@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { createBoxBlockTopology } from '@pascal-app/core'
 import useBlockEditSession from './edit-session'
+import type { BlockLastOperation } from './last-operation'
 import { createBlockSelection } from './selection-model'
 
 describe('block edit session', () => {
@@ -8,7 +9,7 @@ describe('block edit session', () => {
     useBlockEditSession.setState({
       nodeId: null,
       selection: createBlockSelection('face'),
-      activeMaterialSlotId: null,
+      lastOperation: null,
     })
   })
 
@@ -32,13 +33,11 @@ describe('block edit session', () => {
     const selection = createBlockSelection('face', ['f-top'])
     useBlockEditSession.getState().begin('block_1', selection)
     useBlockEditSession.getState().setSelection('block_2', createBlockSelection('vertex', ['v0']))
-    useBlockEditSession.getState().setActiveMaterialSlot('block_2', 'accent')
     useBlockEditSession.getState().end('block_2')
 
     expect(useBlockEditSession.getState()).toMatchObject({
       nodeId: 'block_1',
       selection,
-      activeMaterialSlotId: null,
     })
   })
 
@@ -60,13 +59,34 @@ describe('block edit session', () => {
 
   test('ends only the owned session and resets transient selection', () => {
     useBlockEditSession.getState().begin('block_1', createBlockSelection('face', ['f-top']))
-    useBlockEditSession.getState().setActiveMaterialSlot('block_1', 'accent')
     useBlockEditSession.getState().end('block_1')
 
     expect(useBlockEditSession.getState()).toMatchObject({
       nodeId: null,
       selection: { mode: 'face', ids: [], activeId: null },
-      activeMaterialSlotId: null,
     })
+  })
+
+  test('keeps the latest adjustable operation only for its owning block', () => {
+    const operation = {
+      nodeId: 'block_1',
+      label: 'Move',
+      baseTopology: createBoxBlockTopology(),
+      resultTopology: createBoxBlockTopology(),
+      resultSelection: { mode: 'vertex', ids: ['v0'] },
+      command: {
+        type: 'translate-components',
+        selection: { mode: 'vertex', ids: ['v0'] },
+        delta: [1, 0, 0],
+      },
+      historyDepth: 1,
+    } as BlockLastOperation
+    useBlockEditSession.getState().begin('block_1', createBlockSelection('vertex', ['v0']))
+    useBlockEditSession.getState().setLastOperation('block_2', operation)
+    expect(useBlockEditSession.getState().lastOperation).toBeNull()
+    useBlockEditSession.getState().setLastOperation('block_1', operation)
+    expect(useBlockEditSession.getState().lastOperation).toBe(operation)
+    useBlockEditSession.getState().end('block_1')
+    expect(useBlockEditSession.getState().lastOperation).toBeNull()
   })
 })

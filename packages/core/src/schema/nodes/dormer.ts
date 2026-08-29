@@ -2,12 +2,22 @@ import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
-import { RoofType } from './roof-segment'
+import { getRoofSegmentSurfaceY, type RoofSegmentNode, RoofType } from './roof-segment'
+import { WindowNode } from './window'
 
 export type DormerSurfaceMaterialRole = 'top' | 'side' | 'wall'
 export type DormerSurfaceMaterialSpec = {
   material?: z.infer<typeof MaterialSchema>
   materialPreset?: string
+}
+
+export const DormerWallFace = z.enum(['front', 'back', 'right', 'left'])
+export type DormerWallFace = z.infer<typeof DormerWallFace>
+
+export type DormerWallFaceFrame = {
+  origin: [number, number, number]
+  yaw: number
+  width: number
 }
 
 /**
@@ -65,15 +75,15 @@ export const DormerNode = BaseNode.extend({
 
   roofType: RoofType.default('gable'),
   roofHeight: z.number().default(DORMER_DEFAULTS.ROOF_HEIGHT),
+  shedHighSide: z.enum(['back', 'front']).default('back'),
 
   // Height of the hung wall (the "skirt") that extends below the eave
   // into the host roof — this is the wall area the window opening is
   // cut through. Larger values let the dormer host taller windows.
   wallSkirtHeight: z.number().default(DORMER_DEFAULTS.WALL_SKIRT_HEIGHT),
 
-  // Window is rendered as parametric geometry on the dormer's front
-  // face — not a child node. The fields below mirror the legacy panel
-  // controls; geometry beyond the simple opening box is deferred.
+  // Legacy inline-window controls. Existing scenes are promoted to a hosted
+  // WindowNode during scene migration; these fields remain for archive data.
   windowWidth: z.number().default(DORMER_DEFAULTS.WINDOW_WIDTH),
   windowHeight: z.number().default(DORMER_DEFAULTS.WINDOW_HEIGHT),
   windowOffsetX: z.number().default(DORMER_DEFAULTS.WINDOW_OFFSET_X),
@@ -94,17 +104,221 @@ export const DormerNode = BaseNode.extend({
   windowSill: z.boolean().default(false),
   windowSillDepth: z.number().default(DORMER_DEFAULTS.WINDOW_SILL_DEPTH),
   windowSillThickness: z.number().default(DORMER_DEFAULTS.WINDOW_SILL_THICKNESS),
+
+  // Hosted windows use the same recursive scene-graph contract as walls and
+  // roof segments. Legacy window* fields above are retained for migration.
+  children: z.array(WindowNode.shape.id).default([]),
 }).describe(
   dedent`
   Dormer — a small house-shaped protrusion sitting on top of a roof
   segment. width × depth × height defines the box base; roofType and
-  roofHeight define the dormer's own roof shape. The window opening
-  is parametric geometry on the dormer's front face, not a hosted
-  child node.
+  roofHeight define the dormer's own roof shape. shedHighSide controls
+  the pitch direction for shed roofs. WindowNode children are hosted on
+  its wall faces and use the regular window item model.
   `,
 )
 
 export type DormerNode = z.infer<typeof DormerNode>
+
+export function getDormerWallFaceFrame(
+  dormer: Pick<DormerNode, 'width' | 'depth'>,
+  face: DormerWallFace,
+): DormerWallFaceFrame {
+  switch (face) {
+    case 'back':
+      return { origin: [0, 0, -dormer.depth / 2], yaw: Math.PI, width: dormer.width }
+    case 'right':
+      return { origin: [dormer.width / 2, 0, 0], yaw: Math.PI / 2, width: dormer.depth }
+    case 'left':
+      return { origin: [-dormer.width / 2, 0, 0], yaw: -Math.PI / 2, width: dormer.depth }
+    default:
+      return { origin: [0, 0, dormer.depth / 2], yaw: 0, width: dormer.width }
+  }
+}
+
+export function dormerWallFacePointToDormer(
+  dormer: Pick<DormerNode, 'width' | 'depth'>,
+  face: DormerWallFace,
+  point: [number, number, number],
+): [number, number, number] {
+  const frame = getDormerWallFaceFrame(dormer, face)
+  const cos = Math.cos(frame.yaw)
+  const sin = Math.sin(frame.yaw)
+  const [x, y, z] = point
+  return [
+    frame.origin[0] + x * cos + z * sin,
+    frame.origin[1] + y,
+    frame.origin[2] - x * sin + z * cos,
+  ]
+}
+
+export function dormerPointToWallFace(
+  dormer: Pick<DormerNode, 'width' | 'depth'>,
+  face: DormerWallFace,
+  point: [number, number, number],
+): [number, number, number] {
+  const frame = getDormerWallFaceFrame(dormer, face)
+  const cos = Math.cos(frame.yaw)
+  const sin = Math.sin(frame.yaw)
+  const dx = point[0] - frame.origin[0]
+  const dz = point[2] - frame.origin[2]
+  return [cos * dx - sin * dz, point[1] - frame.origin[1], sin * dx + cos * dz]
+}
+
+export function getDormerWallVerticalBounds(
+  dormer: Pick<DormerNode, 'height' | 'wallSkirtHeight'>,
+) {
+  return {
+    min: -(dormer.wallSkirtHeight ?? DORMER_DEFAULTS.WALL_SKIRT_HEIGHT),
+    max: Math.max(0, dormer.height),
+  }
+}
+
+type DormerWallProfile = Pick<
+  DormerNode,
+  'width' | 'depth' | 'height' | 'wallSkirtHeight' | 'roofType' | 'roofHeight' | 'shedHighSide'
+>
+
+function getDormerWallCeilingAt(
+  dormer: DormerWallProfile,
+  face: DormerWallFace,
+  faceX: number,
+): number {
+  const eaveHeight = Math.max(0, dormer.height)
+  if (dormer.roofType !== 'shed') return eaveHeight
+
+  const depth = Math.max(dormer.depth, Number.EPSILON)
+  const [, , dormerZ] = dormerWallFacePointToDormer(dormer, face, [faceX, 0, 0])
+  const frontWeight = Math.max(0, Math.min(1, dormerZ / depth + 0.5))
+  const highSideWeight = dormer.shedHighSide === 'front' ? frontWeight : 1 - frontWeight
+  return eaveHeight + Math.max(0, dormer.roofHeight) * highSideWeight
+}
+
+export function getDormerWallOpeningVerticalBounds(
+  dormer: DormerWallProfile,
+  face: DormerWallFace,
+  centerX: number,
+  width: number,
+) {
+  const halfWidth = width / 2
+  return {
+    min: -(dormer.wallSkirtHeight ?? DORMER_DEFAULTS.WALL_SKIRT_HEIGHT),
+    max: Math.min(
+      getDormerWallCeilingAt(dormer, face, centerX - halfWidth),
+      getDormerWallCeilingAt(dormer, face, centerX + halfWidth),
+    ),
+  }
+}
+
+export function getDormerWallHorizontalBoundsAtHeight(
+  dormer: DormerWallProfile,
+  face: DormerWallFace,
+  height: number,
+) {
+  const halfWidth = getDormerWallFaceFrame(dormer, face).width / 2
+  const leftCeiling = getDormerWallCeilingAt(dormer, face, -halfWidth)
+  const rightCeiling = getDormerWallCeilingAt(dormer, face, halfWidth)
+
+  if (height <= Math.min(leftCeiling, rightCeiling)) {
+    return { min: -halfWidth, max: halfWidth }
+  }
+  if (leftCeiling === rightCeiling) {
+    return { min: -halfWidth, max: halfWidth }
+  }
+
+  const crossing =
+    -halfWidth + ((height - leftCeiling) / (rightCeiling - leftCeiling)) * (halfWidth * 2)
+
+  if (rightCeiling > leftCeiling) {
+    const min = Math.min(halfWidth, crossing)
+    return { min, max: halfWidth }
+  }
+
+  const max = Math.max(-halfWidth, crossing)
+  return { min: -halfWidth, max }
+}
+
+const DORMER_WINDOW_CENTER_MIN_CLEARANCE = 0.01
+
+export function getDormerExposedFaces(
+  dormer: Pick<DormerNode, 'depth' | 'position' | 'rotation' | 'wallSkirtHeight' | 'windowOffsetY'>,
+  hostSegment: RoofSegmentNode,
+): { front: boolean; back: boolean } {
+  const halfDepth = dormer.depth / 2
+  const [dormerX, dormerY, dormerZ] = dormer.position
+  const faceDX = halfDepth * Math.sin(dormer.rotation)
+  const faceDZ = halfDepth * Math.cos(dormer.rotation)
+  const windowCenterY = dormerY - dormer.wallSkirtHeight / 2 + dormer.windowOffsetY
+  const clears = (faceX: number, faceZ: number) =>
+    windowCenterY - getRoofSegmentSurfaceY(hostSegment, faceX, faceZ) >
+    DORMER_WINDOW_CENTER_MIN_CLEARANCE
+
+  return {
+    front: clears(dormerX + faceDX, dormerZ + faceDZ),
+    back: clears(dormerX - faceDX, dormerZ - faceDZ),
+  }
+}
+
+export function getDormerDefaultWindowFace(
+  dormer: Pick<DormerNode, 'depth' | 'position' | 'rotation' | 'wallSkirtHeight' | 'windowOffsetY'>,
+  hostSegment?: RoofSegmentNode,
+): Extract<DormerWallFace, 'front' | 'back'> {
+  if (!hostSegment) return 'front'
+  const exposed = getDormerExposedFaces(dormer, hostSegment)
+  return !exposed.front && exposed.back ? 'back' : 'front'
+}
+
+export function createDormerDefaultWindow(
+  dormer: Pick<
+    DormerNode,
+    | 'id'
+    | 'width'
+    | 'wallSkirtHeight'
+    | 'windowWidth'
+    | 'windowHeight'
+    | 'windowOffsetX'
+    | 'windowOffsetY'
+    | 'windowFrameThickness'
+    | 'windowFrameDepth'
+    | 'windowColumns'
+    | 'windowRows'
+    | 'windowDividerThickness'
+    | 'windowShape'
+    | 'windowArchHeight'
+    | 'windowCornerRadii'
+    | 'windowSill'
+    | 'windowSillDepth'
+    | 'windowSillThickness'
+  >,
+  id: string,
+  face: Extract<DormerWallFace, 'front' | 'back'> = 'front',
+): WindowNode {
+  const skirt = dormer.wallSkirtHeight ?? DORMER_DEFAULTS.WALL_SKIRT_HEIGHT
+  const equalRatios = (count: number) => Array.from({ length: Math.max(1, count) }, () => 1)
+  return WindowNode.parse({
+    id,
+    parentId: dormer.id,
+    dormerId: dormer.id,
+    dormerFace: face,
+    position: [dormer.windowOffsetX, -skirt / 2 + dormer.windowOffsetY, 0],
+    rotation: [0, 0, 0],
+    side: 'front',
+    width: dormer.windowWidth,
+    height: dormer.windowHeight,
+    openingShape: dormer.windowShape,
+    archHeight: dormer.windowArchHeight,
+    openingCornerRadii: dormer.windowCornerRadii,
+    frameThickness: dormer.windowFrameThickness,
+    frameDepth: dormer.windowFrameDepth,
+    columnRatios: equalRatios(dormer.windowColumns),
+    rowRatios: equalRatios(dormer.windowRows),
+    columnDividerThickness: dormer.windowDividerThickness,
+    rowDividerThickness: dormer.windowDividerThickness,
+    sill: dormer.windowSill,
+    sillDepth: dormer.windowSillDepth,
+    sillThickness: dormer.windowSillThickness,
+  })
+}
 
 /**
  * Per-surface material resolution. Fall-through order:

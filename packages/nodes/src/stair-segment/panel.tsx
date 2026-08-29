@@ -160,7 +160,7 @@ export default function StairSegmentPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
-          max={5}
+          max={1000}
           min={0.5}
           onChange={(v) => handleUpdate({ width: v })}
           precision={2}
@@ -170,7 +170,7 @@ export default function StairSegmentPanel() {
         />
         <SliderControl
           label="Length"
-          max={10}
+          max={1000}
           min={0.5}
           onChange={(v) => handleUpdate({ length: v })}
           precision={2}
@@ -182,7 +182,7 @@ export default function StairSegmentPanel() {
           <>
             <SliderControl
               label="Height"
-              max={10}
+              max={1000}
               min={0.5}
               onChange={(v) => handleUpdate({ height: v })}
               precision={2}
@@ -214,7 +214,7 @@ export default function StairSegmentPanel() {
           {!node.fillToFloor && (
             <SliderControl
               label="Thickness"
-              max={1}
+              max={1000}
               min={0.05}
               onChange={(v) => handleUpdate({ thickness: v })}
               precision={2}
@@ -229,8 +229,6 @@ export default function StairSegmentPanel() {
       <PanelSection title="Position">
         <SliderControl
           label="X"
-          max={50}
-          min={-50}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[0] = v
@@ -243,8 +241,6 @@ export default function StairSegmentPanel() {
         />
         <SliderControl
           label="Y"
-          max={50}
-          min={-50}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[1] = v
@@ -257,8 +253,6 @@ export default function StairSegmentPanel() {
         />
         <SliderControl
           label="Z"
-          max={50}
-          min={-50}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[2] = v

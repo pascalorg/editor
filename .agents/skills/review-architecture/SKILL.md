@@ -24,6 +24,7 @@ Required on every review. Read the remaining pages on demand when the diff touch
 - `wiki/architecture/scene-registry.md`
 - `wiki/architecture/spatial-queries.md`
 - `wiki/architecture/node-schemas.md`
+- `wiki/architecture/inspector-field-limits.md` — no arbitrary `min`/`max` on dimension fields. Read whenever the diff adds or edits `parametrics.ts`, a kind `panel.tsx`, or `<SliderControl>` bounds.
 - `wiki/architecture/events.md`
 - `wiki/architecture/interaction-scope.md` — the interaction state machine + the unified snapping/modifier convention. Read whenever the diff touches a tool, a `move-tool` / `selection` / endpoint / reshape file, `lib/interaction/**`, `lib/snapping-mode.ts`, or `use-interaction-scope`.
 

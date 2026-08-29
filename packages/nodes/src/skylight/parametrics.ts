@@ -18,8 +18,8 @@ export const skylightParametrics: ParametricDescriptor<SkylightNode> = {
     {
       label: 'Dimensions',
       fields: [
-        { key: 'width', kind: 'number', unit: 'm', min: 0.3, max: 3, step: 0.05 },
-        { key: 'height', kind: 'number', unit: 'm', min: 0.3, max: 3, step: 0.05 },
+        { key: 'width', kind: 'number', unit: 'm', min: 0.3, max: 1000, step: 0.05 },
+        { key: 'height', kind: 'number', unit: 'm', min: 0.3, max: 1000, step: 0.05 },
         { key: 'frameThickness', kind: 'number', unit: 'm', min: 0.02, max: 0.15, step: 0.005 },
         { key: 'frameDepth', kind: 'number', unit: 'm', min: 0.02, max: 0.2, step: 0.005 },
         { key: 'glassThickness', kind: 'number', unit: 'm', min: 0.005, max: 0.05, step: 0.001 },

@@ -245,8 +245,20 @@ export function publishStructuralElevationGuide(
     return
   }
 
-  const dx = match.target.anchor[0] - source.anchor[0]
-  const dz = match.target.anchor[1] - source.anchor[1]
+  publishResolvedElevationGuide(source, match.target)
+}
+
+export function publishResolvedElevationGuide(
+  source: ElevationGuideSource,
+  target: ElevationSnapTarget,
+): void {
+  if (!source.levelId) {
+    clearStructuralElevationGuide(source.nodeId)
+    return
+  }
+
+  const dx = target.anchor[0] - source.anchor[0]
+  const dz = target.anchor[1] - source.anchor[1]
   const length = Math.hypot(dx, dz)
   const direction: [number, number] = length > 1e-6 ? [dx / length, dz / length] : [1, 0]
 
@@ -255,8 +267,8 @@ export function publishStructuralElevationGuide(
     levelId: source.levelId,
     center: source.anchor,
     direction,
-    elevation: match.elevation,
-    label: match.target.label,
+    elevation: target.elevation,
+    label: target.label,
   })
 }
 

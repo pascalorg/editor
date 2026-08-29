@@ -18,6 +18,15 @@ export type BlockGizmoDimensions = {
   planeHandleOffset: number
 }
 
+export type BlockGizmoHitDimensions = {
+  axisRadius: number
+  scaleRadius: number
+  planeSize: number
+  rotationTube: number
+  rotationArc: number
+  rotationStart: number
+}
+
 const FIXED_BLOCK_GIZMO_DIMENSIONS: BlockGizmoDimensions = {
   length: 0.7,
   radius: 0.022,
@@ -31,10 +40,10 @@ export function blockOperationAvailability(
   selectedCount: number,
 ): BlockOperationAvailability {
   return {
-    extrude: mode === 'face' && selectedCount === 1,
-    inset: mode === 'face' && selectedCount === 1,
+    extrude: mode === 'face' && selectedCount >= 1,
+    inset: mode === 'face' && selectedCount >= 1,
     merge: mode === 'vertex' && selectedCount >= 2,
-    dissolve: mode === 'edge' && selectedCount === 1,
+    dissolve: (mode === 'edge' && selectedCount >= 1) || (mode === 'face' && selectedCount >= 2),
     bevel: mode === 'edge',
   }
 }
@@ -51,6 +60,7 @@ export function blockComponentStatus({
   loopCutCount,
   loopCutFactor,
   bevelSegments,
+  bevelWidth,
 }: {
   mode: BlockToolbarMode
   selectedCount: number
@@ -58,12 +68,14 @@ export function blockComponentStatus({
   loopCutCount: number
   loopCutFactor: number
   bevelSegments: number
+  bevelWidth: number
 }): string | null {
   if (tool === 'loop-cut') {
     return `Loop Cut · ${loopCutCount} cut${loopCutCount === 1 ? '' : 's'} · factor ${loopCutFactor.toFixed(2)} · click or drag an edge · release applies · wheel changes count`
   }
   if (tool === 'bevel') {
-    return `Bevel · drag an edge to peel it · wheel changes segments (${bevelSegments}) · release to apply`
+    const width = String(Math.round(bevelWidth * 1000) / 1000)
+    return `Bevel · width ${width} m · ${bevelSegments} segments · drag changes width · wheel changes segments`
   }
   return selectedCount === 0 ? `Click a ${mode} to select it` : null
 }
@@ -90,6 +102,21 @@ export function blockGizmoDimensions(_topologyExtent: number): BlockGizmoDimensi
   return FIXED_BLOCK_GIZMO_DIMENSIONS
 }
 
+export function blockGizmoHitDimensions(
+  radius: number,
+  planeHandleSize: number,
+): BlockGizmoHitDimensions {
+  const rotationStart = Math.PI / 15
+  return {
+    axisRadius: radius * 3,
+    scaleRadius: radius * 3.2,
+    planeSize: planeHandleSize * 1.1,
+    rotationTube: radius * 1.5,
+    rotationArc: Math.PI / 2 - rotationStart * 2,
+    rotationStart,
+  }
+}
+
 export function blockToolbarOffset(topologyExtent: number, gizmoLength: number): number {
   const meshRelativeOffset = Math.min(1.4, Math.max(0.9, topologyExtent * 0.25))
   const scaleHandleReach = gizmoLength * 1.2
@@ -99,10 +126,15 @@ export function blockToolbarOffset(topologyExtent: number, gizmoLength: number):
 export function blockBevelWidthFromDrag(
   deltaX: number,
   deltaY: number,
-  topologyExtent: number,
-  viewportHeight: number,
+  {
+    topologyExtent,
+    projectedExtentPixels,
+  }: {
+    topologyExtent: number
+    projectedExtentPixels: number
+  },
 ): number {
   const safeExtent = Math.max(Math.abs(topologyExtent), 0.001)
-  const safeViewportHeight = Math.max(Math.abs(viewportHeight), 1)
-  return (Math.hypot(deltaX, deltaY) * safeExtent) / safeViewportHeight
+  const safeProjectedExtent = Math.max(Math.abs(projectedExtentPixels), 1)
+  return (Math.hypot(deltaX, deltaY) * safeExtent) / safeProjectedExtent
 }

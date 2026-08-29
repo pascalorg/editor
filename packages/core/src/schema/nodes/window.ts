@@ -42,6 +42,10 @@ export const WindowNode = BaseNode.extend({
 
   // Wall reference
   wallId: z.string().optional(),
+  // Alternative host: a dormer's generated wall face. When set, `position`
+  // is FACE-LOCAL — [u along the face, v height, z from the wall mid-plane].
+  dormerId: z.string().optional(),
+  dormerFace: z.enum(['front', 'back', 'right', 'left']).optional(),
   // Alternative host: a roof-segment's generated wall face (base wall
   // under the roof or a coplanar gable end). When set, `position` is
   // FACE-LOCAL — [u along the face, v height, z from the wall mid-plane]

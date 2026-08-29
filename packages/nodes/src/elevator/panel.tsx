@@ -496,8 +496,6 @@ export default function ElevatorPanel() {
       <PanelSection title="Position">
         <SliderControl
           label="X"
-          max={50}
-          min={-50}
           onChange={(value) => {
             const position = getSupportedPosition(value, displayPosition[2])
             previewTransform(position, displayRotation)
@@ -514,8 +512,6 @@ export default function ElevatorPanel() {
         />
         <SliderControl
           label="Y"
-          max={50}
-          min={-50}
           onChange={(value) => {
             const position: ElevatorNode['position'] = [
               displayPosition[0],
@@ -540,8 +536,6 @@ export default function ElevatorPanel() {
         />
         <SliderControl
           label="Z"
-          max={50}
-          min={-50}
           onChange={(value) => {
             const position = getSupportedPosition(displayPosition[0], value)
             previewTransform(position, displayRotation)

@@ -108,9 +108,19 @@ export {
   OpeningDimensionReference,
 } from './nodes/door'
 export {
+  createDormerDefaultWindow,
   DormerNode,
   type DormerSurfaceMaterialRole,
   type DormerSurfaceMaterialSpec,
+  DormerWallFace,
+  dormerPointToWallFace,
+  dormerWallFacePointToDormer,
+  getDormerDefaultWindowFace,
+  getDormerExposedFaces,
+  getDormerWallFaceFrame,
+  getDormerWallHorizontalBoundsAtHeight,
+  getDormerWallOpeningVerticalBounds,
+  getDormerWallVerticalBounds,
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
 export {
@@ -167,6 +177,7 @@ export {
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
 export {
+  LeanToCanopyForm,
   LeanToConnectionMode,
   LeanToEndCondition,
   LeanToExtensionNode,
@@ -203,7 +214,7 @@ export {
   type RidgeVentLine,
   RidgeVentNode,
 } from './nodes/ridge-vent'
-export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
+export type { RoofSupport, RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export type {
   DutchRoofMetrics,
@@ -214,6 +225,7 @@ export type {
 } from './nodes/roof-segment'
 export {
   getActiveRoofHeight,
+  getConicalRoofCoverage,
   getDutchRoofMetrics,
   getEffectiveSegmentSurfaceMaterial,
   getPitchFromActiveRoofHeight,

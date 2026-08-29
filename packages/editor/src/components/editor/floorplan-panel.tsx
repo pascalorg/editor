@@ -5093,6 +5093,9 @@ export function FloorplanPanel({
     if (building?.type !== 'building') return false
     return building.children.some((cid) => state.nodes[cid]?.type === 'level')
   })
+  // The studio workspace (renders / materials / item builder) is a clean
+  // stage — editor viewport chrome, compass included, stays out of it.
+  const isStudioWorkspace = useEditor((s) => s.workspaceMode === 'studio')
   const elevators = useScene(
     useShallow((state) => {
       const building = currentBuildingId ? state.nodes[currentBuildingId] : null
@@ -11143,7 +11146,8 @@ export function FloorplanPanel({
         <FloorplanRegistryActionMenu />
         <FloorplanGroupActionMenu />
 
-        {(levelNode?.type === 'level' || hasAmbientBuildingLevel) &&
+        {!isStudioWorkspace &&
+          (levelNode?.type === 'level' || hasAmbientBuildingLevel) &&
           (compassHost ? (
             createPortal(
               <FloorplanCompassButton

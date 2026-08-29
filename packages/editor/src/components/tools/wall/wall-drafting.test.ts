@@ -436,6 +436,136 @@ describe('createWallOnCurrentLevel', () => {
     expect(created?.supportSlabId).not.toBe(GROUND_SUPPORT_ID)
   })
 
+  test('a fresh-scene wall started on a slab node-top elects that slab plane-bound', () => {
+    const slab = SlabNode.parse({
+      id: 'slab_fresh_floor',
+      parentId: LEVEL_ID,
+      polygon: [
+        [-1, -1],
+        [5, -1],
+        [5, 5],
+        [-1, 5],
+      ],
+      elevation: 0.05,
+      thickness: 0.05,
+    })
+    seedLevel([], [slab])
+    spatialGridManager.clear()
+    spatialGridManager.handleNodeCreated(slab as AnyNode, LEVEL_ID)
+
+    const created = createWallOnCurrentLevel([2, 2], [3, 2], {
+      supportCap: 0.05,
+      preferredSupportSlabId: null,
+      constructionElevation: 0.05,
+      constructionHeight: 2.5,
+      constructionSourceNodeId: slab.id,
+      flatConstructionBase: true,
+    })
+
+    expect(created).not.toBeNull()
+    expect(created?.supportSlabId).toBeUndefined()
+    expect(created?.height).toBeUndefined()
+    expect(created?.supportOffset).toBeUndefined()
+    const support = spatialGridManager.getSlabSupportForWall(
+      LEVEL_ID,
+      created!.start,
+      created!.end,
+      created!.curveOffset,
+      created!.thickness,
+      created!.supportSlabId,
+    )
+    expect(support.electedSlabId).toBe(slab.id)
+    expect(support.elevation).toBeCloseTo(0.05)
+  })
+
+  test('a direct slab source does not pin a cross-slab wall away from the higher majority support', () => {
+    const sourceSlab = SlabNode.parse({
+      id: 'slab_source_low',
+      parentId: LEVEL_ID,
+      polygon: [
+        [-0.1, -1],
+        [0.1, -1],
+        [0.1, 1],
+        [-0.1, 1],
+      ],
+      elevation: 0.1,
+      thickness: 0.05,
+    })
+    const majoritySlab = SlabNode.parse({
+      id: 'slab_majority_high',
+      parentId: LEVEL_ID,
+      polygon: [
+        [0.1, -1],
+        [4.1, -1],
+        [4.1, 1],
+        [0.1, 1],
+      ],
+      elevation: 0.6,
+      thickness: 0.1,
+    })
+    seedLevel([], [sourceSlab, majoritySlab])
+    spatialGridManager.clear()
+    spatialGridManager.handleNodeCreated(sourceSlab as AnyNode, LEVEL_ID)
+    spatialGridManager.handleNodeCreated(majoritySlab as AnyNode, LEVEL_ID)
+
+    const created = createWallOnCurrentLevel([0, 0], [4, 0], {
+      supportCap: 0.6,
+      preferredSupportSlabId: null,
+      constructionElevation: 0.1,
+      constructionHeight: 2.5,
+      constructionSourceNodeId: sourceSlab.id,
+      flatConstructionBase: true,
+    })
+
+    expect(created?.supportSlabId).toBe(majoritySlab.id)
+    expect(created?.height).toBeUndefined()
+    expect(created?.supportOffset).toBeUndefined()
+  })
+
+  test('a grazing direct slab source does not override the commit elevation cap', () => {
+    const sourceSlab = SlabNode.parse({
+      id: 'slab_source_high',
+      parentId: LEVEL_ID,
+      polygon: [
+        [-0.1, -1],
+        [0.1, -1],
+        [0.1, 1],
+        [-0.1, 1],
+      ],
+      elevation: 0.6,
+      thickness: 0.1,
+    })
+    const cappedSlab = SlabNode.parse({
+      id: 'slab_capped_low',
+      parentId: LEVEL_ID,
+      polygon: [
+        [-0.1, -1],
+        [4.1, -1],
+        [4.1, 1],
+        [-0.1, 1],
+      ],
+      elevation: 0.1,
+      thickness: 0.05,
+    })
+    seedLevel([], [sourceSlab, cappedSlab])
+    spatialGridManager.clear()
+    spatialGridManager.handleNodeCreated(sourceSlab as AnyNode, LEVEL_ID)
+    spatialGridManager.handleNodeCreated(cappedSlab as AnyNode, LEVEL_ID)
+
+    const created = createWallOnCurrentLevel([0, 0], [4, 0], {
+      supportCap: 0.1,
+      preferredSupportSlabId: null,
+      constructionElevation: 0.6,
+      constructionHeight: 2.5,
+      constructionSourceNodeId: sourceSlab.id,
+      flatConstructionBase: true,
+    })
+
+    expect(created?.supportSlabId).toBe(cappedSlab.id)
+    expect(created?.height).toBeUndefined()
+    expect(created?.supportOffset).toBeUndefined()
+  })
+
   test('a non-ground draft never freezes the ghost height, even at a raised plane', () => {
     const created = createWallOnCurrentLevel([2, 2], [3, 2], {
       supportCap: 1.2,

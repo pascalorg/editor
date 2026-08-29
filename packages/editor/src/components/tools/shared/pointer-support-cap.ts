@@ -86,7 +86,19 @@ export function resolvePointerSupportSurface(
   // The world ray, kept before the level conversion below: the terrain field is
   // world-space (site geometry, not level-local), so the march needs this frame.
   camera.getWorldPosition(worldRayOrigin)
-  worldRayDirection.set(worldHit[0], worldHit[1], worldHit[2]).sub(worldRayOrigin)
+  const cameraToHit = hitScratch.set(worldHit[0], worldHit[1], worldHit[2]).sub(worldRayOrigin)
+  if ((camera as Camera & { isOrthographicCamera?: boolean }).isOrthographicCamera) {
+    // For an orthographic camera every screen pixel has the same direction. The
+    // hit point is offset from the camera along the view plane, so using
+    // `camera.position -> hit` tilts the ray toward the screen centre and makes
+    // support surfaces drift away from the cursor off-axis.
+    camera.getWorldDirection(worldRayDirection).normalize()
+    worldRayOrigin
+      .set(worldHit[0], worldHit[1], worldHit[2])
+      .addScaledVector(worldRayDirection, -cameraToHit.dot(worldRayDirection))
+  } else {
+    worldRayDirection.copy(cameraToHit).normalize()
+  }
 
   originScratch.copy(worldRayOrigin)
   hitScratch.set(worldHit[0], worldHit[1], worldHit[2])

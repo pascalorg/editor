@@ -184,7 +184,7 @@ export default function EyebrowVentPanel() {
       <PanelSection title="Dimensions">
         <SliderControl
           label="Width"
-          max={3}
+          max={1000}
           min={0.4}
           onChange={(v) => previewProp({ width: v })}
           onCommit={(v) => handleUpdate({ width: v })}
@@ -196,7 +196,7 @@ export default function EyebrowVentPanel() {
         />
         <SliderControl
           label="Depth"
-          max={1.5}
+          max={1000}
           min={0.2}
           onChange={(v) => previewProp({ depth: v })}
           onCommit={(v) => handleUpdate({ depth: v })}
@@ -208,7 +208,7 @@ export default function EyebrowVentPanel() {
         />
         <SliderControl
           label="Height"
-          max={1}
+          max={1000}
           min={0.08}
           onChange={(v) => previewProp({ height: v })}
           onCommit={(v) => handleUpdate({ height: v })}

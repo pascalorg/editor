@@ -29,7 +29,15 @@ const DormerPreview = ({ node, invalid }: { node: DormerNode; invalid?: boolean 
   // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geo = useMemo(
     () => buildDormerGhostGeometry(node),
-    [node.width, node.depth, node.height, node.roofHeight, node.roofType, node.wallSkirtHeight],
+    [
+      node.width,
+      node.depth,
+      node.height,
+      node.roofHeight,
+      node.roofType,
+      node.shedHighSide,
+      node.wallSkirtHeight,
+    ],
   )
 
   useEffect(() => () => geo.dispose(), [geo])

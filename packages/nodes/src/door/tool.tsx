@@ -291,7 +291,15 @@ const DoorTool: React.FC = () => {
         applySnap,
       })
       const { clampedX, clampedY } = clampToWall(wall, localX, width, height)
-      const valid = !hasWallChildOverlap(wall.id, clampedX, clampedY, width, height, ignoreId)
+      const valid = !hasWallChildOverlap(
+        wall.id,
+        useScene.getState().nodes,
+        clampedX,
+        clampedY,
+        width,
+        height,
+        ignoreId,
+      )
       return { clampedX, clampedY, valid }
     }
 

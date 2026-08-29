@@ -37,13 +37,6 @@ function getPeakHeight(n: RoofSegmentNodeType): number {
   return n.wallHeight + getActiveRoofHeight(n)
 }
 
-function isManagedLeanToRoofSegment(n: RoofSegmentNodeType): boolean {
-  const metadata = n.metadata
-  if (!(metadata && typeof metadata === 'object' && !Array.isArray(metadata))) return false
-  const record = metadata as Record<string, unknown>
-  return record.managedByLeanTo !== undefined && record.leanToRole === 'roof-segment'
-}
-
 function getSideResizeHandleY(n: RoofSegmentNodeType, localZ: number): number {
   if (n.roofType !== 'shed') return Math.max(n.wallHeight, MIN_WALL_DISPLAY) / 2
 
@@ -87,6 +80,7 @@ function roofSegmentWidthHandle(side: 'left' | 'right'): HandleDescriptor<RoofSe
       const newCenterZ = anchorZ + sign * (newWidth / 2) * armZ
       return {
         width: newWidth,
+        ...(initial.roofType === 'conical' ? { depth: newWidth } : {}),
         position: [newCenterX, initial.position[1], newCenterZ],
       }
     },
@@ -130,6 +124,14 @@ function roofSegmentDepthHandle(side: 'front' | 'back'): HandleDescriptor<RoofSe
       const newCenterX = anchorX + sign * (newDepth / 2) * armX
       const newCenterZ = anchorZ + sign * (newDepth / 2) * armZ
 
+      if (initial.roofType === 'conical') {
+        return {
+          width: newDepth,
+          depth: newDepth,
+          position: [newCenterX, initial.position[1], newCenterZ],
+        }
+      }
+
       // Preserve peak height — back-solve pitch for the new depth so
       // the assembled roof height matches what it was before the drag.
       const originalRoofHeight = getActiveRoofHeight(initial)
@@ -161,6 +163,24 @@ function roofSegmentDepthHandle(side: 'front' | 'back'): HandleDescriptor<RoofSe
       // For axis 'z', `LinearArrow` adds -π/2 around Y so the chevron
       // points +Z by default. Flip the back arrow by π so it points -Z.
       rotationY: () => (side === 'front' ? 0 : Math.PI),
+    },
+  }
+}
+
+function conicalRoofSegmentRadiusHandle(): HandleDescriptor<RoofSegmentNodeType> {
+  return {
+    kind: 'radial-resize',
+    axis: 'x',
+    min: MIN_ROOF_DIM / 2,
+    currentValue: (n) => n.width / 2,
+    apply: (_initial, radius) => ({ width: radius * 2, depth: radius * 2 }),
+    placement: {
+      position: (n) => [n.width / 2 + SIDE_HANDLE_OFFSET, getSideResizeHandleY(n, 0), 0],
+    },
+    decoration: {
+      kind: 'ring',
+      radius: (n) => n.width / 2,
+      y: (n) => getSideResizeHandleY(n, 0),
     },
   }
 }
@@ -210,7 +230,7 @@ function roofSegmentPitchHandle(): HandleDescriptor<RoofSegmentNodeType> {
     min: (n) => n.wallHeight,
     gridSnap: true,
     currentValue: (n) => getPeakHeight(n),
-    visible: (n) => !isManagedLeanToRoofSegment(n),
+    visible: (n) => !n.managedByParent,
     apply: (initial, newPeakHeight) => {
       const roofHeight = Math.max(0, newPeakHeight - initial.wallHeight)
       const pitch = getPitchFromActiveRoofHeight({
@@ -273,10 +293,17 @@ const roofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
   roofSegmentRotateHandle(),
 ]
 
+const conicalRoofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
+  conicalRoofSegmentRadiusHandle(),
+  roofSegmentWallHeightHandle(),
+  roofSegmentPitchHandle(),
+]
+
 function resolveRoofSegmentHandles(
   node: RoofSegmentNodeType,
 ): HandleDescriptor<RoofSegmentNodeType>[] {
-  return isManagedLeanToRoofSegment(node) ? [] : roofSegmentHandles
+  if (node.managedByParent) return []
+  return node.roofType === 'conical' ? conicalRoofSegmentHandles : roofSegmentHandles
 }
 
 /**
@@ -287,7 +314,7 @@ function resolveRoofSegmentHandles(
  */
 export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   kind: 'roof-segment',
-  schemaVersion: 1,
+  schemaVersion: 4,
   schema: RoofSegmentNode,
   category: 'structure',
   surfaceRole: 'roof',

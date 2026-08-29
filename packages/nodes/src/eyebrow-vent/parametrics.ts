@@ -25,9 +25,9 @@ export const eyebrowVentParametrics: ParametricDescriptor<EyebrowVentNode> = {
     {
       label: 'Dimensions',
       fields: [
-        { key: 'width', kind: 'number', unit: 'm', min: 0.3, max: 2, step: 0.05 },
-        { key: 'depth', kind: 'number', unit: 'm', min: 0.2, max: 1.5, step: 0.05 },
-        { key: 'height', kind: 'number', unit: 'm', min: 0.08, max: 1, step: 0.02 },
+        { key: 'width', kind: 'number', unit: 'm', min: 0.3, max: 1000, step: 0.05 },
+        { key: 'depth', kind: 'number', unit: 'm', min: 0.2, max: 1000, step: 0.05 },
+        { key: 'height', kind: 'number', unit: 'm', min: 0.08, max: 1000, step: 0.02 },
       ],
     },
   ],

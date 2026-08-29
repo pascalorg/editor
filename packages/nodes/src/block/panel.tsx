@@ -1,10 +1,13 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   type BlockNode,
   getCatalogMaterialById,
+  type MaterialSchema,
   parseMaterialRef,
+  type SceneMaterialId,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -19,26 +22,34 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Check, Move, Plus, Trash2 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import { useCallback, useRef, useState } from 'react'
+import { resolveSlotPaintMaterialRef } from '../shared/slot-paint'
 import useBlockEditSession from './edit-session'
 import {
   assignBlockMaterial,
   BLOCK_BODY_SLOT_ID,
   blockMaterialSelection,
-  collectReusableBlockMaterialRefs,
-  createBlockMaterialSlot,
+  createAssignedBlockMaterialSlot,
   removeBlockMaterialSlot,
   renameBlockMaterialSlot,
-  selectBlockFacesByMaterialSlot,
-  setBlockMaterialSlot,
 } from './material-slots'
 import { blockSlots } from './slots'
 
-const REUSABLE_MATERIAL_REF_SEPARATOR = '\u001f'
 const SLOT_TRAILING_ACTION_CLASS =
   'm-2 ml-0 flex w-8 shrink-0 items-center justify-center rounded-md'
 const SLOT_DISABLED_ACTION_CLASS =
   'disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-[#2C2C2E] disabled:active:bg-[#2C2C2E]'
+const NEW_BLOCK_SLOT_MATERIAL = {
+  preset: 'custom',
+  properties: {
+    color: '#7768d8',
+    roughness: 0.75,
+    metalness: 0,
+    opacity: 1,
+    transparent: false,
+    side: 'front',
+  },
+} satisfies MaterialSchema
 
 function materialRefLabel(
   ref: string | undefined,
@@ -83,38 +94,13 @@ export default function BlockPanel() {
   const nodeRef = useRef(node)
   nodeRef.current = node
   const sceneMaterials = useScene((state) => state.materials)
-  const reusableMaterialRefsKey = useScene((state) =>
-    collectReusableBlockMaterialRefs(Object.values(state.nodes), Object.keys(state.materials)).join(
-      REUSABLE_MATERIAL_REF_SEPARATOR,
-    ),
-  )
-  const reusableMaterialRefs = reusableMaterialRefsKey
-    ? reusableMaterialRefsKey.split(REUSABLE_MATERIAL_REF_SEPARATOR)
-    : []
   const readOnly = useScene((state) => state.readOnly)
   const editing = useInteractionScope(
     (state) => state.scope.kind === 'mesh-editing' && state.scope.nodeId === selectedId,
   )
   const sessionNodeId = useBlockEditSession((state) => state.nodeId)
   const selection = useBlockEditSession((state) => state.selection)
-  const activeMaterialSlotId = useBlockEditSession((state) => state.activeMaterialSlotId)
-
-  const activeFaceSlotId = useMemo(() => {
-    if (!(node && sessionNodeId === node.id && selection.mode === 'face')) return null
-    return node.topology.faces.find((face) => face.id === selection.activeId)?.materialSlot ?? null
-  }, [node, selection.activeId, selection.mode, sessionNodeId])
-  const nodeId = node?.id ?? null
-  const activeFaceId =
-    sessionNodeId === nodeId && selection.mode === 'face' ? selection.activeId : null
-  const syncedActiveFaceRef = useRef<string | null>(null)
-
-  useEffect(() => {
-    if (!(nodeId && activeFaceId && activeFaceSlotId)) return
-    const syncKey = `${nodeId}:${activeFaceId}:${activeFaceSlotId}`
-    if (syncedActiveFaceRef.current === syncKey) return
-    syncedActiveFaceRef.current = syncKey
-    useBlockEditSession.getState().setActiveMaterialSlot(nodeId, activeFaceSlotId)
-  }, [activeFaceId, activeFaceSlotId, nodeId])
+  const [slotNotice, setSlotNotice] = useState<{ nodeId: string; text: string } | null>(null)
 
   const close = useCallback(() => {
     setViewerSelection({ selectedIds: [] })
@@ -162,10 +148,6 @@ export default function BlockPanel() {
     selection.activeId,
   )
   const slotDeclarations = blockSlots(node)
-  const activeSlotId =
-    (sessionNodeId === node.id ? activeMaterialSlotId : materialSelection.activeSlotId) ??
-    BLOCK_BODY_SLOT_ID
-  const activeSlotRef = activeSlotId ? node.slots?.[activeSlotId] : undefined
   const canOperateOnFaces = editing && selection.mode === 'face'
   const slotEditTitle = !editing
     ? 'Enter Edit Mode to use slot actions'
@@ -177,25 +159,54 @@ export default function BlockPanel() {
     faceCountBySlot.set(face.materialSlot, (faceCountBySlot.get(face.materialSlot) ?? 0) + 1)
   }
 
-  const chooseSlot = (slotId: string) => {
-    useBlockEditSession.getState().setActiveMaterialSlot(node.id, slotId)
-  }
-
-  const chooseReusableMaterial = (materialRef: string) => {
-    if (!(activeSlotId && materialRef)) return
-    const result = setBlockMaterialSlot(node.slots, activeSlotId, materialRef)
-    if (result.changed) {
-      useScene.getState().updateNode(node.id, {
-        slots: result.slots,
-      })
-      triggerSFX('sfx:menu-click')
-    }
-  }
-
   const addMaterialSlot = () => {
-    const result = createBlockMaterialSlot(node.topology, node.slots, node.slotNames)
-    useScene.getState().updateNode(node.id, { slotNames: result.slotNames })
-    useBlockEditSession.getState().setActiveMaterialSlot(node.id, result.slotId)
+    const scene = useScene.getState()
+    const resolution = resolveSlotPaintMaterialRef(
+      scene.materials,
+      NEW_BLOCK_SLOT_MATERIAL,
+      undefined,
+    )
+    if (!resolution?.ref) return
+    const result = createAssignedBlockMaterialSlot(
+      node.topology,
+      node.slots,
+      node.slotNames,
+      selectedFaceIds,
+      resolution.ref,
+    )
+    if (!result.changed) return
+    let committed = false
+    useScene.setState((current) => {
+      if (current.readOnly || current.nodes[node.id]?.type !== 'block') return current
+      committed = true
+      return {
+        materials: resolution.newSceneMaterial
+          ? {
+              ...current.materials,
+              [resolution.newSceneMaterial.id as SceneMaterialId]: {
+                ...resolution.newSceneMaterial,
+                name: 'Block Accent',
+              },
+            }
+          : current.materials,
+        nodes: {
+          ...current.nodes,
+          [node.id]: {
+            ...current.nodes[node.id],
+            topology: result.topology,
+            slots: result.slots,
+            slotNames: result.slotNames,
+          } as AnyNode,
+        },
+      }
+    })
+    if (!committed) return
+    useScene.getState().markDirty(node.id)
+    const faceLabel = selectedFaceIds.length === 1 ? 'face' : 'faces'
+    setSlotNotice({
+      nodeId: node.id,
+      text: `${result.slotNames[result.slotId] ?? result.slotId} applied to ${selectedFaceIds.length} ${faceLabel} with an accent material. Use Paint (P) to replace it.`,
+    })
     triggerSFX('sfx:menu-click')
   }
 
@@ -211,23 +222,15 @@ export default function BlockPanel() {
     useScene.getState().updateNode(node.id, { slotNames })
   }
 
-  const reusableMaterialLabel = (ref: string) => {
-    const parsed = parseMaterialRef(ref)
-    if (!parsed) return ref
-    return parsed.kind === 'scene'
-      ? (sceneMaterials[parsed.id as keyof typeof sceneMaterials]?.name ?? ref)
-      : (getCatalogMaterialById(parsed.id)?.label ?? ref)
-  }
-
-  const assignMaterial = () => {
-    if (!activeSlotId) return
+  const assignSlot = (slotId: string) => {
+    setSlotNotice(null)
     const result = assignBlockMaterial(
       node.topology,
       node.slots,
       selectedFaceIds,
       {
         kind: 'slot',
-        slotId: activeSlotId,
+        slotId,
       },
       node.slotNames,
     )
@@ -236,26 +239,7 @@ export default function BlockPanel() {
       topology: result.topology,
       slots: result.slots,
     })
-    useBlockEditSession.getState().setActiveMaterialSlot(node.id, result.slotId)
     triggerSFX('sfx:menu-click')
-  }
-
-  const filterSelection = (operation: 'select' | 'deselect') => {
-    if (!(canOperateOnFaces && activeSlotId)) return
-    const ids = selectBlockFacesByMaterialSlot(
-      node.topology,
-      selection.ids,
-      activeSlotId,
-      operation,
-    )
-    const activeId = ids.includes(selection.activeId ?? '')
-      ? selection.activeId
-      : (ids.at(-1) ?? null)
-    useBlockEditSession.getState().setSelection(node.id, {
-      mode: 'face',
-      ids,
-      activeId,
-    })
   }
 
   const removeMaterialSlot = (slotId: string) => {
@@ -266,7 +250,7 @@ export default function BlockPanel() {
       slots: result.slots,
       slotNames: result.slotNames,
     })
-    useBlockEditSession.getState().setActiveMaterialSlot(node.id, result.fallbackSlotId)
+    setSlotNotice(null)
     triggerSFX('sfx:menu-click')
   }
 
@@ -293,8 +277,6 @@ export default function BlockPanel() {
           <SliderControl
             key={label}
             label={label}
-            max={node.position[axis] + 2}
-            min={node.position[axis] - 2}
             onChange={onChange}
             precision={2}
             step={0.01}
@@ -312,58 +294,73 @@ export default function BlockPanel() {
         <div className="mt-2 flex justify-end">
           <ActionButton
             className={SLOT_DISABLED_ACTION_CLASS}
-            disabled={!editing || readOnly}
+            disabled={!canOperateOnFaces || selectedFaceIds.length === 0 || readOnly}
             icon={<Plus className="h-3.5 w-3.5" />}
             label="Add slot"
             onClick={addMaterialSlot}
-            title={slotEditTitle}
+            title={
+              slotEditTitle ??
+              (selectedFaceIds.length === 0 ? 'Select one or more faces first' : undefined)
+            }
           />
         </div>
+
+        {slotNotice?.nodeId === node.id ? (
+          <div
+            aria-live="polite"
+            className="mt-2 rounded-md border border-primary/35 bg-primary/10 px-2.5 py-2 text-foreground text-xs"
+          >
+            {slotNotice.text}
+          </div>
+        ) : null}
 
         <div className="mt-2 max-h-44 overflow-y-auto rounded-lg border border-border/60 bg-[#252527]">
           {slotDeclarations.map((slot, index) => {
             const ref = node.slots?.[slot.slotId]
-            const active = activeSlotId === slot.slotId
+            const active =
+              materialSelection.kind === 'single' && materialSelection.slotId === slot.slotId
             const preview = materialRefPreview(ref, sceneMaterials)
             const faceCount = faceCountBySlot.get(slot.slotId) ?? 0
-            const materialLabel = materialRefLabel(ref, sceneMaterials)
+            const materialLabel =
+              ref || slot.slotId === BLOCK_BODY_SLOT_ID
+                ? materialRefLabel(ref, sceneMaterials)
+                : 'Unpainted'
             return (
               <div
-                className={`group flex min-h-11 items-stretch border-border/50 ${
+                className={`group relative flex min-h-11 items-stretch border-border/50 ${
                   index > 0 ? 'border-t' : ''
                 } ${active ? 'bg-primary/15' : 'hover:bg-white/[0.035]'}`}
                 key={slot.slotId}
               >
                 <button
-                  className="flex w-12 shrink-0 items-center justify-center disabled:cursor-default"
-                  aria-label={`${slot.label}: ${materialLabel}`}
+                  className="absolute inset-0 z-0 rounded-none disabled:cursor-not-allowed disabled:opacity-50"
+                  aria-label={`Apply ${slot.label} to selected faces`}
                   aria-pressed={active}
-                  disabled={!editing}
-                  onClick={() => chooseSlot(slot.slotId)}
+                  disabled={!canOperateOnFaces || selectedFaceIds.length === 0 || readOnly}
+                  onClick={() => assignSlot(slot.slotId)}
                   type="button"
-                >
+                />
+                <span className="pointer-events-none relative z-10 flex w-12 shrink-0 items-center justify-center">
                   <span
                     className="h-7 w-7 shrink-0 rounded-md border border-white/10 bg-cover bg-center shadow-inner"
                     style={{
-                      backgroundColor: preview.color,
+                      backgroundColor:
+                        !ref && slot.slotId !== BLOCK_BODY_SLOT_ID ? '#7768d8' : preview.color,
                       backgroundImage: preview.imageUrl ? `url(${preview.imageUrl})` : undefined,
                     }}
                   />
-                </button>
+                </span>
 
-                <span className="flex min-w-0 flex-1 flex-col justify-center py-1.5">
+                <span className="pointer-events-none relative z-10 flex min-w-0 flex-1 flex-col justify-center py-1.5">
                   <input
                     aria-label={`Rename ${slot.label} slot`}
-                    className="h-5 min-w-0 rounded bg-transparent px-1 font-medium text-foreground text-xs outline-none focus:bg-background/70 focus:ring-1 focus:ring-primary/50 disabled:cursor-not-allowed"
+                    className="pointer-events-auto h-5 min-w-0 rounded bg-transparent px-1 font-medium text-foreground text-xs outline-none focus:bg-background/70 focus:ring-1 focus:ring-primary/50 disabled:cursor-not-allowed"
                     defaultValue={slot.label}
                     disabled={!editing || readOnly}
                     key={`${slot.slotId}:${slot.label}`}
                     onBlur={(event) => {
                       if (!event.currentTarget.value.trim()) event.currentTarget.value = slot.label
                       renameMaterialSlot(slot.slotId, event.currentTarget.value)
-                    }}
-                    onFocus={() => {
-                      if (editing) chooseSlot(slot.slotId)
                     }}
                     onKeyDown={(event) => {
                       if (event.key === 'Enter') event.currentTarget.blur()
@@ -379,12 +376,14 @@ export default function BlockPanel() {
                 </span>
 
                 {slot.slotId === BLOCK_BODY_SLOT_ID ? (
-                  <span className={`${SLOT_TRAILING_ACTION_CLASS} text-primary`}>
+                  <span
+                    className={`${SLOT_TRAILING_ACTION_CLASS} pointer-events-none relative z-10 text-primary`}
+                  >
                     {active ? <Check aria-hidden="true" className="h-4 w-4" /> : null}
                   </span>
                 ) : (
                   <button
-                    className={`${SLOT_TRAILING_ACTION_CLASS} text-muted-foreground transition-colors hover:bg-red-500/15 hover:text-red-300 focus-visible:bg-red-500/15 focus-visible:text-red-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground`}
+                    className={`${SLOT_TRAILING_ACTION_CLASS} relative z-10 text-muted-foreground transition-colors hover:bg-red-500/15 hover:text-red-300 focus-visible:bg-red-500/15 focus-visible:text-red-300 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground`}
                     aria-label={`Delete ${slot.label} slot`}
                     disabled={!editing || readOnly}
                     onClick={() => removeMaterialSlot(slot.slotId)}
@@ -397,60 +396,6 @@ export default function BlockPanel() {
               </div>
             )
           })}
-        </div>
-
-        <div className="mt-2">
-          <label
-            className="mb-1 block font-medium text-[10px] text-muted-foreground uppercase tracking-wider"
-            htmlFor={`block-reusable-material-${node.id}`}
-          >
-            Active slot material
-          </label>
-          <select
-            className="h-9 w-full rounded-md border border-border/60 bg-[#2C2C2E] px-2.5 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary/50 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={!editing || readOnly || !activeSlotId || reusableMaterialRefs.length === 0}
-            id={`block-reusable-material-${node.id}`}
-            onChange={(event) => chooseReusableMaterial(event.target.value)}
-            title={slotEditTitle}
-            value={
-              activeSlotRef && reusableMaterialRefs.includes(activeSlotRef) ? activeSlotRef : ''
-            }
-          >
-            <option value="">
-              {reusableMaterialRefs.length === 0
-                ? 'No reusable materials in this scene'
-                : 'Choose a reusable material…'}
-            </option>
-            {reusableMaterialRefs.map((ref) => (
-              <option key={ref} value={ref}>
-                {reusableMaterialLabel(ref)}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="mt-2 grid grid-cols-3 gap-1.5">
-          <ActionButton
-            className={SLOT_DISABLED_ACTION_CLASS}
-            disabled={!canOperateOnFaces || !activeSlotId}
-            label="Select"
-            onClick={() => filterSelection('select')}
-            title={slotEditTitle}
-          />
-          <ActionButton
-            className={SLOT_DISABLED_ACTION_CLASS}
-            disabled={!canOperateOnFaces || !activeSlotId}
-            label="Deselect"
-            onClick={() => filterSelection('deselect')}
-            title={slotEditTitle}
-          />
-          <ActionButton
-            className={`border-primary/50 bg-primary/15 ${SLOT_DISABLED_ACTION_CLASS} disabled:hover:bg-primary/15 disabled:active:bg-primary/15`}
-            disabled={!canOperateOnFaces || selectedFaceIds.length === 0 || !activeSlotId}
-            label="Assign"
-            onClick={assignMaterial}
-            title={slotEditTitle}
-          />
         </div>
       </PanelSection>
 
