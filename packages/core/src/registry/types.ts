@@ -335,6 +335,8 @@ export type ToolHint = {
    * so the HUD reflects reality. Omit for always-shown hints.
    */
   minDraftVertices?: number
+  /** Optional live predicate for hints that only apply in one tool sub-mode. */
+  visible?: ToolHintVisibility
   /**
    * Render this hint as a live mode chip — like the snapping / continuation
    * chips — instead of a static key row: the HUD shows the current value's
@@ -343,6 +345,13 @@ export type ToolHint = {
    * fallback when the current value has no entry in `chip.labels`.
    */
   chip?: ToolHintChip
+}
+
+export type ToolHintVisibility = {
+  /** Subscribe to changes that may alter `value`. */
+  subscribe: (onChange: () => void) => () => void
+  /** Whether the helper should render this hint now. */
+  value: () => boolean
 }
 
 export type ToolHintChip = {
