@@ -167,7 +167,7 @@ describe('shouldStartDirectMoveDrag', () => {
 })
 
 describe('pointerEventHitsEditorHandle', () => {
-  test('does not let an occluded handle claim a nearer scene body', () => {
+  test('keeps a visible resize handle from falling through to a nearer cabinet body', () => {
     expect(
       pointerEventHitsEditorHandle({
         intersections: [
@@ -179,7 +179,7 @@ describe('pointerEventHitsEditorHandle', () => {
           },
         ],
       }),
-    ).toBe(false)
+    ).toBe(true)
   })
 
   test('recognises a handle when it is the nearest R3F intersection', () => {
