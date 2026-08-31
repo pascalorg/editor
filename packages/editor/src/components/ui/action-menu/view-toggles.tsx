@@ -591,7 +591,7 @@ function ReferenceListSection({
           )}
         </div>
         <button
-          aria-label={show ? t('common.hide') : t('common.show')}
+          aria-label={show ? t('viewer.hideReferenceRow', { subject: title }) : t('viewer.showReferenceRow', { subject: title })}
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-border/40 text-muted-foreground transition-colors hover:bg-white/10 hover:text-foreground"
           onClick={() => setShow(!show)}
           type="button"
@@ -632,7 +632,7 @@ function ReferenceListSection({
                   )}
                 </button>
                 <button
-                  aria-label={t('common.delete')}
+                  aria-label={t('viewer.deleteReferenceRow', { subject: title })}
                   className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-muted-foreground/50 opacity-0 transition-all hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
                   onClick={(event) => {
                     event.stopPropagation()
