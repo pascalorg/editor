@@ -343,7 +343,7 @@ function GuidesControl() {
             </div>
           ) : (
             <div className="rounded-xl border border-border/45 border-dashed bg-background/60 px-3 py-4 text-muted-foreground text-sm">
-              {t('viewer.referencesEmptyText')}
+              {t('viewer.noGuideImagesOnLevel')}
             </div>
           )}
         </div>
@@ -524,7 +524,7 @@ function ScansControl() {
             </div>
           ) : (
             <div className="rounded-xl border border-border/45 border-dashed bg-background/60 px-3 py-4 text-muted-foreground text-sm">
-              {t('viewer.referencesEmptyText')}
+              {t('viewer.noScansOnLevel')}
             </div>
           )}
         </div>
@@ -753,7 +753,7 @@ function ReferencesControl() {
           <ReferenceListSection
             countKey="viewer.scansOnThisLevel"
             defaultNameKey="viewer.scanDefault"
-            emptyText={t('viewer.referencesEmptyText')}
+            emptyText={t('viewer.noScansOnLevel')}
             iconSrc="/icons/mesh.webp"
             nodes={scans}
             onError={setUploadError}
@@ -765,7 +765,7 @@ function ReferencesControl() {
           <ReferenceListSection
             countKey="viewer.guideImagesOnThisLevel"
             defaultNameKey="viewer.guideImageDefault"
-            emptyText={t('viewer.referencesEmptyText')}
+            emptyText={t('viewer.noGuideImagesOnLevel')}
             iconSrc="/icons/floorplan.webp"
             nodes={guides}
             onError={setUploadError}
