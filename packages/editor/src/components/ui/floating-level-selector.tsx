@@ -51,6 +51,7 @@ import { cn } from '../../lib/utils'
 import { ActionButton } from './controls/action-button'
 import { SliderControl } from './controls/slider-control'
 import { LevelDuplicateDialog } from './level-duplicate-dialog'
+import { localizedLevelName } from '../../lib/level-display'
 import {
   Dialog,
   DialogContent,
@@ -60,20 +61,6 @@ import {
   DialogTitle,
 } from './primitives/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from './primitives/popover'
-
-function localizedLevelName(
-  level: LevelNode,
-  t: (key: string, params?: Record<string, string | number>) => string,
-): string {
-  return (
-    level.name ||
-    (level.level === 0
-      ? t('level.groundFloor')
-      : level.level > 0
-        ? t('level.floor', { n: level.level })
-        : t('level.basement', { n: -level.level }))
-  )
-}
 
 // ── Inline rename input for a level row ─────────────────────────────────────
 

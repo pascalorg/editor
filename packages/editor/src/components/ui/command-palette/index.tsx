@@ -10,7 +10,7 @@ import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/shallow'
 import { Dialog, DialogContent, DialogTitle } from './../../../components/ui/primitives/dialog'
-import { getLevelDisplayName } from '@pascal-app/core'
+import { localizedLevelName } from '../../../lib/level-display'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import { usePaletteViewRegistry } from '../../../store/use-palette-view-registry'
 import { useTranslations } from '../../../lib/i18n'
@@ -408,7 +408,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
                     <OptionItem
                       isActive={level.id === activeLevelId}
                       key={level.id}
-                      label={getLevelDisplayName(level)}
+                      label={localizedLevelName(level, t)}
                       onSelect={() =>
                         run(() => useViewer.getState().setSelection({ levelId: level.id }))
                       }

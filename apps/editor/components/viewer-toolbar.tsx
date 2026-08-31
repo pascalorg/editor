@@ -121,7 +121,7 @@ const VIEW_MODES: { id: ViewMode; labelKey: string; icon: React.ReactNode }[] = 
 
 const levelModeOrder = ['stacked', 'exploded', 'solo'] as const
 const levelModeLabels = {
-  manual: 'viewer.stack',
+  manual: 'viewer.manual',
   stacked: 'viewer.stack',
   exploded: 'viewer.exploded',
   solo: 'viewer.solo',
