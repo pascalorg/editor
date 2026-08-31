@@ -22,7 +22,12 @@ import {
   itemPlanAabb,
   type PlanAabb,
 } from './layout-clearance'
-import { publishLiveSceneSnapshot } from './live-sync'
+import {
+  type LiveSyncStatus,
+  liveSyncOutput,
+  persistencePayload,
+  publishLiveSceneSnapshot,
+} from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema } from './schemas'
 
@@ -69,6 +74,7 @@ export const createRoomOutput = {
   ceilingId: z.string(),
   wallIds: z.array(z.string()),
   areaSqMeters: z.number(),
+  ...liveSyncOutput,
 }
 
 export const addDoorInput = {
@@ -89,6 +95,7 @@ export const addDoorOutput = {
   wallLength: z.number(),
   clamped: z.boolean(),
   coordinateSystem: z.literal('wall-local-meters'),
+  ...liveSyncOutput,
 }
 
 export const addWindowInput = {
@@ -112,6 +119,7 @@ export const addWindowOutput = {
   clamped: z.boolean(),
   coordinateSystem: z.literal('wall-local-meters'),
   sillHeight: z.number(),
+  ...liveSyncOutput,
 }
 
 export const furnishRoomInput = {
@@ -126,6 +134,7 @@ export const furnishRoomOutput = {
   placed: z.number(),
   itemIds: z.array(z.string()),
   skipped: z.array(z.string()),
+  ...liveSyncOutput,
 }
 
 type Placement = {
@@ -460,7 +469,7 @@ export function registerCreateRoom(server: McpServer, bridge: SceneOperations): 
           parentId: levelId as AnyNodeId,
         })),
       ])
-      await publishLiveSceneSnapshot(bridge, 'create_room')
+      const persistence = await publishLiveSceneSnapshot(bridge, 'create_room')
 
       return textResult({
         zoneId: zone.id,
@@ -468,6 +477,7 @@ export function registerCreateRoom(server: McpServer, bridge: SceneOperations): 
         ceilingId: ceiling.id,
         wallIds: walls.map((wall) => wall.id),
         areaSqMeters: Math.round(polygonArea(points) * 100) / 100,
+        ...persistencePayload(persistence),
       })
     },
   )
@@ -504,7 +514,7 @@ export function registerAddDoor(server: McpServer, bridge: SceneOperations): voi
         ...(swingDirection ? { swingDirection } : {}),
       })
       const id = bridge.createNode(door, wallId as AnyNodeId)
-      await publishLiveSceneSnapshot(bridge, 'add_door')
+      const persistence = await publishLiveSceneSnapshot(bridge, 'add_door')
       return textResult({
         doorId: id,
         localX,
@@ -513,6 +523,7 @@ export function registerAddDoor(server: McpServer, bridge: SceneOperations): voi
         wallLength: length,
         clamped: Math.abs(localX - wallT * length) > 1e-9,
         coordinateSystem: 'wall-local-meters',
+        ...persistencePayload(persistence),
       })
     },
   )
@@ -547,7 +558,7 @@ export function registerAddWindow(server: McpServer, bridge: SceneOperations): v
         height,
       })
       const id = bridge.createNode(windowNode, wallId as AnyNodeId)
-      await publishLiveSceneSnapshot(bridge, 'add_window')
+      const persistence = await publishLiveSceneSnapshot(bridge, 'add_window')
       return textResult({
         windowId: id,
         localX,
@@ -557,6 +568,7 @@ export function registerAddWindow(server: McpServer, bridge: SceneOperations): v
         clamped: Math.abs(localX - wallT * length) > 1e-9,
         coordinateSystem: 'wall-local-meters',
         sillHeight,
+        ...persistencePayload(persistence),
       })
     },
   )
@@ -663,6 +675,7 @@ export function registerFurnishRoom(server: McpServer, bridge: SceneOperations):
         )
       }
 
+      let persistence: LiveSyncStatus = 'published'
       if (items.length > 0) {
         bridge.applyPatch(
           items.map((item) => ({
@@ -671,13 +684,14 @@ export function registerFurnishRoom(server: McpServer, bridge: SceneOperations):
             parentId: room.levelId as AnyNodeId,
           })),
         )
-        await publishLiveSceneSnapshot(bridge, 'furnish_room')
+        persistence = await publishLiveSceneSnapshot(bridge, 'furnish_room')
       }
 
       return textResult({
         placed: items.length,
         itemIds: items.map((item) => item.id),
         skipped,
+        ...persistencePayload(persistence),
       })
     },
   )
