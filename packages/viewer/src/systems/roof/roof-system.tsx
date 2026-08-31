@@ -11,6 +11,8 @@ import {
   getRoofShapeInsets,
   getRoofShapeRatios,
   getSegmentSlopeFrame,
+  getWallCurveFrameAt,
+  getWallCurveLength,
   hasSegmentMaterialOverride,
   isBandedShedSegment,
   nodeRegistry,
@@ -2389,26 +2391,56 @@ function transformShedPlanPoint(
   point: readonly [number, number],
   nodes?: Record<string, AnyNode>,
 ): [number, number] {
-  const rotation = node.rotation ?? 0
-  const cos = Math.cos(rotation)
-  const sin = Math.sin(rotation)
-  const segmentPoint: [number, number] = [
-    (node.position[0] ?? 0) + point[0] * cos + point[1] * sin,
-    (node.position[2] ?? 0) - point[0] * sin + point[1] * cos,
-  ]
+  // `shedFootprintPieces` are persisted in the flat segment frame, while a
+  // curved host's rendered deck is bent onto its annular band below. Keep the
+  // overlap/joint queries in that same rendered frame; otherwise a curved run
+  // can be matched against a neighbour at the opposite end of the wall.
   const ownerId =
     node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
       ? (node.metadata as Record<string, unknown>).managedByLeanTo
       : undefined
+  const bent =
+    node.arc && typeof ownerId === 'string'
+      ? bendBandPoint(node.arc, bandSignedRef(node.arc), point[0], point[1])
+      : { x: point[0], z: point[1] }
+  const rotation = node.rotation ?? 0
+  const cos = Math.cos(rotation)
+  const sin = Math.sin(rotation)
+  const segmentPoint: [number, number] = [
+    (node.position[0] ?? 0) + bent.x * cos + bent.z * sin,
+    (node.position[2] ?? 0) - bent.x * sin + bent.z * cos,
+  ]
   const owner = typeof ownerId === 'string' ? nodes?.[ownerId] : undefined
   if (owner?.type !== 'lean-to-extension') return segmentPoint
-  const ownerRotation = owner.rotation[1] ?? 0
+  const ownerWall = owner.parentId ? nodes?.[owner.parentId as AnyNodeId] : undefined
+  const ownerPose = ownerWall?.type === 'wall' ? wallHostedShedPose(ownerWall, owner) : null
+  const ownerRotation = ownerPose?.rotationY ?? owner.rotation[1] ?? 0
   const ownerCos = Math.cos(ownerRotation)
   const ownerSin = Math.sin(ownerRotation)
+  const ownerX = ownerPose?.position[0] ?? owner.position[0] ?? 0
+  const ownerZ = ownerPose?.position[2] ?? owner.position[2] ?? 0
   return [
-    (owner.position[0] ?? 0) + segmentPoint[0] * ownerCos + segmentPoint[1] * ownerSin,
-    (owner.position[2] ?? 0) - segmentPoint[0] * ownerSin + segmentPoint[1] * ownerCos,
+    ownerX + segmentPoint[0] * ownerCos + segmentPoint[1] * ownerSin,
+    ownerZ - segmentPoint[0] * ownerSin + segmentPoint[1] * ownerCos,
   ]
+}
+
+function wallHostedShedPose(
+  wall: Extract<AnyNode, { type: 'wall' }>,
+  owner: Extract<AnyNode, { type: 'lean-to-extension' }>,
+): { position: [number, number, number]; rotationY: number } {
+  const length = getWallCurveLength(wall)
+  const t = length > 1e-6 ? Math.max(0, Math.min(1, owner.position[0] / length)) : 0
+  const frame = getWallCurveFrameAt(wall, t)
+  const angle = Math.atan2(frame.tangent.y, frame.tangent.x)
+  return {
+    position: [
+      frame.point.x + frame.normal.x * owner.position[2],
+      owner.position[1],
+      frame.point.y + frame.normal.y * owner.position[2],
+    ],
+    rotationY: -angle + (owner.rotation[1] ?? 0),
+  }
 }
 
 function inverseTransformShedPlanPoint(
@@ -2423,11 +2455,15 @@ function inverseTransformShedPlanPoint(
   const owner = typeof ownerId === 'string' ? nodes?.[ownerId] : undefined
   let source = point
   if (owner?.type === 'lean-to-extension') {
-    const ownerRotation = owner.rotation[1] ?? 0
+    const ownerWall = owner.parentId ? nodes?.[owner.parentId as AnyNodeId] : undefined
+    const ownerPose = ownerWall?.type === 'wall' ? wallHostedShedPose(ownerWall, owner) : null
+    const ownerRotation = ownerPose?.rotationY ?? owner.rotation[1] ?? 0
     const ownerCos = Math.cos(ownerRotation)
     const ownerSin = Math.sin(ownerRotation)
-    const dx = point[0] - (owner.position[0] ?? 0)
-    const dz = point[1] - (owner.position[2] ?? 0)
+    const ownerX = ownerPose?.position[0] ?? owner.position[0] ?? 0
+    const ownerZ = ownerPose?.position[2] ?? owner.position[2] ?? 0
+    const dx = point[0] - ownerX
+    const dz = point[1] - ownerZ
     source = [dx * ownerCos - dz * ownerSin, dx * ownerSin + dz * ownerCos]
   }
   const rotation = node.rotation ?? 0
@@ -2435,7 +2471,16 @@ function inverseTransformShedPlanPoint(
   const sin = Math.sin(rotation)
   const dx = source[0] - (node.position[0] ?? 0)
   const dz = source[1] - (node.position[2] ?? 0)
-  return [dx * cos - dz * sin, dx * sin + dz * cos]
+  const segmentPoint = [dx * cos - dz * sin, dx * sin + dz * cos] as [number, number]
+  if (!node.arc || typeof ownerId !== 'string') return segmentPoint
+
+  const signedRef = bandSignedRef(node.arc)
+  const radialX = segmentPoint[0] - node.arc.centerX
+  const radialZ = segmentPoint[1] - node.arc.centerZ
+  const radialSign = -(Math.sign(node.arc.centerZ) || 1)
+  const phi = Math.atan2(-radialX * radialSign, radialZ * radialSign)
+  const radial = Math.hypot(radialX, radialZ) * radialSign
+  return [node.arc.centerX + phi * signedRef, node.arc.centerZ + radial]
 }
 
 function pointInOrNearShedPolygon(
@@ -2700,6 +2745,22 @@ function shedVerticalThickness(node: RoofSegmentNode): number {
   return node.deckThickness / Math.max(0.1, cosTheta) + node.shingleThickness * cosTheta
 }
 
+function siblingShedTopYInNodeFrame(
+  node: RoofSegmentNode,
+  sibling: RoofSegmentNode,
+  point: readonly [number, number],
+  nodes: Record<string, AnyNode>,
+): number {
+  const worldPoint = transformShedPlanPoint(node, point, nodes)
+  const siblingPoint = inverseTransformShedPlanPoint(sibling, worldPoint, nodes)
+  return (
+    shedWorldYOrigin(sibling, nodes) +
+    getRoofSegmentSurfaceY(sibling, siblingPoint[0], siblingPoint[1]) +
+    shedVerticalThickness(sibling) -
+    shedWorldYOrigin(node, nodes)
+  )
+}
+
 function buildShedJointTransitionFaces(
   node: RoofSegmentNode,
   sibling: RoofSegmentNode,
@@ -2708,18 +2769,9 @@ function buildShedJointTransitionFaces(
   nodes: Record<string, AnyNode>,
   verticalThickness: number,
 ): THREE.Vector3[][] {
-  const nodeWorldY = shedWorldYOrigin(node, nodes)
-  const siblingWorldY = shedWorldYOrigin(sibling, nodes)
-  const siblingThickness = shedVerticalThickness(sibling)
   const heights = (point: readonly [number, number]) => {
     const ownTop = getRoofSegmentSurfaceY(node, point[0], point[1]) + verticalThickness
-    const worldPoint = transformShedPlanPoint(node, point, nodes)
-    const siblingPoint = inverseTransformShedPlanPoint(sibling, worldPoint, nodes)
-    const siblingTop =
-      siblingWorldY +
-      getRoofSegmentSurfaceY(sibling, siblingPoint[0], siblingPoint[1]) +
-      siblingThickness -
-      nodeWorldY
+    const siblingTop = siblingShedTopYInNodeFrame(node, sibling, point, nodes)
     return { ownTop, siblingTop }
   }
   const startHeights = heights(start)
@@ -2911,8 +2963,29 @@ function buildCustomShedGeometry(
     }, 0)
     if (Math.abs(signedArea) <= 1e-9) continue
     const outline = signedArea > 0 ? sanitized : [...sanitized].reverse()
+    const edgeSiblings = banded
+      ? outline.map(() => undefined)
+      : outline.map((point, index) => {
+          const next = outline[(index + 1) % outline.length]!
+          return edgeTouchesSiblingShed(node, point, next, nodes)
+            ? findSiblingShedAcrossEdge(node, point, next, nodes)
+            : undefined
+        })
+    const topY = outline.map(([x, z]) => getRoofSegmentSurfaceY(node, x, z) + verticalThickness)
+    // A convex curved/straight joint places its triangular infill on the
+    // straight run. Pin that patch's shared edge to the curved surface so the
+    // infill meets both roofs instead of floating above the curved seam.
+    if (!banded && outline.length === 3 && nodes) {
+      for (let index = 0; index < outline.length; index++) {
+        const sibling = edgeSiblings[index]
+        if (!sibling?.arc) continue
+        const next = (index + 1) % outline.length
+        topY[index] = siblingShedTopYInNodeFrame(node, sibling, outline[index]!, nodes)
+        topY[next] = siblingShedTopYInNodeFrame(node, sibling, outline[next]!, nodes)
+      }
+    }
     const bottom = outline.map(
-      ([x, z]) => new THREE.Vector3(x, getRoofSegmentSurfaceY(node, x, z), z),
+      ([x, z], index) => new THREE.Vector3(x, topY[index]! - verticalThickness, z),
     )
     const triangles = THREE.ShapeUtils.triangulateShape(
       outline.map(([x, z]) => new THREE.Vector2(x, z)),
@@ -2943,13 +3016,12 @@ function buildCustomShedGeometry(
           ),
           new THREE.Vector3(bottom[next]!.x, bottom[next]!.y + verticalThickness, bottom[next]!.z),
         ]
-        const touchesSibling = edgeTouchesSiblingShed(node, outline[index]!, outline[next]!, nodes)
-        if (!touchesSibling) {
+        const sibling = edgeSiblings[index]
+        if (!sibling) {
           faces.push(sideFace)
           continue
         }
-        const sibling = findSiblingShedAcrossEdge(node, outline[index]!, outline[next]!, nodes)
-        if (sibling && nodes) {
+        if (nodes && Boolean(node.arc) === Boolean(sibling.arc)) {
           jointTransitionFaces.push(
             ...buildShedJointTransitionFaces(
               node,
@@ -2974,8 +3046,13 @@ function buildCustomShedGeometry(
   }
 
   if (banded) {
-    const boundaryFaces = unionPolygons(pieces.map((piece) => [...piece])).flatMap((polygon) =>
-      facetBandedRoofBoundary(sanitizeRoofPlanPolygon(polygon), node.width).map(([start, end]) => {
+    const boundaryFaces: THREE.Vector3[][] = []
+    const jointTransitionFaces: THREE.Vector3[][] = []
+    for (const polygon of unionPolygons(pieces.map((piece) => [...piece]))) {
+      for (const [start, end] of facetBandedRoofBoundary(
+        sanitizeRoofPlanPolygon(polygon),
+        node.width,
+      )) {
         const startBottom = new THREE.Vector3(
           start[0],
           getRoofSegmentSurfaceY(node, start[0], start[1]),
@@ -2986,15 +3063,30 @@ function buildCustomShedGeometry(
           getRoofSegmentSurfaceY(node, end[0], end[1]),
           end[1],
         )
-        return [
+        const sibling = edgeTouchesSiblingShed(node, start, end, nodes)
+          ? findSiblingShedAcrossEdge(node, start, end, nodes)
+          : undefined
+        if (sibling && nodes && Boolean(node.arc) === Boolean(sibling.arc)) {
+          jointTransitionFaces.push(
+            ...buildShedJointTransitionFaces(node, sibling, start, end, nodes, verticalThickness),
+          )
+          continue
+        }
+        if (sibling) continue
+        boundaryFaces.push([
           endBottom,
           startBottom,
           new THREE.Vector3(startBottom.x, startBottom.y + verticalThickness, startBottom.z),
           new THREE.Vector3(endBottom.x, endBottom.y + verticalThickness, endBottom.z),
-        ]
-      }),
-    )
-    geometries.push(createGeometryFromFaces(boundaryFaces, ROOF_EDGE_MATERIAL_INDEX))
+        ])
+      }
+    }
+    if (boundaryFaces.length > 0) {
+      geometries.push(createGeometryFromFaces(boundaryFaces, ROOF_EDGE_MATERIAL_INDEX))
+    }
+    if (jointTransitionFaces.length > 0) {
+      geometries.push(createGeometryFromFaces(jointTransitionFaces, 3))
+    }
   }
 
   if (geometries.length === 0) return null

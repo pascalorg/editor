@@ -1,7 +1,13 @@
 // @ts-expect-error - bun:test is provided by the Bun runtime; viewer does not
 // include Bun globals in its package tsconfig.
 import { describe, expect, test } from 'bun:test'
-import { RoofNode, RoofSegmentNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  LeanToExtensionNode,
+  RoofNode,
+  RoofSegmentNode,
+  WallNode,
+} from '@pascal-app/core'
 import * as THREE from 'three'
 import { generateRoofSegmentGeometry } from './roof-system'
 
@@ -444,6 +450,156 @@ describe('roof system shed geometry', () => {
     expect(Math.min(...topHighYs)).toBeGreaterThan(Math.max(...topLowYs))
 
     geometry.dispose()
+  })
+
+  test('keeps the curved-to-straight miter patch flush along the full seam', () => {
+    const curvedWall = WallNode.parse({
+      id: 'wall_curved_transition',
+      parentId: 'level_curved_transition',
+      start: [8, 8.5],
+      end: [0.5, 3],
+      curveOffset: 2,
+    })
+    const straightWall = WallNode.parse({
+      id: 'wall_straight_transition',
+      parentId: 'level_curved_transition',
+      start: [0.5, 3],
+      end: [-5.5, 7],
+    })
+    const curvedLeanTo = LeanToExtensionNode.parse({
+      id: 'leanto_curved_transition',
+      parentId: curvedWall.id,
+      position: [5.20303160795228, 0, 0.05],
+      span: 10.106063215904559,
+      projection: 2.5,
+      highEdgeHeight: 2.3,
+      pitch: 10,
+    })
+    const straightLeanTo = LeanToExtensionNode.parse({
+      id: 'leanto_straight_transition',
+      parentId: straightWall.id,
+      position: [3.6055512754639896, 0, 0.05],
+      span: 6.911102550927978,
+      projection: 2.5,
+      highEdgeHeight: 2.3,
+      pitch: 10,
+    })
+    const curvedRoof = RoofNode.parse({
+      id: 'roof_curved_transition',
+      parentId: curvedLeanTo.id,
+      children: ['rseg_curved_transition'],
+    })
+    const straightRoof = RoofNode.parse({
+      id: 'roof_straight_transition',
+      parentId: straightLeanTo.id,
+      children: ['rseg_straight_transition'],
+    })
+    const curvedSegment = RoofSegmentNode.parse({
+      id: 'rseg_curved_transition',
+      parentId: curvedRoof.id,
+      metadata: {
+        managedByLeanTo: curvedLeanTo.id,
+        leanToShedJointNeighbors: [straightLeanTo.id],
+      },
+      position: [0, 1.68852513052742, 1.363],
+      roofType: 'shed',
+      width: 10.40606321590456,
+      depth: 2.77,
+      pitch: 10,
+      wallThickness: 0.01,
+      deckThickness: 0.1,
+      shingleThickness: 0.025,
+      arc: { centerX: 0, centerZ: 4.993249999999998, radius: 6.406249999999998 },
+      shedFootprintPieces: [
+        [
+          [-5.20303160795228, -1.383],
+          [5.20303160795228, -1.383],
+          [5.20303160795228, 1.3850000000000002],
+          [-5.20303160795228, 1.3850000000000002],
+        ],
+      ],
+      managedByParent: true,
+      wallShell: 'omit',
+    })
+    const straightSegment = RoofSegmentNode.parse({
+      id: 'rseg_straight_transition',
+      parentId: straightRoof.id,
+      metadata: {
+        managedByLeanTo: straightLeanTo.id,
+        leanToShedJointNeighbors: [curvedLeanTo.id],
+      },
+      position: [0, 1.68852513052742, 1.363],
+      roofType: 'shed',
+      width: 7.211102550927979,
+      depth: 2.77,
+      pitch: 10,
+      wallThickness: 0.01,
+      deckThickness: 0.1,
+      shingleThickness: 0.025,
+      shedFootprintPieces: [
+        [
+          [-3.6055512754639896, -1.383],
+          [3.6055512754639896, -1.383],
+          [3.6055512754639896, 1.3850000000000002],
+          [-3.6055512754639896, 1.3850000000000002],
+        ],
+        [
+          [-3.6319612690700067, -1.4272651623364798],
+          [-6.10960453124532, -2.661407725169994],
+          [-3.6055512754639896, 1.3850000000000002],
+        ],
+      ],
+      managedByParent: true,
+      wallShell: 'omit',
+    })
+    const nodes = Object.fromEntries(
+      [
+        curvedWall,
+        straightWall,
+        curvedLeanTo,
+        straightLeanTo,
+        curvedRoof,
+        straightRoof,
+        curvedSegment,
+        straightSegment,
+      ].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    const curvedGeometry = generateRoofSegmentGeometry(curvedSegment, nodes)
+    const straightGeometry = generateRoofSegmentGeometry(straightSegment, nodes)
+    const topAt = (geometry: THREE.BufferGeometry, point: readonly [number, number]) => {
+      const position = geometry.getAttribute('position')
+      const heights: number[] = []
+      for (let index = 0; index < position.count; index++) {
+        if (Math.hypot(position.getX(index) - point[0], position.getZ(index) - point[1]) < 1e-4) {
+          heights.push(position.getY(index))
+        }
+      }
+      return Math.max(...heights)
+    }
+    const bend = ([x, z]: readonly [number, number]): [number, number] => {
+      const arc = curvedSegment.arc!
+      const signedRef = (Math.sign(arc.centerZ) || 1) * arc.radius
+      const phi = (x - arc.centerX) / signedRef
+      const radial = z - arc.centerZ
+      return [arc.centerX - radial * Math.sin(phi), arc.centerZ + radial * Math.cos(phi)]
+    }
+    const curvedSeam = [
+      bend([5.20303160795228, -1.383]),
+      bend([5.20303160795228, 1.3850000000000002]),
+    ] as const
+    const straightSeam = straightSegment.shedFootprintPieces![1]!.slice(0, 2)
+
+    expect(topAt(straightGeometry, straightSeam[0]!)).toBeCloseTo(
+      topAt(curvedGeometry, curvedSeam[0]),
+      5,
+    )
+    expect(topAt(straightGeometry, straightSeam[1]!)).toBeCloseTo(
+      topAt(curvedGeometry, curvedSeam[1]),
+      5,
+    )
+    curvedGeometry.dispose()
+    straightGeometry.dispose()
   })
 })
 
