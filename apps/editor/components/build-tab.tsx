@@ -1,6 +1,11 @@
 'use client'
 
-import { nodeRegistry } from '@pascal-app/core'
+import {
+  nodeRegistry,
+  type RoofType,
+  RoofType as RoofTypeSchema,
+  useRegistryVersion,
+} from '@pascal-app/core'
 import {
   type FloorplanMode,
   getFloorplanNodeExtension,
@@ -13,13 +18,20 @@ import {
 } from '@pascal-app/editor'
 import { useLiquidLineToolOptions } from '@pascal-app/nodes'
 import Image from 'next/image'
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import {
   Tooltip,
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/toolbar-tooltip'
+import {
+  getActiveRoofFeatureId,
+  getRoofFootprintSource,
+  getRoofFootprintSources,
+  ROOF_TYPE_OPTIONS,
+  type RoofFootprintSource,
+} from '@/lib/build-tab-state'
 import { cn } from '@/lib/utils'
 
 /**
@@ -169,9 +181,35 @@ function activateTerrainSculptMode(): void {
   useEditor.getState().setMode('terrain-sculpt')
 }
 
-type RoofFeature = { kind: string; label: string; iconSrc: string }
+type RoofFeature = {
+  id: string
+  label: string
+  iconSrc: string
+  kind?: string
+}
 
 const ROOF_FEATURE_FALLBACK_ICON = '/icons/roof.webp'
+
+function collectRoofFeatures(): RoofFeature[] {
+  const features: RoofFeature[] = []
+  for (const [kind, def] of nodeRegistry.entries()) {
+    if (
+      def.capabilities.roofAccessory === undefined &&
+      def.presentation?.paletteGroup !== 'roof-features'
+    ) {
+      continue
+    }
+    if (def.capabilities.wallOpeningPlacement) continue
+    const icon = def.presentation?.icon
+    features.push({
+      id: kind,
+      kind,
+      label: def.presentation?.label ?? kind,
+      iconSrc: icon?.kind === 'url' ? icon.src : ROOF_FEATURE_FALLBACK_ICON,
+    })
+  }
+  return features
+}
 
 /**
  * Roof accessories and extensions surfaced under the Roof tile. Unlike the
@@ -181,13 +219,29 @@ const ROOF_FEATURE_FALLBACK_ICON = '/icons/roof.webp'
  * populated during app bootstrap. Label + icon come from `presentation`;
  * non-url icons fall back to the roof icon.
  */
-function activateRoofFeatureTool(kind: string): void {
+function activateRoofFeatureTool(feature: RoofFeature): void {
   const ed = useEditor.getState()
   ed.setPhase('structure')
   ed.setStructureLayer('elements')
   ed.setCatalogCategory(null)
   ed.setMode('build')
-  ed.setTool(kind)
+  if (feature.kind) ed.setTool(feature.kind)
+}
+
+function activateRoofType(roofType: RoofType): void {
+  const editor = useEditor.getState()
+  if (!(editor.mode === 'build' && editor.tool === 'roof')) activateBuildTool('roof')
+  const footprintSource = getRoofFootprintSource(
+    roofType,
+    editor.toolDefaults.roof?.footprintSource,
+  )
+  editor.setToolDefaults('roof', { ...editor.toolDefaults.roof, roofType, footprintSource })
+}
+
+function activateRoofFootprintSource(footprintSource: RoofFootprintSource): void {
+  const editor = useEditor.getState()
+  if (!(editor.mode === 'build' && editor.tool === 'roof')) activateBuildTool('roof')
+  editor.setToolDefaults('roof', { ...editor.toolDefaults.roof, footprintSource })
 }
 
 /**
@@ -208,18 +262,17 @@ const MEP_TOOL_KINDS = new Set<string>([
 export function BuildTab() {
   const activeTool = useEditor((s) => s.tool)
   const mode = useEditor((s) => s.mode)
+  const roofDefaults = useEditor((s) => s.toolDefaults.roof)
   const floorplanMode = useFloorplanMode((s) => s.mode)
   const follow = useLiquidLineToolOptions((s) => s.follow)
   const toggleFollow = useLiquidLineToolOptions((s) => s.toggleFollow)
+  useRegistryVersion()
   const registryReady = useSyncExternalStore(
     subscribeToClientMount,
     () => true,
     () => false,
   )
-  const buildTypes = useMemo(
-    () => (registryReady ? collectBuildTypes(floorplanMode) : BASE_BUILD_TYPES),
-    [floorplanMode, registryReady],
-  )
+  const buildTypes = registryReady ? collectBuildTypes(floorplanMode) : BASE_BUILD_TYPES
 
   // The fitting / follow tools are armed from a segment's panel, not a grid
   // tile — keep the segment tile lit so the panel (and the way back) stays
@@ -242,29 +295,7 @@ export function BuildTab() {
 
   // Read at render time (not module scope): the registry is populated by the
   // app bootstrap, so enumerating earlier would race it and see no kinds.
-  const roofFeatures = useMemo<RoofFeature[]>(() => {
-    if (!registryReady) return []
-    const features: RoofFeature[] = []
-    for (const [kind, def] of nodeRegistry.entries()) {
-      if (
-        def.capabilities.roofAccessory === undefined &&
-        def.presentation?.paletteGroup !== 'roof-features'
-      ) {
-        continue
-      }
-      // Door / window declare `roofAccessory` for the wall-face cut but
-      // already have their own Build tiles — listing them here too
-      // would duplicate the entry under Roof → Features.
-      if (def.capabilities.wallOpeningPlacement) continue
-      const icon = def.presentation?.icon
-      features.push({
-        kind,
-        label: def.presentation?.label ?? kind,
-        iconSrc: icon?.kind === 'url' ? icon.src : ROOF_FEATURE_FALLBACK_ICON,
-      })
-    }
-    return features
-  }, [registryReady])
+  const roofFeatures = registryReady ? collectRoofFeatures() : []
 
   // Tile highlight derives from the single source of truth (the active tool /
   // mode), never a separate local selection — so keyboard shortcuts and panel
@@ -272,9 +303,16 @@ export function BuildTab() {
   // The roof Features sub-grid arms roof-accessory tools (skylight, chimney,
   // …); keep the Roof tile lit (and its panel open) while any of them is the
   // active tool, the same way MEP stays lit for its sub-grid tools.
-  const isRoofFeatureActive =
-    mode === 'build' && !!activeTool && roofFeatures.some((f) => f.kind === activeTool)
+  const activeRoofFeatureId = getActiveRoofFeatureId(roofFeatures, activeTool)
+  const isRoofFeatureActive = mode === 'build' && activeRoofFeatureId !== null
   const isMepActive = mode === 'build' && !!activeTool && MEP_TOOL_KINDS.has(activeTool)
+  const parsedRoofType = RoofTypeSchema.safeParse(roofDefaults?.roofType)
+  const activeRoofType = parsedRoofType.success ? parsedRoofType.data : 'gable'
+  const footprintSources = getRoofFootprintSources(activeRoofType)
+  const activeFootprintSource = getRoofFootprintSource(
+    activeRoofType,
+    roofDefaults?.footprintSource,
+  )
 
   const isTypeActive = (type: BuildType) => {
     if (type.mode) return mode === type.mode
@@ -364,54 +402,124 @@ export function BuildTab() {
         <div className="min-h-0 flex-1 overflow-y-auto">
           <TerrainSculptPanel />
         </div>
-      ) : mode === 'build' &&
-        (activeTool === 'roof' || isRoofFeatureActive) &&
-        roofFeatures.length > 0 ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-          <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">
-            Features & extensions
-          </div>
-          <TooltipProvider delayDuration={0} disableHoverableContent>
-            <div
-              className="grid gap-1.5"
-              style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
-            >
-              {roofFeatures.map((feature) => {
-                const active = mode === 'build' && activeTool === feature.kind
+      ) : mode === 'build' && (activeTool === 'roof' || isRoofFeatureActive) ? (
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
+          <div className="flex flex-col gap-2">
+            <div className="px-0.5 pt-1 font-medium text-muted-foreground text-xs">Roof type</div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {ROOF_TYPE_OPTIONS.map((roofType) => {
+                const active = activeTool === 'roof' && activeRoofType === roofType.value
                 return (
-                  <Tooltip key={feature.kind}>
-                    <TooltipTrigger asChild>
-                      <button
-                        className={cn(
-                          'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
-                          active
-                            ? 'bg-primary/10 ring-1 ring-primary/50'
-                            : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
-                        )}
-                        onClick={() => {
-                          triggerSFX('sfx:menu-click')
-                          activateRoofFeatureTool(feature.kind)
-                        }}
-                        onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                        type="button"
-                      >
-                        <Image
-                          alt={feature.label}
-                          className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
-                          height={48}
-                          src={feature.iconSrc}
-                          width={48}
-                        />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent className="pointer-events-none" side="top">
-                      {feature.label}
-                    </TooltipContent>
-                  </Tooltip>
+                  <button
+                    aria-pressed={active}
+                    className={cn(
+                      'rounded-lg px-2.5 py-2 text-left font-medium text-xs transition-colors',
+                      active
+                        ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
+                        : 'bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground',
+                    )}
+                    key={roofType.value}
+                    onClick={() => {
+                      triggerSFX('sfx:menu-click')
+                      activateRoofType(roofType.value)
+                    }}
+                    onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                    type="button"
+                  >
+                    {roofType.label}
+                  </button>
                 )
               })}
             </div>
-          </TooltipProvider>
+          </div>
+
+          {activeRoofType !== 'conical' && (
+            <div className="flex flex-col gap-2 border-border/50 border-t pt-3">
+              <div className="px-0.5 font-medium text-muted-foreground text-xs">Create from</div>
+              <div className="grid grid-cols-2 gap-1.5">
+                {footprintSources.map((source) => {
+                  const active = activeTool === 'roof' && activeFootprintSource === source.value
+                  return (
+                    <button
+                      aria-pressed={active}
+                      className={cn(
+                        'rounded-lg px-2 py-2 text-center font-medium text-xs transition-colors',
+                        active
+                          ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
+                          : 'bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground',
+                      )}
+                      key={source.value}
+                      onClick={() => {
+                        triggerSFX('sfx:menu-click')
+                        activateRoofFootprintSource(source.value)
+                      }}
+                      onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                      type="button"
+                    >
+                      {source.label}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="px-0.5 text-[11px] text-muted-foreground leading-relaxed">
+                {activeFootprintSource === 'room'
+                  ? 'Hover a room to preview its boundary, then click to place.'
+                  : activeFootprintSource === 'walls'
+                    ? 'Select a curved wall to match its radius and arc.'
+                    : 'Draw the roof footprint with two corner clicks.'}
+              </p>
+            </div>
+          )}
+
+          {roofFeatures.length > 0 ? (
+            <div className="flex flex-col gap-2 border-border/50 border-t pt-3">
+              <div className="px-0.5 font-medium text-muted-foreground text-xs">
+                Features & extensions
+              </div>
+              <TooltipProvider delayDuration={0} disableHoverableContent>
+                <div
+                  className="grid gap-1.5"
+                  style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(56px, 1fr))' }}
+                >
+                  {roofFeatures.map((feature) => {
+                    const active = mode === 'build' && feature.id === activeRoofFeatureId
+                    return (
+                      <Tooltip key={feature.id}>
+                        <TooltipTrigger asChild>
+                          <button
+                            aria-pressed={active}
+                            className={cn(
+                              'group relative flex aspect-square items-center justify-center rounded-xl p-1 transition-all duration-200',
+                              active
+                                ? 'bg-primary/10 ring-1 ring-primary/50'
+                                : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
+                            )}
+                            onClick={() => {
+                              triggerSFX('sfx:menu-click')
+                              activateRoofFeatureTool(feature)
+                            }}
+                            onMouseEnter={() => triggerSFX('sfx:menu-hover')}
+                            type="button"
+                          >
+                            <Image
+                              alt={feature.label}
+                              className="size-full object-contain transition-transform duration-200 group-hover:scale-110"
+                              height={48}
+                              src={feature.iconSrc}
+                              width={48}
+                            />
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent className="pointer-events-none" side="top">
+                          {feature.label}
+                        </TooltipContent>
+                      </Tooltip>
+                    )
+                  })}
+                </div>
+              </TooltipProvider>
+            </div>
+          ) : null}
         </div>
       ) : isMepActive ? (
         <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">

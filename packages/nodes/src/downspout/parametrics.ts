@@ -8,7 +8,7 @@ export const downspoutParametrics: ParametricDescriptor<DownspoutNode> = {
     {
       label: 'Dimensions',
       fields: [
-        { key: 'length', kind: 'number', unit: 'm', min: 0.1, max: 8, step: 0.05 },
+        { key: 'length', kind: 'number', unit: 'm', min: 0.1, max: 1000, step: 0.05 },
         { key: 'diameter', kind: 'number', unit: 'm', min: 0.02, max: 0.15, step: 0.005 },
         // Cross-section: follow the gutter profile, or force round / rect.
         {

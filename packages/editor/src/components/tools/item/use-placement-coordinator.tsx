@@ -59,6 +59,7 @@ import useAlignmentGuides from '../../../store/use-alignment-guides'
 import useEditor, { isAlignmentGuideActive, isMagneticSnapActive } from '../../../store/use-editor'
 
 import useFacingPose from '../../../store/use-facing-pose'
+import usePlacementPreview from '../../../store/use-placement-preview'
 import { getFloorStackPreviewPosition } from '../shared/floor-stack-preview'
 import {
   createLineGeometry,
@@ -71,13 +72,13 @@ import {
   resolvePointerSupportElevation,
   resolvePointerSupportSurface,
 } from '../shared/pointer-support-cap'
-import {
-  applyBlockPreviewPose,
-  resolveBlockFaceSwitch,
-  shouldDetachBlockFaceOnLeave,
-} from './block-preview'
 import { shouldCreateFloorDraft } from './draft-creation'
 import { commitFaceHostClick, resolveFaceHostPreviewCommit } from './face-host-commit'
+import {
+  applyFaceHostPreviewPose,
+  resolveFaceHostSwitch,
+  shouldDetachFaceHostOnLeave,
+} from './face-host-preview'
 import {
   getDetachedAttachmentPreviewLift,
   getGridAlignedDimensions,
@@ -1569,7 +1570,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       event.stopPropagation()
       const draft = draftNode.current
       const nextFaceId = result.hostFaceId
-      const faceSwitch = resolveBlockFaceSwitch(
+      const faceSwitch = resolveFaceHostSwitch(
         currentFaceHostId(draft),
         nextFaceId,
         pendingFaceHostId,
@@ -1594,7 +1595,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         Object.assign(draft, result.nodeUpdate)
         const mesh = sceneRegistry.nodes.get(draft.id)
         const rotation = result.nodeUpdate.rotation ?? draft.rotation
-        if (mesh) applyBlockPreviewPose(mesh, result.gridPosition, rotation)
+        if (mesh) applyFaceHostPreviewPose(mesh, result.gridPosition, rotation)
         useLiveNodeOverrides.getState().set(draft.id, {
           position: result.gridPosition,
           rotation,
@@ -1622,7 +1623,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     const onFaceHostLeave = (event: NodeEvent) => {
       pendingFaceHostId = null
-      if (!shouldDetachBlockFaceOnLeave(asset.attachTo)) {
+      if (!shouldDetachFaceHostOnLeave(asset.attachTo)) {
         event.stopPropagation()
         return
       }
@@ -2249,9 +2250,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         const newRotationY = steppedRotation(currentRotation[1] ?? 0, rotationDir)
         draft.rotation = [currentRotation[0], newRotationY, currentRotation[2]]
 
-        // Ref + cursor mesh + item mesh — no store update during drag
+        // Rotate the building-local cursor by the same delta as the host-local
+        // draft. This preserves the host's composed yaw for items resting on a
+        // table or shelf while still matching the draft exactly on the floor.
         if (cursorGroupRef.current) {
-          cursorGroupRef.current.rotation.y = newRotationY
+          cursorGroupRef.current.rotation.y += newRotationY - currentRotation[1]
         }
         const mesh = sceneRegistry.nodes.get(draft.id)
         if (mesh) mesh.rotation.y = newRotationY
@@ -2315,24 +2318,40 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           }
         }
 
-        // Update live transform for 2D floorplan with post-snap position
+        // Keep both preview renderers on the rotated draft. The item renderer
+        // consumes live node overrides, while the floor-plan renderer consumes
+        // the live transform and placement-preview snapshot.
+        useLiveNodeOverrides.getState().set(draft.id, { rotation: draft.rotation })
         const currentLive = useLiveTransforms.getState().get(draft.id)
-        if (currentLive) {
-          const livePosition: [number, number, number] =
-            surface === 'floor'
-              ? [draft.position[0], draft.position[1], draft.position[2]]
-              : cursorGroupRef.current
-                ? [
-                    cursorGroupRef.current.position.x,
-                    cursorGroupRef.current.position.y,
-                    cursorGroupRef.current.position.z,
-                  ]
-                : [draft.position[0], draft.position[1], draft.position[2]]
-          useLiveTransforms.getState().set(draft.id, {
-            ...currentLive,
-            position: livePosition,
-            rotation: newRotationY,
-          })
+        const livePosition: [number, number, number] =
+          surface === 'floor'
+            ? [draft.position[0], draft.position[1], draft.position[2]]
+            : cursorGroupRef.current
+              ? [
+                  cursorGroupRef.current.position.x,
+                  cursorGroupRef.current.position.y,
+                  cursorGroupRef.current.position.z,
+                ]
+              : [draft.position[0], draft.position[1], draft.position[2]]
+        useLiveTransforms.getState().set(draft.id, {
+          ...currentLive,
+          position: livePosition,
+          rotation: cursorGroupRef.current?.rotation.y ?? newRotationY,
+        })
+
+        const placementPreview = usePlacementPreview.getState()
+        if (placementPreview.node?.id === draft.id) {
+          const parentNode = draft.parentId
+            ? (useScene.getState().nodes[draft.parentId as AnyNodeId] ?? null)
+            : null
+          placementPreview.set(
+            {
+              ...draft,
+              position: [...draft.position],
+              rotation: [...draft.rotation],
+            },
+            parentNode,
+          )
         }
 
         revalidate()
@@ -2477,9 +2496,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (dragMode) window.removeEventListener('pointerup', onReleaseCommit)
       unsubDraftWatch()
       useAlignmentGuides.getState().clear()
-      // Clear live transform for any remaining draft
+      // Clear every live preview channel before restoring or deleting the draft.
       if (draftNode.current) {
         useLiveTransforms.getState().clear(draftNode.current.id)
+        useLiveNodeOverrides.getState().clearFields(draftNode.current.id, ['rotation'])
       }
       draftNode.destroy()
       useScene.temporal.getState().resume()
@@ -2700,7 +2720,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       }
     } else if (placementState.current.surface === 'block-face') {
       const rotation = draftNode.current.rotation
-      applyBlockPreviewPose(
+      applyFaceHostPreviewPose(
         mesh,
         [gridPosition.current.x, gridPosition.current.y, gridPosition.current.z],
         rotation,

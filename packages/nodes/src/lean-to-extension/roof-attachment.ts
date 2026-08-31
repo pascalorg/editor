@@ -366,6 +366,39 @@ export function applyLeanToWallAutoSpan(
   }
 }
 
+export function applyLeanToWallCornerSpan(
+  leanTo: LeanToExtensionNode,
+  wall: WallNode,
+): LeanToExtensionNode {
+  if (!leanTo.autoMiterCorners) return leanTo
+  const wallLength = isCurvedWall(wall)
+    ? getWallCurveLength(wall)
+    : Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+  if (wallLength <= 1e-6) return leanTo
+  if (leanTo.span <= wallLength + 1e-6) return leanTo
+
+  const leftOverhang = Math.max(0, leanTo.leftOverhang)
+  const rightOverhang = Math.max(0, leanTo.rightOverhang)
+  const currentStart = leanTo.position[0] - leanTo.span / 2 - leftOverhang
+  const currentEnd = leanTo.position[0] + leanTo.span / 2 + rightOverhang
+  const targetStart = Math.max(0, currentStart)
+  const targetEnd = Math.min(wallLength, currentEnd)
+  const visibleSpan = targetEnd - targetStart
+  if (currentStart >= -1e-6 && currentEnd <= wallLength + 1e-6) {
+    return leanTo
+  }
+  if (visibleSpan < MIN_EXTENSION_SPAN + leftOverhang + rightOverhang) return leanTo
+
+  return {
+    ...leanTo,
+    ...autoSpanPatch(
+      leanTo,
+      visibleSpan,
+      targetStart + (visibleSpan + leftOverhang - rightOverhang) / 2,
+    ),
+  }
+}
+
 export function applyLeanToAvailableWallSpan(
   leanTo: LeanToExtensionNode,
   wall: WallNode,

@@ -443,6 +443,9 @@ export function resolveWallConstruction(
   let resolvedNodes = nodes
   let sourceSupportUpdate: WallConstructionResolution['sourceSupportUpdate'] = null
   const constructionSourceNodeId = options?.constructionSourceNodeId
+  const constructionSourceIsSlab = constructionSourceNodeId
+    ? nodes[constructionSourceNodeId]?.type === 'slab'
+    : false
   if (constructionSourceNodeId) {
     const sourceNode = nodes[constructionSourceNodeId]
     const currentSupport =
@@ -475,13 +478,14 @@ export function resolveWallConstruction(
       !options.flatConstructionBase
         ? undefined
         : options
-    const preferredSupportSlabId =
-      wallOptions?.flatConstructionBase === true
-        ? GROUND_SUPPORT_ID
-        : (wallOptions?.preferredSupportSlabId ??
-          (wallOptions?.constructionElevation != null && terrainBase != null
-            ? GROUND_SUPPORT_ID
-            : null))
+    const flatConstructionBase =
+      wallOptions?.flatConstructionBase === true && !constructionSourceIsSlab
+    const preferredSupportSlabId = flatConstructionBase
+      ? GROUND_SUPPORT_ID
+      : (wallOptions?.preferredSupportSlabId ??
+        (wallOptions?.constructionElevation != null && terrainBase != null
+          ? GROUND_SUPPORT_ID
+          : null))
     const supportPatch = resolveWallSupportSlabPatch(wallWithParent, resolvedNodes, {
       maxElevation: wallOptions?.supportCap ?? null,
       preferredSlabId: preferredSupportSlabId,
@@ -496,8 +500,7 @@ export function resolveWallConstruction(
       wallOptions?.supportCap ?? null,
     )
     const groundDraft =
-      preferredSupportSlabId === GROUND_SUPPORT_ID &&
-      (terrainBase != null || wallOptions?.flatConstructionBase === true)
+      preferredSupportSlabId === GROUND_SUPPORT_ID && (terrainBase != null || flatConstructionBase)
     const supportOffset =
       groundDraft && wallOptions?.constructionElevation != null
         ? wallOptions.constructionElevation - sourceSupport.elevation

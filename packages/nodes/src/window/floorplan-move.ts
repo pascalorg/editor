@@ -253,6 +253,7 @@ export const windowFloorplanMoveTarget: FloorplanMoveTarget<WindowNode> = ({ nod
       // the 3D move + the shared `resolveOpeningPlacement`.
       const collides = hasWallChildOverlap(
         lastValid.parentId,
+        useScene.getState().nodes,
         lastValid.position[0],
         lastValid.position[1],
         live.width,

@@ -3,14 +3,18 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  createDormerDefaultWindow,
   type DormerNode,
+  generateId,
   type RoofNode,
   type RoofSegmentNode,
   useLiveNodeOverrides,
   useScene,
+  WindowNode,
 } from '@pascal-app/core'
 import {
   cn,
+  createFreshPlacementSubtree,
   PanelSection,
   PanelWrapper,
   SliderControl,
@@ -19,11 +23,14 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { DormerActionsSection } from './panel-actions-section'
 import { DormerPositionSection } from './panel-position-section'
-import { DormerWindowSection } from './panel-window-section'
+import { DormerWindowsSection } from './panel-windows-section'
+import { planDormerWindowRow } from './window-layout'
 
 type RoofType = DormerNode['roofType']
+type ShedHighSide = DormerNode['shedHighSide']
 type DormerSection = 'dormer' | 'window'
 
 const ROOF_TYPE_OPTIONS: Array<{ label: string; value: RoofType }> = [
@@ -36,9 +43,14 @@ const ROOF_TYPE_OPTIONS: Array<{ label: string; value: RoofType }> = [
   { label: 'Flat', value: 'flat' },
 ]
 
+const SHED_HIGH_SIDE_OPTIONS: Array<{ label: string; value: ShedHighSide }> = [
+  { label: 'Rise Back', value: 'back' },
+  { label: 'Rise Front', value: 'front' },
+]
+
 const SECTION_OPTIONS: Array<{ label: string; value: DormerSection }> = [
   { label: 'Dormer', value: 'dormer' },
-  { label: 'Window', value: 'window' },
+  { label: 'Windows', value: 'window' },
 ]
 
 export default function DormerPanel() {
@@ -56,6 +68,16 @@ export default function DormerPanel() {
     selectedId ? (s.get(selectedId as AnyNodeId) as Partial<DormerNode> | undefined) : undefined,
   )
   const node = storeNode && overrides ? ({ ...storeNode, ...overrides } as DormerNode) : storeNode
+  const hostedWindows = useScene(
+    useShallow((state) => {
+      if (!selectedId) return []
+      const dormer = state.nodes[selectedId as AnyNodeId]
+      if (dormer?.type !== 'dormer') return []
+      return (dormer.children ?? [])
+        .map((childId) => state.nodes[childId as AnyNodeId])
+        .filter((child): child is WindowNode => child?.type === 'window')
+    }),
+  )
 
   const handleUpdate = useCallback(
     (updates: Partial<DormerNode>) => {
@@ -109,19 +131,14 @@ export default function DormerPanel() {
   const handleDuplicate = useCallback(() => {
     if (!node?.roofSegmentId) return
     triggerSFX('sfx:item-pick')
-    // Deep clone and strip the id so the move tool's onClick branch
-    // (`isNew || !node.id`) takes the "create fresh" path. Setting
-    // `metadata.isNew = true` is what gates the move tool from
-    // updating any existing node — the dormer is only added to the
-    // scene on click, not when the Duplicate button is pressed.
-    const cloned = structuredClone(node) as DormerNode & { id?: AnyNodeId }
-    delete (cloned as { id?: AnyNodeId }).id
-    const prevMeta =
-      cloned.metadata && typeof cloned.metadata === 'object' && !Array.isArray(cloned.metadata)
-        ? (cloned.metadata as Record<string, unknown>)
-        : {}
-    cloned.metadata = { ...prevMeta, isNew: true }
-    setMovingNode(cloned as DormerNode)
+    useScene.temporal.getState().pause()
+    const draftId = createFreshPlacementSubtree(node.id as AnyNodeId)
+    const draft = draftId ? (useScene.getState().nodes[draftId] as DormerNode | undefined) : null
+    if (!draft) {
+      useScene.temporal.getState().resume()
+      return
+    }
+    setMovingNode(draft)
     setSelection({ selectedIds: [] })
   }, [node, setMovingNode, setSelection])
 
@@ -147,6 +164,69 @@ export default function DormerPanel() {
     }
   }, [selectedId, node, deleteNode, setSelection])
 
+  const handleAddWindow = useCallback(() => {
+    if (!node) return
+    const frontWindows = hostedWindows.filter(
+      (window) => (window.dormerFace ?? 'front') === 'front',
+    )
+    const template = frontWindows[0] ?? hostedWindows[0]
+    const id = generateId('window')
+    const defaultWindow = createDormerDefaultWindow(node, id)
+    const newWindow = WindowNode.parse({
+      ...(template ? structuredClone(template) : defaultWindow),
+      id,
+      name: `Window ${hostedWindows.length + 1}`,
+      parentId: node.id,
+      dormerId: node.id,
+      dormerFace: 'front',
+      wallId: undefined,
+      roofSegmentId: undefined,
+      roofFace: undefined,
+      position: [0, template?.position[1] ?? defaultWindow.position[1], 0],
+      rotation: [0, 0, 0],
+      side: 'front',
+      metadata: {},
+      visible: true,
+    })
+    const plan = planDormerWindowRow(node.width, [...frontWindows, newWindow])
+    if (!plan) return
+
+    const newPlacement = plan.find((entry) => entry.id === newWindow.id)
+    if (!newPlacement) return
+    const placedWindow = WindowNode.parse({
+      ...newWindow,
+      position: newPlacement.position,
+      width: newPlacement.width,
+    })
+    const existingIds = new Set<string>(frontWindows.map((window) => window.id))
+    useScene.getState().applyNodeChanges({
+      create: [{ node: placedWindow, parentId: node.id as AnyNodeId }],
+      update: plan
+        .filter((entry) => existingIds.has(entry.id))
+        .map((entry) => ({
+          id: entry.id as AnyNodeId,
+          data: { position: entry.position, width: entry.width },
+        })),
+    })
+    triggerSFX('sfx:structure-build')
+  }, [hostedWindows, node])
+
+  const handleEditWindow = useCallback(
+    (window: WindowNode) => {
+      setSelection({ selectedIds: [window.id] })
+    },
+    [setSelection],
+  )
+
+  const handleMoveWindow = useCallback(
+    (window: WindowNode) => {
+      triggerSFX('sfx:item-pick')
+      setMovingNode(window)
+      setSelection({ selectedIds: [] })
+    },
+    [setMovingNode, setSelection],
+  )
+
   if (!(node && node.type === 'dormer' && selectedId)) return null
 
   const scenestate = useScene.getState()
@@ -156,6 +236,18 @@ export default function DormerPanel() {
   const roof = segment?.parentId
     ? (scenestate.nodes[segment.parentId as AnyNodeId] as RoofNode | undefined)
     : undefined
+  const frontWindows = hostedWindows.filter((window) => (window.dormerFace ?? 'front') === 'front')
+  const templateWindow = frontWindows[0] ?? hostedWindows[0]
+  const defaultWindow = createDormerDefaultWindow(node, 'window_preview')
+  const canAddWindow =
+    planDormerWindowRow(node.width, [
+      ...frontWindows,
+      {
+        id: 'window_preview',
+        position: [0, templateWindow?.position[1] ?? defaultWindow.position[1], 0],
+        width: templateWindow?.width ?? defaultWindow.width,
+      },
+    ]) !== null
 
   return (
     <PanelWrapper
@@ -202,7 +294,7 @@ export default function DormerPanel() {
           <PanelSection title="Dimensions">
             <SliderControl
               label="Width"
-              max={4}
+              max={1000}
               min={0.5}
               onChange={(v) => previewProp({ width: v })}
               onCommit={(v) => commitProp({ width: v })}
@@ -214,7 +306,7 @@ export default function DormerPanel() {
             />
             <SliderControl
               label="Depth"
-              max={5}
+              max={1000}
               min={0.5}
               onChange={(v) => previewProp({ depth: v })}
               onCommit={(v) => commitProp({ depth: v })}
@@ -226,7 +318,7 @@ export default function DormerPanel() {
             />
             <SliderControl
               label="Wall Height"
-              max={5}
+              max={1000}
               min={0}
               onChange={(v) => previewProp({ height: v })}
               onCommit={(v) => commitProp({ height: v })}
@@ -237,7 +329,7 @@ export default function DormerPanel() {
               value={Math.round(node.height * 100) / 100}
             />
             <SliderControl
-              label="Roof Height"
+              label={node.roofType === 'shed' ? 'Pitch Rise' : 'Roof Height'}
               max={3}
               min={0}
               onChange={(v) => previewProp({ roofHeight: v })}
@@ -272,15 +364,41 @@ export default function DormerPanel() {
               })}
             </div>
           </PanelSection>
+
+          {node.roofType === 'shed' && (
+            <PanelSection title="Pitch Direction">
+              <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
+                {SHED_HIGH_SIDE_OPTIONS.map((option) => {
+                  const isSelected = node.shedHighSide === option.value
+                  return (
+                    <button
+                      className={cn(
+                        'flex min-h-10 items-center justify-center rounded-lg border px-2 py-2 text-xs transition-colors',
+                        isSelected
+                          ? 'border-orange-400/60 bg-orange-400/10 text-foreground'
+                          : 'border-border/50 bg-[#2C2C2E] text-muted-foreground hover:bg-[#3e3e3e] hover:text-foreground',
+                      )}
+                      key={option.value}
+                      onClick={() => handleUpdate({ shedHighSide: option.value })}
+                      type="button"
+                    >
+                      <span className="truncate font-medium">{option.label}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            </PanelSection>
+          )}
         </>
       )}
 
       {section === 'window' && (
-        <DormerWindowSection
-          commitProp={commitProp}
-          handleUpdate={handleUpdate}
-          node={node}
-          previewProp={previewProp}
+        <DormerWindowsSection
+          canAdd={canAddWindow}
+          onAdd={handleAddWindow}
+          onEdit={handleEditWindow}
+          onMove={handleMoveWindow}
+          windows={hostedWindows}
         />
       )}
 

@@ -24,9 +24,9 @@ import type {
  *
  * Per-type roof linework follows the dormer's own roof geometry
  * (`buildDormerCutShape` in csg-geometry.ts): gable ridge runs along Z,
- * shed slopes high-at-back (−Z) to low-at-front (+Z), hip ridges along the
- * longer axis. Gambrel falls back to gable; dutch/mansard to hip — the
- * same fallbacks the 3D cut uses.
+ * shed arrows follow the configured high-to-low direction, and hip ridges
+ * run along the longer axis. Gambrel falls back to gable; dutch/mansard to
+ * hip — the same fallbacks the 3D cut uses.
  */
 export function buildDormerFloorplan(
   node: DormerNode,
@@ -134,10 +134,9 @@ export function buildDormerFloorplan(
   const type = node.roofType
   if (node.roofHeight > 0 && type !== 'flat') {
     if (type === 'shed') {
-      // Slopes from the high back (−Z) down to the low front (+Z); show a
-      // downslope arrow pointing toward the front.
-      const tail = toPlan(0, -hd * 0.55)
-      const head = toPlan(0, hd * 0.55)
+      const highZ = node.shedHighSide === 'front' ? hd * 0.55 : -hd * 0.55
+      const tail = toPlan(0, highZ)
+      const head = toPlan(0, -highZ)
       const dx = head[0] - tail[0]
       const dy = head[1] - tail[1]
       const len = Math.hypot(dx, dy) || 1
@@ -196,17 +195,6 @@ export function buildDormerFloorplan(
       // Gable (and gambrel fallback): ridge runs front-to-back along Z.
       line([0, -hd], [0, hd], ridgeWidth)
     }
-  }
-
-  // Window on the +Z (front) face — a line just inside the front edge,
-  // spanning the window width centred at its X offset. Marks the glazing
-  // and which way the dormer faces.
-  const ww = node.windowWidth ?? 0
-  if (ww > 0.01) {
-    const halfWin = Math.min(ww, node.width) / 2
-    const center = Math.max(-hw + halfWin, Math.min(hw - halfWin, node.windowOffsetX ?? 0))
-    const inset = Math.min(hd * 0.2, 0.08)
-    line([center - halfWin, hd - inset], [center + halfWin, hd - inset], lineWidth)
   }
 
   return { kind: 'group', children }

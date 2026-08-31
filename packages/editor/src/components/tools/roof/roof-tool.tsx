@@ -3,19 +3,29 @@ import {
   type AnyNode,
   type AnyNodeId,
   collectAlignmentAnchors,
+  createConicalRoofSectorAboveWall,
+  createSceneApi,
   emitter,
   type GridEvent,
+  getWallArcData,
+  getWallBaseElevationForNodes,
+  getWallEffectiveHeightForNodes,
+  isCurvedWall,
   type LevelNode,
   RoofNode,
   RoofSegmentNode,
+  type RoofType,
+  RoofType as RoofTypeSchema,
   resolveBuildingForLevel,
+  resolveConicalRoofPlacement,
   sceneRegistry,
   useScene,
+  type WallEvent,
   type WallNode,
   wallSegmentAnchors,
 } from '@pascal-app/core'
 import { clearSurfacePlanSnapFeedback, resolveSurfacePlanPointSnap } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import { generateRoofSegmentGeometry, useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 import {
@@ -33,17 +43,40 @@ import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
 import { useFloorplanDraftPreview } from '../../../store/use-floorplan-draft-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
+import {
+  isStandardRoofWallEligible,
+  parseRoofFootprintSource,
+  type RoofFootprintTarget,
+  resolveRoofFootprintElevation,
+  resolveRoofFootprintWorldElevation,
+  resolveRoofWallTopWorldElevation,
+  resolveRoomRoofFootprint,
+  subscribeToConicalRoofWallClicks,
+} from './roof-footprint'
+import useRoofPlacementMode, { type RoofPlacementMode } from './roof-placement-mode'
 
 const DEFAULT_WALL_HEIGHT = 0.5
 const DEFAULT_PITCH_DEG = 40
 const GRID_OFFSET = 0.02
+
+function placementOptions(mode: RoofPlacementMode) {
+  return {
+    allowRoofSupport: mode !== 'ground',
+    requireRoofSupport: mode === 'roof',
+  }
+}
 
 function resolveRoofDraftPlacement(
   footprintWidth: number,
   footprintDepth: number,
   quarterTurn: boolean,
   parentRotation = 0,
+  roofType: RoofType = 'gable',
 ) {
+  if (roofType === 'conical') {
+    const diameter = Math.max(footprintWidth, footprintDepth)
+    return { width: diameter, depth: diameter, rotation: -parentRotation }
+  }
   return {
     width: quarterTurn ? footprintDepth : footprintWidth,
     depth: quarterTurn ? footprintWidth : footprintDepth,
@@ -94,21 +127,39 @@ function getBelowLevelWalls(
 function getRoofSnapWalls(
   currentLevelId: string | null,
   nodes: Readonly<Record<string, AnyNode>>,
+  roofType: RoofType,
 ): WallNode[] {
-  return [...getLevelWalls(currentLevelId, nodes), ...getBelowLevelWalls(currentLevelId, nodes)]
+  const walls = [
+    ...getLevelWalls(currentLevelId, nodes),
+    ...getBelowLevelWalls(currentLevelId, nodes),
+  ]
+  return roofType === 'conical'
+    ? walls.filter((wall) => isCurvedWall(wall))
+    : walls.filter(isStandardRoofWallEligible)
 }
 
 // Current-level alignment anchors plus the floor-below wall corners.
 function collectRoofAlignmentAnchors(
   nodes: Readonly<Record<string, AnyNode>>,
   currentLevelId: string | null,
+  roofType: RoofType,
 ): AlignmentAnchor[] {
-  return [
+  const anchors = [
     ...collectAlignmentAnchors(nodes, '', currentLevelId),
     ...getBelowLevelWalls(currentLevelId, nodes).flatMap((wall) =>
       wallSegmentAnchors(wall.id, wall.start, wall.end, wall.thickness),
     ),
   ]
+  if (roofType === 'conical') {
+    return anchors.filter((anchor) => {
+      const node = nodes[anchor.nodeId]
+      return node?.type !== 'wall' || isCurvedWall(node)
+    })
+  }
+  return anchors.filter((anchor) => {
+    const node = nodes[anchor.nodeId]
+    return node?.type !== 'wall' || isStandardRoofWallEligible(node)
+  })
 }
 
 /**
@@ -120,7 +171,8 @@ const commitRoofPlacement = (
   corner2: [number, number, number],
   selectedIds: string[],
   quarterTurn: boolean,
-): AnyNode['id'] => {
+  placementMode: RoofPlacementMode,
+): AnyNode['id'] | null => {
   const { createNode, createNodes, nodes } = useScene.getState()
 
   // A placed roof preset seeds `toolDefaults.roof` with the flattened
@@ -129,12 +181,55 @@ const commitRoofPlacement = (
   // come from the drawn rectangle and always win; the segment carries the
   // shape/material params, the roof container picks up the materials.
   const defaults = useEditor.getState().toolDefaults.roof ?? {}
+  const parsedRoofType = RoofTypeSchema.safeParse(defaults.roofType)
+  const roofType = parsedRoofType.success ? parsedRoofType.data : 'gable'
 
   const centerX = (corner1[0] + corner2[0]) / 2
   const centerZ = (corner1[2] + corner2[2]) / 2
 
   const footprintWidth = Math.max(Math.abs(corner2[0] - corner1[0]), 1)
   const footprintDepth = Math.max(Math.abs(corner2[2] - corner1[2]), 1)
+
+  if (roofType === 'conical') {
+    const diameter = Math.max(footprintWidth, footprintDepth)
+    const curbHeight =
+      typeof defaults.wallHeight === 'number' ? defaults.wallHeight : DEFAULT_WALL_HEIGHT
+    const resolved = resolveConicalRoofPlacement({
+      nodes,
+      levelId,
+      center: [centerX, centerZ],
+      radius: diameter / 2,
+      curbHeight,
+      ...placementOptions(placementMode),
+    })
+    if (!resolved.valid) return null
+
+    const roofCount = Object.values(nodes).filter((node) => node.type === 'roof').length
+    const segment = RoofSegmentNode.parse({
+      pitch: DEFAULT_PITCH_DEG,
+      roofType: 'gable',
+      ...defaults,
+      width: diameter,
+      depth: diameter,
+      wallHeight: resolved.wallHeight,
+      position: [0, 0, 0],
+      rotation: 0,
+    })
+    const roof = RoofNode.parse({
+      ...defaults,
+      name: `Roof ${roofCount + 1}`,
+      position: resolved.position,
+      support: resolved.support,
+      children: [segment.id],
+    })
+
+    createNodes([
+      { node: roof, parentId: levelId },
+      { node: segment, parentId: roof.id },
+    ])
+    sfxEmitter.emit('sfx:structure-build')
+    return roof.id
+  }
 
   // Determine if there is an active roof node we should add to
   let targetRoofId: RoofNode['id'] | null = null
@@ -174,6 +269,7 @@ const commitRoofPlacement = (
       footprintDepth,
       quarterTurn,
       targetRoof.rotation,
+      roofType,
     )
 
     const segment = RoofSegmentNode.parse({
@@ -201,6 +297,7 @@ const commitRoofPlacement = (
     footprintDepth,
     quarterTurn,
     roofRotation,
+    roofType,
   )
 
   // Create the segment first (centered in its new parent)
@@ -234,6 +331,47 @@ const commitRoofPlacement = (
   return roof.id
 }
 
+const commitRoofFootprint = (
+  levelId: LevelNode['id'],
+  target: RoofFootprintTarget,
+  quarterTurn: boolean,
+): AnyNode['id'] | null => {
+  if (!target.rectangular) return null
+  const { createNodes, nodes } = useScene.getState()
+  const defaults = useEditor.getState().toolDefaults.roof ?? {}
+  const parsedRoofType = RoofTypeSchema.safeParse(defaults.roofType)
+  const roofType = parsedRoofType.success ? parsedRoofType.data : 'gable'
+  if (roofType === 'conical') return null
+  const roofCount = Object.values(nodes).filter((node) => node.type === 'roof').length
+  const segment = RoofSegmentNode.parse({
+    pitch: DEFAULT_PITCH_DEG,
+    roofType: 'gable',
+    ...defaults,
+    wallHeight: 0,
+    width: quarterTurn ? target.depth : target.width,
+    depth: quarterTurn ? target.width : target.depth,
+    position: [0, 0, 0],
+    rotation: quarterTurn ? Math.PI / 2 : 0,
+  })
+  const roof = RoofNode.parse({
+    ...defaults,
+    name: `Roof ${roofCount + 1}`,
+    position: [
+      target.center[0],
+      resolveRoofFootprintElevation(levelId, target, nodes),
+      target.center[1],
+    ],
+    rotation: target.rotation,
+    children: [segment.id],
+  })
+  createNodes([
+    { node: roof, parentId: levelId },
+    { node: segment, parentId: roof.id },
+  ])
+  sfxEmitter.emit('sfx:structure-build')
+  return roof.id
+}
+
 type PreviewState = {
   corner1: [number, number, number] | null
   cursorPosition: [number, number, number]
@@ -245,12 +383,20 @@ function buildRoofGhostGeometry(
   depth: number,
   wallHeight: number,
   pitchDeg: number,
+  roofType: RoofType,
 ) {
   const safeWidth = Math.max(width, 0.1)
   const safeDepth = Math.max(depth, 0.1)
   const halfWidth = safeWidth / 2
   const halfDepth = safeDepth / 2
   const ridgeHeight = wallHeight + Math.tan((pitchDeg * Math.PI) / 180) * halfDepth
+
+  if (roofType === 'conical') {
+    const roofHeight = Math.max(0.001, Math.tan((pitchDeg * Math.PI) / 180) * halfWidth)
+    const geometry = new THREE.ConeGeometry(halfWidth, roofHeight, 48)
+    geometry.translate(0, wallHeight + roofHeight / 2, 0)
+    return geometry
+  }
 
   const vertices = [
     // Front slope
@@ -324,12 +470,27 @@ function buildRoofGhostGeometry(
   return geometry
 }
 
-function buildRoofGhostEdges(width: number, depth: number, wallHeight: number, pitchDeg: number) {
+function buildRoofGhostEdges(
+  width: number,
+  depth: number,
+  wallHeight: number,
+  pitchDeg: number,
+  roofType: RoofType,
+) {
   const safeWidth = Math.max(width, 0.1)
   const safeDepth = Math.max(depth, 0.1)
   const halfWidth = safeWidth / 2
   const halfDepth = safeDepth / 2
   const ridgeHeight = wallHeight + Math.tan((pitchDeg * Math.PI) / 180) * halfDepth
+
+  if (roofType === 'conical') {
+    const roofHeight = Math.max(0.001, Math.tan((pitchDeg * Math.PI) / 180) * halfWidth)
+    const cone = new THREE.ConeGeometry(halfWidth, roofHeight, 48)
+    cone.translate(0, wallHeight + roofHeight / 2, 0)
+    const edges = new THREE.EdgesGeometry(cone, 10)
+    cone.dispose()
+    return edges
+  }
 
   const vertices = [
     // Base rectangle
@@ -402,6 +563,17 @@ export const RoofTool: React.FC = () => {
   const currentLevelId = useViewer((state) => state.selection.levelId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const setSelection = useViewer((state) => state.setSelection)
+  const setPreviewSelectedIds = useViewer((state) => state.setPreviewSelectedIds)
+  const roofDefaults = useEditor((state) => state.toolDefaults.roof)
+  const placementMode = useRoofPlacementMode((state) => state.mode)
+  const nodes = useScene.getState().nodes
+  const parsedRoofType = RoofTypeSchema.safeParse(roofDefaults?.roofType)
+  const roofType = parsedRoofType.success ? parsedRoofType.data : 'gable'
+  const footprintSource = parseRoofFootprintSource(roofDefaults?.footprintSource, roofType)
+  const previewWallHeight =
+    typeof roofDefaults?.wallHeight === 'number' ? roofDefaults.wallHeight : DEFAULT_WALL_HEIGHT
+  const previewPitch =
+    typeof roofDefaults?.pitch === 'number' ? roofDefaults.pitch : DEFAULT_PITCH_DEG
 
   const selectedIdsRef = useRef(selectedIds)
   useEffect(() => {
@@ -416,11 +588,21 @@ export const RoofTool: React.FC = () => {
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const quarterTurnRef = useRef(false)
   const [quarterTurn, setQuarterTurn] = useState(false)
+  const [footprintTarget, setFootprintTarget] = useState<RoofFootprintTarget | null>(null)
+  const previewTargetIdRef = useRef<string | null>(null)
+  const [previewedConicalWallId, setPreviewedConicalWallId] = useState<WallNode['id'] | null>(null)
+  const [invalidStandardWallHover, setInvalidStandardWallHover] = useState(false)
   const [preview, setPreview] = useState<PreviewState>({
     corner1: null,
     cursorPosition: [0, 0, 0],
     levelY: 0,
   })
+
+  useEffect(() => {
+    if (footprintSource === 'room') return
+    previewTargetIdRef.current = null
+    setFootprintTarget(null)
+  }, [footprintSource])
 
   useEffect(() => {
     if (!currentLevelId) return
@@ -432,14 +614,18 @@ export const RoofTool: React.FC = () => {
     // level plus the wall corners of the floor directly below, so a roof drawn
     // on the upper floor aligns to the walls beneath it. Refreshed after each
     // roof commits. Both corners of the rectangle align.
-    let alignmentCandidates = collectRoofAlignmentAnchors(useScene.getState().nodes, currentLevelId)
+    let alignmentCandidates = collectRoofAlignmentAnchors(
+      useScene.getState().nodes,
+      currentLevelId,
+      roofType,
+    )
 
     // Resolve a grid:move/click into the drafted corner via the shared surface
     // snap pipeline: magnetic lock onto wall corners / midpoints / crossings /
     // bodies on the active level + floor below (raising the green beacon),
     // falling back to alignment guides, then to the world-grid snap. The same
     // path the slab/ceiling tools use, so the beacon and coloring match. The
-    // pipeline reads the snapping mode itself (Shift bypass, magnetic on/off),
+    // pipeline reads the active snapping mode (grid / lines / angles / off),
     // so this tool never inspects the flags. `levelId` is intentionally omitted
     // so the explicit floor-below `walls` aren't filtered back out.
     const resolveDraftPoint = (event: GridEvent): [number, number] => {
@@ -455,26 +641,77 @@ export const RoofTool: React.FC = () => {
       return resolveSurfacePlanPointSnap({
         rawPoint,
         fallbackPoint: gridFallback,
-        walls: getRoofSnapWalls(currentLevelId, nodes),
+        walls: getRoofSnapWalls(currentLevelId, nodes, roofType),
         candidates: alignmentCandidates,
         movingId: '__roof-draft__',
         highlightWalls: true,
       }).point
     }
 
+    const updateFootprintPreview = (target: RoofFootprintTarget | null) => {
+      setFootprintTarget((previous) => (previous?.id === target?.id ? previous : target))
+      if (previewTargetIdRef.current === (target?.id ?? null)) return
+      previewTargetIdRef.current = target?.id ?? null
+      setPreviewSelectedIds(target?.wallIds ?? [])
+    }
+
     const updateOutline = (
       corner1: [number, number, number],
       corner2: [number, number, number],
     ) => {
-      const gridY = corner1[1] + GRID_OFFSET
+      let gridY = corner1[1] + GRID_OFFSET
 
-      const groundPoints = [
-        new Vector3(corner1[0], gridY, corner1[2]),
-        new Vector3(corner2[0], gridY, corner1[2]),
-        new Vector3(corner2[0], gridY, corner2[2]),
-        new Vector3(corner1[0], gridY, corner2[2]),
-        new Vector3(corner1[0], gridY, corner1[2]),
-      ]
+      if (roofType === 'conical') {
+        const centerX = (corner1[0] + corner2[0]) / 2
+        const centerZ = (corner1[2] + corner2[2]) / 2
+        const diameter = Math.max(
+          Math.abs(corner2[0] - corner1[0]),
+          Math.abs(corner2[2] - corner1[2]),
+        )
+        const defaults = useEditor.getState().toolDefaults.roof
+        const curbHeight =
+          typeof defaults?.wallHeight === 'number' ? defaults.wallHeight : DEFAULT_WALL_HEIGHT
+        const placement = resolveConicalRoofPlacement({
+          nodes: useScene.getState().nodes,
+          levelId: currentLevelId,
+          center: [centerX, centerZ],
+          radius: diameter / 2,
+          curbHeight,
+          ...placementOptions(useRoofPlacementMode.getState().mode),
+        })
+        if (placement.valid) {
+          gridY =
+            placement.position[1] +
+            (placement.kind === 'roof' ? placement.wallHeight - curbHeight : 0) +
+            GRID_OFFSET
+        }
+      }
+
+      const groundPoints =
+        roofType === 'conical'
+          ? (() => {
+              const centerX = (corner1[0] + corner2[0]) / 2
+              const centerZ = (corner1[2] + corner2[2]) / 2
+              const diameter = Math.max(
+                Math.abs(corner2[0] - corner1[0]),
+                Math.abs(corner2[2] - corner1[2]),
+              )
+              return Array.from({ length: 49 }, (_, index) => {
+                const angle = (index / 48) * Math.PI * 2
+                return new Vector3(
+                  centerX + Math.cos(angle) * (diameter / 2),
+                  gridY,
+                  centerZ + Math.sin(angle) * (diameter / 2),
+                )
+              })
+            })()
+          : [
+              new Vector3(corner1[0], gridY, corner1[2]),
+              new Vector3(corner2[0], gridY, corner1[2]),
+              new Vector3(corner2[0], gridY, corner2[2]),
+              new Vector3(corner1[0], gridY, corner2[2]),
+              new Vector3(corner1[0], gridY, corner1[2]),
+            ]
 
       outlineRef.current.geometry.dispose()
       outlineRef.current.geometry = new BufferGeometry().setFromPoints(groundPoints)
@@ -483,6 +720,34 @@ export const RoofTool: React.FC = () => {
 
     const onGridMove = (event: GridEvent) => {
       if (!cursorRef.current) return
+
+      if (footprintSource !== 'draw') {
+        const [snappedX, snappedZ] = resolveDraftPoint(event)
+        let target: RoofFootprintTarget | null = null
+        if (footprintSource === 'room') {
+          target = resolveRoomRoofFootprint(
+            currentLevelId,
+            useScene.getState().nodes,
+            [snappedX, snappedZ],
+            {
+              rectangularOnly: true,
+            },
+          )
+          updateFootprintPreview(target)
+        }
+        cursorRef.current.position.set(
+          snappedX,
+          target
+            ? resolveRoofFootprintWorldElevation(
+                currentLevelId,
+                target,
+                useScene.getState().nodes,
+              ) + GRID_OFFSET
+            : event.localPosition[1] + GRID_OFFSET,
+          snappedZ,
+        )
+        return
+      }
 
       const [gridX, gridZ] = resolveDraftPoint(event)
       const y = event.localPosition[1]
@@ -520,6 +785,21 @@ export const RoofTool: React.FC = () => {
     const onGridClick = (event: GridEvent) => {
       if (!currentLevelId) return
 
+      if (footprintSource !== 'draw') {
+        if (footprintSource !== 'room') return
+        const [snappedX, snappedZ] = resolveDraftPoint(event)
+        const target = resolveRoomRoofFootprint(
+          currentLevelId,
+          useScene.getState().nodes,
+          [snappedX, snappedZ],
+          { rectangularOnly: true },
+        )
+        if (!target) return
+        const roofId = commitRoofFootprint(currentLevelId, target, quarterTurnRef.current)
+        if (roofId) setSelection({ selectedIds: [roofId] })
+        return
+      }
+
       const [gridX, gridZ] = resolveDraftPoint(event)
       const y = event.localPosition[1]
 
@@ -530,7 +810,10 @@ export const RoofTool: React.FC = () => {
           [gridX, y, gridZ],
           selectedIdsRef.current,
           quarterTurnRef.current,
+          useRoofPlacementMode.getState().mode,
         )
+
+        if (!roofId) return
 
         setSelection({ selectedIds: [roofId as AnyNode['id']] })
 
@@ -539,7 +822,11 @@ export const RoofTool: React.FC = () => {
         draftPreview.setRoofDraftStart(null)
         draftPreview.setRoofDraftEnd(null)
         outlineRef.current.visible = false
-        alignmentCandidates = collectRoofAlignmentAnchors(useScene.getState().nodes, currentLevelId)
+        alignmentCandidates = collectRoofAlignmentAnchors(
+          useScene.getState().nodes,
+          currentLevelId,
+          roofType,
+        )
         clearSurfacePlanSnapFeedback()
       } else {
         corner1Ref.current = [gridX, y, gridZ]
@@ -565,6 +852,8 @@ export const RoofTool: React.FC = () => {
         setPreview((prev) => ({ ...prev, corner1: null }))
       }
       clearSurfacePlanSnapFeedback()
+      previewTargetIdRef.current = null
+      setPreviewSelectedIds([])
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -573,6 +862,20 @@ export const RoofTool: React.FC = () => {
         event.target instanceof HTMLTextAreaElement ||
         (event.target instanceof HTMLElement && event.target.isContentEditable)
       ) {
+        return
+      }
+      if (roofType === 'conical') {
+        if (
+          (event.key === 'p' || event.key === 'P') &&
+          !event.repeat &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey
+        ) {
+          event.preventDefault()
+          useRoofPlacementMode.getState().cycleMode()
+          sfxEmitter.emit('sfx:grid-snap')
+        }
         return
       }
       if (
@@ -596,14 +899,54 @@ export const RoofTool: React.FC = () => {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    const onWallHover = (event: WallEvent) => {
+      setInvalidStandardWallHover(
+        footprintSource === 'draw' &&
+          roofType !== 'conical' &&
+          !isStandardRoofWallEligible(event.node),
+      )
+    }
+    const onWallLeave = () => setInvalidStandardWallHover(false)
+    emitter.on('wall:enter', onWallHover)
+    emitter.on('wall:move', onWallHover)
+    emitter.on('wall:leave', onWallLeave)
+    const unsubscribeConicalRoofWallClicks = subscribeToConicalRoofWallClicks({
+      footprintSource,
+      currentLevelId,
+      getNodes: () => useScene.getState().nodes,
+      onPreview: (wall) => {
+        setPreviewedConicalWallId(wall?.id ?? null)
+        setPreviewSelectedIds(wall ? [wall.id] : [])
+      },
+      onSelect: (wall) => {
+        setPreviewedConicalWallId(null)
+        setPreviewSelectedIds([])
+        const segmentId = createConicalRoofSectorAboveWall(
+          wall,
+          useScene.getState().nodes,
+          createSceneApi(useScene),
+          currentLevelId as LevelNode['id'],
+        )
+        if (segmentId) setSelection({ selectedIds: [segmentId] })
+      },
+      roofType,
+    })
     window.addEventListener('keydown', onKeyDown)
 
     return () => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      emitter.off('wall:enter', onWallHover)
+      emitter.off('wall:move', onWallHover)
+      emitter.off('wall:leave', onWallLeave)
+      unsubscribeConicalRoofWallClicks()
       window.removeEventListener('keydown', onKeyDown)
       clearSurfacePlanSnapFeedback()
+      previewTargetIdRef.current = null
+      setPreviewedConicalWallId(null)
+      setInvalidStandardWallHover(false)
+      setPreviewSelectedIds([])
 
       corner1Ref.current = null
       const draftPreview = useFloorplanDraftPreview.getState()
@@ -611,7 +954,7 @@ export const RoofTool: React.FC = () => {
       draftPreview.setRoofDraftEnd(null)
       draftPreview.setRoofDraftQuarterTurn(false)
     }
-  }, [currentLevelId, setSelection])
+  }, [currentLevelId, footprintSource, roofType, setPreviewSelectedIds, setSelection])
 
   const { corner1, cursorPosition, levelY } = preview
 
@@ -624,35 +967,152 @@ export const RoofTool: React.FC = () => {
     return { length, width, centerX, centerZ }
   }, [corner1, cursorPosition])
 
+  const resolvedPreviewDimensions =
+    footprintSource === 'draw'
+      ? previewDimensions
+      : footprintTarget
+        ? {
+            length: footprintTarget.width,
+            width: footprintTarget.depth,
+            centerX: footprintTarget.center[0],
+            centerZ: footprintTarget.center[1],
+          }
+        : null
+
+  const conicalPlacement = useMemo(() => {
+    if (!(currentLevelId && previewDimensions && roofType === 'conical')) return null
+    return resolveConicalRoofPlacement({
+      nodes,
+      levelId: currentLevelId,
+      center: [previewDimensions.centerX, previewDimensions.centerZ],
+      radius: Math.max(previewDimensions.length, previewDimensions.width) / 2,
+      curbHeight: previewWallHeight,
+      ...placementOptions(placementMode),
+    })
+  }, [currentLevelId, nodes, placementMode, previewDimensions, previewWallHeight, roofType])
+
+  const conicalWallGhost = useMemo(() => {
+    if (!(roofType === 'conical' && footprintSource === 'walls' && previewedConicalWallId))
+      return null
+    const wall = nodes[previewedConicalWallId]
+    if (wall?.type !== 'wall') return null
+    const arc = getWallArcData(wall)
+    if (!arc) return null
+    const segment = RoofSegmentNode.parse({
+      roofType: 'conical',
+      width: arc.radius * 2,
+      depth: arc.radius * 2,
+      wallHeight: 0,
+      pitch: DEFAULT_PITCH_DEG,
+      conicalStartAngle: arc.startAngle,
+      conicalSweepAngle: arc.delta,
+      conicalFullCircle: true,
+    })
+    const geometry = generateRoofSegmentGeometry(segment)
+    return {
+      edges: new THREE.EdgesGeometry(geometry, 10),
+      geometry,
+      position: [
+        arc.center.x,
+        currentLevelId
+          ? resolveRoofWallTopWorldElevation(currentLevelId, wall, nodes)
+          : getWallBaseElevationForNodes(wall, nodes) + getWallEffectiveHeightForNodes(wall, nodes),
+        arc.center.y,
+      ] as [number, number, number],
+    }
+  }, [currentLevelId, footprintSource, nodes, previewedConicalWallId, roofType])
+
+  const ghostWallHeight =
+    footprintSource !== 'draw'
+      ? 0
+      : conicalPlacement?.valid === true
+        ? conicalPlacement.wallHeight
+        : previewWallHeight
+  const ghostBaseY =
+    footprintSource !== 'draw' && footprintTarget && currentLevelId
+      ? resolveRoofFootprintWorldElevation(currentLevelId, footprintTarget, nodes)
+      : conicalPlacement?.valid === true
+        ? conicalPlacement.position[1]
+        : levelY
+  const ghostColor =
+    footprintSource !== 'draw' &&
+    footprintTarget &&
+    !footprintTarget.rectangular &&
+    roofType !== 'conical'
+      ? '#ef4444'
+      : footprintSource !== 'draw'
+        ? '#22c55e'
+        : conicalPlacement?.valid === false
+          ? '#ef4444'
+          : conicalPlacement?.kind === 'roof'
+            ? '#22c55e'
+            : '#818cf8'
+
   const roofGhostGeometry = useMemo(() => {
-    if (!previewDimensions) return null
+    if (
+      invalidStandardWallHover ||
+      !resolvedPreviewDimensions ||
+      (roofType === 'conical' && footprintSource !== 'draw')
+    )
+      return null
     const placement = resolveRoofDraftPlacement(
-      previewDimensions.length,
-      previewDimensions.width,
+      resolvedPreviewDimensions.length,
+      resolvedPreviewDimensions.width,
       quarterTurn,
+      0,
+      roofType,
     )
     return buildRoofGhostGeometry(
       placement.width,
       placement.depth,
-      DEFAULT_WALL_HEIGHT,
-      DEFAULT_PITCH_DEG,
+      ghostWallHeight,
+      previewPitch,
+      roofType,
     )
-  }, [previewDimensions, quarterTurn])
+  }, [
+    footprintSource,
+    ghostWallHeight,
+    invalidStandardWallHover,
+    previewPitch,
+    quarterTurn,
+    resolvedPreviewDimensions,
+    roofType,
+  ])
 
   const roofGhostEdges = useMemo(() => {
-    if (!previewDimensions) return null
+    if (
+      invalidStandardWallHover ||
+      !resolvedPreviewDimensions ||
+      (roofType === 'conical' && footprintSource !== 'draw')
+    )
+      return null
     const placement = resolveRoofDraftPlacement(
-      previewDimensions.length,
-      previewDimensions.width,
+      resolvedPreviewDimensions.length,
+      resolvedPreviewDimensions.width,
       quarterTurn,
+      0,
+      roofType,
     )
     return buildRoofGhostEdges(
       placement.width,
       placement.depth,
-      DEFAULT_WALL_HEIGHT,
-      DEFAULT_PITCH_DEG,
+      ghostWallHeight,
+      previewPitch,
+      roofType,
     )
-  }, [previewDimensions, quarterTurn])
+  }, [
+    footprintSource,
+    ghostWallHeight,
+    invalidStandardWallHover,
+    previewPitch,
+    quarterTurn,
+    resolvedPreviewDimensions,
+    roofType,
+  ])
+
+  useEffect(() => {
+    if (invalidStandardWallHover) outlineRef.current.visible = false
+  }, [invalidStandardWallHover])
 
   useEffect(
     () => () => {
@@ -660,6 +1120,14 @@ export const RoofTool: React.FC = () => {
       roofGhostEdges?.dispose()
     },
     [roofGhostEdges, roofGhostGeometry],
+  )
+
+  useEffect(
+    () => () => {
+      conicalWallGhost?.geometry.dispose()
+      conicalWallGhost?.edges.dispose()
+    },
+    [conicalWallGhost],
   )
 
   return (
@@ -694,37 +1162,80 @@ export const RoofTool: React.FC = () => {
         />
       )}
 
-      {previewDimensions && previewDimensions.length > 0.1 && previewDimensions.width > 0.1 && (
+      {conicalWallGhost && (
         <group
           layers={EDITOR_LAYER}
-          position={[previewDimensions.centerX, levelY + GRID_OFFSET, previewDimensions.centerZ]}
-          rotation={[0, quarterTurn ? Math.PI / 2 : 0, 0]}
+          position={[
+            conicalWallGhost.position[0],
+            conicalWallGhost.position[1] + GRID_OFFSET,
+            conicalWallGhost.position[2],
+          ]}
         >
-          {roofGhostGeometry && (
-            <mesh geometry={roofGhostGeometry} layers={EDITOR_LAYER} renderOrder={1}>
-              <meshBasicMaterial
-                color="#818cf8"
-                depthTest={false}
-                depthWrite={false}
-                opacity={0.16}
-                side={DoubleSide}
-                transparent
-              />
-            </mesh>
-          )}
-          {roofGhostEdges && (
-            <lineSegments geometry={roofGhostEdges} layers={EDITOR_LAYER} renderOrder={2}>
-              <lineBasicMaterial
-                color="#818cf8"
-                depthTest={false}
-                depthWrite={false}
-                opacity={0.5}
-                transparent
-              />
-            </lineSegments>
-          )}
+          <mesh geometry={conicalWallGhost.geometry} layers={EDITOR_LAYER} renderOrder={1}>
+            <meshBasicMaterial
+              color="#22c55e"
+              depthTest={false}
+              depthWrite={false}
+              opacity={0.2}
+              side={DoubleSide}
+              transparent
+            />
+          </mesh>
+          <lineSegments geometry={conicalWallGhost.edges} layers={EDITOR_LAYER} renderOrder={2}>
+            <lineBasicMaterial
+              color="#22c55e"
+              depthTest={false}
+              depthWrite={false}
+              opacity={0.7}
+              transparent
+            />
+          </lineSegments>
         </group>
       )}
+
+      {!invalidStandardWallHover &&
+        resolvedPreviewDimensions &&
+        resolvedPreviewDimensions.length > 0.1 &&
+        resolvedPreviewDimensions.width > 0.1 && (
+          <group
+            layers={EDITOR_LAYER}
+            position={[
+              resolvedPreviewDimensions.centerX,
+              ghostBaseY + GRID_OFFSET,
+              resolvedPreviewDimensions.centerZ,
+            ]}
+            rotation={[
+              0,
+              (footprintSource !== 'draw' ? (footprintTarget?.rotation ?? 0) : 0) +
+                (roofType === 'conical' ? 0 : quarterTurn ? Math.PI / 2 : 0),
+              0,
+            ]}
+          >
+            {roofGhostGeometry && (
+              <mesh geometry={roofGhostGeometry} layers={EDITOR_LAYER} renderOrder={1}>
+                <meshBasicMaterial
+                  color={ghostColor}
+                  depthTest={false}
+                  depthWrite={false}
+                  opacity={0.16}
+                  side={DoubleSide}
+                  transparent
+                />
+              </mesh>
+            )}
+            {roofGhostEdges && (
+              <lineSegments geometry={roofGhostEdges} layers={EDITOR_LAYER} renderOrder={2}>
+                <lineBasicMaterial
+                  color={ghostColor}
+                  depthTest={false}
+                  depthWrite={false}
+                  opacity={0.5}
+                  transparent
+                />
+              </lineSegments>
+            )}
+          </group>
+        )}
     </group>
   )
 }

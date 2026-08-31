@@ -240,8 +240,6 @@ function MultiVec3Field({
           <SliderControl
             key={`${fieldKey}-${label}`}
             label={label}
-            max={axisValue + 5}
-            min={axisValue - 5}
             mixed={mixed}
             onChange={(next) => previewMultiNodeFields(patchAxis(next))}
             onCommit={(next) => {

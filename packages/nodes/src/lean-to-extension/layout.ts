@@ -10,15 +10,23 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { EAVE_TUCK_INWARD } from '../gutter/eave-snap'
+import { resolveWallAttachmentAtPlanPoint } from '../shared/wall-attach-target'
 import { type LeanToArcFrame, leanToArcFrameAtLocalX } from './arc'
+import { isClosedLoopLeanTo } from './conical-host'
 
 export const MIN_LEAN_TO_POST_HEIGHT = 0.2
 export const MIN_LEAN_TO_WALL_LENGTH = 0.6
 export const LEAN_TO_EXTENSION_GEOMETRY_REVISION = 8
-const LEAN_TO_EDGE_SNAP_TOLERANCE = 0.25
+export const LEAN_TO_EDGE_SNAP_TOLERANCE = 0.25
+export const LEAN_TO_HEIGHT_SNAP_TOLERANCE = 0.15
 const CURVED_INNER_EDGE_CLEARANCE = 0.15
 
+export function isDualSlopeLeanToCanopy(form: LeanToExtensionNode['canopyForm']): boolean {
+  return form === 'gable' || form === 'butterfly'
+}
+
 export type LeanToLayout = {
+  canopyForm: LeanToExtensionNode['canopyForm']
   span: number
   projection: number
   roofRun: number
@@ -38,6 +46,7 @@ export type LeanToLayout = {
   beamSpan: number
   beamCenterY: number
   beamZ: number
+  oppositeBeamZ: number
   postHeight: number
   postXs: number[]
   rafterXs: number[]
@@ -59,27 +68,21 @@ export function resolveLeanToWallSurfaceHit(
   if (!normal) return null
   if (!isCurvedWall(wall)) {
     if (Math.abs(normal[2]) <= 0.7) return null
-    return { localX: localPosition[0], side: normal[2] >= 0 ? 'front' : 'back' }
+  } else if (Math.abs(normal[1]) > 0.7) {
+    return null
   }
-  if (Math.abs(normal[1]) > 0.7) return null
 
-  const arc = getWallArcData(wall)
-  if (!arc) return null
   const chord = getWallChordFrame(wall)
-  const point = {
-    x: chord.start.x + chord.tangent.x * localPosition[0] + chord.normal.x * localPosition[2],
-    y: chord.start.y + chord.tangent.y * localPosition[0] + chord.normal.y * localPosition[2],
-  }
-  const angle = Math.atan2(point.y - arc.center.y, point.x - arc.center.x)
-  let directedAngle = (angle - arc.startAngle) * arc.direction
-  while (directedAngle < 0) directedAngle += Math.PI * 2
-  const t = Math.max(0, Math.min(1, directedAngle / Math.abs(arc.delta)))
-  const frame = getWallCurveFrameAt(wall, t)
-  const signedOffset =
-    (point.x - frame.point.x) * frame.normal.x + (point.y - frame.point.y) * frame.normal.y
+  if (chord.length <= 1e-6) return null
+  const point: [number, number] = [
+    chord.start.x + chord.tangent.x * localPosition[0] + chord.normal.x * localPosition[2],
+    chord.start.y + chord.tangent.y * localPosition[0] + chord.normal.y * localPosition[2],
+  ]
+  const attachment = resolveWallAttachmentAtPlanPoint(wall, point)
+  if (!attachment) return null
   return {
-    localX: getWallCurveLength(wall) * t,
-    side: signedOffset >= 0 ? 'front' : 'back',
+    localX: attachment.localX,
+    side: attachment.side,
   }
 }
 
@@ -97,11 +100,14 @@ export function applyLeanToCurveProjectionLimit(node: LeanToExtensionNode): Lean
 }
 
 export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
+  const canopyForm = node.hostKind === 'freestanding' ? node.canopyForm : 'mono'
+  const butterfly = canopyForm === 'butterfly'
+  const dualSlope = isDualSlopeLeanToCanopy(canopyForm)
   const span = Math.max(0.5, node.span)
   const projection = Math.max(0.5, node.projection)
-  const highOverhang = Math.max(0, node.highOverhang)
+  const highOverhang = dualSlope ? 0 : Math.max(0, node.highOverhang)
   const lowOverhang = Math.max(0, node.lowOverhang)
-  const roofRun = highOverhang + projection + lowOverhang
+  const roofRun = dualSlope ? projection + lowOverhang : highOverhang + projection + lowOverhang
   const roofWidth = span + Math.max(0, node.leftOverhang) + Math.max(0, node.rightOverhang)
   const roofCenterX = (Math.max(0, node.rightOverhang) - Math.max(0, node.leftOverhang)) / 2
   const requestedPitch = (Math.max(1, Math.min(45, node.pitch)) * Math.PI) / 180
@@ -114,9 +120,13 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
   const pitchRadians = Math.min(requestedPitch, maximumPitch)
   const effectivePitchDegrees = (pitchRadians * 180) / Math.PI
   const lowEdgeHeight = node.highEdgeHeight - projection * Math.tan(pitchRadians)
-  const eaveEdgeHeight = node.highEdgeHeight - (projection + lowOverhang) * Math.tan(pitchRadians)
+  const eaveEdgeHeight = butterfly
+    ? lowEdgeHeight
+    : node.highEdgeHeight - (projection + lowOverhang) * Math.tan(pitchRadians)
   const roofCenterZ = (projection + lowOverhang - highOverhang) / 2
-  const roofCenterY = node.highEdgeHeight - roofCenterZ * Math.tan(pitchRadians)
+  const roofCenterY = butterfly
+    ? lowEdgeHeight + roofCenterZ * Math.tan(pitchRadians)
+    : node.highEdgeHeight - roofCenterZ * Math.tan(pitchRadians)
   const effectiveRoofBuildUp =
     node.roofThickness / Math.max(0.1, Math.cos(pitchRadians)) +
     (node.shingleThickness ?? 0.025) * Math.cos(pitchRadians)
@@ -128,30 +138,46 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
   )
   const rafterCenterZ = rafterRun / 2
   const rafterCenterY =
-    node.highEdgeHeight -
-    rafterCenterZ * Math.tan(pitchRadians) -
+    (butterfly
+      ? lowEdgeHeight + rafterCenterZ * Math.tan(pitchRadians)
+      : node.highEdgeHeight - rafterCenterZ * Math.tan(pitchRadians)) -
     effectiveRoofBuildUp -
     node.rafterHeight / 2
   const beamZ = Math.max(0, projection - node.lowBeamInset)
   const beamTop =
-    node.highEdgeHeight - beamZ * Math.tan(pitchRadians) - effectiveRoofBuildUp - node.rafterHeight
+    (butterfly
+      ? lowEdgeHeight + beamZ * Math.tan(pitchRadians)
+      : node.highEdgeHeight - beamZ * Math.tan(pitchRadians)) -
+    effectiveRoofBuildUp -
+    node.rafterHeight
   const beamCenterY = beamTop - node.beamHeight / 2
   const postHeight = Math.max(MIN_LEAN_TO_POST_HEIGHT, beamCenterY - node.beamHeight / 2)
   const usablePostSpan = Math.max(0.1, span - 2 * Math.max(0, node.postInset))
+  const closedLoop = isClosedLoopLeanTo(node)
   const postCount =
     node.postLayoutMode === 'target-spacing'
-      ? Math.max(2, Math.min(20, Math.ceil(usablePostSpan / node.postSpacing) + 1))
+      ? Math.max(
+          closedLoop ? 3 : 2,
+          Math.min(20, Math.ceil(usablePostSpan / node.postSpacing) + (closedLoop ? 0 : 1)),
+        )
       : node.postCount
-  const postXs = evenlySpacedXs(span, postCount, node.postInset)
-  const beamSpan = Math.max(
-    node.postWidth,
-    (postXs.at(-1) ?? 0) - (postXs[0] ?? 0) + node.postWidth,
-  )
+  const postXs = closedLoop
+    ? evenlySpacedLoopXs(span, postCount)
+    : evenlySpacedXs(span, postCount, node.postInset)
+  const beamSpan = closedLoop
+    ? span
+    : Math.max(node.postWidth, (postXs.at(-1) ?? 0) - (postXs[0] ?? 0) + node.postWidth)
   const usableRafterSpan = Math.max(0.1, span - 2 * Math.max(0, node.rafterEndInset))
-  const rafterCount = Math.max(2, Math.ceil(usableRafterSpan / node.rafterSpacing) + 1)
-  const rafterXs = evenlySpacedXs(span, rafterCount, node.rafterEndInset)
+  const rafterCount = Math.max(
+    closedLoop ? 3 : 2,
+    Math.ceil(usableRafterSpan / node.rafterSpacing) + (closedLoop ? 0 : 1),
+  )
+  const rafterXs = closedLoop
+    ? evenlySpacedLoopXs(span, rafterCount)
+    : evenlySpacedXs(span, rafterCount, node.rafterEndInset)
 
   return {
+    canopyForm,
     span,
     projection,
     roofRun,
@@ -171,12 +197,23 @@ export function resolveLeanToLayout(node: LeanToExtensionNode): LeanToLayout {
     beamSpan,
     beamCenterY,
     beamZ,
+    oppositeBeamZ: -beamZ,
     postHeight,
     postXs,
     rafterXs,
     postFrames: postXs.map((x) => leanToArcFrameAtLocalX(node, x)),
     rafterFrames: rafterXs.map((x) => leanToArcFrameAtLocalX(node, x)),
   }
+}
+
+/**
+ * Plan-space center of the rendered lean-to footprint, measured from the node
+ * origin. Placement tools use this shared offset so the pointer marks the
+ * center of the whole footprint rather than the high-edge origin.
+ */
+export function resolveLeanToPlanCenter(node: LeanToExtensionNode): [number, number] {
+  const layout = resolveLeanToLayout(node)
+  return [layout.roofCenterX, isDualSlopeLeanToCanopy(layout.canopyForm) ? 0 : layout.roofCenterZ]
 }
 
 // The host wall's true circular arc expressed in the lean-to's local frame. The
@@ -210,24 +247,165 @@ export function resolveLeanToMoveCenterX(
   snapStep = 0,
   edgeSnapTargets: readonly LeanToEdgeSnapTarget[] = [],
 ): number {
+  return resolveLeanToMoveProposal({
+    node,
+    wall,
+    rawLocalX,
+    rawHighEdgeHeight: node.highEdgeHeight,
+    snapStep,
+    edgeSnapTargets,
+  }).centerX
+}
+
+export type LeanToMoveProposal = {
+  centerX: number
+  highEdgeHeight: number
+  lowEdgeHeight: number
+}
+
+export function resolveLeanToMoveProposal({
+  node,
+  wall,
+  rawLocalX,
+  rawHighEdgeHeight,
+  snapStep = 0,
+  edgeSnapTargets = [],
+}: {
+  node: LeanToExtensionNode
+  wall: WallNode
+  rawLocalX: number
+  rawHighEdgeHeight: number
+  snapStep?: number
+  edgeSnapTargets?: readonly LeanToEdgeSnapTarget[]
+}): LeanToMoveProposal {
   const wallLength = getWallCurveLength(wall)
   const snapped = snapStep > 0 ? Math.round(rawLocalX / snapStep) * snapStep : rawLocalX
   const min = node.span / 2 + Math.max(0, node.leftOverhang)
   const max = wallLength - node.span / 2 - Math.max(0, node.rightOverhang)
-  if (max < min) return wallLength / 2
+  const rawHeightDelta = rawHighEdgeHeight - node.highEdgeHeight
+  if (max < min) {
+    return {
+      centerX: wallLength / 2,
+      highEdgeHeight: rawHighEdgeHeight,
+      lowEdgeHeight: node.lowEdgeHeight + rawHeightDelta,
+    }
+  }
   const clamped = Math.max(min, Math.min(max, snapped))
-  return snapLeanToMoveCenterToEdges(node, clamped, min, max, edgeSnapTargets)
+  const edgeSnap = snapLeanToMoveCenterToEdges(node, clamped, min, max, edgeSnapTargets)
+  const highEdgeHeight = edgeSnap ? edgeSnap.target.roofEdgeY - node.position[1] : rawHighEdgeHeight
+  return {
+    centerX: edgeSnap?.centerX ?? clamped,
+    highEdgeHeight,
+    lowEdgeHeight: node.lowEdgeHeight + highEdgeHeight - node.highEdgeHeight,
+  }
 }
 
 export type LeanToEdgeSnapTarget = {
   leftEdgeX: number
   rightEdgeX: number
+  roofEdgeY: number
+  pitch?: number
+  nodeId?: AnyNodeId
+  anchor?: readonly [number, number]
+}
+
+export type LeanToHeightSnapMatch = {
+  highEdgeHeight: number
+  target: LeanToEdgeSnapTarget
 }
 
 function leanToEdgeSnapTarget(node: LeanToExtensionNode): LeanToEdgeSnapTarget {
   return {
     leftEdgeX: node.position[0] - node.span / 2 - Math.max(0, node.leftOverhang),
     rightEdgeX: node.position[0] + node.span / 2 + Math.max(0, node.rightOverhang),
+    roofEdgeY: node.position[1] + node.highEdgeHeight,
+    pitch: node.pitch,
+  }
+}
+
+export type LeanToSpanResizeSide = 'left' | 'right'
+
+export type LeanToSpanResizeProposal = {
+  span: number
+  position: [number, number, number]
+  highEdgeHeight: number
+  lowEdgeHeight: number
+  pitch: number
+  target: LeanToEdgeSnapTarget | null
+}
+
+export function resolveLeanToSpanResizeProposal({
+  node,
+  wall,
+  rawSpan,
+  side,
+  edgeSnapTargets = [],
+  tolerance = LEAN_TO_EDGE_SNAP_TOLERANCE,
+}: {
+  node: LeanToExtensionNode
+  wall: WallNode
+  rawSpan: number
+  side: LeanToSpanResizeSide
+  edgeSnapTargets?: readonly LeanToEdgeSnapTarget[]
+  tolerance?: number
+}): LeanToSpanResizeProposal {
+  const wallLength = getWallCurveLength(wall)
+  const visualSign = side === 'right' ? 1 : -1
+  const wallSign = Math.cos(node.rotation[1]) >= 0 ? visualSign : -visualSign
+  const fixedStructuralEdge = node.position[0] - wallSign * (node.span / 2)
+  const draggedOverhang = Math.max(0, wallSign > 0 ? node.rightOverhang : node.leftOverhang)
+  const maximumSpan = Math.max(
+    0.5,
+    wallSign > 0
+      ? wallLength - fixedStructuralEdge - draggedOverhang
+      : fixedStructuralEdge - draggedOverhang,
+  )
+  const boundedSpan = Math.max(0.5, Math.min(maximumSpan, rawSpan))
+  const centerX = fixedStructuralEdge + wallSign * (boundedSpan / 2)
+  const draggedRoofEdge = centerX + wallSign * (boundedSpan / 2 + draggedOverhang)
+  const wallEdgeX = wallSign > 0 ? wallLength : 0
+  let best: {
+    edgeX: number
+    distance: number
+    target: LeanToEdgeSnapTarget | null
+  } = {
+    edgeX: wallEdgeX,
+    distance: Math.abs(draggedRoofEdge - wallEdgeX),
+    target: null,
+  }
+
+  for (const target of edgeSnapTargets) {
+    const edgeX = wallSign > 0 ? target.leftEdgeX : target.rightEdgeX
+    const distance = Math.abs(draggedRoofEdge - edgeX)
+    if (distance < best.distance || (Math.abs(distance - best.distance) <= 1e-9 && !best.target)) {
+      best = { edgeX, distance, target }
+    }
+  }
+
+  const snapped = best.distance <= tolerance
+  const span = snapped
+    ? Math.max(0.5, Math.min(maximumSpan, boundedSpan + wallSign * (best.edgeX - draggedRoofEdge)))
+    : boundedSpan
+  const position: [number, number, number] = [
+    fixedStructuralEdge + wallSign * (span / 2),
+    node.position[1],
+    node.position[2],
+  ]
+  const target = snapped ? best.target : null
+  const pitch = target?.pitch ?? node.pitch
+  const highEdgeHeight = target ? target.roofEdgeY - node.position[1] : node.highEdgeHeight
+
+  return {
+    span,
+    position,
+    highEdgeHeight,
+    lowEdgeHeight: leanToLowEdgeHeight({
+      highEdgeHeight,
+      pitch,
+      projection: node.projection,
+    }),
+    pitch,
+    target,
   }
 }
 
@@ -237,10 +415,14 @@ function snapLeanToMoveCenterToEdges(
   min: number,
   max: number,
   targets: readonly LeanToEdgeSnapTarget[],
-): number {
+): { centerX: number; target: LeanToEdgeSnapTarget } | null {
   const movingLeft = centerX - node.span / 2 - Math.max(0, node.leftOverhang)
   const movingRight = centerX + node.span / 2 + Math.max(0, node.rightOverhang)
-  let best: { centerX: number; distance: number } | null = null
+  let best: {
+    centerX: number
+    distance: number
+    target: LeanToEdgeSnapTarget
+  } | null = null
 
   for (const target of targets) {
     const leftToRight = Math.abs(movingLeft - target.rightEdgeX)
@@ -249,7 +431,7 @@ function snapLeanToMoveCenterToEdges(
       if (snappedCenter >= min && snappedCenter <= max) {
         best =
           !best || leftToRight < best.distance
-            ? { centerX: snappedCenter, distance: leftToRight }
+            ? { centerX: snappedCenter, distance: leftToRight, target }
             : best
       }
     }
@@ -260,13 +442,54 @@ function snapLeanToMoveCenterToEdges(
       if (snappedCenter >= min && snappedCenter <= max) {
         best =
           !best || rightToLeft < best.distance
-            ? { centerX: snappedCenter, distance: rightToLeft }
+            ? { centerX: snappedCenter, distance: rightToLeft, target }
             : best
       }
     }
   }
 
-  return best?.centerX ?? centerX
+  return best ? { centerX: best.centerX, target: best.target } : null
+}
+
+export function resolveLeanToHighEdgeHeightSnap(
+  node: LeanToExtensionNode,
+  rawHighEdgeHeight: number,
+  targets: readonly LeanToEdgeSnapTarget[],
+  tolerance = LEAN_TO_HEIGHT_SNAP_TOLERANCE,
+): LeanToHeightSnapMatch | null {
+  const movingLeft = node.position[0] - node.span / 2 - Math.max(0, node.leftOverhang)
+  const movingRight = node.position[0] + node.span / 2 + Math.max(0, node.rightOverhang)
+  let best: {
+    heightDelta: number
+    edgeDistance: number
+    target: LeanToEdgeSnapTarget
+  } | null = null
+
+  for (const target of targets) {
+    const edgeDistance = Math.min(
+      Math.abs(movingLeft - target.rightEdgeX),
+      Math.abs(movingRight - target.leftEdgeX),
+    )
+    if (edgeDistance > LEAN_TO_EDGE_SNAP_TOLERANCE) continue
+
+    const targetHeight = target.roofEdgeY - node.position[1]
+    const heightDelta = Math.abs(targetHeight - rawHighEdgeHeight)
+    if (heightDelta > tolerance) continue
+    if (
+      !best ||
+      heightDelta < best.heightDelta - 1e-9 ||
+      (Math.abs(heightDelta - best.heightDelta) <= 1e-9 && edgeDistance < best.edgeDistance)
+    ) {
+      best = { heightDelta, edgeDistance, target }
+    }
+  }
+
+  return best
+    ? {
+        highEdgeHeight: best.target.roofEdgeY - node.position[1],
+        target: best.target,
+      }
+    : null
 }
 
 export function resolveLeanToEdgeSnapTargets(
@@ -274,24 +497,73 @@ export function resolveLeanToEdgeSnapTargets(
   wall: WallNode,
   nodes: Record<AnyNodeId, AnyNode>,
 ): LeanToEdgeSnapTarget[] {
-  const wallLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+  const wallLength = getWallCurveLength(wall)
   if (wallLength <= 1e-6) return []
-  const wallDx = (wall.end[0] - wall.start[0]) / wallLength
-  const wallDz = (wall.end[1] - wall.start[1]) / wallLength
+  const wallChordLength = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+  if (wallChordLength <= 1e-6) return []
+  const wallDx = (wall.end[0] - wall.start[0]) / wallChordLength
+  const wallDz = (wall.end[1] - wall.start[1]) / wallChordLength
   const sameSideSign = Math.sign(Math.cos(node.rotation[1])) || 1
   const targets: LeanToEdgeSnapTarget[] = []
 
   for (const candidate of Object.values(nodes)) {
     if (candidate.type !== 'lean-to-extension' || candidate.id === node.id) continue
-    if ((Math.sign(Math.cos(candidate.rotation[1])) || 1) !== sameSideSign) continue
     const host = candidate.parentId ? nodes[candidate.parentId as AnyNodeId] : undefined
     if (host?.type !== 'wall') continue
-    const hostLength = Math.hypot(host.end[0] - host.start[0], host.end[1] - host.start[1])
+    if (host.parentId !== wall.parentId) continue
+    const hostLength = getWallCurveLength(host)
     if (hostLength <= 1e-6) continue
-    const hostDx = (host.end[0] - host.start[0]) / hostLength
-    const hostDz = (host.end[1] - host.start[1]) / hostLength
+    const hostChordLength = Math.hypot(host.end[0] - host.start[0], host.end[1] - host.start[1])
+    if (hostChordLength <= 1e-6) continue
+    const hostDx = (host.end[0] - host.start[0]) / hostChordLength
+    const hostDz = (host.end[1] - host.start[1]) / hostChordLength
     const parallel = wallDx * hostDx + wallDz * hostDz
-    if (parallel < 0.999) continue
+    const candidateTarget = leanToEdgeSnapTarget(candidate)
+    const candidatePose = leanToWallLocalPose(host, candidate, 0)
+
+    if (parallel < 0.999) {
+      const wallEnds = [
+        { point: wall.start, x: 0, t: 0 },
+        { point: wall.end, x: wallLength, t: 1 },
+      ] as const
+      const hostEnds = [
+        { point: host.start, x: 0, t: 0 },
+        { point: host.end, x: hostLength, t: 1 },
+      ] as const
+      for (const wallEnd of wallEnds) {
+        for (const hostEnd of hostEnds) {
+          if (
+            Math.hypot(wallEnd.point[0] - hostEnd.point[0], wallEnd.point[1] - hostEnd.point[1]) >
+            LEAN_TO_EDGE_SNAP_TOLERANCE
+          ) {
+            continue
+          }
+          const candidateReachesEnd =
+            Math.min(
+              Math.abs(candidateTarget.leftEdgeX - hostEnd.x),
+              Math.abs(candidateTarget.rightEdgeX - hostEnd.x),
+            ) <= LEAN_TO_EDGE_SNAP_TOLERANCE
+          if (!candidateReachesEnd) continue
+          const wallFrame = getWallCurveFrameAt(wall, wallEnd.t)
+          const hostFrame = getWallCurveFrameAt(host, hostEnd.t)
+          const candidateSideSign = Math.sign(Math.cos(candidate.rotation[1])) || 1
+          const outwardDot =
+            wallFrame.normal.x * sameSideSign * hostFrame.normal.x * candidateSideSign +
+            wallFrame.normal.y * sameSideSign * hostFrame.normal.y * candidateSideSign
+          if (outwardDot < -0.25) continue
+          targets.push({
+            leftEdgeX: wallEnd.x,
+            rightEdgeX: wallEnd.x,
+            roofEdgeY: candidateTarget.roofEdgeY,
+            pitch: candidate.pitch,
+            nodeId: candidate.id as AnyNodeId,
+            anchor: [candidatePose.position[0], candidatePose.position[2]],
+          })
+        }
+      }
+      continue
+    }
+    if ((Math.sign(Math.cos(candidate.rotation[1])) || 1) !== sameSideSign) continue
     const offsetFromWall =
       (host.start[0] - wall.start[0]) * -wallDz + (host.start[1] - wall.start[1]) * wallDx
     if (Math.abs(offsetFromWall) > (wall.thickness ?? 0.1) + LEAN_TO_EDGE_SNAP_TOLERANCE) {
@@ -299,10 +571,13 @@ export function resolveLeanToEdgeSnapTargets(
     }
     const hostStartX =
       (host.start[0] - wall.start[0]) * wallDx + (host.start[1] - wall.start[1]) * wallDz
-    const candidateTarget = leanToEdgeSnapTarget(candidate)
     targets.push({
       leftEdgeX: hostStartX + candidateTarget.leftEdgeX,
       rightEdgeX: hostStartX + candidateTarget.rightEdgeX,
+      roofEdgeY: candidateTarget.roofEdgeY,
+      pitch: candidate.pitch,
+      nodeId: candidate.id as AnyNodeId,
+      anchor: [candidatePose.position[0], candidatePose.position[2]],
     })
   }
 
@@ -316,6 +591,12 @@ function evenlySpacedXs(span: number, count: number, requestedInset: number): nu
   const last = span / 2 - inset
   const step = (last - first) / (resolvedCount - 1)
   return Array.from({ length: resolvedCount }, (_, index) => first + index * step)
+}
+
+function evenlySpacedLoopXs(span: number, count: number): number[] {
+  const resolvedCount = Math.max(3, Math.round(count))
+  const step = span / resolvedCount
+  return Array.from({ length: resolvedCount }, (_, index) => -span / 2 + index * step)
 }
 
 export function resolveLeanToWallPlacement(

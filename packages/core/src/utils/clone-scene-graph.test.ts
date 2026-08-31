@@ -277,3 +277,54 @@ describe('lean-to roof attachment remap', () => {
     expect(levelLeanTo.hostRoofSegmentId).toBe(levelClone.idMap.get('roofseg_1'))
   })
 })
+
+describe('roof surface support remap', () => {
+  test('remaps a mounted roof support segment in whole-scene and level clones', () => {
+    const level = makeNode('level_1', 'level', {
+      children: ['roof_host', 'roof_mounted'],
+    })
+    const host = makeNode('roof_host', 'roof', {
+      parentId: 'level_1',
+      children: ['rseg_host'],
+    })
+    const hostSegment = makeNode('rseg_host', 'roof-segment', {
+      parentId: 'roof_host',
+    })
+    const mounted = makeNode('roof_mounted', 'roof', {
+      parentId: 'level_1',
+      support: {
+        kind: 'roof',
+        roofSegmentId: 'rseg_host',
+        localPosition: [1, 2],
+        curbHeight: 0.5,
+      },
+    })
+    const nodes = {
+      ['level_1' as AnyNodeId]: level,
+      ['roof_host' as AnyNodeId]: host,
+      ['rseg_host' as AnyNodeId]: hostSegment,
+      ['roof_mounted' as AnyNodeId]: mounted,
+    }
+
+    const whole = cloneSceneGraph({ nodes, rootNodeIds: ['level_1' as AnyNodeId] })
+    const wholeHostSegment = Object.values(whole.nodes).find(
+      (node) => node.type === 'roof-segment',
+    )!
+    const wholeMounted = Object.values(whole.nodes).find(
+      (node) => node.type === 'roof' && node.support?.kind === 'roof',
+    )!
+    expect(wholeMounted.type).toBe('roof')
+    if (wholeMounted.type === 'roof' && wholeMounted.support.kind === 'roof') {
+      expect(wholeMounted.support.roofSegmentId).toBe(wholeHostSegment.id)
+    }
+
+    const levelClone = cloneLevelSubtree(nodes, 'level_1' as AnyNodeId)
+    const levelMounted = levelClone.clonedNodes.find(
+      (node) => node.type === 'roof' && node.support?.kind === 'roof',
+    )!
+    expect(levelMounted.type).toBe('roof')
+    if (levelMounted.type === 'roof' && levelMounted.support.kind === 'roof') {
+      expect(levelMounted.support.roofSegmentId).toBe(levelClone.idMap.get('rseg_host'))
+    }
+  })
+})

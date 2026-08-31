@@ -216,6 +216,8 @@ export default function WindowPanel() {
       rotation: [...node.rotation] as [number, number, number],
       side: node.side,
       wallId: node.wallId,
+      dormerId: node.dormerId,
+      dormerFace: node.dormerFace,
       roofSegmentId: node.roofSegmentId,
       roofFace: node.roofFace,
       parentId: node.parentId,

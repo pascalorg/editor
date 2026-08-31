@@ -6,7 +6,7 @@ export const scanParametrics: ParametricDescriptor<ScanNode> = {
       label: 'Transform',
       fields: [
         { key: 'position', kind: 'vec3' },
-        { key: 'scale', kind: 'number', min: 0.01, max: 10, step: 0.1 },
+        { key: 'scale', kind: 'number', min: 0.01, max: 1000, step: 0.1 },
       ],
     },
     {

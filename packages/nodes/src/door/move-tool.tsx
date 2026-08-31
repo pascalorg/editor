@@ -347,6 +347,7 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
 
       const valid = !hasWallChildOverlap(
         event.node.id,
+        useScene.getState().nodes,
         clampedX,
         clampedY,
         movingDoorNode.width,

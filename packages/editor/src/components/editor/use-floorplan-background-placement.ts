@@ -1,7 +1,7 @@
 'use client'
 
 import { emitter, type FenceNode, isCurvedWall, type WallNode } from '@pascal-app/core'
-import { type MouseEvent as ReactMouseEvent, useCallback } from 'react'
+import { type MouseEvent as ReactMouseEvent, useCallback, useEffect } from 'react'
 import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
@@ -125,6 +125,12 @@ export function useFloorplanBackgroundPlacement({
   walls,
   worldGridSnap,
 }: UseFloorplanBackgroundPlacementArgs) {
+  const roofFootprintSource = useEditor((state) => state.toolDefaults.roof?.footprintSource)
+
+  useEffect(() => {
+    if (isRoofBuildActive && roofFootprintSource !== 'draw') clearRoofPlacementDraft()
+  }, [clearRoofPlacementDraft, isRoofBuildActive, roofFootprintSource])
+
   const handleBackgroundPlacementClick = useCallback(
     (
       planPoint: WallPlanPoint,
@@ -187,6 +193,11 @@ export function useFloorplanBackgroundPlacement({
         })
         emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
+
+        if (roofFootprintSource !== 'draw') {
+          clearRoofPlacementDraft()
+          return true
+        }
 
         if (roofDraftStart) {
           clearRoofPlacementDraft()
@@ -392,6 +403,7 @@ export function useFloorplanBackgroundPlacement({
       isZoneBuildActive,
       levelId,
       roofDraftStart,
+      roofFootprintSource,
       setCursorPoint,
       setFenceDraftEnd,
       setFenceDraftStart,
