@@ -466,14 +466,6 @@ export default function RoofSegmentPanel() {
         </PanelSection>
       )}
 
-      <PanelSection title="Drainage">
-        <ToggleControl
-          checked={autoGutterEnabled}
-          label="Auto gutters"
-          onChange={handleAutoGutterToggle}
-        />
-      </PanelSection>
-
       <PanelSection title="Wall Height">
         <SliderControl
           label="Wall"

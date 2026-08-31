@@ -402,6 +402,7 @@ export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export { resolveStairTotalRise, syncStairRises } from './systems/stair/stair-rise'
 export {
+  constrainWallCurveOffsetToAvoidIntersections,
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallArcData,

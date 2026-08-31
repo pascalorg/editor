@@ -26,6 +26,7 @@ import {
   type WallNode,
 } from '../../schema'
 import type { CollectionId } from '../../schema/collections'
+import { constrainWallCurveOffsetToAvoidIntersections } from '../../systems/wall/wall-curve'
 import { addActiveSceneCommitNodeIds, runWithSceneCommitNodeIds } from '../history-control'
 import type { SceneState } from '../use-scene'
 
@@ -1464,7 +1465,23 @@ const updateNodesActionImpl = (
       const currentNode = nextNodes[id]
       if (!currentNode) continue
       addLeanToHostRoofId(currentNode, nextNodes, roofsToRefresh)
-      const updatedNode = parseUpdatedNode(currentNode, data)
+      const curveOffset =
+        currentNode.type === 'wall' ? (data as Partial<WallNode>).curveOffset : undefined
+      const constrainedData =
+        currentNode.type === 'wall' && typeof curveOffset === 'number'
+          ? {
+              ...data,
+              curveOffset: constrainWallCurveOffsetToAvoidIntersections(
+                currentNode,
+                curveOffset,
+                Object.values(nextNodes).filter(
+                  (node): node is WallNode =>
+                    node.type === 'wall' && node.parentId === currentNode.parentId,
+                ),
+              ),
+            }
+          : data
+      const updatedNode = parseUpdatedNode(currentNode, constrainedData)
       addLeanToHostRoofId(updatedNode, nextNodes, roofsToRefresh)
 
       // Handle Reparenting Logic

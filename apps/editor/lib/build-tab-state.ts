@@ -16,8 +16,8 @@ export type RoofFootprintSource = (typeof ROOF_FOOTPRINT_SOURCES)[number]['value
 const CONICAL_ROOF_FOOTPRINT_SOURCES = [ROOF_FOOTPRINT_SOURCES[1]] as const
 
 const STANDARD_ROOF_FOOTPRINT_SOURCES = [
-  ROOF_FOOTPRINT_SOURCES[0],
   ROOF_FOOTPRINT_SOURCES[2],
+  ROOF_FOOTPRINT_SOURCES[0],
 ] as const
 
 export function getRoofFootprintSources(roofType: RoofType) {

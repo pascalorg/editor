@@ -48,7 +48,8 @@ test('conical roofs expose only curved-wall footprint source', () => {
 })
 
 test('non-conical roofs expose room and draw footprint sources', () => {
-  expect(getRoofFootprintSources('hip').map((source) => source.value)).toEqual(['room', 'draw'])
-  expect(getRoofFootprintSource('hip', 'walls')).toBe('room')
+  expect(getRoofFootprintSources('hip').map((source) => source.value)).toEqual(['draw', 'room'])
+  expect(getRoofFootprintSource('hip', 'walls')).toBe('draw')
   expect(getRoofFootprintSource('hip', 'draw')).toBe('draw')
+  expect(getRoofFootprintSource('hip', 'room')).toBe('room')
 })

@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
-export const CupolaMaterialRole = z.enum(['base', 'body', 'roof'])
+export const CupolaMaterialRole = z.enum(['base', 'body', 'roof', 'louvers'])
 export type CupolaMaterialRole = z.infer<typeof CupolaMaterialRole>
 
 export const CupolaNode = BaseNode.extend({
