@@ -96,8 +96,11 @@ export function resolveLeanToWallPlanTarget(
 }
 
 const PLACEMENT_ROTATION_STEP = Math.PI / 4
-export const LEAN_TO_RUN_CONNECT_SNAP_RADIUS = 0.05
 export const LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS = 0.5
+// Continuous canopy runs must stay connected even when the user's active
+// snapping mode disables magnetic pull. Grid/angle modes still control cursor
+// quantization, but they must not turn a continuous chain into separate runs.
+export const LEAN_TO_RUN_CONNECT_SNAP_RADIUS = LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS
 
 export function nextLeanToPlacementRotation(
   current: number,

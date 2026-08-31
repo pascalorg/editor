@@ -11,6 +11,8 @@ import { readLeanToCornerJointMetadata } from './corner-joint'
 import { resolveLeanToLayout, resolveLeanToWallPlacement } from './layout'
 import {
   findLeanToSlabEdgePlacement,
+  LEAN_TO_RUN_CONNECT_SNAP_RADIUS,
+  LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS,
   nextLeanToCanopyForm,
   nextLeanToPlacementRotation,
   reconcileLeanToSlabEdgePlacement,
@@ -26,6 +28,11 @@ import {
 import { applyLeanToWallAutoSpan } from './roof-attachment'
 
 describe('lean-to canopy placement', () => {
+  test('keeps continuous endpoint connection radius enabled in every snap mode', () => {
+    expect(LEAN_TO_RUN_CONNECT_SNAP_RADIUS).toBe(LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS)
+    expect(LEAN_TO_RUN_CONNECT_SNAP_RADIUS).toBe(0.5)
+  })
+
   test('places a freestanding canopy on the active level with two supported sides', () => {
     const node = resolveLeanToFreestandingPlacement('level_ground', [4, 6])
 
