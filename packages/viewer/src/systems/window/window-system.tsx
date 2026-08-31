@@ -24,6 +24,7 @@ import {
   type RenderShading,
   resolveMaterialRef,
 } from '../../lib/materials'
+import { timeSpan } from '../../lib/perf-tracks'
 import useViewer from '../../store/use-viewer'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
 
@@ -146,7 +147,9 @@ export const WindowSystem = () => {
       // Merge any live override (width / height / position) so the mesh
       // rebuild reflects the in-flight drag without zustand churn.
       const effectiveNode = getEffectiveNode(node as WindowNode)
-      updateWindowMesh(effectiveNode, mesh)
+      timeSpan('window', () => updateWindowMesh(effectiveNode, mesh), {
+        properties: [['node', id]],
+      })
       clearDirty(id as AnyNodeId)
       rebuiltWindowsThisFrame += 1
 

@@ -18,7 +18,7 @@ import {
 } from 'react'
 import * as THREE from 'three/webgpu'
 import { hasDrawableGeometry } from '../../lib/drawable-geometry'
-import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
+import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
 import { ensureKtx2Support } from '../../lib/ktx2-loader'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
@@ -537,6 +537,11 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                   ...(props as any),
                   ...backendParameters,
                   alpha: true,
+                  // Allocates the backend's timestamp query pool so
+                  // `resolveTimestampsAsync()` can report real GPU render-pass
+                  // time (post-processing.tsx). The backend self-disables it
+                  // when the device lacks 'timestamp-query'.
+                  trackTimestamp: PERF_OVERLAY_ENABLED,
                 })
                 renderer.toneMapping = THREE.ACESFilmicToneMapping
                 renderer.toneMappingExposure = getSceneTheme(
@@ -621,21 +626,5 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     </Canvas>
   )
 })
-
-const DebugRenderer = () => {
-  useFrame(({ gl, scene, camera }) => {
-    const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
-    gl.render(scene, camera)
-    if (PERF_OVERLAY_ENABLED) {
-      const queue = (gl as any).backend?.device?.queue as
-        | { onSubmittedWorkDone?: () => Promise<void> }
-        | undefined
-      queue?.onSubmittedWorkDone?.().then(() => {
-        pushGpuSample(performance.now() - submittedAt)
-      })
-    }
-  })
-  return null
-}
 
 export default Viewer

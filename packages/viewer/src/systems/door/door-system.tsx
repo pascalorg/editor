@@ -28,6 +28,7 @@ import {
   type RenderShading,
   resolveMaterialRef,
 } from '../../lib/materials'
+import { timeSpan } from '../../lib/perf-tracks'
 import useViewer from '../../store/use-viewer'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
 
@@ -169,7 +170,9 @@ export const DoorSystem = () => {
       // rebuild reflects the in-flight drag without zustand churn. When
       // no override is set this returns the scene node unchanged.
       const effectiveNode = getEffectiveNode(node as DoorNode)
-      updateDoorMesh(effectiveNode, mesh)
+      timeSpan('door', () => updateDoorMesh(effectiveNode, mesh), {
+        properties: [['node', id]],
+      })
       clearDirty(id as AnyNodeId)
       rebuiltDoorsThisFrame += 1
 
