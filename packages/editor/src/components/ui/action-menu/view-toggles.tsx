@@ -542,7 +542,7 @@ function ReferenceListSection({
   title,
   iconSrc,
   countKey,
-  defaultNoun,
+  defaultNameKey,
   emptyText,
   nodes,
   show,
@@ -552,7 +552,7 @@ function ReferenceListSection({
   title: string
   iconSrc: string
   countKey: string
-  defaultNoun: string
+  defaultNameKey: string
   emptyText: string
   nodes: (GuideNode | ScanNode)[]
   show: boolean
@@ -625,8 +625,7 @@ function ReferenceListSection({
                     src={iconSrc}
                   />
                   <p className="truncate font-medium text-foreground text-sm">
-                    {node.name ||
-                      `${defaultNoun.charAt(0).toUpperCase()}${defaultNoun.slice(1)} ${index + 1}`}
+                    {node.name || t(defaultNameKey, { index: index + 1 })}
                   </p>
                   {selectedReferenceId === node.id && (
                     <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-foreground/80" />
@@ -753,7 +752,7 @@ function ReferencesControl() {
           )}
           <ReferenceListSection
             countKey="viewer.scansOnThisLevel"
-            defaultNoun="scan"
+            defaultNameKey="viewer.scanDefault"
             emptyText={t('viewer.referencesEmptyText')}
             iconSrc="/icons/mesh.webp"
             nodes={scans}
@@ -765,7 +764,7 @@ function ReferencesControl() {
           <div className="h-px bg-border/45" />
           <ReferenceListSection
             countKey="viewer.guideImagesOnThisLevel"
-            defaultNoun="guide image"
+            defaultNameKey="viewer.guideImageDefault"
             emptyText={t('viewer.referencesEmptyText')}
             iconSrc="/icons/floorplan.webp"
             nodes={guides}

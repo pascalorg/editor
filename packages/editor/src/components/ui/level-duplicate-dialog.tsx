@@ -3,9 +3,8 @@
 import type { LevelNode } from '@pascal-app/core'
 import { useEffect, useState } from 'react'
 import type { LevelDuplicatePreset } from '../../lib/level-duplication'
-import { getLevelDisplayName } from '@pascal-app/core'
 import { cn } from '../../lib/utils'
-import { messages, useLocale } from '../../lib/i18n'
+import { useTranslations } from '../../lib/i18n'
 import {
   Dialog,
   DialogContent,
@@ -42,9 +41,12 @@ const DUPLICATE_PRESETS: Array<{
   },
 ]
 
-function getLevelLabel(level: LevelNode | null, locale: string) {
-  if (!level) return 'this level'
-  return getLevelDisplayName(level, locale as 'en' | 'zh')
+function getLevelLabel(level: LevelNode | null, t: (key: string, params?: Record<string, string | number>) => string) {
+  if (!level) return t('level.thisLevel')
+  if (level.name) return level.name
+  if (level.level === 0) return t('level.groundFloor')
+  if (level.level > 0) return t('level.floor', { n: level.level })
+  return t('level.basement', { n: -level.level })
 }
 
 export function LevelDuplicateDialog({
@@ -59,14 +61,7 @@ export function LevelDuplicateDialog({
   onOpenChange: (open: boolean) => void
 }) {
   const [preset, setPreset] = useState<LevelDuplicatePreset>('everything')
-  const { locale } = useLocale()
-  const t = (key: string, params?: Record<string, string | number>) => {
-    const str = (messages[locale as 'en' | 'zh'] as Record<string, string>)[key] || key
-    if (!params) return str
-    return Object.entries(params).reduce(
-      (s, [k, v]) => s.replace(new RegExp(`\\{${k}}`, 'g'), String(v)), str,
-    )
-  }
+  const t = useTranslations()
 
   useEffect(() => {
     if (open) {
@@ -79,7 +74,7 @@ export function LevelDuplicateDialog({
       <DialogContent className="sm:max-w-md" showCloseButton={false}>
         <DialogHeader>
           <DialogTitle>{t('levelDuplicate.duplicateLevel')}</DialogTitle>
-          <DialogDescription>{t('levelDuplicate.chooseWhatToCopy', { level: getLevelLabel(level, locale) })}</DialogDescription>
+          <DialogDescription>{t('levelDuplicate.chooseWhatToCopy', { level: getLevelLabel(level, t) })}</DialogDescription>
         </DialogHeader>
 
         <div className="grid gap-2">
