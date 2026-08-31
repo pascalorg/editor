@@ -1,4 +1,5 @@
 import { Keyboard } from 'lucide-react'
+import { useTranslations } from '../../../../../lib/i18n'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
   Dialog,
@@ -15,193 +16,190 @@ import {
 
 type Shortcut = {
   keys: string[]
-  action: string
-  note?: string
+  actionKey: string
+  noteKey?: string
 }
 
 type ShortcutCategory = {
-  title: string
+  titleKey: string
   shortcuts: Shortcut[]
 }
 
 const SHORTCUT_CATEGORIES: ShortcutCategory[] = [
   {
-    title: 'Editor Navigation',
+    titleKey: 'shortcuts.editorNavigation',
     shortcuts: [
-      { keys: ['1'], action: 'Switch to Site phase' },
-      { keys: ['2'], action: 'Switch to Structure phase' },
-      { keys: ['3'], action: 'Switch to Furnish phase' },
-      { keys: ['F'], action: 'Switch to Furnish layer' },
-      { keys: ['Z'], action: 'Switch to Zones layer' },
+      { keys: ['1'], actionKey: 'shortcuts.switchToSitePhase' },
+      { keys: ['2'], actionKey: 'shortcuts.switchToStructurePhase' },
+      { keys: ['3'], actionKey: 'shortcuts.switchToFurnishPhase' },
+      { keys: ['F'], actionKey: 'shortcuts.switchToFurnishLayer' },
+      { keys: ['Z'], actionKey: 'shortcuts.switchToZonesLayer' },
       {
         keys: ['Cmd/Ctrl', 'Arrow Up'],
-        action: 'Select next level in the active building',
+        actionKey: 'shortcuts.selectNextLevel',
       },
       {
         keys: ['Cmd/Ctrl', 'Arrow Down'],
-        action: 'Select previous level in the active building',
+        actionKey: 'shortcuts.selectPreviousLevel',
       },
-      { keys: ['Cmd/Ctrl', 'B'], action: 'Toggle sidebar' },
+      { keys: ['Cmd/Ctrl', 'B'], actionKey: 'shortcuts.toggleSidebar' },
     ],
   },
   {
-    title: 'Modes & History',
+    titleKey: 'shortcuts.modesAndHistory',
     shortcuts: [
-      { keys: ['V'], action: 'Switch to Select mode' },
-      { keys: ['B'], action: 'Switch to Build mode' },
-      { keys: ['M'], action: 'Activate the last measurement tool' },
-      { keys: ['X'], action: 'Switch to Delete mode' },
+      { keys: ['V'], actionKey: 'shortcuts.switchToSelectMode' },
+      { keys: ['B'], actionKey: 'shortcuts.switchToBuildMode' },
+      { keys: ['M'], actionKey: 'shortcuts.activateMeasurementTool' },
+      { keys: ['X'], actionKey: 'shortcuts.switchToDeleteMode' },
       {
         keys: ['Esc'],
-        action: 'Cancel the active tool and return to Select mode',
-        note: 'Mid-draw it cancels only the chain in progress and keeps the tool armed; press it again to leave the tool.',
+        actionKey: 'shortcuts.cancelTool',
+        noteKey: 'shortcuts.cancelToolNote',
       },
-      { keys: ['Delete / Backspace'], action: 'Delete selected objects' },
-      { keys: ['Cmd/Ctrl', 'Z'], action: 'Undo' },
-      { keys: ['Cmd/Ctrl', 'Shift', 'Z'], action: 'Redo' },
+      { keys: ['Delete / Backspace'], actionKey: 'shortcuts.deleteSelected' },
+      { keys: ['Cmd/Ctrl', 'Z'], actionKey: 'shortcuts.undo' },
+      { keys: ['Cmd/Ctrl', 'Shift', 'Z'], actionKey: 'shortcuts.redo' },
     ],
   },
   {
-    title: 'Selection',
+    titleKey: 'shortcuts.selection',
     shortcuts: [
       {
         keys: ['Cmd/Ctrl', 'C'],
-        action: 'Copy the selected objects',
-        note: 'The copied selection can be pasted into another level, project, or browser tab.',
+        actionKey: 'shortcuts.copySelection',
+        noteKey: 'shortcuts.copySelectionNote',
       },
       {
         keys: ['Cmd/Ctrl', 'X'],
-        action: 'Cut the selected objects',
-        note: 'Copies the selection to the clipboard, then removes it from this scene.',
+        actionKey: 'shortcuts.cutSelection',
+        noteKey: 'shortcuts.cutSelectionNote',
       },
       {
         keys: ['Cmd/Ctrl', 'V'],
-        action: 'Paste and place copied objects',
-        note:
-          'Carries a preview under the cursor. Click to place it, or press Escape to cancel.',
+        actionKey: 'shortcuts.pasteSelection',
+        noteKey: 'shortcuts.pasteSelectionNote',
       },
       {
         keys: ['Cmd/Ctrl', 'Left click'],
-        action: 'Add or remove an object from multi-selection',
-        note: 'Works in Select mode on the 3D canvas, the 2D floor plan, and the scene graph.',
+        actionKey: 'shortcuts.addToSelection',
+        noteKey: 'shortcuts.addToSelectionNote',
       },
       {
         keys: ['Shift', 'Left click'],
-        action: 'Add or remove an object from canvas multi-selection',
-        note: 'In the scene graph, Shift-click selects the visible range like a file browser.',
+        actionKey: 'shortcuts.addToCanvasSelection',
+        noteKey: 'shortcuts.addToCanvasSelectionNote',
       },
       {
         keys: ['Left click'],
-        action: 'Move the whole multi-selection',
-        note:
-          'With 2+ objects selected, in 2D and 3D alike: drag the selection (or its dashed box) to slide it; click it to pick it up and place with the next click.',
+        actionKey: 'shortcuts.moveMultiSelection',
+        noteKey: 'shortcuts.moveMultiSelectionNote',
       },
       {
         keys: ['R', 'T'],
-        action: 'Rotate a multi-selection ±45° around its center',
-        note: 'Also works mid-move while carrying the selection.',
+        actionKey: 'shortcuts.rotateMultiSelection',
+        noteKey: 'shortcuts.rotateMultiSelectionNote',
       },
       {
         keys: ['Cmd/Ctrl', 'G'],
-        action: 'Group the multi-selection (session only)',
-        note:
-          'Editor-only. Plain click a member later to reselect the whole group. Not saved with the project.',
+        actionKey: 'shortcuts.groupSelection',
+        noteKey: 'shortcuts.groupSelectionNote',
       },
       {
         keys: ['Cmd/Ctrl', 'Shift', 'G'],
-        action: 'Ungroup the session selection',
-        note: 'Keeps the current selection; only dissolves the session group.',
+        actionKey: 'shortcuts.ungroupSelection',
+        noteKey: 'shortcuts.ungroupSelectionNote',
       },
       {
         keys: ['Esc'],
-        action: 'Clear the selection',
-        note: 'Clicking empty space does the same.',
+        actionKey: 'shortcuts.clearSelection',
+        noteKey: 'shortcuts.clearSelectionNote',
       },
     ],
   },
   {
-    title: 'Direct Manipulation',
+    titleKey: 'shortcuts.directManipulation',
     shortcuts: [
       {
         keys: ['Cmd/Ctrl', 'Left click'],
-        action: 'Move the selected movable object under the cursor',
-        note: 'Drag in Select mode with a single object selected. Guided snapping and guides are enabled by default.',
+        actionKey: 'shortcuts.moveUnderCursor',
+        noteKey: 'shortcuts.moveUnderCursorNote',
       },
       {
         keys: ['Cmd/Ctrl', 'Right click'],
-        action: 'Rotate the selected object under the cursor',
-        note: 'Drag left or right in Select mode with a single object selected. Rotation snaps to 15° increments by default.',
+        actionKey: 'shortcuts.rotateUnderCursor',
+        noteKey: 'shortcuts.rotateUnderCursorNote',
       },
       {
         keys: ['Cmd/Ctrl', 'Shift', 'Right click'],
-        action: 'Rotate freely',
-        note: 'Hold Shift during the drag to bypass the 15° rotation increment.',
+        actionKey: 'shortcuts.rotateFreely',
+        noteKey: 'shortcuts.rotateFreelyNote',
       },
     ],
   },
   {
-    title: 'Drawing Tools',
+    titleKey: 'shortcuts.drawingTools',
     shortcuts: [
       // Shift and Ctrl each mean one thing held and another tapped, and only
       // the hold was documented — which read as the taps not existing. Both
       // taps are listed first because they are the ones nobody discovers.
       {
         keys: ['Shift'],
-        action: 'Cycle the snapping mode',
-        note: 'Tap and release without pressing anything else, while a drawing or move gesture is available.',
+        actionKey: 'shortcuts.cycleSnapMode',
+        noteKey: 'shortcuts.cycleSnapModeNote',
       },
       {
         keys: ['Cmd/Ctrl'],
-        action: 'Cycle the grid step: 0.5 m → 0.25 m → 0.1 m → 0.05 m',
-        note: 'Tap and release on its own. Use it when the default half-metre grid is too coarse — placing a window, for instance.',
+        actionKey: 'shortcuts.cycleGridStep',
+        noteKey: 'shortcuts.cycleGridStepNote',
       },
       {
         keys: ['Shift'],
-        action: 'Bypass guided snapping and angle constraints',
-        note: 'Hold during the active gesture. Passive guide or measurement feedback may stay visible.',
+        actionKey: 'shortcuts.bypassGuidedConstraints',
+        noteKey: 'shortcuts.bypassGuidedConstraintsNote',
       },
       {
         keys: ['Shift'],
-        action: 'Rotate freely, bypassing the default 15° rotation snap',
-        note: 'Hold while dragging a rotate handle or direct-rotation gesture.',
+        actionKey: 'shortcuts.bypassRotationSnap',
+        noteKey: 'shortcuts.bypassRotationSnapNote',
       },
     ],
   },
   {
-    title: 'Item Placement',
+    titleKey: 'shortcuts.itemPlacement',
     shortcuts: [
       {
         keys: ['R', 'T'],
-        action: 'Rotate item; with a door selected, R toggles open/closed and T closes',
+        actionKey: 'shortcuts.rotateItemOrToggleDoor',
       },
       {
         keys: ['E'],
-        action: 'Operate the selected node — doors, windows, and cabinet doors/drawers animate open/closed',
+        actionKey: 'shortcuts.operateSelectedNode',
       },
       {
         keys: ['Shift'],
-        action: 'Temporarily bypass placement validation constraints',
-        note: 'Hold while placing.',
+        actionKey: 'shortcuts.bypassPlacementValidation',
+        noteKey: 'shortcuts.holdWhilePlacing',
       },
     ],
   },
   {
-    title: 'Camera',
+    titleKey: 'shortcuts.camera',
     shortcuts: [
       {
         keys: ['W', 'A', 'S', 'D'],
-        action: 'Pan camera',
-        note: 'Moves in screen space, similar to dragging the camera view.',
+        actionKey: 'shortcuts.panCamera',
+        noteKey: 'shortcuts.panCameraNote',
       },
       {
         keys: ['Middle click'],
-        action: 'Pan camera',
-        note: 'Drag with the middle mouse button, or hold Space while dragging with the left mouse button.',
+        actionKey: 'shortcuts.panCameraMiddle',
+        noteKey: 'shortcuts.dragMiddleMouseOrHoldSpace',
       },
       {
         keys: ['Right click'],
-        action: 'Orbit camera',
-        note: 'Drag with the right mouse button.',
+        actionKey: 'shortcuts.orbitCamera',
+        noteKey: 'shortcuts.dragRightMouse',
       },
     ],
   },
@@ -221,38 +219,38 @@ function ShortcutKeys({ keys }: { keys: string[] }) {
 }
 
 export function KeyboardShortcutsDialog() {
+  const t = useTranslations()
   return (
     <Dialog>
       <DialogTrigger asChild>
         <Button className="w-full justify-start gap-2" variant="outline">
           <Keyboard className="size-4" />
-          Keyboard Shortcuts
+          {t('shortcuts.keyboardShortcuts')}
         </Button>
       </DialogTrigger>
       <DialogContent className="flex max-h-[85vh] flex-col overflow-hidden p-0 sm:max-w-3xl">
         <DialogHeader className="shrink-0 border-b px-6 py-4">
-          <DialogTitle>Keyboard Shortcuts</DialogTitle>
+          <DialogTitle>{t('shortcuts.keyboardShortcuts')}</DialogTitle>
           <DialogDescription>
-            Shortcuts are context-aware. Guided constraints are enabled by default; hold Shift
-            during an active gesture to build freely.
+            {t('shortcuts.contextAware')}
           </DialogDescription>
         </DialogHeader>
 
         <div className="flex-1 space-y-5 overflow-y-auto px-6 py-4">
           {SHORTCUT_CATEGORIES.map((category) => (
-            <section className="space-y-2" key={category.title}>
-              <h3 className="font-medium text-sm">{category.title}</h3>
+            <section className="space-y-2" key={category.titleKey}>
+              <h3 className="font-medium text-sm">{t(category.titleKey)}</h3>
               <div className="overflow-hidden rounded-md border border-border/80">
                 {category.shortcuts.map((shortcut, index) => (
                   <div
                     className="grid grid-cols-[minmax(130px,220px)_1fr] gap-3 px-3 py-2"
-                    key={`${category.title}-${shortcut.action}`}
+                    key={`${category.titleKey}-${shortcut.actionKey}`}
                   >
                     <ShortcutKeys keys={shortcut.keys} />
                     <div>
-                      <p className="text-sm">{shortcut.action}</p>
-                      {shortcut.note ? (
-                        <p className="text-muted-foreground text-xs">{shortcut.note}</p>
+                      <p className="text-sm">{t(shortcut.actionKey)}</p>
+                      {shortcut.noteKey ? (
+                        <p className="text-muted-foreground text-xs">{t(shortcut.noteKey)}</p>
                       ) : null}
                     </div>
                     {index < category.shortcuts.length - 1 ? (

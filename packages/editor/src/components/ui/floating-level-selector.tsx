@@ -45,6 +45,7 @@ import {
 } from '../../lib/level-duplication'
 import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
+import { useTranslations } from '../../lib/i18n'
 import { useLinearDisplay } from '../../lib/use-linear-display'
 import { cn } from '../../lib/utils'
 import { ActionButton } from './controls/action-button'
@@ -142,6 +143,7 @@ function LevelRow({
   onPaste?: () => void
   onRequestDelete: () => void
 }) {
+  const t = useTranslations()
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((s) => s.updateNode)
@@ -188,7 +190,7 @@ function LevelRow({
         >
           <button
             {...dragHandleProps}
-            aria-label={`Reorder ${getLevelDisplayName(level)}`}
+            aria-label={t('level.reorderName', { name: getLevelDisplayName(level) })}
             className={cn(
               'ml-0.5 flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
               isDragging && 'cursor-grabbing opacity-100',
@@ -198,7 +200,7 @@ function LevelRow({
               dragHandleProps?.onClick?.(e)
             }}
             ref={dragHandleRef}
-            title="Drag to reorder"
+            title={t('level.dragToReorder')}
             type="button"
           >
             <GripVertical className="h-3.5 w-3.5" />
@@ -223,7 +225,7 @@ function LevelRow({
               <button
                 className="mr-0.5 shrink-0 whitespace-nowrap rounded px-1 py-0.5 font-mono text-[10px] text-muted-foreground/50 tabular-nums transition-colors hover:bg-white/5 hover:text-foreground"
                 onClick={(e) => e.stopPropagation()}
-                title="Level height"
+                title={t('level.levelHeight')}
                 type="button"
               >
                 {storeyHeightLabel}
@@ -237,7 +239,7 @@ function LevelRow({
               sideOffset={8}
             >
               <SliderControl
-                label="Level height"
+                label={t('level.levelHeight')}
                 max={20}
                 min={1}
                 onChange={(v) => updateNode(level.id, { height: v })}
@@ -280,7 +282,7 @@ function LevelRow({
                 type="button"
               >
                 <Copy className="h-3 w-3" />
-                Duplicate level
+                {t('level.duplicateLevel')}
               </button>
               <button
                 className="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-muted-foreground text-xs transition-colors hover:bg-white/10 hover:text-foreground"
@@ -291,7 +293,7 @@ function LevelRow({
                 type="button"
               >
                 <Copy className="h-3 w-3" />
-                Duplicate with options...
+                {t('level.duplicateOptions')}
               </button>
               {onPaste && (
                 <button
@@ -303,7 +305,7 @@ function LevelRow({
                   type="button"
                 >
                   <ClipboardPaste className="h-3 w-3" />
-                  Paste copied selection
+                  {t('level.pasteCopied')}
                 </button>
               )}
               <button
@@ -313,11 +315,11 @@ function LevelRow({
                   e.stopPropagation()
                   onRequestDelete()
                 }}
-                title={canDeleteLevel ? 'Delete level' : 'The ground level cannot be deleted'}
+                title={canDeleteLevel ? t('level.deleteLevel') : t('level.cannotDeleteGround')}
                 type="button"
               >
                 <Trash2 className="h-3 w-3" />
-                Delete level
+                {t('level.deleteLevel')}
               </button>
             </PopoverContent>
           </Popover>
@@ -389,6 +391,7 @@ function SortableLevelRow({
 // ── Main component ──────────────────────────────────────────────────────────
 
 export function FloatingLevelSelector() {
+  const t = useTranslations()
   const selectedBuildingId = useViewer((s) => s.selection.buildingId)
   const levelId = useViewer((s) => s.selection.levelId)
   const setSelection = useViewer((s) => s.setSelection)
@@ -581,7 +584,7 @@ export function FloatingLevelSelector() {
               // read only from outside: nothing here depends on it.
               data-guide-target="level-add"
               onClick={handleAddAbove}
-              title="Add level above"
+              title={t('level.addLevelAbove')}
               type="button"
             >
               <Plus className="h-2.5 w-2.5" />
@@ -593,7 +596,7 @@ export function FloatingLevelSelector() {
             <button
               className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
               onClick={handleAddBelow}
-              title="Add level below"
+              title={t('level.addLevelBelow')}
               type="button"
             >
               <Plus className="h-2.5 w-2.5" />
@@ -644,7 +647,7 @@ export function FloatingLevelSelector() {
                         <button
                           className={cn(addButtonClass, 'bottom-0 translate-y-1/2')}
                           onClick={() => handleInsertBetween(sortedIndex - 1)}
-                          title="Insert level here"
+                          title={t('level.insertLevelHere')}
                           type="button"
                         >
                           <Plus className="h-2.5 w-2.5" />
@@ -663,11 +666,9 @@ export function FloatingLevelSelector() {
       <Dialog onOpenChange={(open) => !open && setDeletingLevel(null)} open={!!deletingLevel}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
-            <DialogTitle>Delete level</DialogTitle>
+            <DialogTitle>{t('level.deleteLevelTitle')}</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete{' '}
-              <strong>{deletingLevel ? getLevelDisplayName(deletingLevel) : ''}</strong>? All
-              walls, floors, and objects on this level will be permanently removed.
+              {t('level.confirmDelete', { name: deletingLevel ? getLevelDisplayName(deletingLevel) : '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -676,14 +677,14 @@ export function FloatingLevelSelector() {
               onClick={() => setDeletingLevel(null)}
               type="button"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               className="rounded-full bg-red-600 px-4 py-2 text-sm text-white transition-colors hover:bg-red-700"
               onClick={handleConfirmDelete}
               type="button"
             >
-              Delete
+              {t('common.delete')}
             </button>
           </DialogFooter>
         </DialogContent>
