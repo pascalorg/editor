@@ -14,6 +14,7 @@ import { resolveLeanToLayout } from './layout'
 import { type LeanToPlanFacet, leanToPlanFootprintFacets } from './plan-footprint'
 
 const CLEARANCE = 0.05
+const COMPARISON_EPSILON = 1e-9
 
 function overlaps(aCenter: number, aWidth: number, bCenter: number, bWidth: number) {
   return Math.abs(aCenter - bCenter) < (aWidth + bWidth) / 2 + CLEARANCE
@@ -327,7 +328,7 @@ function hostRoofIntrudesBeyondConnection(
       ([x, z]) => (x - origin[0]) * outward[0] + (z - origin[1]) * outward[1],
     ),
   )
-  return furthestOutward > leanTo.connectionInset + CLEARANCE
+  return furthestOutward > leanTo.connectionInset + CLEARANCE + COMPARISON_EPSILON
 }
 
 export function leanToPlacementConflicts(

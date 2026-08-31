@@ -192,10 +192,7 @@ function jointAt(
   }
 }
 
-function compatibleCanopyCandidates(
-  leanTo: LeanToExtensionNode,
-  nodes: Record<string, AnyNode>,
-) {
+function compatibleCanopyCandidates(leanTo: LeanToExtensionNode, nodes: Record<string, AnyNode>) {
   return Object.values(nodes).filter(
     (candidate): candidate is LeanToExtensionNode =>
       candidate.type === 'lean-to-extension' &&
@@ -240,14 +237,10 @@ export function resolveFreestandingCanopyJoints(
   for (const side of ['left', 'right'] as const) {
     const matches = rankedJointMatches(leanTo, side, candidates)
     for (const match of matches) {
-      const reciprocal = rankedJointMatches(
-        match.candidate,
-        match.side,
-        [
-          ...compatibleCanopyCandidates(match.candidate, nodes),
-          ...(sameRoofProfile(leanTo, match.candidate) ? [leanTo] : []),
-        ],
-      )[0]
+      const reciprocal = rankedJointMatches(match.candidate, match.side, [
+        ...compatibleCanopyCandidates(match.candidate, nodes),
+        ...(sameRoofProfile(leanTo, match.candidate) ? [leanTo] : []),
+      ])[0]
       if (reciprocal?.candidate.id !== leanTo.id || reciprocal.side !== side) continue
       joints[side] = match.joint
       break

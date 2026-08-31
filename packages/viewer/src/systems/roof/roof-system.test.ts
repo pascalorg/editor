@@ -1,13 +1,7 @@
 // @ts-expect-error - bun:test is provided by the Bun runtime; viewer does not
 // include Bun globals in its package tsconfig.
 import { describe, expect, test } from 'bun:test'
-import {
-  type AnyNode,
-  LeanToExtensionNode,
-  RoofNode,
-  RoofSegmentNode,
-  WallNode,
-} from '@pascal-app/core'
+import { type AnyNode, RoofNode, RoofSegmentNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { generateRoofSegmentGeometry } from './roof-system'
 
@@ -453,54 +447,17 @@ describe('roof system shed geometry', () => {
   })
 
   test('keeps the curved-to-straight miter patch flush along the full seam', () => {
-    const curvedWall = WallNode.parse({
-      id: 'wall_curved_transition',
-      parentId: 'level_curved_transition',
-      start: [8, 8.5],
-      end: [0.5, 3],
-      curveOffset: 2,
-    })
-    const straightWall = WallNode.parse({
-      id: 'wall_straight_transition',
-      parentId: 'level_curved_transition',
-      start: [0.5, 3],
-      end: [-5.5, 7],
-    })
-    const curvedLeanTo = LeanToExtensionNode.parse({
-      id: 'leanto_curved_transition',
-      parentId: curvedWall.id,
-      position: [5.20303160795228, 0, 0.05],
-      span: 10.106063215904559,
-      projection: 2.5,
-      highEdgeHeight: 2.3,
-      pitch: 10,
-    })
-    const straightLeanTo = LeanToExtensionNode.parse({
-      id: 'leanto_straight_transition',
-      parentId: straightWall.id,
-      position: [3.6055512754639896, 0, 0.05],
-      span: 6.911102550927978,
-      projection: 2.5,
-      highEdgeHeight: 2.3,
-      pitch: 10,
-    })
     const curvedRoof = RoofNode.parse({
       id: 'roof_curved_transition',
-      parentId: curvedLeanTo.id,
       children: ['rseg_curved_transition'],
     })
     const straightRoof = RoofNode.parse({
       id: 'roof_straight_transition',
-      parentId: straightLeanTo.id,
       children: ['rseg_straight_transition'],
     })
     const curvedSegment = RoofSegmentNode.parse({
       id: 'rseg_curved_transition',
       parentId: curvedRoof.id,
-      metadata: {
-        managedByLeanTo: curvedLeanTo.id,
-        leanToShedJointNeighbors: [straightLeanTo.id],
-      },
       position: [0, 1.68852513052742, 1.363],
       roofType: 'shed',
       width: 10.40606321590456,
@@ -510,6 +467,7 @@ describe('roof system shed geometry', () => {
       deckThickness: 0.1,
       shingleThickness: 0.025,
       arc: { centerX: 0, centerZ: 4.993249999999998, radius: 6.406249999999998 },
+      shedSideInfillSpan: 10.106063215904559,
       shedFootprintPieces: [
         [
           [-5.20303160795228, -1.383],
@@ -518,16 +476,19 @@ describe('roof system shed geometry', () => {
           [-5.20303160795228, 1.3850000000000002],
         ],
       ],
+      shedJointFrame: {
+        position: [3.0968408559263407, 0, 7.322489741918625],
+        rotation: 2.50884381858761,
+      },
+      shedJointOwnerId: 'curved-transition',
+      shedJointNeighborIds: ['straight-transition'],
+      shedJointScopeId: 'level_curved_transition',
       managedByParent: true,
       wallShell: 'omit',
     })
     const straightSegment = RoofSegmentNode.parse({
       id: 'rseg_straight_transition',
       parentId: straightRoof.id,
-      metadata: {
-        managedByLeanTo: straightLeanTo.id,
-        leanToShedJointNeighbors: [curvedLeanTo.id],
-      },
       position: [0, 1.68852513052742, 1.363],
       roofType: 'shed',
       width: 7.211102550927979,
@@ -536,6 +497,7 @@ describe('roof system shed geometry', () => {
       wallThickness: 0.01,
       deckThickness: 0.1,
       shingleThickness: 0.025,
+      shedSideInfillSpan: 6.911102550927978,
       shedFootprintPieces: [
         [
           [-3.6055512754639896, -1.383],
@@ -549,20 +511,18 @@ describe('roof system shed geometry', () => {
           [-3.6055512754639896, 1.3850000000000002],
         ],
       ],
+      shedJointFrame: {
+        position: [-2.5277350098112623, 0, 4.958397485283108],
+        rotation: -2.5535900500422257,
+      },
+      shedJointOwnerId: 'straight-transition',
+      shedJointNeighborIds: ['curved-transition'],
+      shedJointScopeId: 'level_curved_transition',
       managedByParent: true,
       wallShell: 'omit',
     })
     const nodes = Object.fromEntries(
-      [
-        curvedWall,
-        straightWall,
-        curvedLeanTo,
-        straightLeanTo,
-        curvedRoof,
-        straightRoof,
-        curvedSegment,
-        straightSegment,
-      ].map((node) => [node.id, node]),
+      [curvedRoof, straightRoof, curvedSegment, straightSegment].map((node) => [node.id, node]),
     ) as Record<string, AnyNode>
 
     const curvedGeometry = generateRoofSegmentGeometry(curvedSegment, nodes)

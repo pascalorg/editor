@@ -1257,22 +1257,14 @@ describe('lean-to corner joint', () => {
     })
     const curved = {
       ...applyLeanToWallAutoSpan(
-        resolveLeanToWallPlacement(
-          curvedWall,
-          getWallCurveLength(curvedWall) / 2,
-          'front',
-        )!,
+        resolveLeanToWallPlacement(curvedWall, getWallCurveLength(curvedWall) / 2, 'front')!,
         curvedWall,
       ),
       id: 'leanto_exported_curved_corner',
     }
     const straight = {
       ...applyLeanToWallAutoSpan(
-        resolveLeanToWallPlacement(
-          straightWall,
-          getWallCurveLength(straightWall) / 2,
-          'front',
-        )!,
+        resolveLeanToWallPlacement(straightWall, getWallCurveLength(straightWall) / 2, 'front')!,
         straightWall,
       ),
       id: 'leanto_exported_straight_corner',

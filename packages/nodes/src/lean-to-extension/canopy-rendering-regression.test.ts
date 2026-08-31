@@ -86,7 +86,13 @@ function separatedTopOverlapCount(geometries: ReturnType<typeof generateRoofSegm
   const raycaster = new Raycaster()
   const direction = new Vector3(0, -1, 0)
   const origin = new Vector3()
-  const bounds = { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity, maxY: -Infinity }
+  const bounds = {
+    minX: Infinity,
+    maxX: -Infinity,
+    minZ: Infinity,
+    maxZ: -Infinity,
+    maxY: -Infinity,
+  }
   for (const geometry of geometries) {
     geometry.computeBoundingBox()
     const box = geometry.boundingBox!
@@ -171,10 +177,9 @@ describe('freestanding canopy rendered-joint regressions', () => {
       ],
       'mono',
     )
-    expect(result.assemblies.map((assembly) => assembly.segment.shedFootprintPieces?.length)).toEqual([
-      1,
-      1,
-    ])
+    expect(
+      result.assemblies.map((assembly) => assembly.segment.shedFootprintPieces?.length),
+    ).toEqual([1, 1])
     for (const geometry of result.geometries) geometry.dispose()
   })
 
@@ -319,7 +324,9 @@ describe('freestanding canopy rendered-joint regressions', () => {
   test('exact minimum diagonal spans remain placeable', () => {
     const level = LevelNode.parse({ id: 'level_exact_minimum_diagonal', level: 0 })
     const end: Point = [Math.SQRT1_2 * 0.5, Math.SQRT1_2 * 0.5]
-    expect(resolveLeanToFreestandingRunPlacement(level.id, [0, 0], end, false, 'mono')).not.toBeNull()
+    expect(
+      resolveLeanToFreestandingRunPlacement(level.id, [0, 0], end, false, 'mono'),
+    ).not.toBeNull()
   })
 
   test('a shared endpoint never creates a one-sided three-way joint', () => {

@@ -11,8 +11,6 @@ import {
   getRoofShapeInsets,
   getRoofShapeRatios,
   getSegmentSlopeFrame,
-  getWallCurveFrameAt,
-  getWallCurveLength,
   hasSegmentMaterialOverride,
   isBandedShedSegment,
   nodeRegistry,
@@ -2389,18 +2387,14 @@ function facetBandedRoofBoundary(
 function transformShedPlanPoint(
   node: RoofSegmentNode,
   point: readonly [number, number],
-  nodes?: Record<string, AnyNode>,
 ): [number, number] {
   // `shedFootprintPieces` are persisted in the flat segment frame, while a
   // curved host's rendered deck is bent onto its annular band below. Keep the
   // overlap/joint queries in that same rendered frame; otherwise a curved run
   // can be matched against a neighbour at the opposite end of the wall.
-  const ownerId =
-    node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
-      ? (node.metadata as Record<string, unknown>).managedByLeanTo
-      : undefined
+  const frame = node.shedJointFrame
   const bent =
-    node.arc && typeof ownerId === 'string'
+    node.arc && frame
       ? bendBandPoint(node.arc, bandSignedRef(node.arc), point[0], point[1])
       : { x: point[0], z: point[1] }
   const rotation = node.rotation ?? 0
@@ -2410,60 +2404,26 @@ function transformShedPlanPoint(
     (node.position[0] ?? 0) + bent.x * cos + bent.z * sin,
     (node.position[2] ?? 0) - bent.x * sin + bent.z * cos,
   ]
-  const owner = typeof ownerId === 'string' ? nodes?.[ownerId] : undefined
-  if (owner?.type !== 'lean-to-extension') return segmentPoint
-  const ownerWall = owner.parentId ? nodes?.[owner.parentId as AnyNodeId] : undefined
-  const ownerPose = ownerWall?.type === 'wall' ? wallHostedShedPose(ownerWall, owner) : null
-  const ownerRotation = ownerPose?.rotationY ?? owner.rotation[1] ?? 0
-  const ownerCos = Math.cos(ownerRotation)
-  const ownerSin = Math.sin(ownerRotation)
-  const ownerX = ownerPose?.position[0] ?? owner.position[0] ?? 0
-  const ownerZ = ownerPose?.position[2] ?? owner.position[2] ?? 0
+  if (!frame) return segmentPoint
+  const ownerCos = Math.cos(frame.rotation)
+  const ownerSin = Math.sin(frame.rotation)
   return [
-    ownerX + segmentPoint[0] * ownerCos + segmentPoint[1] * ownerSin,
-    ownerZ - segmentPoint[0] * ownerSin + segmentPoint[1] * ownerCos,
+    frame.position[0] + segmentPoint[0] * ownerCos + segmentPoint[1] * ownerSin,
+    frame.position[2] - segmentPoint[0] * ownerSin + segmentPoint[1] * ownerCos,
   ]
-}
-
-function wallHostedShedPose(
-  wall: Extract<AnyNode, { type: 'wall' }>,
-  owner: Extract<AnyNode, { type: 'lean-to-extension' }>,
-): { position: [number, number, number]; rotationY: number } {
-  const length = getWallCurveLength(wall)
-  const t = length > 1e-6 ? Math.max(0, Math.min(1, owner.position[0] / length)) : 0
-  const frame = getWallCurveFrameAt(wall, t)
-  const angle = Math.atan2(frame.tangent.y, frame.tangent.x)
-  return {
-    position: [
-      frame.point.x + frame.normal.x * owner.position[2],
-      owner.position[1],
-      frame.point.y + frame.normal.y * owner.position[2],
-    ],
-    rotationY: -angle + (owner.rotation[1] ?? 0),
-  }
 }
 
 function inverseTransformShedPlanPoint(
   node: RoofSegmentNode,
   point: readonly [number, number],
-  nodes?: Record<string, AnyNode>,
 ): [number, number] {
-  const ownerId =
-    node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
-      ? (node.metadata as Record<string, unknown>).managedByLeanTo
-      : undefined
-  const owner = typeof ownerId === 'string' ? nodes?.[ownerId] : undefined
+  const frame = node.shedJointFrame
   let source = point
-  if (owner?.type === 'lean-to-extension') {
-    const ownerWall = owner.parentId ? nodes?.[owner.parentId as AnyNodeId] : undefined
-    const ownerPose = ownerWall?.type === 'wall' ? wallHostedShedPose(ownerWall, owner) : null
-    const ownerRotation = ownerPose?.rotationY ?? owner.rotation[1] ?? 0
-    const ownerCos = Math.cos(ownerRotation)
-    const ownerSin = Math.sin(ownerRotation)
-    const ownerX = ownerPose?.position[0] ?? owner.position[0] ?? 0
-    const ownerZ = ownerPose?.position[2] ?? owner.position[2] ?? 0
-    const dx = point[0] - ownerX
-    const dz = point[1] - ownerZ
+  if (frame) {
+    const ownerCos = Math.cos(frame.rotation)
+    const ownerSin = Math.sin(frame.rotation)
+    const dx = point[0] - frame.position[0]
+    const dz = point[1] - frame.position[2]
     source = [dx * ownerCos - dz * ownerSin, dx * ownerSin + dz * ownerCos]
   }
   const rotation = node.rotation ?? 0
@@ -2472,7 +2432,7 @@ function inverseTransformShedPlanPoint(
   const dx = source[0] - (node.position[0] ?? 0)
   const dz = source[1] - (node.position[2] ?? 0)
   const segmentPoint = [dx * cos - dz * sin, dx * sin + dz * cos] as [number, number]
-  if (!node.arc || typeof ownerId !== 'string') return segmentPoint
+  if (!node.arc || !frame) return segmentPoint
 
   const signedRef = bandSignedRef(node.arc)
   const radialX = segmentPoint[0] - node.arc.centerX
@@ -2514,49 +2474,19 @@ function pointInOrNearShedPolygon(
   return false
 }
 
-function readMetadataString(node: AnyNode, key: string): string | undefined {
-  const metadata = node.metadata
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return undefined
-  const value = (metadata as Record<string, unknown>)[key]
-  return typeof value === 'string' ? value : undefined
-}
-
-// The lean-to assembly records, per managed shed segment, the ids of the
-// neighbouring lean-tos it is actually joined to. Restricting sibling detection
+// Managed shed segments record the ids of their joined owners. Restricting sibling detection
 // to these keeps a shed from mitering against a run it merely passes near in
 // world space (e.g. the two free ends of a J that overlap across its mouth).
-function shedJointNeighborLeanTos(node: RoofSegmentNode): Set<string> | null {
-  const metadata = node.metadata
-  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
-  const value = (metadata as Record<string, unknown>).leanToShedJointNeighbors
-  if (!Array.isArray(value)) return null
-  const ids = value.filter((entry): entry is string => typeof entry === 'string')
-  return ids.length > 0 ? new Set(ids) : null
-}
-
 function isJoinedShedSibling(node: RoofSegmentNode, candidate: RoofSegmentNode): boolean {
-  const neighbors = shedJointNeighborLeanTos(node)
-  if (!neighbors) return true
-  const candidateOwner = readMetadataString(candidate, 'managedByLeanTo')
-  return candidateOwner !== undefined && neighbors.has(candidateOwner)
+  const neighbors = node.shedJointNeighborIds
+  if (!neighbors || neighbors.length === 0) return true
+  return candidate.shedJointOwnerId !== undefined && neighbors.includes(candidate.shedJointOwnerId)
 }
 
-function shedJoinTolerance(
-  node: RoofSegmentNode,
-  sibling: RoofSegmentNode,
-  nodes?: Record<string, AnyNode>,
-): number {
+function shedJoinTolerance(node: RoofSegmentNode, sibling: RoofSegmentNode): number {
   const sideOverhang = (segment: RoofSegmentNode) => {
     const structuralSpan = readFiniteNumber(segment.shedSideInfillSpan)
-    if (structuralSpan !== null) return Math.max(0, (segment.width - structuralSpan) / 2)
-    const managedBy =
-      segment.metadata && typeof segment.metadata === 'object' && !Array.isArray(segment.metadata)
-        ? (segment.metadata as Record<string, unknown>).managedByLeanTo
-        : undefined
-    const owner = typeof managedBy === 'string' ? nodes?.[managedBy] : undefined
-    return owner?.type === 'lean-to-extension'
-      ? Math.max(owner.leftOverhang, owner.rightOverhang)
-      : 0
+    return structuralSpan === null ? 0 : Math.max(0, (segment.width - structuralSpan) / 2)
   }
   return Math.max(
     0.02,
@@ -2574,6 +2504,21 @@ function shedJoinTolerance(
   )
 }
 
+function siblingShedSegments(
+  node: RoofSegmentNode,
+  nodes: Record<string, AnyNode>,
+): RoofSegmentNode[] {
+  return Object.values(nodes).filter(
+    (candidate): candidate is RoofSegmentNode =>
+      candidate.type === 'roof-segment' &&
+      candidate.id !== node.id &&
+      (Boolean(node.parentId && candidate.parentId === node.parentId) ||
+        Boolean(node.shedJointScopeId && candidate.shedJointScopeId === node.shedJointScopeId)) &&
+      candidate.roofType === 'shed' &&
+      isJoinedShedSibling(node, candidate),
+  )
+}
+
 function edgeTouchesSiblingShed(
   node: RoofSegmentNode,
   start: readonly [number, number],
@@ -2581,40 +2526,7 @@ function edgeTouchesSiblingShed(
   nodes: Record<string, AnyNode> | undefined,
 ): boolean {
   if (!nodes) return false
-  const metadata =
-    node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
-      ? (node.metadata as Record<string, unknown>).managedByLeanTo
-      : undefined
-  const ownerId = typeof metadata === 'string' ? metadata : undefined
-  const scopeId = (segment: RoofSegmentNode): string | undefined => {
-    const segmentOwnerId =
-      segment.metadata && typeof segment.metadata === 'object' && !Array.isArray(segment.metadata)
-        ? (segment.metadata as Record<string, unknown>).managedByLeanTo
-        : undefined
-    const owner = typeof segmentOwnerId === 'string' ? nodes[segmentOwnerId] : undefined
-    let parentId: string | undefined = owner?.parentId ?? segment.parentId ?? undefined
-    const parent = parentId ? nodes[parentId] : undefined
-    if (parent?.type === 'wall') parentId = parent.parentId ?? undefined
-    return parentId
-  }
-  const nodeScope = scopeId(node)
-  const siblings = Object.values(nodes).filter(
-    (candidate): candidate is RoofSegmentNode =>
-      candidate.type === 'roof-segment' &&
-      candidate.id !== node.id &&
-      (Boolean(node.parentId && candidate.parentId === node.parentId) ||
-        (typeof ownerId === 'string' &&
-          nodeScope !== undefined &&
-          scopeId(candidate) === nodeScope &&
-          Boolean(
-            candidate.metadata &&
-              typeof candidate.metadata === 'object' &&
-              !Array.isArray(candidate.metadata) &&
-              typeof (candidate.metadata as Record<string, unknown>).managedByLeanTo === 'string',
-          ))) &&
-      candidate.roofType === 'shed' &&
-      isJoinedShedSibling(node, candidate),
-  )
+  const siblings = siblingShedSegments(node, nodes)
   if (siblings.length === 0) return false
 
   const dx = end[0] - start[0]
@@ -2626,16 +2538,16 @@ function edgeTouchesSiblingShed(
   for (const ratio of [0.25, 0.5, 0.75]) {
     const x = start[0] + dx * ratio
     const z = start[1] + dz * ratio
-    const world = transformShedPlanPoint(node, [x, z], nodes)
+    const world = transformShedPlanPoint(node, [x, z])
     const samples: [number, number][] = [
       world,
-      transformShedPlanPoint(node, [x + nx * 1e-4, z + nz * 1e-4], nodes),
-      transformShedPlanPoint(node, [x - nx * 1e-4, z - nz * 1e-4], nodes),
+      transformShedPlanPoint(node, [x + nx * 1e-4, z + nz * 1e-4]),
+      transformShedPlanPoint(node, [x - nx * 1e-4, z - nz * 1e-4]),
     ]
     for (const sample of samples) {
       if (
         siblings.some((sibling) => {
-          const local = inverseTransformShedPlanPoint(sibling, sample, nodes)
+          const local = inverseTransformShedPlanPoint(sibling, sample)
           const footprints = readShedFootprintPieces(sibling)
           const polygons =
             footprints.length > 0
@@ -2644,7 +2556,7 @@ function edgeTouchesSiblingShed(
                 ? [managedShedFootprint(sibling)]
                 : []
           return polygons.some((polygon) =>
-            pointInOrNearShedPolygon(local, polygon, shedJoinTolerance(node, sibling, nodes)),
+            pointInOrNearShedPolygon(local, polygon, shedJoinTolerance(node, sibling)),
           )
         })
       ) {
@@ -2662,39 +2574,7 @@ function findSiblingShedAcrossEdge(
   nodes: Record<string, AnyNode> | undefined,
 ): RoofSegmentNode | undefined {
   if (!nodes) return undefined
-  const ownerId =
-    node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
-      ? (node.metadata as Record<string, unknown>).managedByLeanTo
-      : undefined
-  const scopeId = (segment: RoofSegmentNode): string | undefined => {
-    const segmentOwnerId =
-      segment.metadata && typeof segment.metadata === 'object' && !Array.isArray(segment.metadata)
-        ? (segment.metadata as Record<string, unknown>).managedByLeanTo
-        : undefined
-    const owner = typeof segmentOwnerId === 'string' ? nodes[segmentOwnerId] : undefined
-    let parentId: string | undefined = owner?.parentId ?? segment.parentId ?? undefined
-    const parent = parentId ? nodes[parentId] : undefined
-    if (parent?.type === 'wall') parentId = parent.parentId ?? undefined
-    return parentId
-  }
-  const nodeScope = scopeId(node)
-  const siblings = Object.values(nodes).filter(
-    (candidate): candidate is RoofSegmentNode =>
-      candidate.type === 'roof-segment' &&
-      candidate.id !== node.id &&
-      (Boolean(node.parentId && candidate.parentId === node.parentId) ||
-        (typeof ownerId === 'string' &&
-          nodeScope !== undefined &&
-          scopeId(candidate) === nodeScope &&
-          Boolean(
-            candidate.metadata &&
-              typeof candidate.metadata === 'object' &&
-              !Array.isArray(candidate.metadata) &&
-              typeof (candidate.metadata as Record<string, unknown>).managedByLeanTo === 'string',
-          ))) &&
-      candidate.roofType === 'shed' &&
-      isJoinedShedSibling(node, candidate),
-  )
+  const siblings = siblingShedSegments(node, nodes)
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]
   const length = Math.hypot(dx, dz)
@@ -2706,12 +2586,12 @@ function findSiblingShedAcrossEdge(
       const x = start[0] + dx * ratio
       const z = start[1] + dz * ratio
       const samples: [number, number][] = [
-        transformShedPlanPoint(node, [x, z], nodes),
-        transformShedPlanPoint(node, [x + nx * 1e-4, z + nz * 1e-4], nodes),
-        transformShedPlanPoint(node, [x - nx * 1e-4, z - nz * 1e-4], nodes),
+        transformShedPlanPoint(node, [x, z]),
+        transformShedPlanPoint(node, [x + nx * 1e-4, z + nz * 1e-4]),
+        transformShedPlanPoint(node, [x - nx * 1e-4, z - nz * 1e-4]),
       ]
       return samples.some((sample) => {
-        const local = inverseTransformShedPlanPoint(sibling, sample, nodes)
+        const local = inverseTransformShedPlanPoint(sibling, sample)
         const footprints = readShedFootprintPieces(sibling)
         const polygons =
           footprints.length > 0
@@ -2720,7 +2600,7 @@ function findSiblingShedAcrossEdge(
               ? [managedShedFootprint(sibling)]
               : []
         return polygons.some((polygon) =>
-          pointInOrNearShedPolygon(local, polygon, shedJoinTolerance(node, sibling, nodes)),
+          pointInOrNearShedPolygon(local, polygon, shedJoinTolerance(node, sibling)),
         )
       })
     }),
@@ -2728,14 +2608,7 @@ function findSiblingShedAcrossEdge(
 }
 
 function shedWorldYOrigin(node: RoofSegmentNode, nodes: Record<string, AnyNode>): number {
-  const ownerId =
-    node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
-      ? (node.metadata as Record<string, unknown>).managedByLeanTo
-      : undefined
-  const owner = typeof ownerId === 'string' ? nodes[ownerId] : undefined
-  if (owner?.type === 'lean-to-extension') {
-    return (owner.position[1] ?? 0) + (node.position[1] ?? 0)
-  }
+  if (node.shedJointFrame) return node.shedJointFrame.position[1] + (node.position[1] ?? 0)
   const parent = node.parentId ? nodes[node.parentId] : undefined
   return (parent?.type === 'roof' ? (parent.position[1] ?? 0) : 0) + (node.position[1] ?? 0)
 }
@@ -2751,8 +2624,8 @@ function siblingShedTopYInNodeFrame(
   point: readonly [number, number],
   nodes: Record<string, AnyNode>,
 ): number {
-  const worldPoint = transformShedPlanPoint(node, point, nodes)
-  const siblingPoint = inverseTransformShedPlanPoint(sibling, worldPoint, nodes)
+  const worldPoint = transformShedPlanPoint(node, point)
+  const siblingPoint = inverseTransformShedPlanPoint(sibling, worldPoint)
   return (
     shedWorldYOrigin(sibling, nodes) +
     getRoofSegmentSurfaceY(sibling, siblingPoint[0], siblingPoint[1]) +

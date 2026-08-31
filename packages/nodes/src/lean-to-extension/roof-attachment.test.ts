@@ -91,7 +91,7 @@ describe('lean-to roof-edge attachment', () => {
     expect(connected.shingleThickness).toBe(segment.shingleThickness)
   })
 
-  test('spans and centres the visible extension roof across the full host roof edge', () => {
+  test('clamps an overhang-inclusive host roof edge to the supporting wall span', () => {
     const initial = sceneWithRoof()
     const shiftedRoof = {
       ...initial.roof,
@@ -106,12 +106,58 @@ describe('lean-to roof-edge attachment', () => {
     expect(attachment).not.toBeNull()
 
     const connected = applyLeanToRoofAttachment(initial.leanTo, attachment!)
-    expect(connected.position[0]).toBeCloseTo(3, 5)
-    expect(connected.span + connected.leftOverhang + connected.rightOverhang).toBeCloseTo(6.6, 5)
+    expect(connected.position[0]).toBeCloseTo(2, 5)
+    expect(connected.span + connected.leftOverhang + connected.rightOverhang).toBeCloseTo(4, 5)
     expect(connected.hostRoofEdgeRange).toEqual([0, 1])
     expect(connected.lowEdgeHeight).toBeCloseTo(
       connected.highEdgeHeight - connected.projection * Math.tan((connected.pitch * Math.PI) / 180),
     )
+  })
+
+  test('keeps a rotated host roof overhang from widening the wall-hosted gutter run', () => {
+    const level = LevelNode.parse({ id: 'level_rotated_roof' })
+    const wall = WallNode.parse({
+      id: 'wall_rotated_roof',
+      parentId: level.id,
+      start: [-5, 4],
+      end: [-5, 12],
+    })
+    const roof = RoofNode.parse({
+      id: 'roof_rotated_host',
+      parentId: level.id,
+      position: [-7, 2.5, 8],
+      rotation: -Math.PI / 2,
+      children: ['rseg_rotated_host'],
+    })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_rotated_host',
+      parentId: roof.id,
+      position: [0, 0, 0],
+      rotation: Math.PI,
+      roofType: 'gable',
+      width: 8,
+      depth: 4,
+      wallHeight: 0,
+      pitch: 40,
+      overhang: 0.3,
+    })
+    const leanTo = LeanToExtensionNode.parse({
+      id: 'leanto_rotated_host',
+      parentId: wall.id,
+      position: [4, 0, -0.05],
+      rotation: [0, Math.PI, 0],
+    })
+    const nodes = Object.fromEntries(
+      [level, wall, roof, segment, leanTo].map((node) => [node.id, node]),
+    ) as Record<AnyNodeId, AnyNode>
+
+    const attachment = resolveLeanToRoofAttachment(leanTo, wall, nodes)
+    expect(attachment?.edge).toBe('+Z')
+
+    const connected = applyLeanToRoofAttachment(leanTo, attachment!)
+    expect(connected.position[0]).toBeCloseTo(4, 8)
+    expect(connected.span).toBeCloseTo(7.7, 8)
+    expect(connected.span + connected.leftOverhang + connected.rightOverhang).toBeCloseTo(8, 8)
   })
 
   test('keeps manual span unchanged when auto span is disabled', () => {

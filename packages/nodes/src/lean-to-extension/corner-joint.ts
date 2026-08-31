@@ -1604,15 +1604,15 @@ export function resolveLeanToCornerJoints(
       const gutterIntersection =
         gutterAway && candidateGutterAway
           ? extensionToRunIntersection(
-                wall,
-                cornerLeanTo,
-                side,
-                layout.roofCenterX + sideSign * (layout.roofWidth / 2),
-                ownEdges.front,
-                candidateWall,
-                cornerCandidate,
-                candidateEdges.front,
-              ) !== null ||
+              wall,
+              cornerLeanTo,
+              side,
+              layout.roofCenterX + sideSign * (layout.roofWidth / 2),
+              ownEdges.front,
+              candidateWall,
+              cornerCandidate,
+              candidateEdges.front,
+            ) !== null ||
             extensionToRunIntersection(
               candidateWall,
               cornerCandidate,

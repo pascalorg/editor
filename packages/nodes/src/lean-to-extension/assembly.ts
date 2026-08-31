@@ -42,7 +42,7 @@ import {
   leanToCornerJointMetadata,
   resolveLeanToCornerJoints,
 } from './corner-joint'
-import { isDualSlopeLeanToCanopy, resolveLeanToLayout } from './layout'
+import { isDualSlopeLeanToCanopy, leanToWallLocalPose, resolveLeanToLayout } from './layout'
 
 const MANAGED_BY_KEY = 'managedByLeanTo'
 const MANAGED_ROLE_KEY = 'leanToRole'
@@ -54,7 +54,6 @@ const POST_INDEX_KEY = 'leanToPostIndex'
 const POST_SIDE_KEY = 'leanToPostSide'
 const DRAINAGE_SIDE_KEY = 'leanToDrainageSide'
 const ROOF_PLANE_KEY = 'leanToRoofPlane'
-const SHED_JOINT_NEIGHBORS_KEY = 'leanToShedJointNeighbors'
 const POST_GUTTER_CLEARANCE = 0.02
 const POST_GROUND_EMBED = 0.02
 const POST_BEAM_EMBED = 0.02
@@ -519,6 +518,10 @@ export type LeanToRoofSegmentLayoutPatch = Pick<
   | 'shedSideInfillMaxX'
   | 'shedFootprintPieces'
   | 'shedOpenEndSides'
+  | 'shedJointFrame'
+  | 'shedJointOwnerId'
+  | 'shedJointNeighborIds'
+  | 'shedJointScopeId'
   | 'managedByParent'
   | 'wallShell'
   | 'shedInsetEndPanels'
@@ -538,6 +541,17 @@ export function leanToRoofSegmentLayoutPatch(
       : undefined
   const shingleThickness = leanTo.shingleThickness ?? 0.025
   const overhang = 0
+  const jointPose = wall
+    ? leanToWallLocalPose(wall, leanTo, 0)
+    : { position: leanTo.position, rotationY: leanTo.rotation[1] }
+  const shedJointFields = {
+    shedJointFrame: {
+      position: jointPose.position,
+      rotation: jointPose.rotationY,
+    },
+    shedJointOwnerId: leanTo.id,
+    shedJointScopeId: wall?.parentId ?? leanTo.parentId ?? undefined,
+  }
   if (isDualSlopeLeanToCanopy(layout.canopyForm)) {
     const depth = layout.projection + Math.max(0, leanTo.lowOverhang)
     const planeSide = plane === 'primary' ? 'positive' : 'negative'
@@ -582,6 +596,7 @@ export function leanToRoofSegmentLayoutPatch(
       shedSideInfillMaxX: layout.span / 2 - layout.roofCenterX,
       shedFootprintPieces: undefined,
       shedOpenEndSides: undefined,
+      ...shedJointFields,
       managedByParent: true,
       wallShell: 'omit',
       shedInsetEndPanels: true,
@@ -677,13 +692,12 @@ export function leanToRoofSegmentLayoutPatch(
     shedSideInfillMaxX: layout.span / 2 + sideMemberFaceInset - roofCenterX,
     shedFootprintPieces: hasShapedCorner ? roofPieces : undefined,
     shedOpenEndSides: jointSides.length > 0 ? jointSides : undefined,
+    ...shedJointFields,
+    shedJointNeighborIds: jointNeighborIds.length > 0 ? jointNeighborIds : undefined,
     managedByParent: true,
     wallShell: 'omit',
     shedInsetEndPanels: true,
-    metadata: managedMetadata(leanTo, 'roof-segment', {
-      [ROOF_PLANE_KEY]: plane,
-      ...(jointNeighborIds.length > 0 ? { [SHED_JOINT_NEIGHBORS_KEY]: jointNeighborIds } : {}),
-    }),
+    metadata: managedMetadata(leanTo, 'roof-segment', { [ROOF_PLANE_KEY]: plane }),
     trim: {
       left: linearCanopyJoints.left ? leanTo.leftOverhang : 0,
       right: linearCanopyJoints.right ? leanTo.rightOverhang : 0,
