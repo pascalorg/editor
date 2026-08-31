@@ -4315,6 +4315,44 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
     },
   },
   {
+    id: 'siding-lap-cedar',
+    label: 'Lap siding — cedar',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, stained cedar',
+    previewColor: '#b5825a',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/lap_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#b5825a',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
     id: 'siding-lap-forest',
     label: 'Lap siding — forest',
     category: 'wood',
@@ -4443,7 +4481,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
-        color: '#454543',
+        color: '#5c5c59',
         roughness: 0.85,
         metalness: 0,
         repeatX: 1,
