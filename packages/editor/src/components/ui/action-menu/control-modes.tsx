@@ -4,6 +4,7 @@ import { Icon } from '@iconify/react'
 import { type LucideIcon, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import { Fragment } from 'react'
+import { useTranslations } from './../../../lib/i18n'
 import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
 import { ActionButton } from './action-button'
@@ -16,7 +17,7 @@ type ControlConfig = {
   icon?: LucideIcon
   iconifyIcon?: string
   imageSrc?: string
-  label: string
+  labelKey: string
   shortcut?: string
   color: string
   activeColor: string
@@ -27,7 +28,7 @@ const controls: ControlConfig[] = [
   {
     id: 'select',
     imageSrc: '/icons/select.webp',
-    label: 'Select',
+    labelKey: 'controlModes.select',
     shortcut: 'V',
     color: 'hover:bg-blue-500/20 hover:text-blue-400',
     activeColor: 'bg-blue-500/20 text-blue-400',
@@ -35,7 +36,7 @@ const controls: ControlConfig[] = [
   {
     id: 'zone',
     imageSrc: '/icons/zone.webp',
-    label: 'Zone',
+    labelKey: 'controlModes.zone',
     shortcut: 'Z',
     color: 'hover:bg-green-500/20 hover:text-green-400',
     activeColor: 'bg-green-500/20 text-green-400',
@@ -43,7 +44,7 @@ const controls: ControlConfig[] = [
   {
     id: 'delete',
     icon: Trash2,
-    label: 'Delete',
+    labelKey: 'common.delete',
     shortcut: 'X',
     color: 'hover:bg-red-500/20 hover:text-red-400',
     activeColor: 'bg-red-500/20 text-red-400',
@@ -51,6 +52,7 @@ const controls: ControlConfig[] = [
 ]
 
 export function ControlModes() {
+  const t = useTranslations()
   const mode = useEditor((state) => state.mode)
   const phase = useEditor((state) => state.phase)
   const selectionTool = useEditor((state) => state.floorplanSelectionTool)
@@ -106,6 +108,7 @@ export function ControlModes() {
         const ModeIcon = c.icon
         const isImageMode = Boolean(c.imageSrc)
         const isActive = getIsActive(c.id)
+        const label = t(c.labelKey)
 
         return (
           <Fragment key={c.id}>
@@ -121,7 +124,7 @@ export function ControlModes() {
               // A static hook for a host app that wants to point a first-run
               // tour at this button. Nothing here reads it.
               data-guide-target={c.id === 'select' ? 'mode-select' : undefined}
-              label={c.label}
+              label={label}
               onClick={() => handleClick(c.id)}
               shortcut={c.shortcut}
               size="icon"
@@ -129,7 +132,7 @@ export function ControlModes() {
             >
               {c.imageSrc ? (
                 <Image
-                  alt={c.label}
+                  alt={label}
                   className={cn(
                     'h-[28px] w-[28px] object-contain transition-[opacity,filter] duration-200',
                     isActive

@@ -689,3 +689,11 @@ export {
   type WallSnapKind,
   type WallSnapPoint,
 } from './store/use-wall-snap-indicator'
+export {
+  I18nProvider,
+  useLocale,
+  useTranslations,
+  defaultLocale,
+  type Locale,
+  messages,
+} from './lib/i18n'

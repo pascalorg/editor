@@ -8,12 +8,13 @@ import {
   Editor,
   type SceneGraph,
   type SidebarTab,
+  useTranslations,
 } from '@pascal-app/editor'
 import { Hammer, Layers, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
@@ -32,57 +33,6 @@ export interface SceneMeta {
   sizeBytes: number
   nodeCount: number
 }
-
-const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
-  {
-    id: 'site',
-    label: 'Scene',
-    component: () => null, // Built-in SitePanel handles this
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Layers className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/scene.webp"
-        width={32}
-      />
-    ),
-  },
-  {
-    id: 'build',
-    label: 'Build',
-    component: BuildTab,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Hammer className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/build.webp"
-        width={32}
-      />
-    ),
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    component: () => null,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Settings className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/settings.webp"
-        width={32}
-      />
-    ),
-  },
-]
 
 interface SceneLoaderProps {
   initialScene: SceneGraph
@@ -240,6 +190,61 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
     [meta.id],
   )
 
+  const t = useTranslations()
+  const sidebarTabs: (SidebarTab & { component: React.ComponentType })[] = useMemo(
+    () => [
+      {
+        id: 'site',
+        label: t('sidebar.scene'),
+        component: () => null, // Built-in SitePanel handles this
+        mobileDefaultSnap: 0.5,
+        mobileIcon: <Layers className="h-5 w-5" />,
+        icon: (
+          <Image
+            alt=""
+            className="h-8 w-8 object-contain"
+            height={32}
+            src="/icons/scene.webp"
+            width={32}
+          />
+        ),
+      },
+      {
+        id: 'build',
+        label: t('sidebar.build'),
+        component: BuildTab,
+        mobileDefaultSnap: 0.5,
+        mobileIcon: <Hammer className="h-5 w-5" />,
+        icon: (
+          <Image
+            alt=""
+            className="h-8 w-8 object-contain"
+            height={32}
+            src="/icons/build.webp"
+            width={32}
+          />
+        ),
+      },
+      {
+        id: 'settings',
+        label: t('sidebar.settings'),
+        component: () => null,
+        mobileDefaultSnap: 0.5,
+        mobileIcon: <Settings className="h-5 w-5" />,
+        icon: (
+          <Image
+            alt=""
+            className="h-8 w-8 object-contain"
+            height={32}
+            src="/icons/settings.webp"
+            width={32}
+          />
+        ),
+      },
+    ],
+    [t],
+  )
+
   return (
     <div className="relative h-screen w-screen">
       {conflict && (
@@ -300,7 +305,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         onSave={handleSave}
         onThumbnailCapture={handleThumb}
         projectId={meta.projectId ?? 'default'}
-        sidebarTabs={SIDEBAR_TABS}
+        sidebarTabs={sidebarTabs}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
       />

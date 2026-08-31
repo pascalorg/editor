@@ -66,6 +66,7 @@
   },
   "sidebar": {
     "scene": "场景",
+    "build": "构建",
     "items": "物品",
     "settings": "设置",
     "site": "场地",
@@ -76,6 +77,7 @@
   },
   "editor": {
     "localWarning": "本地编辑器 — 场景不会保存。",
+    "openSavedScenes": "打开已保存的场景",
     "openRecent": "打开最近场景",
     "createNew": "创建新场景"
   },
@@ -285,6 +287,9 @@
   "viewer": {
     "building": "建筑",
     "item": "物品",
+    "orbitLeft": "向左旋转",
+    "orbitRight": "向右旋转",
+    "topView": "顶视图",
     "fullHeight": "全高",
     "cutaway": "剖面",
     "low": "低"

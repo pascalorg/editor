@@ -18,7 +18,7 @@ interface SaveButtonProps {
 }
 
 const t = (key: string, locale: string) => {
-  const msgs = messages[locale] as Record<string, string>
+  const msgs = messages[locale as keyof typeof messages] as Record<string, string>
   return msgs[key] || key
 }
 

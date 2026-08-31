@@ -66,6 +66,7 @@
   },
   "sidebar": {
     "scene": "Scene",
+    "build": "Build",
     "items": "Items",
     "settings": "Settings",
     "site": "Site",
@@ -76,6 +77,7 @@
   },
   "editor": {
     "localWarning": "Local editor — scenes are not saved.",
+    "openSavedScenes": "Open saved scenes",
     "openRecent": "Open recent scenes",
     "createNew": "Create new"
   },
@@ -285,6 +287,9 @@
   "viewer": {
     "building": "Building",
     "item": "Item",
+    "orbitLeft": "Orbit Left",
+    "orbitRight": "Orbit Right",
+    "topView": "Top View",
     "fullHeight": "Full Height",
     "cutaway": "Cutaway",
     "low": "Low"
