@@ -39,6 +39,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { Spline } from 'lucide-react'
 import { useCallback, useMemo, useRef } from 'react'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+import { hasWallCurveBlockingChildren } from './curve-eligibility'
 
 /**
  * Base half of the plane-bound repair: a stamped draft offset goes, and a
@@ -111,19 +112,15 @@ export default function WallPanel() {
   }, [sceneNode, liveOverride])
 
   // Boolean selector — re-renders only when this specific wall's child
-  // composition crosses the "has a door/window/wall-item" threshold.
+  // composition crosses the "has an incompatible hosted child" threshold.
   const hasWallChildrenBlockingCurve = useScene((s) => {
     if (!node) return false
-    return (node.children ?? []).some((childId) => {
-      const child = s.nodes[childId as AnyNodeId]
-      if (!child) return false
-      if (child.type === 'door' || child.type === 'window') return true
-      if (child.type === 'item') {
-        const attachTo = child.asset?.attachTo
-        return attachTo === 'wall' || attachTo === 'wall-side'
-      }
-      return false
-    })
+    return hasWallCurveBlockingChildren(
+      (node.children ?? []).flatMap((childId) => {
+        const child = s.nodes[childId as AnyNodeId]
+        return child ? [child] : []
+      }),
+    )
   })
 
   // Existing plane-bound walls have no stored height. Resolve their current

@@ -41,8 +41,11 @@ import { type BufferGeometry, Color, type Material, type Mesh, type Object3D, Ve
 import {
   canDirectMoveNode,
   canDirectRotateNode,
+  pointerEventHitsEditorHandle,
+  resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
+  shouldStartDirectMoveDrag,
 } from '../../lib/direct-manipulation'
 import { createEditorApi } from '../../lib/editor-api'
 import { selectionEnabled } from '../../lib/interaction/scope'
@@ -1245,6 +1248,7 @@ export const SelectionManager = () => {
       if (!selectionEnabled(useInteractionScope.getState().scope)) return
       const pointer = pointerEventFromNodeEvent(event)
       if (pointer.button !== 0) return
+      const handleOwnsPointer = pointerEventHitsEditorHandle(event.nativeEvent)
 
       // Plain press on a transformable member of a multi-selection arms the
       // group move — dragging slides the whole selection on the ground plane
@@ -1252,6 +1256,7 @@ export const SelectionManager = () => {
       // group-move gizmo cross). A plain click (no drag) still falls through
       // to the normal click handling, which collapses to the pressed node.
       if (
+        !handleOwnsPointer &&
         !(pointer.shiftKey || pointer.altKey || isCommandModifier(pointer)) &&
         armGroupMove3d({
           nodeId: event.node.id as AnyNodeId,
@@ -1267,8 +1272,6 @@ export const SelectionManager = () => {
         return
       }
 
-      if (!isCommandModifier(pointer)) return
-
       const eventNode = useScene.getState().nodes[event.node.id as AnyNodeId] ?? event.node
       const node = resolveCanvasSelectionNode({
         node: eventNode,
@@ -1276,18 +1279,26 @@ export const SelectionManager = () => {
         selectedIds: useViewer.getState().selection.selectedIds,
       })
       if (!canDirectMoveNode(node)) return
-      // Sole selection only: per-node direct manipulation stands down for a
-      // multi-selection (the group sessions own plain drags there, and Cmd is
-      // the selection-toggle key — a wobbly Cmd+click must not yank one
-      // member out of the group).
       const currentSelectedIds = useViewer.getState().selection.selectedIds
-      if (currentSelectedIds.length !== 1 || currentSelectedIds[0] !== node.id) return
+      const allowPlainDrag = nodeRegistry.get(node.type)?.capabilities?.movable?.directDrag === true
+      if (
+        !shouldStartDirectMoveDrag({
+          allowPlainDrag,
+          commandModifier: isCommandModifier(pointer),
+          handleOwnsPointer,
+          nodeId: node.id,
+          selectedIds: currentSelectedIds,
+        })
+      ) {
+        return
+      }
 
       const startX = pointer.clientX
       const startY = pointer.clientY
       const pointerId = pointer.pointerId
       const pointerTarget = pointer.target instanceof EventTarget ? pointer.target : null
       let engaged = false
+      let engagedTargetId: AnyNodeId | null = null
 
       const cleanup = () => {
         window.removeEventListener('pointermove', onMove)
@@ -1309,8 +1320,9 @@ export const SelectionManager = () => {
         useViewer.getState().setInputDragging(true)
         swallowNextClick()
         createEditorApi().engageMoveDrag(node)
+        engagedTargetId = (getMovingNode()?.id as AnyNodeId | undefined) ?? null
         requestAnimationFrame(() => {
-          if (getMovingNode()?.id !== node.id) return
+          if (!getMovingNode()) return
           pointerTarget?.dispatchEvent(
             new PointerEvent('pointermove', {
               altKey: moveEvent.altKey,
@@ -1334,7 +1346,7 @@ export const SelectionManager = () => {
         if (engaged) {
           requestAnimationFrame(() => {
             const editor = useEditor.getState()
-            if (getMovingNode()?.id !== node.id || !editor.placementDragMode) return
+            if (getMovingNode()?.id !== engagedTargetId || !editor.placementDragMode) return
             editor.setMovingNode(null)
           })
         }
@@ -1668,7 +1680,8 @@ export const SelectionManager = () => {
           canDirectMoveNode(nodeToSelect)
         ) {
           sfxEmitter.emit('sfx:item-pick')
-          useEditor.getState().setMovingNode(nodeToSelect as never)
+          const moveTarget = resolveDirectManipulationNode(nodeToSelect, useScene.getState().nodes)
+          useEditor.getState().setMovingNode(moveTarget as never)
           useViewer.getState().setSelection({ selectedIds: [] })
           return
         }

@@ -1,4 +1,12 @@
-import type { AnyNode, CabinetModuleNode, CabinetNode, GeometryContext } from '@pascal-app/core'
+import type {
+  AnyNode,
+  AnyNodeId,
+  CabinetModuleNode,
+  CabinetNode,
+  GeometryContext,
+  WallNode,
+} from '@pascal-app/core'
+import { resolveLevelId } from '@pascal-app/core'
 
 /**
  * Straight-line run layout math — the single home for the "modules sit on the
@@ -11,14 +19,37 @@ export const RUN_ADJACENCY_EPSILON = 1e-4
 
 const ADJACENT_RUN_EPSILON = 1e-4
 const ADJACENT_RUN_Z_TOLERANCE = 0.03
+const REFLOW_CAPACITY_EPSILON = 1e-9
 
 type ModuleLike = Pick<CabinetModuleNode, 'id' | 'position' | 'width'>
 
 type ReflowRunModulesOptions = {
+  wallConstraints?: RunWallConstraints
+  resizeSide?: 'left' | 'right'
+  eligibleDonorIds?: ReadonlySet<CabinetModuleNode['id']>
+  maximumWidth?: number
+  maximumWidthById?: ReadonlyMap<CabinetModuleNode['id'], number>
   minimumWidth?: number
-  preserveExtent?: boolean
+  minimumWidthById?: ReadonlyMap<CabinetModuleNode['id'], number>
+  nominalWidthById?: ReadonlyMap<CabinetModuleNode['id'], number>
   restorableWidthById?: ReadonlyMap<CabinetModuleNode['id'], number>
 }
+
+export type RunWallEndConstraint = {
+  constrained: boolean
+  slack: number
+}
+
+export type RunWallConstraints = {
+  left: RunWallEndConstraint
+  right: RunWallEndConstraint
+}
+
+type RunWallConstraintOptions = {
+  widthGrowth?: number
+}
+
+const OPEN_RUN_END: RunWallEndConstraint = { constrained: false, slack: 0 }
 
 export function sortRunModules<T extends ModuleLike>(modules: readonly T[]): T[] {
   return [...modules].sort((a, b) => a.position[0] - b.position[0])
@@ -30,6 +61,130 @@ export function moduleMinX(module: Pick<CabinetModuleNode, 'position' | 'width'>
 
 export function moduleMaxX(module: Pick<CabinetModuleNode, 'position' | 'width'>): number {
   return module.position[0] + module.width / 2
+}
+
+function levelIdForRun(
+  run: Pick<CabinetNode, 'parentId'>,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): AnyNodeId | null {
+  let parentId = run.parentId as AnyNodeId | null
+  const visited = new Set<AnyNodeId>()
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId)
+    const parent = nodes[parentId]
+    if (!parent) return null
+    if (parent.type === 'level') return parent.id as AnyNodeId
+    parentId = parent.parentId as AnyNodeId | null
+  }
+  return null
+}
+
+function runInLevelFrame(
+  run: Pick<CabinetNode, 'depth' | 'parentId' | 'position' | 'rotation'>,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): Pick<CabinetNode, 'depth' | 'position' | 'rotation'> {
+  let position: CabinetNode['position'] = [...run.position]
+  let rotation = run.rotation
+  let parentId = run.parentId as AnyNodeId | null
+  const visited = new Set<AnyNodeId>()
+
+  while (parentId && !visited.has(parentId)) {
+    visited.add(parentId)
+    const parent = nodes[parentId]
+    if (parent?.type !== 'cabinet' && parent?.type !== 'cabinet-module') break
+    position = runLocalToPlan(parent, position)
+    rotation += parent.rotation
+    parentId = parent.parentId as AnyNodeId | null
+  }
+
+  return { depth: run.depth, position, rotation }
+}
+
+function closestPointOnSegment(
+  point: readonly [number, number],
+  start: readonly [number, number],
+  end: readonly [number, number],
+): readonly [number, number] {
+  const dx = end[0] - start[0]
+  const dz = end[1] - start[1]
+  const lengthSquared = dx * dx + dz * dz
+  if (lengthSquared <= 1e-8) return start
+  const t = Math.max(
+    0,
+    Math.min(1, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dz) / lengthSquared),
+  )
+  return [start[0] + t * dx, start[1] + t * dz]
+}
+
+function wallConstraintAtRunEnd({
+  endX,
+  run,
+  side,
+  walls,
+  widthGrowth,
+}: {
+  endX: number
+  run: Pick<CabinetNode, 'depth' | 'position' | 'rotation'>
+  side: 'left' | 'right'
+  walls: readonly WallNode[]
+  widthGrowth: number
+}): RunWallEndConstraint {
+  const worldPoint = runLocalToPlan(run, [endX, 0, 0])
+  const point: readonly [number, number] = [worldPoint[0], worldPoint[2]]
+  const runAxis: readonly [number, number] = [Math.cos(run.rotation), -Math.sin(run.rotation)]
+  const maxDistance = Math.max(run.depth / 2 + 0.08, widthGrowth)
+  const direction = side === 'left' ? -1 : 1
+  let closestSlack = Number.POSITIVE_INFINITY
+
+  for (const wall of walls) {
+    const dx = wall.end[0] - wall.start[0]
+    const dz = wall.end[1] - wall.start[1]
+    const length = Math.hypot(dx, dz)
+    if (length <= 1e-6) continue
+    const wallAxis: readonly [number, number] = [dx / length, dz / length]
+    const axisDot = runAxis[0] * wallAxis[0] + runAxis[1] * wallAxis[1]
+    if (Math.abs(axisDot) > 0.2) continue
+    const closest = closestPointOnSegment(point, wall.start, wall.end)
+    const offsetX = (closest[0] - point[0]) * runAxis[0] + (closest[1] - point[1]) * runAxis[1]
+    const halfThickness = ((wall.thickness ?? 0.2) / 2) * Math.sqrt(1 - axisDot * axisDot)
+    const distance = Math.hypot(point[0] - closest[0], point[1] - closest[1])
+    if (distance > maxDistance + (wall.thickness ?? 0.2) / 2 + RUN_ADJACENCY_EPSILON) continue
+    if (direction * offsetX < -halfThickness - RUN_ADJACENCY_EPSILON) continue
+    const slack = Math.max(0, direction * offsetX - halfThickness)
+    closestSlack = Math.min(closestSlack, slack)
+  }
+
+  return Number.isFinite(closestSlack) ? { constrained: true, slack: closestSlack } : OPEN_RUN_END
+}
+
+export function runWallConstraints(
+  run: Pick<CabinetNode, 'depth' | 'parentId' | 'position' | 'rotation' | 'width'>,
+  modules: readonly ModuleLike[],
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+  options: RunWallConstraintOptions = {},
+): RunWallConstraints {
+  const levelId = levelIdForRun(run, nodes)
+  if (!levelId) return { left: OPEN_RUN_END, right: OPEN_RUN_END }
+  const walls = Object.values(nodes).filter(
+    (node): node is WallNode =>
+      node?.type === 'wall' &&
+      resolveLevelId(node, nodes as Record<AnyNodeId, AnyNode>) === levelId,
+  )
+  if (walls.length === 0) return { left: OPEN_RUN_END, right: OPEN_RUN_END }
+  const minX = modules.length > 0 ? runMinX(modules) : -run.width / 2
+  const maxX = modules.length > 0 ? runMaxX(modules) : run.width / 2
+  const levelRun = runInLevelFrame(run, nodes)
+  const widthGrowth = Math.max(0, options.widthGrowth ?? 0)
+  return {
+    left: wallConstraintAtRunEnd({ endX: minX, run: levelRun, side: 'left', walls, widthGrowth }),
+    right: wallConstraintAtRunEnd({
+      endX: maxX,
+      run: levelRun,
+      side: 'right',
+      walls,
+      widthGrowth,
+    }),
+  }
 }
 
 export function runMinX(modules: readonly ModuleLike[]): number {
@@ -390,8 +545,10 @@ export function sideInsertX({
 }
 
 /**
- * Re-pack the run left-to-right after one module's width changes, keeping
- * every module flush with its left neighbor. Returns per-module patches.
+ * Re-pack the run after one module's width changes. A single constrained end
+ * may consume its wall gap. When both ends are constrained, the run extent is
+ * fixed and eligible donors absorb the growth, nearest first. The change is
+ * rejected only when their combined capacity is insufficient.
  */
 export function reflowRunModules<T extends ModuleLike>(
   modules: readonly T[],
@@ -407,30 +564,72 @@ export function reflowRunModules<T extends ModuleLike>(
   widths.set(selectedId, selectedWidth)
 
   const selected = sorted[selectedIndex]!
-  let remainingGrowth = selectedWidth - selected.width
-  if (options.preserveExtent && remainingGrowth > RUN_ADJACENCY_EPSILON) {
-    const minimumWidth = options.minimumWidth ?? 0.3
-    const left = sorted.slice(0, selectedIndex).reverse()
-    const right = sorted.slice(selectedIndex + 1)
-    const capacity = (candidates: readonly T[]) =>
-      candidates.reduce((total, module) => total + Math.max(0, module.width - minimumWidth), 0)
-    const candidates = capacity(left) > capacity(right) ? [...left, ...right] : [...right, ...left]
+  const gaps = sorted.map((module, index) => {
+    const next = sorted[index + 1]
+    if (!next) return 0
+    return Math.max(0, moduleMinX(next) - moduleMaxX(module))
+  })
+  const wallConstraints = options.wallConstraints
+  const leftConstrained = wallConstraints?.left.constrained ?? false
+  const rightConstrained = wallConstraints?.right.constrained ?? false
+  const preserveExtent = leftConstrained && rightConstrained
+  const widthGrowth = selectedWidth - selected.width
+  let remainingGrowth = Math.max(0, widthGrowth)
+  const resizeSide = options.resizeSide
+  const consumedRightSlack =
+    rightConstrained && (!preserveExtent || resizeSide === 'right')
+      ? Math.min(remainingGrowth, Math.max(0, wallConstraints?.right.slack ?? 0))
+      : 0
+  remainingGrowth -= consumedRightSlack
+  const consumedLeftSlack =
+    leftConstrained && (!preserveExtent || resizeSide === 'left')
+      ? Math.min(remainingGrowth, Math.max(0, wallConstraints?.left.slack ?? 0))
+      : 0
+  remainingGrowth -= consumedLeftSlack
 
-    for (const module of candidates) {
-      if (remainingGrowth <= RUN_ADJACENCY_EPSILON) break
-      const available = Math.max(0, module.width - minimumWidth)
-      const reduction = Math.min(available, remainingGrowth)
-      widths.set(module.id, module.width - reduction)
-      remainingGrowth -= reduction
+  if (preserveExtent && remainingGrowth > REFLOW_CAPACITY_EPSILON) {
+    const defaultMinimumWidth = options.minimumWidth ?? 0.3
+    const minimumWidth = (module: T) =>
+      options.minimumWidthById?.get(module.id) ?? defaultMinimumWidth
+    const donors = sorted
+      .map((module, index) => ({ index, module }))
+      .filter(
+        ({ module }) =>
+          module.id !== selectedId &&
+          (!options.eligibleDonorIds || options.eligibleDonorIds.has(module.id)) &&
+          module.width - minimumWidth(module) > REFLOW_CAPACITY_EPSILON,
+      )
+      .sort((a, b) => {
+        const distance = Math.abs(a.index - selectedIndex) - Math.abs(b.index - selectedIndex)
+        if (distance !== 0) return distance
+        const capacity =
+          Math.max(0, b.module.width - Math.max(defaultMinimumWidth, minimumWidth(b.module))) -
+          Math.max(0, a.module.width - Math.max(defaultMinimumWidth, minimumWidth(a.module)))
+        if (capacity !== 0) return capacity
+        return b.index - a.index
+      })
+    const available = donors.reduce(
+      (total, { module }) => total + Math.max(0, module.width - minimumWidth(module)),
+      0,
+    )
+    if (available + REFLOW_CAPACITY_EPSILON < remainingGrowth) return []
+
+    for (const useTrimCapacity of [false, true]) {
+      for (const { module } of donors) {
+        if (remainingGrowth <= REFLOW_CAPACITY_EPSILON) break
+        const currentWidth = widths.get(module.id) ?? module.width
+        const floor = useTrimCapacity
+          ? minimumWidth(module)
+          : Math.max(defaultMinimumWidth, minimumWidth(module))
+        const donation = Math.min(Math.max(0, currentWidth - floor), remainingGrowth)
+        widths.set(module.id, Math.max(floor, currentWidth - donation))
+        remainingGrowth -= donation
+      }
     }
   }
 
   let remainingFreedWidth = selected.width - selectedWidth
-  if (
-    options.preserveExtent &&
-    remainingFreedWidth > RUN_ADJACENCY_EPSILON &&
-    options.restorableWidthById
-  ) {
+  if (remainingFreedWidth > REFLOW_CAPACITY_EPSILON) {
     const left = sorted.slice(0, selectedIndex).reverse()
     const right = sorted.slice(selectedIndex + 1)
     const restorable = (candidates: readonly T[]) =>
@@ -440,25 +639,89 @@ export function reflowRunModules<T extends ModuleLike>(
       )
     const candidates =
       restorable(left) > restorable(right) ? [...left, ...right] : [...right, ...left]
-
     for (const module of candidates) {
-      if (remainingFreedWidth <= RUN_ADJACENCY_EPSILON) break
-      const available = Math.max(0, options.restorableWidthById.get(module.id) ?? 0)
+      if (remainingFreedWidth <= REFLOW_CAPACITY_EPSILON) break
+      const available = Math.max(0, options.restorableWidthById?.get(module.id) ?? 0)
       const restoration = Math.min(available, remainingFreedWidth)
       widths.set(module.id, module.width + restoration)
       remainingFreedWidth -= restoration
     }
+
+    if (preserveExtent && remainingFreedWidth > REFLOW_CAPACITY_EPSILON) {
+      const maximumWidth = options.maximumWidth ?? 1.2
+      const fallbackCandidates = sorted
+        .map((module, index) => ({ index, module }))
+        .filter(
+          ({ module }) =>
+            module.id !== selectedId &&
+            (!options.eligibleDonorIds || options.eligibleDonorIds.has(module.id)),
+        )
+        .sort((a, b) => {
+          const distance = Math.abs(a.index - selectedIndex) - Math.abs(b.index - selectedIndex)
+          if (distance !== 0) return distance
+          return b.index - a.index
+        })
+      const available = fallbackCandidates.reduce((total, { module }) => {
+        const currentWidth = widths.get(module.id) ?? module.width
+        const moduleMaximum = options.maximumWidthById?.get(module.id) ?? maximumWidth
+        return total + Math.max(0, moduleMaximum - currentWidth)
+      }, 0)
+      if (available + REFLOW_CAPACITY_EPSILON < remainingFreedWidth) return []
+
+      const absorbFreedWidth = (
+        receivers: typeof fallbackCandidates,
+        maximumFor: (module: T) => number,
+      ) => {
+        for (const { module } of receivers) {
+          if (remainingFreedWidth <= REFLOW_CAPACITY_EPSILON) break
+          const currentWidth = widths.get(module.id) ?? module.width
+          const restoration = Math.min(
+            Math.max(0, maximumFor(module) - currentWidth),
+            remainingFreedWidth,
+          )
+          widths.set(module.id, currentWidth + restoration)
+          remainingFreedWidth -= restoration
+        }
+      }
+      absorbFreedWidth(
+        fallbackCandidates,
+        (module) => options.nominalWidthById?.get(module.id) ?? module.width,
+      )
+      absorbFreedWidth(
+        fallbackCandidates,
+        (module) => options.maximumWidthById?.get(module.id) ?? maximumWidth,
+      )
+    }
   }
 
-  let nextLeft = runMinX(sorted)
-  return sorted.map((module) => {
+  const totalWidth = sorted.reduce(
+    (total, module, index) => total + (widths.get(module.id) ?? 0) + (gaps[index] ?? 0),
+    0,
+  )
+  let nextLeft = runMinX(sorted) - consumedLeftSlack
+  const preserveRightEdge = options.resizeSide === 'left'
+  const preserveLeftEdge = options.resizeSide === 'right'
+  if (rightConstrained && !leftConstrained) {
+    nextLeft = runMaxX(sorted) + consumedRightSlack - totalWidth
+  } else if (leftConstrained && !rightConstrained) {
+    nextLeft = runMinX(sorted) - consumedLeftSlack
+  } else if (preserveExtent && resizeSide === 'right') {
+    nextLeft = runMinX(sorted) - consumedLeftSlack
+  } else if (preserveExtent && resizeSide === 'left') {
+    nextLeft = runMaxX(sorted) + consumedRightSlack - totalWidth
+  } else if (preserveRightEdge) {
+    nextLeft = runMaxX(sorted) - totalWidth
+  } else if (preserveLeftEdge || (!leftConstrained && !rightConstrained && selectedIndex === 0)) {
+    nextLeft = preserveLeftEdge ? runMinX(sorted) - consumedLeftSlack : runMaxX(sorted) - totalWidth
+  }
+  return sorted.map((module, index) => {
     const width = widths.get(module.id) ?? module.width
     const position: T['position'] = [
       nextLeft + width / 2,
       module.position[1],
       module.position[2],
     ] as T['position']
-    nextLeft += width
+    nextLeft += width + (gaps[index] ?? 0)
     return { id: module.id, position, width }
   })
 }

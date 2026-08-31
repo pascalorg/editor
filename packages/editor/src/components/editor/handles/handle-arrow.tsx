@@ -21,6 +21,7 @@ import {
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import { EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY } from '../../../lib/direct-manipulation'
 import useEditor from '../../../store/use-editor'
 
 // While a press-drag move is in flight (`placementDragMode`), the move tool
@@ -29,7 +30,7 @@ import useEditor from '../../../store/use-editor'
 // (`wall:move` for openings, `grid:move` for free movers), freezing the drag.
 // Make every handle hit area inert for the duration; the indicator mesh still
 // renders (it's already NO_RAYCAST + depthTest off) so the grip stays visible.
-function hitAreaRaycast(this: Mesh, raycaster: Raycaster, intersects: Intersection[]): void {
+export function hitAreaRaycast(this: Mesh, raycaster: Raycaster, intersects: Intersection[]): void {
   if (useEditor.getState().placementDragMode) return
   Mesh.prototype.raycast.call(this, raycaster, intersects)
 }
@@ -434,6 +435,7 @@ export function InvisibleHandleHitArea({
       raycast={hitAreaRaycast}
       renderOrder={HIT_AREA_RENDER_ORDER}
       scale={scale}
+      userData={{ [EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY]: true }}
     />
   )
 }

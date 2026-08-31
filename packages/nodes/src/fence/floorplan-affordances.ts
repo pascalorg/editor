@@ -4,6 +4,7 @@ import {
   type FenceNode,
   type FloorplanAffordance,
   type FloorplanAffordanceSession,
+  getFenceCenterlineFrameAt,
   getMaxWallCurveOffset,
   getWallChordFrame,
   normalizeWallCurveOffset,
@@ -48,11 +49,13 @@ const LINKED_FENCE_ENDPOINT_EPSILON = 0.025
 type FenceEndpointPayload = { fenceId: AnyNodeId; endpoint: 'start' | 'end' }
 type FenceControlPointPayload = { fenceId: AnyNodeId; index: number }
 type FenceTangentPayload = { fenceId: AnyNodeId; index: number; side: 'in' | 'out' }
+type FenceThicknessPayload = { fenceId: AnyNodeId; side: 1 | -1 }
 
 // Must match the floorplan builder's TANGENT_HANDLE_ARM_SCALE: the on-screen
 // arm is this many times the raw tangent vector, so dividing the dragged
 // offset back out recovers the stored tangent.
 const TANGENT_HANDLE_ARM_SCALE = 3
+const MIN_FENCE_THICKNESS = 0.03
 
 function pointsNearlyEqual(a: FencePlanPoint, b: FencePlanPoint): boolean {
   return (
@@ -139,6 +142,40 @@ export const fenceCurveAffordance: FloorplanAffordance<FenceNode> = {
       },
       commit() {
         useScene.getState().updateNodes([{ id: fenceId, data: { curveOffset: lastCurveOffset } }])
+        useLiveNodeOverrides.getState().clear(fenceId)
+      },
+    }
+  },
+}
+
+export const fenceThicknessAffordance: FloorplanAffordance<FenceNode> = {
+  start({ node, payload, initialPlanPoint }): FloorplanAffordanceSession {
+    const { side } = payload as FenceThicknessPayload
+    const frame = getFenceCenterlineFrameAt(node, 0.5)
+    const outwardX = frame.normal.x * side
+    const outwardY = frame.normal.y * side
+    const initialThickness = node.thickness ?? 0.08
+    const fenceId = node.id as AnyNodeId
+    let lastThickness = initialThickness
+
+    return {
+      affectedIds: [fenceId],
+      apply({ planPoint }) {
+        const outwardDelta =
+          (planPoint[0] - initialPlanPoint[0]) * outwardX +
+          (planPoint[1] - initialPlanPoint[1]) * outwardY
+        lastThickness = Math.max(
+          MIN_FENCE_THICKNESS,
+          snapScalarToGrid(initialThickness + outwardDelta * 2, getSegmentGridStep()),
+        )
+        useLiveNodeOverrides.getState().set(fenceId, { thickness: lastThickness })
+        useScene.getState().markDirty(fenceId)
+      },
+      canCommit() {
+        return true
+      },
+      commit() {
+        useScene.getState().updateNodes([{ id: fenceId, data: { thickness: lastThickness } }])
         useLiveNodeOverrides.getState().clear(fenceId)
       },
     }

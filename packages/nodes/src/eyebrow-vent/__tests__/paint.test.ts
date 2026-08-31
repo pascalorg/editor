@@ -1,8 +1,18 @@
 import { describe, expect, test } from 'bun:test'
+import { eyebrowVentDefinition } from '../definition'
 import { eyebrowVentPaint, resolveEyebrowVentMaterialRole } from '../paint'
 import { EyebrowVentNode } from '../schema'
 
 describe('eyebrow vent paint', () => {
+  test('presents the front slot as Louvers', () => {
+    const node = EyebrowVentNode.parse({})
+    expect(eyebrowVentDefinition.capabilities.slots?.(node)).toContainEqual({
+      slotId: 'front',
+      label: 'Louvers',
+      default: 'library:preset-softwhite',
+    })
+  })
+
   test('maps geometry groups to hood and front', () => {
     expect(resolveEyebrowVentMaterialRole(0)).toBe('hood')
     expect(resolveEyebrowVentMaterialRole(1)).toBe('front')

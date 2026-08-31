@@ -1,6 +1,7 @@
-import type { AnyNode, EditorApi } from '@pascal-app/core'
+import { type AnyNode, type EditorApi, useScene } from '@pascal-app/core'
 import useEditor from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
+import { resolveDirectManipulationNode, resolveMoveActionNode } from './direct-manipulation'
 import {
   controlPointReshapeScope,
   endpointReshapeScope,
@@ -25,14 +26,16 @@ export function createEditorApi(): EditorApi {
       // (every concrete kind enumerated). Descriptors pass any node; the
       // cast lets registry-driven move kinds through without forcing a
       // schema-level type widening.
-      editor.setMovingNode(node as Parameters<typeof editor.setMovingNode>[0])
+      const target = resolveMoveActionNode(node, useScene.getState().nodes)
+      editor.setMovingNode(target as Parameters<typeof editor.setMovingNode>[0])
     },
     engageMoveDrag(node: AnyNode) {
       const editor = useEditor.getState()
       // Flag drag mode BEFORE mounting the move tool so the coordinator reads
       // it at setup and wires its commit-on-release listener.
       editor.setPlacementDragMode(true)
-      editor.setMovingNode(node as Parameters<typeof editor.setMovingNode>[0])
+      const target = resolveDirectManipulationNode(node, useScene.getState().nodes)
+      editor.setMovingNode(target as Parameters<typeof editor.setMovingNode>[0])
     },
     engageEndpointMove(node: AnyNode, endpoint: 'start' | 'end') {
       // Endpoint reshape is kind-agnostic: the scope carries the node id + which

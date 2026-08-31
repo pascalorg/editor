@@ -15,6 +15,7 @@ const HEIGHT_HANDLE_OFFSET = 0.25
 const ROTATE_CORNER_OFFSET = 0.12
 const MIN_DIM = 0.3
 const MIN_HEIGHT = 0.4
+const CUPOLA_LOUVERS_DEFAULT = 'library:preset-metal'
 
 function getBodyMidY(n: CupolaNodeType): number {
   return Math.max(0.001, n.height) / 2
@@ -108,7 +109,7 @@ const cupolaHandles: HandleDescriptor<CupolaNodeType>[] = [
  */
 export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
   kind: 'cupola',
-  schemaVersion: 3,
+  schemaVersion: 4,
   schema: CupolaNode,
   category: 'structure',
   surfaceRole: 'roof',
@@ -116,7 +117,10 @@ export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
   defaults: () => {
     const stub = CupolaNodeSchema.parse({ id: 'cupola_default' as never, type: 'cupola' })
     const { id: _id, type: _type, ...rest } = stub
-    return rest
+    return {
+      ...rest,
+      slots: { ...(rest.slots ?? {}), louvers: CUPOLA_LOUVERS_DEFAULT },
+    }
   },
 
   capabilities: {
@@ -124,6 +128,7 @@ export const cupolaDefinition: NodeDefinition<typeof CupolaNode> = {
       { slotId: 'base', label: 'Base', default: 'library:preset-softwhite' },
       { slotId: 'body', label: 'Body', default: 'library:preset-softwhite' },
       { slotId: 'roof', label: 'Roof', default: 'library:preset-softwhite' },
+      { slotId: 'louvers', label: 'Louvers', default: CUPOLA_LOUVERS_DEFAULT },
     ],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,

@@ -33,7 +33,7 @@ const WALL_CONNECTION_OVERLAP = 0.02
 const WALL_CONNECTION_TRIM = 0.002
 const PLAN_TOLERANCE = 1e-6
 const MIN_NON_COLLINEAR_ANGLE = 1e-4
-const LINEAR_DIRECTION_TOLERANCE = 1e-3
+const LINEAR_DIRECTION_TOLERANCE = 1e-6
 const LINEAR_JOIN_PLAN_TOLERANCE = 0.03
 const FREESTANDING_JOINT_WALL_THICKNESS = 0.1
 const LINEAR_JOIN_HEIGHT_TOLERANCE = 0.02
@@ -710,9 +710,16 @@ function edgeConnectedPlanPolygonComponent(
   polygons: LeanToPlanPoint[][],
   anchor: LeanToPlanPoint[],
 ): LeanToPlanPoint[][] {
+  return edgeConnectedPlanPolygonComponents(polygons, [anchor])
+}
+
+function edgeConnectedPlanPolygonComponents(
+  polygons: LeanToPlanPoint[][],
+  anchors: LeanToPlanPoint[][],
+): LeanToPlanPoint[][] {
   const connected = new Set<number>()
   const queue = polygons.flatMap((polygon, index) =>
-    polygonsSharePlanEdge(anchor, polygon) ? [index] : [],
+    anchors.some((anchor) => polygonsSharePlanEdge(anchor, polygon)) ? [index] : [],
   )
   for (const index of queue) connected.add(index)
 
@@ -1219,6 +1226,7 @@ function resolveFreestandingRoofPartition(
   candidateWall: WallNode,
   candidateSide: LeanToCornerSide,
   candidateExtension: number,
+  trimConcaveCross: boolean,
 ): {
   basePieces: LeanToPlanPoint[][]
   additionPieces?: LeanToPlanPoint[][]
@@ -1226,6 +1234,7 @@ function resolveFreestandingRoofPartition(
   const layout = resolveLeanToLayout(leanTo)
   const edges = roofPlanEdges(leanTo)
   const sideSign = side === 'left' ? -1 : 1
+  const structuralSideX = sideSign * (layout.span / 2)
   const originalSideX = layout.roofCenterX + sideSign * (layout.roofWidth / 2)
   const heightDelta = (point: readonly [number, number]): number | null => {
     const worldPoint = leanToPointToWorld(wall, leanTo, point[0], point[1])
@@ -1234,10 +1243,17 @@ function resolveFreestandingRoofPartition(
     const candidateHeight = leanToTopHeightAtWorld(candidateWall, candidate, worldPoint)
     return ownHeight === null || candidateHeight === null ? null : ownHeight - candidateHeight
   }
-  const probeDelta = heightDelta([
-    originalSideX - sideSign * Math.min(0.1, layout.roofWidth / 4),
+  const structuralProbeDelta = heightDelta([
+    structuralSideX - sideSign * Math.min(0.1, layout.span / 4),
     (edges.back + edges.front) / 2,
   ])
+  const probeDelta =
+    structuralProbeDelta === null || Math.abs(structuralProbeDelta) <= PLAN_TOLERANCE
+      ? heightDelta([
+          originalSideX - sideSign * Math.min(0.1, layout.roofWidth / 4),
+          (edges.back + edges.front) / 2,
+        ])
+      : structuralProbeDelta
   if (probeDelta === null || Math.abs(probeDelta) <= PLAN_TOLERANCE) return null
 
   const candidatePolygon = (
@@ -1254,10 +1270,15 @@ function resolveFreestandingRoofPartition(
   const partition = (polygon: LeanToPlanPoint[]): LeanToPlanPoint[][] => {
     const overlap = intersectConvexPolygons(polygon, candidatePolygon)
     const exclusive = subtractConvexPolygon(polygon, candidatePolygon)
-    const retainedOverlap = clipToRetainedRoofSide(overlap, heightDelta, Math.sign(probeDelta))
-    return [...exclusive, retainedOverlap].filter(
+    const retainedOverlap = clipToRetainedRoofSide(
+      overlap,
+      heightDelta,
+      (trimConcaveCross ? -1 : 1) * Math.sign(probeDelta),
+    )
+    const pieces = [...exclusive, retainedOverlap].filter(
       (piece) => piece.length >= 3 && Math.abs(polygonSignedArea(piece)) > PLAN_TOLERANCE,
     )
+    return trimConcaveCross ? edgeConnectedPlanPolygonComponent(pieces, retainedOverlap) : pieces
   }
 
   const basePieces = partition(roofBasePolygon(leanTo))
@@ -1267,7 +1288,10 @@ function resolveFreestandingRoofPartition(
     partition(roofExtensionBand(leanTo, side, extension)),
     roofBasePolygon(leanTo),
   )
-  return additionPieces.length > 0 ? { basePieces, additionPieces } : null
+  const connectedAdditions = edgeConnectedPlanPolygonComponents(additionPieces, basePieces)
+  return connectedAdditions.length > 0
+    ? { basePieces, additionPieces: connectedAdditions }
+    : { basePieces }
 }
 
 function resolveCurvedStraightRoofPiece(
@@ -1497,6 +1521,7 @@ export function resolveLeanToCornerJoints(
               candidateRoofExtension,
             )
           : null
+      const trimFreestandingConcaveCross = kind === 'concave'
       const freestandingRoof =
         ownFrame.kind === 'freestanding'
           ? resolveFreestandingRoofPartition(
@@ -1509,6 +1534,7 @@ export function resolveLeanToCornerJoints(
               candidateWall,
               neighborSide,
               candidateRoofExtension,
+              trimFreestandingConcaveCross,
             )
           : null
       const curvedStraightConcaveRoof =
@@ -1571,6 +1597,33 @@ export function resolveLeanToCornerJoints(
         neighborSide,
         candidateRoofExtension,
       )
+      // A curved wall can meet a straight wall at a roof seam while their
+      // low eave curves never intersect. Do not apply a nominal angle miter
+      // in that case: skewing both gutter ends creates a floating, uneven
+      // joint instead of a valid shared edge.
+      const gutterIntersection =
+        gutterAway && candidateGutterAway
+          ? extensionToRunIntersection(
+              wall,
+              cornerLeanTo,
+              side,
+              layout.roofCenterX + sideSign * (layout.roofWidth / 2),
+              ownEdges.front,
+              candidateWall,
+              cornerCandidate,
+              candidateEdges.front,
+            ) !== null ||
+            extensionToRunIntersection(
+              candidateWall,
+              cornerCandidate,
+              neighborSide,
+              candidateLayout.roofCenterX + candidateSideSign * (candidateLayout.roofWidth / 2),
+              candidateEdges.front,
+              wall,
+              cornerLeanTo,
+              ownEdges.front,
+            ) !== null
+          : false
       const gutterInteriorAngle =
         gutterAway && candidateGutterAway
           ? Math.acos(
@@ -1599,7 +1652,9 @@ export function resolveLeanToCornerJoints(
             ? resolveFramingRetainedSide(resolvedSeam, resolvedRoofPieces)
             : undefined,
         beamExtension,
-        gutterMitre: (kind === 'concave' ? -1 : 1) * ((Math.PI - gutterInteriorAngle) / 2),
+        gutterMitre: gutterIntersection
+          ? (kind === 'concave' ? -1 : 1) * ((Math.PI - gutterInteriorAngle) / 2)
+          : 0,
         sharedPostOwner: String(cornerLeanTo.id) < String(candidate.id),
         sharedPostPosition: [
           (side === 'left' ? -layout.span / 2 : layout.span / 2) +

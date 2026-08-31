@@ -5,8 +5,6 @@ import {
   type AnyNode,
   type AnyNodeId,
   collectAlignmentAnchors,
-  createConicalRoofSectorAboveWall,
-  createSceneApi,
   emitter,
   type GridEvent,
   getWallArcData,
@@ -19,16 +17,29 @@ import {
   type RoofType,
   RoofType as RoofTypeSchema,
   resolveBuildingForLevel,
-  resolveConicalRoofPlacement,
+  type SceneApi,
   sceneRegistry,
-  useScene,
   type WallEvent,
   type WallNode,
   wallSegmentAnchors,
 } from '@pascal-app/core'
-import { clearSurfacePlanSnapFeedback, resolveSurfacePlanPointSnap } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  clearSurfacePlanSnapFeedback,
+  EDITOR_LAYER,
+  isGridSnapActive,
+  isMagneticSnapActive,
+  markToolCancelConsumed,
+  resolveSurfacePlanPointSnap,
+  snapWorldXZForActiveBuilding,
+  triggerSFX,
+  useEditor,
+  useFloorplanDraftPreview,
+  useInteractionScope,
+  useRegistryToolContext,
+} from '@pascal-app/editor'
 import { generateRoofSegmentGeometry, useViewer } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import * as THREE from 'three'
 import {
   BufferGeometry,
@@ -38,13 +49,8 @@ import {
   type Line,
   Vector3,
 } from 'three'
-import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
-import { EDITOR_LAYER } from '../../../lib/constants'
-import { sfxEmitter } from '../../../lib/sfx-bus'
-import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
-import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../store/use-editor'
-import { useFloorplanDraftPreview } from '../../../store/use-floorplan-draft-preview'
-import { CursorSphere } from '../shared/cursor-sphere'
+import { createConicalRoofSectorAboveWall } from './conical-roof'
+import { resolveConicalRoofPlacement } from './conical-roof-placement'
 import {
   isStandardRoofWallEligible,
   parseRoofFootprintSource,
@@ -60,6 +66,17 @@ import useRoofPlacementMode, { type RoofPlacementMode } from './roof-placement-m
 const DEFAULT_WALL_HEIGHT = 0.5
 const DEFAULT_PITCH_DEG = 40
 const GRID_OFFSET = 0.02
+
+function createRoofNodes(
+  sceneApi: SceneApi,
+  ops: Parameters<NonNullable<SceneApi['createMany']>>[0],
+): void {
+  if (sceneApi.createMany) {
+    sceneApi.createMany(ops)
+    return
+  }
+  for (const op of ops) sceneApi.upsert(op.node, op.parentId)
+}
 
 function placementOptions(mode: RoofPlacementMode) {
   return {
@@ -168,6 +185,7 @@ function collectRoofAlignmentAnchors(
  * Creates a roof group with one default gable segment
  */
 const commitRoofPlacement = (
+  sceneApi: SceneApi,
   levelId: LevelNode['id'],
   corner1: [number, number, number],
   corner2: [number, number, number],
@@ -175,7 +193,7 @@ const commitRoofPlacement = (
   quarterTurn: boolean,
   placementMode: RoofPlacementMode,
 ): AnyNode['id'] | null => {
-  const { createNode, createNodes, nodes } = useScene.getState()
+  const nodes = sceneApi.nodes()
 
   // A placed roof preset seeds `toolDefaults.roof` with the flattened
   // subtree params (roofType, pitch, wallHeight, overhang, materials, …)
@@ -225,11 +243,11 @@ const commitRoofPlacement = (
       children: [segment.id],
     })
 
-    createNodes([
+    createRoofNodes(sceneApi, [
       { node: roof, parentId: levelId },
       { node: segment, parentId: roof.id },
     ])
-    sfxEmitter.emit('sfx:structure-build')
+    triggerSFX('sfx:structure-build')
     return roof.id
   }
 
@@ -285,8 +303,8 @@ const commitRoofPlacement = (
       rotation: placement.rotation,
     })
 
-    createNode(segment, targetRoofId as AnyNode['id'])
-    sfxEmitter.emit('sfx:structure-build')
+    sceneApi.upsert(segment, targetRoofId as AnyNode['id'])
+    triggerSFX('sfx:structure-build')
     return segment.id // Returns segment ID so it can be selected immediately
   }
 
@@ -324,22 +342,23 @@ const commitRoofPlacement = (
   })
 
   // Create roof first (so segment can be parented to it), then segment
-  createNodes([
+  createRoofNodes(sceneApi, [
     { node: roof, parentId: levelId },
     { node: segment, parentId: roof.id },
   ])
 
-  sfxEmitter.emit('sfx:structure-build')
+  triggerSFX('sfx:structure-build')
   return roof.id
 }
 
 const commitRoofFootprint = (
+  sceneApi: SceneApi,
   levelId: LevelNode['id'],
   target: RoofFootprintTarget,
   quarterTurn: boolean,
 ): AnyNode['id'] | null => {
   if (!target.rectangular) return null
-  const { createNodes, nodes } = useScene.getState()
+  const nodes = sceneApi.nodes()
   const defaults = useEditor.getState().toolDefaults.roof ?? {}
   const parsedRoofType = RoofTypeSchema.safeParse(defaults.roofType)
   const roofType = parsedRoofType.success ? parsedRoofType.data : 'gable'
@@ -366,11 +385,11 @@ const commitRoofFootprint = (
     rotation: target.rotation,
     children: [segment.id],
   })
-  createNodes([
+  createRoofNodes(sceneApi, [
     { node: roof, parentId: levelId },
     { node: segment, parentId: roof.id },
   ])
-  sfxEmitter.emit('sfx:structure-build')
+  triggerSFX('sfx:structure-build')
   return roof.id
 }
 
@@ -560,15 +579,18 @@ function buildRoofGhostEdges(
 }
 
 export const RoofTool: React.FC = () => {
+  const { activeLevelId: currentLevelId, sceneApi, selectNode } = useRegistryToolContext()
   const cursorRef = useRef<Group>(null)
   const outlineRef = useRef<Line>(null!)
-  const currentLevelId = useViewer((state) => state.selection.levelId)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
-  const setSelection = useViewer((state) => state.setSelection)
   const setPreviewSelectedIds = useViewer((state) => state.setPreviewSelectedIds)
   const roofDefaults = useEditor((state) => state.toolDefaults.roof)
   const placementMode = useRoofPlacementMode((state) => state.mode)
-  const nodes = useScene.getState().nodes
+  const subscribeToNodes = useMemo(
+    () => (onChange: () => void) => sceneApi.subscribeNodes?.(() => onChange()) ?? (() => {}),
+    [sceneApi],
+  )
+  const nodes = useSyncExternalStore(subscribeToNodes, sceneApi.nodes, sceneApi.nodes)
   const parsedRoofType = RoofTypeSchema.safeParse(roofDefaults?.roofType)
   const roofType = parsedRoofType.success ? parsedRoofType.data : 'gable'
   const footprintSource = parseRoofFootprintSource(roofDefaults?.footprintSource, roofType)
@@ -581,6 +603,34 @@ export const RoofTool: React.FC = () => {
   useEffect(() => {
     selectedIdsRef.current = selectedIds
   }, [selectedIds])
+
+  useEffect(() => {
+    useRoofPlacementMode.getState().setConical(roofType === 'conical')
+    return () => useRoofPlacementMode.getState().setConical(false)
+  }, [roofType])
+
+  useEffect(() => {
+    if (!currentLevelId) return
+    const draft = RoofNode.parse({
+      ...useEditor.getState().toolDefaults.roof,
+      name: 'Roof preview',
+      parentId: currentLevelId,
+    })
+    useInteractionScope.getState().begin({
+      kind: 'placing',
+      node: draft,
+      nodeId: draft.id,
+      nodeType: draft.type,
+      view: '3d',
+      pressDrag: false,
+      driver: 'registry-tool',
+    })
+    return () => {
+      useInteractionScope
+        .getState()
+        .endIf((scope) => scope.kind === 'placing' && scope.nodeId === draft.id)
+    }
+  }, [currentLevelId])
 
   // Clear preset-seeded defaults on deactivation so a later manual roof draw
   // isn't built with a stale preset's parameters. Unmount-only.
@@ -617,7 +667,7 @@ export const RoofTool: React.FC = () => {
     // on the upper floor aligns to the walls beneath it. Refreshed after each
     // roof commits. Both corners of the rectangle align.
     let alignmentCandidates = collectRoofAlignmentAnchors(
-      useScene.getState().nodes,
+      sceneApi.nodes(),
       currentLevelId,
       roofType,
     )
@@ -639,7 +689,7 @@ export const RoofTool: React.FC = () => {
             useEditor.getState().gridSnapStep,
           ).local
         : rawPoint
-      const nodes = useScene.getState().nodes
+      const nodes = sceneApi.nodes()
       return resolveSurfacePlanPointSnap({
         rawPoint,
         fallbackPoint: gridFallback,
@@ -674,7 +724,7 @@ export const RoofTool: React.FC = () => {
         const curbHeight =
           typeof defaults?.wallHeight === 'number' ? defaults.wallHeight : DEFAULT_WALL_HEIGHT
         const placement = resolveConicalRoofPlacement({
-          nodes: useScene.getState().nodes,
+          nodes: sceneApi.nodes(),
           levelId: currentLevelId,
           center: [centerX, centerZ],
           radius: diameter / 2,
@@ -729,7 +779,7 @@ export const RoofTool: React.FC = () => {
         if (footprintSource === 'room') {
           target = resolveRoomRoofFootprint(
             currentLevelId,
-            useScene.getState().nodes,
+            sceneApi.nodes(),
             [snappedX, snappedZ],
             {
               rectangularOnly: true,
@@ -740,11 +790,8 @@ export const RoofTool: React.FC = () => {
         cursorRef.current.position.set(
           snappedX,
           target
-            ? resolveRoofFootprintWorldElevation(
-                currentLevelId,
-                target,
-                useScene.getState().nodes,
-              ) + GRID_OFFSET
+            ? resolveRoofFootprintWorldElevation(currentLevelId, target, sceneApi.nodes()) +
+                GRID_OFFSET
             : event.localPosition[1] + GRID_OFFSET,
           snappedZ,
         )
@@ -765,7 +812,7 @@ export const RoofTool: React.FC = () => {
         previousGridPosRef.current &&
         (gridX !== previousGridPosRef.current[0] || gridZ !== previousGridPosRef.current[1])
       ) {
-        sfxEmitter.emit('sfx:grid-snap')
+        triggerSFX('sfx:grid-snap')
       }
 
       previousGridPosRef.current = [gridX, gridZ]
@@ -792,13 +839,13 @@ export const RoofTool: React.FC = () => {
         const [snappedX, snappedZ] = resolveDraftPoint(event)
         const target = resolveRoomRoofFootprint(
           currentLevelId,
-          useScene.getState().nodes,
+          sceneApi.nodes(),
           [snappedX, snappedZ],
           { rectangularOnly: true },
         )
         if (!target) return
-        const roofId = commitRoofFootprint(currentLevelId, target, quarterTurnRef.current)
-        if (roofId) setSelection({ selectedIds: [roofId] })
+        const roofId = commitRoofFootprint(sceneApi, currentLevelId, target, quarterTurnRef.current)
+        if (roofId) selectNode(roofId)
         return
       }
 
@@ -807,6 +854,7 @@ export const RoofTool: React.FC = () => {
 
       if (corner1Ref.current) {
         const roofId = commitRoofPlacement(
+          sceneApi,
           currentLevelId,
           corner1Ref.current,
           [gridX, y, gridZ],
@@ -817,7 +865,7 @@ export const RoofTool: React.FC = () => {
 
         if (!roofId) return
 
-        setSelection({ selectedIds: [roofId as AnyNode['id']] })
+        selectNode(roofId as AnyNode['id'])
 
         corner1Ref.current = null
         const draftPreview = useFloorplanDraftPreview.getState()
@@ -825,7 +873,7 @@ export const RoofTool: React.FC = () => {
         draftPreview.setRoofDraftEnd(null)
         outlineRef.current.visible = false
         alignmentCandidates = collectRoofAlignmentAnchors(
-          useScene.getState().nodes,
+          sceneApi.nodes(),
           currentLevelId,
           roofType,
         )
@@ -835,7 +883,7 @@ export const RoofTool: React.FC = () => {
         const draftPreview = useFloorplanDraftPreview.getState()
         draftPreview.setRoofDraftStart([gridX, gridZ])
         draftPreview.setRoofDraftEnd([gridX, gridZ])
-        sfxEmitter.emit('sfx:structure-build-start')
+        triggerSFX('sfx:structure-build-start')
         setPreview((prev) => ({
           ...prev,
           corner1: corner1Ref.current,
@@ -876,7 +924,7 @@ export const RoofTool: React.FC = () => {
         ) {
           event.preventDefault()
           useRoofPlacementMode.getState().cycleMode()
-          sfxEmitter.emit('sfx:grid-snap')
+          triggerSFX('sfx:grid-snap')
         }
         return
       }
@@ -895,7 +943,7 @@ export const RoofTool: React.FC = () => {
       quarterTurnRef.current = nextQuarterTurn
       setQuarterTurn(nextQuarterTurn)
       useFloorplanDraftPreview.getState().setRoofDraftQuarterTurn(nextQuarterTurn)
-      sfxEmitter.emit('sfx:item-rotate')
+      triggerSFX('sfx:item-rotate')
     }
 
     emitter.on('grid:move', onGridMove)
@@ -915,7 +963,7 @@ export const RoofTool: React.FC = () => {
     const unsubscribeConicalRoofWallClicks = subscribeToConicalRoofWallClicks({
       footprintSource,
       currentLevelId,
-      getNodes: () => useScene.getState().nodes,
+      getNodes: sceneApi.nodes,
       onPreview: (wall) => {
         setPreviewedConicalWallId(wall?.id ?? null)
         setPreviewSelectedIds(wall ? [wall.id] : [])
@@ -925,11 +973,11 @@ export const RoofTool: React.FC = () => {
         setPreviewSelectedIds([])
         const segmentId = createConicalRoofSectorAboveWall(
           wall,
-          useScene.getState().nodes,
-          createSceneApi(useScene),
+          sceneApi.nodes(),
+          sceneApi,
           currentLevelId as LevelNode['id'],
         )
-        if (segmentId) setSelection({ selectedIds: [segmentId] })
+        if (segmentId) selectNode(segmentId)
       },
       roofType,
     })
@@ -956,7 +1004,7 @@ export const RoofTool: React.FC = () => {
       draftPreview.setRoofDraftEnd(null)
       draftPreview.setRoofDraftQuarterTurn(false)
     }
-  }, [currentLevelId, footprintSource, roofType, setPreviewSelectedIds, setSelection])
+  }, [currentLevelId, footprintSource, roofType, sceneApi, selectNode, setPreviewSelectedIds])
 
   const { corner1, cursorPosition, levelY } = preview
 
@@ -1241,3 +1289,5 @@ export const RoofTool: React.FC = () => {
     </group>
   )
 }
+
+export default RoofTool

@@ -100,14 +100,16 @@ export function getLinkedWallSnapshots(args: {
 }
 
 function wallSegmentExists(
-  walls: Array<Pick<WallNode, 'start' | 'end'>>,
+  walls: Array<Pick<WallNode, 'start' | 'end' | 'parentId'>>,
   start: WallPlanPoint,
   end: WallPlanPoint,
+  parentId: WallNode['parentId'],
 ) {
   return walls.some(
     (wall) =>
-      (samePoint(wall.start, start) && samePoint(wall.end, end)) ||
-      (samePoint(wall.start, end) && samePoint(wall.end, start)),
+      wall.parentId === parentId &&
+      ((samePoint(wall.start, start) && samePoint(wall.end, end)) ||
+        (samePoint(wall.start, end) && samePoint(wall.end, start))),
   )
 }
 
@@ -174,7 +176,9 @@ export function buildBridgeWallCreates(args: {
       continue
     }
 
-    if (wallSegmentExists(wallsForDuplicateCheck, plan.originalPoint, nextPoint)) {
+    if (
+      wallSegmentExists(wallsForDuplicateCheck, plan.originalPoint, nextPoint, plan.wall.parentId)
+    ) {
       continue
     }
 
@@ -192,7 +196,7 @@ export function buildBridgeWallCreates(args: {
       node: bridgeWall,
       parentId: (plan.wall.parentId ?? undefined) as AnyNodeId | undefined,
     })
-    wallsForDuplicateCheck.push(bridgeWall)
+    wallsForDuplicateCheck.push({ ...bridgeWall, parentId: plan.wall.parentId })
   }
 
   return creates
@@ -213,7 +217,9 @@ export function buildBridgeWallPreviews(args: {
   existingWalls: WallNode[]
 }): Array<{ ghost: GhostWallPreview; wall: WallNode }> {
   const { bridgePlans, nextStart, nextEnd, existingWalls } = args
-  const wallsForDuplicateCheck: Array<Pick<WallNode, 'start' | 'end'>> = [...existingWalls]
+  const wallsForDuplicateCheck: Array<Pick<WallNode, 'start' | 'end' | 'parentId'>> = [
+    ...existingWalls,
+  ]
   const previews: Array<{ ghost: GhostWallPreview; wall: WallNode }> = []
 
   for (const plan of bridgePlans) {
@@ -223,7 +229,9 @@ export function buildBridgeWallPreviews(args: {
       continue
     }
 
-    if (wallSegmentExists(wallsForDuplicateCheck, plan.originalPoint, nextPoint)) {
+    if (
+      wallSegmentExists(wallsForDuplicateCheck, plan.originalPoint, nextPoint, plan.wall.parentId)
+    ) {
       continue
     }
 

@@ -1123,26 +1123,21 @@ describe('buildCabinetGeometry — appliance compartments', () => {
     expect(hinge.rotation.y).toBeGreaterThan(1.9)
   })
 
-  test('fridge cabinet fills tall-carcass remainder with a drawer front above the fridge', () => {
+  test('fridge cabinet carcass ends at the appliance without a top filler', () => {
     const node = CabinetModuleNode.parse({
       cabinetType: 'tall',
       width: FRIDGE_COLUMN_WIDTH,
       depth: FRIDGE_STANDARD_DEPTH,
-      carcassHeight: TALL_CABINET_CARCASS_HEIGHT,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
       showPlinth: false,
       stack: fridgeCabinetStack('fridge-single'),
     })
     const group = buildCabinetGeometry(node, undefined, 'rendered', false)
 
-    const fridgePanel = worldBounds(
-      findMeshByName(group, 'cabinet-fridge-single-0-door-single-panel'),
-    )
-    const drawerFront = worldBounds(findMeshByNamePrefix(group, 'cabinet-drawer-front-'))
     const cabinetTop = worldBounds(findMeshByName(group, 'cabinet-top'))
 
-    expect(cabinetTop.max.y).toBeCloseTo(TALL_CABINET_CARCASS_HEIGHT)
-    expect(fridgePanel.max.y).toBeLessThan(drawerFront.min.y)
-    expect(drawerFront.max.y).toBeCloseTo(TALL_CABINET_CARCASS_HEIGHT)
+    expect(cabinetTop.max.y).toBeCloseTo(FRIDGE_COLUMN_HEIGHT)
+    expect(() => findMeshByNamePrefix(group, 'cabinet-drawer-front-')).toThrow()
   })
 
   test('double refrigerator opens opposing side-by-side leaves', () => {
@@ -2343,7 +2338,7 @@ describe('cabinet handles', () => {
     const leftHandle = widthHandles.find((handle) => handle.anchor === 'max')
     const rightHandle = widthHandles.find((handle) => handle.anchor === 'min')
 
-    expect(handles).toHaveLength(3)
+    expect(handles).toHaveLength(4)
     expect(leftHandle).toBeDefined()
     expect(rightHandle).toBeDefined()
     expect(leftHandle!.apply(node, 0.8, null as never).position?.[0]).toBeCloseTo(-0.1)

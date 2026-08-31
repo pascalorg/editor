@@ -15,8 +15,10 @@ describe('roof footprint sources', () => {
   test('normalizes footprint sources for the selected roof type', () => {
     expect(parseRoofFootprintSource('room', 'conical')).toBe('walls')
     expect(parseRoofFootprintSource('draw', 'conical')).toBe('walls')
-    expect(parseRoofFootprintSource('walls', 'hip')).toBe('room')
+    expect(parseRoofFootprintSource('walls', 'hip')).toBe('draw')
+    expect(parseRoofFootprintSource(undefined, 'hip')).toBe('draw')
     expect(parseRoofFootprintSource('draw', 'hip')).toBe('draw')
+    expect(parseRoofFootprintSource('room', 'hip')).toBe('room')
   })
 
   test('fits a rotated rectangular room', () => {

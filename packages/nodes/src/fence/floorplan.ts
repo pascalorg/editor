@@ -448,6 +448,21 @@ export function buildFenceFloorplan(node: FenceNode, ctx: GeometryContext): Floo
       })
     }
 
+    const thicknessFrame = getFenceCenterlineFrameAt(node, 0.5)
+    const halfThickness = (node.thickness ?? 0.08) / 2
+    for (const side of [1, -1] as const) {
+      children.push({
+        kind: 'endpoint-handle',
+        point: [
+          thicknessFrame.point.x + thicknessFrame.normal.x * halfThickness * side,
+          thicknessFrame.point.y + thicknessFrame.normal.y * halfThickness * side,
+        ],
+        state: 'idle',
+        affordance: 'thickness',
+        payload: { fenceId: node.id, side },
+      })
+    }
+
     // Two perpendicular `move-arrow` chevrons at the fence midpoint.
     // No `affordance` → the registry layer routes pointer-down through
     // `setMovingNode`, which the `FloorplanRegistryMoveOverlay` picks

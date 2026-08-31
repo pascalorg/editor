@@ -56,7 +56,13 @@ export {
 } from './nodes/block'
 export { BoxVentMaterialRole, BoxVentNode } from './nodes/box-vent'
 export { BuildingNode } from './nodes/building'
-export { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
+export {
+  CABINET_METRIC_DEFAULTS,
+  CabinetFrontStyleSchema,
+  CabinetModuleNode,
+  CabinetNode,
+  CabinetTopFinishSchema,
+} from './nodes/cabinet'
 export { CeilingNode } from './nodes/ceiling'
 export { ChimneyMaterialRole, ChimneyNode } from './nodes/chimney'
 export {

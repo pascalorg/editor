@@ -9,9 +9,12 @@ import {
 import { z } from 'zod'
 import {
   canDirectMoveNode,
+  EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY,
+  pointerEventHitsEditorHandle,
   resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
   resolveMoveActionNode,
+  shouldStartDirectMoveDrag,
   snapDirectRotationDelta,
 } from './direct-manipulation'
 
@@ -113,6 +116,91 @@ describe('canDirectMoveNode', () => {
     registerTestDefinition(kind, {})
 
     expect(canDirectMoveNode({ id: 'node_1', type: kind } as unknown as AnyNode)).toBe(false)
+  })
+})
+
+describe('shouldStartDirectMoveDrag', () => {
+  test('arms a plain drag for a kind that opts into direct dragging', () => {
+    expect(
+      shouldStartDirectMoveDrag({
+        allowPlainDrag: true,
+        commandModifier: false,
+        handleOwnsPointer: false,
+        nodeId: 'cabinet_existing',
+        selectedIds: [],
+      }),
+    ).toBe(true)
+  })
+
+  test('keeps modifier dragging limited to the sole selected node', () => {
+    expect(
+      shouldStartDirectMoveDrag({
+        allowPlainDrag: false,
+        commandModifier: true,
+        handleOwnsPointer: false,
+        nodeId: 'item_selected',
+        selectedIds: ['item_selected'],
+      }),
+    ).toBe(true)
+    expect(
+      shouldStartDirectMoveDrag({
+        allowPlainDrag: false,
+        commandModifier: true,
+        handleOwnsPointer: false,
+        nodeId: 'item_other',
+        selectedIds: ['item_selected'],
+      }),
+    ).toBe(false)
+  })
+
+  test('does not arm body dragging when a resize handle owns the pointer', () => {
+    expect(
+      shouldStartDirectMoveDrag({
+        allowPlainDrag: true,
+        commandModifier: false,
+        handleOwnsPointer: true,
+        nodeId: 'cabinet_selected',
+        selectedIds: ['cabinet_selected'],
+      }),
+    ).toBe(false)
+  })
+})
+
+describe('pointerEventHitsEditorHandle', () => {
+  test('keeps a visible resize handle from falling through to a nearer cabinet body', () => {
+    expect(
+      pointerEventHitsEditorHandle({
+        intersections: [
+          { object: { userData: {} } },
+          {
+            object: {
+              userData: { [EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY]: true },
+            },
+          },
+        ],
+      }),
+    ).toBe(true)
+  })
+
+  test('recognises a handle when it is the nearest R3F intersection', () => {
+    expect(
+      pointerEventHitsEditorHandle({
+        intersections: [
+          {
+            object: {
+              userData: { [EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY]: true },
+            },
+          },
+          { object: { userData: {} } },
+        ],
+      }),
+    ).toBe(true)
+  })
+
+  test('does not claim ordinary scene intersections', () => {
+    expect(pointerEventHitsEditorHandle({ intersections: [{ object: { userData: {} } }] })).toBe(
+      false,
+    )
   })
 })
 
@@ -271,5 +359,49 @@ describe('resolveMoveActionNode', () => {
         [child.id]: child,
       }),
     ).toBe(child)
+  })
+
+  test('routes a parent-frame child move to a rotatable assembly parent', () => {
+    const parentKind = 'move-action-rotatable-parent-kind-test'
+    const childKind = 'move-action-rotatable-child-kind-test'
+    registerTestDefinition(parentKind, {
+      capabilities: { rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] } },
+    })
+    registerTestDefinition(childKind, {
+      capabilities: {
+        movable: {
+          axes: ['x', 'z'],
+          gridSnap: true,
+          parentFrame: {
+            resolveParent: (node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) =>
+              (node.parentId ? nodes[node.parentId] : null) ?? null,
+            parentRotationY: () => 0,
+            localToPlan: (_parent: AnyNode, local: readonly [number, number, number]) => [
+              local[0],
+              local[1],
+              local[2],
+            ],
+            planToLocal: (_parent: AnyNode, planX: number, localY: number, planZ: number) => [
+              planX,
+              localY,
+              planZ,
+            ],
+          },
+        },
+      },
+    })
+    const parent = { id: 'move_action_rotatable_run', type: parentKind } as unknown as AnyNode
+    const child = {
+      id: 'move_action_rotatable_module',
+      type: childKind,
+      parentId: parent.id,
+    } as unknown as AnyNode
+
+    expect(
+      resolveMoveActionNode(child, {
+        [parent.id]: parent,
+        [child.id]: child,
+      }),
+    ).toBe(parent)
   })
 })

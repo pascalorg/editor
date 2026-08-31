@@ -969,7 +969,14 @@ export function initializeLeanToExtensionSync(sceneApi: SceneApi) {
       if (nodes[id]?.type === 'lean-to-extension') leanToIds.add(id)
     }
     const affected = affectedLeanToIds(nodes, previous, changedIds, leanToIds)
-    if (affected.size > 0) reconcile(affected)
+    if (affected.size > 0) {
+      // A scene import can hydrate an extension before its managed roof,
+      // segment, and gutter children. Invalidate the cached signature for
+      // every dependent change so that a later child batch cannot skip the
+      // repair of persisted layout metadata.
+      for (const id of affected) signatures.delete(id)
+      reconcile(affected)
+    }
   })
 }
 

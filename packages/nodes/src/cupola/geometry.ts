@@ -11,6 +11,7 @@ export const CUPOLA_MATERIAL_INDEX = {
   base: 0,
   body: 1,
   roof: 2,
+  louvers: 3,
 } as const
 
 /**
@@ -96,7 +97,7 @@ export function buildCupolaGeometry(node: CupolaNode): THREE.BufferGeometry {
   geo.addGroup(0, baseEnd, CUPOLA_MATERIAL_INDEX.base)
   geo.addGroup(baseEnd, bodyEnd - baseEnd, CUPOLA_MATERIAL_INDEX.body)
   geo.addGroup(bodyEnd, corniceEnd - bodyEnd, CUPOLA_MATERIAL_INDEX.roof)
-  geo.addGroup(corniceEnd, louversEnd - corniceEnd, CUPOLA_MATERIAL_INDEX.body)
+  geo.addGroup(corniceEnd, louversEnd - corniceEnd, CUPOLA_MATERIAL_INDEX.louvers)
   geo.addGroup(louversEnd, p.length / 3 - louversEnd, CUPOLA_MATERIAL_INDEX.roof)
   copyUvToSecondaryChannel(geo)
   geo.computeBoundingSphere()

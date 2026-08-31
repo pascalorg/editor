@@ -3,6 +3,7 @@
 import {
   type AnyNodeId,
   acquireSceneHistoryPause,
+  constrainWallCurveOffsetToAvoidIntersections,
   emitter,
   type GridEvent,
   getClampedWallCurveOffset,
@@ -10,6 +11,7 @@ import {
   getWallChordFrame,
   getWallMidpointHandlePoint,
   normalizeWallCurveOffset,
+  useLiveNodeOverrides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -56,6 +58,10 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
     const originalCurveOffset = originalCurveOffsetRef.current
     const chord = getWallChordFrame(node)
     const maxCurveOffset = getMaxWallCurveOffset(node)
+    const levelWalls = Object.values(useScene.getState().nodes).filter(
+      (candidate): candidate is WallNode =>
+        candidate.type === 'wall' && candidate.parentId === node.parentId,
+    )
 
     let releaseHistory = acquireSceneHistoryPause(useScene)
     let wasFinalized = false
@@ -72,16 +78,13 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
       }
       const handlePoint = getWallMidpointHandlePoint(nextNode)
       setCursorLocalPos([handlePoint.x, 0, handlePoint.y])
-      useScene.getState().updateNode(nodeId, { curveOffset })
+      useLiveNodeOverrides.getState().set(nodeId as AnyNodeId, { curveOffset })
       useScene.getState().markDirty(nodeId as AnyNodeId)
     }
 
     const restoreOriginal = () => {
-      if (previewOffsetRef.current === originalCurveOffset) {
-        return
-      }
       previewOffsetRef.current = originalCurveOffset
-      useScene.getState().updateNode(nodeId, { curveOffset: originalCurveOffset })
+      useLiveNodeOverrides.getState().clear(nodeId as AnyNodeId)
       useScene.getState().markDirty(nodeId as AnyNodeId)
     }
 
@@ -102,9 +105,14 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
         (localZ - chord.midpoint.y) * chord.normal.y
       )
       const snappedOffset = snapScalarToGrid(offsetFromMidpoint, snapStep)
-      const nextCurveOffset = normalizeWallCurveOffset(
+      const requestedCurveOffset = normalizeWallCurveOffset(
         node,
         Math.max(-maxCurveOffset, Math.min(maxCurveOffset, snappedOffset)),
+      )
+      const nextCurveOffset = constrainWallCurveOffsetToAvoidIntersections(
+        node,
+        requestedCurveOffset,
+        levelWalls,
       )
 
       if (
@@ -127,13 +135,10 @@ export const CurveWallTool: React.FC<{ node: WallNode }> = ({ node }) => {
 
       const curveOffset = previewOffsetRef.current
       wasFinalized = true
+      useLiveNodeOverrides.getState().clear(nodeId as AnyNodeId)
+      useScene.getState().markDirty(nodeId as AnyNodeId)
 
       if (curveOffset !== originalCurveOffset) {
-        // Restore original baseline while paused so the next resume+update
-        // registers as a single tracked change (undo reverts to original).
-        useScene.getState().updateNode(nodeId, { curveOffset: originalCurveOffset })
-        useScene.getState().markDirty(nodeId as AnyNodeId)
-
         releaseHistory()
         useScene.getState().updateNode(nodeId, { curveOffset })
         useScene.getState().markDirty(nodeId as AnyNodeId)
