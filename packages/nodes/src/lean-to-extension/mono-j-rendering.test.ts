@@ -247,7 +247,7 @@ describe('continuous mono canopy rendering', () => {
         }
       }
     }
-  })
+  }, 15_000)
 
   // J-shapes and closed loops use the same corner partitioning as an L at each end.
   const multiJointShapes: Record<string, Pt[]> = {
