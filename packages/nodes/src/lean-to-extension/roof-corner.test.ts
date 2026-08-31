@@ -1241,6 +1241,77 @@ describe('lean-to corner joint', () => {
     for (const mesh of meshes) mesh.geometry.dispose()
   })
 
+  test('keeps the exported curved-wall corner gutter at one elevation', () => {
+    const curvedWall = WallNode.parse({
+      id: 'wall_exported_curved_corner',
+      parentId: 'level_exported_curved_corner',
+      start: [8, 8.5],
+      end: [0.5, 3],
+      curveOffset: 2,
+    })
+    const straightWall = WallNode.parse({
+      id: 'wall_exported_straight_corner',
+      parentId: 'level_exported_curved_corner',
+      start: [0.5, 3],
+      end: [-5.5, 7],
+    })
+    const curved = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(
+          curvedWall,
+          getWallCurveLength(curvedWall) / 2,
+          'front',
+        )!,
+        curvedWall,
+      ),
+      id: 'leanto_exported_curved_corner',
+    }
+    const straight = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(
+          straightWall,
+          getWallCurveLength(straightWall) / 2,
+          'front',
+        )!,
+        straightWall,
+      ),
+      id: 'leanto_exported_straight_corner',
+    }
+    const nodes = Object.fromEntries(
+      [curvedWall, straightWall, curved, straight].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    const curvedAssembly = createLeanToAssembly(curved, undefined, nodes)
+    const straightAssembly = createLeanToAssembly(straight, undefined, nodes)
+    const curvedGutter = gutterWorldGeometry(
+      curvedWall,
+      curved,
+      curvedAssembly,
+      computeGutterMitres(curvedAssembly.gutter, curvedAssembly.segment, [
+        { gutter: straightAssembly.gutter, segment: straightAssembly.segment },
+      ]),
+    )
+    const straightGutter = gutterWorldGeometry(
+      straightWall,
+      straight,
+      straightAssembly,
+      computeGutterMitres(straightAssembly.gutter, straightAssembly.segment, [
+        { gutter: curvedAssembly.gutter, segment: curvedAssembly.segment },
+      ]),
+    )
+    const curvedMitre = computeGutterMitres(curvedAssembly.gutter, curvedAssembly.segment, [
+      { gutter: straightAssembly.gutter, segment: straightAssembly.segment },
+    ])
+    const straightMitre = computeGutterMitres(straightAssembly.gutter, straightAssembly.segment, [
+      { gutter: curvedAssembly.gutter, segment: curvedAssembly.segment },
+    ])
+    expect(curvedMitre.right).toBe(0)
+    expect(straightMitre.left).toBe(0)
+    expect(curvedGutter.getAttribute('position').count).toBeGreaterThan(0)
+    expect(straightGutter.getAttribute('position').count).toBeGreaterThan(0)
+    curvedGutter.dispose()
+    straightGutter.dispose()
+  })
+
   test('resolves a reciprocal 60 degree corner with its true gutter mitre', () => {
     const { wallA, wallB, leanToA, leanToB, nodes } = angledCornerFixture(60)
 

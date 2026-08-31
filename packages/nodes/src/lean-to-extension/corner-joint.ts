@@ -1597,6 +1597,33 @@ export function resolveLeanToCornerJoints(
         neighborSide,
         candidateRoofExtension,
       )
+      // A curved wall can meet a straight wall at a roof seam while their
+      // low eave curves never intersect. Do not apply a nominal angle miter
+      // in that case: skewing both gutter ends creates a floating, uneven
+      // joint instead of a valid shared edge.
+      const gutterIntersection =
+        gutterAway && candidateGutterAway
+          ? extensionToRunIntersection(
+                wall,
+                cornerLeanTo,
+                side,
+                layout.roofCenterX + sideSign * (layout.roofWidth / 2),
+                ownEdges.front,
+                candidateWall,
+                cornerCandidate,
+                candidateEdges.front,
+              ) !== null ||
+            extensionToRunIntersection(
+              candidateWall,
+              cornerCandidate,
+              neighborSide,
+              candidateLayout.roofCenterX + candidateSideSign * (candidateLayout.roofWidth / 2),
+              candidateEdges.front,
+              wall,
+              cornerLeanTo,
+              ownEdges.front,
+            ) !== null
+          : false
       const gutterInteriorAngle =
         gutterAway && candidateGutterAway
           ? Math.acos(
@@ -1625,7 +1652,9 @@ export function resolveLeanToCornerJoints(
             ? resolveFramingRetainedSide(resolvedSeam, resolvedRoofPieces)
             : undefined,
         beamExtension,
-        gutterMitre: (kind === 'concave' ? -1 : 1) * ((Math.PI - gutterInteriorAngle) / 2),
+        gutterMitre: gutterIntersection
+          ? (kind === 'concave' ? -1 : 1) * ((Math.PI - gutterInteriorAngle) / 2)
+          : 0,
         sharedPostOwner: String(cornerLeanTo.id) < String(candidate.id),
         sharedPostPosition: [
           (side === 'left' ? -layout.span / 2 : layout.span / 2) +
