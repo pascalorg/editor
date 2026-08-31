@@ -121,6 +121,7 @@ export function PreviewToolbar() {
 }
 
 export function FitSceneButton({ onFit }: { onFit: () => void }) {
+  const t = useTranslations()
   return (
     <button
       className="flex h-8 items-center gap-1.5 rounded-xl border border-white/10 bg-black/60 px-3 font-medium text-white/85 text-xs shadow-lg backdrop-blur-md transition-colors hover:bg-black/70 hover:text-white"
@@ -129,7 +130,7 @@ export function FitSceneButton({ onFit }: { onFit: () => void }) {
       type="button"
     >
       <Maximize className="size-3.5" />
-      <span className="hidden sm:inline">Fit</span>
+      <span className="hidden sm:inline">{t('editor.fitScene')}</span>
     </button>
   )
 }
