@@ -526,50 +526,6 @@ export type LeanToRoofSegmentLayoutPatch = Pick<
   | 'metadata'
 >
 
-function joinedNeighborLeanToIds(
-  leanTo: LeanToExtensionNode,
-  nodes?: Record<string, AnyNode>,
-): string[] {
-  const wall =
-    leanTo.parentId && nodes?.[leanTo.parentId]?.type === 'wall'
-      ? (nodes[leanTo.parentId] as WallNode)
-      : undefined
-  const cornerJoints = resolveLeanToCornerJoints(leanTo, wall, nodes)
-  const linearCanopyJoints = Object.entries(resolveFreestandingCanopyJoints(leanTo, nodes)).filter(
-    ([side, joint]) => joint?.kind === 'linear' && !cornerJoints[side as LeanToCornerSide],
-  )
-  const ids = [
-    ...Object.values(cornerJoints).flatMap((joint) =>
-      joint?.neighborId ? [joint.neighborId] : [],
-    ),
-    ...linearCanopyJoints.flatMap(([, joint]) => (joint?.neighborId ? [joint.neighborId] : [])),
-  ]
-  return [...new Set(ids)]
-}
-
-/**
- * Number of freestanding runs in the connected chain of joined lean-tos that
- * `leanTo` belongs to (itself included). A plain run is 1, a single-corner L is
- * 2, a J is 3, a closed square is 4. Corner mitering is only applied to a pure
- * L (chain of 2); longer chains render as plain overlapping runs.
- */
-function joinedRunChainSize(leanTo: LeanToExtensionNode, nodes?: Record<string, AnyNode>): number {
-  if (!nodes) return 1
-  const seen = new Set<string>([leanTo.id])
-  const queue: LeanToExtensionNode[] = [leanTo]
-  while (queue.length > 0) {
-    const current = queue.shift()!
-    for (const id of joinedNeighborLeanToIds(current, nodes)) {
-      if (seen.has(id)) continue
-      const neighbor = nodes[id]
-      if (neighbor?.type !== 'lean-to-extension') continue
-      seen.add(id)
-      queue.push(neighbor)
-    }
-  }
-  return seen.size
-}
-
 export function leanToRoofSegmentLayoutPatch(
   leanTo: LeanToExtensionNode,
   nodes?: Record<string, AnyNode>,
@@ -640,15 +596,8 @@ export function leanToRoofSegmentLayoutPatch(
       ([side, joint]) => joint?.kind === 'linear' && !cornerJoints[side as LeanToCornerSide],
     ),
   ) as Partial<Record<LeanToCornerSide, FreestandingCanopyJoint>>
-  // For straight freestanding mono runs, corner mitering is only applied to a
-  // single-corner L (a joined chain of two runs). J-shapes, longer chains, and
-  // closed loops render as plain overlapping runs — no footprint shaping, no
-  // joint step closures, no corner extension. Curved and wall-attached canopies
-  // keep their multi-corner mitering.
-  const isStraightFreestandingMono = leanTo.hostKind === 'freestanding' && !isCurvedLeanTo(leanTo)
-  const miterAcrossCorner = !isStraightFreestandingMono || joinedRunChainSize(leanTo, nodes) <= 2
   const segmentExtension = (joint: LeanToCornerJoint | undefined) =>
-    !miterAcrossCorner || (leanTo.hostKind === 'freestanding' && joint?.kind === 'concave')
+    leanTo.hostKind === 'freestanding' && joint?.kind === 'concave'
       ? 0
       : (joint?.roofExtension ?? 0)
   const leftCornerExtension = segmentExtension(cornerJoints.left)
@@ -726,16 +675,14 @@ export function leanToRoofSegmentLayoutPatch(
     shedSideInfillSpan: layout.span,
     shedSideInfillMinX: -layout.span / 2 - sideMemberFaceInset - roofCenterX,
     shedSideInfillMaxX: layout.span / 2 + sideMemberFaceInset - roofCenterX,
-    shedFootprintPieces: hasShapedCorner && miterAcrossCorner ? roofPieces : undefined,
-    shedOpenEndSides: miterAcrossCorner && jointSides.length > 0 ? jointSides : undefined,
+    shedFootprintPieces: hasShapedCorner ? roofPieces : undefined,
+    shedOpenEndSides: jointSides.length > 0 ? jointSides : undefined,
     managedByParent: true,
     wallShell: 'omit',
     shedInsetEndPanels: true,
     metadata: managedMetadata(leanTo, 'roof-segment', {
       [ROOF_PLANE_KEY]: plane,
-      ...(miterAcrossCorner && jointNeighborIds.length > 0
-        ? { [SHED_JOINT_NEIGHBORS_KEY]: jointNeighborIds }
-        : {}),
+      ...(jointNeighborIds.length > 0 ? { [SHED_JOINT_NEIGHBORS_KEY]: jointNeighborIds } : {}),
     }),
     trim: {
       left: linearCanopyJoints.left ? leanTo.leftOverhang : 0,

@@ -33,7 +33,7 @@ const WALL_CONNECTION_OVERLAP = 0.02
 const WALL_CONNECTION_TRIM = 0.002
 const PLAN_TOLERANCE = 1e-6
 const MIN_NON_COLLINEAR_ANGLE = 1e-4
-const LINEAR_DIRECTION_TOLERANCE = 1e-3
+const LINEAR_DIRECTION_TOLERANCE = 1e-6
 const LINEAR_JOIN_PLAN_TOLERANCE = 0.03
 const FREESTANDING_JOINT_WALL_THICKNESS = 0.1
 const LINEAR_JOIN_HEIGHT_TOLERANCE = 0.02
@@ -1219,6 +1219,7 @@ function resolveFreestandingRoofPartition(
   candidateWall: WallNode,
   candidateSide: LeanToCornerSide,
   candidateExtension: number,
+  trimConcaveCross: boolean,
 ): {
   basePieces: LeanToPlanPoint[][]
   additionPieces?: LeanToPlanPoint[][]
@@ -1254,10 +1255,15 @@ function resolveFreestandingRoofPartition(
   const partition = (polygon: LeanToPlanPoint[]): LeanToPlanPoint[][] => {
     const overlap = intersectConvexPolygons(polygon, candidatePolygon)
     const exclusive = subtractConvexPolygon(polygon, candidatePolygon)
-    const retainedOverlap = clipToRetainedRoofSide(overlap, heightDelta, Math.sign(probeDelta))
-    return [...exclusive, retainedOverlap].filter(
+    const retainedOverlap = clipToRetainedRoofSide(
+      overlap,
+      heightDelta,
+      (trimConcaveCross ? -1 : 1) * Math.sign(probeDelta),
+    )
+    const pieces = [...exclusive, retainedOverlap].filter(
       (piece) => piece.length >= 3 && Math.abs(polygonSignedArea(piece)) > PLAN_TOLERANCE,
     )
+    return trimConcaveCross ? edgeConnectedPlanPolygonComponent(pieces, retainedOverlap) : pieces
   }
 
   const basePieces = partition(roofBasePolygon(leanTo))
@@ -1497,6 +1503,7 @@ export function resolveLeanToCornerJoints(
               candidateRoofExtension,
             )
           : null
+      const trimFreestandingConcaveCross = kind === 'concave'
       const freestandingRoof =
         ownFrame.kind === 'freestanding'
           ? resolveFreestandingRoofPartition(
@@ -1509,6 +1516,7 @@ export function resolveLeanToCornerJoints(
               candidateWall,
               neighborSide,
               candidateRoofExtension,
+              trimFreestandingConcaveCross,
             )
           : null
       const curvedStraightConcaveRoof =

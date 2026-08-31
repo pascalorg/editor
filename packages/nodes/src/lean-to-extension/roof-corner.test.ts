@@ -432,7 +432,7 @@ describe('lean-to corner joint', () => {
     }
   })
 
-  test('partitions mirrored freestanding mono canopy V corners without gaps or overlaps', () => {
+  test('keeps convex canopy coverage and trims the concave corner cross', () => {
     for (const turnZ of [-4, 4]) {
       const first = resolveLeanToFreestandingRunPlacement('level_free_v', [0, 0], [4, 0])!
       const second = resolveLeanToFreestandingRunPlacement('level_free_v', [4, 0], [4, turnZ])!
@@ -470,7 +470,7 @@ describe('lean-to corner joint', () => {
         raycaster.ray.origin.set(x, 10, z)
         return baselineMeshes.some((mesh) => raycaster.intersectObject(mesh, false).length > 0)
       }
-      let gaps = 0
+      let trimmedBaselineSamples = 0
       const overlaps: Array<{ x: number; z: number; delta: number }> = []
       for (let x = bounds.min.x + 0.031; x < bounds.max.x; x += 0.08) {
         for (let z = bounds.min.z + 0.047; z < bounds.max.z; z += 0.08) {
@@ -486,7 +486,7 @@ describe('lean-to corner joint', () => {
           const hits = roofMeshes.flatMap((mesh) =>
             raycaster.intersectObject(mesh, false).slice(0, 1),
           )
-          if (hits.length === 0) gaps++
+          if (hits.length === 0) trimmedBaselineSamples++
           const delta =
             hits.length > 1
               ? Math.max(...hits.map((hit) => hit.point.y)) -
@@ -499,11 +499,9 @@ describe('lean-to corner joint', () => {
       expect(roofMeshes.map((mesh) => countTopMaterialNonUpwardTriangles(mesh.geometry))).toEqual([
         0, 0,
       ])
-      expect({ turnZ, gaps, overlaps }).toEqual({
-        turnZ,
-        gaps: 0,
-        overlaps: [],
-      })
+      expect(overlaps).toEqual([])
+      if (turnZ < 0) expect(trimmedBaselineSamples).toBe(0)
+      else expect(trimmedBaselineSamples).toBeGreaterThan(0)
       for (const mesh of [...roofMeshes, ...baselineMeshes]) mesh.geometry.dispose()
     }
   })
