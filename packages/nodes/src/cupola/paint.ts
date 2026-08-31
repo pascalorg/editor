@@ -8,6 +8,7 @@ type LegacyCupola = AnyNode & { material?: MaterialSchema; materialPreset?: stri
 export function resolveCupolaMaterialRole(materialIndex: number | null): CupolaMaterialRole {
   if (materialIndex === CUPOLA_MATERIAL_INDEX.body) return 'body'
   if (materialIndex === CUPOLA_MATERIAL_INDEX.roof) return 'roof'
+  if (materialIndex === CUPOLA_MATERIAL_INDEX.louvers) return 'louvers'
   return 'base'
 }
 

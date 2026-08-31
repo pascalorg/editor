@@ -129,7 +129,7 @@ export const eyebrowVentDefinition: NodeDefinition<typeof EyebrowVentNode> = {
   capabilities: {
     slots: () => [
       { slotId: 'hood', label: 'Hood', default: 'library:preset-softwhite' },
-      { slotId: 'front', label: 'Front', default: 'library:preset-softwhite' },
+      { slotId: 'front', label: 'Louvers', default: 'library:preset-softwhite' },
     ],
     selectable: { hitVolume: 'bbox' },
     duplicable: true,

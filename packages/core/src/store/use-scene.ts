@@ -417,6 +417,19 @@ function migrateRoleMaterialSlots(
   return changed ? { ...next, slots } : node
 }
 
+function migrateRenamedSlot(node: Record<string, any>, previousId: string, nextId: string) {
+  if (!node.slots || node.slots[previousId] === undefined) return node
+  const slots = { ...node.slots }
+  if (slots[nextId] === undefined) slots[nextId] = slots[previousId]
+  delete slots[previousId]
+  return { ...node, slots }
+}
+
+function migrateCupolaLouverSlot(node: Record<string, any>) {
+  if (!node.slots || node.slots.louvers !== undefined || node.slots.body === undefined) return node
+  return { ...node, slots: { ...node.slots, louvers: node.slots.body } }
+}
+
 // Stair carries per-role legacy fields (`treadMaterial*` / `sideMaterial*` /
 // `railingMaterial*`) plus a catch-all. Map each to its slot via the same
 // fallback chain the renderer uses (`getEffectiveStairSurfaceMaterial`):
@@ -908,7 +921,12 @@ function migrateNodes(nodes: Record<string, any>): {
       )
     }
 
-    if (node.type === 'gutter' || node.type === 'downspout') {
+    if (node.type === 'gutter') {
+      patchedNodes[id] = migrateRenamedSlot(patchedNodes[id], 'surface', 'gutter')
+      patchedNodes[id] = migrateSingleMaterialSlots(patchedNodes[id], ['gutter'], mintedMaterials)
+    }
+
+    if (node.type === 'downspout') {
       patchedNodes[id] = migrateSingleMaterialSlots(patchedNodes[id], ['surface'], mintedMaterials)
     }
 
@@ -921,9 +939,10 @@ function migrateNodes(nodes: Record<string, any>): {
     }
 
     if (node.type === 'cupola') {
+      patchedNodes[id] = migrateCupolaLouverSlot(patchedNodes[id])
       patchedNodes[id] = migrateRoleMaterialSlots(
         patchedNodes[id],
-        ['base', 'body', 'roof'],
+        ['base', 'body', 'roof', 'louvers'],
         mintedMaterials,
       )
     }
