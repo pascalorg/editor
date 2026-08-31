@@ -3,7 +3,11 @@ import { BuildingNode, CeilingNode, LevelNode, SlabNode, WallNode, ZoneNode } fr
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import { resolveCeilingHeight } from '../services/level-height'
 import { getCeilingClampBound } from '../services/storey'
-import { runWithSceneCommitNodeIds, type SceneCommit, subscribeSceneCommits } from '../store/history-control'
+import {
+  runWithSceneCommitNodeIds,
+  type SceneCommit,
+  subscribeSceneCommits,
+} from '../store/history-control'
 import useScene, { clearSceneHistory } from '../store/use-scene'
 import {
   detectSpacesForLevel,
