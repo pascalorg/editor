@@ -136,7 +136,7 @@ export function LoadBuildDialog({ pending, onCancel, onConfirm }: Props) {
             <div className="space-y-2 rounded-md border border-red-200 bg-red-50 p-3">
               <div className="flex items-center gap-2 font-medium text-red-800 text-sm">
                 <XCircle className="size-4" />
-                {t('loadBuild.errors', { count: errors.length })}
+                {t(errors.length === 1 ? 'loadBuild.errors' : 'loadBuild.errors_plural', { count: errors.length })}
               </div>
               <ul className="space-y-1 text-red-700 text-xs">
                 {errors.map((e) => (
@@ -191,7 +191,7 @@ export function LoadBuildDialog({ pending, onCancel, onConfirm }: Props) {
             <div className="space-y-2 rounded-md border border-amber-200 bg-amber-50 p-3">
               <div className="flex items-center gap-2 font-medium text-amber-800 text-sm">
                 <AlertTriangle className="size-4" />
-                {t('loadBuild.warnings', { count: warnings.length })}
+                {t(warnings.length === 1 ? 'loadBuild.warnings' : 'loadBuild.warnings_plural', { count: warnings.length })}
               </div>
               <ul className="space-y-1 text-amber-700 text-xs">
                 {visibleWarnings.map((w, i) => (

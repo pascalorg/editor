@@ -393,7 +393,7 @@ export function SettingsPanel({
               {projectIdCopyState === 'copied'
                 ? t('settings.copied')
                 : projectIdCopyState === 'error'
-                  ? t('settings.tryAgain')
+                  ? t('editor.tryAgain')
                   : t('common.copy')}
             </Button>
           </div>
