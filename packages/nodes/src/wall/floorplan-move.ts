@@ -105,7 +105,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
   const session: FloorplanMoveTargetSession = {
     affectedIds: [wallId, ...linkedOriginals.map((w) => w.id as AnyNodeId)],
 
-    apply({ planPoint, modifiers }) {
+    apply({ planPoint }) {
       if (!rawAnchor) {
         rawAnchor = [planPoint[0], planPoint[1]]
         return
@@ -119,19 +119,19 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       // the original centre + raw cursor delta onto the axis, snap the
       // absolute projection to a grid multiple, then translate the wall
       // by `axis * perpDelta`. Matches `MoveWallTool` so 2D and 3D drag
-      // produce identical wall topology. Shift bypasses snap.
+      // produce identical wall topology.
       let dx: number
       let dz: number
       if (moveAxis) {
         const originalProj = originalCenter[0] * moveAxis[0] + originalCenter[1] * moveAxis[1]
         const rawProj = originalProj + rawDx * moveAxis[0] + rawDz * moveAxis[1]
-        const snappedProj = modifiers.shiftKey ? rawProj : snapScalarToGrid(rawProj, step)
+        const snappedProj = snapScalarToGrid(rawProj, step)
         const perpDelta = snappedProj - originalProj
         dx = moveAxis[0] * perpDelta
         dz = moveAxis[1] * perpDelta
       } else {
-        dx = modifiers.shiftKey ? rawDx : snapScalarToGrid(rawDx, step)
-        dz = modifiers.shiftKey ? rawDz : snapScalarToGrid(rawDz, step)
+        dx = snapScalarToGrid(rawDx, step)
+        dz = snapScalarToGrid(rawDz, step)
       }
 
       if (dx === lastDelta[0] && dz === lastDelta[1]) return
@@ -187,13 +187,15 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       // until the user commits. Batched into a single zustand
       // notification — otherwise each per-wall `.set` would re-render
       // every override subscriber once per linked wall per tick.
-      useLiveNodeOverrides.getState().setMany([
-        [wallId, { start: nextStart, end: nextEnd }],
-        ...linkedUpdates.map(
-          (upd) =>
-            [upd.id, { start: upd.start, end: upd.end }] as [string, Record<string, unknown>],
-        ),
-      ])
+      useLiveNodeOverrides
+        .getState()
+        .setMany([
+          [wallId, { start: nextStart, end: nextEnd }],
+          ...linkedUpdates.map(
+            (upd) =>
+              [upd.id, { start: upd.start, end: upd.end }] as [string, Record<string, unknown>],
+          ),
+        ])
 
       // Surface bridge-wall previews so the floor-plan SVG layer can
       // render dashed outlines of what `commit()` will insert. Mirrors
@@ -234,7 +236,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
 
     canCommit() {
       const live = useScene.getState().nodes[wallId] as WallNode | undefined
-      if (!live || live.type !== 'wall') return false
+      if (live?.type !== 'wall') return false
       const [dx, dz] = lastDelta
       return dx !== 0 || dz !== 0
     },
@@ -242,7 +244,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
     commit() {
       const sceneState = useScene.getState()
       const liveWall = sceneState.nodes[wallId] as WallNode | undefined
-      if (!liveWall || liveWall.type !== 'wall') {
+      if (liveWall?.type !== 'wall') {
         // Bail without leaving stale overrides behind.
         const overrides = useLiveNodeOverrides.getState()
         overrides.clear(wallId)

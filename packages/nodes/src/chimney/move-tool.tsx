@@ -6,16 +6,29 @@ import {
   ChimneyNode as ChimneyNodeSchema,
   emitter,
   type RoofEvent,
-  type RoofNode,
   type RoofSegmentNode,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  consumePlacementDragRelease,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
+import {
+  createRelativeRoofDrag,
+  type RelativeRoofDragTarget,
+  snapRelativeRoofDragTarget,
+} from '../shared/relative-roof-drag'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfaceNodePlacementGuides,
+  snapRoofSurfaceNodeTarget,
+} from '../shared/roof-surface-placement-guides'
 import ChimneyPreview from './preview'
 
 const tmpMatrix = new THREE.Matrix4()
@@ -68,6 +81,25 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
 
   useEffect(() => {
     if (!activeBuildingId) return
+    useScene.temporal.getState().pause()
+
+    const original = {
+      position: [...node.position] as [number, number, number],
+      rotation: node.rotation ?? 0,
+      roofSegmentId: node.roofSegmentId,
+      parentId: node.parentId,
+      metadata: node.metadata,
+    }
+    const meta =
+      node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
+        ? (node.metadata as Record<string, unknown>)
+        : {}
+    const isNew = !!meta.isNew
+
+    if (node.id) {
+      const chimneyObj = sceneRegistry.nodes.get(node.id)
+      if (chimneyObj) chimneyObj.visible = false
+    }
 
     const computeSegmentXform = (segmentId: string): SegmentTransform | null => {
       const buildingObj = sceneRegistry.nodes.get(activeBuildingId as AnyNodeId)
@@ -84,48 +116,70 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
       }
     }
 
-    const updatePreview = (event: RoofEvent) => {
-      const wx = event.position[0]
-      const wy = event.position[1]
-      const wz = event.position[2]
+    let lastTarget: RelativeRoofDragTarget | null = null
+    let committed = false
+    const roofDrag = createRelativeRoofDrag({
+      position: original.position,
+      roofSegmentId: original.roofSegmentId,
+    })
 
-      const sx = Math.round(wx * 20) / 20
-      const sz = Math.round(wz * 20) / 20
+    const resolveSnappedTarget = (event: RoofEvent): RelativeRoofDragTarget | null => {
+      const rawTarget = roofDrag.resolve(event)
+      if (!rawTarget) return null
+      return snapRoofSurfaceNodeTarget({
+        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+        node,
+        bypass: event.nativeEvent?.shiftKey === true,
+      })
+    }
+
+    const clearTarget = () => {
+      lastTarget = null
+      setSegmentXform(null)
+      setHitLocal(null)
+      setPreviewSegment(null)
+      clearRoofSurfacePlacementGuides()
+    }
+
+    const updatePreview = (event: RoofEvent) => {
+      const target = resolveSnappedTarget(event)
+      if (!target) return clearTarget()
+
+      const sx = Math.round(target.localX * 20) / 20
+      const sz = Math.round(target.localZ * 20) / 20
       const prev = lastSnapRef.current
-      if (!prev || prev[0] !== sx || prev[1] !== sz) {
+      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
         triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
 
-      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
-      if (!hit) return
-
-      const xform = computeSegmentXform(hit.segment.id)
-      if (!xform) return
+      const xform = computeSegmentXform(target.segment.id)
+      if (!xform) return clearTarget()
+      lastTarget = target
       setSegmentXform(xform)
-      setHitLocal([hit.localX, hit.localY, hit.localZ])
-      setPreviewSegment(hit.segment)
+      setHitLocal([target.localX, target.localY, target.localZ])
+      setPreviewSegment(target.segment)
+      publishRoofSurfaceNodePlacementGuides({
+        roof: event.node,
+        segment: target.segment,
+        center: [target.localX, target.localY, target.localZ],
+        node,
+      })
       event.stopPropagation()
     }
 
     const onClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
-      if (!hit) return
+      if (committed) return
+      const target = lastTarget ?? resolveSnappedTarget(event)
+      if (!target) return
+      committed = true
       const state = useScene.getState()
 
       // Strip the `isNew` flag — only used to mark a duplicate clone
       // that hasn't been committed yet.
-      const meta =
-        node.metadata && typeof node.metadata === 'object' && !Array.isArray(node.metadata)
-          ? (node.metadata as Record<string, unknown>)
-          : {}
       const { isNew, ...restMeta } = meta as { isNew?: boolean }
       const cleanedMeta = Object.keys(restMeta).length > 0 ? restMeta : undefined
+      const targetSegmentId = target.segment.id as AnyNodeId
 
       // Duplicate (clone with no committed id yet) → create a fresh
       // chimney parented to the hit segment. Plain move (existing id,
@@ -135,38 +189,136 @@ const MoveChimneyTool = ({ node }: { node: ChimneyNode }) => {
         const committed = ChimneyNodeSchema.parse({
           ...node,
           id: undefined as never,
-          roofSegmentId: hit.segment.id,
-          position: [hit.localX, hit.localY, hit.localZ],
+          roofSegmentId: target.segment.id,
+          parentId: target.segment.id,
+          position: [target.localX, target.localY, target.localZ],
+          visible: true,
           metadata: cleanedMeta,
         })
-        state.createNode(committed, hit.segment.id as AnyNodeId)
-        state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+        useScene.temporal.getState().resume()
+        state.applyNodeChanges({
+          delete: node.id ? [node.id as AnyNodeId] : [],
+          create: [{ node: committed, parentId: targetSegmentId }],
+        })
+        state.dirtyNodes.add(targetSegmentId)
         setSelection({ selectedIds: [committed.id] })
+        useScene.temporal.getState().pause()
       } else {
-        const prevSegmentId = node.roofSegmentId as AnyNodeId | undefined
+        const prevSegmentId = original.roofSegmentId as AnyNodeId | undefined
+        const reparenting = Boolean(prevSegmentId && prevSegmentId !== targetSegmentId)
+        // Resume BEFORE any scene edits so the reparent (both segments'
+        // children arrays + the chimney's own host/position update) lands as
+        // one tracked transaction. Otherwise undo reverts the chimney but
+        // leaves the children arrays inconsistent with its parentId.
+        useScene.temporal.getState().resume()
+        if (reparenting) {
+          const oldSeg = state.nodes[prevSegmentId!] as RoofSegmentNode | undefined
+          if (oldSeg) {
+            state.updateNode(prevSegmentId!, {
+              children: (oldSeg.children ?? []).filter((id) => id !== node.id),
+            })
+          }
+          const newSeg = state.nodes[targetSegmentId] as RoofSegmentNode | undefined
+          if (newSeg && !(newSeg.children ?? []).includes(node.id)) {
+            state.updateNode(targetSegmentId, {
+              children: [...(newSeg.children ?? []), node.id],
+            })
+          }
+          state.dirtyNodes.add(prevSegmentId!)
+        }
         state.updateNode(node.id as AnyNodeId, {
-          roofSegmentId: hit.segment.id,
-          parentId: hit.segment.id,
-          position: [hit.localX, hit.localY, hit.localZ],
+          roofSegmentId: target.segment.id,
+          parentId: target.segment.id,
+          position: [target.localX, target.localY, target.localZ],
+          rotation: original.rotation,
+          visible: true,
           metadata: cleanedMeta,
         })
-        if (prevSegmentId) state.dirtyNodes.add(prevSegmentId)
-        state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+        useScene.temporal.getState().pause()
+        state.dirtyNodes.add(targetSegmentId)
+        state.dirtyNodes.add(node.id as AnyNodeId)
         setSelection({ selectedIds: [node.id] })
       }
+      const obj = node.id && !isNew ? sceneRegistry.nodes.get(node.id) : null
+      if (obj) obj.visible = true
+      clearRoofSurfacePlacementGuides()
       setMovingNode(null)
       triggerSFX('sfx:item-place')
       event.stopPropagation()
     }
 
+    const onCancel = () => {
+      if (isNew) {
+        if (node.id) {
+          const parentId = original.roofSegmentId as AnyNodeId | undefined
+          if (parentId) {
+            const parent = useScene.getState().nodes[parentId] as RoofSegmentNode | undefined
+            if (parent) {
+              useScene.getState().updateNode(parentId, {
+                children: (parent.children ?? []).filter((id) => id !== node.id),
+              })
+            }
+          }
+          useScene.getState().deleteNode(node.id as AnyNodeId)
+        }
+        useScene.temporal.getState().resume()
+        markToolCancelConsumed()
+        clearRoofSurfacePlacementGuides()
+        setMovingNode(null)
+        return
+      }
+
+      if (node.id) {
+        useScene.getState().updateNode(node.id as AnyNodeId, {
+          position: original.position,
+          rotation: original.rotation,
+          roofSegmentId: original.roofSegmentId as AnyNodeId | undefined,
+          parentId: original.parentId as AnyNodeId | undefined,
+          metadata: original.metadata,
+        })
+        if (original.roofSegmentId) {
+          useScene.getState().dirtyNodes.add(original.roofSegmentId as AnyNodeId)
+        }
+        const obj = sceneRegistry.nodes.get(node.id)
+        if (obj) obj.visible = true
+      }
+
+      useScene.temporal.getState().resume()
+      markToolCancelConsumed()
+      clearRoofSurfacePlacementGuides()
+      setMovingNode(null)
+    }
+
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      if (!lastTarget) return
+      onClick({
+        nativeEvent: event,
+        stopPropagation: () => event.stopPropagation(),
+      } as unknown as RoofEvent)
+    }
+
     emitter.on('roof:move', updatePreview)
     emitter.on('roof:enter', updatePreview)
     emitter.on('roof:click', onClick)
+    emitter.on('roof:leave', clearTarget)
+    emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
+      emitter.off('roof:leave', clearTarget)
+      emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
+
+      if (node.id) {
+        const obj = sceneRegistry.nodes.get(node.id)
+        if (obj) obj.visible = true
+      }
+      clearRoofSurfacePlacementGuides()
+      useScene.temporal.getState().resume()
     }
   }, [activeBuildingId, node, setMovingNode, setSelection])
 

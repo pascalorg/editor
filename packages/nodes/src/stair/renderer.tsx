@@ -2,6 +2,7 @@
 
 import {
   type AnyNodeId,
+  resolveStairTotalRise,
   type StairNode,
   type StairSegmentNode,
   useLiveNodeOverrides,
@@ -9,19 +10,24 @@ import {
   useScene,
 } from '@pascal-app/core'
 import {
-  createMaterial,
-  createMaterialFromPresetRef,
-  createSurfaceRoleMaterial,
-  DEFAULT_STAIR_MATERIAL,
   getStairBodyMaterials,
   getStairRailingMaterial,
   NodeRenderer,
+  resolveMaterialRef,
+  resolveSlotDefaultMaterial,
   type StairBodyMaterials,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
+import {
+  STAIR_BODY_SLOT_DEFAULT,
+  STAIR_RAILING_SLOT_DEFAULT,
+  STAIR_TREADS_SLOT_DEFAULT,
+  type StairSlotId,
+} from './slots'
 
 type SegmentTransform = {
   position: [number, number, number]
@@ -77,42 +83,58 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
+  const sceneMaterials = useScene((s) => s.materials)
 
-  const material = useMemo(() => {
-    if (!textures) return createSurfaceRoleMaterial('joinery', colorPreset)
-    const presetMaterial = createMaterialFromPresetRef(node.materialPreset, shading)
-    if (presetMaterial) return presetMaterial
-    const mat = node.material
-    if (!mat) return DEFAULT_STAIR_MATERIAL(shading)
-    return createMaterial(mat, shading)
-  }, [
-    shading,
-    node.materialPreset,
-    node.material,
-    node.material?.preset,
-    node.material?.properties,
-    node.material?.texture,
-    textures,
-    colorPreset,
-  ])
-
-  const straightBodyMaterials = useMemo(
+  const baseBodyMaterials = useMemo(
     () => getStairBodyMaterials(node, shading, textures, colorPreset),
     [node, shading, textures, colorPreset],
   )
 
-  const railingMaterial = useMemo(
+  const bodyMaterials = useMemo<StairBodyMaterials>(
+    () => [
+      resolveStairSlotMaterial(
+        node,
+        'treads',
+        STAIR_TREADS_SLOT_DEFAULT,
+        baseBodyMaterials[STAIR_TREAD_MATERIAL_INDEX],
+        sceneMaterials,
+        shading,
+        textures,
+      ),
+      resolveStairSlotMaterial(
+        node,
+        'body',
+        STAIR_BODY_SLOT_DEFAULT,
+        baseBodyMaterials[STAIR_SIDE_MATERIAL_INDEX],
+        sceneMaterials,
+        shading,
+        textures,
+      ),
+    ],
+    [baseBodyMaterials, node, sceneMaterials, shading, textures],
+  )
+
+  const baseRailingMaterial = useMemo(
     () => getStairRailingMaterial(node, shading, textures, colorPreset),
     [node, shading, textures, colorPreset],
   )
 
-  const straightPlaceholderGeometry = useMemo(() => {
-    const geometry = new THREE.BufferGeometry()
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute([], 3))
-    geometry.addGroup(0, 0, 0)
-    geometry.addGroup(0, 0, 1)
-    return geometry
-  }, [])
+  const railingMaterial = useMemo(
+    () =>
+      resolveStairSlotMaterial(
+        node,
+        'railing',
+        STAIR_RAILING_SLOT_DEFAULT,
+        baseRailingMaterial,
+        sceneMaterials,
+        shading,
+        textures,
+      ),
+    [baseRailingMaterial, node, sceneMaterials, shading, textures],
+  )
+
+  // 2 groups map 1:1 to the stair body's 2-material array (treads + body).
+  const straightPlaceholderGeometry = useMemo(() => createPlaceholderGeometry(2), [])
 
   useEffect(() => {
     return () => {
@@ -133,14 +155,13 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
         <mesh
           castShadow
           geometry={straightPlaceholderGeometry}
-          material={straightBodyMaterials}
+          material={bodyMaterials}
           name="merged-stair"
           receiveShadow
+          userData={STAIR_BODY_SLOT_USER_DATA}
         />
       ) : null}
-      {isSegmentBasedStair ? null : (
-        <CurvedStairBody bodyMaterials={straightBodyMaterials} stair={node} />
-      )}
+      {isSegmentBasedStair ? null : <CurvedStairBody bodyMaterials={bodyMaterials} stair={node} />}
       <StairRailings material={railingMaterial} stair={node} />
       {isSegmentBasedStair ? (
         <group name="segments-wrapper" visible={false}>
@@ -155,16 +176,26 @@ export const StairRenderer = ({ node: rawNode }: { node: StairNode }) => {
 
 function StairRailings({ stair, material }: { stair: StairNode; material: THREE.Material }) {
   const nodes = useScene((state) => state.nodes)
+  // Stair segments' width/length/height arrow handles publish drag values to
+  // `useLiveNodeOverrides` and only commit to zustand on release. Subscribing
+  // here and merging each child segment's override means the railing tracks
+  // the drag in real time instead of freezing at the pre-drag values.
+  const overrides = useLiveNodeOverrides((s) => s.overrides)
 
   const segments = useMemo(
     () =>
       (stair.children ?? [])
-        .map((childId) => nodes[childId as AnyNodeId] as StairSegmentNode | undefined)
+        .map((childId) => {
+          const base = nodes[childId as AnyNodeId] as StairSegmentNode | undefined
+          if (!base) return undefined
+          const override = overrides.get(childId as AnyNodeId)
+          return (override ? { ...base, ...override } : base) as StairSegmentNode
+        })
         .filter(
           (node): node is StairSegmentNode =>
             node?.type === 'stair-segment' && node.visible !== false,
         ),
-    [nodes, stair.children],
+    [nodes, overrides, stair.children],
   )
 
   const railPaths = useMemo(
@@ -186,7 +217,7 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
     const sweepAngle =
       stair.sweepAngle ?? (stair.stairType === 'spiral' ? Math.PI * 2 : Math.PI / 2)
     const stepSweep = sweepAngle / stepCount
-    const stepHeight = Math.max(stair.totalRise ?? 2.5, 0.1) / stepCount
+    const stepHeight = Math.max(resolveStairTotalRise(stair, nodes), 0.1) / stepCount
     const innerRadius = Math.max(
       stair.stairType === 'spiral' ? 0.05 : 0.2,
       stair.innerRadius ?? 0.9,
@@ -229,6 +260,7 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
                   position={[point[0], point[1] + railHeight / 2, point[2]]}
                   receiveShadow
                   scale={[balusterRadius, railHeight, balusterRadius]}
+                  userData={STAIR_RAILING_SLOT_USER_DATA}
                 />
               ))}
               {sidePoints.slice(0, -1).map((point, pointIndex) => {
@@ -287,6 +319,7 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
                   position={[point[2], point[1] + railHeight / 2, point[0]]}
                   receiveShadow
                   scale={[balusterRadius, railHeight, balusterRadius]}
+                  userData={STAIR_RAILING_SLOT_USER_DATA}
                 />
               ))}
               {sidePath.points.slice(0, -1).map((point, pointIndex) => {
@@ -392,6 +425,47 @@ const BALUSTER_GEOMETRY = new THREE.CylinderGeometry(1, 1, 1, 8)
 const RAIL_GEOMETRY = new THREE.CylinderGeometry(1, 1, 1, 8)
 const STAIR_TREAD_MATERIAL_INDEX = 0
 const STAIR_SIDE_MATERIAL_INDEX = 1
+const STAIR_BODY_SLOT_IDS: StairSlotId[] = ['treads', 'body']
+const STAIR_BODY_SLOT_USER_DATA = { slotIds: STAIR_BODY_SLOT_IDS }
+const STAIR_BODY_SINGLE_SLOT_USER_DATA = { slotId: 'body' satisfies StairSlotId }
+const STAIR_RAILING_SLOT_USER_DATA = { slotId: 'railing' satisfies StairSlotId }
+
+type SceneMaterials = Parameters<typeof resolveMaterialRef>[1]
+type ViewerShading = Parameters<typeof resolveMaterialRef>[2]
+
+function hasMaterialSpec(material: unknown, materialPreset: unknown): boolean {
+  return material !== undefined || typeof materialPreset === 'string'
+}
+
+function hasLegacyStairSlotMaterial(node: StairNode, slotId: StairSlotId): boolean {
+  const hasWhole = hasMaterialSpec(node.material, node.materialPreset)
+  const hasTread = hasMaterialSpec(node.treadMaterial, node.treadMaterialPreset)
+  const hasSide = hasMaterialSpec(node.sideMaterial, node.sideMaterialPreset)
+  const hasRailing = hasMaterialSpec(node.railingMaterial, node.railingMaterialPreset)
+
+  if (slotId === 'treads') return hasTread || hasSide || hasWhole
+  if (slotId === 'body') return hasSide || hasTread || hasWhole
+  return hasRailing || hasTread || hasSide || hasWhole
+}
+
+function resolveStairSlotMaterial(
+  node: StairNode,
+  slotId: StairSlotId,
+  defaultRef: string,
+  baseMaterial: THREE.Material,
+  sceneMaterials: SceneMaterials,
+  shading: ViewerShading,
+  textures: boolean,
+): THREE.Material {
+  if (!textures) return baseMaterial
+
+  const slotMaterial = resolveMaterialRef(node.slots?.[slotId], sceneMaterials, shading)
+  if (slotMaterial) return slotMaterial
+
+  if (hasLegacyStairSlotMaterial(node, slotId)) return baseMaterial
+
+  return resolveSlotDefaultMaterial(defaultRef, shading)
+}
 
 function RailSegment({
   start,
@@ -431,6 +505,7 @@ function RailSegment({
       quaternion={quaternion}
       receiveShadow
       scale={[Math.max(radius, 0.01), length, Math.max(radius, 0.01)]}
+      userData={STAIR_RAILING_SLOT_USER_DATA}
     />
   )
 }
@@ -442,9 +517,10 @@ function CurvedStairBody({
   stair: StairNode
   bodyMaterials: StairBodyMaterials
 }) {
+  const nodes = useScene((state) => state.nodes)
   const sideMaterial = bodyMaterials[1]
   const stepCount = Math.max(2, Math.round(stair.stepCount ?? 10))
-  const totalRise = Math.max(stair.totalRise ?? 2.5, 0.1)
+  const totalRise = Math.max(resolveStairTotalRise(stair, nodes), 0.1)
   const stepHeight = totalRise / stepCount
   const isSpiral = stair.stairType === 'spiral'
   const innerRadius = Math.max(isSpiral ? 0.05 : 0.2, stair.innerRadius ?? 0.9)
@@ -585,7 +661,14 @@ function CurvedStepMesh({
   )
 
   return (
-    <mesh castShadow geometry={geometry} material={material} position-y={positionY} receiveShadow />
+    <mesh
+      castShadow
+      geometry={geometry}
+      material={material}
+      position-y={positionY}
+      receiveShadow
+      userData={STAIR_BODY_SLOT_USER_DATA}
+    />
   )
 }
 
@@ -624,6 +707,7 @@ function SpiralColumnMesh({
       name="stair-side"
       position={[0, height / 2, 0]}
       receiveShadow
+      userData={STAIR_BODY_SINGLE_SLOT_USER_DATA}
     />
   )
 }
@@ -651,10 +735,7 @@ function SpiralStepSupportMesh({
   const sizeX = Math.max(0.04, innerRadius - spiralColumnRadius + 0.04)
   const sizeY = Math.max(thickness * 0.55, 0.025)
   const sizeZ = Math.max(0.04, Math.min(0.12, sizeY * 1.5))
-  const geometry = useMemo(
-    () => new THREE.BoxGeometry(sizeX, sizeY, sizeZ),
-    [sizeX, sizeY, sizeZ],
-  )
+  const geometry = useMemo(() => new THREE.BoxGeometry(sizeX, sizeY, sizeZ), [sizeX, sizeY, sizeZ])
   useEffect(
     () => () => {
       geometry.dispose()
@@ -671,6 +752,7 @@ function SpiralStepSupportMesh({
       position={[Math.cos(midAngle) * radial, sizeY / 2, Math.sin(midAngle) * radial]}
       receiveShadow
       rotation-y={-midAngle}
+      userData={STAIR_BODY_SINGLE_SLOT_USER_DATA}
     />
   )
 }
@@ -1051,7 +1133,7 @@ function resolveLandingChainNextStair(
   index: number,
 ): LandingChainNextStair {
   const layout = layouts[index]
-  if (!layout || layout.segment.segmentType !== 'landing') {
+  if (layout?.segment.segmentType !== 'landing') {
     return { isTerminalLandingBeforeStair: false }
   }
 

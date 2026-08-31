@@ -1,11 +1,26 @@
-import type { NodeDefinition } from '@pascal-app/core'
-import { buildWallFloorplan } from './floorplan'
+import {
+  type AnyNodeId,
+  getWallBaseElevationForNodes,
+  getWallEffectiveHeightForNodes,
+  type NodeDefinition,
+  type WallNode as WallNodeType,
+} from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { buildWallContextualDimensions } from './contextual-dimensions'
+import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
 import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
 import { wallFloorplanMoveTarget } from './floorplan-move'
 import { wallFloorplanSiblingOverrides } from './floorplan-overrides'
+import {
+  matchWallMeasurementFeature,
+  resolveWallMeasurementFeature,
+  wallMeasurementFeatures,
+} from './measurement'
 import { wallPaint } from './paint'
 import { wallParametrics } from './parametrics'
+import { wallQuickMeasurement } from './quick-measurement'
 import { WallNode } from './schema'
+import { wallSlots } from './slots'
 
 /**
  * Wall — the Phase 3 stress test of the registry-driven node model.
@@ -17,16 +32,39 @@ import { WallNode } from './schema'
  *   `renderer` + `system` keep wrap-exporting legacy WallRenderer +
  *   WallSystem + WallCutout.
  * Stage C: `def.floorplan` builder produces the mitered plan footprint
- *   polygon using `ctx.siblings` to assemble miter context.
+ *   polygon from shared floor-plan level data, with `ctx.siblings` as the
+ *   direct-caller fallback.
  *   floorplan-panel.tsx's `wallPolygons` short-circuits to [] when
  *   wall is registered.
  */
 export const wallDefinition: NodeDefinition<typeof WallNode> = {
   kind: 'wall',
-  schemaVersion: 1,
+  snapProfile: 'structural',
+  schemaVersion: 8,
   schema: WallNode,
   category: 'structure',
   surfaceRole: 'wall',
+  extensions: {
+    'pascal:editor/floorplan': {
+      contextualDimensions: buildWallContextualDimensions,
+      actionMenu: {
+        canCurve: ({ node, nodes }) =>
+          !node.children.some((childId) => {
+            const child = nodes[childId as AnyNodeId]
+            if (!child) return false
+            if (
+              child.type === 'door' ||
+              child.type === 'window' ||
+              child.type === 'lean-to-extension'
+            ) {
+              return true
+            }
+            if (child.type !== 'item') return false
+            return child.asset?.attachTo === 'wall' || child.asset?.attachTo === 'wall-side'
+          }),
+      },
+    } satisfies FloorplanNodeExtension<WallNode>,
+  },
 
   defaults: () => ({
     object: 'node',
@@ -47,6 +85,14 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     selectable: { hitVolume: 'bbox' },
     // Front + back faces host items (paintings, shelves, switches).
     surfaces: {
+      top: {
+        height: (node, { nodes }) => {
+          const wall = node as WallNodeType
+          return (
+            getWallBaseElevationForNodes(wall, nodes) + getWallEffectiveHeightForNodes(wall, nodes)
+          )
+        },
+      },
       sides: { faces: 'all' },
     },
     duplicable: true,
@@ -56,10 +102,15 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     // preview through this entry rather than carrying a kind-name
     // arm.
     paint: wallPaint,
+    // Declared paintable slots with their default appearance — the same
+    // `{ slotId, label, default }` contract every other paintable kind exposes.
+    // Paint still writes the legacy inline fields for base faces via
+    // `wallPaint`; migrating those fully into `node.slots` is a later step.
+    slots: () => wallSlots(),
   },
 
   relations: {
-    hosts: ['door', 'window', 'item'],
+    hosts: ['door', 'window', 'item', 'lean-to-extension'],
     affectsSpatial: ['slab', 'ceiling', 'zone'],
     linkedBy: 'endpoint-match',
     cascadeDelete: 'descendants',
@@ -77,6 +128,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   // auto-slab live preview, history dances). Placement is wired via
   // `def.tool`.
   tool: () => import('./tool'),
+  preview: () => import('./preview'),
   affordanceTools: {
     curve: () => import('./curve-tool'),
     'move-endpoint': () => import('./move-endpoint-tool'),
@@ -92,9 +144,18 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
     // Priority 4 mirrors the legacy WallSystem's useFrame priority.
     priority: 4,
   },
-  // Stage C: floor-plan rendering. ctx.siblings provides other walls in
-  // the level so `calculateLevelMiters` can compute correct corner joins.
+  // Stage C: floor-plan rendering. Precomputes the level miter graph once
+  // per render pass, then the builder reads its own junctions by wall id.
+  computeFloorplanLevelData: computeWallFloorplanLevelData,
   floorplan: buildWallFloorplan,
+  measurement: {
+    features: (node) => wallMeasurementFeatures(node),
+    quickMeasure: (node) => wallQuickMeasurement(node),
+    match: (node, _ctx, point, maxDistance) =>
+      matchWallMeasurementFeature(node, point, maxDistance),
+    resolve: (node, _ctx, reference) => resolveWallMeasurementFeature(node, reference),
+  },
+  floorplanDependsOnSiblings: true,
   // 2D drag affordances triggered by `endpoint-handle` primitives in
   // `def.floorplan`'s output. Sister to `affordanceTools` (3D) — the
   // same legacy `MoveWallEndpointTool` flow, reachable from both the
@@ -105,17 +166,16 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   },
   floorplanMoveTarget: wallFloorplanMoveTarget,
   floorplanSiblingOverrides: wallFloorplanSiblingOverrides,
-
   toolHints: [
-    { key: 'Left click', label: 'nodes.wall.toolHints.setStartEnd' },
-    { key: 'Shift', label: 'nodes.wall.toolHints.allowAngles' },
-    { key: 'Esc', label: 'nodes.wall.toolHints.cancel' },
+    { key: 'Left click', label: 'Set wall start / end' },
+    { key: 'Esc', label: 'Cancel' },
   ],
 
   presentation: {
-    label: 'nodes.wall.label',
-    description: 'nodes.wall.description',
-    icon: { kind: 'url', src: '/icons/wall.png' },
+    label: 'Wall',
+    description:
+      'A straight or curved wall segment. Hosts doors, windows, lean-to extensions, and wall-mounted items.',
+    icon: { kind: 'url', src: '/icons/wall.webp' },
     paletteSection: 'structure',
     paletteOrder: 10,
   },

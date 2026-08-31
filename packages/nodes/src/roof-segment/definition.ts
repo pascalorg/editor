@@ -3,20 +3,22 @@ import {
   getPitchFromActiveRoofHeight,
   type HandleDescriptor,
   type NodeDefinition,
-  type RoofSegmentNode as RoofSegmentNodeType,
   RoofSegmentNode as RoofSegmentNodeSchema,
+  type RoofSegmentNode as RoofSegmentNodeType,
 } from '@pascal-app/core'
+import { buildRoofSegmentFloorplan } from './floorplan'
 import {
   roofSegmentMoveTarget,
   roofSegmentResizeAffordance,
   roofSegmentRotateAffordance,
 } from './floorplan-affordances'
-import { buildRoofSegmentFloorplan } from './floorplan'
+import { matchRoofSegmentMeasurementFeature, roofSegmentMeasurementFeatures } from './measurement'
 import { roofSegmentParametrics } from './parametrics'
 import { RoofSegmentNode } from './schema'
 
 const SIDE_HANDLE_OFFSET = 0.3
 const HEIGHT_HANDLE_OFFSET = 0.3
+const ROOF_HANDLE_CLEARANCE = 0.15
 const ROTATE_CORNER_OFFSET = 0.4
 const ROTATE_RING_OFFSET = 0.08
 const MIN_ROOF_DIM = 1
@@ -35,64 +37,175 @@ function getPeakHeight(n: RoofSegmentNodeType): number {
   return n.wallHeight + getActiveRoofHeight(n)
 }
 
-// Width arrow — anchor='center' so dragging the +X side grows the full
-// footprint symmetrically (both edges move ±delta). Same idiom as the
-// elevator / column / shelf width arrow.
-function roofSegmentWidthHandle(): HandleDescriptor<RoofSegmentNodeType> {
+function getSideResizeHandleY(n: RoofSegmentNodeType, localZ: number): number {
+  if (n.roofType !== 'shed') return Math.max(n.wallHeight, MIN_WALL_DISPLAY) / 2
+
+  const halfDepth = Math.max(n.depth, MIN_ROOF_DIM) / 2
+  const roofHeight = getActiveRoofHeight(n)
+  const t = halfDepth > 0 ? (localZ + halfDepth) / (2 * halfDepth) : 0.5
+  const roofY = n.wallHeight + roofHeight * (1 - Math.max(0, Math.min(1, t)))
+  return Math.max(roofY, MIN_WALL_DISPLAY) + ROOF_HANDLE_CLEARANCE
+}
+
+// Width arrow on the +X (right) or -X (left) side. Asymmetric resize:
+// dragging one arrow grows the segment outward from its own edge while
+// the opposite edge stays world-fixed — the same pattern doors use
+// (`door/definition.ts:35-73`). The arrow's chevron points outward
+// (`rotationY: Math.PI` flips the left arrow's chevron to face -X) so
+// you read "this edge is what moves" at a glance.
+//
+// `apply` recomputes `position` so the anchored edge stays at the same
+// world point even when the segment is Y-rotated: project the segment's
+// local +X onto world via (cos r, -sin r), find the anchored edge's
+// world XZ from the pre-drag node, then place the new center half a
+// new-width away from that anchor in the same direction.
+function roofSegmentWidthHandle(side: 'left' | 'right'): HandleDescriptor<RoofSegmentNodeType> {
+  const sign = side === 'right' ? 1 : -1
   return {
     kind: 'linear-resize',
     axis: 'x',
-    anchor: 'center',
+    // 'min' = -X edge anchored (right arrow grows the +X edge outward).
+    // 'max' = +X edge anchored (left arrow grows the -X edge outward).
+    anchor: side === 'right' ? 'min' : 'max',
     min: MIN_ROOF_DIM,
+    gridSnap: true,
     currentValue: (n) => n.width,
-    apply: (_n, newValue) => ({ width: newValue }),
+    apply: (initial, newWidth) => {
+      const rotY = initial.rotation ?? 0
+      const armX = Math.cos(rotY)
+      const armZ = -Math.sin(rotY)
+      const anchorX = initial.position[0] - sign * (initial.width / 2) * armX
+      const anchorZ = initial.position[2] - sign * (initial.width / 2) * armZ
+      const newCenterX = anchorX + sign * (newWidth / 2) * armX
+      const newCenterZ = anchorZ + sign * (newWidth / 2) * armZ
+      return {
+        width: newWidth,
+        ...(initial.roofType === 'conical' ? { depth: newWidth } : {}),
+        position: [newCenterX, initial.position[1], newCenterZ],
+      }
+    },
     placement: {
-      position: (n) => [
-        n.width / 2 + SIDE_HANDLE_OFFSET,
-        Math.max(n.wallHeight, MIN_WALL_DISPLAY) / 2,
-        0,
-      ],
+      position: (n) => [sign * (n.width / 2 + SIDE_HANDLE_OFFSET), getSideResizeHandleY(n, 0), 0],
+      // Flip the left chevron so it points outward toward -X. The
+      // generic LinearArrow only auto-orients for axis 'z' (rotates the
+      // chevron 90° to face +Z); +X / -X facing is up to the descriptor.
+      rotationY: () => (side === 'right' ? 0 : Math.PI),
     },
   }
 }
 
-// Depth arrow — symmetric on the +Z side.
-function roofSegmentDepthHandle(): HandleDescriptor<RoofSegmentNodeType> {
+// Depth arrow on the +Z (front) or -Z (back) side. Asymmetric: the
+// dragged edge follows the pointer, the opposite edge stays world-fixed
+// — mirrors the width-handle pattern (`roofSegmentWidthHandle`). Because
+// segment depth feeds the pitch math via `getActiveRoofHeight`, growing
+// depth at constant pitch ramps the peak up too, which reads as
+// scaling. We hold the peak height constant by back-solving a new pitch
+// for the new depth (same recipe the pitch handle uses, run in
+// reverse). MIN/MAX_PITCH clamps cover degenerate cases where the new
+// depth would demand a negative or beyond-vertical pitch.
+function roofSegmentDepthHandle(side: 'front' | 'back'): HandleDescriptor<RoofSegmentNodeType> {
+  const sign = side === 'front' ? 1 : -1
   return {
     kind: 'linear-resize',
     axis: 'z',
-    anchor: 'center',
+    anchor: side === 'front' ? 'min' : 'max',
     min: MIN_ROOF_DIM,
+    gridSnap: true,
     currentValue: (n) => n.depth,
-    apply: (_n, newValue) => ({ depth: newValue }),
+    apply: (initial, newDepth) => {
+      // Recenter so the anchored Z edge stays at the same world point.
+      // Same math as the width handle but along the Z arm: yaw maps
+      // segment-local +Z to (sin r, cos r) in world.
+      const rotY = initial.rotation ?? 0
+      const armX = Math.sin(rotY)
+      const armZ = Math.cos(rotY)
+      const anchorX = initial.position[0] - sign * (initial.depth / 2) * armX
+      const anchorZ = initial.position[2] - sign * (initial.depth / 2) * armZ
+      const newCenterX = anchorX + sign * (newDepth / 2) * armX
+      const newCenterZ = anchorZ + sign * (newDepth / 2) * armZ
+
+      if (initial.roofType === 'conical') {
+        return {
+          width: newDepth,
+          depth: newDepth,
+          position: [newCenterX, initial.position[1], newCenterZ],
+        }
+      }
+
+      // Preserve peak height — back-solve pitch for the new depth so
+      // the assembled roof height matches what it was before the drag.
+      const originalRoofHeight = getActiveRoofHeight(initial)
+      const newPitch = getPitchFromActiveRoofHeight({
+        roofType: initial.roofType,
+        width: initial.width,
+        depth: newDepth,
+        roofHeight: originalRoofHeight,
+        gambrelLowerWidthRatio: initial.gambrelLowerWidthRatio,
+        gambrelLowerHeightRatio: initial.gambrelLowerHeightRatio,
+        mansardSteepWidthRatio: initial.mansardSteepWidthRatio,
+        mansardSteepHeightRatio: initial.mansardSteepHeightRatio,
+        dutchHipWidthRatio: initial.dutchHipWidthRatio,
+        dutchHipHeightRatio: initial.dutchHipHeightRatio,
+      })
+
+      return {
+        depth: newDepth,
+        position: [newCenterX, initial.position[1], newCenterZ],
+        pitch: Math.max(MIN_PITCH, Math.min(MAX_PITCH, newPitch)),
+      }
+    },
     placement: {
       position: (n) => [
         0,
-        Math.max(n.wallHeight, MIN_WALL_DISPLAY) / 2,
-        n.depth / 2 + SIDE_HANDLE_OFFSET,
+        getSideResizeHandleY(n, sign * (n.depth / 2)),
+        sign * (n.depth / 2 + SIDE_HANDLE_OFFSET),
       ],
+      // For axis 'z', `LinearArrow` adds -π/2 around Y so the chevron
+      // points +Z by default. Flip the back arrow by π so it points -Z.
+      rotationY: () => (side === 'front' ? 0 : Math.PI),
     },
   }
 }
 
-// Wall-height arrow — `anchor: 'min'` keeps the base on the floor and
-// grows the wall upward. Placed on the -X side at the wall's top edge
-// so it doesn't stack on the centered pitch arrow when wallHeight ≈ 0
-// (flat roof / no walls).
+function conicalRoofSegmentRadiusHandle(): HandleDescriptor<RoofSegmentNodeType> {
+  return {
+    kind: 'radial-resize',
+    axis: 'x',
+    min: MIN_ROOF_DIM / 2,
+    currentValue: (n) => n.width / 2,
+    apply: (_initial, radius) => ({ width: radius * 2, depth: radius * 2 }),
+    placement: {
+      position: (n) => [n.width / 2 + SIDE_HANDLE_OFFSET, getSideResizeHandleY(n, 0), 0],
+    },
+    decoration: {
+      kind: 'ring',
+      radius: (n) => n.width / 2,
+      y: (n) => getSideResizeHandleY(n, 0),
+    },
+  }
+}
+
+// Wall-height tracker — dashed vertical leader from the floor up to a
+// draggable cube at the wall top, centred on the footprint. Replaces
+// the old -X-side chevron so the wall-top control reads as "the wall is
+// THIS tall" instead of "there's an arrow on the side." Drag math is
+// unchanged: same linear-resize axis='y' / anchor='min' pipeline as
+// every other height handle; the `shape: 'tracker'` flag only swaps the
+// visual. Wall-height clamps to MIN_WALL_DISPLAY for placement so the
+// cube stays grabbable on flat / wall-less segments where the real
+// `wallHeight` is ~0 and the leader would collapse to nothing.
 function roofSegmentWallHeightHandle(): HandleDescriptor<RoofSegmentNodeType> {
   return {
     kind: 'linear-resize',
     axis: 'y',
     anchor: 'min',
+    shape: 'tracker',
     min: MIN_WALL_HEIGHT,
+    gridSnap: true,
     currentValue: (n) => n.wallHeight,
     apply: (_n, newValue) => ({ wallHeight: newValue }),
     placement: {
-      position: (n) => [
-        -(n.width / 2 + SIDE_HANDLE_OFFSET),
-        Math.max(n.wallHeight, MIN_WALL_DISPLAY),
-        0,
-      ],
+      position: (n) => [0, Math.max(n.wallHeight, MIN_WALL_DISPLAY), 0],
     },
   }
 }
@@ -115,7 +228,9 @@ function roofSegmentPitchHandle(): HandleDescriptor<RoofSegmentNodeType> {
     axis: 'y',
     anchor: 'min',
     min: (n) => n.wallHeight,
+    gridSnap: true,
     currentValue: (n) => getPeakHeight(n),
+    visible: (n) => !n.managedByParent,
     apply: (initial, newPeakHeight) => {
       const roofHeight = Math.max(0, newPeakHeight - initial.wallHeight)
       const pitch = getPitchFromActiveRoofHeight({
@@ -169,12 +284,27 @@ function roofSegmentRotateHandle(): HandleDescriptor<RoofSegmentNodeType> {
 }
 
 const roofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
-  roofSegmentWidthHandle(),
-  roofSegmentDepthHandle(),
+  roofSegmentWidthHandle('right'),
+  roofSegmentWidthHandle('left'),
+  roofSegmentDepthHandle('front'),
+  roofSegmentDepthHandle('back'),
   roofSegmentWallHeightHandle(),
   roofSegmentPitchHandle(),
   roofSegmentRotateHandle(),
 ]
+
+const conicalRoofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
+  conicalRoofSegmentRadiusHandle(),
+  roofSegmentWallHeightHandle(),
+  roofSegmentPitchHandle(),
+]
+
+function resolveRoofSegmentHandles(
+  node: RoofSegmentNodeType,
+): HandleDescriptor<RoofSegmentNodeType>[] {
+  if (node.managedByParent) return []
+  return node.roofType === 'conical' ? conicalRoofSegmentHandles : roofSegmentHandles
+}
 
 /**
  * Roof segment — Stage A. Child of a roof node, owns the per-segment
@@ -184,10 +314,15 @@ const roofSegmentHandles: HandleDescriptor<RoofSegmentNodeType>[] = [
  */
 export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   kind: 'roof-segment',
-  schemaVersion: 1,
+  schemaVersion: 4,
   schema: RoofSegmentNode,
   category: 'structure',
   surfaceRole: 'roof',
+  // Mirrors the parent roof: a body-move resolves the no-angle `polygon`
+  // snap context (grid / lines / off), so dragging a segment shows the
+  // snapping chip and honours the active mode like every other structural
+  // move. Resize / rotate run through their own reshaping scope.
+  snapProfile: 'structural',
 
   defaults: () => {
     const stub = RoofSegmentNodeSchema.parse({
@@ -204,14 +339,32 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
     deletable: true,
   },
 
+  // Bespoke move shared with roof / stair / stair-segment via
+  // `shared/move-roof-tool` — routed through `MoveTool`'s registry-
+  // affordance lookup rather than a hardcoded dispatcher arm.
+  affordanceTools: {
+    move: () => import('../shared/move-roof-tool'),
+  },
+
   parametrics: roofSegmentParametrics,
-  handles: roofSegmentHandles,
+  handles: resolveRoofSegmentHandles,
 
   renderer: {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
   floorplan: buildRoofSegmentFloorplan,
+  measurement: {
+    features: (node, ctx) =>
+      roofSegmentMeasurementFeatures(node, ctx.parent?.type === 'roof' ? ctx.parent : null),
+    match: (node, ctx, point, maxDistance) =>
+      matchRoofSegmentMeasurementFeature(
+        node,
+        ctx.parent?.type === 'roof' ? ctx.parent : null,
+        point,
+        maxDistance,
+      ),
+  },
   // Body-move target. The generic Path 2 fallback writes plan coords
   // directly to `position`, which is wrong here because the segment's
   // position is roof-local. `roofSegmentMoveTarget` inverts the parent
@@ -227,7 +380,7 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   presentation: {
     label: 'nodes.roofSegment.label',
     description: 'A single pitched plane of a parent roof.',
-    icon: { kind: 'url', src: '/icons/roof.png' },
+    icon: { kind: 'url', src: '/icons/roof.webp' },
     paletteSection: 'structure',
     paletteOrder: 101,
   },

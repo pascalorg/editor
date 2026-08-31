@@ -16,11 +16,14 @@ export const ElevatorNode = BaseNode.extend({
   type: nodeType('elevator'),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
+  // Unified paint-slot refs (`scene:`/`library:` MaterialRef per slot id),
+  // matching the slot model items/slab/shelf use. Absent = declared default.
+  slots: z.record(z.string(), z.string()).optional(),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // Rotation around the Y axis in radians.
   rotation: z.number().default(0),
-  width: z.number().default(1.6),
-  depth: z.number().default(1.6),
+  width: z.number().default(1.84),
+  depth: z.number().default(1.84),
   shaftWidth: z.number().optional(),
   shaftDepth: z.number().optional(),
   shaftWallThickness: z.number().default(0.09),

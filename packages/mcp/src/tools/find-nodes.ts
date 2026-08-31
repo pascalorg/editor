@@ -100,7 +100,7 @@ export function registerFindNodes(server: McpServer, bridge: SceneOperations): v
       // Zone-polygon filter: point-in-polygon on a representative 2D point.
       if (zoneId) {
         const zone = bridge.getNode(zoneId as AnyNodeId)
-        if (!zone || zone.type !== 'zone') {
+        if (zone?.type !== 'zone') {
           // Unknown zoneId → return empty list rather than throw; matches
           // typical "filter" semantics.
           results = []

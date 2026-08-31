@@ -24,6 +24,7 @@ export const SlabHoleEditor: React.FC<{ slabId: SlabNode['id']; holeIndex: numbe
   const slab = slabNode?.type === 'slab' ? (slabNode as SlabNode) : null
   const holes = slab?.holes || []
   const hole = holes[holeIndex]
+  const metadata = slab?.holeMetadata?.[holeIndex]
 
   const handlePolygonChange = useCallback(
     (newPolygon: Array<[number, number]>) => {
@@ -60,7 +61,7 @@ export const SlabHoleEditor: React.FC<{ slabId: SlabNode['id']; holeIndex: numbe
     }
   }, [slabId])
 
-  if (!(slab && hole) || hole.length < 3) return null
+  if (!(slab && hole) || hole.length < 3 || metadata?.source !== 'manual') return null
 
   return (
     <PolygonEditor

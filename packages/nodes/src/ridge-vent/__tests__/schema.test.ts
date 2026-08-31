@@ -8,7 +8,7 @@ describe('RidgeVentNode schema', () => {
     expect(parsed.id).toMatch(/^rvent_/)
     expect(parsed.length).toBe(2.0)
     expect(parsed.width).toBe(0.3)
-    expect(parsed.height).toBe(0.08)
+    expect(parsed.height).toBe(0.1)
     expect(parsed.style).toBe('standard')
     expect(parsed.endCaps).toBe(true)
     expect(parsed.position).toEqual([0, 0, 0])

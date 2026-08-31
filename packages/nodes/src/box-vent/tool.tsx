@@ -13,8 +13,14 @@ import { triggerSFX, useTranslations } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
+import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
+import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { getAnalyticalNormal, getDownSlopeYaw, surfaceQuatFromNormal } from '../shared/roof-surface'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfacePlacementGuides,
+  roofSurfaceFootprintFromNode,
+} from '../shared/roof-surface-placement-guides'
 import { boxVentDefinition } from './definition'
 import BoxVentPreview from './preview'
 
@@ -38,6 +44,7 @@ const BoxVentTool = () => {
   const [previewPos, setPreviewPos] = useState<[number, number, number] | null>(null)
   const [previewSurfaceQuat, setPreviewSurfaceQuat] = useState<THREE.Quaternion | null>(null)
   const [previewYaw, setPreviewYaw] = useState(0)
+  const [previewRotation, setPreviewRotation] = useState(0)
   const lastSnapRef = useRef<[number, number] | null>(null)
 
   // Default-shaped preview node — matches what the commit will create.
@@ -47,9 +54,9 @@ const BoxVentTool = () => {
         ...boxVentDefinition.defaults(),
         name: 'Box Vent',
         position: [0, 0, 0],
-        rotation: 0,
+        rotation: previewRotation,
       }),
-    [],
+    [previewRotation],
   )
 
   useEffect(() => {
@@ -71,7 +78,7 @@ const BoxVentTool = () => {
       const sx = Math.round(wx * 20) / 20
       const sz = Math.round(wz * 20) / 20
       const prev = lastSnapRef.current
-      if (!prev || prev[0] !== sx || prev[1] !== sz) {
+      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
         triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
@@ -82,7 +89,17 @@ const BoxVentTool = () => {
       const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
       setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
+      setPreviewRotation(getDownSlopeYaw(hit.localX, hit.localZ, hit.segment))
       setPreviewPos(worldToBuildingLocal(wx, wy, wz))
+      publishRoofSurfacePlacementGuides({
+        roof: event.node as RoofNode,
+        segment: hit.segment,
+        center: [hit.localX, hit.localY, hit.localZ],
+        footprint: roofSurfaceFootprintFromNode({
+          ...previewNode,
+          rotation: getDownSlopeYaw(hit.localX, hit.localZ, hit.segment),
+        }),
+      })
       event.stopPropagation()
     }
 
@@ -102,12 +119,13 @@ const BoxVentTool = () => {
         name: t('nodes.boxVent.defaultName', { count: ventCount + 1 }),
         roofSegmentId: hit.segment.id,
         position: [hit.localX, hit.localY, hit.localZ],
-        rotation: 0,
+        rotation: getDownSlopeYaw(hit.localX, hit.localZ, hit.segment),
       })
       state.createNode(vent, hit.segment.id as AnyNodeId)
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
       setSelection({ selectedIds: [vent.id] })
       triggerSFX('sfx:item-place')
+      clearRoofSurfacePlacementGuides()
       event.stopPropagation()
     }
 
@@ -119,19 +137,31 @@ const BoxVentTool = () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
+      clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection])
-
-  if (!activeBuildingId || !previewPos || !previewSurfaceQuat) return null
+  }, [activeBuildingId, setSelection, previewNode])
 
   return (
-    <group position={previewPos}>
-      <group rotation-y={previewYaw}>
-        <group quaternion={previewSurfaceQuat}>
-          <BoxVentPreview node={previewNode} />
+    <>
+      <RoofAttachmentFallbackPreview
+        activeBuildingId={activeBuildingId}
+        ghost={<BoxVentPreview node={previewNode} invalid />}
+        onInvalidTarget={() => {
+          setPreviewPos(null)
+          setPreviewSurfaceQuat(null)
+          clearRoofSurfacePlacementGuides()
+        }}
+      />
+      {activeBuildingId && previewPos && previewSurfaceQuat && (
+        <group position={previewPos}>
+          <group rotation-y={previewYaw}>
+            <group quaternion={previewSurfaceQuat}>
+              <BoxVentPreview node={previewNode} />
+            </group>
+          </group>
         </group>
-      </group>
-    </group>
+      )}
+    </>
   )
 }
 

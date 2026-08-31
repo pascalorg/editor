@@ -56,7 +56,7 @@ export default function ItemPanel() {
       // frame regenerates its cutout geometry around the moved item.
       if (n.asset.attachTo === 'wall' && n.parentId) {
         requestAnimationFrame(() => {
-          useScene.getState().dirtyNodes.add(n.parentId as AnyNode['id'])
+          useScene.getState().markDirty(n.parentId as AnyNode['id'])
         })
       }
     },
@@ -102,7 +102,7 @@ export default function ItemPanel() {
 
   return (
     <PanelWrapper
-      icon={node.asset.thumbnail || '/icons/furniture.png'}
+      icon={node.asset.thumbnail || '/icons/item.webp'}
       onClose={handleClose}
       title={node.name || node.asset.name}
       width={300}

@@ -1,10 +1,18 @@
 'use client'
 
-import { type AnyNodeId, DormerNode, useScene } from '@pascal-app/core'
-import { useTranslations } from '@pascal-app/editor'
+import {
+  type AnyNodeId,
+  createDormerDefaultWindow,
+  DormerNode,
+  getDormerDefaultWindowFace,
+  useScene,
+} from '@pascal-app/core'
+import { usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
+import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
 import { dormerDefinition } from './definition'
+import { DormerPlacementGuides } from './placement-guides'
 import DormerPreview from './preview'
 import { useDormerPlacement } from './use-dormer-placement'
 
@@ -35,7 +43,6 @@ function nextDormerNumber(nodes: Record<string, unknown>): number {
  * registry) so the user sees exactly where the dormer will land.
  */
 const DormerTool = () => {
-  const t = useTranslations()
   const setSelection = useViewer((s) => s.setSelection)
 
   const previewNode = useMemo(
@@ -49,37 +56,86 @@ const DormerTool = () => {
     [],
   )
 
-  const { activeBuildingId, segmentXform, hitLocal, ghostRotation } = useDormerPlacement({
-    onCommit: (hit, rotation) => {
-      const state = useScene.getState()
-      const dormerNumber = nextDormerNumber(state.nodes)
-      const dormer = DormerNode.parse({
-        ...dormerDefinition.defaults(),
-        name: t('nodes.dormer.defaultName', { count: dormerNumber }),
-        roofSegmentId: hit.segment.id,
-        parentId: hit.segment.id,
-        // Anchor at the slope height so the renderer matches the ghost.
-        // The CSG still carves cleanly because it inverts T(position)
-        // when bringing the host into dormer-local.
-        position: [hit.localX, hit.localY, hit.localZ],
-        rotation,
-      })
-      state.createNode(dormer, hit.segment.id as AnyNodeId)
-      state.dirtyNodes.add(hit.segment.id as AnyNodeId)
-      setSelection({ selectedIds: [dormer.id] })
-    },
-  })
+  const { activeBuildingId, clearPreview, segmentXform, hitSegment, hitLocal, ghostRotation } =
+    useDormerPlacement({
+      onCommit: (hit, rotation) => {
+        const state = useScene.getState()
+        const dormer = DormerNode.parse({
+          ...dormerDefinition.defaults(),
+          name: `Dormer ${nextDormerNumber(state.nodes)}`,
+          roofSegmentId: hit.segment.id,
+          parentId: hit.segment.id,
+          // Anchor at the slope height so the renderer matches the ghost.
+          // The CSG still carves cleanly because it inverts T(position)
+          // when bringing the host into dormer-local.
+          position: [hit.localX, hit.localY, hit.localZ],
+          rotation,
+        })
+        state.createNode(dormer, hit.segment.id as AnyNodeId)
+        const defaultWindow = createDormerDefaultWindow(
+          dormer,
+          `window_${dormer.id.replace(/^dormer_/, '')}_default`,
+          getDormerDefaultWindowFace(dormer, hit.segment),
+        )
+        state.createNode(defaultWindow, dormer.id as AnyNodeId)
+        state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+        setSelection({ selectedIds: [dormer.id] })
+        usePlacementPreview.getState().clear()
+      },
+    })
 
-  if (!activeBuildingId || !segmentXform || !hitLocal) return null
+  useEffect(() => {
+    const placementPreview = usePlacementPreview.getState()
+    if (!(hitSegment && hitLocal)) {
+      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+      return
+    }
+    placementPreview.set(
+      DormerNode.parse({
+        ...previewNode,
+        parentId: hitSegment.id,
+        position: hitLocal,
+        roofSegmentId: hitSegment.id,
+        rotation: ghostRotation,
+      }),
+      hitSegment,
+    )
+  }, [ghostRotation, hitLocal, hitSegment, previewNode])
+
+  useEffect(
+    () => () => {
+      const placementPreview = usePlacementPreview.getState()
+      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+    },
+    [previewNode.id],
+  )
 
   return (
-    <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
-      <group position={hitLocal}>
-        <group rotation-y={ghostRotation}>
-          <DormerPreview node={previewNode} />
+    <>
+      <RoofAttachmentFallbackPreview
+        activeBuildingId={activeBuildingId}
+        ghost={<DormerPreview node={previewNode} invalid />}
+        onInvalidTarget={clearPreview}
+      />
+      {activeBuildingId && segmentXform && hitLocal && (
+        <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
+          {hitSegment && (
+            <DormerPlacementGuides
+              center={hitLocal}
+              depth={previewNode.depth}
+              rotation={ghostRotation}
+              segment={hitSegment}
+              width={previewNode.width}
+            />
+          )}
+          <group position={hitLocal}>
+            <group rotation-y={ghostRotation}>
+              <DormerPreview node={previewNode} />
+            </group>
+          </group>
         </group>
-      </group>
-    </group>
+      )}
+    </>
   )
 }
 

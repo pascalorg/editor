@@ -11,8 +11,9 @@ describe('DormerNode schema', () => {
     expect(parsed.depth).toBe(1.55)
     expect(parsed.height).toBe(0)
     expect(parsed.roofType).toBe('gable')
+    expect(parsed.shedHighSide).toBe('back')
     expect(parsed.windowShape).toBe('rectangle')
-    expect(parsed.windowSill).toBe(true)
+    expect(parsed.windowSill).toBe(false)
   })
 
   test('windowColumns / windowRows clamped to [1, 8]', () => {
@@ -24,6 +25,10 @@ describe('DormerNode schema', () => {
   test('windowCornerRadii round-trips as tuple of 4', () => {
     const parsed = DormerNode.parse({ windowCornerRadii: [0.1, 0.2, 0.3, 0.4] })
     expect(parsed.windowCornerRadii).toEqual([0.1, 0.2, 0.3, 0.4])
+  })
+
+  test('shedHighSide round-trips the front-high option', () => {
+    expect(DormerNode.parse({ shedHighSide: 'front' }).shedHighSide).toBe('front')
   })
 })
 

@@ -1,4 +1,5 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { resolveStairTotalRise } from '@pascal-app/core'
 import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import {
   CeilingNode,
@@ -13,21 +14,40 @@ import {
 } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
-import { publishLiveSceneSnapshot } from './live-sync'
+import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
+import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema, Vec3Schema } from './schemas'
 
-const ROOF_TYPES = ['hip', 'gable', 'shed', 'gambrel', 'dutch', 'mansard', 'flat'] as const
+const ROOF_TYPES = [
+  'hip',
+  'gable',
+  'shed',
+  'gambrel',
+  'dutch',
+  'mansard',
+  'flat',
+  'conical',
+] as const
 const RAILING_MODES = ['none', 'left', 'right', 'both'] as const
 
 export const createStoryShellInput = {
   levelId: NodeIdSchema,
   footprint: z.array(Vec2Schema).min(3),
-  wallHeight: z.number().positive().default(2.8),
-  wallThickness: z.number().positive().default(0.16),
+  wallHeight: measurement('length', 'm', {
+    positive: true,
+    description: 'Explicit wall height override. Omit for level-plane-bound walls.',
+  }).optional(),
+  wallThickness: measurement('length', 'm', {
+    positive: true,
+    description: 'Wall thickness.',
+  }).default(0.16),
   createSlab: z.boolean().default(true),
   createCeiling: z.boolean().default(true),
-  slabElevation: z.number().default(0.1),
-  ceilingHeight: z.number().positive().optional(),
+  slabElevation: measurement('length', 'm', { description: 'Slab elevation.' }).default(0.1),
+  ceilingHeight: measurement('length', 'm', {
+    positive: true,
+    description: 'Ceiling height.',
+  }).optional(),
   namePrefix: z.string().optional(),
   wallMaterialPreset: z.string().optional(),
   slabMaterialPreset: z.string().optional(),
@@ -40,6 +60,7 @@ export const createStoryShellOutput = {
   slabId: z.string().nullable(),
   ceilingId: z.string().nullable(),
   createdIds: z.array(z.string()),
+  ...liveSyncOutput,
 }
 
 export const createRoofInput = {
@@ -47,16 +68,25 @@ export const createRoofInput = {
   roofLevelId: NodeIdSchema.optional(),
   useDedicatedRoofLevel: z.boolean().default(true),
   roofLevelLabel: z.string().default('Roof'),
+  // A level ordinal (story index), not a length — kept numeric.
   roofLevelElevation: z.number().optional(),
-  roofLevelHeight: z.number().positive().optional(),
+  roofLevelHeight: measurement('length', 'm', {
+    positive: true,
+    description: 'Roof level height.',
+  }).optional(),
   center: Vec3Schema.optional(),
-  width: z.number().positive(),
-  depth: z.number().positive(),
+  width: measurement('length', 'm', { positive: true, description: 'Roof width.' }),
+  depth: measurement('length', 'm', { positive: true, description: 'Roof depth.' }),
   roofType: z.enum(ROOF_TYPES).default('hip'),
-  pitch: z.number().min(0).max(85).default(35),
-  wallHeight: z.number().min(0).default(0.35),
-  wallThickness: z.number().positive().default(0.16),
-  overhang: z.number().min(0).default(0.45),
+  pitch: measurement('angle', 'deg', { min: 0, max: 85, description: 'Roof pitch.' }).default(35),
+  wallHeight: measurement('length', 'm', { min: 0, description: 'Knee-wall height.' }).default(
+    0.35,
+  ),
+  wallThickness: measurement('length', 'm', {
+    positive: true,
+    description: 'Wall thickness.',
+  }).default(0.16),
+  overhang: measurement('length', 'm', { min: 0, description: 'Eave overhang.' }).default(0.45),
   materialPreset: z.string().optional(),
   name: z.string().optional(),
 }
@@ -67,27 +97,40 @@ export const createRoofOutput = {
   createdRoofLevelId: z.string().nullable(),
   roofId: z.string(),
   roofSegmentId: z.string(),
+  ...liveSyncOutput,
 }
 
 export const createStairBetweenLevelsInput = {
   fromLevelId: NodeIdSchema,
   toLevelId: NodeIdSchema,
   position: Vec3Schema,
-  rotation: z.number().default(0),
-  width: z.number().positive().default(1),
-  runLength: z.number().positive().default(3),
-  totalRise: z.number().positive().default(2.8),
+  rotation: measurement('angle', 'rad', { description: 'Y-axis rotation.' }).default(0),
+  width: measurement('length', 'm', { positive: true, description: 'Stair width.' }).default(1),
+  runLength: measurement('length', 'm', {
+    positive: true,
+    description: 'Horizontal run length.',
+  }).default(3),
+  totalRise: measurement('length', 'm', {
+    positive: true,
+    description: 'Total vertical rise.',
+  }).optional(),
   stepCount: z.number().int().positive().default(14),
   railingMode: z.enum(RAILING_MODES).default('both'),
   destinationSlabId: NodeIdSchema.optional(),
   sourceCeilingId: NodeIdSchema.optional(),
   createDestinationSlabOpening: z.boolean().default(true),
   createSourceCeilingOpening: z.boolean().default(true),
-  openingWidth: z.number().positive().optional(),
-  openingLength: z.number().positive().optional(),
-  openingOffset: z.number().min(0).default(0.15),
+  openingWidth: measurement('length', 'm', {
+    positive: true,
+    description: 'Floor opening width.',
+  }).optional(),
+  openingLength: measurement('length', 'm', {
+    positive: true,
+    description: 'Floor opening length.',
+  }).optional(),
+  openingOffset: measurement('length', 'm', { min: 0, description: 'Opening offset.' }).default(0),
   openingCenter: Vec2Schema.optional(),
-  openingRotation: z.number().optional(),
+  openingRotation: measurement('angle', 'rad', { description: 'Opening rotation.' }).optional(),
   materialPreset: z.string().optional(),
   name: z.string().optional(),
 }
@@ -98,6 +141,7 @@ export const createStairBetweenLevelsOutput = {
   destinationSlabId: z.string().nullable(),
   sourceCeilingId: z.string().nullable(),
   openingPolygon: z.array(Vec2Schema),
+  ...liveSyncOutput,
 }
 
 function textResult<T extends Record<string, unknown>>(payload: T) {
@@ -246,7 +290,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
           start: points[i],
           end: points[(i + 1) % points.length],
           thickness: wallThickness,
-          height: wallHeight,
+          ...(wallHeight !== undefined ? { height: wallHeight } : {}),
           frontSide: 'exterior',
           backSide: 'interior',
           ...(wallMaterialPreset ? { materialPreset: wallMaterialPreset } : {}),
@@ -262,6 +306,11 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
           name: namePrefix ? `${namePrefix} Slab` : undefined,
           polygon: points,
           elevation: slabElevation,
+          // Grounded solid: underside on the level plane, so the created
+          // story slab occupies [0, slabElevation] like the legacy
+          // extrude-from-zero model.
+          thickness: Math.max(slabElevation, 0),
+          recessed: slabElevation < 0,
           ...(slabMaterialPreset ? { materialPreset: slabMaterialPreset } : {}),
           metadata: { role: 'story-slab' },
         })
@@ -271,10 +320,13 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
 
       let ceilingId: string | null = null
       if (createCeiling) {
+        // Height-less unless the caller pinned one: a new story ceiling
+        // follows the level top automatically.
+        const explicitCeilingHeight = ceilingHeight ?? wallHeight
         const ceiling = CeilingNode.parse({
           name: namePrefix ? `${namePrefix} Ceiling` : undefined,
           polygon: points,
-          height: ceilingHeight ?? wallHeight,
+          ...(explicitCeilingHeight !== undefined ? { height: explicitCeilingHeight } : {}),
           ...(ceilingMaterialPreset ? { materialPreset: ceilingMaterialPreset } : {}),
           metadata: { role: 'story-ceiling' },
         })
@@ -283,13 +335,14 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       }
 
       const result = bridge.applyPatch(patches)
-      await publishLiveSceneSnapshot(bridge, 'create_story_shell')
+      const persistence = await publishLiveSceneSnapshot(bridge, 'create_story_shell')
       return textResult({
         levelId,
         wallIds,
         slabId,
         ceilingId,
         createdIds: result.createdIds as string[],
+        ...persistencePayload(persistence),
       })
     },
   )
@@ -321,9 +374,16 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       materialPreset,
       name,
     }) => {
+      const effectiveWidth = roofType === 'conical' ? Math.max(width, depth) : width
+      const effectiveDepth = roofType === 'conical' ? effectiveWidth : depth
       // Peak height is derived from pitch + footprint + type; we still
       // need it to size the auto-generated roof level container below.
-      const peakHeight = getActiveRoofHeight({ roofType, pitch, width, depth })
+      const peakHeight = getActiveRoofHeight({
+        roofType,
+        pitch,
+        width: effectiveWidth,
+        depth: effectiveDepth,
+      })
       const referenceLevel = assertNode(bridge, levelId, 'level')
       const patches: Array<{ op: 'create'; node: AnyNode; parentId: AnyNodeId }> = []
       let targetRoofLevelId = levelId as AnyNodeId
@@ -342,12 +402,12 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         const roofLevel = LevelNode.parse({
           name: roofLevelLabel,
           level: roofLevelElevation ?? nextLevelIndex(bridge, buildingId, referenceLevel),
+          height: roofLevelHeight ?? Math.max(wallHeight + peakHeight, 0.2),
           children: [],
           metadata: {
             role: 'roof',
             label: roofLevelLabel,
             referenceLevelId: levelId,
-            height: roofLevelHeight ?? Math.max(wallHeight + peakHeight, 0.2),
           },
         })
         targetRoofLevelId = roofLevel.id as AnyNodeId
@@ -357,8 +417,8 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
 
       const segment = RoofSegmentNode.parse({
         roofType,
-        width,
-        depth,
+        width: effectiveWidth,
+        depth: effectiveDepth,
         wallHeight,
         pitch,
         wallThickness,
@@ -380,13 +440,14 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         { op: 'create', node: roof, parentId: targetRoofLevelId },
         { op: 'create', node: segment, parentId: roof.id as AnyNodeId },
       ])
-      await publishLiveSceneSnapshot(bridge, 'create_roof')
+      const persistence = await publishLiveSceneSnapshot(bridge, 'create_roof')
       return textResult({
         referenceLevelId: levelId,
         roofLevelId: targetRoofLevelId,
         createdRoofLevelId,
         roofId: roof.id,
         roofSegmentId: segment.id,
+        ...persistencePayload(persistence),
       })
     },
   )
@@ -430,15 +491,7 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         )
       }
 
-      const segment = StairSegmentNode.parse({
-        segmentType: 'stair',
-        width,
-        length: runLength,
-        height: totalRise,
-        stepCount,
-        ...(materialPreset ? { materialPreset } : {}),
-      })
-      const stair = StairNode.parse({
+      const stairDraft = StairNode.parse({
         name: name ?? 'Stair',
         position: position as [number, number, number],
         rotation,
@@ -448,15 +501,33 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         slabOpeningMode: 'none',
         openingOffset,
         width,
-        totalRise,
+        ...(totalRise !== undefined ? { totalRise } : {}),
         stepCount,
         railingMode,
-        children: [segment.id],
+        children: [],
         ...(materialPreset ? { materialPreset } : {}),
         metadata: {
           openingManaged: 'manual-rectangular',
         },
       })
+      const riseNodes = {
+        ...bridge.getNodes(),
+        [fromLevel.id]: {
+          ...fromLevel,
+          children: [...(fromLevel as Extract<AnyNode, { type: 'level' }>).children, stairDraft.id],
+        },
+        [stairDraft.id]: stairDraft,
+      } as Record<string, AnyNode>
+      const resolvedTotalRise = resolveStairTotalRise(stairDraft, riseNodes)
+      const segment = StairSegmentNode.parse({
+        segmentType: 'stair',
+        width,
+        length: runLength,
+        height: resolvedTotalRise,
+        stepCount,
+        ...(materialPreset ? { materialPreset } : {}),
+      })
+      const stair = { ...stairDraft, children: [segment.id] }
 
       const openingPolygon = rectangularOpening({
         position: position as [number, number, number],
@@ -501,13 +572,14 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       }
 
       bridge.applyPatch(patches)
-      await publishLiveSceneSnapshot(bridge, 'create_stair_between_levels')
+      const persistence = await publishLiveSceneSnapshot(bridge, 'create_stair_between_levels')
       return textResult({
         stairId: stair.id,
         stairSegmentId: segment.id,
         destinationSlabId: destinationSlab?.id ?? null,
         sourceCeilingId: sourceCeiling?.id ?? null,
         openingPolygon,
+        ...persistencePayload(persistence),
       })
     },
   )

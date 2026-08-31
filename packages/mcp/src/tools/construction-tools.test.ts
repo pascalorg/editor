@@ -121,6 +121,48 @@ describe('construction tools', () => {
     expect(bridge.validateScene().valid).toBe(true)
   })
 
+  test('create_stair_between_levels defaults opening offset to zero', async () => {
+    const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
+    const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!
+    const upper = LevelNode.parse({ name: 'Second Floor', level: 1, metadata: { height: 2.8 } })
+    bridge.createNode(upper, building.id)
+
+    for (const level of [ground, upper]) {
+      const result = await client.callTool({
+        name: 'create_story_shell',
+        arguments: {
+          levelId: level.id,
+          footprint: [
+            [-4, -3],
+            [4, -3],
+            [4, 3],
+            [-4, 3],
+          ],
+          wallHeight: 2.8,
+        },
+      })
+      expect(result.isError).toBeFalsy()
+    }
+
+    const result = await client.callTool({
+      name: 'create_stair_between_levels',
+      arguments: {
+        fromLevelId: ground.id,
+        toLevelId: upper.id,
+        position: [0, 0, -1],
+        width: 1,
+        runLength: 3,
+        totalRise: 2.8,
+      },
+    })
+    expect(result.isError).toBeFalsy()
+    const parsed = JSON.parse((result.content as Array<{ type: string; text: string }>)[0]!.text)
+    const stair = bridge.getNode(parsed.stairId)
+
+    expect(stair?.type).toBe('stair')
+    if (stair?.type === 'stair') expect(stair.openingOffset).toBe(0)
+  })
+
   test('verify_scene flags suspicious multi-story wall heights', async () => {
     const building = Object.values(bridge.getNodes()).find((n) => n.type === 'building')!
     const ground = Object.values(bridge.getNodes()).find((n) => n.type === 'level')!

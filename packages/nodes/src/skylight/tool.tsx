@@ -9,12 +9,18 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX } from '@pascal-app/editor'
+import { triggerSFX, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
+import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
+import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfacePlacementGuides,
+  roofSurfaceFootprintFromNode,
+} from '../shared/roof-surface-placement-guides'
 import { skylightDefinition } from './definition'
 import SkylightPreview from './preview'
 
@@ -59,7 +65,7 @@ const SkylightTool = () => {
       const sx = Math.round(wx * 20) / 20
       const sz = Math.round(wz * 20) / 20
       const prev = lastSnapRef.current
-      if (!prev || prev[0] !== sx || prev[1] !== sz) {
+      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
         triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
@@ -71,6 +77,21 @@ const SkylightTool = () => {
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
       setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
       setPreviewPos(worldToBuildingLocal(wx, wy, wz))
+      usePlacementPreview.getState().set(
+        SkylightNode.parse({
+          ...previewNode,
+          parentId: hit.segment.id,
+          position: [hit.localX, hit.localY, hit.localZ],
+          roofSegmentId: hit.segment.id,
+        }),
+        hit.segment,
+      )
+      publishRoofSurfacePlacementGuides({
+        roof: event.node as RoofNode,
+        segment: hit.segment,
+        center: [hit.localX, hit.localY, hit.localZ],
+        footprint: roofSurfaceFootprintFromNode(previewNode),
+      })
       event.stopPropagation()
     }
 
@@ -95,6 +116,9 @@ const SkylightTool = () => {
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
       setSelection({ selectedIds: [skylight.id] })
       triggerSFX('sfx:item-place')
+      const placementPreview = usePlacementPreview.getState()
+      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+      clearRoofSurfacePlacementGuides()
       event.stopPropagation()
     }
 
@@ -106,19 +130,35 @@ const SkylightTool = () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
+      const placementPreview = usePlacementPreview.getState()
+      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+      clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection])
-
-  if (!activeBuildingId || !previewPos || !previewSurfaceQuat) return null
+  }, [activeBuildingId, setSelection, previewNode])
 
   return (
-    <group position={previewPos}>
-      <group rotation-y={previewYaw}>
-        <group quaternion={previewSurfaceQuat}>
-          <SkylightPreview node={previewNode} />
+    <>
+      <RoofAttachmentFallbackPreview
+        activeBuildingId={activeBuildingId}
+        ghost={<SkylightPreview node={previewNode} invalid />}
+        onInvalidTarget={() => {
+          setPreviewPos(null)
+          setPreviewSurfaceQuat(null)
+          const placementPreview = usePlacementPreview.getState()
+          if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+          clearRoofSurfacePlacementGuides()
+        }}
+      />
+      {activeBuildingId && previewPos && previewSurfaceQuat && (
+        <group position={previewPos}>
+          <group rotation-y={previewYaw}>
+            <group quaternion={previewSurfaceQuat}>
+              <SkylightPreview node={previewNode} />
+            </group>
+          </group>
         </group>
-      </group>
-    </group>
+      )}
+    </>
   )
 }
 

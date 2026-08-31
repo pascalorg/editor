@@ -4,10 +4,15 @@ import {
   type FloorplanGeometry,
   type FloorplanPoint,
   type GeometryContext,
+  getBlockFaceFrame,
+  getRoofWallFaceFrame,
   getScaledDimensions,
   type ItemNode,
+  type RoofSegmentNode,
+  roofFacePointToSegment,
   useLiveTransforms,
 } from '@pascal-app/core'
+import { formatLinearMeasurement, readFloorplanMetricNotationOverride } from '@pascal-app/editor'
 
 /**
  * Stage C floor-plan builder for item.
@@ -64,7 +69,7 @@ function resolveItemTransform(
     const wallRotation = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
     const wallLocalZ =
       item.asset.attachTo === 'wall-side'
-        ? ((wall.thickness ?? 0.1) / 2) * (item.side === 'back' ? -1 : 1)
+        ? ((wall.thickness ?? 0.1) / 2) * (item.side === 'front' ? 1 : -1)
         : item.position[2]
     const [offsetX, offsetY] = rotateVec(item.position[0], wallLocalZ, wallRotation)
     result = {
@@ -112,6 +117,53 @@ function resolveItemTransform(
       y: shelfZ + offsetY,
       rotation: shelfRotationY + localRotation,
     }
+  } else if (parentNode?.type === 'roof-segment') {
+    // Roof-hosted wall item: FACE-LOCAL position mapped through the face
+    // frame, then composed through the segment's and parent roof's poses
+    // into level-local plan coords.
+    const segment = parentNode as RoofSegmentNode
+    const roof = segment.parentId
+      ? (ctx.resolve(segment.parentId as AnyNodeId) as
+          | (AnyNode & { position: [number, number, number]; rotation: number })
+          | undefined)
+      : undefined
+    if (roof?.type === 'roof' && item.roofFace) {
+      const frame = getRoofWallFaceFrame(segment, item.roofFace)
+      const segLocal = roofFacePointToSegment(segment, item.roofFace, item.position)
+      const [sx, sz] = rotateVec(segLocal[0], segLocal[2], segment.rotation ?? 0)
+      const [rx, rz] = rotateVec(
+        sx + segment.position[0],
+        sz + segment.position[2],
+        roof.rotation ?? 0,
+      )
+      result = {
+        x: rx + roof.position[0],
+        y: rz + roof.position[2],
+        rotation: (roof.rotation ?? 0) + (segment.rotation ?? 0) + frame.yaw + localRotation,
+      }
+    }
+  } else if (parentNode?.type === 'block' && item.blockFaceId) {
+    const frame = getBlockFaceFrame(parentNode.topology, item.blockFaceId)
+    if (frame) {
+      const localX =
+        frame.origin[0] +
+        frame.xAxis[0] * item.position[0] +
+        frame.yAxis[0] * item.position[1] +
+        frame.normal[0] * item.position[2]
+      const localZ =
+        frame.origin[2] +
+        frame.xAxis[2] * item.position[0] +
+        frame.yAxis[2] * item.position[1] +
+        frame.normal[2] * item.position[2]
+      const hostRotation = parentNode.rotation ?? 0
+      const [offsetX, offsetZ] = rotateVec(localX, localZ, hostRotation)
+      const faceRotation = -Math.atan2(frame.xAxis[2], frame.xAxis[0])
+      result = {
+        x: parentNode.position[0] + offsetX,
+        y: parentNode.position[2] + offsetZ,
+        rotation: hostRotation + faceRotation + localRotation,
+      }
+    }
   } else {
     // Level / slab / ceiling parent — item.position is level-local.
     result = {
@@ -125,6 +177,58 @@ function resolveItemTransform(
   return result
 }
 
+export function buildItemContextualDimensions(
+  node: ItemNode,
+  ctx: GeometryContext,
+): FloorplanGeometry | null {
+  const transform = resolveItemTransform(node, ctx)
+  if (!transform) return null
+  const [width, , depth] = getScaledDimensions(node)
+  if (width <= 1e-6 || depth <= 1e-6) return null
+
+  const centerLocalZ = node.asset.attachTo === 'wall-side' ? depth / 2 : 0
+  const [centerOffsetX, centerOffsetY] = rotateVec(0, centerLocalZ, transform.rotation)
+  const cx = transform.x + centerOffsetX
+  const cy = transform.y + centerOffsetY
+  const halfWidth = width / 2
+  const halfDepth = depth / 2
+  const point = (x: number, y: number): FloorplanPoint => {
+    const [rx, ry] = rotateVec(x, y, transform.rotation)
+    return [cx + rx, cy + ry]
+  }
+  const widthNormal = rotateVec(0, -1, transform.rotation)
+  const depthNormal = rotateVec(1, 0, transform.rotation)
+  const unit = ctx.viewState?.unit ?? 'metric'
+  const metricNotation = readFloorplanMetricNotationOverride(ctx) ?? 'meters'
+  const stroke = ctx.viewState?.palette?.selectedStroke ?? '#2563eb'
+
+  return {
+    kind: 'group',
+    children: [
+      {
+        kind: 'dimension',
+        start: point(-halfWidth, -halfDepth),
+        end: point(halfWidth, -halfDepth),
+        offsetNormal: widthNormal,
+        offsetDistance: 0.28,
+        extensionOvershoot: 0.08,
+        text: formatLinearMeasurement(width, unit, metricNotation),
+        stroke,
+      },
+      {
+        kind: 'dimension',
+        start: point(halfWidth, -halfDepth),
+        end: point(halfWidth, halfDepth),
+        offsetNormal: depthNormal,
+        offsetDistance: 0.28,
+        extensionOvershoot: 0.08,
+        text: formatLinearMeasurement(depth, unit, metricNotation),
+        stroke,
+      },
+    ],
+  }
+}
+
 export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): FloorplanGeometry | null {
   const transform = resolveItemTransform(node, ctx)
   if (!transform) return null
@@ -132,9 +236,12 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
   const [width, , depth] = getScaledDimensions(node)
   if (width <= 0 || depth <= 0) return null
 
-  // Wall-side items are anchored at the front face — center their footprint
-  // half-a-depth back toward the wall surface.
-  const centerLocalZ = node.asset.attachTo === 'wall-side' ? -depth / 2 : 0
+  // Wall-side items are anchored at the mounted wall face; their body extends
+  // depth-ward AWAY from the wall (into the room), so push the footprint centre
+  // a half-depth out along the item's local +Z. After the front/back π flip in
+  // `transform.rotation`, +depth/2 always points off the wall for either side;
+  // a negative offset would lay the footprint across the wall onto the far side.
+  const centerLocalZ = node.asset.attachTo === 'wall-side' ? depth / 2 : 0
   const [centerOffsetX, centerOffsetY] = rotateVec(0, centerLocalZ, transform.rotation)
   const cx = transform.x + centerOffsetX
   const cy = transform.y + centerOffsetY
@@ -154,6 +261,11 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
   })
 
   const isSelected = ctx.viewState?.selected ?? false
+  // Marquee preview — the about-to-be-selected tint every other kind shows.
+  const isHighlighted = ctx.viewState?.highlighted ?? false
+  const showSelection = isSelected || isHighlighted
+  const isMoving = ctx.viewState?.moving ?? false
+  const selectedStroke = ctx.viewState?.palette?.selectedStroke ?? '#3b82f6'
   const floorPlanUrl = node.asset.floorPlanUrl
   const children: FloorplanGeometry[] = [
     {
@@ -168,8 +280,11 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
       // the child renders a paintable surface. `fill="none"` would make
       // clicks pass through to whatever's beneath, breaking selection.
       fill: floorPlanUrl ? 'transparent' : '#fef3c7',
-      stroke: '#92400e',
-      strokeWidth: 0.012,
+      // Selected items read as selected: palette stroke + heavier weight
+      // (the move dot used to be the only cue, and it hides in
+      // multi-selections).
+      stroke: showSelection ? selectedStroke : '#92400e',
+      strokeWidth: showSelection ? 0.035 : 0.012,
       opacity: 0.85,
     },
   ]
@@ -183,11 +298,30 @@ export function buildItemFloorplan(node: ItemNode, ctx: GeometryContext): Floorp
       center: [cx, cy],
       width,
       height: depth,
-      rotation: transform.rotation,
+      // `rotateVec` (the footprint polygon) applies R(-angle), but the renderer
+      // draws the image with SVG `rotate(+deg)` = R(+angle). Negate so the
+      // sprite rotates the same way as its footprint box (and 3D); otherwise the
+      // two counter-rotate and diverge by 2x the item's rotation.
+      rotation: -transform.rotation,
     })
   }
-  // Move handle — orange dot at the item center. Only when selected.
-  if (isSelected) {
+  // Selection ring ABOVE the thumbnail — the base polygon's selected stroke
+  // sits underneath the image, so re-draw it on top. `fill: none` keeps the
+  // ring click-through; the base polygon owns hit-testing.
+  if (showSelection && floorPlanUrl) {
+    children.push({
+      kind: 'polygon',
+      points,
+      fill: 'none',
+      stroke: selectedStroke,
+      strokeWidth: 0.035,
+      opacity: isSelected ? 0.95 : 0.7,
+    })
+  }
+  // Move handle — orange dot at the item center. Only when selected and not
+  // already moving: during a move the dot sits under the cursor, so a release
+  // over it would re-arm the move (and re-enter edit) instead of committing.
+  if (isSelected && !isMoving) {
     children.push({
       kind: 'move-handle',
       point: [cx, cy],

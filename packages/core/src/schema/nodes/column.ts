@@ -86,6 +86,8 @@ export const ColumnNode = BaseNode.extend({
   type: nodeType('column'),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
+  // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
+  supportSlabId: z.string().optional(),
   style: ColumnStyle.default('plain'),
   crossSection: ColumnCrossSection.default('round'),
   height: z.number().positive().default(2.5),
@@ -159,6 +161,9 @@ export const ColumnNode = BaseNode.extend({
   bracePlateEnabled: z.boolean().default(true),
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
+  // Unified paint-slot refs (`scene:`/`library:` MaterialRef per slot id),
+  // matching the slot model items/slab/shelf use. Absent = declared default.
+  slots: z.record(z.string(), z.string()).optional(),
 }).describe(dedent`
   Column node - used to represent structural or decorative pillars/columns.
   - style: visual approach such as plain, lathe-turned, carved, or cluster

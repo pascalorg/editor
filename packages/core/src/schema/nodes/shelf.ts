@@ -43,6 +43,8 @@ export const ShelfNode = BaseNode.extend({
   children: z.array(ItemNode.shape.id).default([]),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+  // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
+  supportSlabId: z.string().optional(),
 
   // Dimensions (meters). Schema-level defaults intentionally reproduce
   // the v1 wall-shelf so existing v1 scenes that omit the v2-introduced
@@ -86,6 +88,13 @@ export const ShelfNode = BaseNode.extend({
   // unchanged once `'shelf'` is added to `MaterialTarget`.
   material: MaterialSchema.optional(),
   materialPreset: z.string().optional(),
+
+  // Per-slot material overrides, mirroring `ItemNode.slots`. Key = slot id
+  // (`shelves` / `frame` / `back`, see `shelfSlots`), value = a `MaterialRef`
+  // string (`library:<id>` or `scene:<id>`). Absent slot = fall back to the
+  // legacy whole-shelf `material` / `materialPreset`, then the registry slot
+  // default. A dangling ref renders the default (never blocks).
+  slots: z.record(z.string(), z.string()).optional(),
 })
 
 export type ShelfNode = z.infer<typeof ShelfNode>

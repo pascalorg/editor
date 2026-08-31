@@ -16,6 +16,7 @@ import useEditor from './../../../store/use-editor'
 import { type ExtraPanel, IconRail } from './icon-rail'
 import { SettingsPanel, type SettingsPanelProps } from './panels/settings-panel'
 import { SitePanel, type SitePanelProps } from './panels/site-panel'
+import { useHostPanels } from './use-plugin-panels'
 
 interface AppSidebarProps {
   appMenuButton?: ReactNode
@@ -31,9 +32,12 @@ export function AppSidebar({
   sidebarTop,
   settingsPanelProps,
   sitePanelProps,
-  extraPanels,
+  extraPanels: hostExtraPanels,
   commandPaletteEmptyAction,
 }: AppSidebarProps) {
+  // Host-provided panels merged with registered host panels — the icon rail and
+  // content area treat both identically.
+  const extraPanels = useHostPanels(hostExtraPanels)
   const activePanel = useEditor((s) => s.activeSidebarPanel)
   const setActivePanel = useEditor((s) => s.setActiveSidebarPanel)
   const hasActivePanel =

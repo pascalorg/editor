@@ -1,19 +1,19 @@
-import type {
-  HandleDescriptor,
-  NodeDefinition,
-  ShelfNode as ShelfNodeType,
-} from '@pascal-app/core'
-import { shelfResizeAffordance, shelfRotateAffordance } from './floorplan-affordances'
+import type { HandleDescriptor, NodeDefinition, ShelfNode as ShelfNodeType } from '@pascal-app/core'
+import { sanitizeShelfDimensions } from './dimensions'
 import { buildShelfFloorplan } from './floorplan'
+import { shelfResizeAffordance, shelfRotateAffordance } from './floorplan-affordances'
 import { shelfFloorplanMoveTarget } from './floorplan-move'
 import { buildShelfGeometry, shelfRowSurfaceYs } from './geometry'
+import { shelfPaint } from './paint'
 import { shelfParametrics } from './parametrics'
 import { ShelfNode } from './schema'
+import { shelfSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.18
 const HEIGHT_HANDLE_OFFSET = 0.22
 const ROTATE_CORNER_OFFSET = 0.32
 const ROTATE_RING_OFFSET = 0.04
+const MOVE_FRONT_OFFSET = 0.35
 const MIN_SHELF_WIDTH = 0.3
 const MIN_SHELF_DEPTH = 0.1
 const MIN_SHELF_HEIGHT = 0.05
@@ -99,12 +99,41 @@ function shelfRotateHandle(): HandleDescriptor<ShelfNodeType> {
   }
 }
 
+function shelfMoveHandle(): HandleDescriptor<ShelfNodeType> {
+  return {
+    kind: 'translate',
+    placement: {
+      // Low to the floor at the front edge (matches the item move grip) so it
+      // reads as a floor-move grip and stays clear of the body resize / rotate
+      // handles that sit at mid-height.
+      position: (n) => {
+        const shelf = sanitizeShelfDimensions(n as ShelfNode)
+        return [0, 0.02, shelf.depth / 2 + MOVE_FRONT_OFFSET]
+      },
+    },
+    apply: (_n, pos) => ({ position: [pos[0], pos[1], pos[2]] }),
+    snapExtents: (n) => {
+      const shelf = sanitizeShelfDimensions(n as ShelfNode)
+      const swap = Math.abs(Math.sin(shelf.rotation[1] ?? 0)) > 0.9
+      return [swap ? shelf.depth : shelf.width, swap ? shelf.width : shelf.depth]
+    },
+  }
+}
+
 function shelfHandles(_node: ShelfNodeType): HandleDescriptor<ShelfNodeType>[] {
-  return [shelfWidthHandle(), shelfDepthHandle(), shelfHeightHandle(), shelfRotateHandle()]
+  return [
+    shelfWidthHandle(),
+    shelfDepthHandle(),
+    shelfHeightHandle(),
+    shelfRotateHandle(),
+    shelfMoveHandle(),
+  ]
 }
 
 export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   kind: 'shelf',
+  snapProfile: 'item',
+  facingIndicator: true,
   schemaVersion: 2,
   schema: ShelfNode,
   category: 'furnish',
@@ -130,8 +159,8 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
     withBottom: true,
     bracketStyle: 'minimal',
     // material / materialPreset left undefined — geometry falls back to
-    // `DEFAULT_SHELF_MATERIAL` (off-white), and paint mode writes the
-    // chosen catalog material into these fields.
+    // the per-slot off-white default, and slot paint mode writes chosen
+    // catalog materials into `slots`.
   }),
 
   capabilities: {
@@ -158,16 +187,19 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
     selectable: { hitVolume: 'bbox' },
     duplicable: true,
     deletable: true,
+    paint: shelfPaint,
+    slots: (n) => shelfSlots(n as ShelfNode),
     // Slab elevation lift via the generic `<FloorElevationSystem>` — a
     // shelf sitting over a raised slab visually rests on top of it.
     floorPlaced: {
       footprint: (node) => {
-        const shelf = node as ShelfNode
+        const shelf = sanitizeShelfDimensions(node as ShelfNode)
         return {
           dimensions: [shelf.width, shelf.height, shelf.depth] as [number, number, number],
           rotation: shelf.rotation,
         }
       },
+      collides: true,
     },
   },
 
@@ -189,6 +221,28 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   // system.tsx, no inline floor-plan SVG — see
   // `wiki/architecture/node-definitions.md`.
   geometry: buildShelfGeometry,
+  // Boards/posts/back depend only on these fields — never on hosted
+  // `children`. Lets <GeometrySystem> skip the dispose+rebuild (and the
+  // pointer enter/leave churn it causes) when an item reparents onto a row.
+  geometryKey: (n) => {
+    const s = sanitizeShelfDimensions(n as ShelfNode)
+    return JSON.stringify([
+      s.style,
+      s.width,
+      s.depth,
+      s.thickness,
+      s.height,
+      s.rows,
+      s.columns,
+      s.withBack,
+      s.withSides,
+      s.withBottom,
+      s.bracketStyle,
+      s.material,
+      s.materialPreset,
+      JSON.stringify(s.slots ?? null),
+    ])
+  },
   floorplan: buildShelfFloorplan,
   // 2D move handler — Path 1 in `FloorplanRegistryMoveOverlay`. Without
   // this the overlay falls through to Path 2 which stomps the SVG
@@ -218,7 +272,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   presentation: {
     label: 'nodes.shelf.label',
     description: 'A configurable shelving unit. Items host on each row.',
-    icon: { kind: 'url', src: '/icons/shelf.png' },
+    icon: { kind: 'url', src: '/icons/shelf.webp' },
     paletteSection: 'furnish',
     paletteOrder: 30,
   },

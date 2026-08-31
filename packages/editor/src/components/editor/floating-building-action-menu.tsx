@@ -38,7 +38,7 @@ export function FloatingBuildingActionMenu() {
       // Read lazily at click time — no need to subscribe to nodes for a
       // one-shot action.
       const node = useScene.getState().nodes[buildingId]
-      if (!node || node.type !== 'building') return
+      if (node?.type !== 'building') return
       sfxEmitter.emit('sfx:item-pick')
       setMovingNode(node as BuildingNode)
       setSelection({ buildingId: null })
@@ -57,7 +57,7 @@ export function FloatingBuildingActionMenu() {
           pointerEvents: 'auto',
           touchAction: 'none',
         }}
-        zIndexRange={[100, 0]}
+        zIndexRange={[25, 0]}
       >
         <NodeActionMenu
           onMove={handleMove}

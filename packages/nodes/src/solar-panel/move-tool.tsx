@@ -10,12 +10,27 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { EDITOR_LAYER, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import {
+  consumePlacementDragRelease,
+  EDITOR_LAYER,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from './geometry'
+import {
+  createRelativeRoofDrag,
+  type RelativeRoofDragTarget,
+  roofSegmentLocalToBuildingLocal,
+  snapRelativeRoofDragTarget,
+} from '../shared/relative-roof-drag'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfaceNodePlacementGuides,
+  snapRoofSurfaceNodeTarget,
+} from '../shared/roof-surface-placement-guides'
 
 // MeshBasicMaterial: avoids the WebGPU "Color target has no corresponding
 // fragment stage output / writeMask not zero" error that fires when
@@ -86,28 +101,39 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
     const panelObj = sceneRegistry.nodes.get(node.id)
     if (panelObj) panelObj.visible = false
 
-    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
-      const buildingId = useViewer.getState().selection.buildingId
-      const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
-      if (buildingObj) {
-        const v = new THREE.Vector3(wx, wy, wz)
-        buildingObj.worldToLocal(v)
-        return [v.x, v.y, v.z]
-      }
-      return [wx, wy, wz]
-    }
-
     let lastSnapX = 0
     let lastSnapZ = 0
+    let lastTarget: RelativeRoofDragTarget | null = null
+    let committed = false
+    const roofDrag = createRelativeRoofDrag(original)
+
+    const clearTarget = () => {
+      lastTarget = null
+      setHasHit(false)
+      clearRoofSurfacePlacementGuides()
+    }
+
+    const resolveSnappedTarget = (event: RoofEvent): RelativeRoofDragTarget | null => {
+      const rawTarget = roofDrag.resolve(event)
+      if (!rawTarget) return null
+      return snapRoofSurfaceNodeTarget({
+        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+        node,
+        bypass: event.nativeEvent?.shiftKey === true,
+      })
+    }
 
     const updateGhost = (event: RoofEvent) => {
-      const wx = event.position[0]
-      const wy = event.position[1]
-      const wz = event.position[2]
+      const target = resolveSnappedTarget(event)
+      if (!target) {
+        clearTarget()
+        return
+      }
+      lastTarget = target
 
-      const sx = Math.round(wx * 20) / 20
-      const sz = Math.round(wz * 20) / 20
-      if (sx !== lastSnapX || sz !== lastSnapZ) {
+      const sx = Math.round(target.localX * 20) / 20
+      const sz = Math.round(target.localZ * 20) / 20
+      if (event.nativeEvent?.shiftKey !== true && (sx !== lastSnapX || sz !== lastSnapZ)) {
         triggerSFX('sfx:grid-snap')
         lastSnapX = sx
         lastSnapZ = sz
@@ -119,35 +145,40 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
       // because analytical normals are computed in segment-local space
       // and the yaw is applied explicitly, avoiding any world-vs-local
       // normal mismatch.
-      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
-      if (!hit) return
-
-      const segLocalNormal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
+      const segLocalNormal = getAnalyticalNormal(target.localX, target.localZ, target.segment)
       setPreviewSurfaceQuat(surfaceQuatFromNormal(segLocalNormal, new THREE.Quaternion()))
-      setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
-      setPreviewPos(worldToBuildingLocal(wx, wy, wz))
+      setPreviewYaw((event.node.rotation ?? 0) + (target.segment.rotation ?? 0))
+      setPreviewPos(
+        roofSegmentLocalToBuildingLocal(target.segment.id, [
+          target.localX,
+          target.localY,
+          target.localZ,
+        ]),
+      )
       setHasHit(true)
+      publishRoofSurfaceNodePlacementGuides({
+        roof: event.node as RoofNode,
+        segment: target.segment,
+        center: [target.localX, target.localY, target.localZ],
+        node,
+      })
       event.stopPropagation()
     }
 
     const onRoofClick = (event: RoofEvent) => {
-      const roof = event.node as RoofNode
+      if (committed) return
       const st = useScene.getState()
 
-      const hit = resolveRoofSegmentHit(
-        roof,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
-      if (!hit) return
+      const target = lastTarget ?? resolveSnappedTarget(event)
+      if (!target) return
+      committed = true
 
-      const targetSegmentId = hit.segment.id as AnyNodeId
+      const targetSegmentId = target.segment.id as AnyNodeId
 
       // Compute segment-local normal for the committed node so the
       // renderer's surfaceQuat + outer segment.rotation compose to
       // the same world orientation the ghost showed.
-      const segLocalNormal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
+      const segLocalNormal = getAnalyticalNormal(target.localX, target.localZ, target.segment)
 
       st.updateNode(node.id as AnyNodeId, {
         position: original.position,
@@ -161,7 +192,7 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
       st.updateNode(node.id as AnyNodeId, {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
-        position: [hit.localX, hit.localY, hit.localZ],
+        position: [target.localX, target.localY, target.localZ],
         rotation: original.rotation,
         // Segment-local normal — must stay consistent with getAnalyticalNormal
         // semantics so the renderer's surfaceQuat is in the correct frame.
@@ -194,6 +225,7 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
       if (obj) obj.visible = true
 
       triggerSFX('sfx:item-place')
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
       event.stopPropagation()
     }
@@ -214,6 +246,7 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
         }
         useScene.getState().deleteNode(node.id as AnyNodeId)
         markToolCancelConsumed()
+        clearRoofSurfacePlacementGuides()
         exitMoveMode()
         return
       }
@@ -234,22 +267,37 @@ export default function MoveSolarPanelTool({ node }: { node: SolarPanelNode }) {
 
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
+    }
+
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      if (!lastTarget) return
+      onRoofClick({
+        nativeEvent: event,
+        stopPropagation: () => event.stopPropagation(),
+      } as unknown as RoofEvent)
     }
 
     emitter.on('roof:move', updateGhost)
     emitter.on('roof:enter', updateGhost)
     emitter.on('roof:click', onRoofClick)
+    emitter.on('roof:leave', clearTarget)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       emitter.off('roof:move', updateGhost)
       emitter.off('roof:enter', updateGhost)
       emitter.off('roof:click', onRoofClick)
+      emitter.off('roof:leave', clearTarget)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
 
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
+      clearRoofSurfacePlacementGuides()
       useScene.temporal.getState().resume()
     }
   }, [exitMoveMode, node])

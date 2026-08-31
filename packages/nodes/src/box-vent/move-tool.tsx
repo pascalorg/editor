@@ -10,12 +10,26 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import {
+  consumePlacementDragRelease,
+  markToolCancelConsumed,
+  triggerSFX,
+  useEditor,
+} from '@pascal-app/editor'
 import { useCallback, useEffect, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
+import {
+  createRelativeRoofDrag,
+  type RelativeRoofDragTarget,
+  roofSegmentLocalToBuildingLocal,
+  snapRelativeRoofDragTarget,
+} from '../shared/relative-roof-drag'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfaceNodePlacementGuides,
+  snapRoofSurfaceNodeTarget,
+} from '../shared/roof-surface-placement-guides'
 import BoxVentPreview from './preview'
 
 /**
@@ -55,48 +69,72 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
     const ventObj = sceneRegistry.nodes.get(node.id)
     if (ventObj) ventObj.visible = false
 
-    const worldToBuildingLocal = (wx: number, wy: number, wz: number): [number, number, number] => {
-      const buildingId = useViewer.getState().selection.buildingId
-      const buildingObj = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
-      if (!buildingObj) return [wx, wy, wz]
-      const v = new THREE.Vector3(wx, wy, wz)
-      buildingObj.worldToLocal(v)
-      return [v.x, v.y, v.z]
+    let lastSnap: [number, number] | null = null
+    let lastTarget: RelativeRoofDragTarget | null = null
+    let committed = false
+    const roofDrag = createRelativeRoofDrag(original)
+
+    const clearTarget = () => {
+      lastTarget = null
+      lastSnap = null
+      setPreviewPos(null)
+      setPreviewSurfaceQuat(null)
+      clearRoofSurfacePlacementGuides()
     }
 
-    let lastSnap: [number, number] | null = null
+    const resolveSnappedTarget = (event: RoofEvent): RelativeRoofDragTarget | null => {
+      const rawTarget = roofDrag.resolve(event)
+      if (!rawTarget) return null
+      return snapRoofSurfaceNodeTarget({
+        target: snapRelativeRoofDragTarget(rawTarget, event.nativeEvent?.shiftKey === true),
+        node,
+        bypass: event.nativeEvent?.shiftKey === true,
+      })
+    }
 
     const updatePreview = (event: RoofEvent) => {
-      const wx = event.position[0]
-      const wy = event.position[1]
-      const wz = event.position[2]
+      const target = resolveSnappedTarget(event)
+      if (!target) {
+        clearTarget()
+        return
+      }
+      lastTarget = target
 
-      const sx = Math.round(wx * 20) / 20
-      const sz = Math.round(wz * 20) / 20
-      if (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz) {
+      const sx = Math.round(target.localX * 20) / 20
+      const sz = Math.round(target.localZ * 20) / 20
+      if (
+        event.nativeEvent?.shiftKey !== true &&
+        (!lastSnap || lastSnap[0] !== sx || lastSnap[1] !== sz)
+      ) {
         triggerSFX('sfx:grid-snap')
         lastSnap = [sx, sz]
       }
 
-      const hit = resolveRoofSegmentHit(event.node as RoofNode, wx, wy, wz)
-      if (!hit) return
-
-      const normal = getAnalyticalNormal(hit.localX, hit.localZ, hit.segment)
+      const normal = getAnalyticalNormal(target.localX, target.localZ, target.segment)
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
-      setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
-      setPreviewPos(worldToBuildingLocal(wx, wy, wz))
+      setPreviewYaw((event.node.rotation ?? 0) + (target.segment.rotation ?? 0))
+      setPreviewPos(
+        roofSegmentLocalToBuildingLocal(target.segment.id, [
+          target.localX,
+          target.localY,
+          target.localZ,
+        ]),
+      )
+      publishRoofSurfaceNodePlacementGuides({
+        roof: event.node as RoofNode,
+        segment: target.segment,
+        center: [target.localX, target.localY, target.localZ],
+        node,
+      })
       event.stopPropagation()
     }
 
     const onRoofClick = (event: RoofEvent) => {
-      const hit = resolveRoofSegmentHit(
-        event.node as RoofNode,
-        event.position[0],
-        event.position[1],
-        event.position[2],
-      )
-      if (!hit) return
-      const targetSegmentId = hit.segment.id as AnyNodeId
+      if (committed) return
+      const target = lastTarget ?? resolveSnappedTarget(event)
+      if (!target) return
+      committed = true
+      const targetSegmentId = target.segment.id as AnyNodeId
       const st = useScene.getState()
 
       // Reparent if the cursor landed on a different segment than the
@@ -124,7 +162,7 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
       st.updateNode(node.id as AnyNodeId, {
         roofSegmentId: targetSegmentId,
         parentId: targetSegmentId,
-        position: [hit.localX, hit.localY, hit.localZ],
+        position: [target.localX, target.localY, target.localZ],
         rotation: original.rotation,
         visible: true,
         metadata: {},
@@ -138,6 +176,7 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
       if (obj) obj.visible = true
 
       triggerSFX('sfx:item-place')
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
       event.stopPropagation()
     }
@@ -158,6 +197,7 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
         useScene.getState().deleteNode(node.id as AnyNodeId)
         useScene.temporal.getState().resume()
         markToolCancelConsumed()
+        clearRoofSurfacePlacementGuides()
         exitMoveMode()
         return
       }
@@ -177,25 +217,40 @@ export default function MoveBoxVentTool({ node }: { node: BoxVentNode }) {
 
       useScene.temporal.getState().resume()
       markToolCancelConsumed()
+      clearRoofSurfacePlacementGuides()
       exitMoveMode()
+    }
+
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      if (!lastTarget) return
+      onRoofClick({
+        nativeEvent: event,
+        stopPropagation: () => event.stopPropagation(),
+      } as unknown as RoofEvent)
     }
 
     emitter.on('roof:move', updatePreview)
     emitter.on('roof:enter', updatePreview)
     emitter.on('roof:click', onRoofClick)
+    emitter.on('roof:leave', clearTarget)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onRoofClick)
+      emitter.off('roof:leave', clearTarget)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
 
       // Safety restore — if the tool is unmounted by something other than
       // a commit / cancel path (e.g. tool change, selection wipe), leave
       // the original mesh visible rather than stranded invisible.
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = true
+      clearRoofSurfacePlacementGuides()
       useScene.temporal.getState().resume()
     }
   }, [exitMoveMode, node])

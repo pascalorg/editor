@@ -12,12 +12,16 @@ The event bus (`emitter`) is a global `mitt` instance typed with `EditorEvents`.
 
 ```
 <nodeType>:<suffix>
+node:<suffix>
 ```
 
-Example keys: `wall:click`, `item:enter`, `door:double-click`, `grid:pointerdown`
+Example keys: `wall:click`, `block:enter`, `node:click`, `grid:pointerdown`
 
 ### Node Types
-`wall` `item` `site` `building` `level` `zone` `slab` `ceiling` `roof` `window` `door`
+Every registered `AnyNode` discriminator is available as a typed node-event
+prefix, including `block`. `node:*` is the cross-kind channel for
+consumers that intentionally handle every node kind without maintaining a
+parallel list.
 
 ### Suffixes
 ```ts
@@ -39,7 +43,19 @@ interface NodeEvent<T extends AnyNode = AnyNode> {
 }
 ```
 
-Grid events only carry `position` and `nativeEvent` (no `node`).
+Grid events carry `position`, `localPosition`, optional hit metadata, and
+`nativeEvent` (but no `node`).
+
+## Selection Intent Events
+
+`selection:canvas-node-click` fires after the editor accepts a 2D or 3D node
+click and resolves the node that selection actually targets. Hosts can use it
+for contextual navigation without reacting to programmatic `setSelection`
+calls. The payload is the resolved `AnyNode`.
+
+`selection:find-node` is the explicit reveal intent emitted by the node action
+menu. Hosts and plugins that own catalogs or panels listen to it and reveal the
+node's related controls or presets.
 
 ## Emitting
 
@@ -51,7 +67,9 @@ const events = useNodeEvents(node, 'wall')
 return <mesh ref={ref} {...events} />
 ```
 
-`useNodeEvents` converts R3F `ThreeEvent` into a `NodeEvent` and emits `wall:click`, `wall:enter`, etc. It suppresses events while the camera is dragging.
+`useNodeEvents` converts R3F `ThreeEvent` into a `NodeEvent` and emits both the
+kind-specific event (`wall:click`, `block:enter`, etc.) and its generic
+`node:*` counterpart. It suppresses events while the camera is dragging.
 
 ## Listening
 

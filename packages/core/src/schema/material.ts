@@ -27,7 +27,8 @@ export type MaterialProperties = z.infer<typeof MaterialProperties>
 
 export const MaterialSchema = z.object({
   id: z.string().optional(),
-  preset: MaterialPreset.optional(),
+  // Coerce unknown presets (legacy/AI-generated data) to 'custom' instead of throwing.
+  preset: MaterialPreset.catch('custom').optional(),
   properties: MaterialProperties.optional(),
   texture: z
     .object({
@@ -52,11 +53,17 @@ export const MaterialTarget = z.enum([
   'door',
   'window',
   'shelf',
+  'cabinet',
   'chimney',
   'skylight',
   'dormer',
   'box-vent',
   'ridge-vent',
+  'turbine-vent',
+  'cupola',
+  'eyebrow-vent',
+  'gutter',
+  'downspout',
 ])
 export type MaterialTarget = z.infer<typeof MaterialTarget>
 
@@ -109,7 +116,7 @@ export type MaterialPresetPayload = z.infer<typeof MaterialPresetPayloadSchema>
 
 export const DEFAULT_MATERIALS: Record<MaterialPreset, MaterialProperties> = {
   white: {
-    color: '#ffffff',
+    color: '#e9e9e9',
     roughness: 0.9,
     metalness: 0,
     opacity: 1,
@@ -157,7 +164,7 @@ export const DEFAULT_MATERIALS: Record<MaterialPreset, MaterialProperties> = {
     side: 'front',
   },
   plaster: {
-    color: '#f5f5dc',
+    color: '#ebebd3',
     roughness: 0.95,
     metalness: 0,
     opacity: 1,
@@ -173,7 +180,7 @@ export const DEFAULT_MATERIALS: Record<MaterialPreset, MaterialProperties> = {
     side: 'front',
   },
   marble: {
-    color: '#fafafa',
+    color: '#ebebeb',
     roughness: 0.2,
     metalness: 0.1,
     opacity: 1,
@@ -181,7 +188,7 @@ export const DEFAULT_MATERIALS: Record<MaterialPreset, MaterialProperties> = {
     side: 'front',
   },
   custom: {
-    color: '#ffffff',
+    color: '#e9e9e9',
     roughness: 0.5,
     metalness: 0,
     opacity: 1,

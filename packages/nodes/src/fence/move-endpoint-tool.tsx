@@ -1,20 +1,28 @@
 'use client'
 
-import { type FenceNode, useScene, type WallNode } from '@pascal-app/core'
+import {
+  emitter,
+  type FenceNode,
+  type GridEvent,
+  getWallCurveLength,
+  useScene,
+  type WallNode,
+} from '@pascal-app/core'
 import {
   CursorSphere,
   type FencePlanPoint,
   formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
-  type MovingFenceEndpoint,
+  MeasurementPill,
   triggerSFX,
+  useAlignmentGuides,
   useDragAction,
-  useEditor,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { moveFenceEndpointDragAction } from './actions/move-endpoint'
 
 /**
@@ -31,10 +39,14 @@ import { moveFenceEndpointDragAction } from './actions/move-endpoint'
  *  - Angle label between this segment and any neighbour segment sharing
  *    the dragged endpoint — same legacy treatment.
  *
- *  Mounted by the legacy ToolManager via the `move-endpoint` affordance
- *  key. `target.fence` + `target.endpoint` come from the editor store
- *  (`useEditor.movingFenceEndpoint`).
+ *  Mounted by ToolManager via the `move-endpoint` affordance key. ToolManager
+ *  reconstructs this `target` from the reshaped node + the scope's endpoint.
  */
+export type MovingFenceEndpoint = {
+  fence: FenceNode
+  endpoint: 'start' | 'end'
+}
+
 type SegmentLike = {
   id: string
   start: FencePlanPoint
@@ -90,11 +102,14 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
       : [target.fence.end[0], target.fence.end[1]]
 
   const [altPressed, setAltPressed] = useState(false)
+  const unit = useViewer((s) => s.unit)
 
   const exitMoveMode = (committed: boolean) => {
     if (committed) triggerSFX('sfx:item-place')
     useViewer.getState().setSelection({ selectedIds: [fenceId] })
-    useEditor.getState().setMovingFenceEndpoint(null)
+    useInteractionScope
+      .getState()
+      .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'endpoint')
   }
 
   useDragAction({
@@ -116,6 +131,49 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
   const liveStart = liveFence?.start ?? target.fence.start
   const liveEnd = liveFence?.end ?? target.fence.end
   const movingPoint = endpoint === 'start' ? liveStart : liveEnd
+
+  // Ticker SFX on each grid-snap step, mirroring the wall endpoint tool.
+  // First tick just seeds the ref (no sound on mount). The drag action receives
+  // the Shift modifier through grid events, so mirror that modifier here to
+  // avoid playing grid ticks while snap is bypassed.
+  const previousGridPosRef = useRef<FencePlanPoint | null>(null)
+  const shiftPressedRef = useRef(false)
+  useEffect(() => {
+    const onGridMove = (event: GridEvent) => {
+      shiftPressedRef.current = event.nativeEvent?.shiftKey === true
+    }
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') shiftPressedRef.current = true
+    }
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (event.key === 'Shift') shiftPressedRef.current = false
+    }
+    const onBlur = () => {
+      shiftPressedRef.current = false
+    }
+    emitter.on('grid:move', onGridMove)
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      emitter.off('grid:move', onGridMove)
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+    }
+  }, [])
+
+  useEffect(() => {
+    const prev = previousGridPosRef.current
+    if (
+      !shiftPressedRef.current &&
+      prev &&
+      (prev[0] !== movingPoint[0] || prev[1] !== movingPoint[1])
+    ) {
+      triggerSFX('sfx:grid-snap')
+    }
+    previousGridPosRef.current = movingPoint
+  }, [movingPoint])
 
   // Neighbour segments at the parent level — computed once at mount.
   const parentId = target.fence.parentId ?? null
@@ -151,6 +209,10 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
     ],
   )
 
+  // Safety net: drop any alignment guides if the tool unmounts without the
+  // action's commit / cancel running (e.g. abrupt teardown).
+  useEffect(() => () => useAlignmentGuides.getState().clear(), [])
+
   // Window-level keystate for the detach badge — independent of grid
   // event modifiers so the badge can toggle without a pointer move.
   useEffect(() => {
@@ -174,9 +236,34 @@ export const MoveFenceEndpointTool: React.FC<{ target: MovingFenceEndpoint }> = 
 
   const cursorPos: [number, number, number] = [movingPoint[0], 0, movingPoint[1]]
 
+  // Live segment dimensions for the floating pill. Length tracks the drag;
+  // height + thickness are static during an endpoint move.
+  const liveLength = getWallCurveLength({
+    start: liveStart,
+    end: liveEnd,
+    curveOffset: liveFence?.curveOffset ?? target.fence.curveOffset,
+  })
+  const fenceHeight = target.fence.height ?? 1.8
+  const dimMidX = (liveStart[0] + liveEnd[0]) / 2
+  const dimMidZ = (liveStart[1] + liveEnd[1]) / 2
+
   return (
     <group>
       <CursorSphere position={cursorPos} showTooltip={false} />
+      <Html
+        center
+        position={[dimMidX, fenceHeight + 0.3, dimMidZ]}
+        style={{ pointerEvents: 'none', touchAction: 'none' }}
+        zIndexRange={[100, 0]}
+      >
+        <MeasurementPill
+          height={fenceHeight}
+          length={liveLength}
+          primary="length"
+          thickness={target.fence.thickness ?? 0.08}
+          unit={unit}
+        />
+      </Html>
       <Html
         position={cursorPos}
         style={{ pointerEvents: 'none', touchAction: 'none' }}

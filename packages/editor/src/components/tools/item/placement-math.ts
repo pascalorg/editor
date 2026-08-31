@@ -1,9 +1,26 @@
 import { type AssetInput, isObject } from '@pascal-app/core'
 import { Euler, Matrix3, type Matrix4, Quaternion, Vector3 } from 'three'
-import useEditor from '../../../store/use-editor'
+import { resolveSnapFlags } from '../../../lib/snapping-mode'
+import useEditor, { getActiveSnappingMode } from '../../../store/use-editor'
 
+// Sentinel returned when the active context's snapping mode disables grid snap.
+// The snap helpers below treat any `step <= 0` as "no grid snap" and pass the
+// raw value through. For items the default mode is now `lines` (grid off), so
+// item placement/move is free + line-snap unless the user opts into `grid`.
 function getGridSnapStep(): number {
-  return useEditor.getState().gridSnapStep
+  return resolveSnapFlags(getActiveSnappingMode()).grid ? useEditor.getState().gridSnapStep : 0
+}
+
+const ROTATION_QUANTUM = Math.PI / 4
+
+/**
+ * R/T rotation: round the current angle to the nearest 45° then step ONE
+ * increment in `direction` (+1 / -1), so the node always lands on a clean 45°
+ * multiple regardless of its starting angle (12° → 45°, 40° → 90°) rather than a
+ * blind ±45° from an arbitrary angle.
+ */
+export function steppedRotation(current: number, direction: 1 | -1): number {
+  return (Math.round(current / ROTATION_QUANTUM) + direction) * ROTATION_QUANTUM
 }
 
 function positiveModulo(value: number, divisor: number): number {
@@ -14,6 +31,7 @@ function positiveModulo(value: number, divisor: number): number {
  * Snaps a position to the active grid step, aligning item edges to grid lines.
  */
 export function snapToGrid(position: number, dimension: number, step = getGridSnapStep()): number {
+  if (step <= 0) return position
   const halfDim = dimension / 2
   const offset = positiveModulo(halfDim, step)
   return Math.round((position - offset) / step) * step + offset
@@ -23,6 +41,7 @@ export function snapToGrid(position: number, dimension: number, step = getGridSn
  * Snap a value to the active grid step (used for wall-local positions).
  */
 export function snapToHalf(value: number, step = getGridSnapStep()): number {
+  if (step <= 0) return value
   return Math.round(value / step) * step
 }
 
@@ -30,6 +49,7 @@ export function snapToHalf(value: number, step = getGridSnapStep()): number {
  * Round a value up to the next multiple of `step`, with a minimum of `step`.
  */
 export function snapUpToGridStep(value: number, step = getGridSnapStep()): number {
+  if (step <= 0) return value
   return Math.max(step, Math.ceil(value / step) * step)
 }
 
@@ -53,6 +73,12 @@ export function getGridAlignedDimensions(
     return [snapUpToGridStep(w, step), snapUpToGridStep(h, step), d]
   }
   return [snapUpToGridStep(w, step), h, snapUpToGridStep(d, step)]
+}
+
+export function getDetachedAttachmentPreviewLift(
+  attachTo: AssetInput['attachTo'] | null | undefined,
+): number {
+  return attachTo ? 0.45 : 0
 }
 
 /**
@@ -111,13 +137,13 @@ export function isValidWallSideFace(normal: [number, number, number] | undefined
   return Math.abs(normal[2]) > 0.7
 }
 
-/**
- * Strip the `isTransient` flag from node metadata before committing.
- */
+/** Strip placement-only metadata flags before committing a draft. */
 export function stripTransient(meta: any): any {
   if (!isObject(meta)) return meta
-  const { isTransient, ...rest } = meta as Record<string, any>
-  return rest
+  const nextMeta = { ...(meta as Record<string, any>) }
+  delete nextMeta.isNew
+  delete nextMeta.isTransient
+  return nextMeta
 }
 
 const _up = new Vector3(0, 1, 0)

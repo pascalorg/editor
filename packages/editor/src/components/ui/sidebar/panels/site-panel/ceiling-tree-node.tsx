@@ -1,10 +1,9 @@
-'use client'
-
 import { type AnyNodeId, type CeilingNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { formatAreaLabel } from './../../../../../lib/measurements'
 import useEditor from './../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNode, TreeNodeWrapper } from './tree-node'
@@ -34,6 +33,7 @@ export const CeilingTreeNode = memo(function CeilingTreeNode({
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
+  const unit = useViewer((state) => state.unit)
 
   // Expand when a descendant is selected — imperative to avoid subscribing to the full selectedIds array
   useEffect(() => {
@@ -77,9 +77,7 @@ export const CeilingTreeNode = memo(function CeilingTreeNode({
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const area = calculatePolygonArea(polygon).toFixed(1)
-  const defaultName = 'nodeTypes.ceilingWithArea'
-  const defaultNameParams = { area }
+  const defaultName = `Ceiling (${formatAreaLabel(calculatePolygonArea(polygon), unit)})`
 
   return (
     <TreeNodeWrapper
@@ -88,7 +86,7 @@ export const CeilingTreeNode = memo(function CeilingTreeNode({
       expanded={expanded}
       hasChildren={children.length > 0}
       icon={
-        <Image alt="" className="object-contain" height={14} src="/icons/ceiling.png" width={14} />
+        <Image alt="" className="object-contain" height={14} src="/icons/ceiling.webp" width={14} />
       }
       isHovered={isHovered}
       isLast={isLast}
@@ -97,7 +95,6 @@ export const CeilingTreeNode = memo(function CeilingTreeNode({
       label={
         <InlineRenameInput
           defaultName={defaultName}
-          defaultNameParams={defaultNameParams}
           isEditing={isEditing}
           nodeId={nodeId as AnyNodeId}
           onStartEditing={handleStartEditing}

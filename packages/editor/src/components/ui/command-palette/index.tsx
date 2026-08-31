@@ -10,8 +10,7 @@ import { useEffect, useState } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/shallow'
 import { Dialog, DialogContent, DialogTitle } from './../../../components/ui/primitives/dialog'
-import { getLevelDisplayName } from '../../../lib/level-name'
-import { messages, useLocale } from '../../../lib/i18n'
+import { getLevelDisplayName } from '@pascal-app/core'
 import { useCommandRegistry } from '../../../store/use-command-registry'
 import { usePaletteViewRegistry } from '../../../store/use-palette-view-registry'
 
@@ -149,10 +148,10 @@ function OptionItem({
 // Sub-page label map
 // ---------------------------------------------------------------------------
 const PAGE_LABEL: Record<string, string> = {
-  'wall-mode': 'commands.wallMode',
-  'level-mode': 'commands.levelMode',
-  'rename-level': 'commands.renameLevel',
-  'goto-level': 'commands.gotoLevel',
+  'wall-mode': 'Wall Mode',
+  'level-mode': 'Level Mode',
+  'rename-level': 'Rename Level',
+  'goto-level': 'Go to Level',
 }
 
 // ---------------------------------------------------------------------------
@@ -190,8 +189,6 @@ function EmptyActionItem({ action }: { action: CommandPaletteEmptyAction }) {
 // Main component
 // ---------------------------------------------------------------------------
 export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEmptyAction }) {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale as 'en' | 'zh'] as Record<string, string>)[key] || key
   const { open, setOpen, mode, setMode, pages, inputValue, setInputValue, navigateTo, goBack } =
     useCommandPalette()
 
@@ -247,16 +244,17 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
     setOpen(false)
   }
 
-  const wallModeLabel: Record<'cutaway' | 'up' | 'down', string> = {
-    cutaway: t('commands.cutaway'),
-    up: t('commands.up'),
-    down: t('commands.down'),
+  const wallModeLabel: Record<'cutaway' | 'up' | 'down' | 'translucent', string> = {
+    cutaway: 'Cutaway',
+    up: 'Up',
+    down: 'Down',
+    translucent: 'Translucent',
   }
   const levelModeLabel: Record<'manual' | 'stacked' | 'exploded' | 'solo', string> = {
-    manual: t('commands.manual'),
-    stacked: t('commands.stacked'),
-    exploded: t('commands.exploded'),
-    solo: t('commands.solo'),
+    manual: 'Manual',
+    stacked: 'Stacked',
+    exploded: 'Exploded',
+    solo: 'Solo',
   }
 
   const confirmRename = () => {
@@ -295,7 +293,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
   return (
     <Dialog onOpenChange={setOpen} open={open}>
       <DialogContent className="max-w-lg gap-0 overflow-hidden p-0" showCloseButton={false}>
-        <DialogTitle className="sr-only">{t('commands.commandPalette')}</DialogTitle>
+        <DialogTitle className="sr-only">Command Palette</DialogTitle>
 
         {modeView && <modeView.Component onBack={onBack} onClose={onClose} />}
 
@@ -319,7 +317,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
                   onClick={goBack}
                   type="button"
                 >
-                  {t(PAGE_LABEL[page] ?? views.get(page)?.label ?? page)}
+                  {PAGE_LABEL[page] ?? views.get(page)?.label ?? page}
                 </button>
               )}
               <Command.Input
@@ -328,10 +326,10 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
                 onValueChange={setInputValue}
                 placeholder={
                   page === 'rename-level'
-                    ? t('commands.typeNewName')
+                    ? 'Type a new name…'
                     : page
-                      ? t('commands.filterOptions')
-                      : t('commands.searchActions')
+                      ? 'Filter options…'
+                      : 'Search actions…'
                 }
                 value={inputValue}
               />
@@ -340,7 +338,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
             <Command.List className="max-h-100 overflow-y-auto p-1.5">
               {(!emptyAction || page) && (
                 <Command.Empty className="py-8 text-center text-muted-foreground text-sm">
-                  {t('commands.noCommandsFound')}
+                  No commands found.
                 </Command.Empty>
               )}
               {emptyAction && !page && <EmptyActionItem action={emptyAction} />}
@@ -376,7 +374,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
               {/* ── Wall Mode sub-page ────────────────────────────────────── */}
               {page === 'wall-mode' && (
                 <Command.Group heading="Wall Mode">
-                  {(['cutaway', 'up', 'down'] as const).map((mode) => (
+                  {(['cutaway', 'up', 'down', 'translucent'] as const).map((mode) => (
                     <OptionItem
                       isActive={wallMode === mode}
                       key={mode}
@@ -448,7 +446,7 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
                           Rename to <span className="font-medium">"{inputValue.trim()}"</span>
                         </>
                       ) : (
-                        <span className="text-muted-foreground">{t('commands.typeNewNameAbove')}</span>
+                        <span className="text-muted-foreground">Type a new name above…</span>
                       )}
                     </span>
                   </Command.Item>
@@ -459,18 +457,18 @@ export function CommandPalette({ emptyAction }: { emptyAction?: CommandPaletteEm
             {/* Footer hint */}
             <div className="flex items-center justify-between border-border/50 border-t px-3 py-2">
               <span className="text-[11px] text-muted-foreground">
-                <Shortcut keys={['↑', '↓']} /> {t('commands.navigate')}
+                <Shortcut keys={['↑', '↓']} /> navigate
               </span>
               <span className="text-[11px] text-muted-foreground">
-                <Shortcut keys={['↵']} /> {t('commands.select')}
+                <Shortcut keys={['↵']} /> select
               </span>
               {page ? (
                 <span className="text-[11px] text-muted-foreground">
-                  <Shortcut keys={['⌫']} /> {t('commands.back')}
+                  <Shortcut keys={['⌫']} /> back
                 </span>
               ) : (
                 <span className="text-[11px] text-muted-foreground">
-                  <Shortcut keys={['Esc']} /> {t('commands.close')}
+                  <Shortcut keys={['Esc']} /> close
                 </span>
               )}
             </div>

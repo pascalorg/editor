@@ -4,6 +4,8 @@ import {
   type AnyNode,
   type AnyNodeId,
   type LevelNode,
+  resolveStairTotalRise,
+  type SlabNode,
   type StairNode,
   type StairRailingMode,
   type StairSegmentNode,
@@ -18,65 +20,82 @@ import {
   ActionGroup,
   DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE,
   duplicateStairSubtree,
+  getStairLevelOptions,
   MetricControl,
   PanelSection,
   PanelWrapper,
+  resolveStairDestinationLevel,
+  resolveStairFromLevelId,
+  resolveStairToLevelId,
   SegmentedControl,
   SliderControl,
   ToggleControl,
   triggerSFX,
   useEditor,
-  useTranslations,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { getStairDestinationUpdates } from './destination'
 
 const RAILING_MODE_OPTIONS: { label: string; value: StairRailingMode }[] = [
-  { label: 'nodes.stair.none', value: 'none' },
-  { label: 'nodes.stair.left', value: 'left' },
-  { label: 'nodes.stair.right', value: 'right' },
-  { label: 'nodes.stair.both', value: 'both' },
+  { label: 'None', value: 'none' },
+  { label: 'Left', value: 'left' },
+  { label: 'Right', value: 'right' },
+  { label: 'Both', value: 'both' },
 ]
 
 const STAIR_TYPE_OPTIONS: { label: string; value: StairType }[] = [
-  { label: 'nodes.stair.straight', value: 'straight' },
-  { label: 'nodes.stair.curved', value: 'curved' },
-  { label: 'nodes.stair.spiral', value: 'spiral' },
+  { label: 'Straight', value: 'straight' },
+  { label: 'Curved', value: 'curved' },
+  { label: 'Spiral', value: 'spiral' },
 ]
 
 const TOP_LANDING_MODE_OPTIONS: { label: string; value: StairTopLandingMode }[] = [
-  { label: 'nodes.stair.none', value: 'none' },
-  { label: 'nodes.stair.integrated', value: 'integrated' },
+  { label: 'None', value: 'none' },
+  { label: 'Integrated', value: 'integrated' },
 ]
 
 const STAIR_SLAB_OPENING_OPTIONS: { label: string; value: StairSlabOpeningMode }[] = [
-  { label: 'nodes.stair.none', value: 'none' },
-  { label: 'nodes.stair.destination', value: 'destination' },
+  { label: 'None', value: 'none' },
+  { label: 'Destination', value: 'destination' },
 ]
 
+// Slabs at least this high off the storey floor read as decks (mezzanines) —
+// lower slabs are floor coverings, never useful stair destinations.
+const DECK_DESTINATION_MIN_ELEVATION = 0.5
+
 export default function StairPanel() {
-  const t = useTranslations()
-  const resolveOpts = (opts: { label: string; value: any }[]) =>
-    opts.map((o) => ({ ...o, label: t(o.label) }))
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const nodes = useScene((s) => s.nodes)
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as StairNode | undefined) : undefined,
   )
-  const levels = useScene(
-    useShallow((s) =>
-      Object.values(s.nodes)
-        .filter((entry): entry is LevelNode => entry.type === 'level')
-        .sort((left, right) => left.level - right.level),
-    ),
+  const levels = useMemo<LevelNode[]>(
+    () => (node?.type === 'stair' ? getStairLevelOptions(nodes, node) : []),
+    [node, nodes],
   )
+  const candidateDecks = useMemo<SlabNode[]>(() => {
+    if (node?.type !== 'stair') return []
+    const level = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+    if (level?.type !== 'level') return []
+    const decks: SlabNode[] = []
+    for (const childId of level.children) {
+      const child = nodes[childId as AnyNodeId]
+      if (child?.type !== 'slab') continue
+      if (child.id === node.deckSlabId || child.elevation >= DECK_DESTINATION_MIN_ELEVATION) {
+        decks.push(child)
+      }
+    }
+    return decks
+  }, [node, nodes])
   const segments = useScene(
     useShallow((s) => {
       if (!selectedId) return []
@@ -99,6 +118,50 @@ export default function StairPanel() {
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
+
+  const handleAutoCutoutChange = useCallback(
+    (checked: boolean) => {
+      if (!node) return
+      const updates: Partial<StairNode> = {
+        slabOpeningMode: checked ? 'destination' : 'none',
+      }
+      const sceneNodes = useScene.getState().nodes
+      const fromLevelId = resolveStairFromLevelId(sceneNodes, node)
+      if (checked && fromLevelId) updates.fromLevelId = fromLevelId
+      if (checked && (!node.toLevelId || node.toLevelId === fromLevelId)) {
+        const plan = resolveStairDestinationLevel({
+          fromLevelId,
+          nodes: sceneNodes,
+        })
+        if (plan?.toLevel.id) updates.toLevelId = plan.toLevel.id
+      }
+      handleUpdate(updates)
+    },
+    [node, handleUpdate],
+  )
+
+  const handleFromLevelChange = useCallback(
+    (fromLevelId: string) => {
+      const plan = resolveStairDestinationLevel({
+        fromLevelId: fromLevelId as AnyNodeId,
+        nodes: useScene.getState().nodes,
+      })
+      handleUpdate({
+        fromLevelId,
+        toLevelId: plan?.toLevel.id ?? fromLevelId,
+      })
+    },
+    [handleUpdate],
+  )
+
+  const handleDestinationChange = useCallback(
+    (value: string) => {
+      if (!node) return
+      const target = useScene.getState().nodes[value as AnyNodeId]
+      handleUpdate(getStairDestinationUpdates(node, target, value))
+    },
+    [node, handleUpdate],
+  )
 
   const getLastSegmentFillDefaults = useCallback(() => {
     if (!node) return { fillToFloor: true }
@@ -188,17 +251,20 @@ export default function StairPanel() {
 
   if (!(node && node.type === 'stair' && selectedId && selectedCount === 1)) return null
 
-  const resolvedFromLevelId = node.fromLevelId ?? node.parentId ?? levels[0]?.id ?? null
-  const resolvedToLevelId = node.toLevelId ?? resolvedFromLevelId
+  const resolvedFromLevelId = resolveStairFromLevelId(nodes, node, levels)
+  const resolvedToLevelId = resolveStairToLevelId(nodes, node, resolvedFromLevelId, levels)
+  const deckNode = node.deckSlabId ? nodes[node.deckSlabId as AnyNodeId] : undefined
+  const attachedDeck = deckNode?.type === 'slab' ? deckNode : undefined
+  const resolvedRise = Math.round(resolveStairTotalRise(node, nodes) * 100) / 100
 
   return (
     <PanelWrapper
-      icon="/icons/stairs.png"
+      icon="/icons/stairs.webp"
       onClose={handleClose}
-      title={node.name || t('nodes.stair.fallbackTitle')}
+      title={node.name || 'Staircase'}
       width={300}
     >
-      <PanelSection title={t('nodes.stair.type')}>
+      <PanelSection title="Type">
         <SegmentedControl
           onChange={(value) =>
             handleUpdate(
@@ -211,30 +277,28 @@ export default function StairPanel() {
                 : { stairType: value },
             )
           }
-          options={resolveOpts(STAIR_TYPE_OPTIONS)}
+          options={STAIR_TYPE_OPTIONS}
           value={node.stairType ?? 'straight'}
         />
       </PanelSection>
 
-      <PanelSection title={t('nodes.stair.opening')}>
+      <PanelSection title="Opening">
         <div className="space-y-3">
-          <ToggleControl
-            checked={(node.slabOpeningMode ?? 'none') === 'destination'}
-            label={t('nodes.stair.autoCutout')}
-            onChange={(checked) =>
-              handleUpdate({
-                slabOpeningMode: checked ? 'destination' : 'none',
-              })
-            }
-          />
+          {attachedDeck ? null : (
+            <ToggleControl
+              checked={(node.slabOpeningMode ?? 'none') === 'destination'}
+              label="Auto Cutout"
+              onChange={handleAutoCutoutChange}
+            />
+          )}
 
           <div className="space-y-1.5">
             <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
-              {t('nodes.stair.fromLevel')}
+              From Level
             </div>
             <select
               className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-foreground text-sm"
-              onChange={(event) => handleUpdate({ fromLevelId: event.target.value })}
+              onChange={(event) => handleFromLevelChange(event.target.value)}
               value={resolvedFromLevelId ?? ''}
             >
               {levels.map((level) => (
@@ -247,44 +311,116 @@ export default function StairPanel() {
 
           <div className="space-y-1.5">
             <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
-              {t('nodes.stair.toLevel')}
+              To
             </div>
             <select
               className="h-9 w-full rounded-lg border border-border/50 bg-[#2C2C2E] px-3 text-foreground text-sm"
-              onChange={(event) => handleUpdate({ toLevelId: event.target.value })}
-              value={resolvedToLevelId ?? ''}
+              onChange={(event) => handleDestinationChange(event.target.value)}
+              value={attachedDeck ? attachedDeck.id : (resolvedToLevelId ?? '')}
             >
               {levels.map((level) => (
                 <option key={level.id} value={level.id}>
                   {level.name || `Level ${level.level + 1}`}
                 </option>
               ))}
+              {candidateDecks.map((deck) => (
+                <option key={deck.id} value={deck.id}>
+                  {deck.name || 'Deck'}
+                </option>
+              ))}
             </select>
           </div>
 
-          <SegmentedControl
-            onChange={(value) => handleUpdate({ slabOpeningMode: value as StairSlabOpeningMode })}
-            options={resolveOpts(STAIR_SLAB_OPENING_OPTIONS)}
-            value={node.slabOpeningMode ?? 'none'}
-          />
-
-          {(node.slabOpeningMode ?? 'none') === 'destination' ? (
-            <MetricControl
-              label={t('nodes.stair.openingOffset')}
-              max={0.5}
-              min={0}
-              onChange={(value) => handleUpdate({ openingOffset: value })}
-              precision={2}
-              step={0.01}
-              unit="m"
-              value={Math.round((node.openingOffset ?? 0) * 100) / 100}
-            />
+          {attachedDeck ? (
+            <div className="space-y-1.5">
+              <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
+                Rise
+              </div>
+              <SegmentedControl
+                onChange={(value) =>
+                  handleUpdate(
+                    value === 'custom' ? { totalRise: resolvedRise } : { totalRise: undefined },
+                  )
+                }
+                options={[
+                  { label: 'Follows deck', value: 'follows' },
+                  { label: 'Custom rise', value: 'custom' },
+                ]}
+                value={node.totalRise == null ? 'follows' : 'custom'}
+              />
+              {node.totalRise == null ? (
+                <div className="px-1 text-[11px] text-muted-foreground">
+                  Currently {resolvedRise} m
+                </div>
+              ) : (
+                <MetricControl
+                  label="Rise"
+                  max={10}
+                  min={0.2}
+                  onChange={(value) => handleUpdate({ totalRise: value })}
+                  precision={2}
+                  step={0.05}
+                  unit="m"
+                  value={resolvedRise}
+                />
+              )}
+            </div>
           ) : null}
+
+          {attachedDeck ? null : (
+            <>
+              <SegmentedControl
+                onChange={(value) => handleAutoCutoutChange(value === 'destination')}
+                options={STAIR_SLAB_OPENING_OPTIONS}
+                value={node.slabOpeningMode ?? 'none'}
+              />
+
+              {(node.slabOpeningMode ?? 'none') === 'destination' ? (
+                <MetricControl
+                  label="Opening Offset"
+                  max={0.5}
+                  min={0}
+                  onChange={(value) => handleUpdate({ openingOffset: value })}
+                  precision={2}
+                  step={0.01}
+                  unit="m"
+                  value={Math.round((node.openingOffset ?? 0) * 100) / 100}
+                />
+              ) : null}
+            </>
+          )}
+
+          {node.stairType === 'spiral' && (
+            <>
+              <div className="space-y-1.5">
+                <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
+                  Landing
+                </div>
+                <SegmentedControl
+                  onChange={(value) => handleUpdate({ topLandingMode: value })}
+                  options={TOP_LANDING_MODE_OPTIONS}
+                  value={node.topLandingMode ?? 'none'}
+                />
+              </div>
+              {(node.topLandingMode ?? 'none') === 'integrated' && (
+                <MetricControl
+                  label="Top Landing"
+                  max={5}
+                  min={0.3}
+                  onChange={(value) => handleUpdate({ topLandingDepth: value })}
+                  precision={2}
+                  step={0.05}
+                  unit="m"
+                  value={Math.round((node.topLandingDepth ?? 0.9) * 100) / 100}
+                />
+              )}
+            </>
+          )}
         </div>
       </PanelSection>
 
       {node.stairType === 'straight' && (
-        <PanelSection title={t('nodes.stair.segments')}>
+        <PanelSection title="Segments">
           <div className="flex flex-col gap-1">
             {segments.map((seg, i) => (
               <button
@@ -301,12 +437,12 @@ export default function StairPanel() {
           <div className="flex gap-1.5">
             <ActionButton
               icon={<Plus className="h-3.5 w-3.5" />}
-              label={t('nodes.stair.addFlight')}
+              label="Add flight"
               onClick={handleAddFlight}
             />
             <ActionButton
               icon={<Plus className="h-3.5 w-3.5" />}
-              label={t('nodes.stair.addLanding')}
+              label="Add landing"
               onClick={handleAddLanding}
             />
           </div>
@@ -314,9 +450,9 @@ export default function StairPanel() {
       )}
 
       {(node.stairType === 'curved' || node.stairType === 'spiral') && (
-        <PanelSection title={t('nodes.stair.geometry')}>
+        <PanelSection title="Geometry">
           <MetricControl
-            label={t('common.width')}
+            label="Width"
             max={10}
             min={0.4}
             onChange={(value) => handleUpdate({ width: value })}
@@ -326,17 +462,17 @@ export default function StairPanel() {
             value={Math.round((node.width ?? 1) * 100) / 100}
           />
           <MetricControl
-            label={t('nodes.stair.rise')}
+            label="Rise"
             max={10}
             min={0.2}
             onChange={(value) => handleUpdate({ totalRise: value })}
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round((node.totalRise ?? 2.5) * 100) / 100}
+            value={Math.round(resolveStairTotalRise(node, nodes) * 100) / 100}
           />
           <MetricControl
-            label={t('nodes.stair.steps')}
+            label="Steps"
             max={32}
             min={2}
             onChange={(value) => handleUpdate({ stepCount: Math.max(2, Math.round(value)) })}
@@ -348,13 +484,13 @@ export default function StairPanel() {
           {node.stairType !== 'spiral' && (
             <ToggleControl
               checked={node.fillToFloor ?? true}
-              label={t('nodes.stair.fitToFloor')}
+              label="Fit To Floor"
               onChange={(checked) => handleUpdate({ fillToFloor: checked })}
             />
           )}
           {(node.stairType === 'spiral' || !(node.fillToFloor ?? true)) && (
             <MetricControl
-              label={t('common.thickness')}
+              label="Thickness"
               max={1}
               min={0.02}
               onChange={(value) => handleUpdate({ thickness: value })}
@@ -365,7 +501,7 @@ export default function StairPanel() {
             />
           )}
           <MetricControl
-            label={t('nodes.stair.innerRadius')}
+            label="Inner Radius"
             max={10}
             min={node.stairType === 'spiral' ? 0.05 : 0.2}
             onChange={(value) => handleUpdate({ innerRadius: value })}
@@ -375,7 +511,7 @@ export default function StairPanel() {
             value={Math.round((node.innerRadius ?? 0.9) * 100) / 100}
           />
           <SliderControl
-            label={t('nodes.stair.sweep')}
+            label="Sweep"
             max={node.stairType === 'spiral' ? 720 : 270}
             min={node.stairType === 'spiral' ? -720 : -270}
             onChange={(degrees) => handleUpdate({ sweepAngle: (degrees * Math.PI) / 180 })}
@@ -386,31 +522,14 @@ export default function StairPanel() {
           />
           {node.stairType === 'spiral' && (
             <>
-              <SegmentedControl
-                onChange={(value) => handleUpdate({ topLandingMode: value })}
-                options={resolveOpts(TOP_LANDING_MODE_OPTIONS)}
-                value={node.topLandingMode ?? 'none'}
-              />
-              {(node.topLandingMode ?? 'none') === 'integrated' && (
-                <MetricControl
-                  label={t('nodes.stair.topLanding')}
-                  max={5}
-                  min={0.3}
-                  onChange={(value) => handleUpdate({ topLandingDepth: value })}
-                  precision={2}
-                  step={0.05}
-                  unit="m"
-                  value={Math.round((node.topLandingDepth ?? 0.9) * 100) / 100}
-                />
-              )}
               <ToggleControl
                 checked={node.showCenterColumn ?? true}
-                label={t('nodes.stair.centerColumn')}
+                label="Center Column"
                 onChange={(checked) => handleUpdate({ showCenterColumn: checked })}
               />
               <ToggleControl
                 checked={node.showStepSupports ?? true}
-                label={t('nodes.stair.stepSupports')}
+                label="Step Supports"
                 onChange={(checked) => handleUpdate({ showStepSupports: checked })}
               />
             </>
@@ -418,11 +537,9 @@ export default function StairPanel() {
         </PanelSection>
       )}
 
-      <PanelSection title={t('common.position')}>
+      <PanelSection title="Position">
         <SliderControl
-          label={t('common.x')}
-          max={50}
-          min={-50}
+          label="X"
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[0] = v
@@ -434,9 +551,7 @@ export default function StairPanel() {
           value={Math.round(node.position[0] * 100) / 100}
         />
         <SliderControl
-          label={t('common.y')}
-          max={50}
-          min={-50}
+          label="Y"
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[1] = v
@@ -448,9 +563,7 @@ export default function StairPanel() {
           value={Math.round(node.position[1] * 100) / 100}
         />
         <SliderControl
-          label={t('common.z')}
-          max={50}
-          min={-50}
+          label="Z"
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[2] = v
@@ -462,7 +575,7 @@ export default function StairPanel() {
           value={Math.round(node.position[2] * 100) / 100}
         />
         <SliderControl
-          label={t('common.rotate')}
+          label="Rotation"
           max={180}
           min={-180}
           onChange={(degrees) => {
@@ -475,14 +588,14 @@ export default function StairPanel() {
         />
         <div className="flex gap-1.5 px-1 pt-2 pb-1">
           <ActionButton
-            label={t('nodes.stair.rotationPresets.negative')}
+            label="-45°"
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               handleUpdate({ rotation: node.rotation - Math.PI / 4 })
             }}
           />
           <ActionButton
-            label={t('nodes.stair.rotationPresets.positive')}
+            label="+45°"
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               handleUpdate({ rotation: node.rotation + Math.PI / 4 })
@@ -491,15 +604,15 @@ export default function StairPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title={t('nodes.stair.railing')}>
+      <PanelSection title="Railing">
         <SegmentedControl
           onChange={(value) => handleUpdate({ railingMode: value })}
-          options={resolveOpts(RAILING_MODE_OPTIONS)}
+          options={RAILING_MODE_OPTIONS}
           value={node.railingMode ?? 'none'}
         />
         {(node.railingMode ?? 'none') !== 'none' && (
           <SliderControl
-            label={t('common.height')}
+            label="Height"
             max={1.4}
             min={0.7}
             onChange={(value) => handleUpdate({ railingHeight: value })}
@@ -511,18 +624,18 @@ export default function StairPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title={t('common.actions')}>
+      <PanelSection title="Actions">
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={t('common.move')} onClick={handleMove} />
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label={t('common.duplicate')}
+            label="Duplicate"
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label={t('common.delete')}
+            label="Delete"
             onClick={handleDelete}
           />
         </ActionGroup>

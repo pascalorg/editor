@@ -115,6 +115,117 @@ describe('cloneNodesInto', () => {
     }
   })
 
+  test('remaps associative measurement references inside the cloned subtree', () => {
+    const wall = makeNode('wall_1', 'wall', { parentId: 'level_1' })
+    const measurement = makeNode('measurement_1', 'measurement', {
+      parentId: 'level_1',
+      measurement: {
+        kind: 'distance',
+        points: [
+          {
+            kind: 'feature',
+            reference: { nodeId: 'wall_1', featureId: 'wall:start' },
+            fallback: [0, 0, 0],
+          },
+          [1, 0, 0],
+        ],
+      },
+    })
+    const result = cloneNodesInto([wall, measurement], {
+      rootId: 'wall_1' as AnyNodeId,
+    })
+    const clonedMeasurement = result.nodes.find((node) => node.type === 'measurement')
+
+    expect(clonedMeasurement?.type).toBe('measurement')
+    if (
+      clonedMeasurement?.type === 'measurement' &&
+      clonedMeasurement.measurement.kind === 'distance'
+    ) {
+      const anchor = clonedMeasurement.measurement.points[0]
+      expect(Array.isArray(anchor)).toBe(false)
+      if (anchor && !Array.isArray(anchor)) {
+        expect(anchor.reference.nodeId).toBe(result.idMap.get('wall_1' as AnyNodeId)!)
+      }
+    }
+  })
+
+  test('remaps associative construction-dimension anchors inside the cloned subtree', () => {
+    const wall = makeNode('wall_1', 'wall', { parentId: 'level_1' })
+    const dimension = makeNode('construction-dimension_1', 'construction-dimension', {
+      parentId: 'level_1',
+      anchors: [
+        {
+          kind: 'feature',
+          reference: { nodeId: 'wall_1', featureId: 'wall:start' },
+          fallback: [0, 0, 0],
+        },
+        [1, 0, 0],
+        {
+          kind: 'feature',
+          reference: { nodeId: 'wall_1', featureId: 'wall:end' },
+          fallback: [2, 0, 0],
+        },
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+      chainMode: 'continuous',
+    })
+    const result = cloneNodesInto([wall, dimension], {
+      rootId: 'wall_1' as AnyNodeId,
+    })
+    const clonedDimension = result.nodes.find((node) => node.type === 'construction-dimension')
+
+    expect(clonedDimension?.type).toBe('construction-dimension')
+    if (clonedDimension?.type === 'construction-dimension') {
+      const anchor = clonedDimension.anchors[0]
+      expect(Array.isArray(anchor)).toBe(false)
+      if (anchor && !Array.isArray(anchor)) {
+        expect(anchor.reference.nodeId).toBe(result.idMap.get('wall_1' as AnyNodeId)!)
+      }
+      const lastAnchor = clonedDimension.anchors[2]
+      expect(Array.isArray(lastAnchor)).toBe(false)
+      if (lastAnchor && !Array.isArray(lastAnchor)) {
+        expect(lastAnchor.reference.nodeId).toBe(result.idMap.get('wall_1' as AnyNodeId)!)
+      }
+    }
+  })
+
+  test('remaps a construction dimension foundation controller when both are cloned', () => {
+    const controller = makeNode('construction-dimension_foundation', 'construction-dimension', {
+      parentId: 'level_1',
+      anchors: [
+        [0, 0, 0],
+        [4, 0, 0],
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+      drawingType: 'foundation-plan',
+    })
+    const dependent = makeNode('construction-dimension_floor', 'construction-dimension', {
+      parentId: 'level_1',
+      anchors: [
+        [0, 0, 0],
+        [1, 0, 0],
+      ],
+      baseline: { origin: [0, 1], direction: [1, 0] },
+      controllingDimensionId: controller.id,
+    })
+
+    const result = cloneNodesInto([controller, dependent], {
+      rootId: controller.id as AnyNodeId,
+    })
+    const clonedDependent = result.nodes.find(
+      (node) => node.id === result.idMap.get(dependent.id as AnyNodeId),
+    )
+
+    expect(clonedDependent?.type).toBe('construction-dimension')
+    if (clonedDependent?.type === 'construction-dimension') {
+      expect(clonedDependent.controllingDimensionId).toBe(
+        result.idMap.get(
+          controller.id as AnyNodeId,
+        ) as typeof clonedDependent.controllingDimensionId,
+      )
+    }
+  })
+
   test('parents the cloned root under opts.parentId when supplied', () => {
     const orig = makeNode('shelf_1', 'shelf', { parentId: 'level_old' })
     const { nodes } = cloneNodesInto([orig], {

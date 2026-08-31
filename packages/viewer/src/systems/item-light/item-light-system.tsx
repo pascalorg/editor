@@ -1,7 +1,7 @@
 'use client'
 
 import type { AnyNodeId, LevelNode } from '@pascal-app/core'
-import { sceneRegistry, useInteractive, useScene } from '@pascal-app/core'
+import { findLevelAncestorId, sceneRegistry, useInteractive, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'
 import { MathUtils, type PointLight, Vector3 } from 'three'
@@ -69,8 +69,7 @@ function scoreRegistration(
   const dist = _camPos.distanceTo(_itemPos) / 200
 
   // ── Level factor ──────────────────────────────────────────────────────────
-  const node = nodes[nodeId]
-  const itemLevelId = node?.parentId ?? null
+  const itemLevelId = findLevelAncestorId(nodeId, nodes)
 
   let levelPenalty = 0
   if (selectedLevelId) {
@@ -137,7 +136,10 @@ export function ItemLightSystem() {
       scored.sort((a, b) => a.score - b.score)
 
       // Build the desired assignment (top POOL_SIZE keys)
-      const desired = scored.slice(0, POOL_SIZE).map((s) => s.key)
+      const desired = scored
+        .filter((s) => Number.isFinite(s.score))
+        .slice(0, POOL_SIZE)
+        .map((s) => s.key)
 
       // Build a map of currently-assigned keys → slot index for hysteresis
       const currentlyAssigned = new Map<string, number>()
@@ -226,9 +228,11 @@ export function ItemLightSystem() {
 
       // Fade-out phase: lerp intensity → 0, then complete the transition
       if (slot.isFadingOut) {
+        light.visible = true
         light.intensity = MathUtils.lerp(light.intensity, 0, dt * 12)
         if (light.intensity < 0.01) {
           light.intensity = 0
+          light.visible = false
           slot.isFadingOut = false
           slot.key = slot.pendingKey
           slot.pendingKey = null
@@ -247,6 +251,7 @@ export function ItemLightSystem() {
       if (!slot.key) {
         // Idle slot — keep dark
         light.intensity = 0
+        light.visible = false
         continue
       }
 
@@ -254,6 +259,7 @@ export function ItemLightSystem() {
       if (!reg) {
         slot.key = null
         light.intensity = 0
+        light.visible = false
         continue
       }
 
@@ -277,7 +283,14 @@ export function ItemLightSystem() {
         ? MathUtils.lerp(reg.effect.intensityRange[0], reg.effect.intensityRange[1], t)
         : reg.effect.intensityRange[0]
 
+      if (targetIntensity > 0) {
+        light.visible = true
+      }
       light.intensity = MathUtils.lerp(light.intensity, targetIntensity, dt * 12)
+      if (targetIntensity <= 0 && light.intensity < 0.01) {
+        light.intensity = 0
+        light.visible = false
+      }
     }
   })
 
@@ -288,6 +301,7 @@ export function ItemLightSystem() {
           castShadow={false}
           intensity={0}
           key={i}
+          visible={false}
           ref={(el: any) => {
             lightRefs.current[i] = el
           }}

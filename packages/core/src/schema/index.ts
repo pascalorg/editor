@@ -6,6 +6,8 @@ export {
   type SolarPanelPresetDims,
   SolarPanelPresetKey,
 } from '../solar-panel-presets'
+// Asset URL allowlist
+export { ALLOWED_ORIGINS_ENV, ALLOWED_SCHEMES, AssetUrl } from './asset-url'
 export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 // Camera
 export { CameraSchema } from './camera'
@@ -31,8 +33,30 @@ export {
   resolveMaterial,
   TextureWrapMode,
 } from './material'
-export { BoxVentNode } from './nodes/box-vent'
+export {
+  type AutoDownspoutPlacement,
+  type AutomaticDownspoutInput,
+  planAutomaticDownspouts,
+  resolveAutomaticDownspoutLength,
+} from './nodes/automatic-downspout'
+export {
+  BlockEdge,
+  BlockFace,
+  type BlockFaceFrame,
+  BlockNode,
+  BlockTopology,
+  type BlockTopologyIssue,
+  BlockVertex,
+  blockUndirectedEdgeKey,
+  createBoxBlockTopology,
+  getBlockFaceCentroid,
+  getBlockFaceFrame,
+  getBlockFaceNormal,
+  inspectBlockTopology,
+} from './nodes/block'
+export { BoxVentMaterialRole, BoxVentNode } from './nodes/box-vent'
 export { BuildingNode } from './nodes/building'
+export { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
 export { CeilingNode } from './nodes/ceiling'
 export { ChimneyMaterialRole, ChimneyNode } from './nodes/chimney'
 export {
@@ -50,21 +74,84 @@ export {
   ColumnStyle,
   ColumnSupportStyle,
 } from './nodes/column'
-export { DoorNode, DoorSegment } from './nodes/door'
 export {
+  CONSTRUCTION_DRAWING_TYPES,
+  ConstructionDimensionBaseline,
+  ConstructionDimensionChainMode,
+  ConstructionDimensionDatumPolicy,
+  ConstructionDimensionDrawingOverride,
+  ConstructionDimensionDrawingPresentation,
+  ConstructionDimensionImperialPrecision,
+  ConstructionDimensionMetricNotation,
+  ConstructionDimensionMode,
+  ConstructionDimensionNode,
+  ConstructionDimensionTerminator,
+  ConstructionDimensionTextPosition,
+  ConstructionDrawingType,
+  constructionDimensionRequiredAnchorCount,
+  resolveConstructionDimensionDrawingOverride,
+  resolveConstructionDimensionDrawingPresentation,
+  setConstructionDimensionDrawingPresentation,
+  setConstructionDimensionDrawingSuppressedSegments,
+} from './nodes/construction-dimension'
+export { CupolaMaterialRole, CupolaNode } from './nodes/cupola'
+export {
+  DoorNode,
+  DoorSegment,
+  OpeningConstructionType,
+  OpeningDimensionReference,
+} from './nodes/door'
+export {
+  createDormerDefaultWindow,
   DormerNode,
   type DormerSurfaceMaterialRole,
   type DormerSurfaceMaterialSpec,
+  DormerWallFace,
+  dormerPointToWallFace,
+  dormerWallFacePointToDormer,
+  getDormerDefaultWindowFace,
+  getDormerExposedFaces,
+  getDormerWallFaceFrame,
+  getDormerWallHorizontalBoundsAtHeight,
+  getDormerWallOpeningVerticalBounds,
+  getDormerWallVerticalBounds,
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
+export {
+  DownspoutNode,
+  defaultDownspoutMetadata,
+  isDefaultDownspoutNode,
+  usesAutomaticDownspoutLength,
+} from './nodes/downspout'
+export { DuctFittingNode } from './nodes/duct-fitting'
+export { DuctSegmentNode } from './nodes/duct-segment'
+export { DuctTerminalNode } from './nodes/duct-terminal'
 export {
   ElevatorDoorPanelStyle,
   ElevatorDoorStyle,
   ElevatorNode,
   ElevatorShaftStyle,
 } from './nodes/elevator'
+export { EyebrowVentMaterialRole, EyebrowVentNode } from './nodes/eyebrow-vent'
 export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
+export {
+  computeGutterEaveY,
+  createDefaultGuttersForSegment,
+  GUTTER_EAVE_TUCK_INWARD,
+  GUTTER_EAVE_TUCK_UP,
+  type GutterEaveSide,
+  type GutterEdgeExclusion,
+  GutterNode,
+  GutterOutlet,
+  type GutterRun,
+  getDefaultGutterSide,
+  getGutterRunsForSegment,
+  hasAutoGutterMetadata,
+  isAutoGutterEnabled,
+  isDefaultGutterNode,
+} from './nodes/gutter'
+export { HvacEquipmentNode } from './nodes/hvac-equipment'
 export type {
   AnimationEffect,
   Asset,
@@ -83,27 +170,102 @@ export {
   isLowProfileItemSurface,
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
+export {
+  LeanToCanopyForm,
+  LeanToConnectionMode,
+  LeanToEndCondition,
+  LeanToExtensionNode,
+  LeanToResizeLock,
+  LeanToRoofEdge,
+} from './nodes/lean-to-extension'
 export { LevelNode } from './nodes/level'
+export { LinesetNode } from './nodes/lineset'
+export { LiquidLineNode } from './nodes/liquid-line'
+export {
+  AngleMeasurement,
+  AreaMeasurement,
+  DistanceMeasurement,
+  MeasurementAnchor,
+  MeasurementFeatureAnchor,
+  MeasurementFeatureParameter,
+  MeasurementFeatureReference,
+  MeasurementNode,
+  MeasurementPayload,
+  MeasurementPoint,
+  PerimeterMeasurement,
+  VolumeMeasurement,
+} from './nodes/measurement'
+export { PipeFittingNode } from './nodes/pipe-fitting'
+export { PipeSegmentNode } from './nodes/pipe-segment'
+export { PipeTrapNode } from './nodes/pipe-trap'
 // Nodes
-export { RidgeVentNode } from './nodes/ridge-vent'
-export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
+export {
+  createDefaultRidgeVentsForSegment,
+  getRidgeVentLinesForSegment,
+  hasAutoRidgeVentMetadata,
+  isAutoRidgeVentEnabled,
+  isDefaultRidgeVentNode,
+  type RidgeVentLine,
+  RidgeVentNode,
+} from './nodes/ridge-vent'
+export type { RoofSupport, RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export type {
+  DutchRoofMetrics,
   RoofSegmentSurfaceMaterialRole,
   RoofSegmentSurfaceMaterialSpec,
+  RoofSegmentVisibleTopBounds,
   SegmentSlopeFrame,
 } from './nodes/roof-segment'
 export {
   getActiveRoofHeight,
+  getConicalRoofCoverage,
+  getDutchRoofMetrics,
   getEffectiveSegmentSurfaceMaterial,
   getPitchFromActiveRoofHeight,
+  getRoofSegmentSurfaceY,
+  getRoofSegmentVisibleTopBounds,
   getSegmentSlopeFrame,
   hasSegmentMaterialOverride,
+  isBandedShedSegment,
+  MIN_ROOF_SEGMENT_TRIM_SPAN,
+  normalizeRoofSegmentTrim,
   ROOF_SHAPE_DEFAULTS,
   RoofSegmentNode,
+  RoofSegmentTrim,
   RoofType,
 } from './nodes/roof-segment'
-export { ScanNode } from './nodes/scan'
+export type {
+  DutchRoofShapeMetrics,
+  RoofShapeEaveSide,
+  RoofShapeFaceVertex,
+  RoofShapeInsets,
+  RoofShapeRatios,
+} from './nodes/roof-segment-shape'
+export {
+  getDutchEndSlopeFaces,
+  getDutchRoofShapeMetrics,
+  getRoofModuleFaces,
+  getRoofShapeEaveSides,
+  getRoofShapeInsets,
+  getRoofShapeRatios,
+} from './nodes/roof-segment-shape'
+export type { RoofSegmentWallFace, RoofWallFaceId } from './nodes/roof-segment-walls'
+export {
+  clampRectToRoofWallFace,
+  getMaxRoofRectHeightFromAnchor,
+  getMaxRoofRectWidthFromAnchor,
+  getRoofSegmentWallFace,
+  getRoofSegmentWallFaces,
+  getRoofWallFaceFrame,
+  roofFacePointToSegment,
+  segmentPointToRoofWallFace,
+} from './nodes/roof-segment-walls'
+export {
+  CaptureSessionReference,
+  type CaptureSessionReferenceInput,
+  ScanNode,
+} from './nodes/scan'
 export { ShelfNode } from './nodes/shelf'
 export { SiteNode } from './nodes/site'
 export {
@@ -116,7 +278,7 @@ export {
   SkylightType,
   type SkylightTypePreset,
 } from './nodes/skylight'
-export { SlabNode } from './nodes/slab'
+export { MIN_SLAB_THICKNESS, SlabNode } from './nodes/slab'
 export {
   SolarPanelMaterialRole,
   SolarPanelNode,
@@ -132,15 +294,50 @@ export {
   StairType,
 } from './nodes/stair'
 export { AttachmentSide, StairSegmentNode, StairSegmentType } from './nodes/stair-segment'
+export { StructuralGridNode } from './nodes/structural-grid'
 export { SurfaceHoleMetadata } from './nodes/surface-hole-metadata'
-export type { WallSurfaceMaterialSpec, WallSurfaceSide } from './nodes/wall'
-export {
-  getEffectiveWallSurfaceMaterial,
-  getWallSurfaceMaterialSignature,
-  WallNode,
+export { TurbineVentMaterialRole, TurbineVentNode } from './nodes/turbine-vent'
+export type {
+  WallBandSurfaceSlotId,
+  WallFaceBand,
+  WallFaceBandConfig,
+  WallSurfaceMaterialSpec,
+  WallSurfaceSide,
+  WallSurfaceSlotId,
+  WallTrimConfig,
 } from './nodes/wall'
-export { WindowNode, WindowType } from './nodes/window'
+export {
+  buildEnabledWallFaceBandPatch,
+  buildWallFaceBandCountPatch,
+  getEffectiveWallSurfaceMaterial,
+  getWallBandSlotId,
+  getWallFaceBandConfig,
+  getWallFaceBandForHeight,
+  getWallSurfaceMaterialSignature,
+  getWallSurfaceSideFromBandSlot,
+  WALL_CHAIR_RAIL_DEFAULT,
+  WALL_CHAIR_RAIL_SLOT_DEFAULT,
+  WALL_CROWN_DEFAULT,
+  WALL_CROWN_SLOT_DEFAULT,
+  WALL_FACE_BAND_DEFAULT,
+  WALL_SKIRTING_DEFAULT,
+  WALL_SKIRTING_SLOT_DEFAULT,
+  WALL_SLOT_DEFAULT,
+  WALL_SURFACE_SLOT_DEFAULTS,
+  WALL_TRIM_DEFAULTS,
+  WallNode,
+  WallTreatmentSide,
+  WallTrimProfile,
+} from './nodes/wall'
+export {
+  WindowConstructionType,
+  WindowDimensionReference,
+  WindowNode,
+  WindowType,
+} from './nodes/window'
 export { ZoneNode } from './nodes/zone'
+export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
+export { MAX_TERRAIN_SIDE, TerrainData } from './terrain'
 export type { AnyNodeId, AnyNodeType } from './types'
 // Union types
 export { AnyNode } from './types'

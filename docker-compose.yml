@@ -1,0 +1,21 @@
+services:
+  editor:
+    build: .
+    ports:
+      # Keep the container port at 3000. `/scenes` fetches its own API through a
+      # base URL that only `NEXT_PUBLIC_APP_URL` can override, and Next inlines
+      # that at build time — so a remapped host port 500s the page.
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      # Public editor origin used by Mint OAuth and same-origin checks.
+      MINT_PASCAL_HOST_ORIGIN: ${MINT_PASCAL_HOST_ORIGIN:-http://localhost:3000}
+      # Scene database location. Without the volume below, every saved project is
+      # discarded when the container is recreated.
+      PASCAL_DATA_DIR: /data
+    volumes:
+      - pascal-data:/data
+    restart: unless-stopped
+
+volumes:
+  pascal-data:

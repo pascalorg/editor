@@ -1,12 +1,15 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
-  DEFAULT_WALL_HEIGHT,
   type FenceNode,
+  getWallBaseElevationForNodes,
   getWallCurveFrameAt,
+  getWallEffectiveHeightForNodes,
   getWallThickness,
   isCurvedWall,
+  MIN_WALL_HEIGHT,
   sceneRegistry,
   useLiveNodeOverrides,
   useScene,
@@ -32,21 +35,43 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import {
+  clearStructuralElevationGuide,
+  publishStructuralElevationGuide,
+  resolveStructuralElevationSnap,
+} from '../../lib/elevation-guides'
+import { isHistoryShortcut } from '../../lib/history'
+import { endpointReshapeScope } from '../../lib/interaction/scope'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import useEditor from '../../store/use-editor'
+import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
+import useInteractionScope, {
+  useEndpointReshape,
+  useIsCurveReshape,
+  useMovingNode,
+} from '../../store/use-interaction-scope'
+import { suppressBoxSelectForPointer } from '../tools/select/box-select-state'
+import { resolveResizeSnapValue } from './handles/resize-snap'
+import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
+import {
+  createArrowHitAreaGeometry,
+  createEndpointHitAreaGeometry,
+  HandleArrow,
+  InvisibleHandleHitArea,
+  NO_RAYCAST,
+  useInvisibleHitAreaMaterial,
+} from './node-arrow-handles'
 
 const HANDLE_OFFSET = 0.27
 const HANDLE_MIN_OFFSET = 0.33
 const HANDLE_MIN_HEIGHT = 0.4
 const HANDLE_TOP_INSET = 0.08
 const HEIGHT_HANDLE_OFFSET = 0.26
-const MIN_WALL_HEIGHT = 0.5
 const ARROW_COLOR = '#8381ed'
 const ARROW_HOVER_COLOR = '#a5b4fc'
 // Match the door arrows: scale the rendered chevron down to ~two-thirds
 // so the in-world handles read as a single UI family.
 const ARROW_SCALE = 0.65
-const CORNER_HEX_RADIUS = 0.16
+const CORNER_HEX_RADIUS = 0.11
 const CORNER_DASH_SIZE = 0.1
 const CORNER_GAP_SIZE = 0.07
 const CORNER_DASH_THICKNESS = 0.006
@@ -86,12 +111,12 @@ function createArrowHandleGeometry() {
   shape.lineTo(0.22, 0)
 
   const geometry = new ExtrudeGeometry(shape, {
-    depth: 0.08,
+    depth: 0.045,
     bevelEnabled: true,
-    bevelThickness: 0.035,
-    bevelSize: 0.03,
+    bevelThickness: 0.018,
+    bevelSize: 0.02,
     bevelOffset: 0,
-    bevelSegments: 10,
+    bevelSegments: 8,
     curveSegments: 16,
     steps: 1,
   })
@@ -99,7 +124,7 @@ function createArrowHandleGeometry() {
   // Centre the extruded plate around y=0 and re-orient it so the depth
   // axis points up: the chevron lies flat in the XZ plane, tip along +X,
   // wings spread across ±Z.
-  geometry.translate(0, 0, -0.04)
+  geometry.translate(0, 0, -0.0225)
   geometry.rotateX(-Math.PI / 2)
   geometry.computeVertexNormals()
   geometry.computeBoundingSphere()
@@ -110,11 +135,9 @@ export function WallMoveSideHandles() {
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const mode = useEditor((state) => state.mode)
   const isFloorplanHovered = useEditor((state) => state.isFloorplanHovered)
-  const movingNode = useEditor((state) => state.movingNode)
-  const movingWallEndpoint = useEditor((state) => state.movingWallEndpoint)
-  const movingFenceEndpoint = useEditor((state) => state.movingFenceEndpoint)
-  const curvingWall = useEditor((state) => state.curvingWall)
-  const curvingFence = useEditor((state) => state.curvingFence)
+  const movingNode = useMovingNode()
+  const endpointReshape = useEndpointReshape()
+  const isCurveReshape = useIsCurveReshape()
 
   const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
   // Fence side-move / height / corner-pickers now flow through the
@@ -132,10 +155,8 @@ export function WallMoveSideHandles() {
     !isFloorplanHovered &&
     mode !== 'delete' &&
     !movingNode &&
-    !movingWallEndpoint &&
-    !movingFenceEndpoint &&
-    !curvingWall &&
-    !curvingFence
+    !endpointReshape &&
+    !isCurveReshape
 
   if (!shouldRender || !selectedNode) return null
 
@@ -143,6 +164,18 @@ export function WallMoveSideHandles() {
 }
 
 function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
+  const nodes = useScene((state) => state.nodes)
+  // Merge the in-flight drag override so every handle (side-move arrows,
+  // height arrow, corner leaders) tracks the live height in real time
+  // during a height drag — the scene store stays at the pre-drag value
+  // until commit, so reading `wall` alone would freeze them. Same pattern
+  // as node-arrow-handles.
+  const liveOverride = useLiveNodeOverrides((state) => state.overrides.get(wall.id))
+  const effectiveWall = useMemo(
+    () => (liveOverride ? ({ ...wall, ...liveOverride } as WallNode) : wall),
+    [wall, liveOverride],
+  )
+
   const [levelObject, setLevelObject] = useState<Object3D | null>(() =>
     wall.parentId ? (sceneRegistry.nodes.get(wall.parentId) ?? null) : null,
   )
@@ -175,24 +208,34 @@ function WallMoveSideHandlesForWall({ wall }: { wall: WallNode }) {
     }
   }, [wall.parentId])
 
-  const handles = useMemo(() => getWallMoveHandles(wall), [wall])
+  const baseElevation = getWallBaseElevationForNodes(effectiveWall, nodes)
+  const handles = useMemo(() => getWallMoveHandles(effectiveWall, nodes), [effectiveWall, nodes])
 
   if (!levelObject || handles.length === 0) return null
 
   return createPortal(
-    <group>
-      {handles.map((handle) => (
-        <WallMoveArrowHandle handle={handle} key={handle.key} wall={wall} />
-      ))}
-      <WallHeightArrowHandle wall={wall} />
-      <WallCornerLeaderHandle endpoint="start" wall={wall} />
-      <WallCornerLeaderHandle endpoint="end" wall={wall} />
-    </group>,
+    <>
+      <group position={[0, baseElevation, 0]}>
+        {handles.map((handle) => (
+          <WallMoveArrowHandle handle={handle} key={handle.key} wall={effectiveWall} />
+        ))}
+        <WallHeightArrowHandle wall={effectiveWall} />
+        <WallCornerLeaderHandle endpoint="start" wall={effectiveWall} />
+        <WallCornerLeaderHandle endpoint="end" wall={effectiveWall} />
+      </group>
+      <WallBaseElevationHandle
+        baseElevation={baseElevation}
+        levelObject={levelObject}
+        wall={effectiveWall}
+      />
+    </>,
     levelObject,
   )
 }
 
 function buildDashedVerticalGeometry(height: number) {
+  if (!(Number.isFinite(height) && height > 0)) return new BufferGeometry()
+
   // Build each dash as a thin cylinder section so thickness is
   // controllable — native `lineSegments` lock to 1px on WebGL/WebGPU.
   const dashes: BufferGeometry[] = []
@@ -205,7 +248,10 @@ function buildDashedVerticalGeometry(height: number) {
     dashes.push(cylinder)
     y = end + CORNER_GAP_SIZE
   }
-  const merged = mergeGeometries(dashes, false) ?? new BufferGeometry()
+  const merged =
+    dashes.length > 0
+      ? (mergeGeometries(dashes, false) ?? new BufferGeometry())
+      : new BufferGeometry()
   for (const dash of dashes) dash.dispose()
   return merged
 }
@@ -216,15 +262,19 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
   const billboardRef = useRef<Group>(null)
   const parentWorldQuaternionRef = useRef(new Quaternion())
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.25 : 1) * zoom
+  const baseScale = zoom
+  const visualScale = isHovered ? 1.25 : 1
 
   const corner = endpoint === 'start' ? wall.start : wall.end
   const x = corner[0]
   const z = corner[1]
-  const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+  const wallHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
 
   const dashedGeometry = useMemo(() => buildDashedVerticalGeometry(wallHeight), [wallHeight])
+  const hitGeometry = useMemo(() => createEndpointHitAreaGeometry(CORNER_HEX_RADIUS), [])
+  const hitMaterial = useInvisibleHitAreaMaterial()
   useEffect(() => () => dashedGeometry.dispose(), [dashedGeometry])
+  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
 
   // Node materials matched to the rest of the file — mixing plain
   // `meshBasicMaterial` with WebGPU node materials trips
@@ -306,10 +356,12 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
   }, [])
 
   const activateEndpointMove = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
     sfxEmitter.emit('sfx:item-pick')
     document.body.style.cursor = 'grabbing'
-    useEditor.getState().setMovingWallEndpoint({ wall, endpoint })
+    useInteractionScope.getState().begin(endpointReshapeScope(wall.id, endpoint))
   }
 
   return (
@@ -321,9 +373,10 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
         position={[x, 0, z]}
         renderOrder={1001}
       />
-      <group position={[x, CORNER_FLOOR_OFFSET, z]} ref={billboardRef} scale={scale}>
-        <mesh
-          material={hexMaterial}
+      <group position={[x, CORNER_FLOOR_OFFSET, z]} ref={billboardRef} scale={baseScale}>
+        <InvisibleHandleHitArea
+          geometry={hitGeometry}
+          material={hitMaterial}
           onPointerDown={activateEndpointMove}
           onPointerEnter={(event) => {
             event.stopPropagation()
@@ -337,14 +390,166 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
               document.body.style.cursor = ''
             }
           }}
-          renderOrder={1003}
-        >
-          <circleGeometry args={[CORNER_HEX_RADIUS, 6]} />
-        </mesh>
-        <mesh material={ringMaterial} renderOrder={1002}>
-          <ringGeometry args={[CORNER_HEX_RADIUS, CORNER_HEX_RADIUS * 1.18, 6]} />
-        </mesh>
+          scale={1}
+        />
+        <group scale={visualScale}>
+          <mesh material={hexMaterial} raycast={NO_RAYCAST} renderOrder={1003}>
+            <circleGeometry args={[CORNER_HEX_RADIUS, 6]} />
+          </mesh>
+          <mesh material={ringMaterial} raycast={NO_RAYCAST} renderOrder={1002}>
+            <ringGeometry args={[CORNER_HEX_RADIUS, CORNER_HEX_RADIUS * 1.18, 6]} />
+          </mesh>
+        </group>
       </group>
+    </>
+  )
+}
+
+function WallBaseElevationHandle({
+  wall,
+  baseElevation,
+  levelObject,
+}: {
+  wall: WallNode
+  baseElevation: number
+  levelObject: Object3D
+}) {
+  const [isHovered, setIsHovered] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const { camera } = useThree()
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const curveFrame = isCurvedWall(wall) ? getWallCurveFrameAt(wall, 0.5) : null
+  const midpoint: [number, number] = curveFrame
+    ? [curveFrame.point.x, curveFrame.point.y]
+    : [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2]
+  const elevationGuideSource = {
+    nodeId: wall.id,
+    levelId: wall.parentId,
+    anchor: midpoint,
+  }
+  const leaderBottom = Math.min(0, baseElevation)
+  const leaderHeight = Math.abs(baseElevation)
+  const dashedGeometry = useMemo(
+    () => (leaderHeight > 0.0001 ? buildDashedVerticalGeometry(leaderHeight) : null),
+    [leaderHeight],
+  )
+  const dashMaterial = useMemo(
+    () =>
+      new MeshBasicNodeMaterial({
+        color: new Color(ARROW_COLOR),
+        transparent: true,
+        opacity: 0.85,
+        depthTest: false,
+        depthWrite: false,
+      }),
+    [],
+  )
+
+  const isActive = isHovered || isDragging
+  useEffect(() => {
+    dashMaterial.color.set(isActive ? ARROW_HOVER_COLOR : ARROW_COLOR)
+  }, [dashMaterial, isActive])
+  useEffect(() => () => dashedGeometry?.dispose(), [dashedGeometry])
+  useEffect(() => () => dashMaterial.dispose(), [dashMaterial])
+  const dragControls = useMemo<HandleDragControls>(
+    () => ({
+      onStart: () => {},
+      onEnd: () => {},
+    }),
+    [],
+  )
+
+  const activateElevationMove = useHandleDrag({
+    kind: 'drag',
+    cursor: 'ns-resize',
+    dragControls,
+    handleIndex: 0,
+    node: wall,
+    rideObject: levelObject,
+    setIsDragging,
+    onStart: ({ event, initialNode, intersectPlane, nodeId, sceneApi }) => {
+      if (initialNode.type !== 'wall') return null
+
+      levelObject.updateWorldMatrix(true, false)
+      const initialBase = getWallBaseElevationForNodes(initialNode, sceneApi.nodes())
+      const supportBase = initialBase - (initialNode.supportOffset ?? 0)
+      const initialHeight = getWallEffectiveHeightForNodes(initialNode, sceneApi.nodes())
+      const midpointWorld = new Vector3(midpoint[0], initialBase, midpoint[1]).applyMatrix4(
+        levelObject.matrixWorld,
+      )
+      const planeNormal = new Vector3().subVectors(camera.position, midpointWorld).setY(0)
+      if (planeNormal.lengthSq() === 0) return null
+      planeNormal.normalize()
+      const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, midpointWorld)
+      const initialHit = new Vector3()
+      if (
+        !intersectPlane(event.nativeEvent.clientX, event.nativeEvent.clientY, plane, initialHit)
+      ) {
+        return null
+      }
+      const initialPointerY = levelObject.worldToLocal(initialHit).y
+
+      return {
+        onBegin: () => {
+          useInteractionScope.getState().begin({ kind: 'handle-drag', nodeId, handle: 'elevation' })
+        },
+        onEnd: () => {
+          useInteractionScope.getState().endIf((scope) => scope.kind === 'handle-drag')
+          clearStructuralElevationGuide(initialNode.id)
+        },
+        move: ({ event: moveEvent, intersectPlane: intersectMovePlane }) => {
+          const hit = new Vector3()
+          if (!intersectMovePlane(moveEvent.clientX, moveEvent.clientY, plane, hit)) return null
+          const pointerY = levelObject.worldToLocal(hit).y
+          const nextBase = resolveResizeSnapValue({
+            rawValue: initialBase + pointerY - initialPointerY,
+            gridSnapEnabled: true,
+            gridSnapActive: isGridSnapActive(),
+            gridSnapStep: useEditor.getState().gridSnapStep,
+            magneticSnapActive: isMagneticSnapActive(),
+            magneticSnap: (value) =>
+              resolveStructuralElevationSnap(elevationGuideSource, value, sceneApi.nodes()),
+          })
+          publishStructuralElevationGuide(elevationGuideSource, nextBase, sceneApi.nodes())
+          if (Math.abs(nextBase - initialBase) < 1e-6) {
+            return {
+              supportOffset: initialNode.supportOffset,
+              height: initialNode.height,
+            }
+          }
+          const nextOffset = nextBase - supportBase
+          return {
+            supportOffset: Math.abs(nextOffset) < 1e-6 ? undefined : nextOffset,
+            height: initialHeight,
+          }
+        },
+      }
+    },
+  })
+
+  return (
+    <>
+      {dashedGeometry ? (
+        <mesh
+          frustumCulled={false}
+          geometry={dashedGeometry}
+          material={dashMaterial}
+          position={[midpoint[0], leaderBottom, midpoint[1]]}
+          renderOrder={1001}
+        />
+      ) : null}
+      <HandleArrow
+        cursor="ns-resize"
+        hover={isActive}
+        hoverScale={1.25}
+        onHoverChange={setIsHovered}
+        onPointerDown={activateElevationMove}
+        placement={{
+          position: [midpoint[0], baseElevation, midpoint[1]],
+          baseScale: zoom,
+        }}
+        shape="tracker"
+      />
     </>
   )
 }
@@ -352,6 +557,8 @@ function WallCornerLeaderHandle({ wall, endpoint }: { wall: WallNode; endpoint: 
 function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   const [isHovered, setIsHovered] = useState(false)
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const hitGeometry = useMemo(() => createArrowHitAreaGeometry(), [])
+  const hitMaterial = useInvisibleHitAreaMaterial()
   const arrowMaterial = useMemo(
     () =>
       new MeshBasicNodeMaterial({
@@ -366,7 +573,8 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   )
   const { camera, raycaster, gl } = useThree()
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+  const baseScale = zoom * ARROW_SCALE
+  const scale = (isHovered ? 1.12 : 1) * baseScale
   const dragCleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
@@ -383,6 +591,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   }, [])
 
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   // Sit on the visual centre of the wall — for curved walls that's the
@@ -395,11 +604,15 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
   const dirX = curveFrame ? curveFrame.tangent.x : wall.end[0] - wall.start[0]
   const dirZ = curveFrame ? curveFrame.tangent.y : wall.end[1] - wall.start[1]
   const wallAngle = Math.atan2(-dirZ, dirX)
-  const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+  // `wall` is the override-merged effective wall (see
+  // WallMoveSideHandlesForWall), so this height is already live during a drag.
+  const wallHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
   const handleY = wallHeight + HEIGHT_HANDLE_OFFSET
 
   const activateHeightResize = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
     const levelObject = wall.parentId ? sceneRegistry.nodes.get(wall.parentId) : null
     if (!levelObject) return
 
@@ -426,14 +639,16 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
     const hit = new Vector3()
     if (!raycaster.ray.intersectPlane(plane, hit)) return
 
-    const initialHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+    // Dragging the top makes the wall custom-height; seed from the resolved
+    // effective height so a plane-bound wall's drag starts at its real top.
+    const initialHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
     const initialY = hit.y
     const wallId = wall.id as AnyNodeId
     let pendingHeight = initialHeight
 
     document.body.style.cursor = 'ns-resize'
     sfxEmitter.emit('sfx:item-pick')
-    useEditor.getState().setActiveHandleDrag({ nodeId: wallId, label: 'height' })
+    useInteractionScope.getState().begin({ kind: 'handle-drag', nodeId: wallId, handle: 'height' })
     // Suppress R3F node pointer events until pointerup completes so the
     // synthesized click doesn't reroute selection to whatever mesh sits
     // under the cursor at release.
@@ -459,11 +674,12 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
+      window.removeEventListener('keydown', onKeyDown, true)
       if (document.body.style.cursor === 'ns-resize') {
         document.body.style.cursor = ''
       }
       useScene.temporal.getState().resume()
-      useEditor.getState().setActiveHandleDrag(null)
+      useInteractionScope.getState().endIf((sc) => sc.kind === 'handle-drag')
       useViewer.getState().setInputDragging(false)
       dragCleanupRef.current = null
     }
@@ -488,20 +704,29 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
       cleanup()
     }
 
+    // Escape / ⌘Z abort the drag — capture phase so they win over the global
+    // use-keyboard arms (⌘Z must never history-jump under a live pointer).
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
+      e.preventDefault()
+      e.stopPropagation()
+      swallowNextClick()
+      onCancel()
+    }
+
     dragCleanupRef.current = cleanup
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)
+    window.addEventListener('keydown', onKeyDown, true)
   }
 
   return (
     <group position={[midX, handleY, midZ]} rotation={[0, wallAngle, 0]}>
-      <group rotation={[0, Math.PI / 2, Math.PI / 2]} scale={scale}>
-        <mesh
-          // Geometry-as-prop + frustumCulled={false} — see WallMoveArrowHandle.
-          frustumCulled={false}
-          geometry={arrowGeometry}
-          material={arrowMaterial}
+      <group rotation={[0, Math.PI / 2, Math.PI / 2]}>
+        <InvisibleHandleHitArea
+          geometry={hitGeometry}
+          material={hitMaterial}
           onPointerDown={activateHeightResize}
           onPointerEnter={(event) => {
             event.stopPropagation()
@@ -515,7 +740,16 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
               document.body.style.cursor = ''
             }
           }}
+          scale={baseScale}
+        />
+        <mesh
+          // Geometry-as-prop + frustumCulled={false} — see WallMoveArrowHandle.
+          frustumCulled={false}
+          geometry={arrowGeometry}
+          material={arrowMaterial}
+          raycast={NO_RAYCAST}
           renderOrder={1002}
+          scale={scale}
         />
       </group>
     </group>
@@ -525,6 +759,8 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
 function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMoveHandle }) {
   const [isHovered, setIsHovered] = useState(false)
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const hitGeometry = useMemo(() => createArrowHitAreaGeometry(), [])
+  const hitMaterial = useInvisibleHitAreaMaterial()
   const arrowMaterial = useMemo(
     () =>
       new MeshBasicNodeMaterial({
@@ -541,7 +777,8 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
 
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
 
-  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+  const baseScale = zoom * ARROW_SCALE
+  const scale = (isHovered ? 1.12 : 1) * baseScale
 
   useEffect(() => {
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
@@ -556,33 +793,28 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
   }, [])
 
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   const activateWallMove = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
     document.body.style.cursor = 'grabbing'
 
     sfxEmitter.emit('sfx:item-pick')
     useEditor.getState().setMovingNode(wall)
-    useEditor.getState().setMovingWallEndpoint(null)
-    useEditor.getState().setMovingFenceEndpoint(null)
-    useEditor.getState().setCurvingWall(null)
-    useEditor.getState().setCurvingFence(null)
+    useInteractionScope.getState().endIf((s) => s.kind === 'reshaping' && s.reshape === 'endpoint')
+    useInteractionScope.getState().endIf((s) => s.kind === 'reshaping' && s.reshape === 'curve')
     // Keep the wall selected so it stays the active item once the move
     // commits; the `!movingNode` guard on the handles hides them mid-drag.
   }
 
   return (
-    <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
-      <mesh
-        // Pass geometry as a prop (not `<primitive attach="geometry">`)
-        // so the mesh is never rendered with R3F's default empty
-        // `BufferGeometry`. Combined with `frustumCulled={false}`, the
-        // primitive-attach path emits a `Draw(0, 1, 0, 0)` on the first
-        // frame and WebGPU flags "Vertex buffer slot 0 ... was not set".
-        frustumCulled={false}
-        geometry={arrowGeometry}
-        material={arrowMaterial}
+    <group position={handle.position} rotation={[0, handle.rotationY, 0]}>
+      <InvisibleHandleHitArea
+        geometry={hitGeometry}
+        material={hitMaterial}
         onPointerDown={activateWallMove}
         onPointerEnter={(event) => {
           event.stopPropagation()
@@ -596,7 +828,20 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
             document.body.style.cursor = ''
           }
         }}
+        scale={baseScale}
+      />
+      <mesh
+        // Pass geometry as a prop (not `<primitive attach="geometry">`)
+        // so the mesh is never rendered with R3F's default empty
+        // `BufferGeometry`. Combined with `frustumCulled={false}`, the
+        // primitive-attach path emits a `Draw(0, 1, 0, 0)` on the first
+        // frame and WebGPU flags "Vertex buffer slot 0 ... was not set".
+        frustumCulled={false}
+        geometry={arrowGeometry}
+        material={arrowMaterial}
+        raycast={NO_RAYCAST}
         renderOrder={1002}
+        scale={scale}
       />
     </group>
   )
@@ -605,6 +850,8 @@ function WallMoveArrowHandle({ wall, handle }: { wall: WallNode; handle: WallMov
 function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: WallMoveHandle }) {
   const [isHovered, setIsHovered] = useState(false)
   const arrowGeometry = useMemo(() => createArrowHandleGeometry(), [])
+  const hitGeometry = useMemo(() => createArrowHitAreaGeometry(), [])
+  const hitMaterial = useInvisibleHitAreaMaterial()
   const arrowMaterial = useMemo(
     () =>
       new MeshBasicNodeMaterial({
@@ -620,7 +867,8 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
   const { camera } = useThree()
 
   const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
-  const scale = (isHovered ? 1.12 : 1) * zoom * ARROW_SCALE
+  const baseScale = zoom * ARROW_SCALE
+  const scale = (isHovered ? 1.12 : 1) * baseScale
 
   useEffect(() => {
     arrowMaterial.color.set(isHovered ? ARROW_HOVER_COLOR : ARROW_COLOR)
@@ -635,30 +883,27 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
   }, [])
 
   useEffect(() => () => arrowGeometry.dispose(), [arrowGeometry])
+  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
   useEffect(() => () => arrowMaterial.dispose(), [arrowMaterial])
 
   const activateFenceMove = (event: ThreeEvent<PointerEvent>) => {
+    if (event.button !== 0) return
     event.stopPropagation()
+    suppressBoxSelectForPointer(event)
     document.body.style.cursor = 'grabbing'
 
     sfxEmitter.emit('sfx:item-pick')
     useEditor.getState().setMovingNode(fence)
-    useEditor.getState().setMovingWallEndpoint(null)
-    useEditor.getState().setMovingFenceEndpoint(null)
-    useEditor.getState().setCurvingWall(null)
-    useEditor.getState().setCurvingFence(null)
+    useInteractionScope.getState().endIf((s) => s.kind === 'reshaping' && s.reshape === 'endpoint')
+    useInteractionScope.getState().endIf((s) => s.kind === 'reshaping' && s.reshape === 'curve')
     // Keep the fence selected so it stays active once the move commits.
   }
 
   return (
-    <group position={handle.position} rotation={[0, handle.rotationY, 0]} scale={scale}>
-      <mesh
-        // Pass geometry as a prop — see WallMoveArrowHandle for the
-        // WebGPU "Vertex buffer slot 0 ... was not set" rationale.
-        frustumCulled={false}
-        geometry={arrowGeometry}
-        material={arrowMaterial}
-
+    <group position={handle.position} rotation={[0, handle.rotationY, 0]}>
+      <InvisibleHandleHitArea
+        geometry={hitGeometry}
+        material={hitMaterial}
         onPointerDown={activateFenceMove}
         onPointerEnter={(event) => {
           event.stopPropagation()
@@ -672,13 +917,23 @@ function FenceMoveArrowHandle({ fence, handle }: { fence: FenceNode; handle: Wal
             document.body.style.cursor = ''
           }
         }}
+        scale={baseScale}
+      />
+      <mesh
+        // Pass geometry as a prop — see WallMoveArrowHandle for the
+        // WebGPU "Vertex buffer slot 0 ... was not set" rationale.
+        frustumCulled={false}
+        geometry={arrowGeometry}
+        material={arrowMaterial}
+        raycast={NO_RAYCAST}
         renderOrder={1002}
+        scale={scale}
       />
     </group>
   )
 }
 
-function getWallMoveHandles(wall: WallNode): WallMoveHandle[] {
+function getWallMoveHandles(wall: WallNode, nodes: Record<string, AnyNode>): WallMoveHandle[] {
   const dx = wall.end[0] - wall.start[0]
   const dz = wall.end[1] - wall.start[1]
   const length = Math.hypot(dx, dz)
@@ -694,7 +949,7 @@ function getWallMoveHandles(wall: WallNode): WallMoveHandle[] {
   const midpoint: [number, number] = frame
     ? [frame.point.x, frame.point.y]
     : [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2]
-  const wallHeight = wall.height ?? DEFAULT_WALL_HEIGHT
+  const wallHeight = getWallEffectiveHeightForNodes(wall, nodes)
   const handleHeight = Math.max(wallHeight - HANDLE_TOP_INSET, HANDLE_MIN_HEIGHT)
   const offset = Math.max(getWallThickness(wall) / 2 + HANDLE_OFFSET, HANDLE_MIN_OFFSET)
 

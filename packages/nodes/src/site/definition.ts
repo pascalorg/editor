@@ -1,4 +1,5 @@
 import { type NodeDefinition, SiteNode as SiteNodeSchema } from '@pascal-app/core'
+import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
 import { siteParametrics } from './parametrics'
 import { SiteNode } from './schema'
 
@@ -30,6 +31,17 @@ export const siteDefinition: NodeDefinition<typeof SiteNode> = {
   },
 
   parametrics: siteParametrics,
+  measurement: {
+    features: (node) =>
+      polygonMeasurementFeatures({
+        featurePrefix: 'site',
+        height: 0,
+        label: 'Property',
+        polygon: node.polygon.points,
+      }),
+  },
+  // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',
@@ -39,7 +51,7 @@ export const siteDefinition: NodeDefinition<typeof SiteNode> = {
   presentation: {
     label: 'nodes.site.label',
     description: 'The top-level container holding buildings, zones, and the property boundary.',
-    icon: { kind: 'url', src: '/icons/site.png' },
+    icon: { kind: 'url', src: '/icons/site-flag.webp' },
     paletteSection: 'site',
     paletteOrder: 5,
   },

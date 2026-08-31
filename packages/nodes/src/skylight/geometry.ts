@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { getAnalyticalNormal, getSurfaceY } from '../solar-panel/geometry'
+import { getAnalyticalNormal, getSurfaceY } from '../shared/roof-surface'
 
 export { getAnalyticalNormal, getSurfaceY }
 

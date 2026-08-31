@@ -3,13 +3,15 @@ import { scanParametrics } from './parametrics'
 import { ScanNode } from './schema'
 
 /**
- * Scan — Stage A. Mesh imported from the capture pipeline (LiDAR /
- * photogrammetry). `ScanSystem` handles mesh loading + per-frame
- * positioning; renderer mounts the imported geometry.
+ * Scan — Stage A. Capture-session reference with an optional renderable
+ * mesh. Raw sensor streams stay in the external session manifest.
  */
 export const scanDefinition: NodeDefinition<typeof ScanNode> = {
   kind: 'scan',
-  schemaVersion: 1,
+  // Heavy LiDAR asset: stripped from the bake, re-added live from scene_graph
+  // in the viewer (see plans → Part D; glb-reference-nodes.tsx).
+  bake: 'strip',
+  schemaVersion: 4,
   schema: ScanNode,
   category: 'site',
 
@@ -21,6 +23,9 @@ export const scanDefinition: NodeDefinition<typeof ScanNode> = {
 
   capabilities: {
     selectable: { hitVolume: 'bbox' },
+    movable: { axes: ['x', 'y', 'z'], gridSnap: true },
+    rotatable: { axes: ['y'], snapAngles: [Math.PI / 4] },
+    scalable: { axes: ['x', 'y', 'z'], min: 0.01, max: 10 },
     duplicable: false,
     deletable: true,
     // Scans carry user-uploaded imagery — cataloging them as
@@ -40,14 +45,14 @@ export const scanDefinition: NodeDefinition<typeof ScanNode> = {
   },
 
   presentation: {
-    label: 'nodes.scan.label',
-    description: 'A captured mesh (LiDAR / photogrammetry) imported as a scene reference.',
-    icon: { kind: 'url', src: '/icons/mesh.png' },
+    label: 'Capture',
+    description: 'A captured session with optional mesh, motion, media, and sensor data.',
+    icon: { kind: 'url', src: '/icons/mesh.webp' },
     paletteSection: 'site',
     paletteOrder: 40,
   },
 
   mcp: {
-    description: 'A captured mesh import.',
+    description: 'A captured session reference with an optional renderable mesh.',
   },
 }

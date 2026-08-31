@@ -1,12 +1,14 @@
-import {
-  type AnyNodeId,
-  type DoorNode,
-  getScaledDimensions,
-  type ItemNode,
-  useScene,
-  type WallNode,
-  type WindowNode,
-} from '@pascal-app/core'
+import type { AnyNode, AnyNodeId, WallNode } from '@pascal-app/core'
+import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+
+/**
+ * Default sill height (metres from the floor to the BOTTOM of a window) for a
+ * fresh window that has no wall-face height yet — the off-wall ghost and the
+ * floor-cursor placement use it so a new window floats slightly above the
+ * ground rather than sitting on it. The committed Y is the window's CENTRE, so
+ * callers add `height / 2`. An existing window keeps its own sill.
+ */
+export const DEFAULT_WINDOW_SILL_M = 0.5
 
 /**
  * Converts wall-local (X along wall, Y = height above wall base) to world XYZ.
@@ -34,7 +36,11 @@ export function wallLocalToWorld(
 }
 
 /**
- * Clamps window center position so it stays fully within wall bounds.
+ * Clamps window center position so it stays fully within wall bounds. The Y
+ * ceiling is the wall's RESOLVED top (storey plane for plane-bound walls,
+ * stored height for explicit ones, minus the elected slab base) — `nodes` is
+ * required because a plane-bound wall's top lives on its level, not on the
+ * wall record.
  */
 export function clampToWall(
   wallNode: WallNode,
@@ -42,11 +48,12 @@ export function clampToWall(
   localY: number,
   width: number,
   height: number,
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
 ): { clampedX: number; clampedY: number } {
   const dx = wallNode.end[0] - wallNode.start[0]
   const dz = wallNode.end[1] - wallNode.start[1]
   const wallLength = Math.sqrt(dx * dx + dz * dz)
-  const wallHeight = wallNode.height ?? 2.5
+  const wallHeight = resolveWallOpeningCeiling(wallNode, nodes)
 
   const clampedX = Math.max(width / 2, Math.min(wallLength - width / 2, localX))
   const clampedY = Math.max(height / 2, Math.min(wallHeight - height / 2, localY))
@@ -54,64 +61,8 @@ export function clampToWall(
 }
 
 /**
- * Directly checks the wall's children for bounding-box overlap with a proposed window.
- * Works for both `item` type (position[1] = bottom) and `window` type (position[1] = center).
- * The spatial grid only tracks `item` nodes, so windows must be checked this way.
- * Reads the wall's latest children from the store (not the event node) to avoid stale data.
+ * Wall-child overlap is shared by door + window placement (one source of
+ * truth in `shared/wall-attach-target.ts`). Re-exported here so existing
+ * `./window-math` importers don't change.
  */
-export function hasWallChildOverlap(
-  wallId: string,
-  clampedX: number,
-  clampedY: number,
-  width: number,
-  height: number,
-  ignoreId?: string,
-): boolean {
-  const nodes = useScene.getState().nodes
-  const wallNode = nodes[wallId as AnyNodeId] as WallNode | undefined
-  if (!wallNode) return true // Block if wall not found
-  const halfW = width / 2
-  const halfH = height / 2
-  const newBottom = clampedY - halfH
-  const newTop = clampedY + halfH
-  const newLeft = clampedX - halfW
-  const newRight = clampedX + halfW
-
-  for (const childId of Array.isArray(wallNode.children) ? wallNode.children : []) {
-    if (childId === ignoreId) continue
-    const child = nodes[childId as AnyNodeId]
-    if (!child) continue
-
-    let childLeft: number, childRight: number, childBottom: number, childTop: number
-
-    if (child.type === 'item') {
-      const item = child as ItemNode
-      if (item.asset.attachTo !== 'wall' && item.asset.attachTo !== 'wall-side') continue
-      const [w, h] = getScaledDimensions(item)
-      childLeft = item.position[0] - w / 2
-      childRight = item.position[0] + w / 2
-      childBottom = item.position[1] // items store bottom Y
-      childTop = item.position[1] + h
-    } else if (child.type === 'window') {
-      const win = child as WindowNode
-      childLeft = win.position[0] - win.width / 2
-      childRight = win.position[0] + win.width / 2
-      childBottom = win.position[1] - win.height / 2 // windows store center Y
-      childTop = win.position[1] + win.height / 2
-    } else if (child.type === 'door') {
-      const door = child as DoorNode
-      childLeft = door.position[0] - door.width / 2
-      childRight = door.position[0] + door.width / 2
-      childBottom = door.position[1] - door.height / 2 // doors store center Y
-      childTop = door.position[1] + door.height / 2
-    } else {
-      continue
-    }
-
-    const xOverlap = newLeft < childRight && newRight > childLeft
-    const yOverlap = newBottom < childTop && newTop > childBottom
-    if (xOverlap && yOverlap) return true
-  }
-
-  return false
-}
+export { hasWallChildOverlap } from '../shared/wall-attach-target'

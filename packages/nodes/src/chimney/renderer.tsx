@@ -19,6 +19,7 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildChimneyGeometry } from './geometry'
 import { carveChimneyHoles } from './holes'
 import { trimChimneyBodyAgainstRoof } from './roof-trim'
@@ -77,24 +78,16 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
   }, [node, segment])
 
   // Segment brushes for the body trim. Building these is non-trivial
-  // (4 CSG-ready Brush instances per segment), so memoise by the shape
-  // fields that drive their geometry. A chimney slider drag changes
-  // `node.*` but not these, so the cached brushes survive the drag —
-  // previously each frame rebuilt all four.
-  const segmentBrushes = useMemo(
-    () => (segment ? getRoofSegmentBrushes(segment) : null),
-    [
-      segment?.roofType,
-      segment?.width,
-      segment?.depth,
-      segment?.wallHeight,
-      segment?.pitch,
-      segment?.wallThickness,
-      segment?.deckThickness,
-      segment?.overhang,
-      segment?.shingleThickness,
-    ],
-  )
+  // (4 CSG-ready Brush instances per segment). `segment` comes from a
+  // `useScene` selector, so it only re-identifies when the segment's own
+  // data changes — depend on it directly (as the `geo` memo above does)
+  // and the brushes rebuild exactly when the host roof reshapes, incl.
+  // the gambrel / mansard / dutch-hip width-ratio fields that
+  // `getRoofSegmentBrushes` reads. A chimney slider drag changes `node`,
+  // not `segment`, so the cache still survives the drag. Enumerating
+  // individual fields here previously omitted those ratios and left the
+  // trim CSG-ing against a stale roof outline.
+  const segmentBrushes = useMemo(() => (segment ? getRoofSegmentBrushes(segment) : null), [segment])
   useEffect(
     () => () => {
       if (segmentBrushes) {
@@ -131,6 +124,35 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
     },
     [geo, trimmedBody],
   )
+
+  // Map chimney-local geometry into the host segment's local frame (where the
+  // trim cut prisms live) — same pose the inner mesh group is mounted with
+  // (node.position x/z, y=0 — chimneys anchor to the surface, not position[1]).
+  // Every chimney part (body, cap, flues, cricket, bands) shares this pose, so
+  // each is clipped by the segment trim independently. The body chains AFTER
+  // the through-roof self-trim, so both CSG passes compose.
+  const localToSegment = useMemo(
+    () =>
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(node.position[0] ?? 0, 0, node.position[2] ?? 0),
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), node.rotation ?? 0),
+        new THREE.Vector3(1, 1, 1),
+      ),
+    [node.position[0], node.position[2], node.rotation],
+  )
+  const clippedBody = useSegmentTrimClippedGeometry(
+    trimmedBody ?? geo?.body ?? null,
+    segment,
+    localToSegment,
+  )
+  const clippedCap = useSegmentTrimClippedGeometry(geo?.cap ?? null, segment, localToSegment)
+  const clippedFlues = useSegmentTrimClippedGeometry(geo?.flues ?? null, segment, localToSegment)
+  const clippedCricket = useSegmentTrimClippedGeometry(
+    geo?.cricket ?? null,
+    segment,
+    localToSegment,
+  )
+  const clippedBands = useSegmentTrimClippedGeometry(geo?.bands ?? null, segment, localToSegment)
 
   // Per-instance fallback materials. Were previously module-scoped
   // singletons shared across every chimney — a paint-mode or debug
@@ -223,67 +245,71 @@ const ChimneyRenderer = ({ node: storeNode }: { node: ChimneyNode }) => {
 
   if (!segment || !geo) return null
 
-  // The chimney's geometry bakes its baseY using segment.wallHeight inside
-  // the builder, so the outer group only needs the segment-local X/Z
-  // offset. Y stays at 0 here.
-
   // Chimneys are mounted inside `RoofRenderer`'s `roof-elements` group,
   // which sits at the ROOF's origin — not inside the host segment's
-  // transform. Apply the segment's own position/rotation here so a
-  // chimney parented to segment N lands on segment N (and not on the
-  // first segment) once the chimney's segment-local `node.position[0/2]`
-  // is layered in by `geometry.ts`. Mirrors skylight's renderer.
+  // transform. Apply the segment's pose on the outer group, then nest a
+  // ref'd inner group at the chimney's segment-local position +
+  // rotation so the registered Object3D's local frame is *chimney-local*
+  // — that's what `NodeArrowHandles` reads to place its arrows.
+  // Mirrors skylight's renderer; geometry comes from `geometry.ts` in
+  // chimney-local frame (no transform baking) and lands in the right
+  // world spot via the two-group stack below.
   return (
     <group
       position={segment.position}
-      ref={ref}
       rotation-y={segment.rotation}
       visible={node.visible}
       {...handlers}
     >
-      <mesh
-        castShadow
-        geometry={trimmedBody ?? geo.body}
-        material={surfaceArray}
-        name="chimney-body"
-        receiveShadow
-      />
-      {geo.cap && (
+      <group
+        position={[node.position[0] ?? 0, 0, node.position[2] ?? 0]}
+        ref={ref}
+        rotation-y={node.rotation ?? 0}
+      >
         <mesh
           castShadow
-          geometry={geo.cap}
+          geometry={clippedBody ?? trimmedBody ?? geo.body}
           material={surfaceArray}
-          name="chimney-cap"
+          name="chimney-body"
           receiveShadow
         />
-      )}
-      {geo.flues && (
-        <mesh
-          castShadow
-          geometry={geo.flues}
-          material={surfaceArray}
-          name="chimney-flues"
-          receiveShadow
-        />
-      )}
-      {geo.cricket && (
-        <mesh
-          castShadow
-          geometry={geo.cricket}
-          material={surfaceMaterial}
-          name="chimney-cricket"
-          receiveShadow
-        />
-      )}
-      {geo.bands && (
-        <mesh
-          castShadow
-          geometry={geo.bands}
-          material={surfaceMaterial}
-          name="chimney-bands"
-          receiveShadow
-        />
-      )}
+        {geo.cap && (
+          <mesh
+            castShadow
+            geometry={clippedCap ?? geo.cap}
+            material={surfaceArray}
+            name="chimney-cap"
+            receiveShadow
+          />
+        )}
+        {geo.flues && (
+          <mesh
+            castShadow
+            geometry={clippedFlues ?? geo.flues}
+            material={surfaceArray}
+            name="chimney-flues"
+            receiveShadow
+          />
+        )}
+        {geo.cricket && (
+          <mesh
+            castShadow
+            geometry={clippedCricket ?? geo.cricket}
+            material={surfaceMaterial}
+            name="chimney-cricket"
+            receiveShadow
+          />
+        )}
+        {geo.bands && (
+          <mesh
+            castShadow
+            geometry={clippedBands ?? geo.bands}
+            material={surfaceMaterial}
+            name="chimney-bands"
+            receiveShadow
+          />
+        )}
+      </group>
     </group>
   )
 }

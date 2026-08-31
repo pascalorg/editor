@@ -12,7 +12,7 @@ import { BuildingNode } from './schema'
  */
 export const buildingDefinition: NodeDefinition<typeof BuildingNode> = {
   kind: 'building',
-  schemaVersion: 1,
+  schemaVersion: 3,
   schema: BuildingNode,
   category: 'site',
 
@@ -31,7 +31,16 @@ export const buildingDefinition: NodeDefinition<typeof BuildingNode> = {
     presettable: false,
   },
 
+  // Building-wide drag (whole-building translate + R/T rotation). Routed
+  // through `MoveTool`'s registry-affordance lookup rather than a
+  // hardcoded dispatcher arm.
+  affordanceTools: {
+    move: () => import('./move-tool'),
+  },
+
   parametrics: buildingParametrics,
+  // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',
@@ -39,9 +48,9 @@ export const buildingDefinition: NodeDefinition<typeof BuildingNode> = {
   },
 
   presentation: {
-    label: 'nodes.building.label',
-    description: 'nodes.building.description',
-    icon: { kind: 'url', src: '/icons/building.png' },
+    label: 'Building',
+    description: 'A building container holding one or more levels.',
+    icon: { kind: 'url', src: '/icons/building.webp' },
     paletteSection: 'site',
     paletteOrder: 6,
   },

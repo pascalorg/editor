@@ -36,6 +36,12 @@ return <mesh ref={ref} {...events} />
 
 Events are suppressed during camera drag (`useViewer.getState().cameraDragging`).
 
+Selection/hover picking is only meaningful while the interaction scope is `idle`
+(`selectionEnabled(scope)`). During an active placement/move/etc., the pointer
+belongs to that interaction's body and the hot-set narrows which scene objects
+are raycast-eligible — see [interaction-scope](interaction-scope.md) for the
+hot-set derivation and the overlay scope matrix.
+
 ---
 
 ## Viewer Selection Manager
@@ -55,7 +61,7 @@ type SelectionPath = {
 
 `setSelection` has a hierarchy guard: setting `levelId` without `buildingId` resets children. Use `resetSelection()` to clear everything.
 
-Multi-select: `Ctrl/Meta + click` toggles an ID in `selectedIds`. Regular click replaces it.
+Multi-select: `Ctrl/Meta + click` toggles an ID in `selectedIds`; `Shift + click` toggles the same way. Regular click replaces it.
 
 ---
 
@@ -72,6 +78,30 @@ phase: 'furnish'   → selectable: furniture items only
 ```
 
 Clicking a node of a different phase auto-switches the phase. Double-click drills into a context level.
+
+In Select mode, 3D and 2D canvas selection share the same modifier vocabulary:
+
+- `Ctrl/Meta + click` toggles the clicked object in `selectedIds`.
+- `Shift + click` also toggles the clicked canvas object so users can multi-select from
+  either viewport. The scene graph keeps file-browser semantics: `Shift + click` selects
+  the visible range between the last selected row and the clicked row.
+- `Ctrl/Meta + left-drag` on a selected movable object starts direct move from the canvas.
+- `Ctrl/Meta + right-drag` on a selected rotatable object starts direct rotation from the
+  canvas. Rotation snaps to the default angle increment unless Shift is held during the
+  drag.
+
+The floating helper in `packages/editor/src/components/ui/helpers/helper-manager.tsx`
+mirrors these rules from current selection state and held modifiers. Keep that helper and
+the shortcut dialog in sync when changing selection gestures.
+
+### Session groups (editor-only)
+
+`Ctrl/Cmd+G` / `Ctrl/Cmd+Shift+G` create and dissolve **session selection groups** in
+`use-session-groups` (not the scene graph). Plain click expands to live members via
+`expandIdsForNode`, threaded into all three click paths:
+`resolveSelectedIdsForNodeClick` (3D), the registry layer's `applyEntrySelection` (2D
+entries), and `resolveFloorplanBackgroundSelection` (2D background hit-test). Alt+click
+opts out. See [selection-groups](selection-groups.md).
 
 ---
 

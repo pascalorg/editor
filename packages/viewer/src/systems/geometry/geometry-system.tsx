@@ -3,16 +3,21 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  findLevelAncestorId,
   type GeometryContext,
   getEffectiveNode,
+  levelBaseElevationAt,
   nodeRegistry,
+  noteLevelBaseConsumer,
   type SurfaceRole,
   sceneRegistry,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useEffect } from 'react'
-import { FrontSide, type Group, type Material, type Mesh } from 'three'
+import { useEffect, useRef } from 'react'
+import { FrontSide, type Group, type Material, type Mesh, type Object3D } from 'three'
+import { disposeObject3DResources } from '../../lib/dispose-object3d'
 import {
   type ColorPreset,
   createSurfaceRoleMaterial,
@@ -58,7 +63,25 @@ export const GeometrySystem = () => {
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const bumpGeometryRevision = useViewer((s) => s.bumpGeometryRevision)
+  // The shared scene-material library, threaded into each builder's ctx so
+  // pure geometry builders can resolve `scene:<id>` slot refs without
+  // importing `useScene`.
+  const sceneMaterials = useScene((s) => s.materials)
+  // Per-node cache of the last-built geometry key (for kinds that declare
+  // `def.geometryKey`). Lets us skip a dispose+rebuild when a node is dirty
+  // but its geometry inputs are unchanged — e.g. an item reparenting onto a
+  // shelf dirties the shelf without altering its boards.
+  const builtGeometryKeyRef = useRef<Map<string, GeometryBuildCacheEntry>>(new Map())
 
+  // Re-mark every geometry-backed node dirty whenever a viewer appearance
+  // value changes, so `def.geometry` builders re-run and pick up the new
+  // shading / texture / preset / theme. These four are deliberate re-run
+  // TRIGGERS, not values read in the body — the effect re-fires on any
+  // change. They're primitives (stable by value), so listing them is safe;
+  // biome flags them as "unnecessary" because the body doesn't reference
+  // them, but dropping them silently breaks appearance-mode switching.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: shading/textures/colorPreset/sceneTheme are intentional re-run triggers; removing them stops geometry from rebuilding on appearance change.
   useEffect(() => {
     const nodes = useScene.getState().nodes
     for (const node of Object.values(nodes)) {
@@ -69,9 +92,28 @@ export const GeometrySystem = () => {
     }
   }, [shading, textures, colorPreset, sceneTheme])
 
+  // Editing a scene material must re-colour every geometry node that
+  // references it through a `scene:<id>` slot ref. Such a node's
+  // `geometryKey` is unchanged (only the referenced material's contents
+  // moved), so clear its cached key to defeat the skip in the rebuild loop,
+  // then mark it dirty. Scoped to nodes carrying a `scene:` ref so an
+  // unrelated material edit doesn't churn the whole scene.
+  useEffect(() => {
+    void sceneMaterials
+    const nodes = useScene.getState().nodes
+    for (const node of Object.values(nodes)) {
+      const def = nodeRegistry.get(node.type)
+      if (!def?.geometry) continue
+      if (!nodeReferencesSceneMaterial(node)) continue
+      builtGeometryKeyRef.current.delete(node.id)
+      useScene.getState().markDirty(node.id as AnyNodeId)
+    }
+  }, [sceneMaterials])
+
   useFrame(() => {
     if (dirtyNodes.size === 0) return
     const nodes = useScene.getState().nodes
+    let rebuiltGeometry = false
 
     // Phase 1 — group dirty nodes by (kind, parentId). Kinds that
     // declare `def.computeLevelData` get one batch precompute per
@@ -146,10 +188,24 @@ export const GeometrySystem = () => {
       // now smooths drags through this single line.
       const effectiveNode = getEffectiveNode(node)
 
+      // Skip the rebuild when the geometry inputs are unchanged (kinds that
+      // opt in via `def.geometryKey`). Fold in the global rendering inputs so
+      // a theme / shading change — which re-dirties every geometry node — is
+      // never skipped. This kills the board remount + pointer enter/leave
+      // churn when an item reparents onto a shelf.
+      if (def.geometryKey) {
+        const childLiveOverrideKey = liveChildOverrideKey(node)
+        const builtKey = `${shading}|${textures}|${colorPreset}|${sceneTheme}|${def.geometryKey(effectiveNode)}|${childLiveOverrideKey}`
+        if (shouldReuseGeometryBuild(builtGeometryKeyRef.current, id, group, builtKey)) {
+          clearDirty(id as AnyNodeId)
+          continue
+        }
+      }
+
       const parentId = (node.parentId ?? null) as AnyNodeId | null
       const key: BatchKey = `${node.type}::${parentId ?? ''}`
       const levelData = levelDataByBatch.get(key)
-      const ctx = buildGeometryContext(effectiveNode, nodes, levelData)
+      const ctx = buildGeometryContext(effectiveNode, nodes, levelData, sceneMaterials)
 
       // The builder is typed against the kind's specific node — at the
       // generic system level we lose that refinement, so the cast lands
@@ -171,21 +227,10 @@ export const GeometrySystem = () => {
 
       disposeChildren(group)
       for (const child of [...built.children]) {
-        // Tag every child the builder produced so a subsequent rebuild
-        // can dispose only THIS rebuild's outputs and leave React-
-        // mounted siblings (hosted items inside a shelf / slab / etc.)
-        // alone. Without this, a parent rebuild triggered by a child
-        // event (e.g. an item reparenting onto a shelf calls
-        // `dirtyNodes.add(parent)` in `ItemRenderer`'s effect) would
-        // wipe ALL of the parent group's children — including the
-        // freshly-mounted item — leaving the item in scene state but
-        // invisible.
-        ;(child as { userData?: Record<string, unknown> }).userData = {
-          ...(child as { userData?: Record<string, unknown> }).userData,
-          __fromGeometry: true,
-        }
+        markGeometryBuildOutput(child)
         group.add(child)
       }
+      rebuiltGeometry = true
       // NOTE: we intentionally do NOT reset `group.position` / `group.rotation`
       // here. The `ParametricNodeRenderer` binds them via JSX (`position={...}`
       // / `rotation={...}`) driven by `useLiveTransforms` during drag and
@@ -197,25 +242,52 @@ export const GeometrySystem = () => {
 
       clearDirty(id as AnyNodeId)
     }
+    if (rebuiltGeometry) bumpGeometryRevision()
   }, 2)
 
   return null
+}
+
+function liveChildOverrideKey(node: AnyNode): string {
+  const childIds = (node as unknown as { children?: AnyNodeId[] }).children
+  if (!Array.isArray(childIds) || childIds.length === 0) return ''
+
+  const overrides = useLiveNodeOverrides.getState().overrides
+  const entries: Array<[AnyNodeId, unknown]> = []
+  for (const childId of childIds) {
+    const override = overrides.get(childId)
+    if (override) entries.push([childId, override])
+  }
+  return entries.length === 0 ? '' : JSON.stringify(entries)
+}
+
+function nodeReferencesSceneMaterial(node: AnyNode): boolean {
+  const slots = (node as { slots?: Record<string, string> }).slots
+  if (!slots) return false
+  for (const ref of Object.values(slots)) {
+    if (typeof ref === 'string' && ref.startsWith('scene:')) return true
+  }
+  return false
 }
 
 function buildGeometryContext(
   node: AnyNode,
   nodes: Record<string, AnyNode>,
   levelData: unknown,
+  materials: GeometryContext['materials'],
 ): GeometryContext {
-  const resolve = <N = AnyNode>(id: AnyNodeId): N | undefined => nodes[id] as N | undefined
+  const resolve = <N = AnyNode>(id: AnyNodeId): N | undefined => {
+    const resolved = nodes[id]
+    return resolved ? (getEffectiveNode(resolved) as N) : undefined
+  }
 
   const childIds = (node as unknown as { children?: AnyNodeId[] }).children
   const children: AnyNode[] = Array.isArray(childIds)
-    ? childIds.map((cid) => nodes[cid]).filter((n): n is AnyNode => n !== undefined)
+    ? childIds.map((cid) => resolve<AnyNode>(cid)).filter((n): n is AnyNode => n !== undefined)
     : []
 
   const parentId = node.parentId as AnyNodeId | null
-  const parent: AnyNode | null = parentId ? (nodes[parentId] ?? null) : null
+  const parent: AnyNode | null = parentId ? (resolve<AnyNode>(parentId) ?? null) : null
 
   // Siblings = same kind, same parent, excluding self. Walks the parent's
   // children array; falls back to scanning the whole scene if the parent
@@ -226,17 +298,34 @@ function buildGeometryContext(
     if (Array.isArray(parentChildIds)) {
       for (const sid of parentChildIds) {
         if (sid === node.id) continue
-        const s = nodes[sid]
+        const s = resolve<AnyNode>(sid)
         if (s && s.type === node.type) siblings.push(s)
       }
     } else {
-      siblings = Object.values(nodes).filter(
-        (n) => n !== node && n.type === node.type && n.parentId === parentId,
-      )
+      siblings = Object.values(nodes)
+        .filter((n) => n !== node && n.type === node.type && n.parentId === parentId)
+        .map((n) => getEffectiveNode(n))
     }
   }
 
-  return { resolve, children, siblings, parent, levelData }
+  // The ground under this node, for builders that bake their own vertical
+  // origin (`ctx.levelBaseAt`). A closure rather than a scalar because the
+  // sample point is the builder's business: a fence samples its own start,
+  // and a kind that wanted to drape a span could sample along it. Resolved
+  // against the node's level ancestor, so a builder never has to know how
+  // the level graph is walked — and gets `0` when it has no level, which is
+  // the flat-ground answer those nodes already assumed.
+  //
+  // Calling it also enrolls the kind in terrain invalidation
+  // (`noteLevelBaseConsumer`) — see `terrain-support.ts` for why asking is
+  // the registration.
+  const levelId = findLevelAncestorId(node.id as AnyNodeId, nodes)
+  const levelBaseAt = (x: number, z: number) => {
+    noteLevelBaseConsumer(node.type)
+    return levelId ? levelBaseElevationAt(nodes, levelId, x, z) : 0
+  }
+
+  return { resolve, children, siblings, parent, levelBaseAt, levelData, materials }
 }
 
 function disposeChildren(group: Group) {
@@ -250,22 +339,7 @@ function disposeChildren(group: Group) {
       ?.__fromGeometry
     if (!fromGeometry) continue
     group.remove(child)
-    const mesh = child as Partial<Mesh> & { geometry?: { dispose?: () => void } }
-    if (mesh.geometry?.dispose) mesh.geometry.dispose()
-    if ('material' in mesh) {
-      const m = (mesh as { material: unknown }).material
-      if (Array.isArray(m)) {
-        for (const mat of m) {
-          if (isCachedMaterial(mat)) continue
-          if (mat && typeof (mat as { dispose?: () => void }).dispose === 'function') {
-            ;(mat as { dispose: () => void }).dispose()
-          }
-        }
-      } else if (isCachedMaterial(m)) {
-      } else if (m && typeof (m as { dispose?: () => void }).dispose === 'function') {
-        ;(m as { dispose: () => void }).dispose()
-      }
-    }
+    disposeObject3DResources(child)
   }
 }
 
@@ -314,11 +388,33 @@ function getMaterialSide(material: Material | Material[]): Material['side'] {
   return source?.side ?? FrontSide
 }
 
-function isCachedMaterial(value: unknown): boolean {
-  return Boolean(
-    (value as { userData?: { __pascalCachedMaterial?: boolean } } | null)?.userData
-      ?.__pascalCachedMaterial,
-  )
+export default GeometrySystem
+
+export type GeometryBuildCacheEntry = {
+  group: Group
+  key: string
 }
 
-export default GeometrySystem
+export function markGeometryBuildOutput(child: Object3D): void {
+  // Tag the builder subtree so paint previews can reach nested meshes (for
+  // example a cabinet sink faucet handle), while disposal still removes only
+  // top-level builder children from the registered group.
+  child.traverse((object) => {
+    object.userData = {
+      ...object.userData,
+      __fromGeometry: true,
+    }
+  })
+}
+
+export function shouldReuseGeometryBuild(
+  cache: Map<string, GeometryBuildCacheEntry>,
+  id: string,
+  group: Group,
+  key: string,
+): boolean {
+  const cached = cache.get(id)
+  if (cached?.group === group && cached.key === key) return true
+  cache.set(id, { group, key })
+  return false
+}

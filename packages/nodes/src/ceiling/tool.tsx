@@ -1,7 +1,26 @@
 'use client'
 
-import { emitter, type GridEvent, type LevelNode, useScene } from '@pascal-app/core'
-import { CursorSphere, EDITOR_LAYER, markToolCancelConsumed, triggerSFX, useTranslations } from '@pascal-app/editor'
+import {
+  DEFAULT_ANGLE_STEP,
+  emitter,
+  type GridEvent,
+  type LevelNode,
+  snapPointAlongAngleRay,
+  snapPointToGrid,
+  useScene,
+} from '@pascal-app/core'
+import {
+  CursorSphere,
+  clearCeilingSnapFeedback,
+  EDITOR_LAYER,
+  isAngleSnapActive,
+  isGridSnapActive,
+  markToolCancelConsumed,
+  resolveCeilingPlanPointSnap,
+  triggerSFX,
+  useEditor,
+  useFloorplanDraftPreview,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BufferGeometry, DoubleSide, type Group, type Line, Shape, Vector3 } from 'three'
@@ -14,44 +33,25 @@ import { CeilingNode } from './schema'
  * Multi-click polygon drawing at the ceiling height (2.52m default)
  * with a vertical TSL-gradient connector + ground-shadow lines so the
  * draft is visible against both the ceiling plane and the floor.
- * Shift defeats the axis/45° snap during drag.
  */
 
 const CEILING_HEIGHT = 2.52
 const GRID_OFFSET = 0.02
 
-function calculateSnapPoint(
-  lastPoint: [number, number],
-  currentPoint: [number, number],
-): [number, number] {
-  const [x1, y1] = lastPoint
-  const [x, y] = currentPoint
-  const dx = x - x1
-  const dy = y - y1
-  const absDx = Math.abs(dx)
-  const absDy = Math.abs(dy)
-  const horizontalDist = absDy
-  const verticalDist = absDx
-  const diagonalDist = Math.abs(absDx - absDy)
-  const minDist = Math.min(horizontalDist, verticalDist, diagonalDist)
-  if (minDist === diagonalDist) {
-    const diagonalLength = Math.min(absDx, absDy)
-    return [x1 + Math.sign(dx) * diagonalLength, y1 + Math.sign(dy) * diagonalLength]
-  }
-  if (minDist === horizontalDist) return [x, y1]
-  return [x1, y]
-}
-
-function commitCeilingDrawing(levelId: LevelNode['id'], points: Array<[number, number]>, name: string): string {
-  const { createNode } = useScene.getState()
-  const ceiling = CeilingNode.parse({ name, polygon: points })
+function commitCeilingDrawing(levelId: LevelNode['id'], points: Array<[number, number]>): string {
+  const { createNode, nodes } = useScene.getState()
+  const ceilingCount = Object.values(nodes).filter((n) => n.type === 'ceiling').length
+  const name = `Ceiling ${ceilingCount + 1}`
+  // A placed ceiling preset seeds `toolDefaults.ceiling` (thickness, height,
+  // material, …) before the tool activates; the drawn polygon always wins.
+  const defaults = useEditor.getState().toolDefaults.ceiling ?? {}
+  const ceiling = CeilingNode.parse({ ...defaults, name, polygon: points })
   createNode(ceiling, levelId)
   triggerSFX('sfx:structure-build')
   return ceiling.id
 }
 
 export const CeilingTool: React.FC = () => {
-  const t = useTranslations()
   const cursorRef = useRef<Group>(null)
   const gridCursorRef = useRef<Group>(null)
   const mainLineRef = useRef<Line>(null!)
@@ -67,7 +67,32 @@ export const CeilingTool: React.FC = () => {
   const [snappedCursorPosition, setSnappedCursorPosition] = useState<[number, number]>([0, 0])
   const [levelY, setLevelY] = useState(0)
   const previousSnappedPointRef = useRef<[number, number] | null>(null)
-  const shiftPressed = useRef(false)
+
+  // Clear preset-seeded defaults on deactivation so a later manual ceiling
+  // draw isn't built with a stale preset's parameters. Unmount-only.
+  useEffect(() => () => useEditor.getState().setToolDefaults('ceiling', null), [])
+
+  useEffect(() => () => clearCeilingSnapFeedback(), [])
+
+  // Publish the live vertex count so the HUD shows "Finish" only at ≥ 3 points.
+  useEffect(() => {
+    useEditor.getState().setDraftVertexCount(points.length)
+  }, [points.length])
+  useEffect(() => () => useEditor.getState().setDraftVertexCount(0), [])
+
+  useEffect(() => {
+    useFloorplanDraftPreview.getState().setPolygonDraft('ceiling', points)
+  }, [points])
+  useEffect(
+    () => () => {
+      const draftPreview = useFloorplanDraftPreview.getState()
+      if (draftPreview.polygonDraftType === 'ceiling') {
+        draftPreview.setPolygonDraft(null, [])
+      }
+      draftPreview.setCursorPoint(null)
+    },
+    [],
+  )
 
   const verticalGeo = useMemo(
     () =>
@@ -88,18 +113,26 @@ export const CeilingTool: React.FC = () => {
 
     const onGridMove = (event: GridEvent) => {
       if (!(cursorRef.current && gridCursorRef.current)) return
-      const gridX = Math.round(event.localPosition[0] * 2) / 2
-      const gridZ = Math.round(event.localPosition[2] * 2) / 2
-      const gridPosition: [number, number] = [gridX, gridZ]
+      const rawPoint: [number, number] = [event.localPosition[0], event.localPosition[2]]
+      // Honour the active snapping mode: grid lattice + 15° angle lock are each
+      // gated on the mode (off / lines → free), like the slab tool.
+      const gridStep = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      const gridPosition: [number, number] = [...snapPointToGrid(rawPoint, gridStep)]
       setCursorPosition(gridPosition)
       setLevelY(event.localPosition[1])
       const ceilingY = event.localPosition[1] + CEILING_HEIGHT
       const gridY = event.localPosition[1] + GRID_OFFSET
       const lastPoint = points[points.length - 1]
-      const displayPoint =
-        shiftPressed.current || !lastPoint
-          ? gridPosition
-          : calculateSnapPoint(lastPoint, gridPosition)
+      const orthoPoint: [number, number] =
+        isAngleSnapActive() && lastPoint
+          ? [...snapPointAlongAngleRay(lastPoint, rawPoint, DEFAULT_ANGLE_STEP, gridStep)]
+          : gridPosition
+      const displayPoint = resolveCeilingPlanPointSnap({
+        rawPoint,
+        fallbackPoint: orthoPoint,
+        levelId: currentLevelId,
+      }).point
+      useFloorplanDraftPreview.getState().setCursorPoint(displayPoint)
       setSnappedCursorPosition(displayPoint)
       if (
         points.length > 0 &&
@@ -127,13 +160,14 @@ export const CeilingTool: React.FC = () => {
         Math.abs(clickPoint[0] - firstPoint[0]) < 0.25 &&
         Math.abs(clickPoint[1] - firstPoint[1]) < 0.25
       ) {
-        const { nodes } = useScene.getState()
-        const ceilingCount = Object.values(nodes).filter((n) => n.type === 'ceiling').length
-        const ceilingName = t('nodes.ceiling.defaultName', { count: ceilingCount + 1 })
-        const ceilingId = commitCeilingDrawing(currentLevelId, points, ceilingName)
+        const ceilingId = commitCeilingDrawing(currentLevelId, points)
         setSelection({ selectedIds: [ceilingId] })
         setPoints([])
+        clearCeilingSnapFeedback()
       } else {
+        // Every non-closing vertex is a "start" tick; the closing click above
+        // fires the structure-build (end) cue.
+        triggerSFX('sfx:structure-build-start')
         setPoints([...points, clickPoint])
       }
     }
@@ -141,28 +175,18 @@ export const CeilingTool: React.FC = () => {
     const onGridDoubleClick = (_event: GridEvent) => {
       if (!currentLevelId) return
       if (points.length >= 3) {
-        const { nodes } = useScene.getState()
-        const ceilingCount = Object.values(nodes).filter((n) => n.type === 'ceiling').length
-        const ceilingName = t('nodes.ceiling.defaultName', { count: ceilingCount + 1 })
-        const ceilingId = commitCeilingDrawing(currentLevelId, points, ceilingName)
+        const ceilingId = commitCeilingDrawing(currentLevelId, points)
         setSelection({ selectedIds: [ceilingId] })
         setPoints([])
+        clearCeilingSnapFeedback()
       }
     }
 
     const onCancel = () => {
       if (points.length > 0) markToolCancelConsumed()
       setPoints([])
+      clearCeilingSnapFeedback()
     }
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = true
-    }
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Shift') shiftPressed.current = false
-    }
-    document.addEventListener('keydown', onKeyDown)
-    document.addEventListener('keyup', onKeyUp)
 
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
@@ -170,8 +194,6 @@ export const CeilingTool: React.FC = () => {
     emitter.on('tool:cancel', onCancel)
 
     return () => {
-      document.removeEventListener('keydown', onKeyDown)
-      document.removeEventListener('keyup', onKeyUp)
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('grid:double-click', onGridDoubleClick)
@@ -184,8 +206,8 @@ export const CeilingTool: React.FC = () => {
     if (points.length === 0) {
       mainLineRef.current.visible = false
       closingLineRef.current.visible = false
-      groundMainLineRef.current && (groundMainLineRef.current.visible = false)
-      groundClosingLineRef.current && (groundClosingLineRef.current.visible = false)
+      if (groundMainLineRef.current) groundMainLineRef.current.visible = false
+      if (groundClosingLineRef.current) groundClosingLineRef.current.visible = false
       return
     }
     const ceilingY = levelY + CEILING_HEIGHT

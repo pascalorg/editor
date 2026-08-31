@@ -10,11 +10,17 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX, useTranslations } from '@pascal-app/editor'
+import { triggerSFX, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
+import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
+import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfacePlacementGuides,
+  roofSurfaceFootprintFromNode,
+} from '../shared/roof-surface-placement-guides'
 import { chimneyDefinition } from './definition'
 import ChimneyPreview from './preview'
 
@@ -37,7 +43,6 @@ type SegmentTransform = {
 }
 
 const ChimneyTool = () => {
-  const t = useTranslations()
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
   const setSelection = useViewer((s) => s.setSelection)
 
@@ -89,7 +94,7 @@ const ChimneyTool = () => {
       const sx = Math.round(wx * 20) / 20
       const sz = Math.round(wz * 20) / 20
       const prev = lastSnapRef.current
-      if (!prev || prev[0] !== sx || prev[1] !== sz) {
+      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
         triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
@@ -102,6 +107,21 @@ const ChimneyTool = () => {
       setSegmentXform(xform)
       setHitLocal([hit.localX, hit.localY, hit.localZ])
       setPreviewSegment(hit.segment)
+      usePlacementPreview.getState().set(
+        ChimneyNode.parse({
+          ...previewNode,
+          parentId: hit.segment.id,
+          position: [hit.localX, hit.localY, hit.localZ],
+          roofSegmentId: hit.segment.id,
+        }),
+        hit.segment,
+      )
+      publishRoofSurfacePlacementGuides({
+        roof: event.node as RoofNode,
+        segment: hit.segment,
+        center: [hit.localX, hit.localY, hit.localZ],
+        footprint: roofSurfaceFootprintFromNode(previewNode, { segment: hit.segment }),
+      })
       event.stopPropagation()
     }
 
@@ -114,11 +134,10 @@ const ChimneyTool = () => {
       )
       if (!hit) return
       const state = useScene.getState()
-      const chimneyCount = Object.values(state.nodes).filter((n) => n.type === 'chimney').length
 
       const chimney = ChimneyNode.parse({
         ...chimneyDefinition.defaults(),
-        name: t('nodes.chimney.defaultName', { count: chimneyCount + 1 }),
+        name: 'Chimney',
         roofSegmentId: hit.segment.id,
         position: [hit.localX, hit.localY, hit.localZ],
         rotation: 0,
@@ -127,6 +146,9 @@ const ChimneyTool = () => {
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
       setSelection({ selectedIds: [chimney.id] })
       triggerSFX('sfx:item-place')
+      const placementPreview = usePlacementPreview.getState()
+      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+      clearRoofSurfacePlacementGuides()
       event.stopPropagation()
     }
 
@@ -138,22 +160,39 @@ const ChimneyTool = () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
+      const placementPreview = usePlacementPreview.getState()
+      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+      clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection])
+  }, [activeBuildingId, setSelection, previewNode])
 
-  if (!activeBuildingId || !segmentXform || !hitLocal || !previewSegment) return null
-
-  // Outer group mirrors the real renderer's `position={segment.position}
-  // rotation-y={segment.rotation}` chain by composing the segment's
-  // building-local matrix (which walks roof + level + segment). Inner
-  // group offsets by the cursor's segment-local x/z so the chimney
-  // geometry (built with `position[0,2] = 0`) lands under the cursor.
   return (
-    <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
-      <group position={[hitLocal[0], 0, hitLocal[2]]}>
-        <ChimneyPreview node={previewNode} segment={previewSegment} />
-      </group>
-    </group>
+    <>
+      <RoofAttachmentFallbackPreview
+        activeBuildingId={activeBuildingId}
+        ghost={<ChimneyPreview node={previewNode} invalid />}
+        onInvalidTarget={() => {
+          setSegmentXform(null)
+          setHitLocal(null)
+          setPreviewSegment(null)
+          const placementPreview = usePlacementPreview.getState()
+          if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+          clearRoofSurfacePlacementGuides()
+        }}
+      />
+      {activeBuildingId && segmentXform && hitLocal && previewSegment && (
+        // Outer group mirrors the real renderer's `position={segment.position}
+        // rotation-y={segment.rotation}` chain by composing the segment's
+        // building-local matrix (which walks roof + level + segment). Inner
+        // group offsets by the cursor's segment-local x/z so the chimney
+        // geometry (built with `position[0,2] = 0`) lands under the cursor.
+        <group position={segmentXform.position} quaternion={segmentXform.quaternion}>
+          <group position={[hitLocal[0], 0, hitLocal[2]]}>
+            <ChimneyPreview node={previewNode} segment={previewSegment} />
+          </group>
+        </group>
+      )}
+    </>
   )
 }
 

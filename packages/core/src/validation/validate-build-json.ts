@@ -1,4 +1,7 @@
+import { nodeRegistry } from '../registry'
+import { SceneMaterial } from '../schema/scene-material'
 import { AnyNode, type AnyNodeType } from '../schema/types'
+import { healSceneNodes } from '../utils/heal-scene-graph'
 
 export type ValidationSeverity = 'error' | 'warning'
 
@@ -12,6 +15,8 @@ export type ValidationIssue = {
 export type BuildStats = {
   total: number
   byType: Partial<Record<AnyNodeType, number>>
+  /** Kinds outside the static schema union but registered at runtime (plugins). */
+  pluginTypes: Record<string, number>
   unknownTypes: Record<string, number>
   floorAreaM2: number
 }
@@ -19,6 +24,9 @@ export type BuildStats = {
 export type ParsedBuildJson = {
   nodes: Record<string, unknown>
   rootNodeIds: string[]
+  installedPlugins?: string[]
+  /** Scene materials referenced by node `slots` (`scene:<id>`). */
+  materials?: Record<string, SceneMaterial>
 }
 
 export type SchemaIssue = {
@@ -78,7 +86,13 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
   const errors: ValidationIssue[] = []
   const warnings: ValidationIssue[] = []
   const schemaIssues: SchemaIssue[] = []
-  const stats: BuildStats = { total: 0, byType: {}, unknownTypes: {}, floorAreaM2: 0 }
+  const stats: BuildStats = {
+    total: 0,
+    byType: {},
+    pluginTypes: {},
+    unknownTypes: {},
+    floorAreaM2: 0,
+  }
 
   if (!isPlainObject(input)) {
     errors.push({
@@ -99,6 +113,8 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
 
   const nodesRaw = input.nodes
   const rootNodeIdsRaw = input.rootNodeIds
+  const installedPluginsRaw = input.installedPlugins
+  const materialsRaw = input.materials
 
   if (!isPlainObject(nodesRaw)) {
     errors.push({
@@ -127,8 +143,78 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
     }
   }
 
-  const nodes = nodesRaw as Record<string, unknown>
+  // Heal known pre-existing corruption (null children, zero-length walls) up
+  // front, so a scene saved before the source fixes still imports instead of
+  // hard-failing schema validation. `parsed` below carries the repaired nodes.
+  const { nodes, droppedWallIds, strippedChildRefs } = healSceneNodes(
+    nodesRaw as Record<string, unknown>,
+  )
   const rootNodeIds = rootNodeIdsRaw as string[]
+  const installedPlugins =
+    Array.isArray(installedPluginsRaw) &&
+    installedPluginsRaw.every((pluginId) => typeof pluginId === 'string')
+      ? Array.from(new Set(installedPluginsRaw))
+      : undefined
+
+  if (installedPluginsRaw !== undefined && installedPlugins === undefined) {
+    warnings.push({
+      severity: 'warning',
+      code: 'invalid_installed_plugins',
+      message: 'Ignored invalid "installedPlugins" — expected an array of plugin IDs.',
+    })
+  }
+
+  // Scene materials ride along with the graph: nodes reference them by
+  // `scene:<id>` slot refs, so dropping the table here silently strips
+  // every custom finish from the imported scene. Invalid entries are
+  // skipped one by one — a bad material must not take the import down.
+  //
+  // DELIBERATE: `safeParse().data` NORMALIZES — defaults are injected
+  // and unknown keys dropped. That is the opposite of the API boundary
+  // (`apiGraphSchema` preserves unknown fields on purpose), and it is
+  // chosen here because import feeds the live scene store, which only
+  // understands schema-shaped materials; a hand-edited file with a
+  // half-formed material should land as something the renderer can
+  // draw, not round-trip garbage.
+  let materials: Record<string, SceneMaterial> | undefined
+  if (isPlainObject(materialsRaw)) {
+    const skippedIds: string[] = []
+    const kept: Record<string, SceneMaterial> = {}
+    for (const [id, value] of Object.entries(materialsRaw)) {
+      const result = SceneMaterial.safeParse(value)
+      if (result.success) {
+        kept[id] = result.data
+      } else {
+        skippedIds.push(id)
+      }
+    }
+    if (Object.keys(kept).length > 0) materials = kept
+    if (skippedIds.length > 0) {
+      // Name the ids: the audience is hand-edited files, and a count
+      // alone leaves nothing to repair by.
+      warnings.push({
+        severity: 'warning',
+        code: 'invalid_materials',
+        message: `Ignored ${skippedIds.length} invalid scene material${
+          skippedIds.length === 1 ? '' : 's'
+        }: ${skippedIds.join(', ')}.`,
+      })
+    }
+  } else if (materialsRaw !== undefined) {
+    warnings.push({
+      severity: 'warning',
+      code: 'invalid_materials',
+      message: 'Ignored invalid "materials" — expected an object of id → material.',
+    })
+  }
+
+  if (strippedChildRefs > 0 || droppedWallIds.length > 0) {
+    warnings.push({
+      severity: 'warning',
+      code: 'auto_repaired',
+      message: `Repaired on import: removed ${strippedChildRefs} invalid child reference${strippedChildRefs === 1 ? '' : 's'} and ${droppedWallIds.length} zero-length wall${droppedWallIds.length === 1 ? '' : 's'}.`,
+    })
+  }
 
   if (rootNodeIds.length === 0) {
     errors.push({
@@ -136,6 +222,33 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
       code: 'empty_root_node_ids',
       message: '"rootNodeIds" is empty — no entry point into the scene.',
     })
+  }
+
+  // Ids of nodes whose type falls outside the static schema union — plugin
+  // kinds (`trees:tree`) or genuinely unknown types. The scene store accepts
+  // them on load (they already round-trip through the DB fine) and they're
+  // surfaced by the unknown-types warning, but a parent's strict `children`
+  // id union would hard-fail over them: validate parents against a copy with
+  // those ids filtered out. The imported data itself keeps them.
+  const nonSchemaNodeIds = new Set<string>()
+  for (const [key, value] of Object.entries(nodes)) {
+    if (!isPlainObject(value)) continue
+    const type = typeof value.type === 'string' ? value.type : null
+    if (type && KNOWN_TYPES.has(type)) continue
+    nonSchemaNodeIds.add(typeof value.id === 'string' ? value.id : key)
+  }
+  const withoutNonSchemaChildren = (value: Record<string, unknown>): Record<string, unknown> => {
+    const children = value.children
+    if (!Array.isArray(children)) return value
+    if (!children.some((child) => typeof child === 'string' && nonSchemaNodeIds.has(child))) {
+      return value
+    }
+    return {
+      ...value,
+      children: children.filter(
+        (child) => !(typeof child === 'string' && nonSchemaNodeIds.has(child)),
+      ),
+    }
   }
 
   let validRootCount = 0
@@ -177,7 +290,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
       const t = type as AnyNodeType
       stats.byType[t] = (stats.byType[t] ?? 0) + 1
 
-      const parseResult = AnyNode.safeParse(value)
+      const parseResult = AnyNode.safeParse(withoutNonSchemaChildren(value))
       if (!parseResult.success) {
         schemaFailureCount += 1
         const issue = parseResult.error.issues[0]
@@ -203,7 +316,28 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
         }
       }
     } else {
-      stats.unknownTypes[type] = (stats.unknownTypes[type] ?? 0) + 1
+      const registered = nodeRegistry.get(type)
+      if (registered) {
+        // A runtime-registered plugin kind (e.g. `trees:tree`) is a
+        // first-class citizen: validate it with its own registered schema
+        // instead of flagging it unknown. Files from projects whose plugin
+        // is NOT loaded here still fall through to the unknown-types
+        // warning below.
+        stats.pluginTypes[type] = (stats.pluginTypes[type] ?? 0) + 1
+        const parseResult = registered.schema.safeParse(value)
+        if (!parseResult.success) {
+          schemaFailureCount += 1
+          const issue = parseResult.error.issues[0]
+          schemaIssues.push({
+            nodeId: key,
+            nodeType: type,
+            path: issue ? issue.path.join('.') : '',
+            message: issue ? issue.message : 'schema mismatch',
+          })
+        }
+      } else {
+        stats.unknownTypes[type] = (stats.unknownTypes[type] ?? 0) + 1
+      }
     }
 
     if (parentId && !(parentId in nodes)) {
@@ -282,7 +416,14 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
   const ok = errors.length === 0
   return {
     ok,
-    parsed: ok ? { nodes, rootNodeIds } : null,
+    parsed: ok
+      ? {
+          nodes,
+          rootNodeIds,
+          ...(installedPlugins ? { installedPlugins } : {}),
+          ...(materials ? { materials } : {}),
+        }
+      : null,
     stats,
     errors,
     warnings,

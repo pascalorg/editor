@@ -6,7 +6,7 @@ Thanks for your interest in contributing! We welcome all kinds of contributions 
 
 ### Prerequisites
 
-- [Bun](https://bun.sh/) 1.3+ (or Node.js 18+)
+- [Bun](https://bun.sh/) 1.3+ and Node.js 20.9+
 
 ### Setup
 
@@ -17,7 +17,7 @@ bun install
 bun dev
 ```
 
-The editor will be running at **http://localhost:3000**. That's it!
+The editor will be running at **http://localhost:3002**. That's it!
 
 ### Optional
 
@@ -34,6 +34,27 @@ bun check        # Check for issues
 bun check:fix    # Auto-fix issues
 ```
 
+### Tests
+
+Run the whole suite from the repo root:
+
+```bash
+bun run test     # every package, via Turborepo
+```
+
+Run one package while you work on it:
+
+```bash
+bun --cwd packages/core run test
+```
+
+Use `bun run test`, not bare `bun test`. `test` is one of Bun's own
+subcommands, so `bun test` never reaches the package script — it runs Bun's
+collector over every file it can find, including compiled copies under `dist/`,
+and reports inflated counts. `bun run test` goes through Turborepo, which
+builds workspace dependencies first (several packages import theirs from
+`dist/`) and runs each package's own scoped test script.
+
 ### Project structure
 
 | Package | What it does |
@@ -44,11 +65,15 @@ bun check:fix    # Auto-fix issues
 
 A key rule: **`packages/viewer` must never import from `apps/editor`**. The viewer is a standalone component; editor-specific behavior is injected via props/children.
 
+### Building a plugin
+
+New node kinds and sidebar panels can ship as a plugin instead of editing the built-ins. Read [Create a plugin](https://editor.pascal.app/docs/developers/plugins) for the contract, and clone [`pascalorg/plugin-trees`](https://github.com/pascalorg/plugin-trees) as a worked example.
+
 ## Submitting a PR
 
 1. **Fork the repo** and create a branch from `main`
 2. **Make your changes** and test locally with `bun dev`
-3. **Run `bun check`** to make sure linting passes
+3. **Run `bun check` and `bun run test`** to make sure linting and tests pass
 4. **Open a PR** with a clear description of what changed and why
 5. **Link related issues** if applicable (e.g., "Fixes #42")
 

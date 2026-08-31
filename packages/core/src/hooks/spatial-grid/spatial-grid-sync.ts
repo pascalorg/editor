@@ -1,11 +1,17 @@
+import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
+import { isLevelAtSiteDatum, isLevelBaseConsumer } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
-import type { AnyNode, AnyNodeId, SlabNode, WallNode } from '../../schema'
+import type { AnyNode, AnyNodeId, LevelNode, SiteNode, SlabNode, WallNode } from '../../schema'
+import { getLevelBelow } from '../../services/storey'
+import useLiveTerrain from '../../store/use-live-terrain'
 import useScene from '../../store/use-scene'
+import { getFloorPlacedFootprints } from './floor-placed-elevation'
 import {
   itemOverlapsPolygon,
   spatialGridManager,
   wallOverlapsPolygon,
 } from './spatial-grid-manager'
+import { GROUND_SUPPORT_ID } from './support-host-id'
 
 export function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): string {
   // If the node itself is a level
@@ -26,6 +32,32 @@ export function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode>): s
   }
 
   return 'default' // fallback for orphaned items
+}
+
+/**
+ * Walks the parent chain of `nodeId` and returns the id of the first ancestor
+ * whose `type` is `'level'`, or `null` when no level ancestor exists (orphaned
+ * node, top-level building node, etc.). Unlike `resolveLevelId`, this variant:
+ *
+ * - accepts a node **id** rather than a resolved node, saving the caller a
+ *   `nodes[id]` lookup when only the id is at hand.
+ * - returns `null` instead of the `'default'` fallback, which lets callers
+ *   distinguish "genuinely has no level" from "is a level".
+ * - has a loop guard (16 iterations) so a corrupt parent-chain cycle cannot
+ *   hang the frame loop.
+ */
+export function findLevelAncestorId(
+  nodeId: AnyNodeId,
+  nodes: Record<string, AnyNode>,
+): string | null {
+  let current: AnyNode | undefined = nodes[nodeId]
+  let guard = 0
+  while (current && guard < 16) {
+    if (current.type === 'level') return current.id
+    current = current.parentId ? nodes[current.parentId] : undefined
+    guard += 1
+  }
+  return null
 }
 
 /**
@@ -78,7 +110,7 @@ export function initSpatialGridSync(): () => void {
   const markDirty = (id: AnyNodeId) => store.getState().markDirty(id)
 
   // Subscribe to all changes
-  const unsubscribe = store.subscribe((state, prevState) => {
+  const unsubscribeScene = store.subscribe((state, prevState) => {
     // Detect added nodes
     for (const [id, node] of Object.entries(state.nodes)) {
       if (!prevState.nodes[id as AnyNode['id']]) {
@@ -88,6 +120,14 @@ export function initSpatialGridSync(): () => void {
         // When a slab is added, mark overlapping items/walls dirty
         if (node.type === 'slab') {
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
+          markCoveringDependentsBelow(levelId, state.nodes, markDirty)
+        }
+
+        // A site arriving with terrain already on it (scene load, paste,
+        // imported elevation data) is the same event as a stroke: ground exists
+        // where flat ground was assumed.
+        if (node.type === 'site' && (node as SiteNode).terrain) {
+          markTerrainSupportDependents(state.nodes, markDirty)
         }
       }
     }
@@ -101,6 +141,13 @@ export function initSpatialGridSync(): () => void {
         // When a slab is removed, mark items/walls that were on it dirty (using current state)
         if (node.type === 'slab') {
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
+          markCoveringDependentsBelow(levelId, state.nodes, markDirty)
+        }
+
+        // Deleting a sculpted site drops the ground back to the datum, so its
+        // contents have to come down with it.
+        if (node.type === 'site' && (node as SiteNode).terrain) {
+          markTerrainSupportDependents(state.nodes, markDirty)
         }
       }
     }
@@ -128,23 +175,56 @@ export function initSpatialGridSync(): () => void {
           }
         }
       } else if (node.type === 'slab' && prev.type === 'slab') {
-        if (
+        const supportChanged =
           node.polygon !== prev.polygon ||
           node.elevation !== prev.elevation ||
           node.holes !== prev.holes
-        ) {
+        if (supportChanged) {
           const levelId = resolveLevelId(node, state.nodes)
           spatialGridManager.handleNodeUpdated(node, levelId)
-
-          // Mark nodes overlapping old polygon and new polygon as dirty
-          markNodesOverlappingSlab(prev as SlabNode, state.nodes, markDirty)
-          markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
+        }
+        markSlabChangeDependents(prev as SlabNode, node as SlabNode, state.nodes, markDirty)
+      } else if (node.type === 'level' && prev.type === 'level') {
+        if (node.height !== prev.height) {
+          markLevelHeightDependents(node as LevelNode, state.nodes, markDirty)
+        }
+      } else if (node.type === 'site' && prev.type === 'site') {
+        // Object identity, not deep equality: the store is
+        // immutable-by-convention, so a sculpt commit necessarily produces a new
+        // `terrain` object and an unrelated site edit (polygon, name) keeps the
+        // old one. The same reasoning `terrain-source`'s field cache is keyed on.
+        if ((node as SiteNode).terrain !== (prev as SiteNode).terrain) {
+          markTerrainSupportDependents(state.nodes, markDirty)
+        }
+      } else if (node.type === 'wall' && prev.type === 'wall') {
+        if (
+          node.start !== prev.start ||
+          node.end !== prev.end ||
+          node.curveOffset !== prev.curveOffset ||
+          node.thickness !== prev.thickness
+        ) {
+          // Rendered slab polygons adopt wall bands, so a wall reshape
+          // must reach the manager to refresh its wall map and drop the
+          // level's rendered-polygon cache.
+          spatialGridManager.handleNodeUpdated(node, resolveLevelId(node, state.nodes))
         }
       }
     }
   })
 
-  return unsubscribe
+  // Live terrain is deliberately not written into `useScene` per dab: doing so
+  // would encode the whole field, flood history, and wake every scene subscriber.
+  // Reuse the committed-terrain dependency sweep against the transient field
+  // instead. Dirty marks coalesce in their Set until the next frame, while an
+  // `end` notification also restores every dependent after an abandoned stroke.
+  const unsubscribeLiveTerrain = useLiveTerrain.subscribe(() => {
+    markTerrainSupportDependents(store.getState().nodes, markDirty)
+  })
+
+  return () => {
+    unsubscribeScene()
+    unsubscribeLiveTerrain()
+  }
 }
 
 function arraysEqual(a: number[], b: number[]): boolean {
@@ -152,7 +232,172 @@ function arraysEqual(a: number[], b: number[]): boolean {
 }
 
 /**
- * Mark all floor items, walls, and stairs that may be affected by a slab change as dirty.
+ * A level's stored height moved: plane-bound walls follow the new plane,
+ * stair rise re-derives, and ceilings/fences re-resolve their clamp — mark
+ * them all so their systems rebuild. Restacking the level containers alone
+ * leaves their geometry stale.
+ */
+export function markLevelHeightDependents(
+  level: LevelNode,
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+) {
+  for (const childId of level.children) {
+    const child = nodes[childId]
+    if (!child) continue
+    if (
+      child.type === 'wall' ||
+      child.type === 'stair' ||
+      child.type === 'ceiling' ||
+      child.type === 'fence'
+    ) {
+      markDirty(child.id)
+    }
+  }
+}
+
+/**
+ * A deck slab's walking surface moved: stairs attached to it via
+ * `deckSlabId` derive their rise from that elevation, so their geometry
+ * (and rise-derived affordances) must rebuild.
+ */
+export function markDeckAttachedStairs(
+  slabId: string,
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+) {
+  for (const node of Object.values(nodes)) {
+    if (node.type === 'stair' && node.deckSlabId === slabId) {
+      markDirty(node.id)
+    }
+  }
+}
+
+/**
+ * Dirty every consumer of a slab's top or underside. Kept pure so committed
+ * scene writes and live handle previews use the same dependency boundary.
+ */
+export function markSlabChangeDependents(
+  previous: SlabNode,
+  next: SlabNode,
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+) {
+  const supportChanged =
+    next.polygon !== previous.polygon ||
+    next.elevation !== previous.elevation ||
+    next.holes !== previous.holes
+
+  if (supportChanged) {
+    markNodesOverlappingSlab(previous, nodes, markDirty)
+    markNodesOverlappingSlab(next, nodes, markDirty)
+  }
+  if (next.elevation !== previous.elevation) {
+    markDeckAttachedStairs(next.id, nodes, markDirty)
+  }
+  if (
+    supportChanged ||
+    next.thickness !== previous.thickness ||
+    next.recessed !== previous.recessed
+  ) {
+    markCoveringDependentsBelow(resolveLevelId(next, nodes), nodes, markDirty)
+  }
+}
+
+/**
+ * The sculpted ground moved: every node the terrain *supports* must re-elevate.
+ *
+ * The other rules in this file gate on a footprint overlapping the changed
+ * surface. Terrain has no such gate — a stroke rewrites a field that spans the
+ * whole lot, and the resolver samples it at each node's own XZ — so the sweep is
+ * every floor-placed node on a storey at grade, plus every wall whose explicit
+ * terrain infill samples that field. During a live stroke it fires per dab, but
+ * dirty ids coalesce in a Set until the frame systems consume them; the scene
+ * graph itself is still written only once on commit.
+ *
+ * Without this a sculpt silently desyncs the scene from its own ground. Nothing
+ * re-runs `getFloorPlacedElevation`, so the React commit that rebinds a node
+ * group's base Y leaves it there: a column that was resting on a hillside drops
+ * to the datum and stays buried under the terrain it used to stand on.
+ *
+ * Gated on `isLevelAtSiteDatum` — the same predicate `terrainSupportLift` uses to
+ * decide whether it drapes at all, so the two cannot disagree about which storey
+ * is on the ground.
+ */
+export function markTerrainSupportDependents(
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+) {
+  const gradeLevels = new Map<string, boolean>()
+  const isGrade = (levelId: string) => {
+    let cached = gradeLevels.get(levelId)
+    if (cached === undefined) {
+      cached = isLevelAtSiteDatum(nodes, levelId)
+      gradeLevels.set(levelId, cached)
+    }
+    return cached
+  }
+
+  for (const node of Object.values(nodes)) {
+    if (node.type === 'slab' && node.fillToTerrain === true) {
+      if (isGrade(resolveLevelId(node, nodes))) markDirty(node.id)
+      continue
+    }
+
+    if (node.type === 'wall') {
+      if (node.supportSlabId !== GROUND_SUPPORT_ID && node.fillToTerrain !== true) continue
+      if (!isGrade(resolveLevelId(node, nodes))) continue
+      markDirty(node.id)
+      continue
+    }
+
+    const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
+    if (!floorPlaced) {
+      // A kind whose geometry builder resolved its own origin from the ground
+      // (`ctx.levelBaseAt`) has that ground baked into its meshes, so it has to
+      // rebuild even though nothing about the node changed. This is the
+      // invalidation half of the builder seam: without it a fence keeps the
+      // hillside it was built on and floats after the next stroke. Kinds that
+      // are `floorPlaced` need no entry here — the sweep below already covers
+      // them, through a mesh transform rather than a rebuild.
+      if (isLevelBaseConsumer(node.type) && isGrade(resolveLevelId(node, nodes))) {
+        markDirty(node.id)
+      }
+      continue
+    }
+    if (floorPlaced.applies && !floorPlaced.applies(node)) continue
+    // Items hosted on a shelf or table inherit Y from the parent group; only
+    // level-parented nodes read the ground. Mirrors the resolver's own gate.
+    const parentId = node.parentId as AnyNodeId | null
+    const parent = parentId ? nodes[parentId] : null
+    if (parent && parent.type !== 'level') continue
+    if (!isGrade(resolveLevelId(node, nodes))) continue
+    markDirty(node.id)
+  }
+}
+
+/**
+ * A slab on `slabLevelId` was created/deleted or changed shape/placement:
+ * the covering bound (slab underside) over the level BELOW moved, so that
+ * level's plane-bound walls and clamped ceilings must rebuild.
+ */
+export function markCoveringDependentsBelow(
+  slabLevelId: string,
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+) {
+  const below = getLevelBelow(slabLevelId, nodes)
+  if (!below) return
+  for (const childId of below.children) {
+    const child = nodes[childId]
+    if (child?.type === 'wall' || child?.type === 'ceiling') {
+      markDirty(child.id)
+    }
+  }
+}
+
+/**
+ * Mark all floor items and walls that may be affected by a slab change as dirty.
  */
 function markNodesOverlappingSlab(
   slab: SlabNode,
@@ -162,21 +407,45 @@ function markNodesOverlappingSlab(
   if (slab.polygon.length < 3) return
   const slabLevelId = resolveLevelId(slab, nodes)
 
+  // Walls AND floor-placed nodes follow the slab's RENDERED footprint
+  // (band-adopted edges reach the wall's outer face), so the dirty gate
+  // must test the same polygon the support queries re-evaluate — a stored
+  // polygon that stops short of the wall body would otherwise never
+  // re-elevate nodes sitting over the adopted band.
+  const levelWalls: WallNode[] = []
+  const siblingSlabs: SlabNode[] = []
+  for (const node of Object.values(nodes)) {
+    if (node.type === 'wall' && resolveLevelId(node, nodes) === slabLevelId) {
+      levelWalls.push(node as WallNode)
+    } else if (
+      node.type === 'slab' &&
+      node.id !== slab.id &&
+      resolveLevelId(node, nodes) === slabLevelId
+    ) {
+      siblingSlabs.push(node as SlabNode)
+    }
+  }
+  const renderedPolygon = getRenderableSlabPolygon(slab, { walls: levelWalls, siblingSlabs })
+
   for (const node of Object.values(nodes)) {
     if (node.type === 'wall') {
       const wall = node as WallNode
       if (resolveLevelId(node, nodes) !== slabLevelId) continue
-      if (wallOverlapsPolygon(wall.start, wall.end, slab.polygon)) {
+      if (
+        wallOverlapsPolygon(
+          {
+            start: wall.start,
+            end: wall.end,
+            curveOffset: wall.curveOffset ?? 0,
+            thickness: wall.thickness,
+          },
+          renderedPolygon,
+        )
+      ) {
         markDirty(node.id)
       }
       continue
     }
-    if (node.type === 'stair') {
-      if (resolveLevelId(node, nodes) !== slabLevelId) continue
-      markDirty(node.id)
-      continue
-    }
-
     // Generic floor-placed sweep: any registry kind that opts in via
     // `capabilities.floorPlaced` (item / shelf / column / spawn / …)
     // re-elevates through `<FloorElevationSystem>` when a slab below
@@ -186,12 +455,25 @@ function markNodesOverlappingSlab(
     const floorPlaced = def?.capabilities?.floorPlaced
     if (!floorPlaced) continue
     if (floorPlaced.applies && !floorPlaced.applies(node)) continue
+    const parentId = node.parentId as AnyNodeId | null
+    const parent = parentId ? nodes[parentId] : null
+    if (parent && parent.type !== 'level') continue
     if (resolveLevelId(node, nodes) !== slabLevelId) continue
     const position = (node as { position?: [number, number, number] }).position
     if (!position) continue
-    const { dimensions, rotation } = floorPlaced.footprint(node)
-    if (itemOverlapsPolygon(position, dimensions, rotation, slab.polygon, 0.01)) {
-      markDirty(node.id)
+    for (const footprint of getFloorPlacedFootprints(floorPlaced, node, { nodes })) {
+      if (
+        itemOverlapsPolygon(
+          footprint.position ?? position,
+          footprint.dimensions,
+          footprint.rotation,
+          renderedPolygon,
+          0.01,
+        )
+      ) {
+        markDirty(node.id)
+        break
+      }
     }
   }
 }

@@ -1,30 +1,36 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   type DormerNode,
+  type DormerWallFace,
+  getDormerWallFaceFrame,
   getEffectiveDormerSurfaceMaterial,
   type RoofSegmentNode,
   useLiveNodeOverrides,
   useRegistry,
   useScene,
+  type WindowNode,
 } from '@pascal-app/core'
 import {
   type ColorPreset,
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  NodeRenderer,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
-import { useEffect, useMemo, useRef } from 'react'
-import type * as THREE from 'three'
+import { type ReactNode, useEffect, useMemo, useRef } from 'react'
+import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
+import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import {
   buildDormerFallbackGeometry,
   DORMER_GABLE_MATERIAL_INDEX,
   generateDormerGeometry,
 } from './csg-geometry'
-import DormerWindowAssembly from './window-assembly'
 
 const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   const ref = useRef<THREE.Group>(null!)
@@ -44,6 +50,34 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     [storeNode, liveOverrides],
   )
 
+  const childNodes = useScene(
+    useShallow((state) =>
+      (node.children ?? [])
+        .map((childId) => state.nodes[childId as AnyNodeId])
+        .filter((child): child is AnyNode => child !== undefined),
+    ),
+  )
+  const hostedWindowNodes = useMemo(
+    () => childNodes.filter((child): child is WindowNode => child.type === 'window'),
+    [childNodes],
+  )
+  const hostedWindowIds = useMemo(
+    () => hostedWindowNodes.map((window) => window.id),
+    [hostedWindowNodes],
+  )
+  const liveWindowOverrides = useLiveNodeOverrides(
+    useShallow((state) => hostedWindowIds.map((windowId) => state.overrides.get(windowId))),
+  )
+  const hostedWindows = useMemo(
+    () =>
+      hostedWindowNodes.map((window, index) => {
+        const override = liveWindowOverrides[index]
+        return override ? ({ ...window, ...override } as WindowNode) : window
+      }),
+    [hostedWindowNodes, liveWindowOverrides],
+  )
+  const hasLiveWindowPreview = liveWindowOverrides.some((override) => override !== undefined)
+
   const segment = useScene((state) =>
     node.roofSegmentId
       ? (state.nodes[node.roofSegmentId as AnyNodeId] as RoofSegmentNode | undefined)
@@ -59,6 +93,7 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   // shingle, 4=Gable wall. Walls take the 'wall' role, the deck side and
   // shingle take 'roof'. When textures are off, every slot snaps to its
   // role colour regardless of explicit paint (the render-modes invariant).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const material = useMemo(() => {
     const wallRole = () => createSurfaceRoleMaterial('wall', colorPreset, undefined, sceneTheme)
     const roofRole = () => createSurfaceRoleMaterial('roof', colorPreset, undefined, sceneTheme)
@@ -97,29 +132,18 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     node.wallMaterialPreset,
   ])
 
-  // The window frame bars / sill take the 'joinery' role when untextured;
-  // otherwise the deck-side material (slot 1) drives the frame look.
-  const frameSideMat = useMemo(() => {
-    if (!textures) return createSurfaceRoleMaterial('joinery', colorPreset, undefined, sceneTheme)
-    return material[1]!
-  }, [textures, colorPreset, sceneTheme, material])
-
-  // Dormer window glass has no per-node material — it always takes the
-  // themed 'glazing' role (semi-transparent) in both texture modes.
-  const glassMat = useMemo(
-    () => createSurfaceRoleMaterial('glazing', colorPreset, undefined, sceneTheme),
-    [colorPreset, sceneTheme],
-  )
-
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(() => {
     if (!segment) return null
-    if (isLiveDrag) return buildDormerFallbackGeometry(node)
-    return generateDormerGeometry(node, segment)
+    if (isLiveDrag || hasLiveWindowPreview) return buildDormerFallbackGeometry(node)
+    return generateDormerGeometry(node, segment, hostedWindows)
   }, [
     isLiveDrag,
+    hasLiveWindowPreview,
     segment,
     node.id,
     node.roofType,
+    node.shedHighSide,
     node.width,
     node.depth,
     node.height,
@@ -129,19 +153,23 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
     node.position[1],
     node.position[2],
     node.rotation,
-    node.windowWidth,
-    node.windowHeight,
-    node.windowOffsetX,
-    node.windowOffsetY,
-    node.windowShape,
-    node.windowArchHeight,
-    node.windowCornerRadii[0],
-    node.windowCornerRadii[1],
-    node.windowCornerRadii[2],
-    node.windowCornerRadii[3],
+    hostedWindows,
   ])
 
   useEffect(() => () => geometry?.dispose(), [geometry])
+
+  // Map dormer-local geometry into the host segment's local frame (where the
+  // trim cut prisms live) — same pose the inner mesh group is mounted with.
+  const localToSegment = useMemo(
+    () =>
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0),
+        new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), node.rotation ?? 0),
+        new THREE.Vector3(1, 1, 1),
+      ),
+    [node.position[0], node.position[1], node.position[2], node.rotation],
+  )
+  const clippedGeometry = useSegmentTrimClippedGeometry(geometry, segment, localToSegment)
 
   if (!(segment && geometry)) return null
 
@@ -152,30 +180,53 @@ const DormerRenderer = ({ node: storeNode }: { node: DormerNode }) => {
   // dormer-mesh-local with `dormer.position` + `dormer.rotation`
   // already accounted for by `segToMesh`, so we layer them as group
   // transforms here too.
+  //
+  // The registered ref sits on the inner group that applies the
+  // dormer's own position + rotation so the registered Object3D's
+  // local frame is *dormer-local* — that's what `NodeArrowHandles`
+  // reads to place its chevrons. Mirrors chimney's structure.
   return (
-    <group
-      position={segment.position}
-      ref={ref}
-      rotation-y={segment.rotation ?? 0}
-      visible={node.visible}
-    >
-      <group position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}>
-        <group rotation-y={node.rotation ?? 0} {...handlers}>
-          <mesh
-            castShadow
-            geometry={geometry}
-            material={material}
-            name="dormer-body"
-            receiveShadow
-          />
-          <DormerWindowAssembly
-            frameMaterial={frameSideMat}
-            glassMaterial={glassMat}
-            node={node}
-            segment={segment}
-          />
-        </group>
+    <group position={segment.position} rotation-y={segment.rotation ?? 0} visible={node.visible}>
+      <group
+        position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
+        ref={ref}
+        rotation-y={node.rotation ?? 0}
+      >
+        <mesh
+          castShadow
+          geometry={clippedGeometry ?? geometry}
+          material={material}
+          name="dormer-body"
+          receiveShadow
+          {...handlers}
+        />
+        {hostedWindows.map((window) => (
+          <DormerWindowHostFrame
+            dormer={node}
+            face={window.dormerFace ?? 'front'}
+            key={`${node.id}:${window.id}`}
+          >
+            <NodeRenderer nodeId={window.id} />
+          </DormerWindowHostFrame>
+        ))}
       </group>
+    </group>
+  )
+}
+
+function DormerWindowHostFrame({
+  dormer,
+  face,
+  children,
+}: {
+  dormer: DormerNode
+  face: DormerWallFace
+  children: ReactNode
+}) {
+  const frame = getDormerWallFaceFrame(dormer, face)
+  return (
+    <group position={frame.origin} rotation-y={frame.yaw}>
+      {children}
     </group>
   )
 }

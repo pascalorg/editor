@@ -1,0 +1,231 @@
+import { describe, expect, it } from 'bun:test'
+import type { AnyNode } from '@pascal-app/core'
+import { simplifyConvertedSceneGraph } from '../src/cleanup'
+
+function level(id = 'level_1', children: string[] = []): AnyNode {
+  return {
+    object: 'node',
+    id,
+    type: 'level',
+    name: 'Level',
+    parentId: null,
+    visible: true,
+    level: 0,
+    children,
+  } as AnyNode
+}
+
+function wall(
+  id: string,
+  start: [number, number],
+  end: [number, number],
+  children: string[] = [],
+): AnyNode {
+  return {
+    object: 'node',
+    id,
+    type: 'wall',
+    name: id,
+    parentId: 'level_1',
+    visible: true,
+    start,
+    end,
+    thickness: 0.2,
+    height: 3,
+    children,
+    frontSide: 'unknown',
+    backSide: 'unknown',
+  } as AnyNode
+}
+
+function door(id: string, parentId: string, position: [number, number, number]): AnyNode {
+  return {
+    object: 'node',
+    id,
+    type: 'door',
+    name: id,
+    parentId,
+    wallId: parentId,
+    visible: true,
+    width: 0.9,
+    height: 2.1,
+    position,
+  } as AnyNode
+}
+
+function windowNode(id: string, parentId: string, position: [number, number, number]): AnyNode {
+  return {
+    object: 'node',
+    id,
+    type: 'window',
+    name: id,
+    parentId,
+    wallId: parentId,
+    visible: true,
+    width: 1,
+    height: 1.2,
+    position,
+  } as AnyNode
+}
+
+describe('simplifyConvertedSceneGraph', () => {
+  it('merges collinear wall fragments across door-sized gaps', () => {
+    const nodes: Record<string, AnyNode> = {
+      level_1: level('level_1', ['wall_a', 'wall_b']),
+      wall_a: wall('wall_a', [0, 0], [2, 0]),
+      wall_b: wall('wall_b', [2.9, 0], [5, 0]),
+    }
+
+    const stats = simplifyConvertedSceneGraph(nodes)
+
+    expect(stats.removedMergedWalls).toBe(1)
+    expect(Object.values(nodes).filter((node) => node.type === 'wall')).toHaveLength(1)
+    const keptWall = Object.values(nodes).find((node) => node.type === 'wall')
+    expect(keptWall).toMatchObject({ start: [0, 0], end: [5, 0] })
+    expect((nodes.level_1 as { children: string[] }).children).toEqual([keptWall?.id])
+  })
+
+  it('does not merge parallel wall fragments on centerlines offset by two inches', () => {
+    const nodes: Record<string, AnyNode> = {
+      level_1: level('level_1', ['wall_a', 'wall_b']),
+      wall_a: wall('wall_a', [0, 0], [2, 0]),
+      wall_b: wall('wall_b', [2, 0.0508], [4, 0.0508]),
+    }
+
+    const stats = simplifyConvertedSceneGraph(nodes)
+
+    expect(stats.removedMergedWalls).toBe(0)
+    expect(Object.values(nodes).filter((node) => node.type === 'wall')).toHaveLength(2)
+  })
+
+  it('does not merge collinear wall fragments with different IFC materials', () => {
+    const exterior = wall('wall_exterior', [0, 0], [2, 0])
+    const interior = wall('wall_interior', [2.9, 0], [5, 0])
+    exterior.metadata = { material: 'Exterior Finish Assembly' }
+    interior.metadata = { material: 'Interior Partition Assembly' }
+    const nodes: Record<string, AnyNode> = {
+      level_1: level('level_1', ['wall_exterior', 'wall_interior']),
+      wall_exterior: exterior,
+      wall_interior: interior,
+    }
+
+    const stats = simplifyConvertedSceneGraph(nodes)
+
+    expect(stats.removedMergedWalls).toBe(0)
+    expect(Object.values(nodes).filter((node) => node.type === 'wall')).toHaveLength(2)
+  })
+
+  it('does not merge a material-tagged wall with an untagged wall', () => {
+    const tagged = wall('wall_tagged', [0, 0], [2, 0])
+    tagged.metadata = { material: 'Exterior Finish Assembly' }
+    const nodes: Record<string, AnyNode> = {
+      level_1: level('level_1', ['wall_tagged', 'wall_unknown']),
+      wall_tagged: tagged,
+      wall_unknown: wall('wall_unknown', [2.9, 0], [5, 0]),
+    }
+
+    const stats = simplifyConvertedSceneGraph(nodes)
+
+    expect(stats.removedMergedWalls).toBe(0)
+    expect(Object.values(nodes).filter((node) => node.type === 'wall')).toHaveLength(2)
+  })
+
+  it('does not merge walls with different IFC material layer assemblies', () => {
+    const exterior = wall('wall_exterior', [0, 0], [2, 0])
+    const interior = wall('wall_interior', [2.9, 0], [5, 0])
+    exterior.metadata = {
+      materialLayers: [
+        { name: 'Gypsum', thickness: 0.013 },
+        { name: 'Stud', thickness: 0.09 },
+      ],
+    }
+    interior.metadata = {
+      materialLayers: [
+        { name: 'Gypsum', thickness: 0.013 },
+        { name: 'Concrete', thickness: 0.2 },
+      ],
+    }
+    const nodes: Record<string, AnyNode> = {
+      level_1: level('level_1', ['wall_exterior', 'wall_interior']),
+      wall_exterior: exterior,
+      wall_interior: interior,
+    }
+
+    const stats = simplifyConvertedSceneGraph(nodes)
+
+    expect(stats.removedMergedWalls).toBe(0)
+    expect(Object.values(nodes).filter((node) => node.type === 'wall')).toHaveLength(2)
+  })
+
+  it('does not merge a layer-tagged wall with an untagged wall', () => {
+    const tagged = wall('wall_tagged', [0, 0], [2, 0])
+    tagged.metadata = { materialLayers: [{ name: 'Concrete', thickness: 0.2 }] }
+    const nodes: Record<string, AnyNode> = {
+      level_1: level('level_1', ['wall_tagged', 'wall_unknown']),
+      wall_tagged: tagged,
+      wall_unknown: wall('wall_unknown', [2.9, 0], [5, 0]),
+    }
+
+    const stats = simplifyConvertedSceneGraph(nodes)
+
+    expect(stats.removedMergedWalls).toBe(0)
+    expect(Object.values(nodes).filter((node) => node.type === 'wall')).toHaveLength(2)
+  })
+
+  it('merges walls with identical IFC material layer assemblies', () => {
+    const first = wall('wall_a', [0, 0], [2, 0])
+    const second = wall('wall_b', [2.9, 0], [5, 0])
+    const materialLayers = [
+      { name: 'Gypsum', thickness: 0.013 },
+      { name: 'Stud', thickness: 0.09 },
+    ]
+    first.metadata = { materialLayers }
+    second.metadata = { materialLayers: [...materialLayers] }
+    const nodes: Record<string, AnyNode> = {
+      level_1: level('level_1', ['wall_a', 'wall_b']),
+      wall_a: first,
+      wall_b: second,
+    }
+
+    const stats = simplifyConvertedSceneGraph(nodes)
+
+    expect(stats.removedMergedWalls).toBe(1)
+    expect(Object.values(nodes).filter((node) => node.type === 'wall')).toHaveLength(1)
+  })
+
+  it('reprojects openings from removed walls onto the merged wall', () => {
+    const nodes: Record<string, AnyNode> = {
+      level_1: level('level_1', ['wall_a', 'wall_b']),
+      wall_a: wall('wall_a', [0, 0], [2, 0]),
+      wall_b: wall('wall_b', [2, 0], [4, 0], ['window_1']),
+      window_1: windowNode('window_1', 'wall_b', [1, 1.4, 0]),
+    }
+
+    simplifyConvertedSceneGraph(nodes)
+
+    const keptWall = Object.values(nodes).find((node) => node.type === 'wall')
+    expect(Object.values(nodes).filter((node) => node.type === 'wall')).toHaveLength(1)
+    expect(nodes.window_1).toMatchObject({
+      parentId: keptWall?.id,
+      wallId: keptWall?.id,
+      position: [3, 1.4, 0],
+    })
+    expect((keptWall as { children: string[] }).children).toEqual(['window_1'])
+  })
+
+  it('removes duplicate openings hosted on the same wall', () => {
+    const nodes: Record<string, AnyNode> = {
+      level_1: level('level_1', ['wall_1']),
+      wall_1: wall('wall_1', [0, 0], [4, 0], ['door_1', 'door_2']),
+      door_1: door('door_1', 'wall_1', [1.5, 1.05, 0]),
+      door_2: door('door_2', 'wall_1', [1.51, 1.05, 0]),
+    }
+
+    const stats = simplifyConvertedSceneGraph(nodes)
+
+    expect(stats.removedDuplicateOpenings).toBe(1)
+    expect(nodes.door_1).toBeDefined()
+    expect(nodes.door_2).toBeUndefined()
+    expect((nodes.wall_1 as { children: string[] }).children).toEqual(['door_1'])
+  })
+})

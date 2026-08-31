@@ -81,9 +81,6 @@
         "noNoninteractiveElementInteractions": "off",
         "useButtonType": "off"
       },
-      "nursery": {
-        "noShadow": "off"
-      },
       "security": {
         "noDangerouslySetInnerHtml": "info"
       }
@@ -109,7 +106,8 @@
       "!**/dist",
       "!**/build",
       "!**/public",
-      "!**/components/ui"
+      "!**/components/ui",
+      "!**/next-env.d.ts"
     ]
   },
   "overrides": [

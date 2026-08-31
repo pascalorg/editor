@@ -5,6 +5,11 @@ import type {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { floorplanGeometryMetadata, readFloorplanContext } from '@pascal-app/editor'
+import {
+  buildOpeningMarkAnnotation,
+  type OpeningFloorplanLevelData,
+} from '../shared/opening-documentation'
 import { buildOpeningPlacementDimensions } from '../shared/opening-placement-dimensions'
 
 /**
@@ -25,7 +30,7 @@ export function buildWindowFloorplan(
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
   const wall = ctx.parent as WallNode | null
-  if (!wall || wall.type !== 'wall') return null
+  if (wall?.type !== 'wall') return null
 
   const [x1, z1] = wall.start
   const [x2, z2] = wall.end
@@ -102,6 +107,7 @@ export function buildWindowFloorplan(
       strokeWidth: showSelectedChrome ? 1.9 : 1.25,
       vectorEffect: 'non-scaling-stroke',
       strokeLinejoin: 'round',
+      metadata: floorplanGeometryMetadata({ annotationObstacle: 'bounds' }),
     },
     // Inset glass-pane outline.
     {
@@ -163,11 +169,19 @@ export function buildWindowFloorplan(
 
   // Placement-measurement dimensions when actively moving — same
   // contract as door (see `nodes/src/door/floorplan.ts`).
-  if (view?.moving) {
+  if (view?.moving && readFloorplanContext(ctx).automaticDimensions) {
     for (const dim of buildOpeningPlacementDimensions(node, ctx)) {
       children.push(dim)
     }
   }
+
+  const markAnnotation = buildOpeningMarkAnnotation(
+    node,
+    wall,
+    ctx.levelData as OpeningFloorplanLevelData | undefined,
+    { stroke: showSelectedChrome ? '#f97316' : '#334155' },
+  )
+  if (markAnnotation) children.push(markAnnotation)
 
   return { kind: 'group', children }
 }

@@ -67,14 +67,5 @@ export function buildFrameGeometry({
 
   frameGeo.translate(0, -totalDepth / 2 + curbH, 0)
 
-  // WebGPU node renderer requests `uv2` on every geometry for lightmap support.
-  // CSG output only carries position + normal + uv. Copy uv → uv2 so the
-  // AttributeNode lookup doesn't fail and invalidate the render pipeline.
-  // Mirrors `ensureUv2Attribute` in packages/viewer/src/systems/roof/roof-system.tsx.
-  const uv = frameGeo.getAttribute('uv')
-  if (uv) {
-    frameGeo.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
-  }
-
   return frameGeo
 }

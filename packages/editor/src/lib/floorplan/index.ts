@@ -1,6 +1,15 @@
 export {
+  alignFloorplanDraftPoint,
+  applyFloorplanAlignment,
+  FLOORPLAN_ALIGNMENT_THRESHOLD_M,
+  FLOORPLAN_DRAFT_ALIGN_ID,
+  type FloorplanAlignmentResult,
+} from './apply-alignment'
+export {
   clampPlanValue,
   doesPolygonIntersectSelectionBounds,
+  FLOORPLAN_VIEW_ROTATION_DEG,
+  floorplanLocalToWorldPoint,
   getDistanceToWallSegment,
   getFloorplanSelectionBounds,
   getPlanPointDistance,
@@ -13,6 +22,7 @@ export {
   movePlanPointTowards,
   pointMatchesWallPlanPoint,
   rotatePlanVector,
+  worldToFloorplanLocalPoint,
 } from './geometry'
 export {
   buildFloorplanItemEntry,

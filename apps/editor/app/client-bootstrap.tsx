@@ -9,16 +9,18 @@
 // `loaded` guard inside `../lib/bootstrap` keeps the side effect
 // idempotent under HMR.
 import '../lib/bootstrap'
-import { I18nProvider } from '@pascal-app/editor'
 import { type ReactNode, useEffect } from 'react'
 
-export function ClientBootstrap({ children }: { children: ReactNode }) {
+export function ClientBootstrap({
+  children,
+  enableDevDiagnostics,
+}: {
+  children: ReactNode
+  enableDevDiagnostics: boolean
+}) {
   useEffect(() => {
-    if (process.env.NODE_ENV !== 'development') return
-    // Loaded here (not via a `<Script>` tag in <head>) to avoid React's
-    // "script inside a React component" hydration warning. The package
-    // is already a direct dep, so we don't need the CDN auto-global.
+    if (!enableDevDiagnostics) return
     import('react-scan').then(({ scan }) => scan({ enabled: true }))
-  }, [])
-  return <I18nProvider>{children}</I18nProvider>
+  }, [enableDevDiagnostics])
+  return children
 }

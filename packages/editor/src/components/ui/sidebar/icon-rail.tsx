@@ -1,5 +1,6 @@
 'use client'
 
+import { Plus } from 'lucide-react'
 import type { ComponentType, ReactNode } from 'react'
 import {
   Tooltip,
@@ -7,11 +8,16 @@ import {
   TooltipTrigger,
 } from './../../../components/ui/primitives/tooltip'
 import { cn } from './../../../lib/utils'
-import { messages, useLocale } from '../../../lib/i18n'
 
 export type PanelId = string
 
-export type ExtraPanel = { id: string; icon: ReactNode; label: string; component: ComponentType }
+export type ExtraPanel = {
+  id: string
+  icon: ReactNode
+  label: string
+  component: ComponentType
+  pluginId?: string
+}
 
 interface IconRailProps {
   activePanel: PanelId
@@ -21,19 +27,19 @@ interface IconRailProps {
   className?: string
 }
 
-const sitePanel: { id: PanelId; iconSrc: string; labelKey: string } = {
+const sitePanel: { id: PanelId; iconSrc: string; label: string } = {
   id: 'site',
-  iconSrc: '/icons/level.png',
-  labelKey: 'sidebar.site',
+  iconSrc: '/icons/level.webp',
+  label: 'Site',
 }
 
-const settingsPanel: { id: PanelId; iconSrc: string; labelKey: string } = {
+const settingsPanel: { id: PanelId; iconSrc: string; label: string } = {
   id: 'settings',
-  iconSrc: '/icons/settings.png',
-  labelKey: 'common.settings',
+  iconSrc: '/icons/settings.webp',
+  label: 'Settings',
 }
 
-const panels: { id: PanelId; iconSrc: string; labelKey: string }[] = [sitePanel, settingsPanel]
+const panels: { id: PanelId; iconSrc: string; label: string }[] = [sitePanel, settingsPanel]
 
 export function IconRail({
   activePanel,
@@ -42,8 +48,38 @@ export function IconRail({
   extraPanels,
   className,
 }: IconRailProps) {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
+  const regularExtraPanels = extraPanels?.filter((panel) => !panel.pluginId && panel.id !== 'plugins')
+  const pluginPanels = extraPanels?.filter((panel) => panel.pluginId)
+  const pluginsPanel = extraPanels?.find((panel) => panel.id === 'plugins')
+
+  const renderExtraPanel = (panel: ExtraPanel) => {
+    const isActive = activePanel === panel.id
+    return (
+      <Tooltip key={panel.id}>
+        <TooltipTrigger asChild>
+          <button
+            className={cn(
+              'flex h-9 w-9 items-center justify-center rounded-lg transition-all',
+              isActive ? 'bg-accent' : 'hover:bg-accent',
+            )}
+            onClick={() => onPanelChange(panel.id)}
+            type="button"
+          >
+            <span
+              className={cn(
+                'flex h-6 w-6 items-center justify-center transition-all',
+                !isActive && 'opacity-50',
+              )}
+            >
+              {panel.id === 'plugins' ? <Plus className="h-5 w-5" /> : panel.icon}
+            </span>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="right">{panel.label}</TooltipContent>
+      </Tooltip>
+    )
+  }
+
   return (
     <div
       className={cn(
@@ -72,7 +108,7 @@ export function IconRail({
                 type="button"
               >
                 <img
-                  alt={t(panel.labelKey)}
+                  alt={panel.label}
                   className={cn(
                     'h-6 w-6 object-contain transition-all',
                     !isActive && 'opacity-50 saturate-0',
@@ -81,39 +117,12 @@ export function IconRail({
                 />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">{t(panel.labelKey)}</TooltipContent>
-          </Tooltip>
-        )
-      })}
-
-      {/* Extra panels (injected between site and settings) */}
-      {extraPanels?.map((panel) => {
-        const isActive = activePanel === panel.id
-        return (
-          <Tooltip key={panel.id}>
-            <TooltipTrigger asChild>
-              <button
-                className={cn(
-                  'flex h-9 w-9 items-center justify-center rounded-lg transition-all',
-                  isActive ? 'bg-accent' : 'hover:bg-accent',
-                )}
-                onClick={() => onPanelChange(panel.id)}
-                type="button"
-              >
-                <span
-                  className={cn(
-                    'flex h-6 w-6 items-center justify-center transition-all',
-                    !isActive && 'opacity-50',
-                  )}
-                >
-                  {panel.icon}
-                </span>
-              </button>
-            </TooltipTrigger>
             <TooltipContent side="right">{panel.label}</TooltipContent>
           </Tooltip>
         )
       })}
+
+      {regularExtraPanels?.map(renderExtraPanel)}
 
       {/* Settings panel */}
       {[settingsPanel].map((panel) => {
@@ -130,7 +139,7 @@ export function IconRail({
                 type="button"
               >
                 <img
-                  alt={t(panel.labelKey)}
+                  alt={panel.label}
                   className={cn(
                     'h-6 w-6 object-contain transition-all',
                     !isActive && 'opacity-50 saturate-0',
@@ -139,10 +148,17 @@ export function IconRail({
                 />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">{t(panel.labelKey)}</TooltipContent>
+            <TooltipContent side="right">{panel.label}</TooltipContent>
           </Tooltip>
         )
       })}
+
+      {(pluginPanels?.length || pluginsPanel) && (
+        <div className="mt-1 flex w-9 flex-col items-center gap-1 border-border/70 border-t pt-2">
+          {pluginPanels?.map(renderExtraPanel)}
+          {pluginsPanel && renderExtraPanel(pluginsPanel)}
+        </div>
+      )}
     </div>
   )
 }

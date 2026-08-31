@@ -13,6 +13,7 @@ import {
   EyeOff,
   LocateFixed,
   Lock,
+  Move,
   RotateCcw,
   Ruler,
   Trash2,
@@ -22,7 +23,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { guideEmitter } from '../../../lib/guide-events'
 import { getGuideImageName } from '../../../lib/local-guide-image'
-import { useTranslations } from '../../../lib/i18n'
+import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
@@ -41,7 +42,6 @@ function getScaleStatus(guide: GuideNode, scaleReferenceVisible: boolean) {
 }
 
 export function ReferencePanel() {
-  const t = useTranslations()
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
   const guideUi = useEditor((s) =>
@@ -61,6 +61,9 @@ export function ReferencePanel() {
     selectedReferenceId
       ? (s.nodes[selectedReferenceId as AnyNode['id']] as ReferenceNode | undefined)
       : undefined,
+  )
+  const isScaleFlowActive = useEditor(
+    (s) => s.referenceScaleActiveGuideId !== null && s.referenceScaleActiveGuideId === node?.id,
   )
 
   const handleUpdate = useCallback(
@@ -100,6 +103,9 @@ export function ReferencePanel() {
           } as Partial<GuideNode>,
         )
         setGuideScaleReferenceVisible(selectedReferenceId, true)
+        // The new image starts uncalibrated — drop the calibration auto-lock
+        // so it can be resized/rotated right away.
+        setGuideLocked(selectedReferenceId, false)
       } catch {
         setReplaceError('Could not replace that image.')
       } finally {
@@ -125,12 +131,25 @@ export function ReferencePanel() {
       return
     }
 
+    // The scale line is drawn on the 2D plan — starting from a 3D-only view
+    // would arm the flow invisibly inside the hidden floorplan panel.
+    const editor = useEditor.getState()
+    if (editor.viewMode === '3d') {
+      editor.setViewMode('2d')
+    }
+
     guideEmitter.emit('guide:set-reference-scale', { guideId: node.id })
   }, [node])
 
   const handleCancelScale = useCallback(() => {
     guideEmitter.emit('guide:cancel-reference-scale')
   }, [])
+
+  const handleMoveScan = useCallback(() => {
+    if (node?.type !== 'scan') return
+    useEditor.getState().setMovingNode(node as never)
+    setSelectedReferenceId(null)
+  }, [node, setSelectedReferenceId])
 
   useEffect(() => {
     if (node?.type !== 'guide' || !node.url.startsWith('asset://')) {
@@ -160,12 +179,12 @@ export function ReferencePanel() {
   return (
     <PanelWrapper
       onClose={handleClose}
-      title={node.name || (isScan ? t('editor.3dScan') : t('editor.guideImage'))}
+      title={node.name || (isScan ? 'Capture' : 'Guide Image')}
       width={300}
     >
       {!isScan && (
         <>
-          <PanelSection title={t('editor.image')}>
+          <PanelSection title="Image">
             <input
               accept="image/*"
               className="hidden"
@@ -190,7 +209,7 @@ export function ReferencePanel() {
               <ActionButton
                 className="text-destructive hover:bg-destructive/10"
                 icon={<Trash2 className="h-3.5 w-3.5" />}
-                label={t('editor.delete')}
+                label="Delete"
                 onClick={handleDeleteGuide}
               />
             </ActionGroup>
@@ -233,42 +252,63 @@ export function ReferencePanel() {
             )}
           </PanelSection>
 
-          <PanelSection title={t('editor.referenceScale')}>
+          <PanelSection title="Reference Scale">
             <div className="flex items-center gap-2 rounded-md border border-border/50 bg-background/40 px-2.5 py-2 text-sm">
-              <Ruler className="h-4 w-4 shrink-0 text-primary" />
+              <Ruler
+                className={cn(
+                  'h-4 w-4 shrink-0',
+                  node.scaleReference ? 'text-primary' : 'text-amber-600 dark:text-amber-400',
+                )}
+              />
               <span className="truncate text-muted-foreground">{scaleStatus}</span>
             </div>
 
-            <ActionGroup>
-              <ActionButton
-                label={node.scaleReference ? 'Edit Scale' : 'Set Scale'}
-                onClick={handleStartScale}
-              />
-              <ActionButton label={t('editor.cancel')} onClick={handleCancelScale} />
-            </ActionGroup>
+            {!node.scaleReference && (
+              <p className="px-0.5 text-muted-foreground text-xs leading-snug">
+                {isScaleFlowActive
+                  ? 'Click both ends of a known distance on the plan, then type its real length.'
+                  : 'Draw a line over a known dimension on the plan, then type its real length to scale the image exactly.'}
+              </p>
+            )}
 
             <ActionGroup>
               <ActionButton
-                disabled={!node.scaleReference}
-                label={scaleReferenceVisible ? 'Hide Scale' : 'Show Scale'}
-                onClick={() => {
-                  if (!node.scaleReference) return
-                  setGuideScaleReferenceVisible(node.id, !scaleReferenceVisible)
-                }}
-              />
-              <ActionButton
-                disabled={!node.scaleReference}
-                label={t('editor.clearScale')}
-                onClick={() => handleUpdate({ scaleReference: null } as Partial<GuideNode>)}
+                className={cn(
+                  !node.scaleReference &&
+                    !isScaleFlowActive &&
+                    'border-primary/50 bg-primary/15 text-primary hover:bg-primary/25 active:bg-primary/25',
+                )}
+                label={
+                  isScaleFlowActive ? 'Cancel' : node.scaleReference ? 'Edit Scale' : 'Set Scale'
+                }
+                onClick={isScaleFlowActive ? handleCancelScale : handleStartScale}
               />
             </ActionGroup>
+
+            {node.scaleReference && (
+              <ActionGroup>
+                <ActionButton
+                  label={scaleReferenceVisible ? 'Hide Scale' : 'Show Scale'}
+                  onClick={() => setGuideScaleReferenceVisible(node.id, !scaleReferenceVisible)}
+                />
+                <ActionButton
+                  label="Clear Scale"
+                  onClick={() => {
+                    handleUpdate({ scaleReference: null } as Partial<GuideNode>)
+                    // Calibrating auto-locked the guide; clearing the scale
+                    // returns it to a freely-editable reference.
+                    setGuideLocked(node.id, false)
+                  }}
+                />
+              </ActionGroup>
+            )}
           </PanelSection>
 
-          <PanelSection title={t('editor.quickActions')}>
+          <PanelSection title="Quick Actions">
             <ActionGroup>
               <ActionButton
                 icon={<LocateFixed className="h-3.5 w-3.5" />}
-                label={t('editor.center')}
+                label="Center"
                 onClick={() =>
                   handleUpdate({
                     position: [0, node.position[1], 0],
@@ -277,7 +317,7 @@ export function ReferencePanel() {
               />
               <ActionButton
                 icon={<RotateCcw className="h-3.5 w-3.5" />}
-                label={t('editor.resetRotation')}
+                label="Reset Rotation"
                 onClick={() =>
                   handleUpdate({
                     rotation: [node.rotation[0], 0, node.rotation[2]],
@@ -288,7 +328,7 @@ export function ReferencePanel() {
             <ActionGroup>
               <ActionButton
                 icon={<Ruler className="h-3.5 w-3.5" />}
-                label={t('editor.resetImageScale')}
+                label="Reset Image Scale"
                 onClick={() => handleUpdate({ scale: 1 } as Partial<GuideNode>)}
               />
             </ActionGroup>
@@ -296,7 +336,30 @@ export function ReferencePanel() {
         </>
       )}
 
-      <PanelSection title={t('editor.position')}>
+      {isScan && (
+        <PanelSection title="Capture">
+          <ActionGroup>
+            <ActionButton
+              icon={<Move className="h-3.5 w-3.5" />}
+              label="Move"
+              onClick={handleMoveScan}
+            />
+            <ActionButton
+              icon={
+                node.visible === false ? (
+                  <EyeOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Eye className="h-3.5 w-3.5" />
+                )
+              }
+              label={node.visible === false ? 'Show' : 'Hide'}
+              onClick={() => handleUpdate({ visible: node.visible === false })}
+            />
+          </ActionGroup>
+        </PanelSection>
+      )}
+
+      <PanelSection title="Position">
         <SliderControl
           label={
             <>
@@ -353,7 +416,7 @@ export function ReferencePanel() {
         />
       </PanelSection>
 
-      <PanelSection title={t('editor.rotation')}>
+      <PanelSection title="Rotation">
         <SliderControl
           label={
             <>
@@ -375,7 +438,7 @@ export function ReferencePanel() {
         />
         <div className="flex gap-1.5 px-1 pt-2 pb-1">
           <ActionButton
-            label={t('nodes.stair.rotationPresets.negative')}
+            label="-45°"
             onClick={() =>
               handleUpdate({
                 rotation: [node.rotation[0], node.rotation[1] - Math.PI / 4, node.rotation[2]],
@@ -383,7 +446,7 @@ export function ReferencePanel() {
             }
           />
           <ActionButton
-            label={t('nodes.stair.rotationPresets.positive')}
+            label="+45°"
             onClick={() =>
               handleUpdate({
                 rotation: [node.rotation[0], node.rotation[1] + Math.PI / 4, node.rotation[2]],
@@ -393,7 +456,7 @@ export function ReferencePanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title={t('editor.scaleAndOpacity')}>
+      <PanelSection title="Scale & Opacity">
         <SliderControl
           label={
             <>
@@ -413,7 +476,7 @@ export function ReferencePanel() {
         />
 
         <SliderControl
-          label={t('editor.opacity')}
+          label="Opacity"
           max={100}
           min={0}
           onChange={(v) => handleUpdate({ opacity: v })}

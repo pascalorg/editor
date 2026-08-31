@@ -1,4 +1,10 @@
-import type { DormerNode } from '@pascal-app/core'
+import {
+  type DormerNode,
+  getPitchFromActiveRoofHeight,
+  getRoofModuleFaces,
+  getRoofShapeRatios,
+  ROOF_SHAPE_DEFAULTS,
+} from '@pascal-app/core'
 import * as THREE from 'three'
 
 /**
@@ -16,55 +22,75 @@ export const DORMER_PLACEMENT_SNAP_M = 0.05
  */
 export const DORMER_PLACEMENT_ROTATION_STEP = (15 * Math.PI) / 180
 
+export function getDormerBodyYaw(node: Pick<DormerNode, 'roofType' | 'shedHighSide'>): number {
+  if (node.roofType !== 'shed') return Math.PI / 2
+  return node.shedHighSide === 'front' ? Math.PI : 0
+}
+
 /**
- * Lightweight silhouette geometry used by the placement / move-tool
- * ghost preview only. Renders the dormer as an extruded pentagon
- * (rectangle body + triangular gable) dropped by `wallSkirtHeight` below
- * the anchor so the cursor sits at the floor of the dormer the way the
- * committed CSG geometry does.
- *
- * For `roofType === 'flat'` (or `roofHeight === 0`) the gable apex is
- * skipped and the shape collapses to a rectangle. Other roof types use
- * the gable approximation — exact per-type silhouettes are a future
- * improvement.
- *
- * Kept self-contained (no `@pascal-app/viewer` imports) so the geometry
- * test doesn't drag in the CSG / BVH module graph, which fails to load
- * outside of a browser/WebGL context. The viewer has its own
- * `buildDormerFallbackGeometry` that mirrors this shape — used both as
- * the CSG fallback when boolean ops fail and as the live-drag preview
- * in the dormer renderer.
+ * Builds the lightweight placement and live-edit shell from the same
+ * per-type face generator used by committed roof geometry.
  */
-export function buildDormerGhostGeometry(node: DormerNode): THREE.BufferGeometry {
+export function buildDormerShellGeometry(node: DormerNode): THREE.BufferGeometry {
   const w = Math.max(0.05, node.width)
   const wallH = Math.max(0.05, node.height)
   const roofH = Math.max(0, node.roofHeight)
   const d = Math.max(0.05, node.depth)
-  const skirt = Math.max(0.05, node.wallSkirtHeight)
-  const hw = w / 2
-  const isFlat = node.roofType === 'flat' || roofH === 0
+  const skirt = Math.max(0.05, node.wallSkirtHeight ?? 2)
+  const isShed = node.roofType === 'shed'
+  const segW = isShed ? w : d
+  const segD = isShed ? d : w
+  const pitch = getPitchFromActiveRoofHeight({
+    roofType: node.roofType,
+    width: segW,
+    depth: segD,
+    roofHeight: roofH,
+  })
+  const faces = getRoofModuleFaces({
+    type: node.roofType,
+    w: segW,
+    d: segD,
+    wh: wallH,
+    rh: roofH,
+    baseY: -skirt,
+    insets: {},
+    baseW: segW,
+    baseD: segD,
+    tanTheta: Math.tan((pitch * Math.PI) / 180),
+    shapeRatios: getRoofShapeRatios(ROOF_SHAPE_DEFAULTS),
+  })
+  const positions: number[] = []
+  const materialGroups: Array<{ start: number; count: number; materialIndex: number }> = []
 
-  const shape = new THREE.Shape()
-  shape.moveTo(-hw, -skirt)
-  shape.lineTo(hw, -skirt)
-  shape.lineTo(hw, wallH)
-  if (!isFlat) shape.lineTo(0, wallH + roofH)
-  shape.lineTo(-hw, wallH)
-  shape.closePath()
+  for (const face of faces) {
+    if (face.length < 3) continue
+    const a = new THREE.Vector3(face[0]!.x, face[0]!.y, face[0]!.z)
+    const b = new THREE.Vector3(face[1]!.x, face[1]!.y, face[1]!.z)
+    const c = new THREE.Vector3(face[2]!.x, face[2]!.y, face[2]!.z)
+    const normal = b.clone().sub(a).cross(c.clone().sub(a)).normalize()
+    const start = positions.length / 3
+    for (let index = 1; index < face.length - 1; index++) {
+      for (const point of [face[0]!, face[index]!, face[index + 1]!]) {
+        positions.push(point.x, point.y, point.z)
+      }
+    }
+    materialGroups.push({
+      start,
+      count: positions.length / 3 - start,
+      materialIndex: normal.y > 0.01 ? 3 : 0,
+    })
+  }
 
-  const geo = new THREE.ExtrudeGeometry(shape, { depth: d, bevelEnabled: false })
-  geo.translate(0, 0, -d / 2)
-  return geo
+  const geometry = new THREE.BufferGeometry()
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  for (const group of materialGroups)
+    geometry.addGroup(group.start, group.count, group.materialIndex)
+  const bodyYaw = getDormerBodyYaw(node)
+  if (bodyYaw !== 0) geometry.rotateY(bodyYaw)
+  geometry.computeVertexNormals()
+  return geometry
 }
 
-/**
- * Inspector helper: which window-shape sub-controls to surface for the
- * current dormer.
- */
-export function dormerSupportsArch(node: DormerNode): boolean {
-  return node.windowShape === 'arch'
-}
-
-export function dormerSupportsCornerRadii(node: DormerNode): boolean {
-  return node.windowShape === 'rounded'
+export function buildDormerGhostGeometry(node: DormerNode): THREE.BufferGeometry {
+  return buildDormerShellGeometry(node)
 }

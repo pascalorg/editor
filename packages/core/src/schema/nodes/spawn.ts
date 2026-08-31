@@ -6,6 +6,8 @@ export const SpawnNode = BaseNode.extend({
   type: nodeType('spawn'),
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.number().default(0),
+  // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
+  supportSlabId: z.string().optional(),
 })
 
 export type SpawnNode = z.infer<typeof SpawnNode>

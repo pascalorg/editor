@@ -19,27 +19,24 @@ import {
   ToggleControl,
   triggerSFX,
   useEditor,
-  useTranslations,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Trash2 } from 'lucide-react'
 import { useCallback } from 'react'
 
+const SEGMENT_TYPE_OPTIONS: { label: string; value: StairSegmentType }[] = [
+  { label: 'Flight', value: 'stair' },
+  { label: 'Landing', value: 'landing' },
+]
+
+const ATTACHMENT_SIDE_OPTIONS: { label: string; value: AttachmentSide }[] = [
+  { label: 'Front', value: 'front' },
+  { label: 'Left', value: 'left' },
+  { label: 'Right', value: 'right' },
+]
 
 export default function StairSegmentPanel() {
-  const t = useTranslations()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
-
-  const SEGMENT_TYPE_OPTIONS = [
-    { label: t('nodes.stairSegment.flight'), value: 'stair' as StairSegmentType },
-    { label: t('nodes.stairSegment.landing'), value: 'landing' as StairSegmentType },
-  ]
-
-  const ATTACHMENT_SIDE_OPTIONS = [
-    { label: t('nodes.stairSegment.front'), value: 'front' as AttachmentSide },
-    { label: t('nodes.stairSegment.left'), value: 'left' as AttachmentSide },
-    { label: t('nodes.stairSegment.right'), value: 'right' as AttachmentSide },
-  ]
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -53,7 +50,7 @@ export default function StairSegmentPanel() {
   const isFirstSegment = useScene((s) => {
     if (!node?.parentId) return true
     const parent = s.nodes[node.parentId as AnyNodeId]
-    if (!parent || parent.type !== 'stair') return true
+    if (parent?.type !== 'stair') return true
     const children = (parent as any).children ?? []
     return children[0] === node.id
   })
@@ -124,13 +121,13 @@ export default function StairSegmentPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/stairs.png"
+      icon="/icons/stairs.webp"
       onBack={handleBack}
       onClose={handleClose}
-      title={node.name || t('nodes.stairSegment.fallbackTitle')}
+      title={node.name || 'Stair Segment'}
       width={300}
     >
-      <PanelSection title={t('nodes.stairSegment.type')}>
+      <PanelSection title="Type">
         <SegmentedControl
           onChange={(v) => {
             const updates: Partial<StairSegmentNode> = { segmentType: v }
@@ -151,7 +148,7 @@ export default function StairSegmentPanel() {
       </PanelSection>
 
       {!isFirstSegment && (
-        <PanelSection title={t('nodes.stairSegment.attachment')}>
+        <PanelSection title="Attachment">
           <SegmentedControl
             onChange={(v) => handleUpdate({ attachmentSide: v })}
             options={ATTACHMENT_SIDE_OPTIONS}
@@ -160,10 +157,10 @@ export default function StairSegmentPanel() {
         </PanelSection>
       )}
 
-      <PanelSection title={t('nodes.stairSegment.dimensions')}>
+      <PanelSection title="Dimensions">
         <SliderControl
-          label={t('nodes.stairSegment.width')}
-          max={5}
+          label="Width"
+          max={1000}
           min={0.5}
           onChange={(v) => handleUpdate({ width: v })}
           precision={2}
@@ -172,8 +169,8 @@ export default function StairSegmentPanel() {
           value={Math.round(node.width * 100) / 100}
         />
         <SliderControl
-          label={t('nodes.stairSegment.length')}
-          max={10}
+          label="Length"
+          max={1000}
           min={0.5}
           onChange={(v) => handleUpdate({ length: v })}
           precision={2}
@@ -184,8 +181,8 @@ export default function StairSegmentPanel() {
         {node.segmentType === 'stair' && (
           <>
             <SliderControl
-              label={t('nodes.stairSegment.height')}
-              max={10}
+              label="Height"
+              max={1000}
               min={0.5}
               onChange={(v) => handleUpdate({ height: v })}
               precision={2}
@@ -194,7 +191,7 @@ export default function StairSegmentPanel() {
               value={Math.round(node.height * 100) / 100}
             />
             <SliderControl
-              label={t('nodes.stairSegment.steps')}
+              label="Steps"
               max={30}
               min={2}
               onChange={(v) => handleUpdate({ stepCount: Math.round(v) })}
@@ -207,17 +204,17 @@ export default function StairSegmentPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title={t('nodes.stairSegment.structure')}>
+      <PanelSection title="Structure">
         <div className="space-y-3">
           <ToggleControl
             checked={node.fillToFloor}
-            label={t('nodes.stairSegment.fillToFloor')}
+            label="Fill to floor"
             onChange={(checked) => handleUpdate({ fillToFloor: checked })}
           />
           {!node.fillToFloor && (
             <SliderControl
-              label={t('nodes.stairSegment.thickness')}
-              max={1}
+              label="Thickness"
+              max={1000}
               min={0.05}
               onChange={(v) => handleUpdate({ thickness: v })}
               precision={2}
@@ -229,11 +226,9 @@ export default function StairSegmentPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title={t('common.position')}>
+      <PanelSection title="Position">
         <SliderControl
-          label={t('common.x')}
-          max={50}
-          min={-50}
+          label="X"
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[0] = v
@@ -245,9 +240,7 @@ export default function StairSegmentPanel() {
           value={Math.round(node.position[0] * 100) / 100}
         />
         <SliderControl
-          label={t('common.y')}
-          max={50}
-          min={-50}
+          label="Y"
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[1] = v
@@ -259,9 +252,7 @@ export default function StairSegmentPanel() {
           value={Math.round(node.position[1] * 100) / 100}
         />
         <SliderControl
-          label={t('common.z')}
-          max={50}
-          min={-50}
+          label="Z"
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[2] = v
@@ -273,7 +264,7 @@ export default function StairSegmentPanel() {
           value={Math.round(node.position[2] * 100) / 100}
         />
         <SliderControl
-          label={t('common.rotation')}
+          label="Rotation"
           max={180}
           min={-180}
           onChange={(degrees) => {
@@ -286,14 +277,14 @@ export default function StairSegmentPanel() {
         />
         <div className="flex gap-1.5 px-1 pt-2 pb-1">
           <ActionButton
-            label={t('nodes.stair.rotationPresets.negative')}
+            label="-45°"
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               handleUpdate({ rotation: node.rotation - Math.PI / 4 })
             }}
           />
           <ActionButton
-            label={t('nodes.stair.rotationPresets.positive')}
+            label="+45°"
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               handleUpdate({ rotation: node.rotation + Math.PI / 4 })
@@ -302,18 +293,18 @@ export default function StairSegmentPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title={t('common.actions')}>
+      <PanelSection title="Actions">
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={t('nodes.stairSegment.move')} onClick={handleMove} />
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label={t('nodes.stairSegment.duplicate')}
+            label="Duplicate"
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label={t('common.delete')}
+            label="Delete"
             onClick={handleDelete}
           />
         </ActionGroup>

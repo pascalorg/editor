@@ -10,6 +10,7 @@ import type {
   OrthographicCamera,
 } from 'three/webgpu'
 import * as THREE from 'three/webgpu'
+import { SHADOW_ONLY_LAYER } from '../../lib/layers'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
 
@@ -24,10 +25,32 @@ const SHADOWS_DISABLED =
       .map((s) => s.trim()),
   ).has('shadows')
 
+// Diagnostic toggle: `?debug=shadowcamera` draws a CameraHelper for each
+// shadow camera so the building-fit frustum (and thus shadow texel density)
+// can be inspected while tuning margins/bias.
+const SHADOW_CAMERA_DEBUG =
+  typeof window !== 'undefined' &&
+  new Set(
+    (new URLSearchParams(window.location.search).get('debug') ?? '')
+      .split(',')
+      .map((s) => s.trim()),
+  ).has('shadowcamera')
+
 // Shadow darkness for the bright key lights (themes drive most lights past
-// intensity 1). The aesthetic prototype runs these near-black (≈1.0); this is a
-// deliberate middle ground — present, but not the heavy contact shadow there.
-const MAX_SHADOW_INTENSITY = 0.55
+// intensity 1). Runs high so shadowed areas actually lose the sun's
+// contribution — the ambient/hemisphere/IBL stack provides the fill. The old
+// 0.55 clamp leaked 45% of the key light into shadow and flattened interiors;
+// 0.9 read too heavy in review.
+const MAX_SHADOW_INTENSITY = 0.75
+
+// `normalBias` is measured in world units. The previous 0.3 moved shadow
+// lookups 30 cm off their surfaces, visibly detaching wall shadows at the
+// floor; 0.07 and below still acnes on the building-fit 1024 map (large
+// texels), so 0.08 is the smallest acne-free value at that resolution — even
+// with the depth bias at -0.0005 (which is itself needed: 0.08 alone still
+// showed faint acne at -0.0001).
+const SHADOW_DEPTH_BIAS = -0.0005
+const SHADOW_NORMAL_BIAS = 0.08
 
 // Shadow frustum framing. The frustum is fit to the BUILDING geometry (not the
 // camera): we union the bounds of all registered scene nodes, fit a sphere, and
@@ -70,6 +93,7 @@ export function Lights() {
   const boundsBox = useRef(new THREE.Box3()) // scratch: union AABB
   const boundsSphere = useRef(new THREE.Sphere()) // scratch: fitted sphere
   const lastBoundsTime = useRef(-1) // last refresh timestamp (-1 = never)
+  const shadowHelpers = useRef<Array<THREE.CameraHelper | null>>([])
 
   const hemiRef = useRef<HemisphereLight>(null)
   const ambientRef = useRef<AmbientLight>(null)
@@ -105,15 +129,26 @@ export function Lights() {
           if (SHADOW_EXCLUDED_TYPES.some((t) => sceneRegistry.byType[t]!.has(id))) continue
           box.expandByObject(obj)
         }
-        if (box.isEmpty()) {
-          // Empty scene: fall back to the origin with a default radius so the
-          // ground still receives a sensible shadow region.
+        box.getBoundingSphere(boundsSphere.current)
+        const center = boundsSphere.current.center
+        const radius = boundsSphere.current.radius
+        // Empty scene OR a node with a NaN position/geometry poisoning the union
+        // box: fall back to the origin with a default radius. The directional
+        // light's position is derived from `focus`, so a single non-finite mesh
+        // must NOT be allowed to make `focus`/`radius` NaN — that breaks every
+        // shadow-casting light's position and renders the whole scene black.
+        const finiteBounds =
+          !box.isEmpty() &&
+          Number.isFinite(center.x) &&
+          Number.isFinite(center.y) &&
+          Number.isFinite(center.z) &&
+          Number.isFinite(radius)
+        if (finiteBounds) {
+          shadowFocus.current.copy(center)
+          shadowRadius.current = radius
+        } else {
           shadowFocus.current.set(0, 0, 0)
           shadowRadius.current = SHADOW_FALLBACK_RADIUS
-        } else {
-          box.getBoundingSphere(boundsSphere.current)
-          shadowFocus.current.copy(boundsSphere.current.center)
-          shadowRadius.current = boundsSphere.current.radius
         }
       }
 
@@ -142,6 +177,9 @@ export function Lights() {
         // the <orthographicCamera attach="shadow-camera"> below.
         const cam = light.shadow?.camera as THREE.OrthographicCamera | undefined
         if (cam) {
+          // Shadow-caster-only geometry (hidden roofs/levels in cutaway views)
+          // is visible to the shadow pass alone — see lib/shadow-only.ts.
+          cam.layers.enable(SHADOW_ONLY_LAYER)
           cam.left = -size
           cam.right = size
           cam.top = size
@@ -149,6 +187,15 @@ export function Lights() {
           cam.near = near
           cam.far = far
           cam.updateProjectionMatrix()
+          if (SHADOW_CAMERA_DEBUG) {
+            let helper = shadowHelpers.current[index]
+            if (!helper) {
+              helper = new THREE.CameraHelper(cam)
+              shadowHelpers.current[index] = helper
+              state.scene.add(helper)
+            }
+            helper.update()
+          }
         }
       }
     }
@@ -229,19 +276,27 @@ export function Lights() {
   return (
     <>
       {theme.lights.map((light, index) => (
+        // The user-facing shadows toggle must NOT flip `castShadow` at runtime:
+        // three r184's WebGPU node cache keys builder state by castShadow, but
+        // evicts with the post-toggle key, so flipping off disposes the shadow
+        // map's GPU texture while the shadows-on cache entry (still referencing
+        // it) survives. Re-enabling then reuses that stale state and every
+        // submit fails ("Invalid CommandBuffer ... renderContext_N"). The
+        // toggle is applied via `renderer.shadowMap.enabled` (Canvas `shadows`
+        // prop in viewer/index.tsx), which round-trips without disposing.
         <directionalLight
-          castShadow={Boolean(light.castShadow) && !SHADOWS_DISABLED && shadows}
+          castShadow={Boolean(light.castShadow) && !SHADOWS_DISABLED}
           key={`${index}-${light.position.join(',')}`}
           position={light.position}
           ref={(ref) => {
             lightRefs.current[index] = ref
           }}
-          shadow-bias={-0.002}
+          shadow-bias={SHADOW_DEPTH_BIAS}
           shadow-mapSize={[1024, 1024]}
-          shadow-normalBias={0.3}
-          shadow-radius={1.5}
+          shadow-normalBias={SHADOW_NORMAL_BIAS}
+          shadow-radius={2}
         >
-          {light.castShadow && !SHADOWS_DISABLED && shadows ? (
+          {light.castShadow && !SHADOWS_DISABLED ? (
             <orthographicCamera
               attach="shadow-camera"
               bottom={-shadowCameraSize}

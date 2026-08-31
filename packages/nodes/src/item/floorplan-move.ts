@@ -2,14 +2,28 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CeilingNode,
+  collectAlignmentAnchors,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  getBlockFaceFrame,
+  getRoofWallFaceFrame,
   getScaledDimensions,
   type ItemNode,
+  movingFootprintAnchors,
+  type RoofSegmentNode,
+  roofFacePointToSegment,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
-import { findClosestWallInPlan } from '../shared/wall-attach-target'
+import {
+  applyFloorplanAlignment,
+  isGridSnapActive,
+  isMagneticSnapActive,
+  useEditor,
+  type WallPlanPoint,
+} from '@pascal-app/editor'
+import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
+import { findClosestWallInPlan, snapLocalXToNeighbors } from '../shared/wall-attach-target'
 
 /**
  * 2D floor-plan move handler for item. Branches on `asset.attachTo`:
@@ -32,9 +46,141 @@ import { findClosestWallInPlan } from '../shared/wall-attach-target'
  * the item's current attach family.
  */
 
-const GRID_STEP = 0.5
+type ItemPlanTransform = {
+  point: [number, number]
+  rotation: number
+}
 
-export const itemFloorplanMoveTarget: FloorplanMoveTarget<ItemNode> = ({ node }) => {
+function rotateVec(x: number, z: number, rotationY: number): [number, number] {
+  const c = Math.cos(rotationY)
+  const s = Math.sin(rotationY)
+  return [x * c + z * s, -x * s + z * c]
+}
+
+function resolveItemPlanTransform(
+  item: ItemNode,
+  nodes: Record<AnyNodeId, AnyNode>,
+  cache = new Map<AnyNodeId, ItemPlanTransform>(),
+): ItemPlanTransform {
+  const cached = cache.get(item.id as AnyNodeId)
+  if (cached) return cached
+
+  const localRotation = item.rotation[1] ?? 0
+  let result: ItemPlanTransform = {
+    point: [item.position[0], item.position[2]],
+    rotation: localRotation,
+  }
+  const parent = item.parentId ? nodes[item.parentId as AnyNodeId] : null
+  if (parent?.type === 'wall') {
+    const wallRotation = -Math.atan2(
+      parent.end[1] - parent.start[1],
+      parent.end[0] - parent.start[0],
+    )
+    const wallLocalZ =
+      item.asset.attachTo === 'wall-side'
+        ? ((parent.thickness ?? 0.1) / 2) * (item.side === 'front' ? 1 : -1)
+        : item.position[2]
+    const [offsetX, offsetZ] = rotateVec(item.position[0], wallLocalZ, wallRotation)
+    result = {
+      point: [parent.start[0] + offsetX, parent.start[1] + offsetZ],
+      rotation: wallRotation + localRotation,
+    }
+  } else if (parent?.type === 'shelf') {
+    const shelf = parent as AnyNode & {
+      position: [number, number, number]
+      rotation: [number, number, number]
+    }
+    const [offsetX, offsetZ] = rotateVec(item.position[0], item.position[2], shelf.rotation[1] ?? 0)
+    result = {
+      point: [shelf.position[0] + offsetX, shelf.position[2] + offsetZ],
+      rotation: (shelf.rotation[1] ?? 0) + localRotation,
+    }
+  } else if (parent?.type === 'item') {
+    const parentTransform = resolveItemPlanTransform(parent as ItemNode, nodes, cache)
+    const [offsetX, offsetZ] = rotateVec(
+      item.position[0],
+      item.position[2],
+      parentTransform.rotation,
+    )
+    result = {
+      point: [parentTransform.point[0] + offsetX, parentTransform.point[1] + offsetZ],
+      rotation: parentTransform.rotation + localRotation,
+    }
+  } else if (parent?.type === 'roof-segment') {
+    // Roof-hosted wall item: FACE-LOCAL position mapped through the face
+    // frame, then composed through the segment's and roof's yaw +
+    // position into level-local plan coords — without this the drag seed
+    // jumps off the roof at move start.
+    const segment = parent as RoofSegmentNode
+    const roof = segment.parentId
+      ? (nodes[segment.parentId as AnyNodeId] as
+          | (AnyNode & { position: [number, number, number]; rotation: number })
+          | undefined)
+      : undefined
+    if (roof?.type === 'roof' && item.roofFace) {
+      const frame = getRoofWallFaceFrame(segment, item.roofFace)
+      const segLocal = roofFacePointToSegment(segment, item.roofFace, item.position)
+      const [sx, sz] = rotateVec(segLocal[0], segLocal[2], segment.rotation ?? 0)
+      const [rx, rz] = rotateVec(
+        sx + segment.position[0],
+        sz + segment.position[2],
+        roof.rotation ?? 0,
+      )
+      result = {
+        point: [rx + roof.position[0], rz + roof.position[2]],
+        rotation: (roof.rotation ?? 0) + (segment.rotation ?? 0) + frame.yaw + localRotation,
+      }
+    }
+  } else if (parent?.type === 'block' && item.blockFaceId) {
+    const frame = getBlockFaceFrame(parent.topology, item.blockFaceId)
+    if (frame) {
+      const localX =
+        frame.origin[0] +
+        frame.xAxis[0] * item.position[0] +
+        frame.yAxis[0] * item.position[1] +
+        frame.normal[0] * item.position[2]
+      const localZ =
+        frame.origin[2] +
+        frame.xAxis[2] * item.position[0] +
+        frame.yAxis[2] * item.position[1] +
+        frame.normal[2] * item.position[2]
+      const [offsetX, offsetZ] = rotateVec(localX, localZ, parent.rotation ?? 0)
+      result = {
+        point: [parent.position[0] + offsetX, parent.position[2] + offsetZ],
+        rotation:
+          (parent.rotation ?? 0) - Math.atan2(frame.xAxis[2], frame.xAxis[0]) + localRotation,
+      }
+    }
+  }
+
+  cache.set(item.id as AnyNodeId, result)
+  return result
+}
+
+function resolveItemPlanPoint(
+  item: ItemNode,
+  nodes: Record<AnyNodeId, AnyNode>,
+  cache = new Map<AnyNodeId, ItemPlanTransform>(),
+): [number, number] {
+  return resolveItemPlanTransform(item, nodes, cache).point
+}
+
+function createPlanarMovePointResolver(originalPlanPoint: [number, number], node: ItemNode) {
+  const resolveCursor = createFloorplanCursorResolver({
+    original: originalPlanPoint,
+    metadata: node.metadata,
+  })
+
+  return (planPoint: readonly [number, number]): WallPlanPoint => {
+    // Grid snap is mode-driven (matching 3D): quantize only when grid mode is
+    // active; in lines/off mode the cursor passes through unsnapped.
+    const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+    const snap = (value: number) => (step <= 0 ? value : Math.round(value / step) * step)
+    return resolveCursor(planPoint, { snap }) as WallPlanPoint
+  }
+}
+
+export const itemFloorplanMoveTarget: FloorplanMoveTarget<ItemNode> = ({ node, nodes }) => {
   const attachTo = node.asset.attachTo
   const startLevelId: AnyNodeId | null = (() => {
     // Walk to the owning level depending on the item's current parent:
@@ -64,7 +210,7 @@ export const itemFloorplanMoveTarget: FloorplanMoveTarget<ItemNode> = ({ node })
   if (attachTo === 'ceiling') {
     return buildSurfaceItemSession(node, startLevelId, 'ceiling')
   }
-  return buildFloorItemSession(node, startLevelId)
+  return buildFloorItemSession(node, startLevelId, nodes)
 }
 
 function buildWallItemSession(
@@ -75,37 +221,61 @@ function buildWallItemSession(
   // local-Y carries over from the source item's position (2D can't
   // express vertical movement).
   const startLocalY = node.position[1]
+  const resolveCursor = createFloorplanCursorResolver({
+    original: resolveItemPlanPoint(node, useScene.getState().nodes),
+    metadata: node.metadata,
+  })
+  let lastPatch: Partial<ItemNode> | null = null
 
   return {
     affectedIds: [node.id as AnyNodeId],
-    apply({ planPoint, modifiers }) {
+    apply({ planPoint }) {
       const nodes = useScene.getState().nodes
-      const hit = findClosestWallInPlan(planPoint, nodes, startLevelId)
+      const resolvedPlanPoint = resolveCursor(planPoint)
+      const hit = findClosestWallInPlan(resolvedPlanPoint, nodes, startLevelId)
       if (!hit) return
 
-      const snappedLocalX = modifiers.shiftKey
-        ? hit.localX
-        : Math.round(hit.localX / GRID_STEP) * GRID_STEP
-
       const [width] = getScaledDimensions(node)
+
+      // Figma-style along-wall alignment (edge-to-edge with other openings /
+      // wall items / wall ends), winning over the grid snap; falls back to grid
+      // when nothing aligns. Both are mode-driven (matching 3D): alignment only in
+      // lines/magnetic mode, grid quantization only in grid mode.
+      const neighborX = isMagneticSnapActive()
+        ? snapLocalXToNeighbors({
+            wall: hit.wall,
+            localX: hit.localX,
+            width,
+            selfId: node.id as AnyNodeId,
+            nodes,
+          })
+        : null
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      const snappedLocalX =
+        neighborX ?? (step <= 0 ? hit.localX : Math.round(hit.localX / step) * step)
+
       const halfW = width / 2
       const clampedX = Math.max(halfW, Math.min(hit.wallLength - halfW, snappedLocalX))
 
-      useScene.getState().updateNodes([
-        {
-          id: node.id as AnyNodeId,
-          data: {
-            position: [clampedX, startLocalY, 0],
-            rotation: [0, hit.itemRotation, 0],
-            side: hit.side,
-            parentId: hit.wall.id,
-          },
-        },
-      ])
+      lastPatch = {
+        position: [clampedX, startLocalY, 0],
+        rotation: [0, hit.itemRotation, 0],
+        side: hit.side,
+        parentId: hit.wall.id,
+        roofSegmentId: undefined,
+        roofFace: undefined,
+        blockFaceId: undefined,
+      }
+      useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
+      useScene.getState().markDirty(node.id as AnyNodeId)
     },
     canCommit() {
-      const live = useScene.getState().nodes[node.id as AnyNodeId] as ItemNode | undefined
-      return !!live && live.type === 'item' && !!live.parentId
+      return !!lastPatch?.parentId
+    },
+    commit() {
+      if (!lastPatch) return
+      useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
+      useScene.getState().updateNodes([{ id: node.id as AnyNodeId, data: lastPatch }])
     },
   }
 }
@@ -125,33 +295,52 @@ function buildWallItemSession(
 function buildFloorItemSession(
   node: ItemNode,
   startLevelId: AnyNodeId | null,
+  nodes: Record<AnyNodeId, AnyNode>,
 ): FloorplanMoveTargetSession {
+  const rotationY = node.rotation[1] ?? 0
+  const resolvePlanPoint = createPlanarMovePointResolver(resolveItemPlanPoint(node, nodes), node)
+  // Alignment candidates gathered once — scene is stable during the drag.
+  const candidates = collectAlignmentAnchors(nodes, node.id)
+  let lastPatch: Partial<ItemNode> | null = null
   return {
     affectedIds: [node.id as AnyNodeId],
-    apply({ planPoint, modifiers }) {
-      const snapped: WallPlanPoint = modifiers.shiftKey
-        ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)
+    apply({ planPoint }) {
+      const gridSnapped = resolvePlanPoint(planPoint)
+      // Figma-style alignment layered on the grid snap, mode-driven (matching 3D):
+      // guides are DISPLAYED in every snapping mode; the magnetic pull onto them
+      // is applied only in "lines" mode (`applySnap`).
+      const { point: snapped } = applyFloorplanAlignment(
+        gridSnapped,
+        movingFootprintAnchors(
+          node as unknown as AnyNode,
+          gridSnapped[0],
+          gridSnapped[1],
+          rotationY,
+        ),
+        candidates,
+        { applySnap: isMagneticSnapActive() },
+      )
 
       const sourceY = node.position[1]
       const nextPosition: [number, number, number] = [snapped[0], sourceY, snapped[1]]
 
-      useScene.getState().updateNodes([
-        {
-          id: node.id as AnyNodeId,
-          data: {
-            position: nextPosition,
-            // Keep parent as the level we resolved at session-start. If
-            // somehow it's null (e.g. orphaned item), fall back to the
-            // existing parent so we don't write `null` and detach.
-            parentId: startLevelId ?? node.parentId,
-          },
-        },
-      ])
+      lastPatch = {
+        position: nextPosition,
+        // Keep parent as the level we resolved at session-start. If
+        // somehow it's null (e.g. orphaned item), fall back to the
+        // existing parent so we don't write `null` and detach.
+        parentId: startLevelId ?? node.parentId,
+      }
+      useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
+      useScene.getState().markDirty(node.id as AnyNodeId)
     },
     canCommit() {
-      const live = useScene.getState().nodes[node.id as AnyNodeId] as ItemNode | undefined
-      return !!live && live.type === 'item'
+      return lastPatch !== null
+    },
+    commit() {
+      if (!lastPatch) return
+      useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
+      useScene.getState().updateNodes([{ id: node.id as AnyNodeId, data: lastPatch }])
     },
   }
 }
@@ -169,32 +358,36 @@ function buildSurfaceItemSession(
   startLevelId: AnyNodeId | null,
   targetKind: 'ceiling',
 ): FloorplanMoveTargetSession {
+  const resolvePlanPoint = createPlanarMovePointResolver(
+    resolveItemPlanPoint(node, useScene.getState().nodes),
+    node,
+  )
+  let lastPatch: Partial<ItemNode> | null = null
   return {
     affectedIds: [node.id as AnyNodeId],
-    apply({ planPoint, modifiers }) {
+    apply({ planPoint }) {
       const nodes = useScene.getState().nodes
-      const snapped: WallPlanPoint = modifiers.shiftKey
-        ? ([planPoint[0], planPoint[1]] as WallPlanPoint)
-        : snapPointToGrid([planPoint[0], planPoint[1]] as WallPlanPoint, GRID_STEP)
+      const snapped = resolvePlanPoint(planPoint)
 
       const surface = findContainingSurface(snapped, nodes, startLevelId, targetKind)
 
       const sourceY = node.position[1]
       const nextPosition: [number, number, number] = [snapped[0], sourceY, snapped[1]]
 
-      useScene.getState().updateNodes([
-        {
-          id: node.id as AnyNodeId,
-          data: {
-            position: nextPosition,
-            parentId: surface ? surface.id : node.parentId,
-          },
-        },
-      ])
+      lastPatch = {
+        position: nextPosition,
+        parentId: surface ? surface.id : node.parentId,
+      }
+      useLiveNodeOverrides.getState().set(node.id as AnyNodeId, lastPatch)
+      useScene.getState().markDirty(node.id as AnyNodeId)
     },
     canCommit() {
-      const live = useScene.getState().nodes[node.id as AnyNodeId] as ItemNode | undefined
-      return !!live && live.type === 'item'
+      return lastPatch !== null
+    },
+    commit() {
+      if (!lastPatch) return
+      useLiveNodeOverrides.getState().clear(node.id as AnyNodeId)
+      useScene.getState().updateNodes([{ id: node.id as AnyNodeId, data: lastPatch }])
     },
   }
 }

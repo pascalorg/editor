@@ -3,7 +3,6 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  getActiveRoofHeight,
   RidgeVentNode as RidgeVentSchema,
   type RoofSegmentNode,
   useScene,
@@ -17,7 +16,6 @@ import {
   SliderControl,
   triggerSFX,
   useEditor,
-  useTranslations,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Trash2 } from 'lucide-react'
@@ -30,7 +28,6 @@ import type { RidgeVentNode } from './schema'
  * Delete actions that route through the kind-owned ghost-drag flow.
  */
 export default function RidgeVentPanel() {
-  const t = useTranslations()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
@@ -131,36 +128,36 @@ export default function RidgeVentPanel() {
 
   return (
     <PanelWrapper
-      icon="/icons/roof.png"
+      icon="/icons/roof.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
-      title={node.name || t('nodes.ridgeVent.fallbackTitle')}
+      title={node.name || 'Ridge Vent'}
       width={300}
     >
-      <PanelSection title={t('nodes.ridgeVent.style')}>
+      <PanelSection title="Style">
         <SegmentedControl
           onChange={(v) => handleUpdate({ style: v as RidgeVentNode['style'] })}
           options={[
-            { label: t('nodes.ridgeVent.standard'), value: 'standard' },
-            { label: t('nodes.ridgeVent.shingled'), value: 'shingled' },
-            { label: t('nodes.ridgeVent.flanged'), value: 'metal' },
+            { label: 'Standard', value: 'standard' },
+            { label: 'Shingled', value: 'shingled' },
+            { label: 'Flanged', value: 'metal' },
           ]}
           value={node.style ?? 'standard'}
         />
         <SegmentedControl
           onChange={(v) => handleUpdate({ endCaps: v === 'yes' })}
           options={[
-            { label: t('nodes.ridgeVent.endCaps'), value: 'yes' },
-            { label: t('nodes.ridgeVent.open'), value: 'no' },
+            { label: 'End Caps', value: 'yes' },
+            { label: 'Open', value: 'no' },
           ]}
           value={(node.endCaps ?? true) ? 'yes' : 'no'}
         />
       </PanelSection>
 
-      <PanelSection title={t('nodes.ridgeVent.dimensions')}>
+      <PanelSection title="Dimensions">
         <SliderControl
-          label={t('common.length')}
-          max={8}
+          label="Length"
+          max={1000}
           min={0.5}
           onChange={(v) => handleUpdate({ length: v })}
           onCommit={(v) => handleUpdate({ length: v })}
@@ -171,7 +168,7 @@ export default function RidgeVentPanel() {
           value={Math.round(node.length * 100) / 100}
         />
         <SliderControl
-          label={t('common.width')}
+          label="Width"
           max={0.6}
           min={0.1}
           onChange={(v) => handleUpdate({ width: v })}
@@ -183,7 +180,7 @@ export default function RidgeVentPanel() {
           value={Math.round(node.width * 100) / 100}
         />
         <SliderControl
-          label={t('common.height')}
+          label="Height"
           max={0.2}
           min={0.03}
           onChange={(v) => handleUpdate({ height: v })}
@@ -196,9 +193,9 @@ export default function RidgeVentPanel() {
         />
       </PanelSection>
 
-      <PanelSection title={t('common.position')}>
+      <PanelSection title="Position">
         <SliderControl
-          label={t('common.x')}
+          label="X"
           max={halfW}
           min={-halfW}
           onChange={(v) =>
@@ -218,12 +215,7 @@ export default function RidgeVentPanel() {
           value={Math.round((node.position[0] ?? 0) * 100) / 100}
         />
         <SliderControl
-          label={t('common.y')}
-          max={Math.max(
-            (segment?.wallHeight ?? 3) + (segment ? getActiveRoofHeight(segment) : 3) + 2,
-            (node.position[1] ?? 0) + 0.1,
-          )}
-          min={Math.min(0, (node.position[1] ?? 0) - 0.5)}
+          label="Y"
           onChange={(v) =>
             handleUpdate({
               position: [node.position[0] ?? 0, v, node.position[2] ?? 0],
@@ -241,7 +233,7 @@ export default function RidgeVentPanel() {
           value={Math.round((node.position[1] ?? 0) * 100) / 100}
         />
         <SliderControl
-          label={t('common.z')}
+          label="Z"
           max={halfD}
           min={-halfD}
           onChange={(v) =>
@@ -261,7 +253,7 @@ export default function RidgeVentPanel() {
           value={Math.round((node.position[2] ?? 0) * 100) / 100}
         />
         <SliderControl
-          label={t('nodes.ridgeVent.rotation')}
+          label="Rotation"
           max={180}
           min={-180}
           onChange={(deg) => handleUpdate({ rotation: (deg * Math.PI) / 180 })}
@@ -274,18 +266,18 @@ export default function RidgeVentPanel() {
         />
       </PanelSection>
 
-      <PanelSection title={t('common.actions')}>
+      <PanelSection title="Actions">
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={t('common.move')} onClick={handleMove} />
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label={t('common.duplicate')}
+            label="Duplicate"
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label={t('common.delete')}
+            label="Delete"
             onClick={handleDelete}
           />
         </ActionGroup>

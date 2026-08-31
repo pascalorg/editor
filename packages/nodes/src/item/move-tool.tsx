@@ -1,6 +1,6 @@
 'use client'
 
-import type { ItemNode } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, type ItemNode, useScene } from '@pascal-app/core'
 import {
   type PlacementState,
   triggerSFX,
@@ -35,12 +35,39 @@ import { Vector3 } from 'three'
  * move) also ports to `def.tool`, the primitives can be inlined here
  * and dropped from editor.
  */
-function getInitialState(node: ItemNode): PlacementState {
+export function getInitialState(
+  node: ItemNode,
+  parent: AnyNode | undefined = node.parentId
+    ? useScene.getState().nodes[node.parentId as AnyNodeId]
+    : undefined,
+): PlacementState {
   const attachTo = node.asset.attachTo
+  if (node.blockFaceId && parent?.type === 'block') {
+    return {
+      surface: 'block-face',
+      wallId: null,
+      roofSegmentId: null,
+      blockId: parent.id,
+      ceilingId: null,
+      surfaceItemId: null,
+      shelfId: null,
+    }
+  }
   if (attachTo === 'wall' || attachTo === 'wall-side') {
+    if (node.roofSegmentId) {
+      return {
+        surface: 'roof-wall',
+        wallId: null,
+        roofSegmentId: node.roofSegmentId,
+        ceilingId: null,
+        surfaceItemId: null,
+        shelfId: null,
+      }
+    }
     return {
       surface: 'wall',
       wallId: node.parentId,
+      roofSegmentId: null,
       ceilingId: null,
       surfaceItemId: null,
       shelfId: null,
@@ -50,14 +77,41 @@ function getInitialState(node: ItemNode): PlacementState {
     return {
       surface: 'ceiling',
       wallId: null,
+      roofSegmentId: null,
       ceilingId: node.parentId,
       surfaceItemId: null,
       shelfId: null,
     }
   }
+  // A floor item resting on a host surface (table / counter / shelf) starts in
+  // that surface, not 'floor', so the first pointer move runs the surface move
+  // handler — which preserves the grab offset — instead of a fresh `enter()`
+  // that snaps the item's origin under the cursor. Without this the item
+  // teleports the instant it's grabbed.
+  if (parent?.type === 'item') {
+    return {
+      surface: 'item-surface',
+      wallId: null,
+      roofSegmentId: null,
+      ceilingId: null,
+      surfaceItemId: node.parentId,
+      shelfId: null,
+    }
+  }
+  if (parent?.type === 'shelf') {
+    return {
+      surface: 'shelf-surface',
+      wallId: null,
+      roofSegmentId: null,
+      ceilingId: null,
+      surfaceItemId: null,
+      shelfId: node.parentId,
+    }
+  }
   return {
     surface: 'floor',
     wallId: null,
+    roofSegmentId: null,
     ceilingId: null,
     surfaceItemId: null,
     shelfId: null,
@@ -76,11 +130,15 @@ export function MoveItemTool({ node }: { node: ItemNode }) {
   const cursor = usePlacementCoordinator({
     asset: node.asset,
     draftNode,
+    // Carry painted slot overrides onto the duplicate's draft (wall/ceiling
+    // items create their draft lazily inside the coordinator).
+    slots: node.slots,
     // Duplicates start fresh in floor mode; wall/ceiling draft is created lazily by ensureDraft.
     initialState: isNew
       ? {
           surface: 'floor',
           wallId: null,
+          roofSegmentId: null,
           ceilingId: null,
           surfaceItemId: null,
           shelfId: null,
@@ -88,13 +146,14 @@ export function MoveItemTool({ node }: { node: ItemNode }) {
       : getInitialState(node),
     // Preserve the original item's scale so Y-position calculations use the correct height.
     defaultScale: isNew ? node.scale : undefined,
+    preserveDragOffset: true,
     initDraft: (gridPosition) => {
       if (isNew) {
         // Duplicate: floor items get a draft immediately; wall/ceiling
         // items are created lazily on surface entry.
         gridPosition.copy(new Vector3(...node.position))
         if (!node.asset.attachTo) {
-          draftNode.create(gridPosition, node.asset, node.rotation, node.scale)
+          draftNode.create(gridPosition, node.asset, node.rotation, node.scale, node.slots)
         }
       } else {
         draftNode.adopt(node)

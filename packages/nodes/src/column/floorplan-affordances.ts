@@ -2,8 +2,11 @@ import {
   type AnyNodeId,
   type ColumnNode,
   type FloorplanAffordance,
+  useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
+import { isAngleSnapActive } from '@pascal-app/editor'
+import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
 // Floor minimums — mirror the 3D handles in `column/definition.ts` so a
 // drag can't push a value past what the renderer accepts.
@@ -53,15 +56,15 @@ export const columnResizeAffordance: FloorplanAffordance<ColumnNode> = {
     const initialRadius = node.radius
     const initialBraceWidth = node.braceWidth ?? node.width
     const initialBraceDepth = node.braceDepth ?? node.depth
-    const initialBraceBottomSpread =
-      node.braceBottomSpread ?? Math.max(node.width * 3, 1.2)
+    const initialBraceBottomSpread = node.braceBottomSpread ?? Math.max(node.width * 3, 1.2)
     const initialBraceTopSpread = node.braceTopSpread ?? 0.12
 
     let lastPatch: Partial<ColumnNode> = {}
 
-    const commitPatch = (patch: Partial<ColumnNode>) => {
+    const previewPatch = (patch: Partial<ColumnNode>) => {
       lastPatch = patch
-      useScene.getState().updateNode(columnId, patch)
+      useLiveNodeOverrides.getState().set(columnId, patch)
+      useScene.getState().markDirty(columnId)
     }
 
     return {
@@ -71,37 +74,37 @@ export const columnResizeAffordance: FloorplanAffordance<ColumnNode> = {
         const projDelta = currentProj - initialProj
         switch (dim) {
           case 'width':
-            commitPatch({
+            previewPatch({
               width: Math.max(MIN_COLUMN_WIDTH, initialWidth + 2 * projDelta),
             })
             return
           case 'depth':
-            commitPatch({
+            previewPatch({
               depth: Math.max(MIN_COLUMN_DEPTH, initialDepth + 2 * projDelta),
             })
             return
           case 'uniform': {
             const next = Math.max(MIN_COLUMN_WIDTH, initialWidth + 2 * projDelta)
-            commitPatch({ width: next, depth: next })
+            previewPatch({ width: next, depth: next })
             return
           }
           case 'radius':
-            commitPatch({
+            previewPatch({
               radius: Math.max(MIN_COLUMN_RADIUS, initialRadius + projDelta),
             })
             return
           case 'brace-width':
-            commitPatch({
+            previewPatch({
               braceWidth: Math.max(MIN_BRACE_DIMENSION, initialBraceWidth + 2 * projDelta),
             })
             return
           case 'brace-depth':
-            commitPatch({
+            previewPatch({
               braceDepth: Math.max(MIN_BRACE_DIMENSION, initialBraceDepth + 2 * projDelta),
             })
             return
           case 'brace-bottom-spread':
-            commitPatch({
+            previewPatch({
               braceBottomSpread: Math.max(
                 MIN_BRACE_BOTTOM_SPREAD,
                 initialBraceBottomSpread + 2 * projDelta,
@@ -109,11 +112,8 @@ export const columnResizeAffordance: FloorplanAffordance<ColumnNode> = {
             })
             return
           case 'brace-top-spread':
-            commitPatch({
-              braceTopSpread: Math.max(
-                MIN_BRACE_TOP_SPREAD,
-                initialBraceTopSpread + 2 * projDelta,
-              ),
+            previewPatch({
+              braceTopSpread: Math.max(MIN_BRACE_TOP_SPREAD, initialBraceTopSpread + 2 * projDelta),
             })
             return
         }
@@ -123,6 +123,7 @@ export const columnResizeAffordance: FloorplanAffordance<ColumnNode> = {
       },
       commit() {
         if (Object.keys(lastPatch).length > 0) {
+          useLiveNodeOverrides.getState().clear(columnId)
           useScene.getState().updateNode(columnId, lastPatch)
         }
       },
@@ -151,18 +152,22 @@ export const columnRotateAffordance: FloorplanAffordance<ColumnNode> = {
     return {
       affectedIds: [columnId],
       apply({ planPoint }) {
-        const currentAngle = Math.atan2(planPoint[1] - cz, planPoint[0] - cx)
-        let delta = currentAngle - initialAngle
-        while (delta > Math.PI) delta -= 2 * Math.PI
-        while (delta < -Math.PI) delta += 2 * Math.PI
+        const delta = rotateAffordanceDelta({
+          center: [cx, cz],
+          initialAngle,
+          planPoint,
+          free: !isAngleSnapActive(),
+        })
         const newRotation = initialRotation - delta
         lastRotation = newRotation
-        useScene.getState().updateNode(columnId, { rotation: newRotation })
+        useLiveNodeOverrides.getState().set(columnId, { rotation: newRotation })
+        useScene.getState().markDirty(columnId)
       },
       canCommit() {
         return true
       },
       commit() {
+        useLiveNodeOverrides.getState().clear(columnId)
         useScene.getState().updateNode(columnId, { rotation: lastRotation })
       },
     }

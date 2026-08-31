@@ -1,0 +1,98 @@
+import { describe, expect, it, mock } from 'bun:test'
+import { resolveResizeSnapValue } from './resize-snap'
+
+describe('resolveResizeSnapValue', () => {
+  it('applies only magnetic snapping in lines mode', () => {
+    const magneticSnap = mock(() => 0.6)
+
+    expect(
+      resolveResizeSnapValue({
+        rawValue: 0.59,
+        gridSnapEnabled: true,
+        gridSnapActive: false,
+        gridSnapStep: 0.1,
+        magneticSnapActive: true,
+        magneticSnap,
+      }),
+    ).toBe(0.6)
+    expect(magneticSnap).toHaveBeenCalledWith(0.59)
+  })
+
+  it('applies only grid snapping in grid mode', () => {
+    const magneticSnap = mock(() => 0.6)
+
+    expect(
+      resolveResizeSnapValue({
+        rawValue: 0.56,
+        gridSnapEnabled: true,
+        gridSnapActive: true,
+        gridSnapStep: 0.1,
+        magneticSnapActive: false,
+        magneticSnap,
+      }),
+    ).toBeCloseTo(0.6)
+    expect(magneticSnap).not.toHaveBeenCalled()
+  })
+
+  it('keeps the raw value in off mode', () => {
+    const magneticSnap = mock(() => 0.6)
+
+    expect(
+      resolveResizeSnapValue({
+        rawValue: 0.56,
+        gridSnapEnabled: true,
+        gridSnapActive: false,
+        gridSnapStep: 0.1,
+        magneticSnapActive: false,
+        magneticSnap,
+      }),
+    ).toBe(0.56)
+    expect(magneticSnap).not.toHaveBeenCalled()
+  })
+
+  it('applies a structural connection snap independently of the active mode', () => {
+    const connectionSnap = mock(() => 0.6)
+
+    expect(
+      resolveResizeSnapValue({
+        rawValue: 0.59,
+        gridSnapEnabled: false,
+        gridSnapActive: false,
+        gridSnapStep: 0.1,
+        magneticSnapActive: false,
+        connectionSnap,
+      }),
+    ).toBe(0.6)
+    expect(connectionSnap).toHaveBeenCalledWith(0.59)
+  })
+
+  it('bypasses a structural connection snap while force-moving', () => {
+    const connectionSnap = mock(() => 0.6)
+
+    expect(
+      resolveResizeSnapValue({
+        rawValue: 0.59,
+        gridSnapEnabled: false,
+        gridSnapActive: false,
+        gridSnapStep: 0.1,
+        magneticSnapActive: false,
+        connectionSnapActive: false,
+        connectionSnap,
+      }),
+    ).toBe(0.59)
+    expect(connectionSnap).not.toHaveBeenCalled()
+  })
+
+  it('keeps the last valid value when pointer projection is non-finite', () => {
+    expect(
+      resolveResizeSnapValue({
+        rawValue: Number.NaN,
+        fallbackValue: 12.3,
+        gridSnapEnabled: false,
+        gridSnapActive: false,
+        gridSnapStep: 0.5,
+        magneticSnapActive: false,
+      }),
+    ).toBe(12.3)
+  })
+})

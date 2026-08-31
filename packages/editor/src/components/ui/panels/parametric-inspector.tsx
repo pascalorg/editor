@@ -5,22 +5,23 @@ import {
   type AnyNodeId,
   type IconRef,
   nodeRegistry,
+  type ParamAction,
   type ParamField,
   useScene,
+  type ZoneNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Icon } from '@iconify/react'
 import { Move, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback } from 'react'
+import { resolveMoveActionNode } from '../../../lib/direct-manipulation'
 import { sfxEmitter } from '../../../lib/sfx-bus'
-import { useTranslations } from '../../../lib/i18n'
+import { collectZoneContentIds } from '../../../lib/zone-content'
 import useEditor from '../../../store/use-editor'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
-import { SegmentedControl } from '../controls/segmented-control'
-import { SliderControl } from '../controls/slider-control'
-import { ToggleControl } from '../controls/toggle-control'
-import { PanelWrapper } from './panel-wrapper'
+import { ParametricFieldControl } from './parametric-field-control'
+import { InspectorFooterContext, PanelWrapper } from './panel-wrapper'
 
 /**
  * Auto-derived right-panel inspector for any registry-backed node.
@@ -38,9 +39,15 @@ import { PanelWrapper } from './panel-wrapper'
  * `parametrics.customPanel?` escape hatch for kinds whose parametric editor
  * can't be auto-generated (topology editors etc.).
  */
-export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {}) {
-  const t = useTranslations()
-  const selectedId = useViewer((s) => s.selection.selectedIds[0]) as AnyNodeId | undefined
+export function ParametricInspector({
+  footer,
+  nodeId,
+  onClose,
+}: { footer?: React.ReactNode; nodeId?: AnyNodeId; onClose?: () => void } = {}) {
+  const selectedIdFromSelection = useViewer((s) => s.selection.selectedIds[0]) as
+    | AnyNodeId
+    | undefined
+  const selectedId = nodeId ?? selectedIdFromSelection
   const setSelection = useViewer((s) => s.setSelection)
   // Subscribe only to the *type* — a string primitive that doesn't change
   // when slider values change. Without this, every updateNode tick during
@@ -54,30 +61,60 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
   const handleUpdate = useCallback(
     (patch: Partial<AnyNode>) => {
       if (!selectedId) return
-      useScene.getState().updateNode(selectedId, patch)
+      const scene = useScene.getState()
+      const node = scene.nodes[selectedId]
+      if (parametrics?.derive && node) {
+        const next = { ...node, ...patch } as AnyNode
+        patch = { ...patch, ...parametrics.derive(next, patch, node as AnyNode) }
+      }
+      // Bundle the edited node + any reconcile follow-ups into ONE
+      // updateNodes call so a single inspector edit is a single undo step.
+      const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = [{ id: selectedId, data: patch }]
+      if (parametrics?.reconcile && node) {
+        const next = { ...node, ...patch } as AnyNode
+        updates.push(...parametrics.reconcile(node as AnyNode, next))
+      }
+      scene.updateNodes(updates)
     },
-    [selectedId],
+    [selectedId, parametrics],
   )
 
-  const handleClose = useCallback(() => {
+  const clearSelection = useCallback(() => {
+    if (onClose) {
+      onClose()
+      return
+    }
     setSelection({ selectedIds: [] })
-  }, [setSelection])
+  }, [onClose, setSelection])
 
   const handleMove = useCallback(() => {
     if (!selectedId) return
-    const node = useScene.getState().nodes[selectedId]
+    const sceneNodes = useScene.getState().nodes
+    const node = sceneNodes[selectedId]
     if (!node) return
     sfxEmitter.emit('sfx:item-pick')
-    useEditor.getState().setMovingNode(node as any)
-    setSelection({ selectedIds: [] })
-  }, [selectedId, setSelection])
+    useEditor.getState().setMovingNode(resolveMoveActionNode(node, sceneNodes) as any)
+    clearSelection()
+  }, [selectedId, clearSelection])
 
-  const handleDelete = useCallback(() => {
-    if (!selectedId) return
-    sfxEmitter.emit('sfx:structure-delete')
-    useScene.getState().deleteNode(selectedId)
-    setSelection({ selectedIds: [] })
-  }, [selectedId, setSelection])
+  const handleDelete = useCallback(
+    (withZoneContent = false) => {
+      if (!selectedId) return
+      const scene = useScene.getState()
+      const node = scene.nodes[selectedId]
+      if (!node) return
+
+      const ids =
+        withZoneContent && node.type === 'zone'
+          ? [selectedId, ...collectZoneContentIds(scene.nodes, node as ZoneNode)]
+          : [selectedId]
+
+      sfxEmitter.emit('sfx:structure-delete')
+      scene.deleteNodes(Array.from(new Set(ids)))
+      clearSelection()
+    },
+    [selectedId, clearSelection],
+  )
 
   if (!selectedId || !def || !parametrics) return null
 
@@ -89,10 +126,14 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
   // panel to cover them.
   if (parametrics.customPanel) {
     const CustomPanel = resolveCustomPanel(parametrics.customPanel)
+    // Custom panels render their own `<PanelWrapper>` and don't thread a
+    // `footer` prop, so hand the host footer down via context.
     return (
-      <Suspense fallback={null}>
-        <CustomPanel />
-      </Suspense>
+      <InspectorFooterContext.Provider value={footer}>
+        <Suspense fallback={null}>
+          <CustomPanel />
+        </Suspense>
+      </InspectorFooterContext.Provider>
     )
   }
 
@@ -101,9 +142,20 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
   const iconNode = renderIcon(presentation?.icon)
   const canMove = !!def.capabilities.movable
   const canDelete = def.capabilities.deletable !== false
+  const isZone = nodeType === 'zone'
+
+  const TrailingSection = parametrics.trailingSection
+    ? resolveCustomPanel(parametrics.trailingSection)
+    : null
 
   return (
-    <PanelWrapper footer={footer} icon={iconNode} onClose={handleClose} title={title} width={320}>
+    <PanelWrapper
+      footer={footer}
+      icon={iconNode}
+      onClose={clearSelection}
+      title={title}
+      width={320}
+    >
       {parametrics.groups.map((group, gi) => (
         <PanelSection key={`group-${gi}`} title={group.label}>
           {group.fields.map((field, fi) => (
@@ -116,24 +168,76 @@ export function ParametricInspector({ footer }: { footer?: React.ReactNode } = {
           ))}
         </PanelSection>
       ))}
-      {(canMove || canDelete) && (
-        <PanelSection title={t('editor.actions')}>
-          <ActionGroup>
+      {TrailingSection && (
+        <Suspense fallback={null}>
+          <TrailingSection />
+        </Suspense>
+      )}
+      {(canMove || canDelete || (parametrics.actions && parametrics.actions.length > 0)) && (
+        <PanelSection title="Actions">
+          <ActionGroup className={isZone ? 'flex-col' : undefined}>
             {canMove && (
-              <ActionButton icon={<Move className="h-4 w-4" />} label={t('editor.move')} onClick={handleMove} />
+              <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
             )}
-            {canDelete && (
-              <ActionButton
-                className="border-red-500/40 text-red-200 hover:bg-red-500/15"
-                icon={<Trash2 className="h-4 w-4" />}
-                label={t('editor.delete')}
-                onClick={handleDelete}
-              />
-            )}
+            {parametrics.actions?.map((action, i) => (
+              <ParamActionButton action={action} key={`paramaction-${i}`} nodeId={selectedId} />
+            ))}
+            {canDelete &&
+              (isZone ? (
+                <>
+                  <ActionButton
+                    className="w-full flex-none"
+                    icon={<Trash2 className="h-4 w-4 text-red-400" />}
+                    label="Delete"
+                    onClick={() => handleDelete(false)}
+                  />
+                  <ActionButton
+                    className="w-full flex-none"
+                    icon={<Trash2 className="h-4 w-4 text-red-400" />}
+                    label="Delete with contents"
+                    onClick={() => handleDelete(true)}
+                  />
+                </>
+              ) : (
+                <ActionButton
+                  className="border-red-500/40 text-red-200 hover:bg-red-500/15"
+                  icon={<Trash2 className="h-4 w-4" />}
+                  label="Delete"
+                  onClick={() => handleDelete()}
+                />
+              ))}
           </ActionGroup>
         </PanelSection>
       )}
     </PanelWrapper>
+  )
+}
+
+// One inspector action button. Subscribes to `enabledIf`'s boolean result
+// (same pattern as FieldRenderer's `visible`) so the disabled state stays
+// live as the scene mutates — `===` on the boolean keeps unrelated ticks
+// from re-rendering it. The click handler re-reads the live node so the
+// handler always acts on current state.
+function ParamActionButton({ action, nodeId }: { action: ParamAction<AnyNode>; nodeId: AnyNodeId }) {
+  const disabled = useScene((s) => {
+    if (!action.enabledIf) return false
+    const n = s.nodes[nodeId]
+    return n ? !action.enabledIf(n as AnyNode) : false
+  })
+  return (
+    <ActionButton
+      className={disabled ? 'opacity-40 pointer-events-none' : ''}
+      icon={
+        action.iconSrc ? (
+          <img alt="" className="h-4 w-4 shrink-0 object-contain" src={action.iconSrc} />
+        ) : undefined
+      }
+      label={action.label}
+      onClick={() => {
+        const live = useScene.getState().nodes[nodeId]
+        if (live) action.onClick(live as AnyNode)
+      }}
+    />
   )
 }
 
@@ -205,136 +309,11 @@ function FieldRenderer({ field, nodeId, onUpdate }: FieldRendererProps) {
   })
   if (!visible) return null
 
-  switch (field.kind) {
-    case 'number': {
-      const num = typeof value === 'number' ? value : 0
-      const step = field.step ?? 0.01
-      const precision = precisionForStep(step)
-      return (
-        <SliderControl
-          label={prettifyKey(key)}
-          max={field.max}
-          min={field.min}
-          onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
-          precision={precision}
-          step={step}
-          unit={field.unit ?? ''}
-          value={num}
-        />
-      )
-    }
-
-    case 'boolean': {
-      const checked = value === true
-      return (
-        <ToggleControl
-          checked={checked}
-          label={prettifyKey(key)}
-          onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
-        />
-      )
-    }
-
-    case 'enum': {
-      const str = typeof value === 'string' ? value : (field.options[0] ?? '')
-      if (field.display === 'segmented') {
-        return (
-          <SegmentedControl
-            onChange={(next) => onUpdate({ [key]: next } as Partial<AnyNode>)}
-            options={field.options.map((opt) => ({ label: prettifyEnumValue(opt), value: opt }))}
-            value={str}
-          />
-        )
-      }
-      return (
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
-          <select
-            className="rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
-            onChange={(e) => onUpdate({ [key]: e.target.value } as Partial<AnyNode>)}
-            value={str}
-          >
-            {field.options.map((opt) => (
-              <option key={opt} value={opt}>
-                {prettifyEnumValue(opt)}
-              </option>
-            ))}
-          </select>
-        </div>
-      )
-    }
-
-    case 'color': {
-      const str = typeof value === 'string' ? value : '#888888'
-      return (
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
-          <div className="flex items-center gap-2">
-            <input
-              className="h-6 w-8 cursor-pointer rounded border border-border/50 bg-transparent"
-              onChange={(e) => onUpdate({ [key]: e.target.value } as Partial<AnyNode>)}
-              type="color"
-              value={str}
-            />
-            <input
-              className="w-20 rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
-              onChange={(e) => onUpdate({ [key]: e.target.value } as Partial<AnyNode>)}
-              type="text"
-              value={str}
-            />
-          </div>
-        </div>
-      )
-    }
-
-    case 'vec3': {
-      const v = Array.isArray(value) && value.length >= 3
-        ? (value as [number, number, number])
-        : [0, 0, 0]
-      const axes: Array<{ label: string; index: 0 | 1 | 2 }> = [
-        { label: 'X', index: 0 },
-        { label: 'Y', index: 1 },
-        { label: 'Z', index: 2 },
-      ]
-      return (
-        <>
-          {axes.map(({ label, index }) => {
-            // v is a [number, number, number] tuple; the explicit local
-            // resolves TS's noUncheckedIndexedAccess concern that v[index]
-            // could be undefined.
-            const axisValue = v[index] ?? 0
-            return (
-              <SliderControl
-                key={`${key}-${label}`}
-                label={label}
-                max={axisValue + 5}
-                min={axisValue - 5}
-                onChange={(next) => {
-                  const updated = [...v] as [number, number, number]
-                  updated[index] = next
-                  onUpdate({ [key]: updated } as Partial<AnyNode>)
-                }}
-                precision={2}
-                step={0.05}
-                unit="m"
-                value={Math.round(axisValue * 100) / 100}
-              />
-            )
-          })}
-        </>
-      )
-    }
-
-    case 'custom':
-      // The field owns its rendering and update logic — used for
-      // derived values (length from start/end), dynamic-bounded
-      // sliders (curve sagitta), composed editors.
-      return <CustomFieldRenderer Comp={field.component} nodeId={nodeId} onUpdate={onUpdate} />
-
-    default:
-      // material / ref / unrecognized kinds — not implemented in v1.
-      return null
+  if (field.kind === 'custom') {
+    return <CustomFieldRenderer Comp={field.component} nodeId={nodeId} onUpdate={onUpdate} />
   }
+
+  return <ParametricFieldControl field={field} onChange={onUpdate} value={value} />
 }
 
 function CustomFieldRenderer({
@@ -352,27 +331,4 @@ function CustomFieldRenderer({
   const node = useScene((s) => s.nodes[nodeId])
   if (!node) return null
   return <Comp node={node} onUpdate={onUpdate} />
-}
-
-// ─── helpers ─────────────────────────────────────────────────────────
-
-function precisionForStep(step: number): number {
-  if (step <= 0) return 0
-  return Math.max(0, Math.ceil(-Math.log10(step)))
-}
-
-function prettifyKey(key: string): string {
-  // 'bracketStyle' → 'Bracket style'
-  const spaced = key.replace(/([A-Z])/g, ' $1').toLowerCase()
-  return spaced.charAt(0).toUpperCase() + spaced.slice(1)
-}
-
-function prettifyEnumValue(value: string): string {
-  // 'minimal' → 'Minimal'; 'roof-segment' → 'Roof segment'
-  return value
-    .split(/[-_\s]/)
-    .map((word, i) =>
-      i === 0 ? word.charAt(0).toUpperCase() + word.slice(1) : word.toLowerCase(),
-    )
-    .join(' ')
 }

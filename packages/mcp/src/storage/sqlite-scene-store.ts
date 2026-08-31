@@ -70,10 +70,18 @@ interface ProjectPlaceholder {
   updatedAt: string
 }
 
+// `z.object()` strips keys it doesn't name, so every field that must survive a
+// save→load round trip has to be listed here. Values stay `unknown` rather than
+// being validated against `SceneMaterial`/`Collection`: nothing validates on the
+// way in, and `parseGraph` throws, so a strict shape here would let one odd
+// stored value make a saved scene permanently unloadable. Validation belongs on
+// the write path, where the caller can still react to it.
 const GraphSchema = z.object({
   nodes: z.record(z.string(), z.unknown()),
   rootNodeIds: z.array(z.string()),
   collections: z.record(z.string(), z.unknown()).optional(),
+  materials: z.record(z.string(), z.unknown()).optional(),
+  installedPlugins: z.array(z.string()).optional(),
 })
 
 /**
@@ -148,7 +156,8 @@ function rowToMeta(row: SceneRow): SceneMeta {
 }
 
 function editorUrlForScene(id: string): string {
-  return `/editor/${id}`
+  const origin = process.env.PASCAL_EDITOR_ORIGIN?.replace(/\/$/, '')
+  return origin ? `${origin}/scene/${encodeURIComponent(id)}` : `/editor/${id}`
 }
 
 function hashGraphJson(graphJson: string): string {

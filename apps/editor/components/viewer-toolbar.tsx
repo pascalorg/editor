@@ -5,10 +5,14 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
   useEditor,
-  useLocale,
-  messages,
+  useFloorplanAnnotationVisibility,
+  useFloorplanMode,
   useSidebarStore,
   type ViewMode,
 } from '@pascal-app/editor'
@@ -30,12 +34,20 @@ import {
   EyeOff,
   Footprints,
   Grid2X2,
+  Layers3,
+  Magnet,
   PenLine,
+  Ruler,
+  ScanLine,
+  SlidersHorizontal,
   Sparkles,
+  SquareUserRound,
   SwatchBook,
+  Tag,
 } from 'lucide-react'
 import Image from 'next/image'
 import { type ReactNode, useCallback } from 'react'
+import { flushSync } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from './toolbar-tooltip'
 
@@ -44,6 +56,24 @@ const TOOLBAR_CONTAINER =
 
 const TOOLBAR_BTN =
   'flex w-8 items-center justify-center text-muted-foreground/80 transition-colors hover:bg-white/8 hover:text-foreground/90'
+
+function requestWalkthroughPointerLock() {
+  const canvas = document.querySelector<HTMLCanvasElement>('[data-pascal-viewer-3d] canvas')
+  if (!canvas) return
+
+  if (!canvas.hasAttribute('tabindex')) {
+    canvas.tabIndex = -1
+  }
+  canvas.focus({ preventScroll: true })
+
+  if (document.pointerLockElement === canvas) return
+
+  try {
+    canvas.requestPointerLock?.()
+  } catch {
+    return
+  }
+}
 
 function ToolbarTooltip({ children, label }: { children: ReactNode; label: string }) {
   return (
@@ -54,72 +84,102 @@ function ToolbarTooltip({ children, label }: { children: ReactNode; label: strin
   )
 }
 
-const VIEW_MODES: { id: ViewMode; icon: React.ReactNode }[] = [
+const VIEW_MODES: { id: ViewMode; label: string; icon: React.ReactNode }[] = [
   {
     id: '3d',
+    label: '3D',
     icon: (
       <Image
         alt=""
         className="h-3.5 w-3.5 object-contain"
         height={14}
-        src="/icons/building.png"
+        src="/icons/building.webp"
         width={14}
       />
     ),
   },
   {
     id: '2d',
+    label: '2D',
     icon: (
       <Image
         alt=""
         className="h-3.5 w-3.5 object-contain"
         height={14}
-        src="/icons/blueprint.png"
+        src="/icons/blueprint.webp"
         width={14}
       />
     ),
   },
   {
     id: 'split',
+    label: 'Split',
     icon: <Columns2 className="h-3 w-3" />,
   },
 ]
 
 const levelModeOrder = ['stacked', 'exploded', 'solo'] as const
+const levelModeLabels: Record<string, string> = {
+  manual: 'Stack',
+  stacked: 'Stack',
+  exploded: 'Exploded',
+  solo: 'Solo',
+}
 
-const wallModeOrder = ['cutaway', 'up', 'down'] as const
-const wallModeConfig: Record<string, { icon: string }> = {
-  up: { icon: '/icons/room.png' },
-  cutaway: { icon: '/icons/wallcut.png' },
-  down: { icon: '/icons/walllow.png' },
+const wallModeOrder = ['cutaway', 'up', 'down', 'translucent'] as const
+const wallModeConfig: Record<string, { icon: string; label: string }> = {
+  up: { icon: '/icons/room.webp', label: 'Full height' },
+  cutaway: { icon: '/icons/wallcut.webp', label: 'Cutaway' },
+  down: { icon: '/icons/walllow.webp', label: 'Low' },
+  translucent: { icon: '/icons/wall.webp', label: 'Translucent' },
 }
 
 const SHADING_OPTIONS = [
-  { id: 'solid', nameKey: 'viewer.solid', detailKey: 'viewer.flatAndFast', icon: Box },
-  { id: 'rendered', nameKey: 'viewer.rendered', detailKey: 'viewer.fullAO', icon: Sparkles },
+  { id: 'solid', name: 'Solid', detail: 'Flat and fast — no ambient occlusion', icon: Box },
+  { id: 'rendered', name: 'Rendered', detail: 'Full ambient occlusion', icon: Sparkles },
+] as const
+
+const FLOORPLAN_ANNOTATION_OPTIONS = [
+  { id: 'automaticDimensions', name: 'Automatic dimensions', icon: Ruler },
+  { id: 'manualDimensions', name: 'Manual dimensions', icon: Ruler },
+  { id: 'measurements', name: 'Measurements', icon: ScanLine },
+  { id: 'openingMarks', name: 'Door/window marks', icon: Tag },
+  { id: 'structuralGrids', name: 'Structural grids & column centers', icon: Grid2X2 },
+  { id: 'roomLabels', name: 'Room labels', icon: SquareUserRound },
+  { id: 'stairAnnotations', name: 'Stair annotations', icon: Footprints },
+] as const
+
+const FLOORPLAN_MODE_OPTIONS = [
+  {
+    id: 'default',
+    name: 'Default',
+    detail: 'Clean plan; dimensions appear with selection',
+  },
+  {
+    id: 'expert',
+    name: 'Expert',
+    detail: 'Full documentation and annotation controls',
+  },
+] as const
+
+const FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS = [
+  { id: 'finished-faces', name: 'Finished faces', detail: 'Full wall thickness' },
+  { id: 'centerline', name: 'Wall centerline', detail: 'Single wall axis' },
+  { id: 'stud-faces', name: 'Face of stud', detail: 'Structural core face' },
 ] as const
 
 function ViewModeControl() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
   const viewMode = useEditor((state) => state.viewMode)
   const setViewMode = useEditor((state) => state.setViewMode)
-
-  const modeLabels: Record<ViewMode, string> = {
-    '3d': t('viewer.viewMode3D'),
-    '2d': t('viewer.viewMode2D'),
-    split: t('viewer.viewModeSplit'),
-  }
 
   return (
     <div className={TOOLBAR_CONTAINER}>
       {VIEW_MODES.map((mode) => {
         const isActive = viewMode === mode.id
-        const label = modeLabels[mode.id]
         return (
-          <ToolbarTooltip key={mode.id} label={label}>
+          <ToolbarTooltip key={mode.id} label={mode.label}>
             <button
-              aria-label={label}
+              aria-label={mode.label}
               aria-pressed={isActive}
               className={cn(
                 'flex items-center justify-center gap-1.5 px-2.5 font-medium text-xs transition-colors',
@@ -131,7 +191,7 @@ function ViewModeControl() {
               type="button"
             >
               {mode.icon}
-              <span>{label}</span>
+              <span>{mode.label}</span>
             </button>
           </ToolbarTooltip>
         )
@@ -141,8 +201,6 @@ function ViewModeControl() {
 }
 
 function CollapseSidebarButton() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
   const isCollapsed = useSidebarStore((state) => state.isCollapsed)
   const setIsCollapsed = useSidebarStore((state) => state.setIsCollapsed)
 
@@ -152,9 +210,9 @@ function CollapseSidebarButton() {
 
   return (
     <div className={TOOLBAR_CONTAINER}>
-      <ToolbarTooltip label={isCollapsed ? t('viewer.expandSidebar') : t('viewer.collapseSidebar')}>
+      <ToolbarTooltip label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
         <button
-          aria-label={isCollapsed ? t('viewer.expandSidebar') : t('viewer.collapseSidebar')}
+          aria-label={isCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           className={TOOLBAR_BTN}
           onClick={toggle}
           type="button"
@@ -171,8 +229,6 @@ function CollapseSidebarButton() {
 }
 
 function LevelModeToggle() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
   const levelMode = useViewer((state) => state.levelMode)
   const setLevelMode = useViewer((state) => state.setLevelMode)
   const isDefault = levelMode === 'stacked' || levelMode === 'manual'
@@ -188,8 +244,7 @@ function LevelModeToggle() {
     if (next) setLevelMode(next)
   }
 
-  const levelLabels: Record<string, string> = { manual: t('viewer.manual'), stacked: t('viewer.stack'), exploded: t('viewer.exploded'), solo: t('viewer.solo') }
-  const label = `${t('viewer.levels')}: ${levelLabels[levelMode] ?? t('viewer.stack')}`
+  const label = `Levels: ${levelMode === 'manual' ? 'Manual' : (levelModeLabels[levelMode] ?? 'Stack')}`
 
   return (
     <ToolbarTooltip label={label}>
@@ -209,15 +264,13 @@ function LevelModeToggle() {
         ) : (
           <IconifyIcon height={14} icon="charm:stack-push" width={14} />
         )}
-        <span className="font-medium text-xs">{levelLabels[levelMode] ?? t('viewer.stack')}</span>
+        <span className="font-medium text-xs">{levelModeLabels[levelMode] ?? 'Stack'}</span>
       </button>
     </ToolbarTooltip>
   )
 }
 
 function WallModeToggle() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
   const wallMode = useViewer((state) => state.wallMode)
   const setWallMode = useViewer((state) => state.setWallMode)
   const config = wallModeConfig[wallMode] ?? wallModeConfig.cutaway!
@@ -228,10 +281,8 @@ function WallModeToggle() {
     if (next) setWallMode(next)
   }
 
-  const labelKey = wallMode === 'up' ? 'toolbar.fullHeight' : wallMode === 'down' ? 'toolbar.low' : 'toolbar.cutaway'
-
   return (
-    <ToolbarTooltip label={`${t('toolbar.walls')}: ${t(labelKey)}`}>
+    <ToolbarTooltip label={`Walls: ${config.label}`}>
       <button
         className={cn(
           TOOLBAR_BTN,
@@ -244,261 +295,374 @@ function WallModeToggle() {
         type="button"
       >
         <Image alt="" className="h-4 w-4 object-contain" height={16} src={config.icon} width={16} />
-        <span className="font-medium text-xs">{t(labelKey)}</span>
+        <span className="font-medium text-xs">{config.label}</span>
       </button>
     </ToolbarTooltip>
   )
 }
 
-function RenderModeMenu() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
+// One dropdown that gathers every "how the scene looks" control: grid, shadows,
+// camera projection, units, render mode, edges and scene theme.
+
+const EDGE_OPTIONS = [
+  { id: 'off', name: 'Off', detail: 'No edge lines' },
+  { id: 'soft', name: 'Soft', detail: 'Faint outline of major creases' },
+  { id: 'strong', name: 'Strong', detail: 'Crisp, opaque edge lines' },
+] as const satisfies readonly { id: EdgeMode; name: string; detail: string }[]
+
+const SUBMENU_CONTENT_CLASS = 'min-w-56 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl'
+
+function DisplayMenu() {
+  const viewMode = useEditor((state) => state.viewMode)
+  const showGrid = useViewer((state) => state.showGrid)
+  const setShowGrid = useViewer((state) => state.setShowGrid)
+  const showMeasurements = useViewer((state) => state.showMeasurements)
+  const setShowMeasurements = useViewer((state) => state.setShowMeasurements)
+  const unit = useViewer((state) => state.unit)
+  const setUnit = useViewer((state) => state.setUnit)
+  const metricNotation = useViewer((state) => state.metricNotation)
+  const setMetricNotation = useViewer((state) => state.setMetricNotation)
+  const cameraMode = useViewer((state) => state.cameraMode)
+  const setCameraMode = useViewer((state) => state.setCameraMode)
   const shading = useViewer((state) => state.shading)
   const setShading = useViewer((state) => state.setShading)
-  const active = SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
-  const ActiveIcon = active.icon
-
-  return (
-    <DropdownMenu>
-      <ToolbarTooltip label={`${t('viewer.render')}: ${t(active.nameKey)}`}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-label={`${t('viewer.render')}: ${t(active.nameKey)}`}
-            className={cn(
-              TOOLBAR_BTN,
-              'w-auto gap-1.5 px-2.5',
-              shading === 'rendered' && 'bg-white/10 text-foreground/90',
-            )}
-            type="button"
-          >
-            <ActiveIcon className="h-3.5 w-3.5" />
-            <span className="font-medium text-xs">{t(active.nameKey)}</span>
-          </button>
-        </DropdownMenuTrigger>
-      </ToolbarTooltip>
-      <DropdownMenuContent align="center" className="min-w-56" side="bottom">
-        {SHADING_OPTIONS.map((option) => {
-          const OptionIcon = option.icon
-          return (
-            <DropdownMenuItem key={option.id} onSelect={() => setShading(option.id)}>
-              <OptionIcon className="h-4 w-4" />
-              <div className="flex flex-col">
-                <span className="text-foreground">{t(option.nameKey)}</span>
-                <span className="text-muted-foreground text-xs">{t(option.detailKey)}</span>
-              </div>
-              {shading === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
-            </DropdownMenuItem>
-          )
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
-function SceneThemeMenu() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
   const sceneTheme = useViewer((state) => state.sceneTheme)
   const setSceneTheme = useViewer((state) => state.setSceneTheme)
-  const active = getSceneTheme(sceneTheme)
+  const edges = useViewer((state) => state.edges)
+  const setEdges = useViewer((state) => state.setEdges)
+  const shadows = useViewer((state) => state.shadows)
+  const setShadows = useViewer((state) => state.setShadows)
+  const magneticSnap = useEditor((state) => state.magneticSnap)
+  const setMagneticSnap = useEditor((state) => state.setMagneticSnap)
+  const annotationVisibility = useFloorplanAnnotationVisibility((state) => state.visibility)
+  const setAnnotationCategory = useFloorplanAnnotationVisibility((state) => state.setCategory)
+  const wallDimensionReference = useFloorplanAnnotationVisibility(
+    (state) => state.wallDimensionReference,
+  )
+  const setWallDimensionReference = useFloorplanAnnotationVisibility(
+    (state) => state.setWallDimensionReference,
+  )
+  const floorplanMode = useFloorplanMode((state) => state.mode)
+  const setFloorplanMode = useFloorplanMode((state) => state.setMode)
+
+  const activeShading =
+    SHADING_OPTIONS.find((option) => option.id === shading) ?? SHADING_OPTIONS[0]
+  const activeEdges = EDGE_OPTIONS.find((option) => option.id === edges) ?? EDGE_OPTIONS[0]
+  const activeTheme = getSceneTheme(sceneTheme)
+
+  // Keep the menu open when flipping a toggle.
+  const keepOpen = (event: Event, fn: () => void) => {
+    event.preventDefault()
+    fn()
+  }
 
   return (
     <DropdownMenu>
-      <ToolbarTooltip label={`${t('viewer.sceneTheme')}: ${active.name}`}>
+      <ToolbarTooltip label="Display settings">
         <DropdownMenuTrigger asChild>
           <button
-            aria-label={`${t('viewer.sceneTheme')}: ${active.name}`}
-            className={cn(TOOLBAR_BTN, 'w-28 gap-1.5 px-2.5 text-foreground/90')}
+            aria-label="Display settings"
+            className={cn(TOOLBAR_BTN, 'w-auto gap-1.5 px-2.5 text-foreground/90')}
             type="button"
           >
-            <SwatchBook className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate font-medium text-xs">{active.name}</span>
+            <SlidersHorizontal className="h-3.5 w-3.5 shrink-0" />
+            <span className="font-medium text-xs">Display</span>
           </button>
         </DropdownMenuTrigger>
       </ToolbarTooltip>
-      <DropdownMenuContent align="center" className="min-w-48" side="bottom">
-        {SCENE_THEMES.map((theme) => {
-          const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
-            (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
-          )
-          return (
-            <DropdownMenuItem key={theme.id} onSelect={() => setSceneTheme(theme.id)}>
-              <span
-                className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
-                style={{ backgroundColor: theme.background }}
-              >
-                {swatches.map((color, index) => (
-                  <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
+      <DropdownMenuContent
+        align="end"
+        className="w-60 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl"
+        side="bottom"
+        sideOffset={8}
+      >
+        <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShowGrid(!showGrid))}>
+          <Grid2X2 className="h-4 w-4" />
+          <span>Grid</span>
+          {showGrid ? (
+            <Eye className="ml-auto h-4 w-4 text-foreground" />
+          ) : (
+            <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+          )}
+        </DropdownMenuItem>
+        {viewMode !== '2d' ? (
+          <DropdownMenuItem
+            onSelect={(e) => keepOpen(e, () => setShowMeasurements(!showMeasurements))}
+          >
+            <Ruler className="h-4 w-4" />
+            <span>{viewMode === 'split' ? '3D measurements' : 'Measurements'}</span>
+            {showMeasurements ? (
+              <Eye className="ml-auto h-4 w-4 text-foreground" />
+            ) : (
+              <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+            )}
+          </DropdownMenuItem>
+        ) : null}
+        {viewMode !== '3d' ? (
+          <>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Layers3 className="h-4 w-4" />
+                <span>Floor plan mode</span>
+                <span className="ml-auto text-muted-foreground text-xs">
+                  {floorplanMode === 'default' ? 'Default' : 'Expert'}
+                </span>
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+                {FLOORPLAN_MODE_OPTIONS.map((option) => (
+                  <DropdownMenuItem key={option.id} onSelect={() => setFloorplanMode(option.id)}>
+                    <div className="flex flex-col">
+                      <span className="text-foreground">{option.name}</span>
+                      <span className="text-muted-foreground text-xs">{option.detail}</span>
+                    </div>
+                    {floorplanMode === option.id ? (
+                      <Check className="ml-auto h-4 w-4 text-foreground" />
+                    ) : null}
+                  </DropdownMenuItem>
                 ))}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            {floorplanMode === 'expert' ? (
+              <>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Layers3 className="h-4 w-4" />
+                    <span>Floor plan annotations</span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+                    {FLOORPLAN_ANNOTATION_OPTIONS.map((option) => {
+                      const OptionIcon = option.icon
+                      const visible = annotationVisibility[option.id]
+                      return (
+                        <DropdownMenuItem
+                          key={option.id}
+                          onSelect={(e) =>
+                            keepOpen(e, () => setAnnotationCategory(option.id, !visible))
+                          }
+                        >
+                          <OptionIcon className="h-4 w-4" />
+                          <span>{option.name}</span>
+                          {visible ? (
+                            <Eye className="ml-auto h-4 w-4 text-foreground" />
+                          ) : (
+                            <EyeOff className="ml-auto h-4 w-4 text-muted-foreground" />
+                          )}
+                        </DropdownMenuItem>
+                      )
+                    })}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger>
+                    <Ruler className="h-4 w-4" />
+                    <span>Wall dimensions</span>
+                    <span className="ml-auto text-muted-foreground text-xs">
+                      {
+                        FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS.find(
+                          (option) => option.id === wallDimensionReference,
+                        )?.name
+                      }
+                    </span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+                    {FLOORPLAN_WALL_DIMENSION_REFERENCE_OPTIONS.map((option) => (
+                      <DropdownMenuItem
+                        key={option.id}
+                        onSelect={(event) =>
+                          keepOpen(event, () => setWallDimensionReference(option.id))
+                        }
+                      >
+                        <div className="flex flex-col">
+                          <span className="text-foreground">{option.name}</span>
+                          <span className="text-muted-foreground text-xs">{option.detail}</span>
+                        </div>
+                        {wallDimensionReference === option.id ? (
+                          <Check className="ml-auto h-4 w-4 text-foreground" />
+                        ) : null}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              </>
+            ) : null}
+          </>
+        ) : null}
+        <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setMagneticSnap(!magneticSnap))}>
+          <Magnet className="h-4 w-4" />
+          <span>Magnetic snap</span>
+          <span className="ml-auto text-muted-foreground text-xs">
+            {magneticSnap ? 'On' : 'Off'}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={(e) => keepOpen(e, () => setShadows(!shadows))}>
+          <Contrast className="h-4 w-4" />
+          <span>Shadows</span>
+          <span className="ml-auto text-muted-foreground text-xs">{shadows ? 'On' : 'Off'}</span>
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onSelect={(e) =>
+            keepOpen(e, () =>
+              setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective'),
+            )
+          }
+        >
+          <IconifyIcon
+            height={16}
+            icon={cameraMode === 'perspective' ? 'icon-park-outline:perspective' : 'vaadin:grid'}
+            width={16}
+          />
+          <span>Camera</span>
+          <span className="ml-auto text-muted-foreground text-xs">
+            {cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}
+          </span>
+        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+              {unit === 'imperial' ? 'ft' : metricNotation === 'millimeters' ? 'mm' : 'm'}
+            </span>
+            <span>Units</span>
+            <span className="ml-auto text-muted-foreground text-xs">
+              {unit === 'imperial'
+                ? 'Feet & inches'
+                : metricNotation === 'millimeters'
+                  ? 'Millimeters'
+                  : 'Meters'}
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+            <DropdownMenuItem onSelect={() => setMetricNotation('meters')}>
+              <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+                m
               </span>
-              <span className="text-foreground">{theme.name}</span>
-              {sceneTheme === theme.id ? (
+              <span>Meters</span>
+              {unit === 'metric' && metricNotation === 'meters' ? (
                 <Check className="ml-auto h-4 w-4 text-foreground" />
               ) : null}
             </DropdownMenuItem>
-          )
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
-const EDGE_OPTIONS = [
-  { id: 'off', nameKey: 'viewer.off_edge', detailKey: 'viewer.noEdgeLines' },
-  { id: 'soft', nameKey: 'viewer.soft', detailKey: 'viewer.faintOutline' },
-  { id: 'strong', nameKey: 'viewer.strong', detailKey: 'viewer.crispEdges' },
-] as const satisfies readonly { id: EdgeMode; nameKey: string; detailKey: string }[]
-
-function EdgesMenu() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
-  const edges = useViewer((state) => state.edges)
-  const setEdges = useViewer((state) => state.setEdges)
-  const active = EDGE_OPTIONS.find((option) => option.id === edges) ?? EDGE_OPTIONS[0]
-
-  return (
-    <DropdownMenu>
-      <ToolbarTooltip label={`${t('viewer.edges')}: ${t(active.nameKey)}`}>
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-label={`${t('viewer.edges')}: ${t(active.nameKey)}`}
-            className={cn(TOOLBAR_BTN, edges !== 'off' && 'bg-white/10 text-foreground/90')}
-            type="button"
-          >
-            <PenLine className="h-4 w-4" />
-          </button>
-        </DropdownMenuTrigger>
-      </ToolbarTooltip>
-      <DropdownMenuContent align="center" className="min-w-56" side="bottom">
-        {EDGE_OPTIONS.map((option) => {
-          return (
-            <DropdownMenuItem key={option.id} onSelect={() => setEdges(option.id)}>
-              <div className="flex flex-col">
-                <span className="text-foreground">{t(option.nameKey)}</span>
-                <span className="text-muted-foreground text-xs">{t(option.detailKey)}</span>
-              </div>
-              {edges === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+            <DropdownMenuItem onSelect={() => setMetricNotation('millimeters')}>
+              <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+                mm
+              </span>
+              <span>Millimeters</span>
+              {unit === 'metric' && metricNotation === 'millimeters' ? (
+                <Check className="ml-auto h-4 w-4 text-foreground" />
+              ) : null}
             </DropdownMenuItem>
-          )
-        })}
+            <DropdownMenuItem onSelect={() => setUnit('imperial')}>
+              <span className="flex h-4 w-4 items-center justify-center font-semibold text-[10px]">
+                ft
+              </span>
+              <span>Feet & inches</span>
+              {unit === 'imperial' ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <activeShading.icon className="h-4 w-4" />
+            <span>Render</span>
+            <span className="ml-auto text-muted-foreground text-xs">{activeShading.name}</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+            {SHADING_OPTIONS.map((option) => {
+              const OptionIcon = option.icon
+              return (
+                <DropdownMenuItem key={option.id} onSelect={() => setShading(option.id)}>
+                  <OptionIcon className="h-4 w-4" />
+                  <div className="flex flex-col">
+                    <span className="text-foreground">{option.name}</span>
+                    <span className="text-muted-foreground text-xs">{option.detail}</span>
+                  </div>
+                  {shading === option.id ? (
+                    <Check className="ml-auto h-4 w-4 text-foreground" />
+                  ) : null}
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <PenLine className="h-4 w-4" />
+            <span>Edges</span>
+            <span className="ml-auto text-muted-foreground text-xs">{activeEdges.name}</span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className={SUBMENU_CONTENT_CLASS}>
+            {EDGE_OPTIONS.map((option) => (
+              <DropdownMenuItem key={option.id} onSelect={() => setEdges(option.id)}>
+                <div className="flex flex-col">
+                  <span className="text-foreground">{option.name}</span>
+                  <span className="text-muted-foreground text-xs">{option.detail}</span>
+                </div>
+                {edges === option.id ? <Check className="ml-auto h-4 w-4 text-foreground" /> : null}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
+
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <SwatchBook className="h-4 w-4" />
+            <span>Theme</span>
+            <span className="ml-auto truncate text-muted-foreground text-xs">
+              {activeTheme.name}
+            </span>
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent className="min-w-48 rounded-xl border-border/45 bg-popover/95 backdrop-blur-xl">
+            {SCENE_THEMES.map((theme) => {
+              const swatches = (['wall', 'roof', 'floor', 'glazing'] as const).map(
+                (role) => theme.clayTints?.[role] ?? CLAY_PALETTE[role],
+              )
+              return (
+                <DropdownMenuItem key={theme.id} onSelect={() => setSceneTheme(theme.id)}>
+                  <span
+                    className="grid h-5 w-5 shrink-0 grid-cols-2 overflow-hidden rounded-sm border border-black/10"
+                    style={{ backgroundColor: theme.background }}
+                  >
+                    {swatches.map((color, index) => (
+                      <span key={`${theme.id}-${index}`} style={{ backgroundColor: color }} />
+                    ))}
+                  </span>
+                  <span className="text-foreground">{theme.name}</span>
+                  {sceneTheme === theme.id ? (
+                    <Check className="ml-auto h-4 w-4 text-foreground" />
+                  ) : null}
+                </DropdownMenuItem>
+              )
+            })}
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
       </DropdownMenuContent>
     </DropdownMenu>
-  )
-}
-
-function GridVisibilityToggle() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
-  const showGrid = useViewer((state) => state.showGrid)
-  const setShowGrid = useViewer((state) => state.setShowGrid)
-
-  return (
-    <ToolbarTooltip label={`${t('viewer.grid')}: ${showGrid ? t('viewer.visible') : t('viewer.hidden')}`}>
-      <button
-        aria-label={`${t('viewer.grid')}: ${showGrid ? t('viewer.visible') : t('viewer.hidden')}`}
-        aria-pressed={showGrid}
-        className={cn(
-          TOOLBAR_BTN,
-          'w-auto gap-1.5 px-2.5',
-          showGrid
-            ? 'bg-white/10 text-foreground/90'
-            : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0',
-        )}
-        onClick={() => setShowGrid(!showGrid)}
-        type="button"
-      >
-        <Grid2X2 className="h-3.5 w-3.5" />
-        {showGrid ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-      </button>
-    </ToolbarTooltip>
-  )
-}
-
-function ShadowsToggle() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
-  const shadows = useViewer((state) => state.shadows)
-  const setShadows = useViewer((state) => state.setShadows)
-
-  return (
-    <ToolbarTooltip label={`${t('viewer.shadows')}: ${shadows ? t('viewer.on') : t('viewer.off')}`}>
-      <button
-        aria-label={`${t('viewer.shadows')}: ${shadows ? t('viewer.on') : t('viewer.off')}`}
-        aria-pressed={shadows}
-        className={cn(
-          TOOLBAR_BTN,
-          shadows
-            ? 'bg-white/10 text-foreground/90'
-            : 'opacity-60 grayscale hover:opacity-100 hover:grayscale-0',
-        )}
-        onClick={() => setShadows(!shadows)}
-        type="button"
-      >
-        <Contrast className="h-3.5 w-3.5" />
-      </button>
-    </ToolbarTooltip>
-  )
-}
-
-function UnitToggle() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
-  const unit = useViewer((state) => state.unit)
-  const setUnit = useViewer((state) => state.setUnit)
-
-  return (
-    <ToolbarTooltip label={unit === 'metric' ? t('viewer.metric') : t('viewer.imperial')}>
-      <button
-        className={TOOLBAR_BTN}
-        onClick={() => setUnit(unit === 'metric' ? 'imperial' : 'metric')}
-        type="button"
-      >
-        <span className="font-semibold text-[10px]">{unit === 'metric' ? 'm' : 'ft'}</span>
-      </button>
-    </ToolbarTooltip>
-  )
-}
-
-function CameraModeToggle() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
-  const cameraMode = useViewer((state) => state.cameraMode)
-  const setCameraMode = useViewer((state) => state.setCameraMode)
-
-  return (
-    <ToolbarTooltip label={cameraMode === 'perspective' ? t('viewer.perspective') : t('viewer.orthographic')}>
-      <button
-        className={cn(
-          TOOLBAR_BTN,
-          cameraMode === 'orthographic' && 'bg-white/10 text-foreground/90',
-        )}
-        onClick={() => setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective')}
-        type="button"
-      >
-        {cameraMode === 'perspective' ? (
-          <IconifyIcon height={16} icon="icon-park-outline:perspective" width={16} />
-        ) : (
-          <IconifyIcon height={16} icon="vaadin:grid" width={16} />
-        )}
-      </button>
-    </ToolbarTooltip>
   )
 }
 
 function WalkthroughButton() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
   const isFirstPersonMode = useEditor((state) => state.isFirstPersonMode)
   const setFirstPersonMode = useEditor((state) => state.setFirstPersonMode)
+  const handleClick = useCallback(() => {
+    if (isFirstPersonMode) {
+      setFirstPersonMode(false)
+      return
+    }
+
+    flushSync(() => setFirstPersonMode(true))
+    requestWalkthroughPointerLock()
+  }, [isFirstPersonMode, setFirstPersonMode])
 
   return (
-    <ToolbarTooltip label={t('viewer.walkthrough')}>
+    <ToolbarTooltip label="Walkthrough">
       <button
         className={cn(
           TOOLBAR_BTN,
           isFirstPersonMode && 'bg-emerald-500/15 text-emerald-400 hover:bg-emerald-500/20',
         )}
-        onClick={() => setFirstPersonMode(!isFirstPersonMode)}
+        onClick={handleClick}
         type="button"
       >
         <Footprints className="h-4 w-4" />
@@ -508,18 +672,15 @@ function WalkthroughButton() {
 }
 
 function PreviewButton() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
-
   return (
-    <ToolbarTooltip label={t('controlModes.preview')}>
+    <ToolbarTooltip label="Preview mode">
       <button
         className="flex items-center gap-1.5 px-2.5 font-medium text-muted-foreground/80 text-xs transition-colors hover:bg-white/8 hover:text-foreground/90"
         onClick={() => useEditor.getState().setPreviewMode(true)}
         type="button"
       >
         <Eye className="h-3.5 w-3.5 shrink-0" />
-        <span>{t('controlModes.preview')}</span>
+        <span>Preview</span>
       </button>
     </ToolbarTooltip>
   )
@@ -539,14 +700,8 @@ export function CommunityViewerToolbarRight() {
     <div className={TOOLBAR_CONTAINER}>
       <LevelModeToggle />
       <WallModeToggle />
-      <RenderModeMenu />
-      <SceneThemeMenu />
-      <EdgesMenu />
-      <GridVisibilityToggle />
-      <ShadowsToggle />
       <div className="my-1.5 w-px bg-border/50" />
-      <UnitToggle />
-      <CameraModeToggle />
+      <DisplayMenu />
       <div className="my-1.5 w-px bg-border/50" />
       <WalkthroughButton />
       <PreviewButton />

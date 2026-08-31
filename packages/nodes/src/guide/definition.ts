@@ -10,6 +10,9 @@ import { GuideNode } from './schema'
  */
 export const guideDefinition: NodeDefinition<typeof GuideNode> = {
   kind: 'guide',
+  // Floorplan image reference: stripped from the bake, re-added live from
+  // scene_graph in the viewer (see plans → Part D; glb-reference-nodes.tsx).
+  bake: 'strip',
   schemaVersion: 1,
   schema: GuideNode,
   category: 'site',
@@ -30,6 +33,8 @@ export const guideDefinition: NodeDefinition<typeof GuideNode> = {
   },
 
   parametrics: guideParametrics,
+  // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',
@@ -43,7 +48,7 @@ export const guideDefinition: NodeDefinition<typeof GuideNode> = {
   presentation: {
     label: 'nodes.guide.label',
     description: 'A measurement / reference annotation (linear, area, or arc).',
-    icon: { kind: 'url', src: '/icons/blueprint.png' },
+    icon: { kind: 'url', src: '/icons/blueprint.webp' },
     paletteSection: 'site',
     paletteOrder: 30,
   },

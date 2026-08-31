@@ -3,30 +3,42 @@ import type {
   DoorNode as DoorNodeType,
   HandleDescriptor,
   NodeDefinition,
+  RoofSegmentNode,
   WallNode,
 } from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import {
+  buildDoorFloorplanSchedule,
+  computeDoorFloorplanLevelData,
+} from '../shared/opening-documentation'
+import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
+import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
+import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
+import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
+import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
+import { buildDoorContextualDimensions } from './contextual-dimensions'
+import { scaleHandleHeight } from './door-math'
 import { buildDoorFloorplan } from './floorplan'
 import { doorWidthAffordance } from './floorplan-affordances'
 import { doorFloorplanMoveTarget } from './floorplan-move'
+import { doorPaint } from './paint'
 import { doorParametrics } from './parametrics'
 import { DoorNode } from './schema'
+import { doorSlots } from './slots'
 
 const SIDE_HANDLE_OFFSET = 0.24
 const HEIGHT_HANDLE_OFFSET = 0.24
 const MIN_DOOR_HEIGHT = 0.5
 const MIN_DOOR_WIDTH = 0.3
+// How far the move cross floats off the wall face (+Z, the door's facing
+// normal) so it's grabbable instead of buried in the leaf/frame.
+const MOVE_HANDLE_LIFT = 0.12
 
 function readWallLength(door: DoorNodeType, scene: { get: (id: AnyNodeId) => unknown }): number {
   if (!door.wallId) return Number.POSITIVE_INFINITY
   const wall = scene.get(door.wallId as AnyNodeId) as WallNode | undefined
   if (!wall) return Number.POSITIVE_INFINITY
   return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
-}
-
-function readWallHeight(door: DoorNodeType, scene: { get: (id: AnyNodeId) => unknown }): number {
-  if (!door.wallId) return Number.POSITIVE_INFINITY
-  const wall = scene.get(door.wallId as AnyNodeId) as WallNode | undefined
-  return wall?.height ?? Number.POSITIVE_INFINITY
 }
 
 // Width arrow on the door-local +X (right) or -X (left) side. Drag grows
@@ -41,8 +53,15 @@ function doorWidthHandle(side: 'left' | 'right'): HandleDescriptor<DoorNodeType>
     // 'max' = +X edge anchored (left arrow grows the -X edge outward).
     anchor: side === 'right' ? 'min' : 'max',
     min: MIN_DOOR_WIDTH,
-    max: (n, scene) => readWallLength(n, scene),
+    max: (n, scene) => {
+      // Roof-hosted doors clamp against the face profile (the wall-based
+      // limits read Infinity when wallId is unset).
+      const roofMax = readRoofFaceWidthMax(n, scene, sign)
+      if (roofMax !== null) return Math.max(MIN_DOOR_WIDTH, roofMax)
+      return readWallLength(n, scene)
+    },
     currentValue: (n) => n.width,
+    onDrag: (node) => publishOpeningResizeGuides(node, false),
     apply: (initial, newWidth) => {
       // Anchored edge stays fixed in wall-local coords. Door rotation is
       // applied by the inner ride group (the renderer mounts a nested
@@ -79,15 +98,21 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
     anchor: 'min', // bottom anchored at wall-local Y = position[1] - height/2
     min: MIN_DOOR_HEIGHT,
     max: (n, scene) => {
+      const roofMax = readRoofFaceHeightMax(n, scene, 1)
+      if (roofMax !== null) return Math.max(MIN_DOOR_HEIGHT, roofMax)
       const bottom = n.position[1] - n.height / 2
-      return Math.max(MIN_DOOR_HEIGHT, readWallHeight(n, scene) - bottom)
+      return Math.max(MIN_DOOR_HEIGHT, readHostWallCeiling(n.wallId, scene) - bottom)
     },
     currentValue: (n) => n.height,
+    onDrag: (node) => publishOpeningResizeGuides(node, false),
     apply: (initial, newHeight) => {
       const bottom = initial.position[1] - initial.height / 2
+      // Scale the handle so it tracks the door instead of staying glued to a
+      // fixed floor height (shared with the panel's Height slider).
       return {
         height: newHeight,
         position: [initial.position[0], bottom + newHeight / 2, initial.position[2]],
+        handleHeight: scaleHandleHeight(initial.handleHeight, initial.height, newHeight),
       }
     },
     placement: {
@@ -97,7 +122,26 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
   }
 }
 
+// Press-drag move grip at the door centre, standing in the wall face. Routes
+// through the same move tool as the floating Move button (3D
+// `affordanceTools.move`, 2D `floorplanMoveTarget`) — wall slide + re-host onto
+// another wall — but `engageMoveDrag` commits on release, with no second click.
+function doorMoveHandle(): HandleDescriptor<DoorNodeType> {
+  return {
+    kind: 'tap-action',
+    shape: 'move-cross',
+    plane: 'node-normal',
+    portal: 'grandparent',
+    cursor: 'move',
+    onActivate: (node, _scene, editor) => editor.engageMoveDrag(node),
+    placement: {
+      position: () => [0, 0, MOVE_HANDLE_LIFT],
+    },
+  }
+}
+
 const doorHandles: HandleDescriptor<DoorNodeType>[] = [
+  doorMoveHandle(),
   doorWidthHandle('left'),
   doorWidthHandle('right'),
   doorHeightHandle(),
@@ -124,9 +168,17 @@ const doorHandles: HandleDescriptor<DoorNodeType>[] = [
  */
 export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   kind: 'door',
-  schemaVersion: 1,
+  snapProfile: 'item',
+  facingIndicator: true,
+  schemaVersion: 2,
   schema: DoorNode,
   category: 'structure',
+  extensions: {
+    'pascal:editor/floorplan': {
+      contextualDimensions: buildDoorContextualDimensions,
+      schedule: buildDoorFloorplanSchedule,
+    } satisfies FloorplanNodeExtension<DoorNodeType>,
+  },
   surfaceRole: 'joinery',
 
   // Leverage the schema's zod `.default()` annotations to compute the
@@ -143,10 +195,26 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     duplicable: true,
     deletable: true,
     wallOpeningPlacement: true,
-    // `wallId` ties the door to its host wall and is re-derived from
-    // the wall under the cursor when a preset is placed. Host apps
-    // strip this at preset-save time via `getHostRefFields(def)`.
-    hostRefFields: ['wallId'],
+    // Doors also host on roof-segment wall faces (base walls under the
+    // roof, gable ends). `buildCut` punches the opening into the
+    // segment's wall brush; `dirtyHandledByOwnSystem` keeps the roof-merge
+    // loop from consuming door dirty marks (DoorSystem owns them and
+    // already cascades to the host via parentId).
+    roofAccessory: {
+      buildCut: (node, hostSegment) =>
+        buildRoofWallOpeningCut(node as DoorNodeType, hostSegment as RoofSegmentNode),
+      cutScope: 'wall',
+      dirtyHandledByOwnSystem: true,
+    },
+    // `wallId` / `roofSegmentId` tie the door to its host and are
+    // re-derived from the surface under the cursor when a preset is
+    // placed. Host apps strip these at preset-save time via
+    // `getHostRefFields(def)`.
+    hostRefFields: ['wallId', 'roofSegmentId', 'roofFace'],
+    // Panel / glass slots painted through the registry. The door system tags
+    // each mesh with its `userData.slotId`; paint writes `node.slots`.
+    slots: () => doorSlots(),
+    paint: doorPaint,
   },
 
   parametrics: doorParametrics,
@@ -156,6 +224,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
     kind: 'parametric',
     module: () => import('./renderer'),
   },
+  preview: () => import('./preview'),
   system: {
     module: () => import('./system'),
     // Priority 3 mirrors the legacy DoorSystem (after animation at 2,
@@ -165,6 +234,12 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   // Stage C: floor-plan polygon. Needs ctx.parent (the wall) to compute
   // direction + perpendicular for the cutout footprint.
   floorplan: buildDoorFloorplan,
+  computeFloorplanLevelData: computeDoorFloorplanLevelData,
+  floorplanDependsOnSiblings: true,
+  // Opening symbols position from `ctx.parent` (the host wall); merge the
+  // walls' live drag overrides so the symbol tracks a wall / group drag in
+  // realtime instead of jumping on commit.
+  floorplanSiblingOverrides: wallFloorplanSiblingOverrides,
   // Stage D — placement (`def.tool`) + move-on-wall (`def.
   // affordanceTools.move`). Both ports of the legacy tools at
   // `editor/components/tools/door/`, relocated into the kind folder and
@@ -191,14 +266,16 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
   },
 
   toolHints: [
-    { key: 'Left click', label: 'nodes.door.toolHints.place' },
-    { key: 'Esc', label: 'nodes.door.toolHints.cancel' },
+    { key: 'Left click', label: 'Place door on wall' },
+    { key: 'R', label: 'Flip side' },
+    { key: 'Alt', label: 'Force place' },
+    { key: 'Esc', label: 'Cancel' },
   ],
 
   presentation: {
-    label: 'nodes.door.label',
-    description: 'nodes.door.description',
-    icon: { kind: 'url', src: '/icons/door.png' },
+    label: 'Door',
+    description: 'A door cut into a wall. Animated open/close state.',
+    icon: { kind: 'url', src: '/icons/door.webp' },
     paletteSection: 'structure',
     paletteOrder: 50,
   },

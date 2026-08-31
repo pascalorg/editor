@@ -1,0 +1,488 @@
+import { describe, expect, test } from 'bun:test'
+import { LeanToExtensionNode } from '@pascal-app/core'
+import { generateRoofSegmentGeometry, resolveSurfaceColor } from '@pascal-app/viewer'
+import {
+  Box3,
+  type BoxGeometry,
+  Matrix4,
+  Mesh,
+  type MeshStandardMaterial,
+  Raycaster,
+  Vector3,
+} from 'three'
+import { buildGutterGeometry } from '../gutter/geometry'
+import { createLeanToAssembly } from './assembly'
+import { buildLeanToExtensionGeometry } from './geometry'
+import { resolveLeanToLayout } from './layout'
+import { resolveLeanToFreestandingRunPlacement } from './placement'
+import { leanToSlots } from './slots'
+
+describe('lean-to extension geometry', () => {
+  test('defaults structural framing to the untextured wall role color', () => {
+    const defaults = Object.fromEntries(leanToSlots().map((slot) => [slot.slotId, slot.default]))
+    const group = buildLeanToExtensionGeometry(LeanToExtensionNode.parse({}))
+
+    expect(defaults.ledger).toBeUndefined()
+    expect(defaults.beam).toBeUndefined()
+    expect(defaults.framing).toBeUndefined()
+    for (const name of ['lean-to-front-beam', 'lean-to-rafter-0']) {
+      const material = (group.getObjectByName(name) as Mesh).material as MeshStandardMaterial
+      expect(material.color.getHexString()).toBe(resolveSurfaceColor('wall', 'clay').slice(1))
+      expect(material.map).toBeFalsy()
+    }
+  })
+
+  test('builds a placement preview with structure and a roof proxy', () => {
+    const node = LeanToExtensionNode.parse({ postCount: 3, span: 4 })
+    const group = buildLeanToExtensionGeometry(node)
+    const names = group.children.map((child) => child.name)
+    expect(names).toContain('lean-to-preview-roof')
+    expect(names).not.toContain('lean-to-ledger')
+    expect(names).toContain('lean-to-front-beam')
+    expect(names).not.toContain('lean-to-high-side-flashing')
+    expect(names.some((name) => name.includes('gutter'))).toBe(false)
+    expect(names.some((name) => name.includes('downspout'))).toBe(false)
+    expect(names.filter((name) => name.startsWith('lean-to-post-'))).toHaveLength(3)
+    expect(
+      names.filter((name) => name.startsWith('lean-to-rafter-')).length,
+    ).toBeGreaterThanOrEqual(3)
+  })
+
+  test('models side flashing for abutting ends only', () => {
+    const node = LeanToExtensionNode.parse({
+      leftEndCondition: 'wall-abutment',
+      rightEndCondition: 'open',
+    })
+    const group = buildLeanToExtensionGeometry(node)
+    expect(group.getObjectByName('lean-to-left-side-flashing')).toBeDefined()
+    expect(group.getObjectByName('lean-to-right-side-flashing')).toBeUndefined()
+  })
+
+  test('uses configurable side flashing dimensions', () => {
+    const node = LeanToExtensionNode.parse({
+      sideFlashing: true,
+      leftEndCondition: 'wall-abutment',
+      flashingHeight: 0.22,
+      flashingProjection: 0.06,
+    })
+    const group = buildLeanToExtensionGeometry(node)
+    const flashing = group.getObjectByName('lean-to-left-side-flashing') as Mesh<BoxGeometry>
+    const parameters = flashing.geometry.parameters as { width: number; height: number }
+
+    expect(parameters.height).toBeCloseTo(0.22)
+    expect(parameters.width).toBeCloseTo(0.06)
+  })
+
+  test('switches between hidden, rafter, and purlin framing', () => {
+    const hiddenNames = buildLeanToExtensionGeometry(
+      LeanToExtensionNode.parse({ framingStrategy: 'hidden' }),
+    ).children.map((child) => child.name)
+    const purlinNames = buildLeanToExtensionGeometry(
+      LeanToExtensionNode.parse({ framingStrategy: 'purlins' }),
+    ).children.map((child) => child.name)
+
+    expect(hiddenNames.some((name) => name.startsWith('lean-to-rafter-'))).toBe(false)
+    expect(hiddenNames.some((name) => name.startsWith('lean-to-purlin-'))).toBe(false)
+    expect(purlinNames.some((name) => name.startsWith('lean-to-purlin-'))).toBe(true)
+    expect(purlinNames.some((name) => name.startsWith('lean-to-rafter-'))).toBe(false)
+  })
+
+  test('models an independent high beam and tags configurable finish slots', () => {
+    const node = LeanToExtensionNode.parse({ highSideMode: 'independent-high-beam' })
+    const group = buildLeanToExtensionGeometry(node)
+    expect(group.getObjectByName('lean-to-independent-high-beam')).toBeDefined()
+    expect(group.getObjectByName('lean-to-high-post-0')).toBeDefined()
+    expect(group.getObjectByName('lean-to-high-side-flashing')).toBeUndefined()
+    expect(group.getObjectByName('lean-to-front-beam')?.userData.slotId).toBe('beam')
+  })
+
+  test('leaves the roof and posts to real child nodes in scene geometry', () => {
+    const node = LeanToExtensionNode.parse({ postCount: 3 })
+    const group = buildLeanToExtensionGeometry(node, {} as never)
+    expect(
+      group.children.map((child) => child.name).filter((name) => name.startsWith('lean-to-post-')),
+    ).toEqual([])
+    expect(group.children.map((child) => child.name)).not.toContain('lean-to-preview-roof')
+  })
+
+  test('extends connected roof framing to the wall without a full-width infill panel', () => {
+    const disconnected = LeanToExtensionNode.parse({ projection: 2.5 })
+    const connected = LeanToExtensionNode.parse({ projection: 2.5, connectionInset: 0.3 })
+    const disconnectedGroup = buildLeanToExtensionGeometry(disconnected)
+    const connectedGroup = buildLeanToExtensionGeometry(connected)
+    const depth = (group: ReturnType<typeof buildLeanToExtensionGeometry>, name: string) =>
+      ((group.getObjectByName(name) as Mesh<BoxGeometry>).geometry.parameters as { depth: number })
+        .depth
+
+    expect(depth(connectedGroup, 'lean-to-preview-roof')).toBeCloseTo(
+      depth(disconnectedGroup, 'lean-to-preview-roof'),
+    )
+    expect(depth(connectedGroup, 'lean-to-rafter-0')).toBeCloseTo(
+      depth(disconnectedGroup, 'lean-to-rafter-0'),
+    )
+    expect(connectedGroup.getObjectByName('lean-to-connection-underlap')).toBeUndefined()
+    expect(disconnectedGroup.getObjectByName('lean-to-connection-underlap')).toBeUndefined()
+  })
+
+  test('continues rafters over the front beam with a small gutter clearance', () => {
+    const node = LeanToExtensionNode.parse({ projection: 2.5, lowOverhang: 0.25 })
+    const group = buildLeanToExtensionGeometry(node, {} as never)
+    const rafter = group.getObjectByName('lean-to-rafter-0') as Mesh<BoxGeometry>
+    const rafterSlopeLength = (rafter.geometry.parameters as { depth: number }).depth
+    const rafterFrontZ = rafter.position.z + (rafterSlopeLength * Math.cos(rafter.rotation.x)) / 2
+    const beamOuterZ = node.projection + node.beamWidth / 2
+    const assembly = createLeanToAssembly(node)
+    const gutterGeometry = buildGutterGeometry(assembly.gutter)
+    gutterGeometry.computeBoundingBox()
+    group.updateMatrixWorld(true)
+    const rafterBounds = new Box3().setFromObject(rafter)
+    const gutterBackZ =
+      assembly.segment.position[2] +
+      assembly.gutter.position[2] +
+      (gutterGeometry.boundingBox?.min.z ?? 0)
+    const gutterClearance = gutterBackZ - rafterBounds.max.z
+
+    expect(rafterFrontZ).toBeGreaterThan(beamOuterZ)
+    expect(gutterClearance).toBeGreaterThan(0)
+    expect(gutterClearance).toBeCloseTo(0.033, 5)
+    gutterGeometry.dispose()
+  })
+
+  test('still carries rafters across the front beam when there is no eave overhang', () => {
+    const node = LeanToExtensionNode.parse({ projection: 2.5, lowOverhang: 0 })
+    const group = buildLeanToExtensionGeometry(node, {} as never)
+    const rafter = group.getObjectByName('lean-to-rafter-0') as Mesh<BoxGeometry>
+    const rafterSlopeLength = (rafter.geometry.parameters as { depth: number }).depth
+    const rafterFrontZ = rafter.position.z + (rafterSlopeLength * Math.cos(rafter.rotation.x)) / 2
+
+    expect(rafterFrontZ).toBeCloseTo(node.projection + node.beamWidth / 2, 6)
+  })
+
+  test('ends the front beam flush with the outside faces of the end pillars', () => {
+    const node = LeanToExtensionNode.parse({ span: 4, postCount: 3, postInset: 0.2 })
+    const group = buildLeanToExtensionGeometry(node)
+    const beam = group.getObjectByName('lean-to-front-beam') as Mesh<BoxGeometry>
+    const firstPost = group.getObjectByName('lean-to-post-0') as Mesh<BoxGeometry>
+    const beamWidth = (beam.geometry.parameters as { width: number }).width
+    const postWidth = (firstPost.geometry.parameters as { width: number }).width
+    const beamMinX = beam.position.x - beamWidth / 2
+    const firstPostMinX = firstPost.position.x - postWidth / 2
+
+    expect(beamMinX).toBeCloseTo(firstPostMinX, 6)
+  })
+
+  test('joins curved front-beam facets at the pillar tops on both wall sides', () => {
+    for (const spanArcCenterZ of [-5, 5]) {
+      const node = LeanToExtensionNode.parse({
+        span: 8,
+        projection: 2,
+        postCount: 5,
+        spanArcCenterZ,
+        spanArcRadius: 5,
+      })
+      const group = buildLeanToExtensionGeometry(node)
+      const facets = group.children
+        .filter((child): child is Mesh<BoxGeometry> => child.name.startsWith('lean-to-front-beam-'))
+        .sort(
+          (a, b) =>
+            Number(a.name.slice(a.name.lastIndexOf('-') + 1)) -
+            Number(b.name.slice(b.name.lastIndexOf('-') + 1)),
+        )
+
+      group.updateMatrixWorld(true)
+      let maximumJointGap = 0
+      for (let index = 0; index + 1 < facets.length; index++) {
+        const current = facets[index]!
+        const next = facets[index + 1]!
+        const currentWidth = (current.geometry.parameters as { width: number }).width
+        const nextWidth = (next.geometry.parameters as { width: number }).width
+        const currentEnd = current.localToWorld(new Vector3(currentWidth / 2, 0, 0))
+        const nextStart = next.localToWorld(new Vector3(-nextWidth / 2, 0, 0))
+        maximumJointGap = Math.max(maximumJointGap, currentEnd.distanceTo(nextStart))
+      }
+
+      const firstPost = group.getObjectByName('lean-to-post-0') as Mesh<BoxGeometry>
+      const postHeight = (firstPost.geometry.parameters as { height: number }).height
+      const beamHeight = (facets[0]!.geometry.parameters as { height: number }).height
+      const postTop = firstPost.position.y + postHeight / 2
+      const beamBottom = facets[0]!.position.y - beamHeight / 2
+
+      expect(facets.length).toBeGreaterThan(1)
+      expect(group.getObjectByName('lean-to-front-beam')).toBeUndefined()
+      expect(maximumJointGap).toBeLessThan(0.01)
+      expect(beamBottom).toBeCloseTo(postTop, 6)
+    }
+  })
+
+  test('replaces the joined boundary rafter and extends the beam to the shared corner post', () => {
+    const node = LeanToExtensionNode.parse({
+      span: 4,
+      rightEndCondition: 'joined',
+      metadata: {
+        leanToCornerJoints: {
+          right: {
+            beamExtension: 2.5,
+            gutterMitre: Math.PI / 4,
+            seam: [
+              [2, 0],
+              [4.5, 2.5],
+            ],
+            sharedPostOwner: true,
+          },
+        },
+      },
+    })
+    const layout = resolveLeanToLayout(node)
+    const group = buildLeanToExtensionGeometry(node, {} as never)
+    const beam = group.getObjectByName('lean-to-front-beam') as Mesh<BoxGeometry>
+    const beamWidth = (beam.geometry.parameters as { width: number }).width
+    const beamPositions = beam.geometry.getAttribute('position')
+    const rightEndXs = Array.from({ length: beamPositions.count }, (_, index) =>
+      beamPositions.getX(index),
+    ).filter((x) => x > beamWidth / 2 - node.beamWidth * 1.1)
+    const ordinaryRafters = group.children.filter((child) =>
+      child.name.startsWith('lean-to-rafter-'),
+    )
+
+    expect(beamWidth).toBeCloseTo(layout.beamSpan + 2.5, 6)
+    expect(beam.position.x).toBeCloseTo(1.25, 6)
+    expect(Math.max(...rightEndXs) - Math.min(...rightEndXs)).toBeCloseTo(node.beamWidth, 6)
+    expect(ordinaryRafters).toHaveLength(layout.rafterXs.length - 1)
+    expect(group.getObjectByName('lean-to-right-corner-rafter')).toBeDefined()
+    expect(group.getObjectByName('lean-to-right-side-flashing')).toBeUndefined()
+  })
+
+  test('clips ordinary rafters at a concave valley seam', () => {
+    const seam = [
+      [2, 0],
+      [-0.75, 2.75],
+    ] as const
+    const node = LeanToExtensionNode.parse({
+      span: 4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+      metadata: {
+        leanToCornerJoints: {
+          right: {
+            beamExtension: -2.5,
+            gutterMitre: -Math.PI / 4,
+            seam,
+            sharedPostOwner: true,
+          },
+        },
+      },
+    })
+    const group = buildLeanToExtensionGeometry(node, {} as never)
+    group.updateMatrixWorld(true)
+    const ordinaryRafters = group.children.filter((child): child is Mesh<BoxGeometry> =>
+      child.name.startsWith('lean-to-rafter-'),
+    )
+    const seamMinX = Math.min(seam[0][0], seam[1][0])
+    const seamMaxX = Math.max(seam[0][0], seam[1][0])
+
+    for (const rafter of ordinaryRafters) {
+      if (rafter.position.x < seamMinX || rafter.position.x > seamMaxX) continue
+      const ratio = (rafter.position.x - seam[0][0]) / (seam[1][0] - seam[0][0])
+      const seamZ = seam[0][1] + (seam[1][1] - seam[0][1]) * ratio
+      const bounds = new Box3().setFromObject(rafter)
+      expect(bounds.max.z).toBeLessThanOrEqual(seamZ + 1e-6)
+    }
+  })
+
+  test('clips purlins and removes knee braces beyond a concave beam', () => {
+    const seam = [
+      [2, 0],
+      [-0.75, 2.75],
+    ] as const
+    const node = LeanToExtensionNode.parse({
+      span: 4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+      framingStrategy: 'purlins',
+      postBracing: 'knee',
+      metadata: {
+        leanToCornerJoints: {
+          right: {
+            beamExtension: -2.5,
+            gutterMitre: -Math.PI / 4,
+            seam,
+            sharedPostOwner: true,
+          },
+        },
+      },
+    })
+    const group = buildLeanToExtensionGeometry(node, {} as never)
+    const braces = group.children.filter((child) => child.name.startsWith('lean-to-knee-brace-'))
+    const purlins = group.children.filter((child): child is Mesh<BoxGeometry> =>
+      child.name.startsWith('lean-to-purlin-'),
+    )
+
+    expect(braces).toHaveLength(1)
+    for (const purlin of purlins) {
+      const ratio = (purlin.position.z - seam[0][1]) / (seam[1][1] - seam[0][1])
+      if (ratio < 0 || ratio > 1) continue
+      const seamX = seam[0][0] + (seam[1][0] - seam[0][0]) * ratio
+      const width = (purlin.geometry.parameters as { width: number }).width
+      expect(purlin.position.x + width / 2).toBeLessThanOrEqual(seamX + 1e-6)
+    }
+  })
+
+  test('clips purlins to the front-retained half of a continuous shed seam', () => {
+    const seam = [
+      [2, 0],
+      [-0.75, 2.75],
+    ] as const
+    const node = LeanToExtensionNode.parse({
+      span: 4,
+      leftOverhang: 0,
+      rightOverhang: 0,
+      framingStrategy: 'purlins',
+      metadata: {
+        leanToCornerJoints: {
+          right: {
+            beamExtension: -2.5,
+            gutterMitre: -Math.PI / 4,
+            seam,
+            framingRetainedSide: 'front',
+            sharedPostOwner: true,
+          },
+        },
+      },
+    })
+    const purlins = buildLeanToExtensionGeometry(node, {} as never).children.filter(
+      (child): child is Mesh<BoxGeometry> => child.name.startsWith('lean-to-purlin-'),
+    )
+
+    for (const purlin of purlins) {
+      const ratio = (purlin.position.z - seam[0][1]) / (seam[1][1] - seam[0][1])
+      if (ratio < 0 || ratio > 1) continue
+      const seamX = seam[0][0] + (seam[1][0] - seam[0][0]) * ratio
+      const width = (purlin.geometry.parameters as { width: number }).width
+      expect(purlin.position.x - width / 2).toBeGreaterThanOrEqual(seamX - 1e-6)
+    }
+  })
+
+  test('cuts an extended corner beam at the resolved arbitrary mitre angle', () => {
+    const node = LeanToExtensionNode.parse({
+      span: 4,
+      rightEndCondition: 'joined',
+      metadata: {
+        leanToCornerJoints: {
+          right: {
+            beamExtension: 2.5,
+            gutterMitre: Math.PI / 3,
+            seam: null,
+            sharedPostOwner: true,
+          },
+        },
+      },
+    })
+    const beam = buildLeanToExtensionGeometry(node, {} as never).getObjectByName(
+      'lean-to-front-beam',
+    ) as Mesh<BoxGeometry>
+    const positions = beam.geometry.getAttribute('position')
+    const halfLength = (beam.geometry.parameters as { width: number }).width / 2
+    const endXs = Array.from({ length: positions.count }, (_, index) =>
+      positions.getX(index),
+    ).filter((x) => x > halfLength - node.beamWidth * 2)
+
+    expect(Math.max(...endXs) - Math.min(...endXs)).toBeCloseTo(
+      node.beamWidth * Math.tan(Math.PI / 3),
+      6,
+    )
+  })
+
+  test('keeps framing inside the roof footprint for both continuous shed turns', () => {
+    for (const turnZ of [-4, 4]) {
+      const first = resolveLeanToFreestandingRunPlacement('level_shed_framing', [0, 0], [4, 0])!
+      const second = resolveLeanToFreestandingRunPlacement(
+        'level_shed_framing',
+        [4, 0],
+        [4, turnZ],
+      )!
+      const nodes = { [first.id]: first, [second.id]: second }
+      const runs = [first, second]
+      const assemblies = runs.map((run) => createLeanToAssembly(run, undefined, nodes))
+      const roofMeshes = assemblies.map((assembly, index) => {
+        const run = runs[index]!
+        const matrix = new Matrix4()
+          .makeTranslation(...run.position)
+          .multiply(new Matrix4().makeRotationY(run.rotation[1]))
+          .multiply(new Matrix4().makeTranslation(...assembly.segment.position))
+          .multiply(new Matrix4().makeRotationY(assembly.segment.rotation))
+        return new Mesh(generateRoofSegmentGeometry(assembly.segment).applyMatrix4(matrix))
+      })
+      const raycaster = new Raycaster()
+      raycaster.ray.direction.set(0, -1, 0)
+      const exposedSamples: string[] = []
+
+      for (const [index, assembly] of assemblies.entries()) {
+        const run = runs[index]!
+        const framing = buildLeanToExtensionGeometry(assembly.extension, {} as never)
+        framing.applyMatrix4(
+          new Matrix4()
+            .makeTranslation(...run.position)
+            .multiply(new Matrix4().makeRotationY(run.rotation[1])),
+        )
+        framing.updateMatrixWorld(true)
+        for (const member of framing.children.filter((child): child is Mesh<BoxGeometry> =>
+          /^lean-to-rafter-\d+$/.test(child.name),
+        )) {
+          const { depth } = member.geometry.parameters as { depth: number }
+          for (const z of [-depth * 0.35, 0, depth * 0.35]) {
+            const point = member.localToWorld(new Vector3(0, 0, z))
+            raycaster.ray.origin.set(point.x, 10, point.z)
+            const coverY = Math.max(
+              ...roofMeshes.flatMap((roof) =>
+                raycaster.intersectObject(roof, false).map((hit) => hit.point.y),
+              ),
+            )
+            if (!Number.isFinite(coverY) || coverY <= point.y) {
+              exposedSamples.push(
+                `${turnZ}:${index}:${member.name}:${point.x.toFixed(3)}:${point.y.toFixed(3)}:${point.z.toFixed(3)}:${coverY.toFixed(3)}`,
+              )
+            }
+          }
+        }
+      }
+
+      expect(exposedSamples).toEqual([])
+      for (const roof of roofMeshes) roof.geometry.dispose()
+    }
+  })
+
+  test('builds mirrored roof planes, framing, and eave beams for a gable canopy', () => {
+    const node = LeanToExtensionNode.parse({
+      canopyForm: 'gable',
+      hostKind: 'freestanding',
+      highSideMode: 'independent-high-beam',
+    })
+    const group = buildLeanToExtensionGeometry(node)
+
+    expect(group.getObjectByName('lean-to-preview-roof')).toBeDefined()
+    expect(group.getObjectByName('lean-to-preview-roof-opposite')).toBeDefined()
+    expect(group.getObjectByName('lean-to-front-beam')).toBeDefined()
+    expect(group.getObjectByName('lean-to-opposite-beam')).toBeDefined()
+    expect(group.getObjectByName('lean-to-rafter-0')).toBeDefined()
+    expect(group.getObjectByName('lean-to-opposite-rafter-0')).toBeDefined()
+    expect(group.getObjectByName('lean-to-high-post-0')?.position.z).toBeLessThan(0)
+  })
+
+  test('slopes both butterfly roof planes and rafters inward toward the valley', () => {
+    const node = LeanToExtensionNode.parse({
+      canopyForm: 'butterfly',
+      hostKind: 'freestanding',
+      highSideMode: 'independent-high-beam',
+    })
+    const group = buildLeanToExtensionGeometry(node)
+    const rightRoof = group.getObjectByName('lean-to-preview-roof')
+    const leftRoof = group.getObjectByName('lean-to-preview-roof-opposite')
+
+    expect(rightRoof?.rotation.x).toBeLessThan(0)
+    expect(leftRoof?.rotation.x).toBeGreaterThan(0)
+    expect(group.getObjectByName('lean-to-opposite-beam')).toBeDefined()
+    expect(group.getObjectByName('lean-to-independent-high-beam')).toBeUndefined()
+    expect(group.getObjectByName('lean-to-rafter-0')?.rotation.x).toBeLessThan(0)
+    expect(group.getObjectByName('lean-to-opposite-rafter-0')?.rotation.x).toBeGreaterThan(0)
+  })
+})

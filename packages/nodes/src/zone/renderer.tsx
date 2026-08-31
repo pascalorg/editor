@@ -1,12 +1,20 @@
 'use client'
 
-import { useRegistry, type ZoneNode } from '@pascal-app/core'
-import { useNodeEvents, ZONE_LAYER } from '@pascal-app/viewer'
+import {
+  type AnyNode,
+  resolveAutoZonePolygon,
+  useLiveNodeOverrides,
+  useRegistry,
+  useScene,
+  type ZoneNode,
+} from '@pascal-app/core'
+import { useNodeEvents, useViewer, ZONE_LAYER } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useMemo, useRef } from 'react'
 import { BufferGeometry, Color, DoubleSide, Float32BufferAttribute, type Group, Shape } from 'three'
 import { color, float, uniform, uv } from 'three/tsl'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { useShallow } from 'zustand/react/shallow'
 
 const Y_OFFSET = 0.01
 const WALL_HEIGHT = 2.3
@@ -109,37 +117,70 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
 
   useRegistry(node.id, 'zone', ref)
 
+  // When zones are toggled off (editor outside the zones layer) the visuals
+  // unmount entirely — a drei <Html> keeps costing per-frame matrix work and
+  // live DOM even at opacity 0. The registered group stays so the zone keeps
+  // its scene identity (selection registry, GLB export polygon stamping).
+  const showZones = useViewer((s) => s.showZones)
+
+  // Group-transform drags publish a translated/rotated polygon to
+  // `useLiveNodeOverrides`; merge it so the zone previews live instead of
+  // snapping only on commit (slab/ceiling get this via their systems'
+  // `getEffectiveNode`). Per-node subscription — unrelated overrides don't
+  // re-render this zone.
+  const livePolygon = useLiveNodeOverrides((s) => s.overrides.get(node.id)?.polygon) as
+    | Array<[number, number]>
+    | undefined
+  const dependencyIds = node.autoFromWalls ? node.boundaryWallIds : []
+  const dependencyNodes = useScene(
+    useShallow((state) => dependencyIds.map((id) => state.nodes[id])),
+  )
+  const dependencyOverrides = useLiveNodeOverrides(
+    useShallow((state) => dependencyIds.map((id) => state.overrides.get(id))),
+  )
+  const proceduralPolygon = useMemo(
+    () =>
+      resolveAutoZonePolygon(node, (id) => {
+        const index = dependencyIds.indexOf(id as (typeof dependencyIds)[number])
+        const dependency = dependencyNodes[index]
+        if (!dependency) return undefined
+        const override = dependencyOverrides[index]
+        return override ? ({ ...dependency, ...override } as AnyNode) : dependency
+      }),
+    [dependencyIds, dependencyNodes, dependencyOverrides, node],
+  )
+  const polygon = livePolygon ?? proceduralPolygon
+
   // Create floor shape from polygon
   const floorShape = useMemo(() => {
-    if (!node?.polygon || node.polygon.length < 3) return null
+    if (!polygon || polygon.length < 3) return null
     const shape = new Shape()
-    const firstPt = node.polygon[0]!
+    const firstPt = polygon[0]!
 
     // Shape is in X-Y plane, we rotate it to X-Z plane
     // Negate Y (which becomes Z) to get correct orientation
     shape.moveTo(firstPt[0]!, -firstPt[1]!)
 
-    for (let i = 1; i < node.polygon.length; i++) {
-      const pt = node.polygon[i]!
+    for (let i = 1; i < polygon.length; i++) {
+      const pt = polygon[i]!
       shape.lineTo(pt[0]!, -pt[1]!)
     }
     shape.closePath()
 
     return shape
-  }, [node?.polygon])
+  }, [polygon])
 
   // Create wall geometry from polygon
   const wallGeometry = useMemo(() => {
-    if (!node?.polygon || node.polygon.length < 2) return null
-    return createWallGeometry(node.polygon)
-  }, [node?.polygon])
+    if (!polygon || polygon.length < 2) return null
+    return createWallGeometry(polygon)
+  }, [polygon])
 
   // Calculate polygon centroid for label positioning using the geometric centroid formula
   // This correctly handles polygons regardless of vertex distribution along edges
   const centroid = useMemo(() => {
-    if (!node?.polygon || node.polygon.length < 3) return [0, 0] as [number, number]
+    if (!polygon || polygon.length < 3) return [0, 0] as [number, number]
 
-    const polygon = node.polygon
     let signedArea = 0
     let cx = 0
     let cz = 0
@@ -159,7 +200,7 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
     const factor = 1 / (6 * signedArea)
 
     return [cx * factor, cz * factor] as [number, number]
-  }, [node?.polygon])
+  }, [polygon])
 
   // Create materials
   const floorMaterial = useMemo(() => {
@@ -180,77 +221,81 @@ export const ZoneRenderer = ({ node }: { node: ZoneNode }) => {
 
   return (
     <group ref={ref} {...handlers} userData={{ labelPosition: [centroid[0], 1, centroid[1]] }}>
-      <Html
-        name="label"
-        position={[centroid[0], 1, centroid[1]]}
-        style={{ pointerEvents: 'none' }}
-        zIndexRange={[10, 0]}
-      >
-        <div
-          id={`${node.id}-label`}
-          style={{
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            transform: 'translate3d(-50%, -50%, 0)',
-            opacity: 0,
-            transition: 'opacity 0.3s ease-in-out',
-          }}
-        >
-          <div
-            style={{
-              width: 'max-content',
-              color: 'white',
-              textShadow: `-1px -1px 0 ${node.color}, 1px -1px 0 ${node.color}, -1px 1px 0 ${node.color}, 1px 1px 0 ${node.color}`,
-              textAlign: 'center',
-            }}
-          >
-            <span>{node.name}</span>
-          </div>
-          <div
-            className="label-pin"
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              marginTop: '2px',
-              opacity: 0,
-              transition: 'opacity 0.5s ease-in-out',
-            }}
+      {showZones && (
+        <>
+          <Html
+            name="label"
+            position={[centroid[0], 1, centroid[1]]}
+            style={{ pointerEvents: 'none' }}
+            zIndexRange={[10, 0]}
           >
             <div
+              id={`${node.id}-label`}
               style={{
-                width: '2px',
-                height: '40px',
-                backgroundColor: node.color,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                transform: 'translate3d(-50%, -50%, 0)',
+                opacity: 0,
+                transition: 'opacity 0.3s ease-in-out',
               }}
-            />
-            <div
-              style={{
-                width: '10px',
-                height: '10px',
-                borderRadius: '50%',
-                backgroundColor: node.color,
-                border: '1px solid white',
-              }}
-            />
-          </div>
-        </div>
-      </Html>
+            >
+              <div
+                style={{
+                  width: 'max-content',
+                  color: 'white',
+                  textShadow: `-1px -1px 0 ${node.color}, 1px -1px 0 ${node.color}, -1px 1px 0 ${node.color}, 1px 1px 0 ${node.color}`,
+                  textAlign: 'center',
+                }}
+              >
+                <span>{node.name}</span>
+              </div>
+              <div
+                className="label-pin"
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  marginTop: '2px',
+                  opacity: 0,
+                  transition: 'opacity 0.5s ease-in-out',
+                }}
+              >
+                <div
+                  style={{
+                    width: '2px',
+                    height: '40px',
+                    backgroundColor: node.color,
+                  }}
+                />
+                <div
+                  style={{
+                    width: '10px',
+                    height: '10px',
+                    borderRadius: '50%',
+                    backgroundColor: node.color,
+                    border: '1px solid white',
+                  }}
+                />
+              </div>
+            </div>
+          </Html>
 
-      {/* Floor fill */}
-      <mesh
-        layers={ZONE_LAYER}
-        material={floorMaterial}
-        name="floor"
-        position={[0, Y_OFFSET, 0]}
-        rotation={[-Math.PI / 2, 0, 0]}
-      >
-        <shapeGeometry args={[floorShape]} />
-      </mesh>
+          {/* Floor fill */}
+          <mesh
+            layers={ZONE_LAYER}
+            material={floorMaterial}
+            name="floor"
+            position={[0, Y_OFFSET, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
+          >
+            <shapeGeometry args={[floorShape]} />
+          </mesh>
 
-      {/* Wall borders with gradient */}
-      <mesh geometry={wallGeometry} layers={ZONE_LAYER} material={wallMaterial} name="walls" />
+          {/* Wall borders with gradient */}
+          <mesh geometry={wallGeometry} layers={ZONE_LAYER} material={wallMaterial} name="walls" />
+        </>
+      )}
     </group>
   )
 }

@@ -82,7 +82,7 @@ export function getItemFloorplanTransform(
       )
       const wallLocalZ =
         item.asset.attachTo === 'wall-side'
-          ? ((parentNode.thickness ?? 0.1) / 2) * (item.side === 'back' ? -1 : 1)
+          ? ((parentNode.thickness ?? 0.1) / 2) * (item.side === 'front' ? 1 : -1)
           : item.position[2]
       const [offsetX, offsetY] = rotatePlanVector(item.position[0], wallLocalZ, wallRotation)
 
@@ -164,7 +164,10 @@ type Point = {
 
 function getItemDimensionPolygon(item: ItemNode, transform: FloorplanNodeTransform): Point[] {
   const [width, , depth] = getScaledDimensions(item)
-  const centerLocalZ = item.asset.attachTo === 'wall-side' ? -depth / 2 : 0
+  // Wall-side items extend depth-ward away from the wall (into the room); push
+  // the footprint centre a half-depth out along local +Z. A negative offset
+  // would lay the box across the wall onto the far side (mirrored from 3D).
+  const centerLocalZ = item.asset.attachTo === 'wall-side' ? depth / 2 : 0
   const [offsetX, offsetY] = rotatePlanVector(0, centerLocalZ, transform.rotation)
 
   return getRotatedRectanglePolygon(

@@ -1,4 +1,8 @@
-import { LevelNode as LevelNodeSchema, type NodeDefinition } from '@pascal-app/core'
+import {
+  DEFAULT_LEVEL_HEIGHT,
+  LevelNode as LevelNodeSchema,
+  type NodeDefinition,
+} from '@pascal-app/core'
 import { levelParametrics } from './parametrics'
 import { LevelNode } from './schema'
 
@@ -9,12 +13,16 @@ import { LevelNode } from './schema'
  */
 export const levelDefinition: NodeDefinition<typeof LevelNode> = {
   kind: 'level',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: LevelNode,
   category: 'site',
 
   defaults: () => {
-    const stub = LevelNodeSchema.parse({ id: 'level_default' as never, type: 'level' })
+    const stub = LevelNodeSchema.parse({
+      id: 'level_default' as never,
+      type: 'level',
+      height: DEFAULT_LEVEL_HEIGHT,
+    })
     const { id: _id, type: _type, ...rest } = stub
     return rest
   },
@@ -36,6 +44,8 @@ export const levelDefinition: NodeDefinition<typeof LevelNode> = {
   },
 
   parametrics: levelParametrics,
+  // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',
@@ -47,9 +57,9 @@ export const levelDefinition: NodeDefinition<typeof LevelNode> = {
   },
 
   presentation: {
-    label: 'nodes.level.label',
-    description: 'nodes.level.description',
-    icon: { kind: 'url', src: '/icons/level.png' },
+    label: 'Level',
+    description: 'A single floor of a building, holding walls / slabs / ceilings / items.',
+    icon: { kind: 'url', src: '/icons/level.webp' },
     paletteSection: 'site',
     paletteOrder: 7,
   },

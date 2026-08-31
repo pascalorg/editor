@@ -50,9 +50,6 @@ type RenderableNode = AnyNode & {
 export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
   const ref = useRef<Group>(null!)
   const n = node as RenderableNode
-  // biome-ignore lint/suspicious/noExplicitAny: useNodeEvents is keyed by
-  // literal kind; the registry path passes a runtime kind union. Routing
-  // through the type cast is safer than widening the hook signature.
   const handlers = useNodeEvents(node as any, node.type as any)
   const liveTransform = useLiveTransforms((s) => s.get(node.id as AnyNodeId))
   // Registry arrow handles (rotation gizmo, position-affecting patches)
@@ -62,10 +59,7 @@ export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
   // of snapping only on commit. Per-node subscription so unrelated
   // override writes don't re-render the whole tree.
   const liveOverride = useLiveNodeOverrides((s) => s.overrides.get(node.id))
-  const overrideRotation = liveOverride?.rotation as
-    | [number, number, number]
-    | number
-    | undefined
+  const overrideRotation = liveOverride?.rotation as [number, number, number] | number | undefined
   const overridePosition = liveOverride?.position as [number, number, number] | undefined
 
   useRegistry(node.id, node.type, ref)
@@ -76,12 +70,16 @@ export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
 
   const position = liveTransform?.position ?? overridePosition ?? n.position ?? [0, 0, 0]
   const rawRotation = overrideRotation ?? n.rotation
+  const baseRotation: [number, number, number] =
+    typeof rawRotation === 'number' ? [0, rawRotation, 0] : (rawRotation ?? [0, 0, 0])
+  // The live transform carries only the plan-view Y rotation; keep the
+  // node's own X/Z so 3D-oriented kinds (e.g. a duct-fitting riser at
+  // X=π/2) don't visually flatten to horizontal mid-drag. Matches the
+  // move tool's commit, which also replaces only the Y component.
   const rotation: [number, number, number] =
     liveTransform?.rotation !== undefined
-      ? [0, liveTransform.rotation, 0]
-      : typeof rawRotation === 'number'
-        ? [0, rawRotation, 0]
-        : (rawRotation ?? [0, 0, 0])
+      ? [baseRotation[0], liveTransform.rotation, baseRotation[2]]
+      : baseRotation
 
   return (
     <group

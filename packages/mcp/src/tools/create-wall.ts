@@ -4,19 +4,24 @@ import { WallNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { ErrorCode, throwMcpError } from './errors'
-import { publishLiveSceneSnapshot } from './live-sync'
+import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
+import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema } from './schemas'
 
 export const createWallInput = {
   levelId: NodeIdSchema,
   start: Vec2Schema,
   end: Vec2Schema,
-  thickness: z.number().positive().optional(),
-  height: z.number().positive().optional(),
+  thickness: measurement('length', 'm', {
+    positive: true,
+    description: 'Wall thickness.',
+  }).optional(),
+  height: measurement('length', 'm', { positive: true, description: 'Wall height.' }).optional(),
 }
 
 export const createWallOutput = {
   wallId: z.string(),
+  ...liveSyncOutput,
 }
 
 export function registerCreateWall(server: McpServer, bridge: SceneOperations): void {
@@ -59,8 +64,8 @@ export function registerCreateWall(server: McpServer, bridge: SceneOperations): 
         ...(height !== undefined ? { height } : {}),
       })
       const id = bridge.createNode(wall, levelId as AnyNodeId)
-      await publishLiveSceneSnapshot(bridge, 'create_wall')
-      const payload = { wallId: id as string }
+      const persistence = await publishLiveSceneSnapshot(bridge, 'create_wall')
+      const payload = { wallId: id as string, ...persistencePayload(persistence) }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
         structuredContent: payload,

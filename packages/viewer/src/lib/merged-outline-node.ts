@@ -50,6 +50,7 @@ import {
   SpriteNodeMaterial,
   TempNode,
 } from 'three/webgpu'
+import { hasDrawableGeometry } from './drawable-geometry'
 
 const _quadMesh = new QuadMesh()
 const _size = new Vector2()
@@ -354,6 +355,7 @@ export class MergedOutlineNode extends TempNode {
     renderer.setRenderTarget(this._depthRT)
     renderer.setRenderObjectFunction(
       (obj: any, sc: any, cam: any, geo: any, _mat: any, grp: any, lights: any, clip: any) => {
+        if (!hasDrawableGeometry(geo)) return
         const inCache = this._cacheA.has(obj) || this._cacheB.has(obj)
         if (!inCache) {
           const m = obj.isSprite ? this._depthSpriteMaterial : this._depthMaterial
@@ -369,6 +371,7 @@ export class MergedOutlineNode extends TempNode {
       renderer.setRenderTarget(this._groupA.maskBuffer)
       renderer.setRenderObjectFunction(
         (obj: any, sc: any, cam: any, geo: any, _mat: any, grp: any, lights: any, clip: any) => {
+          if (!hasDrawableGeometry(geo)) return
           if (this._cacheA.has(obj)) {
             const m = obj.isSprite ? this._prepareMaskSpriteMatA : this._prepareMaskMatA
             renderer.renderObject(obj, sc, cam, geo, m, grp, lights, clip)
@@ -384,6 +387,7 @@ export class MergedOutlineNode extends TempNode {
       renderer.setRenderTarget(this._groupB.maskBuffer)
       renderer.setRenderObjectFunction(
         (obj: any, sc: any, cam: any, geo: any, _mat: any, grp: any, lights: any, clip: any) => {
+          if (!hasDrawableGeometry(geo)) return
           if (this._cacheB.has(obj)) {
             const m = obj.isSprite ? this._prepareMaskSpriteMatB : this._prepareMaskMatB
             renderer.renderObject(obj, sc, cam, geo, m, grp, lights, clip)

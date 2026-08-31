@@ -15,7 +15,7 @@ export type Vec3 = readonly [number, number, number]
 /** Default planar grid spacing in meters. Matches the editor's wall tool. */
 export const DEFAULT_GRID_STEP = 0.25
 
-/** Default angle-snap step — π/12 = 15°. Wall tools also use π/4 (45°). */
+/** Default angle-snap step — π/12 = 15°. */
 export const DEFAULT_ANGLE_STEP = Math.PI / 12
 
 // ─── Grid snap ────────────────────────────────────────────────────────
@@ -34,6 +34,53 @@ export function snapPointToGrid(point: Vec2, step: number = DEFAULT_GRID_STEP): 
 /** Snaps a 3D point to a regular grid in the X/Z plane, preserving Y. */
 export function snapVec3ToGrid(point: Vec3, step: number = DEFAULT_GRID_STEP): Vec3 {
   return [snapScalar(point[0], step), point[1], snapScalar(point[2], step)]
+}
+
+/**
+ * Snap a world XZ point to the grid, then express it in the local frame of
+ * a building positioned at `buildingPosition` with rotation `buildingRotationY`
+ * (radians, around the Y axis). Returns both the snapped world point and its
+ * local-frame equivalent, so callers can render in either frame without
+ * recomputing the rotation.
+ *
+ * Use when a tool needs to keep snapping on the world grid (the grid the
+ * editor renders) even when the active building is rotated. Snapping in the
+ * building's local frame would otherwise chase the rotated axes and miss
+ * the visible grid lines.
+ */
+export function snapWorldXZToBuildingLocal(
+  worldX: number,
+  worldZ: number,
+  buildingPosition: Vec3,
+  buildingRotationY: number,
+  step: number = DEFAULT_GRID_STEP,
+): { world: [number, number]; local: [number, number] } {
+  if (step <= 0) {
+    const dx = worldX - buildingPosition[0]
+    const dz = worldZ - buildingPosition[2]
+    const cos = Math.cos(buildingRotationY)
+    const sin = Math.sin(buildingRotationY)
+    return {
+      world: [worldX, worldZ],
+      local: [dx * cos - dz * sin, dx * sin + dz * cos],
+    }
+  }
+  const snappedWX = Math.round(worldX / step) * step
+  const snappedWZ = Math.round(worldZ / step) * step
+  const dx = snappedWX - buildingPosition[0]
+  const dz = snappedWZ - buildingPosition[2]
+  const cos = Math.cos(buildingRotationY)
+  const sin = Math.sin(buildingRotationY)
+  // The forward (local → world) rotation used in the editor is
+  //   wx = bx + lx*cos + lz*sin
+  //   wz = bz - lx*sin + lz*cos
+  // so the inverse (orthogonal, so transpose) is
+  //   lx =  dx*cos - dz*sin
+  //   lz =  dx*sin + dz*cos
+  return {
+    world: [snappedWX, snappedWZ],
+    local: [dx * cos - dz * sin, dx * sin + dz * cos],
+  }
 }
 
 // ─── Angle snap ───────────────────────────────────────────────────────
@@ -62,6 +109,32 @@ export function snapPointToAngle(
     from[1] + Math.sin(snappedAngle) * distance,
   ]
   return gridStep == null ? projected : snapPointToGrid(projected, gridStep)
+}
+
+/**
+ * Snaps a cursor point onto the nearest angle ray from `from` (multiples of
+ * `angleStep`), projecting the cursor onto that ray, then snaps the distance
+ * ALONG the ray to `distanceStep`. Unlike `snapPointToAngle` with a
+ * `gridStep`, the result stays exactly on the snapped ray — grid-snapping
+ * after the angle projection pulls points off non-axis rays.
+ */
+export function snapPointAlongAngleRay(
+  from: Vec2,
+  cursor: Vec2,
+  angleStep: number = DEFAULT_ANGLE_STEP,
+  distanceStep?: number,
+): Vec2 {
+  const dx = cursor[0] - from[0]
+  const dz = cursor[1] - from[1]
+  if (dx === 0 && dz === 0) return [from[0], from[1]]
+  const angle = Math.atan2(dz, dx)
+  const snappedAngle = angleStep > 0 ? Math.round(angle / angleStep) * angleStep : angle
+  const dirX = Math.cos(snappedAngle)
+  const dirZ = Math.sin(snappedAngle)
+  const projected = dx * dirX + dz * dirZ
+  const distance =
+    distanceStep != null && distanceStep > 0 ? snapScalar(projected, distanceStep) : projected
+  return [from[0] + dirX * distance, from[1] + dirZ * distance]
 }
 
 /**

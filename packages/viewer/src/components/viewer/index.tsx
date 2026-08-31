@@ -1,13 +1,30 @@
 'use client'
 
-import { type AnyNodeId, StairOpeningSystem } from '@pascal-app/core'
-import { Canvas, extend, type ThreeToJSXElements, useFrame, useThree } from '@react-three/fiber'
-import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react'
+import {
+  type AnyNodeId,
+  nodeRegistry,
+  StairOpeningSystem,
+  sceneRegistry,
+  useScene,
+} from '@pascal-app/core'
+import { Canvas, extend, type ThreeElement, useFrame, useThree } from '@react-three/fiber'
+import {
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from 'react'
 import * as THREE from 'three/webgpu'
+import { hasDrawableGeometry } from '../../lib/drawable-geometry'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
+import { ensureKtx2Support } from '../../lib/ktx2-loader'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
+import { initializeGpuRenderer, type RendererPowerPreference } from '../../lib/renderer-capability'
 import { getSceneTheme } from '../../lib/scene-themes'
+import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
@@ -16,14 +33,28 @@ import { SceneRenderer } from '../renderers/scene-renderer'
 import FrameLimiter from './frame-limiter'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
+import { PointerRaycastLayers } from './pointer-raycast-layers'
 import PostProcessing, { DEFAULT_HOVER_STYLES, type HoverStyles } from './post-processing'
 import { RegisteredSystems } from './registered-systems'
 import { SceneBvh } from './scene-bvh'
 import { SelectionManager } from './selection-manager'
+import { UnsupportedGpuViewerFallback } from './unsupported-gpu-fallback'
 import { ViewerCamera } from './viewer-camera'
 
+// Must be in place before any node material builds — a null texture pulled by
+// a shared override-material pass otherwise kills the render pass outright.
+installTextureNodeNullGuard()
+
 declare module '@react-three/fiber' {
-  interface ThreeElements extends ThreeToJSXElements<typeof THREE> {}
+  // The TS 7 native compiler (tsgo) rejects mapping the entire `three/webgpu`
+  // namespace into JSX — `ThreeToJSXElements<typeof THREE>` triggers a TS2320
+  // heritage conflict with R3F's core-three base plus a TS2590 "union too
+  // complex". tsc 6 tolerates it; tsgo does not. R3F's base ThreeElements
+  // already covers core three, so we extract only the webgpu/TSL node materials
+  // we actually use as JSX (see r3f.docs.pmnd.rs/api/typescript).
+  interface ThreeElements {
+    lineBasicNodeMaterial: ThreeElement<typeof THREE.LineBasicNodeMaterial>
+  }
 }
 
 extend(THREE as any)
@@ -43,6 +74,75 @@ extend(THREE as any)
 // concurrent configure() calls await the same init instead of creating two
 // renderers in parallel and only caching the second.
 const WEBGPU_RENDERER_CACHE = new WeakMap<HTMLCanvasElement, Promise<THREE.WebGPURenderer>>()
+const SCENE_READY_SETTLED_FRAMES = 2
+const SCENE_READY_MAX_WAIT_FRAMES = 180
+const DIRTY_BUILD_KINDS = new Set([
+  'ceiling',
+  'door',
+  'item',
+  'roof',
+  'roof-segment',
+  'stair',
+  'stair-segment',
+  'wall',
+  'window',
+])
+
+const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakSet<object>()
+
+/**
+ * Renderer-level safety net against the empty-vertex-buffer crash.
+ *
+ * Wraps the per-object render function so any draw whose geometry has a count-0
+ * `position` attribute is skipped instead of submitted. One such draw leaves
+ * WebGPU vertex buffer slot 0 unbound, which the validator rejects and which
+ * poisons the *whole* command encoder — so a single stray empty mesh (e.g. a
+ * transient placeholder, or a derived edge/outline geometry) flickers the entire
+ * canvas, not just itself. See `hasDrawableGeometry`.
+ *
+ * The custom render-object function is the documented three.js hook for this
+ * (`Renderer.setRenderObjectFunction`); it must call `renderObject()` for
+ * everything it keeps. `MergedOutlineNode` captures and restores this function
+ * around its passes, so the guard survives outline rendering (its own passes
+ * carry the same check inline).
+ */
+function installEmptyDrawGuard(renderer: THREE.WebGPURenderer) {
+  renderer.setRenderObjectFunction(
+    (
+      object: any,
+      scene: any,
+      camera: any,
+      geometry: any,
+      material: any,
+      group: any,
+      lightsNode: any,
+      clippingContext: any,
+      passId: any,
+    ) => {
+      if (!hasDrawableGeometry(geometry)) {
+        if (warnedEmptyDraw && !warnedEmptyDraw.has(geometry ?? object)) {
+          warnedEmptyDraw.add(geometry ?? object)
+          console.warn(
+            '[viewer] skipped a draw with an empty position buffer (would poison the WebGPU command encoder)',
+            { name: object?.name, type: object?.type, material: material?.name },
+          )
+        }
+        return
+      }
+      ;(renderer as any).renderObject(
+        object,
+        scene,
+        camera,
+        geometry,
+        material,
+        group,
+        lightsNode,
+        clippingContext,
+        passId,
+      )
+    },
+  )
+}
 
 /**
  * Monitors the WebGPU device for loss / uncaptured errors and logs them.
@@ -68,6 +168,11 @@ function GPUDeviceWatcher() {
   const gl = useThree((s) => s.gl)
 
   useEffect(() => {
+    // Detect KTX2 transcode support as soon as the renderer exists, so catalog
+    // `.ktx2` finish textures load even in scenes with no GLB items (whose
+    // loader would otherwise be the only thing to call this).
+    ensureKtx2Support(gl)
+
     const backend = (gl as any).backend
     const device = backend?.device as WebGPUDeviceLike | undefined
 
@@ -119,6 +224,100 @@ function ToneMappingExposure() {
   return null
 }
 
+function hasPendingSceneBuildWork() {
+  const { dirtyNodes, nodes, rootNodeIds } = useScene.getState()
+
+  for (const id of dirtyNodes) {
+    const node = nodes[id]
+    if (!node) continue
+    // Unreachable nodes (orphaned by a broken detach: the parent doesn't list
+    // them in `children`, or no parent and not a root) never render — every
+    // renderer enumerates the parent's `children` array — so no system will
+    // ever build them or clear their mark. They must not hold scene-ready
+    // hostage (observed in prod scene data: two dangling windows kept every
+    // bake of that scene waiting out the full readiness cap).
+    const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+    const reachable = parent
+      ? (parent as { children?: string[] }).children?.includes(id) === true
+      : rootNodeIds.includes(id)
+    if (!reachable) continue
+    const def = nodeRegistry.get(node.type)
+    if (def?.geometry || def?.capabilities?.floorPlaced || DIRTY_BUILD_KINDS.has(node.type)) {
+      return true
+    }
+  }
+
+  return false
+}
+
+function hasCommittedSceneRoot() {
+  const { nodes, rootNodeIds } = useScene.getState()
+  if (rootNodeIds.length === 0) return Object.keys(nodes).length === 0
+  return rootNodeIds.some((id) => sceneRegistry.nodes.has(id))
+}
+
+function SceneReadyTracker({
+  onSceneReadyChange,
+  sceneReadyKey,
+  sceneReadyMaxWaitMs,
+}: {
+  onSceneReadyChange?: (ready: boolean) => void
+  sceneReadyKey?: string | number | null
+  sceneReadyMaxWaitMs?: number
+}) {
+  const invalidate = useThree((state) => state.invalidate)
+  const readyRef = useRef(false)
+  const settledFramesRef = useRef(0)
+  const waitedFramesRef = useRef(0)
+  const waitStartRef = useRef<number | null>(null)
+  const onSceneReadyChangeRef = useRef(onSceneReadyChange)
+
+  useEffect(() => {
+    onSceneReadyChangeRef.current = onSceneReadyChange
+  }, [onSceneReadyChange])
+
+  useEffect(() => {
+    void sceneReadyKey
+    readyRef.current = false
+    settledFramesRef.current = 0
+    waitedFramesRef.current = 0
+    waitStartRef.current = null
+    onSceneReadyChangeRef.current?.(false)
+    invalidate()
+  }, [invalidate, sceneReadyKey])
+
+  useFrame(() => {
+    if (!(onSceneReadyChangeRef.current && !readyRef.current)) return
+
+    waitedFramesRef.current += 1
+    waitStartRef.current ??= performance.now()
+    // Give-up cap so a permanently-dirty node can't block readiness forever.
+    // The frame-count default assumes display-rate frames; a host whose frame
+    // cadence is decoupled from wall time (the headless bake page's timer-driven
+    // loop runs 180 frames in 3.6s — faster than a cold item download) passes
+    // `sceneReadyMaxWaitMs` to make the cap wall-clock instead.
+    const capReached = sceneReadyMaxWaitMs
+      ? performance.now() - waitStartRef.current >= sceneReadyMaxWaitMs
+      : waitedFramesRef.current >= SCENE_READY_MAX_WAIT_FRAMES
+    if (!capReached && (!hasCommittedSceneRoot() || hasPendingSceneBuildWork())) {
+      settledFramesRef.current = 0
+      invalidate()
+      return
+    }
+
+    settledFramesRef.current += 1
+    if (settledFramesRef.current < SCENE_READY_SETTLED_FRAMES) {
+      invalidate()
+      return
+    }
+
+    readyRef.current = true
+    onSceneReadyChangeRef.current(true)
+  }, 10)
+
+  return null
+}
+
 interface ViewerProps {
   children?: React.ReactNode
   hoverStyles?: HoverStyles
@@ -126,6 +325,7 @@ interface ViewerProps {
   perf?: boolean
   useBvh?: boolean
   renderContext?: RenderContext
+  transparent?: boolean
   defaultRender?: {
     shading?: RenderShading
     textures?: boolean
@@ -140,6 +340,44 @@ interface ViewerProps {
    * for a future focus-mode UX.
    */
   isolate?: AnyNodeId[] | null
+  /**
+   * Host-controlled key for scene readiness. Change it whenever a new scene
+   * graph is being loaded; the viewer will report not-ready until the graph is
+   * mounted, build systems have had a frame to settle, and one rendered frame
+   * has presented the new content.
+   */
+  sceneReadyKey?: string | number | null
+  onSceneReadyChange?: (ready: boolean) => void
+  /**
+   * Wall-clock give-up cap for scene readiness, replacing the default
+   * frame-count cap. Set it on hosts whose frame cadence is decoupled from
+   * real time (the headless bake page's timer-driven loop runs the default
+   * 180-frame cap in ~3.6s — shorter than a cold item-model download).
+   */
+  sceneReadyMaxWaitMs?: number
+  /**
+   * Frame cap for the render loop, in frames per second. Defaults to 50, the
+   * value the viewer has always used.
+   *
+   * The viewer runs `frameloop="never"` and advances frames itself through
+   * `<FrameLimiter>`, so this cap is the only thing setting the cadence and a
+   * host cannot raise it from the outside. Hosts that animate the scene on
+   * their own clock — a timeline scrubbing node transforms, a walkthrough
+   * camera — are pinned to it and cannot reach display refresh, which reads as
+   * judder against a 60Hz+ monitor. Raise it for those; lower it to spare the
+   * GPU on a passive or background canvas.
+   */
+  maxFps?: number
+  /**
+   * Skip the TSL post-processing pipeline (SSGI/denoise/ink/outline) and render
+   * the scene directly. For headless/capture surfaces (the bake page) where
+   * frame quality is irrelevant: on a software-rasterised worker the pipeline
+   * consumes the whole CPU budget and bakes time out. Equivalent to the
+   * `?disable=postFx` diagnostic URL flag, but host-controlled.
+   */
+  disablePostFx?: boolean
+  /** Keep the mounted renderer/context warm without advancing scene frames. */
+  renderPaused?: boolean
 }
 
 /** Imperative handle exposed via `ref` on `<Viewer>`. */
@@ -161,11 +399,26 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     perf = false,
     useBvh = true,
     renderContext = 'editor',
+    transparent,
     defaultRender,
     isolate,
+    sceneReadyKey,
+    onSceneReadyChange,
+    sceneReadyMaxWaitMs,
+    maxFps = 50,
+    disablePostFx = false,
+    renderPaused = false,
   },
   ref,
 ) {
+  useEffect(() => {
+    if (nodeRegistry.size === 0) {
+      console.warn(
+        '[viewer] Node registry is empty. Install @pascal-app/nodes and call await loadPlugin(builtinPlugin) before mounting <Viewer>.',
+      )
+    }
+  }, [])
+
   useImperativeHandle(
     ref,
     () => ({
@@ -188,14 +441,38 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     }
   }, [isolate])
 
+  const [rendererInitFailed, setRendererInitFailed] = useState(false)
+
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
+  const transparentBackground = useViewer((state) => state.transparentBackground)
+  // The shadows toggle drives `renderer.shadowMap.enabled` (via the Canvas
+  // `shadows` prop) rather than the lights' `castShadow`: toggling castShadow
+  // off disposes the shadow map's GPU texture but three r184's WebGPU node
+  // cache keeps the shadows-on builder state that references it, so toggling
+  // back on reuses destroyed resources and every frame submit fails with a
+  // GPUValidationError. Disabling at the renderer level rebuilds materials
+  // without disposing anything, so the round-trip is safe.
+  const shadowsEnabled = useViewer((state) => state.shadows)
+  useLayoutEffect(() => {
+    if (transparent === undefined) return
+
+    useViewer.getState().setTransparentBackground(transparent)
+    return () => {
+      useViewer.getState().setTransparentBackground(false)
+    }
+  }, [transparent])
+
+  const defaultShading = defaultRender?.shading
+  const defaultTextures = defaultRender?.textures
+  const defaultColorPreset = defaultRender?.colorPreset
+  const hasDefaultRender = defaultRender != null
   useEffect(() => {
     const ctx = renderContext
     useViewer.getState().setRenderContext(ctx)
     const { shading, shadingByContext, setShading } = useViewer.getState()
-    setShading(shadingByContext[ctx] ?? defaultRender?.shading ?? shading)
+    setShading(shadingByContext[ctx] ?? defaultShading ?? shading)
 
-    if (!defaultRender || typeof window === 'undefined') return
+    if (!hasDefaultRender || typeof window === 'undefined') return
 
     let persistedState: Record<string, unknown> = {}
     const rawPreferences = window.localStorage.getItem('viewer-preferences')
@@ -213,47 +490,76 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
       } catch {}
     }
 
-    if (defaultRender.textures !== undefined && !('textures' in persistedState)) {
-      useViewer.getState().setTextures(defaultRender.textures)
+    if (defaultTextures !== undefined && !('textures' in persistedState)) {
+      useViewer.getState().setTextures(defaultTextures)
     }
-    if (defaultRender.colorPreset && !('colorPreset' in persistedState)) {
-      useViewer.getState().setColorPreset(defaultRender.colorPreset)
+    if (defaultColorPreset && !('colorPreset' in persistedState)) {
+      useViewer.getState().setColorPreset(defaultColorPreset)
     }
-  }, [])
+  }, [defaultColorPreset, defaultShading, defaultTextures, hasDefaultRender, renderContext])
 
   // Coarse-pointer devices (phones/tablets) get a tighter DPR ceiling to keep
   // fragment-shader cost down — saves another ~30% over 1.5x on high-DPI mobile.
   // Desktops (fine pointer) keep the original 1.5 cap.
   const maxDpr =
     typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches ? 1.25 : 1.5
+  const showGpuFallback = rendererInitFailed
+  // When we can't mount the GPU canvas, the SceneReadyTracker never mounts and
+  // the host editor would otherwise wait on its scene-readiness timeout. Signal
+  // readiness explicitly so the host can drop its loader immediately.
+  useEffect(() => {
+    if (showGpuFallback) onSceneReadyChange?.(true)
+  }, [showGpuFallback, onSceneReadyChange])
+
+  if (showGpuFallback) {
+    return <UnsupportedGpuViewerFallback />
+  }
   return (
     <Canvas
       camera={{ position: [50, 50, 50], fov: 50 }}
-      className={`transition-colors duration-700 ${isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'}`}
+      className={`transition-colors duration-700 ${
+        transparentBackground ? 'bg-transparent' : isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'
+      }`}
       dpr={[1, maxDpr]}
       frameloop="never"
       gl={
-        ((props: { canvas?: HTMLCanvasElement }) => {
+        ((props: { canvas?: HTMLCanvasElement; powerPreference?: RendererPowerPreference }) => {
           const canvas = props.canvas
           const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
           if (cached) return cached
           const promise = (async () => {
-            try {
-              const renderer = new THREE.WebGPURenderer(props as any)
-              renderer.toneMapping = THREE.ACESFilmicToneMapping
-              renderer.toneMappingExposure = getSceneTheme(
-                useViewer.getState().sceneTheme,
-              ).toneMappingExposure
-              await renderer.init()
-              return renderer
-            } catch (err) {
-              // Drop the failed promise from the cache so a future Canvas
-              // mount on the same DOM can retry instead of inheriting the
-              // rejection forever.
-              if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
-              console.error('[viewer] WebGPURenderer init failed', err)
-              throw err
+            const result = await initializeGpuRenderer({
+              // Supplying `device` makes three skip its own `requestAdapter`,
+              // so R3F's `powerPreference` only reaches the GPU if we forward it.
+              powerPreference: props.powerPreference,
+              createRenderer: (backendParameters) => {
+                const renderer = new THREE.WebGPURenderer({
+                  ...(props as any),
+                  ...backendParameters,
+                  alpha: true,
+                })
+                renderer.toneMapping = THREE.ACESFilmicToneMapping
+                renderer.toneMappingExposure = getSceneTheme(
+                  useViewer.getState().sceneTheme,
+                ).toneMappingExposure
+                return renderer
+              },
+            })
+            if (result.status === 'ready') {
+              installEmptyDrawGuard(result.renderer)
+              return result.renderer
             }
+
+            if (canvas) WEBGPU_RENDERER_CACHE.delete(canvas)
+            console.error('[viewer] WebGPURenderer init failed', result.error)
+            setRendererInitFailed(true)
+            // Never settles on purpose. Rejecting is what produced
+            // MONOREPO-EDITOR-59: R3F awaits this inside its own configure()
+            // with no catch, so a rejection surfaces as an unhandled rejection.
+            // Resolving is worse still — R3F would call render() on a renderer
+            // that has no context. The state update above unmounts this Canvas,
+            // which is what releases the pending configure().
+            return new Promise<never>(() => undefined)
           })()
           if (canvas) WEBGPU_RENDERER_CACHE.set(canvas, promise)
           return promise
@@ -264,13 +570,19 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
       }}
       shadows={{
         type: THREE.PCFShadowMap,
-        enabled: true,
+        enabled: shadowsEnabled,
       }}
     >
-      <FrameLimiter fps={50} />
+      <FrameLimiter fps={maxFps} paused={renderPaused} />
       <ViewerCamera />
+      <PointerRaycastLayers />
       <GPUDeviceWatcher />
       <ToneMappingExposure />
+      <SceneReadyTracker
+        onSceneReadyChange={onSceneReadyChange}
+        sceneReadyKey={sceneReadyKey}
+        sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+      />
 
       <ErrorBoundary fallback={null} scope="viewer-scene">
         {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
@@ -301,7 +613,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
             kind's `def.system` is loaded via lazy() and rendered here,
             ordered by `system.priority`. */}
         <RegisteredSystems />
-        <PostProcessing hoverStyles={hoverStyles} />
+        <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />
         {selectionManager === 'default' && <SelectionManager />}
         {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
         {children}

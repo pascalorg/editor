@@ -7,8 +7,11 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { EdgeMode } from '../lib/edge-style'
 import type { ColorPreset, RenderShading } from '../lib/materials'
+import { SCENE_THEME_IDS } from '../lib/scene-themes'
 
 export type RenderContext = 'editor' | 'viewer'
+export type MetricNotation = 'meters' | 'millimeters'
+export type WallMode = 'up' | 'cutaway' | 'down' | 'translucent'
 
 type SelectionPath = {
   buildingId: BuildingNode['id'] | null
@@ -26,6 +29,10 @@ type ViewerState = {
   selection: SelectionPath
   previewSelectedIds: BaseNode['id'][]
   setPreviewSelectedIds: (ids: BaseNode['id'][]) => void
+  /** Host-owned selection highlights rendered through the viewer's native
+   * selection paths without changing the local user's editable selection. */
+  externalSelectedIds: BaseNode['id'][]
+  setExternalSelectedIds: (ids: BaseNode['id'][]) => void
   hoverHighlightMode: string
   setHoverHighlightMode: (mode: string) => void
   hoveredId: AnyNode['id'] | ZoneNode['id'] | null
@@ -39,6 +46,26 @@ type ViewerState = {
 
   renderContext: RenderContext
   setRenderContext: (context: RenderContext) => void
+
+  /** True during a GLB bake/export pass. Renderers that normally draw via a
+   * collective InstancedMesh (`def.system`) and mount only an invisible per-node
+   * proxy can watch this to emit real, visible geometry so the exporter — which
+   * clones only the `scene-renderer` subtree — captures them. Transient (never
+   * persisted). */
+  isExporting: boolean
+  setExporting: (value: boolean) => void
+
+  /** Item model loads that exhausted their retries — nodeId → asset URL. The
+   * scene renders without these items (they settle as skipped); a bake host
+   * can persist the map onto the artifact's metadata so a missing item is
+   * queryable instead of silently absent. Transient (never persisted). */
+  itemLoadFailures: Record<string, string>
+  reportItemLoadFailure: (nodeId: string, url: string) => void
+  clearItemLoadFailure: (nodeId: string) => void
+
+  /** Suspend the render loop while the canvas is fully covered (e.g. studio gallery). */
+  renderPaused: boolean
+  setRenderPaused: (value: boolean) => void
 
   shading: RenderShading
   shadingByContext: Partial<Record<RenderContext, RenderShading>>
@@ -58,12 +85,18 @@ type ViewerState = {
 
   unit: 'metric' | 'imperial'
   setUnit: (unit: 'metric' | 'imperial') => void
+  metricNotation: MetricNotation
+  setMetricNotation: (notation: MetricNotation) => void
+  /** True once the user explicitly picked a unit. Until then `unit` is a
+   * locale-derived default and is not persisted, so the default can keep
+   * tracking the browser locale across sessions. */
+  unitExplicit: boolean
 
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
   setLevelMode: (mode: 'stacked' | 'exploded' | 'solo' | 'manual') => void
 
-  wallMode: 'up' | 'cutaway' | 'down'
-  setWallMode: (mode: 'up' | 'cutaway' | 'down') => void
+  wallMode: WallMode
+  setWallMode: (mode: WallMode) => void
 
   showScans: boolean
   setShowScans: (show: boolean) => void
@@ -74,11 +107,34 @@ type ViewerState = {
   showGrid: boolean
   setShowGrid: (show: boolean) => void
 
+  showMeasurements: boolean
+  setShowMeasurements: (show: boolean) => void
+
+  // Presentation flag for parametric zones. When false the zone renderer
+  // unmounts its meshes AND its drei <Html> label (an <Html> costs per-frame
+  // matrix work + live DOM even at opacity 0, so hiding is not enough). The
+  // editor drives this from its structure layer; viewer surfaces keep the
+  // default. Not persisted — derived state, not a user preference.
+  showZones: boolean
+  setShowZones: (show: boolean) => void
+
+  transparentBackground: boolean
+  setTransparentBackground: (transparent: boolean) => void
+
+  // Embed-controlled ink-edge opacity override (null = use the per-mode default).
+  inkOpacity: number | null
+  setInkOpacity: (opacity: number | null) => void
+
   projectId: string | null
   setProjectId: (id: string | null) => void
   projectPreferences: Record<
     string,
-    { showScans?: boolean; showGuides?: boolean; showGrid?: boolean }
+    {
+      showScans?: boolean
+      showGuides?: boolean
+      showGrid?: boolean
+      showMeasurements?: boolean
+    }
   >
 
   // Smart selection update
@@ -86,6 +142,10 @@ type ViewerState = {
   resetSelection: () => void
 
   outliner: Outliner // No setter as we will manipulate directly the arrays
+  /** Bumped by GeometrySystem after each rebuild pass so selection/outline
+   * effects can re-apply to the freshly swapped meshes. */
+  geometryRevision: number
+  bumpGeometryRevision: () => void
 
   // Export functionality
   exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
@@ -96,6 +156,11 @@ type ViewerState = {
 
   walkthroughMode: boolean
   setWalkthroughMode: (mode: boolean) => void
+
+  /** Pointer lock temporarily released mid-walkthrough (⌘/PrintScreen — OS
+   *  screenshot needs a movable cursor); clicking the canvas re-locks. */
+  walkthroughSuspended: boolean
+  setWalkthroughSuspended: (suspended: boolean) => void
 
   cameraDragging: boolean
   setCameraDragging: (dragging: boolean) => void
@@ -114,12 +179,168 @@ type ViewerState = {
   setInputDragging: (dragging: boolean) => void
 }
 
+type PersistedViewerState = Partial<
+  Pick<
+    ViewerState,
+    | 'cameraMode'
+    | 'sceneTheme'
+    | 'shadingByContext'
+    | 'textures'
+    | 'colorPreset'
+    | 'edges'
+    | 'shadows'
+    | 'unit'
+    | 'metricNotation'
+    | 'unitExplicit'
+    | 'levelMode'
+    | 'wallMode'
+    | 'projectPreferences'
+  >
+>
+
+const CAMERA_MODES = ['perspective', 'orthographic'] as const
+const RENDER_SHADINGS = ['solid', 'rendered'] as const
+const COLOR_PRESETS = ['clay', 'white', 'mono', 'blueprint'] as const
+const EDGE_MODES = ['off', 'soft', 'strong'] as const
+const UNITS = ['metric', 'imperial'] as const
+const METRIC_NOTATIONS = ['meters', 'millimeters'] as const
+const LEVEL_MODES = ['stacked', 'exploded', 'solo', 'manual'] as const
+const WALL_MODES = ['up', 'cutaway', 'down', 'translucent'] as const
+
+// Countries still on imperial/US customary units: United States, Liberia, Myanmar.
+const IMPERIAL_REGIONS = ['US', 'LR', 'MM']
+
+// IANA zones for those countries. The timezone tracks the OS clock (actual
+// location), unlike navigator.language where en-US is a common default for
+// users far outside the US.
+const IMPERIAL_TIMEZONES = new Set([
+  'America/New_York',
+  'America/Detroit',
+  'America/Kentucky/Louisville',
+  'America/Kentucky/Monticello',
+  'America/Indiana/Indianapolis',
+  'America/Indiana/Vincennes',
+  'America/Indiana/Winamac',
+  'America/Indiana/Marengo',
+  'America/Indiana/Petersburg',
+  'America/Indiana/Vevay',
+  'America/Indiana/Tell_City',
+  'America/Indiana/Knox',
+  'America/Chicago',
+  'America/Menominee',
+  'America/North_Dakota/Center',
+  'America/North_Dakota/New_Salem',
+  'America/North_Dakota/Beulah',
+  'America/Denver',
+  'America/Boise',
+  'America/Phoenix',
+  'America/Los_Angeles',
+  'America/Anchorage',
+  'America/Juneau',
+  'America/Sitka',
+  'America/Metlakatla',
+  'America/Yakutat',
+  'America/Nome',
+  'America/Adak',
+  'Pacific/Honolulu',
+  'America/Puerto_Rico',
+  'Pacific/Guam',
+  'Africa/Monrovia', // Liberia
+  'Asia/Yangon', // Myanmar
+  'Asia/Rangoon', // Myanmar (legacy alias)
+])
+
+function detectDefaultUnit(): ViewerState['unit'] {
+  if (typeof navigator === 'undefined') return 'metric'
+  try {
+    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    if (timeZone) return IMPERIAL_TIMEZONES.has(timeZone) ? 'imperial' : 'metric'
+    // No timezone available: fall back to an explicit locale region subtag
+    // only (never maximize() — it turns a bare "en" into region US).
+    const region = new Intl.Locale(navigator.language).region
+    return region && IMPERIAL_REGIONS.includes(region) ? 'imperial' : 'metric'
+  } catch {
+    return 'metric'
+  }
+}
+
+function pickString<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
+  return typeof value === 'string' && allowed.includes(value as T) ? (value as T) : fallback
+}
+
+function normalizeShadingByContext(value: unknown): ViewerState['shadingByContext'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+
+  const next: ViewerState['shadingByContext'] = {}
+  for (const [context, shading] of Object.entries(value)) {
+    if (context !== 'editor' && context !== 'viewer') continue
+    next[context] = pickString<RenderShading>(shading, RENDER_SHADINGS, 'rendered')
+  }
+  return next
+}
+
+function normalizeProjectPreferences(value: unknown): ViewerState['projectPreferences'] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+
+  const next: ViewerState['projectPreferences'] = {}
+  for (const [projectId, preferences] of Object.entries(value)) {
+    if (!preferences || typeof preferences !== 'object' || Array.isArray(preferences)) continue
+    const record = preferences as Record<string, unknown>
+    next[projectId] = {
+      ...(typeof record.showScans === 'boolean' ? { showScans: record.showScans } : {}),
+      ...(typeof record.showGuides === 'boolean' ? { showGuides: record.showGuides } : {}),
+      ...(typeof record.showGrid === 'boolean' ? { showGrid: record.showGrid } : {}),
+      ...(typeof record.showMeasurements === 'boolean'
+        ? { showMeasurements: record.showMeasurements }
+        : {}),
+    }
+  }
+  return next
+}
+
+function normalizePersistedViewerState(value: unknown): PersistedViewerState {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {}
+  const state = value as Record<string, unknown>
+
+  return {
+    cameraMode: pickString<ViewerState['cameraMode']>(
+      state.cameraMode,
+      CAMERA_MODES,
+      'perspective',
+    ),
+    sceneTheme: pickString(state.sceneTheme, SCENE_THEME_IDS, 'studio'),
+    shadingByContext: normalizeShadingByContext(state.shadingByContext),
+    textures: typeof state.textures === 'boolean' ? state.textures : true,
+    colorPreset: pickString<ColorPreset>(state.colorPreset, COLOR_PRESETS, 'clay'),
+    edges: pickString<EdgeMode>(state.edges, EDGE_MODES, 'soft'),
+    shadows: typeof state.shadows === 'boolean' ? state.shadows : true,
+    unit: pickString<ViewerState['unit']>(state.unit, UNITS, detectDefaultUnit()),
+    metricNotation: pickString<MetricNotation>(state.metricNotation, METRIC_NOTATIONS, 'meters'),
+    unitExplicit:
+      typeof state.unit === 'string' && UNITS.includes(state.unit as ViewerState['unit']),
+    levelMode: pickString<ViewerState['levelMode']>(state.levelMode, LEVEL_MODES, 'stacked'),
+    wallMode: pickString<ViewerState['wallMode']>(state.wallMode, WALL_MODES, 'up'),
+    projectPreferences: normalizeProjectPreferences(state.projectPreferences),
+  }
+}
+
 const useViewer = create<ViewerState>()(
   persist(
     (set) => ({
       selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
       previewSelectedIds: [],
       setPreviewSelectedIds: (ids) => set({ previewSelectedIds: ids }),
+      externalSelectedIds: [],
+      setExternalSelectedIds: (ids) =>
+        set((state) => {
+          if (
+            state.externalSelectedIds.length === ids.length &&
+            state.externalSelectedIds.every((id, index) => id === ids[index])
+          ) {
+            return state
+          }
+          return { externalSelectedIds: ids }
+        }),
       hoverHighlightMode: 'default',
       setHoverHighlightMode: (mode) =>
         set((state) => (state.hoverHighlightMode === mode ? state : { hoverHighlightMode: mode })),
@@ -134,6 +355,27 @@ const useViewer = create<ViewerState>()(
 
       renderContext: 'editor',
       setRenderContext: (context) => set({ renderContext: context }),
+
+      isExporting: false,
+      setExporting: (value) => set({ isExporting: value }),
+
+      itemLoadFailures: {},
+      reportItemLoadFailure: (nodeId, url) =>
+        set((state) =>
+          state.itemLoadFailures[nodeId] === url
+            ? state
+            : { itemLoadFailures: { ...state.itemLoadFailures, [nodeId]: url } },
+        ),
+      clearItemLoadFailure: (nodeId) =>
+        set((state) => {
+          if (!(nodeId in state.itemLoadFailures)) return state
+          const next = { ...state.itemLoadFailures }
+          delete next[nodeId]
+          return { itemLoadFailures: next }
+        }),
+
+      renderPaused: false,
+      setRenderPaused: (value) => set({ renderPaused: value }),
 
       shading: 'rendered',
       shadingByContext: {},
@@ -155,8 +397,12 @@ const useViewer = create<ViewerState>()(
       shadows: true,
       setShadows: (shadows) => set({ shadows }),
 
-      unit: 'metric',
-      setUnit: (unit) => set({ unit }),
+      unit: detectDefaultUnit(),
+      metricNotation: 'meters',
+      unitExplicit: false,
+      setUnit: (unit) => set({ unit, unitExplicit: true }),
+      setMetricNotation: (metricNotation) =>
+        set({ unit: 'metric', metricNotation, unitExplicit: true }),
 
       levelMode: 'stacked',
       setLevelMode: (mode) => set({ levelMode: mode }),
@@ -203,6 +449,28 @@ const useViewer = create<ViewerState>()(
           return { showGrid: show, projectPreferences }
         }),
 
+      showMeasurements: true,
+      setShowMeasurements: (show) =>
+        set((state) => {
+          const projectPreferences = { ...(state.projectPreferences || {}) }
+          if (state.projectId) {
+            projectPreferences[state.projectId] = {
+              ...(projectPreferences[state.projectId] || {}),
+              showMeasurements: show,
+            }
+          }
+          return { showMeasurements: show, projectPreferences }
+        }),
+
+      showZones: true,
+      setShowZones: (show) => set({ showZones: show }),
+
+      transparentBackground: false,
+      setTransparentBackground: (transparent) => set({ transparentBackground: transparent }),
+
+      inkOpacity: null,
+      setInkOpacity: (opacity) => set({ inkOpacity: opacity }),
+
       projectId: null,
       setProjectId: (id) =>
         set((state) => {
@@ -213,6 +481,7 @@ const useViewer = create<ViewerState>()(
             showScans: prefs.showScans ?? true,
             showGuides: prefs.showGuides ?? true,
             showGrid: prefs.showGrid ?? true,
+            showMeasurements: prefs.showMeasurements ?? true,
           }
         }),
       projectPreferences: {},
@@ -250,6 +519,9 @@ const useViewer = create<ViewerState>()(
         }),
 
       outliner: { selectedObjects: [], hoveredObjects: [] },
+      geometryRevision: 0,
+      bumpGeometryRevision: () =>
+        set((state) => ({ geometryRevision: state.geometryRevision + 1 })),
 
       exportScene: null,
       setExportScene: (fn) => set({ exportScene: fn }),
@@ -258,7 +530,10 @@ const useViewer = create<ViewerState>()(
       setDebugColors: (enabled) => set({ debugColors: enabled }),
 
       walkthroughMode: false,
-      setWalkthroughMode: (mode) => set({ walkthroughMode: mode }),
+      setWalkthroughMode: (mode) => set({ walkthroughMode: mode, walkthroughSuspended: false }),
+
+      walkthroughSuspended: false,
+      setWalkthroughSuspended: (suspended) => set({ walkthroughSuspended: suspended }),
 
       cameraDragging: false,
       setCameraDragging: (dragging) => set({ cameraDragging: dragging }),
@@ -267,6 +542,10 @@ const useViewer = create<ViewerState>()(
     }),
     {
       name: 'viewer-preferences',
+      merge: (persistedState, currentState) => ({
+        ...currentState,
+        ...normalizePersistedViewerState(persistedState),
+      }),
       partialize: (state) => ({
         cameraMode: state.cameraMode,
         sceneTheme: state.sceneTheme,
@@ -275,7 +554,8 @@ const useViewer = create<ViewerState>()(
         colorPreset: state.colorPreset,
         edges: state.edges,
         shadows: state.shadows,
-        unit: state.unit,
+        ...(state.unitExplicit ? { unit: state.unit } : {}),
+        metricNotation: state.metricNotation,
         levelMode: state.levelMode,
         wallMode: state.wallMode,
         projectPreferences: state.projectPreferences,
@@ -283,5 +563,18 @@ const useViewer = create<ViewerState>()(
     },
   ),
 )
+
+/** Apply an authoritative country code (e.g. IP-derived by the host app) as
+ * the unit default. Stronger signal than the timezone heuristic used at store
+ * creation, but still a default: it never overrides an explicit user choice
+ * and is not persisted (the unit only sticks once the user touches the
+ * toggle). */
+export function applyCountryUnitDefault(country: string | null | undefined) {
+  if (!country) return
+  const state = useViewer.getState()
+  if (state.unitExplicit) return
+  const unit = IMPERIAL_REGIONS.includes(country.toUpperCase()) ? 'imperial' : 'metric'
+  if (state.unit !== unit) useViewer.setState({ unit })
+}
 
 export default useViewer

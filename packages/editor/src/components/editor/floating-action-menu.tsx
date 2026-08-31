@@ -5,20 +5,32 @@ import {
   type AnyNodeId,
   type CeilingNode,
   ColumnNode,
+  createSceneApi,
   DoorNode,
   ElevatorNode,
+  emitter,
   FenceNode,
   generateId,
+  getActiveRoofHeight,
+  getEffectiveNode,
+  getWallCurveLength,
+  getWallEffectiveHeightForNodes,
+  getWallThickness,
   ItemNode,
+  isCurvedWall,
   isRegistryMovable,
   isRegistrySelectable,
+  isSplineFence,
+  type NodeQuickAction,
   nodeRegistry,
   RoofSegmentNode,
+  runAsSingleSceneHistoryStep,
   type SlabNode,
   SpawnNode,
-  StairNode,
   StairSegmentNode,
   sceneRegistry,
+  summarizeSystemFor,
+  useLiveNodeOverrides,
   useScene,
   WallNode,
   WindowNode,
@@ -26,13 +38,48 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useFrame } from '@react-three/fiber'
-import { useCallback, useRef } from 'react'
+import { useCallback, useMemo, useRef } from 'react'
 import * as THREE from 'three'
+import { useShallow } from 'zustand/react/shallow'
+import { useReducedMotion } from '../../hooks/use-reduced-motion'
+import { resolveMoveActionNode } from '../../lib/direct-manipulation'
+import { getFloatingMenuScale } from '../../lib/floating-menu-scale'
+import {
+  createFreshPlacementSubtree,
+  duplicatesAsFreshSubtree,
+  prepareFreshPlacementRootDuplicate,
+} from '../../lib/fresh-planar-placement'
+import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
+import { curveReshapeScope, holeEditScope } from '../../lib/interaction/scope'
+import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
+import { collectQuickActionNodeScope } from '../../lib/quick-action-nodes'
 import { duplicateRoofSubtree } from '../../lib/roof-duplication'
-import { sfxEmitter } from '../../lib/sfx-bus'
-import { duplicateStairSubtree } from '../../lib/stair-duplication'
+import { emitDeleteSFX, sfxEmitter } from '../../lib/sfx-bus'
+import { cn } from '../../lib/utils'
 import useEditor from '../../store/use-editor'
+import useInteractionScope, {
+  useActiveHandleDrag,
+  useEndpointReshape,
+  useIsCurveReshape,
+} from '../../store/use-interaction-scope'
+import { IconRefGlyph } from '../ui/icon-ref'
+import { formatMeasurement, MeasurementPill } from './measurement-pill'
 import { NodeActionMenu } from './node-action-menu'
+
+/**
+ * A kind shows the system pill when it exposes typed ports — `def.ports`
+ * is exactly what makes a node participate in the supply/return graph the
+ * pill summarizes. Keeps the menu off a hand-maintained kind list.
+ */
+const hasPorts = (type: string) => nodeRegistry.get(type)?.ports != null
+
+/**
+ * A kind shows the rotation-axis pill when its R/T keyboard rotation
+ * turns around a user-cyclable axis (`keyboardActions.axisCycling`) —
+ * duct / pipe fittings with full 3D orientation.
+ */
+const hasAxisCycling = (type: string) =>
+  nodeRegistry.get(type)?.keyboardActions?.axisCycling === true
 
 const ALLOWED_TYPES = [
   'item',
@@ -53,17 +100,6 @@ const ALLOWED_TYPES = [
 const DELETE_ONLY_TYPES: string[] = []
 const HOLE_TYPES = ['slab', 'ceiling']
 
-// Menu scales with camera zoom so it feels anchored to the object, but is
-// clamped on both ends so it stays readable when zoomed way out and doesn't
-// dominate the screen when zoomed in close. Reference values are picked so
-// scale = 1 lands near the editor's default framing.
-const MIN_MENU_SCALE = 0.5
-// Cap at 1 so zooming in doesn't grow the menu past its default pixel size —
-// only zoom-out shrinks it (down to MIN_MENU_SCALE).
-const MAX_MENU_SCALE = 1
-const REF_ORTHO_ZOOM = 20
-const REF_CAMERA_DISTANCE = 12
-
 // World-space Y distance from a node's bbox top to the floating menu anchor.
 // Per-type because in-world chrome above the node (height-resize arrows,
 // measurement labels) varies in vertical reach.
@@ -76,9 +112,10 @@ const MENU_Y_OFFSETS: Record<string, number> = {
   door: 0.6,
   window: 0.6,
   column: 0.6,
-  // Fence: clears the height-resize arrow (sits at fence.height + 0.45)
-  // plus the chevron's own visual size, so the menu floats just above it.
-  fence: 1.05,
+  // Fence: still clears the height-resize arrow (sits at fence.height +
+  // 0.45) plus the chevron's visual size, but kept low so the menu sits
+  // close to the fence rather than floating well above it.
+  fence: 0.7,
   // Elevator: clears the cab-height arrow which sits above the SHAFT
   // top (resolved through level entries), so the menu floats above it.
   elevator: 0.9,
@@ -100,42 +137,225 @@ const MENU_Y_OFFSETS: Record<string, number> = {
 function getMenuYOffset(node: AnyNode | null): number {
   if (!node) return MENU_Y_OFFSET_DEFAULT + EXTRA_MENU_LIFT
   if (node.type === 'stair-segment') {
-    return (
-      (MENU_Y_OFFSETS[`stair-${node.segmentType}`] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
-    )
+    return (MENU_Y_OFFSETS[`stair-${node.segmentType}`] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
   }
   return (MENU_Y_OFFSETS[node.type] ?? MENU_Y_OFFSET_DEFAULT) + EXTRA_MENU_LIFT
 }
 
+function getAttributeVersion(
+  attribute: THREE.BufferAttribute | THREE.InterleavedBufferAttribute | null | undefined,
+): number {
+  return attribute && 'version' in attribute && typeof attribute.version === 'number'
+    ? attribute.version
+    : 0
+}
+
+function SideAddGlyph({ direction }: { direction: 'left' | 'right' }) {
+  return (
+    <svg
+      aria-hidden="true"
+      className="h-3.5 w-3.5"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="1.7"
+      viewBox="0 0 24 24"
+    >
+      <rect x="8" y="7" width="9" height="10" rx="1.75" />
+      <path d="M12.5 7v10" />
+      {direction === 'left' ? (
+        <>
+          <path d="M6.5 12H2.75" />
+          <path d="m5.5 9.75-2.75 2.25 2.75 2.25" />
+        </>
+      ) : (
+        <>
+          <path d="M17.5 12h3.75" />
+          <path d="m18.5 9.75 2.75 2.25-2.75 2.25" />
+        </>
+      )}
+    </svg>
+  )
+}
+
+// Builtin string tokens map to the generic glyphs above; kind-owned marks
+// arrive as IconRef objects and render through the shared IconRefGlyph.
+function QuickActionIcon({ action }: { action: NodeQuickAction }) {
+  const icon = action.icon
+  if (!icon) return null
+  if (typeof icon === 'object') return <IconRefGlyph icon={icon} size={14} />
+  switch (icon) {
+    case 'add-left':
+      return <SideAddGlyph direction="left" />
+    case 'add-right':
+      return <SideAddGlyph direction="right" />
+    default:
+      return null
+  }
+}
+
+function collectQuickActionNodes(
+  nodes: Record<AnyNodeId, AnyNode>,
+  selectedId: string | null,
+): Record<AnyNodeId, AnyNode> | null {
+  if (!selectedId) return null
+  const selected = nodes[selectedId as AnyNodeId]
+  const def = selected ? nodeRegistry.get(selected.type) : undefined
+  if (!def?.quickActions) return null
+  return collectQuickActionNodeScope(nodes, selectedId, def.quickActionNodeScope)
+}
+
+// Pooled scratch for the per-frame anchor recompute (see useFrame below) so a
+// dragged node doesn't allocate a fresh Box3 + Vector3 every frame.
+const _anchorBox = new THREE.Box3()
+const _anchorCenter = new THREE.Vector3()
+
+function getObjectGeometryKey(object: THREE.Object3D): string {
+  const parts: string[] = []
+  object.traverse((child) => {
+    const geometry = (child as Partial<THREE.Mesh>).geometry
+    if (!geometry) return
+
+    parts.push(
+      [
+        geometry.id,
+        getAttributeVersion(geometry.getAttribute('position')),
+        getAttributeVersion(geometry.getIndex()),
+      ].join(':'),
+    )
+  })
+  return parts.join('|')
+}
+
+function setNodeDerivedMenuAnchor(
+  node: AnyNode,
+  object: THREE.Object3D,
+  target: THREE.Vector3,
+): boolean {
+  if (node.type !== 'roof-segment') return false
+
+  const visualTop =
+    node.wallHeight +
+    getActiveRoofHeight(node) +
+    Math.max(0, node.deckThickness ?? 0) +
+    Math.max(0, node.shingleThickness ?? 0)
+
+  target.set(0, visualTop, 0).applyMatrix4(object.matrixWorld)
+  target.y += getMenuYOffset(node)
+  return true
+}
+
+// Fence schema defaults — mirror packages/nodes/src/fence/definition.ts so the
+// pill reads sensibly before an explicit height / thickness is set.
+const FENCE_DEFAULT_HEIGHT = 1.8
+const FENCE_DEFAULT_THICKNESS = 0.08
+
+// Dimensions for the height-drag pill. Walls and fences both carry
+// start/end/curveOffset, so getWallCurveLength covers length for either.
+function getHeightPillDimensions(node: WallNode | FenceNode): {
+  height: number
+  length: number
+  thickness: number
+} {
+  if (node.type === 'wall') {
+    return {
+      height: getWallEffectiveHeightForNodes(node, useScene.getState().nodes),
+      length: getWallCurveLength(node),
+      thickness: getWallThickness(node),
+    }
+  }
+  return {
+    height: node.height ?? FENCE_DEFAULT_HEIGHT,
+    length: getWallCurveLength(node),
+    thickness: node.thickness ?? FENCE_DEFAULT_THICKNESS,
+  }
+}
+
 export function FloatingActionMenu() {
+  const reducedMotion = useReducedMotion()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const updateNode = useScene((s) => s.updateNode)
   const mode = useEditor((s) => s.mode)
   const isFloorplanHovered = useEditor((s) => s.isFloorplanHovered)
-  const movingWallEndpoint = useEditor((s) => s.movingWallEndpoint)
-  const movingFenceEndpoint = useEditor((s) => s.movingFenceEndpoint)
-  const curvingFence = useEditor((s) => s.curvingFence)
+  const canFindNode = useEditor((s) => s.canFindNode)
+  const endpointReshape = useEndpointReshape()
+  const isCurveReshape = useIsCurveReshape()
   const setMovingNode = useEditor((s) => s.setMovingNode)
-  const setCurvingWall = useEditor((s) => s.setCurvingWall)
-  const setCurvingFence = useEditor((s) => s.setCurvingFence)
   const setSelection = useViewer((s) => s.setSelection)
-  const setEditingHole = useEditor((s) => s.setEditingHole)
+  const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
+  // Drives the height-drag dimension pill below the menu. `activeHandleDrag`
+  // flips only at drag start / end, so subscribing here is cheap — the live
+  // height value is written imperatively in the useFrame below.
+  const activeHandleDrag = useActiveHandleDrag()
+  // R/T rotation axis for kinds with full 3D orientation (duct fittings).
+  const rotationAxis = useEditor((s) => s.rotationAxis)
+  // The floating action menu is an action-conflicting control: hard-hidden
+  // during any active interaction so it never competes with the live action.
+  const scope = useInteractionScope((s) => s.scope)
+  const menuStepBack = resolveOverlayPolicy(scope).conflictingControls === 'hidden'
 
   const groupRef = useRef<THREE.Group>(null)
   const menuScaleRef = useRef<HTMLDivElement>(null)
+  const pillHeightRef = useRef<HTMLSpanElement>(null)
+
+  // Cached world anchor. The anchor is derived from `Box3.setFromObject`,
+  // which traverses the selected object's children — so a node with a
+  // continuously-animating child (the spinning turbine-vent head) makes the
+  // AABB wobble a few millimetres every frame, and the menu drifts even with
+  // a still camera. We instead recompute the box only when the selection,
+  // the object's world transform, or its geometry actually changes, and
+  // reuse the cached anchor otherwise. (Also removes a per-frame
+  // `setFromObject` for every selection.)
+  const anchorRef = useRef(new THREE.Vector3())
+  const hasAnchorRef = useRef(false)
+  const lastMatrixRef = useRef(new THREE.Matrix4())
+  const lastAnchorKeyRef = useRef<{
+    id: string | null
+    node: AnyNode | null
+    geometryKey: string | null
+  }>({
+    id: null,
+    node: null,
+    geometryKey: null,
+  })
 
   // Only show for single selection of specific types
-  const selectedId = selectedIds.length === 1 ? selectedIds[0] : null
+  const selectedId = selectedIds.length === 1 ? (selectedIds[0] ?? null) : null
 
   // Subscribe just to the selected node so unrelated scene updates do not
   // re-render this menu.
   const node = useScene((s) => (selectedId ? (s.nodes[selectedId as AnyNodeId] ?? null) : null))
+  const quickActionNodes = useScene(useShallow((s) => collectQuickActionNodes(s.nodes, selectedId)))
+  const quickActions = useMemo<NodeQuickAction[]>(
+    () =>
+      node && quickActionNodes
+        ? (nodeRegistry.get(node.type)?.quickActions?.({
+            node: node as never,
+            nodes: quickActionNodes,
+          }) ?? [])
+        : [],
+    [node, quickActionNodes],
+  )
   // ALLOWED_TYPES is the hardcoded set; registry-driven kinds (any
   // NodeDefinition with `capabilities.selectable`) get the floating menu
   // by default too. Phase 4 collapses these into a single registry check.
   const isValidType = node
-    ? ALLOWED_TYPES.includes(node.type) || isRegistrySelectable(node.type)
+    ? nodeRegistry.get(node.type)?.presentation?.actionMenu !== false &&
+      (ALLOWED_TYPES.includes(node.type) || isRegistrySelectable(node.type))
     : false
+
+  // Height-drag pill: shown just above the menu only while the selected
+  // wall/fence height arrow is being dragged. Length + thickness are fixed
+  // during a height drag, so they're computed here; the live height value
+  // is updated imperatively in the useFrame (same pattern as the scale).
+  const pillNode = node?.type === 'wall' || node?.type === 'fence' ? node : null
+  const isHeightDragPill =
+    pillNode !== null &&
+    activeHandleDrag?.nodeId === selectedId &&
+    activeHandleDrag?.label === 'height'
+  const pillDims = pillNode ? getHeightPillDimensions(pillNode) : null
 
   // Boolean selector, only re-renders when curving availability actually flips.
   const canCurveSelectedWall = useScene((s) => {
@@ -155,33 +375,97 @@ export function FloatingActionMenu() {
   })
 
   useFrame((state) => {
-    if (!(selectedId && isValidType && groupRef.current)) return
+    if (!(selectedId && node && isValidType && groupRef.current)) return
 
     // Scale the HTML menu with camera zoom (ortho) or inverse distance
     // (perspective) so it feels anchored to the world, clamped on both ends
     // so it stays readable at extreme zoom-out and doesn't fill the screen
     // when zoomed in close.
     if (menuScaleRef.current) {
-      const raw =
-        state.camera instanceof THREE.OrthographicCamera
-          ? state.camera.zoom / REF_ORTHO_ZOOM
-          : REF_CAMERA_DISTANCE /
-            Math.max(state.camera.position.distanceTo(groupRef.current.position), 0.001)
-      const scale = Math.min(MAX_MENU_SCALE, Math.max(MIN_MENU_SCALE, raw))
+      const scale = getFloatingMenuScale(state.camera, groupRef.current.position)
       menuScaleRef.current.style.transform = `scale(${scale})`
+    }
+
+    // Live height readout for the drag pill. The dragged height lands in
+    // `useLiveNodeOverrides` (not the scene store) each frame, so read it
+    // imperatively here instead of forcing a per-frame React re-render.
+    if (
+      pillHeightRef.current &&
+      (node?.type === 'wall' || node?.type === 'fence') &&
+      activeHandleDrag?.nodeId === selectedId &&
+      activeHandleDrag?.label === 'height'
+    ) {
+      const override = useLiveNodeOverrides.getState().overrides.get(selectedId) as
+        | { height?: number }
+        | undefined
+      const fallbackHeight =
+        node.type === 'wall'
+          ? getWallEffectiveHeightForNodes(node, useScene.getState().nodes)
+          : FENCE_DEFAULT_HEIGHT
+      const liveHeight = override?.height ?? node.height ?? fallbackHeight
+      pillHeightRef.current.textContent = `H ${formatMeasurement(liveHeight, unit, metricNotation)}`
     }
 
     const obj = sceneRegistry.nodes.get(selectedId)
     if (obj) {
-      // Calculate bounding box in world space
-      const box = new THREE.Box3().setFromObject(obj)
-      if (!box.isEmpty()) {
-        const center = box.getCenter(new THREE.Vector3())
-        // Position above the object. Per-type offsets clear each kind's
-        // in-world chrome (height-resize arrows, measurement labels).
-        groupRef.current.position.set(center.x, box.max.y + getMenuYOffset(node), center.z)
+      obj.updateWorldMatrix(true, false)
+
+      // Recompute the anchor only when the object genuinely changes —
+      // reselected, moved (its own world matrix changed), or resized
+      // (a fresh store node on commit, or a live override / handle drag
+      // mid-resize). A spinning child changes the head's matrix, not the
+      // registered group's, so it never triggers a recompute → the menu
+      // holds still.
+      // Cheapest guards first: a selection swap, the object's own world
+      // transform changing (true every frame during a drag), a live override,
+      // or an active handle drag all force a recompute on their own — so skip
+      // the geometry traversal (`getObjectGeometryKey` walks the whole subtree
+      // reading attribute versions) until none of them fired and a
+      // geometry-only change is the only thing left that could move the anchor.
+      const overrideActive = useLiveNodeOverrides.getState().overrides.get(selectedId) != null
+      const dragActive = activeHandleDrag?.nodeId === selectedId
+      const selectionChanged =
+        lastAnchorKeyRef.current.id !== selectedId || lastAnchorKeyRef.current.node !== node
+      const matrixChanged = !lastMatrixRef.current.equals(obj.matrixWorld)
+
+      let geometryKey = lastAnchorKeyRef.current.geometryKey
+      let needsRecompute = selectionChanged || matrixChanged || overrideActive || dragActive
+      // Only when nothing cheaper fired do we pay for the subtree traversal —
+      // a geometry-only change is the lone remaining trigger. When a cheaper
+      // guard already forced a recompute the stored key is reused; the matrix
+      // (or override/drag) keeps recomputing the anchor every frame, so a
+      // geometry edit mid-drag is absorbed, and the next idle frame refreshes
+      // the key against the live geometry.
+      if (!needsRecompute) {
+        geometryKey = getObjectGeometryKey(obj)
+        if (geometryKey !== lastAnchorKeyRef.current.geometryKey) needsRecompute = true
       }
 
+      if (needsRecompute) {
+        const effectiveNode = getEffectiveNode(node)
+        if (!setNodeDerivedMenuAnchor(effectiveNode, obj, anchorRef.current)) {
+          _anchorBox.setFromObject(obj)
+          if (!_anchorBox.isEmpty()) {
+            _anchorBox.getCenter(_anchorCenter)
+            // Position above the object. Per-type offsets clear each kind's
+            // in-world chrome (height-resize arrows, measurement labels).
+            anchorRef.current.set(
+              _anchorCenter.x,
+              _anchorBox.max.y + getMenuYOffset(effectiveNode),
+              _anchorCenter.z,
+            )
+            hasAnchorRef.current = true
+          }
+        } else {
+          hasAnchorRef.current = true
+        }
+        lastMatrixRef.current.copy(obj.matrixWorld)
+        lastAnchorKeyRef.current = { id: selectedId, node, geometryKey }
+      }
+
+      if (hasAnchorRef.current) {
+        groupRef.current.position.copy(anchorRef.current)
+      }
     }
   })
 
@@ -192,22 +476,23 @@ export function FloatingActionMenu() {
       sfxEmitter.emit('sfx:item-pick')
       if (node.type === 'wall') {
         if (!canCurveSelectedWall) return
-        setCurvingWall(node)
+        useInteractionScope.getState().begin(curveReshapeScope(node.id))
       } else if (node.type === 'fence') {
-        setCurvingFence(node)
+        useInteractionScope.getState().begin(curveReshapeScope(node.id))
       } else {
         return
       }
       setSelection({ selectedIds: [] })
     },
-    [canCurveSelectedWall, node, setCurvingFence, setCurvingWall, setSelection],
+    [canCurveSelectedWall, node, setSelection],
   )
   const handleMove = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!node) return
       sfxEmitter.emit('sfx:item-pick')
-      setMovingNode(node as any)
+      const sceneNodes = useScene.getState().nodes
+      setMovingNode(resolveMoveActionNode(node, sceneNodes) as any)
       setSelection({ selectedIds: [] })
     },
     [node, setMovingNode, setSelection],
@@ -229,9 +514,27 @@ export function FloatingActionMenu() {
 
       useScene.temporal.getState().pause()
 
-      let duplicateInfo = structuredClone(node) as any
-      delete duplicateInfo.id
-      duplicateInfo.metadata = { ...duplicateInfo.metadata, isNew: true }
+      if (duplicatesAsFreshSubtree(node as AnyNode)) {
+        let draftId: AnyNodeId | null = null
+        try {
+          draftId = createFreshPlacementSubtree(node.id as AnyNodeId)
+          const draft = draftId ? useScene.getState().nodes[draftId] : null
+          if (draft) {
+            setMovingNode(draft as any)
+            setSelection({ selectedIds: [] })
+            return
+          }
+        } catch (error) {
+          if (draftId && useScene.getState().nodes[draftId]) {
+            useScene.getState().deleteNode(draftId)
+          }
+          console.error('Failed to duplicate node subtree', error)
+        }
+        useScene.temporal.getState().resume()
+        return
+      }
+
+      const duplicateInfo = prepareFreshPlacementRootDuplicate(node as AnyNode) as any
 
       let duplicate: AnyNode | null = null
       try {
@@ -254,11 +557,6 @@ export function FloatingActionMenu() {
         } else if (node.type === 'roof-segment') {
           duplicateInfo.id = generateId('rseg')
           duplicate = RoofSegmentNode.parse(duplicateInfo)
-        } else if (node.type === 'stair') {
-          duplicateInfo.children = []
-          duplicateInfo.metadata = { ...duplicateInfo.metadata }
-          delete duplicateInfo.metadata?.isNew
-          duplicate = StairNode.parse(duplicateInfo)
         } else if (node.type === 'stair-segment') {
           duplicate = StairSegmentNode.parse(duplicateInfo)
         } else if (node.type === 'spawn') {
@@ -296,11 +594,7 @@ export function FloatingActionMenu() {
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
         } else if (duplicate.type === 'fence') {
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
-        } else if (
-          duplicate.type === 'roof-segment' ||
-          duplicate.type === 'stair' ||
-          duplicate.type === 'stair-segment'
-        ) {
+        } else if (duplicate.type === 'roof-segment' || duplicate.type === 'stair-segment') {
           // Add small offset to make it visible
           if ('position' in duplicate) {
             duplicate.position = [
@@ -309,26 +603,43 @@ export function FloatingActionMenu() {
               duplicate.position[2] + 1,
             ]
           }
-          if (node.type === 'stair' && duplicate.type === 'stair') {
-            duplicateStairSubtree(node.id as AnyNodeId, { mode: 'move' })
-          } else {
-            useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
-          }
-
-          // Duplicate children for stair nodes
-        } else if (duplicate.type === 'chimney' || duplicate.type === 'dormer') {
-          // Chimney & dormer use pure drag-to-place: NO node is
-          // inserted into the scene until the user clicks a roof
-          // segment. The `setMovingNode` call below hands the clone
-          // (with `metadata.isNew = true` + no id) to
-          // `MoveChimneyTool` / `MoveDormerTool`, which call
-          // `createNode` on the click that commits the placement.
-          // Skipping the auto-create avoids the "duplicate appears at
-          // +1 offset before drag" UX the other registry kinds use.
+          useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
+        } else if (
+          duplicate.type === 'item' ||
+          duplicate.type === 'chimney' ||
+          duplicate.type === 'dormer'
+        ) {
+          // Items, chimneys & dormers use pure drag-to-place: NO node is
+          // inserted into the scene until the user clicks to commit. The
+          // `setMovingNode` call below hands the clone (with
+          // `metadata.isNew = true` + no id) to its move tool —
+          // `MoveItemTool` / `MoveChimneyTool` / `MoveDormerTool` — which
+          // create a draft and call `createNode` on the commit click.
+          // Pre-creating here would drop a second copy into the scene
+          // before any click — the furnish-tab "duplicate auto-places an
+          // item without clicking" bug. (Item has its own
+          // draft-committing move tool, so it must skip the generic
+          // registry auto-create branch below.)
+        } else if (
+          duplicate.type === 'duct-segment' ||
+          duplicate.type === 'duct-fitting' ||
+          duplicate.type === 'pipe-segment' ||
+          duplicate.type === 'lineset' ||
+          duplicate.type === 'liquid-line'
+        ) {
+          // Duct runs & fittings, DWV pipe runs, and refrigerant linesets use
+          // pure drag-to-place: NO node is inserted into the scene until the
+          // commit click. `setMovingNode` below hands the clone (with
+          // `metadata.isNew`) to its ghost tool (`MoveDuctSegmentTool` /
+          // `MoveDuctFittingTool` / `MovePipeSegmentTool` / `MoveLinesetTool`),
+          // which previews a translucent copy inside a footprint bounding box
+          // on the cursor and calls `createNode` on the drop click.
+          // Pre-creating here would drop a copy before any click — the
+          // "auto-places it" bug.
         } else if (nodeRegistry.has(duplicate.type)) {
-          // Registry-driven kinds: offset the position slightly so the
-          // duplicate doesn't overlap exactly, then create + hand to the
-          // move tool. Mirrors the roof-segment / stair-segment behavior.
+          // Registry-driven kinds: offset slightly so the duplicate doesn't
+          // overlap exactly, then create + hand to the move tool. Mirrors the
+          // roof-segment / stair-segment behavior.
           if ('position' in duplicate && Array.isArray((duplicate as any).position)) {
             const pos = (duplicate as { position: [number, number, number] }).position
             ;(duplicate as { position: [number, number, number] }).position = [
@@ -336,6 +647,12 @@ export function FloatingActionMenu() {
               pos[1],
               pos[2] + 1,
             ]
+          } else if ('path' in duplicate && Array.isArray((duplicate as any).path)) {
+            // Other polyline kinds (pipe / lineset) carry a `path`, not a
+            // `position`. Create the copy HIDDEN so nothing is auto-placed:
+            // their shared path mover reveals it as a cursor-following
+            // preview on the first mouse move and commits on the next click.
+            ;(duplicate as { visible?: boolean }).visible = false
           }
           useScene.getState().createNode(duplicate, duplicate.parentId as AnyNodeId)
         }
@@ -355,12 +672,8 @@ export function FloatingActionMenu() {
           nodeRegistry.has(duplicate.type)
         ) {
           setMovingNode(duplicate as any)
-        } else if (duplicate.type === 'stair') {
-          setSelection({ selectedIds: [duplicate.id as AnyNodeId] })
         }
-        if (duplicate.type !== 'stair') {
-          setSelection({ selectedIds: [] })
-        }
+        setSelection({ selectedIds: [] })
       }
     },
     [node, setMovingNode, setSelection],
@@ -397,33 +710,63 @@ export function FloatingActionMenu() {
         holes: [...currentHoles, newHole],
         holeMetadata: [...currentMetadata, { source: 'manual' }],
       })
-      setEditingHole({ nodeId: selectedId, holeIndex: currentHoles.length })
+      useInteractionScope
+        .getState()
+        .begin(holeEditScope({ nodeId: selectedId, holeIndex: currentHoles.length }))
       // Re-assert selection so the node stays selected
       setSelection({ selectedIds: [selectedId] })
     },
-    [node, selectedId, updateNode, setEditingHole, setSelection],
+    [node, selectedId, updateNode, setSelection],
   )
 
   const handleDelete = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
       if (!selectedId) return
-      if (node?.type === 'item') {
-        sfxEmitter.emit('sfx:item-delete')
-      } else {
-        sfxEmitter.emit('sfx:structure-delete')
-      }
+      emitDeleteSFX(node?.type)
       setSelection({ selectedIds: [] })
       useScene.getState().deleteNode(selectedId as AnyNodeId)
     },
     [node?.type, selectedId, setSelection],
   )
 
+  // "Find in catalog": the editor only signals intent — the host (community)
+  // listens for `selection:find-node` and reveals the node in its browser.
+  const handleFind = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (node) emitter.emit('selection:find-node', node)
+    },
+    [node],
+  )
+
+  const handleQuickAction = useCallback(
+    (action: NodeQuickAction) => (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.stopPropagation()
+      if (!node) return
+      if (action.disabled) {
+        if (action.blockedFeedback) {
+          playBlockedQuickActionFeedback(e.currentTarget, reducedMotion)
+        }
+        return
+      }
+      const run = () => action.run({ node, sceneApi: createSceneApi(useScene) })
+      const result =
+        action.history === 'single' ? runAsSingleSceneHistoryStep(useScene, run) : run()
+      if (result?.selectedIds) setSelection({ selectedIds: result.selectedIds })
+      if (result?.selectedIds) {
+        const selectedDifferentNode = result.selectedIds.some((id) => id !== node.id)
+        sfxEmitter.emit(selectedDifferentNode ? 'sfx:item-place' : 'sfx:item-pick')
+      }
+    },
+    [node, reducedMotion, setSelection],
+  )
+
   if (
     !(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete') ||
-    movingWallEndpoint ||
-    movingFenceEndpoint ||
-    curvingFence
+    endpointReshape ||
+    isCurveReshape ||
+    menuStepBack
   )
     return null
 
@@ -436,23 +779,27 @@ export function FloatingActionMenu() {
             pointerEvents: 'auto',
             touchAction: 'none',
           }}
-          zIndexRange={[100, 0]}
+          zIndexRange={[25, 0]}
         >
-          <div ref={menuScaleRef} style={{ transformOrigin: 'center center' }}>
+          <div
+            className="relative flex flex-col items-center"
+            ref={menuScaleRef}
+            style={{ transformOrigin: 'center center' }}
+          >
             <NodeActionMenu
+              onFind={node && canFindNode ? handleFind : undefined}
               onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
               onCurve={
-                node?.type === 'fence' || (node?.type === 'wall' && canCurveSelectedWall)
+                (node?.type === 'fence' && !isSplineFence(node) && !isCurvedWall(node)) ||
+                (node?.type === 'wall' && canCurveSelectedWall)
                   ? handleCurve
                   : undefined
               }
               onMove={
-                // Registry-driven: any kind that declares
+                // Fully registry-driven: any kind that declares
                 // `capabilities.movable`, a `floorplanMoveTarget`, or a
                 // 3D `affordanceTools.move` mover gets the Move button.
-                // Replaces the previous 13-arm `node?.type === '…'`
-                // chain so adding a new movable kind doesn't touch this
-                // file.
+                // Adding a new movable kind never touches this file.
                 node && isRegistryMovable(node.type) ? handleMove : undefined
               }
               onDelete={handleDelete}
@@ -467,9 +814,144 @@ export function FloatingActionMenu() {
               onPointerDown={(e) => e.stopPropagation()}
               onPointerUp={(e) => e.stopPropagation()}
             />
+            {quickActions.length > 0 ? (
+              <div
+                className="pointer-events-auto mt-1 inline-flex w-max items-center justify-center gap-0.5 rounded-lg border border-border/50 bg-background/90 px-1.5 py-1 shadow-md backdrop-blur-md"
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+              >
+                {quickActions.map((action) => (
+                  <button
+                    aria-disabled={action.disabled || undefined}
+                    aria-label={action.title ?? action.label}
+                    className={cn(
+                      'tooltip-trigger flex items-center rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground',
+                      action.disabled &&
+                        'cursor-not-allowed opacity-40 hover:bg-transparent hover:text-muted-foreground',
+                    )}
+                    disabled={action.disabled && !action.blockedFeedback}
+                    key={action.id}
+                    onClick={handleQuickAction(action)}
+                    title={action.title ?? action.label}
+                    type="button"
+                  >
+                    <span className="flex items-center gap-1.5" data-quick-action-feedback>
+                      <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center text-current">
+                        <QuickActionIcon action={action} />
+                      </span>
+                      <span className="whitespace-nowrap leading-none" data-quick-action-label>
+                        {action.label}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {/* Height-drag dimension pill. Absolutely positioned just above
+                the menu (away from the height arrow below it) so it rides the
+                same scale transform + anchor, never overlaps the menu, and
+                needs no menu lift — which is what caused the click flicker.
+                Non-interactive. */}
+            {isHeightDragPill && pillDims ? (
+              <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2">
+                <MeasurementPill
+                  height={pillDims.height}
+                  length={pillDims.length}
+                  primary="height"
+                  ref={pillHeightRef}
+                  thickness={pillDims.thickness}
+                  unit={unit}
+                />
+              </div>
+            ) : null}
+            {/* HVAC chrome above the menu — same slot as the wall height
+                pill. System pill (which tree, run length, equipment reach)
+                for every distribution kind; the rotation-axis pill stacks
+                under it for duct fittings. */}
+            {node && hasPorts(node.type) ? (
+              <div className="-translate-x-1/2 pointer-events-none absolute bottom-full left-1/2 mb-2 flex flex-col items-center gap-1">
+                <SystemSummaryPill metricNotation={metricNotation} nodeId={node.id} unit={unit} />
+                {hasAxisCycling(node.type) ? (
+                  <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
+                    <span className="font-medium text-foreground">
+                      Axis {rotationAxis.toUpperCase()}
+                    </span>
+                    <span aria-hidden className="text-muted-foreground">
+                      ·
+                    </span>
+                    <span className="text-muted-foreground">R/T rotate</span>
+                    <span aria-hidden className="text-muted-foreground">
+                      ·
+                    </span>
+                    <span className="text-muted-foreground">⌥ axis</span>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </Html>
       </group>
     </group>
+  )
+}
+
+/**
+ * System summary pill for a selected distribution kind (HVAC duct / DWV
+ * pipe / refrigerant lineset): which supply/return tree it belongs to, its
+ * run length, and whether it actually reaches a piece of equipment.
+ *
+ * Mounted only while an HVAC node is selected, so the full-`nodes`
+ * subscription it needs (connectivity changes when ANY joint moves) doesn't
+ * re-render the always-mounted parent menu on every unrelated scene tick.
+ */
+function SystemSummaryPill({
+  metricNotation,
+  nodeId,
+  unit,
+}: {
+  metricNotation: 'meters' | 'millimeters'
+  nodeId: AnyNodeId
+  unit: 'metric' | 'imperial'
+}) {
+  const allNodes = useScene((s) => s.nodes)
+  const summary = useMemo(() => summarizeSystemFor(nodeId, allNodes), [nodeId, allNodes])
+  if (!summary) return null
+  return (
+    <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
+      <span className="font-medium text-foreground">
+        {summary.systems.length > 0
+          ? summary.systems.map((sys) => sys[0]!.toUpperCase() + sys.slice(1)).join(' + ')
+          : 'System'}
+      </span>
+      {summary.runCount > 0 ? (
+        <>
+          <span aria-hidden className="text-muted-foreground">
+            ·
+          </span>
+          <span className="text-muted-foreground">
+            {formatMeasurement(summary.runLengthM, unit, metricNotation)} · {summary.runCount}{' '}
+            {summary.runCount === 1 ? 'run' : 'runs'}
+          </span>
+        </>
+      ) : null}
+      {summary.terminalCount > 0 ? (
+        <>
+          <span aria-hidden className="text-muted-foreground">
+            ·
+          </span>
+          <span className="text-muted-foreground">
+            {summary.terminalCount} {summary.terminalCount === 1 ? 'register' : 'registers'}
+          </span>
+        </>
+      ) : null}
+      {summary.connectedToEquipment ? null : (
+        <>
+          <span aria-hidden className="text-muted-foreground">
+            ·
+          </span>
+          <span className="font-medium text-amber-500">⚠ no equipment</span>
+        </>
+      )}
+    </div>
   )
 }

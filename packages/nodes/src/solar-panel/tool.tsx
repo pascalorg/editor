@@ -9,13 +9,19 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX, useTranslations } from '@pascal-app/editor'
+import { triggerSFX, usePlacementPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
-import { resolveRoofSegmentHit } from '../roof/segment-hit'
+import { RoofAttachmentFallbackPreview } from '../shared/roof-attachment-fallback-preview'
+import { resolveRoofSegmentHit } from '../shared/roof-segment-hit'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import {
+  clearRoofSurfacePlacementGuides,
+  publishRoofSurfacePlacementGuides,
+  roofSurfaceFootprintFromNode,
+} from '../shared/roof-surface-placement-guides'
 import { solarPanelDefinition } from './definition'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from './geometry'
 import SolarPanelPreview from './preview'
 
 const worldPoint = new THREE.Vector3()
@@ -29,7 +35,6 @@ const worldPoint = new THREE.Vector3()
  * in the node so the renderer reproduces the same orientation.
  */
 const SolarPanelTool = () => {
-  const t = useTranslations()
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
   const setSelection = useViewer((s) => s.setSelection)
 
@@ -73,7 +78,7 @@ const SolarPanelTool = () => {
       const sx = Math.round(wx * 20) / 20
       const sz = Math.round(wz * 20) / 20
       const prev = lastSnapRef.current
-      if (!prev || prev[0] !== sx || prev[1] !== sz) {
+      if (event.nativeEvent?.shiftKey !== true && (!prev || prev[0] !== sx || prev[1] !== sz)) {
         triggerSFX('sfx:grid-snap')
         lastSnapRef.current = [sx, sz]
       }
@@ -85,6 +90,22 @@ const SolarPanelTool = () => {
       setPreviewSurfaceQuat(surfaceQuatFromNormal(normal, new THREE.Quaternion()))
       setPreviewYaw((event.node.rotation ?? 0) + (hit.segment.rotation ?? 0))
       setPreviewPos(worldToBuildingLocal(wx, wy, wz))
+      usePlacementPreview.getState().set(
+        SolarPanelNode.parse({
+          ...previewNode,
+          parentId: hit.segment.id,
+          position: [hit.localX, hit.localY, hit.localZ],
+          roofSegmentId: hit.segment.id,
+          surfaceNormal: [normal.x, normal.y, normal.z],
+        }),
+        hit.segment,
+      )
+      publishRoofSurfacePlacementGuides({
+        roof: event.node as RoofNode,
+        segment: hit.segment,
+        center: [hit.localX, hit.localY, hit.localZ],
+        footprint: roofSurfaceFootprintFromNode(previewNode),
+      })
       event.stopPropagation()
     }
 
@@ -97,7 +118,6 @@ const SolarPanelTool = () => {
       )
       if (!hit) return
       const state = useScene.getState()
-      const panelCount = Object.values(state.nodes).filter((n) => (n as any).type === 'solarPanel').length
 
       // Use the raycast hit Y (segment-local) and analytical normal so the
       // committed panel sits exactly where the ghost was rendered. The
@@ -108,7 +128,7 @@ const SolarPanelTool = () => {
 
       const panel = SolarPanelNode.parse({
         ...solarPanelDefinition.defaults(),
-        name: t('nodes.solarPanel.defaultName', { count: panelCount + 1 }),
+        name: 'Solar Panel',
         roofSegmentId: hit.segment.id,
         position: [hit.localX, hit.localY, hit.localZ],
         rotation: 0,
@@ -118,6 +138,9 @@ const SolarPanelTool = () => {
       state.dirtyNodes.add(hit.segment.id as AnyNodeId)
       setSelection({ selectedIds: [panel.id] })
       triggerSFX('sfx:item-place')
+      const placementPreview = usePlacementPreview.getState()
+      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+      clearRoofSurfacePlacementGuides()
       event.stopPropagation()
     }
 
@@ -129,19 +152,35 @@ const SolarPanelTool = () => {
       emitter.off('roof:move', updatePreview)
       emitter.off('roof:enter', updatePreview)
       emitter.off('roof:click', onClick)
+      const placementPreview = usePlacementPreview.getState()
+      if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+      clearRoofSurfacePlacementGuides()
     }
-  }, [activeBuildingId, setSelection])
-
-  if (!activeBuildingId || !previewPos || !previewSurfaceQuat) return null
+  }, [activeBuildingId, setSelection, previewNode])
 
   return (
-    <group position={previewPos}>
-      <group rotation-y={previewYaw}>
-        <group quaternion={previewSurfaceQuat}>
-          <SolarPanelPreview node={previewNode} />
+    <>
+      <RoofAttachmentFallbackPreview
+        activeBuildingId={activeBuildingId}
+        ghost={<SolarPanelPreview node={previewNode} invalid />}
+        onInvalidTarget={() => {
+          setPreviewPos(null)
+          setPreviewSurfaceQuat(null)
+          const placementPreview = usePlacementPreview.getState()
+          if (placementPreview.node?.id === previewNode.id) placementPreview.clear()
+          clearRoofSurfacePlacementGuides()
+        }}
+      />
+      {activeBuildingId && previewPos && previewSurfaceQuat && (
+        <group position={previewPos}>
+          <group rotation-y={previewYaw}>
+            <group quaternion={previewSurfaceQuat}>
+              <SolarPanelPreview node={previewNode} />
+            </group>
+          </group>
         </group>
-      </group>
-    </group>
+      )}
+    </>
   )
 }
 

@@ -13,11 +13,9 @@ import type { ShelfNode } from './schema'
  * then walks the result, **clones** each mesh's material, and mutates
  * the clone for a translucent ghost.
  *
- * Cloning is non-negotiable: `getShelfMaterial` caches the default
- * material instance in a module-scoped map keyed on
- * `material` / `materialPreset`, so every unpainted shelf in the scene
- * shares the same material. Mutating `mat.transparent = true` here
- * would leak into every committed shelf and render them all see-through.
+ * Cloning is non-negotiable: shelf geometry may receive materials from
+ * shared viewer caches, so mutating `mat.transparent = true` here would
+ * leak into committed shelves using the same material.
  *
  * Building the full geometry tree per-frame would be wasteful, so we
  * memoize the group + dispose the per-mesh material clones on unmount.
@@ -44,9 +42,9 @@ const ShelfPreview = ({ node }: { node: ShelfNode }) => {
       ;(obj as unknown as { raycast: () => void }).raycast = () => {}
 
       // `Mesh.material` is typed as `Material | Material[]` upstream;
-      // every shelf board carries a material from
-      // `getShelfMaterial`. Access through a structural cast keeps the
-      // assignment well-typed without depending on the Mesh union.
+      // every shelf board carries a material from the geometry builder.
+      // Access through a structural cast keeps the assignment well-typed
+      // without depending on the Mesh union.
       const mesh = obj as {
         material?: Material | Material[]
       }
@@ -70,8 +68,8 @@ const ShelfPreview = ({ node }: { node: ShelfNode }) => {
 
     return () => {
       // Dispose only the clones we made — never the shared cached
-      // material returned by `getShelfMaterial`, which other shelves in
-      // the scene still reference. Geometry is left alone for the same
+      // material returned by the builder, which other shelves in the
+      // scene may still reference. Geometry is left alone for the same
       // reason; the builder may move to a cached strategy in future.
       for (const c of cloned) c.dispose()
       built.traverse((obj) => {

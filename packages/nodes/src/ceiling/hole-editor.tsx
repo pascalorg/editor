@@ -2,6 +2,7 @@
 
 import {
   type CeilingNode,
+  resolveCeilingHeight,
   resolveLevelId,
   useLiveNodeOverrides,
   useScene,
@@ -69,7 +70,7 @@ export const CeilingHoleEditor: React.FC<{
       onPolygonChange={handlePolygonChange}
       onPolygonPreview={handlePolygonPreview}
       polygon={hole}
-      surfaceHeight={ceiling.height ?? 2.5}
+      surfaceHeight={resolveCeilingHeight(ceiling, useScene.getState().nodes)}
     />
   )
 }

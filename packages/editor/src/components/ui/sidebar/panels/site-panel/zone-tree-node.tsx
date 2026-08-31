@@ -1,9 +1,8 @@
-'use client'
-
 import { useScene, type ZoneNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { memo, useCallback, useState } from 'react'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
+import { formatAreaLabel } from './../../../../../lib/measurements'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
@@ -28,6 +27,7 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
+  const unit = useViewer((state) => state.unit)
 
   const handleClick = useCallback(() => setSelection({ zoneId: nodeId }), [nodeId, setSelection])
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
@@ -36,10 +36,7 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  // Calculate approximate area from polygon
-  const area = calculatePolygonArea(polygon).toFixed(1)
-  const defaultName = 'nodeTypes.zoneWithArea'
-  const defaultNameParams = { area }
+  const defaultName = `Zone (${formatAreaLabel(calculatePolygonArea(polygon), unit)})`
 
   return (
     <TreeNodeWrapper
@@ -57,7 +54,6 @@ export const ZoneTreeNode = memo(function ZoneTreeNode({
       label={
         <InlineRenameInput
           defaultName={defaultName}
-          defaultNameParams={defaultNameParams}
           isEditing={isEditing}
           nodeId={nodeId}
           onStartEditing={handleStartEditing}

@@ -4,6 +4,7 @@ import type { AssetInput } from '@pascal-app/core'
 import { Root as TooltipRoot } from '@radix-ui/react-tooltip'
 import NextImage from 'next/image'
 import { useMemo, useState } from 'react'
+import { triggerSFX } from '../../../../../lib/sfx-bus'
 import { cn } from '../../../../../lib/utils'
 import { ItemCatalog } from '../../../item-catalog/item-catalog'
 import {
@@ -126,9 +127,14 @@ export function FunctionTreePanel({
     <div className="flex h-full flex-col">
       {/* Root nodes as a category grid — icon when available, otherwise a
           two-letter abbreviation, with the full name in a hover tooltip.
-          Mirrors the Build tab's tile grid so the two panels read the same. */}
+          Mirrors the Build tab's tile grid so the two panels read the same.
+
+          `functionTree` is embedder-supplied and unbounded, and these tiles are
+          `aspect-square`, so row count grows with it while the item list below is
+          the only scroller. Without the cap a large taxonomy pushes the list out
+          of the panel entirely and nothing can scroll it back. */}
       <TooltipProvider delayDuration={0} disableHoverableContent>
-        <div className="grid shrink-0 grid-cols-5 gap-1.5 border-border/70 border-b p-2">
+        <div className="grid max-h-[40%] shrink-0 grid-cols-5 gap-1.5 overflow-y-auto border-border/70 border-b p-2">
           {functionTree.map((root) => {
             const isActive = activeRoot?.slug === root.slug
             return (
@@ -141,7 +147,11 @@ export function FunctionTreePanel({
                         ? 'bg-primary/10 ring-1 ring-primary/50'
                         : 'bg-muted/40 opacity-70 grayscale hover:bg-muted hover:opacity-100 hover:grayscale-0',
                     )}
-                    onClick={() => selectRoot(root.slug)}
+                    onClick={() => {
+                      triggerSFX('sfx:menu-click')
+                      selectRoot(root.slug)
+                    }}
+                    onMouseEnter={() => triggerSFX('sfx:menu-hover')}
                     type="button"
                   >
                     {root.iconUrl ? (

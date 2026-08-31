@@ -1,6 +1,8 @@
-import { useIntl } from 'react-intl'
 import type { ToolHint } from '@pascal-app/core'
-import { ShortcutToken } from '../primitives/shortcut-token'
+import type { ContinuationContext } from '../../../lib/continuation'
+import type { SnapContext } from '../../../lib/snapping-mode'
+import useEditor from '../../../store/use-editor'
+import { ContextualHelperPanel } from './contextual-helper-panel'
 
 /**
  * Generic helper panel rendered from `def.toolHints` data. Matches the
@@ -11,17 +13,47 @@ import { ShortcutToken } from '../primitives/shortcut-token'
  * Drops the need for per-kind helper files entirely — kinds declare
  * their hints as static data in their `NodeDefinition`.
  */
-export function RegisteredToolHelper({ hints }: { hints: ToolHint[] }) {
-  const { formatMessage } = useIntl()
-  if (hints.length === 0) return null
+export function RegisteredToolHelper({
+  hints,
+  shiftPressed = false,
+  snapContext = null,
+  continuationContext = null,
+}: {
+  hints: ToolHint[]
+  shiftPressed?: boolean
+  snapContext?: SnapContext | null
+  continuationContext?: ContinuationContext | null
+}) {
+  // Live vertex count of an in-progress polygon draft, so hints gated on a
+  // minimum (e.g. "Finish" at ≥ 3) only appear once they're actually possible.
+  const draftVertexCount = useEditor((s) => s.draftVertexCount)
+  // Some hints are replaced by live contextual chips, so keep the generic
+  // registry renderer from duplicating stale/static versions.
+  const visible = hints.filter(
+    (hint) =>
+      !(hint.key === 'Shift' && hint.label === 'Cycle snapping mode') &&
+      (hint.minDraftVertices == null || draftVertexCount >= hint.minDraftVertices),
+  )
+  if (visible.length === 0 && !snapContext && !continuationContext) return null
+  // Hints carrying a live-state `chip` render as mode chips next to the
+  // snapping / continuation rows; the rest stay static key rows.
+  const chipHints = visible.filter((hint) => hint.chip)
+  const staticHints = visible.filter((hint) => !hint.chip)
   return (
-    <div className="pointer-events-none fixed top-1/2 right-4 z-40 flex -translate-y-1/2 flex-col gap-2 rounded-lg border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur-md">
-      {hints.map((hint) => (
-        <div className="flex items-center gap-2 text-sm" key={`${hint.key}:${hint.label}`}>
-          <ShortcutToken value={hint.key} />
-          <span className="text-muted-foreground">{formatMessage({ id: hint.label })}</span>
-        </div>
-      ))}
-    </div>
+    <ContextualHelperPanel
+      chipHints={chipHints}
+      hints={staticHints.map((hint) => {
+        // Shift is a per-kind bypass for opening / zone / duct placement ("Free
+        // place", "Free angle", …) — those flip to a bypassed state while held.
+        const isBypassHint = hint.key === 'Shift'
+        return {
+          keys: [hint.key],
+          label: shiftPressed && isBypassHint ? 'Guided constraints bypassed' : hint.label,
+          active: shiftPressed && isBypassHint,
+        }
+      })}
+      continuationContext={continuationContext}
+      snapContext={snapContext}
+    />
   )
 }

@@ -42,6 +42,7 @@ export function DormerPositionSection({
   const segmentId = segment?.id
   const roofChildrenKey = (roof?.children ?? []).join(',')
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: roofChildrenKey is the stable signature of `roof.children`; intentionally omitting `roof` (object identity) in favor of the joined ids.
   const worldXform = useMemo(() => {
     const dormerObj = sceneRegistry.nodes.get(selectedId)
     let worldX = 0
@@ -80,7 +81,6 @@ export function DormerPositionSection({
       if (Number.isFinite(lo_x)) bounds = { minX: lo_x, maxX: hi_x, minZ: lo_z, maxZ: hi_z }
     }
     return { worldX, worldZ, worldRotation, bounds }
-    // biome-ignore lint/correctness/useExhaustiveDependencies: roofChildrenKey is the stable signature of `roof.children`; intentionally omitting `roof` (object identity) in favor of the joined ids.
   }, [selectedId, px, py, pz, nodeRotation, segmentId, roofChildrenKey])
 
   const worldX_now = worldXform.worldX
@@ -98,7 +98,7 @@ export function DormerPositionSection({
     const state = useScene.getState()
     const worldPt = new Vector3(wx, 0, wz)
     for (const candidate of Object.values(state.nodes)) {
-      if (!candidate || candidate.type !== 'roof-segment') continue
+      if (candidate?.type !== 'roof-segment') continue
       const seg = candidate as RoofSegmentNode
       const segObj = sceneRegistry.nodes.get(seg.id)
       if (!segObj) continue

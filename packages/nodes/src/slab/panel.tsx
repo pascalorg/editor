@@ -1,19 +1,33 @@
 'use client'
 
-import { type AnyNode, type SlabNode, useScene } from '@pascal-app/core'
+import { type AnyNode, MIN_SLAB_THICKNESS, type SlabNode, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
+  holeEditScope,
   PanelSection,
   PanelWrapper,
+  SegmentedControl,
   SliderControl,
   triggerSFX,
+  useEditingHole,
   useEditor,
-  useTranslations,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Edit, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useEffect, useRef } from 'react'
+import {
+  applySlabAnchorElevationChange,
+  applySlabElevationPreset,
+  applySlabRecessDepthChange,
+  applySlabThicknessChange,
+  applySlabTopChange,
+  clampSlabElevation,
+  getSlabAnchorElevation,
+  getSlabBaseElevation,
+  getSlabRecessDepth,
+} from './elevation-limit'
 
 /**
  * Phase 5 Stage E — slab inspector (kind-owned).
@@ -27,11 +41,10 @@ import { useCallback, useEffect, useRef } from 'react'
  * into `parametrics.groups`.
  */
 export function SlabPanel() {
-  const t = useTranslations()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const unit = useViewer((s) => s.unit)
   const setSelection = useViewer((s) => s.setSelection)
-  const editingHole = useEditor((s) => s.editingHole)
-  const setEditingHole = useEditor((s) => s.setEditingHole)
+  const editingHole = useEditingHole()
   const setMovingNode = useEditor((s) => s.setMovingNode)
 
   const node = useScene((s) =>
@@ -52,22 +65,107 @@ export function SlabPanel() {
     [selectedId],
   )
 
+  const handleElevationChange = useCallback(
+    (proposed: number) => {
+      const current = nodeRef.current
+      if (!current) return
+      const { elevation } = clampSlabElevation(useScene.getState().nodes, current, proposed)
+      handleUpdate(applySlabTopChange(current, elevation))
+    },
+    [handleUpdate],
+  )
+
+  const handleThicknessChange = useCallback(
+    (proposed: number) => {
+      const current = nodeRef.current
+      if (!current) return
+      const base = getSlabBaseElevation(current)
+      const requested = applySlabThicknessChange(current, proposed)
+      const clamped = clampSlabElevation(useScene.getState().nodes, current, requested.elevation)
+      handleUpdate(
+        applySlabThicknessChange(current, Math.max(MIN_SLAB_THICKNESS, clamped.elevation - base)),
+      )
+    },
+    [handleUpdate],
+  )
+
+  const handleAnchorChange = useCallback(
+    (proposed: number) => {
+      const current = nodeRef.current
+      if (!current) return
+      const patch = applySlabAnchorElevationChange(current, proposed)
+      const requestedTop = patch.elevation ?? current.elevation
+      const { elevation } = clampSlabElevation(useScene.getState().nodes, current, requestedTop)
+      if (current.recessed) {
+        const delta = elevation - requestedTop
+        handleUpdate({
+          ...patch,
+          elevation,
+          recessedRimElevation: (patch.recessedRimElevation ?? proposed) + delta,
+        })
+        return
+      }
+      handleUpdate(applySlabAnchorElevationChange(current, elevation - current.thickness))
+    },
+    [handleUpdate],
+  )
+
+  const handleRecessDepthChange = useCallback(
+    (proposed: number) => {
+      const current = nodeRef.current
+      if (!current?.recessed) return
+      handleUpdate(applySlabRecessDepthChange(current, proposed))
+    },
+    [handleUpdate],
+  )
+
+  const handleElevationPreset = useCallback(
+    (signedDepth: number) => {
+      const current = nodeRef.current
+      if (!current) return
+      const anchor = getSlabAnchorElevation(current)
+      const requested = applySlabElevationPreset(current, signedDepth)
+      if (requested.recessed) {
+        handleUpdate(requested)
+        return
+      }
+      const requestedTop = requested.elevation ?? current.elevation
+      const { elevation } = clampSlabElevation(useScene.getState().nodes, current, requestedTop)
+      const thickness = Math.max(MIN_SLAB_THICKNESS, elevation - anchor)
+      handleUpdate({ ...requested, elevation: anchor + thickness, thickness })
+    },
+    [handleUpdate],
+  )
+
+  const handleTerrainModeChange = useCallback(
+    (mode: 'fixed' | 'terrain') => {
+      handleUpdate({ fillToTerrain: mode === 'terrain' ? true : undefined })
+    },
+    [handleUpdate],
+  )
+
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
-    setEditingHole(null)
-  }, [setSelection, setEditingHole])
+    useInteractionScope
+      .getState()
+      .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'hole')
+  }, [setSelection])
 
   useEffect(() => {
     if (!node) {
-      setEditingHole(null)
+      useInteractionScope
+        .getState()
+        .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'hole')
     }
-  }, [node, setEditingHole])
+  }, [node])
 
   useEffect(() => {
     return () => {
-      setEditingHole(null)
+      useInteractionScope
+        .getState()
+        .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'hole')
     }
-  }, [setEditingHole])
+  }, [])
 
   const handleAddHole = useCallback(() => {
     if (!(node && selectedId)) return
@@ -97,15 +195,17 @@ export function SlabPanel() {
       holes: [...currentHoles, newHole],
       holeMetadata: [...currentMetadata, { source: 'manual' }],
     })
-    setEditingHole({ nodeId: selectedId, holeIndex: currentHoles.length })
-  }, [node, selectedId, handleUpdate, setEditingHole])
+    useInteractionScope
+      .getState()
+      .begin(holeEditScope({ nodeId: selectedId, holeIndex: currentHoles.length }))
+  }, [node, selectedId, handleUpdate])
 
   const handleEditHole = useCallback(
     (index: number) => {
       if (!selectedId) return
-      setEditingHole({ nodeId: selectedId, holeIndex: index })
+      useInteractionScope.getState().begin(holeEditScope({ nodeId: selectedId, holeIndex: index }))
     },
-    [selectedId, setEditingHole],
+    [selectedId],
   )
 
   const handleDeleteHole = useCallback(
@@ -120,10 +220,12 @@ export function SlabPanel() {
       const newMetadata = currentMetadata.filter((_, i) => i !== index)
       handleUpdate({ holes: newHoles, holeMetadata: newMetadata })
       if (editingHole?.nodeId === selectedId && editingHole?.holeIndex === index) {
-        setEditingHole(null)
+        useInteractionScope
+          .getState()
+          .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'hole')
       }
     },
-    [selectedId, node?.holes, node?.holeMetadata, handleUpdate, editingHole, setEditingHole],
+    [selectedId, node?.holes, node?.holeMetadata, handleUpdate, editingHole],
   )
 
   const handleMove = useCallback(() => {
@@ -152,41 +254,120 @@ export function SlabPanel() {
 
   const area = calculateArea(node.polygon)
 
+  // Clean preset values per display system; imperial stores exact meters
+  // for whole-inch offsets.
+  const elevationPresets =
+    unit === 'imperial'
+      ? [
+          { label: 'Sunken (6")', elevation: -0.1524 },
+          { label: 'Thin (1")', elevation: 0.0254 },
+          { label: 'Standard (2")', elevation: 0.0508 },
+          { label: 'Thick (6")', elevation: 0.1524 },
+        ]
+      : [
+          { label: 'Sunken (15cm)', elevation: -0.15 },
+          { label: 'Thin (2cm)', elevation: 0.02 },
+          { label: 'Standard (5cm)', elevation: 0.05 },
+          { label: 'Thick (15cm)', elevation: 0.15 },
+        ]
+
   return (
     <PanelWrapper
-      icon="/icons/floor.png"
+      icon="/icons/floor.webp"
       onClose={handleClose}
-      title={node.name || t('nodes.slab.fallbackTitle')}
+      title={node.name || 'Slab'}
       width={320}
     >
-      <PanelSection title={t('nodes.slab.elevation')}>
+      <PanelSection title="Elevation">
+        {/* Range mirrors the 20 m storey cap; `clampSlabElevation` in the
+            write path stays the real bound against the level. */}
         <SliderControl
-          label={t('common.height')}
-          max={1}
-          min={-1}
-          onChange={(v) => handleUpdate({ elevation: v })}
+          label={node.recessed ? 'Floor' : 'Surface'}
+          max={20}
+          min={-3}
+          onChange={handleElevationChange}
           precision={3}
           step={0.01}
           unit="m"
           value={Math.round(node.elevation * 1000) / 1000}
         />
 
+        <SliderControl
+          label={node.recessed ? 'Rim' : 'Base'}
+          max={20}
+          min={-3}
+          onChange={handleAnchorChange}
+          precision={3}
+          step={0.01}
+          unit="m"
+          value={Math.round(getSlabAnchorElevation(node) * 1000) / 1000}
+        />
+
+        {node.recessed ? (
+          <SliderControl
+            label="Depth"
+            max={1000}
+            min={MIN_SLAB_THICKNESS}
+            onChange={handleRecessDepthChange}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={Math.round(getSlabRecessDepth(node) * 100) / 100}
+          />
+        ) : (
+          <SliderControl
+            label="Thickness"
+            max={1000}
+            min={MIN_SLAB_THICKNESS}
+            onChange={handleThicknessChange}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={Math.round((node.thickness ?? 0.05) * 100) / 100}
+          />
+        )}
+
+        {!node.recessed && (
+          <>
+            <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
+              Foundation
+            </div>
+            <SegmentedControl
+              onChange={handleTerrainModeChange}
+              options={[
+                { label: 'Fixed', value: 'fixed' },
+                { label: 'Follows terrain', value: 'terrain' },
+              ]}
+              value={node.fillToTerrain ? 'terrain' : 'fixed'}
+            />
+            {node.fillToTerrain && (
+              <div className="px-1 text-[11px] text-muted-foreground">
+                Extends the perimeter down to terrain. The flat surface, base, and thickness stay
+                unchanged.
+              </div>
+            )}
+          </>
+        )}
+
         <div className="mt-2 grid grid-cols-2 gap-1.5 px-1 pb-1">
-          <ActionButton label={t('nodes.slab.elevationPresets.sunken')} onClick={() => handleUpdate({ elevation: -0.15 })} />
-          <ActionButton label={t('nodes.slab.elevationPresets.ground')} onClick={() => handleUpdate({ elevation: 0 })} />
-          <ActionButton label={t('nodes.slab.elevationPresets.raised')} onClick={() => handleUpdate({ elevation: 0.05 })} />
-          <ActionButton label={t('nodes.slab.elevationPresets.step')} onClick={() => handleUpdate({ elevation: 0.15 })} />
+          {elevationPresets.map((preset) => (
+            <ActionButton
+              key={preset.label}
+              label={preset.label}
+              onClick={() => handleElevationPreset(preset.elevation)}
+            />
+          ))}
         </div>
       </PanelSection>
 
-      <PanelSection title={t('nodes.slab.info')}>
+      <PanelSection title="Info">
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
-          <span>{t('common.area')}</span>
+          <span>Area</span>
           <span className="font-mono text-white">{area.toFixed(2)} m²</span>
         </div>
       </PanelSection>
 
-      <PanelSection title={t('nodes.slab.holes')}>
+      <PanelSection title="Holes">
         {node.holes && node.holes.length > 0 ? (
           <div className="flex flex-col gap-1 pb-2">
             {node.holes.map((hole, index) => {
@@ -220,8 +401,14 @@ export function SlabPanel() {
                     {isEditing ? (
                       <ActionButton
                         className="h-7 bg-primary text-primary-foreground hover:bg-primary/90"
-                        label={t('common.done')}
-                        onClick={() => setEditingHole(null)}
+                        label="Done"
+                        onClick={() =>
+                          useInteractionScope
+                            .getState()
+                            .endIf(
+                              (scope) => scope.kind === 'reshaping' && scope.reshape === 'hole',
+                            )
+                        }
                       />
                     ) : isAutoHole ? (
                       <div className="rounded-md bg-[#2C2C2E] px-2 py-1 text-[10px] text-muted-foreground">
@@ -251,7 +438,7 @@ export function SlabPanel() {
             })}
           </div>
         ) : (
-          <div className="px-2 py-3 text-center text-muted-foreground text-xs">{t('nodes.slab.noHoles')}</div>
+          <div className="px-2 py-3 text-center text-muted-foreground text-xs">No holes</div>
         )}
 
         <div className="px-1 pt-1 pb-1">
@@ -259,13 +446,13 @@ export function SlabPanel() {
             className="w-full"
             disabled={editingHole?.nodeId === selectedId}
             icon={<Plus className="h-3.5 w-3.5" />}
-            label={t('nodes.slab.addHole')}
+            label="Add Hole"
             onClick={handleAddHole}
           />
         </div>
       </PanelSection>
       <ActionGroup>
-        <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={t('common.move')} onClick={handleMove} />
+        <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
       </ActionGroup>
     </PanelWrapper>
   )

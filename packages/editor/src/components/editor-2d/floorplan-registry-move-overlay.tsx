@@ -1,24 +1,44 @@
 'use client'
 
 import {
+  type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
+  bboxAnchors,
+  bboxCornerAnchors,
+  createSceneApi,
+  emitter,
   type FloorplanMoveTargetSession,
   nodeRegistry,
   pauseSceneHistory,
   resumeSceneHistory,
-  snapPointToGrid,
   useLiveNodeOverrides,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
+import { commitFreshPlacementSubtree } from '../../lib/fresh-planar-placement'
+import { isHistoryShortcut } from '../../lib/history'
+import { isFreshPlacementMetadata, stripPlacementMetadataFlags } from '../../lib/placement-metadata'
+import { resolvePlanarCursorPosition } from '../../lib/planar-cursor-placement'
+import { movementSfxStepKey } from '../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import useEditor from '../../store/use-editor'
+import { resolveAlignmentForFloorplanView } from '../../lib/world-grid-snap'
+import useAlignmentGuides from '../../store/use-alignment-guides'
+import useEditor, {
+  isAlignmentGuideActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
+} from '../../store/use-editor'
+import { useMovingNode } from '../../store/use-interaction-scope'
 import { useWallMoveGhosts } from '../../store/use-wall-move-ghosts'
 
-const GRID_STEP = 0.5
+// Figma-style alignment snap threshold. Meters in world space; 8cm gives
+// a comfortable "magnetic" pull at default zoom without fighting the
+// grid snap. Held fixed for v1 — a future revision can scale this with
+// the SVG's units-per-pixel so the feel stays constant across zoom.
+const ALIGNMENT_THRESHOLD_M = 0.08
 
 /**
  * Cursor-driven placement for registered kinds in the floor plan.
@@ -41,7 +61,7 @@ const GRID_STEP = 0.5
  * cursor → meters accounts for pan / zoom / building rotation.
  */
 export function FloorplanRegistryMoveOverlay() {
-  const movingNode = useEditor((s) => s.movingNode)
+  const movingNode = useMovingNode()
   const setMovingNode = useEditor((s) => s.setMovingNode)
   const setMovingNodeOrigin = useEditor((s) => s.setMovingNodeOrigin)
 
@@ -67,15 +87,32 @@ export function FloorplanRegistryMoveOverlay() {
       return [m.x, m.y]
     }
 
+    const isPointerOverFloorplanScene = (clientX: number, clientY: number): boolean => {
+      // The scene's `<g>` only covers painted SVG elements, so hovers over
+      // empty grid background often target the parent SVG. Bounds keep the
+      // cursor active anywhere inside the floor-plan viewport.
+      const svg = scene.ownerSVGElement
+      if (!svg) return false
+      const rect = svg.getBoundingClientRect()
+      return (
+        clientX >= rect.left &&
+        clientX <= rect.right &&
+        clientY >= rect.top &&
+        clientY <= rect.bottom
+      )
+    }
+
     // ── Path 1 — kind-owned `floorplanMoveTarget` ───────────────────
     if (hasMoveTarget && def?.floorplanMoveTarget) {
       const sceneNodes = useScene.getState().nodes
+      const sceneApi = createSceneApi(useScene)
       const session: FloorplanMoveTargetSession = (
         def.floorplanMoveTarget as (a: {
           node: AnyNode
           nodes: Record<AnyNodeId, AnyNode>
+          sceneApi: ReturnType<typeof createSceneApi>
         }) => FloorplanMoveTargetSession
-      )({ node: movingNode, nodes: sceneNodes })
+      )({ node: movingNode, nodes: sceneNodes, sceneApi })
 
       // Capture snapshots of every affected node BEFORE the first apply
       // so the single-undo dance has a clean baseline to revert to.
@@ -87,6 +124,17 @@ export function FloorplanRegistryMoveOverlay() {
       pauseSceneHistory(useScene)
       let historyPaused = true
 
+      const clearLivePreviews = () => {
+        const liveTransforms = useLiveTransforms.getState()
+        const liveOverrides = useLiveNodeOverrides.getState()
+        const scene = useScene.getState()
+        for (const id of session.affectedIds) {
+          liveTransforms.clear(id)
+          liveOverrides.clear(id)
+          scene.markDirty(id)
+        }
+      }
+
       // The registry action menu's Move button portals to `document.body`,
       // so the trigger click's pointer-up happens OUTSIDE the floor-plan
       // scene and never reaches `onPointerUp` here. That means: the very
@@ -97,25 +145,17 @@ export function FloorplanRegistryMoveOverlay() {
       // to be consumed. That legacy flow is gone in the registry layer;
       // all entries use the action menu now.
       let hasMovedSinceStart = false
-
-      const isPointerOverFloorplanScene = (clientX: number, clientY: number): boolean => {
-        // We can't just check `target.closest('[data-floorplan-scene]')`
-        // because the scene's `<g>` only covers painted SVG elements —
-        // hovering empty grid background returns the parent SVG element
-        // as target (no ancestor with the marker), so the closest check
-        // fails. Compare the pointer position against the scene's
-        // bounding rect instead: any cursor inside the SVG viewport
-        // counts as "over the floor plan", regardless of whether the
-        // exact pixel paints a node or just blank surface.
-        const svg = scene.ownerSVGElement
-        if (!svg) return false
-        const rect = svg.getBoundingClientRect()
-        return (
-          clientX >= rect.left &&
-          clientX <= rect.right &&
-          clientY >= rect.top &&
-          clientY <= rect.bottom
-        )
+      // Last resolved position of the moved node — drives the move "tick" SFX.
+      // Parity with the 3D move, which emits on any change of the resolved
+      // position (every snapping mode, not only grid).
+      let lastSnapKey: string | null = null
+      // Live cursor location — updated on EVERY pointermove (even over the 3D
+      // canvas) so R-key ownership can follow the pointer's CURRENT pane rather
+      // than the sticky `hasMovedSinceStart`. Without this, once the user touched
+      // the 2D pane the overlay claimed R forever and the 3D flip went dead.
+      let pointerOverFloorplan = false
+      const onPointerTrack = (event: PointerEvent) => {
+        pointerOverFloorplan = isPointerOverFloorplanScene(event.clientX, event.clientY)
       }
 
       const onMove = (event: PointerEvent) => {
@@ -139,10 +179,31 @@ export function FloorplanRegistryMoveOverlay() {
             metaKey: event.metaKey,
           },
         })
+        // Move "tick" — same feedback the 3D move gives, which fires whenever the
+        // resolved position changes (any snapping mode, not just grid), so it
+        // ticks as the item lands on each new snapped/free position.
+        const movedId = session.affectedIds[0]
+        const moved = movedId ? useScene.getState().nodes[movedId] : undefined
+        const pos = (moved as { position?: [number, number, number] } | undefined)?.position
+        if (pos) {
+          const key = movementSfxStepKey({
+            coords: [pos[0], pos[2]],
+            gridSnapActive: isGridSnapActive(),
+            gridStep: useEditor.getState().gridSnapStep,
+          })
+          if (key !== lastSnapKey) {
+            lastSnapKey = key
+            sfxEmitter.emit('sfx:grid-snap')
+          }
+        }
       }
 
       const commitFinalStateOrRevert = () => {
         const commitValid = session.canCommit()
+        const freshPlacement = isFreshPlacementMetadata(
+          (useScene.getState().nodes[movingNode.id] as { metadata?: unknown } | undefined)
+            ?.metadata,
+        )
 
         // Claim ownership of the drag teardown so the 3D move tool's
         // unmount-time cleanup skips its restore-from-snapshot — see
@@ -156,6 +217,29 @@ export function FloorplanRegistryMoveOverlay() {
         // planner). For those we still do Phase 1 (revert to baseline)
         // and Phase 2's resume — but Phase 2's write is delegated, and
         // we skip the snapshot-diff finalUpdates path.
+        if (commitValid && freshPlacement) {
+          session.commit?.()
+          const stagedNode = useScene.getState().nodes[movingNode.id]
+          const committedId = stagedNode
+            ? commitFreshPlacementSubtree(
+                movingNode.id as AnyNodeId,
+                {
+                  metadata: stripPlacementMetadataFlags(stagedNode.metadata),
+                  visible: true,
+                } as Partial<AnyNode>,
+              )
+            : null
+          if (historyPaused) {
+            resumeSceneHistory(useScene)
+            historyPaused = false
+          }
+          if (committedId) {
+            sfxEmitter.emit('sfx:item-place')
+            useViewer.getState().setSelection({ selectedIds: [committedId] })
+          }
+          return
+        }
+
         if (commitValid && session.commit) {
           useScene.getState().updateNodes(snapshotsToUpdates(snapshots))
           if (historyPaused) {
@@ -164,6 +248,7 @@ export function FloorplanRegistryMoveOverlay() {
           }
           session.commit()
           sfxEmitter.emit('sfx:item-place')
+          useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
           return
         }
 
@@ -184,6 +269,24 @@ export function FloorplanRegistryMoveOverlay() {
           if (changed) finalUpdates.push({ id: snap.id, data })
         }
 
+        for (const snap of snapshots) {
+          const current = sceneState[snap.id]
+          if (!current || !isFreshPlacementMetadata((current as { metadata?: unknown }).metadata)) {
+            continue
+          }
+          const existing = finalUpdates.find((update) => update.id === snap.id)
+          const metadata = stripPlacementMetadataFlags((current as { metadata?: unknown }).metadata)
+          if (existing) {
+            existing.data.metadata = metadata
+            existing.data.visible = true
+          } else {
+            finalUpdates.push({
+              id: snap.id,
+              data: { metadata, visible: true },
+            })
+          }
+        }
+
         if (commitValid && finalUpdates.length > 0) {
           // Single-undo dance:
           //   1. Revert to baseline while history is still paused.
@@ -195,24 +298,6 @@ export function FloorplanRegistryMoveOverlay() {
             historyPaused = false
           }
           useScene.getState().updateNodes(finalUpdates)
-          // Strip the isNew metadata once committed (matches the legacy
-          // 3D move-tool that demotes duplicated nodes from "new" status
-          // on first successful drop).
-          for (const snap of snapshots) {
-            const current = useScene.getState().nodes[snap.id]
-            const meta =
-              current && typeof (current as { metadata?: unknown }).metadata === 'object'
-                ? ((current as { metadata?: Record<string, unknown> }).metadata ?? {})
-                : {}
-            if (meta.isNew) {
-              useScene.getState().updateNodes([
-                {
-                  id: snap.id,
-                  data: { metadata: { ...meta, isNew: false } } as Record<string, unknown>,
-                },
-              ])
-            }
-          }
           sfxEmitter.emit('sfx:item-place')
           // Re-select the moved node(s) — mirrors the legacy 3D move
           // tool. The action menu cleared selection on Move click so
@@ -235,6 +320,7 @@ export function FloorplanRegistryMoveOverlay() {
         // reason as `onMove`: commits should land for any pointer-up
         // inside the SVG viewport, including empty grid background.
         if (!isPointerOverFloorplanScene(event.clientX, event.clientY)) return
+        if (!hasMovedSinceStart) return
 
         // Commit using the LAST pointermove's state — no re-apply at
         // pointer-up coords. A previous version re-applied here to
@@ -270,25 +356,62 @@ export function FloorplanRegistryMoveOverlay() {
         // the following click are separate DOM events, so we listen on
         // window in the capture phase to intercept the click before any
         // bubble-phase handler (the floor-plan SVG) sees it.
-        const swallowClick = (e: MouseEvent) => {
-          e.stopPropagation()
-          e.preventDefault()
-          window.removeEventListener('click', swallowClick, true)
-        }
-        window.addEventListener('click', swallowClick, true)
-        // Safety net: if no click fires (e.g. user dragged enough to
-        // suppress it), drop the listener on the next tick.
-        setTimeout(() => {
-          window.removeEventListener('click', swallowClick, true)
-        }, 0)
+        swallowNextClick()
       }
 
       const onKey = (event: KeyboardEvent) => {
-        if (event.key !== 'Escape') return
+        // R flips a directional kind's facing mid-placement (door / window:
+        // front ↔ back). The session records the flip and re-runs its last
+        // apply so the 2D symbol updates immediately; kinds without a facing
+        // leave `flipSide` unset and R falls through to the global handler.
+        //
+        // Ownership follows the CURRENT pointer pane, not a sticky flag: the 3D
+        // move tool ALSO listens for R on `window`. We own R only while the
+        // cursor is over the 2D floor-plan pane (`pointerOverFloorplan`) AND the
+        // 2D mover has actually engaged (`hasMovedSinceStart`); then we
+        // `stopImmediatePropagation` (this handler is CAPTURE-phase, so it runs
+        // first) so the 3D tool can't also flip. When the cursor is over the 3D
+        // pane we yield — the 3D tool owns R there. (The old sticky
+        // `hasMovedSinceStart`-only gate made the overlay claim R forever after
+        // the first 2D move, killing the 3D flip.)
+        if (event.key === 'r' || event.key === 'R') {
+          // Yield Cmd/Ctrl+R to the browser reload instead of flipping the side.
+          if (event.metaKey || event.ctrlKey) return
+          if (!(session.flipSide && hasMovedSinceStart && pointerOverFloorplan)) return
+          if (event.repeat) return
+          const t = event.target as HTMLElement | null
+          if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) {
+            return
+          }
+          event.preventDefault()
+          event.stopImmediatePropagation()
+          session.flipSide()
+          sfxEmitter.emit('sfx:item-rotate')
+          return
+        }
+        if (event.key !== 'Escape' && !isHistoryShortcut(event)) return
+        if (isHistoryShortcut(event)) {
+          // ⌘Z mid-move cancels like Escape — keep it from reaching the
+          // global undo arm (this handler is capture-phase, that one bubbles).
+          event.preventDefault()
+          event.stopImmediatePropagation()
+        }
         // Claim teardown ownership so the 3D move tool's cleanup skips
         // its own restore — without this, both sides would race to
         // write the same baseline, harmless but wasteful.
         setMovingNodeOrigin('2d')
+        if (isFreshPlacementMetadata((movingNode as { metadata?: unknown }).metadata)) {
+          emitter.emit('tool:cancel')
+          useScene.getState().deleteNode(movingNode.id as AnyNodeId)
+          if (historyPaused) {
+            resumeSceneHistory(useScene)
+            historyPaused = false
+          }
+          clearLivePreviews()
+          useAlignmentGuides.getState().clear()
+          setMovingNode(null)
+          return
+        }
         // Revert untracked, then resume — no history entry.
         useScene.getState().updateNodes(snapshotsToUpdates(snapshots))
         if (historyPaused) {
@@ -301,24 +424,24 @@ export function FloorplanRegistryMoveOverlay() {
         // `useLiveNodeOverrides`. Either way, leaving them in place
         // after Esc would freeze the 2D / 3D view at the cancelled
         // position.
-        const liveTransforms = useLiveTransforms.getState()
-        const liveOverrides = useLiveNodeOverrides.getState()
-        for (const id of session.affectedIds) {
-          liveTransforms.clear(id)
-          liveOverrides.clear(id)
-        }
+        clearLivePreviews()
         // Restore selection cleared by the action menu's Move click.
         useViewer.getState().setSelection({ selectedIds: snapshots.map((s) => s.id) })
         setMovingNode(null)
       }
 
+      window.addEventListener('pointermove', onPointerTrack)
       window.addEventListener('pointermove', onMove)
       window.addEventListener('pointerup', onPointerUp)
-      window.addEventListener('keydown', onKey)
+      // Capture phase so this runs BEFORE the 3D move tool's bubble-phase R
+      // listener — when the cursor is over the 2D pane, `stopImmediatePropagation`
+      // then pre-empts it so only one handler flips.
+      window.addEventListener('keydown', onKey, true)
       return () => {
+        window.removeEventListener('pointermove', onPointerTrack)
         window.removeEventListener('pointermove', onMove)
         window.removeEventListener('pointerup', onPointerUp)
-        window.removeEventListener('keydown', onKey)
+        window.removeEventListener('keydown', onKey, true)
         // Unmount cleanup. `historyPaused === true` here means none of
         // our terminal paths (commit, Esc) ran in this overlay — they
         // each call `resumeSceneHistory` and flip the flag.
@@ -349,12 +472,12 @@ export function FloorplanRegistryMoveOverlay() {
         // `useLiveTransforms`; wall sessions write to
         // `useLiveNodeOverrides`. In pure 2D view the corresponding 3D
         // tool's cleanup isn't there to clear them for us.
-        const liveTransforms = useLiveTransforms.getState()
-        const liveOverrides = useLiveNodeOverrides.getState()
-        for (const id of session.affectedIds) {
-          liveTransforms.clear(id)
-          liveOverrides.clear(id)
-        }
+        clearLivePreviews()
+        // Sessions that publish Figma-style alignment guides during `apply`
+        // (item / shelf / column) leave them in the store; this cleanup runs
+        // after every terminal path (commit + Esc both unmount via
+        // `setMovingNode(null)`), so clearing here drops any lingering guide.
+        useAlignmentGuides.getState().clear()
         // Same belt-and-suspenders pattern for the wall bridge ghost
         // previews — clear unconditionally so Esc / mid-drag unmount /
         // 3D-takeover paths all end up with no stale ghosts left over.
@@ -367,71 +490,294 @@ export function FloorplanRegistryMoveOverlay() {
     // ── Path 2 — generic free-floating translate ────────────────────
     const entry = scene.querySelector(`[data-node-id="${movingNode.id}"]`) as SVGGElement | null
     if (!entry) return
+    const sceneNodes = useScene.getState().nodes as Record<string, AnyNode>
+    const relatedEntryIds = collectFloorplanMoveEntryIds(movingNode.id as AnyNodeId, sceneNodes)
+    const relatedEntries = Array.from(relatedEntryIds)
+      .map((id) => scene.querySelector(`[data-node-id="${id}"]`) as SVGGElement | null)
+      .filter((value): value is SVGGElement => value != null)
 
-    const originalPosition = ((
-      movingNode as unknown as {
-        position?: [number, number, number]
-      }
-    ).position ?? [0, 0, 0]) as [number, number, number]
+    // Polyline kinds (duct / pipe / lineset) carry a `path`, not a
+    // `position` — translating a `position` here would write a field their
+    // schema ignores and snap the run back. For those we move every path
+    // point by the cursor delta and commit the translated `path` instead.
+    // The reference origin is the path centre so the SVG `translate` delta
+    // matches the geometry's actual location (which isn't at [0,0,0]).
+    // Only 3D `[x, y, z]` polyline kinds (duct / pipe / lineset) are handled
+    // here. A spline fence also carries a `path`, but it is 2D (`[x, y]`) and
+    // moves through its own `floorplanMoveTarget`, so exclude shorter tuples.
+    const rawPath = (movingNode as { path?: unknown }).path
+    const originalPath =
+      Array.isArray(rawPath) && Array.isArray(rawPath[0]) && rawPath[0].length >= 3
+        ? (rawPath as [number, number, number][]).map((p) => [...p] as [number, number, number])
+        : null
+    const originalPosition: [number, number, number] = originalPath
+      ? (() => {
+          let cx = 0
+          let cz = 0
+          for (const p of originalPath) {
+            cx += p[0]
+            cz += p[2]
+          }
+          const n = originalPath.length || 1
+          return [cx / n, originalPath[0]?.[1] ?? 0, cz / n]
+        })()
+      : (((movingNode as unknown as { position?: [number, number, number] }).position ?? [
+          0, 0, 0,
+        ]) as [number, number, number])
+    const isFreshPlacement = isFreshPlacementMetadata(
+      (movingNode as { metadata?: unknown }).metadata,
+    )
+
+    // SVG units in this floorplan map 1:1 to world meters, and the
+    // `<g data-node-id>` entry has no transform of its own when at rest,
+    // so its untransformed bbox IS the world-space footprint. Cache the
+    // moving entry's local bbox once (relative to originalPosition) and
+    // derive anchors at any proposed (sx, sz) by translating it.
+    const movingLocalBBox = unionFloorplanEntryBBox(relatedEntries)
+    const candidateAnchors: AlignmentAnchor[] = []
+    const allEntries = scene.querySelectorAll('[data-node-id]')
+    for (const el of Array.from(allEntries)) {
+      const otherId = el.getAttribute('data-node-id')
+      if (!otherId || relatedEntryIds.has(otherId as AnyNodeId)) continue
+      const b = (el as SVGGraphicsElement).getBBox()
+      // Skip only fully-degenerate (point) entries. A thin run (duct / pipe /
+      // lineset drawn as a line) has one zero dimension but is still a valid
+      // alignment target — its endpoints become line anchors.
+      if (b.width <= 0 && b.height <= 0) continue
+      candidateAnchors.push(...bboxAnchors(otherId, b.x, b.y, b.x + b.width, b.y + b.height))
+    }
 
     let lastSnapped: [number, number] | null = null
+    let dragAnchor: [number, number] | null = null
+
+    // Footprint bounding box drawn around the dragged entry — the 2D
+    // counterpart of the 3D `DragBoundingBox`, so a moved / duplicated node
+    // reads the same in both views. Green wireframe rect over the entry's
+    // own bbox, translated in lockstep with it. The entry stays visible the
+    // whole drag (no hide-until-move) so it never appears to vanish.
+    const SVG_NS = 'http://www.w3.org/2000/svg'
+    const boxEl = document.createElementNS(SVG_NS, 'rect')
+    boxEl.setAttribute('x', String(movingLocalBBox.x))
+    boxEl.setAttribute('y', String(movingLocalBBox.y))
+    boxEl.setAttribute('width', String(movingLocalBBox.width))
+    boxEl.setAttribute('height', String(movingLocalBBox.height))
+    boxEl.setAttribute('fill', 'none')
+    boxEl.setAttribute('stroke', '#22c55e')
+    boxEl.setAttribute('stroke-width', '1.5')
+    boxEl.setAttribute('vector-effect', 'non-scaling-stroke')
+    boxEl.setAttribute('pointer-events', 'none')
+    scene.appendChild(boxEl)
 
     const onMove = (event: PointerEvent) => {
       // Same target guard as Path 1 — pointer must be over the floor
       // plan scene; otherwise we'd react to 3D-canvas moves with garbage
       // plan coords.
-      const target = event.target as Element | null
-      if (!target?.closest('[data-floorplan-scene]')) return
+      if (!isPointerOverFloorplanScene(event.clientX, event.clientY)) return
       const m = toMeters(event.clientX, event.clientY)
       if (!m) return
-      const [sx, sz] = snapPointToGrid([m[0], m[1]], GRID_STEP)
-      const dx = sx - originalPosition[0]
-      const dz = sz - originalPosition[2]
-      entry.setAttribute('transform', `translate(${dx} ${dz})`)
-      lastSnapped = [sx, sz]
+
+      // 1) Grid snap baseline. Fresh catalog placement is absolute under
+      // the cursor; existing moves preserve the cursor's grab offset. Grid
+      // follows the active snapping mode (Shift cycles it); raw cursor in
+      // any non-grid mode.
+      const gridStep = useEditor.getState().gridSnapStep
+      const snap = (value: number) =>
+        isGridSnapActive() ? Math.round(value / gridStep) * gridStep : value
+      const resolved = resolvePlanarCursorPosition({
+        cursor: [m[0], m[1]],
+        original: [originalPosition[0], originalPosition[2]],
+        anchor: dragAnchor,
+        mode: isFreshPlacement ? 'absolute' : 'relative',
+        snap,
+      })
+      dragAnchor = resolved.anchor
+      const [gridX, gridZ] = resolved.point
+
+      // 2) Alignment snap layered on top. Treat the grid-snapped point
+      // as the "proposed" position so alignment competes from a stable
+      // base rather than the raw cursor jitter. Alignment "lines" are
+      // DISPLAYED in every mode except Off (isAlignmentGuideActive); the
+      // magnetic pull toward them applies only in 'lines' mode. Alt is
+      // force-place, not a snap bypass.
+      let finalX = gridX
+      let finalZ = gridZ
+      if (isAlignmentGuideActive() && candidateAnchors.length > 0) {
+        // Translate the cached local bbox to the proposed pos to get the
+        // moving anchors at that location. The entry's untransformed
+        // bbox is in world meters relative to the node's origin, so a
+        // simple translate suffices.
+        const dxProposed = gridX - originalPosition[0]
+        const dzProposed = gridZ - originalPosition[2]
+        // Corner-only for the moving node so it aligns by its edges, never
+        // its centreline — matching the placement tools and Path 1 move
+        // sessions. Candidates keep their full 9-point set (we DO want to
+        // align to a neighbour's centre / edge-midpoints).
+        const movingAnchors = bboxCornerAnchors(
+          movingNode.id,
+          movingLocalBBox.x + dxProposed,
+          movingLocalBBox.y + dzProposed,
+          movingLocalBBox.x + movingLocalBBox.width + dxProposed,
+          movingLocalBBox.y + movingLocalBBox.height + dzProposed,
+        )
+        // Local-frame resolve (anchors come from the building-local
+        // SVG `getBBox()`). Guides land in the editor-local alignment
+        // store, which the 2D FloorplanAlignmentGuideLayer renders
+        // inside the rotated scene <g>. The 3D pipeline uses a
+        // separate store, so frames stay isolated per surface.
+        const result = resolveAlignmentForFloorplanView({
+          moving: movingAnchors,
+          candidates: candidateAnchors,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (result.snap && isMagneticSnapActive()) {
+          finalX += result.snap.dx
+          finalZ += result.snap.dz
+        }
+        useAlignmentGuides.getState().set(result.guides)
+      } else {
+        useAlignmentGuides.getState().clear()
+      }
+
+      // 3) Kind-owned attachment snap (cabinet → wall) — 2D parity with the
+      // 3D move tool's `groupMoveSnap` pass. An attach behavior, not an
+      // alignment guide, so it runs in every snapping mode except Off.
+      const groupMoveSnap = def?.capabilities?.movable?.groupMoveSnap
+      if (groupMoveSnap && (isGridSnapActive() || isMagneticSnapActive())) {
+        const snappedPosition = groupMoveSnap({
+          node: movingNode,
+          candidatePosition: [finalX, originalPosition[1], finalZ],
+          movingIds: [movingNode.id as AnyNodeId],
+          nodes: useScene.getState().nodes as Record<string, AnyNode>,
+          levelId:
+            (useViewer.getState().selection.levelId as AnyNodeId | null) ??
+            (movingNode.parentId as AnyNodeId | undefined) ??
+            null,
+        })
+        if (snappedPosition) {
+          finalX = snappedPosition[0]
+          finalZ = snappedPosition[2]
+          useAlignmentGuides.getState().clear()
+        }
+      }
+
+      const dx = finalX - originalPosition[0]
+      const dz = finalZ - originalPosition[2]
+      for (const relatedEntry of relatedEntries) {
+        relatedEntry.setAttribute('transform', `translate(${dx} ${dz})`)
+      }
+      boxEl.setAttribute('transform', `translate(${dx} ${dz})`)
+      lastSnapped = [finalX, finalZ]
     }
 
     const onPointerUp = (event: PointerEvent) => {
       if (event.button !== 0) return
-      const target = event.target as Element | null
-      if (!target?.closest('[data-floorplan-scene]')) return
+      if (!isPointerOverFloorplanScene(event.clientX, event.clientY)) return
 
       const snapped = lastSnapped
-      if (snapped) {
-        const [sx, sz] = snapped
-        const [, oldY] = originalPosition
-        useScene
-          .getState()
-          .updateNode(movingNode.id as AnyNodeId, { position: [sx, oldY, sz] } as Partial<AnyNode>)
-        const meta = (movingNode as unknown as { metadata?: Record<string, unknown> }).metadata
-        if (meta?.isNew) {
-          useScene.getState().updateNode(
+      if (!snapped) return
+      const [sx, sz] = snapped
+      const [, oldY] = originalPosition
+      setMovingNodeOrigin('2d')
+      let selectedId = movingNode.id as AnyNodeId
+      if (originalPath) {
+        // Polyline kinds: shift every point by the committed delta and
+        // write `path`. Strip the fresh-placement flags on first drop.
+        const dx = sx - originalPosition[0]
+        const dz = sz - originalPosition[2]
+        const nextPath = originalPath.map(
+          ([x, y, z]) => [x + dx, y, z + dz] as [number, number, number],
+        )
+        useScene.getState().updateNode(
+          movingNode.id as AnyNodeId,
+          (isFreshPlacement
+            ? {
+                path: nextPath,
+                metadata: stripPlacementMetadataFlags(
+                  (movingNode as { metadata?: unknown }).metadata,
+                ),
+                visible: true,
+              }
+            : { path: nextPath }) as Partial<AnyNode>,
+        )
+        useViewer.getState().setSelection({ selectedIds: [movingNode.id as AnyNodeId] })
+        for (const relatedEntry of relatedEntries) {
+          relatedEntry.removeAttribute('transform')
+        }
+        useAlignmentGuides.getState().clear()
+        setMovingNode(null)
+        swallowNextClick()
+        return
+      }
+      if (isFreshPlacement) {
+        selectedId =
+          commitFreshPlacementSubtree(
             movingNode.id as AnyNodeId,
             {
-              metadata: { ...meta, isNew: false },
+              position: [sx, oldY, sz],
+              metadata: stripPlacementMetadataFlags(
+                (movingNode as { metadata?: unknown }).metadata,
+              ),
+              visible: true,
             } as Partial<AnyNode>,
-          )
-        }
+          ) ?? selectedId
+      } else {
+        useScene.getState().updateNode(
+          movingNode.id as AnyNodeId,
+          {
+            position: [sx, oldY, sz],
+          } as Partial<AnyNode>,
+        )
       }
-      entry.removeAttribute('transform')
+      useViewer.getState().setSelection({ selectedIds: [selectedId] })
+      for (const relatedEntry of relatedEntries) {
+        relatedEntry.removeAttribute('transform')
+      }
+      useAlignmentGuides.getState().clear()
       setMovingNode(null)
+      swallowNextClick()
     }
 
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        entry.removeAttribute('transform')
-        setMovingNode(null)
+      if (event.key !== 'Escape' && !isHistoryShortcut(event)) return
+      if (isHistoryShortcut(event)) {
+        // ⌘Z mid-move cancels like Escape — keep it from reaching the
+        // global undo arm (this handler is capture-phase, that one bubbles).
+        event.preventDefault()
+        event.stopImmediatePropagation()
       }
+      setMovingNodeOrigin('2d')
+      if (isFreshPlacement) {
+        emitter.emit('tool:cancel')
+        const temporal = useScene.temporal.getState()
+        const wasTracking = (temporal as { isTracking?: boolean }).isTracking !== false
+        if (wasTracking) temporal.pause()
+        useScene.getState().deleteNode(movingNode.id as AnyNodeId)
+        if (wasTracking) temporal.resume()
+      }
+      for (const relatedEntry of relatedEntries) {
+        relatedEntry.removeAttribute('transform')
+      }
+      useAlignmentGuides.getState().clear()
+      setMovingNode(null)
     }
 
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onPointerUp)
-    window.addEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey, true)
     return () => {
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onPointerUp)
-      window.removeEventListener('keydown', onKey)
-      entry.removeAttribute('transform')
+      window.removeEventListener('keydown', onKey, true)
+      for (const relatedEntry of relatedEntries) {
+        relatedEntry.removeAttribute('transform')
+      }
+      // Always un-hide on teardown so a committed copy shows and a
+      // never-revealed entry doesn't leak a hidden style onto a reused node.
+      for (const relatedEntry of relatedEntries) {
+        relatedEntry.style.visibility = ''
+      }
+      boxEl.remove()
+      useAlignmentGuides.getState().clear()
     }
   }, [isActive, movingNode, setMovingNode, setMovingNodeOrigin, hasMoveTarget, def])
 
@@ -479,4 +825,63 @@ function deepEqual(a: unknown, b: unknown): boolean {
     return true
   }
   return false
+}
+
+function collectFloorplanMoveEntryIds(
+  rootId: AnyNodeId,
+  nodes: Record<string, AnyNode>,
+): Set<AnyNodeId> {
+  const root = nodes[rootId]
+  if (root?.type !== 'cabinet' && root?.type !== 'cabinet-module') {
+    return new Set([rootId])
+  }
+
+  const ids = new Set<AnyNodeId>()
+  const queue: AnyNodeId[] = [rootId]
+  while (queue.length > 0) {
+    const id = queue.pop()!
+    if (ids.has(id)) continue
+    const node = nodes[id]
+    if (node?.type !== 'cabinet' && node?.type !== 'cabinet-module') continue
+    ids.add(id)
+    for (const childId of node.children ?? []) {
+      const child = nodes[childId as AnyNodeId]
+      if (child?.type === 'cabinet' || child?.type === 'cabinet-module') {
+        queue.push(childId as AnyNodeId)
+      }
+    }
+  }
+  return ids
+}
+
+function unionFloorplanEntryBBox(entries: readonly SVGGraphicsElement[]): DOMRect {
+  const first = entries[0]?.getBBox()
+  if (!first) return new DOMRect(0, 0, 0, 0)
+
+  let minX = first.x
+  let minY = first.y
+  let maxX = first.x + first.width
+  let maxY = first.y + first.height
+  for (const entry of entries.slice(1)) {
+    const box = entry.getBBox()
+    minX = Math.min(minX, box.x)
+    minY = Math.min(minY, box.y)
+    maxX = Math.max(maxX, box.x + box.width)
+    maxY = Math.max(maxY, box.y + box.height)
+  }
+  return new DOMRect(minX, minY, Math.max(0, maxX - minX), Math.max(0, maxY - minY))
+}
+
+function swallowNextClick() {
+  const swallowClick = (e: MouseEvent) => {
+    e.stopPropagation()
+    e.preventDefault()
+    window.removeEventListener('click', swallowClick, true)
+  }
+  window.addEventListener('click', swallowClick, true)
+  // Safety net: if no click fires (e.g. user dragged enough to suppress it),
+  // drop the listener on the next tick.
+  setTimeout(() => {
+    window.removeEventListener('click', swallowClick, true)
+  }, 0)
 }

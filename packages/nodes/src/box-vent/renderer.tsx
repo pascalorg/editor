@@ -13,19 +13,20 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  resolveMaterialRef,
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
-import { getAnalyticalNormal, surfaceQuatFromNormal } from '../solar-panel/geometry'
+import { getAnalyticalNormal, surfaceQuatFromNormal } from '../shared/roof-surface'
+import { useSegmentTrimClippedGeometry } from '../shared/use-segment-trim-clip'
 import { buildBoxVentGeometry } from './geometry'
 
 const defaultMaterial = new THREE.MeshStandardMaterial({
   color: 0xff_ff_ff,
   roughness: 0.85,
   metalness: 0.1,
-  side: THREE.DoubleSide,
 })
 
 /**
@@ -56,6 +57,7 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
   const textures = useViewer((s) => s.textures)
   const colorPreset: ColorPreset = useViewer((s) => s.colorPreset)
   const sceneTheme = useViewer((s) => s.sceneTheme)
+  const sceneMaterials = useScene((s) => s.materials)
 
   // Merge live overrides (panel slider drags) on top of the store node.
   // Sliders write here on every `onChange` and only flush to the scene
@@ -76,6 +78,7 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
   // every parametric field, including the per-style ones. Listing them
   // explicitly keeps the dep array tight (vs. `[node]` which would
   // also fire on `name` / `visible` flips).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildBoxVentGeometry(node),
     [
@@ -107,26 +110,60 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
     return surfaceQuatFromNormal(normal, new THREE.Quaternion())
   }, [segment, node.position[0], node.position[2]])
 
-  // Paint surface: explicit material wins, then preset, then the cached
-  // default. Mirrors the slab / stair / wall pattern. Preset materials
-  // come from the shared cache with `side: FrontSide`; clone + force
-  // DoubleSide locally so back faces of the vent body / hood don't drop
-  // out when the camera looks up at the eaves.
+  // Paint surfaces: the lower base and upper cover resolve independently.
+  // FrontSide everywhere — DoubleSide on the role material's
+  // NodeMaterial poisons the MRT scene pass (see `materials.ts` line 77 /
+  // glazing fix 9400f1c5). Earlier this path forced DoubleSide so back
+  // faces of the vent body / hood wouldn't drop out when looking up at the
+  // eaves; that's now a known visual tradeoff — a closed-solid extrude in
+  // `geometry.ts` is the right fix if undersides become noticeable.
   const material = useMemo(() => {
-    // Untextured box vent (and textures-off mode) takes the themed 'roof'
-    // role colour. Request DoubleSide directly so the cached role material
-    // is the right side — no clone/mutation of a shared material.
-    if (!textures || (!node.material && !node.materialPreset)) {
-      return createSurfaceRoleMaterial('roof', colorPreset, THREE.DoubleSide, sceneTheme)
+    const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
+    if (!textures) return [roleDefault, roleDefault]
+    const resolve = (role: 'base' | 'top') => {
+      const slotMaterial = resolveMaterialRef(node.slots?.[role], sceneMaterials, shading)
+      if (slotMaterial) return slotMaterial
+      if (node.material) return createMaterial(node.material, shading)
+      if (node.materialPreset) {
+        return createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial
+      }
+      return roleDefault
     }
-    const base = node.material
-      ? createMaterial(node.material, shading)
-      : (createMaterialFromPresetRef(node.materialPreset, shading) ?? defaultMaterial)
-    if (base.side === THREE.DoubleSide) return base
-    const cloned = base.clone()
-    cloned.side = THREE.DoubleSide
-    return cloned
-  }, [textures, colorPreset, sceneTheme, shading, node.material, node.materialPreset])
+    return [resolve('base'), resolve('top')]
+  }, [
+    textures,
+    colorPreset,
+    sceneTheme,
+    shading,
+    node.slots,
+    node.material,
+    node.materialPreset,
+    sceneMaterials,
+  ])
+
+  // Compose slope tilt + yaw onto a single quaternion so the registered
+  // ref's local frame is vent-mesh-local. `NodeArrowHandles` reads this
+  // frame to place its chevrons; collapsing the nested-group stack onto
+  // the registered group lets handles use vent-local coords directly,
+  // without per-arrow tilt compensation. Mirrors solar-panel's renderer.
+  const yAxis = useMemo(() => new THREE.Vector3(0, 1, 0), [])
+  const composedQuat = useMemo(() => {
+    const yawQuat = new THREE.Quaternion().setFromAxisAngle(yAxis, node.rotation ?? 0)
+    return new THREE.Quaternion().copy(surfaceQuat).multiply(yawQuat)
+  }, [surfaceQuat, node.rotation, yAxis])
+
+  // Map vent-local geometry into the host segment's local frame (the frame the
+  // trim cut prisms live in) — same pose the inner mesh group is mounted with.
+  const localToSegment = useMemo(
+    () =>
+      new THREE.Matrix4().compose(
+        new THREE.Vector3(node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0),
+        composedQuat,
+        new THREE.Vector3(1, 1, 1),
+      ),
+    [node.position[0], node.position[1], node.position[2], composedQuat],
+  )
+  const clippedGeometry = useSegmentTrimClippedGeometry(geometry, segment, localToSegment)
 
   if (!segment) return null
 
@@ -146,21 +183,18 @@ const BoxVentRenderer = ({ node: storeNode }: { node: BoxVentNode }) => {
     <group position={segPos} rotation-y={segRotY}>
       <group
         position={[node.position[0] ?? 0, node.position[1] ?? 0, node.position[2] ?? 0]}
+        quaternion={composedQuat}
         ref={ref}
         visible={node.visible}
       >
-        <group quaternion={surfaceQuat}>
-          <group rotation-y={node.rotation ?? 0}>
-            <mesh
-              castShadow
-              geometry={geometry}
-              material={material}
-              name="box-vent-surface"
-              receiveShadow
-              {...handlers}
-            />
-          </group>
-        </group>
+        <mesh
+          castShadow
+          geometry={clippedGeometry ?? geometry}
+          material={material}
+          name="box-vent-surface"
+          receiveShadow
+          {...handlers}
+        />
       </group>
     </group>
   )

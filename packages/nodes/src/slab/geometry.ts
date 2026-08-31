@@ -1,25 +1,53 @@
-import { getMaterialPresetByRef, type SlabNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type BuildingNode,
+  type GeometryContext,
+  getLevelElevations,
+  getMaterialPresetByRef,
+  getRenderableSlabPolygon,
+  type LevelNode,
+  type SiteNode,
+  type SlabNode,
+  slabPolygonContextFromGeometry,
+  surfaceHeightAt,
+  terrainFieldOf,
+} from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
+  buildTerrainPerimeterFillGeometry,
   type ColorPreset,
   createDefaultMaterial,
   createMaterial,
   createSurfaceRoleMaterial,
-  DEFAULT_SLAB_MATERIAL,
   generateSlabGeometry,
   type RenderShading,
+  resolveMaterialRef,
+  resolveSlotDefaultMaterial,
 } from '@pascal-app/viewer'
-import { DoubleSide, Group, type Material, Mesh, type Texture } from 'three'
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  FrontSide,
+  Group,
+  type Material,
+  Mesh,
+  type Texture,
+  Vector3,
+} from 'three'
+import { creaseCrossings } from '../site/terrain-drape'
+import { SLAB_SIDE_SLOT_DEFAULT, SLAB_TOP_SLOT_DEFAULT, type SlabSlotId } from './slots'
 
 /**
  * Stage B builder for slab. Reuses `generateSlabGeometry` (pure
  * triangulation + hole CSG from viewer) and the same material cache
  * pattern the legacy slab renderer used.
  *
- * Materials are cached by `{material, materialPreset}` signature so
- * slabs sharing settings share the GPU resource. Cached entry mutation
- * (preset apply) is preserved — async texture loads still update the
- * rendered material after re-mount.
+ * Materials follow the unified slot model: the single `surface` slot resolves
+ * `node.slots.surface` (a shared scene material or `library:` finish) → the
+ * legacy inline `node.material` / `materialPreset` (pre-slot-model scenes) →
+ * the declared slot default colour. Textures-off collapses to the themed
+ * `floor` role — the guaranteed monochrome escape hatch.
  */
 type SlabMaterial = Material & {
   alphaMap?: Texture | null
@@ -29,21 +57,101 @@ type SlabMaterial = Material & {
 }
 
 const slabMaterialCache = new Map<string, Material>()
-
-function getSlabMaterial(
+function getSlabSlotMaterial(
   node: SlabNode,
+  slotId: SlabSlotId,
   shading: RenderShading,
   textures: boolean,
   colorPreset: ColorPreset,
-  sceneTheme?: string,
+  sceneTheme: string | undefined,
+  sceneMaterials: GeometryContext['materials'],
 ): Material {
-  // Untextured slabs (and everything in textures-off mode) take the themed
-  // 'floor' role colour. createSurfaceRoleMaterial returns a shared cached
-  // material, so it is returned as-is without the mutation below.
-  if (!textures || (!node.materialPreset && !node.material)) {
-    return createSurfaceRoleMaterial('floor', colorPreset, DoubleSide, sceneTheme)
+  // Textures-off mode takes the themed 'floor' role colour for every face — the
+  // guaranteed escape hatch, independent of any slot override. FrontSide —
+  // DoubleSide on the role material's NodeMaterial poisons the MRT scene pass
+  // (see `materials.ts` line 77 / glazing fix 9400f1c5). Slab side faces still
+  // render correctly because `generateSlabGeometry` emits outward-facing normals.
+  if (!textures) {
+    return createSurfaceRoleMaterial('floor', colorPreset, FrontSide, sceneTheme)
   }
 
+  // Unified slot override — shared scene material or catalog `library:` finish.
+  const slotRef = node.slots?.[slotId]
+  if (slotRef) {
+    const resolved = resolveMaterialRef(slotRef, sceneMaterials, shading)
+    if (resolved) return resolved
+  }
+
+  // Legacy inline material / preset (pre-slot-model scenes) applied to the whole
+  // slab — map it onto the top face only; sides take their own default.
+  if (slotId === 'surface' && (node.materialPreset || node.material)) {
+    return getLegacySlabMaterial(node, shading)
+  }
+
+  // Declared slot default — a catalog `library:` finish or a flat colour.
+  const slotDefault = slotId === 'side' ? SLAB_SIDE_SLOT_DEFAULT : SLAB_TOP_SLOT_DEFAULT
+  return resolveSlotDefaultMaterial(slotDefault, shading, 0.8)
+}
+
+// Split the merged slab buffer into top-facing (floor) and everything-else
+// (vertical walls + underside) sub-geometries by per-triangle face normal, so
+// the two paintable slots get distinct materials + raycast tags. De-indexes
+// into per-face triangles (slabs are flat-shaded, so no shared-vertex seams).
+function splitSlabFacesByFacing(geometry: BufferGeometry): {
+  top: BufferGeometry
+  side: BufferGeometry
+} {
+  const position = geometry.getAttribute('position')
+  const uv = geometry.getAttribute('uv')
+  const index = geometry.getIndex()
+  const triangleCount = index ? index.count / 3 : position.count / 3
+
+  const top = { pos: [] as number[], uv: [] as number[] }
+  const side = { pos: [] as number[], uv: [] as number[] }
+  const a = new Vector3()
+  const b = new Vector3()
+  const c = new Vector3()
+  const ab = new Vector3()
+  const ac = new Vector3()
+  const normal = new Vector3()
+
+  for (let t = 0; t < triangleCount; t += 1) {
+    const i0 = index ? index.getX(t * 3) : t * 3
+    const i1 = index ? index.getX(t * 3 + 1) : t * 3 + 1
+    const i2 = index ? index.getX(t * 3 + 2) : t * 3 + 2
+    a.fromBufferAttribute(position, i0)
+    b.fromBufferAttribute(position, i1)
+    c.fromBufferAttribute(position, i2)
+    ab.subVectors(b, a)
+    ac.subVectors(c, a)
+    normal.crossVectors(ab, ac)
+    const lengthSq = normal.lengthSq()
+    const isTop = lengthSq > 1e-12 && normal.y / Math.sqrt(lengthSq) > 0.5
+    const target = isTop ? top : side
+    for (const i of [i0, i1, i2]) {
+      target.pos.push(position.getX(i), position.getY(i), position.getZ(i))
+      if (uv) target.uv.push(uv.getX(i), uv.getY(i))
+    }
+  }
+
+  const build = (data: { pos: number[]; uv: number[] }) => {
+    const geo = new BufferGeometry()
+    geo.setAttribute('position', new Float32BufferAttribute(data.pos, 3))
+    if (data.uv.length > 0) {
+      geo.setAttribute('uv', new Float32BufferAttribute(data.uv, 2))
+      geo.setAttribute('uv2', new Float32BufferAttribute(data.uv.slice(), 2))
+    }
+    geo.computeVertexNormals()
+    return geo
+  }
+
+  return { top: build(top), side: build(side) }
+}
+
+function getLegacySlabMaterial(node: SlabNode, shading: RenderShading): Material {
+  // Cached by `{material, materialPreset}` signature so slabs sharing settings
+  // share the GPU resource; cached entry mutation (preset apply) is preserved
+  // so async texture loads still update the rendered material after re-mount.
   const cacheKey = JSON.stringify({
     shading,
     material: node.material ?? null,
@@ -57,7 +165,7 @@ function getSlabMaterial(
     ? createDefaultMaterial('#ffffff', 0.5, shading)
     : node.material
       ? createMaterial(node.material, shading).clone()
-      : DEFAULT_SLAB_MATERIAL(shading).clone()
+      : createDefaultMaterial('#e5e5e5', 0.8, shading)
 
   if (preset) {
     applyMaterialPresetToMaterials(material, preset)
@@ -67,7 +175,10 @@ function getSlabMaterial(
   slabMaterial.transparent = false
   slabMaterial.opacity = 1
   slabMaterial.alphaMap = null
-  slabMaterial.side = DoubleSide
+  // FrontSide — user-supplied materials may be NodeMaterials, and DoubleSide
+  // on any NodeMaterial in the MRT scene pass poisons the render context
+  // (see `materials.ts` line 77 / glazing fix 9400f1c5).
+  slabMaterial.side = FrontSide
   slabMaterial.depthWrite = true
   slabMaterial.needsUpdate = true
 
@@ -75,22 +186,150 @@ function getSlabMaterial(
   return material
 }
 
+function terrainFillContext(ctx: GeometryContext | undefined) {
+  if (!ctx) return null
+  const level = ctx.parent
+  if (level?.type !== 'level' || !level.parentId) return null
+  const building = ctx.resolve<BuildingNode>(level.parentId as AnyNodeId)
+  if (building?.type !== 'building' || !building.parentId) return null
+  const site = ctx.resolve<SiteNode>(building.parentId as AnyNodeId)
+  if (site?.type !== 'site') return null
+  const field = terrainFieldOf(site)
+
+  const nodes: Record<string, AnyNode> = {
+    [site.id]: site,
+    [building.id]: building,
+    [level.id]: level as LevelNode,
+  }
+  for (const childId of building.children) {
+    const child = ctx.resolve<AnyNode>(childId as AnyNodeId)
+    if (child) nodes[child.id] = child
+  }
+  const elevation = getLevelElevations(nodes).get(level.id)
+  if (!elevation) return null
+  const baseWorldY = (building.position?.[1] ?? 0) + elevation.baseY
+  if (Math.abs(baseWorldY) >= 1e-4) return null
+
+  return {
+    baseWorldY,
+    building,
+    field,
+  }
+}
+
+function buildSlabTerrainFillGeometry(
+  node: SlabNode,
+  polygon: Array<[number, number]>,
+  ctx: GeometryContext | undefined,
+): BufferGeometry | null {
+  const terrain = terrainFillContext(ctx)
+  if (!terrain || polygon.length < 3) return null
+
+  let area2 = 0
+  for (let index = 0; index < polygon.length; index += 1) {
+    const [ax, az] = polygon[index]!
+    const [bx, bz] = polygon[(index + 1) % polygon.length]!
+    area2 += ax * bz - bx * az
+  }
+  const contour = area2 < 0 ? [...polygon].reverse() : polygon
+  const angle = terrain.building.rotation?.[1] ?? 0
+  const cos = Math.cos(angle)
+  const sin = Math.sin(angle)
+  const [offsetX, , offsetZ] = terrain.building.position ?? [0, 0, 0]
+  const toSite = (x: number, z: number): [number, number] => [
+    cos * x + sin * z + offsetX,
+    -sin * x + cos * z + offsetZ,
+  ]
+
+  const points: Array<[number, number]> = []
+  for (let index = 0; index < contour.length; index += 1) {
+    const [ax, az] = contour[index]!
+    const [bx, bz] = contour[(index + 1) % contour.length]!
+    const [siteAx, siteAz] = toSite(ax, az)
+    const [siteBx, siteBz] = toSite(bx, bz)
+    points.push([ax, az])
+    if (terrain.field) {
+      for (const t of creaseCrossings(terrain.field, siteAx, siteAz, siteBx, siteBz)) {
+        points.push([ax + (bx - ax) * t, az + (bz - az) * t])
+      }
+    }
+  }
+
+  const top = node.elevation - node.thickness
+  const localPoints = points.map(([x, z]) => ({ x, z }))
+  const bottomY = points.map(([x, z]) => {
+    const [siteX, siteZ] = toSite(x, z)
+    const ground = terrain.field ? surfaceHeightAt(terrain.field, siteX, siteZ) : 0
+    return Math.min(top, ground - terrain.baseWorldY)
+  })
+  return buildTerrainPerimeterFillGeometry(localPoints, bottomY, top, 1e-4)
+}
+
 export function buildSlabGeometry(
   node: SlabNode,
-  _ctx?: unknown,
+  ctx?: GeometryContext,
   shading: RenderShading = 'rendered',
   textures = true,
   colorPreset: ColorPreset = 'clay',
   sceneTheme?: string,
 ): Group {
   const group = new Group()
-  const geometry = generateSlabGeometry(node)
-  const material = getSlabMaterial(node, shading, textures, colorPreset, sceneTheme)
-  const mesh = new Mesh(geometry, material)
-  mesh.castShadow = true
-  mesh.receiveShadow = true
+  const polygonContext = slabPolygonContextFromGeometry(ctx)
+  const merged = generateSlabGeometry(node, polygonContext)
+  const { top, side } = splitSlabFacesByFacing(merged)
+  merged.dispose()
+
   const elevation = node.elevation ?? 0.05
-  if (elevation < 0) mesh.position.y = elevation
-  group.add(mesh)
+  // One mesh per slot, each tagged with its slot id so the unified slot paint
+  // resolves the hit (`resolveRole` reads `userData.slotId`) and previews it.
+  for (const [slotId, geometry] of [
+    ['surface', top],
+    ['side', side],
+  ] as const) {
+    const material = getSlabSlotMaterial(
+      node,
+      slotId,
+      shading,
+      textures,
+      colorPreset,
+      sceneTheme,
+      ctx?.materials,
+    )
+    const mesh = new Mesh(geometry, material)
+    mesh.castShadow = true
+    mesh.receiveShadow = true
+    mesh.userData.slotId = slotId
+    // Solid slabs bake [elevation − thickness, elevation] into the geometry;
+    // recessed shells are authored from floor to rim and translated so the
+    // floor sits at `elevation`.
+    if (node.recessed) mesh.position.y = elevation
+    group.add(mesh)
+  }
+
+  if (node.fillToTerrain && !node.recessed) {
+    const terrainFill = buildSlabTerrainFillGeometry(
+      node,
+      getRenderableSlabPolygon(node, polygonContext),
+      ctx,
+    )
+    if (terrainFill) {
+      const mesh = new Mesh(
+        terrainFill,
+        getSlabSlotMaterial(
+          node,
+          'side',
+          shading,
+          textures,
+          colorPreset,
+          sceneTheme,
+          ctx?.materials,
+        ),
+      )
+      mesh.castShadow = true
+      mesh.receiveShadow = true
+      mesh.userData.slotId = 'side'
+      group.add(mesh)
+    }
+  }
   return group
 }

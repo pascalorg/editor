@@ -5,11 +5,12 @@ import { Copy, Move, SlidersHorizontal, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import type { MouseEventHandler } from 'react'
 import { cn } from '../../../lib/utils'
-import { messages, useLocale, useTranslations } from '../../../lib/i18n'
 import { getNodeDisplay } from './node-display'
 
 interface MobileSelectionBarProps {
-  node: AnyNode
+  node: AnyNode | null
+  label?: string
+  icon?: string
   onMove: () => void
   onDuplicate: () => void
   onDelete: () => void
@@ -21,22 +22,23 @@ const ACTION_BTN =
 
 export function MobileSelectionBar({
   node,
+  label,
+  icon,
   onMove,
   onDuplicate,
   onDelete,
   onEdit,
 }: MobileSelectionBarProps) {
-  const t = useTranslations()
-  const { locale } = useLocale()
-  const { icon, labelKey } = getNodeDisplay(node)
-  const label = labelKey.includes('.') ? (messages[locale] as Record<string, string>)[labelKey] || labelKey : labelKey
+  const display = getNodeDisplay(node)
+  const resolvedLabel = label ?? display.label
+  const resolvedIcon = icon ?? display.icon
 
   const stop: MouseEventHandler<HTMLButtonElement> = (e) => e.stopPropagation()
 
   return (
     <div className="pointer-events-auto absolute right-3 bottom-6 left-3 z-50 flex h-12 items-stretch gap-1 rounded-2xl border border-border/50 bg-background/95 px-2 shadow-2xl backdrop-blur-xl">
       <button
-        aria-label={`Edit ${label}`}
+        aria-label={`Edit ${resolvedLabel}`}
         className={cn(
           'flex min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left transition-colors hover:bg-white/8',
         )}
@@ -47,15 +49,15 @@ export function MobileSelectionBar({
           alt=""
           className="shrink-0 rounded object-contain"
           height={20}
-          src={icon}
+          src={resolvedIcon}
           width={20}
         />
-        <span className="truncate font-medium text-foreground text-sm">{label}</span>
+        <span className="truncate font-medium text-foreground text-sm">{resolvedLabel}</span>
       </button>
 
       <div className="flex items-center gap-0.5 border-border/40 border-l pl-1">
         <button
-          aria-label={t('editor.move')}
+          aria-label="Move"
           className={ACTION_BTN}
           onClick={(e) => {
             stop(e)
@@ -66,7 +68,7 @@ export function MobileSelectionBar({
           <Move className="h-4 w-4" />
         </button>
         <button
-          aria-label={t('editor.duplicate')}
+          aria-label="Duplicate"
           className={ACTION_BTN}
           onClick={(e) => {
             stop(e)
@@ -77,7 +79,7 @@ export function MobileSelectionBar({
           <Copy className="h-4 w-4" />
         </button>
         <button
-          aria-label={t('editor.delete')}
+          aria-label="Delete"
           className={cn(ACTION_BTN, 'hover:bg-red-500/15 hover:text-red-400')}
           onClick={(e) => {
             stop(e)
@@ -88,7 +90,7 @@ export function MobileSelectionBar({
           <Trash2 className="h-4 w-4" />
         </button>
         <button
-          aria-label={t('editor.editProperties')}
+          aria-label="Edit properties"
           className={ACTION_BTN}
           onClick={(e) => {
             stop(e)

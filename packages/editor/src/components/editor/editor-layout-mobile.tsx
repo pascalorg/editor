@@ -159,6 +159,11 @@ export function EditorLayoutMobile({
       const expandedThreshold = Math.max(SHEET_HANDLE_PX, defaultPx * 0.5)
       if (current > expandedThreshold) {
         sheetRef.current?.snapTo(SHEET_HANDLE_PX)
+        // Closing the sheet disarms any build tool back to select
+        const { mode, setMode } = useEditor.getState()
+        if (mode === 'build') {
+          setMode('select')
+        }
       } else {
         sheetRef.current?.snapTo(defaultPx)
       }

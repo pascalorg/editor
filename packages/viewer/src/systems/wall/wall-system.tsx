@@ -3,13 +3,16 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  calculateLevelMiters,
-  DEFAULT_WALL_HEIGHT,
+  DEFAULT_LEVEL_HEIGHT,
   type DoorNode,
   getAdjacentWallIds,
-  getWallCurveFrameAt,
-  getWallMiterBoundaryPoints,
   getEffectiveNode,
+  getWallBandSlotId,
+  getWallCurveFrameAt,
+  getWallFaceBandConfig,
+  getWallFaceBandForHeight,
+  getWallMiterBoundaryPoints,
+  getWallPlaneTop,
   getWallPlanFootprint,
   getWallSurfacePolygon,
   getWallThickness,
@@ -17,24 +20,61 @@ import {
   type Point2D,
   pointToKey,
   resolveLevelId,
+  resolveWallTop,
   sceneRegistry,
   spatialGridManager,
+  terrainSupportLift,
   useLiveNodeOverrides,
+  useLiveTransforms,
   useScene,
   type WallMiterData,
   type WallNode,
+  type WallSlabSupportSegment,
+  type WallSurfaceSide,
+  type WallSurfaceSlotId,
   type WindowNode,
 } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
+import { useEffect } from 'react'
 import * as THREE from 'three'
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
+import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
+import { setGroupsSortedByMaterial } from '../../lib/geometry-groups'
+import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
+import { clearLevelMiterCache, getCachedLevelMiters } from './level-miter-cache'
+import {
+  buildOpeningCutoutGeometry,
+  getOpeningCutoutBottomPadding,
+} from './opening-cutout-geometry'
+import { sweepUnbuiltWalls, WALL_PLACEHOLDER_SWEEP_INTERVAL } from './wall-placeholder-sweep'
 
 // Reusable CSG evaluator for better performance
 const csgEvaluator = new Evaluator()
+csgEvaluator.attributes = ['position', 'normal', 'uv', 'uv2']
 const CURVED_WALL_3D_ENDPOINT_INSET = 0.0015
 const WALL_FACE_NORMAL_Y_EPSILON = 0.6
 const WALL_FACE_EDGE_DISTANCE_EPSILON = 0.003
+const WALL_BAND_SPLIT_EPSILON = 1e-5
+const WALL_BAND_SLOT_MATERIAL_INDEX: Record<WallSurfaceSlotId, number> = {
+  interior: 1,
+  exterior: 2,
+  lowerInterior: 3,
+  middleInterior: 4,
+  upperInterior: 5,
+  topInterior: 6,
+  lowerExterior: 7,
+  middleExterior: 8,
+  upperExterior: 9,
+  topExterior: 10,
+  skirtingInterior: 0,
+  skirtingExterior: 0,
+  crownInterior: 0,
+  crownExterior: 0,
+  chairRailInterior: 0,
+  chairRailExterior: 0,
+}
 
 function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
   ;(geometry as any).computeBoundsTree = computeBoundsTree
@@ -51,13 +91,6 @@ type TaggedWallBoundaryEdge = {
   start: THREE.Vector2
   end: THREE.Vector2
   tag: WallBoundaryEdgeTag
-}
-
-function ensureUv2Attribute(geometry: THREE.BufferGeometry) {
-  const uv = geometry.getAttribute('uv')
-  if (!uv) return
-
-  geometry.setAttribute('uv2', new THREE.Float32BufferAttribute(Array.from(uv.array), 2))
 }
 
 function insetCurvedWallBoundaryPointsFor3D(
@@ -196,21 +229,27 @@ function distanceToWallBoundaryEdge(point: THREE.Vector2, edge: TaggedWallBounda
 }
 
 function getWallFaceMaterialIndex(
-  wall: Pick<WallNode, 'frontSide' | 'backSide'>,
+  wall: Pick<WallNode, 'frontSide' | 'backSide' | 'height' | 'faceBands'>,
   face: 'front' | 'back',
-): 0 | 1 | 2 {
+  y: number,
+  effectiveWallHeight: number,
+): number {
   const semantic = face === 'front' ? wall.frontSide : wall.backSide
-  const fallback = face === 'front' ? 1 : 2
+  const fallback: WallSurfaceSide = face === 'front' ? 'interior' : 'exterior'
+  const side = semantic === 'interior' || semantic === 'exterior' ? semantic : fallback
 
-  if (semantic === 'interior') return 1
-  if (semantic === 'exterior') return 2
-  return fallback
+  const bands = getWallFaceBandConfig(wall, effectiveWallHeight)
+  if (!bands.enabled) return WALL_BAND_SLOT_MATERIAL_INDEX[side]
+
+  const band = getWallFaceBandForHeight(wall, y, effectiveWallHeight)
+  return WALL_BAND_SLOT_MATERIAL_INDEX[getWallBandSlotId(side, band)]
 }
 
 function assignWallMaterialGroups(
   geometry: THREE.BufferGeometry,
   wall: WallNode,
   boundaryEdges: TaggedWallBoundaryEdge[],
+  effectiveWallHeight: number,
 ) {
   const position = geometry.getAttribute('position')
   if (!position) return
@@ -290,24 +329,135 @@ function assignWallMaterialGroups(
       continue
     }
 
-    triangleMaterials[triangleIndex] = getWallFaceMaterialIndex(wall, nearestTag)
+    triangleMaterials[triangleIndex] = getWallFaceMaterialIndex(
+      wall,
+      nearestTag,
+      centroid.y,
+      effectiveWallHeight,
+    )
   }
 
-  geometry.clearGroups()
+  setGroupsSortedByMaterial(geometry, triangleMaterials)
+}
 
-  let currentMaterial = triangleMaterials[0] ?? 0
-  let groupStart = 0
+type SplitVertex = {
+  x: number
+  y: number
+  z: number
+}
 
-  for (let triangleIndex = 1; triangleIndex < triangleCount; triangleIndex += 1) {
-    const materialIndex = triangleMaterials[triangleIndex] ?? 0
-    if (materialIndex === currentMaterial) continue
+function interpolateSplitVertex(a: SplitVertex, b: SplitVertex, t: number): SplitVertex {
+  return {
+    x: a.x + (b.x - a.x) * t,
+    y: a.y + (b.y - a.y) * t,
+    z: a.z + (b.z - a.z) * t,
+  }
+}
 
-    geometry.addGroup(groupStart * 3, (triangleIndex - groupStart) * 3, currentMaterial)
-    groupStart = triangleIndex
-    currentMaterial = materialIndex
+function clipPolygonByY(polygon: SplitVertex[], planeY: number, keepBelow: boolean): SplitVertex[] {
+  const out: SplitVertex[] = []
+  if (polygon.length === 0) return out
+
+  const isInside = (vertex: SplitVertex) =>
+    keepBelow
+      ? vertex.y <= planeY + WALL_BAND_SPLIT_EPSILON
+      : vertex.y >= planeY - WALL_BAND_SPLIT_EPSILON
+
+  for (let index = 0; index < polygon.length; index += 1) {
+    const current = polygon[index]!
+    const previous = polygon[(index + polygon.length - 1) % polygon.length]!
+    const currentInside = isInside(current)
+    const previousInside = isInside(previous)
+
+    if (currentInside !== previousInside) {
+      const denom = current.y - previous.y
+      if (Math.abs(denom) > WALL_BAND_SPLIT_EPSILON) {
+        out.push(interpolateSplitVertex(previous, current, (planeY - previous.y) / denom))
+      }
+    }
+    if (currentInside) out.push(current)
   }
 
-  geometry.addGroup(groupStart * 3, (triangleCount - groupStart) * 3, currentMaterial)
+  return out
+}
+
+function triangulateSplitPolygon(polygon: SplitVertex[], positions: number[]) {
+  if (polygon.length < 3) return
+  const first = polygon[0]!
+  for (let index = 1; index < polygon.length - 1; index += 1) {
+    const b = polygon[index]!
+    const c = polygon[index + 1]!
+    positions.push(first.x, first.y, first.z, b.x, b.y, b.z, c.x, c.y, c.z)
+  }
+}
+
+function splitGeometryAtHorizontalPlanes(
+  geometry: THREE.BufferGeometry,
+  planes: number[],
+): THREE.BufferGeometry {
+  const splitPlanes = Array.from(
+    new Set(
+      planes
+        .filter((plane) => Number.isFinite(plane) && plane > WALL_BAND_SPLIT_EPSILON)
+        .map((plane) => Math.round(plane / WALL_BAND_SPLIT_EPSILON) * WALL_BAND_SPLIT_EPSILON),
+    ),
+  ).sort((a, b) => a - b)
+  if (splitPlanes.length === 0) return geometry
+
+  const source = geometry.index ? geometry.toNonIndexed() : geometry
+  const position = source.getAttribute('position')
+  if (!position || position.count === 0) return source
+
+  const positions: number[] = []
+  for (let index = 0; index < position.count; index += 3) {
+    let polygons: SplitVertex[][] = [
+      [
+        { x: position.getX(index), y: position.getY(index), z: position.getZ(index) },
+        { x: position.getX(index + 1), y: position.getY(index + 1), z: position.getZ(index + 1) },
+        { x: position.getX(index + 2), y: position.getY(index + 2), z: position.getZ(index + 2) },
+      ],
+    ]
+
+    for (const plane of splitPlanes) {
+      const next: SplitVertex[][] = []
+      for (const polygon of polygons) {
+        const minY = Math.min(...polygon.map((vertex) => vertex.y))
+        const maxY = Math.max(...polygon.map((vertex) => vertex.y))
+        if (plane <= minY + WALL_BAND_SPLIT_EPSILON || plane >= maxY - WALL_BAND_SPLIT_EPSILON) {
+          next.push(polygon)
+          continue
+        }
+
+        const below = clipPolygonByY(polygon, plane, true)
+        const above = clipPolygonByY(polygon, plane, false)
+        if (below.length >= 3) next.push(below)
+        if (above.length >= 3) next.push(above)
+      }
+      polygons = next
+    }
+
+    for (const polygon of polygons) triangulateSplitPolygon(polygon, positions)
+  }
+
+  if (source !== geometry) geometry.dispose()
+  source.dispose()
+
+  const split = new THREE.BufferGeometry()
+  split.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  split.computeVertexNormals()
+  return split
+}
+
+function getWallBandSplitPlanes(wall: WallNode, effectiveWallHeight: number): number[] {
+  const bands = getWallFaceBandConfig(wall, effectiveWallHeight)
+  if (!bands.enabled) return []
+  const planes = [bands.lowerTop]
+  if (bands.count >= 3) planes.push(bands.middleTop)
+  if (bands.count >= 4) planes.push(bands.upperTop)
+  return planes.filter(
+    (plane) =>
+      plane > WALL_BAND_SPLIT_EPSILON && plane < effectiveWallHeight - WALL_BAND_SPLIT_EPSILON,
+  )
 }
 
 // ============================================================================
@@ -330,21 +480,73 @@ let useFrameNb = 0
 // within ~80ms. Standard CAD-app behavior. Speeds up t-junction drags ~3×,
 // 4-corner-room drags ~4×.
 const DRAG_FLUSH_MS = 80
+const MAX_WALL_REBUILDS_PER_FRAME = 8
+const WALL_PROGRESSIVE_DIRTY_THRESHOLD = MAX_WALL_REBUILDS_PER_FRAME
+const WALL_PROGRESSIVE_TIME_BUDGET_MS = 8
 let lastWallDirtyAtMs = 0
 const pendingAdjacentByLevel = new Map<string, Set<string>>()
 
+// Walls whose geometry this system replaced since the last drain.
+//
+// The store's dirty mark is cleared the moment a wall is rebuilt, so anything
+// running later in the same frame would never see it. This is that same
+// signal, held until a consumer picks it up. Neighbours rebuilt by the
+// trailing-edge flush land here too — those never carry a dirty mark at all.
+const rebuiltWalls = new Set<string>()
+
+/** Moves every rebuild notice collected so far into `into`. */
+export function drainRebuiltWalls(into: Set<string>): void {
+  for (const wallId of rebuiltWalls) into.add(wallId)
+  rebuiltWalls.clear()
+}
+
+/** Rebuilds this system still owes — neighbours deferred during a drag. */
+export function getPendingWallRebuildCount(): number {
+  let count = 0
+  for (const ids of pendingAdjacentByLevel.values()) {
+    count += ids.size
+  }
+  return count
+}
+
+let placeholderSweepCountdown = WALL_PLACEHOLDER_SWEEP_INTERVAL
+
 export const WallSystem = () => {
-  const dirtyNodes = useScene((state) => state.dirtyNodes)
+  // Subscribe so scene writes and override-only changes (no scene write)
+  // still re-run this component. The frame body reads the LIVE set via
+  // `useScene.getState()` — a closure over the subscribed value goes stale
+  // whenever the store REPLACES the set (scene load, plugin install) in the
+  // window before React commits the re-render, and marks added to the new
+  // set in that window would be invisible to the frame.
+  useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
-  // Subscribe so override-only changes (no scene write) still re-run
-  // this component, which lets the gate below pick up the latest
-  // `dirtyNodes` set from the same render pass that received the
-  // override-publishing `markDirty` call. Without this, very fast
-  // drags could land an override and a markDirty in the same React
-  // tick and the next `useFrame` would still see the stale closure.
   useLiveNodeOverrides((s) => s.overrides)
 
+  // The miter cache is module-level, so it outlives this mount. Editor
+  // teardown resets the other shared singletons; without the same reset here a
+  // remount in the same tab keeps every previous level's walls reachable.
+  useEffect(() => () => clearLevelMiterCache(), [])
+
   useFrame(() => {
+    // Self-heal: any registered wall still on its mount-time placeholder
+    // geometry with NO dirty mark gets re-marked, so a lost mark (system
+    // mounted late, suspense remount, mark consumed elsewhere) can never
+    // strand a wall as a degenerate point forever (QA f2 probe5/probe6 —
+    // scene loaded with the X-ray active never built any of its 24 walls).
+    placeholderSweepCountdown -= 1
+    if (placeholderSweepCountdown <= 0) {
+      placeholderSweepCountdown = WALL_PLACEHOLDER_SWEEP_INTERVAL
+      const sceneState = useScene.getState()
+      sweepUnbuiltWalls({
+        wallIds: sceneRegistry.byType.wall ?? [],
+        geometryOf: (wallId) =>
+          (sceneRegistry.nodes.get(wallId) as THREE.Mesh | undefined)?.geometry ?? null,
+        isDirty: (wallId) => sceneState.dirtyNodes.has(wallId as AnyNodeId),
+        markDirty: (wallId) => sceneState.markDirty(wallId as AnyNodeId),
+      })
+    }
+
+    const dirtyNodes = useScene.getState().dirtyNodes
     const hasDirty = dirtyNodes.size > 0
     const hasPending = pendingAdjacentByLevel.size > 0
     if (!hasDirty && !hasPending) return
@@ -354,12 +556,13 @@ export const WallSystem = () => {
 
     // Collect dirty walls and their levels
     const dirtyWallsByLevel = new Map<string, Set<string>>()
+    let dirtyWallCount = 0
 
     useFrameNb += 1
     if (hasDirty) {
       dirtyNodes.forEach((id) => {
         const node = nodes[id]
-        if (!node || node.type !== 'wall') return
+        if (node?.type !== 'wall') return
 
         const levelId = node.parentId
         if (!levelId) return
@@ -368,6 +571,7 @@ export const WallSystem = () => {
           dirtyWallsByLevel.set(levelId, new Set())
         }
         dirtyWallsByLevel.get(levelId)?.add(id)
+        dirtyWallCount += 1
       })
     }
 
@@ -376,25 +580,54 @@ export const WallSystem = () => {
       lastWallDirtyAtMs = now
     }
 
+    const useProgressiveWallRebuilds = dirtyWallCount > WALL_PROGRESSIVE_DIRTY_THRESHOLD
+    let rebuiltWallsThisFrame = 0
+    const rebuildFrameStartedAt = now
+
     // Process each level that has dirty walls
     for (const [levelId, dirtyWallIds] of dirtyWallsByLevel) {
+      if (useProgressiveWallRebuilds && rebuiltWallsThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) {
+        break
+      }
+
       const levelWalls = getLevelWalls(levelId)
-      const miterData = calculateLevelMiters(levelWalls)
+      const miterData = getCachedLevelMiters(levelId, levelWalls)
+      const rebuiltWallIds = new Set<string>()
 
       // Update dirty walls — always, no throttling. The dragged wall must
-      // follow the cursor with full fidelity (cutouts and all).
+      // follow the cursor with full fidelity (cutouts and all). Large imports
+      // enter the progressive path so initial load can't lock the tab.
       for (const wallId of dirtyWallIds) {
+        if (useProgressiveWallRebuilds) {
+          if (rebuiltWallsThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) {
+            break
+          }
+          if (
+            rebuiltWallsThisFrame > 0 &&
+            performance.now() - rebuildFrameStartedAt >= WALL_PROGRESSIVE_TIME_BUDGET_MS
+          ) {
+            break
+          }
+        }
+
         const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
         if (mesh) {
           updateWallGeometry(wallId, miterData)
           clearDirty(wallId as AnyNodeId)
+          rebuiltWalls.add(wallId)
+          rebuiltWallIds.add(wallId)
+          rebuiltWallsThisFrame += 1
         }
         // If mesh not found, keep it dirty for next frame
       }
 
+      if (rebuiltWallIds.size === 0) {
+        continue
+      }
+
       // Adjacent walls sharing junctions — *defer* during active drag
       // (dirty arrived this frame), flush on the trailing edge.
-      const adjacentWallIds = getAdjacentWallIds(levelWalls, dirtyWallIds)
+      const adjacentWallIds = getAdjacentWallIds(levelWalls, rebuiltWallIds)
       let pending = pendingAdjacentByLevel.get(levelId)
       if (!pending) {
         pending = new Set()
@@ -412,16 +645,48 @@ export const WallSystem = () => {
     // their correct miter joins.
     const quiet = !hasDirtyWalls && now - lastWallDirtyAtMs >= DRAG_FLUSH_MS
     if (quiet && pendingAdjacentByLevel.size > 0) {
+      const pendingCount = getPendingWallRebuildCount()
+      const useProgressiveAdjacentRebuilds = pendingCount > WALL_PROGRESSIVE_DIRTY_THRESHOLD
+      let rebuiltAdjacentThisFrame = 0
+      const adjacentFrameStartedAt = performance.now()
+
       for (const [levelId, pendingIds] of pendingAdjacentByLevel) {
         if (pendingIds.size === 0) continue
         const levelWalls = getLevelWalls(levelId)
-        const miterData = calculateLevelMiters(levelWalls)
-        for (const wallId of pendingIds) {
+        const miterData = getCachedLevelMiters(levelId, levelWalls)
+        for (const wallId of Array.from(pendingIds)) {
+          if (useProgressiveAdjacentRebuilds) {
+            if (rebuiltAdjacentThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) {
+              break
+            }
+            if (
+              rebuiltAdjacentThisFrame > 0 &&
+              performance.now() - adjacentFrameStartedAt >= WALL_PROGRESSIVE_TIME_BUDGET_MS
+            ) {
+              break
+            }
+          }
+
           const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
-          if (mesh) updateWallGeometry(wallId, miterData)
+          if (mesh) {
+            updateWallGeometry(wallId, miterData)
+            rebuiltWalls.add(wallId)
+          }
+          pendingIds.delete(wallId)
+          rebuiltAdjacentThisFrame += 1
+        }
+
+        if (pendingIds.size === 0) {
+          pendingAdjacentByLevel.delete(levelId)
+        }
+
+        if (
+          useProgressiveAdjacentRebuilds &&
+          rebuiltAdjacentThisFrame >= MAX_WALL_REBUILDS_PER_FRAME
+        ) {
+          break
         }
       }
-      pendingAdjacentByLevel.clear()
     }
   }, 4)
 
@@ -450,7 +715,7 @@ function getLevelWalls(levelId: string): WallNode[] {
   const { nodes } = useScene.getState()
   const level = nodes[levelId as AnyNodeId]
 
-  if (!level || level.type !== 'level') return []
+  if (level?.type !== 'level') return []
 
   const walls: WallNode[] = []
   for (const childId of level.children) {
@@ -471,14 +736,30 @@ function getLevelWalls(levelId: string): WallNode[] {
 function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   const nodes = useScene.getState().nodes
   const sceneNode = nodes[wallId as WallNode['id']]
-  if (!sceneNode || sceneNode.type !== 'wall') return
+  if (sceneNode?.type !== 'wall') return
   const node = getEffectiveWall(sceneNode as WallNode)
 
   const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
   if (!mesh) return
 
   const levelId = resolveLevelId(node, nodes)
-  const slabElevation = spatialGridManager.getSlabElevationForWall(levelId, node.start, node.end)
+  // Covering-clamped plane: a flush/thick slab on the level above shortens
+  // the plane-bound walls below it (explicit-height walls ignore the value).
+  const planeTop = getWallPlaneTop(node, levelId, nodes)
+  const slabSupport = spatialGridManager.getSlabSupportForWall(
+    levelId,
+    node.start,
+    node.end,
+    node.curveOffset ?? 0,
+    node.thickness,
+    node.supportSlabId,
+    undefined,
+    node.supportOffset,
+  )
+  const slabElevation = slabSupport.elevation
+  const terrainBottomAt = node.fillToTerrain
+    ? (x: number, z: number) => terrainSupportLift(nodes, levelId, x, z)
+    : undefined
 
   const childrenIds = node.children || []
   // Merge live overrides into door / window children so cutouts track an
@@ -488,18 +769,54 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   const childrenNodes = childrenIds
     .map((childId) => nodes[childId])
     .filter((n): n is AnyNode => n !== undefined)
-    .map((child) =>
-      child.type === 'door' || child.type === 'window' ? getEffectiveNode(child) : child,
-    )
+    .map((child) => {
+      if (child.type !== 'door' && child.type !== 'window') return child
+      // `getEffectiveNode` folds in resize overrides (width/height arrows).
+      // Position moves publish to `useLiveTransforms` instead, so fold that
+      // in too — opening cutout brushes are rebuilt directly from the
+      // effective node position rather than from the rendered proxy mesh.
+      const effective = getEffectiveNode(child)
+      const live = useLiveTransforms.getState().get(child.id)
+      if (!live?.position) return effective
+      return { ...effective, position: live.position }
+    })
 
-  const newGeo = generateExtrudedWall(node, childrenNodes, miterData, slabElevation)
+  const builtGeo = generateExtrudedWall(
+    node,
+    childrenNodes,
+    miterData,
+    slabElevation,
+    slabSupport.baseElevation,
+    slabSupport.baseSegments,
+    planeTop,
+    terrainBottomAt,
+  )
+  const wallAngle = Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0])
+  // World transform the render mesh will apply (position + Y-rotation below).
+  // Reproduce it here so the UVs can be projected in WORLD space — see
+  // `applyWorldPlanarWallUVs`.
+  const wallWorldMatrix = new THREE.Matrix4().compose(
+    new THREE.Vector3(node.start[0], slabElevation, node.start[1]),
+    new THREE.Quaternion().setFromAxisAngle(WALL_UV_Y_AXIS, -wallAngle),
+    WALL_UV_UNIT_SCALE,
+  )
+  const newGeo = applyWorldPlanarWallUVs(builtGeo, wallWorldMatrix)
 
   mesh.geometry.dispose()
   mesh.geometry = newGeo
   // Update collision mesh
   const collisionMesh = mesh.getObjectByName('collision-mesh') as THREE.Mesh
   if (collisionMesh) {
-    const collisionGeo = generateExtrudedWall(node, [], miterData, slabElevation)
+    const collisionGeo = generateExtrudedWall(
+      node,
+      [],
+      miterData,
+      slabElevation,
+      slabSupport.baseElevation,
+      slabSupport.baseSegments,
+      planeTop,
+      terrainBottomAt,
+    )
     collisionMesh.geometry.dispose()
     collisionMesh.geometry = collisionGeo
   }
@@ -509,24 +826,167 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   mesh.rotation.y = -angle
 }
 
+const WALL_UV_Y_AXIS = new THREE.Vector3(0, 1, 0)
+const WALL_UV_UNIT_SCALE = new THREE.Vector3(1, 1, 1)
+
+/**
+ * Re-project a wall's UVs in WORLD space (1 UV unit = 1 m) so the finish tiles
+ * continuously across adjacent walls and lines up with the roof gable above —
+ * instead of THREE's `ExtrudeGeometry` UVs, which restart at each wall's own
+ * start/end. Matches `roof-system`'s `pushRoofUv` projection exactly: vertical
+ * faces use `U = ±worldX/Z` (the axis across the face normal) and `V = 1 -
+ * worldY`; the thin top/bottom caps use `(worldX, worldZ)`. De-indexes first so
+ * every triangle projects by its own face normal (no shared-vertex seams at
+ * edges). Applied only to the render mesh; collision/floorplan geometry is
+ * untouched.
+ */
+function applyWorldPlanarWallUVs(
+  geometry: THREE.BufferGeometry,
+  worldMatrix: THREE.Matrix4,
+): THREE.BufferGeometry {
+  const target = geometry.index ? geometry.toNonIndexed() : geometry
+  if (target !== geometry) geometry.dispose()
+
+  const position = target.getAttribute('position')
+  if (!position || position.count === 0) return target
+
+  const a = new THREE.Vector3()
+  const b = new THREE.Vector3()
+  const c = new THREE.Vector3()
+  const normal = new THREE.Vector3()
+  const edgeAB = new THREE.Vector3()
+  const edgeAC = new THREE.Vector3()
+  const uvs = new Float32Array(position.count * 2)
+
+  for (let i = 0; i < position.count; i += 3) {
+    a.fromBufferAttribute(position, i).applyMatrix4(worldMatrix)
+    b.fromBufferAttribute(position, i + 1).applyMatrix4(worldMatrix)
+    c.fromBufferAttribute(position, i + 2).applyMatrix4(worldMatrix)
+    edgeAB.subVectors(b, a)
+    edgeAC.subVectors(c, a)
+    normal.crossVectors(edgeAB, edgeAC).normalize()
+
+    const absX = Math.abs(normal.x)
+    const absY = Math.abs(normal.y)
+    const absZ = Math.abs(normal.z)
+
+    for (let k = 0; k < 3; k += 1) {
+      const p = k === 0 ? a : k === 1 ? b : c
+      let u: number
+      let v: number
+      if (absY >= absX && absY >= absZ) {
+        u = p.x
+        v = p.z
+      } else {
+        v = 1 - p.y
+        u = absX >= absZ ? (normal.x >= 0 ? p.z : -p.z) : normal.z >= 0 ? p.x : -p.x
+      }
+      uvs[(i + k) * 2] = u
+      uvs[(i + k) * 2 + 1] = v
+    }
+  }
+
+  target.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  target.setAttribute('uv2', new THREE.Float32BufferAttribute(uvs.slice(), 2))
+  return target
+}
+
 /**
  * Generates extruded wall geometry with mitering and cutouts
  *
  * Key insight from demo: polygon is built in WORLD coordinates first,
  * then we transform to wall-local for the 3D mesh.
  */
+const WALL_TERRAIN_SAMPLE_STEP = 0.25
+
+type WallTerrainBottomSampler = (x: number, z: number) => number | null
+
+function densifyClosedWallPerimeter(points: Point2D[]): Point2D[] {
+  const dense: Point2D[] = []
+  for (let index = 0; index < points.length; index += 1) {
+    const start = points[index]!
+    const end = points[(index + 1) % points.length]!
+    const length = Math.hypot(end.x - start.x, end.y - start.y)
+    const segments = Math.max(1, Math.ceil(length / WALL_TERRAIN_SAMPLE_STEP))
+    for (let segment = 0; segment < segments; segment += 1) {
+      const t = segment / segments
+      dense.push({
+        x: start.x + (end.x - start.x) * t,
+        y: start.y + (end.y - start.y) * t,
+      })
+    }
+  }
+  return dense
+}
+
+function buildWallTerrainFillGeometry(
+  perimeter: Point2D[],
+  worldToLocal: (point: Point2D) => { x: number; z: number },
+  wallBaseElevation: number,
+  terrainBottomAt: WallTerrainBottomSampler,
+): THREE.BufferGeometry | null {
+  const worldPoints = densifyClosedWallPerimeter(perimeter)
+  if (worldPoints.length < 3) return null
+
+  const localPoints = worldPoints.map(worldToLocal)
+  const bottomY = worldPoints.map((point) => {
+    const terrainElevation = terrainBottomAt(point.x, point.y)
+    return terrainElevation == null ? 0 : Math.min(0, terrainElevation - wallBaseElevation)
+  })
+  return buildTerrainPerimeterFillGeometry(localPoints, bottomY, 0)
+}
+
+function mergeWallTerrainFill(
+  body: THREE.BufferGeometry,
+  fill: THREE.BufferGeometry | null,
+  wall: WallNode,
+  boundaryEdges: TaggedWallBoundaryEdge[],
+  effectiveWallHeight: number,
+): THREE.BufferGeometry {
+  if (!fill) return body
+
+  const bodyGeometry = body.index ? body.toNonIndexed() : body
+  if (bodyGeometry !== body) body.dispose()
+  ensureRenderableGeometryAttributes(bodyGeometry)
+  ensureRenderableGeometryAttributes(fill)
+  const merged = mergeGeometries([bodyGeometry, fill], false)
+  if (!merged) {
+    fill.dispose()
+    return bodyGeometry
+  }
+
+  bodyGeometry.dispose()
+  fill.dispose()
+  merged.computeVertexNormals()
+  assignWallMaterialGroups(merged, wall, boundaryEdges, effectiveWallHeight)
+  ensureRenderableGeometryAttributes(merged)
+  return merged
+}
+
 export function generateExtrudedWall(
   wallNode: WallNode,
   childrenNodes: AnyNode[],
   miterData: WallMiterData,
   slabElevation = 0,
+  baseElevation = slabElevation,
+  baseSegments: readonly WallSlabSupportSegment[] = [
+    { start: 0, end: 1, elevation: baseElevation },
+  ],
+  storeyHeight = DEFAULT_LEVEL_HEIGHT,
+  terrainBottomAt?: WallTerrainBottomSampler,
 ): THREE.BufferGeometry {
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
-  // Positive slab: shift the whole wall up (full height preserved)
-  // Negative slab: extend wall downward so top stays fixed at wallNode.height
-  const wallHeight = wallNode.height ?? DEFAULT_WALL_HEIGHT
-  const height = slabElevation > 0 ? wallHeight : wallHeight - slabElevation
+  const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation)
+  const effectiveWallHeight = topElevation - slabElevation
+  const effectiveBaseElevation = Math.min(baseElevation, slabElevation)
+  const localBottom = effectiveBaseElevation - slabElevation
+  const height = topElevation - effectiveBaseElevation
+  // A slab at or above the storey plane leaves a plane-bound wall with no
+  // body — bail before ExtrudeGeometry sees a non-positive depth.
+  if (height <= 1e-9) {
+    return new THREE.BufferGeometry()
+  }
 
   const thickness = getWallThickness(wallNode)
 
@@ -566,6 +1026,9 @@ export function generateExtrudedWall(
   // Convert polygon to local coordinates
   const localPoints = polyPoints.map(worldToLocal)
   const boundaryEdges = buildTaggedWallBoundaryEdges(wallNode, localPoints, miterData)
+  const terrainFill = terrainBottomAt
+    ? buildWallTerrainFillGeometry(polyPoints, worldToLocal, slabElevation, terrainBottomAt)
+    : null
 
   // Build THREE.js shape
   // Shape uses (x, y) where we map: shape.x = local.x, shape.y = -local.z
@@ -585,18 +1048,127 @@ export function generateExtrudedWall(
 
   // Rotate so extrusion direction (Z) becomes height direction (Y)
   geometry.rotateX(-Math.PI / 2)
+  if (Math.abs(localBottom) > 1e-9) geometry.translate(0, localBottom, 0)
   geometry.computeVertexNormals()
-  assignWallMaterialGroups(geometry, wallNode, boundaryEdges)
-  ensureUv2Attribute(geometry)
+  assignWallMaterialGroups(geometry, wallNode, boundaryEdges, effectiveWallHeight)
+  ensureRenderableGeometryAttributes(geometry)
 
-  // Apply CSG subtraction for cutouts (doors/windows)
-  const cutoutBrushes = collectCutoutBrushes(wallNode, childrenNodes, thickness)
+  // Start with the lowest required wall prism, then remove the volume below
+  // each higher-supported run. This keeps the existing mitered footprint and
+  // opening CSG while giving one wall a stepped longitudinal base.
+  const baseProfileCutouts: Brush[] = []
+  for (const segment of baseSegments) {
+    const segmentElevation = Math.min(segment.elevation, slabElevation)
+    const cutHeight = segmentElevation - effectiveBaseElevation
+    if (cutHeight <= 1e-6 || segment.end - segment.start <= 1e-7) continue
+
+    const segmentStart = THREE.MathUtils.clamp(segment.start, 0, 1)
+    const segmentEnd = THREE.MathUtils.clamp(segment.end, 0, 1)
+    const cutHalfWidth = Math.max(thickness * 2, 0.2)
+    const worldCutoutPoints: Point2D[] = []
+
+    if (isCurvedWall(wallNode)) {
+      const sampleCount = Math.max(2, Math.ceil((segmentEnd - segmentStart) * 24))
+      const left: Point2D[] = []
+      const right: Point2D[] = []
+      for (let index = 0; index <= sampleCount; index++) {
+        const t = segmentStart + ((segmentEnd - segmentStart) * index) / sampleCount
+        const frame = getWallCurveFrameAt(wallNode, t)
+        const endpointExtension =
+          index === 0 && segmentStart <= 1e-7
+            ? -cutHalfWidth
+            : index === sampleCount && segmentEnd >= 1 - 1e-7
+              ? cutHalfWidth
+              : 0
+        const center = {
+          x: frame.point.x + frame.tangent.x * endpointExtension,
+          y: frame.point.y + frame.tangent.y * endpointExtension,
+        }
+        left.push({
+          x: center.x + frame.normal.x * cutHalfWidth,
+          y: center.y + frame.normal.y * cutHalfWidth,
+        })
+        right.push({
+          x: center.x - frame.normal.x * cutHalfWidth,
+          y: center.y - frame.normal.y * cutHalfWidth,
+        })
+      }
+      worldCutoutPoints.push(...left, ...right.reverse())
+    } else {
+      const tangentX = v.x / L
+      const tangentY = v.y / L
+      const normalX = -tangentY
+      const normalY = tangentX
+      const startExtension = segmentStart <= 1e-7 ? cutHalfWidth : 0
+      const endExtension = segmentEnd >= 1 - 1e-7 ? cutHalfWidth : 0
+      const startPoint = {
+        x: wallStart.x + tangentX * (segmentStart * L - startExtension),
+        y: wallStart.y + tangentY * (segmentStart * L - startExtension),
+      }
+      const endPoint = {
+        x: wallStart.x + tangentX * (segmentEnd * L + endExtension),
+        y: wallStart.y + tangentY * (segmentEnd * L + endExtension),
+      }
+      worldCutoutPoints.push(
+        {
+          x: startPoint.x + normalX * cutHalfWidth,
+          y: startPoint.y + normalY * cutHalfWidth,
+        },
+        { x: endPoint.x + normalX * cutHalfWidth, y: endPoint.y + normalY * cutHalfWidth },
+        { x: endPoint.x - normalX * cutHalfWidth, y: endPoint.y - normalY * cutHalfWidth },
+        {
+          x: startPoint.x - normalX * cutHalfWidth,
+          y: startPoint.y - normalY * cutHalfWidth,
+        },
+      )
+    }
+
+    const localCutoutPoints = worldCutoutPoints.map(worldToLocal)
+    if (localCutoutPoints.length < 3) continue
+    const cutoutShape = new THREE.Shape()
+    cutoutShape.moveTo(localCutoutPoints[0]!.x, -localCutoutPoints[0]!.z)
+    for (let index = 1; index < localCutoutPoints.length; index++) {
+      cutoutShape.lineTo(localCutoutPoints[index]!.x, -localCutoutPoints[index]!.z)
+    }
+    cutoutShape.closePath()
+
+    const cutoutBottom = localBottom - 0.01
+    const cutoutTop = segmentElevation - slabElevation
+    const cutoutGeometry = new THREE.ExtrudeGeometry(cutoutShape, {
+      depth: cutoutTop - cutoutBottom,
+      bevelEnabled: false,
+    })
+    cutoutGeometry.rotateX(-Math.PI / 2)
+    cutoutGeometry.translate(0, cutoutBottom, 0)
+    computeGeometryBoundsTree(cutoutGeometry)
+    baseProfileCutouts.push(new Brush(cutoutGeometry))
+  }
+
+  // Apply base-profile and opening cutouts in one CSG pass.
+  const cutoutBrushes = [
+    ...baseProfileCutouts,
+    ...collectCutoutBrushes(wallNode, childrenNodes, thickness),
+  ]
   if (cutoutBrushes.length === 0) {
-    return geometry
+    const splitGeometry = splitGeometryAtHorizontalPlanes(
+      geometry,
+      getWallBandSplitPlanes(wallNode, effectiveWallHeight),
+    )
+    splitGeometry.computeVertexNormals()
+    assignWallMaterialGroups(splitGeometry, wallNode, boundaryEdges, effectiveWallHeight)
+    ensureRenderableGeometryAttributes(splitGeometry)
+    return mergeWallTerrainFill(
+      splitGeometry,
+      terrainFill,
+      wallNode,
+      boundaryEdges,
+      effectiveWallHeight,
+    )
   }
 
   // Create wall brush from geometry
   // Pre-compute BVH with new API to avoid deprecation warning
+  ensureRenderableGeometryAttributes(geometry)
   computeGeometryBoundsTree(geometry)
 
   const wallBrush = new Brush(geometry)
@@ -605,8 +1177,9 @@ export function generateExtrudedWall(
   // Subtract each cutout from the wall
   let resultBrush = wallBrush
   for (const cutoutBrush of cutoutBrushes) {
-    cutoutBrush.updateMatrixWorld()
+    prepareBrushForCSG(cutoutBrush)
     const newResult = csgEvaluator.evaluate(resultBrush, cutoutBrush, SUBTRACTION)
+    prepareBrushForCSG(newResult)
     if (resultBrush !== wallBrush) {
       csgGeometry(resultBrush).dispose()
     }
@@ -620,16 +1193,27 @@ export function generateExtrudedWall(
   }
 
   const resultGeometry = csgGeometry(resultBrush)
-  resultGeometry.computeVertexNormals()
-  assignWallMaterialGroups(resultGeometry, wallNode, boundaryEdges)
-  ensureUv2Attribute(resultGeometry)
+  const splitResultGeometry = splitGeometryAtHorizontalPlanes(
+    resultGeometry,
+    getWallBandSplitPlanes(wallNode, effectiveWallHeight),
+  )
+  splitResultGeometry.computeVertexNormals()
+  assignWallMaterialGroups(splitResultGeometry, wallNode, boundaryEdges, effectiveWallHeight)
+  ensureRenderableGeometryAttributes(splitResultGeometry)
 
-  return resultGeometry
+  return mergeWallTerrainFill(
+    splitResultGeometry,
+    terrainFill,
+    wallNode,
+    boundaryEdges,
+    effectiveWallHeight,
+  )
 }
 
 /**
- * Collects cutout brushes from child items for CSG subtraction
- * The cutout mesh is a plane, so we extrude it into a box that goes through the wall
+ * Collects opening and item cutout brushes for CSG subtraction. Door/window
+ * cuts come directly from node geometry; item proxy meshes are transformed
+ * into wall-local boxes that pass through the wall.
  */
 function collectCutoutBrushes(
   wallNode: WallNode,
@@ -647,17 +1231,8 @@ function collectCutoutBrushes(
   for (const child of childrenNodes) {
     if (child.type !== 'item' && child.type !== 'window' && child.type !== 'door') continue
 
-    if (
-      (child.type === 'door' && child.openingKind === 'opening') ||
-      (child.type === 'door' &&
-        child.openingKind === 'door' &&
-        (child.openingShape === 'arch' || child.openingShape === 'rounded')) ||
-      (child.type === 'window' && child.openingKind === 'opening') ||
-      (child.type === 'window' &&
-        child.openingKind === 'window' &&
-        (child.openingShape === 'arch' || child.openingShape === 'rounded'))
-    ) {
-      brushes.push(createShapedOpeningCutoutBrush(child, wallThickness))
+    if (child.type === 'door' || child.type === 'window') {
+      brushes.push(createOpeningCutoutBrush(child, wallThickness))
       continue
     }
 
@@ -715,189 +1290,22 @@ function collectCutoutBrushes(
   return brushes
 }
 
-type ShapedOpeningNode = DoorNode | WindowNode
-type CornerRadii = {
-  topLeft: number
-  topRight: number
-  bottomRight: number
-  bottomLeft: number
-}
-
-function createShapedOpeningCutoutBrush(opening: ShapedOpeningNode, wallThickness: number): Brush {
-  const shape = createShapedOpeningCutoutShape(opening)
-  const depth = wallThickness * 2
-  const bevelSize =
-    opening.openingShape === 'rounded'
-      ? Math.min(
-          Math.max(opening.openingRevealRadius ?? 0.025, 0),
-          Math.max(wallThickness * 0.45, 0.001),
-          Math.max((opening.cornerRadius ?? 0.15) * 0.45, 0.001),
-        )
-      : 0
-  const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth,
-    bevelEnabled: bevelSize > 0,
-    bevelSegments: bevelSize > 0 ? 8 : 0,
-    bevelSize,
-    bevelThickness: bevelSize,
-    curveSegments: 24,
-  })
-
-  geometry.translate(0, 0, -depth / 2)
+function createOpeningCutoutBrush(opening: DoorNode | WindowNode, wallThickness: number): Brush {
+  const halfWidth = opening.width / 2
+  const bottom = opening.position[1] - opening.height / 2
+  const bottomPadding = getOpeningCutoutBottomPadding(opening, bottom)
+  const geometry = buildOpeningCutoutGeometry(
+    opening,
+    {
+      left: opening.position[0] - halfWidth,
+      right: opening.position[0] + halfWidth,
+      bottom: bottom - bottomPadding,
+      top: opening.position[1] + opening.height / 2,
+    },
+    wallThickness * 2,
+    wallThickness,
+  )
   computeGeometryBoundsTree(geometry)
 
   return new Brush(geometry)
-}
-
-function createShapedOpeningCutoutShape(opening: ShapedOpeningNode): THREE.Shape {
-  const halfWidth = opening.width / 2
-  const bottom = opening.position[1] - opening.height / 2
-  const top = opening.position[1] + opening.height / 2
-  const centerX = opening.position[0]
-  const left = centerX - halfWidth
-  const right = centerX + halfWidth
-  const width = Math.max(opening.width, 1e-6)
-  const height = Math.max(opening.height, 1e-6)
-  const shape = new THREE.Shape()
-
-  if (opening.openingShape === 'arch') {
-    const archHeight = Math.min(Math.max(opening.archHeight ?? width / 2, 0.01), height)
-    const springY = top - archHeight
-    const segments = 32
-
-    shape.moveTo(left, bottom)
-    shape.lineTo(right, bottom)
-    shape.lineTo(right, springY)
-    for (let index = 1; index <= segments; index += 1) {
-      const x = right + (left - right) * (index / segments)
-      const normalizedX = Math.min(Math.abs((x - centerX) / halfWidth), 1)
-      const y = springY + archHeight * Math.sqrt(Math.max(1 - normalizedX * normalizedX, 0))
-      shape.lineTo(x, y)
-    }
-    shape.lineTo(left, bottom)
-    shape.closePath()
-    return shape
-  }
-
-  if (opening.openingShape === 'rounded') {
-    const radii = getRoundedOpeningRadii(opening, width, height)
-    applyRoundedOpeningShape(shape, left, right, bottom, top, radii)
-    return shape
-  }
-
-  shape.moveTo(left, bottom)
-  shape.lineTo(right, bottom)
-  shape.lineTo(right, top)
-  shape.lineTo(left, top)
-  shape.closePath()
-  return shape
-}
-
-function getRoundedOpeningRadii(
-  opening: ShapedOpeningNode,
-  width: number,
-  height: number,
-): CornerRadii {
-  if (opening.type !== 'window') {
-    if (opening.openingRadiusMode === 'individual') {
-      const [topLeft = 0, topRight = 0] = opening.openingTopRadii ?? [0.15, 0.15]
-
-      return normalizeCornerRadii(
-        {
-          topLeft: Math.max(topLeft, 0),
-          topRight: Math.max(topRight, 0),
-          bottomRight: 0,
-          bottomLeft: 0,
-        },
-        width,
-        height,
-      )
-    }
-
-    const maxRadius = Math.min(width / 2, height)
-    const radius = Math.min(Math.max(opening.cornerRadius ?? 0.15, 0), maxRadius)
-    return { topLeft: radius, topRight: radius, bottomRight: 0, bottomLeft: 0 }
-  }
-
-  if (opening.openingRadiusMode === 'individual') {
-    const [topLeft = 0, topRight = 0, bottomRight = 0, bottomLeft = 0] =
-      opening.openingCornerRadii ?? [0.15, 0.15, 0.15, 0.15]
-
-    return normalizeCornerRadii(
-      {
-        topLeft: Math.max(topLeft, 0),
-        topRight: Math.max(topRight, 0),
-        bottomRight: Math.max(bottomRight, 0),
-        bottomLeft: Math.max(bottomLeft, 0),
-      },
-      width,
-      height,
-    )
-  }
-
-  const maxRadius = Math.min(width / 2, height / 2)
-  const radius = Math.min(Math.max(opening.cornerRadius ?? 0.15, 0), maxRadius)
-  return { topLeft: radius, topRight: radius, bottomRight: radius, bottomLeft: radius }
-}
-
-function normalizeCornerRadii(radii: CornerRadii, width: number, height: number): CornerRadii {
-  const next = { ...radii }
-  const maxScale = Math.min(
-    1,
-    width / Math.max(next.topLeft + next.topRight, 1e-6),
-    width / Math.max(next.bottomLeft + next.bottomRight, 1e-6),
-    height / Math.max(next.topLeft + next.bottomLeft, 1e-6),
-    height / Math.max(next.topRight + next.bottomRight, 1e-6),
-  )
-
-  if (maxScale < 1) {
-    next.topLeft *= maxScale
-    next.topRight *= maxScale
-    next.bottomRight *= maxScale
-    next.bottomLeft *= maxScale
-  }
-
-  return next
-}
-
-function applyRoundedOpeningShape(
-  shape: THREE.Shape,
-  left: number,
-  right: number,
-  bottom: number,
-  top: number,
-  radii: CornerRadii,
-) {
-  const { topLeft, topRight, bottomRight, bottomLeft } = radii
-
-  shape.moveTo(left + bottomLeft, bottom)
-  shape.lineTo(right - bottomRight, bottom)
-  if (bottomRight > 1e-6) {
-    shape.absarc(right - bottomRight, bottom + bottomRight, bottomRight, -Math.PI / 2, 0, false)
-  } else {
-    shape.lineTo(right, bottom)
-  }
-
-  shape.lineTo(right, top - topRight)
-  if (topRight > 1e-6) {
-    shape.absarc(right - topRight, top - topRight, topRight, 0, Math.PI / 2, false)
-  } else {
-    shape.lineTo(right, top)
-  }
-
-  shape.lineTo(left + topLeft, top)
-  if (topLeft > 1e-6) {
-    shape.absarc(left + topLeft, top - topLeft, topLeft, Math.PI / 2, Math.PI, false)
-  } else {
-    shape.lineTo(left, top)
-  }
-
-  shape.lineTo(left, bottom + bottomLeft)
-  if (bottomLeft > 1e-6) {
-    shape.absarc(left + bottomLeft, bottom + bottomLeft, bottomLeft, Math.PI, Math.PI * 1.5, false)
-  } else {
-    shape.lineTo(left, bottom)
-  }
-
-  shape.closePath()
 }

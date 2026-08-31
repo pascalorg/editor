@@ -17,14 +17,12 @@ interface SceneLoaderProps {
 }
 
 export function SceneLoader({ className, fullScreen = false }: SceneLoaderProps) {
-  const [loaderClass, setLoaderClass] = useState<string | null>(null)
+  const [loaderClass, setLoaderClass] = useState(LOADERS[0]!)
 
   useEffect(() => {
     // Pick a random loader on mount
     setLoaderClass(LOADERS[Math.floor(Math.random() * LOADERS.length)] ?? LOADERS[0]!)
   }, [])
-
-  if (!loaderClass) return null
 
   return (
     <div

@@ -3,13 +3,27 @@
 import {
   type AnyNodeId,
   type CeilingNode,
+  collectAlignmentAnchors,
   emitter,
   type GridEvent,
+  polygonAnchors,
+  resolveAlignment,
+  resolveCeilingHeight,
   sceneRegistry,
+  snapScalar,
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { CursorSphere, markToolCancelConsumed, triggerSFX, useEditor } from '@pascal-app/editor'
+import {
+  CursorSphere,
+  consumePlacementDragRelease,
+  isAlignmentGuideActive,
+  isMagneticSnapActive,
+  markToolCancelConsumed,
+  triggerSFX,
+  useAlignmentGuides,
+  useEditor,
+} from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type * as THREE from 'three'
@@ -26,11 +40,14 @@ import { BufferGeometry, DoubleSide, Path, Shape, ShapeGeometry, Vector3 } from 
  * mesh's X/Z position on rebuild (`mesh.position.x = 0`,
  * `mesh.position.z = 0`) so the visual transitions smoothly.
  *
- * 0.5m grid snap (matches legacy).
+ * Snaps to the editor's configured grid step.
  */
 function snap(value: number) {
-  return Math.round(value * 2) / 2
+  return snapScalar(value, useEditor.getState().gridSnapStep)
 }
+
+/** Figma-style alignment-snap threshold (meters), matching the other tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
 
 function translatePolygon(
   polygon: Array<[number, number]>,
@@ -83,7 +100,8 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     (node.holes ?? []).map((hole) => hole.map(([x, z]) => [x, z] as [number, number])),
   )
   const originalCenterRef = useRef(getPolygonCenter(originalPolygonRef.current))
-  const heightRef = useRef(node.height ?? 2.5)
+  // Resolved once at drag start — the ceiling plane can't change mid-move.
+  const heightRef = useRef(resolveCeilingHeight(node, useScene.getState().nodes))
   const dragAnchorRef = useRef<[number, number] | null>(null)
   const previousGridPosRef = useRef<[number, number] | null>(null)
   const deltaRef = useRef<[number, number]>([0, 0])
@@ -104,15 +122,18 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     const height = heightRef.current
     const ceilingId = node.id
 
+    // Alignment candidates — every other alignable object's anchors,
+    // gathered once (the scene graph is stable during the drag).
+    const alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, ceilingId)
+
     let wasCommitted = false
 
     const applyPreview = (deltaX: number, deltaZ: number) => {
       deltaRef.current = [deltaX, deltaZ]
       setMeshOffset(ceilingId as AnyNodeId, deltaX, deltaZ, height)
       // Aligned with slab/fence: the delta matches the direct mesh
-      // mutation. CeilingRenderer doesn't bind position via React, so
-      // this entry isn't consumed for rendering, but kept consistent
-      // in case other systems read it.
+      // mutation. CeilingRenderer also consumes this store so external
+      // movers can preview ceilings without rebuilding the polygon.
       useLiveTransforms.getState().set(ceilingId, {
         position: [deltaX, 0, deltaZ],
         rotation: 0,
@@ -146,10 +167,33 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       const anchor = dragAnchorRef.current ?? [localX, localZ]
       dragAnchorRef.current = anchor
 
-      applyPreview(localX - anchor[0], localZ - anchor[1])
+      let deltaX = localX - anchor[0]
+      let deltaZ = localZ - anchor[1]
+
+      // Figma-style alignment snap: align the ceiling's translated polygon
+      // vertices to other objects' anchors and publish a guide. Guides are
+      // DISPLAYED in every snapping mode (isAlignmentGuideActive); the magnetic
+      // pull into the delta applies only in 'lines' mode (isMagneticSnapActive).
+      if (isAlignmentGuideActive() && alignmentCandidates.length > 0) {
+        const result = resolveAlignment({
+          moving: polygonAnchors(ceilingId, translatePolygon(originalPolygon, deltaX, deltaZ)),
+          candidates: alignmentCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (result.snap && isMagneticSnapActive()) {
+          deltaX += result.snap.dx
+          deltaZ += result.snap.dz
+        }
+        useAlignmentGuides.getState().set(result.guides)
+      } else {
+        useAlignmentGuides.getState().clear()
+      }
+
+      applyPreview(deltaX, deltaZ)
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (wasCommitted) return
       if (isFloorplanSourcedEvent(event)) return
       if (Date.now() - activatedAtRef.current < 150) {
         event.nativeEvent?.stopPropagation?.()
@@ -167,6 +211,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
         useScene.getState().markDirty(ceilingId as AnyNodeId)
       }
       useLiveTransforms.getState().clear(ceilingId)
+      useAlignmentGuides.getState().clear()
 
       triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [ceilingId] })
@@ -174,8 +219,15 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       event.nativeEvent?.stopPropagation?.()
     }
 
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      activatedAtRef.current = 0
+      onGridClick({ nativeEvent: event } as unknown as GridEvent)
+    }
+
     const onCancel = () => {
       clearPreview()
+      useAlignmentGuides.getState().clear()
       useViewer.getState().setSelection({ selectedIds: [ceilingId] })
       markToolCancelConsumed()
       exitMoveMode()
@@ -184,8 +236,10 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
+      useAlignmentGuides.getState().clear()
       if (!wasCommitted) {
         clearPreview()
       } else {
@@ -194,6 +248,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
   }, [exitMoveMode, node.id])
 
@@ -201,7 +256,7 @@ export const MoveCeilingTool: React.FC<{ node: CeilingNode }> = ({ node }) => {
     <CeilingMovePreview
       ceilingId={node.id}
       cursorLocalPos={cursorLocalPos}
-      height={node.height ?? 2.5}
+      height={heightRef.current}
       originalHoles={originalHolesRef.current}
       originalPolygon={originalPolygonRef.current}
     />

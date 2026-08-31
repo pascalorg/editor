@@ -6,14 +6,20 @@ import {
   type MaterialPresetPayload,
   type MaterialProperties,
   type MaterialSchema,
+  parseMaterialRef,
   resolveMaterial,
+  type SceneMaterial,
+  type SceneMaterialId,
   type SurfaceRole,
 } from '@pascal-app/core'
 import * as THREE from 'three'
+import { float, mix, positionViewDirection, transformedNormalView } from 'three/tsl'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
 
 import { resolveCdnUrl } from './asset-url'
+import { isKtx2Url, ktx2Loader, whenKtx2Ready } from './ktx2-loader'
 import { getSceneTheme } from './scene-themes'
+import { stampPascalTextureRef } from './texture-reference'
 
 export type RenderShading = 'solid' | 'rendered'
 export type ColorPreset = 'clay' | 'white' | 'mono' | 'blueprint'
@@ -28,14 +34,16 @@ export const CLAY_PALETTE: Record<SurfaceRole, string> = {
   furnishing: '#d2ccbe',
 }
 
+// Albedos are clamped to ≈0.83 linear (max channel #eb): real white paint
+// reflects ~80%, and pure-white albedo kills GI/shadow contrast.
 export const WHITE_PALETTE: Record<SurfaceRole, string> = {
-  wall: '#f4f3ef',
-  floor: '#ece9e2',
-  ceiling: '#fbfaf6',
+  wall: '#ebeae6',
+  floor: '#e7e4dd',
+  ceiling: '#ebeae6',
   roof: '#dedbd2',
-  joinery: '#e8e5dc',
+  joinery: '#e5e2d9',
   glazing: '#dbe8ee',
-  furnishing: '#efede7',
+  furnishing: '#e9e7e1',
 }
 
 export const MONO_PALETTE: Record<SurfaceRole, string> = {
@@ -73,7 +81,7 @@ export function resolveSurfaceColor(
   // The active scene theme may tint individual roles (e.g. Mediterranean's blue
   // roof); fall back to the chosen colour preset's palette when it doesn't.
   const tints = sceneThemeId ? getSceneTheme(sceneThemeId).clayTints : undefined
-  return tints?.[role] ?? PRESET_PALETTES[preset][role]
+  return tints?.[role] ?? (PRESET_PALETTES[preset] ?? CLAY_PALETTE)[role]
 }
 
 // DoubleSide on any NodeMaterial inside the MRT scenePass (SSGI's output /
@@ -87,11 +95,16 @@ export const glassMaterial = new MeshLambertNodeMaterial({
   opacity: 0.35,
   side: THREE.FrontSide,
 })
+glassMaterial.userData.__pascalCachedMaterial = true
+
+function resolveNodeMaterialSide(side: THREE.Side): THREE.Side {
+  return side === THREE.DoubleSide ? THREE.FrontSide : side
+}
 
 const sideMap: Record<MaterialProperties['side'], THREE.Side> = {
   front: THREE.FrontSide,
   back: THREE.BackSide,
-  double: THREE.DoubleSide,
+  double: THREE.FrontSide,
 }
 
 const materialCache = new Map<string, THREE.Material>()
@@ -100,6 +113,14 @@ const surfaceRoleMaterialCache = new Map<string, THREE.Material>()
 const textureCache = new Map<string, THREE.Texture>()
 const textureLoadPromises = new Map<string, Promise<THREE.Texture | null>>()
 const textureLoader = new THREE.TextureLoader()
+
+// `.ktx2` finish maps transcode through the shared KTX2 loader (support is
+// detected once at viewer init); everything else loads as a normal image.
+function pickTextureLoader(url: string): THREE.TextureLoader {
+  // KTX2Loader's load/loadAsync are call-compatible with TextureLoader (url →
+  // Texture / Promise<Texture>); cast for typing.
+  return isKtx2Url(url) ? (ktx2Loader as unknown as THREE.TextureLoader) : textureLoader
+}
 const wrapMap = {
   Repeat: THREE.RepeatWrapping,
   ClampToEdge: THREE.ClampToEdgeWrapping,
@@ -162,12 +183,28 @@ function getCacheKey(props: MaterialProperties, shading: RenderShading): string 
   return `${shading}-${props.color}-${props.roughness}-${props.metalness}-${props.opacity}-${props.transparent}-${props.side}`
 }
 
-function getTextureKey(material?: MaterialSchema): string {
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
+export function resolveTextureRepeat(repeat: unknown, scale: unknown): [number, number] {
+  const fallback = isFiniteNumber(scale) ? scale : 1
+  if (Array.isArray(repeat) && isFiniteNumber(repeat[0]) && isFiniteNumber(repeat[1])) {
+    return [repeat[0], repeat[1]]
+  }
+  if (isFiniteNumber(repeat)) return [repeat, repeat]
+  if (repeat && typeof repeat === 'object' && 'x' in repeat && 'y' in repeat) {
+    const { x, y } = repeat
+    if (isFiniteNumber(x) && isFiniteNumber(y)) return [x, y]
+  }
+  return [fallback, fallback]
+}
+
+export function getTextureKey(material?: MaterialSchema): string {
   const texture = material?.texture
   if (!texture) return 'none'
-  const repeat = texture.repeat?.join('x') ?? 'default'
-  const scale = texture.scale ?? 'default'
-  return `${texture.url}-${repeat}-${scale}`
+  const [repeatX, repeatY] = resolveTextureRepeat(texture.repeat, texture.scale)
+  return `${texture.url}-${repeatX}x${repeatY}`
 }
 
 function getTexture(material?: MaterialSchema): THREE.Texture | undefined {
@@ -178,15 +215,22 @@ function getTexture(material?: MaterialSchema): THREE.Texture | undefined {
   const cached = textureCache.get(cacheKey)
   if (cached) return cached
 
-  const texture = textureLoader.load(textureConfig.url)
+  const resolvedUrl = /^(?:asset|blob|data):/.test(textureConfig.url)
+    ? textureConfig.url
+    : (resolveCdnUrl(textureConfig.url) ?? textureConfig.url)
+  const texture = pickTextureLoader(resolvedUrl).load(resolvedUrl)
   texture.wrapS = THREE.RepeatWrapping
   texture.wrapT = THREE.RepeatWrapping
 
-  const repeatX = textureConfig.repeat?.[0] ?? textureConfig.scale ?? 1
-  const repeatY = textureConfig.repeat?.[1] ?? textureConfig.scale ?? 1
+  const [repeatX, repeatY] = resolveTextureRepeat(textureConfig.repeat, textureConfig.scale)
   texture.repeat.set(repeatX, repeatY)
   texture.updateMatrix()
   texture.colorSpace = THREE.SRGBColorSpace
+  stampPascalTextureRef(texture, {
+    kind: 'project-asset',
+    src: resolvedUrl,
+    slot: 'map',
+  })
 
   textureCache.set(cacheKey, texture)
   return texture
@@ -246,8 +290,13 @@ function getPresetTexture(
   const cached = textureCache.get(cacheKey)
   if (cached) return cached
 
-  const texture = textureLoader.load(resolvedPath)
+  const texture = pickTextureLoader(resolvedPath).load(resolvedPath)
   applyTextureProperties(texture, props, slot)
+  stampPascalTextureRef(texture, {
+    kind: 'material',
+    src: resolvedPath,
+    slot: slot ?? 'map',
+  })
   setTextureCacheKey(texture, cacheKey)
   textureCache.set(cacheKey, texture)
   return texture
@@ -290,10 +339,24 @@ async function loadPresetTexture(
   const existingPromise = textureLoadPromises.get(cacheKey)
   if (existingPromise) return existingPromise
 
-  const promise = textureLoader
-    .loadAsync(resolvedPath)
+  // `.ktx2` loads wait for `detectSupport` (KTX2Loader.load throws before it) —
+  // materials can be created while a capture canvas's renderer is still
+  // initializing, and failing here would cache the material permanently
+  // texture-less (white).
+  const load = isKtx2Url(resolvedPath)
+    ? whenKtx2Ready().then(() =>
+        (ktx2Loader as unknown as THREE.TextureLoader).loadAsync(resolvedPath),
+      )
+    : textureLoader.loadAsync(resolvedPath)
+
+  const promise = load
     .then((texture) => {
       applyTextureProperties(texture, props, slot)
+      stampPascalTextureRef(texture, {
+        kind: 'material',
+        src: resolvedPath,
+        slot: slot ?? 'map',
+      })
       setTextureCacheKey(texture, cacheKey)
       textureCache.set(cacheKey, texture)
       textureLoadPromises.delete(cacheKey)
@@ -318,7 +381,13 @@ function queueTextureAssignment(
   const textureMaterial = material as TextureMaterial
 
   if (!path) {
-    textureMaterial[slot] = null
+    if (textureMaterial[slot] != null) {
+      // Rebuild the node graph: a cached WebGPU material keeps a TextureNode
+      // for the slot, whose per-frame material reference would pull the null
+      // and crash in TextureNode.update ("null (reading 'matrix')").
+      textureMaterial[slot] = null
+      material.needsUpdate = true
+    }
     return
   }
 
@@ -337,7 +406,14 @@ function queueTextureAssignment(
     return
   }
 
-  textureMaterial[slot] = null
+  // Cold load: clear the slot for the fetch window, and rebuild the node
+  // graph if it previously held a texture — reused cached materials otherwise
+  // keep a TextureNode whose reference pulls the null and crashes the render
+  // pass. Cold loads are the norm for freshly generated library materials.
+  if (textureMaterial[slot] != null) {
+    textureMaterial[slot] = null
+    material.needsUpdate = true
+  }
 
   loadPresetTexture(path, props, slot).then((texture) => {
     if (!texture) return
@@ -368,14 +444,41 @@ function applyMaterialMapProperties(
   }
   material.transparent = mapProperties.transparent
   material.opacity = mapProperties.opacity
-  material.side =
+  material.side = resolveNodeMaterialSide(
     mapProperties.side === 0
       ? THREE.FrontSide
       : mapProperties.side === 1
         ? THREE.BackSide
-        : THREE.DoubleSide
+        : THREE.DoubleSide,
+  )
   applyTexturePropertiesToMaterial(material, mapProperties)
   material.needsUpdate = true
+}
+
+// Glass-like transparency threshold: any standard material authored as
+// `transparent` with opacity below this gets the fresnel treatment.
+const GLASS_OPACITY_THRESHOLD = 0.6
+
+/**
+ * Fresnel-driven opacity for glass: nearly the authored opacity head-on,
+ * increasingly opaque (showing the environment reflection) at grazing angles.
+ * This is what makes glass read as a surface instead of a flat blue tint.
+ */
+function applyGlassFresnel(material: MeshStandardNodeMaterial) {
+  const facing = transformedNormalView.dot(positionViewDirection).clamp(0, 1)
+  const fresnel = facing.oneMinus().pow(3)
+  material.opacityNode = mix(float(material.opacity), float(0.92), fresnel)
+  material.envMapIntensity = 1.4
+}
+
+function maybeApplyGlassFresnel(material: THREE.Material) {
+  if (
+    material instanceof MeshStandardNodeMaterial &&
+    material.transparent &&
+    material.opacity < GLASS_OPACITY_THRESHOLD
+  ) {
+    applyGlassFresnel(material)
+  }
 }
 
 function applyMaterialPresetTextures(material: CommonMaterial, preset: MaterialPresetPayload) {
@@ -430,6 +533,8 @@ export function createMaterialFromPreset(
   const material =
     shading === 'solid' ? new MeshLambertNodeMaterial() : new MeshStandardNodeMaterial()
   applyMaterialPresetToMaterials(material, preset)
+  maybeApplyGlassFresnel(material)
+  material.userData.__pascalCachedMaterial = true
   materialCache.set(cacheKey, material)
   return material
 }
@@ -479,8 +584,48 @@ export function createMaterial(
           metalness: props.metalness,
         })
 
+  maybeApplyGlassFresnel(threeMaterial)
+  threeMaterial.userData.__pascalCachedMaterial = true
   materialCache.set(cacheKey, threeMaterial)
   return threeMaterial
+}
+
+/**
+ * Resolve a MaterialRef ('library:<id>' | 'scene:<id>') to a three.js material.
+ * Returns null for an unknown / dangling ref so callers fall back to the
+ * slot's default (authored material, then themed default). Never throws.
+ */
+export function resolveMaterialRef(
+  ref: string | undefined,
+  sceneMaterials: Record<SceneMaterialId, SceneMaterial> | undefined,
+  shading: RenderShading = 'rendered',
+): THREE.Material | null {
+  const parsed = parseMaterialRef(ref)
+  if (!parsed) return null
+  if (parsed.kind === 'library') return createMaterialFromPresetRef(ref, shading)
+  const sceneMaterial = sceneMaterials?.[parsed.id as SceneMaterialId]
+  if (!sceneMaterial) return null
+  return createMaterial(sceneMaterial.material, shading)
+}
+
+/**
+ * Resolve a node kind's declared slot default — either a catalog `library:<id>`
+ * finish or a flat `#rrggbb` colour — to a renderable material. Shared by the
+ * procedural kinds whose colored-mode unpainted appearance comes from a
+ * declarative default (slab, wall).
+ */
+export function resolveSlotDefaultMaterial(
+  slotDefault: string,
+  shading: RenderShading = 'rendered',
+  roughness = 0.9,
+): THREE.Material {
+  if (parseMaterialRef(slotDefault)?.kind === 'library') {
+    return (
+      createMaterialFromPresetRef(slotDefault, shading) ??
+      createDefaultMaterial('#ffffff', roughness, shading)
+    )
+  }
+  return createDefaultMaterial(slotDefault, roughness, shading)
 }
 
 export function createDefaultMaterial(
@@ -489,10 +634,11 @@ export function createDefaultMaterial(
   shading: RenderShading = 'rendered',
   side: THREE.Side = THREE.FrontSide,
 ): THREE.Material {
+  const resolvedSide = resolveNodeMaterialSide(side)
   if (shading === 'solid') {
     return new MeshLambertNodeMaterial({
       color,
-      side,
+      side: resolvedSide,
     })
   }
 
@@ -500,7 +646,7 @@ export function createDefaultMaterial(
     color,
     roughness,
     metalness: 0,
-    side,
+    side: resolvedSide,
   })
 }
 
@@ -516,6 +662,7 @@ function cachedDefaultMaterial(
   if (cached) return cached
 
   const material = createDefaultMaterial(color, roughness, shading, side)
+  material.userData.__pascalCachedMaterial = true
   defaultMaterialCache.set(cacheKey, material)
   return material
 }
@@ -526,7 +673,14 @@ export function createSurfaceRoleMaterial(
   side: THREE.Side = THREE.FrontSide,
   sceneThemeId?: string,
 ): THREE.Material {
-  const resolvedSide = role === 'glazing' ? THREE.DoubleSide : side
+  // DoubleSide on glazing trips the MRT back-face pipeline issue documented
+  // on `glassMaterial` above — the validator rejects the back-face variant
+  // for missing MRT outputs and poisons the render context (manifests as
+  // "Color target has no corresponding fragment stage output" on scene
+  // open). Callers that need both sides visible must rotate the host mesh 180° so the
+  // FrontSide faces the viewer.
+  const resolvedSide =
+    role === 'glazing' ? THREE.FrontSide : resolveNodeMaterialSide(side ?? THREE.FrontSide)
   const cacheKey = `${role}-${preset}-${resolvedSide}-${sceneThemeId ?? 'base'}`
   const cached = surfaceRoleMaterialCache.get(cacheKey)
   if (cached) return cached
@@ -551,11 +705,11 @@ export function createSurfaceRoleMaterial(
 }
 
 export function baseMaterial(shading: RenderShading = 'rendered'): THREE.Material {
-  return cachedDefaultMaterial('base', '#f2f0ed', 0.5, shading)
+  return cachedDefaultMaterial('base', '#e9e7e3', 0.5, shading)
 }
 
 export function DEFAULT_WALL_MATERIAL(shading: RenderShading = 'rendered'): THREE.Material {
-  return cachedDefaultMaterial('wall', '#ffffff', 0.9, shading)
+  return cachedDefaultMaterial('wall', '#e9e6e0', 0.9, shading)
 }
 
 export function DEFAULT_SLAB_MATERIAL(shading: RenderShading = 'rendered'): THREE.Material {
@@ -571,11 +725,16 @@ export function DEFAULT_WINDOW_MATERIAL(shading: RenderShading = 'rendered'): TH
   const cached = defaultMaterialCache.get(cacheKey)
   if (cached) return cached
 
+  // DoubleSide on a NodeMaterial inside the MRT scene pass compiles a back-face
+  // pipeline variant whose fragment outputs don't cover every MRT target — the
+  // validator rejects it and poisons the render context (see the note above
+  // `glassMaterial`). FrontSide; flip the consumer's back-face group 180° if a
+  // back face is actually visible.
   const params = {
     color: '#87ceeb',
     opacity: 0.3,
     transparent: true,
-    side: THREE.DoubleSide,
+    side: THREE.FrontSide,
   }
   const material =
     shading === 'solid'
@@ -585,12 +744,13 @@ export function DEFAULT_WINDOW_MATERIAL(shading: RenderShading = 'rendered'): TH
           roughness: 0.1,
           metalness: 0.1,
         })
+  maybeApplyGlassFresnel(material)
   defaultMaterialCache.set(cacheKey, material)
   return material
 }
 
 export function DEFAULT_CEILING_MATERIAL(shading: RenderShading = 'rendered'): THREE.Material {
-  return cachedDefaultMaterial('ceiling', '#f5f5dc', 0.95, shading)
+  return cachedDefaultMaterial('ceiling', '#ebebd3', 0.95, shading)
 }
 
 export function DEFAULT_ROOF_MATERIAL(shading: RenderShading = 'rendered'): THREE.Material {
@@ -598,11 +758,11 @@ export function DEFAULT_ROOF_MATERIAL(shading: RenderShading = 'rendered'): THRE
 }
 
 export function DEFAULT_SHELF_MATERIAL(shading: RenderShading = 'rendered'): THREE.Material {
-  return cachedDefaultMaterial('shelf', '#ffffff', 0.9, shading)
+  return cachedDefaultMaterial('shelf', '#e9e6e0', 0.9, shading)
 }
 
 export function DEFAULT_STAIR_MATERIAL(shading: RenderShading = 'rendered'): THREE.Material {
-  return cachedDefaultMaterial('stair', '#ffffff', 0.9, shading)
+  return cachedDefaultMaterial('stair', '#e9e6e0', 0.9, shading)
 }
 
 export function disposeMaterial(material: THREE.Material): void {

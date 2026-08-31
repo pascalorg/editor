@@ -2,10 +2,12 @@
 
 import {
   type AnyNodeId,
+  collectAlignmentAnchors,
   emitter,
   type FenceNode,
   type GridEvent,
   type LevelNode,
+  polygonAnchors,
   type SlabNode,
   sceneRegistry,
   useLiveTransforms,
@@ -14,9 +16,17 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  consumePlacementDragRelease,
+  getSegmentGridStep,
+  isAlignmentGuideActive,
+  isMagneticSnapActive,
   markToolCancelConsumed,
+  projectAlignmentGuidesWorldToActiveBuildingLocal,
+  resolveAlignmentForActiveBuilding,
+  snapBuildingLocalToWorldGrid,
   snapFenceDraftPoint,
   triggerSFX,
+  useAlignmentGuides,
   useEditor,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -40,6 +50,9 @@ import type * as THREE from 'three'
  * nothing for zundo to record. The single `scene.update` on commit
  * becomes the single undo step naturally.
  */
+/** Figma-style alignment-snap threshold (meters), matching the other tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
+
 function translatePolygon(
   polygon: Array<[number, number]>,
   deltaX: number,
@@ -125,6 +138,10 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       .map((childId) => useScene.getState().nodes[childId as AnyNodeId])
       .filter((child): child is FenceNode => child?.type === 'fence')
 
+    // Alignment candidates — every other alignable object's anchors,
+    // gathered once (the scene graph is stable during the drag).
+    const alignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, slabId)
+
     let wasCommitted = false
 
     const applyPreview = (deltaX: number, deltaZ: number) => {
@@ -153,10 +170,13 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
 
     const onGridMove = (event: GridEvent) => {
       if (isFloorplanSourcedEvent(event)) return
+      const gridStep = getSegmentGridStep()
       const [localX, localZ] = snapFenceDraftPoint({
         point: [event.localPosition[0], event.localPosition[2]],
         walls: levelWalls,
         fences: levelFences,
+        magnetic: isMagneticSnapActive(),
+        gridSnap: (p) => snapBuildingLocalToWorldGrid(p, gridStep),
       })
 
       if (
@@ -170,10 +190,35 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       const anchor = dragAnchorRef.current ?? [localX, localZ]
       dragAnchorRef.current = anchor
 
-      applyPreview(localX - anchor[0], localZ - anchor[1])
+      let deltaX = localX - anchor[0]
+      let deltaZ = localZ - anchor[1]
+
+      // Figma-style alignment snap: align the slab's translated polygon
+      // vertices to other objects' anchors and publish a guide. Guides are
+      // DISPLAYED in every snapping mode (isAlignmentGuideActive); the magnetic
+      // pull into the delta applies only in 'lines' mode (isMagneticSnapActive).
+      if (isAlignmentGuideActive() && alignmentCandidates.length > 0) {
+        const result = resolveAlignmentForActiveBuilding({
+          moving: polygonAnchors(slabId, translatePolygon(originalPolygon, deltaX, deltaZ)),
+          candidates: alignmentCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (result.snap && isMagneticSnapActive()) {
+          deltaX += result.snap.dx
+          deltaZ += result.snap.dz
+        }
+        useAlignmentGuides
+          .getState()
+          .set(projectAlignmentGuidesWorldToActiveBuildingLocal(result.guides))
+      } else {
+        useAlignmentGuides.getState().clear()
+      }
+
+      applyPreview(deltaX, deltaZ)
     }
 
     const onGridClick = (event: GridEvent) => {
+      if (wasCommitted) return
       if (isFloorplanSourcedEvent(event)) return
       if (Date.now() - activatedAtRef.current < 150) {
         event.nativeEvent?.stopPropagation?.()
@@ -190,6 +235,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
         useScene.getState().updateNode(slabId, {
           polygon: translatePolygon(originalPolygon, deltaX, deltaZ),
           holes: originalHoles.map((h) => translatePolygon(h, deltaX, deltaZ)),
+          autoFromWalls: false,
         })
         useScene.getState().markDirty(slabId as AnyNodeId)
       }
@@ -197,6 +243,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       // GeometrySystem rebuild zeros it on the next frame, by which
       // point the new geometry is in place — visual stays smooth.
       useLiveTransforms.getState().clear(slabId)
+      useAlignmentGuides.getState().clear()
 
       triggerSFX('sfx:item-place')
       useViewer.getState().setSelection({ selectedIds: [slabId] })
@@ -204,10 +251,17 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       event.nativeEvent?.stopPropagation?.()
     }
 
+    const onPlacementDragPointerUp = (event: PointerEvent) => {
+      if (!consumePlacementDragRelease(event)) return
+      activatedAtRef.current = 0
+      onGridClick({ nativeEvent: event } as unknown as GridEvent)
+    }
+
     const onCancel = () => {
       // No scene state to roll back — we never wrote anything. Just
       // restore the mesh visual.
       clearPreview()
+      useAlignmentGuides.getState().clear()
       useViewer.getState().setSelection({ selectedIds: [slabId] })
       markToolCancelConsumed()
       exitMoveMode()
@@ -216,8 +270,10 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
     emitter.on('grid:move', onGridMove)
     emitter.on('grid:click', onGridClick)
     emitter.on('tool:cancel', onCancel)
+    window.addEventListener('pointerup', onPlacementDragPointerUp)
 
     return () => {
+      useAlignmentGuides.getState().clear()
       if (!wasCommitted) {
         clearPreview()
       } else {
@@ -226,6 +282,7 @@ export const MoveSlabTool: React.FC<{ node: SlabNode }> = ({ node }) => {
       emitter.off('grid:move', onGridMove)
       emitter.off('grid:click', onGridClick)
       emitter.off('tool:cancel', onCancel)
+      window.removeEventListener('pointerup', onPlacementDragPointerUp)
     }
   }, [exitMoveMode, node.id, node.parentId])
 

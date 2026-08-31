@@ -2,10 +2,18 @@
 
 import {
   type AnyNodeId,
+  collectAlignmentAnchors,
   emitter,
   type GridEvent,
+  getWallBaseElevationForNodes,
+  getWallCurveLength,
+  getWallThickness,
   pauseSceneHistory,
+  resolveAlignment,
+  resolveMovedWallSupportSlabPatch,
   resumeSceneHistory,
+  runAsSingleSceneHistoryStep,
+  useLiveNodeOverrides,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
@@ -14,18 +22,26 @@ import {
   formatAngleRadians,
   getAngleToSegmentReference,
   getSegmentAngleReferenceAtPoint,
+  isAlignmentGuideActive,
+  isAngleSnapActive,
+  isMagneticSnapActive,
   isSegmentLongEnough,
-  type MovingWallEndpoint,
+  MeasurementPill,
   markToolCancelConsumed,
-  snapWallDraftPoint,
+  resolveEndpointWallSplit,
+  snapWallDraftPointDetailed,
   triggerSFX,
-  useEditor,
-  WALL_FINE_GRID_STEP,
+  useAlignmentGuides,
+  useInteractionScope,
+  useWallSnapIndicator,
+  WALL_CONNECT_SNAP_RADIUS,
   type WallPlanPoint,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { LevelOffsetGroup } from '../shared/level-offset-group'
+import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 /**
  * Wall endpoint move tool (kind-owned).
@@ -36,9 +52,18 @@ import { useCallback, useEffect, useRef, useState } from 'react'
  * dismisses without committing.
  *
  * Mounted via `def.affordanceTools['move-endpoint']` from
- * `wall/definition.ts`. Editor state trigger is
- * `useEditor.movingWallEndpoint`.
+ * `wall/definition.ts`. Triggered by an `endpoint` reshape scope; ToolManager
+ * reconstructs this `target` from the reshaped node + the scope's endpoint.
  */
+export type MovingWallEndpoint = {
+  wall: WallNode
+  endpoint: 'start' | 'end'
+}
+
+/** Figma-style alignment-snap threshold (meters), matching the item move /
+ *  placement tools. 8 cm gives a magnetic pull without fighting grid snap. */
+const ALIGNMENT_THRESHOLD_M = 0.08
+
 function samePoint(a: WallPlanPoint, b: WallPlanPoint) {
   return a[0] === b[0] && a[1] === b[1]
 }
@@ -159,9 +184,7 @@ function getLinkedWallUpdates(
 }
 
 export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({ target }) => {
-  const hasDraggedRef = useRef(false)
   const previousGridPosRef = useRef<WallPlanPoint | null>(null)
-  const shiftPressedRef = useRef(false)
   const altPressedRef = useRef(false)
   const nodeIdRef = useRef(target.wall.id)
   const originalStartRef = useRef<WallPlanPoint>([...target.wall.start] as WallPlanPoint)
@@ -187,9 +210,26 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     return [point[0], 0, point[1]]
   })
   const [altPressed, setAltPressed] = useState(false)
+  const unit = useViewer((s) => s.unit)
+  const nodes = useScene((state) => state.nodes)
+  const liveOverride = useLiveNodeOverrides((state) => state.overrides.get(target.wall.id))
+  const effectiveWall = liveOverride
+    ? ({ ...target.wall, ...liveOverride } as WallNode)
+    : target.wall
+  const wallBaseElevation = getWallBaseElevationForNodes(effectiveWall, nodes)
+
+  // Alt-detach only affects walls sharing the moving endpoint; walls linked
+  // solely to the fixed endpoint never move, so the hint would be noise.
+  const movingOriginal =
+    target.endpoint === 'start' ? originalStartRef.current : originalEndRef.current
+  const canDetachCorner = linkedOriginalsRef.current.some(
+    (wall) => samePoint(wall.start, movingOriginal) || samePoint(wall.end, movingOriginal),
+  )
 
   const exitMoveMode = useCallback(() => {
-    useEditor.getState().setMovingWallEndpoint(null)
+    useInteractionScope
+      .getState()
+      .endIf((scope) => scope.kind === 'reshaping' && scope.reshape === 'endpoint')
   }, [])
 
   useEffect(() => {
@@ -197,26 +237,88 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     const originalStart = originalStartRef.current
     const originalEnd = originalEndRef.current
     const fixedPoint = fixedPointRef.current
+    const movingOriginalPoint = target.endpoint === 'start' ? originalStart : originalEnd
+    // Walls attached to the MOVING corner cascade with the drag, but the snap
+    // pipeline reads the scene store, which keeps their pre-drag coordinates
+    // until commit. Their stale corners would recreate the old junction as a
+    // snap/alignment target: inside the connect radius the endpoint could
+    // never land closer than ~5cm to where it started, making sub-5cm
+    // corrections (e.g. squaring a scan-imported 91° corner) impossible.
+    // Excluded while attached; under Alt-detach they stay put and remain
+    // legitimate targets.
+    const movingLinkedWallIds = linkedOriginalsRef.current
+      .filter(
+        (wall) =>
+          samePoint(wall.start, movingOriginalPoint) || samePoint(wall.end, movingOriginalPoint),
+      )
+      .map((wall) => wall.id)
     const levelWalls = Object.values(useScene.getState().nodes).filter(
       (node): node is WallNode =>
         node?.type === 'wall' && (node.parentId ?? null) === (target.wall.parentId ?? null),
     )
 
+    // Alignment candidates — anchors of every OTHER alignable object (walls,
+    // fences, items, slabs, ceilings, columns), gathered once (the set is
+    // stable during the drag). Coords are building-local, the same frame as
+    // the cursor and the 3D guide layer, so the published guide lines up.
+    // The attached variant additionally drops anchors owned by walls that
+    // follow the moving corner (see `movingLinkedWallIds` above) — their
+    // scene coordinates are stale during the drag.
+    const wallAlignmentCandidates = collectAlignmentAnchors(useScene.getState().nodes, nodeId)
+    const movingLinkedIdSet = new Set<string>(movingLinkedWallIds)
+    const attachedAlignmentCandidates = wallAlignmentCandidates.filter(
+      (anchor) => !movingLinkedIdSet.has(anchor.nodeId),
+    )
+
     pauseSceneHistory(useScene)
     let wasCommitted = false
+    // Last RAW cursor point from `grid:move` — lets the Alt keydown/keyup
+    // handlers re-run the FULL snap pipeline immediately on a modifier change
+    // instead of waiting for the next mousemove. The raw point (not the
+    // snapped one) matters: the snap/alignment candidate set depends on Alt
+    // (stale-junction exclusion above), so a point snapped under the previous
+    // modifier state must not be reused as-is.
+    let lastRawPoint: WallPlanPoint | null = null
+    // The first pointer-up is the *grab* of a click-to-move; later ones are
+    // drops. See the `!hasChanged` branch in `onPointerUp`.
+    let hasReleasedOnce = false
+
+    // Wall ids carrying a live position override during the drag. Mirrors the
+    // 3D/2D wall MOVE tools: preview via `useLiveNodeOverrides` (the wall
+    // system, wall panel, and 2D floor plan all merge it) instead of writing
+    // the scene store every tick. A per-tick `updateNodes` hands a fresh `nodes`
+    // reference to every `useScene(s => s.nodes)` subscriber (sidebar panels,
+    // contextual HUD, tooltips, floor plan) and rebuilds them all each frame.
+    // The store is written ONCE, atomically, on commit.
+    const touchedWallIds = new Set<AnyNodeId>()
 
     const applyNodePreview = (
       updates: Array<{ id: WallNode['id']; start: WallPlanPoint; end: WallPlanPoint }>,
     ) => {
-      useScene.getState().updateNodes(
-        updates.map((entry) => ({
-          id: entry.id as AnyNodeId,
-          data: { start: entry.start, end: entry.end },
-        })),
+      const overrides = useLiveNodeOverrides.getState()
+      const sceneState = useScene.getState()
+      overrides.setMany(
+        updates.map(
+          (entry) =>
+            [entry.id, { start: entry.start, end: entry.end }] as [string, Record<string, unknown>],
+        ),
       )
       for (const entry of updates) {
-        useScene.getState().markDirty(entry.id as AnyNodeId)
+        touchedWallIds.add(entry.id as AnyNodeId)
+        sceneState.markDirty(entry.id as AnyNodeId)
       }
+    }
+
+    // Drop every live override (mesh + miters revert to the scene store, which
+    // was never mutated during the drag) and re-dirty so geometry rebuilds.
+    const clearPreviewOverrides = () => {
+      const overrides = useLiveNodeOverrides.getState()
+      const sceneState = useScene.getState()
+      for (const id of touchedWallIds) {
+        overrides.clear(id)
+        sceneState.markDirty(id)
+      }
+      touchedWallIds.clear()
     }
 
     const applyPreview = (movingPoint: WallPlanPoint, detachLinkedWalls = false) => {
@@ -231,6 +333,20 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
             nextStart,
             nextEnd,
           )
+      if (detachLinkedWalls) {
+        // Attach→detach transition: `setMany` only writes the ids it is
+        // handed, so linked walls dragged on earlier attached ticks would keep
+        // their stale overrides. Drop them so their corners snap back to the
+        // scene originals (untouched during the drag).
+        const overrides = useLiveNodeOverrides.getState()
+        const sceneState = useScene.getState()
+        for (const linked of linkedOriginalsRef.current) {
+          if (touchedWallIds.delete(linked.id as AnyNodeId)) {
+            overrides.clear(linked.id)
+            sceneState.markDirty(linked.id as AnyNodeId)
+          }
+        }
+      }
       previewRef.current = { start: nextStart, end: nextEnd }
       setCursorLocalPos([movingPoint[0], 0, movingPoint[1]])
       setAngleLabel(
@@ -252,84 +368,219 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const restoreOriginal = (clearAngleLabel = true) => {
-      applyNodePreview([
-        { id: nodeId, start: originalStart, end: originalEnd },
-        ...linkedOriginalsRef.current,
-      ])
+      clearPreviewOverrides()
       if (clearAngleLabel) {
         setAngleLabel(null)
       }
     }
 
-    const onGridMove = (event: GridEvent) => {
-      const planPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
-      // Endpoint *move* snaps to the grid (and to other wall corners) —
-      // 45° angle snap is for the initial draft, where it gives clean
-      // orthogonal corners; here it would fight every perpendicular
-      // drag by warping the endpoint onto the nearest 45° line from
-      // the fixed corner.
-      //
-      // Shift switches to the *fine* grid step (`WALL_FINE_GRID_STEP`)
-      // for precision placement, so it can land on positions the
-      // active grid would skip (e.g. 0.05m increments when the active
-      // grid is 0.5m). It does NOT bypass snap.
-      const snappedPoint = snapWallDraftPoint({
+    // Eat the click the browser fires right after the commit pointerup so it
+    // doesn't fall through to the wall body and arm the wall move tool.
+    const swallowNextClick = () => {
+      const swallow = (e: Event) => {
+        e.stopPropagation()
+        e.preventDefault()
+      }
+      window.addEventListener('click', swallow, { capture: true, once: true })
+      setTimeout(() => window.removeEventListener('click', swallow, { capture: true }), 300)
+    }
+
+    // Full snap pipeline from a RAW cursor point to the applied endpoint —
+    // shared by `grid:move` and the Alt keydown/keyup handlers, since the
+    // candidate set (stale-junction exclusion) flips with the modifier.
+    // Endpoint move honours the active snapping mode (the HUD chip): grid →
+    // lattice; lines → magnetic corner/alignment snap; angles → lock the
+    // segment to 15° rays from the FIXED corner; off → raw. No Shift bypass —
+    // Shift cycles the mode now, and Off is the bypass.
+    const resolveDragPoint = (planPoint: WallPlanPoint): WallPlanPoint => {
+      const snapResult = snapWallDraftPointDetailed({
         point: planPoint,
         walls: levelWalls,
-        ignoreWallIds: [nodeId],
-        step: shiftPressedRef.current ? WALL_FINE_GRID_STEP : undefined,
+        ignoreWallIds: altPressedRef.current ? [nodeId] : [nodeId, ...movingLinkedWallIds],
+        start: fixedPoint,
+        angleSnap: isAngleSnapActive(),
+        magnetic: isMagneticSnapActive(),
       })
+      const snappedPoint = snapResult.point
+
+      // Figma-style alignment: nudge the dragged endpoint onto another wall /
+      // fence endpoint or midpoint axis when within threshold, and publish a
+      // guide. The resolver connects to the NEAREST real anchor of the
+      // candidate, so the dot always sits on an actual point (endpoint /
+      // midpoint), never an empty-space bbox corner. Layered on top of the
+      // grid + corner snap above; Alt is reserved for corner-detach here.
+      // Alignment lines are DISPLAYED in every mode except Off
+      // (isAlignmentGuideActive); the magnetic pull onto them is applied only in
+      // 'lines' mode (isMagneticSnapActive).
+      let alignedPoint = snappedPoint
+      const alignmentCandidates = altPressedRef.current
+        ? wallAlignmentCandidates
+        : attachedAlignmentCandidates
+      if (isAlignmentGuideActive() && alignmentCandidates.length > 0) {
+        const ar = resolveAlignment({
+          moving: [{ nodeId, kind: 'corner', x: snappedPoint[0], z: snappedPoint[1] }],
+          candidates: alignmentCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        const magnetic = isMagneticSnapActive()
+        if (ar.snap && magnetic) {
+          alignedPoint = [snappedPoint[0] + ar.snap.dx, snappedPoint[1] + ar.snap.dz]
+        }
+        // Non-magnetic modes don't pull onto a guide, so only surface guides
+        // whose anchor is within connect distance — a corner shouldn't magnetise
+        // the dot from farther than any other point on the wall. See wall draft.
+        useAlignmentGuides
+          .getState()
+          .set(
+            magnetic
+              ? ar.guides
+              : ar.guides.filter(
+                  (guide) =>
+                    Math.hypot(
+                      snappedPoint[0] - guide.anchor.x,
+                      snappedPoint[1] - guide.anchor.z,
+                    ) <= WALL_CONNECT_SNAP_RADIUS,
+                ),
+          )
+      } else {
+        useAlignmentGuides.getState().clear()
+      }
 
       if (
         previousGridPosRef.current &&
-        (snappedPoint[0] !== previousGridPosRef.current[0] ||
-          snappedPoint[1] !== previousGridPosRef.current[1])
+        (alignedPoint[0] !== previousGridPosRef.current[0] ||
+          alignedPoint[1] !== previousGridPosRef.current[1])
       ) {
         triggerSFX('sfx:grid-snap')
       }
-      previousGridPosRef.current = snappedPoint
-      hasDraggedRef.current = true
+      previousGridPosRef.current = alignedPoint
 
-      applyPreview(snappedPoint, event.nativeEvent.altKey)
+      // Stand the magnetic beacon at the endpoint when it locked onto existing
+      // wall geometry (corner / midpoint / crossing / wall body).
+      useWallSnapIndicator
+        .getState()
+        .set(
+          snapResult.snap
+            ? { x: alignedPoint[0], z: alignedPoint[1], kind: snapResult.snap }
+            : null,
+        )
+
+      return alignedPoint
+    }
+
+    const onGridMove = (event: GridEvent) => {
+      const planPoint: WallPlanPoint = [event.localPosition[0], event.localPosition[2]]
+      lastRawPoint = planPoint
+      // The keydown listener can't observe an Alt press that predates the
+      // tool mounting; the pointer event can. Sync the shared ref (single Alt
+      // source for snap targets, preview, HUD badge, and commit) before the
+      // snap pipeline reads it.
+      if (event.nativeEvent.altKey !== altPressedRef.current) {
+        altPressedRef.current = event.nativeEvent.altKey
+        setAltPressed(event.nativeEvent.altKey)
+      }
+      applyPreview(resolveDragPoint(planPoint), altPressedRef.current)
     }
 
     const onPointerUp = () => {
-      // Press-release without drag: dismiss the tool without committing.
-      if (!hasDraggedRef.current) {
-        useViewer.getState().setSelection({ selectedIds: [nodeId] })
-        setAngleLabel(null)
-        exitMoveMode()
-        return
-      }
+      useAlignmentGuides.getState().clear()
+      useWallSnapIndicator.getState().clear()
+      // The handle sits on the wall body, so the browser fires a click on the
+      // wall after this release. Swallow it on EVERY endpoint-tool release (a
+      // no-drag tap dismisses, a drag commits) — otherwise that click falls
+      // through to the selection manager and arms the wall MOVE tool, a mode the
+      // user never asked for.
+      swallowNextClick()
 
       const preview = previewRef.current ?? { start: originalStart, end: originalEnd }
       const hasChanged = !(
         samePoint(preview.start, originalStart) && samePoint(preview.end, originalEnd)
       )
 
-      if (hasChanged && isSegmentLongEnough(preview.start, preview.end)) {
+      // Endpoint still at its original spot. The FIRST release is the *grab*
+      // of a click-to-move (a tap on the handle, or a press that never
+      // dragged): stay armed so the endpoint keeps following the cursor — a
+      // press-drag and a click thus engage identically. Any LATER release at
+      // an unchanged position is a deliberate drop: end the interaction
+      // cleanly (previews restored, scope ended, no history entry) instead of
+      // leaving the user stuck until they move the mouse.
+      if (!hasChanged) {
+        if (!hasReleasedOnce) {
+          hasReleasedOnce = true
+          return
+        }
+        restoreOriginal()
+        useViewer.getState().setSelection({ selectedIds: [nodeId] })
+        exitMoveMode()
+        return
+      }
+
+      if (isSegmentLongEnough(preview.start, preview.end)) {
         wasCommitted = true
 
-        // Restore original baseline while paused so the next resume+update
-        // registers as a single tracked change (undo reverts to original).
-        applyNodePreview([
-          { id: nodeId, start: originalStart, end: originalEnd },
-          ...linkedOriginalsRef.current,
-        ])
+        const linkedUpdates = altPressedRef.current
+          ? []
+          : getLinkedWallUpdates(
+              linkedOriginalsRef.current,
+              originalStart,
+              originalEnd,
+              preview.start,
+              preview.end,
+            )
 
+        // Drop the live overrides; the store write below is the source of truth.
+        // The store sat at the pre-drag (original) values the whole drag — only
+        // overrides moved — so one resume+write records original→final as a
+        // single tracked change (one Ctrl-Z reverts to original). The split
+        // ops (create halves, migrate attachments, delete host) would each
+        // push their own entry, so the whole commit runs as one history step.
+        clearPreviewOverrides()
         resumeSceneHistory(useScene)
-        applyNodePreview([
-          { id: nodeId, start: preview.start, end: preview.end },
-          ...(altPressedRef.current
-            ? []
-            : getLinkedWallUpdates(
-                linkedOriginalsRef.current,
-                originalStart,
-                originalEnd,
-                preview.start,
-                preview.end,
-              )),
-        ])
+        runAsSingleSceneHistoryStep(useScene, () => {
+          // Dropping the endpoint on another wall's interior splits that host
+          // like the draw path does. Linked walls updated in this commit share
+          // the drop point as an endpoint (a corner join, not a split), so
+          // they're excluded along with the moved wall — in Alt-detach mode
+          // `linkedUpdates` is empty and a stationary former sibling can be
+          // split like any other host.
+          const movingPoint = target.endpoint === 'start' ? preview.start : preview.end
+          const resolved = resolveEndpointWallSplit({
+            point: movingPoint,
+            levelId: target.wall.parentId ?? null,
+            ignoreWallIds: [nodeId, ...linkedUpdates.map((u) => String(u.id))],
+          })
+          const finalPoint = resolved ?? movingPoint
+          useScene.getState().updateNodes([
+            {
+              id: nodeId as AnyNodeId,
+              data: {
+                start: target.endpoint === 'start' ? finalPoint : preview.start,
+                end: target.endpoint === 'end' ? finalPoint : preview.end,
+              },
+            },
+            ...linkedUpdates.map((u) => ({
+              id: u.id as AnyNodeId,
+              data: {
+                start: samePoint(u.start, movingPoint) ? finalPoint : u.start,
+                end: samePoint(u.end, movingPoint) ? finalPoint : u.end,
+              },
+            })),
+          ])
+          const affectedIds = [nodeId as AnyNodeId, ...linkedUpdates.map((u) => u.id as AnyNodeId)]
+          const committedNodes = useScene.getState().nodes
+          useScene.getState().updateNodes(
+            affectedIds.flatMap((id) => {
+              const wall = committedNodes[id]
+              return wall?.type === 'wall'
+                ? [{ id, data: resolveMovedWallSupportSlabPatch(wall, committedNodes) }]
+                : []
+            }),
+          )
+          useScene.getState().markDirty(nodeId as AnyNodeId)
+          for (const u of linkedUpdates) {
+            useScene.getState().markDirty(u.id as AnyNodeId)
+          }
+        })
         pauseSceneHistory(useScene)
         triggerSFX('sfx:item-place')
       }
@@ -340,6 +591,8 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
 
     const onCancel = () => {
+      useAlignmentGuides.getState().clear()
+      useWallSnapIndicator.getState().clear()
       restoreOriginal()
       useViewer.getState().setSelection({ selectedIds: [nodeId] })
       resumeSceneHistory(useScene)
@@ -348,33 +601,37 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
       exitMoveMode()
     }
 
+    // Single Alt writer for keyboard transitions. Re-running the FULL snap
+    // pipeline from the raw cursor on the flip keeps geometry and the HUD
+    // badge in lockstep — detach reverts the linked walls instantly and
+    // re-snaps against their (now live) corners, re-attach drops them from
+    // the candidate set again — without waiting for the next mousemove.
+    const setAltState = (pressed: boolean) => {
+      if (altPressedRef.current === pressed) return
+      altPressedRef.current = pressed
+      setAltPressed(pressed)
+      if (lastRawPoint) {
+        applyPreview(resolveDragPoint(lastRawPoint), pressed)
+      }
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
         return
       }
-      if (event.key === 'Shift') {
-        shiftPressedRef.current = true
-      }
       if (event.key === 'Alt') {
-        altPressedRef.current = true
-        setAltPressed(true)
+        setAltState(true)
       }
     }
 
     const onKeyUp = (event: KeyboardEvent) => {
-      if (event.key === 'Shift') {
-        shiftPressedRef.current = false
-      }
       if (event.key === 'Alt') {
-        altPressedRef.current = false
-        setAltPressed(false)
+        setAltState(false)
       }
     }
 
     const onWindowBlur = () => {
-      shiftPressedRef.current = false
-      altPressedRef.current = false
-      setAltPressed(false)
+      setAltState(false)
     }
 
     emitter.on('grid:move', onGridMove)
@@ -385,6 +642,8 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     window.addEventListener('blur', onWindowBlur)
 
     return () => {
+      useAlignmentGuides.getState().clear()
+      useWallSnapIndicator.getState().clear()
       if (!wasCommitted) {
         restoreOriginal(false)
       }
@@ -398,28 +657,64 @@ export const MoveWallEndpointTool: React.FC<{ target: MovingWallEndpoint }> = ({
     }
   }, [exitMoveMode, target])
 
+  // Live segment dimensions for the floating pill. The moving endpoint is
+  // `cursorLocalPos`; the other end is fixed. Length tracks the drag (curve
+  // offset is unchanged by an endpoint move); height + thickness are static.
+  const movingPlanPoint: WallPlanPoint = [cursorLocalPos[0], cursorLocalPos[2]]
+  const fixedPlanPoint = fixedPointRef.current
+  const previewStart = target.endpoint === 'start' ? movingPlanPoint : fixedPlanPoint
+  const previewEnd = target.endpoint === 'end' ? movingPlanPoint : fixedPlanPoint
+  const liveLength = getWallCurveLength({
+    start: previewStart,
+    end: previewEnd,
+    curveOffset: target.wall.curveOffset,
+  })
+  const wallHeight = resolveWallOpeningCeiling(effectiveWall, nodes)
+  const dimMidX = (previewStart[0] + previewEnd[0]) / 2
+  const dimMidZ = (previewStart[1] + previewEnd[1]) / 2
+
   return (
-    <group>
-      <CursorSphere position={cursorLocalPos} showTooltip={false} />
-      <Html
-        position={[cursorLocalPos[0], 0, cursorLocalPos[2]]}
-        style={{ pointerEvents: 'none', touchAction: 'none' }}
-        zIndexRange={[100, 0]}
-      >
-        <div className="translate-y-10">
-          <div
-            className={`whitespace-nowrap rounded-full border px-2 py-1 font-medium text-[11px] shadow-lg backdrop-blur-md transition-colors ${
-              altPressed
-                ? 'border-amber-500/80 bg-amber-500/15 text-amber-100'
-                : 'border-border bg-background/95 text-muted-foreground'
-            }`}
+    <LevelOffsetGroup>
+      <group position={[0, wallBaseElevation, 0]}>
+        <CursorSphere position={cursorLocalPos} showTooltip={false} />
+        <Html
+          center
+          position={[dimMidX, wallHeight + 0.3, dimMidZ]}
+          style={{ pointerEvents: 'none', touchAction: 'none' }}
+          zIndexRange={[100, 0]}
+        >
+          <MeasurementPill
+            height={wallHeight}
+            length={liveLength}
+            primary="length"
+            thickness={getWallThickness(effectiveWall)}
+            unit={unit}
+          />
+        </Html>
+        {canDetachCorner && (
+          <Html
+            position={[cursorLocalPos[0], 0, cursorLocalPos[2]]}
+            style={{ pointerEvents: 'none', touchAction: 'none' }}
+            zIndexRange={[100, 0]}
           >
-            {altPressed ? 'Detaching corner' : 'Alt to detach'}
-          </div>
-        </div>
-      </Html>
-      {angleLabel && <EndpointAngleLabel label={angleLabel.label} position={angleLabel.position} />}
-    </group>
+            <div className="translate-y-10">
+              <div
+                className={`whitespace-nowrap rounded-full border px-2 py-1 font-medium text-[11px] shadow-lg backdrop-blur-md transition-colors ${
+                  altPressed
+                    ? 'border-amber-500/80 bg-amber-500/15 text-amber-100'
+                    : 'border-border bg-background/95 text-muted-foreground'
+                }`}
+              >
+                {altPressed ? 'Detaching corner' : 'Alt to detach'}
+              </div>
+            </div>
+          </Html>
+        )}
+        {angleLabel && (
+          <EndpointAngleLabel label={angleLabel.label} position={angleLabel.position} />
+        )}
+      </group>
+    </LevelOffsetGroup>
   )
 }
 

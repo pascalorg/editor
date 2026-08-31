@@ -1,59 +1,44 @@
 import type { AnyNode } from '@pascal-app/core'
-import { messages } from '../../../lib/i18n'
 
 export type NodeDisplay = {
   icon: string
-  /** i18n key or custom name */
-  labelKey: string
+  label: string
 }
 
 const TYPE_DEFAULTS: Record<string, NodeDisplay> = {
-  item: { icon: '/icons/furniture.png', labelKey: 'nodeTypes.item' },
-  wall: { icon: '/icons/wall.png', labelKey: 'nodeTypes.wall' },
-  door: { icon: '/icons/door.png', labelKey: 'nodeTypes.door' },
-  window: { icon: '/icons/window.png', labelKey: 'nodeTypes.window' },
-  slab: { icon: '/icons/floor.png', labelKey: 'nodeTypes.slab' },
-  ceiling: { icon: '/icons/ceiling.png', labelKey: 'nodeTypes.ceiling' },
-  column: { icon: '/icons/column.png', labelKey: 'nodeTypes.column' },
-  elevator: { icon: '/icons/elevator.png', labelKey: 'nodeTypes.elevator' },
-  fence: { icon: '/icons/fence.png', labelKey: 'nodeTypes.fence' },
-  roof: { icon: '/icons/roof.png', labelKey: 'nodeTypes.roof' },
-  'roof-segment': { icon: '/icons/roof.png', labelKey: 'nodeTypes.roofSegment' },
-  stair: { icon: '/icons/stair.png', labelKey: 'nodeTypes.stairs' },
-  'stair-segment': { icon: '/icons/stair.png', labelKey: 'nodeTypes.stairSegment' },
-  scan: { icon: '/icons/mesh.png', labelKey: 'nodeTypes.scan' },
-  guide: { icon: '/icons/floorplan.png', labelKey: 'nodeTypes.guide' },
-  shelf: { icon: '/icons/shelf.png', labelKey: 'nodeTypes.shelf' },
-  spawn: { icon: '/icons/site.png', labelKey: 'nodeTypes.spawn' },
-  boxVent: { icon: '/icons/box-vent.png', labelKey: 'nodeTypes.boxVent' },
-  chimney: { icon: '/icons/chimney.png', labelKey: 'nodeTypes.chimney' },
-  dormer: { icon: '/icons/dormer.png', labelKey: 'nodeTypes.dormer' },
-  ridgeVent: { icon: '/icons/ridge-vent.png', labelKey: 'nodeTypes.ridgeVent' },
-  solarPanel: { icon: '/icons/solar-panel.png', labelKey: 'nodeTypes.solarPanel' },
+  item: { icon: '/icons/item.webp', label: 'Item' },
+  wall: { icon: '/icons/wall.webp', label: 'Wall' },
+  door: { icon: '/icons/door.webp', label: 'Door' },
+  window: { icon: '/icons/window.webp', label: 'Window' },
+  slab: { icon: '/icons/floor.webp', label: 'Slab' },
+  ceiling: { icon: '/icons/ceiling.webp', label: 'Ceiling' },
+  column: { icon: '/icons/column.webp', label: 'Column' },
+  elevator: { icon: '/icons/elevator.webp', label: 'Elevator' },
+  fence: { icon: '/icons/fence.webp', label: 'Fence' },
+  roof: { icon: '/icons/roof.webp', label: 'Roof' },
+  'roof-segment': { icon: '/icons/roof.webp', label: 'Roof segment' },
+  stair: { icon: '/icons/stairs.webp', label: 'Stair' },
+  'stair-segment': { icon: '/icons/stairs.webp', label: 'Stair segment' },
+  scan: { icon: '/icons/mesh.webp', label: '3D Scan' },
+  guide: { icon: '/icons/floorplan.webp', label: 'Guide image' },
 }
 
-/**
- * Returns display info for a node.
- * labelKey is either an i18n key (nodeTypes.XXX) or a custom name set by the user.
- */
+export function getTypeDisplay(type: string): NodeDisplay {
+  return TYPE_DEFAULTS[type] ?? { icon: '/icons/select.webp', label: type }
+}
+
 export function getNodeDisplay(node: AnyNode | null | undefined): NodeDisplay {
-  if (!node) return { icon: '/icons/select.png', labelKey: 'Selection' }
-  const fallback = TYPE_DEFAULTS[node.type] ?? { icon: '/icons/select.png', labelKey: node.type }
+  if (!node) return { icon: '/icons/select.webp', label: 'Selection' }
+  const fallback = TYPE_DEFAULTS[node.type] ?? { icon: '/icons/select.webp', label: node.type }
   // Item nodes carry an asset with its own thumbnail/name
   if (node.type === 'item') {
-    const name = node.name || node.asset?.name
     return {
       icon: node.asset?.thumbnail || fallback.icon,
-      labelKey: name || fallback.labelKey,
+      label: node.name || node.asset?.name || fallback.label,
     }
   }
   return {
     icon: fallback.icon,
-    labelKey: node.name || fallback.labelKey,
+    label: node.name || fallback.label,
   }
-}
-
-/** Resolve a node type label key to a translated string */
-export function resolveNodeLabel(labelKey: string, locale: string): string {
-  return (messages[locale as 'en' | 'zh'] as Record<string, string>)[labelKey] || labelKey
 }

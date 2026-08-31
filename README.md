@@ -5,33 +5,82 @@ A 3D building editor built with React Three Fiber and WebGPU.
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![npm @pascal-app/core](https://img.shields.io/npm/v/@pascal-app/core?label=%40pascal-app%2Fcore)](https://www.npmjs.com/package/@pascal-app/core)
 [![npm @pascal-app/viewer](https://img.shields.io/npm/v/@pascal-app/viewer?label=%40pascal-app%2Fviewer)](https://www.npmjs.com/package/@pascal-app/viewer)
-[![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white)](https://discord.gg/SaBRA9t2)
+[![npm @pascal-app/cli](https://img.shields.io/npm/v/@pascal-app/cli?label=%40pascal-app%2Fcli)](https://www.npmjs.com/package/@pascal-app/cli)
+[![Discord](https://img.shields.io/badge/Discord-Join%20Server-5865F2?logo=discord&logoColor=white)](https://discord.gg/XRKsDcpqgS)
 [![X (Twitter)](https://img.shields.io/badge/follow-%40pascal__app-black?logo=x&logoColor=white)](https://x.com/pascal_app)
 
 https://github.com/user-attachments/assets/8b50e7cf-cebe-4579-9cf3-8786b35f7b6b
 
+## Run the Editor Locally
+
+Node.js 22.13 or newer can create a persistent local Pascal installation without
+cloning this repository:
+
+```bash
+npx @pascal-app/cli editor
+```
+
+The CLI starts the editor and an authenticated MCP service in the background, selects
+collision-free loopback ports, and keeps projects in `~/.pascal/data/pascal.db`. Configure
+an agent to launch `pascal mcp connect`. See [Run Pascal locally](https://editor.pascal.app/docs/developers/local-editor)
+for pnpm/Bun commands, project management, MCP setup, updates, storage paths, and
+troubleshooting.
+
+## Using Published Packages
+
+The viewer runtime and built-in node definitions are separate packages. Install the full built-in
+viewer set, then load the built-in plugin once before mounting `<Viewer>`. Capture sessions are an
+optional transport-neutral extension:
+
+```bash
+npm install @pascal-app/core @pascal-app/viewer @pascal-app/editor @pascal-app/nodes
+npm install @pascal-app/capture-protocol @pascal-app/capture-viewer
+```
+
+```typescript
+import { loadPlugin } from '@pascal-app/core'
+import { builtinPlugin } from '@pascal-app/nodes'
+
+await loadPlugin(builtinPlugin)
+```
+
+See the [`@pascal-app/viewer` quick start](packages/viewer/README.md#usage) for a React example.
 
 
 ## Repository Architecture
 
-This is a Turborepo monorepo with three main packages:
+This is a Turborepo monorepo with the reusable editor packages, the standalone app,
+and the CLI that distributes it:
 
 ```
-editor-v2/
+editor/
 ├── apps/
 │   └── editor/          # Next.js application
 ├── packages/
-│   ├── core/            # Schema definitions, state management, systems
-│   └── viewer/          # 3D rendering components
+│   ├── core/            # Schemas, scene state, and registry contracts
+│   ├── viewer/          # 3D rendering runtime and shared systems
+│   ├── capture-protocol/ # Static/live capture-session contracts
+│   ├── capture-viewer/  # Capture source runtime and reference renderers
+│   ├── editor/          # Editing tools and UI components
+│   ├── nodes/           # Built-in node definitions, renderers, and systems
+│   ├── cli/             # Persistent local editor installer and process manager
+│   ├── mcp/             # Model Context Protocol server and scene storage
+│   └── ui/              # Shared UI components
 ```
 
 ### Separation of Concerns
 
 | Package | Responsibility |
 |---------|---------------|
-| **@pascal-app/core** | Node schemas, scene state (Zustand), systems (geometry generation), spatial queries, event bus |
-| **@pascal-app/viewer** | 3D rendering via React Three Fiber, default camera/controls, post-processing |
-| **apps/editor** | UI components, tools, custom behaviors, editor-specific systems |
+| **@pascal-app/core** | Node schemas, scene state (Zustand), registry contracts, spatial queries, and event bus |
+| **@pascal-app/viewer** | 3D rendering via React Three Fiber, shared render systems, default camera/controls, and post-processing |
+| **@pascal-app/capture-protocol** | Versioned capture manifests, normalized streams, and transport-neutral static/live sources |
+| **@pascal-app/capture-viewer** | Viewer child runtime and reference model, device-motion, and point-cloud layers |
+| **@pascal-app/editor** | Editing tools, panels, selection, and direct-manipulation UI |
+| **@pascal-app/nodes** | Built-in registry plugin with node definitions, renderers, geometry, and systems |
+| **@pascal-app/cli** | Installs and manages a versioned standalone editor runtime and persistent local data |
+| **@pascal-app/mcp** | Exposes scene tools, resources, prompts, and local storage to MCP-compatible AI hosts |
+| **apps/editor** | Standalone Next.js host for the editor packages |
 
 The **viewer** renders the scene with sensible defaults. The **editor** extends it with interactive tools, selection management, and editing capabilities.
 
@@ -334,6 +383,15 @@ Clears dirty flag
 
 ---
 
+## Building a Plugin
+
+The editor is extensible: a plugin ships node kinds (schema, 3D/2D rendering, placement tools, inspector parametrics) and left-rail panels through the same `Plugin` manifest the built-ins use — there is no separate internal API.
+
+- **Developer guide** — [Create a plugin](https://editor.pascal.app/docs/developers/plugins): the `Plugin` shape, panel contributions, discovery, lifecycle, and what's in/out of v1.
+- **Worked example** — [`pascalorg/plugin-trees`](https://github.com/pascalorg/plugin-trees): a standalone plugin with procedural trees, flowers, grass, and a presets panel. Clone it as a starting point.
+
+---
+
 ## Technology Stack
 
 - **React 19** + **Next.js 16**
@@ -365,7 +423,7 @@ bun dev
 # 1. Build @pascal-app/core and @pascal-app/viewer
 # 2. Start watching both packages for changes
 # 3. Start the Next.js editor dev server
-# Open http://localhost:3000
+# Open http://localhost:3002
 ```
 
 **Important:** Always run `bun dev` from the root directory to ensure the package watchers are running. This enables hot reload when you edit files in `packages/core/src/` or `packages/viewer/src/`.
@@ -405,6 +463,17 @@ npm publish --workspace=@pascal-app/viewer --access public
 | `packages/viewer/src/components/viewer/` | Main Viewer component |
 | `apps/editor/components/tools/` | Editor tools |
 | `apps/editor/store/` | Editor-specific state |
+
+---
+
+## Contributing
+
+Bug fixes, features, docs and ideas are all welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) for setup, code style and the PR flow.
+
+- New node kinds and sidebar panels ship as [plugins](https://editor.pascal.app/docs/developers/plugins) rather than edits to the built-ins — [`pascalorg/plugin-trees`](https://github.com/pascalorg/plugin-trees) is a worked example
+- Questions and ideas go to [Discussions](https://github.com/pascalorg/editor/discussions); reproducible bugs go to [Issues](https://github.com/pascalorg/editor/issues)
+- Participation is covered by our [Code of Conduct](CODE_OF_CONDUCT.md)
+- Security problems go to [SECURITY.md](SECURITY.md), not a public issue
 
 ---
 

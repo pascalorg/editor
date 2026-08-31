@@ -62,6 +62,50 @@ So picking the Mediterranean theme gives a blue roof + warm walls without touchi
 
 Each of these reads `shading`/`textures`/`colorPreset`/`sceneTheme` from `useViewer` (or receives them threaded from `GeometrySystem`) and **must include `sceneTheme` in its material cache key and its rebuild dependency array**, or theme switches won't re-colour. `GeometrySystem` marks every geometry node dirty on any of those changing.
 
+## Custom-mesh face materials
+
+Blocks use the reusable `MaterialRef` model through stable, user-named object slots. `BlockNode.slots` maps slot IDs to `scene:` or `library:` references, `slotNames` stores their editable labels, and each `BlockFace.materialSlot` stores one slot ID. `body` is the permanent base slot and the fallback for unbound or unresolved slots.
+
+The geometry builder emits one Three.js group per topology face and a material array ordered by the node's stable slot IDs. It publishes that render-material order as `userData.slotIds` and records each face's vertex range in `geometry.userData.blockFaces`. The paint capability re-raycasts the mesh and maps the hit triangle through those ranges to a stable topology face ID, so preview and commit affect only that face. Face UVs retain the world-scale projection contract below.
+
+The block inspector calls this collection **Slots**. Users can rename slots, and the Paint tool changes a slot's material using reusable scene-material datablocks. While one or more faces are selected in edit mode, clicking a slot binds those faces to it immediately; there is no separate Assign / Select / Deselect button row.
+
+Adding a slot while faces are selected creates the slot, binds those faces to it, and assigns a distinct generated accent material in the same scene update. This makes the new surface visibly different in both edit mode and the rendered model before the user chooses a final paint material. With no selected faces, Add Slot is a no-op so it cannot create an invisible, unused slot.
+
+Deleting a non-body slot remaps every assigned face to `body` in the same node update, and `body` becomes the active assignment source. The reusable scene or library material remains available to other nodes.
+
+The global Paint tool resolves the hit face's assigned slot and changes that slot's material binding. A fresh mesh has every face assigned to `body`, so its first paint updates the entire mesh. Once faces are assigned to named slots, painting any one of those faces updates every face using that slot. A one-off material reuses a structurally matching scene material before creating a reusable scene material. Erasing clears the slot binding; `body` returns to the wall-role default and other unbound slots fall back to `body`.
+
+Topology operators preserve assignments deterministically:
+
+- retained and transformed faces keep their slot;
+- extrude caps/sides and inset caps/rings inherit the source face;
+- loop-cut pieces inherit the face they split;
+- bevel bands and mixed-material dissolve use the first adjacent face in stable `topology.faces` order;
+- deleting the last face that uses a slot does not delete its reusable material.
+
+### External plugin renderers
+
+Plugin renderers follow the same four axes through the public `@pascal-app/viewer`
+surface. For an imported hierarchy, capture its authored materials once and apply
+this mapping reactively:
+
+| Host state | Imported material |
+|---|---|
+| Colored + Rendered | Authored material |
+| Colored + Solid | Cached Lambert variant retaining colour, albedo map, alpha, and slots |
+| Monochrome | `createSurfaceRoleMaterial(surfaceRole, colorPreset, side, sceneTheme)` |
+
+The adapter belongs to the plugin renderer because it owns the hierarchy and knows
+which surfaces are furnishing, glazing, or another role. Material swaps happen on
+preference changes, never in `useFrame`. Restore authored materials before disposing
+the loader-owned hierarchy, dispose only plugin-owned variants, and leave host-cached
+role materials alone.
+
+Edges and the expensive render pipeline do not need a plugin material hook: they are
+screen-space host passes over `SCENE_LAYER`. Placement ghosts should use the editor
+overlay layer so they remain crisp and do not enter the scene depth/normal targets.
+
 ## Scene themes
 
 A `SceneTheme` (`lib/scene-themes.ts`) bundles everything that defines a "look":
@@ -80,3 +124,17 @@ The editor UI chrome is always dark (a fixed `document.body.classList.add('dark'
 ## Adding a theme
 
 Append a `SceneTheme` to `SCENE_THEMES` with all required fields. `clayTints` is a `Partial` — any role you omit falls back to the active `colorPreset`. The theme pickers (toolbar + community overlay) render a 2×2 swatch from `clayTints` over `background`, so populate at least `wall`/`roof`/`floor`/`glazing` for a good swatch.
+
+## Texture world scale (UVs in metres)
+
+Every procedural surface generates UVs in metres: 1 UV unit = 1 m.
+
+This contract is shared by wall `systems/wall/wall-system.tsx` (`ExtrudeGeometry`), slab `systems/slab/slab-system.tsx` (`generatePositiveSlabGeometry`, and `generatePoolGeometry`), ceiling `systems/ceiling/ceiling-system.tsx`, roof `systems/roof/roof-system.tsx`, and chimney/dormer `nodes/src/chimney/geometry.ts`.
+
+GLB item slots follow the same ~1 UV unit/m authoring convention, enforced by the slot validator's UV-presence check and the Blender recipe in [item-authoring](item-authoring.md). This is an authoring requirement, not a render-time correction.
+
+A catalog material's `repeat` (`mapProperties.repeatX/repeatY` in `packages/core/src/material-library.ts`) is therefore a per-material world-scale setting: tiles per metre.
+
+`repeat: 1` means 1 tile/m, `0.4` means one tile every 2.5 m, and `1.5` means 1.5 tiles/m.
+
+Repeat is a property of the material, identical for every surface that uses it, never per-item or per-surface. Custom repeat values are intentional material scale, not per-surface hacks.

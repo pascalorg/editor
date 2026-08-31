@@ -1,16 +1,23 @@
 import {
+  type AlignmentAnchor,
   type AnyNode,
   type AnyNodeId,
+  collectAlignmentAnchors,
   type DragAction,
   type FenceNode,
+  resolveAlignment,
+  resolveFenceSupportSlabPatch,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
 import {
   type FencePlanPoint,
+  isAlignmentGuideActive,
+  isAngleSnapActive,
+  isMagneticSnapActive,
   isSegmentLongEnough,
   snapFenceDraftPoint,
-  WALL_FINE_GRID_STEP,
+  useAlignmentGuides,
 } from '@pascal-app/editor'
 
 /**
@@ -43,6 +50,10 @@ import {
 
 const LINKED_FENCE_ENDPOINT_EPSILON = 0.025
 
+/** Figma-style alignment-snap threshold (meters), matching the wall / item
+ *  tools. */
+const ALIGNMENT_THRESHOLD_M = 0.08
+
 function samePoint(a: FencePlanPoint, b: FencePlanPoint): boolean {
   return (
     Math.abs(a[0] - b[0]) <= LINKED_FENCE_ENDPOINT_EPSILON &&
@@ -67,6 +78,9 @@ export type MoveFenceEndpointCtx = {
   linkedOriginals: LinkedFenceSnapshot[]
   levelWalls: WallNode[]
   levelFences: FenceNode[]
+  /** Alignment anchors (endpoints + midpoints) of every OTHER wall / fence on
+   *  the level (building-local), feeding the resolver. */
+  alignCandidates: AlignmentAnchor[]
 }
 
 export type MoveFenceEndpointDraft = {
@@ -85,7 +99,7 @@ function snapshotLinked(
   const { nodes } = useScene.getState()
   const out: LinkedFenceSnapshot[] = []
   for (const node of Object.values(nodes)) {
-    if (!node || node.type !== 'fence') continue
+    if (node?.type !== 'fence') continue
     if (node.id === fenceId) continue
     if ((node.parentId ?? null) !== parentId) continue
     if (!samePoint(node.start, linkedPoint) && !samePoint(node.end, linkedPoint)) continue
@@ -96,6 +110,26 @@ function snapshotLinked(
     })
   }
   return out
+}
+
+/**
+ * Re-elect the slab lift host for the given fences from their CURRENT
+ * store state (call after the endpoint writes). Only writes when the host
+ * actually changes, so unaffected drags stay patch-free.
+ */
+function applyFenceSupportPatches(
+  ids: readonly AnyNodeId[],
+  scene: { update(id: AnyNodeId, data: Partial<AnyNode>): void },
+) {
+  const nodes = useScene.getState().nodes
+  for (const id of ids) {
+    const fence = nodes[id]
+    if (fence?.type !== 'fence') continue
+    const patch = resolveFenceSupportSlabPatch(fence as FenceNode, nodes)
+    if (patch.supportSlabId !== (fence as FenceNode).supportSlabId) {
+      scene.update(id, patch as Partial<AnyNode>)
+    }
+  }
 }
 
 function linkedCascade(
@@ -132,6 +166,10 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         else if (node.type === 'fence') levelFences.push(node)
       }
 
+      // Alignment targets — anchors of every other alignable object (walls,
+      // fences, items, slabs, ceilings, columns).
+      const alignCandidates = collectAlignmentAnchors(useScene.getState().nodes, fence.id)
+
       return {
         fenceId: fence.id as AnyNodeId,
         endpoint,
@@ -143,29 +181,56 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         linkedOriginals: snapshotLinked(fence.id, parentId, originalMovingPoint),
         levelWalls,
         levelFences,
+        alignCandidates,
       }
     },
 
     preview: (ctx, point, modifiers) => {
       const planPoint: FencePlanPoint = [point[0], point[1]]
-      // Endpoint move = grid snap only; the 45°-from-start angle snap
-      // is draft-only. Shift switches to the fine grid step for
-      // precision, mirroring the wall convention.
+      // Endpoint move honours the active snapping mode (HUD chip): grid → lattice;
+      // lines → magnetic corner/alignment; angles → lock to 15° rays from the
+      // fixed corner; off → raw. No Shift bypass — Shift cycles the mode; Off is
+      // the bypass.
       const snapped = snapFenceDraftPoint({
         point: planPoint,
         walls: ctx.levelWalls,
         fences: ctx.levelFences,
         ignoreFenceIds: [ctx.fenceId as string],
-        step: modifiers.shift ? WALL_FINE_GRID_STEP : undefined,
+        start: ctx.fixedPoint,
+        angleSnap: isAngleSnapActive(),
+        magnetic: isMagneticSnapActive(),
       })
-      const nextStart = ctx.endpoint === 'start' ? snapped : ctx.fixedPoint
-      const nextEnd = ctx.endpoint === 'end' ? snapped : ctx.fixedPoint
+
+      // Figma-style alignment: nudge the dragged endpoint onto another wall /
+      // fence endpoint or midpoint axis when within threshold, and publish a
+      // guide. The resolver connects to the NEAREST real anchor, so the dot
+      // always sits on an actual point. Alt is reserved for detach. The guide is
+      // DISPLAYED in every mode except Off (isAlignmentGuideActive); the
+      // magnetic pull onto it is applied only in 'lines' mode
+      // (isMagneticSnapActive).
+      let aligned = snapped
+      if (isAlignmentGuideActive() && ctx.alignCandidates.length > 0) {
+        const ar = resolveAlignment({
+          moving: [{ nodeId: ctx.fenceId as string, kind: 'corner', x: snapped[0], z: snapped[1] }],
+          candidates: ctx.alignCandidates,
+          threshold: ALIGNMENT_THRESHOLD_M,
+        })
+        if (ar.snap && isMagneticSnapActive()) {
+          aligned = [snapped[0] + ar.snap.dx, snapped[1] + ar.snap.dz]
+        }
+        useAlignmentGuides.getState().set(ar.guides)
+      } else {
+        useAlignmentGuides.getState().clear()
+      }
+
+      const nextStart = ctx.endpoint === 'start' ? aligned : ctx.fixedPoint
+      const nextEnd = ctx.endpoint === 'end' ? aligned : ctx.fixedPoint
       const detached = modifiers.alt
       const linkedUpdates = detached
         ? []
-        : linkedCascade(ctx.linkedOriginals, ctx.originalMovingPoint, snapped)
+        : linkedCascade(ctx.linkedOriginals, ctx.originalMovingPoint, aligned)
       return {
-        movingPoint: snapped,
+        movingPoint: aligned,
         start: nextStart,
         end: nextEnd,
         linkedUpdates,
@@ -186,10 +251,15 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
         )
         dirty.push(linked.id as AnyNodeId)
       }
+      // Re-elect the lift host live: a fence dragged onto / off an elevated
+      // deck rises or drops with the pointer instead of waiting for commit
+      // (fences run no per-frame election — `supportSlabId` IS the lift).
+      applyFenceSupportPatches(dirty, scene)
       return dirty
     },
 
     commit: (draft, ctx, scene) => {
+      useAlignmentGuides.getState().clear()
       // Min-length rejection still matters — too-short fence is invalid
       // and should bounce back via the cancel path (snapshot restore).
       // But the "no-change" rejection is removed: see
@@ -205,6 +275,7 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
       scene.restoreAll()
       scene.resumeHistory()
       scene.update(ctx.fenceId, { start: draft.start, end: draft.end } as Partial<AnyNode>)
+      const patched: AnyNodeId[] = [ctx.fenceId]
       if (!draft.detached) {
         for (const linked of draft.linkedUpdates) {
           scene.update(
@@ -214,13 +285,20 @@ export const moveFenceEndpointDragAction: DragAction<MoveFenceEndpointCtx, MoveF
               end: linked.end,
             } as Partial<AnyNode>,
           )
+          patched.push(linked.id as AnyNodeId)
         }
       }
+      // The restoreAll above reverted any live host patch — re-run the
+      // election against the final endpoints so the committed fence stands
+      // on (or leaves) its deck. Uncapped: an endpoint drag has no commit
+      // pointer ray worth trusting, matching the wall move commits.
+      applyFenceSupportPatches(patched, scene)
       return true
     },
 
     cancel: (_ctx, _scene) => {
-      // No-op — createDragSession.cancel() calls scene.restoreAll()
+      useAlignmentGuides.getState().clear()
+      // No-op otherwise — createDragSession.cancel() calls scene.restoreAll()
       // which puts every touched node back via the snapshot.
     },
   }

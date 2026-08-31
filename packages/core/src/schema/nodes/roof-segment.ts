@@ -4,9 +4,62 @@ import { BaseNode, nodeType, objectId } from '../base'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
 
-export const RoofType = z.enum(['hip', 'gable', 'shed', 'gambrel', 'dutch', 'mansard', 'flat'])
+export const RoofType = z.enum([
+  'hip',
+  'gable',
+  'shed',
+  'gambrel',
+  'dutch',
+  'mansard',
+  'flat',
+  'conical',
+])
 
 export type RoofType = z.infer<typeof RoofType>
+
+export const MIN_ROOF_SEGMENT_TRIM_SPAN = 0.1
+const DEFAULT_ROOF_SEGMENT_WIDTH = 8
+const DEFAULT_ROOF_SEGMENT_DEPTH = 6
+
+export const RoofSegmentTrim = z
+  .object({
+    left: z.number().min(0).default(0),
+    right: z.number().min(0).default(0),
+    front: z.number().min(0).default(0),
+    back: z.number().min(0).default(0),
+    frontLeft: z.number().min(0).default(0),
+    frontRight: z.number().min(0).default(0),
+    backLeft: z.number().min(0).default(0),
+    backRight: z.number().min(0).default(0),
+    frontLeftX: z.number().min(0).default(0),
+    frontLeftZ: z.number().min(0).default(0),
+    frontRightX: z.number().min(0).default(0),
+    frontRightZ: z.number().min(0).default(0),
+    backLeftX: z.number().min(0).default(0),
+    backLeftZ: z.number().min(0).default(0),
+    backRightX: z.number().min(0).default(0),
+    backRightZ: z.number().min(0).default(0),
+  })
+  .default({
+    left: 0,
+    right: 0,
+    front: 0,
+    back: 0,
+    frontLeft: 0,
+    frontRight: 0,
+    backLeft: 0,
+    backRight: 0,
+    frontLeftX: 0,
+    frontLeftZ: 0,
+    frontRightX: 0,
+    frontRightZ: 0,
+    backLeftX: 0,
+    backLeftZ: 0,
+    backRightX: 0,
+    backRightZ: 0,
+  })
+
+export type RoofSegmentTrim = z.infer<typeof RoofSegmentTrim>
 
 // Default shape ratios. Tuning these used to require editing the geometry
 // code in two places; they are now schema fields with these defaults.
@@ -23,6 +76,17 @@ export const ROOF_SHAPE_DEFAULTS = {
   dutchHipWidthRatio: 0.25,
   /** Dutch: hip face rises this fraction of the way to the peak. */
   dutchHipHeightRatio: 0.5,
+  /** Dutch: gable waist span along the ridge axis, as a fraction of the max span. */
+  dutchWaistLengthRatio: 0.98,
+  /**
+   * Dutch: how far the gablet's barge board extends outward past the gablet
+   * end-wall, along the ridge axis, in metres. 0 disables the rake. The board
+   * lies in the gablet's slope planes (coplanar with the main Dutch slopes)
+   * and overhangs the lower hip skirt; the gablet end-wall itself stays put.
+   */
+  dutchGabletRake: 0.48,
+  /** Dutch: thickness of the top gable rake slab. */
+  dutchTopRakeThickness: 0.21,
 } as const
 
 export const RoofSegmentNode = BaseNode.extend({
@@ -51,6 +115,22 @@ export const RoofSegmentNode = BaseNode.extend({
   // Footprint dimensions
   width: z.number().default(8),
   depth: z.number().default(6),
+  // Angular extent of a conical roof. A full cone uses 2π. A signed
+  // sweep preserves the direction of the curved wall used to create a
+  // conical sector; other roof types ignore both fields.
+  conicalStartAngle: z.number().optional(),
+  conicalSweepAngle: z
+    .number()
+    .min(-Math.PI * 2)
+    .max(Math.PI * 2)
+    .optional(),
+  // Overrides the stored sector angles without discarding them, allowing
+  // the panel to switch back to the original clipped wall sweep.
+  conicalFullCircle: z.boolean().optional(),
+  // Segment-local distances trimmed from each footprint side. The trim
+  // boundary is projected vertically through the roof volume, so the
+  // resulting edge follows the actual sloped roof surfaces.
+  trim: RoofSegmentTrim,
   // Wall height beneath the roof
   wallHeight: z.number().default(0.5),
   // Roof pitch in degrees — angle of the primary slope face.
@@ -63,6 +143,24 @@ export const RoofSegmentNode = BaseNode.extend({
   deckThickness: z.number().default(0.1),
   overhang: z.number().default(0.3),
   shingleThickness: z.number().default(0.05),
+  arc: z
+    .object({
+      centerX: z.number(),
+      centerZ: z.number(),
+      radius: z.number(),
+    })
+    .optional()
+    .describe(
+      'Concentric-arc descriptor for a curved shed deck, in segment-local coordinates (center + true radius). Absent for a straight deck.',
+    ),
+  shedSideInfillSpan: z.number().positive().optional(),
+  shedSideInfillMinX: z.number().optional(),
+  shedSideInfillMaxX: z.number().optional(),
+  shedFootprintPieces: z.array(z.array(z.tuple([z.number(), z.number()])).min(3)).optional(),
+  shedOpenEndSides: z.array(z.enum(['left', 'right'])).optional(),
+  managedByParent: z.boolean().default(false),
+  wallShell: z.enum(['auto', 'include', 'omit']).default('auto'),
+  shedInsetEndPanels: z.boolean().default(false),
   // Shape-specific ratios. Only the pair matching `roofType` is read; the
   // rest are inert. Defined on every segment so the panel can flip
   // roofType without losing the previous shape's tuning.
@@ -96,8 +194,19 @@ export const RoofSegmentNode = BaseNode.extend({
     .min(0.1)
     .max(0.9)
     .default(ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio),
+  dutchWaistLengthRatio: z
+    .number()
+    .min(0.1)
+    .max(1)
+    .default(ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio),
+  dutchGabletRake: z.number().min(0).max(3).default(ROOF_SHAPE_DEFAULTS.dutchGabletRake),
+  dutchTopRakeThickness: z
+    .number()
+    .min(0.01)
+    .max(0.5)
+    .default(ROOF_SHAPE_DEFAULTS.dutchTopRakeThickness),
   // Hosted accessories — chimney, dormer, skylight, box-vent,
-  // ridge-vent, solar-panel. Each accessory's `parentId` points back
+  // ridge-vent, solar-panel, gutter. Each accessory's `parentId` points back
   // here; the segment renderer mounts them recursively via
   // `<NodeRenderer>` so they inherit the segment's transform stack.
   // Required for `createNode(child, segmentId)` to append the child
@@ -110,8 +219,11 @@ export const RoofSegmentNode = BaseNode.extend({
   Roof segment node - an individual roof module within a roof group.
   Each segment generates a complete architectural volume (walls + roof).
   Multiple segments can be combined to form complex roof shapes.
-  - roofType: hip, gable, shed, gambrel, dutch, mansard, flat
+  - roofType: hip, gable, shed, gambrel, dutch, mansard, flat, conical
   - width/depth: footprint dimensions
+  - conicalStartAngle / conicalSweepAngle: angular extent of a conical sector (radians)
+  - conicalFullCircle: temporarily render the complete cone while preserving the sector angles
+  - trim: segment-local side cut distances
   - wallHeight: height of walls below the roof
   - pitch: roof slope in degrees (angle of the primary slope face)
   - wallThickness/deckThickness: structural thicknesses
@@ -120,10 +232,152 @@ export const RoofSegmentNode = BaseNode.extend({
   - gambrelLowerWidthRatio / gambrelLowerHeightRatio: kink position on gambrel roofs
   - mansardSteepWidthRatio / mansardSteepHeightRatio: waist position on mansard roofs
   - dutchHipWidthRatio / dutchHipHeightRatio: hip-to-gable split on dutch roofs
+  - dutchWaistLengthRatio: gable waist span along the ridge axis
+  - dutchGabletRake: gablet barge-board overhang past the gablet end-wall (m, 0 = none)
+  - dutchTopRakeThickness: thickness of the top gable rake slab
   `,
 )
 
 export type RoofSegmentNode = z.infer<typeof RoofSegmentNode>
+
+export function getConicalRoofCoverage(
+  node: Pick<RoofSegmentNode, 'conicalFullCircle' | 'conicalStartAngle' | 'conicalSweepAngle'>,
+): {
+  fullCircle: boolean
+  startAngle: number
+  sweepAngle: number
+} {
+  const storedSweep = node.conicalSweepAngle
+  const inferredFullCircle =
+    storedSweep === undefined || Math.abs(storedSweep) >= Math.PI * 2 - 1e-4
+  const fullCircle = node.conicalFullCircle ?? inferredFullCircle
+  if (fullCircle) {
+    return { fullCircle: true, startAngle: 0, sweepAngle: -Math.PI * 2 }
+  }
+  const hasClippedSweep = storedSweep !== undefined && Math.abs(storedSweep) < Math.PI * 2 - 1e-4
+  return {
+    fullCircle: false,
+    startAngle: node.conicalStartAngle ?? 0,
+    sweepAngle: hasClippedSweep ? storedSweep : -Math.PI,
+  }
+}
+
+function finiteNonNegative(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0
+}
+
+function finitePositive(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+}
+
+function normalizeTrimAxis(start: unknown, end: unknown, span: number): readonly [number, number] {
+  const maxTotal = Math.max(0, finiteNonNegative(span) - MIN_ROOF_SEGMENT_TRIM_SPAN)
+  let a = Math.min(finiteNonNegative(start), maxTotal)
+  let b = Math.min(finiteNonNegative(end), maxTotal)
+  const total = a + b
+
+  if (total > maxTotal && total > 0) {
+    const scale = maxTotal / total
+    a *= scale
+    b *= scale
+  }
+
+  return [a, b] as const
+}
+
+export function normalizeRoofSegmentTrim(
+  node: Pick<RoofSegmentNode, 'width' | 'depth'> & { trim?: Partial<RoofSegmentTrim> },
+): RoofSegmentTrim {
+  const trim = node.trim ?? {}
+  const [left, right] = normalizeTrimAxis(trim.left, trim.right, node.width)
+  const [back, front] = normalizeTrimAxis(trim.back, trim.front, node.depth)
+  const maxWidthDiagonal = Math.max(0, finiteNonNegative(node.width) - left - right)
+  const maxDepthDiagonal = Math.max(0, finiteNonNegative(node.depth) - front - back)
+  const maxWidthPair = Math.max(0, maxWidthDiagonal - MIN_ROOF_SEGMENT_TRIM_SPAN)
+  const maxDepthPair = Math.max(0, maxDepthDiagonal - MIN_ROOF_SEGMENT_TRIM_SPAN)
+  let [frontLeftX, frontLeftZ] = normalizeCornerAxisTrim(
+    trim.frontLeft,
+    trim.frontLeftX,
+    trim.frontLeftZ,
+    maxWidthPair,
+    maxDepthPair,
+  )
+  let [frontRightX, frontRightZ] = normalizeCornerAxisTrim(
+    trim.frontRight,
+    trim.frontRightX,
+    trim.frontRightZ,
+    maxWidthPair,
+    maxDepthPair,
+  )
+  let [backLeftX, backLeftZ] = normalizeCornerAxisTrim(
+    trim.backLeft,
+    trim.backLeftX,
+    trim.backLeftZ,
+    maxWidthPair,
+    maxDepthPair,
+  )
+  let [backRightX, backRightZ] = normalizeCornerAxisTrim(
+    trim.backRight,
+    trim.backRightX,
+    trim.backRightZ,
+    maxWidthPair,
+    maxDepthPair,
+  )
+
+  for (let i = 0; i < 3; i += 1) {
+    ;[frontLeftX, frontRightX] = normalizeTrimPair(frontLeftX, frontRightX, maxWidthPair)
+    ;[backLeftX, backRightX] = normalizeTrimPair(backLeftX, backRightX, maxWidthPair)
+    ;[frontLeftZ, backLeftZ] = normalizeTrimPair(frontLeftZ, backLeftZ, maxDepthPair)
+    ;[frontRightZ, backRightZ] = normalizeTrimPair(frontRightZ, backRightZ, maxDepthPair)
+  }
+
+  const frontLeft = Math.min(frontLeftX, frontLeftZ)
+  const frontRight = Math.min(frontRightX, frontRightZ)
+  const backLeft = Math.min(backLeftX, backLeftZ)
+  const backRight = Math.min(backRightX, backRightZ)
+
+  return {
+    left,
+    right,
+    front,
+    back,
+    frontLeft,
+    frontRight,
+    backLeft,
+    backRight,
+    frontLeftX,
+    frontLeftZ,
+    frontRightX,
+    frontRightZ,
+    backLeftX,
+    backLeftZ,
+    backRightX,
+    backRightZ,
+  }
+}
+
+function normalizeTrimPair(a: number, b: number, maxTotal: number): [number, number] {
+  const total = a + b
+  if (total <= maxTotal || total <= 0) return [a, b]
+  const scale = maxTotal / total
+  return [a * scale, b * scale]
+}
+
+function normalizeCornerAxisTrim(
+  scalar: unknown,
+  axisX: unknown,
+  axisZ: unknown,
+  maxX: number,
+  maxZ: number,
+): [number, number] {
+  const x = finiteNonNegative(axisX)
+  const z = finiteNonNegative(axisZ)
+  const fallback = finiteNonNegative(scalar)
+  if (x > 0 || z > 0) {
+    return [Math.min(x, maxX), Math.min(z, maxZ)]
+  }
+  return [Math.min(fallback, maxX), Math.min(fallback, maxZ)]
+}
 
 // ----------------------------------------------------------------------------
 // Pitch ↔ roof-peak height
@@ -144,6 +398,7 @@ type ShapeRatios = {
   mansardSteepHeightRatio: number
   dutchHipWidthRatio: number
   dutchHipHeightRatio: number
+  dutchWaistLengthRatio: number
 }
 
 type PitchInputs = {
@@ -152,9 +407,44 @@ type PitchInputs = {
   depth: number
 } & Partial<ShapeRatios>
 
+export type DutchRoofMetrics = {
+  axis: 'x' | 'z'
+  inset: number
+  waistHalfX: number
+  waistHalfZ: number
+  ridgeStart: readonly [number, number]
+  ridgeEnd: readonly [number, number]
+  shoulderInsetAlongDepth: number
+  shoulderInsetAlongWidth: number
+}
+
+function getDutchUpperShellBounds(
+  node: Pick<RoofSegmentNode, 'width' | 'depth'> &
+    Partial<
+      Pick<RoofSegmentNode, 'dutchHipWidthRatio' | 'dutchWaistLengthRatio' | 'dutchGabletRake'>
+    >,
+) {
+  const metrics = getDutchRoofMetrics(node)
+  const width = finitePositive(node.width, DEFAULT_ROOF_SEGMENT_WIDTH)
+  const depth = finitePositive(node.depth, DEFAULT_ROOF_SEGMENT_DEPTH)
+  const rake = node.dutchGabletRake ?? ROOF_SHAPE_DEFAULTS.dutchGabletRake
+  const rakeReach =
+    metrics.axis === 'x'
+      ? Math.min(Math.max(0, rake), Math.max(0, width / 2 - metrics.waistHalfX) * 0.98)
+      : Math.min(Math.max(0, rake), Math.max(0, depth / 2 - metrics.waistHalfZ) * 0.98)
+
+  return {
+    ...metrics,
+    upperHalfX: metrics.axis === 'x' ? metrics.waistHalfX + rakeReach : metrics.waistHalfX,
+    upperHalfZ: metrics.axis === 'x' ? metrics.waistHalfZ : metrics.waistHalfZ + rakeReach,
+  }
+}
+
 function withRatioDefaults(input: PitchInputs): PitchInputs & ShapeRatios {
   return {
     ...input,
+    width: finitePositive(input.width, DEFAULT_ROOF_SEGMENT_WIDTH),
+    depth: finitePositive(input.depth, DEFAULT_ROOF_SEGMENT_DEPTH),
     gambrelLowerWidthRatio:
       input.gambrelLowerWidthRatio ?? ROOF_SHAPE_DEFAULTS.gambrelLowerWidthRatio,
     gambrelLowerHeightRatio:
@@ -165,12 +455,54 @@ function withRatioDefaults(input: PitchInputs): PitchInputs & ShapeRatios {
       input.mansardSteepHeightRatio ?? ROOF_SHAPE_DEFAULTS.mansardSteepHeightRatio,
     dutchHipWidthRatio: input.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio,
     dutchHipHeightRatio: input.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio,
+    dutchWaistLengthRatio: input.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio,
+  }
+}
+
+export function getDutchRoofMetrics(
+  input: Pick<RoofSegmentNode, 'width' | 'depth'> &
+    Partial<Pick<RoofSegmentNode, 'dutchHipWidthRatio' | 'dutchWaistLengthRatio'>>,
+): DutchRoofMetrics {
+  const width = finitePositive(input.width, DEFAULT_ROOF_SEGMENT_WIDTH)
+  const depth = finitePositive(input.depth, DEFAULT_ROOF_SEGMENT_DEPTH)
+  const inset =
+    Math.min(width, depth) * (input.dutchHipWidthRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipWidthRatio)
+  const waistLengthRatio = input.dutchWaistLengthRatio ?? ROOF_SHAPE_DEFAULTS.dutchWaistLengthRatio
+
+  if (width >= depth) {
+    const waistHalfX = Math.max(0, (width / 2 - inset) * waistLengthRatio)
+    const waistHalfZ = Math.max(0, depth / 2 - inset)
+    return {
+      axis: 'x',
+      inset,
+      waistHalfX,
+      waistHalfZ,
+      ridgeStart: [-waistHalfX, 0],
+      ridgeEnd: [waistHalfX, 0],
+      shoulderInsetAlongDepth: Math.max(0, depth / 2 - waistHalfZ),
+      shoulderInsetAlongWidth: Math.max(0, width / 2 - waistHalfX),
+    }
+  }
+
+  const waistHalfX = Math.max(0, width / 2 - inset)
+  const waistHalfZ = Math.max(0, (depth / 2 - inset) * waistLengthRatio)
+  return {
+    axis: 'z',
+    inset,
+    waistHalfX,
+    waistHalfZ,
+    ridgeStart: [0, waistHalfZ],
+    ridgeEnd: [0, -waistHalfZ],
+    shoulderInsetAlongDepth: Math.max(0, depth / 2 - waistHalfZ),
+    shoulderInsetAlongWidth: Math.max(0, width / 2 - waistHalfX),
   }
 }
 
 function getPrimarySlopeRun(input: PitchInputs & ShapeRatios): number {
   const min = Math.min(input.width, input.depth)
   switch (input.roofType) {
+    case 'conical':
+      return input.width / 2
     case 'shed':
       return input.depth
     case 'gable':
@@ -181,7 +513,6 @@ function getPrimarySlopeRun(input: PitchInputs & ShapeRatios): number {
       return min * input.mansardSteepWidthRatio
     case 'dutch':
       return min * input.dutchHipWidthRatio
-    case 'hip':
     default:
       return min / 2
   }
@@ -251,6 +582,168 @@ export function getSegmentSlopeFrame(
  */
 export function getActiveRoofHeight(node: Parameters<typeof getSegmentSlopeFrame>[0]): number {
   return getSegmentSlopeFrame(node).activeRh
+}
+
+export type RoofSegmentVisibleTopBounds = {
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+  width: number
+  depth: number
+}
+
+export function getRoofSegmentVisibleTopBounds(
+  segment: RoofSegmentNode,
+): RoofSegmentVisibleTopBounds {
+  const { activeRh, cosTheta, sinTheta } = getSegmentSlopeFrame(segment)
+  const width = finitePositive(segment.width, DEFAULT_ROOF_SEGMENT_WIDTH)
+  const depth = finitePositive(segment.depth, DEFAULT_ROOF_SEGMENT_DEPTH)
+  const trim = normalizeRoofSegmentTrim({ ...segment, width, depth })
+  const horizontalOverhang = finiteNonNegative(segment.overhang) * cosTheta
+  const deckExt = finiteNonNegative(segment.wallThickness) / 2 + horizontalOverhang
+  const shingleOverhang = finiteNonNegative(segment.shingleThickness) * sinTheta
+
+  let xExt = deckExt
+  let frontExt = deckExt
+  let backExt = deckExt
+
+  if (
+    segment.roofType === 'hip' ||
+    segment.roofType === 'conical' ||
+    segment.roofType === 'mansard' ||
+    segment.roofType === 'dutch'
+  ) {
+    xExt += shingleOverhang
+    frontExt += shingleOverhang
+    backExt += shingleOverhang
+  } else if (segment.roofType === 'gable' || segment.roofType === 'gambrel') {
+    frontExt += shingleOverhang
+    backExt += shingleOverhang
+  } else if (segment.roofType === 'shed' && activeRh > 0) {
+    frontExt += shingleOverhang
+  }
+
+  let minX = trim.left > 0 ? -width / 2 + trim.left : -width / 2 - xExt
+  let maxX = trim.right > 0 ? width / 2 - trim.right : width / 2 + xExt
+  let minZ = trim.back > 0 ? -depth / 2 + trim.back : -depth / 2 - backExt
+  let maxZ = trim.front > 0 ? depth / 2 - trim.front : depth / 2 + frontExt
+
+  if (trim.frontLeftX > 0 && trim.frontLeftZ > 0 && maxZ - trim.frontLeftZ < 0) {
+    minX = Math.max(minX, minX + (trim.frontLeftX * (trim.frontLeftZ - maxZ)) / trim.frontLeftZ)
+  }
+  if (trim.backLeftX > 0 && trim.backLeftZ > 0 && minZ + trim.backLeftZ > 0) {
+    minX = Math.max(minX, minX + (trim.backLeftX * (trim.backLeftZ + minZ)) / trim.backLeftZ)
+  }
+  if (trim.frontRightX > 0 && trim.frontRightZ > 0 && maxZ - trim.frontRightZ < 0) {
+    maxX = Math.min(maxX, maxX - (trim.frontRightX * (trim.frontRightZ - maxZ)) / trim.frontRightZ)
+  }
+  if (trim.backRightX > 0 && trim.backRightZ > 0 && minZ + trim.backRightZ > 0) {
+    maxX = Math.min(maxX, maxX - (trim.backRightX * (trim.backRightZ + minZ)) / trim.backRightZ)
+  }
+
+  if (trim.frontLeftX > 0 && trim.frontLeftZ > 0 && minX + trim.frontLeftX > 0) {
+    maxZ = Math.min(maxZ, maxZ - (trim.frontLeftZ * (trim.frontLeftX + minX)) / trim.frontLeftX)
+  }
+  if (trim.frontRightX > 0 && trim.frontRightZ > 0 && maxX - trim.frontRightX < 0) {
+    maxZ = Math.min(maxZ, maxZ - (trim.frontRightZ * (trim.frontRightX - maxX)) / trim.frontRightX)
+  }
+  if (trim.backLeftX > 0 && trim.backLeftZ > 0 && minX + trim.backLeftX > 0) {
+    minZ = Math.max(minZ, minZ + (trim.backLeftZ * (trim.backLeftX + minX)) / trim.backLeftX)
+  }
+  if (trim.backRightX > 0 && trim.backRightZ > 0 && maxX - trim.backRightX < 0) {
+    minZ = Math.max(minZ, minZ + (trim.backRightZ * (trim.backRightX - maxX)) / trim.backRightX)
+  }
+
+  return {
+    minX,
+    maxX,
+    minZ,
+    maxZ,
+    width: Math.max(0.01, maxX - minX),
+    depth: Math.max(0.01, maxZ - minZ),
+  }
+}
+
+/** Segment-local surface height used by roof accessory placement and hit disambiguation. */
+export function getRoofSegmentSurfaceY(
+  node: Pick<RoofSegmentNode, 'roofType' | 'width' | 'depth' | 'wallHeight'> &
+    Parameters<typeof getSegmentSlopeFrame>[0],
+  localX: number,
+  localZ: number,
+): number {
+  const slopeFrame = getSegmentSlopeFrame(node)
+  const activeRh = slopeFrame.activeRh
+  const peakY = node.wallHeight + activeRh
+  if (activeRh === 0) return node.wallHeight
+
+  if (node.roofType === 'gable' || node.roofType === 'gambrel' || node.roofType === 'mansard') {
+    const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
+    return peakY - t * activeRh
+  }
+
+  if (node.roofType === 'dutch') {
+    const hipHeightRatio = node.dutchHipHeightRatio ?? ROOF_SHAPE_DEFAULTS.dutchHipHeightRatio
+    const metrics = getDutchUpperShellBounds(node)
+    const lowerRise = activeRh * hipHeightRatio
+    if (metrics.axis === 'x') {
+      const waistHalfZ = Math.max(0.0001, metrics.waistHalfZ)
+      if (Math.abs(localX) <= metrics.upperHalfX && Math.abs(localZ) <= waistHalfZ) {
+        const upperRise = activeRh * (1 - hipHeightRatio)
+        const upperTan = upperRise / waistHalfZ
+        return peakY - Math.abs(localZ) * upperTan
+      }
+
+      const xProgressDenom = Math.max(0.0001, node.width / 2 - metrics.waistHalfX)
+      const zProgressDenom = Math.max(0.0001, node.depth / 2 - waistHalfZ)
+      const xProgress = Math.max(0, Math.abs(localX) - metrics.waistHalfX) / xProgressDenom
+      const zProgress = Math.max(0, Math.abs(localZ) - waistHalfZ) / zProgressDenom
+      return node.wallHeight + lowerRise * (1 - Math.min(1, Math.max(xProgress, zProgress)))
+    }
+
+    const waistHalfX = Math.max(0.0001, metrics.waistHalfX)
+    if (Math.abs(localX) <= waistHalfX && Math.abs(localZ) <= metrics.upperHalfZ) {
+      const upperRise = activeRh * (1 - hipHeightRatio)
+      const upperRun = waistHalfX
+      const upperTan = upperRise / upperRun
+      return peakY - Math.abs(localX) * upperTan
+    }
+    const xProgressDenom = Math.max(0.0001, node.width / 2 - waistHalfX)
+    const zProgressDenom = Math.max(0.0001, node.depth / 2 - metrics.waistHalfZ)
+    const xProgress = Math.max(0, Math.abs(localX) - waistHalfX) / xProgressDenom
+    const zProgress = Math.max(0, Math.abs(localZ) - metrics.waistHalfZ) / zProgressDenom
+    return node.wallHeight + lowerRise * (1 - Math.min(1, Math.max(xProgress, zProgress)))
+  }
+
+  if (node.roofType === 'shed') {
+    const t = (localZ + node.depth / 2) / (node.depth || 1)
+    return peakY - t * activeRh
+  }
+
+  if (node.roofType === 'hip') {
+    const fx = node.width > 0 ? Math.abs(localX) / (node.width / 2) : 0
+    const fz = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
+    return peakY - Math.max(fx, fz) * activeRh
+  }
+
+  if (node.roofType === 'conical') {
+    const radius = Math.max(0.0001, node.width / 2)
+    const radialProgress = Math.min(1, Math.hypot(localX, localZ) / radius)
+    return peakY - radialProgress * activeRh
+  }
+
+  const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
+  return peakY - t * activeRh
+}
+
+// A shed segment whose deck follows a concentric arc.
+export function isBandedShedSegment(node: Pick<RoofSegmentNode, 'roofType' | 'arc'>): node is Pick<
+  RoofSegmentNode,
+  'roofType' | 'arc'
+> & {
+  arc: NonNullable<RoofSegmentNode['arc']>
+} {
+  return node.roofType === 'shed' && node.arc != null && Number.isFinite(node.arc.radius)
 }
 
 /**

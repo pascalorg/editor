@@ -1,514 +1,462 @@
-'use client'
-
-import type { RidgeVentNode } from '@pascal-app/core'
+import {
+  getDutchRoofMetrics,
+  getRidgeVentLinesForSegment,
+  normalizeRoofSegmentTrim,
+  type RidgeVentNode,
+  type RoofSegmentNode,
+} from '@pascal-app/core'
 import * as THREE from 'three'
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
+import { getRoofTopSurfaceY } from '../shared/roof-surface'
 
-const ARC_SEGMENTS = 8
-const SHELL_THICKNESS = 0.25
-const SHINGLED_PEAK_SEGS = 3
+const ARC_SEGS = 16
 const SHINGLED_TAB_SIZE = 0.3
+const DEFAULT_RIDGE_VENT_LENGTH = 2
+const DEFAULT_RIDGE_VENT_WIDTH = 0.3
+const DEFAULT_RIDGE_VENT_HEIGHT = 0.1
+type ProfilePoint = [z: number, capY: number]
+type RidgeVentGeometryVertex = {
+  x: number
+  y: number
+  z: number
+  nx: number
+  ny: number
+  nz: number
+  u: number
+  v: number
+}
+type SegmentTrimClipPlane = {
+  signedDistance: (segmentX: number, segmentZ: number) => number
+}
+
+type RidgeVentSupportLine = {
+  startX: number
+  endX: number
+  name: string
+  taperAtStart: boolean
+  taperAtEnd: boolean
+}
+type RidgeVentEndTaper = {
+  taperAtStart: boolean
+  taperAtEnd: boolean
+  taperLength: number
+  tipHalfWidth: number
+}
 
 /**
- * Pure builder for the ridge vent mesh. Three styles share a common
- * cross-section approach: extrude a 2D profile (in the Y-Z plane)
- * along the segment's X axis (ridge direction), then add optional
- * end caps.
+ * Pure builder for the ridge vent mesh. Each style is a peaked **band** of
+ * constant thickness `t` that drapes over the ridge like a real ridge cap:
+ * a shaped top surface, a parallel underside offset down by `t`, visible
+ * eave thickness faces along both edges, and end caps.
  *
- *  - `standard`: smooth curved shell with offset inner surface
- *  - `shingled`: angular slopes meeting at a rounded peak with tab ridges
- *  - `metal`: angular bent-metal cap with drip-edge lips and a center bead
+ * This is the middle ground between the two earlier extremes — the original
+ * was a paper-thin shell (no perceptible thickness), then a flat-bottomed
+ * solid (read as a closed box). The band keeps the V / arched cap silhouette
+ * and the open underside (so it sits astride the ridge) while showing real
+ * thickness at the eaves and ends.
  *
- * Pure: no React, no scene access, no store mutation.
+ *  - `standard`: smooth rounded arch
+ *  - `shingled`: angular peak with raised shingle-course ridges across the top
+ *  - `metal`: bent-metal cap with a wide flat seam and drip lips
+ *
+ * `endCaps` closes both ends. Pure: no React, no scene access, no mutation.
  */
-export function buildRidgeVentGeometry(node: RidgeVentNode): THREE.BufferGeometry {
-  const halfLen = node.length / 2
-  const halfW = node.width / 2
-  const h = node.height
+export function buildRidgeVentGeometry(
+  node: RidgeVentNode,
+  segment?: RoofSegmentNode,
+): THREE.BufferGeometry {
+  const length = finitePositive(node.length, DEFAULT_RIDGE_VENT_LENGTH)
+  const width = finitePositive(node.width, DEFAULT_RIDGE_VENT_WIDTH)
+  const h = finitePositive(node.height, DEFAULT_RIDGE_VENT_HEIGHT)
+  const halfLen = length / 2
+  const halfW = width / 2
+  // Band thickness. Generous enough to read as a solid cap; the eave faces
+  // are `t` tall, which is the depth the user actually sees from the side.
+  const t = Math.max(0.02, h * 0.4)
 
-  const pieces: THREE.BufferGeometry[] = []
-
-  if (node.style === 'metal') {
-    pieces.push(buildMetalProfile(halfLen, halfW, h))
-  } else if (node.style === 'shingled') {
-    pieces.push(buildShingledProfile(halfLen, halfW, h))
-  } else {
-    pieces.push(buildCurvedCapProfile(halfLen, halfW, h))
+  const centerX = finiteNumber(node.position?.[0], 0)
+  const centerZ = finiteNumber(node.position?.[2], 0)
+  const rotationY = finiteNumber(node.rotation, 0)
+  const sinR = Math.sin(rotationY)
+  const cosR = Math.cos(rotationY)
+  const dutchTopRidgeSupport = getDutchTopRidgeSupport(segment, centerX, centerZ, rotationY)
+  const surfaceYAt = (x: number, z: number) => {
+    if (!segment) return 0
+    let sampleX = centerX + x * cosR + z * sinR
+    let sampleZ = centerZ - x * sinR + z * cosR
+    if (dutchTopRidgeSupport) {
+      if (dutchTopRidgeSupport.axis === 'x') {
+        sampleX = clamp(
+          sampleX,
+          -dutchTopRidgeSupport.innerHalfSpan,
+          dutchTopRidgeSupport.innerHalfSpan,
+        )
+      } else {
+        sampleZ = clamp(
+          sampleZ,
+          -dutchTopRidgeSupport.innerHalfSpan,
+          dutchTopRidgeSupport.innerHalfSpan,
+        )
+      }
+    }
+    return getRoofTopSurfaceY(sampleX, sampleZ, segment)
   }
+  const ridgeY = surfaceYAt(0, 0)
+  const seatYAt = (x: number, z: number) => (segment ? surfaceYAt(x, z) - ridgeY : 0)
 
-  if (node.endCaps) {
-    const cap =
-      node.style === 'metal'
-        ? buildMetalEndCaps(halfLen, halfW, h)
-        : node.style === 'shingled'
-          ? buildShingledEndCaps(halfLen, halfW, h)
-          : buildCurvedEndCaps(halfLen, halfW, h)
-    if (cap) pieces.push(cap)
-  }
+  const top =
+    node.style === 'metal'
+      ? metalTop(halfW, h, t)
+      : node.style === 'shingled'
+        ? shingledTop(halfW, h, t)
+        : standardTop(halfW, h, t)
+  const supportLine = segment ? getSupportLineForVent(segment, node) : null
+  const endTaper = getRidgeVentEndTaper(supportLine, width, h)
 
-  return pieces.length === 1 ? pieces[0]! : (mergeGeometries(pieces, false) ?? pieces[0]!)
-}
-
-// ─── Standard curved cap ─────────────────────────────────────────────
-
-function buildCurvedCapProfile(halfLen: number, halfW: number, h: number): THREE.BufferGeometry {
   const positions: number[] = []
   const normals: number[] = []
   const uvs: number[] = []
-  const t = h * SHELL_THICKNESS
 
-  const outerPts: [number, number][] = []
-  for (let i = 0; i <= ARC_SEGMENTS; i++) {
-    const frac = i / ARC_SEGMENTS
-    const angle = Math.PI * frac
-    const z = -halfW + frac * (2 * halfW)
-    const y = h * Math.sin(angle)
-    outerPts.push([z, y])
-  }
-  const innerPts = offsetProfileInward(outerPts, t)
+  buildBand(positions, normals, uvs, top, seatYAt, -halfLen, halfLen, node.endCaps, endTaper)
 
-  for (let i = 0; i < ARC_SEGMENTS; i++) {
-    const [oz0, oy0] = outerPts[i]!
-    const [oz1, oy1] = outerPts[i + 1]!
-    const [iz0, iy0] = innerPts[i]!
-    const [iz1, iy1] = innerPts[i + 1]!
-
-    const dz = oz1 - oz0
-    const dy = oy1 - oy0
-    const fLen = Math.sqrt(dz * dz + dy * dy) || 1
-    const fnz = -dy / fLen
-    const fny = dz / fLen
-
-    pushQuad(
-      positions,
-      normals,
-      uvs,
-      [-halfLen, oy0, oz0],
-      [halfLen, oy0, oz0],
-      [halfLen, oy1, oz1],
-      [-halfLen, oy1, oz1],
-      [0, fny, fnz],
-    )
-
-    pushQuad(
-      positions,
-      normals,
-      uvs,
-      [-halfLen, iy1, iz1],
-      [halfLen, iy1, iz1],
-      [halfLen, iy0, iz0],
-      [-halfLen, iy0, iz0],
-      [0, -fny, -fnz],
-    )
+  if (node.style === 'shingled') {
+    addShingledTabs(positions, normals, uvs, -halfLen, halfLen, top, h, seatYAt, endTaper)
   }
 
-  // Eave bottoms
-  for (const idx of [0, ARC_SEGMENTS]) {
-    const [oz, oy] = outerPts[idx]!
-    const [iz, iy] = innerPts[idx]!
-    if (idx === 0) {
-      pushQuad(
-        positions,
-        normals,
-        uvs,
-        [-halfLen, iy, iz],
-        [halfLen, iy, iz],
-        [halfLen, oy, oz],
-        [-halfLen, oy, oz],
-        [0, -1, 0],
-      )
-    } else {
-      pushQuad(
-        positions,
-        normals,
-        uvs,
-        [-halfLen, oy, oz],
-        [halfLen, oy, oz],
-        [halfLen, iy, iz],
-        [-halfLen, iy, iz],
-        [0, -1, 0],
-      )
-    }
-  }
+  const geometry = buildBufferGeometry(positions, normals, uvs)
+  if (!segment) return geometry
 
-  return buildBufferGeometry(positions, normals, uvs)
+  const clipped = clipRidgeVentGeometryToSegmentTrim(geometry, node, segment)
+  if (clipped !== geometry) geometry.dispose()
+  return clipped
 }
 
-function buildCurvedEndCaps(
-  halfLen: number,
-  halfW: number,
-  h: number,
-): THREE.BufferGeometry | null {
-  const positions: number[] = []
-  const normals: number[] = []
-  const uvs: number[] = []
-  const t = h * SHELL_THICKNESS
-
-  const outerPts: [number, number][] = []
-  for (let i = 0; i <= ARC_SEGMENTS; i++) {
-    const frac = i / ARC_SEGMENTS
-    const angle = Math.PI * frac
-    outerPts.push([-halfW + frac * (2 * halfW), h * Math.sin(angle)])
-  }
-  const innerPts = offsetProfileInward(outerPts, t)
-
-  for (const sign of [-1, 1] as const) {
-    const x = sign * halfLen
-    for (let i = 0; i < ARC_SEGMENTS; i++) {
-      const a: [number, number, number] = [x, outerPts[i]![1], outerPts[i]![0]]
-      const b: [number, number, number] = [x, outerPts[i + 1]![1], outerPts[i + 1]![0]]
-      const c: [number, number, number] = [x, innerPts[i + 1]![1], innerPts[i + 1]![0]]
-      const d: [number, number, number] = [x, innerPts[i]![1], innerPts[i]![0]]
-      if (sign > 0) pushQuad(positions, normals, uvs, a, b, c, d, [sign, 0, 0])
-      else pushQuad(positions, normals, uvs, d, c, b, a, [sign, 0, 0])
-    }
-  }
-
-  return positions.length === 0 ? null : buildBufferGeometry(positions, normals, uvs)
+function finiteNumber(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
 }
 
-// ─── Shingled profile ───────────────────────────────────────────────
+function finitePositive(value: unknown, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : fallback
+}
 
-function shingledOuterPts(halfW: number, h: number): [number, number][] {
-  const peakR = halfW * 0.1
-  const slopeY = (h * (halfW - peakR)) / halfW
-  const pts: [number, number][] = [[-halfW, 0]]
-  for (let i = 0; i <= SHINGLED_PEAK_SEGS; i++) {
-    const frac = i / SHINGLED_PEAK_SEGS
-    const angle = Math.PI * (1 - frac)
-    pts.push([peakR * Math.cos(angle), slopeY + (h - slopeY) * Math.sin(angle)])
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function getRidgeVentEndTaper(
+  supportLine: RidgeVentSupportLine | null,
+  width: number,
+  height: number,
+): RidgeVentEndTaper | null {
+  if (
+    !supportLine ||
+    (supportLine.name !== 'Hip Ridge Vent' && supportLine.name !== 'Slope Ridge Vent')
+  ) {
+    return null
   }
-  pts.push([halfW, 0])
+
+  const lineLength = supportLine.endX - supportLine.startX
+  const taperLength = Math.min(
+    Math.max(0.07, width * 0.45, height * 0.9),
+    Math.max(0, lineLength / 2 - 0.02),
+  )
+  if (!(taperLength > 0.001)) return null
+
+  return {
+    taperAtStart: supportLine.taperAtStart,
+    taperAtEnd: supportLine.taperAtEnd,
+    taperLength,
+    tipHalfWidth: Math.min(width * 0.34, Math.max(0.04, width * 0.26)),
+  }
+}
+
+function getDutchTopRidgeSupport(
+  segment: RoofSegmentNode | undefined,
+  centerX: number,
+  centerZ: number,
+  rotationY: number,
+): { axis: 'x' | 'z'; innerHalfSpan: number } | null {
+  if (segment?.roofType !== 'dutch') return null
+
+  const metrics = getDutchRoofMetrics(segment)
+  const onWidthAxisTopRidge =
+    metrics.axis === 'x' && Math.abs(centerZ) <= 1e-4 && Math.abs(Math.sin(rotationY)) <= 1e-4
+  const onDepthAxisTopRidge =
+    metrics.axis === 'z' && Math.abs(centerX) <= 1e-4 && Math.abs(Math.cos(rotationY)) <= 1e-4
+
+  if (onWidthAxisTopRidge) {
+    return { axis: 'x', innerHalfSpan: metrics.waistHalfX }
+  }
+  if (onDepthAxisTopRidge) {
+    return { axis: 'z', innerHalfSpan: metrics.waistHalfZ }
+  }
+  return null
+}
+
+// ─── Top profiles (open polylines eave → peak → eave, in [z, y]) ─────────
+// Eaves sit at y = t so that the underside (top − t) lands on y = 0 at the
+// eaves, seating the cap on the roof while leaving a peaked void beneath.
+
+// Smooth rounded arch.
+function standardTop(halfW: number, h: number, t: number): ProfilePoint[] {
+  const pts: ProfilePoint[] = []
+  for (let i = 0; i <= ARC_SEGS; i++) {
+    const frac = i / ARC_SEGS
+    const z = -halfW + frac * 2 * halfW
+    const y = t + (h - t) * Math.sin(frac * Math.PI)
+    pts.push([z, y])
+  }
   return pts
 }
 
-function buildShingledProfile(halfLen: number, halfW: number, h: number): THREE.BufferGeometry {
-  const positions: number[] = []
-  const normals: number[] = []
-  const uvs: number[] = []
-  const t = h * SHELL_THICKNESS
+// Angular peak with a narrow flat ridge at the top.
+function shingledTop(halfW: number, h: number, t: number): ProfilePoint[] {
+  const peakHalf = halfW * 0.12
+  return [
+    [-halfW, t],
+    [-peakHalf, h],
+    [peakHalf, h],
+    [halfW, t],
+  ]
+}
 
-  const outerPts = shingledOuterPts(halfW, h)
-  const innerPts = offsetProfileInward(outerPts, t)
+// Bent-metal cap: steep folds up to a wide flat standing seam.
+function metalTop(halfW: number, h: number, t: number): ProfilePoint[] {
+  const seamHalf = halfW * 0.5
+  const shoulderY = t + (h - t) * 0.5
+  return [
+    [-halfW, t],
+    [-halfW * 0.82, shoulderY],
+    [-seamHalf, h],
+    [seamHalf, h],
+    [halfW * 0.82, shoulderY],
+    [halfW, t],
+  ]
+}
 
-  for (let i = 0; i < outerPts.length - 1; i++) {
-    const [oz0, oy0] = outerPts[i]!
-    const [oz1, oy1] = outerPts[i + 1]!
-    const [iz0, iy0] = innerPts[i]!
-    const [iz1, iy1] = innerPts[i + 1]!
+// ─── Band assembly ───────────────────────────────────────────────────────
 
-    const dz = oz1 - oz0
-    const dy = oy1 - oy0
-    const fLen = Math.sqrt(dz * dz + dy * dy) || 1
-    const fnz = -dy / fLen
-    const fny = dz / fLen
+function buildBand(
+  positions: number[],
+  normals: number[],
+  uvs: number[],
+  top: ProfilePoint[],
+  seatYAt: (x: number, z: number) => number,
+  startX: number,
+  endX: number,
+  withCaps: boolean,
+  endTaper: RidgeVentEndTaper | null = null,
+): void {
+  const n = top.length
+  const halfWidth = getProfileHalfWidth(top)
+  const stations = getRidgeVentSweepStations(startX, endX, endTaper)
+  const scaledZAt = (x: number, z: number): number =>
+    z * getProfileScaleAtX(x, startX, endX, halfWidth, endTaper)
+  const seatAt = (x: number, z: number): number => seatYAt(x, scaledZAt(x, z))
+  const topAt = (x: number, z: number, capY: number): number => seatAt(x, z) + capY
 
-    pushQuad(
-      positions,
-      normals,
-      uvs,
-      [-halfLen, oy0, oz0],
-      [halfLen, oy0, oz0],
-      [halfLen, oy1, oz1],
-      [-halfLen, oy1, oz1],
-      [0, fny, fnz],
-    )
-
-    pushQuad(
-      positions,
-      normals,
-      uvs,
-      [-halfLen, iy1, iz1],
-      [halfLen, iy1, iz1],
-      [halfLen, iy0, iz0],
-      [-halfLen, iy0, iz0],
-      [0, -fny, -fnz],
-    )
+  // Top surface + underside, swept along the ridge length.
+  for (let station = 0; station < stations.length - 1; station += 1) {
+    const x0 = stations[station]!
+    const x1 = stations[station + 1]!
+    for (let i = 0; i < n - 1; i++) {
+      const [z0, capY0] = top[i]!
+      const [z1, capY1] = top[i + 1]!
+      const x0z0 = scaledZAt(x0, z0)
+      const x1z0 = scaledZAt(x1, z0)
+      const x1z1 = scaledZAt(x1, z1)
+      const x0z1 = scaledZAt(x0, z1)
+      pushQuad(
+        positions,
+        normals,
+        uvs,
+        [x0, topAt(x0, z0, capY0), x0z0],
+        [x1, topAt(x1, z0, capY0), x1z0],
+        [x1, topAt(x1, z1, capY1), x1z1],
+        [x0, topAt(x0, z1, capY1), x0z1],
+        [0, 1, 0],
+      )
+      pushQuad(
+        positions,
+        normals,
+        uvs,
+        [x0, seatAt(x0, z0), x0z0],
+        [x1, seatAt(x1, z0), x1z0],
+        [x1, seatAt(x1, z1), x1z1],
+        [x0, seatAt(x0, z1), x0z1],
+        [0, -1, 0],
+      )
+    }
   }
 
-  // Eave bottoms
-  {
-    const [oz, oy] = outerPts[0]!
-    const [iz, iy] = innerPts[0]!
-    pushQuad(
-      positions,
-      normals,
-      uvs,
-      [-halfLen, iy, iz],
-      [halfLen, iy, iz],
-      [halfLen, oy, oz],
-      [-halfLen, oy, oz],
-      [0, -1, 0],
-    )
-  }
-  {
-    const last = outerPts.length - 1
-    const [oz, oy] = outerPts[last]!
-    const [iz, iy] = innerPts[last]!
-    pushQuad(
-      positions,
-      normals,
-      uvs,
-      [-halfLen, oy, oz],
-      [halfLen, oy, oz],
-      [halfLen, iy, iz],
-      [-halfLen, iy, iz],
-      [0, -1, 0],
-    )
+  // Eave thickness faces (the visible depth along each long edge).
+  for (let station = 0; station < stations.length - 1; station += 1) {
+    const x0 = stations[station]!
+    const x1 = stations[station + 1]!
+    for (const idx of [0, n - 1]) {
+      const [z, capY] = top[idx]!
+      const x0z = scaledZAt(x0, z)
+      const x1z = scaledZAt(x1, z)
+      const hint: [number, number, number] = [0, 0, z < 0 ? -1 : 1]
+      pushQuad(
+        positions,
+        normals,
+        uvs,
+        [x0, seatAt(x0, z), x0z],
+        [x1, seatAt(x1, z), x1z],
+        [x1, topAt(x1, z, capY), x1z],
+        [x0, topAt(x0, z, capY), x0z],
+        hint,
+      )
+    }
   }
 
-  // Tab divider ridges along the length
-  const totalLen = halfLen * 2
+  // End caps: the band's cross-section ring at each end.
+  if (withCaps) {
+    for (const [x, sign] of [
+      [startX, -1],
+      [endX, 1],
+    ] as const) {
+      const hint: [number, number, number] = [sign, 0, 0]
+      for (let i = 0; i < n - 1; i++) {
+        const [z0, capY0] = top[i]!
+        const [z1, capY1] = top[i + 1]!
+        const scaledZ0 = scaledZAt(x, z0)
+        const scaledZ1 = scaledZAt(x, z1)
+        pushQuad(
+          positions,
+          normals,
+          uvs,
+          [x, topAt(x, z0, capY0), scaledZ0],
+          [x, topAt(x, z1, capY1), scaledZ1],
+          [x, seatAt(x, z1), scaledZ1],
+          [x, seatAt(x, z0), scaledZ0],
+          hint,
+        )
+      }
+    }
+  }
+}
+
+function getProfileHalfWidth(top: ProfilePoint[]): number {
+  return top.reduce((halfWidth, [z]) => Math.max(halfWidth, Math.abs(z)), 0)
+}
+
+function getRidgeVentSweepStations(
+  startX: number,
+  endX: number,
+  endTaper: RidgeVentEndTaper | null,
+): number[] {
+  const stations = [startX, endX]
+  if (endTaper?.taperAtStart) stations.push(startX + endTaper.taperLength)
+  if (endTaper?.taperAtEnd) stations.push(endX - endTaper.taperLength)
+  return stations
+    .filter((x) => x >= startX && x <= endX)
+    .sort((a, b) => a - b)
+    .filter((x, index, sorted) => index === 0 || Math.abs(x - sorted[index - 1]!) > 1e-5)
+}
+
+function getProfileScaleAtX(
+  x: number,
+  startX: number,
+  endX: number,
+  halfWidth: number,
+  endTaper: RidgeVentEndTaper | null,
+): number {
+  if (!endTaper || !(halfWidth > 0.0001)) return 1
+
+  const tipScale = clamp(endTaper.tipHalfWidth / halfWidth, 0, 1)
+  if (endTaper.taperAtStart && x <= startX + endTaper.taperLength) {
+    const progress = clamp((x - startX) / endTaper.taperLength, 0, 1)
+    return lerp(tipScale, 1, progress)
+  }
+  if (endTaper.taperAtEnd && x >= endX - endTaper.taperLength) {
+    const progress = clamp((endX - x) / endTaper.taperLength, 0, 1)
+    return lerp(tipScale, 1, progress)
+  }
+  return 1
+}
+
+// ─── Shingled course ridges ──────────────────────────────────────────────
+// Thin raised lines running across the cap at intervals, suggesting
+// overlapping shingle courses. Sit on the top profile edges.
+
+function addShingledTabs(
+  positions: number[],
+  normals: number[],
+  uvs: number[],
+  startX: number,
+  endX: number,
+  top: ProfilePoint[],
+  h: number,
+  seatYAt: (x: number, z: number) => number,
+  endTaper: RidgeVentEndTaper | null = null,
+): void {
+  const totalLen = endX - startX
   const numTabs = Math.max(2, Math.round(totalLen / SHINGLED_TAB_SIZE))
   const tabLen = totalLen / numTabs
   const ridgeH = h * 0.06
-  const ridgeD = 0.006
+  const ridgeD = Math.min(0.01, tabLen * 0.15)
 
   for (let tab = 1; tab < numTabs; tab++) {
-    const x = -halfLen + tab * tabLen
-    for (let i = 0; i < outerPts.length - 1; i++) {
-      const [oz0, oy0] = outerPts[i]!
-      const [oz1, oy1] = outerPts[i + 1]!
-      const dz = oz1 - oz0
-      const dy = oy1 - oy0
-      const fLen = Math.sqrt(dz * dz + dy * dy) || 1
-      const fnz = -dy / fLen
-      const fny = dz / fLen
-      const r0y = oy0 + fny * ridgeH
-      const r0z = oz0 + fnz * ridgeH
-      const r1y = oy1 + fny * ridgeH
-      const r1z = oz1 + fnz * ridgeH
+    const x = startX + tab * tabLen
+    if (isInsideEndTaper(x, startX, endX, endTaper)) continue
+    for (let i = 0; i < top.length - 1; i++) {
+      const [z0, capY0] = top[i]!
+      const [z1, capY1] = top[i + 1]!
+      const y0 = seatYAt(x, z0) + capY0
+      const y1 = seatYAt(x, z1) + capY1
+      const dz = z1 - z0
+      const dy = y1 - y0
+      const len = Math.sqrt(dz * dz + dy * dy) || 1
+      const nz = -dy / len
+      const ny = dz / len
+      const r0y = y0 + ny * ridgeH
+      const r0z = z0 + nz * ridgeH
+      const r1y = y1 + ny * ridgeH
+      const r1z = z1 + nz * ridgeH
+      const backX = x - ridgeD
+      const by0 = seatYAt(backX, z0) + capY0
+      const by1 = seatYAt(backX, z1) + capY1
+      const br0y = by0 + ny * ridgeH
+      const br1y = by1 + ny * ridgeH
       pushQuad(
         positions,
         normals,
         uvs,
         [x, r0y, r0z],
         [x, r1y, r1z],
-        [x, oy1, oz1],
-        [x, oy0, oz0],
+        [x, y1, z1],
+        [x, y0, z0],
         [1, 0, 0],
       )
       pushQuad(
         positions,
         normals,
         uvs,
-        [x, r0y, r0z],
-        [x, r1y, r1z],
-        [x - ridgeD, oy1, oz1],
-        [x - ridgeD, oy0, oz0],
-        [0, fny, fnz],
+        [backX, br0y, r0z],
+        [backX, br1y, r1z],
+        [backX, by1, z1],
+        [backX, by0, z0],
+        [-1, 0, 0],
       )
     }
   }
-
-  return buildBufferGeometry(positions, normals, uvs)
 }
 
-function buildShingledEndCaps(
-  halfLen: number,
-  halfW: number,
-  h: number,
-): THREE.BufferGeometry | null {
-  const positions: number[] = []
-  const normals: number[] = []
-  const uvs: number[] = []
-  const t = h * SHELL_THICKNESS
-
-  const outerPts = shingledOuterPts(halfW, h)
-  const innerPts = offsetProfileInward(outerPts, t)
-
-  for (const sign of [-1, 1] as const) {
-    const x = sign * halfLen
-    for (let i = 0; i < outerPts.length - 1; i++) {
-      const a: [number, number, number] = [x, outerPts[i]![1], outerPts[i]![0]]
-      const b: [number, number, number] = [x, outerPts[i + 1]![1], outerPts[i + 1]![0]]
-      const c: [number, number, number] = [x, innerPts[i + 1]![1], innerPts[i + 1]![0]]
-      const d: [number, number, number] = [x, innerPts[i]![1], innerPts[i]![0]]
-      if (sign > 0) pushQuad(positions, normals, uvs, a, b, c, d, [sign, 0, 0])
-      else pushQuad(positions, normals, uvs, d, c, b, a, [sign, 0, 0])
-    }
-  }
-
-  return positions.length === 0 ? null : buildBufferGeometry(positions, normals, uvs)
-}
-
-// ─── Metal profile ───────────────────────────────────────────────────
-
-/**
- * Bent-sheet-metal ridge cap cross-section. Real metal vents read as a
- * smooth arched cap riding above two flat mounting flanges — not the
- * old angular peak + bead, which looked like a stamped novelty. Profile:
- *
- *   flange ─┐                                            ┌─ flange
- *           │   ◜╶─────  rounded ridge cap  ─────╶◝      │
- *           │  ╱                                   ╲     │
- *           └─╯                                     ╰────┘
- *
- * Built from outer points (Z, Y); the inner shell is offset inward so the
- * cap reads as a real folded-metal thickness instead of paper-thin.
- */
-function metalProfile(halfW: number, h: number, t: number) {
-  // Horizontal mounting flange that hugs the shingles on each side. Wide
-  // enough to read as a real screw-down tab, not a sliver.
-  const flangeW = halfW * 0.22
-  // Where the arched cap takes off from the flange tip — gentle rise so
-  // the corner reads as a soft fold instead of a hard kink.
-  const liftH = h * 0.12
-  const liftDZ = halfW * 0.04
-  // Span and height of the rounded cap. Span stays narrower than the
-  // overall width so the cap "rides" on the flanges rather than swallow-
-  // ing them.
-  const capHalfSpan = halfW * 0.7
-  const capPeakY = h
-  const capStartY = h * 0.45
-  const capSegs = 12
-
-  const outer: [number, number][] = []
-  // Left flange — flat horizontal tab.
-  outer.push([-halfW, 0])
-  outer.push([-halfW + flangeW, 0])
-  // Soft fold up to the cap's starting shoulder.
-  outer.push([-halfW + flangeW + liftDZ, liftH])
-  outer.push([-capHalfSpan, capStartY])
-  // Rounded ridge: half-sine from left shoulder over the top to right
-  // shoulder. Using sin() (not cos+sin sphere math) keeps the cap's
-  // tangents continuous with the slope below — no visible kinks.
-  for (let i = 1; i < capSegs; i++) {
-    const frac = i / capSegs
-    const z = -capHalfSpan + frac * (2 * capHalfSpan)
-    const y = capStartY + (capPeakY - capStartY) * Math.sin(frac * Math.PI)
-    outer.push([z, y])
-  }
-  // Mirror down the right side.
-  outer.push([capHalfSpan, capStartY])
-  outer.push([halfW - flangeW - liftDZ, liftH])
-  outer.push([halfW - flangeW, 0])
-  outer.push([halfW, 0])
-
-  const inner = offsetProfileInward(outer, t)
-  return { outer, inner }
-}
-
-function segNormal(z0: number, y0: number, z1: number, y1: number): number[] {
-  const dz = z1 - z0
-  const dy = y1 - y0
-  const len = Math.sqrt(dz * dz + dy * dy) || 1
-  return [0, dz / len, -dy / len]
-}
-
-function buildMetalProfile(halfLen: number, halfW: number, h: number): THREE.BufferGeometry {
-  const positions: number[] = []
-  const normals: number[] = []
-  const uvs: number[] = []
-  const t = h * SHELL_THICKNESS
-  const { outer, inner } = metalProfile(halfW, h, t)
-
-  for (let i = 0; i < outer.length - 1; i++) {
-    const [oz0, oy0] = outer[i]!
-    const [oz1, oy1] = outer[i + 1]!
-    const [iz0, iy0] = inner[i]!
-    const [iz1, iy1] = inner[i + 1]!
-
-    const outerN = segNormal(oz0, oy0, oz1, oy1)
-    const innerN = segNormal(iz0, iy0, iz1, iy1).map((v) => -v)
-
-    pushQuad(
-      positions,
-      normals,
-      uvs,
-      [-halfLen, oy0, oz0],
-      [halfLen, oy0, oz0],
-      [halfLen, oy1, oz1],
-      [-halfLen, oy1, oz1],
-      outerN,
-    )
-
-    pushQuad(
-      positions,
-      normals,
-      uvs,
-      [-halfLen, iy1, iz1],
-      [halfLen, iy1, iz1],
-      [halfLen, iy0, iz0],
-      [-halfLen, iy0, iz0],
-      innerN,
-    )
-  }
-
-  // Eave bottoms
-  pushQuad(
-    positions,
-    normals,
-    uvs,
-    [-halfLen, inner[0]![1], inner[0]![0]],
-    [halfLen, inner[0]![1], inner[0]![0]],
-    [halfLen, outer[0]![1], outer[0]![0]],
-    [-halfLen, outer[0]![1], outer[0]![0]],
-    [0, -1, 0],
+function isInsideEndTaper(
+  x: number,
+  startX: number,
+  endX: number,
+  endTaper: RidgeVentEndTaper | null,
+): boolean {
+  if (!endTaper) return false
+  return (
+    (endTaper.taperAtStart && x <= startX + endTaper.taperLength) ||
+    (endTaper.taperAtEnd && x >= endX - endTaper.taperLength)
   )
-  const last = outer.length - 1
-  pushQuad(
-    positions,
-    normals,
-    uvs,
-    [-halfLen, outer[last]![1], outer[last]![0]],
-    [halfLen, outer[last]![1], outer[last]![0]],
-    [halfLen, inner[last]![1], inner[last]![0]],
-    [-halfLen, inner[last]![1], inner[last]![0]],
-    [0, -1, 0],
-  )
-
-  return buildBufferGeometry(positions, normals, uvs)
 }
 
-function buildMetalEndCaps(halfLen: number, halfW: number, h: number): THREE.BufferGeometry | null {
-  const positions: number[] = []
-  const normals: number[] = []
-  const uvs: number[] = []
-  const t = h * SHELL_THICKNESS
-  const { outer, inner } = metalProfile(halfW, h, t)
-
-  for (const sign of [-1, 1] as const) {
-    const x = sign * halfLen
-
-    for (let i = 0; i < outer.length - 1; i++) {
-      const a: [number, number, number] = [x, outer[i]![1], outer[i]![0]]
-      const b: [number, number, number] = [x, outer[i + 1]![1], outer[i + 1]![0]]
-      const c: [number, number, number] = [x, inner[i + 1]![1], inner[i + 1]![0]]
-      const d: [number, number, number] = [x, inner[i]![1], inner[i]![0]]
-      if (sign > 0) pushQuad(positions, normals, uvs, a, b, c, d, [sign, 0, 0])
-      else pushQuad(positions, normals, uvs, d, c, b, a, [sign, 0, 0])
-    }
-  }
-
-  return positions.length === 0 ? null : buildBufferGeometry(positions, normals, uvs)
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────
-
-function offsetProfileInward(pts: [number, number][], t: number): [number, number][] {
-  const result: [number, number][] = []
-  for (let i = 0; i < pts.length; i++) {
-    const [z, y] = pts[i]!
-    let dz: number
-    let dy: number
-    if (i === 0) {
-      dz = pts[1]![0] - z
-      dy = pts[1]![1] - y
-    } else if (i === pts.length - 1) {
-      dz = z - pts[i - 1]![0]
-      dy = y - pts[i - 1]![1]
-    } else {
-      dz = pts[i + 1]![0] - pts[i - 1]![0]
-      dy = pts[i + 1]![1] - pts[i - 1]![1]
-    }
-    const len = Math.sqrt(dz * dz + dy * dy) || 1
-    const nz = dy / len
-    const ny = -dz / len
-    result.push([z + nz * t, y + ny * t])
-  }
-  return result
-}
+// ─── Geometry plumbing ───────────────────────────────────────────────────
 
 function buildBufferGeometry(
   positions: number[],
@@ -516,41 +464,328 @@ function buildBufferGeometry(
   uvs: number[],
 ): THREE.BufferGeometry {
   const geo = new THREE.BufferGeometry()
+  if (positions.length === 0) {
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
+    geo.setAttribute('normal', new THREE.Float32BufferAttribute(new Float32Array(9), 3))
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(6), 2))
+    geo.computeBoundingSphere()
+    return geo
+  }
   geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
   geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
   geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  geo.computeBoundingSphere()
   return geo
 }
 
+function clipRidgeVentGeometryToSegmentTrim(
+  geometry: THREE.BufferGeometry,
+  node: RidgeVentNode,
+  segment: RoofSegmentNode,
+): THREE.BufferGeometry {
+  const planes = getSegmentTrimClipPlanes(segment)
+  if (planes.length === 0) return geometry
+
+  const position = geometry.getAttribute('position')
+  const normal = geometry.getAttribute('normal')
+  const uv = geometry.getAttribute('uv')
+  if (!position || !normal || !uv) return geometry
+
+  const positions: number[] = []
+  const normals: number[] = []
+  const uvs: number[] = []
+
+  for (let i = 0; i < position.count; i += 3) {
+    let polygon: RidgeVentGeometryVertex[] = [
+      readGeometryVertex(position, normal, uv, i),
+      readGeometryVertex(position, normal, uv, i + 1),
+      readGeometryVertex(position, normal, uv, i + 2),
+    ]
+
+    for (const plane of planes) {
+      polygon = clipPolygonToSegmentTrimPlane(polygon, plane, node)
+      if (polygon.length < 3) break
+    }
+
+    if (polygon.length < 3) continue
+    for (let j = 1; j < polygon.length - 1; j += 1) {
+      pushGeometryVertex(positions, normals, uvs, polygon[0]!)
+      pushGeometryVertex(positions, normals, uvs, polygon[j]!)
+      pushGeometryVertex(positions, normals, uvs, polygon[j + 1]!)
+    }
+  }
+
+  return buildBufferGeometry(positions, normals, uvs)
+}
+
+function getSupportLineForVent(
+  segment: RoofSegmentNode,
+  node: RidgeVentNode,
+): RidgeVentSupportLine | null {
+  const lines = getRidgeVentLinesForSegment(segment)
+  if (lines.length === 0) return null
+
+  const centerX = finiteNumber(node.position?.[0], 0)
+  const centerZ = finiteNumber(node.position?.[2], 0)
+  const rotationY = finiteNumber(node.rotation, 0)
+  const dirX = Math.cos(rotationY)
+  const dirZ = -Math.sin(rotationY)
+
+  let best: RidgeVentSupportLine | null = null
+  let bestScore = Number.POSITIVE_INFINITY
+
+  for (const line of lines) {
+    const [sx, sz] = line.start
+    const [ex, ez] = line.end
+    const lineDx = ex - sx
+    const lineDz = ez - sz
+    const lineLength = Math.hypot(lineDx, lineDz)
+    if (!(lineLength > 1e-4)) continue
+
+    const unitX = lineDx / lineLength
+    const unitZ = lineDz / lineLength
+    const yawPenalty = 1 - Math.abs(unitX * dirX + unitZ * dirZ)
+    const centerOffsetX = centerX - sx
+    const centerOffsetZ = centerZ - sz
+    const t = Math.max(0, Math.min(lineLength, centerOffsetX * unitX + centerOffsetZ * unitZ))
+    const nearestX = sx + unitX * t
+    const nearestZ = sz + unitZ * t
+    const distanceSq = (centerX - nearestX) ** 2 + (centerZ - nearestZ) ** 2
+    const score = distanceSq + yawPenalty * 6
+
+    if (score < bestScore) {
+      bestScore = score
+      const startLocalX = (sx - centerX) * dirX + (sz - centerZ) * dirZ
+      const endLocalX = (ex - centerX) * dirX + (ez - centerZ) * dirZ
+      const startRadiusSq = sx * sx + sz * sz
+      const endRadiusSq = ex * ex + ez * ez
+      const outerIsStart = startRadiusSq > endRadiusSq
+      const minIsStart = startLocalX <= endLocalX
+      best = {
+        startX: Math.min(startLocalX, endLocalX),
+        endX: Math.max(startLocalX, endLocalX),
+        name: line.name,
+        taperAtStart: minIsStart ? outerIsStart : !outerIsStart,
+        taperAtEnd: minIsStart ? !outerIsStart : outerIsStart,
+      }
+    }
+  }
+
+  return best
+}
+
+function readGeometryVertex(
+  position: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+  normal: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+  uv: THREE.BufferAttribute | THREE.InterleavedBufferAttribute,
+  index: number,
+): RidgeVentGeometryVertex {
+  return {
+    x: position.getX(index),
+    y: position.getY(index),
+    z: position.getZ(index),
+    nx: normal.getX(index),
+    ny: normal.getY(index),
+    nz: normal.getZ(index),
+    u: uv.getX(index),
+    v: uv.getY(index),
+  }
+}
+
+function pushGeometryVertex(
+  positions: number[],
+  normals: number[],
+  uvs: number[],
+  vertex: RidgeVentGeometryVertex,
+) {
+  positions.push(vertex.x, vertex.y, vertex.z)
+  normals.push(vertex.nx, vertex.ny, vertex.nz)
+  uvs.push(vertex.u, vertex.v)
+}
+
+function clipPolygonToSegmentTrimPlane(
+  polygon: RidgeVentGeometryVertex[],
+  plane: SegmentTrimClipPlane,
+  node: RidgeVentNode,
+): RidgeVentGeometryVertex[] {
+  const next: RidgeVentGeometryVertex[] = []
+  let previous = polygon[polygon.length - 1]!
+  let previousDistance = getTrimClipDistance(previous, plane, node)
+  let previousInside = previousDistance <= 1e-6
+
+  for (const current of polygon) {
+    const currentDistance = getTrimClipDistance(current, plane, node)
+    const currentInside = currentDistance <= 1e-6
+
+    if (currentInside) {
+      if (!previousInside) {
+        next.push(interpolateGeometryVertex(previous, current, previousDistance, currentDistance))
+      }
+      next.push(current)
+    } else if (previousInside) {
+      next.push(interpolateGeometryVertex(previous, current, previousDistance, currentDistance))
+    }
+
+    previous = current
+    previousDistance = currentDistance
+    previousInside = currentInside
+  }
+
+  return next
+}
+
+function getTrimClipDistance(
+  vertex: RidgeVentGeometryVertex,
+  plane: SegmentTrimClipPlane,
+  node: RidgeVentNode,
+): number {
+  const centerX = finiteNumber(node.position?.[0], 0)
+  const centerZ = finiteNumber(node.position?.[2], 0)
+  const rotationY = finiteNumber(node.rotation, 0)
+  const segmentX = centerX + vertex.x * Math.cos(rotationY) + vertex.z * Math.sin(rotationY)
+  const segmentZ = centerZ - vertex.x * Math.sin(rotationY) + vertex.z * Math.cos(rotationY)
+  return plane.signedDistance(segmentX, segmentZ)
+}
+
+function interpolateGeometryVertex(
+  a: RidgeVentGeometryVertex,
+  b: RidgeVentGeometryVertex,
+  distanceA: number,
+  distanceB: number,
+): RidgeVentGeometryVertex {
+  const t = distanceA / (distanceA - distanceB || 1)
+  return {
+    x: lerp(a.x, b.x, t),
+    y: lerp(a.y, b.y, t),
+    z: lerp(a.z, b.z, t),
+    nx: lerp(a.nx, b.nx, t),
+    ny: lerp(a.ny, b.ny, t),
+    nz: lerp(a.nz, b.nz, t),
+    u: lerp(a.u, b.u, t),
+    v: lerp(a.v, b.v, t),
+  }
+}
+
+function lerp(a: number, b: number, t: number): number {
+  return a + (b - a) * t
+}
+
+function getSegmentTrimClipPlanes(segment: RoofSegmentNode): SegmentTrimClipPlane[] {
+  const trim = normalizeRoofSegmentTrim(segment)
+  const planes: SegmentTrimClipPlane[] = []
+  const leftX = -segment.width / 2 + trim.left
+  const rightX = segment.width / 2 - trim.right
+  const frontZ = segment.depth / 2 - trim.front
+  const backZ = -segment.depth / 2 + trim.back
+
+  if (trim.left > 0) planes.push({ signedDistance: (x) => leftX - x })
+  if (trim.right > 0) planes.push({ signedDistance: (x) => x - rightX })
+  if (trim.front > 0) planes.push({ signedDistance: (_x, z) => z - frontZ })
+  if (trim.back > 0) planes.push({ signedDistance: (_x, z) => backZ - z })
+
+  const diagonalPlane = (
+    lineA: readonly [number, number],
+    lineB: readonly [number, number],
+    outsidePoint: readonly [number, number],
+  ): SegmentTrimClipPlane | null => {
+    const dx = lineB[0] - lineA[0]
+    const dz = lineB[1] - lineA[1]
+    const length = Math.hypot(dx, dz)
+    if (!(length > 0)) return null
+    let nx = -dz / length
+    let nz = dx / length
+    const midX = (lineA[0] + lineB[0]) / 2
+    const midZ = (lineA[1] + lineB[1]) / 2
+    if (nx * (outsidePoint[0] - midX) + nz * (outsidePoint[1] - midZ) < 0) {
+      nx *= -1
+      nz *= -1
+    }
+    return {
+      signedDistance: (x, z) => nx * (x - midX) + nz * (z - midZ),
+    }
+  }
+
+  const pushDiagonalPlane = (
+    lineA: readonly [number, number],
+    lineB: readonly [number, number],
+    outsidePoint: readonly [number, number],
+  ) => {
+    const plane = diagonalPlane(lineA, lineB, outsidePoint)
+    if (plane) planes.push(plane)
+  }
+
+  if (trim.frontLeftX > 0 && trim.frontLeftZ > 0) {
+    pushDiagonalPlane(
+      [leftX + trim.frontLeftX, frontZ],
+      [leftX, frontZ - trim.frontLeftZ],
+      [leftX - 1, frontZ + 1],
+    )
+  }
+  if (trim.frontRightX > 0 && trim.frontRightZ > 0) {
+    pushDiagonalPlane(
+      [rightX, frontZ - trim.frontRightZ],
+      [rightX - trim.frontRightX, frontZ],
+      [rightX + 1, frontZ + 1],
+    )
+  }
+  if (trim.backLeftX > 0 && trim.backLeftZ > 0) {
+    pushDiagonalPlane(
+      [leftX, backZ + trim.backLeftZ],
+      [leftX + trim.backLeftX, backZ],
+      [leftX - 1, backZ - 1],
+    )
+  }
+  if (trim.backRightX > 0 && trim.backRightZ > 0) {
+    pushDiagonalPlane(
+      [rightX - trim.backRightX, backZ],
+      [rightX, backZ + trim.backRightZ],
+      [rightX + 1, backZ - 1],
+    )
+  }
+
+  return planes
+}
+
+// Winding-safe quad: triangulates (a,b,c,d) and orients both triangles so
+// the shared flat normal points toward `hint`. UVs are dimension-based so
+// painted presets tile at world scale across the ridge length and the cap.
 function pushQuad(
   positions: number[],
   normals: number[],
   uvs: number[],
-  a: number[] | readonly number[],
-  b: number[] | readonly number[],
-  c: number[] | readonly number[],
-  d: number[] | readonly number[],
-  n: number[] | readonly number[],
+  a: number[],
+  b: number[],
+  c: number[],
+  d: number[],
+  hint: number[],
 ) {
-  // Dimension-based planar UVs: U follows |b-a|, V follows |d-a|, so
-  // textures tile at world scale across the ridge length, the arched
-  // shell, and the end caps. Hardcoded 0..1 UVs stretched each face
-  // independently — a 2m ridge tile looked the same as a 4cm lip.
-  const abx = b[0]! - a[0]!
-  const aby = b[1]! - a[1]!
-  const abz = b[2]! - a[2]!
-  const adx = d[0]! - a[0]!
-  const ady = d[1]! - a[1]!
-  const adz = d[2]! - a[2]!
-  const u = Math.sqrt(abx * abx + aby * aby + abz * abz)
-  const v = Math.sqrt(adx * adx + ady * ady + adz * adz)
+  let nx = (c[1]! - a[1]!) * (b[2]! - a[2]!) - (c[2]! - a[2]!) * (b[1]! - a[1]!)
+  let ny = (c[2]! - a[2]!) * (b[0]! - a[0]!) - (c[0]! - a[0]!) * (b[2]! - a[2]!)
+  let nz = (c[0]! - a[0]!) * (b[1]! - a[1]!) - (c[1]! - a[1]!) * (b[0]! - a[0]!)
+  const flip = nx * hint[0]! + ny * hint[1]! + nz * hint[2]! < 0
+  if (flip) {
+    nx = -nx
+    ny = -ny
+    nz = -nz
+  }
+  const len = Math.sqrt(nx * nx + ny * ny + nz * nz) || 1
+  nx /= len
+  ny /= len
+  nz /= len
 
-  // Winding is (a, c, b) + (a, d, c) so the triangle face direction
-  // matches the stored normal — same fix as box-vent's pushQuad.
-  positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, b[0]!, b[1]!, b[2]!)
-  normals.push(n[0]!, n[1]!, n[2]!, n[0]!, n[1]!, n[2]!, n[0]!, n[1]!, n[2]!)
-  uvs.push(0, 0, u, v, u, 0)
-  positions.push(a[0]!, a[1]!, a[2]!, d[0]!, d[1]!, d[2]!, c[0]!, c[1]!, c[2]!)
-  normals.push(n[0]!, n[1]!, n[2]!, n[0]!, n[1]!, n[2]!, n[0]!, n[1]!, n[2]!)
-  uvs.push(0, 0, 0, v, u, v)
+  const u = Math.hypot(b[0]! - a[0]!, b[1]! - a[1]!, b[2]! - a[2]!)
+  const v = Math.hypot(d[0]! - a[0]!, d[1]! - a[1]!, d[2]! - a[2]!)
+
+  if (flip) {
+    positions.push(a[0]!, a[1]!, a[2]!, b[0]!, b[1]!, b[2]!, c[0]!, c[1]!, c[2]!)
+    uvs.push(0, 0, u, 0, u, v)
+    positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, d[0]!, d[1]!, d[2]!)
+    uvs.push(0, 0, u, v, 0, v)
+  } else {
+    positions.push(a[0]!, a[1]!, a[2]!, c[0]!, c[1]!, c[2]!, b[0]!, b[1]!, b[2]!)
+    uvs.push(0, 0, u, v, u, 0)
+    positions.push(a[0]!, a[1]!, a[2]!, d[0]!, d[1]!, d[2]!, c[0]!, c[1]!, c[2]!)
+    uvs.push(0, 0, 0, v, u, v)
+  }
+  for (let i = 0; i < 6; i++) normals.push(nx, ny, nz)
 }

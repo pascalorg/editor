@@ -35,10 +35,7 @@ function ItemPlacementContent({ selectedItem }: { selectedItem: AssetInput }) {
     },
     onCommitted: () => {
       triggerSFX('sfx:item-place')
-      // Returning `true` tells the coordinator to immediately spawn the
-      // next draft so the user can keep placing copies — matches the
-      // "repeat-on-click" UX of the legacy tool.
-      return true
+      return useEditor.getState().getContinuation('point') === 'repeat'
     },
   })
 

@@ -13,16 +13,52 @@ export { ErrorBoundary } from './components/error-boundary'
 // — no per-kind re-exports needed.
 export { NodeRenderer } from './components/renderers/node-renderer'
 export { default as Viewer, type ViewerHandle } from './components/viewer'
+export {
+  type BVHEcctrlApi,
+  default as BVHEcctrl,
+  type MovementInput,
+} from './components/viewer/bvh-ecctrl'
+export {
+  buildGlbInteractiveItems,
+  GlbInteractive,
+  type GlbInteractiveItem,
+} from './components/viewer/glb-interactive'
+export {
+  buildGlbReferenceNodes,
+  buildGlbReplaceNodes,
+} from './components/viewer/glb-reference-nodes'
+export {
+  type GlbHover,
+  type GlbIdentity,
+  type GlbLevel,
+  GlbScene,
+  type GlbWalkthrough,
+} from './components/viewer/glb-scene'
+export {
+  CROUCH_CAPSULE,
+  CROUCH_EYE_OFFSET,
+  CROUCH_FLOAT_HEIGHT,
+  CROUCH_RUN_SPEED,
+  CROUCH_WALK_SPEED,
+  EYE_LERP_SPEED,
+  GlbWalkthroughController,
+  STAND_CAPSULE,
+  STAND_CLEARANCE,
+  STAND_FLOAT_HEIGHT,
+  WALKTHROUGH_FOV,
+} from './components/viewer/glb-walkthrough-controller'
 export type { HoverStyle, HoverStyles } from './components/viewer/post-processing'
 export {
   DEFAULT_HOVER_STYLES,
   SSGI_PARAMS,
 } from './components/viewer/post-processing'
-export { WalkthroughControls } from './components/viewer/walkthrough-controls'
+export { SceneEnvironment } from './components/viewer/scene-environment'
 export { useAssetUrl } from './hooks/use-asset-url'
 export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useNodeEvents } from './hooks/use-node-events'
 export { ASSETS_CDN_URL, resolveAssetUrl, resolveCdnUrl } from './lib/asset-url'
+export { backdropGradient, deepSkyColor, horizonHazeColor } from './lib/backdrop'
+export { applyWorldScaleBoxUVs } from './lib/box-uv'
 // CSG primitives — used by chimney's roof-trim and other kinds whose
 // geometry subtracts pieces against their host. Lives in viewer
 // because three-bvh-csg / three-mesh-bvh are viewer-only deps.
@@ -33,12 +69,35 @@ export {
   csgEvaluator,
   csgGeometry,
   csgMaterials,
+  INTERSECTION,
   prepareBrushForCSG,
   SUBTRACTION,
 } from './lib/csg-utils'
+export { disposeObject3DResources } from './lib/dispose-object3d'
 export type { EdgeMode } from './lib/edge-style'
-export { applyIsolation, clearIsolation, collectIsolationSubtree } from './lib/isolation'
-export { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from './lib/layers'
+export {
+  computeHeroFraming,
+  DEFAULT_FRAMING_EXCLUDED_TYPES,
+  type HeroFraming,
+  heroCameraPose,
+  temporarilyHideNodeTypes,
+  unionRegisteredNodeBounds,
+} from './lib/hero-pose'
+export {
+  applyIsolation,
+  clearIsolation,
+  collectIsolationSubtree,
+  isIsolationActive,
+} from './lib/isolation'
+export { configureKtx2Support, ensureKtx2Support } from './lib/ktx2-loader'
+export {
+  BATCHED_LAYER,
+  GRID_LAYER,
+  OVERLAY_LAYER,
+  SCENE_LAYER,
+  setSurfaceRaycastLayers,
+  ZONE_LAYER,
+} from './lib/layers'
 export {
   applyMaterialPresetToMaterials,
   BLUEPRINT_PALETTE,
@@ -63,19 +122,61 @@ export {
   MONO_PALETTE,
   PRESET_PALETTES,
   type RenderShading,
+  resolveMaterialRef,
+  resolveSlotDefaultMaterial,
   resolveSurfaceColor,
   WHITE_PALETTE,
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
-export { unionPolygons } from './lib/polygon-union'
+export {
+  detectRendererCapability,
+  initializeGpuRenderer,
+  type RendererBackendParameters,
+  type RendererCapability,
+  type RendererCapabilityCanvas,
+  type RendererInitializationResult,
+  type RendererPowerPreference,
+} from './lib/renderer-capability'
 export {
   getSceneTheme,
   SCENE_THEME_IDS,
   SCENE_THEMES,
   type SceneTheme,
 } from './lib/scene-themes'
+export { type HiddenReason, hideFromScene, showInScene } from './lib/scene-visibility'
+export {
+  createSnapshotPipeline,
+  SNAPSHOT_MAX_EDGE,
+  SNAPSHOT_MIME,
+  SNAPSHOT_QUALITY,
+  type SnapshotCaptureMode,
+  type SnapshotCaptureResult,
+  type SnapshotCropRegion,
+  type SnapshotPipeline,
+  type SnapshotSize,
+  THUMBNAIL_HEIGHT,
+  THUMBNAIL_WIDTH,
+} from './lib/snapshot-pipeline'
+export {
+  buildTerrainPerimeterFillGeometry,
+  type TerrainPerimeterPoint,
+} from './lib/terrain-perimeter-fill'
+export {
+  getPascalTextureRef,
+  type PascalTextureColorSpace,
+  type PascalTextureMap,
+  type PascalTextureRef,
+  stampPascalTextureRef,
+  textureMapForSlot,
+} from './lib/texture-reference'
+export { packNormalToRGB, unpackRGBToNormal } from './lib/tsl-compat'
 export { useItemLightPool } from './store/use-item-light-pool'
-export { default as useViewer } from './store/use-viewer'
+export {
+  applyCountryUnitDefault,
+  default as useViewer,
+  type MetricNotation,
+  type WallMode,
+} from './store/use-viewer'
 export { CeilingSystem } from './systems/ceiling/ceiling-system'
 export {
   createColumnBoxGeometry,
@@ -84,12 +185,16 @@ export {
   createColumnTorusGeometry,
 } from './systems/column/column-geometry'
 export { DoorAnimationSystem } from './systems/door/door-animation-system'
-export { DoorSystem } from './systems/door/door-system'
+export { buildDoorPreviewMesh, DoorSystem, poseDoorMovingParts } from './systems/door/door-system'
 export { ElevatorInteractionSystem } from './systems/elevator/elevator-interaction-system'
 // Fence system follows the wall re-export pattern — composed into the
 // registry-driven fence definition's `def.system`. Removed in Phase 6
 // alongside the legacy fence mount point.
-export { FenceSystem, generateFenceGeometry } from './systems/fence/fence-system'
+export {
+  FenceSystem,
+  generateFenceGeometry,
+  generateFenceSlotGeometries,
+} from './systems/fence/fence-system'
 // Generic floor-elevation system. Lifts the rendered mesh of any kind
 // whose definition declares `capabilities.floorPlaced` by the slab
 // elevation under its footprint. Replaces the per-kind elevation block
@@ -110,6 +215,8 @@ export { getRoofMaterialArray } from './systems/roof/roof-materials'
 // read these through the public surface. No kind-specific helpers
 // belong here — those live in `@pascal-app/nodes/<kind>/`.
 export {
+  clipGeometryBySegmentTrim,
+  generateRoofSegmentGeometry,
   getRoofOuterSurfaceFrameAtPoint,
   getRoofSegmentBrushes,
   mapRoofGroupMaterialIndex,
@@ -120,10 +227,9 @@ export {
   type SurfaceFrame,
 } from './systems/roof/roof-system'
 export { ScanSystem } from './systems/scan/scan-system'
-// Slab system follows the wall + fence re-export pattern — composed into
-// the registry-driven slab definition's `def.system`. Removed in Phase 6
-// alongside the legacy slab mount point.
-export { generateSlabGeometry, SlabSystem } from './systems/slab/slab-system'
+// Pure slab geometry generator — composed into the registry-driven slab
+// definition's `def.geometry` in `@pascal-app/nodes`.
+export { generateSlabGeometry } from './systems/slab/slab-system'
 export {
   getStairBodyMaterials,
   getStairRailingMaterial,
@@ -131,13 +237,28 @@ export {
   type StairBodyMaterials,
 } from './systems/stair/stair-materials'
 export { StairSystem } from './systems/stair/stair-system'
-export { WallCutout } from './systems/wall/wall-cutout'
+// Pure opening-cutout profile math shared by the wall CSG pipeline and
+// roof-wall opening cuts in `@pascal-app/nodes` — keeps shaped holes
+// (arch / rounded / frameless opening) identical across both hosts.
+export {
+  buildOpeningCutoutGeometry,
+  getOpeningCutoutBottomPadding,
+  hasFlatOpeningCutoutBottom,
+} from './systems/wall/opening-cutout-geometry'
+export { getWallHideState, WallCutout } from './systems/wall/wall-cutout'
 export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 // Wall internals re-exported so `@pascal-app/nodes`' registry-driven wall
 // definition can compose them into `def.system` without duplicating the
 // 800+ lines of CSG / mitering logic during Phase 3. These exports are
 // removed in Phase 6 when the legacy mount points are deleted.
-export { WallSystem } from './systems/wall/wall-system'
-export { WindowAnimationSystem } from './systems/window/window-animation-system'
-export { WindowSystem } from './systems/window/window-system'
+export {
+  drainRebuiltWalls,
+  getPendingWallRebuildCount,
+  WallSystem,
+} from './systems/wall/wall-system'
+export {
+  poseWindowMovingParts,
+  WindowAnimationSystem,
+} from './systems/window/window-animation-system'
+export { buildWindowPreviewMesh, WindowSystem } from './systems/window/window-system'
 export { ZoneSystem } from './systems/zone/zone-system'

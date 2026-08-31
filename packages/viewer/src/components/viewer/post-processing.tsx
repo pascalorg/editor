@@ -2,14 +2,12 @@
 
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Color, Layers, type Object3D, UnsignedByteType } from 'three'
+import { Color, Layers, Matrix4, type Object3D, Scene, UnsignedByteType } from 'three'
 import { ssgi } from 'three/addons/tsl/display/SSGINode.js'
 import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import {
   add,
-  colorToDirection,
   diffuseColor,
-  directionToColor,
   float,
   mix,
   mrt,
@@ -17,19 +15,35 @@ import {
   oscSine,
   output,
   pass,
+  premultiplyAlpha,
+  renderOutput,
   sample,
+  saturation,
+  screenUV,
+  smoothstep,
   time,
   uniform,
+  vec3,
   vec4,
 } from 'three/tsl'
 import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
-import { edgeColorFor } from '../../lib/edge-style'
+import { backdropGradient, deepSkyColor, horizonHazeColor } from '../../lib/backdrop'
+import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
 import { inkedEdges } from '../../lib/ink-edges'
 import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { getSceneTheme } from '../../lib/scene-themes'
+import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
 import useViewer from '../../store/use-viewer'
+
+// Scene-referred grade applied before the output tone mapping (AgX). AgX rolls
+// highlights off gently but reads flat on its own; a mild mid-gray-pivot
+// contrast + saturation lift restores the punch. Rendered shading only.
+export const GRADE_PARAMS = {
+  contrast: 1.05,
+  saturation: 1.1,
+}
 
 // SSGI Parameters - adjust these to fine-tune global illumination and ambient occlusion
 export const SSGI_PARAMS = {
@@ -57,6 +71,11 @@ export const SSGI_PARAMS = {
 //   - outline: skip the merged-outline node and its 14 internal RTs
 //   - postFx:  bypass the whole RenderPipeline and use renderer.render(scene, camera)
 //              directly — isolates raw scene-render cost from any post-FX overhead
+//   - draw:    skip the render call entirely — frames still tick (useFrame
+//              systems, scene-ready) but no draw is ever submitted. For
+//              consumers that only need the built scene graph, never pixels:
+//              the headless bake worker renders on SwiftShader (CPU), where
+//              per-frame vertex/draw cost dominates the whole capture.
 function readPerfDisableFlags() {
   if (typeof window === 'undefined') {
     return { ao: false, denoise: false, outline: false, postFx: false }
@@ -83,6 +102,17 @@ const PERF_POST_FX_DISABLED =
       .split(',')
       .map((s) => s.trim()),
   ).has('postFx')
+
+const PERF_DRAW_DISABLED =
+  typeof window !== 'undefined' &&
+  new Set(
+    (new URLSearchParams(window.location.search).get('disable') ?? '')
+      .split(',')
+      .map((s) => s.trim()),
+  ).has('draw')
+
+// Stand-in scene for `?disable=draw` frames — cleared, never populated.
+const emptyScene = new Scene()
 
 const MAX_PIPELINE_RETRIES = 3
 const RETRY_DELAY_MS = 500
@@ -126,8 +156,11 @@ function sanitizeOutlineObjects(objects: Object3D[]) {
 
 const PostProcessingPasses = ({
   hoverStyles = DEFAULT_HOVER_STYLES,
+  disablePostFx = false,
 }: {
   hoverStyles?: HoverStyles
+  /** Host-controlled equivalent of `?disable=postFx` — see the Viewer prop. */
+  disablePostFx?: boolean
 }) => {
   const { gl: renderer, invalidate, scene, camera, size } = useThree()
   const renderPipelineRef = useRef<RenderPipeline | null>(null)
@@ -138,14 +171,36 @@ const PostProcessingPasses = ({
 
   // Background color uniform — updated every frame via lerp, read by the TSL pipeline.
   // Initialised from the current scene theme so there's no flash on first render.
-  const initBg = getSceneTheme(useViewer.getState().sceneTheme).background
+  const initTheme = getSceneTheme(useViewer.getState().sceneTheme)
+  const initBg = initTheme.background
   const bgUniform = useRef(uniform(new Color(initBg)))
   const bgCurrent = useRef(new Color(initBg))
   const bgTarget = useRef(new Color())
+  // Zenith colour of the backdrop gradient (falls back to the flat background).
+  const initSky = initTheme.backgroundSky ?? initBg
+  const bgSkyUniform = useRef(uniform(new Color(initSky)))
+  const bgSkyCurrent = useRef(new Color(initSky))
+  const bgSkyTarget = useRef(new Color())
+  // Horizon haze band + deep zenith (derived — see lib/backdrop.ts).
+  const initHaze = horizonHazeColor(initSky, initTheme.appearance)
+  const bgHazeUniform = useRef(uniform(new Color(initHaze)))
+  const bgHazeCurrent = useRef(new Color(initHaze))
+  const bgHazeTarget = useRef(new Color())
+  const initSkyDeep = deepSkyColor(initSky)
+  const bgSkyDeepUniform = useRef(uniform(new Color(initSkyDeep)))
+  const bgSkyDeepCurrent = useRef(new Color(initSkyDeep))
+  const bgSkyDeepTarget = useRef(new Color())
+  // Scene-camera matrices for the backdrop: the pipeline's fullscreen quad has
+  // its own camera, so the sky gradient reconstructs each pixel's world-space
+  // view ray from these to find the true horizon (dir.y = 0).
+  const camProjInvUniform = useRef(uniform(new Matrix4()))
+  const camWorldUniform = useRef(uniform(new Matrix4()))
 
   // Ink-line colour follows the scene-theme background luminance (dark lines on
   // light scenes, light on dark), refreshed each frame like the background.
+  // Dark scenes also scale the ink opacity down (see edge-style.ts).
   const inkColorUniform = useRef(uniform(new Color(edgeColorFor(initBg))))
+  const inkOpacityScaleUniform = useRef(uniform(edgeOpacityScaleFor(initBg)))
 
   const zoneLayers = useMemo(() => {
     const l = new Layers()
@@ -182,6 +237,8 @@ const PostProcessingPasses = ({
   const projectId = useViewer((s) => s.projectId)
   const shading = useViewer((s) => s.shading)
   const edges = useViewer((s) => s.edges)
+  const inkOpacityOverride = useViewer((s) => s.inkOpacity)
+  const transparentBackground = useViewer((s) => s.transparentBackground)
   const lastProjectIdRef = useRef(projectId)
 
   // Bump this to force a pipeline rebuild (used by retry logic)
@@ -262,6 +319,19 @@ const PostProcessingPasses = ({
     }
 
     const perfDisable = readPerfDisableFlags()
+
+    // postFx off (host prop or ?disable=postFx): never allocate the pipeline —
+    // useFrame's null-pipeline branch direct-renders. Before this check the
+    // URL flag only skipped the pipeline at render time; the build still
+    // allocated every pass.
+    if (disablePostFx || perfDisable.postFx) {
+      hasPipelineErrorRef.current = false
+      if (renderPipelineRef.current) {
+        renderPipelineRef.current.dispose()
+      }
+      renderPipelineRef.current = null
+      return
+    }
     const ssgiEnabled = shading === 'rendered' && SSGI_PARAMS.enabled && !perfDisable.ao
     const denoiseEnabled = ssgiEnabled && !perfDisable.denoise
     const outlineEnabled = !perfDisable.outline
@@ -274,7 +344,7 @@ const PostProcessingPasses = ({
     // Same 1px line thickness for both (soft's thickness is the nice one);
     // strong reads heavier purely by being fully solid vs soft's lighter 50%.
     const inkRadius = 1
-    const inkOpacity = edges === 'strong' ? 1 : 0.5
+    const inkOpacity = inkOpacityOverride ?? (edges === 'strong' ? 1 : 0.5)
 
     console.log('[viewer/post-processing] Building pipeline', {
       version: pipelineVersion,
@@ -282,9 +352,9 @@ const PostProcessingPasses = ({
       denoise: denoiseEnabled,
       outline: outlineEnabled,
       perfDisable,
-      hoverHighlightMode,
       projectId,
       shading,
+      transparentBackground,
       rendererCtor: (renderer as any).constructor?.name,
       width,
       height,
@@ -336,7 +406,13 @@ const PostProcessingPasses = ({
       const hasGeometry = scenePassColor.a
       const contentAlpha = hasGeometry.max(zonePass.a)
 
-      let sceneColor = scenePassColor as unknown as ReturnType<typeof vec4>
+      // Composite the zone-pass tint into the base scene so rooms show whether or
+      // not SSGI is enabled. When SSGI is on, the branch below overwrites this
+      // with its own zone-inclusive composite (no double-add).
+      let sceneColor = vec4(
+        add(scenePassColor.rgb, zonePass.rgb),
+        contentAlpha,
+      ) as unknown as ReturnType<typeof vec4>
 
       // Depth + normal MRT — shared by SSGI (diffuse/normal) and the ink pass
       // (depth/normal). Built whenever either is active.
@@ -348,7 +424,7 @@ const PostProcessingPasses = ({
           mrt({
             output,
             diffuseColor,
-            normal: directionToColor(normalView),
+            normal: packNormalToRGB(normalView),
           }),
         )
         scenePassDepth = scenePass.getTextureNode('depth')
@@ -356,7 +432,7 @@ const PostProcessingPasses = ({
         const normalTexture = scenePass.getTexture('normal')
         normalTexture.type = UnsignedByteType
         // Extract normal from color-encoded texture (SSGI consumes the node form)
-        sceneNormal = sample((uv) => colorToDirection(scenePassNormal.sample(uv)))
+        sceneNormal = sample((uv) => unpackRGBToNormal(scenePassNormal.sample(uv)))
       }
 
       if (ssgiEnabled) {
@@ -377,14 +453,16 @@ const PostProcessingPasses = ({
         giPass.useScreenSpaceSampling.value = SSGI_PARAMS.useScreenSpaceSampling
         giPass.useTemporalFiltering = SSGI_PARAMS.useTemporalFiltering
 
-        const giTexture = (giPass as any).getTextureNode()
+        // r185: SSGI renders AO and GI into two separate textures (R8 + RG11B10)
+        // exposed via getAONode()/getGINode() instead of one rgba texture.
+        const aoTexture = (giPass as any).getAONode()
 
-        const gi = giPass.rgb
+        const gi = (giPass as any).getGINode().rgb
         let ao: any
         if (denoiseEnabled) {
           // DenoiseNode only denoises RGB — alpha is passed through unchanged.
-          // SSGI packs AO into alpha, so we remap it into RGB before denoising.
-          const aoAsRgb = vec4(giTexture.a, giTexture.a, giTexture.a, float(1))
+          // SSGI's AO is a single red channel, so we remap it into RGB before denoising.
+          const aoAsRgb = vec4(aoTexture.r, aoTexture.r, aoTexture.r, float(1))
           const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
           denoisePass.index.value = 0
           denoisePass.radius.value = 4
@@ -392,8 +470,19 @@ const PostProcessingPasses = ({
         } else {
           // Diagnostic path: feed raw noisy SSGI AO straight through. Will
           // look grainy — that's the point, it isolates denoise cost.
-          ao = giTexture.a
+          ao = aoTexture.r
         }
+
+        // AO is a near/mid-field cue like the ink: fade it out with raw depth
+        // (same ≈150→350 m window as ink-edges' distanceFade) so the horizon
+        // disc and the geometry↔sky depth cliff never grow an AO band — that
+        // band read as a visible line along the horizon.
+        const aoFarFade = smoothstep(
+          float(0.9994),
+          float(0.9998),
+          scenePassDepth.sample(screenUV).r,
+        )
+        ao = mix(ao, float(1), aoFarFade)
 
         // Composite: scene * AO + diffuse * GI
         sceneColor = vec4(
@@ -413,15 +502,30 @@ const PostProcessingPasses = ({
             normalTex: scenePassNormal,
             inkColor: inkColorUniform.current,
             radius: inkRadius,
-            opacity: inkOpacity,
+            opacity: float(inkOpacity).mul(inkOpacityScaleUniform.current),
           }),
           sceneColor.a,
         )
       }
 
+      // Scene-referred grade (contrast around mid-gray + saturation) before the
+      // pipeline's output tone mapping. Kept out of solid/schematic shading so
+      // the flat presets stay exact. The same transform is applied to the
+      // backdrop below so geometry that fades to the background colour (the
+      // horizon disc) matches it exactly.
+      const gradeRgb = (rgb: any) =>
+        saturation(
+          rgb.div(0.18).pow(vec3(GRADE_PARAMS.contrast)).mul(0.18),
+          GRADE_PARAMS.saturation,
+        )
+      if (shading === 'rendered') {
+        sceneColor = vec4(gradeRgb(sceneColor.rgb), sceneColor.a)
+      }
+
       // Single merged outline node: one shared depth pass for both selected + hovered groups.
       const outliner = useViewer.getState().outliner
       let compositeWithOutlines = sceneColor
+      let visualAlpha = contentAlpha
       if (outlineEnabled) {
         const outlineNode = mergedOutline(scene, camera, {
           primaryObjects: outliner.selectedObjects,
@@ -449,19 +553,59 @@ const PostProcessingPasses = ({
           .mul(hoverStrength)
           .mul(osc)
 
+        const outlineAlpha = outlineNode.primaryVisibleEdge
+          .max(outlineNode.primaryHiddenEdge)
+          .max(outlineNode.secondaryVisibleEdge)
+          .max(outlineNode.secondaryHiddenEdge)
+        visualAlpha = visualAlpha.max(outlineAlpha)
         compositeWithOutlines = vec4(
           add(sceneColor.rgb, selectedOutline.add(hoverOutline)),
           sceneColor.a,
         )
       }
 
-      const composited = mix(bgUniform.current, compositeWithOutlines.rgb, contentAlpha)
+      // Backdrop: world-space view ray per pixel → background / horizon haze /
+      // sky gradient (shared formula in lib/backdrop.ts). The horizon disc
+      // dissolves into the same formula, so backdrop and ground meet
+      // seamlessly exactly where the disc vanishes.
+      const ndc = vec4(
+        screenUV.x.mul(2).sub(1),
+        float(1).sub(screenUV.y).mul(2).sub(1),
+        1,
+        1,
+      ) as any
+      const viewRay = (camProjInvUniform.current as any).mul(ndc)
+      const worldDir = (camWorldUniform.current as any).mul(vec4(viewRay.xyz, 0)).xyz.normalize()
+      let bgGradient = backdropGradient({
+        dirY: worldDir.y,
+        background: bgUniform.current,
+        haze: bgHazeUniform.current,
+        sky: bgSkyUniform.current,
+        skyDeep: bgSkyDeepUniform.current,
+      })
+      if (shading === 'rendered') {
+        bgGradient = gradeRgb(bgGradient)
+      }
+      const composited = mix(bgGradient, compositeWithOutlines.rgb, contentAlpha)
       // Editor overlays painted on top by their own alpha — they never get inked,
       // AO'd, or outlined, and always read crisp regardless of scene depth.
       const withOverlay = mix(composited, overlayColor.rgb, overlayColor.a)
-      const finalOutput = vec4(withOverlay, float(1))
+      let finalOutput: ReturnType<typeof premultiplyAlpha> | ReturnType<typeof vec4> = vec4(
+        withOverlay,
+        float(1),
+      )
+      if (transparentBackground) {
+        const overlayAlpha = overlayColor.a
+        const alpha = overlayAlpha.add(visualAlpha.mul(overlayAlpha.oneMinus()))
+        const straightRgb = overlayColor.rgb
+          .mul(overlayAlpha)
+          .add(compositeWithOutlines.rgb.mul(visualAlpha).mul(overlayAlpha.oneMinus()))
+          .div(alpha.max(float(0.00001)))
+        finalOutput = premultiplyAlpha(renderOutput(vec4(straightRgb, alpha)))
+      }
 
       const renderPipeline = new RenderPipeline(renderer as unknown as WebGPURenderer)
+      renderPipeline.outputColorTransform = !transparentBackground
       renderPipeline.outputNode = finalOutput
       renderPipelineRef.current = renderPipeline
       retryCountRef.current = 0
@@ -489,18 +633,24 @@ const PostProcessingPasses = ({
       renderPipelineRef.current = null
     }
   }, [
+    // NOTE: hoverHighlightMode intentionally excluded — the hover style is
+    // pushed to uniforms in a separate effect, so a hover must NOT rebuild the
+    // whole pipeline. The uniform refs below are stable (useMemo), so they
+    // never trigger a rebuild either.
     camera,
+    disablePostFx,
     hoverHiddenColor,
-    hoverHighlightMode,
     hoverPulseMix,
     hoverStrength,
     hoverVisibleColor,
     edges,
+    inkOpacityOverride,
     pipelineVersion,
     projectId,
     renderer,
     scene,
     shading,
+    transparentBackground,
     size.height,
     size.width,
     zoneLayers,
@@ -513,21 +663,62 @@ const PostProcessingPasses = ({
       return
     }
 
+    // `?disable=draw`: nothing downstream wants pixels — render an EMPTY scene
+    // instead of the real one. This is the only render call (positive-priority
+    // useFrame subscribers already disable R3F's automatic render), so the real
+    // scene is never drawn: per-frame vertex/draw cost drops to a single 64×64
+    // clear, which is what makes headless bakes viable on SwiftShader (CPU).
+    // Rendering nothing at all is NOT an option — with zero submitted frames
+    // Chromium's no-damage scheduler throttles rAF to 1Hz (measured), stalling
+    // the useFrame systems the bake still needs.
+    if (PERF_DRAW_DISABLED) {
+      try {
+        ;(renderer as any).render(emptyScene, camera)
+      } catch {
+        // A failed empty draw changes nothing — systems keep ticking.
+      }
+      return
+    }
+
     // Animate background colour toward the current scene theme target (same lerp as AnimatedBackground)
-    bgTarget.current.set(getSceneTheme(useViewer.getState().sceneTheme).background)
+    const bgTheme = getSceneTheme(useViewer.getState().sceneTheme)
+    bgTarget.current.set(bgTheme.background)
     bgCurrent.current.lerp(bgTarget.current, Math.min(delta, 0.1) * 4)
     bgUniform.current.value.copy(bgCurrent.current)
+    bgSkyTarget.current.set(bgTheme.backgroundSky ?? bgTheme.background)
+    bgSkyCurrent.current.lerp(bgSkyTarget.current, Math.min(delta, 0.1) * 4)
+    bgSkyUniform.current.value.copy(bgSkyCurrent.current)
+    bgHazeTarget.current.set(
+      horizonHazeColor(bgTheme.backgroundSky ?? bgTheme.background, bgTheme.appearance),
+    )
+    bgHazeCurrent.current.lerp(bgHazeTarget.current, Math.min(delta, 0.1) * 4)
+    bgHazeUniform.current.value.copy(bgHazeCurrent.current)
+    bgSkyDeepTarget.current.set(deepSkyColor(bgTheme.backgroundSky ?? bgTheme.background))
+    bgSkyDeepCurrent.current.lerp(bgSkyDeepTarget.current, Math.min(delta, 0.1) * 4)
+    bgSkyDeepUniform.current.value.copy(bgSkyDeepCurrent.current)
+    camProjInvUniform.current.value.copy(camera.projectionMatrixInverse)
+    camWorldUniform.current.value.copy(camera.matrixWorld)
     // Ink colour follows the (lerping) background luminance — snaps dark↔light.
-    inkColorUniform.current.value.set(edgeColorFor(`#${bgCurrent.current.getHexString()}`))
+    const bgHex = `#${bgCurrent.current.getHexString()}`
+    inkColorUniform.current.value.set(edgeColorFor(bgHex))
+    inkOpacityScaleUniform.current.value = edgeOpacityScaleFor(bgHex)
 
     const outliner = useViewer.getState().outliner
     sanitizeOutlineObjects(outliner.selectedObjects)
     sanitizeOutlineObjects(outliner.hoveredObjects)
 
-    if (PERF_POST_FX_DISABLED || hasPipelineErrorRef.current || !renderPipelineRef.current) {
+    if (
+      disablePostFx ||
+      PERF_POST_FX_DISABLED ||
+      hasPipelineErrorRef.current ||
+      !renderPipelineRef.current
+    ) {
       try {
-        if ((renderer as any).setClearAlpha) {
-          ;(renderer as any).setClearAlpha(1)
+        const clearAlpha = transparentBackground ? 0 : 1
+        if ((renderer as any).setClearColor) {
+          ;(renderer as any).setClearColor(bgCurrent.current, clearAlpha)
+        } else if ((renderer as any).setClearAlpha) {
+          ;(renderer as any).setClearAlpha(clearAlpha)
         }
         const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
         ;(renderer as any).render(scene, camera)
@@ -566,6 +757,8 @@ const PostProcessingPasses = ({
       }
     } catch (error) {
       hasPipelineErrorRef.current = true
+      // A failed MRT pass may leave its target bound; clear it before the fallback render.
+      ;(renderer as any).setRenderTarget?.(null)
       console.error('[viewer/post-processing] Render pass failed.', {
         retryCount: retryCountRef.current,
         rendererCtor: (renderer as any).constructor?.name,

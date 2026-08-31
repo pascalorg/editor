@@ -1,42 +1,36 @@
-import { useIntl } from 'react-intl'
-import { ShortcutToken } from '../primitives/shortcut-token'
+import type { ContinuationContext } from '../../../lib/continuation'
+import type { SnapContext } from '../../../lib/snapping-mode'
+import { ContextualHelperPanel } from './contextual-helper-panel'
 
 interface ItemHelperProps {
   showEsc?: boolean
+  snapContext?: SnapContext | null
+  // Whether to advertise Alt = force-place. Only meaningful for kinds that
+  // collision-validate their drop.
+  showForce?: boolean
+  // Set for a fresh point-kind placement (e.g. a positioned preset) so the
+  // once/repeat continuation chip shows; null for an existing-node move.
+  continuationContext?: ContinuationContext | null
 }
 
-export function ItemHelper({ showEsc }: ItemHelperProps) {
-  const { formatMessage } = useIntl()
+// Snapping mode is the chip on the right (Shift cycles it), so it's not repeated
+// as a key hint. Rotate is the two keys; Alt forces an invalid (red) drop.
+export function ItemHelper({
+  showEsc,
+  snapContext,
+  showForce,
+  continuationContext = null,
+}: ItemHelperProps) {
   return (
-    <div className="pointer-events-none fixed top-1/2 right-4 z-40 flex -translate-y-1/2 flex-col gap-2 rounded-lg border border-border bg-background/95 px-4 py-3 shadow-lg backdrop-blur-md">
-      <div className="flex items-center gap-2 text-sm">
-        <ShortcutToken value="Left click" />
-        <span className="text-muted-foreground">{formatMessage({ id: 'itemHelper.placeItem' })}</span>
-      </div>
-      <div className="flex items-center gap-2 text-sm">
-        <ShortcutToken value="R" />
-        <span className="text-muted-foreground">{formatMessage({ id: 'itemHelper.rotateCounterclockwise' })}</span>
-      </div>
-      <div className="flex items-center gap-2 text-sm">
-        <ShortcutToken value="T" />
-        <span className="text-muted-foreground">{formatMessage({ id: 'itemHelper.rotateClockwise' })}</span>
-      </div>
-      <div className="flex items-center gap-2 text-sm">
-        <ShortcutToken value="Shift" />
-        <span className="text-muted-foreground">{formatMessage({ id: 'itemHelper.freePlace' })}</span>
-      </div>
-      {showEsc && (
-        <div className="flex items-center gap-2 text-sm">
-          <ShortcutToken value="Esc" />
-          <span className="text-muted-foreground">{formatMessage({ id: 'common.cancel' })}</span>
-        </div>
-      )}
-      {!showEsc && (
-        <div className="flex items-center gap-2 text-sm">
-          <ShortcutToken value="Right click" />
-          <span className="text-muted-foreground">{formatMessage({ id: 'common.cancel' })}</span>
-        </div>
-      )}
-    </div>
+    <ContextualHelperPanel
+      continuationContext={continuationContext}
+      hints={[
+        { keys: ['Left click'], label: 'Place' },
+        { keys: ['R', 'T'], label: 'Rotate' },
+        ...(showForce ? [{ keys: ['Alt'], label: 'Force place' }] : []),
+        { keys: [showEsc ? 'Esc' : 'Right click'], label: 'Cancel' },
+      ]}
+      snapContext={snapContext}
+    />
   )
 }

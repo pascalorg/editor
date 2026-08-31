@@ -105,11 +105,26 @@ export function getSurface(host: AnyNode): SurfacesConfig | null {
  * Resolves the stackable top height of a host (e.g. table surface, slab top,
  * stair landing). Returns `null` when the host has no `surfaces.top`.
  */
-export function getTopSurfaceHeight(host: AnyNode): number | null {
+export function getTopSurfaceHeight(
+  host: AnyNode,
+  nodes: Record<string, AnyNode> = { [host.id]: host },
+): number | null {
   const surfaces = getSurface(host)
   if (!surfaces?.top) return null
   const { height } = surfaces.top
-  return typeof height === 'function' ? height(host) : height
+  return typeof height === 'function' ? height(host, { nodes }) : height
+}
+
+/**
+ * Whether `host` can receive a surface-resting (top-stacked) child. A
+ * ceiling-mounted item hangs from the ceiling, so its visible "top" is not a
+ * usable resting surface — nothing should stack on a ceiling fan. The check
+ * reads the instance-level `asset.attachTo` (not the host KIND, which is shared
+ * across all items) so a single gate covers every interaction path.
+ */
+export function canHostOnTop(host: AnyNode): boolean {
+  const attachTo = (host as { asset?: { attachTo?: string } }).asset?.attachTo
+  return attachTo !== 'ceiling'
 }
 
 /**
@@ -129,10 +144,7 @@ export function pickHost(args: {
     const def = nodeRegistry.get(host.type)
     const hostable = def?.capabilities.hostable
     if (!hostable) continue
-    if (hostable.parents.length > 0 && !hostable.parents.includes('*')) {
-      // capability declares specific parents; verify the placed kind's own def
-      // also permits this host kind.
-    }
+    if (!canHostOnTop(host)) continue
     if (args.hitTest && !args.hitTest(host, args.point)) continue
     return host
   }
@@ -143,7 +155,11 @@ export function pickHost(args: {
  * Convenience: clamps a Y coordinate to the top of a host surface, when one
  * is declared. Returns the original Y if the host has no top surface.
  */
-export function clampYToHostTop(host: AnyNode, originalY: number): number {
-  const top = getTopSurfaceHeight(host)
+export function clampYToHostTop(
+  host: AnyNode,
+  originalY: number,
+  nodes?: Record<string, AnyNode>,
+): number {
+  const top = getTopSurfaceHeight(host, nodes)
   return top == null ? originalY : top
 }

@@ -18,7 +18,7 @@ export const BuildingRenderer = ({ node }: { node: BuildingNode }) => {
       rotation={[node.rotation[0], node.rotation[1], node.rotation[2]]}
       {...handlers}
     >
-      {node.children.map((childId) => (
+      {(node.children ?? []).map((childId) => (
         <NodeRenderer key={childId} nodeId={childId} />
       ))}
     </group>

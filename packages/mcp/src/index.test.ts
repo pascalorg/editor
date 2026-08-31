@@ -1,8 +1,9 @@
 import { expect, test } from 'bun:test'
+import packageJson from '../package.json'
 
 test('version module loads', async () => {
   const mod = await import('./index')
-  expect(mod.version).toBe('0.1.0')
+  expect(mod.version).toBe(packageJson.version)
 })
 
 test('createPascalMcpServer is a function', async () => {

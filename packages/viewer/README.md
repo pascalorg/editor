@@ -5,19 +5,19 @@
 ## Installation
 
 ```bash
-npm install @pascal-app/viewer @pascal-app/core
+npm install @pascal-app/core @pascal-app/viewer @pascal-app/editor @pascal-app/nodes
 ```
 
 ## Peer Dependencies
 
 ```bash
-npm install react three @react-three/fiber @react-three/drei
+npm install next react react-dom three @react-three/fiber @react-three/drei lucide-react zustand
 ```
 
 ## What's Included
 
 - **Viewer Component** - WebGPU-powered 3D viewer with camera controls
-- **Node Renderers** - React Three Fiber components for all node types
+- **Node Rendering Runtime** - Registry-driven dispatch for node renderers supplied by `@pascal-app/nodes`
 - **Post-Processing** - SSGI (ambient occlusion + global illumination), TRAA (anti-aliasing), outline effects
 - **Level System** - Level visibility and positioning (stacked/exploded/solo modes)
 - **Wall Cutout System** - Dynamic wall hiding based on camera position
@@ -26,10 +26,22 @@ npm install react three @react-three/fiber @react-three/drei
 ## Usage
 
 ```typescript
-import { Viewer, useViewer } from '@pascal-app/viewer'
-import { useScene } from '@pascal-app/core'
+import { loadPlugin } from '@pascal-app/core'
+import { builtinPlugin } from '@pascal-app/nodes'
+import { Viewer } from '@pascal-app/viewer'
+import { useEffect, useState } from 'react'
+
+const registryReady = loadPlugin(builtinPlugin)
 
 function App() {
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    void registryReady.then(() => setReady(true))
+  }, [])
+
+  if (!ready) return null
+
   return (
     <div style={{ width: '100vw', height: '100vh' }}>
       <Viewer />
@@ -37,6 +49,9 @@ function App() {
   )
 }
 ```
+
+Load the built-in plugin once, before mounting any viewer. Without it, the registry has no node
+definitions and scene nodes cannot render. Host-provided plugins use the same `loadPlugin` API.
 
 ## Custom Camera Controls
 
@@ -52,6 +67,58 @@ function App() {
   )
 }
 ```
+
+## 2D and Split-View Embeds
+
+`@pascal-app/viewer` owns the 3D canvas. The npm-facing multi-view shell lives in
+`@pascal-app/editor`, where it can compose that canvas with the read-only SVG floor plan without
+coupling editor-only floor-plan state into the viewer runtime.
+
+Use `modes` to expose any combination of `3d`, `2d`, and `split`. A single enabled mode hides the
+switcher automatically. `mode` and `onModeChange` can be supplied for controlled embeds; otherwise
+`defaultMode` is used.
+
+```tsx
+import { ViewerStage, useViewerCameraNavigationSync } from '@pascal-app/editor'
+import { Viewer } from '@pascal-app/viewer'
+import { CameraControls, type CameraControlsImpl } from '@react-three/drei'
+import { useRef } from 'react'
+
+function SyncedCameraControls() {
+  const controls = useRef<CameraControlsImpl>(null)
+  const publishCameraPose = useViewerCameraNavigationSync(controls)
+
+  return <CameraControls makeDefault onUpdate={publishCameraPose} ref={controls} />
+}
+
+function EmbeddedViewer() {
+  return (
+    <div style={{ width: 960, height: 640 }}>
+      <ViewerStage defaultMode="3d" modes={['3d', '2d']}>
+        <Viewer>
+          <SyncedCameraControls />
+        </Viewer>
+      </ViewerStage>
+    </div>
+  )
+}
+```
+
+Common configurations:
+
+```tsx
+<ViewerStage modes={['3d']}>{viewer}</ViewerStage>
+<ViewerStage modes={['2d']} />
+<ViewerStage modes={['3d', '2d']}>{viewer}</ViewerStage>
+<ViewerStage modes={['3d', 'split']}>{viewer}</ViewerStage>
+<ViewerStage modes={['3d', '2d', 'split']}>{viewer}</ViewerStage>
+```
+
+For a 2D-only embed, no 3D canvas is mounted. When 3D or split is enabled, the 3D canvas stays
+mounted while 2D is active, avoiding renderer reinitialization. Camera poses,
+floor-plan pan/zoom/rotation, and the compass synchronize through transient subscriptions; live
+navigation does not require a React render per frame. Set `showCompass={false}` or
+`showSwitcher={false}` when the host supplies its own controls.
 
 ## Viewer State
 

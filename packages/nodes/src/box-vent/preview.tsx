@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
+import { INVALID_GHOST_COLOR } from '../shared/ghost-materials'
 import { buildBoxVentGeometry } from './geometry'
 import type { BoxVentNode } from './schema'
 
@@ -15,7 +16,8 @@ import type { BoxVentNode } from './schema'
  * leaving raycast active would cause the preview itself to intercept
  * the cursor ray and starve the placement tool of `roof:move` events.
  */
-const BoxVentPreview = ({ node }: { node: BoxVentNode }) => {
+const BoxVentPreview = ({ node, invalid }: { node: BoxVentNode; invalid?: boolean }) => {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: deps deliberately list the build inputs; depending on the whole object would rebuild on unrelated field changes.
   const geometry = useMemo(
     () => buildBoxVentGeometry(node),
     [node.width, node.depth, node.height, node.hoodOverhang, node.style],
@@ -24,17 +26,17 @@ const BoxVentPreview = ({ node }: { node: BoxVentNode }) => {
   const material = useMemo(
     () =>
       new THREE.MeshStandardMaterial({
-        color: 0xff_ff_ff,
-        emissive: 0x6c_a3_ff,
+        color: invalid ? INVALID_GHOST_COLOR : 0xff_ff_ff,
+        emissive: invalid ? INVALID_GHOST_COLOR : 0x6c_a3_ff,
         emissiveIntensity: 0.18,
         roughness: 0.85,
         metalness: 0.05,
         transparent: true,
-        opacity: 0.35,
+        opacity: invalid ? 0.4 : 0.35,
         depthWrite: false,
         side: THREE.DoubleSide,
       }),
-    [],
+    [invalid],
   )
 
   const edgesGeometry = useMemo(() => new THREE.EdgesGeometry(geometry, 25), [geometry])

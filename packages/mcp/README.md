@@ -3,47 +3,68 @@
 Model Context Protocol server for the Pascal 3D editor. Drives the
 `@pascal-app/core` scene graph from any MCP-compatible AI host.
 
-The server runs headlessly in Bun with no browser, WebGPU, React, or external
-database service. It exposes the same scene mutations used by the editor UI
-(create walls, place items, cut openings, undo, etc.) as MCP tools, resources,
-and prompts.
+For the hosted Pascal MCP endpoint and copy-ready setup for Claude Code, Codex,
+Cursor, and OpenClaw, read [Connect an AI agent](https://editor.pascal.app/docs/developers/mcp).
+The hosted endpoint edits projects in a Pascal account; this package is the
+open-source, local server for custom hosts and local scene storage.
 
-## Install
+The server runs headlessly in Node.js 22.13 or newer or Bun, with no browser,
+WebGPU, React, or external database service. It exposes the same scene mutations used
+by the editor UI (create walls, place items, cut openings, undo, etc.) as MCP tools,
+resources, and prompts.
+
+## Recommended local setup
+
+For a local editor and MCP that share projects automatically, install the Pascal CLI:
+
+```bash
+npx @pascal-app/cli editor
+pascal mcp setup codex
+```
+
+`pascal editor` starts the editor and an authenticated MCP service together.
+`pascal mcp connect` is a stable stdio connector that discovers the dynamic loopback
+port, so MCP client configuration contains neither a changing port nor a secret.
+
+Use this package directly when embedding the MCP server, supplying a custom store, or
+running MCP without the Pascal editor.
+
+## Install the package directly
 
 ```bash
 bun add @pascal-app/mcp
 ```
 
-`@pascal-app/core` is a peer dependency; Bun workspaces resolve it automatically.
-The MCP CLI is intended to run with Bun. When the storage package is consumed by
-the Next.js editor server, it opens the same local database through Node's
-built-in SQLite driver.
+`@pascal-app/core` is a peer dependency. The local store uses Bun SQLite under Bun and
+Node's built-in SQLite driver under Node.js.
 
 ## Quick start
 
 Launch the server over stdio in one line:
 
 ```bash
-bunx pascal-mcp
+bunx @pascal-app/mcp
+# or
+npm exec --package=@pascal-app/mcp -- pascal-mcp
 ```
 
 Load an initial scene from disk:
 
 ```bash
-pascal-mcp --stdio --scene ./my-scene.json
+bunx @pascal-app/mcp --stdio --scene ./my-scene.json
 ```
 
 Expose it over loopback HTTP:
 
 ```bash
-pascal-mcp --http --port 8787
+bunx @pascal-app/mcp --http --port 8787
 ```
 
 Binding a non-loopback host requires a bearer token:
 
 ```bash
 PASCAL_MCP_HTTP_TOKEN="$(openssl rand -hex 32)" \
-  pascal-mcp --http --host 0.0.0.0 --port 8787 --cors-origin https://editor.example
+  bunx @pascal-app/mcp --http --host 0.0.0.0 --port 8787 --cors-origin https://editor.example
 ```
 
 ## Local scene storage
@@ -89,7 +110,10 @@ another MCP process saved a newer version first, the MCP tool returns
 `live_sync_version_conflict`; reload the scene with `load_scene` before
 continuing.
 
-## Claude Desktop config
+## Managed CLI client configuration
+
+The recommended JSON configuration for Claude Desktop, Cursor, and compatible clients
+is:
 
 Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
@@ -98,25 +122,19 @@ Edit `~/Library/Application Support/Claude/claude_desktop_config.json`
 {
   "mcpServers": {
     "pascal": {
-      "command": "bunx",
-      "args": ["pascal-mcp"],
-      "env": {
-        "PASCAL_DATA_DIR": "/Users/you/.pascal/data"
-      }
+      "command": "pascal",
+      "args": ["mcp", "connect"]
     }
   }
 }
 ```
 
-If `bunx` is not on your PATH, point `command` at the absolute path to `bun`
-and pass the built `dist/bin/pascal-mcp.js` file as the first arg.
-
-## Claude Code config
+### Claude Code
 
 Via the CLI:
 
 ```bash
-claude mcp add pascal bunx pascal-mcp
+pascal mcp setup claude
 ```
 
 Or add to `.mcp.json` at the repo root:
@@ -125,24 +143,21 @@ Or add to `.mcp.json` at the repo root:
 {
   "mcpServers": {
     "pascal": {
-      "command": "bunx",
-      "args": ["pascal-mcp"],
-      "env": {
-        "PASCAL_DATA_DIR": "/Users/you/.pascal/data"
-      }
+      "command": "pascal",
+      "args": ["mcp", "connect"]
     }
   }
 }
 ```
 
-For local workspace testing before publish, build first and point Claude Code at
-the built binary:
+For package-development testing without the managed CLI, build first and point Claude
+Code at the built binary:
 
 ```json
 {
   "mcpServers": {
     "pascal": {
-      "command": "bun",
+      "command": "node",
       "args": ["/absolute/path/to/editor/packages/mcp/dist/bin/pascal-mcp.js"],
       "env": {
         "PASCAL_DATA_DIR": "/Users/you/.pascal/data"
@@ -152,12 +167,12 @@ the built binary:
 }
 ```
 
-## Codex CLI config
+### Codex CLI
 
 Via the CLI:
 
 ```bash
-codex mcp add pascal --env PASCAL_DATA_DIR="$HOME/.pascal/data" -- bunx pascal-mcp
+pascal mcp setup codex
 ```
 
 For local workspace testing before publish:
@@ -166,21 +181,21 @@ For local workspace testing before publish:
 bun run --cwd packages/mcp build
 codex mcp add pascal-dev \
   --env PASCAL_DATA_DIR="$HOME/.pascal/data" \
-  -- bun "$PWD/packages/mcp/dist/bin/pascal-mcp.js"
+  -- node "$PWD/packages/mcp/dist/bin/pascal-mcp.js"
 ```
 
 This writes an entry like this to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.pascal-dev]
-command = "bun"
+command = "node"
 args = ["/absolute/path/to/editor/packages/mcp/dist/bin/pascal-mcp.js"]
 
 [mcp_servers.pascal-dev.env]
 PASCAL_DATA_DIR = "/Users/you/.pascal/data"
 ```
 
-## Cursor config
+### Cursor config
 
 In Cursor settings (`settings.json`):
 
@@ -188,11 +203,8 @@ In Cursor settings (`settings.json`):
 {
   "mcp.servers": {
     "pascal": {
-      "command": "bunx",
-      "args": ["pascal-mcp"],
-      "env": {
-        "PASCAL_DATA_DIR": "/Users/you/.pascal/data"
-      }
+      "command": "pascal",
+      "args": ["mcp", "connect"]
     }
   }
 }
@@ -200,7 +212,7 @@ In Cursor settings (`settings.json`):
 
 ## Programmatic use
 
-Embed the server in your own Bun process using the in-memory transport. The
+Embed the server in your own Node.js or Bun process using the in-memory transport. The
 example below runs a full client/server pair inside a single script — useful
 for agent frameworks and tests.
 
@@ -226,6 +238,77 @@ console.log(scene)
 
 See [`examples/embed-in-agent.ts`](./examples/embed-in-agent.ts) for a
 compilable version.
+
+## Coordinate conventions
+
+Pascal is a **right-handed** scene where **X and Z form the ground plane and Y
+is up**. Lengths are in **metres**; rotations are **radians**, stored as Euler
+`[x, y, z]` tuples.
+
+**Plan → world.** Every 2-D point you pass is a level/building-local
+ground-plane coordinate
+`[x, z]` — this includes `wall.start` / `wall.end` and the `polygon` / `holes`
+arrays of `slab`, `zone`, and `ceiling`. With the default identity building
+transform, it appears in world space as:
+
+```
+[x, z]  →  (x, y, z)      // the 2nd component is world Z (depth), not "up"
+```
+
+There is no sign flip in the stored convention: tooling consumes the second
+component as world Z directly. The vertical `y` starts from the owning level's
+stacked height as computed by the level system from accumulated level heights,
+plus the element's own height; slabs additionally carry an absolute
+`elevation`.
+
+**Heads-up when you compute coordinates outside the editor.** Pascal's
+viewports apply their own rotations on top of the world axes: the 2-D plan
+panel rotates its content by the user's view rotation (north-aligned = 0°,
+`FLOORPLAN_VIEW_ROTATION_DEG` baseline, north = world −Z), and
+the 3-D "top-down" snap preserves the camera's current azimuth, so when invoked
+from the iso default position, world and screen axes are offset by ~45° until
+you orbit to an axis-aligned view. So a layout authored as if
+*"Y = north, viewed top-down"* — common in land surveys, north-up site plans,
+and 2-D plotting libraries — will arrive **rotated** relative to its source
+when viewed in Pascal (and possibly further reflected, depending on which
+viewport and camera state you're in). The editor's own 2-D and 3-D tools are
+internally consistent with their stored coordinates, so this only affects
+geometry authored programmatically. To verify orientation before trusting
+externally-computed coordinates, place a scaled guide image at known anchor
+points and check alignment; apply whatever rotation (or reflection) your
+authoring side needs to match.
+
+A worked demonstration of all of this — axis-aligned baseline, the rotated
+30° example below, and a paired "page-intent vs world-result" L for the
+external-coordinate gotcha — lives in
+[`examples/coordinate-conventions-demo.md`](./examples/coordinate-conventions-demo.md)
+and [`examples/coordinate-conventions-demo.json`](./examples/coordinate-conventions-demo.json).
+Load the JSON with
+`bunx @pascal-app/mcp --stdio --scene examples/coordinate-conventions-demo.json`.
+
+**Example — a 6 × 4 m slab rotated 30° about its first corner** (coordinates
+rounded to 3 dp; sides ≈ 6 m / 4 m; not axis-aligned, so the mapping is
+actually exercised):
+
+```json
+{
+  "op": "create",
+  "parentId": "<levelId>",
+  "node": {
+    "type": "slab",
+    "elevation": 0.0,
+    "polygon": [[0, 0], [5.196, 3.0], [3.196, 6.464], [-2.0, 3.464]]
+  }
+}
+```
+
+This lands flat on the ground (Y = 0), about 6 m along a heading 30° off the +X
+axis and 4 m along its perpendicular — i.e. occupying world (x, z) directly.
+
+One separate gotcha: wall-attached coordinates are wall-local, not plan
+coordinates. Stored door/window `position[0]`, and `place_item` `position[0]`
+when the target is a wall, are metres along the wall; wall-attached rotations
+are wall-local too.
 
 ## Tools
 

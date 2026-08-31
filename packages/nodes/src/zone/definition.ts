@@ -1,11 +1,22 @@
-import { type NodeDefinition, ZoneNode as ZoneNodeSchema } from '@pascal-app/core'
+import {
+  type NodeDefinition,
+  resolveAutoZonePolygon,
+  ZoneNode as ZoneNodeSchema,
+} from '@pascal-app/core'
+import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import { polygonMeasurementFeatures } from '../shared/polygon-measurement'
+import { buildZoneContextualDimensions } from './contextual-dimensions'
 import { buildZoneFloorplan } from './floorplan'
 import {
   zoneAddVertexAffordance,
+  zoneDeleteVertexAffordance,
   zoneMoveEdgeAffordance,
   zoneMoveVertexAffordance,
 } from './floorplan-affordances'
+import { zoneFloorplanMoveTarget } from './floorplan-move'
 import { zoneParametrics } from './parametrics'
+import { zoneQuickMeasurement } from './quick-measurement'
+import { buildRoomFloorplanSchedule } from './room-documentation'
 import { ZoneNode } from './schema'
 
 /**
@@ -16,9 +27,16 @@ import { ZoneNode } from './schema'
  */
 export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   kind: 'zone',
-  schemaVersion: 1,
+  snapProfile: 'structural',
+  schemaVersion: 2,
   schema: ZoneNode,
   category: 'site',
+  extensions: {
+    'pascal:editor/floorplan': {
+      contextualDimensions: buildZoneContextualDimensions,
+      schedule: buildRoomFloorplanSchedule,
+    } satisfies FloorplanNodeExtension<ZoneNode>,
+  },
 
   defaults: () => {
     const stub = ZoneNodeSchema.parse({ id: 'zone_default' as never, type: 'zone' })
@@ -36,6 +54,18 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
   },
 
   parametrics: zoneParametrics,
+  measurement: {
+    features: (node, ctx) =>
+      polygonMeasurementFeatures({
+        featurePrefix: 'zone',
+        height: 0,
+        label: 'Zone',
+        polygon: resolveAutoZonePolygon(node, ctx.resolve),
+      }),
+    quickMeasure: (node, ctx) => zoneQuickMeasurement(node, ctx),
+  },
+  // No dirty consumer rebuilds this kind — see NodeDefinition.dirtyTracking.
+  dirtyTracking: false,
 
   renderer: {
     kind: 'parametric',
@@ -46,19 +76,26 @@ export const zoneDefinition: NodeDefinition<typeof ZoneNode> = {
     priority: 4,
   },
   floorplan: buildZoneFloorplan,
-  // Polygon editor when selected — same three operations slabs / ceilings
+  floorplanDependencies: (node) => (node.autoFromWalls ? node.boundaryWallIds : []),
+  // 2D body move — centroid-pivot polygon mover (same as slab / ceiling).
+  // Without this, zone fell through to the overlay's generic free-translate
+  // path, which committed a `position` field zone has no schema for, so the
+  // polygon never actually moved on drop.
+  floorplanMoveTarget: zoneFloorplanMoveTarget,
+  // Polygon editor when selected — same four operations slabs / ceilings
   // expose. The shared factories key off `node.polygon`, optional
   // `node.holes` (absent on zones). See `floorplan-affordances.ts`.
   floorplanAffordances: {
     'move-vertex': zoneMoveVertexAffordance,
     'add-vertex': zoneAddVertexAffordance,
     'move-edge': zoneMoveEdgeAffordance,
+    'delete-vertex': zoneDeleteVertexAffordance,
   },
 
   presentation: {
     label: 'nodes.zone.label',
     description: 'A polygonal site zone (lawn, water, paving) with a TSL gradient material.',
-    icon: { kind: 'url', src: '/icons/zone.png' },
+    icon: { kind: 'url', src: '/icons/zone.webp' },
     paletteSection: 'site',
     paletteOrder: 20,
   },

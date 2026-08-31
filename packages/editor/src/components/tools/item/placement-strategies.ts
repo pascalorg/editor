@@ -6,21 +6,31 @@ import type {
   GridEvent,
   ItemEvent,
   ItemNode,
+  NodeEvent,
+  RoofEvent,
+  RoofNode,
+  RoofSegmentNode,
+  RoofWallFaceId,
   ShelfEvent,
   ShelfNode,
   WallEvent,
   WallNode,
 } from '@pascal-app/core'
 import {
+  canHostOnTop,
+  clampRectToRoofWallFace,
+  getRoofSegmentWallFace,
   getScaledDimensions,
   isLowProfileItemSurface,
   nodeRegistry,
+  roofFacePointToSegment,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import { Euler, Matrix3, Quaternion, Vector3 } from 'three'
+import { hasRoofFaceChildOverlap, resolveRoofWallHit } from '../../../lib/roof-wall-hit'
+import { snapWorldXZForActiveBuilding } from '../../../lib/world-grid-snap'
 import {
-  calculateCursorRotation,
   calculateItemRotation,
   getGridAlignedDimensions,
   getSideFromNormal,
@@ -55,6 +65,7 @@ function isUpwardItemSurfaceHit(event: ItemEvent): boolean {
 }
 
 function getSurfacePlacementHeight(surfaceItem: ItemNode, event: ItemEvent, localPos: Vector3) {
+  if (!canHostOnTop(surfaceItem)) return null
   if (isLowProfileItemSurface(surfaceItem)) return null
   if (!isUpwardItemSurfaceHit(event)) return null
 
@@ -99,16 +110,25 @@ export const floorStrategy = {
     const [dimX, , dimZ] = dims
     const rotY = ctx.draftItem?.rotation?.[1] ?? 0
     const swapDims = Math.abs(Math.sin(rotY)) > 0.9
-    // event.localPosition is building-local; the coordinator cursor group is inside the
-    // building-local ToolManager group, so local coords are correct for both data and visuals.
-    const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
-    const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
+    // Snap on the world XZ grid (the grid the editor renders) so the
+    // item edges land on the visible grid even when the active building
+    // is rotated; then project the world point back into building-local
+    // for storage. Without this, a rotated building drags placement off
+    // the world grid.
+    // Snapping is governed by the active mode (snapToGrid returns raw in Off /
+    // non-grid modes); Alt is force-place only and never bypasses snapping here.
+    const [x, z] = snapWorldXZForActiveBuilding(
+      snapToGrid(event.position[0], swapDims ? dimZ : dimX),
+      snapToGrid(event.position[2], swapDims ? dimX : dimZ),
+      0,
+    ).local
+    const y = ctx.gridPosition.y
 
     return {
-      gridPosition: [x, 0, z],
-      cursorPosition: [x, event.localPosition[1], z],
+      gridPosition: [x, y, z],
+      cursorPosition: [x, y, z],
       cursorRotationY: rotY,
-      nodeUpdate: { position: [x, 0, z] },
+      nodeUpdate: { position: [x, y, z] },
       stopPropagation: false,
       dirtyNodeId: null,
     }
@@ -125,8 +145,13 @@ export const floorStrategy = {
   ): CommitResult | null {
     if (ctx.state.surface !== 'floor') return null
     if (!(ctx.levelId && ctx.draftItem)) return null
+    if (ctx.draftItem.asset.attachTo) return null
 
-    const pos: [number, number, number] = [ctx.gridPosition.x, 0, ctx.gridPosition.z]
+    const pos: [number, number, number] = [
+      ctx.gridPosition.x,
+      ctx.gridPosition.y,
+      ctx.gridPosition.z,
+    ]
     const valid = validators.canPlaceOnFloor(
       ctx.levelId,
       pos,
@@ -153,6 +178,51 @@ export const floorStrategy = {
 // WALL STRATEGY
 // ============================================================================
 
+/**
+ * Resolve the wall-local node position AND the world pose of the placement
+ * wireframe from ONE wall-local point, so the box can't drift from the item it
+ * previews.
+ *
+ * `event.object` is the wall's collision mesh — the frame `event.localPosition`
+ * was measured in — so `localToWorld` is the exact inverse of the hit. Snapping
+ * the raw world hit per axis instead (the old path) put the box on a different
+ * lattice than the node: wall-local X runs from `wall.start`, and wall-local Y
+ * is measured from the supporting slab's elevation, not from world zero.
+ *
+ * `z` follows the hosting convention rather than the hit depth: `wall` items
+ * center in the thickness, `wall-side` items mount on the hit face — mirroring
+ * `ItemSystem`'s per-frame push, so the wireframe's `z = 0` face lands flush
+ * with the wall instead of extending through it.
+ */
+function resolveWallPlacementPose(
+  event: WallEvent,
+  localX: number,
+  localY: number,
+  attachTo: 'wall' | 'wall-side',
+  side: 'front' | 'back',
+  itemRotation: number,
+): {
+  position: [number, number, number]
+  cursorPosition: [number, number, number]
+  cursorRotationY: number
+} {
+  const localZ =
+    attachTo === 'wall-side' ? ((event.node.thickness ?? 0.1) / 2) * (side === 'front' ? 1 : -1) : 0
+  event.object.updateWorldMatrix(true, false)
+  const world = event.object.localToWorld(new Vector3(localX, localY, localZ))
+  const wallYaw = -Math.atan2(
+    event.node.end[1] - event.node.start[1],
+    event.node.end[0] - event.node.start[0],
+  )
+  return {
+    position: [localX, localY, localZ],
+    cursorPosition: [world.x, world.y, world.z],
+    // Same composition the 2D floorplan resolves a wall child with
+    // (`resolveItemTransform`): the cursor frame IS the item frame.
+    cursorRotationY: wallYaw + itemRotation,
+  }
+}
+
 export const wallStrategy = {
   /**
    * Handle wall:enter — transition from floor to wall surface.
@@ -176,11 +246,9 @@ export const wallStrategy = {
 
     const side = getSideFromNormal(event.normal)
     const itemRotation = calculateItemRotation(event.normal)
-    const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
 
     const x = snapToHalf(event.localPosition[0])
     const y = snapToHalf(event.localPosition[1])
-    const z = snapToHalf(event.localPosition[2])
 
     // Get auto-adjusted Y position from validator
     const rawDims = ctx.draftItem
@@ -198,22 +266,27 @@ export const wallStrategy = {
     )
 
     const adjustedY = validation.adjustedY ?? y
+    const pose = resolveWallPlacementPose(event, x, adjustedY, attachTo, side, itemRotation)
 
     return {
-      stateUpdate: { surface: 'wall', wallId: event.node.id },
+      stateUpdate: {
+        surface: 'wall',
+        wallId: event.node.id,
+        roofSegmentId: null,
+      },
       nodeUpdate: {
-        position: [x, adjustedY, z],
+        position: pose.position,
         parentId: event.node.id,
+        // The draft may arrive from a roof-segment wall face.
+        roofSegmentId: undefined,
+        roofFace: undefined,
+        blockFaceId: undefined,
         side,
         rotation: [0, itemRotation, 0],
       },
-      cursorRotationY: cursorRotation,
-      gridPosition: [x, adjustedY, z],
-      cursorPosition: [
-        snapToHalf(event.position[0]),
-        snapToHalf(event.position[1]),
-        snapToHalf(event.position[2]),
-      ],
+      cursorRotationY: pose.cursorRotationY,
+      gridPosition: pose.position,
+      cursorPosition: pose.cursorPosition,
       stopPropagation: true,
     }
   },
@@ -234,11 +307,10 @@ export const wallStrategy = {
 
     const side = getSideFromNormal(event.normal)
     const itemRotation = calculateItemRotation(event.normal)
-    const cursorRotation = calculateCursorRotation(event.normal, event.node.start, event.node.end)
+    const attachTo = ctx.draftItem.asset.attachTo as 'wall' | 'wall-side'
 
     const snappedX = snapToHalf(event.localPosition[0])
     const snappedY = snapToHalf(event.localPosition[1])
-    const snappedZ = snapToHalf(event.localPosition[2])
 
     // Get auto-adjusted Y position from validator
     const validation = validators.canPlaceOnWall(
@@ -247,23 +319,20 @@ export const wallStrategy = {
       snappedX,
       snappedY,
       getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), ctx.draftItem.asset.attachTo),
-      ctx.draftItem.asset.attachTo as 'wall' | 'wall-side',
+      attachTo,
       side,
       [ctx.draftItem.id],
     )
 
     const adjustedY = validation.adjustedY ?? snappedY
+    const pose = resolveWallPlacementPose(event, snappedX, adjustedY, attachTo, side, itemRotation)
 
     return {
-      gridPosition: [snappedX, adjustedY, snappedZ],
-      cursorPosition: [
-        snapToHalf(event.position[0]),
-        snapToHalf(event.position[1]),
-        snapToHalf(event.position[2]),
-      ],
-      cursorRotationY: cursorRotation,
+      gridPosition: pose.position,
+      cursorPosition: pose.cursorPosition,
+      cursorRotationY: pose.cursorRotationY,
       nodeUpdate: {
-        position: [snappedX, adjustedY, snappedZ],
+        position: pose.position,
         side,
         rotation: [0, itemRotation, 0],
       },
@@ -302,6 +371,9 @@ export const wallStrategy = {
       nodeUpdate: {
         position: [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
         parentId: event.node.id,
+        roofSegmentId: undefined,
+        roofFace: undefined,
+        blockFaceId: undefined,
         side: ctx.draftItem.side,
         rotation: ctx.draftItem.rotation,
         metadata: stripTransient(ctx.draftItem.metadata),
@@ -326,6 +398,339 @@ export const wallStrategy = {
       cursorRotationY: 0,
       gridPosition: [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
       cursorPosition: [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
+      stopPropagation: true,
+    }
+  },
+}
+
+// ============================================================================
+// ROOF WALL STRATEGY
+// ============================================================================
+
+type RoofWallTarget = {
+  segment: RoofSegmentNode
+  faceId: RoofWallFaceId
+  faceYaw: number
+  /** Stored node position: FACE-LOCAL, y = bottom edge. */
+  position: [number, number, number]
+  /** Face-coord center of the placed rect (for the overlap guard). */
+  centerU: number
+  centerV: number
+  width: number
+  height: number
+  cursorPosition: [number, number, number]
+  cursorRotationY: number
+}
+
+/**
+ * Resolve a roof pointer event to an item placement on a segment wall
+ * face. Items snap u / bottom-v to the 0.5m grid, then the rect is
+ * clamped inside the face profile (sliding under the gable slopes).
+ * Position frame matches wall hosting: y anchors the BOTTOM edge;
+ * `wall-side` items mount on the outer surface, `wall` items center in
+ * the wall thickness.
+ *
+ * `freePlace` mirrors the wall flow's Alt override (stubbed
+ * validators): the profile clamp is skipped, so the rect may overhang
+ * the face edges — placement follows the snapped cursor as-is.
+ */
+function resolveRoofWallTarget(
+  ctx: PlacementContext,
+  event: RoofEvent,
+  freePlace = false,
+): RoofWallTarget | null {
+  const attachTo = ctx.asset.attachTo
+  if (attachTo !== 'wall' && attachTo !== 'wall-side') return null
+
+  const hit = resolveRoofWallHit(event.node as RoofNode, event.position, event.normal, event.object)
+  if (!hit) return null
+
+  const rawDims = ctx.draftItem
+    ? getScaledDimensions(ctx.draftItem)
+    : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
+  const dims = getGridAlignedDimensions(rawDims, attachTo)
+  const [width, height] = dims
+
+  // Snap follows the active mode (snapToHalf returns raw in Off/non-grid);
+  // `freePlace` (Alt) is force-place — it only skips the face-fit validity gate.
+  const u = snapToHalf(hit.u)
+  const centerV = snapToHalf(hit.v) + height / 2
+  const fitted = freePlace ? null : clampRectToRoofWallFace(hit.face, u, centerV, width, height)
+  if (!fitted && !freePlace) return null
+  const finalU = fitted?.u ?? u
+  const finalV = fitted?.v ?? centerV
+
+  // FACE-LOCAL storage (z = 0 → wall mid-plane; ItemSystem pushes
+  // wall-side items to the outer surface, exactly like wall hosting).
+  // The renderer mounts the node inside the live face frame, so items
+  // track segment resizes without any re-anchoring.
+  const position: [number, number, number] = [finalU, finalV - height / 2, 0]
+
+  const segObj = sceneRegistry.nodes.get(hit.segment.id)
+  if (!segObj) return null
+  segObj.updateWorldMatrix(true, false)
+  const segLocal = roofFacePointToSegment(hit.segment, hit.face.id, position)
+  const worldPos = segObj.localToWorld(new Vector3(segLocal[0], segLocal[1], segLocal[2]))
+
+  const nodes = useScene.getState().nodes
+  const roof = hit.segment.parentId
+    ? (nodes[hit.segment.parentId as AnyNodeId] as RoofNode | undefined)
+    : undefined
+
+  return {
+    segment: hit.segment,
+    faceId: hit.face.id,
+    faceYaw: hit.face.yaw,
+    position,
+    centerU: finalU,
+    centerV: finalV,
+    width,
+    height,
+    cursorPosition: [worldPos.x, worldPos.y, worldPos.z],
+    cursorRotationY: (roof?.rotation ?? 0) + (hit.segment.rotation ?? 0) + hit.face.yaw,
+  }
+}
+
+/** Validation half of `checkCanPlace` for the roof-wall surface. */
+function canPlaceOnRoofWall(ctx: PlacementContext): boolean {
+  const segmentId = ctx.state.roofSegmentId
+  if (!(segmentId && ctx.draftItem)) return false
+  const segment = useScene.getState().nodes[segmentId as AnyNodeId] as RoofSegmentNode | undefined
+  if (segment?.type !== 'roof-segment') return false
+  const faceId = ctx.draftItem.roofFace
+  if (!faceId) return false
+  const face = getRoofSegmentWallFace(segment, faceId)
+
+  const dims = getGridAlignedDimensions(
+    getScaledDimensions(ctx.draftItem),
+    ctx.draftItem.asset.attachTo,
+  )
+  const [width, height] = dims
+  // gridPosition carries the stored FACE-LOCAL coords (u, bottom-v, z).
+  const u = ctx.gridPosition.x
+  const centerV = ctx.gridPosition.y + height / 2
+  const clamped = clampRectToRoofWallFace(face, u, centerV, width, height)
+  if (!clamped || Math.abs(clamped.u - u) > 1e-3 || Math.abs(clamped.v - centerV) > 1e-3) {
+    return false
+  }
+  return !hasRoofFaceChildOverlap(segment, faceId, u, centerV, width, height, ctx.draftItem.id)
+}
+
+export const roofWallStrategy = {
+  /**
+   * Handle roof:enter / first hover — transition onto a segment wall
+   * face. Returns null when the item doesn't wall-attach or the pointer
+   * isn't over a placeable face.
+   */
+  enter(ctx: PlacementContext, event: RoofEvent, freePlace = false): TransitionResult | null {
+    const target = resolveRoofWallTarget(ctx, event, freePlace)
+    if (!target) return null
+
+    return {
+      stateUpdate: {
+        surface: 'roof-wall',
+        roofSegmentId: target.segment.id,
+        wallId: null,
+      },
+      nodeUpdate: {
+        position: target.position,
+        parentId: target.segment.id,
+        roofSegmentId: target.segment.id,
+        roofFace: target.faceId,
+        blockFaceId: undefined,
+        wallId: undefined,
+        side: 'front',
+        rotation: [0, 0, 0],
+      },
+      cursorRotationY: target.cursorRotationY,
+      gridPosition: target.position,
+      cursorPosition: target.cursorPosition,
+      stopPropagation: true,
+    }
+  },
+
+  /**
+   * Handle roof:move while on a segment wall face. Returns null when the
+   * pointer resolves to a DIFFERENT segment (the coordinator re-enters —
+   * segment transitions inside one roof never re-fire roof:enter) or to
+   * no placeable face.
+   */
+  move(ctx: PlacementContext, event: RoofEvent, freePlace = false): PlacementResult | null {
+    if (ctx.state.surface !== 'roof-wall') return null
+    if (!ctx.draftItem) return null
+
+    const target = resolveRoofWallTarget(ctx, event, freePlace)
+    if (!target) return null
+    if (target.segment.id !== ctx.state.roofSegmentId) return null
+
+    return {
+      gridPosition: target.position,
+      cursorPosition: target.cursorPosition,
+      cursorRotationY: target.cursorRotationY,
+      nodeUpdate: {
+        position: target.position,
+        side: 'front',
+        rotation: [0, 0, 0],
+        roofFace: target.faceId,
+      },
+      stopPropagation: true,
+      // Items don't cut the roof — no geometry rebuild needed.
+      dirtyNodeId: null,
+    }
+  },
+
+  /**
+   * Handle roof:click — commit placement on the segment wall face.
+   */
+  click(ctx: PlacementContext, _event: RoofEvent, freePlace = false): CommitResult | null {
+    if (ctx.state.surface !== 'roof-wall') return null
+    if (!(ctx.draftItem && ctx.state.roofSegmentId)) return null
+    // Alt mirrors the wall flow's stubbed validators: skip profile-fit
+    // and overlap checks entirely.
+    if (!freePlace && !canPlaceOnRoofWall(ctx)) return null
+
+    return {
+      nodeUpdate: {
+        position: [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
+        parentId: ctx.state.roofSegmentId,
+        roofSegmentId: ctx.state.roofSegmentId,
+        roofFace: ctx.draftItem.roofFace,
+        blockFaceId: undefined,
+        wallId: undefined,
+        side: 'front',
+        rotation: [0, 0, 0],
+        metadata: stripTransient(ctx.draftItem.metadata),
+      },
+      stopPropagation: true,
+      dirtyNodeId: null,
+    }
+  },
+
+  /**
+   * Handle roof:leave — transition back to floor surface.
+   */
+  leave(ctx: PlacementContext): TransitionResult | null {
+    if (ctx.state.surface !== 'roof-wall') return null
+
+    return {
+      stateUpdate: { surface: 'floor', roofSegmentId: null },
+      nodeUpdate: {
+        position: [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
+        parentId: ctx.levelId,
+        roofSegmentId: undefined,
+        roofFace: undefined,
+      },
+      cursorRotationY: 0,
+      gridPosition: [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
+      cursorPosition: [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
+      stopPropagation: true,
+    }
+  },
+}
+
+// ============================================================================
+// FACE HOST STRATEGY
+// ============================================================================
+
+function resolveFaceHostTarget(ctx: PlacementContext, event: NodeEvent) {
+  const faceHost = nodeRegistry.get(event.node.type)?.capabilities.faceHost
+  if (!faceHost) return null
+  const rawDimensions = ctx.draftItem
+    ? getScaledDimensions(ctx.draftItem)
+    : (ctx.asset.dimensions ?? DEFAULT_DIMENSIONS)
+  return faceHost.resolvePlacement({
+    host: event.node,
+    asset: ctx.asset,
+    draftItem: ctx.draftItem,
+    localPosition: event.localPosition,
+    faceIndex: event.faceIndex,
+    object: event.object,
+    currentFaceId: faceHost.currentFaceId(ctx.draftItem),
+    rawDimensions,
+    dimensions: getGridAlignedDimensions(rawDimensions, ctx.asset.attachTo),
+    snapScalar: snapToHalf,
+  })
+}
+
+function clearFaceHostItemFields(ctx: PlacementContext): Partial<ItemNode> {
+  const host = ctx.state.blockId ? useScene.getState().nodes[ctx.state.blockId] : undefined
+  const clearFields = host
+    ? nodeRegistry.get(host.type)?.capabilities.faceHost?.clearItemFields
+    : undefined
+  const patch: Partial<ItemNode> = {}
+  for (const field of clearFields ?? []) {
+    ;(patch as Record<string, unknown>)[field] = undefined
+  }
+  return patch
+}
+
+export const faceHostStrategy = {
+  enter(ctx: PlacementContext, event: NodeEvent): TransitionResult | null {
+    const target = resolveFaceHostTarget(ctx, event)
+    if (!target) return null
+    return {
+      stateUpdate: {
+        surface: 'block-face',
+        blockId: event.node.id,
+        wallId: null,
+        roofSegmentId: null,
+      },
+      nodeUpdate: {
+        ...target.nodeUpdate,
+      },
+      gridPosition: target.position,
+      cursorPosition: target.cursorPosition,
+      cursorRotationY: target.cursorRotation[1],
+      cursorRotation: target.cursorRotation,
+      stopPropagation: true,
+      hostFaceId: target.faceId,
+    }
+  },
+
+  move(ctx: PlacementContext, event: NodeEvent): PlacementResult | null {
+    if (ctx.state.surface !== 'block-face' || !ctx.draftItem) return null
+    const target = resolveFaceHostTarget(ctx, event)
+    if (!target || event.node.id !== ctx.state.blockId) return null
+    return {
+      gridPosition: target.position,
+      cursorPosition: target.cursorPosition,
+      cursorRotationY: target.cursorRotation[1],
+      cursorRotation: target.cursorRotation,
+      nodeUpdate: target.nodeUpdate,
+      stopPropagation: true,
+      dirtyNodeId: null,
+      hostFaceId: target.faceId,
+    }
+  },
+
+  click(ctx: PlacementContext, event: NodeEvent): CommitResult | null {
+    if (ctx.state.surface !== 'block-face' || !ctx.draftItem) return null
+    const target = resolveFaceHostTarget(ctx, event)
+    if (!target || event.node.id !== ctx.state.blockId) return null
+    return {
+      nodeUpdate: {
+        ...target.nodeUpdate,
+        metadata: stripTransient(ctx.draftItem.metadata),
+      },
+      stopPropagation: true,
+      dirtyNodeId: null,
+    }
+  },
+
+  leave(ctx: PlacementContext): TransitionResult | null {
+    if (ctx.state.surface !== 'block-face') return null
+    const floorPosition: [number, number, number] = [ctx.gridPosition.x, 0, ctx.gridPosition.z]
+    return {
+      stateUpdate: { surface: 'floor', blockId: null },
+      nodeUpdate: {
+        ...clearFaceHostItemFields(ctx),
+        position: floorPosition,
+        parentId: ctx.levelId,
+        rotation: [0, ctx.currentCursorRotationY, 0],
+      },
+      cursorRotationY: ctx.currentCursorRotationY,
+      gridPosition: floorPosition,
+      cursorPosition: floorPosition,
       stopPropagation: true,
     }
   },
@@ -365,16 +770,19 @@ export const ceilingStrategy = {
     // use the ceiling hit's local position rather than world position.
     const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
     const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
-    const worldSnapped = event.object.localToWorld(new Vector3(x, -itemHeight, z))
+    // Recessed fixtures seat flush with the ceiling plane (body rising into the
+    // void above); everything else hangs its full height below the ceiling.
+    const seatY = ctx.asset.recessed ? 0 : -itemHeight
+    const worldSnapped = event.object.localToWorld(new Vector3(x, seatY, z))
 
     return {
       stateUpdate: { surface: 'ceiling', ceilingId: event.node.id },
       nodeUpdate: {
-        position: [x, -itemHeight, z],
+        position: [x, seatY, z],
         parentId: event.node.id,
       },
       cursorRotationY: 0,
-      gridPosition: [x, -itemHeight, z],
+      gridPosition: [x, seatY, z],
       cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
       stopPropagation: true,
     }
@@ -396,10 +804,13 @@ export const ceilingStrategy = {
 
     const x = snapToGrid(event.localPosition[0], swapDims ? dimZ : dimX)
     const z = snapToGrid(event.localPosition[2], swapDims ? dimX : dimZ)
-    const worldSnapped = event.object.localToWorld(new Vector3(x, -itemHeight, z))
+    // Recessed fixtures seat flush with the ceiling plane (body rising into the
+    // void above); everything else hangs its full height below the ceiling.
+    const seatY = ctx.draftItem.asset.recessed ? 0 : -itemHeight
+    const worldSnapped = event.object.localToWorld(new Vector3(x, seatY, z))
 
     return {
-      gridPosition: [x, -itemHeight, z],
+      gridPosition: [x, seatY, z],
       cursorPosition: [worldSnapped.x, worldSnapped.y, worldSnapped.z],
       cursorRotationY: 0,
       nodeUpdate: null,
@@ -765,6 +1176,18 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
 
   const alignedDims = getGridAlignedDimensions(getScaledDimensions(ctx.draftItem), attachTo)
 
+  if (ctx.state.surface === 'block-face') {
+    const hostId = ctx.state.blockId
+    const host = hostId ? useScene.getState().nodes[hostId as AnyNodeId] : undefined
+    const faceHost = host ? nodeRegistry.get(host.type)?.capabilities.faceHost : undefined
+    if (!(host && faceHost)) return false
+    return faceHost.isStoredPlacementValid({
+      host,
+      item: ctx.draftItem,
+      asset: ctx.draftItem.asset,
+    })
+  }
+
   if (attachTo === 'ceiling') {
     if (ctx.state.surface !== 'ceiling' || !ctx.state.ceilingId) return false
     return validators.canPlaceOnCeiling(
@@ -777,6 +1200,9 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
   }
 
   if (attachTo === 'wall' || attachTo === 'wall-side') {
+    if (ctx.state.surface === 'roof-wall') {
+      return canPlaceOnRoofWall(ctx)
+    }
     if (ctx.state.surface !== 'wall' || !ctx.state.wallId) return false
     return validators.canPlaceOnWall(
       ctx.levelId,
@@ -793,7 +1219,7 @@ export function checkCanPlace(ctx: PlacementContext, validators: SpatialValidato
   // Floor (no attachTo)
   return validators.canPlaceOnFloor(
     ctx.levelId,
-    [ctx.gridPosition.x, 0, ctx.gridPosition.z],
+    [ctx.gridPosition.x, ctx.gridPosition.y, ctx.gridPosition.z],
     alignedDims,
     ctx.draftItem.rotation,
     [ctx.draftItem.id],

@@ -98,6 +98,11 @@ const assetSchema = z.object({
   src: AssetUrl,
   dimensions: z.tuple([z.number(), z.number(), z.number()]).default([1, 1, 1]), // [w, h, d]
   attachTo: z.enum(['wall', 'wall-side', 'ceiling']).optional(),
+  // Ceiling fixtures (e.g. recessed downlights) that embed *into* the ceiling
+  // rather than hang below it: the item seats flush with the ceiling plane
+  // (its body rising into the void above) and the ceiling is cut out around
+  // the item's footprint. Ignored unless `attachTo === 'ceiling'`.
+  recessed: z.boolean().optional(),
   tags: z.array(z.string()).optional(),
   // Function-axis tag slugs from the taxonomy. Drives the hierarchical
   // Items-tab browse: a tree node matches when any of its descendant slugs
@@ -130,9 +135,40 @@ export const ItemNode = BaseNode.extend({
   // Wall attachment properties (only used when asset.attachTo is "wall" or "wall-side")
   wallId: z.string().optional(),
   wallT: z.number().optional(), // 0-1 parametric position along wall
+  // Alternative wall host: a roof-segment's generated wall face. When
+  // set, `position` is FACE-LOCAL — [u along the face, v = bottom edge,
+  // z from the wall mid-plane] — exactly the wall-child convention
+  // (ItemSystem's wall-side push applies the same way); the renderer
+  // mounts the node inside the face frame (`getRoofWallFaceFrame`).
+  roofSegmentId: z.string().optional(),
+  roofFace: z.enum(['front', 'back', 'right', 'left']).optional(),
+  // Alternative wall-like host: a planar block face. Position is
+  // FACE-LOCAL [u, v, normal offset], relative to the live face centroid.
+  // The renderer rebuilds the frame from the face normal so the item follows
+  // later edits that translate or slope the face.
+  blockFaceId: z.string().optional(),
+
+  // Persisted floor-support host (canonical doc — the same field on other
+  // floor-placed kinds and walls follows these rules). Written at
+  // placement/commit ONLY when overlapping slabs disagree on elevation
+  // (ambiguity); absent/null means "elect the support fresh on every
+  // read", which is the historical behavior. Read paths PREFER this slab
+  // while it still exists and still overlaps the node's footprint, and
+  // silently fall back to election otherwise. Deleting the host slab
+  // strips the field (deleteNodesAction); a host merely reshaped away is
+  // deliberately kept so hosting resumes if the slab's polygon returns.
+  // The sentinel value 'ground' (GROUND_SUPPORT_ID) pins the node to the
+  // level base — written when a pointer-capped commit elected the ground
+  // while a slab (e.g. an elevated deck) still overlapped the footprint.
+  supportSlabId: z.string().optional(),
 
   // Denormalized references to collections this node belongs to
   collectionIds: z.array(z.custom<CollectionId>()).optional(),
+
+  // Per-slot material overrides. Key = slot id (see deriveSlotId), value = a
+  // MaterialRef string ('library:<id>' or 'scene:<id>'). Absent = authored /
+  // registry default. A dangling ref renders the default (never blocks).
+  slots: z.record(z.string(), z.string()).optional(),
 
   asset: assetSchema,
 }).describe(dedent`Item node - used to represent a item in the building

@@ -1,12 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { getActiveRoofHeight, type RoofSegmentNode } from '@pascal-app/core'
-import {
-  buildSolarPanelGeometry,
-  computeAutoFit,
-  flippedPanelDims,
-  getAnalyticalNormal,
-  getSurfaceY,
-} from '../geometry'
+import { getAnalyticalNormal, getSurfaceY } from '../../shared/roof-surface'
+import { buildSolarPanelGeometry, computeAutoFit, flippedPanelDims } from '../geometry'
 import { SolarPanelNode } from '../schema'
 
 // atan(2 / 3) in degrees — gives `getActiveRoofHeight` ≈ 2.0 on the
@@ -140,9 +135,7 @@ describe('getAnalyticalNormal', () => {
     expect(top.x).toBeGreaterThan(0)
     expect(top.x).toBeLessThan(steep.x)
   })
-  // Regression: dutch previously fell through to gable code, ignoring
-  // the X axis. Hip ends rendered with the wrong tilt direction.
-  test('dutch +x hip end tilts toward +x (w>=d)', () => {
+  test('dutch width-axis shoulder tilts toward +x when outside the waist span', () => {
     const seg = fixtureSegment({ roofType: 'dutch', width: 8, depth: 6 })
     const n = getAnalyticalNormal(seg.width / 2 - 0.01, 0, seg)
     expect(n.x).toBeGreaterThan(0)
@@ -155,6 +148,18 @@ describe('getAnalyticalNormal', () => {
     expect(n.z).toBeGreaterThan(0)
     expect(Math.abs(n.x)).toBeLessThan(1e-6)
     expect(n.y).toBeGreaterThan(0)
+  })
+  test('dutch top gable face keeps the same fall direction near the ridge', () => {
+    const seg = fixtureSegment({
+      roofType: 'dutch',
+      width: 8,
+      depth: 6,
+      dutchHipWidthRatio: 0.2,
+      dutchHipHeightRatio: 0.6,
+    })
+    const upper = getAnalyticalNormal(0, 0.01, seg)
+    expect(upper.z).toBeGreaterThan(0)
+    expect(Math.abs(upper.x)).toBeLessThan(1e-6)
   })
 })
 

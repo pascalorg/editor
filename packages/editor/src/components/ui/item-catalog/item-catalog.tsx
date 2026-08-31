@@ -1,17 +1,13 @@
 'use client'
 
 import type { AssetInput } from '@pascal-app/core'
-import { resolveCdnUrl } from '@pascal-app/viewer'
-import Image from 'next/image'
+import { resolveCdnUrl, useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from './../../../components/ui/primitives/tooltip'
+import { triggerSFX } from './../../../lib/sfx-bus'
 import { cn } from './../../../lib/utils'
 import useEditor, { type CatalogCategory } from './../../../store/use-editor'
-import { CATALOG_ITEMS } from './catalog-items'
+import { resolveAssetSnapTarget, SnapTargetBadge } from '../snap-target-badge'
+import { CATALOG_ITEMS, type CatalogItem } from './catalog-items'
 
 export function ItemCatalog({
   category,
@@ -40,9 +36,9 @@ export function ItemCatalog({
   const setMode = useEditor((state) => state.setMode)
   const setTool = useEditor((state) => state.setTool)
 
-  const sourceItems = itemsOverride ?? CATALOG_ITEMS
+  const sourceItems: CatalogItem[] = itemsOverride ?? CATALOG_ITEMS
   // Server-provided results bypass all local filtering; otherwise filter by category/search/tags
-  const filteredItems =
+  const filteredItems: CatalogItem[] =
     overrideItems ??
     (() => {
       const categoryItems = search
@@ -57,22 +53,6 @@ export function ItemCatalog({
       })
     })()
 
-  const categoryItems = filteredItems
-
-  // Auto-select first item if current selection is not in the filtered list
-  useEffect(() => {
-    const isCurrentItemInCategory = categoryItems.some((item) => item.src === selectedItem?.src)
-    if (!isCurrentItemInCategory && categoryItems.length > 0) {
-      setSelectedItem(categoryItems[0] as AssetInput)
-    }
-  }, [categoryItems, selectedItem?.src, setSelectedItem])
-
-  const getAttachmentIcon = (attachTo: AssetInput['attachTo']) => {
-    if (attachTo === 'wall' || attachTo === 'wall-side') return '/icons/wall.png'
-    if (attachTo === 'ceiling') return '/icons/ceiling.png'
-    return null
-  }
-
   if (filteredItems.length === 0 && emptyState) {
     return <>{emptyState}</>
   }
@@ -85,7 +65,7 @@ export function ItemCatalog({
       {leadingTile}
       {filteredItems.map((item, index) => {
         const isSelected = selectedItem?.src === item?.src
-        const attachmentIcon = getAttachmentIcon(item?.attachTo)
+        const snapTarget = resolveAssetSnapTarget(item?.attachTo)
         return (
           <button
             className={cn(
@@ -94,10 +74,16 @@ export function ItemCatalog({
             )}
             key={index}
             onClick={() => {
+              triggerSFX('sfx:menu-click')
+              // Drop the current selection before arming placement — keeping
+              // it would route shortcuts (rotate & co) to both the ghost and
+              // the selected node.
+              useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
               setSelectedItem(item)
-              setTool('item')
+              setTool(item.tool ?? 'item')
               setMode('build')
             }}
+            onMouseEnter={() => triggerSFX('sfx:menu-hover')}
             type="button"
           >
             <div className="relative aspect-square w-full overflow-hidden rounded-lg">
@@ -107,14 +93,8 @@ export function ItemCatalog({
                 loading="eager"
                 src={resolveCdnUrl(item.thumbnail) || ''}
               />
-              {attachmentIcon && (
-                <div className="absolute right-1 bottom-1 flex h-4 w-4 items-center justify-center rounded bg-black/60">
-                  <img
-                    alt={item.attachTo === 'ceiling' ? 'Ceiling attachment' : 'Wall attachment'}
-                    className="h-4 w-4"
-                    src={attachmentIcon}
-                  />
-                </div>
+              {snapTarget && (
+                <SnapTargetBadge className="absolute right-1 bottom-1" target={snapTarget} />
               )}
             </div>
             <span className="truncate px-0.5 text-left font-medium text-[11px] text-muted-foreground group-hover:text-foreground">

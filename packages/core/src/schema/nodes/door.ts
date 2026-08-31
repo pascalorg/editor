@@ -19,6 +19,13 @@ export const DoorSegment = z.object({
 export type DoorSegment = z.infer<typeof DoorSegment>
 
 export const DoorCategory = z.enum(['interior', 'garage'])
+export const OpeningConstructionType = z.enum(['framed', 'masonry'])
+export const OpeningDimensionReference = z.enum([
+  'nominal',
+  'rough-opening',
+  'masonry-opening',
+  'finish-opening',
+])
 export const DoorType = z.enum([
   'hinged',
   'double',
@@ -34,6 +41,8 @@ export const DoorType = z.enum([
 export const DoorTrackStyle = z.enum(['none', 'visible', 'pocket', 'overhead'])
 
 export type DoorCategory = z.infer<typeof DoorCategory>
+export type OpeningConstructionType = z.infer<typeof OpeningConstructionType>
+export type OpeningDimensionReference = z.infer<typeof OpeningDimensionReference>
 export type DoorType = z.infer<typeof DoorType>
 export type DoorTrackStyle = z.infer<typeof DoorTrackStyle>
 
@@ -41,15 +50,41 @@ export const DoorNode = BaseNode.extend({
   id: objectId('door'),
   type: nodeType('door'),
   material: MaterialSchema.optional(),
+  // Per-slot material overrides on the unified slot model. Keys: `panel` (the
+  // door body), `glass`. Value = a `MaterialRef` (`library:<id>` / `scene:<id>`).
+  // Absent = the body/glass default. Mirrors `ShelfNode.slots`.
+  slots: z.record(z.string(), z.string()).optional(),
 
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   side: z.enum(['front', 'back']).optional(),
   wallId: z.string().optional(),
+  // Alternative host: a roof-segment's generated wall face (base wall
+  // under the roof or a coplanar gable end). When set, `position` is
+  // FACE-LOCAL — [u along the face, v height, z from the wall mid-plane]
+  // — exactly the wall-child convention; the renderer mounts the node
+  // inside the face frame (`getRoofWallFaceFrame`), which is what makes
+  // hosted children track segment resizes live.
+  roofSegmentId: z.string().optional(),
+  roofFace: z.enum(['front', 'back', 'right', 'left']).optional(),
 
   // Overall dimensions
   width: z.number().default(0.9),
   height: z.number().default(2.1),
+
+  // Construction-document identity. `mark` overrides the deterministic
+  // level fallback (101, 102, ...). Rough-opening dimensions stay optional
+  // because they are manufacturer/framing inputs, not safe derivations from
+  // the nominal modeled size.
+  mark: z.string().trim().max(16).optional(),
+  constructionType: OpeningConstructionType.default('framed'),
+  dimensionReference: OpeningDimensionReference.default('nominal'),
+  roughOpeningWidth: z.number().positive().optional(),
+  roughOpeningHeight: z.number().positive().optional(),
+  masonryOpeningWidth: z.number().positive().optional(),
+  masonryOpeningHeight: z.number().positive().optional(),
+  finishOpeningWidth: z.number().positive().optional(),
+  finishOpeningHeight: z.number().positive().optional(),
 
   // Door family
   doorCategory: DoorCategory.default('interior'),

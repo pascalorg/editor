@@ -1,6 +1,4 @@
-'use client'
-
-import { type BuildingNode, LevelNode, useScene } from '@pascal-app/core'
+import { type BuildingNode, DEFAULT_LEVEL_HEIGHT, LevelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Building2, Plus } from 'lucide-react'
 import { memo, useState } from 'react'
@@ -10,7 +8,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from './../../../../../components/ui/primitives/tooltip'
-import { useTranslations } from './../../../../../lib/i18n'
 import { focusTreeNode, TreeNode, TreeNodeWrapper } from './tree-node'
 import { TreeNodeActions } from './tree-node-actions'
 
@@ -25,7 +22,6 @@ export const BuildingTreeNode = memo(function BuildingTreeNode({
   depth,
   isLast,
 }: BuildingTreeNodeProps) {
-  const t = useTranslations()
   const [expanded, setExpanded] = useState(true)
   const createNode = useScene((state) => state.createNode)
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
@@ -47,6 +43,7 @@ export const BuildingTreeNode = memo(function BuildingTreeNode({
     const levelCount = children.filter((childId) => nodes[childId]?.type === 'level').length
     const newLevel = LevelNode.parse({
       level: levelCount,
+      height: DEFAULT_LEVEL_HEIGHT,
       children: [],
       parentId: nodeId,
     })
@@ -67,7 +64,7 @@ export const BuildingTreeNode = memo(function BuildingTreeNode({
                 <Plus className="h-3 w-3" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">{t('editor.addNewLevel')}</TooltipContent>
+            <TooltipContent side="right">Add new level</TooltipContent>
           </Tooltip>
         </div>
       }

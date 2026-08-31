@@ -1,6 +1,12 @@
 'use client'
 
-import { type AnyNode, nodeRegistry, type RendererSource, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  isNodeKindEnabled,
+  nodeRegistry,
+  type RendererSource,
+  useScene,
+} from '@pascal-app/core'
 import { type ComponentType, lazy, Suspense } from 'react'
 import { ParametricNodeRenderer } from './parametric-node-renderer'
 
@@ -8,7 +14,7 @@ import { ParametricNodeRenderer } from './parametric-node-renderer'
 // on every render — that would create a new Suspense boundary each time.
 const lazyCache = new WeakMap<RendererSource<AnyNode>, ComponentType<{ node: AnyNode }>>()
 
-function getRegistryRenderer(
+export function getRegistryRenderer(
   source: RendererSource<AnyNode>,
 ): ComponentType<{ node: AnyNode }> | null {
   const cached = lazyCache.get(source)
@@ -23,7 +29,9 @@ function getRegistryRenderer(
 
 export const NodeRenderer = ({ nodeId }: { nodeId: AnyNode['id'] }) => {
   const node = useScene((state) => state.nodes[nodeId])
+  const installedPlugins = useScene((state) => state.installedPlugins)
   if (!node) return null
+  if (!isNodeKindEnabled(node.type, installedPlugins)) return null
   const def = nodeRegistry.get(node.type)
   if (!def) return null
   // Two-checkbox dispatch (see wiki/architecture/node-definitions.md):

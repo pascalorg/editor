@@ -1,0 +1,73 @@
+{
+  "name": "@pascal-app/cli",
+  "version": "1.0.0-beta.1",
+  "description": "Run the open-source Pascal 3D editor, local projects, and MCP agent tools from your terminal",
+  "type": "module",
+  "bin": {
+    "pascal": "dist/bin/pascal.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "build-runtime": "cd ../../apps/editor && PASCAL_PORTABLE_BUILD=1 bun run build",
+    "check-types": "tsc --build --pretty false && tsc --project tsconfig.scripts.json --pretty false",
+    "stage-runtime": "bun run scripts/stage-runtime.ts",
+    "smoke-runtime": "bun run scripts/smoke-packed-runtime.ts",
+    "test": "bun test src",
+    "prepublishOnly": "bun run check-types && bun run build && bun run test && bun run build-runtime && bun run stage-runtime && bun run smoke-runtime"
+  },
+  "devDependencies": {
+    "@pascal/typescript-config": "*",
+    "@types/node": "^22.19.20",
+    "typescript": "6.0.3"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "keywords": [
+    "pascal",
+    "editor",
+    "3d-editor",
+    "3d",
+    "architecture",
+    "building-design",
+    "cad",
+    "bim",
+    "local-first",
+    "cli",
+    "mcp",
+    "ai-agents"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pascalorg/editor.git",
+    "directory": "packages/cli"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Pascal",
+    "email": "open@pascal.app",
+    "url": "https://pascal.app"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "homepage": "https://editor.pascal.app/docs/developers/local-editor",
+  "bugs": "https://github.com/pascalorg/editor/issues"
+}

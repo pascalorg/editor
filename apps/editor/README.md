@@ -7,7 +7,7 @@ A 3D building editor built with React Three Fiber and WebGPU.
 This is a Turborepo monorepo with three main packages:
 
 ```
-editor-v2/
+editor/
 ├── apps/
 │   └── editor/          # Next.js application (this package)
 ├── packages/
@@ -183,7 +183,6 @@ Systems are React components that run in the render loop (`useFrame`) to update 
 | System | Responsibility |
 |--------|---------------|
 | `WallSystem` | Generates wall geometry with mitering and CSG cutouts for doors/windows |
-| `SlabSystem` | Generates floor geometry from polygons |
 | `CeilingSystem` | Generates ceiling geometry |
 | `RoofSystem` | Generates roof geometry |
 | `ItemSystem` | Positions items on walls, ceilings, or floors (slab elevation) |
@@ -345,7 +344,7 @@ pnpm install
 # Run development server
 pnpm dev
 
-# Open http://localhost:3000
+# Open http://localhost:3002
 ```
 
 ---

@@ -33,6 +33,7 @@ export const RoofTreeNode = memo(function RoofTreeNode({
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
   const setHoveredId = useViewer((state) => state.setHoveredId)
+  const setRoofHostDragArmedId = useEditor((state) => state.setRoofHostDragArmedId)
   const { drag, dropTarget } = useTreeNodeDrag()
 
   const segments = useScene(
@@ -62,8 +63,11 @@ export const RoofTreeNode = memo(function RoofTreeNode({
       if (!handled && useEditor.getState().phase === 'furnish') {
         useEditor.getState().setPhase('structure')
       }
+      if (!e.metaKey && !e.ctrlKey && !e.shiftKey) {
+        setRoofHostDragArmedId(nodeId)
+      }
     },
-    [nodeId, setSelection],
+    [nodeId, setRoofHostDragArmedId, setSelection],
   )
 
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
@@ -104,7 +108,7 @@ export const RoofTreeNode = memo(function RoofTreeNode({
         expanded={expanded}
         hasChildren={segments.length > 0}
         icon={
-          <Image alt="" className="object-contain" height={14} src="/icons/roof.png" width={14} />
+          <Image alt="" className="object-contain" height={14} src="/icons/roof.webp" width={14} />
         }
         isDropTarget={isValidDropTarget && isDropTarget}
         isHovered={isHovered || isDropTarget}
@@ -245,7 +249,7 @@ function RoofSegmentTreeNode({
             alt=""
             className="object-contain opacity-60"
             height={14}
-            src="/icons/roof.png"
+            src="/icons/roof.webp"
             width={14}
           />
         }

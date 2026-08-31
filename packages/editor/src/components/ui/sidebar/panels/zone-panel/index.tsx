@@ -1,9 +1,14 @@
-'use client'
-
-import { emitter, useScene, type ZoneNode } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  useScene,
+  type ZoneNode,
+} from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { Camera, Hexagon, Trash2 } from 'lucide-react'
+import { Camera, Hexagon, Save, Trash2 } from 'lucide-react'
 import { useState } from 'react'
+import { sfxEmitter } from './../../../../../lib/sfx-bus'
+import { collectZoneContentIds } from './../../../../../lib/zone-content'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
   Popover,
@@ -11,12 +16,11 @@ import {
   PopoverTrigger,
 } from './../../../../../components/ui/primitives/popover'
 import { cn } from './../../../../../lib/utils'
-import { messages, useLocale } from '../../../../../lib/i18n'
 import useEditor from './../../../../../store/use-editor'
+import { ActionButton } from '../../../controls/action-button'
+import { PanelSection } from '../../../controls/panel-section'
 
 function ZoneItem({ zone }: { zone: ZoneNode }) {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale as 'en' | 'zh'] as Record<string, string>)[key] || key
   const [cameraPopoverOpen, setCameraPopoverOpen] = useState(false)
   const deleteNode = useScene((state) => state.deleteNode)
   const updateNode = useScene((state) => state.updateNode)
@@ -31,6 +35,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation()
+    sfxEmitter.emit('sfx:structure-delete')
     deleteNode(zone.id)
     if (isSelected) {
       setSelection({ zoneId: null })
@@ -62,7 +67,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
           <button
             className="relative flex h-6 w-6 cursor-pointer items-center justify-center rounded-md text-muted-foreground opacity-0 transition-colors hover:bg-black/5 hover:text-foreground group-hover/row:opacity-100 dark:hover:bg-white/10"
             onClick={(e) => e.stopPropagation()}
-            title={t('treeActions.cameraSnapshot')}
+            title="Camera snapshot"
           >
             <Camera className="h-3 w-3" />
             {zone.camera && (
@@ -87,7 +92,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
                 }}
               >
                 <Camera className="h-3.5 w-3.5" />
-                {t('treeActions.viewSnapshot')}
+                View snapshot
               </button>
             )}
             <button
@@ -99,7 +104,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
               }}
             >
               <Camera className="h-3.5 w-3.5" />
-              {zone.camera ? t('treeActions.updateSnapshot') : t('treeActions.takeSnapshot')}
+              {zone.camera ? 'Update snapshot' : 'Take snapshot'}
             </button>
             {zone.camera && (
               <button
@@ -111,7 +116,7 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
                 }}
               >
                 <Trash2 className="h-3.5 w-3.5" />
-                {t('treeActions.clearSnapshot')}
+                Clear snapshot
               </button>
             )}
           </div>
@@ -128,10 +133,10 @@ function ZoneItem({ zone }: { zone: ZoneNode }) {
 }
 
 export function ZonePanel() {
-  const { locale } = useLocale()
-  const t = (key: string) => (messages[locale as 'en' | 'zh'] as Record<string, string>)[key] || key
   const nodes = useScene((state) => state.nodes)
   const currentLevelId = useViewer((state) => state.selection.levelId)
+  const selectedZoneId = useViewer((state) => state.selection.zoneId)
+  const setSelection = useViewer((state) => state.setSelection)
   const setPhase = useEditor((state) => state.setPhase)
   const setMode = useEditor((state) => state.setMode)
   const setTool = useEditor((state) => state.setTool)
@@ -140,6 +145,7 @@ export function ZonePanel() {
   const levelZones = Object.values(nodes).filter(
     (node): node is ZoneNode => node.type === 'zone' && node.parentId === currentLevelId,
   )
+  const selectedZone = levelZones.find((zone) => zone.id === selectedZoneId)
 
   const handleAddZone = () => {
     if (currentLevelId) {
@@ -149,10 +155,21 @@ export function ZonePanel() {
     }
   }
 
+  const deleteSelectedZone = (withContent: boolean) => {
+    if (!selectedZone) return
+    const scene = useScene.getState()
+    const ids = withContent
+      ? [selectedZone.id as AnyNodeId, ...collectZoneContentIds(scene.nodes, selectedZone)]
+      : [selectedZone.id as AnyNodeId]
+    sfxEmitter.emit('sfx:structure-delete')
+    scene.deleteNodes(Array.from(new Set(ids)))
+    setSelection({ selectedIds: [], zoneId: null })
+  }
+
   if (!currentLevelId) {
     return (
       <div className="px-3 py-4 text-muted-foreground text-sm">
-        {t('zone.selectLevelToView')}
+        Select a level to view and create zones
       </div>
     )
   }
@@ -161,14 +178,39 @@ export function ZonePanel() {
     <div className="py-1">
       {levelZones.length === 0 ? (
         <div className="px-3 py-4 text-muted-foreground text-sm">
-          {t('zone.noZonesOnLevel')}{' '}
+          No zones on this level.{' '}
           <button className="cursor-pointer text-primary hover:underline" onClick={handleAddZone}>
-            {t('zone.addOne')}
+            Add one
           </button>
         </div>
       ) : (
         levelZones.map((zone) => <ZoneItem key={zone.id} zone={zone} />)
       )}
+      {selectedZone ? (
+        <PanelSection className="mt-2 border-t" title="Actions">
+          <ActionButton
+            className="w-full flex-none"
+            icon={<Save className="h-4 w-4" />}
+            label="Save to catalog"
+            onClick={() => emitter.emit('room-preset:create', { zoneId: selectedZone.id })}
+            type="button"
+          />
+          <ActionButton
+            className="w-full flex-none"
+            icon={<Trash2 className="h-4 w-4 text-red-400" />}
+            label="Delete"
+            onClick={() => deleteSelectedZone(false)}
+            type="button"
+          />
+          <ActionButton
+            className="w-full flex-none"
+            icon={<Trash2 className="h-4 w-4 text-red-400" />}
+            label="Delete with contents"
+            onClick={() => deleteSelectedZone(true)}
+            type="button"
+          />
+        </PanelSection>
+      ) : null}
     </div>
   )
 }
