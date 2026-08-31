@@ -38,7 +38,9 @@ export default async function ImportPage({
         <p className="mb-8 text-muted-foreground text-sm">
           Review the file before it becomes a scene. Nothing is created until you confirm.
         </p>
-        <ImportClient name={params.name ?? null} src={params.src ?? null} />
+        {/* Keyed by src: a new file is a new flow — state (scene name,
+            phase) must never leak from the previous one. */}
+        <ImportClient key={params.src} name={params.name ?? null} src={params.src ?? null} />
       </main>
     </div>
   )

@@ -34,11 +34,10 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
   const creating = useRef(false)
 
   useEffect(() => {
-    // A new src restarts the flow: reset to fetching so a stale review
-    // (and its Import button) can never act on the previous file, and
-    // ignore every state update from a superseded run — an abort must
-    // not surface as an error either.
-    setPhase({ kind: 'fetching' })
+    // A new src remounts the component (the page keys it by src), so
+    // state can never leak between files. Within one mount, ignore
+    // every state update from a superseded run — an abort must not
+    // surface as an error either.
     const parsedSrc = parseImportSrc(src)
     if (!parsedSrc.ok) {
       setPhase({ kind: 'error', message: parsedSrc.reason })
@@ -133,8 +132,7 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
       setPhase({
         kind: 'review',
         result: review,
-        createError:
-          error instanceof Error ? error.message : 'Creating the scene failed.',
+        createError: error instanceof Error ? error.message : 'Creating the scene failed.',
       })
     } finally {
       // Released in every path: after an error the user may retry.
@@ -204,9 +202,7 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
         )}
       </div>
 
-      {phase.createError && (
-        <p className="text-destructive text-sm">{phase.createError}</p>
-      )}
+      {phase.createError && <p className="text-destructive text-sm">{phase.createError}</p>}
       <button
         className="rounded-md border border-border bg-accent px-4 py-2 font-medium text-sm hover:bg-accent/80 disabled:opacity-50"
         disabled={!result.ok || !result.parsed}
