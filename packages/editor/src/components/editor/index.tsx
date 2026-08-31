@@ -62,6 +62,7 @@ import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
 import { ViewerStage } from '../viewer/viewer-stage'
 import type { ViewerStageMode } from '../viewer/viewer-stage-modes'
+import { CaptureCameraRig } from './capture-camera-rig'
 import { CustomCameraControls } from './custom-camera-controls'
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
 import { EditorLayoutV2 } from './editor-layout-v2'
@@ -796,6 +797,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
+      {isCaptureMode && <CaptureCameraRig />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       {!isFirstPersonMode && <SiteEdgeLabels />}
@@ -1539,7 +1541,10 @@ export default function Editor({
                       <HelperManager />
                     </div>
                   )}
-                  {isFirstPersonMode && (
+                  {/* Capture mode drives walk / fly from its own overlay, which
+                      owns the framing chrome — the walkthrough HUD would both
+                      clutter the frame and offer a second, conflicting exit. */}
+                  {isFirstPersonMode && !isCaptureMode && (
                     <FirstPersonOverlay
                       onExit={() => useEditor.getState().setFirstPersonMode(false)}
                     />
