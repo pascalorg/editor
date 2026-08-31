@@ -265,6 +265,7 @@
   "loadBuild.errors_plural": "{count} errors",
   "loadBuild.floorArea": "Floor area",
   "loadBuild.hide": "Hide",
+  "loadBuild.invalidJson": "File could not be parsed as JSON.",
   "loadBuild.items": "Items",
   "loadBuild.levels": "Levels",
   "loadBuild.nodes": "{count} nodes",

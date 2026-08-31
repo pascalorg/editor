@@ -265,6 +265,7 @@
   "loadBuild.errors_plural": "{count} 个错误",
   "loadBuild.floorArea": "地板面积",
   "loadBuild.hide": "隐藏",
+  "loadBuild.invalidJson": "无法将文件解析为 JSON。",
   "loadBuild.items": "物品",
   "loadBuild.levels": "楼层",
   "loadBuild.nodes": "{count} 个节点",

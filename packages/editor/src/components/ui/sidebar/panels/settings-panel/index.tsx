@@ -272,7 +272,7 @@ export function SettingsPanel({
               {
                 severity: 'error',
                 code: 'invalid_json',
-                message: 'File could not be parsed as JSON.',
+                message: t('loadBuild.invalidJson'),
               },
             ],
             warnings: [],
