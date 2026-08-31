@@ -79,7 +79,17 @@
     "localWarning": "Local editor — scenes are not saved.",
     "openSavedScenes": "Open saved scenes",
     "openRecent": "Open recent scenes",
-    "createNew": "Create new"
+    "createNew": "Create new",
+    "placeBuilding": "Place building",
+    "rotate": "Rotate",
+    "chooseRoom": "Choose room",
+    "selectCurvedWall": "Select curved wall",
+    "setDiameter": "Set diameter",
+    "setCorner": "Set corner",
+    "rotateRoofDirection": "Rotate roof direction 90°",
+    "place": "Place",
+    "forcePlace": "Force place",
+    "guidedConstraintsBypassed": "Guided constraints bypassed"
   },
   "scenes": {
     "title": "Your scenes",
@@ -193,7 +203,16 @@
     "ceiling": "Ceiling",
     "zone": "Zone",
     "spawnPoint": "Spawn Point",
-    "shelf": "Shelf"
+    "shelf": "Shelf",
+    "duct": "Duct",
+    "ductFitting": "Duct Fitting",
+    "register": "Register",
+    "hvacUnit": "HVAC Unit",
+    "dwvPipe": "DWV Pipe",
+    "trap": "Trap",
+    "pipeFitting": "Pipe Fitting",
+    "lineset": "Lineset",
+    "liquidLine": "Liquid Line"
   },
   "furnishTools": {
     "furniture": "Furniture",
@@ -225,6 +244,7 @@
     "selectPreviousLevel": "Select previous level in the active building"
   },
   "panel": {
+    "selection": "Selection",
     "scaleAndOpacity": "Scale & Opacity",
     "editScale": "Edit Scale",
     "setScale": "Set Scale",

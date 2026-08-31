@@ -1,4 +1,5 @@
 import type { ToolHint } from '@pascal-app/core'
+import { useTranslations } from '../../../lib/i18n'
 import type { SnapContext } from '../../../lib/snapping-mode'
 import useEditor from '../../../store/use-editor'
 import useRoofPlacementMode from '../../tools/roof/roof-placement-mode'
@@ -26,16 +27,17 @@ const placementHint: ToolHint = {
 }
 
 export function RoofHelper({ snapContext }: { snapContext?: SnapContext | null }) {
+  const t = useTranslations()
   const isConical = useEditor((state) => state.toolDefaults.roof?.roofType === 'conical')
   const footprintSource = useEditor((state) => state.toolDefaults.roof?.footprintSource)
   const placementLabel =
     footprintSource === 'room'
-      ? 'Choose room'
+      ? t('editor.chooseRoom')
       : footprintSource === 'walls'
-        ? 'Select curved wall'
+        ? t('editor.selectCurvedWall')
         : isConical
-          ? 'Set diameter'
-          : 'Set corner'
+          ? t('editor.setDiameter')
+          : t('editor.setCorner')
   return (
     <ContextualHelperPanel
       chipHints={isConical ? [placementHint] : []}
@@ -44,8 +46,10 @@ export function RoofHelper({ snapContext }: { snapContext?: SnapContext | null }
           keys: ['Left click'],
           label: placementLabel,
         },
-        ...(!isConical ? [{ keys: ['R'], label: 'Rotate roof direction 90°' }] : []),
-        { keys: ['Esc'], label: 'Cancel' },
+        ...(!isConical
+          ? [{ keys: ['R'], label: t('editor.rotateRoofDirection') }]
+          : []),
+        { keys: ['Esc'], label: t('common.cancel') },
       ]}
       snapContext={snapContext}
     />

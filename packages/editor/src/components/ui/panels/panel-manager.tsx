@@ -24,6 +24,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useEffect, useState } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
+import { useTranslations } from '../../../lib/i18n'
 import { shouldShowEditingControls } from '../../../lib/interaction/overlay-policy'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
@@ -183,8 +184,11 @@ function MobileMultiPanelLayer({
   panel: React.ReactNode
   type: string | null
 }) {
+  const t = useTranslations()
   const [isSheetOpen, setIsSheetOpen] = useState(false)
-  const display = type ? getTypeDisplay(type) : { icon: '/icons/select.webp', label: 'Selection' }
+  const display = type
+    ? getTypeDisplay(type)
+    : { icon: '/icons/select.webp', label: t('panel.selection') }
   const title = breakdown || display.label
 
   useEffect(() => {

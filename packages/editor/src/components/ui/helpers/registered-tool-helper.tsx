@@ -1,5 +1,6 @@
 import type { ToolHint } from '@pascal-app/core'
 import type { ContinuationContext } from '../../../lib/continuation'
+import { useTranslations } from '../../../lib/i18n'
 import type { SnapContext } from '../../../lib/snapping-mode'
 import useEditor from '../../../store/use-editor'
 import { ContextualHelperPanel } from './contextual-helper-panel'
@@ -24,6 +25,7 @@ export function RegisteredToolHelper({
   snapContext?: SnapContext | null
   continuationContext?: ContinuationContext | null
 }) {
+  const t = useTranslations()
   // Live vertex count of an in-progress polygon draft, so hints gated on a
   // minimum (e.g. "Finish" at ≥ 3) only appear once they're actually possible.
   const draftVertexCount = useEditor((s) => s.draftVertexCount)
@@ -48,7 +50,10 @@ export function RegisteredToolHelper({
         const isBypassHint = hint.key === 'Shift'
         return {
           keys: [hint.key],
-          label: shiftPressed && isBypassHint ? 'Guided constraints bypassed' : hint.label,
+          label:
+            shiftPressed && isBypassHint
+              ? t('editor.guidedConstraintsBypassed')
+              : hint.label,
           active: shiftPressed && isBypassHint,
         }
       })}

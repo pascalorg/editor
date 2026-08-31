@@ -79,7 +79,17 @@
     "localWarning": "本地编辑器 — 场景不会保存。",
     "openSavedScenes": "打开已保存的场景",
     "openRecent": "打开最近场景",
-    "createNew": "创建新场景"
+    "createNew": "创建新场景",
+    "placeBuilding": "放置建筑",
+    "rotate": "旋转",
+    "chooseRoom": "选择房间",
+    "selectCurvedWall": "选择弧形墙",
+    "setDiameter": "设置直径",
+    "setCorner": "设置角点",
+    "rotateRoofDirection": "旋转屋顶方向 90°",
+    "place": "放置",
+    "forcePlace": "强制放置",
+    "guidedConstraintsBypassed": "已绕过引导约束"
   },
   "scenes": {
     "title": "您的场景",
@@ -193,7 +203,16 @@
     "ceiling": "天花板",
     "zone": "区域",
     "spawnPoint": "出生点",
-    "shelf": "搁架"
+    "shelf": "搁架",
+    "duct": "风管",
+    "ductFitting": "风管配件",
+    "register": "出风口",
+    "hvacUnit": "暖通空调机组",
+    "dwvPipe": "DWV 管",
+    "trap": "存水弯",
+    "pipeFitting": "管件",
+    "lineset": "冷媒管",
+    "liquidLine": "液管"
   },
   "furnishTools": {
     "furniture": "家具",
@@ -225,6 +244,7 @@
     "selectPreviousLevel": "选择活动建筑中的上一个楼层"
   },
   "panel": {
+    "selection": "选择",
     "scaleAndOpacity": "比例与不透明度",
     "editScale": "编辑比例",
     "setScale": "设置比例",
