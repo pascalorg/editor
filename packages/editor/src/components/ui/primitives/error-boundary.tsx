@@ -62,7 +62,7 @@ function ErrorBoundaryFallback({
         className="mt-4 rounded bg-blue-600 px-4 py-2 hover:bg-blue-700"
         onClick={onReset}
       >
-        Try again
+        {t('editor.tryAgain')}
       </button>
     </div>
   )

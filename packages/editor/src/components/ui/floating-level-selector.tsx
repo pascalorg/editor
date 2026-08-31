@@ -43,7 +43,7 @@ import {
   buildLevelDuplicateCreateOps,
   type LevelDuplicatePreset,
 } from '../../lib/level-duplication'
-import { getDefaultLevelName, getLevelDisplayName } from '@pascal-app/core'
+import { getDefaultLevelName } from '@pascal-app/core'
 import { deleteLevelWithFallbackSelection } from '../../lib/level-selection'
 import { useTranslations } from '../../lib/i18n'
 import { useLinearDisplay } from '../../lib/use-linear-display'
@@ -60,6 +60,20 @@ import {
   DialogTitle,
 } from './primitives/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from './primitives/popover'
+
+function localizedLevelName(
+  level: LevelNode,
+  t: (key: string, params?: Record<string, string | number>) => string,
+): string {
+  return (
+    level.name ||
+    (level.level === 0
+      ? t('level.groundFloor')
+      : level.level > 0
+        ? t('level.floor', { n: level.level })
+        : t('level.basement', { n: -level.level }))
+  )
+}
 
 // ── Inline rename input for a level row ─────────────────────────────────────
 
@@ -190,7 +204,7 @@ function LevelRow({
         >
           <button
             {...dragHandleProps}
-            aria-label={t('level.reorderName', { name: getLevelDisplayName(level) })}
+            aria-label={t('level.reorderName', { name: localizedLevelName(level, t) })}
             className={cn(
               'ml-0.5 flex h-6 w-4 shrink-0 cursor-grab touch-none items-center justify-center rounded-md text-muted-foreground/35 opacity-0 transition-colors hover:bg-white/5 hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary/50 group-hover/level:opacity-100',
               isDragging && 'cursor-grabbing opacity-100',
@@ -213,10 +227,10 @@ function LevelRow({
               e.stopPropagation()
               setIsEditing(true)
             }}
-            title={getLevelDisplayName(level)}
+            title={localizedLevelName(level, t)}
             type="button"
           >
-            <span className="truncate">{getLevelDisplayName(level)}</span>
+            <span className="truncate">{localizedLevelName(level, t)}</span>
           </button>
 
           {/* Storey height badge — opens the height popover */}
@@ -668,7 +682,7 @@ export function FloatingLevelSelector() {
           <DialogHeader>
             <DialogTitle>{t('level.deleteLevelTitle')}</DialogTitle>
             <DialogDescription>
-              {t('level.confirmDelete', { name: deletingLevel ? getLevelDisplayName(deletingLevel) : '' })}
+              {t('level.confirmDelete', { name: deletingLevel ? localizedLevelName(deletingLevel, t) : '' })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

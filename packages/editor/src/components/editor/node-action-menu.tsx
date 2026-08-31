@@ -51,10 +51,10 @@ export function NodeActionMenu({
     >
       {onFind && (
         <button
-          aria-label="Find in catalog"
+          aria-label={t('nodeActions.findInCatalog')}
           className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           onClick={onFind}
-          title="Find in catalog"
+          title={t('nodeActions.findInCatalog')}
           type="button"
         >
           <Search className="h-4 w-4" />
@@ -73,10 +73,10 @@ export function NodeActionMenu({
       )}
       {onEditMesh && (
         <button
-          aria-label="Edit mesh"
+          aria-label={t('nodeActions.editMesh')}
           className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           onClick={onEditMesh}
-          title="Edit mesh"
+          title={t('nodeActions.editMesh')}
           type="button"
         >
           <PencilRuler className="h-4 w-4" />
@@ -84,10 +84,10 @@ export function NodeActionMenu({
       )}
       {onGroup && (
         <button
-          aria-label="Group selection"
+          aria-label={t('nodeActions.group')}
           className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           onClick={onGroup}
-          title="Group (Ctrl/Cmd+G)"
+          title={t('nodeActions.groupShortcut')}
           type="button"
         >
           <Group className="h-4 w-4" />
@@ -95,10 +95,10 @@ export function NodeActionMenu({
       )}
       {onUngroup && (
         <button
-          aria-label="Ungroup selection"
+          aria-label={t('nodeActions.ungroup')}
           className="tooltip-trigger rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           onClick={onUngroup}
-          title="Ungroup (Ctrl/Cmd+Shift+G)"
+          title={t('nodeActions.ungroupShortcut')}
           type="button"
         >
           <Ungroup className="h-4 w-4" />
