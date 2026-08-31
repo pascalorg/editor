@@ -17,6 +17,7 @@ import {
 } from '@pascal-app/core'
 import {
   CursorSphere,
+  EDITOR_LAYER,
   isGridSnapActive,
   isMagneticSnapActive,
   markToolCancelConsumed,
@@ -676,7 +677,12 @@ const LeanToExtensionTool = () => {
         />
       ) : null}
       {runSnap ? (
-        <mesh position={runSnap} renderOrder={1001} rotation={[-Math.PI / 2, 0, 0]}>
+        <mesh
+          layers={EDITOR_LAYER}
+          position={runSnap}
+          renderOrder={1001}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
           <ringGeometry args={[0.13, 0.2, 24]} />
           <meshBasicMaterial color="#22c55e" depthTest={false} side={2} />
         </mesh>

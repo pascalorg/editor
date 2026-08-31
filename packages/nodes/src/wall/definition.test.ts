@@ -2,12 +2,12 @@ import { describe, expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeId,
-  createConicalRoofSectorAboveWall,
   RoofNode,
   RoofSegmentNode,
   type SceneApi,
 } from '@pascal-app/core'
 import { getFloorplanNodeExtension } from '@pascal-app/editor'
+import { createConicalRoofSectorAboveWall } from '../roof/conical-roof'
 import { wallDefinition } from './definition'
 
 test('wallDefinition records the lean-to child schema migration', () => {

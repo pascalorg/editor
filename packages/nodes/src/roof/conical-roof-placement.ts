@@ -1,5 +1,11 @@
-import type { AnyNode, LevelNode, RoofNode, RoofSegmentNode, RoofSupport } from '../schema'
-import { getRoofSegmentSurfaceY } from '../schema'
+import {
+  type AnyNode,
+  getRoofSegmentSurfaceY,
+  type LevelNode,
+  type RoofNode,
+  type RoofSegmentNode,
+  type RoofSupport,
+} from '@pascal-app/core'
 
 export type ConicalRoofLevelPlacement = {
   valid: true

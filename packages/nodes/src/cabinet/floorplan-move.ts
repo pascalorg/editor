@@ -148,6 +148,31 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
   const session: FloorplanMoveTargetSession = {
     affectedIds: run ? [moduleId, run.id as AnyNodeId] : [moduleId],
     apply({ planPoint }) {
+      if ((isGridSnapActive() || isMagneticSnapActive()) && run?.parentId) {
+        const rawLocal = cabinetModuleParentFrame.planToLocal(
+          run,
+          planPoint[0],
+          originalLocal[1],
+          planPoint[1],
+          useScene.getState().nodes,
+        )
+        const wallLocal = resolveCabinetModuleWallSnapLocal({
+          candidateLocal: rawLocal,
+          gridStep: isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
+          module: node,
+          nodes: useScene.getState().nodes,
+          parentLevelId: run.parentId as AnyNodeId,
+          run,
+        })
+        if (wallLocal) {
+          lastLocal = wallLocal
+          useAlignmentGuides.getState().clear()
+          useLiveNodeOverrides.getState().set(moduleId, { position: wallLocal })
+          useScene.getState().markDirty(run.id as AnyNodeId)
+          return
+        }
+      }
+
       const snap = (value: number) =>
         isGridSnapActive()
           ? Math.round(value / useEditor.getState().gridSnapStep) *
@@ -191,18 +216,6 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
             else useAlignmentGuides.getState().clear()
           }
         }
-      }
-      // Wall attachment snap — 2D parity with the 3D move tool's
-      // `groupMoveSnap` pass: active in every snapping mode except Off.
-      if ((isGridSnapActive() || isMagneticSnapActive()) && run.parentId) {
-        const snapped = resolveCabinetModuleWallSnapLocal({
-          candidateLocal: local,
-          module: node,
-          nodes: useScene.getState().nodes,
-          parentLevelId: run.parentId as AnyNodeId,
-          run,
-        })
-        if (snapped) local = snapped
       }
       lastLocal = local
       useLiveNodeOverrides.getState().set(moduleId, { position: local })

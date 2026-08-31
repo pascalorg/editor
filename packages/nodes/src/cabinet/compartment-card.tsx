@@ -275,7 +275,7 @@ export function CompartmentCard({
         />
       </div>
 
-      {!isHood && !isCooktop && type !== 'sink' && (
+      {total > 1 && !isHood && !isCooktop && type !== 'sink' && (
         <div className="pb-2">
           <SliderControl
             label="Height"

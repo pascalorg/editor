@@ -391,7 +391,7 @@ export default function RoofSegmentPanel() {
         {node.roofType === 'conical' ? (
           <SliderControl
             label="Diameter"
-            max={25}
+            max={1000}
             min={0.5}
             onChange={(v) => handleUpdate({ width: v, depth: v })}
             precision={2}
@@ -403,7 +403,7 @@ export default function RoofSegmentPanel() {
           <>
             <SliderControl
               label="Width"
-              max={25}
+              max={1000}
               min={0.5}
               onChange={(v) => handleUpdate({ width: v })}
               precision={2}
@@ -413,7 +413,7 @@ export default function RoofSegmentPanel() {
             />
             <SliderControl
               label="Depth"
-              max={25}
+              max={1000}
               min={0.5}
               onChange={(v) => handleUpdate({ depth: v })}
               precision={2}
