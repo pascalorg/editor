@@ -541,7 +541,8 @@ function ScansControl() {
 function ReferenceListSection({
   title,
   iconSrc,
-  noun,
+  countKey,
+  defaultNoun,
   emptyText,
   nodes,
   show,
@@ -550,7 +551,8 @@ function ReferenceListSection({
 }: {
   title: string
   iconSrc: string
-  noun: string
+  countKey: string
+  defaultNoun: string
   emptyText: string
   nodes: (GuideNode | ScanNode)[]
   show: boolean
@@ -584,8 +586,7 @@ function ReferenceListSection({
           <p className="font-medium text-foreground text-sm">{title}</p>
           {hasItems && (
             <p className="text-muted-foreground text-xs">
-              {nodes.length} {noun}
-              {nodes.length !== 1 ? 's' : ''} {t('viewer.onThisLevel')}
+              {t(nodes.length === 1 ? countKey : `${countKey}_plural`, { count: nodes.length })}
             </p>
           )}
         </div>
@@ -625,7 +626,7 @@ function ReferenceListSection({
                   />
                   <p className="truncate font-medium text-foreground text-sm">
                     {node.name ||
-                      `${noun.charAt(0).toUpperCase()}${noun.slice(1)} ${index + 1}`}
+                      `${defaultNoun.charAt(0).toUpperCase()}${defaultNoun.slice(1)} ${index + 1}`}
                   </p>
                   {selectedReferenceId === node.id && (
                     <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-foreground/80" />
@@ -751,10 +752,11 @@ function ReferencesControl() {
             </div>
           )}
           <ReferenceListSection
+            countKey="viewer.scansOnThisLevel"
+            defaultNoun="scan"
             emptyText={t('viewer.referencesEmptyText')}
             iconSrc="/icons/mesh.webp"
             nodes={scans}
-            noun="scan"
             onError={setUploadError}
             setShow={setShowScans}
             show={showScans}
@@ -762,10 +764,11 @@ function ReferencesControl() {
           />
           <div className="h-px bg-border/45" />
           <ReferenceListSection
+            countKey="viewer.guideImagesOnThisLevel"
+            defaultNoun="guide image"
             emptyText={t('viewer.referencesEmptyText')}
             iconSrc="/icons/floorplan.webp"
             nodes={guides}
-            noun="guide image"
             onError={setUploadError}
             setShow={setShowGuides}
             show={showGuides}

@@ -52,7 +52,7 @@ export function ScenesList({ scenes }: { scenes: SceneMeta[] }) {
 
         {scenes.length === 0 ? (
           <div className="rounded-xl border border-border/60 border-dashed bg-background p-12 text-center">
-            <p className="text-muted-foreground text-sm">{t('scenes.noScenes')}</p>
+            <p className="text-muted-foreground text-sm">{t('scenes.noScenesSaved')}</p>
             <div className="mt-4 flex justify-center">
               <CreateSceneButton label={t('editor.createNew')} />
             </div>
