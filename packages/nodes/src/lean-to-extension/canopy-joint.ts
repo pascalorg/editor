@@ -192,13 +192,8 @@ function jointAt(
   }
 }
 
-export function resolveFreestandingCanopyJoints(
-  leanTo: LeanToExtensionNode,
-  nodes: Record<string, AnyNode> | undefined,
-): Partial<Record<LeanToCornerSide, FreestandingCanopyJoint>> {
-  if (!nodes || leanTo.hostKind !== 'freestanding' || !leanTo.autoMiterCorners) return {}
-
-  const candidates = Object.values(nodes).filter(
+function compatibleCanopyCandidates(leanTo: LeanToExtensionNode, nodes: Record<string, AnyNode>) {
+  return Object.values(nodes).filter(
     (candidate): candidate is LeanToExtensionNode =>
       candidate.type === 'lean-to-extension' &&
       candidate.id !== leanTo.id &&
@@ -207,25 +202,47 @@ export function resolveFreestandingCanopyJoints(
       candidate.autoMiterCorners &&
       sameRoofProfile(leanTo, candidate),
   )
+}
+
+function rankedJointMatches(
+  leanTo: LeanToExtensionNode,
+  side: LeanToCornerSide,
+  candidates: LeanToExtensionNode[],
+) {
+  const ownEndpoint = endpoint(leanTo, side)
+  return candidates
+    .flatMap((candidate) => {
+      const match = matchingEndpoint(candidate, ownEndpoint)
+      if (!match) return []
+      const joint = jointAt(leanTo, side, candidate, match.side)
+      return joint ? [{ candidate, joint, ...match }] : []
+    })
+    .sort(
+      (a, b) =>
+        a.distance - b.distance ||
+        String(a.candidate.id).localeCompare(String(b.candidate.id)) ||
+        a.side.localeCompare(b.side),
+    )
+}
+
+export function resolveFreestandingCanopyJoints(
+  leanTo: LeanToExtensionNode,
+  nodes: Record<string, AnyNode> | undefined,
+): Partial<Record<LeanToCornerSide, FreestandingCanopyJoint>> {
+  if (!nodes || leanTo.hostKind !== 'freestanding' || !leanTo.autoMiterCorners) return {}
+
+  const candidates = compatibleCanopyCandidates(leanTo, nodes)
   const joints: Partial<Record<LeanToCornerSide, FreestandingCanopyJoint>> = {}
 
   for (const side of ['left', 'right'] as const) {
-    const ownEndpoint = endpoint(leanTo, side)
-    const matches = candidates
-      .flatMap((candidate) => {
-        const match = matchingEndpoint(candidate, ownEndpoint)
-        return match ? [{ candidate, ...match }] : []
-      })
-      .sort(
-        (a, b) =>
-          a.distance - b.distance ||
-          String(a.candidate.id).localeCompare(String(b.candidate.id)) ||
-          a.side.localeCompare(b.side),
-      )
+    const matches = rankedJointMatches(leanTo, side, candidates)
     for (const match of matches) {
-      const joint = jointAt(leanTo, side, match.candidate, match.side)
-      if (!joint) continue
-      joints[side] = joint
+      const reciprocal = rankedJointMatches(match.candidate, match.side, [
+        ...compatibleCanopyCandidates(match.candidate, nodes),
+        ...(sameRoofProfile(leanTo, match.candidate) ? [leanTo] : []),
+      ])[0]
+      if (reciprocal?.candidate.id !== leanTo.id || reciprocal.side !== side) continue
+      joints[side] = match.joint
       break
     }
   }

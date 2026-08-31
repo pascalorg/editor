@@ -70,19 +70,17 @@ describe('multi-joint mono canopy', () => {
       (run) => createLeanToAssembly(run, undefined, nodes).segment.shedFootprintPieces ?? [],
     )
 
-    expect(footprintsByRun.every((footprints) => footprints.length > 0)).toBe(true)
+    expect(footprintsByRun.map((footprints) => footprints.length)).toEqual([1, 1])
     expect(footprintsByRun.flat().some(hasSelfIntersection)).toBe(false)
     expect(
       footprintsByRun[0]!.reduce((sum, footprint) => sum + polygonArea(footprint), 0),
-    ).toBeCloseTo(18.303629451612156)
+    ).toBeCloseTo(18.29244342600493)
     expect(
       footprintsByRun[1]!.reduce((sum, footprint) => sum + polygonArea(footprint), 0),
-    ).toBeCloseTo(22.29958447881066)
+    ).toBeCloseTo(22.28839845320343)
   })
 
-  // A J-shape (chain of 3+ freestanding straight mono runs) is not mitered: each
-  // run renders as a plain rectangle with no shaped footprint pieces.
-  test('leaves every run un-mitered across both joints in the reported layout', () => {
+  test('miters every run across both joints in the reported layout', () => {
     const level = LevelNode.parse({ id: 'level_mono_reported_layout', level: 0 })
     const runs = [
       resolveLeanToFreestandingRunPlacement(level.id, [-7, 11.5], [2, 12], false, 'mono')!,
@@ -97,10 +95,11 @@ describe('multi-joint mono canopy', () => {
       (run) => createLeanToAssembly(run, undefined, nodes).segment.shedFootprintPieces ?? [],
     )
 
-    expect(footprintsByRun.every((footprints) => footprints.length === 0)).toBe(true)
+    expect(footprintsByRun.every((footprints) => footprints.length > 0)).toBe(true)
+    expect(footprintsByRun.flat().some(hasSelfIntersection)).toBe(false)
   })
 
-  test('leaves every run un-mitered when the first run forms the top of a J', () => {
+  test('miters every run when the first run forms the top of a J', () => {
     const level = LevelNode.parse({ id: 'level_mono_browser_top_first_j', level: 0 })
     const points: Point[] = [
       [-6, 2.5],
@@ -121,6 +120,7 @@ describe('multi-joint mono canopy', () => {
       (run) => createLeanToAssembly(run!, undefined, nodes).segment.shedFootprintPieces ?? [],
     )
 
-    expect(footprintsByRun.every((footprints) => footprints.length === 0)).toBe(true)
+    expect(footprintsByRun.every((footprints) => footprints.length > 0)).toBe(true)
+    expect(footprintsByRun.flat().some(hasSelfIntersection)).toBe(false)
   })
 })

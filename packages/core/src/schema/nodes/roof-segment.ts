@@ -158,6 +158,18 @@ export const RoofSegmentNode = BaseNode.extend({
   shedSideInfillMaxX: z.number().optional(),
   shedFootprintPieces: z.array(z.array(z.tuple([z.number(), z.number()])).min(3)).optional(),
   shedOpenEndSides: z.array(z.enum(['left', 'right'])).optional(),
+  // Shared scene-scope data for comparing shed seams that live under separate
+  // roof parents. Kind-owned assembly code supplies it; the renderer remains
+  // independent of the kind that produced the segment.
+  shedJointFrame: z
+    .object({
+      position: z.tuple([z.number(), z.number(), z.number()]),
+      rotation: z.number(),
+    })
+    .optional(),
+  shedJointOwnerId: z.string().optional(),
+  shedJointNeighborIds: z.array(z.string()).optional(),
+  shedJointScopeId: z.string().optional(),
   managedByParent: z.boolean().default(false),
   wallShell: z.enum(['auto', 'include', 'omit']).default('auto'),
   shedInsetEndPanels: z.boolean().default(false),

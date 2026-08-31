@@ -432,7 +432,7 @@ describe('lean-to corner joint', () => {
     }
   })
 
-  test('partitions mirrored freestanding mono canopy V corners without gaps or overlaps', () => {
+  test('keeps convex canopy coverage and trims the concave corner cross', () => {
     for (const turnZ of [-4, 4]) {
       const first = resolveLeanToFreestandingRunPlacement('level_free_v', [0, 0], [4, 0])!
       const second = resolveLeanToFreestandingRunPlacement('level_free_v', [4, 0], [4, turnZ])!
@@ -470,7 +470,7 @@ describe('lean-to corner joint', () => {
         raycaster.ray.origin.set(x, 10, z)
         return baselineMeshes.some((mesh) => raycaster.intersectObject(mesh, false).length > 0)
       }
-      let gaps = 0
+      let trimmedBaselineSamples = 0
       const overlaps: Array<{ x: number; z: number; delta: number }> = []
       for (let x = bounds.min.x + 0.031; x < bounds.max.x; x += 0.08) {
         for (let z = bounds.min.z + 0.047; z < bounds.max.z; z += 0.08) {
@@ -486,7 +486,7 @@ describe('lean-to corner joint', () => {
           const hits = roofMeshes.flatMap((mesh) =>
             raycaster.intersectObject(mesh, false).slice(0, 1),
           )
-          if (hits.length === 0) gaps++
+          if (hits.length === 0) trimmedBaselineSamples++
           const delta =
             hits.length > 1
               ? Math.max(...hits.map((hit) => hit.point.y)) -
@@ -499,11 +499,9 @@ describe('lean-to corner joint', () => {
       expect(roofMeshes.map((mesh) => countTopMaterialNonUpwardTriangles(mesh.geometry))).toEqual([
         0, 0,
       ])
-      expect({ turnZ, gaps, overlaps }).toEqual({
-        turnZ,
-        gaps: 0,
-        overlaps: [],
-      })
+      expect(overlaps).toEqual([])
+      if (turnZ < 0) expect(trimmedBaselineSamples).toBe(0)
+      else expect(trimmedBaselineSamples).toBeGreaterThan(0)
       for (const mesh of [...roofMeshes, ...baselineMeshes]) mesh.geometry.dispose()
     }
   })
@@ -1241,6 +1239,69 @@ describe('lean-to corner joint', () => {
     expect(intrusions).toBe(0)
 
     for (const mesh of meshes) mesh.geometry.dispose()
+  })
+
+  test('keeps the exported curved-wall corner gutter at one elevation', () => {
+    const curvedWall = WallNode.parse({
+      id: 'wall_exported_curved_corner',
+      parentId: 'level_exported_curved_corner',
+      start: [8, 8.5],
+      end: [0.5, 3],
+      curveOffset: 2,
+    })
+    const straightWall = WallNode.parse({
+      id: 'wall_exported_straight_corner',
+      parentId: 'level_exported_curved_corner',
+      start: [0.5, 3],
+      end: [-5.5, 7],
+    })
+    const curved = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(curvedWall, getWallCurveLength(curvedWall) / 2, 'front')!,
+        curvedWall,
+      ),
+      id: 'leanto_exported_curved_corner',
+    }
+    const straight = {
+      ...applyLeanToWallAutoSpan(
+        resolveLeanToWallPlacement(straightWall, getWallCurveLength(straightWall) / 2, 'front')!,
+        straightWall,
+      ),
+      id: 'leanto_exported_straight_corner',
+    }
+    const nodes = Object.fromEntries(
+      [curvedWall, straightWall, curved, straight].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+    const curvedAssembly = createLeanToAssembly(curved, undefined, nodes)
+    const straightAssembly = createLeanToAssembly(straight, undefined, nodes)
+    const curvedGutter = gutterWorldGeometry(
+      curvedWall,
+      curved,
+      curvedAssembly,
+      computeGutterMitres(curvedAssembly.gutter, curvedAssembly.segment, [
+        { gutter: straightAssembly.gutter, segment: straightAssembly.segment },
+      ]),
+    )
+    const straightGutter = gutterWorldGeometry(
+      straightWall,
+      straight,
+      straightAssembly,
+      computeGutterMitres(straightAssembly.gutter, straightAssembly.segment, [
+        { gutter: curvedAssembly.gutter, segment: curvedAssembly.segment },
+      ]),
+    )
+    const curvedMitre = computeGutterMitres(curvedAssembly.gutter, curvedAssembly.segment, [
+      { gutter: straightAssembly.gutter, segment: straightAssembly.segment },
+    ])
+    const straightMitre = computeGutterMitres(straightAssembly.gutter, straightAssembly.segment, [
+      { gutter: curvedAssembly.gutter, segment: curvedAssembly.segment },
+    ])
+    expect(curvedMitre.right).toBe(0)
+    expect(straightMitre.left).toBe(0)
+    expect(curvedGutter.getAttribute('position').count).toBeGreaterThan(0)
+    expect(straightGutter.getAttribute('position').count).toBeGreaterThan(0)
+    curvedGutter.dispose()
+    straightGutter.dispose()
   })
 
   test('resolves a reciprocal 60 degree corner with its true gutter mitre', () => {

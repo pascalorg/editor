@@ -295,6 +295,15 @@ export function resolveLeanToRoofAttachment(
           (leanTo.connectionOffset ?? 0)
         if (highEdgeHeight < 0.8 || highEdgeHeight > 10) continue
 
+        const edgeWallStart = projection(start, frame.wallStart, frame.along)
+        const edgeWallEnd = projection(end, frame.wallStart, frame.along)
+        const rawSpanStart = Math.min(edgeWallStart, edgeWallEnd)
+        const rawSpanEnd = Math.max(edgeWallStart, edgeWallEnd)
+        const wallLength = getWallCurveLength(wall)
+        const spanStart = isCurvedWall(wall) ? rawSpanStart : Math.max(0, rawSpanStart)
+        const spanEnd = isCurvedWall(wall) ? rawSpanEnd : Math.min(wallLength, rawSpanEnd)
+        if (spanEnd - spanStart <= 1e-6) continue
+
         const attachment: LeanToRoofAttachment = {
           roofId: roof.id,
           roofSegmentId: segment.id,
@@ -303,14 +312,8 @@ export function resolveLeanToRoofAttachment(
           highEdgeHeight,
           planDistance,
           overlap,
-          edgeSpan: Math.abs(
-            projection(end, frame.wallStart, frame.along) -
-              projection(start, frame.wallStart, frame.along),
-          ),
-          wallLocalCenterX:
-            (projection(start, frame.wallStart, frame.along) +
-              projection(end, frame.wallStart, frame.along)) /
-            2,
+          edgeSpan: spanEnd - spanStart,
+          wallLocalCenterX: (spanStart + spanEnd) / 2,
           deckThickness: segment.deckThickness,
           shingleThickness: segment.shingleThickness ?? 0,
         }

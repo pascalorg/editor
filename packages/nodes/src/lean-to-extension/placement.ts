@@ -96,8 +96,11 @@ export function resolveLeanToWallPlanTarget(
 }
 
 const PLACEMENT_ROTATION_STEP = Math.PI / 4
-export const LEAN_TO_RUN_CONNECT_SNAP_RADIUS = 0.05
 export const LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS = 0.5
+// Continuous canopy runs must stay connected even when the user's active
+// snapping mode disables magnetic pull. Grid/angle modes still control cursor
+// quantization, but they must not turn a continuous chain into separate runs.
+export const LEAN_TO_RUN_CONNECT_SNAP_RADIUS = LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS
 
 export function nextLeanToPlacementRotation(
   current: number,
@@ -168,7 +171,9 @@ export function resolveLeanToFreestandingRunPlacement(
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]
   const span = Math.hypot(dx, dz)
-  if (span < 0.5) return null
+  // Keep exact-minimum diagonal runs valid. Floating-point distance can land a
+  // mathematically 0.5 m run a few ulps below the schema minimum.
+  if (span < 0.5 - 1e-9) return null
   const from = flipProjection ? end : start
   const to = flipProjection ? start : end
   const rotationY = Math.atan2(-(to[1] - from[1]), to[0] - from[0])

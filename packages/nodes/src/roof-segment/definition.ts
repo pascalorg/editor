@@ -314,7 +314,7 @@ function resolveRoofSegmentHandles(
  */
 export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   kind: 'roof-segment',
-  schemaVersion: 4,
+  schemaVersion: 5,
   schema: RoofSegmentNode,
   category: 'structure',
   surfaceRole: 'roof',
