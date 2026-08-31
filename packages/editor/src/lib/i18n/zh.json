@@ -54,6 +54,7 @@
   "commands.takeScreenshot": "截图",
   "commands.takeSnapshot": "快照",
   "commands.toggleFullscreen": "切换全屏",
+  "commands.translucent": "半透明",
   "commands.typeNewName": "输入新名称…",
   "commands.typeNewNameAbove": "在上方输入新名称…",
   "commands.undo": "撤销",

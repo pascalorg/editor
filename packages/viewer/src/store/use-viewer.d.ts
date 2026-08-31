@@ -27,8 +27,8 @@ type ViewerState = {
   setExporting: (value: boolean) => void
   levelMode: 'stacked' | 'exploded' | 'solo' | 'manual'
   setLevelMode: (mode: 'stacked' | 'exploded' | 'solo' | 'manual') => void
-  wallMode: 'up' | 'cutaway' | 'down'
-  setWallMode: (mode: 'up' | 'cutaway' | 'down') => void
+  wallMode: 'up' | 'cutaway' | 'down' | 'translucent'
+  setWallMode: (mode: 'up' | 'cutaway' | 'down' | 'translucent') => void
   showScans: boolean
   setShowScans: (show: boolean) => void
   showGuides: boolean

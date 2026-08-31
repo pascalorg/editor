@@ -54,6 +54,7 @@
   "commands.takeScreenshot": "Take Screenshot",
   "commands.takeSnapshot": "Take Snapshot",
   "commands.toggleFullscreen": "Toggle Fullscreen",
+  "commands.translucent": "Translucent",
   "commands.typeNewName": "Type a new name…",
   "commands.typeNewNameAbove": "Type a new name above…",
   "commands.undo": "Undo",
