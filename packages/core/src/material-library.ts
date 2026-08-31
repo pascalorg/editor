@@ -4155,6 +4155,507 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
       },
     },
   },
+  /* ── Siding (contributed by PlanCrafters, 2026-08-31) ─────────────────────
+   * The catalog shipped no siding finish at all — no lap, no clapboard, no
+   * board-and-batten — so exterior walls imported from PlanCrafters could be
+   * color-true only as flat paint. One white seamless albedo per profile,
+   * tinted per entry via mapProperties.color (same mechanism the flat color
+   * presets use), keeps this to two textures for twelve finishes.
+   */
+  {
+    id: 'siding-lap-white',
+    label: 'Lap siding — white',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted white',
+    previewColor: '#e9e9e9',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/lap_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#e9e9e9',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-greige',
+    label: 'Lap siding — greige',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted greige',
+    previewColor: '#c8c1b8',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/lap_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#c8c1b8',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-gray',
+    label: 'Lap siding — gray',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted gray',
+    previewColor: '#8b8a86',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/lap_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#8b8a86',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-sage',
+    label: 'Lap siding — sage',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted sage',
+    previewColor: '#bcc5b2',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/lap_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#bcc5b2',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-forest',
+    label: 'Lap siding — forest',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted forest',
+    previewColor: '#4f6b57',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/lap_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#4f6b57',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-navy',
+    label: 'Lap siding — navy',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted navy',
+    previewColor: '#2f4865',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/lap_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#2f4865',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-yellow',
+    label: 'Lap siding — yellow',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted yellow',
+    previewColor: '#f2e3b3',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/lap_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#f2e3b3',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-nearblack',
+    label: 'Lap siding — nearblack',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted nearblack',
+    previewColor: '#232322',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/lap_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#454543',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-lap-clay',
+    label: 'Lap siding — clay',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior clapboard lap siding, painted clay',
+    previewColor: '#8f4a2e',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/lap_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#8f4a2e',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-batten-cream',
+    label: 'Board & batten — cream',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior board-and-batten siding, painted cream',
+    previewColor: '#efe3cc',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/batten_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/batten_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#efe3cc',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-batten-sand',
+    label: 'Board & batten — sand',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior board-and-batten siding, painted sand',
+    previewColor: '#ddccae',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/batten_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/batten_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#ddccae',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-batten-charcoal',
+    label: 'Board & batten — charcoal',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior board-and-batten siding, painted charcoal',
+    previewColor: '#4e5257',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/batten_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/batten_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#4e5257',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
+  {
+    id: 'siding-batten-olive',
+    label: 'Board & batten — olive',
+    category: 'wood',
+    surfaces: ['wall', 'outdoor'],
+    description: 'Exterior board-and-batten siding, painted olive',
+    previewColor: '#8d9368',
+    preset: {
+      maps: {
+        // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
+        // Donation form: '/material/siding/batten_albedo_512.webp' once the
+        // texture is hosted alongside the rest of the material CDN.
+        albedoMap: 'http://localhost:3002/material/siding/batten_albedo_512.webp',
+      },
+      mapProperties: {
+        color: '#8d9368',
+        roughness: 0.85,
+        metalness: 0,
+        repeatX: 1,
+        repeatY: 1,
+        rotation: 0,
+        wrapS: 'Repeat',
+        wrapT: 'Repeat',
+        normalScaleX: 1,
+        normalScaleY: 1,
+        emissiveIntensity: 1,
+        displacementScale: 0.02,
+        bumpScale: 1,
+        transparent: false,
+        flipY: true,
+        emissiveColor: '#000000',
+        aoMapIntensity: 1,
+        side: 0,
+        opacity: 1,
+        lightMapIntensity: 1,
+      },
+    },
+  },
 ]
 
 const STATIC_CATALOG_IDS = new Set(MATERIAL_CATALOG.map((item) => item.id))
