@@ -5,12 +5,12 @@ import { SNAPSHOT_MAX_EDGE } from '@pascal-app/viewer'
 import {
   Check,
   Crop,
+  Drone,
   Footprints,
   Loader2,
   Maximize2,
   Monitor,
   Orbit,
-  Plane,
   RotateCcw,
   X,
 } from 'lucide-react'
@@ -129,10 +129,27 @@ const CROP_LABELS: Record<CropMode, string> = {
 const FOV_SLIDER_CLASS =
   'w-24 [&_[data-slot=slider-track]]:h-1 [&_[data-slot=slider-track]]:bg-white/20 [&_[data-slot=slider-range]]:bg-white [&_[data-slot=slider-thumb]]:size-3 [&_[data-slot=slider-thumb]]:border-white/50 [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-thumb]]:ring-white/30'
 
-const CAMERA_NAV_HINTS: Record<CaptureCameraNav, string | null> = {
+type CameraNavHint = {
+  action: string
+  keys: readonly string[]
+}
+
+const CAMERA_NAV_HINTS: Record<CaptureCameraNav, readonly CameraNavHint[] | null> = {
   orbit: null,
-  walk: 'Click the scene to look around · WASD to walk · Space to jump · P frees the cursor · Enter to shoot',
-  fly: 'Click the scene to look around · WASD to fly · Space up · Q down · Shift to boost · Enter to shoot',
+  walk: [
+    { keys: ['WASD'], action: 'move' },
+    { keys: ['Space'], action: 'jump' },
+    { keys: ['P'], action: 'free cursor' },
+    { keys: ['Enter'], action: 'shoot' },
+  ],
+  drone: [
+    { keys: ['WASD'], action: 'move' },
+    { keys: ['Space', 'E'], action: 'up' },
+    { keys: ['Q'], action: 'down' },
+    { keys: ['Shift'], action: 'boost' },
+    { keys: ['P'], action: 'free cursor' },
+    { keys: ['Enter'], action: 'shoot' },
+  ],
 }
 
 export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
@@ -390,7 +407,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     })
   }, [captureState, mode, drag, projectId, isPreset, standardAspect])
 
-  // Esc dismisses. Enter fires the shutter: walk and fly hold a pointer lock, so
+  // Esc dismisses. Enter fires the shutter: walk and drone hold a pointer lock, so
   // a keyboard shutter is the only way to shoot without leaving the camera first.
   useEffect(() => {
     if (!isCaptureMode) return
@@ -411,13 +428,13 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   if (!isCaptureMode) return null
 
   const resolution = getResolution(mode, overlayRef.current, drag, standardAspect)
-  // Walk and fly need the canvas to receive the click that grants pointer lock,
+  // Walk and drone need the canvas to receive the click that grants pointer lock,
   // so the area-drag surface steps aside — same treatment as preset mode, whose
   // frame is fixed and camera-driven.
   const cameraOwnsPointer = cameraNav !== 'orbit'
   const frameLocked = isPreset || cameraOwnsPointer
   // Preset captures are a constrained flow (fixed square, host-owned banner);
-  // they keep the plain orbit camera. Walk / fly need a keyboard, so they stay
+  // they keep the plain orbit camera. Walk / drone need a keyboard, so they stay
   // off touch. The fov control is armed by the capture rig only on a
   // perspective camera — orthographic captures have no lens to drive.
   const showCameraNav = !(isPreset || isMobile)
@@ -547,7 +564,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
               <CornerAccents />
               {/* Corner handles — preset mode locks the frame to the
                   auto-staged centered square; the user adjusts the
-                  camera instead. Walk / fly lock it for the same reason. */}
+                  camera instead. Walk / drone lock it for the same reason. */}
               {!frameLocked &&
                 (
                   [
@@ -638,10 +655,10 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
                   onClick={() => setCameraNav('walk')}
                 />
                 <ModeButton
-                  active={cameraNav === 'fly'}
-                  icon={<Plane className="h-3.5 w-3.5" />}
-                  label="Fly"
-                  onClick={() => setCameraNav('fly')}
+                  active={cameraNav === 'drone'}
+                  icon={<Drone className="h-3.5 w-3.5" />}
+                  label="Drone"
+                  onClick={() => setCameraNav('drone')}
                 />
               </div>
             )}
@@ -745,16 +762,32 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
 
         {/* Preset captures carry their own "Frame your item" banner — the
             snapshot pitch only applies to the studio/reference flow. */}
-        {!isMobile && !isPreset && (
-          <span className="pointer-events-none max-w-90 rounded-lg border border-white/10 bg-neutral-950/85 px-3.5 py-1.5 text-center text-[11.5px] text-white/85 leading-relaxed backdrop-blur-md">
-            {cameraHint ?? (
-              <>
-                A <b className="font-semibold text-white">snapshot</b>
-                {' freezes this exact camera angle as a reusable reference for renders & videos.'}
-              </>
-            )}
-          </span>
-        )}
+        {!isMobile &&
+          !isPreset &&
+          (cameraHint ? (
+            <div className="pointer-events-none flex max-w-lg flex-wrap items-center justify-center gap-x-2.5 gap-y-1 rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 text-[10px] backdrop-blur-md">
+              {cameraHint.map(({ keys, action }) => (
+                <span className="inline-flex items-center gap-1 whitespace-nowrap" key={action}>
+                  <span className="inline-flex items-center gap-0.5">
+                    {keys.map((key, index) => (
+                      <span className="inline-flex items-center gap-0.5" key={key}>
+                        {index > 0 && <span className="text-white/25">/</span>}
+                        <kbd className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 font-mono text-[9px] text-white/80 leading-none shadow-sm">
+                          {key}
+                        </kbd>
+                      </span>
+                    ))}
+                  </span>
+                  <span className="text-white/55">{action}</span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="pointer-events-none max-w-90 rounded-lg border border-white/10 bg-neutral-950/85 px-3.5 py-1.5 text-center text-[11.5px] text-white/85 leading-relaxed backdrop-blur-md">
+              A <b className="font-semibold text-white">snapshot</b>
+              {' freezes this exact camera angle as a reusable reference for renders & videos.'}
+            </span>
+          ))}
 
         <button
           aria-label={isPreset ? 'Capture' : 'Take snapshot'}

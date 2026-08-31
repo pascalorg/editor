@@ -35,7 +35,7 @@ export const CaptureCameraRig = () => {
       useEditor.getState().armCaptureFov(null)
       // Walkthrough restores its own pre-entry fov when it unmounts, which can
       // happen in the same commit as this rig (leaving capture also leaves
-      // walk/fly). Only put the entry fov back if the camera still holds our
+      // walk/drone). Only put the entry fov back if the camera still holds our
       // last write — otherwise someone else has already re-owned it.
       if (appliedFovRef.current !== null && perspectiveCamera.fov === appliedFovRef.current) {
         perspectiveCamera.fov = entryFov

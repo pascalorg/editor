@@ -99,11 +99,11 @@ export type CaptureMode =
 
 /**
  * How the first-person camera moves. `walk` is the grounded street-view
- * controller (gravity, collision, door interaction); `fly` is a free camera
+ * controller (gravity, collision, door interaction); `drone` is a free camera
  * with no gravity or collision, offered by the snapshot capture overlay so a
  * shot can be framed from anywhere in the scene.
  */
-export type FirstPersonMovementMode = 'walk' | 'fly'
+export type FirstPersonMovementMode = 'walk' | 'drone'
 
 /** Degrees. Range of the capture-mode field-of-view control. */
 export const CAPTURE_FOV_MIN = 15
@@ -460,7 +460,7 @@ type EditorState = {
   setFirstPersonMode: (enabled: boolean) => void
   // Which first-person controller runs while `isFirstPersonMode` is on. Reset to
   // `walk` whenever first person is left, so the grounded controller stays the
-  // default entry point; only the capture overlay arms `fly`.
+  // default entry point; only the capture overlay arms `drone`.
   firstPersonMovementMode: FirstPersonMovementMode
   setFirstPersonMovementMode: (mode: FirstPersonMovementMode) => void
   // Perspective field of view (degrees) the snapshot capture overlay is driving,
@@ -1219,7 +1219,7 @@ const useEditor = create<EditorState>()(
         const resolved: CaptureMode =
           typeof next === 'boolean' ? { mode: next ? 'standard' : 'idle' } : next
         const entering = resolved.mode !== 'idle'
-        // Walk / fly framing is a capture-only camera, so leaving capture always
+        // Walk / drone framing is a capture-only camera, so leaving capture always
         // lands back on orbit. Run it first: it restores its own view mode, and
         // the capture restore below has the final say.
         if (!entering && get().isFirstPersonMode) {

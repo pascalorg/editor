@@ -1541,7 +1541,7 @@ export default function Editor({
                       <HelperManager />
                     </div>
                   )}
-                  {/* Capture mode drives walk / fly from its own overlay, which
+                  {/* Capture mode drives walk / drone from its own overlay, which
                       owns the framing chrome — the walkthrough HUD would both
                       clutter the frame and offer a second, conflicting exit. */}
                   {isFirstPersonMode && !isCaptureMode && (

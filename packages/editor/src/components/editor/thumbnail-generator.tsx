@@ -147,7 +147,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           ;(controls as any).getTarget(v)
           tgt = [v.x, v.y, v.z]
         } else {
-          // Walk / fly captures run without orbit controls, so there is no orbit
+          // Walk / drone captures run without orbit controls, so there is no orbit
           // target to read. Synthesize one down the view axis — otherwise the
           // saved snapshot carries no framing to return to.
           const look = new THREE.Vector3(0, 0, -1)
