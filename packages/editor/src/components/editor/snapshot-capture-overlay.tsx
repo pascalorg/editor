@@ -117,7 +117,7 @@ function CornerAccents() {
 }
 
 const HUD_CHIP_CLASS =
-  'flex flex-col gap-px rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 backdrop-blur-md'
+  'flex flex-col gap-px rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5'
 
 const CROP_LABELS: Record<CropMode, string> = {
   standard: 'Standard',
@@ -537,7 +537,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
               has a pre-staged square, so we never show it there. */}
           {!selectionStyle && !isPreset && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <span className="rounded-full border border-white/10 bg-neutral-950/80 px-4 py-2 text-sm text-white backdrop-blur-md">
+              <span className="rounded-full border border-white/10 bg-neutral-950/80 px-4 py-2 text-sm text-white">
                 {cameraOwnsPointer
                   ? 'Switch back to orbit to drag a capture area'
                   : 'Drag the area you want to capture'}
@@ -622,7 +622,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       <div className="pointer-events-auto absolute top-4 right-4">
         <button
           aria-label="Close capture mode"
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 text-white/80 text-xs backdrop-blur-md transition-colors hover:bg-neutral-950 hover:text-white"
+          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 text-white/80 text-xs transition-colors hover:bg-neutral-950 hover:text-white"
           onClick={dismiss}
           type="button"
         >
@@ -641,7 +641,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
         {(showCameraNav || fovValue !== null) && (
           <div className="pointer-events-auto flex items-center gap-2">
             {showCameraNav && (
-              <div className="flex items-center gap-1 rounded-full border border-white/10 bg-neutral-950/85 px-1.5 py-1.5 shadow-xl backdrop-blur-md">
+              <div className="flex items-center gap-1 rounded-full border border-white/10 bg-neutral-950/85 px-1.5 py-1.5 shadow-xl">
                 <ModeButton
                   active={cameraNav === 'orbit'}
                   icon={<Orbit className="h-3.5 w-3.5" />}
@@ -663,7 +663,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
               </div>
             )}
             {fovValue !== null && (
-              <div className="flex items-center gap-2.5 rounded-full border border-white/10 bg-neutral-950/85 py-1.5 pr-1.5 pl-3 shadow-xl backdrop-blur-md">
+              <div className="flex items-center gap-2.5 rounded-full border border-white/10 bg-neutral-950/85 py-1.5 pr-1.5 pl-3 shadow-xl">
                 <span className="font-mono text-[8.5px] text-white/50 uppercase tracking-[0.14em]">
                   Lens
                 </span>
@@ -698,7 +698,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
         )}
 
         {!isCropLocked && (
-          <div className="pointer-events-auto relative flex items-center gap-1 rounded-full border border-white/10 bg-neutral-950/85 px-1.5 py-1.5 shadow-xl backdrop-blur-md">
+          <div className="pointer-events-auto relative flex items-center gap-1 rounded-full border border-white/10 bg-neutral-950/85 px-1.5 py-1.5 shadow-xl">
             {/* Clicking Standard while it's active opens the aspect picker */}
             <ModeButton
               active={mode === 'standard'}
@@ -713,7 +713,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
               }}
             />
             {aspectMenuOpen && mode === 'standard' && (
-              <div className="absolute bottom-[calc(100%+8px)] left-0 flex gap-1 rounded-full border border-white/10 bg-neutral-950/90 p-1.5 shadow-xl backdrop-blur-md">
+              <div className="absolute bottom-[calc(100%+8px)] left-0 flex gap-1 rounded-full border border-white/10 bg-neutral-950/90 p-1.5 shadow-xl">
                 {(Object.keys(STANDARD_SIZES) as StandardAspect[]).map((aspect) => (
                   <button
                     className={`rounded-full px-2.5 py-1 font-mono text-[11px] transition-colors ${
@@ -765,7 +765,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
         {!isMobile &&
           !isPreset &&
           (cameraHint ? (
-            <div className="pointer-events-none flex max-w-lg flex-wrap items-center justify-center gap-x-2.5 gap-y-1 rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 text-[10px] backdrop-blur-md">
+            <div className="pointer-events-none flex max-w-lg flex-wrap items-center justify-center gap-x-2.5 gap-y-1 rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 text-[10px]">
               {cameraHint.map(({ keys, action }) => (
                 <span className="inline-flex items-center gap-1 whitespace-nowrap" key={action}>
                   <span className="inline-flex items-center gap-0.5">
@@ -783,7 +783,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
               ))}
             </div>
           ) : (
-            <span className="pointer-events-none max-w-90 rounded-lg border border-white/10 bg-neutral-950/85 px-3.5 py-1.5 text-center text-[11.5px] text-white/85 leading-relaxed backdrop-blur-md">
+            <span className="pointer-events-none max-w-90 rounded-lg border border-white/10 bg-neutral-950/85 px-3.5 py-1.5 text-center text-[11.5px] text-white/85 leading-relaxed">
               A <b className="font-semibold text-white">snapshot</b>
               {' freezes this exact camera angle as a reusable reference for renders & videos.'}
             </span>
