@@ -5,7 +5,7 @@ import { LevelNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { ErrorCode, throwMcpError } from './errors'
-import { publishLiveSceneSnapshot } from './live-sync'
+import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema } from './schemas'
 
@@ -24,6 +24,7 @@ export const createLevelInput = {
 
 export const createLevelOutput = {
   levelId: z.string(),
+  ...liveSyncOutput,
 }
 
 export function registerCreateLevel(server: McpServer, bridge: SceneOperations): void {
@@ -65,8 +66,8 @@ export function registerCreateLevel(server: McpServer, bridge: SceneOperations):
       })
 
       const id = bridge.createNode(levelNode, buildingId as AnyNodeId)
-      await publishLiveSceneSnapshot(bridge, 'create_level')
-      const payload = { levelId: id as string }
+      const persistence = await publishLiveSceneSnapshot(bridge, 'create_level')
+      const payload = { levelId: id as string, ...persistencePayload(persistence) }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
         structuredContent: payload,

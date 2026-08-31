@@ -5,7 +5,7 @@ import { z } from 'zod'
 import type { Patch as BridgePatch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
 import { ErrorCode, throwMcpError } from './errors'
-import { publishLiveSceneSnapshot } from './live-sync'
+import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { NodeIdSchema } from './schemas'
 
 export const duplicateLevelInput = {
@@ -15,6 +15,7 @@ export const duplicateLevelInput = {
 export const duplicateLevelOutput = {
   newLevelId: z.string(),
   newNodeIds: z.array(z.string()),
+  ...liveSyncOutput,
 }
 
 export function registerDuplicateLevel(server: McpServer, bridge: SceneOperations): void {
@@ -59,11 +60,12 @@ export function registerDuplicateLevel(server: McpServer, bridge: SceneOperation
       })
 
       const result = bridge.applyPatch(patches)
-      await publishLiveSceneSnapshot(bridge, 'duplicate_level')
+      const persistence = await publishLiveSceneSnapshot(bridge, 'duplicate_level')
 
       const payload = {
         newLevelId: newLevelId as string,
         newNodeIds: result.createdIds as unknown as string[],
+        ...persistencePayload(persistence),
       }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

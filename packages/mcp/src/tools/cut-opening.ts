@@ -5,7 +5,7 @@ import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { ErrorCode, throwMcpError } from './errors'
 import { wallLength, wallLocalXFromT } from './geometry'
-import { publishLiveSceneSnapshot } from './live-sync'
+import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema } from './schemas'
 
@@ -19,6 +19,7 @@ export const cutOpeningInput = {
 
 export const cutOpeningOutput = {
   openingId: z.string(),
+  ...liveSyncOutput,
 }
 
 export function registerCutOpening(server: McpServer, bridge: SceneOperations): void {
@@ -69,9 +70,9 @@ export function registerCutOpening(server: McpServer, bridge: SceneOperations): 
               position: [base.position[0], 0.9 + height / 2, 0],
             })
       const id = bridge.createNode(opening, wallId as AnyNodeId)
-      await publishLiveSceneSnapshot(bridge, 'cut_opening')
+      const persistence = await publishLiveSceneSnapshot(bridge, 'cut_opening')
 
-      const payload = { openingId: id as string }
+      const payload = { openingId: id as string, ...persistencePayload(persistence) }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
         structuredContent: payload,

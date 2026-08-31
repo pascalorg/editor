@@ -6,7 +6,7 @@ import type { SceneOperations } from '../operations'
 import { findCatalogItem } from './asset-catalog'
 import { ErrorCode, throwMcpError } from './errors'
 import { projectWorldPointToWallLocalX, wallLength } from './geometry'
-import { publishLiveSceneSnapshot } from './live-sync'
+import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec3Schema } from './schemas'
 
@@ -20,6 +20,7 @@ export const placeItemInput = {
 export const placeItemOutput = {
   itemId: z.string(),
   status: z.string().optional(),
+  ...liveSyncOutput,
 }
 
 export function registerPlaceItem(server: McpServer, bridge: SceneOperations): void {
@@ -97,10 +98,11 @@ export function registerPlaceItem(server: McpServer, bridge: SceneOperations): v
         ...wallExtras,
       })
       const id = bridge.createNode(item, parentId as AnyNodeId)
-      await publishLiveSceneSnapshot(bridge, 'place_item')
+      const persistence = await publishLiveSceneSnapshot(bridge, 'place_item')
       const payload = {
         itemId: id as string,
         status: catalogAsset ? 'ok' : 'catalog_unavailable',
+        ...persistencePayload(persistence),
       }
       return {
         content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
