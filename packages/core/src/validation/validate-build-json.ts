@@ -1,4 +1,5 @@
 import { nodeRegistry } from '../registry'
+import { SceneMaterial } from '../schema/scene-material'
 import { AnyNode, type AnyNodeType } from '../schema/types'
 import { healSceneNodes } from '../utils/heal-scene-graph'
 
@@ -24,6 +25,8 @@ export type ParsedBuildJson = {
   nodes: Record<string, unknown>
   rootNodeIds: string[]
   installedPlugins?: string[]
+  /** Scene materials referenced by node `slots` (`scene:<id>`). */
+  materials?: Record<string, SceneMaterial>
 }
 
 export type SchemaIssue = {
@@ -111,6 +114,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
   const nodesRaw = input.nodes
   const rootNodeIdsRaw = input.rootNodeIds
   const installedPluginsRaw = input.installedPlugins
+  const materialsRaw = input.materials
 
   if (!isPlainObject(nodesRaw)) {
     errors.push({
@@ -157,6 +161,50 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
       severity: 'warning',
       code: 'invalid_installed_plugins',
       message: 'Ignored invalid "installedPlugins" — expected an array of plugin IDs.',
+    })
+  }
+
+  // Scene materials ride along with the graph: nodes reference them by
+  // `scene:<id>` slot refs, so dropping the table here silently strips
+  // every custom finish from the imported scene. Invalid entries are
+  // skipped one by one — a bad material must not take the import down.
+  //
+  // DELIBERATE: `safeParse().data` NORMALIZES — defaults are injected
+  // and unknown keys dropped. That is the opposite of the API boundary
+  // (`apiGraphSchema` preserves unknown fields on purpose), and it is
+  // chosen here because import feeds the live scene store, which only
+  // understands schema-shaped materials; a hand-edited file with a
+  // half-formed material should land as something the renderer can
+  // draw, not round-trip garbage.
+  let materials: Record<string, SceneMaterial> | undefined
+  if (isPlainObject(materialsRaw)) {
+    const skippedIds: string[] = []
+    const kept: Record<string, SceneMaterial> = {}
+    for (const [id, value] of Object.entries(materialsRaw)) {
+      const result = SceneMaterial.safeParse(value)
+      if (result.success) {
+        kept[id] = result.data
+      } else {
+        skippedIds.push(id)
+      }
+    }
+    if (Object.keys(kept).length > 0) materials = kept
+    if (skippedIds.length > 0) {
+      // Name the ids: the audience is hand-edited files, and a count
+      // alone leaves nothing to repair by.
+      warnings.push({
+        severity: 'warning',
+        code: 'invalid_materials',
+        message: `Ignored ${skippedIds.length} invalid scene material${
+          skippedIds.length === 1 ? '' : 's'
+        }: ${skippedIds.join(', ')}.`,
+      })
+    }
+  } else if (materialsRaw !== undefined) {
+    warnings.push({
+      severity: 'warning',
+      code: 'invalid_materials',
+      message: 'Ignored invalid "materials" — expected an object of id → material.',
     })
   }
 
@@ -373,6 +421,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
           nodes,
           rootNodeIds,
           ...(installedPlugins ? { installedPlugins } : {}),
+          ...(materials ? { materials } : {}),
         }
       : null,
     stats,
