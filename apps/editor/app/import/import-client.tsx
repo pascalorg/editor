@@ -200,6 +200,20 @@ export function ImportClient({ src, name }: { src: string | null; name: string |
             ))}
           </ul>
         )}
+        {/* The schema error above says "see details below" — these are the
+            details: per-node path and message, same data Load Build shows. */}
+        {result.schemaIssues.length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {result.schemaIssues.map((issue) => (
+              <li
+                className="text-destructive text-xs"
+                key={`${issue.nodeId}:${issue.path}:${issue.message}`}
+              >
+                {issue.nodeId} ({issue.nodeType}) · {issue.path}: {issue.message}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {phase.createError && <p className="text-destructive text-sm">{phase.createError}</p>}
