@@ -38,6 +38,29 @@ describe('wallDefinition floor-plan extension', () => {
     expect(canCurve?.({ node: wall, nodes })).toBe(false)
     expect(canCurve?.({ node: { ...wall, children: [] }, nodes })).toBe(true)
   })
+
+  test('disables curving for hosted lean-to extensions', () => {
+    const wall = wallDefinition.schema.parse({
+      id: 'wall_lean-to-host',
+      children: ['leanto_test'],
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const nodes = {
+      [wall.id]: wall,
+      leanto_test: {
+        object: 'node',
+        id: 'leanto_test',
+        type: 'lean-to-extension',
+        parentId: wall.id,
+        visible: true,
+        metadata: {},
+      } as AnyNode,
+    } as Record<AnyNodeId, AnyNode>
+
+    const canCurve = getFloorplanNodeExtension(wallDefinition)?.actionMenu?.canCurve
+    expect(canCurve?.({ node: wall, nodes })).toBe(false)
+  })
 })
 
 test('wall top surface follows the effective level-bound height', () => {

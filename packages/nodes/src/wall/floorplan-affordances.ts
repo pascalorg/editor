@@ -1,10 +1,13 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  constrainWallCurveOffsetToAvoidIntersections,
   type FloorplanAffordance,
   type FloorplanAffordanceSession,
   getMaxWallCurveOffset,
   getWallChordFrame,
+  getWallCurveFrameAt,
+  getWallThickness,
   normalizeWallCurveOffset,
   runAsSingleSceneHistoryStep,
   useLiveNodeOverrides,
@@ -51,6 +54,9 @@ import {
  */
 
 type WallEndpointPayload = { wallId: AnyNodeId; endpoint: 'start' | 'end' }
+type WallThicknessPayload = { wallId: AnyNodeId; side: 1 | -1 }
+
+const MIN_WALL_THICKNESS = 0.05
 
 function pointsEqual(a: readonly number[], b: readonly number[]) {
   return a[0] === b[0] && a[1] === b[1]
@@ -58,11 +64,18 @@ function pointsEqual(a: readonly number[], b: readonly number[]) {
 
 function collectLevelWalls(
   nodes: Record<AnyNodeId, AnyNode>,
+  parentId: AnyNodeId | null,
   excludeWallId?: AnyNodeId,
 ): WallNode[] {
   const out: WallNode[] = []
   for (const node of Object.values(nodes)) {
-    if (node?.type === 'wall' && node.id !== excludeWallId) out.push(node as WallNode)
+    if (
+      node?.type === 'wall' &&
+      node.id !== excludeWallId &&
+      (node.parentId ?? null) === parentId
+    ) {
+      out.push(node as WallNode)
+    }
   }
   return out
 }
@@ -70,6 +83,7 @@ function collectLevelWalls(
 function collectLinkedWalls(
   nodes: Record<AnyNodeId, AnyNode>,
   draggedWallId: AnyNodeId,
+  parentId: AnyNodeId | null,
   originalStart: WallPlanPoint,
   originalEnd: WallPlanPoint,
 ): Array<{ id: AnyNodeId; start: WallPlanPoint; end: WallPlanPoint }> {
@@ -77,6 +91,7 @@ function collectLinkedWalls(
   for (const node of Object.values(nodes)) {
     if (node?.type !== 'wall') continue
     if (node.id === draggedWallId) continue
+    if ((node.parentId ?? null) !== parentId) continue
     const wall = node as WallNode
     if (
       pointsEqual(wall.start, originalStart) ||
@@ -131,9 +146,18 @@ export const wallCurveAffordance: FloorplanAffordance<WallNode> = {
           (y - chord.midpoint.y) * chord.normal.y
         )
         const snappedOffset = snapScalarToGrid(offsetFromMidpoint, snapStep)
-        const nextCurveOffset = normalizeWallCurveOffset(
+        const requestedCurveOffset = normalizeWallCurveOffset(
           node,
           Math.max(-maxOffset, Math.min(maxOffset, snappedOffset)),
+        )
+        const sceneNodes = useScene.getState().nodes
+        const nextCurveOffset = constrainWallCurveOffsetToAvoidIntersections(
+          node,
+          requestedCurveOffset,
+          Object.values(sceneNodes).filter(
+            (candidate): candidate is WallNode =>
+              candidate.type === 'wall' && candidate.parentId === node.parentId,
+          ),
         )
         lastCurveOffset = nextCurveOffset
 
@@ -160,6 +184,41 @@ export const wallCurveAffordance: FloorplanAffordance<WallNode> = {
   },
 }
 
+export const wallThicknessAffordance: FloorplanAffordance<WallNode> = {
+  start({ node, payload, initialPlanPoint }): FloorplanAffordanceSession {
+    const { side } = payload as WallThicknessPayload
+    const frame = getWallCurveFrameAt(node, 0.5)
+    const outwardX = frame.normal.x * side
+    const outwardY = frame.normal.y * side
+    const initialThickness = getWallThickness(node)
+    const wallId = node.id as AnyNodeId
+    let lastThickness = initialThickness
+
+    return {
+      affectedIds: [wallId],
+      apply({ planPoint }) {
+        const outwardDelta =
+          (planPoint[0] - initialPlanPoint[0]) * outwardX +
+          (planPoint[1] - initialPlanPoint[1]) * outwardY
+        const rawThickness = initialThickness + outwardDelta * 2
+        lastThickness = Math.max(
+          MIN_WALL_THICKNESS,
+          snapScalarToGrid(rawThickness, getSegmentGridStep()),
+        )
+        useLiveNodeOverrides.getState().set(wallId, { thickness: lastThickness })
+        useScene.getState().markDirty(wallId)
+      },
+      canCommit() {
+        return true
+      },
+      commit() {
+        useScene.getState().updateNodes([{ id: wallId, data: { thickness: lastThickness } }])
+        useLiveNodeOverrides.getState().clear(wallId)
+      },
+    }
+  },
+}
+
 export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
   start({ node, payload, nodes }): FloorplanAffordanceSession {
     const { endpoint } = payload as WallEndpointPayload
@@ -167,7 +226,8 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
       endpoint === 'start' ? ([...node.end] as WallPlanPoint) : ([...node.start] as WallPlanPoint)
     const originalStart: WallPlanPoint = [...node.start] as WallPlanPoint
     const originalEnd: WallPlanPoint = [...node.end] as WallPlanPoint
-    const linkedWalls = collectLinkedWalls(nodes, node.id, originalStart, originalEnd)
+    const parentId = (node.parentId ?? null) as AnyNodeId | null
+    const linkedWalls = collectLinkedWalls(nodes, node.id, parentId, originalStart, originalEnd)
     const affectedIds: AnyNodeId[] = [node.id, ...linkedWalls.map((w) => w.id)]
     const movingOriginal: WallPlanPoint = endpoint === 'start' ? originalStart : originalEnd
     // Walls attached to the MOVING corner cascade with the drag, but the snap
@@ -197,7 +257,7 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
         // the moving corner are excluded (stale coordinates); under
         // Alt-detach they stay put, so they rejoin the candidate pool.
         const sceneNodes = useScene.getState().nodes
-        const walls = collectLevelWalls(sceneNodes, node.id)
+        const walls = collectLevelWalls(sceneNodes, parentId, node.id)
         const staleWallIds = modifiers.altKey ? [node.id] : [node.id, ...movingLinkedWallIds]
         // The grid step follows the active snapping mode (`getSegmentGridStep()`
         // is 0 outside grid mode), so `'lines' / 'angles' / 'off'` no longer
@@ -227,6 +287,7 @@ export const wallMoveEndpointAffordance: FloorplanAffordance<WallNode> = {
           applySnap: isMagneticSnapActive(),
           bypass: !isAlignmentGuideActive(),
           excludeIds: staleWallIds,
+          levelId: parentId,
         }) as WallPlanPoint
 
         const primaryStart: WallPlanPoint = endpoint === 'start' ? aligned : fixedPoint

@@ -7,8 +7,13 @@ import {
 } from '@pascal-app/core'
 import type { FloorplanNodeExtension } from '@pascal-app/editor'
 import { buildWallContextualDimensions } from './contextual-dimensions'
+import { hasWallCurveBlockingChildren } from './curve-eligibility'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
-import { wallCurveAffordance, wallMoveEndpointAffordance } from './floorplan-affordances'
+import {
+  wallCurveAffordance,
+  wallMoveEndpointAffordance,
+  wallThicknessAffordance,
+} from './floorplan-affordances'
 import { wallFloorplanMoveTarget } from './floorplan-move'
 import { wallFloorplanSiblingOverrides } from './floorplan-overrides'
 import {
@@ -49,19 +54,12 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
       contextualDimensions: buildWallContextualDimensions,
       actionMenu: {
         canCurve: ({ node, nodes }) =>
-          !node.children.some((childId) => {
-            const child = nodes[childId as AnyNodeId]
-            if (!child) return false
-            if (
-              child.type === 'door' ||
-              child.type === 'window' ||
-              child.type === 'lean-to-extension'
-            ) {
-              return true
-            }
-            if (child.type !== 'item') return false
-            return child.asset?.attachTo === 'wall' || child.asset?.attachTo === 'wall-side'
-          }),
+          !hasWallCurveBlockingChildren(
+            node.children.flatMap((childId) => {
+              const child = nodes[childId as AnyNodeId]
+              return child ? [child] : []
+            }),
+          ),
       },
     } satisfies FloorplanNodeExtension<WallNode>,
   },
@@ -163,6 +161,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   floorplanAffordances: {
     'move-endpoint': wallMoveEndpointAffordance,
     curve: wallCurveAffordance,
+    thickness: wallThicknessAffordance,
   },
   floorplanMoveTarget: wallFloorplanMoveTarget,
   floorplanSiblingOverrides: wallFloorplanSiblingOverrides,

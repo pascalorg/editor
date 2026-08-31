@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { useScene } from '@pascal-app/core'
+import { LevelNode, useScene, WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import useAlignmentGuides from '../../store/use-alignment-guides'
-import { applyFloorplanAlignment } from './apply-alignment'
+import { alignFloorplanDraftPoint, applyFloorplanAlignment } from './apply-alignment'
 
 describe('applyFloorplanAlignment', () => {
   beforeEach(() => {
@@ -36,5 +36,35 @@ describe('applyFloorplanAlignment', () => {
     expect(result.snapped).toBe(false)
     expect(result.guides).toHaveLength(1)
     expect(useAlignmentGuides.getState().guides).toHaveLength(1)
+  })
+
+  test('can restrict candidates to the active level', () => {
+    const lowerLevel = LevelNode.parse({ id: 'level_lower', level: 0 })
+    const upperLevel = LevelNode.parse({ id: 'level_upper', level: 1 })
+    const lowerWall = WallNode.parse({
+      id: 'wall_lower',
+      parentId: lowerLevel.id,
+      start: [10, 10],
+      end: [14, 10],
+    })
+    const upperWall = WallNode.parse({
+      id: 'wall_upper',
+      parentId: upperLevel.id,
+      start: [0, 0],
+      end: [4, 0],
+    })
+    useScene.setState({
+      nodes: Object.fromEntries(
+        [lowerLevel, upperLevel, lowerWall, upperWall].map((node) => [node.id, node]),
+      ),
+    } as never)
+
+    expect(
+      alignFloorplanDraftPoint([0.04, 0], {
+        applySnap: true,
+        levelId: lowerLevel.id,
+      }),
+    ).toEqual([0.04, 0])
+    expect(useAlignmentGuides.getState().guides).toHaveLength(0)
   })
 })
