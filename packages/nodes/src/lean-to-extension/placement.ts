@@ -168,7 +168,9 @@ export function resolveLeanToFreestandingRunPlacement(
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]
   const span = Math.hypot(dx, dz)
-  if (span < 0.5) return null
+  // Keep exact-minimum diagonal runs valid. Floating-point distance can land a
+  // mathematically 0.5 m run a few ulps below the schema minimum.
+  if (span < 0.5 - 1e-9) return null
   const from = flipProjection ? end : start
   const to = flipProjection ? start : end
   const rotationY = Math.atan2(-(to[1] - from[1]), to[0] - from[0])

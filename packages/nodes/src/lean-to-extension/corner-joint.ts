@@ -710,9 +710,16 @@ function edgeConnectedPlanPolygonComponent(
   polygons: LeanToPlanPoint[][],
   anchor: LeanToPlanPoint[],
 ): LeanToPlanPoint[][] {
+  return edgeConnectedPlanPolygonComponents(polygons, [anchor])
+}
+
+function edgeConnectedPlanPolygonComponents(
+  polygons: LeanToPlanPoint[][],
+  anchors: LeanToPlanPoint[][],
+): LeanToPlanPoint[][] {
   const connected = new Set<number>()
   const queue = polygons.flatMap((polygon, index) =>
-    polygonsSharePlanEdge(anchor, polygon) ? [index] : [],
+    anchors.some((anchor) => polygonsSharePlanEdge(anchor, polygon)) ? [index] : [],
   )
   for (const index of queue) connected.add(index)
 
@@ -1227,6 +1234,7 @@ function resolveFreestandingRoofPartition(
   const layout = resolveLeanToLayout(leanTo)
   const edges = roofPlanEdges(leanTo)
   const sideSign = side === 'left' ? -1 : 1
+  const structuralSideX = sideSign * (layout.span / 2)
   const originalSideX = layout.roofCenterX + sideSign * (layout.roofWidth / 2)
   const heightDelta = (point: readonly [number, number]): number | null => {
     const worldPoint = leanToPointToWorld(wall, leanTo, point[0], point[1])
@@ -1235,10 +1243,17 @@ function resolveFreestandingRoofPartition(
     const candidateHeight = leanToTopHeightAtWorld(candidateWall, candidate, worldPoint)
     return ownHeight === null || candidateHeight === null ? null : ownHeight - candidateHeight
   }
-  const probeDelta = heightDelta([
-    originalSideX - sideSign * Math.min(0.1, layout.roofWidth / 4),
+  const structuralProbeDelta = heightDelta([
+    structuralSideX - sideSign * Math.min(0.1, layout.span / 4),
     (edges.back + edges.front) / 2,
   ])
+  const probeDelta =
+    structuralProbeDelta === null || Math.abs(structuralProbeDelta) <= PLAN_TOLERANCE
+      ? heightDelta([
+          originalSideX - sideSign * Math.min(0.1, layout.roofWidth / 4),
+          (edges.back + edges.front) / 2,
+        ])
+      : structuralProbeDelta
   if (probeDelta === null || Math.abs(probeDelta) <= PLAN_TOLERANCE) return null
 
   const candidatePolygon = (
@@ -1273,7 +1288,10 @@ function resolveFreestandingRoofPartition(
     partition(roofExtensionBand(leanTo, side, extension)),
     roofBasePolygon(leanTo),
   )
-  return additionPieces.length > 0 ? { basePieces, additionPieces } : null
+  const connectedAdditions = edgeConnectedPlanPolygonComponents(additionPieces, basePieces)
+  return connectedAdditions.length > 0
+    ? { basePieces, additionPieces: connectedAdditions }
+    : { basePieces }
 }
 
 function resolveCurvedStraightRoofPiece(
