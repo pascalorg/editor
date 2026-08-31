@@ -192,6 +192,7 @@ export function SettingsPanel({
   const nodes = useScene((state) => state.nodes)
   const rootNodeIds = useScene((state) => state.rootNodeIds)
   const installedPlugins = useScene((state) => state.installedPlugins)
+  const materials = useScene((state) => state.materials)
   const setScene = useScene((state) => state.setScene)
   const clearScene = useScene((state) => state.clearScene)
   const resetSelection = useViewer((state) => state.resetSelection)
@@ -232,7 +233,10 @@ export function SettingsPanel({
   const isLocalProject = false // Props-based; only show cloud sections when projectId provided
 
   const handleSaveBuild = () => {
-    const sceneData = { nodes, rootNodeIds, installedPlugins }
+    // Materials ride along: nodes reference them by `scene:<id>` slot
+    // refs, so a save without the table produces a file whose custom
+    // finishes revert to defaults on the very Load Build path below.
+    const sceneData = { nodes, rootNodeIds, installedPlugins, materials }
     const json = JSON.stringify(sceneData, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)

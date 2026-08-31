@@ -161,7 +161,10 @@ describe('scene materials', () => {
     })
     expect(result.ok).toBe(true)
     expect(Object.keys(result.parsed?.materials ?? {})).toEqual(['mat_ok'])
-    expect(result.warnings.some((w) => w.code === 'invalid_materials')).toBe(true)
+    const warning = result.warnings.find((w) => w.code === 'invalid_materials')
+    expect(warning).toBeDefined()
+    // The skipped ids are named so a hand-edited file can be repaired.
+    expect(warning?.message).toContain('mat_bad')
   })
 
   test('warns when materials is not an object', () => {

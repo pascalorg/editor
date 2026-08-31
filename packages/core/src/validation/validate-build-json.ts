@@ -178,22 +178,26 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
   // draw, not round-trip garbage.
   let materials: Record<string, SceneMaterial> | undefined
   if (isPlainObject(materialsRaw)) {
-    let skipped = 0
+    const skippedIds: string[] = []
     const kept: Record<string, SceneMaterial> = {}
     for (const [id, value] of Object.entries(materialsRaw)) {
       const result = SceneMaterial.safeParse(value)
       if (result.success) {
         kept[id] = result.data
       } else {
-        skipped += 1
+        skippedIds.push(id)
       }
     }
     if (Object.keys(kept).length > 0) materials = kept
-    if (skipped > 0) {
+    if (skippedIds.length > 0) {
+      // Name the ids: the audience is hand-edited files, and a count
+      // alone leaves nothing to repair by.
       warnings.push({
         severity: 'warning',
         code: 'invalid_materials',
-        message: `Ignored ${skipped} invalid scene material${skipped === 1 ? '' : 's'}.`,
+        message: `Ignored ${skippedIds.length} invalid scene material${
+          skippedIds.length === 1 ? '' : 's'
+        }: ${skippedIds.join(', ')}.`,
       })
     }
   } else if (materialsRaw !== undefined) {
