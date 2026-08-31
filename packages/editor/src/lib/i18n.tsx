@@ -1,6 +1,6 @@
 'use client'
 
-import { createContext, useContext, useState, useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useMemo, useState, useEffect, type ReactNode } from 'react'
 import { IntlProvider } from 'react-intl'
 import en from './i18n/en.json'
 import zh from './i18n/zh.json'
@@ -32,14 +32,18 @@ export function useLocale() {
 
 export function useTranslations() {
   const { locale } = useContext(I18nContext)
-  return (key: string, params?: Record<string, string | number>): string => {
-    const str = messages[locale][key] ?? key
-    if (!params) return str
-    return Object.entries(params).reduce(
-      (s, [k, v]) => s.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v)),
-      str,
-    )
-  }
+  return useMemo(
+    () =>
+      (key: string, params?: Record<string, string | number>): string => {
+        const str = messages[locale][key] ?? key
+        if (!params) return str
+        return Object.entries(params).reduce(
+          (s, [k, v]) => s.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v)),
+          str,
+        )
+      },
+    [locale],
+  )
 }
 
 export function I18nProvider({ children }: { children: ReactNode }) {

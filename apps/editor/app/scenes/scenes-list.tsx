@@ -44,7 +44,10 @@ export function ScenesList({ scenes }: { scenes: SceneMeta[] }) {
         <p className="mb-8 text-muted-foreground text-sm">
           {scenes.length === 0
             ? t('scenes.noScenes')
-            : t('scenes.sceneCount', { count: scenes.length })}
+            : t(
+                scenes.length === 1 ? 'scenes.sceneCount' : 'scenes.sceneCount_plural',
+                { count: scenes.length },
+              )}
         </p>
 
         {scenes.length === 0 ? (

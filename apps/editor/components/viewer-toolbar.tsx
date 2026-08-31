@@ -127,7 +127,7 @@ const levelModeLabels = {
   solo: 'viewer.solo',
 } as const satisfies Record<string, string>
 
-const wallModeOrder = ['cutaway', 'up', 'down'] as const
+const wallModeOrder = ['cutaway', 'up', 'down', 'translucent'] as const
 const wallModeConfig: Record<string, { icon: string; labelKey: string }> = {
   up: { icon: '/icons/room.webp', labelKey: 'viewer.fullHeight' },
   cutaway: { icon: '/icons/wallcut.webp', labelKey: 'viewer.cutaway' },

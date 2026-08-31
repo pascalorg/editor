@@ -265,7 +265,12 @@ function GuidesControl() {
               <p className="font-medium text-foreground text-sm">{t('viewer.guideImages')}</p>
               {hasGuides && (
                 <p className="text-muted-foreground text-xs">
-                  {t('viewer.guideImagesOnThisLevel', { count: guides.length })}
+                  {t(
+                    guides.length === 1
+                      ? 'viewer.guideImagesOnThisLevel'
+                      : 'viewer.guideImagesOnThisLevel_plural',
+                    { count: guides.length },
+                  )}
                 </p>
               )}
             </div>
@@ -441,7 +446,12 @@ function ScansControl() {
               <p className="font-medium text-foreground text-sm">{t('viewer.scans')}</p>
               {hasScans && (
                 <p className="text-muted-foreground text-xs">
-                  {t('viewer.scansOnThisLevel', { count: scans.length })}
+                  {t(
+                    scans.length === 1
+                      ? 'viewer.scansOnThisLevel'
+                      : 'viewer.scansOnThisLevel_plural',
+                    { count: scans.length },
+                  )}
                 </p>
               )}
             </div>

@@ -851,6 +851,7 @@
   "scenes.noThumbnail": "无缩略图",
   "scenes.nodes": "{count} 个节点",
   "scenes.sceneCount": "{count} 个场景",
+  "scenes.sceneCount_plural": "{count} 个场景",
   "scenes.title": "您的场景",
   "scenes.noScenesSaved": "暂无保存的场景",
   "save.conflictReload": "冲突 — 场景在其他地方被修改。请重新加载以继续。",
