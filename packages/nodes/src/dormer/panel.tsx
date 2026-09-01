@@ -20,6 +20,7 @@ import {
   SliderControl,
   triggerSFX,
   useEditor,
+  useTranslations,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useState } from 'react'
@@ -33,14 +34,14 @@ type RoofType = DormerNode['roofType']
 type ShedHighSide = DormerNode['shedHighSide']
 type DormerSection = 'dormer' | 'window'
 
-const ROOF_TYPE_OPTIONS: Array<{ label: string; value: RoofType }> = [
-  { label: 'Gable', value: 'gable' },
-  { label: 'Hip', value: 'hip' },
-  { label: 'Shed', value: 'shed' },
-  { label: 'Gambrel', value: 'gambrel' },
-  { label: 'Dutch', value: 'dutch' },
-  { label: 'Mansard', value: 'mansard' },
-  { label: 'Flat', value: 'flat' },
+const ROOF_TYPE_OPTIONS: Array<{ labelKey: string; value: RoofType }> = [
+  { labelKey: 'nodes.dormer.gable', value: 'gable' },
+  { labelKey: 'nodes.dormer.hip', value: 'hip' },
+  { labelKey: 'nodes.dormer.shed', value: 'shed' },
+  { labelKey: 'nodes.dormer.gambrel', value: 'gambrel' },
+  { labelKey: 'nodes.dormer.dutch', value: 'dutch' },
+  { labelKey: 'nodes.dormer.mansard', value: 'mansard' },
+  { labelKey: 'nodes.dormer.flat', value: 'flat' },
 ]
 
 const SHED_HIGH_SIDE_OPTIONS: Array<{ label: string; value: ShedHighSide }> = [
@@ -48,12 +49,13 @@ const SHED_HIGH_SIDE_OPTIONS: Array<{ label: string; value: ShedHighSide }> = [
   { label: 'Rise Front', value: 'front' },
 ]
 
-const SECTION_OPTIONS: Array<{ label: string; value: DormerSection }> = [
-  { label: 'Dormer', value: 'dormer' },
-  { label: 'Windows', value: 'window' },
+const SECTION_OPTIONS: Array<{ labelKey: string; value: DormerSection }> = [
+  { labelKey: 'nodes.dormer.dormer', value: 'dormer' },
+  { labelKey: 'nodes.dormer.window', value: 'window' },
 ]
 
 export default function DormerPanel() {
+  const t = useTranslations()
   const [section, setSection] = useState<DormerSection>('dormer')
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
@@ -254,7 +256,7 @@ export default function DormerPanel() {
       icon="/icons/roof.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
-      title={node.name || 'Dormer'}
+      title={node.name || t('nodes.dormer.dormer')}
       width={300}
     >
       <DormerPositionSection
@@ -266,7 +268,7 @@ export default function DormerPanel() {
         selectedId={selectedId}
       />
 
-      <PanelSection title="Section">
+      <PanelSection title={t('nodes.dormer.section')}>
         <div className="grid grid-cols-3 gap-1.5 px-1 pt-1">
           {SECTION_OPTIONS.map((option) => {
             const isSelected = section === option.value
@@ -282,7 +284,7 @@ export default function DormerPanel() {
                 onClick={() => setSection(option.value)}
                 type="button"
               >
-                <span className="truncate font-medium">{option.label}</span>
+                <span className="truncate font-medium">{t(option.labelKey)}</span>
               </button>
             )
           })}
@@ -291,9 +293,9 @@ export default function DormerPanel() {
 
       {section === 'dormer' && (
         <>
-          <PanelSection title="Dimensions">
+          <PanelSection title={t('common.dimensions')}>
             <SliderControl
-              label="Width"
+              label={t('nodes.dormer.width')}
               max={1000}
               min={0.5}
               onChange={(v) => previewProp({ width: v })}
@@ -305,7 +307,7 @@ export default function DormerPanel() {
               value={Math.round(node.width * 100) / 100}
             />
             <SliderControl
-              label="Depth"
+              label={t('nodes.dormer.depth')}
               max={1000}
               min={0.5}
               onChange={(v) => previewProp({ depth: v })}
@@ -317,7 +319,7 @@ export default function DormerPanel() {
               value={Math.round(node.depth * 100) / 100}
             />
             <SliderControl
-              label="Wall Height"
+              label={t('nodes.dormer.wallHeight')}
               max={1000}
               min={0}
               onChange={(v) => previewProp({ height: v })}
@@ -329,7 +331,7 @@ export default function DormerPanel() {
               value={Math.round(node.height * 100) / 100}
             />
             <SliderControl
-              label={node.roofType === 'shed' ? 'Pitch Rise' : 'Roof Height'}
+              label={node.roofType === 'shed' ? 'Pitch Rise' : t('nodes.dormer.roofHeight')}
               max={3}
               min={0}
               onChange={(v) => previewProp({ roofHeight: v })}
@@ -358,7 +360,7 @@ export default function DormerPanel() {
                     onClick={() => handleUpdate({ roofType: option.value })}
                     type="button"
                   >
-                    <span className="truncate font-medium">{option.label}</span>
+                    <span className="truncate font-medium">{t(option.labelKey)}</span>
                   </button>
                 )
               })}
