@@ -1,6 +1,6 @@
 import { nodeRegistry } from '../registry'
 import { SceneMaterial } from '../schema/scene-material'
-import { AnyNode, type AnyNodeType } from '../schema/types'
+import { AnyNode, type AnyNodeType, nodeKindOf } from '../schema/types'
 import { healSceneNodes } from '../utils/heal-scene-graph'
 
 export type ValidationSeverity = 'error' | 'warning'
@@ -46,9 +46,7 @@ export type ValidateBuildJsonResult = {
   schemaIssueCount: number
 }
 
-const KNOWN_TYPES = new Set<string>(
-  AnyNode.options.map((o) => o.shape.type.parse(undefined) as string),
-)
+const KNOWN_TYPES = new Set<string>(AnyNode.options.map(nodeKindOf))
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
