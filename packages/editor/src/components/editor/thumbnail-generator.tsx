@@ -36,6 +36,9 @@ interface ThumbnailGeneratorProps {
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }
 
+/** Metres ahead of a controls-less camera to place the stored snapshot target. */
+const FIRST_PERSON_TARGET_DISTANCE = 8
+
 function clampSnapshotSize(width: number, height: number): { w: number; h: number } {
   const maxEdge = Math.max(width, height)
   if (maxEdge <= SNAPSHOT_MAX_EDGE) return { w: width, h: height }
@@ -143,6 +146,15 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           const v = new THREE.Vector3()
           ;(controls as any).getTarget(v)
           tgt = [v.x, v.y, v.z]
+        } else {
+          // Walk / drone captures run without orbit controls, so there is no orbit
+          // target to read. Synthesize one down the view axis — otherwise the
+          // saved snapshot carries no framing to return to.
+          const look = new THREE.Vector3(0, 0, -1)
+            .applyQuaternion(mainCamera.quaternion)
+            .multiplyScalar(FIRST_PERSON_TARGET_DISTANCE)
+            .add(pos)
+          tgt = [look.x, look.y, look.z]
         }
         const isOrtho = mainCamera instanceof THREE.OrthographicCamera
         const cameraData: SnapshotCameraData = {
