@@ -22,6 +22,8 @@ import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { ParametricFieldControl } from './parametric-field-control'
 import { InspectorFooterContext, PanelWrapper } from './panel-wrapper'
+import { camelType } from './node-display'
+import { useTranslations } from '../../../lib/i18n'
 
 /**
  * Auto-derived right-panel inspector for any registry-backed node.
@@ -49,6 +51,7 @@ export function ParametricInspector({
     | undefined
   const selectedId = nodeId ?? selectedIdFromSelection
   const setSelection = useViewer((s) => s.setSelection)
+  const t = useTranslations()
   // Subscribe only to the *type* — a string primitive that doesn't change
   // when slider values change. Without this, every updateNode tick during
   // a drag re-renders the entire panel + every field + every SliderControl.
@@ -138,7 +141,11 @@ export function ParametricInspector({
   }
 
   const presentation = def.presentation
-  const title = presentation?.label ?? nodeType ?? ''
+  const titleFromCatalog = t(`panel.nodeType.${camelType(nodeType ?? '')}`)
+  const title =
+    titleFromCatalog.startsWith('panel.nodeType.')
+      ? (presentation?.label ?? nodeType ?? '')
+      : titleFromCatalog
   const iconNode = renderIcon(presentation?.icon)
   const canMove = !!def.capabilities.movable
   const canDelete = def.capabilities.deletable !== false

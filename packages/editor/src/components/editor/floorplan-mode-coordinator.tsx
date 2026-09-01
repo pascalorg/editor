@@ -3,12 +3,16 @@
 import { emitter, nodeRegistry } from '@pascal-app/core'
 import { X } from 'lucide-react'
 import { useEffect, useRef } from 'react'
+import { camelType } from '../ui/panels/node-display'
+import { useTranslations } from '../../lib/i18n'
 import { getFloorplanNodeExtension } from '../../lib/floorplan/floorplan-extension'
 import { isFloorplanToolAvailableInMode } from '../../lib/floorplan/floorplan-mode'
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 
-function getToolLabel(tool: string): string {
+function getToolLabel(tool: string, t: ReturnType<typeof useTranslations>): string {
+  const fromCatalog = t(`panel.nodeType.${camelType(tool)}`)
+  if (!fromCatalog.startsWith('panel.nodeType.')) return fromCatalog
   return nodeRegistry.get(tool)?.presentation?.label ?? tool
 }
 
@@ -21,6 +25,7 @@ export function FloorplanModeCoordinator() {
   const setFloorplanMode = useFloorplanMode((state) => state.setMode)
   const showExpertModeNotice = useFloorplanMode((state) => state.showExpertModeNotice)
   const showNotice = useFloorplanMode((state) => state.showNotice)
+  const t = useTranslations()
   const previousFloorplanMode = useRef(floorplanMode)
 
   useEffect(() => {
@@ -30,7 +35,7 @@ export function FloorplanModeCoordinator() {
     const extension = getFloorplanNodeExtension(nodeRegistry.get(tool))
     if (isFloorplanToolAvailableInMode(extension?.availableModes, floorplanMode)) return
 
-    const toolLabel = getToolLabel(tool)
+    const toolLabel = getToolLabel(tool, t)
     emitter.emit('tool:cancel')
     useEditor.getState().setMode('select')
     if (priorFloorplanMode === 'expert') {
@@ -40,7 +45,7 @@ export function FloorplanModeCoordinator() {
     } else {
       showExpertModeNotice(toolLabel)
     }
-  }, [editorMode, floorplanMode, showExpertModeNotice, showNotice, tool])
+  }, [editorMode, floorplanMode, showExpertModeNotice, showNotice, tool, t])
 
   useEffect(() => {
     if (!notice || notice.kind === 'switch-to-expert') return
