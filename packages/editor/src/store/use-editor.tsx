@@ -85,7 +85,14 @@ export type SnapshotStandardAspect = '16:9' | '9:16' | '4:3' | '3:4' | '1:1'
 
 export type CaptureMode =
   | { mode: 'idle' }
-  | { mode: 'standard'; crop?: SnapshotCropMode; standardAspect?: SnapshotStandardAspect }
+  | {
+      mode: 'standard'
+      crop?: SnapshotCropMode
+      standardAspect?: SnapshotStandardAspect
+      /** The host needs this exact output shape (e.g. the publish cover) —
+       *  hide the crop/aspect switcher instead of merely preselecting it. */
+      lockCrop?: boolean
+    }
   | {
       mode: 'preset'
       isolated: AnyNodeId[]
@@ -483,6 +490,12 @@ type EditorState = {
   captureFovBaseline: number | null
   setCaptureFov: (fov: number) => void
   armCaptureFov: (fov: number | null) => void
+  // The shutter has fired and the snapshot is being rendered/saved: walk /
+  // drone freeze look + movement so a late WASD tap or mouse twitch can't
+  // shift the frame out from under the shot. Set by the capture overlay for
+  // the whole capturing→saved window.
+  captureShutterHold: boolean
+  setCaptureShutterHold: (hold: boolean) => void
   // Workspace mode: 'edit' is the full editing surface; 'studio' is the
   // render/snapshot surface (clean canvas, no editing chrome or selection).
   // Entering studio forces a 3D-only view and restores the prior view on exit.
@@ -1480,6 +1493,8 @@ const useEditor = create<EditorState>()(
             ? { captureFov: null, captureFovBaseline: null }
             : { captureFov: fov, captureFovBaseline: fov },
         ),
+      captureShutterHold: false,
+      setCaptureShutterHold: (hold) => set({ captureShutterHold: hold }),
       workspaceMode: 'edit' as WorkspaceMode,
       _viewModeBeforeStudio: null as ViewMode | null,
       setWorkspaceMode: (mode) => {

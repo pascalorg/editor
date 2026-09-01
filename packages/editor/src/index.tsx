@@ -119,7 +119,6 @@ export { MoveTool } from './components/tools/item/move-tool'
 // `@pascal-app/nodes` (wall curve sagitta snap, door / window placement,
 // item drop) so kinds don't reach into editor internals.
 export {
-  calculateCursorRotation,
   calculateItemRotation,
   getSideFromNormal,
   isValidWallSideFace,

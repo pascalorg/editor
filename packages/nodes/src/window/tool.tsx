@@ -22,7 +22,6 @@ import {
   WindowNode,
 } from '@pascal-app/core'
 import {
-  calculateCursorRotation,
   calculateItemRotation,
   clearPlacementSurface,
   EDITOR_LAYER,
@@ -671,8 +670,15 @@ const WindowTool: React.FC = () => {
       const side = sideFlip ? (faceSide === 'front' ? 'back' : 'front') : faceSide
       const flipOffset = sideFlip ? Math.PI : 0
       const itemRotation = calculateItemRotation(event.normal) + flipOffset
-      const cursorRotation =
-        calculateCursorRotation(event.normal, event.node.start, event.node.end) + flipOffset
+      // World yaw of a wall CHILD: the wall group is yawed -wallAngle and the
+      // node carries wall-local `itemRotation` — `calculateCursorRotation` was
+      // π off, pointing the facing triangle at the far side of the wall (see
+      // MoveDoorTool.applyPreview, which fixed the same class for moves).
+      const wallAngle = Math.atan2(
+        event.node.end[1] - event.node.start[1],
+        event.node.end[0] - event.node.start[0],
+      )
+      const cursorRotation = itemRotation - wallAngle
 
       applyWallTarget({
         wall: event.node,
