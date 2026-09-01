@@ -46,7 +46,7 @@ export function toWallCeilingSceneReader(
 export function resolveWallOpeningCeiling(
   wall: WallNode,
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
-  t?: number,
+  t: number,
 ): number {
   return getWallEffectiveHeightForNodes(wall, nodes as Record<string, AnyNode>, t)
 }
@@ -76,7 +76,7 @@ export function readHostWallCeiling(
       return Math.max(0.01, resolveWallOpeningCeiling(wall, scene.nodes(), localT))
     }
   }
-  return Math.max(0.01, resolveWallOpeningCeiling(wall, scene.nodes()))
+  return Math.max(0.01, resolveWallOpeningCeiling(wall, scene.nodes(), 0))
 }
 
 export function readHostWallCeilingMaxWidth(

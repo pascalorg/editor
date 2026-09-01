@@ -1335,10 +1335,7 @@ function createOpeningCutoutBrush(
   let top = opening.position[1] + opening.height / 2
 
   if (wallNode && effectiveWallHeight !== undefined) {
-    const endHeightOffset = clampWallEndHeightOffset(
-      wallNode.endHeightOffset,
-      effectiveWallHeight,
-    )
+    const endHeightOffset = clampWallEndHeightOffset(wallNode.endHeightOffset, effectiveWallHeight)
     const dx = wallNode.end[0] - wallNode.start[0]
     const dz = wallNode.end[1] - wallNode.start[1]
     const wallLength = Math.hypot(dx, dz)

@@ -129,7 +129,7 @@ export default function WallPanel() {
   const resolvedHeightMeters = useScene((s) => {
     const wall = selectedId ? (s.nodes[selectedId as AnyNodeId] as WallNode | undefined) : undefined
     if (wall?.type !== 'wall') return undefined
-    return resolveWallOpeningCeiling(wall, s.nodes)
+    return resolveWallOpeningCeiling(wall, s.nodes, 0)
   })
 
   // Mirror the latest node into a ref so the slider handlers below have
@@ -181,7 +181,7 @@ export default function WallPanel() {
       if (mode === 'custom' && !isCustom) {
         // Seed from the current effective height so the geometry doesn't
         // jump at the moment of detaching from the storey plane.
-        const seeded = resolveWallOpeningCeiling(n, useScene.getState().nodes)
+        const seeded = resolveWallOpeningCeiling(n, useScene.getState().nodes, 0)
         handleUpdate({ height: Math.max(0.1, seeded) })
       } else if (mode === 'storey' && isCustom) {
         // Absent `height` = plane-bound; the store strips undefined keys.
@@ -301,13 +301,11 @@ export default function WallPanel() {
         )}
         <SliderControl
           label="End height offset"
-          max={metersToLinearUnit(1000, unit)}
           min={metersToLinearUnit(-(wallHeightMeters - 0.01), unit)}
           onChange={(v) => {
             const minMeters = -(wallHeightMeters - 0.01)
             handleUpdate({
               endHeightOffset: linearControlValueToMeters(v, unit, {
-                maxMeters: 1000,
                 minMeters,
               }),
             })

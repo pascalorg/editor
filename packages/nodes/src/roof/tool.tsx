@@ -1064,7 +1064,8 @@ export const RoofTool: React.FC = () => {
         arc.center.x,
         currentLevelId
           ? resolveRoofWallTopWorldElevation(currentLevelId, wall, nodes)
-          : getWallBaseElevationForNodes(wall, nodes) + getWallEffectiveHeightForNodes(wall, nodes),
+          : getWallBaseElevationForNodes(wall, nodes) +
+            getWallEffectiveHeightForNodes(wall, nodes, 0),
         arc.center.y,
       ] as [number, number, number],
     }

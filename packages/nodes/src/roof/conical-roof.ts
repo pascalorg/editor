@@ -69,7 +69,7 @@ export function createConicalRoofSectorAboveWall(
         0,
         sourceLevelY +
           getWallBaseElevationForNodes(wall, completeNodes) +
-          getWallEffectiveHeightForNodes(wall, completeNodes) -
+          getWallEffectiveHeightForNodes(wall, completeNodes, 0) -
           targetLevelY,
       ),
       arc.center.y,

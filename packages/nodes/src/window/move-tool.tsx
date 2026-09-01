@@ -237,6 +237,16 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
     // The window's chosen facing side. R flips it mid-placement (front ↔ back),
     // matching the committed-selected R flip. Initialised from the moving node.
     let sideOverride: WindowNode['side'] = movingWindowNode.side
+    let dragAnchor: {
+      wallId: string
+      rawX: number
+      rawY: number
+      startX: number
+      startY: number
+    } | null = null
+    // The wall the window was grabbed from. Nulled the first time the anchor
+    // seeds on any other host: the grab offset is then forgotten for good.
+    let grabWallId: string | null = movingWindowNode.parentId
     let lastTarget: {
       wallNode: WallEvent['node']
       wallId: string
@@ -353,6 +363,22 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
 
       const rawLocalX = event.localPosition[0]
       const rawLocalY = event.localPosition[1]
+      if (!dragAnchor || dragAnchor.wallId !== event.node.id) {
+        // Grab offset survives only on the original wall and only until the
+        // window anchors on any other host — after that every wall (the
+        // original included) centers the window under the cursor.
+        const preserveGrab = event.node.id === grabWallId
+        if (!preserveGrab) grabWallId = null
+        dragAnchor = {
+          wallId: event.node.id,
+          rawX: rawLocalX,
+          rawY: rawLocalY,
+          startX: preserveGrab ? original.position[0] : rawLocalX,
+          startY: preserveGrab ? original.position[1] : snapToHalf(rawLocalY),
+        }
+      }
+      const targetLocalX = dragAnchor.startX + (rawLocalX - dragAnchor.rawX)
+      const targetRawLocalY = dragAnchor.startY + (rawLocalY - dragAnchor.rawY)
       // Vertical sill alignment (snap + guide) is the magnetic ("lines")
       // component for Y: a sibling's sill/centre/top wins over the grid when
       // within threshold, so it runs only when magnetic snap is on; otherwise
@@ -361,17 +387,17 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
         ? resolveSillSnap({
             wall: event.node,
             movingId: movingWindowNode.id,
-            localX: rawLocalX,
-            localY: rawLocalY,
+            localX: targetLocalX,
+            localY: targetRawLocalY,
             width: movingWindowNode.width,
             height: movingWindowNode.height,
             nodes: useScene.getState().nodes,
           })
         : null
-      const targetLocalY = sillSnapped ?? snapToHalf(rawLocalY)
+      const targetLocalY = sillSnapped ?? snapToHalf(targetRawLocalY)
       const localX = resolveWallSlideAlignment({
         wallNode: event.node,
-        rawLocalX,
+        rawLocalX: targetLocalX,
         width: movingWindowNode.width,
         candidates: alignmentCandidates,
         // Along-wall alignment guides display in every snapping mode; the
@@ -668,6 +694,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // open floor. Revert is left to free-follow / cancel / commit.
       hideCursor()
       useLiveTransforms.getState().clear(movingWindowNode.id)
+      dragAnchor = null
       lastTarget = null
       lastRoofEvent = null
     }
@@ -768,7 +795,9 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       lastRoofEvent = null
       lastDormerEvent = event
       lastDormerTarget = target
-      
+      dragAnchor = null
+      grabWallId = null
+
       const side = sideOverride ?? 'front'
       const rotation: [number, number, number] = [0, side === 'back' ? Math.PI : 0, 0]
       if (currentHostId !== target.dormer.id) {
@@ -967,8 +996,12 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       // Valid roof hit owns the pointer for the next few frames; the floor
       // free-follow stands down until the cursor genuinely leaves the roof.
       markWallOwnedPointer()
-      // Wall-frame live transform doesn't apply on a roof face.
+      // Wall-frame drag anchor / live transform don't apply on a roof face —
+      // and anchoring here counts as "elsewhere", so the original wall's grab
+      // offset is forgotten for good.
       freeFollowing = false
+      dragAnchor = null
+      grabWallId = null
       lastTarget = null
       lastRoofEvent = event
       useLiveNodeOverrides.getState().clear(movingWindowNode.id)
@@ -1089,6 +1122,7 @@ const MoveWindowTool: React.FC<{ node: WindowNode }> = ({ node: movingWindowNode
       hideCursor()
       useLiveNodeOverrides.getState().clear(movingWindowNode.id)
       useLiveTransforms.getState().clear(movingWindowNode.id)
+      dragAnchor = null
       lastTarget = null
       lastRoofEvent = null
     }

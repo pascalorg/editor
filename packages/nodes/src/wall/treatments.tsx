@@ -572,7 +572,7 @@ export function buildTrimGeometry(
   childrenNodes: OpeningLike[],
   levelData: WallTreatmentLevelData,
 ) {
-  const wallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes)
+  const wallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes, 0)
   const height = trim.height
   const endHeightOffset = clampWallEndHeightOffset(node.endHeightOffset, wallHeight)
   const minWallHeight = Math.min(wallHeight, wallHeight + endHeightOffset)

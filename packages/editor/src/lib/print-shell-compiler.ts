@@ -148,7 +148,7 @@ function preparedWallHeight(
     }
   }
 
-  const height = getWallEffectiveHeightForNodes(node, nodes)
+  const height = getWallEffectiveHeightForNodes(node, nodes, 0)
   if (!Number.isFinite(height) || height <= 1e-7) {
     return {
       height: null,

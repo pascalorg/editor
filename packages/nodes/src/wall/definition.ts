@@ -87,7 +87,11 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
         height: (node, { nodes }) => {
           const wall = node as WallNodeType
           return (
-            getWallBaseElevationForNodes(wall, nodes) + getWallEffectiveHeightForNodes(wall, nodes)
+            getWallBaseElevationForNodes(wall, nodes) +
+            Math.max(
+              getWallEffectiveHeightForNodes(wall, nodes, 0),
+              getWallEffectiveHeightForNodes(wall, nodes, 1),
+            )
           )
         },
       },

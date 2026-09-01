@@ -290,7 +290,7 @@ function StructureThicknessHandle({
   const structureHeight =
     node.type === 'fence'
       ? (node.height ?? 1.8)
-      : getWallEffectiveHeightForNodes(node, useScene.getState().nodes)
+      : getWallEffectiveHeightForNodes(node, useScene.getState().nodes, 0.5)
   const outward = new Vector2(frame.normal.x * side, frame.normal.y * side)
   const faceOffset = thickness / 2 + 0.006
   const position: [number, number, number] = [
@@ -364,7 +364,7 @@ function StructureThicknessHandle({
       const initialStructureHeight =
         initialNode.type === 'fence'
           ? (initialNode.height ?? 1.8)
-          : getWallEffectiveHeightForNodes(initialNode, useScene.getState().nodes)
+          : getWallEffectiveHeightForNodes(initialNode, useScene.getState().nodes, 0.5)
       const initialStructureThickness =
         initialNode.type === 'fence'
           ? (initialNode.thickness ?? 0.08)
@@ -769,7 +769,7 @@ function WallBaseElevationHandle({
       levelObject.updateWorldMatrix(true, false)
       const initialBase = getWallBaseElevationForNodes(initialNode, sceneApi.nodes())
       const supportBase = initialBase - (initialNode.supportOffset ?? 0)
-      const initialHeight = getWallEffectiveHeightForNodes(initialNode, sceneApi.nodes())
+      const initialHeight = getWallEffectiveHeightForNodes(initialNode, sceneApi.nodes(), 0)
       const midpointWorld = new Vector3(midpoint[0], initialBase, midpoint[1]).applyMatrix4(
         levelObject.matrixWorld,
       )
@@ -937,7 +937,7 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
 
     // Dragging the top makes the wall custom-height; seed from the resolved
     // effective height so a plane-bound wall's drag starts at its real top.
-    const initialHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes)
+    const initialHeight = getWallEffectiveHeightForNodes(wall, useScene.getState().nodes, 0)
     const initialY = hit.y
     const wallId = wall.id as AnyNodeId
     let pendingHeight = initialHeight

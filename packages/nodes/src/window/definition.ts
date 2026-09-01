@@ -116,7 +116,7 @@ function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeT
     gridSnap: true,
     min: MIN_WINDOW_WIDTH,
     max: (n, scene) => {
-const dormerMax = readDormerFaceWidthMax(n, scene, sign)
+      const dormerMax = readDormerFaceWidthMax(n, scene, sign)
       if (dormerMax !== null) return Math.max(MIN_WINDOW_WIDTH, dormerMax)
       // Roof-hosted windows clamp against the face profile.
       const roofMax = readRoofFaceWidthMax(n, scene, sign)

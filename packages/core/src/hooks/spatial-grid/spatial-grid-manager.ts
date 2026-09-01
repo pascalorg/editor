@@ -369,7 +369,7 @@ export class SpatialGridManager {
     return Math.hypot(dx, dy)
   }
 
-  private getWallHeight(wallId: string, t?: number): number {
+  private getWallHeight(wallId: string, t: number): number {
     const wall = this.getWall(wallId)
     if (!wall) return 0
     const nodes = useScene.getState().nodes as Record<string, AnyNode>
@@ -1311,7 +1311,7 @@ export function getWallBaseElevationForNodes(
 export function getWallEffectiveHeightForNodes(
   wall: WallNode,
   nodes: Record<string, AnyNode>,
-  t = 0,
+  t: number,
 ): number {
   const levelId = resolveNodeLevelId(wall, nodes)
   const baseElevation = getWallBaseElevationForNodes(wall, nodes)

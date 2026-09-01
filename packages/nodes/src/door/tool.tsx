@@ -296,7 +296,7 @@ const DoorTool: React.FC = () => {
         nodes: () => useScene.getState().nodes,
       }
       const { clampedX, clampedY, fits } = clampToWall(wall, localX, width, height, sceneReader)
-const valid =
+      const valid =
         fits &&
         !hasWallChildOverlap(
           wall.id,

@@ -272,7 +272,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       const collides =
         !lastFits ||
         hasWallChildOverlap(
-lastValid.parentId,
+          lastValid.parentId,
           useScene.getState().nodes,
           lastValid.position[0],
           lastValid.position[1],

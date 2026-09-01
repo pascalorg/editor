@@ -56,7 +56,7 @@ import {
   snappingModesFor,
 } from '../lib/snapping-mode'
 import { publishNavigationSyncPoseToStore } from './navigation-sync-pose-store'
-import useInteractionScope, { getMovingNode } from './use-interaction-scope'
+import useInteractionScope from './use-interaction-scope'
 
 const DEFAULT_ACTIVE_SIDEBAR_PANEL = 'build'
 const DEFAULT_FLOORPLAN_PANE_RATIO = 0.5
@@ -1532,9 +1532,6 @@ export function getActiveSnapContext(): SnapContext | null {
   const editor = useEditor.getState()
   return snapContextOf({
     scope: useInteractionScope.getState().scope,
-    // Active node movement (e.g. dragging a window, door, or item) activates
-    // the kind's snapping profile so Shift/Ctrl keyboard cycling works mid-drag.
-    movingNodeType: getMovingNode()?.type,
     mode: editor.mode,
     tool: editor.tool,
     profileOf: (typeOrTool) => nodeRegistry.get(typeOrTool)?.snapProfile,
