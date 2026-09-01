@@ -695,5 +695,6 @@ export {
   useTranslations,
   defaultLocale,
   type Locale,
+  type Translator,
   messages,
 } from './lib/i18n'

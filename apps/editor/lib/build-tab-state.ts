@@ -5,13 +5,22 @@ export type RoofFeatureIdentity = {
   kind?: string
 }
 
-const ROOF_FOOTPRINT_SOURCES = [
-  { label: 'Room', value: 'room' },
-  { label: 'Wall', value: 'walls' },
-  { label: 'Draw', value: 'draw' },
-] as const
+// Labels are resolved via i18n at render time — `value` is the stable key
+// (used for `data-value` / state lookups / serialization), `labelKey` is the
+// translator lookup. Both en.json and zh.json keep these in lockstep under
+// `buildTab.*`.
+type RoofFootprintSourceDescriptor = {
+  value: RoofFootprintSource
+  labelKey: string
+}
 
-export type RoofFootprintSource = (typeof ROOF_FOOTPRINT_SOURCES)[number]['value']
+const ROOF_FOOTPRINT_SOURCES: readonly RoofFootprintSourceDescriptor[] = [
+  { value: 'room', labelKey: 'buildTab.roofSource.room' },
+  { value: 'walls', labelKey: 'buildTab.roofSource.walls' },
+  { value: 'draw', labelKey: 'buildTab.roofSource.draw' },
+]
+
+export type RoofFootprintSource = 'room' | 'walls' | 'draw'
 
 const CONICAL_ROOF_FOOTPRINT_SOURCES = [ROOF_FOOTPRINT_SOURCES[1]] as const
 
@@ -31,15 +40,20 @@ export function getRoofFootprintSource(roofType: RoofType, value: unknown): Roof
     : sources[0].value
 }
 
-export const ROOF_TYPE_OPTIONS: ReadonlyArray<{ label: string; value: RoofType }> = [
-  { label: 'Hip', value: 'hip' },
-  { label: 'Gable', value: 'gable' },
-  { label: 'Shed', value: 'shed' },
-  { label: 'Flat', value: 'flat' },
-  { label: 'Gambrel', value: 'gambrel' },
-  { label: 'Dutch', value: 'dutch' },
-  { label: 'Mansard', value: 'mansard' },
-  { label: 'Conical', value: 'conical' },
+export type RoofTypeOption = {
+  value: RoofType
+  labelKey: string
+}
+
+export const ROOF_TYPE_OPTIONS: readonly RoofTypeOption[] = [
+  { value: 'hip', labelKey: 'buildTab.roofType.hip' },
+  { value: 'gable', labelKey: 'buildTab.roofType.gable' },
+  { value: 'shed', labelKey: 'buildTab.roofType.shed' },
+  { value: 'flat', labelKey: 'buildTab.roofType.flat' },
+  { value: 'gambrel', labelKey: 'buildTab.roofType.gambrel' },
+  { value: 'dutch', labelKey: 'buildTab.roofType.dutch' },
+  { value: 'mansard', labelKey: 'buildTab.roofType.mansard' },
+  { value: 'conical', labelKey: 'buildTab.roofType.conical' },
 ]
 
 export function getActiveRoofFeatureId(
