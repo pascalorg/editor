@@ -951,9 +951,11 @@ export const FirstPersonControls = () => {
 
   const toggleInteractableTarget = useCallback(() => {
     // Drone is a camera, not an avatar: the click that re-acquires pointer lock
-    // must not swing a door open under the shot being framed. Same in capture
-    // mode's walk camera — there, a locked-pointer click IS the shutter.
-    if (isDroneMode || useEditor.getState().isCaptureMode) return
+    // must not swing a door open under the shot being framed. (In capture
+    // mode's walk camera the CLICK path is gated at handleMouseDown — there a
+    // locked-pointer click is the shutter — but E/R still open doors, so the
+    // photographer can stage the shot.)
+    if (isDroneMode) return
 
     const target = interactableTargetRef.current ?? resolveInteractableTarget()
     if (!target) return
@@ -1176,6 +1178,10 @@ export const FirstPersonControls = () => {
       if (document.pointerLockElement !== canvas) return
       if (event.button !== 0) return
 
+      // Capture mode: the locked-pointer click is the SHUTTER (the snapshot
+      // overlay's window-capture listener already fired); doors stay on E/R.
+      if (useEditor.getState().isCaptureMode) return
+
       event.preventDefault()
       event.stopPropagation()
       toggleInteractableTargetRef.current()
@@ -1193,6 +1199,19 @@ export const FirstPersonControls = () => {
       // Deliberately released (screenshot pause) — stay in first person;
       // clicking the canvas re-locks.
       if (suspendRef.current) return
+
+      // Capture mode: Esc (the browser's own unlock — no keydown reaches us)
+      // acts like P. Dropping back to orbit would throw away the framed pose,
+      // which reads as a crash to anyone who never noticed P.
+      if (
+        hadPointerLockRef.current &&
+        useEditor.getState().isCaptureMode &&
+        useEditor.getState().isFirstPersonMode
+      ) {
+        suspendRef.current = true
+        useViewer.getState().setWalkthroughSuspended(true)
+        return
+      }
 
       if (hadPointerLockRef.current && useEditor.getState().isFirstPersonMode) {
         useEditor.getState().setFirstPersonMode(false)
@@ -1258,6 +1277,18 @@ export const FirstPersonControls = () => {
       } else if (event.code === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
+        // Capture mode: Esc only frees the cursor (see handlePointerLockChange
+        // — while locked the browser unlocks without delivering the keydown);
+        // already-free means there is nothing to do. Exiting is the overlay's
+        // close affordance, never a reflex Esc.
+        if (useEditor.getState().isCaptureMode) {
+          if (document.pointerLockElement === canvas) {
+            suspendRef.current = true
+            useViewer.getState().setWalkthroughSuspended(true)
+            document.exitPointerLock()
+          }
+          return
+        }
         if (document.pointerLockElement === canvas) {
           document.exitPointerLock()
         }
