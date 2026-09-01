@@ -216,8 +216,8 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
     move: () => import('./move-tool'),
   },
   toolHints: [
-    { key: 'Left click', label: 'nodes.boxVent.toolHints.place', labelKey: 'nodes.boxVent.toolHints.place' },
-    { key: 'Esc', label: 'common.cancel', labelKey: 'common.cancel' },
+    { key: 'Left click', label: 'Place box vent', labelKey: 'nodes.boxVent.toolHints.place' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
 
   presentation: {

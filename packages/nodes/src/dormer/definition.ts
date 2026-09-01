@@ -324,9 +324,9 @@ export const dormerDefinition: NodeDefinition<typeof DormerNode> = {
 
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Left click', label: 'nodes.dormer.toolHints.place' },
-    { key: 'R / Shift+R', label: 'nodes.dormer.toolHints.rotateGhost' },
-    { key: 'Esc', label: 'common.cancel' },
+    { key: 'Left click', label: 'Place dormer on roof', labelKey: 'nodes.dormer.toolHints.place' },
+    { key: 'R / Shift+R', label: 'Rotate ghost', labelKey: 'nodes.dormer.toolHints.rotateGhost' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
 
   presentation: {
