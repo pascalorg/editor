@@ -62,7 +62,7 @@ import {
   HandleArrow,
   NO_RAYCAST,
 } from './handles/handle-arrow'
-import { replacePreviewOverrideIds } from './handles/preview-overrides'
+import { createLinearResizeDragBinding } from './handles/linear-resize-drag'
 import { resolveResizeSnapValue } from './handles/resize-snap'
 import { type HandleDragControls, useHandleDrag } from './handles/use-handle-drag'
 
@@ -716,10 +716,17 @@ function LinearArrow({
           getPointerRay(event.nativeEvent.clientX, event.nativeEvent.clientY, _resizeRay),
         ) / localToWorldScale
 
-      const overrideId =
-        (descriptor.kind === 'linear-resize'
-          ? descriptor.overrideTarget?.(initialNode as never, sceneApi)
-          : undefined) ?? nodeId
+      const linearBinding =
+        descriptor.kind === 'linear-resize'
+          ? createLinearResizeDragBinding({
+              descriptor,
+              initialNode,
+              nodeId,
+              sceneApi,
+              initialModifiers: { altKey: event.nativeEvent.altKey },
+            })
+          : null
+      const overrideId = linearBinding?.overrideId ?? nodeId
       const initialValue = descriptor.currentValue(initialNode)
       const minBound = resolveBound(descriptor.min, Number.NEGATIVE_INFINITY, initialNode, sceneApi)
       const maxBound = resolveBound(descriptor.max, Number.POSITIVE_INFINITY, initialNode, sceneApi)
@@ -736,14 +743,9 @@ function LinearArrow({
       // when the (snapped + clamped) value actually changes, so the cue
       // tracks real size steps instead of every sub-pixel pointer jitter.
       let lastTickValue = initialValue
-      let previewOverrideIds = new Set<AnyNodeId>()
-
       return {
         overrideId,
-        commit:
-          descriptor.kind === 'linear-resize' && descriptor.commit
-            ? (patch) => descriptor.commit?.(initialNode, patch, sceneApi)
-            : undefined,
+        commit: linearBinding?.commit,
         onBegin: () => {
           // Always claim the handle-drag scope so the HUD knows a resize is the
           // active interaction (keeps the idle select hints off-screen). The
@@ -761,12 +763,9 @@ function LinearArrow({
             descriptor.onDragEnd?.(initialNode as never, sceneApi)
           }
           if (onDrag) useOpeningGuides.getState().clear()
-          for (const previewId of previewOverrideIds) {
-            useLiveNodeOverrides.getState().clear(previewId)
-            useScene.getState().markDirty(previewId)
-          }
+          linearBinding?.clearPreview()
         },
-        move: ({ event: moveEvent, getPointerRay: getMovePointerRay }) => {
+        move: ({ event: moveEvent, modifiers, getPointerRay: getMovePointerRay }) => {
           const currentPointer =
             closestAxisParameterToRay(
               _resizeOriginW,
@@ -780,13 +779,13 @@ function LinearArrow({
             rawValue: rawNext,
             fallbackValue: lastTickValue,
             gridSnapEnabled: linearDescriptor?.gridSnap === true,
-            gridSnapActive: isGridSnapActive(),
+            gridSnapActive: isGridSnapActive() && !modifiers.altKey,
             gridSnapStep: useEditor.getState().gridSnapStep,
-            magneticSnapActive: isMagneticSnapActive(),
+            magneticSnapActive: isMagneticSnapActive() && !modifiers.altKey,
             magneticSnap: linearDescriptor?.magneticSnap
               ? (value) => linearDescriptor.magneticSnap?.(initialNode, value, sceneApi) ?? value
               : undefined,
-            connectionSnapActive: !moveEvent.altKey,
+            connectionSnapActive: !modifiers.altKey,
             connectionSnap: linearDescriptor?.connectionSnap
               ? (value) => linearDescriptor.connectionSnap?.(initialNode, value, sceneApi) ?? value
               : undefined,
@@ -796,30 +795,9 @@ function LinearArrow({
             lastTickValue = next
             sfxEmitter.emit('sfx:resize')
           }
-          const patch = descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>
-          if (descriptor.kind === 'linear-resize' && descriptor.previewOverrides) {
-            const previewEntries = descriptor.previewOverrides(initialNode as never, next, sceneApi)
-            const nextPreviewOverrideIds = replacePreviewOverrideIds(
-              previewOverrideIds,
-              previewEntries,
-              (previewId) => {
-                useLiveNodeOverrides.getState().clear(previewId)
-                useScene.getState().markDirty(previewId)
-              },
-            )
-            useLiveNodeOverrides
-              .getState()
-              .setMany(
-                previewEntries.map(([id, previewPatch]) => [
-                  id,
-                  previewPatch as Record<string, unknown>,
-                ]),
-              )
-            for (const [previewId] of previewEntries) {
-              useScene.getState().markDirty(previewId)
-            }
-            previewOverrideIds = nextPreviewOverrideIds
-          }
+          const patch = linearBinding
+            ? linearBinding.apply(next, modifiers)
+            : (descriptor.apply(initialNode as never, next, sceneApi) as Partial<AnyNode>)
           // Let the kind publish live guides for the edge being resized.
           onDrag?.({ ...(initialNode as object), ...patch } as AnyNode, sceneApi)
           return patch

@@ -164,6 +164,72 @@ describe('addCabinetModuleSide', () => {
     expect(added?.depth).toBeCloseTo(0.6)
   })
 
+  test('inherits the anchor cabinet structure when extending a run', () => {
+    const levelId = 'level_add-side-structure-inheritance' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_run-add-side-structure-inheritance',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: ['cabinet-module_anchor-add-side-structure-inheritance'],
+    })
+    const anchor = CabinetModuleNode.parse({
+      id: 'cabinet-module_anchor-add-side-structure-inheritance',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      stack: [
+        { id: 'drawer-anchor-add-side-structure-inheritance', type: 'drawer', drawerCount: 3 },
+        { id: 'door-anchor-add-side-structure-inheritance', type: 'door', shelfCount: 2 },
+      ],
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, anchor as AnyNode])
+
+    const addedId = addCabinetModuleSide({
+      anchorModule: anchor,
+      run,
+      sceneApi,
+      side: 'right',
+    })
+
+    const added = sceneApi.get<CabinetModuleNode>(addedId!)
+    expect(added?.stack?.map((compartment) => compartment.type)).toEqual(['drawer', 'door'])
+    expect(added?.stack?.[0]?.drawerCount).toBe(3)
+    expect(added?.stack?.[1]?.shelfCount).toBe(2)
+  })
+
+  test.each([
+    'left',
+    'right',
+  ] as const)('adds a standard cabinet beside a dishwasher on the %s instead of cloning the appliance', (side) => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_run-add-side-dishwasher',
+      children: ['cabinet-module_add-side-dishwasher'],
+    })
+    const dishwasher = CabinetModuleNode.parse({
+      id: 'cabinet-module_add-side-dishwasher',
+      parentId: run.id,
+      name: 'Dishwasher',
+      position: [0, 0.1, 0],
+      width: 0.6,
+      stack: [{ id: 'dishwasher-compartment-add-side', type: 'dishwasher', height: 0.72 }],
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, dishwasher as AnyNode])
+
+    const addedId = addCabinetModuleSide({
+      anchorModule: dishwasher,
+      run,
+      sceneApi,
+      side,
+    })
+
+    const added = sceneApi.get<CabinetModuleNode>(addedId!)
+    expect(added?.name).toBe('Base Cabinet 2')
+    expect(added?.stack?.map((compartment) => compartment.type)).toEqual(['door'])
+  })
+
   test('shrinks a newly added corner-end base cabinet to the remaining wall clearance', () => {
     const levelId = 'level_add-side-wall-clearance' as AnyNodeId
     const run = CabinetNode.parse({
@@ -456,6 +522,37 @@ describe('addCornerRun', () => {
     expect(generatedModules.every((node) => node.stack?.[0]?.shelfCount === 5)).toBe(true)
   })
 
+  test('preserves the source cabinet structure on the connected corner cabinet', () => {
+    const levelId = 'level_corner-structure-inheritance' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-structure-inheritance',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: ['cabinet-module_source-structure-inheritance'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-structure-inheritance',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      stack: [
+        { id: 'drawer-source-structure-inheritance', type: 'drawer', drawerCount: 3 },
+        { id: 'door-source-structure-inheritance', type: 'door', shelfCount: 2 },
+      ],
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
+
+    const selectedId = addCornerRun({ module, run, sceneApi, side: 'right' })
+
+    const connected = sceneApi.get<CabinetModuleNode>(selectedId!)
+    expect(connected?.stack?.map((compartment) => compartment.type)).toEqual(['drawer', 'door'])
+    expect(connected?.stack?.[0]?.drawerCount).toBe(3)
+    expect(connected?.stack?.[1]?.shelfCount).toBe(2)
+  })
+
   test('keeps linked L runs aligned when the source cabinet width changes later', () => {
     const levelId = 'level_corner-linked-width' as AnyNodeId
     const run = CabinetNode.parse({
@@ -502,6 +599,53 @@ describe('addCornerRun', () => {
       modulesOut.find((node) => node.name === 'Wall Cabinet' && node.parentId === linkedBase?.id)
         ?.width,
     ).toBeCloseTo(0.45)
+  })
+
+  test('keeps the linked leg attached when source re-layout bails', () => {
+    const levelId = 'level_corner-linked-width-bail' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-linked-width-bail',
+      parentId: levelId,
+      children: ['cabinet-module_source-corner-linked-width-bail'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-corner-linked-width-bail',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
+    addCornerRun({ module, run, sceneApi, side: 'right' })
+
+    const linkedBase = Object.values(sceneApi.nodes()).find(
+      (node): node is CabinetNode => node.type === 'cabinet' && node.name === 'Corner Base Run',
+    )!
+    const extra = CabinetModuleNode.parse({
+      id: 'cabinet-module_unexpected-extra-corner-module',
+      parentId: linkedBase.id,
+      name: 'Unexpected extra module',
+      position: [0.7, 0.1, 0],
+      width: 0.3,
+      depth: 0.58,
+    })
+    sceneApi.upsert(extra as AnyNode, linkedBase.id as AnyNodeId)
+    sceneApi.update(linkedBase.id as AnyNodeId, {
+      children: [...linkedBase.children, extra.id],
+    } as Partial<AnyNode>)
+
+    const previous = sceneApi.get<CabinetModuleNode>(module.id)!
+    sceneApi.update(module.id as AnyNodeId, { width: 0.45 } as Partial<AnyNode>)
+    syncCornerRunsFromSourceModule({
+      module: sceneApi.get<CabinetModuleNode>(module.id)!,
+      previousModule: previous,
+      run: sceneApi.get<CabinetNode>(run.id)!,
+      sceneApi,
+    })
+
+    expect(sceneApi.get<CabinetNode>(linkedBase.id)!.position[0]).toBeCloseTo(
+      linkedBase.position[0] - 0.225,
+    )
   })
 
   test('re-anchors linked L runs when the source module moves along its run', () => {

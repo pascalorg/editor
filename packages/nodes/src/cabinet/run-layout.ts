@@ -26,6 +26,7 @@ type ModuleLike = Pick<CabinetModuleNode, 'id' | 'position' | 'width'>
 type ReflowRunModulesOptions = {
   wallConstraints?: RunWallConstraints
   resizeSide?: 'left' | 'right'
+  consumeAdjacentGap?: boolean
   eligibleDonorIds?: ReadonlySet<CabinetModuleNode['id']>
   maximumWidth?: number
   maximumWidthById?: ReadonlyMap<CabinetModuleNode['id'], number>
@@ -547,8 +548,9 @@ export function sideInsertX({
 /**
  * Re-pack the run after one module's width changes. A single constrained end
  * may consume its wall gap. When both ends are constrained, the run extent is
- * fixed and eligible donors absorb the growth, nearest first. The change is
- * rejected only when their combined capacity is insufficient.
+ * fixed and eligible donors absorb the growth, nearest first. Manual edge
+ * resize may consume an open inter-module gap before shifting its neighbor.
+ * The change is rejected only when their combined capacity is insufficient.
  */
 export function reflowRunModules<T extends ModuleLike>(
   modules: readonly T[],
@@ -576,6 +578,17 @@ export function reflowRunModules<T extends ModuleLike>(
   const widthGrowth = selectedWidth - selected.width
   let remainingGrowth = Math.max(0, widthGrowth)
   const resizeSide = options.resizeSide
+  const layoutGaps = [...gaps]
+  let consumedAdjacentGap = 0
+  if (options.consumeAdjacentGap && widthGrowth > REFLOW_CAPACITY_EPSILON && resizeSide) {
+    const adjacentGapIndex = resizeSide === 'right' ? selectedIndex : selectedIndex - 1
+    if (adjacentGapIndex >= 0 && adjacentGapIndex < layoutGaps.length) {
+      const adjacentGap = layoutGaps[adjacentGapIndex] ?? 0
+      consumedAdjacentGap = Math.min(widthGrowth, adjacentGap)
+      layoutGaps[adjacentGapIndex] = adjacentGap - consumedAdjacentGap
+    }
+  }
+  remainingGrowth -= consumedAdjacentGap
   const consumedRightSlack =
     rightConstrained && (!preserveExtent || resizeSide === 'right')
       ? Math.min(remainingGrowth, Math.max(0, wallConstraints?.right.slack ?? 0))
@@ -695,7 +708,7 @@ export function reflowRunModules<T extends ModuleLike>(
   }
 
   const totalWidth = sorted.reduce(
-    (total, module, index) => total + (widths.get(module.id) ?? 0) + (gaps[index] ?? 0),
+    (total, module, index) => total + (widths.get(module.id) ?? 0) + (layoutGaps[index] ?? 0),
     0,
   )
   let nextLeft = runMinX(sorted) - consumedLeftSlack
@@ -721,7 +734,7 @@ export function reflowRunModules<T extends ModuleLike>(
       module.position[1],
       module.position[2],
     ] as T['position']
-    nextLeft += width + (gaps[index] ?? 0)
+    nextLeft += width + (layoutGaps[index] ?? 0)
     return { id: module.id, position, width }
   })
 }

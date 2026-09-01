@@ -33,6 +33,7 @@ function module(
 
 const magneticSnap = cabinetModuleParentFrame.magneticSnap!
 const magneticSnapMatches = cabinetModuleParentFrame.magneticSnapMatches!
+const isValidPosition = cabinetModuleParentFrame.isValidPosition!
 
 describe('cabinetModuleParentFrame.magneticSnap', () => {
   test('pulls a module flush against a sibling edge within the 8 cm threshold', () => {
@@ -94,6 +95,38 @@ describe('cabinetModuleParentFrame.magneticSnap', () => {
 
     expect(snapped[0]).toBeCloseTo(0.74)
     expect(snapped[0] + moving.width / 2).toBeCloseTo(right.position[0] - right.width / 2)
+  })
+})
+
+describe('cabinetModuleParentFrame.isValidPosition', () => {
+  test('rejects a dragged module while its footprint overlaps a sibling', () => {
+    const moving = module('cabinet-module_moving', [0.65, 0.1, 0])
+    const sibling = module('cabinet-module_sibling', [0, 0.1, 0])
+    const { run, nodes } = runFixture([moving, sibling])
+
+    expect(
+      isValidPosition({ node: moving, parent: run, position: [0.4, 0.1, 0], nodes }),
+    ).toBe(false)
+  })
+
+  test('accepts a dragged module once its footprint clears siblings', () => {
+    const moving = module('cabinet-module_moving', [0.65, 0.1, 0])
+    const sibling = module('cabinet-module_sibling', [0, 0.1, 0])
+    const { run, nodes } = runFixture([moving, sibling])
+
+    expect(
+      isValidPosition({ node: moving, parent: run, position: [0.65, 0.1, 0], nodes }),
+    ).toBe(true)
+  })
+
+  test('does not reject aligned widths when depth bands are separated', () => {
+    const moving = module('cabinet-module_moving', [0.4, 0.1, 0.8])
+    const sibling = module('cabinet-module_sibling', [0, 0.1, 0])
+    const { run, nodes } = runFixture([moving, sibling])
+
+    expect(
+      isValidPosition({ node: moving, parent: run, position: [0.4, 0.1, 0.8], nodes }),
+    ).toBe(true)
   })
 })
 

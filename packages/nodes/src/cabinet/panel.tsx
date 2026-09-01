@@ -44,6 +44,7 @@ import {
   backAlignZ,
   type CabinetRunStylePatch,
   cabinetCeilingGap,
+  cabinetModuleCeilingOverflow,
   cabinetModulesForRun,
   resolveCabinetType,
   runModuleBaseY,
@@ -178,7 +179,6 @@ export default function CabinetPanel() {
       s.nodes[selected.parentId as AnyNodeId]?.type === 'cabinet-module'
     )
   })
-
   const showReflowRejected = useCallback(() => {
     setReflowNotice({ message: REFLOW_REJECTED_MESSAGE })
   }, [])
@@ -307,6 +307,8 @@ export default function CabinetPanel() {
           if (liveNode?.type === 'cabinet-module') {
             syncCornerRunsFromSourceModule({
               module: liveNode,
+              previousModule:
+                liveBeforeUpdate?.type === 'cabinet-module' ? liveBeforeUpdate : undefined,
               run: parent,
               sceneApi: createSceneApi(useScene),
             })
@@ -381,7 +383,9 @@ export default function CabinetPanel() {
           if (seen.has(run.id as AnyNodeId)) continue
           seen.add(run.id as AnyNodeId)
           reports.push(
-            validateCabinetRun(run, cabinetModulesForRun(run, useScene.getState().nodes)),
+            validateCabinetRun(run, cabinetModulesForRun(run, useScene.getState().nodes), {
+              nodes: useScene.getState().nodes,
+            }),
           )
           for (const childId of run.children ?? []) {
             const child = useScene.getState().nodes[childId as AnyNodeId]
@@ -406,6 +410,10 @@ export default function CabinetPanel() {
     : null
   const isHoodOnlyNode =
     stack.length > 0 && stack.every((compartment) => isHoodCompartmentType(compartment.type))
+  const ceilingOverflow =
+    node.type === 'cabinet-module'
+      ? cabinetModuleCeilingOverflow(node, useScene.getState().nodes as Record<AnyNodeId, AnyNode>)
+      : 0
   const normalized = normalizeCabinetStack(node)
   const rowHeights = new Map(normalized.map((row) => [row.index, row.height]))
   const rows = stack.map((compartment, index) => ({ compartment, index })).reverse()
@@ -753,6 +761,15 @@ export default function CabinetPanel() {
                 />
               </>
             )}
+            {ceilingOverflow > 1e-4 && (
+              <div className="flex gap-1.5 px-1 text-xs leading-5 text-red-300">
+                <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />
+                <span>
+                  Finished height extends {(ceilingOverflow * 1000).toFixed(0)} mm above the
+                  ceiling.
+                </span>
+              </div>
+            )}
           </div>
         </PanelSection>
       )}
@@ -772,7 +789,7 @@ export default function CabinetPanel() {
               ))}
               {planningReport.warnings.map((planningIssue) => (
                 <div
-                  className="flex gap-1.5 text-amber-300"
+                  className={`flex gap-1.5 ${planningIssue.code === 'ceiling-overflow' ? 'text-red-300' : 'text-amber-300'}`}
                   key={`${planningIssue.severity}-${planningIssue.code}-${planningIssue.nodeIds.join('-')}`}
                 >
                   <AlertTriangle className="mt-1 h-3.5 w-3.5 shrink-0" />

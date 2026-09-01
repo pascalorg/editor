@@ -2025,6 +2025,17 @@ export type MovableParentFrame = {
     nodes: Readonly<Record<string, AnyNode>>,
   ) => ParentFrameSnapMatch[]
   /**
+   * Optional live collision check for a child moving in the parent frame.
+   * The generic move tool uses this to colour the drag bounds and reject an
+   * invalid drop; the kind owns the actual domain rule.
+   */
+  isValidPosition?: (args: {
+    node: AnyNode
+    parent: AnyNode
+    position: readonly [number, number, number]
+    nodes: Readonly<Record<string, AnyNode>>
+  }) => boolean
+  /**
    * Called after a move of the child commits, with the LIVE (post-commit)
    * child and parent. Lets the kind run derived-state maintenance the
    * generic tool can't know about (a cabinet run re-flowing its layout and

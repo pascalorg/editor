@@ -2346,6 +2346,130 @@ describe('cabinet handles', () => {
   })
 
   test.each([
+    'left',
+    'right',
+  ] as const)('resizing into a gap left by a deleted module keeps the neighbor fixed from the %s side', (side) => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_handle-gap-run',
+      children: ['cabinet-module_handle-gap-left', 'cabinet-module_handle-gap-right'],
+    })
+    const left = CabinetModuleNode.parse({
+      id: 'cabinet-module_handle-gap-left',
+      parentId: run.id,
+      position: [-0.5, 0.1, 0],
+      width: 0.5,
+    })
+    const right = CabinetModuleNode.parse({
+      id: 'cabinet-module_handle-gap-right',
+      parentId: run.id,
+      position: [0.2, 0.1, 0],
+      width: 0.5,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, left as AnyNode, right as AnyNode])
+    const selected = side === 'right' ? left : right
+    const neighbor = side === 'right' ? right : left
+    const handles =
+      typeof cabinetModuleDefinition.handles === 'function'
+        ? cabinetModuleDefinition.handles(selected, sceneApi as never)
+        : (cabinetModuleDefinition.handles ?? [])
+    const widthHandle = handles.find(
+      (handle): handle is LinearResizeHandle<typeof selected> =>
+        handle.kind === 'linear-resize' &&
+        handle.axis === 'x' &&
+        handle.anchor === (side === 'right' ? 'min' : 'max'),
+    )
+
+    expect(widthHandle).toBeDefined()
+    expect(widthHandle!.magneticSnap).toBeDefined()
+    const snappedWidth = widthHandle!.magneticSnap!(selected, 0.65, sceneApi as never)
+    const unsnappedWidth = widthHandle!.magneticSnap!(selected, 0.6, sceneApi as never)
+    const patch = widthHandle!.apply(selected, snappedWidth, sceneApi as never)
+    const preview = widthHandle!.previewOverrides?.(selected, snappedWidth, sceneApi as never) ?? []
+    const previewNeighbor = preview.find(([id]) => id === neighbor.id)?.[1]
+
+    expect(snappedWidth).toBeCloseTo(0.7)
+    expect(unsnappedWidth).toBeCloseTo(0.6)
+    expect(patch.position?.[0]).toBeCloseTo(side === 'right' ? -0.4 : 0.1)
+    expect(previewNeighbor?.position?.[0]).toBeCloseTo(neighbor.position[0])
+
+    widthHandle!.commit?.(selected, patch, sceneApi as never)
+    expect(sceneApi.get<CabinetModuleNode>(neighbor.id)?.position[0]).toBeCloseTo(
+      neighbor.position[0],
+    )
+  })
+
+  test.each([
+    'left',
+    'right',
+  ] as const)('Alt-resizing a run module leaves the neighbor independent from the %s side', (side) => {
+    const run = CabinetNode.parse({
+      id: `cabinet_handle-alt-run-${side}`,
+      children: [
+        `cabinet-module_handle-alt-left-${side}`,
+        `cabinet-module_handle-alt-right-${side}`,
+      ],
+    })
+    const left = CabinetModuleNode.parse({
+      id: `cabinet-module_handle-alt-left-${side}`,
+      parentId: run.id,
+      position: [-0.5, 0.1, 0],
+      width: 0.5,
+    })
+    const right = CabinetModuleNode.parse({
+      id: `cabinet-module_handle-alt-right-${side}`,
+      parentId: run.id,
+      position: [0.2, 0.1, 0],
+      width: 0.5,
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, left as AnyNode, right as AnyNode])
+    const selected = side === 'right' ? left : right
+    const neighbor = side === 'right' ? right : left
+    const handles =
+      typeof cabinetModuleDefinition.handles === 'function'
+        ? cabinetModuleDefinition.handles(selected, sceneApi as never)
+        : (cabinetModuleDefinition.handles ?? [])
+    const widthHandle = handles.find(
+      (handle): handle is LinearResizeHandle<typeof selected> =>
+        handle.kind === 'linear-resize' &&
+        handle.axis === 'x' &&
+        handle.anchor === (side === 'right' ? 'min' : 'max'),
+    )
+
+    expect(widthHandle).toBeDefined()
+    const applyWithAlt = widthHandle!.apply as unknown as (
+      node: typeof selected,
+      width: number,
+      sceneApi: never,
+      modifiers: { altKey: boolean },
+    ) => Partial<typeof selected>
+    const previewWithAlt = widthHandle!.previewOverrides as unknown as (
+      node: typeof selected,
+      width: number,
+      sceneApi: never,
+      modifiers: { altKey: boolean },
+    ) => ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]>
+    const commitWithAlt = widthHandle!.commit as unknown as (
+      node: typeof selected,
+      patch: Partial<typeof selected>,
+      sceneApi: never,
+      modifiers: { altKey: boolean },
+    ) => void
+    const patch = applyWithAlt(selected, 0.8, sceneApi as never, { altKey: true })
+    const preview = new Map(previewWithAlt(selected, 0.8, sceneApi as never, { altKey: true }))
+
+    expect(patch.width).toBeCloseTo(0.8)
+    expect(preview.has(neighbor.id as AnyNodeId)).toBe(false)
+
+    commitWithAlt(selected, patch, sceneApi as never, { altKey: true })
+
+    expect(sceneApi.get<CabinetModuleNode>(selected.id)?.width).toBeCloseTo(0.8)
+    expect(sceneApi.get<CabinetModuleNode>(neighbor.id)?.width).toBeCloseTo(neighbor.width)
+    expect(sceneApi.get<CabinetModuleNode>(neighbor.id)?.position[0]).toBeCloseTo(
+      neighbor.position[0],
+    )
+  })
+
+  test.each([
     ['left', -Math.PI / 2],
     ['right', Math.PI / 2],
   ] as const)('L %s groups expose a depth arrow on both inside fronts', (_side, legRotation) => {

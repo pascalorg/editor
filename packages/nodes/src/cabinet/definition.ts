@@ -256,6 +256,7 @@ const ROTATE_RING_OFFSET = 0.04
 const MIN_CABINET_CARCASS_HEIGHT = 0.4
 const CABINET_ADJACENCY_EPSILON = 1e-4
 const CABINET_DEPTH_SNAP_THRESHOLD = 0.02
+const CABINET_WIDTH_SNAP_THRESHOLD = 0.08
 
 function isCabinetModule(node: AnyNode | undefined): node is CabinetModuleNodeType {
   return node?.type === 'cabinet-module'
@@ -1046,6 +1047,7 @@ function commitModuleResize(
   }
 
   if (typeof patch.width === 'number') {
+    const previousModule = module
     sceneApi.update(module.id as AnyNodeId, patch as Partial<AnyNode>)
     if (resolveCabinetType(module, parentRun) === 'base') {
       const wallChild = wallChildOf(module, sceneApi.nodes())
@@ -1054,6 +1056,12 @@ function commitModuleResize(
       }
     }
     bumpCabinetRunLayoutRevision(sceneApi, parentRun)
+    syncCornerRunsFromSourceModule({
+      module: sceneApi.get<CabinetModuleNodeType>(module.id as AnyNodeId) ?? module,
+      previousModule,
+      run: sceneApi.get<CabinetNodeType>(parentRun.id as AnyNodeId) ?? parentRun,
+      sceneApi,
+    })
     return
   }
 
@@ -1084,6 +1092,7 @@ function commitModuleResize(
 
   syncCornerRunsFromSourceModule({
     module: sceneApi.get<CabinetModuleNodeType>(module.id as AnyNodeId) ?? module,
+    previousModule: module,
     run: sceneApi.get<CabinetNodeType>(parentRun.id as AnyNodeId) ?? parentRun,
     sceneApi,
   })
@@ -1138,6 +1147,85 @@ function cabinetManualWidthContext(
   return { run, selected: parent, modules: cabinetModulesForRun(run, sceneApi.nodes()) }
 }
 
+function cabinetWidthIsNestedModule(node: CabinetModuleNodeType, sceneApi: SceneApi): boolean {
+  const context = cabinetManualWidthContext(node, sceneApi)
+  return context !== null && context.selected.id !== node.id
+}
+
+function snapCabinetWidth(
+  node: CabinetModuleNodeType,
+  width: number,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+): number {
+  const context = cabinetManualWidthContext(node, sceneApi)
+  if (!context) return width
+
+  const sorted = sortRunModules(context.modules)
+  const selected = context.selected
+  const selectedIndex = sorted.findIndex((module) => module.id === selected.id)
+  const neighborHost = sorted[side === 'right' ? selectedIndex + 1 : selectedIndex - 1]
+  if (!neighborHost) return width
+
+  const nested = selected.id !== node.id
+  const snapTarget = nested ? wallChildOf(neighborHost, sceneApi.nodes()) : neighborHost
+  if (!snapTarget) return width
+
+  const selectedCenter = nested
+    ? cabinetModuleRunLocalCenterX(node, sceneApi)
+    : selected.position[0]
+  const targetCenter = nested
+    ? cabinetModuleRunLocalCenterX(snapTarget, sceneApi)
+    : snapTarget.position[0]
+  if (selectedCenter === null || targetCenter === null) return width
+
+  const selectedEdge = selectedCenter + (side === 'right' ? node.width / 2 : -node.width / 2)
+  const neighborEdge =
+    targetCenter + (side === 'right' ? -snapTarget.width / 2 : snapTarget.width / 2)
+  const gap = side === 'right' ? neighborEdge - selectedEdge : selectedEdge - neighborEdge
+  if (gap <= CABINET_ADJACENCY_EPSILON) return width
+
+  const targetWidth = node.width + gap - (nested ? 0 : cabinetWallWidthGap(node, side, sceneApi))
+  return targetWidth > node.width && Math.abs(width - targetWidth) <= CABINET_WIDTH_SNAP_THRESHOLD
+    ? targetWidth
+    : width
+}
+
+function cabinetIndependentWidthPatch(
+  node: CabinetModuleNodeType,
+  width: number,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+): Partial<CabinetEditableNode> {
+  const sign = side === 'right' ? 1 : -1
+  const gap = cabinetWallWidthGap(node, side, sceneApi)
+  const effectiveWidth = width + gap
+  return {
+    width: effectiveWidth,
+    position: [
+      node.position[0] + (sign * (effectiveWidth - node.width)) / 2,
+      node.position[1],
+      node.position[2],
+    ],
+  }
+}
+
+function cabinetIndependentWidthPreviewOverrides(
+  node: CabinetModuleNodeType,
+  width: number,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+): Array<readonly [AnyNodeId, Partial<AnyNode>]> {
+  const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
+  const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
+  if (parentRunOverride) overrides.push(parentRunOverride)
+
+  const gap = cabinetWallWidthGap(node, side, sceneApi)
+  const selectedWallOverride = wallCabinetWidthOverride(node, width + gap, sceneApi)
+  if (selectedWallOverride) overrides.push(selectedWallOverride)
+  return overrides
+}
+
 function cabinetManualWidthReflow(
   node: CabinetModuleNodeType,
   width: number,
@@ -1165,6 +1253,7 @@ function cabinetManualWidthReflow(
     clampedSelectedWidth,
     {
       resizeSide: side,
+      consumeAdjacentGap: true,
       eligibleDonorIds: new Set(),
       maximumWidth: MAX_CABINET_WIDTH,
     },
@@ -1235,18 +1324,31 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
     anchor: side === 'right' ? 'min' : 'max',
     min: (node, sceneApi) => {
       if (!isCabinetModule(node)) return MIN_CABINET_WIDTH
-      const gap = cabinetWallWidthGap(node, side, sceneApi)
+      const gap = cabinetWidthIsNestedModule(node, sceneApi)
+        ? 0
+        : cabinetWallWidthGap(node, side, sceneApi)
       return MIN_CABINET_WIDTH - gap
     },
     max: (node, sceneApi) => {
       const ownMax = cabinetResizeUpperBound(node.width, MAX_CABINET_WIDTH)
       if (!isCabinetModule(node)) return ownMax
-      const gap = cabinetWallWidthGap(node, side, sceneApi)
+      const gap = cabinetWidthIsNestedModule(node, sceneApi)
+        ? 0
+        : cabinetWallWidthGap(node, side, sceneApi)
       return ownMax - gap
     },
+    magneticSnap: (node, width, sceneApi) =>
+      isCabinetModule(node) ? snapCabinetWidth(node, width, side, sceneApi) : width,
     currentValue: (node) => node.width,
-    apply: (node, width, sceneApi) => {
-      if (isCabinetModule(node) && cabinetManualWidthContext(node, sceneApi)) {
+    apply: (node, width, sceneApi, modifiers) => {
+      if (isCabinetModule(node) && modifiers?.altKey) {
+        return cabinetIndependentWidthPatch(node, width, side, sceneApi)
+      }
+      if (
+        isCabinetModule(node) &&
+        cabinetManualWidthContext(node, sceneApi) &&
+        !cabinetWidthIsNestedModule(node, sceneApi)
+      ) {
         const reflow = cabinetManualWidthReflow(node, width, side, sceneApi)
         if (reflow) {
           const selected = reflow.reflowed.find((entry) => entry.id === reflow.selected.id)
@@ -1254,7 +1356,10 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
         }
         return { width: node.width, position: node.position }
       }
-      const gap = isCabinetModule(node) ? cabinetWallWidthGap(node, side, sceneApi) : 0
+      const gap =
+        isCabinetModule(node) && !cabinetWidthIsNestedModule(node, sceneApi)
+          ? cabinetWallWidthGap(node, side, sceneApi)
+          : 0
       const effectiveWidth = width + gap
       return {
         width: effectiveWidth,
@@ -1265,8 +1370,15 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
         ],
       }
     },
-    previewOverrides: (node, width, sceneApi) => {
+    previewOverrides: (node, width, sceneApi, modifiers) => {
       if (!isCabinetModule(node)) return []
+      if (modifiers?.altKey) {
+        return cabinetIndependentWidthPreviewOverrides(node, width, side, sceneApi)
+      }
+      if (cabinetWidthIsNestedModule(node, sceneApi)) {
+        const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
+        return parentRunOverride ? [parentRunOverride] : []
+      }
       const reflow = cabinetManualWidthReflow(node, width, side, sceneApi)
       if (reflow) {
         const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
@@ -1317,8 +1429,23 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
       }
       return overrides
     },
-    commit: (node, patch, sceneApi) => {
+    commit: (node, patch, sceneApi, modifiers) => {
+      if (isCabinetModule(node) && typeof patch.width === 'number' && modifiers?.altKey) {
+        commitCabinetResize(
+          node,
+          {
+            ...patch,
+            metadata: metadataForSelectedWidth(node, patch.width, patch.metadata),
+          },
+          sceneApi,
+        )
+        return
+      }
       if (isCabinetModule(node) && typeof patch.width === 'number') {
+        if (cabinetWidthIsNestedModule(node, sceneApi)) {
+          commitCabinetResize(node, patch, sceneApi)
+          return
+        }
         commitCabinetManualWidth(
           node,
           patch.width - cabinetWallWidthGap(node, side, sceneApi),

@@ -29,6 +29,7 @@ import {
 import {
   backAnchoredModuleZ,
   DEFAULT_CEILING_HEIGHT,
+  defaultCabinetStack,
   hoodCompartmentHeight,
   newCabinetCompartment,
   stackForCabinet,
@@ -330,10 +331,10 @@ export function wallBottomHeightForTallAlignment() {
 }
 
 /** Resolve the remaining vertical space above a wall/tall module. */
-export function cabinetCeilingGap(
+function cabinetCeilingContext(
   node: CabinetModuleNode,
   nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
-): number {
+): { ceilingHeight: number; worldY: number } {
   let worldY = node.position[1]
   let current: AnyNode = node
   const visited = new Set<AnyNodeId>()
@@ -358,9 +359,32 @@ export function cabinetCeilingGap(
     level?.type === 'level' && typeof level.height === 'number'
       ? level.height
       : DEFAULT_CEILING_HEIGHT
+  return { ceilingHeight, worldY }
+}
+
+/** Resolve the remaining vertical space above a wall/tall module. */
+export function cabinetCeilingGap(
+  node: CabinetModuleNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): number {
+  const { ceilingHeight, worldY } = cabinetCeilingContext(node, nodes)
   const currentTop =
     worldY + node.carcassHeight + (node.withCountertop ? node.countertopThickness : 0)
   return Math.min(1.2, Math.max(0, ceilingHeight - currentTop))
+}
+
+/** Resolve how far a module's carcass and top finish extend above the ceiling. */
+export function cabinetModuleCeilingOverflow(
+  node: CabinetModuleNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): number {
+  const { ceilingHeight, worldY } = cabinetCeilingContext(node, nodes)
+  const currentTop =
+    worldY +
+    node.carcassHeight +
+    (node.withCountertop ? node.countertopThickness : 0) +
+    (node.topFinish === 'top-cabinet' || node.topFinish === 'trim' ? node.topFinishHeight : 0)
+  return Math.max(0, currentTop - ceilingHeight)
 }
 
 /** Local Z offset that makes a shallower wall cabinet's back flush with its deeper base. */
@@ -755,6 +779,22 @@ export function cornerSourceModulesForRun(
 
 function doorStack(shelfCount: number) {
   return [{ ...newCabinetCompartment('door'), shelfCount }]
+}
+
+function cloneCabinetStack(module: CabinetModuleNode): CabinetModuleNode['stack'] {
+  return stackForCabinet(module).map((compartment) => ({
+    ...compartment,
+    id: newCabinetCompartment(compartment.type).id,
+  }))
+}
+
+const STORAGE_COMPARTMENT_TYPES = new Set(['shelf', 'drawer', 'door'])
+
+function sideAdditionStack(module: CabinetModuleNode): CabinetModuleNode['stack'] | undefined {
+  const stack = stackForCabinet(module)
+  return stack.every((compartment) => STORAGE_COMPARTMENT_TYPES.has(compartment.type))
+    ? cloneCabinetStack(module)
+    : defaultCabinetStack(module)
 }
 
 function cloneWallCabinetStack(
@@ -1702,6 +1742,11 @@ function upsertCabinetRunWithModules({
       countertopOverhang: runTier === 'base' ? sourceRun.countertopOverhang : 0,
       showPlinth: false,
       withCountertop: false,
+      frontGap: sourceRun.frontGap,
+      frontStyle: sourceRun.frontStyle,
+      frontOverlay: sourceRun.frontOverlay,
+      handleStyle: sourceRun.handleStyle,
+      handlePosition: sourceRun.handlePosition,
       moduleKind: patch.moduleKind ?? 'standard',
       ...(patch.openSide ? { openSide: patch.openSide } : {}),
       ...(patch.cornerShelf ? { cornerShelf: true } : {}),
@@ -2112,7 +2157,10 @@ function syncDerivedCornerRun({
         frontOverlay: sourceRun.frontOverlay,
         handleStyle: sourceRun.handleStyle,
         handlePosition: sourceRun.handlePosition,
-        stack: doorStack(layout.connectedShelfCount),
+        stack:
+          role === 'base-leg' && entry.name === 'Base Cabinet'
+            ? cloneCabinetStack(sourceModule)
+            : doorStack(layout.connectedShelfCount),
         metadata: entry.metadata,
       } as Partial<AnyNode>,
     )
@@ -2143,16 +2191,40 @@ function syncDerivedCornerRun({
 export function syncCornerRunsFromSourceModule({
   baseLayout = 'full',
   module,
+  previousModule,
   run,
   sceneApi,
 }: {
   baseLayout?: CornerBaseLayout
   module: CabinetModuleNode
+  previousModule?: CabinetModuleNode
   run: CabinetNode
   sceneApi: SceneApi
 }) {
   const link = cornerSourceLink(module.metadata)
   if (!link) return
+  if (previousModule) {
+    const previousEdge =
+      link.side === 'left' ? moduleMinX(previousModule) : moduleMaxX(previousModule)
+    const nextEdge = link.side === 'left' ? moduleMinX(module) : moduleMaxX(module)
+    const edgeShift = nextEdge - previousEdge
+    if (Math.abs(edgeShift) > CABINET_EDGE_EPSILON) {
+      for (const runId of link.linkedRunIds) {
+        const linkedRun = sceneApi.get<CabinetNode>(runId)
+        if (linkedRun?.type !== 'cabinet' || linkedRun.parentId !== run.id) continue
+        sceneApi.update(
+          linkedRun.id as AnyNodeId,
+          {
+            position: [
+              linkedRun.position[0] + edgeShift,
+              linkedRun.position[1],
+              linkedRun.position[2],
+            ],
+          } as Partial<AnyNode>,
+        )
+      }
+    }
+  }
   for (const runId of link.linkedRunIds) {
     const linkedRun = sceneApi.get<CabinetNode>(runId)
     if (linkedRun?.type !== 'cabinet') continue
@@ -2290,6 +2362,7 @@ export function planCabinetModuleSideAddition({
     anchorModule ?? (side === 'left' ? sortedModules[0] : sortedModules.at(-1)) ?? null
   const depth = depthSource?.depth ?? run.depth
   const z = depthSource ? backAnchoredModuleZ(depthSource.position[2], depthSource.depth, depth) : 0
+  const structureSource = anchorModule ?? depthSource
   const width = resolveSideAddedModuleWidth({
     centerX: x,
     centerZ: z,
@@ -2318,6 +2391,12 @@ export function planCabinetModuleSideAddition({
     countertopOverhang: run.countertopOverhang,
     showPlinth: false,
     withCountertop: false,
+    frontGap: structureSource?.frontGap ?? run.frontGap,
+    frontStyle: structureSource?.frontStyle ?? run.frontStyle,
+    frontOverlay: structureSource?.frontOverlay ?? run.frontOverlay,
+    handleStyle: structureSource?.handleStyle ?? run.handleStyle,
+    handlePosition: structureSource?.handlePosition ?? run.handlePosition,
+    ...(structureSource ? { stack: sideAdditionStack(structureSource) } : {}),
   })
 }
 
@@ -2456,7 +2535,7 @@ export function addCornerRun({
             name: 'Base Cabinet',
             width: connectedWidth,
             openSide: 'left' as const,
-            stack: doorStack(connectedShelfCount),
+            stack: cloneCabinetStack(sourceModule),
           },
         ]
       : [
@@ -2464,7 +2543,7 @@ export function addCornerRun({
             name: 'Base Cabinet',
             width: connectedWidth,
             openSide: 'right' as const,
-            stack: doorStack(connectedShelfCount),
+            stack: cloneCabinetStack(sourceModule),
           },
           {
             name: 'Corner Filler',

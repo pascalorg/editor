@@ -318,8 +318,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // refuse an invalid drop unless Alt forces it. The gate + footprint both come
   // from the kind's declarative `floorPlaced` capability, so opting a new kind
   // in is just `collides: true` — no change here.
-  // Parent-frame kinds skip the world-frame floor-collision box — their
-  // position isn't in the level frame the spatial grid indexes.
+  // Parent-frame kinds skip the world-frame floor-collision check — their
+  // position isn't in the level frame the spatial grid indexes. They may
+  // still provide a parent-frame collision check and use the same bounds box.
   const collides =
     !frameParent && nodeRegistry.get(node.type)?.capabilities?.floorPlaced?.collides === true
   // Snapshot the scene once at drag-start — bounds depend on `node` (locked
@@ -334,6 +335,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         | undefined) ?? null,
     [node],
   )
+  const parentFrameCollides = Boolean(
+    frameParent && parentFrame?.isValidPosition && dragBounds?.size,
+  )
   // Collision extents: the declared drag bounds (composite kinds — a cabinet
   // run spans its modules) win over the single-node footprint.
   const resolvedFootprint = useMemo(
@@ -344,8 +348,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     [dragBounds, node],
   )
   const boxDimensions = useMemo(
-    () => (collides ? resolvedFootprint : null),
-    [collides, resolvedFootprint],
+    () => (collides || parentFrameCollides ? resolvedFootprint : null),
+    [collides, parentFrameCollides, resolvedFootprint],
   )
   const [valid, setValid] = useState(true)
   const previewRotationY = useCallback(
@@ -522,6 +526,21 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       if (altRef.current) {
         validRef.current = true
         setValid(true)
+        return
+      }
+      if (parentFrameCollides && frameParent && parentFrame?.isValidPosition) {
+        const candidate = {
+          ...(node as Record<string, unknown>),
+          position: lastCursorRef.current,
+        } as AnyNode
+        const validPosition = parentFrame.isValidPosition({
+          node: candidate,
+          parent: frameParent,
+          position: lastCursorRef.current,
+          nodes: useScene.getState().nodes as Record<string, AnyNode>,
+        })
+        validRef.current = validPosition
+        setValid(validPosition)
         return
       }
       const levelId = useViewer.getState().selection.levelId ?? node.parentId

@@ -53,10 +53,12 @@ function mergeSceneUpdate(
 function collectCabinetModuleMoveCommitUpdates({
   lastLocal,
   moduleId,
+  previousModule,
   runId,
 }: {
   lastLocal: [number, number, number]
   moduleId: AnyNodeId
+  previousModule: CabinetModuleNodeType
   runId: AnyNodeId
 }): SceneUpdate[] | null {
   const baseNodes = useScene.getState().nodes as Record<AnyNodeId, AnyNode>
@@ -112,6 +114,7 @@ function collectCabinetModuleMoveCommitUpdates({
   if (liveModule?.type === 'cabinet-module') {
     syncCornerRunsFromSourceModule({
       module: liveModule,
+      previousModule,
       run: sceneApi.get<CabinetNodeType>(runId) ?? liveRun,
       sceneApi,
     })
@@ -144,10 +147,13 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
   ) as CabinetNodeType | null
   const originalLocal = [...node.position] as [number, number, number]
   let lastLocal: [number, number, number] = originalLocal
+  let lastPositionValid = true
+  let forcePlace = false
 
   const session: FloorplanMoveTargetSession = {
     affectedIds: run ? [moduleId, run.id as AnyNodeId] : [moduleId],
-    apply({ planPoint }) {
+    apply({ planPoint, modifiers }) {
+      forcePlace = modifiers.altKey
       if ((isGridSnapActive() || isMagneticSnapActive()) && run?.parentId) {
         const rawLocal = cabinetModuleParentFrame.planToLocal(
           run,
@@ -166,6 +172,14 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
         })
         if (wallLocal) {
           lastLocal = wallLocal
+          lastPositionValid = cabinetModuleParentFrame.isValidPosition
+            ? cabinetModuleParentFrame.isValidPosition({
+                node: { ...node, position: wallLocal },
+                parent: run,
+                position: wallLocal,
+                nodes: useScene.getState().nodes as Record<string, AnyNode>,
+              })
+            : true
           useAlignmentGuides.getState().clear()
           useLiveNodeOverrides.getState().set(moduleId, { position: wallLocal })
           useScene.getState().markDirty(run.id as AnyNodeId)
@@ -185,6 +199,7 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
       // same as the generic overlay would have done.
       if (!run) {
         lastLocal = [planX, originalLocal[1], planZ]
+        lastPositionValid = true
         useLiveNodeOverrides.getState().set(moduleId, { position: lastLocal })
         return
       }
@@ -218,13 +233,22 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
         }
       }
       lastLocal = local
+      lastPositionValid = cabinetModuleParentFrame.isValidPosition
+        ? cabinetModuleParentFrame.isValidPosition({
+            node: { ...node, position: local },
+            parent: run,
+            position: local,
+            nodes: useScene.getState().nodes as Record<string, AnyNode>,
+          })
+        : true
       useLiveNodeOverrides.getState().set(moduleId, { position: local })
       useScene.getState().markDirty(run.id as AnyNodeId)
     },
     canCommit() {
       const live = useScene.getState().nodes[moduleId]
       if (live?.type !== 'cabinet-module') return false
-      return lastLocal[0] !== originalLocal[0] || lastLocal[2] !== originalLocal[2]
+      const changed = lastLocal[0] !== originalLocal[0] || lastLocal[2] !== originalLocal[2]
+      return changed && (lastPositionValid || forcePlace)
     },
     commit() {
       const scene = useScene.getState()
@@ -235,7 +259,12 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
         return
       }
       const runId = run.id as AnyNodeId
-      const updates = collectCabinetModuleMoveCommitUpdates({ lastLocal, moduleId, runId })
+      const updates = collectCabinetModuleMoveCommitUpdates({
+        lastLocal,
+        moduleId,
+        previousModule: node,
+        runId,
+      })
       if (updates) {
         scene.updateNodes(updates)
         return
@@ -252,6 +281,7 @@ export const cabinetModuleFloorplanMoveTarget: FloorplanMoveTarget<CabinetModule
       if (liveModule?.type === 'cabinet-module') {
         syncCornerRunsFromSourceModule({
           module: liveModule,
+          previousModule: node,
           run: sceneApi.get(runId) ?? liveRun,
           sceneApi,
         })
