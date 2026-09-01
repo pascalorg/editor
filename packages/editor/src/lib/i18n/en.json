@@ -181,6 +181,8 @@
   "contextualHelp.select.ungroupSelection": "Ungroup session selection",
   "contextualHelp.single.movableDrag": "Drag selected movable object",
   "contextualHelp.single.rotatableDrag": "Drag left or right to rotate selected object",
+  "dialog.deleteElements.title": "Delete {count} elements?",
+  "dialog.deleteElements.description": "This removes every selected element. You can undo the deletion while it remains in the editor history.",
   "editor.cameraPan": "Pan",
   "editor.cameraRotate": "Rotate",
   "editor.cameraZoom": "Zoom",

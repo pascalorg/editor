@@ -181,6 +181,8 @@
   "contextualHelp.select.ungroupSelection": "取消编组本次会话的选中",
   "contextualHelp.single.movableDrag": "拖动选中的可移动对象",
   "contextualHelp.single.rotatableDrag": "向左或向右拖动以旋转选中对象",
+  "dialog.deleteElements.title": "删除 {count} 个元素？",
+  "dialog.deleteElements.description": "这将删除所有选中的元素。只要删除操作仍在编辑器历史记录中，你就可以撤销。",
   "editor.cameraPan": "平移",
   "editor.cameraRotate": "旋转",
   "editor.cameraZoom": "缩放",
