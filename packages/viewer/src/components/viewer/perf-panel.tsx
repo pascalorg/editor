@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { usePerfActionReceipts } from '../../lib/perf-actions'
 import { usePerfStats } from '../../lib/perf-panel-store'
 
 // Rendered OUTSIDE <Canvas> (drei <Html> wrappers carry a camera-driven
@@ -38,6 +39,21 @@ function mb(bytes: number): string {
 
 const label: React.CSSProperties = { color: '#8b90a0' }
 const value: React.CSSProperties = { textAlign: 'right', color: '#e7e9f0' }
+const grid: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'auto 1fr',
+  columnGap: 12,
+}
+const section: React.CSSProperties = {
+  marginTop: 6,
+  paddingTop: 6,
+  borderTop: '1px solid rgba(255,255,255,0.07)',
+}
+const clip: React.CSSProperties = {
+  overflow: 'hidden',
+  textOverflow: 'ellipsis',
+  whiteSpace: 'nowrap',
+}
 
 const Row = ({ name, children }: { name: string; children: React.ReactNode }) => (
   <>
@@ -45,6 +61,49 @@ const Row = ({ name, children }: { name: string; children: React.ReactNode }) =>
     <span style={value}>{children}</span>
   </>
 )
+
+const ACTION_TRACK_LINES = 4
+const OLDER_ACTION_LINES = 2
+
+/**
+ * Cost of the last edit gesture, from the action ledger — see lib/perf-actions.ts
+ * for what counts as settled. Amber total = the action never settled (the user
+ * started another one, or it blew the settle budget).
+ */
+const LastAction = () => {
+  const [latest, ...older] = usePerfActionReceipts()
+  if (!latest) return null
+  return (
+    <div style={section}>
+      <div style={{ ...label, opacity: 0.7 }}>last action</div>
+      <div style={grid}>
+        <span style={{ ...value, textAlign: 'left', ...clip }}>
+          {latest.detail ? `${latest.name} ${latest.detail}` : latest.name}
+        </span>
+        <span style={{ ...value, color: latest.outcome === 'settled' ? '#e7e9f0' : '#fbbf24' }}>
+          {latest.outcome === 'settled'
+            ? `${latest.totalMs.toFixed(0)}ms`
+            : `${latest.totalMs.toFixed(0)}ms ${latest.outcome}`}
+        </span>
+      </div>
+      <div style={{ ...label, ...clip }}>
+        {`drag ${latest.dragMs.toFixed(0)} / settle ${latest.settleMs.toFixed(0)} (${latest.settleFrames} frames)`}
+      </div>
+      {latest.tracks.slice(0, ACTION_TRACK_LINES).map((track) => (
+        <div key={track.name} style={grid}>
+          <span style={label}>{track.name}</span>
+          <span style={value}>{`${track.totalMs.toFixed(1)}ms (${track.count}×)`}</span>
+        </div>
+      ))}
+      {older.slice(0, OLDER_ACTION_LINES).map((receipt) => (
+        <div key={receipt.endedAt} style={{ ...grid, opacity: 0.55 }}>
+          <span style={{ ...label, ...clip }}>{receipt.name}</span>
+          <span style={value}>{`${receipt.totalMs.toFixed(0)}ms`}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 export const PerfPanel = () => {
   const stats = usePerfStats()
@@ -189,7 +248,7 @@ export const PerfPanel = () => {
       </div>
       {stats ? (
         <div style={{ padding: '8px 10px' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 12 }}>
+          <div style={grid}>
             <Row name="frame">
               {stats.frameMs > 0
                 ? `${stats.frameMs.toFixed(1)}ms cpu (max ${stats.frameMaxMs.toFixed(1)})`
@@ -224,19 +283,11 @@ export const PerfPanel = () => {
               {`${stats.meshes} mesh  ${stats.lines} line  ${stats.lights} light`}
             </Row>
           </div>
+          <LastAction />
           {stats.tracks.length > 0 && (
-            <div
-              style={{
-                marginTop: 6,
-                paddingTop: 6,
-                borderTop: '1px solid rgba(255,255,255,0.07)',
-              }}
-            >
+            <div style={section}>
               {stats.tracks.map((t) => (
-                <div
-                  key={t.name}
-                  style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 12 }}
-                >
+                <div key={t.name} style={grid}>
                   <span style={label}>{t.name}</span>
                   <span style={value}>
                     {`${t.totalMs.toFixed(1)}ms (${t.count}×, max ${t.maxMs.toFixed(1)})`}

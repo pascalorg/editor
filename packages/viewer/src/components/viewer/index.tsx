@@ -28,6 +28,7 @@ import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
 import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
+import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import FrameLimiter from './frame-limiter'
@@ -626,6 +627,11 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />
           {selectionManager === 'default' && <SelectionManager />}
           {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
+          {/* Feeds the action-cost ledger the frame's settle state (dirty
+            queue + deferred wall rebuilds) at a priority after every other
+            system, so a receipt closes when the user can actually see the
+            edit. */}
+          {(perf || PERF_OVERLAY_ENABLED) && <PerfActionSettleSystem />}
           {children}
         </ErrorBoundary>
       </Canvas>

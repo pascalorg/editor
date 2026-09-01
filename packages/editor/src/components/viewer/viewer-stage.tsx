@@ -1,7 +1,7 @@
 'use client'
 
 import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -134,6 +134,9 @@ export function ViewerStage({
   const chooseLevel = useCallback(
     (nextLevelId: string, notify = true) => {
       setInternalLevelId(nextLevelId)
+      if (notify && nextLevelId !== useViewer.getState().selection.levelId) {
+        markPerfAction('level-switch', nextLevelId)
+      }
       selectViewerLevel(scene?.nodes ?? useScene.getState().nodes, nextLevelId)
       if (notify) onLevelChange?.(nextLevelId)
     },

@@ -1,4 +1,5 @@
 import { useLiveNodeOverrides, useLiveTransforms, useScene } from '@pascal-app/core'
+import { markPerfAction } from '@pascal-app/viewer'
 
 export type HistoryCommandState = {
   canRedo: boolean
@@ -72,6 +73,7 @@ function refreshSceneAfterHistoryJump() {
 }
 
 export function runUndo(): HistoryCommandResult {
+  markPerfAction('undo')
   if (historyCommandDelegate) return historyCommandDelegate.undo()
   if (useScene.temporal.getState().pastStates.length === 0) return { kind: 'empty' }
   useScene.temporal.getState().undo()
@@ -80,6 +82,7 @@ export function runUndo(): HistoryCommandResult {
 }
 
 export function runRedo(): HistoryCommandResult {
+  markPerfAction('redo')
   if (historyCommandDelegate) return historyCommandDelegate.redo()
   if (useScene.temporal.getState().futureStates.length === 0) return { kind: 'empty' }
   useScene.temporal.getState().redo()

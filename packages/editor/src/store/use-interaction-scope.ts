@@ -1,6 +1,7 @@
 'use client'
 
 import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
+import { beginPerfAction, commitPerfAction, hasActivePerfAction } from '@pascal-app/viewer'
 import { useRef } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
@@ -45,9 +46,41 @@ export type InteractionScopeState = {
   endIf: (match: (scope: ActiveInteractionScope) => boolean) => void
 }
 
+// Perf action ledger (`?perf`): every 3D gesture funnels through this store, so
+// begin/end are the one generic bracket for action-cost receipts. A more
+// specific call site (use-drag-action, the 2D floorplan layer) may have begun
+// its own action first — yield to it. `end` is commit/cancel-neutral by
+// contract; explicit cancels finalize earlier via markToolCancelConsumed, so
+// the commit below no-ops for them.
+function beginScopePerfAction(scope: ActiveInteractionScope): void {
+  if (hasActivePerfAction()) return
+  switch (scope.kind) {
+    case 'moving':
+      beginPerfAction('drag:move', scope.nodeType)
+      break
+    case 'placing':
+      beginPerfAction(`place:${scope.node?.type ?? 'node'}`, scope.node?.id ?? '')
+      break
+    case 'reshaping': {
+      const nodeType = useScene.getState().nodes[scope.nodeId as AnyNodeId]?.type
+      beginPerfAction(`drag:${nodeType ? `${nodeType}-` : ''}${scope.reshape}`, scope.nodeId)
+      break
+    }
+    case 'handle-drag':
+      beginPerfAction(`drag:${scope.handle}`, scope.nodeId)
+      break
+    default:
+      // drafting / mesh-editing are long-lived modes, not gestures
+      break
+  }
+}
+
 const useInteractionScope = create<InteractionScopeState>((set, get) => ({
   scope: IDLE_SCOPE,
-  begin: (scope) => set({ scope }),
+  begin: (scope) => {
+    beginScopePerfAction(scope)
+    set({ scope })
+  },
   update: (patch) =>
     set((state) => {
       if (state.scope.kind === 'idle') return state
@@ -56,12 +89,16 @@ const useInteractionScope = create<InteractionScopeState>((set, get) => ({
     }),
   end: () => {
     if (get().scope.kind === 'idle') return
+    commitPerfAction()
     set({ scope: IDLE_SCOPE })
   },
   endIf: (match) => {
     const scope = get().scope
     if (scope.kind === 'idle') return
-    if (match(scope)) set({ scope: IDLE_SCOPE })
+    if (match(scope)) {
+      commitPerfAction()
+      set({ scope: IDLE_SCOPE })
+    }
   },
 }))
 

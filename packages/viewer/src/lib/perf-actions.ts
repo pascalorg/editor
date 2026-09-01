@@ -47,6 +47,11 @@ type ActiveAction = {
 }
 
 const SETTLE_TIMEOUT_MS = 5000
+// A gesture that begins and never commits (a hover preview, a drag whose
+// pointerup never reached the caller) is never settle-checked, so without an
+// absolute cap it would hold its sample subscription — and keep growing its
+// buckets — for the rest of the session.
+const UNCOMMITTED_TIMEOUT_MS = 60_000
 const MAX_RECEIPTS = 5
 
 let active: ActiveAction | null = null
@@ -161,14 +166,28 @@ export function markPerfAction(name: string, detail = ''): void {
 }
 
 /**
+ * Whether an action is currently being attributed. Lets a generic call site
+ * (the interaction scope) yield to a more specific one that began first.
+ */
+export function hasActivePerfAction(): boolean {
+  return active !== null
+}
+
+/**
  * Called once per frame by the viewer settle system with the current dirty
- * count and the wall system's deferred-neighbour backlog.
+ * count and the wall system's deferred-neighbour backlog. Also the ledger's
+ * only heartbeat, so it is where a stuck action gets released.
  */
 export function notifyPerfActionFrame(dirtyCount: number, pendingRebuilds: number): void {
   const action = active
-  if (!action || action.committedAt === null) return
+  if (!action) return
+  const now = performance.now()
+  if (action.committedAt === null) {
+    if (now - action.startedAt > UNCOMMITTED_TIMEOUT_MS) finalize('interrupted')
+    return
+  }
   action.settleFrames += 1
-  if (performance.now() - action.committedAt > SETTLE_TIMEOUT_MS) {
+  if (now - action.committedAt > SETTLE_TIMEOUT_MS) {
     finalize('timeout')
     return
   }
@@ -177,13 +196,20 @@ export function notifyPerfActionFrame(dirtyCount: number, pendingRebuilds: numbe
   }
 }
 
+// Module-level so the panel's twice-a-second re-render doesn't tear the
+// subscription down and rebuild it; `receipts` is replaced, never mutated, so
+// the snapshot is stable between finalizes.
+function subscribeReceipts(listener: () => void): () => void {
+  listeners.add(listener)
+  return () => {
+    listeners.delete(listener)
+  }
+}
+
+function getReceipts(): PerfActionReceipt[] {
+  return receipts
+}
+
 export function usePerfActionReceipts(): PerfActionReceipt[] {
-  return useSyncExternalStore(
-    (listener) => {
-      listeners.add(listener)
-      return () => listeners.delete(listener)
-    },
-    () => receipts,
-    () => receipts,
-  )
+  return useSyncExternalStore(subscribeReceipts, getReceipts, getReceipts)
 }

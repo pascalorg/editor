@@ -6,7 +6,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { beginPerfAction, commitPerfAction, useViewer } from '@pascal-app/viewer'
 import { useCallback, useMemo, useRef } from 'react'
 import type { Vector3 } from 'three'
 import usePlacementPreview from '../../../store/use-placement-preview'
@@ -220,6 +220,7 @@ export function useDraftNode(): DraftNodeHandle {
       const parentId = (newParentId ?? useViewer.getState().selection.levelId) as AnyNodeId
       if (!parentId) return null
 
+      beginPerfAction('place:item', draft.id)
       // Delete draft while paused (invisible to undo)
       useScene.getState().deleteNode(draft.id)
       draftRef.current = null
@@ -268,6 +269,7 @@ export function useDraftNode(): DraftNodeHandle {
 
       adoptedRef.current = false
       originalStateRef.current = null
+      commitPerfAction()
       return committedNode.id
     },
     [],

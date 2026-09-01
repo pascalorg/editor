@@ -1,5 +1,5 @@
 import { type LevelNode, useScene } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import { Layers } from 'lucide-react'
 import { memo, useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
@@ -30,7 +30,10 @@ export const LevelTreeNode = memo(function LevelTreeNode({
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
   const setSelection = useViewer((state) => state.setSelection)
 
-  const handleClick = useCallback(() => setSelection({ levelId: nodeId }), [nodeId, setSelection])
+  const handleClick = useCallback(() => {
+    if (!isSelected) markPerfAction('level-switch', nodeId)
+    setSelection({ levelId: nodeId })
+  }, [isSelected, nodeId, setSelection])
   const handleDoubleClick = useCallback(() => focusTreeNode(nodeId), [nodeId])
   const handleToggle = useCallback(() => setExpanded((prev) => !prev), [])
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
