@@ -163,18 +163,26 @@ export function ParametricInspector({
       title={title}
       width={320}
     >
-      {parametrics.groups.map((group, gi) => (
-        <PanelSection key={`group-${gi}`} title={group.label}>
-          {group.fields.map((field, fi) => (
-            <FieldRenderer
-              key={`field-${gi}-${fi}-${String(field.key)}`}
-              field={field as ParamField<AnyNode>}
-              nodeId={selectedId}
-              onUpdate={handleUpdate}
-            />
-          ))}
-        </PanelSection>
-      ))}
+      {parametrics.groups.map((group, gi) => {
+        // Resolve group title via catalog when the descriptor carries a key.
+        // `t(key)` returns the key itself when no catalog entry exists, so
+        // comparing back to the key detects a miss and keeps the hardcoded
+        // English label as the fallback.
+        const resolved = group.labelKey ? t(group.labelKey) : ''
+        const groupTitle = resolved && resolved !== group.labelKey ? resolved : group.label
+        return (
+          <PanelSection key={`group-${gi}`} title={groupTitle}>
+            {group.fields.map((field, fi) => (
+              <FieldRenderer
+                key={`field-${gi}-${fi}-${String(field.key)}`}
+                field={field as ParamField<AnyNode>}
+                nodeId={selectedId}
+                onUpdate={handleUpdate}
+              />
+            ))}
+          </PanelSection>
+        )
+      })}
       {TrailingSection && (
         <Suspense fallback={null}>
           <TrailingSection />
