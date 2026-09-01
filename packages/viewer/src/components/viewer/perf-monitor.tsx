@@ -1,8 +1,8 @@
 import { useScene } from '@pascal-app/core'
-import { Html } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { initPerfObservers } from '../../lib/perf-observers'
+import { publishPerfStats } from '../../lib/perf-panel-store'
 import { clearPerfMeasures, drainPerfCounters, type PerfCounterBucket } from '../../lib/perf-tracks'
 
 const SAMPLE_INTERVAL = 0.5 // seconds between display updates
@@ -40,36 +40,12 @@ function averageOf(bucket: PerfCounterBucket | undefined): number | null {
   return bucket.totalMs / bucket.count
 }
 
-function formatMb(bytes: number): string {
-  return `${Math.round(bytes / (1024 * 1024))}MB`
-}
-
+/**
+ * Headless collector. Runs inside <Canvas> (it needs useFrame + gl.info) and
+ * publishes each window's stats to perf-panel-store; the visible panel is
+ * <PerfPanel>, mounted outside the canvas — see perf-panel.tsx for why.
+ */
 export const PerfMonitor = () => {
-  const [stats, setStats] = useState({
-    fps: 0,
-    frameMs: 0,
-    frameMaxMs: 0,
-    encodeMs: 0,
-    encodeMaxMs: 0,
-    gpuMs: 0,
-    gpuMaxMs: 0,
-    gpuTracked: false,
-    queueMs: 0,
-    queueMaxMs: 0,
-    drawCalls: 0,
-    triangles: 0,
-    dirty: 0,
-    dirtyDetail: '',
-    geometries: 0,
-    textures: 0,
-    gpuBytes: 0,
-    heapBytes: 0,
-    meshes: 0,
-    lines: 0,
-    sprites: 0,
-    lights: 0,
-    tracks: [] as TrackLine[],
-  })
   const frameCount = useRef(0)
   const elapsed = useRef(0)
   const tickCount = useRef(0)
@@ -172,7 +148,7 @@ export const PerfMonitor = () => {
       .sort((a, b) => b.totalMs - a.totalMs)
       .slice(0, MAX_TRACK_LINES)
 
-    setStats({
+    publishPerfStats({
       fps,
       frameMs: lastFrame.current.ms,
       frameMaxMs: lastFrame.current.max,
@@ -207,53 +183,5 @@ export const PerfMonitor = () => {
     elapsed.current = now
   })
 
-  const memLine = [
-    `${stats.geometries} geo`,
-    `${stats.textures} tex`,
-    ...(stats.gpuBytes > 0 ? [`${formatMb(stats.gpuBytes)} gpu`] : []),
-    ...(stats.heapBytes > 0 ? [`${formatMb(stats.heapBytes)} js`] : []),
-  ].join('  ')
-
-  const trackLines = stats.tracks
-    .map(
-      (t) =>
-        ` ${t.name.padEnd(14)}${t.totalMs.toFixed(1)}ms (${t.count}×, max ${t.maxMs.toFixed(1)})`,
-    )
-    .join('\n')
-
-  return (
-    <Html
-      position={[0, 0, 0]}
-      style={{ position: 'fixed', top: 8, left: 8, pointerEvents: 'none' }}
-      zIndexRange={[100, 100]}
-    >
-      <div
-        style={{
-          fontFamily: 'monospace',
-          fontSize: 11,
-          lineHeight: 1.5,
-          // FrameLimiter caps the loop at 50fps, so 48+ is "at the cap" —
-          // grading against 60 would paint a perfectly healthy scene amber.
-          color: stats.fps < 30 ? '#f87171' : stats.fps < 48 ? '#fbbf24' : '#4ade80',
-          background: 'rgba(0,0,0,0.7)',
-          borderRadius: 6,
-          padding: '6px 10px',
-          whiteSpace: 'pre',
-        }}
-      >
-        {`FPS    ${stats.fps} (limited)
-FRAME  ${stats.frameMs > 0 ? `${stats.frameMs.toFixed(1)}ms cpu (max ${stats.frameMaxMs.toFixed(1)})` : '—'}
-ENCODE ${stats.encodeMs > 0 ? `${stats.encodeMs.toFixed(1)}ms (max ${stats.encodeMaxMs.toFixed(1)})` : '—'}
-GPU    ${stats.gpuTracked ? `${stats.gpuMs.toFixed(1)}ms (max ${stats.gpuMaxMs.toFixed(1)})` : '— (no timestamp-query)'}
-QUEUE  ${stats.queueMs > 0 ? `${stats.queueMs.toFixed(1)}ms (max ${stats.queueMaxMs.toFixed(1)})` : '—'}
-DRAW   ${stats.drawCalls}
-TRI    ${(stats.triangles / 1000).toFixed(1)}k
-MEM    ${memLine}
-DIRTY  ${stats.dirty}${stats.dirtyDetail ? ` (${stats.dirtyDetail})` : ''}
-VIS    ${stats.meshes} mesh  ${stats.lines} line  ${stats.sprites} sprite  ${stats.lights} light (in scene, not drawn)${
-          trackLines ? `\nTRACKS\n${trackLines}` : ''
-        }`}
-      </div>
-    </Html>
-  )
+  return null
 }
