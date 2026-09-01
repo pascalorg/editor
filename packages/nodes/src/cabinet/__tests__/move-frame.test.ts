@@ -104,9 +104,9 @@ describe('cabinetModuleParentFrame.isValidPosition', () => {
     const sibling = module('cabinet-module_sibling', [0, 0.1, 0])
     const { run, nodes } = runFixture([moving, sibling])
 
-    expect(
-      isValidPosition({ node: moving, parent: run, position: [0.4, 0.1, 0], nodes }),
-    ).toBe(false)
+    expect(isValidPosition({ node: moving, parent: run, position: [0.4, 0.1, 0], nodes })).toBe(
+      false,
+    )
   })
 
   test('accepts a dragged module once its footprint clears siblings', () => {
@@ -114,9 +114,9 @@ describe('cabinetModuleParentFrame.isValidPosition', () => {
     const sibling = module('cabinet-module_sibling', [0, 0.1, 0])
     const { run, nodes } = runFixture([moving, sibling])
 
-    expect(
-      isValidPosition({ node: moving, parent: run, position: [0.65, 0.1, 0], nodes }),
-    ).toBe(true)
+    expect(isValidPosition({ node: moving, parent: run, position: [0.65, 0.1, 0], nodes })).toBe(
+      true,
+    )
   })
 
   test('does not reject aligned widths when depth bands are separated', () => {
@@ -124,9 +124,9 @@ describe('cabinetModuleParentFrame.isValidPosition', () => {
     const sibling = module('cabinet-module_sibling', [0, 0.1, 0])
     const { run, nodes } = runFixture([moving, sibling])
 
-    expect(
-      isValidPosition({ node: moving, parent: run, position: [0.4, 0.1, 0.8], nodes }),
-    ).toBe(true)
+    expect(isValidPosition({ node: moving, parent: run, position: [0.4, 0.1, 0.8], nodes })).toBe(
+      true,
+    )
   })
 })
 

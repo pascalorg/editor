@@ -6,12 +6,7 @@ import type {
   MovableParentFrame,
   ParentFrameSnapMatch,
 } from '@pascal-app/core'
-import {
-  moduleMaxX,
-  moduleMinX,
-  planToRunLocal,
-  runLocalToPlan,
-} from './run-layout'
+import { moduleMaxX, moduleMinX, planToRunLocal, runLocalToPlan } from './run-layout'
 import {
   bumpCabinetRunLayoutRevision,
   cabinetModulesForRun,

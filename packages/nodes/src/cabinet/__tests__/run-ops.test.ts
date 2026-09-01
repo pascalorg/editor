@@ -630,9 +630,12 @@ describe('addCornerRun', () => {
       depth: 0.58,
     })
     sceneApi.upsert(extra as AnyNode, linkedBase.id as AnyNodeId)
-    sceneApi.update(linkedBase.id as AnyNodeId, {
-      children: [...linkedBase.children, extra.id],
-    } as Partial<AnyNode>)
+    sceneApi.update(
+      linkedBase.id as AnyNodeId,
+      {
+        children: [...linkedBase.children, extra.id],
+      } as Partial<AnyNode>,
+    )
 
     const previous = sceneApi.get<CabinetModuleNode>(module.id)!
     sceneApi.update(module.id as AnyNodeId, { width: 0.45 } as Partial<AnyNode>)

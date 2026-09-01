@@ -1166,6 +1166,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     canonicalPositionFromPlan,
     parentFrame,
     frameParent,
+    parentFrameCollides,
     cursorAttached,
     portSnapConfig,
     groupMoveSnapConfig,
