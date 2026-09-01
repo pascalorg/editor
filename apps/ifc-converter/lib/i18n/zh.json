@@ -1,0 +1,8 @@
+{
+  "ifcConverter.metaTitle": "IFC → Pascal 转换器",
+  "ifcConverter.metaDescription": "把 IFC 建筑模型转换成 Pascal 场景图 JSON。",
+  "ifcConverter.editor.grid": "网格",
+  "ifcConverter.editor.fitScene": "适配场景",
+  "ifcConverter.editor.copyToClipboard": "复制到剪贴板",
+  "ifcConverter.editor.showJsonPreview": "显示 JSON 预览"
+}

@@ -1,0 +1,8 @@
+{
+  "ifcConverter.metaTitle": "IFC → Pascal Converter",
+  "ifcConverter.metaDescription": "Convert IFC building models into Pascal scene-graph JSON.",
+  "ifcConverter.editor.grid": "Grid",
+  "ifcConverter.editor.fitScene": "Fit scene",
+  "ifcConverter.editor.copyToClipboard": "Copy to clipboard",
+  "ifcConverter.editor.showJsonPreview": "Show JSON preview"
+}

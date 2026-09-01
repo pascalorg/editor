@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { ClientBootstrap } from './client-bootstrap'
+import { I18nProvider } from '@/lib/i18n'
 import './globals.css'
 
 export const metadata = {
@@ -11,7 +12,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
-        <ClientBootstrap>{children}</ClientBootstrap>
+        <I18nProvider>
+          <ClientBootstrap>{children}</ClientBootstrap>
+        </I18nProvider>
       </body>
     </html>
   )
