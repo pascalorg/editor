@@ -25,6 +25,7 @@ import { canDirectMoveNode, canDirectRotateNode } from '../../../lib/direct-mani
 import type { ReshapeKind } from '../../../lib/interaction/scope'
 import { isFreshPlacementMetadata } from '../../../lib/placement-metadata'
 import { snapContextOf } from '../../../lib/snapping-mode'
+import { useTranslations, type Translator } from '../../../lib/i18n'
 import useEditor, { getActiveContinuationContext } from '../../../store/use-editor'
 import useInteractionScope, {
   useActiveHandleDrag,
@@ -37,20 +38,20 @@ import { RegisteredToolHelper } from './registered-tool-helper'
 
 // Reshaping a selected node's geometry (endpoint / curve / polygon corner). The
 // snapping chip is the main control; these just name the gesture + Esc.
-function reshapingHints(reshape: ReshapeKind): ContextualShortcutHint[] {
-  const action =
+function reshapingHints(reshape: ReshapeKind, t: Translator): ContextualShortcutHint[] {
+  const actionKey =
     reshape === 'curve'
-      ? 'Curve'
+      ? 'contextualHelp.reshape.curve'
       : reshape === 'control-point'
-        ? 'Move control point'
+        ? 'contextualHelp.reshape.controlPoint'
         : reshape === 'tangent'
-          ? 'Move tangent'
+          ? 'contextualHelp.reshape.tangent'
       : reshape === 'endpoint'
-        ? 'Move endpoint'
-        : 'Move corner'
+        ? 'contextualHelp.reshape.endpoint'
+        : 'contextualHelp.reshape.corner'
   return [
-    { keys: ['Drag'], label: action },
-    { keys: ['Esc'], label: 'Cancel' },
+    { keys: ['Drag'], label: t(actionKey) },
+    { keys: ['Esc'], label: t('common.cancel') },
   ]
 }
 
@@ -59,27 +60,31 @@ function reshapingHints(reshape: ReshapeKind): ContextualShortcutHint[] {
 // brush ring now carries the verb in colour (`brushRingColor`): the ring says
 // *which* verb only to someone who already knows the mapping, and the HUD is what
 // teaches it.
-function terrainSculptHints(verb: TerrainVerb, sampling: boolean): ContextualShortcutHint[] {
+function terrainSculptHints(
+  verb: TerrainVerb,
+  sampling: boolean,
+  t: Translator,
+): ContextualShortcutHint[] {
   if (sampling) {
     return [
-      { keys: ['Click'], label: 'Pick target height' },
-      { keys: ['Esc'], label: 'Cancel picking' },
+      { keys: ['Click'], label: t('contextualHelp.sculpt.pickTarget') },
+      { keys: ['Esc'], label: t('contextualHelp.sculpt.cancelPick') },
     ]
   }
-  const action =
+  const actionKey =
     verb === 'raise'
-      ? 'Raise ground'
+      ? 'contextualHelp.sculpt.raise'
       : verb === 'lower'
-        ? 'Lower ground'
+        ? 'contextualHelp.sculpt.lower'
         : verb === 'flatten'
-          ? 'Level ground'
-          : 'Smooth ground'
+          ? 'contextualHelp.sculpt.flatten'
+          : 'contextualHelp.sculpt.smooth'
   return [
-    { keys: ['Drag'], label: action },
+    { keys: ['Drag'], label: t(actionKey) },
     // Nested, so the two render as alternatives ("[ / ]") rather than a chord —
     // a flat `['[', ']']` joins with "+" and would read as "press both".
-    { keys: [['[', ']']], label: 'Brush size' },
-    { keys: ['Esc'], label: 'Cancel stroke' },
+    { keys: [['[', ']']], label: t('contextualHelp.sculpt.brushSize') },
+    { keys: ['Esc'], label: t('contextualHelp.sculpt.cancelStroke') },
   ]
 }
 
@@ -126,6 +131,7 @@ function useActiveModifierKeys(): ActiveModifierKeys {
 }
 
 export function HelperManager() {
+  const t = useTranslations()
   const mode = useEditor((s) => s.mode)
   const tool = useEditor((s) => s.tool)
   const terrainVerb = useEditor((s) => s.terrainVerb)
@@ -256,7 +262,7 @@ export function HelperManager() {
   // before the select branch so the idle "drag selected / add objects" hints
   // never leak over an in-progress reshape — and it gets its own snapping chip.
   if (scope.kind === 'reshaping') {
-    return <ContextualHelperPanel hints={reshapingHints(scope.reshape)} snapContext={snapContext} />
+    return <ContextualHelperPanel hints={reshapingHints(scope.reshape, t)} snapContext={snapContext} />
   }
 
   if (movingNode) {
@@ -292,7 +298,7 @@ export function HelperManager() {
   // mode-specific — bracket resize, and an Esc that abandons the stroke rather
   // than exiting the mode.
   if (mode === 'terrain-sculpt') {
-    return <ContextualHelperPanel hints={terrainSculptHints(terrainVerb, terrainSampling)} />
+    return <ContextualHelperPanel hints={terrainSculptHints(terrainVerb, terrainSampling, t)} />
   }
 
   if (scope.kind === 'mesh-editing') {
@@ -309,9 +315,9 @@ export function HelperManager() {
     return (
       <ContextualHelperPanel
         hints={[
-          { keys: ['Hover'], label: 'Inspect surface dimensions' },
-          { keys: ['Click'], label: 'Pin measurement lens' },
-          { keys: ['Esc'], label: 'Exit smart measure' },
+          { keys: ['Hover'], label: t('contextualHelp.measurement.inspect') },
+          { keys: ['Click'], label: t('contextualHelp.measurement.pin') },
+          { keys: ['Esc'], label: t('contextualHelp.measurement.exit') },
         ]}
       />
     )

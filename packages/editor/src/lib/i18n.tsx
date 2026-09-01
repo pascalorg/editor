@@ -32,7 +32,7 @@ export function useLocale() {
 
 export function useTranslations() {
   const { locale } = useContext(I18nContext)
-  return useMemo(
+  return useMemo<Translator>(
     () =>
       (key: string, params?: Record<string, string | number>): string => {
         const str = messages[locale][key] ?? key
@@ -45,6 +45,11 @@ export function useTranslations() {
     [locale],
   )
 }
+
+export type Translator = (
+  key: string,
+  params?: Record<string, string | number>,
+) => string
 
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [locale, setLocale] = useState<Locale>(getDefaultLocale())
