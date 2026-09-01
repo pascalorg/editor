@@ -13,6 +13,7 @@ import {
   PanelWrapper,
   SegmentedControl,
   SliderControl,
+  useTranslations,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { AlertTriangle, Pause, Play, Plus } from 'lucide-react'
@@ -81,39 +82,39 @@ import {
 } from './widths'
 
 const HANDLE_STYLE_OPTIONS = [
-  { value: 'bar', label: 'Bar' },
-  { value: 'knob', label: 'Knob' },
-  { value: 'cutout', label: 'Cutout' },
-  { value: 'hole', label: 'Hole' },
-  { value: 'none', label: 'None' },
+  { value: 'bar', labelKey: 'nodes.cabinet.handle.bar' },
+  { value: 'knob', labelKey: 'nodes.cabinet.handle.knob' },
+  { value: 'cutout', labelKey: 'nodes.cabinet.handle.cutout' },
+  { value: 'hole', labelKey: 'nodes.cabinet.handle.hole' },
+  { value: 'none', labelKey: 'nodes.cabinet.handle.none' },
 ] as const
 
 const HANDLE_POSITION_OPTIONS = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'top', label: 'Top' },
-  { value: 'center', label: 'Center' },
+  { value: 'auto', labelKey: 'nodes.cabinet.handlePosition.auto' },
+  { value: 'top', labelKey: 'nodes.cabinet.handlePosition.top' },
+  { value: 'center', labelKey: 'nodes.cabinet.handlePosition.center' },
 ] as const
 
 const FRONT_OVERLAY_OPTIONS = [
-  { value: 'full', label: 'Overlay' },
-  { value: 'inset', label: 'Inset' },
+  { value: 'full', labelKey: 'nodes.cabinet.frontOverlay.full' },
+  { value: 'inset', labelKey: 'nodes.cabinet.frontOverlay.inset' },
 ] as const
 
 const FRONT_STYLE_OPTIONS = [
-  { value: 'slab', label: 'Slab' },
-  { value: 'shaker', label: 'Shaker' },
-  { value: 'raised-arch', label: 'Raised Arch' },
+  { value: 'slab', labelKey: 'nodes.cabinet.frontStyle.slab' },
+  { value: 'shaker', labelKey: 'nodes.cabinet.frontStyle.shaker' },
+  { value: 'raised-arch', labelKey: 'nodes.cabinet.frontStyle.raisedArch' },
 ] as const
 
 const CABINET_TIER_OPTIONS = [
-  { value: 'base', label: 'Base Cabinet' },
-  { value: 'tall', label: 'Tall Cabinet' },
+  { value: 'base', labelKey: 'nodes.cabinet.tier.base' },
+  { value: 'tall', labelKey: 'nodes.cabinet.tier.tall' },
 ] as const
 
 const TOP_FINISH_OPTIONS = [
-  { value: 'none', label: 'None' },
-  { value: 'top-cabinet', label: 'Top Cabinet' },
-  { value: 'trim', label: 'Trim / Soffit' },
+  { value: 'none', labelKey: 'nodes.cabinet.topFinish.none' },
+  { value: 'top-cabinet', labelKey: 'nodes.cabinet.topFinish.topCabinet' },
+  { value: 'trim', labelKey: 'nodes.cabinet.topFinish.trim' },
 ] as const
 
 const EMPTY_MODULES: CabinetModuleNodeType[] = []
@@ -121,10 +122,10 @@ const EMPTY_MODULE_IDS: AnyNodeId[] = []
 
 const PRESET_BUTTON_CLASS =
   'flex h-9 items-center justify-center rounded-md border border-border/40 bg-[#252527] px-3 py-2 text-center text-xs font-medium text-foreground transition-colors hover:border-border/70 hover:bg-[#303033]'
-const REFLOW_REJECTED_MESSAGE =
-  'No space in this run. No base cabinet can shrink enough to fit this item.'
+const REFLOW_REJECTED_KEY = 'nodes.cabinet.reflowRejected'
 
 export default function CabinetPanel() {
+  const t = useTranslations()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const [isAnimating, setIsAnimating] = useState(false)
@@ -180,8 +181,8 @@ export default function CabinetPanel() {
   })
 
   const showReflowRejected = useCallback(() => {
-    setReflowNotice({ message: REFLOW_REJECTED_MESSAGE })
-  }, [])
+    setReflowNotice({ message: t(REFLOW_REJECTED_KEY) })
+  }, [t])
 
   useEffect(() => {
     if (selectedId) setReflowNotice(null)
@@ -577,13 +578,13 @@ export default function CabinetPanel() {
       icon="/icons/item.webp"
       onBack={node.type === 'cabinet-module' ? backToRun : undefined}
       onClose={close}
-      title={node.name || 'Modular Cabinet'}
+      title={node.name || t('nodes.cabinet.fallbackTitle')}
       width={320}
     >
       {node.type === 'cabinet-module' &&
         parentRun?.type === 'cabinet' &&
         cabinetModuleSupportsPresets(node) && (
-          <PanelSection title="Presets">
+          <PanelSection title={t('nodes.cabinet.presets')}>
             <div className="grid grid-cols-2 gap-2 px-1 pb-2">
               {CABINET_PRESETS.map((preset) => (
                 <button
@@ -599,11 +600,11 @@ export default function CabinetPanel() {
           </PanelSection>
         )}
 
-      <PanelSection title="Dimensions">
+      <PanelSection title={t('nodes.cabinet.dimensions')}>
         {node.type === 'cabinet-module' && !isHoodOnlyNode && (
           <div className="space-y-1 px-1 pb-2">
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Standard width
+              {t('nodes.cabinet.standardWidth')}
             </div>
             <SegmentedControl
               disabled={usesFixedApplianceWidth}
@@ -622,7 +623,7 @@ export default function CabinetPanel() {
           </div>
         )}
         <SliderControl
-          label="Width"
+          label={t('common.width')}
           max={3}
           min={0.3}
           onChange={(value) => updateNode({ width: value })}
@@ -634,7 +635,7 @@ export default function CabinetPanel() {
         {!isHoodOnlyNode && (
           <>
             <SliderControl
-              label="Depth"
+              label={t('common.depth')}
               max={1.2}
               min={0.3}
               onChange={(value) => updateNode({ depth: value })}
@@ -644,7 +645,7 @@ export default function CabinetPanel() {
               value={node.depth}
             />
             <SliderControl
-              label="Carcass height"
+              label={t('nodes.cabinet.carcassHeight')}
               max={
                 node.type === 'cabinet-module' && resolveCabinetType(node, parentRun) === 'tall'
                   ? 2.4
@@ -666,7 +667,7 @@ export default function CabinetPanel() {
       </PanelSection>
 
       {node.type === 'cabinet-module' && parentRun?.type === 'cabinet' && !isHoodOnlyNode && (
-        <PanelSection title="Cabinet Type">
+        <PanelSection title={t('nodes.cabinet.cabinetType')}>
           <div className="space-y-2 px-1 pb-2">
             <SegmentedControl
               onChange={(value) => {
@@ -678,17 +679,17 @@ export default function CabinetPanel() {
               }}
               options={CABINET_TIER_OPTIONS.map((option) => ({
                 value: option.value,
-                label: option.label,
+                label: t(option.labelKey),
               }))}
               value={resolveCabinetType(node, parentRun)}
             />
             {resolveCabinetType(node, parentRun) === 'base' &&
               (hasWallCabinet ? (
-                <ActionButton label="Remove wall cabinet" onClick={removeWallCabinet} />
+                <ActionButton label={t('nodes.cabinet.removeWallCabinet')} onClick={removeWallCabinet} />
               ) : (
                 <>
-                  <ActionButton label="Add wall cabinet" onClick={addWallCabinetAbove} />
-                  <ActionButton label="Add chimney" onClick={addHoodAbove} />
+                  <ActionButton label={t('nodes.cabinet.addWallCabinet')} onClick={addWallCabinetAbove} />
+                  <ActionButton label={t('nodes.cabinet.addChimney')} onClick={addHoodAbove} />
                 </>
               ))}
           </div>
@@ -696,11 +697,11 @@ export default function CabinetPanel() {
       )}
 
       {canAddTopFinish && (
-        <PanelSection title="Top / Ceiling">
+        <PanelSection title={t('nodes.cabinet.topCeiling')}>
           <div className="space-y-2 px-1 pb-2">
             <div>
               <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                Finish
+                {t('nodes.cabinet.finish')}
               </div>
               <SegmentedControl
                 onChange={(value) =>
@@ -712,7 +713,7 @@ export default function CabinetPanel() {
                   })
                 }
                 options={TOP_FINISH_OPTIONS.map((option) => ({
-                  label: option.label,
+                  label: t(option.labelKey),
                   value: option.value,
                 }))}
                 value={node.topFinish ?? 'none'}
@@ -721,7 +722,7 @@ export default function CabinetPanel() {
             {node.topFinish !== 'none' && (
               <>
                 <ActionButton
-                  label="Fill to ceiling"
+                  label={t('nodes.cabinet.fillToCeiling')}
                   onClick={() =>
                     updateNode({
                       topFinishHeight: cabinetCeilingGap(
@@ -732,7 +733,7 @@ export default function CabinetPanel() {
                   }
                 />
                 <SliderControl
-                  label="Top height"
+                  label={t('nodes.cabinet.topHeight')}
                   max={1.2}
                   min={0}
                   onChange={(value) => updateNode({ topFinishHeight: value })}
@@ -742,7 +743,7 @@ export default function CabinetPanel() {
                   value={node.topFinishHeight}
                 />
                 <SliderControl
-                  label="Top depth"
+                  label={t('nodes.cabinet.topDepth')}
                   max={1.2}
                   min={0.15}
                   onChange={(value) => updateNode({ topFinishDepth: value })}
@@ -759,7 +760,7 @@ export default function CabinetPanel() {
 
       {planningReport &&
         (planningReport.errors.length > 0 || planningReport.warnings.length > 0) && (
-          <PanelSection title="Planning checks">
+          <PanelSection title={t('nodes.cabinet.planningChecks')}>
             <div className="space-y-1 px-1 pb-2 text-xs leading-5">
               {planningReport.errors.map((planningIssue) => (
                 <div
@@ -784,11 +785,11 @@ export default function CabinetPanel() {
         )}
 
       {!isHoodOnlyNode && (
-        <PanelSection title="Open Animation">
+        <PanelSection title={t('nodes.cabinet.openAnimation')}>
           <div className="flex items-center gap-2 px-1">
             <div className="min-w-0 flex-1">
               <SliderControl
-                label="Open"
+                label={t('nodes.cabinet.open')}
                 max={100}
                 min={0}
                 onChange={(value) => {
@@ -803,10 +804,10 @@ export default function CabinetPanel() {
             <button
               aria-label={
                 isAnimating
-                  ? 'Stop animation'
+                  ? t('nodes.cabinet.stopAnimation')
                   : (node.operationState ?? 0) >= 0.99
-                    ? 'Close cabinet'
-                    : 'Open cabinet'
+                    ? t('nodes.cabinet.closeCabinet')
+                    : t('nodes.cabinet.openCabinet')
               }
               className="flex h-7 shrink-0 items-center gap-1.5 rounded-lg border border-border/40 bg-[#2C2C2E] px-2.5 text-[11px] font-medium text-foreground transition-colors hover:bg-[#3e3e3e]"
               onClick={() => {
@@ -818,23 +819,27 @@ export default function CabinetPanel() {
               }}
               title={
                 isAnimating
-                  ? 'Stop animation'
+                  ? t('nodes.cabinet.stopAnimation')
                   : (node.operationState ?? 0) >= 0.99
-                    ? 'Close cabinet'
-                    : 'Play animation'
+                    ? t('nodes.cabinet.closeCabinet')
+                    : t('nodes.cabinet.playAnimation')
               }
               type="button"
             >
               {isAnimating ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
               <span>
-                {isAnimating ? 'Stop' : (node.operationState ?? 0) >= 0.99 ? 'Close' : 'Play'}
+                {isAnimating
+                  ? t('nodes.cabinet.stop')
+                  : (node.operationState ?? 0) >= 0.99
+                    ? t('nodes.cabinet.close')
+                    : t('nodes.cabinet.play')}
               </span>
             </button>
           </div>
         </PanelSection>
       )}
 
-      <PanelSection title="Compartments">
+      <PanelSection title={t('nodes.cabinet.compartments')}>
         {reflowNotice ? (
           <p
             aria-live="polite"
@@ -869,7 +874,7 @@ export default function CabinetPanel() {
         <div className="px-1 pb-1">
           <ActionButton
             icon={<Plus className="h-4 w-4" />}
-            label="Add compartment"
+            label={t('nodes.cabinet.addCompartment')}
             onClick={addCompartment}
           />
         </div>
@@ -877,11 +882,11 @@ export default function CabinetPanel() {
 
       {!isHoodOnlyNode && (
         <>
-          <PanelSection title="Fronts">
+          <PanelSection title={t('nodes.cabinet.fronts')}>
             <div className="space-y-2 px-1 pb-2">
               <div>
                 <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Style
+                  {t('nodes.cabinet.fronts.style')}
                 </div>
                 <SegmentedControl
                   onChange={(value) =>
@@ -889,14 +894,14 @@ export default function CabinetPanel() {
                   }
                   options={FRONT_STYLE_OPTIONS.map((option) => ({
                     value: option.value,
-                    label: option.label,
+                    label: t(option.labelKey),
                   }))}
                   value={node.frontStyle ?? 'slab'}
                 />
               </div>
               <div>
                 <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Mounting
+                  {t('nodes.cabinet.fronts.mounting')}
                 </div>
                 <SegmentedControl
                   onChange={(value) =>
@@ -904,14 +909,14 @@ export default function CabinetPanel() {
                   }
                   options={FRONT_OVERLAY_OPTIONS.map((option) => ({
                     value: option.value,
-                    label: option.label,
+                    label: t(option.labelKey),
                   }))}
                   value={node.frontOverlay ?? 'full'}
                 />
               </div>
               <div>
                 <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Reveal gap
+                  {t('nodes.cabinet.fronts.revealGap')}
                 </div>
                 <SegmentedControl
                   mixed={cabinetRevealGapId(node.frontGap) === 'custom'}
@@ -934,11 +939,11 @@ export default function CabinetPanel() {
             </div>
           </PanelSection>
 
-          <PanelSection title="Handles">
+          <PanelSection title={t('nodes.cabinet.handles')}>
             <div className="space-y-2 px-1 pb-2">
               <div>
                 <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Style
+                  {t('nodes.cabinet.handles.style')}
                 </div>
                 <SegmentedControl
                   onChange={(value) =>
@@ -946,7 +951,7 @@ export default function CabinetPanel() {
                   }
                   options={HANDLE_STYLE_OPTIONS.map((option) => ({
                     value: option.value,
-                    label: option.label,
+                    label: t(option.labelKey),
                   }))}
                   value={node.handleStyle}
                 />
@@ -954,7 +959,7 @@ export default function CabinetPanel() {
               {(node.handleStyle === 'bar' || node.handleStyle === 'knob') && (
                 <div>
                   <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                    Position
+                    {t('nodes.cabinet.handles.position')}
                   </div>
                   <SegmentedControl
                     onChange={(value) =>
@@ -962,7 +967,7 @@ export default function CabinetPanel() {
                     }
                     options={HANDLE_POSITION_OPTIONS.map((option) => ({
                       value: option.value,
-                      label: option.label,
+                      label: t(option.labelKey),
                     }))}
                     value={node.handlePosition ?? 'auto'}
                   />
