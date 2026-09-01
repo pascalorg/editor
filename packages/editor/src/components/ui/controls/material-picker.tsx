@@ -173,6 +173,7 @@ export function MaterialPicker({
         ) : null}
         {catalogItems.map((item) => {
           const isSelected = selectedMaterialPreset === toLibraryMaterialRef(item.id)
+          const label = t(item.labelKey)
           return (
             <button
               className={`group relative flex flex-col gap-1.5 rounded-xl p-1.5 transition-colors hover:cursor-pointer hover:bg-sidebar-accent ${
@@ -189,7 +190,7 @@ export function MaterialPicker({
               <div className="relative aspect-square w-full overflow-hidden rounded-lg">
                 {item.previewThumbnailUrl ? (
                   <img
-                    alt={item.label}
+                    alt={label}
                     className="h-full w-full object-cover"
                     src={item.previewThumbnailUrl}
                   />
@@ -201,7 +202,7 @@ export function MaterialPicker({
                 )}
               </div>
               <span className="truncate px-0.5 text-left font-medium text-[11px] text-muted-foreground group-hover:text-foreground">
-                {item.label}
+                {label}
               </span>
             </button>
           )

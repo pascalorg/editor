@@ -1692,7 +1692,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                 )}
                 src="/icons/site-flag.webp"
               />
-              <span className="font-medium text-sm">{siteNode.name || 'Site'}</span>
+              <span className="font-medium text-sm">{siteNode.name || t('site.site')}</span>
             </div>
             <CameraPopover
               buttonClassName={cn(
