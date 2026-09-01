@@ -130,6 +130,7 @@ export {
   WHITE_PALETTE,
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
+export * from './lib/perf-actions'
 export * from './lib/perf-tracks'
 export {
   detectRendererCapability,

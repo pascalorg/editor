@@ -37,6 +37,17 @@ export type PerfTrackColor =
 
 const counters = new Map<string, PerfCounterBucket>()
 
+// Live tap on every recorded sample, regardless of the panel's drain cadence.
+// The action ledger (perf-actions.ts) subscribes for the lifetime of one edit
+// action to attribute samples to it.
+type PerfSampleListener = (track: string, ms: number) => void
+const sampleListeners = new Set<PerfSampleListener>()
+
+export function subscribePerfSamples(listener: PerfSampleListener): () => void {
+  sampleListeners.add(listener)
+  return () => sampleListeners.delete(listener)
+}
+
 function record(track: string, ms: number): void {
   const bucket = counters.get(track)
   if (bucket) {
@@ -46,6 +57,7 @@ function record(track: string, ms: number): void {
   } else {
     counters.set(track, { totalMs: ms, maxMs: ms, count: 1 })
   }
+  for (const listener of sampleListeners) listener(track, ms)
 }
 
 function emitMeasure(
