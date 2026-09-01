@@ -568,6 +568,7 @@
   "nodes.ceiling.autoHoleLabel.elevator": "自动电梯切口",
   "nodes.ceiling.autoHoleLabel.stair": "自动楼梯切口",
   "nodes.ceiling.customHeight": "自定义高度",
+  "nodes.ceiling.currently": "当前 {value}",
   "nodes.ceiling.editing": "编辑中",
   "nodes.ceiling.followsLevel": "跟随楼层",
   "nodes.ceiling.height": "高度",
