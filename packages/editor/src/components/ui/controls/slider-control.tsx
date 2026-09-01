@@ -2,6 +2,7 @@
 
 import { useScene } from '@pascal-app/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useTranslations } from '../../../lib/i18n'
 import {
   lingoUnitSpec,
   measurementHint,
@@ -67,6 +68,7 @@ export function SliderControl({
   restoreOnCommit = true,
   mixed = false,
 }: SliderControlProps) {
+  const t = useTranslations()
   // Display/storage conversion so the value honors the metric/imperial toggle.
   // `value`, `onChange`, `onCommit`, `min`/`max`/`clamp` are always in the
   // stored unit (meters for `unit === 'm'`); the step, drag deltas, text field
@@ -354,7 +356,7 @@ export function SliderControl({
             className="flex cursor-text items-center text-muted-foreground transition-colors hover:text-foreground"
             onClick={handleValueClick}
           >
-            <span className="font-mono tracking-tight">Mixed</span>
+            <span className="font-mono tracking-tight">{t('common.mixed')}</span>
           </div>
         ) : (
           <div
