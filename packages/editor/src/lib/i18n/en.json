@@ -1461,6 +1461,7 @@
   "nodes.zone.toolHints.place": "Place zone",
   "nodes.block.toolHints.place": "Place block",
   "nodes.column.toolHints.place": "Place column",
+  "nodes.cupola.toolHints.place": "Place cupola on roof",
   "nodes.door.toolHints.flipSide": "Flip side",
   "nodes.downspout.toolHints.highlightOutlet": "Highlight outlet",
   "nodes.downspout.toolHints.drop": "Drop downspout from outlet",

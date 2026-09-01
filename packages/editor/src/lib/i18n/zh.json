@@ -1461,6 +1461,7 @@
   "nodes.zone.toolHints.place": "放置区域",
   "nodes.block.toolHints.place": "放置块",
   "nodes.column.toolHints.place": "放置柱子",
+  "nodes.cupola.toolHints.place": "在屋顶上放置屋顶通风塔",
   "nodes.door.toolHints.flipSide": "翻转侧面",
   "nodes.downspout.toolHints.highlightOutlet": "高亮出水口",
   "nodes.downspout.toolHints.drop": "从出水口放下水落管",
