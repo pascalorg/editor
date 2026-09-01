@@ -117,10 +117,10 @@ const exitToSelectAfterUnconsumedCancel = () => {
   // From zone mode, return to structure select
   if (currentPhase === 'structure' && currentStructureLayer === 'zones') {
     useEditor.getState().setStructureLayer('elements')
-    useEditor.getState().setMode('select')
+    useEditor.getState().armToolMode({ mode: 'select' })
   } else {
     // Return to the default select tool while keeping the active building/level context.
-    useEditor.getState().setMode('select')
+    useEditor.getState().armToolMode({ mode: 'select' })
   }
 
   useEditor.getState().setFloorplanSelectionTool('click')
@@ -367,33 +367,28 @@ export const useKeyboard = ({
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('site')
-        useEditor.getState().setMode('select')
+        useEditor.getState().armToolMode({ mode: 'select' })
       } else if (e.key === '2' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('structure')
-        useEditor.getState().setMode('select')
+        useEditor.getState().armToolMode({ mode: 'select' })
       } else if (e.key === '3' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('furnish')
-        useEditor.getState().setMode('select')
+        useEditor.getState().armToolMode({ mode: 'select' })
       } else if (e.key === 'f' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         if (isToolOwnedCanopyForm()) return
         e.preventDefault()
         useEditor.getState().setPhase('furnish')
-        useEditor.getState().setMode('build')
-        // Set the item tool explicitly so the active tool never inherits a
-        // stale tool from a prior build session.
-        useEditor.getState().setTool('item')
+        useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
         useEditor.getState().setActiveSidebarPanel('items')
       } else if (e.key === 'z' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
         useEditor.getState().setPhase('structure')
         useEditor.getState().setStructureLayer('zones')
-        useEditor.getState().setMode('build')
-        // Set the zone tool explicitly so it never inherits a stale tool.
-        useEditor.getState().setTool('zone')
+        useEditor.getState().armToolMode({ mode: 'build', tool: 'zone' })
       } else if (e.key === 'm' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
@@ -401,39 +396,33 @@ export const useKeyboard = ({
         editor.setPhase('structure')
         editor.setStructureLayer('elements')
         editor.setToolDefaults('measurement', { kind: editor.lastMeasurementKind })
-        editor.setMode('build')
-        editor.setTool('measurement')
+        editor.armToolMode({ mode: 'build', tool: 'measurement' })
       }
       if (e.key === 'v' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
-        useEditor.getState().setMode('select')
+        useEditor.getState().armToolMode({ mode: 'select' })
         useEditor.getState().setFloorplanSelectionTool('click')
       } else if (e.key === 'b' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
         useEditor.getState().setPhase('structure')
         useEditor.getState().setStructureLayer('elements')
-        useEditor.getState().setMode('build')
-        // Set the wall tool explicitly so B never inherits a stale tool
-        // (e.g. fence) left over from a prior build session.
-        useEditor.getState().setTool('wall')
+        useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
       } else if (e.key === 'x' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        useEditor.getState().setMode('delete')
+        useEditor.getState().armToolMode({ mode: 'delete' })
       } else if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        useEditor.getState().primeMaterialPaintFromSelection()
         useEditor.getState().setPhase('structure')
         useEditor.getState().setStructureLayer('elements')
-        useEditor.getState().setMode('material-paint')
+        useEditor.getState().armMaterialPaint()
       } else if (e.key === 'g' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        // G for ground. No `setPhase` — `setMode` moves to the site phase itself,
-        // and doing it here would set the phase twice with a mode reset between.
-        useEditor.getState().setMode('terrain-sculpt')
+        // G for ground. The ToolMode transition moves to the site phase itself.
+        useEditor.getState().armToolMode({ mode: 'terrain-sculpt' })
       } else if (e.key === 'c' && (e.metaKey || e.ctrlKey) && !e.shiftKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()

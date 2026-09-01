@@ -463,6 +463,7 @@ export {
   scopeNodeId,
 } from './lib/interaction/scope'
 export {
+  type ActivePaintMaterial,
   buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
@@ -599,15 +600,20 @@ export {
 export type {
   CaptureMode,
   FloorplanSelectionTool,
+  Mode,
   SnapshotCropMode,
   SnapshotStandardAspect,
   SplitOrientation,
+  StructureTool,
   Tool,
   ToolDefaults,
+  ToolMode,
   ViewMode,
   WorkspaceMode,
 } from './store/use-editor'
 export {
+  armMaterialPaint,
+  armToolMode,
   default as useEditor,
   getActiveContinuationContext,
   getActiveSnapContext,

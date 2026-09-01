@@ -45,19 +45,19 @@ beforeEach(() => {
 
 afterEach(() => {
   useInteractionScope.getState().end()
-  useEditor.setState({ mode: 'select', tool: null })
+  useEditor.getState().armToolMode({ mode: 'select' })
   clearSceneHistory()
 })
 
 describe('rotation shortcut ownership', () => {
   test('leaves R and T to the active item placement tool', () => {
-    useEditor.setState({ mode: 'build', tool: 'item' })
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
 
     expect(isToolOwnedRotation()).toBe(true)
   })
 
   test('leaves R and T to the active lean-to placement tool', () => {
-    useEditor.setState({ mode: 'build', tool: 'lean-to-extension' })
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'lean-to-extension' })
 
     expect(isToolOwnedRotation()).toBe(true)
   })
@@ -76,10 +76,10 @@ describe('rotation shortcut ownership', () => {
   })
 
   test('leaves F to the active lean-to placement tool', () => {
-    useEditor.setState({ mode: 'build', tool: 'lean-to-extension' })
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'lean-to-extension' })
 
     expect(isToolOwnedCanopyForm()).toBe(true)
-    useEditor.setState({ tool: 'wall' })
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
     expect(isToolOwnedCanopyForm()).toBe(false)
   })
 })
