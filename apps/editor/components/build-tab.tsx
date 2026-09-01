@@ -123,10 +123,11 @@ function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
     tools.push({
       id: kind,
       kind,
-      // Registry-driven kinds use the presentation label directly (each node
-      // definition ships its own display string in `presentation.label` —
-      // that's where Chinese wiring would land in a follow-up audit).
-      labelKey: '',
+      // Prefer the i18n key the definition ships (`presentation.labelKey`),
+      // falling back to the hardcoded `presentation.label` for kinds that
+      // don't carry one yet. The render path picks `labelKey` first and only
+      // falls back to `label` when the key is empty.
+      labelKey: presentation.labelKey ?? '',
       label: presentation.label,
       iconSrc: presentation.icon.kind === 'url' ? presentation.icon.src : '/icons/spawn-point.webp',
       paletteOrder: presentation.paletteOrder ?? Number.MAX_SAFE_INTEGER,
