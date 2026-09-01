@@ -32,6 +32,9 @@ describe('measurementDefinition', () => {
       'Esc',
     ])
     expect(measurementDefinition.toolHints?.at(-1)?.label).toBe('Finish and continue')
+    expect(measurementDefinition.toolHints?.at(-1)?.labelKey).toBe(
+      'nodes.measurement.toolHints.finishContinue',
+    )
   })
 
   test('produces schema-valid defaults', () => {
