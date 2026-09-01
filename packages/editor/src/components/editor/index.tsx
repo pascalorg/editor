@@ -1006,6 +1006,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
   const setFloorplanPaneRatio = useEditor((s) => s.setFloorplanPaneRatio)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const isCaptureMode = useEditor((s) => s.isCaptureMode)
 
   const [isCameraControlsHintVisible, setIsCameraControlsHintVisible] = useState<boolean | null>(
     null,
@@ -1120,7 +1121,10 @@ const ViewerCanvas = memo(function ViewerCanvas({
             renderContext="editor"
             renderPaused={!show3d && !showLoader}
             sceneReadyKey={sceneReadyKey}
-            selectionManager={isFirstPersonMode ? 'default' : 'custom'}
+            // Walk/drone framing during snapshot capture is camera-only: the
+            // viewer's default selection manager would hover-highlight whatever
+            // the cursor crosses, which orbit capture never does.
+            selectionManager={isFirstPersonMode && !isCaptureMode ? 'default' : 'custom'}
           >
             <ViewerSceneContent
               isFirstPersonMode={isFirstPersonMode}
