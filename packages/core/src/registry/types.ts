@@ -1450,8 +1450,21 @@ export type KeyboardAction = {
 export type Presentation = {
   /** Sentence-case label shown in palette buttons, breadcrumbs, etc. */
   label: string
+  /**
+   * Optional i18n key resolved at render time. When set, the i18n catalog
+   * value wins over `label` so the same definition can ship translated UI
+   * surfaces without re-publishing. Falls back to `label` if the catalog
+   * lookup misses or the active locale has no entry yet.
+   */
+  labelKey?: string
   /** Optional longer tooltip / help text. */
   description?: string
+  /**
+   * Optional i18n key for `description`. Same fallback semantics as
+   * `labelKey`. Defined alongside it so MCP and tooltip surfaces can be
+   * wired without re-touching every definition.
+   */
+  descriptionKey?: string
   /** Icon for palette buttons and tree views. */
   icon: IconRef
   /** Tool palette section. Defaults to `category` when omitted. */
