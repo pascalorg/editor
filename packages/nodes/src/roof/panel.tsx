@@ -249,7 +249,7 @@ export default function RoofPanel() {
       title={node.name || t('nodes.roof.fallbackTitle')}
       width={300}
     >
-      <PanelSection title="Segments">
+      <PanelSection title={t('nodes.roof.segments')}>
         <div className="flex flex-col gap-1">
           {segments.map((seg, i) => (
             <button
@@ -258,7 +258,9 @@ export default function RoofPanel() {
               onClick={() => handleSelectSegment(seg.id)}
               type="button"
             >
-              <span className="truncate">{seg.name || `Segment ${i + 1}`}</span>
+              <span className="truncate">
+                {seg.name || t('nodes.roof.defaultName.segment', { count: i + 1 })}
+              </span>
               <span className="text-muted-foreground text-xs capitalize">{seg.roofType}</span>
             </button>
           ))}
@@ -323,14 +325,14 @@ export default function RoofPanel() {
         />
         <div className="flex gap-1.5 px-1 pt-2 pb-1">
           <ActionButton
-            label="-45°"
+            label={t('common.minus45')}
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               handleUpdate({ rotation: node.rotation - Math.PI / 4 })
             }}
           />
           <ActionButton
-            label="+45°"
+            label={t('common.plus45')}
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               handleUpdate({ rotation: node.rotation + Math.PI / 4 })
@@ -339,7 +341,7 @@ export default function RoofPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Elements">
+      <PanelSection title={t('nodes.roof.elements')}>
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             {chimneys.map((chimney, i) => (
@@ -349,8 +351,12 @@ export default function RoofPanel() {
                 onClick={() => handleSelectElement(chimney.id)}
                 type="button"
               >
-                <span className="truncate">{chimney.name || `Chimney ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs">chimney</span>
+                <span className="truncate">
+                  {chimney.name || t('nodes.roof.defaultName.chimney', { count: i + 1 })}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {t('nodes.roof.kindLabel.chimney')}
+                </span>
               </button>
             ))}
             <ActionGroup>
@@ -370,8 +376,12 @@ export default function RoofPanel() {
                 onClick={() => handleSelectElement(dormer.id)}
                 type="button"
               >
-                <span className="truncate">{dormer.name || `Dormer ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs">dormer</span>
+                <span className="truncate">
+                  {dormer.name || t('nodes.roof.defaultName.dormer', { count: i + 1 })}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {t('nodes.roof.kindLabel.dormer')}
+                </span>
               </button>
             ))}
             <ActionGroup>
@@ -391,8 +401,12 @@ export default function RoofPanel() {
                 onClick={() => handleSelectElement(skylight.id)}
                 type="button"
               >
-                <span className="truncate">{skylight.name || `Skylight ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs">skylight</span>
+                <span className="truncate">
+                  {skylight.name || t('nodes.roof.defaultName.skylight', { count: i + 1 })}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {t('nodes.roof.kindLabel.skylight')}
+                </span>
               </button>
             ))}
             <ActionGroup>
@@ -412,8 +426,12 @@ export default function RoofPanel() {
                 onClick={() => handleSelectElement(panel.id)}
                 type="button"
               >
-                <span className="truncate">{panel.name || `Solar Panel ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs">solar panel</span>
+                <span className="truncate">
+                  {panel.name || t('nodes.roof.defaultName.solarPanel', { count: i + 1 })}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {t('nodes.roof.kindLabel.solarPanel')}
+                </span>
               </button>
             ))}
             <ActionGroup>
@@ -435,18 +453,15 @@ export default function RoofPanel() {
               >
                 <span className="truncate">
                   {vent.name ||
-                    (vent.type === 'box-vent'
-                      ? `Box Vent ${i + 1}`
-                      : vent.type === 'ridge-vent'
-                        ? `Ridge Vent ${i + 1}`
-                        : `Turbine Vent ${i + 1}`)}
+                    t(
+                      `nodes.roof.defaultName.${vent.type === 'box-vent' ? 'boxVent' : vent.type === 'ridge-vent' ? 'ridgeVent' : 'turbineVent'}`,
+                      { count: i + 1 },
+                    )}
                 </span>
                 <span className="text-muted-foreground text-xs">
-                  {vent.type === 'box-vent'
-                    ? 'box vent'
-                    : vent.type === 'ridge-vent'
-                      ? 'ridge vent'
-                      : 'turbine vent'}
+                  {t(
+                    `nodes.roof.kindLabel.${vent.type === 'box-vent' ? 'boxVent' : vent.type === 'ridge-vent' ? 'ridgeVent' : 'turbineVent'}`,
+                  )}
                 </span>
               </button>
             ))}
@@ -455,7 +470,7 @@ export default function RoofPanel() {
               options={[
                 { label: t('nodes.roof.box'), value: 'box-vent' },
                 { label: t('nodes.roof.ridge'), value: 'ridge-vent' },
-                { label: 'Turbine', value: 'turbine-vent' },
+                { label: t('nodes.roof.turbine'), value: 'turbine-vent' },
               ]}
               value={ventType}
             />
@@ -472,7 +487,7 @@ export default function RoofPanel() {
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Cupola"
+                label={t('nodes.roof.addCupola')}
                 onClick={() => activateTool('cupola')}
               />
             </ActionGroup>
@@ -482,7 +497,7 @@ export default function RoofPanel() {
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Eyebrow Vent"
+                label={t('nodes.roof.addEyebrowVent')}
                 onClick={() => activateTool('eyebrow-vent')}
               />
             </ActionGroup>
@@ -496,14 +511,18 @@ export default function RoofPanel() {
                 onClick={() => handleSelectElement(gutter.id)}
                 type="button"
               >
-                <span className="truncate">{gutter.name || `Gutter ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs">gutter</span>
+                <span className="truncate">
+                  {gutter.name || t('nodes.roof.defaultName.gutter', { count: i + 1 })}
+                </span>
+                <span className="text-muted-foreground text-xs">
+                  {t('nodes.roof.kindLabel.gutter')}
+                </span>
               </button>
             ))}
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Gutter"
+                label={t('nodes.roof.addGutter')}
                 onClick={() => activateTool('gutter')}
               />
             </ActionGroup>
