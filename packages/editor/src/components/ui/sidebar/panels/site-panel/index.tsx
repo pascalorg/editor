@@ -191,13 +191,13 @@ const PropertyLineSection = memo(function PropertyLineSection() {
       {/* Measurements */}
       <div className="relative flex gap-3 pr-3 pb-2 pl-10">
         <div className="text-muted-foreground text-xs">
-          Area:{' '}
+          {t('site.area')}:{' '}
           <span className="text-foreground">
             {displayArea.toFixed(1)} {getAreaUnitLabel(viewerUnit)}
           </span>
         </div>
         <div className="text-muted-foreground text-xs">
-          Perimeter:{' '}
+          {t('site.perimeter')}:{' '}
           <span className="text-foreground">
             {displayPerimeter.toFixed(1)} {linearLabel}
           </span>
@@ -211,7 +211,7 @@ const PropertyLineSection = memo(function PropertyLineSection() {
             {points.map((point, index) => (
               <div className="flex items-center gap-1.5 text-xs" key={index}>
                 <span className="w-4 shrink-0 text-right text-muted-foreground">{index + 1}</span>
-                <label className="shrink-0 text-muted-foreground">X</label>
+                <label className="shrink-0 text-muted-foreground">{t('site.axisX')}</label>
                 <input
                   className="w-16 rounded border border-border/50 bg-accent/50 px-1.5 py-0.5 text-foreground text-xs focus:border-primary focus:outline-none"
                   onChange={(e) =>
@@ -221,7 +221,7 @@ const PropertyLineSection = memo(function PropertyLineSection() {
                   type="number"
                   value={Number(toDisplayLinear(point[0]).toFixed(2))}
                 />
-                <label className="shrink-0 text-muted-foreground">Z</label>
+                <label className="shrink-0 text-muted-foreground">{t('site.axisZ')}</label>
                 <input
                   className="w-16 rounded border border-border/50 bg-accent/50 px-1.5 py-0.5 text-foreground text-xs focus:border-primary focus:outline-none"
                   onChange={(e) =>
@@ -251,7 +251,7 @@ const PropertyLineSection = memo(function PropertyLineSection() {
             onClick={handleAddPoint}
           >
             <Plus className="h-3 w-3" />
-            Add point
+            {t('site.addPoint')}
           </button>
         </div>
       )}
@@ -312,7 +312,7 @@ const CameraPopover = memo(function CameraPopover({
               }}
             >
               <Camera className="h-3.5 w-3.5" />
-              View snapshot
+              {t('site.camera.viewSnapshot')}
             </button>
           )}
           <button
@@ -324,7 +324,7 @@ const CameraPopover = memo(function CameraPopover({
             }}
           >
             <Camera className="h-3.5 w-3.5" />
-            {hasCamera ? 'Update snapshot' : 'Take snapshot'}
+            {hasCamera ? t('site.camera.updateSnapshot') : t('site.camera.takeSnapshot')}
           </button>
           {hasCamera && (
             <button
@@ -336,7 +336,7 @@ const CameraPopover = memo(function CameraPopover({
               }}
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Clear snapshot
+              {t('site.camera.clearSnapshot')}
             </button>
           )}
         </div>
@@ -443,7 +443,7 @@ const ReferenceItem = memo(function ReferenceItem({
             />
           )}
           <InlineRenameInput
-            defaultName={isCapture ? 'Capture' : 'Guide Image'}
+            defaultName={isCapture ? t('site.reference.capture') : t('site.reference.guide')}
             isEditing={isEditing}
             nodeId={refNode.id}
             onStartEditing={() => setIsEditing(true)}
@@ -866,7 +866,7 @@ const LevelItem = memo(function LevelItem({
                   }}
                 >
                   <Camera className="h-3.5 w-3.5" />
-                  View snapshot
+                  {t('site.camera.viewSnapshot')}
                 </button>
               )}
               <button
@@ -878,7 +878,7 @@ const LevelItem = memo(function LevelItem({
                 }}
               >
                 <Camera className="h-3.5 w-3.5" />
-                {level.camera ? 'Update snapshot' : 'Take snapshot'}
+                {level.camera ? t('site.camera.updateSnapshot') : t('site.camera.takeSnapshot')}
               </button>
               {level.camera && (
                 <button
@@ -890,7 +890,7 @@ const LevelItem = memo(function LevelItem({
                   }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Clear snapshot
+                  {t('site.camera.clearSnapshot')}
                 </button>
               )}
             </div>
@@ -917,7 +917,7 @@ const LevelItem = memo(function LevelItem({
               title={t('level.duplicateLevel')}
             >
               <Copy className="h-3.5 w-3.5" />
-              Duplicate
+              {t('common.duplicate')}
             </button>
             <button
               className="flex w-full cursor-pointer items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors hover:bg-accent"
@@ -925,7 +925,7 @@ const LevelItem = memo(function LevelItem({
               title={t('site.duplicateLevelWithOptions')}
             >
               <Copy className="h-3.5 w-3.5" />
-              Duplicate with options...
+              {t('level.duplicateOptions')}
             </button>
             <button
               className="flex w-full items-center gap-2 rounded px-3 py-1.5 text-left text-sm transition-colors enabled:cursor-pointer enabled:hover:bg-accent enabled:hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-50"
@@ -934,7 +934,7 @@ const LevelItem = memo(function LevelItem({
               title={canDeleteLevel ? t('level.deleteLevel') : t('level.cannotDeleteGround')}
             >
               <Trash2 className="h-3.5 w-3.5" />
-              Delete
+              {t('common.delete')}
             </button>
           </PopoverContent>
         </Popover>
@@ -1046,7 +1046,7 @@ const LevelsSection = memo(function LevelsSection({
             <div className="pointer-events-none absolute top-0 bottom-1/2 left-[21px] w-px bg-border/50" />
             {/* Horizontal branch line */}
             <div className="pointer-events-none absolute top-1/2 left-[21px] h-px w-[11px] bg-border/50" />
-            No levels yet
+            {t('site.noLevelsYet')}
           </div>
         )}
         {[...levels].reverse().map((level, index) => (
@@ -1114,7 +1114,7 @@ const LayerToggle = memo(function LayerToggle() {
             )}
             src="/icons/room.webp"
           />
-          Structure
+          {t('site.structure')}
         </div>
         <div className="absolute right-1.5 bottom-1 z-10 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md">
           <span className="block font-medium font-mono text-[9px] text-muted-foreground/70 leading-none">
@@ -1150,7 +1150,7 @@ const LayerToggle = memo(function LayerToggle() {
             )}
             src="/icons/couch.webp"
           />
-          Furnish
+          {t('site.furnish')}
         </div>
         <div className="absolute right-1.5 bottom-1 z-10 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md">
           <span className="block font-medium font-mono text-[9px] text-muted-foreground/70 leading-none">
@@ -1187,7 +1187,7 @@ const LayerToggle = memo(function LayerToggle() {
             )}
             src="/icons/kitchen.webp"
           />
-          Zones
+          {t('site.zones')}
         </div>
         <div className="absolute right-1.5 bottom-1 z-10 rounded border border-border/40 bg-background/40 px-1 py-[2px] backdrop-blur-md">
           <span className="block font-medium font-mono text-[9px] text-muted-foreground/70 leading-none">
@@ -1322,7 +1322,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
                   }}
                 >
                   <Camera className="h-3.5 w-3.5" />
-                  View snapshot
+                  {t('site.camera.viewSnapshot')}
                 </button>
               )}
               <button
@@ -1334,7 +1334,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
                 }}
               >
                 <Camera className="h-3.5 w-3.5" />
-                {zone.camera ? 'Update snapshot' : 'Take snapshot'}
+                {zone.camera ? t('site.camera.updateSnapshot') : t('site.camera.takeSnapshot')}
               </button>
               {zone.camera && (
                 <button
@@ -1346,7 +1346,7 @@ const ZoneItem = memo(function ZoneItem({ zone, isLast }: { zone: ZoneNode; isLa
                   }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Clear snapshot
+                  {t('site.camera.clearSnapshot')}
                 </button>
               )}
             </div>
@@ -1373,7 +1373,7 @@ const MultiSelectionBadge = memo(function MultiSelectionBadge() {
   return (
     <div className="pointer-events-none sticky top-4 z-50 flex h-0 w-full justify-center overflow-visible">
       <div className="pointer-events-auto flex items-center gap-2.5 rounded-full border border-primary/20 bg-primary px-0.5 py-4 pl-2 font-medium text-primary-foreground text-xs shadow-black/10 shadow-lg backdrop-blur-md">
-        <span>{selectedIds.length} objects selected</span>
+        <span>{t('site.objectsSelected', { count: selectedIds.length })}</span>
         <button
           className="cursor-pointer rounded-full p-1.5 transition-colors hover:bg-primary-foreground/20"
           onClick={() => setSelection({ selectedIds: [] })}
@@ -1434,9 +1434,9 @@ const ContentSection = memo(function ContentSection() {
     if (levelZones.length === 0) {
       return (
         <div className="px-3 py-4 text-muted-foreground text-sm">
-          No zones on this level.{' '}
+          {t('level.noZonesOnLevel')}{' '}
           <button className="cursor-pointer text-primary hover:underline" onClick={handleAddZone}>
-            Add one
+            {t('common.addOne')}
           </button>
         </div>
       )
@@ -1535,7 +1535,7 @@ const BuildingItem = memo(function BuildingItem({
             )}
             src="/icons/building.webp"
           />
-          <span className="truncate font-medium text-sm">{building.name || 'Building'}</span>
+          <span className="truncate font-medium text-sm">{building.name || t('site.building')}</span>
         </div>
         <Popover
           onOpenChange={(open) => setBuildingCameraOpen(open ? building.id : null)}
@@ -1575,7 +1575,7 @@ const BuildingItem = memo(function BuildingItem({
                   }}
                 >
                   <Camera className="h-3.5 w-3.5" />
-                  View snapshot
+                  {t('site.camera.viewSnapshot')}
                 </button>
               )}
               <button
@@ -1587,7 +1587,7 @@ const BuildingItem = memo(function BuildingItem({
                 }}
               >
                 <Camera className="h-3.5 w-3.5" />
-                {building.camera ? 'Update snapshot' : 'Take snapshot'}
+                {building.camera ? t('site.camera.updateSnapshot') : t('site.camera.takeSnapshot')}
               </button>
               {building.camera && (
                 <button
@@ -1599,7 +1599,7 @@ const BuildingItem = memo(function BuildingItem({
                   }}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
-                  Clear snapshot
+                  {t('site.camera.clearSnapshot')}
                 </button>
               )}
             </div>
@@ -1730,7 +1730,7 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
           {/* Buildings List */}
           {buildings.length === 0 ? (
             <motion.div className="px-3 py-4 text-muted-foreground text-sm" layout="position">
-              No buildings yet
+              {t('site.noBuildingsYet')}
             </motion.div>
           ) : (
             <div className="flex min-h-0 flex-1 flex-col">
