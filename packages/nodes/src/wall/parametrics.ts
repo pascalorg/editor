@@ -17,6 +17,7 @@ export const wallParametrics: ParametricDescriptor<WallNode> = {
   groups: [
     {
       label: 'Dimensions',
+      labelKey: 'common.dimensions',
       fields: [
         { key: 'thickness', kind: 'number', unit: 'm', min: 0.05, max: 1000, step: 0.01 },
         // `height` may be absent (plane-bound top); the custom panel owns the

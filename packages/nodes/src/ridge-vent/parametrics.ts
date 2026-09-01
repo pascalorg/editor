@@ -9,11 +9,16 @@ export const ridgeVentParametrics: ParametricDescriptor<RidgeVentNode> = {
   groups: [
     {
       label: 'Style',
+      labelKey: 'common.style',
       fields: [
         {
           key: 'style',
           kind: 'enum',
           options: ['standard', 'shingled', 'metal'],
+          optionLabelKeys: {
+            "standard": "nodes.ridgeVent.standard",
+            "shingled": "nodes.ridgeVent.shingled"
+          },
           display: 'segmented',
         },
         { key: 'endCaps', kind: 'boolean' },
@@ -21,6 +26,7 @@ export const ridgeVentParametrics: ParametricDescriptor<RidgeVentNode> = {
     },
     {
       label: 'Dimensions',
+      labelKey: 'common.dimensions',
       fields: [
         { key: 'length', kind: 'number', unit: 'm', min: 0.5, max: 1000, step: 0.05 },
         { key: 'width', kind: 'number', unit: 'm', min: 0.1, max: 0.6, step: 0.01 },

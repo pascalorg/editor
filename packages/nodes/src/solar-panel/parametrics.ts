@@ -30,6 +30,10 @@ export const solarPanelParametrics: ParametricDescriptor<SolarPanelNode> = {
           key: 'mountingType',
           kind: 'enum',
           options: ['flush', 'tilted'],
+          optionLabelKeys: {
+            "flush": "nodes.solarPanel.flush",
+            "tilted": "nodes.solarPanel.tilted"
+          },
           display: 'segmented',
         },
         {

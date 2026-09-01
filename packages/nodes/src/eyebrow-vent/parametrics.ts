@@ -11,11 +11,15 @@ export const eyebrowVentParametrics: ParametricDescriptor<EyebrowVentNode> = {
   groups: [
     {
       label: 'Style',
+      labelKey: 'common.style',
       fields: [
         {
           key: 'style',
           kind: 'enum',
           options: ['scoop', 'half-round', 'slant-box'],
+          optionLabelKeys: {
+            "scoop": "nodes.eyebrowVent.scoop"
+          },
           display: 'segmented',
         },
         { key: 'louverCount', kind: 'number', min: 0, max: 8, step: 1 },
@@ -24,6 +28,7 @@ export const eyebrowVentParametrics: ParametricDescriptor<EyebrowVentNode> = {
     },
     {
       label: 'Dimensions',
+      labelKey: 'common.dimensions',
       fields: [
         { key: 'width', kind: 'number', unit: 'm', min: 0.3, max: 1000, step: 0.05 },
         { key: 'depth', kind: 'number', unit: 'm', min: 0.2, max: 1000, step: 0.05 },

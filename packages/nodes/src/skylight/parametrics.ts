@@ -17,6 +17,7 @@ export const skylightParametrics: ParametricDescriptor<SkylightNode> = {
     },
     {
       label: 'Dimensions',
+      labelKey: 'common.dimensions',
       fields: [
         { key: 'width', kind: 'number', unit: 'm', min: 0.3, max: 1000, step: 0.05 },
         { key: 'height', kind: 'number', unit: 'm', min: 0.3, max: 1000, step: 0.05 },
@@ -64,6 +65,12 @@ export const skylightParametrics: ParametricDescriptor<SkylightNode> = {
           key: 'openingSide',
           kind: 'enum',
           options: ['top', 'bottom', 'left', 'right'],
+          optionLabelKeys: {
+            "top": "nodes.skylight.top",
+            "bottom": "nodes.skylight.bottom",
+            "left": "nodes.skylight.left",
+            "right": "nodes.skylight.right"
+          },
           display: 'segmented',
           visibleIf: (n) => n.skylightType === 'opening',
         },
@@ -71,6 +78,10 @@ export const skylightParametrics: ParametricDescriptor<SkylightNode> = {
           key: 'slideDirection',
           kind: 'enum',
           options: ['x', 'z'],
+          optionLabelKeys: {
+            "x": "common.x",
+            "z": "common.z"
+          },
           display: 'segmented',
           visibleIf: (n) => n.skylightType === 'sliding',
         },

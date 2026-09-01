@@ -22,6 +22,15 @@ export const dormerParametrics: ParametricDescriptor<DormerNode> = {
           key: 'roofType',
           kind: 'enum',
           options: ['hip', 'gable', 'shed', 'gambrel', 'dutch', 'mansard', 'flat'],
+          optionLabelKeys: {
+            "hip": "nodes.dormer.hip",
+            "gable": "nodes.dormer.gable",
+            "shed": "nodes.dormer.shed",
+            "gambrel": "nodes.dormer.gambrel",
+            "dutch": "nodes.dormer.dutch",
+            "mansard": "nodes.dormer.mansard",
+            "flat": "nodes.dormer.flat"
+          },
           display: 'select',
         },
         { key: 'roofHeight', kind: 'number', unit: 'm', min: 0, max: 2, step: 0.05 },
@@ -29,6 +38,9 @@ export const dormerParametrics: ParametricDescriptor<DormerNode> = {
           key: 'shedHighSide',
           kind: 'enum',
           options: ['back', 'front'],
+          optionLabelKeys: {
+            "back": "common.back"
+          },
           display: 'segmented',
           visibleIf: (n) => n.roofType === 'shed',
         },

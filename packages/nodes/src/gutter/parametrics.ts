@@ -16,6 +16,7 @@ export const gutterParametrics: ParametricDescriptor<GutterNode> = {
     },
     {
       label: 'Dimensions',
+      labelKey: 'common.dimensions',
       fields: [
         { key: 'length', kind: 'number', unit: 'm', min: 0.2, max: 1000, step: 0.05 },
         { key: 'size', kind: 'number', unit: 'm', min: 0.05, max: 0.3, step: 0.005 },

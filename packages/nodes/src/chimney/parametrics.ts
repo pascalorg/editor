@@ -16,6 +16,10 @@ export const chimneyParametrics: ParametricDescriptor<ChimneyNode> = {
           key: 'bodyShape',
           kind: 'enum',
           options: ['square', 'round'],
+          optionLabelKeys: {
+            "square": "nodes.chimney.square",
+            "round": "nodes.chimney.round"
+          },
           display: 'segmented',
         },
         { key: 'width', kind: 'number', unit: 'm', min: 0.2, max: 1000, step: 0.05 },
@@ -47,6 +51,11 @@ export const chimneyParametrics: ParametricDescriptor<ChimneyNode> = {
           key: 'shoulderStyle',
           kind: 'enum',
           options: ['none', 'tapered', 'corbeled'],
+          optionLabelKeys: {
+            "none": "nodes.chimney.none",
+            "tapered": "nodes.chimney.tapered",
+            "corbeled": "nodes.chimney.corbeled"
+          },
           display: 'segmented',
         },
         {
@@ -77,6 +86,12 @@ export const chimneyParametrics: ParametricDescriptor<ChimneyNode> = {
           key: 'capShape',
           kind: 'enum',
           options: ['none', 'sloped', 'flat', 'stepped'],
+          optionLabelKeys: {
+            "none": "nodes.chimney.none",
+            "sloped": "nodes.chimney.sloped",
+            "flat": "nodes.chimney.flat",
+            "stepped": "nodes.chimney.stepped"
+          },
           display: 'segmented',
           visibleIf: (n) => n.cap === true,
         },
@@ -108,6 +123,10 @@ export const chimneyParametrics: ParametricDescriptor<ChimneyNode> = {
           key: 'flueShape',
           kind: 'enum',
           options: ['round', 'square'],
+          optionLabelKeys: {
+            "round": "nodes.chimney.round",
+            "square": "nodes.chimney.square"
+          },
           display: 'segmented',
           visibleIf: (n) => n.flueCount > 0,
         },
@@ -146,6 +165,10 @@ export const chimneyParametrics: ParametricDescriptor<ChimneyNode> = {
           key: 'cricketStyle',
           kind: 'enum',
           options: ['none', 'simple'],
+          optionLabelKeys: {
+            "none": "nodes.chimney.none",
+            "simple": "nodes.chimney.simple"
+          },
           display: 'segmented',
           visibleIf: (n) => n.bodyShape === 'square',
         },
@@ -153,6 +176,10 @@ export const chimneyParametrics: ParametricDescriptor<ChimneyNode> = {
           key: 'cricketSide',
           kind: 'enum',
           options: ['front', 'back'],
+          optionLabelKeys: {
+            "front": "nodes.chimney.front",
+            "back": "nodes.chimney.back"
+          },
           display: 'segmented',
           visibleIf: (n) => n.bodyShape === 'square' && n.cricketStyle !== 'none',
         },

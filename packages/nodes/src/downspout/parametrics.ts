@@ -7,6 +7,7 @@ export const downspoutParametrics: ParametricDescriptor<DownspoutNode> = {
   groups: [
     {
       label: 'Dimensions',
+      labelKey: 'common.dimensions',
       fields: [
         { key: 'length', kind: 'number', unit: 'm', min: 0.1, max: 1000, step: 0.05 },
         { key: 'diameter', kind: 'number', unit: 'm', min: 0.02, max: 0.15, step: 0.005 },
