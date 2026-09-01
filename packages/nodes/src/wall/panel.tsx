@@ -34,6 +34,7 @@ import {
   SliderControl,
   triggerSFX,
   useInteractionScope,
+  useTranslations,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Spline } from 'lucide-react'
@@ -89,6 +90,7 @@ const WALL_TRIM_PROFILE_OPTIONS: Record<
 }
 
 export default function WallPanel() {
+  const t = useTranslations()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const unit = useViewer((s) => s.unit)
   const setSelection = useViewer((s) => s.setSelection)
@@ -248,12 +250,12 @@ export default function WallPanel() {
     <PanelWrapper
       icon="/icons/wall.webp"
       onClose={handleClose}
-      title={node.name || 'Wall'}
+      title={node.name || t('nodes.wall.fallbackTitle')}
       width={280}
     >
-      <PanelSection title="Dimensions">
+      <PanelSection title={t('nodes.wall.dimensions')}>
         <SliderControl
-          label="Length"
+          label={t('nodes.wall.length')}
           max={metersToLinearUnit(1000, unit)}
           min={metersToLinearUnit(0.1, unit)}
           onChange={(value) =>
@@ -332,7 +334,7 @@ export default function WallPanel() {
         />
         {!hasWallChildrenBlockingCurve && (
           <SliderControl
-            label="Curve"
+            label={t('nodes.wall.curve')}
             max={Math.max(metersToLinearUnit(0.01, unit), displayMaxCurveOffset)}
             min={-Math.max(metersToLinearUnit(0.01, unit), displayMaxCurveOffset)}
             onChange={(v) =>
@@ -394,11 +396,11 @@ export default function WallPanel() {
       />
 
       {!hasWallChildrenBlockingCurve && (
-        <PanelSection title="Actions">
+        <PanelSection title={t('common.actions')}>
           <ActionGroup>
             <ActionButton
               icon={<Spline className="h-3.5 w-3.5" />}
-              label="Curve"
+              label={t('nodes.wall.curve')}
               onClick={handleCurve}
             />
           </ActionGroup>
