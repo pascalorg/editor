@@ -22,6 +22,7 @@ import {
   renderPlannedConstructionDimensions,
   type WallConstructionDimensionPlan,
 } from './construction-dimensions'
+import { hasWallCurveBlockingChildren } from './curve-eligibility'
 
 // Same constants the legacy `getFloorplanWall` uses (editor/lib/floorplan/walls.ts).
 // Slightly exaggerates thin walls so the 2D plan stays legible without
@@ -266,6 +267,21 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
       payload: { wallId: node.id, endpoint: 'end' as const },
     })
 
+    const thicknessFrame = getWallCurveFrameAt(self, 0.5)
+    const halfVisibleThickness = getWallThickness(self) / 2
+    for (const side of [1, -1] as const) {
+      children.push({
+        kind: 'endpoint-handle',
+        point: [
+          thicknessFrame.point.x + thicknessFrame.normal.x * halfVisibleThickness * side,
+          thicknessFrame.point.y + thicknessFrame.normal.y * halfVisibleThickness * side,
+        ],
+        state: 'idle',
+        affordance: 'thickness',
+        payload: { wallId: node.id, side },
+      })
+    }
+
     // Side move arrows — two directional arrows at the wall midpoint,
     // pointing outward perpendicular to the wall. Mirrors the 3D
     // `WallMoveSideHandles` arrows so users can grab the wall body
@@ -294,11 +310,10 @@ export function buildWallFloorplan(node: WallNode, ctx: GeometryContext): Floorp
     }
 
     // Curve sagitta handle — teal dot at the wall midpoint that
-    // controls `curveOffset`. Hidden when the wall hosts a door /
-    // window / wall-attached item: bending the wall would tear those
-    // children, so the legacy disables the handle in that case (see
-    // `wallCurveHandles.hasWallChildrenBlockingCurve`).
-    if (!hasCurveBlockingChildren(ctx.children)) {
+    // controls `curveOffset`. Hidden when the wall hosts an opening,
+    // lean-to extension, or wall-attached item because bending the host
+    // would tear the child geometry away from it.
+    if (!hasWallCurveBlockingChildren(ctx.children)) {
       const handle = getWallMidpointHandlePoint(node)
       children.push({
         kind: 'endpoint-handle',
@@ -352,21 +367,4 @@ function wallDimensionDatumPolicy(reference: WallDimensionReference) {
     case 'finished-faces':
       return 'wall-face' as const
   }
-}
-
-/**
- * Doors, windows, and wall-attached items would tear if the wall bent
- * around them, so the curve sagitta handle hides when any of those
- * children exist. Mirrors the legacy
- * `wallCurveHandles.hasWallChildrenBlockingCurve` check.
- */
-function hasCurveBlockingChildren(children: AnyNode[]): boolean {
-  for (const child of children) {
-    if (child.type === 'door' || child.type === 'window') return true
-    if (child.type === 'item') {
-      const attachTo = (child as { asset?: { attachTo?: string } }).asset?.attachTo
-      if (attachTo === 'wall' || attachTo === 'wall-side') return true
-    }
-  }
-  return false
 }

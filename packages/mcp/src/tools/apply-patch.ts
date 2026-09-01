@@ -4,7 +4,7 @@ import { z } from 'zod'
 import type { Patch as BridgePatch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
 import { ErrorCode, throwMcpError } from './errors'
-import { publishLiveSceneSnapshot } from './live-sync'
+import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { PatchSchema } from './schemas'
 
 export const applyPatchInput = {
@@ -15,6 +15,7 @@ export const applyPatchOutput = {
   appliedOps: z.number(),
   deletedIds: z.array(z.string()),
   createdIds: z.array(z.string()),
+  ...liveSyncOutput,
 }
 
 export function registerApplyPatch(server: McpServer, bridge: SceneOperations): void {
@@ -52,11 +53,12 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
 
       try {
         const result = bridge.applyPatch(bridgePatches)
-        await publishLiveSceneSnapshot(bridge, 'apply_patch')
+        const persistence = await publishLiveSceneSnapshot(bridge, 'apply_patch')
         const payload = {
           appliedOps: result.appliedOps,
           deletedIds: result.deletedIds as unknown as string[],
           createdIds: result.createdIds as unknown as string[],
+          ...persistencePayload(persistence),
         }
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload) }],

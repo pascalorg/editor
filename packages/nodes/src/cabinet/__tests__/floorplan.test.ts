@@ -3,6 +3,7 @@ import type { AnyNode, FloorplanGeometry, GeometryContext } from '@pascal-app/co
 import { cabinetDefinition } from '../definition'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from '../floorplan'
 import { cabinetFloorplanSiblingOverrides } from '../floorplan-overrides'
+import { resolveCabinetGridPosition } from '../placement-snap'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 
 function makeContext(overrides: Partial<GeometryContext> = {}): GeometryContext {
@@ -62,6 +63,35 @@ describe('buildCabinetFloorplan', () => {
     // front / left / right edges (defaults: countertop on, overhang 0.02).
     expect(body.width).toBeCloseTo(run.width + 2 * run.countertopOverhang)
     expect(body.height).toBeCloseTo(run.depth + run.countertopOverhang)
+  })
+
+  test('placement snap aligns the actual countertop outline with the plan grid', () => {
+    const defaults = cabinetDefinition.defaults()
+    const outlineWidth = defaults.width + defaults.countertopOverhang * 2
+    const outlineDepth = defaults.depth + defaults.countertopOverhang
+    const position = resolveCabinetGridPosition({
+      raw: [0.12, 0, 0.17],
+      dimensions: [outlineWidth, 0.92, outlineDepth],
+      footprintOffset: [0, defaults.countertopOverhang / 2],
+      yaw: 0,
+      step: 0.5,
+    })
+    const run = CabinetNode.parse({
+      ...defaults,
+      id: 'cabinet_grid-aligned-floorplan-preview',
+      position,
+      children: [],
+    })
+
+    const geometry = buildCabinetFloorplan(run, makeContext()) as Extract<
+      FloorplanGeometry,
+      { kind: 'group' }
+    >
+    const transformed = geometry.children[0] as Extract<FloorplanGeometry, { kind: 'group' }>
+    const body = transformed.children[0] as Extract<FloorplanGeometry, { kind: 'rect' }>
+
+    expect(transformed.transform?.translate[0] + body.x).toBeCloseTo(0)
+    expect(transformed.transform?.translate[1] + body.y).toBeCloseTo(0)
   })
 
   test('run draws one countertop rect per span, extended by the overhang', () => {

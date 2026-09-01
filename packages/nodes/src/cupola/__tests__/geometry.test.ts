@@ -18,7 +18,7 @@ describe('buildCupolaGeometry', () => {
     expect(geo.getAttribute('normal').count).toBe(p.count)
     expect(geo.getAttribute('uv').count).toBe(p.count)
     expect(geo.getAttribute('uv2').count).toBe(p.count)
-    expect(new Set(geo.groups.map((group) => group.materialIndex))).toEqual(new Set([0, 1, 2]))
+    expect(new Set(geo.groups.map((group) => group.materialIndex))).toEqual(new Set([0, 1, 2, 3]))
     expect(geo.groups.reduce((count, group) => count + group.count, 0)).toBe(p.count)
   })
 

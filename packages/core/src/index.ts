@@ -94,15 +94,6 @@ export {
 } from './hooks/spatial-grid/support-host-patch'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export { loadAssetUrl, saveAsset } from './lib/asset-storage'
-export { createConicalRoofSectorAboveWall } from './lib/conical-roof'
-export {
-  type ConicalRoofInvalidPlacement,
-  type ConicalRoofLevelPlacement,
-  type ConicalRoofPlacement,
-  type ConicalRoofSurfacePlacement,
-  type ResolveConicalRoofPlacementInput,
-  resolveConicalRoofPlacement,
-} from './lib/conical-roof-placement'
 export {
   clampDoorOperationState,
   getDoorRenderOpenAmount,
@@ -411,6 +402,7 @@ export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export { resolveStairTotalRise, syncStairRises } from './systems/stair/stair-rise'
 export {
+  constrainWallCurveOffsetToAvoidIntersections,
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallArcData,

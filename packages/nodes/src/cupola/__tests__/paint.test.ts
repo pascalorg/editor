@@ -1,12 +1,26 @@
 import { describe, expect, test } from 'bun:test'
+import { cupolaDefinition } from '../definition'
 import { cupolaPaint, resolveCupolaMaterialRole } from '../paint'
 import { CupolaNode } from '../schema'
 
 describe('cupola paint', () => {
-  test('maps geometry groups to base, body, and roof', () => {
+  test('declares and seeds metallic louvers for new cupolas', () => {
+    const defaults = cupolaDefinition.defaults()
+    const node = CupolaNode.parse(defaults)
+
+    expect(node.slots?.louvers).toBe('library:preset-metal')
+    expect(cupolaDefinition.capabilities.slots?.(node)).toContainEqual({
+      slotId: 'louvers',
+      label: 'Louvers',
+      default: 'library:preset-metal',
+    })
+  })
+
+  test('maps geometry groups to base, body, roof, and louvers', () => {
     expect(resolveCupolaMaterialRole(0)).toBe('base')
     expect(resolveCupolaMaterialRole(1)).toBe('body')
     expect(resolveCupolaMaterialRole(2)).toBe('roof')
+    expect(resolveCupolaMaterialRole(3)).toBe('louvers')
   })
 
   test('updates only the selected construction part', () => {
@@ -14,12 +28,12 @@ describe('cupola paint', () => {
     expect(
       cupolaPaint.buildPatch({
         node,
-        role: 'roof',
+        role: 'louvers',
         material: undefined,
         materialPreset: 'library:copper',
       }),
     ).toEqual({
-      slots: { body: 'library:louver', roof: 'library:copper' },
+      slots: { body: 'library:louver', louvers: 'library:copper' },
     })
   })
 

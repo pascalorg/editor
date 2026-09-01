@@ -2,6 +2,7 @@
   "name": "@pascal-app/editor",
   "version": "1.0.0-beta.5",
   "description": "Pascal building editor component",
+  "license": "MIT",
   "type": "module",
   "exports": {
     ".": "./src/index.tsx",

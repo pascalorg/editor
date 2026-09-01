@@ -1,6 +1,5 @@
-// @ts-expect-error - bun:test is provided by the Bun runtime; core does not depend on @types/bun.
 import { describe, expect, test } from 'bun:test'
-import { LevelNode, RoofNode, RoofSegmentNode } from '../schema'
+import { LevelNode, RoofNode, RoofSegmentNode } from '@pascal-app/core'
 import { resolveConicalRoofPlacement } from './conical-roof-placement'
 
 function sceneWithHost() {

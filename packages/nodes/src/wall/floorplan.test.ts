@@ -226,4 +226,21 @@ describe('buildWallFloorplan render purpose', () => {
     expect(arrows[1].point[0]).toBeCloseTo(2)
     expect(arrows[1].point[1]).toBeCloseTo(-1.115)
   })
+
+  test('places thickness handles on both visible faces of a curved wall', () => {
+    const curved = WallNode.parse({ ...wall, curveOffset: 1 })
+    const geometry = buildWallFloorplan(curved, context('edit', true))
+    const handles = geometry
+      ? flatten(geometry).filter(
+          (entry) => entry.kind === 'endpoint-handle' && entry.affordance === 'thickness',
+        )
+      : []
+
+    expect(handles).toHaveLength(2)
+    if (handles[0]?.kind !== 'endpoint-handle' || handles[1]?.kind !== 'endpoint-handle') return
+    expect(handles[0].point[0]).toBeCloseTo(2)
+    expect(handles[0].point[1]).toBeCloseTo(-0.935)
+    expect(handles[1].point[0]).toBeCloseTo(2)
+    expect(handles[1].point[1]).toBeCloseTo(-1.065)
+  })
 })

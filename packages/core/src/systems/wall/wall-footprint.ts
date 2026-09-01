@@ -7,6 +7,8 @@ import {
   type WallMiterData,
 } from './wall-mitering'
 
+export { calculateLevelMiters, type Point2D, type WallMiterData } from './wall-mitering'
+
 export const DEFAULT_WALL_THICKNESS = 0.1
 export const DEFAULT_WALL_HEIGHT = 2.5
 const CURVED_WALL_SURFACE_SEGMENTS = 24

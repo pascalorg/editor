@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type FenceNode,
   findLevelAncestorId,
   getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
@@ -53,8 +54,10 @@ function segmentCenter(
 // A stale host resolves to the level base — the sculpted ground under the
 // fence's start point, sampled where the builder samples it, so the guide line
 // lands on the rail it claims to describe.
-function fenceBaseElevation(node: AnyNode, nodes: Record<string, AnyNode>): number {
-  if (node.type !== 'fence') return 0
+export function getFenceBaseElevationForNodes(
+  node: FenceNode,
+  nodes: Record<string, AnyNode>,
+): number {
   const host = node.supportSlabId ? nodes[node.supportSlabId as AnyNodeId] : undefined
   const hosted = host?.type === 'slab' && (host.parentId ?? null) === (node.parentId ?? null)
   const levelId = findLevelAncestorId(node.id as AnyNodeId, nodes)
@@ -161,7 +164,7 @@ export function collectElevationSnapTargets(
     }
 
     if (node.type === 'fence') {
-      const base = fenceBaseElevation(node, nodes)
+      const base = getFenceBaseElevationForNodes(node, nodes)
       const center = segmentCenter(node.start, node.end)
       targets.push({
         id: `${node.id}:base`,

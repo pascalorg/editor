@@ -3,6 +3,9 @@ import { createSceneOperations, type SceneOperations } from '../../operations'
 import {
   type ProjectCreateOptions,
   type ProjectStatus,
+  type SceneEvent,
+  type SceneEventAppendOptions,
+  type SceneEventListOptions,
   type SceneListOptions,
   type SceneMeta,
   type SceneMutateOptions,
@@ -54,8 +57,10 @@ export class InMemorySceneStore implements SceneStore {
       updatedAt: string
     }
   >()
+  private readonly events: SceneEvent[] = []
   private idCounter = 0
   private projectCounter = 0
+  private eventCounter = 0
 
   async createProject(opts: ProjectCreateOptions): Promise<ProjectStatus> {
     const id = opts.id ?? `project_${++this.projectCounter}`
@@ -190,6 +195,29 @@ export class InMemorySceneStore implements SceneStore {
     this.data.set(id, updated)
     this.touchProject(id, newName, updated.updatedAt)
     return this.toMeta(updated)
+  }
+
+  async appendSceneEvent(opts: SceneEventAppendOptions): Promise<SceneEvent> {
+    const event: SceneEvent = {
+      eventId: ++this.eventCounter,
+      sceneId: opts.sceneId,
+      version: opts.version,
+      kind: opts.kind,
+      createdAt: new Date().toISOString(),
+      graph: opts.graph,
+    }
+    this.events.push(event)
+    return event
+  }
+
+  async listSceneEvents(sceneId: string, opts?: SceneEventListOptions): Promise<SceneEvent[]> {
+    let events = this.events.filter((event) => event.sceneId === sceneId)
+    const afterEventId = opts?.afterEventId
+    if (afterEventId !== undefined) {
+      events = events.filter((event) => event.eventId > afterEventId)
+    }
+    if (opts?.limit !== undefined) events = events.slice(0, opts.limit)
+    return events
   }
 
   private touchProject(id: string, name: string, updatedAt: string): void {

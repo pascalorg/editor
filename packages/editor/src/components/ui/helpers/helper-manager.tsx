@@ -34,7 +34,6 @@ import { BuildingHelper } from './building-helper'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 import { ItemHelper } from './item-helper'
 import { RegisteredToolHelper } from './registered-tool-helper'
-import { RoofHelper } from './roof-helper'
 
 // Reshaping a selected node's geometry (endpoint / curve / polygon corner). The
 // snapping chip is the main control; these just name the gesture + Esc.
@@ -315,12 +314,6 @@ export function HelperManager() {
       />
     )
   }
-
-  // Legacy fallback — only `roof` remains because it hasn't migrated to
-  // `def.tool` / `def.toolHints` yet (no Stage D port). Checked before the
-  // generic tool branch so the snap-context fallback below doesn't capture it
-  // and drop its bespoke `RoofHelper` hints. When roof migrates, this deletes.
-  if (tool === 'roof') return <RoofHelper snapContext={snapContext} />
 
   // Registry-first: a kind renders the generic `RegisteredToolHelper` when it
   // declares `def.toolHints`, OR whenever its draft resolves to a snap /

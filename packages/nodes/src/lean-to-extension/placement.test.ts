@@ -4,6 +4,8 @@ import {
   BuildingNode,
   getWallCurveLength,
   LevelNode,
+  RoofNode,
+  RoofSegmentNode,
   SlabNode,
   WallNode,
 } from '@pascal-app/core'
@@ -11,6 +13,8 @@ import { readLeanToCornerJointMetadata } from './corner-joint'
 import { resolveLeanToLayout, resolveLeanToWallPlacement } from './layout'
 import {
   findLeanToSlabEdgePlacement,
+  LEAN_TO_RUN_CONNECT_SNAP_RADIUS,
+  LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS,
   nextLeanToCanopyForm,
   nextLeanToPlacementRotation,
   reconcileLeanToSlabEdgePlacement,
@@ -26,6 +30,11 @@ import {
 import { applyLeanToWallAutoSpan } from './roof-attachment'
 
 describe('lean-to canopy placement', () => {
+  test('keeps continuous endpoint connection radius enabled in every snap mode', () => {
+    expect(LEAN_TO_RUN_CONNECT_SNAP_RADIUS).toBe(LEAN_TO_RUN_MAGNETIC_SNAP_RADIUS)
+    expect(LEAN_TO_RUN_CONNECT_SNAP_RADIUS).toBe(0.5)
+  })
+
   test('places a freestanding canopy on the active level with two supported sides', () => {
     const node = resolveLeanToFreestandingPlacement('level_ground', [4, 6])
 
@@ -277,6 +286,88 @@ describe('lean-to canopy placement', () => {
       hostKind: 'wall',
       highSideMode: 'wall-ledger',
     })
+  })
+
+  test('allows a wall canopy beneath the eave of its room roof', () => {
+    const building = BuildingNode.parse({
+      id: 'building_roof_eave_attachment',
+      children: ['level_roof_eave_attachment'],
+    })
+    const level = LevelNode.parse({
+      id: 'level_roof_eave_attachment',
+      parentId: building.id,
+      level: 0,
+      height: 3,
+      children: [
+        'wall_roof_eave_south',
+        'wall_roof_eave_east',
+        'wall_roof_eave_north',
+        'wall_roof_eave_west',
+        'roof_eave_attachment',
+      ],
+    })
+    const walls = [
+      WallNode.parse({
+        id: 'wall_roof_eave_south',
+        parentId: level.id,
+        start: [0, 0],
+        end: [8, 0],
+        height: 3,
+      }),
+      WallNode.parse({
+        id: 'wall_roof_eave_east',
+        parentId: level.id,
+        start: [8, 0],
+        end: [8, 4],
+        height: 3,
+      }),
+      WallNode.parse({
+        id: 'wall_roof_eave_north',
+        parentId: level.id,
+        start: [8, 4],
+        end: [0, 4],
+        height: 3,
+      }),
+      WallNode.parse({
+        id: 'wall_roof_eave_west',
+        parentId: level.id,
+        start: [0, 4],
+        end: [0, 0],
+        height: 3,
+      }),
+    ]
+    const roof = RoofNode.parse({
+      id: 'roof_eave_attachment',
+      parentId: level.id,
+      position: [4, 3, 2],
+      children: ['rseg_eave_attachment'],
+    })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_eave_attachment',
+      parentId: roof.id,
+      roofType: 'gable',
+      position: [0, 0, 0],
+      rotation: Math.PI,
+      width: 8,
+      depth: 4,
+      wallHeight: 0,
+      pitch: 25,
+      overhang: 0.3,
+    })
+    const nodes = Object.fromEntries(
+      [building, level, ...walls, roof, segment].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    const target = resolveLeanToPlanPlacement({
+      activeLevelId: level.id,
+      freestandingPoint: [1, -0.2],
+      nodes,
+      point: [1, -0.2],
+    })
+
+    expect(target.wall?.id).toBe(walls[0]!.id)
+    expect(target.node.hostRoofSegmentId).toBe(segment.id)
+    expect(target.valid).toBe(true)
   })
 
   test('snaps a ground-plane target near a curved wall before falling back to freestanding', () => {

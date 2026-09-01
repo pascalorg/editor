@@ -3,6 +3,8 @@ import type { Point2D } from './wall-mitering'
 
 const CURVE_EPSILON = 1e-6
 const DEFAULT_SAMPLE_SEGMENTS = 24
+const CURVE_INTERSECTION_SEARCH_STEPS = 20
+const CURVE_INTERSECTION_TOLERANCE = 1e-6
 
 type WallCurveLike = Pick<WallNode | FenceNode, 'start' | 'end' | 'curveOffset'>
 
@@ -187,6 +189,93 @@ export function sampleWallCenterline(wall: WallCurveLike, segments = DEFAULT_SAM
     { length: count + 1 },
     (_, index) => getWallCurveFrameAt(wall, index / count).point,
   )
+}
+
+function segmentIntersectionPoint(a: Point2D, b: Point2D, c: Point2D, d: Point2D): Point2D | null {
+  const abX = b.x - a.x
+  const abY = b.y - a.y
+  const cdX = d.x - c.x
+  const cdY = d.y - c.y
+  const denominator = abX * cdY - abY * cdX
+  if (Math.abs(denominator) <= CURVE_INTERSECTION_TOLERANCE) return null
+
+  const acX = c.x - a.x
+  const acY = c.y - a.y
+  const t = (acX * cdY - acY * cdX) / denominator
+  const u = (acX * abY - acY * abX) / denominator
+  if (
+    t < -CURVE_INTERSECTION_TOLERANCE ||
+    t > 1 + CURVE_INTERSECTION_TOLERANCE ||
+    u < -CURVE_INTERSECTION_TOLERANCE ||
+    u > 1 + CURVE_INTERSECTION_TOLERANCE
+  ) {
+    return null
+  }
+
+  return { x: a.x + t * abX, y: a.y + t * abY }
+}
+
+function pointMatchesEndpoint(point: Point2D, wall: WallCurveLike) {
+  return [getWallStartPoint(wall), getWallEndPoint(wall)].some(
+    (endpoint) => distance(point, endpoint) <= CURVE_INTERSECTION_TOLERANCE,
+  )
+}
+
+function wallCurveIntersectsSibling(wall: WallNode, sibling: WallNode) {
+  const wallPoints = sampleWallCenterline(wall)
+  const siblingPoints = sampleWallCenterline(sibling)
+
+  for (let wallIndex = 0; wallIndex < wallPoints.length - 1; wallIndex += 1) {
+    const wallStart = wallPoints[wallIndex]!
+    const wallEnd = wallPoints[wallIndex + 1]!
+    for (let siblingIndex = 0; siblingIndex < siblingPoints.length - 1; siblingIndex += 1) {
+      const siblingStart = siblingPoints[siblingIndex]!
+      const siblingEnd = siblingPoints[siblingIndex + 1]!
+      const intersection = segmentIntersectionPoint(wallStart, wallEnd, siblingStart, siblingEnd)
+      if (!intersection) continue
+      if (pointMatchesEndpoint(intersection, wall) && pointMatchesEndpoint(intersection, sibling)) {
+        continue
+      }
+      return true
+    }
+  }
+
+  return false
+}
+
+function wallCurveIntersectsSiblings(wall: WallNode, walls: readonly WallNode[]) {
+  if (!isCurvedWall(wall)) return false
+  return walls.some(
+    (sibling) =>
+      sibling.id !== wall.id &&
+      sibling.parentId === wall.parentId &&
+      wallCurveIntersectsSibling(wall, sibling),
+  )
+}
+
+export function constrainWallCurveOffsetToAvoidIntersections(
+  wall: WallNode,
+  proposedOffset: number,
+  walls: readonly WallNode[],
+) {
+  const currentOffset = normalizeWallCurveOffset(wall, wall.curveOffset ?? 0)
+  const normalizedProposal = normalizeWallCurveOffset(wall, proposedOffset)
+  const proposedWall = { ...wall, curveOffset: normalizedProposal }
+  if (!wallCurveIntersectsSiblings(proposedWall, walls)) return normalizedProposal
+
+  const currentWall = { ...wall, curveOffset: currentOffset }
+  if (wallCurveIntersectsSiblings(currentWall, walls)) return currentOffset
+
+  let safeOffset = currentOffset
+  let blockedOffset = normalizedProposal
+  for (let index = 0; index < CURVE_INTERSECTION_SEARCH_STEPS; index += 1) {
+    const candidateOffset = (safeOffset + blockedOffset) / 2
+    const candidateWall = { ...wall, curveOffset: candidateOffset }
+    if (wallCurveIntersectsSiblings(candidateWall, walls)) blockedOffset = candidateOffset
+    else safeOffset = candidateOffset
+  }
+
+  return normalizeWallCurveOffset(wall, safeOffset)
 }
 
 export function getWallCurveLength(wall: WallCurveLike, segments = DEFAULT_SAMPLE_SEGMENTS) {

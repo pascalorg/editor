@@ -17,6 +17,7 @@ import {
   fenceCurveAffordance,
   fenceMoveEndpointAffordance,
   fenceTangentAffordance,
+  fenceThicknessAffordance,
 } from './floorplan-affordances'
 import { fenceFloorplanMoveTarget } from './floorplan-move'
 import { buildFenceGeometry } from './geometry'
@@ -361,6 +362,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
     'move-control-point': fenceControlPointAffordance,
     'move-tangent': fenceTangentAffordance,
     curve: fenceCurveAffordance,
+    thickness: fenceThicknessAffordance,
   },
   // Body move on the fence is driven by the two `move-arrow` chevrons
   // the floor-plan builder emits at the midpoint. Pointer-down enters

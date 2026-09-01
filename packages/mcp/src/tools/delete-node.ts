@@ -3,7 +3,7 @@ import type { AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
 import { ErrorCode, throwMcpError } from './errors'
-import { publishLiveSceneSnapshot } from './live-sync'
+import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { NodeIdSchema } from './schemas'
 
 export const deleteNodeInput = {
@@ -13,6 +13,7 @@ export const deleteNodeInput = {
 
 export const deleteNodeOutput = {
   deletedIds: z.array(z.string()),
+  ...liveSyncOutput,
 }
 
 export function registerDeleteNode(server: McpServer, bridge: SceneOperations): void {
@@ -32,8 +33,8 @@ export function registerDeleteNode(server: McpServer, bridge: SceneOperations): 
       }
       try {
         const removed = bridge.deleteNode(id as AnyNodeId, cascade ?? false)
-        await publishLiveSceneSnapshot(bridge, 'delete_node')
-        const payload = { deletedIds: removed }
+        const persistence = await publishLiveSceneSnapshot(bridge, 'delete_node')
+        const payload = { deletedIds: removed, ...persistencePayload(persistence) }
         return {
           content: [{ type: 'text' as const, text: JSON.stringify(payload) }],
           structuredContent: payload,

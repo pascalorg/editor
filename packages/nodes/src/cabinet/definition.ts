@@ -6,12 +6,19 @@ import type {
   DuplicateSubtreeCloneArgs,
   DuplicateSubtreeCloneResult,
   FloorPlacedFootprint,
+  GridSnapPositionArgs,
+  GroupMoveSnapArgs,
+  GroupMoveSnapResult,
   HandleDescriptor,
   LinearResizeHandle,
   NodeDefinition,
   SceneApi,
 } from '@pascal-app/core'
-import { findLevelAncestorId, selectionProxyIdFromMetadata } from '@pascal-app/core'
+import {
+  CABINET_METRIC_DEFAULTS,
+  findLevelAncestorId,
+  selectionProxyIdFromMetadata,
+} from '@pascal-app/core'
 import { bakeCabinetAnimationClip } from './animation'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
@@ -20,8 +27,11 @@ import { buildCabinetGeometry } from './geometry'
 import { toggleCabinetOperationState } from './interaction'
 import { cabinetModuleParentFrame } from './move-frame'
 import { cabinetPaint } from './paint'
+import { cabinetModuleUsesFixedApplianceWidth } from './panel-visibility'
 import { cabinetModuleParametrics, cabinetParametrics } from './parametrics'
+import { resolveCabinetGridPosition } from './placement-snap'
 import useCabinetPlacementType from './placement-type'
+import { metadataForSelectedWidth, metadataWithPresetWidthDebt } from './preset-width-debt'
 import { cabinetQuickActions } from './quick-actions'
 import {
   cabinetConnectedDepthBounds,
@@ -31,7 +41,12 @@ import {
   MIN_CABINET_DEPTH,
   MIN_CABINET_WIDTH,
 } from './resize-limits'
-import { moduleSideOpen, sortRunModules } from './run-layout'
+import {
+  moduleSideOpen,
+  reflowRunModules as reflowCabinetRunModules,
+  runWallConstraints,
+  sortRunModules,
+} from './run-layout'
 import {
   backAlignedRunDepthOverrides,
   backAlignZ,
@@ -39,8 +54,10 @@ import {
   bumpCabinetRunLayoutRevision,
   cabinetMetadataRecord,
   cabinetModulesForRun,
+  cabinetModuleTotalHeight,
   totalCabinetHeight as cabinetTotalHeight,
   cornerSourceWidthOverridesForDerivedDepth,
+  nestedCornerRunPositionOverrides,
   previewCornerRunsFromRunSources,
   resolveCabinetType,
   runModuleBaseY,
@@ -68,6 +85,7 @@ import {
 import { resolveCabinetModuleWallSnapLocal, resolveCabinetRunWallSnap } from './wall-snap'
 
 type CabinetEditableNode = CabinetNodeType | CabinetModuleNodeType
+
 type CabinetDuplicableNode = AnyNode & {
   type: 'cabinet' | 'cabinet-module'
   position: [number, number, number]
@@ -192,7 +210,7 @@ function appendCabinetFloorPlacedFootprints(
       ]
       footprints.push({
         position: modulePosition,
-        dimensions: [module.width, cabinetTotalHeight(module), module.depth],
+        dimensions: [module.width, cabinetModuleTotalHeight(module), module.depth],
         rotation: [0, runRotation + module.rotation, 0],
       })
     }
@@ -257,26 +275,41 @@ function hasCabinetParentId(node: Pick<CabinetEditableNode, 'parentId'>): boolea
 
 function resolveCabinetGroupMoveSnap({
   candidatePosition,
+  candidateRotation,
   levelId,
   movingIds,
   node,
   nodes,
-}: {
-  candidatePosition: [number, number, number]
-  levelId: AnyNodeId | null
-  movingIds: readonly AnyNodeId[]
-  node: AnyNode
-  nodes: Readonly<Record<string, AnyNode>>
-}): [number, number, number] | null {
+}: GroupMoveSnapArgs): GroupMoveSnapResult | null {
   if (node.type !== 'cabinet' || !levelId) return null
   return resolveCabinetRunWallSnap({
     cabinet: node,
     candidatePosition,
+    candidateRotation,
     excludeIds: movingIds,
     gridStep: 0,
     nodes: nodes as Record<AnyNodeId, AnyNode>,
     parentLevelId: levelId,
   })
+}
+
+function resolveCabinetMoveGridSnap({
+  candidatePosition,
+  candidateRotation,
+  gridStep,
+  node,
+  nodes,
+}: GridSnapPositionArgs): [number, number, number] {
+  if (!isCabinetRun(node)) return candidatePosition
+  const bounds = cabinetLocalBounds(node, nodes as Readonly<Record<AnyNodeId, AnyNode>>)
+  const snapped = resolveCabinetGridPosition({
+    raw: candidatePosition,
+    dimensions: bounds.size,
+    footprintOffset: [bounds.center[0], bounds.center[2]],
+    yaw: candidateRotation,
+    step: gridStep,
+  })
+  return [snapped[0], candidatePosition[1], snapped[2]]
 }
 
 /**
@@ -291,19 +324,13 @@ function resolveCabinetModuleGroupMoveSnap({
   movingIds,
   node,
   nodes,
-}: {
-  candidatePosition: [number, number, number]
-  levelId: AnyNodeId | null
-  movingIds: readonly AnyNodeId[]
-  node: AnyNode
-  nodes: Readonly<Record<string, AnyNode>>
-}): [number, number, number] | null {
+}: GroupMoveSnapArgs): GroupMoveSnapResult | null {
   if (node.type !== 'cabinet-module' || !node.parentId) return null
   const run = nodes[node.parentId]
   if (!isCabinetRun(run)) return null
   const parentLevelId = (levelId ?? run.parentId ?? null) as AnyNodeId | null
   if (!parentLevelId) return null
-  return resolveCabinetModuleWallSnapLocal({
+  const position = resolveCabinetModuleWallSnapLocal({
     candidateLocal: candidatePosition,
     excludeIds: movingIds,
     module: node,
@@ -311,6 +338,7 @@ function resolveCabinetModuleGroupMoveSnap({
     parentLevelId,
     run,
   })
+  return position ? { position } : null
 }
 
 function cabinetLayoutRevision(metadata: CabinetNodeType['metadata']): unknown {
@@ -441,10 +469,7 @@ function includeCabinetModuleBounds(
   bounds.minX = Math.min(bounds.minX, x - module.width / 2)
   bounds.maxX = Math.max(bounds.maxX, x + module.width / 2)
   bounds.minY = Math.min(bounds.minY, y - (module.showPlinth ? module.plinthHeight : 0))
-  bounds.maxY = Math.max(
-    bounds.maxY,
-    y + module.carcassHeight + (module.withCountertop ? module.countertopThickness : 0),
-  )
+  bounds.maxY = Math.max(bounds.maxY, y + cabinetModuleTotalHeight(module))
   bounds.minZ = Math.min(bounds.minZ, z - module.depth / 2)
   bounds.maxZ = Math.max(bounds.maxZ, z + module.depth / 2)
 
@@ -492,7 +517,8 @@ function cabinetLocalBounds(
     minX: -node.width / 2,
     maxX: node.width / 2,
     minY: 0,
-    maxY: cabinetTotalHeight(node),
+    maxY:
+      node.type === 'cabinet-module' ? cabinetModuleTotalHeight(node) : cabinetTotalHeight(node),
     minZ: -node.depth / 2,
     maxZ: node.depth / 2,
   }
@@ -509,7 +535,7 @@ function cabinetLocalBounds(
       for (const module of modules) {
         includeCabinetModuleBounds(module, nodes, [0, 0, 0], bounds)
       }
-      bounds.maxY += node.withCountertop ? node.countertopThickness : 0
+      bounds.maxY = Math.max(bounds.maxY, cabinetTotalHeight(node))
       // A seating back overhang (unlike the small front/side overhang) is
       // deep enough to matter for selection and collision.
       if (node.withCountertop && node.barLedge?.edge !== 'back') {
@@ -842,7 +868,10 @@ function parentRunGeometryPreviewOverride(
 ): readonly [AnyNodeId, Partial<AnyNode>] | null {
   if (!isCabinetModule(node) || !node.parentId) return null
   const parent = sceneApi.get(node.parentId as AnyNodeId)
-  return isCabinetRun(parent) ? [parent.id as AnyNodeId, {}] : null
+  if (isCabinetRun(parent)) return [parent.id as AnyNodeId, {}]
+  if (!isCabinetModule(parent) || wallChildOf(parent, sceneApi.nodes())?.id !== node.id) return null
+  const run = parent.parentId ? sceneApi.get(parent.parentId as AnyNodeId) : undefined
+  return isCabinetRun(run) ? [run.id as AnyNodeId, {}] : null
 }
 
 function sharedDepthBounds(
@@ -1091,6 +1120,113 @@ function commitCabinetResize(
   sceneApi.update(node.id as AnyNodeId, patch as Partial<AnyNode>)
 }
 
+function cabinetManualWidthContext(
+  node: CabinetModuleNodeType,
+  sceneApi: SceneApi,
+): {
+  run: CabinetNodeType
+  selected: CabinetModuleNodeType
+  modules: CabinetModuleNodeType[]
+} | null {
+  const parent = node.parentId ? sceneApi.get(node.parentId as AnyNodeId) : undefined
+  if (isCabinetRun(parent)) {
+    return { run: parent, selected: node, modules: cabinetModulesForRun(parent, sceneApi.nodes()) }
+  }
+  if (!isCabinetModule(parent)) return null
+  const run = parent.parentId ? sceneApi.get(parent.parentId as AnyNodeId) : undefined
+  if (!isCabinetRun(run) || wallChildOf(parent, sceneApi.nodes())?.id !== node.id) return null
+  return { run, selected: parent, modules: cabinetModulesForRun(run, sceneApi.nodes()) }
+}
+
+function cabinetManualWidthReflow(
+  node: CabinetModuleNodeType,
+  width: number,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+) {
+  const context = cabinetManualWidthContext(node, sceneApi)
+  if (!context) return null
+  const wallGap = cabinetWallWidthGap(node, side, sceneApi)
+  const selectedWidth = width + wallGap
+  const runConstraints = runWallConstraints(
+    context.run,
+    context.modules,
+    sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+    { widthGrowth: Math.max(0, selectedWidth - context.selected.width) },
+  )
+  const draggedEnd = side === 'right' ? runConstraints.right : runConstraints.left
+  const clampedSelectedWidth =
+    selectedWidth > context.selected.width && draggedEnd.constrained
+      ? Math.min(selectedWidth, context.selected.width + draggedEnd.slack)
+      : selectedWidth
+  const reflowed = reflowCabinetRunModules(
+    context.modules,
+    context.selected.id,
+    clampedSelectedWidth,
+    {
+      resizeSide: side,
+      eligibleDonorIds: new Set(),
+      maximumWidth: MAX_CABINET_WIDTH,
+    },
+  )
+  return reflowed.length > 0 ? { ...context, reflowed, wallGap } : null
+}
+
+function commitCabinetManualWidth(
+  node: CabinetModuleNodeType,
+  width: number,
+  side: 'left' | 'right',
+  sceneApi: SceneApi,
+) {
+  const reflow = cabinetManualWidthReflow(node, width, side, sceneApi)
+  if (!reflow) return
+  const reflowById = new Map(reflow.reflowed.map((entry) => [entry.id, entry]))
+  for (const module of reflow.modules) {
+    const next = reflowById.get(module.id)
+    if (!next) continue
+    const isSelected = module.id === reflow.selected.id
+    const modulePatch: Partial<CabinetModuleNodeType> = {
+      width: next.width,
+      position: next.position,
+    }
+    if (isSelected) {
+      modulePatch.metadata = metadataForSelectedWidth(module, next.width)
+    } else if (Math.abs(next.width - module.width) > 1e-4) {
+      modulePatch.metadata = metadataWithPresetWidthDebt(
+        module,
+        reflow.selected.id,
+        next.width - module.width,
+      )
+    }
+    const nestedCornerOverrides = nestedCornerRunPositionOverrides(
+      module,
+      next.position,
+      sceneApi.nodes(),
+    )
+    sceneApi.update(module.id as AnyNodeId, modulePatch as Partial<AnyNode>)
+    for (const [id, override] of nestedCornerOverrides) {
+      sceneApi.update(id, override)
+    }
+    const wallChild = wallChildOf(module, sceneApi.nodes())
+    if (wallChild) {
+      sceneApi.update(
+        wallChild.id as AnyNodeId,
+        {
+          width: next.width,
+          position: [0, wallChild.position[1], backAlignZ(module.depth, wallChild.depth)],
+        } as Partial<AnyNode>,
+      )
+    }
+  }
+  syncCornerRunsFromRunSources({
+    baseLayout: 'width-only',
+    previousModules: reflow.modules,
+    run: sceneApi.get<CabinetNodeType>(reflow.run.id as AnyNodeId) ?? reflow.run,
+    sceneApi,
+  })
+  bumpCabinetRunLayoutRevision(sceneApi, reflow.run)
+}
+
 function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEditableNode> {
   const sign = side === 'right' ? 1 : -1
   return {
@@ -1100,21 +1236,24 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
     min: (node, sceneApi) => {
       if (!isCabinetModule(node)) return MIN_CABINET_WIDTH
       const gap = cabinetWallWidthGap(node, side, sceneApi)
-      const connected = cabinetWidthConnectedNeighbor(node, side, sceneApi)
-      if (!connected || isCabinetWidthFiller(connected)) return MIN_CABINET_WIDTH - gap
-      const connectedMax = cabinetResizeUpperBound(connected.width, MAX_CABINET_WIDTH)
-      return Math.max(MIN_CABINET_WIDTH - gap, node.width - (connectedMax - connected.width))
+      return MIN_CABINET_WIDTH - gap
     },
     max: (node, sceneApi) => {
       const ownMax = cabinetResizeUpperBound(node.width, MAX_CABINET_WIDTH)
       if (!isCabinetModule(node)) return ownMax
       const gap = cabinetWallWidthGap(node, side, sceneApi)
-      const connected = cabinetWidthConnectedNeighbor(node, side, sceneApi)
-      if (!connected || isCabinetWidthFiller(connected)) return ownMax - gap
-      return Math.min(ownMax - gap, node.width + connected.width - MIN_CABINET_WIDTH)
+      return ownMax - gap
     },
     currentValue: (node) => node.width,
     apply: (node, width, sceneApi) => {
+      if (isCabinetModule(node) && cabinetManualWidthContext(node, sceneApi)) {
+        const reflow = cabinetManualWidthReflow(node, width, side, sceneApi)
+        if (reflow) {
+          const selected = reflow.reflowed.find((entry) => entry.id === reflow.selected.id)
+          if (selected) return { width: selected.width, position: selected.position }
+        }
+        return { width: node.width, position: node.position }
+      }
       const gap = isCabinetModule(node) ? cabinetWallWidthGap(node, side, sceneApi) : 0
       const effectiveWidth = width + gap
       return {
@@ -1128,6 +1267,35 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
     },
     previewOverrides: (node, width, sceneApi) => {
       if (!isCabinetModule(node)) return []
+      const reflow = cabinetManualWidthReflow(node, width, side, sceneApi)
+      if (reflow) {
+        const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
+        const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
+        if (parentRunOverride) overrides.push(parentRunOverride)
+        for (const entry of reflow.reflowed) {
+          const module = reflow.modules.find((candidate) => candidate.id === entry.id)
+          if (!module) continue
+          overrides.push([
+            module.id as AnyNodeId,
+            { width: entry.width, position: entry.position } as Partial<AnyNode>,
+          ])
+          const wallChild = wallChildOf(module, sceneApi.nodes())
+          if (wallChild) {
+            overrides.push([
+              wallChild.id as AnyNodeId,
+              {
+                width: entry.width,
+                position: [0, wallChild.position[1], backAlignZ(module.depth, wallChild.depth)],
+              } as Partial<AnyNode>,
+            ])
+          }
+        }
+        return overrides
+      }
+      if (cabinetManualWidthContext(node, sceneApi)) {
+        const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
+        return parentRunOverride ? [parentRunOverride] : []
+      }
       const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
       const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
       if (parentRunOverride) overrides.push(parentRunOverride)
@@ -1150,6 +1318,15 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
       return overrides
     },
     commit: (node, patch, sceneApi) => {
+      if (isCabinetModule(node) && typeof patch.width === 'number') {
+        commitCabinetManualWidth(
+          node,
+          patch.width - cabinetWallWidthGap(node, side, sceneApi),
+          side,
+          sceneApi,
+        )
+        return
+      }
       const connectedResize =
         isCabinetModule(node) && typeof patch.width === 'number'
           ? connectedCabinetWidthResize(
@@ -1159,9 +1336,28 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
               sceneApi,
             )
           : null
-      commitCabinetResize(node, patch, sceneApi)
+      const selectedPatch =
+        isCabinetModule(node) && typeof patch.width === 'number'
+          ? {
+              ...patch,
+              metadata: metadataForSelectedWidth(node, patch.width, patch.metadata),
+            }
+          : patch
+      commitCabinetResize(node, selectedPatch, sceneApi)
       if (connectedResize) {
-        commitCabinetResize(connectedResize.module, connectedResize.patch, sceneApi)
+        const widthDelta = connectedResize.patch.width - connectedResize.module.width
+        commitCabinetResize(
+          connectedResize.module,
+          {
+            ...connectedResize.patch,
+            metadata: metadataWithPresetWidthDebt(
+              connectedResize.module,
+              node.id as CabinetModuleNodeType['id'],
+              widthDelta,
+            ),
+          },
+          sceneApi,
+        )
       }
     },
     visible: (node, sceneApi) =>
@@ -1731,7 +1927,11 @@ function cabinetHeightHandle(): HandleDescriptor<CabinetEditableNode> {
     apply: (_node, carcassHeight) => ({ carcassHeight }),
     commit: commitCabinetResize,
     placement: {
-      position: (node) => [0, cabinetTotalHeight(node) + HEIGHT_HANDLE_OFFSET, 0],
+      position: (node, sceneApi) => [
+        0,
+        cabinetLocalBounds(node, sceneApi.nodes()).maxY + HEIGHT_HANDLE_OFFSET,
+        0,
+      ],
     },
   }
 }
@@ -1814,28 +2014,47 @@ function isHoodOnlyCabinet(node: CabinetEditableNode): boolean {
   return stack.length > 0 && stack.every((compartment) => isHoodCompartmentType(compartment.type))
 }
 
+function cabinetModuleHeightHandleVisible(
+  node: CabinetModuleNodeType,
+  sceneApi: SceneApi,
+): boolean {
+  const parent = node.parentId ? sceneApi.get(node.parentId as AnyNodeId) : undefined
+  if (isCabinetRun(parent)) {
+    return parent.runTier === 'wall' || resolveCabinetType(node, parent) === 'tall'
+  }
+  return isCabinetModule(parent) && wallChildOf(parent, sceneApi.nodes())?.id === node.id
+}
+
 function cabinetModuleHandles(): HandleDescriptor<CabinetModuleNodeType>[] {
   return [
     {
       ...cabinetWidthHandle('left'),
       visible: (node, sceneApi) =>
-        !isCabinetWidthFiller(node) && !cabinetModuleSideHasCornerFiller(node, 'left', sceneApi),
+        !isCabinetWidthFiller(node) &&
+        !cabinetModuleUsesFixedApplianceWidth(node) &&
+        !cabinetModuleSideHasCornerFiller(node, 'left', sceneApi),
     } as HandleDescriptor<CabinetModuleNodeType>,
     {
       ...cabinetWidthHandle('right'),
       visible: (node, sceneApi) =>
-        !isCabinetWidthFiller(node) && !cabinetModuleSideHasCornerFiller(node, 'right', sceneApi),
+        !isCabinetWidthFiller(node) &&
+        !cabinetModuleUsesFixedApplianceWidth(node) &&
+        !cabinetModuleSideHasCornerFiller(node, 'right', sceneApi),
     } as HandleDescriptor<CabinetModuleNodeType>,
     {
       ...cabinetDepthHandle(),
       visible: (node) => !isCabinetWidthFiller(node),
+    } as HandleDescriptor<CabinetModuleNodeType>,
+    {
+      ...cabinetHeightHandle(),
+      visible: cabinetModuleHeightHandleVisible,
     } as HandleDescriptor<CabinetModuleNodeType>,
   ]
 }
 
 export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   kind: 'cabinet',
-  schemaVersion: 7,
+  schemaVersion: 8,
   schema: CabinetNode,
   category: 'furnish',
   surfaceRole: 'joinery',
@@ -1852,13 +2071,13 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     runTier: 'base',
     children: [],
     width: 0.5,
-    depth: 0.5,
-    carcassHeight: 0.72,
+    depth: CABINET_METRIC_DEFAULTS.depth,
+    carcassHeight: CABINET_METRIC_DEFAULTS.carcassHeight,
     operationState: 0,
-    plinthHeight: 0.1,
+    plinthHeight: CABINET_METRIC_DEFAULTS.plinthHeight,
     toeKickDepth: 0.075,
     boardThickness: 0.018,
-    countertopThickness: 0.02,
+    countertopThickness: CABINET_METRIC_DEFAULTS.countertopThickness,
     countertopOverhang: 0.02,
     countertopBackOverhang: 0,
     withFinishedBack: false,
@@ -1879,8 +2098,10 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     selectable: { hitVolume: 'bbox' },
     movable: {
       axes: ['x', 'z'],
+      directDrag: true,
       gridSnap: true,
-      groupMoveSnap: resolveCabinetGroupMoveSnap,
+      gridSnapPosition: resolveCabinetMoveGridSnap,
+      groupMoveSnapPose: resolveCabinetGroupMoveSnap,
       override: ({ node }) =>
         selectionProxyIdFromMetadata((node as { metadata?: unknown }).metadata)
           ? { axes: [], gridSnap: false }
@@ -1891,10 +2112,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
     deletable: true,
     surfaces: {
       top: {
-        height: (node) => {
-          const n = node as CabinetNodeType
-          return n.plinthHeight + n.carcassHeight + (n.withCountertop ? n.countertopThickness : 0)
-        },
+        height: (node, context) => cabinetLocalBounds(node as CabinetNodeType, context.nodes).maxY,
       },
     },
     floorPlaced: {
@@ -1922,7 +2140,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   // Dirty-cascade: a dirtied run re-marks its hosted modules so their
   // composite geometry re-flows with the run (see `cascadeDirty`).
   relations: {
-    hosts: ['cabinet-module'],
+    hosts: ['cabinet', 'cabinet-module'],
   },
 
   parametrics: cabinetParametrics,
@@ -2025,7 +2243,7 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
 
 export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> = {
   kind: 'cabinet-module',
-  schemaVersion: 4,
+  schemaVersion: 5,
   schema: CabinetModuleNode,
   category: 'furnish',
   surfaceRole: 'joinery',
@@ -2042,8 +2260,8 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     children: [],
     cabinetType: 'base',
     width: 0.5,
-    depth: 0.5,
-    carcassHeight: 0.72,
+    depth: CABINET_METRIC_DEFAULTS.depth,
+    carcassHeight: CABINET_METRIC_DEFAULTS.carcassHeight,
     operationState: 0,
     plinthHeight: 0,
     toeKickDepth: 0.075,
@@ -2057,6 +2275,9 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     moduleKind: 'standard' as const,
     openSide: undefined,
     cornerShelf: false,
+    topFinish: 'none' as const,
+    topFinishHeight: CabinetModuleNode.parse({}).topFinishHeight,
+    topFinishDepth: 0.32,
     frontStyle: 'slab',
     handleStyle: 'bar',
     handlePosition: 'auto',
@@ -2071,9 +2292,10 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
     selectable: { hitVolume: 'bbox' },
     movable: {
       axes: ['x', 'z'],
+      directDrag: true,
       gridSnap: true,
       parentFrame: cabinetModuleParentFrame,
-      groupMoveSnap: resolveCabinetModuleGroupMoveSnap,
+      groupMoveSnapPose: resolveCabinetModuleGroupMoveSnap,
       override: ({ node }) =>
         selectionProxyIdFromMetadata((node as { metadata?: unknown }).metadata)
           ? { axes: [], gridSnap: false }
@@ -2087,13 +2309,7 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       footprint: (node) => {
         const n = node as CabinetModuleNodeType
         return {
-          dimensions: [
-            n.width,
-            (n.showPlinth ? n.plinthHeight : 0) +
-              n.carcassHeight +
-              (n.withCountertop ? n.countertopThickness : 0),
-            n.depth,
-          ] as [number, number, number],
+          dimensions: [n.width, cabinetModuleTotalHeight(n), n.depth] as [number, number, number],
           rotation: [0, n.rotation, 0] as [number, number, number],
         }
       },
@@ -2136,6 +2352,9 @@ export const cabinetModuleDefinition: NodeDefinition<typeof CabinetModuleNode> =
       n.withCountertop,
       n.openSide ?? null,
       n.cornerShelf ?? false,
+      n.topFinish,
+      n.topFinishHeight,
+      n.topFinishDepth,
       JSON.stringify(n.material ?? null),
       JSON.stringify(n.materialPreset ?? null),
       JSON.stringify(n.slots ?? null),

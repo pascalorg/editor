@@ -237,7 +237,7 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
     if (!textures) {
       return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
     }
-    const slotMaterial = resolveMaterialRef(node.slots?.surface, sceneMaterials, shading)
+    const slotMaterial = resolveMaterialRef(node.slots?.gutter, sceneMaterials, shading)
     if (slotMaterial) return slotMaterial
     if (!node.material && !node.materialPreset) {
       return createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
@@ -250,7 +250,7 @@ const GutterRenderer = ({ node: storeNode }: { node: GutterNode }) => {
     colorPreset,
     sceneTheme,
     shading,
-    node.slots?.surface,
+    node.slots?.gutter,
     node.material,
     node.materialPreset,
     sceneMaterials,
