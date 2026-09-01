@@ -11,6 +11,7 @@ export const chimneyParametrics: ParametricDescriptor<ChimneyNode> = {
   groups: [
     {
       label: 'Body',
+      labelKey: 'nodes.chimney.body',
       fields: [
         {
           key: 'bodyShape',
@@ -46,6 +47,7 @@ export const chimneyParametrics: ParametricDescriptor<ChimneyNode> = {
     },
     {
       label: 'Shoulder',
+      labelKey: 'nodes.chimney.shoulder',
       fields: [
         {
           key: 'shoulderStyle',
@@ -80,6 +82,7 @@ export const chimneyParametrics: ParametricDescriptor<ChimneyNode> = {
     },
     {
       label: 'Cap',
+      labelKey: 'nodes.chimney.cap',
       fields: [
         { key: 'cap', kind: 'boolean' },
         {
@@ -117,6 +120,7 @@ export const chimneyParametrics: ParametricDescriptor<ChimneyNode> = {
     },
     {
       label: 'Flues',
+      labelKey: 'nodes.chimney.flues',
       fields: [
         { key: 'flueCount', kind: 'number', min: 0, max: 4, step: 1 },
         {
@@ -160,6 +164,7 @@ export const chimneyParametrics: ParametricDescriptor<ChimneyNode> = {
     },
     {
       label: 'Cricket',
+      labelKey: 'nodes.chimney.cricket',
       fields: [
         {
           key: 'cricketStyle',

@@ -9,6 +9,7 @@ export const solarPanelParametrics: ParametricDescriptor<SolarPanelNode> = {
   groups: [
     {
       label: 'Grid',
+      labelKey: 'nodes.solarPanel.grid',
       fields: [
         { key: 'rows', kind: 'number', min: 1, max: 20, step: 1 },
         { key: 'columns', kind: 'number', min: 1, max: 20, step: 1 },
@@ -16,6 +17,7 @@ export const solarPanelParametrics: ParametricDescriptor<SolarPanelNode> = {
     },
     {
       label: 'Panel dimensions',
+      labelKey: 'nodes.solarPanel.panelDimensions',
       fields: [
         { key: 'panelWidth', kind: 'number', unit: 'm', min: 0.4, max: 1000, step: 0.01 },
         { key: 'panelHeight', kind: 'number', unit: 'm', min: 0.4, max: 1000, step: 0.01 },
@@ -25,6 +27,7 @@ export const solarPanelParametrics: ParametricDescriptor<SolarPanelNode> = {
     },
     {
       label: 'Mounting',
+      labelKey: 'common.mounting',
       fields: [
         {
           key: 'mountingType',
@@ -50,6 +53,7 @@ export const solarPanelParametrics: ParametricDescriptor<SolarPanelNode> = {
     },
     {
       label: 'Frame',
+      labelKey: 'nodes.solarPanel.frame',
       fields: [
         { key: 'frameThickness', kind: 'number', unit: 'm', min: 0, max: 0.1, step: 0.005 },
         { key: 'frameDepth', kind: 'number', unit: 'm', min: 0.005, max: 0.1, step: 0.005 },

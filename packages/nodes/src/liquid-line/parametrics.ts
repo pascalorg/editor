@@ -5,6 +5,7 @@ export const liquidLineParametrics: ParametricDescriptor<LiquidLineNode> = {
   groups: [
     {
       label: 'Line',
+      labelKey: 'nodes.liquidLine.line',
       fields: [
         {
           key: 'diameter',

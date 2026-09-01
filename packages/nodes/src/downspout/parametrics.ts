@@ -22,6 +22,7 @@ export const downspoutParametrics: ParametricDescriptor<DownspoutNode> = {
     },
     {
       label: 'Hardware',
+      labelKey: 'nodes.downspout.hardware',
       fields: [
         // Wall straps clamping the run, like the gutter's hangers.
         {
@@ -50,6 +51,7 @@ export const downspoutParametrics: ParametricDescriptor<DownspoutNode> = {
     },
     {
       label: 'Placement',
+      labelKey: 'common.placement',
       fields: [
         // Slide the outlet (and so this downspout) along the eave. Edits
         // the linked outlet's offset on the host gutter — the only way to

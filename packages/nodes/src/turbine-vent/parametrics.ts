@@ -37,6 +37,7 @@ export const turbineVentParametrics: ParametricDescriptor<TurbineVentNode> = {
     },
     {
       label: 'Motion',
+      labelKey: 'nodes.turbineVent.motion',
       fields: [{ key: 'spinSpeed', kind: 'number', unit: 'rad/s', min: 0, max: 4, step: 0.1 }],
     },
   ],

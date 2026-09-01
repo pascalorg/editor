@@ -5,6 +5,7 @@ export const gutterParametrics: ParametricDescriptor<GutterNode> = {
   groups: [
     {
       label: 'Profile',
+      labelKey: 'nodes.gutter.profile',
       fields: [
         {
           key: 'profile',
@@ -32,6 +33,7 @@ export const gutterParametrics: ParametricDescriptor<GutterNode> = {
     },
     {
       label: 'End caps',
+      labelKey: 'nodes.gutter.endCaps',
       fields: [
         { key: 'endCapLeft', kind: 'boolean' },
         { key: 'endCapRight', kind: 'boolean' },
@@ -39,6 +41,7 @@ export const gutterParametrics: ParametricDescriptor<GutterNode> = {
     },
     {
       label: 'Hangers',
+      labelKey: 'nodes.gutter.hangers',
       fields: [
         {
           key: 'hangerStyle',

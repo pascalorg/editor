@@ -90,6 +90,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
   groups: [
     {
       label: 'Size',
+      labelKey: 'nodes.leanToExtension.size',
       fields: [
         {
           key: 'canopyForm',
@@ -146,6 +147,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
     },
     {
       label: 'Connection',
+      labelKey: 'nodes.leanToExtension.connection',
       fields: [
         {
           key: 'connectionMode',
@@ -188,6 +190,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
     },
     {
       label: 'Structure',
+      labelKey: 'nodes.leanToExtension.structure',
       fields: [
         {
           key: 'postLayoutMode',
@@ -265,6 +268,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
     },
     {
       label: 'Drainage',
+      labelKey: 'common.drainage',
       fields: [
         { key: 'gutterEnabled', label: 'Gutters', kind: 'boolean' },
         {
@@ -303,6 +307,7 @@ export const leanToExtensionParametrics: ParametricDescriptor<LeanToExtensionNod
     },
     {
       label: 'Advanced',
+      labelKey: 'common.advanced',
       fields: [
         {
           key: 'resizeLock',

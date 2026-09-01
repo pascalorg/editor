@@ -26,6 +26,7 @@ export const shelfParametrics: ParametricDescriptor<ShelfNode> = {
     },
     {
       label: 'Topology',
+      labelKey: 'nodes.shelf.topology',
       fields: [
         { key: 'rows', kind: 'number', min: 1, max: 8, step: 1 },
         // Columns only meaningful for kinds with vertical dividers.

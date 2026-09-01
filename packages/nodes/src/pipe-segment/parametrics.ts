@@ -5,6 +5,7 @@ export const pipeSegmentParametrics: ParametricDescriptor<PipeSegmentNode> = {
   groups: [
     {
       label: 'Drainage',
+      labelKey: 'common.drainage',
       fields: [
         {
           key: 'system',
@@ -24,6 +25,7 @@ export const pipeSegmentParametrics: ParametricDescriptor<PipeSegmentNode> = {
     },
     {
       label: 'Construction',
+      labelKey: 'common.construction',
       fields: [
         {
           key: 'pipeMaterial',

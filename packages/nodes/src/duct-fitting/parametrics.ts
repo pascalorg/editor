@@ -217,6 +217,7 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
   groups: [
     {
       label: 'Fitting',
+      labelKey: 'common.fitting',
       fields: [
         {
           key: 'fittingType',
@@ -252,6 +253,7 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
     },
     {
       label: 'Connections',
+      labelKey: 'common.connections',
       fields: [
         {
           key: 'shape',
@@ -349,6 +351,7 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
     },
     {
       label: 'Placement',
+      labelKey: 'common.placement',
       fields: [
         { key: 'position', kind: 'vec3' },
         { key: 'rotation', kind: 'vec3' },

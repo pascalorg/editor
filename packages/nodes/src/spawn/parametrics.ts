@@ -9,6 +9,7 @@ export const spawnParametrics: ParametricDescriptor<SpawnNode> = {
   groups: [
     {
       label: 'Transform',
+      labelKey: 'common.transform',
       fields: [
         { key: 'position', kind: 'vec3' },
         // rotation on spawn is a scalar yaw (not vec3). Phase 4 will support a

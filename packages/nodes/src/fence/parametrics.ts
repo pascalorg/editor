@@ -59,6 +59,7 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
     },
     {
       label: 'Structure',
+      labelKey: 'nodes.fence.structure',
       fields: [
         { key: 'baseHeight', kind: 'number', unit: 'm', min: 0.04, max: 1, step: 0.01 },
         { key: 'topRailHeight', kind: 'number', unit: 'm', min: 0.01, max: 0.25, step: 0.005 },

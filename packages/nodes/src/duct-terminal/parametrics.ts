@@ -5,6 +5,7 @@ export const ductTerminalParametrics: ParametricDescriptor<DuctTerminalNode> = {
   groups: [
     {
       label: 'Terminal',
+      labelKey: 'nodes.ductTerminal.terminal',
       fields: [
         {
           key: 'terminalType',
@@ -21,6 +22,7 @@ export const ductTerminalParametrics: ParametricDescriptor<DuctTerminalNode> = {
     },
     {
       label: 'Face',
+      labelKey: 'nodes.ductTerminal.face',
       fields: [
         { key: 'width', kind: 'number', unit: 'm', min: 0.1, max: 1000, step: 0.05 },
         { key: 'depth', kind: 'number', unit: 'm', min: 0.05, max: 1000, step: 0.05 },
@@ -28,6 +30,7 @@ export const ductTerminalParametrics: ParametricDescriptor<DuctTerminalNode> = {
     },
     {
       label: 'Collar',
+      labelKey: 'nodes.ductTerminal.collar',
       fields: [
         {
           key: 'collarShape',
@@ -66,6 +69,7 @@ export const ductTerminalParametrics: ParametricDescriptor<DuctTerminalNode> = {
     },
     {
       label: 'Placement',
+      labelKey: 'common.placement',
       fields: [{ key: 'position', kind: 'vec3' }],
     },
   ],

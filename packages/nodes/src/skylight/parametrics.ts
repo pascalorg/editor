@@ -6,6 +6,7 @@ export const skylightParametrics: ParametricDescriptor<SkylightNode> = {
   groups: [
     {
       label: 'Type',
+      labelKey: 'nodes.skylight.type',
       fields: [
         {
           key: 'skylightType',
@@ -28,6 +29,7 @@ export const skylightParametrics: ParametricDescriptor<SkylightNode> = {
     },
     {
       label: 'Curb',
+      labelKey: 'nodes.skylight.curb',
       fields: [
         { key: 'curb', kind: 'boolean' },
         {
@@ -43,6 +45,7 @@ export const skylightParametrics: ParametricDescriptor<SkylightNode> = {
     },
     {
       label: 'Opening',
+      labelKey: 'nodes.skylight.opening',
       fields: [
         {
           key: 'operationState',
@@ -89,6 +92,7 @@ export const skylightParametrics: ParametricDescriptor<SkylightNode> = {
     },
     {
       label: 'Lantern',
+      labelKey: 'nodes.skylight.lantern',
       fields: [
         {
           key: 'lanternHeight',
