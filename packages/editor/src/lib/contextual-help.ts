@@ -3,10 +3,22 @@ export type ContextualShortcutHint = {
   // itself be an array of alternatives (rendered joined by "/"), e.g.
   // [['Cmd/Ctrl', 'Shift'], 'Left click'] → "⌘ / ⇧ + click".
   keys: Array<string | string[]>
+  /**
+   * Pre-resolved label (English by convention). The contextual helper prefers
+   * `labelKey` when supplied and falls back to this verbatim — convenient for
+   * embedder-provided hints that already come pre-localised.
+   */
   label: string
+  /**
+   * Optional i18n key for `label`. When set, the contextual helper resolves
+   * through the active locale at render time; otherwise `label` is used
+   * verbatim. Supply one of these (or both, with `label` as the fallback).
+   */
+  labelKey?: string
   // Optional secondary line under the label for a terser qualifier
   // (e.g. "disable 15° snap"). The HUD wraps both lines rather than truncating.
   subtitle?: string
+  subtitleKey?: string
   active?: boolean
 }
 
@@ -37,6 +49,7 @@ export function resolveRotateHandleHelpHints(shiftPressed: boolean): ContextualS
     {
       keys: [SHIFT_KEY],
       label: shiftPressed ? 'Rotating freely (no angle step)' : 'Hold to rotate freely',
+      labelKey: shiftPressed ? 'contextualHelp.rotateHandle.active' : 'contextualHelp.rotateHandle.idle',
       active: shiftPressed,
     },
   ]
@@ -79,6 +92,7 @@ export function resolveSelectModeHelpHints({
     hints.push({
       keys: [[COMMAND_KEY, SHIFT_KEY], LEFT_CLICK],
       label: 'Add or remove objects from the selection',
+      labelKey: 'contextualHelp.select.addOrRemove',
       active: true,
     })
     return hints
@@ -91,22 +105,26 @@ export function resolveSelectModeHelpHints({
     hints.push({
       keys: [LEFT_CLICK],
       label: 'Click or drag the selection to move it as one',
+      labelKey: 'contextualHelp.select.moveAsOne',
     })
-    hints.push({ keys: [ROTATE_KEYS], label: 'Rotate the selection ±45°' })
+    hints.push({ keys: [ROTATE_KEYS], label: 'Rotate the selection ±45°', labelKey: 'contextualHelp.select.rotateSelection' })
     hints.push({
       keys: [COMMAND_KEY, 'G'],
       label: 'Group selection (session only)',
+      labelKey: 'contextualHelp.select.groupSelection',
     })
     hints.push({
       keys: [COMMAND_KEY, SHIFT_KEY, 'G'],
       label: 'Ungroup session selection',
+      labelKey: 'contextualHelp.select.ungroupSelection',
     })
     hints.push({
       keys: [[COMMAND_KEY, SHIFT_KEY], LEFT_CLICK],
       label: 'Add or remove objects from the selection',
+      labelKey: 'contextualHelp.select.addOrRemove',
       active: commandPressed || shiftPressed,
     })
-    hints.push({ keys: [ESC_KEY], label: 'Clear the selection (or click outside)' })
+    hints.push({ keys: [ESC_KEY], label: 'Clear the selection (or click outside)', labelKey: 'contextualHelp.select.clearSelection' })
     return hints
   }
 
@@ -116,12 +134,28 @@ export function resolveSelectModeHelpHints({
   // detaches the joint mid-drag; a fitting's cluster adds rotate arcs, with
   // R / T (and Alt to switch axis) for keyboard rotation.
   if (mepSelection === 'run') {
-    hints.push({ keys: [CLICK], label: 'Click a handle dot to show move arrows' })
-    hints.push({ keys: [ALT_KEY], label: 'Detach the joint while dragging an arrow' })
+    hints.push({
+      keys: [CLICK],
+      label: 'Click a handle dot to show move arrows',
+      labelKey: 'contextualHelp.mep.run.showArrows',
+    })
+    hints.push({
+      keys: [ALT_KEY],
+      label: 'Detach the joint while dragging an arrow',
+      labelKey: 'contextualHelp.mep.run.detachJoint',
+    })
   } else if (mepSelection === 'fitting') {
-    hints.push({ keys: [CLICK], label: 'Click the handle dot to show move + rotate handles' })
-    hints.push({ keys: [ROTATE_KEYS], label: 'Rotate ±45°' })
-    hints.push({ keys: [ALT_KEY], label: 'Switch the rotation axis (Y → X → Z)' })
+    hints.push({
+      keys: [CLICK],
+      label: 'Click the handle dot to show move + rotate handles',
+      labelKey: 'contextualHelp.mep.fitting.showHandles',
+    })
+    hints.push({ keys: [ROTATE_KEYS], label: 'Rotate ±45°', labelKey: 'contextualHelp.mep.fitting.rotate45' })
+    hints.push({
+      keys: [ALT_KEY],
+      label: 'Switch the rotation axis (Y → X → Z)',
+      labelKey: 'contextualHelp.mep.fitting.switchAxis',
+    })
   }
 
   // The rows are the same whatever modifier is held — guides/snapping are
@@ -132,6 +166,7 @@ export function resolveSelectModeHelpHints({
     hints.push({
       keys: [LEFT_CLICK],
       label: 'Drag selected movable object',
+      labelKey: 'contextualHelp.single.movableDrag',
     })
   }
 
@@ -139,12 +174,14 @@ export function resolveSelectModeHelpHints({
     hints.push({
       keys: [COMMAND_KEY, RIGHT_CLICK],
       label: 'Drag left or right to rotate selected object',
+      labelKey: 'contextualHelp.single.rotatableDrag',
     })
   }
 
   hints.push({
     keys: [[COMMAND_KEY, SHIFT_KEY], LEFT_CLICK],
     label: 'Add or remove objects from the selection',
+    labelKey: 'contextualHelp.select.addOrRemove',
     active: commandPressed || shiftPressed,
   })
 

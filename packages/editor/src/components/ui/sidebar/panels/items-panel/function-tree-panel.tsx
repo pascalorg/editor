@@ -18,8 +18,30 @@ import { messages, useLocale } from '../../../../../lib/i18n'
 export type FunctionTreeNode = {
   slug: string
   name: string
+  /**
+   * Optional i18n key for `name`. If provided, the panel resolves the display
+   * label through the active locale's translation table; otherwise `name` is
+   * used verbatim (suitable for embedder-supplied taxonomies that already come
+   * pre-localised server-side).
+   */
+  nameKey?: string
   iconUrl?: string | null
   children: FunctionTreeNode[]
+}
+
+/** Resolve a tree node's name, preferring the i18n key when supplied. */
+function resolveNodeLabel(
+  node: FunctionTreeNode,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
+  if (node.nameKey) {
+    const translated = t(node.nameKey)
+    // `t` falls back to the key itself when missing, which would surface as a
+    // raw `functionTree.kitchen` tooltip. Detect that and prefer the human
+    // name in that case.
+    if (translated && translated !== node.nameKey) return translated
+  }
+  return node.name
 }
 
 const SOURCE_CHIPS: Array<{ id: NonNullable<AssetInput['source']>; labelKey: string }> = [
@@ -137,6 +159,7 @@ export function FunctionTreePanel({
         <div className="grid max-h-[40%] shrink-0 grid-cols-5 gap-1.5 overflow-y-auto border-border/70 border-b p-2">
           {functionTree.map((root) => {
             const isActive = activeRoot?.slug === root.slug
+            const label = resolveNodeLabel(root, t)
             return (
               <TooltipRoot key={root.slug}>
                 <TooltipTrigger asChild>
@@ -156,7 +179,7 @@ export function FunctionTreePanel({
                   >
                     {root.iconUrl ? (
                       <NextImage
-                        alt={root.name}
+                        alt={label}
                         className="size-7 object-contain"
                         height={28}
                         src={root.iconUrl}
@@ -164,13 +187,13 @@ export function FunctionTreePanel({
                       />
                     ) : (
                       <span className="font-semibold text-muted-foreground text-xs uppercase">
-                        {root.name.slice(0, 2)}
+                        {label.slice(0, 2)}
                       </span>
                     )}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent className="icon-grid-tooltip pointer-events-none" side="top">
-                  {root.name}
+                  {label}
                 </TooltipContent>
               </TooltipRoot>
             )
@@ -242,7 +265,7 @@ export function FunctionTreePanel({
                   onClick={() => setActiveChildSlug(isActive ? null : child.slug)}
                   type="button"
                 >
-                  {child.name}
+                  {resolveNodeLabel(child, t)}
                 </button>
               )
             })}

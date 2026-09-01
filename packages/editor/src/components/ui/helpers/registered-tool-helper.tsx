@@ -69,14 +69,18 @@ export function RegisteredToolHelper({
         // Shift is a per-kind bypass for opening / zone / duct placement ("Free
         // place", "Free angle", …) — those flip to a bypassed state while held.
         const isBypassHint = hint.key === 'Shift'
+        const resolvedLabel = hint.labelKey
+          ? t(hint.labelKey)
+          : t(hint.label) !== hint.label
+            ? t(hint.label)
+            : hint.label
         return {
           keys: [hint.key],
           label:
             shiftPressed && isBypassHint
               ? t('editor.guidedConstraintsBypassed')
-              : t(hint.label) !== hint.label
-                ? t(hint.label)
-                : hint.label,
+              : resolvedLabel,
+          labelKey: hint.labelKey,
           active: shiftPressed && isBypassHint,
         }
       })}

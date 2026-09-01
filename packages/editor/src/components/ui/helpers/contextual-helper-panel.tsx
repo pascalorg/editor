@@ -224,9 +224,19 @@ function SnappingChips({ context }: { context: SnapContext }) {
 // current value's label, and clicking the row (or the hint's key, handled by
 // the tool itself) cycles it.
 function ToolHintChipRow({ hint }: { hint: ToolHint & { chip: NonNullable<ToolHint['chip']> } }) {
+  const t = useTranslations()
   const { chip } = hint
   const value = useSyncExternalStore(chip.subscribe, chip.value, chip.value)
-  const label = chip.labels[value] ?? hint.label
+  const valueLabel = chip.labels[value]
+  // Per-value label wins; resolve via `t()` when supplied as an i18n key,
+  // otherwise render verbatim. Fall back to the hint's own labelKey/label.
+  const label = valueLabel
+    ? /^[a-z][a-zA-Z]*\.[a-zA-Z.]+$/.test(valueLabel) && t(valueLabel) !== valueLabel
+      ? t(valueLabel)
+      : valueLabel
+    : hint.labelKey
+      ? t(hint.labelKey)
+      : hint.label
   return (
     <ChipRow
       ariaLabel={label}
@@ -244,7 +254,8 @@ function ContinuationChip({ context }: { context: ContinuationContext }) {
   const mode = useEditor((s) => s.getContinuation(context))
   const cycleContinuation = useEditor((s) => s.cycleContinuation)
   const profile = CONTINUATION_PROFILES[context]
-  const label = profile.labels[mode] ?? mode
+  const labelKey = profile.labels[mode] ?? mode
+  const label = t(labelKey)
   const icon = profile.icons[mode] ?? 'lucide:repeat'
 
   return (
@@ -395,6 +406,7 @@ export function ContextualHelperPanel({
   showPaintScope?: boolean
   continuationContext?: ContinuationContext | null
 }) {
+  const t = useTranslations()
   if (
     hints.length === 0 &&
     chipHints.length === 0 &&
@@ -433,11 +445,11 @@ export function ContextualHelperPanel({
                 hint.active ? 'font-medium text-white' : 'text-muted-foreground',
               )}
             >
-              {hint.label}
+              {hint.labelKey ? t(hint.labelKey) : hint.label}
             </div>
-            {hint.subtitle ? (
+            {hint.subtitle || hint.subtitleKey ? (
               <div className="text-[10px] text-muted-foreground/70 leading-snug">
-                {hint.subtitle}
+                {hint.subtitleKey ? t(hint.subtitleKey) : hint.subtitle}
               </div>
             ) : null}
           </div>

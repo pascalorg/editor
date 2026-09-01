@@ -331,6 +331,12 @@ export type ToolHint = {
   /** Description of what the input does. Sentence case. */
   label: string
   /**
+   * Optional i18n key for `label`. When set, the contextual helper resolves
+   * through the active locale at render time; otherwise `label` is used
+   * verbatim (suitable for hints that already arrive pre-localised).
+   */
+  labelKey?: string
+  /**
    * Only show this hint once the in-progress draft has at least this many
    * vertices (reads `useEditor.draftVertexCount`). Lets a polygon tool's
    * "Finish" hint appear only when finishing is actually possible (≥ 3 points),

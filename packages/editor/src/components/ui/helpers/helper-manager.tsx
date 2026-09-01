@@ -228,7 +228,9 @@ export function HelperManager() {
   if (activeHandleDrag?.label === GROUP_MOVE_DRAG_LABEL) {
     return (
       <ContextualHelperPanel
-        hints={[{ keys: ['R / T'], label: 'Rotate the selection ±45°' }]}
+        hints={[
+          { keys: ['R / T'], label: 'Rotate the selection ±45°', labelKey: 'contextualHelp.select.rotateSelection' },
+        ]}
         snapContext={snapContext}
       />
     )
@@ -242,8 +244,8 @@ export function HelperManager() {
     return (
       <ContextualHelperPanel
         hints={[
-          { keys: ['Drag'], label: 'Resize' },
-          { keys: ['Esc'], label: 'Cancel' },
+          { keys: ['Drag'], label: 'Resize', labelKey: 'contextualHelp.resize' },
+          { keys: ['Esc'], label: 'Cancel', labelKey: 'common.cancel' },
         ]}
         snapContext={snapContext}
       />
