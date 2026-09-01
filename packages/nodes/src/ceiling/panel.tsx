@@ -257,7 +257,9 @@ export function CeilingPanel() {
         />
         {isFollows ? (
           <div className="px-1 text-[11px] text-muted-foreground">
-            Currently {formatLinearMeasurement(resolvedHeight, unit, metricNotation)}
+            {t('nodes.ceiling.currently', {
+              value: formatLinearMeasurement(resolvedHeight, unit, metricNotation),
+            })}
           </div>
         ) : (
           <SliderControl
