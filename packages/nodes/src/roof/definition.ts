@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/core'
 import { buildRoofFloorplan } from './floorplan'
 import { roofParametrics } from './parametrics'
+import useRoofFootprintSource from './roof-footprint-source'
 import useRoofPlacementMode, {
   conicalRoofToolHintVisibility,
   standardRoofToolHintVisibility,
@@ -204,6 +205,30 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
       visible: standardRoofToolHintVisibility,
     },
     { key: 'Esc', label: 'Cancel' },
+  ],
+  toolOptions: [
+    {
+      id: 'footprintSource',
+      label: 'Create from',
+      choices: [
+        {
+          value: 'draw',
+          label: 'Draw',
+          description: 'Draw the roof footprint with two corner clicks.',
+        },
+        {
+          value: 'room',
+          label: 'Room',
+          description: 'Hover a room to preview its boundary, then click to place.',
+        },
+      ],
+      subscribe: (onChange) => useRoofFootprintSource.subscribe(onChange),
+      value: () => useRoofFootprintSource.getState().source,
+      set: (value) =>
+        useRoofFootprintSource.getState().setSource(value === 'room' ? 'room' : 'draw'),
+      // Conical roofs always build from a curved wall pick; the row would lie.
+      visible: standardRoofToolHintVisibility,
+    },
   ],
 
   parametrics: roofParametrics,

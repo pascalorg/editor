@@ -370,6 +370,40 @@ export type ToolHintChip = {
   tooltip?: string
 }
 
+// ─── ToolOption ──────────────────────────────────────────────────────
+//
+// A declarative pick-one option row for a kind's build tool, chosen in a
+// sidebar BEFORE drawing (a `ToolHintChip` cycles in the HUD DURING it).
+// Any host that mounts the shared `<ToolOptionsPanel>` shows every kind's
+// declared options without per-kind wiring — the community Build sidebar
+// gets them for free instead of hardcoding each one. The kind owns the
+// state, typically a small ephemeral store beside its tool.
+
+export type ToolOptionChoice = {
+  /** Value token, e.g. 'draw'. */
+  value: string
+  /** Button label. Sentence case. */
+  label: string
+  /** Helper line shown under the row while this choice is active. */
+  description?: string
+}
+
+export type ToolOption = {
+  /** Stable row id within the kind, e.g. 'footprintSource'. */
+  id: string
+  /** Row label. Sentence case, e.g. 'Create from'. */
+  label: string
+  choices: readonly ToolOptionChoice[]
+  /** Subscribe to live value changes (Zustand-store-like); returns unsubscribe. */
+  subscribe: (onChange: () => void) => () => void
+  /** Current value token. */
+  value: () => string
+  /** Select a choice. Pure state write — arming the tool is the host's job. */
+  set: (value: string) => void
+  /** Optional live predicate — e.g. the roof's 'Create from' hides for conical. */
+  visible?: ToolHintVisibility
+}
+
 export type FloorplanGeometry =
   | ({ kind: 'path'; d: string } & FloorplanStyle)
   | ({ kind: 'polygon'; points: readonly FloorplanPoint[] } & FloorplanStyle)
@@ -1323,6 +1357,13 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * its bespoke helper component instead.
    */
   toolHints?: ToolHint[]
+
+  /**
+   * Pick-one option rows for this kind's build tool, rendered by the shared
+   * `<ToolOptionsPanel>` in whichever sidebar the host mounts it (see
+   * `ToolOption`). E.g. the roof's 'Create from: Draw / Room'.
+   */
+  toolOptions?: readonly ToolOption[]
 
   /**
    * Which snapping profile this kind uses, so the editor's contextual snapping
