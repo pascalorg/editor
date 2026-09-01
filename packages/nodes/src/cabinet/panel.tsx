@@ -64,6 +64,7 @@ import {
   backAnchoredModuleZ,
   type CabinetCompartment,
   clampCabinetCarcassHeightForStack,
+  isFridgeCompartmentType,
   isHoodCompartmentType,
   minCabinetCarcassHeightForStack,
   newCabinetCompartment,
@@ -410,6 +411,9 @@ export default function CabinetPanel() {
     : null
   const isHoodOnlyNode =
     stack.length > 0 && stack.every((compartment) => isHoodCompartmentType(compartment.type))
+  const isFridgeModule =
+    node.type === 'cabinet-module' &&
+    stack.some((compartment) => isFridgeCompartmentType(compartment.type))
   const ceilingOverflow =
     node.type === 'cabinet-module'
       ? cabinetModuleCeilingOverflow(node, useScene.getState().nodes as Record<AnyNodeId, AnyNode>)
@@ -894,6 +898,30 @@ export default function CabinetPanel() {
 
       {!isHoodOnlyNode && (
         <>
+          {isFridgeModule && (
+            <PanelSection title="Appliance front">
+              <div className="space-y-2 px-1 pb-2">
+                <div>
+                  <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Panel-ready
+                  </div>
+                  <SegmentedControl
+                    onChange={(value) => updateNode({ panelReady: value === 'on' })}
+                    options={[
+                      { value: 'off', label: 'Appliance' },
+                      { value: 'on', label: 'Cabinet panel' },
+                    ]}
+                    value={node.panelReady ? 'on' : 'off'}
+                  />
+                </div>
+                {node.panelReady && (
+                  <p className="px-1 text-xs leading-5 text-muted-foreground">
+                    Uses the cabinet front style, reveal, handle, and front material settings below.
+                  </p>
+                )}
+              </div>
+            </PanelSection>
+          )}
           <PanelSection title="Fronts">
             <div className="space-y-2 px-1 pb-2">
               <div>

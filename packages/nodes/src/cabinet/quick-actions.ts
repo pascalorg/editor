@@ -22,6 +22,7 @@ import {
   wallChildAdditionOverlaps,
   wallChildOf,
 } from './run-ops'
+import { patchCompartment, stackForCabinet } from './stack'
 
 type CabinetContext = {
   run: CabinetNode
@@ -61,6 +62,10 @@ const cornerTurnLeftIcon: IconRef = {
 const cornerTurnRightIcon: IconRef = {
   kind: 'component',
   module: () => import('./quick-action-icons').then((m) => ({ default: m.CornerTurnRightGlyph })),
+}
+const hingeFlipIcon: IconRef = {
+  kind: 'component',
+  module: () => import('./quick-action-icons').then((m) => ({ default: m.HingeFlipGlyph })),
 }
 
 function resolveCabinetContext(
@@ -159,6 +164,44 @@ export function cabinetQuickActions({
     }) != null
 
   const actions: NodeQuickAction[] = []
+  if (context.module) {
+    const doorCompartments = stackForCabinet(context.module).filter(
+      (compartment) => compartment.type === 'door',
+    )
+    const flippableDoorCompartments = doorCompartments.filter((compartment) => {
+      const doorType =
+        compartment.doorType ?? (context.module!.width > 0.5 ? 'double' : 'single-left')
+      return doorType === 'single-left' || doorType === 'single-right'
+    })
+    const hingeFlipBlocked = flippableDoorCompartments.length === 0
+    actions.push({
+      id: 'cabinet:flip-hinge',
+      label: 'Flip hinge',
+      title: hingeFlipBlocked
+        ? 'Only single doors have a flippable hinge'
+        : 'Flip single-door hinges left/right',
+      icon: hingeFlipIcon,
+      disabled: hingeFlipBlocked,
+      blockedFeedback: hingeFlipBlocked,
+      history: 'single',
+      run: ({ sceneApi }) => {
+        if (hingeFlipBlocked) return undefined
+        const stack = stackForCabinet(context.module!)
+        sceneApi.update(context.module!.id as AnyNodeId, {
+          stack: stack.map((compartment) => {
+            if (compartment.type !== 'door') return compartment
+            const doorType =
+              compartment.doorType ?? (context.module!.width > 0.5 ? 'double' : 'single-left')
+            if (doorType !== 'single-left' && doorType !== 'single-right') return compartment
+            return patchCompartment(compartment, {
+              doorType: doorType === 'single-left' ? 'single-right' : 'single-left',
+            })
+          }),
+        })
+        return { selectedIds: [context.module!.id as AnyNodeId] }
+      },
+    })
+  }
   const pushSideAction = (side: 'left' | 'right', disabled: boolean) => {
     actions.push({
       id: `cabinet:add-${side}`,

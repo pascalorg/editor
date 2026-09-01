@@ -1123,6 +1123,28 @@ describe('buildCabinetGeometry — appliance compartments', () => {
     expect(hinge.rotation.y).toBeGreaterThan(1.9)
   })
 
+  test('panel-ready refrigerator uses the cabinet front and handle settings', () => {
+    const node = CabinetModuleNode.parse({
+      cabinetType: 'tall',
+      width: FRIDGE_COLUMN_WIDTH,
+      depth: FRIDGE_STANDARD_DEPTH,
+      carcassHeight: FRIDGE_COLUMN_HEIGHT,
+      panelReady: true,
+      frontStyle: 'shaker',
+      handleStyle: 'bar',
+      stack: [{ id: 'fridge', type: 'fridge-single', height: FRIDGE_COLUMN_HEIGHT }],
+    })
+    const group = buildCabinetGeometry(node, undefined, 'rendered', false)
+
+    const panel = findMeshByName(group, 'cabinet-fridge-single-0-door-single-panel')
+    expect(panel.userData.slotId).toBe('front')
+    expect(findMeshByName(group, 'cabinet-fridge-single-0-door-single-handle')).toBeDefined()
+    expect(() => findMeshByName(group, 'cabinet-fridge-single-0-door-single-badge')).toThrow()
+    expect(() =>
+      findMeshByName(group, 'cabinet-fridge-single-0-door-single-water-dispenser'),
+    ).toThrow()
+  })
+
   test('fridge cabinet carcass ends at the appliance without a top filler', () => {
     const node = CabinetModuleNode.parse({
       cabinetType: 'tall',
@@ -1278,6 +1300,77 @@ describe('buildCabinetGeometry — run countertops', () => {
     const group = buildCabinetGeometry(run, geometryContext({ children: [] }), 'rendered', false)
 
     expect(group.children).toHaveLength(0)
+  })
+
+  test('finished end panels follow exposed run ends and match the front style', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_finished-ends-run',
+      withFinishedEnds: true,
+      frontStyle: 'shaker',
+      children: ['cabinet-module_finished-ends-left', 'cabinet-module_finished-ends-right'],
+    })
+    const modules = [
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_finished-ends-left',
+        parentId: run.id,
+        position: [-0.3, 0.1, 0],
+        width: 0.6,
+        showPlinth: false,
+        withCountertop: false,
+      }),
+      CabinetModuleNode.parse({
+        id: 'cabinet-module_finished-ends-right',
+        parentId: run.id,
+        position: [0.3, 0.1, 0],
+        width: 0.6,
+        showPlinth: false,
+        withCountertop: false,
+      }),
+    ]
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: modules }),
+      'rendered',
+      false,
+    )
+
+    const left = findMeshByName(group, 'cabinet-run-finished-end-left')
+    const right = findMeshByName(group, 'cabinet-run-finished-end-right')
+    expect(left.userData.slotId).toBe('front')
+    expect(right.userData.slotId).toBe('front')
+    expect(worldBounds(left).min.x).toBeLessThan(-0.59)
+    expect(worldBounds(right).max.x).toBeGreaterThan(0.59)
+  })
+
+  test('finished end panels are omitted where a neighboring run abuts the end', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_finished-ends-joined-run',
+      withFinishedEnds: true,
+      children: ['cabinet-module_finished-ends-joined-module'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_finished-ends-joined-module',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.6,
+      showPlinth: false,
+      withCountertop: false,
+    })
+    const neighbor = CabinetNode.parse({
+      id: 'cabinet_finished-ends-neighbor',
+      position: [0.6, 0, 0],
+      width: 0.6,
+      depth: 0.6,
+    })
+    const group = buildCabinetGeometry(
+      run,
+      geometryContext({ children: [module], siblings: [neighbor] }),
+      'rendered',
+      false,
+    )
+
+    expect(() => findMeshByName(group, 'cabinet-run-finished-end-left')).not.toThrow()
+    expect(() => findMeshByName(group, 'cabinet-run-finished-end-right')).toThrow()
   })
 
   test('run plinth follows shifted module depth extents instead of growing backward', () => {

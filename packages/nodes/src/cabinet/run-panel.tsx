@@ -619,6 +619,11 @@ export function CabinetRunPanel({
             label="Finished back"
             onChange={(checked) => updateRun({ withFinishedBack: checked })}
           />
+          <ToggleControl
+            checked={node.withFinishedEnds}
+            label="Finished end panels"
+            onChange={(checked) => updateRun({ withFinishedEnds: checked })}
+          />
           {node.withCountertop && (
             <ToggleControl
               checked={node.withWaterfall}

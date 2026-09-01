@@ -43,6 +43,53 @@ function sceneApiFixture(seed: AnyNode[]): SceneApi {
 }
 
 describe('cabinet quick actions', () => {
+  test('flips single-door hinges from the selection action', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_run-quick-actions-hinge',
+      parentId: 'level_quick-actions-hinge',
+      children: ['cabinet-module_quick-actions-hinge'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_quick-actions-hinge',
+      parentId: run.id,
+      width: 0.4,
+      stack: [
+        { id: 'door-quick-actions-hinge', type: 'door', doorType: 'single-left', shelfCount: 2 },
+      ],
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
+    const action = cabinetQuickActions({ node: module, nodes: sceneApi.nodes() }).find(
+      (candidate) => candidate.id === 'cabinet:flip-hinge',
+    )
+
+    expect(action?.disabled).toBeFalsy()
+    action!.run({ sceneApi })
+    expect(sceneApi.get<CabinetModuleNode>(module.id)?.stack?.[0]).toMatchObject({
+      doorType: 'single-right',
+    })
+  })
+
+  test('disables hinge flipping for double-door selections', () => {
+    const run = CabinetNode.parse({
+      id: 'cabinet_run-quick-actions-double-hinge',
+      parentId: 'level_quick-actions-double-hinge',
+      children: ['cabinet-module_quick-actions-double-hinge'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_quick-actions-double-hinge',
+      parentId: run.id,
+      width: 0.8,
+      stack: [{ id: 'door-double-hinge', type: 'door', doorType: 'double', shelfCount: 2 }],
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
+    const action = cabinetQuickActions({ node: module, nodes: sceneApi.nodes() }).find(
+      (candidate) => candidate.id === 'cabinet:flip-hinge',
+    )
+
+    expect(action?.disabled).toBe(true)
+    expect(action?.title).toContain('single doors')
+  })
+
   test.each([
     'left',
     'right',
