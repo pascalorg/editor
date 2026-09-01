@@ -951,8 +951,9 @@ export const FirstPersonControls = () => {
 
   const toggleInteractableTarget = useCallback(() => {
     // Drone is a camera, not an avatar: the click that re-acquires pointer lock
-    // must not swing a door open under the shot being framed.
-    if (isDroneMode) return
+    // must not swing a door open under the shot being framed. Same in capture
+    // mode's walk camera — there, a locked-pointer click IS the shutter.
+    if (isDroneMode || useEditor.getState().isCaptureMode) return
 
     const target = interactableTargetRef.current ?? resolveInteractableTarget()
     if (!target) return

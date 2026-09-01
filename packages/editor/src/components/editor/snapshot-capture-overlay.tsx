@@ -15,8 +15,10 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useIsMobile } from '../../hooks/use-mobile'
 import { triggerSFX } from '../../lib/sfx-bus'
+import { requestWalkthroughPointerLock } from '../../lib/walkthrough-pointer-lock'
 import useEditor, {
   CAPTURE_FOV_MAX,
   CAPTURE_FOV_MIN,
@@ -139,16 +141,18 @@ const CAMERA_NAV_HINTS: Record<CaptureCameraNav, readonly CameraNavHint[] | null
   walk: [
     { keys: ['WASD'], action: 'move' },
     { keys: ['Space'], action: 'jump' },
+    { keys: ['Wheel'], action: 'lens' },
     { keys: ['P'], action: 'free cursor' },
-    { keys: ['Enter'], action: 'shoot' },
+    { keys: ['Click', 'Enter'], action: 'shoot' },
   ],
   drone: [
     { keys: ['WASD'], action: 'move' },
     { keys: ['Space', 'E'], action: 'up' },
     { keys: ['Q'], action: 'down' },
     { keys: ['Shift'], action: 'boost' },
+    { keys: ['Wheel'], action: 'lens' },
     { keys: ['P'], action: 'free cursor' },
-    { keys: ['Enter'], action: 'shoot' },
+    { keys: ['Click', 'Enter'], action: 'shoot' },
   ],
 }
 
@@ -163,9 +167,11 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   const isPreset = captureMode.mode === 'preset'
   const requestedCrop = captureMode.mode === 'standard' ? captureMode.crop : undefined
   const requestedAspect = captureMode.mode === 'standard' ? captureMode.standardAspect : undefined
-  // A host-preselected crop means the host needs that exact output shape
-  // (e.g. the publish-cover capture) — hide the crop/aspect switcher.
-  const isCropLocked = isPreset || requestedCrop !== undefined
+  // Only an explicit host lock hides the crop/aspect switcher (the publish
+  // cover needs its exact output shape). A plain preselected crop — the
+  // Studio capbar's choice — just seeds the pill and stays user-changeable.
+  const isCropLocked =
+    isPreset || (captureMode.mode === 'standard' && captureMode.lockCrop === true)
 
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const firstPersonMovementMode = useEditor((s) => s.firstPersonMovementMode)
@@ -182,8 +188,14 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       editor.setFirstPersonMode(false)
       return
     }
-    editor.setFirstPersonMovementMode(next)
-    if (!editor.isFirstPersonMode) editor.setFirstPersonMode(true)
+    // Lock the pointer in the same click task (the gesture requirement):
+    // flush the mode flip so FirstPersonControls is mounted when the lock
+    // lands, instead of making the user click the canvas a second time.
+    flushSync(() => {
+      editor.setFirstPersonMovementMode(next)
+      if (!editor.isFirstPersonMode) editor.setFirstPersonMode(true)
+    })
+    requestWalkthroughPointerLock()
   }, [])
 
   const [mode, setMode] = useState<CropMode>('standard')
@@ -424,6 +436,42 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [handleCapture, isCaptureMode, setCaptureMode])
+
+  // While walk / drone hold the pointer lock, the wheel drives the lens and a
+  // click fires the shutter. Both gate on the lock being HELD: the click that
+  // acquires it happens unlocked, so entering the camera never also shoots,
+  // and an unlocked wheel keeps scrolling whatever pane it's over.
+  useEffect(() => {
+    if (!isCaptureMode || cameraNav === 'orbit') return
+    const canvas = document.querySelector<HTMLCanvasElement>('[data-pascal-viewer-3d] canvas')
+    if (!canvas) return
+    // `setCaptureFov` rounds to whole degrees; accumulate sub-degree trackpad
+    // deltas so slow scrolls still move the lens.
+    let pendingFovDelta = 0
+    const onWheel = (e: WheelEvent) => {
+      if (document.pointerLockElement !== canvas) return
+      e.preventDefault()
+      const pixels = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY
+      // Wheel-up narrows the lens (zoom in), matching the orbit dolly.
+      pendingFovDelta += pixels * 0.05
+      const whole = Math.trunc(pendingFovDelta)
+      if (whole === 0) return
+      pendingFovDelta -= whole
+      const editor = useEditor.getState()
+      if (editor.captureFov === null) return
+      editor.setCaptureFov(editor.captureFov + whole)
+    }
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0 || document.pointerLockElement !== canvas) return
+      handleCapture()
+    }
+    window.addEventListener('wheel', onWheel, { passive: false })
+    window.addEventListener('mousedown', onMouseDown)
+    return () => {
+      window.removeEventListener('wheel', onWheel)
+      window.removeEventListener('mousedown', onMouseDown)
+    }
+  }, [cameraNav, handleCapture, isCaptureMode])
 
   if (!isCaptureMode) return null
 

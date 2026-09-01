@@ -85,7 +85,14 @@ export type SnapshotStandardAspect = '16:9' | '9:16' | '4:3' | '3:4' | '1:1'
 
 export type CaptureMode =
   | { mode: 'idle' }
-  | { mode: 'standard'; crop?: SnapshotCropMode; standardAspect?: SnapshotStandardAspect }
+  | {
+      mode: 'standard'
+      crop?: SnapshotCropMode
+      standardAspect?: SnapshotStandardAspect
+      /** The host needs this exact output shape (e.g. the publish cover) —
+       *  hide the crop/aspect switcher instead of merely preselecting it. */
+      lockCrop?: boolean
+    }
   | {
       mode: 'preset'
       isolated: AnyNodeId[]
