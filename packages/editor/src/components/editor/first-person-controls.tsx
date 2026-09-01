@@ -1280,15 +1280,17 @@ export const FirstPersonControls = () => {
       } else if (event.code === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
-        // Capture mode: Esc only frees the cursor (see handlePointerLockChange
-        // — while locked the browser unlocks without delivering the keydown);
-        // already-free means there is nothing to do. Exiting is the overlay's
-        // close affordance, never a reflex Esc.
+        // Capture mode, first Esc frees the cursor (see handlePointerLockChange
+        // — while locked the browser usually unlocks without delivering the
+        // keydown); with the cursor already free, Esc cancels the snapshot
+        // (setCaptureMode(false) also lands the camera back on orbit).
         if (useEditor.getState().isCaptureMode) {
           if (document.pointerLockElement === canvas) {
             suspendRef.current = true
             useViewer.getState().setWalkthroughSuspended(true)
             document.exitPointerLock()
+          } else {
+            useEditor.getState().setCaptureMode(false)
           }
           return
         }
