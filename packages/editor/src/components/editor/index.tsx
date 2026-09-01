@@ -63,6 +63,7 @@ import type { SidebarTab } from '../ui/sidebar/tab-bar'
 import { useHostPanels } from '../ui/sidebar/use-plugin-panels'
 import { ViewerStage } from '../viewer/viewer-stage'
 import type { ViewerStageMode } from '../viewer/viewer-stage-modes'
+import { CaptureCameraRig } from './capture-camera-rig'
 import { CustomCameraControls } from './custom-camera-controls'
 import { DeleteConfirmationDialog } from './delete-confirmation-dialog'
 import { EditorLayoutV2 } from './editor-layout-v2'
@@ -799,6 +800,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(isLoading || isFirstPersonMode) && <SnapAwareGrid />}
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
+      {isCaptureMode && <CaptureCameraRig />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       {!isFirstPersonMode && <SiteEdgeLabels />}
@@ -1007,6 +1009,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   const floorplanPaneRatio = useEditor((s) => s.floorplanPaneRatio)
   const setFloorplanPaneRatio = useEditor((s) => s.setFloorplanPaneRatio)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
+  const isCaptureMode = useEditor((s) => s.isCaptureMode)
 
   const [isCameraControlsHintVisible, setIsCameraControlsHintVisible] = useState<boolean | null>(
     null,
@@ -1121,7 +1124,10 @@ const ViewerCanvas = memo(function ViewerCanvas({
             renderContext="editor"
             renderPaused={!show3d && !showLoader}
             sceneReadyKey={sceneReadyKey}
-            selectionManager={isFirstPersonMode ? 'default' : 'custom'}
+            // Walk/drone framing during snapshot capture is camera-only: the
+            // viewer's default selection manager would hover-highlight whatever
+            // the cursor crosses, which orbit capture never does.
+            selectionManager={isFirstPersonMode && !isCaptureMode ? 'default' : 'custom'}
           >
             <ViewerSceneContent
               isFirstPersonMode={isFirstPersonMode}
@@ -1542,7 +1548,10 @@ export default function Editor({
                       <HelperManager />
                     </div>
                   )}
-                  {isFirstPersonMode && (
+                  {/* Capture mode drives walk / drone from its own overlay, which
+                      owns the framing chrome — the walkthrough HUD would both
+                      clutter the frame and offer a second, conflicting exit. */}
+                  {isFirstPersonMode && !isCaptureMode && (
                     <FirstPersonOverlay
                       onExit={() => useEditor.getState().setFirstPersonMode(false)}
                     />

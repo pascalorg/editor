@@ -12,7 +12,12 @@ import {
   useSyncExternalStore,
 } from 'react'
 import useEditor from '../../../store/use-editor'
-import { editorHostPanelRegistry, type EditorHostPanel } from '../../../lib/plugin-panels'
+import {
+  editorHostPanelRegistry,
+  type EditorHostPanel,
+  managedPluginIds,
+  showsPluginManager,
+} from '../../../lib/plugin-panels'
 import { ErrorBoundary } from '../primitives/error-boundary'
 import type { ExtraPanel } from './icon-rail'
 import { PluginsPanel } from './panels/plugins-panel'
@@ -100,6 +105,7 @@ export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
   )
   const workspaceMode = useEditor((s) => s.workspaceMode)
   const installedPlugins = useScene((s) => s.installedPlugins)
+  const readOnly = useScene((s) => s.readOnly)
   const hostIds = new Set(hostPanels?.map((p) => p.id))
 
   useEffect(() => {
@@ -126,7 +132,16 @@ export function useHostPanels(hostPanels?: ExtraPanel[]): ExtraPanel[] {
         pluginId: p.pluginId,
       }),
     )
+  // The manager tab is the one panel the editor contributes itself, so it is
+  // also the one that can be alone in the rail — see `showsPluginManager`.
   const manager =
-    workspaceMode === 'edit' && !hostIds.has(pluginsManagerPanel.id) ? [pluginsManagerPanel] : []
+    !hostIds.has(pluginsManagerPanel.id) &&
+    showsPluginManager({
+      managedPluginCount: managedPluginIds(registered).length,
+      readOnly,
+      workspaceMode,
+    })
+      ? [pluginsManagerPanel]
+      : []
   return [...(hostPanels ?? []), ...fromRegistry, ...manager]
 }
