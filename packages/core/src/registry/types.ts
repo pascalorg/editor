@@ -2346,6 +2346,13 @@ export type ParamAction<N> = {
 
 export type ParamGroup<N> = {
   label: string
+  /**
+   * Optional i18n key resolved at render time. Wins over `label` when the
+   * catalog has an entry; falls back to `label` unchanged otherwise. Defined
+   * alongside it so the inspector can localize section headings without
+   * re-touching every parametrics descriptor.
+   */
+  labelKey?: string
   fields: ParamField<N>[]
 }
 
@@ -2353,6 +2360,9 @@ export type ParamField<N> =
   | {
       key: keyof N
       label?: string
+      /** Optional i18n key for `label` — same fallback semantics as
+       *  `ParamGroup.labelKey`. */
+      labelKey?: string
       kind: 'number'
       unit?: string
       min?: number
@@ -2361,21 +2371,35 @@ export type ParamField<N> =
       visibleIf?: (n: N) => boolean
       customEditor?: ComponentType
     }
-  | { key: keyof N; label?: string; kind: 'boolean'; visibleIf?: (n: N) => boolean }
   | {
       key: keyof N
       label?: string
+      labelKey?: string
+      kind: 'boolean'
+      visibleIf?: (n: N) => boolean
+    }
+  | {
+      key: keyof N
+      label?: string
+      labelKey?: string
       kind: 'enum'
       options: readonly string[]
+      /**
+       * Per-option i18n keys. Each entry maps a raw option value (the
+       * string stored in `options`) to its catalog key. Missing entries
+       * fall through to `prettifyEnumValue(option)` exactly as before, so
+       * un-translated kinds keep their current English rendering.
+       */
+      optionLabelKeys?: Record<string, string>
       /** Defaults to 'select' (dropdown). 'segmented' renders the inline
        *  tabbed switcher — better for short option lists (2-4 items). */
       display?: 'select' | 'segmented'
       visibleIf?: (n: N) => boolean
     }
-  | { key: keyof N; label?: string; kind: 'vec3'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; label?: string; kind: 'color'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; label?: string; kind: 'material'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; label?: string; kind: 'ref'; refKind: string; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; labelKey?: string; kind: 'vec3'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; labelKey?: string; kind: 'color'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; labelKey?: string; kind: 'material'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; labelKey?: string; kind: 'ref'; refKind: string; visibleIf?: (n: N) => boolean }
   /** Escape hatch for fields that don't map to a single node key —
    *  derived values (`length` from `start`/`end`), sliders with
    *  dynamic min/max (curve sagitta bounded by chord length),
@@ -2384,6 +2408,7 @@ export type ParamField<N> =
   | {
       key: string
       label?: string
+      labelKey?: string
       kind: 'custom'
       component: ComponentType<{ node: N; onUpdate: (patch: Partial<N>) => void }>
       visibleIf?: (n: N) => boolean
