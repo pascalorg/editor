@@ -44,6 +44,28 @@ describe('isCaptureStreamRenderable', () => {
     ).toBe(true)
   })
 
+  test('renders extracted JSON preview artifacts', () => {
+    for (const [kind, role] of [
+      ['surface-mesh', 'surfaceMesh'],
+      ['point-cloud', 'pointCloud'],
+      ['device-motion', 'deviceMotion'],
+    ] as const) {
+      expect(
+        isCaptureStreamRenderable({
+          id: kind,
+          kind,
+          role,
+          availability: 'ready',
+          artifact: {
+            id: `preview-${kind}`,
+            mediaType: 'application/json',
+            uri: `/api/captures/c/archive/sessions/s/artifacts/preview-${kind}`,
+          },
+        }),
+      ).toBe(true)
+    }
+  })
+
   test('renders a valid inline color surface mesh', () => {
     expect(
       isCaptureStreamRenderable({
