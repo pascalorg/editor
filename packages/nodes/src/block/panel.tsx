@@ -19,6 +19,8 @@ import {
   SliderControl,
   triggerSFX,
   useInteractionScope,
+  useTranslations,
+  type Translator,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Check, Move, Plus, Trash2 } from 'lucide-react'
@@ -54,12 +56,14 @@ const NEW_BLOCK_SLOT_MATERIAL = {
 function materialRefLabel(
   ref: string | undefined,
   sceneMaterials: ReturnType<typeof useScene.getState>['materials'],
+  t: Translator,
 ): string {
   const parsed = parseMaterialRef(ref)
   if (!parsed) return 'Default material'
   if (parsed.kind === 'scene')
     return sceneMaterials[parsed.id as keyof typeof sceneMaterials]?.name ?? ref ?? parsed.id
-  return getCatalogMaterialById(parsed.id)?.label ?? ref ?? parsed.id
+  const catalogMaterial = getCatalogMaterialById(parsed.id)
+  return catalogMaterial ? t(catalogMaterial.labelKey) : ref ?? parsed.id
 }
 
 function materialRefPreview(
@@ -84,6 +88,7 @@ function materialRefPreview(
 }
 
 export default function BlockPanel() {
+  const t = useTranslations()
   const selectedId = useViewer((state) => state.selection.selectedIds[0])
   const setViewerSelection = useViewer((state) => state.setSelection)
   const node = useScene((state) => {
@@ -323,7 +328,7 @@ export default function BlockPanel() {
             const faceCount = faceCountBySlot.get(slot.slotId) ?? 0
             const materialLabel =
               ref || slot.slotId === BLOCK_BODY_SLOT_ID
-                ? materialRefLabel(ref, sceneMaterials)
+                ? materialRefLabel(ref, sceneMaterials, t)
                 : 'Unpainted'
             return (
               <div
