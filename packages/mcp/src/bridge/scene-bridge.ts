@@ -3,7 +3,12 @@ import './node-shims'
 
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode } from '@pascal-app/core/schema'
-import { type AnyNodeId, AnyNode as AnyNodeSchema, type AnyNodeType } from '@pascal-app/core/schema'
+import {
+  type AnyNodeId,
+  AnyNode as AnyNodeSchema,
+  type AnyNodeType,
+  parseNode,
+} from '@pascal-app/core/schema'
 // Per PLAN §0.6: `useScene` is the DEFAULT export from `@pascal-app/core/store`.
 import useScene from '@pascal-app/core/store'
 import type { SceneMeta } from '../storage/types'
@@ -351,7 +356,7 @@ export class SceneBridge {
       const p = patches[i]
       if (!p) throw new Error(`invalid patch: patches[${i}] is undefined`)
       if (p.op === 'create') {
-        const res = AnyNodeSchema.safeParse(p.node)
+        const res = parseNode(p.node)
         if (!res.success) {
           throw new Error(
             `invalid patch: patches[${i}] create node failed schema: ${res.error.message}`,

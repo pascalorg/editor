@@ -13,6 +13,12 @@ export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 export { CameraSchema } from './camera'
 // Collections
 export { type Collection, type CollectionId, generateCollectionId } from './collections'
+// Compiled per-kind parsers (opt-in)
+export {
+  compiledNodeParsersEnabled,
+  enableCompiledNodeParsers,
+  parseNode,
+} from './compiled-node-parsers'
 export type {
   MaterialMapProperties,
   MaterialMaps,

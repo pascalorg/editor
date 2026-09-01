@@ -66,6 +66,7 @@
     "dev": "tsgo --build --watch",
     "test": "bun test src",
     "bench:registry": "bun run src/registry/__bench__/relations-resolver.bench.ts",
+    "bench:schema": "bun run src/schema/__bench__/node-parsers.bench.ts",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {

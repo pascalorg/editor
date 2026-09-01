@@ -8,6 +8,7 @@ import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/re
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
+import { compiledNodeSchema } from '../schema/compiled-node-parsers'
 import { DoorNode as DoorNodeSchema } from '../schema/nodes/door'
 import {
   createDormerDefaultWindow,
@@ -124,7 +125,7 @@ function normalizeStairNode(node: Record<string, unknown>) {
     children: getStringArray(node.children),
   }
 
-  const parsed = StairNodeSchema.safeParse(sanitized)
+  const parsed = compiledNodeSchema(StairNodeSchema).safeParse(sanitized)
   if (!parsed.success) return null
   if (hasTotalRise) return parsed.data
   // Absent `totalRise` means "rise derives from the storey height" and must
@@ -149,12 +150,12 @@ function normalizeStairSegmentNode(node: Record<string, unknown>) {
     thickness: getFiniteNumber(node.thickness, 0.25),
   }
 
-  const parsed = StairSegmentNodeSchema.safeParse(sanitized)
+  const parsed = compiledNodeSchema(StairSegmentNodeSchema).safeParse(sanitized)
   return parsed.success ? parsed.data : null
 }
 
 function normalizeDoorNode(node: Record<string, unknown>) {
-  const parsed = DoorNodeSchema.safeParse(node)
+  const parsed = compiledNodeSchema(DoorNodeSchema).safeParse(node)
   return parsed.success ? { ...node, ...parsed.data } : null
 }
 
@@ -162,7 +163,7 @@ function normalizeDoorNode(node: Record<string, unknown>) {
 // `frameThickness`) load without it; the mesh builder then reads undefined and
 // throws every frame. Zod-parse on load so schema defaults land, like doors.
 function normalizeWindowNode(node: Record<string, unknown>) {
-  const parsed = WindowNodeSchema.safeParse(node)
+  const parsed = compiledNodeSchema(WindowNodeSchema).safeParse(node)
   return parsed.success ? { ...node, ...parsed.data } : null
 }
 
@@ -193,7 +194,7 @@ function normalizeShelfNode(node: Record<string, unknown>) {
     ),
   }
 
-  const parsed = ShelfNodeSchema.safeParse(sanitized)
+  const parsed = compiledNodeSchema(ShelfNodeSchema).safeParse(sanitized)
   return parsed.success ? parsed.data : null
 }
 
@@ -222,7 +223,7 @@ function normalizeElevatorNode(node: Record<string, unknown>) {
     dwellMs: getFiniteNumber(node.dwellMs, 1400),
   }
 
-  const parsed = ElevatorNodeSchema.safeParse(sanitized)
+  const parsed = compiledNodeSchema(ElevatorNodeSchema).safeParse(sanitized)
   return parsed.success ? parsed.data : null
 }
 
