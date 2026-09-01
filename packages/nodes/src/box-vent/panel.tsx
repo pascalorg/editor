@@ -169,7 +169,7 @@ export default function BoxVentPanel() {
       icon="/icons/roof.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
-      title={node.name || 'Box Vent'}
+      title={node.name || t('nodes.boxVent.boxVent')}
       width={300}
     >
       <PanelSection title={t('nodes.boxVent.style')}>

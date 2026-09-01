@@ -263,7 +263,7 @@ export default function SkylightPanel() {
       icon="/icons/roof.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
-      title={node.name || 'Skylight'}
+      title={node.name || t('nodes.skylight.skylight')}
       width={300}
     >
       <PanelSection title="Type">

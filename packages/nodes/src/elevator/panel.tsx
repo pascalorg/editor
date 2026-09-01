@@ -323,7 +323,7 @@ export default function ElevatorPanel() {
     const duplicate = ElevatorNodeSchema.parse({
       ...structuredClone(node),
       id: undefined,
-      name: node.name ? `${node.name} Copy` : 'Elevator Copy',
+      name: node.name ? t('nodes.elevator.copy', { name: node.name }) : t('nodes.elevator.defaultCopy'),
       position: [node.position[0] + 1, node.position[1], node.position[2] + 1],
       metadata: { ...(stripDuplicateFlags(node.metadata) as Record<string, unknown>), isNew: true },
     })

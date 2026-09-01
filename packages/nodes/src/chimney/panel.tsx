@@ -344,7 +344,7 @@ export default function ChimneyPanel() {
       icon="/icons/roof.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
-      title={node.name || 'Chimney'}
+      title={node.name || t('nodes.chimney.chimney')}
       width={300}
     >
       <PanelSection title={t('nodes.chimney.style')}>
