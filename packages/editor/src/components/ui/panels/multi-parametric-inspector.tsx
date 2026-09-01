@@ -65,14 +65,13 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
   if (nodeIds.length < 2 || !nodeType || !parametrics) return null
 
   const display = getTypeDisplay(nodeType, t)
-  const title = matchedGroup ? `${matchedGroup.label} · ${breakdown}` : breakdown || display.label
+  const title = matchedGroup ? t('panel.multiSelection.withGroup', { label: matchedGroup.label, count: breakdown }) : breakdown || display.label
 
   return (
     <PanelWrapper footer={footer} icon={display.icon} onClose={handleClose} title={title} width={320}>
       {matchedGroup && (
         <div className="border-border/50 border-b px-3 py-2 text-muted-foreground text-xs">
-          {matchedGroup.label} (session only). Plain click reselects all members. Not saved with the
-          project.
+          {t('panel.multiSelection.sessionOnlyFooter', { label: matchedGroup.label })}
         </div>
       )}
       {parametrics.groups.map((group, gi) => (

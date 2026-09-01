@@ -20,6 +20,7 @@ import { PanelWrapper } from './panel-wrapper'
 import { formatSelectionBreakdown } from './selection-breakdown'
 
 export function MultiSelectionActions() {
+  const t = useTranslations()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const sessionGroups = useSessionGroups((s) => s.groups)
   const sceneNodes = useScene((s) => s.nodes)
@@ -38,28 +39,28 @@ export function MultiSelectionActions() {
       {showGroup && (
         <ActionButton
           icon={<Group className="h-4 w-4" />}
-          label="Group"
+          label={t('panel.action.group')}
           onClick={() => groupCurrentSelection()}
-          title="Group (Ctrl/Cmd+G)"
+          title={t('nodeActions.groupShortcut')}
         />
       )}
       {showUngroup && (
         <ActionButton
           icon={<Ungroup className="h-4 w-4" />}
-          label="Ungroup"
+          label={t('panel.action.ungroup')}
           onClick={() => ungroupCurrentSelection()}
-          title="Ungroup (Ctrl/Cmd+Shift+G)"
+          title={t('nodeActions.ungroupShortcut')}
         />
       )}
       <ActionButton
         icon={<Copy className="h-4 w-4" />}
-        label="Duplicate"
+        label={t('panel.action.duplicate')}
         onClick={() => duplicateSelectionAndPickUp()}
       />
       <ActionButton
         className="border-red-500/40 text-red-200 hover:bg-red-500/15"
         icon={<Trash2 className="h-4 w-4 text-red-400" />}
-        label="Delete"
+        label={t('panel.action.delete')}
         onClick={() => deleteSelection()}
       />
     </ActionGroup>
@@ -94,16 +95,15 @@ export function MultiSelectionPanel({ footer }: { footer?: React.ReactNode }) {
       onClose={() => setSelection({ selectedIds: [] })}
       title={
         matchedGroup
-          ? `${matchedGroup.label} · ${selectedIds.length}`
-          : `${selectedIds.length} selected`
+          ? t('panel.multiSelection.withGroup', { label: matchedGroup.label, count: selectedIds.length })
+          : t('panel.multiSelection.selected', { count: selectedIds.length })
       }
       width={320}
     >
       {breakdown && <div className="px-3 py-3 text-muted-foreground text-xs">{breakdown}</div>}
       {matchedGroup && (
         <div className="border-border/50 border-t px-3 py-2 text-muted-foreground text-xs">
-          {matchedGroup.label} (session only). Plain click reselects all members. Not saved with the
-          project.
+          {t('panel.multiSelection.sessionOnlyFooter', { label: matchedGroup.label })}
         </div>
       )}
       <div className="border-border/50 border-t p-3">
