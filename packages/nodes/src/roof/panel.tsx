@@ -25,6 +25,7 @@ import {
   SliderControl,
   triggerSFX,
   useEditor,
+  useTranslations,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Plus, Trash2 } from 'lucide-react'
@@ -32,6 +33,7 @@ import { useCallback, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 
 export default function RoofPanel() {
+  const t = useTranslations()
   const [ventType, setVentType] = useState<'box-vent' | 'ridge-vent' | 'turbine-vent'>('box-vent')
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
@@ -244,7 +246,7 @@ export default function RoofPanel() {
     <PanelWrapper
       icon="/icons/roof.webp"
       onClose={handleClose}
-      title={node.name || 'Roof'}
+      title={node.name || t('nodes.roof.fallbackTitle')}
       width={300}
     >
       <PanelSection title="Segments">
@@ -264,15 +266,15 @@ export default function RoofPanel() {
         <ActionGroup>
           <ActionButton
             icon={<Plus className="h-3.5 w-3.5" />}
-            label="Draw Segment"
+            label={t('nodes.roof.addSegment')}
             onClick={handleAddSegment}
           />
         </ActionGroup>
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title={t('common.position')}>
         <SliderControl
-          label="X"
+          label={t('common.x')}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[0] = v
@@ -284,7 +286,7 @@ export default function RoofPanel() {
           value={Math.round(node.position[0] * 100) / 100}
         />
         <SliderControl
-          label="Y"
+          label={t('common.y')}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[1] = v
@@ -296,7 +298,7 @@ export default function RoofPanel() {
           value={Math.round(node.position[1] * 100) / 100}
         />
         <SliderControl
-          label="Z"
+          label={t('common.z')}
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[2] = v
@@ -308,7 +310,7 @@ export default function RoofPanel() {
           value={Math.round(node.position[2] * 100) / 100}
         />
         <SliderControl
-          label="Rotation"
+          label={t('common.rotation')}
           max={180}
           min={-180}
           onChange={(degrees) => {
@@ -354,7 +356,7 @@ export default function RoofPanel() {
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Chimney"
+                label={t('nodes.roof.addChimney')}
                 onClick={() => activateTool('chimney')}
               />
             </ActionGroup>
@@ -375,7 +377,7 @@ export default function RoofPanel() {
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Dormer"
+                label={t('nodes.roof.addDormer')}
                 onClick={() => activateTool('dormer')}
               />
             </ActionGroup>
@@ -396,7 +398,7 @@ export default function RoofPanel() {
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Skylight"
+                label={t('nodes.roof.addSkylight')}
                 onClick={() => activateTool('skylight')}
               />
             </ActionGroup>
@@ -417,7 +419,7 @@ export default function RoofPanel() {
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Solar Panel"
+                label={t('nodes.roof.addSolarPanel')}
                 onClick={() => activateTool('solar-panel')}
               />
             </ActionGroup>
@@ -451,8 +453,8 @@ export default function RoofPanel() {
             <SegmentedControl<'box-vent' | 'ridge-vent' | 'turbine-vent'>
               onChange={setVentType}
               options={[
-                { label: 'Box', value: 'box-vent' },
-                { label: 'Ridge', value: 'ridge-vent' },
+                { label: t('nodes.roof.box'), value: 'box-vent' },
+                { label: t('nodes.roof.ridge'), value: 'ridge-vent' },
                 { label: 'Turbine', value: 'turbine-vent' },
               ]}
               value={ventType}
@@ -460,7 +462,7 @@ export default function RoofPanel() {
             <ActionGroup>
               <ActionButton
                 icon={<Plus className="h-3.5 w-3.5" />}
-                label="Add Vent"
+                label={t('nodes.roof.addVent')}
                 onClick={() => activateTool(ventType)}
               />
             </ActionGroup>
@@ -509,18 +511,18 @@ export default function RoofPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={t('common.actions')}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={t('common.move')} onClick={handleMove} />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={t('common.duplicate')}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label="Delete"
+            label={t('common.delete')}
             onClick={handleDelete}
           />
         </ActionGroup>
