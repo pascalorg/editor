@@ -15,6 +15,7 @@ import {
   type SnapContext,
 } from '../../../lib/snapping-mode'
 import { cn } from '../../../lib/utils'
+import { useTranslations } from '../../../lib/i18n'
 import useEditor, { type GridSnapStep } from '../../../store/use-editor'
 import useFenceCurveDraft from '../../../store/use-fence-curve-draft'
 import { ShortcutToken } from '../primitives/shortcut-token'
@@ -161,10 +162,10 @@ const SNAPPING_MODE_ICONS = {
 } as const
 
 const SNAPPING_MODE_LABELS = {
-  grid: 'Grid',
-  lines: 'Lines',
-  angles: 'Angles',
-  off: 'Off',
+  grid: 'helper.snapping.grid',
+  lines: 'helper.snapping.lines',
+  angles: 'helper.snapping.angles',
+  off: 'helper.snapping.off',
 } as const
 
 const GRID_SNAP_STEPS: GridSnapStep[] = [0.5, 0.25, 0.1, 0.05]
@@ -177,38 +178,41 @@ function nextGridSnapStep(step: GridSnapStep): GridSnapStep {
 // The active interaction's snapping controls, scoped to its context (wall / item
 // / polygon) so each action shows only the modes that make sense for it.
 function SnappingChips({ context }: { context: SnapContext }) {
+  const t = useTranslations()
   const snappingMode = useEditor((s) => s.snappingModeByContext[context])
   const setSnappingMode = useEditor((s) => s.setSnappingMode)
   const gridSnapStep = useEditor((s) => s.gridSnapStep)
   const setGridSnapStep = useEditor((s) => s.setGridSnapStep)
 
   const gridActive = resolveSnapFlags(snappingMode).grid
+  const modeLabel = t(SNAPPING_MODE_LABELS[snappingMode])
+  const snappingLine = t('helper.snapping.line', { mode: modeLabel })
 
   return (
     <>
       <ChipRow
-        ariaLabel={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
+        ariaLabel={snappingLine}
         guideTarget="snap-mode"
         icon={SNAPPING_MODE_ICONS[snappingMode]}
-        label={`Snapping: ${SNAPPING_MODE_LABELS[snappingMode]}`}
+        label={snappingLine}
         onClick={() => {
           setSnappingMode(context, cycleSnappingModeIn(context, snappingMode))
           sfxEmitter.emit('sfx:grid-snap')
         }}
         shortcut="Shift"
-        tooltip="Snapping mode — click or press Shift to cycle"
+        tooltip={t('helper.snapping.tooltip')}
       />
       {gridActive ? (
         <ChipRow
-          ariaLabel={`Grid step: ${gridSnapStep.toFixed(2)} m`}
+          ariaLabel={t('helper.gridStep.line', { step: gridSnapStep.toFixed(2) })}
           guideTarget="snap-grid-step"
-          label={`Grid: ${gridSnapStep.toFixed(2)} m`}
+          label={t('helper.gridStep.label', { step: gridSnapStep.toFixed(2) })}
           onClick={() => {
             setGridSnapStep(nextGridSnapStep(gridSnapStep))
             sfxEmitter.emit('sfx:grid-snap')
           }}
           shortcut="Ctrl"
-          tooltip="Grid step — click or tap Ctrl to cycle"
+          tooltip={t('helper.gridStep.tooltip')}
         />
       ) : null}
     </>
@@ -236,6 +240,7 @@ function ToolHintChipRow({ hint }: { hint: ToolHint & { chip: NonNullable<ToolHi
 }
 
 function ContinuationChip({ context }: { context: ContinuationContext }) {
+  const t = useTranslations()
   const mode = useEditor((s) => s.getContinuation(context))
   const cycleContinuation = useEditor((s) => s.cycleContinuation)
   const profile = CONTINUATION_PROFILES[context]
@@ -244,40 +249,44 @@ function ContinuationChip({ context }: { context: ContinuationContext }) {
 
   return (
     <ChipRow
-      ariaLabel={`Continuation: ${label}`}
+      ariaLabel={t('helper.continuation.line', { label })}
       icon={icon}
       label={label}
       onClick={() => cycleContinuation(context)}
       shortcut="C"
-      tooltip="Continuation — click or press C to cycle"
+      tooltip={t('helper.continuation.tooltip')}
     />
   )
 }
 
 function FenceContinuationChips() {
+  const t = useTranslations()
   const mode = useEditor((s) => s.getContinuation('fence'))
   const setContinuation = useEditor((s) => s.setContinuation)
   const curveStarted = useFenceCurveDraft((s) => s.pointCount > 0)
 
   const isCurved = mode === 'curved'
   const straightMode = isCurved ? 'continuous' : mode
-  const straightLabel = straightMode === 'single' ? 'Straight: Single' : 'Straight: Continuous'
+  const straightStraightKey =
+    straightMode === 'single' ? 'helper.fence.straightSingle' : 'helper.fence.straightContinuous'
+  const straightLabel = t(straightStraightKey)
   const straightIcon = straightMode === 'single' ? 'lucide:minus' : 'lucide:waypoints'
-  const typeLabel = isCurved ? 'Type: Curved' : 'Type: Straight'
+  const typeLabelKey = isCurved ? 'helper.fence.typeCurved' : 'helper.fence.typeStraight'
+  const typeLabel = t(typeLabelKey)
   const typeIcon = isCurved ? 'lucide:spline' : 'lucide:minus'
 
   return (
     <>
       <ChipRow
-        ariaLabel={`Fence type: ${isCurved ? 'Curved' : 'Straight'}`}
+        ariaLabel={t('helper.fence.typeLine', { kind: isCurved ? t('helper.fence.curved') : t('helper.fence.straight') })}
         icon={typeIcon}
         label={typeLabel}
         onClick={() => setContinuation('fence', isCurved ? 'continuous' : 'curved')}
         shortcut="T"
-        tooltip="Fence type — click or press T to switch between straight and curved"
+        tooltip={t('helper.fence.typeTooltip')}
       />
       <ChipRow
-        ariaLabel={`Fence continuation: ${straightLabel}`}
+        ariaLabel={t('helper.fence.continuationLine', { label: straightLabel })}
         disabled={isCurved}
         icon={straightIcon}
         label={straightLabel}
@@ -289,8 +298,8 @@ function FenceContinuationChips() {
         shortcut="C"
         tooltip={
           isCurved
-            ? 'Straight continuation is unavailable while curved fence type is active'
-            : 'Straight fence continuation — click or press C to toggle'
+            ? t('helper.fence.continuationCurved')
+            : t('helper.fence.continuationStraight')
         }
       />
       {/* Curved fences are committed by a closing gesture rather than per-click,
@@ -299,7 +308,7 @@ function FenceContinuationChips() {
       {isCurved && curveStarted ? (
         <ChipRow
           icon="lucide:circle-check"
-          label="Finish curve (or double-click)"
+          label={t('helper.fence.finishCurve')}
           shortcut="Enter"
         />
       ) : null}
@@ -318,6 +327,7 @@ const PAINT_SCOPE_ICONS: Record<PaintScope, string> = {
 // derived `paintHover` (scopes + labels), so it works for any kind without a
 // per-target table.
 function PaintScopeChip() {
+  const t = useTranslations()
   // What the cursor is over (that's what the next click paints). `null` when not
   // over a paintable surface — including an item with no slots.
   const paintHover = useEditor((s) => s.paintHover)
@@ -329,13 +339,17 @@ function PaintScopeChip() {
   // Nothing to paint with yet (no material picked, not erasing) → the first step
   // is choosing a material, so say that before anything about scope or hovering.
   if (!(paintEraser || hasActivePaintMaterial(activePaintMaterial))) {
-    return <ChipRow icon="lucide:palette" label="Select a material to paint" />
+    return <ChipRow icon="lucide:palette" label={t('helper.paint.pickMaterial')} />
   }
 
   // Not over anything paintable → guide the user to hover, still teaching Shift.
   if (!paintHover) {
     return (
-      <ChipRow icon="lucide:mouse-pointer-click" label="Hover a surface to paint" shortcut="Shift" />
+      <ChipRow
+        icon="lucide:mouse-pointer-click"
+        label={t('helper.paint.hoverSurface')}
+        shortcut="Shift"
+      />
     )
   }
 
@@ -343,26 +357,23 @@ function PaintScopeChip() {
   // A scope carried over from another node (the mode is global) falls back to
   // the narrowest for both display and — via the apply-time resolver — behaviour.
   const effective: PaintScope = scopes.includes(paintScope) ? paintScope : 'single'
+  const scopeLabel = paintScopeLabel(effective, paintHover, t)
+  const paintLine = t('helper.paint.line', { scope: scopeLabel })
 
   // Paintable but with no scope choice (roof, a one-slot node, …) → a passive
   // row that still names the surface, so the user always sees what they'll paint.
   if (scopes.length <= 1) {
-    return (
-      <ChipRow
-        icon={PAINT_SCOPE_ICONS[effective]}
-        label={`Paint: ${paintScopeLabel(effective, paintHover)}`}
-      />
-    )
+    return <ChipRow icon={PAINT_SCOPE_ICONS[effective]} label={paintLine} />
   }
 
   return (
     <ChipRow
-      ariaLabel={`Paint scope: ${paintScopeLabel(effective, paintHover)}`}
+      ariaLabel={t('helper.paint.scopeLine', { scope: scopeLabel })}
       icon={PAINT_SCOPE_ICONS[effective]}
-      label={`Paint: ${paintScopeLabel(effective, paintHover)}`}
+      label={paintLine}
       onClick={() => cyclePaintScope()}
       shortcut="Shift"
-      tooltip="Paint scope — click or press Shift to cycle"
+      tooltip={t('helper.paint.scopeTooltip')}
     />
   )
 }

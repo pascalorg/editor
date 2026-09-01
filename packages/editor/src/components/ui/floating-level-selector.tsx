@@ -74,7 +74,8 @@ function LevelInlineRename({
   onStopEditing: () => void
 }) {
   const updateNode = useScene((s) => s.updateNode)
-  const defaultName = getDefaultLevelName(level.level)
+  const t = useTranslations()
+  const defaultName = getDefaultLevelName(level.level, t)
   const [value, setValue] = useState(level.name || '')
   const inputRef = useRef<HTMLInputElement>(null)
 

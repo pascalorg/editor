@@ -14,6 +14,7 @@ import { ArrowLeft, ChevronRight, Layers } from 'lucide-react'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { useTranslations } from '../../lib/i18n'
 import { cn } from '../../lib/utils'
 
 const getNodeName = (node: AnyNode): string => {
@@ -46,6 +47,7 @@ export const ViewerSceneHeader = ({
   backHref = '/',
   stats,
 }: ViewerSceneHeaderProps) => {
+  const t = useTranslations()
   const selection = useViewer((s) => s.selection)
 
   // Subscribe only to the specific nodes we read so that creating an unrelated
@@ -162,7 +164,7 @@ export const ViewerSceneHeader = ({
                     className={`truncate transition-colors ${zone ? 'text-muted-foreground hover:text-foreground' : 'font-medium text-foreground'}`}
                     onClick={() => handleBreadcrumbClick('level')}
                   >
-                    {getLevelDisplayName(level)}
+                    {getLevelDisplayName(level, t)}
                   </button>
                 </>
               )}
@@ -221,7 +223,7 @@ export const ViewerSceneHeader = ({
                       <Layers className="h-3.5 w-3.5" />
                     </span>
                     <div className="min-w-0 flex-1 truncate text-left">
-                      {getLevelDisplayName(lvl)}
+                      {getLevelDisplayName(lvl, t)}
                     </div>
                   </div>
                 </button>
