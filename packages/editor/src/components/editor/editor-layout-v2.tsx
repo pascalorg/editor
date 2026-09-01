@@ -183,10 +183,9 @@ function RightColumn({
     >
       {/* Viewer toolbar */}
       {(toolbarLeft || toolbarRight) && (
-        <div className="pointer-events-none absolute top-3 right-3 left-3 z-20 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
-          <div className="pointer-events-auto flex items-center gap-2 justify-self-start">{toolbarLeft}</div>
-          <div className="pointer-events-auto flex items-center gap-2 justify-self-center col-span-1">{toolbarRight}</div>
-          <div className="justify-self-end" />
+        <div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex items-center justify-between gap-2">
+          <div className="pointer-events-auto flex items-center gap-2">{toolbarLeft}</div>
+          <div className="pointer-events-auto flex items-center gap-2">{toolbarRight}</div>
         </div>
       )}
       {/* Canvas area. `isolate` matters: drei's `<Html>` computes a z-index
