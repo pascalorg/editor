@@ -10,6 +10,7 @@ import {
   selectionIntersectsSessionGroup,
   selectionMatchesSessionGroup,
 } from '../../../lib/session-groups'
+import { useTranslations } from '../../../lib/i18n'
 import useSessionGroups, {
   groupCurrentSelection,
   ungroupCurrentSelection,
@@ -69,11 +70,15 @@ export function MultiSelectionActions() {
  * Docked multi-selection panel. Includes Group / Ungroup for session selection sets.
  */
 export function MultiSelectionPanel({ footer }: { footer?: React.ReactNode }) {
+  const t = useTranslations()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const setSelection = useViewer((s) => s.setSelection)
   const sessionGroups = useSessionGroups((s) => s.groups)
   const breakdown = useScene((s) =>
-    formatSelectionBreakdown(selectedIds.map((id) => s.nodes[id as AnyNodeId]?.type)),
+    formatSelectionBreakdown(
+      selectedIds.map((id) => s.nodes[id as AnyNodeId]?.type),
+      t,
+    ),
   )
   const sceneNodes = useScene((s) => s.nodes)
   const liveIds = useMemo(() => new Set(Object.keys(sceneNodes)), [sceneNodes])

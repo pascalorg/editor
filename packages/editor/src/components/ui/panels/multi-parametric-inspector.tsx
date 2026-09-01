@@ -11,6 +11,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { useTranslations } from '../../../lib/i18n'
 import { selectionMatchesSessionGroup } from '../../../lib/session-groups'
 import useSessionGroups from '../../../store/use-session-groups'
 import { PanelSection } from '../controls/panel-section'
@@ -32,6 +33,7 @@ import { PanelWrapper } from './panel-wrapper'
 import { formatSelectionBreakdown } from './selection-breakdown'
 
 export function MultiParametricInspector({ footer }: { footer?: React.ReactNode }) {
+  const t = useTranslations()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const setSelection = useViewer((s) => s.setSelection)
   const nodeIds = useScene(
@@ -42,7 +44,10 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
     return first?.type ?? null
   })
   const breakdown = useScene((s) =>
-    formatSelectionBreakdown(nodeIds.map((id) => s.nodes[id]?.type)),
+    formatSelectionBreakdown(
+      nodeIds.map((id) => s.nodes[id]?.type),
+      t,
+    ),
   )
   const sessionGroups = useSessionGroups((s) => s.groups)
   const matchedGroup = useMemo(
@@ -59,7 +64,7 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
 
   if (nodeIds.length < 2 || !nodeType || !parametrics) return null
 
-  const display = getTypeDisplay(nodeType)
+  const display = getTypeDisplay(nodeType, t)
   const title = matchedGroup ? `${matchedGroup.label} · ${breakdown}` : breakdown || display.label
 
   return (

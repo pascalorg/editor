@@ -4,6 +4,7 @@ import type { AnyNode } from '@pascal-app/core'
 import { Copy, Move, SlidersHorizontal, Trash2 } from 'lucide-react'
 import Image from 'next/image'
 import type { MouseEventHandler } from 'react'
+import { useTranslations } from '../../../lib/i18n'
 import { cn } from '../../../lib/utils'
 import { getNodeDisplay } from './node-display'
 
@@ -29,7 +30,8 @@ export function MobileSelectionBar({
   onDelete,
   onEdit,
 }: MobileSelectionBarProps) {
-  const display = getNodeDisplay(node)
+  const t = useTranslations()
+  const display = getNodeDisplay(node, t)
   const resolvedLabel = label ?? display.label
   const resolvedIcon = icon ?? display.icon
 

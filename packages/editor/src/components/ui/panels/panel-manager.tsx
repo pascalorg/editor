@@ -103,6 +103,7 @@ function MobilePanelLayer({
   panel: React.ReactNode
   isReference: boolean
 }) {
+  const t = useTranslations()
   const setSelection = useViewer((s) => s.setSelection)
   const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -150,7 +151,7 @@ function MobilePanelLayer({
 
   if (!(node || isReference)) return null
 
-  const display = getNodeDisplay(node)
+  const display = getNodeDisplay(node, t)
 
   return (
     <>
@@ -186,9 +187,7 @@ function MobileMultiPanelLayer({
 }) {
   const t = useTranslations()
   const [isSheetOpen, setIsSheetOpen] = useState(false)
-  const display = type
-    ? getTypeDisplay(type)
-    : { icon: '/icons/select.webp', label: t('panel.selection') }
+  const display = type ? getTypeDisplay(type, t) : { icon: '/icons/select.webp', label: t('panel.selection') }
   const title = breakdown || display.label
 
   useEffect(() => {
@@ -225,6 +224,7 @@ export function PanelManager({
   inspectorFooter?: React.ReactNode
   multiSelectionFooter?: React.ReactNode
 }) {
+  const t = useTranslations()
   const isMobile = useIsMobile()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const selectedZoneId = useViewer((s) => s.selection.zoneId)
@@ -248,7 +248,10 @@ export function PanelManager({
   )
   const multiBreakdown = useScene((s) =>
     selectedIds.length > 1
-      ? formatSelectionBreakdown(selectedIds.map((id) => s.nodes[id as AnyNodeId]?.type))
+      ? formatSelectionBreakdown(
+          selectedIds.map((id) => s.nodes[id as AnyNodeId]?.type),
+          t,
+        )
       : '',
   )
 
