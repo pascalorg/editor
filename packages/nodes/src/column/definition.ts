@@ -411,8 +411,8 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   // registry-first path mounts this and skips the legacy `<ColumnTool>`.
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Left click', label: 'Place column' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: 'Place column', labelKey: 'nodes.column.toolHints.place' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
   computeFloorplanLevelData: computeColumnFloorplanLevelData,
   floorplanDependsOnSiblings: true,

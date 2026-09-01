@@ -182,9 +182,9 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
   // snapping chip shows during placement.
   snapDraftDirectional: false,
   toolHints: [
-    { key: 'Left click', label: 'Place elevator' },
-    { key: 'R / T', label: 'Rotate' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: 'Place elevator', labelKey: 'nodes.elevator.toolHints.place' },
+    { key: 'R / T', label: 'Rotate', labelKey: 'editor.rotate' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
   surfaceRole: 'joinery',
 

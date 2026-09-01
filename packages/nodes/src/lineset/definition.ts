@@ -113,10 +113,10 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
 
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Click', label: 'Start lineset' },
-    { key: 'Click again', label: 'Place it (locked to 45°)' },
-    { key: 'Alt + drag', label: 'Go vertical ↕, click to place' },
-    { key: 'Esc', label: 'Cancel start point' },
+    { key: 'Click', label: 'Start lineset', labelKey: 'nodes.lineset.toolHints.start' },
+    { key: 'Click again', label: 'Place it (locked to 45°)', labelKey: 'nodes.lineset.toolHints.place' },
+    { key: 'Alt + drag', label: 'Go vertical ↕, click to place', labelKey: 'nodes.lineset.toolHints.vertical' },
+    { key: 'Esc', label: 'Cancel start point', labelKey: 'common.cancel' },
   ],
 
   presentation: {

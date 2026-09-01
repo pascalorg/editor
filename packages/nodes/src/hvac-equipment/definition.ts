@@ -85,9 +85,9 @@ export const hvacEquipmentDefinition: NodeDefinition<typeof HvacEquipmentNode> =
 
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Click', label: 'Place unit' },
-    { key: 'R / T', label: 'Rotate ±45°' },
-    { key: 'Esc', label: 'Exit' },
+    { key: 'Click', label: 'Place unit', labelKey: 'nodes.hvacEquipment.toolHints.place' },
+    { key: 'R / T', label: 'Rotate ±45°', labelKey: 'contextualHelp.mep.fitting.rotate45' },
+    { key: 'Esc', label: 'Exit', labelKey: 'common.cancel' },
   ],
 
   presentation: {

@@ -109,12 +109,12 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
 
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Click', label: 'Start run' },
-    { key: 'Click again', label: 'Place it (waste falls ¼″/ft)' },
-    { key: 'Q', label: 'Waste / vent' },
-    { key: '[ / ]', label: 'Pipe size down / up' },
-    { key: 'Alt + drag', label: 'Vertical stack ↕, click to place' },
-    { key: 'Esc', label: 'Cancel start point' },
+    { key: 'Click', label: 'Start run', labelKey: 'nodes.pipeSegment.toolHints.start' },
+    { key: 'Click again', label: 'Place it (waste falls ¼″/ft)', labelKey: 'nodes.pipeSegment.toolHints.place' },
+    { key: 'Q', label: 'Waste / vent', labelKey: 'nodes.pipeSegment.toolHints.wasteVent' },
+    { key: '[ / ]', label: 'Pipe size down / up', labelKey: 'nodes.pipeSegment.toolHints.size' },
+    { key: 'Alt + drag', label: 'Vertical stack ↕, click to place', labelKey: 'nodes.pipeSegment.toolHints.vertical' },
+    { key: 'Esc', label: 'Cancel start point', labelKey: 'common.cancel' },
   ],
 
   presentation: {

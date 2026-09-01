@@ -84,11 +84,11 @@ export const pipeFittingDefinition: NodeDefinition<typeof PipeFittingNode> = {
 
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Click', label: 'Place fitting' },
-    { key: 'Hover a pipe end', label: 'Snap onto the run' },
-    { key: 'R / T', label: 'Rotate ±45°' },
-    { key: 'Alt', label: 'Switch rotation axis (Y → X → Z)' },
-    { key: 'Esc', label: 'Exit' },
+    { key: 'Click', label: 'Place fitting', labelKey: 'nodes.pipeFitting.toolHints.place' },
+    { key: 'Hover a pipe end', label: 'Snap onto the run', labelKey: 'nodes.pipeFitting.toolHints.snap' },
+    { key: 'R / T', label: 'Rotate ±45°', labelKey: 'contextualHelp.mep.fitting.rotate45' },
+    { key: 'Alt', label: 'Switch rotation axis (Y → X → Z)', labelKey: 'contextualHelp.mep.fitting.switchAxis' },
+    { key: 'Esc', label: 'Exit', labelKey: 'common.cancel' },
   ],
 
   presentation: {

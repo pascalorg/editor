@@ -51,9 +51,9 @@ export const pipeTrapDefinition: NodeDefinition<typeof PipeTrapNode> = {
 
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Click', label: 'Place trap' },
-    { key: 'R / T', label: 'Rotate ±45°' },
-    { key: 'Esc', label: 'Exit' },
+    { key: 'Click', label: 'Place trap', labelKey: 'nodes.pipeTrap.toolHints.place' },
+    { key: 'R / T', label: 'Rotate ±45°', labelKey: 'contextualHelp.mep.fitting.rotate45' },
+    { key: 'Esc', label: 'Exit', labelKey: 'common.cancel' },
   ],
 
   presentation: {

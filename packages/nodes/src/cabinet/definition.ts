@@ -2209,22 +2209,26 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
   },
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Click', label: 'Place cabinet' },
+    { key: 'Click', label: 'Place cabinet', labelKey: 'nodes.cabinet.toolHints.place' },
     {
       key: 'I',
       label: 'Placement type',
+      labelKey: 'nodes.cabinet.toolHints.placementType',
       chip: {
         subscribe: (onChange) => useCabinetPlacementType.subscribe(onChange),
         value: () => useCabinetPlacementType.getState().type,
         cycle: () => void useCabinetPlacementType.getState().cycleType(),
-        labels: { cabinet: 'Type: Cabinet', island: 'Type: Island' },
+        labels: {
+          cabinet: 'nodes.cabinet.toolHints.typeCabinet',
+          island: 'nodes.cabinet.toolHints.typeIsland',
+        },
         icons: { cabinet: 'lucide:rectangle-horizontal', island: 'lucide:table-2' },
         tooltip: 'Placement type — click or press I to toggle',
       },
     },
-    { key: 'Alt', label: 'Force place' },
-    { key: 'R / T', label: 'Rotate' },
-    { key: 'Esc', label: 'Cancel run / exit' },
+    { key: 'Alt', label: 'Force place', labelKey: 'editor.forcePlace' },
+    { key: 'R / T', label: 'Rotate', labelKey: 'editor.rotate' },
+    { key: 'Esc', label: 'Cancel run / exit', labelKey: 'common.cancel' },
   ],
 
   presentation: {

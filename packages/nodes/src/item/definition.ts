@@ -330,11 +330,11 @@ export const itemDefinition: NodeDefinition<typeof ItemNode> = {
   floorplanMoveTarget: itemFloorplanMoveTarget,
 
   toolHints: [
-    { key: 'Left click', label: 'Place item' },
-    { key: 'R / T', label: 'Rotate' },
-    { key: 'Shift', label: 'Cycle snapping mode' },
-    { key: 'Alt', label: 'Force place' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: 'Place item', labelKey: 'nodes.item.toolHints.place' },
+    { key: 'R / T', label: 'Rotate', labelKey: 'editor.rotate' },
+    { key: 'Shift', label: 'Cycle snapping mode', labelKey: 'nodes.item.toolHints.cycleSnap' },
+    { key: 'Alt', label: 'Force place', labelKey: 'editor.forcePlace' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
 
   presentation: {

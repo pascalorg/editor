@@ -100,9 +100,9 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
   },
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Left click', label: 'Place spawn point' },
-    { key: 'R / T', label: 'Rotate spawn point' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: 'Place spawn point', labelKey: 'nodes.spawn.toolHints.place' },
+    { key: 'R / T', label: 'Rotate spawn point', labelKey: 'nodes.spawn.toolHints.rotate' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
 
   presentation: {

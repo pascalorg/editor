@@ -176,19 +176,20 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   },
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Left click', label: 'Set roof footprint' },
+    { key: 'Left click', label: 'Set roof footprint', labelKey: 'nodes.roof.toolHints.setFootprint' },
     {
       key: 'P',
       label: 'Placement',
+      labelKey: 'nodes.roof.toolHints.placement',
       visible: conicalRoofToolHintVisibility,
       chip: {
         subscribe: (onChange) => useRoofPlacementMode.subscribe(onChange),
         value: () => useRoofPlacementMode.getState().mode,
         cycle: () => useRoofPlacementMode.getState().cycleMode(),
         labels: {
-          auto: 'Placement: Auto',
-          ground: 'Placement: Ground',
-          roof: 'Placement: Roof',
+          auto: 'nodes.roof.toolHints.placementAuto',
+          ground: 'nodes.roof.toolHints.placementGround',
+          roof: 'nodes.roof.toolHints.placementRoof',
         },
         icons: {
           auto: 'lucide:scan-search',
@@ -201,9 +202,10 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
     {
       key: 'R',
       label: 'Rotate roof direction 90°',
+      labelKey: 'nodes.roof.toolHints.rotateDirection',
       visible: standardRoofToolHintVisibility,
     },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
 
   parametrics: roofParametrics,

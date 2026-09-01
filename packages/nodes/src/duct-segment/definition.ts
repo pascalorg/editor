@@ -175,13 +175,13 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
 
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Click', label: 'Start segment' },
-    { key: 'Click again', label: 'Place and continue' },
-    { key: 'Alt + drag', label: 'Go vertical ↕, click to place' },
-    { key: '[ / ]', label: 'Duct diameter down / up' },
-    { key: 'Q', label: 'Round / rect trunk' },
-    { key: 'C', label: 'Ceiling / floor height' },
-    { key: 'Esc', label: 'Cancel start point' },
+    { key: 'Click', label: 'Start segment', labelKey: 'nodes.ductSegment.toolHints.start' },
+    { key: 'Click again', label: 'Place and continue', labelKey: 'nodes.ductSegment.toolHints.placeContinue' },
+    { key: 'Alt + drag', label: 'Go vertical ↕, click to place', labelKey: 'nodes.ductSegment.toolHints.vertical' },
+    { key: '[ / ]', label: 'Duct diameter down / up', labelKey: 'nodes.ductSegment.toolHints.diameter' },
+    { key: 'Q', label: 'Round / rect trunk', labelKey: 'nodes.ductSegment.toolHints.trunk' },
+    { key: 'C', label: 'Ceiling / floor height', labelKey: 'nodes.ductSegment.toolHints.height' },
+    { key: 'Esc', label: 'Cancel start point', labelKey: 'common.cancel' },
   ],
 
   presentation: {

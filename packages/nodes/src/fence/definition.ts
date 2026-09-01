@@ -384,8 +384,8 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
   },
 
   toolHints: [
-    { key: 'Left click', label: 'Set fence start / end' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: 'Set fence start / end', labelKey: 'nodes.fence.toolHints.setStartEnd' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
 
   presentation: {
