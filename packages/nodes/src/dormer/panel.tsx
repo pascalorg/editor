@@ -44,9 +44,9 @@ const ROOF_TYPE_OPTIONS: Array<{ labelKey: string; value: RoofType }> = [
   { labelKey: 'nodes.dormer.flat', value: 'flat' },
 ]
 
-const SHED_HIGH_SIDE_OPTIONS: Array<{ label: string; value: ShedHighSide }> = [
-  { label: 'Rise Back', value: 'back' },
-  { label: 'Rise Front', value: 'front' },
+const SHED_HIGH_SIDE_OPTIONS: Array<{ labelKey: string; value: ShedHighSide }> = [
+  { labelKey: 'nodes.dormer.riseBack', value: 'back' },
+  { labelKey: 'nodes.dormer.riseFront', value: 'front' },
 ]
 
 const SECTION_OPTIONS: Array<{ labelKey: string; value: DormerSection }> = [
@@ -177,7 +177,7 @@ export default function DormerPanel() {
     const newWindow = WindowNode.parse({
       ...(template ? structuredClone(template) : defaultWindow),
       id,
-      name: `Window ${hostedWindows.length + 1}`,
+      name: t('nodes.dormer.defaultName', { count: hostedWindows.length + 1 }),
       parentId: node.id,
       dormerId: node.id,
       dormerFace: 'front',
@@ -331,7 +331,7 @@ export default function DormerPanel() {
               value={Math.round(node.height * 100) / 100}
             />
             <SliderControl
-              label={node.roofType === 'shed' ? 'Pitch Rise' : t('nodes.dormer.roofHeight')}
+              label={node.roofType === 'shed' ? t('nodes.dormer.pitchRise') : t('nodes.dormer.roofHeight')}
               max={3}
               min={0}
               onChange={(v) => previewProp({ roofHeight: v })}
@@ -344,7 +344,7 @@ export default function DormerPanel() {
             />
           </PanelSection>
 
-          <PanelSection title="Roof Type">
+          <PanelSection title={t('nodes.dormer.roofType')}>
             <div className="grid grid-cols-3 gap-1.5 px-1 pt-1">
               {ROOF_TYPE_OPTIONS.map((option) => {
                 const isSelected = node.roofType === option.value
@@ -368,7 +368,7 @@ export default function DormerPanel() {
           </PanelSection>
 
           {node.roofType === 'shed' && (
-            <PanelSection title="Pitch Direction">
+            <PanelSection title={t('nodes.dormer.pitchDirection')}>
               <div className="grid grid-cols-2 gap-1.5 px-1 pt-1">
                 {SHED_HIGH_SIDE_OPTIONS.map((option) => {
                   const isSelected = node.shedHighSide === option.value
@@ -384,7 +384,7 @@ export default function DormerPanel() {
                       onClick={() => handleUpdate({ shedHighSide: option.value })}
                       type="button"
                     >
-                      <span className="truncate font-medium">{option.label}</span>
+                      <span className="truncate font-medium">{t(option.labelKey)}</span>
                     </button>
                   )
                 })}
