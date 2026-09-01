@@ -263,7 +263,7 @@ export default function StairPanel() {
     <PanelWrapper
       icon="/icons/stairs.webp"
       onClose={handleClose}
-      title={node.name || 'Staircase'}
+      title={node.name || t('nodes.stair.fallbackTitle')}
       width={300}
     >
       <PanelSection title={t('nodes.stair.type')}>
@@ -305,7 +305,7 @@ export default function StairPanel() {
             >
               {levels.map((level) => (
                 <option key={level.id} value={level.id}>
-                  {level.name || `Level ${level.level + 1}`}
+                  {level.name || t('nodes.stair.levelName', { n: level.level + 1 })}
                 </option>
               ))}
             </select>
@@ -322,12 +322,12 @@ export default function StairPanel() {
             >
               {levels.map((level) => (
                 <option key={level.id} value={level.id}>
-                  {level.name || `Level ${level.level + 1}`}
+                  {level.name || t('nodes.stair.levelName', { n: level.level + 1 })}
                 </option>
               ))}
               {candidateDecks.map((deck) => (
                 <option key={deck.id} value={deck.id}>
-                  {deck.name || 'Deck'}
+                  {deck.name || t('nodes.stair.deckName')}
                 </option>
               ))}
             </select>
@@ -336,7 +336,7 @@ export default function StairPanel() {
           {attachedDeck ? (
             <div className="space-y-1.5">
               <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
-                Rise
+                {t('nodes.stair.rise')}
               </div>
               <SegmentedControl
                 onChange={(value) =>
@@ -345,18 +345,18 @@ export default function StairPanel() {
                   )
                 }
                 options={[
-                  { label: 'Follows deck', value: 'follows' },
-                  { label: 'Custom rise', value: 'custom' },
+                  { label: t('nodes.stair.followsDeck'), value: 'follows' },
+                  { label: t('nodes.stair.customRise'), value: 'custom' },
                 ]}
                 value={node.totalRise == null ? 'follows' : 'custom'}
               />
               {node.totalRise == null ? (
                 <div className="px-1 text-[11px] text-muted-foreground">
-                  Currently {resolvedRise} m
+                  {t('nodes.stair.currently', { height: resolvedRise })}
                 </div>
               ) : (
                 <MetricControl
-                  label="Rise"
+                  label={t('nodes.stair.rise')}
                   max={10}
                   min={0.2}
                   onChange={(value) => handleUpdate({ totalRise: value })}
@@ -396,7 +396,7 @@ export default function StairPanel() {
             <>
               <div className="space-y-1.5">
                 <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
-                  Landing
+                  {t('nodes.stair.landing')}
                 </div>
                 <SegmentedControl
                   onChange={(value) => handleUpdate({ topLandingMode: value })}
@@ -431,8 +431,8 @@ export default function StairPanel() {
                 onClick={() => handleSelectSegment(seg.id)}
                 type="button"
               >
-                <span className="truncate">{seg.name || `Segment ${i + 1}`}</span>
-                <span className="text-muted-foreground text-xs capitalize">{seg.segmentType}</span>
+                <span className="truncate">{seg.name || t('nodes.stair.segmentName', { n: i + 1 })}</span>
+                <span className="text-muted-foreground text-xs capitalize">{seg.segmentType === 'stair' ? t('nodes.stairSegment.flight') : t('nodes.stairSegment.landing')}</span>
               </button>
             ))}
           </div>
@@ -464,7 +464,7 @@ export default function StairPanel() {
             value={Math.round((node.width ?? 1) * 100) / 100}
           />
           <MetricControl
-            label="Rise"
+            label={t('nodes.stair.rise')}
             max={10}
             min={0.2}
             onChange={(value) => handleUpdate({ totalRise: value })}
@@ -474,7 +474,7 @@ export default function StairPanel() {
             value={Math.round(resolveStairTotalRise(node, nodes) * 100) / 100}
           />
           <MetricControl
-            label="Steps"
+            label={t('nodes.stair.steps')}
             max={32}
             min={2}
             onChange={(value) => handleUpdate({ stepCount: Math.max(2, Math.round(value)) })}
@@ -492,7 +492,7 @@ export default function StairPanel() {
           )}
           {(node.stairType === 'spiral' || !(node.fillToFloor ?? true)) && (
             <MetricControl
-              label="Thickness"
+              label={t('common.thickness')}
               max={1}
               min={0.02}
               onChange={(value) => handleUpdate({ thickness: value })}
