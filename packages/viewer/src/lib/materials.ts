@@ -589,6 +589,17 @@ export function createMaterial(
 }
 
 /**
+ * Cache-signature fragment for a catalog preset ref. Dynamic library
+ * materials (AI-generated `library:mtl_*`) register asynchronously, so a ref
+ * that fails to resolve is NOT static content: tag it so signature-keyed
+ * material caches re-resolve once the library registers instead of pinning
+ * the dangling-ref fallback for the whole session.
+ */
+export function materialPresetRefSignature(ref: string): string {
+  return getMaterialPresetByRef(ref) ? ref : `${ref}#unresolved`
+}
+
+/**
  * Resolve a MaterialRef ('library:<id>' | 'scene:<id>') to a three.js material.
  * Returns null for an unknown / dangling ref so callers fall back to the
  * slot's default (authored material, then themed default). Never throws.

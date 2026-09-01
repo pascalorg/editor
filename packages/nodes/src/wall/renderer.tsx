@@ -8,7 +8,13 @@ import {
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { getVisibleWallMaterials, NodeRenderer, useNodeEvents, useViewer } from '@pascal-app/viewer'
+import {
+  getVisibleWallMaterials,
+  NodeRenderer,
+  useLibraryMaterialsVersion,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import type { Mesh } from 'three'
 import { useShallow } from 'zustand/react/shallow'
@@ -124,6 +130,10 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
   // dirty loop never fires for a material-only edit). `getMaterialsForWall`'s
   // content hash keeps unaffected walls on their cached materials.
   const sceneMaterials = useScene((s) => s.materials)
+  // Same for the dynamic library: AI-generated `library:mtl_*` presets
+  // register after mount, and a dangling ref cached as the slot default must
+  // re-resolve when they land.
+  const libraryMaterialsVersion = useLibraryMaterialsVersion()
   const baseMaterials = getVisibleWallMaterials(
     node,
     shading,
@@ -132,9 +142,10 @@ const WallRenderer = ({ node }: { node: WallNode }) => {
     sceneTheme,
     sceneMaterials,
   )
+  // biome-ignore lint/correctness/useExhaustiveDependencies: libraryMaterialsVersion invalidates the ref resolution inside createWallExtraSlotMaterials
   const extraMaterials = useMemo(
     () => createWallExtraSlotMaterials(node, shading, sceneMaterials),
-    [node, sceneMaterials, shading],
+    [node, sceneMaterials, shading, libraryMaterialsVersion],
   )
   useEffect(
     () => () => {
