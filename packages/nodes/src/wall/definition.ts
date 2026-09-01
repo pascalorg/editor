@@ -172,6 +172,7 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
 
   presentation: {
     label: 'Wall',
+    labelKey: 'panel.nodeType.wall',
     description:
       'A straight or curved wall segment. Hosts doors, windows, lean-to extensions, and wall-mounted items.',
     icon: { kind: 'url', src: '/icons/wall.webp' },

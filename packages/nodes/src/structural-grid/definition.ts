@@ -47,6 +47,7 @@ export const structuralGridDefinition: NodeDefinition<typeof StructuralGridNode>
 
   presentation: {
     label: 'Structural Grid',
+    labelKey: 'panel.nodeType.structuralGrid',
     description: 'Persistent construction grid axis with identification bubbles.',
     icon: { kind: 'url', src: '/icons/structural-grid.webp' },
     paletteSection: 'structure',

@@ -272,6 +272,7 @@ export const elevatorDefinition: NodeDefinition<typeof ElevatorNode> = {
 
   presentation: {
     label: 'Elevator',
+    labelKey: 'panel.nodeType.elevator',
     description: 'A multi-level elevator shaft with configurable openings per level.',
     icon: { kind: 'url', src: '/icons/wallcut.webp' },
     paletteSection: 'structure',

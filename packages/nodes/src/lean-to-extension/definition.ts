@@ -496,6 +496,7 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
   ],
   presentation: {
     label: 'Canopy',
+    labelKey: 'panel.nodeType.leanToExtension',
     description:
       'An attached mono-pitch or freestanding mono, gable, or butterfly canopy with managed structure and drainage.',
     icon: { kind: 'url', src: '/icons/lean-to-extension.webp' },

@@ -62,6 +62,7 @@ export const measurementDefinition: NodeDefinition<typeof MeasurementNode> = {
 
   presentation: {
     label: 'Measurement',
+    labelKey: 'panel.nodeType.measurement',
     description: 'A persistent distance, angle, area, perimeter, or volume annotation.',
     icon: { kind: 'iconify', name: 'lucide:ruler' },
     hidden: true,

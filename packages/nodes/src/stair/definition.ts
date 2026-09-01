@@ -526,6 +526,7 @@ export const stairDefinition: NodeDefinition<typeof StairNode> = {
 
   presentation: {
     label: 'Stair',
+    labelKey: 'panel.nodeType.stair',
     description:
       'A stair composed of one or more flights with configurable treads, risers, railings.',
     icon: { kind: 'url', src: '/icons/stairs.webp' },

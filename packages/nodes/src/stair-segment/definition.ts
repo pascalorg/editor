@@ -139,6 +139,7 @@ export const stairSegmentDefinition: NodeDefinition<typeof StairSegmentNode> = {
 
   presentation: {
     label: 'Stair Segment',
+    labelKey: 'panel.nodeType.stairSegment',
     description: 'A single flight of a parent stair.',
     icon: { kind: 'url', src: '/icons/stairs.webp' },
     paletteSection: 'structure',

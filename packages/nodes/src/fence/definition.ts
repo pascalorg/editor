@@ -390,6 +390,7 @@ export const fenceDefinition: NodeDefinition<typeof FenceNode> = {
 
   presentation: {
     label: 'Fence',
+    labelKey: 'panel.nodeType.fence',
     description: 'A straight or curved fence segment with configurable posts and infill.',
     icon: { kind: 'url', src: '/icons/fence.webp' },
     paletteSection: 'structure',

@@ -274,6 +274,7 @@ export const doorDefinition: NodeDefinition<typeof DoorNode> = {
 
   presentation: {
     label: 'Door',
+    labelKey: 'panel.nodeType.door',
     description: 'A door cut into a wall. Animated open/close state.',
     icon: { kind: 'url', src: '/icons/door.webp' },
     paletteSection: 'structure',

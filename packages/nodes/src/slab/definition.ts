@@ -369,6 +369,7 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
 
   presentation: {
     label: 'Slab',
+    labelKey: 'panel.nodeType.slab',
     description: 'A polygon-bounded floor surface that hosts items on top.',
     icon: { kind: 'url', src: '/icons/floor.webp' },
     paletteSection: 'structure',

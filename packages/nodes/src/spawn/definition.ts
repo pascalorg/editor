@@ -107,6 +107,7 @@ export const spawnDefinition: NodeDefinition<typeof SpawnNode> = {
 
   presentation: {
     label: 'Spawn Point',
+    labelKey: 'panel.nodeType.spawn',
     description: 'Player or camera origin within a level. One per level.',
     icon: { kind: 'url', src: '/icons/spawn-point.webp' },
     paletteSection: 'structure',

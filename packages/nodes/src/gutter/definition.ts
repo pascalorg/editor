@@ -191,6 +191,7 @@ export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
 
   presentation: {
     label: 'Gutter',
+    labelKey: 'panel.nodeType.gutter',
     description: 'Rain-water channel running along the eave of a roof segment.',
     icon: { kind: 'url', src: '/icons/gutter.webp' },
     paletteSection: 'structure',

@@ -87,6 +87,7 @@ export const ductTerminalDefinition: NodeDefinition<typeof DuctTerminalNode> = {
 
   presentation: {
     label: 'Register',
+    labelKey: 'panel.nodeType.ductTerminal',
     description:
       'Duct terminal — supply register, ceiling diffuser, or return grille. Duct runs end at its collar.',
     icon: { kind: 'url', src: '/icons/registers.webp' },

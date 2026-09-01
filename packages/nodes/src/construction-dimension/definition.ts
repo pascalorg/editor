@@ -79,6 +79,7 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
 
   presentation: {
     label: 'Construction Dimension',
+    labelKey: 'panel.nodeType.constructionDimension',
     description: 'Associative linear, curved, circular, angular, or coordinate plan dimension.',
     icon: { kind: 'iconify', name: 'lucide:ruler-dimension-line' },
     hidden: true,

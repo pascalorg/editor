@@ -271,6 +271,7 @@ export const skylightDefinition: NodeDefinition<typeof SkylightNode> = {
 
   presentation: {
     label: 'Skylight',
+    labelKey: 'panel.nodeType.skylight',
     description: 'Framed glass opening on a roof segment.',
     icon: { kind: 'url', src: '/icons/skylight.webp' },
     paletteSection: 'structure',

@@ -113,6 +113,7 @@ export const liquidLineDefinition: NodeDefinition<typeof LiquidLineNode> = {
 
   presentation: {
     label: 'Liquid Line',
+    labelKey: 'panel.nodeType.liquidLine',
     description:
       'Standalone refrigerant liquid line — a thin bare-copper run; Follow mode traces an existing lineset.',
     icon: { kind: 'url', src: '/icons/lineset.webp' },

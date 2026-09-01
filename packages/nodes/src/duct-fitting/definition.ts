@@ -126,6 +126,7 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
 
   presentation: {
     label: 'Duct Fitting',
+    labelKey: 'panel.nodeType.ductFitting',
     description: 'Elbow, tee, reducer, or square-to-round transition connecting duct runs.',
     icon: { kind: 'url', src: '/icons/duct-fitting.webp' },
     paletteSection: 'structure',

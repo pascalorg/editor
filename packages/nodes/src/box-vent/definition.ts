@@ -222,6 +222,7 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
 
   presentation: {
     label: 'Box Vent',
+    labelKey: 'panel.nodeType.boxVent',
     description: 'Small louvered exhaust vent that sits on a roof slope.',
     icon: { kind: 'url', src: '/icons/box-vent.webp' },
     paletteSection: 'structure',

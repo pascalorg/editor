@@ -162,6 +162,7 @@ export const eyebrowVentDefinition: NodeDefinition<typeof EyebrowVentNode> = {
 
   presentation: {
     label: 'Eyebrow Vent',
+    labelKey: 'panel.nodeType.eyebrowVent',
     description: 'Low curved lens-shaped roof vent with a louvered front.',
     icon: { kind: 'url', src: '/icons/eyebrow-vent.webp' },
     paletteSection: 'structure',

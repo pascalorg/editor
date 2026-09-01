@@ -121,6 +121,7 @@ export const linesetDefinition: NodeDefinition<typeof LinesetNode> = {
 
   presentation: {
     label: 'Lineset',
+    labelKey: 'panel.nodeType.lineset',
     description:
       'Refrigerant lineset — copper suction + liquid pair joining a condenser to the indoor coil.',
     icon: { kind: 'url', src: '/icons/lineset.webp' },

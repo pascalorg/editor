@@ -126,6 +126,7 @@ export const blockDefinition: NodeDefinition<typeof BlockNode> = {
   ],
   presentation: {
     label: 'Block',
+    labelKey: 'panel.nodeType.block',
     description: 'A topology-backed solid edited directly in the canvas.',
     icon: { kind: 'url', src: '/icons/cube.webp' },
     paletteSection: 'structure',

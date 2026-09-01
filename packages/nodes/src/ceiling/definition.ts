@@ -221,6 +221,7 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
 
   presentation: {
     label: 'Ceiling',
+    labelKey: 'panel.nodeType.ceiling',
     description: 'A polygon-bounded ceiling surface that hosts ceiling-mounted items.',
     icon: { kind: 'url', src: '/icons/ceiling.webp' },
     paletteSection: 'structure',
