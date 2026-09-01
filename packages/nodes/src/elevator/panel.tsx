@@ -497,7 +497,7 @@ export default function ElevatorPanel() {
 
       <PanelSection title={t('common.position')}>
         <SliderControl
-          label="X"
+          label={t('common.x')}
           onChange={(value) => {
             const position = getSupportedPosition(value, displayPosition[2])
             previewTransform(position, displayRotation)
@@ -513,7 +513,7 @@ export default function ElevatorPanel() {
           value={roundMeters(displayPosition[0])}
         />
         <SliderControl
-          label="Y"
+          label={t('common.y')}
           onChange={(value) => {
             const position: ElevatorNode['position'] = [
               displayPosition[0],
@@ -537,7 +537,7 @@ export default function ElevatorPanel() {
           value={roundMeters(displayPosition[1])}
         />
         <SliderControl
-          label="Z"
+          label={t('common.z')}
           onChange={(value) => {
             const position = getSupportedPosition(displayPosition[0], value)
             previewTransform(position, displayRotation)
@@ -598,7 +598,7 @@ export default function ElevatorPanel() {
             >
               {levels.map((level) => (
                 <option key={level.id} value={level.id}>
-                  {level.name || `Level ${level.level}`}
+                  {level.name || t('nodes.elevator.levelFallback', { n: level.level })}
                 </option>
               ))}
             </select>
@@ -615,7 +615,7 @@ export default function ElevatorPanel() {
             >
               {levels.map((level) => (
                 <option key={level.id} value={level.id}>
-                  {level.name || `Level ${level.level}`}
+                  {level.name || t('nodes.elevator.levelFallback', { n: level.level })}
                 </option>
               ))}
             </select>
@@ -633,7 +633,7 @@ export default function ElevatorPanel() {
           >
             {defaultLevelOptions.map((level) => (
               <option key={level.id} value={level.id}>
-                {level.name || `Level ${level.level}`}
+                {level.name || t('nodes.elevator.levelFallback', { n: level.level })}
               </option>
             ))}
           </select>
@@ -813,7 +813,7 @@ export default function ElevatorPanel() {
                 key={level.id}
               >
                 <span className="min-w-0 truncate text-sm">
-                  {level.name || `Level ${level.level}`}
+                  {level.name || t('nodes.elevator.levelFallback', { n: level.level })}
                 </span>
                 <div className="flex shrink-0 gap-1.5">
                   <button
@@ -868,7 +868,7 @@ export default function ElevatorPanel() {
                 type="button"
               >
                 <span className="flex min-w-0 flex-col">
-                  <span className="truncate text-xs">{level.name || `Level ${level.level}`}</span>
+                  <span className="truncate text-xs">{level.name || t('nodes.elevator.levelFallback', { n: level.level })}</span>
                   {isDisabled ? (
                     <span className="mt-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-current/65">
                       {t('nodes.elevator.disabled')}

@@ -266,7 +266,7 @@ export default function SkylightPanel() {
       title={node.name || t('nodes.skylight.skylight')}
       width={300}
     >
-      <PanelSection title="Type">
+      <PanelSection title={t('nodes.skylight.type')}>
         <div className="grid grid-cols-2 gap-2 px-1 pt-1">
           {SKYLIGHT_TYPE_ORDER.map((skylightType) => {
             const isSelected = activeSkylightType === skylightType
@@ -290,7 +290,7 @@ export default function SkylightPanel() {
           })}
         </div>
         <SliderControl
-          label="Glass Thickness"
+          label={t('nodes.skylight.glassThickness')}
           max={0.05}
           min={0.002}
           onChange={(v) => previewProp({ glassThickness: v })}
@@ -304,7 +304,7 @@ export default function SkylightPanel() {
         {activeSkylightType === 'lantern' && (
           <>
             <SliderControl
-              label="Lantern Height"
+              label={t('nodes.skylight.lanternHeight')}
               max={1.0}
               min={0.05}
               onChange={(v) => previewProp({ lanternHeight: v })}
@@ -316,7 +316,7 @@ export default function SkylightPanel() {
               value={Math.round((node.lanternHeight ?? 0.25) * 1000) / 1000}
             />
             <SliderControl
-              label="Top Scale"
+              label={t('nodes.skylight.topScale')}
               max={0.95}
               min={0}
               onChange={(v) => previewProp({ lanternTopScale: v })}
@@ -332,7 +332,7 @@ export default function SkylightPanel() {
         {activeSkylightType === 'opening' && (
           <>
             <SliderControl
-              label="Open"
+              label={t('nodes.skylight.open')}
               max={1}
               min={0}
               onChange={(v) => previewProp({ operationState: v })}
@@ -344,7 +344,7 @@ export default function SkylightPanel() {
               value={Math.round((node.operationState ?? 0) * 100) / 100}
             />
             <SliderControl
-              label="Opening Angle"
+              label={t('nodes.skylight.openingAngle')}
               max={80}
               min={0}
               onChange={(deg) => previewProp({ openingAngle: (deg * Math.PI) / 180 })}
@@ -375,7 +375,7 @@ export default function SkylightPanel() {
             />
             {(node.motorHousing ?? false) && (
               <SliderControl
-                label="Motor Housing"
+                label={t('nodes.skylight.motorHousing')}
                 max={0.2}
                 min={0.03}
                 onChange={(v) => previewProp({ motorHousingSize: v })}
@@ -392,7 +392,7 @@ export default function SkylightPanel() {
         {activeSkylightType === 'sliding' && (
           <>
             <SliderControl
-              label="Open"
+              label={t('nodes.skylight.open')}
               max={1}
               min={0}
               onChange={(v) => previewProp({ operationState: v })}
@@ -412,7 +412,7 @@ export default function SkylightPanel() {
               value={(node.slideDirection ?? 'z') as any}
             />
             <SliderControl
-              label="Track Width"
+              label={t('nodes.skylight.trackWidth')}
               max={0.12}
               min={0.02}
               onChange={(v) => previewProp({ trackWidth: v })}
@@ -454,9 +454,9 @@ export default function SkylightPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Frame">
+      <PanelSection title={t('nodes.skylight.frame')}>
         <SliderControl
-          label="Thickness"
+          label={t('common.thickness')}
           max={0.2}
           min={0.02}
           onChange={(v) => previewProp({ frameThickness: v })}
@@ -468,7 +468,7 @@ export default function SkylightPanel() {
           value={Math.round((node.frameThickness ?? 0.05) * 1000) / 1000}
         />
         <SliderControl
-          label="Depth"
+          label={t('common.depth')}
           max={0.3}
           min={0.02}
           onChange={(v) => previewProp({ frameDepth: v })}
@@ -480,7 +480,7 @@ export default function SkylightPanel() {
           value={Math.round((node.frameDepth ?? 0.08) * 1000) / 1000}
         />
         <SliderControl
-          label="Cutout Offset"
+          label={t('nodes.skylight.cutoutOffset')}
           max={0.2}
           min={0}
           onChange={(v) => previewProp({ cutoutOffset: v })}
@@ -493,7 +493,7 @@ export default function SkylightPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Curb">
+      <PanelSection title={t('nodes.skylight.curb')}>
         <SegmentedControl
           onChange={(v) => handleUpdate({ curb: v === 'yes' })}
           options={[
@@ -504,7 +504,7 @@ export default function SkylightPanel() {
         />
         {(node.curb ?? false) && (
           <SliderControl
-            label="Height"
+            label={t('common.height')}
             max={0.3}
             min={0.02}
             onChange={(v) => previewProp({ curbHeight: v })}

@@ -5,6 +5,7 @@ import { SNAPSHOT_MAX_EDGE } from '@pascal-app/viewer'
 import { Check, Crop, Loader2, Maximize2, Monitor, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useIsMobile } from '../../hooks/use-mobile'
+import { useTranslations } from '../../lib/i18n'
 import { triggerSFX } from '../../lib/sfx-bus'
 import useEditor, {
   type SnapshotCropMode,
@@ -108,6 +109,7 @@ const CROP_LABELS: Record<CropMode, string> = {
 }
 
 export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
+  const t = useTranslations()
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const captureMode = useEditor((s) => s.captureMode)
   const setCaptureMode = useEditor((s) => s.setCaptureMode)
@@ -535,7 +537,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       {/* Top-right dismiss button (icon-only on mobile) */}
       <div className="pointer-events-auto absolute top-4 right-4">
         <button
-          aria-label="Close capture mode"
+          aria-label={t('editor.closeCaptureMode')}
           className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 text-white/80 text-xs backdrop-blur-md transition-colors hover:bg-neutral-950 hover:text-white"
           onClick={dismiss}
           type="button"

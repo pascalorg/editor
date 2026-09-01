@@ -2,6 +2,7 @@
 
 import { Box, Columns2, Map as MapIcon } from 'lucide-react'
 import type { ReactNode } from 'react'
+import { useTranslations } from '../../lib/i18n'
 import { cn } from '../../lib/utils'
 import { normalizeViewerStageModes, type ViewerStageMode } from './viewer-stage-modes'
 
@@ -22,11 +23,12 @@ export function ViewerStageSwitcher({
   modes,
   onChange,
 }: ViewerStageSwitcherProps) {
+  const t = useTranslations()
   const enabledModes = normalizeViewerStageModes(modes)
 
   return (
     <div
-      aria-label="Viewer layout"
+      aria-label={t('editor.viewerLayout')}
       className={cn(
         'dark absolute top-4 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-white/10 bg-neutral-950/82 p-1 text-white shadow-elevation-4 backdrop-blur-xl',
         className,
@@ -37,7 +39,7 @@ export function ViewerStageSwitcher({
         <StageButton
           active={mode === '3d'}
           icon={<Box />}
-          label="3D"
+          label={t('editor.viewer3d')}
           onClick={() => onChange('3d')}
         />
       ) : null}
@@ -45,7 +47,7 @@ export function ViewerStageSwitcher({
         <StageButton
           active={mode === '2d'}
           icon={<MapIcon />}
-          label="2D"
+          label={t('editor.viewer2d')}
           onClick={() => onChange('2d')}
         />
       ) : null}
@@ -54,7 +56,7 @@ export function ViewerStageSwitcher({
           active={mode === 'split'}
           className={hideSplitOnMobile && enabledModes.length > 1 ? 'hidden md:flex' : undefined}
           icon={<Columns2 />}
-          label="Split"
+          label={t('editor.viewerSplit')}
           onClick={() => onChange('split')}
         />
       ) : null}

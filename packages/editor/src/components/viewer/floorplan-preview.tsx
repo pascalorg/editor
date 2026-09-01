@@ -982,9 +982,9 @@ export function FloorplanPreview({
             fontWeight: 600,
           }}
         >
-          Floor
+          {t('editor.floor')}
           <select
-            aria-label="Floor"
+            aria-label={t('editor.floor')}
             onChange={(event) => chooseLevel(event.target.value)}
             style={{
               border: '1px solid rgba(148,163,184,.55)',
@@ -1026,28 +1026,28 @@ export function FloorplanPreview({
         }}
       >
         <button
-          aria-label="Zoom out"
+          aria-label={t('editor.zoomOut')}
           onClick={() => zoom(1.2)}
           style={controlStyle}
-          title="Zoom out"
+          title={t('editor.zoomOut')}
           type="button"
         >
           <Minus size={16} />
         </button>
         <button
-          aria-label="Fit floor plan"
+          aria-label={t('editor.fitFloorPlan')}
           onClick={() => updateLocalViewBox(fittedViewBox)}
           style={controlStyle}
-          title="Fit floor plan"
+          title={t('editor.fitFloorPlan')}
           type="button"
         >
           <Maximize2 size={15} />
         </button>
         <button
-          aria-label="Zoom in"
+          aria-label={t('editor.zoomIn')}
           onClick={() => zoom(0.8)}
           style={controlStyle}
-          title="Zoom in"
+          title={t('editor.zoomIn')}
           type="button"
         >
           <Plus size={16} />

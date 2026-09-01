@@ -75,7 +75,7 @@ export function FloorplanModeCoordinator() {
         </button>
       ) : null}
       <button
-        aria-label="Dismiss"
+        aria-label={t('common.dismiss')}
         className="shrink-0 rounded p-1 text-muted-foreground hover:bg-white/10 hover:text-foreground"
         onClick={dismissNotice}
         type="button"

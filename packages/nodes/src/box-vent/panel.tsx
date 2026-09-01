@@ -337,7 +337,7 @@ export default function BoxVentPanel() {
               value={Math.round((node.domeCurvature ?? 1.0) * 100) / 100}
             />
             <SliderControl
-              label="Base Flange"
+              label={t('nodes.boxVent.baseFlange')}
               max={0.2}
               min={0}
               onChange={(v) => previewProp({ hoodOverhang: v })}

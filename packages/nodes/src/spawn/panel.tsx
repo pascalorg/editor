@@ -9,6 +9,7 @@ import {
   SliderControl,
   triggerSFX,
   useEditor,
+  useTranslations,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Trash2 } from 'lucide-react'
@@ -20,6 +21,7 @@ export default function SpawnPanel() {
   const updateNode = useScene((s) => s.updateNode)
   const deleteNode = useScene((s) => s.deleteNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
+  const t = useTranslations()
 
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as SpawnNode | undefined) : undefined,
@@ -97,12 +99,12 @@ export default function SpawnPanel() {
     <PanelWrapper
       icon="/icons/spawn-point.webp"
       onClose={handleClose}
-      title="Spawn Point"
+      title={t('nodes.spawn.spawnPoint')}
       width={300}
     >
-      <PanelSection title="Position">
+      <PanelSection title={t('panel.section.position')}>
         <SliderControl
-          label="X"
+          label={t('common.x')}
           max={node.position[0] + 2}
           min={node.position[0] - 2}
           onChange={(value) =>
@@ -114,7 +116,7 @@ export default function SpawnPanel() {
           value={Math.round(node.position[0] * 100) / 100}
         />
         <SliderControl
-          label="Y"
+          label={t('common.y')}
           max={node.position[1] + 2}
           min={node.position[1] - 2}
           onChange={(value) =>
@@ -126,7 +128,7 @@ export default function SpawnPanel() {
           value={Math.round(node.position[1] * 100) / 100}
         />
         <SliderControl
-          label="Z"
+          label={t('common.z')}
           max={node.position[2] + 2}
           min={node.position[2] - 2}
           onChange={(value) =>
@@ -139,9 +141,9 @@ export default function SpawnPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Facing">
+      <PanelSection title={t('nodes.spawn.facing')}>
         <SliderControl
-          label="Yaw"
+          label={t('common.yaw')}
           max={storedRotationDegrees + 90}
           min={storedRotationDegrees - 90}
           onChange={handleRotationChange}
@@ -153,13 +155,17 @@ export default function SpawnPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={t('nodes.spawn.actions')}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
+          <ActionButton
+            icon={<Move className="h-4 w-4" />}
+            label={t('editor.move')}
+            onClick={handleMove}
+          />
           <ActionButton
             className="border-red-500/40 text-red-200 hover:bg-red-500/15"
             icon={<Trash2 className="h-4 w-4" />}
-            label="Delete"
+            label={t('editor.delete')}
             onClick={handleDelete}
           />
         </ActionGroup>

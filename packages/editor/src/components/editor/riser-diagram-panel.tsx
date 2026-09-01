@@ -4,6 +4,7 @@ import { type AnyNodeId, buildRiserDiagram, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { X } from 'lucide-react'
 import { useMemo } from 'react'
+import { useTranslations } from '../../lib/i18n'
 import useEditor from '../../store/use-editor'
 
 const WASTE_COLOR = '#0ea5e9'
@@ -31,6 +32,7 @@ export function RiserDiagramPanel() {
 }
 
 function RiserDiagramContent() {
+  const t = useTranslations()
   const setRiserOpen = useEditor((s) => s.setRiserOpen)
   const nodes = useScene((s) => s.nodes)
   const selectedIds = useViewer((s) => s.selection.selectedIds)
@@ -74,7 +76,7 @@ function RiserDiagramContent() {
           <svg
             height={Math.max(height, 120)}
             role="img"
-            aria-label="DWV riser diagram"
+            aria-label={t('editor.riserDiagram')}
             viewBox={`0 0 ${Math.max(width, 200)} ${Math.max(height, 120)}`}
             width="100%"
           >

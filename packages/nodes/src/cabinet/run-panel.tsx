@@ -14,6 +14,7 @@ import {
   SegmentedControl,
   SliderControl,
   ToggleControl,
+  useTranslations,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Plus, Trash } from 'lucide-react'
@@ -404,6 +405,7 @@ export function CabinetRunPanel({
   modules: CabinetModuleNodeType[]
   onClose: () => void
 }) {
+  const t = useTranslations()
   const setSelection = useViewer((s) => s.setSelection)
   const sortedModules = useMemo(
     () => [...modules].sort((a, b) => a.position[0] - b.position[0]),
@@ -464,7 +466,7 @@ export function CabinetRunPanel({
       title={node.name || 'Modular Cabinet'}
       width={320}
     >
-      <PanelSection title="Modules">
+      <PanelSection title={t('nodes.cabinet.modules')}>
         <div className="flex flex-col gap-2 px-1 pb-2">
           {sortedModules.map((module, index) => (
             <div
@@ -498,24 +500,24 @@ export function CabinetRunPanel({
           <div className="grid grid-cols-2 gap-2">
             <ActionButton
               icon={<Plus className="h-4 w-4" />}
-              label="Add left"
+              label={t('nodes.cabinet.addLeft')}
               onClick={() => addModule('left')}
             />
             <ActionButton
               icon={<Plus className="h-4 w-4" />}
-              label="Add right"
+              label={t('nodes.cabinet.addRight')}
               onClick={() => addModule('right')}
             />
           </div>
         </div>
       </PanelSection>
 
-      <PanelSection title="Shared Plinth & Countertop">
+      <PanelSection title={t('nodes.cabinet.sharedPlinthCountertop')}>
         <div className="space-y-2 px-1 pb-2">
           {node.runTier === 'base' && (
             <div>
               <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                Standard dimensions
+                {t('nodes.cabinet.standardDimensions')}
               </div>
               <SegmentedControl
                 mixed={dimensionProfile === 'custom'}
@@ -527,12 +529,12 @@ export function CabinetRunPanel({
                 value={dimensionProfile === 'us-base' ? 'us-base' : 'metric-base'}
               />
               <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
-                Applies depth, carcass, plinth, and countertop thickness to this run.
+                {t('nodes.cabinet.appliesStandardDimensions')}
               </p>
             </div>
           )}
           <SliderControl
-            label="Depth"
+            label={t('common.depth')}
             max={1.2}
             min={0.3}
             onChange={(value) => updateRun({ depth: value })}
@@ -542,7 +544,7 @@ export function CabinetRunPanel({
             value={node.depth}
           />
           <SliderControl
-            label="Carcass height"
+            label={t('nodes.cabinet.carcassHeight')}
             max={node.runTier === 'tall' ? 2.4 : 1.4}
             min={Math.max(0.4, ...modules.map((module) => minCabinetCarcassHeightForStack(module)))}
             onChange={(value) => updateRun({ carcassHeight: value })}
@@ -553,12 +555,12 @@ export function CabinetRunPanel({
           />
           <ToggleControl
             checked={node.showPlinth}
-            label="Show plinth"
+            label={t('nodes.cabinet.showPlinth')}
             onChange={(checked) => updateRun({ showPlinth: checked })}
           />
           {node.showPlinth && (
             <SliderControl
-              label="Plinth height"
+              label={t('nodes.cabinet.plinthHeight')}
               max={0.3}
               min={0.02}
               onChange={(value) => updateRun({ plinthHeight: value })}
@@ -570,13 +572,13 @@ export function CabinetRunPanel({
           )}
           <ToggleControl
             checked={node.withCountertop}
-            label="Show countertop"
+            label={t('nodes.cabinet.showCountertop')}
             onChange={(checked) => updateRun({ withCountertop: checked })}
           />
           {node.withCountertop && (
             <>
               <SliderControl
-                label="Countertop height"
+                label={t('nodes.cabinet.countertopHeight')}
                 max={0.08}
                 min={0.005}
                 onChange={(value) => updateRun({ countertopThickness: value })}
@@ -586,7 +588,7 @@ export function CabinetRunPanel({
                 value={node.countertopThickness}
               />
               <SliderControl
-                label="Countertop depth"
+                label={t('nodes.cabinet.countertopDepth')}
                 max={0.12}
                 min={0}
                 onChange={(value) => updateRun({ countertopOverhang: value })}
@@ -600,11 +602,11 @@ export function CabinetRunPanel({
         </div>
       </PanelSection>
 
-      <PanelSection title="Island & Bar">
+      <PanelSection title={t('nodes.cabinet.islandAndBar')}>
         <div className="space-y-2 px-1 pb-2">
           {node.withCountertop && node.barLedge?.edge !== 'back' && (
             <SliderControl
-              label="Seating overhang"
+              label={t('nodes.cabinet.seatingOverhang')}
               max={0.45}
               min={0}
               onChange={(value) => updateRun({ countertopBackOverhang: value })}
@@ -616,19 +618,19 @@ export function CabinetRunPanel({
           )}
           <ToggleControl
             checked={node.withFinishedBack}
-            label="Finished back"
+            label={t('nodes.cabinet.finishedBack')}
             onChange={(checked) => updateRun({ withFinishedBack: checked })}
           />
           {node.withCountertop && (
             <ToggleControl
               checked={node.withWaterfall}
-              label="Waterfall ends"
+              label={t('nodes.cabinet.waterfallEnds')}
               onChange={(checked) => updateRun({ withWaterfall: checked })}
             />
           )}
           <ToggleControl
             checked={Boolean(node.barLedge)}
-            label="Bar counter"
+            label={t('nodes.cabinet.barCounter')}
             onChange={(checked) =>
               updateRun({
                 barLedge: checked ? { edge: 'back', height: 1.06, depth: 0.35 } : undefined,
@@ -644,14 +646,14 @@ export function CabinetRunPanel({
                   })
                 }
                 options={[
-                  { value: 'back', label: 'Back' },
-                  { value: 'left', label: 'Left' },
-                  { value: 'right', label: 'Right' },
+                  { value: 'back', label: t('nodes.cabinet.back') },
+                  { value: 'left', label: t('nodes.cabinet.left') },
+                  { value: 'right', label: t('nodes.cabinet.right') },
                 ]}
                 value={node.barLedge.edge}
               />
               <SliderControl
-                label="Bar height"
+                label={t('nodes.cabinet.barHeight')}
                 max={1.3}
                 min={0.9}
                 onChange={(value) => updateRun({ barLedge: { ...node.barLedge!, height: value } })}
@@ -661,7 +663,7 @@ export function CabinetRunPanel({
                 value={node.barLedge.height}
               />
               <SliderControl
-                label="Bar depth"
+                label={t('nodes.cabinet.barDepth')}
                 max={0.5}
                 min={0.15}
                 onChange={(value) => updateRun({ barLedge: { ...node.barLedge!, depth: value } })}
@@ -675,11 +677,11 @@ export function CabinetRunPanel({
         </div>
       </PanelSection>
 
-      <PanelSection title="Fronts">
+      <PanelSection title={t('nodes.cabinet.fronts')}>
         <div className="space-y-2 px-1 pb-2">
           <div>
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-              Style
+              {t('nodes.cabinet.style')}
             </div>
             <SegmentedControl
               onChange={(value) =>
@@ -732,7 +734,7 @@ export function CabinetRunPanel({
         </div>
       </PanelSection>
 
-      <PanelSection title="Handles">
+      <PanelSection title={t('nodes.cabinet.handles')}>
         <div className="space-y-2 px-1 pb-2">
           <div>
             <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">

@@ -103,7 +103,7 @@ export const ViewerSceneHeader = ({
         <div className="flex items-center gap-3 px-3 py-2.5">
           {onBack ? (
             <button
-              aria-label="Back"
+              aria-label={t('common.back')}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
               onClick={onBack}
               type="button"
@@ -112,7 +112,7 @@ export const ViewerSceneHeader = ({
             </button>
           ) : (
             <Link
-              aria-label="Back"
+              aria-label={t('common.back')}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
               href={backHref}
               prefetch={false}
