@@ -274,6 +274,14 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     return () => emitter.off('snapshot:saved', handler)
   }, [setCaptureMode])
 
+  // From the shutter firing until the saved toast clears, walk / drone hold
+  // still: a late WASD tap or mouse twitch must not shift the frame out from
+  // under the shot the user just took.
+  useEffect(() => {
+    useEditor.getState().setCaptureShutterHold(captureState !== 'idle')
+    return () => useEditor.getState().setCaptureShutterHold(false)
+  }, [captureState])
+
   const dismiss = useCallback(() => setCaptureMode(false), [setCaptureMode])
 
   // Tracks whether the active drag is a "move entire rect" gesture

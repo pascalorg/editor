@@ -479,6 +479,12 @@ type EditorState = {
   captureFovBaseline: number | null
   setCaptureFov: (fov: number) => void
   armCaptureFov: (fov: number | null) => void
+  // The shutter has fired and the snapshot is being rendered/saved: walk /
+  // drone freeze look + movement so a late WASD tap or mouse twitch can't
+  // shift the frame out from under the shot. Set by the capture overlay for
+  // the whole capturing→saved window.
+  captureShutterHold: boolean
+  setCaptureShutterHold: (hold: boolean) => void
   // Workspace mode: 'edit' is the full editing surface; 'studio' is the
   // render/snapshot surface (clean canvas, no editing chrome or selection).
   // Entering studio forces a 3D-only view and restores the prior view on exit.
@@ -1392,6 +1398,8 @@ const useEditor = create<EditorState>()(
             ? { captureFov: null, captureFovBaseline: null }
             : { captureFov: fov, captureFovBaseline: fov },
         ),
+      captureShutterHold: false,
+      setCaptureShutterHold: (hold) => set({ captureShutterHold: hold }),
       workspaceMode: 'edit' as WorkspaceMode,
       _viewModeBeforeStudio: null as ViewMode | null,
       setWorkspaceMode: (mode) => {

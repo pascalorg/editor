@@ -677,6 +677,7 @@ export const FirstPersonControls = () => {
   const suspendRef = useRef(false)
   const eyeOffsetRef = useRef(CAMERA_EYE_OFFSET)
   const [crouched, setCrouched] = useState(false)
+  const captureShutterHold = useEditor((state) => state.captureShutterHold)
   const [isElevatorRideLocked, setIsElevatorRideLocked] = useState(false)
   const ridingElevatorRef = useRef<{
     elevatorId: AnyNodeId
@@ -1157,6 +1158,8 @@ export const FirstPersonControls = () => {
     const canvas = gl.domElement
     const handleMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return
+      // Shutter hold: the shot is rendering — a mouse twitch must not pan it.
+      if (useEditor.getState().captureShutterHold) return
 
       yawRef.current -= e.movementX * LOOK_SENSITIVITY
       pitchRef.current = Math.max(
@@ -1588,6 +1591,8 @@ export const FirstPersonControls = () => {
   // rises, Q (or Ctrl) sinks, and Shift boosts.
   useFrame((_, delta) => {
     if (!isDroneMode) return
+    // Shutter hold: freeze the drone mid-air while the shot renders.
+    if (useEditor.getState().captureShutterHold) return
 
     const step = Math.min(delta, 0.1)
     const movement = movementInputRef.current
@@ -1730,7 +1735,7 @@ export const FirstPersonControls = () => {
             maxRunSpeed={crouched ? CROUCH_RUN_SPEED : 5}
             maxSlope={1.2}
             maxWalkSpeed={crouched ? CROUCH_WALK_SPEED : 2}
-            paused={isElevatorRideLocked}
+            paused={isElevatorRideLocked || captureShutterHold}
             position={controllerStart.position}
             ref={setControllerApi}
           />
