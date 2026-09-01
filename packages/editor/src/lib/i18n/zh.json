@@ -1218,7 +1218,6 @@
   "tools.spawnPoint": "出生点",
   "tools.stairs": "楼梯",
   "tools.wall": "墙",
-  "tools.wall.setStartEnd": "设置墙体起点 / 终点",
   "tools.window": "窗",
   "tools.zone": "区域",
   "treeActions.cameraSnapshot": "相机快照",

@@ -166,8 +166,8 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   floorplanMoveTarget: wallFloorplanMoveTarget,
   floorplanSiblingOverrides: wallFloorplanSiblingOverrides,
   toolHints: [
-    { key: 'Left click', label: 'Set wall start / end', labelKey: 'tools.wall.setStartEnd' },
-    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
+    { key: 'Left click', label: 'Set wall start / end', labelKey: 'nodes.wall.toolHints.setStartEnd' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'nodes.wall.toolHints.cancel' },
   ],
 
   presentation: {
