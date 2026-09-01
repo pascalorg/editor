@@ -344,6 +344,6 @@ export {
 export { ZoneNode } from './nodes/zone'
 export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
 export { MAX_TERRAIN_SIDE, TerrainData } from './terrain'
-export type { AnyNodeId, AnyNodeType } from './types'
+export type { AnyNodeId, AnyNodeOption, AnyNodeType } from './types'
 // Union types
-export { AnyNode } from './types'
+export { AnyNode, nodeKindOf } from './types'
