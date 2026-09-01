@@ -1,5 +1,6 @@
-import { useScene } from '@pascal-app/core'
+import { sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame, useThree } from '@react-three/fiber'
+import { Vector3 } from 'three'
 import { useEffect, useRef } from 'react'
 import { initPerfObservers } from '../../lib/perf-observers'
 import { publishPerfStats } from '../../lib/perf-panel-store'
@@ -63,9 +64,40 @@ export const PerfMonitor = () => {
   // shows lifetime totals. Disabling autoReset and explicitly resetting at
   // each window gives true per-frame averages.
   const gl = useThree((s) => s.gl)
+  const getThree = useThree((s) => s.get)
   useEffect(() => {
     initPerfObservers()
   }, [])
+  // Scripted-probe hooks for the scaling-matrix runner (scripts/perf/…): only
+  // mounted with `?perf`, so nothing reaches `window` in normal sessions.
+  // `projectNode` returns CSS pixels relative to the canvas, ready for a
+  // synthetic click on the node.
+  useEffect(() => {
+    const probe = {
+      listNodes(type: string): string[] {
+        return Object.values(useScene.getState().nodes)
+          .filter((n) => n.type === type)
+          .map((n) => n.id as string)
+      },
+      projectNode(nodeId: string): { x: number; y: number; behindCamera: boolean } | null {
+        const object = sceneRegistry.nodes.get(nodeId)
+        if (!object) return null
+        const { camera, size } = getThree()
+        const v = new Vector3()
+        object.getWorldPosition(v)
+        v.project(camera)
+        return {
+          x: ((v.x + 1) / 2) * size.width,
+          y: ((1 - v.y) / 2) * size.height,
+          behindCamera: v.z > 1,
+        }
+      },
+    }
+    ;(window as any).__pascalPerf = probe
+    return () => {
+      if ((window as any).__pascalPerf === probe) delete (window as any).__pascalPerf
+    }
+  }, [getThree])
   useEffect(() => {
     if (!gl?.info) return
     const previousAutoReset = gl.info.autoReset
