@@ -17,6 +17,7 @@ import {
   ToggleControl,
   triggerSFX,
   useEditor,
+  useTranslations,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Move, Trash2 } from 'lucide-react'
@@ -46,6 +47,7 @@ const COLUMN_PRESET_OPTIONS = Object.entries(COLUMN_PRESETS).map(([value, preset
 const COLUMN_PROPORTION_PRESETS = {
   slender: {
     label: 'Slender',
+    labelKey: 'nodes.column.slender' as const,
     height: 3.6,
     width: 0.34,
     baseHeight: 0.18,
@@ -56,6 +58,7 @@ const COLUMN_PROPORTION_PRESETS = {
   },
   standard: {
     label: 'Standard',
+    labelKey: 'nodes.column.standard' as const,
     height: 2.9,
     width: 0.44,
     baseHeight: 0.22,
@@ -66,6 +69,7 @@ const COLUMN_PROPORTION_PRESETS = {
   },
   heavy: {
     label: 'Heavy',
+    labelKey: 'nodes.column.heavy' as const,
     height: 3,
     width: 0.58,
     baseHeight: 0.28,
@@ -76,6 +80,7 @@ const COLUMN_PROPORTION_PRESETS = {
   },
   stout: {
     label: 'Short / Stout',
+    labelKey: 'nodes.column.shortStout' as const,
     height: 2.2,
     width: 0.62,
     baseHeight: 0.3,
@@ -92,21 +97,22 @@ const COLUMN_PROPORTION_OPTIONS = Object.entries(COLUMN_PROPORTION_PRESETS).map(
   ([value, preset]) => ({
     value: value as ColumnProportionPresetId,
     label: preset.label,
+    labelKey: preset.labelKey,
   }),
 )
 
-const SUPPORT_STYLE_OPTIONS: Array<{ label: string; value: ColumnNode['supportStyle'] }> = [
-  { label: 'Vertical', value: 'vertical' },
-  { label: 'A-Frame', value: 'a-frame' },
-  { label: 'Y Support', value: 'y-frame' },
-  { label: 'V Support', value: 'v-frame' },
-  { label: 'X Brace', value: 'x-brace' },
-  { label: 'K Brace', value: 'k-brace' },
-  { label: 'Single Strut', value: 'single-strut' },
-  { label: 'Tripod', value: 'tripod' },
-  { label: 'Trestle', value: 'trestle' },
-  { label: 'Portal Frame', value: 'portal-frame' },
-  { label: 'Box Frame', value: 'box-frame' },
+const SUPPORT_STYLE_OPTIONS: Array<{ labelKey: string; value: ColumnNode['supportStyle'] }> = [
+  { labelKey: 'nodes.column.vertical', value: 'vertical' },
+  { labelKey: 'nodes.column.aFrame', value: 'a-frame' },
+  { labelKey: 'nodes.column.yFrame', value: 'y-frame' },
+  { labelKey: 'nodes.column.vFrame', value: 'v-frame' },
+  { labelKey: 'nodes.column.xBrace', value: 'x-brace' },
+  { labelKey: 'nodes.column.kBrace', value: 'k-brace' },
+  { labelKey: 'nodes.column.singleStrut', value: 'single-strut' },
+  { labelKey: 'nodes.column.tripod', value: 'tripod' },
+  { labelKey: 'nodes.column.trestle', value: 'trestle' },
+  { labelKey: 'nodes.column.portalFrame', value: 'portal-frame' },
+  { labelKey: 'nodes.column.boxFrame', value: 'box-frame' },
 ]
 
 type NonVerticalSupportStyle = Exclude<ColumnNode['supportStyle'], 'vertical'>
@@ -287,6 +293,7 @@ function shaftProfileUpdates(shaftProfile: ColumnNode['shaftProfile']): Partial<
 }
 
 export default function ColumnPanel() {
+  const t = useTranslations()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
   const setSelection = useViewer((s) => s.setSelection)
@@ -347,10 +354,10 @@ export default function ColumnPanel() {
     <PanelWrapper
       icon="/icons/column.webp"
       onClose={handleClose}
-      title={node.name || 'Column'}
+      title={node.name || t('panel.nodeType.column')}
       width={300}
     >
-      <PanelSection title="Preset">
+      <PanelSection title={t('nodes.column.preset')}>
         <select
           className={SELECT_CLASS}
           onChange={(event) => {
@@ -359,7 +366,7 @@ export default function ColumnPanel() {
           }}
           value=""
         >
-          <option value="">Apply preset...</option>
+          <option value="">{t('nodes.column.applyPreset')}</option>
           {COLUMN_PRESET_OPTIONS.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -368,7 +375,7 @@ export default function ColumnPanel() {
         </select>
       </PanelSection>
 
-      <PanelSection title="Shape">
+      <PanelSection title={t('nodes.column.shape')}>
         <div className="grid grid-cols-2 gap-2 px-1 pt-1">
           {SUPPORT_STYLE_OPTIONS.map((option) => {
             const isSelected = supportStyle === option.value
@@ -404,7 +411,7 @@ export default function ColumnPanel() {
                 }}
                 type="button"
               >
-                <span className="truncate font-medium">{option.label}</span>
+                <span className="truncate font-medium">{t(option.labelKey)}</span>
               </button>
             )
           })}
@@ -412,7 +419,7 @@ export default function ColumnPanel() {
         {isBraceSupport ? (
           <>
             <SliderControl
-              label="Brace Width"
+              label={t('nodes.column.braceWidth')}
               max={0.8}
               min={0.04}
               onChange={(value) => handleUpdate({ braceWidth: value, width: value })}
@@ -422,7 +429,7 @@ export default function ColumnPanel() {
               value={node.braceWidth ?? node.width}
             />
             <SliderControl
-              label="Brace Depth"
+              label={t('nodes.column.braceDepth')}
               max={0.8}
               min={0.04}
               onChange={(value) => handleUpdate({ braceDepth: value, depth: value })}
@@ -439,7 +446,7 @@ export default function ColumnPanel() {
                 [
                   {
                     value: 'round',
-                    label: 'Round',
+                    labelKey: 'nodes.column.round' as const,
                     icon: (
                       <svg
                         aria-hidden="true"
@@ -454,7 +461,7 @@ export default function ColumnPanel() {
                   },
                   {
                     value: 'square',
-                    label: 'Square',
+                    labelKey: 'nodes.column.square' as const,
                     icon: (
                       <svg
                         aria-hidden="true"
@@ -477,7 +484,7 @@ export default function ColumnPanel() {
                   },
                   {
                     value: 'rectangular',
-                    label: 'Rectangular',
+                    labelKey: 'nodes.column.rectangular' as const,
                     icon: (
                       <svg
                         aria-hidden="true"
@@ -500,7 +507,7 @@ export default function ColumnPanel() {
                   },
                 ] as {
                   value: ColumnNode['crossSection']
-                  label: string
+                  labelKey: string
                   icon: React.ReactNode
                 }[]
               ).map((option) => {
@@ -526,14 +533,14 @@ export default function ColumnPanel() {
                       {option.icon}
                     </span>
                     <span className="font-medium text-[11px] leading-none tracking-wide">
-                      {option.label}
+                      {t(option.labelKey)}
                     </span>
                   </button>
                 )
               })}
             </div>
             <SliderControl
-              label="Edge Softness"
+              label={t('nodes.column.edgeSoftness')}
               max={0.12}
               min={0}
               onChange={(value) => handleUpdate({ edgeSoftness: value })}
@@ -544,7 +551,7 @@ export default function ColumnPanel() {
             />
             {(node.crossSection === 'square' || node.crossSection === 'rectangular') && (
               <SliderControl
-                label="Shaft Corner Radius"
+                label={t('nodes.column.shaftCornerRadius')}
                 max={0.3}
                 min={0}
                 onChange={(value) => handleUpdate({ shaftCornerRadius: value })}
@@ -558,7 +565,7 @@ export default function ColumnPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Dimensions">
+      <PanelSection title={t('nodes.column.dimensions')}>
         {managedByLeanTo && (
           <p className="px-1 pt-1 text-muted-foreground text-xs leading-relaxed">
             Height and footprint are controlled by the lean-to extension. Rotate or change the
@@ -574,17 +581,17 @@ export default function ColumnPanel() {
             }}
             value=""
           >
-            <option value="">Apply proportion...</option>
+            <option value="">{t('nodes.column.applyProportion')}</option>
             {COLUMN_PROPORTION_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
-                {option.label}
+                {t(option.labelKey)}
               </option>
             ))}
           </select>
         )}
         {!managedByLeanTo && (
           <SliderControl
-            label="Height"
+            label={t('common.height')}
             max={1000}
             min={0.8}
             onChange={(value) => handleUpdate({ height: value })}
@@ -605,7 +612,7 @@ export default function ColumnPanel() {
               supportStyle === 'portal-frame' ||
               supportStyle === 'box-frame') && (
               <SliderControl
-                label="Bottom Spread"
+                label={t('nodes.column.bottomSpread')}
                 max={1000}
                 min={0.2}
                 onChange={(value) =>
@@ -624,7 +631,7 @@ export default function ColumnPanel() {
               />
             )}
             <SliderControl
-              label={supportStyle === 'y-frame' ? 'Fork Spread' : 'Top Spread'}
+              label={supportStyle === 'y-frame' ? t('nodes.column.forkSpread') : t('nodes.column.topSpread')}
               max={
                 supportStyle === 'y-frame' ||
                 supportStyle === 'v-frame' ||
@@ -659,14 +666,14 @@ export default function ColumnPanel() {
             />
             <ToggleControl
               checked={node.bracePlateEnabled ?? true}
-              label="Connector Plates"
+              label={t('nodes.column.connectorPlates')}
               onChange={(checked) => handleUpdate({ bracePlateEnabled: checked })}
             />
           </>
         ) : !managedByLeanTo ? (
           <>
             <SliderControl
-              label="Width"
+              label={t('common.width')}
               max={1000}
               min={0.12}
               onChange={(value) =>
@@ -683,7 +690,7 @@ export default function ColumnPanel() {
             />
             {node.crossSection === 'rectangular' && (
               <SliderControl
-                label="Depth"
+                label={t('common.depth')}
                 max={1000}
                 min={0.12}
                 onChange={(value) => handleUpdate({ depth: value })}
@@ -698,7 +705,7 @@ export default function ColumnPanel() {
       </PanelSection>
 
       {!isBraceSupport && (
-        <PanelSection title="Shaft">
+        <PanelSection title={t('nodes.column.shaft')}>
           <select
             className={SELECT_CLASS}
             onChange={(event) =>
@@ -706,14 +713,14 @@ export default function ColumnPanel() {
             }
             value={shaftProfile}
           >
-            <option value="straight">Straight</option>
-            <option value="tapered">Tapered</option>
-            <option value="bulged">Bulged</option>
-            <option value="hourglass">Hourglass</option>
+            <option value="straight">{t('nodes.column.straight')}</option>
+            <option value="tapered">{t('nodes.column.tapered')}</option>
+            <option value="bulged">{t('nodes.column.bulged')}</option>
+            <option value="hourglass">{t('nodes.column.hourglass')}</option>
           </select>
           {shaftProfile === 'straight' && (
             <SliderControl
-              label="Shaft Width"
+              label={t('nodes.column.shaftWidth')}
               max={1.2}
               min={0.3}
               onChange={(value) => handleUpdate({ shaftStartScale: value, shaftEndScale: value })}
@@ -725,7 +732,7 @@ export default function ColumnPanel() {
           {shaftProfile === 'tapered' && (
             <>
               <SliderControl
-                label="Bottom Width"
+                label={t('nodes.column.bottomWidth')}
                 max={1.2}
                 min={0.3}
                 onChange={(value) => handleUpdate({ shaftStartScale: value })}
@@ -734,7 +741,7 @@ export default function ColumnPanel() {
                 value={node.shaftStartScale ?? 0.82}
               />
               <SliderControl
-                label="Top Width"
+                label={t('nodes.column.topWidth')}
                 max={1.2}
                 min={0.3}
                 onChange={(value) => handleUpdate({ shaftEndScale: value })}
@@ -743,7 +750,7 @@ export default function ColumnPanel() {
                 value={node.shaftEndScale ?? 0.72}
               />
               <SliderControl
-                label="Taper"
+                label={t('nodes.column.taper')}
                 max={0.45}
                 min={0}
                 onChange={(value) => handleUpdate({ shaftTaper: value })}
@@ -756,7 +763,7 @@ export default function ColumnPanel() {
           {shaftProfile === 'bulged' && (
             <>
               <SliderControl
-                label="End Width"
+                label={t('nodes.column.endWidth')}
                 max={1.2}
                 min={0.3}
                 onChange={(value) => handleUpdate({ shaftStartScale: value, shaftEndScale: value })}
@@ -765,7 +772,7 @@ export default function ColumnPanel() {
                 value={node.shaftStartScale ?? 0.68}
               />
               <SliderControl
-                label="Bulge"
+                label={t('nodes.column.bulge')}
                 max={0.35}
                 min={0}
                 onChange={(value) => handleUpdate({ shaftBulge: value })}
@@ -778,7 +785,7 @@ export default function ColumnPanel() {
           {shaftProfile === 'hourglass' && (
             <>
               <SliderControl
-                label="End Width"
+                label={t('nodes.column.endWidth')}
                 max={1.2}
                 min={0.3}
                 onChange={(value) => handleUpdate({ shaftStartScale: value, shaftEndScale: value })}
@@ -787,7 +794,7 @@ export default function ColumnPanel() {
                 value={node.shaftStartScale ?? 0.84}
               />
               <SliderControl
-                label="Waist"
+                label={t('nodes.column.waist')}
                 max={0.35}
                 min={0}
                 onChange={(value) => handleUpdate({ shaftBulge: value })}
@@ -798,7 +805,7 @@ export default function ColumnPanel() {
             </>
           )}
           <SliderControl
-            label="Segment Twist"
+            label={t('nodes.column.segmentTwist')}
             max={90}
             min={-90}
             onChange={(value) =>
@@ -816,7 +823,7 @@ export default function ColumnPanel() {
           />
           {Math.abs(node.shaftTwistStep ?? 0) > 0.001 && (
             <SliderControl
-              label="Twist Segments"
+              label={t('nodes.column.twistSegments')}
               max={48}
               min={4}
               onChange={(value) => handleUpdate({ shaftSegmentCount: Math.round(value) })}
@@ -826,7 +833,7 @@ export default function ColumnPanel() {
             />
           )}
           <SliderControl
-            label="Ring Pairs"
+            label={t('nodes.column.ringPairs')}
             max={4}
             min={0}
             onChange={(value) =>
@@ -843,7 +850,7 @@ export default function ColumnPanel() {
           />
           {(node.ringCount ?? 0) > 0 && (
             <SliderControl
-              label="Ring Thickness"
+              label={t('nodes.column.ringThickness')}
               max={0.14}
               min={0.01}
               onChange={(value) => handleUpdate({ ringThickness: value })}
@@ -855,7 +862,7 @@ export default function ColumnPanel() {
           )}
           {(node.ringCount ?? 0) > 0 && (
             <SliderControl
-              label="Ring Spread"
+              label={t('nodes.column.ringSpread')}
               max={0.45}
               min={0.04}
               onChange={(value) => handleUpdate({ ringSpread: value, ringPlacement: 'ends' })}
@@ -868,7 +875,7 @@ export default function ColumnPanel() {
       )}
 
       {!isBraceSupport && (
-        <PanelSection title="Ends">
+        <PanelSection title={t('nodes.column.ends')}>
           <select
             className={SELECT_CLASS}
             onChange={(event) => {
@@ -900,14 +907,14 @@ export default function ColumnPanel() {
             }}
             value={node.capitalStyle === 'simple-slab' ? 'simple' : (node.capitalStyle ?? 'simple')}
           >
-            <option value="none">No Top</option>
-            <option value="simple">Simple Top</option>
-            <option value="stepped">Stepped Top</option>
-            <option value="rounded">Rounded Top</option>
+            <option value="none">{t('nodes.column.noTop')}</option>
+            <option value="simple">{t('nodes.column.simpleTop')}</option>
+            <option value="stepped">{t('nodes.column.steppedTop')}</option>
+            <option value="rounded">{t('nodes.column.roundedTop')}</option>
           </select>
           {node.capitalStyle !== 'none' && (
             <SliderControl
-              label="Top Height"
+              label={t('nodes.column.topHeight')}
               max={0.8}
               min={0.06}
               onChange={(value) => handleUpdate({ capitalHeight: value })}
@@ -919,7 +926,7 @@ export default function ColumnPanel() {
           )}
           {node.capitalStyle !== 'none' && (
             <SliderControl
-              label="Top Width"
+              label={t('nodes.column.topWidth')}
               max={2.4}
               min={0.6}
               onChange={(value) =>
@@ -935,7 +942,7 @@ export default function ColumnPanel() {
           )}
           {node.capitalStyle !== 'none' && node.crossSection === 'rectangular' && (
             <SliderControl
-              label="Top Depth"
+              label={t('nodes.column.topDepth')}
               max={2.4}
               min={0.6}
               onChange={(value) => handleUpdate({ capitalDepthScale: value })}
@@ -946,7 +953,7 @@ export default function ColumnPanel() {
           )}
           {node.capitalStyle === 'stepped' && (
             <SliderControl
-              label="Top Tiers"
+              label={t('nodes.column.topTiers')}
               max={8}
               min={3}
               onChange={(value) => handleUpdate({ capitalTierCount: Math.round(value) })}
@@ -957,7 +964,7 @@ export default function ColumnPanel() {
           )}
           {node.capitalStyle === 'stepped' && (
             <SliderControl
-              label="Top Step Spread"
+              label={t('nodes.column.topStepSpread')}
               max={0.9}
               min={0.05}
               onChange={(value) => handleUpdate({ capitalStepSpread: value })}
@@ -1009,15 +1016,15 @@ export default function ColumnPanel() {
             }}
             value={node.baseStyle ?? 'square-plinth'}
           >
-            <option value="none">No Bottom</option>
-            <option value="simple-square">Simple Block Bottom</option>
-            <option value="square-plinth">Square Plinth Bottom</option>
-            <option value="stepped-square">Stepped Bottom</option>
-            <option value="round-rings">Rounded Bottom</option>
+            <option value="none">{t('nodes.column.noBottom')}</option>
+            <option value="simple-square">{t('nodes.column.simpleBlockBottom')}</option>
+            <option value="square-plinth">{t('nodes.column.squarePlinthBottom')}</option>
+            <option value="stepped-square">{t('nodes.column.steppedBottom')}</option>
+            <option value="round-rings">{t('nodes.column.roundRings')}</option>
           </select>
           {node.baseStyle !== 'none' && (
             <SliderControl
-              label="Bottom Height"
+              label={t('nodes.column.bottomHeight')}
               max={0.8}
               min={0.06}
               onChange={(value) => handleUpdate({ baseHeight: value })}
@@ -1029,7 +1036,7 @@ export default function ColumnPanel() {
           )}
           {node.baseStyle !== 'none' && (
             <SliderControl
-              label="Bottom Width"
+              label={t('nodes.column.bottomWidth')}
               max={2.4}
               min={0.6}
               onChange={(value) =>
@@ -1045,7 +1052,7 @@ export default function ColumnPanel() {
           )}
           {node.baseStyle !== 'none' && node.crossSection === 'rectangular' && (
             <SliderControl
-              label="Bottom Depth"
+              label={t('nodes.column.bottomDepth')}
               max={2.4}
               min={0.6}
               onChange={(value) => handleUpdate({ baseDepthScale: value })}
@@ -1056,7 +1063,7 @@ export default function ColumnPanel() {
           )}
           {node.baseStyle === 'round-rings' && (
             <SliderControl
-              label="Plinth Thickness"
+              label={t('nodes.column.plinthThickness')}
               max={0.7}
               min={0.2}
               onChange={(value) => handleUpdate({ basePlinthHeightRatio: value })}
@@ -1067,7 +1074,7 @@ export default function ColumnPanel() {
           )}
           {node.baseStyle === 'round-rings' && (
             <SliderControl
-              label="Round Band Width"
+              label={t('nodes.column.roundBandWidth')}
               max={1.2}
               min={0.5}
               onChange={(value) => handleUpdate({ baseRoundBandScale: value })}
@@ -1078,7 +1085,7 @@ export default function ColumnPanel() {
           )}
           {node.baseStyle === 'round-rings' && (
             <SliderControl
-              label="Neck Width"
+              label={t('nodes.column.neckWidth')}
               max={1}
               min={0.35}
               onChange={(value) => handleUpdate({ baseNeckScale: value })}
@@ -1089,7 +1096,7 @@ export default function ColumnPanel() {
           )}
           {node.baseStyle === 'stepped-square' && (
             <SliderControl
-              label="Bottom Tiers"
+              label={t('nodes.column.bottomTiers')}
               max={8}
               min={3}
               onChange={(value) => handleUpdate({ baseTierCount: Math.round(value) })}
@@ -1100,7 +1107,7 @@ export default function ColumnPanel() {
           )}
           {node.baseStyle === 'stepped-square' && (
             <SliderControl
-              label="Bottom Step Spread"
+              label={t('nodes.column.bottomStepSpread')}
               max={0.9}
               min={0.05}
               onChange={(value) => handleUpdate({ baseStepSpread: value })}
@@ -1112,9 +1119,9 @@ export default function ColumnPanel() {
         </PanelSection>
       )}
 
-      <PanelSection title="Transform">
+      <PanelSection title={t('nodes.column.transform')}>
         <SliderControl
-          label="Yaw"
+          label={t('nodes.column.yaw')}
           max={180}
           min={-180}
           onChange={(value) => handleUpdate({ rotation: (value * Math.PI) / 180 })}
@@ -1125,13 +1132,13 @@ export default function ColumnPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={t('common.actions')}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
+          <ActionButton icon={<Move className="h-4 w-4" />} label={t('common.move')} onClick={handleMove} />
           <ActionButton
             className="border-red-500/40 text-red-200 hover:bg-red-500/15"
             icon={<Trash2 className="h-4 w-4" />}
-            label="Delete"
+            label={t('common.delete')}
             onClick={handleDelete}
           />
         </ActionGroup>
