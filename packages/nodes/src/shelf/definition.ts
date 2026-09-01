@@ -270,7 +270,7 @@ export const shelfDefinition: NodeDefinition<typeof ShelfNode> = {
   ],
 
   presentation: {
-    label: 'nodes.shelf.label',
+    label: 'Shelf',
     description: 'A configurable shelving unit. Items host on each row.',
     icon: { kind: 'url', src: '/icons/shelf.webp' },
     paletteSection: 'furnish',

@@ -408,7 +408,7 @@ export const chimneyDefinition: NodeDefinition<typeof ChimneyNode> = {
   ],
 
   presentation: {
-    label: 'nodes.chimney.label',
+    label: 'Chimney',
     description: 'Vertical masonry stack on a roof segment.',
     icon: { kind: 'url', src: '/icons/chimney.webp' },
     paletteSection: 'structure',

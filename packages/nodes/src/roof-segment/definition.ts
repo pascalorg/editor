@@ -378,7 +378,7 @@ export const roofSegmentDefinition: NodeDefinition<typeof RoofSegmentNode> = {
   },
 
   presentation: {
-    label: 'nodes.roofSegment.label',
+    label: 'Roof Segment',
     description: 'A single pitched plane of a parent roof.',
     icon: { kind: 'url', src: '/icons/roof.webp' },
     paletteSection: 'structure',

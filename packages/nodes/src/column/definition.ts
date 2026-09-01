@@ -434,7 +434,7 @@ export const columnDefinition: NodeDefinition<typeof ColumnNode> = {
   },
 
   presentation: {
-    label: 'nodes.column.label',
+    label: 'Column',
     description: 'A parametric column with configurable cross-section, base, and capital.',
     icon: { kind: 'url', src: '/icons/column.webp' },
     paletteSection: 'structure',
