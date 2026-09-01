@@ -30,8 +30,7 @@
     "tailwind-merge": "^3.5.0",
     "tailwindcss": "^4.2.1",
     "three": "^0.185.0",
-    "web-ifc": "^0.0.77",
-    "zod": "^4.3.5"
+    "web-ifc": "^0.0.77"
   },
   "devDependencies": {
     "@pascal/typescript-config": "*",
