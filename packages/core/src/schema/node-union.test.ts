@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { z } from 'zod'
+import { authoredNodeSchemas, NODE_KINDS, NODE_REQUIRED_FIELDS } from './__fixtures__/node-fixtures'
 import { nodeType } from './base'
-import * as schema from './index'
 import { AnyNode, type AnyNodeOption, nodeKindOf, nodeUnion } from './types'
 
 /**
@@ -13,96 +13,7 @@ import { AnyNode, type AnyNodeOption, nodeKindOf, nodeUnion } from './types'
  * tests fail in CI if the projection regresses or a zod upgrade breaks it.
  */
 
-const UNION_KINDS = AnyNode.options.map(nodeKindOf)
-
-/** Fields a kind requires beyond the defaults its own schema fills in. */
-const REQUIRED_FIELDS: Record<string, Record<string, unknown>> = {
-  ceiling: {
-    polygon: [
-      [0, 0],
-      [4, 0],
-      [4, 4],
-    ],
-  },
-  'duct-segment': {
-    path: [
-      [0, 0, 0],
-      [1, 0, 0],
-    ],
-  },
-  fence: { start: [0, 0], end: [4, 0] },
-  guide: { url: 'asset://guide.png' },
-  item: {
-    asset: {
-      id: 'asset-1',
-      category: 'furniture',
-      name: 'Chair',
-      thumbnail: 'asset://chair.png',
-      src: 'asset://chair.glb',
-    },
-  },
-  lineset: {
-    path: [
-      [0, 0, 0],
-      [1, 0, 0],
-    ],
-  },
-  'liquid-line': {
-    path: [
-      [0, 0, 0],
-      [1, 0, 0],
-    ],
-  },
-  measurement: {
-    measurement: {
-      kind: 'distance',
-      points: [
-        [0, 0, 0],
-        [1, 0, 0],
-      ],
-    },
-  },
-  'pipe-segment': {
-    path: [
-      [0, 0, 0],
-      [1, 0, 0],
-    ],
-  },
-  slab: {
-    polygon: [
-      [0, 0],
-      [4, 0],
-      [4, 4],
-    ],
-  },
-  wall: { start: [0, 0], end: [4, 0] },
-  zone: {
-    name: 'Kitchen',
-    polygon: [
-      [0, 0],
-      [4, 0],
-      [4, 4],
-    ],
-  },
-}
-
-/** Node schemas as authored — discriminator still wrapped by `nodeType()`. */
-type AuthoredNode = z.ZodObject<
-  { type: z.ZodDefault<z.ZodLiteral<string>> } & z.core.$ZodLooseShape
->
-
-function isAuthoredNode(value: unknown): value is AuthoredNode {
-  if (!(value instanceof z.ZodObject)) return false
-  const discriminator = (value.shape as Record<string, unknown>).type
-  return discriminator instanceof z.ZodDefault && discriminator.unwrap() instanceof z.ZodLiteral
-}
-
-/** kind → the per-kind schema the package exports, keyed off its own default. */
-const authoredByKind = new Map<string, AuthoredNode>()
-for (const exported of Object.values(schema)) {
-  if (!isAuthoredNode(exported)) continue
-  authoredByKind.set(exported.shape.type.unwrap().value, exported)
-}
+const authoredByKind = authoredNodeSchemas()
 
 describe('nodeUnion', () => {
   test('assembles a parsable union from nodeType() members', () => {
@@ -172,13 +83,13 @@ describe('AnyNode', () => {
   })
 
   test('exposes every union kind as a per-kind schema', () => {
-    const missing = UNION_KINDS.filter((kind) => !authoredByKind.has(kind))
+    const missing = NODE_KINDS.filter((kind) => !authoredByKind.has(kind))
     expect(missing).toEqual([])
   })
 
-  test('REQUIRED_FIELDS lists no kind outside the union', () => {
-    const stale = Object.keys(REQUIRED_FIELDS).filter(
-      (kind) => !UNION_KINDS.includes(kind as (typeof UNION_KINDS)[number]),
+  test('NODE_REQUIRED_FIELDS lists no kind outside the union', () => {
+    const stale = Object.keys(NODE_REQUIRED_FIELDS).filter(
+      (kind) => !NODE_KINDS.includes(kind as (typeof NODE_KINDS)[number]),
     )
     expect(stale).toEqual([])
   })
@@ -187,11 +98,11 @@ describe('AnyNode', () => {
   // authoring path has to keep working for every kind: parse a type-less
   // fixture through the per-kind schema (its `.default()` fills `type` in),
   // then parse that output through the union.
-  test.each(UNION_KINDS)('round-trips a %s through per-kind then union', (kind) => {
+  test.each(NODE_KINDS)('round-trips a %s through per-kind then union', (kind) => {
     const authored = authoredByKind.get(kind)
     if (!authored) throw new Error(`no per-kind schema exported for "${kind}"`)
 
-    const perKind = authored.safeParse({ ...REQUIRED_FIELDS[kind] })
+    const perKind = authored.safeParse({ ...NODE_REQUIRED_FIELDS[kind] })
     expect(perKind.error?.issues ?? []).toEqual([])
     expect((perKind.data as { type?: string } | undefined)?.type).toBe(kind)
 
@@ -203,6 +114,6 @@ describe('AnyNode', () => {
   test('nodeKindOf reads the kind off any option', () => {
     const options: AnyNodeOption[] = [...AnyNode.options]
     expect(new Set(options.map(nodeKindOf)).size).toBe(options.length)
-    expect(UNION_KINDS).toContain('wall')
+    expect(NODE_KINDS).toContain('wall')
   })
 })

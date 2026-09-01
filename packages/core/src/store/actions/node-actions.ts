@@ -20,6 +20,7 @@ import {
   isDefaultDownspoutNode,
   isDefaultGutterNode,
   isDefaultRidgeVentNode,
+  parseNode,
   planAutomaticDownspouts,
   type RoofSegmentNode,
   resolveAutomaticDownspoutLength,
@@ -529,7 +530,7 @@ function warnSanitizedNodeMutation(
 
 function parseCreatedNode(node: AnyNode, parentId: AnyNodeId | null): AnyNode {
   const candidate = { ...node, parentId }
-  const parsed = AnyNodeSchema.safeParse(candidate)
+  const parsed = parseNode(candidate)
   if (parsed.success) return parsed.data
 
   const schema = getNodeSchemaForType(candidate.type)
@@ -559,7 +560,7 @@ function mergeNodeUpdate(currentNode: AnyNode, patch: Partial<AnyNode>): AnyNode
 
 function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode {
   const candidate = mergeNodeUpdate(currentNode, data)
-  const parsed = AnyNodeSchema.safeParse(candidate)
+  const parsed = parseNode(candidate)
   if (parsed.success) return parsed.data
 
   const schema = getNodeSchemaForType(candidate.type)
