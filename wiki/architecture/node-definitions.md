@@ -61,7 +61,7 @@ Per-kind `def.system` components mount alongside via `<RegisteredSystems>`. They
 
 ### `dirtyTracking`
 
-`dirtyNodes` is the per-frame rebuild queue consumed by `<GeometrySystem>` (`def.geometry`), `<FloorElevationSystem>` (`capabilities.floorPlaced`), and the legacy per-kind viewer systems. Kinds none of those consume — structural/organizational kinds like site, building, level, zone, guide — declare `dirtyTracking: false` so `markDirty` skips them. Without it their marks are never cleared: they accumulate for the whole session, defeat every consumer's empty-set early exit each frame, and pollute the perf overlay's DIRTY readout. If such a kind later gains `def.geometry` (or any other dirty consumer), delete the flag.
+`dirtyNodes` is the per-frame rebuild queue consumed by `<GeometrySystem>` (`def.geometry`), `<FloorElevationSystem>` (`capabilities.floorPlaced`), and the legacy per-kind viewer systems. Kinds none of those consume — structural/organizational kinds like site, building, level, zone, guide — declare `dirtyTracking: false`. The store's set is a `GuardedDirtySet`: `add()` itself refuses marks for flagged kinds, so both `markDirty` and direct `dirtyNodes.add(...)` calls are covered (blindly marking `node.parentId` is safe — a wall's parent is a level, and the guard drops it). A mark without a consumer would otherwise sit for the whole session, defeat every consumer's empty-set early exit each frame, and pollute the perf overlay's DIRTY readout. If such a kind later gains `def.geometry` (or any other dirty consumer), delete the flag.
 
 ## `GeometryContext`
 
@@ -160,7 +160,7 @@ useFrame(() => {
 Use this when the kind has parametric geometry **and** extra responsibilities. **Door, window.**
 
 - `geometry` builds the visible meshes (frame, panels, hardware) as a pure function of node state + parent wall.
-- `system` advances animation (`operationState`), then calls `markDirty(node.id)` so the geometry system rebuilds on the next frame.
+- `system` advances animation (`operationState`) in `useInteractive`. The animation *record itself* is the per-frame rebuild signal — the consumer system rebuilds any node with an active entry (doors) or poses named parts directly (windows). Do **not** `markDirty` per animation tick: a dirty mark is one-shot work that must drain to zero, and per-tick marks keep the scene from ever settling (breaks the `?perf` settle detector and any render-on-demand quiet gate). Mark once when the animation completes so the settled pose gets its rebuild.
 
 This split keeps animation state outside the node schema (it's ephemeral — lives in `useInteractive`) while still re-using the generic rebuild path.
 

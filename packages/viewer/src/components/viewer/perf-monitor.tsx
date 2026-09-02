@@ -79,6 +79,25 @@ export const PerfMonitor = () => {
           .filter((n) => n.type === type)
           .map((n) => n.id as string)
       },
+      // Raw dirty-set census: total marks, marks whose node is gone (phantoms),
+      // and live marks bucketed by node kind. The panel's DIRTY readout filters
+      // to live nodes, so scripted runs need this to see leaks at all.
+      dirtyResidue(): {
+        total: number
+        phantom: number
+        phantomIds: string[]
+        liveByType: Record<string, number>
+      } {
+        const { dirtyNodes, nodes } = useScene.getState()
+        const phantomIds: string[] = []
+        const liveByType: Record<string, number> = {}
+        for (const id of dirtyNodes) {
+          const node = nodes[id]
+          if (!node) phantomIds.push(id as string)
+          else liveByType[node.type] = (liveByType[node.type] ?? 0) + 1
+        }
+        return { total: dirtyNodes.size, phantom: phantomIds.length, phantomIds, liveByType }
+      },
       projectNode(nodeId: string): { x: number; y: number; behindCamera: boolean } | null {
         const object = sceneRegistry.nodes.get(nodeId)
         if (!object) return null

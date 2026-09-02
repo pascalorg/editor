@@ -54,6 +54,11 @@ const MAX_WINDOW_REBUILDS_PER_FRAME = 16
 const WINDOW_PROGRESSIVE_DIRTY_THRESHOLD = MAX_WINDOW_REBUILDS_PER_FRAME
 const WINDOW_PROGRESSIVE_TIME_BUDGET_MS = 8
 
+// Transient rebuild requests from WindowAnimationSystem for windows whose type
+// has no direct pose path: drained every frame. Deliberately not dirtyNodes —
+// a running animation must not keep the dirty set from reaching zero.
+export const pendingWindowAnimationRebuilds = new Set<AnyNodeId>()
+
 export const WindowSystem = () => {
   const dirtyNodes = useScene((state) => state.dirtyNodes)
   const clearDirty = useScene((state) => state.clearDirty)
@@ -100,7 +105,7 @@ export const WindowSystem = () => {
   }, [sceneMaterials])
 
   useFrame(() => {
-    if (dirtyNodes.size === 0) return
+    if (dirtyNodes.size === 0 && pendingWindowAnimationRebuilds.size === 0) return
     baseMaterial = textures
       ? getBaseMaterial(shading)
       : createSurfaceRoleMaterial('joinery', colorPreset)
@@ -120,6 +125,12 @@ export const WindowSystem = () => {
       if (node?.type !== 'window') return
       dirtyWindowIds.push(id as AnyNodeId)
     })
+    if (pendingWindowAnimationRebuilds.size > 0) {
+      for (const id of pendingWindowAnimationRebuilds) {
+        if (nodes[id]?.type === 'window' && !dirtyWindowIds.includes(id)) dirtyWindowIds.push(id)
+      }
+      pendingWindowAnimationRebuilds.clear()
+    }
 
     const useProgressiveWindowRebuilds = dirtyWindowIds.length > WINDOW_PROGRESSIVE_DIRTY_THRESHOLD
     const frameStartedAt = performance.now()
