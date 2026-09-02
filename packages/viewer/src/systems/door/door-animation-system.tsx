@@ -3,13 +3,6 @@ import { useFrame } from '@react-three/fiber'
 
 const easeDoorAnimation = (value: number) => value * value * (3 - 2 * value)
 
-function markDoorDirty(doorId: AnyNodeId) {
-  const scene = useScene.getState()
-  const node = scene.nodes[doorId]
-  scene.dirtyNodes.add(doorId)
-  if (node?.parentId) scene.dirtyNodes.add(node.parentId as AnyNodeId)
-}
-
 export const DoorAnimationSystem = () => {
   useFrame(({ clock }) => {
     const interactive = useInteractive.getState()
@@ -35,8 +28,10 @@ export const DoorAnimationSystem = () => {
 
       const progress = Math.min(1, (now - startedAt) / animation.durationMs)
       const value = animation.from + (animation.to - animation.from) * easeDoorAnimation(progress)
+      // No dirty mark per tick: DoorSystem rebuilds any door with an entry in
+      // `doorAnimations`, and a dirty mark is a one-shot work item, not a
+      // needs-frame signal — per-tick marks kept the scene from ever settling.
       interactive.setDoorOpenState(typedDoorId, { [animation.field]: value })
-      markDoorDirty(typedDoorId)
 
       if (progress < 1) continue
 
@@ -44,10 +39,12 @@ export const DoorAnimationSystem = () => {
       if (animation.persist) {
         scene.updateNode(typedDoorId, { [animation.field]: animation.to })
         interactive.removeDoorOpenState(typedDoorId)
-        markDoorDirty(typedDoorId)
       } else {
         interactive.setDoorOpenState(typedDoorId, { [animation.field]: animation.to })
       }
+      // One final mark so the settled pose gets a rebuild after the animation
+      // entry is gone (the persist branch's updateNode also marks, harmlessly).
+      scene.markDirty(typedDoorId)
       emitter.emit('door:animation-completed', {
         doorId: typedDoorId as DoorNode['id'],
         field: animation.field,

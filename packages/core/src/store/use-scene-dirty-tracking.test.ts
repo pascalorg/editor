@@ -39,6 +39,9 @@ describe('dirty tracking', () => {
   beforeEach(() => {
     if (!nodeRegistry.has(untrackedDef.kind)) nodeRegistry._register(untrackedDef)
     if (!nodeRegistry.has(trackedDef.kind)) nodeRegistry._register(trackedDef)
+    // Clear rather than replace the dirty set: the store's own instance is the
+    // guarded one, and the raw-add tests below exercise that guard.
+    useScene.getState().dirtyNodes.clear()
     useScene.setState({
       nodes: {
         [UNTRACKED]: makeNode(UNTRACKED, 'test-untracked'),
@@ -46,7 +49,6 @@ describe('dirty tracking', () => {
         [UNREGISTERED]: makeNode(UNREGISTERED, 'unregistered-kind'),
       },
       rootNodeIds: [UNTRACKED, TRACKED, UNREGISTERED],
-      dirtyNodes: new Set(),
       collections: {},
     } as never)
     useScene.temporal.getState().clear()
@@ -65,6 +67,36 @@ describe('dirty tracking', () => {
     useScene.getState().markDirty(UNREGISTERED)
     expect(useScene.getState().dirtyNodes.has(TRACKED)).toBe(true)
     expect(useScene.getState().dirtyNodes.has(UNREGISTERED)).toBe(true)
+  })
+
+  test('raw dirtyNodes.add applies the same consumer-kind guard as markDirty', () => {
+    useScene.getState().dirtyNodes.add(UNTRACKED)
+    useScene.getState().dirtyNodes.add(TRACKED)
+    expect(useScene.getState().dirtyNodes.has(UNTRACKED)).toBe(false)
+    expect(useScene.getState().dirtyNodes.has(TRACKED)).toBe(true)
+  })
+
+  test('raw dirtyNodes.add accepts ids with no node yet', () => {
+    const pending = 'item_pending_create' as AnyNodeId
+    useScene.getState().dirtyNodes.add(pending)
+    expect(useScene.getState().dirtyNodes.has(pending)).toBe(true)
+  })
+
+  test('undo clears dirty marks whose node no longer exists', async () => {
+    const NEW = 'item_undone_away' as AnyNodeId
+    // Tracked write: pushes the pre-write state (without NEW) onto pastStates.
+    useScene.setState({
+      nodes: { ...useScene.getState().nodes, [NEW]: makeNode(NEW, 'test-tracked') },
+    } as never)
+    useScene.getState().markDirty(NEW)
+    expect(useScene.getState().dirtyNodes.has(NEW)).toBe(true)
+
+    useScene.temporal.getState().undo()
+    // The sweep runs in the temporal subscriber's microtask.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(useScene.getState().nodes[NEW]).toBeUndefined()
+    expect(useScene.getState().dirtyNodes.has(NEW)).toBe(false)
   })
 
   test('deleteNodes removes deleted ids from the dirty set', () => {
