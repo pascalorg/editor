@@ -1,4 +1,5 @@
 'use client'
+import { polePosition3 } from '../utility-line/endpoints'
 
 import { useLiveNodeOverrides, useRegistry, useScene } from '@pascal-app/core'
 import { useNodeEvents } from '@pascal-app/viewer'
@@ -73,7 +74,7 @@ export const UtilityPoleRenderer = ({ node: rawNode }: { node: UtilityPoleNode }
       nodes as unknown as Record<string, Record<string, unknown>>,
       node as unknown as Record<string, unknown>,
     )
-    return siteToLocal(frame, node.position)
+    return siteToLocal(frame, polePosition3(node))
   }, [nodes, node])
 
   const height = node.height
