@@ -119,7 +119,6 @@ export { MoveTool } from './components/tools/item/move-tool'
 // `@pascal-app/nodes` (wall curve sagitta snap, door / window placement,
 // item drop) so kinds don't reach into editor internals.
 export {
-  calculateCursorRotation,
   calculateItemRotation,
   getSideFromNormal,
   isValidWallSideFace,
@@ -241,6 +240,7 @@ export { SegmentedControl } from './components/ui/controls/segmented-control'
 export { SliderControl } from './components/ui/controls/slider-control'
 export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-panel'
 export { ToggleControl } from './components/ui/controls/toggle-control'
+export { ToolOptionsPanel } from './components/ui/controls/tool-options-panel'
 export { FloatingLevelSelector } from './components/ui/floating-level-selector'
 export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
 // Item collections UI — used by the kind-owned ItemPanel in nodes/.
@@ -462,6 +462,7 @@ export {
   scopeNodeId,
 } from './lib/interaction/scope'
 export {
+  type ActivePaintMaterial,
   buildResetSurfaceMaterialUpdates,
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
@@ -598,15 +599,20 @@ export {
 export type {
   CaptureMode,
   FloorplanSelectionTool,
+  Mode,
   SnapshotCropMode,
   SnapshotStandardAspect,
   SplitOrientation,
+  StructureTool,
   Tool,
   ToolDefaults,
+  ToolMode,
   ViewMode,
   WorkspaceMode,
 } from './store/use-editor'
 export {
+  armMaterialPaint,
+  armToolMode,
   default as useEditor,
   getActiveContinuationContext,
   getActiveSnapContext,

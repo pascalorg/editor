@@ -58,9 +58,9 @@
     "@pascal-app/core": "^1.0.0-beta.5"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@modelcontextprotocol/sdk": "^1.30.0",
     "@pascal-app/lingo": "^0.2.0",
-    "zod": "^4.3.5"
+    "zod": ">=4.5.4 <4.6"
   },
   "devDependencies": {
     "@pascal-app/core": "^1.0.0-beta.5",

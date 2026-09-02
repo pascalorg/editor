@@ -155,11 +155,18 @@ function getEditorUiStateForRestoredSelection(
   fallbackUiState: PersistedEditorUiState,
 ): PersistedEditorUiState {
   if (!selection.levelId) {
+    const mode = fallbackUiState.phase === 'site' ? fallbackUiState.mode : 'select'
     return {
       ...fallbackUiState,
       phase: 'site',
-      mode: fallbackUiState.phase === 'site' ? fallbackUiState.mode : 'select',
-      tool: null,
+      toolMode:
+        mode === 'build'
+          ? { mode, tool: 'property-line' }
+          : mode === 'terrain-sculpt'
+            ? { mode }
+            : { mode: 'select' },
+      mode,
+      tool: mode === 'build' ? 'property-line' : null,
       structureLayer: 'elements',
       catalogCategory: null,
     }
@@ -169,6 +176,7 @@ function getEditorUiStateForRestoredSelection(
     return {
       ...fallbackUiState,
       phase: 'structure',
+      toolMode: { mode: 'select' },
       mode: 'select',
       tool: null,
       structureLayer: 'zones',
@@ -192,6 +200,7 @@ function getEditorUiStateForRestoredSelection(
   return {
     ...fallbackUiState,
     phase: shouldRestoreFurnishPhase ? 'furnish' : 'structure',
+    toolMode: { mode: 'select' },
     mode: 'select',
     tool: null,
     structureLayer: 'elements',
@@ -304,14 +313,14 @@ export function syncEditorSelectionFromCurrentScene() {
         // SelectionPath expects branded ids. The runtime values match the
         // brand; the cast bridges the static gap.
         useViewer.getState().setSelection(restoredSelection as never)
-        useEditor.setState(
+        restoreEditorUiState(
           restoredEditorUiState.phase === 'site'
             ? (selectionDrivenEditorUiState ?? restoredEditorUiState)
             : restoredEditorUiState,
         )
       } else if (restoredEditorUiState.phase === 'site') {
         useViewer.getState().resetSelection()
-        useEditor.setState(restoredEditorUiState)
+        restoreEditorUiState(restoredEditorUiState)
       } else {
         useViewer.getState().setSelection({
           buildingId: firstBuilding.id,
@@ -319,7 +328,7 @@ export function syncEditorSelectionFromCurrentScene() {
           selectedIds: [],
           zoneId: null,
         })
-        useEditor.setState(restoredEditorUiState)
+        restoreEditorUiState(restoredEditorUiState)
       }
       return
     }
@@ -327,7 +336,7 @@ export function syncEditorSelectionFromCurrentScene() {
     if (restoredSelection) {
       useViewer.getState().setSelection(restoredSelection as never)
       if (selectionDrivenEditorUiState) {
-        useEditor.setState(selectionDrivenEditorUiState)
+        restoreEditorUiState(selectionDrivenEditorUiState)
       }
       return
     }
@@ -351,6 +360,12 @@ export function syncEditorSelectionFromCurrentScene() {
   }
 }
 
+function restoreEditorUiState(state: PersistedEditorUiState) {
+  const { toolMode, mode: _mode, tool: _tool, ...rest } = state
+  useEditor.setState(rest)
+  useEditor.getState().armToolMode(toolMode)
+}
+
 function resetEditorInteractionState() {
   useViewer.getState().setHoveredId(null)
   useViewer.getState().resetSelection()
@@ -362,8 +377,6 @@ function resetEditorInteractionState() {
   sceneRegistry.clear()
   useEditor.setState({
     phase: 'site',
-    mode: 'select',
-    tool: null,
     structureLayer: 'elements',
     catalogCategory: null,
     selectedItem: null,
@@ -372,6 +385,7 @@ function resetEditorInteractionState() {
     hoveredHole: null,
     isPreviewMode: false,
   })
+  useEditor.getState().armToolMode({ mode: 'select' })
 }
 
 function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is SceneGraph {

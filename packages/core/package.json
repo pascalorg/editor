@@ -66,6 +66,7 @@
     "dev": "tsgo --build --watch",
     "test": "bun test src",
     "bench:registry": "bun run src/registry/__bench__/relations-resolver.bench.ts",
+    "bench:schema": "bun run src/schema/__bench__/node-parsers.bench.ts",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {
@@ -80,7 +81,7 @@
     "idb-keyval": "^6.2.2",
     "mitt": "^3.0.1",
     "nanoid": "^5.1.6",
-    "zod": "^4.3.5",
+    "zod": ">=4.5.4 <4.6",
     "zundo": "^2.3.0",
     "zustand": "^5"
   },

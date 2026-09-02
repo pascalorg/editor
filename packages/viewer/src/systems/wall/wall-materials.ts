@@ -26,6 +26,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   createSurfaceRoleMaterial,
+  materialPresetRefSignature,
   type RenderShading,
   resolveMaterialRef,
   resolveSurfaceColor,
@@ -155,8 +156,10 @@ function resolveWallSlotMaterial(
 
 // Cache-key fragment for one face: the slot ref plus, for a `scene:` ref, the
 // referenced material's *content* — so editing a scene material assigned to a
-// wall invalidates the cache (a `library:` ref is static catalog content, so
-// its id alone is enough). Falls back to the legacy signature when unmigrated.
+// wall invalidates the cache. A `library:` ref carries its resolution state
+// instead: AI-generated materials register asynchronously, and a dangling ref
+// resolved to the slot default must not stay cached once the library lands.
+// Falls back to the legacy signature when unmigrated.
 function wallFaceMaterialSignature(
   wallNode: WallNode,
   side: WallSurfaceSide,
@@ -171,7 +174,7 @@ function wallFaceMaterialSignature(
         material: sceneMaterials?.[parsed.id as SceneMaterialId]?.material ?? null,
       })
     }
-    return JSON.stringify({ ref })
+    return JSON.stringify({ ref: materialPresetRefSignature(ref) })
   }
   return getWallSurfaceMaterialSignature(getEffectiveWallSurfaceMaterial(wallNode, side))
 }
@@ -190,7 +193,7 @@ function wallSlotMaterialSignature(
         material: sceneMaterials?.[parsed.id as SceneMaterialId]?.material ?? null,
       })
     }
-    return JSON.stringify({ ref })
+    return JSON.stringify({ ref: materialPresetRefSignature(ref) })
   }
 
   const side = getWallSurfaceSideFromBandSlot(slotId)

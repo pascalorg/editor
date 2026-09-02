@@ -15,9 +15,11 @@ import {
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useIsMobile } from '../../hooks/use-mobile'
 import { useTranslations } from '../../lib/i18n'
 import { triggerSFX } from '../../lib/sfx-bus'
+import { requestWalkthroughPointerLock } from '../../lib/walkthrough-pointer-lock'
 import useEditor, {
   CAPTURE_FOV_MAX,
   CAPTURE_FOV_MIN,
@@ -25,7 +27,9 @@ import useEditor, {
   type SnapshotCropMode,
   type SnapshotStandardAspect,
 } from '../../store/use-editor'
+import { useFirstPersonHud } from '../../store/use-first-person-hud'
 import { Slider } from '../ui/slider'
+import { WalkthroughCrosshair } from '../walkthrough-hud'
 
 // Local alias — distinct from `useEditor.captureMode` (which describes *why*
 // a capture is happening, e.g. `preset`). This one says HOW the captured
@@ -135,21 +139,29 @@ type CameraNavHint = {
   keys: readonly string[]
 }
 
+function CaptureWalkthroughCrosshair() {
+  const interact = useFirstPersonHud((state) => state.interact)
+  return <WalkthroughCrosshair interact={interact} />
+}
+
 const CAMERA_NAV_HINTS: Record<CaptureCameraNav, readonly CameraNavHint[] | null> = {
   orbit: null,
   walk: [
     { keys: ['WASD'], action: 'move' },
     { keys: ['Space'], action: 'jump' },
-    { keys: ['P'], action: 'free cursor' },
-    { keys: ['Enter'], action: 'shoot' },
+    { keys: ['E'], action: 'open' },
+    { keys: ['Wheel'], action: 'lens' },
+    { keys: ['P', 'Esc'], action: 'free cursor' },
+    { keys: ['Click', 'Enter'], action: 'shoot' },
   ],
   drone: [
     { keys: ['WASD'], action: 'move' },
     { keys: ['Space', 'E'], action: 'up' },
     { keys: ['Q'], action: 'down' },
     { keys: ['Shift'], action: 'boost' },
-    { keys: ['P'], action: 'free cursor' },
-    { keys: ['Enter'], action: 'shoot' },
+    { keys: ['Wheel'], action: 'lens' },
+    { keys: ['P', 'Esc'], action: 'free cursor' },
+    { keys: ['Click', 'Enter'], action: 'shoot' },
   ],
 }
 
@@ -165,9 +177,11 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   const isPreset = captureMode.mode === 'preset'
   const requestedCrop = captureMode.mode === 'standard' ? captureMode.crop : undefined
   const requestedAspect = captureMode.mode === 'standard' ? captureMode.standardAspect : undefined
-  // A host-preselected crop means the host needs that exact output shape
-  // (e.g. the publish-cover capture) — hide the crop/aspect switcher.
-  const isCropLocked = isPreset || requestedCrop !== undefined
+  // Only an explicit host lock hides the crop/aspect switcher (the publish
+  // cover needs its exact output shape). A plain preselected crop — the
+  // Studio capbar's choice — just seeds the pill and stays user-changeable.
+  const isCropLocked =
+    isPreset || (captureMode.mode === 'standard' && captureMode.lockCrop === true)
 
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const firstPersonMovementMode = useEditor((s) => s.firstPersonMovementMode)
@@ -184,8 +198,22 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       editor.setFirstPersonMode(false)
       return
     }
-    editor.setFirstPersonMovementMode(next)
-    if (!editor.isFirstPersonMode) editor.setFirstPersonMode(true)
+    // Lock the pointer in the same click task (the gesture requirement):
+    // flush the mode flip so FirstPersonControls is mounted when the lock
+    // lands, instead of making the user click the canvas a second time.
+    flushSync(() => {
+      editor.setFirstPersonMovementMode(next)
+      if (!editor.isFirstPersonMode) editor.setFirstPersonMode(true)
+    })
+    requestWalkthroughPointerLock({
+      // Freeing the cursor in one camera and immediately picking the other
+      // hits the browser's re-lock cooldown; retry once it passes, as long as
+      // the user is still framing in a first-person camera.
+      retryWhile: () => {
+        const state = useEditor.getState()
+        return state.isCaptureMode && state.isFirstPersonMode
+      },
+    })
   }, [])
 
   const [mode, setMode] = useState<CropMode>('standard')
@@ -247,6 +275,14 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     emitter.on('snapshot:saved', handler)
     return () => emitter.off('snapshot:saved', handler)
   }, [setCaptureMode])
+
+  // From the shutter firing until the saved toast clears, walk / drone hold
+  // still: a late WASD tap or mouse twitch must not shift the frame out from
+  // under the shot the user just took.
+  useEffect(() => {
+    useEditor.getState().setCaptureShutterHold(captureState !== 'idle')
+    return () => useEditor.getState().setCaptureShutterHold(false)
+  }, [captureState])
 
   const dismiss = useCallback(() => setCaptureMode(false), [setCaptureMode])
 
@@ -409,13 +445,17 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     })
   }, [captureState, mode, drag, projectId, isPreset, standardAspect])
 
-  // Esc dismisses. Enter fires the shutter: walk and drone hold a pointer lock, so
-  // a keyboard shutter is the only way to shoot without leaving the camera first.
+  // Esc dismisses — in ORBIT only. In walk / drone, Esc means "free the
+  // cursor" (the browser's own pointer-lock exit; FirstPersonControls pauses
+  // instead of bailing) — reflexively dropping the whole capture with the
+  // framed pose would punish anyone who never noticed P. Enter fires the
+  // shutter: walk and drone hold a pointer lock, so a keyboard shutter works
+  // without leaving the camera.
   useEffect(() => {
     if (!isCaptureMode) return
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setCaptureMode(false)
+        if (cameraNav === 'orbit') setCaptureMode(false)
         return
       }
       if (e.key !== 'Enter') return
@@ -425,7 +465,46 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [handleCapture, isCaptureMode, setCaptureMode])
+  }, [cameraNav, handleCapture, isCaptureMode, setCaptureMode])
+
+  // While walk / drone hold the pointer lock, the wheel drives the lens and a
+  // click fires the shutter. Both gate on the lock being HELD: the click that
+  // acquires it happens unlocked, so entering the camera never also shoots,
+  // and an unlocked wheel keeps scrolling whatever pane it's over.
+  useEffect(() => {
+    if (!isCaptureMode || cameraNav === 'orbit') return
+    const canvas = document.querySelector<HTMLCanvasElement>('[data-pascal-viewer-3d] canvas')
+    if (!canvas) return
+    // `setCaptureFov` rounds to whole degrees; accumulate sub-degree trackpad
+    // deltas so slow scrolls still move the lens.
+    let pendingFovDelta = 0
+    const onWheel = (e: WheelEvent) => {
+      if (document.pointerLockElement !== canvas) return
+      e.preventDefault()
+      const pixels = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY
+      // Wheel-up narrows the lens (zoom in), matching the orbit dolly.
+      pendingFovDelta += pixels * 0.05
+      const whole = Math.trunc(pendingFovDelta)
+      if (whole === 0) return
+      pendingFovDelta -= whole
+      const editor = useEditor.getState()
+      if (editor.captureFov === null) return
+      editor.setCaptureFov(editor.captureFov + whole)
+    }
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0 || document.pointerLockElement !== canvas) return
+      handleCapture()
+    }
+    window.addEventListener('wheel', onWheel, { passive: false })
+    // Capture phase: FirstPersonControls' own document-capture mousedown
+    // handler stops propagation while locked, which a bubble listener never
+    // survives — window-capture runs first.
+    window.addEventListener('mousedown', onMouseDown, true)
+    return () => {
+      window.removeEventListener('wheel', onWheel)
+      window.removeEventListener('mousedown', onMouseDown, true)
+    }
+  }, [cameraNav, handleCapture, isCaptureMode])
 
   if (!isCaptureMode) return null
 
@@ -480,6 +559,10 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-40" ref={overlayRef}>
+      {/* Walk / drone keep the walkthrough's centered pointer (the ring means
+          E opens the door / window under it) — the capture overlay replaces
+          the walkthrough HUD, so the crosshair rides along here. */}
+      {cameraOwnsPointer && <CaptureWalkthroughCrosshair />}
       {/* Standard mode: letterboxed 16:9 frame with thirds + corner accents */}
       {standardFrame && (
         <div

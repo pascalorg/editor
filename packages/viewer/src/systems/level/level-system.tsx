@@ -4,8 +4,7 @@ import type { Object3D } from 'three'
 import { lerp } from 'three/src/math/MathUtils.js'
 import { applyShadowOnly, clearShadowOnly } from '../../lib/shadow-only'
 import useViewer from '../../store/use-viewer'
-
-const EXPLODED_GAP = 5
+import { EXPLODED_GAP } from './level-utils'
 
 // Levels currently in shadow-caster-only mode (solo hides them from the color
 // passes but keeps their sun shadows). Tracked so we can restore layer masks

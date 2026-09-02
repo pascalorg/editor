@@ -2300,5 +2300,6 @@
   "editor.customHeight": "Custom height",
   "editor.currentlyLabel": "Currently {value}",
   "editor.capture": "Capture",
-  "editor.top": "Top"
+  "editor.top": "Top",
+  "buildTab.roofSource.conicalHint": "Select a curved wall to match its radius and arc."
 }

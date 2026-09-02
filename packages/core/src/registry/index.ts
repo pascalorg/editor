@@ -164,5 +164,7 @@ export type {
   SystemContribution,
   ToolHint,
   ToolHintChip,
+  ToolOption,
+  ToolOptionChoice,
   Vec2,
 } from './types'

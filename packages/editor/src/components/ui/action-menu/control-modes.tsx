@@ -56,7 +56,7 @@ export function ControlModes() {
   const mode = useEditor((state) => state.mode)
   const phase = useEditor((state) => state.phase)
   const selectionTool = useEditor((state) => state.floorplanSelectionTool)
-  const setMode = useEditor((state) => state.setMode)
+  const armToolMode = useEditor((state) => state.armToolMode)
   const setPhase = useEditor((state) => state.setPhase)
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setSelectionTool = useEditor((state) => state.setFloorplanSelectionTool)
@@ -84,21 +84,21 @@ export function ControlModes() {
     }
 
     if (id === 'select') {
-      setMode('select')
+      armToolMode({ mode: 'select' })
       setSelectionTool('click')
     } else if (id === 'box-select') {
-      setMode('select')
+      armToolMode({ mode: 'select' })
       setSelectionTool('marquee')
     } else if (id === 'zone') {
       if (getIsActive('zone')) {
-        setMode('select')
+        armToolMode({ mode: 'select' })
       } else {
         setPhase('structure')
         setStructureLayer('zones')
-        setMode('build')
+        armToolMode({ mode: 'build', tool: 'zone' })
       }
     } else {
-      setMode(id)
+      armToolMode({ mode: id })
     }
   }
 

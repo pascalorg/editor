@@ -13,6 +13,7 @@ import {
   isFloorplanToolAvailableInMode,
   MaterialPaintPanel,
   TerrainSculptPanel,
+  ToolOptionsPanel,
   triggerSFX,
   useEditor,
   useFloorplanMode,
@@ -28,13 +29,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/toolbar-tooltip'
-import {
-  getActiveRoofFeatureId,
-  getRoofFootprintSource,
-  getRoofFootprintSources,
-  ROOF_TYPE_OPTIONS,
-  type RoofFootprintSource,
-} from '@/lib/build-tab-state'
+import { getActiveRoofFeatureId, ROOF_TYPE_OPTIONS } from '@/lib/build-tab-state'
 import { cn } from '@/lib/utils'
 
 /**
@@ -257,17 +252,7 @@ function activateRoofFeatureTool(feature: RoofFeature): void {
 function activateRoofType(roofType: RoofType): void {
   const editor = useEditor.getState()
   if (!(editor.mode === 'build' && editor.tool === 'roof')) activateBuildTool('roof')
-  const footprintSource = getRoofFootprintSource(
-    roofType,
-    editor.toolDefaults.roof?.footprintSource,
-  )
-  editor.setToolDefaults('roof', { ...editor.toolDefaults.roof, roofType, footprintSource })
-}
-
-function activateRoofFootprintSource(footprintSource: RoofFootprintSource): void {
-  const editor = useEditor.getState()
-  if (!(editor.mode === 'build' && editor.tool === 'roof')) activateBuildTool('roof')
-  editor.setToolDefaults('roof', { ...editor.toolDefaults.roof, footprintSource })
+  editor.setToolDefaults('roof', { ...editor.toolDefaults.roof, roofType })
 }
 
 /**
@@ -336,11 +321,6 @@ export function BuildTab() {
   const isKitchenActive = mode === 'build' && activeTool === 'cabinet'
   const parsedRoofType = RoofTypeSchema.safeParse(roofDefaults?.roofType)
   const activeRoofType = parsedRoofType.success ? parsedRoofType.data : 'gable'
-  const footprintSources = getRoofFootprintSources(activeRoofType)
-  const activeFootprintSource = getRoofFootprintSource(
-    activeRoofType,
-    roofDefaults?.footprintSource,
-  )
 
   const isTypeActive = (type: BuildType) => {
     if (type.mode) return mode === type.mode
@@ -467,44 +447,18 @@ export function BuildTab() {
             </div>
           </div>
 
-          {activeRoofType !== 'conical' && (
-            <div className="flex flex-col gap-2 border-border/50 border-t pt-3">
-              <div className="px-0.5 font-medium text-muted-foreground text-xs">
-                {t('buildTab.section.createFrom')}
-              </div>
-              <div className="grid grid-cols-2 gap-1.5">
-                {footprintSources.map((source) => {
-                  const active = activeTool === 'roof' && activeFootprintSource === source.value
-                  return (
-                    <button
-                      aria-pressed={active}
-                      className={cn(
-                        'rounded-lg px-2 py-2 text-center font-medium text-xs transition-colors',
-                        active
-                          ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
-                          : 'bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground',
-                      )}
-                      key={source.value}
-                      onClick={() => {
-                        triggerSFX('sfx:menu-click')
-                        activateRoofFootprintSource(source.value)
-                      }}
-                      onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                      type="button"
-                    >
-                      {t(source.labelKey)}
-                    </button>
-                  )
-                })}
-              </div>
-              <p className="px-0.5 text-[11px] text-muted-foreground leading-relaxed">
-                {activeFootprintSource === 'room'
-                  ? t('buildTab.roofSource.roomHint')
-                  : activeFootprintSource === 'walls'
-                    ? t('buildTab.roofSource.wallsHint')
-                    : t('buildTab.roofSource.drawHint')}
-              </p>
-            </div>
+          <ToolOptionsPanel
+            className="border-border/50 border-t pt-3"
+            kind="roof"
+            onSelect={() => {
+              const editor = useEditor.getState()
+              if (!(editor.mode === 'build' && editor.tool === 'roof')) activateBuildTool('roof')
+            }}
+          />
+          {activeRoofType === 'conical' && (
+            <p className="border-border/50 border-t px-0.5 pt-3 text-[11px] text-muted-foreground leading-relaxed">
+              {t('buildTab.roofSource.conicalHint')}
+            </p>
           )}
 
           {roofFeatures.length > 0 ? (

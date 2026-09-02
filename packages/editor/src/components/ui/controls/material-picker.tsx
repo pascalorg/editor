@@ -18,7 +18,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { useTranslations, type Translator } from '../../../lib/i18n'
 import { triggerSFX } from '../../../lib/sfx-bus'
 
-export type MaterialSourceFilter = 'all' | MaterialSource
+export type MaterialSourceFilter = MaterialSource
 
 export type MaterialPickerProps = {
   selectedMaterialPreset?: string
@@ -29,10 +29,10 @@ export type MaterialPickerProps = {
   onCreateMaterialRequest?: () => void
 }
 
-// Labels are resolved via i18n at render time — see `paint`, `materialPicker`,
-// `materials`, and `items` namespaces in en.json / zh.json.
+// No 'all': the browse surfaces (Items / Rooms / Build) dropped it and default
+// to the Pascal library — the combined list buried the curated set.
+// Labels are resolved at render time via t().
 const SOURCE_FILTERS: { id: MaterialSourceFilter; labelKey: string }[] = [
-  { id: 'all', labelKey: 'common.all' },
   { id: 'pascal', labelKey: 'materialPicker.source.pascal' },
   { id: 'mine', labelKey: 'items.mine' },
   { id: 'workspace', labelKey: 'materialPicker.source.workspace' },
@@ -46,7 +46,6 @@ function getCategoryLabel(category: (typeof MATERIAL_CATEGORIES)[number], t: Tra
 }
 
 function filterBySource(items: MaterialCatalogItem[], filter: MaterialSourceFilter) {
-  if (filter === 'all') return items
   return items.filter((item) => (item.source ?? 'pascal') === filter)
 }
 
@@ -66,7 +65,7 @@ export function MaterialPicker({
   const [selectedCategory, setSelectedCategory] = useState<(typeof MATERIAL_CATEGORIES)[number]>(
     MATERIAL_CATEGORIES[0],
   )
-  const [sourceFilter, setSourceFilter] = useState<MaterialSourceFilter>('all')
+  const [sourceFilter, setSourceFilter] = useState<MaterialSourceFilter>('pascal')
   // Version counter so host registrations/unregistrations re-render the picker.
   const libraryVersion = useSyncExternalStore(
     subscribeLibraryMaterials,

@@ -2489,7 +2489,7 @@ export function addCornerRun({
   })
   const selectionRootId = cornerSelectionRootId(sourceRun, baseLeg.runId)
   const linkedRunIds: AnyNodeId[] = [baseLeg.runId]
-  const baseLegLiveMetadata = sceneApi.get<CabinetNode>(baseLeg.runId)?.metadata ?? null
+  const baseLegLiveMetadata = sceneApi.get<CabinetNode>(baseLeg.runId)?.metadata ?? {}
   const baseLegMetadata = cabinetMetadataRecord(baseLegLiveMetadata)
   sceneApi.update(baseLeg.runId, {
     metadata: {
@@ -2561,7 +2561,7 @@ export function addCornerRun({
         sourceRun,
       })
       linkedRunIds.push(bridgeRun.runId)
-      const bridgeRunLiveMetadata = sceneApi.get<CabinetNode>(bridgeRun.runId)?.metadata ?? null
+      const bridgeRunLiveMetadata = sceneApi.get<CabinetNode>(bridgeRun.runId)?.metadata ?? {}
       const bridgeRunMetadata = cabinetMetadataRecord(bridgeRunLiveMetadata)
       sceneApi.update(bridgeRun.runId, {
         metadata: {
@@ -2613,8 +2613,7 @@ export function addCornerRun({
       sourceRun,
     })
     linkedRunIds.push(wallFillerRun.runId)
-    const wallFillerRunLiveMetadata =
-      sceneApi.get<CabinetNode>(wallFillerRun.runId)?.metadata ?? null
+    const wallFillerRunLiveMetadata = sceneApi.get<CabinetNode>(wallFillerRun.runId)?.metadata ?? {}
     const wallFillerRunMetadata = cabinetMetadataRecord(wallFillerRunLiveMetadata)
     sceneApi.update(wallFillerRun.runId, {
       metadata: {
@@ -2651,7 +2650,7 @@ export function addCornerRun({
   }
 
   const liveSourceMetadata =
-    sceneApi.get<CabinetModuleNode>(sourceModule.id as AnyNodeId)?.metadata ?? null
+    sceneApi.get<CabinetModuleNode>(sourceModule.id as AnyNodeId)?.metadata ?? {}
   const sourceMetadata = cabinetMetadataRecord(liveSourceMetadata)
   const existingSourceLink = cornerSourceLink(liveSourceMetadata)
   sceneApi.update(

@@ -61,6 +61,7 @@ import {
   resolveRoomRoofFootprint,
   subscribeToConicalRoofWallClicks,
 } from './roof-footprint'
+import useRoofFootprintSource from './roof-footprint-source'
 import useRoofPlacementMode, { type RoofPlacementMode } from './roof-placement-mode'
 
 const DEFAULT_WALL_HEIGHT = 0.5
@@ -593,7 +594,8 @@ export const RoofTool: React.FC = () => {
   const nodes = useSyncExternalStore(subscribeToNodes, sceneApi.nodes, sceneApi.nodes)
   const parsedRoofType = RoofTypeSchema.safeParse(roofDefaults?.roofType)
   const roofType = parsedRoofType.success ? parsedRoofType.data : 'gable'
-  const footprintSource = parseRoofFootprintSource(roofDefaults?.footprintSource, roofType)
+  const footprintSourceChoice = useRoofFootprintSource((state) => state.source)
+  const footprintSource = parseRoofFootprintSource(footprintSourceChoice, roofType)
   const previewWallHeight =
     typeof roofDefaults?.wallHeight === 'number' ? roofDefaults.wallHeight : DEFAULT_WALL_HEIGHT
   const previewPitch =

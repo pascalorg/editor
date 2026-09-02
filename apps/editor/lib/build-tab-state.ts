@@ -5,41 +5,11 @@ export type RoofFeatureIdentity = {
   kind?: string
 }
 
-// Labels are resolved via i18n at render time — `value` is the stable key
-// (used for `data-value` / state lookups / serialization), `labelKey` is the
-// translator lookup. Both en.json and zh.json keep these in lockstep under
-// `buildTab.*`.
-type RoofFootprintSourceDescriptor = {
-  value: RoofFootprintSource
-  labelKey: string
-}
-
-const ROOF_FOOTPRINT_SOURCES: readonly RoofFootprintSourceDescriptor[] = [
-  { value: 'room', labelKey: 'buildTab.roofSource.room' },
-  { value: 'walls', labelKey: 'buildTab.roofSource.walls' },
-  { value: 'draw', labelKey: 'buildTab.roofSource.draw' },
-]
-
-export type RoofFootprintSource = 'room' | 'walls' | 'draw'
-
-const CONICAL_ROOF_FOOTPRINT_SOURCES = [ROOF_FOOTPRINT_SOURCES[1]] as const
-
-const STANDARD_ROOF_FOOTPRINT_SOURCES = [
-  ROOF_FOOTPRINT_SOURCES[2],
-  ROOF_FOOTPRINT_SOURCES[0],
-] as const
-
-export function getRoofFootprintSources(roofType: RoofType) {
-  return roofType === 'conical' ? CONICAL_ROOF_FOOTPRINT_SOURCES : STANDARD_ROOF_FOOTPRINT_SOURCES
-}
-
-export function getRoofFootprintSource(roofType: RoofType, value: unknown): RoofFootprintSource {
-  const sources = getRoofFootprintSources(roofType)
-  return sources.some((source) => source.value === value)
-    ? (value as RoofFootprintSource)
-    : sources[0].value
-}
-
+// `labelKey` is resolved at render time via `t()` from `buildTab.roofType.*`.
+// `value` is the stable key (used for `data-value` / state lookups / serialization).
+// The footprint-source picker UI that used to live here was removed upstream —
+// that choice is now driven by `<ToolOptionsPanel kind="roof" />` reading
+// `useRoofFootprintSource` directly.
 export type RoofTypeOption = {
   value: RoofType
   labelKey: string

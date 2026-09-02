@@ -680,6 +680,7 @@ export const FirstPersonControls = () => {
   const suspendRef = useRef(false)
   const eyeOffsetRef = useRef(CAMERA_EYE_OFFSET)
   const [crouched, setCrouched] = useState(false)
+  const captureShutterHold = useEditor((state) => state.captureShutterHold)
   const [isElevatorRideLocked, setIsElevatorRideLocked] = useState(false)
   const ridingElevatorRef = useRef<{
     elevatorId: AnyNodeId
@@ -954,7 +955,10 @@ export const FirstPersonControls = () => {
 
   const toggleInteractableTarget = useCallback(() => {
     // Drone is a camera, not an avatar: the click that re-acquires pointer lock
-    // must not swing a door open under the shot being framed.
+    // must not swing a door open under the shot being framed. (In capture
+    // mode's walk camera the CLICK path is gated at handleMouseDown — there a
+    // locked-pointer click is the shutter — but E/R still open doors, so the
+    // photographer can stage the shot.)
     if (isDroneMode) return
 
     const target = interactableTargetRef.current ?? resolveInteractableTarget()
@@ -1157,6 +1161,8 @@ export const FirstPersonControls = () => {
     const canvas = gl.domElement
     const handleMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return
+      // Shutter hold: the shot is rendering — a mouse twitch must not pan it.
+      if (useEditor.getState().captureShutterHold) return
 
       yawRef.current -= e.movementX * LOOK_SENSITIVITY
       pitchRef.current = Math.max(
@@ -1178,6 +1184,10 @@ export const FirstPersonControls = () => {
       if (document.pointerLockElement !== canvas) return
       if (event.button !== 0) return
 
+      // Capture mode: the locked-pointer click is the SHUTTER (the snapshot
+      // overlay's window-capture listener already fired); doors stay on E/R.
+      if (useEditor.getState().isCaptureMode) return
+
       event.preventDefault()
       event.stopPropagation()
       toggleInteractableTargetRef.current()
@@ -1195,6 +1205,19 @@ export const FirstPersonControls = () => {
       // Deliberately released (screenshot pause) — stay in first person;
       // clicking the canvas re-locks.
       if (suspendRef.current) return
+
+      // Capture mode: Esc (the browser's own unlock — no keydown reaches us)
+      // acts like P. Dropping back to orbit would throw away the framed pose,
+      // which reads as a crash to anyone who never noticed P.
+      if (
+        hadPointerLockRef.current &&
+        useEditor.getState().isCaptureMode &&
+        useEditor.getState().isFirstPersonMode
+      ) {
+        suspendRef.current = true
+        useViewer.getState().setWalkthroughSuspended(true)
+        return
+      }
 
       if (hadPointerLockRef.current && useEditor.getState().isFirstPersonMode) {
         useEditor.getState().setFirstPersonMode(false)
@@ -1260,6 +1283,20 @@ export const FirstPersonControls = () => {
       } else if (event.code === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
+        // Capture mode, first Esc frees the cursor (see handlePointerLockChange
+        // — while locked the browser usually unlocks without delivering the
+        // keydown); with the cursor already free, Esc cancels the snapshot
+        // (setCaptureMode(false) also lands the camera back on orbit).
+        if (useEditor.getState().isCaptureMode) {
+          if (document.pointerLockElement === canvas) {
+            suspendRef.current = true
+            useViewer.getState().setWalkthroughSuspended(true)
+            document.exitPointerLock()
+          } else {
+            useEditor.getState().setCaptureMode(false)
+          }
+          return
+        }
         if (document.pointerLockElement === canvas) {
           document.exitPointerLock()
         }
@@ -1559,6 +1596,8 @@ export const FirstPersonControls = () => {
   // rises, Q (or Ctrl) sinks, and Shift boosts.
   useFrame((_, delta) => {
     if (!isDroneMode) return
+    // Shutter hold: freeze the drone mid-air while the shot renders.
+    if (useEditor.getState().captureShutterHold) return
 
     const step = Math.min(delta, 0.1)
     const movement = movementInputRef.current
@@ -1701,7 +1740,7 @@ export const FirstPersonControls = () => {
             maxRunSpeed={crouched ? CROUCH_RUN_SPEED : 5}
             maxSlope={1.2}
             maxWalkSpeed={crouched ? CROUCH_WALK_SPEED : 2}
-            paused={isElevatorRideLocked}
+            paused={isElevatorRideLocked || captureShutterHold}
             position={controllerStart.position}
             ref={setControllerApi}
           />

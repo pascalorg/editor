@@ -10551,9 +10551,11 @@ export function FloorplanPanel({
       }
 
       if (useEditor.getState().phase !== 'site') {
-        useEditor.setState({ catalogCategory: null, mode: 'select', phase: 'site', tool: null })
+        useEditor.getState().setPhase('site')
+        useEditor.getState().armToolMode({ mode: 'select' })
+      } else {
+        selectSiteFloorplanContext()
       }
-      selectSiteFloorplanContext()
 
       const nextDraft = {
         siteId,
@@ -10635,9 +10637,11 @@ export function FloorplanPanel({
       ]
 
       if (useEditor.getState().phase !== 'site') {
-        useEditor.setState({ catalogCategory: null, mode: 'select', phase: 'site', tool: null })
+        useEditor.getState().setPhase('site')
+        useEditor.getState().armToolMode({ mode: 'select' })
+      } else {
+        selectSiteFloorplanContext()
       }
-      selectSiteFloorplanContext()
 
       const nextDraft = {
         siteId,

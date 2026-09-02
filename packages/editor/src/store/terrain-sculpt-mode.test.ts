@@ -52,8 +52,7 @@ describe('terrain-sculpt mode lifecycle', () => {
 
   test('a phase switch out of site drops the scope', () => {
     useEditor.getState().setMode('terrain-sculpt')
-    // This path rewrites `mode` without going through `setMode`, which is
-    // exactly why the scope sync is its own function.
+    // The phase setter delegates its mode rewrite to the ToolMode transition.
     useEditor.getState().setPhase('structure')
     expect(useInteractionScope.getState().scope.kind).toBe('idle')
   })
@@ -153,10 +152,8 @@ describe('the brush and the 3D canvas travel together', () => {
 
 describe('the modes that hide the editing canvas release the brush', () => {
   // Preview / walkthrough / studio all unmount `ToolManager` (via `noEditing`),
-  // so the sculpt tool that would release the scope on unmount is gone. Each one
-  // resets `mode` with a raw `set` rather than `setMode`, which is exactly the
-  // bug class `setPhase` had: a `sculpting` scope leaked here disables selection
-  // across the whole editor with nothing left mounted to clear it.
+  // so the sculpt tool that would release the scope on unmount is gone. Their
+  // ToolMode transitions must release the scope before the canvas disappears.
   test('entering preview releases it', () => {
     useEditor.getState().setMode('terrain-sculpt')
     useEditor.getState().setPreviewMode(true)
