@@ -691,6 +691,7 @@ export {
 // Sheets (WS2) — headless floor-plan geometry collection + the multi-sheet
 // vector PDF writer. Consumed by @pascal-app/plugin-sheets.
 export {
+  collectFloorplanSchedules,
   collectSheetGeometry,
   exportSheetsToPdf,
   POINTS_PER_INCH,

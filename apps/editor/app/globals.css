@@ -7,6 +7,7 @@
 @source "../../../node_modules/@mint/pascal-plugin/src";
 @source "../../../node_modules/@pascal-app/plugin-streetscape/src";
 @source "../../../packages/plugin-plans/src";
+@source "../../../packages/plugin-sheets/src";
 @source "../../../packages/plugin-sections/src";
 
 @custom-variant dark (&:is(.dark *));

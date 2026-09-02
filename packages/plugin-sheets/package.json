@@ -1,0 +1,36 @@
+{
+  "name": "@pascal-app/plugin-sheets",
+  "version": "0.1.0",
+  "description": "Sheets — paper space inside Pascal. Live viewports drawn by Pascal's own renderer, a title block from a project record saved in the scene, layers per viewport, and one multi-sheet vector PDF.",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "peerDependencies": {
+    "@pascal-app/core": ">=0.9.1 <2",
+    "@pascal-app/editor": ">=0.9.1 <2",
+    "lucide-react": "*",
+    "react": "^18 || ^19",
+    "react-dom": "^18 || ^19",
+    "zustand": "^5"
+  },
+  "devDependencies": {
+    "@pascal/typescript-config": "*",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5"
+  }
+}

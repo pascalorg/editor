@@ -37,6 +37,7 @@ const nextConfig: NextConfig = {
     '@mint/pascal-plugin',
     '@pascal-app/plugin-bones',
     '@pascal-app/plugin-plans',
+    '@pascal-app/plugin-sheets',
     '@pascal-app/plugin-sections',
     '@dgreenheck/ez-tree',
   ],
