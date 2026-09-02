@@ -177,10 +177,14 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
             h: (FRAME.h - 0.6) / markers.length - GAP,
           }))
         : [
+            // A SECTION viewport with no marker, not a notes block: the sheet
+            // prints the "how to place a marker" instructions from
+            // `NO_SECTION_MARKER_NOTE` while there is nothing to cut, and it
+            // starts drawing the moment a marker exists and is assigned to it.
             {
-              kind: 'notes' as const,
-              title: 'Building sections',
-              text: 'No section markers in this scene yet.\nPlace a section marker in the model and\nregenerate to fill this sheet.',
+              kind: 'section' as const,
+              title: 'Building section',
+              scale: elevationScale,
               x: FRAME.x,
               y: FRAME.y + 0.4,
               w: FRAME.w,

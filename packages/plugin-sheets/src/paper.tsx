@@ -215,7 +215,13 @@ export function Paper({
         <Primitives list={composed.plate} />
 
         {composed.windows.map((win, i) => {
-          const unitsPerPixel = win.viewport.width / Math.max(1, win.rect.w * zoom)
+          // World units per PDF point — IDENTICAL to the pdfkit renderer's
+          // `1 / (placement.width / viewport.width)` with placement in points
+          // (72 per sheet inch). Annotation geometry (dimension ticks, label
+          // text) is sized in points, not metres, so passing this is what
+          // makes a 1" = 20' site plan's yard dimensions legible instead of
+          // sub-2 pt — and makes the screen an exact preview of the PDF.
+          const unitsPerPoint = win.viewport.width / Math.max(1e-6, win.rect.w * 72)
           return (
             <svg
               key={`win-${i}`}
@@ -240,7 +246,8 @@ export function Paper({
                     geometry={win.annotations}
                     renderMode="pdf"
                     sceneRotationDeg={win.rotationDeg}
-                    screenUnitsPerPixel={unitsPerPixel}
+                    annotationUnitsPerPoint={unitsPerPoint}
+                    screenUnitsPerPixel={unitsPerPoint}
                     pointerEventsOverride="none"
                   />
                 )}

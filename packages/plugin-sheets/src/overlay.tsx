@@ -12,12 +12,52 @@ import { X } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useEditor } from '@pascal-app/editor'
+import { captureViewportImage } from './capture'
 import { composeSheet } from './page'
 import { Paper } from './paper'
 import { ProjectEditor, Rail, useSceneNodes } from './rail'
-import { sheets } from './model'
-import type { SheetNode } from './schema'
+import { sheets, viewports } from './model'
+import type { SheetNode, ViewportNode } from './schema'
 import { useSheets } from './store'
+
+/* --------------------------------------------------------- escape */
+
+/**
+ * Anything that owns Escape before the workspace does. A nested dialog, a
+ * menu, a popover, the command palette or the rail's own "+ Viewport" list
+ * must all get to close themselves first — pressing Escape once should never
+ * dismiss the whole workspace out from under an open thing.
+ */
+const ESCAPE_BLOCKING_SELECTOR = [
+  '[role="dialog"]',
+  '[role="alertdialog"]',
+  '[role="menu"]',
+  '[role="listbox"]',
+  '[cmdk-root]',
+  '[data-radix-popper-content-wrapper]',
+  '[data-sheets-menu]',
+].join(', ')
+
+const TEXT_ENTRY_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT'])
+
+/**
+ * Whether Escape should close the Sheets workspace. Pure, and takes the
+ * document, so the guard is testable without a browser.
+ */
+export function shouldCloseOnEscape(doc: {
+  querySelector: (selector: string) => unknown
+  activeElement?: unknown
+}): boolean {
+  if (doc.querySelector(ESCAPE_BLOCKING_SELECTOR)) return false
+  const active = doc.activeElement as
+    | { tagName?: string; isContentEditable?: boolean }
+    | null
+    | undefined
+  if (!active) return true
+  if (active.tagName && TEXT_ENTRY_TAGS.has(active.tagName)) return false
+  if (active.isContentEditable) return false
+  return true
+}
 
 export function SheetsWorkspace() {
   const workspaceMode = (useEditor as unknown as (selector: (s: { workspaceMode: string }) => string) => string)(
@@ -30,9 +70,57 @@ export function SheetsWorkspace() {
   const sheet = (S.sheetId ? (nodes[S.sheetId] as SheetNode | undefined) : undefined) ?? list[0]
 
   const composed = useMemo(
-    () => (sheet && open ? composeSheet(sheet, { nodes }) : null),
-    [sheet, nodes, open],
+    () => (sheet && open ? composeSheet(sheet, { nodes, captureNotes: S.captureNotes }) : null),
+    [sheet, nodes, open, S.captureNotes],
   )
+
+  /**
+   * Auto-capture the cover view the first time a sheet carrying a `view3d`
+   * viewport is shown, so A0.0 is never a blank box waiting for someone to
+   * find a button.
+   *
+   * The 3D viewer stays mounted underneath this overlay — the workspace is a
+   * separate React root appended to `document.body` and painted over the
+   * editor, not a replacement for it — so the camera is drivable from here and
+   * the capture does not have to happen before the workspace opens. When it
+   * fails anyway, the reason is parked in the store and printed on the sheet
+   * by `resolveViewport`.
+   *
+   * One attempt per viewport per session: a retry loop against a viewer that
+   * is not there would spin forever. "Recapture" in the Layers tab is the
+   * manual retry.
+   */
+  useEffect(() => {
+    if (!open || !sheet) return
+    const pending = viewports(nodes, sheet.id).filter(
+      (vp: ViewportNode) =>
+        vp.kind === 'view3d' && !vp.dataUrl && !useSheets.getState().captureTried[vp.id],
+    )
+    if (pending.length === 0) return
+    let cancelled = false
+    void (async () => {
+      for (const vp of pending) {
+        useSheets.getState().markCaptureTried(vp.id)
+        useSheets.getState().setBusy({ label: 'Capturing the cover view' })
+        try {
+          const result = await captureViewportImage(vp)
+          if (cancelled) return
+          useSheets.getState().setCaptureNote(vp.id, result.ok ? null : result.reason)
+          useSheets
+            .getState()
+            .setMessage(result.ok ? 'Cover view captured' : `Cover view: ${result.reason}`)
+        } catch (error) {
+          if (cancelled) return
+          useSheets.getState().setCaptureNote(vp.id, (error as Error).message)
+        } finally {
+          if (!cancelled) useSheets.getState().setBusy(null)
+        }
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [open, sheet, nodes])
 
   useEffect(() => {
     if (!open) return
@@ -40,8 +128,10 @@ export function SheetsWorkspace() {
       const target = event.target as HTMLElement | null
       if (target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)) return
       if (event.key === 'Escape') {
+        if (!shouldCloseOnEscape(document)) return
         if (useSheets.getState().editingProject) useSheets.getState().setEditingProject(false)
         else closeSheets()
+        return
       }
       const current = list.findIndex((s) => s.id === sheet?.id)
       if (event.key === 'ArrowRight' || event.key === 'PageDown') {

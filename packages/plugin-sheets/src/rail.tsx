@@ -9,20 +9,23 @@
  * record editor.
  */
 import { useScene } from '@pascal-app/core'
-import { ActionButton, PanelSection } from '@pascal-app/editor'
+import { PanelSection } from '@pascal-app/editor'
 import {
   Building2,
   Camera,
   ChevronDown,
+  Info,
   MapPin,
   Pencil,
   Plus,
   Printer,
+  Scissors,
   Sparkles,
   Trash2,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { captureViewportImage } from './capture'
+import { sectionMarkers } from './drawings'
 import { generateDefaultSet } from './generate'
 import {
   addSheet,
@@ -69,6 +72,50 @@ export function useSceneNodes(): NodeMap {
 const input =
   'w-full rounded-md border border-input bg-transparent px-2 py-1.5 text-foreground text-xs placeholder:text-muted-foreground/60 focus:border-ring focus:outline-none'
 const labelCls = 'flex flex-col gap-1 text-[11px] text-muted-foreground'
+
+/**
+ * The rail's own action button.
+ *
+ * The editor's shared `ActionButton` hard-codes `bg-[#2C2C2E]`, which is all
+ * but invisible against the rail's `bg-card` in the dark theme and unreadable
+ * (dark ink on dark grey) in the light one. These use theme tokens only, so
+ * they read in both — `primary` for the one action a sheet set actually needs,
+ * outlined `secondary` for the rest.
+ */
+export function RailButton({
+  icon,
+  label,
+  tone = 'secondary',
+  disabled,
+  onClick,
+  title,
+}: {
+  icon: React.ReactNode
+  label: string
+  tone?: 'primary' | 'secondary'
+  disabled?: boolean
+  onClick?: () => void
+  title?: string
+}) {
+  const cls =
+    tone === 'primary'
+      ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+      : 'border border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground'
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      title={title ?? label}
+      className={`flex h-9 w-full items-center justify-center gap-1.5 rounded-lg px-3 font-medium text-xs shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${cls}`}
+    >
+      <span className="shrink-0" aria-hidden>
+        {icon}
+      </span>
+      <span className="truncate">{label}</span>
+    </button>
+  )
+}
 
 export function Chip({
   children,
@@ -597,6 +644,9 @@ export function Rail({ nodes }: { nodes: NodeMap }) {
                 </div>
               </PanelSection>
             ))}
+            {current && isSectionSheet(current, nodes) && (
+              <SectionsPanel sheet={current} nodes={nodes} onAdded={(id) => S.select(id)} />
+            )}
           </div>
         )}
 
@@ -604,10 +654,12 @@ export function Rail({ nodes }: { nodes: NodeMap }) {
           <LayersPanel
             viewport={selected}
             nodes={nodes}
+            captureNote={selected ? S.captureNotes[selected.id] : undefined}
             onCapture={() =>
               selected &&
               void run('Capturing the view', async () => {
                 const result = await captureViewportImage(selected)
+                S.setCaptureNote(selected.id, result.ok ? null : result.reason)
                 return result.ok ? 'captured' : result.reason
               })
             }
@@ -618,72 +670,81 @@ export function Rail({ nodes }: { nodes: NodeMap }) {
       </div>
 
       {S.panel === 'sheets' && (
-        <div className="space-y-1 border-border border-t p-2">
-              <ActionButton
-                icon={<Plus className="h-3.5 w-3.5" />}
-                label="Sheet"
-                onClick={() => {
-                  const sheet = addSheet({
-                    number: nextSheetNumber(list),
-                    title: 'New sheet',
-                    order: list.length,
-                  })
-                  S.setSheet(sheet.id)
-                }}
+        <div className="space-y-1.5 border-border border-t p-2">
+          <div className="flex gap-1.5">
+            <RailButton
+              icon={<Plus className="h-3.5 w-3.5" />}
+              label="Sheet"
+              onClick={() => {
+                const sheet = addSheet({
+                  number: nextSheetNumber(list),
+                  title: 'New sheet',
+                  order: list.length,
+                })
+                S.setSheet(sheet.id)
+              }}
+            />
+            <div className="relative flex-1">
+              <RailButton
+                icon={<ChevronDown className="h-3.5 w-3.5" />}
+                label="Viewport"
+                disabled={!current}
+                onClick={() => setAddOpen((v) => !v)}
               />
-              <div className="relative">
-                <ActionButton
-                  icon={<ChevronDown className="h-3.5 w-3.5" />}
-                  label="Viewport"
-                  disabled={!current}
-                  onClick={() => setAddOpen((v) => !v)}
-                />
-                {addOpen && current && (
-                  <div className="absolute bottom-full z-10 mb-1 w-full overflow-hidden rounded-md border border-border bg-popover shadow-lg">
-                    {VIEWPORT_KINDS.map((entry) => (
-                      <button
-                        type="button"
-                        key={entry.kind}
-                        className="block w-full px-2 py-1.5 text-left text-xs hover:bg-accent"
-                        onClick={() => {
-                          setAddOpen(false)
-                          const created = addViewport({
-                            sheetId: current.id,
-                            kind: entry.kind,
-                            ...defaultPlacement(current, nodes, entry.kind),
-                          })
-                          S.select(created.id)
-                        }}
-                      >
-                        {entry.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <ActionButton
-                icon={<Sparkles className="h-3.5 w-3.5" />}
-                label="Generate default set"
-                onClick={() =>
-                  void run('Generating the default set', () => {
-                    const result = generateDefaultSet(sceneNodes())
-                    const parts: string[] = []
-                    if (result.created.length) parts.push(`created ${result.created.join(', ')}`)
-                    if (result.skipped.length) parts.push(`kept ${result.skipped.join(', ')}`)
-                    return parts.join(' · ') || 'nothing to do'
-                  })
-                }
-              />
-              <ActionButton
-                icon={<Printer className="h-3.5 w-3.5" />}
-                label="Print / PDF"
-                onClick={() =>
-                  void run('Writing the PDF', async () => {
-                    const result = await printSet()
-                    return result.ok ? `${result.sheets} sheets written` : result.reason
-                  })
-                }
-              />
+              {addOpen && current && (
+                <div
+                  role="menu"
+                  data-sheets-menu=""
+                  className="absolute bottom-full z-10 mb-1 w-full overflow-hidden rounded-md border border-border bg-popover text-popover-foreground shadow-lg"
+                >
+                  {VIEWPORT_KINDS.map((entry) => (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      key={entry.kind}
+                      className="block w-full px-2 py-1.5 text-left text-xs hover:bg-accent hover:text-accent-foreground"
+                      onClick={() => {
+                        setAddOpen(false)
+                        const created = addViewport({
+                          sheetId: current.id,
+                          kind: entry.kind,
+                          ...defaultPlacement(current, nodes, entry.kind),
+                        })
+                        S.select(created.id)
+                      }}
+                    >
+                      {entry.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+          <RailButton
+            tone="primary"
+            icon={<Sparkles className="h-3.5 w-3.5" />}
+            label="Generate default set"
+            onClick={() =>
+              void run('Generating the default set', () => {
+                const result = generateDefaultSet(sceneNodes())
+                const parts: string[] = []
+                if (result.created.length) parts.push(`created ${result.created.join(', ')}`)
+                if (result.skipped.length) parts.push(`kept ${result.skipped.join(', ')}`)
+                return parts.join(' · ') || 'nothing to do'
+              })
+            }
+          />
+          <RailButton
+            icon={<Printer className="h-3.5 w-3.5" />}
+            label="Print / PDF"
+            disabled={list.length === 0}
+            onClick={() =>
+              void run('Writing the PDF', async () => {
+                const result = await printSet()
+                return result.ok ? `${result.sheets} sheets written` : result.reason
+              })
+            }
+          />
         </div>
       )}
 
@@ -734,6 +795,89 @@ function defaultPlacement(
   }
 }
 
+/* ---------------------------------------------------------- sections */
+
+/**
+ * Is this the sheet the sections live on? True when it already carries a
+ * section viewport, or when its number is in the A5 series — the number the
+ * default set gives the sections sheet.
+ */
+export function isSectionSheet(sheet: SheetNode, nodes: NodeMap): boolean {
+  if (/^A5/.test(sheet.number)) return true
+  return viewports(nodes, sheet.id).some((vp) => vp.kind === 'section')
+}
+
+/**
+ * Every section marker in the scene, each with a one-click "add viewport".
+ * When there are none, the panel says exactly where the tool is instead of
+ * leaving the sheet a mystery.
+ */
+function SectionsPanel({
+  sheet,
+  nodes,
+  onAdded,
+}: {
+  sheet: SheetNode
+  nodes: NodeMap
+  onAdded: (id: string) => void
+}) {
+  const markers = sectionMarkers(nodes)
+  const placed = new Set(
+    viewports(nodes, sheet.id)
+      .filter((vp) => vp.kind === 'section')
+      .map((vp) => vp.markerId)
+      .filter((id): id is string => !!id),
+  )
+  return (
+    <PanelSection title="Sections">
+      {markers.length === 0 ? (
+        <div className="flex gap-2 rounded-md border border-border border-dashed p-2 text-[11px] text-muted-foreground leading-relaxed">
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>
+            No section markers in this scene yet. Place one in the 2D plan:{' '}
+            <span className="text-foreground">Sections panel → Section marker tool</span>. It will
+            show up here, ready to drop on this sheet.
+          </span>
+        </div>
+      ) : (
+        <div className="space-y-0.5">
+          {markers.map((marker, i) => {
+            const name = (marker.name as string | undefined) || `Section ${i + 1}`
+            const already = placed.has(marker.id)
+            return (
+              <div
+                key={marker.id}
+                className="flex items-center gap-2 rounded-md px-2 py-1 text-muted-foreground text-xs"
+              >
+                <Scissors className="h-3 w-3 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{name}</span>
+                <button
+                  type="button"
+                  disabled={already}
+                  title={already ? 'Already on this sheet' : `Add a viewport for ${name}`}
+                  className="shrink-0 rounded-md border border-border bg-background px-2 py-0.5 text-[10px] text-foreground hover:bg-accent disabled:opacity-40"
+                  onClick={() => {
+                    const created = addViewport({
+                      sheetId: sheet.id,
+                      kind: 'section',
+                      markerId: marker.id,
+                      title: name,
+                      ...defaultPlacement(sheet, nodes, 'section'),
+                    })
+                    onAdded(created.id)
+                  }}
+                >
+                  {already ? 'on sheet' : 'add viewport'}
+                </button>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </PanelSection>
+  )
+}
+
 /* ------------------------------------------------------------ layers */
 
 const LAYER_ROWS: { key: keyof ViewportLayers; label: string }[] = [
@@ -758,10 +902,12 @@ function LayersPanel({
   viewport,
   nodes,
   onCapture,
+  captureNote,
 }: {
   viewport: ViewportNode | undefined
   nodes: NodeMap
   onCapture: () => void
+  captureNote?: string
 }) {
   if (!viewport) {
     return (
@@ -856,11 +1002,18 @@ function LayersPanel({
           </label>
         )}
         {viewport.kind === 'view3d' && (
-          <ActionButton
+          <RailButton
+            tone={viewport.dataUrl ? 'secondary' : 'primary'}
             icon={<Camera className="h-3.5 w-3.5" />}
-            label={viewport.dataUrl ? 'Recapture standard view' : 'Capture standard view'}
+            label={viewport.dataUrl ? 'Recapture' : 'Capture standard view'}
             onClick={onCapture}
+            title="Drive the camera to the standard cover-front pose, capture it, and put your own view back"
           />
+        )}
+        {viewport.kind === 'view3d' && captureNote && (
+          <p className="rounded-md border border-border border-dashed p-2 text-[11px] text-muted-foreground leading-relaxed">
+            {captureNote}
+          </p>
         )}
         {viewport.kind !== 'schedule' &&
           viewport.kind !== 'notes' &&

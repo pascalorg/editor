@@ -87,10 +87,17 @@ export function registerSheetsCommands(): void {
 }
 
 export { sheetsNodeDefinitions } from './definitions'
-export { registerSheetDrawingProvider, type DrawingProvider, type DrawingResult } from './drawings'
+export {
+  NO_SECTION_MARKER_NOTE,
+  registerSheetDrawingProvider,
+  sectionMarkers,
+  splitProvidedGeometry,
+  type DrawingProvider,
+  type DrawingResult,
+} from './drawings'
 export { generateDefaultSet, missingSheets, planDefaultSet, type Plan } from './generate'
 export { composeAll, composeSheet, type ComposedSheet } from './page'
-export { closeSheets, openSheets } from './overlay'
+export { closeSheets, openSheets, shouldCloseOnEscape } from './overlay'
 export { printSet } from './print'
 export { coverFrontPose, findFrontDoor } from './pose'
 export { buildSchedule, resolveMarks } from './schedule'

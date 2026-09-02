@@ -28,12 +28,14 @@ export type ComposeOptions = {
   nodes: NodeMap
   /** Data URLs captured for view3d viewports this session. */
   captures?: Record<string, string>
+  /** Why a view3d viewport has no image, keyed by viewport id. */
+  captureNotes?: Record<string, string>
   /** Draw the sheet index in the title block (cover sheets). */
   withIndex?: boolean
 }
 
 export function composeSheet(sheet: SheetNode, options: ComposeOptions): ComposedSheet {
-  const { nodes, captures } = options
+  const { nodes, captures, captureNotes } = options
   const paper = paperSize(sheet.size)
   const list = viewports(nodes, sheet.id)
   const overlay: FloorplanGeometry[] = []
@@ -42,7 +44,7 @@ export function composeSheet(sheet: SheetNode, options: ComposeOptions): Compose
 
   const scalesUsed = new Set<number>()
   list.forEach((vp, index) => {
-    const drawn = resolveViewport(vp, { nodes, captures })
+    const drawn = resolveViewport(vp, { nodes, captures, captureNotes })
     overlay.push(...drawn.plate)
     if (drawn.live) {
       windows.push({

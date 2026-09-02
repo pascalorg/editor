@@ -72,10 +72,13 @@ describe('the default set', () => {
     ])
   })
 
-  test('A5.0 says so plainly when there are no section markers', () => {
+  test('A5.0 holds an unassigned section viewport when there are no markers', () => {
+    // Not a notes block: the viewport prints the "place a marker" note while
+    // there is nothing to cut and starts drawing as soon as one is assigned.
     const sections = planDefaultSet(scene()).find((p) => p.number === 'A5.0')!
     expect(sections.viewports).toHaveLength(1)
-    expect(sections.viewports[0]?.kind).toBe('notes')
+    expect(sections.viewports[0]?.kind).toBe('section')
+    expect(sections.viewports[0]?.markerId).toBeUndefined()
   })
 
   test('a section marker in the scene becomes a section viewport', () => {

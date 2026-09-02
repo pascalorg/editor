@@ -87,6 +87,62 @@ export function annotationVisibility(layers: ViewportLayers) {
   }
 }
 
+/**
+ * Dimension primitives are ANNOTATIONS, not model geometry.
+ *
+ * The distinction is not cosmetic. `FloorplanDimensionRenderer` sizes ticks
+ * and label either in WORLD metres (0.15 m text) or in PAPER points (8 pt),
+ * depending on whether it is handed an `annotationUnitsPerPoint`. A plan at
+ * 1/4" = 1'-0" happens to make 0.15 m read as ~0.12 in of paper, so world
+ * sizing looks right there — but a site plan at 1" = 20' is five times
+ * coarser and the same text lands under 2 pt. That is why WS1's four yard
+ * dimension strings were on the sheet all along and still invisible.
+ *
+ * So a provided drawing is split: dimensions go to the ANNOTATION channel,
+ * which `paper.tsx` and `sheet-export.ts` both render in paper points.
+ */
+const DIMENSION_KINDS = new Set(['dimension', 'dimension-string', 'dimension-label'])
+
+function dimensionLayerFor(geometry: FloorplanGeometry, layers: ViewportLayers): boolean {
+  const role = (geometry as { metadata?: { annotationRole?: unknown } }).metadata?.annotationRole
+  if (role === 'manual-dimension' || role === 'construction-dimension') {
+    return layers.manualDimensions
+  }
+  if (role === 'contextual-dimension') return layers.contextualDimensions
+  return layers.automaticDimensions
+}
+
+/**
+ * Split a provided drawing's primitives into the model channel and the
+ * annotation channel, dropping dimensions whose layer switch is off.
+ *
+ * Untransformed groups are descended into so a provider may nest freely; a
+ * group carrying a `transform` stays whole in the model channel, because
+ * lifting a child out of it would lose that transform.
+ */
+export function splitProvidedGeometry(
+  primitives: readonly FloorplanGeometry[],
+  layers: ViewportLayers,
+): { model: FloorplanGeometry[]; annotations: FloorplanGeometry[] } {
+  const model: FloorplanGeometry[] = []
+  const annotations: FloorplanGeometry[] = []
+  const walk = (list: readonly FloorplanGeometry[]) => {
+    for (const geometry of list) {
+      if (geometry.kind === 'group' && !geometry.transform) {
+        walk(geometry.children)
+        continue
+      }
+      if (!DIMENSION_KINDS.has(geometry.kind)) {
+        model.push(geometry)
+        continue
+      }
+      if (dimensionLayerFor(geometry, layers)) annotations.push(geometry)
+    }
+  }
+  walk(primitives)
+  return { model, annotations }
+}
+
 const FURNITURE_TYPES = new Set(['item', 'shelf', 'cabinet', 'cabinet-module'])
 const MEP_TYPES = new Set([
   'duct-segment',
@@ -131,7 +187,15 @@ export type DrawnViewport = {
   scale: number | undefined
 }
 
+/**
+ * A dashed placeholder box with plain words in it. `message` may carry
+ * newlines; the lines are centred as a block so a real explanation fits
+ * instead of running off the edge of the paper.
+ */
 function note(vp: ViewportNode, message: string): FloorplanGeometry[] {
+  const lines = message.split('\n')
+  const lineHeight = 0.24
+  const top = vp.y + vp.h / 2 - ((lines.length - 1) * lineHeight) / 2
   return [
     {
       kind: 'rect',
@@ -144,18 +208,31 @@ function note(vp: ViewportNode, message: string): FloorplanGeometry[] {
       strokeWidth: 0.008,
       strokeDasharray: '0.08 0.06',
     },
-    {
+    ...lines.map<FloorplanGeometry>((line, i) => ({
       kind: 'text',
       x: vp.x + vp.w / 2,
-      y: vp.y + vp.h / 2,
-      text: message,
+      y: top + i * lineHeight,
+      text: line,
       fontSize: 0.16,
       fill: INK_SOFT,
       textAnchor: 'middle',
       fontFamily: 'Helvetica, Arial, sans-serif',
-    },
+    })),
   ]
 }
+
+/**
+ * What a section sheet says when the scene has no section markers. Named
+ * because both the sheet and the rail quote the same route.
+ */
+export const NO_SECTION_MARKER_NOTE = [
+  'No section markers in this scene yet.',
+  '',
+  'Place a section marker in the 2D plan:',
+  'Sections panel → Section marker tool.',
+  '',
+  'Then use Sections in the Sheets rail to add a viewport for it.',
+].join('\n')
 
 function textBlock(vp: ViewportNode, body: string): FloorplanGeometry[] {
   const out: FloorplanGeometry[] = []
@@ -199,6 +276,29 @@ export type ResolveContext = {
   nodes: NodeMap
   /** Data URLs captured for view3d viewports this session, keyed by viewport id. */
   captures?: Record<string, string>
+  /**
+   * Why a view3d viewport has no image, keyed by viewport id. A blank box
+   * tells the reader nothing; the reason is printed on the paper instead.
+   */
+  captureNotes?: Record<string, string>
+}
+
+/** Break a sentence into lines of at most `max` characters, on word breaks. */
+export function wrapWords(text: string, max = 46): string {
+  const out: string[] = []
+  for (const paragraph of text.split('\n')) {
+    let line = ''
+    for (const word of paragraph.split(/\s+/).filter(Boolean)) {
+      if (line && line.length + 1 + word.length > max) {
+        out.push(line)
+        line = word
+      } else {
+        line = line ? `${line} ${word}` : word
+      }
+    }
+    out.push(line)
+  }
+  return out.join('\n')
 }
 
 export function resolveViewport(vp: ViewportNode, ctx: ResolveContext): DrawnViewport {
@@ -223,8 +323,19 @@ export function resolveViewport(vp: ViewportNode, ctx: ResolveContext): DrawnVie
     case 'view3d': {
       const url = ctx.captures?.[vp.id] || vp.dataUrl
       if (!url) {
+        const reason = ctx.captureNotes?.[vp.id]
+        const message =
+          vp.kind !== 'view3d'
+            ? 'No image placed in this viewport yet.'
+            : reason
+              ? wrapWords(`This view could not be captured. ${reason}`)
+              : wrapWords(
+                  'Capturing the standard three-quarter view… if this stays here, ' +
+                    'the 3D viewer is not running behind the Sheets workspace — open the ' +
+                    'model once, then press Recapture in the Layers tab.',
+                )
         return {
-          plate: note(vp, vp.kind === 'view3d' ? 'view — not captured yet' : 'no image'),
+          plate: note(vp, message),
           live: null,
           title: vp.title || (vp.kind === 'view3d' ? 'Perspective' : 'Image'),
           scale: undefined,
@@ -294,6 +405,11 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
       : vp.kind === 'section'
         ? 'Building section'
         : `${(vp.direction ?? 'north').toUpperCase()} elevation`)
+  // A section viewport with nothing to cut is the ordinary state of a fresh
+  // scene, not a failure. Say how to fix it rather than "pending".
+  if (vp.kind === 'section' && !vp.markerId && sectionMarkers(nodes).length === 0) {
+    return { plate: note(vp, NO_SECTION_MARKER_NOTE), live: null, title, scale: vp.scale }
+  }
   if (!build) {
     const pending =
       vp.kind === 'site-plan' ? 'site plan — pending' : `${vp.kind} — pending`
@@ -318,13 +434,31 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
   if (!result || result.primitives.length === 0) {
     return { plate: note(vp, `${vp.kind} — nothing to draw`), live: null, title, scale: vp.scale }
   }
-  const model: FloorplanGeometry = { kind: 'group', children: result.primitives }
+  const split = splitProvidedGeometry(result.primitives, vp.layers)
   return {
     plate: [],
-    live: { model, annotations: null, view: windowFor(vp, padBounds(result.bounds, 0.4), 0), rotationDeg: 0 },
+    live: {
+      model: combine(split.model.length > 0 ? [{ kind: 'group', children: split.model }] : []),
+      annotations: combine(
+        split.annotations.length > 0 ? [{ kind: 'group', children: split.annotations }] : [],
+      ),
+      view: windowFor(vp, padBounds(result.bounds, 0.4), 0),
+      rotationDeg: 0,
+    },
     title,
     scale: vp.scale,
   }
+}
+
+/**
+ * Section markers anywhere in the scene. WS6 owns the kind; match on the
+ * name so this package does not have to depend on a package that may not be
+ * installed yet.
+ */
+export function sectionMarkers(nodes: NodeMap): AnyNodeLike[] {
+  return Object.values(nodes).filter(
+    (n): n is AnyNodeLike => typeof n?.type === 'string' && n.type.includes('section-marker'),
+  )
 }
 
 /**

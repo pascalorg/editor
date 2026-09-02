@@ -6,14 +6,15 @@
  * path is the editor's own snapshot pipeline: emit
  * `camera-controls:generate-thumbnail`, the ThumbnailGenerator renders
  * explicitly and hands the host a Blob through `onThumbnailCapture`, which
- * `apps/editor/app/page.tsx:112` re-broadcasts as a `pascal:thumbnail` DOM
- * event. Same mechanism `packages/plugin-plans/src/snapshot.ts` uses.
+ * the host re-broadcasts as a `pascal:thumbnail` DOM event. Same mechanism
+ * `packages/plugin-plans/src/snapshot.ts` uses.
  *
- * KNOWN GAP (host, not this package): the generator registers its emitter
- * handler only when the host passes `onThumbnailCapture`, and only
- * `apps/editor/app/page.tsx` does. On the saved-scene route
- * (`apps/editor/app/scene/[id]/page.tsx`) no handler exists, so capture
- * cannot work there until that route passes the same prop.
+ * Both host routes now re-broadcast: `apps/editor/app/page.tsx:112` and
+ * `apps/editor/components/scene-loader.tsx:233` (the saved-scene route). The
+ * remaining precondition is simply that a 3D canvas is mounted — the Sheets
+ * workspace is an overlay painted over the editor, not a replacement for it,
+ * so the viewer stays alive underneath and the capture works from inside the
+ * workspace.
  *
  * What is different here: a sheet must not depend on where the user left the
  * camera. The pose is COMPUTED (`pose.ts`), applied through
@@ -72,7 +73,12 @@ export async function captureViewportImage(
 ): Promise<CaptureResult> {
   if (typeof window === 'undefined') return { ok: false, reason: 'no browser' }
   const pose = resolveViewportPose(viewport)
-  if (!pose) return { ok: false, reason: 'nothing in the scene to frame' }
+  if (!pose) {
+    return {
+      ok: false,
+      reason: 'There is nothing in the scene to frame yet — draw some walls first.',
+    }
+  }
 
   const restore = currentPose()
   // `camera:go-to-position` drives CameraControls.setLookAt directly
@@ -99,18 +105,23 @@ export async function captureViewportImage(
   if (!raw) {
     return {
       ok: false,
-      // The generator returns early when the host passes no
-      // `onThumbnailCapture` — and only `apps/editor/app/page.tsx:112`
-      // does. On `/scene/[id]` no handler is registered, so no blob is
-      // ever emitted and there is nothing to wait for. Say so rather than
-      // leaving a silent blank box on the cover sheet.
+      // The generator returns early when the host route passes no
+      // `onThumbnailCapture`, and emits nothing at all when no 3D canvas is
+      // mounted — either way no blob arrives and there is nothing to wait
+      // for. Say so in plain words rather than leaving a silent blank box.
       reason:
-        'no snapshot came back — the host route must pass onThumbnailCapture to <ThumbnailGenerator> and re-broadcast it as a `pascal:thumbnail` event (apps/editor/app/page.tsx does; apps/editor/app/scene/[id]/page.tsx does not)',
+        'No snapshot came back from the 3D viewer within 20 seconds. The viewer has to be mounted for a capture — open the model view once in this tab, then press Recapture.',
     }
   }
 
   const dataUrl = await toJpeg(raw, options.maxWidth ?? 1800)
-  if (!dataUrl) return { ok: false, reason: 'the captured frame was blank' }
+  if (!dataUrl) {
+    return {
+      ok: false,
+      reason:
+        'The captured frame came back blank — the 3D viewer rendered nothing at the standard pose.',
+    }
+  }
   if (options.persist !== false) updateViewport(viewport.id, { dataUrl })
   return { ok: true, dataUrl }
 }

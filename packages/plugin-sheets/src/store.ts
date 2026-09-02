@@ -18,6 +18,13 @@ type SheetsState = {
   pan: { x: number; y: number }
   busy: SheetsBusy
   message: string | null
+  /**
+   * Why a view3d viewport has no image, keyed by viewport id. Session state,
+   * not document state: a failure is about this browser tab, not the scene.
+   */
+  captureNotes: Record<string, string>
+  /** Viewport ids auto-capture has already tried this session. */
+  captureTried: Record<string, true>
   setSheet: (id: string | null) => void
   select: (id: string | null) => void
   setEditingProject: (value: boolean) => void
@@ -25,6 +32,8 @@ type SheetsState = {
   setView: (zoom: number, pan: { x: number; y: number }) => void
   setBusy: (busy: SheetsBusy) => void
   setMessage: (message: string | null) => void
+  markCaptureTried: (id: string) => void
+  setCaptureNote: (id: string, note: string | null) => void
 }
 
 export const useSheets = create<SheetsState>((set) => ({
@@ -36,6 +45,8 @@ export const useSheets = create<SheetsState>((set) => ({
   pan: { x: 0, y: 0 },
   busy: null,
   message: null,
+  captureNotes: {},
+  captureTried: {},
   setSheet: (sheetId) => set({ sheetId, selectedViewportId: null }),
   select: (selectedViewportId) => set({ selectedViewportId }),
   setEditingProject: (editingProject) => set({ editingProject }),
@@ -43,4 +54,13 @@ export const useSheets = create<SheetsState>((set) => ({
   setView: (zoom, pan) => set({ zoom, pan }),
   setBusy: (busy) => set({ busy }),
   setMessage: (message) => set({ message }),
+  markCaptureTried: (id) =>
+    set((state) => ({ captureTried: { ...state.captureTried, [id]: true } })),
+  setCaptureNote: (id, note) =>
+    set((state) => {
+      const next = { ...state.captureNotes }
+      if (note === null) delete next[id]
+      else next[id] = note
+      return { captureNotes: next }
+    }),
 }))
