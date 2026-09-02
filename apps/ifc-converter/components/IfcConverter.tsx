@@ -237,8 +237,12 @@ export default function IfcConverter() {
     }
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: stable drop handler; handleFile only calls setState setters, so a mount-time capture stays correct.
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  // No `useCallback`: handleFile closes over `t` and the render-scoped load
+  // helpers, both of which must reflect the active locale. When `I18nProvider`
+  // swaps en → zh after mount, the drop handler re-binds on the next render
+  // and picks up the new translator. Stable identity doesn't matter here —
+  // there are no memoized children consuming `handleDrop`.
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
     const file = e.dataTransfer.files[0]
@@ -247,7 +251,7 @@ export default function IfcConverter() {
     } else {
       setError(t('ifcConverter.errors.invalidFile'))
     }
-  }, [])
+  }
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
