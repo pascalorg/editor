@@ -98,7 +98,7 @@ export function ControlModes({ compact = false }: { compact?: boolean }) {
     } else if (id === 'delete') {
       // Toggle, like zone: clicking the active delete button returns to select
       // instead of re-arming delete, so the mode never sticks with no way out.
-      setMode(getIsActive('delete') ? 'select' : 'delete')
+      armToolMode({ mode: getIsActive('delete') ? 'select' : 'delete' })
     } else {
       armToolMode({ mode: id })
     }
