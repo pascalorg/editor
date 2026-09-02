@@ -16,7 +16,7 @@ import {
   ToggleControl,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Plus, Trash } from 'lucide-react'
+import { Equal as EqualIcon, Plus, Trash } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 import {
   metadataForSelectedWidth,
@@ -44,6 +44,8 @@ import {
   backAlignZ,
   bumpCabinetRunLayoutRevision,
   cabinetMetadataRecord,
+  cabinetRunWidthEqualizationPlan,
+  equalizeCabinetRunWidths,
   nestedCornerRunPositionOverrides,
   resolveCabinetType,
   runModuleBaseY,
@@ -405,9 +407,14 @@ export function CabinetRunPanel({
   onClose: () => void
 }) {
   const setSelection = useViewer((s) => s.setSelection)
+  const sceneNodes = useScene((s) => s.nodes)
   const sortedModules = useMemo(
     () => [...modules].sort((a, b) => a.position[0] - b.position[0]),
     [modules],
+  )
+  const widthEqualization = useMemo(
+    () => cabinetRunWidthEqualizationPlan(node, sceneNodes),
+    [node, sceneNodes],
   )
 
   const updateRun = useCallback(
@@ -427,6 +434,18 @@ export function CabinetRunPanel({
     },
     [node, setSelection],
   )
+
+  const equalizeWidths = useCallback(() => {
+    equalizeCabinetRunWidths({ run: node, sceneApi: createSceneApi(useScene) })
+  }, [node])
+
+  const equalizeWidthsTitle = !widthEqualization.ok
+    ? widthEqualization.reason === 'not-enough-modules'
+      ? 'At least two standard base cabinets are required'
+      : 'The available run width cannot satisfy the cabinet width limits'
+    : widthEqualization.changed
+      ? 'Equalize all resizeable standard base cabinets in this run'
+      : 'The resizeable cabinet widths are already equal'
 
   const dimensionProfile = cabinetDimensionProfileId(node)
   const applyDimensionProfile = useCallback(
@@ -507,6 +526,17 @@ export function CabinetRunPanel({
               onClick={() => addModule('right')}
             />
           </div>
+          <ActionButton
+            className="mt-2 w-full"
+            disabled={!widthEqualization.ok || !widthEqualization.changed}
+            icon={<EqualIcon className="h-4 w-4" />}
+            label="Equalize widths"
+            onClick={equalizeWidths}
+            title={equalizeWidthsTitle}
+          />
+          <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
+            Balances standard base cabinets while keeping appliance and corner-filler widths fixed.
+          </p>
         </div>
       </PanelSection>
 

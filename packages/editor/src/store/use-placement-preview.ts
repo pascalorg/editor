@@ -29,6 +29,7 @@ type PlacementPreviewState = {
   /** Transient preview node, already positioned + rotated at the (snapped,
    *  aligned) cursor. `null` when no placement is active. */
   node: AnyNode | null
+  contextNodes: AnyNode[]
   /** Optional synthetic parent for the preview's `def.floorplan` context.
    *  Door / window glyph builders need `ctx.parent` to be a wall to draw their
    *  real symbol (swing arc / panes); off any real wall we hand them a
@@ -43,6 +44,7 @@ type PlacementPreviewState = {
     node: AnyNode | null,
     parentNode?: AnyNode | null,
     dimensions?: PlacementPreviewDimension[],
+    contextNodes?: AnyNode[],
   ): void
   selectDimension(id: string | null): void
   setDimensionInput(value: string): void
@@ -52,11 +54,12 @@ type PlacementPreviewState = {
 
 const usePlacementPreview = create<PlacementPreviewState>((set) => ({
   node: null,
+  contextNodes: [],
   parentNode: null,
   dimensions: [],
   activeDimensionId: null,
   dimensionInput: '',
-  set: (node, parentNode = null, dimensions = []) =>
+  set: (node, parentNode = null, dimensions = [], contextNodes = []) =>
     set((state) => {
       const activeDimensionId = dimensions.some(
         (dimension) => dimension.id === state.activeDimensionId,
@@ -65,6 +68,7 @@ const usePlacementPreview = create<PlacementPreviewState>((set) => ({
         : null
       return {
         node,
+        contextNodes,
         parentNode,
         dimensions,
         activeDimensionId,
@@ -77,6 +81,7 @@ const usePlacementPreview = create<PlacementPreviewState>((set) => ({
   clear: () =>
     set({
       node: null,
+      contextNodes: [],
       parentNode: null,
       dimensions: [],
       activeDimensionId: null,
