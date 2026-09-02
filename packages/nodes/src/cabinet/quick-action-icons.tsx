@@ -89,22 +89,3 @@ export function CornerTurnLeftGlyph() {
 export function CornerTurnRightGlyph() {
   return <CornerTurnGlyph direction="right" />
 }
-
-export function HingeFlipGlyph() {
-  return (
-    <svg
-      aria-hidden="true"
-      className="h-3.5 w-3.5"
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.7"
-      viewBox="0 0 24 24"
-    >
-      <path d="M7 5h10v14H7z" />
-      <path d="M10 9h4M10 12h4M10 15h4" />
-      <path d="m4 8 2-2 2 2M20 16l-2 2-2-2" />
-    </svg>
-  )
-}

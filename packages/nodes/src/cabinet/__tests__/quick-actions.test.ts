@@ -43,51 +43,25 @@ function sceneApiFixture(seed: AnyNode[]): SceneApi {
 }
 
 describe('cabinet quick actions', () => {
-  test('flips single-door hinges from the selection action', () => {
+  test('does not expose hinge flipping in the floating actions', () => {
     const run = CabinetNode.parse({
-      id: 'cabinet_run-quick-actions-hinge',
-      parentId: 'level_quick-actions-hinge',
-      children: ['cabinet-module_quick-actions-hinge'],
+      id: 'cabinet_run-quick-actions-no-hinge',
+      parentId: 'level_quick-actions-no-hinge',
+      children: ['cabinet-module_quick-actions-no-hinge'],
     })
     const module = CabinetModuleNode.parse({
-      id: 'cabinet-module_quick-actions-hinge',
+      id: 'cabinet-module_quick-actions-no-hinge',
       parentId: run.id,
       width: 0.4,
-      stack: [
-        { id: 'door-quick-actions-hinge', type: 'door', doorType: 'single-left', shelfCount: 2 },
-      ],
+      stack: [{ id: 'door-quick-actions-no-hinge', type: 'door', doorType: 'single-left' }],
     })
     const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
-    const action = cabinetQuickActions({ node: module, nodes: sceneApi.nodes() }).find(
-      (candidate) => candidate.id === 'cabinet:flip-hinge',
-    )
 
-    expect(action?.disabled).toBeFalsy()
-    action!.run({ sceneApi })
-    expect(sceneApi.get<CabinetModuleNode>(module.id)?.stack?.[0]).toMatchObject({
-      doorType: 'single-right',
-    })
-  })
-
-  test('disables hinge flipping for double-door selections', () => {
-    const run = CabinetNode.parse({
-      id: 'cabinet_run-quick-actions-double-hinge',
-      parentId: 'level_quick-actions-double-hinge',
-      children: ['cabinet-module_quick-actions-double-hinge'],
-    })
-    const module = CabinetModuleNode.parse({
-      id: 'cabinet-module_quick-actions-double-hinge',
-      parentId: run.id,
-      width: 0.8,
-      stack: [{ id: 'door-double-hinge', type: 'door', doorType: 'double', shelfCount: 2 }],
-    })
-    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
-    const action = cabinetQuickActions({ node: module, nodes: sceneApi.nodes() }).find(
-      (candidate) => candidate.id === 'cabinet:flip-hinge',
-    )
-
-    expect(action?.disabled).toBe(true)
-    expect(action?.title).toContain('single doors')
+    expect(
+      cabinetQuickActions({ node: module, nodes: sceneApi.nodes() }).some(
+        (action) => action.id === 'cabinet:flip-hinge',
+      ),
+    ).toBe(false)
   })
 
   test.each([
