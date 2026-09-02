@@ -10,6 +10,7 @@ import {
 import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
+import { plansHostPanel, plansPlugin, registerPlansCommands } from '@pascal-app/plugin-plans'
 import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
 
@@ -92,6 +93,10 @@ extendPluginDiscovery(async () => [bonesPlugin])
 // Opt-in: Bones ships uninstalled — users enable it per scene from the
 // Plugins panel (engineering X-ray is a specialist view, not a default).
 registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: false })
+// Plans (PlanCrafters): Ctrl+K → Generate plans; the set opens in-editor.
+extendPluginDiscovery(async () => [plansPlugin])
+registerEditorHostPanel(plansHostPanel)
+registerPlansCommands()
 extendPluginDiscovery(async () => [mintPlugin])
 registerEditorHostPanel(mintHostPanel)
 extendPluginDiscovery(async () => [streetscapePlugin])

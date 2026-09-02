@@ -107,6 +107,11 @@ export default function Home() {
       <Editor
         layoutVersion="v2"
         projectId={PROJECT_ID}
+        // Plans plugin: the editor's own snapshot pipeline delivers the 3D view
+        // here; re-broadcast it as a DOM event so a plugin can await it.
+        onThumbnailCapture={(blob, cameraData) => {
+          window.dispatchEvent(new CustomEvent('pascal:thumbnail', { detail: { blob, cameraData } }))
+        }}
         sidebarTabs={SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
