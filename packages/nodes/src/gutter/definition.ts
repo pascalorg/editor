@@ -185,12 +185,13 @@ export const gutterDefinition: NodeDefinition<typeof GutterNode> = {
     move: () => import('./move-tool'),
   },
   toolHints: [
-    { key: 'Left click', label: 'Place gutter on roof eave' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: 'Place gutter on roof eave', labelKey: 'nodes.gutter.toolHints.place' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
 
   presentation: {
     label: 'Gutter',
+    labelKey: 'panel.nodeType.gutter',
     description: 'Rain-water channel running along the eave of a roof segment.',
     icon: { kind: 'url', src: '/icons/gutter.webp' },
     paletteSection: 'structure',

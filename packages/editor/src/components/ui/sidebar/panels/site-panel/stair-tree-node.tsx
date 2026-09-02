@@ -1,9 +1,12 @@
+'use client'
+
 import { type AnyNodeId, type StairNode, type StairSegmentNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { AnimatePresence } from 'motion/react'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { messages, useLocale } from '../../../../../lib/i18n'
 import useEditor from '../../../../../store/use-editor'
 import { InlineRenameInput } from './inline-rename-input'
 import { focusTreeNode, handleTreeSelection, TreeNodeWrapper } from './tree-node'
@@ -23,6 +26,8 @@ export const StairTreeNode = memo(function StairTreeNode({
 }: StairTreeNodeProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [expanded, setExpanded] = useState(false)
+  const { locale } = useLocale()
+  const t = (key: string) => (messages[locale] as Record<string, string>)[key] || key
   const isVisible = useScene((s) => s.nodes[nodeId]?.visible !== false)
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(nodeId))
   const isHovered = useViewer((state) => state.hoveredId === nodeId)
@@ -83,7 +88,8 @@ export const StairTreeNode = memo(function StairTreeNode({
   }, [isDropTarget, expanded])
 
   const segmentCount = segments.length
-  const defaultName = `Staircase (${segmentCount} segment${segmentCount !== 1 ? 's' : ''})`
+  const defaultName = 'nodeTypes.staircaseWithSegments'
+  const defaultNameParams = { count: segmentCount }
 
   // Hide the dragged segment from every stair while dragging
   const visibleSegments = drag ? segments.filter((seg) => seg.id !== drag.nodeId) : segments
@@ -108,6 +114,7 @@ export const StairTreeNode = memo(function StairTreeNode({
         label={
           <InlineRenameInput
             defaultName={defaultName}
+            defaultNameParams={defaultNameParams}
             isEditing={isEditing}
             nodeId={nodeId}
             onStartEditing={handleStartEditing}
@@ -163,6 +170,7 @@ function StairSegmentTreeNode({
   isLast?: boolean
 }) {
   const [isEditing, setIsEditing] = useState(false)
+  const { locale } = useLocale()
   const isSelected = useViewer((state) => state.selection.selectedIds.includes(node.id))
   const isHovered = useViewer((state) => state.hoveredId === node.id)
   const setSelection = useViewer((state) => state.setSelection)
@@ -191,8 +199,13 @@ function StairSegmentTreeNode({
   const handleStartEditing = useCallback(() => setIsEditing(true), [])
   const handleStopEditing = useCallback(() => setIsEditing(false), [])
 
-  const typeLabel = node.segmentType === 'stair' ? 'Flight' : 'Landing'
-  const defaultName = `${typeLabel} (${node.width.toFixed(1)}×${node.length.toFixed(1)}m)`
+  const typeLabel = node.segmentType === 'stair' ? 'nodeTypes.flight' : 'nodeTypes.landing'
+  const defaultName = 'nodeTypes.stairSegmentWithDims'
+  const defaultNameParams = {
+    type: (messages[locale] as Record<string, string>)[typeLabel] || typeLabel,
+    width: node.width.toFixed(1),
+    depth: node.length.toFixed(1),
+  }
 
   return (
     <div data-drop-child={node.id}>
@@ -218,6 +231,7 @@ function StairSegmentTreeNode({
         label={
           <InlineRenameInput
             defaultName={defaultName}
+            defaultNameParams={defaultNameParams}
             isEditing={isEditing}
             nodeId={node.id}
             onStartEditing={handleStartEditing}

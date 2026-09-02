@@ -1,6 +1,7 @@
 import type { ToolHint } from '@pascal-app/core'
 import { useMemo, useSyncExternalStore } from 'react'
 import type { ContinuationContext } from '../../../lib/continuation'
+import { useTranslations } from '../../../lib/i18n'
 import type { SnapContext } from '../../../lib/snapping-mode'
 import useEditor from '../../../store/use-editor'
 import { ContextualHelperPanel } from './contextual-helper-panel'
@@ -25,6 +26,7 @@ export function RegisteredToolHelper({
   snapContext?: SnapContext | null
   continuationContext?: ContinuationContext | null
 }) {
+  const t = useTranslations()
   // Live vertex count of an in-progress polygon draft, so hints gated on a
   // minimum (e.g. "Finish" at ≥ 3) only appear once they're actually possible.
   const draftVertexCount = useEditor((s) => s.draftVertexCount)
@@ -67,9 +69,18 @@ export function RegisteredToolHelper({
         // Shift is a per-kind bypass for opening / zone / duct placement ("Free
         // place", "Free angle", …) — those flip to a bypassed state while held.
         const isBypassHint = hint.key === 'Shift'
+        const resolvedLabel = hint.labelKey
+          ? t(hint.labelKey)
+          : t(hint.label) !== hint.label
+            ? t(hint.label)
+            : hint.label
         return {
           keys: [hint.key],
-          label: shiftPressed && isBypassHint ? 'Guided constraints bypassed' : hint.label,
+          label:
+            shiftPressed && isBypassHint
+              ? t('editor.guidedConstraintsBypassed')
+              : resolvedLabel,
+          labelKey: hint.labelKey,
           active: shiftPressed && isBypassHint,
         }
       })}

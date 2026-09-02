@@ -55,6 +55,18 @@ describe('cyclePaintScope', () => {
 })
 
 describe('paintScopeLabel', () => {
+  // Identity translator — tests assert against the i18n key (with any
+  // interpolation substituted), which keeps the suite locale-independent.
+  // The real English/Zh strings live next to the rest of the i18n keys.
+  const identityT = (
+    key: string,
+    vars?: Record<string, string | number>,
+  ): string => {
+    if (!vars) return key
+    return `${key} ${Object.entries(vars)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(' ')}`
+  }
   const info = (over: Partial<PaintHoverInfo>): PaintHoverInfo => ({
     scopes: ['single'],
     slotLabel: 'Seat cushion',
@@ -62,17 +74,23 @@ describe('paintScopeLabel', () => {
     ...over,
   })
   it('single shows the hovered slot label', () => {
-    expect(paintScopeLabel('single', info({ slotLabel: 'Seat cushion' }))).toBe('Seat cushion')
+    expect(paintScopeLabel('single', info({ slotLabel: 'Seat cushion' }), identityT)).toBe(
+      'Seat cushion',
+    )
   })
   it('single falls back when there is no slot label', () => {
-    expect(paintScopeLabel('single', info({ slotLabel: '' }))).toBe('This surface')
+    expect(paintScopeLabel('single', info({ slotLabel: '' }), identityT)).toBe(
+      'helper.paint.thisSurface',
+    )
   })
   it('object reads "Whole <noun>"', () => {
-    expect(paintScopeLabel('object', info({ nodeNoun: 'shelf' }))).toBe('Whole shelf')
+    expect(paintScopeLabel('object', info({ nodeNoun: 'shelf' }), identityT)).toBe(
+      'helper.paint.wholeNoun noun=shelf',
+    )
   })
   it('matching / room are kind-agnostic', () => {
-    expect(paintScopeLabel('matching', info({}))).toBe('All matching')
-    expect(paintScopeLabel('room', info({}))).toBe('Room')
+    expect(paintScopeLabel('matching', info({}), identityT)).toBe('helper.paint.allMatching')
+    expect(paintScopeLabel('room', info({}), identityT)).toBe('helper.paint.room')
   })
 })
 

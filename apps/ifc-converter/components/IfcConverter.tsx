@@ -3,7 +3,8 @@
 import { convertIfcToPascal, type PascalSceneGraph } from '@pascal-app/ifc-converter'
 import dynamic from 'next/dynamic'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { availableTestFiles, exampleFileUrl, testFiles } from '@/lib/test-files'
+import { availableTestFiles, exampleFileUrl, testFiles, type TestFile } from '@/lib/test-files'
+import { useTranslations } from '@/lib/i18n'
 
 // The viewer uses three's WebGPU renderer + the registry-driven scene
 // store, neither of which run during SSR — dynamic-import with ssr:false
@@ -31,7 +32,17 @@ function meta(node: { metadata?: unknown } | null | undefined): ConverterMetadat
   return (node?.metadata ?? {}) as ConverterMetadata
 }
 
+interface SearchResult {
+  id: string
+  name: string
+  type: string
+  /** Dictionary key + params used to render the match description via t(). */
+  matchKey: string
+  matchParams: Record<string, string | number>
+}
+
 export default function IfcConverter() {
+  const t = useTranslations()
   const [pascalData, setPascalData] = useState<PascalSceneGraph | null>(null)
   const [status, setStatus] = useState<Status>('idle')
   const [error, setError] = useState<string | null>(null)
@@ -82,33 +93,53 @@ export default function IfcConverter() {
     }
   }, [elementTypes])
 
-  const searchResults = useMemo(() => {
+  const searchResults = useMemo<SearchResult[]>(() => {
     if (!pascalData || !searchQuery.trim()) return []
     const q = searchQuery.toLowerCase()
-    const results: { id: string; name: string; type: string; match: string }[] = []
+    const results: SearchResult[] = []
     for (const node of Object.values(pascalData.nodes)) {
       if (['site', 'building', 'level'].includes(node.type)) continue
       const m = meta(node)
-      let match: string | null = null
-      if (node.name?.toLowerCase().includes(q)) match = `Name: ${node.name}`
-      else if (node.type.includes(q)) match = `Type: ${node.type}`
-      else if (m.ifcType?.toLowerCase().includes(q)) match = `IFC: ${m.ifcType}`
-      else if (m.typeName?.toLowerCase().includes(q)) match = `Type: ${m.typeName}`
-      else if (m.material?.toLowerCase().includes(q)) match = `Material: ${m.material}`
-      else if (m.globalId?.toLowerCase().includes(q)) match = `ID: ${m.globalId}`
-      else if (m.properties) {
+      let matchKey: string | null = null
+      let matchParams: Record<string, string | number> = {}
+      if (node.name?.toLowerCase().includes(q)) {
+        matchKey = 'ifcConverter.search.matchName'
+        matchParams = { value: node.name }
+      } else if (node.type.includes(q)) {
+        matchKey = 'ifcConverter.search.matchType'
+        matchParams = { value: node.type }
+      } else if (m.ifcType?.toLowerCase().includes(q)) {
+        matchKey = 'ifcConverter.search.matchIfc'
+        matchParams = { value: m.ifcType }
+      } else if (m.typeName?.toLowerCase().includes(q)) {
+        matchKey = 'ifcConverter.search.matchType'
+        matchParams = { value: m.typeName }
+      } else if (m.material?.toLowerCase().includes(q)) {
+        matchKey = 'ifcConverter.search.matchMaterial'
+        matchParams = { value: m.material }
+      } else if (m.globalId?.toLowerCase().includes(q)) {
+        matchKey = 'ifcConverter.search.matchId'
+        matchParams = { value: m.globalId }
+      } else if (m.properties) {
         for (const [psetName, props] of Object.entries(m.properties) as [string, any][]) {
           for (const [k, v] of Object.entries(props)) {
             if (k.toLowerCase().includes(q) || String(v).toLowerCase().includes(q)) {
-              match = `${psetName}: ${k} = ${v}`
+              matchKey = 'ifcConverter.search.matchProperty'
+              matchParams = { pset: psetName, key: k, value: String(v) }
               break
             }
           }
-          if (match) break
+          if (matchKey) break
         }
       }
-      if (match) {
-        results.push({ id: node.id, name: node.name ?? node.id, type: node.type, match })
+      if (matchKey) {
+        results.push({
+          id: node.id,
+          name: node.name ?? node.id,
+          type: node.type,
+          matchKey,
+          matchParams,
+        })
         if (results.length >= 50) break
       }
     }
@@ -133,7 +164,7 @@ export default function IfcConverter() {
     setSearchQuery('')
     setSelectedNodeId(null)
     setConversionProgress(0)
-    setConversionMessage('Starting conversion...')
+    setConversionMessage(t('ifcConverter.status.starting'))
 
     try {
       const result = await convertIfcToPascal(data, (message, percent) => {
@@ -143,9 +174,9 @@ export default function IfcConverter() {
       setPascalData(result)
       setStatus('ready')
       setConversionProgress(100)
-      setConversionMessage('Conversion complete!')
+      setConversionMessage(t('ifcConverter.status.complete'))
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Conversion failed')
+      setError(err instanceof Error ? err.message : t('ifcConverter.errors.conversionFailed'))
       setStatus('error')
       setConversionProgress(0)
     }
@@ -167,13 +198,17 @@ export default function IfcConverter() {
       const file = testFiles.find((f) => f.name === filename)
       const url = file ? exampleFileUrl(file) : `/test-ifc-files/${filename}`
       const response = await fetch(url)
-      if (!response.ok) throw new Error(`Could not load ${filename} (${response.status})`)
+      if (!response.ok) {
+        throw new Error(
+          t('ifcConverter.errors.couldNotLoad', { filename, status: response.status }),
+        )
+      }
       const arrayBuffer = await response.arrayBuffer()
       const uint8Array = new Uint8Array(arrayBuffer)
       setIfcData(uint8Array)
       await loadAndConvert(uint8Array, filename)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load file')
+      setError(err instanceof Error ? err.message : t('ifcConverter.errors.failedToLoad'))
       setStatus('error')
     }
   }
@@ -197,22 +232,26 @@ export default function IfcConverter() {
       setIfcData(uint8Array)
       await loadAndConvert(uint8Array, file.name)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load file')
+      setError(err instanceof Error ? err.message : t('ifcConverter.errors.failedToLoad'))
       setStatus('error')
     }
   }
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: stable drop handler; handleFile only calls setState setters, so a mount-time capture stays correct.
-  const handleDrop = useCallback((e: React.DragEvent) => {
+  // No `useCallback`: handleFile closes over `t` and the render-scoped load
+  // helpers, both of which must reflect the active locale. When `I18nProvider`
+  // swaps en → zh after mount, the drop handler re-binds on the next render
+  // and picks up the new translator. Stable identity doesn't matter here —
+  // there are no memoized children consuming `handleDrop`.
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setIsDragging(false)
     const file = e.dataTransfer.files[0]
     if (file?.name.toLowerCase().endsWith('.ifc')) {
       handleFile(file)
     } else {
-      setError('Please drop a valid IFC file')
+      setError(t('ifcConverter.errors.invalidFile'))
     }
-  }, [])
+  }
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -262,9 +301,9 @@ export default function IfcConverter() {
 
   return (
     <div className="w-full max-w-7xl mx-auto p-6 space-y-6">
-      <div className="text-center">
-        <h2 className="text-2xl font-semibold text-gray-900">Try It</h2>
-        <p className="text-sm text-gray-500 mt-1">Upload an IFC file or pick an example below</p>
+      <div id="try" className="text-center">
+        <h2 className="text-2xl font-semibold text-gray-900">{t('ifcConverter.section.tryIt')}</h2>
+        <p className="text-sm text-gray-500 mt-1">{t('ifcConverter.section.tryItSub')}</p>
       </div>
 
       {/* Upload — compact */}
@@ -294,8 +333,8 @@ export default function IfcConverter() {
             />
           </svg>
           <span className="text-sm text-gray-600">
-            Drop an IFC file here or{' '}
-            <span className="text-blue-600 font-medium">browse to upload</span>
+            {t('ifcConverter.dropzone.prompt')}{' '}
+            <span className="text-blue-600 font-medium">{t('ifcConverter.dropzone.browse')}</span>
           </span>
         </label>
       </div>
@@ -303,10 +342,10 @@ export default function IfcConverter() {
       {/* Example IFC files — 2 rows x 5 cards */}
       <div>
         <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-3">
-          Or pick an example
+          {t('ifcConverter.section.examples')}
         </p>
         <div className="grid grid-cols-5 gap-3">
-          {availableTestFiles().map((file) => (
+          {availableTestFiles().map((file: TestFile) => (
             <button
               key={file.name}
               onClick={() => loadExampleFile(file.name)}
@@ -322,14 +361,14 @@ export default function IfcConverter() {
                   selectedFile === file.name ? 'text-blue-700' : 'text-gray-900'
                 }`}
               >
-                {file.label}
+                {t(file.labelKey)}
               </p>
               <p className="text-xs text-gray-400 mt-0.5">{file.detail}</p>
-              <p className="text-xs text-gray-500 mt-1">{file.description}</p>
-              {file.warning && (
+              <p className="text-xs text-gray-500 mt-1">{t(file.descriptionKey)}</p>
+              {file.warningKey && (
                 <p className="mt-1.5 flex items-start gap-1 text-[11px] leading-snug text-amber-700">
                   <span aria-hidden>⚠️</span>
-                  <span>{file.warning}</span>
+                  <span>{t(file.warningKey)}</span>
                 </p>
               )}
             </button>
@@ -340,7 +379,7 @@ export default function IfcConverter() {
       {/* Error */}
       {status === 'error' && error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-red-700 text-sm">
-          <span className="font-medium">Error:</span> {error}
+          <span className="font-medium">{t('ifcConverter.action.errorPrefix')}</span> {error}
         </div>
       )}
 
@@ -354,10 +393,14 @@ export default function IfcConverter() {
                 <div className="flex items-center gap-3">
                   <h2 className="text-lg font-semibold text-gray-900">{fileName}</h2>
                   <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
-                    {Object.keys(pascalData.nodes).length} nodes
+                    {t('ifcConverter.counts.totalNodes', {
+                      count: Object.keys(pascalData.nodes).length,
+                    })}
                   </span>
                   <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded">
-                    {new Set(Object.values(pascalData.nodes).map((n) => n.type)).size} types
+                    {t('ifcConverter.counts.totalTypes', {
+                      count: new Set(Object.values(pascalData.nodes).map((n) => n.type)).size,
+                    })}
                   </span>
                 </div>
 
@@ -366,13 +409,13 @@ export default function IfcConverter() {
                     onClick={downloadIfc}
                     className="px-3 py-1.5 text-sm font-medium bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 hover:border-gray-400 transition-colors"
                   >
-                    Download IFC
+                    {t('ifcConverter.action.downloadIfc')}
                   </button>
                   <button
                     onClick={downloadPascalJson}
                     className="px-3 py-1.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
                   >
-                    Download Pascal JSON
+                    {t('ifcConverter.action.downloadJson')}
                   </button>
                 </div>
               </div>
@@ -381,23 +424,26 @@ export default function IfcConverter() {
               {elementTypes.length > 1 && (
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                    Types
+                    {t('ifcConverter.section.types')}
                   </span>
                   <button
                     onClick={() => setVisibleTypes(new Set(elementTypes))}
                     className="text-xs px-2 py-0.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100"
                   >
-                    All
+                    {t('ifcConverter.filter.all')}
                   </button>
-                  {elementTypes.map((t) => {
-                    const active = visibleTypes.has(t)
+                  {elementTypes.map((typeKey) => {
+                    const active = visibleTypes.has(typeKey)
+                    const count = typeCounts[typeKey] ?? 0
+                    const countKey =
+                      count === 1 ? 'ifcConverter.counts.types.one' : 'ifcConverter.counts.types.other'
                     return (
                       <button
-                        key={t}
+                        key={typeKey}
                         onClick={() => {
                           const next = new Set(visibleTypes)
-                          if (active) next.delete(t)
-                          else next.add(t)
+                          if (active) next.delete(typeKey)
+                          else next.add(typeKey)
                           setVisibleTypes(next)
                         }}
                         className={`text-xs px-2 py-0.5 rounded border transition-colors ${
@@ -406,8 +452,7 @@ export default function IfcConverter() {
                             : 'bg-white text-gray-400 border-gray-300 hover:border-gray-400'
                         }`}
                       >
-                        {typeCounts[t]} {t}
-                        {(typeCounts[t] ?? 0) > 1 ? 's' : ''}
+                        {t(countKey, { count, type: typeKey })}
                       </button>
                     )
                   })}
@@ -418,19 +463,19 @@ export default function IfcConverter() {
               {levels.length > 1 && (
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">
-                    Levels
+                    {t('ifcConverter.section.levels')}
                   </span>
                   <button
                     onClick={() => setVisibleLevels(new Set(levels.map((l) => l.id)))}
                     className="text-xs px-2 py-0.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100"
                   >
-                    All
+                    {t('ifcConverter.filter.all')}
                   </button>
                   <button
                     onClick={() => setVisibleLevels(new Set())}
                     className="text-xs px-2 py-0.5 rounded border border-gray-300 text-gray-500 hover:bg-gray-100"
                   >
-                    None
+                    {t('ifcConverter.filter.none')}
                   </button>
                   {levels.map((level) => {
                     const active = visibleLevels.has(level.id)
@@ -460,7 +505,7 @@ export default function IfcConverter() {
               <div className="relative">
                 <input
                   type="text"
-                  placeholder="Search elements by name, type, material, property..."
+                  placeholder={t('ifcConverter.search.placeholder')}
                   value={searchQuery}
                   onChange={(e) => {
                     setSearchQuery(e.target.value)
@@ -484,7 +529,9 @@ export default function IfcConverter() {
                 {searchOpen && searchQuery.trim() && (
                   <div className="absolute z-10 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
                     {searchResults.length === 0 ? (
-                      <div className="px-3 py-4 text-sm text-gray-400 text-center">No results</div>
+                      <div className="px-3 py-4 text-sm text-gray-400 text-center">
+                        {t('ifcConverter.search.noResults')}
+                      </div>
                     ) : (
                       searchResults.map((r) => (
                         <button
@@ -503,13 +550,15 @@ export default function IfcConverter() {
                             </span>
                             <span className="text-sm text-gray-900 truncate">{r.name}</span>
                           </div>
-                          <p className="text-xs text-gray-400 mt-0.5 truncate">{r.match}</p>
+                          <p className="text-xs text-gray-400 mt-0.5 truncate">
+                            {t(r.matchKey, r.matchParams)}
+                          </p>
                         </button>
                       ))
                     )}
                     {searchResults.length >= 50 && (
                       <div className="px-3 py-2 text-xs text-gray-400 text-center">
-                        Showing first 50 results
+                        {t('ifcConverter.search.showingFirst50')}
                       </div>
                     )}
                   </div>
@@ -526,7 +575,9 @@ export default function IfcConverter() {
                 <div className="absolute inset-0 z-10 bg-white/80 backdrop-blur-sm rounded-lg flex flex-col items-center justify-center gap-3">
                   <div className="animate-spin rounded-full h-8 w-8 border-2 border-gray-200 border-t-blue-600"></div>
                   <p className="font-medium text-gray-900 text-sm">
-                    {status === 'loading' ? 'Loading file...' : 'Converting to Pascal'}
+                    {status === 'loading'
+                      ? t('ifcConverter.status.loading')
+                      : t('ifcConverter.status.converting')}
                   </p>
                   {status === 'converting' && (
                     <div className="w-48 space-y-1">
@@ -548,9 +599,7 @@ export default function IfcConverter() {
                 <PascalViewer sceneGraph={pascalData} onSelectNode={setSelectedNodeId} />
               )}
               {!pascalData && <div className="w-full h-[600px] bg-gray-900 rounded-lg" />}
-              <p className="text-xs text-gray-400 mt-1">
-                Orbit (left click) / Pan (right click) / Zoom (scroll) / Click element to inspect
-              </p>
+              <p className="text-xs text-gray-400 mt-1">{t('ifcConverter.viewerHint')}</p>
             </div>
             {selectedNodeId &&
               Boolean(
@@ -558,7 +607,7 @@ export default function IfcConverter() {
               ) &&
               (() => {
                 const node = (pascalData!.nodes as Record<string, any>)[selectedNodeId] as any
-                const meta = node.metadata ?? {}
+                const nodeMeta = node.metadata ?? {}
                 const Row = ({ k, v }: { k: string; v: string }) => (
                   <div className="flex justify-between text-xs gap-2">
                     <span className="text-gray-500 shrink-0">{k}</span>
@@ -583,17 +632,26 @@ export default function IfcConverter() {
                       </div>
 
                       <div className="space-y-1 pb-2 border-b border-gray-100">
-                        <Row k="Type" v={node.type} />
-                        {meta.typeName && <Row k="Type Name" v={meta.typeName} />}
-                        {meta.ifcType && <Row k="IFC Type" v={meta.ifcType} />}
-                        {meta.globalId && <Row k="Global ID" v={meta.globalId} />}
-                        {meta.expressID != null && (
-                          <Row k="Express ID" v={String(meta.expressID)} />
+                        <Row k={t('ifcConverter.inspector.type')} v={node.type} />
+                        {nodeMeta.typeName && (
+                          <Row k={t('ifcConverter.inspector.typeName')} v={nodeMeta.typeName} />
                         )}
-                        {meta.levelId && (
+                        {nodeMeta.ifcType && (
+                          <Row k={t('ifcConverter.inspector.ifcType')} v={nodeMeta.ifcType} />
+                        )}
+                        {nodeMeta.globalId && (
+                          <Row k={t('ifcConverter.inspector.globalId')} v={nodeMeta.globalId} />
+                        )}
+                        {nodeMeta.expressID != null && (
                           <Row
-                            k="Level"
-                            v={pascalData!.nodes[meta.levelId]?.name ?? meta.levelId}
+                            k={t('ifcConverter.inspector.expressId')}
+                            v={String(nodeMeta.expressID)}
+                          />
+                        )}
+                        {nodeMeta.levelId && (
+                          <Row
+                            k={t('ifcConverter.inspector.level')}
+                            v={pascalData!.nodes[nodeMeta.levelId]?.name ?? nodeMeta.levelId}
                           />
                         )}
                       </div>
@@ -606,72 +664,105 @@ export default function IfcConverter() {
                         node.polygon) && (
                         <div className="space-y-1 pb-2 border-b border-gray-100">
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                            Geometry
+                            {t('ifcConverter.inspector.geometry')}
                           </p>
                           {node.start && (
                             <Row
-                              k="Start"
+                              k={t('ifcConverter.inspector.start')}
                               v={`[${node.start.map((v: number) => v.toFixed(2)).join(', ')}]`}
                             />
                           )}
                           {node.end && (
                             <Row
-                              k="End"
+                              k={t('ifcConverter.inspector.end')}
                               v={`[${node.end.map((v: number) => v.toFixed(2)).join(', ')}]`}
                             />
                           )}
                           {node.thickness != null && (
-                            <Row k="Thickness" v={`${node.thickness.toFixed(3)} m`} />
+                            <Row
+                              k={t('ifcConverter.inspector.thickness')}
+                              v={`${node.thickness.toFixed(3)} ${t('ifcConverter.units.m')}`}
+                            />
                           )}
                           {node.height != null && (
-                            <Row k="Height" v={`${node.height.toFixed(3)} m`} />
+                            <Row
+                              k={t('ifcConverter.inspector.height')}
+                              v={`${node.height.toFixed(3)} ${t('ifcConverter.units.m')}`}
+                            />
                           )}
-                          {node.width != null && <Row k="Width" v={`${node.width.toFixed(3)} m`} />}
+                          {node.width != null && (
+                            <Row
+                              k={t('ifcConverter.inspector.width')}
+                              v={`${node.width.toFixed(3)} ${t('ifcConverter.units.m')}`}
+                            />
+                          )}
                           {node.position != null && node.type !== 'wall' && (
                             <Row
-                              k="Position"
+                              k={t('ifcConverter.inspector.position')}
                               v={`[${node.position.map((v: number) => v.toFixed(2)).join(', ')}]`}
                             />
                           )}
                           {node.elevation != null && (
-                            <Row k="Elevation" v={`${node.elevation.toFixed(3)} m`} />
+                            <Row
+                              k={t('ifcConverter.inspector.elevation')}
+                              v={`${node.elevation.toFixed(3)} ${t('ifcConverter.units.m')}`}
+                            />
                           )}
                           {node.sillHeight != null && (
-                            <Row k="Sill Height" v={`${node.sillHeight.toFixed(3)} m`} />
+                            <Row
+                              k={t('ifcConverter.inspector.sillHeight')}
+                              v={`${node.sillHeight.toFixed(3)} ${t('ifcConverter.units.m')}`}
+                            />
                           )}
-                          {node.polygon && <Row k="Polygon" v={`${node.polygon.length} points`} />}
+                          {node.polygon && (
+                            <Row
+                              k={t('ifcConverter.inspector.polygon')}
+                              v={t('ifcConverter.counts.polygonPoints', {
+                                count: node.polygon.length,
+                              })}
+                            />
+                          )}
                         </div>
                       )}
 
-                      {(meta.material || meta.materialLayers) && (
+                      {(nodeMeta.material || nodeMeta.materialLayers) && (
                         <div className="space-y-1 pb-2 border-b border-gray-100">
                           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                            Material
+                            {t('ifcConverter.inspector.material')}
                           </p>
-                          {meta.material && <Row k="Name" v={meta.material} />}
-                          {meta.materialLayers?.map((l: any, i: number) => (
+                          {nodeMeta.material && (
+                            <Row k={t('ifcConverter.inspector.name')} v={nodeMeta.material} />
+                          )}
+                          {nodeMeta.materialLayers?.map((l: any, i: number) => (
                             <Row
                               key={i}
                               k={l.name}
                               v={
-                                l.thickness != null ? `${(l.thickness * 1000).toFixed(0)} mm` : '-'
+                                l.thickness != null
+                                  ? `${(l.thickness * 1000).toFixed(0)} ${t('ifcConverter.units.mm')}`
+                                  : '-'
                               }
                             />
                           ))}
                         </div>
                       )}
 
-                      {meta.properties &&
-                        Object.entries(meta.properties).map(([psetName, props]: [string, any]) => (
-                          <div key={psetName} className="space-y-1 pb-2 border-b border-gray-100">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                              {psetName}
-                            </p>
-                            {Object.entries(props).map(([k, v]: [string, any]) => (
-                              <Row key={k} k={k} v={String(v)} />
-                            ))}
-                          </div>
-                        ))}
+                      {nodeMeta.properties &&
+                        Object.entries(nodeMeta.properties).map(
+                          ([psetName, props]: [string, any]) => (
+                            <div
+                              key={psetName}
+                              className="space-y-1 pb-2 border-b border-gray-100"
+                            >
+                              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                                {psetName}
+                              </p>
+                              {Object.entries(props).map(([k, v]: [string, any]) => (
+                                <Row key={k} k={k} v={String(v)} />
+                              ))}
+                            </div>
+                          ),
+                        )}
                     </div>
                   </div>
                 )
@@ -684,12 +775,14 @@ export default function IfcConverter() {
       {status === 'ready' && pascalData && showJson && (
         <div className="fixed right-0 top-0 h-screen w-96 bg-gray-900 shadow-2xl z-50 flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-gray-700">
-            <h3 className="text-sm font-semibold text-gray-300">Pascal JSON</h3>
+            <h3 className="text-sm font-semibold text-gray-300">
+              {t('ifcConverter.section.jsonTitle')}
+            </h3>
             <div className="flex items-center gap-2">
               <button
                 onClick={copyJsonToClipboard}
                 className="text-gray-400 hover:text-white transition-colors p-1 hover:bg-gray-800 rounded"
-                title="Copy to clipboard"
+                title={t('ifcConverter.editor.copyToClipboard')}
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
@@ -728,7 +821,7 @@ export default function IfcConverter() {
         <button
           onClick={() => setShowJson(true)}
           className="fixed right-6 top-24 bg-gray-900 text-white shadow-xl hover:bg-gray-800 transition-all z-10 group rounded-lg px-4 py-2"
-          title="Show JSON preview"
+          title={t('ifcConverter.editor.showJsonPreview')}
         >
           <div className="flex items-center gap-2">
             {/* Curly braces icon */}

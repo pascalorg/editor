@@ -58,6 +58,7 @@ export const levelDefinition: NodeDefinition<typeof LevelNode> = {
 
   presentation: {
     label: 'Level',
+    labelKey: 'panel.nodeType.level',
     description: 'A single floor of a building, holding walls / slabs / ceilings / items.',
     icon: { kind: 'url', src: '/icons/level.webp' },
     paletteSection: 'site',

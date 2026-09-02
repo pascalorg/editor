@@ -1,3 +1,5 @@
+'use client'
+
 import { resolveLevelId, useScene, type ZoneNode } from '@pascal-app/core'
 import { useCallback } from 'react'
 import { PolygonEditor } from '../shared/polygon-editor'

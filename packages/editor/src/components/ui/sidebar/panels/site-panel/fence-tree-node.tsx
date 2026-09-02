@@ -1,3 +1,5 @@
+'use client'
+
 import { type AnyNodeId, type FenceNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
@@ -51,7 +53,7 @@ export const FenceTreeNode = memo(function FenceTreeNode({
       isVisible={node.visible !== false}
       label={
         <InlineRenameInput
-          defaultName="Fence"
+          defaultName="nodeTypes.fence"
           isEditing={isEditing}
           nodeId={node.id}
           onStartEditing={() => setIsEditing(true)}

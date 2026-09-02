@@ -54,14 +54,15 @@ export const measurementDefinition: NodeDefinition<typeof MeasurementNode> = {
   },
   tool: () => import('./tool-router'),
   toolHints: [
-    { key: 'Left click', label: 'Place measurement point' },
-    { key: 'Enter', label: 'Finish measurement' },
-    { key: 'Backspace', label: 'Remove last point' },
-    { key: 'Esc', label: 'Finish and continue' },
+    { key: 'Left click', label: 'Place measurement point', labelKey: 'nodes.measurement.toolHints.placePoint' },
+    { key: 'Enter', label: 'Finish measurement', labelKey: 'nodes.measurement.toolHints.finish' },
+    { key: 'Backspace', label: 'Remove last point', labelKey: 'nodes.measurement.toolHints.removeLast' },
+    { key: 'Esc', label: 'Finish and continue', labelKey: 'nodes.measurement.toolHints.finishContinue' },
   ],
 
   presentation: {
     label: 'Measurement',
+    labelKey: 'panel.nodeType.measurement',
     description: 'A persistent distance, angle, area, perimeter, or volume annotation.',
     icon: { kind: 'iconify', name: 'lucide:ruler' },
     hidden: true,

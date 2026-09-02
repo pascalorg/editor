@@ -1,3 +1,5 @@
+'use client'
+
 import {
   type AlignmentAnchor,
   type AnyNode,
@@ -35,6 +37,7 @@ import {
   useFloorplanDraftPreview,
   useInteractionScope,
   useRegistryToolContext,
+  useTranslations,
 } from '@pascal-app/editor'
 import { generateRoofSegmentGeometry, useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
@@ -49,6 +52,7 @@ import {
 } from 'three'
 import { createConicalRoofSectorAboveWall } from './conical-roof'
 import { resolveConicalRoofPlacement } from './conical-roof-placement'
+import { getDefaultRoofName, getRoofPreviewName } from './naming'
 import {
   isStandardRoofWallEligible,
   parseRoofFootprintSource,
@@ -191,6 +195,7 @@ const commitRoofPlacement = (
   selectedIds: string[],
   quarterTurn: boolean,
   placementMode: RoofPlacementMode,
+  t: ReturnType<typeof useTranslations>,
 ): AnyNode['id'] | null => {
   const nodes = sceneApi.nodes()
 
@@ -236,7 +241,7 @@ const commitRoofPlacement = (
     })
     const roof = RoofNode.parse({
       ...defaults,
-      name: `Roof ${roofCount + 1}`,
+      name: getDefaultRoofName(roofCount + 1, t),
       position: resolved.position,
       support: resolved.support,
       children: [segment.id],
@@ -309,7 +314,7 @@ const commitRoofPlacement = (
 
   // Count existing roofs for naming
   const roofCount = Object.values(nodes).filter((n) => n.type === 'roof').length
-  const name = `Roof ${roofCount + 1}`
+  const name = getDefaultRoofName(roofCount + 1, t)
   const roofRotation = typeof defaults.rotation === 'number' ? defaults.rotation : 0
   const placement = resolveRoofDraftPlacement(
     footprintWidth,
@@ -355,6 +360,7 @@ const commitRoofFootprint = (
   levelId: LevelNode['id'],
   target: RoofFootprintTarget,
   quarterTurn: boolean,
+  t: ReturnType<typeof useTranslations>,
 ): AnyNode['id'] | null => {
   if (!target.rectangular) return null
   const nodes = sceneApi.nodes()
@@ -375,7 +381,7 @@ const commitRoofFootprint = (
   })
   const roof = RoofNode.parse({
     ...defaults,
-    name: `Roof ${roofCount + 1}`,
+    name: getDefaultRoofName(roofCount + 1, t),
     position: [
       target.center[0],
       resolveRoofFootprintElevation(levelId, target, nodes),
@@ -578,6 +584,7 @@ function buildRoofGhostEdges(
 }
 
 export const RoofTool: React.FC = () => {
+  const t = useTranslations()
   const { activeLevelId: currentLevelId, sceneApi, selectNode } = useRegistryToolContext()
   const cursorRef = useRef<Group>(null)
   const outlineRef = useRef<Line>(null!)
@@ -613,7 +620,7 @@ export const RoofTool: React.FC = () => {
     if (!currentLevelId) return
     const draft = RoofNode.parse({
       ...useEditor.getState().toolDefaults.roof,
-      name: 'Roof preview',
+      name: getRoofPreviewName(t),
       parentId: currentLevelId,
     })
     useInteractionScope.getState().begin({
@@ -844,7 +851,7 @@ export const RoofTool: React.FC = () => {
           { rectangularOnly: true },
         )
         if (!target) return
-        const roofId = commitRoofFootprint(sceneApi, currentLevelId, target, quarterTurnRef.current)
+        const roofId = commitRoofFootprint(sceneApi, currentLevelId, target, quarterTurnRef.current, t)
         if (roofId) selectNode(roofId)
         return
       }
@@ -861,6 +868,7 @@ export const RoofTool: React.FC = () => {
           selectedIdsRef.current,
           quarterTurnRef.current,
           useRoofPlacementMode.getState().mode,
+          t,
         )
 
         if (!roofId) return

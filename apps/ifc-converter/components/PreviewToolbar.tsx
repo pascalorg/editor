@@ -12,22 +12,17 @@ import { type AnyNode, type LevelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { Box, Grid2x2, Layers, Layers2, Maximize, ScanLine, Square } from 'lucide-react'
 import { type ReactNode, useMemo } from 'react'
+import { useTranslations } from '@/lib/i18n'
 
 const levelModes = ['stacked', 'solo', 'exploded', 'manual'] as const
 const wallModes = ['up', 'cutaway', 'down', 'translucent'] as const
 
-const levelLabel: Record<(typeof levelModes)[number], string> = {
-  stacked: 'Stack',
-  solo: 'Solo',
-  exploded: 'Exploded',
-  manual: 'Manual',
+function levelLabelKey(mode: (typeof levelModes)[number]): string {
+  return `ifcConverter.toolbar.levelMode.${mode}`
 }
 
-const wallLabel: Record<(typeof wallModes)[number], string> = {
-  up: 'Full',
-  cutaway: 'Cutaway',
-  down: 'Down',
-  translucent: 'Translucent',
+function wallLabelKey(mode: (typeof wallModes)[number]): string {
+  return `ifcConverter.toolbar.wallMode.${mode}`
 }
 
 function cycle<T>(list: readonly T[], current: T): T {
@@ -64,6 +59,7 @@ function ToolButton({
 }
 
 export function PreviewToolbar() {
+  const t = useTranslations()
   const cameraMode = useViewer((s) => s.cameraMode)
   const setCameraMode = useViewer((s) => s.setCameraMode)
   const showGrid = useViewer((s) => s.showGrid)
@@ -84,7 +80,11 @@ export function PreviewToolbar() {
             <Square className="size-3.5" />
           )
         }
-        label={cameraMode === 'perspective' ? 'Perspective' : 'Orthographic'}
+        label={
+          cameraMode === 'perspective'
+            ? t('ifcConverter.toolbar.perspective')
+            : t('ifcConverter.toolbar.orthographic')
+        }
         onClick={() => setCameraMode(cameraMode === 'perspective' ? 'orthographic' : 'perspective')}
       />
 
@@ -95,14 +95,14 @@ export function PreviewToolbar() {
         icon={
           levelMode === 'solo' ? <Layers2 className="size-3.5" /> : <Layers className="size-3.5" />
         }
-        label={`Levels: ${levelLabel[levelMode]}`}
+        label={t('ifcConverter.toolbar.levelsLabel', { mode: t(levelLabelKey(levelMode)) })}
         onClick={() => setLevelMode(cycle(levelModes, levelMode))}
       />
 
       <ToolButton
         active={wallMode !== 'up'}
         icon={<ScanLine className="size-3.5" />}
-        label={`Walls: ${wallLabel[wallMode]}`}
+        label={t('ifcConverter.toolbar.wallsLabel', { mode: t(wallLabelKey(wallMode)) })}
         onClick={() => setWallMode(cycle(wallModes, wallMode))}
       />
 
@@ -111,7 +111,7 @@ export function PreviewToolbar() {
       <ToolButton
         active={showGrid}
         icon={<Grid2x2 className="size-3.5" />}
-        label="Grid"
+        label={t('ifcConverter.editor.grid')}
         onClick={() => setShowGrid(!showGrid)}
       />
     </div>
@@ -119,15 +119,16 @@ export function PreviewToolbar() {
 }
 
 export function FitSceneButton({ onFit }: { onFit: () => void }) {
+  const t = useTranslations()
   return (
     <button
       className="flex h-8 items-center gap-1.5 rounded-xl border border-white/10 bg-black/60 px-3 font-medium text-white/85 text-xs shadow-lg backdrop-blur-md transition-colors hover:bg-black/70 hover:text-white"
       onClick={onFit}
-      title="Fit scene"
+      title={t('ifcConverter.editor.fitScene')}
       type="button"
     >
       <Maximize className="size-3.5" />
-      <span className="hidden sm:inline">Fit</span>
+      <span className="hidden sm:inline">{t('ifcConverter.editor.fitScene')}</span>
     </button>
   )
 }
@@ -140,6 +141,7 @@ export function FitSceneButton({ onFit }: { onFit: () => void }) {
  * has 0 or 1 levels — no point picking from a list of one.
  */
 export function LevelSelector() {
+  const t = useTranslations()
   const nodes = useScene((s) => s.nodes)
   const selection = useViewer((s) => s.selection)
   const setSelection = useViewer((s) => s.setSelection)
@@ -173,7 +175,9 @@ export function LevelSelector() {
             onClick={() => setSelection({ levelId: level.id })}
             type="button"
           >
-            <span className="truncate">{level.name?.trim() || `Level ${level.level}`}</span>
+            <span className="truncate">
+              {level.name?.trim() || t('ifcConverter.fallback.level', { index: level.level })}
+            </span>
             <span className="shrink-0 text-[10px] text-white/40">L{level.level}</span>
           </button>
         )

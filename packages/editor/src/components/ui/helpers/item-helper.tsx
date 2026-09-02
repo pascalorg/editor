@@ -1,4 +1,5 @@
 import type { ContinuationContext } from '../../../lib/continuation'
+import { useTranslations } from '../../../lib/i18n'
 import type { SnapContext } from '../../../lib/snapping-mode'
 import { ContextualHelperPanel } from './contextual-helper-panel'
 
@@ -21,14 +22,15 @@ export function ItemHelper({
   showForce,
   continuationContext = null,
 }: ItemHelperProps) {
+  const t = useTranslations()
   return (
     <ContextualHelperPanel
       continuationContext={continuationContext}
       hints={[
-        { keys: ['Left click'], label: 'Place' },
-        { keys: ['R', 'T'], label: 'Rotate' },
-        ...(showForce ? [{ keys: ['Alt'], label: 'Force place' }] : []),
-        { keys: [showEsc ? 'Esc' : 'Right click'], label: 'Cancel' },
+        { keys: ['Left click'], label: t('editor.place') },
+        { keys: ['R', 'T'], label: t('editor.rotate') },
+        ...(showForce ? [{ keys: ['Alt'], label: t('editor.forcePlace') }] : []),
+        { keys: [showEsc ? 'Esc' : 'Right click'], label: t('common.cancel') },
       ]}
       snapContext={snapContext}
     />

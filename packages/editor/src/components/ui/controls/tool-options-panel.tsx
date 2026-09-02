@@ -2,12 +2,27 @@
 
 import { nodeRegistry, type ToolOption } from '@pascal-app/core'
 import { useSyncExternalStore } from 'react'
+import { useTranslations } from '../../../lib/i18n'
 import { cn } from '../../../lib/utils'
 import { triggerSFX } from '../../../lib/sfx-bus'
 
 const ALWAYS_VISIBLE = {
   subscribe: () => () => {},
   value: () => true,
+}
+
+/** Resolve a `*Key` override against `t()`, falling back to the static string. */
+function resolveText(
+  t: (key: string, vars?: Record<string, string | number>) => string,
+  key: string | undefined,
+  fallback: string | undefined,
+): string | undefined {
+  if (key) {
+    const translated = t(key)
+    // Echoed key = untranslated in the active locale; fall back.
+    if (translated !== key) return translated
+  }
+  return fallback
 }
 
 function ToolOptionRow({
@@ -17,15 +32,17 @@ function ToolOptionRow({
   option: ToolOption
   onSelect?: (option: ToolOption, value: string) => void
 }) {
+  const t = useTranslations()
   const visibility = option.visible ?? ALWAYS_VISIBLE
   const visible = useSyncExternalStore(visibility.subscribe, visibility.value, visibility.value)
   const value = useSyncExternalStore(option.subscribe, option.value, option.value)
   if (!visible) return null
 
   const activeChoice = option.choices.find((choice) => choice.value === value)
+  const rowLabel = resolveText(t, option.labelKey, option.label) ?? ''
   return (
     <div className="flex flex-col gap-2">
-      <div className="px-0.5 font-medium text-muted-foreground text-xs">{option.label}</div>
+      <div className="px-0.5 font-medium text-muted-foreground text-xs">{rowLabel}</div>
       <div
         className="grid gap-1.5"
         style={{
@@ -34,6 +51,7 @@ function ToolOptionRow({
       >
         {option.choices.map((choice) => {
           const active = choice.value === value
+          const choiceLabel = resolveText(t, choice.labelKey, choice.label) ?? ''
           return (
             <button
               aria-pressed={active}
@@ -52,15 +70,18 @@ function ToolOptionRow({
               onMouseEnter={() => triggerSFX('sfx:menu-hover')}
               type="button"
             >
-              {choice.label}
+              {choiceLabel}
             </button>
           )
         })}
       </div>
-      {activeChoice?.description ? (
-        <p className="px-0.5 text-[11px] text-muted-foreground leading-relaxed">
-          {activeChoice.description}
-        </p>
+      {activeChoice ? (
+        (() => {
+          const desc = resolveText(t, activeChoice.descriptionKey, activeChoice.description)
+          return desc ? (
+            <p className="px-0.5 text-[11px] text-muted-foreground leading-relaxed">{desc}</p>
+          ) : null
+        })()
       ) : null}
     </div>
   )

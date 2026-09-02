@@ -1,3 +1,5 @@
+'use client'
+
 import { useCallback } from 'react'
 import type { CeilingNode, LevelNode, WallNode } from '../../schema'
 import { spatialGridManager } from './spatial-grid-manager'

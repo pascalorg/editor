@@ -8,7 +8,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { PanelSection, SliderControl } from '@pascal-app/editor'
+import { PanelSection, SliderControl, useTranslations } from '@pascal-app/editor'
 import { useMemo } from 'react'
 import { Vector3 } from 'three'
 
@@ -34,6 +34,7 @@ export function DormerPositionSection({
   previewProp: (updates: Partial<DormerNode>) => void
   commitProp: (updates: Partial<DormerNode>) => void
 }) {
+  const t = useTranslations()
   const px = node.position[0]
   const py = node.position[1]
   const pz = node.position[2]
@@ -165,9 +166,9 @@ export function DormerPositionSection({
   }
 
   return (
-    <PanelSection title="Position">
+    <PanelSection title={t('common.position')}>
       <SliderControl
-        label="X"
+        label={t('common.x')}
         max={Math.round(worldMaxX * 10) / 10}
         min={Math.round(worldMinX * 10) / 10}
         onChange={(newWorldX) => {
@@ -183,7 +184,7 @@ export function DormerPositionSection({
         value={Math.round(worldX_now * 100) / 100}
       />
       <SliderControl
-        label="Z"
+        label={t('common.z')}
         max={Math.round(worldMaxZ * 10) / 10}
         min={Math.round(worldMinZ * 10) / 10}
         onChange={(newWorldZ) => {
@@ -199,7 +200,7 @@ export function DormerPositionSection({
         value={Math.round(worldZ_now * 100) / 100}
       />
       <SliderControl
-        label="Rotation"
+        label={t('common.rotate')}
         max={180}
         min={-180}
         onChange={(degrees) => {

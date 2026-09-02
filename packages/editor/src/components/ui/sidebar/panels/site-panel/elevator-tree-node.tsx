@@ -1,3 +1,5 @@
+'use client'
+
 import { type AnyNodeId, type ElevatorNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
@@ -57,7 +59,7 @@ export const ElevatorTreeNode = memo(function ElevatorTreeNode({
       isVisible={isVisible}
       label={
         <InlineRenameInput
-          defaultName={node?.name || 'Elevator'}
+          defaultName={node?.name || 'nodeTypes.elevator'}
           isEditing={isEditing}
           nodeId={nodeId}
           onStartEditing={() => setIsEditing(true)}

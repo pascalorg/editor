@@ -1,6 +1,7 @@
 'use client'
 
 import type { MaterialProperties, MaterialSchema } from '@pascal-app/core'
+import { useTranslations } from '../../../lib/i18n'
 import { Input } from '../primitives/input'
 import { SliderControl } from './slider-control'
 
@@ -20,6 +21,7 @@ export function MaterialPropertiesEditor({
   value: MaterialSchema
   onChange: (next: MaterialSchema) => void
 }) {
+  const t = useTranslations()
   const currentProps = value.properties ?? DEFAULT_MATERIAL_PROPERTIES
 
   const updateMaterial = (
@@ -41,7 +43,7 @@ export function MaterialPropertiesEditor({
     <div className="space-y-3">
       <div className="space-y-2">
         <label className="block font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
-          Color
+          {t('material.color')}
         </label>
         <div className="flex items-center gap-2">
           <input
@@ -58,7 +60,7 @@ export function MaterialPropertiesEditor({
       </div>
 
       <SliderControl
-        label="Roughness"
+        label={t('material.roughness')}
         max={1}
         min={0}
         onChange={(value) => updateMaterial({ roughness: value })}
@@ -68,7 +70,7 @@ export function MaterialPropertiesEditor({
       />
 
       <SliderControl
-        label="Metalness"
+        label={t('material.metalness')}
         max={1}
         min={0}
         onChange={(value) => updateMaterial({ metalness: value })}
@@ -78,7 +80,7 @@ export function MaterialPropertiesEditor({
       />
 
       <SliderControl
-        label="Opacity"
+        label={t('material.opacity')}
         max={1}
         min={0}
         onChange={(value) => updateMaterial({ opacity: value }, value < 1 || currentProps.transparent)}
@@ -89,7 +91,7 @@ export function MaterialPropertiesEditor({
 
       <div className="space-y-2">
         <label className="block font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
-          Side
+          {t('material.side')}
         </label>
         <select
           className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 dark:bg-input/30"
@@ -98,9 +100,9 @@ export function MaterialPropertiesEditor({
           }
           value={currentProps.side}
         >
-          <option value="front">Front</option>
-          <option value="back">Back</option>
-          <option value="double">Double</option>
+          <option value="front">{t('material.side.front')}</option>
+          <option value="back">{t('material.side.back')}</option>
+          <option value="double">{t('material.side.double')}</option>
         </select>
       </div>
     </div>

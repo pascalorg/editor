@@ -66,16 +66,22 @@ export function cyclePaintScope(scope: PaintScope, scopes: PaintScope[]): PaintS
   return list[(index + 1) % list.length] ?? 'single'
 }
 
-export function paintScopeLabel(scope: PaintScope, info: PaintHoverInfo): string {
+export type Translator = (key: string, vars?: Record<string, string | number>) => string
+
+export function paintScopeLabel(
+  scope: PaintScope,
+  info: PaintHoverInfo,
+  t: Translator,
+): string {
   switch (scope) {
     case 'object':
-      return `Whole ${info.nodeNoun}`
+      return t('helper.paint.wholeNoun', { noun: info.nodeNoun })
     case 'matching':
-      return 'All matching'
+      return t('helper.paint.allMatching')
     case 'room':
-      return 'Room'
+      return t('helper.paint.room')
     default:
-      return info.slotLabel || 'This surface'
+      return info.slotLabel || t('helper.paint.thisSurface')
   }
 }
 

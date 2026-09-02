@@ -121,11 +121,12 @@ export const blockDefinition: NodeDefinition<typeof BlockNode> = {
   preview: () => import('./preview'),
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Left click', label: 'Place block' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: 'Place block', labelKey: 'nodes.block.toolHints.place' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
   presentation: {
     label: 'Block',
+    labelKey: 'panel.nodeType.block',
     description: 'A topology-backed solid edited directly in the canvas.',
     icon: { kind: 'url', src: '/icons/cube.webp' },
     paletteSection: 'structure',

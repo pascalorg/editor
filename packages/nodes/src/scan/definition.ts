@@ -46,6 +46,7 @@ export const scanDefinition: NodeDefinition<typeof ScanNode> = {
 
   presentation: {
     label: 'Capture',
+    labelKey: 'panel.nodeType.scan',
     description: 'A captured session with optional mesh, motion, media, and sensor data.',
     icon: { kind: 'url', src: '/icons/mesh.webp' },
     paletteSection: 'site',

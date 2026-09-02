@@ -5,6 +5,7 @@ export const linesetParametrics: ParametricDescriptor<LinesetNode> = {
   groups: [
     {
       label: 'Lines',
+      labelKey: 'nodes.lineset.lines',
       fields: [
         {
           key: 'suctionDiameter',
@@ -26,6 +27,7 @@ export const linesetParametrics: ParametricDescriptor<LinesetNode> = {
     },
     {
       label: 'Insulation',
+      labelKey: 'nodes.lineset.insulation',
       fields: [
         {
           key: 'insulated',

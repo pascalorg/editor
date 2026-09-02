@@ -39,14 +39,15 @@ export const structuralGridDefinition: NodeDefinition<typeof StructuralGridNode>
   dirtyTracking: false,
   floorplan: buildStructuralGridFloorplan,
   toolHints: [
-    { key: 'Left click', label: 'Start grid axis' },
-    { key: 'Left click', label: 'Finish grid axis' },
-    { key: 'Alt', label: 'Bypass snapping' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: 'Start grid axis', labelKey: 'nodes.structuralGrid.toolHints.start' },
+    { key: 'Left click', label: 'Finish grid axis', labelKey: 'nodes.structuralGrid.toolHints.finish' },
+    { key: 'Alt', label: 'Bypass snapping', labelKey: 'nodes.structuralGrid.toolHints.bypassSnap' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
 
   presentation: {
     label: 'Structural Grid',
+    labelKey: 'panel.nodeType.structuralGrid',
     description: 'Persistent construction grid axis with identification bubbles.',
     icon: { kind: 'url', src: '/icons/structural-grid.webp' },
     paletteSection: 'structure',

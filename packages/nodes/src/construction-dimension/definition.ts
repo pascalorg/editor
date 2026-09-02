@@ -70,15 +70,16 @@ export const constructionDimensionDefinition: NodeDefinition<typeof Construction
     'move-construction-dimension-witness': moveConstructionDimensionWitnessAffordance,
   },
   toolHints: [
-    { key: 'Left click', label: 'Pick witness point' },
-    { key: 'Enter', label: 'Finish multi-point witnesses' },
-    { key: 'Left click', label: 'Place dimension line when needed' },
-    { key: 'Backspace', label: 'Remove last witness' },
-    { key: 'Esc', label: 'Step back or cancel' },
+    { key: 'Left click', label: 'Pick witness point', labelKey: 'nodes.constructionDimension.toolHints.pickWitness' },
+    { key: 'Enter', label: 'Finish multi-point witnesses', labelKey: 'nodes.constructionDimension.toolHints.finishWitnesses' },
+    { key: 'Left click', label: 'Place dimension line when needed', labelKey: 'nodes.constructionDimension.toolHints.placeLine' },
+    { key: 'Backspace', label: 'Remove last witness', labelKey: 'nodes.constructionDimension.toolHints.removeLast' },
+    { key: 'Esc', label: 'Step back or cancel', labelKey: 'common.cancel' },
   ],
 
   presentation: {
     label: 'Construction Dimension',
+    labelKey: 'panel.nodeType.constructionDimension',
     description: 'Associative linear, curved, circular, angular, or coordinate plan dimension.',
     icon: { kind: 'iconify', name: 'lucide:ruler-dimension-line' },
     hidden: true,

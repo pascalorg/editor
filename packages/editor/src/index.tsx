@@ -467,7 +467,7 @@ export {
   buildRoofSurfaceMaterialPatch,
   buildSingleSurfaceMaterialPatch,
   buildStairSurfaceMaterialPatch,
-  getActivePaintMaterialLabel,
+  getActivePaintMaterialLabelKey,
   hasActivePaintMaterial,
 } from './lib/material-paint'
 export {
@@ -695,3 +695,12 @@ export {
   type WallSnapKind,
   type WallSnapPoint,
 } from './store/use-wall-snap-indicator'
+export {
+  I18nProvider,
+  useLocale,
+  useTranslations,
+  defaultLocale,
+  type Locale,
+  type Translator,
+  messages,
+} from './lib/i18n'

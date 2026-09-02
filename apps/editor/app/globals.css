@@ -170,6 +170,25 @@
   scrollbar-width: none; /* Firefox */
 }
 
+/* Custom scrollbar — thin, dark-themed */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: #2c2c2e;
+}
+
+::-webkit-scrollbar-thumb {
+  background: oklch(1 0 0 / 30%);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(1 0 0 / 50%);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

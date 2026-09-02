@@ -1,26 +1,33 @@
+'use client'
+
 import { Icon } from '@iconify/react'
 import type * as React from 'react'
 
 import { cn } from '../../../lib/utils'
+import { useTranslations } from '../../../lib/i18n'
 
-const MOUSE_SHORTCUTS = {
+// Mouse + key labels live as i18n keys so screen-reader / tooltip text
+// follows the active locale. The map below is keyed on the raw string passed
+// to <ShortcutToken>; on the component side the renderer looks up the
+// matching label via `t()`.
+const MOUSE_SHORTCUTS: Record<string, { icon: string; labelKey: string }> = {
   Click: {
     icon: 'ph:mouse-left-click-fill',
-    label: 'Left click',
+    labelKey: 'keys.leftClick',
   },
   'Left click': {
     icon: 'ph:mouse-left-click-fill',
-    label: 'Left click',
+    labelKey: 'keys.leftClick',
   },
   'Middle click': {
     icon: 'qlementine-icons:mouse-middle-button-16',
-    label: 'Middle click',
+    labelKey: 'keys.middleClick',
   },
   'Right click': {
     icon: 'ph:mouse-right-click-fill',
-    label: 'Right click',
+    labelKey: 'keys.rightClick',
   },
-} as const
+}
 
 // The platform-agnostic command modifier. Both Cmd and Ctrl bind the action; we
 // render the symbol for the *current* device so the hint reads native (⌘ on Mac,
@@ -61,25 +68,28 @@ type ShortcutTokenProps = React.ComponentProps<'kbd'> & {
 }
 
 function ShortcutToken({ className, displayValue, value, ...props }: ShortcutTokenProps) {
+  const t = useTranslations()
   const mouseShortcut =
-    value in MOUSE_SHORTCUTS ? MOUSE_SHORTCUTS[value as keyof typeof MOUSE_SHORTCUTS] : null
+    value in MOUSE_SHORTCUTS ? MOUSE_SHORTCUTS[value] : null
   const isCommand = COMMAND_VALUES.has(value)
   const isShift = value === 'Shift'
   const commandDisplay = IS_MAC ? '⌘' : 'Ctrl'
-  const commandLabel = IS_MAC ? 'Command' : 'Control'
+  const commandLabel = IS_MAC ? t('keys.commandMac') : t('keys.control')
+  const shiftLabel = t('keys.shift')
+  const mouseLabel = mouseShortcut ? t(mouseShortcut.labelKey) : null
 
   return (
     <kbd
       aria-label={
-        mouseShortcut?.label ??
-        (isCommand ? commandLabel : isShift ? 'Shift' : (displayValue ?? value))
+        mouseLabel ??
+        (isCommand ? commandLabel : isShift ? shiftLabel : (displayValue ?? value))
       }
       className={cn(
         'inline-flex h-6 items-center rounded border border-border bg-muted px-2 font-medium font-mono text-[11px] text-muted-foreground',
         (mouseShortcut || isShift) && 'justify-center px-1.5',
         className,
       )}
-      title={mouseShortcut?.label ?? (isCommand ? commandLabel : isShift ? 'Shift' : value)}
+      title={mouseLabel ?? (isCommand ? commandLabel : isShift ? shiftLabel : value)}
       {...props}
     >
       {mouseShortcut ? (
@@ -92,7 +102,7 @@ function ShortcutToken({ className, displayValue, value, ...props }: ShortcutTok
             icon={mouseShortcut.icon}
             width={14}
           />
-          <span className="sr-only">{mouseShortcut.label}</span>
+          <span className="sr-only">{mouseLabel}</span>
         </>
       ) : isShift ? (
         // Icon rather than the ⇧ text glyph — the font renders the glyph's
@@ -106,7 +116,7 @@ function ShortcutToken({ className, displayValue, value, ...props }: ShortcutTok
             icon="ph:arrow-fat-up"
             width={13}
           />
-          <span className="sr-only">Shift</span>
+          <span className="sr-only">{shiftLabel}</span>
         </>
       ) : isCommand ? (
         // The ⌘ glyph reads small next to letters at the same font size, so bump

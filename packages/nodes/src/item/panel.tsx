@@ -10,6 +10,7 @@ import {
   SliderControl,
   triggerSFX,
   useEditor,
+  useTranslations,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Link, Link2Off, Move, Trash2 } from 'lucide-react'
@@ -30,6 +31,7 @@ import { useCallback, useRef, useState } from 'react'
  * (see the wiki / plan recipe).
  */
 export default function ItemPanel() {
+  const t = useTranslations()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const deleteNode = useScene((s) => s.deleteNode)
@@ -105,7 +107,7 @@ export default function ItemPanel() {
       title={node.name || node.asset.name}
       width={300}
     >
-      <PanelSection title="Position">
+      <PanelSection title={t('nodes.item.position')}>
         <SliderControl
           label={
             <>
@@ -156,7 +158,7 @@ export default function ItemPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Rotation">
+      <PanelSection title={t('nodes.item.rotation')}>
         <SliderControl
           label={
             <>
@@ -176,7 +178,7 @@ export default function ItemPanel() {
         />
         <div className="flex gap-1.5 px-1 pt-2 pb-1">
           <ActionButton
-            label="-45°"
+            label={t('nodes.stair.rotationPresets.negative')}
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               const currentDegrees = (node.rotation[1] * 180) / Math.PI
@@ -185,7 +187,7 @@ export default function ItemPanel() {
             }}
           />
           <ActionButton
-            label="+45°"
+            label={t('nodes.stair.rotationPresets.positive')}
             onClick={() => {
               triggerSFX('sfx:item-rotate')
               const currentDegrees = (node.rotation[1] * 180) / Math.PI
@@ -196,10 +198,10 @@ export default function ItemPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Scale">
+      <PanelSection title={t('nodes.item.scale')}>
         <div className="flex items-center justify-between px-2 pb-2">
           <span className="font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-            Uniform Scale
+            {t('nodes.item.uniformScale')}
           </span>
           <button
             className={
@@ -282,9 +284,9 @@ export default function ItemPanel() {
         )}
       </PanelSection>
 
-      <PanelSection title="Info">
+      <PanelSection title={t('nodes.item.info')}>
         <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-sm">
-          <span>Dimensions</span>
+          <span>{t('common.dimensions')}</span>
           {(() => {
             const [w, h, d] = getScaledDimensions(node)
             return (
@@ -296,29 +298,29 @@ export default function ItemPanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Collections">
+      <PanelSection title={t('nodes.item.collections')}>
         <ActionGroup>
           <CollectionsPopover
             collectionIds={node.collectionIds}
             nodeId={selectedId as AnyNode['id']}
           >
-            <ActionButton label="Manage collections…" />
+            <ActionButton label={t('nodes.item.manageCollections')} />
           </CollectionsPopover>
         </ActionGroup>
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={t('common.actions')}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={t('common.move')} onClick={handleMove} />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={t('common.duplicate')}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label="Delete"
+            label={t('common.delete')}
             onClick={handleDelete}
           />
         </ActionGroup>

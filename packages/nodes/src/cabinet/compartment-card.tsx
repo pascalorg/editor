@@ -1,6 +1,6 @@
 'use client'
 
-import { SegmentedControl, SliderControl, ToggleControl } from '@pascal-app/editor'
+import { SegmentedControl, SliderControl, ToggleControl, useTranslations } from '@pascal-app/editor'
 import { ArrowDown, ArrowUp, Minus, Plus, Trash } from 'lucide-react'
 import {
   type CabinetCompartment,
@@ -208,6 +208,7 @@ export function CompartmentCard({
   allowHood?: boolean
   wallCabinet?: boolean
 }) {
+  const t = useTranslations()
   const type = compartment.type as CabinetCompartmentType
   const isFridge = isFridgeCompartmentType(type)
   const isHood = isHoodCompartmentType(type)
@@ -278,7 +279,7 @@ export function CompartmentCard({
       {total > 1 && !isHood && !isCooktop && type !== 'sink' && (
         <div className="pb-2">
           <SliderControl
-            label="Height"
+            label={t('common.height')}
             max={carcassHeight}
             min={0.1}
             onChange={onResizeHeight}
@@ -292,7 +293,7 @@ export function CompartmentCard({
 
       {type === 'shelf' && (
         <Stepper
-          label="Shelves"
+          label={t('common.shelves')}
           max={8}
           min={0}
           onChange={(value) => onReplace(patchCompartment(compartment, { shelfCount: value }))}
@@ -302,7 +303,7 @@ export function CompartmentCard({
 
       {type === 'drawer' && (
         <Stepper
-          label="Drawers"
+          label={t('common.drawers')}
           max={6}
           min={1}
           onChange={(value) => onReplace(patchCompartment(compartment, { drawerCount: value }))}
@@ -326,7 +327,7 @@ export function CompartmentCard({
             />
           </div>
           <Stepper
-            label="Shelves inside"
+            label={t('nodes.cabinet.shelvesInside')}
             max={8}
             min={0}
             onChange={(value) => onReplace(patchCompartment(compartment, { shelfCount: value }))}
@@ -410,7 +411,7 @@ export function CompartmentCard({
           </div>
           <ToggleControl
             checked={compartmentCooktopBurnersOn(compartment)}
-            label="Burners on"
+            label={t('nodes.cabinet.burnersOn')}
             onChange={(checked) => {
               const count = compartmentCooktopElementCount(
                 compartment,
@@ -430,7 +431,7 @@ export function CompartmentCard({
           {type === 'cooktop-gas' && (
             <ToggleControl
               checked={compartmentCooktopShowGrate(compartment)}
-              label="Top grate"
+              label={t('nodes.cabinet.topGrate')}
               onChange={(checked) =>
                 onReplace(patchCompartment(compartment, { cooktopShowGrate: checked }))
               }
@@ -458,7 +459,7 @@ export function CompartmentCard({
       {type === 'pull-out-pantry' && (
         <div className="space-y-2">
           <Stepper
-            label="Baskets"
+            label={t('nodes.cabinet.baskets')}
             max={8}
             min={2}
             onChange={(value) => onReplace(patchCompartment(compartment, { shelfCount: value }))}

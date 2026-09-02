@@ -22,6 +22,8 @@ import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { ParametricFieldControl } from './parametric-field-control'
 import { InspectorFooterContext, PanelWrapper } from './panel-wrapper'
+import { camelType } from './node-display'
+import { useTranslations } from '../../../lib/i18n'
 
 /**
  * Auto-derived right-panel inspector for any registry-backed node.
@@ -49,6 +51,7 @@ export function ParametricInspector({
     | undefined
   const selectedId = nodeId ?? selectedIdFromSelection
   const setSelection = useViewer((s) => s.setSelection)
+  const t = useTranslations()
   // Subscribe only to the *type* — a string primitive that doesn't change
   // when slider values change. Without this, every updateNode tick during
   // a drag re-renders the entire panel + every field + every SliderControl.
@@ -138,7 +141,11 @@ export function ParametricInspector({
   }
 
   const presentation = def.presentation
-  const title = presentation?.label ?? nodeType ?? ''
+  const titleFromCatalog = t(`panel.nodeType.${camelType(nodeType ?? '')}`)
+  const title =
+    titleFromCatalog.startsWith('panel.nodeType.')
+      ? (presentation?.label ?? nodeType ?? '')
+      : titleFromCatalog
   const iconNode = renderIcon(presentation?.icon)
   const canMove = !!def.capabilities.movable
   const canDelete = def.capabilities.deletable !== false
@@ -156,28 +163,40 @@ export function ParametricInspector({
       title={title}
       width={320}
     >
-      {parametrics.groups.map((group, gi) => (
-        <PanelSection key={`group-${gi}`} title={group.label}>
-          {group.fields.map((field, fi) => (
-            <FieldRenderer
-              key={`field-${gi}-${fi}-${String(field.key)}`}
-              field={field as ParamField<AnyNode>}
-              nodeId={selectedId}
-              onUpdate={handleUpdate}
-            />
-          ))}
-        </PanelSection>
-      ))}
+      {parametrics.groups.map((group, gi) => {
+        // Resolve group title via catalog when the descriptor carries a key.
+        // `t(key)` returns the key itself when no catalog entry exists, so
+        // comparing back to the key detects a miss and keeps the hardcoded
+        // English label as the fallback.
+        const resolved = group.labelKey ? t(group.labelKey) : ''
+        const groupTitle = resolved && resolved !== group.labelKey ? resolved : group.label
+        return (
+          <PanelSection key={`group-${gi}`} title={groupTitle}>
+            {group.fields.map((field, fi) => (
+              <FieldRenderer
+                key={`field-${gi}-${fi}-${String(field.key)}`}
+                field={field as ParamField<AnyNode>}
+                nodeId={selectedId}
+                onUpdate={handleUpdate}
+              />
+            ))}
+          </PanelSection>
+        )
+      })}
       {TrailingSection && (
         <Suspense fallback={null}>
           <TrailingSection />
         </Suspense>
       )}
       {(canMove || canDelete || (parametrics.actions && parametrics.actions.length > 0)) && (
-        <PanelSection title="Actions">
+        <PanelSection title={t('panel.section.actions')}>
           <ActionGroup className={isZone ? 'flex-col' : undefined}>
             {canMove && (
-              <ActionButton icon={<Move className="h-4 w-4" />} label="Move" onClick={handleMove} />
+              <ActionButton
+                icon={<Move className="h-4 w-4" />}
+                label={t('editor.move')}
+                onClick={handleMove}
+              />
             )}
             {parametrics.actions?.map((action, i) => (
               <ParamActionButton action={action} key={`paramaction-${i}`} nodeId={selectedId} />
@@ -188,13 +207,13 @@ export function ParametricInspector({
                   <ActionButton
                     className="w-full flex-none"
                     icon={<Trash2 className="h-4 w-4 text-red-400" />}
-                    label="Delete"
+                    label={t('editor.delete')}
                     onClick={() => handleDelete(false)}
                   />
                   <ActionButton
                     className="w-full flex-none"
                     icon={<Trash2 className="h-4 w-4 text-red-400" />}
-                    label="Delete with contents"
+                    label={t('editor.deleteWithContents')}
                     onClick={() => handleDelete(true)}
                   />
                 </>
@@ -202,7 +221,7 @@ export function ParametricInspector({
                 <ActionButton
                   className="border-red-500/40 text-red-200 hover:bg-red-500/15"
                   icon={<Trash2 className="h-4 w-4" />}
-                  label="Delete"
+                  label={t('editor.delete')}
                   onClick={() => handleDelete()}
                 />
               ))}

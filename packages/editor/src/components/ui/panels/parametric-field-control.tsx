@@ -4,6 +4,7 @@ import type { AnyNode, ParamField } from '@pascal-app/core'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
 import { ToggleControl } from '../controls/toggle-control'
+import { useTranslations } from '../../../lib/i18n'
 import { precisionForStep, prettifyEnumValue, prettifyKey } from './parametric-field-utils'
 
 interface ParametricFieldControlProps {
@@ -22,6 +23,35 @@ export function ParametricFieldControl({
   onCommit,
 }: ParametricFieldControlProps) {
   const key = String(field.key)
+  const t = useTranslations()
+
+  // Resolve the field's display label. `field.label` wins when present (it
+  // was authored deliberately); `field.labelKey` is the catalog equivalent;
+  // otherwise fall through to the key-derived prettifier. Catalog misses
+  // (t(key) === key) cascade through to the same fallback chain so an
+  // un-translated descriptor still renders sensibly.
+  const resolveFieldLabel = (): string => {
+    if (field.label) return field.label
+    const labelKey = (field as { labelKey?: string }).labelKey
+    if (labelKey) {
+      const fromCatalog = t(labelKey)
+      if (fromCatalog !== labelKey) return fromCatalog
+    }
+    return prettifyKey(key)
+  }
+
+  // Resolve an enum option's display label. `optionLabelKeys[opt]` is the
+  // catalog key for that value — when the catalog has an entry, use it;
+  // otherwise fall through to the prettifier so un-wired options still
+  // render their existing English pretty form.
+  const resolveOptionLabel = (opt: string): string => {
+    const optKey = field.kind === 'enum' ? field.optionLabelKeys?.[opt] : undefined
+    if (optKey) {
+      const fromCatalog = t(optKey)
+      if (fromCatalog !== optKey) return fromCatalog
+    }
+    return prettifyEnumValue(opt)
+  }
 
   switch (field.kind) {
     case 'number': {
@@ -30,7 +60,7 @@ export function ParametricFieldControl({
       const precision = precisionForStep(step)
       return (
         <SliderControl
-          label={prettifyKey(key)}
+          label={resolveFieldLabel()}
           max={field.max}
           min={field.min}
           mixed={mixed}
@@ -50,7 +80,7 @@ export function ParametricFieldControl({
       return (
         <ToggleControl
           checked={checked}
-          label={prettifyKey(key)}
+          label={resolveFieldLabel()}
           mixed={mixed}
           onChange={(next) => {
             const patch = { [key]: next } as Partial<AnyNode>
@@ -73,14 +103,14 @@ export function ParametricFieldControl({
           <SegmentedControl
             mixed={mixed}
             onChange={apply}
-            options={field.options.map((opt) => ({ label: prettifyEnumValue(opt), value: opt }))}
+            options={field.options.map((opt) => ({ label: resolveOptionLabel(opt), value: opt }))}
             value={str}
           />
         )
       }
       return (
         <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
+          <span className="text-foreground/80 text-xs">{resolveFieldLabel()}</span>
           <select
             className="rounded-md border border-border/50 bg-[#2C2C2E] px-2 py-1 text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-foreground/30"
             onChange={(e) => apply(e.target.value)}
@@ -93,7 +123,7 @@ export function ParametricFieldControl({
             )}
             {field.options.map((opt) => (
               <option key={opt} value={opt}>
-                {prettifyEnumValue(opt)}
+                {resolveOptionLabel(opt)}
               </option>
             ))}
           </select>
@@ -110,7 +140,7 @@ export function ParametricFieldControl({
       }
       return (
         <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-foreground/80 text-xs">{prettifyKey(key)}</span>
+          <span className="text-foreground/80 text-xs">{resolveFieldLabel()}</span>
           <div className="flex items-center gap-2">
             <input
               className="h-6 w-8 cursor-pointer rounded border border-border/50 bg-transparent"

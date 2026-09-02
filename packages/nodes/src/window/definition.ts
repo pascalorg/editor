@@ -299,14 +299,15 @@ export const windowDefinition: NodeDefinition<typeof WindowNode> = {
   },
 
   toolHints: [
-    { key: 'Left click', label: 'Place window on wall' },
-    { key: 'R', label: 'Flip side' },
-    { key: 'Alt', label: 'Force place' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: 'Place window on wall', labelKey: 'nodes.window.toolHints.place' },
+    { key: 'R', label: 'Flip side', labelKey: 'nodes.window.toolHints.flipSide' },
+    { key: 'Alt', label: 'Force place', labelKey: 'editor.forcePlace' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
 
   presentation: {
     label: 'Window',
+    labelKey: 'panel.nodeType.window',
     description: 'A window cut into a wall. Animated open/close for opening windows.',
     icon: { kind: 'url', src: '/icons/window.webp' },
     paletteSection: 'structure',

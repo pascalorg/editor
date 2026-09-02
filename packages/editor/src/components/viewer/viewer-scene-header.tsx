@@ -14,17 +14,19 @@ import { ArrowLeft, ChevronRight, Layers } from 'lucide-react'
 import Link from 'next/link'
 import type { ReactNode } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { useTranslations } from '../../lib/i18n'
 import { cn } from '../../lib/utils'
 
-const getNodeName = (node: AnyNode): string => {
+const getNodeName = (node: AnyNode, t: ReturnType<typeof useTranslations>): string => {
   if ('name' in node && node.name) return node.name
-  if (node.type === 'wall') return 'Wall'
-  if (node.type === 'fence') return 'Fence'
-  if (node.type === 'item') return (node as { asset: { name: string } }).asset?.name || 'Item'
-  if (node.type === 'slab') return 'Slab'
-  if (node.type === 'ceiling') return 'Ceiling'
-  if (node.type === 'roof') return 'Roof'
-  if (node.type === 'roof-segment') return 'Roof Segment'
+  if (node.type === 'wall') return t('site.nodeType.wall')
+  if (node.type === 'fence') return t('site.nodeType.fence')
+  if (node.type === 'item')
+    return (node as { asset: { name: string } }).asset?.name || t('site.nodeType.item')
+  if (node.type === 'slab') return t('site.nodeType.slab')
+  if (node.type === 'ceiling') return t('site.nodeType.ceiling')
+  if (node.type === 'roof') return t('site.nodeType.roof')
+  if (node.type === 'roof-segment') return t('site.nodeType.roofSegment')
   return node.type
 }
 
@@ -46,6 +48,7 @@ export const ViewerSceneHeader = ({
   backHref = '/',
   stats,
 }: ViewerSceneHeaderProps) => {
+  const t = useTranslations()
   const selection = useViewer((s) => s.selection)
 
   // Subscribe only to the specific nodes we read so that creating an unrelated
@@ -100,7 +103,7 @@ export const ViewerSceneHeader = ({
         <div className="flex items-center gap-3 px-3 py-2.5">
           {onBack ? (
             <button
-              aria-label="Back"
+              aria-label={t('common.back')}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
               onClick={onBack}
               type="button"
@@ -109,7 +112,7 @@ export const ViewerSceneHeader = ({
             </button>
           ) : (
             <Link
-              aria-label="Back"
+              aria-label={t('common.back')}
               className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md transition-colors hover:bg-white/10"
               href={backHref}
               prefetch={false}
@@ -119,7 +122,7 @@ export const ViewerSceneHeader = ({
           )}
           <div className="min-w-0 flex-1">
             <div className="truncate font-medium text-foreground text-sm">
-              {projectName || 'Untitled'}
+              {projectName || t('site.untitled')}
             </div>
             {owner?.username && (
               <Link
@@ -144,7 +147,7 @@ export const ViewerSceneHeader = ({
                 className="text-muted-foreground transition-colors hover:text-foreground"
                 onClick={() => handleBreadcrumbClick('root')}
               >
-                Site
+                {t('site.site')}
               </button>
 
               <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
@@ -152,7 +155,7 @@ export const ViewerSceneHeader = ({
                 className={`truncate transition-colors ${level ? 'text-muted-foreground hover:text-foreground' : 'font-medium text-foreground'}`}
                 onClick={() => handleBreadcrumbClick('building')}
               >
-                {building.name || 'Building'}
+                {building.name || t('site.building')}
               </button>
 
               {level && (
@@ -162,7 +165,7 @@ export const ViewerSceneHeader = ({
                     className={`truncate transition-colors ${zone ? 'text-muted-foreground hover:text-foreground' : 'font-medium text-foreground'}`}
                     onClick={() => handleBreadcrumbClick('level')}
                   >
-                    {getLevelDisplayName(level)}
+                    {getLevelDisplayName(level, t)}
                   </button>
                 </>
               )}
@@ -182,7 +185,7 @@ export const ViewerSceneHeader = ({
                 <>
                   <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
                   <span className="truncate font-medium text-foreground">
-                    {getNodeName(selectedNode)}
+                    {getNodeName(selectedNode, t)}
                   </span>
                 </>
               )}
@@ -195,7 +198,7 @@ export const ViewerSceneHeader = ({
       {building && levels.length > 0 && (
         <div className="corner-smooth pointer-events-auto flex w-48 flex-col overflow-hidden rounded-2xl border border-border/40 bg-background/95 py-1 shadow-elevation-4 backdrop-blur-xl transition-colors duration-200 ease-out">
           <span className="px-3 py-2 font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
-            Levels
+            {t('site.levels')}
           </span>
           <div className="flex flex-col">
             {levels.map((lvl) => {
@@ -221,7 +224,7 @@ export const ViewerSceneHeader = ({
                       <Layers className="h-3.5 w-3.5" />
                     </span>
                     <div className="min-w-0 flex-1 truncate text-left">
-                      {getLevelDisplayName(lvl)}
+                      {getLevelDisplayName(lvl, t)}
                     </div>
                   </div>
                 </button>

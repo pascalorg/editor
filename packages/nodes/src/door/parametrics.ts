@@ -13,6 +13,7 @@ export const doorParametrics: ParametricDescriptor<DoorNode> = {
   groups: [
     {
       label: 'Dimensions',
+      labelKey: 'common.dimensions',
       fields: [
         { key: 'width', kind: 'number', unit: 'm', min: 0.5, max: 1000, step: 0.05 },
         { key: 'height', kind: 'number', unit: 'm', min: 1.0, max: 1000, step: 0.05 },
@@ -20,6 +21,7 @@ export const doorParametrics: ParametricDescriptor<DoorNode> = {
     },
     {
       label: 'Frame',
+      labelKey: 'nodes.door.frame',
       fields: [
         { key: 'frameThickness', kind: 'number', unit: 'm', min: 0.01, max: 0.2, step: 0.005 },
         { key: 'frameDepth', kind: 'number', unit: 'm', min: 0.01, max: 0.3, step: 0.005 },

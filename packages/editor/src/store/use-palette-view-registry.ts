@@ -1,3 +1,5 @@
+'use client'
+
 import type { ComponentType } from 'react'
 import { create } from 'zustand'
 

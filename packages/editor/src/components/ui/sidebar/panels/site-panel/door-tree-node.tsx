@@ -66,7 +66,7 @@ export const DoorTreeNode = memo(function DoorTreeNode({
       isVisible={isVisible}
       label={
         <InlineRenameInput
-          defaultName="Door"
+          defaultName="nodeTypes.door"
           isEditing={isEditing}
           nodeId={nodeId as AnyNodeId}
           onStartEditing={handleStartEditing}

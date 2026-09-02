@@ -1,3 +1,5 @@
+'use client'
+
 import {
   getMaterialPresetByRef,
   type MaterialMapProperties,

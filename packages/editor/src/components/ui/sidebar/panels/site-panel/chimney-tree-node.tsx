@@ -1,3 +1,5 @@
+'use client'
+
 import { type AnyNodeId, type ChimneyNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
@@ -43,7 +45,7 @@ export const ChimneyTreeNode = memo(function ChimneyTreeNode({
     [nodeId, setSelection],
   )
 
-  const defaultName = node?.name || 'Chimney'
+  const defaultName = node?.name || 'nodeTypes.chimney'
 
   return (
     <TreeNodeWrapper

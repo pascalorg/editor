@@ -216,12 +216,13 @@ export const boxVentDefinition: NodeDefinition<typeof BoxVentNode> = {
     move: () => import('./move-tool'),
   },
   toolHints: [
-    { key: 'Left click', label: 'Place box vent on roof' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: 'Place box vent', labelKey: 'nodes.boxVent.toolHints.place' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
 
   presentation: {
     label: 'Box Vent',
+    labelKey: 'panel.nodeType.boxVent',
     description: 'Small louvered exhaust vent that sits on a roof slope.',
     icon: { kind: 'url', src: '/icons/box-vent.webp' },
     paletteSection: 'structure',

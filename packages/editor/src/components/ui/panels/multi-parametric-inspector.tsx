@@ -11,6 +11,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { useTranslations } from '../../../lib/i18n'
 import { selectionMatchesSessionGroup } from '../../../lib/session-groups'
 import useSessionGroups from '../../../store/use-session-groups'
 import { PanelSection } from '../controls/panel-section'
@@ -32,6 +33,7 @@ import { PanelWrapper } from './panel-wrapper'
 import { formatSelectionBreakdown } from './selection-breakdown'
 
 export function MultiParametricInspector({ footer }: { footer?: React.ReactNode }) {
+  const t = useTranslations()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
   const setSelection = useViewer((s) => s.setSelection)
   const nodeIds = useScene(
@@ -42,7 +44,10 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
     return first?.type ?? null
   })
   const breakdown = useScene((s) =>
-    formatSelectionBreakdown(nodeIds.map((id) => s.nodes[id]?.type)),
+    formatSelectionBreakdown(
+      nodeIds.map((id) => s.nodes[id]?.type),
+      t,
+    ),
   )
   const sessionGroups = useSessionGroups((s) => s.groups)
   const matchedGroup = useMemo(
@@ -59,15 +64,14 @@ export function MultiParametricInspector({ footer }: { footer?: React.ReactNode 
 
   if (nodeIds.length < 2 || !nodeType || !parametrics) return null
 
-  const display = getTypeDisplay(nodeType)
-  const title = matchedGroup ? `${matchedGroup.label} · ${breakdown}` : breakdown || display.label
+  const display = getTypeDisplay(nodeType, t)
+  const title = matchedGroup ? t('panel.multiSelection.withGroup', { label: matchedGroup.label, count: breakdown }) : breakdown || display.label
 
   return (
     <PanelWrapper footer={footer} icon={display.icon} onClose={handleClose} title={title} width={320}>
       {matchedGroup && (
         <div className="border-border/50 border-b px-3 py-2 text-muted-foreground text-xs">
-          {matchedGroup.label} (session only). Plain click reselects all members. Not saved with the
-          project.
+          {t('panel.multiSelection.sessionOnlyFooter', { label: matchedGroup.label })}
         </div>
       )}
       {parametrics.groups.map((group, gi) => (

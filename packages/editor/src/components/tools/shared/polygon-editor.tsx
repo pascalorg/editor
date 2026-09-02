@@ -1,3 +1,5 @@
+'use client'
+
 import { emitter, type GridEvent, sceneRegistry } from '@pascal-app/core'
 import { SCENE_LAYER, useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'

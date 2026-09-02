@@ -1,3 +1,5 @@
+'use client'
+
 import { type AnyNodeId, type ColumnNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
@@ -42,7 +44,7 @@ export const ColumnTreeNode = memo(function ColumnTreeNode({
     [nodeId, setSelection],
   )
 
-  const defaultName = node?.name || 'Column'
+  const defaultName = node?.name || 'nodeTypes.column'
 
   return (
     <TreeNodeWrapper

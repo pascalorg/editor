@@ -1,3 +1,5 @@
+'use client'
+
 import NumberFlow from '@number-flow/react'
 import { useState } from 'react'
 

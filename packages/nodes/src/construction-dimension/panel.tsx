@@ -26,61 +26,96 @@ import {
   SliderControl,
   triggerSFX,
   useDrawingView,
+  useTranslations,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Trash2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 
-const MODE_LABELS: Record<ConstructionDimensionNode['mode'], string> = {
-  linear: 'Linear',
-  radius: 'Radius',
-  diameter: 'Diameter',
-  'center-mark': 'Center mark',
-  chord: 'Chord',
-  'arc-length': 'Arc length',
-  angular: 'Angular',
-  coordinate: 'Coordinate',
+const MODE_LABEL_KEYS: Record<ConstructionDimensionNode['mode'], string> = {
+  linear: 'nodes.constructionDimension.modeOptions.linear',
+  radius: 'nodes.constructionDimension.modeOptions.radius',
+  diameter: 'nodes.constructionDimension.modeOptions.diameter',
+  'center-mark': 'nodes.constructionDimension.modeOptions.center-mark',
+  chord: 'nodes.constructionDimension.modeOptions.chord',
+  'arc-length': 'nodes.constructionDimension.modeOptions.arc-length',
+  angular: 'nodes.constructionDimension.modeOptions.angular',
+  coordinate: 'nodes.constructionDimension.modeOptions.coordinate',
 }
 
-const DATUM_POLICY_OPTIONS: Array<{ label: string; value: ConstructionDimensionDatumPolicy }> = [
-  { label: 'Centerline', value: 'centerline' },
-  { label: 'Wall face', value: 'wall-face' },
-  { label: 'Structural face', value: 'structural-face' },
-  { label: 'Finish face', value: 'finish-face' },
+const DATUM_POLICY_OPTIONS: Array<{
+  labelKey: string
+  value: ConstructionDimensionDatumPolicy
+}> = [
+  { labelKey: 'nodes.constructionDimension.datumPolicyOptions.centerline', value: 'centerline' },
+  { labelKey: 'nodes.constructionDimension.datumPolicyOptions.wallFace', value: 'wall-face' },
+  {
+    labelKey: 'nodes.constructionDimension.datumPolicyOptions.structuralFace',
+    value: 'structural-face',
+  },
+  { labelKey: 'nodes.constructionDimension.datumPolicyOptions.finishFace', value: 'finish-face' },
 ]
 
-const TERMINATOR_OPTIONS: Array<{ label: string; value: ConstructionDimensionTerminator }> = [
-  { label: 'Architectural tick', value: 'architectural-tick' },
-  { label: 'Filled arrow', value: 'filled-arrow' },
-  { label: 'Open arrow', value: 'open-arrow' },
-  { label: 'Dot', value: 'dot' },
+const TERMINATOR_OPTIONS: Array<{
+  labelKey: string
+  value: ConstructionDimensionTerminator
+}> = [
+  {
+    labelKey: 'nodes.constructionDimension.terminatorOptions.architectural-tick',
+    value: 'architectural-tick',
+  },
+  {
+    labelKey: 'nodes.constructionDimension.terminatorOptions.filled-arrow',
+    value: 'filled-arrow',
+  },
+  {
+    labelKey: 'nodes.constructionDimension.terminatorOptions.open-arrow',
+    value: 'open-arrow',
+  },
+  { labelKey: 'nodes.constructionDimension.terminatorOptions.dot', value: 'dot' },
 ]
 
-const TEXT_POSITION_OPTIONS: Array<{ label: string; value: ConstructionDimensionTextPosition }> = [
-  { label: 'Above line', value: 'above' },
-  { label: 'Centered on line', value: 'centered' },
+const TEXT_POSITION_OPTIONS: Array<{
+  labelKey: string
+  value: ConstructionDimensionTextPosition
+}> = [
+  {
+    labelKey: 'nodes.constructionDimension.textPositionOptions.above',
+    value: 'above',
+  },
+  {
+    labelKey: 'nodes.constructionDimension.textPositionOptions.centered',
+    value: 'centered',
+  },
 ]
 
 const IMPERIAL_PRECISION_OPTIONS: Array<{
-  label: string
+  labelKey: string
   value: ConstructionDimensionImperialPrecision
 }> = [
-  { label: 'Nearest inch', value: '1' },
-  { label: 'Nearest 1/2 inch', value: '1/2' },
-  { label: 'Nearest 1/4 inch', value: '1/4' },
-  { label: 'Nearest 1/8 inch', value: '1/8' },
-  { label: 'Nearest 1/16 inch', value: '1/16' },
+  { labelKey: 'nodes.constructionDimension.imperialPrecisionOptions.1', value: '1' },
+  { labelKey: 'nodes.constructionDimension.imperialPrecisionOptions.1/2', value: '1/2' },
+  { labelKey: 'nodes.constructionDimension.imperialPrecisionOptions.1/4', value: '1/4' },
+  { labelKey: 'nodes.constructionDimension.imperialPrecisionOptions.1/8', value: '1/8' },
+  { labelKey: 'nodes.constructionDimension.imperialPrecisionOptions.1/16', value: '1/16' },
 ]
 
 const METRIC_NOTATION_OPTIONS: Array<{
-  label: string
+  labelKey: string
   value: ConstructionDimensionMetricNotation
 }> = [
-  { label: 'Meters', value: 'meters' },
-  { label: 'Millimeters', value: 'millimeters' },
+  {
+    labelKey: 'nodes.constructionDimension.metricNotationOptions.meters',
+    value: 'meters',
+  },
+  {
+    labelKey: 'nodes.constructionDimension.metricNotationOptions.millimeters',
+    value: 'millimeters',
+  },
 ]
 
 export default function ConstructionDimensionPanel() {
+  const t = useTranslations()
   const selectedId = useViewer((state) => state.selection.selectedIds[0])
   const setSelection = useViewer((state) => state.setSelection)
   const dimension = useScene((state) => {
@@ -98,6 +133,9 @@ export default function ConstructionDimensionPanel() {
   )
   const activeDrawingLabel =
     DRAWING_TYPE_OPTIONS.find((option) => option.id === activeDrawingType)?.label ?? 'Floor plan'
+  // Pass the resolved label through t() so it can also be localized if the
+  // drawing-type registry ever publishes a translation key alongside `label`.
+  const localizedDrawingLabel = t(activeDrawingLabel)
   const activePresentation = resolveConstructionDimensionDrawingPresentation(
     dimension,
     activeDrawingType,
@@ -143,16 +181,16 @@ export default function ConstructionDimensionPanel() {
     <PanelWrapper
       icon="/icons/blueprint.webp"
       onClose={() => setSelection({ selectedIds: [] })}
-      title="Construction Dimension"
+      title={t('nodes.constructionDimension.fallbackTitle')}
       width={320}
     >
-      <PanelSection title="Dimension">
+      <PanelSection title={t('nodes.constructionDimension.dimension')}>
         <div className="flex items-center justify-between gap-3 text-sm">
-          <span className="text-muted-foreground">Mode</span>
-          <span className="font-medium text-foreground">{MODE_LABELS[dimension.mode]}</span>
+          <span className="text-muted-foreground">{t('nodes.constructionDimension.mode')}</span>
+          <span className="font-medium text-foreground">{t(MODE_LABEL_KEYS[dimension.mode])}</span>
         </div>
         <SliderControl
-          label="Feature count"
+          label={t('nodes.constructionDimension.featureCount')}
           max={999}
           min={1}
           onChange={(featureCount) => update({ featureCount })}
@@ -162,7 +200,9 @@ export default function ConstructionDimensionPanel() {
         />
         {supportsCenterMark ? (
           <label className="flex items-center justify-between gap-3 text-sm">
-            <span className="text-muted-foreground">Center mark</span>
+            <span className="text-muted-foreground">
+              {t('nodes.constructionDimension.centerMark')}
+            </span>
             <input
               checked={dimension.showCenterMark}
               onChange={(event) => update({ showCenterMark: event.target.checked })}
@@ -172,9 +212,9 @@ export default function ConstructionDimensionPanel() {
         ) : null}
       </PanelSection>
 
-      <PanelSection title="Drawing coordination">
+      <PanelSection title={t('nodes.constructionDimension.drawingCoordination')}>
         <SelectField
-          label="Primary drawing"
+          label={t('nodes.constructionDimension.primaryDrawing')}
           onChange={(drawingType) =>
             update({ drawingType: drawingType as ConstructionDrawingType })
           }
@@ -185,7 +225,7 @@ export default function ConstructionDimensionPanel() {
           value={dimension.drawingType}
         />
         <SelectField
-          label={`${activeDrawingLabel} presentation`}
+          label={t('nodes.constructionDimension.presentation', { drawing: localizedDrawingLabel })}
           onChange={(presentation) =>
             updateDrawingPresentation(
               activeDrawingType,
@@ -193,10 +233,15 @@ export default function ConstructionDimensionPanel() {
             )
           }
           options={[
-            { label: 'Shown', value: 'shown' },
-            { label: 'Omitted', value: 'omit' },
+            { label: t('nodes.constructionDimension.presentationOptions.shown'), value: 'shown' },
+            { label: t('nodes.constructionDimension.presentationOptions.omit'), value: 'omit' },
             ...(activeDrawingType === 'floor-plan'
-              ? [{ label: 'Controlled by foundation', value: 'controlled' }]
+              ? [
+                  {
+                    label: t('nodes.constructionDimension.presentationOptions.controlled'),
+                    value: 'controlled',
+                  },
+                ]
               : []),
           ]}
           value={activePresentation}
@@ -213,83 +258,89 @@ export default function ConstructionDimensionPanel() {
           />
         ) : null}
         <p className="text-muted-foreground text-xs">
-          Linked dimensions reuse the controller's associative anchors and update with it.
+          {t('nodes.constructionDimension.linkedDimensionsNote')}
         </p>
         <TextField
-          label={`${activeDrawingLabel} suppressed segments`}
+          label={t('nodes.constructionDimension.suppressedSegments', { drawing: localizedDrawingLabel })}
           onCommit={updateSuppressedSegments}
-          placeholder="e.g. 2, 4"
+          placeholder={t('nodes.constructionDimension.suppressedSegmentsPlaceholder')}
           value={suppressedSegmentsText}
         />
         <p className="text-muted-foreground text-xs">
-          Segment numbers are one-based and apply only in this drawing view.
+          {t('nodes.constructionDimension.suppressedSegmentsNote')}
         </p>
       </PanelSection>
 
-      <PanelSection title="Notation">
+      <PanelSection title={t('nodes.constructionDimension.notation')}>
         <TextField
-          label="Prefix"
+          label={t('nodes.constructionDimension.prefix')}
           onCommit={(prefix) => update({ prefix })}
           value={dimension.prefix}
         />
         <TextField
-          label="Suffix"
+          label={t('nodes.constructionDimension.suffix')}
           onCommit={(suffix) => update({ suffix })}
           value={dimension.suffix}
         />
         <TextField
-          label="Text override"
+          label={t('nodes.constructionDimension.textOverride')}
           onCommit={(textOverride) => update({ textOverride: textOverride || null })}
-          placeholder="Use measured value"
+          placeholder={t('nodes.constructionDimension.textOverridePlaceholder')}
           value={dimension.textOverride ?? ''}
         />
       </PanelSection>
 
-      <PanelSection title="Standards">
+      <PanelSection title={t('nodes.constructionDimension.standards')}>
         <SelectField
-          label="Datum policy"
+          label={t('nodes.constructionDimension.datumPolicy')}
           onChange={(datumPolicy) =>
             update({ datumPolicy: datumPolicy as ConstructionDimensionDatumPolicy })
           }
-          options={DATUM_POLICY_OPTIONS}
+          options={DATUM_POLICY_OPTIONS.map((o) => ({ label: t(o.labelKey), value: o.value }))}
           value={dimension.datumPolicy}
         />
         <SelectField
-          label="Terminator"
+          label={t('nodes.constructionDimension.terminator')}
           onChange={(terminator) =>
             update({ terminator: terminator as ConstructionDimensionTerminator })
           }
-          options={TERMINATOR_OPTIONS}
+          options={TERMINATOR_OPTIONS.map((o) => ({ label: t(o.labelKey), value: o.value }))}
           value={dimension.terminator}
         />
         <SelectField
-          label="Text position"
+          label={t('nodes.constructionDimension.textPosition')}
           onChange={(textPosition) =>
             update({ textPosition: textPosition as ConstructionDimensionTextPosition })
           }
-          options={TEXT_POSITION_OPTIONS}
+          options={TEXT_POSITION_OPTIONS.map((o) => ({ label: t(o.labelKey), value: o.value }))}
           value={dimension.textPosition}
         />
         <SelectField
-          label="Imperial precision"
+          label={t('nodes.constructionDimension.imperialPrecision')}
           onChange={(imperialPrecision) =>
             update({
               imperialPrecision: imperialPrecision as ConstructionDimensionImperialPrecision,
             })
           }
-          options={IMPERIAL_PRECISION_OPTIONS}
+          options={IMPERIAL_PRECISION_OPTIONS.map((o) => ({
+            label: t(o.labelKey),
+            value: o.value,
+          }))}
           value={dimension.imperialPrecision}
         />
         <SelectField
-          label="Metric notation"
+          label={t('nodes.constructionDimension.metricNotation')}
           onChange={(metricNotation) =>
             update({ metricNotation: metricNotation as ConstructionDimensionMetricNotation })
           }
-          options={METRIC_NOTATION_OPTIONS}
+          options={METRIC_NOTATION_OPTIONS.map((o) => ({
+            label: t(o.labelKey),
+            value: o.value,
+          }))}
           value={dimension.metricNotation}
         />
         <SliderControl
-          label="Extension gap"
+          label={t('nodes.constructionDimension.extensionGap')}
           max={0.5}
           min={0}
           onChange={(extensionStartGap) => update({ extensionStartGap })}
@@ -298,7 +349,7 @@ export default function ConstructionDimensionPanel() {
           value={dimension.extensionStartGap}
         />
         <SliderControl
-          label="Extension overshoot"
+          label={t('nodes.constructionDimension.extensionOvershoot')}
           max={0.5}
           min={0}
           onChange={(extensionOvershoot) => update({ extensionOvershoot })}
@@ -308,12 +359,12 @@ export default function ConstructionDimensionPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={t('nodes.constructionDimension.actions')}>
         <ActionGroup>
           <ActionButton
             className="border-red-500/40 text-red-200 hover:bg-red-500/15"
             icon={<Trash2 className="h-4 w-4" />}
-            label="Delete"
+            label={t('common.delete')}
             onClick={() => {
               triggerSFX('sfx:structure-delete')
               deleteNode(dimension.id)
@@ -347,13 +398,14 @@ function FoundationControllerField({
   value: string
   onChange: (value: NonNullable<ConstructionDimensionNode['controllingDimensionId']>) => void
 }) {
+  const t = useTranslations()
   const foundationControllers = useScene(
     useShallow((state) => selectFoundationControllers(state.nodes, dimensionId)),
   )
   return (
     <SelectField
       disabled={foundationControllers.length === 0}
-      label="Foundation controller"
+      label={t('nodes.constructionDimension.foundationController')}
       onChange={(controllingDimensionId) =>
         onChange(
           controllingDimensionId as NonNullable<
@@ -362,10 +414,10 @@ function FoundationControllerField({
         )
       }
       options={foundationControllers.map((controller) => ({
-        label: controller.name || 'Foundation dimension',
+        label: controller.name || t('nodes.constructionDimension.defaultFoundationDimensionName'),
         value: controller.id,
       }))}
-      placeholder="No foundation dimensions"
+      placeholder={t('nodes.constructionDimension.noFoundationDimensions')}
       value={value}
     />
   )

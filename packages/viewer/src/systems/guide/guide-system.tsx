@@ -1,3 +1,5 @@
+'use client'
+
 import { sceneRegistry } from '@pascal-app/core'
 import { useEffect } from 'react'
 import useViewer from '../../store/use-viewer'

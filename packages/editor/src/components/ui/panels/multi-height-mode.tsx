@@ -16,6 +16,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { useTranslations } from '../../../lib/i18n'
 import { formatLinearMeasurement } from '../../../lib/measurements'
 import { SegmentedControl } from '../controls/segmented-control'
 import { SliderControl } from '../controls/slider-control'
@@ -73,6 +74,7 @@ export function MultiHeightModeField({
   max?: number
   step?: number
 }) {
+  const t = useTranslations()
   const unit = useViewer((s) => s.unit)
   const metricNotation = useViewer((s) => s.metricNotation)
   const mode = useScene(useShallow((s) => reduceHeightBoundMode(nodeIds, s.nodes)))
@@ -145,29 +147,31 @@ export function MultiHeightModeField({
   const sliderMixed = storedHeight.kind === 'mixed' || mixedMode
   const currentLabel = Number.isFinite(liveHeight)
     ? formatLinearMeasurement(liveHeight, unit, metricNotation)
-    : 'Mixed'
+    : t('common.mixed')
 
   return (
     <>
       {nodeType === 'wall' && (
         <div className="px-1 font-medium text-[10px] text-muted-foreground/80 uppercase tracking-wider">
-          Top
+          {t('editor.top')}
         </div>
       )}
       <SegmentedControl
         mixed={mixedMode}
         onChange={applyMode}
         options={[
-          { label: 'Follows level', value: 'storey' },
-          { label: 'Custom height', value: 'custom' },
+          { label: t('editor.followsLevel'), value: 'storey' },
+          { label: t('editor.customHeight'), value: 'custom' },
         ]}
         value={mode.kind === 'same' ? mode.value : 'storey'}
       />
       {isFollows ? (
-        <div className="px-1 text-[11px] text-muted-foreground">Currently {currentLabel}</div>
+        <div className="px-1 text-[11px] text-muted-foreground">
+          {t('editor.currentlyLabel', { value: currentLabel })}
+        </div>
       ) : isCustom ? (
         <SliderControl
-          label="Height"
+          label={t('common.height')}
           max={max}
           min={min}
           mixed={sliderMixed}

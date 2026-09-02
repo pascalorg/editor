@@ -1,3 +1,5 @@
+'use client'
+
 import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'

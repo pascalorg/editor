@@ -214,13 +214,14 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   },
 
   toolHints: [
-    { key: 'Left click', label: 'Trace ceiling outline' },
-    { key: 'Enter', label: 'Finish ceiling', minDraftVertices: 3 },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: 'Trace ceiling outline', labelKey: 'nodes.ceiling.toolHints.trace' },
+    { key: 'Enter', label: 'Finish ceiling', labelKey: 'nodes.ceiling.toolHints.finish', minDraftVertices: 3 },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
 
   presentation: {
     label: 'Ceiling',
+    labelKey: 'panel.nodeType.ceiling',
     description: 'A polygon-bounded ceiling surface that hosts ceiling-mounted items.',
     icon: { kind: 'url', src: '/icons/ceiling.webp' },
     paletteSection: 'structure',

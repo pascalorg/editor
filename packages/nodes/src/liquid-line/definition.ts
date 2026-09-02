@@ -104,15 +104,16 @@ export const liquidLineDefinition: NodeDefinition<typeof LiquidLineNode> = {
 
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Click', label: 'Start liquid line' },
-    { key: 'Click again', label: 'Place it (locked to 45°)' },
-    { key: 'Alt + drag', label: 'Go vertical ↕, click to place' },
-    { key: 'F', label: 'Follow: trace a lineset' },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Click', label: 'Start liquid line', labelKey: 'nodes.liquidLine.toolHints.start' },
+    { key: 'Click again', label: 'Place it (locked to 45°)', labelKey: 'nodes.liquidLine.toolHints.place' },
+    { key: 'Alt + drag', label: 'Go vertical ↕, click to place', labelKey: 'nodes.liquidLine.toolHints.vertical' },
+    { key: 'F', label: 'Follow: trace a lineset', labelKey: 'nodes.liquidLine.toolHints.follow' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
 
   presentation: {
     label: 'Liquid Line',
+    labelKey: 'panel.nodeType.liquidLine',
     description:
       'Standalone refrigerant liquid line — a thin bare-copper run; Follow mode traces an existing lineset.',
     icon: { kind: 'url', src: '/icons/lineset.webp' },

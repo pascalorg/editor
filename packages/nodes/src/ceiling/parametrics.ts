@@ -12,6 +12,7 @@ export const ceilingParametrics: ParametricDescriptor<CeilingNode> = {
   groups: [
     {
       label: 'Dimensions',
+      labelKey: 'common.dimensions',
       fields: [{ key: 'height', kind: 'number', unit: 'm', min: 0.1, max: 1000, step: 0.05 }],
     },
   ],

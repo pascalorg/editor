@@ -1,5 +1,7 @@
 import type { ReactNode } from 'react'
 import { ClientBootstrap } from './client-bootstrap'
+import { HtmlLangSync } from './html-lang-sync'
+import { I18nProvider } from '@/lib/i18n'
 import './globals.css'
 
 export const metadata = {
@@ -9,9 +11,13 @@ export const metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
-        <ClientBootstrap>{children}</ClientBootstrap>
+        <I18nProvider>
+          <HtmlLangSync>
+            <ClientBootstrap>{children}</ClientBootstrap>
+          </HtmlLangSync>
+        </I18nProvider>
       </body>
     </html>
   )

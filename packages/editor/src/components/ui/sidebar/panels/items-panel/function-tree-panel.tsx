@@ -12,19 +12,42 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '../../../../../components/ui/primitives/tooltip'
+import { messages, useLocale } from '../../../../../lib/i18n'
 
 /** A function-axis taxonomy node, assembled into a tree by the embedder. */
 export type FunctionTreeNode = {
   slug: string
   name: string
+  /**
+   * Optional i18n key for `name`. If provided, the panel resolves the display
+   * label through the active locale's translation table; otherwise `name` is
+   * used verbatim (suitable for embedder-supplied taxonomies that already come
+   * pre-localised server-side).
+   */
+  nameKey?: string
   iconUrl?: string | null
   children: FunctionTreeNode[]
 }
 
-const SOURCE_CHIPS: Array<{ id: NonNullable<AssetInput['source']>; label: string }> = [
-  { id: 'library', label: 'Library' },
-  { id: 'community', label: 'Community' },
-  { id: 'mine', label: 'Mine' },
+/** Resolve a tree node's name, preferring the i18n key when supplied. */
+function resolveNodeLabel(
+  node: FunctionTreeNode,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): string {
+  if (node.nameKey) {
+    const translated = t(node.nameKey)
+    // `t` falls back to the key itself when missing, which would surface as a
+    // raw `functionTree.kitchen` tooltip. Detect that and prefer the human
+    // name in that case.
+    if (translated && translated !== node.nameKey) return translated
+  }
+  return node.name
+}
+
+const SOURCE_CHIPS: Array<{ id: NonNullable<AssetInput['source']>; labelKey: string }> = [
+  { id: 'library', labelKey: 'items.library' },
+  { id: 'community', labelKey: 'items.community' },
+  { id: 'mine', labelKey: 'items.mine' },
 ]
 
 /** Every slug at or below `node`, so a non-leaf selection matches descendants. */
@@ -70,6 +93,14 @@ export function FunctionTreePanel({
   const [activeChildSlug, setActiveChildSlug] = useState<string | null>(null)
   const [activeSource, setActiveSource] = useState<AssetInput['source'] | null>('library')
   const [search, setSearch] = useState('')
+  const { locale } = useLocale()
+  const t = (key: string, params?: Record<string, string | number>) => {
+    const str = (messages[locale] as Record<string, string>)[key] || key
+    if (!params) return str
+    return Object.entries(params).reduce(
+      (s, [k, v]) => s.replace(new RegExp(`\\{${k}\\}`, 'g'), String(v)), str,
+    )
+  }
 
   const isServerSearch = onSearchChange !== undefined
   const isSearchPending = isServerSearch && search.length > 0 && searchResults === null
@@ -128,6 +159,7 @@ export function FunctionTreePanel({
         <div className="grid max-h-[40%] shrink-0 grid-cols-5 gap-1.5 overflow-y-auto border-border/70 border-b p-2">
           {functionTree.map((root) => {
             const isActive = activeRoot?.slug === root.slug
+            const label = resolveNodeLabel(root, t)
             return (
               <TooltipRoot key={root.slug}>
                 <TooltipTrigger asChild>
@@ -147,7 +179,7 @@ export function FunctionTreePanel({
                   >
                     {root.iconUrl ? (
                       <NextImage
-                        alt={root.name}
+                        alt={label}
                         className="size-7 object-contain"
                         height={28}
                         src={root.iconUrl}
@@ -155,13 +187,13 @@ export function FunctionTreePanel({
                       />
                     ) : (
                       <span className="font-semibold text-muted-foreground text-xs uppercase">
-                        {root.name.slice(0, 2)}
+                        {label.slice(0, 2)}
                       </span>
                     )}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent className="icon-grid-tooltip pointer-events-none" side="top">
-                  {root.name}
+                  {label}
                 </TooltipContent>
               </TooltipRoot>
             )
@@ -178,7 +210,7 @@ export function FunctionTreePanel({
               setSearch(e.target.value)
               onSearchChange?.(e.target.value)
             }}
-            placeholder="Search..."
+            placeholder={t('items.search')}
             type="text"
             value={search}
           />
@@ -197,7 +229,7 @@ export function FunctionTreePanel({
                   onClick={() => setActiveSource(isActive ? null : chip.id)}
                   type="button"
                 >
-                  {chip.label}
+                  {t(chip.labelKey)}
                 </button>
               )
             })}
@@ -217,7 +249,7 @@ export function FunctionTreePanel({
               onClick={() => setActiveChildSlug(null)}
               type="button"
             >
-              All
+              {t('items.all')}
             </button>
             {activeRoot.children.map((child) => {
               const isActive = activeChildSlug === child.slug
@@ -233,7 +265,7 @@ export function FunctionTreePanel({
                   onClick={() => setActiveChildSlug(isActive ? null : child.slug)}
                   type="button"
                 >
-                  {child.name}
+                  {resolveNodeLabel(child, t)}
                 </button>
               )
             })}
@@ -250,7 +282,7 @@ export function FunctionTreePanel({
         ) : isServerSearch && search && searchResults?.length === 0 ? (
           (emptyState ?? (
             <div className="flex h-full items-center justify-center text-muted-foreground text-xs">
-              No results for &ldquo;{search}&rdquo;
+              {t('items.noResults', { search })}
             </div>
           ))
         ) : (

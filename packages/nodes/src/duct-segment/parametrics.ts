@@ -97,6 +97,7 @@ export const ductSegmentParametrics: ParametricDescriptor<DuctSegmentNode> = {
   groups: [
     {
       label: 'Air',
+      labelKey: 'nodes.ductSegment.air',
       fields: [
         {
           key: 'system',
@@ -141,6 +142,7 @@ export const ductSegmentParametrics: ParametricDescriptor<DuctSegmentNode> = {
     },
     {
       label: 'Construction',
+      labelKey: 'common.construction',
       fields: [
         {
           key: 'ductMaterial',

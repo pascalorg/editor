@@ -5,6 +5,7 @@ export const blockParametrics: ParametricDescriptor<BlockNode> = {
   groups: [
     {
       label: 'Position',
+      labelKey: 'common.position',
       fields: [{ key: 'position', kind: 'vec3' }],
     },
   ],

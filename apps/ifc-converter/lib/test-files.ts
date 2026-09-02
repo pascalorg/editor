@@ -1,8 +1,11 @@
 export interface TestFile {
   name: string
-  label: string
+  /** Dictionary key — resolved by the UI via useTranslations(). */
+  labelKey: string
+  /** File size as a raw number + unit (kept as-is; "MB" stays untranslated). */
   detail: string
-  description: string
+  /** Dictionary key — resolved by the UI via useTranslations(). */
+  descriptionKey: string
   /**
    * Served from `examplesBaseUrl` instead of the repo's `public/` folder.
    * The large IFC samples (tens of MB each) aren't committed to keep the
@@ -10,9 +13,9 @@ export interface TestFile {
    * runtime. Marked entries only appear once a base URL is configured.
    */
   remote?: boolean
-  /** Shown as a caution on the example card (e.g. heavy models that can
-   * tax the browser when rendered). */
-  warning?: string
+  /** Dictionary key for a caution shown on the example card (e.g.
+   * heavy models that can tax the browser when rendered). */
+  warningKey?: string
 }
 
 // Host serving the large (remote) example IFCs by filename. The big
@@ -30,71 +33,71 @@ export const examplesBaseUrl = (
 export const testFiles: TestFile[] = [
   {
     name: '01-duplex.ifc',
-    label: 'Duplex Apartment',
+    labelKey: 'ifcConverter.examples.01.label',
     detail: '1.2 MB',
-    description: 'Multi-level apartment from IFC Tools Project',
+    descriptionKey: 'ifcConverter.examples.01.description',
   },
   {
     name: '02-schependomlaan.ifc',
-    label: 'Schependomlaan',
+    labelKey: 'ifcConverter.examples.02.label',
     detail: '47 MB',
-    description: 'Dutch apartment complex (buildingSMART)',
+    descriptionKey: 'ifcConverter.examples.02.description',
     remote: true,
-    warning: 'Very large — may slow down or crash the browser when rendered.',
+    warningKey: 'ifcConverter.examples.heavy',
   },
   {
     name: '03-rac-sample-project.ifc',
-    label: 'RAC Sample Project',
+    labelKey: 'ifcConverter.examples.03.label',
     detail: '43 MB',
-    description: 'Revit commercial office building',
+    descriptionKey: 'ifcConverter.examples.03.description',
     remote: true,
   },
   {
     name: '04-ifc-open-house.ifc',
-    label: 'IFC Open House',
+    labelKey: 'ifcConverter.examples.04.label',
     detail: '111 KB',
-    description: 'Small residential house (IFC4)',
+    descriptionKey: 'ifcConverter.examples.04.description',
   },
   {
     name: '05-paris-ground-floor.ifc',
-    label: 'Paris Building',
+    labelKey: 'ifcConverter.examples.05.label',
     detail: '3.9 MB',
-    description: '19 rue Marc Antoine Petit, Paris',
+    descriptionKey: 'ifcConverter.examples.05.description',
   },
   {
     name: '06-sample-castle.ifc',
-    label: 'Sample Castle',
+    labelKey: 'ifcConverter.examples.06.label',
     detail: '47 MB',
-    description: 'Historic architecture demo model',
+    descriptionKey: 'ifcConverter.examples.06.description',
     remote: true,
-    warning: 'Very large — may slow down or crash the browser when rendered.',
+    warningKey: 'ifcConverter.examples.heavy',
   },
   {
     name: '07-revit-architectural.ifc',
-    label: 'Revit Architectural',
+    labelKey: 'ifcConverter.examples.07.label',
     detail: '13 MB',
-    description: 'Autodesk Revit Architecture model',
+    descriptionKey: 'ifcConverter.examples.07.description',
     remote: true,
   },
   {
     name: '08-revit-mep.ifc',
-    label: 'Revit MEP',
+    labelKey: 'ifcConverter.examples.08.label',
     detail: '28 MB',
-    description: 'Building systems from Revit MEP',
+    descriptionKey: 'ifcConverter.examples.08.description',
     remote: true,
   },
   {
     name: '09-revit-structural.ifc',
-    label: 'Revit Structural',
+    labelKey: 'ifcConverter.examples.09.label',
     detail: '11 MB',
-    description: 'Structural engineering from Revit',
+    descriptionKey: 'ifcConverter.examples.09.description',
     remote: true,
   },
   {
     name: '10-sample-house.ifc',
-    label: 'Sample House',
+    labelKey: 'ifcConverter.examples.10.label',
     detail: '2.2 MB',
-    description: 'Complete residential house model',
+    descriptionKey: 'ifcConverter.examples.10.description',
   },
 ]
 

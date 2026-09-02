@@ -8,12 +8,13 @@ import {
   Editor,
   type SceneGraph,
   type SidebarTab,
+  useTranslations,
 } from '@pascal-app/editor'
 import { Hammer, Layers, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
@@ -32,57 +33,6 @@ export interface SceneMeta {
   sizeBytes: number
   nodeCount: number
 }
-
-const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
-  {
-    id: 'site',
-    label: 'Scene',
-    component: () => null, // Built-in SitePanel handles this
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Layers className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/scene.webp"
-        width={32}
-      />
-    ),
-  },
-  {
-    id: 'build',
-    label: 'Build',
-    component: BuildTab,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Hammer className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/build.webp"
-        width={32}
-      />
-    ),
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    component: () => null,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Settings className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/settings.webp"
-        width={32}
-      />
-    ),
-  },
-]
 
 interface SceneLoaderProps {
   initialScene: SceneGraph
@@ -240,28 +190,81 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
     [meta.id],
   )
 
+  const t = useTranslations()
+  const sidebarTabs: (SidebarTab & { component: React.ComponentType })[] = useMemo(
+    () => [
+      {
+        id: 'site',
+        label: t('sidebar.scene'),
+        component: () => null, // Built-in SitePanel handles this
+        mobileDefaultSnap: 0.5,
+        mobileIcon: <Layers className="h-5 w-5" />,
+        icon: (
+          <Image
+            alt=""
+            className="h-8 w-8 object-contain"
+            height={32}
+            src="/icons/scene.webp"
+            width={32}
+          />
+        ),
+      },
+      {
+        id: 'build',
+        label: t('sidebar.build'),
+        component: BuildTab,
+        mobileDefaultSnap: 0.5,
+        mobileIcon: <Hammer className="h-5 w-5" />,
+        icon: (
+          <Image
+            alt=""
+            className="h-8 w-8 object-contain"
+            height={32}
+            src="/icons/build.webp"
+            width={32}
+          />
+        ),
+      },
+      {
+        id: 'settings',
+        label: t('sidebar.settings'),
+        component: () => null,
+        mobileDefaultSnap: 0.5,
+        mobileIcon: <Settings className="h-5 w-5" />,
+        icon: (
+          <Image
+            alt=""
+            className="h-8 w-8 object-contain"
+            height={32}
+            src="/icons/settings.webp"
+            width={32}
+          />
+        ),
+      },
+    ],
+    [t],
+  )
+
   return (
     <div className="relative h-screen w-screen">
       {conflict && (
         <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 shadow-xl">
-          <h2 className="font-semibold text-sm">Another session saved first — refresh?</h2>
-          <p className="mt-1 text-muted-foreground text-xs">
-            Your changes haven&apos;t been saved. Reload to pick up the latest version.
-          </p>
+          <h2 className="font-semibold text-sm">{t('editor.conflictTitle')}</h2>
+          <p className="mt-1 text-muted-foreground text-xs">{t('editor.conflictBody')}</p>
           <div className="mt-3 flex items-center gap-2">
             <button
               className="rounded-md border border-border bg-accent px-3 py-1.5 font-medium text-xs hover:bg-accent/80"
               onClick={() => router.refresh()}
               type="button"
             >
-              Reload
+              {t('editor.reload')}
             </button>
             <button
               className="rounded-md border border-border bg-background px-3 py-1.5 font-medium text-xs hover:bg-accent/40"
               onClick={() => setConflict(false)}
               type="button"
             >
-              Dismiss
+              {t('editor.dismiss')}
             </button>
           </div>
         </div>
@@ -281,16 +284,16 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
           onClick={() =>
             router.push(lightPreview ? `/scene/${meta.id}` : `/scene/${meta.id}?disable=postFx`)
           }
-          title="Skip the post-processing pipeline — lighter on the GPU, no ambient occlusion or selection outlines"
+          title={t('editor.lightPreviewTitle')}
           type="button"
         >
-          Light preview
+          {t('editor.lightPreview')}
         </button>
         <Link
           className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
           href="/scenes"
         >
-          All scenes
+          {t('scenes.allScenes')}
         </Link>
       </div>
       <Editor
@@ -300,7 +303,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         onSave={handleSave}
         onThumbnailCapture={handleThumb}
         projectId={meta.projectId ?? 'default'}
-        sidebarTabs={SIDEBAR_TABS}
+        sidebarTabs={sidebarTabs}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
         viewerToolbarRight={<CommunityViewerToolbarRight />}
       />

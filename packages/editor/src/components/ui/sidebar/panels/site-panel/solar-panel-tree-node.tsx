@@ -1,3 +1,5 @@
+'use client'
+
 import { type AnyNodeId, type SolarPanelNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
@@ -43,7 +45,7 @@ export const SolarPanelTreeNode = memo(function SolarPanelTreeNode({
     [nodeId, setSelection],
   )
 
-  const defaultName = node?.name || 'Solar Panel'
+  const defaultName = node?.name || 'nodeTypes.solarPanel'
 
   return (
     <TreeNodeWrapper

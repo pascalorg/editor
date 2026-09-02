@@ -1,3 +1,5 @@
+'use client'
+
 import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Color, Layers, Matrix4, type Object3D, Scene, UnsignedByteType } from 'three'

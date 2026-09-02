@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { guideEmitter } from '../../../lib/guide-events'
+import { useTranslations } from '../../../lib/i18n'
 import { getGuideImageName } from '../../../lib/local-guide-image'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
@@ -32,16 +33,22 @@ import { PanelWrapper } from './panel-wrapper'
 
 type ReferenceNode = ScanNode | GuideNode
 
-function getScaleStatus(guide: GuideNode, scaleReferenceVisible: boolean) {
+function getScaleStatus(
+  guide: GuideNode,
+  scaleReferenceVisible: boolean,
+  t: ReturnType<typeof useTranslations>,
+) {
   const reference = guide.scaleReference
   if (!reference) {
-    return 'Uncalibrated'
+    return t('editor.uncalibrated')
   }
 
-  return `${scaleReferenceVisible ? 'Scaled' : 'Scaled (hidden)'} · ${reference.label}`
+  const status = scaleReferenceVisible ? t('editor.scaled') : t('editor.scaledHidden')
+  return `${status} · ${reference.label}`
 }
 
 export function ReferencePanel() {
+  const t = useTranslations()
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const setSelectedReferenceId = useEditor((s) => s.setSelectedReferenceId)
   const guideUi = useEditor((s) =>
@@ -85,7 +92,7 @@ export function ReferencePanel() {
       }
 
       if (!file.type.startsWith('image/')) {
-        setReplaceError('Choose a PNG, JPEG, or WebP image.')
+        setReplaceError(t('editor.chooseImage'))
         return
       }
 
@@ -107,7 +114,7 @@ export function ReferencePanel() {
         // so it can be resized/rotated right away.
         setGuideLocked(selectedReferenceId, false)
       } catch {
-        setReplaceError('Could not replace that image.')
+        setReplaceError(t('editor.couldNotReplaceImage'))
       } finally {
         setIsReplacing(false)
       }
@@ -174,7 +181,7 @@ export function ReferencePanel() {
   const isScan = node.type === 'scan'
   const guideLocked = !isScan && guideUi?.locked === true
   const scaleReferenceVisible = !isScan && guideUi?.scaleReferenceVisible !== false
-  const scaleStatus = isScan ? null : getScaleStatus(node, scaleReferenceVisible)
+  const scaleStatus = isScan ? null : getScaleStatus(node, scaleReferenceVisible, t)
 
   return (
     <PanelWrapper
@@ -184,7 +191,7 @@ export function ReferencePanel() {
     >
       {!isScan && (
         <>
-          <PanelSection title="Image">
+          <PanelSection title={t('editor.image')}>
             <input
               accept="image/*"
               className="hidden"
@@ -203,13 +210,13 @@ export function ReferencePanel() {
               <ActionButton
                 disabled={isReplacing}
                 icon={<Upload className="h-3.5 w-3.5" />}
-                label={isReplacing ? 'Replacing...' : 'Replace'}
+                label={isReplacing ? t('editor.replacing') : t('editor.replace')}
                 onClick={() => replaceInputRef.current?.click()}
               />
               <ActionButton
                 className="text-destructive hover:bg-destructive/10"
                 icon={<Trash2 className="h-3.5 w-3.5" />}
-                label="Delete"
+                label={t('editor.delete')}
                 onClick={handleDeleteGuide}
               />
             </ActionGroup>
@@ -223,7 +230,7 @@ export function ReferencePanel() {
                     <Eye className="h-3.5 w-3.5" />
                   )
                 }
-                label={node.visible === false ? 'Show' : 'Hide'}
+                label={node.visible === false ? t('common.show') : t('common.hide')}
                 onClick={() => handleUpdate({ visible: node.visible === false })}
               />
               <ActionButton
@@ -234,7 +241,7 @@ export function ReferencePanel() {
                     <Unlock className="h-3.5 w-3.5" />
                   )
                 }
-                label={guideLocked ? 'Unlock' : 'Lock'}
+                label={guideLocked ? t('editor.unlock') : t('editor.lock')}
                 onClick={() => setGuideLocked(node.id, !guideLocked)}
               />
             </ActionGroup>
@@ -247,12 +254,12 @@ export function ReferencePanel() {
 
             {isAssetMissing && (
               <div className="rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-1.5 text-amber-700 text-xs dark:text-amber-300">
-                Overlay image unavailable. Replace the image to restore it.
+                {t('editor.overlayImageUnavailable')}
               </div>
             )}
           </PanelSection>
 
-          <PanelSection title="Reference Scale">
+          <PanelSection title={t('editor.referenceScale')}>
             <div className="flex items-center gap-2 rounded-md border border-border/50 bg-background/40 px-2.5 py-2 text-sm">
               <Ruler
                 className={cn(
@@ -266,8 +273,8 @@ export function ReferencePanel() {
             {!node.scaleReference && (
               <p className="px-0.5 text-muted-foreground text-xs leading-snug">
                 {isScaleFlowActive
-                  ? 'Click both ends of a known distance on the plan, then type its real length.'
-                  : 'Draw a line over a known dimension on the plan, then type its real length to scale the image exactly.'}
+                  ? t('editor.clickEndsOfKnownDistance')
+                  : t('editor.drawLineOverKnownDimension')}
               </p>
             )}
 
@@ -279,7 +286,11 @@ export function ReferencePanel() {
                     'border-primary/50 bg-primary/15 text-primary hover:bg-primary/25 active:bg-primary/25',
                 )}
                 label={
-                  isScaleFlowActive ? 'Cancel' : node.scaleReference ? 'Edit Scale' : 'Set Scale'
+                  isScaleFlowActive
+                    ? t('common.cancel')
+                    : node.scaleReference
+                      ? t('editor.editScale')
+                      : t('editor.setScale')
                 }
                 onClick={isScaleFlowActive ? handleCancelScale : handleStartScale}
               />
@@ -288,11 +299,13 @@ export function ReferencePanel() {
             {node.scaleReference && (
               <ActionGroup>
                 <ActionButton
-                  label={scaleReferenceVisible ? 'Hide Scale' : 'Show Scale'}
+                  label={
+                    scaleReferenceVisible ? t('editor.hideScale') : t('editor.showScale')
+                  }
                   onClick={() => setGuideScaleReferenceVisible(node.id, !scaleReferenceVisible)}
                 />
                 <ActionButton
-                  label="Clear Scale"
+                  label={t('editor.clearScale')}
                   onClick={() => {
                     handleUpdate({ scaleReference: null } as Partial<GuideNode>)
                     // Calibrating auto-locked the guide; clearing the scale
@@ -304,11 +317,11 @@ export function ReferencePanel() {
             )}
           </PanelSection>
 
-          <PanelSection title="Quick Actions">
+          <PanelSection title={t('editor.quickActions')}>
             <ActionGroup>
               <ActionButton
                 icon={<LocateFixed className="h-3.5 w-3.5" />}
-                label="Center"
+                label={t('editor.center')}
                 onClick={() =>
                   handleUpdate({
                     position: [0, node.position[1], 0],
@@ -317,7 +330,7 @@ export function ReferencePanel() {
               />
               <ActionButton
                 icon={<RotateCcw className="h-3.5 w-3.5" />}
-                label="Reset Rotation"
+                label={t('editor.resetRotation')}
                 onClick={() =>
                   handleUpdate({
                     rotation: [node.rotation[0], 0, node.rotation[2]],
@@ -328,7 +341,7 @@ export function ReferencePanel() {
             <ActionGroup>
               <ActionButton
                 icon={<Ruler className="h-3.5 w-3.5" />}
-                label="Reset Image Scale"
+                label={t('editor.resetImageScale')}
                 onClick={() => handleUpdate({ scale: 1 } as Partial<GuideNode>)}
               />
             </ActionGroup>
@@ -337,11 +350,11 @@ export function ReferencePanel() {
       )}
 
       {isScan && (
-        <PanelSection title="Capture">
+        <PanelSection title={t('editor.capture')}>
           <ActionGroup>
             <ActionButton
               icon={<Move className="h-3.5 w-3.5" />}
-              label="Move"
+              label={t('editor.move')}
               onClick={handleMoveScan}
             />
             <ActionButton
@@ -352,18 +365,19 @@ export function ReferencePanel() {
                   <Eye className="h-3.5 w-3.5" />
                 )
               }
-              label={node.visible === false ? 'Show' : 'Hide'}
+              label={node.visible === false ? t('common.show') : t('common.hide')}
               onClick={() => handleUpdate({ visible: node.visible === false })}
             />
           </ActionGroup>
         </PanelSection>
       )}
 
-      <PanelSection title="Position">
+      <PanelSection title={t('panel.section.position')}>
         <SliderControl
           label={
             <>
-              X<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+              {t('common.x')}
+              <sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
           max={50}
@@ -381,7 +395,8 @@ export function ReferencePanel() {
         <SliderControl
           label={
             <>
-              Y<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+              {t('common.y')}
+              <sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
           max={50}
@@ -399,7 +414,8 @@ export function ReferencePanel() {
         <SliderControl
           label={
             <>
-              Z<sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
+              {t('common.z')}
+              <sub className="ml-[1px] text-[11px] opacity-70">pos</sub>
             </>
           }
           max={50}
@@ -416,11 +432,12 @@ export function ReferencePanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Rotation">
+      <PanelSection title={t('panel.section.rotation')}>
         <SliderControl
           label={
             <>
-              Y<sub className="ml-[1px] text-[11px] opacity-70">rot</sub>
+              {t('common.y')}
+              <sub className="ml-[1px] text-[11px] opacity-70">rot</sub>
             </>
           }
           max={180}
@@ -438,7 +455,7 @@ export function ReferencePanel() {
         />
         <div className="flex gap-1.5 px-1 pt-2 pb-1">
           <ActionButton
-            label="-45°"
+            label={t('common.minus45')}
             onClick={() =>
               handleUpdate({
                 rotation: [node.rotation[0], node.rotation[1] - Math.PI / 4, node.rotation[2]],
@@ -446,7 +463,7 @@ export function ReferencePanel() {
             }
           />
           <ActionButton
-            label="+45°"
+            label={t('common.plus45')}
             onClick={() =>
               handleUpdate({
                 rotation: [node.rotation[0], node.rotation[1] + Math.PI / 4, node.rotation[2]],
@@ -456,7 +473,7 @@ export function ReferencePanel() {
         </div>
       </PanelSection>
 
-      <PanelSection title="Scale & Opacity">
+      <PanelSection title={t('panel.section.scaleOpacity')}>
         <SliderControl
           label={
             <>
@@ -476,7 +493,7 @@ export function ReferencePanel() {
         />
 
         <SliderControl
-          label="Opacity"
+          label={t('editor.opacity')}
           max={100}
           min={0}
           onChange={(v) => handleUpdate({ opacity: v })}

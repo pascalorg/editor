@@ -18,6 +18,7 @@ import {
   SliderControl,
   triggerSFX,
   useEditor,
+  useTranslations,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Move, Trash2 } from 'lucide-react'
@@ -30,6 +31,7 @@ import type { EyebrowVentNode } from './schema'
  * placement tool uses. Mirrors the box-vent / cupola panel.
  */
 export default function EyebrowVentPanel() {
+  const t = useTranslations()
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
@@ -142,21 +144,21 @@ export default function EyebrowVentPanel() {
       icon="/icons/roof.webp"
       onBack={node.roofSegmentId ? handleBack : undefined}
       onClose={handleClose}
-      title={node.name || 'Eyebrow Vent'}
+      title={node.name || t('nodes.eyebrowVent.fallbackTitle')}
       width={300}
     >
-      <PanelSection title="Style">
+      <PanelSection title={t('nodes.eyebrowVent.style')}>
         <SegmentedControl
           onChange={(v) => handleUpdate({ style: v as EyebrowVentNode['style'] })}
           options={[
-            { label: 'Scoop', value: 'scoop' },
-            { label: 'Half-round', value: 'half-round' },
-            { label: 'Slant-box', value: 'slant-box' },
+            { label: t('nodes.eyebrowVent.scoop'), value: 'scoop' },
+            { label: t('nodes.eyebrowVent.halfRound'), value: 'half-round' },
+            { label: t('nodes.eyebrowVent.slantBox'), value: 'slant-box' },
           ]}
           value={node.style ?? 'scoop'}
         />
         <SliderControl
-          label="Louvers"
+          label={t('nodes.eyebrowVent.louvers')}
           max={8}
           min={0}
           onChange={(v) => previewProp({ louverCount: Math.round(v) })}
@@ -168,7 +170,7 @@ export default function EyebrowVentPanel() {
         />
         {node.style === 'slant-box' ? (
           <SliderControl
-            label="Back height"
+            label={t('nodes.eyebrowVent.backHeight')}
             max={1}
             min={0.15}
             onChange={(v) => previewProp({ backRatio: v })}
@@ -181,9 +183,9 @@ export default function EyebrowVentPanel() {
         ) : null}
       </PanelSection>
 
-      <PanelSection title="Dimensions">
+      <PanelSection title={t('nodes.eyebrowVent.dimensions')}>
         <SliderControl
-          label="Width"
+          label={t('common.width')}
           max={1000}
           min={0.4}
           onChange={(v) => previewProp({ width: v })}
@@ -195,7 +197,7 @@ export default function EyebrowVentPanel() {
           value={Math.round(node.width * 100) / 100}
         />
         <SliderControl
-          label="Depth"
+          label={t('common.depth')}
           max={1000}
           min={0.2}
           onChange={(v) => previewProp({ depth: v })}
@@ -207,7 +209,7 @@ export default function EyebrowVentPanel() {
           value={Math.round(node.depth * 100) / 100}
         />
         <SliderControl
-          label="Height"
+          label={t('common.height')}
           max={1000}
           min={0.08}
           onChange={(v) => previewProp({ height: v })}
@@ -220,9 +222,9 @@ export default function EyebrowVentPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Position">
+      <PanelSection title={t('common.position')}>
         <SliderControl
-          label="X"
+          label={t('common.x')}
           max={Math.round(((segment?.width ?? 10) / 2) * 100) / 100}
           min={-Math.round(((segment?.width ?? 10) / 2) * 100) / 100}
           onChange={(v) =>
@@ -238,7 +240,7 @@ export default function EyebrowVentPanel() {
           value={Math.round((node.position[0] ?? 0) * 100) / 100}
         />
         <SliderControl
-          label="Y"
+          label={t('common.y')}
           max={Math.max(
             (segment?.wallHeight ?? 3) + (segment ? getActiveRoofHeight(segment) : 3) + 2,
             (node.position[1] ?? 0) + 0.1,
@@ -257,7 +259,7 @@ export default function EyebrowVentPanel() {
           value={Math.round((node.position[1] ?? 0) * 100) / 100}
         />
         <SliderControl
-          label="Z"
+          label={t('common.z')}
           max={Math.round(((segment?.depth ?? 10) / 2) * 100) / 100}
           min={-Math.round(((segment?.depth ?? 10) / 2) * 100) / 100}
           onChange={(v) =>
@@ -273,7 +275,7 @@ export default function EyebrowVentPanel() {
           value={Math.round((node.position[2] ?? 0) * 100) / 100}
         />
         <SliderControl
-          label="Rotation"
+          label={t('common.rotation')}
           max={180}
           min={-180}
           onChange={(deg) => previewProp({ rotation: (deg * Math.PI) / 180 })}
@@ -286,18 +288,18 @@ export default function EyebrowVentPanel() {
         />
       </PanelSection>
 
-      <PanelSection title="Actions">
+      <PanelSection title={t('common.actions')}>
         <ActionGroup>
-          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label="Move" onClick={handleMove} />
+          <ActionButton icon={<Move className="h-3.5 w-3.5" />} label={t('common.move')} onClick={handleMove} />
           <ActionButton
             icon={<Copy className="h-3.5 w-3.5" />}
-            label="Duplicate"
+            label={t('common.duplicate')}
             onClick={handleDuplicate}
           />
           <ActionButton
             className="hover:bg-red-500/20"
             icon={<Trash2 className="h-3.5 w-3.5 text-red-400" />}
-            label="Delete"
+            label={t('common.delete')}
             onClick={handleDelete}
           />
         </ActionGroup>

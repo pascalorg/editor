@@ -1,3 +1,5 @@
+'use client'
+
 import {
   getRenderableSlabPolygon,
   type PolygonPoint2D,

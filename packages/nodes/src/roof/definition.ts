@@ -177,19 +177,20 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   },
   tool: () => import('./tool'),
   toolHints: [
-    { key: 'Left click', label: 'Set roof footprint' },
+    { key: 'Left click', label: 'Set roof footprint', labelKey: 'nodes.roof.toolHints.setFootprint' },
     {
       key: 'P',
       label: 'Placement',
+      labelKey: 'nodes.roof.toolHints.placement',
       visible: conicalRoofToolHintVisibility,
       chip: {
         subscribe: (onChange) => useRoofPlacementMode.subscribe(onChange),
         value: () => useRoofPlacementMode.getState().mode,
         cycle: () => useRoofPlacementMode.getState().cycleMode(),
         labels: {
-          auto: 'Placement: Auto',
-          ground: 'Placement: Ground',
-          roof: 'Placement: Roof',
+          auto: 'nodes.roof.toolHints.placementAuto',
+          ground: 'nodes.roof.toolHints.placementGround',
+          roof: 'nodes.roof.toolHints.placementRoof',
         },
         icons: {
           auto: 'lucide:scan-search',
@@ -197,29 +198,36 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
           roof: 'lucide:house',
         },
         tooltip: 'Placement surface - click or press P to cycle',
+        tooltipKey: 'nodes.roof.toolHints.placementTooltip',
       },
     },
     {
       key: 'R',
       label: 'Rotate roof direction 90°',
+      labelKey: 'nodes.roof.toolHints.rotateDirection',
       visible: standardRoofToolHintVisibility,
     },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
   toolOptions: [
     {
       id: 'footprintSource',
       label: 'Create from',
+      labelKey: 'buildTab.section.createFrom',
       choices: [
         {
           value: 'draw',
           label: 'Draw',
+          labelKey: 'buildTab.roofSource.draw',
           description: 'Draw the roof footprint with two corner clicks.',
+          descriptionKey: 'buildTab.roofSource.drawHint',
         },
         {
           value: 'room',
           label: 'Room',
+          labelKey: 'buildTab.roofSource.room',
           description: 'Hover a room to preview its boundary, then click to place.',
+          descriptionKey: 'buildTab.roofSource.roomHint',
         },
       ],
       subscribe: (onChange) => useRoofFootprintSource.subscribe(onChange),
@@ -246,6 +254,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
 
   presentation: {
     label: 'Roof',
+    labelKey: 'panel.nodeType.roof',
     description: 'A pitched / hip / gable roof composed of one or more segments.',
     icon: { kind: 'url', src: '/icons/roof.webp' },
     paletteSection: 'structure',

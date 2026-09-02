@@ -14,6 +14,7 @@ import {
   buildResetSurfaceMaterialUpdates,
   resolvePaintTargetFromSelection,
 } from './../../../lib/material-paint'
+import { useTranslations } from './../../../lib/i18n'
 import useEditor from './../../../store/use-editor'
 import { Button } from '../primitives/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../primitives/tooltip'
@@ -33,6 +34,7 @@ export type MaterialPaintPanelProps = {
 }
 
 export function MaterialPaintPanel({ onCreateMaterialRequest }: MaterialPaintPanelProps) {
+  const t = useTranslations()
   const activePaintMaterial = useEditor((state) => state.activePaintMaterial)
   const activePaintTarget = useEditor((state) => state.activePaintTarget)
   const armMaterialPaint = useEditor((state) => state.armMaterialPaint)
@@ -68,7 +70,7 @@ export function MaterialPaintPanel({ onCreateMaterialRequest }: MaterialPaintPan
     const count = Object.keys(useScene.getState().materials).length
     useScene.getState().addSceneMaterial({
       id,
-      name: `Material ${count + 1}`,
+      name: t('paint.material.defaultName', { n: count + 1 }),
       material: {
         preset: 'custom',
         properties: {
@@ -97,7 +99,7 @@ export function MaterialPaintPanel({ onCreateMaterialRequest }: MaterialPaintPan
           variant={paintEraser ? 'default' : 'outline'}
         >
           <Eraser />
-          Erase
+          {t('paint.erase')}
         </Button>
         <Button
           className="flex-1"
@@ -107,7 +109,7 @@ export function MaterialPaintPanel({ onCreateMaterialRequest }: MaterialPaintPan
           variant="outline"
         >
           <RotateCcw />
-          Reset all
+          {t('paint.resetAll')}
         </Button>
       </div>
 
@@ -128,12 +130,12 @@ export function MaterialPaintPanel({ onCreateMaterialRequest }: MaterialPaintPan
       <div className="mt-2 shrink-0 space-y-1.5 border-border/60 border-t pt-2">
         <div className="flex items-center justify-between">
           <span className="font-medium text-muted-foreground text-xs uppercase tracking-[0.12em]">
-            Scene materials
+            {t('paint.sceneMaterials')}
           </span>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
-                aria-label="Add material"
+                aria-label={t('paint.addMaterial')}
                 onClick={createCustomMaterial}
                 size="icon-sm"
                 type="button"
@@ -142,7 +144,7 @@ export function MaterialPaintPanel({ onCreateMaterialRequest }: MaterialPaintPan
                 <Plus />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>Add material</TooltipContent>
+            <TooltipContent>{t('paint.addMaterial')}</TooltipContent>
           </Tooltip>
         </div>
         <div className="subtle-scrollbar max-h-56 overflow-y-auto">
@@ -150,7 +152,7 @@ export function MaterialPaintPanel({ onCreateMaterialRequest }: MaterialPaintPan
             <SceneMaterialList autoEditId={autoEditMaterialId} />
           ) : (
             <p className="px-0.5 py-1 text-muted-foreground text-xs">
-              No custom materials yet — add one with +.
+              {t('paint.noCustomMaterials')}
             </p>
           )}
         </div>

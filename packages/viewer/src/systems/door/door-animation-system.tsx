@@ -1,3 +1,5 @@
+'use client'
+
 import { type AnyNodeId, type DoorNode, emitter, useInteractive, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 

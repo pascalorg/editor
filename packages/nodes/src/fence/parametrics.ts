@@ -18,6 +18,7 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
   groups: [
     {
       label: 'Style',
+      labelKey: 'common.style',
       fields: [
         {
           key: 'style',
@@ -36,6 +37,7 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
     },
     {
       label: 'Dimensions',
+      labelKey: 'common.dimensions',
       fields: [
         // Length / Curve drive start/end + the single sagitta — meaningless
         // for a multi-point spline fence, so hide them when `path` is set.
@@ -57,6 +59,7 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
     },
     {
       label: 'Structure',
+      labelKey: 'nodes.fence.structure',
       fields: [
         { key: 'baseHeight', kind: 'number', unit: 'm', min: 0.04, max: 1, step: 0.01 },
         { key: 'topRailHeight', kind: 'number', unit: 'm', min: 0.01, max: 0.25, step: 0.005 },

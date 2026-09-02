@@ -11,11 +11,16 @@ export const cupolaParametrics: ParametricDescriptor<CupolaNode> = {
   groups: [
     {
       label: 'Style',
+      labelKey: 'common.style',
       fields: [
         {
           key: 'roofStyle',
           kind: 'enum',
           options: ['dome', 'pyramid'],
+          optionLabelKeys: {
+            "dome": "nodes.cupola.dome",
+            "pyramid": "nodes.cupola.pyramid"
+          },
           display: 'segmented',
         },
         { key: 'finial', kind: 'boolean' },
@@ -23,6 +28,7 @@ export const cupolaParametrics: ParametricDescriptor<CupolaNode> = {
     },
     {
       label: 'Dimensions',
+      labelKey: 'common.dimensions',
       fields: [
         { key: 'width', kind: 'number', unit: 'm', min: 0.3, max: 1000, step: 0.05 },
         { key: 'depth', kind: 'number', unit: 'm', min: 0.3, max: 1000, step: 0.05 },

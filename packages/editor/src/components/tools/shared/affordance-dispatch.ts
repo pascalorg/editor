@@ -1,3 +1,5 @@
+'use client'
+
 import { nodeRegistry } from '@pascal-app/core'
 import { type ComponentType, lazy } from 'react'
 

@@ -15,6 +15,7 @@ import {
 } from '@pascal-app/core'
 import { Plus } from 'lucide-react'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { useTranslations, type Translator } from '../../../lib/i18n'
 import { triggerSFX } from '../../../lib/sfx-bus'
 
 export type MaterialSourceFilter = MaterialSource
@@ -28,17 +29,20 @@ export type MaterialPickerProps = {
   onCreateMaterialRequest?: () => void
 }
 
-// No 'All': the browse surfaces (Items / Rooms / Build) dropped it and default
+// No 'all': the browse surfaces (Items / Rooms / Build) dropped it and default
 // to the Pascal library — the combined list buried the curated set.
-const SOURCE_FILTERS: { id: MaterialSourceFilter; label: string }[] = [
-  { id: 'pascal', label: 'Pascal' },
-  { id: 'mine', label: 'Mine' },
-  { id: 'workspace', label: 'Workspace' },
-  { id: 'community', label: 'Community' },
+// Labels are resolved at render time via t().
+const SOURCE_FILTERS: { id: MaterialSourceFilter; labelKey: string }[] = [
+  { id: 'pascal', labelKey: 'materialPicker.source.pascal' },
+  { id: 'mine', labelKey: 'items.mine' },
+  { id: 'workspace', labelKey: 'materialPicker.source.workspace' },
+  { id: 'community', labelKey: 'items.community' },
 ]
 
-function getCategoryLabel(category: (typeof MATERIAL_CATEGORIES)[number]) {
-  return category.charAt(0).toUpperCase() + category.slice(1)
+function getCategoryLabel(category: (typeof MATERIAL_CATEGORIES)[number], t: Translator): string {
+  const translated = t(`materials.${category}`)
+  // Un-translated categories echo the key back; fall back to the capitalized id.
+  return translated.startsWith('materials.') ? category.charAt(0).toUpperCase() + category.slice(1) : translated
 }
 
 function filterBySource(items: MaterialCatalogItem[], filter: MaterialSourceFilter) {
@@ -57,6 +61,7 @@ export function MaterialPicker({
   disabled = false,
   onCreateMaterialRequest,
 }: MaterialPickerProps) {
+  const t = useTranslations()
   const [selectedCategory, setSelectedCategory] = useState<(typeof MATERIAL_CATEGORIES)[number]>(
     MATERIAL_CATEGORIES[0],
   )
@@ -115,7 +120,7 @@ export function MaterialPicker({
             }}
             type="button"
           >
-            {getCategoryLabel(category)}
+            {getCategoryLabel(category, t)}
           </button>
         ))}
       </div>
@@ -138,7 +143,7 @@ export function MaterialPicker({
             onMouseEnter={() => triggerSFX('sfx:menu-hover')}
             type="button"
           >
-            {filter.label}
+            {t(filter.labelKey)}
           </button>
         ))}
       </div>
@@ -161,12 +166,13 @@ export function MaterialPicker({
               <Plus className="size-5 text-muted-foreground group-hover:text-foreground" />
             </div>
             <span className="truncate px-0.5 text-left font-medium text-[11px] text-muted-foreground group-hover:text-foreground">
-              New material
+              {t('materialPicker.newMaterial')}
             </span>
           </button>
         ) : null}
         {catalogItems.map((item) => {
           const isSelected = selectedMaterialPreset === toLibraryMaterialRef(item.id)
+          const label = t(item.labelKey)
           return (
             <button
               className={`group relative flex flex-col gap-1.5 rounded-xl p-1.5 transition-colors hover:cursor-pointer hover:bg-sidebar-accent ${
@@ -183,7 +189,7 @@ export function MaterialPicker({
               <div className="relative aspect-square w-full overflow-hidden rounded-lg">
                 {item.previewThumbnailUrl ? (
                   <img
-                    alt={item.label}
+                    alt={label}
                     className="h-full w-full object-cover"
                     src={item.previewThumbnailUrl}
                   />
@@ -195,7 +201,7 @@ export function MaterialPicker({
                 )}
               </div>
               <span className="truncate px-0.5 text-left font-medium text-[11px] text-muted-foreground group-hover:text-foreground">
-                {item.label}
+                {label}
               </span>
             </button>
           )

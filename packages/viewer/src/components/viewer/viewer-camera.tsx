@@ -1,3 +1,5 @@
+'use client'
+
 import { OrthographicCamera, PerspectiveCamera } from '@react-three/drei'
 import useViewer from '../../store/use-viewer'
 

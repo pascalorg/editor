@@ -362,13 +362,14 @@ export const slabDefinition: NodeDefinition<typeof SlabNode> = {
   },
 
   toolHints: [
-    { key: 'Left click', label: 'Trace slab outline' },
-    { key: 'Enter', label: 'Finish slab', minDraftVertices: 3 },
-    { key: 'Esc', label: 'Cancel' },
+    { key: 'Left click', label: 'Trace slab outline', labelKey: 'nodes.slab.toolHints.trace' },
+    { key: 'Enter', label: 'Finish slab', labelKey: 'nodes.slab.toolHints.finish', minDraftVertices: 3 },
+    { key: 'Esc', label: 'Cancel', labelKey: 'common.cancel' },
   ],
 
   presentation: {
     label: 'Slab',
+    labelKey: 'panel.nodeType.slab',
     description: 'A polygon-bounded floor surface that hosts items on top.',
     icon: { kind: 'url', src: '/icons/floor.webp' },
     paletteSection: 'structure',

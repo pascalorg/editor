@@ -16,17 +16,22 @@ export const boxVentParametrics: ParametricDescriptor<BoxVentNode> = {
   groups: [
     {
       label: 'Style',
+      labelKey: 'common.style',
       fields: [
         {
           key: 'style',
           kind: 'enum',
           options: ['standard', 'low-profile', 'dome'],
+          optionLabelKeys: {
+            "dome": "nodes.boxVent.dome"
+          },
           display: 'segmented',
         },
       ],
     },
     {
       label: 'Dimensions',
+      labelKey: 'common.dimensions',
       fields: [
         { key: 'width', kind: 'number', unit: 'm', min: 0.15, max: 1000, step: 0.01 },
         { key: 'depth', kind: 'number', unit: 'm', min: 0.15, max: 1000, step: 0.01 },

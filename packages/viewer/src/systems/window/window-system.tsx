@@ -1,3 +1,5 @@
+'use client'
+
 import {
   type AnyNodeId,
   DEFAULT_WALL_THICKNESS,

@@ -488,13 +488,15 @@ export const leanToExtensionDefinition: NodeDefinition<typeof LeanToExtensionNod
     {
       key: 'Left click',
       label: 'Place canopy or set the next run point',
+      labelKey: 'nodes.leanToExtension.toolHints.place',
     },
-    { key: 'R / T', label: 'Rotate or flip the run side' },
-    { key: 'F', label: 'Cycle mono / gable / butterfly' },
-    { key: 'Esc', label: 'End run / cancel' },
+    { key: 'R / T', label: 'Rotate or flip the run side', labelKey: 'nodes.leanToExtension.toolHints.rotateFlip' },
+    { key: 'F', label: 'Cycle mono / gable / butterfly', labelKey: 'nodes.leanToExtension.toolHints.cycleStyle' },
+    { key: 'Esc', label: 'End run / cancel', labelKey: 'common.cancel' },
   ],
   presentation: {
     label: 'Canopy',
+    labelKey: 'panel.nodeType.leanToExtension',
     description:
       'An attached mono-pitch or freestanding mono, gable, or butterfly canopy with managed structure and drainage.',
     icon: { kind: 'url', src: '/icons/lean-to-extension.webp' },

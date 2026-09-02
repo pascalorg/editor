@@ -9,7 +9,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { triggerSFX } from '@pascal-app/editor'
+import { triggerSFX, useTranslations } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
@@ -37,6 +37,7 @@ const worldPoint = new THREE.Vector3()
  * roof + segment rotation stack.
  */
 const BoxVentTool = () => {
+  const t = useTranslations()
   const activeBuildingId = useViewer((s) => s.selection.buildingId)
   const setSelection = useViewer((s) => s.setSelection)
 
@@ -111,10 +112,11 @@ const BoxVentTool = () => {
       )
       if (!hit) return
       const state = useScene.getState()
+      const ventCount = Object.values(state.nodes).filter((n) => (n as any).type === 'boxVent').length
 
       const vent = BoxVentNode.parse({
         ...boxVentDefinition.defaults(),
-        name: 'Box Vent',
+        name: t('nodes.boxVent.defaultName', { count: ventCount + 1 }),
         roofSegmentId: hit.segment.id,
         position: [hit.localX, hit.localY, hit.localZ],
         rotation: getDownSlopeYaw(hit.localX, hit.localZ, hit.segment),

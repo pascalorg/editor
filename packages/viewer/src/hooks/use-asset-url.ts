@@ -1,3 +1,5 @@
+'use client'
+
 import { loadAssetUrl } from '@pascal-app/core'
 import { useEffect, useState } from 'react'
 

@@ -6,10 +6,12 @@ import {
   type FloorplanGeometry,
   type FloorplanPalette,
   type GeometryContext,
+  getDefaultLevelName,
   isNodeKindEnabled,
   nodeRegistry,
   useScene,
 } from '@pascal-app/core'
+import type { Translator } from '@pascal-app/core'
 import { AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
 import { useViewer } from '@pascal-app/viewer'
 import { Maximize2, Minus, Plus } from 'lucide-react'
@@ -33,6 +35,7 @@ import {
 } from '../../lib/floorplan'
 import { getFloorplanNodeExtension } from '../../lib/floorplan/floorplan-extension'
 import { buildFloorplanContext, floorplanLayerRank } from '../../lib/floorplan/floorplan-readonly'
+import { useTranslations } from '../../lib/i18n'
 import { subscribeNavigationSyncPose } from '../../store/navigation-sync-pose-store'
 import useEditor, { type NavigationSyncPose } from '../../store/use-editor'
 import {
@@ -141,13 +144,10 @@ function boundsToViewBox(bounds: FloorplanBounds): FloorplanViewBox {
   }
 }
 
-function levelLabel(level: AnyNode): string {
+function levelLabel(level: AnyNode, t: Translator): string {
   const named = (level as { name?: string }).name?.trim()
   if (named) return named
-  const ordinal = (level as { level?: number }).level ?? 0
-  if (ordinal === 0) return 'Ground floor'
-  if (ordinal < 0) return `Basement ${Math.abs(ordinal)}`
-  return `Level ${ordinal}`
+  return getDefaultLevelName((level as { level?: number }).level ?? 0, t)
 }
 
 function collectLevelTree(root: AnyNode, nodes: Record<string, AnyNode>): AnyNode[] {
@@ -321,6 +321,7 @@ export function FloorplanPreview({
   showLevelSelector = true,
   synchronizeNavigation = false,
 }: FloorplanPreviewProps) {
+  const t = useTranslations()
   const storeNodes = useScene((state) => (scene ? EMPTY_PREVIEW_NODES : state.nodes))
   const storeInstalledPlugins = useScene((state) =>
     scene ? EMPTY_INSTALLED_PLUGINS : state.installedPlugins,
@@ -894,7 +895,7 @@ export function FloorplanPreview({
       {synchronizeNavigation ? <FloorplanCameraSyncMount /> : null}
       <div
         aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight + - 0 F"
-        aria-label={`${activeLevel ? levelLabel(activeLevel) : 'Floor plan'} 2D view`}
+        aria-label={`${activeLevel ? levelLabel(activeLevel, t) : 'Floor plan'} 2D view`}
         onKeyDown={onKeyDown}
         role="application"
         ref={interactionRef}
@@ -981,9 +982,9 @@ export function FloorplanPreview({
             fontWeight: 600,
           }}
         >
-          Floor
+          {t('editor.floor')}
           <select
-            aria-label="Floor"
+            aria-label={t('editor.floor')}
             onChange={(event) => chooseLevel(event.target.value)}
             style={{
               border: '1px solid rgba(148,163,184,.55)',
@@ -997,7 +998,7 @@ export function FloorplanPreview({
           >
             {levels.map((level) => (
               <option key={level.id} value={level.id}>
-                {levelLabel(level)}
+                {levelLabel(level, t)}
               </option>
             ))}
           </select>
@@ -1025,28 +1026,28 @@ export function FloorplanPreview({
         }}
       >
         <button
-          aria-label="Zoom out"
+          aria-label={t('editor.zoomOut')}
           onClick={() => zoom(1.2)}
           style={controlStyle}
-          title="Zoom out"
+          title={t('editor.zoomOut')}
           type="button"
         >
           <Minus size={16} />
         </button>
         <button
-          aria-label="Fit floor plan"
+          aria-label={t('editor.fitFloorPlan')}
           onClick={() => updateLocalViewBox(fittedViewBox)}
           style={controlStyle}
-          title="Fit floor plan"
+          title={t('editor.fitFloorPlan')}
           type="button"
         >
           <Maximize2 size={15} />
         </button>
         <button
-          aria-label="Zoom in"
+          aria-label={t('editor.zoomIn')}
           onClick={() => zoom(0.8)}
           style={controlStyle}
-          title="Zoom in"
+          title={t('editor.zoomIn')}
           type="button"
         >
           <Plus size={16} />

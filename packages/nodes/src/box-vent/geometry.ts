@@ -1,3 +1,5 @@
+'use client'
+
 import { type BoxVentNode, getActiveRoofHeight, type RoofType } from '@pascal-app/core'
 import * as THREE from 'three'
 import { copyUvToSecondaryChannel } from '../shared/primitive-uv'

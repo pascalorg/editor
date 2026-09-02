@@ -1,3 +1,5 @@
+'use client'
+
 import { type ChimneyNode, getActiveRoofHeight, type RoofSegmentNode } from '@pascal-app/core'
 import {
   Brush,

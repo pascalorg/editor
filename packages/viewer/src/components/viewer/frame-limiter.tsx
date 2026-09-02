@@ -1,3 +1,5 @@
+'use client'
+
 import { useThree } from '@react-three/fiber'
 import { useLayoutEffect, useRef } from 'react'
 import useViewer from '../../store/use-viewer'

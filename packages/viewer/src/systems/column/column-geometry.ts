@@ -1,3 +1,5 @@
+'use client'
+
 import {
   BoxGeometry,
   type BufferGeometry,

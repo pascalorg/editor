@@ -101,7 +101,7 @@ export {
   isOperationDoorType,
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
-export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
+export { getDefaultLevelName, getLevelDisplayName, type Translator } from './lib/level-name'
 export {
   areMeasurementPointsCoplanar,
   closestMeasurementFeatureBinding,

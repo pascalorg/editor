@@ -78,6 +78,8 @@ import {
 } from '../../lib/window-interaction'
 import useEditor from '../../store/use-editor'
 import { useFirstPersonHud, type WalkthroughInteract } from '../../store/use-first-person-hud'
+import type { Translator } from '@pascal-app/core'
+import { useTranslations } from '../../lib/i18n'
 import { WalkthroughHud } from '../walkthrough-hud'
 import {
   buildFirstPersonColliderWorldFromRegistry,
@@ -285,7 +287,7 @@ function pointIsInLevelFootprint(
   )
 }
 
-function resolveFirstPersonHudLabels(worldPoint: Vector3) {
+function resolveFirstPersonHudLabels(worldPoint: Vector3, t: Translator) {
   const nodes = useScene.getState().nodes
   const levelElevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
 
@@ -328,7 +330,7 @@ function resolveFirstPersonHudLabels(worldPoint: Vector3) {
     )
 
     return {
-      floorLabel: getLevelDisplayName(activeLevel),
+      floorLabel: getLevelDisplayName(activeLevel, t),
       zoneLabel: zone?.type === 'zone' ? zone.name : null,
     }
   }
@@ -660,6 +662,7 @@ const resolvePlacedSpawnNode = (
 
 export const FirstPersonControls = () => {
   const { camera, gl } = useThree()
+  const t = useTranslations()
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const placedSpawnNode = useScene((state) => resolvePlacedSpawnNode(state.nodes, selectedLevelId))
   const isDroneMode = useEditor((state) => state.firstPersonMovementMode === 'drone')
@@ -1688,7 +1691,7 @@ export const FirstPersonControls = () => {
     if (hudLabelFrameRef.current >= HUD_LABEL_SAMPLE_FRAMES) {
       hudLabelFrameRef.current = 0
       camera.getWorldPosition(hudWorldEyePosition)
-      useFirstPersonHud.getState().setHud(resolveFirstPersonHudLabels(hudWorldEyePosition))
+      useFirstPersonHud.getState().setHud(resolveFirstPersonHudLabels(hudWorldEyePosition, t))
     }
   }, 2.5)
 

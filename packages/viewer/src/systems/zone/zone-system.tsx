@@ -1,3 +1,5 @@
+'use client'
+
 import { sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useRef } from 'react'

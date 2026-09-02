@@ -1,3 +1,5 @@
+'use client'
+
 import type { ComponentType } from 'react'
 import type { AnimationClip, BufferGeometry, Object3D, Ray } from 'three'
 import type { ZodObject, z } from 'zod'
@@ -329,6 +331,12 @@ export type ToolHint = {
   /** Description of what the input does. Sentence case. */
   label: string
   /**
+   * Optional i18n key for `label`. When set, the contextual helper resolves
+   * through the active locale at render time; otherwise `label` is used
+   * verbatim (suitable for hints that already arrive pre-localised).
+   */
+  labelKey?: string
+  /**
    * Only show this hint once the in-progress draft has at least this many
    * vertices (reads `useEditor.draftVertexCount`). Lets a polygon tool's
    * "Finish" hint appear only when finishing is actually possible (≥ 3 points),
@@ -368,6 +376,11 @@ export type ToolHintChip = {
   icons?: Record<string, string>
   /** Hover tooltip, e.g. 'Placement type — click or press I to cycle'. */
   tooltip?: string
+  /**
+   * Translator key resolving to the hover tooltip. Consumers resolve
+   * `tooltipKey` first and fall back to `tooltip` when untranslated.
+   */
+  tooltipKey?: string
 }
 
 // ─── ToolOption ──────────────────────────────────────────────────────
@@ -384,8 +397,19 @@ export type ToolOptionChoice = {
   value: string
   /** Button label. Sentence case. */
   label: string
+  /**
+   * Translator key resolving to the button label. If both `label` and
+   * `labelKey` are set, the consumer resolves `labelKey` first and falls back
+   * to `label` when the key is untranslated.
+   */
+  labelKey?: string
   /** Helper line shown under the row while this choice is active. */
   description?: string
+  /**
+   * Translator key resolving to the helper line. Falls back to `description`
+   * when the key is untranslated.
+   */
+  descriptionKey?: string
 }
 
 export type ToolOption = {
@@ -393,6 +417,11 @@ export type ToolOption = {
   id: string
   /** Row label. Sentence case, e.g. 'Create from'. */
   label: string
+  /**
+   * Translator key resolving to the row label. Consumers resolve `labelKey`
+   * first and fall back to `label` when untranslated.
+   */
+  labelKey?: string
   choices: readonly ToolOptionChoice[]
   /** Subscribe to live value changes (Zustand-store-like); returns unsubscribe. */
   subscribe: (onChange: () => void) => () => void
@@ -1483,8 +1512,21 @@ export type KeyboardAction = {
 export type Presentation = {
   /** Sentence-case label shown in palette buttons, breadcrumbs, etc. */
   label: string
+  /**
+   * Optional i18n key resolved at render time. When set, the i18n catalog
+   * value wins over `label` so the same definition can ship translated UI
+   * surfaces without re-publishing. Falls back to `label` if the catalog
+   * lookup misses or the active locale has no entry yet.
+   */
+  labelKey?: string
   /** Optional longer tooltip / help text. */
   description?: string
+  /**
+   * Optional i18n key for `description`. Same fallback semantics as
+   * `labelKey`. Defined alongside it so MCP and tooltip surfaces can be
+   * wired without re-touching every definition.
+   */
+  descriptionKey?: string
   /** Icon for palette buttons and tree views. */
   icon: IconRef
   /** Tool palette section. Defaults to `category` when omitted. */
@@ -2366,6 +2408,13 @@ export type ParamAction<N> = {
 
 export type ParamGroup<N> = {
   label: string
+  /**
+   * Optional i18n key resolved at render time. Wins over `label` when the
+   * catalog has an entry; falls back to `label` unchanged otherwise. Defined
+   * alongside it so the inspector can localize section headings without
+   * re-touching every parametrics descriptor.
+   */
+  labelKey?: string
   fields: ParamField<N>[]
 }
 
@@ -2373,6 +2422,9 @@ export type ParamField<N> =
   | {
       key: keyof N
       label?: string
+      /** Optional i18n key for `label` — same fallback semantics as
+       *  `ParamGroup.labelKey`. */
+      labelKey?: string
       kind: 'number'
       unit?: string
       min?: number
@@ -2381,21 +2433,35 @@ export type ParamField<N> =
       visibleIf?: (n: N) => boolean
       customEditor?: ComponentType
     }
-  | { key: keyof N; label?: string; kind: 'boolean'; visibleIf?: (n: N) => boolean }
   | {
       key: keyof N
       label?: string
+      labelKey?: string
+      kind: 'boolean'
+      visibleIf?: (n: N) => boolean
+    }
+  | {
+      key: keyof N
+      label?: string
+      labelKey?: string
       kind: 'enum'
       options: readonly string[]
+      /**
+       * Per-option i18n keys. Each entry maps a raw option value (the
+       * string stored in `options`) to its catalog key. Missing entries
+       * fall through to `prettifyEnumValue(option)` exactly as before, so
+       * un-translated kinds keep their current English rendering.
+       */
+      optionLabelKeys?: Record<string, string>
       /** Defaults to 'select' (dropdown). 'segmented' renders the inline
        *  tabbed switcher — better for short option lists (2-4 items). */
       display?: 'select' | 'segmented'
       visibleIf?: (n: N) => boolean
     }
-  | { key: keyof N; label?: string; kind: 'vec3'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; label?: string; kind: 'color'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; label?: string; kind: 'material'; visibleIf?: (n: N) => boolean }
-  | { key: keyof N; label?: string; kind: 'ref'; refKind: string; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; labelKey?: string; kind: 'vec3'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; labelKey?: string; kind: 'color'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; labelKey?: string; kind: 'material'; visibleIf?: (n: N) => boolean }
+  | { key: keyof N; label?: string; labelKey?: string; kind: 'ref'; refKind: string; visibleIf?: (n: N) => boolean }
   /** Escape hatch for fields that don't map to a single node key —
    *  derived values (`length` from `start`/`end`), sliders with
    *  dynamic min/max (curve sagitta bounded by chord length),
@@ -2404,6 +2470,7 @@ export type ParamField<N> =
   | {
       key: string
       label?: string
+      labelKey?: string
       kind: 'custom'
       component: ComponentType<{ node: N; onUpdate: (patch: Partial<N>) => void }>
       visibleIf?: (n: N) => boolean

@@ -1,3 +1,5 @@
+'use client'
+
 import { useGLTF } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js'

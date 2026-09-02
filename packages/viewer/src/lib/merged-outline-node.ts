@@ -1,5 +1,6 @@
 // @ts-nocheck — Three.js TSL/WebGPU internal APIs have incomplete type definitions;
 // this file is a fork of OutlineNode and is intentionally exempt from strict TS checking.
+'use client'
 
 /**
  * MergedOutlineNode — a fork of Three.js OutlineNode that processes two object

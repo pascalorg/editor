@@ -60,6 +60,7 @@ export const pipeFittingParametrics: ParametricDescriptor<PipeFittingNode> = {
   groups: [
     {
       label: 'Fitting',
+      labelKey: 'common.fitting',
       fields: [
         {
           key: 'fittingType',
@@ -86,6 +87,7 @@ export const pipeFittingParametrics: ParametricDescriptor<PipeFittingNode> = {
     },
     {
       label: 'Connections',
+      labelKey: 'common.connections',
       fields: [
         { key: 'diameter', kind: 'number', unit: 'in', min: 1.25, max: 6, step: 0.25 },
         {
@@ -102,6 +104,7 @@ export const pipeFittingParametrics: ParametricDescriptor<PipeFittingNode> = {
     },
     {
       label: 'Placement',
+      labelKey: 'common.placement',
       fields: [
         { key: 'position', kind: 'vec3' },
         { key: 'rotation', kind: 'vec3' },

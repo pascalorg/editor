@@ -1,3 +1,5 @@
+'use client'
+
 import { useThree } from '@react-three/fiber'
 import { forwardRef, type ReactNode, useEffect, useImperativeHandle, useRef } from 'react'
 import { type BufferGeometry, type Group, Mesh } from 'three'

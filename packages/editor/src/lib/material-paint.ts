@@ -75,8 +75,8 @@ function getCatalogEntryForActivePaintMaterial(material: ActivePaintMaterial | n
   return getCatalogMaterialById(catalogId)
 }
 
-export function getActivePaintMaterialLabel(material: ActivePaintMaterial | null | undefined) {
-  return getCatalogEntryForActivePaintMaterial(material)?.label ?? 'Custom'
+export function getActivePaintMaterialLabelKey(material: ActivePaintMaterial | null | undefined) {
+  return getCatalogEntryForActivePaintMaterial(material)?.labelKey ?? null
 }
 
 export function buildRoofSurfaceMaterialPatch(

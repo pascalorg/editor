@@ -1,3 +1,5 @@
+'use client'
+
 import { type AnyNodeId, useScene, type WallNode } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
@@ -87,7 +89,7 @@ export const WallTreeNode = memo(function WallTreeNode({
       isVisible={isVisible}
       label={
         <InlineRenameInput
-          defaultName="Wall"
+          defaultName="nodeTypes.wall"
           isEditing={isEditing}
           nodeId={nodeId as AnyNodeId}
           onStartEditing={handleStartEditing}

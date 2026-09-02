@@ -44,6 +44,7 @@ import {
   useEditor,
   useInteractionScope,
   useMeasurementDraft,
+  useTranslations,
 } from '@pascal-app/editor'
 import { setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -1223,6 +1224,7 @@ function DraftLabel({
 }
 
 function DraftExtrusionControl({ position }: { position: Vector3 }) {
+  const t = useTranslations()
   const unit = useViewer((state) => state.unit)
   const extrusionHeight = useMeasurementDraft((state) => state.extrusionHeight)
   const points = useMeasurementDraft((state) => state.points)
@@ -1282,14 +1284,14 @@ function DraftExtrusionControl({ position }: { position: Vector3 }) {
         }}
       >
         <label className="sr-only" htmlFor="measurement-3d-extrusion-height">
-          Extrusion height
+          {t('nodes.measurement.extrusionHeight')}
         </label>
         <div className="relative min-w-0 flex-1">
           <span className="pointer-events-none absolute inset-y-0 left-2 flex items-center font-medium text-muted-foreground text-xs">
             H
           </span>
           <input
-            aria-label="Extrusion height"
+            aria-label={t('nodes.measurement.extrusionHeight')}
             className="h-8 w-full rounded-md border border-border bg-background pr-7 pl-6 text-sm outline-none focus:border-indigo-400"
             id="measurement-3d-extrusion-height"
             inputMode="decimal"

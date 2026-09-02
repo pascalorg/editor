@@ -17,6 +17,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useIsMobile } from '../../hooks/use-mobile'
+import { useTranslations } from '../../lib/i18n'
 import { triggerSFX } from '../../lib/sfx-bus'
 import { requestWalkthroughPointerLock } from '../../lib/walkthrough-pointer-lock'
 import useEditor, {
@@ -165,6 +166,7 @@ const CAMERA_NAV_HINTS: Record<CaptureCameraNav, readonly CameraNavHint[] | null
 }
 
 export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
+  const t = useTranslations()
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const captureMode = useEditor((s) => s.captureMode)
   const setCaptureMode = useEditor((s) => s.setCaptureMode)
@@ -704,8 +706,8 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       {/* Top-right dismiss button (icon-only on mobile) */}
       <div className="pointer-events-auto absolute top-4 right-4">
         <button
-          aria-label="Close capture mode"
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 text-white/80 text-xs transition-colors hover:bg-neutral-950 hover:text-white"
+          aria-label={t('editor.closeCaptureMode')}
+          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 text-white/80 text-xs backdrop-blur-md transition-colors hover:bg-neutral-950 hover:text-white"
           onClick={dismiss}
           type="button"
         >
