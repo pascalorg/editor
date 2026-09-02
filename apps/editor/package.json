@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",
-    "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#5679260261ee1c733656ff6dfb99e30bb24b58a7",
+    "@pascal-app/plugin-bones": "file:../../../Plan Crafters Integration/plugin-bones",
     "@pascal-app/plugin-plans": "*",
     "@pascal-app/plugin-sheets": "*",
     "@pascal-app/plugin-sections": "*",
