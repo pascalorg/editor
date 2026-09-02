@@ -10,6 +10,7 @@ import {
   planDimensionDrive,
   resolveDimensionDrive,
 } from '../../../lib/floorplan/dimension-drive'
+import { formatScheduleLength } from '../../../lib/floorplan/schedules'
 
 /**
  * Click-to-type dimensions — WS3.
@@ -109,7 +110,7 @@ export function FloorplanDimensionEditOverlay(): React.ReactElement | null {
       setError(`Cannot read "${draft.trim()}"`)
       return
     }
-    const outcome = commitDimensionValue({ target, nextLength })
+    const outcome = commitDimensionValue({ target, nextLength, unit })
     if (!outcome.ok) {
       setError(outcome.reason)
       return
@@ -172,6 +173,7 @@ type CommitOutcome = { ok: true } | { ok: false; reason: string }
 export function commitDimensionValue(args: {
   target: Pick<EditTarget, 'ownerNodeId' | 'witnessStart' | 'witnessEnd' | 'value'>
   nextLength: number
+  unit?: 'metric' | 'imperial'
 }): CommitOutcome {
   const store = useScene.getState()
   const nodes = store.nodes as Readonly<Record<string, AnyNode>>
@@ -190,7 +192,7 @@ export function commitDimensionValue(args: {
       return { ok: false, reason: `Not drivable — ${resolution.reason}` }
     }
     store.updateNode(args.target.ownerNodeId, {
-      textOverride: formatOverride(args.nextLength),
+      textOverride: formatScheduleLength(args.nextLength, args.unit ?? 'imperial'),
     } as Partial<AnyNode>)
     return { ok: true }
   }
@@ -212,10 +214,6 @@ export function commitDimensionValue(args: {
   else for (const change of changes) store.updateNode(change.id, change.data)
   for (const change of changes) store.markDirty(change.id)
   return { ok: true }
-}
-
-function formatOverride(metres: number): string {
-  return `${Number.parseFloat(metres.toFixed(4))}`
 }
 
 function number(value: string | null): number | null {
