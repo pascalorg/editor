@@ -69,18 +69,18 @@ function fixture(levelNumber = 0) {
 describe('opening construction documentation', () => {
   test('assigns deterministic level-based door marks and skips explicit marks', () => {
     const { doorA, doorB, nodes } = fixture()
-    const explicit = DoorNode.parse({ ...doorA, mark: '101' })
+    const explicit = DoorNode.parse({ ...doorA, mark: 'D101' })
     const marks = computeDoorFloorplanLevelData({ siblings: [explicit, doorB], nodes })
 
-    expect(marks.markById.get(explicit.id)).toBe('101')
-    expect(marks.markById.get(doorB.id)).toBe('102')
+    expect(marks.markById.get(explicit.id)).toBe('D101')
+    expect(marks.markById.get(doorB.id)).toBe('D102')
 
     const upperFixture = fixture(1)
     const upperMarks = computeDoorFloorplanLevelData({
       siblings: [upperFixture.doorA],
       nodes: upperFixture.nodes,
     })
-    expect(upperMarks.markById.get(upperFixture.doorA.id)).toBe('201')
+    expect(upperMarks.markById.get(upperFixture.doorA.id)).toBe('D201')
   })
 
   test('assigns stable window marks in level order', () => {
@@ -90,8 +90,8 @@ describe('opening construction documentation', () => {
       nodes,
     })
 
-    expect(marks.markById.get(windowA.id)).toBe('W01')
-    expect(marks.markById.get(windowB.id)).toBe('W02')
+    expect(marks.markById.get(windowA.id)).toBe('W101')
+    expect(marks.markById.get(windowB.id)).toBe('W102')
   })
 
   test('builds U.S. door schedule dimensions without inventing a rough opening', () => {
@@ -104,7 +104,7 @@ describe('opening construction documentation', () => {
     })
 
     expect(schedule?.rows[0]?.cells).toMatchObject({
-      mark: '101',
+      mark: 'D101',
       size: `3'-0" x 7'-0"`,
       roughOpening: 'VERIFY',
     })
@@ -125,7 +125,7 @@ describe('opening construction documentation', () => {
     })
 
     expect(schedule?.rows[0]?.cells).toMatchObject({
-      mark: 'W01',
+      mark: 'W101',
       roughOpening: `4'-1 3/16" x 4'-2 3/8"`,
       sill: `3'-0"`,
       head: `7'-0"`,
@@ -191,7 +191,9 @@ describe('opening construction documentation', () => {
     expect(schedule?.issues).toEqual(['Duplicate door mark A1 (2 instances)'])
   })
 
-  test('places the opening mark tag on the interior face of an exterior wall', () => {
+  // WS3: the tag moved to the EXTERIOR face and the outline is now a
+  // hexagon for doors / an ellipse (24-gon) for windows.
+  test('places the opening mark tag on the exterior face of an exterior wall', () => {
     const { doorA, nodes, wall } = fixture()
     const levelData = computeDoorFloorplanLevelData({ siblings: [doorA], nodes })
     const annotation = buildOpeningMarkAnnotation(doorA, wall, levelData)
@@ -199,7 +201,28 @@ describe('opening construction documentation', () => {
     expect(annotation?.kind).toBe('group')
     if (annotation?.kind !== 'group') return
     const tag = annotation.children.find((child) => child.kind === 'text')
-    expect(tag).toMatchObject({ kind: 'text', text: '101', x: 3 })
-    expect(tag?.kind === 'text' ? tag.y : null).toBeLessThan(0)
+    expect(tag).toMatchObject({ kind: 'text', text: 'D101', x: 3 })
+    // frontSide is exterior, so the tag sits on the +normal side (z > 0).
+    expect(tag?.kind === 'text' ? tag.y : null).toBeGreaterThan(0)
+  })
+
+  test('door tags are hexagons and window tags are ellipses', () => {
+    const { doorA, nodes, wall, windowA } = fixture()
+    const doorTag = buildOpeningMarkAnnotation(
+      doorA,
+      wall,
+      computeDoorFloorplanLevelData({ siblings: [doorA], nodes }),
+    )
+    const windowTag = buildOpeningMarkAnnotation(
+      windowA,
+      wall,
+      computeWindowFloorplanLevelData({ siblings: [windowA], nodes }),
+    )
+    const outline = (annotation: typeof doorTag) =>
+      annotation?.kind === 'group'
+        ? annotation.children.find((child) => child.kind === 'polygon')
+        : undefined
+    expect(outline(doorTag)?.kind === 'polygon' ? outline(doorTag)?.points.length : 0).toBe(6)
+    expect(outline(windowTag)?.kind === 'polygon' ? outline(windowTag)?.points.length : 0).toBe(24)
   })
 })

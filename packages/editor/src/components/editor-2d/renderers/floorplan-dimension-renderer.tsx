@@ -21,6 +21,22 @@ const SQRT_ONE_HALF = Math.SQRT1_2
 
 type FloorplanDimensionRenderMode = 'screen' | 'pdf'
 
+/**
+ * Click-to-type dimensions (WS3).
+ *
+ * On screen the label plate carries an invisible hit rect plus the data the
+ * editing layer needs to drive geometry from a typed value. The layer picks
+ * it up by DOM delegation (`FloorplanDimensionEditOverlay` below), so every
+ * producer of `dimension` / `dimension-string` geometry — wall automatic
+ * dimensions, contextual dimensions, manual construction-dimension nodes —
+ * becomes editable without each one wiring up a callback.
+ *
+ * Witness points are the measured feature points in level-plan metres; the
+ * value is the length the label actually reads (dimension-line points when
+ * the producer supplied them, witness points otherwise).
+ */
+export const FLOORPLAN_DIMENSION_HIT_ATTRIBUTE = 'data-floorplan-dimension-hit'
+
 type DimensionGeometry = Extract<FloorplanGeometry, { kind: 'dimension' }>
 type DimensionStringGeometry = Extract<FloorplanGeometry, { kind: 'dimension-string' }>
 type DimensionTerminator = NonNullable<DimensionGeometry['terminator']>
@@ -276,10 +292,20 @@ export function FloorplanDimensionRenderer({
         data-floorplan-dimension-start-y={layout.dimensionStart[1]}
         data-floorplan-dimension-end-x={layout.dimensionEnd[0]}
         data-floorplan-dimension-end-y={layout.dimensionEnd[1]}
+        data-floorplan-dimension-text={geometry.text}
+        data-floorplan-dimension-value={dimensionLabelValue(layout)}
+        data-floorplan-dimension-witness-start-x={geometry.start[0]}
+        data-floorplan-dimension-witness-start-y={geometry.start[1]}
+        data-floorplan-dimension-witness-end-x={geometry.end[0]}
+        data-floorplan-dimension-witness-end-y={geometry.end[1]}
         transform={labelTransform}
       >
         <DimensionLabel
           fontSize={labelFontSize}
+          // `overridden` is declared on the geometry union in
+          // packages/core/src/registry/types.ts; the cast keeps this file
+          // compiling against a core dist built before that field landed.
+          overridden={(geometry as { overridden?: boolean }).overridden === true}
           renderMode={renderMode}
           stroke={stroke}
           text={geometry.text}
@@ -451,6 +477,12 @@ export function FloorplanDimensionStringRenderer({
               data-floorplan-dimension-start-y={layout.dimensionStart[1]}
               data-floorplan-dimension-end-x={layout.dimensionEnd[0]}
               data-floorplan-dimension-end-y={layout.dimensionEnd[1]}
+              data-floorplan-dimension-text={segment.text}
+              data-floorplan-dimension-value={dimensionLabelValue(layout)}
+              data-floorplan-dimension-witness-start-x={segment.start[0]}
+              data-floorplan-dimension-witness-start-y={segment.start[1]}
+              data-floorplan-dimension-witness-end-x={segment.end[0]}
+              data-floorplan-dimension-witness-end-y={segment.end[1]}
               transform={labelTransform}
             >
               <DimensionLabel
@@ -468,6 +500,14 @@ export function FloorplanDimensionStringRenderer({
   )
 }
 
+/** The length the label reads — the dimension-line span, offset cancels out. */
+function dimensionLabelValue(layout: ArchitecturalDimensionLayout): number {
+  return Math.hypot(
+    layout.dimensionEnd[0] - layout.dimensionStart[0],
+    layout.dimensionEnd[1] - layout.dimensionStart[1],
+  )
+}
+
 function rotateVector(vector: FloorplanPoint, radians: number): FloorplanPoint {
   const cosine = Math.cos(radians)
   const sine = Math.sin(radians)
@@ -480,12 +520,15 @@ function DimensionLabel({
   fontSize,
   stroke,
   renderMode,
+  overridden = false,
 }: {
   text: string
   y: number
   fontSize: number
   stroke: string
   renderMode: FloorplanDimensionRenderMode
+  /** Draws the "override" badge when the value could not drive geometry. */
+  overridden?: boolean
 }) {
   const width = Math.max(fontSize, text.length * fontSize * LABEL_CHARACTER_WIDTH_RATIO)
   const plateWidth = width + fontSize * 0.5
@@ -522,6 +565,38 @@ function DimensionLabel({
       >
         {text}
       </text>
+      {overridden && renderMode !== 'pdf' ? (
+        <text
+          fill={stroke}
+          fontFamily="ui-monospace, SFMono-Regular, Menlo, monospace"
+          fontSize={fontSize * 0.62}
+          opacity={0.75}
+          paintOrder="stroke"
+          stroke="#ffffff"
+          strokeLinejoin="round"
+          strokeWidth={2}
+          textAnchor="middle"
+          vectorEffect="non-scaling-stroke"
+          x={0}
+          y={y + fontSize * 0.86}
+        >
+          override
+        </text>
+      ) : null}
+      {renderMode === 'pdf' ? null : (
+        // Invisible click target on the plate. `pointer-events` is inherited
+        // from the dimension group (`none`), so it is re-enabled here only.
+        <rect
+          {...{ [FLOORPLAN_DIMENSION_HIT_ATTRIBUTE]: '' }}
+          cursor="text"
+          fill="transparent"
+          height={plateHeight}
+          pointerEvents="all"
+          width={plateWidth}
+          x={-plateWidth / 2}
+          y={plateY}
+        />
+      )}
     </>
   )
 }

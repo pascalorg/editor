@@ -685,6 +685,12 @@ export type FloorplanGeometry =
       text: string
       /** Optional override for the line/text colour. Defaults to the palette accent. */
       stroke?: string
+      /**
+       * WS3: the text is an author override rather than the measured value.
+       * Set when a typed dimension could not drive geometry and fell back to
+       * `textOverride`; the 2D renderer draws a small "override" badge.
+       */
+      overridden?: boolean
     }
   | {
       kind: 'dimension-string'

@@ -565,6 +565,12 @@ function dimensionGeometry(
     textPosition: node.textPosition,
     text,
     stroke,
+    // WS3: a typed value that could not drive geometry falls back to
+    // `textOverride`; the renderer badges it so the drawing never lies
+    // about being associative. `overridden` is declared on the geometry
+    // union in packages/core/src/registry/types.ts — the cast keeps this
+    // compiling against a core dist built before that field landed.
+    ...({ overridden: node.textOverride !== null } as object),
   }
 }
 

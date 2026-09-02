@@ -701,3 +701,33 @@ export {
   type SheetPdfPage,
   type SheetPdfWindow,
 } from './lib/floorplan/sheet-export'
+// Annotations (WS3) — deterministic door/window marks, driving dimensions,
+// and construction-document schedule data.
+export {
+  type DimensionDrivePlan,
+  type DimensionDriveResolution,
+  type DimensionDriveTarget,
+  type DimensionPlanPoint,
+  parseDimensionInput,
+  planDimensionDrive,
+  resolveDimensionDrive,
+} from './lib/floorplan/dimension-drive'
+export {
+  type MarkResolution,
+  type OpeningMarkKind,
+  orderedOpenings,
+  persistResolvedMarks,
+  resolveMarkDetail,
+  resolveMarks,
+} from './lib/floorplan/marks'
+export {
+  doorSchedule,
+  floorplanSchedules,
+  formatScheduleLength,
+  type OpeningScheduleRow,
+  type RoomScheduleRow,
+  roomSchedule,
+  type ScheduleResult,
+  type ScheduleUnit,
+  windowSchedule,
+} from './lib/floorplan/schedules'

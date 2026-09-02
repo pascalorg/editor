@@ -6,7 +6,11 @@ import type {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
-import { type FloorplanSchedule, withFloorplanGeometryMetadata } from '@pascal-app/editor'
+import {
+  type FloorplanSchedule,
+  resolveMarkDetail,
+  withFloorplanGeometryMetadata,
+} from '@pascal-app/editor'
 import {
   type ConstructionLengthProfile,
   type ConstructionLinearUnit,
@@ -158,11 +162,14 @@ export function buildOpeningMarkAnnotation(
   const dirZ = dz / wallLength
   const normalX = -dirZ
   const normalZ = dirX
-  const side = interiorSide(wall, preferredSide)
+  // WS3: the tag sits just OUTSIDE the wall on the exterior side, the way a
+  // door/window tag is drawn on a construction document. `preferredSide` is
+  // the fallback when neither face is declared exterior.
+  const side = exteriorSide(wall, preferredSide)
   const openingCenterX = wall.start[0] + dirX * opening.position[0]
   const openingCenterZ = wall.start[1] + dirZ * opening.position[0]
   const halfDepth = (wall.thickness ?? 0.1) / 2
-  const bubbleOffset = halfDepth + 0.5
+  const bubbleOffset = halfDepth + 0.4
   const bubbleX = openingCenterX + normalX * bubbleOffset * side
   const bubbleZ = openingCenterZ + normalZ * bubbleOffset * side
   const explicitMark = opening.mark?.trim()
@@ -184,18 +191,22 @@ export function buildOpeningMarkAnnotation(
           stroke,
           strokeWidth: 0.018,
         },
-        {
-          kind: 'rect',
-          x: bubbleX - bubbleWidth / 2,
-          y: bubbleZ - bubbleHeight / 2,
-          width: bubbleWidth,
-          height: bubbleHeight,
-          rx: bubbleHeight / 2,
-          ry: bubbleHeight / 2,
-          fill: '#ffffff',
-          stroke,
-          strokeWidth: 0.02,
-        },
+        // Door tag = hexagon, window tag = ellipse (WS3).
+        opening.type === 'door'
+          ? {
+              kind: 'polygon',
+              points: hexagonPoints(bubbleX, bubbleZ, bubbleWidth, bubbleHeight),
+              fill: '#ffffff',
+              stroke,
+              strokeWidth: 0.02,
+            }
+          : {
+              kind: 'polygon',
+              points: ellipsePoints(bubbleX, bubbleZ, bubbleWidth / 2, bubbleHeight / 2),
+              fill: '#ffffff',
+              stroke,
+              strokeWidth: 0.02,
+            },
         {
           kind: 'text',
           x: bubbleX,
@@ -239,12 +250,48 @@ export function resolveOpeningDimensionDocumentation(
   }
 }
 
+/**
+ * WS3: numbering lives in `packages/editor/src/lib/floorplan/marks.ts` —
+ * D101/W101 per level ordinal, clockwise from the NW-most exterior wall.
+ * This wrapper keeps the node-side call sites unchanged and narrows the
+ * result to one kind. When no level can be resolved (a detached opening in
+ * a preview context) it falls back to a local sequence so previews still
+ * label something.
+ */
 function resolveOpeningMarks<T extends OpeningNode>(
   openings: ReadonlyArray<T>,
   nodes: Readonly<Record<string, AnyNode>>,
   kind: OpeningKind,
   explicitLevelId?: string,
 ): MarkResolution {
+  const level = resolveLevel(openings[0], nodes, explicitLevelId)
+  if (level) {
+    // Callers pass live sibling snapshots that may not be the objects in
+    // `nodes` (mid-drag overrides, un-committed panel edits). Overlay them so
+    // an explicit `mark` on the snapshot is honoured.
+    const overlaid: Record<string, AnyNode> = { ...nodes }
+    for (const opening of openings) overlaid[opening.id] = opening as AnyNode
+    const resolution = resolveMarkDetail(overlaid, level.id as never)
+    const markById = new Map<string, string>()
+    for (const opening of openings) {
+      const mark = resolution.marks.get(opening.id)
+      if (mark) markById.set(opening.id, mark)
+    }
+    const issues = resolution.issues.filter((issue) => issue.startsWith(`Duplicate ${kind} `))
+    // Openings the level walk did not reach (detached / hidden) still need
+    // a mark so the schedule row is not blank.
+    let fallbackSequence = 1
+    for (const opening of openings) {
+      if (markById.has(opening.id)) continue
+      const explicit = opening.mark?.trim()
+      markById.set(
+        opening.id,
+        explicit || automaticMark(kind, level.level ?? 0, fallbackSequence++),
+      )
+    }
+    return { markById, issues }
+  }
+
   const markById = new Map<string, string>()
   const explicitMarks = new Map<string, string[]>()
   const used = new Set<string>()
@@ -260,14 +307,13 @@ function resolveOpeningMarks<T extends OpeningNode>(
     else explicitMarks.set(normalized, [opening.id])
   }
 
-  const level = resolveLevel(openings[0], nodes, explicitLevelId)
   let sequence = 1
   for (const opening of openings) {
     if (markById.has(opening.id)) continue
-    let candidate = automaticMark(kind, level?.level ?? 0, sequence)
+    let candidate = automaticMark(kind, 0, sequence)
     while (used.has(candidate.toLocaleUpperCase())) {
       sequence++
-      candidate = automaticMark(kind, level?.level ?? 0, sequence)
+      candidate = automaticMark(kind, 0, sequence)
     }
     markById.set(opening.id, candidate)
     used.add(candidate.toLocaleUpperCase())
@@ -300,8 +346,8 @@ function resolveLevel(
 }
 
 function automaticMark(kind: OpeningKind, level: number, sequence: number): string {
-  if (kind === 'door') return String((Math.max(0, level) + 1) * 100 + sequence)
-  return `W${String(sequence).padStart(2, '0')}`
+  const base = (Math.max(0, level) + 1) * 100
+  return `${kind === 'door' ? 'D' : 'W'}${base + sequence}`
 }
 
 function fallbackMark(opening: OpeningNode): string {
@@ -312,6 +358,57 @@ function interiorSide(wall: WallNode, fallback: -1 | 1): -1 | 1 {
   if (wall.frontSide === 'exterior' && wall.backSide !== 'exterior') return -1
   if (wall.backSide === 'exterior' && wall.frontSide !== 'exterior') return 1
   return fallback
+}
+
+/** The face that looks outdoors — where the opening tag is drawn. */
+function exteriorSide(wall: WallNode, fallback: -1 | 1): -1 | 1 {
+  if (wall.frontSide === 'exterior' && wall.backSide !== 'exterior') return 1
+  if (wall.backSide === 'exterior' && wall.frontSide !== 'exterior') return -1
+  return fallback
+}
+
+/**
+ * Window tag outline. The geometry union has no `ellipse` primitive
+ * (`packages/core/src/registry/types.ts:364+`), so the ellipse is emitted as
+ * a 24-gon — indistinguishable at tag size in both SVG and the vector PDF,
+ * and it needs no change to the renderers.
+ */
+function ellipsePoints(
+  cx: number,
+  cy: number,
+  rx: number,
+  ry: number,
+): Array<[number, number]> {
+  const segments = 24
+  const points: Array<[number, number]> = []
+  for (let index = 0; index < segments; index++) {
+    const angle = (index / segments) * Math.PI * 2
+    points.push([cx + Math.cos(angle) * rx, cy + Math.sin(angle) * ry])
+  }
+  return points
+}
+
+/**
+ * A flat-top hexagon inscribed in the tag box: the standard door-tag
+ * outline. `width` is the full span, `height` the full depth.
+ */
+function hexagonPoints(
+  cx: number,
+  cy: number,
+  width: number,
+  height: number,
+): Array<[number, number]> {
+  const halfWidth = width / 2
+  const halfHeight = height / 2
+  const inset = Math.min(halfWidth * 0.42, halfHeight)
+  return [
+    [cx - halfWidth, cy],
+    [cx - halfWidth + inset, cy - halfHeight],
+    [cx + halfWidth - inset, cy - halfHeight],
+    [cx + halfWidth, cy],
+    [cx + halfWidth - inset, cy + halfHeight],
+    [cx - halfWidth + inset, cy + halfHeight],
+  ]
 }
 
 function formatSize(

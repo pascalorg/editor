@@ -115,6 +115,7 @@ import {
   resolveSvgAnnotationCollisions,
   svgAnnotationLabelId,
 } from './floorplan-annotation-layout'
+import { FloorplanDimensionEditOverlay } from './floorplan-dimension-edit-overlay'
 import { FloorplanDimensionRenderer } from './floorplan-dimension-renderer'
 import { FloorplanGeometryRenderer } from './floorplan-geometry-renderer'
 import {
@@ -1479,6 +1480,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         ))}
       </g>
       <FloorplanAnnotationLayoutResolver active={floorplanVisible} />
+      {/* WS3 — click-to-type dimension labels. Portals its HTML input to
+          document.body, so mounting it inside the SVG tree is safe. */}
+      <FloorplanDimensionEditOverlay />
       {/* Dashed group bbox — shows what a group drag carries along while a
           multi-selection exists, rides the live delta mid-drag, and doubles
           as the group's whole-area drag handle. */}
