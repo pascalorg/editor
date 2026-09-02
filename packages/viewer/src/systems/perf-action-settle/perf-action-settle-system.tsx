@@ -11,7 +11,17 @@ const SETTLE_PRIORITY = 100
 
 const PerfActionSettleFrame = () => {
   useFrame(() => {
-    notifyPerfActionFrame(useScene.getState().dirtyNodes.size, getPendingWallRebuildCount())
+    // Count only dirty marks whose node still exists. A node deleted while
+    // dirty (undo of a wall split, redo storms) leaves its mark in dirtyNodes
+    // forever — no system clears marks for missing nodes — and that phantom
+    // dirt would keep every action from ever settling. Real finding, tracked
+    // in plans/performance/editor-scalable-scene-runtime.md.
+    const { dirtyNodes, nodes } = useScene.getState()
+    let liveDirty = 0
+    dirtyNodes.forEach((id) => {
+      if (nodes[id]) liveDirty++
+    })
+    notifyPerfActionFrame(liveDirty, getPendingWallRebuildCount())
   }, SETTLE_PRIORITY)
   return null
 }
