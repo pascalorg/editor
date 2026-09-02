@@ -41,6 +41,7 @@
         "@radix-ui/react-tooltip": "^1.2.8",
         "@react-three/drei": "^10.7.7",
         "@react-three/fiber": "^9.5.0",
+        "@react-three/xr": "^6.6.30",
         "@tailwindcss/postcss": "^4.2.1",
         "clsx": "^2.1.1",
         "geist": "^1.7.0",

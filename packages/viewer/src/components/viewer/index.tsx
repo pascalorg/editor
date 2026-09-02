@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/core'
 import { Canvas, extend, type ThreeElement, useFrame, useThree } from '@react-three/fiber'
 import {
+  type ComponentType,
   forwardRef,
   useEffect,
   useImperativeHandle,
@@ -338,6 +339,7 @@ export interface ViewerXRConfig {
   multiview?: boolean
   originPosition?: [number, number, number]
   session?: XRSession
+  inputSourceOverlay?: ComponentType<{ type: 'controller' | 'hand' }>
 }
 
 interface ViewerProps {
@@ -620,6 +622,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           >
             <ViewerScene
               disablePostFx
+              inputSourceOverlay={xr.inputSourceOverlay}
               playerModes={xr.playerModes}
               hoverStyles={hoverStyles}
               immersiveXR
@@ -659,6 +662,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
 function ViewerScene({
   children,
   disablePostFx,
+  inputSourceOverlay,
   playerModes = false,
   hoverStyles,
   immersiveXR = false,
@@ -672,6 +676,7 @@ function ViewerScene({
 }: {
   children?: React.ReactNode
   disablePostFx: boolean
+  inputSourceOverlay?: ComponentType<{ type: 'controller' | 'hand' }>
   playerModes?: boolean
   hoverStyles: HoverStyles
   immersiveXR?: boolean
@@ -708,7 +713,9 @@ function ViewerScene({
           /> */}
         <Lights />
         {playerModes && xrStore ? (
-          <PlayerModeScene store={xrStore}>{renderedScene}</PlayerModeScene>
+          <PlayerModeScene inputSourceOverlay={inputSourceOverlay} store={xrStore}>
+            {renderedScene}
+          </PlayerModeScene>
         ) : (
           renderedScene
         )}

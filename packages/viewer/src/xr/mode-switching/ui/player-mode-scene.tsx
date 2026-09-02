@@ -2,6 +2,7 @@
 
 import { useFrame, useThree } from '@react-three/fiber'
 import {
+  DefaultXRController,
   DefaultXRHand,
   useXR,
   useXRInputSourceState,
@@ -9,7 +10,7 @@ import {
   type XRControllerState,
   XRSpace,
 } from '@react-three/xr'
-import { type ReactNode, useCallback, useEffect, useRef } from 'react'
+import { type ComponentType, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Euler, type Group, type Object3D, Vector3 } from 'three'
 import { GOD_ORIGIN_POSITION, GOD_ORIGIN_ROTATION } from '../../god-mode'
 import { GodModeHandControls } from '../../god-mode/input/god-mode-hand-controls'
@@ -42,6 +43,33 @@ function PlayerModeHandInput() {
       <PlayerModeHandThumbInput />
     </>
   )
+}
+
+type InputSourceOverlay = ComponentType<{ type: 'controller' | 'hand' }>
+
+function createPlayerModeHandInput(InputSourceOverlay: InputSourceOverlay) {
+  return function PlayerModeHandInputWithOverlay() {
+    return (
+      <>
+        <DefaultXRHand />
+        <GodModeHandControls />
+        <HumanModeHandControls />
+        <PlayerModeHandThumbInput />
+        <InputSourceOverlay type="hand" />
+      </>
+    )
+  }
+}
+
+function createPlayerModeControllerInput(InputSourceOverlay: InputSourceOverlay) {
+  return function PlayerModeControllerInputWithOverlay() {
+    return (
+      <>
+        <DefaultXRController />
+        <InputSourceOverlay type="controller" />
+      </>
+    )
+  }
 }
 
 type Handedness = 'left' | 'right'
@@ -174,21 +202,34 @@ function PlayerModeRig({ sceneRootRef }: { sceneRootRef: React.RefObject<Group |
 
 export function PlayerModeScene({
   children,
+  inputSourceOverlay,
   store,
 }: {
   children: ReactNode
+  inputSourceOverlay?: InputSourceOverlay
   store: ViewerXRStore
 }) {
   const sceneRootRef = useRef<Group | null>(null)
+  const HandInput = useMemo(
+    () =>
+      inputSourceOverlay ? createPlayerModeHandInput(inputSourceOverlay) : PlayerModeHandInput,
+    [inputSourceOverlay],
+  )
+  const ControllerInput = useMemo(
+    () => (inputSourceOverlay ? createPlayerModeControllerInput(inputSourceOverlay) : null),
+    [inputSourceOverlay],
+  )
 
   useEffect(() => {
     useXRPlayerMode.getState().setMode(XR_PLAYER_MODES.GOD)
-    store.setHand(PlayerModeHandInput)
+    store.setHand(HandInput)
+    if (ControllerInput) store.setController(ControllerInput)
     return () => {
       store.setHand(DefaultXRHand)
+      if (ControllerInput) store.setController(DefaultXRController)
       useXRPlayerMode.getState().setMode(XR_PLAYER_MODES.GOD)
     }
-  }, [store])
+  }, [ControllerInput, HandInput, store])
 
   return (
     <>

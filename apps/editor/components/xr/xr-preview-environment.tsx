@@ -1,6 +1,14 @@
 'use client'
 
-import { applySceneGraphToEditor, type SceneGraph } from '@pascal-app/editor'
+import {
+  applySceneGraphToEditor,
+  Grid,
+  NodeArrowHandles,
+  type SceneGraph,
+  SelectionManager,
+  ToolManager,
+  useEditor,
+} from '@pascal-app/editor'
 import {
   requestGodScaleReset,
   toggleXRPlayerMode,
@@ -11,6 +19,8 @@ import {
 import { Glasses, LoaderCircle, Orbit, PersonStanding, RotateCcw, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { mountEmulatorControls } from '@/lib/xr/emulator'
+import { XRWandInputOverlay } from './wand-panel'
+import { XREditorInputBridge } from './xr-editor-input-bridge'
 import { requestEditorVRSession, useEditorXRRuntime, xrConfigForRuntime } from './xr-runtime'
 
 const LOCAL_SCENE_KEY = 'pascal-editor-scene'
@@ -20,13 +30,38 @@ type PreviewScene = {
   name: string
 }
 
+function XREditorScene() {
+  const gridSnapStep = useEditor((state) => state.gridSnapStep)
+
+  return (
+    <>
+      <SelectionManager />
+      <NodeArrowHandles />
+      <Grid cellColor="#aaa" cellSize={gridSnapStep} fadeDistance={500} sectionColor="#ccc" />
+      <ToolManager />
+      <XREditorInputBridge />
+    </>
+  )
+}
+
 export function XRPreviewEnvironment({ sceneId }: { sceneId?: string }) {
   const runtime = useEditorXRRuntime(true)
   const [scene, setScene] = useState<PreviewScene | null>()
   const [session, setSession] = useState<XRSession>()
   const [error, setError] = useState<string | null>(null)
+  const [editorReady, setEditorReady] = useState(false)
   const [inputSummary, setInputSummary] = useState('No tracked inputs')
   const playerMode = useXRPlayerMode((state) => state.mode)
+
+  useEffect(() => {
+    let cancelled = false
+    void Promise.resolve(useEditor.persist.rehydrate()).then(() => {
+      if (!cancelled) setEditorReady(true)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -63,10 +98,10 @@ export function XRPreviewEnvironment({ sceneId }: { sceneId?: string }) {
   }, [sceneId])
 
   useEffect(() => {
-    if (!scene) return
+    if (!(editorReady && scene)) return
     applySceneGraphToEditor(scene.graph)
     return () => applySceneGraphToEditor(null)
-  }, [scene])
+  }, [editorReady, scene])
 
   useEffect(() => {
     if (runtime.status !== 'ready') return
@@ -103,12 +138,16 @@ export function XRPreviewEnvironment({ sceneId }: { sceneId?: string }) {
     }
   }, [runtime])
 
-  const xr = session ? xrConfigForRuntime(runtime, session) : undefined
+  const xr = session
+    ? { ...xrConfigForRuntime(runtime, session)!, inputSourceOverlay: XRWandInputOverlay }
+    : undefined
 
   if (xr && scene) {
     return (
       <main className="relative h-screen w-screen overflow-hidden bg-black">
-        <Viewer disablePostFx maxFps={90} renderContext="viewer" xr={xr} />
+        <Viewer disablePostFx maxFps={90} renderContext="editor" selectionManager="custom" xr={xr}>
+          <XREditorScene />
+        </Viewer>
         <div className="absolute top-4 left-4 z-[1000] rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-white text-xs backdrop-blur">
           {playerMode === XR_PLAYER_MODES.GOD ? 'God mode' : 'Human mode'} · {inputSummary}
         </div>
@@ -148,7 +187,8 @@ export function XRPreviewEnvironment({ sceneId }: { sceneId?: string }) {
     )
   }
 
-  const preparing = runtime.status === 'idle' || runtime.status === 'loading' || scene === undefined
+  const preparing =
+    !editorReady || runtime.status === 'idle' || runtime.status === 'loading' || scene === undefined
   const unavailable =
     runtime.status === 'unsupported' || runtime.status === 'error' || scene === null
 

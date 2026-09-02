@@ -18,6 +18,8 @@ import { getMovingNode } from '../../store/use-interaction-scope'
 // about to snap into lights up.
 const PLACEMENT_REVEAL_RADIUS = 12
 
+export const EDITOR_GRID_INPUT_NAME = 'pascal-editor-grid-input'
+
 const UP = new Vector3(0, 1, 0)
 // PlaneGeometry faces +Z; this is the orientation that lays it flat (its normal
 // → world +Y), equivalent to the old `rotation-x={-π/2}`.
@@ -315,6 +317,7 @@ export const Grid = ({
       geometry={geometry}
       layers={GRID_LAYER}
       material={material}
+      name={EDITOR_GRID_INPUT_NAME}
       ref={gridRef}
       renderOrder={1}
     />
