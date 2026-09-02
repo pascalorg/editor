@@ -15,6 +15,7 @@ import {
   type GridEvent,
   type GroupMoveSnapResult,
   getFloorPlacedFootprints,
+  type MovableConfig,
   movingFootprintAnchors,
   type NodeEvent,
   nodeRegistry,
@@ -309,6 +310,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // the drag and commit alongside the moved node on drop. Null for kinds with
   // no ports, so every other movable kind is unaffected.
   const connectivityRef = useRef<PortConnectivity | null>(null)
+  // Node ids touched by a parent-frame kind's derived live preview, such as
+  // linked cabinet corner runs. This is separate from port connectivity so
+  // each preview channel can be cleared independently.
+  const parentFramePreviewIdsRef = useRef<AnyNodeId[]>([])
   // Node ids this drag has pushed live overrides onto — cleared on
   // commit / cancel / unmount so a follow-on drag starts clean.
   const overriddenIdsRef = useRef<AnyNodeId[]>([])
@@ -318,8 +323,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // refuse an invalid drop unless Alt forces it. The gate + footprint both come
   // from the kind's declarative `floorPlaced` capability, so opting a new kind
   // in is just `collides: true` — no change here.
-  // Parent-frame kinds skip the world-frame floor-collision box — their
-  // position isn't in the level frame the spatial grid indexes.
+  // Parent-frame kinds skip the world-frame floor-collision check — their
+  // position isn't in the level frame the spatial grid indexes. They may
+  // still provide a parent-frame collision check and use the same bounds box.
   const collides =
     !frameParent && nodeRegistry.get(node.type)?.capabilities?.floorPlaced?.collides === true
   // Snapshot the scene once at drag-start — bounds depend on `node` (locked
@@ -334,6 +340,9 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         | undefined) ?? null,
     [node],
   )
+  const parentFrameCollides = Boolean(
+    frameParent && parentFrame?.isValidPosition && dragBounds?.size,
+  )
   // Collision extents: the declared drag bounds (composite kinds — a cabinet
   // run spans its modules) win over the single-node footprint.
   const resolvedFootprint = useMemo(
@@ -344,8 +353,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     [dragBounds, node],
   )
   const boxDimensions = useMemo(
-    () => (collides ? resolvedFootprint : null),
-    [collides, resolvedFootprint],
+    () => (collides || parentFrameCollides ? resolvedFootprint : null),
+    [collides, parentFrameCollides, resolvedFootprint],
   )
   const [valid, setValid] = useState(true)
   const previewRotationY = useCallback(
@@ -403,6 +412,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     nodeRegistry.get(node.type)?.capabilities?.movable?.groupMoveSnap ?? null
   const groupMoveSnapPoseConfig =
     nodeRegistry.get(node.type)?.capabilities?.movable?.groupMoveSnapPose ?? null
+  const movableValidityConfig =
+    (nodeRegistry.get(node.type)?.capabilities?.movable as MovableConfig | undefined) ?? null
   const gridSnapPositionConfig =
     nodeRegistry.get(node.type)?.capabilities?.movable?.gridSnapPosition ?? null
   // Mirrors of `valid` / Alt for the event handlers inside the effect, which
@@ -498,17 +509,46 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
     const syncParentFramePreview = (position: [number, number, number]) => {
       if (!frameParent) return
-      useLiveNodeOverrides.getState().set(node.id, {
+      const entries: Array<readonly [AnyNodeId, Record<string, unknown>]> = [
+        [node.id as AnyNodeId, { position, rotation: rotationRef.current }],
+      ]
+      const derivedEntries = parentFrame?.previewOverrides?.({
+        node,
+        parent: frameParent,
         position,
-        rotation: rotationRef.current,
+        sceneApi: createSceneApi(useScene),
       })
-      useScene.getState().markDirty(frameParent.id as AnyNodeId)
+      if (derivedEntries) {
+        for (const [id, values] of derivedEntries) {
+          if (id === node.id) continue
+          entries.push([id, values as Record<string, unknown>])
+        }
+      }
+
+      const nextIds = new Set(entries.map(([id]) => id))
+      for (const id of parentFramePreviewIdsRef.current) {
+        if (!nextIds.has(id)) useLiveNodeOverrides.getState().clear(id)
+      }
+      useLiveNodeOverrides.getState().setMany(entries)
+      parentFramePreviewIdsRef.current = [...nextIds]
+
+      const scene = useScene.getState()
+      for (const [id] of entries) {
+        if (scene.nodes[id]) scene.markDirty(id)
+      }
+      if (frameParent.id !== node.id) scene.markDirty(frameParent.id as AnyNodeId)
     }
 
     const clearParentFramePreview = () => {
       if (!frameParent) return
-      useLiveNodeOverrides.getState().clear(node.id)
-      useScene.getState().markDirty(frameParent.id as AnyNodeId)
+      const ids = new Set<AnyNodeId>([node.id as AnyNodeId, ...parentFramePreviewIdsRef.current])
+      const scene = useScene.getState()
+      for (const id of ids) {
+        useLiveNodeOverrides.getState().clear(id)
+        if (scene.nodes[id]) scene.markDirty(id)
+      }
+      parentFramePreviewIdsRef.current = []
+      scene.markDirty(frameParent.id as AnyNodeId)
     }
 
     setCursorPosition(getVisualPosition(originalPosition, originalRotationY))
@@ -518,10 +558,25 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     // override so the user can drop on top of an existing item on purpose. Only
     // shelves show the box, so this no-ops for every other movable kind.
     const recomputeValidity = () => {
-      if (!boxDimensions) return
+      if (!boxDimensions && !movableValidityConfig) return
       if (altRef.current) {
         validRef.current = true
         setValid(true)
+        return
+      }
+      if (parentFrameCollides && frameParent && parentFrame?.isValidPosition) {
+        const candidate = {
+          ...(node as Record<string, unknown>),
+          position: lastCursorRef.current,
+        } as AnyNode
+        const validPosition = parentFrame.isValidPosition({
+          node: candidate,
+          parent: frameParent,
+          position: lastCursorRef.current,
+          nodes: useScene.getState().nodes as Record<string, AnyNode>,
+        })
+        validRef.current = validPosition
+        setValid(validPosition)
         return
       }
       const levelId = useViewer.getState().selection.levelId ?? node.parentId
@@ -559,15 +614,27 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       const { valid: placeable } =
         resolvedFootprints.length > 0
           ? spatialGridManager.canPlaceOnFloorFootprints(levelId, resolvedFootprints, [node.id])
-          : spatialGridManager.canPlaceOnFloor(
-              levelId,
-              getVisualPosition(livePosition),
-              boxDimensions,
-              [0, liveRotation, 0],
-              [node.id],
-            )
-      validRef.current = placeable
-      setValid(placeable)
+          : boxDimensions
+            ? spatialGridManager.canPlaceOnFloor(
+                levelId,
+                getVisualPosition(livePosition),
+                boxDimensions,
+                [0, liveRotation, 0],
+                [node.id],
+              )
+            : { valid: true }
+      const kindValid = movableValidityConfig?.isValidPosition
+        ? movableValidityConfig.isValidPosition({
+            node: effectiveNode,
+            position: livePosition,
+            rotation: rotationRef.current,
+            levelId: levelId as AnyNodeId | null,
+            nodes: useScene.getState().nodes as Record<string, AnyNode>,
+          })
+        : true
+      const positionValid = placeable && kindValid
+      validRef.current = positionValid
+      setValid(positionValid)
     }
     recomputeValidity()
 
@@ -1147,10 +1214,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     canonicalPositionFromPlan,
     parentFrame,
     frameParent,
+    parentFrameCollides,
     cursorAttached,
     portSnapConfig,
     groupMoveSnapConfig,
     groupMoveSnapPoseConfig,
+    movableValidityConfig,
     gridSnapPositionConfig,
     exitMoveMode,
     isFreshPlacement,

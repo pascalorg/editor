@@ -147,7 +147,6 @@ export default function DoorPanel() {
   const node = useScene((s) =>
     selectedId ? (s.nodes[selectedId as AnyNode['id']] as DoorNode | undefined) : undefined,
   )
-
   // Panel slider-drag fix recipe (plans/editor-node-registry.md). Without
   // it, the 29+ SliderControls in this panel would loop on drag.
   const handleUpdate = useCallback(

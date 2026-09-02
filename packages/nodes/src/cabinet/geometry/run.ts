@@ -1,8 +1,9 @@
 import type { CabinetModuleNode, CabinetNode, GeometryContext } from '@pascal-app/core'
 import type { ColorPreset, RenderShading } from '@pascal-app/viewer'
-import { Group, type Mesh } from 'three'
+import { Group, Mesh } from 'three'
 import { getRunSpanEnds, getRunSpans } from '../run-layout'
 import { compartmentSinkLayout, stackForCabinet } from '../stack'
+import { buildFrontGeometry } from './fronts'
 import { addBox, getCabinetSlotMaterials } from './shared'
 import { cutSinkIntoCountertop, type SinkBowlSpec, sinkBowls } from './sink'
 
@@ -63,6 +64,30 @@ export function buildCabinetRunGeometry(
         'cabinet-run-back-panel',
         'front',
       )
+    }
+
+    if (node.withFinishedEnds) {
+      for (const side of ['left', 'right'] as const) {
+        const exposed = side === 'left' ? exposedLeft : exposedRight
+        if (!exposed) continue
+        const endPanel = new Mesh(
+          buildFrontGeometry(node, span.depth, span.topY, false, null),
+          materials.front,
+        )
+        endPanel.name = `cabinet-run-finished-end-${side}`
+        endPanel.position.set(
+          side === 'left'
+            ? span.minX - node.frontThickness / 2
+            : span.maxX + node.frontThickness / 2,
+          span.topY / 2,
+          span.centerZ,
+        )
+        endPanel.rotation.y = side === 'left' ? -Math.PI / 2 : Math.PI / 2
+        endPanel.castShadow = true
+        endPanel.receiveShadow = true
+        endPanel.userData.slotId = 'front'
+        group.add(endPanel)
+      }
     }
 
     // Raised bar counter: knee wall against one run face topped by a slab at

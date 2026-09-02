@@ -150,6 +150,7 @@ export {
   resolveLevelConstructionPlane,
 } from './components/tools/shared/horizontal-construction-plane'
 export { PlacementBox } from './components/tools/shared/placement-box'
+export { PlacementDimensionGuides } from './components/tools/shared/placement-dimension-guides'
 // Pointer-decided support surface (deck top vs floor underneath) — the
 // draw tools (wall / fence) ride their grid plane and commit cap on it.
 export {
@@ -482,6 +483,14 @@ export {
   triangulateMeasurementPolygon,
 } from './lib/measurement-label'
 export {
+  type LingoUnitSpec,
+  lingoUnitSpec,
+  type MeasurementHintOptions,
+  measurementHint,
+  type ParseMeasurementOptions,
+  parseMeasurement,
+} from './lib/measurement-parser'
+export {
   buildMeasurementAngleArcPoints,
   cubicMetersToVolumeUnit,
   formatAreaLabel,
@@ -673,7 +682,10 @@ export {
   type PathDraftPoint,
   usePathDraftPreview,
 } from './store/use-path-draft-preview'
-export { default as usePlacementPreview } from './store/use-placement-preview'
+export {
+  default as usePlacementPreview,
+  type PlacementPreviewDimension,
+} from './store/use-placement-preview'
 export {
   activateQuickMeasurementHudSource,
   clearQuickMeasurementHudSource,

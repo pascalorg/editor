@@ -14,10 +14,22 @@
 import type { AnyNode } from '@pascal-app/core'
 import { create } from 'zustand'
 
+export type PlacementPreviewDimension = {
+  id: string
+  start: [number, number, number]
+  end: [number, number, number]
+  offsetNormal: [number, number]
+  offsetDistance: number
+  value: number
+  renderIn3d?: boolean
+  renderInFloorplan?: boolean
+}
+
 type PlacementPreviewState = {
   /** Transient preview node, already positioned + rotated at the (snapped,
    *  aligned) cursor. `null` when no placement is active. */
   node: AnyNode | null
+  contextNodes: AnyNode[]
   /** Optional synthetic parent for the preview's `def.floorplan` context.
    *  Door / window glyph builders need `ctx.parent` to be a wall to draw their
    *  real symbol (swing arc / panes); off any real wall we hand them a
@@ -25,15 +37,56 @@ type PlacementPreviewState = {
    *  the faithful blueprint symbol instead of a bare rectangle. `null` for
    *  self-contained kinds (column / elevator). */
   parentNode: AnyNode | null
-  set(node: AnyNode | null, parentNode?: AnyNode | null): void
+  dimensions: PlacementPreviewDimension[]
+  activeDimensionId: string | null
+  dimensionInput: string
+  set(
+    node: AnyNode | null,
+    parentNode?: AnyNode | null,
+    dimensions?: PlacementPreviewDimension[],
+    contextNodes?: AnyNode[],
+  ): void
+  selectDimension(id: string | null): void
+  setDimensionInput(value: string): void
+  clearDimensionEditor(): void
   clear(): void
 }
 
 const usePlacementPreview = create<PlacementPreviewState>((set) => ({
   node: null,
+  contextNodes: [],
   parentNode: null,
-  set: (node, parentNode = null) => set({ node, parentNode }),
-  clear: () => set({ node: null, parentNode: null }),
+  dimensions: [],
+  activeDimensionId: null,
+  dimensionInput: '',
+  set: (node, parentNode = null, dimensions = [], contextNodes = []) =>
+    set((state) => {
+      const activeDimensionId = dimensions.some(
+        (dimension) => dimension.id === state.activeDimensionId,
+      )
+        ? state.activeDimensionId
+        : null
+      return {
+        node,
+        contextNodes,
+        parentNode,
+        dimensions,
+        activeDimensionId,
+        dimensionInput: activeDimensionId ? state.dimensionInput : '',
+      }
+    }),
+  selectDimension: (id) => set({ activeDimensionId: id, dimensionInput: '' }),
+  setDimensionInput: (dimensionInput) => set({ dimensionInput }),
+  clearDimensionEditor: () => set({ activeDimensionId: null, dimensionInput: '' }),
+  clear: () =>
+    set({
+      node: null,
+      contextNodes: [],
+      parentNode: null,
+      dimensions: [],
+      activeDimensionId: null,
+      dimensionInput: '',
+    }),
 }))
 
 export default usePlacementPreview

@@ -10,6 +10,7 @@ import {
   emitter,
   type FloorplanMoveTargetSession,
   type GroupMoveSnapResult,
+  type MovableConfig,
   nodeRegistry,
   pauseSceneHistory,
   resumeSceneHistory,
@@ -562,6 +563,9 @@ export function FloorplanRegistryMoveOverlay() {
     let currentRotation = originalRotation
     let lastSnapped: { point: [number, number]; rotation: number } | null = null
     let dragAnchor: [number, number] | null = null
+    let lastPositionValid = true
+    let forcePlace = false
+    const movableValidityConfig = (def?.capabilities?.movable as MovableConfig | undefined) ?? null
 
     // Footprint bounding box drawn around the dragged entry — the 2D
     // counterpart of the 3D `DragBoundingBox`, so a moved / duplicated node
@@ -588,6 +592,7 @@ export function FloorplanRegistryMoveOverlay() {
       if (!isPointerOverFloorplanScene(event.clientX, event.clientY)) return
       const m = toMeters(event.clientX, event.clientY)
       if (!m) return
+      forcePlace = event.altKey
 
       // 1) Wall attachment gets the raw proposal before grid/alignment. If no
       // attachment is available, fresh placement is absolute under the cursor
@@ -712,6 +717,24 @@ export function FloorplanRegistryMoveOverlay() {
         relatedEntry.setAttribute('transform', transform)
       }
       boxEl.setAttribute('transform', transform)
+      const oldY = originalPosition[1]
+      lastPositionValid = movableValidityConfig?.isValidPosition
+        ? movableValidityConfig.isValidPosition({
+            node: {
+              ...movingNode,
+              position: [finalX, oldY, finalZ],
+              rotation: currentRotation,
+            } as AnyNode,
+            position: [finalX, oldY, finalZ],
+            rotation: currentRotation,
+            levelId:
+              (useViewer.getState().selection.levelId as AnyNodeId | null) ??
+              (movingNode.parentId as AnyNodeId | null) ??
+              null,
+            nodes: useScene.getState().nodes as Record<string, AnyNode>,
+          })
+        : true
+      boxEl.setAttribute('stroke', lastPositionValid || forcePlace ? '#22c55e' : '#ef4444')
       lastSnapped = { point: [finalX, finalZ], rotation: currentRotation }
     }
 
@@ -732,6 +755,15 @@ export function FloorplanRegistryMoveOverlay() {
         : snapped.rotation
       const rotationPatch = 'rotation' in movingNode ? { rotation } : {}
       setMovingNodeOrigin('2d')
+      if (!lastPositionValid && !forcePlace) {
+        for (const relatedEntry of relatedEntries) {
+          relatedEntry.removeAttribute('transform')
+        }
+        useAlignmentGuides.getState().clear()
+        setMovingNode(null)
+        swallowNextClick()
+        return
+      }
       let selectedId = movingNode.id as AnyNodeId
       if (originalPath) {
         // Polyline kinds: shift every point by the committed delta and

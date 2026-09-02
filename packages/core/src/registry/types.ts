@@ -2014,6 +2014,18 @@ export type MovableConfig = {
    */
   groupMoveSnapPose?: (args: GroupMoveSnapArgs) => GroupMoveSnapResult | null
   /**
+   * Optional kind-owned validity check for the final planar drag pose. This
+   * complements `floorPlaced` collision checks for constraints that depend
+   * on other scene geometry, such as a cabinet crossing a wall opening.
+   */
+  isValidPosition?: (args: {
+    node: AnyNode
+    position: readonly [number, number, number]
+    rotation: number
+    levelId: AnyNodeId | null
+    nodes: Readonly<Record<string, AnyNode>>
+  }) => boolean
+  /**
    * Kind-owned grid resolver for a planar move. Unlike scalar grid snapping,
    * this receives the complete candidate pose so a kind can snap a visible
    * footprint edge (including a local bounds offset and rotation) rather than
@@ -2065,6 +2077,24 @@ export type MovableParentFrame = {
     snappedLocal: readonly [number, number, number],
     nodes: Readonly<Record<string, AnyNode>>,
   ) => ParentFrameSnapMatch[]
+  /** Optional kind-owned live patches for derived nodes that follow the move. */
+  previewOverrides?: (args: {
+    node: AnyNode
+    parent: AnyNode
+    position: readonly [number, number, number]
+    sceneApi: SceneApi
+  }) => ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]>
+  /**
+   * Optional live collision check for a child moving in the parent frame.
+   * The generic move tool uses this to colour the drag bounds and reject an
+   * invalid drop; the kind owns the actual domain rule.
+   */
+  isValidPosition?: (args: {
+    node: AnyNode
+    parent: AnyNode
+    position: readonly [number, number, number]
+    nodes: Readonly<Record<string, AnyNode>>
+  }) => boolean
   /**
    * Called after a move of the child commits, with the LIVE (post-commit)
    * child and parent. Lets the kind run derived-state maintenance the

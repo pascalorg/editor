@@ -1,5 +1,6 @@
-import type { CabinetModuleNode, CabinetNode } from '@pascal-app/core'
+import type { AnyNode, AnyNodeId, CabinetModuleNode, CabinetNode } from '@pascal-app/core'
 import { moduleMaxX, moduleMinX, sortRunModules } from './run-layout'
+import { cabinetModuleCeilingOverflow } from './run-ops'
 import { minCabinetCarcassHeightForStack } from './stack'
 
 export const CABINET_PLANNING_TOLERANCE = 1e-4
@@ -11,6 +12,7 @@ export type CabinetPlanningIssueCode =
   | 'tier-mismatch'
   | 'stack-too-short'
   | 'top-cabinet-too-short'
+  | 'ceiling-overflow'
 
 export type CabinetPlanningIssue = {
   code: CabinetPlanningIssueCode
@@ -28,6 +30,7 @@ export type CabinetPlanningReport = {
 export type CabinetPlanningOptions = {
   tolerance?: number
   minimumTopCabinetHeight?: number
+  nodes?: Readonly<Partial<Record<AnyNodeId, AnyNode>>>
 }
 
 function issue(
@@ -105,6 +108,20 @@ export function validateCabinetRun(
           [module.id],
         ),
       )
+    }
+
+    if (options.nodes) {
+      const overflow = cabinetModuleCeilingOverflow(module, options.nodes)
+      if (overflow > tolerance) {
+        warnings.push(
+          issue(
+            'ceiling-overflow',
+            'warning',
+            `${module.name || 'Cabinet module'} extends ${(overflow * 1000).toFixed(0)} mm above the ceiling.`,
+            [run.id, module.id],
+          ),
+        )
+      }
     }
 
     if (!next) continue
