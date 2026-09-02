@@ -389,8 +389,6 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   //    to their true positions first for a consistent auto-thumbnail angle.
   // The caller owns policy (when to fire, whether the tab is visible).
   useEffect(() => {
-    if (!onThumbnailCapture) return
-
     const handleGenerateThumbnail = async (event: {
       captureMode?: 'standard' | 'viewport' | 'area'
       cropRegion?: { x: number; y: number; width: number; height: number }
@@ -418,7 +416,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
 
     emitter.on('camera-controls:generate-thumbnail', handleGenerateThumbnail)
     return () => emitter.off('camera-controls:generate-thumbnail', handleGenerateThumbnail)
-  }, [generate, onThumbnailCapture])
+  }, [generate])
 
   // Go-to-camera: animate camera to a saved snapshot position/target
   useEffect(() => {
