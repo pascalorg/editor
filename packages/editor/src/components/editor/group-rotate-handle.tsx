@@ -13,10 +13,11 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { OrthographicCamera, Plane, Vector2, Vector3 } from 'three'
+import { OrthographicCamera, Plane, type Ray, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
 import { isHistoryShortcut } from '../../lib/history'
 import { sfxEmitter } from '../../lib/sfx-bus'
+import { getSpatialPointerId, spatialPointerInput } from '../../lib/spatial-pointer-input'
 import useEditor from '../../store/use-editor'
 import useInteractionScope, {
   useActiveHandleDrag,
@@ -163,6 +164,14 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
+    const spatialPointerId = getSpatialPointerId(event.nativeEvent)
+    const spatialRay = spatialPointerId ? event.ray.clone() : null
+    if (spatialPointerId) {
+      const target = event.object as typeof event.object & {
+        setPointerCapture?: (pointerId: number) => void
+      }
+      target.setPointerCapture?.(event.pointerId)
+    }
 
     frozenRest.current = { pivot: rest.pivot.clone(), corner: rest.corner.clone() }
     const center = rest.pivot.clone()
@@ -213,10 +222,12 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
       )
     }
 
-    setNDC(event.nativeEvent.clientX, event.nativeEvent.clientY)
-    raycaster.setFromCamera(ndc, camera)
+    if (!spatialRay) {
+      setNDC(event.nativeEvent.clientX, event.nativeEvent.clientY)
+      raycaster.setFromCamera(ndc, camera)
+    }
     const hit = new Vector3()
-    if (!raycaster.ray.intersectPlane(plane, hit)) return
+    if (!(spatialRay ?? raycaster.ray).intersectPlane(plane, hit)) return
     const initialAngle = angleOf(hit)
 
     document.body.style.cursor = 'grabbing'
@@ -230,15 +241,13 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     })
     setIsDragging(true)
 
-    const onMove = (e: PointerEvent) => {
-      setNDC(e.clientX, e.clientY)
-      raycaster.setFromCamera(ndc, camera)
+    const applyRay = (ray: Ray, freeRotation: boolean) => {
       const moveHit = new Vector3()
-      if (!raycaster.ray.intersectPlane(plane, moveHit)) return
+      if (!ray.intersectPlane(plane, moveHit)) return
       let delta = angleOf(moveHit) - initialAngle
       while (delta > Math.PI) delta -= 2 * Math.PI
       while (delta < -Math.PI) delta += 2 * Math.PI
-      if (!e.shiftKey) delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
+      if (!freeRotation) delta = Math.round(delta / DEFAULT_ANGLE_STEP) * DEFAULT_ANGLE_STEP
 
       // Shared rigid-rotation math (also used by the keyboard group R/T);
       // see `rotateGroupPatches` for the orbit/yaw handedness contract.
@@ -286,8 +295,14 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
         })
       }
     }
+    const onMove = (e: PointerEvent) => {
+      setNDC(e.clientX, e.clientY)
+      raycaster.setFromCamera(ndc, camera)
+      applyRay(raycaster.ray, e.shiftKey)
+    }
 
     const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
+    let releaseSpatialCapture: (() => void) | null = null
     const clearLivePreviews = () => {
       const overrides = useLiveNodeOverrides.getState()
       const liveTransforms = useLiveTransforms.getState()
@@ -303,6 +318,8 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
       window.removeEventListener('keydown', onKeyDown, true)
+      releaseSpatialCapture?.()
+      releaseSpatialCapture = null
       if (document.body.style.cursor === 'grabbing') document.body.style.cursor = ''
       useScene.temporal.getState().resume()
       useViewer.getState().setInputDragging(false)
@@ -366,6 +383,16 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
     for (const id of affectedIds) {
       useLiveTransforms.getState().clear(id)
     }
+    if (spatialPointerId && spatialRay) {
+      releaseSpatialCapture = spatialPointerInput.capture(spatialPointerId, {
+        onMove: (ray) => {
+          spatialRay.copy(ray)
+          applyRay(spatialRay, false)
+        },
+        onRelease: onUp,
+        onCancel,
+      })
+    }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)
@@ -398,6 +425,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
           onPointerDown={activate}
           onPointerEnter={onHoverEnter}
           onPointerLeave={onHoverLeave}
+          pointerEventsOrder={10}
           scale={baseScale}
         />
         <mesh
@@ -407,6 +435,7 @@ function GroupRotateHandleInner({ ids, meshEpoch }: { ids: string[]; meshEpoch: 
           onPointerDown={activate}
           onPointerEnter={onHoverEnter}
           onPointerLeave={onHoverLeave}
+          pointerEventsOrder={10}
           renderOrder={1010}
           scale={scale}
         />

@@ -4,6 +4,7 @@ export type XRFrameLoopRenderer = {
   setSize(width: number, height: number, updateStyle?: boolean): void
   xr: {
     enabled: boolean
+    isPresenting: boolean
   }
 }
 
@@ -14,7 +15,6 @@ type XRViewport = {
 }
 
 type R3FXRConnection = {
-  connect(): void
   disconnect(): void
 }
 
@@ -66,8 +66,13 @@ export async function takeOverXRFrameLoop(
   await renderer.setAnimationLoop(renderFrame)
 
   return () => {
+    if (renderer.xr.isPresenting) return
     renderer.xr.enabled = false
     void renderer.setAnimationLoop(null)
-    r3fXR?.connect()
   }
+}
+
+export function stopXRFrameLoop(renderer: XRFrameLoopRenderer) {
+  renderer.xr.enabled = false
+  void renderer.setAnimationLoop(null)
 }

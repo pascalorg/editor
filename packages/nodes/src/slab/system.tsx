@@ -20,7 +20,7 @@ import { useEffect } from 'react'
  * rebuilds them through `def.geometry` as usual.
  */
 
-function levelSlabContextSignatures(nodes: Record<string, AnyNode>): Map<string, string> {
+export function levelSlabContextSignatures(nodes: Record<string, AnyNode>): Map<string, string> {
   const partsByLevel = new Map<string, string[]>()
 
   const push = (levelId: string, part: string) => {
@@ -51,6 +51,13 @@ function levelSlabContextSignatures(nodes: Record<string, AnyNode>): Map<string,
 
   for (const node of Object.values(nodes)) {
     if (node.type !== 'building') continue
+    if (
+      !Array.isArray(node.position) ||
+      !Array.isArray(node.rotation) ||
+      !Array.isArray(node.children)
+    ) {
+      continue
+    }
     const transform = `${node.position.join(',')}|${node.rotation.join(',')}`
     for (const childId of node.children) {
       const child = nodes[childId]

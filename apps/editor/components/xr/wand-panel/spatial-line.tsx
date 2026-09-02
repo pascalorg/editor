@@ -14,12 +14,14 @@ export function SpatialLine({
   lineWidth = 1,
   opacity = 1,
   points,
+  renderOrder = 5,
   transparent = false,
 }: {
   color: string
   lineWidth?: number
   opacity?: number
   points: readonly [number, number, number][]
+  renderOrder?: number
   transparent?: boolean
 }) {
   const line = useMemo(
@@ -44,5 +46,6 @@ export function SpatialLine({
     [line],
   )
 
+  line.renderOrder = renderOrder
   return <primitive object={line} raycast={() => undefined} />
 }

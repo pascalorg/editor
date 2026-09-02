@@ -24,6 +24,8 @@ export function XRWandPanel({ handedness = 'left' }: { handedness?: XRHandedness
       onPointerDown={(event) => event.stopPropagation()}
       onPointerOver={(event) => event.stopPropagation()}
       onPointerUp={(event) => event.stopPropagation()}
+      pointerEventsOrder={100}
+      pointerEventsType={{ deny: 'grab' }}
     >
       {panels.map((panel, index) => {
         const pose = resolveWandPanelFacePose(index, handedness)

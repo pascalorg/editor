@@ -50,6 +50,8 @@ XR mode runs only under `/xr` or `/xr/scene/[id]` and mounts the canvas with `We
 
 The icon-only VR button sits beside Walkthrough and Preview in the editor toolbar. Its click opens or focuses a named XR testing window. That window has its own explicit session-start button because native WebXR requires user activation in the same browsing context that requests the immersive session.
 
+Before opening the testing window, the toolbar snapshots the editor's current in-memory scene into a dedicated XR preview key and marks the route to consume that snapshot. This keeps the immersive scene aligned with unsaved or debounce-pending edits instead of depending on the last autosave or API response. Direct visits to a persisted scene XR URL still load that scene through the API.
+
 The TSL post-processing pipeline is unmounted while XR mode is configured. XR uses one dedicated direct-render driver after scene systems run, avoiding SSGI, denoise, ink, and outline passes that have not been validated for stereo XR rendering. The driver updates Three's stereo union camera before drawing and prevents a second automatic camera update during that draw.
 
 The desktop frame limiter pauses while an immersive session is active. React Three Fiber then renders from the WebXR animation loop at the headset's cadence and receives the current `XRFrame`.
@@ -80,7 +82,7 @@ This starts the Next.js editor on all interfaces with its development HTTPS cert
 - Human mode restores the scene to world scale. The left controller stick moves relative to head direction, the right stick snap-turns, and movement is resolved through a player capsule against the rendered scene's BVHs.
 - With hand tracking, pinching inside the left wrist zone drives locomotion and pinching inside the right wrist zone drives turning. Movement and turns use the same comfort vignette and haptic feedback behavior as WebXR Home.
 - Press the left controller Y button, hold both tracked thumb tips together for 0.8 seconds, or use the mode button in the test environment to switch between God and Human mode. The hand gesture fires once per hold and rearms after the thumbs separate. Returning to God mode restores the scene transform captured before entering Human mode.
-- XR supplies a plain theme background because the desktop sky gradient belongs to the post-processing pipeline.
+- XR supplies the theme's neutral base background because the desktop sky gradient belongs to the post-processing pipeline. The zenith colour is not flattened across the immersive view.
 - The site's presentation-only horizon disc is suppressed in immersive XR because its fade depends on the desktop post-processing backdrop. The real site ground, slabs, terrain, and scene geometry remain visible.
 - The Synthetic Environment Module is not registered for VR testing because it adds its own floor grid and environment canvas. Add it only when an AR/MR feature needs synthetic planes, meshes, depth, or hit testing.
 - On a browser or headset with native immersive WebXR, the emulator is not installed.

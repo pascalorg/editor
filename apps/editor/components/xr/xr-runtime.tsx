@@ -25,7 +25,13 @@ export function useEditorXRRuntime(enabled: boolean): XRRuntimeState {
           setRuntime({ status: 'unsupported' })
           return
         }
-        setRuntime({ source, status: 'ready', store: createViewerXRStore() })
+        setRuntime({
+          source,
+          status: 'ready',
+          // The editor uses ordinary spatial meshes for its wand and scene;
+          // disabling Layers avoids an unnecessary WebGL emulator framebuffer.
+          store: createViewerXRStore({ layers: false }),
+        })
       })
       .catch((error: unknown) => {
         if (cancelled) return
@@ -54,7 +60,6 @@ export async function requestEditorVRSession(store: ViewerXRStore): Promise<XRSe
       'dom-overlay',
       'hand-tracking',
       'hit-test',
-      'layers',
       'mesh-detection',
       'plane-detection',
     ],

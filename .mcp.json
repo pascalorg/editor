@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "pmndrs": {
+      "type": "http",
+      "url": "https://docs.pmnd.rs/api/mcp"
+    }
+  }
+}

@@ -32,6 +32,7 @@ import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { shouldMountPostProcessingRenderDriver } from '../../xr/frame-loop'
 import { GOD_ORIGIN_POSITION } from '../../xr/god-mode'
 import { PlayerModeScene } from '../../xr/mode-switching'
+import { immersiveXRBackgroundColor } from '../../xr/presentation-background'
 import { ImmersiveXRPresentationProvider } from '../../xr/presentation-context'
 import { ViewerXRSessionRoot } from '../../xr/session-root'
 import type { ViewerXRStore } from '../../xr/store'
@@ -171,7 +172,7 @@ type WebGPUDeviceLike = {
   removeEventListener?: (type: string, listener: EventListener) => void
 }
 
-function GPUDeviceWatcher() {
+function GPUDeviceWatcher({ intentionalWebGL = false }: { intentionalWebGL?: boolean }) {
   const gl = useThree((s) => s.gl)
 
   useEffect(() => {
@@ -184,10 +185,12 @@ function GPUDeviceWatcher() {
     const device = backend?.device as WebGPUDeviceLike | undefined
 
     if (!device) {
-      console.warn('[viewer] No WebGPU device on backend — running on a fallback renderer.', {
-        backend: backend?.constructor?.name ?? 'unknown',
-        rendererType: (gl as any).constructor?.name ?? 'unknown',
-      })
+      if (!intentionalWebGL) {
+        console.warn('[viewer] No WebGPU device on backend — running on a fallback renderer.', {
+          backend: backend?.constructor?.name ?? 'unknown',
+          rendererType: (gl as any).constructor?.name ?? 'unknown',
+        })
+      }
       return
     }
 
@@ -213,7 +216,7 @@ function GPUDeviceWatcher() {
     return () => {
       device.removeEventListener?.('uncapturederror', onUncapturedError)
     }
-  }, [gl])
+  }, [gl, intentionalWebGL])
 
   return null
 }
@@ -232,10 +235,7 @@ function ToneMappingExposure() {
 }
 
 function ImmersiveXRBackground() {
-  const background = useViewer((state) => {
-    const theme = getSceneTheme(state.sceneTheme)
-    return theme.backgroundSky ?? theme.background
-  })
+  const background = useViewer((state) => immersiveXRBackgroundColor(state.sceneTheme))
   return <color args={[background]} attach="background" />
 }
 
@@ -561,6 +561,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
       gl={
         ((props: { canvas?: HTMLCanvasElement; powerPreference?: RendererPowerPreference }) => {
           const canvas = props.canvas
+          const xrMultiview = xr?.multiview ?? false
           const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
           if (cached) return cached
           const promise = (async () => {
@@ -574,7 +575,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                   ...(props as any),
                   ...backendParameters,
                   alpha: true,
-                  multiview: xr?.multiview ?? false,
+                  multiview: xrMultiview,
                 })
                 renderer.toneMapping = THREE.ACESFilmicToneMapping
                 renderer.toneMappingExposure = getSceneTheme(
@@ -701,7 +702,7 @@ function ViewerScene({
       <ViewerCamera immersiveXR={immersiveXR} />
       {immersiveXR && <ImmersiveXRBackground />}
       <PointerRaycastLayers />
-      <GPUDeviceWatcher />
+      <GPUDeviceWatcher intentionalWebGL={immersiveXR} />
       <ToneMappingExposure />
       <SceneReadyTracker
         onSceneReadyChange={onSceneReadyChange}

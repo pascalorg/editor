@@ -5,6 +5,7 @@ import {
   renderImmersiveXRFrame,
   shouldMountPostProcessingRenderDriver,
   shouldPauseFrameLimiterForXR,
+  stopXRFrameLoop,
   takeOverXRFrameLoop,
 } from './frame-loop'
 
@@ -69,10 +70,9 @@ describe('takeOverXRFrameLoop', () => {
       setAnimationLoop,
       setPixelRatio: mock((dpr: number) => calls.push(`dpr:${dpr}`)),
       setSize: mock((width: number, height: number) => calls.push(`size:${width}x${height}`)),
-      xr: { enabled: false },
+      xr: { enabled: false, isPresenting: false },
     }
     const r3fXR = {
-      connect: mock(() => calls.push('connect')),
       disconnect: mock(() => calls.push('disconnect')),
     }
     const renderFrame = (() => undefined) as XRFrameRequestCallback
@@ -89,14 +89,35 @@ describe('takeOverXRFrameLoop', () => {
 
     restore()
 
-    expect(calls).toEqual([
-      'disconnect',
-      'dpr:1.5',
-      'size:936x800',
-      'set-loop',
-      'clear-loop',
-      'connect',
-    ])
+    expect(calls).toEqual(['disconnect', 'dpr:1.5', 'size:936x800', 'set-loop', 'clear-loop'])
+    expect(renderer.xr.enabled).toBe(false)
+  })
+
+  test('keeps Three’s XR wrapper alive until the presenting session ends', async () => {
+    const setAnimationLoop = mock(async () => undefined)
+    const renderer = {
+      setAnimationLoop,
+      setPixelRatio: mock(() => undefined),
+      setSize: mock(() => undefined),
+      xr: { enabled: false, isPresenting: false },
+    }
+
+    const restore = await takeOverXRFrameLoop(
+      renderer,
+      null,
+      (() => undefined) as XRFrameRequestCallback,
+      { dpr: 1, height: 800, width: 1280 },
+    )
+    renderer.xr.isPresenting = true
+    restore()
+
+    expect(setAnimationLoop).toHaveBeenCalledTimes(1)
+    expect(renderer.xr.enabled).toBe(true)
+
+    renderer.xr.isPresenting = false
+    stopXRFrameLoop(renderer)
+
+    expect(setAnimationLoop).toHaveBeenLastCalledWith(null)
     expect(renderer.xr.enabled).toBe(false)
   })
 })

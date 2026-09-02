@@ -8,22 +8,31 @@ import {
   SelectionManager,
   ToolManager,
   useEditor,
+  WallMoveSideHandles,
 } from '@pascal-app/editor'
 import {
   requestGodScaleReset,
   toggleXRPlayerMode,
+  useViewer,
   useXRPlayerMode,
   Viewer,
   XR_PLAYER_MODES,
 } from '@pascal-app/viewer'
 import { Glasses, LoaderCircle, Orbit, PersonStanding, RotateCcw, X } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { mountEmulatorControls } from '@/lib/xr/emulator'
+import { XR_PREVIEW_SCENE_KEY } from '@/lib/xr/preview-window'
 import { XRWandInputOverlay } from './wand-panel'
 import { XREditorInputBridge } from './xr-editor-input-bridge'
+import { XRRenderErrorBoundary } from './xr-render-error-boundary'
 import { requestEditorVRSession, useEditorXRRuntime, xrConfigForRuntime } from './xr-runtime'
 
 const LOCAL_SCENE_KEY = 'pascal-editor-scene'
+
+function endXRSession(session?: XRSession) {
+  if (!session) return
+  void session.end().catch(() => undefined)
+}
 
 type PreviewScene = {
   graph: SceneGraph
@@ -37,6 +46,7 @@ function XREditorScene() {
     <>
       <SelectionManager />
       <NodeArrowHandles />
+      <WallMoveSideHandles />
       <Grid cellColor="#aaa" cellSize={gridSnapStep} fadeDistance={500} sectionColor="#ccc" />
       <ToolManager />
       <XREditorInputBridge />
@@ -44,14 +54,23 @@ function XREditorScene() {
   )
 }
 
-export function XRPreviewEnvironment({ sceneId }: { sceneId?: string }) {
+export function XRPreviewEnvironment({
+  liveSnapshot = false,
+  sceneId,
+}: {
+  liveSnapshot?: boolean
+  sceneId?: string
+}) {
   const runtime = useEditorXRRuntime(true)
   const [scene, setScene] = useState<PreviewScene | null>()
   const [session, setSession] = useState<XRSession>()
   const [error, setError] = useState<string | null>(null)
   const [editorReady, setEditorReady] = useState(false)
   const [inputSummary, setInputSummary] = useState('No tracked inputs')
+  const [enteringVR, setEnteringVR] = useState(false)
+  const sessionRequest = useRef<Promise<void> | null>(null)
   const playerMode = useXRPlayerMode((state) => state.mode)
+  const selectedIds = useViewer((state) => state.selection.selectedIds)
 
   useEffect(() => {
     let cancelled = false
@@ -66,12 +85,13 @@ export function XRPreviewEnvironment({ sceneId }: { sceneId?: string }) {
   useEffect(() => {
     let cancelled = false
 
-    if (!sceneId) {
+    if (liveSnapshot || !sceneId) {
       try {
-        const graph = JSON.parse(
-          localStorage.getItem(LOCAL_SCENE_KEY) ?? 'null',
-        ) as SceneGraph | null
-        setScene(graph ? { graph, name: 'Local scene' } : null)
+        const storageKey = liveSnapshot ? XR_PREVIEW_SCENE_KEY : LOCAL_SCENE_KEY
+        const graph = JSON.parse(localStorage.getItem(storageKey) ?? 'null') as SceneGraph | null
+        setScene(
+          graph ? { graph, name: liveSnapshot ? 'Current editor scene' : 'Local scene' } : null,
+        )
       } catch {
         setScene(null)
       }
@@ -95,11 +115,12 @@ export function XRPreviewEnvironment({ sceneId }: { sceneId?: string }) {
     return () => {
       cancelled = true
     }
-  }, [sceneId])
+  }, [liveSnapshot, sceneId])
 
   useEffect(() => {
     if (!(editorReady && scene)) return
     applySceneGraphToEditor(scene.graph)
+    useEditor.setState({ mode: 'select', tool: null })
     return () => applySceneGraphToEditor(null)
   }, [editorReady, scene])
 
@@ -127,16 +148,26 @@ export function XRPreviewEnvironment({ sceneId }: { sceneId?: string }) {
   }, [runtime, session])
 
   const enterVR = useCallback(async () => {
-    if (runtime.status !== 'ready') return
+    if (runtime.status !== 'ready' || session || sessionRequest.current) return
     setError(null)
-    try {
-      const nextSession = await requestEditorVRSession(runtime.store)
-      nextSession.addEventListener('end', () => setSession(undefined), { once: true })
-      setSession(nextSession)
-    } catch (sessionError) {
-      setError(sessionError instanceof Error ? sessionError.message : 'Could not enter VR')
-    }
-  }, [runtime])
+    setEnteringVR(true)
+
+    const request = (async () => {
+      try {
+        const nextSession = await requestEditorVRSession(runtime.store)
+        nextSession.addEventListener('end', () => setSession(undefined), { once: true })
+        setSession(nextSession)
+      } catch (sessionError) {
+        setError(sessionError instanceof Error ? sessionError.message : 'Could not enter VR')
+      } finally {
+        setEnteringVR(false)
+        sessionRequest.current = null
+      }
+    })()
+
+    sessionRequest.current = request
+    await request
+  }, [runtime, session])
 
   const xr = session
     ? { ...xrConfigForRuntime(runtime, session)!, inputSourceOverlay: XRWandInputOverlay }
@@ -145,10 +176,21 @@ export function XRPreviewEnvironment({ sceneId }: { sceneId?: string }) {
   if (xr && scene) {
     return (
       <main className="relative h-screen w-screen overflow-hidden bg-black">
-        <Viewer disablePostFx maxFps={90} renderContext="editor" selectionManager="custom" xr={xr}>
-          <XREditorScene />
-        </Viewer>
-        <div className="absolute top-4 left-4 z-[1000] rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-white text-xs backdrop-blur">
+        <XRRenderErrorBoundary onExit={() => endXRSession(session)}>
+          <Viewer
+            disablePostFx
+            maxFps={90}
+            renderContext="editor"
+            selectionManager="custom"
+            xr={xr}
+          >
+            <XREditorScene />
+          </Viewer>
+        </XRRenderErrorBoundary>
+        <div
+          className="absolute top-4 left-4 z-[1000] rounded-full border border-white/20 bg-black/60 px-3 py-1.5 text-white text-xs backdrop-blur"
+          data-xr-selected-ids={selectedIds.join(',')}
+        >
           {playerMode === XR_PLAYER_MODES.GOD ? 'God mode' : 'Human mode'} · {inputSummary}
         </div>
         <div className="absolute top-4 right-4 z-[1000] flex gap-2">
@@ -177,7 +219,7 @@ export function XRPreviewEnvironment({ sceneId }: { sceneId?: string }) {
           <button
             aria-label="Exit VR test environment"
             className="rounded-full border border-white/20 bg-black/60 p-2 text-white backdrop-blur hover:bg-black/80"
-            onClick={() => void session?.end()}
+            onClick={() => endXRSession(session)}
             type="button"
           >
             <X className="h-4 w-4" />
@@ -211,11 +253,11 @@ export function XRPreviewEnvironment({ sceneId }: { sceneId?: string }) {
         <div className="mt-6 flex gap-3">
           <button
             className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-sky-500 px-4 py-2.5 font-medium text-sm text-white hover:bg-sky-400 disabled:cursor-not-allowed disabled:opacity-50"
-            disabled={preparing || unavailable}
+            disabled={preparing || unavailable || enteringVR}
             onClick={() => void enterVR()}
             type="button"
           >
-            {preparing && <LoaderCircle className="h-4 w-4 animate-spin" />}
+            {(preparing || enteringVR) && <LoaderCircle className="h-4 w-4 animate-spin" />}
             {runtime.status === 'ready' && runtime.source === 'emulated'
               ? 'Start Quest 3 emulator'
               : 'Enter VR'}

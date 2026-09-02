@@ -18,6 +18,7 @@ import { GodModeControls } from '../../god-mode/ui/god-mode-controls'
 import { HumanModeHandControls } from '../../human-mode/input/hand-locomotion'
 import { pulseInputSource } from '../../human-mode/lib/haptics'
 import { HumanModeControls } from '../../human-mode/ui/human-mode-controls'
+import { isDirectR3FPointerTarget } from '../../pointer-filter'
 import type { ViewerXRStore } from '../../store'
 import {
   captureGodSceneTransform,
@@ -34,10 +35,20 @@ import {
 } from '../lib/thumb-mode-gesture'
 import { useXRPlayerMode, XR_PLAYER_MODES } from '../store/player-mode'
 
+function PlayerModeDefaultHand() {
+  return (
+    <DefaultXRHand
+      grabPointer={{ filter: isDirectR3FPointerTarget }}
+      rayPointer={{ filter: isDirectR3FPointerTarget }}
+      touchPointer={{ filter: isDirectR3FPointerTarget }}
+    />
+  )
+}
+
 function PlayerModeHandInput() {
   return (
     <>
-      <DefaultXRHand />
+      <PlayerModeDefaultHand />
       <GodModeHandControls />
       <HumanModeHandControls />
       <PlayerModeHandThumbInput />
@@ -51,7 +62,7 @@ function createPlayerModeHandInput(InputSourceOverlay: InputSourceOverlay) {
   return function PlayerModeHandInputWithOverlay() {
     return (
       <>
-        <DefaultXRHand />
+        <PlayerModeDefaultHand />
         <GodModeHandControls />
         <HumanModeHandControls />
         <PlayerModeHandThumbInput />
@@ -61,12 +72,16 @@ function createPlayerModeHandInput(InputSourceOverlay: InputSourceOverlay) {
   }
 }
 
-function createPlayerModeControllerInput(InputSourceOverlay: InputSourceOverlay) {
+function PlayerModeDefaultController() {
+  return <DefaultXRController rayPointer={{ filter: isDirectR3FPointerTarget }} />
+}
+
+function createPlayerModeControllerInput(InputSourceOverlay?: InputSourceOverlay) {
   return function PlayerModeControllerInputWithOverlay() {
     return (
       <>
-        <DefaultXRController />
-        <InputSourceOverlay type="controller" />
+        <PlayerModeDefaultController />
+        {InputSourceOverlay && <InputSourceOverlay type="controller" />}
       </>
     )
   }
@@ -216,17 +231,17 @@ export function PlayerModeScene({
     [inputSourceOverlay],
   )
   const ControllerInput = useMemo(
-    () => (inputSourceOverlay ? createPlayerModeControllerInput(inputSourceOverlay) : null),
+    () => createPlayerModeControllerInput(inputSourceOverlay),
     [inputSourceOverlay],
   )
 
   useEffect(() => {
     useXRPlayerMode.getState().setMode(XR_PLAYER_MODES.GOD)
     store.setHand(HandInput)
-    if (ControllerInput) store.setController(ControllerInput)
+    store.setController(ControllerInput)
     return () => {
       store.setHand(DefaultXRHand)
-      if (ControllerInput) store.setController(DefaultXRController)
+      store.setController(DefaultXRController)
       useXRPlayerMode.getState().setMode(XR_PLAYER_MODES.GOD)
     }
   }, [ControllerInput, HandInput, store])

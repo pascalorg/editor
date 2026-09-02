@@ -1,6 +1,6 @@
 'use client'
 
-import { type ReactNode, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
 import { Shape } from 'three'
 import { XR_WAND_PANEL_LAYOUT } from './panel-layout'
 import { SpatialLine, shapeLinePoints } from './spatial-line'
@@ -52,8 +52,16 @@ export function SpatialButton({
 }) {
   const [hovered, setHovered] = useState(false)
   const [pressed, setPressed] = useState(false)
+  const hoverLeaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const shape = useMemo(() => roundedShape(size[0], size[1]), [size])
   const points = useMemo(() => shapeLinePoints(shape), [shape])
+
+  useEffect(
+    () => () => {
+      if (hoverLeaveTimer.current) clearTimeout(hoverLeaveTimer.current)
+    },
+    [],
+  )
 
   return (
     <group
@@ -65,9 +73,13 @@ export function SpatialButton({
         event.stopPropagation()
         if (!disabled) setPressed(true)
       }}
-      onPointerEnter={() => !disabled && setHovered(true)}
+      onPointerEnter={() => {
+        if (disabled) return
+        if (hoverLeaveTimer.current) clearTimeout(hoverLeaveTimer.current)
+        setHovered(true)
+      }}
       onPointerLeave={() => {
-        setHovered(false)
+        hoverLeaveTimer.current = setTimeout(() => setHovered(false), 75)
         setPressed(false)
       }}
       onPointerUp={(event) => {
@@ -113,7 +125,7 @@ export function PanelFace() {
     <>
       <mesh position={[0, 0, -0.012]}>
         <shapeGeometry args={[shape, 8]} />
-        <meshBasicMaterial color={panel} depthWrite={false} opacity={0.94} transparent />
+        <meshBasicMaterial color={panel} depthWrite opacity={1} />
       </mesh>
       <SpatialLine color={border} lineWidth={1.4} opacity={0.9} points={points} />
     </>

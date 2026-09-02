@@ -28,6 +28,8 @@ describe('XR wand panel layout', () => {
     ).text()
 
     expect(source).not.toContain('RingArrows')
+    expect(source).toContain('pointerEventsOrder={100}')
+    expect(source).toContain("pointerEventsType={{ deny: 'grab' }}")
   })
 
   test('mirrors the ring faces for the opposite hand', () => {

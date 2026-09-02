@@ -9,7 +9,7 @@ function TextureIcon({ size, src }: { size: number; src: string }) {
   const texture = useTexture(src)
   texture.colorSpace = SRGBColorSpace
   return (
-    <mesh position={[0, 0.022, 0.012]} raycast={() => undefined}>
+    <mesh position={[0, 0.022, 0.012]} renderOrder={6} raycast={() => undefined}>
       <planeGeometry args={[size, size]} />
       <meshBasicMaterial alphaTest={0.05} map={texture} toneMapped={false} transparent />
     </mesh>
@@ -27,7 +27,7 @@ export function PanelIcon({
 }) {
   if (!src) {
     return (
-      <mesh position={[0, 0.022, 0.012]} raycast={() => undefined}>
+      <mesh position={[0, 0.022, 0.012]} renderOrder={6} raycast={() => undefined}>
         <planeGeometry args={[size, size]} />
         <meshBasicMaterial color={color} toneMapped={false} />
       </mesh>

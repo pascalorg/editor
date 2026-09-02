@@ -15,6 +15,7 @@ import { useEffect, useRef } from 'react'
 import { type Camera, type Object3D, type Plane, type Ray, Vector2, type Vector3 } from 'three'
 import { isHistoryShortcut } from '../../../lib/history'
 import { sfxEmitter } from '../../../lib/sfx-bus'
+import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
 import { suppressBoxSelectForPointer } from '../../tools/select/box-select-state'
 import { commitHandleDragPatch } from './handle-drag-history'
 
@@ -104,6 +105,12 @@ function suppressInputDraggingUntilPointerRelease(pointerId: number) {
   window.addEventListener('pointerup', restore)
   window.addEventListener('pointercancel', restore)
   window.addEventListener('blur', onBlur)
+  return () => restore()
+}
+
+function getSpatialPointerSource(event: ThreeEvent<PointerEvent>): object | null {
+  const pointerId = getSpatialPointerId(event.nativeEvent)
+  return typeof pointerId === 'object' ? pointerId : null
 }
 
 export function useHandleDrag(args: UseHandleDragArgs) {
@@ -118,9 +125,17 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     if (event.button !== 0) return
     event.stopPropagation()
     suppressBoxSelectForPointer(event)
+    const spatialPointerSource = getSpatialPointerSource(event)
 
     if (args.kind === 'tap') {
-      suppressInputDraggingUntilPointerRelease(event.nativeEvent.pointerId)
+      const restoreInputDragging = suppressInputDraggingUntilPointerRelease(event.pointerId)
+      if (spatialPointerSource) {
+        spatialPointerInput.capture(spatialPointerSource, {
+          onMove: () => undefined,
+          onRelease: restoreInputDragging,
+          onCancel: restoreInputDragging,
+        })
+      }
       swallowNextClick()
       sfxEmitter.emit('sfx:item-pick')
       document.body.style.cursor = ''
@@ -130,6 +145,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
 
     const { cursor, dragControls, handleIndex, node, rideObject, setIsDragging } = args
     rideObject.updateMatrixWorld()
+    const spatialRay = spatialPointerSource ? event.ray.clone() : null
 
     const ndc = new Vector2()
     const setPointerRay = (clientX: number, clientY: number) => {
@@ -141,10 +157,12 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       raycaster.setFromCamera(ndc, camera)
     }
     const getPointerRay: GetPointerRay = (clientX, clientY, target) => {
+      if (spatialRay) return target.copy(spatialRay)
       setPointerRay(clientX, clientY)
       return target.copy(raycaster.ray)
     }
     const intersectPlane: IntersectPlane = (clientX, clientY, plane, target) => {
+      if (spatialRay) return spatialRay.intersectPlane(plane, target)
       setPointerRay(clientX, clientY)
       return raycaster.ray.intersectPlane(plane, target)
     }
@@ -177,6 +195,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
 
     let lastPatch: Partial<AnyNode> | null = null
     let historyPaused = true
+    let releaseSpatialCapture: (() => void) | null = null
 
     const resumeHistory = () => {
       if (!historyPaused) return
@@ -199,6 +218,8 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
       window.removeEventListener('keydown', onKeyDown, true)
+      releaseSpatialCapture?.()
+      releaseSpatialCapture = null
       if (document.body.style.cursor === cursor) {
         document.body.style.cursor = ''
       }
@@ -248,6 +269,23 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     }
 
     dragCleanupRef.current = onCancel
+    if (spatialPointerSource && spatialRay) {
+      releaseSpatialCapture = spatialPointerInput.capture(spatialPointerSource, {
+        onMove: (ray) => {
+          spatialRay.copy(ray)
+          onMove(
+            new PointerEvent('pointermove', {
+              button: 0,
+              buttons: 1,
+              pointerId: event.pointerId,
+              pointerType: 'xr',
+            }),
+          )
+        },
+        onRelease: onUp,
+        onCancel,
+      })
+    }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)

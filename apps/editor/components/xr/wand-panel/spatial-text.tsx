@@ -40,6 +40,7 @@ export function SpatialText({
   fontSize,
   maxWidth,
   position,
+  renderOrder = 6,
   textAlign = 'center',
 }: {
   anchorX?: 'center' | 'left' | 'right'
@@ -49,6 +50,7 @@ export function SpatialText({
   fontSize: number
   maxWidth?: number
   position: [number, number, number]
+  renderOrder?: number
   textAlign?: 'center' | 'left' | 'right'
 }) {
   const text = Children.toArray(children).join('')
@@ -104,6 +106,7 @@ export function SpatialText({
   return (
     <mesh
       position={[position[0] + offsetX, position[1] + offsetY, position[2]]}
+      renderOrder={renderOrder}
       raycast={() => undefined}
     >
       <planeGeometry args={[rendered.width, rendered.height]} />
