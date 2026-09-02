@@ -2438,6 +2438,35 @@ describe('cabinet handles', () => {
     expect(rightHandle!.apply(node, 0.8, null as never).position?.[0]).toBeCloseTo(0.1)
   })
 
+  test.each(['left', 'right'] as const)('L %s width preview moves the linked leg live', (side) => {
+    const fixture = generatedL(side)
+    const handles = cabinetModuleDefinition.handles as (
+      node: CabinetModuleNode,
+      sceneApi: ReturnType<typeof sceneApiFixture>,
+    ) => HandleDescriptor<CabinetModuleNode>[]
+    const widthHandle = handles(fixture.sourceModule, fixture.sceneApi).find(
+      (handle): handle is LinearResizeHandle<CabinetModuleNode> =>
+        handle.kind === 'linear-resize' &&
+        handle.axis === 'x' &&
+        handle.anchor === (side === 'right' ? 'min' : 'max'),
+    )
+
+    expect(widthHandle).toBeDefined()
+    const before = fixture.sceneApi.get<CabinetNode>(fixture.leg.id)!.position
+    const preview = new Map(
+      widthHandle!.previewOverrides?.(
+        fixture.sourceModule,
+        fixture.sourceModule.width + 0.2,
+        fixture.sceneApi,
+      ) ?? [],
+    )
+    const linkedLegPreview = preview.get(fixture.leg.id as AnyNodeId)
+
+    expect(linkedLegPreview?.position).toBeDefined()
+    expect(linkedLegPreview?.position?.[0]).toBeCloseTo(before[0] + (side === 'right' ? 0.2 : -0.2))
+    expect(fixture.sceneApi.get<CabinetNode>(fixture.leg.id)!.position).toEqual(before)
+  })
+
   test.each([
     'left',
     'right',

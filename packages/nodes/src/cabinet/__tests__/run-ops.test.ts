@@ -704,6 +704,58 @@ describe('addCornerRun', () => {
     expect(legWorldAfter.rotation).toBeCloseTo(legWorldBefore.rotation)
   })
 
+  test('previews linked L runs while the source module moves without mutating the scene', () => {
+    const levelId = 'level_corner-preview-move' as AnyNodeId
+    const run = CabinetNode.parse({
+      id: 'cabinet_source-run-preview-move',
+      parentId: levelId,
+      position: [0, 0, 0],
+      rotation: 0,
+      children: ['cabinet-module_source-corner-preview-move'],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_source-corner-preview-move',
+      parentId: run.id,
+      position: [0, 0.1, 0],
+      width: 0.9,
+      depth: 0.58,
+      carcassHeight: 0.72,
+      stack: [{ id: 'door-source-preview-move', type: 'door', shelfCount: 2 }],
+    })
+    const sceneApi = sceneApiFixture([run as AnyNode, module as AnyNode])
+    addCornerRun({ module, run, sceneApi, side: 'right' })
+
+    const linkedBase = Object.values(sceneApi.nodes()).find(
+      (node): node is CabinetNode => node.type === 'cabinet' && node.name === 'Corner Base Run',
+    )!
+    const before = resolveCabinetWorldTransform(
+      linkedBase,
+      sceneApi.nodes() as Record<AnyNodeId, AnyNode>,
+    )
+    const nextPosition: [number, number, number] = [0.5, module.position[1], module.position[2]]
+    const preview = new Map(
+      previewCornerRunsFromRunSources({
+        initialOverrides: [[module.id as AnyNodeId, { position: nextPosition }]],
+        previousModules: [module],
+        run,
+        sceneApi,
+      }),
+    )
+    const previewNodes = { ...sceneApi.nodes() } as Record<AnyNodeId, AnyNode>
+    for (const [id, override] of preview) {
+      if (previewNodes[id]) previewNodes[id] = { ...previewNodes[id], ...override } as AnyNode
+    }
+    const after = resolveCabinetWorldTransform(
+      previewNodes[linkedBase.id as AnyNodeId] as CabinetNode,
+      previewNodes,
+    )
+
+    expect(after.position[0] - before.position[0]).toBeCloseTo(0.5)
+    expect(after.position[2]).toBeCloseTo(before.position[2])
+    expect(sceneApi.get<CabinetModuleNode>(module.id)!.position).toEqual(module.position)
+    expect(sceneApi.get<CabinetNode>(linkedBase.id)!.position).toEqual(linkedBase.position)
+  })
+
   test('propagates front styling changes into linked corner runs and modules', () => {
     const levelId = 'level_corner-linked-front-style' as AnyNodeId
     const run = CabinetNode.parse({

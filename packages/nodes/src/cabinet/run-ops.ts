@@ -2626,11 +2626,13 @@ export function syncCornerRunsFromRunSources({
 export function previewCornerRunsFromRunSources({
   baseLayout = 'full',
   initialOverrides = [],
+  previousModules = [],
   run,
   sceneApi,
 }: {
   baseLayout?: CornerBaseLayout
   initialOverrides?: ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]>
+  previousModules?: readonly CabinetModuleNode[]
   run: CabinetNode
   sceneApi: SceneApi
 }): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
@@ -2655,7 +2657,12 @@ export function previewCornerRunsFromRunSources({
     markDirty: () => {},
   }
 
-  syncCornerRunsFromRunSources({ baseLayout, run, sceneApi: previewSceneApi })
+  syncCornerRunsFromRunSources({
+    baseLayout,
+    previousModules,
+    run,
+    sceneApi: previewSceneApi,
+  })
   return [...overrides]
 }
 

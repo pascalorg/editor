@@ -13,6 +13,7 @@ import {
   bumpCabinetRunLayoutRevision,
   cabinetModulesForRun,
   cabinetModuleTotalHeight,
+  previewCornerRunsFromRunSources,
   syncCornerRunsFromSourceModule,
 } from './run-ops'
 import { findClosestCabinetWallInPlan, resolveCabinetWallFaceOffset } from './wall-snap'
@@ -362,6 +363,15 @@ export const cabinetModuleParentFrame: MovableParentFrame = {
   planToLocal,
   magneticSnap,
   magneticSnapMatches,
+  previewOverrides: ({ node, parent, position, sceneApi }) => {
+    if (node.type !== 'cabinet-module' || parent.type !== 'cabinet') return []
+    return previewCornerRunsFromRunSources({
+      initialOverrides: [[node.id as AnyNodeId, { position: [...position] }]],
+      previousModules: [node as CabinetModuleNodeType],
+      run: parent as CabinetNodeType,
+      sceneApi,
+    }).filter(([id]) => id !== node.id)
+  },
   isValidPosition: ({ node, parent, position, nodes }) => {
     if (node.type !== 'cabinet-module' || parent.type !== 'cabinet') return true
 

@@ -1275,6 +1275,10 @@ function cabinetIndependentWidthPreviewOverrides(
   sceneApi: SceneApi,
 ): Array<readonly [AnyNodeId, Partial<AnyNode>]> {
   const overrides: Array<readonly [AnyNodeId, Partial<AnyNode>]> = []
+  overrides.push([
+    node.id as AnyNodeId,
+    cabinetIndependentWidthPatch(node, width, side, sceneApi) as Partial<AnyNode>,
+  ])
   const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
   if (parentRunOverride) overrides.push(parentRunOverride)
 
@@ -1282,6 +1286,24 @@ function cabinetIndependentWidthPreviewOverrides(
   const selectedWallOverride = wallCabinetWidthOverride(node, width + gap, sceneApi)
   if (selectedWallOverride) overrides.push(selectedWallOverride)
   return overrides
+}
+
+function previewCabinetCornerWidthOverrides(
+  node: CabinetModuleNodeType,
+  initialOverrides: ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]>,
+  sceneApi: SceneApi,
+): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
+  const parent = node.parentId
+    ? sceneApi.get<CabinetNodeType>(node.parentId as AnyNodeId)
+    : undefined
+  if (!parent || !isCabinetRun(parent)) return initialOverrides
+  return previewCornerRunsFromRunSources({
+    baseLayout: 'width-only',
+    initialOverrides,
+    previousModules: cabinetModulesForRun(parent, sceneApi.nodes()),
+    run: parent,
+    sceneApi,
+  })
 }
 
 function cabinetManualWidthReflow(
@@ -1431,7 +1453,11 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
     previewOverrides: (node, width, sceneApi, modifiers) => {
       if (!isCabinetModule(node)) return []
       if (modifiers?.altKey) {
-        return cabinetIndependentWidthPreviewOverrides(node, width, side, sceneApi)
+        return previewCabinetCornerWidthOverrides(
+          node,
+          cabinetIndependentWidthPreviewOverrides(node, width, side, sceneApi),
+          sceneApi,
+        )
       }
       if (cabinetWidthIsNestedModule(node, sceneApi)) {
         const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
@@ -1449,6 +1475,9 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
             module.id as AnyNodeId,
             { width: entry.width, position: entry.position } as Partial<AnyNode>,
           ])
+          overrides.push(
+            ...nestedCornerRunPositionOverrides(module, entry.position, sceneApi.nodes()),
+          )
           const wallChild = wallChildOf(module, sceneApi.nodes())
           if (wallChild) {
             overrides.push([
@@ -1460,7 +1489,7 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
             ])
           }
         }
-        return overrides
+        return previewCabinetCornerWidthOverrides(node, overrides, sceneApi)
       }
       if (cabinetManualWidthContext(node, sceneApi)) {
         const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
@@ -1470,6 +1499,20 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
       const parentRunOverride = parentRunGeometryPreviewOverride(node, sceneApi)
       if (parentRunOverride) overrides.push(parentRunOverride)
       const gap = cabinetWallWidthGap(node, side, sceneApi)
+      const effectiveWidth = width + gap
+      const selectedPosition: [number, number, number] = [
+        node.position[0] + (sign * (effectiveWidth - node.width)) / 2,
+        node.position[1],
+        node.position[2],
+      ]
+      overrides.push([
+        node.id as AnyNodeId,
+        {
+          width: effectiveWidth,
+          position: selectedPosition,
+        } as Partial<AnyNode>,
+      ])
+      overrides.push(...nestedCornerRunPositionOverrides(node, selectedPosition, sceneApi.nodes()))
       const selectedWallOverride = wallCabinetWidthOverride(node, width + gap, sceneApi)
       if (selectedWallOverride) overrides.push(selectedWallOverride)
       const connectedResize = connectedCabinetWidthResize(node, side, width - node.width, sceneApi)
@@ -1478,6 +1521,13 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
           connectedResize.module.id as AnyNodeId,
           connectedResize.patch as Partial<AnyNode>,
         ])
+        overrides.push(
+          ...nestedCornerRunPositionOverrides(
+            connectedResize.module,
+            connectedResize.patch.position,
+            sceneApi.nodes(),
+          ),
+        )
         const connectedWallOverride = wallCabinetWidthOverride(
           connectedResize.module,
           connectedResize.patch.width,
@@ -1485,7 +1535,7 @@ function cabinetWidthHandle(side: 'left' | 'right'): HandleDescriptor<CabinetEdi
         )
         if (connectedWallOverride) overrides.push(connectedWallOverride)
       }
-      return overrides
+      return previewCabinetCornerWidthOverrides(node, overrides, sceneApi)
     },
     commit: (node, patch, sceneApi, modifiers) => {
       if (isCabinetModule(node) && typeof patch.width === 'number' && modifiers?.altKey) {

@@ -310,6 +310,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
   // the drag and commit alongside the moved node on drop. Null for kinds with
   // no ports, so every other movable kind is unaffected.
   const connectivityRef = useRef<PortConnectivity | null>(null)
+  // Node ids touched by a parent-frame kind's derived live preview, such as
+  // linked cabinet corner runs. This is separate from port connectivity so
+  // each preview channel can be cleared independently.
+  const parentFramePreviewIdsRef = useRef<AnyNodeId[]>([])
   // Node ids this drag has pushed live overrides onto — cleared on
   // commit / cancel / unmount so a follow-on drag starts clean.
   const overriddenIdsRef = useRef<AnyNodeId[]>([])
@@ -505,17 +509,46 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
     const syncParentFramePreview = (position: [number, number, number]) => {
       if (!frameParent) return
-      useLiveNodeOverrides.getState().set(node.id, {
+      const entries: Array<readonly [AnyNodeId, Record<string, unknown>]> = [
+        [node.id as AnyNodeId, { position, rotation: rotationRef.current }],
+      ]
+      const derivedEntries = parentFrame?.previewOverrides?.({
+        node,
+        parent: frameParent,
         position,
-        rotation: rotationRef.current,
+        sceneApi: createSceneApi(useScene),
       })
-      useScene.getState().markDirty(frameParent.id as AnyNodeId)
+      if (derivedEntries) {
+        for (const [id, values] of derivedEntries) {
+          if (id === node.id) continue
+          entries.push([id, values as Record<string, unknown>])
+        }
+      }
+
+      const nextIds = new Set(entries.map(([id]) => id))
+      for (const id of parentFramePreviewIdsRef.current) {
+        if (!nextIds.has(id)) useLiveNodeOverrides.getState().clear(id)
+      }
+      useLiveNodeOverrides.getState().setMany(entries)
+      parentFramePreviewIdsRef.current = [...nextIds]
+
+      const scene = useScene.getState()
+      for (const [id] of entries) {
+        if (scene.nodes[id]) scene.markDirty(id)
+      }
+      if (frameParent.id !== node.id) scene.markDirty(frameParent.id as AnyNodeId)
     }
 
     const clearParentFramePreview = () => {
       if (!frameParent) return
-      useLiveNodeOverrides.getState().clear(node.id)
-      useScene.getState().markDirty(frameParent.id as AnyNodeId)
+      const ids = new Set<AnyNodeId>([node.id as AnyNodeId, ...parentFramePreviewIdsRef.current])
+      const scene = useScene.getState()
+      for (const id of ids) {
+        useLiveNodeOverrides.getState().clear(id)
+        if (scene.nodes[id]) scene.markDirty(id)
+      }
+      parentFramePreviewIdsRef.current = []
+      scene.markDirty(frameParent.id as AnyNodeId)
     }
 
     setCursorPosition(getVisualPosition(originalPosition, originalRotationY))

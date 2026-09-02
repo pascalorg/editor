@@ -2036,6 +2036,13 @@ export type MovableParentFrame = {
     snappedLocal: readonly [number, number, number],
     nodes: Readonly<Record<string, AnyNode>>,
   ) => ParentFrameSnapMatch[]
+  /** Optional kind-owned live patches for derived nodes that follow the move. */
+  previewOverrides?: (args: {
+    node: AnyNode
+    parent: AnyNode
+    position: readonly [number, number, number]
+    sceneApi: SceneApi
+  }) => ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]>
   /**
    * Optional live collision check for a child moving in the parent frame.
    * The generic move tool uses this to colour the drag bounds and reject an
