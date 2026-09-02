@@ -93,7 +93,7 @@ export const UtilityPoleRenderer = ({ node: rawNode }: { node: UtilityPoleNode }
 
       {/* Hardware turns with `yaw`; the shaft is a cylinder and the guy is a
           COMPASS direction in site axes, so only this inner group rotates. */}
-      <group rotation={[0, node.yaw, 0]}>
+      <group rotation={[0, (node.yaw ?? 0), 0]}>
         <mesh position={[0, height - CROSSARM_DROP, 0]}>
           <boxGeometry args={[CROSSARM_LENGTH, CROSSARM_SECTION, CROSSARM_SECTION]} />
           <meshStandardMaterial color={HARDWARE_COLOR} metalness={0.1} roughness={0.8} />

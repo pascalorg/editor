@@ -159,7 +159,7 @@ export function poleAttachmentPoint(pole: UtilityPoleNode, toward: PlanPoint | n
   const plan = polePlan(pole)
   const butt = polePosition3(pole)[1]
   const height = Math.max(0, (pole.height || DEFAULT_POLE_HEIGHT) - POLE_CROSSARM_DROP)
-  const axis = crossarmAxis(pole.yaw)
+  const axis = crossarmAxis((pole.yaw ?? 0))
   const offset = crossarmPinOffset()
   let side = 1
   if (toward) {

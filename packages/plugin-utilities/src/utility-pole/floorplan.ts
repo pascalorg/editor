@@ -50,7 +50,7 @@ export function drawUtilityPole(
   // The crossarm itself, drawn along `yaw` — without it the plan symbol gives
   // no feedback at all for the R / T rotate, and the run leaves the arm at a
   // pin the plan does not show.
-  const armAxis = crossarmAxis(node.yaw)
+  const armAxis = crossarmAxis((node.yaw ?? 0))
   const armHalf = POLE_CROSSARM_LENGTH / 2
   children.push({
     kind: 'line',

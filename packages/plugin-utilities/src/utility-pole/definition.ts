@@ -24,7 +24,7 @@ const steppedYaw = (current: number, direction: 1 | -1): number =>
 const rotatePole = (node: UtilityPoleNode, direction: 1 | -1): void => {
   useScene
     .getState()
-    .updateNode(node.id as AnyNodeId, { yaw: steppedYaw(node.yaw, direction) } as never)
+    .updateNode(node.id as AnyNodeId, { yaw: steppedYaw((node.yaw ?? 0), direction) } as never)
 }
 
 /**
