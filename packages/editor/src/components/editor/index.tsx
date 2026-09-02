@@ -64,7 +64,7 @@ import { PanelManager } from '../ui/panels/panel-manager'
 import { ErrorBoundary } from '../ui/primitives/error-boundary'
 import { useSidebarStore } from '../ui/primitives/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
-import { SceneLoader } from '../ui/scene-loader'
+import { SceneLoader, SceneLoadFailed } from '../ui/scene-loader'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import type { ExtraPanel } from '../ui/sidebar/icon-rail'
 import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
@@ -1255,6 +1255,11 @@ function EditorContent({
 
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
+  // A failed `onLoad` is shown as an error with a retry, never as an empty
+  // scene: an editor that renders the default scaffold after a failed load
+  // autosaves that scaffold over the real project.
+  const [sceneLoadError, setSceneLoadError] = useState<unknown>(null)
+  const [sceneLoadAttempt, setSceneLoadAttempt] = useState(0)
   const [sceneReadyKey, setSceneReadyKey] = useState(0)
   const [isViewerSceneReady, setIsViewerSceneReady] = useState(false)
   const [previewStageMode, setPreviewStageMode] = useState<ViewerStageMode>('3d')
@@ -1296,6 +1301,7 @@ function EditorContent({
 
     async function load() {
       isLoadingSceneRef.current = true
+      setSceneLoadError(null)
       setHasLoadedInitialScene(false)
       setIsViewerSceneReady(false)
       setIsSceneLoading(true)
@@ -1304,6 +1310,7 @@ function EditorContent({
       // Session groups are not scene-graph state — clear on every load/switch.
       useSessionGroups.getState().clearGroups()
 
+      let failed = false
       try {
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
         if (!cancelled) {
@@ -1311,19 +1318,23 @@ function EditorContent({
           setIsViewerSceneReady(false)
           setSceneReadyKey((key) => key + 1)
         }
-      } catch {
+      } catch (error) {
+        // Leave the store unloaded and the autosave loop in its loading
+        // state: nothing may be written until a load actually succeeds.
+        failed = true
         if (!cancelled) {
-          applySceneGraphToEditor(null)
-          setIsViewerSceneReady(false)
-          setSceneReadyKey((key) => key + 1)
+          console.error('[editor] scene load failed', error)
+          setSceneLoadError(error ?? new Error('Scene load failed'))
         }
       } finally {
         if (!cancelled) {
           setIsSceneLoading(false)
-          setHasLoadedInitialScene(true)
-          requestAnimationFrame(() => {
-            isLoadingSceneRef.current = false
-          })
+          if (!failed) {
+            setHasLoadedInitialScene(true)
+            requestAnimationFrame(() => {
+              isLoadingSceneRef.current = false
+            })
+          }
         }
       }
     }
@@ -1333,7 +1344,11 @@ function EditorContent({
     return () => {
       cancelled = true
     }
-  }, [onLoad, isLoadingSceneRef])
+  }, [onLoad, isLoadingSceneRef, sceneLoadAttempt])
+
+  const retrySceneLoad = useCallback(() => {
+    setSceneLoadAttempt((attempt) => attempt + 1)
+  }, [])
 
   // Apply preview scene when version preview mode changes
   useEffect(() => {
@@ -1522,7 +1537,11 @@ function EditorContent({
         <FloorplanModeCoordinator />
         {visibleLoader && (
           <div className="fixed inset-0 z-60">
-            <SceneLoader className="bg-background" />
+            {sceneLoadError ? (
+              <SceneLoadFailed className="bg-background" onRetry={retrySceneLoad} />
+            ) : (
+              <SceneLoader className="bg-background" />
+            )}
           </div>
         )}
 
@@ -1598,7 +1617,11 @@ function EditorContent({
       <FloorplanModeCoordinator />
       {visibleLoader && (
         <div className="fixed inset-0 z-60">
-          <SceneLoader className="bg-background" />
+          {sceneLoadError ? (
+            <SceneLoadFailed className="bg-background" onRetry={retrySceneLoad} />
+          ) : (
+            <SceneLoader className="bg-background" />
+          )}
         </div>
       )}
 
