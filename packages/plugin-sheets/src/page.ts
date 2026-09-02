@@ -74,6 +74,8 @@ export function composeSheet(sheet: SheetNode, options: ComposeOptions): Compose
     sheetIndex: withIndex
       ? sheets(nodes).map((s) => ({ number: s.number, title: s.title }))
       : undefined,
+    sheetOrdinal: Math.max(1, sheets(nodes).findIndex((s) => s.id === sheet.id) + 1),
+    sheetCount: sheets(nodes).length,
   }
   const titleBlock = buildTitleBlock(titleBlockInput)
   overlay.push(...buildStatusStamp(titleBlockInput))

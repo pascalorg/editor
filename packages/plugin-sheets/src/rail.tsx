@@ -1036,6 +1036,14 @@ function LayersPanel({
               </select>
             </label>
           )}
+        <button
+          type="button"
+          onClick={() => set({ locked: !viewport.locked })}
+          className={`flex w-full items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs ${viewport.locked ? 'border-border bg-background text-foreground hover:bg-accent' : 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/15'}`}
+          title={viewport.locked ? 'Locked — click to allow moving and resizing on the paper' : 'Unlocked — drag on the paper; click to lock'}
+        >
+          {viewport.locked ? '🔒 Locked on the sheet — unlock to move' : '🔓 Unlocked — drag on the sheet, click to lock'}
+        </button>
         <div className="grid grid-cols-4 gap-1">
           {(['x', 'y', 'w', 'h'] as const).map((key) => (
             <label className={labelCls} key={key}>

@@ -175,6 +175,8 @@ export const ViewportNode = BaseNode.extend({
   direction: z.enum(['north', 'east', 'south', 'west']).optional(),
   layers: ViewportLayers.default(DEFAULT_VIEWPORT_LAYERS),
   title: z.string().default(''),
+  /** Locked viewports select but do not move or resize on the paper (default). */
+  locked: z.boolean().default(true),
   /** Optional crop in WORLD metres; absent means "fit the drawing". */
   crop: WorldBounds.optional(),
   /** view3d only. */

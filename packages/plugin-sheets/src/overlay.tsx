@@ -44,6 +44,16 @@ const TEXT_ENTRY_TAGS = new Set(['INPUT', 'TEXTAREA', 'SELECT'])
  * Whether Escape should close the Sheets workspace. Pure, and takes the
  * document, so the guard is testable without a browser.
  */
+const PLEX = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;700&family=Big+Shoulders+Display:wght@800&display=swap'
+function ensureFonts(): void {
+  if (typeof document === 'undefined' || document.getElementById('pascal-sheets-plex')) return
+  const l = document.createElement('link')
+  l.id = 'pascal-sheets-plex'
+  l.rel = 'stylesheet'
+  l.href = PLEX
+  document.head.appendChild(l)
+}
+
 export function shouldCloseOnEscape(doc: {
   querySelector: (selector: string) => unknown
   activeElement?: unknown
@@ -215,6 +225,7 @@ export function closeSheets(): void {
   )
 }
 
+// The paper is set in IBM Plex (PlanCrafters' sheet type); load it once.
 const ROOT_ID = 'pascal-sheets-workspace'
 const ROOT_KEY = '__pascalSheetsWorkspaceRoot'
 

@@ -135,6 +135,11 @@ export function Paper({
         const vp = composed.placements.find((p) => p.viewport.id === id)?.viewport
         if (vp) {
           onSelect(id)
+          if (vp.locked) {
+            // Locked: select only. Unlock from the Layers tab to move or resize.
+            dragRef.current = null
+            return
+          }
           dragRef.current = {
             mode: handle ? 'resize' : 'move',
             id,
@@ -297,7 +302,7 @@ function ViewportFrame({
         fill="transparent"
         stroke={selected ? '#2563eb' : 'transparent'}
         strokeWidth={unitsPerPixel * (selected ? 1.5 : 1)}
-        style={{ cursor: 'move' }}
+        style={{ cursor: viewport.locked ? 'default' : 'move' }}
       />
       {selected && (
         <rect

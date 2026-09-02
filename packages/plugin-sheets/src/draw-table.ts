@@ -6,7 +6,7 @@
  */
 import type { FloorplanGeometry } from '@pascal-app/core'
 import type { ScheduleTable } from './schedule'
-import { INK, INK_SOFT } from './titleblock'
+import { INK, INK_SOFT, SANS } from './titleblock'
 
 const HEADER_H = 0.26
 const ROW_H = 0.22
@@ -34,7 +34,7 @@ export function drawTable(
       text: `! ${issue}`,
       fontSize: 0.1,
       fill: '#b45309',
-      fontFamily: 'Helvetica, Arial, sans-serif',
+      fontFamily: SANS,
     })
   }
   const totalWeight = table.columns.reduce((s, c) => s + c.weight, 0)
@@ -64,7 +64,7 @@ export function drawTable(
       fontSize: 0.11,
       fill: '#ffffff',
       fontWeight: 700,
-      fontFamily: 'Helvetica, Arial, sans-serif',
+      fontFamily: SANS,
     })
     cx += widths[i] ?? 0
   })
@@ -85,7 +85,7 @@ export function drawTable(
         text: value,
         fontSize: 0.105,
         fill: INK,
-        fontFamily: 'Helvetica, Arial, sans-serif',
+        fontFamily: SANS,
       })
       bx += widths[i] ?? 0
     })
@@ -100,7 +100,7 @@ export function drawTable(
       text: `+${table.rows.length - rows.length} more — enlarge this viewport`,
       fontSize: 0.1,
       fill: INK_SOFT,
-      fontFamily: 'Helvetica, Arial, sans-serif',
+      fontFamily: SANS,
     })
   }
 

@@ -6,6 +6,15 @@
  * screen SVG and the PDF page both use, so the title block on screen and the
  * title block in the PDF are literally the same primitives (`FloorplanGeometry`,
  * `packages/core/src/registry/types.ts:364+`) rendered by two back ends.
+ *
+ * LAYOUT. The strip follows the PlanCrafters sheet (app/js/sheets.js
+ * `S._titleBlock`, `S.TB_W = 3.4`): a 3.4-inch strip on ARCH D, centred
+ * text, and the same row order top to bottom — firm plate, designer,
+ * PROJECT (name wrapped to two balanced lines when long, then the address),
+ * OWNER / JURISDICTION / APN, DATE / SCALE, a flexible REVISIONS area that
+ * also carries the preliminary stamp, then the sheet title and the big sheet
+ * number with "SHEET n OF m" under it. Type is IBM Plex Sans / Plex Mono
+ * with system fallbacks, the family the PlanCrafters sheets are set in.
  */
 import type { FloorplanGeometry } from '@pascal-app/core'
 import type { ProjectRecordNode } from './schema'
@@ -15,6 +24,10 @@ export const INK = '#111827'
 export const INK_SOFT = '#6b7280'
 export const PAPER = '#ffffff'
 export const RULE = '#111827'
+export const STAMP_RED = '#b91c1c'
+
+export const SANS = '"IBM Plex Sans", "Helvetica Neue", Helvetica, Arial, sans-serif'
+export const MONO = '"IBM Plex Mono", "SFMono-Regular", Menlo, Consolas, monospace'
 
 export type TitleBlockInput = {
   widthIn: number
@@ -28,6 +41,9 @@ export type TitleBlockInput = {
   scaleText?: string
   /** The whole set, for the cover sheet's index. */
   sheetIndex?: { number: string; title: string }[]
+  /** 1-based position of this sheet in the set, and the set size. */
+  sheetOrdinal?: number
+  sheetCount?: number
 }
 
 export type TitleBlockLayout = {
@@ -36,35 +52,31 @@ export type TitleBlockLayout = {
 }
 
 const MARGIN_IN = 0.5
-
+/** PlanCrafters `S.TB_W` on ARCH D; scaled for smaller paper, never wider. */
 export function titleBlockWidth(widthIn: number): number {
-  return Math.max(3.2, Math.min(5.5, widthIn * 0.155))
+  return Math.min(3.4, Math.max(2.6, widthIn * (3.4 / 36)))
 }
 
 /** Where viewports may live: inside the border, left of the title block. */
 export function sheetFrame(widthIn: number, heightIn: number): TitleBlockLayout['frame'] {
   const tb = titleBlockWidth(widthIn)
   return {
-    x: MARGIN_IN,
-    y: MARGIN_IN,
-    w: widthIn - MARGIN_IN * 2 - tb,
-    h: heightIn - MARGIN_IN * 2,
+    x: MARGIN_IN + 0.1,
+    y: MARGIN_IN + 0.1,
+    w: widthIn - MARGIN_IN * 2 - tb - 0.2,
+    h: heightIn - MARGIN_IN * 2 - 0.2,
   }
 }
 
-function text(
-  x: number,
-  y: number,
-  value: string,
-  size: number,
-  opts: {
-    weight?: number
-    fill?: string
-    anchor?: 'start' | 'middle' | 'end'
-    family?: string
-    opacity?: number
-  } = {},
-): FloorplanGeometry {
+type TextOpts = {
+  weight?: number
+  fill?: string
+  anchor?: 'start' | 'middle' | 'end'
+  family?: string
+  opacity?: number
+}
+
+function text(x: number, y: number, value: string, size: number, opts: TextOpts = {}): FloorplanGeometry {
   return {
     kind: 'text',
     x,
@@ -73,7 +85,7 @@ function text(
     fontSize: size,
     fill: opts.fill ?? INK,
     fontWeight: opts.weight ?? 400,
-    fontFamily: opts.family ?? 'Helvetica, Arial, sans-serif',
+    fontFamily: opts.family ?? SANS,
     textAnchor: opts.anchor ?? 'start',
     dominantBaseline: 'alphabetic',
     opacity: opts.opacity,
@@ -103,6 +115,39 @@ function rect(
   }
 }
 
+/** Approximate set width of a Plex Sans string, inches, for wrapping and shrink-to-fit. */
+function measure(value: string, size: number, weight = 400): number {
+  const k = weight >= 700 ? 0.58 : 0.54
+  return value.length * size * k
+}
+
+/** Shrink a size until the string fits `maxW`, never below 55 % (sheets.js R162). */
+function fit(value: string, size: number, maxW: number, weight = 400): number {
+  let s = size
+  for (let k = 0; k < 6 && measure(value, s, weight) > maxW; k++) {
+    s *= Math.max(0.55, maxW / measure(value, s, weight))
+  }
+  return s
+}
+
+/** Balanced two-line wrap (sheets.js `wrap2`) — a long name reads better on two lines than shrunk. */
+function wrap2(value: string): string[] {
+  const words = value.trim().split(/\s+/)
+  if (words.length < 2) return [value]
+  let best: string[] = [value]
+  let bestD = Number.POSITIVE_INFINITY
+  for (let i = 1; i < words.length; i++) {
+    const a = words.slice(0, i).join(' ')
+    const b = words.slice(i).join(' ')
+    const d = Math.abs(a.length - b.length)
+    if (d < bestD) {
+      bestD = d
+      best = [a, b]
+    }
+  }
+  return best
+}
+
 function truncate(value: string, max: number): string {
   return value.length <= max ? value : `${value.slice(0, Math.max(0, max - 1))}…`
 }
@@ -123,128 +168,163 @@ export function apnOf(input: TitleBlockInput): string {
 }
 
 /**
- * The border, the title block, and — when the record is still marked
- * preliminary — the diagonal NOT FOR CONSTRUCTION stamp across the drawing
- * area. A cover sheet also gets the sheet index.
+ * The border and the title block. A cover sheet also gets the sheet index in
+ * the strip's flexible area.
  */
 export function buildTitleBlock(input: TitleBlockInput): FloorplanGeometry[] {
   const { widthIn: W, heightIn: H, record } = input
   const out: FloorplanGeometry[] = []
   const tbw = titleBlockWidth(W)
-  const tbx = W - MARGIN_IN - tbw
+  const x0 = W - MARGIN_IN - tbw
+  const y0 = MARGIN_IN
+  const h = H - MARGIN_IN * 2
+  const cx = x0 + tbw / 2
+  const left = x0 + 0.18
+  const right = x0 + tbw - 0.18
+  const innerW = tbw - 0.36
+  const k = tbw / 3.4 // row scale for smaller paper
 
-  // Paper + border.
+  // Paper + border + strip.
   out.push(rect(0, 0, W, H, { fill: PAPER }))
   out.push(rect(MARGIN_IN, MARGIN_IN, W - MARGIN_IN * 2, H - MARGIN_IN * 2, { strokeWidth: 0.02 }))
-  out.push(line(tbx, MARGIN_IN, tbx, H - MARGIN_IN, 0.014))
-
-  const left = tbx + 0.16
-  const right = W - MARGIN_IN - 0.16
-  const inner = right - left
-  let y = MARGIN_IN + 0.42
-
-  const rule = () => {
-    y += 0.1
-    out.push(line(tbx, y, W - MARGIN_IN, y, 0.006))
-    y += 0.26
+  out.push(rect(x0, y0, tbw, h, { strokeWidth: 0.02 }))
+  const hr = (yy: number) => out.push(line(x0, yy, x0 + tbw, yy, 0.012))
+  const centered = (value: string, yy: number, size: number, weight = 400, family = SANS, fill = INK) => {
+    const s = fit(value, size, innerW, weight)
+    out.push(text(cx, yy + s * 0.36, value, s, { anchor: 'middle', weight, family, fill }))
   }
-  const field = (caption: string, value: string, size = 0.13) => {
-    out.push(text(left, y, caption.toUpperCase(), 0.075, { fill: INK_SOFT, weight: 600 }))
-    y += 0.16
-    out.push(text(left, y, truncate(value || '—', Math.floor(inner / (size * 0.52))), size))
-    y += 0.1
+  const leftText = (value: string, yy: number, size: number, weight = 400, family = SANS) => {
+    const s = fit(value, size, innerW, weight)
+    out.push(text(left, yy + s * 0.36, value, s, { weight, family }))
   }
 
-  // Firm plate.
+  let y = y0 + 0.55 * k
+
+  // Brand plate: the firm, or the designer when there is no firm yet.
   const firm = record?.firm
-  out.push(text(left, y, (firm?.logoText || firm?.company || 'PASCAL').toUpperCase(), 0.21, { weight: 700 }))
-  y += 0.2
+  const brand = (firm?.company || record?.designer?.name || 'PASCAL').toUpperCase()
+  centered(brand, y, 0.26 * k, 800)
+  const sub = (firm?.logoText || (firm?.company ? 'S T U D I O' : 'D E S I G N')).toUpperCase()
+  centered(sub, y + 0.34 * k, 0.15 * k, 500)
   const contact = [firm?.phone, firm?.email].filter(Boolean).join('   ')
-  if (contact) {
-    out.push(text(left, y, contact, 0.085, { fill: INK_SOFT }))
-    y += 0.06
-  }
-  rule()
+  if (contact) centered(contact, y + 0.58 * k, 0.09 * k, 400, SANS, INK_SOFT)
+  y += (contact ? 0.92 : 0.78) * k
+  hr(y)
 
-  field('Project', record?.identity?.projectName || 'Untitled project', 0.15)
-  for (const l of addressLines(input)) {
-    out.push(text(left, y, truncate(l, 40), 0.105, { fill: INK_SOFT }))
-    y += 0.15
-  }
-  const apn = apnOf(input)
-  if (apn) {
-    out.push(text(left, y, `APN ${apn}`, 0.095, { fill: INK_SOFT }))
-    y += 0.14
-  }
-  rule()
+  // Designer / firm line.
+  y += 0.3 * k
+  const designer = [record?.designer?.name, record?.designer?.license].filter(Boolean).join('  ·  ')
+  centered((designer || 'DESIGNER').toUpperCase(), y, 0.16 * k, 600)
+  y += 0.3 * k
+  hr(y)
 
-  field('Owner', record?.owner?.name || '')
-  field(
-    'Designer',
-    [record?.designer?.name, record?.designer?.license].filter(Boolean).join('  ·  '),
-  )
-  if (record?.engineer?.company) {
-    field(
-      'Engineer of record',
-      [record.engineer.company, record.engineer.license].filter(Boolean).join('  ·  '),
-    )
+  // PROJECT.
+  y += 0.34 * k
+  leftText('PROJECT', y, 0.12 * k, 700, MONO)
+  const name = record?.identity?.projectName || 'Untitled project'
+  const nameLines = measure(name, 0.19 * k, 700) > innerW ? wrap2(name) : [name]
+  const addr = addressLines(input)
+  if (nameLines.length === 2) {
+    centered(nameLines[0] ?? '', y + 0.22 * k, 0.15 * k, 700)
+    centered(nameLines[1] ?? '', y + 0.42 * k, 0.15 * k, 700)
+    addr.forEach((l, i) => centered(l, y + (0.74 + i * 0.19) * k, 0.14 * k))
+    if (addr.length === 0) centered('—', y + 0.74 * k, 0.14 * k)
+  } else {
+    centered(nameLines[0] ?? '', y + 0.3 * k, 0.19 * k, 700)
+    addr.forEach((l, i) => centered(l, y + (0.62 + i * 0.19) * k, 0.14 * k))
+    if (addr.length === 0) centered('—', y + 0.62 * k, 0.14 * k)
   }
+  y += (1.16 + (addr.length > 1 ? 0.1 : 0)) * k
+  hr(y)
+
+  // OWNER / JURISDICTION / APN.
+  y += 0.26 * k
   const j = record?.jurisdiction
   const jurisdiction = [j?.city, j?.county, j?.state].filter(Boolean).join(', ')
-  if (jurisdiction) field('Jurisdiction', jurisdiction)
-  rule()
+  leftText(`OWNER: ${record?.owner?.name || '—'}`, y, 0.13 * k)
+  leftText(`JURISDICTION: ${jurisdiction || '—'}`, y + 0.26 * k, 0.13 * k)
+  leftText(`APN: ${apnOf(input) || '—'}`, y + 0.52 * k, 0.13 * k)
+  y += 0.82 * k
+  hr(y)
 
-  // Revisions.
-  out.push(text(left, y, 'REVISIONS', 0.075, { fill: INK_SOFT, weight: 600 }))
-  y += 0.18
+  // DATE / SCALE.
+  y += 0.26 * k
+  leftText(`DATE: ${record?.date || '—'}`, y, 0.13 * k)
+  leftText(`SCALE: ${input.scaleText || 'AS NOTED'}`, y + 0.26 * k, 0.13 * k)
+  if (record?.drawnBy) leftText(`DRAWN BY: ${record.drawnBy}`, y + 0.52 * k, 0.13 * k)
+  y += (record?.drawnBy ? 0.82 : 0.56) * k
+  hr(y)
+
+  // REVISIONS (flexible) — with the preliminary stamp box, PlanCrafters style.
+  const nbY = y0 + h - 2.4 * k
+  y += 0.24 * k
+  leftText('REVISIONS', y, 0.12 * k, 700, MONO)
+  let ry = y + 0.28 * k
   const revisions = record?.revisions ?? []
-  if (revisions.length === 0) {
-    out.push(text(left, y, '—', 0.1, { fill: INK_SOFT }))
-    y += 0.16
-  } else {
-    for (const r of revisions.slice(0, 8)) {
-      out.push(text(left, y, r.id || '·', 0.095, { weight: 600 }))
-      out.push(text(left + 0.4, y, truncate(r.description, 26), 0.095))
-      out.push(text(right, y, r.date, 0.095, { anchor: 'end', fill: INK_SOFT }))
-      y += 0.17
-    }
+  for (const r of revisions.slice(0, 6)) {
+    if (ry > nbY - 0.3 * k) break
+    out.push(text(left, ry + 0.04, r.id || '·', 0.1 * k, { weight: 700 }))
+    out.push(text(left + 0.38 * k, ry + 0.04, truncate(r.description, 22), 0.1 * k))
+    out.push(text(right, ry + 0.04, r.date, 0.1 * k, { anchor: 'end', fill: INK_SOFT }))
+    ry += 0.2 * k
   }
-  rule()
+  const status = record?.documentStatus ?? 'preliminary'
+  if (status === 'preliminary' && nbY - ry > 1.7 * k) {
+    const sy = ry + 0.16 * k
+    const sh = 1.45 * k
+    out.push(rect(x0 + 0.14, sy, tbw - 0.28, sh, { stroke: STAMP_RED, strokeWidth: 0.02 }))
+    const sx = x0 + 0.26
+    out.push(text(sx, sy + 0.34 * k, 'PRELIMINARY', 0.2 * k, { weight: 800, fill: STAMP_RED }))
+    out.push(text(sx, sy + 0.6 * k, 'NOT FOR CONSTRUCTION', 0.17 * k, { weight: 800, fill: STAMP_RED }))
+    const lines = [
+      'Not reviewed or sealed. Verify every',
+      'dimension in the field before work.',
+      'Issue for permit sets the final status.',
+    ]
+    lines.forEach((ln, i) =>
+      out.push(text(sx, sy + (0.92 + i * 0.17) * k, ln, 0.095 * k, { weight: 600, fill: STAMP_RED })),
+    )
+    ry = sy + sh
+  }
 
-  // Sheet index, cover sheets only.
+  // Sheet index (cover sheets) in what is left of the flexible area.
   if (input.sheetIndex && input.sheetIndex.length > 0) {
-    out.push(text(left, y, 'SHEET INDEX', 0.075, { fill: INK_SOFT, weight: 600 }))
-    y += 0.18
-    for (const s of input.sheetIndex.slice(0, 24)) {
-      out.push(text(left, y, s.number, 0.095, { weight: 600 }))
-      out.push(text(left + 0.75, y, truncate(s.title, 28), 0.095, { fill: INK_SOFT }))
-      y += 0.16
+    let iy = ry + 0.3 * k
+    if (iy < nbY - 0.6 * k) {
+      leftText('SHEET INDEX', iy, 0.12 * k, 700, MONO)
+      iy += 0.24 * k
+      const pitch = Math.max(
+        0.15 * k,
+        Math.min(0.2 * k, (nbY - 0.15 * k - iy) / Math.max(1, input.sheetIndex.length)),
+      )
+      for (const s of input.sheetIndex) {
+        if (iy > nbY - 0.12 * k) break
+        out.push(text(left, iy, s.number, pitch * 0.62, { weight: 700, family: MONO }))
+        out.push(text(left + 0.62 * k, iy, truncate(s.title.toUpperCase(), 30), pitch * 0.58, { fill: INK_SOFT }))
+        iy += pitch
+      }
     }
-    rule()
   }
 
-  // Bottom plate: status, date / drawn by / scale, then the sheet identity.
-  const bottom = H - MARGIN_IN
-  const plate = bottom - 1.85
-  out.push(line(tbx, plate, W - MARGIN_IN, plate, 0.006))
-  const status = (record?.documentStatus ?? 'preliminary').replace('-', ' ').toUpperCase()
-  out.push(text(left, plate + 0.24, status, 0.11, { weight: 700 }))
-
-  const cols = [
-    { caption: 'DATE', value: record?.date || '' },
-    { caption: 'DRAWN BY', value: record?.drawnBy || '' },
-    { caption: 'SCALE', value: input.scaleText || 'AS NOTED' },
-  ]
-  const colW = inner / cols.length
-  cols.forEach((c, i) => {
-    const cx = left + colW * i
-    out.push(text(cx, plate + 0.55, c.caption, 0.07, { fill: INK_SOFT, weight: 600 }))
-    out.push(text(cx, plate + 0.72, truncate(c.value || '—', 14), 0.1))
-  })
-
-  out.push(line(tbx, plate + 0.88, W - MARGIN_IN, plate + 0.88, 0.006))
-  out.push(text(left, plate + 1.24, truncate(input.title, 30), 0.14, { weight: 600 }))
-  out.push(text(right, plate + 1.7, input.number, 0.34, { anchor: 'end', weight: 700 }))
+  // Sheet title + number (bottom).
+  hr(nbY)
+  centered(input.title.toUpperCase(), nbY + 0.42 * k, 0.2 * k, 700)
+  hr(nbY + 0.9 * k)
+  out.push(
+    text(cx, nbY + 1.95 * k, input.number, 0.85 * k, {
+      anchor: 'middle',
+      weight: 800,
+      family: '"Big Shoulders Display", "IBM Plex Sans", Helvetica, Arial, sans-serif',
+    }),
+  )
+  if (input.sheetOrdinal && input.sheetCount) {
+    out.push(
+      text(cx, y0 + h - 0.16 * k, `SHEET ${input.sheetOrdinal} OF ${input.sheetCount}`, 0.11 * k, {
+        anchor: 'middle',
+        family: MONO,
+      }),
+    )
+  }
 
   return out
 }
@@ -252,7 +332,8 @@ export function buildTitleBlock(input: TitleBlockInput): FloorplanGeometry[] {
 /**
  * "PRELIMINARY — NOT FOR CONSTRUCTION" laid diagonally across the drawing
  * area. Drawn OVER the viewports, not under them — a stamp under a floor plan
- * is not a stamp.
+ * is not a stamp. Light, so the drawing stays legible (the strip carries the
+ * full-strength stamp).
  */
 export function buildStatusStamp(input: TitleBlockInput): FloorplanGeometry[] {
   if ((input.record?.documentStatus ?? 'preliminary') !== 'preliminary') return []
@@ -269,7 +350,7 @@ export function buildStatusStamp(input: TitleBlockInput): FloorplanGeometry[] {
           anchor: 'middle',
           weight: 700,
           fill: '#dc2626',
-          opacity: 0.16,
+          opacity: 0.12,
         }),
       ],
     },
@@ -286,24 +367,13 @@ export function buildViewportLabel(
   w: number,
 ): FloorplanGeometry[] {
   const out: FloorplanGeometry[] = []
-  out.push({
-    kind: 'circle',
-    cx: x + 0.16,
-    cy: y - 0.11,
-    r: 0.16,
-    fill: 'none',
-    stroke: INK,
-    strokeWidth: 0.012,
-  })
-  out.push(
-    text(x + 0.16, y - 0.05, String(index), 0.14, { anchor: 'middle', weight: 700 }),
-  )
-  out.push(text(x + 0.42, y, title.toUpperCase(), 0.15, { weight: 700 }))
+  out.push({ kind: 'circle', cx: x + 0.17, cy: y - 0.11, r: 0.17, fill: 'none', stroke: INK, strokeWidth: 0.014 })
+  out.push(text(x + 0.17, y - 0.05, String(index), 0.15, { anchor: 'middle', weight: 700 }))
+  out.push(text(x + 0.46, y, title.toUpperCase(), 0.16, { weight: 700 }))
   if (scale) {
-    out.push(
-      text(x + w, y, scaleLabel(scale), 0.115, { anchor: 'end', fill: INK_SOFT, weight: 600 }),
-    )
+    out.push(text(x + w, y, scaleLabel(scale), 0.12, { anchor: 'end', fill: INK_SOFT, weight: 600, family: MONO }))
   }
-  out.push(line(x, y + 0.09, x + w, y + 0.09, 0.014))
+  out.push(line(x, y + 0.09, x + w, y + 0.09, 0.018))
+  out.push(line(x, y + 0.13, x + w, y + 0.13, 0.006))
   return out
 }
