@@ -16,8 +16,8 @@ import {
   ToggleControl,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Equal as EqualIcon, Plus, Trash } from 'lucide-react'
-import { useCallback, useMemo } from 'react'
+import { Copy, Equal as EqualIcon, Plus, Trash } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
 import {
   metadataForSelectedWidth,
   metadataWithPresetWidthDebt,
@@ -44,7 +44,9 @@ import {
   backAlignZ,
   bumpCabinetRunLayoutRevision,
   cabinetMetadataRecord,
+  cabinetRunArrayPlan,
   cabinetRunWidthEqualizationPlan,
+  duplicateCabinetModuleAlongRun,
   equalizeCabinetRunWidths,
   nestedCornerRunPositionOverrides,
   resolveCabinetType,
@@ -412,9 +414,30 @@ export function CabinetRunPanel({
     () => [...modules].sort((a, b) => a.position[0] - b.position[0]),
     [modules],
   )
+  const [arraySourceId, setArraySourceId] = useState<AnyNodeId | null>(null)
+  const [arrayCopyCount, setArrayCopyCount] = useState(2)
+  const [arraySpacing, setArraySpacing] = useState(0)
+  const [arrayDirection, setArrayDirection] = useState<'left' | 'right'>('right')
   const widthEqualization = useMemo(
     () => cabinetRunWidthEqualizationPlan(node, sceneNodes),
     [node, sceneNodes],
+  )
+  const arraySource = useMemo(
+    () =>
+      sortedModules.find(
+        (module) => module.id === arraySourceId && module.moduleKind !== 'corner-filler',
+      ) ?? sortedModules.find((module) => module.moduleKind !== 'corner-filler'),
+    [arraySourceId, sortedModules],
+  )
+  const arrayPlan = useMemo(
+    () =>
+      cabinetRunArrayPlan(node, sceneNodes, {
+        copyCount: arrayCopyCount,
+        direction: arrayDirection,
+        sourceModuleId: arraySource?.id ?? null,
+        spacing: arraySpacing,
+      }),
+    [arrayCopyCount, arrayDirection, arraySource?.id, arraySpacing, node, sceneNodes],
   )
 
   const updateRun = useCallback(
@@ -446,6 +469,27 @@ export function CabinetRunPanel({
     : widthEqualization.changed
       ? 'Equalize all resizeable standard base cabinets in this run'
       : 'The resizeable cabinet widths are already equal'
+
+  const duplicateAlongRun = useCallback(() => {
+    if (!arraySource) return
+    const copiedIds = duplicateCabinetModuleAlongRun({
+      copyCount: arrayCopyCount,
+      direction: arrayDirection,
+      run: node,
+      sceneApi: createSceneApi(useScene),
+      sourceModuleId: arraySource.id as AnyNodeId,
+      spacing: arraySpacing,
+    })
+    if (copiedIds?.length) setSelection({ selectedIds: [node.id as AnyNodeId] })
+  }, [arrayCopyCount, arrayDirection, arraySpacing, arraySource, node, setSelection])
+
+  const duplicateAlongRunTitle = !arrayPlan.ok
+    ? arrayPlan.reason === 'no-source'
+      ? 'Choose a standard or appliance module as the source'
+      : arrayPlan.reason === 'invalid-options'
+        ? 'Choose a copy count from 1 to 20 and spacing from 0 to 2 m'
+        : 'There is not enough room in this run for the requested array'
+    : `Create ${arrayCopyCount} ${arraySource?.name || 'module'} cop${arrayCopyCount === 1 ? 'y' : 'ies'}`
 
   const dimensionProfile = cabinetDimensionProfileId(node)
   const applyDimensionProfile = useCallback(
@@ -503,6 +547,20 @@ export function CabinetRunPanel({
                 </div>
               </button>
               <button
+                aria-label={`Use ${module.name || `Module ${index + 1}`} as array source`}
+                className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/50 text-muted-foreground transition-colors hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                disabled={module.moduleKind === 'corner-filler'}
+                onClick={() => setArraySourceId(module.id as AnyNodeId)}
+                title={
+                  module.moduleKind === 'corner-filler'
+                    ? 'Corner fillers cannot be used as array sources'
+                    : 'Use this module as the array source'
+                }
+                type="button"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+              <button
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-500/20 bg-red-500/8 text-red-300 transition-colors hover:bg-red-500/15 hover:text-red-200 disabled:opacity-30"
                 disabled={modules.length <= 1}
                 onClick={() => deleteModule(module)}
@@ -536,6 +594,64 @@ export function CabinetRunPanel({
           />
           <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
             Balances standard base cabinets while keeping appliance and corner-filler widths fixed.
+          </p>
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Duplicate along run">
+        <div className="space-y-2 px-1 pb-2">
+          <div className="rounded-lg border border-border/40 bg-[#252527] px-2 py-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Source module
+            </div>
+            <div className="truncate pt-1 text-xs font-medium text-foreground">
+              {arraySource?.name ||
+                (arraySource ? moduleSummary(arraySource) : 'No eligible module')}
+            </div>
+          </div>
+          <SliderControl
+            label="Copies"
+            max={20}
+            min={1}
+            onChange={(value) => setArrayCopyCount(Math.round(value))}
+            precision={0}
+            step={1}
+            value={arrayCopyCount}
+          />
+          <SliderControl
+            label="Spacing"
+            max={2}
+            min={0}
+            onChange={setArraySpacing}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={arraySpacing}
+          />
+          <div>
+            <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Direction
+            </div>
+            <SegmentedControl
+              onChange={(value) => setArrayDirection(value as 'left' | 'right')}
+              options={[
+                { value: 'left', label: 'Left' },
+                { value: 'right', label: 'Right' },
+              ]}
+              value={arrayDirection}
+            />
+          </div>
+          <ActionButton
+            className="w-full"
+            disabled={!arrayPlan.ok}
+            icon={<Copy className="h-4 w-4" />}
+            label="Create array"
+            onClick={duplicateAlongRun}
+            title={duplicateAlongRunTitle}
+          />
+          <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
+            Copies include the source cabinet structure and any attached wall cabinet. Existing
+            modules stay fixed; the requested array must fit in the available run space.
           </p>
         </div>
       </PanelSection>

@@ -5,7 +5,9 @@ import {
   type CabinetModuleNode,
   type CabinetNode,
   calculateLevelMiters,
+  cloneNodesInto,
   getWallPlanFootprint,
+  nodeRegistry,
   resolveLevelId,
   type SceneApi,
   selectionProxyIdFromMetadata,
@@ -573,6 +575,205 @@ export function equalizeCabinetRunWidths({
     sceneApi.restoreAll()
     sceneApi.resumeHistory()
     return false
+  }
+}
+
+export type CabinetRunArrayDirection = 'left' | 'right'
+
+export type CabinetRunArrayPlan =
+  | {
+      ok: true
+      sourceModuleId: AnyNodeId
+      positions: CabinetModuleNode['position'][]
+    }
+  | {
+      ok: false
+      reason: 'no-source' | 'invalid-options' | 'no-space'
+    }
+
+export function cabinetRunArrayPlan(
+  run: CabinetNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+  options: {
+    sourceModuleId: AnyNodeId | null
+    copyCount: number
+    spacing: number
+    direction: CabinetRunArrayDirection
+  },
+): CabinetRunArrayPlan {
+  if (!options.sourceModuleId) return { ok: false, reason: 'no-source' }
+  if (
+    !Number.isInteger(options.copyCount) ||
+    options.copyCount < 1 ||
+    options.copyCount > 20 ||
+    !Number.isFinite(options.spacing) ||
+    options.spacing < 0 ||
+    options.spacing > 2
+  ) {
+    return { ok: false, reason: 'invalid-options' }
+  }
+
+  const modules = cabinetModulesForRun(run, nodes)
+  const source = modules.find((module) => module.id === options.sourceModuleId)
+  if (!source || source.moduleKind === 'corner-filler') {
+    return { ok: false, reason: 'no-source' }
+  }
+
+  const direction = options.direction === 'left' ? -1 : 1
+  const step = source.width + options.spacing
+  const positions = Array.from(
+    { length: options.copyCount },
+    (_, index) =>
+      [
+        source.position[0] + direction * step * (index + 1),
+        source.position[1],
+        source.position[2],
+      ] as CabinetModuleNode['position'],
+  )
+  const epsilon = CABINET_EDGE_EPSILON
+
+  for (const position of positions) {
+    const minX = position[0] - source.width / 2
+    const maxX = position[0] + source.width / 2
+    const overlaps = modules.some((module) => {
+      if (module.id === source.id) return false
+      return moduleMinX(module) < maxX - epsilon && moduleMaxX(module) > minX + epsilon
+    })
+    if (overlaps) return { ok: false, reason: 'no-space' }
+  }
+
+  const constraints = runWallConstraints(run, modules, nodes)
+  const currentMinX = Math.min(...modules.map(moduleMinX))
+  const currentMaxX = Math.max(...modules.map(moduleMaxX))
+  const plannedMinX = Math.min(
+    currentMinX,
+    ...positions.map((position) => position[0] - source.width / 2),
+  )
+  const plannedMaxX = Math.max(
+    currentMaxX,
+    ...positions.map((position) => position[0] + source.width / 2),
+  )
+  if (
+    (constraints.left.constrained &&
+      currentMinX - plannedMinX > constraints.left.slack + epsilon) ||
+    (constraints.right.constrained && plannedMaxX - currentMaxX > constraints.right.slack + epsilon)
+  ) {
+    return { ok: false, reason: 'no-space' }
+  }
+
+  return { ok: true, sourceModuleId: source.id, positions }
+}
+
+function cleanCabinetArrayMetadata(metadata: CabinetEditableNode['metadata']) {
+  const {
+    cabinetCornerDerivedRun: _derived,
+    cabinetCornerSourceLink: _source,
+    isNew: _isNew,
+    nodeSelectionProxyId: _proxy,
+    ...rest
+  } = cabinetMetadataRecord(metadata)
+  return rest
+}
+
+function cabinetArrayCloneNodes(
+  source: CabinetModuleNode,
+  position: CabinetModuleNode['position'],
+  sceneApi: SceneApi,
+): AnyNode[] | null {
+  const subtree = sceneApi.getSubtree(source.id as AnyNodeId)
+  if (!subtree) return null
+
+  const duplicable = nodeRegistry.get(source.type)?.capabilities?.duplicable
+  const prepared =
+    duplicable && typeof duplicable === 'object' && duplicable.prepareSubtreeClone
+      ? duplicable.prepareSubtreeClone({
+          root: subtree.root,
+          descendants: subtree.descendants,
+          rootId: source.id as AnyNodeId,
+          rootPatch: { position },
+          nodes: sceneApi.nodes(),
+        })
+      : null
+  const root = {
+    ...(prepared?.root ?? subtree.root),
+    metadata: cleanCabinetArrayMetadata((prepared?.root ?? subtree.root).metadata),
+  } as CabinetModuleNode
+  root.position = position
+  const descendants = (prepared?.descendants ?? subtree.descendants).map(
+    (node) =>
+      ({
+        ...node,
+        metadata: cleanCabinetArrayMetadata(node.metadata),
+      }) as AnyNode,
+  )
+  return cloneNodesInto([root, ...descendants], {
+    parentId: source.parentId as AnyNodeId,
+    rootId: source.id as AnyNodeId,
+    position,
+  }).nodes
+}
+
+export function duplicateCabinetModuleAlongRun({
+  run,
+  sceneApi,
+  sourceModuleId,
+  copyCount,
+  spacing,
+  direction,
+}: {
+  run: CabinetNode
+  sceneApi: SceneApi
+  sourceModuleId: AnyNodeId | null
+  copyCount: number
+  spacing: number
+  direction: CabinetRunArrayDirection
+}): AnyNodeId[] | null {
+  const liveRun = sceneApi.get<CabinetNode>(run.id as AnyNodeId)
+  if (!liveRun) return null
+  const plan = cabinetRunArrayPlan(liveRun, sceneApi.nodes(), {
+    copyCount,
+    direction,
+    sourceModuleId,
+    spacing,
+  })
+  if (!plan.ok) return null
+  const source = sceneApi.get<CabinetModuleNode>(plan.sourceModuleId)
+  if (!source) return null
+
+  const clonedNodes: AnyNode[] = []
+  const clonedRootIds: AnyNodeId[] = []
+  for (const position of plan.positions) {
+    const clone = cabinetArrayCloneNodes(source, position, sceneApi)
+    if (!clone || clone.length === 0) return null
+    clonedRootIds.push(clone[0]!.id as AnyNodeId)
+    clonedNodes.push(...clone)
+  }
+
+  sceneApi.pauseHistory()
+  try {
+    const createMany = sceneApi.createMany
+    const clonedRootIdSet = new Set(clonedRootIds)
+    if (createMany) {
+      createMany(
+        clonedNodes.map((node) =>
+          clonedRootIdSet.has(node.id as AnyNodeId)
+            ? { node, parentId: liveRun.id as AnyNodeId }
+            : { node },
+        ),
+      )
+    } else {
+      for (const node of clonedNodes) {
+        const isRoot = clonedRootIdSet.has(node.id as AnyNodeId)
+        sceneApi.upsert(node, isRoot ? (liveRun.id as AnyNodeId) : undefined)
+      }
+    }
+    bumpCabinetRunLayoutRevision(sceneApi, liveRun)
+    sceneApi.resumeHistory()
+    return clonedRootIds
+  } catch {
+    sceneApi.restoreAll()
+    sceneApi.resumeHistory()
+    return null
   }
 }
 
