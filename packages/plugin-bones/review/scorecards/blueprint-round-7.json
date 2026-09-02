@@ -1,0 +1,72 @@
+{
+  "round": 7,
+  "pin": "01da90f",
+  "protocol": "FINAL SHIP-GATE paper round at 01da90f (B4+B5 merged + round-6 fixes f7db0c2 + B21 wave-2 + blocking-coverage fix). Fresh full pass — predecessor died mid-walk; every set regenerated at the pin via pure buildPlanSet (bun harness at repo root, computeLevel + injected bones:framing, relativeLevelBaseY(levels, owner)). SEVEN sets: (A) demo-house-FL over HTTP (fc866f2f271b, 74 nodes, 14 sheets, 2030 members / 94 fixtures — counts identical to rounds 5-6), (B) stairtower-NY UPPER-owner (framing node on lvl1: slab + 1.2×2.8 stair hole + 30° oblique trapezoid wing + 2.4 m door in 2.5 m wall + 3.4 m engineered slider + interior partition + gable roof on separate lvlroof — 13 sheets, 610 members), (C) B21 >40-flag stress (demo + 45 synthetic warnings incl. a 3-component composed flag — 16 sheets), (D) stairtower GROUND-owner with insulation override + second engineered slider (merged B4+B5 takeoff, 12 sheets), (E) 6×3.5 rectangular-floor control (blocking expectation), (F) ground stairtower at detail 200 (LOD-stamp check, 11 sheets), (G) 26-circuit legend-stress electrical sheet (round-6 recipe). 77 sheets rasterized with Playwright page.setContent at 2x; 28 walked by eye covering every distinct sheet class; SVG text forensics on all 77. Evidence in /tmp/bp11/.",
+  "verdict": "APPROVE",
+  "items": {
+    "SWEEP-invariants": {
+      "status": "PASS",
+      "evidence": "bun test at 01da90f: 947 pass / 1 todo / 0 fail — 948 tests across 42 files, 30,919 expect() calls; bunx tsc --noEmit clean. All gated checklist rows green: E1-E5, S1-S11, M1/M2, P1-P5, A1-A4.",
+      "note": "No gated row regressed. The two round-6 paper blockers now carry gates (wrapRow loop, relativeLevelBaseY) per process."
+    },
+    "R6-FIX-flag-verbatim": {
+      "status": "PASS",
+      "evidence": "P4/C5: stairtower-upper composed header flag (296 chars, 3 components: 'ENGINEERED BEAM REQUIRED — exceeds prescriptive header span | header 4x12 does not fit between the RO and the plates (1.5\" of 11.3\") — RO head lowered 5.2cm — raise the wall, lower the opening, or use an engineered flat header | RO shifted 83.3cm to fit the framed run — verify the drawn position') prints VERBATIM over four wrapped lines on Schedules 2/2 — both remedy tails intact (viewed). Demo S10 flat-roof flag (197 chars) ends '…purlin + 2x4 struts to bearing or engineered member required (R802.5.1)' — full tail on paper (viewed + text-matched). Every engine flag+warning of sets A (10) and B (6) reconstructs verbatim from the printed lines; ZERO ellipsis characters across all 77 sheets of all seven sets.",
+      "note": "The round-6 truncation blocker is dead on the exact baseline that exposed it. wrapRow loops; pagination absorbs the lines."
+    },
+    "R6-FIX-floor-legend": {
+      "status": "PASS",
+      "evidence": "P2: stairtower floor-sheet legend prints 'subfloor — 3/4\" T&G deck (drawn translucent)' and 'hanger — joist hanger' below the sized rows (viewed + exact-string match); the sheet's dominant ink is now labeled.",
+      "note": "Round-5 carry closed. Size-less roles get legend rows."
+    },
+    "R6-FIX-blocking-oblique": {
+      "status": "PASS",
+      "evidence": "S1-family: wing blocking count 9, max corner outside the 30° slab polygon 0.00 cm (round-6: 13.9 cm), blocking corners inside any rim joist: 0 (member forensics); floor sheet viewed — blocks sit between joists inside the rim. Coverage rule did NOT strip ordinary bays: the 6×3.5 rect control emits 14 blocks at 01da90f and 14 at pre-fix ebe66f5 with IDENTICAL x-centers and lengths (worktree diff) — one block per clear bay incl. the short end bay; the only unblocked gaps are the zero-width sistered-joist face pair and the bay beside it, both byte-equal pre/post (pre-existing layout, see advisory).",
+      "note": "01da90f's 'blocks bear on joists, never rim or air' holds on paper and did not regress rectangular floors. Wedge/needle gates in interpenetration.test.ts."
+    },
+    "R6-FIX-upper-storey-roof": {
+      "status": "PASS",
+      "evidence": "A3-paper: relativeLevelBaseY(levels,'lvl1') = {lvl0:-2.5, lvl1:0, lvlroof:+2.5} — lift is the storey DELTA. All four stairtower-upper elevations + section + cover viewed: the lvlroof gable sits ON the walls (rafter eave ends at 2.31 m vs cap-plate top 2.46 m — tails lap the plate; ceiling joists bear at the plate line), datums print T.O. PLATE +2.48 m / RIDGE +4.77 m — owner-local (round-6 printed +7.77 with a full storey of daylight). Cover axon shows rafters meeting cap plates.",
+      "note": "The storey-of-daylight class is dead. Ground owners unchanged (demo byte-consistent counts)."
+    },
+    "B21-flag-pagination": {
+      "status": "PASS",
+      "evidence": "55 engine flags+warnings on the stress set: 17 print on Schedules 4/4 (incl. the 296-char composed flag verbatim), pointer line '⚑ + 39 more flags — see \"Flags (continued)\"' closes the block, and sheet 16/16 'Flags (continued)' carries #7-#44 + the sheet-derived roof-coverage flag in two columns — every flag present EXACTLY once across the set (55/55, 0 missing, 0 duped; the only non-engine printed line is the pointer + the roof-coverage flag the plan set itself derives, printed once), zero negative-coordinate text, zero ellipsis, sheet numbering contiguous 1..16 with SHEET n/16 on every title block incl. the continuation sheet.",
+      "note": "B21a closed on paper. Takeoff repaginates to 4 pages cleanly; takeoff rows never collide with the flag block."
+    },
+    "B21-bolt-legend": {
+      "status": "PASS",
+      "evidence": "Foundation legend prints '5/8\" anchor bolts @ 5'-7.81\" o.c. max — 31 pcs' — dia matches the drawn members (label '5/8\" anchor bolt', shank 15.9 mm) and the o.c. matches an INDEPENDENT max-gap computation over the bolt members (1.723 m ≈ 5'-7.8\"); filled bolt dots vs open rebar-dowel circles keyed separately (viewed). Bolt bbox == stemwall bbox (bolts cover every foundation run that exists).",
+      "note": "B21b closed: the legend derives from members, no hardcoded '1/2\" @ 6ft' lie. C3 satisfied."
+    },
+    "B21-lod-stamp": {
+      "status": "PASS",
+      "evidence": "Every non-cover title block prints 'LOD 400 · Bones · scale …' on all 400 sets (13+14+16+12+10 sheets) and the cover states 'full construction set · LOD 400'; the detail-200 compose prints 'LOD 200 · Bones' on every title block + 'full construction set · LOD 200' on its cover with ZERO 'LOD 400' claims anywhere in the set (string scan of all 11 sheets).",
+      "note": "B21c closed: the stamp follows the composed detail, cover included."
+    },
+    "B4-B5-merged-takeoff": {
+      "status": "PASS",
+      "evidence": "S4/S11 on ONE takeoff (ground stairtower, viewed sheets 11-12/12): 2x6 PT books on its OWN SKU rows (2+4 pcs 20-ft + 120 bd-ft, '(pressure-treated)') beside untreated 2x6; PT members are exactly the 4 slab-bearing sole plates labeled 'PT sole plate on slab (R317.1)'; conservation proven — PT+untreated pcs (115) and bd-ft (1136.0) equal a PT-neutralized recompute to the digit; ONE booked row per sheet-good (Drywall 1/2\" ×1, Sheathing 7/16\" WSP ×1, WRB ×1, Cladding ×1 — no gross+member double-book); engineered slider books 'Engineered header (LVL/PSL — by supplier) 1 pcs + 11.8 lf' with zero 4x12 rows; climate labels LIVE — 'Insulation — batt R-30 (stud bays, by area)', sheathing label '…cavity R30 (zone 5A)…', characteristics 'Climate zone 5A · Wall cavity R-30'; zero '[object Object]'; canonical order (sizes → PT → engineered → sheet goods → insulation) stable. Demo (FL) books 2x4 PT + 2x6 PT rows and 'Anchor bolts — 31 pcs (sole plate anchorage (R403.1.6))' — no phantom-mudsill text; upper-storey set books NO PT rows (plates on framed floor stay untreated, B5 isolation).",
+      "note": "The merged tree holds both audits' promises simultaneously — consistent, conserved, canonically ordered."
+    },
+    "REG-sweep": {
+      "status": "PASS",
+      "evidence": "Deck under-layer: 41 deck rects (fill-opacity 0.35, #cfc4a6 hairlines) draw at SVG indices 9-49, first framing rect 50 — all deck under all framing; joists/girders/doubled stair headers/hangers read through (viewed). Legend rect: 26-circuit stress backing rect x44 y42 w484 h420 with col-2 rows ON it, every drawn circuit has a row (25/25; hvac whip → MEP by design); demo single-column rect 250×294 with 13/13 rows. Circuit legend completeness on demo: all 14 circuits + SE cable keyed with breaker/gauge (viewed). Section poché: 36 (demo) / 16 (stairtower) #222 cut rects + cut-band note (viewed). A-A cut marks on both wall plans (dashed line + A bubbles, viewed). Elevations: 4 per set, S/N mirrored correctly, E/W distinct, consistent orientation + north arrows across sheets (P2/A3). Title blocks: jurisdiction + code name + date + disclaimer + SHEET n/N everywhere; NY set prints '2025 Residential Code of New York State (2024 IRC base)'. A1 scale: 6 m deck strip = 302.4 px at 1:75 (≤0.1% error). A2/C5: subfloor 21 sheets == ceil(61.1 m² / 2.973 m²) == schedules row.",
+      "note": "No previously-passed class regressed. Demo counts byte-consistent with rounds 5-6 (2030/94); the only demo paper deltas vs round 6 are the B5 PT rows/labels + anchor-row text, exactly the B5-EXPECTED-DIFF enumeration."
+    },
+    "ADVISORIES-carried": {
+      "status": "FLAG",
+      "evidence": "(1) PRE-EXISTING, byte-equal pre/post 01da90f: the bay beside a sistered joist (under a bearing wall) gets no mid-span block — rect control emits 14 not 15; worth folding into the queued bolt-vs-stud-style layout audit. (2) Upper-owner GRADE semantics (round-5/6 N2/A3 carry): girder posts to the storey below draw as bare below-grade piles and the datum still says 'GRADE 0.00m' — a 'LEVEL DATUM +2.70m' label would stop the buried-pile read; same class: the ground-mounted condenser/pad straddles the owner-level grade line on upper-owner elevations. (3) Legend-stress composition (round-6 carry, stress-only): the 484 px backing rect overlays west-wing devices at 0.92 white — shift the plan transform when legendCols > 1. (4) Wall-sheet role legend prints one size per role ('header — 4x8') while an engineered 4x12 is drawn on the same sheet (round-6 minor). (5) MEP line-set stroke lacks a legend row. (6) P1 carried: plan sheets right-biased with an empty west margin; schedules first pages bottom-heavy. (7) Demo slab-less wing: no foundation under the NW wing — honest ('Room … has no floor slab under it' + roof-coverage flag print) but the slab-less-wing advisories stay queued.",
+      "note": "None of these is new at 01da90f, none is a physical-impossibility class, and every one is either flagged honestly on paper or byte-identical to previously-approved rounds. Queue them; none blocks the stamp."
+    }
+  },
+  "recommendations": [
+    "Queue the sistered-joist end-bay block (rect control: bay 0.095-0.425 m unblocked while the mirror end bay blocks) with the queued anchor-bolt-vs-stud layout audit — same 'layout nudging' family; add a sistered-bay case to the blocking gate when fixed.",
+    "Upper-owner datum semantics: print 'LEVEL DATUM +2.50m' (storey base) instead of 'GRADE 0.00m' when the owner storey is above ground, and consider drawing storey-below girder posts dashed — kills the buried-pile read (N2/A3 carry).",
+    "Legend-stress composition: right-shift the plan transform when legendCols > 1 so the 484 px box never covers west-wing devices (P1, stress sets only).",
+    "Wall-sheet role legend: append '(+ engineered)' or per-size rows when a role is drawn in more than one size on the sheet.",
+    "Add a legend row for the MEP refrigerant line-set stroke.",
+    "P1 pagination balance (right-bias + bottom-heavy schedules) — carried since round 3, cosmetic."
+  ],
+  "shipStamp": "APPROVE — I would sign this set. All six round-6/B21 focus classes verified dead ON PAPER at the exact pin, the merged B4+B5 takeoff is conserved and honest, no gated invariant regressed (947/0 at 948 tests, tsc clean), and every residual is a carried, honestly-flagged advisory."
+}

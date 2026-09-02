@@ -1,0 +1,350 @@
+{
+  "round": 1,
+  "systems": {
+    "wall-framing": {
+      "lod": 300,
+      "evidence": [
+        "200 plates/studs/opening frames \u2014 src/engines/wall-framing.ts:92-95 (plates), :111-208 (kings/trimmers/header/sill/cripples), :212-215 (o.c. studs); tests wall-framing.test.ts 'emits one bottom plate and a double top plate', 'emits kings, trimmers, and a span-sized header', 'no common stud lands inside the rough opening', 'emits a rough sill with supporting cripples below', 'doors get no sill' (numeric Y/dims assertions)",
+        "300 header by span table \u2014 src/core/spec.ts:62-68,89-94 + wall-framing.ts:119; tests 'RO 36.9in \u2192 4x8' and 'small window header uses the light end of the table' (4x4)",
+        "300 stud size from wall thickness \u2014 wall-framing.ts:42-44; test 'thin wall frames 2x4, thick wall frames 2x6'",
+        "300 spacing honored \u2014 wall-framing.ts:224-231; tests 'studPositions 4m wall at 16in o.c.' (asserts 16in pitch) and 'spec with 24in spacing produces fewer studs'",
+        "300 jurisdiction pass applied \u2014 src/framing/compute.ts:63-69; test compute.test.ts 'LOD 300 in a deep-frost state digs deeper footings than LOD 200'",
+        "engineered-beam flag past table \u2014 wall-framing.ts:124-133; test 'oversized opening span is flagged for engineering'"
+      ],
+      "firstFailingCriterion": "350: corner assemblies where walls meet (California/U/3-stud \u2014 not doubled-up naive overlap) \u2014 each wall is framed independently with a plain end stud; no corner detection exists anywhere in src/engines/wall-framing.ts",
+      "gaps": [
+        "Detect shared wall endpoints and emit California/3-stud corner assemblies at exterior corners with a numeric position test (rubric 350 'corner assemblies where walls meet').",
+        "Emit partition backing (ladder blocking or extra studs) where an interior wall tees into another wall mid-run (rubric 350 'partition backing where interior walls tee into walls').",
+        "Emit two trimmers per side when the rough opening exceeds 6 ft (rubric 350 'double trimmers on openings > 6 ft').",
+        "Offset the cap plate ends at corners so top-plate laps alternate, asserted numerically (rubric 350 'double top plate lap at corners (cap plate offset)').",
+        "Fix the terminal stud bay: dropping a grid stud near the guaranteed end stud leaves a bay up to o.c.+1.5in (25.5in at 24in o.c.), violating 'spacing honored' at the wall end (rubric 300/350 spacing)."
+      ],
+      "spotChecks": [
+        {
+          "claim": "Header span table escalates correctly (RO 80.2in \u2192 4x10, RO 57.5in \u2192 4x8)",
+          "held": true,
+          "note": "bun -e via frameWall; matches spec.headerRules buckets"
+        },
+        {
+          "claim": "24in o.c. spacing honored",
+          "held": true,
+          "note": "Field gaps exactly 0.6096m, BUT max terminal gap 0.6467m (25.46in) when a grid stud is dropped near the end stud \u2014 flagged as gap/advisory"
+        },
+        {
+          "claim": "No member intrudes the window rough opening; 2x4/2x6 threshold flips exactly at 0.13m",
+          "held": true,
+          "note": "0 box intrusions into the RO rectangle; t=0.129\u21922x4, t=0.13\u21922x6"
+        }
+      ]
+    },
+    "cmu": {
+      "lod": 300,
+      "evidence": [
+        "200 running bond + cut closers \u2014 src/engines/cmu.ts:101-117,244-261; tests cmu.test.ts 'block count is the hand-tallied 105', 'running bond: odd-course head joints offset half a block' (numeric centers), 'unlayable slivers (< 2in) are dropped'",
+        "200 cut jambs \u2014 cmu.ts:127-142; test 'jamb blocks are cut tight: face lands half a joint off the RO line' (numeric)",
+        "200 lintel + bond beam \u2014 cmu.ts:219-240 (lintel), :271-279 (bond beam); tests 'precast lintel: 8in tall, RO + 2\u00d78in long, bearing 8in past each jamb', 'bond beam caps the wall: top course, full length, grouted label'",
+        "300 block depth from wall thickness \u2014 cmu.ts:165; test 'block depth clamps to min(wall thickness, 7-5/8in actual)'",
+        "300 lintel bearing \u22658in \u2014 cmu.ts:57,219-225; test asserts bearing extents = u0\u22128in / u1+8in exactly",
+        "300 bond-beam-as-lintel suppression \u2014 cmu.ts:222-226; test 'no separate lintel \u2014 the bond beam is the structural head'"
+      ],
+      "firstFailingCriterion": "350: grouted-cell VERTICAL REBAR geometry at ends/corners AND at code o.c. (48\" typical) and at opening jambs \u2014 end cells only carry a text label (cmu.ts:257-258); no rebar members exist, no 48\" o.c. intermediate cells, no jamb-cell grouting, and no horizontal bond-beam bar geometry",
+      "gaps": [
+        "Emit vertical rebar members (material 'steel') inside grouted cells at wall ends/corners, at 48in o.c., and at opening jambs, with numeric position tests (rubric 350 'grouted-cell VERTICAL REBAR geometry').",
+        "Emit horizontal bar members inside the bond beam (rubric 350 'horizontal bond-beam bars').",
+        "Grout the opening-jamb cells (label + future rebar anchor) so jamb reinforcing is derivable (rubric 350 'at opening jambs')."
+      ],
+      "spotChecks": [
+        {
+          "claim": "Block count matches an independent hand tally on a 3.25m \u00d7 2.2m wall",
+          "held": true,
+          "note": "76 blocks (5 even courses \u00d7 8 + 4 odd \u00d7 9), 1 bond beam \u2014 exact"
+        },
+        {
+          "claim": "Lintel bears exactly 8in past both jambs; suppressed when the head is within one course of the bond beam",
+          "held": true,
+          "note": "8.000in both sides; 0 lintels for a 2.1m door in a 2.4m wall"
+        },
+        {
+          "claim": "Corners interlock (400 criterion, expected unmet at 300)",
+          "held": true,
+          "note": "9 overlapping block pairs between two perpendicular walls sharing a corner \u2014 double-stack confirmed, consistent with awarding 300 not 400"
+        }
+      ]
+    },
+    "floor": {
+      "lod": 300,
+      "evidence": [
+        "200 joists short direction + rim + blocking \u2014 src/engines/floor-framing.ts:124-153 (joists), :156-176 (rims), :224-249 (blocking); tests floor-framing.test.ts 'joists span the short (X) direction, laid along Z at o.c.' (asserts 16in row pitch), 'rim joists trace the four perimeter edges', 'one blocking row at mid-span between rows' (numeric length spacing\u2212t)",
+        "300 depth from span table \u2014 floor-framing.ts:81-87 + spec.ts:74; test 'escalates depth with span, null past the table' and '4m span (13.1 ft) picks 2x10'",
+        "300 polygon clipping \u2014 polygonSpans floor-framing.ts:52-78; tests 'L-shape \u2192 clipped span in the notch' and 'rows past the notch are shorter than rows before it'",
+        "300 girder + posts past the table \u2014 floor-framing.ts:179-222; test 'girder at mid-span with posts, joists re-sized for the half span' (2x8 at halved span, flag asserted)"
+      ],
+      "firstFailingCriterion": "350: joist HANGERS at girder-face and flush-header connections (hardware members) \u2014 the girder is dropped and joists bear on top (verified: girder top Y == joist bottom Y), so no hanger hardware exists anywhere",
+      "gaps": [
+        "Emit hanger hardware members (steel) at joist-to-girder/flush-header connections, or make the girder flush and hang joists off its face (rubric 350 'joist HANGERS ... hardware members').",
+        "Double the joists under bearing walls above that run parallel to the joists (rubric 350 'doubled joists under parallel bearing walls above').",
+        "Use slab.holes to split joist rows and frame stairwell openings with headers + doubled trimmers \u2014 holes are currently extracted but ignored (rubric 350 'holes in the slab (stairwells) framed with headers + doubled trimmers')."
+      ],
+      "spotChecks": [
+        {
+          "claim": "Girder posts land at 8 ft o.c. under the girder",
+          "held": true,
+          "note": "post gaps exactly 2.438m on a 6\u00d79m slab"
+        },
+        {
+          "claim": "Girder is a bearing (dropped) connection, not a hung one",
+          "held": true,
+          "note": "girder top = joist bottom = \u22120.3342m \u2014 confirms 350 hangers unmet"
+        },
+        {
+          "claim": "Slab holes are not framed",
+          "held": true,
+          "note": "5 full-length joists run straight through a 2\u00d72m stairwell hole \u2014 350 criterion confirmed missing"
+        }
+      ]
+    },
+    "roof": {
+      "lod": 300,
+      "evidence": [
+        "200 gable/shed rafters, ridge, ceiling joists, collar ties \u2014 src/engines/roof-framing.ts:218-314 (gable), :316-343 (shed); tests roof-framing.test.ts 'rafter long axis points down-slope (verified via three.js Euler)', 'ridge runs along the width at the peak, one size deeper', 'ceiling joists span the depth at the eave line', 'collar ties sit in the upper third, every other rafter' (all numeric)",
+        "200/300 endpoint regression \u2014 roof-framing.regression.test.ts 'every rafter on both slopes spans exactly tip \u2192 ridge' reconstructs endpoints from Euler and asserts eave tip (incl. overhang term) and ridge exactly",
+        "300 hip: hips + shortened ridge + commons \u2014 roof-framing.ts:345-436; tests 'four hips to the corners + shortened ridge' (ridge length 2m exact), 'hip members slope from ridge end to corner' (length hypot(run\u221a2, rise))",
+        "300 hurricane ties in high-wind specs \u2014 roof-framing.ts:203-216 + profiles.ts:119; tests 'no hurricane ties by default; present under a high-wind spec' (count == rafter count), profiles.test.ts 'high wind adds hurricane ties'",
+        "300 overhang geometry \u2014 roof-framing.ts:233-239; regression test asserts tipZ = run + overhang\u00b7cos\u03b8 and tipY = eave \u2212 overhang\u00b7sin\u03b8"
+      ],
+      "firstFailingCriterion": "350: JACK RAFTERS on hip end planes \u2014 hip end planes get zero rafters (verified: 0 members with |x| beyond the ridge half-length); also gambrel/dutch/mansard/flat emit nothing (roof-framing.ts:161-163)",
+      "gaps": [
+        "Add jack rafters at o.c. on the four hip end/side planes, shortening to each hip member with numeric endpoint tests (rubric 350 'JACK RAFTERS on hip end planes').",
+        "Frame gambrel, dutch, mansard, and flat roofs (flat = joist-style with rim) instead of emitting nothing (rubric 350 'gambrel + dutch + mansard + flat framed').",
+        "Emit valley members where two roof segments intersect (rubric 350 'valley members where two segments intersect').",
+        "Add outlookers/rake framing on gable overhangs (rubric 350 'outlookers/rake framing on gable overhangs').",
+        "Add a test that frames with a non-default spec.rafterSize (e.g. snow-bumped 2x10) and asserts rafter member size, closing the 300 'rafter size from spec' test hole."
+      ],
+      "spotChecks": [
+        {
+          "claim": "Hip members run exactly from ridge end to footprint corner",
+          "held": true,
+          "note": "endpoints reconstructed via Euler: high end (\u00b11, 5.517, 0), low end (\u00b14, 3.0, \u00b13) \u2014 exact"
+        },
+        {
+          "claim": "No rafters exist on hip end planes (jacks missing)",
+          "held": true,
+          "note": "0 rafters with |x| > ridgeHalf \u2014 confirms 350 unmet"
+        },
+        {
+          "claim": "Unsupported roof types emit nothing",
+          "held": true,
+          "note": "flat/gambrel \u2192 0 members, matching test 'unsupported types emit nothing'"
+        }
+      ]
+    },
+    "foundation": {
+      "lod": 300,
+      "evidence": [
+        "200 footing + stemwall + anchor bolts \u2014 src/engines/foundation.ts:133-180; tests foundation.test.ts 'one continuous footing: spec width \u00d7 8in high, bottom at -footingDepth', 'stemwall spans footing top \u2192 y = 0', 'anchor bolts are 5/8in square \u00d7 10in steel piercing the plate line' (embedment \u22127in asserted)",
+        "300 frost-driven depth \u2014 profiles.ts:114 (max(12in, frostLine)) ; tests profiles.test.ts 'deep frost drives deep footings', compute.test.ts 'LOD 300 in a deep-frost state digs deeper footings than LOD 200'",
+        "300 R403.1.6 bolt layout \u2014 anchorBoltPositions foundation.ts:51-69; tests '6m wall \u2192 4 bolts: ends at 12in, interior gaps even and \u2264 6ft o.c.', 'minimum TWO bolts even on a wall shorter than one spacing'",
+        "300 seismic hold-downs \u2014 foundation.ts:189-202 + profiles.ts:116-117; tests 'one HDU at each end, just inside the corner, bearing on y = 0', profiles.test 'seismic hold-downs tighten anchor spacing to 4 ft'",
+        "300 slab edge \u2014 foundation.ts:211-223; test 'one 12in-deep concrete thickened edge tucked just below y = 0'"
+      ],
+      "firstFailingCriterion": "350: footing CORNER CONTINUITY (runs extended/mitered so corners are monolithic) \u2014 footings run exactly the wall length with an explicit ASSUMPTION comment deferring corners to renderer overlap (foundation.ts:134-136)",
+      "gaps": [
+        "Extend or miter footing/stemwall runs at shared wall corners so the corner pour is monolithic, with a numeric overlap/extent test (rubric 350 'footing CORNER CONTINUITY').",
+        "Emit interior thickened footings under bearing walls that carry girder posts or a storey above (rubric 350 'interior thickened footings under bearing walls').",
+        "Emit 2\u00d7#4 continuous rebar members in footings and stemwall verticals per SDC (rubric 350 'REBAR: 2\u00d7#4 continuous in footings, verticals at stemwall per SDC')."
+      ],
+      "spotChecks": [
+        {
+          "claim": "CA (SDC D) pipeline yields hold-downs and 4 ft bolt spacing end-to-end",
+          "held": true,
+          "note": "computeLevel with jurisdiction 'CA': 2 hold-downs, max bolt gap 3.46 ft \u2264 4 ft"
+        },
+        {
+          "claim": "MN frost line drives footing bottom to \u221242in",
+          "held": true,
+          "note": "spec.footingDepth 42.0in, footing bottom \u22121.0668m exact"
+        },
+        {
+          "claim": "FL defaults exterior walls to CMU and enables hurricane ties",
+          "held": true,
+          "note": "exteriorWallDefault 'cmu', wind 140 \u2192 ties true; blocks emitted through computeLevel"
+        }
+      ]
+    },
+    "electrical": {
+      "lod": 300,
+      "evidence": [
+        "200 receptacles per NEC spacing \u2014 src/engines/electrical.ts:156-190,218-235; tests electrical.test.ts 'spacing <= 12ft and ends <= 6ft on each face', plus electrical.regression.test.ts property test over 400 random walls (6ft/12ft walk, none in door ROs)",
+        "200 switches at doors / lights per room / panel \u2014 electrical.ts:237-261, :264-292, :324-367; tests 'interior wall: switch on BOTH faces, 8in past the +u RO edge' (numeric), 'every room gets a ceiling light at its centroid', 'prefers the longest garage-bounding wall over a longer exterior wall' (panel at 60in AFF)",
+        "300 GFCI by room type \u2014 electrical.ts:45-50,225; tests 'receptacles whose face point falls in a kitchen become GFCI', 'an interior kitchen/living partition is GFCI on the kitchen face only'",
+        "300 smoke alarms per R314 \u2014 electrical.ts:279-308; tests 'each bedroom gets a ceiling smoke alarm (IRC R314.3)', 'a hallway adds one alarm outside the sleeping area'",
+        "300 doorway breaks \u2014 usableSegments electrical.ts:156-175; tests 'a door splits the wall at its rough opening', 'windows do NOT break the wall line', 'stub segments under 2ft are dropped'",
+        "300 face-correct placement \u2014 faceOf/interiorFaces electrical.ts:109-142; tests 'rotationY points each device away from its wall (three.js check)', 'face lands on the side whose offset point is inside a room', 'room on the other side flips the face'"
+      ],
+      "firstFailingCriterion": "350: CIRCUITING \u2014 every device assigned to a circuit (2 kitchen SABC 20A, bath 20A, laundry 20A, lighting/general by 3VA\u00b7sqft) \u2014 no circuit concept exists anywhere in the engine, fixtures carry no circuit meta",
+      "gaps": [
+        "Assign every fixture a circuit id per NEC rules (2 kitchen SABC, bath/laundry 20A, lighting by 3VA\u00b7sqft) stored in fixture.meta (rubric 350 'CIRCUITING \u2014 every device assigned to a circuit').",
+        "Derive a panel schedule: takeoff rows per circuit with device counts and estimated VA (rubric 350 'panel schedule derivable').",
+        "Place 3-way switch pairs for rooms with 2+ doors and hallways (rubric 350 '3-way switching for rooms with 2+ doors and hallways')."
+      ],
+      "spotChecks": [
+        {
+          "claim": "Laundry zone triggers GFCI (only kitchen is covered by tests)",
+          "held": true,
+          "note": "all receptacles on a laundry-bounded wall are receptacle-gfci"
+        },
+        {
+          "claim": "NEC walk on a 15m wall: ends \u2264 6ft, gaps \u2264 12ft",
+          "held": true,
+          "note": "first at 4.92 ft, max gap 9.84 ft"
+        },
+        {
+          "claim": "GFCI split by face on a kitchen/living partition",
+          "held": true,
+          "note": "matches suite test 'kitchen face only'; 8 GFCI vs 6 plain in the two-room count-sanity plan"
+        }
+      ]
+    },
+    "plumbing": {
+      "lod": 250,
+      "evidence": [
+        "200 vent stack \u2014 src/engines/plumbing.ts:142-152; test mep.test.ts 'one vent stack rising through the roof at the bathroom wet wall' (length = height+0.6 asserted)",
+        "200 stub-outs / drains / supplies / water heater / cleanout \u2014 plumbing.ts:174-202, :204-232, :235-245, :153-160; tests 'every wet room gets stub-outs (2 bath, 1 kitchen, 1 laundry)', 'drains + hot/cold supplies run from remote wet rooms toward the stack', 'water heater prefers the laundry; cleanout at the stack base'",
+        "300 wet-wall selection logic \u2014 wetWallFor plumbing.ts:62-90; test 'wetWallFor honors boundary walls'",
+        "300 sizes and rough-in heights EXIST IN CODE ONLY \u2014 plumbing.ts:35-38 (3in stack, 2in branch, 3/4in supply from data/mep-rules.json), :174-187 (12/21/18/42in heights): no test asserts any pipe diameter or any stub-out height, so per the evidence standard these score at most half a level up from 200"
+      ],
+      "firstFailingCriterion": "300: sizes per dataset (3\" main / 2\" branch / supply sizes); rough-in heights \u2014 no suite test asserts pipe dims or stub heights, AND the 3\" main drain member is never emitted: the stack room's drain run is zero-length by construction (plumbing.ts:139 and :168 compute the identical point), so MAIN_DRAIN is dead code",
+      "gaps": [
+        "Add numeric tests asserting pipe diameters (3in stack/main, 2in branch, 3/4in supply dims) and stub-out rough-in heights (12/21/18/42in AFF) (rubric 300 'sizes per dataset; rough-in heights').",
+        "Emit the 3in building-drain/main run as real geometry \u2014 route the stack-room drain (currently always zero-length) or a main to a cleanout/sewer exit point (rubric 300 'sizes per dataset (3\" main)').",
+        "Then for 350: route drains/supplies Manhattan along walls with 1/4in-per-ft slope on horizontal runs, trap arms within code length, and vent reconnect above flood rim (rubric 350)."
+      ],
+      "spotChecks": [
+        {
+          "claim": "Pipe sizes and rough-in heights are correct in code (even though untested)",
+          "held": true,
+          "note": "stack 3.00in; branch drain 2.00in; stubs at 12/21/18/42in AFF \u2014 code works, but no regression test would catch a break"
+        },
+        {
+          "claim": "A 3in main drain run is emitted for the stack room",
+          "held": false,
+          "note": "stackAt and the stack room's stub point are the same computed point \u2192 run length 0 \u2192 null; only 2in branch drains ever appear. Counter-evidence recorded; score capped at 250"
+        }
+      ]
+    },
+    "hvac": {
+      "lod": 300,
+      "evidence": [
+        "200 equipment/registers/trunk+branches/return/thermostat \u2014 src/engines/hvac.ts:128-199; tests mep.test.ts 'a register in every habitable room (laundry included), none in the hallway', 'trunk + one branch per register, branches end at the registers' (endpoint reconstruction via Euler), 'return near the unit, thermostat on a wall at 60 inches'",
+        "300 tonnage from conditioned area, labeled rule-of-thumb \u2014 tonsFor hvac.ts:58-62, label :134; tests 'tonnage from conditioned area (garage excluded), sane bounds' (tonsFor(80)=2, equip.meta.tons=2)",
+        "300 service-space equipment placement \u2014 hvac.ts:119-126; test asserts equip.sourceId === 'r_laundry' (laundry > garage > hallway > largest)"
+      ],
+      "firstFailingCriterion": "350: Manhattan duct routing (trunk along a hallway/corridor axis, branches at right angles) \u2014 the trunk is a straight diagonal from equipment to the register centroid and branches tee at arbitrary angles (hvac.ts:161-170)",
+      "gaps": [
+        "Route the trunk along a hallway/corridor axis and make branches leave at right angles (Manhattan) (rubric 350 'Manhattan duct routing').",
+        "Size each register's cfm from room area, splitting cfm/ton proportionally, surfaced in labels/meta (rubric 350 'register cfm sized from room area').",
+        "Step the trunk cross-section down after each branch takeoff (rubric 350 'trunk size steps down after takeoffs').",
+        "Add bath exhaust fans and a laundry dryer vent with exterior terminations (rubric 350 'bath exhaust fans + dryer vent').",
+        "Add a suite test with a garage room proving it is excluded from conditioned tonnage (closes the untested sub-clause of 300)."
+      ],
+      "spotChecks": [
+        {
+          "claim": "Garage area is excluded from tonnage",
+          "held": true,
+          "note": "2.0 tons with and without an 80 m\u00b2 garage added \u2014 correct, but no suite test contains a garage"
+        },
+        {
+          "claim": "Minimum tonnage clamps at 1.5",
+          "held": true,
+          "note": "tonsFor(10 m\u00b2) = 1.5"
+        },
+        {
+          "claim": "Branches terminate at registers or the register sits on the trunk",
+          "held": true,
+          "note": "suite test verified by endpoint reconstruction; re-ran green"
+        }
+      ]
+    },
+    "takeoff": {
+      "lod": 300,
+      "evidence": [
+        "200 piece counts from actual members \u2014 src/engines/takeoff.ts:141-259; tests takeoff.test.ts 'one row per kind present, counted', 'anchor bolts, hold-downs, and hurricane ties (label match) count each'",
+        "300 stock rounding \u2014 stockFor takeoff.ts:68-81; tests 'every stock boundary rounds up correctly', 'an exactly-8-ft cut buys 8 ft stock (no float creep)', 'a 22-ft girder exceeds stock: two 20-ft sticks, field splice'",
+        "300 board feet \u2014 takeoff.ts:89-95,164-171; tests '2x6 stud at 8 ft stock: 8 bd-ft exactly', 'spliced runs bill both purchased sticks: 80 bd-ft'",
+        "300 yd\u00b3 \u2014 takeoff.ts:199-213; tests 'sums member volumes and converts m\u00b3 \u2192 yd\u00b3 at 1.30795', 'CMU blocks counted each and excluded from poured yardage', 'tiny pour never rounds to 0.0'",
+        "300 devices with code citations \u2014 FIXTURE_ROWS takeoff.ts:102-117; test end-to-end CSV contains 'Receptacles,NEC 210.52 spacing,1,pcs'; FLAG rows tested ('one FLAG row per distinct flag text')"
+      ],
+      "firstFailingCriterion": "350: per-SYSTEM sections \u2014 computeTakeoff returns one flat row list with no system grouping (verified end-to-end: 29 flat rows for a 5-wall house), and there are no sheathing/subfloor/drywall sheet-count lines",
+      "gaps": [
+        "Group takeoff rows into per-system sections (wall framing / floor / roof / foundation / electrical / plumbing / HVAC) in both rows and CSV (rubric 350 'per-SYSTEM sections').",
+        "Add 4x8 sheet-count lines for wall sheathing, subfloor, and drywall computed from wall/slab areas (rubric 350 'sheathing/subfloor/drywall sheet counts').",
+        "Extend hardware lines to hangers and roof ties via dedicated roles instead of the /hurricane/i label regex (rubric 350 'hardware (hangers/ties/washers) lines').",
+        "Add linear-feet lines for pipe by size and duct by size from the MEP run members (feeds rubric 400 'wire by gauge, pipe by size, duct by size')."
+      ],
+      "spotChecks": [
+        {
+          "claim": "End-to-end takeoff from a real computeLevel scene is internally consistent",
+          "held": true,
+          "note": "29 rows: splice lines for 7m plates/rims (12 pcs 20ft), 5.9 yd\u00b3 concrete, 24 bolts, 8 hold-downs, FLAG row for a 4.2m window header"
+        },
+        {
+          "claim": "Stock rounding boundaries exact at 8/10/12/14/16/20 ft",
+          "held": true,
+          "note": "suite test re-verified; feet(8) lands in 8 ft stock"
+        },
+        {
+          "claim": "CMU wall flows into 'CMU block' pcs, not yd\u00b3",
+          "held": true,
+          "note": "blocks counted each; only bond-beam/lintels pour"
+        }
+      ]
+    },
+    "ui-ux-perf": {
+      "lod": 300,
+      "evidence": [
+        "One-column panel, Generic/Code/Fab as the only LOD control \u2014 src/panel.tsx:42-63 (single flex column), :158-171 (segmented '200/300/400'), :190-216 (per-system toggles unchanged), no modal dialogs anywhere in panel.tsx",
+        "Perf gate test exists and passes \u2014 src/framing/perf.test.ts:139-150 '20-wall house, all systems, LOD 400: p95 < 50ms' and '60-wall: p95 < 150ms' (performance.now-based, ran green standalone and in suite: 216 pass / 0 fail)",
+        "Instanced rendering, draw calls O(color buckets) \u2014 src/framing/renderer.tsx:109-136 (one InstancedMesh per color bucket, no per-member React components); spot check: 4 buckets for a full LOD-400 all-systems scene",
+        "Warnings surfaced, never blocking \u2014 compute.ts:97-100 pushes warnings; panel.tsx:218-225 renders them as text under the member count"
+      ],
+      "firstFailingCriterion": "Gate item 'takeoff stays scannable / warnings surfaced': TakeoffSection renders only rows.slice(0, 12) with no collapsible remainder (panel.tsx:289), which hides FLAG rows (e.g. 'ENGINEERED BEAM REQUIRED' landed at row index 15 in a realistic scene) and all fixture rows from the UI",
+      "gaps": [
+        "Make the takeoff list collapsible/scrollable (or group into sections) instead of truncating at 12 rows so FLAG lines are always visible (gate: 'takeoff stays scannable', 'warnings surfaced, never blocking').",
+        "Compute computeLevel once per scene change and share it between XraySection and TakeoffSection \u2014 it currently runs twice per edit (panel.tsx:75-78 and :270-273).",
+        "Surface all warnings, not just warnings[0] (panel.tsx:221-223).",
+        "Add a draw-call regression test asserting bucket count stays bounded (\u2264 number of colors) for a large scene."
+      ],
+      "spotChecks": [
+        {
+          "claim": "Perf gate passes standalone",
+          "held": true,
+          "note": "2 pass in 82ms; suite 216/216 green in 126ms total"
+        },
+        {
+          "claim": "Draw calls scale with color buckets, not member count",
+          "held": true,
+          "note": "4 buckets for 52 members across all systems; renderer builds one InstancedMesh per bucket"
+        },
+        {
+          "claim": "FLAG rows are visible in the panel takeoff",
+          "held": false,
+          "note": "In a realistic 5-wall scene the ENGINEERED BEAM flag is row 15; the panel shows rows 0-11 only \u2014 hidden in UI (CSV export retains it)"
+        }
+      ]
+    }
+  },
+  "advisories": [
+    "Concurrent build activity during the audit: src/framing/perf.test.ts appeared at 08:34 (mid-review) and compute.ts/schema.ts/definition.ts were touched minutes earlier; scores reflect the tree as re-tested afterward (216 tests, 0 fail).",
+    "panel.tsx computes computeLevel twice on every scene edit (XraySection and TakeoffSection each useMemo over the whole nodes map) \u2014 at 60 walls that is 2\u00d7 the ~perf-budget per pointer-driven change; compute once and share.",
+    "Takeoff UI truncates to 12 rows with no expander: FLAG rows (engineered-beam warnings) and all device rows are invisible in the panel for any realistic house; only the CSV keeps them.",
+    "Terminal stud bay can exceed o.c. spacing by one stud thickness (25.46in at 24in o.c.) when studPositions drops a grid stud that collides with the guaranteed end stud (wall-framing.ts:230).",
+    "SlabSlice.holes are extracted (wall-model.ts:107-110) but never consumed \u2014 joists run straight through stairwells; this is also the rubric's floor-350 line.",
+    "Plumbing MAIN_DRAIN (3in) is effectively dead code: the stack room's drain run is always zero-length because stackAt and the room's stub point are the same computed point (plumbing.ts:139,168).",
+    "Takeoff counts hurricane ties via /hurricane/i label regex across engines (takeoff.ts:224); a label rename in roof-framing silently zeroes the count and no cross-engine test guards the contract.",
+    "CMU grouted-cell labels ('grouted cell + vertical rebar') feed nothing: takeoff has no grout volume, rebar, or mortar line, so the labels are display-only.",
+    "floor-framing POST_HEIGHT is hard-coded 2.4m regardless of the storey below (floor-framing.ts:27) \u2014 posts will float or clip on non-default storey heights.",
+    "Electrical places receptacles on both faces of every interior wall even when neither side is a habitable room (acknowledged over-placement); closet/garage partitions accumulate devices that inflate the takeoff.",
+    "HVAC test fixtures contain no garage room, so the 'conditioned area excludes garage' behavior (verified manually) has no regression test."
+  ],
+  "overall": "This is defensibly LOD-300-partout, not 400 \u2014 and one system short of even that: plumbing sits at 250 because two of its three 300 criteria (dataset pipe sizes, rough-in heights) have zero test coverage and the 3-inch main drain member can never be emitted. Everything that exists is unusually well built: 216 passing tests with real numeric geometry assertions (three.js Euler endpoint reconstruction, hand-tallied CMU counts, NEC property tests over 400 random walls), a passing sub-50ms perf gate at LOD 400 all-systems, honest ASSUMPTION/LOD-400 comments, and instanced rendering that keeps draw calls at ~4 buckets. But not a single system reaches 350: there are no corner assemblies or partition backing, no joist hangers or stairwell framing, no jack rafters (and four roof types emit nothing), no footing corner continuity or rebar, no circuits, no Manhattan MEP routing, no drain slope, and the takeoff is a flat list with no per-system sections, sheet counts, cut lists, or fastener schedules. Next round I would attack: (1) the plumbing test debt and dead main-drain path, (2) hip end planes and the unframed roof types, (3) corner conditions everywhere (wall corners double-place end studs, CMU corners double-stack \u2014 9 overlapping block pairs verified, footings stop dead at corners), and (4) the panel's truncated takeoff, which currently hides the one flag a builder must not miss."
+}

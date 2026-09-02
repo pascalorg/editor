@@ -1,0 +1,18 @@
+{
+  "round": 11,
+  "summary": {
+    "verdict": "3/10 at 400 — tonight's interpenetration gate is the right instrument but it shipped half-blind, and the round-10 demotions are only partly closed. The gate's own slab factory passes `y:` where SlabSlice wants `elevation:` (interpenetration.test.ts:225), so every floor member composes at NaN Y and `aabbTouch` short-circuits: the floor and foundation-slab scenarios return [] vacuously. `bunx tsc --noEmit` is RED at HEAD on exactly that line plus a 1-arg `test.todo` (:308) — bun test is green (407 pass / 1 todo) only because bun does not typecheck. Verified GOOD: the inscribed rafter geometry is exactly tangent (ridge-face and eave/fascia gaps 0.0 mm at every pitch 5-60deg, no continuity regression), gable+hip compose clean, the foundation oblique multiplier (1+|cos|)/sin holds from 20-80deg, electrical LA-1/GA-1 are now numerically pinned and wiring hugs walls at every plan rotation (max 0.0000 m, zero air runs), the cut list covers 202/202 wood members, and the perf/draw-call gates are real. REFUTED: floor blocking still overruns 38-172 mm into joists and rims on plain rectangles (the round-10 demotion did not close); stair trimmers clash with commons in 36/101 swept hole positions; joists pierce rim joists on any non-axis-aligned slab edge; walls double-stack cap plates at oblique corners because the (1+|cos|)/sin fix was never ported out of foundation.ts; CMU double-stacks blocks and bond beams at 45/60deg corners (the literal 400 criterion); gambrel, mansard, dutch and flat roofs plus hips at 60-80deg and pitches <=10deg interpenetrate because the ridge-face/plumb-inset fix landed only on gable and hip; foundation still clashes at 15deg corners, at interior-bearing tees, at Y-junctions, and puts #4 stemwall verticals inside 5/8 anchor bolts in the SDC-D path; plumbing and HVAC route on WORLD X/Z, not on wall directions, so a house drawn at 17/30/45deg gets branch drains 2.0 m off any wall and a trunk that crosses its corridor instead of following it. Electrical promoted 350->400. Recommendation for round 12: fix the gate typo and add a non-finite guard first, then generalize the scenario matrix along the three axes the counterexamples exploit — plan rotation, roof type, and junction topology.",
+    "lod": {
+      "wall-framing": 350,
+      "cmu": 350,
+      "floor": 300,
+      "roof": 350,
+      "foundation": 350,
+      "electrical": 400,
+      "plumbing": 350,
+      "hvac": 350,
+      "takeoff": 400,
+      "ui-ux-perf": 400
+    }
+  }
+}

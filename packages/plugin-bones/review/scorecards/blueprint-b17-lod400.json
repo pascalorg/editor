@@ -1,0 +1,190 @@
+{
+ "round": "B17-lod400",
+ "pin": "ce8166035b73bfcea9fab2d374c770cb5cee22da",
+ "branch": "feat/lod400-b17",
+ "base": "3ff4ec5e287ac3afcd8ac0d5ce8524c4afa17b25",
+ "date": "2026-08-21",
+ "protocol": "Paper round on the B17 batch (slab-on-grade field R506.1 + 6-mil vapor retarder R506.2.3 + slab-field yd³/sqft takeoff) per review/BLUEPRINTS.md. Pure buildPlanSet in the /private/tmp/pilot-b17 worktree at the pin, compared against a detached worktree at the base 3ff4ec5 with a FIXED date so sheets byte-compare. Three sets each side: demo-house-FL (fc866f2f271b over HTTP, ground level, 5 slabs incl. the slab-less Living/Kitchen wing — 14 sheets), twostorey-NY-ground (composed 9×6 shell + interior bearing partition + slab with a 1.2×1.6 utility hole, node on the GROUND storey — 13 sheets), twostorey-NY-upper (same scene, node on STOREY 1 with framed floor, stair hole + 3.51 m slider RO — 11 sheets), plus a 41-flag pagination stress set. All 38 pin sheets rasterized with Playwright page.setContent @2x and the affected ones WALKED; foundation-sheet linework pixel-probed through the strips; member dumps + takeoff JSON diffed member-by-member. Evidence: /tmp/b17-exam/{out,out-base}/ + crops.",
+ "verdict": "REVISE — the FOUNDATION plan is exactly what the round asked for (translucent layer-ZERO slab field, hardware legible on top, hole/band carves honest, quantities member-exact, warning verbatim, upper storeys byte-equal), but the SIDE VIEWS lie about the pour: on the demo section, slab strips whose axis lies parallel to the cut plane print as 0.66–1.2 m-tall dashed picket bands straddling grade — memberAxis uses the SECOND-largest dim (the strip's plan width) as stroke thickness, so the 3-1/2\" slab draws up to ~13× too thick, overprinting stud bottoms and the perimeter detail, and the coincident vapor retarder doubles the band. Same class pollutes all four demo elevations and lays gray ribbons across the cover isometric. The two-storey section is the proof the intent is right: there the strips CROSS the plane and print as a thin dark 4.5 px cut band at grade — a perfect new stratum. One rendering fix (plate-role stroke width = thickness dim; suppress the membrane on side views) closes the round.",
+ "items": {
+  "FOCUS-1-slab-underlay-foundation-sheet": {
+   "status": "PASS",
+   "checklist": [
+    "S3",
+    "S4",
+    "S1"
+   ],
+   "evidence": "demo 02-foundation-plan: 27 translucent strip rects (fill #c3c9cf, fill-opacity 0.35, hairline stroke) ALL draw before the first mitered path and first hardware circle (SVG indices: last slab rect 3401 < first miter path 3647 < first circle 11489). Pixel probe on the 2x PNG: field interior averages 235 gray; a scanline through the south perimeter run carries 89 dark px (min 67) — stemwall miters, filled bolt dots and open rebar dowel circles all read crisply on top (crop-south-run.png, crop-interior.png). The round-5 deck-washout class does NOT recur. twostorey-NY-ground: strips tile inside the stemwall faces, the 1.2×1.6 utility hole is carved white, the interior bearing footing interrupts the field exactly at its band, mitered corners intact. The demo's empty NW room is the slab-less Living/Kitchen — honestly empty, with its pre-existing 'no floor slab under it' flag printed on sheet 3/3.",
+   "note": "Strip seams read like the floor sheet's deck convention — consistent house style. Field areas: demo 75.2 m² over 5 slabs (all 5 emit), ground compose ~46.8 m² after hole + band carves."
+  },
+  "FOCUS-2-legend-rows": {
+   "status": "FLAG",
+   "checklist": [
+    "P2",
+    "P4"
+   ],
+   "evidence": "Both new rows print on both ground foundation sheets, ABOVE the bolt/dowel rows: 'slab — 3-1/2\" slab-on-grade, drawn translucent — on 4\" base course (R506.1/R506.2.2)' and 'vapor-retarder — 6-mil vapor retarder under slab (R506.2.3) — not drawn'. But the legend backing rect is FIXED at 250 px (MARGIN-4, w=250) and the slab row runs ~430 px — rows 1–2 overflow the box by ~170 px and the box's right border strikes through row 1's text mid-phrase. Legible on both scenes only because blank paper happens to sit right of the box.",
+   "note": "Not the round-5 class (nothing prints on bare linework here) but 'inside the box' is geometrically false. Cheap fix: size the backing rect to the longest legend row (the circuit-legend code already widens per column) or wrap the slab row at ~44 chars."
+  },
+  "FOCUS-3-takeoff-rows": {
+   "status": "PASS",
+   "checklist": [
+    "S4",
+    "C5",
+    "S11"
+   ],
+   "evidence": "demo 12 (1/3): 'Foundation · Concrete — 11.9 yd³ (footings)', '— 1 yd³ (stemwalls)', '— 8.7 yd³ (slab field (3-1/2\" slab-on-grade, R506.1))', 'Vapor retarder 6-mil poly — 890 sqft (under slab, +10% seam laps/turn-ups (R506.2.3))' — all four wrapped at word boundaries, three pours split by element. Member-exactness re-derived independently: 27 strips × dims = 6.69 m³ × 1.30795 = 8.75 → 8.7 ✓; membrane 75.2 m² × 1.1 × 10.7639 = 890.3 → 890 ✓ (the +10% lap factor is STATED on the row). Ground compose: 5.4 yd³ + 554.1 sqft, membrane area ≡ field area 1:1. Sheet 13: 'Foundation · Anchor bolts — 31 pcs (sole plate anchorage (R403.1.6))' + 'Rebar — 591.4 lf' — the B5 row text intact. No 'slab edge' phantom row anywhere (the dead role is gone from the union).",
+   "note": "Booked == built in both directions: stripping the members drops both rows (takeoff.test pin). Foundation section reads coherently as footings / stemwalls / slab as separate orderable pours."
+  },
+  "FOCUS-4-honest-warning": {
+   "status": "PASS",
+   "checklist": [
+    "P4"
+   ],
+   "evidence": "demo 14 (3/3) Flags block: '⚑ Ground floor is slab-on-grade — the Foundation system draws the slab field, vapor retarder and footings' prints VERBATIM, wrapped whole across two lines, no ellipsis anywhere on the sheet; the same compute result carries 27+27 slab/membrane members, so the promise names geometry that exists (gated in compute.multistorey.test). Base wording ('see Foundation for the slab and footings') retired — the only warning diff across all three scenes.",
+   "note": "The retitle is the honest half of B17: the old text pointed at a phantom."
+  },
+  "FOCUS-5-section-stratum": {
+   "status": "FAIL",
+   "checklist": [
+    "P3"
+   ],
+   "evidence": "twostorey-NY-ground 11-section: CORRECT — strips cross the cut plane and print as dark #222 cut rects 4.5 px tall (= 0.0889 m at 1:75) tiled edge-to-edge between the stemwalls: the slab reads as a thin stratum at grade under the walls, membrane a 1.5 px line under it. demo-house-FL 11-section: WRONG — slab_1's strips lie PARALLEL to the cut plane and print via the 'in-band beyond' path as dashed lines with stroke-width = memberAxis w = the strip's PLAN WIDTH: measured 45.2/25.0/20.5/9.9 px (= 1.20/0.66/0.54/0.26 m) centered at y 522.1, i.e. a picket band straddling grade from ~+0.55 m into the stud bottoms to ~−0.65 m, at 0.6 opacity across the whole west band (SVG x 263–631); the vapor retarder draws an IDENTICAL second band 2.3 px lower (exhibits: /tmp/b17-exam/crop-section-grade-pin.png vs -base.png; the 10 added SVG lines). The 3-1/2\" pour reads as a ~4-ft-deep mass — a lie about geometry on paper. Same class on all four demo elevations (heavy gray comb below grade, e.g. south: foundation strokes to 45.2 px vs base max 20.5) and the cover isometric (gray dashed ribbons across the interior framing, absent at base). Root cause: memberAxis returns w = second-largest dim — right for sticks, wrong for PLATE members whose width >> thickness. Bonus dead ink: plane-CROSSING strips also emit degenerate zero-length dashed lines (x1==x2, butt caps, invisible), each duplicated 2× (50 added elements on the ground section for 38 members).",
+   "note": "The subfloor deck shares this class on upper-storey elevations (20.5 px floor-framing strokes — pre-existing, byte-identical at base, never flagged because it blends into the platform band). Fix once for all plate roles: side-view stroke width = the THICKNESS dim (min dim) for slab/vapor-retarder/subfloor, and suppress the vapor retarder on side views entirely (0.15 mm — legend-only, mirroring the plan-sheet stance); drop the degenerate zero-length emits."
+  },
+  "REG-blast-radius": {
+   "status": "PASS",
+   "checklist": [
+    "S4",
+    "A3",
+    "E5"
+   ],
+   "evidence": "Member diff pin-vs-base: demo 2084 = 2030 + 27 slab + 27 vapor-retarder, ZERO removed/changed; ground compose 514 = 476 + 19 + 19; upper storey 451/451 IDENTICAL and all 11 upper sheets byte-equal as SVG strings — upper storeys never grow a pour. Ground-set wall/roof/electrical/MEP plan sheets byte-equal to base (slab members live in system foundation only); the diffs are exactly cover/foundation/elevations/section/schedules. master-baseline.json regenerated for the new ground-level members — disclosed in the branch, E5's byte-equality pin re-anchored.",
+   "note": "Blast radius is exactly the manifest: new members + retitled warning + the takeoff rows."
+  },
+  "REG-round5-7-sweep": {
+   "status": "PASS",
+   "checklist": [
+    "P2",
+    "P4",
+    "C5",
+    "S11",
+    "C3"
+   ],
+   "evidence": "Deck under-layer: upper floor sheet byte-equal to base (verified paper-good in rounds 5/6/7 + B5). Flag pagination (B21a): 41-flag stress set → 'Flags (continued 1/2)' + '2/2' continuation sheets, two-column, every flag verbatim incl. tails, zero '…' across all 10 sheets, n/N numbering correct. Engineered SKU: upper schedules books 'Engineered header (LVL/PSL — by supplier) — 1 pcs' + lf row for the 3.51 m slider, no dimensional sticks. PT rows: demo '2x4 PT/2x6 PT' pcs+bd-ft rows beside untreated siblings; ground '2x6 PT — 2+4 pcs, 120 bd-ft'; anchor row 'sole plate anchorage (R403.1.6)', 'mudsill' zero hits. Climate labels: 'Climate zone 2A · Wall cavity R-13' (FL) and 'Climate zone 5A · Wall cavity R-30' (NY) print in characteristics. Bolt legend derived from members: '5/8\" anchor bolts @ 5'-7.81\" o.c. max — 31 pcs' (demo, 31 bolt members exactly) / '@ 5'-10.75\" — 20 pcs' (ground, 20 exactly); 'vertical rebar dowels — 45 pcs' counts foundation-system dowels only (the 42 CMU verticals correctly excluded). A1: strip rects span 443.3 px for 8.797 m world = 50.39 px/m vs the stated 1:75 (50.4) — 0.1% error.",
+   "note": "Foundation sheet still has no legend rows for footing/stemwall roles themselves (size-less concrete runs; only slab/vapor/bolts/dowels are named) — pre-existing P2 laxity, byte-identical at base, carried."
+  },
+  "SWEEP": {
+   "status": "PASS",
+   "evidence": "Full suite at the pin (worktree /private/tmp/pilot-b17 @ ce81660): bun test → 968 pass / 1 todo / 0 fail (969 tests, 31,160 expect() calls, 42 files, 537 ms); bunx tsc --noEmit clean. Checklist S4 row extended to the slab field with its four named gates all present and green (foundation.test slab-field describe, takeoff.test B17 S4-parity describe, compute.multistorey B17 describe incl. the warning-names-real-geometry pin and upper-storey exclusion, interpenetration slab scenarios incl. the stair-hole SAT and the 45° chamfered compose). No gated row regressed.",
+   "note": "S1 compose gates prove the carve engine: strips never share volume with stemwalls/footings, never reach into holes, and clear the oblique 45° stemwall band."
+  }
+ },
+ "recommendations": [
+  "BLOCKER (the round's one FAIL): side-view stroke width for plate members — memberAxis's w = second-largest dim turns the slab field's 1.2 m strip WIDTH into drawn DEPTH on every elevation/section/cover; use the thickness dim for roles slab/vapor-retarder (and subfloor — same pre-existing class on upper elevations), so the pour prints 3-1/2\" thin. Add a plan-set gate pinning the section stroke width of a slab strip to its thickness × scale.",
+  "Suppress the vapor retarder on elevations/section like the foundation plan already does (coincident under the slab, 0.15 mm real — it currently doubles the false band); keep the legend row.",
+  "Stop emitting the degenerate zero-length dashed lines for plane-crossing strips in sectionSheet (dead ink, duplicated 2× per member — 50 junk elements on the ground section).",
+  "Widen the foundation legend backing rect to its longest row (or word-wrap the slab row): the fixed 250 px box's border strikes through both new rows' text.",
+  "Carried (pre-existing, byte-identical at base): footing/stemwall roles have no legend rows on the foundation sheet; plan-sheet right bias on the shared transform (P1); demo 'Living / Kitchen has no floor slab' wing prints honestly empty — consider a 'NO SLAB — see flags' note inside the empty room outline."
+ ],
+ "suite": {
+  "pass": 968,
+  "todo": 1,
+  "fail": 0,
+  "tests": 969,
+  "assertions": 31160,
+  "files": 42,
+  "tsc": "clean"
+ },
+ "round2": {
+  "round": "B17-lod400-r2 (closing paper check on the round-1 FAIL + skeptic riders)",
+  "pin": "ddf78537d5d0dfb9f4d8e991cd4ab53c898a5ee5",
+  "branch": "feat/lod400-b17",
+  "base": "ce8166035b73bfcea9fab2d374c770cb5cee22da (the round-1 pin — pin vs base isolates the round-2 fix commit)",
+  "date": "2026-08-21",
+  "protocol": "Round-2 paper check per review/BLUEPRINTS.md in a detached scratch worktree at ddf7853 (972-pass suite). Same three sets as round 1 — demo-house-FL (fc866f2f271b re-fetched over HTTP, graph byte-equal to the round-1 snapshot, 14 sheets / 2084 members), twostorey-NY-ground (13 sheets / 514), twostorey-NY-upper (11 sheets / 451) — regenerated with pure buildPlanSet and rasterized with Playwright page.setContent @2x (editor never opened). Every pin-vs-round-1-pin DIFF sheet walked by eye with zoom crops of the grade band, the upper-storey platform, and the top-plate line; stroke-width histograms extracted per system color from every side-view SVG and mapped member-by-member to dims via members.json. Riders re-proven live with a scratch bun test on the real demo graph. Evidence: /tmp/b17r2-exam/{out,crop-*}.",
+  "verdict": "PASS",
+  "items": {
+   "FOCUS-1-section-slab-stratum": {
+    "status": "PASS",
+    "checklist": [
+     "P3",
+     "A1"
+    ],
+    "evidence": "demo 11-section: foundation stroke set collapses from round-1 {45.2/25.0/20.5/9.9 px ribbons} to {4.5, 5.1, 10.2, 15.4, 0.7/0.8} — every value maps to a true member dim at the stated 1:75 (50.39 px/m): slab band 4.5 px = 0.0889 m EXACT, stemwall curbs 5.1 = 0.1016, footings 10.2/15.4 = 0.2032/0.3048, membrane clamped 0.7 hairline at y 524.3 hugging the pour underside (band spans 519.9–524.4) — inside the band's lower edge, never a twin band 2.3 px below it. Zoom crop: stud bottoms sit clear above grade on clean paper; the 3-1/2\" pour reads as one thin stratum with an honest dashed below-grade comb under it (crop-r2-section-grade.png vs crop-r1-section-grade.png).",
+    "note": "The round-1 picket band straddling grade (~+0.55 m into the stud bottoms to −0.65 m) is dead."
+   },
+   "FOCUS-2-elevations-and-cover": {
+    "status": "PASS",
+    "checklist": [
+     "P3"
+    ],
+    "evidence": "All four demo elevations share the identical honest histogram {0.7×139, 3.4×27, 3.8×9, 7.7×9, 11.5×9} at 1:100 (37.8 px/m): slab 3.4 = 0.0889, stemwall 3.8, footings 7.7/11.5 — round-1 max was 44.1 px = 1.17 m. Pixel walk (south + north crops): tan wall stops AT grade, one shallow gray comb below, no gray wash over stud bottoms, no double-depth band. Cover iso: round-1 foundation ribbons up to 35.3 px → round-2 max 9.2 px (the 0.3048 footing), membrane hairlines 0.7×139 present; the interior floor reads as faint thin dashes, zero gray ribbons across the framing (01-cover.png pin vs base). Two-storey ground cover: 37.7/37.8/45.4 ribbons gone; the 38.4 px lines that REMAIN are the NY frost stemwalls' true 1.016 m side extent."
+   },
+   "FOCUS-3-class-side-effects": {
+    "status": "PASS",
+    "checklist": [
+     "P3",
+     "C4"
+    ],
+    "evidence": "Plate-like class now honest everywhere and nothing fell to invisibility: wall plates 1.4 px @1:100 / 1.9 @1:75 / 2.9 @1:50 (0.038 m × scale — above the 0.7 clamp, print visibly; demo wall band reads unchanged in character, two-storey plate lines crisper — crop-*-north-topplate.png); footings 0.406→0.203/0.305 m; HVAC pad 35.9→3.8 px (its true 4\"). The predicate correctly refuses to demote tall runs: NY stemwalls (dims [L, 1.016, 0.2032] — vertical dim NOT smallest) keep their true 51.2 px depth on the compose sections/elevations, anchor bolts/rebar dowels (vertical) unchanged at 0.8/0.7. Subfloor deck (the latent sibling): upper section round-1 drew a false 30.7 px (0.41 m) tan band FLOATING ABOVE the storey datum over the wall bottoms — round-2 draws the deck as a 1.4 px (= true 3/4\" at 1:50) line hugging the platform top (crop-*-upper-platform.png); upper cover deck ribbons 15.4→0.7 hairlines. Only 0.7-px strokes anywhere are real hairlines (membrane 0.15 mm, rebar 12.7 mm).",
+    "note": "1.4 px at 96 dpi ≈ 0.37 mm — a fine but standard pen weight; the deck line sits against the heavier storey datum line, which is the honest position (deck top = datum)."
+   },
+   "FOCUS-4-crossing-poche-untouched": {
+    "status": "PASS",
+    "checklist": [
+     "P3"
+    ],
+    "evidence": "twostorey-NY-ground 11-section keeps the round-1 PASS anatomy: dark #222 cut rects tile the slab as a thin stratum at grade between the stemwall columns (true width × true 3-1/2\" height), stemwalls descend to footing pads — pixel-identical detail (crop-r2-2st-ground-grade.png); the only change is the beyond-work comb behind it dropping from plan-width to true-thickness dashes. The a97e48/roof strokes on that sheet are byte-identical between rounds."
+   },
+   "FOCUS-5-skeptic-riders": {
+    "status": "PASS",
+    "checklist": [
+     "P4"
+    ],
+    "evidence": "Live scratch run on the real demo graph at the pin: showFoundation=false → 'Ground floor is slab-on-grade — enable Foundation to see the slab field, vapor retarder and footings' with ZERO slab/vapor-retarder members in the result; default (ON) keeps the round-1 wording verbatim ('the Foundation system draws …') with the members present — the pointer clause never promises geometry that isn't drawn. 'slab-edge' sweep: the three ALLOWED-list pairs are gone from interpenetration.test.ts; the only remaining repo hits are retirement comments (types.ts:52, foundation.test.ts:197, takeoff.ts:392)."
+   },
+   "REG-blast-radius": {
+    "status": "PASS",
+    "checklist": [
+     "S4",
+     "C5",
+     "P1",
+     "P2",
+     "A3",
+     "E5",
+     "S11"
+    ],
+    "evidence": "members.json AND takeoff.json byte-identical to the round-1 pin on all three sets (2084/514/451 members — line-art-only change proven). Sheet diff pin-vs-round-1: EXACTLY cover + all elevations + section per set; foundation plan, every plan sheet and every schedules sheet byte-equal as SVG strings — the foundation sheet's round-1 PASS state (translucent layer-ZERO underlay, hardware legible on top, legend counts member-exact) carries verbatim, as do the takeoff pour rows, both legend rows, PT/anchor-row text, climate labels and the flags block. Suite includes the master-baseline byte-equality pin (baseline config has showFoundation true — default warning text unchanged)."
+   },
+   "CARRIED-flags": {
+    "status": "FLAG",
+    "checklist": [
+     "P2"
+    ],
+    "evidence": "Unchanged, disclosed round 1, byte-equal this round: (1) foundation legend backing rect fixed at 250 px — the slab row still runs past the border (legible only over blank paper); (2) memberSegs still emits degenerate zero-length dashed lines for plane-crossing strips (invisible butt-cap dead ink — 3 of the demo section's foundation lines have x1==x2); (3) footing/stemwall roles still have no legend rows of their own.",
+    "note": "None of these lie about geometry; all three stay on the recommendations list."
+   },
+   "SWEEP": {
+    "status": "PASS",
+    "evidence": "Full suite at the pin (detached worktree @ ddf7853): bun test → 972 pass / 1 todo / 0 fail (973 tests, 31,190 expect() calls, 42 files, 524 ms); bunx tsc --noEmit clean. The four new gates are present and non-vacuous: section stroke-width pin (ratio parsed from the title block, exact 0.0889 m band + 0.7 hairline only, provably below the plan-width class), crossing-rect pin, elevations ≤ true thickness + cover fixture-pixel pin (<10 px, 0.7 hairline present), showFoundation-OFF warning pin. No checklist row regressed."
+   }
+  },
+  "recommendations": [
+   "Carried: widen the foundation legend backing rect to its longest row (or wrap the slab row) — the fixed 250 px box's border still strikes through the two B17 rows.",
+   "Carried: stop emitting the degenerate zero-length dashed lines for plane-crossing strips in sectionSheet (invisible dead ink, ~2 per member).",
+   "Carried (pre-existing): footing/stemwall roles have no legend rows on the foundation sheet; plan-sheet right bias on the shared transform (P1); consider a 'NO SLAB — see flags' note inside the demo's honestly-empty Living/Kitchen wing.",
+   "Nice-to-have (P3, not blocking): the subfloor deck's 1.4 px line at 1:50 overlaps the heavier storey datum line — a future pass could offset the datum annotation or dash it so the deck edge reads on its own."
+  ],
+  "suite": {
+   "pass": 972,
+   "todo": 1,
+   "fail": 0,
+   "tests": 973,
+   "assertions": 31190,
+   "files": 42,
+   "tsc": "clean"
+  }
+ },
+ "shipStamp": "APPROVE — B17 stamped for merge at ddf7853. The round-1 FAIL is closed as a CLASS: every side-view stroke on all 15 regenerated side-view sheets maps to a true member dimension (slab 3-1/2\" band at grade, membrane a deliberate 0.7 px clamped hairline hugging the pour underside, footings/stemwalls/plates/subfloor deck at their real thicknesses, tall frost stemwalls correctly keeping their real depth), the crossing-cut poché is pixel-identical, engine output is byte-identical to the round-1 pin (members + takeoff on all three scenes), the foundation plan and every schedules sheet carry their round-1 PASS state verbatim, both skeptic riders are proven live, and the suite is 972/0 with tsc clean. Skeptic already PASSed the engine work; the two carried FLAGs (legend box width, dead-ink zero-length emits) are cosmetic, disclosed, and on the recommendations list."
+}

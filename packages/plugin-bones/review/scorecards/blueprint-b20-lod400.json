@@ -1,0 +1,73 @@
+{
+  "round": "B20-lod400",
+  "pin": "80676ba",
+  "branch": "feat/lod400-b20",
+  "base": "3910a75",
+  "protocol": "LOD-400 B20 paper round per review/BLUEPRINTS.md. Pure buildPlanSet in the detached worktree /private/tmp/review-b20-80676ba at 80676ba, byte-compared against the SAME harness at master 3910a75 (fixed date 08/21/2026). Nine scenes: demo (fc866f2f271b over HTTP, 15 sheets, FL), cagar (garage+bath compose, CA — tank WH + straps), intlgar (same graph, INTL — strap negative control), vent (14 m wall, far lav — weir→vent), island (kitchen island sink), shieldthin (0.09 m wet partition), clash (tankless, meter at panelMountU), f3 (corner-flush lav + interior-footing toilet, NY frost), pinch (twin bearing walls 0.45 m apart — the unclampable-drop fallback). All 119 pin sheets + base demo/cagar rasterized with Playwright page.setContent @2x (never the editor); affected sheets viewed, WH/f3/pinch crops at print size; members/fixtures/takeoff JSON diffed base-vs-pin for all nine scenes. Evidence: /tmp/bp-b20/{base,pin}/**, crops /tmp/bp-b20/crops-*.png.",
+  "verdict": "APPROVE — every promise in the B20 brief is real ON PAPER and the blast radius is exactly the enumerated hardware: the CA compose prints tank+pan+stand+strap-band+T&P without clutter (the CA-vs-INTL pixel diff is precisely the 3-leg strap U; INTL ships zero straps anywhere), the takeoff books valve/pan/stand/straps 1/1/1/2 pcs with cites and the discharge rides Copper ¾\" lf with EXACT member-sum conservation; the weir→vent flag prints verbatim with the measured 21.3 ft; the island flag composes with ' | ' across the wrap; both shield wordings print distinct; the meter×panel TRADE CLASH riser flag prints verbatim (the ⚠ label is a 3D/inspector surface — fixture labels never typeset, the flag IS the paper story); both F3 exhibits clamp clear (lavc 9.9→9.756, wc22 5.22→5.266 — base geometry was a bare bore into the footing band) and the horizontal-leg tick join works (double-tick + halo'd SLEEVE cite + standing legend row on f3/pinch). Full suite at the pin: 1077 pass / 1 todo / 0 fail (1078 tests, 45 files, 36,896 expects). Three flags travel as queued advisories, none blocking: the dropSleeved fallback is paper-invisible AND un-gated (F5), the new pan/stand steel reaches 4-6 cm into the stud bay extending the pre-existing tank-graze class (F1b), and the T&P discharge resurrects the generic 'supply / DWV pipe' legend row (F1c).",
+  "items": {
+    "FOCUS-1-wh-assembly-and-takeoff": {
+      "status": "PASS",
+      "checklist": ["P6", "C5", "S4", "P2", "P4"],
+      "evidence": "cagar (CA) MEP sheet: pan (0.7 sq) / stand (0.66 sq) / tank (0.6 sq) print as clean concentric rects with the strap band as a 3-leg U (wall face → front → wall face) and the T&P valve+discharge as a small stub off the tank — additive detail, zero clutter at 1:100 (crops-pin-wh.png vs crops-base-wh.png: base is a bare buff box). CA-vs-INTL pixel diff of the two MEP sheets in the WH area is EXACTLY the strap U (crops-ca-vs-intl-diff.png); intlgar members carry zero wh-strap-* (diff: +5 members = stand/pan/valve/discharge×2; cagar +11 incl. 6 strap legs). Takeoff on paper (cagar sheet 2/3): 'T&P relief valve — 1 pcs (¾\" discharge to ≤6\" AFF (P2803.6.1))', 'Water-heater drain pan — 1 pcs', 'Water-heater stand — 1 pcs', 'Seismic straps — 2 pcs (tank upper+lower thirds (P2801.8))'; INTL sheet prints NO strap row. Discharge books as ordinary pipe: Copper ¾\" 33.5→39.2 lf (+5.7 lf = the drawn 0.09 nipple + 1.655 drop), +1 elbow; conservation EXACT on cagar and demo (Copper ¾\"/½\", PVC 3\"/1.5\" rows == member sums to 0.1 lf). Discharge bottom = 0.1525 m = 6\" AFF exactly. Demo (tankless): valve+discharge only, no pan/stand/straps — matrix honest.",
+      "note": "Two riders below (F1b geometry, F1c legend semantics)."
+    },
+    "FOCUS-1b-pan-stand-in-the-stud-bay": {
+      "status": "FLAG",
+      "checklist": ["S1", "P6"],
+      "evidence": "The tank anchor whOff=0.35 is measured from the wall CENTERLINE, so on the 0.15 m garage wall the tank face already sat 1.2 cm inside the studs (PRE-existing, base-identical). B20's wrappers deepen the bore: cagar members — studs span x ∈ [-0.0623, 0.0623]; wh-stand x ∈ [0.02, 0.68] (4.2 cm into the studs, through the PT sole plate band y 0–0.038); wh-pan x ∈ [0.0, 0.7] (steel to the wall centerline, 6.2 cm into the studs at y 0.407–0.457). 10 AABB overlap pairs vs wall-framing/layers. Un-gated: interpenetration.test.ts scopes MEP out and no equipment-vs-structure scenario exists. On paper it is subtle (the pan edge rides the wall line at 1:100); in 3D X-ray the pan slab will read through the studs.",
+      "note": "Root cause is the pre-existing anchor convention (offset from centerline, not the finished face) — fix it ONCE for tank+hardware: whOff ≥ wall.thickness/2 + pan half-margin (or size pan/stand off the tank's three FREE faces only), and queue an equipment-vs-structure SAT scenario. Not blocking: extends a board-queued class (fixture-vs-structure), strap legs correctly TERMINATE at the wall face."
+    },
+    "FOCUS-1c-tp-discharge-legend-row": {
+      "status": "FLAG",
+      "checklist": ["P2"],
+      "evidence": "plumbingPipeColor('wh-tp-discharge') → null, so the discharge prints in the generic slate #8fb0c4 and resurrects the LOD-200 fallback legend row 'supply / DWV pipe' on every WH sheet (pin demo + cagar have it; base neither) beside the fully-classified cold/hot/DWV rows. P2's letter is satisfied (the color has a row); the row NAME is a half-truth on a sheet where every other pipe is classified.",
+      "note": "One-line fix: map the wh-tp- prefix in plumbingPipeColor (own tone + 'T&P discharge ¾\"' row, or reuse hot/warm red) — update the legend pins in the same commit."
+    },
+    "FOCUS-2-weir-vent-and-island": {
+      "status": "PASS",
+      "checklist": ["P4", "P5", "P6"],
+      "evidence": "vent schedules print VERBATIM across the word-boundary wrap: '⚑ TRAP ARM: Lavatory trap weir sits 21.3 ft from its vent — exceeds 5 ft for a 1.25\" arm (Table P3105.1); vent closer to the trap' — the measured figure (0.3 m emitted arm + 6.2 m along-wall to the near lav's re-vent = 21.3 ft) with the limit and the Table cite; the near lav (vent carrier) and the exempt-but-measured WC print NO flag (negative controls hold). Arm labels state the basis ('weir→vent ≤ N ft, P3105.1'). island schedules: '⚑ ISLAND VENT: Kitchen sink is an island fixture — island venting required (P3112), not modeled; verify loop vent/AAV with the AHJ | TRAP ARM: … 20 ft … (Table P3105.1)…' — both components COMPOSE with ' | ' and print in full over 3 wrapped lines, no ellipsis.",
+      "note": "The old fixture→wall measure would have read 0.6 m for the far lav — the printed 21.3 ft is the round's whole point, and it reaches paper intact."
+    },
+    "FOCUS-3-shield-cover-flags": {
+      "status": "PASS",
+      "checklist": ["P4", "P6"],
+      "evidence": "Two distinct wordings, both verbatim on schedules: shieldthin (0.09 m wet partition) — '⚑ SHIELD: 3\" DWV stack in a 3.5\" wall has 0.27\" of cover — it does not fit the stud bay; frame the wet wall 2x6 and add steel shield plates (P2603.2.1)'; vent/island (0.15 m walls) — '⚑ SHIELD: 3\" DWV stack sits 1.45\" from the wall face (< 1.5\") — steel shield plates required (P2603.2.1)'. Negative control: the demo's 0.2 m wet walls (2.44\" cover) print NO shield flag — the flagship set stays clean. Both placed-path and room-category-fallback stacks carry the flag (gated).",
+      "note": "The flag fires on every default 0.15 m wet wall by design (the cover story is true there); the physical nail-plate members correctly ride B15."
+    },
+    "FOCUS-4-meter-panel-clash": {
+      "status": "PASS",
+      "checklist": ["P4", "P6", "A4"],
+      "evidence": "clash scene (tankless, meter at panelMountU on the longest wall — panel fixture at [5, 1.52, 0.076], meter at the same u): the cold-main RISER carries the flag and schedules print it verbatim across the wrap: '⚑ TRADE CLASH: water meter + cold main sit in the electrical panel's dedicated space (NEC 110.26(E) — no foreign piping over the panel footprint); move the water entry along the wall'. The meter fixture label carries '— ⚠ in panel dedicated space (NEC 110.26(E))' (3D/inspector surface — fixture labels never typeset on sheets; the riser flag is the paper surface, which P4 requires). Parity is structural, not a copy: plumbing imports the SAME placePanelSpot + panelMountU electrical uses, and respects a panel override via overrideWallPoint (gated: override away from the wall clears both label and flag).",
+      "note": "The flag fires on most default composes (both trades genuinely elect the same spot — the honest confession); the spatial reservation that will retire it rides B12/B16 per the checklist row. Advisory: electrical's own RO-slide of the panel is not mirrored in the threshold math — the ±(15\"+0.15 m) window absorbs small slides; revisit when B12/B16 lands."
+    },
+    "FOCUS-5-f3-residuals-and-glyph-join": {
+      "status": "FLAG",
+      "checklist": ["P6", "S1", "P4"],
+      "evidence": "The two exhibits PASS end-to-end: base f3 members show the corner-flush lav drop at x=9.9 (inside the east frost stemwall band, edge 9.757) and the toilet drop at x=5.22 (inside w_mid's 16\" thickened-footing band, edge 5.241) — bare bores; pin clamps them to 9.756 and 5.266 (≥ band + pipe half + 2 cm), the ONLY geometry moves in the 9-scene diff (dwv-trap/branch/main/vent re-anchor, drainage continuity gated in plumbing.safety.test.ts + both interpenetration repros). On paper (f3 MEP, 1:75) the drops read INSIDE the room off both walls, DWV flow arrows intact, and the glyph join WORKS for horizontal sleeved legs: the building drain's stemwall crossing prints the double-tick + halo'd 'SLEEVE (P2603.4)' cite + the standing 'TICKS = SLEEVED CROSSING (P2603.4)' legend row (f3 and pinch sheets). THE GAP: the NEW dropSleeved fallback never reaches paper. pinch exhibit (twin bearing walls 0.45 m apart — clampDropClear exhausts 4 passes): the toilet drop stays at x=5.3 INSIDE wB's footing band, its riser label gains '— sleeved where it crosses concrete (P2603.4)' — but the tick layer's dims[0]>=dims[1] filter excludes vertical members (correctly: a drop crosses no foundation LINE), the arm carrier vanishes for flush fixtures (armPlan < minLen), labels never typeset, and the note is a LABEL not a flag — grep over all 12 pinch sheets: the only P2603.4 marks belong to dwv-main. A drop boring a footing is exactly the crossing an examiner marks, and the model's honesty ('never a silent bare crossing') goes silent at the sheet. The fallback branch is also UN-GATED: plumbing.safety.test.ts and both interpenetration repros exercise clamp-SUCCESS only; no test constructs dropSleeved=true.",
+      "note": "Cheap fix, two halves in one commit: (1) compose the dropSleeveNote into the trap riser's FLAG (flags print verbatim on schedules for free — the roFlag ?? crowd chain has room), and/or print a point-glyph + cite at a dropSleeved drop on the MEP sheet; (2) add the pinched-slot gate (twin bearing walls < 2·need apart → dropSleeved pins true, label + flag pinned, drainage SAT exempt). Not blocking: the trigger needs twin-bearing-wall slots (real as back-to-back plumbing chases, but rare), the model stays honest and SAT-exempt, and both round exhibits work."
+    },
+    "FOCUS-6-regression-sweep": {
+      "status": "PASS",
+      "checklist": ["P1", "P2", "P3", "P4", "C5", "S4", "E3", "M2"],
+      "evidence": "Demo (flagship): DWV flow arrows 2/2 base==pin, sewer-exit marker + 'SEWER/SEPTIC (P3005.4)' cite prints, line-set pair rails read as two colors with both legend rows ('suction ¾\" (insulated)' / 'liquid ⅜\"'), slope rows ('DWV SLOPE 1/4 IN/FT…' + 'ARROWS POINT TO SEWER (P3005.3)') print, tick legend row appears ONLY on sheets that print ticks (f3/pinch/vent/… yes; demo/cagar no — no horizontal sleeved legs there, base-identical). Demo pixel diff vs base localizes to the legend block (the F1c row shift) + the WH T&P stub; flags block gains exactly TRADE CLASH (schedules 3→4 pages, every flag verbatim incl. the composed line-set '… | …' flags). Blast radius proven across all nine scenes: member census diffs are EXACTLY +wh-* hardware (+3 tankless / +5 tank-INTL / +11 tank-CA) and the f3 drop re-anchors; zero removals elsewhere; takeoff deltas are exactly the 4 hardware rows + discharge lf + 1 elbow. master-baseline.json recapture matches that manifest. Takeoff conservation exact (demo: PVC 3\" 32.5 lf, PVC 1.5\" 74.1, Copper ¾\" 17, Copper ½\" 93 == member sums). Cover axon (cagar) renders the assembly without artifacts; title blocks intact (CA prints the CRC + effective date).",
+      "note": "P1 sheet balance on the small composes (drawing upper-right, legend left) is the pre-existing small-scene layout, byte-similar at base — not B20's."
+    }
+  },
+  "suite": {
+    "command": "bun test @ 80676ba (detached worktree)",
+    "pass": 1077,
+    "todo": 1,
+    "fail": 0,
+    "tests": 1078,
+    "files": 45,
+    "expects": 36896
+  },
+  "recommendations": [
+    "dropSleeved must reach paper + a gate: compose ' — sleeved where it crosses concrete (P2603.4)' into the trap riser's flag chain (schedules print it for free) and pin a twin-bearing-wall pinch scenario (clampDropClear exhaustion) in plumbing.safety.test.ts; optionally a point-tick at the drop on the MEP sheet.",
+    "Re-anchor the WH hardware off the finished wall face: whOff currently measures from the wall CENTERLINE, so the new pan reaches x=0.0 (6.2 cm into the studs) and the stand crosses the PT sole plate — fix tank+pan+stand together and add an equipment-vs-structure SAT scenario (currently scoped out of S1).",
+    "Give the T&P discharge its own pipe tone/legend row (or the hot tone) so the LOD-200 'supply / DWV pipe' fallback row stops resurrecting on classified sheets — update the legend pins in the same commit.",
+    "When B12/B16 land the real 110.26(E) reservation, retire the plumbing-side heuristic threshold in one place and mirror electrical's RO-slide of the panel in the clash window."
+  ]
+}

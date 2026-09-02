@@ -1,0 +1,102 @@
+MORNING REVIEW — 2026-08-25
+============================
+THREE PROD SHIPS since your last check-in. Everything below is LIVE
+on editor.pascal.app, each behind full adversarial rounds.
+
+SHIP 1 — YOUR CMU PAINT FLICKER (root-caused + fixed)
+------------------------------------------------------
+Why it blinked: the cinder blocks and the painted wall skin occupied
+EXACTLY the same plane (blocks fill the wall's full thickness; paint
+puts an opaque material back on the face through two paths the
+X-ray's wall-hiding never controlled; the editor only re-hides on
+big camera moves — hence the camera-dependent quilt).
+The fix: blocks bury 5mm inside the wall faces (same recipe as your
+blinking-duct fix). QA reproduced your exact quilt at the old build,
+then measured 0 differing pixels across every camera orbit at the
+new one — white paint, brick, hover-preview, both wall modes.
+TEST: paint anything on a CMU wall, orbit. It should just be paint.
+Note: FRAMED walls can still flicker when painted (different
+mechanism, host-side fix queued — the wall-hiding should self-heal).
+
+SHIP 2 — YOUR HEAT PUMP FEEDBACK (all four) + LGS PHASE 1
+----------------------------------------------------------
+- Not red anymore: the unit renders bones equipment-gray.
+- Not tilted: the whole assembly sits square to its wall.
+- On the grid: auto placement snaps the WORLD grid you see (0.5m),
+  and the 24" service clearance is now a proven floor — snapping
+  can only push AWAY from the wall. If clearances/windows leave no
+  grid spot, the unit stays at the honest position and says so
+  ('⚠ off-grid — … near the elected spot') — and that flag
+  survives reloads (the loop caught it silently vanishing).
+- R rotates it: whole assembly turns as one rigid object in 45°
+  steps (that's the editor's own rotation quantum — two presses =
+  90°), line-set and whip re-anchor live.
+TEST: starter house → X-ray → select the heat pump → R.
+
+SHIP 3 — LGS: THE X.COM ASK IS ANSWERED END-TO-END
+---------------------------------------------------
+Phases 0-2 all shipped ("Can it be configured to use light gauge
+steel framing? … FRAMECAD, Howick … profiles populate the framing"):
+- Set a wall to STEEL on its card (Framed · Steel · CMU · Skip), or
+  flip the whole level: panel → new 'Framing' row (Lumber|Steel).
+- Steel walls frame per IRC R603 at LOD 400: C-studs in tracks,
+  king/jack/headers, strap bracing, factory punchout metadata.
+  Labels carry real AISI designators ('550S162-68 (Gr 50)') from a
+  fully CITED catalog — every number traces to a vendor PDF, AISI
+  standard, or SFIA table; nothing invented (unverifiable values
+  say so on the label).
+- Pick a MACHINE (row appears only when Steel is chosen —
+  FRAMECAD / Howick / Scottsdale, Pinnacle marked unverified): it
+  brands the members and warns honestly about what it can't roll.
+  Real finding baked in: FRAMECAD's TF550H rolls the studs but NOT
+  the matching track — the warning tells you.
+- Two controls total, no new clutter: QA measured ZERO changed
+  pixels outside the panel on lumber scenes.
+TEST: any scene → panel → Framing: Steel → pick TF550H → warnings.
+Remaining: Phase 3 (steel floors/roofs) — queued, not started.
+
+ALSO SHIPPED — 16 CANADIAN JURISDICTIONS (community!)
+------------------------------------------------------
+Jonathan Nusbaum (Terra Modular — they run a white-labeled Bones
+deployment, so a real commercial user) sent a genuinely excellent
+PR: all provinces + territories, NBC 2020 citations, honest unit
+conversions, permafrost warnings. Adopted by cherry-pick with HIS
+authorship preserved on master; both his PRs answered publicly from
+your account (one adopted, one superseded-with-credit).
+The adoption EXPOSED a real dormant bug: 'ircBase' was decorative —
+IRC section numbers printed unconditionally on non-IRC
+jurisdictions (Wisconsin, Vermont) since forever. Now every non-IRC
+jurisdiction states its governing code in a warning that reaches
+paper. Prairie frost depths reach the composed footings (SK: 83").
+TEST: jurisdiction dropdown → the Canada block sits after
+California; pick Yukon → permafrost note under the picker.
+
+PROCESS NOTES
+-------------
+- 5 branches merged, suite 1,743 → 1,946 tests, 13 adversarial
+  rounds, every REVISE finding fixed and re-verified before merge.
+- The loop's best catches this window: the off-grid flag laundered
+  by the auto-seed lifecycle (skeptic + visual found it
+  independently); a checklist reach-bound that had been stale since
+  the unwarp round (now a per-class THEOREM with a sweep gate); the
+  CA-Nunavut wind/ties combination minting a false label on its
+  first-ever data path; strap bracing silently deleted at CMU
+  junctions (now warns with the unbraced extent).
+- API flakiness (SSO expiries) killed several review agents
+  mid-round; resumes recovered everything, zero work lost.
+
+OPEN / NEXT QUEUE
+-----------------
+- LGS Phase 3: steel floors/roofs (R505/R804) + machine-export
+  research (stated non-goal v1).
+- Host follow-ups: WallCutout self-healing suppression (kills the
+  framed-paint flicker class + all resurrection paths); headless
+  engine exports (adopted idea from Jonathan's PR #2).
+- Queued residuals: lineset×dryer-duct bore (owns any remaining
+  duct striping), CMU end-face/corner-gap class, per-label IRC-cite
+  suppression for non-IRC rows (big blast radius), title-block clip
+  on long code strings, sloped-roof tieAt steel-in-rafter,
+  register×fan coincidence, elbow miters, hydration flash, WH
+  floating sign, HP sign mirrored text, wall-tool-armed-on-load.
+- Carried for you: hover-glow verdict, Q13, auto-assume-room-from-
+  slab, GPU toggle eyeball, plain-drag vs ⌘-drag parity call.

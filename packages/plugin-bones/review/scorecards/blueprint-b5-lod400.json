@@ -1,0 +1,82 @@
+{
+  "round": "B5-light",
+  "pin": "4ebb049d9fc8fa7f3194feeace64acd9290b524e",
+  "branch": "feat/lod400-b5",
+  "base": "af3b846",
+  "protocol": "LIGHT paper round on the B5 batch (PT sole plates R317.1 + anchor-row truth) per review/BLUEPRINTS.md. Pure buildPlanSet in a detached scratch worktree at the pin, pre/post compared against a second detached worktree at the base af3b846 with a FIXED date string so sheets byte-compare. Three sets each side: demo-house-FL (fc866f2f271b over HTTP, ground level, slab-on-grade — 14 sheets), stairtower-NY-ground (composed two-storey, framing node on the GROUND storey — 13 sheets), stairtower-NY-upper (same scene, node on STOREY 1 — 13 sheets), plus a 26-circuit legend-stress electrical sheet at the pin. 41 pin sheets rasterized with Playwright page.setContent at 2x; every affected sheet WALKED (demo 12/13/14, ground 12/13, upper 02/12/13, foundation plans, legend-stress). Member dumps + takeoff JSON diffed member-by-member and row-by-row. SVGs/PNGs/stats in /tmp/bp-b5/{base,pin}/.",
+  "verdict": "PASS — the B5 batch is exactly its manifest on paper: across all three composes the ONLY member diffs are ground-level wall-framing bottom plates (demo 9/9, stairtower-ground 4/4) flipping material lumber→pt-lumber with the label re-cited 'PT sole plate on slab (R317.1)' (splice notes preserved verbatim); counts, order, dims, positions, fixtures and warnings byte-equal. Takeoff: PT SKU rows land beside their untreated siblings with EXACT piece conservation (2x4 102=96+6, 2x6 104=98+6 on demo; 2x6 106=100+6 on stairtower-ground) and EXACT bd-ft conservation (688=608+80, 1092=998+94, 1064=944+120 — better than the manifest's 0.1 grace), no double-booking, no orphaned untreated plate rows, zero PT rows on the upper storey. The Foundation anchor row reads 'sole plate anchorage (R403.1.6)' with quantity unchanged (31/20 pcs) and 'mudsill' greps ZERO hits across all 41 pin sheets (base had exactly one hit per ground set). Storey-1 is untouched: 717/717 members byte-identical, takeoff row-for-row identical, ALL 13 upper sheets byte-equal pre/post. Round-5 fixes hold on this branch (deck under-layer, legend backing rect, engineered-header SKU). Full suite at the pin: 929 pass / 1 todo / 0 fail (930 tests, 30,717 expect() calls, 42 files), bunx tsc --noEmit clean — S11's gates all present and green. Two CARRIED master-side paper items (byte-identical at base, NOT in B5's blast radius) go to the round-6 loop: the schedules flag block's 2-line cap ellipsizes the long S10 flat-roof flag mid-remedy (P4 — a silently dropped warning tail), and the subfloor legend row is still absent from the floor sheet (round-5 P2 item, not shipped with 1555027).",
+  "items": {
+    "FOCUS-1-pt-sku-rows": {
+      "status": "PASS",
+      "checklist": ["S11", "C5", "S4"],
+      "evidence": "Member diff pin-vs-base: demo-house-FL 2021/2030 identical, 9 diffs ALL wall-framing/bottom-plate material+label only; stairtower-NY-ground 407/411 identical, 4 diffs same class. Takeoff pcs conservation exact per size (2x4 102->96+6, 2x6 104->98+6; ground compose 2x6 106->100+6); bd-ft exact (688=608+80, 1092=998+94, 1064=944+120). Sheets: demo 12-schedules-takeoff-1-3.png prints '2x4 PT — 2 pcs (20 ft stock (pressure-treated))', '2x4 PT — 4 pcs (20 ft stock (field splice — run exceeds 20 ft) (pressure-treated))' wrapped at word boundaries directly under the untreated 2x4 rows, then the 2x6 PT trio; stairtower-ground 12 same pattern. No PT row in any non-Wall-framing section; upper storey books zero PT.",
+      "note": "The '(field splice — …) (pressure-treated)' nested-paren detail reads slightly clunky but is unambiguous and unclipped. Catalog order (PT variant right after its untreated size) makes the split easy to audit against the plate count."
+    },
+    "FOCUS-2-anchor-row-truth": {
+      "status": "PASS",
+      "checklist": ["S11", "C3", "C5"],
+      "evidence": "Demo 12: 'Foundation · Anchor bolts — 31 pcs (sole plate anchorage (R403.1.6))'; stairtower-ground 12: same text, 20 pcs; quantities identical to base (row retitle only). grep -i mudsill over every pin sheet SVG (3 sets, 41 sheets incl. legend-stress): 0 hits; at base the ground schedules each carried exactly one 'mudsill anchorage' hit. Foundation plan legend unchanged and honest: '1/2\" anchor bolts @ 6\\'-0\" o.c. max — 31 pcs' filled dots vs open rebar-dowel circles, mitered corner runs (C3 conventions intact, foundation sheet byte-equal to base).",
+      "note": "The retitle is truthful on slab-on-grade: the bolts clamp the wall engine's PT sole plate; no mudsill member exists in these sets."
+    },
+    "FOCUS-3-pt-label-on-paper": {
+      "status": "PASS",
+      "checklist": ["S11", "P4"],
+      "evidence": "All 13 PT members carry the verbatim label 'PT sole plate on slab (R317.1)' with splice notes appended intact ('… — spliced from 2× 20ft stock (1 splice, min 24\" lap)'). No wrapping or clipping defect exists on paper because plan-set never typesets member LABELS: the printed PT story is the '<size> PT (pressure-treated)' SKU rows (clean, verified on two scenes) plus the R403.1.6 anchor row. The R317.1 cite itself reaches the 3D X-ray/inspector only.",
+      "note": "S11 holds as written (cite in the label, own SKU row, anchor row names the plate). ADVISORY for a follow-up: no printed sheet says R317.1 or otherwise marks WHICH plates are treated — the wall-plan role legend still reads 'bottom-plate — 2x4' (size-keyed, material-blind). A plans examiner checking treated-wood compliance reads it off the drawings, not the buy list. Cheap fix: legend row 'bottom-plate — 2x4 PT (R317.1)' on ground sets (roleSizes keyed by size+material), or a general note on the foundation/wall plan."
+    },
+    "FOCUS-4-storey1-isolation": {
+      "status": "PASS",
+      "checklist": ["S11", "A3"],
+      "evidence": "stairtower-NY-upper pre/post: 717/717 members byte-identical (JSON field-level compare, zero diffs), takeoff identical, anchor rows absent both sides, and ALL 13 sheets byte-equal as SVG strings (fixed date). Upper plates print 'Bottom plate' untreated; takeoff keeps everything on the untreated 2x4/2x6 buckets (no PT rows).",
+      "note": "Matches the manifest's storey-1 sweep claim (0 diffs) — verified independently on this composed scene, spot-checked visually on upper sheets 12/13."
+    },
+    "REG-round5-deck-underlayer": {
+      "status": "PASS",
+      "checklist": ["P2", "C4"],
+      "evidence": "stairtower-NY-upper 02-floor-framing-plan.png: 41 translucent (fill-opacity 0.35, hairline #cfc4a6 seam) deck rects draw at rect indices 9-49 of 201 — before every joist/girder/header — and the joist grid, 4x10 girder line, stair-hole doubled headers/trimmers and oblique wing joists all read clearly through the deck. Round-5's washout blocker stays dead on this branch.",
+      "note": "Carried from round-5: the deck still has NO legend row ('subfloor' appears nowhere in the sheet SVG; legend is built from sized members only) — see CARRIED-2."
+    },
+    "REG-round5-legend-rect": {
+      "status": "PASS",
+      "checklist": ["P2", "P4"],
+      "evidence": "legend-stress (26 circuits): backing rect x=44 w=484 (right edge 528), column-2 rows (XT-7/8/9, swatches at x=280) all INSIDE the box; max row text y=454 vs box bottom 462; every circuit incl. all 12 synthetic XT ids has a legend row. Rasterized sheet confirms column 2 sits on the white backing, not bare linework.",
+      "note": "The two-column stress legend now occludes part of the west wing at 0.92 opacity — inherent to a 26-circuit synthetic worst case, single-column real sets unaffected; not actionable."
+    },
+    "REG-round5-engineered-header-sku": {
+      "status": "PASS",
+      "checklist": ["C5", "S4"],
+      "evidence": "stairtower-NY-upper 12: 'Wall framing · Engineered header (LVL/PSL — by supplier) — 1 pcs (exceeds prescriptive header span — see flags)' + '— 11.8 lf (lineal feet)'; the 3.51 m slider RO books NO dimensional sticks for that header (4x8 rows on the sheet belong to the other prescriptive headers), and 'ENGINEERED BEAM REQUIRED — exceeds prescriptive header span' prints in the flags block on sheet 13.",
+      "note": "Booked == built holds in both directions for the supplier SKU convention."
+    },
+    "CARRIED-1-flag-two-line-cap": {
+      "status": "FLAG",
+      "checklist": ["P4"],
+      "evidence": "demo 14-schedules-takeoff-3-3: the S10 flag prints 'Flat roof joist over prescriptive span — 8.72 m horizontal projection > 3.57 m allowable (2x6 @ 24\" o.c., SPF #2, R802.4.1) — purlin + 2x4 struts to bearing or engineered member…' — the tail 'required (R802.5.1)' is DROPPED. plan-set.ts wrapRow caps every row at TWO lines and ellipsizes the remainder (line ~1303), while the flag-block comment claims 'flags still print VERBATIM'. Byte-identical at base af3b846 — NOT a B5 diff: the class arrived with S10's long flag texts (26a9fd9..776624a), after round-5's pin e4ce6fc, so no prior paper round could have seen it.",
+      "note": "P4 calls a dropped warning a lie on paper; this one drops the operative word 'required' plus a code cite from a structural remedy. Belongs to the master/round-6 loop, blocker-adjacent there. Fix: let ⚑ rows wrap to N lines (the flag reserve already counts lines — extend wrapRow with a maxLines param for the flag list and keep the 2-line cap for takeoff rows), plus a plan-set gate pinning a >2-line flag prints verbatim."
+    },
+    "CARRIED-2-subfloor-legend-row": {
+      "status": "FLAG",
+      "checklist": ["P2"],
+      "evidence": "stairtower-NY-upper floor sheet legend: joist/header/rim-joist/girder/post/blocking only; 'subfloor' — still the sheet's dominant ink area, now honestly translucent — has no legend row (legend derives from sized members; deck members are size-less). Round-5 scored this FAIL (P2-subfloor-legend) and folded it into the FOCUS-1 fix, but 1555027 shipped the under-layer + legend-box fixes without the row. Identical at base and pin.",
+      "note": "One-line-ish fix alongside the ghost convention: push a 'subfloor 3/4\" T&G (translucent)' swatch row on floor sheets with deck members, + gate."
+    },
+    "SWEEP": {
+      "status": "PASS",
+      "evidence": "Detached worktree at 4ebb049: bun test → 929 pass / 1 todo / 0 fail (930 tests, 30,717 expect() calls, 42 files, 506 ms); bunx tsc --noEmit clean. S11 row present with all four named gates (wall-framing.test.ts PT material/isolation pins, takeoff.test.ts SKU split + conservation + anchor text pin, compute.multistorey.test.ts storey-0/1 split, interpenetration.test.ts slab-on-grade compose + anchor-bolt|bottom-plate allow-list). E1-E5, S1-S10, M1/M2, P1-P5, A1-A4 gates green; no gated row regressed.",
+      "note": "S1 bookkeeping in the B5 checklist edit is honest: the anchor-bolt×bottom-plate class closes as design intent (bolts clamp the sole plate) while the newly-surfaced anchor-bolt×STUD residual (shank inside a grid stud's footprint) is disclosed and queued — cited here so the round is diffable."
+    }
+  },
+  "recommendations": [
+    "Print the treated-plate truth on the DRAWINGS, not just the buy list: ground-set wall-plan legend row 'bottom-plate — 2x4 PT (R317.1)' (key roleSizes by size+material for pt-lumber) or a general note beside the foundation plan's anchor-bolt legend ('sole plates PT per R317.1(2)'). Cheap, and it is the surface a plans examiner actually checks for R317 compliance.",
+    "Flag block verbatim-ness (carried, master-side): give wrapRow a maxLines override for the ⚑ list so long S10-class flags never ellipsize a remedy ('…engineered member[required (R802.5.1)]' is currently dropped on demo 3/3); add the plan-set gate P4 never had.",
+    "Subfloor legend row (carried, round-5 P2): add the translucent-deck swatch row on floor sheets with deck members.",
+    "Queued S1 residual from B5's own compose scenario: nudge anchor-bolt layout off stud footprints (or SAT-exempt with a bearing note) — the shank tops out 1.5\" above the PT plate inside stud territory.",
+    "Carried minors unchanged: plan-sheet right bias (P1), upper-storey GRADE datum semantics (N2/A3), per-opening header tags (C4)."
+  ],
+  "suite": { "pass": 929, "todo": 1, "fail": 0, "tests": 930, "assertions": 30717, "files": 42, "tsc": "clean" },
+  "reVerify": {
+    "date": "2026-08-20",
+    "protocol": "Independent second pass at the same pin (fresh detached worktrees /tmp/bp-b5x/wt-{pin,base}, own harness + own scene composes — NOT a re-read of the first pass's artifacts): demo-house-FL (fc866f2f271b snapshot, ground, 14 sheets), composed twostorey-NY (9×6 ground slab-on-grade w/ interior partition + storey-1 framed floor with 1.2×2.8 stair hole and a 3.51 m engineered-header RO; node on EACH storey, 10 sheets each), 25-circuit legend-stress electrical sheet. Fixed date 08/20/2026 both sides; all 34 pin sheets + stress sheet rasterized (Playwright page.setContent @2x) and the affected ones walked. Evidence: /tmp/bp-b5x/out/{base,pin}/.",
+    "verdict": "PASS — confirms the round. Demo: 2030/2030 members, 9 diffs all wall-framing/bottom-plate {material lumber→pt-lumber, label 'Bottom plate…'→'PT sole plate on slab (R317.1)…' splice notes verbatim}, fixtures (94) + warnings byte-equal; conservation EXACT on paper (2x4 102=96+6 pcs, 688=608+80 bd-ft; 2x6 104=98+6, 1092=998+94). Twostorey ground: 314/314, 5 plate diffs (4 ext + 1 partition), 2x6 142=135+7 pcs, 1388=1248+140 bd-ft; anchor rows 'sole plate anchorage (R403.1.6)' 31/20 pcs, quantities unchanged; 'mudsill' 0 hits across every pin sheet (base: exactly 1 per ground schedules). Storey-1: 391/391 members zero field diffs, takeoff 44 rows identical, all 10 upper sheets byte-equal, zero PT rows. Paper blast radius exactly the schedules sheets — every other sheet byte-equal pin/base on both ground sets (13/14 + 9/10 EQ; schedules 2/3+3/3 diffs are pure pagination flow from the 8 new PT rows). Round-5 regressions hold: deck rects (27, fill-opacity 0.35) draw at indices 6..32 before all 122 joist/girder/header rects — grid + 4x10 girder + stair-hole headers fully legible; legend-stress backing rect x=44 w=484 covers both columns (25/25 circuit rows, XT-7/8/9 at x=280 inside, max y 454 < 462); engineered header books 1 pcs + 12.1 lf supplier SKU with no dimensional sticks and 'ENGINEERED BEAM REQUIRED' verbatim in flags. CARRIED-1 re-confirmed byte-identical at base ('…struts to bearing or engineered member…' still drops 'required (R802.5.1)' — demo 3/3, master-side round-6 item). CARRIED-2 re-confirmed (floor-sheet legend: joist/header/rim-joist/girder/post only, no subfloor row). FOCUS-3 advisory re-confirmed: wall-plan legend still prints 'bottom-plate — 2x6' size-keyed/material-blind — no drawing surface marks WHICH plates are treated. Suite re-run at the pin: 929 pass / 1 todo / 0 fail (930 tests, 30717 expect(), 42 files, 479 ms), bunx tsc --noEmit clean; S11's four gates verified present (wall-framing/takeoff/multistorey/interpenetration incl. the anchor-bolt|bottom-plate allow-list pin and the 'sole plate anchorage (R403.1.6)' text pin)."
+  }
+}

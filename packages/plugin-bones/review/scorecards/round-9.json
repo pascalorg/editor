@@ -1,0 +1,18 @@
+{
+  "round": 9,
+  "summary": {
+    "verdict": "9/10; floor back to 350 \u2014 round-8 orientation fix world-verified end-to-end (both orientations, both windings, hole matrix). Remaining 400 gaps: header-band carve incomplete (76mm header/girder embed), tails cut at hole edge (interpenetrate plies, corrupt cut list), girder END bearing unvalidated, 12x12 needs multi-girder.",
+    "lod": {
+      "wall-framing": 400,
+      "cmu": 400,
+      "floor": 350,
+      "roof": 400,
+      "foundation": 400,
+      "electrical": 400,
+      "plumbing": 400,
+      "hvac": 400,
+      "takeoff": 400,
+      "ui-ux-perf": 400
+    }
+  }
+}

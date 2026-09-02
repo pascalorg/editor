@@ -1,0 +1,28 @@
+{
+  "round": 6,
+  "summary": {
+    "verdict": "9/10 at 400 re-earned under fresh geometry; floor 350 \u2014 girder fix held narrowly but the hole-interaction matrix leaked: orphan girder hangers in the pinned scenario, trimmers through the girder body, bbox-only header clamp on L-shapes, twin-hole duplicate trimmers, blocking inside the girder, and wing rows cut at an ABSENT girder (L-shape, extent-less girder bearings).",
+    "lod": {
+      "wall-framing": 400,
+      "cmu": 400,
+      "floor": 350,
+      "roof": 400,
+      "foundation": 400,
+      "electrical": 400,
+      "plumbing": 400,
+      "hvac": 400,
+      "takeoff": 400,
+      "ui-ux-perf": 400
+    },
+    "keyAdvisories": [
+      "blocking embedded in girder",
+      "intrusion tolerance stack ~3in",
+      "orphan hangers inflate takeoff",
+      "junction door-snap untested",
+      "reducer estimate pools directions",
+      "plumbing supplies Manhattan through rooms (carried)",
+      "risers <3cm dropped",
+      "L-shape test pinned buggy wing behavior"
+    ]
+  }
+}

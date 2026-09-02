@@ -1,0 +1,70 @@
+NIGHT-7 MORNING REVIEW — 2026-08-21
+====================================
+SHIPPED TO PROD: private-editor b9688fd7 (editor 8408cb88 carrying
+#697 selection + #698 pin; plugin 3022fc0d, 1054 tests). Pre-ship 3D
+visual round: APPROVE — all six checks with instance-level numeric
+evidence (line-set lateral verified to the millimeter, DWV slopes
+monotonic to one exit, exploded strata clean). Two host-level notes
+for a headed spot-check: door leaf slide-drag is inert in BOTH modes
+(pre-existing; the MOVE flow works), and the hover glow was invisible
+under the headless WebGL fallback — eyeball it on real GPU.
+
+YOUR 3 FEEDBACKS — ALL DELIVERED
+---------------------------------
+F1 HEAT PUMP: the line-set is real now — suction 3/4" (cold-blue,
+  insulated) + liquid 3/8" (warm-red) routed as a strapped pair from
+  the condenser through ONE wall penetration along the walls to the
+  air handler. 4 adversarial rounds killed: pair collapse on detours,
+  plan overprint (both colors print), stale riser roll at corners,
+  cross-trade bores (the pair now rides 3.5cm off the plumbing plane,
+  flags any residual crossing, thin walls clamp with a warning), and
+  a negative-length miter sliver that was silently SUBTRACTING copper
+  from the takeoff.
+F2 WALL SELECTION (shipped to editor main #697): nearest-first with
+  hit OWNERSHIP — a wall in front of the sofa wins the hover/click;
+  outlets keep their priority; hidden walls glow on hover (tuned after
+  pixel QA); cold-loading a scene with X-ray on self-heals; 7/7
+  browser tests. Bonus root-cause: the systems-mount pipeline had a
+  one-shot memo that could leave ALL walls as placeholders.
+F3 CRAWLSPACE DRAINAGE: every toilet/shower/sink drops through the
+  floor into a buried sloped tree (P3005.3) collecting to ONE labeled
+  sewer exit; frost jurisdictions sleeve exactly the legs that cross
+  concrete (P2603.4, ticks + cites on the MEP sheet); upper storeys
+  tell the truth ('riser to storey below — not modeled' + warning);
+  flow arrows point downstream with full de-collision.
+
+WAVE-2 BLOCKERS (both closed)
+------------------------------
+B17 SLAB TRUTH: the biggest pour on the job is booked — slab field
+  members at R506.1 3-1/2" with carve bands from the ACTUAL footing/
+  stemwall runs (pour math verified from first principles: 10.34 yd3),
+  6-mil vapor retarder + rows; side views stroke plate-like members
+  at TRUE thickness (a 1.2m 'ribbon' class died, incl. the latent
+  subfloor twin).
+B19 RETURN AIR: the air handler prefers conditioned service space
+  (garage only as a loud M1602.2(1) warning; the open return grille
+  NEVER in a garage); a real return trunk rides its own plane with
+  supply keep-out from one source of truth; soffit legs slide doorway
+  crossings to solid wall or flag; duct takeoff prints TRUE sections
+  (the 'Duct 8x79"' phantom class is dead — supply fixed too).
+
+PLUS: MEP glyph layer (4 rounds) — ticks/arrows/cites/marker all
+de-collide against pipes, equipment, text and each other, with honest
+crowded-drop records; equipment bodies named in the legend.
+
+PROCESS NOTES
+-------------
+- API instability all night: verify agents stalled/died ~10 times.
+  The loop adapted — inline merge-gate verification (B5 precedent)
+  closed F1 rounds 3-4, B19's doorway defect, and cross-trade.
+- INCIDENT (recovered, no loss): agents twice checked out shas in the
+  main checkout; a detached-HEAD window silently no-opped three merge
+  pushes. Caught via file-drift, recovered by repointing master at
+  the verified HEAD. A mechanical guard is queued.
+
+OPEN QUESTIONS / NEXT
+---------------------
+- Q13 (carried): X-ray wall-card solid-mode trade-off — your call.
+- Hover glow intensity is now 0.4/0.2 — tell me if it feels too hot.
+- Next backlog: B18 anchorage, B20 plumbing safety, B21d door/window
+  schedule sheet, B6-B16 wave-1 remainder, F3 trap-drop residuals.

@@ -1,0 +1,42 @@
+{
+  "round": 2,
+  "summary": {
+    "verdict": "NOT yet LOD-400-partout: wall-framing, cmu, and ui-ux-perf certified 400; floor, roof, foundation, electrical, plumbing, hvac, takeoff at 350 — each blocked by one specific 400 line.",
+    "lod": {
+      "wall-framing": 400,
+      "cmu": 400,
+      "floor": 350,
+      "roof": 350,
+      "foundation": 350,
+      "electrical": 350,
+      "plumbing": 350,
+      "hvac": 350,
+      "takeoff": 350,
+      "ui-ux-perf": 400
+    },
+    "blockers": {
+      "floor": "bearing validator only tested for silence — add a positive test that makes the R502.6 flag fire; extend sistered joists to the nearest bearing",
+      "roof": "no finish fascia member (only 'Sub-fascia 2x6'); valley carries no jacks; rafter toe-nails booked as 16d instead of 10d",
+      "foundation": "concrete pooled in one yd³ row — split footing/stemwall/slab-edge; stemwall step-downs neither modeled nor documented N/A",
+      "electrical": "wire chains cross open rooms (14/43 legs > 0.5 m from any wall) — not wall-following; no box counts by type; door-less hallways get no switch",
+      "plumbing": "no fitting/elbow count rows anywhere in the takeoff",
+      "hvac": "duct lf exists but no boot/elbow/takeoff-collar fitting rows; condensate labeled sloped but drawn level",
+      "takeoff": "cutList/cutListCsv tested but unreachable — no panel control invokes them"
+    },
+    "advisories": [
+      "cut list one button away from shipping",
+      "panel + FramingRenderer each run computeLevel (2x per edit)",
+      "sistered joists end unsupported and self-flag at 400",
+      "wiring air-crossing makes NM footage optimistic",
+      "no fitting counts → MEP under-quotes multi-bend runs",
+      "foundation concrete pooled; step-downs unaddressed",
+      "rafter toe-nail gauge wrong in ROLE_CONNECTION (16d booked, schedule says 10d)",
+      "cap-plate lap collides for walls thinner than the cap width (~0.089 m)",
+      "fab features activate at detail 300 (Code) — Generic/Code/Fab no longer maps 1:1 to 300/350/400",
+      "electrical over-places receptacles on both faces of every interior wall (acknowledged assumption)",
+      "hip side-plane jacks get no hurricane ties"
+    ]
+  },
+  "note": "Full reviewer output (evidence citations, spot checks incl. counter-evidence, per-system gap lists) recorded by the round-2 independent reviewer agent; summary above preserves every scored fact. Round-2 spot checks that FAILED: finish-fascia presence (roof), foundation concrete split (foundation), wall-following wiring (electrical), cut-list reachability (takeoff) — these four plus the floor/plumbing/hvac blockers define round 3.",
+  "suite": { "tests": 340, "fail": 0, "drawCallsSpotCheck": "604 members + 37 fixtures → 14 InstancedMeshes", "perfGate": "20-wall p95 < 50ms, 60-wall < 150ms (passing)" }
+}

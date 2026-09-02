@@ -1,0 +1,35 @@
+{
+  "round": 4,
+  "summary": {
+    "verdict": "9/10 at LOD 400 \u2014 all four round-3 blockers genuinely fixed with pinning tests; every constructed spot check held (HAP/hip-plumb hand recomputes, valley jacks at unseen pitch to 4e-16, CMU U-plan brute force 0 overlaps, washer-per-bolt zero offset, exact 1/48 slopes). Floor at 350 on a NEW counterexample.",
+    "lod": {
+      "wall-framing": 400,
+      "cmu": 400,
+      "floor": 350,
+      "roof": 400,
+      "foundation": 400,
+      "electrical": 400,
+      "plumbing": 400,
+      "hvac": 400,
+      "takeoff": 400,
+      "ui-ux-perf": 400
+    },
+    "blockers": {
+      "floor": "sister spans never split at stair holes: a bearing wall flanking a stairwell (1cm slop, or fully over it) yields a sister bridging the opening; both ends bear so validateJoistBearing stays silent"
+    },
+    "advisories": [
+      "electrical drill legs pass through door ROs when a hop stays on one wall (rubric tolerates; advisory)",
+      "Trunk reducers row correct but deletable \u2014 no pinning test",
+      "window RO anchors at finish sill \u2014 convention worth a comment/test",
+      "plumbing supplies Manhattan through rooms (carried)",
+      "hot+cold share one fitting chain key (carried)",
+      "panel React untested (carried)",
+      "fab content at Code/300 (carried)",
+      "next probes: non-axis-aligned walls/wings, multi-hole slabs, grille/trunk collision, multi-level wiring"
+    ]
+  },
+  "suite": {
+    "tests": 366,
+    "fail": 0
+  }
+}

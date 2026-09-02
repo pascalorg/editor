@@ -1,0 +1,88 @@
+NIGHT-10 MORNING REVIEW — 2026-08-24
+====================================
+TWO SHIPS. Prod already has the HEAT-PUMP PACKAGE (deployed ~05:20:
+private-editor #397 → 1231a771, plugin 4a527ec). The DAWN SHIP
+(plugin d1c3c8b, 1,736 tests) carries the other eight merges — at
+review-writing time its visual round was running; the chain follows
+on SHIP.
+
+YOUR HEAT PUMP — THE FULL STORY, NOW ON PROD
+---------------------------------------------
+- Auto placement is scene-aware: the pad validates as genuinely
+  OUTDOORS (room polygons + floor coverage + wall bodies), walks to
+  the next wall when blocked, flags loudly when stuck. Your Starter
+  House scene was the root-cause exhibit — the election was picking
+  a falsely-"exterior" bathroom partition.
+- The unit renders as the real AC BLOCK model on its pad, tonnage
+  label kept, disconnect + line-set attached.
+- The gray placeholder cube no longer buries it (service bodies
+  suppress in X-ray when the engine draws the real thing; the SIGN
+  is the select/move handle — your drag-recovery flow verified end
+  to end). Body returns when you toggle HVAC off.
+- Simple-room case: no zones → the panel now tells you to draw one.
+
+TONNAGE NOW FOLLOWS CODE (dawn ship)
+-------------------------------------
+Manual-J-lite per IRC M1401.3 → ACCA Manual J/S: envelope UA ×
+climate design ΔT + per-orientation solar + internal gains +
+infiltration on the conditioned VOLUME; a humid-zone latent
+allowance (×1.25 regime A — FL/TX size honestly now); Manual-S
+95–115% selection; >5-ton loads split into multiple condensers
+with per-unit labels. Every figure prints its composition
+('2.62 t sensible × 1.25 latent (regime A) → 3.5 t selected') on
+the panel, takeoff and sheets. Old sqft rule survives only as a
+labeled fallback.
+
+YOUR BLINKING DUCT (dawn ship, honest status)
+----------------------------------------------
+The coplanar-geometry family at duct/equipment junctions is fixed
+(junction bodies grow 5mm so runs bury INSIDE — 11-scenario sweep
+gate). HONEST CAVEAT the loop surfaced: those pairs were all
+same-color, so your TWO-color striping likely rides the one
+cross-color pair — the dryer-exhaust×line-set bore (a known queued
+item, now pinned by a test that dies when the bore fix lands). The
+dawn visual round reproduces your camera and bisects if anything
+still blinks. If you still see it after the ship, it's the bore —
+already top of the next queue.
+
+ALSO IN THE DAWN SHIP
+----------------------
+- Sheets: straps/HDUs/portal posts/uplift hardware finally KEYED
+  (glyphs + legend rows); LOD-200 exports book the same takeoff
+  rows as the panel.
+- Zones: duplicate zones merge (with a warning) — kills the false
+  'countertop not modeled' class; 'Master terrace' reads outdoor,
+  'Garden bedroom' keeps its smoke alarm; Kindergarden ≠ garden.
+- Electrical: no more ceiling lights floating over gardens (real
+  entrance lights above dwelling doors per NEC 210.70(A)(2));
+  smoke alarms always indoors; garden-facing walls stopped minting
+  indoor receptacles on reversed-orientation scenes.
+- Roofs: square-hip overlap fixed with real geometry; sub-3:12
+  hip/mansard ridges flag R802.4.3; 115-129mph states' roof ties
+  state their scope.
+- Host: the CI flake from night-8 fixed at the root (registry mock
+  leak) — shipped with the HP package.
+
+PROCESS NOTES
+-------------
+- 10 merges tonight (incl. host + HP package), 2 prod ships,
+  tests 1,646 → 1,736.
+- The loop caught two things worth telling you about: the visual
+  re-check NO-SHIPped the first HP package (service body occluding
+  the asset — fixed same night), and the z-fight skeptic proved my
+  own fix couldn't explain your two-color striping (same-color
+  fragments can't oscillate) — that honesty is why the bore is now
+  pinned instead of pretending the symptom is closed.
+- GitHub tarball 504s + one SSO expiry mid-night; zero work lost.
+
+OPEN / NEXT QUEUE
+-----------------
+- lineset×dryer-duct BORE (owns your striping if it persists).
+- Sloped-roof hurricane ties center steel inside rafters (the B8b
+  class, 28-44 pre-existing pairs) — next structural residual.
+- register×fan fixture coincidence; elbow miters; hydration flash
+  of placeholder bodies; WH floating sign on wet-room-less scenes;
+  plate-washer legend; Manual-J says-so gates + 115.0% wording
+  guard.
+- Carried for you: hover-glow verdict, Q13, auto-assume-room-from-
+  slab product call, GPU eyeball on the toggle recompile.

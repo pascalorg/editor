@@ -1,0 +1,77 @@
+{
+ "round": "B13-lod400",
+ "pin": "a34759f141404a4bcd1400cf63bb3e8f0ce619fb",
+ "branch": "feat/lod400-b13",
+ "base": "3910a75 (master)",
+ "date": "2026-08-21",
+ "protocol": "Paper round on B13 (R314.3 placement + CO alarms + ONE-circuit 14/3 interconnect + 3-way travelers) per review/BLUEPRINTS.md. Pure buildPlanSet in the detached worktree /private/tmp/review-b13-a34759f at the pin vs a scratch detached worktree at the base 3910a75, FIXED date + frozen demo graph so sheets byte-compare. Three sets each side: demo-house-FL (fc866f2f271b over HTTP — hallway scene, no garage: 2176 members / 94 fixtures / 14 sheets), compose-garage-NY (12x8 attached garage + hallway + 2 bedrooms + living w/ 3 doors -> CO alarm + two 3-way traveler groups, 12 sheets), compose-proxyless-TX (bedroom-only block + detached garage -> BOTH B13 proxy-impossible warnings, 12 sheets). All 38 pin sheets + 38 base sheets rasterized with Playwright page.setContent @2x (editor never opened); every affected sheet WALKED with zoom crops; SD-1/traveler chain visibility pixel-probed by sampling the PNG along each drawn leg (SVG rect extraction + fitted transform); takeoff JSON re-derived member-by-member; master-baseline.json recapture audited against the commit's enumerated diff. Evidence: /tmp/b13-exam/{out,out-base,crop-*,diff-*}.",
+ "verdict": "PASS — every focus item lands: SD-1 prints in its own hue-338 crimson (min RGB distance 66.5 to SA-1 / 68.6 to GEN-4, 3.3x the gated 20 floor) with the interconnected legend row; the CM bubble prints at the CO-alarm spot with its 'CM — CO alarm (R315.3)' legend row (verified on pixels — the plan-set gate is deferred to post-B21d-merge as disclosed); the circuit schedule carries 'Circuit SD-1 — 15A / 14 AWG / AFCI' in the dedicated slot and the baseline panel books exactly 10 circuits; the takeoff splits NM-B by gauge AND conductors with lf exactly equal to drawn members and books the 'CO alarms — IRC R315.3' row; both proxy-impossible warnings print VERBATIM in Flags; blast radius is surgically electrical wire-runs only (every other sheet byte-equal on all three scenes). Three FLAGs, none geometry lies: the 14/3 chain is only fragment-readable under circuit overprint (43% demo / 18% compose), the CO alarm's ceiling box is unbooked, and duplicate overlapping ZONES on the demo mint a false cross-circuit 3-way group whose traveler B13 now materializes.",
+ "items": {
+  "FOCUS-1-sd-color-and-cm-tag": {
+   "status": "PASS",
+   "checklist": ["E3", "E6", "P2"],
+   "evidence": "circuitColor('SD-1') = #ae2959 (hue 338 @ L42): min RGB distance across every family on the demo set is 66.5 (SA-1 #ae5729) and 68.6 (GEN-4 #a5279d) — 3.3x the gated 20-RGB real-id floor (circuit-colors.test.ts +2 tests at the pin). LOOKED at 1:100 (smaller than the 1:75 ask): the legend swatch reads apart from SA rust and GEN-4 magenta, and the crimson alarm elbows at each bedroom SD are unmistakable on the compose sheet (crop-comp-sd-east.png). CM: exactly one CM bubble prints at the CO-alarm spot (hall centroid − 12\", de-collided beside the L/SD cluster) + the 'CM — CO alarm (R315.3)' legend row above the circuit rows; 'CO' stays the cleanout's tag on the MEP sheet — no collision. Demo has no garage → no CM anywhere on its sheets (correct absence).",
+   "note": "No plan-set.test.ts gate for the CM tag/legend or SD legend row — disclosed by the pilot to avoid B21d's file. Verified on pixels here; add the gate in the post-merge pass (recommendation 1)."
+  },
+  "FOCUS-2-circuit-schedule": {
+   "status": "PASS",
+   "checklist": ["E6", "C5"],
+   "evidence": "Demo schedules 2/3: 'Circuit SD-1 — 3 devices (15A / 14 AWG / 15 VA / AFCI)' prints in the dedicated slot (after SA/BA, before GEN — the circuitSchedule order gains SD between GA and GEN); compose: '— 4 devices (… 20 VA / AFCI)' incl. the CO alarm. AFCI notation per NEC 210.12(A) on both. master-baseline.json audited: panel meta.circuits = 10 EXACTLY (was 9), both alarms SD-1 + interconnected:true, 540 members / 45 fixtures — the commit's enumerated recapture holds byte-for-byte in INTL and TX.",
+   "note": "Advisory (pre-existing, does not print anywhere today): panel meta.circuits is computed in assignCircuits BEFORE compute's post-HVAC AC-n pass, so it reads 10 while the schedule prints 11 rows with AC-1 (demo: 12 vs 13). If that meta ever reaches paper or the panel card it will lie by one."
+  },
+  "FOCUS-3-takeoff-rows": {
+   "status": "PASS",
+   "checklist": ["S4", "E6", "C5"],
+   "evidence": "'CO alarms — 1 pcs (IRC R315.3 — garage / fuel appliance)' prints on the compose schedules (and correctly nowhere on demo/proxyless). NM-B now splits by gauge+conductors: demo '14/2 — 1240.2 lf', '14/3 — 230.5 lf (alarm interconnect + 3-way travelers (IRC R314.4 / NEC 404.2))', plus 12/2 and 8/2. Conservation re-derived independently from members.json: 14/3 = SD-1 73.8 + LTG-2 travelers 43.8 + LTG-4 travelers 112.9 = 230.5 EXACT; 14/2 = 1240.1≈1240.2; 12/2 = SA-1+SA-2+BA-1 = 626.9 EXACT. Compose 370.1 lf 14/3 = 152.3 interconnect + 217.8 travelers. Booked == drawn in both directions.",
+   "note": "Two honesty nits: (1) NEW — 'Ceiling boxes (lights + smoke alarms)' filter omits 'co-alarm', so the CO alarm's ceiling box is unbooked (compose books 8 boxes for 9 ceiling devices); one-line filter + detail-text fix. (2) CARRIED (pre-existing at base: demo 14 dups/70.9 lf, compose 27/118.1) — byte-duplicate wire legs book twice while dedupeShapes draws them once; B13's traveler middle-switch stubs and shared alarm-bay legs join the class (compose 14/3 carries ~26.5 lf of duplicated legs ≈ 7% of the row)."
+  },
+  "FOCUS-4-interconnect-chain-and-travelers": {
+   "status": "FLAG",
+   "checklist": ["E6", "E2", "C2", "P3"],
+   "evidence": "Continuity itself is engine-proven (E2-style union-find scoped to interconnect members, 20 gates green) and every alarm shows crimson legs AT its box: bedroom SD elbows and the hall SD/CM stubs read clearly at 1:100 (crop-comp-sd-east.png). But the chain does NOT read as ONE continuous crimson run: pixel-probing every drawn SD-1 leg finds only 43% of sampled length prints in SD crimson on the demo and 18% on the compose — trunk legs on shared wall centerlines are fully overprinted by later-drawn circuits (a 99 px demo leg is 22/24 GEN-3 with zero crimson; the compose's LONGEST SD-1 leg, 302 px along the north wall, shows 0/75 crimson) — and the compose's 'SD-1' label anchors to exactly that zero-crimson bundle. Travelers: the 14/3 legs print in their circuit color and visibly link the S-box pairs (LTG-3 chains measured ~44% visible; takeoff row names them) — but on the PLAN nothing distinguishes a traveler from an ordinary switch leg, and 3-way switches print plain 'S' (drafting standard is S3/S4 subscripts).",
+   "note": "The overprint is the pre-existing shared-centerline convention (every circuit suffers it; base sheets identical) — but B13 makes it matter: the interconnect is THE thing an examiner wants to trace. The repo already owns the remedy pattern — the line-set pair's ±2.5 px schematic perpendicular nudge (M2). Recommend the same convention for the SD-1 chain (life-safety priority) + S3 tags."
+  },
+  "FOCUS-4b-false-threeway-group-demo": {
+   "status": "FLAG",
+   "checklist": ["E6", "S8"],
+   "evidence": "On-paper exhibit (demo, fixtures.json + members.json): the scene's duplicate overlapping zones ('Living / Kitchen' + 'Living + Kitchen') put the TWO FACES of one door's switch pair — deviceIds switch-wall_x86…-door_siyw…-p at [3.33,1.22,2.43] on LTG-1 and …-m at [3.33,1.22,2.57] on LTG-2 — into ONE threeWayRoom group labeled 'Switch (3-way — Living + Kitchen, 3 entries)'. B13's traveler pass now materializes that false group: a 14/3 'traveler' (two 0.07 m stubs boring the wall face-to-face + shared risers) chains switch boxes that belong to DIFFERENT CIRCUITS — a cross-circuit traveler no electrician can wire — and books its lf on the 14/3 row (~1.5 lf here). The grouping-by-room-containment is pre-existing (round-12 relabels); what is new is that it now emits members and cable quantities.",
+   "note": "Deterministic, tiny lf, only on scenes with overlapping duplicate zones (the demo also carries 6 duplicate walls that S8 dedupes — zones never got the twin treatment). Cheap fix: key travelerGroups by (threeWayRoom, circuit) — assignCircuits already owns both — or dedupe zone twins like walls. Recommendation 3; not round-blocking."
+  },
+  "FOCUS-5-warnings-verbatim": {
+   "status": "PASS",
+   "checklist": ["P4", "E6"],
+   "evidence": "compose-proxyless-TX schedules 2/2 Flags block prints BOTH B13 warnings VERBATIM, wrapped whole, no ellipsis: '⚑ No hallway and no room adjoins a bedroom — smoke alarm outside the sleeping area (IRC R314.3(2)) not placed; verify layout' and '⚑ Attached garage with bedrooms but no room to host it — CO alarm (IRC R315.3) not placed; verify layout' — composing beside the pre-existing M3 garage-return warning and the framing flags. The engine really did withhold the fixtures (2 bedroom alarms only, no outside-area alarm, no CM anywhere on the plan) — the paper tells the same story as the geometry. Demo (hallway present) gains NO new warnings, byte-equal flags page content modulo row flow.",
+   "note": "layoutElectrical's new warnings out-param verified live end-to-end through computeLevel -> buildPlanSet."
+  },
+  "FOCUS-6-regression-sweep": {
+   "status": "PASS",
+   "checklist": ["E5", "S4", "P1", "P2", "M2", "M3"],
+   "evidence": "Pin vs base with frozen demo graph + fixed date: changed sheets are EXACTLY the electrical plan + the schedules pages whose rows flowed (demo 05/13/14; composes 04/11/12) — cover, foundation, wall, roof, ALL elevations, section and the MEP sheet are byte-equal as SVG strings on all three scenes. Member diff = electrical wire-runs ONLY (demo +87/−23, compose-garage +95/−17, proxyless +19/−9; zero non-electrical deltas) — the commit's blast-radius claim verified member-by-member. MEP sheet eyeballed anyway: line-set suction/liquid both print with the schematic nudge, return duct in its darker tone with both legend rows, glyph de-collision + sewer marker intact — the glyph/line-set/return-tone rounds carry. E5's baseline recapture is disclosed, enumerated, and matches the JSON exactly. The B21d door/window schedule sheet is NOT on this branch (14/12-sheet sets end at Schedules) — see merge note.",
+   "note": "MERGE INTERACTION for the board: B13 touches plan-set.ts (FIXTURE_TAG 'CM' + TAG_NAMES row — 2 lines) while B21d owns plan-set.ts/plan-set.test.ts heavily; land the deferred CM/SD legend gate in plan-set.test.ts AFTER B21d merges, and re-run a combined paper look at the electrical sheet + new schedule sheet together."
+  },
+  "SWEEP": {
+   "status": "PASS",
+   "evidence": "Full suite at the pin (detached worktree @ a34759f): bun test -> 1079 pass / 1 todo / 0 fail (1080 tests, 36,989 expect() calls, 45 files, 835 ms); bunx tsc --noEmit clean. Checklist row E6 added in the same commit with its gate (src/engines/electrical.alarms.test.ts, 20 tests: no-hallway proxy census + adjacency geometry, per-story pin on a two-storey computeLevel scene, CO matrix, one-circuit pin, scoped 14/3 union-find walk, traveler continuity + single-entry negative, takeoff split conservation). Two pre-B13 pins updated to the new truth as disclosed. No checklist row regressed; E1-E5, S4, P1-P4, A4 walked.",
+   "note": "Live harness reconfirmed the E6 census on three scenes the gates don't cover verbatim (real demo graph over HTTP + two composes)."
+  }
+ },
+ "recommendations": [
+  "Post-B21d-merge: add the deferred plan-set gate — CM tag bubble at the co-alarm fixture, 'CM — CO alarm (R315.3)' legend row, SD-1 legend row with the interconnected hint (plan-set.test.ts is B21d's file; land the gate after that merge, then a combined electrical+schedule-sheet paper look).",
+  "Give the SD-1 interconnect the line-set treatment (M2 precedent): a ±2-3 px schematic perpendicular nudge (or draw the SD chain LAST) so the life-safety chain reads as one continuous crimson run — today 57-82% of its drawn length hides under later circuits, and the compose's SD-1 label sits on a run with zero visible crimson.",
+  "Fix the false 3-way group class: key travelerGroups by (threeWayRoom, circuit) — or dedupe overlapping zone twins the way S8 dedupes walls — so opposite-face switch pairs on different circuits never chain a cross-circuit traveler (demo exhibit: door_siyw9njh's -p/-m faces, LTG-1 x LTG-2, 0.07 m wall-boring stubs).",
+  "Book the CO alarm's ceiling box: the 'Ceiling boxes' filter reads lights + smoke-alarm only — include 'co-alarm' and update the row detail text.",
+  "Tag 3-way switches 'S3' (and 4-way middles 'S4') on the electrical sheet — travelers are otherwise indistinguishable from switch legs on paper; the group label already knows the entry count.",
+  "Carried (pre-existing, byte-identical at base): wire chains book byte-duplicate legs twice while the sheet dedupes them (demo 70.9 lf at base; travelers add middle-switch stub dups) — a per-circuit member dedupe before the takeoff tally closes it; panel meta.circuits excludes the post-HVAC AC-n circuit (reads 10 where 11 exist) — harmless until it prints."
+ ],
+ "suite": {
+  "pass": 1079,
+  "todo": 1,
+  "fail": 0,
+  "tests": 1080,
+  "assertions": 36989,
+  "files": 45,
+  "runtimeMs": 835,
+  "tsc": "clean"
+ },
+ "shipStamp": "APPROVE — B13 stamped for merge at a34759f. The alarm truth is on paper end-to-end: placement (hallway, proxy, per-story, CO) with loud verbatim warnings where placement is impossible; ONE SD-1 circuit with breaker/AWG/AFCI in the schedule's dedicated slot and the baseline panel at exactly 10; a 14/3 SKU split whose lf equals the drawn members to the decimal; hue-338 crimson clearing the color floor 3x; CM tagged and legended on pixels; and a blast radius that is precisely 'electrical wire-runs only' across three scenes x 38 sheets. Suite 1079/0 + tsc clean with the E6 row and its 20 gates in the same commit. The three FLAGs (chain overprint readability, unbooked CO ceiling box, false cross-circuit traveler on duplicate-zone scenes) are small, evidenced, and on the recommendations list — none is a lie about geometry the round can't disclose."
+}

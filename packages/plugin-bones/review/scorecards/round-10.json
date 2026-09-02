@@ -1,0 +1,28 @@
+{
+  "round": 10,
+  "summary": {
+    "verdict": "6/10 at 400 — the round applied the world-composition standard repo-wide and demoted four systems with precise gap lists: wall-framing (corner/tee volumes shared, single fire-block row, splice arithmetic, silent RO shifts), floor (blocking family sizing, trimmer/sister dedupe, girder end validation dead behind the schematic flag), foundation (oblique corners perpendicular-only, thickened slab edge doubled inside stemwall volume), electrical (LA-1/GA-1 untested). Advisories: roof fixed 3.5in birdsmouth over-notches past ~21-27deg, 1x8 finish fascia unpurchasable, HAP unpinned; CMU grout label-string coupling and no numeric yd3 pin; HVAC square trunk misread as round. Reviewer recommendation: a repo-wide pairwise interpenetration gate converts three demotions into regression-proof fixes.",
+    "lod": {
+      "wall-framing": 350,
+      "cmu": 400,
+      "floor": 350,
+      "roof": 400,
+      "foundation": 350,
+      "electrical": 350,
+      "plumbing": 400,
+      "hvac": 400,
+      "takeoff": 400,
+      "ui-ux-perf": 400
+    }
+  },
+  "fixes_landed_same_night": [
+    "interpenetration gate (OBB SAT, scenario matrix per engine) — 858e5fb",
+    "ridge-face bearing + inscribed plumb cuts, dropped gable ends, rolled outlookers, sistered CJ/collar ties, fascia outside tails, jack cheek bearing — 858e5fb",
+    "foundation thickened-edge doubling removed; oblique corner multipliers (1+|cos|)/sin — 858e5fb, 6bf2215",
+    "girder end validation live via advisory channel (rim pockets + notch rims recognized) — 6044075",
+    "wall corner/tee run insets, multi-row fire blocking, splice arithmetic, RO-shift flag, bay-clipped backing — 7d3f986",
+    "birdsmouth d/4 cap + 1x8 purchasable + HAP numeric pin — earlier tonight",
+    "CMU grouted?: boolean + grout yd3 numeric pins; HVAC trunk label contract in takeoff; LA-1/GA-1 pins",
+    "X-ray overlay-layer rendering fix (host cutaway re-shows no longer hide members) — 50bd690"
+  ]
+}

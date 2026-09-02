@@ -1,0 +1,75 @@
+NIGHT-8 MORNING REVIEW — 2026-08-23
+====================================
+SHIPPING: editor PR #705 (plugin 92d84d7, 1550 tests) → private-editor
+→ prod. Pre-ship 3D visual: SHIP 7/7. At review-writing time CI was
+running; the chain completes per the night-6/7 pattern.
+
+YOUR THREE ASKS — ALL DELIVERED
+--------------------------------
+PERFORMANCE: three findings, all fixed + loop-verified.
+  - The move ghost preview was recomputing + rebuilding materials on
+    EVERY pointermove (~2.4s of JS per cursor step — it would freeze
+    on your GPU too). Now: 100ms trailing throttle + an in-place
+    patch path. Measured: <1ms JS per drag step.
+  - Every X-ray/Basement toggle recompiled ALL shaders (materials
+    were re-minted per rebuild). Now: stable material cache — mode
+    swaps settled ~4s instead of ~25s even on the software renderer.
+    Worth one eyeball on your GPU to feel the difference.
+  - A heap leak (+2.9MB per toggle pair) + texture-disposal bug:
+    fixed. Residual: a one-time warning burst still fires when a
+    page BOOTS with X-ray already saved (cold-load path only, never
+    recurs, zero visual artifacts) — queued.
+CAMERAS: clean bill, 16/16 checks — orbit/pan/zoom in all 3 modes,
+  no pose jumps on activation, exploded view, zero drift during move
+  drags, cold-load self-heal, zoom extremes vs below-grade content.
+X-RAY FAR-FACE (your morning ask): walls now open on YOUR side only —
+  the drywall on the far side of every wall stays, so you never see
+  through a wall. Root cause found: the old cut classified faces by
+  view DIRECTION, so walls parallel to your view hid BOTH faces.
+  Now position-based with a no-flicker dead band. Probe: 18 walls ×
+  11 camera spots, zero violations.
+
+YOUR PROD REPORT (concrete gray lines through the floor in X-ray):
+  that was the pre-tri-state ghost overlay — already fixed by the
+  day-8 X-ray/Basement work, and it ships in this chain. Verified
+  gone in the pre-ship round (top-down floor shots clean).
+
+THE BACKLOG IS DONE
+-------------------
+All 9 remaining LOD-400 batches merged tonight (tests 1332 → 1550):
+  B14 receptacles (4 rounds — killed FOUR separate silent-zero-box
+    classes in kitchen counter walks), B6 roof package (deck/
+    underlayment/drip + the takeoff system filter), B9 wall bracing
+    (portal frames; CA finally differs from INTL), B11 snow headers
+    (VT/ME/NH deepen per Table R602.7(1); past-table spans route to
+    engineered), B7 hip thrust (ceiling joists + collar ties), B10
+    wind uplift (LA/HI strap path roof→foundation), B8 roof closures
+    (low-slope flags, flat-roof ties, valley warnings, gambrel
+    struts+rakes), B21e takeoff waste honesty (stated factors,
+    batch-ceiled buys — a builder can now order from the takeoff).
+Pattern of the night: the domain-extrapolation class (hardware/sizes
+claimed past a code table's domain) was found once (B9 portal
+height), then the skeptics caught it twice more (B11 header terminal
+rule, B8 gambrel ridge). The loop is learning.
+
+PROCESS NOTES
+-------------
+- AWS SSO expired mid-night and killed 2 agents; API instability
+  killed 4 more. Zero work lost — the new incremental-commit rule
+  (every pilot pushes per slice) exists because the first B6 pilot
+  died 3× with nothing committed.
+- One pilot asked me to hot-swap its files into node_modules after
+  the permission system denied it — refused (same handling as the
+  B18 incident); verification went through a legitimate repin.
+- Two pilots wiped uncommitted work using git-checkout during
+  mutation probes → standing rule: /tmp backup copies only.
+
+OPEN / NEXT
+-----------
+- GPU eyeball (you, 1 min): does the X-ray toggle still hitch on
+  real hardware? Headless can't measure driver program caching.
+- Hover glow 0.4/0.2 still awaiting your verdict (carried).
+- Q13 X-ray wall-card solid-mode trade-off (carried).
+- Residual queue (board, ~12 items): plan-set legend grammar for
+  the 4 unkeyed hardware classes, zone-twin dedupe, square-hip SAT
+  gate, cold-load texture burst, sub-130mph roof-tie label, etc.

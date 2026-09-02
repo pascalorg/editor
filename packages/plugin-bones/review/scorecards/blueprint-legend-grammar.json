@@ -1,0 +1,48 @@
+{
+  "round": "legend-grammar r1 (paper)",
+  "branch": "feat/legend-grammar",
+  "sha": "215ad1a",
+  "date": "2026-08-23",
+  "verdict": "APPROVE",
+  "suite": { "pass": 1649, "todo": 1, "fail": 0, "tests": 1650, "files": 61, "expects": 50450, "tsc": "clean" },
+  "method": "pure buildPlanSet bun harness on the fc866f2f271b demo graph + injected bones:framing (CA/LA/HI/INTL/TX @400, INTL @200 ±areas; 10-ft garage door widened on the kq2 perimeter wall for the CS-PF composes, both returns 0.71 m). Sheets rasterized via Playwright page.setContent at 2-20x; every affected sheet LOOKED at. Master-side twin builds (4a527ec) for byte comparison. Fixed date, panel-parity buildPlanSet options.",
+  "items": {
+    "F1-ca-seismic": {
+      "status": "PASS",
+      "evidence": "CA garage compose: wall sheet prints 3 filled-diamond portal straps + 6 open-square post markers; foundation sheet 18 filled-square HDUs. Glyph census == member census per role (SVG-verified 3/6/18). Legend rows keyed with the exact swatch markup + derived cites: 'Portal strap 1000 lb (CS-PF, R602.10.6.4) — 3 pcs', 'Portal hold-down post (doubled 2x6) — R602.10.6.4 — 6 pcs', '■ HDU hold-down — 18 pcs'. At 14-20x crops the strap diamonds are unmistakable at the garage jambs (master printed a ~1.6 px unkeyed fleck at the same spot — before/after compared); HDU squares read distinct from ● bolt dots (r=2.2 filled) and ○ dowel circles at a glance; min HDU↔mark clearance 6.99 px, zero crowded fallbacks. The accidental 'post — 2x6' roleSizes row is gone. B12-r1 unkeyed-dominant-ink class CLOSED for the strap/HDU/uplift/portal family.",
+      "note": "Two advisories, neither blocking: (a) the HDU legend row carries NO cite because the MEMBER label is bare 'HDU hold-down' (foundation.ts, frozen this wave) — the wave-2 derived-row rule correctly refuses to invent one; add the R602.10.4.4 cite to the engine label in a foundation round and the row inherits it free. (b) the portal-post open square is the weakest glyph of the six: drawn OVER the post's lumber rect on the dense wall band it reads as heavier framing ticks rather than a distinct marker at 1:1 (deliberate — the post is real lumber and keeps its rect); keyed + censused, so acceptable, but a future round could offset the marker off-band like the other glyphs."
+    },
+    "F2-la-windy": {
+      "status": "PASS",
+      "evidence": "LA compose wall sheet: uplift trio censuses 1:1 (open diamond uplift-strap 18, open triangle connector 96, filled triangle-down foundation-strap 16 — SVG census == member census). Three distinct shapes readable at 2x full-sheet and 8x crops. Legend rows named with counts + WFCM cites, per-opening variants booked separately: 'Header uplift strap over door (WFCM) — 2 pcs' / 'over window — 16 pcs' / 'Plate-to-foundation uplift strap (WFCM) — 16 pcs' / 'Stud-to-plate connector (R802.11 path / WFCM) — 96 pcs'."
+    },
+    "F3-hi-worst-case": {
+      "status": "PASS",
+      "evidence": "HI (seismic+windy) wall sheet carries all five wall-side kinds at once — 130 glyphs (3 strap + 18 uplift-strap + 96 connector + 7 foundation-strap + 6 portal-post), min pairwise glyph distance 7.00 px (exactly the clear budget), ZERO 'hardware-glyph crowded' comments. 8x crop at the garage jambs: spiral dodges stack the coincident stud-top/plate-line marks in tidy clusters hugging their wall — shapes never blob, each stays within the 12 px dodge ring of its member (≈3 mm on paper). foundation-strap census 7 vs LA's 16 truthfully shows the S16 HDU/bolt dedupe winning more spots at HI's 4-ft seismic bolt spacing. Legend box height grows to fit (h=266) with all six rows.",
+      "note": "CARRIED CLASS (pre-existing, honest): the legend box is a fixed 250 px wide; the foundation sheet's slab row overflows it by 148 px on MASTER today. The branch's two longest wall-sheet rows join the class (+41 px portal post, +28 px connector) — measured via getBBox; no text-over-text, no drawing-ink collision (drawing starts ~x 600). Queue a legendW-from-content or row-wrap fix for the family; the E1 two-row split precedent exists in-file."
+    },
+    "F4-lod200-c5-parity": {
+      "status": "PASS",
+      "evidence": "INTL@200 with opts.areas = result.areas: ALL 96 panel computeTakeoff rows print on the schedules sheets (programmatic parity — zero missing), incl. the B21e gross-fallback wording VERBATIM: 'Wall sheathing 7/16\" WSP — 36 sheets (4x8 sheets, gross (openings cut out))' and 'Drywall 1/2\" — 121 sheets (4x8 sheets, gross — both faces of interior walls)'. Rows wrap whole (P4), flags block + BUILDING CHARACTERISTICS intact on 3/3. Without areas the fallback rows stay off paper AND the whole set is byte-equal to master — the option is purely additive.",
+      "note": "The prod export still won't carry the rows until the sibling pilot lands the stated one-liner (panel.tsx `areas: result.areas` — TODO comment in PlanSetOptions, panel.tsx owned by another branch this wave). Paper capability + gates are complete; flag the hookup on the board so it doesn't silently linger."
+    },
+    "F5-regression-byte-equality": {
+      "status": "PASS",
+      "evidence": "Branch-vs-master (4a527ec) full plan-set builds, fixed date: INTL@400, TX@400, INTL@200 — every sheet byte-equal. Hardware composes (CA-garage, LA, HI-garage): ONLY 'Wall framing plan' + 'Foundation plan' differ (LA: wall only — no seismic HDUs); electrical, MEP, cover, elevations, section, door+window schedule, schedules sheets all byte-equal. INTL compose emits zero hardware-family members and zero glyph markup on any sheet (gated too). Suite 1649/0 + tsc clean at 215ad1a."
+    },
+    "F6-plate-washer-residual": {
+      "status": "FLAG",
+      "evidence": "Confirmed genuinely out of tonight's family and near-zero severity: the 42 plate-washer members print as generic ~2 px rects at 0.00 px from their anchor-bolt dots (SVG-measured median distance 0.00) — the r=2.2 filled dot covers them completely, so they are HIDDEN ink, not unkeyed DOMINANT ink. Nothing misleading prints. Residual stands as stated; a future foundation paper round could fold them into the bolt legend row ('washers follow bolts 1:1, R602.11.1' — the S12 washer-parity story) rather than glyph them."
+    },
+    "checklist-walk": {
+      "status": "PASS",
+      "evidence": "P1 one shared transform — glyph truth-anchoring gates fit the transform independently from foundation bolt dots and hold on both sheets. P2 every symbol keyed — six glyphs, legend swatch = exact plan markup, census-gated. P3 title block — jurisdiction + code name + effective date + LOD stamp + SHEET n/N + ratio + north arrow verified on renders (CA/HI/LA/INTL200). P4 warnings verbatim — LOD-200 3/3 flag block prints all engine warnings; P4 label floor met (glyph bodies 6-8 px ≥ 7px rule met at the print size, fixed-px so scale-independent). P6/B21d — glyph spots join placed[] so opening-mark bubbles dodge them (gated); schedule sheets byte-equal. E5/S13/S16 baselines — INTL/TX byte-equal incl. E5-relevant electrical sheets. S4/C5 — paper and panel book the SAME takeoff when areas thread through. No regressed row found."
+    }
+  },
+  "recommendations": [
+    "foundation.ts (next foundation round): put the R602.10.4.4 cite on the HDU member label — the derived legend row inherits it for free",
+    "legend box width: derive legendW from the longest row (or wrap rows >250 px, the E1 two-row precedent) — kills the carried 148 px foundation overflow and the two new wall-sheet joiners in one move",
+    "portal-post marker: consider offsetting the open square off the wall band (the same spiral the other glyphs use) so it reads as a marker rather than heavier framing ink",
+    "board: keep the panel.tsx `areas: result.areas` one-liner visible in the merge notes — C5 parity only reaches prod exports once the sibling pilot lands it"
+  ]
+}

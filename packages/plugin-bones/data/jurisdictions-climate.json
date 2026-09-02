@@ -1,0 +1,1334 @@
+{
+  "version": "2026-08-15",
+  "disclaimer": "Typical state-level values — site-specific design values (IRC Table R301.2(1), filled in by the local jurisdiction) govern; verify with the AHJ. Entries AL through MO + DC were reconstructed on 2026-08-13 after the climate-a research output was lost; see per-entry \"caveat\". Canadian provincial and territorial entries (CA-*) were added 2026-08-15 from NBC 2020 Appendix C and Ontario SB-1; see the per-entry \"caveat\". CA-* unit conversions: ground snow Ss kPa → psf at 1 kPa = 20.885 psf; frost depth mm → in at 25.4 mm = 1 in — documented per row in snowNote/frostLineNote.",
+  "sources": [
+    "https://ascehazardtool.org/",
+    "https://hazards.atcouncil.org/",
+    "https://www.usgs.gov/programs/earthquake-hazards/science/seismic-design-maps",
+    "https://codes.iccsafe.org/content/IRC2021P2/chapter-3-building-planning",
+    "https://www.fema.gov/emergency-managers/risk-management/building-science/building-codes",
+    "https://codes.ohio.gov/ohio-administrative-code/rule-4101:8-4-01",
+    "https://www.dli.pa.gov/ucc/Pages/default.aspx",
+    "https://dsps.wi.gov/Pages/Programs/UniformDwelling/Default.aspx",
+    "https://extension.usu.edu/",
+    "https://www.wbdg.org/",
+    "https://floridabuilding.org/",
+    "https://www.dli.mn.gov/business/codes-and-laws",
+    "https://www.mass.gov/orgs/board-of-building-regulations-and-standards",
+    "https://nrc.canada.ca/en/certifications-evaluations-standards/codes-canada/codes-canada-publications/national-building-code-canada-2020",
+    "https://www.seismescanada.rncan.gc.ca/hazard-alea/interpolat/nbc-cnb-en.php",
+    "https://www.ontario.ca/page/building-code-updates"
+  ],
+  "states": {
+    "AL": {
+      "name": "Alabama",
+      "frostLineIn": 12,
+      "frostLineNote": "Typically 6-12 in south/central; 12-18 in in northern counties (Huntsville area).",
+      "groundSnowLoadPsf": 10,
+      "snowNote": "Gulf coast ~0-5 psf; central ~5-10 psf; northern counties 10-15 psf.",
+      "ultimateWindMph": 115,
+      "windNote": "Interior 105-115 mph; Gulf coast (Mobile, Baldwin) 140-160 mph with wind-borne debris region; high tornado exposure statewide.",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly A-B; far northern counties trend toward C near the East Tennessee seismic zone.",
+      "termiteRisk": "heavy",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "AK": {
+      "name": "Alaska",
+      "frostLineIn": 42,
+      "frostLineNote": "Anchorage/Southcentral commonly 42 in; SE coastal 18-36 in; Interior and Arctic permafrost zones require engineered foundations — prescriptive frost depth does not apply.",
+      "groundSnowLoadPsf": 50,
+      "snowNote": "Anchorage ~50 psf; Fairbanks ~60 psf; Southeast (Juneau) 50-70 psf; mountain areas are case-study zones (100+ psf).",
+      "ultimateWindMph": 120,
+      "windNote": "Anchorage ~120-130 mph; Aleutians and exposed coastal areas 150+ mph special wind regions; interior lower (~105-115 mph).",
+      "seismicSdc": "D",
+      "seismicNote": "Southcentral (Anchorage, 1964 M9.2 source zone) SDC D+; among the most seismically active regions on earth; engineered lateral design standard.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": true,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "AZ": {
+      "name": "Arizona",
+      "frostLineIn": 12,
+      "frostLineNote": "Phoenix/Tucson low desert: 12 in minimum embedment (no frost design depth); Flagstaff/Mogollon Rim high country 30-36 in.",
+      "groundSnowLoadPsf": 5,
+      "snowNote": "Low desert 0-5 psf; Flagstaff (~7,000 ft) is a case-study zone (~55-90 psf); White Mountains higher.",
+      "ultimateWindMph": 105,
+      "windNote": "Roughly 100-110 mph statewide; monsoon downbursts drive local gust exposure.",
+      "seismicSdc": "B",
+      "seismicNote": "Phoenix/Tucson typically B; northwestern AZ and the Flagstaff volcanic field trend C.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "negligible",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "AR": {
+      "name": "Arkansas",
+      "frostLineIn": 18,
+      "frostLineNote": "Typically 12-24 in; Little Rock ~18 in, Ozark highlands 24 in.",
+      "groundSnowLoadPsf": 10,
+      "snowNote": "Southern lowlands ~5-10 psf; Ozarks/northern tier 10-20 psf.",
+      "ultimateWindMph": 115,
+      "windNote": "105-115 mph statewide; significant tornado exposure.",
+      "seismicSdc": "B",
+      "seismicNote": "Most of state B-C; northeast Arkansas (Jonesboro, New Madrid seismic zone) D — engineered lateral design common there.",
+      "termiteRisk": "heavy",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "CA": {
+      "name": "California",
+      "frostLineIn": 12,
+      "frostLineNote": "Coastal and valley jurisdictions: 12 in minimum embedment; Sierra and mountain jurisdictions 18-36 in (Tahoe basin 24-36 in).",
+      "groundSnowLoadPsf": 5,
+      "snowNote": "Most population centers 0-5 psf; Sierra Nevada and mountain jurisdictions are case-study zones (Tahoe 100-300+ psf).",
+      "ultimateWindMph": 100,
+      "windNote": "Most of state 95-110 mph; ASCE special wind regions in Santa Ana canyon corridors and mountain gaps.",
+      "seismicSdc": "D",
+      "seismicNote": "Most population centers SDC D (E near major faults); seismic governs lateral design statewide — shear walls and hold-downs standard.",
+      "termiteRisk": "heavy",
+      "weatheringPotential": "negligible",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": true,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "CO": {
+      "name": "Colorado",
+      "frostLineIn": 36,
+      "frostLineNote": "Front Range (Denver, Colorado Springs) commonly 36 in; mountain jurisdictions 48+ in. Local-adoption state — verify locally.",
+      "groundSnowLoadPsf": 30,
+      "snowNote": "Denver metro ~30 psf; foothills 40-60 psf; mountain towns are case-study zones (75-150+ psf).",
+      "ultimateWindMph": 115,
+      "windNote": "Plains 115-120 mph; Front Range foothill zones (Boulder area) are special wind regions designed for 140+ mph; hail/tornado exposure on the plains.",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly B; some western/central mountain areas trend C.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "CT": {
+      "name": "Connecticut",
+      "frostLineIn": 42,
+      "frostLineNote": "CT State Building Code practice commonly 42 in; local practice 36-48 in.",
+      "groundSnowLoadPsf": 30,
+      "snowNote": "Coastal ~25-30 psf; northwest hills 35-40 psf.",
+      "ultimateWindMph": 115,
+      "windNote": "Inland 110-115 mph; Long Island Sound shoreline 120-130 mph (hurricane-prone region).",
+      "seismicSdc": "B",
+      "seismicNote": "SDC B typical for default site class; Moodus seismic area locally noted.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "DE": {
+      "name": "Delaware",
+      "frostLineIn": 24,
+      "frostLineNote": "Sussex County ~24 in; New Castle County commonly 30-32 in.",
+      "groundSnowLoadPsf": 20,
+      "snowNote": "Roughly 15-25 psf; higher in the north.",
+      "ultimateWindMph": 115,
+      "windNote": "Inland 110-115 mph; Atlantic coast (Rehoboth) 120-130 mph.",
+      "seismicSdc": "B",
+      "seismicNote": "SDC A-B; low seismic hazard.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "DC": {
+      "name": "District of Columbia",
+      "frostLineIn": 24,
+      "frostLineNote": "DC Construction Codes practice 24-30 in; 24 in commonly cited.",
+      "groundSnowLoadPsf": 25,
+      "snowNote": "Roughly 25 psf.",
+      "ultimateWindMph": 115,
+      "windNote": "110-115 mph.",
+      "seismicSdc": "B",
+      "seismicNote": "SDC B typical; the 2011 Mineral, VA earthquake caused local damage on soft sites.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "FL": {
+      "name": "Florida",
+      "frostLineIn": 12,
+      "frostLineNote": "No frost design depth; FBC-R 12 in minimum footing embedment governs statewide.",
+      "groundSnowLoadPsf": 0,
+      "snowNote": "0 psf statewide.",
+      "ultimateWindMph": 140,
+      "windNote": "Inland north Florida 120-130 mph; peninsula coasts 150-170 mph; HVHZ (Miami-Dade/Broward) 170-180 mph with impact-rated openings and enhanced uplift detailing.",
+      "seismicSdc": "A",
+      "seismicNote": "SDC A statewide; negligible seismic hazard.",
+      "termiteRisk": "very heavy",
+      "weatheringPotential": "negligible",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": true,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "GA": {
+      "name": "Georgia",
+      "frostLineIn": 12,
+      "frostLineNote": "South/central 6-12 in; north Georgia mountains 12-18 in.",
+      "groundSnowLoadPsf": 10,
+      "snowNote": "South 0-5 psf; Atlanta ~5-10 psf; Blue Ridge mountains 15-30 psf.",
+      "ultimateWindMph": 115,
+      "windNote": "Interior 105-115 mph; coast (Savannah, Brunswick) 130-140 mph with wind-borne debris region.",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly B; NW Georgia and areas under Charleston-zone influence trend C.",
+      "termiteRisk": "heavy",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "HI": {
+      "name": "Hawaii",
+      "frostLineIn": 12,
+      "frostLineNote": "No frost; 12 in minimum footing embedment governs.",
+      "groundSnowLoadPsf": 0,
+      "snowNote": "0 psf at habitable elevations (snow only on Mauna Kea/Mauna Loa summits).",
+      "ultimateWindMph": 130,
+      "windNote": "Vult ~130 mph base with island-specific topographic wind-speed-up factors (Hawaii amendments); hurricane exposure (Iniki 1992).",
+      "seismicSdc": "D",
+      "seismicNote": "Hawaii Island D-E near active volcanism; Oahu/Maui C-D.",
+      "termiteRisk": "very heavy",
+      "weatheringPotential": "negligible",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": true,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "ID": {
+      "name": "Idaho",
+      "frostLineIn": 36,
+      "frostLineNote": "Boise/Treasure Valley 24-36 in; northern and high-elevation jurisdictions 42-48 in.",
+      "groundSnowLoadPsf": 35,
+      "snowNote": "Treasure Valley ~25-35 psf; northern panhandle 50-70 psf; mountain jurisdictions are case-study zones (100+ psf).",
+      "ultimateWindMph": 105,
+      "windNote": "Roughly 100-110 mph statewide; canyon special wind regions locally.",
+      "seismicSdc": "C",
+      "seismicNote": "Central Idaho (Borah Peak 1983 M6.9) and eastern ID trend C-D; Boise B-C; panhandle B.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "IL": {
+      "name": "Illinois",
+      "frostLineIn": 36,
+      "frostLineNote": "Chicago metro commonly 42 in; central IL 36 in; far south 30 in.",
+      "groundSnowLoadPsf": 25,
+      "snowNote": "Northern IL 25-30 psf; central ~20 psf; south 15 psf.",
+      "ultimateWindMph": 115,
+      "windNote": "105-115 mph statewide; significant tornado exposure.",
+      "seismicSdc": "B",
+      "seismicNote": "Most of state A-B; far southern IL (New Madrid/Wabash Valley zones) C-D.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "IN": {
+      "name": "Indiana",
+      "frostLineIn": 30,
+      "frostLineNote": "Indianapolis ~30 in; northern counties 36 in; Ohio River valley 24 in.",
+      "groundSnowLoadPsf": 20,
+      "snowNote": "Northern lake-effect counties 25-30 psf; central ~20 psf; south 15 psf.",
+      "ultimateWindMph": 115,
+      "windNote": "105-115 mph statewide; tornado exposure.",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly B; SW Indiana (Wabash Valley seismic zone, Evansville) C-D.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "IA": {
+      "name": "Iowa",
+      "frostLineIn": 42,
+      "frostLineNote": "Commonly 42 in (Des Moines); northern counties 48 in.",
+      "groundSnowLoadPsf": 30,
+      "snowNote": "Southern 25-30 psf; northern 35-40 psf.",
+      "ultimateWindMph": 115,
+      "windNote": "110-115 mph statewide; derecho and tornado exposure.",
+      "seismicSdc": "A",
+      "seismicNote": "SDC A statewide; negligible seismic hazard.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "KS": {
+      "name": "Kansas",
+      "frostLineIn": 30,
+      "frostLineNote": "Kansas City metro ~36 in; central 30 in; SW Kansas 24 in. Local-adoption state — verify locally.",
+      "groundSnowLoadPsf": 20,
+      "snowNote": "Roughly 15-25 psf; higher in the northeast.",
+      "ultimateWindMph": 115,
+      "windNote": "110-115 mph statewide; extreme tornado exposure (not captured by ASCE basic wind maps).",
+      "seismicSdc": "A",
+      "seismicNote": "Mostly A-B; south-central induced-seismicity areas have trended B.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "KY": {
+      "name": "Kentucky",
+      "frostLineIn": 24,
+      "frostLineNote": "Kentucky Residential Code practice ~24 in statewide.",
+      "groundSnowLoadPsf": 15,
+      "snowNote": "Western KY 10-15 psf; eastern highlands 15-20 psf.",
+      "ultimateWindMph": 115,
+      "windNote": "105-115 mph statewide; significant tornado exposure in western KY.",
+      "seismicSdc": "B",
+      "seismicNote": "Most of state B; far western KY (Paducah, New Madrid zone) D — engineered lateral design common there.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "LA": {
+      "name": "Louisiana",
+      "frostLineIn": 12,
+      "frostLineNote": "No meaningful frost depth; 12 in minimum embedment governs; expansive/soft soils drive foundation design in much of the state.",
+      "groundSnowLoadPsf": 5,
+      "snowNote": "0-5 psf; northern parishes up to ~10 psf.",
+      "ultimateWindMph": 130,
+      "windNote": "Northern parishes 115-120 mph; coast (New Orleans, Houma, Lake Charles) 140-160 mph with wind-borne debris region.",
+      "seismicSdc": "A",
+      "seismicNote": "SDC A statewide; negligible seismic hazard.",
+      "termiteRisk": "very heavy",
+      "weatheringPotential": "negligible",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "ME": {
+      "name": "Maine",
+      "frostLineIn": 48,
+      "frostLineNote": "Southern/coastal Maine 48 in; northern Maine (Aroostook) 60-72 in.",
+      "groundSnowLoadPsf": 60,
+      "snowNote": "Coastal 50-60 psf; interior/northern 70-100 psf.",
+      "ultimateWindMph": 110,
+      "windNote": "Interior 100-110 mph; downeast coast 115-120 mph.",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly B; coastal/central pockets trend C on soft sites.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "MD": {
+      "name": "Maryland",
+      "frostLineIn": 30,
+      "frostLineNote": "Baltimore/central 30 in; Eastern Shore 24 in; western MD (Garrett County) 36-42 in.",
+      "groundSnowLoadPsf": 25,
+      "snowNote": "Eastern Shore 15-20 psf; central 25-30 psf; Garrett County 50+ psf.",
+      "ultimateWindMph": 115,
+      "windNote": "Most of state 110-115 mph; Ocean City/Atlantic coast 120-130 mph.",
+      "seismicSdc": "B",
+      "seismicNote": "SDC A-B statewide.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "MA": {
+      "name": "Massachusetts",
+      "frostLineIn": 48,
+      "frostLineNote": "MA State Building Code: 4 ft (48 in) statewide.",
+      "groundSnowLoadPsf": 40,
+      "snowNote": "Boston ~40 psf; central/western MA 50-60 psf; Cape Cod 25-30 psf.",
+      "ultimateWindMph": 120,
+      "windNote": "Interior 110-115 mph; Cape Cod and the Islands 140+ mph (hurricane-prone region with wind-borne debris zones).",
+      "seismicSdc": "B",
+      "seismicNote": "SDC B typical; Boston-area soft soils can push C — MA carries state-specific seismic amendments.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "MI": {
+      "name": "Michigan",
+      "frostLineIn": 42,
+      "frostLineNote": "Michigan Residential Code: 42 in in the southern zone; northern Lower Peninsula and UP 48-60 in.",
+      "groundSnowLoadPsf": 30,
+      "snowNote": "SE Michigan 20-25 psf; northern Lower Peninsula 40-60 psf; Keweenaw/UP lake-effect belts 60-100+ psf.",
+      "ultimateWindMph": 110,
+      "windNote": "105-115 mph statewide.",
+      "seismicSdc": "A",
+      "seismicNote": "SDC A-B statewide; negligible hazard.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "MN": {
+      "name": "Minnesota",
+      "frostLineIn": 42,
+      "frostLineNote": "MN Rules 1303.1600: 42 in southern zone (incl. Twin Cities), 60 in northern zone.",
+      "groundSnowLoadPsf": 50,
+      "snowNote": "State snow-load zones: ~35 psf far south, 50 psf central/north (Twin Cities at 50).",
+      "ultimateWindMph": 110,
+      "windNote": "105-115 mph statewide.",
+      "seismicSdc": "A",
+      "seismicNote": "SDC A statewide; negligible seismic hazard.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "MS": {
+      "name": "Mississippi",
+      "frostLineIn": 12,
+      "frostLineNote": "Typically 6-12 in; northern counties up to 15-18 in.",
+      "groundSnowLoadPsf": 5,
+      "snowNote": "Coast ~0 psf; northern MS 5-10 psf.",
+      "ultimateWindMph": 120,
+      "windNote": "Northern MS 110-115 mph; Gulf coast (Biloxi, Gulfport) 145-160 mph with wind-borne debris region.",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly B; NW corner (New Madrid influence) C-D.",
+      "termiteRisk": "heavy",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "MO": {
+      "name": "Missouri",
+      "frostLineIn": 30,
+      "frostLineNote": "Kansas City ~36 in; St. Louis 30 in; southern MO 24 in. Local-adoption state — verify locally.",
+      "groundSnowLoadPsf": 20,
+      "snowNote": "Roughly 15-25 psf; northern MO toward 25 psf.",
+      "ultimateWindMph": 115,
+      "windNote": "110-115 mph statewide; significant tornado exposure.",
+      "seismicSdc": "B",
+      "seismicNote": "Most of state B; SE Missouri Bootheel (New Madrid zone) D-E — engineered lateral design required there.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Reconstructed 2026-08-13: the A-half research output (climate-a.json) was lost before merge; values are typical published figures re-derived from the cited sources — verify against Table R301.2(1) of the local AHJ."
+    },
+    "MT": {
+      "name": "Montana",
+      "frostLineIn": 48,
+      "frostLineNote": "Commonly 36-60+ in; many jurisdictions require 48 in, deeper at elevation and in NE Montana.",
+      "groundSnowLoadPsf": 40,
+      "snowNote": "Roughly 20-50 psf in populated valleys/plains; 100-150+ psf in mountain areas (case-study zones).",
+      "ultimateWindMph": 115,
+      "windNote": "Most of state 105-115 mph; ASCE 7 special wind regions along the Rocky Mountain Front (e.g., Livingston, Great Falls) can exceed 140 mph.",
+      "seismicSdc": "C",
+      "seismicNote": "Western MT (Intermountain Seismic Belt: Missoula, Bozeman, Helena) typically C-D; eastern plains A-B.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      }
+    },
+    "NE": {
+      "name": "Nebraska",
+      "frostLineIn": 36,
+      "frostLineNote": "Typically 30-42 in; many local codes (e.g., Omaha, Lincoln) require 36-42 in.",
+      "groundSnowLoadPsf": 25,
+      "snowNote": "Roughly 20-30 psf statewide; slightly higher in the northeast.",
+      "ultimateWindMph": 115,
+      "windNote": "110-120 mph Vult Risk Cat II; high thunderstorm/tornado exposure but no special ASCE zones.",
+      "seismicSdc": "A",
+      "seismicNote": "SDC A-B statewide; very low seismic hazard.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      }
+    },
+    "NV": {
+      "name": "Nevada",
+      "frostLineIn": 24,
+      "frostLineNote": "Las Vegas ~12 in; Reno/Carson City 24-36 in; deeper in high-elevation rural counties.",
+      "groundSnowLoadPsf": 20,
+      "snowNote": "Las Vegas ~5-15 psf; Reno ~30 psf; Sierra/high-elevation areas are case-study zones (100+ psf).",
+      "ultimateWindMph": 105,
+      "windNote": "Roughly 100-110 mph; special wind regions near Sierra front and some mountain gaps.",
+      "seismicSdc": "D",
+      "seismicNote": "Reno and Las Vegas metros typically SDC D; among the most seismically active states.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": true,
+        "hvhz": false,
+        "deepFrostFootings": false
+      }
+    },
+    "NH": {
+      "name": "New Hampshire",
+      "frostLineIn": 48,
+      "frostLineNote": "Typically 48 in statewide; some northern jurisdictions use 54-60 in.",
+      "groundSnowLoadPsf": 60,
+      "snowNote": "Southern NH ~50-60 psf; White Mountains 90+ psf (case-study areas).",
+      "ultimateWindMph": 110,
+      "windNote": "Interior 105-115 mph; short Atlantic coastline near 120 mph; Mt. Washington area is a special wind region.",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly B; isolated C pockets in central NH.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      }
+    },
+    "NJ": {
+      "name": "New Jersey",
+      "frostLineIn": 36,
+      "frostLineNote": "Typically 30-36 in; 36 in is the common statewide practice (NJ IRC amendments).",
+      "groundSnowLoadPsf": 25,
+      "snowNote": "Roughly 20-30 psf; higher (~30-35) in NW highlands, lower near the shore.",
+      "ultimateWindMph": 115,
+      "windNote": "Interior 110-115 mph; Jersey Shore 120-130 mph with wind-borne debris provisions near the coast.",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly B; parts of northern NJ near the Ramapo fault trend toward C.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      }
+    },
+    "NM": {
+      "name": "New Mexico",
+      "frostLineIn": 18,
+      "frostLineNote": "Albuquerque ~18 in; southern lowlands 12 in; high-elevation north (Santa Fe, Taos) 24-36 in.",
+      "groundSnowLoadPsf": 15,
+      "snowNote": "Albuquerque ~10-15 psf; southern deserts ~5 psf; northern mountains 40-60+ psf.",
+      "ultimateWindMph": 105,
+      "windNote": "Roughly 100-115 mph; east-side plains toward 115 mph; some mountain special wind regions.",
+      "seismicSdc": "C",
+      "seismicNote": "Rio Grande rift corridor (Albuquerque, Socorro) typically B-C; eastern plains B or lower.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      }
+    },
+    "NY": {
+      "name": "New York",
+      "frostLineIn": 48,
+      "frostLineNote": "Upstate typically 48 in (some areas 42-60); NYC/Long Island commonly 36-48 in.",
+      "groundSnowLoadPsf": 40,
+      "snowNote": "NYC/Long Island 20-25 psf; upstate 40-70 psf; Tug Hill/Adirondacks 80-90+ psf.",
+      "ultimateWindMph": 115,
+      "windNote": "Interior 105-115 mph; Long Island and NYC coastal zones 120-140 mph (hurricane-prone region).",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly A-B; NYC metro and parts of the Adirondacks/Buffalo trend toward C on softer sites.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      }
+    },
+    "NC": {
+      "name": "North Carolina",
+      "frostLineIn": 12,
+      "frostLineNote": "NC code: 12 in typical for piedmont/coastal plain; 16-24 in in western mountain counties.",
+      "groundSnowLoadPsf": 15,
+      "snowNote": "Coastal plain 5-10 psf; piedmont 10-15 psf; mountains 20-50+ psf.",
+      "ultimateWindMph": 115,
+      "windNote": "Inland 110-115 mph; coast 130-160 mph (Outer Banks highest); wind-borne debris region at the coast.",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly B; western mountains and areas near the SC border trend toward C.",
+      "termiteRisk": "heavy",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      }
+    },
+    "ND": {
+      "name": "North Dakota",
+      "frostLineIn": 60,
+      "frostLineNote": "Commonly 48-72 in; many jurisdictions require 60 in (extreme frost penetration state).",
+      "groundSnowLoadPsf": 40,
+      "snowNote": "Roughly 30-50 psf; higher in the Red River Valley/northeast.",
+      "ultimateWindMph": 115,
+      "windNote": "110-115 mph statewide; strong sustained prairie winds.",
+      "seismicSdc": "A",
+      "seismicNote": "SDC A statewide; negligible seismic hazard.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      }
+    },
+    "OH": {
+      "name": "Ohio",
+      "frostLineIn": 32,
+      "frostLineNote": "Ohio Residential Code sets 32 in statewide; some local practice 30-36 in.",
+      "groundSnowLoadPsf": 20,
+      "snowNote": "Roughly 20-25 psf statewide; slightly higher in the NE snowbelt near Lake Erie.",
+      "ultimateWindMph": 110,
+      "windNote": "105-115 mph Vult Risk Cat II statewide.",
+      "seismicSdc": "A",
+      "seismicNote": "Mostly A; western Ohio (Anna seismic zone, Shelby County area) trends B-C.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      }
+    },
+    "OK": {
+      "name": "Oklahoma",
+      "frostLineIn": 18,
+      "frostLineNote": "Typically 12-24 in; 18 in common in central OK, shallower in the southeast.",
+      "groundSnowLoadPsf": 10,
+      "snowNote": "Roughly 5-15 psf; panhandle toward 15-20 psf.",
+      "ultimateWindMph": 115,
+      "windNote": "110-115 mph; extreme tornado exposure (not captured by ASCE basic wind maps).",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly A-B; central OK induced-seismicity areas have trended toward B-C.",
+      "termiteRisk": "heavy",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      }
+    },
+    "OR": {
+      "name": "Oregon",
+      "frostLineIn": 12,
+      "frostLineNote": "Oregon Residential Specialty Code minimum 12 in in western valleys; 18-24 in east of the Cascades and at elevation.",
+      "groundSnowLoadPsf": 25,
+      "snowNote": "Willamette Valley ~20-25 psf (state minimum ~20); Cascades and eastern mountains are case-study zones (100-300+ psf).",
+      "ultimateWindMph": 100,
+      "windNote": "Interior valleys 95-110 mph; coastal headlands and Columbia Gorge are special wind regions (up to 130+ mph).",
+      "seismicSdc": "D",
+      "seismicNote": "Western OR (Portland, Willamette Valley, coast) typically D due to Cascadia; central/eastern OR B-C.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": true,
+        "hvhz": false,
+        "deepFrostFootings": false
+      }
+    },
+    "PA": {
+      "name": "Pennsylvania",
+      "frostLineIn": 36,
+      "frostLineNote": "PA UCC statewide practice 36 in; some northern-tier jurisdictions use 42 in.",
+      "groundSnowLoadPsf": 30,
+      "snowNote": "Philadelphia ~25 psf; Pittsburgh ~25 psf; northern tier and Laurel Highlands 40-50 psf.",
+      "ultimateWindMph": 115,
+      "windNote": "105-115 mph statewide; slightly higher toward the southeast.",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly A-B; SE Pennsylvania (Lancaster/Philadelphia region) trends B-C.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      }
+    },
+    "RI": {
+      "name": "Rhode Island",
+      "frostLineIn": 40,
+      "frostLineNote": "RI state building code commonly cited at 40 in; local practice 36-48 in.",
+      "groundSnowLoadPsf": 30,
+      "snowNote": "Roughly 30-35 psf statewide.",
+      "ultimateWindMph": 120,
+      "windNote": "Entire state is hurricane-exposed; inland ~115-120 mph, coastal Washington/Newport counties 130-140 mph.",
+      "seismicSdc": "B",
+      "seismicNote": "SDC B typical for default site class.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      }
+    },
+    "SC": {
+      "name": "South Carolina",
+      "frostLineIn": 12,
+      "frostLineNote": "Typically 6-12 in; upstate uses ~12 in, coastal plain often minimum embedment only.",
+      "groundSnowLoadPsf": 10,
+      "snowNote": "Coastal 0-5 psf; midlands ~10 psf; upstate 10-15 psf.",
+      "ultimateWindMph": 120,
+      "windNote": "Upstate 110-115 mph; coast (Charleston, Myrtle Beach) 140-160 mph with wind-borne debris region.",
+      "seismicSdc": "C",
+      "seismicNote": "Midlands/upstate typically C; Charleston/coastal low country D-E (1886 Charleston earthquake source zone) — hold-downs and engineered lateral design common there.",
+      "termiteRisk": "heavy",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      }
+    },
+    "SD": {
+      "name": "South Dakota",
+      "frostLineIn": 48,
+      "frostLineNote": "Typically 42-60 in; 48 in common (Sioux Falls, Rapid City).",
+      "groundSnowLoadPsf": 40,
+      "snowNote": "Roughly 30-50 psf; Black Hills higher in places.",
+      "ultimateWindMph": 115,
+      "windNote": "110-115 mph statewide; strong prairie wind exposure.",
+      "seismicSdc": "A",
+      "seismicNote": "Mostly A; Black Hills area trends B.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      }
+    },
+    "TN": {
+      "name": "Tennessee",
+      "frostLineIn": 12,
+      "frostLineNote": "Typically 12 in statewide; 18 in in higher East Tennessee elevations.",
+      "groundSnowLoadPsf": 10,
+      "snowNote": "West/middle TN ~10 psf; East TN valleys 10-15 psf; Smokies 20-40+ psf.",
+      "ultimateWindMph": 110,
+      "windNote": "105-115 mph statewide; significant tornado exposure in West/Middle TN.",
+      "seismicSdc": "C",
+      "seismicNote": "East TN seismic zone typically C; Memphis/West TN (New Madrid zone) D — engineered lateral systems and hold-downs common there.",
+      "termiteRisk": "heavy",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      }
+    },
+    "TX": {
+      "name": "Texas",
+      "frostLineIn": 12,
+      "frostLineNote": "Typically 6-12 in embedment minimums; panhandle up to 18-24 in (Amarillo ~16-24 in). Expansive clay, not frost, governs many foundations.",
+      "groundSnowLoadPsf": 5,
+      "snowNote": "0-5 psf for most of the state; panhandle 10-20 psf.",
+      "ultimateWindMph": 115,
+      "windNote": "Interior 105-115 mph; Gulf coast (Houston-Galveston, Corpus Christi, Brownsville) 130-160 mph with TDI windstorm requirements in designated catastrophe zones.",
+      "seismicSdc": "A",
+      "seismicNote": "Mostly A; El Paso area and some West Texas areas B-C.",
+      "termiteRisk": "heavy",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      }
+    },
+    "UT": {
+      "name": "Utah",
+      "frostLineIn": 30,
+      "frostLineNote": "Wasatch Front commonly 30 in; ranges 24-36 in, deeper in mountain jurisdictions.",
+      "groundSnowLoadPsf": 40,
+      "snowNote": "Salt Lake Valley ~35-45 psf; St. George ~15-20 psf; mountain towns are case-study zones (100-300+ psf).",
+      "ultimateWindMph": 105,
+      "windNote": "Roughly 100-110 mph; canyon-wind special wind regions along the Wasatch Front (e.g., Centerville/Farmington).",
+      "seismicSdc": "D",
+      "seismicNote": "Wasatch Front (Salt Lake, Provo, Ogden) typically D; hold-downs and braced/shear walls standard.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": true,
+        "hvhz": false,
+        "deepFrostFootings": false
+      }
+    },
+    "VT": {
+      "name": "Vermont",
+      "frostLineIn": 48,
+      "frostLineNote": "Typically 48 in; 54-60 in in the Northeast Kingdom and at elevation.",
+      "groundSnowLoadPsf": 60,
+      "snowNote": "Champlain Valley ~50 psf; most of state 50-70 psf; higher elevations 80-90+ psf.",
+      "ultimateWindMph": 105,
+      "windNote": "100-110 mph statewide; mountain summits higher.",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly B; NW Vermont near the Champlain Valley trends toward C.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      }
+    },
+    "VA": {
+      "name": "Virginia",
+      "frostLineIn": 18,
+      "frostLineNote": "VA USBC commonly 18 in east/central; 24-30 in in western mountains and Shenandoah highlands.",
+      "groundSnowLoadPsf": 25,
+      "snowNote": "Tidewater 10-15 psf; northern VA/piedmont 25-30 psf; mountains 30-40+ psf.",
+      "ultimateWindMph": 110,
+      "windNote": "Interior 105-115 mph; Hampton Roads/Eastern Shore ~115-130 mph — verify hurricane detailing near the coast.",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly B; central VA seismic zone (Mineral, 2011 M5.8) locally higher.",
+      "termiteRisk": "heavy",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      }
+    },
+    "WA": {
+      "name": "Washington",
+      "frostLineIn": 12,
+      "frostLineNote": "Western WA typically 12 in; eastern WA (Spokane) 24 in; deeper in mountain areas.",
+      "groundSnowLoadPsf": 25,
+      "snowNote": "Puget Sound 15-25 psf (20 psf min common); Spokane ~40 psf; Cascades are case-study zones (100-400 psf).",
+      "ultimateWindMph": 100,
+      "windNote": "Puget Sound 95-110 mph; coastal and gorge special wind regions higher.",
+      "seismicSdc": "D",
+      "seismicNote": "Puget Sound (Seattle, Tacoma) typically D (Cascadia + crustal faults); eastern WA B-C.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": true,
+        "hvhz": false,
+        "deepFrostFootings": false
+      }
+    },
+    "WV": {
+      "name": "West Virginia",
+      "frostLineIn": 24,
+      "frostLineNote": "Typically 24-36 in; deeper in the eastern highlands (Canaan Valley area 36 in).",
+      "groundSnowLoadPsf": 30,
+      "snowNote": "Western lowlands ~20-25 psf; Allegheny highlands 40-60+ psf.",
+      "ultimateWindMph": 105,
+      "windNote": "100-115 mph statewide.",
+      "seismicSdc": "B",
+      "seismicNote": "SDC A-B statewide; low seismic hazard.",
+      "termiteRisk": "moderate",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": false
+      }
+    },
+    "WI": {
+      "name": "Wisconsin",
+      "frostLineIn": 48,
+      "frostLineNote": "WI Uniform Dwelling Code: 48 in typical; 40 in allowed in some southern zones, up to 60 in north.",
+      "groundSnowLoadPsf": 40,
+      "snowNote": "Southern WI 30-35 psf; northern WI 50-60 psf.",
+      "ultimateWindMph": 110,
+      "windNote": "105-115 mph statewide.",
+      "seismicSdc": "A",
+      "seismicNote": "SDC A statewide; negligible seismic hazard.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      }
+    },
+    "WY": {
+      "name": "Wyoming",
+      "frostLineIn": 42,
+      "frostLineNote": "Typically 36-48 in (Cheyenne ~36 in, Casper 42 in); deeper in mountain jurisdictions (Jackson 48+ in).",
+      "groundSnowLoadPsf": 40,
+      "snowNote": "Plains 20-40 psf; mountain areas (Jackson, Teton County) 70-150+ psf case-study zones.",
+      "ultimateWindMph": 115,
+      "windNote": "110-120 mph plains; special wind regions (I-80 corridor near Arlington/Elk Mountain, mountain gaps) 140+ mph.",
+      "seismicSdc": "B",
+      "seismicNote": "Mostly B; western WY (Jackson/Yellowstone, Teton fault) C-D — engineered lateral design common there.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      }
+    },
+    "CA-ON-S": {
+      "name": "Canada · Ontario — South (GTA / Golden Horseshoe)",
+      "frostLineIn": 47,
+      "frostLineNote": "OBC 9.12.2.2 + SB-1: 1200 mm (47 in) typical for Toronto, Hamilton and Niagara.",
+      "groundSnowLoadPsf": 23,
+      "snowNote": "SB-1 Toronto Ss = 1.1 kPa, Sr = 0.4 kPa (~23 psf ground snow). Windsor and Niagara slightly lower; the Georgian Bay snowbelt is far higher.",
+      "ultimateWindMph": 110,
+      "windNote": "Hourly wind pressure q(1/50) ~0.44-0.52 kPa; no hurricane or wind-borne-debris regime.",
+      "seismicSdc": "A",
+      "seismicNote": "Sa(0.2) is well below the NBC 9.23.13 prescriptive threshold of 0.70, so prescriptive lateral bracing applies.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern."
+    },
+    "CA-ON-E": {
+      "name": "Canada · Ontario — East (Ottawa Valley / Kingston)",
+      "frostLineIn": 71,
+      "frostLineNote": "SB-1: 1800 mm (71 in) for Ottawa and much of eastern Ontario.",
+      "groundSnowLoadPsf": 52,
+      "snowNote": "SB-1 Ottawa Ss = 2.5 kPa, Sr = 0.4 kPa (~52 psf) — more than double the GTA.",
+      "ultimateWindMph": 110,
+      "windNote": "Comparable to southern Ontario; no coastal regime.",
+      "seismicSdc": "C",
+      "seismicNote": "The western Quebec / Ottawa Valley zone is the second-highest seismic hazard in Canada; Sa(0.2) approaches the NBC 9.23.13 prescriptive threshold and engineered lateral design may be required.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern."
+    },
+    "CA-ON-N": {
+      "name": "Canada · Ontario — North (Sudbury / Thunder Bay)",
+      "frostLineIn": 83,
+      "frostLineNote": "SB-1: 1800 mm (71 in) at Sudbury, up to 2100 mm (83 in) at Thunder Bay and further north.",
+      "groundSnowLoadPsf": 60,
+      "snowNote": "Ss typically 2.5-3.5 kPa (~52-73 psf); lake-effect belts higher.",
+      "ultimateWindMph": 110,
+      "seismicSdc": "A",
+      "seismicNote": "Low hazard across the Canadian Shield.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern."
+    },
+    "CA-BC": {
+      "name": "Canada · British Columbia",
+      "frostLineIn": 18,
+      "frostLineNote": "Lower Mainland and Vancouver Island ~450 mm (18 in) in a mild marine climate. The Interior (Kamloops, Prince George) runs 1200-1800 mm — override for interior sites.",
+      "groundSnowLoadPsf": 35,
+      "snowNote": "Coastal Ss ~1.5-2.0 kPa (~31-42 psf); interior and mountain sites far higher.",
+      "ultimateWindMph": 115,
+      "windNote": "Exposed coastal sites higher; no hurricane regime.",
+      "seismicSdc": "D",
+      "seismicNote": "Cascadia subduction zone — the highest seismic hazard in Canada. Coastal BC exceeds the NBC 9.23.13 prescriptive bracing threshold, so Part 4 engineered lateral design is normal practice.",
+      "termiteRisk": "moderate to heavy",
+      "weatheringPotential": "moderate",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": true,
+        "hvhz": false,
+        "deepFrostFootings": false
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern. BC also enforces the BC Energy Step Code, which commonly drives thicker or double-stud exterior walls than this profile assumes."
+    },
+    "CA-AB": {
+      "name": "Canada · Alberta",
+      "frostLineIn": 71,
+      "frostLineNote": "Typically 1500-2400 mm (59-94 in); the Calgary-Edmonton corridor commonly ~1800 mm (71 in).",
+      "groundSnowLoadPsf": 27,
+      "snowNote": "Ss ~1.1-1.6 kPa (~23-33 psf) for the Calgary-Edmonton corridor; foothills and mountain parks much higher.",
+      "ultimateWindMph": 115,
+      "windNote": "The chinook belt and foothills see high gusts.",
+      "seismicSdc": "A",
+      "seismicNote": "Low hazard; the southwestern foothills are moderate.",
+      "termiteRisk": "none to slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern."
+    },
+    "CA-SK": {
+      "name": "Canada · Saskatchewan",
+      "frostLineIn": 83,
+      "frostLineNote": "Prairie frost penetration 1800-2400 mm (71-94 in) — deeper than any US state tabulates. Regina and Saskatoon commonly 2100 mm (83 in).",
+      "groundSnowLoadPsf": 31,
+      "snowNote": "Ss ~1.4-1.6 kPa (~29-33 psf); dry cold with moderate accumulation.",
+      "ultimateWindMph": 115,
+      "windNote": "Sustained open-prairie exposure.",
+      "seismicSdc": "A",
+      "seismicNote": "Among the lowest seismic hazards in North America.",
+      "termiteRisk": "none to slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern."
+    },
+    "CA-MB": {
+      "name": "Canada · Manitoba",
+      "frostLineIn": 78,
+      "frostLineNote": "Prairie frost penetration 1800-2400 mm (71-94 in); Winnipeg commonly ~2000 mm (78 in).",
+      "groundSnowLoadPsf": 42,
+      "snowNote": "Ss ~1.9-2.2 kPa (~40-46 psf) for Winnipeg and the Red River Valley.",
+      "ultimateWindMph": 115,
+      "windNote": "Sustained open-prairie exposure.",
+      "seismicSdc": "A",
+      "seismicNote": "Very low hazard.",
+      "termiteRisk": "none to slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern."
+    },
+    "CA-QC": {
+      "name": "Canada · Quebec",
+      "frostLineIn": 59,
+      "frostLineNote": "Montreal ~1500 mm (59 in); Quebec City and north 1500-2000 mm.",
+      "groundSnowLoadPsf": 54,
+      "snowNote": "Montreal Ss ~2.6 kPa (~54 psf); Quebec City and the north 3.0-4.5 kPa.",
+      "ultimateWindMph": 110,
+      "seismicSdc": "C",
+      "seismicNote": "Charlevoix and western Quebec are elevated-hazard zones; Montreal is moderate.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern."
+    },
+    "CA-NB": {
+      "name": "Canada · New Brunswick",
+      "frostLineIn": 55,
+      "frostLineNote": "Typically 1200-1500 mm (47-59 in).",
+      "groundSnowLoadPsf": 60,
+      "snowNote": "Ss ~2.5-3.5 kPa (~52-73 psf).",
+      "ultimateWindMph": 120,
+      "windNote": "Post-tropical storm exposure inland of the Bay of Fundy.",
+      "seismicSdc": "B",
+      "seismicNote": "Low to moderate.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern."
+    },
+    "CA-NS": {
+      "name": "Canada · Nova Scotia",
+      "frostLineIn": 47,
+      "frostLineNote": "Typically ~1200 mm (47 in); milder maritime ground temperatures.",
+      "groundSnowLoadPsf": 52,
+      "snowNote": "Ss ~2.0-3.0 kPa (~42-63 psf).",
+      "ultimateWindMph": 130,
+      "windNote": "Atlantic post-tropical systems (Juan 2003, Fiona 2022) drive roof-uplift detailing.",
+      "seismicSdc": "A",
+      "seismicNote": "Low hazard.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern."
+    },
+    "CA-PE": {
+      "name": "Canada · Prince Edward Island",
+      "frostLineIn": 47,
+      "frostLineNote": "Typically ~1200 mm (47 in).",
+      "groundSnowLoadPsf": 52,
+      "snowNote": "Ss ~2.5 kPa (~52 psf).",
+      "ultimateWindMph": 130,
+      "windNote": "Among the highest sustained wind exposures in Atlantic Canada.",
+      "seismicSdc": "A",
+      "seismicNote": "Low hazard.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern."
+    },
+    "CA-NL": {
+      "name": "Canada · Newfoundland and Labrador",
+      "frostLineIn": 59,
+      "frostLineNote": "Island 1200-1500 mm; Labrador far deeper, with permafrost in the far north.",
+      "groundSnowLoadPsf": 73,
+      "snowNote": "Ss ~2.5-4.5 kPa (~52-94 psf) — among the highest in Canada.",
+      "ultimateWindMph": 140,
+      "windNote": "Extreme North Atlantic wind exposure.",
+      "seismicSdc": "A",
+      "seismicNote": "Low hazard.",
+      "termiteRisk": "none to slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": true,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern."
+    },
+    "CA-YT": {
+      "name": "Canada · Yukon",
+      "frostLineIn": 96,
+      "frostLineNote": "Discontinuous permafrost; conventional frost-depth footings are often inappropriate. PERMAFROST: a spread-footing depth is not a meaningful output here — piles, adfreeze piles or insulated space-frame foundations are the norm. Design the foundation explicitly.",
+      "groundSnowLoadPsf": 42,
+      "snowNote": "Ss ~1.0-2.5 kPa (~21-52 psf).",
+      "ultimateWindMph": 110,
+      "seismicSdc": "C",
+      "seismicNote": "Southwestern Yukon is a moderate-to-high hazard zone.",
+      "termiteRisk": "none",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern. PERMAFROST: spread-footing depth is not a meaningful output here — piles, adfreeze piles or insulated space-frame foundations are the norm. Design the foundation explicitly."
+    },
+    "CA-NT": {
+      "name": "Canada · Northwest Territories",
+      "frostLineIn": 96,
+      "frostLineNote": "Continuous and discontinuous permafrost. PERMAFROST: a spread-footing depth is not a meaningful output here — piles, adfreeze piles or insulated space-frame foundations are the norm. Design the foundation explicitly.",
+      "groundSnowLoadPsf": 52,
+      "snowNote": "Ss ~1.5-3.0 kPa (~31-63 psf).",
+      "ultimateWindMph": 115,
+      "seismicSdc": "A",
+      "seismicNote": "Low hazard.",
+      "termiteRisk": "none",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern. PERMAFROST: spread-footing depth is not a meaningful output here — piles, adfreeze piles or insulated space-frame foundations are the norm. Design the foundation explicitly."
+    },
+    "CA-NU": {
+      "name": "Canada · Nunavut",
+      "frostLineIn": 96,
+      "frostLineNote": "Continuous permafrost. PERMAFROST: a spread-footing depth is not a meaningful output here — piles, adfreeze piles or insulated space-frame foundations are the norm. Design the foundation explicitly.",
+      "groundSnowLoadPsf": 63,
+      "snowNote": "Ss ~1.5-3.5 kPa (~31-73 psf) with extreme drifting.",
+      "ultimateWindMph": 140,
+      "windNote": "Extreme Arctic wind exposure.",
+      "seismicSdc": "A",
+      "seismicNote": "Low hazard.",
+      "termiteRisk": "none",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern. PERMAFROST: spread-footing depth is not a meaningful output here — piles, adfreeze piles or insulated space-frame foundations are the norm. Design the foundation explicitly."
+    },
+    "CA-GEN": {
+      "name": "Canada · Generic (NBC 2020)",
+      "frostLineIn": 48,
+      "frostLineNote": "Conservative national placeholder. Canadian frost depths run from ~450 mm on the BC coast to 2400 mm on the Prairies — pick a province for a usable value.",
+      "groundSnowLoadPsf": 40,
+      "snowNote": "Conservative national placeholder; Ss varies roughly 1.0-4.5 kPa across Canada.",
+      "ultimateWindMph": 115,
+      "seismicSdc": "B",
+      "seismicNote": "Generic. Coastal BC is far higher; the Prairies far lower.",
+      "termiteRisk": "slight",
+      "weatheringPotential": "severe",
+      "flags": {
+        "hurricaneTies": false,
+        "seismicHoldDowns": false,
+        "hvhz": false,
+        "deepFrostFootings": true
+      },
+      "caveat": "Canadian entry (added 2026-08-15): typical provincial values derived from NBC 2020 Division B Appendix C, and Ontario MMAH Supplementary Standard SB-1 for the Ontario rows. Site-specific values from the authority having jurisdiction govern. This is the fallback for a Canadian locale with an unknown province — always pick a province where it is known."
+    }
+  }
+}

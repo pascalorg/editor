@@ -1,0 +1,41 @@
+{
+  "version": "2026-08-13",
+  "disclaimer": "Drafting aid, not engineering. Fastening per IRC 2021 Table R602.3(1) common connections — verify with the AHJ; engineered/high-wind assemblies differ.",
+  "sources": [
+    "IRC 2021 Table R602.3(1) — Fastening Schedule for Structural Members (values captured in docs/research/framing-tables.md)",
+    "Nail count-per-pound: industry supplier data for bright common nails (approximate)"
+  ],
+  "nails": {
+    "16d-common": { "lengthIn": 3.5, "perLb": 44, "use": "framing member to member" },
+    "10d-common": { "lengthIn": 3.0, "perLb": 66, "use": "toe-nails, blocking" },
+    "8d-common": { "lengthIn": 2.5, "perLb": 99, "use": "sheathing, subfloor" }
+  },
+  "connections": {
+    "stud-to-plate-end": { "nail": "16d-common", "count": 2, "note": "end nail through plate into each stud end (top + bottom)" },
+    "stud-to-plate-toe": { "nail": "10d-common", "count": 3, "note": "alternative toe-nail; used where end nailing is impossible" },
+    "doubleTopPlate-lap": { "nail": "16d-common", "count": 8, "note": "face nails at lap splice area, min 24-in lap" },
+    "doubleTopPlate-run": { "nail": "16d-common", "perFt": 0.75, "note": "16-in o.c. face nailing along the double plate" },
+    "header-to-king": { "nail": "16d-common", "count": 4, "note": "each end, through king into header" },
+    "trimmer-to-king": { "nail": "16d-common", "perFt": 1.5, "note": "face nails 16-in o.c. staggered" },
+    "cripple-to-plate": { "nail": "16d-common", "count": 2, "note": "end nail per end" },
+    "sill-to-trimmer": { "nail": "16d-common", "count": 2, "note": "per end" },
+    "fireblocking": { "nail": "16d-common", "count": 4, "note": "2 per end, snug fit" },
+    "joist-to-rim": { "nail": "16d-common", "count": 3, "note": "end nail through rim into joist" },
+    "joist-to-plate-toe": { "nail": "10d-common", "count": 3, "note": "toe-nail joist bearing" },
+    "blocking-to-joist": { "nail": "10d-common", "count": 4, "note": "2 per end toe/end" },
+    "rafter-to-plate-toe": { "nail": "10d-common", "count": 3, "note": "toe-nail (plus tie hardware where required)" },
+    "rafter-to-ridge": { "nail": "16d-common", "count": 3, "note": "end/toe nail at ridge" },
+    "collarTie-to-rafter": { "nail": "10d-common", "count": 3, "note": "face nails per end" },
+    "ceilingJoist-to-plate": { "nail": "10d-common", "count": 3, "note": "toe-nail per bearing" },
+    "ceilingJoist-lap": { "nail": "10d-common", "count": 3, "note": "at laps over partitions" },
+    "subfloor-sheet": { "nail": "8d-common", "count": 40, "note": "6-in edges / 12-in field per 4x8 T&G sheet (ring shank preferred)" },
+    "wallSheathing-sheet": { "nail": "8d-common", "count": 44, "note": "6-in edges / 12-in field per 4x8 WSP sheet" },
+    "roofSheathing-sheet": { "nail": "8d-common", "count": 44, "note": "6-in edges / 12-in field per 4x8 WSP roof deck sheet (R803.2.3.1)" }
+  },
+  "hardware": {
+    "joist-hanger": { "model": "LUS-series (size to joist)", "nailsPer": 10, "nail": "10d-common" },
+    "hurricane-tie": { "model": "H2.5A", "nailsPer": 10, "nail": "8d-common" },
+    "hold-down": { "model": "HDU2+ (size per design)", "anchor": "5/8-in SSTB or bolt" },
+    "plate-washer": { "model": "3x3x0.229 (SDC D0-D2, R602.11.1)", "per": "anchor bolt" }
+  }
+}

@@ -1,0 +1,74 @@
+{
+  "round": "B11-lod400-r2",
+  "pin": "996fa1c",
+  "branch": "feat/lod400-b11",
+  "base": "779d70e",
+  "round1Pin": "ff10aa4",
+  "date": "2026-08-22",
+  "protocol": "Round-2 paper spot-check on the B11 pilot fixes (B11e skeptic terminal cap: band caps engineeredHeaderSpan at its 2-2x12 cell; B11f examiner r1: cover DESIGN CRITERIA line; B11g docs/S14 amendments only — paper at 996fa1c ≡ a069149) per review/BLUEPRINTS.md. Pure buildPlanSet in detached worktrees (/tmp/exam-b11-r2 @ 996fa1c, /tmp/examiner-b11 @ ff10aa4, main checkout read-only @ 779d70e), FIXED date 8/22/2026. Scene fc866f2f271b over HTTP (graph byte-identical to round 1) + injected bones:framing (detail 400, all systems). Variants: demo (as-is), straddle (r1 parity, RO 56\"+80\"), r2straddle (round-2 focus, RO 70\" in-domain + 90\" past-cap on the 8 m north wall). Codes VT/MN/TX/INTL = 36 composes across three builds, 18 sheets each. Low-snow byte-compared file-by-file vs master; deepened sets text-diffed element-by-element AND pixel-diffed vs the round-1 pin (PIL per-sheet, bbox + count); affected sheets rasterized with Playwright page.setContent @2x and LOOKED at (VT/MN/INTL covers + bottom-band crops, VT schedule, takeoff 1/5 + 5/5, flags-continued, r2 north elevation + header-band crop, wall framing plan). Takeoff diffed row-by-row from computeTakeoff dumps. Evidence: /tmp/b11r2/{out-pin2,out-pin1,out-base,crop-*.png,harness.ts}. Full suite at the pin: 1419 pass / 1 todo / 0 fail (1420 tests, 54 files, 42179 expect() calls), bunx tsc --noEmit clean.",
+  "verdict": "APPROVE — both round-2 devices reach paper exactly as specified and nothing else moved. The cover DESIGN CRITERIA line prints verbatim, 10px legible, exactly between the jurisdiction and date lines ('… @ 70 psf ground snow …' at VT, '… @ 50 psf …' at MN, absent at INTL/TX); the past-cap 90\" RO prints 'ENGINEERED (by supplier)' in the B21d HEADER cell with '⚑ ENGINEERED BEAM REQUIRED — exceeds prescriptive header span' on the schedule row AND in the Flags block, the takeoff books it on the supplier pcs/lf rows (4x12 SKU excludes it: 5→4 pcs vs r1) and the member label confesses 'drawn as 4x12 — size by supplier' — no 4x12 lumber claim anywhere for that opening; the in-domain 70\" RO still prints 4x12 with the full table label story at VT (and honestly 4x10 at MN, in the 50-band's 71\" cell). Low-snow paper is byte-equal to master 779d70e file-for-file including dumps in all three variants; the pixel-diff vs round 1 is confined to the cover footer band + the flipped header cells/flags/takeoff-row-flow (demo-VT: cover ONLY; wall plan/elevations/section/foundation/electrical/MEP: zero diff pixels). The round-1 FAIL (FOCUS-2) flips to PASS; all five round-1 PASSes re-verified at the new pin. The B1 flag-precedence side effect is exact on paper (S7 compression aggregate 125→124 beside the +1 engineered row). Merge stamp.",
+  "items": {
+    "FOCUS-A-cover-design-criteria": {
+      "status": "PASS",
+      "checklist": ["S14", "P4", "C6"],
+      "evidence": "VT covers (demo + both straddles) print 'DESIGN CRITERIA — headers sized per Table R602.7(1) @ 70 psf ground snow — ≤ 24 ft building width, roof-and-ceiling loading assumed' as one whole 10px line at y=774, inserted between the jurisdiction/code line (y=760) and the date/disclaimer line (pushed 774→788); MN prints the '@ 50 psf' variant. Rasterized + LOOKED (crop-cover-bottom-{pin2,mn,intl}.png): legible, ends ~62% sheet width, clear of the SHEET 1/18 title text. Cover pixel-diff bbox vs r1 = (96,1533)-(1332,1581)@2x — exactly the two footer text lines, nothing else on the sheet moved."
+    },
+    "FOCUS-B-past-cap-90in-on-paper": {
+      "status": "PASS",
+      "checklist": ["S14", "P6", "P4", "S4"],
+      "evidence": "r2straddle-VT W2 (RO 7'-6\" × 4'-0.75\") HEADER cell prints 'ENGINEERED (by supplier)' + row flag '⚑ ENGINEERED BEAM REQUIRED — exceeds prescriptive header span'; the same flag prints in the sheet-17 Flags block (verbatim, P4) and the aggregate honestly grows '+ 7 more'→'+ 8 more' with the braced-wall flag spilling whole onto Flags (continued). Takeoff: 'Engineered header (LVL/PSL — by supplier) — 1 pcs (exceeds prescriptive header span — see flags)' + '— 8 lf'; 4x12 SKU 5→4 pcs / 160→128 bd-ft vs r1 (the 70\" stick is the only injected 4x12). Member dump: exactly ONE member changed vs r1 — material lumber→engineered, label 'Engineered header over window (drawn as 4x12 — size by supplier) — sized per Table R602.7(1) @ 70 psf…'. Same story at MN (90\" > 83\" cap). Elevation still draws the honest placeholder stick (geometry byte-equal to r1; LOOKED at the header-band crop). B1 precedence side effect exact: the flipped header sheds the wall's S7 compression flag — Flags row 125→124 ea in both VT and MN."
+    },
+    "FOCUS-C-in-domain-70in-still-prescriptive": {
+      "status": "PASS",
+      "checklist": ["S14", "P6"],
+      "evidence": "r2straddle-VT W1 (RO 5'-10\") HEADER cell prints 4x12, material lumber, label 'Header 4x12 over window — sized per Table R602.7(1) @ 70 psf ground snow — ≤ 24 ft building width, roof-and-ceiling loading assumed', no engineered flag — its schedule row carries only the wall-scoped compression aggregate prefixed 'wall wall_n2u7vn4nfimt2bom:' (P6 wall-scope convention). MN band cross-check: the same 70\" span prints 4x10 (≤ the 50-band's 71\" cell) with the '@ 50 psf' label; INTL prints 4x10 with NO table claim."
+    },
+    "FOCUS-D-low-snow-byte-equality": {
+      "status": "PASS",
+      "checklist": ["S14", "E5", "P1"],
+      "evidence": "diff -rq pin2-vs-master(779d70e) for demo/straddle/r2straddle × TX/INTL: all 18 sheets + dump.json (members, takeoff, warnings) byte-equal in all six composes — the r2straddle variant (with the 90\" opening) included: low snow keeps the shipped 10-ft engineered threshold, 90\" frames 4x12 lumber with no table claim (pre-existing terminal gap, manifest-documented out of scope). INTL cover carries no DESIGN CRITERIA line (LOOKED)."
+    },
+    "FOCUS-E-pixel-diff-confinement-vs-r1": {
+      "status": "PASS",
+      "checklist": ["P1", "P2", "A1", "A3"],
+      "evidence": "Per-sheet PIL pixel-diff pin1(ff10aa4)-vs-pin2(996fa1c): demo-VT differs on 01-cover ONLY (17214 px, footer band). straddle-VT / r2straddle-VT / r2straddle-MN differ on cover + 12-schedule (flipped cell + inserted flag row + reflow) + takeoff pages (SKU/supplier/flag row flow) + 18-flags-continued (spilled flag). ZERO diff pixels on wall framing plan, all four elevations, section, foundation, roof, electrical, plumbing/HVAC in every compose — the placeholder stick geometry and the shared transform held; deepened warnings and fixtures byte-equal to master everywhere (fixtureCount 101 in all composes)."
+    },
+    "FOCUS-1-r1-VT-deepened-sizes-on-paper": {
+      "status": "PASS",
+      "checklist": ["S14", "P6"],
+      "evidence": "Re-scored at 996fa1c: r1 straddle-VT schedule cells reproduce except the intended 80\" flip to 'ENGINEERED (by supplier)' (80\" > 74\" cap — the r2 correction of what r1 scored as an unconditional 4x12); demo-VT deepened cells byte-equal to r1 (pixel-diff: cover only). Elevation stroke-depth evidence from r1 carries — geometry sheets zero-diff between pins."
+    },
+    "FOCUS-2-r1-assumption-label-on-paper": {
+      "status": "PASS",
+      "checklist": ["P4", "S14", "C6"],
+      "was": "FAIL (round 1)",
+      "evidence": "The round-1 blocker is closed on the surface the builder reads: the cover DESIGN CRITERIA line (FOCUS-A). The materiality exhibit that drove the REVISE (33-ft printed footprint > the assumed 24 ft under an unconditional 4x10) is now double-covered: the width assumption prints on sheet 1, and the terminal cap routes past-cell spans to the ENGINEERED path instead of affirming the table outside its domain."
+    },
+    "FOCUS-3-r1-takeoff-SKU-shifts": {
+      "status": "PASS",
+      "checklist": ["S4", "S14"],
+      "evidence": "Row-by-row pin2-vs-master, r2straddle-VT: 4x8 7→5, 4x10 5→3, 4x12 1→4, +Engineered supplier 1 pcs/8 lf, 2x6 130→117 pcs / 3162→3058 bd-ft (eaten cripples), 16d nails 2724→2688→2672-class member-derived drift, Flags rows: compression 125→124 + ENGINEERED 1. MN mirrors in its band (4x8 rows untouched). The r1 advisory is closed: manifest T1 now enumerates the Fasteners 16d mirror (B11g)."
+    },
+    "FOCUS-4-r1-low-snow-byte-equality": { "status": "PASS", "checklist": ["E5", "S14"], "evidence": "See FOCUS-D — re-verified at 996fa1c on three variants including the new past-cap scene." },
+    "FOCUS-5-r1-regression-sweep-unaffected-sheets": {
+      "status": "PASS",
+      "checklist": ["P1", "S13", "C1", "C3"],
+      "evidence": "Deepened states pin2-vs-master: 02-foundation, 04-roof-framing, 05-electrical-rough-in, 06-plumbing-hvac byte-EQUAL in all six deepened composes; changed sheets exactly cover/wall-plan/4 elevations/section/schedule/takeoff(+flags-cont where spilled). Bracing censuses unchanged (S13 flags identical in the Flags block); no new warnings (dump warnings == master in all 12 non-low-snow comparisons)."
+    },
+    "FOCUS-6-r1-MN-50-band-encoding": {
+      "status": "PASS",
+      "checklist": ["S14"],
+      "evidence": "Re-verified + extended past the cap: 70\" → 4x10 (≤71\"), 80\" → 4x12 lumber (≤83\" — straddle-MN pin2-vs-pin1 diff is cover-only, the cap does NOT flip in-domain 50-band spans), 90\" → ENGINEERED (>83\"). Zero 4x8 shifts at MN anywhere."
+    },
+    "P3": { "status": "PASS", "evidence": "Title blocks intact on every LOOKED sheet (jurisdiction + code, LOD 400, scale, date, disclaimer, SHEET n/18).", "note": "Carried pre-existing minors (byte-equal lineage, not B11): VT code-name mid-word ellipsis in the 48-char title-block slot; the long VT code line on the cover grazes just above the SHEET 1/18 annotation (both pins identical)." },
+    "C5": { "status": "PASS", "evidence": "Every flag prints whole; the '+N more' budget re-counts honestly (7→8) when the engineered flag lands; continuation sheet carries the spilled braced-wall flag verbatim.", "note": "Cosmetic: the 'Engineered header … — 8 lf' takeoff row wraps with a lone 'lf' on its continuation line — legal word-boundary wrap, no ellipsis." },
+    "P2": { "status": "PASS", "evidence": "Framing legend 'header — 4x12' follows the most-common-per-role convention at the deepened compose; opening-mark legend row cross-references the schedule; no new symbols/colors introduced by r2 (supplier cell + flags are text)." },
+    "A2": { "status": "PASS", "evidence": "Member census ↔ takeoff parity exact in every diff (one flipped member ↔ one supplier pcs row + one 4x12 pc decrement; 13/9 eaten cripples ↔ 2x6 pcs deltas; nail counts 4/pc)." }
+  },
+  "recommendations": [
+    "Queued residual (manifest-documented, out of B11 scope): low-snow terminal gap — INTL/TX frame lumber 4x12 up to the shipped 120\" threshold with no table claim; when a low-snow honesty pass lands, the same DESIGN CRITERIA + supplier-cell machinery is ready.",
+    "Carried pre-existing minors for the plan-set legend-grammar residual round: VT title-block code-name ellipsis; the cover's long VT code line grazing the SHEET 1/18 annotation; lone-unit word wrap ('lf') on supplier takeoff rows.",
+    "The DESIGN CRITERIA line is the standing home for future structural loading bases (B7 hip thrust / B10 uplift) — extend the same PlanSetOptions field rather than minting new cover lines per batch."
+  ],
+  "suite": { "pass": 1419, "todo": 1, "fail": 0, "tests": 1420, "files": 54, "expects": 42179, "tsc": "clean" }
+}

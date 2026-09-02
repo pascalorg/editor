@@ -1,0 +1,61 @@
+{
+  "round": "condenser-always light paper round (fix/condenser-always)",
+  "pin": "9736eef817337a290296dbbb596138a245abb09e",
+  "branch": "fix/condenser-always (1 commit on master 84fb524; diff = src/engines/hvac.ts + hvac.condensers.test.ts + mep.test.ts + service-overrides.test.ts — no plan-set/takeoff code touched)",
+  "protocol": "Pure buildPlanSet bun harness per review/BLUEPRINTS.md from detached scratch worktrees at the exact pin (/tmp/bones-cond-pin) and at master (/tmp/bones-cond-master), editor never opened. Composes: (A) demo-house-FL over HTTP (fc866f2f271b, 74 nodes, injected bones:framing jurisdiction FL, all systems on) at LOD 400/300/200 on BOTH shas; (B) synthetic no-exterior-NJ (12x10 shell, both wall faces 'interior', OVERSIZED slab so the geometric exterior fallback finds zero exposed sides, laundry/living/bedroom zones) at LOD 400/300 on both shas. Date pinned '8/21/2026' for byte-comparability. 28 rasters (Playwright page.setContent @2x + 5x/8x/10x crops) LOOKED at; SVG text/element forensics: per-sheet byte-compares pin-vs-master, number-stripped skeleton compares, stitched takeoff-row set diffs across LODs, bubble/arrow coordinate extraction, scale-bar measurement. Evidence in /tmp/bp-cond/ (svg + forensics.json + png).",
+  "verdict": "APPROVE",
+  "suite": {
+    "pass": 1058,
+    "todo": 1,
+    "fail": 0,
+    "tests": 1059,
+    "files": 44,
+    "assertions": 36808,
+    "tsc": "clean (bunx tsc --noEmit at the exact pin, detached worktree, removed after)",
+    "note": "Counts at the exact pin 9736eef (master 84fb524 = 1054 tests; the branch adds the condenser-always describe: repro (c)/(b)/(d), pinned refutation (a), and the 3000-compose invariant matrix)."
+  },
+  "items": {
+    "SWEEP-invariants": {
+      "status": "PASS",
+      "checklist": ["E1-E5", "S1-S11", "M1-M3", "P1-P5", "A1-A4"],
+      "evidence": "bun test at 9736eef: 1058 pass / 1 todo / 0 fail across 44 files, 36,808 expect() calls; tsc clean. Engine diff confined to hvac.ts (condenser gate removal + no-exterior fallback + NEC 440.14 warning); electrical/plumbing/foundation/takeoff/plan-set code untouched. M2's own gate file carries the new contract (AH present => outdoor unit present or a warning names why, 3000-compose matrix incl. exterior=false and INTL/undefined states). No gated row regressed.",
+      "note": "M2's checklist prose still opens 'sized, placed and booked honestly' with no LOD clause — the row text should gain one line ('the row ships at every LOD the AH does; condensate stays 400') next docs pass. Gate exists; prose lags."
+    },
+    "FOCUS-1-lod300-200-compose": {
+      "status": "PASS",
+      "checklist": ["M2", "P2", "C1", "C2-spirit"],
+      "evidence": "Demo @300 and @200 (pin): MEP sheet shows the condenser pad + rotated cabinet outline, CU + DS bubbles, and the suction(teal #35b8c9)/liquid(orange #d98134) line-set pair riding the wall and exiting to the unit — verified on pixels at 5x (crop-300/200-cu-cluster.png) and by SVG census (CU bubble at plan translate(767.7,564.4), DS at (767.7,546.3) both LODs). Engine anchors byte-equal to 400 (forensics: 1 condenser, 1 disconnect, 26 lineset legs, 56.1 lf at every LOD; positions identical — the sheet-space delta is the shared setTransform rescale, see REG item). BEFORE-STATE proven at master: demo-300/200 MEP has NO CU/DS bubble, no pad, no line-set, no legend rows (crop-master300-same-corner.png: bare corner) — the exact silent AH-without-outdoor-unit paper the user reported. Condensate remains 400-only (1 member at 400, 0 at 300/200).",
+      "note": "The demo row anchors beside the sewer exit cluster; the CO bubble prints on the pad corner — byte-identical at 400 to shipped master, pre-existing adjacency, reads at 5x."
+    },
+    "FOCUS-1b-takeoff-and-legend-parity": {
+      "status": "PASS",
+      "checklist": ["S4", "P2", "C5"],
+      "evidence": "Stitched takeoff-row set diff across pin demo 400/300/200: the eight condenser-class rows are byte-IDENTICAL text at all three LODs — 'AC condensers — 1 pcs (3.5 tons total …)', 'Condenser pads — 1 pcs', 'AC disconnects — 1 pcs (NEC 440.14 …)', 'Condenser whips — 1 pcs', 'Line-set suction 3/4\" — 56.1 lf', 'Line-set liquid 3/8\" — 56.1 lf', 'Line-set insulation — 56.1 lf', plus the same '(1/3)(2/3)(3/3)' pagination (200 grew a third schedules page vs master's two). The ONLY 400-not-in-300 HVAC row is 'HVAC · PVC 0.75\" — 5.7 lf' — the condensate drain, exactly the stated <400 exclusion; the remaining 400-only rows are the pre-existing wire-lf fabrication ladder (NM-B/SE cable). 300-vs-200 deltas are all pre-existing ladder classes (code-sized vs generic foundation/plumbing/grout quantities, span flag at 300+), zero condenser rows among them. 'Mechanical equipment — 1 pcs' stays the AH alone — condensers are excluded from the generic row (takeoff.ts:837-841) so nothing books twice. MEP legend rows 400 == 300 verbatim (both line-set rows + CU + DS); at 200 the legend drops supply-cold/hot + EF exactly because those members don't exist at 200 — every printed symbol still has its row (P2), verified by full-text extraction.",
+      "note": "The >15 m line-set advisory now prints in the demo Flags block at 300/200 too (the members exist there now) — honest, matches the 400 sheet."
+    },
+    "FOCUS-2-no-exterior-flags-verbatim": {
+      "status": "PASS",
+      "checklist": ["P4", "M2", "S4", "P2"],
+      "evidence": "no-exterior-NJ @400 AND @300 (pin): the schedules Flags block prints ALL THREE lines VERBATIM — '⚑ ⚠ verify condenser placement — no exterior wall anchors the row' (the member flag on pad+cabinet, aggregated), '⚑ no exterior wall — condenser row placed at the anchor, verify' (engine warning), '⚑ AC disconnect + whip not mounted — no exterior wall face for the box (NEC 440.14) — verify' (engine warning) — plus '⚑ AIR RUN: line-set found no wall path — route along a wall' on the flagged legs. Verified by full-text extraction of both schedules sheets and on pixels (crop-noext-flags.png). Paper stays consistent with the words: MEP sheet draws the unit at the least-bad anchor just outside the nearest wall with the flagged line-set pair dropping to the AH (crop-noext-pad-wall-8x.png — pad clear of the wall band, pair legible); NO DS bubble prints and NO 'AC disconnect' legend row exists (P2-consistent with the loud omission); the takeoff books pad/unit/line-set but ZERO disconnect/whip rows — members are truth (S4), the warning carries the gap. Master before-state: same compose = 0 condensers, 1 warning, silence.",
+      "note": "Element-level SVG diff pin-vs-master on the noext MEP sheet is EXACTLY the condenser paper: 2 line-set rects + pad/cabinet rects + CU bubble + the grown legend + the sewer label sliding clear. Nothing else moved."
+    },
+    "FOCUS-3-regression-400-byte-equal": {
+      "status": "PASS",
+      "checklist": ["S10-style byte-equality", "P1-P3"],
+      "evidence": "All 14 demo @400 sheets byte-IDENTICAL pin vs master (cmp per sheet, date pinned) — cover, foundation, wall/roof framing, electrical, MEP, 4 elevations, section, 3 schedules pages. forensics.json byte-identical too (2112 members / 94 fixtures / 5 warnings / same flags). At 400 the gate rewrite is a pure no-op: nothing moved. The stale-comment fix is source-only (hvac.ts header prose; sheets carry no comments).",
+      "note": "At 300/200 every sheet legitimately differs: the new pad/cabinet extend the content bbox so the ONE shared SetTransform rescales the whole set (P1/P2 working as designed) — foundation and electrical skeletons are EQUAL after number-stripping (transform-only shift, cross-sheet alignment preserved); cover/elevations/section additionally gain the new hvac members (south elevation +28 elements, looked at — cabinet/pad/line-set integrate cleanly; section poché of the attic return at the cut unchanged in kind)."
+    },
+    "SWEEP-prior-classes": {
+      "status": "PASS",
+      "checklist": ["P3", "P4", "M3", "S4/B17"],
+      "evidence": "GLYPHS: bubble chains resolve without overprint on every looked sheet (demo exit cluster CO/DS/CO/CU at 5x; noext CO/SO/CO/WH/AH/RA/SR chain at 10x); the drop-provenance discipline is alive ('<!-- dwv-arrow dropped (crowded): dwv-main -->' recorded on the noext sheet); no arrow prints inside text. RETURN TONE: 'duct — return air' darker tone + both duct legend rows present at 400/300/200; the return drop + soffit legs read distinctly beside the supply trunk (crop-300-return-tone.png). SLAB UNDERLAY (B17): foundation sheet keeps the translucent slab-field strips, the 'vapor-retarder … not drawn' legend line, anchor-bolt filled dots vs rebar-dowel open circles with counts, at 300 and on the degenerate oversized-slab compose. SCALE: demo-300 MEP scale bar measures 188.98 px for 5 m @1:100 @96dpi (expected 188.98) — 0.0% error (A1). Title blocks stamp the composed LOD ('LOD 300/200 · Bones …') per the wave-2 honesty rule (C6).",
+      "note": "Two pre-existing observations, unchanged by this branch (master-identical geometry): (1) at LOD 300/200 the electrical sheet prints devices with no circuit runs while the takeoff prints circuit rows — the wiring is 400-ladder scope; a sub-400 set read against examiner C2 looks incomplete even though the stamp is honest. Queue candidate: a 'wiring composed at LOD 400' note on the sub-400 electrical sheet. (2) noext degenerate compose: the dwv flow arrowhead overprints the coincident CO bubble at the everything-in-one-corner cluster — bubble/arrow coordinates byte-identical on master; the known all-glyphs-at-one-anchor class. (3) noext legend 'supply / DWV pipe' merged row — the board-queued coincident-row advisory."
+    }
+  },
+  "recommendations": [
+    "Add the LOD clause to checklist M2's prose ('condenser row ships at every LOD the AH does; condensate is 400 scope') — the gate landed, the row text lags.",
+    "Sub-400 electrical sheet: print a one-line 'circuit wiring composed at LOD 400' note (or a legend row) so a 300/200 set doesn't read as C2-incomplete.",
+    "noext-class composes: consider letting the least-bad anchor prefer a wall segment AWAY from the sewer/AH glyph cluster when scores tie — the honest fallback currently lands the CU bubble one bubble-diameter from the densest cluster on the sheet (reads fine at 5x today).",
+    "Queued board advisory unchanged: merged 'supply / DWV pipe' legend row on coincident-run scenes."
+  ]
+}

@@ -1,0 +1,80 @@
+{
+ "round": "B6-lod400-r2",
+ "pin": "71712a288cc16fba4ea7cc606bf20b49944adeaf",
+ "branch": "feat/lod400-b6",
+ "base": "b903507d377a58d7a4fcf936b5c5dbb66eb6de3c",
+ "date": "2026-08-22",
+ "protocol": "Round-2 paper round on the B6 roof package fix commits (2af86e0 F3+F4 flags, ead6915 F2 exact-pct, ebd9639 F1 roll-aware projection + layer-0 deck + legend rows, c7803bc F5 rolled section band, 71712a2 S4 row + derived floor) per review/BLUEPRINTS.md. Pure buildPlanSet — bun harness in the detached /tmp/examiner-b6-r2 worktree at 71712a2 vs a detached /tmp/b6r2-base at the rebase base b903507, fixed date so sheets byte-compare. EIGHT scenes per the round brief: demo-house-FL (fc866f2f271b re-fetched over HTTP, byte-identical to the round-1 snapshot — FLAT 12.4×7.9), roofed-NY (round-1 valley compose verbatim: gable 40° + crossing minor gable valley pair + hip 5×4@30 bay), gable40, gable60, hip 10×8@40, hip 5×4@30, shed@20, gambrel — 107 sheets/side rasterized with Playwright page.setContent @2x, never the editor. Every affected sheet LOOKED at; deck bands, drip flush and under-tile pct re-derived member-exact from members.json + SVG parses; per-sheet byte-compare pin vs base; takeoff rows diffed; round-1 crop exhibits (hip bay, main gable, valley region, eave band, demo section) re-shot. Evidence: /tmp/b6r2-exam/{out,out-base,crop-*}.",
+ "verdict": "APPROVE — all three round-1 FAILs and both FLAGs are closed on paper, member-exact and LOOKED. F1: the roll-aware projection prints every gable deck band foreshortened onto its TRUE plan band — downhill edge 4.5–7 mm INSIDE the eave tip line (was 0.53 m past), uphill edge 5–8 mm short of the ridge on its own side (was 1.06 m of overlap), hip strips never past the arris lines (worst 0.0000 m past-hip, ≥3.9 mm inside the eave, both hips) — and the deck joins the subfloor convention (layer ZERO, fill-opacity 0.35, hairline seam; wrb not drawn): the hip 10×8 sheet is a textbook hip diagram again with ridge/commons/jacks crisp OVER the wash (round-1's opaque patchwork exhibit re-shot and dead), rafters/purlins/valleys read through the deck on all eight scenes. F1b: foundation, wall-framing, electrical AND plumbing/MEP sheets are byte-EQUAL pin vs base on ALL EIGHT scenes — the 16.1 px shared-transform drift is gone, and the flush drip reposition (eave drip outer edge == finish-fascia outer face at 0.0000 m, rake drip == barge face, flat gravel stop inside the rim faces) even retired the demo's honest 0.2 px growth. F2: the deck labels state the EXACT per-compose coverage (hip 10×8 '91.5%', hip 5×4 '84.4%' — both match my independent drawn/plane recomputation to the rounding digit; 'slight under-tile' prose is dead), the printed buy row carries 'tapered planes conservatively under-tiled … buy waste factor separately' on the schedules sheet, and the gate floor is DERIVED from the strip arithmetic across a 4-geometry matrix including the round-1 84.4% counter-example. F3: the valley trim statement is a member FLAG now and PRINTS — takeoff 'FLAG — 4 ea' row + verbatim red line in the schedules flag block ('trim to the valley line on site (overlay framing)'), major deck stays clean. F4: shed no-drip and gambrel rake-metal gaps print as flags the same way. F5: the section cuts rolled plates as thin bands rotated by the TRUE roll hugging the rafter tops eave→ridge (±40/±60/±30, gambrel both plane angles) — the 8.1 m false horizontal chord is gone on every sloped scene while the flat demo keeps its honest level band; the widest surviving unrotated dark rects are slab/footing cuts. FOCUS-6: the three SIZELESS_LEGEND roof rows print on every roof sheet, the 13-row cap holds at the compose's 12 rows with all sized roles kept, and zero roof rows leak onto any other sheet. Census diff is exactly +deck/+wrb/+drip per scene, warnings byte-identical, takeoff diff is add-only (wall rows untouched in BOTH system-filter directions). Suite 1312/0 + tsc clean at the pin.",
+ "items": {
+  "F1-roof-plan-truth-and-legibility": {
+   "status": "PASS",
+   "checklist": ["P3", "C4", "S2", "P1"],
+   "evidence": "Member-exact SVG measurement (scale recovered off the ridge member, 50.39 px/m == exact 1:75): gable40 deck bands — uphill edge +0.005/+0.007 m short of the ridge (no overlap), downhill edge 3.523/3.525 m vs eave tip 3.5298 (spill −6.4/−4.5 mm, i.e. INSIDE); gable60 the same class (−5.0/−7.0 mm). Hip strips (42 on 10×8, 22 on 5×4, incl. the rotated cross-family): worst corner 0.0000 m past the hip lines, ≥3.9 mm inside the eave rect. LOOKED at all eight roof plans: deck prints as a pale translucent wash with hairline seams; rafters, ridge, hips, jacks, purlin rows, outlooker ladders and valley 2x8s all read ON TOP (layer-0 draw order also proven in the SVG: last deck rect precedes the first #444 structural stroke on every sheet). Round-1 exhibit re-shot: crop-hip-r2 vs round-1 crop-hip-pin — the opaque tan patchwork with buried ridge/jacks is now a crisp hip diagram; the honest strip-step notches along the arris lines read as conservative trimming, not noise.",
+   "note": "The stepped white notches at hips/arrises are the under-tile made visible — honest and legible at print scale."
+  },
+  "F1b-shared-transform-byte-stability": {
+   "status": "PASS",
+   "checklist": ["P1", "A3", "E5", "S4"],
+   "evidence": "Per-sheet byte-compare pin vs base on all EIGHT scenes: 02-foundation, 03-wall-framing, 05-electrical and 06-plumbing-hvac are byte-EQUAL everywhere (the wall plan equality also pins the A-A cut mark in place). Round-1 measured a uniform 16.1 px drift on the compose and 0.2 px on the demo — both are ZERO now: the planBounds roll projection plus the flush drip edges (eave drip outer edge == finish fascia outer face, gap +0.0000/−0.0000 m re-derived on gable40/60; rake drip outer == barge outer face 5.119 == 5.119 m; flat gravel stop pulled inside the rim faces) mean the roof package adds NO plan envelope at all. Only cover/roof/elevations/section/schedules differ, each by exactly the new content.",
+   "note": "Demo graph re-fetched over HTTP and verified byte-identical to the round-1 snapshot before comparing."
+  },
+  "F2-under-tile-honesty": {
+   "status": "PASS",
+   "checklist": ["S4", "P4", "C5"],
+   "evidence": "Independent recomputation of drawn strip area / true plane area: hip10x8 91.55% → every deck label prints 'strip-tiled: conservative under-tile, 91.5% of plane area; trim to hip lines on site'; hip5x4 84.39% → '84.4%' (the round-1 exhibit, no longer hiding under a 85% magic floor or 'slight' prose). The buy row prints ON PAPER (schedules sheets, LOOKED + grep): 'Roof sheathing 7/16\" WSP — 261.7 sqft (deck panels, from members (~9 4x8 sheets, R803.2) — tapered planes conservatively under-tiled (see member labels); buy waste factor separately'; rect-plane roofs (gable/shed/flat) carry NO waste note. The test floor is now DERIVED (edge wedges + vanishing tail strips + apex losses) and sweeps [10,8,40], [5,4,30], [16,10,25], [6,6,60] with the label pct pinned to the computed ratio. Underlayment books deck × 1.1 exactly on all six roofed scenes (261.7→287.8 etc.) with the lap factor stated.",
+   "note": "Residual (minor, not blocking): the exact pct itself reaches paper only via the qualitative row note — 'see member labels' is a 3D-surface reference. Defensible since a multi-roof scene has per-roof ratios one row can't carry, and the printed caveat is complete without the number; if a future round wants the digit on paper, print it per-roof when the scene has one tapered roof."
+  },
+  "F3-valley-flag-prints": {
+   "status": "PASS",
+   "checklist": ["P4", "S1"],
+   "evidence": "The minor's 4 deck/membrane members carry the FLAG 'roof deck/underlayment overlays the main roof past the valley — trim to the valley line on site (overlay framing)' (label suffix removed; major stays flag-clean — verified in members.json). It PRINTS twice on the compose set: takeoff 'Flags · FLAG — 4 ea' row and the schedules flag block verbatim red line (LOOKED at sheet 14/14). The roof plan shows the overlay honestly: the minor's translucent wash rides over the major's with both framings readable (crop-minor-r2).",
+   "note": "The multi-segment deck×deck SAT at the valley remains the disclosed test.todo (overframing clip = B7/B8 territory) — the printed flag is the honest bridge, exactly as round 1 asked."
+  },
+  "F4-shed-gambrel-stated-gaps": {
+   "status": "PASS",
+   "checklist": ["P4", "P2"],
+   "evidence": "Shed: zero drip members, no drip legend row (honest), and the deck flag 'shed roof: fascia + drip edge not modeled at LOD 400 — eave/rake metal by trim schedule (R905.2.8.5)' prints in the takeoff Flags row + schedules flag block. Gambrel: eave drip present, rake drip absent, and all four deck panels carry 'gambrel rake: rake framing + rake drip edge not modeled at LOD 400 — rides with the R802 rake-ladder follow-up (B8d)' — printed the same two places. Both LOOKED on the rasterized flag blocks.",
+   "note": "Gambrel plan reads clean: four foreshortened plane washes between eave/break/ridge lines, framing on top."
+  },
+  "F5-section-rolled-band": {
+   "status": "PASS",
+   "checklist": ["P3"],
+   "evidence": "Section SVGs across the matrix: rolled deck/membrane cut as #222 bands rotated by the TRUE roll — gable40 ±40.00°, gable60 ±60.00°, hips ±40/±30, gambrel all four plane angles (±40.00 and ±29.22), shed +20.00 — and LOOKED: the bands hug the rafter TOP faces eave→ridge like the built panel; the round-1 8.1 m horizontal mid-air chord is gone from the compose section. The FLAT demo section still prints its honest level band (443.5 px at the platform plane with drip squares at both ends — same as round 1, correct because that deck IS a level plate). Widest surviving unrotated dark rects (53–91 px) are the slab-on-grade / footing cuts, the B17 convention — no stick-class impostor.",
+   "note": ""
+  },
+  "F6-legend-keys": {
+   "status": "PASS",
+   "checklist": ["P2"],
+   "evidence": "Every roof sheet prints the three scoped SIZELESS_LEGEND rows ('sheathing — 7/16\" WSP roof deck (R803.2), drawn translucent', 'wrb — roof underlayment under covering (R905.1.1) — not drawn', 'drip-edge — drip edge — eave/rake metal (R905.2.8.5)'); shed correctly omits the drip row (no members). The 13-row cap holds: the compose roof sheet carries 12 rows with ALL nine sized roles kept (rafter/outlooker/fascia/ridge/cj/collar/hip/jack/valley) — the round-6 cap-regression class did not recur. Leak check: grep across all 107 non-roof sheets for the three row texts = zero hits, and the wall sheets are byte-equal to base anyway.",
+   "note": ""
+  },
+  "REG-blast-radius": {
+   "status": "PASS",
+   "checklist": ["S4", "S10", "E5", "P4", "C5"],
+   "evidence": "Member census diff pin vs base is EXACTLY the manifest on all eight scenes (demo +1 deck +1 wrb +4 drip; compose +26/+26/+16; hips +42/+42/+4 and +22/+22/+4; shed +1/+1/+0; gambrel +4/+4/+2). Warnings byte-identical per scene. Takeoff diff is ADD-ONLY everywhere: the Roof rows + the own 'Nails 8d common (roof deck)' row (2200 = 50 sheets × 44 on the compose, printed beside the wall 8d row — LOOKED) + the new Flags rows; zero wall rows changed in either system-filter direction (the all-CMU demo keeps its gross wall story, the framed scenes keep member-derived rows with no roof sqft in them). Round-1 exhibits re-shot and compared: hip bay (patchwork → diagram), main-gable ridge/eave (deck edge ON the fascia line), valley region, eave band (fascia capped by the drip hairline, no float, no doubled band), demo section (unchanged honest band). Elevations gain only hairlines; datums (GRADE/T.O. PLATE/RIDGE) intact; cover axon legible, no washout.",
+   "note": "Cosmetic only: at the gable60 apex the two rake-drip hairlines meet with a ~2 px chevron overshoot (rake metal butting at the ridge) — sub-print-scale, physically plausible, noted for a polish pass. Carried pre-existing classes unchanged: P1 right-bias of the shared transform, demo roof platform offset from the wall footprint (scene data, roof-coverage-flagged), fixed-width legend rect."
+  },
+  "SWEEP": {
+   "status": "PASS",
+   "evidence": "Full suite at the pin in the detached worktree: bun test → 1312 pass / 1 todo / 0 fail (1313 tests, 41,069 expect() calls, 52 files, 1.48 s); bunx tsc --noEmit clean. The new gates are non-vacuous and mirror the paper checks: plan-set.test 'B6 fix F1' describe (foreshortened band == member band, no eave spill/ridge overlap at the exact round-1 geometry, layer-0 draw order, Foundation-sheet byte-stability on a yawed-wing compose, 13-cap legend rows, wall-sheet leak inverse) + 'B6 fix F5' describe (±roll rotated bands, unrotated-chord bound at half the band length); roof-framing.test derived-floor matrix incl. the 84.4% counter-example with label-pct pinned to the computed ratio, valley FLAG pins (label suffix asserted GONE), shed/gambrel flag pins; takeoff.test F2 waste-note row + full-coverage inverse. S4's extended checklist row text matches observed behavior clause by clause. No gated checklist row regresses.",
+   "note": ""
+  }
+ },
+ "recommendations": [
+  "Polish (non-blocking): print the exact under-tile pct in the buy-row detail when the scene has a single tapered roof (the per-roof string already exists on the labels); today's 'see member labels' is a 3D-surface pointer a paper-only reader can't follow, though the actionable caveat is complete without it.",
+  "Polish (non-blocking): miter or butt-trim the rake-drip pair at the gable apex — a ~2 px hairline chevron overshoots the ridge point on steep gables (gable60 east elevation).",
+  "Carried for B7/B8 (disclosed): multi-segment deck×deck SAT at the valley stays the test.todo behind the printed overlay-trim flag; hip/valley overframing clip is that batch's work.",
+  "Board note for the plan-set owner: the roof deck wash makes the pre-existing P1 right-bias slightly more visible on single-roof scenes (big pale field right of center) — same transform class as always, nothing new regressed."
+ ],
+ "suite": {
+  "pass": 1312,
+  "todo": 1,
+  "fail": 0,
+  "tests": 1313,
+  "assertions": 41069,
+  "files": 52,
+  "runtime": "1.48s",
+  "tsc": "clean"
+ }
+}

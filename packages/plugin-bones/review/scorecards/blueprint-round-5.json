@@ -1,0 +1,65 @@
+{
+  "round": 5,
+  "pin": "e4ce6fc",
+  "protocol": "NARROW examiner round at e4ce6fc — first paper review since LOD-400 B1 (header-depth + RO-height-clamp flags) and B3 (subfloor deck strips) landed. Two sets generated via pure buildPlanSet (bun harness, computeLevel + injected bones:framing, LOD 400, all systems): demo-house-FL (fc866f2f271b over HTTP, regression baseline, 14 sheets) and stairtower-NY (composed two-storey 9×6 focus scene, framing node on the UPPER level: slab with a 1.2×2.8 stair hole, TALL DOOR 2.4 m in a 2.5 m wall at w1s u=6.5, interior partition, 30°-sheared oblique wing slab+walls, gable roof — 13 sheets, 711 members incl. 35 deck strips / 54.295 m²), plus a legend-stress electrical sheet (demo members + 12 synthetic circuits = 26) to LOOK at the night-5 two-column legend, and a floor-sheet A/B variant with role 'subfloor' filtered out. 29 sheets rasterized with Playwright page.setContent at 2x and ALL walked; crops in /tmp/qa-examiner6/, SVGs+stats in /tmp/bp6/.",
+  "verdict": "REVISE (narrow) — B1 and B3 are honest at the DATA level everywhere the round could measure: the tall door's header collapses to a 1.5\" sliver and the flag prints VERBATIM in the schedules Flags block ('header 4x8 does not fit between the RO and the plates (1.5\" of 7.2\") — raise the wall, lower the opening, or use an engineered flat header' — wrapped at a word boundary, never clipped), the subfloor takeoff row derives from the drawn members exactly (19 sheets == ceil(54.295 m² / 2.973 m²), schedules path and panel path agree, no lumber double-booking, demo slab-on-grade books zero), and every focus regression holds (two-column circuit legend prints all 26 circuits, CU tag + legend row distinct from AH, section poché conventions intact, demo set unchanged at 14 clean sheets). ONE paper defect blocks: the FLOOR sheet is WASHED OUT — planSheet draws members long-first (sort by dims[0] descending) and the z-run deck strips carry dims[0] = bay width (~0.41 m), the SMALLEST key on the sheet, so all 23 main-slab strips paint LAST, tiling the entire slab with opaque #e8d9b8 rects OVER the 62 joists, both 4x10 girders, the doubled stair headers/trimmers, rims and blocking. The only linework left in the field is the strip EDGES, which sit exactly HALF A 16\" BAY off the true joist centerlines (measured 10.2 px ≡ 0.203 m at 1:75 on every interior row) — an examiner reading those lines as the joist layout sets every joist 8\" wrong, and the sheet's own legend lists joist/girder/rim/blocking while none are visible and 'subfloor' itself (the dominant ink) has NO legend row (checklist row P2 verbatim). The same members are correctly GHOSTED in 3D (renderer.tsx floor-framing ghost class) — the paper path has no analog. Invariant sweep at the pin (detached worktree /tmp/bp6-worktree): bun test → 883 pass / 1 todo / 0 fail (884 total, 29,658 assertions, 41 files), bunx tsc --noEmit clean — E1-E5, S1-S9, M1/M2, P1-P5, A1-A4 gates all green; no gated row regressed; the wash-out is a NEW ungated paper class (per process it needs a row/gate with its fix).",
+  "items": {
+    "FOCUS-1-floor-washout": {
+      "status": "FAIL",
+      "evidence": "/tmp/qa-examiner6/st-floor-FULL-with-deck.png vs st-floor-FULL-no-deck.png (A/B: same scene, role 'subfloor' filtered); st-floor-field-AB.png; st-floor-stairhole-WITH-deck.png; SVG forensics: 35 strip rects draw at indices 89–182 — after the last joist (85) and both girders (18–19); strip edges x = {410.3, 429.9, 450.4, 470.8, 491.2, 511.8, 532.2 …} vs joist centerlines x = {419.6, 440.1, 460.6, 481.0, 501.5, 522.0, 542.5 …} — Δ = 10.2 px = 0.2032 m = half the 16\" bay at 1:75 (50.4 px/m), every interior row",
+      "note": "The joist grid is INVISIBLE on the floor sheet: opaque bay-wide strips tile the whole slab and the visible 'lines' are strip boundaries at bay MIDPOINTS — actively misleading layout linework, not just clutter. Hangers (tiny, draw after) float as detached hardware marks on the tan field; the stair hole reads but its doubled headers/trimmers are buried except edge slivers. Root cause is draw order + opaque fill: planSheet's long-first sort keys on dims[0], and z-run deck strips bake the axis into dims ([width, t, len]) so they sort SMALLEST; x-run slabs would interleave differently but the fill is opaque either way. The 3D X-ray ghosts floor-framing (renderer.tsx:228) — paper needs the analog. Fix per the recommendation below; the checklist needs a row ('floor-sheet joist linework survives the deck') + a plan-set gate."
+    },
+    "FOCUS-1b-deck-oblique-overhang": {
+      "status": "FLAG",
+      "evidence": "/tmp/qa-examiner6/st-floor-wing-WITH-deck.png (30°-sheared wing: strip corners step past the rim/wall line, up to ~0.12 m; white wedge gaps mirror at the opposite edge) vs st-floor-wing-NO-deck.png (joists clip clean)",
+      "note": "emitDeck clips each strip to the polygon span AT THE ROW CENTERLINE only — a 0.41 m-wide strip crossing an oblique edge overhangs it by up to halfWidth·tanθ (engine geometry, visible in 3D too, not paper-only). Booked area counts the overhang: S4-adjacent OVER-book on oblique edges (the hole carve is the opposite, a stated conservative under-book). Real decking is cut at the rim. Suggest per-strip polygon clip (both bounds of the band, keep the min span) or at least a sawtooth flag on slabs whose layout frame has oblique edges."
+    },
+    "FOCUS-2-tall-door-flags": {
+      "status": "PASS",
+      "evidence": "/tmp/qa-examiner6/st-flags-block.png — '⚑ header 4x8 does not fit between the RO and the plates (1.5\" of 7.2\") — raise the wall, lower the opening, or use an engineered flat header' verbatim, wrapped over two lines, on stairtower schedules 2/2; stats.json: w1s header dims[1] = 1.50\", flag carried on the member; normal doors (door_g 2.1 m, door_up, win_up) flag-free with full prescriptive depth",
+      "note": "Checklist row P4 (warnings/flags verbatim on paper) holds for the new class. ADVISORY: the RO-HEIGHT-CLAMP flag is unreachable on paper from the header emit — whenever the head clamps, studTop − roTop = 1.5\" so headerDepth < hw for EVERY prescriptive header size and headerDepthFlag wins the single-slot chain (wall-framing.ts `headerDepthFlag ?? roHeightClampFlag ?? roClampFlag`; the B1 gate itself concedes 'the clamp is subsumed'). The board's 'two flag classes' is one printable class on headers, and a simultaneous 'RO shifted' clamp is silenced the same way (the tall door also shifted RO on the demo header chain). Not a lie — the depth flag names the same remedy — but if the clamp text is ever meant to print, join the flags (' · ') or emit the height clamp on a trimmer/king."
+    },
+    "FOCUS-3-takeoff-consistency": {
+      "status": "PASS",
+      "evidence": "stairtower schedules 1/2: 'Sheathing · Subfloor 3/4\" T&G — 19 sheets (4x8 sheets, gross)'; /tmp/bp6/stairtower-NY/stats.json: 35 deck members, 54.295 m², ceil(54.295/2.9729) = 19; paper row (computeTakeoff WITHOUT areas) == panel row (WITH areas) == 19; demo-house-FL (slab-on-grade): zero deck members AND no Subfloor row; size-less deck members join no lumber section (no double-booking beside the sheet row)",
+      "note": "S4 booked == built holds in both directions on paper. Nominal-identity note: the collapsed 4x8 header still books as 'Wall framing · 4x8 — 2 pcs' per the shipped labels-stay-nominal convention (S7-style), with the flag carrying the truth — consistent, examiner-acceptable."
+    },
+    "REG-legend-two-column": {
+      "status": "FLAG",
+      "evidence": "/tmp/qa-examiner6/legend-stress-two-columns.png — 26-circuit stress set: rows 1-22 in column 1, XT-7/XT-8/XT-9 flow to column 2 at x=278; every drawn circuit has a legend row (round-4 P4 truncation stays dead); demo (14 circuits) single-column unchanged",
+      "note": "The night-5 fix WORKS — nothing truncates. Formatting nick: the legend's white backing rect is hard-coded 250 px wide, so second-column rows print OUTSIDE the ruled box with no backing — legible on this sheet only because the strip above the plan is empty; on a right-biased plan (round-4 P1) they would sit naked on wire linework. Widen the backing rect to cover the printed columns."
+    },
+    "REG-CU-tag": {
+      "status": "PASS",
+      "evidence": "/tmp/qa-examiner6/demo-mep-CU-tag.png — demo MEP: CU bubble on the outdoor pad beside DS, 'CU — AC condenser (outdoor unit)' legend row; AH tag remains on the indoor air handler only",
+      "note": "Round-4 focus defect stays closed."
+    },
+    "REG-section-poche": {
+      "status": "PASS",
+      "evidence": "demo 11: dark filled cut rects at both wall stacks, dashed below-grade foundation outlines, 0.9 m band note; stairtower 11: cut convention holds on the composed two-storey (cut blacks at plates/rim, light beyond, ground line)",
+      "note": "N3 conventions intact. Carried datum semantics advisory: the upper-storey set labels its own storey base 'GRADE 0.00m' and the girder posts (which stand inside the storey below) dangle below that line reading like buried piles — pre-existing owner-level-local convention (A3 note), not a regression."
+    },
+    "REG-demo-baseline": {
+      "status": "PASS",
+      "evidence": "demo-house-FL 14 sheets: 15 circuit legend rows single-column, 0 label overlaps spot-checked, A-A cut marks on the wall plan, GRADE/T.O. PLATE/RIDGE datums, north arrows, SHEET n/14 title blocks with FL code + effective date, role legends incl. 'stud — 2x4'",
+      "note": "No demo-set drift observed against the round-4 record (member deltas are the B1/B3 engine additions, reconciled in the takeoff)."
+    },
+    "P2-subfloor-legend": {
+      "status": "FAIL",
+      "evidence": "stairtower floor sheet legend: joist/header/rim-joist/girder/post/blocking rows only — 'subfloor', the sheet's dominant fill (~54 m² of ink), has no row (deck members carry no size, and the role legend is built from sized members only); 'hanger' shares the gap (pre-existing, visually negligible)",
+      "note": "Checklist row P2: every symbol/color on a sheet appears in that sheet's legend. Folded into the FOCUS-1 fix (a ghosted/outline deck should still get a legend row, e.g. 'subfloor 3/4\" T&G — ghosted')."
+    },
+    "SWEEP": {
+      "status": "PASS",
+      "evidence": "detached worktree at e4ce6fc: bun test → 883 pass / 1 todo / 0 fail (884 tests, 29,658 assertions, 41 files); bunx tsc --noEmit clean",
+      "note": "All checklist gates green (E1-E5, S1-S9, M1/M2, P1-P5, A1-A4); B1/B3 gates present (wall-framing.test.ts header-truth describe, compute.multistorey.test.ts booked==built). The floor-sheet wash-out and the subfloor legend gap are NEW ungated paper classes — per process each needs a row + plan-set gate with the fix."
+    }
+  },
+  "recommendations": [
+    "FLOOR SHEET (the blocker): stop filling deck strips as opaque body-color rects over the joist grid. Cheapest honest options, in order: (a) EXCLUDE role 'subfloor' from the floor sheet linework entirely (the takeoff row + 3D ghost carry the deck story); (b) draw strips OUTLINE-ONLY (fill none or fill-opacity ~0.15, dashed 0.4 stroke) and force them UNDER the joists (sort exception or a pre-pass bucket), mirroring the 3D ghost class; either way add a 'subfloor 3/4\" T&G' legend row. Gate: on a floor sheet with deck members, every joist centerline stroke survives (sample: joist rect count drawn AFTER the last subfloor rect > 0, or pixel/z-order pin).",
+    "Deck-strip oblique clip: clip each strip against the polygon at BOTH band edges (intersect spans at lo and hi, or true polygon clip) so strips never overhang an oblique rim — kills the wing sawtooth, trims the S4 over-book, and keeps the hole carve's conservative direction.",
+    "RO-height-clamp reachability: the clamp text can never print from the header's single flag slot (depth flag always wins when the clamp fires). Join concurrent flags with ' · ' on the header, or move the height-clamp flag to a trimmer/king member so both truths reach the Flags block.",
+    "Legend backing width: size the legend's white rect to the printed column count (round-5 stress exhibit shows column 2 outside the box) — one-line fix in planSheet.",
+    "Carried minors: plan-sheet right bias (P1), upper-storey 'GRADE' datum naming + sub-grade girder posts on non-ground sets (N2/A3 semantics), TX-style long code citations ellipsis (C6), per-opening header tags (C4)."
+  ]
+}

@@ -1,0 +1,109 @@
+{
+  "round": 4,
+  "pin": "4e2dd82",
+  "protocol": "EXAMINER round — first paper review since condensers / AC dedicated circuits / cavity-fit framing / batts / tee insets landed. Three sets generated via pure buildPlanSet (bun harness, computeLevel + injected bones:framing, LOD 400, all systems, service points seeded incl. heat pump): demo-house-FL (fc866f2f271b over HTTP, regression baseline), rich-NY (composed headlessly: 8 zones / 330 m² / 74 m exterior ring, 8 windows + 7 doors, 8 perpendicular tees + one ~28° and one ~62° oblique tee, mixed CMU wall w_w cmuHeightM 1.2 with a seam-crossing window, batt overrides w_s/w_e, explicit 2x6-on-0.114m misfit w_bd12, full 22×15 gable roof, 2 condensers at zone 5A/650), rich-TX (same geometry, brick-default cladding, zone 2A/450 → 2×4-ton units). 42 sheets rasterized with Playwright page.setContent at 2x and ALL walked; crops in /tmp/qa-examiner5/, SVGs+stats in /tmp/bp5/.",
+  "verdict": "REVISE (narrow) — the new systems are drawn, honest and code-cited on paper: the AC story prints end-to-end (AC-1 — 30A/10AWG · AC condenser (dedicated 2-pole) legend row verbatim on NY, 40A/8AWG on TX and the 3.5-ton demo; homeruns drawn panel→disconnect wall on all three sets, labeled, ΔE(AC-1,AC-2)=56, nearest non-AC neighbor ΔE 18.4 (BA-1, both blues but separable); takeoff panel schedule carries every AC row at 3600 VA), the condenser row is exactly what M2 promises (2 pads + cabinets outside the north wall, pad inner edge at the brick-cleared plane z=15.205 on TX to the millimeter, Manhattan Ø22+Ø10 line-sets joining the air handler, DS boxes slid clear, 'DS — AC disconnect' in the MEP legend, takeoff '2 pcs (6/8 tons total — assumed sizing, Manual S governs)'), compressed framing reads correctly (w_bd12 plates draw 0.0886 m — non-degenerate — with the aggregated 'compressed to 3.49\"' flag AND the S7 warning verbatim in the schedules; default 0.15 m walls draw 0.1246 m with flag only), batts lay out in the bays and book by type+R (R-30 366 sqft + R-21 245 sqft; R-13 on TX = zone code-min), the tee-stem trio VERIFIES on paper (all 8 perpendicular tees close at +0.0 cm plates AND drywall; oblique-tee plates corner-touch the through face at +0.6/+1.1 cm, no bow-ties, no crossings), the mixed wall seams on a whole course (182 blocks zone-only, PT seam sill + 10 seam bolts booked, crossing-window flag prints), and every regression pin holds (0 label-label and 0 label-bubble overlaps on all three electrical sheets, demo roof-coverage flag fires red / rich full-gable stays silent, section cut slid to x≈12.38 clear of the x=12 and x=13 wall axes with filled-rect poché, GRADE/T.O. PLATE/RIDGE datums on all 12 elevations, scale exact — bar 30.236 px/m vs bolt-row measurement +0.006%, characteristics block accurate: 330.0 m² / 825 m³ / 8 windows / 7 doors / R-30 zone 5A). Two paper defects still block a clean pass, both NEW classes exposed by the first >22-line electrical sheet: (1) the circuit legend TRUNCATES at the row>22 cap — the 23-circuit rich sets print 16 circuit rows and silently drop LTG-6, LTG-7, SA-1, SA-2, ac-whip-1/2 and the SE-cable row while those circuits' colored runs and labels ARE on the drawing — colors used with no legend row is checklist row P2 verbatim, and the two smoke-alarm circuits are the safety-critical ones (breaker/gauge only recoverable from the takeoff panel schedule two sheets away); (2) both outdoor condensers print the air handler's bubble — FIXTURE_TAG has no condenser kind, so their fixture kind 'equipment' falls to 'AH' and the NY/TX MEP sheets show THREE 'air handler' symbols, two of them outdoors on pads (an examiner reads mis-tagged equipment; the legend row says 'air handler'). Aggravating the truncation: the brute-forced circuit family goes perceptually degenerate at 23 circuits — GEN-8 #5ad039 vs LTG-6 #53d345 is ΔE 4.2 (twin greens, exhibit crops indistinguishable) and GEN-7 vs LTG-3 ΔE 8.8, so with LTG-6's row truncated a green run is unattributable on paper. Invariant sweep at the pin: 866 tests (865 pass / 1 todo / 0 fail, 29,219 assertions, 40 files), tsc clean — E1-E5, S1-S9, M1/M2, P1-P5, A1-A4 gates all green; no gated row regressed; the P2 paper violation is a NEW ungated class (legend cap), not a regression of a pinned behavior.",
+  "items": {
+    "N1-cover": {
+      "status": "PASS",
+      "evidence": "/tmp/bp5/rich-NY/01-cover.png, rich-TX/01, demo-house-FL/01",
+      "note": "Hero fills the frame, stroke legend lists exactly the five systems the hero draws (electrical never drawn on the hero — same as round 3), index 2..14 matches printed sheets, SHEET 1/14, jurisdiction + code + effective date + disclaimer legible, 'members drawn at model elevations' note present. Member-count changes since round 3 (demo header 4x8→4x6, trimmer/king 2x4→2x6) reconcile with the takeoff — engine-side resizing, not a paper defect."
+    },
+    "N2-elevations": {
+      "status": "FLAG",
+      "evidence": "rich-NY/07..10, rich-TX/07..10, demo 07..10; RIDGE +7.20m / T.O. PLATE +2.48m / GRADE 0.00m tags on all 12",
+      "note": "Datums, single family ratio, butt caps, dashed below-grade all hold. Carried (worse now with batts+layers): near/far members overprint into one flat tan mass — the mixed CMU wall's coursing and the batt bays are invisible on the west elevations because every parallel wall prints at full opacity. TX title block: the long non-adoption citation ends in an ellipsis ('…the IRC as it existed on May 1, 2012'…) — clipped, not wrapped (C6 minor)."
+    },
+    "N3-section": {
+      "status": "PASS",
+      "evidence": "rich-NY/11 (cut slid to x≈12.38 — clear of w_bath_e x=12 and w_bd23 x=13; unit-2 condenser pad+cabinet cut as a dark block on grade beyond the right wall), demo/11 (dark CMU cut stacks both walls, 13 m roof plate correctly 0.6-opacity beyond)",
+      "note": "Cut-slide, filled-rect poché, below-grade dash convention and the 0.9 m band note all hold on both a synthetic and the demo set."
+    },
+    "P1": {
+      "status": "FLAG",
+      "evidence": "rich-NY/02..06 (drawing right-of-center, left third empty except legend); rich takeoff 1/3+2/3 content in the top half",
+      "note": "Carried composition flag: plan sheets bias right (shared-transform artifact), takeoff pages top-heavy. Elevations/sections centered; no overlaps anywhere."
+    },
+    "P2": {
+      "status": "PASS",
+      "evidence": "scale bar 181.42 px / 6 m = 30.236 px/m exact 1:125; anchor-bolt row measurement 30.238 px/m (+0.006%); foundation/wall/roof/electrical/MEP footprints register across sheets on all three sets",
+      "note": "One shared transform per set holds (checklist P1 pin)."
+    },
+    "P3": {
+      "status": "PASS",
+      "evidence": "corner-level tee math from /tmp/bp5/rich-NY/stats.json + crops ny-wall-tee-bd12-hall.png, ny-wall-oblique-tee-top.png, ny-wall-oblique-tee-start.png, ny-foundation-oblique-butt.png",
+      "note": "THE FOCUS ITEM VERIFIES: all 8 perpendicular tees close at +0.0 cm (plates and the df565b7 drywall insets), both oblique tees corner-touch the through face (+0.6 cm at 62°, +1.1 cm at 28°) with zero penetrations — no bow-ties, no daylight beyond the inherent square-cut wedge. Foundation oblique stem butts the through FOOTING's face (+14.6 cm off the wall face = flush with the 0.4 m footing) — correct detail that reads as an intentional butt. Residuals, classified: (a) NEW MINOR — the stem's obtuse-side drywall strip stops 4.8–8.9 cm short of the through face at the oblique tees (acute-side strip exact at +0.0) — the width-aware retreat applies the acute-corner term to both strips; (b) KNOWN (S1 residual, board-queued) — framed hall-wall stems run to the mixed CMU wall's centerline (−10 cm past its face; frameWalls never sees CMU/mixed walls for insets) — reads as a butted through-run on paper, no bow-tie."
+    },
+    "P4": {
+      "status": "FAIL",
+      "evidence": "rich-NY/05 + rich-TX/05 SVG legend rows end at 'LTG-5 — 15A/14AWG · lighting' while run labels LTG-6, LTG-7, SA-1, SA-2 print on the drawing (plus unlabeled ac-whip stubs and the SE lateral); /tmp/qa-examiner5/ny-elec-legend-truncated.png; plan-set.ts electrical legend 'if (row > 22) break'; twin greens exhibit ny-elec-label-GEN-8.png vs ny-elec-label-LTG-6.png (ΔE 4.2)",
+      "note": "Text-over-text is CLEAN (0 label-label, 0 label-bubble rect overlaps measured on all three electrical sheets — the round-3 de-collision holds with the new AC runs). The FAIL is legend coverage, checklist row P2 verbatim: on the first sheet to exceed the 22-row cap, seven drawn circuit colors have no legend row — including both smoke-alarm circuits (SA-1/SA-2, the 15A/14-3 safety interconnects) and the SE cable row that round-3 fixCheck2 added. Aggravated by perceptual color collapse at 23 circuits: GEN-8 vs LTG-6 ΔE 4.2 and GEN-7 vs LTG-3 ΔE 8.8 are indistinguishable on paper, so the truncated circuits are unattributable even by color matching. Also noted: crowd-escaped labels park far from their runs with no leader (LTG-6 ~1.9 m into the room; GEN-4/GEN-6/GEN-7/LTG-2 float outside the building outline above the top wall). Demo set (14 circuits) is complete and clean — this is scene-size-triggered, not a regression of the pinned sets."
+    },
+    "C1": {
+      "status": "PASS",
+      "evidence": "rich roof sheets silent (full 22×15 gable, no false positive); demo/04 fires 'part of the plan has no roof members — check roof coverage' red on the legend AND in the demo schedules flag block (/tmp/qa-examiner5/demo-roof-coverage-flag.png)",
+      "note": "Every system with members got its sheet on all three sets; slab-on-grade sets correctly print no floor-framing sheet with the slab note in the flags."
+    },
+    "C2": {
+      "status": "FLAG",
+      "evidence": "'AC-1 — 30A/10AWG · AC condenser (dedicated 2-pole)' + AC-2 rows on rich-NY/05 (exact focus row); 40A/8AWG on rich-TX and demo AC-1; AC homeruns drawn and labeled on all sets; takeoff 2/3 panel schedule: every circuit incl. 'Circuit AC-1 — 1 devices (30A/10 AWG/3600 VA)' and the truncated LTG-6/7 SA-1/2",
+      "note": "Every circuit is drawn, colored, homerun-traceable to P, and the panel schedule reconciles (60 R + 16 GFCI + device sums). Three traceability nicks keep it FLAG: (1) the P4 legend truncation leaves 7 rich-set circuits schedule-only; (2) the AC homerun terminates at an unmarked wall point on the ELECTRICAL sheet — the DS symbol lives only on the MEP sheet (fixture system filter), so the dedicated circuit's endpoint needs a cross-sheet hop; (3) the ac-whip stubs print colored but unlabeled and unlegended."
+    },
+    "C3": {
+      "status": "PASS",
+      "evidence": "rich-NY/02: 44 filled bolt dots + 66 open dowel circles = legend callouts = takeoff rows ('Anchor bolts — 44 pcs (mudsill anchorage R403.1.6)'); mitered perimeter, interior partition footings incl. the oblique run, CMU west wall footed",
+      "note": "Corners close at all angles including the composed oblique junctions (S3)."
+    },
+    "C4": {
+      "status": "FLAG",
+      "evidence": "rich wall sheets: 'STUDS @ 16\" O.C. U.N.O.' + 8 role-size rows; roof sheets: 'RAFTERS @ 24\" O.C.' + 6 roles; crop ny-wall-south-batts.png",
+      "note": "Openings framed (headers/kings/trimmers distinguishable), spacing callouts true. Two paper gaps on the rich sets: (1) the role legend takes the FIRST 8 roles by insertion, and 'stud' — the sheet's most numerous member — lost its row to 'sill' (demo still prints stud — 2x4); (2) BATTS render on the wall sheet but in the same lumber tan as plates/blocking (wall-sheet fill map has no 'insulation' entry and batts carry no size so they can't even join the role legend) — 69 batt members are on paper yet indistinguishable from wood and unlegended. The compressed-framing story otherwise reads correctly: w_bd12's band draws at its cavity-fit width, plate bands nowhere degenerate, and both S7 texts print (aggregated member flag + verbatim wall warning)."
+    },
+    "C5": {
+      "status": "FLAG",
+      "evidence": "rich-NY/14: BUILDING CHARACTERISTICS (330.0 m² · 825.0 m³ · 168.7 m² envelope · 8 windows · 7 doors · zone 5A · R-30 · Cooling ~4.8 ton RULE OF THUMB) + 13 red flag lines all verbatim (cavity-fit warning, 2 mixed-wall butts, seam-crossing window, v1 layers note, batt derations, connector-too-long, slab-on-grade); HVAC rows: 'AC condensers — 2 pcs (6 tons total…)'",
+      "note": "Flags list intact (no truncation), characteristics accurate against the composed scene, batts/claddings/CMU/PT/seam-bolts all booked per S5/S6. Paper cut: the same set prints 'Cooling ~4.8 ton' (55 m²/ton rule) beside 'AC condensers — 6 tons total' (650 sqft/ton rule) — 4.8 vs 6.0 on NY and 4.8 vs 8.0 on TX; both are labeled assumptions but an examiner circles the 66% spread with no cross-reference. Minor: the seam-crossing flag prints twice (aggregated class line + verbatim warning with the window id)."
+    },
+    "C6": {
+      "status": "PASS",
+      "evidence": "all 42 title blocks: project, level, jurisdiction + code name + effective date, LOD 400, ratio scale, date, disclaimer, SHEET n/14",
+      "note": "Minor carried: TX's very long non-adoption code citation clips with an ellipsis on the second line."
+    },
+    "A1": {
+      "status": "PASS",
+      "evidence": "bar = 30.236 px/m exact; independent bolt-row measurement 30.238 px/m (+0.006% error, well under the 5% protocol bound)",
+      "note": "Exact by construction."
+    },
+    "A2": {
+      "status": "PASS",
+      "evidence": "44/66 foundation hardware = legend = takeoff; 2 condensers drawn = fixture row = takeoff '2 pcs'; AC breaker/gauge identical on sheet-5 legend, DS labels and the panel schedule; CMU 182 pcs consistent with the drawn zone courses",
+      "note": "Counts reconcile at data and drawn-mark level on the new systems."
+    },
+    "A3": {
+      "status": "PASS",
+      "evidence": "north arrows all plan sheets, one shared y-down transform; elevation handedness consistent with the plan on the composed scene (windows land at their model stations); demo unchanged",
+      "note": ""
+    },
+    "M-mep": {
+      "status": "FLAG",
+      "evidence": "/tmp/qa-examiner5/ny-mep-condensers.png — 2 pads (wall-aligned) + cabinets + DS boxes + Manhattan line-sets joining at the AH; 'DS — AC disconnect' legend row; TX pad inner edge z=15.205 = wall face 15.075 + 0.13 brick allowance exactly; trunk at y=2.8 above the 2.5 plate band (M1), registers at 2.46, line-sets at 0.38/0.42, whips 0.8-1.0",
+      "note": "THE FOCUS DEFECT: both outdoor condensers print the 'AH' bubble and legend as 'air handler' — FIXTURE_TAG maps fixture KIND and the condenser cabinets share kind 'equipment' with the real air handler, so the NY/TX MEP sheets show three AH symbols (two outdoors on pads) and the demo shows two. Sizing/count/clearances/routing are all honest (M2) — this is symbol identity only, but equipment mis-tagging is exactly what a mechanical plans examiner red-lines. Known cosmetic (board-noted): unit #1 cabinet draws tilted toward the equipment room on its straight pad (~8° NY, larger on demo)."
+    },
+    "SWEEP": {
+      "status": "PASS",
+      "evidence": "detached worktree at 4e2dd82: bun test → 865 pass / 1 todo / 0 fail (866 total, 29,219 assertions, 40 files); bunx tsc --noEmit clean",
+      "note": "All checklist gates green (E1-E5, S1-S9, M1/M2, P1-P5, A1-A4). No gated row regressed on paper. The P4/P2 legend-cap violation and the AH-tag collision are NEW ungated classes — per process each needs a row/gate with its fix (suggest: 'every wire-run sourceId on the electrical sheet has a legend row' pin + a condenser-tag pin)."
+    }
+  },
+  "recommendations": [
+    "Kill the electrical legend's 'row > 22' cap (plan-set.ts): flow circuit rows into a second legend column (or paginate the legend block) so every drawn circuit keeps its breaker/gauge/zone row — the 23-circuit rich scene drops LTG-6/7, SA-1/2, the whips AND the SE-cable row today. Gate: every wire-run sourceId on the sheet has a legend row (P2).",
+    "Give the condenser its own fixture identity: distinct kind (or meta-driven tag) → 'CU' bubble + 'AC condenser' legend row; keep 'AH' for the air handler alone. Gate: no two distinct equipment labels share a tag on the MEP sheet.",
+    "Enforce a minimum pairwise ΔE across the WHOLE circuit family at generation time (not just AC vs real ids): GEN-8/LTG-6 print ΔE 4.2 and GEN-7/LTG-3 ΔE 8.8 at 23 circuits — twin colors defeat the legend even without truncation.",
+    "Draw a DS marker (or a terminal tick + 'to DS' note) at the AC homerun's endpoint on the ELECTRICAL sheet so the dedicated circuit terminates visibly without hopping to the MEP sheet.",
+    "Batt paper identity (S6 follow-through): fill role 'insulation' with the 3D pink (#e8b4c8) on the wall sheet and add a legend row ('batt R-30'); also rank the role legend by member count so 'stud' never loses its row to 'sill'.",
+    "Oblique-tee layer inset, obtuse side: the stem's far-side face layer needs the sign-flipped retreat term ((t − w·cosθ) form) — it stops 4.8–8.9 cm short of the through face while the acute side lands exact.",
+    "Cross-cite the two cooling numbers: print the condenser plan's tons in the characteristics block ('installed 6.0 t across 2 units; rule-of-thumb load ~4.8 t — Manual J/S govern') or vice versa.",
+    "Leader ticks for crowd-escaped circuit labels (park distance > ~2 label heights): LTG-6 floats ~1.9 m from its run; GEN-4/6/7/LTG-2 park outside the building outline.",
+    "Carried minors: plan-sheet right bias (P1), elevation depth cue (N2), TX title-block citation ellipsis (C6), per-opening header tags (C4), dedupe the twice-printed seam-crossing flag (C5)."
+  ]
+}

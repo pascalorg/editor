@@ -1,0 +1,18 @@
+{
+  "round": "E1-openings",
+  "date": "2026-08-15",
+  "plugin_sha": "b7a7930",
+  "verdict": "PASS",
+  "core_test": "Placed low window (sill ~0.35m) directly on a live 18in receptacle run; RO framed and run rerouted under the sill within 0.4s, stable at 5s, zero stale wire. Recompute (A2) confirmed live.",
+  "checked": [
+    "new low window: under-sill detour, box remounted below sill outside RO",
+    "interior door: switch beside RO, feed crosses above header",
+    "exterior door: runs terminate/turn at jambs across ~6 angles",
+    "all 10 existing windows: wires under sills, no box in any RO",
+    "false alarm: 'wire through window' was parallax through glazing",
+    "panel flags visible: 'RO shifted Ncm to fit framed run' warnings"
+  ],
+  "escalations": [
+    "E4 air jumpers: straight diagonals through open room air (blue over bed, yellow across living room) — physically impossible cable paths; new checklist row, fix separately"
+  ]
+}
