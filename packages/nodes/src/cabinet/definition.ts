@@ -19,6 +19,7 @@ import {
   findLevelAncestorId,
   selectionProxyIdFromMetadata,
 } from '@pascal-app/core'
+import { findWallOpeningConflicts } from '../shared/wall-opening-clearance'
 import { bakeCabinetAnimationClip } from './animation'
 import { buildCabinetFloorplan, buildCabinetModuleFloorplan } from './floorplan'
 import { cabinetModuleFloorplanMoveTarget } from './floorplan-move'
@@ -82,7 +83,12 @@ import {
   cabinetTreeHidden,
   cabinetTreeLabel,
 } from './tree-structure'
-import { resolveCabinetModuleWallSnapLocal, resolveCabinetRunWallSnap } from './wall-snap'
+import {
+  findClosestCabinetWallInPlan,
+  resolveCabinetModuleWallSnapLocal,
+  resolveCabinetRunWallSnap,
+  resolveCabinetWallFaceOffset,
+} from './wall-snap'
 
 type CabinetEditableNode = CabinetNodeType | CabinetModuleNodeType
 
@@ -247,6 +253,58 @@ export function cabinetFloorPlacedFootprints(
   const footprints: FloorPlacedFootprint[] = []
   appendCabinetFloorPlacedFootprints(node, nodes, [0, 0, 0], 0, footprints)
   return footprints
+}
+
+function cabinetRunOverlapsWallOpening({
+  levelId,
+  node,
+  nodes,
+  position,
+  rotation,
+}: {
+  levelId: AnyNodeId | null
+  node: CabinetNodeType
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>
+  position: readonly [number, number, number]
+  rotation: number
+}): boolean {
+  const parentLevelId = (levelId ??
+    findLevelAncestorId(node.id as AnyNodeId, nodes)) as AnyNodeId | null
+  if (!parentLevelId) return false
+
+  const candidate = { ...node, position: [...position] as [number, number, number], rotation }
+  return cabinetFloorPlacedFootprints(candidate, nodes).some((footprint) => {
+    if (!footprint.position) return false
+    const hit = findClosestCabinetWallInPlan({
+      excludeIds: [],
+      nodes: nodes as Record<AnyNodeId, AnyNode>,
+      parentLevelId,
+      planPoint: [footprint.position[0], footprint.position[2]],
+      yaw: footprint.rotation[1],
+    })
+    if (!hit) return false
+
+    const normalScale = hit.side === 'front' ? 1 : -1
+    const expectedPerp =
+      resolveCabinetWallFaceOffset({
+        hit,
+        nodes: nodes as Record<AnyNodeId, AnyNode>,
+        parentLevelId,
+      }) +
+      normalScale * (footprint.dimensions[2] / 2)
+    if (Math.abs(hit.perpDistance - expectedPerp) > 0.12) return false
+
+    return (
+      findWallOpeningConflicts({
+        bottom: footprint.position[1],
+        height: footprint.dimensions[1],
+        localX: hit.localX,
+        nodes,
+        wall: hit.wall,
+        width: footprint.dimensions[0],
+      }).length > 0
+    )
+  })
 }
 
 const SIDE_HANDLE_OFFSET = 0.18
@@ -2231,6 +2289,15 @@ export const cabinetDefinition: NodeDefinition<typeof CabinetNode> = {
       gridSnap: true,
       gridSnapPosition: resolveCabinetMoveGridSnap,
       groupMoveSnapPose: resolveCabinetGroupMoveSnap,
+      isValidPosition: ({ node, position, rotation, levelId, nodes }) =>
+        node.type !== 'cabinet' ||
+        !cabinetRunOverlapsWallOpening({
+          levelId,
+          node: node as CabinetNodeType,
+          nodes: nodes as Readonly<Record<AnyNodeId, AnyNode>>,
+          position,
+          rotation,
+        }),
       override: ({ node }) =>
         selectionProxyIdFromMetadata((node as { metadata?: unknown }).metadata)
           ? { axes: [], gridSnap: false }

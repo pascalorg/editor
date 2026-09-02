@@ -54,6 +54,7 @@ import {
 } from '../shared/floor-placement'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import type { WallHit } from '../shared/wall-attach-target'
+import { findWallOpeningConflicts } from '../shared/wall-opening-clearance'
 import {
   type CabinetStretchPreview,
   cabinetStretchExitSide,
@@ -100,6 +101,7 @@ type CabinetPlacement = {
   snappedToWall: boolean
   valid: boolean
   conflictIds: string[]
+  wallId?: AnyNodeId
   wallLocalX?: number
   guide?: CabinetWallSnapPlacement['guide']
   snapReason?: CabinetWallSnapPlacement['snapReason']
@@ -587,7 +589,20 @@ const CabinetTool = () => {
               next.yaw,
               0,
             ])
-      return { ...next, conflictIds: result.conflictIds, valid: result.valid }
+      const wall = next.wallId ? useScene.getState().nodes[next.wallId] : undefined
+      const openingConflictIds =
+        wall?.type === 'wall' && next.wallLocalX != null
+          ? findWallOpeningConflicts({
+              bottom: 0,
+              height: placementDimensions[1],
+              localX: next.wallLocalX,
+              nodes: useScene.getState().nodes,
+              wall,
+              width: previewNode.width,
+            })
+          : []
+      const conflictIds = [...new Set([...result.conflictIds, ...openingConflictIds])]
+      return { ...next, conflictIds, valid: result.valid && openingConflictIds.length === 0 }
     }
 
     const resolveWallHitPlacement = (hit: WallHit): CabinetPlacement | null => {
@@ -614,6 +629,7 @@ const CabinetTool = () => {
         position: wallPlacement.position,
         snapReason: wallPlacement.snapReason,
         valid: true,
+        wallId: hit.wall.id as AnyNodeId,
         wallLocalX: wallPlacement.localX,
         wallSurfaceNormal,
         yaw: wallPlacement.yaw,
@@ -697,6 +713,8 @@ const CabinetTool = () => {
             position: anchor.position,
             yaw: anchor.yaw,
             snappedToWall: anchor.snappedToWall,
+            wallId: anchor.wallId,
+            wallLocalX: anchor.wallLocalX,
             wallSurfaceNormal: anchor.wallSurfaceNormal,
             valid: false,
             conflictIds: [],
@@ -715,19 +733,50 @@ const CabinetTool = () => {
         ? [chainRootRunRef.current.id as AnyNodeId]
         : undefined
       const result = resolveCabinetContinuousValidity(
-        spatialGridManager.canPlaceOnFloor(
-          activeLevelId,
-          spanCenter,
-          [stretch.length, placementDimensions[1], placementDimensions[2]],
-          [0, anchor.yaw, 0],
-          ignoreIds,
-        ),
+        (() => {
+          const floorResult = spatialGridManager.canPlaceOnFloor(
+            activeLevelId,
+            spanCenter,
+            [stretch.length, placementDimensions[1], placementDimensions[2]],
+            [0, anchor.yaw, 0],
+            ignoreIds,
+          )
+          const nodes = useScene.getState().nodes
+          const wall = anchor.wallId ? nodes[anchor.wallId] : undefined
+          const wallHit =
+            wall?.type === 'wall' && anchor.wallLocalX != null
+              ? { wall, localX: anchor.wallLocalX + stretch.centerLocalX }
+              : findClosestCabinetWallInPlan({
+                  excludeIds: [],
+                  nodes,
+                  parentLevelId: activeLevelId as AnyNodeId,
+                  planPoint: [spanCenter[0], spanCenter[2]],
+                  yaw: anchor.yaw,
+                })
+          const openingConflictIds =
+            wallHit && (wallHit.localX ?? null) != null
+              ? findWallOpeningConflicts({
+                  bottom: 0,
+                  height: placementDimensions[1],
+                  localX: wallHit.localX!,
+                  nodes,
+                  wall: wallHit.wall,
+                  width: stretch.length,
+                })
+              : []
+          return {
+            conflictIds: [...new Set([...floorResult.conflictIds, ...openingConflictIds])],
+            valid: floorResult.valid && openingConflictIds.length === 0,
+          }
+        })(),
         isForcePlacementEvent(event),
       )
       return {
         position: anchor.position,
         yaw: anchor.yaw,
         snappedToWall: anchor.snappedToWall,
+        wallId: anchor.wallId,
+        wallLocalX: anchor.wallLocalX,
         wallSurfaceNormal: anchor.wallSurfaceNormal,
         valid: result.valid,
         conflictIds: result.conflictIds,
@@ -1028,6 +1077,8 @@ const CabinetTool = () => {
           position: next.position,
           yaw: next.yaw,
           snappedToWall: next.snappedToWall,
+          wallId: next.wallId,
+          wallLocalX: next.wallLocalX,
           wallSurfaceNormal: next.wallSurfaceNormal,
         }
         publishPlacement(resolveStretchedPlacement(draftAnchorRef.current, event))

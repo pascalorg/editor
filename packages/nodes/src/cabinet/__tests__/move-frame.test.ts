@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { AnyNode, AnyNodeId } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, DoorNode, LevelNode, WallNode } from '@pascal-app/core'
 import { cabinetModuleParentFrame } from '../move-frame'
 import { CabinetModuleNode, CabinetNode } from '../schema'
 
@@ -115,6 +115,41 @@ describe('cabinetModuleParentFrame.isValidPosition', () => {
     const { run, nodes } = runFixture([moving, sibling])
 
     expect(isValidPosition({ node: moving, parent: run, position: [0.65, 0.1, 0], nodes })).toBe(
+      true,
+    )
+  })
+
+  test('rejects a wall-snapped module that overlaps a door opening', () => {
+    const level = LevelNode.parse({ id: 'level_magnet-opening' })
+    const door = DoorNode.parse({
+      id: 'door_magnet-opening',
+      parentId: 'wall_magnet-opening',
+      position: [1, 1.05, 0],
+      width: 0.9,
+      height: 2.1,
+    })
+    const wall = WallNode.parse({
+      id: 'wall_magnet-opening',
+      parentId: level.id,
+      children: [door.id],
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const run = CabinetNode.parse({
+      id: 'cabinet_magnet-opening',
+      parentId: level.id,
+      children: ['cabinet-module_moving'],
+      position: [0, 0, 0],
+    })
+    const moving = module('cabinet-module_moving', [0, 0.1, 0])
+    const nodes = Object.fromEntries(
+      [level, wall, door, run, moving].map((node) => [node.id, node as AnyNode]),
+    ) as Record<string, AnyNode>
+
+    expect(isValidPosition({ node: moving, parent: run, position: [1, 0.1, 0.39], nodes })).toBe(
+      false,
+    )
+    expect(isValidPosition({ node: moving, parent: run, position: [2, 0.1, 0.39], nodes })).toBe(
       true,
     )
   })

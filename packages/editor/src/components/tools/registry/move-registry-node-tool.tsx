@@ -15,6 +15,7 @@ import {
   type GridEvent,
   type GroupMoveSnapResult,
   getFloorPlacedFootprints,
+  type MovableConfig,
   movingFootprintAnchors,
   type NodeEvent,
   nodeRegistry,
@@ -407,6 +408,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     nodeRegistry.get(node.type)?.capabilities?.movable?.groupMoveSnap ?? null
   const groupMoveSnapPoseConfig =
     nodeRegistry.get(node.type)?.capabilities?.movable?.groupMoveSnapPose ?? null
+  const movableValidityConfig =
+    (nodeRegistry.get(node.type)?.capabilities?.movable as MovableConfig | undefined) ?? null
   const gridSnapPositionConfig =
     nodeRegistry.get(node.type)?.capabilities?.movable?.gridSnapPosition ?? null
   // Mirrors of `valid` / Alt for the event handlers inside the effect, which
@@ -522,7 +525,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     // override so the user can drop on top of an existing item on purpose. Only
     // shelves show the box, so this no-ops for every other movable kind.
     const recomputeValidity = () => {
-      if (!boxDimensions) return
+      if (!boxDimensions && !movableValidityConfig) return
       if (altRef.current) {
         validRef.current = true
         setValid(true)
@@ -578,15 +581,27 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       const { valid: placeable } =
         resolvedFootprints.length > 0
           ? spatialGridManager.canPlaceOnFloorFootprints(levelId, resolvedFootprints, [node.id])
-          : spatialGridManager.canPlaceOnFloor(
-              levelId,
-              getVisualPosition(livePosition),
-              boxDimensions,
-              [0, liveRotation, 0],
-              [node.id],
-            )
-      validRef.current = placeable
-      setValid(placeable)
+          : boxDimensions
+            ? spatialGridManager.canPlaceOnFloor(
+                levelId,
+                getVisualPosition(livePosition),
+                boxDimensions,
+                [0, liveRotation, 0],
+                [node.id],
+              )
+            : { valid: true }
+      const kindValid = movableValidityConfig?.isValidPosition
+        ? movableValidityConfig.isValidPosition({
+            node: effectiveNode,
+            position: livePosition,
+            rotation: rotationRef.current,
+            levelId: levelId as AnyNodeId | null,
+            nodes: useScene.getState().nodes as Record<string, AnyNode>,
+          })
+        : true
+      const positionValid = placeable && kindValid
+      validRef.current = positionValid
+      setValid(positionValid)
     }
     recomputeValidity()
 
@@ -1171,6 +1186,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
     portSnapConfig,
     groupMoveSnapConfig,
     groupMoveSnapPoseConfig,
+    movableValidityConfig,
     gridSnapPositionConfig,
     exitMoveMode,
     isFreshPlacement,

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, type AnyNodeId, LevelNode, WallNode } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, DoorNode, LevelNode, WallNode } from '@pascal-app/core'
 import type { WallHit } from '../../shared/wall-attach-target'
 import { cabinetDefinition } from '../definition'
 import { CabinetModuleNode, CabinetNode } from '../schema'
@@ -150,6 +150,56 @@ describe('already-placed cabinet grid snap', () => {
 
     expect(snapped[0] - module.width / 2).toBeCloseTo(0.5)
     expect(snapped[2] - module.depth / 2).toBeCloseTo(0.5)
+  })
+
+  test('run movement validates wall openings after snapping', () => {
+    const level = LevelNode.parse({ id: 'level_run-opening', children: ['wall_run-opening'] })
+    const door = DoorNode.parse({
+      id: 'door_run-opening',
+      parentId: 'wall_run-opening',
+      position: [1, 1.05, 0],
+      width: 0.9,
+      height: 2.1,
+    })
+    const wall = WallNode.parse({
+      id: 'wall_run-opening',
+      parentId: level.id,
+      children: [door.id],
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const module = CabinetModuleNode.parse({
+      id: 'cabinet-module_run-opening',
+      parentId: 'cabinet_run-opening',
+      position: [0, 0, 0],
+      width: 0.6,
+      depth: 0.58,
+    })
+    const run = CabinetNode.parse({
+      id: 'cabinet_run-opening',
+      parentId: level.id,
+      children: [module.id],
+      position: [0, 0, 0.39],
+    })
+    const nodes = Object.fromEntries(
+      [level, wall, door, run, module].map((node) => [node.id, node as AnyNode]),
+    ) as Record<AnyNodeId, AnyNode>
+    const isValidPosition = (
+      cabinetDefinition.capabilities?.movable as unknown as {
+        isValidPosition?: (args: Record<string, unknown>) => boolean
+      }
+    ).isValidPosition
+
+    expect(isValidPosition).toBeFunction()
+    expect(
+      isValidPosition!({
+        node: run,
+        position: [1, 0, 0.39],
+        rotation: 0,
+        levelId: level.id,
+        nodes,
+      }),
+    ).toBe(false)
   })
 })
 

@@ -1973,6 +1973,18 @@ export type MovableConfig = {
    */
   groupMoveSnapPose?: (args: GroupMoveSnapArgs) => GroupMoveSnapResult | null
   /**
+   * Optional kind-owned validity check for the final planar drag pose. This
+   * complements `floorPlaced` collision checks for constraints that depend
+   * on other scene geometry, such as a cabinet crossing a wall opening.
+   */
+  isValidPosition?: (args: {
+    node: AnyNode
+    position: readonly [number, number, number]
+    rotation: number
+    levelId: AnyNodeId | null
+    nodes: Readonly<Record<string, AnyNode>>
+  }) => boolean
+  /**
    * Kind-owned grid resolver for a planar move. Unlike scalar grid snapping,
    * this receives the complete candidate pose so a kind can snap a visible
    * footprint edge (including a local bounds offset and rotation) rather than
