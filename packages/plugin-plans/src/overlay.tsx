@@ -1,19 +1,16 @@
 /**
  * The Plans overlay — the construction set, inside the editor.
  *
- * Full-bleed over the editor (z above the palette), Pascal theme tokens
- * throughout so it reads as the editor's own surface in light or dark.
- * Left: the run narration + sheet index. Centre: one sheet, INLINE SVG
- * (never <img> — the sheets @import IBM Plex and their text was measured
- * against real Plex metrics; an <img> cannot load that font). Zoom/pan is
- * the workbench's: transform on a top-left-origin wrapper, zoom about the
- * pointer, wheel factor exp(-dy·0.0016), dblclick fit ↔ 4×.
+ * Full-bleed over the editor, Pascal theme tokens throughout. Left: the
+ * rail (project, sheets, tools). Centre: the sheet stage with live tools.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { X } from 'lucide-react'
+import { useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { generatePlans } from './run'
-import { SitePlanControls } from './site-panel'
-import { type Sheet, type StageLog, usePlans } from './store'
+import { summarize } from './project'
+import { ProjectEditor, Rail, useProjectRecord } from './rail'
+import { SheetStage } from './stage'
+import { type Sheet, usePlans } from './store'
 
 const PLEX = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap'
 
@@ -26,125 +23,7 @@ function ensureFonts() {
   document.head.appendChild(l)
 }
 
-/* ---------------------------------------------------------------- viewer */
-
-function SheetViewer({ sheet }: { sheet: Sheet }) {
-  const host = useRef<HTMLDivElement>(null)
-  const page = useRef<HTMLDivElement>(null)
-  const view = useRef({ s: 1, tx: 0, ty: 0 })
-  const [, bump] = useState(0)
-  const vb = useMemo(() => {
-    const m = (sheet.viewBox || '0 0 3456 2304').split(/\s+/).map(Number)
-    return { w: m[2] || 3456, h: m[3] || 2304 }
-  }, [sheet.viewBox])
-  // strip physical size so the page sizes from the viewBox in CSS px
-  const svg = useMemo(() => sheet.svg.replace(/\swidth="[^"]*in"/, '').replace(/\sheight="[^"]*in"/, ''), [sheet.svg])
-
-  const apply = useCallback(() => {
-    const p = page.current
-    if (!p) return
-    const v = view.current
-    p.style.transform = `translate(${v.tx}px, ${v.ty}px) scale(${v.s})`
-    bump((n) => n + 1)
-  }, [])
-  const fit = useCallback(() => {
-    const h = host.current
-    if (!h) return
-    const pad = 24
-    const s = Math.min((h.clientWidth - pad * 2) / vb.w, (h.clientHeight - pad * 2) / vb.h)
-    view.current = { s, tx: (h.clientWidth - vb.w * s) / 2, ty: (h.clientHeight - vb.h * s) / 2 }
-    apply()
-  }, [apply, vb.h, vb.w])
-  const zoomAt = useCallback((px: number, py: number, k: number) => {
-    const v = view.current
-    const s2 = Math.max(0.02, Math.min(40, v.s * k))
-    const kk = s2 / v.s
-    view.current = { s: s2, tx: px - (px - v.tx) * kk, ty: py - (py - v.ty) * kk }
-    apply()
-  }, [apply])
-
-  useEffect(() => { fit() }, [fit, sheet.id])
-  useEffect(() => {
-    const h = host.current
-    if (!h) return
-    const ro = new ResizeObserver(() => fit())
-    ro.observe(h)
-    return () => ro.disconnect()
-  }, [fit])
-
-  const onWheel = (e: React.WheelEvent) => {
-    e.preventDefault()
-    const r = host.current!.getBoundingClientRect()
-    zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * 0.0016))
-  }
-  const drag = useRef<{ x: number; y: number; tx: number; ty: number; id: number } | null>(null)
-  const onDown = (e: React.PointerEvent) => {
-    if (e.button !== 0 && e.button !== 1) return
-    drag.current = { x: e.clientX, y: e.clientY, tx: view.current.tx, ty: view.current.ty, id: e.pointerId }
-    ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
-  }
-  const onMove = (e: React.PointerEvent) => {
-    const d = drag.current
-    if (!d) return
-    view.current = { ...view.current, tx: d.tx + (e.clientX - d.x), ty: d.ty + (e.clientY - d.y) }
-    apply()
-  }
-  const onUp = () => { drag.current = null }
-  const onDbl = (e: React.MouseEvent) => {
-    const r = host.current!.getBoundingClientRect()
-    if (view.current.s < 3.5) zoomAt(e.clientX - r.left, e.clientY - r.top, 4 / view.current.s)
-    else fit()
-  }
-
-  return (
-    <div className="relative flex-1 overflow-hidden bg-muted/40" ref={host} onWheel={onWheel} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp} onDoubleClick={onDbl} style={{ cursor: 'grab', touchAction: 'none' }}>
-      <div
-        ref={page}
-        className="absolute top-0 left-0 bg-white shadow-2xl"
-        style={{ width: vb.w, height: vb.h, transformOrigin: '0 0', willChange: 'transform' }}
-        // eslint-disable-next-line react/no-danger
-        dangerouslySetInnerHTML={{ __html: svg }}
-      />
-      <div className="pointer-events-none absolute right-3 bottom-3 rounded-md border border-border bg-background/90 px-2 py-1 font-mono text-[11px] text-muted-foreground">
-        {Math.round(view.current.s * 100)}% · wheel zoom · drag pan · dbl-click fit
-      </div>
-    </div>
-  )
-}
-
-/* ------------------------------------------------------------- stage log */
-
-const DOT: Record<StageLog['status'], string> = {
-  pending: 'bg-muted-foreground/30',
-  running: 'bg-primary animate-pulse',
-  ok: 'bg-emerald-500',
-  skipped: 'bg-muted-foreground/60',
-  failed: 'bg-destructive',
-}
-
-function Stages({ stages }: { stages: StageLog[] }) {
-  return (
-    <ol className="flex flex-col gap-1.5">
-      {stages.map((s) => (
-        <li key={s.id} className="text-xs">
-          <div className="flex items-center gap-2">
-            <span className={`inline-block h-2 w-2 shrink-0 rounded-full ${DOT[s.status]}`} />
-            <span className={s.status === 'pending' ? 'text-muted-foreground' : 'text-foreground'}>{s.label}</span>
-            {s.ms !== undefined && <span className="ml-auto font-mono text-[10px] text-muted-foreground">{s.ms} ms</span>}
-          </div>
-          {s.detail && <div className="pl-4 text-muted-foreground">{s.detail}</div>}
-          {s.lines?.map((l, i) => (
-            <div key={i} className={`pl-4 ${/^(✗|skipped|draft)/.test(l) ? 'text-amber-500' : 'text-muted-foreground/80'}`}>{l}</div>
-          ))}
-        </li>
-      ))}
-    </ol>
-  )
-}
-
-/* --------------------------------------------------------------- overlay */
-
-function printSet(sheets: Sheet[]) {
+export function printSet(sheets: Sheet[]) {
   const w = window.open('', '_blank')
   if (!w) return
   const pages = sheets
@@ -166,11 +45,18 @@ function printSet(sheets: Sheet[]) {
 
 export function PlansOverlay() {
   const S = usePlans()
+  const rec = useProjectRecord()
+  const sum = summarize(rec)
   useEffect(() => { ensureFonts() }, [])
   useEffect(() => {
     if (!S.open) return
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') S.setOpen(false)
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT')) return
+      if (e.key === 'Escape') {
+        if (S.editingProject) S.setEditingProject(false)
+        else S.setOpen(false)
+      }
       if (e.key === 'ArrowRight' || e.key === 'PageDown') S.setCurrent(S.current + 1)
       if (e.key === 'ArrowLeft' || e.key === 'PageUp') S.setCurrent(S.current - 1)
     }
@@ -179,97 +65,85 @@ export function PlansOverlay() {
   }, [S])
   if (!S.open) return null
   const sheet = S.sheets[S.current]
-  const elapsed = S.startedAt ? ((S.finishedAt ?? Date.now()) - S.startedAt) / 1000 : 0
+  const running = S.run === 'running'
+  const stage = S.stages.find((s) => s.status === 'running')
 
   return (
     <div className="fixed inset-0 z-[70] flex flex-col bg-background text-foreground" style={{ fontFamily: 'var(--font-sans, ui-sans-serif, system-ui)' }}>
-      {/* header */}
-      <header className="flex items-center gap-3 border-b border-border px-4 py-2">
+      <div className={`h-0.5 w-full ${running || S.rendering.length ? 'bg-primary/30' : 'bg-transparent'}`}>
+        {(running || S.rendering.length > 0) && <div className="h-full w-1/3 animate-[plans-slide_1.2s_ease-in-out_infinite] bg-primary" />}
+      </div>
+      <style>{`@keyframes plans-slide{0%{margin-left:0}50%{margin-left:66%}100%{margin-left:0}}`}</style>
+
+      <header className="flex items-center gap-3 border-border border-b px-4 py-2">
         <span className="font-semibold text-sm">Plans</span>
-        <span className="text-muted-foreground text-xs">
-          {S.run === 'running' && 'generating…'}
-          {S.run === 'done' && `${S.sheets.length} sheets · ${elapsed.toFixed(1)} s`}
-          {S.run === 'failed' && <span className="text-destructive">failed — {S.error}</span>}
+        <span className="truncate text-muted-foreground text-xs">
+          {sum.name && <span className="text-foreground">{sum.name}</span>}
+          {sum.name && sum.address && ' · '}
+          {sum.address}
         </span>
-        <div className="ml-auto flex items-center gap-2">
-          <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            API
-            <input className="w-44 rounded-md border border-input bg-transparent px-2 py-1 font-mono text-[11px] text-foreground" value={S.apiBase} onChange={(e) => S.setApiBase(e.target.value)} />
-          </label>
-          <button type="button" className="rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-accent disabled:opacity-50" disabled={S.run === 'running'} onClick={() => void generatePlans()}>
-            {S.run === 'running' ? 'Generating…' : 'Regenerate'}
-          </button>
-          <button type="button" className="rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-accent disabled:opacity-50" disabled={!S.sheets.length} onClick={() => printSet(S.sheets)}>
-            Print / PDF
-          </button>
-          <button type="button" className="rounded-md bg-primary px-3 py-1.5 text-primary-foreground text-xs" onClick={() => S.setOpen(false)}>
-            Close
-          </button>
-        </div>
+        <span className="ml-auto truncate text-muted-foreground text-xs">
+          {running && (stage ? `${stage.label}…` : 'generating…')}
+          {!running && S.rendering.length > 0 && `drawing ${S.rendering.join(', ')}…`}
+          {!running && S.rendering.length === 0 && S.run === 'done' && sheet && `${sheet.number} ${sheet.title}`}
+        </span>
+        <button type="button" className="rounded-md p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground" onClick={() => S.setOpen(false)} title="Close (Esc)">
+          <X className="h-4 w-4" />
+        </button>
       </header>
 
       <div className="flex min-h-0 flex-1">
-        {/* left rail */}
-        <aside className="flex w-80 shrink-0 flex-col gap-4 overflow-y-auto border-r border-border bg-card p-3">
-          <section>
-            <h3 className="mb-2 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">Run</h3>
-            <Stages stages={S.stages} />
-          </section>
-          {S.snapshot && (
-            <section>
-              <h3 className="mb-2 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">Cover view</h3>
-              <img alt="3D snapshot for the cover" src={S.snapshot} className="w-full rounded-md border border-border" />
-            </section>
+        {S.editingProject ? (
+          <aside className="flex w-[340px] shrink-0 flex-col overflow-hidden border-border border-r bg-card">
+            <ProjectEditor onClose={() => S.setEditingProject(false)} />
+          </aside>
+        ) : (
+          <Rail onEditProject={() => S.setEditingProject(true)} onPrint={() => printSet(S.sheets)} />
+        )}
+
+        <div className="relative flex min-w-0 flex-1 flex-col">
+          {sheet ? (
+            <SheetStage key={sheet.number} sheet={sheet} onEditProject={() => S.setEditingProject(true)} />
+          ) : (
+            <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground text-sm">
+              {running ? (
+                <>
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                  <div>{stage ? stage.label : 'Starting'}…</div>
+                </>
+              ) : S.run === 'failed' ? (
+                <div className="max-w-md text-center">{S.error}</div>
+              ) : (
+                <div className="max-w-md text-center">No set yet. Add the project details on the left, then Generate plans.</div>
+              )}
+            </div>
           )}
-          <section>
-            <h3 className="mb-2 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">Site plan</h3>
-            <SitePlanControls />
-          </section>
-          {S.sheets.length > 0 && (
-            <section>
-              <h3 className="mb-2 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">Sheets</h3>
-              <ol className="flex flex-col gap-0.5">
-                {S.sheets.map((s, i) => (
-                  <li key={s.id}>
-                    <button type="button" onClick={() => S.setCurrent(i)} className={`flex w-full items-baseline gap-2 rounded-md px-2 py-1 text-left text-xs ${i === S.current ? 'bg-accent text-accent-foreground' : 'hover:bg-accent/60'}`}>
-                      <span className="w-10 shrink-0 font-mono text-[11px] text-muted-foreground">{s.number ?? i + 1}</span>
-                      <span className="truncate">{s.title}</span>
-                    </button>
-                  </li>
-                ))}
-                {S.skipped.map((k) => (
-                  <li key={k.id} className="px-2 py-1 text-[11px] text-amber-500">not shipped — {k.id}: {k.reason}</li>
+          {S.showWarnings && S.warnings.length > 0 && (
+            <div className="absolute right-0 bottom-0 left-0 max-h-56 overflow-y-auto border-border border-t bg-card/95 p-3 text-xs backdrop-blur">
+              <div className="mb-1 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">Notes from the engine</div>
+              <ol className="space-y-1">
+                {S.warnings.map((w, i) => (
+                  <li key={i} className="text-foreground/90">{w}</li>
                 ))}
               </ol>
-            </section>
+            </div>
           )}
-        </aside>
-
-        {/* stage */}
-        {sheet ? (
-          <SheetViewer key={sheet.id} sheet={sheet} />
-        ) : (
-          <div className="flex flex-1 items-center justify-center text-muted-foreground text-sm">
-            {S.run === 'running' ? 'Rendering the set…' : S.run === 'failed' ? 'No sheets — see the run log.' : 'No set yet.'}
-          </div>
-        )}
+        </div>
       </div>
 
-      {/* footer: current sheet + warnings */}
       {sheet && (
-        <footer className="flex items-center gap-3 border-t border-border px-4 py-1.5 text-xs">
+        <footer className="flex items-center gap-3 border-border border-t px-4 py-1.5 text-xs">
           <button type="button" className="rounded-md border border-border px-2 py-0.5 hover:bg-accent disabled:opacity-40" disabled={S.current === 0} onClick={() => S.setCurrent(S.current - 1)}>‹</button>
           <span className="font-mono text-muted-foreground">{S.current + 1} / {S.sheets.length}</span>
           <button type="button" className="rounded-md border border-border px-2 py-0.5 hover:bg-accent disabled:opacity-40" disabled={S.current >= S.sheets.length - 1} onClick={() => S.setCurrent(S.current + 1)}>›</button>
           <span className="font-medium">{sheet.number} {sheet.title}</span>
-          {S.warnings.length > 0 && <span className="ml-auto truncate text-amber-500">{S.warnings.length} warning{S.warnings.length === 1 ? '' : 's'} — {S.warnings[0]}</span>}
+          {sheet.manifest?.site && sheet.manifest.site.footprint.length >= 3 && <span className="text-muted-foreground">· drag the house, click a yard dimension or a lot line</span>}
+          <span className="ml-auto text-muted-foreground">← → to page · Esc to close</span>
         </footer>
       )}
     </div>
   )
 }
-
-/* --------------------------------------------------- self-mounted root */
 
 let root: Root | null = null
 export function mountPlansOverlay() {

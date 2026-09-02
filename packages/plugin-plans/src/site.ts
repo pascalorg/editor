@@ -225,6 +225,44 @@ export function setSetbacks(sb: Setbacks, source: string, zone: string): void {
   update(s.siteId, { metadata })
 }
 
+/**
+ * Move the house by a delta expressed on the SHEET's site plan, i.e. in the
+ * HA (building-frame) plan: inches, x east, y south. The building node lives
+ * in the site frame, so the delta turns by the building's Y rotation first
+ * (three.js: world = (c·lx + s·lz, −s·lx + c·lz)).
+ */
+export function moveHouseBySheetInches(dxIn: number, dyIn: number): void {
+  const s = readSite()
+  const c = Math.cos(s.rotationY)
+  const sn = Math.sin(s.rotationY)
+  const dx = dxIn * 0.0254
+  const dz = dyIn * 0.0254
+  nudgeBuilding(c * dx + sn * dz, -sn * dx + c * dz)
+}
+
+/** Set one required yard (metres). `left`/`right` write the shared `side` yard. */
+export function setRequiredYard(kind: string, metres: number | undefined): void {
+  const s = readSite()
+  const sb = { ...s.setbacks }
+  const k = kind === 'left' || kind === 'right' ? 'side' : kind
+  if (k !== 'front' && k !== 'side' && k !== 'rear') return
+  if (metres === undefined) delete sb[k]
+  else sb[k] = metres
+  setSetbacks(sb, s.setbacksSource, s.zone)
+}
+
+/** "20", "20.5", "20'-6\"", "20' 6", "20ft 6in" → inches; null when unreadable. */
+export function parseFtIn(text: string): number | null {
+  const t = text.trim().toLowerCase().replace(/ft/g, "'").replace(/in\b/g, '"')
+  if (!t) return null
+  const m = t.match(/^(-?\d+(?:\.\d+)?)\s*'?\s*(?:-|\s)?\s*(\d+(?:\.\d+)?)?\s*"?$/)
+  if (!m) return null
+  const ft = Number(m[1])
+  const inches = m[2] !== undefined ? Number(m[2]) : 0
+  if (!Number.isFinite(ft) || !Number.isFinite(inches)) return null
+  return m[2] === undefined ? ft * 12 : Math.sign(ft || 1) * (Math.abs(ft) * 12 + inches)
+}
+
 export function fmtFt(m: number | null | undefined): string {
   if (m === null || m === undefined || !Number.isFinite(m)) return '—'
   const ft = m / FT

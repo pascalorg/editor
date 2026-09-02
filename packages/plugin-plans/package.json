@@ -23,6 +23,7 @@
   "peerDependencies": {
     "@pascal-app/core": ">=0.9.1 <1",
     "@pascal-app/editor": ">=0.9.1 <1",
+    "lucide-react": "*",
     "react": "^18 || ^19",
     "react-dom": "^18 || ^19",
     "zustand": "^5"

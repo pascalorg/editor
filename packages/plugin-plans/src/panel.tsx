@@ -1,45 +1,53 @@
 /**
- * Sidebar panel — the small surface. The big one is the overlay (Ctrl+K →
- * Generate plans). This shows the last run and offers the same actions.
+ * Sidebar panel — the project, the button, the last set. The big surface is
+ * the overlay (Ctrl+K → Generate plans).
  */
+import { FileText, Printer, RefreshCw, Sparkles } from 'lucide-react'
+import { printSet } from './overlay'
+import { ProjectCard, ProjectEditor, SettingsSection, SheetList } from './rail'
 import { generatePlans } from './run'
 import { SitePlanControls } from './site-panel'
 import { usePlans } from './store'
 
 export default function PlansPanel() {
   const S = usePlans()
-  return (
-    <div className="flex flex-col gap-4 p-4 text-sidebar-foreground">
-      <div>
-        <h2 className="font-semibold text-sm">Plans</h2>
-        <p className="mt-1 text-sidebar-foreground/60 text-xs">
-          A permit-ready construction set from the open scene — cover, site plan, floor plans, elevations, sections, framing, schedules. The scene goes to the Plans API; what comes back is shown verbatim, defects included.
-        </p>
+  const running = S.run === 'running'
+  if (S.editingProject && !S.open) {
+    return (
+      <div className="h-full">
+        <ProjectEditor onClose={() => S.setEditingProject(false)} />
       </div>
-      <button type="button" onClick={() => void generatePlans()} disabled={S.run === 'running'} className="rounded-lg bg-primary px-3 py-2.5 font-semibold text-primary-foreground text-sm shadow-sm disabled:opacity-60">
-        {S.run === 'running' ? 'Generating…' : 'Generate plans'}
-      </button>
-      <p className="text-sidebar-foreground/50 text-[11px]">Also in the command palette: Ctrl+K → “Generate plans”.</p>
-      {S.run !== 'idle' && (
-        <div className="rounded-md border border-sidebar-border/50 bg-sidebar-accent/40 p-3 text-xs">
-          <div className="flex items-center justify-between">
-            <span>{S.run === 'done' ? `${S.sheets.length} sheets` : S.run === 'failed' ? 'Failed' : 'Running…'}</span>
-            <button type="button" className="rounded-md border border-sidebar-border/60 px-2 py-1 hover:bg-sidebar-accent" onClick={() => S.setOpen(true)}>Open</button>
-          </div>
-          {S.error && <div className="mt-2 text-destructive">{S.error}</div>}
-          {S.skipped.map((k) => (
-            <div key={k.id} className="mt-1 text-amber-500">not shipped — {k.id}: {k.reason}</div>
-          ))}
-        </div>
-      )}
-      <div className="rounded-md border border-sidebar-border/50 p-3">
-        <h3 className="mb-2 font-mono text-[10px] text-sidebar-foreground/60 uppercase tracking-wider">Site plan</h3>
+    )
+  }
+  return (
+    <div className="flex flex-col text-sidebar-foreground">
+      <ProjectCard onEdit={() => S.setEditingProject(true)} />
+      <div className="flex gap-1.5 p-3">
+        <button type="button" onClick={() => void generatePlans()} disabled={running} className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground text-xs shadow-sm disabled:opacity-60">
+          {running ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : S.sheets.length ? <RefreshCw className="h-3.5 w-3.5" /> : <Sparkles className="h-3.5 w-3.5" />}
+          {running ? 'Generating…' : S.sheets.length ? 'Regenerate' : 'Generate plans'}
+        </button>
+        {S.sheets.length > 0 && (
+          <>
+            <button type="button" onClick={() => S.setOpen(true)} className="flex items-center gap-1.5 rounded-lg border border-sidebar-border/60 px-3 py-2 text-xs hover:bg-sidebar-accent" title="Open the set"><FileText className="h-3.5 w-3.5" />Open</button>
+            <button type="button" onClick={() => printSet(S.sheets)} className="rounded-lg border border-sidebar-border/60 px-2.5 py-2 text-xs hover:bg-sidebar-accent" title="Print / PDF"><Printer className="h-3.5 w-3.5" /></button>
+          </>
+        )}
+      </div>
+      <p className="px-3 text-[11px] text-sidebar-foreground/50">Also: Ctrl+K → “Generate plans”.</p>
+      {S.run === 'failed' && <div className="mx-3 mt-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-destructive text-xs">{S.error}</div>}
+      <div className="mt-3 border-sidebar-border/50 border-t p-3">
+        <div className="mb-2 font-mono text-[10px] text-sidebar-foreground/60 uppercase tracking-wider">Sheets</div>
+        {S.sheets.length ? <SheetList /> : <p className="text-[11px] text-sidebar-foreground/50">No set yet.</p>}
+      </div>
+      <div className="border-sidebar-border/50 border-t p-3">
+        <div className="mb-2 font-mono text-[10px] text-sidebar-foreground/60 uppercase tracking-wider">Site plan</div>
         <SitePlanControls compact />
       </div>
-      <label className="flex flex-col gap-1 text-[11px] text-sidebar-foreground/60">
-        Plans API
-        <input className="rounded-md border border-sidebar-border/60 bg-transparent px-2 py-1 font-mono text-[11px] text-sidebar-foreground" value={S.apiBase} onChange={(e) => S.setApiBase(e.target.value)} />
-      </label>
+      <div className="border-sidebar-border/50 border-t p-3">
+        <div className="mb-2 font-mono text-[10px] text-sidebar-foreground/60 uppercase tracking-wider">Settings</div>
+        <SettingsSection />
+      </div>
     </div>
   )
 }

@@ -1,17 +1,16 @@
 /**
  * The Plans API client — an HTTP client like PlanCrafters, with no private
- * path to the sheet engines (the workbench rule). Everything logged is what
- * the API returned.
+ * path to the sheet engines. Everything logged is what the API returned.
  *
  * Contract (plancrafters-pascal/api, verified 2026-09-02):
  *   GET  /v1/health
- *   POST /v1/plans/validate      { graph }                          advisory
- *   POST /v1/intake/enrich       { address, gis:true, record? }     → { project, site? }
- *   POST /v1/site/apply-parcel   { graph, site }                    → { applied, parcel, graph }
- *   POST /v1/plans/checks        { graph, project? }                → { findings, counts }
+ *   POST /v1/plans/validate      { graph }
+ *   POST /v1/intake/enrich       { address, gis:true }               → { project, site? }
+ *   POST /v1/site/apply-parcel   { graph, site }                     → { applied, parcel, graph }
+ *   POST /v1/plans/checks        { graph, project? }                 → { findings, counts }
  *   POST /v1/plans/documents?engine=plancrafters
- *        { graph, project?, options:{ computeEnergy:true, projectName?, coverImage? } }
- *        → { sheets:[{number,name,level?,svg}], skipped:[{number,title,reason}], warnings, notices, draft, setSize }
+ *        { graph, project?, options:{ computeEnergy, elevations, sections, projectName, date, drawnBy, coverImage, sheets? } }
+ *        → { sheets:[{number,name,svg,manifest?}], skipped, warnings, notices, draft, setSize }
  */
 import type { Sheet } from './store'
 
@@ -47,31 +46,51 @@ export function errorMessage(c: ApiCall): string {
   return e ? `${e.code ?? c.status}: ${e.message ?? ''}`.trim() : `http ${c.status}`
 }
 
-/** The scene's own project record node — address, names, state. */
-export type ProjectIdentity = {
-  name?: string
-  address?: string
-  state?: string
-}
+/* ------------------------------------------------------ sheet manifest */
 
-export function readProjectIdentity(graph: SceneGraph): ProjectIdentity {
-  const out: ProjectIdentity = {}
-  for (const node of Object.values(graph.nodes)) {
-    const n = node as { type?: string; name?: string; project?: { identity?: Record<string, unknown>; jurisdiction?: { city?: string; state?: string } } }
-    if (n?.type !== 'plancrafters:project') continue
-    // the record lives under `project` (features/project/node.ts): identity.{projectName, address:{street,city,state,zip}}
-    const id = (n.project?.identity ?? {}) as { projectName?: string; name?: string; address?: { street?: string; city?: string; state?: string; zip?: string } }
-    out.name = id.projectName || id.name || n.name
-    const a = id.address
-    const j = n.project?.jurisdiction
-    out.state = a?.state || j?.state
-    // an address needs a STREET to be geocodable; city/state alone is a locale, not a site
-    if (a?.street) {
-      out.address = [a.street, a.city || j?.city, [a.state || j?.state, a.zip].filter(Boolean).join(' ')].filter(Boolean).join(', ')
-    }
-    break
-  }
-  return out
+export interface Px {
+  x: number
+  y: number
+}
+export interface SheetItemMeta {
+  i: number
+  kind: string
+  title?: string
+  x: number
+  y: number
+  w: number
+  h: number
+}
+export interface YardDimMeta {
+  side: 'front' | 'rear' | 'left' | 'right'
+  lenIn: number
+  label: string
+  a: Px
+  b: Px
+  mid: Px
+  dir: { x: number; y: number }
+}
+export interface LotEdgeMeta {
+  a: Px
+  b: Px
+  kind: string
+  distIn: number
+}
+export interface SitePlanMeta {
+  xform: { minxIn: number; minyIn: number; pxPerIn: number; offxPx: number; offyPx: number }
+  lot: Px[]
+  footprint: Px[]
+  yards: YardDimMeta[]
+  envelope: Px[]
+  edges: LotEdgeMeta[]
+  setbacks: { front?: number; side?: number; rear?: number; left?: number; right?: number } | null
+  setbacksSource: string | null
+  established: boolean
+}
+export interface SheetManifest {
+  items: SheetItemMeta[]
+  site?: SitePlanMeta
+  siteNote?: string
 }
 
 /** Is the scene's site already a recorded parcel (GIS-stamped)? */
@@ -94,14 +113,14 @@ export type DocumentsResult = {
 }
 
 export function parseDocuments(body: Record<string, unknown>): DocumentsResult {
-  const rawSheets = (body.sheets as { number: string; name: string; level?: string; svg: string }[] | undefined) ?? []
+  const rawSheets = (body.sheets as { number: string; name: string; svg: string; manifest?: SheetManifest }[] | undefined) ?? []
   const sheets: Sheet[] = rawSheets.map((s, i) => ({
     id: `${s.number || i}`,
     number: s.number,
     title: s.name,
     svg: s.svg,
     viewBox: (s.svg.match(/viewBox="([^"]+)"/) || [])[1],
-    notes: [],
+    ...(s.manifest ? { manifest: s.manifest } : {}),
   }))
   const skipped = ((body.skipped as { number: string; title?: string; reason: string }[] | undefined) ?? []).map((s) => ({
     id: `${s.number}${s.title ? ' ' + s.title : ''}`,
