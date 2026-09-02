@@ -9,6 +9,7 @@
 @source "../../../packages/plugin-plans/src";
 @source "../../../packages/plugin-sheets/src";
 @source "../../../packages/plugin-sections/src";
+@source "../../../packages/plugin-utilities/src";
 
 @custom-variant dark (&:is(.dark *));
 

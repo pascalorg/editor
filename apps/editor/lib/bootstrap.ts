@@ -13,6 +13,7 @@ import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import { plansHostPanel, plansPlugin, registerPlansCommands } from '@pascal-app/plugin-plans'
 import { registerSheetsCommands, sheetsHostPanel, sheetsPlugin } from '@pascal-app/plugin-sheets'
 import { sectionsHostPanel, sectionsPlugin } from '@pascal-app/plugin-sections'
+import { utilitiesHostPanel, utilitiesPlugin } from '@pascal-app/plugin-utilities'
 import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
 
@@ -106,6 +107,9 @@ registerSheetsCommands()
 // Sections: true vector sections + elevations from Pascal's own geometry.
 extendPluginDiscovery(async () => [sectionsPlugin])
 registerEditorHostPanel(sectionsHostPanel)
+// Site utilities (WS4): overhead / underground runs, poles, service points.
+extendPluginDiscovery(async () => [utilitiesPlugin])
+registerEditorHostPanel(utilitiesHostPanel)
 extendPluginDiscovery(async () => [mintPlugin])
 registerEditorHostPanel(mintHostPanel)
 extendPluginDiscovery(async () => [streetscapePlugin])

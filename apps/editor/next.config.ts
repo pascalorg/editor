@@ -39,6 +39,7 @@ const nextConfig: NextConfig = {
     '@pascal-app/plugin-plans',
     '@pascal-app/plugin-sheets',
     '@pascal-app/plugin-sections',
+    '@pascal-app/plugin-utilities',
     '@dgreenheck/ez-tree',
   ],
   turbopack: {

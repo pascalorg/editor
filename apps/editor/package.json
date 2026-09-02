@@ -17,6 +17,7 @@
     "@pascal-app/plugin-plans": "*",
     "@pascal-app/plugin-sheets": "*",
     "@pascal-app/plugin-sections": "*",
+    "@pascal-app/plugin-utilities": "*",
     "@mint/pascal-plugin": "github:mintdotgg/mint-pascal-plugin#902c546dbaece6b31455c0dc394afe6b9cd136fe",
     "@number-flow/react": "^0.6.0",
     "@pascal-app/core": "*",
