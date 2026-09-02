@@ -214,6 +214,7 @@ export function SheetsWorkspace() {
 }
 
 export function openSheets(): void {
+  ensureFonts()
   ;(useEditor.getState() as unknown as { setWorkspaceMode: (m: string) => void }).setWorkspaceMode(
     'sheets',
   )
