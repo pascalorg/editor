@@ -8,7 +8,13 @@ import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/re
 import { BuildingNode } from '../schema'
 import type { Collection, CollectionId } from '../schema/collections'
 import { generateCollectionId } from '../schema/collections'
+import { compiledNodeSchema } from '../schema/compiled-node-parsers'
 import { DoorNode as DoorNodeSchema } from '../schema/nodes/door'
+import {
+  createDormerDefaultWindow,
+  DormerNode as DormerNodeSchema,
+  getDormerDefaultWindowFace,
+} from '../schema/nodes/dormer'
 import { ElevatorNode as ElevatorNodeSchema } from '../schema/nodes/elevator'
 import { LevelNode, normalizeLevelBaseElevation } from '../schema/nodes/level'
 import {
@@ -119,7 +125,7 @@ function normalizeStairNode(node: Record<string, unknown>) {
     children: getStringArray(node.children),
   }
 
-  const parsed = StairNodeSchema.safeParse(sanitized)
+  const parsed = compiledNodeSchema(StairNodeSchema).safeParse(sanitized)
   if (!parsed.success) return null
   if (hasTotalRise) return parsed.data
   // Absent `totalRise` means "rise derives from the storey height" and must
@@ -144,12 +150,12 @@ function normalizeStairSegmentNode(node: Record<string, unknown>) {
     thickness: getFiniteNumber(node.thickness, 0.25),
   }
 
-  const parsed = StairSegmentNodeSchema.safeParse(sanitized)
+  const parsed = compiledNodeSchema(StairSegmentNodeSchema).safeParse(sanitized)
   return parsed.success ? parsed.data : null
 }
 
 function normalizeDoorNode(node: Record<string, unknown>) {
-  const parsed = DoorNodeSchema.safeParse(node)
+  const parsed = compiledNodeSchema(DoorNodeSchema).safeParse(node)
   return parsed.success ? { ...node, ...parsed.data } : null
 }
 
@@ -157,7 +163,7 @@ function normalizeDoorNode(node: Record<string, unknown>) {
 // `frameThickness`) load without it; the mesh builder then reads undefined and
 // throws every frame. Zod-parse on load so schema defaults land, like doors.
 function normalizeWindowNode(node: Record<string, unknown>) {
-  const parsed = WindowNodeSchema.safeParse(node)
+  const parsed = compiledNodeSchema(WindowNodeSchema).safeParse(node)
   return parsed.success ? { ...node, ...parsed.data } : null
 }
 
@@ -188,7 +194,7 @@ function normalizeShelfNode(node: Record<string, unknown>) {
     ),
   }
 
-  const parsed = ShelfNodeSchema.safeParse(sanitized)
+  const parsed = compiledNodeSchema(ShelfNodeSchema).safeParse(sanitized)
   return parsed.success ? parsed.data : null
 }
 
@@ -217,7 +223,7 @@ function normalizeElevatorNode(node: Record<string, unknown>) {
     dwellMs: getFiniteNumber(node.dwellMs, 1400),
   }
 
-  const parsed = ElevatorNodeSchema.safeParse(sanitized)
+  const parsed = compiledNodeSchema(ElevatorNodeSchema).safeParse(sanitized)
   return parsed.success ? parsed.data : null
 }
 
@@ -410,6 +416,19 @@ function migrateRoleMaterialSlots(
   }
 
   return changed ? { ...next, slots } : node
+}
+
+function migrateRenamedSlot(node: Record<string, any>, previousId: string, nextId: string) {
+  if (!node.slots || node.slots[previousId] === undefined) return node
+  const slots = { ...node.slots }
+  if (slots[nextId] === undefined) slots[nextId] = slots[previousId]
+  delete slots[previousId]
+  return { ...node, slots }
+}
+
+function migrateCupolaLouverSlot(node: Record<string, any>) {
+  if (!node.slots || node.slots.louvers !== undefined || node.slots.body === undefined) return node
+  return { ...node, slots: { ...node.slots, louvers: node.slots.body } }
 }
 
 // Stair carries per-role legacy fields (`treadMaterial*` / `sideMaterial*` /
@@ -796,6 +815,40 @@ function migrateNodes(nodes: Record<string, any>): {
       }
     }
 
+    // Dormers originally rendered one inline parametric window. Promote that
+    // default to a real hosted WindowNode so additional windows can use the
+    // regular window tool and inspector without changing the old appearance.
+    if (node.type === 'dormer') {
+      const hasLegacyInlineWindow = !Array.isArray(
+        (patchedNodes[id] as { children?: unknown }).children,
+      )
+      if (!hasLegacyInlineWindow) continue
+      const dormer = DormerNodeSchema.parse({
+        ...patchedNodes[id],
+        children: getStringArray((patchedNodes[id] as { children?: unknown }).children),
+      })
+      const children = getStringArray(dormer.children)
+      const hasHostedWindow = children.some((childId) => patchedNodes[childId]?.type === 'window')
+      if (!hasHostedWindow) {
+        const baseWindowId = `window_${id.replace(/^dormer_/, '')}_default`
+        let windowId = baseWindowId
+        let suffix = 1
+        while (patchedNodes[windowId]) {
+          windowId = `${baseWindowId}_${suffix}`
+          suffix += 1
+        }
+        const host = dormer.roofSegmentId ? patchedNodes[dormer.roofSegmentId] : undefined
+        const hostSegment = host?.type === 'roof-segment' ? (host as RoofSegmentNode) : undefined
+        const window = createDormerDefaultWindow(
+          dormer,
+          windowId,
+          getDormerDefaultWindowFace(dormer, hostSegment),
+        )
+        patchedNodes[windowId] = window
+        patchedNodes[id] = { ...dormer, children: [...children, window.id] }
+      }
+    }
+
     if (node.type === 'construction-dimension') {
       patchedNodes[id] = migrateConstructionDimension(node)
     }
@@ -869,7 +922,12 @@ function migrateNodes(nodes: Record<string, any>): {
       )
     }
 
-    if (node.type === 'gutter' || node.type === 'downspout') {
+    if (node.type === 'gutter') {
+      patchedNodes[id] = migrateRenamedSlot(patchedNodes[id], 'surface', 'gutter')
+      patchedNodes[id] = migrateSingleMaterialSlots(patchedNodes[id], ['gutter'], mintedMaterials)
+    }
+
+    if (node.type === 'downspout') {
       patchedNodes[id] = migrateSingleMaterialSlots(patchedNodes[id], ['surface'], mintedMaterials)
     }
 
@@ -882,9 +940,10 @@ function migrateNodes(nodes: Record<string, any>): {
     }
 
     if (node.type === 'cupola') {
+      patchedNodes[id] = migrateCupolaLouverSlot(patchedNodes[id])
       patchedNodes[id] = migrateRoleMaterialSlots(
         patchedNodes[id],
-        ['base', 'body', 'roof'],
+        ['base', 'body', 'roof', 'louvers'],
         mintedMaterials,
       )
     }

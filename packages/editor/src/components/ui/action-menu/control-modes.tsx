@@ -54,7 +54,7 @@ export function ControlModes({ compact = false }: { compact?: boolean }) {
   const mode = useEditor((state) => state.mode)
   const phase = useEditor((state) => state.phase)
   const selectionTool = useEditor((state) => state.floorplanSelectionTool)
-  const setMode = useEditor((state) => state.setMode)
+  const armToolMode = useEditor((state) => state.armToolMode)
   const setPhase = useEditor((state) => state.setPhase)
   const setStructureLayer = useEditor((state) => state.setStructureLayer)
   const setSelectionTool = useEditor((state) => state.setFloorplanSelectionTool)
@@ -82,25 +82,25 @@ export function ControlModes({ compact = false }: { compact?: boolean }) {
     }
 
     if (id === 'select') {
-      setMode('select')
+      armToolMode({ mode: 'select' })
       setSelectionTool('click')
     } else if (id === 'box-select') {
-      setMode('select')
+      armToolMode({ mode: 'select' })
       setSelectionTool('marquee')
     } else if (id === 'zone') {
       if (getIsActive('zone')) {
-        setMode('select')
+        armToolMode({ mode: 'select' })
       } else {
         setPhase('structure')
         setStructureLayer('zones')
-        setMode('build')
+        armToolMode({ mode: 'build', tool: 'zone' })
       }
     } else if (id === 'delete') {
       // Toggle, like zone: clicking the active delete button returns to select
       // instead of re-arming delete, so the mode never sticks with no way out.
       setMode(getIsActive('delete') ? 'select' : 'delete')
     } else {
-      setMode(id)
+      armToolMode({ mode: id })
     }
   }
 
@@ -122,6 +122,9 @@ export function ControlModes({ compact = false }: { compact?: boolean }) {
                 isImageMode && isActive && 'bg-white/10 hover:bg-white/10',
                 isImageMode && !isActive && 'hover:bg-white/5',
               )}
+              // A static hook for a host app that wants to point a first-run
+              // tour at this button. Nothing here reads it.
+              data-guide-target={c.id === 'select' ? 'mode-select' : undefined}
               label={c.label}
               onClick={() => handleClick(c.id)}
               shortcut={c.shortcut}

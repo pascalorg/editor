@@ -137,12 +137,19 @@ export { boxVentDefinition } from './box-vent'
 export { buildingDefinition } from './building'
 export {
   bakeCabinetAnimationClip,
+  CABINET_PLANNING_TOLERANCE,
   type CabinetPlacementType,
+  type CabinetPlanningIssue,
+  type CabinetPlanningIssueCode,
+  type CabinetPlanningOptions,
+  type CabinetPlanningReport,
   cabinetDefinition,
   cabinetModuleDefinition,
+  MIN_PRACTICAL_TOP_CABINET_HEIGHT,
   poseCabinetMovingParts,
   useCabinetPlacementStatus,
   useCabinetPlacementType,
+  validateCabinetRun,
 } from './cabinet'
 export { ceilingDefinition } from './ceiling'
 export { chimneyDefinition } from './chimney'
@@ -171,7 +178,7 @@ export { pipeFittingDefinition } from './pipe-fitting'
 export { pipeSegmentDefinition } from './pipe-segment'
 export { pipeTrapDefinition } from './pipe-trap'
 export { ridgeVentDefinition } from './ridge-vent'
-export { roofDefinition } from './roof'
+export { type RoofFootprintSourceChoice, roofDefinition, useRoofFootprintSource } from './roof'
 export { roofSegmentDefinition } from './roof-segment'
 export { scanDefinition } from './scan'
 export { shelfDefinition } from './shelf'

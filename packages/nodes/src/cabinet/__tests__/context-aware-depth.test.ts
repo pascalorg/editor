@@ -107,12 +107,12 @@ describe('context-aware cabinet depth', () => {
     )
     expect(baseLeg?.type).toBe('cabinet')
     if (baseLeg?.type !== 'cabinet') return
-    expect(baseLeg.depth).toBeCloseTo(0.5)
+    expect(baseLeg.depth).toBeCloseTo(0.6)
 
     const legModules = (baseLeg.children ?? [])
       .map((id) => sceneApi.get(id as AnyNodeId))
       .filter((node) => node?.type === 'cabinet-module')
-    expect(legModules.every((module) => module.depth === 0.5)).toBe(true)
+    expect(legModules.every((module) => module.depth === 0.6)).toBe(true)
     expect(legModules.find((module) => module.name === 'Corner Filler')?.width).toBeCloseTo(
       source.depth,
     )
@@ -123,7 +123,7 @@ describe('context-aware cabinet depth', () => {
       run: sceneApi.get(run.id as AnyNodeId) as typeof run,
       sceneApi,
     })
-    expect(sceneApi.get(baseLeg.id as AnyNodeId)?.depth).toBeCloseTo(0.5)
+    expect(sceneApi.get(baseLeg.id as AnyNodeId)?.depth).toBeCloseTo(0.6)
     expect(
       (sceneApi.get(baseLeg.id as AnyNodeId) as typeof baseLeg).children
         .map((id) => sceneApi.get(id as AnyNodeId))
@@ -163,7 +163,7 @@ describe('context-aware cabinet depth', () => {
     )
     expect(bridge?.type).toBe('cabinet-module')
     if (bridge?.type !== 'cabinet-module') return
-    expect(bridge.width).toBeCloseTo(0.5 - 0.32)
+    expect(bridge.width).toBeCloseTo(0.6 - 0.32)
     expect(bridge.depth).toBeCloseTo(sourceWall.depth)
 
     const cornerWallFiller = Object.values(sceneApi.nodes()).find(
@@ -233,7 +233,7 @@ describe('context-aware cabinet depth', () => {
     )
     expect(bridge?.type).toBe('cabinet-module')
     if (bridge?.type !== 'cabinet-module') return
-    expect(bridge.width).toBeCloseTo(0.5 - 0.32)
+    expect(bridge.width).toBeCloseTo(0.6 - 0.32)
     expect(bridge.depth).toBeCloseTo(sourceWall.depth)
 
     const cornerWallFiller = Object.values(sceneApi.nodes()).find(

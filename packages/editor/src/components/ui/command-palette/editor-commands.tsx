@@ -50,10 +50,9 @@ export function EditorCommands() {
   const { navigateTo, setInputValue, setOpen } = useCommandPalette()
 
   const setPhase = useEditor((s) => s.setPhase)
-  const setMode = useEditor((s) => s.setMode)
-  const setTool = useEditor((s) => s.setTool)
+  const armToolMode = useEditor((s) => s.armToolMode)
+  const armMaterialPaint = useEditor((s) => s.armMaterialPaint)
   const setStructureLayer = useEditor((s) => s.setStructureLayer)
-  const primeMaterialPaintFromSelection = useEditor((s) => s.primeMaterialPaintFromSelection)
   const isPreviewMode = useEditor((s) => s.isPreviewMode)
   const setPreviewMode = useEditor((s) => s.setPreviewMode)
 
@@ -69,9 +68,9 @@ export function EditorCommands() {
     const activateTool = (tool: StructureTool) => {
       run(() => {
         setPhase('structure')
-        setMode('build')
         if (tool === 'zone') setStructureLayer('zones')
-        setTool(tool)
+        else setStructureLayer('elements')
+        armToolMode({ mode: 'build', tool })
       })
     }
 
@@ -165,10 +164,9 @@ export function EditorCommands() {
         shortcut: ['P'],
         execute: () =>
           run(() => {
-            primeMaterialPaintFromSelection()
             setPhase('structure')
             setStructureLayer('elements')
-            setMode('material-paint')
+            armMaterialPaint()
           }),
       },
       {
@@ -178,9 +176,8 @@ export function EditorCommands() {
         icon: <Mountain className="h-4 w-4" />,
         keywords: ['terrain', 'ground', 'elevation', 'sculpt', 'hill', 'slope', 'grade', 'dig'],
         shortcut: ['G'],
-        // No `setPhase`: `setMode` moves to the site phase itself, and doing it
-        // here would set the phase twice with a mode reset in between.
-        execute: () => run(() => setMode('terrain-sculpt')),
+        // The ToolMode transition moves to the site phase itself.
+        execute: () => run(() => armToolMode({ mode: 'terrain-sculpt' })),
       },
 
       // ── Levels ───────────────────────────────────────────────────────────
@@ -430,8 +427,8 @@ export function EditorCommands() {
     setInputValue,
     setOpen,
     setPhase,
-    setMode,
-    setTool,
+    armToolMode,
+    armMaterialPaint,
     setStructureLayer,
     isPreviewMode,
     setPreviewMode,

@@ -1,5 +1,25 @@
 import { getLevelElevations, type LevelNode, sceneRegistry, useScene } from '@pascal-app/core'
 
+export const EXPLODED_GAP = 5
+
+/**
+ * The Y a level settles at under the given presentation mode — its stacked
+ * elevation plus the exploded gap. Analytic (scene store + mode), never a
+ * mesh read: a level created this frame has its Object3D at y=0 until
+ * LevelSystem lerps it, and a mode switch leaves meshes mid-lerp — camera
+ * code framing a level must aim at the destination, not the moving target.
+ */
+export function getLevelPresentationY(
+  levelId: string,
+  nodes: Record<string, unknown>,
+  levelMode: 'stacked' | 'exploded' | 'solo' | 'manual',
+): number {
+  const level = nodes[levelId] as LevelNode | undefined
+  const baseY = getLevelElevations(nodes as never).get(levelId)?.baseY ?? 0
+  const explodedExtra = levelMode === 'exploded' && level ? level.level * EXPLODED_GAP : 0
+  return baseY + explodedExtra
+}
+
 /**
  * Instantly snaps all level Objects3D to their true stacked Y positions
  * (ignores levelMode — always uses stacked, no exploded gap).

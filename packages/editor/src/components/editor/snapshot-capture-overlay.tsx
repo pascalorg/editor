@@ -2,14 +2,33 @@
 
 import { emitter } from '@pascal-app/core'
 import { SNAPSHOT_MAX_EDGE } from '@pascal-app/viewer'
-import { Check, Crop, Loader2, Maximize2, Monitor, X } from 'lucide-react'
+import {
+  Check,
+  Crop,
+  Drone,
+  Footprints,
+  Loader2,
+  Maximize2,
+  Monitor,
+  Orbit,
+  RotateCcw,
+  X,
+} from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useIsMobile } from '../../hooks/use-mobile'
 import { triggerSFX } from '../../lib/sfx-bus'
+import { requestWalkthroughPointerLock } from '../../lib/walkthrough-pointer-lock'
 import useEditor, {
+  CAPTURE_FOV_MAX,
+  CAPTURE_FOV_MIN,
+  type FirstPersonMovementMode,
   type SnapshotCropMode,
   type SnapshotStandardAspect,
 } from '../../store/use-editor'
+import { useFirstPersonHud } from '../../store/use-first-person-hud'
+import { Slider } from '../ui/slider'
+import { WalkthroughCrosshair } from '../walkthrough-hud'
 
 // Local alias — distinct from `useEditor.captureMode` (which describes *why*
 // a capture is happening, e.g. `preset`). This one says HOW the captured
@@ -17,6 +36,9 @@ import useEditor, {
 // user-dragged area. Hosts can preselect it via `captureMode.crop`.
 type CropMode = SnapshotCropMode
 type CaptureState = 'idle' | 'capturing' | 'saved'
+/** Which camera the shot is framed with: the editor's orbit camera, or one of
+ *  the two first-person controllers. */
+type CaptureCameraNav = 'orbit' | FirstPersonMovementMode
 
 interface DragPoint {
   x: number
@@ -124,12 +146,47 @@ function CornerAccents() {
 }
 
 const HUD_CHIP_CLASS =
-  'flex flex-col gap-px rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 backdrop-blur-md'
+  'flex flex-col gap-px rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5'
 
 const CROP_LABELS: Record<CropMode, string> = {
   standard: 'Standard',
   viewport: 'Viewport',
   area: 'Area',
+}
+
+// Dark-HUD skin for the shared slider, which is themed for the light editor chrome.
+const FOV_SLIDER_CLASS =
+  'w-24 [&_[data-slot=slider-track]]:h-1 [&_[data-slot=slider-track]]:bg-white/20 [&_[data-slot=slider-range]]:bg-white [&_[data-slot=slider-thumb]]:size-3 [&_[data-slot=slider-thumb]]:border-white/50 [&_[data-slot=slider-thumb]]:bg-white [&_[data-slot=slider-thumb]]:ring-white/30'
+
+type CameraNavHint = {
+  action: string
+  keys: readonly string[]
+}
+
+function CaptureWalkthroughCrosshair() {
+  const interact = useFirstPersonHud((state) => state.interact)
+  return <WalkthroughCrosshair interact={interact} />
+}
+
+const CAMERA_NAV_HINTS: Record<CaptureCameraNav, readonly CameraNavHint[] | null> = {
+  orbit: null,
+  walk: [
+    { keys: ['WASD'], action: 'move' },
+    { keys: ['Space'], action: 'jump' },
+    { keys: ['E'], action: 'open' },
+    { keys: ['Wheel'], action: 'lens' },
+    { keys: ['P', 'Esc'], action: 'free cursor' },
+    { keys: ['Click', 'Enter'], action: 'shoot' },
+  ],
+  drone: [
+    { keys: ['WASD'], action: 'move' },
+    { keys: ['Space', 'E'], action: 'up' },
+    { keys: ['Q'], action: 'down' },
+    { keys: ['Shift'], action: 'boost' },
+    { keys: ['Wheel'], action: 'lens' },
+    { keys: ['P', 'Esc'], action: 'free cursor' },
+    { keys: ['Click', 'Enter'], action: 'shoot' },
+  ],
 }
 
 export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
@@ -143,9 +200,44 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
   const isPreset = captureMode.mode === 'preset'
   const requestedCrop = captureMode.mode === 'standard' ? captureMode.crop : undefined
   const requestedAspect = captureMode.mode === 'standard' ? captureMode.standardAspect : undefined
-  // A host-preselected crop means the host needs that exact output shape
-  // (e.g. the publish-cover capture) — hide the crop/aspect switcher.
-  const isCropLocked = isPreset || requestedCrop !== undefined
+  // Only an explicit host lock hides the crop/aspect switcher (the publish
+  // cover needs its exact output shape). A plain preselected crop — the
+  // Studio capbar's choice — just seeds the pill and stays user-changeable.
+  const isCropLocked =
+    isPreset || (captureMode.mode === 'standard' && captureMode.lockCrop === true)
+
+  const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
+  const firstPersonMovementMode = useEditor((s) => s.firstPersonMovementMode)
+  const captureFov = useEditor((s) => s.captureFov)
+  const captureFovBaseline = useEditor((s) => s.captureFovBaseline)
+  const setCaptureFov = useEditor((s) => s.setCaptureFov)
+  // Orbit is just "first person off", so deriving the segmented control's value
+  // from the walkthrough flag keeps the two from drifting when walkthrough ends
+  // on its own (Esc, or a lost pointer lock).
+  const cameraNav: CaptureCameraNav = isFirstPersonMode ? firstPersonMovementMode : 'orbit'
+  const setCameraNav = useCallback((next: CaptureCameraNav) => {
+    const editor = useEditor.getState()
+    if (next === 'orbit') {
+      editor.setFirstPersonMode(false)
+      return
+    }
+    // Lock the pointer in the same click task (the gesture requirement):
+    // flush the mode flip so FirstPersonControls is mounted when the lock
+    // lands, instead of making the user click the canvas a second time.
+    flushSync(() => {
+      editor.setFirstPersonMovementMode(next)
+      if (!editor.isFirstPersonMode) editor.setFirstPersonMode(true)
+    })
+    requestWalkthroughPointerLock({
+      // Freeing the cursor in one camera and immediately picking the other
+      // hits the browser's re-lock cooldown; retry once it passes, as long as
+      // the user is still framing in a first-person camera.
+      retryWhile: () => {
+        const state = useEditor.getState()
+        return state.isCaptureMode && state.isFirstPersonMode
+      },
+    })
+  }, [])
 
   const [mode, setMode] = useState<CropMode>('standard')
   const [standardAspect, setStandardAspect] = useState<StandardAspect>('16:9')
@@ -169,16 +261,6 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     observer.observe(el)
     return () => observer.disconnect()
   }, [isCaptureMode])
-
-  // Dismiss on Esc
-  useEffect(() => {
-    if (!isCaptureMode) return
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setCaptureMode(false)
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [isCaptureMode, setCaptureMode])
 
   // Reset local state when entering capture mode. Preset mode also
   // auto-stages a centered square crop sized to ~75% of the shorter
@@ -226,6 +308,14 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       emitter.off('snapshot:failed', onFailed)
     }
   }, [setCaptureMode])
+
+  // From the shutter firing until the saved toast clears, walk / drone hold
+  // still: a late WASD tap or mouse twitch must not shift the frame out from
+  // under the shot the user just took.
+  useEffect(() => {
+    useEditor.getState().setCaptureShutterHold(captureState !== 'idle')
+    return () => useEditor.getState().setCaptureShutterHold(false)
+  }, [captureState])
 
   const dismiss = useCallback(() => setCaptureMode(false), [setCaptureMode])
 
@@ -405,9 +495,82 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
     [captureState, mode, drag, projectId, isPreset, standardAspect, resolutionId, encodingId],
   )
 
+  // Esc dismisses — in ORBIT only. In walk / drone, Esc means "free the
+  // cursor" (the browser's own pointer-lock exit; FirstPersonControls pauses
+  // instead of bailing) — reflexively dropping the whole capture with the
+  // framed pose would punish anyone who never noticed P. Enter fires the
+  // shutter: walk and drone hold a pointer lock, so a keyboard shutter works
+  // without leaving the camera.
+  useEffect(() => {
+    if (!isCaptureMode) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (cameraNav === 'orbit') setCaptureMode(false)
+        return
+      }
+      if (e.key !== 'Enter') return
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return
+      e.preventDefault()
+      handleCapture()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [cameraNav, handleCapture, isCaptureMode, setCaptureMode])
+
+  // While walk / drone hold the pointer lock, the wheel drives the lens and a
+  // click fires the shutter. Both gate on the lock being HELD: the click that
+  // acquires it happens unlocked, so entering the camera never also shoots,
+  // and an unlocked wheel keeps scrolling whatever pane it's over.
+  useEffect(() => {
+    if (!isCaptureMode || cameraNav === 'orbit') return
+    const canvas = document.querySelector<HTMLCanvasElement>('[data-pascal-viewer-3d] canvas')
+    if (!canvas) return
+    // `setCaptureFov` rounds to whole degrees; accumulate sub-degree trackpad
+    // deltas so slow scrolls still move the lens.
+    let pendingFovDelta = 0
+    const onWheel = (e: WheelEvent) => {
+      if (document.pointerLockElement !== canvas) return
+      e.preventDefault()
+      const pixels = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY
+      // Wheel-up narrows the lens (zoom in), matching the orbit dolly.
+      pendingFovDelta += pixels * 0.05
+      const whole = Math.trunc(pendingFovDelta)
+      if (whole === 0) return
+      pendingFovDelta -= whole
+      const editor = useEditor.getState()
+      if (editor.captureFov === null) return
+      editor.setCaptureFov(editor.captureFov + whole)
+    }
+    const onMouseDown = (e: MouseEvent) => {
+      if (e.button !== 0 || document.pointerLockElement !== canvas) return
+      handleCapture()
+    }
+    window.addEventListener('wheel', onWheel, { passive: false })
+    // Capture phase: FirstPersonControls' own document-capture mousedown
+    // handler stops propagation while locked, which a bubble listener never
+    // survives — window-capture runs first.
+    window.addEventListener('mousedown', onMouseDown, true)
+    return () => {
+      window.removeEventListener('wheel', onWheel)
+      window.removeEventListener('mousedown', onMouseDown, true)
+    }
+  }, [cameraNav, handleCapture, isCaptureMode])
+
   if (!isCaptureMode) return null
 
   const resolution = getResolution(mode, overlayRef.current, drag, standardAspect)
+  // Walk and drone need the canvas to receive the click that grants pointer lock,
+  // so the area-drag surface steps aside — same treatment as preset mode, whose
+  // frame is fixed and camera-driven.
+  const cameraOwnsPointer = cameraNav !== 'orbit'
+  const frameLocked = isPreset || cameraOwnsPointer
+  // Preset captures are a constrained flow (fixed square, host-owned banner);
+  // they keep the plain orbit camera. Walk / drone need a keyboard, so they stay
+  // off touch. The fov control is armed by the capture rig only on a
+  // perspective camera — orthographic captures have no lens to drive.
+  const showCameraNav = !(isPreset || isMobile)
+  const fovValue = isPreset ? null : captureFov
+  const cameraHint = CAMERA_NAV_HINTS[cameraNav]
 
   // Standard mode framing: the output is a center-crop of the canvas to the
   // chosen aspect (see ThumbnailGenerator) — show exactly that region as a
@@ -446,6 +609,10 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-40" ref={overlayRef}>
+      {/* Walk / drone keep the walkthrough's centered pointer (the ring means
+          E opens the door / window under it) — the capture overlay replaces
+          the walkthrough HUD, so the crosshair rides along here. */}
+      {cameraOwnsPointer && <CaptureWalkthroughCrosshair />}
       {/* Standard mode: letterboxed 16:9 frame with thirds + corner accents */}
       {standardFrame && (
         <div
@@ -473,13 +640,13 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       {mode === 'area' && (
         <div
           className={
-            isPreset
+            frameLocked
               ? 'pointer-events-none absolute inset-0'
               : 'pointer-events-auto absolute inset-0 bg-black/30'
           }
-          onPointerDown={isPreset ? undefined : onPointerDown}
+          onPointerDown={frameLocked ? undefined : onPointerDown}
           onPointerMove={
-            isPreset
+            frameLocked
               ? undefined
               : (e) => {
                   onPointerMove(e)
@@ -497,16 +664,18 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
                   }
                 }
           }
-          onPointerUp={isPreset ? undefined : onPointerUp}
-          style={isPreset ? undefined : { cursor: 'crosshair' }}
+          onPointerUp={frameLocked ? undefined : onPointerUp}
+          style={frameLocked ? undefined : { cursor: 'crosshair' }}
         >
           {/* "No selection" hint — only when the user has to draw the
               area themselves (`standard` capture). Preset mode always
               has a pre-staged square, so we never show it there. */}
           {!selectionStyle && !isPreset && (
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <span className="rounded-full border border-white/10 bg-neutral-950/80 px-4 py-2 text-sm text-white backdrop-blur-md">
-                Drag the area you want to capture
+              <span className="rounded-full border border-white/10 bg-neutral-950/80 px-4 py-2 text-sm text-white">
+                {cameraOwnsPointer
+                  ? 'Switch back to orbit to drag a capture area'
+                  : 'Drag the area you want to capture'}
               </span>
             </div>
           )}
@@ -530,8 +699,8 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
               <CornerAccents />
               {/* Corner handles — preset mode locks the frame to the
                   auto-staged centered square; the user adjusts the
-                  camera instead. */}
-              {!isPreset &&
+                  camera instead. Walk / drone lock it for the same reason. */}
+              {!frameLocked &&
                 (
                   [
                     { pos: { top: -5, left: -5 }, cursor: 'nwse-resize' },
@@ -588,7 +757,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       <div className="pointer-events-auto absolute top-4 right-4">
         <button
           aria-label="Close capture mode"
-          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 text-white/80 text-xs backdrop-blur-md transition-colors hover:bg-neutral-950 hover:text-white"
+          className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 text-white/80 text-xs transition-colors hover:bg-neutral-950 hover:text-white"
           onClick={dismiss}
           type="button"
         >
@@ -600,10 +769,71 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
       {/* Subtle scrim so the bottom controls stay readable on bright scenes */}
       <div className="pointer-events-none absolute inset-x-0 bottom-0 h-36 bg-gradient-to-t from-black/45 via-black/15 to-transparent" />
 
-      {/* Bottom-center: crop switcher, caption + shutter */}
+      {/* Bottom-center: camera row, crop switcher, caption + shutter */}
       <div className="pointer-events-none absolute right-0 bottom-5 left-0 flex flex-col items-center gap-2.5">
+        {/* How you move while composing, and the lens. Both are capture-scoped:
+            leaving capture puts the camera back on orbit at its entry fov. */}
+        {(showCameraNav || fovValue !== null) && (
+          <div className="pointer-events-auto flex items-center gap-2">
+            {showCameraNav && (
+              <div className="flex items-center gap-1 rounded-full border border-white/10 bg-neutral-950/85 px-1.5 py-1.5 shadow-xl">
+                <ModeButton
+                  active={cameraNav === 'orbit'}
+                  icon={<Orbit className="h-3.5 w-3.5" />}
+                  label="Orbit"
+                  onClick={() => setCameraNav('orbit')}
+                />
+                <ModeButton
+                  active={cameraNav === 'walk'}
+                  icon={<Footprints className="h-3.5 w-3.5" />}
+                  label="Walk"
+                  onClick={() => setCameraNav('walk')}
+                />
+                <ModeButton
+                  active={cameraNav === 'drone'}
+                  icon={<Drone className="h-3.5 w-3.5" />}
+                  label="Drone"
+                  onClick={() => setCameraNav('drone')}
+                />
+              </div>
+            )}
+            {fovValue !== null && (
+              <div className="flex items-center gap-2.5 rounded-full border border-white/10 bg-neutral-950/85 py-1.5 pr-1.5 pl-3 shadow-xl">
+                <span className="font-mono text-[8.5px] text-white/50 uppercase tracking-[0.14em]">
+                  Lens
+                </span>
+                <Slider
+                  aria-label="Field of view"
+                  className={FOV_SLIDER_CLASS}
+                  max={CAPTURE_FOV_MAX}
+                  min={CAPTURE_FOV_MIN}
+                  onValueChange={([next]) => {
+                    if (next !== undefined) setCaptureFov(next)
+                  }}
+                  step={1}
+                  value={[fovValue]}
+                />
+                <span className="w-8 text-right font-semibold text-white text-xs tabular-nums">
+                  {fovValue}°
+                </span>
+                <button
+                  aria-label="Reset field of view"
+                  className="grid h-6 w-6 place-items-center rounded-full text-white/50 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-white/50"
+                  disabled={captureFovBaseline === null || fovValue === captureFovBaseline}
+                  onClick={() => {
+                    if (captureFovBaseline !== null) setCaptureFov(captureFovBaseline)
+                  }}
+                  type="button"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {!isCropLocked && (
-          <div className="pointer-events-auto relative flex items-center gap-1 rounded-full border border-white/10 bg-neutral-950/85 px-1.5 py-1.5 shadow-xl backdrop-blur-md">
+          <div className="pointer-events-auto relative flex items-center gap-1 rounded-full border border-white/10 bg-neutral-950/85 px-1.5 py-1.5 shadow-xl">
             {/* Clicking Standard while it's active opens the aspect picker */}
             <ModeButton
               active={mode === 'standard'}
@@ -618,7 +848,7 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
               }}
             />
             {aspectMenuOpen && mode === 'standard' && (
-              <div className="absolute bottom-[calc(100%+8px)] left-0 flex gap-1 rounded-full border border-white/10 bg-neutral-950/90 p-1.5 shadow-xl backdrop-blur-md">
+              <div className="absolute bottom-[calc(100%+8px)] left-0 flex gap-1 rounded-full border border-white/10 bg-neutral-950/90 p-1.5 shadow-xl">
                 {(Object.keys(STANDARD_SIZES) as StandardAspect[]).map((aspect) => (
                   <button
                     className={`rounded-full px-2.5 py-1 font-mono text-[11px] transition-colors ${
@@ -667,12 +897,32 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
 
         {/* Preset captures carry their own "Frame your item" banner — the
             snapshot pitch only applies to the studio/reference flow. */}
-        {!isMobile && !isPreset && (
-          <span className="pointer-events-none max-w-90 rounded-lg border border-white/10 bg-neutral-950/85 px-3.5 py-1.5 text-center text-[11.5px] text-white/85 leading-relaxed backdrop-blur-md">
-            A <b className="font-semibold text-white">snapshot</b>
-            {' freezes this exact camera angle as a reusable reference for renders & videos.'}
-          </span>
-        )}
+        {!isMobile &&
+          !isPreset &&
+          (cameraHint ? (
+            <div className="pointer-events-none flex max-w-lg flex-wrap items-center justify-center gap-x-2.5 gap-y-1 rounded-lg border border-white/10 bg-neutral-950/85 px-3 py-1.5 text-[10px]">
+              {cameraHint.map(({ keys, action }) => (
+                <span className="inline-flex items-center gap-1 whitespace-nowrap" key={action}>
+                  <span className="inline-flex items-center gap-0.5">
+                    {keys.map((key, index) => (
+                      <span className="inline-flex items-center gap-0.5" key={key}>
+                        {index > 0 && <span className="text-white/25">/</span>}
+                        <kbd className="rounded border border-white/15 bg-white/5 px-1.5 py-0.5 font-mono text-[9px] text-white/80 leading-none shadow-sm">
+                          {key}
+                        </kbd>
+                      </span>
+                    ))}
+                  </span>
+                  <span className="text-white/55">{action}</span>
+                </span>
+              ))}
+            </div>
+          ) : (
+            <span className="pointer-events-none max-w-90 rounded-lg border border-white/10 bg-neutral-950/85 px-3.5 py-1.5 text-center text-[11.5px] text-white/85 leading-relaxed">
+              A <b className="font-semibold text-white">snapshot</b>
+              {' freezes this exact camera angle as a reusable reference for renders & videos.'}
+            </span>
+          ))}
 
         <button
           aria-label={isPreset ? 'Capture' : 'Take snapshot'}

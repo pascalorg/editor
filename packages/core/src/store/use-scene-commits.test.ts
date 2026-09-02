@@ -4,7 +4,9 @@ import { initSpaceDetectionSync, type Space } from '../lib/space-detection'
 import { nodeRegistry } from '../registry/registry'
 import type { AnyNodeDefinition } from '../registry/types'
 import { BuildingNode } from '../schema/nodes/building'
+import { CeilingNode } from '../schema/nodes/ceiling'
 import { LevelNode } from '../schema/nodes/level'
+import { SlabNode } from '../schema/nodes/slab'
 import { WallNode } from '../schema/nodes/wall'
 import { SceneMaterial, type SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
@@ -422,6 +424,135 @@ describe('scene commit boundary', () => {
       expect(
         receiverNodes.filter((node) => node.type === 'ceiling' && node.autoFromWalls),
       ).toHaveLength(2)
+    } finally {
+      stopDetection()
+    }
+  })
+
+  test('keeps a triangular room valid when an inward wall curve reaches its neighbours', () => {
+    const walls = [
+      WallNode.parse({ id: 'wall_curve_base', parentId: LEVEL_ID, start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ id: 'wall_curve_right', parentId: LEVEL_ID, start: [4, 0], end: [2, 3] }),
+      WallNode.parse({ id: 'wall_curve_left', parentId: LEVEL_ID, start: [2, 3], end: [0, 0] }),
+    ]
+    const polygon: Array<[number, number]> = [
+      [0, 0],
+      [4, 0],
+      [2, 3],
+    ]
+    const slab = SlabNode.parse({
+      id: 'slab_curve_triangle',
+      parentId: LEVEL_ID,
+      polygon,
+      autoFromWalls: true,
+    })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_curve_triangle',
+      parentId: LEVEL_ID,
+      polygon,
+      autoFromWalls: true,
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [LEVEL_ID]: {
+          ...state.nodes[LEVEL_ID],
+          children: [...walls.map((wall) => wall.id), slab.id, ceiling.id],
+        } as AnyNode,
+        ...Object.fromEntries([...walls, slab, ceiling].map((node) => [node.id, node])),
+      },
+    }))
+    clearSceneHistory()
+
+    let spaces: Record<string, Space> = {}
+    const editorStore = {
+      getState: () => ({
+        spaces,
+        setSpaces: (next: Record<string, Space>) => {
+          spaces = next
+        },
+      }),
+    }
+    const stopDetection = initSpaceDetectionSync(useScene, editorStore)
+
+    try {
+      useScene.getState().updateNode(walls[0]!.id, { curveOffset: -2 })
+
+      const nodes = useScene.getState().nodes
+      const curvedWall = nodes[walls[0]!.id]
+      const updatedSlab = nodes[slab.id]
+      const updatedCeiling = nodes[ceiling.id]
+      expect(curvedWall?.type === 'wall' ? curvedWall.curveOffset : null).toBeGreaterThan(-2)
+      expect(Object.values(spaces)).toHaveLength(1)
+      expect(updatedSlab?.type === 'slab' ? updatedSlab.polygon.length : 0).toBeGreaterThan(3)
+      expect(
+        updatedCeiling?.type === 'ceiling' ? updatedCeiling.polygon.length : 0,
+      ).toBeGreaterThan(3)
+    } finally {
+      stopDetection()
+    }
+  })
+
+  test('keeps the full inward curve when a square room has enough clearance', () => {
+    const walls = [
+      WallNode.parse({ id: 'wall_square_base', parentId: LEVEL_ID, start: [0, 0], end: [4, 0] }),
+      WallNode.parse({ id: 'wall_square_right', parentId: LEVEL_ID, start: [4, 0], end: [4, 3] }),
+      WallNode.parse({ id: 'wall_square_top', parentId: LEVEL_ID, start: [4, 3], end: [0, 3] }),
+      WallNode.parse({ id: 'wall_square_left', parentId: LEVEL_ID, start: [0, 3], end: [0, 0] }),
+    ]
+    const polygon: Array<[number, number]> = [
+      [0, 0],
+      [4, 0],
+      [4, 3],
+      [0, 3],
+    ]
+    const slab = SlabNode.parse({
+      id: 'slab_curve_square',
+      parentId: LEVEL_ID,
+      polygon,
+      autoFromWalls: true,
+    })
+    const ceiling = CeilingNode.parse({
+      id: 'ceiling_curve_square',
+      parentId: LEVEL_ID,
+      polygon,
+      autoFromWalls: true,
+    })
+    useScene.setState((state) => ({
+      nodes: {
+        ...state.nodes,
+        [LEVEL_ID]: {
+          ...state.nodes[LEVEL_ID],
+          children: [...walls.map((wall) => wall.id), slab.id, ceiling.id],
+        } as AnyNode,
+        ...Object.fromEntries([...walls, slab, ceiling].map((node) => [node.id, node])),
+      },
+    }))
+    clearSceneHistory()
+
+    let spaces: Record<string, Space> = {}
+    const stopDetection = initSpaceDetectionSync(useScene, {
+      getState: () => ({
+        spaces,
+        setSpaces: (next: Record<string, Space>) => {
+          spaces = next
+        },
+      }),
+    })
+
+    try {
+      useScene.getState().updateNode(walls[0]!.id, { curveOffset: -2 })
+
+      const nodes = useScene.getState().nodes
+      const curvedWall = nodes[walls[0]!.id]
+      const updatedSlab = nodes[slab.id]
+      const updatedCeiling = nodes[ceiling.id]
+      expect(curvedWall?.type === 'wall' ? curvedWall.curveOffset : null).toBe(-2)
+      expect(Object.values(spaces)).toHaveLength(1)
+      expect(updatedSlab?.type === 'slab' ? updatedSlab.polygon.length : 0).toBeGreaterThan(4)
+      expect(
+        updatedCeiling?.type === 'ceiling' ? updatedCeiling.polygon.length : 0,
+      ).toBeGreaterThan(4)
     } finally {
       stopDetection()
     }

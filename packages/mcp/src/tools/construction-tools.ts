@@ -14,11 +14,20 @@ import {
 } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
-import { publishLiveSceneSnapshot } from './live-sync'
+import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
 import { NodeIdSchema, Vec2Schema, Vec3Schema } from './schemas'
 
-const ROOF_TYPES = ['hip', 'gable', 'shed', 'gambrel', 'dutch', 'mansard', 'flat'] as const
+const ROOF_TYPES = [
+  'hip',
+  'gable',
+  'shed',
+  'gambrel',
+  'dutch',
+  'mansard',
+  'flat',
+  'conical',
+] as const
 const RAILING_MODES = ['none', 'left', 'right', 'both'] as const
 
 export const createStoryShellInput = {
@@ -51,6 +60,7 @@ export const createStoryShellOutput = {
   slabId: z.string().nullable(),
   ceilingId: z.string().nullable(),
   createdIds: z.array(z.string()),
+  ...liveSyncOutput,
 }
 
 export const createRoofInput = {
@@ -87,6 +97,7 @@ export const createRoofOutput = {
   createdRoofLevelId: z.string().nullable(),
   roofId: z.string(),
   roofSegmentId: z.string(),
+  ...liveSyncOutput,
 }
 
 export const createStairBetweenLevelsInput = {
@@ -130,6 +141,7 @@ export const createStairBetweenLevelsOutput = {
   destinationSlabId: z.string().nullable(),
   sourceCeilingId: z.string().nullable(),
   openingPolygon: z.array(Vec2Schema),
+  ...liveSyncOutput,
 }
 
 function textResult<T extends Record<string, unknown>>(payload: T) {
@@ -323,13 +335,14 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       }
 
       const result = bridge.applyPatch(patches)
-      await publishLiveSceneSnapshot(bridge, 'create_story_shell')
+      const persistence = await publishLiveSceneSnapshot(bridge, 'create_story_shell')
       return textResult({
         levelId,
         wallIds,
         slabId,
         ceilingId,
         createdIds: result.createdIds as string[],
+        ...persistencePayload(persistence),
       })
     },
   )
@@ -361,9 +374,16 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       materialPreset,
       name,
     }) => {
+      const effectiveWidth = roofType === 'conical' ? Math.max(width, depth) : width
+      const effectiveDepth = roofType === 'conical' ? effectiveWidth : depth
       // Peak height is derived from pitch + footprint + type; we still
       // need it to size the auto-generated roof level container below.
-      const peakHeight = getActiveRoofHeight({ roofType, pitch, width, depth })
+      const peakHeight = getActiveRoofHeight({
+        roofType,
+        pitch,
+        width: effectiveWidth,
+        depth: effectiveDepth,
+      })
       const referenceLevel = assertNode(bridge, levelId, 'level')
       const patches: Array<{ op: 'create'; node: AnyNode; parentId: AnyNodeId }> = []
       let targetRoofLevelId = levelId as AnyNodeId
@@ -397,8 +417,8 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
 
       const segment = RoofSegmentNode.parse({
         roofType,
-        width,
-        depth,
+        width: effectiveWidth,
+        depth: effectiveDepth,
         wallHeight,
         pitch,
         wallThickness,
@@ -420,13 +440,14 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
         { op: 'create', node: roof, parentId: targetRoofLevelId },
         { op: 'create', node: segment, parentId: roof.id as AnyNodeId },
       ])
-      await publishLiveSceneSnapshot(bridge, 'create_roof')
+      const persistence = await publishLiveSceneSnapshot(bridge, 'create_roof')
       return textResult({
         referenceLevelId: levelId,
         roofLevelId: targetRoofLevelId,
         createdRoofLevelId,
         roofId: roof.id,
         roofSegmentId: segment.id,
+        ...persistencePayload(persistence),
       })
     },
   )
@@ -551,13 +572,14 @@ export function registerConstructionTools(server: McpServer, bridge: SceneOperat
       }
 
       bridge.applyPatch(patches)
-      await publishLiveSceneSnapshot(bridge, 'create_stair_between_levels')
+      const persistence = await publishLiveSceneSnapshot(bridge, 'create_stair_between_levels')
       return textResult({
         stairId: stair.id,
         stairSegmentId: segment.id,
         destinationSlabId: destinationSlab?.id ?? null,
         sourceCeilingId: sourceCeiling?.id ?? null,
         openingPolygon,
+        ...persistencePayload(persistence),
       })
     },
   )

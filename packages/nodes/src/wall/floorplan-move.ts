@@ -1,11 +1,21 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  type AutoCeilingSyncPlan,
+  type AutoSlabSyncPlan,
+  type CeilingNode,
+  detectSpacesForLevel,
   type FloorplanMoveTarget,
   type FloorplanMoveTargetSession,
+  getCeilingClampBound,
   getPerpendicularWallMoveAxis,
   getPlannedLinkedWallUpdates,
+  getStoredLevelHeight,
+  type LevelNode,
+  planAutoCeilingsForLevel,
+  planAutoSlabsForLevel,
   planWallMoveJunctions,
+  type SlabNode,
   useLiveNodeOverrides,
   useScene,
   type WallNode,
@@ -28,6 +38,24 @@ import {
   type LinkedWallSnapshot,
   stripWallIsNewMetadata,
 } from './move-shared'
+
+function getLevelSlabs(levelId: string, nodes: ReturnType<typeof useScene.getState>['nodes']) {
+  return Object.values(nodes).filter(
+    (entry): entry is SlabNode => entry?.type === 'slab' && (entry.parentId ?? null) === levelId,
+  )
+}
+
+function getLevelCeilings(levelId: string, nodes: ReturnType<typeof useScene.getState>['nodes']) {
+  return Object.values(nodes).filter(
+    (entry): entry is CeilingNode =>
+      entry?.type === 'ceiling' && (entry.parentId ?? null) === levelId,
+  )
+}
+
+type WallMoveSurfacePlans = {
+  slabs: AutoSlabSyncPlan
+  ceilings: AutoCeilingSyncPlan
+}
 
 /**
  * 2D floor-plan move handler for wall.
@@ -53,10 +81,9 @@ import {
  * overrides after the write lands so the system reads from the new
  * committed scene state.
  *
- * Auto-slab live preview and ghost bridge SVG previews — visible in
- * the 3D tool — are deliberately deferred. Slab polygons re-derive on
- * commit through the normal scene reactions; bridges appear at commit
- * time. Follow-up work to surface them mid-drag is tracked separately.
+ * Existing automatic slabs and ceilings receive live polygon overrides during
+ * the drag. New surfaces and removals stay deferred until commit because live
+ * overrides cannot represent nodes that do not exist in the scene.
  */
 export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node }) => {
   const wallId = node.id as AnyNodeId
@@ -101,9 +128,83 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
   let lastDelta: WallPlanPoint = [0, 0]
   let lastNextStart: WallPlanPoint = originalStart
   let lastNextEnd: WallPlanPoint = originalEnd
+  const levelId = node.parentId ?? null
+  const affectedIds: AnyNodeId[] = [wallId, ...linkedOriginals.map((wall) => wall.id as AnyNodeId)]
+  const affectedIdSet = new Set(affectedIds)
+  const touchedSurfaceIds = new Set<AnyNodeId>()
+  let latestSurfacePlans: WallMoveSurfacePlans | null = null
+
+  const planSurfaces = (walls: WallNode[]): WallMoveSurfacePlans | null => {
+    if (!levelId) return null
+    const sceneState = useScene.getState()
+    const levelWalls = walls.filter((wall) => (wall.parentId ?? null) === levelId)
+    const { roomPolygons } = detectSpacesForLevel(levelId, levelWalls)
+    const slabs = planAutoSlabsForLevel(roomPolygons, getLevelSlabs(levelId, sceneState.nodes))
+    const levelNode = sceneState.nodes[levelId as AnyNodeId]
+    const ceilings = planAutoCeilingsForLevel(
+      roomPolygons,
+      getLevelCeilings(levelId, sceneState.nodes),
+      {
+        storeyHeight:
+          levelNode?.type === 'level' ? getStoredLevelHeight(levelNode as LevelNode) : undefined,
+        ceilingClampBound: (polygon) => getCeilingClampBound(levelId, sceneState.nodes, polygon),
+      },
+    )
+    return { slabs, ceilings }
+  }
+
+  const publishSurfacePreviews = (walls: WallNode[]) => {
+    const plans = planSurfaces(walls)
+    latestSurfacePlans = plans
+    if (!plans) return
+
+    const entries: Array<[AnyNodeId, Record<string, unknown>]> = []
+    for (const update of plans.slabs.update) {
+      if (update.data.polygon !== undefined) {
+        entries.push([update.id as AnyNodeId, { polygon: update.data.polygon }])
+      }
+    }
+    for (const update of plans.ceilings.update) {
+      if (update.data.polygon !== undefined || update.data.height !== undefined) {
+        entries.push([update.id as AnyNodeId, update.data as Record<string, unknown>])
+      }
+    }
+
+    const nextIds = new Set(entries.map(([id]) => id))
+    const overrides = useLiveNodeOverrides.getState()
+    const sceneState = useScene.getState()
+    for (const id of touchedSurfaceIds) {
+      if (nextIds.has(id)) continue
+      overrides.clear(id)
+      sceneState.markDirty(id)
+      touchedSurfaceIds.delete(id)
+    }
+    if (entries.length > 0) {
+      overrides.setMany(entries)
+      for (const [id] of entries) {
+        touchedSurfaceIds.add(id)
+        if (!affectedIdSet.has(id)) {
+          affectedIdSet.add(id)
+          affectedIds.push(id)
+        }
+        sceneState.markDirty(id)
+      }
+    }
+  }
+
+  const clearSurfacePreviews = () => {
+    const overrides = useLiveNodeOverrides.getState()
+    const sceneState = useScene.getState()
+    for (const id of touchedSurfaceIds) {
+      overrides.clear(id)
+      sceneState.markDirty(id)
+    }
+    touchedSurfaceIds.clear()
+    latestSurfacePlans = null
+  }
 
   const session: FloorplanMoveTargetSession = {
-    affectedIds: [wallId, ...linkedOriginals.map((w) => w.id as AnyNodeId)],
+    affectedIds,
 
     apply({ planPoint }) {
       if (!rawAnchor) {
@@ -221,6 +322,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
         thickness: getFloorplanWallThickness(wall),
       }))
       useWallMoveGhosts.getState().setBridges(ghostBridges)
+      publishSurfacePreviews([...previewSceneWalls, ...bridgePreviews.map(({ wall }) => wall)])
 
       // `WallSystem` only runs its rebuild pass when `dirtyNodes` is
       // non-empty. We're not writing to scene any more, but we still
@@ -249,6 +351,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
         const overrides = useLiveNodeOverrides.getState()
         overrides.clear(wallId)
         for (const wall of linkedOriginals) overrides.clear(wall.id as AnyNodeId)
+        clearSurfacePreviews()
         return
       }
 
@@ -305,10 +408,51 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
         wallCount: Object.values(sceneState.nodes).filter((entry) => entry?.type === 'wall').length,
       })
 
+      const finalWalls = [
+        ...existingWalls,
+        ...bridgeCreates.map(
+          (entry) => ({ ...entry.node, parentId: entry.parentId ?? null }) as WallNode,
+        ),
+      ]
+      const surfacePlans = planSurfaces(finalWalls) ?? latestSurfacePlans
+      const surfaceUpdates = surfacePlans
+        ? [
+            ...surfacePlans.slabs.update.map((entry) => ({
+              id: entry.id as AnyNodeId,
+              data: entry.data as Partial<AnyNode>,
+            })),
+            ...surfacePlans.ceilings.update.map((entry) => ({
+              id: entry.id as AnyNodeId,
+              data: entry.data as Partial<AnyNode>,
+            })),
+          ]
+        : []
+      const surfaceCreates = surfacePlans
+        ? [
+            ...surfacePlans.slabs.create.map((slab) => ({
+              node: slab,
+              parentId: levelId as AnyNodeId,
+            })),
+            ...surfacePlans.ceilings.create.map((ceiling) => ({
+              node: ceiling,
+              parentId: levelId as AnyNodeId,
+            })),
+          ]
+        : []
+      const surfaceDeletes = surfacePlans
+        ? [
+            ...surfacePlans.slabs.delete.map((id) => id as AnyNodeId),
+            ...surfacePlans.ceilings.delete.map((id) => id as AnyNodeId),
+          ]
+        : []
+
       sceneState.applyNodeChanges({
-        update: commitUpdates as Array<{ id: AnyNodeId; data: Partial<AnyNode> }>,
-        create: bridgeCreates,
-        delete: Array.from(collapsedLinkedWallIds),
+        update: [
+          ...(commitUpdates as Array<{ id: AnyNodeId; data: Partial<AnyNode> }>),
+          ...surfaceUpdates,
+        ],
+        create: [...bridgeCreates, ...surfaceCreates],
+        delete: Array.from(new Set([...collapsedLinkedWallIds, ...surfaceDeletes])),
       })
 
       // Drop the live overrides now that the committed scene state
@@ -319,6 +463,7 @@ export const wallFloorplanMoveTarget: FloorplanMoveTarget<WallNode> = ({ node })
       const overrides = useLiveNodeOverrides.getState()
       overrides.clear(wallId)
       for (const wall of linkedOriginals) overrides.clear(wall.id as AnyNodeId)
+      clearSurfacePreviews()
 
       // Swap ghosts → real walls: the bridges we just created render
       // through the registry layer, so the dashed previews aren't

@@ -112,6 +112,14 @@ export const SFX: Record<string, SFXConfig> = {
     volumeRange: [0.85, 1.0],
     minIntervalMs: 60,
   },
+  // A three-second jingle for finishing something, not a click cue. No pitch or
+  // volume jitter — a fanfare that lands a semitone off reads as broken rather
+  // than as varied — and a gap longer than the sound itself, so two milestones
+  // that land together play once instead of phasing over each other.
+  success: {
+    src: '/audios/sfx/success.mp3',
+    minIntervalMs: 3_000,
+  },
 } as const
 
 export type SFXName = keyof typeof SFX

@@ -8,7 +8,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useEditor } from '@pascal-app/editor'
+import { commitFreshPlacementSubtree, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo } from 'react'
 import { DormerPlacementGuides } from './placement-guides'
@@ -67,7 +67,12 @@ const MoveDormerTool = ({ node }: { node: DormerNode }) => {
       // Restore visibility + metadata if the move was cancelled.
       const obj = sceneRegistry.nodes.get(node.id)
       if (obj) obj.visible = prevVisible ?? true
-      if (!isNew) {
+      if (isNew) {
+        if (node.id && useScene.getState().nodes[node.id]) {
+          useScene.getState().deleteNode(node.id as AnyNodeId)
+        }
+        useScene.temporal.getState().resume()
+      } else {
         useScene.getState().updateNode(node.id as AnyNodeId, {
           metadata: originalMetadata,
         })
@@ -103,7 +108,27 @@ const MoveDormerTool = ({ node }: { node: DormerNode }) => {
           return Object.keys(rest).length > 0 ? rest : undefined
         })()
 
-        if (isNew || !node.id) {
+        if (isNew && node.id) {
+          const committedId = commitFreshPlacementSubtree(node.id as AnyNodeId, {
+            roofSegmentId: hit.segment.id,
+            parentId: hit.segment.id,
+            position: [hit.localX, hit.localY, hit.localZ],
+            rotation,
+            metadata: cleanedMeta,
+            visible: true,
+          })
+          if (!committedId) return
+          const committedNode = useScene.getState().nodes[committedId] as DormerNode | undefined
+          for (const childId of committedNode?.children ?? []) {
+            const child = useScene.getState().nodes[childId]
+            if (child?.type === 'window') {
+              useScene.getState().updateNode(childId, { dormerId: committedId })
+            }
+          }
+          state.dirtyNodes.add(hit.segment.id as AnyNodeId)
+          state.dirtyNodes.add(committedId)
+          setSelection({ selectedIds: [committedId] })
+        } else if (!node.id) {
           const { id: _id, ...rest } = node
           const committed = DormerNodeSchema.parse({
             ...rest,

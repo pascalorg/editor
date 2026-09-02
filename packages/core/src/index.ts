@@ -144,6 +144,7 @@ export {
   type RoofPlanSegment,
   roofOverlapEntryOwns,
   roofPlanBoundsOverlap,
+  roofPlanOverlapEntryOwns,
 } from './lib/roof-overlap'
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export {
@@ -402,6 +403,7 @@ export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export { resolveStairTotalRise, syncStairRises } from './systems/stair/stair-rise'
 export {
+  constrainWallCurveOffsetToAvoidIntersections,
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
   getWallArcData,

@@ -3,8 +3,11 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { ColumnNode } from './column'
 import { RoofNode } from './roof'
+import { SlabNode } from './slab'
 
 export const LeanToConnectionMode = z.enum(['auto', 'manual'])
+export const LeanToCanopyForm = z.enum(['mono', 'gable', 'butterfly'])
+export const LeanToHostKind = z.enum(['wall', 'slab-edge', 'freestanding', 'conical-roof'])
 export const LeanToRoofEdge = z.enum(['+X', '-X', '+Z', '-Z'])
 export const LeanToResizeLock = z.enum([
   'preserve-high-edge',
@@ -17,9 +20,15 @@ export const LeanToHighSideMode = z.enum(['wall-ledger', 'independent-high-beam'
 export const LeanToPostLayoutMode = z.enum(['count', 'target-spacing'])
 export const LeanToFootingStyle = z.enum(['none', 'base-plate', 'concrete-pad'])
 export const LeanToCoveringType = z.enum(['generic', 'shingle', 'metal-panel'])
+const LeanToOmittedPostSlot = z.object({
+  side: z.enum(['low', 'high']),
+  index: z.number().int(),
+  layoutCount: z.number().int().min(1),
+})
 const DEFAULT_LOW_EDGE_HEIGHT = 2.7 - 3 * Math.tan((5 * Math.PI) / 180)
 const DEFAULT_LEAN_TO_POST_SPACING = 3
 export type LeanToConnectionMode = z.infer<typeof LeanToConnectionMode>
+export type LeanToCanopyForm = z.infer<typeof LeanToCanopyForm>
 export type LeanToRoofEdge = z.infer<typeof LeanToRoofEdge>
 
 export const LeanToExtensionNode = BaseNode.extend({
@@ -28,6 +37,12 @@ export const LeanToExtensionNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   children: z.array(z.union([ColumnNode.shape.id, RoofNode.shape.id])).default([]),
+  canopyForm: LeanToCanopyForm.default('mono'),
+  hostKind: LeanToHostKind.default('wall'),
+  hostHeightOffset: z.number().min(-10).max(10).default(0),
+  hostSlabId: SlabNode.shape.id.optional(),
+  hostSlabEdgeIndex: z.number().int().min(0).optional(),
+  hostSlabEdgeT: z.number().min(0).max(1).optional(),
 
   span: z.number().min(0.5).max(100).default(4),
   autoSpan: z.boolean().default(true),
@@ -101,15 +116,16 @@ export const LeanToExtensionNode = BaseNode.extend({
   postLayoutMode: LeanToPostLayoutMode.default('target-spacing'),
   postSpacing: z.number().min(0.3).max(10).default(DEFAULT_LEAN_TO_POST_SPACING),
   postInset: z.number().min(0).max(3).default(0),
+  omittedPostSlots: z.array(LeanToOmittedPostSlot).default([]),
   postBracing: z.enum(['none', 'knee']).default('none'),
   footingStyle: LeanToFootingStyle.default('none'),
 }).describe(
   dedent`
-  Wall-hosted lean-to roof extension.
-  The high edge attaches to the host wall and the mono-pitch roof falls along
-  local +Z to a beam supported by a managed row of column children. Its roof is a standard
-  shed roof segment with standard gutter and downspout children. It is an open canopy, not a
-  standalone enclosed shed roof.
+  Open parametric canopy.
+  The high edge can attach to a wall, attach to an upper slab edge, stand on an independent
+  high beam, or wrap around a conical roof's cylindrical base. Attached canopies use a mono-pitch
+  roof. Freestanding canopies can use a mono-pitch, gable, or butterfly roof with managed columns,
+  framing, gutters, and downspouts.
   `,
 )
 

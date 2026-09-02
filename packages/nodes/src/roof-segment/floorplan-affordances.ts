@@ -8,13 +8,13 @@ import {
   useLiveNodeOverrides,
   useScene,
 } from '@pascal-app/core'
-import { getSegmentGridStep, isAngleSnapActive } from '@pascal-app/editor'
+import { getSegmentGridStep, isAngleSnapActive, isGridSnapActive } from '@pascal-app/editor'
 import { createFloorplanCursorResolver } from '../shared/floorplan-cursor'
 import { rotateAffordanceDelta } from '../shared/rotate-affordance'
 
 const MIN_ROOF_DIM = 1
 
-type RoofSegmentResizePayload = { axis: 'x' | 'z'; side: 1 | -1 }
+type RoofSegmentResizePayload = { mode: 'radial' } | { axis: 'x' | 'z'; side: 1 | -1 }
 
 // Resolve world-space center + effective rotation of a roof segment by
 // composing the parent roof's position + rotation with the segment's
@@ -61,14 +61,44 @@ function resolveSegmentFrame(
  */
 export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> = {
   start({ node, payload, nodes, initialPlanPoint }) {
-    const { axis, side } = payload as RoofSegmentResizePayload
+    const resize = payload as RoofSegmentResizePayload
     const segmentId = node.id as AnyNodeId
+    const { cx, cz } = resolveSegmentFrame(node, nodes)
+    if ('mode' in resize) {
+      const initialRadius = node.width / 2
+      const initialPointerRadius = Math.hypot(initialPlanPoint[0] - cx, initialPlanPoint[1] - cz)
+      let lastRadius = initialRadius
+
+      return {
+        affectedIds: [segmentId],
+        apply({ planPoint }) {
+          const pointerRadius = Math.hypot(planPoint[0] - cx, planPoint[1] - cz)
+          lastRadius = Math.max(
+            MIN_ROOF_DIM / 2,
+            initialRadius + pointerRadius - initialPointerRadius,
+          )
+          const diameter = lastRadius * 2
+          useLiveNodeOverrides.getState().set(segmentId, { width: diameter, depth: diameter })
+          useScene.getState().markDirty(segmentId)
+        },
+        canCommit() {
+          return true
+        },
+        commit() {
+          useLiveNodeOverrides.getState().clear(segmentId)
+          const diameter = lastRadius * 2
+          useScene.getState().updateNode(segmentId, { width: diameter, depth: diameter })
+        },
+      }
+    }
+
+    const { axis, side } = resize
     const initialValue = axis === 'x' ? node.width : node.depth
     const initialPosition = node.position
     const segmentRotation = node.rotation ?? 0
     const armX = axis === 'x' ? Math.cos(segmentRotation) : Math.sin(segmentRotation)
     const armZ = axis === 'x' ? -Math.sin(segmentRotation) : Math.cos(segmentRotation)
-    const { cx, cz, effRot } = resolveSegmentFrame(node, nodes)
+    const { effRot } = resolveSegmentFrame(node, nodes)
     const cosEff = Math.cos(effRot)
     const sinEff = Math.sin(effRot)
     // Project (planPoint - center) onto the segment's local X or Z axis
@@ -91,7 +121,7 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
         // Mode-aware grid step (0 outside grid mode, so `lines` / `off` resize
         // freely — the "smooth" behaviour that used to need a held Shift). The
         // reshaping scope opened by the dispatcher resolves the `polygon` set.
-        const step = getSegmentGridStep()
+        const step = isGridSnapActive() ? getSegmentGridStep() : 0
         const snappedValue = step > 0 ? snapScalar(rawValue, step) : rawValue
         const newValue = Math.max(MIN_ROOF_DIM, snappedValue)
         const centerOffset = (side * (newValue - initialValue)) / 2
@@ -101,12 +131,13 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
           initialPosition[2] + centerOffset * armZ,
         ]
         lastValue = newValue
-        useLiveNodeOverrides
-          .getState()
-          .set(
-            segmentId,
-            axis === 'x' ? { width: newValue, position } : { depth: newValue, position },
-          )
+        const dimensions =
+          node.roofType === 'conical'
+            ? { width: newValue, depth: newValue }
+            : axis === 'x'
+              ? { width: newValue }
+              : { depth: newValue }
+        useLiveNodeOverrides.getState().set(segmentId, { ...dimensions, position })
         useScene.getState().markDirty(segmentId)
       },
       canCommit() {
@@ -120,12 +151,13 @@ export const roofSegmentResizeAffordance: FloorplanAffordance<RoofSegmentNode> =
           initialPosition[1],
           initialPosition[2] + centerOffset * armZ,
         ]
-        useScene
-          .getState()
-          .updateNode(
-            segmentId,
-            axis === 'x' ? { width: lastValue, position } : { depth: lastValue, position },
-          )
+        const dimensions =
+          node.roofType === 'conical'
+            ? { width: lastValue, depth: lastValue }
+            : axis === 'x'
+              ? { width: lastValue }
+              : { depth: lastValue }
+        useScene.getState().updateNode(segmentId, { ...dimensions, position })
       },
     }
   },
@@ -204,7 +236,7 @@ export const roofSegmentMoveTarget: FloorplanMoveTarget<RoofSegmentNode> = ({ no
       // Mode-aware: `getSegmentGridStep()` is 0 outside grid mode (so `lines` /
       // `off` move freely), and the `moving` scope resolves the `polygon` set
       // via the kind's `snapProfile` — no held-Shift bypass.
-      const step = getSegmentGridStep()
+      const step = isGridSnapActive() ? getSegmentGridStep() : 0
       const snap = (value: number) => snapScalar(value, step)
       const worldPoint = resolveCursor(planPoint, { snap })
       const dx = worldPoint[0] - roofPosX

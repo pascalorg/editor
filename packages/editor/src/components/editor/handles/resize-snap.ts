@@ -8,6 +8,8 @@ export function resolveResizeSnapValue({
   gridSnapStep,
   magneticSnapActive,
   magneticSnap,
+  connectionSnapActive = true,
+  connectionSnap,
 }: {
   rawValue: number
   fallbackValue?: number
@@ -16,12 +18,15 @@ export function resolveResizeSnapValue({
   gridSnapStep: number
   magneticSnapActive: boolean
   magneticSnap?: (value: number) => number
+  connectionSnapActive?: boolean
+  connectionSnap?: (value: number) => number
 }): number {
   if (!Number.isFinite(rawValue)) return fallbackValue
   const gridValue =
     gridSnapEnabled && gridSnapActive && gridSnapStep > 0
       ? snapScalar(rawValue, gridSnapStep)
       : rawValue
-  const resolved = magneticSnapActive && magneticSnap ? magneticSnap(gridValue) : gridValue
+  const modeValue = magneticSnapActive && magneticSnap ? magneticSnap(gridValue) : gridValue
+  const resolved = connectionSnapActive && connectionSnap ? connectionSnap(modeValue) : modeValue
   return Number.isFinite(resolved) ? resolved : fallbackValue
 }

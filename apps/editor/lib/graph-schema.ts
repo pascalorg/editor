@@ -1,5 +1,5 @@
 import { warehousePlugin } from '@ovurrsl/plugin-warehouse'
-import { AnyNode } from '@pascal-app/core/schema'
+import { AnyNode, BaseNode, nodeKindOf, SceneMaterial } from '@pascal-app/core/schema'
 import { treesPlugin } from '@pascal-app/plugin-trees'
 import { z } from 'zod'
 
@@ -29,7 +29,9 @@ for (const plugin of [treesPlugin, warehousePlugin]) {
   }
 }
 
-function validateNode(node: unknown): z.ZodSafeParseResult<unknown> {
+const KNOWN_TYPES = new Set<string>(AnyNode.options.map(nodeKindOf))
+
+export function validateNode(node: unknown): z.ZodSafeParseResult<unknown> {
   const kind = (node as { type?: unknown } | null)?.type
   const pluginSchema = typeof kind === 'string' ? pluginNodeSchemas.get(kind) : undefined
   if (pluginSchema) return pluginSchema.safeParse(node)
@@ -72,16 +74,59 @@ export const apiGraphSchema = z
     installedPlugins: z.array(z.string().min(1)).optional(),
   })
   .superRefine((value, ctx) => {
-    for (const [nodeId, node] of Object.entries(value.nodes)) {
-      const res = validateNode(node)
-      if (!res.success) {
-        for (const issue of res.error.issues) {
-          ctx.addIssue({
-            code: 'custom',
-            path: ['nodes', nodeId, ...issue.path],
-            message: issue.message,
-          })
-        }
+    const addIssues = (nodeId: string, error: z.ZodError) => {
+      for (const issue of error.issues) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['nodes', nodeId, ...issue.path],
+          message: issue.message,
+        })
       }
+    }
+
+    for (const [materialId, material] of Object.entries(value.materials ?? {})) {
+      const res = SceneMaterial.safeParse(material)
+      if (res.success) continue
+      for (const issue of res.error.issues) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['materials', materialId, ...issue.path],
+          message: issue.message,
+        })
+      }
+    }
+
+    // Ids of plugin nodes in this graph. Builtin container schemas name the
+    // child kinds they accept (`BuildingNode.children`, `RoofNode.children`),
+    // so a container holding a plugin child fails against `AnyNode` even
+    // though the relationship is legitimate. Those ids are dropped from a
+    // *copy* handed to `AnyNode`; the stored graph keeps them, and each
+    // plugin node is validated with its owning plugin schema.
+    const pluginIds = new Set<string>()
+    for (const [nodeId, node] of Object.entries(value.nodes)) {
+      const type = (node as { type?: unknown } | null)?.type
+      if (typeof type === 'string' && pluginNodeSchemas.has(type)) pluginIds.add(nodeId)
+    }
+
+    for (const [nodeId, node] of Object.entries(value.nodes)) {
+      const type = (node as { type?: unknown } | null)?.type
+
+      // If registered in pluginNodeSchemas, validate with that schema!
+      if (typeof type === 'string' && pluginNodeSchemas.has(type)) {
+        const schema = pluginNodeSchemas.get(type)!
+        const res = schema.safeParse(node)
+        if (!res.success) {
+          addIssues(nodeId, res.error)
+        }
+        continue
+      }
+
+      const children = (node as { children?: unknown } | null)?.children
+      const candidate =
+        pluginIds.size > 0 && Array.isArray(children)
+          ? { ...(node as object), children: children.filter((c) => !pluginIds.has(c as string)) }
+          : node
+      const res = AnyNode.safeParse(candidate)
+      if (!res.success) addIssues(nodeId, res.error)
     }
   })

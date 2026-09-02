@@ -9,8 +9,13 @@ import {
 } from '@pascal-app/viewer'
 import { BoxGeometry, FrontSide, Group, type Material, Mesh, Quaternion, Vector3 } from 'three'
 import { bendLocalPoint, bendRotationYAtLocalX, isCurvedLeanTo } from './arc'
+import { type CanopySide, readFreestandingCanopyJointMetadata } from './canopy-joint'
 import { readLeanToCornerJointMetadata } from './corner-joint'
-import { LEAN_TO_EXTENSION_GEOMETRY_REVISION, resolveLeanToLayout } from './layout'
+import {
+  isDualSlopeLeanToCanopy,
+  LEAN_TO_EXTENSION_GEOMETRY_REVISION,
+  resolveLeanToLayout,
+} from './layout'
 import { LEAN_TO_SLOT_DEFAULTS, type LeanToSlotId } from './slots'
 
 // Number of straight facets used to approximate a curved member spanning the arc.
@@ -22,6 +27,7 @@ export function leanToFacetCount(node: LeanToExtensionNode): number {
 export function leanToExtensionGeometryKey(node: LeanToExtensionNode): string {
   return JSON.stringify([
     LEAN_TO_EXTENSION_GEOMETRY_REVISION,
+    node.canopyForm,
     node.span,
     node.spanArcCenterZ,
     node.spanArcRadius,
@@ -64,6 +70,7 @@ export function leanToExtensionGeometryKey(node: LeanToExtensionNode): string {
     node.leftEndCondition,
     node.rightEndCondition,
     readLeanToCornerJointMetadata(node),
+    readFreestandingCanopyJointMetadata(node),
   ])
 }
 
@@ -151,6 +158,7 @@ function addMiteredBeam(
     colorPreset: ColorPreset
     sceneTheme?: string
     material: Material
+    name?: string
   },
 ) {
   const length = args.maxX - args.minX
@@ -172,7 +180,7 @@ function addMiteredBeam(
   positions.needsUpdate = true
   geometry.computeVertexNormals()
   const mesh = new Mesh(geometry, args.material)
-  mesh.name = 'lean-to-front-beam'
+  mesh.name = args.name ?? 'lean-to-front-beam'
   mesh.position.set(centerX, args.y, args.z)
   mesh.castShadow = true
   mesh.receiveShadow = true
@@ -211,7 +219,12 @@ export function buildLeanToExtensionGeometry(
   sceneTheme?: string,
 ): Group {
   const layout = resolveLeanToLayout(node)
+  const butterfly = layout.canopyForm === 'butterfly'
+  const dualSlope = isDualSlopeLeanToCanopy(layout.canopyForm)
+  const primarySlope = butterfly ? -layout.pitchRadians : layout.pitchRadians
+  const oppositeSlope = -primarySlope
   const cornerJoints = readLeanToCornerJointMetadata(node)
+  const canopyJoints = readFreestandingCanopyJointMetadata(node)
   const group = new Group()
   group.name = 'lean-to-extension-geometry'
 
@@ -236,6 +249,7 @@ export function buildLeanToExtensionGeometry(
     return {
       z: start[1] + (end[1] - start[1]) * ratio,
       dzDx: (end[1] - start[1]) / deltaX,
+      retainedSide: cornerJoints[side]?.framingRetainedSide ?? 'back',
     }
   }
   const retainedWidthAtZ = (z: number) => {
@@ -250,6 +264,48 @@ export function buildLeanToExtensionGeometry(
       const ratio = (z - start[1]) / deltaZ
       if (ratio < -1e-6 || ratio > 1 + 1e-6) continue
       const seamX = start[0] + (end[0] - start[0]) * ratio
+      const deltaX = end[0] - start[0]
+      if (Math.abs(deltaX) <= 1e-6) continue
+      const retainedSide = cornerJoints[side]?.framingRetainedSide ?? 'back'
+      const slope = deltaZ / deltaX
+      const retainGreaterX = retainedSide === 'front' ? slope < 0 : slope > 0
+      if (retainGreaterX) minX = Math.max(minX, seamX)
+      else maxX = Math.min(maxX, seamX)
+    }
+    return { minX, maxX }
+  }
+  const canopySeamIntersectionsAtX = (planeSide: CanopySide, x: number) => {
+    const intersections: Array<{ z: number; dzDx: number }> = []
+    for (const [side, joint] of Object.entries(canopyJoints) as [
+      'left' | 'right',
+      NonNullable<(typeof canopyJoints)['left' | 'right']>,
+    ][]) {
+      if (joint.kind !== 'corner' || joint.innerCanopySide !== planeSide) continue
+      const endpointX = side === 'left' ? -layout.span / 2 : layout.span / 2
+      const seamEndX = endpointX + (side === 'left' ? 1 : -1) * joint.trimX
+      const seamEndZ = (planeSide === 'positive' ? 1 : -1) * joint.trimZ
+      const deltaX = seamEndX - endpointX
+      if (Math.abs(deltaX) <= 1e-6) continue
+      const ratio = (x - endpointX) / deltaX
+      if (ratio < -1e-6 || ratio > 1 + 1e-6) continue
+      intersections.push({ z: seamEndZ * ratio, dzDx: seamEndZ / deltaX })
+    }
+    return intersections
+  }
+  const retainedCanopyWidthAtZ = (planeSide: CanopySide, z: number) => {
+    let minX = layout.roofCenterX - layout.roofWidth / 2
+    let maxX = layout.roofCenterX + layout.roofWidth / 2
+    for (const [side, joint] of Object.entries(canopyJoints) as [
+      'left' | 'right',
+      NonNullable<(typeof canopyJoints)['left' | 'right']>,
+    ][]) {
+      if (joint.kind !== 'corner' || joint.innerCanopySide !== planeSide || joint.trimZ <= 1e-6) {
+        continue
+      }
+      const ratio = Math.abs(z) / joint.trimZ
+      if (ratio < -1e-6 || ratio > 1 + 1e-6) continue
+      const endpointX = side === 'left' ? -layout.span / 2 : layout.span / 2
+      const seamX = endpointX + (side === 'left' ? 1 : -1) * joint.trimX * ratio
       if (side === 'left') minX = Math.max(minX, seamX)
       else maxX = Math.min(maxX, seamX)
     }
@@ -399,12 +455,25 @@ export function buildLeanToExtensionGeometry(
       depth: layout.slopeLength,
       localZ: layout.roofCenterZ,
       y: layout.roofCenterY,
-      rotationX: layout.pitchRadians,
+      rotationX: primarySlope,
       role: 'roof',
     })
+    if (dualSlope) {
+      addBentStrip({
+        name: 'lean-to-preview-roof-opposite',
+        centerX: layout.roofCenterX,
+        totalWidth: layout.roofWidth,
+        height: node.roofThickness,
+        depth: layout.slopeLength,
+        localZ: -layout.roofCenterZ,
+        y: layout.roofCenterY,
+        rotationX: oppositeSlope,
+        role: 'roof',
+      })
+    }
   }
 
-  if (node.highSideMode === 'independent-high-beam') {
+  if (node.highSideMode === 'independent-high-beam' && !butterfly) {
     addBentStrip({
       name: 'lean-to-independent-high-beam',
       centerX: 0,
@@ -481,6 +550,24 @@ export function buildLeanToExtensionGeometry(
       sceneTheme,
       material: beamMaterial,
     })
+    if (dualSlope) {
+      addMiteredBeam(group, {
+        minX: beamMinX,
+        maxX: beamMaxX,
+        leftMiterCenter: null,
+        rightMiterCenter: null,
+        leftMiterSlope: 0,
+        rightMiterSlope: 0,
+        height: node.beamHeight,
+        depth: node.beamWidth,
+        y: layout.beamCenterY,
+        z: layout.oppositeBeamZ,
+        colorPreset,
+        sceneTheme,
+        material: beamMaterial,
+        name: 'lean-to-opposite-beam',
+      })
+    }
   }
 
   if (!ctx) {
@@ -511,19 +598,21 @@ export function buildLeanToExtensionGeometry(
   }
 
   if (!ctx && node.highSideMode === 'independent-high-beam') {
-    const highPostHeight = Math.max(
-      0.2,
-      layout.highEdgeHeight -
-        node.roofThickness / 2 -
-        node.ledgerHeight +
-        node.ledgerVerticalOffset,
-    )
+    const highPostHeight = dualSlope
+      ? layout.postHeight
+      : Math.max(
+          0.2,
+          layout.highEdgeHeight -
+            node.roofThickness / 2 -
+            node.ledgerHeight +
+            node.ledgerVerticalOffset,
+        )
     for (const [index, x] of layout.postXs.entries()) {
       addBentBox({
         name: `lean-to-high-post-${index}`,
         size: [node.postWidth, highPostHeight, node.postDepth],
         localX: x,
-        localZ: 0,
+        localZ: dualSlope ? layout.oppositeBeamZ : 0,
         y: highPostHeight / 2,
         role: 'joinery',
         material: postsMaterial,
@@ -534,7 +623,7 @@ export function buildLeanToExtensionGeometry(
           name: `lean-to-high-post-footing-${index}`,
           size: [node.postWidth * footingScale, footingHeight, node.postDepth * footingScale],
           localX: x,
-          localZ: 0,
+          localZ: dualSlope ? layout.oppositeBeamZ : 0,
           y: footingHeight / 2,
           role: 'joinery',
           material: footingsMaterial,
@@ -558,6 +647,19 @@ export function buildLeanToExtensionGeometry(
         material: framingMaterial,
         slotId: 'framing',
       })
+      if (dualSlope) {
+        addBentBox({
+          name: `lean-to-opposite-knee-brace-${index}`,
+          size: [node.rafterWidth, node.rafterHeight, Math.min(0.8, layout.projection / 2)],
+          localX: x,
+          localZ: Math.min(0, layout.oppositeBeamZ + 0.22),
+          y: layout.beamCenterY - 0.22,
+          rotationX: -Math.PI / 4,
+          role: 'joinery',
+          material: framingMaterial,
+          slotId: 'framing',
+        })
+      }
     }
   }
 
@@ -566,32 +668,30 @@ export function buildLeanToExtensionGeometry(
       node.roofThickness / Math.max(0.1, Math.cos(layout.pitchRadians)) +
       (node.shingleThickness ?? 0.025) * Math.cos(layout.pitchRadians)
     const rafterY = (z: number) =>
-      layout.highEdgeHeight -
-      z * Math.tan(layout.pitchRadians) -
+      (butterfly
+        ? layout.lowEdgeHeight + Math.abs(z) * Math.tan(layout.pitchRadians)
+        : layout.highEdgeHeight - Math.abs(z) * Math.tan(layout.pitchRadians)) -
       roofBuildUp -
       node.rafterHeight / 2
     const halfRafterRun = (layout.rafterSlopeLength * Math.cos(layout.pitchRadians)) / 2
     const rafterBackZ = layout.rafterCenterZ - halfRafterRun
     const rafterFrontZ = layout.rafterCenterZ + halfRafterRun
-    for (const [index, x] of layout.rafterXs.entries()) {
-      if (cornerJoints.left && index === 0) continue
-      if (cornerJoints.right && index === layout.rafterXs.length - 1) continue
-      let clippedFrontZ = rafterFrontZ
-      for (const side of ['left', 'right'] as const) {
-        const intersection = seamIntersectionAtX(side, x)
-        if (!intersection) continue
-        const endRetreat =
-          (Math.abs(intersection.dzDx) * node.rafterWidth) / 2 +
-          (Math.sin(layout.pitchRadians) * node.rafterHeight) / 2 +
-          0.002
-        clippedFrontZ = Math.min(clippedFrontZ, intersection.z - endRetreat)
-      }
-      if (clippedFrontZ <= rafterBackZ + 1e-6) continue
-      if (clippedFrontZ < rafterFrontZ - 1e-6) {
+    const addRafter = (
+      name: string,
+      x: number,
+      backZ: number,
+      frontZ: number,
+      centerZ: number,
+      rotationX: number,
+    ) => {
+      if (frontZ <= backZ + 1e-6) return
+      const expectedBackZ = centerZ - halfRafterRun
+      const expectedFrontZ = centerZ + halfRafterRun
+      if (backZ > expectedBackZ + 1e-6 || frontZ < expectedFrontZ - 1e-6) {
         addBoxBetween(group, {
-          name: `lean-to-rafter-${index}`,
-          start: [x, rafterY(rafterBackZ), rafterBackZ],
-          end: [x, rafterY(clippedFrontZ), clippedFrontZ],
+          name,
+          start: [x, rafterY(backZ), backZ],
+          end: [x, rafterY(frontZ), frontZ],
           width: node.rafterWidth,
           height: node.rafterHeight,
           role: 'joinery',
@@ -600,22 +700,75 @@ export function buildLeanToExtensionGeometry(
           material: framingMaterial,
           slotId: 'framing',
         })
-      } else {
-        addBentBox({
-          name: `lean-to-rafter-${index}`,
-          size: [node.rafterWidth, node.rafterHeight, layout.rafterSlopeLength],
-          localX: x,
-          localZ: layout.rafterCenterZ,
-          y: layout.rafterCenterY,
-          rotationX: layout.pitchRadians,
-          role: 'joinery',
-          material: framingMaterial,
-          slotId: 'framing',
-        })
+        return
+      }
+      addBentBox({
+        name,
+        size: [node.rafterWidth, node.rafterHeight, layout.rafterSlopeLength],
+        localX: x,
+        localZ: centerZ,
+        y: layout.rafterCenterY,
+        rotationX,
+        role: 'joinery',
+        material: framingMaterial,
+        slotId: 'framing',
+      })
+    }
+    for (const [index, x] of layout.rafterXs.entries()) {
+      if (cornerJoints.left && index === 0) continue
+      if (cornerJoints.right && index === layout.rafterXs.length - 1) continue
+      let clippedBackZ = rafterBackZ
+      let clippedFrontZ = rafterFrontZ
+      for (const side of ['left', 'right'] as const) {
+        const intersection = seamIntersectionAtX(side, x)
+        if (!intersection) continue
+        const endRetreat =
+          (Math.abs(intersection.dzDx) * node.rafterWidth) / 2 +
+          (Math.sin(layout.pitchRadians) * node.rafterHeight) / 2 +
+          0.002
+        if (intersection.retainedSide === 'front') {
+          clippedBackZ = Math.max(clippedBackZ, intersection.z + endRetreat)
+        } else {
+          clippedFrontZ = Math.min(clippedFrontZ, intersection.z - endRetreat)
+        }
+      }
+      for (const intersection of canopySeamIntersectionsAtX('positive', x)) {
+        const endRetreat =
+          (Math.abs(intersection.dzDx) * node.rafterWidth) / 2 +
+          (Math.sin(layout.pitchRadians) * node.rafterHeight) / 2 +
+          0.002
+        clippedFrontZ = Math.min(clippedFrontZ, intersection.z - endRetreat)
+      }
+      addRafter(
+        `lean-to-rafter-${index}`,
+        x,
+        clippedBackZ,
+        clippedFrontZ,
+        layout.rafterCenterZ,
+        primarySlope,
+      )
+      if (dualSlope) {
+        let oppositeBackZ = -rafterFrontZ
+        const oppositeFrontZ = -rafterBackZ
+        for (const intersection of canopySeamIntersectionsAtX('negative', x)) {
+          const endRetreat =
+            (Math.abs(intersection.dzDx) * node.rafterWidth) / 2 +
+            (Math.sin(layout.pitchRadians) * node.rafterHeight) / 2 +
+            0.002
+          oppositeBackZ = Math.max(oppositeBackZ, intersection.z + endRetreat)
+        }
+        addRafter(
+          `lean-to-opposite-rafter-${index}`,
+          x,
+          oppositeBackZ,
+          oppositeFrontZ,
+          -layout.rafterCenterZ,
+          oppositeSlope,
+        )
       }
     }
     for (const [side, joint] of Object.entries(cornerJoints)) {
-      if (!(joint?.sharedPostOwner && joint.seam)) continue
+      if (!(joint?.sharedPostOwner && joint.seam) || node.hostKind === 'freestanding') continue
       const [start, end] = joint.seam
       const [startX, startZ] = bend(start[0], start[1])
       const [endX, endZ] = bend(end[0], end[1])
@@ -642,22 +795,49 @@ export function buildLeanToExtensionGeometry(
     for (let index = 0; index < count; index++) {
       const fraction = index / (count - 1)
       const z = fraction * layout.rafterCenterZ * 2
-      const y = layout.rafterCenterY + (layout.rafterCenterZ - z) * Math.tan(layout.pitchRadians)
+      const y =
+        layout.rafterCenterY +
+        (butterfly ? z - layout.rafterCenterZ : layout.rafterCenterZ - z) *
+          Math.tan(layout.pitchRadians)
       const retained = retainedWidthAtZ(z)
-      if (retained.maxX <= retained.minX + 1e-6) continue
-      addBentStrip({
-        name: `lean-to-purlin-${index}`,
-        centerX: (retained.minX + retained.maxX) / 2,
-        totalWidth: retained.maxX - retained.minX,
-        height: node.purlinHeight,
-        depth: node.purlinWidth,
-        localZ: z,
-        y,
-        rotationX: layout.pitchRadians,
-        role: 'joinery',
-        material: framingMaterial,
-        slotId: 'framing',
-      })
+      const positiveRetained = retainedCanopyWidthAtZ('positive', z)
+      const primaryMinX = Math.max(retained.minX, positiveRetained.minX)
+      const primaryMaxX = Math.min(retained.maxX, positiveRetained.maxX)
+      if (primaryMaxX > primaryMinX + 1e-6) {
+        addBentStrip({
+          name: `lean-to-purlin-${index}`,
+          centerX: (primaryMinX + primaryMaxX) / 2,
+          totalWidth: primaryMaxX - primaryMinX,
+          height: node.purlinHeight,
+          depth: node.purlinWidth,
+          localZ: z,
+          y,
+          rotationX: primarySlope,
+          role: 'joinery',
+          material: framingMaterial,
+          slotId: 'framing',
+        })
+      }
+      if (dualSlope) {
+        const negativeRetained = retainedCanopyWidthAtZ('negative', -z)
+        const oppositeMinX = Math.max(retained.minX, negativeRetained.minX)
+        const oppositeMaxX = Math.min(retained.maxX, negativeRetained.maxX)
+        if (oppositeMaxX > oppositeMinX + 1e-6) {
+          addBentStrip({
+            name: `lean-to-opposite-purlin-${index}`,
+            centerX: (oppositeMinX + oppositeMaxX) / 2,
+            totalWidth: oppositeMaxX - oppositeMinX,
+            height: node.purlinHeight,
+            depth: node.purlinWidth,
+            localZ: -z,
+            y,
+            rotationX: oppositeSlope,
+            role: 'joinery',
+            material: framingMaterial,
+            slotId: 'framing',
+          })
+        }
+      }
     }
   }
 

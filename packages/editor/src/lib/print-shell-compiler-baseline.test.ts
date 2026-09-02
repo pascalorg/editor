@@ -11,7 +11,16 @@ import { compilePrintShellBaseline } from './print-shell-compiler-baseline'
 import { compileManifoldMeshData } from './print-shell-compiler-manifold-core'
 import { compileSemanticPrintShellWithManifold } from './print-shell-compiler-manifold-worker'
 
-const ROOF_TYPES: RoofType[] = ['gable', 'hip', 'shed', 'gambrel', 'mansard', 'flat', 'dutch']
+const ROOF_TYPES: RoofType[] = [
+  'gable',
+  'hip',
+  'shed',
+  'gambrel',
+  'mansard',
+  'flat',
+  'dutch',
+  'conical',
+]
 
 function structuralBox(id: string, x: number): THREE.Group {
   const group = new THREE.Group()
@@ -344,7 +353,7 @@ describe('print shell compiler baseline', () => {
         id: `rseg_print-shell-${roofType}`,
         roofType,
         width: 4,
-        depth: 3,
+        depth: roofType === 'conical' ? 4 : 3,
         wallHeight: 0.5,
         pitch: 30,
         wallThickness: 0.15,

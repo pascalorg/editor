@@ -195,8 +195,15 @@ function RightColumn({
           <div className="pointer-events-auto flex items-center gap-2">{toolbarRight}</div>
         </div>
       )}
-      {/* Canvas area */}
-      <div className="relative flex-1 overflow-hidden">{children}</div>
+      {/* Canvas area. `isolate` matters: drei's `<Html>` computes a z-index
+          from camera distance and defaults to a range topping out at
+          16,777,271, and without a stacking context here those values compete
+          directly with the viewer toolbar (z-20), the stage overlay (z-10) and
+          the overlay band (z-30) — so an in-scene tool badge painted over all
+          three. Isolating pins every in-scene HTML layer inside the canvas,
+          where it belongs, and leaves their order relative to each other
+          untouched. */}
+      <div className="relative isolate flex-1 overflow-hidden">{children}</div>
       {/* Stage overlay — replaces the canvas visually (e.g. studio gallery)
           while keeping it mounted. Sits below the viewer toolbar (z-20) so
           the stage switch stays reachable. */}

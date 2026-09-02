@@ -141,7 +141,7 @@ describe('addCabinetModuleSide', () => {
     }
   })
 
-  test('adds a default base cabinet at 0.5m wide and 0.5m deep', () => {
+  test('adds a default base cabinet at 0.5m wide and 0.6m deep', () => {
     const levelId = 'level_add-side-default-size' as AnyNodeId
     const run = CabinetNode.parse({
       id: 'cabinet_run-add-side-default-size',
@@ -161,7 +161,7 @@ describe('addCabinetModuleSide', () => {
     expect(id).toBeTruthy()
     const added = sceneApi.get<CabinetModuleNode>(id!)
     expect(added?.width).toBeCloseTo(0.5)
-    expect(added?.depth).toBeCloseTo(0.5)
+    expect(added?.depth).toBeCloseTo(0.6)
   })
 
   test('shrinks a newly added corner-end base cabinet to the remaining wall clearance', () => {
@@ -942,7 +942,7 @@ describe('addCornerRun', () => {
       )
       const connectedBase = derivedModules.find((module) => module.name === 'Base Cabinet')!
       expect(wallChildOf(connectedBase, sceneApi.nodes())?.width).toBeCloseTo(0.6)
-      expect(derivedRun.depth).toBeCloseTo(0.5)
+      expect(derivedRun.depth).toBeCloseTo(0.6)
     }
     for (const filler of cornerWallFillers) {
       expect(sceneApi.get<CabinetModuleNode>(filler.id as AnyNodeId)?.width).toBeCloseTo(0.32)
@@ -1965,7 +1965,7 @@ describe('addCornerRun', () => {
     )
     const bridgeFillers = modulesOut.filter((node) => node.name === 'Wall Bridge Filler')
     expect(bridgeFillers).toHaveLength(1)
-    expect(bridgeFillers[0]?.width).toBeCloseTo(0.5 - 0.32)
+    expect(bridgeFillers[0]?.width).toBeCloseTo(0.6 - 0.32)
 
     const linkedBase = modulesOut.find(
       (node) => node.id !== module.id && node.name === 'Base Cabinet',

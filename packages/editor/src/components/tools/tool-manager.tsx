@@ -34,7 +34,6 @@ import { WallSnapBeaconLayer } from '../editor/wall-snap-beacon-layer'
 import { ElevatorTool } from './elevator/elevator-tool'
 import { MoveTool } from './item/move-tool'
 import { RegistryToolProvider } from './registry-tool-context'
-import { RoofTool } from './roof/roof-tool'
 import { getRegistryAffordanceTool } from './shared/affordance-dispatch'
 import { FacingPoseIndicator } from './shared/facing-pose-indicator'
 import { SiteBoundaryEditor } from './site/site-boundary-editor'
@@ -95,7 +94,6 @@ const tools: Record<Phase, Partial<Record<Tool, React.FC>>> = {
     'property-line': SiteBoundaryEditor,
   },
   structure: {
-    roof: RoofTool,
     stair: StairTool,
     zone: ZoneTool,
   },
@@ -153,6 +151,7 @@ export const ToolManager: React.FC = () => {
   const registryToolContext = useMemo(
     () => ({
       activeLevelId: activeLevelId ?? null,
+      isCameraDragging: () => useViewer.getState().cameraDragging,
       sceneApi: registrySceneApi,
       selectNode: (nodeId: AnyNodeId) => setSelection({ selectedIds: [nodeId] }),
     }),
@@ -302,7 +301,7 @@ export const ToolManager: React.FC = () => {
   }
 
   return (
-    <>
+    <RegistryToolProvider value={registryToolContext}>
       {/* World-space tools: site boundary and building movement operate in world coordinates */}
       {showSiteBoundaryEditor && <SiteBoundaryEditor />}
       {/* Terrain sculpting is a mode rather than a `tools[phase][tool]` entry —
@@ -418,9 +417,7 @@ export const ToolManager: React.FC = () => {
             NodeDefinition with a tool contribution, mount it here. */}
         {(!movingNode || registryToolOwnsPlacement) && useRegistryTool && RegistryToolComponent && (
           <Suspense fallback={null}>
-            <RegistryToolProvider value={registryToolContext}>
-              <RegistryToolComponent />
-            </RegistryToolProvider>
+            <RegistryToolComponent />
           </Suspense>
         )}
         {!movingNode && !useRegistryTool && showBuildTool && tool === 'elevator' && (
@@ -448,6 +445,6 @@ export const ToolManager: React.FC = () => {
         {/* "Magnetic" beacon at the active wall-draft snap point. */}
         <WallSnapBeaconLayer />
       </group>
-    </>
+    </RegistryToolProvider>
   )
 }

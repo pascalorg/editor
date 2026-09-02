@@ -17,7 +17,7 @@ import { Plus } from 'lucide-react'
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { triggerSFX } from '../../../lib/sfx-bus'
 
-export type MaterialSourceFilter = 'all' | MaterialSource
+export type MaterialSourceFilter = MaterialSource
 
 export type MaterialPickerProps = {
   selectedMaterialPreset?: string
@@ -28,8 +28,9 @@ export type MaterialPickerProps = {
   onCreateMaterialRequest?: () => void
 }
 
+// No 'All': the browse surfaces (Items / Rooms / Build) dropped it and default
+// to the Pascal library — the combined list buried the curated set.
 const SOURCE_FILTERS: { id: MaterialSourceFilter; label: string }[] = [
-  { id: 'all', label: 'All' },
   { id: 'pascal', label: 'DigitalTwin' },
   { id: 'mine', label: 'Mine' },
   { id: 'workspace', label: 'Workspace' },
@@ -41,7 +42,6 @@ function getCategoryLabel(category: (typeof MATERIAL_CATEGORIES)[number]) {
 }
 
 function filterBySource(items: MaterialCatalogItem[], filter: MaterialSourceFilter) {
-  if (filter === 'all') return items
   return items.filter((item) => (item.source ?? 'pascal') === filter)
 }
 
@@ -60,7 +60,7 @@ export function MaterialPicker({
   const [selectedCategory, setSelectedCategory] = useState<(typeof MATERIAL_CATEGORIES)[number]>(
     MATERIAL_CATEGORIES[0],
   )
-  const [sourceFilter, setSourceFilter] = useState<MaterialSourceFilter>('all')
+  const [sourceFilter, setSourceFilter] = useState<MaterialSourceFilter>('pascal')
   // Version counter so host registrations/unregistrations re-render the picker.
   const libraryVersion = useSyncExternalStore(
     subscribeLibraryMaterials,

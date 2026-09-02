@@ -46,6 +46,7 @@ import {
   resolveDirectManipulationNode,
   resolveDirectRotationDragDelta,
   resolveDirectRotationPatch,
+  shouldStartDirectMoveDrag,
   snapDirectRotationDelta,
 } from '../../../lib/direct-manipulation'
 import { isNodeIdEditLocked } from '../../../lib/edit-lock'
@@ -645,16 +646,24 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
   const startDirectMoveDrag = useCallback(
     (id: AnyNodeId, event: ReactPointerEvent<SVGGElement>): boolean => {
-      if (event.button !== 0 || !(event.metaKey || event.ctrlKey)) return false
+      if (event.button !== 0) return false
 
       const node = useScene.getState().nodes[id]
       if (!node || !isRegistryMovable(node.type)) return false
-      // Sole selection only: per-node direct manipulation stands down for a
-      // multi-selection (the group session owns plain drags there, and Cmd is
-      // the selection-toggle key — a wobbly Cmd+click must not yank one
-      // member out of the group).
       const currentSelectedIds = useViewer.getState().selection.selectedIds
-      if (currentSelectedIds.length !== 1 || currentSelectedIds[0] !== id) return false
+      const allowPlainDrag = nodeRegistry.get(node.type)?.capabilities?.movable?.directDrag === true
+      const commandModifier = event.metaKey || event.ctrlKey
+      if (
+        !shouldStartDirectMoveDrag({
+          allowPlainDrag,
+          commandModifier,
+          handleOwnsPointer: false,
+          nodeId: id,
+          selectedIds: currentSelectedIds,
+        })
+      ) {
+        return false
+      }
 
       event.preventDefault()
       event.stopPropagation()
@@ -706,9 +715,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         if (endEvent.pointerId !== pointerId) return
         cleanup()
         if (!engaged) {
-          // Cmd/Ctrl+click without drag: toggle member (options object, not bare boolean).
           applyEntrySelection(id, {
-            shouldToggle: true,
+            shouldToggle: commandModifier,
             isolateMember: false,
           })
         }
@@ -1950,12 +1958,12 @@ const FloorplanRegistryEntry = memo(function FloorplanRegistryEntry({
       // the body-drag gesture — the whole selection slides, not one member.
       if (onGroupMovePointerDown(nodeId, event)) return
       sfxEmitter.emit('sfx:item-pick')
-      setMovingNode(currentNode as never)
+      createEditorApi().engageMove(currentNode)
       // Claim 2D ownership of this move at the source. `setMovingNode`
       // resets the origin to null, so this must follow it.
       setMovingNodeOrigin('2d')
     },
-    [nodeId, onGroupMovePointerDown, setMovingNode, setMovingNodeOrigin],
+    [nodeId, onGroupMovePointerDown, setMovingNodeOrigin],
   )
 
   const cacheEntry = buildFloorplanEntryGeometry({

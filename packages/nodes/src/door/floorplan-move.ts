@@ -259,6 +259,7 @@ export const doorFloorplanMoveTarget: FloorplanMoveTarget<DoorNode> = ({ node })
       // `resolveOpeningPlacement`).
       const collides = hasWallChildOverlap(
         lastValid.parentId,
+        useScene.getState().nodes,
         lastValid.position[0],
         lastValid.position[1],
         live.width,

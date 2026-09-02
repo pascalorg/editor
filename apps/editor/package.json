@@ -56,7 +56,7 @@
     "y-protocols": "^1.0.7",
     "y-websocket": "^2.1.0",
     "yjs": "^13.6.32",
-    "zod": "^4.3.5",
+    "zod": ">=4.5.4 <4.6",
     "zustand": "^5"
   },
   "devDependencies": {

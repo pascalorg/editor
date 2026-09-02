@@ -71,7 +71,7 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
 
   const material = useMemo(() => {
     const roleDefault = createSurfaceRoleMaterial('roof', colorPreset, THREE.FrontSide, sceneTheme)
-    const resolve = (role: 'base' | 'body' | 'roof') => {
+    const resolve = (role: 'base' | 'body' | 'roof' | 'louvers') => {
       if (!textures) return roleDefault
       const slotMaterial = resolveMaterialRef(node.slots?.[role], sceneMaterials, shading)
       if (slotMaterial) return slotMaterial
@@ -81,7 +81,7 @@ const CupolaRenderer = ({ node: storeNode }: { node: CupolaNode }) => {
       }
       return roleDefault
     }
-    return [resolve('base'), resolve('body'), resolve('roof')]
+    return [resolve('base'), resolve('body'), resolve('roof'), resolve('louvers')]
   }, [
     textures,
     colorPreset,

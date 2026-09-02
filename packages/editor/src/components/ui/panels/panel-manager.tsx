@@ -24,6 +24,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { useCallback, useDeferredValue, useEffect, useState } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
+import { shouldShowEditingControls } from '../../../lib/interaction/overlay-policy'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import useEditor from '../../../store/use-editor'
 import { deleteSelection, duplicateSelectionAndPickUp, startGroupPickUp } from '../../editor/group-actions'
@@ -228,6 +229,7 @@ export function PanelManager({
   const setSelection = useViewer((s) => s.setSelection)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
   const deferredReferenceId = useDeferredValue(selectedReferenceId)
+  const readOnly = useScene((s) => s.readOnly)
   // Only subscribe to the *type* of the single-selected node — string primitive
   // so we don't re-render on unrelated scene mutations.
   const selectedNodeType = useScene((s) => {
@@ -269,6 +271,8 @@ export function PanelManager({
       resetDesktopInspectorCollapsed()
     }
   }, [hasAnySelection])
+
+  if (!shouldShowEditingControls(readOnly)) return null
 
   if (isMobile) {
     if (deferredReferenceId) {

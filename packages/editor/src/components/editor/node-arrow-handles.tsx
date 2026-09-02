@@ -243,16 +243,15 @@ export function NodeArrowHandles() {
       typeof def.handles === 'function'
         ? def.handles(node as never, descriptorSceneApi)
         : (def.handles as HandleDescriptor[])
-    // The whole-node move-cross gizmo is gone: moving is now click-to-move on
-    // the selected node body (see selection-manager). Drop both flavours — the
-    // `translate` ground cross (column/roof/shelf/spawn) and the `tap-action`
-    // `move-cross` (item/door/window/elevator/stair) — keep rotate/resize.
-    return all.filter(
-      (d) =>
-        d.kind !== 'translate' &&
-        !('shape' in d && d.shape === 'move-cross') &&
-        (d.kind !== 'linear-resize' || d.visible?.(node as never, descriptorSceneApi) !== false),
-    )
+    return all.filter((descriptor) => {
+      if (descriptor.kind === 'translate') return false
+      const visible =
+        'visible' in descriptor
+          ? descriptor.visible?.(node as never, descriptorSceneApi)
+          : undefined
+      if ('shape' in descriptor && descriptor.shape === 'move-cross') return visible === true
+      return visible !== false
+    })
   }, [node, def, descriptorSceneApi])
 
   const shouldRender =
@@ -302,18 +301,25 @@ function NodeArrowHandlesForNode({
   descriptors: HandleDescriptor[]
 }) {
   const parentId = node.parentId ?? null
-  const grandparentId = useScene((state) => {
-    if (!parentId) return null
-    const parent = state.nodes[parentId as AnyNodeId]
-    return parent?.parentId ?? null
-  })
 
   const portalMode: HandlePortal = descriptors.some((d) => d.portal === 'grandparent')
     ? 'grandparent'
     : 'parent'
 
+  const portalTargetResolver = descriptors.find(
+    (descriptor) => descriptor.portalTarget !== undefined,
+  )?.portalTarget
+  const descriptorSceneApi = useMemo(() => createSceneApi(useScene), [])
+
   // Portal target: the mesh we createPortal into.
-  const portalTargetId = portalMode === 'grandparent' ? grandparentId : parentId
+  const portalTargetId = useScene((state) => {
+    if (portalTargetResolver) {
+      return portalTargetResolver(node as never, descriptorSceneApi) ?? null
+    }
+    const parentId = node.parentId ?? null
+    if (!parentId || portalMode === 'parent') return parentId
+    return state.nodes[parentId as AnyNodeId]?.parentId ?? null
+  })
   // Outer wrapper mirrors this mesh's local pose. For 'parent' mode the
   // outer IS the node (so handles + drag math both live in node-local).
   // For 'grandparent' the outer rides the parent and an inner group adds
@@ -788,6 +794,10 @@ function LinearArrow({
             magneticSnapActive: isMagneticSnapActive(),
             magneticSnap: linearDescriptor?.magneticSnap
               ? (value) => linearDescriptor.magneticSnap?.(initialNode, value, sceneApi) ?? value
+              : undefined,
+            connectionSnapActive: !moveEvent.altKey,
+            connectionSnap: linearDescriptor?.connectionSnap
+              ? (value) => linearDescriptor.connectionSnap?.(initialNode, value, sceneApi) ?? value
               : undefined,
           })
           const next = Math.min(maxBound, Math.max(minBound, snappedNext))

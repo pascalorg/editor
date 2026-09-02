@@ -1,9 +1,13 @@
 import { get, set } from 'idb-keyval'
+import { customAlphabet } from 'nanoid'
 
 export const ASSET_PREFIX = 'asset_data:'
 
 // Cache for active object URLs to prevent leaks and flickering
 const urlCache = new Map<string, string>()
+
+// Unlike crypto.randomUUID(), nanoid works outside secure contexts.
+const nanoAssetId = customAlphabet('0123456789abcdefghijklmnopqrstuvwxyz', 16)
 
 /**
  * `crypto.randomUUID` exists only in secure contexts, and an editor served
@@ -26,7 +30,7 @@ function randomAssetId(): string {
  * Save a file to IndexedDB and return a custom protocol URL
  */
 export async function saveAsset(file: File): Promise<string> {
-  const id = randomAssetId()
+  const id = nanoAssetId()
   await set(`${ASSET_PREFIX}${id}`, file)
   return `asset://${id}`
 }

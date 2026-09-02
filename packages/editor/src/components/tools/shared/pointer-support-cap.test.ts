@@ -12,7 +12,14 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { BoxGeometry, Mesh, MeshBasicMaterial, PerspectiveCamera } from 'three'
+import {
+  BoxGeometry,
+  Mesh,
+  MeshBasicMaterial,
+  OrthographicCamera,
+  PerspectiveCamera,
+  Vector3,
+} from 'three'
 import { z } from 'zod'
 import useInteractionScope from '../../../store/use-interaction-scope'
 import { createWallOnCurrentLevel } from '../wall/wall-drafting'
@@ -82,7 +89,7 @@ describe('resolvePointerSupportSurface node tops', () => {
     sceneRegistry.clear()
   })
 
-  const addPluginPlatform = (z = 0) => {
+  const addPluginPlatform = (z = 0, size: [number, number, number] = [4, 2, 4]) => {
     useScene.setState((state) => ({
       nodes: {
         ...state.nodes,
@@ -96,12 +103,46 @@ describe('resolvePointerSupportSurface node tops', () => {
         } as unknown as AnyNode,
       },
     }))
-    const platformMesh = new Mesh(new BoxGeometry(4, 2, 4), new MeshBasicMaterial())
+    const platformMesh = new Mesh(new BoxGeometry(...size), new MeshBasicMaterial())
     platformMesh.position.set(0, 1, z)
     platformMesh.updateMatrixWorld(true)
     sceneRegistry.nodes.set(PLATFORM_ID, platformMesh)
     sceneRegistry.byType[PLATFORM_KIND]!.add(PLATFORM_ID)
   }
+
+  test('keeps an off-center orthographic ray on the cursor line', () => {
+    const camera = new OrthographicCamera(-20, 20, 20, -20, -1000, 1000)
+    camera.position.set(10, 10, 10)
+    camera.lookAt(0, 0, 0)
+    camera.updateMatrixWorld(true)
+
+    const direction = camera.getWorldDirection(new Vector3())
+    const right = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion)
+    const up = new Vector3(0, 1, 0).applyQuaternion(camera.quaternion)
+    const rayOrigin = camera.position.clone().addScaledVector(right, 3).addScaledVector(up, 2)
+    const groundDistance = -rayOrigin.y / direction.y
+    const worldHit = rayOrigin.clone().addScaledVector(direction, groundDistance)
+    const topDistance = (2 - rayOrigin.y) / direction.y
+    const expectedTop = rayOrigin.clone().addScaledVector(direction, topDistance)
+
+    addPluginPlatform(expectedTop.z, [0.5, 2, 0.5])
+    const platformMesh = sceneRegistry.nodes.get(PLATFORM_ID)!
+    platformMesh.position.set(expectedTop.x, 1, expectedTop.z)
+    platformMesh.updateMatrixWorld(true)
+
+    const support = resolvePointerSupportSurface(
+      camera,
+      worldHit.toArray() as [number, number, number],
+      {
+        includeNodeTopSurfaces: true,
+      },
+    )
+
+    expect(support?.sourceNodeId).toBe(PLATFORM_ID)
+    expect(support?.worldPoint?.[0]).toBeCloseTo(expectedTop.x)
+    expect(support?.worldPoint?.[1]).toBeCloseTo(expectedTop.y)
+    expect(support?.worldPoint?.[2]).toBeCloseTo(expectedTop.z)
+  })
 
   test('discovers a plugin-declared top surface without a kind-name list', () => {
     addPluginPlatform()

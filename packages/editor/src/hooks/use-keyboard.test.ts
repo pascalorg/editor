@@ -7,10 +7,13 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { meshEditScope } from '../lib/interaction/scope'
+import useEditor from '../store/use-editor'
 import useInteractionScope from '../store/use-interaction-scope'
 import {
   canCycleSnappingModeShortcut,
   canRunGlobalRotationShortcut,
+  isToolOwnedCanopyForm,
+  isToolOwnedRotation,
   runHistoryShortcut,
 } from './use-keyboard'
 
@@ -42,7 +45,43 @@ beforeEach(() => {
 
 afterEach(() => {
   useInteractionScope.getState().end()
+  useEditor.getState().armToolMode({ mode: 'select' })
   clearSceneHistory()
+})
+
+describe('rotation shortcut ownership', () => {
+  test('leaves R and T to the active item placement tool', () => {
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
+
+    expect(isToolOwnedRotation()).toBe(true)
+  })
+
+  test('leaves R and T to the active lean-to placement tool', () => {
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'lean-to-extension' })
+
+    expect(isToolOwnedRotation()).toBe(true)
+  })
+
+  test('leaves R and T to a moving lean-to extension', () => {
+    const leanTo = { id: 'lean_to_moving', type: 'lean-to-extension' } as unknown as AnyNode
+    useInteractionScope.getState().begin({
+      kind: 'moving',
+      node: leanTo,
+      nodeId: leanTo.id,
+      nodeType: leanTo.type,
+      view: '3d',
+    })
+
+    expect(isToolOwnedRotation()).toBe(true)
+  })
+
+  test('leaves F to the active lean-to placement tool', () => {
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'lean-to-extension' })
+
+    expect(isToolOwnedCanopyForm()).toBe(true)
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'wall' })
+    expect(isToolOwnedCanopyForm()).toBe(false)
+  })
 })
 
 describe('history shortcuts during block editing', () => {

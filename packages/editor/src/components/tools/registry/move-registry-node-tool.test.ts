@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { showsValidityBox } from './move-registry-node-tool'
+import { resolveMoveRotationStep, showsValidityBox } from './move-registry-node-tool'
 
 /**
  * The gap this closes: `floorPlaced.collides` is the spatial grid's plan
@@ -19,5 +19,15 @@ describe('which moves are validated', () => {
 
   test('a kind declaring neither keeps its plain arrow cursor', () => {
     expect(showsValidityBox(false, false)).toBe(false)
+  })
+})
+
+describe('move rotation steps', () => {
+  test('applies a free rotation step while the move is unattached', () => {
+    expect(resolveMoveRotationStep(0.5, 0.25, null)).toBeCloseTo(0.75)
+  })
+
+  test('rejects rotation steps while the move is wall-attached', () => {
+    expect(resolveMoveRotationStep(0.5, 0.25, Math.PI / 2)).toBeNull()
   })
 })

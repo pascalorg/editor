@@ -13,6 +13,12 @@ export { BaseNode, generateId, Material, nodeType, objectId } from './base'
 export { CameraSchema } from './camera'
 // Collections
 export { type Collection, type CollectionId, generateCollectionId } from './collections'
+// Compiled per-kind parsers (opt-in)
+export {
+  compiledNodeParsersEnabled,
+  enableCompiledNodeParsers,
+  parseNode,
+} from './compiled-node-parsers'
 export type {
   MaterialMapProperties,
   MaterialMaps,
@@ -56,7 +62,13 @@ export {
 } from './nodes/block'
 export { BoxVentMaterialRole, BoxVentNode } from './nodes/box-vent'
 export { BuildingNode } from './nodes/building'
-export { CabinetModuleNode, CabinetNode } from './nodes/cabinet'
+export {
+  CABINET_METRIC_DEFAULTS,
+  CabinetFrontStyleSchema,
+  CabinetModuleNode,
+  CabinetNode,
+  CabinetTopFinishSchema,
+} from './nodes/cabinet'
 export { CeilingNode } from './nodes/ceiling'
 export { ChimneyMaterialRole, ChimneyNode } from './nodes/chimney'
 export {
@@ -102,9 +114,19 @@ export {
   OpeningDimensionReference,
 } from './nodes/door'
 export {
+  createDormerDefaultWindow,
   DormerNode,
   type DormerSurfaceMaterialRole,
   type DormerSurfaceMaterialSpec,
+  DormerWallFace,
+  dormerPointToWallFace,
+  dormerWallFacePointToDormer,
+  getDormerDefaultWindowFace,
+  getDormerExposedFaces,
+  getDormerWallFaceFrame,
+  getDormerWallHorizontalBoundsAtHeight,
+  getDormerWallOpeningVerticalBounds,
+  getDormerWallVerticalBounds,
   getEffectiveDormerSurfaceMaterial,
 } from './nodes/dormer'
 export {
@@ -161,6 +183,7 @@ export {
   LOW_PROFILE_ITEM_SURFACE_MAX_HEIGHT,
 } from './nodes/item'
 export {
+  LeanToCanopyForm,
   LeanToConnectionMode,
   LeanToEndCondition,
   LeanToExtensionNode,
@@ -197,7 +220,7 @@ export {
   type RidgeVentLine,
   RidgeVentNode,
 } from './nodes/ridge-vent'
-export type { RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
+export type { RoofSupport, RoofSurfaceMaterialRole, RoofSurfaceMaterialSpec } from './nodes/roof'
 export { getEffectiveRoofSurfaceMaterial, RoofNode } from './nodes/roof'
 export type {
   DutchRoofMetrics,
@@ -208,6 +231,7 @@ export type {
 } from './nodes/roof-segment'
 export {
   getActiveRoofHeight,
+  getConicalRoofCoverage,
   getDutchRoofMetrics,
   getEffectiveSegmentSurfaceMaterial,
   getPitchFromActiveRoofHeight,
@@ -326,6 +350,6 @@ export {
 export { ZoneNode } from './nodes/zone'
 export { generateSceneMaterialId, SceneMaterial, type SceneMaterialId } from './scene-material'
 export { MAX_TERRAIN_SIDE, TerrainData } from './terrain'
-export type { AnyNodeId, AnyNodeType } from './types'
+export type { AnyNodeId, AnyNodeOption, AnyNodeType } from './types'
 // Union types
-export { AnyNode } from './types'
+export { AnyNode, nodeKindOf } from './types'

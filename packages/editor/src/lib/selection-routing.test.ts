@@ -1,6 +1,15 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, emitter, nodeRegistry, registerNode } from '@pascal-app/core'
+import {
+  type AnyNode,
+  BlockNode,
+  emitter,
+  nodeRegistry,
+  registerNode,
+  useScene,
+} from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { z } from 'zod'
+import useEditor from '../store/use-editor'
 import {
   emitCanvasNodeSelection,
   resolveCanvasSelectionNode,
@@ -70,6 +79,64 @@ describe('emitCanvasNodeSelection', () => {
 
     emitter.off('selection:canvas-node-click', onSelection)
     expect(received).toEqual([node])
+  })
+
+  test('deletes an accepted floorplan node when Delete mode is active', () => {
+    const node = BlockNode.parse({ id: 'block_floorplan-delete-target' })
+    const previousToolMode = useEditor.getState().toolMode
+    const previousScene = useScene.getState()
+    const previousSelection = useViewer.getState().selection
+    const received: AnyNode[] = []
+    const listener = (selectedNode: AnyNode) => received.push(selectedNode)
+
+    emitter.on('selection:canvas-node-click', listener)
+
+    try {
+      useEditor.getState().armToolMode({ mode: 'delete' })
+      useScene.setState({
+        nodes: { [node.id]: node },
+        rootNodeIds: [node.id],
+        readOnly: false,
+      })
+      useViewer.getState().setSelection({ selectedIds: [node.id] })
+
+      emitCanvasNodeSelection(node)
+
+      expect(useScene.getState().nodes[node.id]).toBeUndefined()
+      expect(useViewer.getState().selection.selectedIds).toEqual([])
+      expect(received).toEqual([])
+    } finally {
+      emitter.off('selection:canvas-node-click', listener)
+      useEditor.getState().armToolMode(previousToolMode)
+      useScene.setState(previousScene)
+      useViewer.setState({ selection: previousSelection })
+    }
+  })
+
+  test('preserves a floorplan node and its selection when the scene is read-only', () => {
+    const node = BlockNode.parse({ id: 'block_floorplan-read-only-target' })
+    const previousToolMode = useEditor.getState().toolMode
+    const previousScene = useScene.getState()
+    const previousSelection = useViewer.getState().selection
+
+    try {
+      useEditor.getState().armToolMode({ mode: 'delete' })
+      useScene.setState({
+        nodes: { [node.id]: node },
+        rootNodeIds: [node.id],
+        readOnly: true,
+      })
+      useViewer.getState().setSelection({ selectedIds: [node.id] })
+
+      emitCanvasNodeSelection(node)
+
+      expect(useScene.getState().nodes[node.id]).toEqual(node)
+      expect(useViewer.getState().selection.selectedIds).toEqual([node.id])
+    } finally {
+      useEditor.getState().armToolMode(previousToolMode)
+      useScene.setState(previousScene)
+      useViewer.setState({ selection: previousSelection })
+    }
   })
 })
 

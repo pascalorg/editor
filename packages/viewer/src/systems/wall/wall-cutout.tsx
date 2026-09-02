@@ -1,6 +1,7 @@
 import {
   type AnyNodeId,
   emitter,
+  getLibraryMaterialsVersion,
   getWallFaceBandConfig,
   getWallPlaneTop,
   resolveLevelId,
@@ -138,6 +139,7 @@ export const WallCutout = () => {
     materials: null as object | null,
     shading: null as unknown,
     wallCount: -1,
+    libraryMaterialsVersion: -1,
   })
   const lastTextures = useRef(useViewer.getState().textures)
   const lastColorPreset = useRef(useViewer.getState().colorPreset)
@@ -187,17 +189,22 @@ export const WallCutout = () => {
     // face bands is a full-scene scan; its inputs are immutable store slices,
     // so identity is enough to know the key cannot have changed.
     const wallCount = sceneRegistry.byType.wall!.size
+    // Dynamic `library:mtl_*` materials register after mount; the version bump
+    // flips the `#unresolved` signature fragments so dangling paint re-resolves.
+    const libraryMaterialsVersion = getLibraryMaterialsVersion()
     const appearanceInputs = wallAppearanceInputs.current
     if (
       appearanceInputs.nodes !== sceneState.nodes ||
       appearanceInputs.materials !== sceneState.materials ||
       appearanceInputs.shading !== shading ||
-      appearanceInputs.wallCount !== wallCount
+      appearanceInputs.wallCount !== wallCount ||
+      appearanceInputs.libraryMaterialsVersion !== libraryMaterialsVersion
     ) {
       appearanceInputs.nodes = sceneState.nodes
       appearanceInputs.materials = sceneState.materials
       appearanceInputs.shading = shading
       appearanceInputs.wallCount = wallCount
+      appearanceInputs.libraryMaterialsVersion = libraryMaterialsVersion
       wallAppearanceKeyRef.current = Array.from(sceneRegistry.byType.wall!)
         .sort()
         .map((wallId) => {

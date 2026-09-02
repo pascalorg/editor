@@ -35,7 +35,7 @@ export type MaterialPaintPanelProps = {
 export function MaterialPaintPanel({ onCreateMaterialRequest }: MaterialPaintPanelProps) {
   const activePaintMaterial = useEditor((state) => state.activePaintMaterial)
   const activePaintTarget = useEditor((state) => state.activePaintTarget)
-  const setActivePaintMaterial = useEditor((state) => state.setActivePaintMaterial)
+  const armMaterialPaint = useEditor((state) => state.armMaterialPaint)
   const setActivePaintTarget = useEditor((state) => state.setActivePaintTarget)
   const paintEraser = useEditor((state) => state.paintEraser)
   const setPaintEraser = useEditor((state) => state.setPaintEraser)
@@ -81,7 +81,7 @@ export function MaterialPaintPanel({ onCreateMaterialRequest }: MaterialPaintPan
         },
       },
     })
-    setActivePaintMaterial({ materialPreset: toSceneMaterialRef(id), sourceTarget: activePaintTarget })
+    armMaterialPaint({ materialPreset: toSceneMaterialRef(id), sourceTarget: activePaintTarget })
     setAutoEditMaterialId(id)
   }
 
@@ -112,11 +112,13 @@ export function MaterialPaintPanel({ onCreateMaterialRequest }: MaterialPaintPan
       </div>
 
       {/* Scrolls: category tabs (fixed inside) + catalog grid (the scroll). */}
-      <div className="min-h-0 flex-1">
+      {/* A stable hook for host-app onboarding to point at. Static, and read
+          only from outside: nothing here depends on it. */}
+      <div className="min-h-0 flex-1" data-guide-target="paint-material">
         <MaterialPicker
           onCreateMaterialRequest={onCreateMaterialRequest}
           onSelectMaterialPreset={(materialPreset) => {
-            setActivePaintMaterial({ materialPreset, sourceTarget: activePaintTarget })
+            armMaterialPaint({ materialPreset, sourceTarget: activePaintTarget })
           }}
           selectedMaterialPreset={activePaintMaterial?.materialPreset}
         />

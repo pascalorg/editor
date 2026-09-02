@@ -50,7 +50,7 @@ import {
   duplicatesAsFreshSubtree,
   prepareFreshPlacementRootDuplicate,
 } from '../../lib/fresh-planar-placement'
-import { resolveOverlayPolicy } from '../../lib/interaction/overlay-policy'
+import { resolveFloatingActionMenuVisibility } from '../../lib/interaction/overlay-policy'
 import { curveReshapeScope, holeEditScope } from '../../lib/interaction/scope'
 import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
 import { collectQuickActionNodeScope } from '../../lib/quick-action-nodes'
@@ -292,10 +292,7 @@ export function FloatingActionMenu() {
   const activeHandleDrag = useActiveHandleDrag()
   // R/T rotation axis for kinds with full 3D orientation (duct fittings).
   const rotationAxis = useEditor((s) => s.rotationAxis)
-  // The floating action menu is an action-conflicting control: hard-hidden
-  // during any active interaction so it never competes with the live action.
   const scope = useInteractionScope((s) => s.scope)
-  const menuStepBack = resolveOverlayPolicy(scope).conflictingControls === 'hidden'
 
   const groupRef = useRef<THREE.Group>(null)
   const menuScaleRef = useRef<HTMLDivElement>(null)
@@ -360,6 +357,7 @@ export function FloatingActionMenu() {
     activeHandleDrag?.nodeId === selectedId &&
     activeHandleDrag?.label === 'height'
   const pillDims = pillNode ? getHeightPillDimensions(pillNode) : null
+  const menuVisibility = resolveFloatingActionMenuVisibility(scope, isHeightDragPill)
 
   // Boolean selector, only re-renders when curving availability actually flips.
   const canCurveSelectedWall = useScene((s) => {
@@ -770,7 +768,7 @@ export function FloatingActionMenu() {
     !(selectedId && node && isValidType && !isFloorplanHovered && mode !== 'delete') ||
     endpointReshape ||
     isCurveReshape ||
-    menuStepBack
+    !menuVisibility.root
   )
     return null
 
@@ -790,43 +788,45 @@ export function FloatingActionMenu() {
             ref={menuScaleRef}
             style={{ transformOrigin: 'center center' }}
           >
-            <NodeActionMenu
-              onFind={node && canFindNode ? handleFind : undefined}
-              onAddHole={
-                !editLocked && node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined
-              }
-              onCurve={
-                !editLocked &&
-                ((node?.type === 'fence' && !isSplineFence(node) && !isCurvedWall(node)) ||
-                  (node?.type === 'wall' && canCurveSelectedWall))
-                  ? handleCurve
-                  : undefined
-              }
-              onMove={
-                // Fully registry-driven: any kind that declares
-                // `capabilities.movable`, a `floorplanMoveTarget`, or a
-                // 3D `affordanceTools.move` mover gets the Move button.
-                // Adding a new movable kind never touches this file.
-                !editLocked && node && isRegistryMovable(node.type) ? handleMove : undefined
-              }
-              onDelete={editLocked ? undefined : handleDelete}
-              onDuplicate={
-                // Locked like every other edit here. Duplicating under a lock
-                // wrote the copy at the source's exact position, where the same
-                // lock then made it unselectable and undeletable — an invisible
-                // node nothing in the UI could reach.
-                !editLocked &&
-                node &&
-                node.type !== 'spawn' &&
-                !DELETE_ONLY_TYPES.includes(node.type) &&
-                !HOLE_TYPES.includes(node.type)
-                  ? handleDuplicate
-                  : undefined
-              }
-              onPointerDown={(e) => e.stopPropagation()}
-              onPointerUp={(e) => e.stopPropagation()}
-            />
-            {!editLocked && quickActions.length > 0 ? (
+            {menuVisibility.actions ? (
+              <NodeActionMenu
+                onFind={node && canFindNode ? handleFind : undefined}
+                onAddHole={
+                  !editLocked && node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined
+                }
+                onCurve={
+                  !editLocked &&
+                  ((node?.type === 'fence' && !isSplineFence(node) && !isCurvedWall(node)) ||
+                    (node?.type === 'wall' && canCurveSelectedWall))
+                    ? handleCurve
+                    : undefined
+                }
+                onMove={
+                  // Fully registry-driven: any kind that declares
+                  // `capabilities.movable`, a `floorplanMoveTarget`, or a
+                  // 3D `affordanceTools.move` mover gets the Move button.
+                  // Adding a new movable kind never touches this file.
+                  !editLocked && node && isRegistryMovable(node.type) ? handleMove : undefined
+                }
+                onDelete={editLocked ? undefined : handleDelete}
+                onDuplicate={
+                  // Locked like every other edit here. Duplicating under a lock
+                  // wrote the copy at the source's exact position, where the same
+                  // lock then made it unselectable and undeletable — an invisible
+                  // node nothing in the UI could reach.
+                  !editLocked &&
+                  node &&
+                  node.type !== 'spawn' &&
+                  !DELETE_ONLY_TYPES.includes(node.type) &&
+                  !HOLE_TYPES.includes(node.type)
+                    ? handleDuplicate
+                    : undefined
+                }
+                onPointerDown={(e) => e.stopPropagation()}
+                onPointerUp={(e) => e.stopPropagation()}
+              />
+            ) : null}
+            {menuVisibility.actions && !editLocked && quickActions.length > 0 ? (
               <div
                 className="pointer-events-auto mt-1 inline-flex w-max items-center justify-center gap-0.5 rounded-lg border border-border/50 bg-background/90 px-1.5 py-1 shadow-md backdrop-blur-md"
                 onPointerDown={(e) => e.stopPropagation()}

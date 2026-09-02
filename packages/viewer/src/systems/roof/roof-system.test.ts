@@ -1,7 +1,7 @@
 // @ts-expect-error - bun:test is provided by the Bun runtime; viewer does not
 // include Bun globals in its package tsconfig.
 import { describe, expect, test } from 'bun:test'
-import { RoofSegmentNode } from '@pascal-app/core'
+import { type AnyNode, RoofNode, RoofSegmentNode } from '@pascal-app/core'
 import * as THREE from 'three'
 import { generateRoofSegmentGeometry } from './roof-system'
 
@@ -15,6 +15,7 @@ describe('roof system shed geometry', () => {
     const sideInfillX: number[] = []
     const sideInfillNormals: THREE.Vector3[] = []
     const roofSideX: number[] = []
+    const wallVertexYs: number[] = []
     const a = new THREE.Vector3()
     const b = new THREE.Vector3()
     const c = new THREE.Vector3()
@@ -38,22 +39,28 @@ describe('roof system shed geometry', () => {
         }
 
         if (group.materialIndex === 2) {
-          sideInfillNormals.push(normal.clone())
-          for (const vertexIndex of [ia, ib, ic]) {
-            const x = position.getX(vertexIndex)
-            const y = position.getY(vertexIndex)
-            if (y >= segment.wallHeight - 0.001) {
-              sideInfillX.push(x)
+          const vertexIndices = [ia, ib, ic]
+          for (const vertexIndex of vertexIndices) {
+            wallVertexYs.push(position.getY(vertexIndex))
+          }
+          if (
+            vertexIndices.every(
+              (vertexIndex) => position.getY(vertexIndex) >= segment.wallHeight - 0.05,
+            )
+          ) {
+            sideInfillNormals.push(normal.clone())
+            for (const vertexIndex of vertexIndices) {
+              sideInfillX.push(position.getX(vertexIndex))
             }
           }
         }
       }
     }
 
-    return { geometry, roofSideX, sideInfillNormals, sideInfillX }
+    return { geometry, roofSideX, sideInfillNormals, sideInfillX, wallVertexYs }
   }
 
-  test('keeps standalone shed side infill inside the overhanging roof edge', () => {
+  test('keeps the standalone shed wall shell beneath the overhanging roof edge', () => {
     const segment = RoofSegmentNode.parse({
       id: 'rseg_shed',
       type: 'roof-segment',
@@ -68,15 +75,82 @@ describe('roof system shed geometry', () => {
       shingleThickness: 0.05,
     })
     const wallSideX = segment.width / 2
-    const { geometry, roofSideX, sideInfillNormals, sideInfillX } = inspectShedGeometry(segment)
+    const { geometry, roofSideX, wallVertexYs } = inspectShedGeometry(segment)
 
-    expect(sideInfillNormals).toHaveLength(2)
-    expect(sideInfillX.length).toBeGreaterThan(0)
-    expect(sideInfillNormals.every((panelNormal) => Math.abs(panelNormal.x) > 0.95)).toBe(true)
-    expect(sideInfillNormals.every((panelNormal) => Math.abs(panelNormal.z) < 0.05)).toBe(true)
-    expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeLessThan(wallSideX - 0.05)
-    expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeGreaterThan(wallSideX - 0.15)
+    expect(wallVertexYs.length).toBeGreaterThan(0)
+    expect(Math.min(...wallVertexYs)).toBeLessThan(segment.wallHeight / 2)
     expect(Math.max(...roofSideX)).toBeGreaterThan(wallSideX + segment.overhang * 0.5)
+
+    geometry.dispose()
+  })
+
+  test('retains the wall shell when changing a standalone segment to shed', () => {
+    const original = RoofSegmentNode.parse({
+      id: 'rseg_switched_to_shed',
+      type: 'roof-segment',
+      roofType: 'gable',
+      width: 8,
+      depth: 6,
+      wallHeight: 2.6,
+      wallThickness: 0.1,
+      pitch: 25,
+      overhang: 0.3,
+      deckThickness: 0.1,
+      shingleThickness: 0.05,
+    })
+    const segment = RoofSegmentNode.parse({ ...original, roofType: 'shed' })
+    const geometry = generateRoofSegmentGeometry(segment)
+    const position = geometry.getAttribute('position')
+    const index = geometry.getIndex()
+    expect(index).not.toBeNull()
+
+    const wallVertexYs: number[] = []
+    for (const group of geometry.groups) {
+      if (group.materialIndex !== 2) continue
+      for (let offset = group.start; offset < group.start + group.count; offset += 1) {
+        wallVertexYs.push(position.getY(index!.getX(offset)))
+      }
+    }
+
+    expect(wallVertexYs.length).toBeGreaterThan(0)
+    expect(Math.min(...wallVertexYs)).toBeLessThan(segment.wallHeight / 2)
+
+    geometry.dispose()
+  })
+
+  test('omits overlapping wall shells from legacy composite shed roofs', () => {
+    const roof = RoofNode.parse({
+      id: 'roof_legacy_composite_shed',
+      type: 'roof',
+      children: ['rseg_legacy_shed_a', 'rseg_legacy_shed_b'],
+    })
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_legacy_shed_a',
+      type: 'roof-segment',
+      parentId: roof.id,
+      roofType: 'shed',
+      width: 8,
+      depth: 6,
+      wallHeight: 0.1,
+      wallThickness: 0.1,
+      pitch: 25,
+      overhang: 0.3,
+      deckThickness: 0.1,
+      shingleThickness: 0.05,
+    })
+    const sibling = RoofSegmentNode.parse({
+      ...segment,
+      id: 'rseg_legacy_shed_b',
+      position: [2, 0, 0],
+      rotation: Math.PI / 4,
+    })
+    const geometry = generateRoofSegmentGeometry(segment, {
+      [roof.id]: roof,
+      [segment.id]: segment,
+      [sibling.id]: sibling,
+    })
+
+    expect(geometry.groups.some((group) => group.materialIndex === 2)).toBe(false)
 
     geometry.dispose()
   })
@@ -102,6 +176,8 @@ describe('roof system shed geometry', () => {
       shedSideInfillSpan: span,
       shedSideInfillMinX: -infillHalfWidth,
       shedSideInfillMaxX: infillHalfWidth,
+      shedInsetEndPanels: true,
+      wallShell: 'omit',
     })
     const { geometry, roofSideX, sideInfillNormals, sideInfillX } = inspectShedGeometry(segment)
 
@@ -111,6 +187,128 @@ describe('roof system shed geometry', () => {
     expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeLessThan(span / 2 + leftOverhang)
     expect(Math.max(...roofSideX)).toBeGreaterThan(span / 2 + leftOverhang * 0.5)
 
+    geometry.dispose()
+  })
+
+  test('does not emit vertical fascia along a connected shed footprint edge', () => {
+    const parent = RoofNode.parse({
+      id: 'roof_connected_shed',
+      type: 'roof',
+      children: ['rseg_connected_a', 'rseg_connected_b'],
+    })
+    const base = RoofSegmentNode.parse({
+      id: 'rseg_connected_a',
+      type: 'roof-segment',
+      parentId: parent.id,
+      roofType: 'shed',
+      width: 2,
+      depth: 2,
+      wallHeight: 0,
+      wallThickness: 0.01,
+      pitch: 15,
+      overhang: 0,
+      deckThickness: 0.1,
+      shingleThickness: 0.025,
+      wallShell: 'omit',
+      shedFootprintPieces: [
+        [
+          [-1, -1],
+          [1, -1],
+          [1, 1],
+          [-1, 1],
+        ],
+      ],
+    })
+    const sibling = RoofSegmentNode.parse({
+      ...base,
+      id: 'rseg_connected_b',
+      position: [2, 0, 0],
+    })
+    const nodes = {
+      [parent.id]: parent,
+      [base.id]: base,
+      [sibling.id]: sibling,
+    }
+    const geometry = generateRoofSegmentGeometry(base, nodes)
+    const position = geometry.getAttribute('position')
+    const index = geometry.getIndex()!
+    const normal = new THREE.Vector3()
+    let verticalTriangles = 0
+    for (const group of geometry.groups) {
+      for (let offset = group.start; offset < group.start + group.count; offset += 3) {
+        const a = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset))
+        const b = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset + 1))
+        const c = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset + 2))
+        normal.subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize()
+        if (Math.abs(normal.y) < 1e-6) verticalTriangles += 1
+      }
+    }
+
+    expect(verticalTriangles).toBe(6)
+    geometry.dispose()
+  })
+
+  test('omits the vertical cut face along a managed diagonal shed seam', () => {
+    const parent = RoofNode.parse({
+      id: 'roof_connected_diagonal_shed',
+      type: 'roof',
+      children: ['rseg_diagonal_a', 'rseg_diagonal_b'],
+    })
+    const base = RoofSegmentNode.parse({
+      id: 'rseg_diagonal_a',
+      type: 'roof-segment',
+      parentId: parent.id,
+      roofType: 'shed',
+      width: 2,
+      depth: 2,
+      wallHeight: 0,
+      wallThickness: 0.01,
+      pitch: 15,
+      overhang: 0,
+      deckThickness: 0.1,
+      shingleThickness: 0.025,
+      wallShell: 'omit',
+      managedByParent: true,
+      trim: { frontRightX: 1, frontRightZ: 1 },
+    })
+    const sibling = RoofSegmentNode.parse({
+      ...base,
+      id: 'rseg_diagonal_b',
+      managedByParent: false,
+      trim: {},
+      shedFootprintPieces: [
+        [
+          [1, 0],
+          [1, 1],
+          [0, 1],
+        ],
+      ],
+    })
+    const nodes = {
+      [parent.id]: parent,
+      [base.id]: base,
+      [sibling.id]: sibling,
+    }
+    const geometry = generateRoofSegmentGeometry(base, nodes)
+    const position = geometry.getAttribute('position')
+    const index = geometry.getIndex()!
+    const normal = new THREE.Vector3()
+    let diagonalVerticalTriangles = 0
+
+    for (const group of geometry.groups) {
+      for (let offset = group.start; offset < group.start + group.count; offset += 3) {
+        const a = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset))
+        const b = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset + 1))
+        const c = new THREE.Vector3().fromBufferAttribute(position, index.getX(offset + 2))
+        normal.subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize()
+        if (Math.abs(normal.y) > 1e-6) continue
+        if ([a, b, c].every((point) => Math.abs(point.x + point.z - 1) < 1e-6)) {
+          diagonalVerticalTriangles += 1
+        }
+      }
+    }
+
+    expect(diagonalVerticalTriangles).toBe(0)
     geometry.dispose()
   })
 
@@ -245,6 +443,269 @@ describe('roof system shed geometry', () => {
     expect(topLowYs.length).toBeGreaterThan(0)
     expect(Math.min(...topHighYs)).toBeGreaterThan(Math.max(...topLowYs))
 
+    geometry.dispose()
+  })
+
+  test('keeps the curved-to-straight miter patch flush along the full seam', () => {
+    const curvedRoof = RoofNode.parse({
+      id: 'roof_curved_transition',
+      children: ['rseg_curved_transition'],
+    })
+    const straightRoof = RoofNode.parse({
+      id: 'roof_straight_transition',
+      children: ['rseg_straight_transition'],
+    })
+    const curvedSegment = RoofSegmentNode.parse({
+      id: 'rseg_curved_transition',
+      parentId: curvedRoof.id,
+      position: [0, 1.68852513052742, 1.363],
+      roofType: 'shed',
+      width: 10.40606321590456,
+      depth: 2.77,
+      pitch: 10,
+      wallThickness: 0.01,
+      deckThickness: 0.1,
+      shingleThickness: 0.025,
+      arc: { centerX: 0, centerZ: 4.993249999999998, radius: 6.406249999999998 },
+      shedSideInfillSpan: 10.106063215904559,
+      shedFootprintPieces: [
+        [
+          [-5.20303160795228, -1.383],
+          [5.20303160795228, -1.383],
+          [5.20303160795228, 1.3850000000000002],
+          [-5.20303160795228, 1.3850000000000002],
+        ],
+      ],
+      shedJointFrame: {
+        position: [3.0968408559263407, 0, 7.322489741918625],
+        rotation: 2.50884381858761,
+      },
+      shedJointOwnerId: 'curved-transition',
+      shedJointNeighborIds: ['straight-transition'],
+      shedJointScopeId: 'level_curved_transition',
+      managedByParent: true,
+      wallShell: 'omit',
+    })
+    const straightSegment = RoofSegmentNode.parse({
+      id: 'rseg_straight_transition',
+      parentId: straightRoof.id,
+      position: [0, 1.68852513052742, 1.363],
+      roofType: 'shed',
+      width: 7.211102550927979,
+      depth: 2.77,
+      pitch: 10,
+      wallThickness: 0.01,
+      deckThickness: 0.1,
+      shingleThickness: 0.025,
+      shedSideInfillSpan: 6.911102550927978,
+      shedFootprintPieces: [
+        [
+          [-3.6055512754639896, -1.383],
+          [3.6055512754639896, -1.383],
+          [3.6055512754639896, 1.3850000000000002],
+          [-3.6055512754639896, 1.3850000000000002],
+        ],
+        [
+          [-3.6319612690700067, -1.4272651623364798],
+          [-6.10960453124532, -2.661407725169994],
+          [-3.6055512754639896, 1.3850000000000002],
+        ],
+      ],
+      shedJointFrame: {
+        position: [-2.5277350098112623, 0, 4.958397485283108],
+        rotation: -2.5535900500422257,
+      },
+      shedJointOwnerId: 'straight-transition',
+      shedJointNeighborIds: ['curved-transition'],
+      shedJointScopeId: 'level_curved_transition',
+      managedByParent: true,
+      wallShell: 'omit',
+    })
+    const nodes = Object.fromEntries(
+      [curvedRoof, straightRoof, curvedSegment, straightSegment].map((node) => [node.id, node]),
+    ) as Record<string, AnyNode>
+
+    const curvedGeometry = generateRoofSegmentGeometry(curvedSegment, nodes)
+    const straightGeometry = generateRoofSegmentGeometry(straightSegment, nodes)
+    const topAt = (geometry: THREE.BufferGeometry, point: readonly [number, number]) => {
+      const position = geometry.getAttribute('position')
+      const heights: number[] = []
+      for (let index = 0; index < position.count; index++) {
+        if (Math.hypot(position.getX(index) - point[0], position.getZ(index) - point[1]) < 1e-4) {
+          heights.push(position.getY(index))
+        }
+      }
+      return Math.max(...heights)
+    }
+    const bend = ([x, z]: readonly [number, number]): [number, number] => {
+      const arc = curvedSegment.arc!
+      const signedRef = (Math.sign(arc.centerZ) || 1) * arc.radius
+      const phi = (x - arc.centerX) / signedRef
+      const radial = z - arc.centerZ
+      return [arc.centerX - radial * Math.sin(phi), arc.centerZ + radial * Math.cos(phi)]
+    }
+    const curvedSeam = [
+      bend([5.20303160795228, -1.383]),
+      bend([5.20303160795228, 1.3850000000000002]),
+    ] as const
+    const straightSeam = straightSegment.shedFootprintPieces![1]!.slice(0, 2)
+
+    expect(topAt(straightGeometry, straightSeam[0]!)).toBeCloseTo(
+      topAt(curvedGeometry, curvedSeam[0]),
+      5,
+    )
+    expect(topAt(straightGeometry, straightSeam[1]!)).toBeCloseTo(
+      topAt(curvedGeometry, curvedSeam[1]),
+      5,
+    )
+    curvedGeometry.dispose()
+    straightGeometry.dispose()
+  })
+})
+
+describe('roof system conical sector geometry', () => {
+  test('does not leave broad radial closure triangles on a narrow sector', () => {
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_narrow_conical_sector',
+      type: 'roof-segment',
+      roofType: 'conical',
+      width: 2,
+      depth: 2,
+      wallHeight: 0,
+      pitch: 40,
+      overhang: 0.3,
+      conicalStartAngle: 0.3,
+      conicalSweepAngle: 0.5,
+    })
+
+    const geometry = generateRoofSegmentGeometry(segment)
+    const position = geometry.getAttribute('position')
+    const index = geometry.getIndex()
+    expect(index).not.toBeNull()
+    const a = new THREE.Vector3()
+    const b = new THREE.Vector3()
+    const c = new THREE.Vector3()
+    const ab = new THREE.Vector3()
+    const ac = new THREE.Vector3()
+    const normal = new THREE.Vector3()
+    let broadCutTriangleCount = 0
+    for (let offset = 0; offset < index!.count; offset += 3) {
+      a.fromBufferAttribute(position, index!.getX(offset))
+      b.fromBufferAttribute(position, index!.getX(offset + 1))
+      c.fromBufferAttribute(position, index!.getX(offset + 2))
+      normal.crossVectors(ab.subVectors(b, a), ac.subVectors(c, a))
+      const area = normal.length() / 2
+      normal.normalize()
+      const radii = [a, b, c].map((point) => Math.hypot(point.x, point.z))
+      const ys = [a.y, b.y, c.y]
+      if (
+        Math.abs(normal.y) < 0.05 &&
+        area > 0.1 &&
+        Math.min(...radii) < 0.1 &&
+        Math.max(...radii) > 0.5 &&
+        Math.max(...ys) - Math.min(...ys) > 0.5
+      ) {
+        broadCutTriangleCount += 1
+      }
+    }
+
+    let whiteSlopeArea = 0
+    for (const group of geometry.groups) {
+      if (group.materialIndex !== 0) continue
+      for (let offset = group.start; offset < group.start + group.count; offset += 3) {
+        a.fromBufferAttribute(position, index!.getX(offset))
+        b.fromBufferAttribute(position, index!.getX(offset + 1))
+        c.fromBufferAttribute(position, index!.getX(offset + 2))
+        normal.crossVectors(ab.subVectors(b, a), ac.subVectors(c, a))
+        const area = normal.length() / 2
+        normal.normalize()
+        if (normal.y > 0.1) whiteSlopeArea += area
+      }
+    }
+
+    expect(broadCutTriangleCount).toBe(0)
+    expect(whiteSlopeArea).toBeLessThan(0.05)
+    geometry.dispose()
+  })
+
+  test('keeps large sectors free of CSG striping and phantom wall faces', () => {
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_large_conical_sector',
+      type: 'roof-segment',
+      roofType: 'conical',
+      width: 10,
+      depth: 10,
+      wallHeight: 0,
+      pitch: 40,
+      overhang: 0.3,
+      conicalStartAngle: 0.3,
+      conicalSweepAngle: 1,
+    })
+
+    const geometry = generateRoofSegmentGeometry(segment)
+    const triangleCount = (geometry.getIndex()?.count ?? 0) / 3
+
+    expect(triangleCount).toBeLessThan(100)
+    expect(geometry.groups.some((group) => group.materialIndex === 2)).toBe(false)
+    geometry.dispose()
+  })
+
+  test('emits canopy wall faces with both windings', () => {
+    const segment = RoofSegmentNode.parse({
+      id: 'rseg_double_sided_conical_walls',
+      type: 'roof-segment',
+      roofType: 'conical',
+      width: 4,
+      depth: 4,
+      wallHeight: 2,
+      wallThickness: 0.1,
+      pitch: 40,
+      overhang: 0.3,
+      conicalStartAngle: 0.3,
+      conicalSweepAngle: 1,
+    })
+
+    const geometry = generateRoofSegmentGeometry(segment)
+    const position = geometry.getAttribute('position')
+    const index = geometry.getIndex()
+    expect(index).not.toBeNull()
+
+    const wallMaterialIndices = new Set<number>()
+    const windingCounts = new Map<string, [number, number]>()
+    const a = new THREE.Vector3()
+    const b = new THREE.Vector3()
+    const c = new THREE.Vector3()
+    const normal = new THREE.Vector3()
+    for (const group of geometry.groups) {
+      for (let offset = group.start; offset < group.start + group.count; offset += 3) {
+        a.fromBufferAttribute(position, index!.getX(offset))
+        b.fromBufferAttribute(position, index!.getX(offset + 1))
+        c.fromBufferAttribute(position, index!.getX(offset + 2))
+        const ys = [a.y, b.y, c.y]
+        if (Math.min(...ys) > 0.001 || Math.max(...ys) < segment.wallHeight - 0.001) continue
+        wallMaterialIndices.add(group.materialIndex ?? 0)
+        normal.crossVectors(b.clone().sub(a), c.clone().sub(a)).normalize()
+        const firstNonzero = [normal.x, normal.y, normal.z].find(
+          (coordinate) => Math.abs(coordinate) > 1e-5,
+        )
+        const winding = firstNonzero !== undefined && firstNonzero < 0 ? 1 : 0
+        if (winding === 1) normal.negate()
+        const signature = [normal.x, normal.y, normal.z, normal.dot(a)]
+          .map((coordinate) => coordinate.toFixed(4))
+          .join(',')
+        const counts = windingCounts.get(signature) ?? [0, 0]
+        counts[winding] += 1
+        windingCounts.set(signature, counts)
+      }
+    }
+
+    expect([...wallMaterialIndices]).toEqual([0])
+    expect(windingCounts.size).toBeGreaterThan(0)
+    expect(
+      [...windingCounts.values()].every(
+        ([forwardCount, reverseCount]) => forwardCount > 0 && forwardCount === reverseCount,
+      ),
+    ).toBe(true)
     geometry.dispose()
   })
 })

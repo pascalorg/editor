@@ -16,7 +16,6 @@ import {
   WallNode as WallNodeSchema,
 } from '@pascal-app/core'
 import {
-  calculateCursorRotation,
   calculateItemRotation,
   EDITOR_LAYER,
   getSideFromNormal,
@@ -291,7 +290,15 @@ const DoorTool: React.FC = () => {
         applySnap,
       })
       const { clampedX, clampedY } = clampToWall(wall, localX, width, height)
-      const valid = !hasWallChildOverlap(wall.id, clampedX, clampedY, width, height, ignoreId)
+      const valid = !hasWallChildOverlap(
+        wall.id,
+        useScene.getState().nodes,
+        clampedX,
+        clampedY,
+        width,
+        height,
+        ignoreId,
+      )
       return { clampedX, clampedY, valid }
     }
 
@@ -474,7 +481,12 @@ const DoorTool: React.FC = () => {
       const flipOffset = sideFlip ? Math.PI : 0
       const itemRotation = calculateItemRotation(event.normal) + flipOffset
       const cursorRotation =
-        calculateCursorRotation(event.normal, event.node.start, event.node.end) + flipOffset
+        // World yaw of a wall CHILD (-wallAngle + itemRotation, which already
+        // carries the flip) — `calculateCursorRotation` was π off, pointing
+        // the facing triangle at the far side of the wall (see
+        // MoveDoorTool.applyPreview).
+        itemRotation -
+        Math.atan2(event.node.end[1] - event.node.start[1], event.node.end[0] - event.node.start[0])
       applyWallTarget({
         wall: event.node,
         rawLocalX: event.localPosition[0],

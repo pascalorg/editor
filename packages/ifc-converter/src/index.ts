@@ -31,10 +31,11 @@ export interface PascalSceneGraph {
   collections?: Record<string, unknown>
 }
 
-// Pascal's BaseNode.metadata is typed as `JSONType` (z.json()) — a loose
-// JSON value. The converter writes a fixed shape; this typed accessor
-// keeps dot-access ergonomics without spraying `as any` through the
-// post-processing loops. Read-side only — writes still inline literals.
+// Pascal's BaseNode.metadata is typed as `Record<string, unknown>` — an
+// open object with unchecked values. The converter writes a fixed shape;
+// this typed accessor keeps dot-access ergonomics without spraying `as any`
+// through the post-processing loops. Read-side only — writes still inline
+// literals.
 type ConverterMetadata = {
   ifcType?: string
   expressID?: number
@@ -51,11 +52,10 @@ function meta(node: { metadata?: unknown } | null | undefined): ConverterMetadat
   return (node?.metadata ?? {}) as ConverterMetadata
 }
 
-// Pascal's `BaseNode.metadata` is `z.json()` — a recursive JSON value
-// type that doesn't accept `undefined` (JSON has `null`, not undefined).
-// The converter pulls many fields from optional IFC properties that
-// often return `undefined`; stripping them at the boundary keeps the
-// schemas happy without spraying `?? null` through every assignment.
+// The converter pulls many metadata fields from optional IFC properties
+// that often return `undefined`. Those keys vanish the moment the graph is
+// serialized, so stripping them here keeps the in-memory scene identical to
+// the persisted one instead of spraying `?? null` through every assignment.
 function buildMetadata(input: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}
   for (const [key, value] of Object.entries(input)) {

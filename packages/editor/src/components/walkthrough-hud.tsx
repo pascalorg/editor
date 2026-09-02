@@ -17,6 +17,24 @@ export type WalkthroughHudProps = {
   children?: ReactNode
 }
 
+/** The centered walkthrough pointer: a dot that grows into a green ring over
+ *  an interactable (door / window / elevator). Also mounted by the snapshot
+ *  capture overlay so walk / drone framing keeps the same E-to-open pointer. */
+export function WalkthroughCrosshair({ interact }: { interact: WalkthroughInteract }) {
+  return (
+    <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+      <div
+        className={cn(
+          'rounded-full transition-all duration-150',
+          interact
+            ? 'h-4 w-4 border-2 border-emerald-400 bg-emerald-400/10'
+            : 'h-1.5 w-1.5 bg-white/80 shadow-[0_0_2px_rgba(0,0,0,0.6)]',
+        )}
+      />
+    </div>
+  )
+}
+
 export function WalkthroughHud({
   floorLabel,
   zoneLabel,
@@ -51,16 +69,7 @@ export function WalkthroughHud({
         {children}
       </div>
 
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-        <div
-          className={cn(
-            'rounded-full transition-all duration-150',
-            interact
-              ? 'h-4 w-4 border-2 border-emerald-400 bg-emerald-400/10'
-              : 'h-1.5 w-1.5 bg-white/80 shadow-[0_0_2px_rgba(0,0,0,0.6)]',
-          )}
-        />
-      </div>
+      <WalkthroughCrosshair interact={interact} />
 
       <div className="absolute bottom-6 left-1/2 flex -translate-x-1/2 items-center gap-2">
         {suspended ? (

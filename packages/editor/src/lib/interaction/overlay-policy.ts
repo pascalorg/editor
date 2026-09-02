@@ -57,3 +57,19 @@ const ACTIVE_POLICY: OverlayPolicy = {
 export function resolveOverlayPolicy(scope: InteractionScope): OverlayPolicy {
   return isActive(scope) ? ACTIVE_POLICY : IDLE_POLICY
 }
+
+export function resolveFloatingActionMenuVisibility(
+  scope: InteractionScope,
+  hasActiveMeasurementPill: boolean,
+): { root: boolean; actions: boolean } {
+  const policy = resolveOverlayPolicy(scope)
+  const actions = policy.conflictingControls === 'shown'
+  return {
+    root: actions || (hasActiveMeasurementPill && policy.activeAffordances === 'shown'),
+    actions,
+  }
+}
+
+export function shouldShowEditingControls(readOnly: boolean): boolean {
+  return !readOnly
+}

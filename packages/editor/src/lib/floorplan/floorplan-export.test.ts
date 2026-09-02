@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test'
-import type { FloorplanGeometry } from '@pascal-app/core'
+import type { FloorplanGeometry, NodeCategory } from '@pascal-app/core'
 import { splitFloorplanOverlay } from '../../components/editor-2d/renderers/floorplan-registry-layer'
 import { DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY } from './annotation-visibility'
 import {
   filterFloorplanExportOverlay,
   fitPlanToBox,
   isFloorplanExportAnnotationGeometry,
+  isFloorplanNodeInExportScope,
   partitionFloorplanExportOverlay,
   resolveFloorplanExportAnnotationVisibility,
   resolveFloorplanExportNodeGeometry,
@@ -315,5 +316,41 @@ describe('resolveFloorplanPageLayout', () => {
     expect(resolveFloorplanPageLayout(842, 595)).toEqual({
       planBox: { x: 36, y: 64, width: 770, height: 495 },
     })
+  })
+})
+
+describe('isFloorplanNodeInExportScope', () => {
+  const definition = (category?: NodeCategory) => ({ category })
+
+  test('includes structure-category nodes under structure and full', () => {
+    expect(isFloorplanNodeInExportScope(definition('structure'), 'structure')).toBe(true)
+    expect(isFloorplanNodeInExportScope(definition('structure'), 'full')).toBe(true)
+  })
+
+  test('excludes utility-category nodes under structure', () => {
+    expect(isFloorplanNodeInExportScope(definition('utility'), 'full')).toBe(true)
+    expect(isFloorplanNodeInExportScope(definition('utility'), 'structure')).toBe(false)
+  })
+
+  test('includes furnish-category nodes only under full', () => {
+    expect(isFloorplanNodeInExportScope(definition('furnish'), 'full')).toBe(true)
+    expect(isFloorplanNodeInExportScope(definition('furnish'), 'structure')).toBe(false)
+  })
+
+  test('includes analysis and site-category nodes only under full', () => {
+    for (const category of ['analysis', 'site'] as const) {
+      expect(isFloorplanNodeInExportScope(definition(category), 'full')).toBe(true)
+      expect(isFloorplanNodeInExportScope(definition(category), 'structure')).toBe(false)
+    }
+  })
+
+  test('excludes nodes with no category except under full', () => {
+    expect(isFloorplanNodeInExportScope(definition(undefined), 'full')).toBe(true)
+    expect(isFloorplanNodeInExportScope(definition(undefined), 'structure')).toBe(false)
+  })
+
+  test('handles an undefined definition like a no-category node', () => {
+    expect(isFloorplanNodeInExportScope(undefined, 'full')).toBe(true)
+    expect(isFloorplanNodeInExportScope(undefined, 'structure')).toBe(false)
   })
 })

@@ -589,6 +589,17 @@ export function createMaterial(
 }
 
 /**
+ * Cache-signature fragment for a catalog preset ref. Dynamic library
+ * materials (AI-generated `library:mtl_*`) register asynchronously, so a ref
+ * that fails to resolve is NOT static content: tag it so signature-keyed
+ * material caches re-resolve once the library registers instead of pinning
+ * the dangling-ref fallback for the whole session.
+ */
+export function materialPresetRefSignature(ref: string): string {
+  return getMaterialPresetByRef(ref) ? ref : `${ref}#unresolved`
+}
+
+/**
  * Resolve a MaterialRef ('library:<id>' | 'scene:<id>') to a three.js material.
  * Returns null for an unknown / dangling ref so callers fall back to the
  * slot's default (authored material, then themed default). Never throws.
@@ -675,9 +686,7 @@ export function createSurfaceRoleMaterial(
   // on `glassMaterial` above — the validator rejects the back-face variant
   // for missing MRT outputs and poisons the render context (manifests as
   // "Color target has no corresponding fragment stage output" on scene
-  // open, since the dormer's window-assembly mounts the glazing material
-  // on both gable faces on the first frame). Callers that need both sides
-  // visible (e.g. dormer back gable) must rotate the host mesh 180° so the
+  // open). Callers that need both sides visible must rotate the host mesh 180° so the
   // FrontSide faces the viewer.
   const resolvedSide =
     role === 'glazing' ? THREE.FrontSide : resolveNodeMaterialSide(side ?? THREE.FrontSide)

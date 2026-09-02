@@ -1,13 +1,16 @@
 import {
   type DormerNode,
+  dormerWallFacePointToDormer,
+  getDormerWallFaceFrame,
   getPitchFromActiveRoofHeight,
-  getRoofSegmentSurfaceY,
   ROOF_SHAPE_DEFAULTS,
   type RoofSegmentNode,
+  type WindowNode,
 } from '@pascal-app/core'
 import {
   ADDITION,
   Brush,
+  buildOpeningCutoutGeometry,
   computeGeometryBoundsTree,
   csgEvaluator,
   csgGeometry,
@@ -20,7 +23,7 @@ import {
   SUBTRACTION,
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
-import { buildDormerShellGeometry } from './geometry'
+import { buildDormerShellGeometry, getDormerBodyYaw } from './geometry'
 
 // Legacy default for the hung-wall (skirt) height. Used as a fallback
 // when `dormer.wallSkirtHeight` is undefined (e.g. old saved scenes).
@@ -48,181 +51,19 @@ export function buildDormerFallbackGeometry(dormer: DormerNode): THREE.BufferGeo
   return buildDormerShellGeometry(dormer)
 }
 
-export function createDormerArchShape(w: number, h: number, archHeight: number): THREE.Shape {
-  const hw = w / 2
-  const hh = h / 2
-  const clampedArch = Math.min(Math.max(archHeight, 0.01), Math.max(h, 0.01))
-  const springY = hh - clampedArch
-  const segments = 32
-
-  const shape = new THREE.Shape()
-  shape.moveTo(-hw, -hh)
-  shape.lineTo(hw, -hh)
-  shape.lineTo(hw, springY)
-  for (let i = 1; i <= segments; i++) {
-    const x = hw + (-hw - hw) * (i / segments)
-    const t = Math.min(Math.abs(x) / hw, 1)
-    const y = springY + clampedArch * Math.sqrt(Math.max(1 - t * t, 0))
-    shape.lineTo(x, y)
-  }
-  shape.lineTo(-hw, -hh)
-  shape.closePath()
-  return shape
-}
-
-export function normalizeDormerCornerRadii(
-  radii: [number, number, number, number],
-  w: number,
-  h: number,
-): [number, number, number, number] {
-  const r = radii.map((v) => Math.max(v, 0)) as [number, number, number, number]
-  const scale = Math.min(
-    1,
-    Math.max(w, 0) / Math.max(r[0] + r[1], 1e-6),
-    Math.max(w, 0) / Math.max(r[3] + r[2], 1e-6),
-    Math.max(h, 0) / Math.max(r[0] + r[3], 1e-6),
-    Math.max(h, 0) / Math.max(r[1] + r[2], 1e-6),
+function createHostedWindowCutGeometry(window: WindowNode): THREE.BufferGeometry {
+  const depth = 0.4
+  return buildOpeningCutoutGeometry(
+    window,
+    {
+      left: -window.width / 2,
+      right: window.width / 2,
+      bottom: -window.height / 2,
+      top: window.height / 2,
+    },
+    depth,
+    0.05,
   )
-  if (scale >= 1) return r
-  return r.map((v) => v * scale) as [number, number, number, number]
-}
-
-export function createDormerRoundedShape(
-  w: number,
-  h: number,
-  radii: [number, number, number, number],
-): THREE.Shape {
-  const hw = w / 2
-  const hh = h / 2
-  const [tl, tr, br, bl] = normalizeDormerCornerRadii(radii, w, h)
-
-  const shape = new THREE.Shape()
-  shape.moveTo(-hw + bl, -hh)
-  shape.lineTo(hw - br, -hh)
-  if (br > 0) shape.absarc(hw - br, -hh + br, br, -Math.PI / 2, 0, false)
-  else shape.lineTo(hw, -hh)
-  shape.lineTo(hw, hh - tr)
-  if (tr > 0) shape.absarc(hw - tr, hh - tr, tr, 0, Math.PI / 2, false)
-  else shape.lineTo(hw, hh)
-  shape.lineTo(-hw + tl, hh)
-  if (tl > 0) shape.absarc(-hw + tl, hh - tl, tl, Math.PI / 2, Math.PI, false)
-  else shape.lineTo(-hw, hh)
-  shape.lineTo(-hw, -hh + bl)
-  if (bl > 0) shape.absarc(-hw + bl, -hh + bl, bl, Math.PI, (3 * Math.PI) / 2, false)
-  else shape.lineTo(-hw, -hh)
-  shape.closePath()
-  return shape
-}
-
-function resolveDormerRadii(
-  dormer: DormerNode,
-  w: number,
-  h: number,
-): [number, number, number, number] {
-  return normalizeDormerCornerRadii(dormer.windowCornerRadii, w, h)
-}
-
-function createDormerWindowCutGeometry(
-  dormer: DormerNode,
-  w: number,
-  h: number,
-  depth: number,
-): THREE.BufferGeometry {
-  const shape = dormer.windowShape ?? 'rectangle'
-  if (shape === 'arch') {
-    const s = createDormerArchShape(w, h, dormer.windowArchHeight ?? 0.35)
-    const geo = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false, curveSegments: 24 })
-    geo.translate(0, 0, -depth / 2)
-    return geo
-  }
-  if (shape === 'rounded') {
-    const radii = resolveDormerRadii(dormer, w, h)
-    const s = createDormerRoundedShape(w, h, radii)
-    const geo = new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false, curveSegments: 24 })
-    geo.translate(0, 0, -depth / 2)
-    return geo
-  }
-  return new THREE.BoxGeometry(w, h, depth)
-}
-
-// Exposure datum: a face shows its window when the window CENTER clears
-// the host's structural surface line (≥ half the window visible).
-// Gating on the window BOTTOM suppressed the default window on the
-// default 40° roof (break-even ≈ 36.7° pitch) and across the whole
-// lower-slope/overhang band. A partially buried window reads as a
-// window meeting the roof line: the host shingle shell occludes the
-// buried frame from outside (the dormer roof cut only clears the inner
-// cavity, 5cm short of the gable face), and the glass panes span the
-// full opening so the wall cut never reads as a see-through hole. The
-// margin only absorbs float noise at the grazing boundary — suppress
-// only when the window is truly unplaceable.
-const WINDOW_CENTER_MIN_CLEARANCE = 0.01
-
-/**
- * Which gable faces of a dormer have a visible window opening.
- * "front" = mesh-local +Z, "back" = mesh-local −Z (after the +π/2 yaw
- * bake for non-shed roofs).
- *
- * Each face centre is lifted into segment-local X *and* Z (the yaw
- * matters, and on hip hosts the end slopes fall along X) and compared
- * against the host's canonical per-type surface line via
- * `getRoofSegmentSurfaceY`, which extrapolates past the structural
- * eave instead of plateauing at the wall top — a face hanging in free
- * air past the eave keeps dropping. Gates both the CSG window-cut
- * decision (`generateDormerGeometry`) and the live render
- * (window-assembly.tsx).
- */
-export function getDormerExposedFaces(
-  dormer: DormerNode,
-  hostSegment: RoofSegmentNode,
-): { front: boolean; back: boolean } {
-  const halfDepth = dormer.depth / 2
-  const dormerX = dormer.position[0] ?? 0
-  const dormerY = dormer.position[1] ?? 0
-  const dormerZ = dormer.position[2] ?? 0
-  const rot = dormer.rotation ?? 0
-
-  // Gable-face centres in segment-local X/Z (accounts for dormer yaw).
-  const faceDX = halfDepth * Math.sin(rot)
-  const faceDZ = halfDepth * Math.cos(rot)
-
-  // Window centre in segment-local Y. Mirrors `getDormerSkirtWindowDims`
-  // so both functions read the same window position: dormer-local Y=0
-  // sits at `dormer.position[1]` and the window centre sits in the
-  // skirt at -(skirtH / 2) + windowOffsetY.
-  const skirtH = dormerSkirtHeight(dormer)
-  const windowCenterSegY = dormerY - skirtH / 2 + (dormer.windowOffsetY ?? 0)
-
-  const clears = (faceX: number, faceZ: number): boolean =>
-    windowCenterSegY - getRoofSegmentSurfaceY(hostSegment, faceX, faceZ) >
-    WINDOW_CENTER_MIN_CLEARANCE
-
-  return {
-    front: clears(dormerX + faceDX, dormerZ + faceDZ),
-    back: clears(dormerX - faceDX, dormerZ - faceDZ),
-  }
-}
-
-/**
- * Computed dimensions for the window opening on a dormer's gable face.
- * The skirt (the wall extension below the eave used for CSG-trim) is
- * `DORMER_DROP_BELOW` tall, so the window sits within that band.
- */
-export function getDormerSkirtWindowDims(dormer: DormerNode): {
-  width: number
-  height: number
-  centerY: number
-  offsetX: number
-} {
-  const skirtH = dormerSkirtHeight(dormer)
-  const maxW = Math.max(dormer.width - 0.1, 0.1)
-  const maxH = Math.max(skirtH - 0.1, 0.1)
-  const width = Math.min(Math.max(dormer.windowWidth ?? 1.2, 0.1), maxW)
-  const height = Math.min(Math.max(dormer.windowHeight ?? 1.2, 0.1), maxH)
-  const offsetX = dormer.windowOffsetX ?? 0
-  const offsetY = dormer.windowOffsetY ?? 0
-  const centerY = -(skirtH / 2) + offsetY
-  return { width, height, centerY, offsetX }
 }
 
 /**
@@ -235,9 +76,10 @@ export function getDormerSkirtWindowDims(dormer: DormerNode): {
 export function generateDormerGeometry(
   dormer: DormerNode,
   hostSegment: RoofSegmentNode,
+  hostedWindows: readonly WindowNode[] = [],
 ): THREE.BufferGeometry {
   const isShed = dormer.roofType === 'shed'
-  const yawBake = isShed ? 0 : Math.PI / 2
+  const yawBake = getDormerBodyYaw(dormer)
   const segWidth = isShed ? dormer.width : dormer.depth
   const segDepth = isShed ? dormer.depth : dormer.width
   const skirt = dormerSkirtHeight(dormer)
@@ -251,7 +93,7 @@ export function generateDormerGeometry(
     type: 'roof-segment',
     parentId: null,
     visible: true,
-    metadata: null,
+    metadata: {},
     children: [],
     position: [0, 0, 0],
     rotation: 0,
@@ -293,6 +135,9 @@ export function generateDormerGeometry(
     deckThickness: 0.04,
     overhang: 0.08,
     shingleThickness: 0.02,
+    managedByParent: false,
+    wallShell: 'auto',
+    shedInsetEndPanels: false,
   }
 
   const dormerBrushes = getRoofSegmentBrushes(virtualSegment)
@@ -388,20 +233,14 @@ export function generateDormerGeometry(
       dormerSolid = trimmed
     }
 
-    // Cut window openings on exposed gable faces.
-    const exposed = getDormerExposedFaces(dormer, hostSegment)
-    const skirtWin = getDormerSkirtWindowDims(dormer)
-    const gableHalfZ = dormer.depth / 2
-    const cutDepth = 0.4
-
-    const cutFace = (zSign: number) => {
-      const cutGeo = createDormerWindowCutGeometry(
-        dormer,
-        skirtWin.width,
-        skirtWin.height,
-        cutDepth,
-      )
-      cutGeo.translate(skirtWin.offsetX, skirtWin.centerY, zSign * gableHalfZ)
+    // Cut hosted window openings in dormer-local face coordinates.
+    const cutWindow = (window: WindowNode) => {
+      const face = window.dormerFace ?? 'front'
+      const frame = getDormerWallFaceFrame(dormer, face)
+      const center = dormerWallFacePointToDormer(dormer, face, window.position)
+      const cutGeo = createHostedWindowCutGeometry(window)
+      cutGeo.rotateY(frame.yaw)
+      cutGeo.translate(center[0], center[1], center[2])
       if (!cutGeo.getIndex()) {
         const posCount = cutGeo.getAttribute('position').count
         const idx = new Uint32Array(posCount)
@@ -421,8 +260,7 @@ export function generateDormerGeometry(
       dormerSolid = result
     }
 
-    if (exposed.front) cutFace(+1)
-    if (exposed.back) cutFace(-1)
+    for (const window of hostedWindows) cutWindow(window)
 
     resultGeo = csgGeometry(dormerSolid)
     const resultMaterials = csgMaterials(dormerSolid)
@@ -480,10 +318,10 @@ export function generateDormerGeometry(
  * Shapes per roof type:
  * - **flat**:                a plain box (top flush with the eave; the
  *                            dormer body has no roof above wallH).
- * - **shed**:                trapezoid in YZ, extruded along X. Eave
- *                            at z=+d/2 (y=wallH), peak at z=-d/2
- *                            (y=wallH+roofH) — matches the slope
- *                            direction the dormer body uses.
+ * - **shed**:                trapezoid in YZ, extruded along X. The
+ *                            base shape is high at z=-d/2; the caller
+ *                            flips it when the configured high side is
+ *                            the front.
  * - **gable / gambrel**:     pentagon (rectangle + symmetric triangle)
  *                            in XY, extruded along Z. Ridge runs
  *                            along Z (mesh-Z = virtualSegment-X after
@@ -762,10 +600,13 @@ export function buildDormerRoofCut(dormer: DormerNode): THREE.BufferGeometry | n
   //   - gable / gambrel:        pentagon (narrows along width axis)
   const geo = buildDormerCutShape(dormer.roofType, innerW, innerD, skirt, wallH, roofH)
 
-  // Yaw in the geometry's own (un-translated) frame so the cut aligns
-  // with the dormer's footprint after rotation.
-  if (Math.abs(dormer.rotation) > 1e-4) {
-    geo.rotateY(dormer.rotation)
+  // Yaw in the geometry's own (un-translated) frame so the cut follows
+  // both the shed pitch direction and the dormer's footprint rotation.
+  const shedDirectionYaw =
+    dormer.roofType === 'shed' && dormer.shedHighSide === 'front' ? Math.PI : 0
+  const cutYaw = shedDirectionYaw + dormer.rotation
+  if (Math.abs(cutYaw) > 1e-4) {
+    geo.rotateY(cutYaw)
   }
 
   // Translate into segment-local. position[1] becomes the dormer's

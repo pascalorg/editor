@@ -13,6 +13,17 @@ function polygonArea(points: Point2D[]) {
   return Math.abs(area / 2)
 }
 
+function hasRepeatedNonAdjacentPoint(points: Point2D[]) {
+  return points.some((point, index) =>
+    points.some(
+      (candidate, candidateIndex) =>
+        candidateIndex > index + 1 &&
+        !(index === 0 && candidateIndex === points.length - 1) &&
+        Math.hypot(point[0] - candidate[0], point[1] - candidate[1]) <= 1e-7,
+    ),
+  )
+}
+
 describe('unionPolygons', () => {
   test('collapses a contained polygon into the containing polygon', () => {
     const small: Point2D[] = [
@@ -73,6 +84,87 @@ describe('unionPolygons', () => {
 
     expect(result).toHaveLength(2)
     expect(result.map(polygonArea)).toEqual([1, 1])
+  })
+
+  test('does not stitch point-touching branches into a self-touching ring', () => {
+    const lowerTip: Point2D[] = [
+      [-4.4073, -1.383],
+      [-4.2663, -1.383],
+      [-4.4073, -1.22435],
+    ]
+    const upperTip: Point2D[] = [
+      [-2.1038, 0.35056],
+      [-0.9401, 1.385],
+      [-3.0233, 1.385],
+    ]
+    const connectingBand: Point2D[] = [
+      [-4.2663, -1.383],
+      [-3.0233, 1.385],
+      [-4.4073, 1.385],
+      [-4.4073, -1.22435],
+    ]
+
+    const result = unionPolygons([lowerTip, upperTip, connectingBand])
+
+    expect(result).toHaveLength(2)
+    expect(result.some(hasRepeatedNonAdjacentPoint)).toBe(false)
+  })
+
+  test('keeps point-touching branches separate in every orientation and input order', () => {
+    const polygons: Point2D[][] = [
+      [
+        [-4.4073, -1.383],
+        [-4.2663, -1.383],
+        [-4.4073, -1.22435],
+      ],
+      [
+        [-2.1038, 0.35056],
+        [-0.9401, 1.385],
+        [-3.0233, 1.385],
+      ],
+      [
+        [-4.2663, -1.383],
+        [-3.0233, 1.385],
+        [-4.4073, 1.385],
+        [-4.4073, -1.22435],
+      ],
+    ]
+    const orders = [
+      [0, 1, 2],
+      [0, 2, 1],
+      [1, 0, 2],
+      [1, 2, 0],
+      [2, 0, 1],
+      [2, 1, 0],
+    ]
+    const expectedArea = polygons.reduce((sum, polygon) => sum + polygonArea(polygon), 0)
+
+    for (const order of orders) {
+      for (let quarterTurns = 0; quarterTurns < 4; quarterTurns++) {
+        for (const reflection of [-1, 1]) {
+          const transformed = order.map((index) =>
+            polygons[index]!.map(([sourceX, sourceZ]): Point2D => {
+              let x = sourceX * reflection
+              let z = sourceZ
+              for (let turn = 0; turn < quarterTurns; turn++) {
+                const previousX = x
+                x = -z
+                z = previousX
+              }
+              return [x, z]
+            }),
+          )
+
+          const result = unionPolygons(transformed)
+
+          expect(result).toHaveLength(2)
+          expect(result.some(hasRepeatedNonAdjacentPoint)).toBe(false)
+          expect(result.reduce((sum, polygon) => sum + polygonArea(polygon), 0)).toBeCloseTo(
+            expectedArea,
+          )
+        }
+      }
+    }
   })
 })
 

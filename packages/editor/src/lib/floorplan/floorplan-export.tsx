@@ -8,6 +8,7 @@ import {
   type FloorplanPalette,
   type FloorplanPoint,
   type LiveNodeOverrides,
+  type NodeCategory,
   nodeRegistry,
   resolveBuildingForLevel,
   useScene,
@@ -68,6 +69,20 @@ import { FLOORPLAN_VIEW_ROTATION_DEG } from './geometry'
  * every node that has a floorplan builder and is visible.
  */
 export type FloorplanExportScope = 'full' | 'structure'
+
+/**
+ * Whether a node belongs in the given export scope. `'full'` short-circuits
+ * and admits every node; `'structure'` admits only `structure`-category
+ * nodes. An `undefined` definition (unregistered node type) behaves like a
+ * node with no category.
+ */
+export function isFloorplanNodeInExportScope(
+  definition: { category?: NodeCategory } | undefined,
+  scope: FloorplanExportScope,
+): boolean {
+  if (scope === 'full') return true
+  return definition?.category === 'structure'
+}
 
 const SVG_NS = 'http://www.w3.org/2000/svg'
 /** Minimum and proportional margin around the structural drawing bounds. */
@@ -747,7 +762,7 @@ function collectFloorplanGeometry(
     if (
       def?.floorplan &&
       isFloorplanNodeVisible(node) &&
-      (scope === 'full' || def.category === 'structure')
+      isFloorplanNodeInExportScope(def, scope)
     ) {
       const drawingNode = resolveNodeForDrawingType(node, nodes, drawingType)
       if (drawingNode) entries.push({ id, node: drawingNode })
@@ -762,10 +777,7 @@ function collectFloorplanGeometry(
     const collectedIds = new Set(entries.map((entry) => entry.id))
     for (const linked of collectFloorplanLinkedLevelNodes(nodes, levelId, collectedIds)) {
       const definition = nodeRegistry.get(linked.node.type)
-      if (
-        isFloorplanNodeVisible(linked.node) &&
-        (scope === 'full' || definition?.category === 'structure')
-      ) {
+      if (isFloorplanNodeVisible(linked.node) && isFloorplanNodeInExportScope(definition, scope)) {
         const drawingNode = resolveNodeForDrawingType(linked.node, nodes, drawingType)
         if (drawingNode) {
           entries.push({ id: linked.id, node: drawingNode, parentOverride: activeLevelNode })

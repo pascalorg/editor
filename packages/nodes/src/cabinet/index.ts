@@ -5,3 +5,12 @@ export {
   type CabinetPlacementType,
   default as useCabinetPlacementType,
 } from './placement-type'
+export {
+  CABINET_PLANNING_TOLERANCE,
+  type CabinetPlanningIssue,
+  type CabinetPlanningIssueCode,
+  type CabinetPlanningOptions,
+  type CabinetPlanningReport,
+  MIN_PRACTICAL_TOP_CABINET_HEIGHT,
+  validateCabinetRun,
+} from './validation'

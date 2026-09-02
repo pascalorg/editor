@@ -295,6 +295,15 @@ export function resolveLeanToRoofAttachment(
           (leanTo.connectionOffset ?? 0)
         if (highEdgeHeight < 0.8 || highEdgeHeight > 10) continue
 
+        const edgeWallStart = projection(start, frame.wallStart, frame.along)
+        const edgeWallEnd = projection(end, frame.wallStart, frame.along)
+        const rawSpanStart = Math.min(edgeWallStart, edgeWallEnd)
+        const rawSpanEnd = Math.max(edgeWallStart, edgeWallEnd)
+        const wallLength = getWallCurveLength(wall)
+        const spanStart = isCurvedWall(wall) ? rawSpanStart : Math.max(0, rawSpanStart)
+        const spanEnd = isCurvedWall(wall) ? rawSpanEnd : Math.min(wallLength, rawSpanEnd)
+        if (spanEnd - spanStart <= 1e-6) continue
+
         const attachment: LeanToRoofAttachment = {
           roofId: roof.id,
           roofSegmentId: segment.id,
@@ -303,14 +312,8 @@ export function resolveLeanToRoofAttachment(
           highEdgeHeight,
           planDistance,
           overlap,
-          edgeSpan: Math.abs(
-            projection(end, frame.wallStart, frame.along) -
-              projection(start, frame.wallStart, frame.along),
-          ),
-          wallLocalCenterX:
-            (projection(start, frame.wallStart, frame.along) +
-              projection(end, frame.wallStart, frame.along)) /
-            2,
+          edgeSpan: spanEnd - spanStart,
+          wallLocalCenterX: (spanStart + spanEnd) / 2,
           deckThickness: segment.deckThickness,
           shingleThickness: segment.shingleThickness ?? 0,
         }
@@ -363,6 +366,39 @@ export function applyLeanToWallAutoSpan(
   return {
     ...leanTo,
     ...autoSpanPatch(leanTo, wallLength, wallLength / 2),
+  }
+}
+
+export function applyLeanToWallCornerSpan(
+  leanTo: LeanToExtensionNode,
+  wall: WallNode,
+): LeanToExtensionNode {
+  if (!leanTo.autoMiterCorners) return leanTo
+  const wallLength = isCurvedWall(wall)
+    ? getWallCurveLength(wall)
+    : Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+  if (wallLength <= 1e-6) return leanTo
+  if (leanTo.span <= wallLength + 1e-6) return leanTo
+
+  const leftOverhang = Math.max(0, leanTo.leftOverhang)
+  const rightOverhang = Math.max(0, leanTo.rightOverhang)
+  const currentStart = leanTo.position[0] - leanTo.span / 2 - leftOverhang
+  const currentEnd = leanTo.position[0] + leanTo.span / 2 + rightOverhang
+  const targetStart = Math.max(0, currentStart)
+  const targetEnd = Math.min(wallLength, currentEnd)
+  const visibleSpan = targetEnd - targetStart
+  if (currentStart >= -1e-6 && currentEnd <= wallLength + 1e-6) {
+    return leanTo
+  }
+  if (visibleSpan < MIN_EXTENSION_SPAN + leftOverhang + rightOverhang) return leanTo
+
+  return {
+    ...leanTo,
+    ...autoSpanPatch(
+      leanTo,
+      visibleSpan,
+      targetStart + (visibleSpan + leftOverhang - rightOverhang) / 2,
+    ),
   }
 }
 

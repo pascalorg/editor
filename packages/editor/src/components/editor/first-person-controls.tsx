@@ -88,6 +88,11 @@ import {
 
 const CAMERA_EYE_OFFSET = 0.45
 const LOOK_SENSITIVITY = 0.002
+// Drone mode: metres per second, and how hard Shift boosts it. The smoothing
+// constant is an exponential approach rate, not a linear acceleration.
+const DRONE_SPEED = 7
+const DRONE_RUN_MULTIPLIER = 3
+const DRONE_SMOOTHING = 12
 const CONTROLLER_CENTER_FROM_EYE = 0.85
 const DOOR_INTERACTION_DISTANCE = 2.5
 const DOOR_LEAF_INTERACTION_DEPTH = 0.08
@@ -142,6 +147,10 @@ function focusFirstPersonCanvas(canvas: HTMLCanvasElement) {
 
 const cameraOffset = new Vector3()
 const cameraEuler = new Euler(0, 0, 0, 'YXZ')
+const droneEuler = new Euler(0, 0, 0, 'YXZ')
+const droneForward = new Vector3()
+const droneRight = new Vector3()
+const droneDesiredVelocity = new Vector3()
 const standClearanceRaycaster = new Raycaster()
 const standClearanceUp = new Vector3(0, 1, 0)
 const centerScreenPoint = new Vector2(0, 0)
@@ -652,6 +661,7 @@ export const FirstPersonControls = () => {
   const { camera, gl } = useThree()
   const selectedLevelId = useViewer((state) => state.selection.levelId)
   const placedSpawnNode = useScene((state) => resolvePlacedSpawnNode(state.nodes, selectedLevelId))
+  const isDroneMode = useEditor((state) => state.firstPersonMovementMode === 'drone')
   const controllerRef = useRef<BVHEcctrlApi | null>(null)
   const movementInputRef = useRef<MovementInput>({ ...inactiveMovementInput })
   const hadPointerLockRef = useRef(false)
@@ -660,10 +670,14 @@ export const FirstPersonControls = () => {
   const interactableTargetRef = useRef<FirstPersonInteractableTarget | null>(null)
   const hudLabelFrameRef = useRef(HUD_LABEL_SAMPLE_FRAMES - 1)
   const crouchKeyRef = useRef(false)
+  const droneAscendKeyRef = useRef(false)
+  const droneDescendKeyRef = useRef(false)
+  const droneVelocityRef = useRef(new Vector3())
   const suspendRef = useRef(false)
   const eyeOffsetRef = useRef(CAMERA_EYE_OFFSET)
   const [crouched, setCrouched] = useState(false)
   const speeds = useWalkthroughSpeeds(crouched)
+  const captureShutterHold = useEditor((state) => state.captureShutterHold)
   const [isElevatorRideLocked, setIsElevatorRideLocked] = useState(false)
   const ridingElevatorRef = useRef<{
     elevatorId: AnyNodeId
@@ -692,13 +706,19 @@ export const FirstPersonControls = () => {
     }
   }, [])
 
+  // While a snapshot is being framed the capture rig owns the fov (the user is
+  // driving it from the overlay's slider), so walkthrough neither applies its
+  // own nor restores one underneath it. Read imperatively: this must not re-run
+  // — and therefore restore — when capture mode toggles mid-walkthrough.
   useEffect(() => {
     const perspectiveCamera = camera as PerspectiveCamera
     if (!perspectiveCamera.isPerspectiveCamera) return
+    if (useEditor.getState().isCaptureMode) return
     const previousFov = perspectiveCamera.fov
     perspectiveCamera.fov = WALKTHROUGH_FOV
     perspectiveCamera.updateProjectionMatrix()
     return () => {
+      if (useEditor.getState().isCaptureMode) return
       perspectiveCamera.fov = previousFov
       perspectiveCamera.updateProjectionMatrix()
     }
@@ -931,6 +951,13 @@ export const FirstPersonControls = () => {
   }, [resolveInteractableDoorId, resolveInteractableElevatorTarget, resolveInteractableWindowId])
 
   const toggleInteractableTarget = useCallback(() => {
+    // Drone is a camera, not an avatar: the click that re-acquires pointer lock
+    // must not swing a door open under the shot being framed. (In capture
+    // mode's walk camera the CLICK path is gated at handleMouseDown — there a
+    // locked-pointer click is the shutter — but E/R still open doors, so the
+    // photographer can stage the shot.)
+    if (isDroneMode) return
+
     const target = interactableTargetRef.current ?? resolveInteractableTarget()
     if (!target) return
 
@@ -984,9 +1011,11 @@ export const FirstPersonControls = () => {
     if (node?.type !== 'door' || node.openingKind === 'opening') return
 
     toggleDoorOpenState(doorId, { persist: false })
-  }, [resolveInteractableTarget])
+  }, [isDroneMode, resolveInteractableTarget])
 
   const closeInteractableTarget = useCallback(() => {
+    if (isDroneMode) return
+
     const target = interactableTargetRef.current ?? resolveInteractableTarget()
     if (!target) return
 
@@ -1010,7 +1039,7 @@ export const FirstPersonControls = () => {
     if (node?.type !== 'door' || node.openingKind === 'opening') return
 
     closeDoorOpenState(target.id, { persist: false })
-  }, [resolveInteractableTarget])
+  }, [isDroneMode, resolveInteractableTarget])
 
   const placedSpawn = useMemo<FirstPersonSpawn | null>(() => {
     if (!(placedSpawnNode && placedSpawnNode.type === 'spawn')) return null
@@ -1042,7 +1071,10 @@ export const FirstPersonControls = () => {
   }, [placedSpawnNode])
 
   useEffect(() => {
-    rebuildColliderWorld()
+    // Drone has no gravity, no floor and no collision, so the BVH collider world
+    // (a full-scene traversal, rebuilt on every door/window animation) is pure
+    // cost there. Switching modes disposes it and rebuilds on the way back.
+    if (!isDroneMode) rebuildColliderWorld()
 
     return () => {
       worldRef.current?.dispose()
@@ -1052,16 +1084,39 @@ export const FirstPersonControls = () => {
       setElevatorColliderMeshes([])
       setWorld(null)
     }
-  }, [rebuildColliderWorld])
+  }, [isDroneMode, rebuildColliderWorld])
 
   useEffect(() => {
+    if (isDroneMode) return
     emitter.on('door:animation-completed', rebuildColliderWorld)
     emitter.on('window:animation-completed', rebuildColliderWorld)
     return () => {
       emitter.off('door:animation-completed', rebuildColliderWorld)
       emitter.off('window:animation-completed', rebuildColliderWorld)
     }
-  }, [rebuildColliderWorld])
+  }, [isDroneMode, rebuildColliderWorld])
+
+  // A walk session started before a drone detour would otherwise resume at its
+  // original spawn; drop it so the next walk re-derives one.
+  useEffect(() => {
+    if (isDroneMode) setControllerStart(null)
+  }, [isDroneMode])
+
+  // Drone picks up wherever the camera currently is — orbit pose or walk eye.
+  useEffect(() => {
+    if (!isDroneMode) return
+    droneEuler.setFromQuaternion(camera.quaternion)
+    yawRef.current = droneEuler.y
+    pitchRef.current = droneEuler.x
+    droneVelocityRef.current.set(0, 0, 0)
+
+    // Interaction prompts belong to walk; drop whatever its frame left behind.
+    if (useViewer.getState().hoveredId === interactableTargetRef.current?.id) {
+      useViewer.getState().setHoveredId(null)
+    }
+    interactableTargetRef.current = null
+    useFirstPersonHud.getState().reset()
+  }, [camera, isDroneMode])
 
   useEffect(() => {
     if (!world) return
@@ -1103,6 +1158,8 @@ export const FirstPersonControls = () => {
     const canvas = gl.domElement
     const handleMouseMove = (e: MouseEvent) => {
       if (document.pointerLockElement !== canvas) return
+      // Shutter hold: the shot is rendering — a mouse twitch must not pan it.
+      if (useEditor.getState().captureShutterHold) return
 
       yawRef.current -= e.movementX * LOOK_SENSITIVITY
       pitchRef.current = Math.max(
@@ -1124,6 +1181,10 @@ export const FirstPersonControls = () => {
       if (document.pointerLockElement !== canvas) return
       if (event.button !== 0) return
 
+      // Capture mode: the locked-pointer click is the SHUTTER (the snapshot
+      // overlay's window-capture listener already fired); doors stay on E/R.
+      if (useEditor.getState().isCaptureMode) return
+
       event.preventDefault()
       event.stopPropagation()
       toggleInteractableTargetRef.current()
@@ -1141,6 +1202,19 @@ export const FirstPersonControls = () => {
       // Deliberately released (screenshot pause) — stay in first person;
       // clicking the canvas re-locks.
       if (suspendRef.current) return
+
+      // Capture mode: Esc (the browser's own unlock — no keydown reaches us)
+      // acts like P. Dropping back to orbit would throw away the framed pose,
+      // which reads as a crash to anyone who never noticed P.
+      if (
+        hadPointerLockRef.current &&
+        useEditor.getState().isCaptureMode &&
+        useEditor.getState().isFirstPersonMode
+      ) {
+        suspendRef.current = true
+        useViewer.getState().setWalkthroughSuspended(true)
+        return
+      }
 
       if (hadPointerLockRef.current && useEditor.getState().isFirstPersonMode) {
         useEditor.getState().setFirstPersonMode(false)
@@ -1194,9 +1268,32 @@ export const FirstPersonControls = () => {
         // While paused (P), crouch is frozen as-is — ⌃⇧⌘4 (clipboard
         // screenshot) must not toggle it under the user.
         if (!suspendRef.current) crouchKeyRef.current = true
+      } else if (event.code === 'KeyQ') {
+        // Drone descend. Space (already bound to jump) and E are the matching ascend.
+        event.preventDefault()
+        event.stopPropagation()
+        if (!suspendRef.current) droneDescendKeyRef.current = true
+      } else if (event.code === 'KeyE' && isDroneMode) {
+        event.preventDefault()
+        event.stopPropagation()
+        if (!suspendRef.current) droneAscendKeyRef.current = true
       } else if (event.code === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
+        // Capture mode, first Esc frees the cursor (see handlePointerLockChange
+        // — while locked the browser usually unlocks without delivering the
+        // keydown); with the cursor already free, Esc cancels the snapshot
+        // (setCaptureMode(false) also lands the camera back on orbit).
+        if (useEditor.getState().isCaptureMode) {
+          if (document.pointerLockElement === canvas) {
+            suspendRef.current = true
+            useViewer.getState().setWalkthroughSuspended(true)
+            document.exitPointerLock()
+          } else {
+            useEditor.getState().setCaptureMode(false)
+          }
+          return
+        }
         if (document.pointerLockElement === canvas) {
           document.exitPointerLock()
         }
@@ -1230,11 +1327,21 @@ export const FirstPersonControls = () => {
       if ((event.code === 'ControlLeft' || event.code === 'ControlRight') && !suspendRef.current) {
         crouchKeyRef.current = false
       }
+      if (event.code === 'KeyQ' && !suspendRef.current) {
+        droneDescendKeyRef.current = false
+      }
+      if (event.code === 'KeyE' && !suspendRef.current) {
+        droneAscendKeyRef.current = false
+      }
       applyMovementKey(event, false)
     }
 
     const handleBlur = () => {
-      if (!suspendRef.current) crouchKeyRef.current = false
+      if (!suspendRef.current) {
+        crouchKeyRef.current = false
+        droneAscendKeyRef.current = false
+        droneDescendKeyRef.current = false
+      }
     }
 
     document.addEventListener('keydown', handleKeyDown, true)
@@ -1245,7 +1352,7 @@ export const FirstPersonControls = () => {
       document.removeEventListener('keyup', handleKeyUp, true)
       window.removeEventListener('blur', handleBlur)
     }
-  }, [closeInteractableTarget, gl, toggleInteractableTarget])
+  }, [closeInteractableTarget, gl, isDroneMode, toggleInteractableTarget])
 
   const syncElevatorColliderMeshes = useCallback(() => {
     const nodes = useScene.getState().nodes
@@ -1321,6 +1428,7 @@ export const FirstPersonControls = () => {
   }, [])
 
   useFrame(() => {
+    if (isDroneMode) return
     syncElevatorColliderMeshes()
   }, -1)
 
@@ -1480,7 +1588,42 @@ export const FirstPersonControls = () => {
     return standClearanceRaycaster.intersectObjects(meshes, false).length === 0
   }, [])
 
+  // Drone: a free camera driven straight from the look angles — no controller,
+  // no gravity or collision clamping. WASD move along the view axes, Space or E
+  // rises, Q (or Ctrl) sinks, and Shift boosts.
   useFrame((_, delta) => {
+    if (!isDroneMode) return
+    // Shutter hold: freeze the drone mid-air while the shot renders.
+    if (useEditor.getState().captureShutterHold) return
+
+    const step = Math.min(delta, 0.1)
+    const movement = movementInputRef.current
+
+    droneEuler.set(pitchRef.current, yawRef.current, 0, 'YXZ')
+    camera.quaternion.setFromEuler(droneEuler)
+    droneForward.set(0, 0, -1).applyEuler(droneEuler)
+    droneRight.set(1, 0, 0).applyEuler(droneEuler)
+
+    droneDesiredVelocity.set(0, 0, 0)
+    if (movement.forward) droneDesiredVelocity.add(droneForward)
+    if (movement.backward) droneDesiredVelocity.sub(droneForward)
+    if (movement.rightward) droneDesiredVelocity.add(droneRight)
+    if (movement.leftward) droneDesiredVelocity.sub(droneRight)
+    if (movement.jump || droneAscendKeyRef.current) droneDesiredVelocity.y += 1
+    if (droneDescendKeyRef.current || crouchKeyRef.current) droneDesiredVelocity.y -= 1
+    if (droneDesiredVelocity.lengthSq() > 0) {
+      droneDesiredVelocity
+        .normalize()
+        .multiplyScalar(DRONE_SPEED * (movement.run ? DRONE_RUN_MULTIPLIER : 1))
+    }
+
+    droneVelocityRef.current.lerp(droneDesiredVelocity, 1 - Math.exp(-step * DRONE_SMOOTHING))
+    camera.position.addScaledVector(droneVelocityRef.current, step)
+    camera.updateMatrixWorld(true)
+  }, 2.5)
+
+  useFrame((_, delta) => {
+    if (isDroneMode) return
     if (!controllerRef.current?.group) return
 
     const group = controllerRef.current.group
@@ -1562,7 +1705,7 @@ export const FirstPersonControls = () => {
     [world, elevatorColliderMeshes],
   )
 
-  if (!world) {
+  if (isDroneMode || !world) {
     return null
   }
 
@@ -1594,7 +1737,7 @@ export const FirstPersonControls = () => {
             maxRunSpeed={speeds.run}
             maxSlope={1.2}
             maxWalkSpeed={speeds.walk}
-            paused={isElevatorRideLocked}
+            paused={isElevatorRideLocked || captureShutterHold}
             position={controllerStart.position}
             ref={setControllerApi}
           />

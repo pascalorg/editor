@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { warehousePlugin } from '@ovurrsl/plugin-warehouse'
-import { AnyNode } from '@pascal-app/core/schema'
+import { AnyNode, CabinetModuleNode, CabinetNode } from '@pascal-app/core/schema'
 import { treesPlugin } from '@pascal-app/plugin-trees'
 import { apiGraphSchema } from './graph-schema'
 
@@ -92,6 +92,28 @@ test('accepts a builtin container whose children include a plugin node id', () =
   const graph = buildGraph({ [LEVEL_ID]: level([TREE_ID]), [TREE_ID]: pluginTree() }, [LEVEL_ID])
 
   expect(apiGraphSchema.safeParse(graph).success).toBe(true)
+})
+
+test('accepts a cabinet run containing a derived L-corner run', () => {
+  const source = CabinetNode.parse({
+    id: 'cabinet_graph-source',
+    children: ['cabinet_graph-derived'],
+  })
+  const derived = CabinetNode.parse({
+    id: 'cabinet_graph-derived',
+    parentId: source.id,
+    children: ['cabinet-module_graph-derived'],
+  })
+  const module = CabinetModuleNode.parse({
+    id: 'cabinet-module_graph-derived',
+    parentId: derived.id,
+  })
+
+  expect(
+    apiGraphSchema.safeParse(
+      buildGraph({ [source.id]: source, [derived.id]: derived, [module.id]: module }, [source.id]),
+    ).success,
+  ).toBe(true)
 })
 
 test('keeps plugin child ids in the parsed graph', () => {

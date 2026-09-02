@@ -10,6 +10,7 @@ import {
   WallNode,
   WindowNode,
 } from '@pascal-app/core'
+import { resolveLeanToCornerJoints } from './corner-joint'
 import { resolveLeanToWallPlacement } from './layout'
 import { leanToPlacementConflicts, resolveLeanToEndAbutments } from './placement-validation'
 import { applyLeanToWallAutoSpan } from './roof-attachment'
@@ -126,6 +127,50 @@ describe('lean-to placement validation', () => {
       [existing.id]: existing,
     } as Record<string, AnyNode>
 
+    expect(leanToPlacementConflicts(candidate, straightWall, nodes)).toEqual([])
+  })
+
+  test('allows a convex curved-to-straight corner with an overlapping footprint', () => {
+    const curvedWall = WallNode.parse({
+      id: 'wall_curved_convex_placement',
+      parentId: 'level_convex_placement',
+      start: [0, 0],
+      end: [6, 0],
+      curveOffset: -0.5,
+      children: ['leanto_curved_convex_placement'],
+    })
+    const straightWall = WallNode.parse({
+      id: 'wall_straight_convex_placement',
+      parentId: 'level_convex_placement',
+      start: [6, 0],
+      end: [6, -6],
+    })
+    const curvedPlacement = resolveLeanToWallPlacement(
+      curvedWall,
+      getWallCurveLength(curvedWall) / 2,
+      'front',
+    )!
+    const existing = {
+      ...applyLeanToWallAutoSpan(curvedPlacement, curvedWall),
+      id: 'leanto_curved_convex_placement',
+      rightOverhang: 4,
+    }
+    const straightPlacement = resolveLeanToWallPlacement(straightWall, 3, 'front')!
+    const candidate = {
+      ...applyLeanToWallAutoSpan(straightPlacement, straightWall),
+      leftOverhang: 4,
+    }
+    const nodes = {
+      [curvedWall.id]: curvedWall,
+      [straightWall.id]: straightWall,
+      [existing.id]: existing,
+    } as Record<AnyNodeId, AnyNode>
+
+    expect(
+      Object.values(resolveLeanToCornerJoints(candidate, straightWall, nodes)).some(
+        (joint) => joint?.kind === 'convex' && joint.neighborId === existing.id,
+      ),
+    ).toBe(true)
     expect(leanToPlacementConflicts(candidate, straightWall, nodes)).toEqual([])
   })
 

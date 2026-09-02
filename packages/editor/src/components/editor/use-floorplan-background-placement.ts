@@ -1,9 +1,21 @@
 'use client'
 
-import { emitter, type FenceNode, isCurvedWall, type WallNode } from '@pascal-app/core'
-import { type MouseEvent as ReactMouseEvent, useCallback } from 'react'
+import {
+  emitter,
+  type FenceNode,
+  isCurvedWall,
+  nodeRegistry,
+  type WallNode,
+} from '@pascal-app/core'
+import {
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useSyncExternalStore,
+} from 'react'
 import { resolveCeilingPlanPointSnap } from '../../lib/ceiling-plan-snap'
 import { alignFloorplanDraftPoint, getPlanPointDistance } from '../../lib/floorplan'
+import { resolveGenericFloorplanGridEventPoint } from '../../lib/floorplan-grid-event-point'
 import { resolveSlabPlanPointSnap } from '../../lib/slab-plan-snap'
 import useAlignmentGuides from '../../store/use-alignment-guides'
 import useEditor, { isAngleSnapActive, isMagneticSnapActive } from '../../store/use-editor'
@@ -11,6 +23,9 @@ import usePlacementPreview from '../../store/use-placement-preview'
 import useSegmentDraftChain from '../../store/use-segment-draft-chain'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
 import { getSegmentGridStep, type WallPlanPoint } from '../tools/wall/wall-drafting'
+
+const NOOP_SUBSCRIBE = () => () => {}
+const DEFAULT_ROOF_FOOTPRINT_CHOICE = () => 'draw'
 
 type UseFloorplanBackgroundPlacementArgs = {
   activePolygonDraftPoints: WallPlanPoint[]
@@ -55,6 +70,7 @@ type UseFloorplanBackgroundPlacementArgs = {
   isWallBuildActive: boolean
   isZoneBuildActive: boolean
   levelId: string | null
+  registryToolOwnsSnapping: boolean
   roofDraftStart: WallPlanPoint | null
   setCursorPoint: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
   setFenceDraftEnd: React.Dispatch<React.SetStateAction<WallPlanPoint | null>>
@@ -113,6 +129,7 @@ export function useFloorplanBackgroundPlacement({
   isWallBuildActive,
   isZoneBuildActive,
   levelId,
+  registryToolOwnsSnapping,
   roofDraftStart,
   setCursorPoint,
   setFenceDraftEnd,
@@ -125,6 +142,26 @@ export function useFloorplanBackgroundPlacement({
   walls,
   worldGridSnap,
 }: UseFloorplanBackgroundPlacementArgs) {
+  // Read the roof's footprint-source option through the registry, not
+  // `@pascal-app/nodes`: this file lands in the nodes package's program via
+  // its editor imports, so a direct nodes import would cycle onto nodes' own
+  // dist output.
+  const roofFootprintOption = nodeRegistry
+    .get('roof')
+    ?.toolOptions?.find((option) => option.id === 'footprintSource')
+  const roofFootprintChoice = useSyncExternalStore(
+    roofFootprintOption?.subscribe ?? NOOP_SUBSCRIBE,
+    roofFootprintOption?.value ?? DEFAULT_ROOF_FOOTPRINT_CHOICE,
+    roofFootprintOption?.value ?? DEFAULT_ROOF_FOOTPRINT_CHOICE,
+  )
+  // Conical always builds from a curved wall pick, regardless of the choice.
+  const roofIsConical = useEditor((state) => state.toolDefaults.roof?.roofType === 'conical')
+  const roofFootprintSource = roofIsConical ? 'walls' : roofFootprintChoice
+
+  useEffect(() => {
+    if (isRoofBuildActive && roofFootprintSource !== 'draw') clearRoofPlacementDraft()
+  }, [clearRoofPlacementDraft, isRoofBuildActive, roofFootprintSource])
+
   const handleBackgroundPlacementClick = useCallback(
     (
       planPoint: WallPlanPoint,
@@ -187,6 +224,11 @@ export function useFloorplanBackgroundPlacement({
         })
         emitFloorplanGridEvent('click', snappedPoint, event)
         setCursorPoint(snappedPoint)
+
+        if (roofFootprintSource !== 'draw') {
+          clearRoofPlacementDraft()
+          return true
+        }
 
         if (roofDraftStart) {
           clearRoofPlacementDraft()
@@ -357,9 +399,13 @@ export function useFloorplanBackgroundPlacement({
       // local floor-plan draft handler (column / spawn / shelf / etc.).
       // The tool's `grid:click` subscriber owns the placement.
       if (isFloorplanGridInteractionActive) {
-        const snappedPoint = getSnappedFloorplanPoint(planPoint)
-        emitFloorplanGridEvent('click', snappedPoint, event)
-        setCursorPoint(snappedPoint)
+        const eventPoint = resolveGenericFloorplanGridEventPoint({
+          point: planPoint,
+          registryToolOwnsSnapping,
+          snap: getSnappedFloorplanPoint,
+        })
+        emitFloorplanGridEvent('click', eventPoint, event)
+        setCursorPoint(eventPoint)
         return true
       }
 
@@ -392,6 +438,8 @@ export function useFloorplanBackgroundPlacement({
       isZoneBuildActive,
       levelId,
       roofDraftStart,
+      registryToolOwnsSnapping,
+      roofFootprintSource,
       setCursorPoint,
       setFenceDraftEnd,
       setFenceDraftStart,

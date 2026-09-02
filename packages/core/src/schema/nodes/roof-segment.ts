@@ -4,7 +4,16 @@ import { BaseNode, nodeType, objectId } from '../base'
 import type { MaterialSchema as MaterialSchemaType } from '../material'
 import { MaterialSchema } from '../material'
 
-export const RoofType = z.enum(['hip', 'gable', 'shed', 'gambrel', 'dutch', 'mansard', 'flat'])
+export const RoofType = z.enum([
+  'hip',
+  'gable',
+  'shed',
+  'gambrel',
+  'dutch',
+  'mansard',
+  'flat',
+  'conical',
+])
 
 export type RoofType = z.infer<typeof RoofType>
 
@@ -106,6 +115,18 @@ export const RoofSegmentNode = BaseNode.extend({
   // Footprint dimensions
   width: z.number().default(8),
   depth: z.number().default(6),
+  // Angular extent of a conical roof. A full cone uses 2π. A signed
+  // sweep preserves the direction of the curved wall used to create a
+  // conical sector; other roof types ignore both fields.
+  conicalStartAngle: z.number().optional(),
+  conicalSweepAngle: z
+    .number()
+    .min(-Math.PI * 2)
+    .max(Math.PI * 2)
+    .optional(),
+  // Overrides the stored sector angles without discarding them, allowing
+  // the panel to switch back to the original clipped wall sweep.
+  conicalFullCircle: z.boolean().optional(),
   // Segment-local distances trimmed from each footprint side. The trim
   // boundary is projected vertically through the roof volume, so the
   // resulting edge follows the actual sloped roof surfaces.
@@ -137,6 +158,21 @@ export const RoofSegmentNode = BaseNode.extend({
   shedSideInfillMaxX: z.number().optional(),
   shedFootprintPieces: z.array(z.array(z.tuple([z.number(), z.number()])).min(3)).optional(),
   shedOpenEndSides: z.array(z.enum(['left', 'right'])).optional(),
+  // Shared scene-scope data for comparing shed seams that live under separate
+  // roof parents. Kind-owned assembly code supplies it; the renderer remains
+  // independent of the kind that produced the segment.
+  shedJointFrame: z
+    .object({
+      position: z.tuple([z.number(), z.number(), z.number()]),
+      rotation: z.number(),
+    })
+    .optional(),
+  shedJointOwnerId: z.string().optional(),
+  shedJointNeighborIds: z.array(z.string()).optional(),
+  shedJointScopeId: z.string().optional(),
+  managedByParent: z.boolean().default(false),
+  wallShell: z.enum(['auto', 'include', 'omit']).default('auto'),
+  shedInsetEndPanels: z.boolean().default(false),
   // Shape-specific ratios. Only the pair matching `roofType` is read; the
   // rest are inert. Defined on every segment so the panel can flip
   // roofType without losing the previous shape's tuning.
@@ -195,8 +231,10 @@ export const RoofSegmentNode = BaseNode.extend({
   Roof segment node - an individual roof module within a roof group.
   Each segment generates a complete architectural volume (walls + roof).
   Multiple segments can be combined to form complex roof shapes.
-  - roofType: hip, gable, shed, gambrel, dutch, mansard, flat
+  - roofType: hip, gable, shed, gambrel, dutch, mansard, flat, conical
   - width/depth: footprint dimensions
+  - conicalStartAngle / conicalSweepAngle: angular extent of a conical sector (radians)
+  - conicalFullCircle: temporarily render the complete cone while preserving the sector angles
   - trim: segment-local side cut distances
   - wallHeight: height of walls below the roof
   - pitch: roof slope in degrees (angle of the primary slope face)
@@ -213,6 +251,28 @@ export const RoofSegmentNode = BaseNode.extend({
 )
 
 export type RoofSegmentNode = z.infer<typeof RoofSegmentNode>
+
+export function getConicalRoofCoverage(
+  node: Pick<RoofSegmentNode, 'conicalFullCircle' | 'conicalStartAngle' | 'conicalSweepAngle'>,
+): {
+  fullCircle: boolean
+  startAngle: number
+  sweepAngle: number
+} {
+  const storedSweep = node.conicalSweepAngle
+  const inferredFullCircle =
+    storedSweep === undefined || Math.abs(storedSweep) >= Math.PI * 2 - 1e-4
+  const fullCircle = node.conicalFullCircle ?? inferredFullCircle
+  if (fullCircle) {
+    return { fullCircle: true, startAngle: 0, sweepAngle: -Math.PI * 2 }
+  }
+  const hasClippedSweep = storedSweep !== undefined && Math.abs(storedSweep) < Math.PI * 2 - 1e-4
+  return {
+    fullCircle: false,
+    startAngle: node.conicalStartAngle ?? 0,
+    sweepAngle: hasClippedSweep ? storedSweep : -Math.PI,
+  }
+}
 
 function finiteNonNegative(value: unknown): number {
   return typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0
@@ -453,6 +513,8 @@ export function getDutchRoofMetrics(
 function getPrimarySlopeRun(input: PitchInputs & ShapeRatios): number {
   const min = Math.min(input.width, input.depth)
   switch (input.roofType) {
+    case 'conical':
+      return input.width / 2
     case 'shed':
       return input.depth
     case 'gable':
@@ -560,6 +622,7 @@ export function getRoofSegmentVisibleTopBounds(
 
   if (
     segment.roofType === 'hip' ||
+    segment.roofType === 'conical' ||
     segment.roofType === 'mansard' ||
     segment.roofType === 'dutch'
   ) {
@@ -673,6 +736,12 @@ export function getRoofSegmentSurfaceY(
     const fx = node.width > 0 ? Math.abs(localX) / (node.width / 2) : 0
     const fz = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0
     return peakY - Math.max(fx, fz) * activeRh
+  }
+
+  if (node.roofType === 'conical') {
+    const radius = Math.max(0.0001, node.width / 2)
+    const radialProgress = Math.min(1, Math.hypot(localX, localZ) / radius)
+    return peakY - radialProgress * activeRh
   }
 
   const t = node.depth > 0 ? Math.abs(localZ) / (node.depth / 2) : 0

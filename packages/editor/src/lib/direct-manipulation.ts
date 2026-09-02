@@ -45,6 +45,25 @@ const BESPOKE_SELECTION_MOVE_KINDS = new Set([
   'liquid-line',
 ])
 
+export const EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY = 'editorHandleHitArea'
+
+export function pointerEventHitsEditorHandle(event: unknown): boolean {
+  if (!event || typeof event !== 'object') return false
+  const intersections = (
+    event as {
+      intersections?: readonly {
+        object?: { userData?: Record<string, unknown> }
+      }[]
+    }
+  ).intersections
+  return (
+    intersections?.some(
+      (intersection) =>
+        intersection.object?.userData?.[EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY] === true,
+    ) ?? false
+  )
+}
+
 export function canDirectMoveNode(node: AnyNode): boolean {
   // These MEP kinds own move through bespoke selection rigs (latch cubes,
   // directional arrows, grid-driven previews). Sending body drags/clicks
@@ -64,6 +83,24 @@ export function canDirectMoveNode(node: AnyNode): boolean {
   return isMovable(node)
 }
 
+export function shouldStartDirectMoveDrag({
+  allowPlainDrag,
+  commandModifier,
+  handleOwnsPointer,
+  nodeId,
+  selectedIds,
+}: {
+  allowPlainDrag: boolean
+  commandModifier: boolean
+  handleOwnsPointer: boolean
+  nodeId: string
+  selectedIds: readonly string[]
+}): boolean {
+  if (handleOwnsPointer) return false
+  if (commandModifier) return selectedIds.length === 1 && selectedIds[0] === nodeId
+  return allowPlainDrag && selectedIds.length < 2
+}
+
 export function resolveDirectManipulationNode(
   node: AnyNode,
   nodes: Readonly<Record<string, AnyNode | undefined>>,
@@ -80,7 +117,7 @@ export function resolveMoveActionNode(
 ): AnyNode {
   const parentFrame = nodeRegistry.get(node.type)?.capabilities?.movable?.parentFrame
   const parent = parentFrame?.resolveParent(node, nodes as Readonly<Record<string, AnyNode>>)
-  return parent?.type === node.type ? parent : node
+  return parent && (parent.type === node.type || canDirectRotateNode(parent)) ? parent : node
 }
 
 export function snapDirectRotationDelta(delta: number, free: boolean): number {
