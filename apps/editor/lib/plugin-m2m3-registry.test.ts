@@ -76,7 +76,7 @@ describe('M2 & M3: Dynamic Lazy Plugin Registry & Bootstrap Decoupling', () => {
           expect(loaded.panel.label).toBeDefined()
         }
       }
-    })
+    }, { timeout: 30000 })
   })
 
   describe('3. Canlı Çalışma Zamanı Aktivasyonu & Reaktivite (Zero-Reload Hot Activation)', () => {

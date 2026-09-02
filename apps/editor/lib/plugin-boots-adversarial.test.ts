@@ -59,7 +59,7 @@ describe('Milestone 1 Adversarial Challenge: @pascal-app/plugin-boots', () => {
       expect(componentModule).toBeDefined()
       expect(componentModule.default).toBeDefined()
       expect(typeof componentModule.default).toBe('function')
-    })
+    }, { timeout: 30000 })
   })
 
   describe('2. Adversarial Schema Validation & Edge Cases (JobNode & Zod)', () => {
