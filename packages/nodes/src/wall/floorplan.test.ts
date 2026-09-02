@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  assemblyThickness,
   type FloorplanGeometry,
   type FloorplanPalette,
   type GeometryContext,
@@ -225,5 +226,106 @@ describe('buildWallFloorplan render purpose', () => {
     expect(arrows[0].point[1]).toBeCloseTo(-0.885)
     expect(arrows[1].point[0]).toBeCloseTo(2)
     expect(arrows[1].point[1]).toBeCloseTo(-1.115)
+  })
+})
+
+describe('buildWallFloorplan assembly layers', () => {
+  const assembly = {
+    preset: 'exterior-2x6-siding',
+    exterior: { finish: 'siding' as const, thickness: 0.75 * 0.0254 },
+    sheathing: { material: 'osb' as const, thickness: 0.4375 * 0.0254 },
+    framing: { kind: 'wood' as const, depth: 5.5 * 0.0254 },
+    interior: { finish: 'drywall' as const, thickness: 0.5 * 0.0254 },
+  }
+  const layered = WallNode.parse({
+    id: 'wall_layered',
+    parentId: 'level_main',
+    start: [0, 0],
+    end: [4, 0],
+    thickness: assemblyThickness(assembly),
+    assembly,
+    frontSide: 'exterior',
+    backSide: 'interior',
+    type: 'wall',
+    name: 'Layered wall',
+  })
+  const plain = WallNode.parse({
+    id: 'wall_plain',
+    parentId: 'level_main',
+    start: [0, 0],
+    end: [4, 0],
+    thickness: 0.1,
+    frontSide: 'exterior',
+    backSide: 'interior',
+    type: 'wall',
+    name: 'Plain wall',
+  })
+
+  test('a wall with no assembly draws exactly what it drew before', () => {
+    const built = buildWallFloorplan(plain, context('document'))
+    const parts = built ? flatten(built) : []
+    expect(parts.some((part) => part.kind === 'hatch')).toBe(false)
+  })
+
+  test('document purpose draws the framing poche and one line per interior boundary', () => {
+    const built = buildWallFloorplan(layered, context('document'))
+    expect(built).not.toBeNull()
+    const parts = flatten(built as FloorplanGeometry)
+    // 4 layers -> 5 boundaries -> 3 interior lines.
+    const hatches = parts.filter((part) => part.kind === 'hatch')
+    expect(hatches).toHaveLength(1)
+    const lines = parts.filter(
+      (part): part is Extract<FloorplanGeometry, { kind: 'line' }> =>
+        part.kind === 'line' && part.opacity === 1,
+    )
+    expect(lines).toHaveLength(3)
+    // Straight wall along +x: each boundary sits at its own y offset, all
+    // strictly inside the footprint.
+    const half = assemblyThickness(assembly) / 2
+    for (const line of lines) {
+      expect(line.y1).toBeCloseTo(line.y2, 12)
+      expect(Math.abs(line.y1)).toBeLessThan(half)
+      expect(line.x1).toBeCloseTo(0, 9)
+      expect(line.x2).toBeCloseTo(4, 9)
+    }
+  })
+
+  test('edit purpose keeps the layer lines but drops the poche', () => {
+    const built = buildWallFloorplan(layered, context('edit'))
+    const parts = flatten(built as FloorplanGeometry)
+    expect(parts.some((part) => part.kind === 'hatch')).toBe(false)
+    const lines = parts.filter(
+      (part): part is Extract<FloorplanGeometry, { kind: 'line' }> => part.kind === 'line',
+    )
+    expect(lines).toHaveLength(3)
+    for (const line of lines) expect(line.opacity).toBeLessThan(1)
+  })
+
+  test('an opening cuts through every layer line', () => {
+    const ctx = context('document')
+    const door = {
+      id: 'door_1',
+      type: 'door' as const,
+      parentId: 'wall_layered',
+      position: [2, 0, 0] as [number, number, number],
+      width: 0.9,
+    }
+    const withDoor: GeometryContext = {
+      ...ctx,
+      children: [door as unknown as GeometryContext['children'][number]],
+    }
+    const parts = flatten(buildWallFloorplan(layered, withDoor) as FloorplanGeometry)
+    const lines = parts.filter(
+      (part): part is Extract<FloorplanGeometry, { kind: 'line' }> =>
+        part.kind === 'line' && part.opacity === 1,
+    )
+    // Each of the 3 interior boundaries is cut into two pieces by the door.
+    expect(lines).toHaveLength(6)
+    for (const line of lines) {
+      const lo = Math.min(line.x1, line.x2)
+      const hi = Math.max(line.x1, line.x2)
+      // No piece overlaps the 1.55..2.45 rough opening.
+      expect(hi <= 1.55 + 1e-9 || lo >= 2.45 - 1e-9).toBe(true)
+    }
   })
 })

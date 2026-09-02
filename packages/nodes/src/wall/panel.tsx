@@ -3,22 +3,42 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  assemblyThickness,
+  BRICK_AIR_SPACE,
+  BRICK_VENEER,
   buildWallFaceBandCountPatch,
+  FIBER_CEMENT,
   GROUND_SUPPORT_ID,
+  GYPSUM_HALF,
+  GYPSUM_SHEATHING,
   getClampedWallCurveOffset,
   getMaxWallCurveOffset,
+  getWallAssemblyPreset,
   getWallCurveLength,
   getWallFaceBandConfig,
   normalizeWallCurveOffset,
+  resolveWallAssembly,
+  SIDING_LAP,
+  STONE_VENEER_UNVERIFIED,
+  STUCCO_3_COAT,
   terrainSupportLift,
   useLiveNodeOverrides,
   useScene,
+  WALL_ASSEMBLY_PRESETS,
   WALL_CHAIR_RAIL_DEFAULT,
   WALL_CROWN_DEFAULT,
   WALL_FACE_BAND_DEFAULT,
   WALL_SKIRTING_DEFAULT,
+  type WallAssembly,
+  type WallAssemblyExteriorFinish,
+  type WallAssemblyFramingKind,
+  type WallAssemblyInteriorFinish,
+  type WallAssemblySheathingMaterial,
   type WallNode,
   type WallTrimProfile,
+  WSP_SHEATHING,
+  wallAssemblyPatch,
+  wallAssemblyUnverifiedNote,
 } from '@pascal-app/core'
 import {
   ActionButton,
@@ -37,7 +57,7 @@ import {
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Spline } from 'lucide-react'
-import { useCallback, useMemo, useRef } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
 import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
 
 /**
@@ -316,23 +336,37 @@ export default function WallPanel() {
             Extends downward to meet the terrain. Height and top stay unchanged.
           </div>
         )}
-        <SliderControl
-          label="Thickness"
-          max={metersToLinearUnit(1, unit)}
-          min={metersToLinearUnit(0.05, unit)}
-          onChange={(v) =>
-            handleUpdate({
-              thickness: linearControlValueToMeters(v, unit, {
-                maxMeters: 1,
-                minMeters: 0.05,
-              }),
-            })
-          }
-          precision={3}
-          step={0.01}
-          unit={unitLabel}
-          value={Math.round(displayThickness * 1000) / 1000}
-        />
+        {node.assembly ? (
+          // The assembly owns the total. Editing `thickness` here would put the
+          // two out of sync, so the slider becomes a readout and the Assembly
+          // section is the only place thickness changes.
+          <div className="flex items-center justify-between px-2 py-1.5">
+            <span className="font-medium text-[10px] text-muted-foreground uppercase tracking-wider">
+              Thickness
+            </span>
+            <span className="text-[11px] text-muted-foreground tabular-nums">
+              {formatLinearMeasurement(thickness, unit)} · from assembly
+            </span>
+          </div>
+        ) : (
+          <SliderControl
+            label="Thickness"
+            max={metersToLinearUnit(1, unit)}
+            min={metersToLinearUnit(0.05, unit)}
+            onChange={(v) =>
+              handleUpdate({
+                thickness: linearControlValueToMeters(v, unit, {
+                  maxMeters: 1,
+                  minMeters: 0.05,
+                }),
+              })
+            }
+            precision={3}
+            step={0.01}
+            unit={unitLabel}
+            value={Math.round(displayThickness * 1000) / 1000}
+          />
+        )}
         {!hasWallChildrenBlockingCurve && (
           <SliderControl
             label="Curve"
@@ -356,6 +390,8 @@ export default function WallPanel() {
           />
         )}
       </PanelSection>
+
+      <WallAssemblySection node={node} onUpdate={handleUpdate} unit={unit} />
 
       <WallFaceBandSection
         node={node}
@@ -620,6 +656,387 @@ function WallTrimSection({
               value={metersToLinearUnit(trimValue.offsetY ?? 0, unit)}
             />
           )}
+        </>
+      )}
+    </PanelSection>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Assembly
+// ---------------------------------------------------------------------------
+//
+// The assembly is the SINGLE SOURCE OF TRUTH for `wall.thickness` — every edit
+// here goes through `wallAssemblyPatch`, which writes the layer stack AND the
+// re-derived total in one `updateNode` call, so the 2D plan and the 3D wall
+// both move on the same store tick.
+
+const METRES_PER_INCH = 0.0254
+
+/**
+ * Imperial-friendly thickness input. Accepts `5/8`, `5/8"`, `7/16 in`,
+ * `1-1/4"`, `1 1/2"`, `12mm`, `0.012m`. A bare number means INCHES in imperial
+ * display and MILLIMETRES in metric — wall layers are millimetre-scale and
+ * typing `0.0127` for half-inch board is nobody's idea of usable.
+ */
+function parseLayerThickness(raw: string, unit: 'metric' | 'imperial'): number | null {
+  const text = raw.trim().toLowerCase().replace(/["”]/g, ' in ')
+  if (!text) return null
+  const explicit = /(mm|cm|m|in|ft|')\s*$/.exec(text)
+  const suffix = explicit?.[1]
+  const body = (suffix ? text.slice(0, explicit?.index) : text).trim()
+
+  // `1-1/4` / `1 1/2` / `5/8` / `0.4375`
+  const mixed = /^(\d+(?:\.\d+)?)[\s-]+(\d+)\s*\/\s*(\d+)$/.exec(body)
+  const fraction = /^(\d+)\s*\/\s*(\d+)$/.exec(body)
+  let value: number
+  if (mixed) {
+    value = Number(mixed[1]) + Number(mixed[2]) / Number(mixed[3])
+  } else if (fraction) {
+    value = Number(fraction[1]) / Number(fraction[2])
+  } else {
+    value = Number(body)
+  }
+  if (!Number.isFinite(value) || value < 0) return null
+
+  switch (suffix) {
+    case 'mm':
+      return value / 1000
+    case 'cm':
+      return value / 100
+    case 'm':
+      return value
+    case 'in':
+      return value * METRES_PER_INCH
+    case 'ft':
+    case "'":
+      return value * 12 * METRES_PER_INCH
+    default:
+      return unit === 'imperial' ? value * METRES_PER_INCH : value / 1000
+  }
+}
+
+/** Nearest common fraction of an inch, so 0.0111 m reads back as `7/16"`. */
+function formatLayerThickness(metres: number, unit: 'metric' | 'imperial'): string {
+  if (unit !== 'imperial') return `${Math.round(metres * 1000 * 10) / 10} mm`
+  const inchValue = metres / METRES_PER_INCH
+  const sixteenths = Math.round(inchValue * 16)
+  if (Math.abs(inchValue * 16 - sixteenths) > 1e-6) return `${Math.round(inchValue * 1000) / 1000}"`
+  const whole = Math.floor(sixteenths / 16)
+  let numerator = sixteenths % 16
+  let denominator = 16
+  while (numerator % 2 === 0 && numerator > 0) {
+    numerator /= 2
+    denominator /= 2
+  }
+  if (numerator === 0) return `${whole}"`
+  return whole > 0 ? `${whole}-${numerator}/${denominator}"` : `${numerator}/${denominator}"`
+}
+
+const SELECT_CLASS =
+  'h-7 w-full rounded border border-border bg-background px-2 text-[11px] text-foreground outline-none focus:border-primary'
+const INPUT_CLASS =
+  'h-7 w-full rounded border border-border bg-background px-2 text-[11px] text-foreground outline-none focus:border-primary'
+const ROW_LABEL_CLASS =
+  'w-[68px] shrink-0 text-[10px] text-muted-foreground uppercase tracking-wide'
+
+function LayerRow({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="flex items-center gap-2 px-1 py-0.5">
+      <span className={ROW_LABEL_CLASS}>{label}</span>
+      <div className="flex flex-1 items-center gap-1.5">{children}</div>
+    </div>
+  )
+}
+
+function ThicknessInput({
+  metres,
+  onCommit,
+  unit,
+}: {
+  metres: number
+  onCommit: (metres: number) => void
+  unit: 'metric' | 'imperial'
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const display = draft ?? formatLayerThickness(metres, unit)
+  return (
+    <input
+      className={INPUT_CLASS}
+      onBlur={() => {
+        if (draft != null) {
+          const parsed = parseLayerThickness(draft, unit)
+          if (parsed != null) onCommit(parsed)
+        }
+        setDraft(null)
+      }}
+      onChange={(event) => setDraft(event.target.value)}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter') event.currentTarget.blur()
+        if (event.key === 'Escape') {
+          setDraft(null)
+          event.currentTarget.blur()
+        }
+      }}
+      spellCheck={false}
+      value={display}
+    />
+  )
+}
+
+const EXTERIOR_FINISH_OPTIONS: Array<{ value: WallAssemblyExteriorFinish; label: string }> = [
+  { value: 'none', label: 'None' },
+  { value: 'siding', label: 'Lap siding' },
+  { value: 'fiber-cement', label: 'Fiber cement' },
+  { value: 'stucco', label: 'Stucco' },
+  { value: 'brick', label: 'Brick veneer' },
+  { value: 'stone', label: 'Stone veneer' },
+]
+
+const SHEATHING_OPTIONS: Array<{ value: WallAssemblySheathingMaterial; label: string }> = [
+  { value: 'none', label: 'None' },
+  { value: 'osb', label: 'OSB' },
+  { value: 'plywood', label: 'Plywood' },
+  { value: 'gypsum', label: 'Gypsum' },
+]
+
+const FRAMING_OPTIONS: Array<{ value: WallAssemblyFramingKind; label: string }> = [
+  { value: 'wood', label: 'Wood studs' },
+  { value: 'lgs', label: 'Steel studs' },
+  { value: 'cmu', label: 'CMU' },
+  { value: 'icf', label: 'ICF' },
+]
+
+const INTERIOR_FINISH_OPTIONS: Array<{ value: WallAssemblyInteriorFinish; label: string }> = [
+  { value: 'none', label: 'None' },
+  { value: 'drywall', label: 'Drywall' },
+  { value: 'plaster', label: 'Plaster' },
+]
+
+/** Cited default thickness for a finish the user just switched to. */
+const EXTERIOR_FINISH_DEFAULT: Record<WallAssemblyExteriorFinish, number> = {
+  none: 0,
+  siding: SIDING_LAP,
+  'fiber-cement': FIBER_CEMENT,
+  stucco: STUCCO_3_COAT,
+  brick: BRICK_VENEER + BRICK_AIR_SPACE,
+  stone: STONE_VENEER_UNVERIFIED,
+}
+
+function WallAssemblySection({
+  node,
+  onUpdate,
+  unit,
+}: {
+  node: WallNode
+  onUpdate: (updates: Partial<WallNode>) => void
+  unit: 'metric' | 'imperial'
+}) {
+  const assembly = node.assembly
+  const resolved = resolveWallAssembly(node)
+  const presetNote = wallAssemblyUnverifiedNote(node)
+
+  // Every write goes through wallAssemblyPatch so `thickness` is re-derived.
+  // Changing any layer clears `preset` — the stack is no longer that preset.
+  const apply = (next: WallAssembly) => onUpdate(wallAssemblyPatch(next))
+  const edit = (mutate: (draft: WallAssembly) => WallAssembly) => {
+    if (!assembly) return
+    const next = mutate({ ...assembly })
+    apply({ ...next, preset: undefined })
+  }
+
+  return (
+    <PanelSection title="Assembly">
+      <LayerRow label="Preset">
+        <select
+          className={SELECT_CLASS}
+          onChange={(event) => {
+            const id = event.target.value
+            if (!id) {
+              onUpdate({ assembly: undefined })
+              return
+            }
+            const preset = getWallAssemblyPreset(id)
+            if (preset) apply({ ...preset.assembly })
+          }}
+          value={assembly?.preset ?? ''}
+        >
+          <option value="">{assembly ? 'Custom' : 'None (single layer)'}</option>
+          {WALL_ASSEMBLY_PRESETS.map((preset) => (
+            <option key={preset.id} value={preset.id}>
+              {preset.label}
+            </option>
+          ))}
+        </select>
+      </LayerRow>
+
+      {assembly && (
+        <>
+          <LayerRow label="Exterior">
+            <select
+              className={SELECT_CLASS}
+              onChange={(event) => {
+                const finish = event.target.value as WallAssemblyExteriorFinish
+                edit((draft) => ({
+                  ...draft,
+                  exterior: { finish, thickness: EXTERIOR_FINISH_DEFAULT[finish] },
+                }))
+              }}
+              value={assembly.exterior?.finish ?? 'none'}
+            >
+              {EXTERIOR_FINISH_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {assembly.exterior && assembly.exterior.finish !== 'none' && (
+              <ThicknessInput
+                metres={assembly.exterior.thickness}
+                onCommit={(thickness) =>
+                  edit((draft) => ({
+                    ...draft,
+                    exterior: { finish: draft.exterior?.finish ?? 'siding', thickness },
+                  }))
+                }
+                unit={unit}
+              />
+            )}
+          </LayerRow>
+
+          <LayerRow label="Sheathing">
+            <select
+              className={SELECT_CLASS}
+              onChange={(event) => {
+                const material = event.target.value as WallAssemblySheathingMaterial
+                edit((draft) => ({
+                  ...draft,
+                  sheathing: {
+                    material,
+                    thickness:
+                      material === 'none'
+                        ? 0
+                        : material === 'gypsum'
+                          ? GYPSUM_SHEATHING
+                          : WSP_SHEATHING,
+                  },
+                }))
+              }}
+              value={assembly.sheathing?.material ?? 'none'}
+            >
+              {SHEATHING_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {assembly.sheathing && assembly.sheathing.material !== 'none' && (
+              <ThicknessInput
+                metres={assembly.sheathing.thickness}
+                onCommit={(thickness) =>
+                  edit((draft) => ({
+                    ...draft,
+                    sheathing: { material: draft.sheathing?.material ?? 'osb', thickness },
+                  }))
+                }
+                unit={unit}
+              />
+            )}
+          </LayerRow>
+
+          <LayerRow label="Framing">
+            <select
+              className={SELECT_CLASS}
+              onChange={(event) =>
+                edit((draft) => ({
+                  ...draft,
+                  framing: {
+                    kind: event.target.value as WallAssemblyFramingKind,
+                    depth: draft.framing.depth,
+                  },
+                }))
+              }
+              value={assembly.framing.kind}
+            >
+              {FRAMING_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ThicknessInput
+              metres={assembly.framing.depth}
+              onCommit={(depth) =>
+                edit((draft) => ({ ...draft, framing: { kind: draft.framing.kind, depth } }))
+              }
+              unit={unit}
+            />
+          </LayerRow>
+
+          <LayerRow label="Interior">
+            <select
+              className={SELECT_CLASS}
+              onChange={(event) => {
+                const finish = event.target.value as WallAssemblyInteriorFinish
+                edit((draft) => ({
+                  ...draft,
+                  interior: {
+                    finish,
+                    thickness: finish === 'none' ? 0 : (draft.interior?.thickness ?? GYPSUM_HALF),
+                  },
+                }))
+              }}
+              value={assembly.interior?.finish ?? 'none'}
+            >
+              {INTERIOR_FINISH_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            {assembly.interior && assembly.interior.finish !== 'none' && (
+              <ThicknessInput
+                metres={assembly.interior.thickness}
+                onCommit={(thickness) =>
+                  edit((draft) => ({
+                    ...draft,
+                    interior: { finish: draft.interior?.finish ?? 'drywall', thickness },
+                  }))
+                }
+                unit={unit}
+              />
+            )}
+          </LayerRow>
+
+          <div className="flex items-center justify-between px-2 py-1.5">
+            <span className="font-medium text-[10px] text-muted-foreground uppercase tracking-wide">
+              Total thickness
+            </span>
+            <span className="font-medium text-[11px] text-foreground tabular-nums">
+              {formatLayerThickness(assemblyThickness(assembly), unit)}
+            </span>
+          </div>
+
+          {resolved.kind === 'partition' && (
+            <div className="px-2 pb-1.5 text-[10px] text-muted-foreground">
+              Partition: the interior finish is applied to both faces.
+            </div>
+          )}
+          {resolved.kind === 'envelope' && resolved.exteriorSide == null && (
+            <div className="px-2 pb-1.5 text-[10px] text-muted-foreground">
+              Which face is outside is undetermined (no room detected on either side) — the exterior
+              layers are drawn on the front face.
+            </div>
+          )}
+          {presetNote && (
+            <div className="px-2 pb-2 text-[10px] text-amber-600 dark:text-amber-400">
+              Unverified: {presetNote}
+            </div>
+          )}
+          <div className="px-2 pb-2 text-[10px] text-muted-foreground">
+            Layer thicknesses follow the 2021 IRC assembly data. Drafting aid, not engineering —
+            verify with the authority having jurisdiction.
+          </div>
         </>
       )}
     </PanelSection>

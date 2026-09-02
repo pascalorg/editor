@@ -128,6 +128,86 @@ export const WALL_SURFACE_SLOT_DEFAULTS = {
 
 export type WallSurfaceSlotId = keyof typeof WALL_SURFACE_SLOT_DEFAULTS
 
+// ---------------------------------------------------------------------------
+// Wall assembly (WS5)
+// ---------------------------------------------------------------------------
+// A real layered wall stack. Every thickness is in METRES.
+//
+// SINGLE SOURCE OF TRUTH: when `assembly` is present it OWNS the wall's total
+// thickness. `wall.thickness` stays the TOTAL for every existing consumer
+// (footprint, miters, 3D viewer, dimensions) and must be re-derived from the
+// stack — `assemblyThickness(assembly)` in
+// `packages/core/src/systems/wall/wall-assembly.ts` — and written back to
+// `thickness` on EVERY assembly edit. Never edit `thickness` directly while an
+// assembly is present; edit the assembly and re-derive.
+
+export const WallAssemblyExteriorFinish = z.enum([
+  'siding',
+  'stucco',
+  'brick',
+  'stone',
+  'fiber-cement',
+  'none',
+])
+export type WallAssemblyExteriorFinish = z.infer<typeof WallAssemblyExteriorFinish>
+
+export const WallAssemblySheathingMaterial = z.enum(['osb', 'plywood', 'gypsum', 'none'])
+export type WallAssemblySheathingMaterial = z.infer<typeof WallAssemblySheathingMaterial>
+
+export const WallAssemblyFramingKind = z.enum(['wood', 'lgs', 'cmu', 'icf'])
+export type WallAssemblyFramingKind = z.infer<typeof WallAssemblyFramingKind>
+
+export const WallAssemblyInteriorFinish = z.enum(['drywall', 'plaster', 'none'])
+export type WallAssemblyInteriorFinish = z.infer<typeof WallAssemblyInteriorFinish>
+
+export const WallAssembly = z
+  .object({
+    /** Id of a `WALL_ASSEMBLY_PRESETS` entry this stack was seeded from. */
+    preset: z.string().optional(),
+    /** Outermost cladding. For `brick` the thickness INCLUDES the air space. */
+    exterior: z
+      .object({
+        finish: WallAssemblyExteriorFinish,
+        thickness: z.number().nonnegative(),
+      })
+      .optional(),
+    sheathing: z
+      .object({
+        material: WallAssemblySheathingMaterial,
+        thickness: z.number().nonnegative(),
+      })
+      .optional(),
+    /** The structural core. Always present — it is what makes a wall a wall. */
+    framing: z.object({
+      kind: WallAssemblyFramingKind,
+      depth: z.number().nonnegative(),
+    }),
+    interior: z
+      .object({
+        finish: WallAssemblyInteriorFinish,
+        thickness: z.number().nonnegative(),
+      })
+      .optional(),
+    /** Free-text cavity insulation note (e.g. 'R-21 batt'). No geometry. */
+    cavityInsulation: z.string().optional(),
+  })
+  .describe(
+    dedent`
+    Layered wall assembly, all thicknesses in metres, ordered outside -> inside:
+    exterior finish, sheathing, framing, interior finish.
+    - When present, this is the SINGLE SOURCE OF TRUTH for wall thickness:
+      wall.thickness MUST equal assemblyThickness(assembly) and is rewritten on
+      every assembly edit. Consumers keep reading wall.thickness as the total.
+    - A stack with neither exterior nor sheathing is a PARTITION: the interior
+      finish is applied to BOTH faces (total = 2 x interior + framing).
+    - Which face is exterior comes from wall.frontSide / wall.backSide;
+      frontSide is the +normal side, normal = perp(end - start).
+    - The weather-resistive barrier (IRC R703.2) is intentionally not modelled:
+      it is a film with no drawable thickness.
+    `,
+  )
+export type WallAssembly = z.infer<typeof WallAssembly>
+
 export const WallNode = BaseNode.extend({
   id: objectId('wall'),
   type: nodeType('wall'),
@@ -156,7 +236,12 @@ export const WallNode = BaseNode.extend({
   // read only by the load migration that moves them into `slots`; delete them
   // in a follow-up once migrated scenes are the norm.
   slots: z.record(z.string(), z.string()).optional(),
+  // TOTAL wall thickness in metres — the one number every consumer reads.
+  // Derived from `assembly` (see WallAssembly) whenever an assembly is present.
   thickness: z.number().optional(),
+  // Layered construction stack. Optional: absent = a single unspecified slab of
+  // `thickness`. Present = `thickness` is derived and must not be hand-edited.
+  assembly: WallAssembly.optional(),
   height: z.number().optional(),
   curveOffset: z.number().optional(),
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
@@ -180,7 +265,9 @@ export const WallNode = BaseNode.extend({
 }).describe(
   dedent`
   Wall node - used to represent a wall in the building
-  - thickness: thickness in meters
+  - thickness: TOTAL thickness in meters (all assembly layers together)
+  - assembly: optional layered construction stack; when present it is the single
+    source of truth and thickness is re-derived from it on every edit
   - height: height in meters
   - fillToTerrain: extends the wall downward to the terrain without changing its authored height
   - curveOffset: midpoint sagitta offset used to bend the wall into an arc

@@ -11,7 +11,6 @@ import { registerEditorHostPanel } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import { plansHostPanel, plansPlugin, registerPlansCommands } from '@pascal-app/plugin-plans'
-import { sectionsHostPanel, sectionsPlugin } from '@pascal-app/plugin-sections'
 import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
 
@@ -98,9 +97,6 @@ registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: false })
 extendPluginDiscovery(async () => [plansPlugin])
 registerEditorHostPanel(plansHostPanel)
 registerPlansCommands()
-// Sections: true vector sections + elevations from Pascal's own geometry.
-extendPluginDiscovery(async () => [sectionsPlugin])
-registerEditorHostPanel(sectionsHostPanel)
 extendPluginDiscovery(async () => [mintPlugin])
 registerEditorHostPanel(mintHostPanel)
 extendPluginDiscovery(async () => [streetscapePlugin])
