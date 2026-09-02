@@ -7,7 +7,7 @@ import {
   resumeSpaceDetection,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { cancelPerfAction, markPerfAction, useViewer } from '@pascal-app/viewer'
 import { useEffect } from 'react'
 import { Vector3 } from 'three'
 import {
@@ -102,6 +102,9 @@ function rotateGroupSelection(direction: 1 | -1): boolean {
 let _toolCancelConsumed = false
 export const markToolCancelConsumed = () => {
   _toolCancelConsumed = true
+  // A consumed cancel means the active gesture reverted — the perf ledger must
+  // not measure the restore as a committed action's settle.
+  cancelPerfAction()
 }
 
 // Escape's fall-through when no tool consumed the cancel: drop back to the
@@ -458,8 +461,10 @@ export const useKeyboard = ({
             const currentIdx = levelId ? levels.indexOf(levelId as any) : -1
             const nextIdx = currentIdx < levels.length - 1 ? currentIdx + 1 : currentIdx
             if (nextIdx !== -1 && nextIdx !== currentIdx) {
+              markPerfAction('level-switch', levels[nextIdx] as string)
               useViewer.getState().setSelection({ levelId: levels[nextIdx] as any })
             } else if (currentIdx === -1) {
+              markPerfAction('level-switch', levels[0] as string)
               useViewer.getState().setSelection({ levelId: levels[0] as any })
             }
           }
@@ -479,8 +484,10 @@ export const useKeyboard = ({
             const currentIdx = levelId ? levels.indexOf(levelId as any) : -1
             const prevIdx = currentIdx > 0 ? currentIdx - 1 : currentIdx
             if (prevIdx !== -1 && prevIdx !== currentIdx) {
+              markPerfAction('level-switch', levels[prevIdx] as string)
               useViewer.getState().setSelection({ levelId: levels[prevIdx] as any })
             } else if (currentIdx === -1) {
+              markPerfAction('level-switch', levels[levels.length - 1] as string)
               useViewer.getState().setSelection({ levelId: levels[levels.length - 1] as any })
             }
           }

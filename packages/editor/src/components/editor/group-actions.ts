@@ -14,7 +14,7 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import { Plane, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
@@ -575,6 +575,11 @@ export function deleteSelection(): boolean {
   if (selectedIds.length === 0) return false
 
   const commitDelete = () => {
+    const detail =
+      selectedIds.length === 1
+        ? (useScene.getState().nodes[selectedIds[0]!]?.type ?? selectedIds[0]!)
+        : String(selectedIds.length)
+    markPerfAction('delete', detail)
     if (selectedIds.length === 1) {
       emitDeleteSFX(useScene.getState().nodes[selectedIds[0]!]?.type)
     } else {

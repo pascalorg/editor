@@ -14,11 +14,22 @@ import {
 import {
   type HoverStyles,
   InteractiveSystem,
+  PERF_OVERLAY_ENABLED,
+  recordPerfSample,
   SceneEnvironment,
   useViewer,
   Viewer,
 } from '@pascal-app/viewer'
-import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import {
+  memo,
+  Profiler,
+  type ProfilerOnRenderCallback,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
@@ -101,6 +112,9 @@ const PAINT_CURSOR_BADGE_OFFSET_X = 14
 const PAINT_CURSOR_BADGE_OFFSET_Y = 14
 const SCENE_READY_FALLBACK_MS = 8000
 type PaintCursorBadgeState = 'empty' | 'ready' | 'blocked'
+const recordEditorRender: ProfilerOnRenderCallback = (_id, _phase, actualDuration) => {
+  if (PERF_OVERLAY_ENABLED) recordPerfSample('react-render', actualDuration)
+}
 const EDITOR_HOVER_STYLES: HoverStyles = {
   default: { visibleColor: 0x00_aa_ff, hiddenColor: 0xf3_ff_47, strength: 5, pulse: true },
   delete: { visibleColor: 0xef_44_44, hiddenColor: 0x99_1b_1b, strength: 6, pulse: false },
@@ -1196,7 +1210,7 @@ function PreviewStage({
   )
 }
 
-export default function Editor({
+function EditorContent({
   layoutVersion = 'v1',
   appMenuButton,
   sidebarTop,
@@ -1632,5 +1646,13 @@ export default function Editor({
         </>
       )}
     </div>
+  )
+}
+
+export default function Editor(props: EditorProps) {
+  return (
+    <Profiler id="editor" onRender={recordEditorRender}>
+      <EditorContent {...props} />
+    </Profiler>
   )
 }
