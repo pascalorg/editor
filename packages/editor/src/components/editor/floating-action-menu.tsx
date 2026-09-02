@@ -786,7 +786,13 @@ export function FloatingActionMenu() {
           >
             {menuVisibility.actions ? (
               <NodeActionMenu
-                onFind={node && canFindNode ? handleFind : undefined}
+                onFind={
+                  node &&
+                  canFindNode &&
+                  nodeRegistry.get(node.type)?.presentation?.findInCatalog !== false
+                    ? handleFind
+                    : undefined
+                }
                 onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
                 onCurve={
                   (node?.type === 'fence' && !isSplineFence(node) && !isCurvedWall(node)) ||

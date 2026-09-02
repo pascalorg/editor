@@ -1499,6 +1499,9 @@ export type Presentation = {
   /** Set false when selection is edited directly through in-scene affordances
    * and the generic floating action menu would duplicate or conflict with them. */
   actionMenu?: boolean
+  /** Set false to drop the "Find in catalog" action for this kind — for nodes
+   * that are placed through a plugin panel rather than a browsable catalog. */
+  findInCatalog?: boolean
 }
 
 export type IconRef =
