@@ -128,8 +128,22 @@ export function hasOverheadElevation(line: UtilityLineNode): boolean {
   return line.path.some((point) => point[1] > OVERHEAD_ELEVATION_EPSILON)
 }
 
+/**
+ * A pole's `[x, y, z]` in site metres. Scenes saved before the pole carried a
+ * height stored a PLAN pair `[x, z]`; the zod preprocess widens it on parse,
+ * but a scene loaded straight into the store never parses, so read it here
+ * too — otherwise `position[2]` is undefined and NaN reaches three.js.
+ */
+export const polePosition3 = (pole: UtilityPoleNode): Vec3 => {
+  const p = pole.position as unknown as number[]
+  return p.length === 2 ? [p[0] ?? 0, 0, p[1] ?? 0] : [p[0] ?? 0, p[1] ?? 0, p[2] ?? 0]
+}
+
 /** Plan `[x, z]` of a pole, in site metres. */
-export const polePlan = (pole: UtilityPoleNode): PlanPoint => [pole.position[0], pole.position[2]]
+export const polePlan = (pole: UtilityPoleNode): PlanPoint => {
+  const p = polePosition3(pole)
+  return [p[0], p[2]]
+}
 
 /**
  * The crossarm attachment point of a pole, in absolute SITE metres.
@@ -143,7 +157,7 @@ export const polePlan = (pole: UtilityPoleNode): PlanPoint => [pole.position[0],
  */
 export function poleAttachmentPoint(pole: UtilityPoleNode, toward: PlanPoint | null): Vec3 {
   const plan = polePlan(pole)
-  const butt = pole.position[1]
+  const butt = polePosition3(pole)[1]
   const height = Math.max(0, (pole.height || DEFAULT_POLE_HEIGHT) - POLE_CROSSARM_DROP)
   const axis = crossarmAxis(pole.yaw)
   const offset = crossarmPinOffset()

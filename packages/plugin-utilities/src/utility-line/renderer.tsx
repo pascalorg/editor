@@ -69,7 +69,12 @@ export const UtilityLineRenderer = ({ node: rawNode }: { node: UtilityLineNode }
       node,
     ).path
     return {
-      local: site.map((p) => siteToLocal(frame, p)) as Vec3[],
+      // A vertex that did not resolve (a dangling ref, a legacy pole with a
+      // 2-tuple position) must not reach three.js: a NaN anywhere makes
+      // CatmullRomCurve3 index an undefined point and throw inside the viewer.
+      local: (site.map((p) => siteToLocal(frame, p)) as Vec3[]).filter((p) =>
+        p.every((v) => Number.isFinite(v)),
+      ),
       // Grade in the LOCAL frame. The trench ribbon rides the GROUND, not
       // the building origin — `siteToLocal` subtracts `frame.origin[1]`, so
       // a hardcoded local y floated the trench whenever the building sat

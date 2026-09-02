@@ -1,4 +1,5 @@
 import type { FloorplanGeometry, GeometryContext } from '@pascal-app/core'
+import { polePlan } from '../utility-line/endpoints'
 import { floorplanDrawContext, type UtilitiesDrawContext } from '../draw-context'
 import { utilitiesLayerMetadata } from '../layer'
 import type { UtilityPoleNode } from '../schema'
@@ -24,7 +25,7 @@ export function drawUtilityPole(
   node: UtilityPoleNode,
   dctx: UtilitiesDrawContext,
 ): FloorplanGeometry | null {
-  const [cx, cy] = dctx.toPlan([node.position[0], node.position[2]])
+  const [cx, cy] = dctx.toPlan(polePlan(node))
 
   const view = dctx.view
   const selected = (view?.selected ?? false) || (view?.highlighted ?? false)

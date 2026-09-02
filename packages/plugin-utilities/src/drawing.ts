@@ -1,4 +1,5 @@
 import type { FloorplanGeometry, SceneSnapshot } from '@pascal-app/core'
+import { polePlan } from './utility-line/endpoints'
 import { siteDrawContext } from './draw-context'
 import { isServicePoint, isUtilityLine, isUtilityPole } from './kind-guards'
 import { drawServicePoint } from './service-point/floorplan'
@@ -63,7 +64,7 @@ export function buildUtilitiesDrawing(scene: SceneSnapshot): UtilitiesDrawing {
       if (!geometry) continue
       counts.poles += 1
       primitives.push(geometry)
-      points.push([node.position[0], node.position[2]])
+      points.push(polePlan(node))
     } else if (isServicePoint(node)) {
       const geometry = drawServicePoint(node, dctx)
       if (!geometry) continue

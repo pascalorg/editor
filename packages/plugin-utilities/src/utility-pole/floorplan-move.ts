@@ -1,4 +1,5 @@
 import { type FloorplanMoveTargetSession, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import { polePosition3 } from '../utility-line/endpoints'
 import { isGridSnapActive, useEditor } from '@pascal-app/editor'
 import { asNodeId } from '../kind-guards'
 import type { UtilityPoleNode } from '../schema'
@@ -30,7 +31,7 @@ export function utilityPoleFloorplanMove({
     nodes as unknown as LooseNodes,
     node as unknown as Record<string, unknown>,
   )
-  const buttY = node.position[1]
+  const buttY = polePosition3(node)[1]
   let latest: [number, number, number] | null = null
 
   return {
