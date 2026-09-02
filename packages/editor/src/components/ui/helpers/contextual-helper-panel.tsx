@@ -244,7 +244,13 @@ function ToolHintChipRow({ hint }: { hint: ToolHint & { chip: NonNullable<ToolHi
       label={label}
       onClick={chip.cycle}
       shortcut={hint.key}
-      tooltip={chip.tooltip}
+      tooltip={
+        chip.tooltipKey
+          ? t(chip.tooltipKey) !== chip.tooltipKey
+            ? t(chip.tooltipKey)
+            : chip.tooltip
+          : chip.tooltip
+      }
     />
   )
 }

@@ -376,6 +376,11 @@ export type ToolHintChip = {
   icons?: Record<string, string>
   /** Hover tooltip, e.g. 'Placement type — click or press I to cycle'. */
   tooltip?: string
+  /**
+   * Translator key resolving to the hover tooltip. Consumers resolve
+   * `tooltipKey` first and fall back to `tooltip` when untranslated.
+   */
+  tooltipKey?: string
 }
 
 // ─── ToolOption ──────────────────────────────────────────────────────
@@ -392,8 +397,19 @@ export type ToolOptionChoice = {
   value: string
   /** Button label. Sentence case. */
   label: string
+  /**
+   * Translator key resolving to the button label. If both `label` and
+   * `labelKey` are set, the consumer resolves `labelKey` first and falls back
+   * to `label` when the key is untranslated.
+   */
+  labelKey?: string
   /** Helper line shown under the row while this choice is active. */
   description?: string
+  /**
+   * Translator key resolving to the helper line. Falls back to `description`
+   * when the key is untranslated.
+   */
+  descriptionKey?: string
 }
 
 export type ToolOption = {
@@ -401,6 +417,11 @@ export type ToolOption = {
   id: string
   /** Row label. Sentence case, e.g. 'Create from'. */
   label: string
+  /**
+   * Translator key resolving to the row label. Consumers resolve `labelKey`
+   * first and fall back to `label` when untranslated.
+   */
+  labelKey?: string
   choices: readonly ToolOptionChoice[]
   /** Subscribe to live value changes (Zustand-store-like); returns unsubscribe. */
   subscribe: (onChange: () => void) => () => void

@@ -2301,5 +2301,8 @@
   "editor.currentlyLabel": "当前 {value}",
   "editor.capture": "采集",
   "editor.top": "顶部",
-  "buildTab.roofSource.conicalHint": "选择一面弧形墙以匹配其半径和弧度。"
+  "buildTab.roofSource.conicalHint": "选择一面弧形墙以匹配其半径和弧度。",
+  "nodes.roof.toolHints.placementTooltip": "放置面 — 点击或按 P 键切换",
+  "nodes.roof.defaultName": "屋顶 {count}",
+  "nodes.roof.preview": "屋顶预览"
 }

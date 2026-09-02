@@ -36,6 +36,7 @@ import {
   useFacingPose,
   usePlacementPreview,
   useRegistryToolContext,
+  useTranslations,
 } from '@pascal-app/editor'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
@@ -63,6 +64,7 @@ import {
   resolveWallSlideAlignment,
 } from '../shared/wall-opening-alignment'
 import { WindowFloorProjection } from './floor-projection'
+import { getDefaultWindowName } from './naming'
 import WindowPreview from './preview'
 import {
   clampToWall,
@@ -104,6 +106,7 @@ type HostKind = 'wall' | 'roof' | 'dormer' | null
  * engages only on an actual mesh hover — no proximity magnet.
  */
 const WindowTool: React.FC = () => {
+  const t = useTranslations()
   const { activeLevelId, isCameraDragging, selectNode } = useRegistryToolContext()
   const draftRef = useRef<WindowNode | null>(null)
   const cursorGroupRef = useRef<Group>(null!)
@@ -553,7 +556,7 @@ const WindowTool: React.FC = () => {
       }).length
 
       const node = WindowNode.parse({
-        name: `Window ${windowCount + 1}`,
+        name: getDefaultWindowName(windowCount + 1, t),
         position: [clampedX, clampedY, 0],
         rotation: [0, itemRotation, 0],
         side,
@@ -606,7 +609,7 @@ const WindowTool: React.FC = () => {
       const windowCount = Object.values(state.nodes).filter((node) => node.type === 'window').length
       const side = sideFlip ? 'back' : 'front'
       const node = WindowNode.parse({
-        name: `Window ${windowCount + 1}`,
+        name: getDefaultWindowName(windowCount + 1, t),
         position: target.position,
         rotation: [0, sideFlip ? Math.PI : 0, 0],
         side,
@@ -919,7 +922,7 @@ const WindowTool: React.FC = () => {
       ).length
 
       const node = WindowNode.parse({
-        name: `Window ${windowCount + 1}`,
+        name: getDefaultWindowName(windowCount + 1, t),
         position,
         rotation: [0, 0, 0],
         side: 'front',

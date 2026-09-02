@@ -198,6 +198,7 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
           roof: 'lucide:house',
         },
         tooltip: 'Placement surface - click or press P to cycle',
+        tooltipKey: 'nodes.roof.toolHints.placementTooltip',
       },
     },
     {
@@ -212,16 +213,21 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
     {
       id: 'footprintSource',
       label: 'Create from',
+      labelKey: 'buildTab.section.createFrom',
       choices: [
         {
           value: 'draw',
           label: 'Draw',
+          labelKey: 'buildTab.roofSource.draw',
           description: 'Draw the roof footprint with two corner clicks.',
+          descriptionKey: 'buildTab.roofSource.drawHint',
         },
         {
           value: 'room',
           label: 'Room',
+          labelKey: 'buildTab.roofSource.room',
           description: 'Hover a room to preview its boundary, then click to place.',
+          descriptionKey: 'buildTab.roofSource.roomHint',
         },
       ],
       subscribe: (onChange) => useRoofFootprintSource.subscribe(onChange),
