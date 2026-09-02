@@ -73,18 +73,28 @@ function refreshSceneAfterHistoryJump() {
 }
 
 export function runUndo(): HistoryCommandResult {
-  markPerfAction('undo')
-  if (historyCommandDelegate) return historyCommandDelegate.undo()
+  if (historyCommandDelegate) {
+    const result = historyCommandDelegate.undo()
+    // Mark only real jumps: a no-op undo must not open a receipt (or
+    // interrupt one that is still settling).
+    if (result.kind !== 'empty') markPerfAction('undo')
+    return result
+  }
   if (useScene.temporal.getState().pastStates.length === 0) return { kind: 'empty' }
+  markPerfAction('undo')
   useScene.temporal.getState().undo()
   refreshSceneAfterHistoryJump()
   return { kind: 'applied', persistence: 'local' }
 }
 
 export function runRedo(): HistoryCommandResult {
-  markPerfAction('redo')
-  if (historyCommandDelegate) return historyCommandDelegate.redo()
+  if (historyCommandDelegate) {
+    const result = historyCommandDelegate.redo()
+    if (result.kind !== 'empty') markPerfAction('redo')
+    return result
+  }
   if (useScene.temporal.getState().futureStates.length === 0) return { kind: 'empty' }
+  markPerfAction('redo')
   useScene.temporal.getState().redo()
   refreshSceneAfterHistoryJump()
   return { kind: 'applied', persistence: 'local' }

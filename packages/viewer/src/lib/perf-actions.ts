@@ -35,6 +35,7 @@ export type PerfActionReceipt = {
 }
 
 type ActiveAction = {
+  id: number
   name: string
   detail: string
   startedAt: number
@@ -55,6 +56,11 @@ const UNCOMMITTED_TIMEOUT_MS = 60_000
 const MAX_RECEIPTS = 5
 
 let active: ActiveAction | null = null
+let actionSeq = 0
+// Whether this device has ever produced a real timestamp-query sample. Without
+// `timestamp-query` support no 'gpu-render' sample can ever arrive, so settle
+// falls back to the queue fence — see the sample listener below.
+let gpuTimestampsSeen = false
 let receipts: PerfActionReceipt[] = []
 const listeners = new Set<() => void>()
 
@@ -120,12 +126,18 @@ function finalize(outcome: PerfActionReceipt['outcome']): void {
   )
 }
 
-/** Start attributing samples to a named action. Interrupts any active one. */
-export function beginPerfAction(name: string, detail = ''): void {
-  if (!PERF_OVERLAY_ENABLED) return
+/**
+ * Start attributing samples to a named action. Interrupts any active one.
+ * Returns an id the caller can compare against `getActivePerfActionId()` to
+ * commit only the action it actually began.
+ */
+export function beginPerfAction(name: string, detail = ''): number | null {
+  if (!PERF_OVERLAY_ENABLED) return null
   if (active) finalize('interrupted')
+  const id = ++actionSeq
   const buckets = new Map<string, { totalMs: number; count: number }>()
   active = {
+    id,
     name,
     detail,
     startedAt: performance.now(),
@@ -141,10 +153,19 @@ export function beginPerfAction(name: string, detail = ''): void {
       } else {
         buckets.set(track, { totalMs: ms, count: 1 })
       }
-      // A GPU sample landing after the quiet point is the settle signal.
-      if (active?.awaitingGpu && track === 'gpu-render') finalize('settled')
+      if (track === 'gpu-render') gpuTimestampsSeen = true
+      // A GPU sample landing after the quiet point is the settle signal. On
+      // devices without timestamp-query no 'gpu-render' sample ever arrives —
+      // the queue fence is the closest "the user saw it" stand-in there.
+      if (
+        active?.awaitingGpu &&
+        (track === 'gpu-render' || (!gpuTimestampsSeen && track === 'gpu-queue'))
+      ) {
+        finalize('settled')
+      }
     }),
   }
+  return id
 }
 
 /** The gesture ended (pointer up / operation dispatched); settling begins. */
@@ -171,6 +192,21 @@ export function markPerfAction(name: string, detail = ''): void {
  */
 export function hasActivePerfAction(): boolean {
   return active !== null
+}
+
+/**
+ * Like `hasActivePerfAction`, but false once the active action has committed.
+ * A generic bracket yields to an UNCOMMITTED action (a gesture in flight) but
+ * must be free to start a new receipt while the previous one is merely
+ * settling — beginPerfAction then finalizes the settling one as interrupted.
+ */
+export function hasUncommittedPerfAction(): boolean {
+  return active !== null && active.committedAt === null
+}
+
+/** Id of the action currently attributing samples, if any. */
+export function getActivePerfActionId(): number | null {
+  return active?.id ?? null
 }
 
 /**

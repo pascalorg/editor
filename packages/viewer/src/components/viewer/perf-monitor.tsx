@@ -1,7 +1,7 @@
 import { sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame, useThree } from '@react-three/fiber'
-import { Vector3 } from 'three'
 import { useEffect, useRef } from 'react'
+import { Vector3 } from 'three'
 import { initPerfObservers } from '../../lib/perf-observers'
 import { publishPerfStats } from '../../lib/perf-panel-store'
 import { clearPerfMeasures, drainPerfCounters, type PerfCounterBucket } from '../../lib/perf-tracks'
