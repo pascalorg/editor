@@ -59,9 +59,17 @@ interface ResolveResponse {
  */
 export function SiteNodePanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
-  const node = useScene((s) =>
-    selectedId ? (s.nodes[selectedId as AnyNode['id']] as SiteNode | undefined) : undefined,
-  )
+  // The selected site node, else THE site node: the sidebar's Site header
+  // mounts this panel directly, where nothing may be selected.
+  const node = useScene((s) => {
+    const selected = selectedId ? (s.nodes[selectedId as AnyNode['id']] as AnyNode | undefined) : undefined
+    if (selected?.type === 'site') return selected as SiteNode
+    for (const id of s.rootNodeIds) {
+      const n = s.nodes[id as AnyNode['id']] as AnyNode | undefined
+      if (n?.type === 'site') return n as SiteNode
+    }
+    return undefined
+  })
 
   const [query, setQuery] = useState('')
   const [suggestions, setSuggestions] = useState<Suggestion[]>([])

@@ -28,7 +28,18 @@ import {
   X,
 } from 'lucide-react'
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
-import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { type ComponentType, lazy, memo, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { nodeRegistry } from '@pascal-app/core'
+
+/** The site kind's inspector (`parametrics.customPanel`), mounted under the Site header. */
+const SiteKindPanel = lazy(async () => {
+  const def = nodeRegistry.get('site') as
+    | { parametrics?: { customPanel?: () => Promise<{ default: ComponentType }> } }
+    | undefined
+  const loader = def?.parametrics?.customPanel
+  if (!loader) return { default: () => null }
+  return loader()
+})
 import { useShallow } from 'zustand/react/shallow'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
@@ -1715,6 +1726,12 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                 transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
               >
                 <PropertyLineSection />
+                {/* Address → parcel, setbacks, front edge: the site kind's own
+                    panel (packages/nodes/src/site/panel.tsx), loaded through
+                    the registry so the editor does not import the nodes package. */}
+                <Suspense fallback={null}>
+                  <SiteKindPanel />
+                </Suspense>
               </motion.div>
             )}
           </AnimatePresence>
