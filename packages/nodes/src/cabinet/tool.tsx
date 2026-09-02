@@ -23,6 +23,7 @@ import {
 } from '@pascal-app/core'
 import {
   clearPlacementSurface,
+  EDITOR_LAYER,
   getFloorStackPreviewPosition,
   getSideFromNormal,
   isAlignmentGuideActive,
@@ -511,6 +512,7 @@ const CabinetTool = () => {
     })
     const group = buildCabinetGeometry(node)
     group.traverse((child) => {
+      child.layers.set(EDITOR_LAYER)
       if (child instanceof Mesh) {
         child.material = child.material.clone()
         child.material.transparent = true

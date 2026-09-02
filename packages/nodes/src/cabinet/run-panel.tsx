@@ -6,7 +6,7 @@ import type {
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
 } from '@pascal-app/core'
-import { createSceneApi, useScene } from '@pascal-app/core'
+import { createSceneApi, resolveLevelId, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   PanelSection,
@@ -18,6 +18,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { Copy, Equal as EqualIcon, Plus, Trash } from 'lucide-react'
 import { useCallback, useMemo, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   metadataForSelectedWidth,
   metadataWithPresetWidthDebt,
@@ -80,6 +81,44 @@ const RUN_MODULE_SYNC_PATCH_KEYS = new Set<keyof CabinetNodeType>([
 ])
 const RUN_DEPTH_PATCH_KEY = 'depth'
 const MIN_TRIMMED_CORNER_PRESET_WIDTH = 0.05
+
+function selectCabinetRunPlanningNodes(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  runId: AnyNodeId,
+): AnyNode[] {
+  const run = nodes[runId]
+  if (run?.type !== 'cabinet') return []
+
+  const relevantIds = new Set<AnyNodeId>()
+  const addWithAncestors = (node: AnyNode | undefined) => {
+    let current = node
+    const visited = new Set<AnyNodeId>()
+    while (current && !visited.has(current.id as AnyNodeId)) {
+      const currentId = current.id as AnyNodeId
+      visited.add(currentId)
+      relevantIds.add(currentId)
+      current = current.parentId ? nodes[current.parentId as AnyNodeId] : undefined
+    }
+  }
+
+  addWithAncestors(run)
+  for (const childId of run.children ?? []) addWithAncestors(nodes[childId as AnyNodeId])
+
+  const levelId = resolveLevelId(run, nodes as Record<string, AnyNode>)
+  for (const candidate of Object.values(nodes)) {
+    if (
+      candidate?.type === 'wall' &&
+      resolveLevelId(candidate, nodes as Record<string, AnyNode>) === levelId
+    ) {
+      addWithAncestors(candidate)
+    }
+  }
+
+  return [...relevantIds].flatMap((id) => {
+    const node = nodes[id]
+    return node ? [node] : []
+  })
+}
 
 const FRONT_STYLE_OPTIONS = [
   { value: 'slab', label: 'Slab' },
@@ -415,7 +454,20 @@ export function CabinetRunPanel({
   onClose: () => void
 }) {
   const setSelection = useViewer((s) => s.setSelection)
-  const sceneNodes = useScene((s) => s.nodes)
+  const planningNodeList = useScene(
+    useShallow((state) =>
+      selectCabinetRunPlanningNodes(
+        state.nodes as Record<AnyNodeId, AnyNode>,
+        node.id as AnyNodeId,
+      ),
+    ),
+  )
+  const planningNodes = useMemo(
+    () =>
+      Object.fromEntries(planningNodeList.map((planningNode) => [planningNode.id, planningNode])),
+    [planningNodeList],
+  ) as Record<AnyNodeId, AnyNode>
+  const planningNode = (planningNodes[node.id as AnyNodeId] as CabinetNodeType | undefined) ?? node
   const sortedModules = useMemo(
     () => [...modules].sort((a, b) => a.position[0] - b.position[0]),
     [modules],
@@ -425,8 +477,8 @@ export function CabinetRunPanel({
   const [arraySpacing, setArraySpacing] = useState(0)
   const [arrayDirection, setArrayDirection] = useState<'left' | 'right'>('right')
   const widthEqualization = useMemo(
-    () => cabinetRunWidthEqualizationPlan(node, sceneNodes),
-    [node, sceneNodes],
+    () => cabinetRunWidthEqualizationPlan(planningNode, planningNodes),
+    [planningNode, planningNodes],
   )
   const arraySource = useMemo(
     () =>
@@ -437,13 +489,13 @@ export function CabinetRunPanel({
   )
   const arrayPlan = useMemo(
     () =>
-      cabinetRunArrayPlan(node, sceneNodes, {
+      cabinetRunArrayPlan(planningNode, planningNodes, {
         copyCount: arrayCopyCount,
         direction: arrayDirection,
         sourceModuleId: arraySource?.id ?? null,
         spacing: arraySpacing,
       }),
-    [arrayCopyCount, arrayDirection, arraySource?.id, arraySpacing, node, sceneNodes],
+    [arrayCopyCount, arrayDirection, arraySource?.id, arraySpacing, planningNode, planningNodes],
   )
 
   const updateRun = useCallback(
