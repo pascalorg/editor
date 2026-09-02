@@ -87,7 +87,7 @@ function isBlank(ctx: CanvasRenderingContext2D, w: number, h: number): boolean {
       for (let x = 0; x < w; x += step) {
         const d = ctx.getImageData(x, y, 1, 1).data
         n++
-        if (Math.abs(d[0] - first[0]) + Math.abs(d[1] - first[1]) + Math.abs(d[2] - first[2]) < 12) same++
+        if (Math.abs((d[0] ?? 0) - (first[0] ?? 0)) + Math.abs((d[1] ?? 0) - (first[1] ?? 0)) + Math.abs((d[2] ?? 0) - (first[2] ?? 0)) < 12) same++
       }
     }
     // a frame that is one flat colour everywhere is not a view of anything

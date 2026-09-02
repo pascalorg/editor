@@ -3,6 +3,7 @@
  * Generate plans). This shows the last run and offers the same actions.
  */
 import { generatePlans } from './run'
+import { SitePlanControls } from './site-panel'
 import { usePlans } from './store'
 
 export default function PlansPanel() {
@@ -31,6 +32,10 @@ export default function PlansPanel() {
           ))}
         </div>
       )}
+      <div className="rounded-md border border-sidebar-border/50 p-3">
+        <h3 className="mb-2 font-mono text-[10px] text-sidebar-foreground/60 uppercase tracking-wider">Site plan</h3>
+        <SitePlanControls compact />
+      </div>
       <label className="flex flex-col gap-1 text-[11px] text-sidebar-foreground/60">
         Plans API
         <input className="rounded-md border border-sidebar-border/60 bg-transparent px-2 py-1 font-mono text-[11px] text-sidebar-foreground" value={S.apiBase} onChange={(e) => S.setApiBase(e.target.value)} />

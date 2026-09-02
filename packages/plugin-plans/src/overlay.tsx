@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { generatePlans } from './run'
+import { SitePlanControls } from './site-panel'
 import { type Sheet, type StageLog, usePlans } from './store'
 
 const PLEX = 'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap'
@@ -220,6 +221,10 @@ export function PlansOverlay() {
               <img alt="3D snapshot for the cover" src={S.snapshot} className="w-full rounded-md border border-border" />
             </section>
           )}
+          <section>
+            <h3 className="mb-2 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">Site plan</h3>
+            <SitePlanControls />
+          </section>
           {S.sheets.length > 0 && (
             <section>
               <h3 className="mb-2 font-mono text-[10px] text-muted-foreground uppercase tracking-wider">Sheets</h3>

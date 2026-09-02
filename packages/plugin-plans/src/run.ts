@@ -39,7 +39,7 @@ export async function generatePlans(): Promise<void> {
       st('health', { status: 'failed', ms: health.ms, detail: errorMessage(health), lines: [`Start it with: bash scripts/workbench.sh (plancrafters-pascal) — API base ${base}`] })
       throw new Error(`Plans API is not answering at ${base}`)
     }
-    st('health', { status: 'ok', ms: health.ms, detail: `version ${String(health.body.version ?? '?')}` })
+    st('health', { status: 'ok', ms: health.ms, detail: `version ${String((health.body as Record<string, unknown>).version ?? '?')}` })
 
     // ---- 1. scene ----
     startStage('scene')
