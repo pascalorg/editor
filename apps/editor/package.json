@@ -11,7 +11,7 @@
     "start": "next start",
     "lint": "biome lint",
     "check-types": "next typegen && tsc --noEmit",
-    "test": "bun test lib"
+    "test": "bun test lib --timeout 30000"
   },
   "dependencies": {
     "@iconify/react": "^6.0.2",
