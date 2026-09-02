@@ -141,6 +141,11 @@ import {
   RotationAngleOverlay,
 } from '../editor-2d/renderers/floorplan-registry-layer'
 import { FloorplanStairLayer } from '../editor-2d/renderers/floorplan-stair-layer'
+// Site-plan view (WS1). Owned under `lib/floorplan/site-plan/**`; this panel
+// only chooses between it and the registry layer, and mounts the switch.
+import { FloorplanDrawingTypeSwitch } from '../../lib/floorplan/site-plan/drawing-type-switch'
+import { FloorplanSitePlanLayer } from '../../lib/floorplan/site-plan/site-plan-layer'
+import useDrawingView from '../../store/use-drawing-view'
 import { FloorplanVoronoiLayer } from '../editor-2d/renderers/floorplan-voronoi-layer'
 import { buildSvgPolylinePath, formatPolygonPath, getArcPlanPoint } from '../editor-2d/svg-paths'
 import { snapFenceDraftPoint } from '../tools/fence/fence-drafting'
@@ -5020,6 +5025,9 @@ export function FloorplanPanel({
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
   const showGrid = useViewer((state) => state.showGrid)
+  // Floor plan vs. site plan (WS1). Site plan hides the level geometry and
+  // draws the lot instead — see `lib/floorplan/site-plan/site-plan-layer.tsx`.
+  const activeDrawingType = useDrawingView((state) => state.drawingType)
   const showGuides = useViewer((state) => state.showGuides)
   const setShowGuides = useViewer((state) => state.setShowGuides)
   const selectedItem = useEditor((state) => state.selectedItem)
@@ -11135,6 +11143,7 @@ export function FloorplanPanel({
             pill, plus the group pill for multi-selections. */}
         <FloorplanRegistryActionMenu />
         <FloorplanGroupActionMenu />
+        <FloorplanDrawingTypeSwitch />
 
         {(levelNode?.type === 'level' || hasAmbientBuildingLevel) &&
           (compassHost ? (
@@ -11445,7 +11454,13 @@ export function FloorplanPanel({
                     whose extent is derived from the current viewBox and
                     would create a measure→fit→measure loop. */}
                 <g ref={floorplanContentRef}>
-                  <FloorplanRegistryLayer />
+                  {/* Site-plan mode swaps the level drawing for the lot /
+                      setback / footprint drawing, in SITE coordinates. */}
+                  {activeDrawingType === 'site-plan' ? (
+                    <FloorplanSitePlanLayer />
+                  ) : (
+                    <FloorplanRegistryLayer />
+                  )}
                   {/* Faint footprint ghost of the node being placed by a
                       registry placement tool (e.g. column), following the
                       cursor. The 3D mesh preview is hidden in 2D, so this is

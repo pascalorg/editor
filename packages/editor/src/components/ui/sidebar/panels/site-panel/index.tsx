@@ -1666,7 +1666,14 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                 : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
             )}
             layout="position"
-            onClick={() => setPhase('site')}
+            onClick={() => {
+              setPhase('site')
+              // Also SELECT the site node so the registry inspector mounts the
+              // site kind's panel (address / parcel / setbacks / front edge).
+              // The site kind opts out of 3D click selection, so this header is
+              // its only selection entry point. (WS1)
+              setSelection({ selectedIds: [siteNode.id as AnyNodeId], zoneId: null })
+            }}
           >
             <div className="flex items-center gap-2">
               <img

@@ -667,3 +667,36 @@ export {
   type WallSnapKind,
   type WallSnapPoint,
 } from './store/use-wall-snap-indicator'
+
+// ── Site plan (WS1) ──────────────────────────────────────────────────
+export {
+  boundsInsidePolygon,
+  buildingRecentreOffset,
+  buildSitePlanDrawing,
+  castYardDimensions,
+  classifyEdges,
+  describeSiteEdges,
+  FloorplanDrawingTypeSwitch,
+  FloorplanSitePlanLayer,
+  formatFeetInches,
+  setbackEnvelope,
+  type SitePlanDrawing,
+  type SitePlanEdge,
+  type YardDimension,
+} from './lib/floorplan/site-plan'
+export {
+  EDITOR_DRAWING_TYPE_OPTIONS,
+  type EditorDrawingType,
+} from './store/use-drawing-view'
+// Sheets (WS2) — headless floor-plan geometry collection + the multi-sheet
+// vector PDF writer. Consumed by @pascal-app/plugin-sheets.
+export {
+  collectSheetGeometry,
+  exportSheetsToPdf,
+  POINTS_PER_INCH,
+  resolveSheetRotationDeg,
+  type SheetGeometryEntry,
+  type SheetGeometryOptions,
+  type SheetPdfPage,
+  type SheetPdfWindow,
+} from './lib/floorplan/sheet-export'

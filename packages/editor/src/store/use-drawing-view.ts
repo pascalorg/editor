@@ -20,8 +20,24 @@ export type DrawingAnnotationLayoutOverride = {
 
 export type DrawingAnnotationLayoutOverrides = Record<string, DrawingAnnotationLayoutOverride>
 
+/**
+ * Drawing types the 2D editor can actually render today. `floor-plan` is the
+ * default; `site-plan` renders through
+ * `lib/floorplan/site-plan/buildSitePlanDrawing`. The remaining
+ * `ConstructionDrawingType` members exist on annotations (they gate dimension
+ * visibility) but have no editor renderer yet, so the switch does not offer
+ * them — widen this union as each one lands.
+ */
+export type EditorDrawingType = Extract<ConstructionDrawingType, 'floor-plan' | 'site-plan'>
+
+export const EDITOR_DRAWING_TYPE_OPTIONS = [
+  { id: 'floor-plan', label: 'Floor plan' },
+  { id: 'site-plan', label: 'Site plan' },
+] as const satisfies readonly { id: EditorDrawingType; label: string }[]
+
 type DrawingViewState = {
-  drawingType: Extract<ConstructionDrawingType, 'floor-plan'>
+  drawingType: EditorDrawingType
+  setDrawingType: (drawingType: EditorDrawingType) => void
   annotationLayoutOverrides: DrawingAnnotationLayoutOverrides
   setAnnotationLayoutOverride: (
     id: string,
@@ -52,10 +68,18 @@ export function normalizeAnnotationLayoutOverrides(
   return out
 }
 
+/** Persisted value → a drawing type the editor can render. Unknown → floor-plan. */
+export function normalizeEditorDrawingType(value: unknown): EditorDrawingType {
+  return EDITOR_DRAWING_TYPE_OPTIONS.some((o) => o.id === value)
+    ? (value as EditorDrawingType)
+    : 'floor-plan'
+}
+
 const useDrawingView = create<DrawingViewState>()(
   persist(
     (set) => ({
       drawingType: 'floor-plan',
+      setDrawingType: (drawingType) => set({ drawingType }),
       annotationLayoutOverrides: {},
       setAnnotationLayoutOverride: (id, override) =>
         set((state) => {
@@ -69,12 +93,16 @@ const useDrawingView = create<DrawingViewState>()(
       name: 'pascal-floorplan-drawing-view',
       merge: (persistedState, currentState) => ({
         ...currentState,
+        drawingType: normalizeEditorDrawingType(
+          (persistedState as { drawingType?: unknown } | undefined)?.drawingType,
+        ),
         annotationLayoutOverrides: normalizeAnnotationLayoutOverrides(
           (persistedState as { annotationLayoutOverrides?: unknown } | undefined)
             ?.annotationLayoutOverrides,
         ),
       }),
       partialize: (state) => ({
+        drawingType: state.drawingType,
         annotationLayoutOverrides: state.annotationLayoutOverrides,
       }),
     },

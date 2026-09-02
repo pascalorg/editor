@@ -255,7 +255,13 @@ export {
   ScanNode,
 } from './nodes/scan'
 export { ShelfNode } from './nodes/shelf'
-export { SiteNode } from './nodes/site'
+export {
+  migrateSiteMetadata,
+  SiteAddress,
+  SiteNode,
+  SiteParcel,
+  SiteSetbacks,
+} from './nodes/site'
 export {
   SKYLIGHT_TYPE_ORDER,
   SKYLIGHT_TYPE_PRESETS,
