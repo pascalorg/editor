@@ -1,4 +1,5 @@
 import type { AnyNodeId, SceneApi } from '@pascal-app/core'
+import { polePlan, polePosition3 } from './utility-line/endpoints'
 import { isGridSnapActive, useDrawingView, useEditor } from '@pascal-app/editor'
 import { isServicePoint, isUtilityPole } from './kind-guards'
 import type { UtilityLineNode } from './schema'
@@ -119,9 +120,9 @@ export function collectSnapTargets(sceneApi: SceneApi, frame: BuildingFrame): Sn
       // (`resolveLineEndpoints`).
       out.push({
         id: node.id,
-        site: [node.position[0], node.position[2]],
+        site: polePlan(node),
         overheadHeight:
-          node.position[1] + Math.max(0, (node.height || DEFAULT_POLE_HEIGHT) - POLE_CROSSARM_DROP),
+          polePosition3(node)[1] + Math.max(0, (node.height || DEFAULT_POLE_HEIGHT) - POLE_CROSSARM_DROP),
         kind: 'pole',
       })
     } else if (isServicePoint(node)) {
