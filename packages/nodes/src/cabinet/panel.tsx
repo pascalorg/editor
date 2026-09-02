@@ -76,6 +76,12 @@ import {
 import { resolveCompartmentTransition } from './stack-transitions'
 import { validateCabinetRun } from './validation'
 import {
+  CABINET_WALL_HEIGHT_PRESETS,
+  type CabinetWallHeightPresetId,
+  cabinetWallHeightPresetById,
+  cabinetWallHeightPresetId,
+} from './wall-height-presets'
+import {
   CABINET_STANDARD_WIDTHS,
   type CabinetStandardWidthId,
   cabinetStandardWidthById,
@@ -524,6 +530,13 @@ export default function CabinetPanel() {
   const hasWallCabinet = node?.type === 'cabinet-module' ? Boolean(wallChild) : false
 
   const isWallChildModule = node?.type === 'cabinet-module' && parentIsModule
+  const isWallCabinetModule =
+    node?.type === 'cabinet-module' && (isWallChildModule || parentRun?.runTier === 'wall')
+  const wallHeightPreset = isWallCabinetModule ? cabinetWallHeightPresetId(node) : 'custom'
+  const applyWallHeightPreset = (presetId: CabinetWallHeightPresetId) => {
+    if (!isWallCabinetModule) return
+    updateNode({ carcassHeight: cabinetWallHeightPresetById(presetId).value })
+  }
   const canAddTopFinish =
     node.type === 'cabinet-module' &&
     !isHoodOnlyNode &&
@@ -631,6 +644,30 @@ export default function CabinetPanel() {
               }))}
               value={standardWidth === 'custom' ? '600' : standardWidth}
             />
+          </div>
+        )}
+        {isWallCabinetModule && !isHoodOnlyNode && (
+          <div className="space-y-1 px-1 pb-2">
+            <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Height preset
+            </div>
+            <SegmentedControl
+              mixed={wallHeightPreset === 'custom'}
+              onChange={(value) => applyWallHeightPreset(value as CabinetWallHeightPresetId)}
+              options={CABINET_WALL_HEIGHT_PRESETS.map((preset) => ({
+                label: (
+                  <span className="flex flex-col items-center leading-3">
+                    <span>{preset.label}</span>
+                    <span className="text-[9px] text-muted-foreground">{preset.metricLabel}</span>
+                  </span>
+                ),
+                value: preset.id,
+              }))}
+              value={wallHeightPreset === 'custom' ? '18' : wallHeightPreset}
+            />
+            <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
+              Common wall-cabinet heights. Use the slider below for a custom height.
+            </p>
           </div>
         )}
         <SliderControl

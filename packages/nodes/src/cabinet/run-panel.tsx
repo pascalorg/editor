@@ -61,6 +61,12 @@ import {
   reflowCabinetRunModules,
   stackForCabinet,
 } from './stack'
+import {
+  CABINET_WALL_HEIGHT_PRESETS,
+  type CabinetWallHeightPresetId,
+  cabinetWallHeightPresetById,
+  cabinetWallHeightPresetId,
+} from './wall-height-presets'
 
 export type CabinetEditableNode = CabinetNodeType | CabinetModuleNodeType
 
@@ -492,6 +498,13 @@ export function CabinetRunPanel({
     : `Create ${arrayCopyCount} ${arraySource?.name || 'module'} cop${arrayCopyCount === 1 ? 'y' : 'ies'}`
 
   const dimensionProfile = cabinetDimensionProfileId(node)
+  const wallHeightPreset = cabinetWallHeightPresetId(node)
+  const applyWallHeightPreset = useCallback(
+    (presetId: CabinetWallHeightPresetId) => {
+      updateRun({ carcassHeight: cabinetWallHeightPresetById(presetId).value })
+    },
+    [updateRun],
+  )
   const applyDimensionProfile = useCallback(
     (profileId: CabinetDimensionProfileId) => {
       const profile = cabinetDimensionProfileById(profileId)
@@ -674,6 +687,30 @@ export function CabinetRunPanel({
               />
               <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
                 Applies depth, carcass, plinth, and countertop thickness to this run.
+              </p>
+            </div>
+          )}
+          {node.runTier === 'wall' && (
+            <div>
+              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Height preset
+              </div>
+              <SegmentedControl
+                mixed={wallHeightPreset === 'custom'}
+                onChange={(value) => applyWallHeightPreset(value as CabinetWallHeightPresetId)}
+                options={CABINET_WALL_HEIGHT_PRESETS.map((preset) => ({
+                  label: (
+                    <span className="flex flex-col items-center leading-3">
+                      <span>{preset.label}</span>
+                      <span className="text-[9px] text-muted-foreground">{preset.metricLabel}</span>
+                    </span>
+                  ),
+                  value: preset.id,
+                }))}
+                value={wallHeightPreset === 'custom' ? '18' : wallHeightPreset}
+              />
+              <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
+                Common wall-cabinet heights. Use the slider below for a custom height.
               </p>
             </div>
           )}
