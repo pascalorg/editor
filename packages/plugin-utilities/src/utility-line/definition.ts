@@ -90,6 +90,7 @@ export const utilityLineDefinition: NodeDefinition<typeof UtilityLineNode> = {
     { key: 'Double click / Enter', label: 'Finish the run' },
     { key: 'Alt', label: 'Ignore grid snap' },
     { key: 'Esc', label: 'Undo the last vertex, or cancel' },
+    { key: 'Near a wall', label: 'A power overhead run ends on an electric meter there' },
   ],
   presentation: {
     label: 'Utility line',
@@ -101,6 +102,6 @@ export const utilityLineDefinition: NodeDefinition<typeof UtilityLineNode> = {
   },
   mcp: {
     description:
-      'A site utility run. system: power | sewer | water | gas | comm | storm. routing: overhead | underground. path is a list of [x, y, z] vertices in SITE metres (x east, z south, y elevation); underground vertices carry a NEGATIVE y equal to the burial depth. sizeInches / material are the callout; fromRef / toRef name the pole or service point at each end; sagRatio is the overhead display sag as a fraction of the span (a drawing default, not an engineered sag).',
+      'A site utility run. system: power | sewer | water | gas | comm | storm. routing: overhead | underground. path is a list of [x, y, z] vertices in SITE metres (x east, z south) whose y is measured FROM GRADE — negative for a buried cover, positive for an overhead attachment height. fromRef / toRef name the pole or service point at each end, and when set the FIRST / LAST vertex is DERIVED from that node at read time (a pole: the crossarm pin facing the run; a service point: its 3D anchor, lifted to the NEC 230.24(B)(1) 10 ft drip-loop height for an overhead run) — the stored vertex is ignored, so moving the pole or the meter moves the run and no stale copy is left in path. Only the intermediate vertices are stored geometry. sizeInches / material are the callout; sagRatio is the overhead display sag as a fraction of the span (a drawing default, not an engineered sag).',
   },
 }

@@ -143,11 +143,38 @@ export const GUY_DIRECTIONS = ['none', 'north', 'east', 'south', 'west'] as cons
 export const GuyDirection = z.enum(GUY_DIRECTIONS)
 export type GuyDirection = z.infer<typeof GuyDirection>
 
+/**
+ * Legacy poles stored `position` as a PLAN pair `[x, z]`. The host move tool
+ * writes an `[x, y, z]` triple (`move-registry-node-tool.tsx` commits
+ * `position: [...lastCursorRef.current]` unconditionally), so the field is a
+ * triple now and old pairs are WIDENED on parse rather than rejected — an
+ * existing scene keeps its poles.
+ */
+const polePosition = z.preprocess(
+  (value) => (Array.isArray(value) && value.length === 2 ? [value[0], 0, value[1]] : value),
+  z.tuple([z.number(), z.number(), z.number()]),
+)
+
 export const UtilityPoleNode = BaseNode.extend({
   id: objectId('utilpl'),
   type: nodeType('utility-pole'),
-  /** Plan position in SITE metres `[x, z]` — the pole butt at grade. */
-  position: z.tuple([z.number(), z.number()]).default([0, 0]),
+  /**
+   * Butt position in SITE metres `[x, y, z]` — x east, z south, y the butt
+   * elevation (0 = at grade). A legacy `[x, z]` pair is accepted.
+   */
+  position: polePosition.default([0, 0, 0]),
+  /**
+   * Crossarm direction, radians about +Y. 0 lays the arm along the site x
+   * axis. R / T step it by 45°, and `resolveLineEndpoints` attaches a span to
+   * the insulator pin on whichever end of the arm faces the run.
+   *
+   * `yaw` is the ONLY rotation this kind has, deliberately. The host move
+   * tool writes a `rotation` on every commit; an unknown key is merged into
+   * the store and dropped by this schema on the next parse, so it can never
+   * become a second, competing source of truth. The definition's
+   * `keyboardActions` (R / T) and its rotate handle both write `yaw`.
+   */
+  yaw: z.number().default(0),
   /**
    * Above-grade height, metres. Default 10.668 m = 35 ft, the common
    * distribution-pole length; ANSI O5.1 (Wood Poles — Specifications and
@@ -163,7 +190,7 @@ export const UtilityPoleNode = BaseNode.extend({
   guy: GuyDirection.default('none'),
   label: z.string().trim().max(24).default(''),
 }).describe(
-  `Utility pole. position is [x, z] in SITE metres (butt at grade); height metres above grade (default 10.668 m / 35 ft, a common ANSI O5.1 stock length, not a code minimum); classLabel is free text; hasTransformer adds a pole-mounted transformer can; guy adds a down-guy in that compass direction.`,
+  `Utility pole. position is [x, y, z] in SITE metres (the butt; y = 0 at grade, a legacy [x, z] pair is widened on parse); yaw is the crossarm direction in radians about +Y (R / T step it by 45°); height metres above grade (default 10.668 m / 35 ft, a common ANSI O5.1 stock length, not a code minimum); classLabel is free text; hasTransformer adds a pole-mounted transformer can; guy adds a down-guy in that compass direction.`,
 )
 export type UtilityPoleNode = z.infer<typeof UtilityPoleNode>
 
@@ -225,12 +252,20 @@ export const SERVICE_POINT_SYSTEM: Record<ServicePointKind, UtilitySystem> = {
  * Anchoring mirrors `bones:service` (plugin-bones `src/service/schema.ts`):
  * wall-mounted points carry `wallId` + `wallT` (0..1 along the wall) +
  * `height` (above the wall's base), free-standing points carry `position`.
- * When a wall anchor resolves it WINS; `position` is the fallback and the
- * manual escape hatch, which is the inverse of bones' precedence — bones
- * lets a moved `position` outrank the anchor because its host move tool
- * writes `position` mid-drag. This plugin's placement tool writes the
- * anchor directly, so the simpler rule holds and is stated here rather
- * than silently differing.
+ * A resolving wall anchor WINS while `position` is still the default
+ * sentinel `[0, 0, 0]`; a `position` written OFF that sentinel outranks the
+ * anchor. That is bones' precedence, matched deliberately (this package used
+ * to invert it).
+ *
+ * The reason is the move gesture. The host move tool previews a drag by
+ * pushing `{ position }` into `useLiveNodeOverrides`
+ * (`move-registry-node-tool.tsx:482`) and never touches `wallId` / `wallT`.
+ * Under "the anchor always wins" the meter sat frozen on its wall for the
+ * whole drag and only jumped at the end — so the drop it feeds could not
+ * follow it either. With this rule the live position drives the preview, and
+ * the move's `onCommit` re-anchors to the nearest wall and resets `position`
+ * to the sentinel, leaving the anchor authoritative the instant the drag
+ * ends.
  */
 export const ServicePointNode = BaseNode.extend({
   id: objectId('utilsp'),
@@ -247,7 +282,7 @@ export const ServicePointNode = BaseNode.extend({
   label: z.string().trim().max(48).default(''),
 }).describe(
   `Building/utility interface point. serviceKind: electric-meter | panel | water-meter | sewer-cleanout | gas-meter | water-entry | sewer-exit | power-entry | telecom-nid.
-  - wallId + wallT (0..1 along the wall) + height: wall-mounted anchor (wins when it resolves)
-  - position: [x, y, z] SITE metres for free-standing points, and the fallback when no wall anchor resolves`,
+  - wallId + wallT (0..1 along the wall) + height: wall-mounted anchor (wins while position is the default [0, 0, 0])
+  - position: [x, y, z] SITE metres for free-standing points; written off [0, 0, 0] it outranks the wall anchor (that is what a live drag does, and the drag's commit re-anchors and resets it)`,
 )
 export type ServicePointNode = z.infer<typeof ServicePointNode>

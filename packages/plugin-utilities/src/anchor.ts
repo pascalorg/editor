@@ -1,5 +1,5 @@
-import type { LooseNode, LooseNodes } from './site-frame'
 import type { ServicePointNode } from './schema'
+import type { LooseNode, LooseNodes } from './site-frame'
 
 /**
  * Wall anchoring for `service-point`, mirroring the `bones:service` contract
@@ -130,11 +130,32 @@ export type ResolvedServicePoint = {
 }
 
 /**
+ * Tolerance for "`position` is still the default sentinel `[0, 0, 0]`".
+ * 1 mm — below any placement a user can express, above float noise.
+ */
+export const SENTINEL_POSITION_EPSILON = 1e-3
+
+/** True while `position` has never been written off its `[0, 0, 0]` default. */
+export function isSentinelPosition(position: readonly [number, number, number]): boolean {
+  return (
+    Math.abs(position[0]) < SENTINEL_POSITION_EPSILON &&
+    Math.abs(position[1]) < SENTINEL_POSITION_EPSILON &&
+    Math.abs(position[2]) < SENTINEL_POSITION_EPSILON
+  )
+}
+
+/**
  * Where a service point actually is, in BUILDING-LOCAL metres.
  *
- * A resolving wall anchor wins; otherwise the node's own `position` is used,
- * converted from site metres by the caller. `siteToLocalPosition` is passed
- * in rather than imported so this stays a pure function of its arguments.
+ * A resolving wall anchor wins WHILE `position` is the sentinel; a `position`
+ * written off the sentinel outranks it (schema.ts states the rule and why —
+ * short version: the host move tool previews a drag through `position` alone,
+ * so an always-winning anchor freezes the meter mid-drag). The commit side of
+ * that gesture re-anchors and resets `position`, so a wall-mounted point
+ * spends its resting life on the anchor branch.
+ *
+ * `siteToLocalPosition` is passed in rather than imported so this stays a
+ * pure function of its arguments.
  */
 export function resolveServicePoint(
   nodes: LooseNodes,
@@ -142,7 +163,7 @@ export function resolveServicePoint(
   siteToLocalPosition: (position: readonly [number, number, number]) => [number, number, number],
 ): ResolvedServicePoint {
   const geom = node.wallId ? wallGeom(nodes[node.wallId]) : null
-  if (geom && typeof node.wallT === 'number') {
+  if (geom && typeof node.wallT === 'number' && isSentinelPosition(node.position)) {
     const on = wallPointAt(geom, node.wallT)
     const normal = wallNormal(geom)
     // Sit the body just proud of the wall face rather than inside it.

@@ -58,13 +58,15 @@ export const utilitiesHostPanel = {
 } satisfies EditorHostPanel
 
 export {
+  isSentinelPosition,
   nearestWall,
   projectOntoWall,
   resolveServicePoint,
+  SENTINEL_POSITION_EPSILON,
+  type WallProjection,
   wallGeom,
   wallNormal,
   wallPointAt,
-  type WallProjection,
 } from './anchor'
 export {
   floorplanDrawContext,
@@ -87,6 +89,7 @@ export {
   type Vec3,
 } from './geometry/catenary'
 export { type DashInterval, dashIntervals, pointAtDistance3 } from './geometry/dash'
+export { gradeElevationAt, TRENCH_HEIGHT_ABOVE_GRADE } from './geometry/grade'
 export {
   type LabelSite,
   longestSegmentMidpoint,
@@ -98,11 +101,13 @@ export {
   linearFeet,
   lineLength,
   METRES_PER_FOOT,
+  measuredPath,
   metresToFeet,
   type SystemTotal,
   totalMetres,
   totalsBySystem,
 } from './geometry/totals'
+export { siteParentFrame } from './host-frame'
 export { isServicePoint, isUtilityLine, isUtilityPole } from './kind-guards'
 export { isUtilitiesGeometry, UTILITIES_LAYER_KEY, UTILITIES_LAYER_VALUE } from './layer'
 export {
@@ -126,8 +131,22 @@ export {
   UtilityRouting,
   UtilitySystem,
 } from './schema'
+export {
+  type AutoMeterPlan,
+  EXISTING_METER_TOLERANCE,
+  METER_SNAP_RADIUS,
+  planAutoMeter,
+} from './service-point/auto-meter'
 export { servicePointDefinition } from './service-point/definition'
 export { drawServicePoint } from './service-point/floorplan'
+export {
+  resolveServicePointDrop,
+  type ServicePointDrop,
+  servicePointDropPatch,
+  servicePointFloorplanMove,
+  servicePointMoveCommit,
+  WALL_REHOST_RADIUS,
+} from './service-point/floorplan-move'
 export {
   type BuildingFrame,
   buildingFrameOf,
@@ -139,6 +158,37 @@ export {
   siteToLocalPlan,
 } from './site-frame'
 export { utilityLineDefinition } from './utility-line/definition'
-export { burialDepth, calloutText, drawUtilityLine, formatInches } from './utility-line/floorplan'
+export {
+  DEFAULT_OVERHEAD_HEIGHT,
+  type EndpointContext,
+  type EndpointKind,
+  hasOverheadElevation,
+  OVERHEAD_ELEVATION_EPSILON,
+  poleAttachmentPoint,
+  type ResolvedEndpoint,
+  type ResolvedLine,
+  resolvedLinePath,
+  resolveLineEndpoints,
+  resolveLineEndpointsVia,
+  SERVICE_DROP_MIN_HEIGHT,
+  serviceAttachmentHeight,
+  servicePointAnchor,
+} from './utility-line/endpoints'
+export {
+  burialDepth,
+  burialDepthOf,
+  calloutText,
+  calloutTextFor,
+  drawUtilityLine,
+  formatInches,
+} from './utility-line/floorplan'
 export { utilityPoleDefinition } from './utility-pole/definition'
 export { drawUtilityPole, guyVector } from './utility-pole/floorplan'
+export { utilityPoleFloorplanMove } from './utility-pole/floorplan-move'
+export {
+  crossarmAxis,
+  crossarmPinOffset,
+  POLE_CROSSARM_DROP,
+  POLE_CROSSARM_LENGTH,
+  POLE_INSULATOR_INSET,
+} from './utility-pole/geometry'

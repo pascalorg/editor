@@ -3,6 +3,7 @@ import { floorplanDrawContext, type UtilitiesDrawContext } from '../draw-context
 import { utilitiesLayerMetadata } from '../layer'
 import type { UtilityPoleNode } from '../schema'
 import { SYSTEM_COLOR } from '../schema'
+import { crossarmAxis, POLE_CROSSARM_LENGTH } from './geometry'
 
 const SYMBOL_RADIUS = 0.45
 const STROKE = 0.07
@@ -23,7 +24,7 @@ export function drawUtilityPole(
   node: UtilityPoleNode,
   dctx: UtilitiesDrawContext,
 ): FloorplanGeometry | null {
-  const [cx, cy] = dctx.toPlan(node.position)
+  const [cx, cy] = dctx.toPlan([node.position[0], node.position[2]])
 
   const view = dctx.view
   const selected = (view?.selected ?? false) || (view?.highlighted ?? false)
@@ -44,6 +45,22 @@ export function drawUtilityPole(
     { kind: 'line', x1: cx - arm, y1: cy, x2: cx + arm, y2: cy, stroke, strokeWidth: STROKE },
     { kind: 'line', x1: cx, y1: cy - arm, x2: cx, y2: cy + arm, stroke, strokeWidth: STROKE },
   ]
+
+  // The crossarm itself, drawn along `yaw` — without it the plan symbol gives
+  // no feedback at all for the R / T rotate, and the run leaves the arm at a
+  // pin the plan does not show.
+  const armAxis = crossarmAxis(node.yaw)
+  const armHalf = POLE_CROSSARM_LENGTH / 2
+  children.push({
+    kind: 'line',
+    x1: cx - armAxis[0] * armHalf,
+    y1: cy - armAxis[1] * armHalf,
+    x2: cx + armAxis[0] * armHalf,
+    y2: cy + armAxis[1] * armHalf,
+    stroke,
+    strokeWidth: STROKE * 1.4,
+    strokeLinecap: 'round',
+  })
 
   if (node.hasTransformer) {
     children.push({
@@ -111,7 +128,10 @@ export function buildUtilityPoleFloorplan(
   node: UtilityPoleNode,
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
-  return drawUtilityPole(node, floorplanDrawContext(node as unknown as Record<string, unknown>, ctx))
+  return drawUtilityPole(
+    node,
+    floorplanDrawContext(node as unknown as Record<string, unknown>, ctx),
+  )
 }
 
 /** Plan unit vector for a guy direction. x east, y(z) south. */

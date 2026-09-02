@@ -7,6 +7,12 @@ import type { Group } from 'three'
 import type { UtilityPoleNode } from '../schema'
 import { resolveFrame, siteToLocal } from '../site-frame'
 import { guyVector } from './floorplan'
+import {
+  POLE_CROSSARM_DROP,
+  POLE_CROSSARM_LENGTH,
+  POLE_CROSSARM_SECTION,
+  POLE_INSULATOR_INSET,
+} from './geometry'
 
 /**
  * Butt and top diameters of a wood distribution pole, metres.
@@ -22,11 +28,16 @@ import { guyVector } from './floorplan'
 const BUTT_DIAMETER = 0.33
 const TOP_DIAMETER = 0.21
 
-/** Crossarm: 8 ft (2.44 m) is the common distribution crossarm length. */
-const CROSSARM_LENGTH = 2.44
-const CROSSARM_SECTION = 0.09
-/** The crossarm sits just below the top of the pole. */
-const CROSSARM_DROP = 0.6
+/**
+ * Crossarm dimensions come from `./geometry` — the same module
+ * `resolveLineEndpoints` attaches spans with, so a cable lands on the arm
+ * this renderer actually draws instead of on a second, drifting copy of the
+ * numbers.
+ */
+const CROSSARM_LENGTH = POLE_CROSSARM_LENGTH
+const CROSSARM_SECTION = POLE_CROSSARM_SECTION
+const CROSSARM_DROP = POLE_CROSSARM_DROP
+const PIN_INSET = POLE_INSULATOR_INSET
 
 const TRANSFORMER_DIAMETER = 0.6
 const TRANSFORMER_HEIGHT = 0.9
@@ -62,7 +73,7 @@ export const UtilityPoleRenderer = ({ node: rawNode }: { node: UtilityPoleNode }
       nodes as unknown as Record<string, Record<string, unknown>>,
       node as unknown as Record<string, unknown>,
     )
-    return siteToLocal(frame, [node.position[0], 0, node.position[1]])
+    return siteToLocal(frame, node.position)
   }, [nodes, node])
 
   const height = node.height
@@ -80,26 +91,33 @@ export const UtilityPoleRenderer = ({ node: rawNode }: { node: UtilityPoleNode }
         <meshStandardMaterial color={POLE_COLOR} metalness={0} roughness={0.95} />
       </mesh>
 
-      <mesh position={[0, height - CROSSARM_DROP, 0]}>
-        <boxGeometry args={[CROSSARM_LENGTH, CROSSARM_SECTION, CROSSARM_SECTION]} />
-        <meshStandardMaterial color={HARDWARE_COLOR} metalness={0.1} roughness={0.8} />
-      </mesh>
-      {/* Three insulator pins on the crossarm — centre and both ends. */}
-      {[-CROSSARM_LENGTH / 2 + 0.2, 0, CROSSARM_LENGTH / 2 - 0.2].map((x) => (
-        <mesh key={x} position={[x, height - CROSSARM_DROP + 0.12, 0]}>
-          <cylinderGeometry args={[0.045, 0.045, 0.18, 8]} />
-          <meshStandardMaterial color="#9aa3ad" metalness={0.2} roughness={0.5} />
+      {/* Hardware turns with `yaw`; the shaft is a cylinder and the guy is a
+          COMPASS direction in site axes, so only this inner group rotates. */}
+      <group rotation={[0, node.yaw, 0]}>
+        <mesh position={[0, height - CROSSARM_DROP, 0]}>
+          <boxGeometry args={[CROSSARM_LENGTH, CROSSARM_SECTION, CROSSARM_SECTION]} />
+          <meshStandardMaterial color={HARDWARE_COLOR} metalness={0.1} roughness={0.8} />
         </mesh>
-      ))}
+        {/* Three insulator pins on the crossarm — centre and both ends. The
+            end pins are where `resolveLineEndpoints` lands a span. */}
+        {[-CROSSARM_LENGTH / 2 + PIN_INSET, 0, CROSSARM_LENGTH / 2 - PIN_INSET].map((x) => (
+          <mesh key={x} position={[x, height - CROSSARM_DROP + 0.12, 0]}>
+            <cylinderGeometry args={[0.045, 0.045, 0.18, 8]} />
+            <meshStandardMaterial color="#9aa3ad" metalness={0.2} roughness={0.5} />
+          </mesh>
+        ))}
 
-      {node.hasTransformer ? (
-        <mesh position={[BUTT_DIAMETER / 2 + TRANSFORMER_DIAMETER / 2, height - TRANSFORMER_DROP, 0]}>
-          <cylinderGeometry
-            args={[TRANSFORMER_DIAMETER / 2, TRANSFORMER_DIAMETER / 2, TRANSFORMER_HEIGHT, 14]}
-          />
-          <meshStandardMaterial color={TRANSFORMER_COLOR} metalness={0.4} roughness={0.6} />
-        </mesh>
-      ) : null}
+        {node.hasTransformer ? (
+          <mesh
+            position={[BUTT_DIAMETER / 2 + TRANSFORMER_DIAMETER / 2, height - TRANSFORMER_DROP, 0]}
+          >
+            <cylinderGeometry
+              args={[TRANSFORMER_DIAMETER / 2, TRANSFORMER_DIAMETER / 2, TRANSFORMER_HEIGHT, 14]}
+            />
+            <meshStandardMaterial color={TRANSFORMER_COLOR} metalness={0.4} roughness={0.6} />
+          </mesh>
+        ) : null}
+      </group>
 
       {guy ? (
         <mesh

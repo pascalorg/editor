@@ -6,9 +6,11 @@ import { useEffect, useMemo, useRef } from 'react'
 import { CatmullRomCurve3, type Group, LineCurve3, TubeGeometry, Vector3 } from 'three'
 import { sampleOverheadPath, type Vec3 } from '../geometry/catenary'
 import { dashIntervals } from '../geometry/dash'
+import { gradeElevationAt, TRENCH_HEIGHT_ABOVE_GRADE } from '../geometry/grade'
 import type { UtilityLineNode } from '../schema'
 import { SYSTEM_COLOR } from '../schema'
 import { resolveFrame, siteToLocal } from '../site-frame'
+import { resolveLineEndpoints } from './endpoints'
 
 /** Cable / conduit radius, metres. A drawing radius, not a conductor size. */
 const OVERHEAD_RADIUS = 0.022
@@ -16,8 +18,6 @@ const BURIED_RADIUS = 0.05
 /** Dash and gap lengths for the buried run, metres. */
 const DASH = 0.7
 const GAP = 0.35
-/** Height above grade of the faint surface trench line, metres. */
-const TRENCH_Y = 0.015
 
 /**
  * 3D renderer for a utility run.
@@ -49,12 +49,40 @@ export const UtilityLineRenderer = ({ node: rawNode }: { node: UtilityLineNode }
 
   const color = SYSTEM_COLOR[node.system]
 
-  const local = useMemo<Vec3[]>(() => {
+  /**
+   * The run in BUILDING-LOCAL metres.
+   *
+   * The SITE path is RESOLVED first (`endpoints.ts`): a linked end is read
+   * off the pole's crossarm or the meter's anchor every render, so moving
+   * either node moves the cable, and an overhead run with no stored heights
+   * gets its attachment elevations derived instead of being drawn at
+   * whatever y happened to be in `path` (which is how a service drop ended
+   * up lying in the floor).
+   */
+  const { local, localGradeY } = useMemo(() => {
     const frame = resolveFrame(
       nodes as unknown as Record<string, Record<string, unknown>>,
       node as unknown as Record<string, unknown>,
     )
-    return node.path.map((p) => siteToLocal(frame, p))
+    const site = resolveLineEndpoints(
+      nodes as unknown as Record<string, Record<string, unknown>>,
+      node,
+    ).path
+    return {
+      local: site.map((p) => siteToLocal(frame, p)) as Vec3[],
+      // Grade in the LOCAL frame. The trench ribbon rides the GROUND, not
+      // the building origin — `siteToLocal` subtracts `frame.origin[1]`, so
+      // a hardcoded local y floated the trench whenever the building sat
+      // above grade.
+      localGradeY: site.length
+        ? siteToLocal(frame, [
+            (site[0] as Vec3)[0],
+            gradeElevationAt(null, [(site[0] as Vec3)[0], (site[0] as Vec3)[2]]) +
+              TRENCH_HEIGHT_ABOVE_GRADE,
+            (site[0] as Vec3)[2],
+          ])[1]
+        : TRENCH_HEIGHT_ABOVE_GRADE,
+    }
   }, [nodes, node])
 
   const overheadGeometry = useMemo<TubeGeometry | null>(() => {
@@ -88,10 +116,10 @@ export const UtilityLineRenderer = ({ node: rawNode }: { node: UtilityLineNode }
 
   const trenchGeometry = useMemo<TubeGeometry | null>(() => {
     if (node.routing !== 'underground' || local.length < 2) return null
-    const points = local.map((p) => new Vector3(p[0], TRENCH_Y, p[2]))
+    const points = local.map((p) => new Vector3(p[0], localGradeY, p[2]))
     const curve = new CatmullRomCurve3(points, false, 'catmullrom', 0)
     return new TubeGeometry(curve, Math.max(8, points.length * 4), 0.03, 4, false)
-  }, [local, node.routing])
+  }, [local, localGradeY, node.routing])
 
   useEffect(
     () => () => {

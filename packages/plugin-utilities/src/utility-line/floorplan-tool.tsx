@@ -3,6 +3,9 @@
 import type { AnyNode, AnyNodeId } from '@pascal-app/core'
 import { type FloorplanToolContext, useInteractionScope } from '@pascal-app/editor'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { DEFAULT_BURIAL_DEPTH, ServicePointNode, SYSTEM_COLOR, UtilityLineNode } from '../schema'
+import { planAutoMeter } from '../service-point/auto-meter'
+import { siteToLocalPlan } from '../site-frame'
 import {
   clientToPlanPoint,
   collectSnapTargets,
@@ -13,13 +16,19 @@ import {
   planToSite,
   readLineDefaults,
   resolveToolFrame,
-  siteToPlan,
   type SnapTarget,
+  siteToPlan,
   snapPlanPoint,
 } from '../tool-support'
-import { DEFAULT_BURIAL_DEPTH, SYSTEM_COLOR, UtilityLineNode } from '../schema'
 
-type Vertex = { site: PlanPoint; plan: PlanPoint; elevation: number; ref: string | null }
+type Vertex = {
+  site: PlanPoint
+  plan: PlanPoint
+  elevation: number
+  ref: string | null
+  /** Alt was held for this click — the opt-out for snapping AND auto-meter. */
+  altKey: boolean
+}
 
 /**
  * Draw a utility run: click each vertex, double-click (or Enter) to finish.
@@ -29,11 +38,22 @@ type Vertex = { site: PlanPoint; plan: PlanPoint; elevation: number; ref: string
  * bar here (there is no plugin hook for adding controls to the host's
  * floating tool bar, so the choice lives beside the placement buttons).
  *
- * Endpoints snap to poles and service points within 2 m, and a snapped
- * endpoint records the target's node id in `fromRef` / `toRef` and takes its
- * attachment height, so an overhead drop lands on the crossarm rather than
- * at a guessed elevation. Underground vertices are stored at
- * `DEFAULT_BURIAL_DEPTH` (negative), the depth field the panel then edits.
+ * Endpoints snap to poles and service points within 2 m and record the
+ * target's node id in `fromRef` / `toRef`. From then on that endpoint is
+ * DERIVED, not stored: `endpoints.ts` reads it off the pole's crossarm or the
+ * meter's anchor on every render, so moving either node moves the run. The
+ * elevation written here only ever seeds an UNLINKED end. Underground
+ * vertices are stored at `DEFAULT_BURIAL_DEPTH` (negative, a cover below
+ * grade), the depth field the panel then edits.
+ *
+ * AUTO-METER RULE — also documented in the panel and the README:
+ *   When the FINAL click of a POWER OVERHEAD run lands within
+ *   `METER_SNAP_RADIUS` (1.5 m) of a wall and has not already snapped to a
+ *   pole or service point, the run binds to the nearest existing
+ *   `electric-meter` on that wall, and CREATES one at the projected `wallT`
+ *   if there is none. That is what a service drop is: it terminates at the
+ *   meter / weatherhead on the house, never on the ground beside it. Hold Alt
+ *   on the final click to opt out — Alt already suppresses snapping and grid.
  */
 export default function FloorplanUtilityLineToolLayer({
   activeLevelId,
@@ -79,6 +99,7 @@ export default function FloorplanUtilityLineToolLayer({
           elevation:
             routing === 'overhead' ? target.overheadHeight : Math.min(0, DEFAULT_BURIAL_DEPTH),
           ref: target.id,
+          altKey: event.altKey,
         }
       }
       return {
@@ -86,20 +107,51 @@ export default function FloorplanUtilityLineToolLayer({
         plan: snappedPlan,
         elevation: routing === 'overhead' ? DEFAULT_OVERHEAD_HEIGHT : DEFAULT_BURIAL_DEPTH,
         ref: null,
+        altKey: event.altKey,
       }
+    }
+
+    /**
+     * The auto-meter rule (see the module note). Returns the node id the run
+     * should end on, creating the meter when the wall has none — or null when
+     * the rule does not apply, leaving the end unlinked.
+     */
+    const autoMeterFor = (last: Vertex, buildingId: AnyNodeId | null): string | null => {
+      if (last.ref || last.altKey) return null
+      if (!(routing === 'overhead' && system === 'power')) return null
+      const { frame } = resolveToolFrame(sceneApi, activeLevelId)
+      const nodes = sceneApi.nodes() as unknown as Record<string, Record<string, unknown>>
+      const local = siteToLocalPlan(frame, last.site)
+      const plan = planAutoMeter(nodes, local)
+      if (plan.kind === 'none') return null
+      if (plan.kind === 'bind') return plan.nodeId
+      const meter = ServicePointNode.parse({
+        name: 'Electric meter',
+        serviceKind: 'electric-meter',
+        wallId: plan.wallId,
+        wallT: plan.wallT,
+      })
+      sceneApi.upsert(meter as unknown as AnyNode, buildingId ?? undefined)
+      return meter.id
     }
 
     const commit = () => {
       const drawn = verticesRef.current
       if (drawn.length < 2) return
       const { buildingId } = resolveToolFrame(sceneApi, activeLevelId)
+      const last = drawn[drawn.length - 1] as Vertex
+      const toRef = last.ref ?? autoMeterFor(last, buildingId)
       const node = UtilityLineNode.parse({
         name: 'Utility line',
         system,
         routing,
+        // Stored vertices are relative to GRADE — a positive height for an
+        // overhead run, a negative cover for a buried one. Linked ends are
+        // overwritten at read time by `resolveLineEndpoints`; what is stored
+        // for them only matters when the referenced node goes away.
         path: drawn.map((v) => [v.site[0], v.elevation, v.site[1]]),
         fromRef: drawn[0]?.ref ?? null,
-        toRef: drawn[drawn.length - 1]?.ref ?? null,
+        toRef,
       })
       sceneApi.upsert(node as unknown as AnyNode, buildingId ?? undefined)
       selectNode(node.id as AnyNodeId)

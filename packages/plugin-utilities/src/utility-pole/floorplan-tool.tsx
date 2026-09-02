@@ -48,7 +48,12 @@ export default function FloorplanUtilityPoleToolLayer({
       if (!raw) return
       const { buildingId, planFrame } = resolveToolFrame(sceneApi, activeLevelId)
       const site = planToSite(planFrame, snapPlanPoint(raw, event.altKey, gridSnapStep))
-      const node = UtilityPoleNode.parse({ name: 'Utility pole', position: site })
+      // `position` is [x, y, z] SITE metres; a freshly placed pole is butted
+      // at grade (y = 0).
+      const node = UtilityPoleNode.parse({
+        name: 'Utility pole',
+        position: [site[0], 0, site[1]],
+      })
       sceneApi.upsert(node as unknown as AnyNode, buildingId ?? undefined)
       selectNode(node.id as AnyNodeId)
       finishTool()
@@ -82,8 +87,22 @@ export default function FloorplanUtilityPoleToolLayer({
         stroke={SYSTEM_COLOR.power}
         strokeWidth={0.07}
       />
-      <line stroke={SYSTEM_COLOR.power} strokeWidth={0.07} x1={cx - arm} x2={cx + arm} y1={cy} y2={cy} />
-      <line stroke={SYSTEM_COLOR.power} strokeWidth={0.07} x1={cx} x2={cx} y1={cy - arm} y2={cy + arm} />
+      <line
+        stroke={SYSTEM_COLOR.power}
+        strokeWidth={0.07}
+        x1={cx - arm}
+        x2={cx + arm}
+        y1={cy}
+        y2={cy}
+      />
+      <line
+        stroke={SYSTEM_COLOR.power}
+        strokeWidth={0.07}
+        x1={cx}
+        x2={cx}
+        y1={cy - arm}
+        y2={cy + arm}
+      />
     </g>
   )
 }

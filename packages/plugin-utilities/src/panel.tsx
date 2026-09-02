@@ -4,7 +4,7 @@ import { useScene } from '@pascal-app/core'
 import { useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useMemo, useState } from 'react'
-import { metresToFeet, totalsBySystem } from './geometry/totals'
+import { lineLength, metresToFeet, totalsBySystem } from './geometry/totals'
 import { asNodeId, isServicePoint, isUtilityLine, isUtilityPole } from './kind-guards'
 import {
   DEFAULT_BURIAL_DEPTH,
@@ -15,11 +15,11 @@ import {
   SYSTEM_COLOR,
   SYSTEM_LABEL,
   SYSTEM_MATERIALS,
-  type UtilitySystem,
   UTILITY_SYSTEMS,
+  type UtilitySystem,
 } from './schema'
+import type { LooseNodes } from './site-frame'
 import { burialDepth, calloutText } from './utility-line/floorplan'
-import { lineLength } from './geometry/totals'
 
 const ROUTINGS = ['underground', 'overhead'] as const
 
@@ -49,7 +49,11 @@ export default function UtilitiesPanel() {
   const lines = useMemo(() => (Object.values(nodes) as unknown[]).filter(isUtilityLine), [nodes])
   const poles = useMemo(() => (Object.values(nodes) as unknown[]).filter(isUtilityPole), [nodes])
   const points = useMemo(() => (Object.values(nodes) as unknown[]).filter(isServicePoint), [nodes])
-  const totals = useMemo(() => totalsBySystem(lines), [lines])
+  // Totals are measured on the RESOLVED runs, so a linked drop is billed to
+  // the pole and the meter it is actually attached to, and the take-off
+  // changes the moment either of them moves.
+  const looseNodes = nodes as unknown as LooseNodes
+  const totals = useMemo(() => totalsBySystem(lines, looseNodes), [lines, looseNodes])
 
   const select = (id: string) => useViewer.getState().setSelection({ selectedIds: [asNodeId(id)] })
 
@@ -63,9 +67,16 @@ export default function UtilitiesPanel() {
     const next = current === 'overhead' ? 'underground' : 'overhead'
     const line = lines.find((candidate) => candidate.id === id)
     if (!line) return
-    // Burying a run has to move it underground and lifting it has to raise
-    // it — flipping only the flag would leave an "underground" line drawn in
-    // the air. Vertices that already carry a sensible elevation keep it.
+    // Burying a run has to move it underground and lifting it has to raise it
+    // — flipping only the flag is exactly what left a service drop lying at
+    // −0.75 m, i.e. in the floor. Vertices that already carry a sensible
+    // elevation keep it.
+    //
+    // Lifting CLEARS a leftover burial depth to 0 rather than guessing a
+    // height. A zeroed overhead run counts as "no elevation data", so
+    // `resolveLineEndpoints` derives the attachment heights from the pole and
+    // the meter and interpolates between them. Guessing a number here would
+    // beat that derivation and put the stale copy straight back.
     const path = line.path.map((point) => {
       const y =
         next === 'underground'
@@ -74,7 +85,7 @@ export default function UtilitiesPanel() {
             : DEFAULT_BURIAL_DEPTH
           : point[1] > 0
             ? point[1]
-            : 5.5
+            : 0
       return [point[0], y, point[2]] as [number, number, number]
     })
     // Plugin kinds are outside core's `AnyNode` union, so the patch is
@@ -143,7 +154,10 @@ export default function UtilitiesPanel() {
         </button>
         <div className="text-[10px] text-muted-foreground leading-snug">
           Click each vertex, double-click or Enter to finish. Endpoints snap to poles and service
-          points; hold Alt to ignore both snap and grid.
+          points, and a snapped end then FOLLOWS that node — move the pole or the meter and the run
+          moves with it. A power overhead run whose last click lands within 1.5 m of a wall ends on
+          an electric meter there, creating one if the wall has none. Hold Alt to opt out of snap,
+          grid and the auto-meter.
         </div>
       </div>
 
@@ -210,9 +224,9 @@ export default function UtilitiesPanel() {
             <button className={rowClass} onClick={() => select(line.id)} type="button">
               {chip(SYSTEM_COLOR[line.system])}
               <span className="font-medium text-foreground">{SYSTEM_LABEL[line.system]}</span>
-              <span className="truncate">{calloutText(line) || '—'}</span>
+              <span className="truncate">{calloutText(line, looseNodes) || '—'}</span>
               <span className="ml-auto shrink-0 tabular-nums">
-                {Math.round(metresToFeet(lineLength(line)))} LF
+                {Math.round(metresToFeet(lineLength(line, looseNodes)))} LF
               </span>
             </button>
             <div className="flex items-center gap-2 pl-2 text-[10px] text-muted-foreground">
@@ -224,7 +238,7 @@ export default function UtilitiesPanel() {
                 {line.routing} ⇄
               </button>
               {line.routing === 'underground' ? (
-                <span>{(burialDepth(line) * 39.3701).toFixed(0)}″ cover</span>
+                <span>{(burialDepth(line, looseNodes) * 39.3701).toFixed(0)}″ cover</span>
               ) : (
                 <span>{(line.sagRatio * 100).toFixed(1)}% sag</span>
               )}
@@ -233,11 +247,9 @@ export default function UtilitiesPanel() {
                 <select
                   className="ml-auto rounded border border-border bg-card px-1 py-0.5"
                   onChange={(event) =>
-                    useScene
-                      .getState()
-                      .updateNode(asNodeId(line.id), {
-                        material: event.target.value || null,
-                      } as never)
+                    useScene.getState().updateNode(asNodeId(line.id), {
+                      material: event.target.value || null,
+                    } as never)
                   }
                   value={line.material ?? ''}
                 >

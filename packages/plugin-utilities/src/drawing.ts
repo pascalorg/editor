@@ -3,6 +3,7 @@ import { siteDrawContext } from './draw-context'
 import { isServicePoint, isUtilityLine, isUtilityPole } from './kind-guards'
 import { drawServicePoint } from './service-point/floorplan'
 import type { LooseNode, LooseNodes } from './site-frame'
+import { resolveLineEndpoints } from './utility-line/endpoints'
 import { drawUtilityLine } from './utility-line/floorplan'
 import { drawUtilityPole } from './utility-pole/floorplan'
 
@@ -52,13 +53,17 @@ export function buildUtilitiesDrawing(scene: SceneSnapshot): UtilitiesDrawing {
       if (!geometry) continue
       counts.lines += 1
       primitives.push(geometry)
-      for (const vertex of node.path) points.push([vertex[0], vertex[2]])
+      // Bounds come off the RESOLVED run, so a drop that ends on a meter is
+      // bounded at the meter and not at whatever copy `path` still holds.
+      for (const vertex of resolveLineEndpoints(nodes, node).path) {
+        points.push([vertex[0], vertex[2]])
+      }
     } else if (isUtilityPole(node)) {
       const geometry = drawUtilityPole(node, dctx)
       if (!geometry) continue
       counts.poles += 1
       primitives.push(geometry)
-      points.push([node.position[0], node.position[1]])
+      points.push([node.position[0], node.position[2]])
     } else if (isServicePoint(node)) {
       const geometry = drawServicePoint(node, dctx)
       if (!geometry) continue

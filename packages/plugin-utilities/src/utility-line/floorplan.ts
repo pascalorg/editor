@@ -1,10 +1,14 @@
 import type { FloorplanGeometry, GeometryContext } from '@pascal-app/core'
 import { floorplanDrawContext, type UtilitiesDrawContext } from '../draw-context'
+import { runLength, type Vec3 } from '../geometry/catenary'
+import { gradeElevationAt } from '../geometry/grade'
 import { longestSegmentMidpoint, type PlanPoint, spacedLabelPoints } from '../geometry/labels'
-import { lineLength, metresToFeet } from '../geometry/totals'
+import { metresToFeet } from '../geometry/totals'
 import { utilitiesLayerMetadata } from '../layer'
 import type { UtilityLineNode } from '../schema'
 import { SYSTEM_COLOR, SYSTEM_LETTER } from '../schema'
+import type { LooseNodes } from '../site-frame'
+import { resolveLineEndpoints, resolveLineEndpointsVia } from './endpoints'
 
 /** Plan tag spacing along an underground run, metres (≈ 26 ft). */
 const LETTER_SPACING = 8
@@ -24,13 +28,18 @@ const STROKE = 0.11
  * Coordinates: the node stores SITE metres; the floor-plan layer draws in
  * building-local metres, so every vertex goes through `siteToLocalPlan`.
  * See `site-frame.ts` for why.
+ *
+ * The run drawn is the RESOLVED one (`endpoints.ts`): a linked end comes from
+ * the pole or the meter, not from the stored copy in `path`, so moving either
+ * node moves the line in 2D exactly as it does in 3D.
  */
 export function drawUtilityLine(
   node: UtilityLineNode,
   dctx: UtilitiesDrawContext,
 ): FloorplanGeometry | null {
-  if (node.path.length < 2) return null
-  const plan: PlanPoint[] = node.path.map((p) => dctx.toPlan([p[0], p[2]]))
+  const resolved = resolveLineEndpointsVia({ resolve: dctx.resolve, frame: dctx.frame }, node)
+  if (resolved.path.length < 2) return null
+  const plan: PlanPoint[] = resolved.path.map((p) => dctx.toPlan([p[0], p[2]]))
 
   const view = dctx.view
   const selected = (view?.selected ?? false) || (view?.highlighted ?? false)
@@ -122,7 +131,7 @@ export function drawUtilityLine(
     }
   }
 
-  const callout = calloutText(node)
+  const callout = calloutTextFor(node, resolved.path)
   if (callout) {
     const site = longestSegmentMidpoint(plan)
     if (site) {
@@ -145,7 +154,13 @@ export function drawUtilityLine(
   }
 
   if (selected) {
+    // Only STORED vertices get a drag handle. A derived end belongs to the
+    // pole or the meter it is linked to: a handle there would write a vertex
+    // that the next read throws away, which reads to the user as a handle
+    // that snaps back. Move the pole or the meter instead — both are
+    // draggable in their own right.
     plan.forEach((point, index) => {
+      if (resolved.derivedIndices.includes(index)) return
       children.push({
         kind: 'endpoint-handle',
         point,
@@ -164,29 +179,59 @@ export function buildUtilityLineFloorplan(
   node: UtilityLineNode,
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
-  return drawUtilityLine(node, floorplanDrawContext(node as unknown as Record<string, unknown>, ctx))
+  return drawUtilityLine(
+    node,
+    floorplanDrawContext(node as unknown as Record<string, unknown>, ctx),
+  )
 }
 
-/** The size / material / length callout drawn beside a run. */
-export function calloutText(node: UtilityLineNode): string {
+/**
+ * The size / material / length callout drawn beside a run, measured on an
+ * already-resolved path.
+ */
+export function calloutTextFor(node: UtilityLineNode, path: readonly Vec3[]): string {
   const bits: string[] = []
   if (node.sizeInches) bits.push(`${formatInches(node.sizeInches)}"`)
   if (node.material) bits.push(node.material.toUpperCase())
-  const feet = metresToFeet(lineLength(node))
+  const feet = metresToFeet(runLength(path, node.routing, node.sagRatio))
   if (feet > 0) bits.push(`${Math.round(feet)} LF`)
   if (node.routing === 'underground') {
-    const depth = burialDepth(node)
+    const depth = burialDepthOf(path)
     if (depth > 0) bits.push(`${Math.round(metresToFeet(depth) * 12)}" COVER`)
   }
   if (node.label) bits.unshift(node.label)
   return bits.join(' · ')
 }
 
-/** Deepest (most negative) vertex of a buried run, reported as a POSITIVE cover. */
-export function burialDepth(node: UtilityLineNode): number {
+/**
+ * The callout for a run in a scene. Pass `nodes` so a linked run is measured
+ * on its DERIVED endpoints; without them the stored path is measured and a
+ * moved pole leaves the length stale.
+ */
+export function calloutText(node: UtilityLineNode, nodes?: LooseNodes | null): string {
+  return calloutTextFor(node, nodes ? resolveLineEndpoints(nodes, node).path : node.path)
+}
+
+/**
+ * Deepest cover of a buried run, reported as a POSITIVE depth BELOW GRADE.
+ *
+ * Measured against `gradeElevationAt` per vertex, not against absolute zero
+ * and not against the building level origin — a run under a building whose
+ * origin sits above grade is still 30 in of cover, and used to be reported as
+ * whatever the origin offset made it.
+ */
+export function burialDepthOf(path: readonly Vec3[]): number {
   let deepest = 0
-  for (const point of node.path) if (point[1] < deepest) deepest = point[1]
+  for (const point of path) {
+    const cover = point[1] - gradeElevationAt(null, [point[0], point[2]])
+    if (cover < deepest) deepest = cover
+  }
   return -deepest
+}
+
+/** Deepest cover of a buried run in a scene. See `burialDepthOf`. */
+export function burialDepth(node: UtilityLineNode, nodes?: LooseNodes | null): number {
+  return burialDepthOf(nodes ? resolveLineEndpoints(nodes, node).path : node.path)
 }
 
 /** 0.75 → `3/4`, 4 → `4`. Utility sizes are called out in fractional inches. */

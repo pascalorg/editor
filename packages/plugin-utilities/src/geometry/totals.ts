@@ -1,5 +1,20 @@
 import type { UtilityLineNode, UtilityRouting, UtilitySystem } from '../schema'
-import { runLength } from './catenary'
+import type { LooseNodes } from '../site-frame'
+import { resolvedLinePath } from '../utility-line/endpoints'
+import { runLength, type Vec3 } from './catenary'
+
+/**
+ * The run to measure.
+ *
+ * Pass the scene's nodes and the ends linked through `fromRef` / `toRef` are
+ * DERIVED from the pole and the meter, so a take-off follows them when they
+ * move (`utility-line/endpoints.ts`). Omit them and the stored `path` is
+ * measured as-is — correct for an unlinked run, and a stale-copy risk for a
+ * linked one, which is why every caller inside this package passes the nodes.
+ */
+export function measuredPath(line: UtilityLineNode, nodes?: LooseNodes | null): readonly Vec3[] {
+  return nodes ? resolvedLinePath(nodes, line) : line.path
+}
 
 /** Exact conversion: 1 international foot = 0.3048 m (NIST SP 811). */
 export const METRES_PER_FOOT = 0.3048
@@ -27,10 +42,13 @@ export type SystemTotal = {
  * Systems with no runs are omitted; the result is ordered by descending
  * length so the panel reads worst-first.
  */
-export function totalsBySystem(lines: readonly UtilityLineNode[]): SystemTotal[] {
+export function totalsBySystem(
+  lines: readonly UtilityLineNode[],
+  nodes?: LooseNodes | null,
+): SystemTotal[] {
   const bySystem = new Map<UtilitySystem, SystemTotal>()
   for (const line of lines) {
-    const length = runLength(line.path, line.routing, line.sagRatio)
+    const length = runLength(measuredPath(line, nodes), line.routing, line.sagRatio)
     if (!(length > 0)) continue
     const entry = bySystem.get(line.system) ?? {
       system: line.system,
@@ -53,21 +71,25 @@ export function totalsBySystem(lines: readonly UtilityLineNode[]): SystemTotal[]
 }
 
 /** Length of a single run in the routing-appropriate measure, metres. */
-export function lineLength(line: UtilityLineNode): number {
-  return runLength(line.path, line.routing, line.sagRatio)
+export function lineLength(line: UtilityLineNode, nodes?: LooseNodes | null): number {
+  return runLength(measuredPath(line, nodes), line.routing, line.sagRatio)
 }
 
 /** Grand total across every system, metres. */
-export function totalMetres(lines: readonly UtilityLineNode[]): number {
-  return totalsBySystem(lines).reduce((sum, entry) => sum + entry.metres, 0)
+export function totalMetres(lines: readonly UtilityLineNode[], nodes?: LooseNodes | null): number {
+  return totalsBySystem(lines, nodes).reduce((sum, entry) => sum + entry.metres, 0)
 }
 
 /** Linear feet, rounded to the nearest foot — the take-off number. */
-export function linearFeet(lines: readonly UtilityLineNode[], routing?: UtilityRouting): number {
+export function linearFeet(
+  lines: readonly UtilityLineNode[],
+  routing?: UtilityRouting,
+  nodes?: LooseNodes | null,
+): number {
   let metres = 0
   for (const line of lines) {
     if (routing && line.routing !== routing) continue
-    metres += lineLength(line)
+    metres += lineLength(line, nodes)
   }
   return Math.round(metresToFeet(metres))
 }
