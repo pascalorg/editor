@@ -33,3 +33,4 @@ export {
   type YardSide,
 } from './geometry'
 export { FloorplanSitePlanLayer } from './site-plan-layer'
+export { registerSitePlanContributor, sitePlanContributions, type SitePlanContributor } from './contributors'

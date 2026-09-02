@@ -679,6 +679,8 @@ export {
   FloorplanDrawingTypeSwitch,
   FloorplanSitePlanLayer,
   formatFeetInches,
+  registerSitePlanContributor,
+  type SitePlanContributor,
   setbackEnvelope,
   type SitePlanDrawing,
   type SitePlanEdge,

@@ -7,13 +7,22 @@ import {
   nodeRegistry,
   registerNode,
 } from '@pascal-app/core'
-import { registerEditorHostPanel } from '@pascal-app/editor'
+import { registerEditorHostPanel, registerSitePlanContributor } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
-import { plansHostPanel, plansPlugin, registerPlansCommands } from '@pascal-app/plugin-plans'
-import { registerSheetsCommands, sheetsHostPanel, sheetsPlugin } from '@pascal-app/plugin-sheets'
-import { sectionsHostPanel, sectionsPlugin } from '@pascal-app/plugin-sections'
-import { utilitiesHostPanel, utilitiesPlugin } from '@pascal-app/plugin-utilities'
+import {
+  registerSheetDrawingProvider,
+  registerSheetsCommands,
+  sheetsHostPanel,
+  sheetsPlugin,
+} from '@pascal-app/plugin-sheets'
+import {
+  buildElevationDrawing,
+  buildSectionDrawing,
+  sectionsHostPanel,
+  sectionsPlugin,
+} from '@pascal-app/plugin-sections'
+import { buildUtilitiesDrawing, utilitiesHostPanel, utilitiesPlugin } from '@pascal-app/plugin-utilities'
 import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
 
@@ -96,10 +105,7 @@ extendPluginDiscovery(async () => [bonesPlugin])
 // Opt-in: Bones ships uninstalled — users enable it per scene from the
 // Plugins panel (engineering X-ray is a specialist view, not a default).
 registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: false })
-// Plans (PlanCrafters): Ctrl+K → Generate plans; the set opens in-editor.
-extendPluginDiscovery(async () => [plansPlugin])
-registerEditorHostPanel(plansHostPanel)
-registerPlansCommands()
+// Plans (PlanCrafters remote engine) is parked — see docs/construction-documents.md.
 // Sheets: paper space, drawn by Pascal's own renderer (Ctrl+K → Open sheets).
 extendPluginDiscovery(async () => [sheetsPlugin])
 registerEditorHostPanel(sheetsHostPanel)
@@ -107,9 +113,19 @@ registerSheetsCommands()
 // Sections: true vector sections + elevations from Pascal's own geometry.
 extendPluginDiscovery(async () => [sectionsPlugin])
 registerEditorHostPanel(sectionsHostPanel)
+// Sheet viewports of kind 'section' / 'elevation' draw through the sections builders.
+// They take `{ nodes }` and draw with y = -elevation (plugin-sections/src/geometry/types.ts).
+registerSheetDrawingProvider('section', (nodes, args) =>
+  buildSectionDrawing({ nodes: nodes as never }, args as never),
+)
+registerSheetDrawingProvider('elevation', (nodes, args) =>
+  buildElevationDrawing({ nodes: nodes as never }, ((args as { direction?: string }).direction ?? 'south') as never),
+)
 // Site utilities (WS4): overhead / underground runs, poles, service points.
 extendPluginDiscovery(async () => [utilitiesPlugin])
 registerEditorHostPanel(utilitiesHostPanel)
+// …and on the site plan (the site layer draws only what the builder returns).
+registerSitePlanContributor('utilities', (scene) => buildUtilitiesDrawing(scene as never))
 extendPluginDiscovery(async () => [mintPlugin])
 registerEditorHostPanel(mintHostPanel)
 extendPluginDiscovery(async () => [streetscapePlugin])

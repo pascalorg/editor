@@ -27,6 +27,7 @@ import {
   setbackEnvelope,
   type YardDimension,
 } from './geometry'
+import { sitePlanContributions } from './contributors'
 
 /** Contract shared by every drawing producer (see docs/construction-documents.md). */
 export interface SitePlanDrawing {
@@ -160,7 +161,9 @@ export function levelFootprintLoops(
   for (const wall of walls) {
     const poly = getWallPlanFootprint(wall, miters)
     if (poly.length < 3) continue
-    loops.push(poly.map((p) => [ox + p.x * cos - p.y * sin, oz + p.x * sin + p.y * cos] as Pt))
+    // three.js Y rotation, the convention BuildingRenderer applies:
+    // world = (cos·lx + sin·lz, −sin·lx + cos·lz) + position
+    loops.push(poly.map((p) => [ox + p.x * cos + p.y * sin, oz - p.x * sin + p.y * cos] as Pt))
   }
   return loops
 }
@@ -360,6 +363,9 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
         maxY: Math.max(lotBounds.maxY, footprintBounds.maxY),
       }
     : lotBounds
+
+  // Plugin kinds that live in site metres (utilities …) — see contributors.ts.
+  primitives.push(...sitePlanContributions(scene))
 
   return {
     primitives,
