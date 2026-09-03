@@ -83,6 +83,21 @@ export function charsPerLine(w: number, fontSize: number): number {
   return Math.max(12, Math.floor(w / (fontSize * 0.5)))
 }
 
+/**
+ * How many columns a block of notes should flow into.
+ *
+ * A note set 10 inches wide is technically legible and practically unusable —
+ * the eye loses the line on the way back. Plan notes are set in columns of
+ * roughly four inches, which at this type size is about 80 characters, so the
+ * count is chosen to land near that measure and then capped so a wide sheet
+ * does not shred the notes into slivers.
+ */
+export function notesColumnCount(widthIn: number, max = 3): number {
+  return Math.max(1, Math.min(max, Math.round(widthIn / TARGET_NOTE_COLUMN_IN)))
+}
+
+const TARGET_NOTE_COLUMN_IN = 4.2
+
 export type NumberedNote = { text: string }
 
 /**
@@ -95,6 +110,9 @@ export function notesColumn(
   box: Box,
   notes: readonly string[],
   fontSize = 0.105,
+  /** Number of notes printed BEFORE this column — a note set that flows
+   * across columns must keep counting, not restart at 1 in every column. */
+  startIndex = 0,
 ): { height: number; overflow: number } {
   const cols = charsPerLine(box.w - 0.22, fontSize)
   let y = box.y
@@ -107,7 +125,7 @@ export function notesColumn(
       kind: 'text',
       x: box.x,
       y: y + NOTE_LINE_H - 0.045,
-      text: `${index + 1}.`,
+      text: `${startIndex + index + 1}.`,
       fontSize,
       fill: INK,
       fontWeight: 700,
@@ -134,6 +152,8 @@ export type LegendRow = {
   /** Symbol geometry in a LOCAL frame, centred on (0,0), in sheet inches. */
   swatch: FloorplanGeometry[]
   label: string
+  /** Stable key, stamped on the label text so a test can read the legend back. */
+  key?: string
 }
 
 /**
@@ -162,6 +182,7 @@ export function legendBlock(
       fontSize: 0.105,
       fill: INK,
       fontFamily: SANS,
+      ...(row.key ? { metadata: { mepLegendKey: row.key } } : {}),
     })
     y += ROW_H
     printed += 1
@@ -244,4 +265,16 @@ export function runSwatch(
       ...(dash ? { strokeDasharray: dash } : {}),
     },
   ]
+}
+
+/**
+ * The host prints at most six provider warnings under a viewport
+ * (`warningsPlate`, drawings.ts). Rather than let the seventh vanish, the
+ * tail folds into a line that says how many are not shown — a dropped
+ * warning is the one failure mode a warning strip must not have.
+ */
+export function capWarnings(warnings: readonly string[], max = 6): string[] {
+  const unique = [...new Set(warnings.filter((w) => w.trim().length > 0))]
+  if (unique.length <= max) return unique
+  return [...unique.slice(0, max - 1), `+${unique.length - (max - 1)} further warnings not shown`]
 }

@@ -134,16 +134,40 @@ asphalt shingle.
 - Vicinity map (needs a tile service; the parcel resolver already has the
   lat/lng).
 
-## 4. Status of this pass (2026-09-03)
+## 4. Status of this pass (2026-09-03, end of day)
 
-Landed and verified in the running app (see the commit messages for detail):
-2D site-frame fix, attach-end repair, demo house furnished/sited/roomed,
-1/4" plans with fixture schedules and north arrows, elevation materials,
-provider plumbing for the new sheet kinds. The structural, MEP and
-notes/energy sheets are being filled in by their workstreams into the
-`providers/` and `plans/` modules; until each lands its viewport prints
-"<kind> — nothing to draw" rather than a blank.
+Verified in the running app on `plancrafters-cottage` (scene version 58, 15 sheets after
+`bun scripts/demo/reset-sheets.ts` + "Generate default set"):
 
-Known gaps carried honestly: terrain/contours (flat grade), engineered
-structural values (verify rows), FL energy form (inputs only), roof material
-(assumed asphalt shingle until the roof material maps to a finish kind).
+| Sheet | What is on it now |
+|-------|-------------------|
+| A0.0 | Cover: name block, front-quarter hero framed on the sited house, sheet index (15), project data (living 1,472 sf, lot 10,487 sf, coverage), general notes |
+| A0.1 | General notes — 119 notes in 10 disciplines, every one cited (47 print `(verify: R…)` where the exact subsection was not certain) |
+| A1.0 | Site plan — one lot line, setback envelope, footprint, yard dimensions, pole in the ROW, overhead drop to the meter (EM), north arrow, lot/APN label, scale bar |
+| A2.0 | Floor plan at 1/4" = 1'-0" with the 55 placed items, 12 room labels (name / number / finishes / CH), door & window tags, dimensions, north arrow; room schedule + fixture schedule (A01–A15) beside it |
+| A3.0 | Roof plan with ridge, pitch arrows (7:12), dashed drip edge; attic venting calculation & diagram (1/150 and 1/300, R806) |
+| A4.0 | Four elevations with lap-siding courses, shingle courses, gable ends clad, finish key, ft-in datums, GRADE |
+| A5.0 | Two vector sections (assembly poché) |
+| A8.0 | Door & window schedules with QTY, EGRESS (R310), TEMPERED (R308.4), STATUS |
+| SN1 | Design criteria, fastening schedule (R602.3(1) from Bones data), connector hardware, cited structural notes |
+| S1.0 | Foundation & anchorage plan (wood exteriors → anchor bolts per R403.1.6), footing + anchorage schedules, legend, notes |
+| S3.0 | Roof framing plan (rafters/ridge with measured spacing, beam schedule, notes, legend) |
+| S4.0 | Braced wall lines (R602.10, method only — stated) with schedule |
+| E1.0 | Electrical plan derived live from Bones (receptacles incl. GFCI/counter/basin/WP, switches, lights, SD/CO, panel beside the meter, circuits), legend, panel schedule, NEC-cited notes |
+| P1.0 | Plumbing plan (fixtures with W/H/C/T keys and schedule marks, Bones rough-ins/vent/water heater/cleanouts), keys, notes, fixture schedule |
+| EN1.0 | Energy compliance: envelope by orientation, conditioned space, climate zone 2A, prescriptive rows (citable ones filled, the rest `(verify)`), fenestration/door schedules, compliance-path note |
+
+Known gaps carried honestly (each is printed on the paper where it applies):
+- Grade is flat: no terrain/contours yet (§3 has the plan). GRADE prints 0'-0".
+- Service size prints the NEC 230.79(C) minimum (100 A) — no Article 220 load calc exists; the
+  reference set's 200 A came from a designer's calc.
+- Structural engineered values (soil bearing, slab reinforcement, holdown capacities, bracing amounts,
+  girder trusses) print as `(verify …)`; Bones flags the 9.75 m ceiling-joist span on this cottage.
+- Energy: three prescriptive rows are citable from repo data; the rest read `(verify)`; the FL
+  R402/R405 form is attached, not generated.
+- Bones defects found and worked around: wall-attached items are invisible to the plumbing engine;
+  `afci.necSection` in `data/electrical-rules.json` says 210.12(B) (dwellings are 210.12(A));
+  plugin-bones exports only its root, so the sheet providers import it by relative path.
+- 2D editor view follows the 3D camera (navigation sync); "Align view to north" + wheel to reset.
+- Roof material is assumed asphalt shingle until the roof material maps to a finish kind.
+- `apps/editor` `tsc` has a pre-existing error from plugin-bones' nested copy of `@pascal-app/core`.

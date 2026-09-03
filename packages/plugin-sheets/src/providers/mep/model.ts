@@ -41,7 +41,17 @@ export type ServiceSync = {
   heightAff: number
   /** False when a real `bones:service` node already owned the spot. */
   synthesized: boolean
+  /** Where the panel was pinned, and what pinned it. */
+  panel: { wallId: string; wallT: number; from: 'item' | 'beside-meter' } | null
 }
+
+/** Panel enclosure centre height above the floor — Bones' own PANEL_AFF. */
+const PANEL_AFF = 1.524
+/** How far along the wall the panel stands from the meter when nothing else
+ * pins it. Bones uses the same 0.6 m offset the other way round in
+ * `placeElectricMeterSpot` (METER_PANEL_OFFSET) — the service conductors stay
+ * short and the two enclosures keep their own working space. */
+const PANEL_BESIDE_METER = 0.6
 
 export type MepModel = {
   levelId: string
@@ -50,12 +60,37 @@ export type MepModel = {
   walls: WallSlice[]
   /** Engine warnings — printed on the sheet, never swallowed. */
   warnings: string[]
+  /** Resolved code jurisdiction ('FL', 'INTL', …) — the notes cite it. */
+  jurisdiction: string
   /** How the meter got its spot, for the sheet's own honesty line. */
   serviceSync: ServiceSync | null
 }
 
-/** The synthetic `bones:service` record's id — never written to the scene. */
-export const SYNTHETIC_SERVICE_ID = 'bonessvc_sheets_electric_meter_sync'
+/** The synthetic `bones:service` record ids — never written to the scene. */
+export const SYNTHETIC_METER_ID = 'bonessvc_sheets_electric_meter_sync'
+export const SYNTHETIC_PANEL_ID = 'bonessvc_sheets_panel_sync'
+
+/** One synthetic `bones:service` record, in the shape compute.ts reads. */
+function serviceRecord(
+  id: string,
+  levelId: string,
+  serviceType: string,
+  wallId: string,
+  wallT: number,
+  heightAff: number,
+): AnyNodeLike {
+  return {
+    id,
+    type: 'bones:service',
+    parentId: levelId,
+    visible: true,
+    serviceType,
+    wallId,
+    wallT,
+    heightAff,
+    position: [0, 0, 0],
+  }
+}
 
 function levelOf(nodes: NodeMap, levelId: string): AnyNodeLike | undefined {
   const node = nodes[levelId]
@@ -88,7 +123,7 @@ export function utilitiesMeterAnchor(
     const wallId = typeof node.wallId === 'string' ? node.wallId : ''
     if (!wallId) continue
     const wall = nodes[wallId]
-    if (!wall || wall.type !== 'wall' || wall.parentId !== levelId) continue
+    if (wall?.type !== 'wall' || wall.parentId !== levelId) continue
     const wallT = num(node.wallT)
     if (wallT === null) continue
     return {
@@ -101,15 +136,81 @@ export function utilitiesMeterAnchor(
   return null
 }
 
-/** A real `bones:service` electric-meter node already on this level. */
-function hasBonesMeterNode(nodes: NodeMap, levelId: string): boolean {
+/** A real `bones:service` node of `serviceType` already on this level. */
+function hasBonesServiceNode(nodes: NodeMap, levelId: string, serviceType: string): boolean {
   return Object.values(nodes).some(
     (n) =>
       n?.type === 'bones:service' &&
       n.parentId === levelId &&
       n.visible !== false &&
-      String(n.serviceType ?? '') === 'electric-meter',
+      String(n.serviceType ?? '') === serviceType,
   )
+}
+
+/**
+ * Where the PANEL belongs, so the sheet, the site plan and the model agree.
+ *
+ * Bones auto-places the panel on the longest garage or exterior wall, which
+ * on a garage-less cottage puts it clean across the house from the meter the
+ * service point pinned — a service chain no electrician would run. Two things
+ * outrank the auto-placement, in order:
+ *
+ *  1. A PLACED PANEL. An `electric-panel` item hung on a wall of this level is
+ *     the user pointing at the spot; its `wallT` is read straight off the
+ *     wall-local position the host stores.
+ *  2. THE METER. Otherwise the panel stands beside the meter on the meter's
+ *     own wall, inside, the way a meter-main pair is actually built.
+ */
+function panelAnchor(
+  nodes: NodeMap,
+  levelId: string,
+  meter: { wallId: string; wallT: number } | null,
+): { wallId: string; wallT: number; heightAff: number; from: 'item' | 'beside-meter' } | null {
+  const placed = Object.values(nodes)
+    .filter((n) => {
+      if (n?.type !== 'item' || n.visible === false) return false
+      const asset = (n.asset ?? {}) as { id?: string }
+      if (String(asset.id ?? '') !== 'electric-panel') return false
+      const wall = typeof n.parentId === 'string' ? nodes[n.parentId] : undefined
+      return wall?.type === 'wall' && wall.parentId === levelId
+    })
+    .sort((a, b) => String(a.id).localeCompare(String(b.id)))[0]
+  if (placed) {
+    const wall = nodes[String(placed.parentId)]
+    const length = wallLength(wall)
+    const position = Array.isArray(placed.position) ? (placed.position as number[]) : null
+    const u = position && typeof position[0] === 'number' ? position[0] : null
+    if (length > 0.1 && u !== null && Number.isFinite(u)) {
+      const pos = Array.isArray(placed.position) ? (placed.position as number[]) : []
+      const height = typeof pos[1] === 'number' && Number.isFinite(pos[1]) ? pos[1] : PANEL_AFF
+      return {
+        wallId: String(placed.parentId),
+        wallT: Math.max(0, Math.min(1, u / length)),
+        heightAff: height,
+        from: 'item',
+      }
+    }
+  }
+  if (!meter) return null
+  const wall = nodes[meter.wallId]
+  const length = wallLength(wall)
+  if (length <= 0.1) return null
+  const u = meter.wallT * length
+  const beside = u + PANEL_BESIDE_METER <= length - 0.2 ? u + PANEL_BESIDE_METER : u - PANEL_BESIDE_METER
+  return {
+    wallId: meter.wallId,
+    wallT: Math.max(0, Math.min(1, beside / length)),
+    heightAff: PANEL_AFF,
+    from: 'beside-meter',
+  }
+}
+
+function wallLength(wall: AnyNodeLike | undefined): number {
+  if (wall?.type !== 'wall') return 0
+  const start = wall.start
+  const end = wall.end
+  if (!Array.isArray(start) || !Array.isArray(end)) return 0
+  return Math.hypot(Number(end[0]) - Number(start[0]), Number(end[1]) - Number(start[1]))
 }
 
 /**
@@ -147,8 +248,17 @@ const cache = new WeakMap<object, CacheEntry>()
 export function mepModel(nodes: NodeMap, levelId: string | undefined): MepModel | null {
   if (!levelId || !levelOf(nodes, levelId)) return null
   const anchor = utilitiesMeterAnchor(nodes, levelId)
-  const ownedByBones = hasBonesMeterNode(nodes, levelId)
-  const key = `${levelId}|${anchor ? `${anchor.wallId}@${anchor.wallT.toFixed(6)}@${anchor.heightAff.toFixed(4)}` : '-'}|${ownedByBones ? 'b' : 's'}`
+  const meterOwnedByBones = hasBonesServiceNode(nodes, levelId, 'electric-meter')
+  const panelOwnedByBones = hasBonesServiceNode(nodes, levelId, 'panel')
+  const panel = panelOwnedByBones ? null : panelAnchor(nodes, levelId, anchor)
+  const key = [
+    levelId,
+    anchor
+      ? `${anchor.wallId}@${anchor.wallT.toFixed(6)}@${anchor.heightAff.toFixed(4)}`
+      : '-',
+    meterOwnedByBones ? 'b' : 's',
+    panel ? `${panel.wallId}@${panel.wallT.toFixed(6)}@${panel.from}` : '-',
+  ].join('|')
 
   let entries = cache.get(nodes as object)
   if (!entries) {
@@ -159,30 +269,41 @@ export function mepModel(nodes: NodeMap, levelId: string | undefined): MepModel 
   if (hit) return hit
 
   const serviceSync: ServiceSync | null = anchor
-    ? { ...anchor, synthesized: !ownedByBones }
+    ? {
+        ...anchor,
+        synthesized: !meterOwnedByBones,
+        panel: panel ? { wallId: panel.wallId, wallT: panel.wallT, from: panel.from } : null,
+      }
     : null
 
-  // The throwaway node map: the scene's own nodes plus the mirrored anchor.
-  // Shaped exactly as compute.ts's `extractExtraServiceOverrides` reads a
-  // `bones:service` node — type, parentId, visible, serviceType, wallId,
-  // wallT, heightAff, and the [0,0,0] "wall anchor is authoritative" position.
+  // The throwaway node map: the scene's own nodes plus the mirrored anchors.
+  // Each entry is shaped exactly as compute.ts reads a `bones:service` node
+  // (`extractServiceOverrides` for the panel, `extractExtraServiceOverrides`
+  // for the meter) — type, parentId, visible, serviceType, wallId, wallT,
+  // heightAff, and the [0,0,0] "the wall anchor is authoritative" position.
+  const synthetic: NodeMap = {}
+  if (anchor && !meterOwnedByBones) {
+    synthetic[SYNTHETIC_METER_ID] = serviceRecord(
+      SYNTHETIC_METER_ID,
+      levelId,
+      'electric-meter',
+      anchor.wallId,
+      anchor.wallT,
+      anchor.heightAff,
+    )
+  }
+  if (panel) {
+    synthetic[SYNTHETIC_PANEL_ID] = serviceRecord(
+      SYNTHETIC_PANEL_ID,
+      levelId,
+      'panel',
+      panel.wallId,
+      panel.wallT,
+      panel.heightAff,
+    )
+  }
   const engineNodes: NodeMap =
-    anchor && !ownedByBones
-      ? {
-          ...nodes,
-          [SYNTHETIC_SERVICE_ID]: {
-            id: SYNTHETIC_SERVICE_ID,
-            type: 'bones:service',
-            parentId: levelId,
-            visible: true,
-            serviceType: 'electric-meter',
-            wallId: anchor.wallId,
-            wallT: anchor.wallT,
-            heightAff: anchor.heightAff,
-            position: [0, 0, 0],
-          },
-        }
-      : nodes
+    Object.keys(synthetic).length > 0 ? { ...nodes, ...synthetic } : nodes
 
   let model: MepModel
   try {
@@ -196,6 +317,7 @@ export function mepModel(nodes: NodeMap, levelId: string | undefined): MepModel 
       members: result.members,
       walls: result.walls,
       warnings: [...result.warnings],
+      jurisdiction: result.jurisdiction,
       serviceSync,
     }
   } catch (error) {
@@ -205,6 +327,7 @@ export function mepModel(nodes: NodeMap, levelId: string | undefined): MepModel 
       members: [],
       walls: [],
       warnings: [`MEP engine failed: ${(error as Error).message ?? 'unknown error'}`],
+      jurisdiction: 'AUTO',
       serviceSync,
     }
   }

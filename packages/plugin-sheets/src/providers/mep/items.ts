@@ -17,14 +17,21 @@
  * rotation silently mirrors every wall-hung sink to the far side of its
  * wall).
  *
- * MARKS. The fixture schedule is owned by `schedule-fixtures.ts`. When it
- * produces rows, the marks printed on this plan are ITS marks, looked up by
- * description, so plan and schedule always agree. Until it does, the marks
- * are derived the same deterministic way it will: distinct descriptions
- * sorted, then A01, A02, …
+ * MARKS. The fixture schedule is owned by `schedule-fixtures.ts`, and it
+ * publishes `fixtureMarks(nodes, levelId)` — item id → the label its row
+ * carries. That map IS the marks this plan prints, keyed by NODE, so a plan
+ * bubble and a schedule row can never drift apart (matching on the printed
+ * description instead once produced a plan whose kitchen sink and dishwasher
+ * shared a mark). A fixture the schedule does not carry falls back to a
+ * deterministic mark derived the same way theirs is — grouped, sorted, then
+ * A01, A02, … — and the sheet says so in a warning.
  */
 import type { NodeMap } from '../../model'
-import { buildFixtureSchedule } from '../../schedule-fixtures'
+import {
+  fixtureMarks as scheduleFixtureMarks,
+  isScheduledFixture,
+  serviceFor,
+} from '../../schedule-fixtures'
 
 /** The host's plan-space rotation — CLOCKWISE. See the module note. */
 function rotateVec(x: number, y: number, angle: number): [number, number] {
@@ -281,52 +288,58 @@ export function itemPlanTransform(
 }
 
 /**
- * Marks for the level's plumbing fixtures.
+ * Marks for the level's plumbing fixtures, keyed by ITEM ID.
  *
- * `buildFixtureSchedule` owns the schedule. When it has rows, its marks win
- * — matched by the row's description, case-insensitively, so the plan bubble
- * and the schedule row carry the same letters. When it has none (the stub, or
- * a level it found nothing on), the same rule it will apply is applied here:
- * distinct descriptions sorted, then A01, A02, …
+ * The schedule's own `fixtureMarks` is authoritative. Anything it does not
+ * carry gets a fallback mark derived the way the schedule derives its own —
+ * one mark per distinct description, descriptions sorted, then A01, A02, … —
+ * offset past the schedule's marks so the two can never collide.
  */
 export function fixtureMarks(
   nodes: NodeMap,
   levelId: string,
-  descriptions: readonly string[],
-): { marks: Map<string, string>; fromSchedule: boolean } {
+  items: readonly { id: string; description: string }[],
+): { marks: Map<string, string>; missing: string[] } {
+  // A schedule that throws must not take the plan down with it.
+  const scheduled = safeMarks(nodes, levelId)
   const marks = new Map<string, string>()
-  let fromSchedule = false
-  try {
-    const table = buildFixtureSchedule(nodes, levelId)
-    for (const row of table.rows) {
-      const description = String(row.description ?? '').trim()
-      const mark = String(row.mark ?? '').trim()
-      if (description && mark) {
-        marks.set(description.toLowerCase(), mark)
-        fromSchedule = true
-      }
-    }
-  } catch {
-    // A schedule that throws must not take the plan down with it.
+  const missing: string[] = []
+  for (const item of items) {
+    const mark = scheduled.get(item.id)
+    if (mark) marks.set(item.id, mark)
+    else missing.push(item.id)
   }
-  const distinct = [...new Set(descriptions)].sort((a, b) => a.localeCompare(b))
-  distinct.forEach((description, index) => {
-    const key = description.toLowerCase()
-    if (marks.has(key)) return
-    marks.set(key, `A${String(index + 1).padStart(2, '0')}`)
-  })
-  return { marks, fromSchedule }
+  if (missing.length === 0) return { marks, missing }
+
+  // Fallback numbering starts after the highest A-number the schedule used,
+  // so an unscheduled fixture never re-uses a scheduled fixture's label.
+  let base = 0
+  for (const mark of scheduled.values()) {
+    const value = Number(/^A(\d+)$/.exec(mark)?.[1] ?? 0)
+    if (Number.isFinite(value)) base = Math.max(base, value)
+  }
+  const byId = new Map(items.map((item) => [item.id, item.description]))
+  const distinct = [...new Set(missing.map((id) => byId.get(id) ?? ''))].sort((a, b) =>
+    a.localeCompare(b),
+  )
+  for (const id of missing) {
+    const index = distinct.indexOf(byId.get(id) ?? '')
+    marks.set(id, `A${String(base + index + 1).padStart(2, '0')}`)
+  }
+  return { marks, missing }
 }
 
 /**
  * Every plumbing-connected item on the level, with its plan transform, class
  * and schedule mark. `skipped` names the items whose host frame this mirror
- * cannot resolve, so the sheet can say so instead of dropping them silently.
+ * cannot resolve, so the sheet can say so instead of dropping them silently;
+ * `unscheduled` counts the fixtures the fixture schedule did not carry, whose
+ * marks are therefore this module's own.
  */
 export function placedPlumbingItems(
   nodes: NodeMap,
   levelId: string,
-): { items: PlacedItem[]; skipped: string[]; marksFromSchedule: boolean } {
+): { items: PlacedItem[]; skipped: string[]; unscheduled: number } {
   const rows: {
     id: string
     node: Record<string, unknown>
@@ -355,10 +368,10 @@ export function placedPlumbingItems(
   }
 
   rows.sort((a, b) => a.id.localeCompare(b.id))
-  const { marks, fromSchedule } = fixtureMarks(
+  const { marks, missing } = fixtureMarks(
     nodes,
     levelId,
-    rows.map((r) => r.cls.description),
+    rows.map((r) => ({ id: r.id, description: r.cls.description })),
   )
 
   const items: PlacedItem[] = rows.map(({ id, node, cls, transform }) => {
@@ -383,11 +396,11 @@ export function placedPlumbingItems(
       width,
       depth,
       cls,
-      mark: marks.get(cls.description.toLowerCase()) ?? 'A??',
+      mark: marks.get(id) ?? 'A??',
       wallHosted: t.wallHosted,
     }
   })
-  return { items, skipped, marksFromSchedule: fromSchedule }
+  return { items, skipped, unscheduled: missing.length }
 }
 
 /** Whether an item belongs to `levelId`, following item→item→wall→level. */
@@ -405,6 +418,76 @@ function onLevel(
   if (!parent) return false
   if (parent.type === 'level') return parent.id === levelId
   return onLevel(nodes, parent, levelId, depth + 1)
+}
+
+/* -------------------------------------------------- electrical items */
+
+export type ElectricAppliance = {
+  id: string
+  plan: [number, number]
+  rotation: number
+  width: number
+  depth: number
+  /** The fixture schedule's mark for this item. */
+  mark: string
+  /** The schedule's description, for the tag. */
+  name: string
+  /** Paddle fans get their own plan symbol. */
+  fan: boolean
+}
+
+/**
+ * The placed items that need a branch circuit — the range, the dryer, the
+ * dishwasher, the condenser, the fans, the panel itself.
+ *
+ * The classification is not this module's: `schedule-fixtures.ts` already
+ * decides what is a fixture and what service it takes (`isScheduledFixture`,
+ * `serviceFor`), and the mark is that schedule's mark. So an appliance shown
+ * on E1.0 is exactly a row of the fixture schedule with ELECTRIC in its INFO
+ * cell — the plan and the schedule cannot disagree about which appliances
+ * need a circuit.
+ */
+export function electricalAppliances(
+  nodes: NodeMap,
+  levelId: string,
+): { items: ElectricAppliance[]; skipped: string[] } {
+  const marks = safeMarks(nodes, levelId)
+  const items: ElectricAppliance[] = []
+  const skipped: string[] = []
+  for (const node of Object.values(nodes)) {
+    if (!isScheduledFixture(node)) continue
+    if (!onLevel(nodes, node, levelId)) continue
+    const asset = (node.asset ?? {}) as { id?: string; name?: string; dimensions?: unknown }
+    const assetId = String(asset.id ?? '').toLowerCase()
+    if (!serviceFor(assetId).includes('ELECTRIC')) continue
+    const transform = itemPlanTransform(nodes, node)
+    if (!transform) {
+      skipped.push(String(asset.name || assetId || node.id))
+      continue
+    }
+    const dimensions = vec3(asset.dimensions, [0.6, 0.8, 0.6])
+    const scale = vec3(node.scale, [1, 1, 1])
+    items.push({
+      id: String(node.id),
+      plan: [transform.x, transform.y],
+      rotation: transform.rotation,
+      width: Math.abs(dimensions[0] * scale[0]),
+      depth: Math.abs(dimensions[2] * scale[2]),
+      mark: marks.get(String(node.id)) ?? 'A??',
+      name: String(asset.name || assetId).toUpperCase(),
+      fan: /fan/.test(assetId),
+    })
+  }
+  items.sort((a, b) => a.id.localeCompare(b.id))
+  return { items, skipped }
+}
+
+function safeMarks(nodes: NodeMap, levelId: string): Map<string, string> {
+  try {
+    return scheduleFixtureMarks(nodes, levelId)
+  } catch {
+    return new Map()
+  }
 }
 
 /** The key letters printed beside a fixture, in W H C G T order. */

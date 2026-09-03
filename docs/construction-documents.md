@@ -89,3 +89,17 @@ Shared files everyone may append ONE line to (re-read immediately before editing
 - Utilities: rail icon → Draw utility line / Place pole / Place service point. Linked endpoints follow the pole and the meter.
 - Framing: Plugins → install Bones → Bones panel → "⚡ X-Ray this level".
 - Sections: Sections panel → Section marker tool (two clicks) → sheets A5.0 → add viewport.
+
+## Status 2026-09-03 — permit-set pass (see docs/plan-set-gap-analysis.md)
+
+- Demo data: `bun scripts/demo/furnish-cottage.ts` sites the house, sets cited wall assemblies, detects the
+  rooms into ROOM zones and places 55 real catalog items; `bun scripts/demo/reset-sheets.ts` removes the
+  generated sheets so "Generate default set" lays the set out again (the generator never touches an
+  existing sheet number, so a changed default only reaches a scene whose old sheets are gone).
+- Sheet providers live in `packages/plugin-sheets/src/providers/*` (structural, electrical, plumbing,
+  energy, general-notes) and are registered once from bootstrap (`registerBuiltinSheetProviders`).
+  A provider returns world-metre `primitives` for a live window and/or absolute sheet-inch `plate`
+  geometry; `plans/*-set.ts` modules add their sheets to the default set by number.
+- Gotchas: an HMR reload while the Sheets workspace is open leaves it reading "no sheets yet" until the
+  page is reloaded; the 2D editor's rotation/zoom follow the 3D camera (navigation sync) — use "Align view
+  to north" and the wheel; `pascalorg`-style URL guard rejects any `scheme:rest` string in node data.
