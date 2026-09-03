@@ -270,3 +270,5 @@ export {
 } from './systems/window/window-animation-system'
 export { buildWindowPreviewMesh, WindowSystem } from './systems/window/window-system'
 export { ZoneSystem } from './systems/zone/zone-system'
+
+export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-store'

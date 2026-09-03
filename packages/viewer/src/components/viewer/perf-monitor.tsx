@@ -1,9 +1,9 @@
 import { sceneRegistry, useScene } from '@pascal-app/core'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { type Object3D, Vector3 } from 'three'
+import { Vector3 } from 'three'
 import { initPerfObservers } from '../../lib/perf-observers'
-import { publishPerfStats } from '../../lib/perf-panel-store'
+import { publishPerfStats, readPerfBatchStats } from '../../lib/perf-panel-store'
 import { clearPerfMeasures, drainPerfCounters, type PerfCounterBucket } from '../../lib/perf-tracks'
 
 const SAMPLE_INTERVAL = 0.5 // seconds between display updates
@@ -18,13 +18,7 @@ const RENDER_TRACKS = new Set(['gpu-render', 'gpu-queue', 'render-encode', 'fram
 
 type TrackLine = { name: string; totalMs: number; count: number; maxMs: number }
 
-type Census = {
-  meshes: number
-  lines: number
-  sprites: number
-  lights: number
-  batchMeshes: Object3D[]
-}
+type Census = { meshes: number; lines: number; sprites: number; lights: number }
 
 /**
  * `scene.traverse` descends into hidden subtrees, so a collapsed level or an
@@ -33,10 +27,7 @@ type Census = {
  */
 function countVisible(object: any, out: Census): void {
   if (object.visible === false) return
-  if (object.isMesh) {
-    out.meshes++
-    if (object.name === 'item-batch') out.batchMeshes.push(object)
-  }
+  if (object.isMesh) out.meshes++
   else if (object.isLine || object.isLineSegments || object.isLineLoop) out.lines++
   else if (object.isSprite) out.sprites++
   else if (object.isLight) out.lights++
@@ -65,7 +56,7 @@ export const PerfMonitor = () => {
   const lastGpu = useRef({ ms: 0, max: 0, seen: false })
   const lastQueue = useRef({ ms: 0, max: 0 })
   const lastEncode = useRef({ ms: 0, max: 0 })
-  const lastCensus = useRef<Census>({ meshes: 0, lines: 0, sprites: 0, lights: 0, batchMeshes: [] })
+  const lastCensus = useRef<Census>({ meshes: 0, lines: 0, sprites: 0, lights: 0 })
 
   // Take ownership of info reset. The custom RenderPipeline.render() path
   // we use in post-processing doesn't trigger three.js's automatic per-frame
@@ -292,17 +283,11 @@ export const PerfMonitor = () => {
     }
 
     if (tickCount.current % CENSUS_EVERY_TICKS === 1) {
-      const census: Census = { meshes: 0, lines: 0, sprites: 0, lights: 0, batchMeshes: [] }
+      const census: Census = { meshes: 0, lines: 0, sprites: 0, lights: 0 }
       countVisible(scene, census)
       lastCensus.current = census
     }
-    // Live per sample (culling changes it every frame); the census only
-    // refreshes which batch meshes exist.
-    let batchInstances = 0
-    for (const batch of lastCensus.current.batchMeshes) {
-      const count = (batch as { _multiDrawCount?: number })._multiDrawCount
-      if (typeof count === 'number' && count > 0) batchInstances += count
-    }
+    const batch = readPerfBatchStats()
 
     const counters = drainPerfCounters()
     // Whole-frame main-thread work measured around FrameLimiter's advance()
@@ -346,9 +331,8 @@ export const PerfMonitor = () => {
       queueMs: lastQueue.current.ms,
       queueMaxMs: lastQueue.current.max,
       drawCalls,
-      batchInstances,
-      batchMeshes: lastCensus.current.batchMeshes.length,
       triangles,
+      batch,
       dirty,
       dirtyDetail,
       geometries: memory.geometries ?? 0,

@@ -1,7 +1,7 @@
 'use client'
 
 import { type AnyNodeId, emitter, sceneRegistry, useScene } from '@pascal-app/core'
-import { isIsolationActive, useViewer } from '@pascal-app/viewer'
+import { isIsolationActive, publishPerfBatchStats, useViewer } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import type { Object3D } from 'three'
@@ -92,7 +92,10 @@ function resetModuleState() {
 }
 
 function releaseItem(itemId: string) {
-  if (store.release(itemId)) revealBatchedItem(itemId)
+  if (store.release(itemId)) {
+    revealBatchedItem(itemId)
+    publishBatchStats()
+  }
 }
 
 function releaseAll() {
@@ -229,6 +232,19 @@ function runItemBatchFrame(
   }
   staleItems.clear()
   for (const itemId of deferred) staleItems.add(itemId)
+  publishBatchStats()
+}
+
+// Membership truth for the ?perf panel's `batch` row — the panel cannot read
+// this package's store itself, and the per-pass multi-draw counters flip
+// between shadow/main/outline cameras.
+function publishBatchStats() {
+  const stats = store.stats()
+  publishPerfBatchStats({
+    items: stats.items,
+    instances: stats.instances,
+    containers: stats.batches,
+  })
 }
 
 export const ItemBatchSystem = () => {
