@@ -209,6 +209,9 @@ export interface EditorProps {
   sidebarOverlay?: ReactNode
   viewerBanner?: ReactNode
 
+  /** Whether to show the floating level selector in the 3D viewport. Defaults to true. */
+  showLevelSelector?: boolean
+
   // Panel config (passed through to sidebar panels — v1 only)
   settingsPanelProps?: SettingsPanelProps
   sitePanelProps?: SitePanelProps
@@ -1268,6 +1271,7 @@ export default function Editor({
   sitePanelProps,
   extraSidebarPanels,
   commandPaletteEmptyAction,
+  showLevelSelector = true,
 }: EditorProps) {
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
@@ -1541,7 +1545,7 @@ export default function Editor({
           navbarSlot={navbarSlot}
           overlays={
             <>
-              {!(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
+              {showLevelSelector && !(isCaptureMode || stageOverlay) && <FloatingLevelSelector />}
               {!(isVersionPreviewMode || isCaptureMode || isStudioMode) && (
                 <div className="pointer-events-auto">
                   <ActionMenu />
@@ -1633,6 +1637,7 @@ export default function Editor({
       {/* Fixed UI overlays scoped to the viewer area */}
       {!isPreviewMode && (
         <ViewerOverlays left={overlayLeft}>
+          {showLevelSelector && <FloatingLevelSelector />}
           <div className="pointer-events-auto">
             <ActionMenu />
           </div>

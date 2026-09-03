@@ -577,7 +577,7 @@ export function FloatingLevelSelector() {
 
   return (
     <>
-      <div className="pointer-events-auto absolute top-14 left-3 z-20">
+      <div className="pointer-events-auto absolute top-16 left-4 z-30">
         <div className="relative">
           {/* Floating + at top edge */}
           {!draggingLevelId && (
