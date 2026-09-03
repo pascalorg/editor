@@ -161,6 +161,27 @@ export class ItemBatchStore implements ItemBatchStoreApi {
     return joined
   }
 
+  /**
+   * Drops batches whose mesh is no longer a child of the live level root — a
+   * React remount of the level subtree (thumbnail capture's level shuffling,
+   * tool-state changes) replaces the registry groups and silently orphans the
+   * imperatively-parented batch meshes, while fresh source clones mount with
+   * no layer hold. Returns the affected item ids so the caller can release
+   * and re-stale them against the new scene graph.
+   */
+  pruneDetached(): Set<string> {
+    const orphaned = new Set<string>()
+    for (const [key, record] of [...this.batches]) {
+      const root = this.getLevelRoot(record.levelId)
+      if (root && record.batched.parent === root) continue
+      for (const instance of record.instances) orphaned.add(instance.itemId)
+      record.batched.removeFromParent()
+      record.batched.dispose()
+      this.batches.delete(key)
+    }
+    return orphaned
+  }
+
   release(itemId: string): boolean {
     const keys = this.keysByItem.get(itemId)
     if (!keys) return false

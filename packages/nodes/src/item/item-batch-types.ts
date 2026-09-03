@@ -71,6 +71,8 @@ export type ItemBatchStoreApi = {
   join(candidates: ItemCandidate[], minEntriesForNewBatch: number): ItemBatchEntry[]
   /** Removes the item's instances and reveals nothing (caller reveals). */
   release(itemId: string): boolean
+  /** Drops batches orphaned by a level-subtree remount; returns their items. */
+  pruneDetached(): Set<string>
   has(itemId: string): boolean
   itemIds(): ReadonlySet<string>
   /** Tears down every batch on a level (level deleted / isolation). */

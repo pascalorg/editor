@@ -116,6 +116,15 @@ function runItemBatchFrame(
   const itemIds = getBatchableItemIds()
 
   let changed = changedItems.size > 0
+
+  // A level-subtree remount (thumbnail capture, tool-state swings) replaces
+  // the registry groups: batches die with the old groups and fresh sources
+  // mount with no hold. Detect it by parent identity and re-sew.
+  for (const itemId of store.pruneDetached()) {
+    releaseItem(itemId)
+    staleItems.add(itemId)
+    changed = true
+  }
   for (const itemId of changedItems) {
     releaseItem(itemId)
     staleItems.add(itemId)
@@ -259,6 +268,46 @@ export const ItemBatchSystem = () => {
       ids: () => [...store.itemIds()],
       hovered: () => useViewer.getState().hoveredId ?? null,
       wave: () => ({ ...waveDebug }),
+      releaseAllNow: () => {
+        releaseAll()
+      },
+      staleAllNow: () => {
+        for (const itemId of getBatchableItemIds()) staleItems.add(itemId)
+      },
+      batchRender: () => {
+        const out: Array<{
+          segments: number
+          visibleChain: boolean
+          culled: boolean
+          instances: number
+        }> = []
+        for (const levelId of sceneRegistry.byType.level ?? []) {
+          const root = sceneRegistry.nodes.get(levelId)
+          root?.traverse((child) => {
+            if (child.name !== 'item-batch') return
+            let chain = true
+            let walker: typeof child | null = child
+            let top: typeof child = child
+            while (walker) {
+              if (walker.visible === false) chain = false
+              top = walker
+              walker = walker.parent as typeof child | null
+            }
+            const b = child as unknown as {
+              _multiDrawCount?: number
+              _maxInstanceCount?: number
+              frustumCulled: boolean
+            }
+            out.push({
+              segments: b._multiDrawCount ?? -1,
+              visibleChain: chain && (top as { isScene?: boolean }).isScene === true,
+              culled: b.frustumCulled,
+              instances: b._maxInstanceCount ?? -1,
+            })
+          })
+        }
+        return out
+      },
       sceneCensus: () => {
         let batchMeshes = 0
         let heldSources = 0
