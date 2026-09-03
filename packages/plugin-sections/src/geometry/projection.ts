@@ -1,5 +1,6 @@
 import type { FloorplanGeometry } from '@pascal-app/core'
 import { boundsOf, segmentInsidePolygon } from './math'
+import { CASING, doorGlyph, windowGlyph } from './openings'
 import type { BuildingModel, Opening, PrismSolid, RoofSolid, WallSolid } from './scene-model'
 import {
   BRICK_COURSE,
@@ -166,45 +167,22 @@ function openingPrimitives(
   const u1 = projectU(view, centre[0] + wall.axis[0] * half, centre[1] + wall.axis[1] * half)
   const [uMin, uMax] = u0 <= u1 ? [u0, u1] : [u1, u0]
   if (uMax - uMin < 1e-4) return []
-  const out: FloorplanGeometry[] = [
-    polygonPrimitive(rectPolygon(uMin, drawY(opening.headY), uMax, drawY(opening.sillY)), {
-      fill: PAPER,
-      stroke: INK,
-      strokeWidth: WEIGHT.projected,
-    }),
-  ]
-  if (opening.nodeType === 'window') {
-    // Mullion glyph — the pane divisions the window itself declares.
-    for (let c = 1; c < opening.columns; c++) {
-      const u = uMin + ((uMax - uMin) * c) / opening.columns
-      out.push(
-        line([u, drawY(opening.headY)], [u, drawY(opening.sillY)], {
-          strokeWidth: WEIGHT.detail,
-        }),
-      )
-    }
-    for (let r = 1; r < opening.rows; r++) {
-      const y = drawY(opening.headY + ((opening.sillY - opening.headY) * r) / opening.rows)
-      out.push(line([uMin, y], [uMax, y], { strokeWidth: WEIGHT.detail }))
-    }
-    if (opening.hasSill) {
-      // Sill board — projects 60 mm past the opening on each side.
-      out.push(
-        line([uMin - 0.06, drawY(opening.sillY)], [uMax + 0.06, drawY(opening.sillY)], {
-          strokeWidth: WEIGHT.projected,
-        }),
-      )
-    }
-  } else {
-    // Door: a threshold tick at the sill, no swing (that is a plan symbol).
-    out.push(
-      line([uMin, drawY(opening.sillY)], [uMax, drawY(opening.sillY)], {
-        strokeWidth: WEIGHT.projected,
-      }),
-    )
-  }
-  return out
+  // The opening as the node describes it — sashes, leaves, panels, grids,
+  // casing, sill, threshold (openings.ts). Cased openings draw no leaf.
+  const box = { x0: uMin, x1: uMax, yTop: drawY(opening.headY), yBottom: drawY(opening.sillY) }
+  return opening.nodeType === 'window' ? windowGlyph(opening, box) : doorGlyph(opening, box)
 }
+
+/** Drawing x of an opening's centre on `wall`, for tags. */
+export function openingCentreU(view: Projector, wall: WallSolid, opening: Opening): number {
+  return projectU(
+    view,
+    wall.start[0] + wall.axis[0] * opening.along,
+    wall.start[1] + wall.axis[1] * opening.along,
+  )
+}
+
+export { CASING }
 
 export type ProjectWallOptions = {
   /**
@@ -227,9 +205,12 @@ export function projectWall(
   // The exterior face points AT the viewer when its outward normal runs
   // against the view direction.
   const exteriorFacesViewer = facing * wall.exteriorSign < -0.3
+  // The face is painted in the cladding's own colour when the exterior looks
+  // at the viewer and the material rendition is on; otherwise paper white.
+  const clad = options.finish && exteriorFacesViewer
   const primitives: FloorplanGeometry[] = [
     polygonPrimitive(rectPolygon(extent[0], drawY(wall.topY), extent[1], drawY(wall.baseY)), {
-      fill: PAPER,
+      fill: clad ? (wall.claddingColor ?? PAPER) : PAPER,
       stroke: INK,
       strokeWidth: WEIGHT.projected,
     }),
@@ -272,6 +253,8 @@ export function projectPrism(view: Projector, prism: PrismSolid): ProjectedPiece
 }
 
 const ROOF_SAMPLES = 72
+/** Roof covering colour when the roof carries no material: an assumed asphalt-shingle grey. */
+export const ROOF_ASSUMED = '#9ca3af'
 
 /**
  * Silhouette of a roof segment as seen by `view`: the upper envelope of its
@@ -281,6 +264,10 @@ const ROOF_SAMPLES = 72
 export type ProjectRoofOptions = {
   /** Draw shingle courses inside the roof silhouette (elevations). */
   courses?: boolean
+  /** Colour of the walls' cladding, for a gable end seen head-on. */
+  gableColor?: string | null
+  /** Print the pitch flag (rise:12) on a slope seen from the gable end. */
+  pitchFlag?: boolean
   /**
    * Cladding for a GABLE END seen head-on: the triangle under the rake is the
    * gable wall, not roof surface, so it takes the walls' finish pattern.
@@ -329,19 +316,64 @@ export function projectRoof(
   }
   if (upper.length < 2) return null
   const outline = [...upper, ...lower.reverse()]
+  const halfDepth = (roof.local.maxZ - roof.local.minZ) / 2
+  const rise = roof.ridgeY - roof.plateY
+  // Which face is this? A slope face looks at the viewer when the segment's
+  // down-slope axis runs along the view direction (the same test the fascia
+  // line uses); a gable END is seen when the axis runs across it.
+  const alignment = Math.abs(roof.axisZ[0] * view.forward[0] + roof.axisZ[1] * view.forward[1])
+  const slopeFace = alignment > 0.7
+  const gableEnd = alignment < 0.3 && rise > 0.05
+  const fill = options.courses
+    ? slopeFace
+      ? (roof.color ?? ROOF_ASSUMED)
+      : gableEnd
+        ? (options.gableColor ?? PAPER)
+        : PAPER
+    : PAPER
   const primitives: FloorplanGeometry[] = [
-    polygonPrimitive(outline, { fill: PAPER, stroke: INK, strokeWidth: WEIGHT.projected }),
+    polygonPrimitive(outline, { fill, stroke: INK, strokeWidth: WEIGHT.projected }),
   ]
+  if (options.pitchFlag && gableEnd && halfDepth > 1e-6) {
+    // Pitch flag on the left slope: rise in twelfths over a 12-unit run, from
+    // the segment's pitch angle — the same number the roof plan prints.
+    const riseIn12 = Math.round(Math.tan((roof.pitchDeg * Math.PI) / 180) * 12 * 2) / 2
+    const a = upper[0]!
+    const b = upper[Math.max(1, Math.floor(upper.length * 0.25))]!
+    const mx = (a[0] + b[0]) / 2
+    const my = (a[1] + b[1]) / 2 - 0.35
+    const run = 0.45
+    const riseM = (run * riseIn12) / 12
+    primitives.push(
+      line([mx - run, my], [mx, my], { strokeWidth: WEIGHT.detail }),
+      line([mx, my], [mx, my - riseM], { strokeWidth: WEIGHT.detail }),
+      line([mx - run, my], [mx, my - riseM], { strokeWidth: WEIGHT.detail }),
+      {
+        kind: 'text',
+        x: mx - run / 2,
+        y: my + 0.14,
+        text: '12',
+        fontSize: 0.12,
+        fill: INK,
+        textAnchor: 'middle',
+        dominantBaseline: 'alphabetic',
+      } as FloorplanGeometry,
+      {
+        kind: 'text',
+        x: mx + 0.06,
+        y: my - riseM / 2 + 0.04,
+        text: `${riseIn12}`,
+        fontSize: 0.12,
+        fill: INK,
+        textAnchor: 'start',
+        dominantBaseline: 'alphabetic',
+      } as FloorplanGeometry,
+    )
+  }
   if (options.courses) {
-    const halfDepth = (roof.local.maxZ - roof.local.minZ) / 2
-    const rise = roof.ridgeY - roof.plateY
     const plateY = drawY(roof.plateY)
     // The region between the silhouette's top edge and the plate line.
     const aboveWalls: Vec2[] = [...upper, [upper[upper.length - 1]![0], plateY], [upper[0]![0], plateY]]
-    // Which face is this? A slope face looks at the viewer when the segment's
-    // down-slope axis runs along the view direction (the same test the fascia
-    // line uses); a gable END is seen when the axis runs across it.
-    const alignment = Math.abs(roof.axisZ[0] * view.forward[0] + roof.axisZ[1] * view.forward[1])
     if (rise > 0.05 && alignment > 0.7) {
       // Shingle exposure foreshortened by the pitch: a course seen in
       // elevation is `exposure · cos(pitch)` tall.
@@ -386,12 +418,12 @@ export function levelDatums(model: BuildingModel, uMin: number, uMax: number): F
     )
     out.push({
       kind: 'text',
-      x: uMax + overshoot,
-      y: y - 0.06,
+      x: uMax + overshoot + 0.08,
+      y: y + 0.05,
       text: `${level.ordinal === 0 ? 'FINISH FLOOR' : level.name.toUpperCase()}   ${formatFeetInches(level.baseY)}`,
       fontSize: 0.15,
       fill: INK,
-      textAnchor: 'end',
+      textAnchor: 'start',
       dominantBaseline: 'alphabetic',
     } as FloorplanGeometry)
   }
@@ -421,12 +453,12 @@ export function roofDatums(model: BuildingModel, uMin: number, uMax: number): Fl
       )
       out.push({
         kind: 'text',
-        x: uMax + overshoot,
-        y: y - 0.06,
+        x: uMax + overshoot + 0.08,
+        y: y + 0.05,
         text: `${name}   ${formatFeetInches(elevation)}`,
         fontSize: 0.15,
         fill: INK,
-        textAnchor: 'end',
+        textAnchor: 'start',
         dominantBaseline: 'alphabetic',
       } as FloorplanGeometry)
     }

@@ -470,7 +470,7 @@ describe('buildElevationDrawing', () => {
   test('the south elevation shows the door at its true size', () => {
     const drawing = buildElevationDrawing(scene(), 'south')
     const door = polygons(drawing.primitives)
-      .filter((p) => p.fill === '#ffffff')
+      .filter((p) => p.fill === '#ffffff' || p.fill === '#f1f5f9')
       .map(extent)
       .find(
         (e) => Math.abs(e.x1 - e.x0 - DOOR_WIDTH) < 1e-6 && Math.abs(e.top - DOOR_HEIGHT) < 1e-6,
@@ -482,7 +482,7 @@ describe('buildElevationDrawing', () => {
   test('the north elevation shows the window at its true size and sill', () => {
     const drawing = buildElevationDrawing(scene(), 'north')
     const window = polygons(drawing.primitives)
-      .filter((p) => p.fill === '#ffffff')
+      .filter((p) => p.fill === '#ffffff' || p.fill === '#f1f5f9')
       .map(extent)
       .find(
         (e) =>

@@ -15,7 +15,10 @@ import {
   projectWall,
   roofDatums,
 } from './projection'
+import { projectItem } from './items'
 import { FINISH_LABEL, type FinishKind } from './materials'
+import { openingTag } from './openings'
+import { openingCentreU } from './projection'
 import { type BuildingModel, buildBuildingModel } from './scene-model'
 import { INK, label, line, WEIGHT } from './style'
 import { type DrawingResult, type DrawingScene, EMPTY_BOUNDS, type Vec2 } from './types'
@@ -121,6 +124,9 @@ export function buildElevationDrawing(
 
   const projected: ProjectedPiece[] = []
   const finishesUsed = new Map<FinishKind | 'unspecified', number>()
+  const finishColors = new Map<FinishKind, string>()
+  const colorCounts = new Map<string, number>()
+  const tags: FloorplanGeometry[] = []
   for (const wall of built.walls) {
     const piece = projectWall(view, wall, { finish: true })
     if (!piece) continue
@@ -129,7 +135,22 @@ export function buildElevationDrawing(
     if (facing * wall.exteriorSign < -0.3) {
       const key = wall.exteriorFinish ?? 'unspecified'
       finishesUsed.set(key, (finishesUsed.get(key) ?? 0) + 1)
+      if (wall.exteriorFinish && wall.claddingColor) {
+        finishColors.set(wall.exteriorFinish, wall.claddingColor)
+        colorCounts.set(wall.claddingColor, (colorCounts.get(wall.claddingColor) ?? 0) + 1)
+      }
+      // Mark tags over the openings on the faces that look at the viewer —
+      // the same D### / W### the schedule prints.
+      for (const opening of wall.openings) {
+        tags.push(...openingTag(opening, openingCentreU(view, wall, opening), drawY(opening.headY) - 0.09))
+      }
     }
+  }
+  // Whatever is placed in the scene, where it stands: trees, the condenser,
+  // furniture behind glass — boxes at their real size, hidden by nearer walls.
+  for (const item of built.items) {
+    const piece = projectItem(view, item)
+    if (piece) projected.push(piece)
   }
   for (const prism of built.prisms) {
     // A slab's edge is only worth showing where it is exposed; drawing every
@@ -148,9 +169,17 @@ export function buildElevationDrawing(
       gableCount = count
     }
   }
+  let gableColor: string | null = null
+  let gableColorCount = 0
+  for (const [color, count] of colorCounts) {
+    if (count > gableColorCount) {
+      gableColor = color
+      gableColorCount = count
+    }
+  }
   const roofDetail: FloorplanGeometry[] = []
   for (const roof of built.roofs) {
-    const piece = projectRoof(view, roof, { courses: true, gableFinish })
+    const piece = projectRoof(view, roof, { courses: true, gableFinish, gableColor, pitchFlag: true })
     if (!piece) continue
     projected.push(piece)
     // Fascia / eave line — only meaningful when the eave edge runs across the
@@ -201,10 +230,31 @@ export function buildElevationDrawing(
     )
   }
   const keyTop = -grade.minElevation + 0.55
-  const finishKey: FloorplanGeometry[] = keyLines.flatMap((text, i) => [
-    label(bodyBounds.minX, keyTop + i * 0.22, `${i + 1}`, { fontSize: 0.14, fontWeight: 700 }),
-    label(bodyBounds.minX + 0.3, keyTop + i * 0.22, text, { fontSize: 0.14 }),
-  ])
+  const keyFinishes = [...finishesUsed.entries()].sort((a, b) => b[1] - a[1]).map(([f]) => f)
+  const finishKey: FloorplanGeometry[] = keyLines.flatMap((text, i) => {
+    const finish = keyFinishes[i]
+    const swatch =
+      finish && finish !== 'unspecified' ? finishColors.get(finish) ?? null : i === keyLines.length - 1 && built.roofs.length > 0 ? (built.roofs[0]?.color ?? null) : null
+    const y = keyTop + i * 0.22
+    return [
+      label(bodyBounds.minX, y, `${i + 1}`, { fontSize: 0.14, fontWeight: 700 }),
+      ...(swatch
+        ? [
+            {
+              kind: 'rect',
+              x: bodyBounds.minX + 0.26,
+              y: y - 0.13,
+              width: 0.18,
+              height: 0.14,
+              fill: swatch,
+              stroke: INK,
+              strokeWidth: WEIGHT.detail,
+            } as FloorplanGeometry,
+          ]
+        : []),
+      label(bodyBounds.minX + (swatch ? 0.52 : 0.3), y, text, { fontSize: 0.14 }),
+    ]
+  })
   if (keyLines.length > 0) {
     finishKey.unshift(
       label(bodyBounds.minX, keyTop - 0.24, 'EXTERIOR FINISH KEY', { fontSize: 0.15, fontWeight: 700 }),
@@ -216,9 +266,18 @@ export function buildElevationDrawing(
     ...roofDatums(built, bodyBounds.minX, bodyBounds.maxX),
     ...body,
     ...grade.primitives,
+    ...tags,
     ...finishKey,
   ]
-  const bounds = boundsFromPrimitives(primitives) ?? EMPTY_BOUNDS
+  const raw = boundsFromPrimitives(primitives) ?? EMPTY_BOUNDS
+  // Text has no geometric extent here: leave room for the datum labels
+  // (right), the GRADE label (left) and the finish key (below).
+  const bounds = {
+    minX: raw.minX - 1.6,
+    maxX: raw.maxX + 2.6,
+    minY: raw.minY - 0.3,
+    maxY: raw.maxY + 0.5,
+  }
   return {
     primitives,
     bounds: padBounds(bounds, 0.25),

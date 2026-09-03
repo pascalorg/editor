@@ -171,3 +171,22 @@ Known gaps carried honestly (each is printed on the paper where it applies):
 - 2D editor view follows the 3D camera (navigation sync); "Align view to north" + wheel to reset.
 - Roof material is assumed asphalt shingle until the roof material maps to a finish kind.
 - `apps/editor` `tsc` has a pre-existing error from plugin-bones' nested copy of `@pascal-app/core`.
+
+### Later on 2026-09-03 — elevations and sections as-built, print fidelity
+
+- Elevations and sections now read the model's materials and openings: wall faces fill with the
+  cladding's catalog colour (painted exterior slot first, then the assembly finish), roofs with the
+  roof material's colour (assumed shingle grey when none), and every door and window is drawn from
+  its own node — sash count and meeting rail for hung/sliding windows, dashed swing "V" toward the
+  hinge for casements/awnings, muntin grids from `columnRatios`/`rowRatios`, casing and sill, door
+  leaves with their panel/glass segments, garage sections, knobs, thresholds — tagged with the same
+  D### / W### marks the schedules print (`plugin-sections/geometry/openings.ts`).
+- Placed items (furniture, fixtures, appliances, trees, the condenser) project into elevations and
+  sections as labelled boxes at their real size and place; plants draw as trunk + canopy. This is a
+  stand-in for the GLB silhouette, stated in the module header (`geometry/items.ts`).
+- Cut cladding layers in sections take the cladding colour; walls beyond the cut show their doors and
+  windows; a pitch flag (rise:12 from the segment's pitch) marks gable-end views.
+- Print: `bun scripts/demo/print-set.ts` writes the set headlessly through the same composer and
+  pdfkit path the rail uses, so pages can be inspected. It found and fixed two print-only defects:
+  `transparent` fills painted black (the furniture sprites' hit polygons) and datum labels clipped at
+  the viewport edge. Sprites embed in the PDF; FileReader-less environments base64 them directly.

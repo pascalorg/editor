@@ -186,8 +186,11 @@ function paintStyledGeometry(
   geometry: StyledGeometry,
   context: RenderContext,
 ): void {
-  const fill = geometry.fill && geometry.fill !== 'none' ? geometry.fill : null
-  const stroke = geometry.stroke && geometry.stroke !== 'none' ? geometry.stroke : null
+  // SVG's `transparent` / `none` mean "no paint" — pdfkit would read either
+  // as a colour name it does not know and paint black (the furniture sprites'
+  // hit-target polygons printed as black boxes).
+  const fill = isPaint(geometry.fill) ? (geometry.fill as string) : null
+  const stroke = isPaint(geometry.stroke) ? (geometry.stroke as string) : null
   const opacity = geometry.opacity ?? 1
   const fillOpacity = (geometry.fillOpacity ?? 1) * opacity
   const strokeOpacity = (geometry.strokeOpacity ?? 1) * opacity
@@ -209,6 +212,12 @@ function paintStyledGeometry(
   if (fill && stroke) raw.fillAndStroke(fill, stroke)
   else if (fill) raw.fill(fill)
   else if (stroke) raw.stroke(stroke)
+}
+
+function isPaint(value: unknown): boolean {
+  if (typeof value !== 'string') return false
+  const v = value.trim().toLowerCase()
+  return v !== '' && v !== 'none' && v !== 'transparent' && !v.startsWith('url(') && !v.startsWith('var(')
 }
 
 function resolveStrokeWidth(geometry: StyledGeometry, context: RenderContext): number {
@@ -645,7 +654,18 @@ async function drawImage(
   }
 }
 
-function blobToDataUrl(blob: Blob): Promise<string> {
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  // FileReader exists only in browsers; the headless export (scripts/demo/
+  // print-set.ts) runs the same renderer under Bun, where the bytes are
+  // base64-encoded directly instead.
+  if (typeof FileReader === 'undefined') {
+    const bytes = new Uint8Array(await blob.arrayBuffer())
+    let binary = ''
+    for (let i = 0; i < bytes.length; i += 0x8000) {
+      binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+    }
+    return `data:${blob.type || 'image/png'};base64,${btoa(binary)}`
+  }
   return new Promise((resolve, reject) => {
     const reader = new FileReader()
     reader.onerror = () => reject(reader.error)

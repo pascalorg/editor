@@ -1,4 +1,5 @@
 import type { FloorplanGeometry } from '@pascal-app/core'
+import { projectItem } from './items'
 import { padBounds, segmentInsidePolygon } from './math'
 import {
   boundsFromPrimitives,
@@ -125,7 +126,11 @@ function cutWall(spec: SectionSpec, view: Projector, wall: WallSolid): Floorplan
       for (const band of bands) {
         out.push(
           polygonPrimitive(rectPolygon(band.u0, drawY(top), band.u1, drawY(bottom)), {
-            fill: LAYER_FILL[band.layer.role],
+            // The cut cladding layer takes the cladding's real colour.
+            fill:
+              band.layer.role === 'exterior-finish' && wall.claddingColor
+                ? wall.claddingColor
+                : LAYER_FILL[band.layer.role],
             stroke: INK,
             strokeWidth: band.layer.role === 'framing' ? WEIGHT.cut : WEIGHT.cutLayer,
             strokeLinejoin: 'miter',
@@ -252,7 +257,9 @@ export function buildSectionDrawing(
 
   const projected: ProjectedPiece[] = []
   for (const wall of built.walls) {
-    const piece = projectWall(view, wall)
+    // Beyond the cut, walls read with their doors and windows; an exterior
+    // face seen through the section is clad like the elevation shows it.
+    const piece = projectWall(view, wall, { finish: true })
     if (piece) projected.push(piece)
   }
   for (const prism of built.prisms) {
@@ -261,6 +268,13 @@ export function buildSectionDrawing(
   }
   for (const roof of built.roofs) {
     const piece = projectRoof(view, roof)
+    if (piece) projected.push(piece)
+  }
+  // Furniture, fixtures and appliances beyond the cut plane, within the
+  // section depth — the reference set shows the toilet, tub and cabinets in
+  // its sections, and so does this one.
+  for (const item of built.items) {
+    const piece = projectItem(view, item)
     if (piece) projected.push(piece)
   }
 
@@ -293,7 +307,10 @@ export function buildSectionDrawing(
   }
   return {
     primitives,
-    bounds: padBounds(bounds, 0.25),
+    bounds: padBounds(
+      { minX: bounds.minX - 1.6, maxX: bounds.maxX + 2.6, minY: bounds.minY - 0.3, maxY: bounds.maxY + 0.3 },
+      0.25,
+    ),
     // bounds.y is negated elevation, so min/max swap back here.
     elevationRange: { min: -bounds.maxY, max: -bounds.minY },
     warnings,

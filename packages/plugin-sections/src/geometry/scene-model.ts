@@ -8,7 +8,12 @@ import {
   decodeTerrainField,
   getActiveRoofHeight,
   getDutchRoofMetrics,
+  getEffectiveRoofSurfaceMaterial,
   getLevelElevations,
+  getMaterialPresetByRef,
+  getScaledDimensions,
+  type ItemNode,
+  parseMaterialRef,
   getRoofSegmentVisibleTopBounds,
   getSegmentSlopeFrame,
   getWallPlanFootprint,
@@ -22,8 +27,10 @@ import {
   surfaceHeightAt,
   type WallAssemblyLayer,
   type WallNode,
+  wallAssemblyFinishRef,
   type WindowNode,
 } from '@pascal-app/core'
+import { resolveMarkDetail } from '@pascal-app/editor'
 import { rotateY, unrotateY } from './math'
 import type { Nodes, Vec2 } from './types'
 
@@ -85,6 +92,12 @@ export function exteriorFinishOf(
 // Solids
 // ---------------------------------------------------------------------------
 
+export type DoorSegmentSpec = {
+  type: 'panel' | 'glass' | 'empty'
+  heightRatio: number
+  columnRatios: number[]
+}
+
 export type Opening = {
   id: string
   nodeType: 'door' | 'window'
@@ -99,6 +112,45 @@ export type Opening = {
   /** Pane divisions, for the elevation mullion glyph. */
   columns: number
   rows: number
+  /** The schedule's mark for this opening (D101 / W101 …), '' when unknown. */
+  mark: string
+  /** 'opening' = a cased opening without a leaf / sash. */
+  openingKind: 'door' | 'window' | 'opening'
+  openingShape: string
+  construction: 'framed' | 'masonry'
+  frameThickness: number
+  columnRatios: number[]
+  rowRatios: number[]
+  // windows
+  windowType?: string
+  casementStyle?: 'single' | 'french'
+  hingesSide?: 'left' | 'right'
+  awningDirection?: 'up' | 'down'
+  // doors
+  doorType?: string
+  leafCount?: number
+  segments?: DoorSegmentSpec[]
+  handle?: boolean
+  handleHeight?: number
+  handleSide?: 'left' | 'right'
+  threshold?: boolean
+}
+
+/**
+ * A placed item (furniture, fixture, appliance, tree …) as an oriented
+ * footprint box: world plan corners plus base / top elevations. Items nested
+ * inside other items are skipped (their frame is the parent's mesh).
+ */
+export type ItemSolid = {
+  kind: 'item'
+  id: string
+  name: string
+  assetId: string
+  category: string
+  polygon: Vec2[]
+  baseY: number
+  topY: number
+  levelId: string | null
 }
 
 export type WallSolid = {
@@ -124,6 +176,12 @@ export type WallSolid = {
    * blank and listed as "no cladding specified" in the finish key.
    */
   exteriorFinish: 'siding' | 'stucco' | 'brick' | 'stone' | 'fiber-cement' | 'none' | null
+  /**
+   * The colour the cladding renders in 3D — the painted exterior slot's
+   * catalog colour, else the assembly finish's catalog colour — or null when
+   * neither is known (drawn on white).
+   */
+  claddingColor: string | null
   baseY: number
   topY: number
   openings: Opening[]
@@ -161,6 +219,10 @@ export type RoofSolid = {
   ridgeY: number
   /** Plate line — top of the segment's own wall band. */
   plateY: number
+  /** The roof covering's catalog colour when painted, else null (assumed shingle grey). */
+  color: string | null
+  /** The segment's pitch, degrees — the roof plan's "7:12" comes from the same field. */
+  pitchDeg: number
 }
 
 export type LevelInfo = {
@@ -175,6 +237,7 @@ export type BuildingModel = {
   walls: WallSolid[]
   prisms: PrismSolid[]
   roofs: RoofSolid[]
+  items: ItemSolid[]
   levels: LevelInfo[]
   /** World elevation of the ground at a plan point. */
   gradeAt: (x: number, z: number) => number
@@ -197,7 +260,39 @@ function findLevelId(node: AnyNode, nodes: Nodes): string | null {
   return null
 }
 
-function collectOpenings(wall: WallSolid, nodes: Nodes, warnings: string[]): Opening[] {
+/** Catalog colour behind a `library:` material ref, else null. */
+function libraryColor(ref: string | null | undefined): string | null {
+  if (!ref || parseMaterialRef(ref)?.kind !== 'library') return null
+  const preset = getMaterialPresetByRef(ref) as
+    | { previewColor?: string; mapProperties?: { color?: string } }
+    | null
+  return preset?.previewColor ?? preset?.mapProperties?.color ?? null
+}
+
+/** The 3D exterior face colour: painted exterior slot first, then the assembly cladding. */
+export function claddingColorOf(wall: WallNode): string | null {
+  const slots = (wall.slots ?? {}) as Record<string, string>
+  const painted = slots.exterior ?? slots.middleExterior ?? null
+  return libraryColor(painted) ?? libraryColor(wallAssemblyFinishRef(wall))
+}
+
+function roofColorOf(roof: RoofNode, segment: RoofSegmentNode): string | null {
+  const own = (segment as { topMaterialPreset?: string; materialPreset?: string }).topMaterialPreset
+    ?? (segment as { materialPreset?: string }).materialPreset
+  const spec = getEffectiveRoofSurfaceMaterial(roof, 'top')
+  return (
+    libraryColor(own) ??
+    libraryColor(spec.materialPreset) ??
+    ((spec.material as { properties?: { color?: string } } | undefined)?.properties?.color ?? null)
+  )
+}
+
+function collectOpenings(
+  wall: WallSolid,
+  nodes: Nodes,
+  warnings: string[],
+  marks: ReadonlyMap<string, string>,
+): Opening[] {
   const openings: Opening[] = []
   for (const node of Object.values(nodes)) {
     if (!node) continue
@@ -217,19 +312,137 @@ function collectOpenings(wall: WallSolid, nodes: Nodes, warnings: string[]): Ope
     const centerY = hosted.position[1]
     const width = hosted.width
     const height = hosted.height
+    const isDoor = node.type === 'door'
+    const door = hosted as DoorNode
+    const win = hosted as WindowNode
+    const loose = hosted as unknown as Record<string, unknown>
+    const kind = loose.openingKind === 'opening' ? 'opening' : isDoor ? 'door' : 'window'
     openings.push({
       id: hosted.id,
-      nodeType: node.type === 'door' ? 'door' : 'window',
+      nodeType: isDoor ? 'door' : 'window',
       along,
       width,
       sillY: wall.baseY + centerY - height / 2,
       headY: wall.baseY + centerY + height / 2,
-      hasSill: node.type === 'window' && (hosted as WindowNode).sill !== false,
-      columns: node.type === 'window' ? ((hosted as WindowNode).columnRatios?.length ?? 1) : 1,
-      rows: node.type === 'window' ? ((hosted as WindowNode).rowRatios?.length ?? 1) : 1,
+      hasSill: !isDoor && win.sill !== false,
+      columns: !isDoor ? (win.columnRatios?.length ?? 1) : 1,
+      rows: !isDoor ? (win.rowRatios?.length ?? 1) : 1,
+      mark: marks.get(hosted.id) ?? (typeof loose.mark === 'string' ? loose.mark : ''),
+      openingKind: kind,
+      openingShape: typeof loose.openingShape === 'string' ? (loose.openingShape as string) : 'rectangle',
+      construction: loose.constructionType === 'masonry' ? 'masonry' : 'framed',
+      frameThickness: typeof loose.frameThickness === 'number' ? (loose.frameThickness as number) : 0.05,
+      columnRatios: !isDoor ? [...(win.columnRatios ?? [1])] : [1],
+      rowRatios: !isDoor ? [...(win.rowRatios ?? [1])] : [1],
+      ...(isDoor
+        ? {
+            doorType: door.doorType,
+            leafCount: door.leafCount,
+            segments: (door as { segments?: DoorSegmentSpec[] }).segments?.map((s) => ({
+              type: s.type,
+              heightRatio: s.heightRatio,
+              columnRatios: [...(s.columnRatios ?? [1])],
+            })),
+            handle: door.handle,
+            handleHeight: door.handleHeight,
+            handleSide: door.handleSide,
+            threshold: door.threshold,
+          }
+        : {
+            windowType: win.windowType,
+            casementStyle: win.casementStyle,
+            hingesSide: win.hingesSide,
+            awningDirection: win.awningDirection,
+          }),
     })
   }
   return openings.sort((a, b) => a.along - b.along)
+}
+
+// Plan-space rotation, the floor plan's convention (`nodes/src/item/floorplan.ts`).
+function rotateVec(x: number, y: number, angle: number): Vec2 {
+  const c = Math.cos(angle)
+  const s = Math.sin(angle)
+  return [x * c + y * s, -x * s + y * c]
+}
+
+/**
+ * Every placed item as an oriented footprint box. Level-parented items carry
+ * level-local `position` / `rotation`; wall-hosted items carry a wall-local
+ * `[along, height, offset]` and the wall's own yaw — the same maths the floor
+ * plan uses, so an item lands on paper where it lands in plan.
+ */
+function collectItems(nodes: Nodes, elevations: Map<string, { baseY: number }>, warnings: string[]): ItemSolid[] {
+  const items: ItemSolid[] = []
+  let nested = 0
+  for (const node of Object.values(nodes)) {
+    if (!isType<ItemNode>(node, 'item')) continue
+    if (node.visible === false) continue
+    const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+    const [w, h, d] = getScaledDimensions(node)
+    if (!(w > 1e-4 && d > 1e-4 && h > 1e-4)) continue
+    let cx: number
+    let cz: number
+    let rotation: number
+    let baseY: number
+    const levelId = findLevelId(node, nodes)
+    const levelBase = elevations.get(levelId ?? '')?.baseY ?? 0
+    if (parent?.type === 'wall') {
+      const wall = parent as WallNode
+      const wallRotation = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+      const zLocal =
+        node.asset.attachTo === 'wall-side'
+          ? ((wall.thickness ?? 0.1) / 2) * (node.side === 'front' ? 1 : -1)
+          : node.position[2]
+      const [ox, oz] = rotateVec(node.position[0], zLocal, wallRotation)
+      cx = wall.start[0] + ox
+      cz = wall.start[1] + oz
+      rotation = wallRotation + (node.rotation[1] ?? 0)
+      if (node.asset.attachTo === 'wall-side') {
+        const [dx, dz] = rotateVec(0, d / 2, rotation)
+        cx += dx
+        cz += dz
+      }
+      baseY = levelBase + (wall.supportOffset ?? 0) + node.position[1]
+    } else if (parent?.type === 'item' || parent?.type === 'shelf') {
+      nested++
+      continue
+    } else if (parent?.type === 'roof-segment' || parent?.type === 'block') {
+      nested++
+      continue
+    } else {
+      cx = node.position[0]
+      cz = node.position[2]
+      rotation = node.rotation[1] ?? 0
+      baseY = levelBase + node.position[1]
+    }
+    const corners: Vec2[] = (
+      [
+        [-w / 2, -d / 2],
+        [w / 2, -d / 2],
+        [w / 2, d / 2],
+        [-w / 2, d / 2],
+      ] as Vec2[]
+    ).map(([x, z]) => {
+      const [rx, rz] = rotateVec(x, z, rotation)
+      return [cx + rx, cz + rz] as Vec2
+    })
+    items.push({
+      kind: 'item',
+      id: node.id,
+      name: node.name ?? node.asset.name ?? 'item',
+      assetId: node.asset.id,
+      category: node.asset.category,
+      polygon: corners,
+      baseY,
+      topY: baseY + h,
+      levelId,
+    })
+  }
+  if (nested > 0) {
+    warnings.push(`${nested} item(s) hosted on other items / roof faces are not drawn (their frame is the host mesh).`)
+  }
+  return items
 }
 
 /**
@@ -338,6 +551,8 @@ function collectRoof(
       eaveY: originY + segment.wallHeight - frame.sinTheta * segment.overhang,
       ridgeY: originY + segment.wallHeight + getActiveRoofHeight(segment),
       plateY: originY + segment.wallHeight,
+      color: roofColorOf(roof, segment),
+      pitchDeg: typeof segment.pitch === 'number' ? segment.pitch : 0,
     })
   }
   return solids
@@ -396,6 +611,15 @@ export function buildBuildingModel(nodes: Nodes): BuildingModel {
   for (const [levelId, levelWalls] of wallsByLevel) {
     const baseY = elevations.get(levelId)?.baseY ?? 0
     const miters = calculateLevelMiters(levelWalls)
+    // The schedule's marks, so the tags on paper and the schedule rows agree.
+    let marks: ReadonlyMap<string, string> = new Map()
+    if (levelId !== '__orphan__') {
+      try {
+        marks = resolveMarkDetail(nodes as never, levelId as never).marks
+      } catch {
+        warnings.push(`Opening marks could not be resolved for level ${levelId}.`)
+      }
+    }
     for (const wall of levelWalls) {
       const polygon = getWallPlanFootprint(wall, miters).map(
         (point) => [point.x, point.y] as const,
@@ -432,12 +656,13 @@ export function buildBuildingModel(nodes: Nodes): BuildingModel {
         exteriorSign: assembly.exteriorSideResolved,
         layers: assembly.layers,
         exteriorFinish: exteriorFinishOf(wall),
+        claddingColor: claddingColorOf(wall),
         baseY: baseY + (wall.supportOffset ?? 0),
         topY: baseY + (wall.supportOffset ?? 0) + (wall.height ?? DEFAULT_WALL_HEIGHT),
         openings: [],
         levelId: levelId === '__orphan__' ? null : levelId,
       }
-      solid.openings = collectOpenings(solid, nodes, warnings)
+      solid.openings = collectOpenings(solid, nodes, warnings, marks)
       walls.push(solid)
     }
   }
@@ -491,5 +716,6 @@ export function buildBuildingModel(nodes: Nodes): BuildingModel {
     )
   }
 
-  return { walls, prisms, roofs, levels, gradeAt: terrainSampler(nodes, warnings), warnings }
+  const items = collectItems(nodes, elevations, warnings)
+  return { walls, prisms, roofs, items, levels, gradeAt: terrainSampler(nodes, warnings), warnings }
 }
