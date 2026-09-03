@@ -32,7 +32,7 @@ import {
   useXRPlayerMode,
   XR_PLAYER_MODES,
 } from '@pascal-app/viewer'
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import { useMemo, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
   collectXRSettingRows,
@@ -330,7 +330,9 @@ function DefaultSettings() {
 }
 
 export function XRSettingsPanel() {
-  const [pagination, setPagination] = useState({ key: '', page: 0 })
+  const paginationKey = useXRWandPanelSettings((state) => state.settingsContextKey)
+  const paginationPage = useXRWandPanelSettings((state) => state.settingsPage)
+  const setSettingsNavigation = useXRWandPanelSettings((state) => state.setSettingsNavigation)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
   const toolDefaults = useEditor((state) =>
@@ -360,9 +362,9 @@ export function XRSettingsPanel() {
   )
   const rows = useMemo(() => (context ? collectXRSettingRows(context) : []), [context])
   const contextKey = context?.key ?? 'default'
-  const page = pagination.key === contextKey ? pagination.page : 0
+  const page = paginationKey === contextKey ? paginationPage : 0
   const current = getPage(rows, page, ROWS_PER_PAGE)
-  const setPage = (nextPage: number) => setPagination({ key: contextKey, page: nextPage })
+  const setPage = (nextPage: number) => setSettingsNavigation(contextKey, nextPage)
 
   const update = (row: XRSettingFieldRow, value: unknown) => {
     if (!context) return

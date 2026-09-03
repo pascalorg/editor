@@ -7,6 +7,7 @@ import { useEffect } from 'react'
 import FrameLimiter from '../components/viewer/frame-limiter'
 import { applyViewerCameraClipping, viewerCameraClipping } from '../components/viewer/viewer-camera'
 import {
+  advanceXRFrameWithoutDesktopRender,
   renderImmersiveXRFrame,
   shouldPauseFrameLimiterForXR,
   stopXRFrameLoop,
@@ -60,8 +61,9 @@ function XRSessionBinding({ session, store }: { session?: XRSession; store: View
         (time, frame) => {
           if (!frame) return
           const frameState = rootStore.getState()
-          advance(time, true, frameState, frame)
-
+          advanceXRFrameWithoutDesktopRender(frameState, () => {
+            advance(time, true, frameState, frame)
+          })
           renderImmersiveXRFrame(renderer, frameState.scene, frameState.camera)
         },
         {

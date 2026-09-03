@@ -18,8 +18,9 @@ import {
   paintScopeLabel,
   useEditor,
 } from '@pascal-app/editor'
-import { useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useMemo, useRef, useSyncExternalStore } from 'react'
 import { activatePaintMode } from '@/lib/build-palette'
+import { useXRWandPanelSettings } from '@/lib/xr/wand-panel-settings'
 import { PanelIcon } from './panel-icon'
 import { getPage } from './panel-layout'
 import { PanelHeader, SpatialButton } from './spatial-controls'
@@ -107,8 +108,9 @@ function MaterialTile({
 }
 
 export function XRPaintPanel() {
-  const [categoryIndex, setCategoryIndex] = useState(0)
-  const [page, setPage] = useState(0)
+  const categoryIndex = useXRWandPanelSettings((state) => state.paintCategoryIndex)
+  const page = useXRWandPanelSettings((state) => state.paintPage)
+  const setPaintNavigation = useXRWandPanelSettings((state) => state.setPaintNavigation)
   const mode = useEditor((state) => state.mode)
   const activePaintMaterial = useEditor((state) => state.activePaintMaterial)
   const activePaintTarget = useEditor((state) => state.activePaintTarget)
@@ -152,10 +154,10 @@ export function XRPaintPanel() {
 
   const changeCategory = (direction: -1 | 1) => {
     if (availableCategories.length < 2) return
-    setCategoryIndex(
+    setPaintNavigation(
       (activeCategoryIndex + direction + availableCategories.length) % availableCategories.length,
+      0,
     )
-    setPage(0)
   }
 
   return (
@@ -299,7 +301,7 @@ export function XRPaintPanel() {
           <SpatialButton
             disabled={current.currentPage === 0}
             name="xr-paint-previous-page"
-            onClick={() => setPage(current.currentPage - 1)}
+            onClick={() => setPaintNavigation(activeCategoryIndex, current.currentPage - 1)}
             position={[-0.28, 0, 0]}
             size={[0.075, 0.055]}
           >
@@ -332,7 +334,7 @@ export function XRPaintPanel() {
           <SpatialButton
             disabled={current.currentPage >= current.pageCount - 1}
             name="xr-paint-next-page"
-            onClick={() => setPage(current.currentPage + 1)}
+            onClick={() => setPaintNavigation(activeCategoryIndex, current.currentPage + 1)}
             position={[0.28, 0, 0]}
             size={[0.075, 0.055]}
           >

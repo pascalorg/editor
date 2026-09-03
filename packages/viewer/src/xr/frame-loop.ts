@@ -32,6 +32,20 @@ type XRUnionCamera = {
   layers?: { mask: number }
 }
 
+type R3FFrameState = {
+  internal: { priority: number }
+}
+
+export function advanceXRFrameWithoutDesktopRender(state: R3FFrameState, advanceFrame: () => void) {
+  const renderPriority = state.internal.priority
+  state.internal.priority = renderPriority + 1
+  try {
+    advanceFrame()
+  } finally {
+    state.internal.priority = renderPriority
+  }
+}
+
 export function unifyXRStereoCameraLayers(camera: XRUnionCamera) {
   const mask = camera.layers?.mask
   if (mask === undefined) return

@@ -22,6 +22,22 @@ describe('isDirectR3FPointerTarget', () => {
     expect(isR3FPointerTarget(wallCollisionMesh)).toBe(true)
   })
 
+  test('keeps an explicit collision child ahead of its passive rendered parent', () => {
+    const passiveWallBody = new Mesh()
+    const wallCollisionMesh = new Mesh()
+    const interactiveWrapper = new Group()
+
+    ;(interactiveWrapper as Group & { __r3f: { eventCount: number } }).__r3f = {
+      eventCount: 6,
+    }
+    ;(wallCollisionMesh as Mesh & { __r3f: { eventCount: number } }).__r3f = { eventCount: 6 }
+    passiveWallBody.add(wallCollisionMesh)
+    interactiveWrapper.add(passiveWallBody)
+
+    expect(isR3FPointerTarget(passiveWallBody)).toBe(false)
+    expect(isR3FPointerTarget(wallCollisionMesh)).toBe(true)
+  })
+
   test('inherits pointer handlers for nested imported meshes', () => {
     const interactiveItemWrapper = new Group()
     const importedGroup = new Group()

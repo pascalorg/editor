@@ -2,7 +2,7 @@
 
 import { type SiteNode, type TerrainVerb, useScene } from '@pascal-app/core'
 import { brushRadiusRange, flattenSite, resetSiteTerrain, useEditor } from '@pascal-app/editor'
-import { useState } from 'react'
+import { useXRWandPanelSettings } from '@/lib/xr/wand-panel-settings'
 import { getPage } from './panel-layout'
 import {
   PageArrows,
@@ -16,7 +16,8 @@ const TERRAIN_VERBS: TerrainVerb[] = ['raise', 'lower', 'flatten', 'smooth']
 const ROWS_PER_PAGE = 5
 
 export function XRTerrainSettingsPanel() {
-  const [page, setPage] = useState(0)
+  const page = useXRWandPanelSettings((state) => state.terrainPage)
+  const setPage = useXRWandPanelSettings((state) => state.setTerrainPage)
   const verb = useEditor((state) => state.terrainVerb)
   const setVerb = useEditor((state) => state.setTerrainVerb)
   const brush = useEditor((state) => state.terrainBrush)

@@ -2,7 +2,7 @@
 
 import { type RoofType, RoofType as RoofTypeSchema, useRegistryVersion } from '@pascal-app/core'
 import { useEditor, useFloorplanMode } from '@pascal-app/editor'
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import {
   activateBuildTool,
   activateModularCabinetTool,
@@ -17,6 +17,7 @@ import {
   XR_MEP_ITEMS,
 } from '@/lib/build-palette'
 import { ROOF_TYPE_OPTIONS } from '@/lib/build-tab-state'
+import { useXRWandPanelSettings } from '@/lib/xr/wand-panel-settings'
 import { PanelIcon } from './panel-icon'
 import { getPageWithPinnedFirst } from './panel-layout'
 import { PanelHeader, SpatialButton } from './spatial-controls'
@@ -25,7 +26,6 @@ import { XR_WAND_THEME } from './theme'
 
 const ITEMS_PER_PAGE = 9
 
-type BuildSection = 'main' | 'mep' | 'roof'
 type PaletteEntry = {
   active: boolean
   iconSrc: string
@@ -64,8 +64,9 @@ function PaletteTile({ entry, index }: { entry: PaletteEntry; index: number }) {
 }
 
 export function XRBuildPanel() {
-  const [section, setSection] = useState<BuildSection>('main')
-  const [page, setPage] = useState(0)
+  const section = useXRWandPanelSettings((state) => state.buildSection)
+  const page = useXRWandPanelSettings((state) => state.buildPage)
+  const setBuildNavigation = useXRWandPanelSettings((state) => state.setBuildNavigation)
   const mode = useEditor((state) => state.mode)
   const activeTool = useEditor((state) => state.tool)
   const roofDefaults = useEditor((state) => state.toolDefaults.roof)
@@ -150,12 +151,10 @@ export function XRBuildPanel() {
           select: () => {
             if (type.id === 'mep') {
               activateBuildTool('duct-segment')
-              setSection('mep')
-              setPage(0)
+              setBuildNavigation('mep', 0)
             } else if (type.id === 'roof') {
               activateBuildTool('roof')
-              setSection('roof')
-              setPage(0)
+              setBuildNavigation('roof', 0)
             } else if (type.id === 'kitchen') {
               activateModularCabinetTool()
             } else if (type.mode === 'material-paint') {
@@ -169,7 +168,7 @@ export function XRBuildPanel() {
         }
       }),
     ]
-  }, [activeRoofType, activeTool, buildTypes, mode, roofFeatures, section])
+  }, [activeRoofType, activeTool, buildTypes, mode, roofFeatures, section, setBuildNavigation])
 
   const current = getPageWithPinnedFirst(entries, page, ITEMS_PER_PAGE)
   const title = section === 'main' ? 'Build' : section === 'mep' ? 'MEP' : 'Roof'
@@ -181,8 +180,7 @@ export function XRBuildPanel() {
         <SpatialButton
           name={`xr-build-${section}-back`}
           onClick={() => {
-            setSection('main')
-            setPage(0)
+            setBuildNavigation('main', 0)
           }}
           position={[-0.3, 0.35, 0]}
           size={[0.12, 0.055]}
@@ -206,7 +204,7 @@ export function XRBuildPanel() {
           <SpatialButton
             disabled={current.currentPage === 0}
             name={`xr-build-${section}-previous-page`}
-            onClick={() => setPage(current.currentPage - 1)}
+            onClick={() => setBuildNavigation(section, current.currentPage - 1)}
             position={[-0.07, 0, 0]}
             size={[0.055, 0.055]}
           >
@@ -232,7 +230,7 @@ export function XRBuildPanel() {
           <SpatialButton
             disabled={current.currentPage >= current.pageCount - 1}
             name={`xr-build-${section}-next-page`}
-            onClick={() => setPage(current.currentPage + 1)}
+            onClick={() => setBuildNavigation(section, current.currentPage + 1)}
             position={[0.07, 0, 0]}
             size={[0.055, 0.055]}
           >

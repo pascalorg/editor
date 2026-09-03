@@ -2,6 +2,7 @@
 // include Bun ambient types in its production declaration build.
 import { describe, expect, mock, test } from 'bun:test'
 import {
+  advanceXRFrameWithoutDesktopRender,
   renderImmersiveXRFrame,
   shouldMountPostProcessingRenderDriver,
   shouldPauseFrameLimiterForXR,
@@ -11,6 +12,29 @@ import {
 } from './frame-loop'
 
 describe('takeOverXRFrameLoop', () => {
+  test('advances R3F effects without issuing its desktop-camera render', () => {
+    const state = { internal: { priority: 0 } }
+    let priorityDuringAdvance = 0
+
+    advanceXRFrameWithoutDesktopRender(state, () => {
+      priorityDuringAdvance = state.internal.priority
+    })
+
+    expect(priorityDuringAdvance).toBe(1)
+    expect(state.internal.priority).toBe(0)
+  })
+
+  test('restores R3F render priority when frame advancement fails', () => {
+    const state = { internal: { priority: 2 } }
+
+    expect(() =>
+      advanceXRFrameWithoutDesktopRender(state, () => {
+        throw new Error('advance failed')
+      }),
+    ).toThrow('advance failed')
+    expect(state.internal.priority).toBe(2)
+  })
+
   test('pauses the desktop frame loop as soon as an XR session is supplied', () => {
     expect(shouldPauseFrameLimiterForXR(false, {} as XRSession)).toBe(true)
     expect(shouldPauseFrameLimiterForXR(false, undefined)).toBe(false)

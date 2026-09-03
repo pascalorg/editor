@@ -2,6 +2,7 @@
 
 import {
   type AnyNode,
+  type AnyNodeId,
   emitter,
   type GridEvent,
   type NodeEvent,
@@ -216,17 +217,41 @@ export function XREmulatorTestHarnessBridge() {
       if (!registered) return false
       registered.updateWorldMatrix(true, true)
       const bounds = new Box3().setFromObject(registered)
-      if (bounds.isEmpty()) {
-        const positioned = await setInputPose(registered, inputKind, distance)
-        if (positioned) await waitForXRFrames(2)
-        return positioned
-      }
       const target = new Object3D()
-      bounds.getCenter(target.position)
+      let targetDistance = distance
+      if (bounds.isEmpty()) {
+        const node = useScene.getState().nodes[nodeId as AnyNodeId]
+        const vertices = (
+          node as { topology?: { vertices?: { position?: number[] }[] } } | undefined
+        )?.topology?.vertices
+        const positions = vertices
+          ?.map((vertex) => vertex.position)
+          .filter(
+            (position): position is [number, number, number] =>
+              position?.length === 3 && position.every(Number.isFinite),
+          )
+        if (positions && positions.length > 0) {
+          const localBounds = new Box3().setFromPoints(
+            positions.map((position) => new Vector3().fromArray(position)),
+          )
+          localBounds.getCenter(target.position)
+          registered.localToWorld(target.position)
+          const worldScale = registered.getWorldScale(new Vector3())
+          targetDistance = Math.max(
+            targetDistance,
+            localBounds.getSize(new Vector3()).multiply(worldScale).length() / 2 + 0.25,
+          )
+        } else {
+          registered.getWorldPosition(target.position)
+        }
+      } else {
+        bounds.getCenter(target.position)
+        targetDistance = Math.max(targetDistance, bounds.getSize(new Vector3()).length() / 2 + 0.25)
+      }
       const normal = camera.getWorldPosition(new Vector3()).sub(target.position).normalize()
       target.quaternion.setFromUnitVectors(new Vector3(0, 0, 1), normal)
       target.updateMatrixWorld(true)
-      const positioned = await setInputPose(target, inputKind, distance)
+      const positioned = await setInputPose(target, inputKind, targetDistance)
       if (positioned) await waitForXRFrames(2)
       return positioned
     }
@@ -554,6 +579,8 @@ export function XREmulatorTestHarnessBridge() {
         .transformDirection(origin.matrixWorld)
       const raycaster = new Raycaster(rayOrigin, rayDirection)
       raycaster.layers.enableAll()
+      registered.updateWorldMatrix(true, true)
+      const registeredBounds = new Box3().setFromObject(registered)
       const describeHit = (object: Object3D) => {
         const path: { childTargets: string[]; eventCount: number; name: string; type: string }[] =
           []
@@ -577,6 +604,13 @@ export function XREmulatorTestHarnessBridge() {
         return path
       }
       return {
+        bounds: registeredBounds.isEmpty()
+          ? null
+          : {
+              max: registeredBounds.max.toArray(),
+              min: registeredBounds.min.toArray(),
+            },
+        childCount: registered.children.length,
         firstHits: raycaster
           .intersectObjects(scene.children, true)
           .slice(0, 8)
@@ -586,6 +620,9 @@ export function XREmulatorTestHarnessBridge() {
             path: describeHit(hit.object),
           })),
         nodeHits: raycaster.intersectObject(registered, true).length,
+        rayDirection: rayDirection.toArray(),
+        rayOrigin: rayOrigin.toArray(),
+        registeredPosition: registered.getWorldPosition(new Vector3()).toArray(),
       }
     }
 
