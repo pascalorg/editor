@@ -1,8 +1,10 @@
 // @ts-expect-error — bun:test is provided by the Bun runtime; viewer does not
 // include Bun ambient types in its production declaration build.
 import { describe, expect, test } from 'bun:test'
+import { Layers } from 'three'
 import {
   applyViewerCameraClipping,
+  enableImmersiveXRViewLayers,
   viewerCameraClipping,
   viewerUsesPerspectiveCamera,
 } from './viewer-camera'
@@ -36,5 +38,20 @@ describe('viewerCameraClipping', () => {
 
     expect(camera).toMatchObject({ far: 10_000, near: 0.001 })
     expect(projectionUpdates).toBe(1)
+  })
+
+  test('XR enables presentation layers and restores the prior masks', () => {
+    const cameraLayers = new Layers()
+    const raycasterLayers = new Layers()
+    const cameraMask = cameraLayers.mask
+    const raycasterMask = raycasterLayers.mask
+
+    const restore = enableImmersiveXRViewLayers(cameraLayers, raycasterLayers)
+
+    expect(cameraLayers.mask).not.toBe(cameraMask)
+    expect(raycasterLayers.mask).not.toBe(raycasterMask)
+    restore()
+    expect(cameraLayers.mask).toBe(cameraMask)
+    expect(raycasterLayers.mask).toBe(raycasterMask)
   })
 })

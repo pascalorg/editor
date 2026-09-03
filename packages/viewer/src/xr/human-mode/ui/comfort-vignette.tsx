@@ -3,6 +3,7 @@
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { MathUtils, type Mesh, type MeshBasicMaterial } from 'three'
+import { OVERLAY_LAYER } from '../../../lib/layers'
 import { useXRPlayerMode, XR_PLAYER_MODES } from '../../mode-switching/store/player-mode'
 import { resolveComfortOpacity } from '../lib/comfort'
 import { getArtificialMovementSpeed } from '../lib/locomotion'
@@ -30,7 +31,13 @@ export function ComfortVignette() {
   })
 
   return (
-    <mesh frustumCulled={false} position={[0, 0, -0.15]} ref={mesh} renderOrder={2000}>
+    <mesh
+      frustumCulled={false}
+      layers={OVERLAY_LAYER}
+      position={[0, 0, -0.15]}
+      ref={mesh}
+      renderOrder={2000}
+    >
       <planeGeometry args={[0.5, 0.5]} />
       <meshBasicMaterial
         color="black"

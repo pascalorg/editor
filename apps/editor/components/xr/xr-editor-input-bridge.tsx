@@ -22,6 +22,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useXR } from '@react-three/xr'
 import { useCallback, useEffect, useRef } from 'react'
 import { Plane, Quaternion, Raycaster, Vector3 } from 'three'
+import { activateSelectMode } from '@/lib/build-palette'
 import {
   didXRButtonPressStart,
   isXRCancelPressed,
@@ -343,7 +344,7 @@ export function XREditorInputBridge() {
 
     const nextCancelPressed = isXRCancelPressed(inputSources)
     if (didXRButtonPressStart(cancelPressed.current, nextCancelPressed)) {
-      emitter.emit('tool:cancel')
+      activateSelectMode()
       const rightController = inputSources.find(
         (inputSource) => inputSource.handedness === 'right' && inputSource.gamepad != null,
       )

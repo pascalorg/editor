@@ -41,3 +41,12 @@ export function getPage<T>(items: readonly T[], page: number, pageSize: number) 
     items: items.slice(currentPage * pageSize, (currentPage + 1) * pageSize),
   }
 }
+
+export function getPageWithPinnedFirst<T>(items: readonly T[], page: number, pageSize: number) {
+  const pinned = items[0]
+  const current = getPage(items.slice(1), page, Math.max(1, pageSize - 1))
+  return {
+    ...current,
+    items: pinned === undefined ? current.items : [pinned, ...current.items],
+  }
+}

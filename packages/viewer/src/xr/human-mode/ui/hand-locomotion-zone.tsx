@@ -6,6 +6,7 @@ import { useXR } from '@react-three/xr'
 import { useMemo, useRef } from 'react'
 import { DoubleSide, Euler, type Group, Quaternion, Vector3 } from 'three'
 import { useStore } from 'zustand'
+import { OVERLAY_LAYER } from '../../../lib/layers'
 import { useXRPlayerMode, XR_PLAYER_MODES } from '../../mode-switching/store/player-mode'
 import { HAND_ZONE_RADIUS } from '../constants/human-mode-constants'
 import {
@@ -45,7 +46,7 @@ function HandLocomotionJoystick({ handedness }: { handedness: 'left' | 'right' }
       ref={group}
       visible={control.active}
     >
-      <mesh frustumCulled={false} raycast={ignoreRaycast} renderOrder={1002}>
+      <mesh frustumCulled={false} layers={OVERLAY_LAYER} raycast={ignoreRaycast} renderOrder={1002}>
         <ringGeometry args={[JOYSTICK_RADIUS - 0.002, JOYSTICK_RADIUS, 64]} />
         <meshBasicMaterial
           color={control.state === 'active' ? '#38bdf8' : JOYSTICK_COLOR}
@@ -59,6 +60,7 @@ function HandLocomotionJoystick({ handedness }: { handedness: 'left' | 'right' }
         <group key={rotation} rotation={[0, 0, rotation]}>
           <mesh
             frustumCulled={false}
+            layers={OVERLAY_LAYER}
             position={[0, JOYSTICK_ARROW_DISTANCE, 0]}
             raycast={ignoreRaycast}
             renderOrder={1002}
@@ -100,6 +102,7 @@ function HandActivationZone({ handedness }: { handedness: 'left' | 'right' }) {
   return (
     <group ref={group}>
       <mesh
+        layers={OVERLAY_LAYER}
         name={`hand-${handedness}-activation-zone`}
         raycast={ignoreRaycast}
         renderOrder={1000}
@@ -115,6 +118,7 @@ function HandActivationZone({ handedness }: { handedness: 'left' | 'right' }) {
         />
       </mesh>
       <mesh
+        layers={OVERLAY_LAYER}
         name={`hand-${handedness}-activation-zone-fill`}
         raycast={ignoreRaycast}
         renderOrder={999}
@@ -136,6 +140,7 @@ function HandActivationZone({ handedness }: { handedness: 'left' | 'right' }) {
         anchorY="middle"
         color={control.state === 'active' ? '#38bdf8' : '#cbd5e1'}
         fontSize={0.025}
+        layers={OVERLAY_LAYER}
         position={[0, 0.01, 0]}
         raycast={ignoreRaycast}
         rotation={[-Math.PI / 2, 0, 0]}

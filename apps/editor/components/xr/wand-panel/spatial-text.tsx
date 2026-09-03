@@ -1,5 +1,6 @@
 'use client'
 
+import { EDITOR_LAYER } from '@pascal-app/editor'
 import { Children, type ReactNode, useEffect, useMemo } from 'react'
 import { CanvasTexture, SRGBColorSpace } from 'three'
 
@@ -105,6 +106,7 @@ export function SpatialText({
 
   return (
     <mesh
+      layers={EDITOR_LAYER}
       position={[position[0] + offsetX, position[1] + offsetY, position[2]]}
       renderOrder={renderOrder}
       raycast={() => undefined}

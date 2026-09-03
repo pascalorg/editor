@@ -3,100 +3,89 @@
 import {
   type AnyNode,
   type AnyNodeId,
-  nodeRegistry,
-  type ParamAction,
-  type ParamField,
+  type BuildingNode,
+  getLevelDisplayName,
+  getLibraryMaterialIdFromRef,
+  getLibraryMaterialsVersion,
+  getMaterialsForCategory,
+  type LevelNode,
+  MATERIAL_CATEGORIES,
+  subscribeLibraryMaterials,
+  toLibraryMaterialRef,
   useScene,
 } from '@pascal-app/core'
 import { commitParametricNodeFields, useEditor } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
-import { useMemo, useState } from 'react'
+import { toggleXRPlayerMode, useViewer, useXRPlayerMode, XR_PLAYER_MODES } from '@pascal-app/viewer'
+import { useMemo, useState, useSyncExternalStore } from 'react'
+import { useShallow } from 'zustand/react/shallow'
+import {
+  collectXRSettingRows,
+  createXRSettingPatch,
+  readXRSettingValue,
+  resolveXRSettingsContext,
+  type XRSettingFieldRow,
+  type XRSettingsContext,
+} from '@/lib/xr/settings'
 import { getPage } from './panel-layout'
 import {
+  PageArrows,
   PanelHeader,
   PanelHint,
   SettingChoice,
+  SettingCycle,
   SettingStepper,
   SpatialButton,
 } from './spatial-controls'
 import { SpatialText } from './spatial-text'
 import { XR_WAND_THEME } from './theme'
 
-const ROWS_PER_PAGE = 4
+const ROWS_PER_PAGE = 5
+const XR_COLORS = ['#888888', '#ffffff', '#18181b', '#ef4444', '#22c55e', '#3b82f6']
 
-type FieldRow = {
-  axis?: number
-  field: ParamField<AnyNode>
-  id: string
-  label: string
+function cycleOption(options: readonly unknown[], current: unknown, direction: -1 | 1) {
+  if (options.length === 0) return undefined
+  const index = options.indexOf(current)
+  const base = index < 0 ? (direction === 1 ? -1 : 0) : index
+  return options[(base + direction + options.length) % options.length]
 }
 
-function fieldRows(node: AnyNode): FieldRow[] {
-  const parametrics = nodeRegistry.get(node.type)?.parametrics
-  if (!parametrics) return []
-  const rows: FieldRow[] = []
-  for (const group of parametrics.groups) {
-    for (const rawField of group.fields) {
-      const field = rawField as ParamField<AnyNode>
-      if (field.visibleIf && !field.visibleIf(node)) continue
-      const label = field.label ?? String(field.key)
-      if (field.kind === 'vec3') {
-        for (let axis = 0; axis < 3; axis += 1) {
-          rows.push({
-            axis,
-            field,
-            id: `${String(field.key)}-${axis}`,
-            label: `${label} ${'XYZ'[axis]}`,
-          })
-        }
-      } else {
-        rows.push({ field, id: String(field.key), label })
-      }
-    }
-  }
-  return rows
+function formatValue(value: unknown) {
+  if (typeof value === 'string') return value || 'None'
+  if (typeof value === 'boolean') return value ? 'On' : 'Off'
+  if (typeof value === 'number') return String(Number(value.toFixed(3)))
+  return value == null ? 'None' : 'Assigned'
 }
 
-function formatReadout(value: unknown, field: ParamField<AnyNode>) {
-  if (field.kind === 'custom') return 'Desktop control'
-  if (field.kind === 'material') return value ? 'Assigned' : 'Default'
-  if (field.kind === 'ref') return typeof value === 'string' ? value.slice(0, 12) : 'None'
-  if (field.kind === 'color') return typeof value === 'string' ? value.toUpperCase() : 'Default'
-  return String(value ?? '—')
-}
+function FieldControl({
+  context,
+  materials,
+  onChange,
+  referenceNodes,
+  row,
+}: {
+  context: XRSettingsContext
+  materials: ReturnType<typeof getMaterialsForCategory>
+  onChange: (row: XRSettingFieldRow, value: unknown) => void
+  referenceNodes: AnyNode[]
+  row: XRSettingFieldRow
+}) {
+  let value = readXRSettingValue(context, row)
+  const name = `xr-setting-${String(row.field.key)}${row.axis == null ? '' : `-${row.axis}`}`
 
-function FieldControl({ node, row }: { node: AnyNode; row: FieldRow }) {
-  const key = String(row.field.key)
-  const rawValue = (node as unknown as Record<string, unknown>)[key]
-  if (row.field.kind === 'number') {
-    const value = typeof rawValue === 'number' ? rawValue : 0
+  if (row.field.kind === 'number' || row.field.kind === 'vec3') {
+    const min = row.field.kind === 'number' ? (row.field.min ?? -1000) : -1000
+    const max = row.field.kind === 'number' ? (row.field.max ?? 1000) : 1000
+    const numericValue = Math.max(min, Math.min(max, typeof value === 'number' ? value : min))
     return (
       <SettingStepper
         label={row.label}
-        max={row.field.max ?? 1000}
-        min={row.field.min ?? -1000}
-        onChange={(next) => commitParametricNodeFields(node.id as AnyNodeId, { [key]: next })}
-        step={row.field.step ?? 0.1}
-        unit={row.field.unit}
-        value={value}
-      />
-    )
-  }
-  if (row.field.kind === 'vec3') {
-    const axis = row.axis ?? 0
-    const vector = Array.isArray(rawValue) ? [...rawValue] : [0, 0, 0]
-    const value = typeof vector[axis] === 'number' ? vector[axis] : 0
-    return (
-      <SettingStepper
-        label={row.label}
-        max={1000}
-        min={-1000}
-        onChange={(next) => {
-          vector[axis] = next
-          commitParametricNodeFields(node.id as AnyNodeId, { [key]: vector })
-        }}
-        step={0.1}
-        value={value}
+        max={max}
+        min={min}
+        name={name}
+        onChange={(next) => onChange(row, next)}
+        step={row.field.kind === 'number' ? (row.field.step ?? 0.1) : 0.1}
+        unit={row.field.kind === 'number' ? row.field.unit : undefined}
+        value={numericValue}
       />
     )
   }
@@ -104,144 +93,221 @@ function FieldControl({ node, row }: { node: AnyNode; row: FieldRow }) {
     return (
       <SettingChoice
         label={row.label}
-        onClick={() => commitParametricNodeFields(node.id as AnyNodeId, { [key]: !rawValue })}
-        value={rawValue ? 'On' : 'Off'}
+        name={name}
+        onClick={() => onChange(row, value !== true)}
+        value={value === true ? 'On' : 'Off'}
       />
     )
   }
-  if (row.field.kind === 'enum') {
-    const index = row.field.options.indexOf(String(rawValue))
-    const next = row.field.options[(index + 1) % row.field.options.length]
-    return (
-      <SettingChoice
-        label={row.label}
-        onClick={() => commitParametricNodeFields(node.id as AnyNodeId, { [key]: next })}
-        value={String(rawValue ?? row.field.options[0] ?? '—')}
-      />
-    )
+
+  let options: readonly unknown[] = []
+  let displayValue = formatValue(value)
+  let mapValue = (next: unknown) => next
+  if (row.field.kind === 'enum') options = row.field.options
+  if (row.field.kind === 'color') options = XR_COLORS
+  if (row.field.kind === 'material') {
+    options = materials.map((material) => material.id)
+    const selectedId = getLibraryMaterialIdFromRef(value as never)
+    displayValue = materials.find((material) => material.id === selectedId)?.label ?? 'Default'
+    mapValue = (next) => toLibraryMaterialRef(String(next))
+    value = selectedId
   }
-  return <SettingChoice label={row.label} value={formatReadout(rawValue, row.field)} />
+  if (row.field.kind === 'ref') {
+    const refKind = row.field.refKind
+    const references = referenceNodes.filter((node) => node.type === refKind)
+    options = [null, ...references.map((node) => node.id)]
+    const selected = references.find((node) => node.id === value)
+    displayValue = selected
+      ? String((selected as AnyNode & { name?: string }).name ?? selected.type)
+      : 'None'
+  }
+  if (row.field.kind === 'custom') {
+    return <SettingChoice label={row.label} name={name} value="Custom editor" />
+  }
+
+  const change = (direction: -1 | 1) => {
+    const next = cycleOption(options, value, direction)
+    if (next !== undefined) onChange(row, mapValue(next))
+  }
+  return (
+    <SettingCycle
+      label={row.label}
+      name={name}
+      next={() => change(1)}
+      previous={() => change(-1)}
+      value={displayValue}
+    />
+  )
 }
 
 function DefaultSettings() {
   const mode = useEditor((state) => state.mode)
+  const playerMode = useXRPlayerMode((state) => state.mode)
   const gridSnapStep = useEditor((state) => state.gridSnapStep)
   const cycleGridSnapStep = useEditor((state) => state.cycleGridSnapStep)
+  const selectedBuildingId = useViewer((state) => state.selection.buildingId)
+  const activeLevelId = useViewer((state) => state.selection.levelId)
+  const setSelection = useViewer((state) => state.setSelection)
+  const resolvedBuildingId = useScene((state) => {
+    if (selectedBuildingId) return selectedBuildingId
+    return (
+      Object.values(state.nodes).find((node) => node?.type === 'building') as
+        | BuildingNode
+        | undefined
+    )?.id
+  })
+  const levels = useScene(
+    useShallow((state) => {
+      const building = resolvedBuildingId ? state.nodes[resolvedBuildingId] : undefined
+      if (building?.type !== 'building') return [] as LevelNode[]
+      return building.children
+        .map((id) => state.nodes[id])
+        .filter((node): node is LevelNode => node?.type === 'level')
+        .sort((a, b) => a.level - b.level)
+    }),
+  )
+  const activeLevel = levels.find((level) => level.id === activeLevelId) ?? levels[0]
+  const cycleFloor = () => {
+    if (!activeLevel) return
+    const index = levels.findIndex((level) => level.id === activeLevel.id)
+    const next = levels[(index + 1) % levels.length]
+    if (next) setSelection({ buildingId: resolvedBuildingId, levelId: next.id })
+  }
+
   return (
     <>
-      <group position={[0, 0.2, 0]}>
-        <SettingChoice label="Editor mode" value={mode} />
+      <group position={[0, 0.28, 0]}>
+        <SettingChoice
+          label="Floor"
+          name="xr-setting-floor"
+          onClick={levels.length ? cycleFloor : undefined}
+          value={activeLevel ? getLevelDisplayName(activeLevel) : 'No floors'}
+        />
       </group>
-      <group position={[0, 0.09, 0]}>
-        <SettingChoice label="Grid snap" onClick={cycleGridSnapStep} value={`${gridSnapStep} m`} />
+      <group position={[0, 0.16, 0]}>
+        <SettingChoice label="Editor mode" name="xr-setting-editor-mode" value={mode} />
       </group>
-      <PanelHint>Select one scene item to edit its registry settings here.</PanelHint>
+      <group position={[0, 0.04, 0]}>
+        <SettingChoice
+          label="Grid snap"
+          name="xr-setting-grid-snap"
+          onClick={cycleGridSnapStep}
+          value={`${gridSnapStep} m`}
+        />
+      </group>
+      <group position={[0, -0.08, 0]}>
+        <SettingChoice
+          label="XR scale"
+          name="xr-setting-player-mode"
+          onClick={toggleXRPlayerMode}
+          value={playerMode === XR_PLAYER_MODES.GOD ? 'God' : 'Human'}
+        />
+      </group>
+      <PanelHint position={[0, -0.22, 0.012]}>Select an item or choose a build tool.</PanelHint>
     </>
   )
 }
 
 export function XRSettingsPanel() {
-  const [page, setPage] = useState(0)
-  const selectedId = useViewer((state) =>
-    state.selection.selectedIds.length === 1
-      ? (state.selection.selectedIds[0] as AnyNodeId | undefined)
-      : undefined,
+  const [pagination, setPagination] = useState({ key: '', page: 0 })
+  const mode = useEditor((state) => state.mode)
+  const tool = useEditor((state) => state.tool)
+  const toolDefaults = useEditor((state) =>
+    state.tool ? state.toolDefaults[state.tool] : undefined,
   )
-  const node = useScene((state) => (selectedId ? state.nodes[selectedId] : undefined))
-  const rows = useMemo(() => (node ? fieldRows(node) : []), [node])
+  const setToolDefaults = useEditor((state) => state.setToolDefaults)
+  const selectedId = useViewer((state) =>
+    state.selection.selectedIds.length === 1 ? state.selection.selectedIds[0] : undefined,
+  )
+  const selectedNode = useScene((state) =>
+    selectedId ? state.nodes[selectedId as AnyNodeId] : undefined,
+  )
+  const nodes = useScene((state) => state.nodes)
+  const materialVersion = useSyncExternalStore(
+    subscribeLibraryMaterials,
+    getLibraryMaterialsVersion,
+    getLibraryMaterialsVersion,
+  )
+  const materials = useMemo(() => {
+    void materialVersion
+    return MATERIAL_CATEGORIES.flatMap((category) => getMaterialsForCategory(category))
+  }, [materialVersion])
+  const referenceNodes = useMemo(() => Object.values(nodes).filter(Boolean) as AnyNode[], [nodes])
+  const context = useMemo(
+    () => resolveXRSettingsContext({ mode, selectedNode, tool, toolDefaults }),
+    [mode, selectedNode, tool, toolDefaults],
+  )
+  const rows = useMemo(() => (context ? collectXRSettingRows(context) : []), [context])
+  const contextKey = context?.key ?? 'default'
+  const page = pagination.key === contextKey ? pagination.page : 0
   const current = getPage(rows, page, ROWS_PER_PAGE)
-  const definition = node ? nodeRegistry.get(node.type) : undefined
-  const actions = (definition?.parametrics?.actions ?? []) as ParamAction<AnyNode>[]
+  const setPage = (nextPage: number) => setPagination({ key: contextKey, page: nextPage })
+
+  const update = (row: XRSettingFieldRow, value: unknown) => {
+    if (!context) return
+    const patch = createXRSettingPatch(context, row, value)
+    if (context.source === 'node') {
+      commitParametricNodeFields(context.node.id as AnyNodeId, patch)
+    } else if (context.tool) {
+      setToolDefaults(context.tool, { ...toolDefaults, ...patch })
+    }
+  }
 
   return (
     <group name="xr-wand-settings-panel">
       <PanelHeader
-        mark={node ? `${rows.length} settings` : 'selection-aware'}
-        title={node ? (definition?.presentation?.label ?? node.type) : 'Settings'}
+        mark={context ? `${rows.length} controls` : 'selection-aware'}
+        title={context?.title ?? 'Settings'}
       />
-      {!node ? (
+      {!context ? (
         <DefaultSettings />
       ) : (
         <>
           {current.items.map((row, index) => (
-            <group key={row.id} position={[0, 0.28 - index * 0.115, 0]}>
-              <FieldControl node={node} row={row} />
+            <group key={row.id} position={[0, 0.29 - index * 0.125, 0]}>
+              {row.kind === 'field' ? (
+                <FieldControl
+                  context={context}
+                  materials={materials}
+                  onChange={update}
+                  referenceNodes={referenceNodes}
+                  row={row}
+                />
+              ) : (
+                <SpatialButton
+                  disabled={row.action.enabledIf ? !row.action.enabledIf(context.node) : false}
+                  name={`xr-setting-action-${row.id}`}
+                  onClick={() =>
+                    row.action.onClick(
+                      useScene.getState().nodes[context.node.id as AnyNodeId] as AnyNode,
+                    )
+                  }
+                  position={[0, 0, 0]}
+                  size={[0.7, 0.075]}
+                >
+                  <SpatialText
+                    anchorX="center"
+                    anchorY="middle"
+                    color={XR_WAND_THEME.text}
+                    fontSize={0.021}
+                    position={[0, 0, 0.012]}
+                  >
+                    {row.label}
+                  </SpatialText>
+                </SpatialButton>
+              )}
             </group>
           ))}
           {rows.length === 0 && (
-            <PanelHint>
-              This item uses a custom desktop inspector. Select another item or use the editor
-              panel.
-            </PanelHint>
+            <PanelHint>No spatial settings are exposed for this item yet.</PanelHint>
           )}
-          <group position={[0, -0.27, 0]}>
-            {actions.slice(0, 2).map((action, index) => (
-              <SpatialButton
-                disabled={action.enabledIf ? !action.enabledIf(node) : false}
-                key={action.label}
-                onClick={() =>
-                  action.onClick(useScene.getState().nodes[node.id as AnyNodeId] as AnyNode)
-                }
-                position={[-0.18 + index * 0.36, 0, 0]}
-                size={[0.32, 0.07]}
-              >
-                <SpatialText
-                  anchorX="center"
-                  anchorY="middle"
-                  color={XR_WAND_THEME.text}
-                  fontSize={0.019}
-                  maxWidth={0.29}
-                  position={[0, 0, 0.012]}
-                >
-                  {action.label}
-                </SpatialText>
-              </SpatialButton>
-            ))}
-          </group>
           {current.pageCount > 1 && (
-            <group position={[0, -0.35, 0]}>
-              <SpatialButton
-                disabled={current.currentPage === 0}
-                onClick={() => setPage(current.currentPage - 1)}
-                position={[-0.16, 0, 0]}
-                size={[0.08, 0.055]}
-              >
-                <SpatialText
-                  anchorX="center"
-                  anchorY="middle"
-                  color={XR_WAND_THEME.text}
-                  fontSize={0.027}
-                  position={[0, 0, 0.012]}
-                >
-                  ‹
-                </SpatialText>
-              </SpatialButton>
-              <SpatialText
-                anchorX="center"
-                anchorY="middle"
-                color={XR_WAND_THEME.muted}
-                fontSize={0.019}
-                position={[0, 0, 0.012]}
-              >
-                {current.currentPage + 1}/{current.pageCount}
-              </SpatialText>
-              <SpatialButton
-                disabled={current.currentPage >= current.pageCount - 1}
-                onClick={() => setPage(current.currentPage + 1)}
-                position={[0.16, 0, 0]}
-                size={[0.08, 0.055]}
-              >
-                <SpatialText
-                  anchorX="center"
-                  anchorY="middle"
-                  color={XR_WAND_THEME.text}
-                  fontSize={0.027}
-                  position={[0, 0, 0.012]}
-                >
-                  ›
-                </SpatialText>
-              </SpatialButton>
-            </group>
+            <PageArrows
+              name="xr-settings"
+              onChange={setPage}
+              page={current.currentPage}
+              pageCount={current.pageCount}
+            />
           )}
         </>
       )}

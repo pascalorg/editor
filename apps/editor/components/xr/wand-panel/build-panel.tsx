@@ -9,15 +9,16 @@ import {
   activatePaintMode,
   activateRoofFeatureTool,
   activateRoofType,
+  activateSelectMode,
   activateTerrainSculptMode,
   collectBuildTypes,
   collectRoofFeatures,
-  MEP_ITEMS,
   type RoofFeature,
+  XR_MEP_ITEMS,
 } from '@/lib/build-palette'
 import { ROOF_TYPE_OPTIONS } from '@/lib/build-tab-state'
 import { PanelIcon } from './panel-icon'
-import { getPage } from './panel-layout'
+import { getPageWithPinnedFirst } from './panel-layout'
 import { PanelHeader, SpatialButton } from './spatial-controls'
 import { SpatialText } from './spatial-text'
 import { XR_WAND_THEME } from './theme'
@@ -40,6 +41,7 @@ function tilePosition(index: number): [number, number, number] {
 function PaletteTile({ entry, index }: { entry: PaletteEntry; index: number }) {
   return (
     <SpatialButton
+      name={`xr-build-tool-${entry.id}`}
       onClick={entry.select}
       position={tilePosition(index)}
       selected={entry.active}
@@ -81,36 +83,24 @@ export function XRBuildPanel() {
   const activeRoofType = parsedRoofType.success ? parsedRoofType.data : 'gable'
 
   const entries = useMemo<PaletteEntry[]>(() => {
+    const selectEntry: PaletteEntry = {
+      active: mode === 'select',
+      iconSrc: '/icons/select.webp',
+      id: 'select',
+      label: 'Select',
+      select: activateSelectMode,
+    }
+
     if (section === 'mep') {
       return [
-        ...MEP_ITEMS.map((item) => ({
+        selectEntry,
+        ...XR_MEP_ITEMS.map((item) => ({
           active: mode === 'build' && activeTool === item.kind,
           iconSrc: item.iconSrc,
           id: item.id,
           label: item.label,
           select: () => activateBuildTool(item.kind),
         })),
-        {
-          active: mode === 'build' && activeTool === 'duct-fitting',
-          iconSrc: '/icons/duct-fitting.webp',
-          id: 'duct-fitting',
-          label: 'Duct Fitting',
-          select: () => activateBuildTool('duct-fitting'),
-        },
-        {
-          active: mode === 'build' && activeTool === 'pipe-fitting',
-          iconSrc: '/icons/duct-fitting.webp',
-          id: 'pipe-fitting',
-          label: 'Pipe Fitting',
-          select: () => activateBuildTool('pipe-fitting'),
-        },
-        {
-          active: mode === 'build' && activeTool === 'pipe-trap',
-          iconSrc: '/icons/dwv-pipes.webp',
-          id: 'pipe-trap',
-          label: 'Pipe Trap',
-          select: () => activateBuildTool('pipe-trap'),
-        },
       ]
     }
 
@@ -123,6 +113,7 @@ export function XRBuildPanel() {
         select: () => activateRoofType(option.value as RoofType),
       }))
       return [
+        selectEntry,
         ...roofTypes,
         ...roofFeatures.map((feature: RoofFeature) => ({
           active: mode === 'build' && activeTool === feature.kind,
@@ -134,50 +125,53 @@ export function XRBuildPanel() {
       ]
     }
 
-    return buildTypes.map((type) => {
-      const isMepTool =
-        !!activeTool &&
-        (activeTool.includes('duct') ||
-          activeTool.includes('pipe') ||
-          activeTool === 'lineset' ||
-          activeTool === 'liquid-line' ||
-          activeTool === 'hvac-equipment')
-      const active = type.mode
-        ? mode === type.mode
-        : type.id === 'kitchen'
-          ? mode === 'build' && activeTool === 'cabinet'
-          : type.id === 'mep'
-            ? mode === 'build' && isMepTool
-            : mode === 'build' && activeTool === type.kind
-      return {
-        active,
-        iconSrc: type.iconSrc,
-        id: type.id,
-        label: type.label,
-        select: () => {
-          if (type.id === 'mep') {
-            activateBuildTool('duct-segment')
-            setSection('mep')
-            setPage(0)
-          } else if (type.id === 'roof') {
-            activateBuildTool('roof')
-            setSection('roof')
-            setPage(0)
-          } else if (type.id === 'kitchen') {
-            activateModularCabinetTool()
-          } else if (type.mode === 'material-paint') {
-            activatePaintMode()
-          } else if (type.mode === 'terrain-sculpt') {
-            activateTerrainSculptMode()
-          } else if (type.kind) {
-            activateBuildTool(type.kind)
-          }
-        },
-      }
-    })
+    return [
+      selectEntry,
+      ...buildTypes.map((type) => {
+        const isMepTool =
+          !!activeTool &&
+          (activeTool.includes('duct') ||
+            activeTool.includes('pipe') ||
+            activeTool === 'lineset' ||
+            activeTool === 'liquid-line' ||
+            activeTool === 'hvac-equipment')
+        const active = type.mode
+          ? mode === type.mode
+          : type.id === 'kitchen'
+            ? mode === 'build' && activeTool === 'cabinet'
+            : type.id === 'mep'
+              ? mode === 'build' && isMepTool
+              : mode === 'build' && activeTool === type.kind
+        return {
+          active,
+          iconSrc: type.iconSrc,
+          id: type.id,
+          label: type.label,
+          select: () => {
+            if (type.id === 'mep') {
+              activateBuildTool('duct-segment')
+              setSection('mep')
+              setPage(0)
+            } else if (type.id === 'roof') {
+              activateBuildTool('roof')
+              setSection('roof')
+              setPage(0)
+            } else if (type.id === 'kitchen') {
+              activateModularCabinetTool()
+            } else if (type.mode === 'material-paint') {
+              activatePaintMode()
+            } else if (type.mode === 'terrain-sculpt') {
+              activateTerrainSculptMode()
+            } else if (type.kind) {
+              activateBuildTool(type.kind)
+            }
+          },
+        }
+      }),
+    ]
   }, [activeRoofType, activeTool, buildTypes, mode, roofFeatures, section])
 
-  const current = getPage(entries, page, ITEMS_PER_PAGE)
+  const current = getPageWithPinnedFirst(entries, page, ITEMS_PER_PAGE)
   const title = section === 'main' ? 'Build' : section === 'mep' ? 'MEP' : 'Roof'
 
   return (
@@ -185,6 +179,7 @@ export function XRBuildPanel() {
       <PanelHeader mark={`${entries.length} tools`} title={title} />
       {section !== 'main' && (
         <SpatialButton
+          name={`xr-build-${section}-back`}
           onClick={() => {
             setSection('main')
             setPage(0)
@@ -210,6 +205,7 @@ export function XRBuildPanel() {
         <group position={[0.23, 0.35, 0]}>
           <SpatialButton
             disabled={current.currentPage === 0}
+            name={`xr-build-${section}-previous-page`}
             onClick={() => setPage(current.currentPage - 1)}
             position={[-0.07, 0, 0]}
             size={[0.055, 0.055]}
@@ -235,6 +231,7 @@ export function XRBuildPanel() {
           </SpatialText>
           <SpatialButton
             disabled={current.currentPage >= current.pageCount - 1}
+            name={`xr-build-${section}-next-page`}
             onClick={() => setPage(current.currentPage + 1)}
             position={[0.07, 0, 0]}
             size={[0.055, 0.055]}

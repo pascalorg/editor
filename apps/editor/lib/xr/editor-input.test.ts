@@ -73,6 +73,9 @@ describe('XR editor input routing', () => {
     expect(resolveXRReleaseAction({ mode: 'build', placementDrag: false, scopeKind: 'idle' })).toBe(
       'emit-tool-grid-click',
     )
+    expect(
+      resolveXRReleaseAction({ mode: 'material-paint', placementDrag: false, scopeKind: 'idle' }),
+    ).toBe('ignore')
     expect(resolveXRReleaseAction({ mode: 'select', placementDrag: true, scopeKind: 'idle' })).toBe(
       'finish-placement-drag',
     )

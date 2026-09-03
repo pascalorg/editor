@@ -267,9 +267,13 @@ function getRestoredSelectionForScene(
 export function syncEditorSelectionFromCurrentScene() {
   const sceneNodes = useScene.getState().nodes as Record<string, any>
   const sceneRootIds = useScene.getState().rootNodeIds
-  const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
   const resolve = (child: any) => (typeof child === 'string' ? sceneNodes[child] : child)
-  const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
+  const rootNodes = sceneRootIds.map((id) => sceneNodes[id]).filter(Boolean)
+  const firstBuilding =
+    rootNodes.find((node) => node.type === 'building') ??
+    rootNodes
+      .flatMap((node) => (Array.isArray(node.children) ? node.children.map(resolve) : []))
+      .find((node) => node?.type === 'building')
   const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
   const restoredEditorUiState = normalizePersistedEditorUiState(useEditor.getState())
   const shouldRestoreEditorUiState = hasCustomPersistedEditorUiState(restoredEditorUiState)

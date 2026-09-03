@@ -42,6 +42,9 @@ export function resolveXRReleaseAction({
   scopeKind: string
 }): XRReleaseAction {
   if (placementDrag) return 'finish-placement-drag'
+  // Paint is committed by the shared node click handler, just like desktop
+  // paint. Do not also route an empty XR release through grid tool logic.
+  if (mode === 'material-paint') return 'ignore'
   if (mode !== 'select') return 'emit-tool-grid-click'
   return scopeKind === 'idle' ? 'defer-empty-selection' : 'ignore'
 }

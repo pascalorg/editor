@@ -381,6 +381,7 @@
   },
   "patchedDependencies": {
     "three@0.185.1": "patches/three@0.185.1.patch",
+    "iwer@2.3.0": "patches/iwer@2.3.0.patch",
   },
   "overrides": {
     "@types/react": "19.2.17",

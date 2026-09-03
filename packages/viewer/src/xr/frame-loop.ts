@@ -27,6 +27,22 @@ type XRRenderDriverRenderer = {
   }
 }
 
+type XRUnionCamera = {
+  cameras?: { layers?: { mask: number } }[]
+  layers?: { mask: number }
+}
+
+export function unifyXRStereoCameraLayers(camera: XRUnionCamera) {
+  const mask = camera.layers?.mask
+  if (mask === undefined) return
+  // Three reserves layers 1 and 2 for left/right-eye visibility and removes
+  // one from each sub-camera. Pascal uses those layers for overlays and zones,
+  // so direct immersive presentation must render the union in both eyes.
+  for (const subCamera of camera.cameras ?? []) {
+    if (subCamera.layers) subCamera.layers.mask = mask
+  }
+}
+
 export function shouldPauseFrameLimiterForXR(paused: boolean, session?: XRSession) {
   return paused || session != null
 }
@@ -41,10 +57,12 @@ export function renderImmersiveXRFrame(
   camera: unknown,
 ) {
   renderer.xr.updateCamera(camera)
+  const xrCamera = renderer.xr.getCamera() as XRUnionCamera
+  unifyXRStereoCameraLayers(xrCamera)
   const cameraAutoUpdate = renderer.xr.cameraAutoUpdate
   renderer.xr.cameraAutoUpdate = false
   try {
-    renderer.render(scene, renderer.xr.getCamera())
+    renderer.render(scene, xrCamera)
   } finally {
     renderer.xr.cameraAutoUpdate = cameraAutoUpdate
   }

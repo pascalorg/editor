@@ -2,6 +2,7 @@
 
 import { useFrame, useThree } from '@react-three/fiber'
 import {
+  CombinedPointer,
   DefaultXRController,
   DefaultXRHand,
   useXR,
@@ -12,13 +13,15 @@ import {
 } from '@react-three/xr'
 import { type ComponentType, type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react'
 import { Euler, type Group, type Object3D, Vector3 } from 'three'
+import { DistanceAwareRayPointer } from '../../distance-aware-ray-pointer'
 import { GOD_ORIGIN_POSITION, GOD_ORIGIN_ROTATION } from '../../god-mode'
 import { GodModeHandControls } from '../../god-mode/input/god-mode-hand-controls'
 import { GodModeControls } from '../../god-mode/ui/god-mode-controls'
 import { HumanModeHandControls } from '../../human-mode/input/hand-locomotion'
 import { pulseInputSource } from '../../human-mode/lib/haptics'
 import { HumanModeControls } from '../../human-mode/ui/human-mode-controls'
-import { isDirectR3FPointerTarget } from '../../pointer-filter'
+import { DISTANCE_AWARE_RAY_POINTER_OPTIONS } from '../../pointer-cursor'
+import { isR3FPointerTarget } from '../../pointer-filter'
 import type { ViewerXRStore } from '../../store'
 import {
   captureGodSceneTransform,
@@ -37,11 +40,21 @@ import { useXRPlayerMode, XR_PLAYER_MODES } from '../store/player-mode'
 
 function PlayerModeDefaultHand() {
   return (
-    <DefaultXRHand
-      grabPointer={{ filter: isDirectR3FPointerTarget }}
-      rayPointer={{ filter: isDirectR3FPointerTarget }}
-      touchPointer={{ filter: isDirectR3FPointerTarget }}
-    />
+    <>
+      <DefaultXRHand grabPointer={false} rayPointer={false} touchPointer={false} />
+      <CombinedPointer>
+        <DistanceAwareRayPointer
+          options={{
+            ...DISTANCE_AWARE_RAY_POINTER_OPTIONS,
+            filter: isR3FPointerTarget,
+            rayModel: {
+              ...DISTANCE_AWARE_RAY_POINTER_OPTIONS.rayModel,
+              maxLength: 0.2,
+            },
+          }}
+        />
+      </CombinedPointer>
+    </>
   )
 }
 
@@ -73,7 +86,19 @@ function createPlayerModeHandInput(InputSourceOverlay: InputSourceOverlay) {
 }
 
 function PlayerModeDefaultController() {
-  return <DefaultXRController rayPointer={{ filter: isDirectR3FPointerTarget }} />
+  return (
+    <>
+      <DefaultXRController grabPointer={false} rayPointer={false} />
+      <CombinedPointer>
+        <DistanceAwareRayPointer
+          options={{
+            ...DISTANCE_AWARE_RAY_POINTER_OPTIONS,
+            filter: isR3FPointerTarget,
+          }}
+        />
+      </CombinedPointer>
+    </>
+  )
 }
 
 function createPlayerModeControllerInput(InputSourceOverlay?: InputSourceOverlay) {
@@ -104,12 +129,16 @@ function PlayerModeHandThumbInput() {
   return <XRSpace ref={setThumbObject} space="thumb-tip" />
 }
 
-function PlayerModeHandToggle() {
+function PlayerModeHandToggle({ disabled = false }: { disabled?: boolean }) {
+  const leftHand = useXRInputSourceState('hand', 'left')
+  const rightHand = useXRInputSourceState('hand', 'right')
   const leftThumb = useRef({ position: new Vector3(), visible: false })
   const rightThumb = useRef({ position: new Vector3(), visible: false })
   const gesture = useRef<ThumbModeGestureState>({ elapsed: 0, triggered: false })
+  const selectionBlockedGesture = useRef(false)
 
   useFrame((_, delta) => {
+    if (disabled) return
     const leftObject = thumbObjects.left
     const rightObject = thumbObjects.right
     leftThumb.current.visible = leftObject?.visible === true
@@ -117,12 +146,14 @@ function PlayerModeHandToggle() {
     if (leftThumb.current.visible) leftObject!.getWorldPosition(leftThumb.current.position)
     if (rightThumb.current.visible) rightObject!.getWorldPosition(rightThumb.current.position)
 
+    const selecting =
+      leftHand?.inputSource.gamepad?.buttons[0]?.pressed === true ||
+      rightHand?.inputSource.gamepad?.buttons[0]?.pressed === true
+    const touching = areThumbTipsTouching(leftThumb.current, rightThumb.current)
+    if (selecting) selectionBlockedGesture.current = true
+    else if (!touching) selectionBlockedGesture.current = false
     if (
-      advanceThumbModeGesture(
-        gesture.current,
-        areThumbTipsTouching(leftThumb.current, rightThumb.current),
-        delta,
-      )
+      advanceThumbModeGesture(gesture.current, touching && !selectionBlockedGesture.current, delta)
     ) {
       useXRPlayerMode.getState().toggle()
     }
@@ -249,7 +280,7 @@ export function PlayerModeScene({
   return (
     <>
       <PlayerModeControllerToggle />
-      <PlayerModeHandToggle />
+      <PlayerModeHandToggle disabled={inputSourceOverlay != null} />
       <PlayerModeRig sceneRootRef={sceneRootRef} />
       <GodModeControls sceneRootRef={sceneRootRef} />
       <HumanModeControls sceneRootRef={sceneRootRef} />

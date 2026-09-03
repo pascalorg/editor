@@ -697,6 +697,31 @@ function ViewerScene({
     <SceneRenderer />
   )
 
+  const spatialScene = (
+    <>
+      {renderedScene}
+
+      {/* Generic slab-elevation lift for any kind that declares
+          `capabilities.floorPlaced`. Runs at frame priority 1 so it
+          lands its mesh.position.y override before the priority-2
+          systems below clear the dirty mark. */}
+      <FloorElevationSystem />
+      {/* Generic geometry rebuild loop for any registered kind that
+          ships `def.geometry`. Reads dirtyNodes, calls the kind's pure
+          builder, swaps the registered group's children. See
+          wiki/architecture/node-definitions.md. */}
+      <GeometrySystem />
+      {/* Automated stair opening sync — updates slab/ceiling cutouts
+          whenever stairs, slabs, or levels change. */}
+      <StairOpeningSystem />
+      {/* Mounts systems contributed by registry-backed kinds. Each
+          kind's `def.system` is loaded via lazy() and rendered here,
+          ordered by `system.priority`. */}
+      <RegisteredSystems />
+      {children}
+    </>
+  )
+
   return (
     <>
       <ViewerCamera immersiveXR={immersiveXR} />
@@ -715,35 +740,16 @@ function ViewerScene({
         <Lights />
         {playerModes && xrStore ? (
           <PlayerModeScene inputSourceOverlay={inputSourceOverlay} store={xrStore}>
-            {renderedScene}
+            {spatialScene}
           </PlayerModeScene>
         ) : (
-          renderedScene
+          spatialScene
         )}
-
-        {/* Generic slab-elevation lift for any kind that declares
-            `capabilities.floorPlaced`. Runs at frame priority 1 so it
-            lands its mesh.position.y override before the priority-2
-            systems below clear the dirty mark. */}
-        <FloorElevationSystem />
-        {/* Generic geometry rebuild loop for any registered kind that
-            ships `def.geometry`. Reads dirtyNodes, calls the kind's pure
-            builder, swaps the registered group's children. See
-            wiki/architecture/node-definitions.md. */}
-        <GeometrySystem />
-        {/* Automated stair opening sync — updates slab/ceiling cutouts
-            whenever stairs, slabs, or levels change. */}
-        <StairOpeningSystem />
-        {/* Mounts systems contributed by registry-backed kinds. Each
-            kind's `def.system` is loaded via lazy() and rendered here,
-            ordered by `system.priority`. */}
-        <RegisteredSystems />
         {shouldMountPostProcessingRenderDriver(immersiveXR) && (
           <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />
         )}
         {selectionManager === 'default' && <SelectionManager />}
         {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
-        {children}
       </ErrorBoundary>
     </>
   )

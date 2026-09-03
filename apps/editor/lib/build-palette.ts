@@ -1,4 +1,4 @@
-import { nodeRegistry, type RoofType } from '@pascal-app/core'
+import { emitter, nodeRegistry, type RoofType } from '@pascal-app/core'
 import {
   CATALOG_ITEMS,
   type FloorplanMode,
@@ -8,7 +8,11 @@ import {
   useFloorplanMode,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { getRoofFootprintSource, type RoofFootprintSource } from '@/lib/build-tab-state'
+import {
+  getRoofFootprintSource,
+  ROOF_TYPE_OPTIONS,
+  type RoofFootprintSource,
+} from '@/lib/build-tab-state'
 
 export type MepToolKind =
   | 'duct-segment'
@@ -77,6 +81,28 @@ export const MEP_ITEMS: MepItem[] = [
   { id: 'pipe-segment', label: 'DWV Pipe', iconSrc: '/icons/dwv-pipes.webp', kind: 'pipe-segment' },
 ]
 
+export const XR_MEP_ITEMS: MepItem[] = [
+  ...MEP_ITEMS,
+  {
+    id: 'duct-fitting',
+    label: 'Duct Fitting',
+    iconSrc: '/icons/duct-fitting.webp',
+    kind: 'duct-fitting',
+  },
+  {
+    id: 'pipe-fitting',
+    label: 'Pipe Fitting',
+    iconSrc: '/icons/duct-fitting.webp',
+    kind: 'pipe-fitting',
+  },
+  {
+    id: 'pipe-trap',
+    label: 'Pipe Trap',
+    iconSrc: '/icons/dwv-pipes.webp',
+    kind: 'pipe-trap',
+  },
+]
+
 export const MEP_TOOL_KINDS = new Set<string>([
   ...MEP_ITEMS.map((item) => item.kind),
   'duct-fitting',
@@ -120,6 +146,18 @@ export function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
   return [...tools, ...BASE_BUILD_TYPES.filter((type) => !type.kind)]
 }
 
+export function collectXRBuildPaletteManifest(floorplanMode: FloorplanMode) {
+  return {
+    main: ['select', ...collectBuildTypes(floorplanMode).map((entry) => entry.id)],
+    mep: ['select', ...XR_MEP_ITEMS.map((entry) => entry.id)],
+    roof: [
+      'select',
+      ...ROOF_TYPE_OPTIONS.map((entry) => `roof-${entry.value}`),
+      ...collectRoofFeatures().map((entry) => entry.id),
+    ],
+  }
+}
+
 export function activateBuildTool(kind: string): void {
   const editor = useEditor.getState()
   const definition = nodeRegistry.get(kind)
@@ -131,12 +169,18 @@ export function activateBuildTool(kind: string): void {
     return
   }
   if (extension?.preferredView) editor.setViewMode(extension.preferredView)
+  useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   editor.setPhase('structure')
   editor.setStructureLayer('elements')
   editor.setCatalogCategory(null)
   editor.setToolDefaults(kind, null)
   editor.setMode('build')
   editor.setTool(kind)
+}
+
+export function activateSelectMode(): void {
+  emitter.emit('tool:cancel')
+  useEditor.getState().setMode('select')
 }
 
 export function activateModularCabinetTool(): void {
@@ -184,6 +228,7 @@ export function collectRoofFeatures(): RoofFeature[] {
 
 export function activateRoofFeatureTool(feature: RoofFeature): void {
   const editor = useEditor.getState()
+  useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
   editor.setPhase('structure')
   editor.setStructureLayer('elements')
   editor.setCatalogCategory(null)

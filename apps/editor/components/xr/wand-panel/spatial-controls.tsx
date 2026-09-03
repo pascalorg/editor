@@ -1,11 +1,17 @@
 'use client'
 
+import { EDITOR_LAYER } from '@pascal-app/editor'
 import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react'
-import { Shape } from 'three'
+import { DoubleSide, Shape } from 'three'
 import { XR_WAND_PANEL_LAYOUT } from './panel-layout'
 import { SpatialLine, shapeLinePoints } from './spatial-line'
 import { SpatialText } from './spatial-text'
 import { XR_WAND_THEME } from './theme'
+
+declare global {
+  var __pascalXRHoveredTarget: string | undefined
+  var __pascalXRLastPointerEvent: string | undefined
+}
 
 const { accent, accentLine, border, disabled: disabledColor, muted, panel, text } = XR_WAND_THEME
 const LEFT_CHEVRON = [
@@ -37,6 +43,7 @@ export function SpatialButton({
   children,
   color = text,
   disabled = false,
+  name,
   onClick,
   position,
   selected = false,
@@ -45,6 +52,7 @@ export function SpatialButton({
   children?: ReactNode
   color?: string
   disabled?: boolean
+  name?: string
   onClick?: () => void
   position: [number, number, number]
   selected?: boolean
@@ -64,37 +72,58 @@ export function SpatialButton({
   )
 
   return (
-    <group
-      onClick={(event) => {
-        event.stopPropagation()
-        if (!disabled) onClick?.()
-      }}
-      onPointerDown={(event) => {
-        event.stopPropagation()
-        if (!disabled) setPressed(true)
-      }}
-      onPointerEnter={() => {
-        if (disabled) return
-        if (hoverLeaveTimer.current) clearTimeout(hoverLeaveTimer.current)
-        setHovered(true)
-      }}
-      onPointerLeave={() => {
-        hoverLeaveTimer.current = setTimeout(() => setHovered(false), 75)
-        setPressed(false)
-      }}
-      onPointerUp={(event) => {
-        event.stopPropagation()
-        setPressed(false)
-      }}
-      position={position}
-      scale={pressed && !disabled ? 0.96 : 1}
-    >
-      <mesh position={[0, 0, 0.004]}>
+    <group position={position} scale={pressed && !disabled ? 0.96 : 1}>
+      <mesh
+        layers={EDITOR_LAYER}
+        name={name}
+        onClick={(event) => {
+          event.stopPropagation()
+          if (process.env.NODE_ENV === 'development') {
+            globalThis.__pascalXRLastPointerEvent = `click:${name ?? ''}`
+          }
+          if (!disabled) onClick?.()
+        }}
+        onPointerCancel={(event) => {
+          event.object.releasePointerCapture?.(event.pointerId)
+          setPressed(false)
+        }}
+        onPointerDown={(event) => {
+          event.stopPropagation()
+          event.object.setPointerCapture?.(event.pointerId)
+          if (process.env.NODE_ENV === 'development') {
+            globalThis.__pascalXRLastPointerEvent = `down:${name ?? ''}`
+          }
+          if (!disabled) setPressed(true)
+        }}
+        onPointerEnter={() => {
+          if (disabled) return
+          if (hoverLeaveTimer.current) clearTimeout(hoverLeaveTimer.current)
+          setHovered(true)
+          if (process.env.NODE_ENV === 'development') globalThis.__pascalXRHoveredTarget = name
+        }}
+        onPointerLeave={() => {
+          hoverLeaveTimer.current = setTimeout(() => setHovered(false), 75)
+          setPressed(false)
+          if (globalThis.__pascalXRHoveredTarget === name) {
+            globalThis.__pascalXRHoveredTarget = undefined
+          }
+        }}
+        onPointerUp={(event) => {
+          event.stopPropagation()
+          event.object.releasePointerCapture?.(event.pointerId)
+          if (process.env.NODE_ENV === 'development') {
+            globalThis.__pascalXRLastPointerEvent = `up:${name ?? ''}`
+          }
+          setPressed(false)
+        }}
+        position={[0, 0, 0.004]}
+      >
         <shapeGeometry args={[shape, 4]} />
         <meshBasicMaterial
           color={selected ? accent : color}
           depthWrite={false}
           opacity={disabled ? 0.02 : selected ? 0.28 : hovered ? 0.12 : 0.06}
+          side={DoubleSide}
           transparent
         />
       </mesh>
@@ -123,7 +152,7 @@ export function PanelFace() {
   const points = useMemo(() => shapeLinePoints(shape), [shape])
   return (
     <>
-      <mesh position={[0, 0, -0.012]}>
+      <mesh layers={EDITOR_LAYER} position={[0, 0, -0.012]}>
         <shapeGeometry args={[shape, 8]} />
         <meshBasicMaterial color={panel} depthWrite opacity={1} />
       </mesh>
@@ -168,7 +197,13 @@ export function PanelHeader({ mark, title }: { mark?: string; title: string }) {
   )
 }
 
-export function PanelHint({ children }: { children: ReactNode }) {
+export function PanelHint({
+  children,
+  position = [0, -0.37, 0.012],
+}: {
+  children: ReactNode
+  position?: [number, number, number]
+}) {
   return (
     <SpatialText
       anchorX="center"
@@ -176,7 +211,7 @@ export function PanelHint({ children }: { children: ReactNode }) {
       color={muted}
       fontSize={0.021}
       maxWidth={0.64}
-      position={[0, -0.37, 0.012]}
+      position={position}
       textAlign="center"
     >
       {children}
@@ -185,10 +220,12 @@ export function PanelHint({ children }: { children: ReactNode }) {
 }
 
 export function PageArrows({
+  name,
   onChange,
   page,
   pageCount,
 }: {
+  name: string
   onChange: (page: number) => void
   page: number
   pageCount: number
@@ -197,6 +234,7 @@ export function PageArrows({
     <group position={[0, -0.455, 0]}>
       <SpatialButton
         disabled={page === 0}
+        name={`${name}-previous-page`}
         onClick={() => onChange(page - 1)}
         position={[-0.27, 0, 0]}
         size={[0.1, 0.065]}
@@ -218,6 +256,7 @@ export function PageArrows({
       </SpatialText>
       <SpatialButton
         disabled={page >= pageCount - 1}
+        name={`${name}-next-page`}
         onClick={() => onChange(page + 1)}
         position={[0.27, 0, 0]}
         size={[0.1, 0.065]}
@@ -236,6 +275,7 @@ export function SettingStepper({
   label,
   max,
   min,
+  name,
   onChange,
   step,
   unit,
@@ -244,6 +284,7 @@ export function SettingStepper({
   label: string
   max: number
   min: number
+  name: string
   onChange: (value: number) => void
   step: number
   unit?: string
@@ -262,6 +303,7 @@ export function SettingStepper({
         {label}
       </SpatialText>
       <SpatialButton
+        name={`${name}-decrement`}
         onClick={() => onChange(Math.max(min, value - step))}
         position={[0.1, 0, 0]}
         size={[0.085, 0.07]}
@@ -287,6 +329,7 @@ export function SettingStepper({
         {unit ? ` ${unit}` : ''}
       </SpatialText>
       <SpatialButton
+        name={`${name}-increment`}
         onClick={() => onChange(Math.min(max, value + step))}
         position={[0.34, 0, 0]}
         size={[0.085, 0.07]}
@@ -307,10 +350,12 @@ export function SettingStepper({
 
 export function SettingChoice({
   label,
+  name,
   onClick,
   value,
 }: {
   label: string
+  name: string
   onClick?: () => void
   value: string
 }) {
@@ -328,6 +373,7 @@ export function SettingChoice({
       </SpatialText>
       <SpatialButton
         disabled={!onClick}
+        name={name}
         onClick={onClick}
         position={[0.22, 0, 0]}
         size={[0.31, 0.07]}
@@ -342,6 +388,61 @@ export function SettingChoice({
         >
           {value}
         </SpatialText>
+      </SpatialButton>
+    </group>
+  )
+}
+
+export function SettingCycle({
+  label,
+  name,
+  next,
+  previous,
+  value,
+}: {
+  label: string
+  name: string
+  next: () => void
+  previous: () => void
+  value: string
+}) {
+  return (
+    <group>
+      <SpatialText
+        anchorX="left"
+        anchorY="middle"
+        color={text}
+        fontSize={0.025}
+        maxWidth={0.25}
+        position={[-0.35, 0, 0.012]}
+      >
+        {label}
+      </SpatialText>
+      <SpatialButton
+        name={`${name}-previous`}
+        onClick={previous}
+        position={[0.05, 0, 0]}
+        size={[0.07, 0.07]}
+      >
+        <SpatialLine color={text} lineWidth={1.5} points={LEFT_CHEVRON} />
+      </SpatialButton>
+      <SpatialText
+        anchorX="center"
+        anchorY="middle"
+        color={text}
+        fontSize={0.019}
+        maxWidth={0.21}
+        position={[0.22, 0, 0.012]}
+      >
+        {value}
+      </SpatialText>
+      <SpatialButton
+        name={`${name}-next`}
+        onClick={next}
+        position={[0.39, 0, 0]}
+        size={[0.07, 0.07]}
+      >
+        <SpatialLine color={text} lineWidth={1.5} points={RIGHT_CHEVRON} />
       </SpatialButton>
     </group>
   )

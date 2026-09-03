@@ -1,6 +1,7 @@
 'use client'
 
 import { getImmersiveVRSupport } from '@pascal-app/viewer'
+import type { XRDevice } from 'iwer'
 
 export type XRRuntimeSource = 'native' | 'emulated' | 'unsupported'
 
@@ -13,6 +14,10 @@ type EmulatedXRDevice = {
     devUICanvas: HTMLCanvasElement
     devUIContainer: HTMLDivElement
   }
+}
+
+export function getEmulatedXRDevice(): XRDevice | undefined {
+  return (globalThis as GlobalWithIwerSetup)[deviceKey] as XRDevice | undefined
 }
 
 type GlobalWithIwerSetup = typeof globalThis & {

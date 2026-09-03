@@ -24,6 +24,7 @@ import { mountEmulatorControls } from '@/lib/xr/emulator'
 import { XR_PREVIEW_SCENE_KEY } from '@/lib/xr/preview-window'
 import { XRWandInputOverlay } from './wand-panel'
 import { XREditorInputBridge } from './xr-editor-input-bridge'
+import { XREmulatorTestHarnessBridge } from './xr-emulator-test-harness'
 import { XRRenderErrorBoundary } from './xr-render-error-boundary'
 import { requestEditorVRSession, useEditorXRRuntime, xrConfigForRuntime } from './xr-runtime'
 
@@ -50,6 +51,7 @@ function XREditorScene() {
       <Grid cellColor="#aaa" cellSize={gridSnapStep} fadeDistance={500} sectionColor="#ccc" />
       <ToolManager />
       <XREditorInputBridge />
+      <XREmulatorTestHarnessBridge />
     </>
   )
 }

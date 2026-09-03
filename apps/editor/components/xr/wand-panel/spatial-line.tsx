@@ -1,5 +1,6 @@
 'use client'
 
+import { EDITOR_LAYER } from '@pascal-app/editor'
 import { useEffect, useMemo } from 'react'
 import { BufferGeometry, LineBasicMaterial, type Shape, Line as ThreeLine, Vector3 } from 'three'
 
@@ -46,6 +47,7 @@ export function SpatialLine({
     [line],
   )
 
+  line.layers.set(EDITOR_LAYER)
   line.renderOrder = renderOrder
   return <primitive object={line} raycast={() => undefined} />
 }

@@ -17,12 +17,15 @@ packages/viewer/src/xr/
 apps/editor/components/xr/
 ├── wand-panel/                # Left-hand three-face Build, Paint, and selection-aware Settings UI.
 ├── xr-editor-input-bridge.tsx # Adapts controller trigger and hand pinch rays to the editor's existing pointer/event pipeline.
+├── xr-emulator-test-harness.tsx # Exposes development-only, event-observable controller and hand scenarios.
 ├── xr-preview-environment.tsx # Dedicated scene loader and launch surface for XR testing.
 └── xr-runtime.tsx             # Owns XR runtime state, session requests, and the Viewer XR configuration.
 
 apps/editor/lib/xr/
 ├── editor-input.ts   # Pure controller/hand source selection and XR button edge detection.
+├── emulator-ray.ts   # Resolves deterministic controller/hand poses for emulator targets.
 ├── emulator.ts       # Installs the Quest 3 IWER emulator only in local development when native XR is absent.
+├── settings.ts       # Resolves registry settings for selected nodes and pre-placement tool defaults.
 └── preview-window.ts # Opens or focuses the standalone XR testing window.
 
 apps/editor/lib/build-palette.ts # Shared palette definitions and activators used by desktop and XR build surfaces.
@@ -60,7 +63,13 @@ The standalone XR route mounts the editor's existing selection manager, grid, no
 
 Controller trigger and tracked-hand pinch use the pointer implementation supplied by `@react-three/xr`. The app-level XR input bridge independently intersects the controller/hand target ray with the existing editor grid and emits the same `grid:move`, `grid:pointerdown`, `grid:pointerup`, and `grid:click` events consumed on desktop. Holding trigger or pinch on an already-selected movable node enters the existing press-drag move path; release is forwarded to its existing commit-on-release listener. The right controller B button emits the existing `tool:cancel` event. No XR-specific scene mutation or placement algorithm exists.
 
+Wall-hosted tools receive the existing `wall:enter`, `wall:move`, and `wall:click` events. The wall collision mesh stays render-active with color and depth writes disabled; setting the mesh or its material invisible removes it from the spatial-pointer traversal even though a direct Three.js raycast can still report it. This keeps door and window placement on the same host-resolution path as desktop input.
+
+Editor selection and manipulation use the ray pointer exclusively; near-field grab and touch pointers do not compete for the same scene node. Ray filtering accepts both direct R3F handlers and handlers inherited from a rendered ancestor. This is required for imported GLB items, elevators, and other renderers whose event handlers live on a wrapper while the raycastable meshes are nested below it.
+
 The left controller grip or left middle-finger metacarpal carries the three-face wand panel copied from the WebXR Home attachment geometry. Its labels use canvas textures and its borders use standard Three.js lines because Drei's Troika text and fat-line shader materials are incompatible with the XR renderer's node-material path. Ring arrows rotate between Build, Paint, and Settings. Build is paginated and exposes nested Roof and MEP pages using the same icons and activation functions as the desktop Build tab. Paint is always present and pages through the live core material library. Settings follows the single selected node and derives number, boolean, enum, vector, and read-only fallback rows from `nodeRegistry`; writes use the same derive/reconcile commit helper as the desktop parametric inspector. The input bridge suppresses grid authoring while a target ray intersects the wand, so pressing a panel control cannot also place scene geometry.
+
+Every spatial control has a stable `xr-*` object name. Select is pinned as the first Build tile on every main, Roof, and MEP page so every tool has an immediate spatial escape path. The Settings face uses one flattened sequence for visible registry fields, vector axes, and actions, so pagination cannot hide a second independent control list. A selected node has priority; otherwise the active build tool is shown with registry defaults merged with editor tool defaults, and edits are saved before placement. Unsupported custom DOM editors are labelled as desktop-only instead of pretending to be editable in XR.
 
 ## Local testing
 
@@ -81,12 +90,13 @@ This starts the Next.js editor on all interfaces with its development HTTPS cert
 - Reset restores the scene root to identity and the XR origin to the default God-view pose. These are presentation transforms and are never persisted to `packages/core`.
 - Human mode restores the scene to world scale. The left controller stick moves relative to head direction, the right stick snap-turns, and movement is resolved through a player capsule against the rendered scene's BVHs.
 - With hand tracking, pinching inside the left wrist zone drives locomotion and pinching inside the right wrist zone drives turning. Movement and turns use the same comfort vignette and haptic feedback behavior as WebXR Home.
-- Press the left controller Y button, hold both tracked thumb tips together for 0.8 seconds, or use the mode button in the test environment to switch between God and Human mode. The hand gesture fires once per hold and rearms after the thumbs separate. Returning to God mode restores the scene transform captured before entering Human mode.
+- Press the left controller Y button or use the mode button in the test environment to switch between God and Human mode. Standalone viewer integrations can also hold both tracked thumb tips together for 0.8 seconds. The editor disables that proximity gesture because it conflicts with precise hand interaction on the wand; use **Settings → XR scale** instead. Returning to God mode restores the scene transform captured before entering Human mode.
 - XR supplies the theme's neutral base background because the desktop sky gradient belongs to the post-processing pipeline. The zenith colour is not flattened across the immersive view.
 - The site's presentation-only horizon disc is suppressed in immersive XR because its fade depends on the desktop post-processing backdrop. The real site ground, slabs, terrain, and scene geometry remain visible.
 - The Synthetic Environment Module is not registered for VR testing because it adds its own floor grid and environment canvas. Add it only when an AR/MR feature needs synthetic planes, meshes, depth, or hit testing.
 - On a browser or headset with native immersive WebXR, the emulator is not installed.
 - Production builds never load or install IWER.
+- Development sessions expose `__pascalXRTestHarness`. It aims the emulated right controller or hand at stable spatial-control names and drives the actual IWER trigger/pinch transition. A click succeeds only after the target receives its R3F click event; snapshots report hover, delivered pointer and grid events, editor mode/tool/scope, selection, and scene counts. `clickLevelPoint` drives the existing grid event pipeline at a level-local plan coordinate, while `placeToolOnGrid` verifies tool activation, delivered points, newly created node IDs, and cancellation back to Select. `placeToolOnNode` additionally verifies delivery to a host surface and checks that the committed child references that host. This makes panel, selection, placement, and manipulation checks observable rather than timing-only smoke tests.
 - A physical headset must trust the development certificate when connecting over the local network. `localhost` testing can use the normal development command, but HTTPS is the reliable path for another device.
 
 The neighboring `WebXR Home` project uses `@iwsdk/vite-plugin-dev`. That plugin is intentionally not copied because this app runs on Next.js rather than Vite. Direct IWER initialization provides the equivalent local emulator without adding a second app runtime or IWSDK scene engine.

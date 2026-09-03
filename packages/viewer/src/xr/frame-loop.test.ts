@@ -7,6 +7,7 @@ import {
   shouldPauseFrameLimiterForXR,
   stopXRFrameLoop,
   takeOverXRFrameLoop,
+  unifyXRStereoCameraLayers,
 } from './frame-loop'
 
 describe('takeOverXRFrameLoop', () => {
@@ -59,6 +60,17 @@ describe('takeOverXRFrameLoop', () => {
 
     expect(() => renderImmersiveXRFrame(renderer, {}, {})).toThrow('draw failed')
     expect(renderer.xr.cameraAutoUpdate).toBe(true)
+  })
+
+  test('renders overlay and zone layers in both stereo eyes', () => {
+    const left = { layers: { mask: 0b1011 } }
+    const right = { layers: { mask: 0b1101 } }
+    const camera = { cameras: [left, right], layers: { mask: 0b1111 } }
+
+    unifyXRStereoCameraLayers(camera)
+
+    expect(left.layers.mask).toBe(0b1111)
+    expect(right.layers.mask).toBe(0b1111)
   })
 
   test('disconnects R3F and installs the renderer-owned XR frame loop', async () => {
