@@ -98,6 +98,125 @@ export const PerfMonitor = () => {
         }
         return { total: dirtyNodes.size, phantom: phantomIds.length, phantomIds, liveByType }
       },
+      // Draw-call composition census for the item/draw-reduction work
+      // (charter backlog #3): how item draws decompose per item and per
+      // asset, plus projected draw counts for the two candidate techniques —
+      // per-item merge-by-material and per-asset instancing.
+      drawComposition(): {
+        items: number
+        itemMeshes: number
+        otherVisibleMeshes: number
+        meshesByKind: Record<string, number>
+        perItemMeshes: { avg: number; p50: number; max: number }
+        assets: Array<{
+          id: string
+          name: string
+          copies: number
+          meshesPerCopy: number
+          materialsPerCopy: number
+        }>
+        projected: { current: number; perItemMerge: number; instancedByAsset: number; both: number }
+      } {
+        const { nodes } = useScene.getState()
+        type AssetAgg = {
+          name: string
+          copies: number
+          meshesPerCopy: number
+          materialsPerCopy: number
+          uniqueMeshKeys: Set<string>
+          uniqueMaterials: Set<string>
+        }
+        const assets = new Map<string, AssetAgg>()
+        const meshesPerItem: number[] = []
+        let itemMeshes = 0
+        let perItemMerge = 0
+        for (const node of Object.values(nodes)) {
+          if (node.type !== 'item') continue
+          const group = sceneRegistry.nodes.get(node.id)
+          if (!group) continue
+          let meshes = 0
+          const materials = new Set<string>()
+          const meshKeys = new Set<string>()
+          group.traverse((child: any) => {
+            if (!child.isMesh || child.visible === false) return
+            meshes++
+            const mats = Array.isArray(child.material) ? child.material : [child.material]
+            for (const m of mats) if (m) materials.add(m.uuid as string)
+            meshKeys.add(
+              `${child.geometry?.uuid ?? '?'}|${mats.map((m: any) => m?.uuid ?? '?').join(',')}`,
+            )
+          })
+          if (meshes === 0) continue
+          itemMeshes += meshes
+          meshesPerItem.push(meshes)
+          perItemMerge += materials.size
+          const asset = (node as { asset?: { id?: string; name?: string } }).asset
+          const assetId = asset?.id ?? 'unknown'
+          const agg = assets.get(assetId) ?? {
+            name: asset?.name ?? assetId,
+            copies: 0,
+            meshesPerCopy: meshes,
+            materialsPerCopy: materials.size,
+            uniqueMeshKeys: new Set<string>(),
+            uniqueMaterials: new Set<string>(),
+          }
+          agg.copies++
+          for (const k of meshKeys) agg.uniqueMeshKeys.add(k)
+          for (const m of materials) agg.uniqueMaterials.add(m)
+          assets.set(assetId, agg)
+        }
+        // Bucket every registered node's meshes by kind so the non-item side
+        // of the draw budget is attributable too.
+        const meshesByKind: Record<string, number> = {}
+        let registeredMeshes = 0
+        for (const node of Object.values(nodes)) {
+          const group = sceneRegistry.nodes.get(node.id)
+          if (!group) continue
+          let count = 0
+          group.traverse((child: any) => {
+            if (child.isMesh && child.visible !== false) count++
+          })
+          if (count === 0) continue
+          meshesByKind[node.type] = (meshesByKind[node.type] ?? 0) + count
+          registeredMeshes += count
+        }
+        let otherVisibleMeshes = 0
+        const { scene } = getThree()
+        scene.traverse((child: any) => {
+          if (child.isMesh && child.visible !== false) otherVisibleMeshes++
+        })
+        meshesByKind['(unregistered)'] = Math.max(0, otherVisibleMeshes - registeredMeshes)
+        otherVisibleMeshes -= itemMeshes
+        let instancedByAsset = 0
+        let both = 0
+        for (const agg of assets.values()) {
+          instancedByAsset += agg.uniqueMeshKeys.size
+          both += agg.uniqueMaterials.size
+        }
+        const sorted = [...meshesPerItem].sort((a, b) => a - b)
+        return {
+          items: meshesPerItem.length,
+          itemMeshes,
+          otherVisibleMeshes,
+          meshesByKind,
+          perItemMeshes: {
+            avg: Number((itemMeshes / Math.max(1, meshesPerItem.length)).toFixed(1)),
+            p50: sorted[Math.floor(sorted.length / 2)] ?? 0,
+            max: sorted[sorted.length - 1] ?? 0,
+          },
+          assets: [...assets.entries()]
+            .map(([id, a]) => ({
+              id,
+              name: a.name,
+              copies: a.copies,
+              meshesPerCopy: a.meshesPerCopy,
+              materialsPerCopy: a.materialsPerCopy,
+            }))
+            .sort((a, b) => b.copies * b.meshesPerCopy - a.copies * a.meshesPerCopy)
+            .slice(0, 15),
+          projected: { current: itemMeshes, perItemMerge, instancedByAsset, both },
+        }
+      },
       projectNode(nodeId: string): { x: number; y: number; behindCamera: boolean } | null {
         const object = sceneRegistry.nodes.get(nodeId)
         if (!object) return null
