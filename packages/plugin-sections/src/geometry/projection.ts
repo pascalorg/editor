@@ -2,12 +2,15 @@ import type { FloorplanGeometry } from '@pascal-app/core'
 import { boundsOf, segmentInsidePolygon } from './math'
 import type { BuildingModel, Opening, PrismSolid, RoofSolid, WallSolid } from './scene-model'
 import {
+  BRICK_COURSE,
   type FaceHole,
   finishHatch,
   formatFeetInches,
   gradeTicks,
+  LAP_EXPOSURE,
   scanlinesInPolygon,
   SHINGLE_COURSE,
+  STONE_COURSE,
 } from './materials'
 import {
   DASH,
@@ -278,6 +281,12 @@ const ROOF_SAMPLES = 72
 export type ProjectRoofOptions = {
   /** Draw shingle courses inside the roof silhouette (elevations). */
   courses?: boolean
+  /**
+   * Cladding for a GABLE END seen head-on: the triangle under the rake is the
+   * gable wall, not roof surface, so it takes the walls' finish pattern.
+   * Absent → the gable is left blank.
+   */
+  gableFinish?: 'siding' | 'stucco' | 'brick' | 'stone' | 'fiber-cement' | 'none' | null
 }
 
 export function projectRoof(
@@ -324,18 +333,31 @@ export function projectRoof(
     polygonPrimitive(outline, { fill: PAPER, stroke: INK, strokeWidth: WEIGHT.projected }),
   ]
   if (options.courses) {
-    // Shingle exposure foreshortened by the pitch: a course seen in elevation
-    // is `exposure · cos(pitch)` tall. The rise/run comes from the segment's
-    // ridge over its half-depth, so a flat roof gets no courses at all.
     const halfDepth = (roof.local.maxZ - roof.local.minZ) / 2
     const rise = roof.ridgeY - roof.plateY
-    const cosPitch = halfDepth > 1e-6 ? halfDepth / Math.hypot(halfDepth, rise) : 1
-    if (rise > 0.05) {
-      // Courses only over the TOP surface: clip against the upper envelope
-      // closed by the plate line, not the deck underside.
-      const plateY = drawY(roof.plateY)
-      const topSurface: Vec2[] = [...upper, [upper[upper.length - 1]![0], plateY], [upper[0]![0], plateY]]
-      primitives.push(...scanlinesInPolygon(topSurface, SHINGLE_COURSE * cosPitch))
+    const plateY = drawY(roof.plateY)
+    // The region between the silhouette's top edge and the plate line.
+    const aboveWalls: Vec2[] = [...upper, [upper[upper.length - 1]![0], plateY], [upper[0]![0], plateY]]
+    // Which face is this? A slope face looks at the viewer when the segment's
+    // down-slope axis runs along the view direction (the same test the fascia
+    // line uses); a gable END is seen when the axis runs across it.
+    const alignment = Math.abs(roof.axisZ[0] * view.forward[0] + roof.axisZ[1] * view.forward[1])
+    if (rise > 0.05 && alignment > 0.7) {
+      // Shingle exposure foreshortened by the pitch: a course seen in
+      // elevation is `exposure · cos(pitch)` tall.
+      const cosPitch = halfDepth > 1e-6 ? halfDepth / Math.hypot(halfDepth, rise) : 1
+      primitives.push(...scanlinesInPolygon(aboveWalls, SHINGLE_COURSE * cosPitch))
+    } else if (rise > 0.05 && alignment < 0.3 && options.gableFinish) {
+      // Gable end: the triangle is wall, clad like the walls below it.
+      const finish = options.gableFinish
+      if (finish === 'siding' || finish === 'fiber-cement') {
+        primitives.push(...scanlinesInPolygon(aboveWalls, LAP_EXPOSURE))
+      } else if (finish === 'brick') {
+        primitives.push(...scanlinesInPolygon(aboveWalls, BRICK_COURSE, { strokeWidth: 0.0025 }))
+      } else if (finish === 'stone') {
+        primitives.push(...scanlinesInPolygon(aboveWalls, STONE_COURSE))
+      }
+      // stucco: the stipple is not clipped to a polygon here — left blank.
     }
   }
   return { depth: maxDepth(view, clipped), primitives }

@@ -44,33 +44,22 @@ function withSheets(nodes: NodeMap): NodeMap {
 describe('the default set', () => {
   test('covers the standard sheets', () => {
     const numbers = planDefaultSet(scene()).map((p) => p.number)
-    expect(numbers).toEqual([
-      'A0.0',
-      'A1.0',
-      'A2.0',
-      'A3.0',
-      'A4.0',
-      'A5.0',
-      'A8.0',
-      'S1.0',
-      'E1.0',
-    ])
+    // The plan-set modules (structural, MEP, notes, energy) add their own
+    // sheets by number; the architectural core is always present, in order.
+    const core = ['A0.0', 'A1.0', 'A2.0', 'A3.0', 'A4.0', 'A5.0', 'A8.0']
+    expect(core.filter((n) => numbers.includes(n))).toEqual(core)
+    expect(numbers.filter((n) => core.includes(n))).toEqual(core)
+    expect(numbers.some((n) => /^S1/.test(n))).toBe(true)
+    expect(numbers.some((n) => /^E1/.test(n))).toBe(true)
+    // Architectural first, then structural, then the trades.
+    const rank = (n: string) => (/^A/.test(n) ? 0 : /^S/.test(n) ? 1 : 2)
+    expect([...numbers].map(rank)).toEqual([...numbers].map(rank).sort((a, b) => a - b))
   })
 
   test('one floor-plan sheet per level', () => {
-    expect(planDefaultSet(scene(3)).map((p) => p.number)).toEqual([
-      'A0.0',
-      'A1.0',
-      'A2.0',
-      'A2.1',
-      'A2.2',
-      'A3.0',
-      'A4.0',
-      'A5.0',
-      'A8.0',
-      'S1.0',
-      'E1.0',
-    ])
+    const numbers = planDefaultSet(scene(3)).map((p) => p.number)
+    expect(numbers.filter((n) => /^A2\./.test(n))).toEqual(['A2.0', 'A2.1', 'A2.2'])
+    expect(numbers.indexOf('A2.2')).toBeLessThan(numbers.indexOf('A3.0'))
   })
 
   test('the cover asks for the standard pose, never the current camera', () => {
@@ -136,14 +125,15 @@ describe('the default set', () => {
 describe('idempotency', () => {
   test('a second run creates nothing and keeps everything', () => {
     const nodes = scene(2)
+    const total = planDefaultSet(nodes).length
     const first = missingSheets(nodes)
-    expect(first.create.map((p) => p.number)).toHaveLength(10)
+    expect(first.create.map((p) => p.number)).toHaveLength(total)
     expect(first.keep).toEqual([])
 
     const populated = withSheets(nodes)
     const second = missingSheets(populated)
     expect(second.create).toEqual([])
-    expect(second.keep).toHaveLength(10)
+    expect(second.keep).toHaveLength(total)
   })
 
   test('adding a level only adds that level`s sheet', () => {

@@ -138,9 +138,19 @@ export function buildElevationDrawing(
     const piece = projectPrism(view, prism)
     if (piece) projected.push(piece)
   }
+  // The gable ends are clad like the walls: use the finish most of the
+  // visible walls declare (null when none declares one).
+  let gableFinish: FinishKind | null = null
+  let gableCount = 0
+  for (const [finish, count] of finishesUsed) {
+    if (finish !== 'unspecified' && count > gableCount) {
+      gableFinish = finish
+      gableCount = count
+    }
+  }
   const roofDetail: FloorplanGeometry[] = []
   for (const roof of built.roofs) {
-    const piece = projectRoof(view, roof, { courses: true })
+    const piece = projectRoof(view, roof, { courses: true, gableFinish })
     if (!piece) continue
     projected.push(piece)
     // Fascia / eave line — only meaningful when the eave edge runs across the

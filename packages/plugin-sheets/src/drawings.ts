@@ -30,6 +30,7 @@ import type { AnyNodeLike, NodeMap } from './model'
 import { levelLabel, sheets } from './model'
 import { scaleLabel, sheetInchesToWorld, worldToSheetInches } from './scale'
 import { adaptSchedule, buildSchedule, type ScheduleTable } from './schedule'
+import { enrichOpeningSchedule } from './schedule-openings'
 import type { ViewportLayers, ViewportNode } from './schema'
 import { INK, INK_SOFT, MONO, SANS } from './titleblock'
 
@@ -922,9 +923,14 @@ function resolveSchedule(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
       scale: undefined,
     }
   }
-  const table =
+  const base =
     (of === 'doors' || of === 'windows' ? hostSchedule(nodes, levelId, of) : null) ??
     buildSchedule(nodes as never, levelId, of)
+  // QTY / EGRESS / TEMPERED / STATUS, derived from the model (schedule-openings.ts).
+  const table =
+    of === 'doors' || of === 'windows'
+      ? enrichOpeningSchedule(base, nodes as never, levelId, of)
+      : base
   const title = vp.title || table.title
   if (table.rows.length === 0) {
     return {
