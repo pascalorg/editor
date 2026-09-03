@@ -2,6 +2,10 @@ import { describe, expect, test } from 'bun:test'
 import { missingSheets, planDefaultSet } from './generate'
 import type { NodeMap } from './model'
 import { SheetNode } from './schema'
+import { sheetFrame } from './titleblock'
+
+/** The drawable frame of an ARCH D sheet — the box every viewport must fit. */
+const FRAME = sheetFrame(36, 24)
 
 function scene(levelCount = 1): NodeMap {
   const nodes: NodeMap = {
@@ -40,7 +44,17 @@ function withSheets(nodes: NodeMap): NodeMap {
 describe('the default set', () => {
   test('covers the standard sheets', () => {
     const numbers = planDefaultSet(scene()).map((p) => p.number)
-    expect(numbers).toEqual(['A0.0', 'A1.0', 'A2.0', 'A4.0', 'A5.0', 'A8.0'])
+    expect(numbers).toEqual([
+      'A0.0',
+      'A1.0',
+      'A2.0',
+      'A3.0',
+      'A4.0',
+      'A5.0',
+      'A8.0',
+      'S1.0',
+      'E1.0',
+    ])
   })
 
   test('one floor-plan sheet per level', () => {
@@ -50,9 +64,12 @@ describe('the default set', () => {
       'A2.0',
       'A2.1',
       'A2.2',
+      'A3.0',
       'A4.0',
       'A5.0',
       'A8.0',
+      'S1.0',
+      'E1.0',
     ])
   })
 
@@ -64,18 +81,24 @@ describe('the default set', () => {
 
   test('A4.0 carries all four elevations', () => {
     const elevations = planDefaultSet(scene()).find((p) => p.number === 'A4.0')!
-    expect(elevations.viewports.map((v) => v.direction)).toEqual([
-      'north',
-      'east',
-      'south',
-      'west',
-    ])
+    expect(elevations.viewports.map((v) => v.direction)).toEqual(['north', 'east', 'south', 'west'])
   })
 
-  test('A5.0 holds an unassigned section viewport when there are no markers', () => {
-    // Not a notes block: the viewport prints the "place a marker" note while
-    // there is nothing to cut and starts drawing as soon as one is assigned.
+  test('A5.0 plans the two default cuts when there are no markers', () => {
+    // The scene has walls, so the sheet gets the longitudinal and transverse
+    // default cuts rather than one empty placeholder.
     const sections = planDefaultSet(scene()).find((p) => p.number === 'A5.0')!
+    expect(sections.viewports).toHaveLength(2)
+    expect(sections.viewports.map((v) => v.kind)).toEqual(['section', 'section'])
+    expect(sections.viewports.map((v) => v.title)).toEqual(['Section A', 'Section B'])
+    // The markers themselves are created by `ensureSectionMarkers` at generate
+    // time; planning alone leaves the ids unbound.
+    expect(sections.viewports[0]?.markerId).toBeUndefined()
+  })
+
+  test('A5.0 falls back to one unassigned viewport when there is nothing to cut', () => {
+    const empty: NodeMap = { site_1: { id: 'site_1', type: 'site' } }
+    const sections = planDefaultSet(empty).find((p) => p.number === 'A5.0')!
     expect(sections.viewports).toHaveLength(1)
     expect(sections.viewports[0]?.kind).toBe('section')
     expect(sections.viewports[0]?.markerId).toBeUndefined()
@@ -103,8 +126,8 @@ describe('the default set', () => {
       for (const vp of plan.viewports) {
         expect(vp.x!).toBeGreaterThanOrEqual(0.5)
         expect(vp.y!).toBeGreaterThanOrEqual(0.5)
-        expect(vp.x! + vp.w!).toBeLessThanOrEqual(30.1)
-        expect(vp.y! + vp.h!).toBeLessThanOrEqual(23.6)
+        expect(vp.x! + vp.w!).toBeLessThanOrEqual(FRAME.x + FRAME.w + 1e-6)
+        expect(vp.y! + vp.h!).toBeLessThanOrEqual(FRAME.y + FRAME.h + 1e-6)
       }
     }
   })
@@ -114,13 +137,13 @@ describe('idempotency', () => {
   test('a second run creates nothing and keeps everything', () => {
     const nodes = scene(2)
     const first = missingSheets(nodes)
-    expect(first.create.map((p) => p.number)).toHaveLength(7)
+    expect(first.create.map((p) => p.number)).toHaveLength(10)
     expect(first.keep).toEqual([])
 
     const populated = withSheets(nodes)
     const second = missingSheets(populated)
     expect(second.create).toEqual([])
-    expect(second.keep).toHaveLength(7)
+    expect(second.keep).toHaveLength(10)
   })
 
   test('adding a level only adds that level`s sheet', () => {

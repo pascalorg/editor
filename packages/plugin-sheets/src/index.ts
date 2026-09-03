@@ -9,13 +9,9 @@
  * Ctrl+K → "Open sheets", or the Sheets panel in the rail.
  */
 import type { Plugin } from '@pascal-app/core'
-import {
-  type CommandAction,
-  type EditorHostPanel,
-  useCommandRegistry,
-} from '@pascal-app/editor'
+import { type CommandAction, type EditorHostPanel, useCommandRegistry } from '@pascal-app/editor'
 import { sheetsNodeDefinitions } from './definitions'
-import { generateDefaultSet } from './generate'
+import { generateDefaultSet, regenerateCover } from './generate'
 import { sceneNodes } from './model'
 import { mountSheetsWorkspace, openSheets } from './overlay'
 import { printSet } from './print'
@@ -74,6 +70,16 @@ export function registerSheetsCommands(): void {
       },
     },
     {
+      id: 'sheets.cover',
+      label: 'Rebuild cover sheet (A0.0)',
+      group: 'Sheets',
+      keywords: ['cover', 'a0.0', 'project data', 'sheet index', 'general notes'],
+      execute: () => {
+        regenerateCover()
+        openSheets()
+      },
+    },
+    {
       id: 'sheets.print',
       label: 'Print sheets to PDF',
       group: 'Sheets',
@@ -86,21 +92,41 @@ export function registerSheetsCommands(): void {
   useCommandRegistry.getState().register(actions)
 }
 
-export { sheetsNodeDefinitions } from './definitions'
 export {
+  buildCoverBlock,
+  computeProjectData,
+  type ProjectData,
+  polygonAreaSqM,
+  projectSubtitle,
+  UNKNOWN as PROJECT_DATA_UNKNOWN,
+} from './cover'
+export { sheetsNodeDefinitions } from './definitions'
+export { drawTable, isNumericColumn, SCHEDULE_LEGEND, tableHeight } from './draw-table'
+export {
+  type DrawingProvider,
+  type DrawingResult,
   NO_SECTION_MARKER_NOTE,
   registerSheetDrawingProvider,
   sectionMarkers,
   splitProvidedGeometry,
-  type DrawingProvider,
-  type DrawingResult,
 } from './drawings'
-export { generateDefaultSet, missingSheets, planDefaultSet, type Plan } from './generate'
-export { composeAll, composeSheet, type ComposedSheet } from './page'
+export {
+  COVER_LAYOUT,
+  coverViewports,
+  defaultSectionMarkers,
+  ensureSectionMarkers,
+  generateDefaultSet,
+  missingSheets,
+  type Plan,
+  planDefaultSet,
+  regenerateCover,
+  type SectionMarkerSpec,
+} from './generate'
 export { closeSheets, openSheets, shouldCloseOnEscape } from './overlay'
-export { printSet } from './print'
+export { type ComposedSheet, composeAll, composeSheet } from './page'
 export { coverFrontPose, findFrontDoor } from './pose'
-export { buildSchedule, resolveMarks } from './schedule'
+export { printSet } from './print'
 export * from './scale'
+export { buildSchedule, resolveMarks } from './schedule'
 export * from './schema'
 export { useSheets } from './store'

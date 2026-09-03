@@ -24,13 +24,14 @@ import {
   rotateBounds,
   unionBounds,
 } from './bounds'
-import { drawTable } from './draw-table'
-import { adaptSchedule, buildSchedule, type ScheduleTable } from './schedule'
-import { INK, INK_SOFT } from './titleblock'
+import { buildCoverBlock, type CoverBlock } from './cover'
+import { drawTable, SCHEDULE_LEGEND } from './draw-table'
 import type { AnyNodeLike, NodeMap } from './model'
-import { levelLabel } from './model'
-import { sheetInchesToWorld } from './scale'
+import { levelLabel, sheets } from './model'
+import { scaleLabel, sheetInchesToWorld, worldToSheetInches } from './scale'
+import { adaptSchedule, buildSchedule, type ScheduleTable } from './schedule'
 import type { ViewportLayers, ViewportNode } from './schema'
+import { INK, INK_SOFT, MONO, SANS } from './titleblock'
 
 /* ------------------------------------------------- provider registry */
 
@@ -38,7 +39,10 @@ export type DrawingResult = {
   primitives: FloorplanGeometry[]
   bounds: { minX: number; minY: number; maxX: number; maxY: number }
 }
-export type DrawingProvider = (nodes: NodeMap, args: Record<string, unknown>) => DrawingResult | null
+export type DrawingProvider = (
+  nodes: NodeMap,
+  args: Record<string, unknown>,
+) => DrawingResult | null
 
 const providers = new Map<string, DrawingProvider>()
 
@@ -156,15 +160,76 @@ const MEP_TYPES = new Set([
   'pipe-trap',
 ])
 
+/** Bones kinds that belong to the ELECTRICAL layer, not the framing layer. */
+const BONES_ELECTRICAL = new Set(['bones:device', 'bones:service'])
+
+/**
+ * The kinds a ROOF PLAN shows. `resolveNodeForDrawingType`
+ * (`packages/editor/src/lib/floorplan/drawing-coordination.ts`) only ever
+ * consults `def.extensions['pascal:editor/floorplan'].resolveForDrawing`, and
+ * the ONLY kind in the tree that implements it is `construction-dimension` —
+ * so `drawingType: 'roof-plan'` on its own would draw a floor plan with the
+ * roof linework on top of it. The filter is therefore ours to apply: a roof
+ * plan is the roof, its penetrations and its drainage, and nothing else.
+ */
+const ROOF_PLAN_TYPES = new Set([
+  'roof',
+  'roof-segment',
+  'skylight',
+  'chimney',
+  'dormer',
+  'cupola',
+  'gutter',
+  'downspout',
+  'ridge-vent',
+  'box-vent',
+  'eyebrow-vent',
+  'turbine-vent',
+  'solar-panel',
+  'lean-to-extension',
+  'construction-dimension',
+  'structural-grid',
+  'measurement',
+])
+
+/** The kinds a FOUNDATION PLAN shows — the slab, what bears on it, the grid. */
+const FOUNDATION_PLAN_TYPES = new Set([
+  'slab',
+  'wall',
+  'column',
+  'stair',
+  'stair-segment',
+  'construction-dimension',
+  'structural-grid',
+  'measurement',
+])
+
 /** Whether a node type is drawn under this viewport's layer switches. */
 export function acceptsNode(layers: ViewportLayers, type: string, category?: string): boolean {
   if (FURNITURE_TYPES.has(type)) return layers.furniture
   if (MEP_TYPES.has(type)) return layers.mep
+  if (BONES_ELECTRICAL.has(type)) return layers.electrical
   if (type.startsWith('bones:')) return layers.framing
   if (type.startsWith('utilities:')) return layers.siteUtilities
   if (type === 'terrain' || type === 'scan') return layers.terrain
   if (category === 'analysis') return false
   return true
+}
+
+/**
+ * The layer switches, narrowed by what the drawing type is ABOUT. A roof plan
+ * that also drew every wall and door would just be a floor plan with ridges on
+ * it — which is exactly what `drawingType` alone produces today.
+ */
+export function acceptsNodeForDrawing(
+  layers: ViewportLayers,
+  type: string,
+  category: string | undefined,
+  drawingType: string | undefined,
+): boolean {
+  if (drawingType === 'roof-plan' && !ROOF_PLAN_TYPES.has(type)) return false
+  if (drawingType === 'foundation-plan' && !FOUNDATION_PLAN_TYPES.has(type)) return false
+  return acceptsNode(layers, type, category)
 }
 
 /* ------------------------------------------------------- resolution */
@@ -185,6 +250,11 @@ export type DrawnViewport = {
   title: string
   /** The scale actually drawn (a fitted viewport may not use `viewport.scale`). */
   scale: number | undefined
+  /**
+   * Cover blocks and other composed plates carry their own headings; the
+   * numbered viewport label strip would only repeat them.
+   */
+  noLabel?: boolean
 }
 
 /**
@@ -312,6 +382,22 @@ export function resolveViewport(vp: ViewportNode, ctx: ResolveContext): DrawnVie
       return resolveProvided(vp, nodes)
     case 'schedule':
       return resolveSchedule(vp, nodes)
+    case 'cover':
+      return {
+        plate: buildCoverBlock({
+          block: (vp.coverBlock ?? 'title') as CoverBlock,
+          nodes,
+          x: vp.x,
+          y: vp.y,
+          w: vp.w,
+          h: vp.h,
+          index: sheets(nodes).map((s) => ({ number: s.number, title: s.title })),
+        }),
+        live: null,
+        title: vp.title || 'Cover',
+        scale: undefined,
+        noLabel: true,
+      }
     case 'notes':
       return {
         plate: textBlock(vp, vp.text || 'General notes'),
@@ -358,7 +444,12 @@ export function resolveViewport(vp: ViewportNode, ctx: ResolveContext): DrawnVie
       }
     }
     default:
-      return { plate: note(vp, 'unsupported viewport'), live: null, title: vp.title, scale: undefined }
+      return {
+        plate: note(vp, 'unsupported viewport'),
+        live: null,
+        title: vp.title,
+        scale: undefined,
+      }
   }
 }
 
@@ -374,7 +465,8 @@ function resolvePlan(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
     levelId: levelId as never,
     drawingType: (vp.drawingType ?? 'floor-plan') as never,
     annotationVisibility: annotationVisibility(vp.layers),
-    accept: (node, category) => acceptsNode(vp.layers, node.type, category),
+    accept: (node, category) =>
+      acceptsNodeForDrawing(vp.layers, node.type, category, vp.drawingType),
   })
   const model = combine(entries.map((e) => e.model))
   const annotations = combine(entries.map((e) => e.annotations))
@@ -384,10 +476,7 @@ function resolvePlan(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
   const rotationDeg = editor.resolveSheetRotationDeg(nodes as never, levelId as never)
   const bounds = vp.crop
     ? vp.crop
-    : padBounds(
-        unionBounds(geometryListBounds([model]), geometryListBounds([annotations])),
-        0.4,
-      )
+    : padBounds(unionBounds(geometryListBounds([model]), geometryListBounds([annotations])), 0.4)
   return {
     plate: [],
     live: { model, annotations, view: windowFor(vp, bounds, rotationDeg), rotationDeg },
@@ -411,8 +500,7 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
     return { plate: note(vp, NO_SECTION_MARKER_NOTE), live: null, title, scale: vp.scale }
   }
   if (!build) {
-    const pending =
-      vp.kind === 'site-plan' ? 'site plan — pending' : `${vp.kind} — pending`
+    const pending = vp.kind === 'site-plan' ? 'site plan — pending' : `${vp.kind} — pending`
     return { plate: note(vp, pending), live: null, title, scale: vp.scale }
   }
   let result: DrawingResult | null = null
@@ -435,8 +523,14 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
     return { plate: note(vp, `${vp.kind} — nothing to draw`), live: null, title, scale: vp.scale }
   }
   const split = splitProvidedGeometry(result.primitives, vp.layers)
+  const cornerPlate =
+    vp.kind === 'site-plan' && vp.layers.siteUtilities
+      ? siteCornerBlocks(vp, nodes, northRotationOf(nodes))
+      : vp.kind === 'site-plan'
+        ? siteCornerBlocks(vp, {}, northRotationOf(nodes))
+        : []
   return {
-    plate: [],
+    plate: cornerPlate,
     live: {
       model: combine(split.model.length > 0 ? [{ kind: 'group', children: split.model }] : []),
       annotations: combine(
@@ -448,6 +542,229 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
     title,
     scale: vp.scale,
   }
+}
+
+/* ------------------------------------------- site-plan corner blocks */
+
+/**
+ * The utility kinds a site plan can carry (WS4's `plugin-utilities`), with the
+ * swatch each one is drawn with. A legend entry is only printed for a kind
+ * that is ACTUALLY in the scene — a legend listing symbols that are not on the
+ * drawing is worse than no legend.
+ */
+export const SITE_UTILITY_LEGEND: { type: string; label: string; dash?: string; color: string }[] =
+  [
+    { type: 'utilities:water-line', label: 'WATER SERVICE', dash: '0.10 0.05', color: '#2563eb' },
+    { type: 'utilities:sewer-line', label: 'SANITARY SEWER', dash: '0.16 0.06', color: '#65a30d' },
+    {
+      type: 'utilities:gas-line',
+      label: 'GAS SERVICE',
+      dash: '0.14 0.05 0.03 0.05',
+      color: '#ca8a04',
+    },
+    {
+      type: 'utilities:electric-line',
+      label: 'ELECTRIC SERVICE',
+      dash: '0.12 0.06',
+      color: '#dc2626',
+    },
+    { type: 'utilities:storm-line', label: 'STORM DRAIN', dash: '0.20 0.06', color: '#0891b2' },
+    { type: 'utilities:utility-line', label: 'UTILITY RUN', dash: '0.12 0.06', color: '#7c3aed' },
+    { type: 'utilities:utility-pole', label: 'UTILITY POLE', color: '#7c3aed' },
+    { type: 'utilities:service-point', label: 'SERVICE POINT', color: '#7c3aed' },
+  ]
+
+/**
+ * A north arrow + graphic scale bar + utilities legend, in SHEET INCHES, in
+ * the bottom-left corner of a site-plan viewport.
+ *
+ * A graphic scale bar is the one thing on a site plan that survives being
+ * photocopied at the counter, which is why it is drawn here rather than left
+ * to the numeric scale in the title block. The bar length is chosen as a round
+ * number of feet that is at most 2.4 in of paper at the viewport's scale.
+ */
+export function siteCornerBlocks(
+  vp: ViewportNode,
+  nodes: NodeMap,
+  northRotation: number,
+): FloorplanGeometry[] {
+  const out: FloorplanGeometry[] = []
+  const pad = 0.22
+  const legend = SITE_UTILITY_LEGEND.filter((entry) =>
+    Object.values(nodes).some((n) => n?.type === entry.type),
+  )
+  const legendH = legend.length > 0 ? 0.34 + legend.length * 0.22 : 0
+  const boxW = Math.min(3.2, vp.w * 0.34)
+  const boxH = 1.42 + legendH
+  const x = vp.x + pad
+  const y = vp.y + vp.h - pad - boxH
+
+  out.push({
+    kind: 'rect',
+    x,
+    y,
+    width: boxW,
+    height: boxH,
+    fill: '#ffffff',
+    stroke: INK,
+    strokeWidth: 0.014,
+  })
+
+  // North arrow: a filled needle, rotated by the site's north rotation.
+  const nx = x + 0.42
+  const ny = y + 0.62
+  const r = 0.34
+  out.push({
+    kind: 'group',
+    transform: { translate: [nx, ny], rotate: northRotation },
+    children: [
+      {
+        kind: 'polygon',
+        points: [
+          [0, -r],
+          [r * 0.42, r * 0.55],
+          [0, r * 0.24],
+          [-r * 0.42, r * 0.55],
+        ],
+        fill: INK,
+        stroke: INK,
+        strokeWidth: 0.008,
+      },
+    ],
+  })
+  out.push({
+    kind: 'text',
+    x: nx,
+    y: y + 1.16,
+    text: 'N',
+    fontSize: 0.2,
+    fill: INK,
+    fontWeight: 800,
+    fontFamily: SANS,
+    textAnchor: 'middle',
+  })
+
+  // Graphic scale bar.
+  const barX = x + 0.94
+  const barY = y + 0.66
+  const barMax = boxW - 1.16
+  const feet = chooseBarFeet(vp.scale, barMax)
+  const barW = worldToSheetInches(feet * 0.3048, vp.scale)
+  const half = barW / 2
+  out.push({ kind: 'rect', x: barX, y: barY, width: half, height: 0.11, fill: INK, stroke: 'none' })
+  out.push({
+    kind: 'rect',
+    x: barX + half,
+    y: barY,
+    width: half,
+    height: 0.11,
+    fill: '#ffffff',
+    stroke: INK,
+    strokeWidth: 0.008,
+  })
+  out.push({
+    kind: 'rect',
+    x: barX,
+    y: barY,
+    width: barW,
+    height: 0.11,
+    fill: 'none',
+    stroke: INK,
+    strokeWidth: 0.008,
+  })
+  for (const [i, label] of ['0', `${feet / 2}`, `${feet}`].entries()) {
+    out.push({
+      kind: 'text',
+      x: barX + (barW * i) / 2,
+      y: barY - 0.06,
+      text: label,
+      fontSize: 0.12,
+      fill: INK,
+      fontFamily: MONO,
+      fontWeight: 600,
+      textAnchor: 'middle',
+    })
+  }
+  out.push({
+    kind: 'text',
+    x: barX,
+    y: barY + 0.32,
+    text: `FEET   ${scaleLabel(vp.scale)}`,
+    fontSize: 0.12,
+    fill: INK_SOFT,
+    fontFamily: MONO,
+    fontWeight: 600,
+  })
+
+  if (legend.length > 0) {
+    let ly = y + 1.34
+    out.push({
+      kind: 'text',
+      x: x + 0.18,
+      y: ly,
+      text: 'UTILITIES LEGEND',
+      fontSize: 0.135,
+      fill: INK,
+      fontWeight: 800,
+      fontFamily: SANS,
+    })
+    out.push({
+      kind: 'line',
+      x1: x + 0.18,
+      y1: ly + 0.07,
+      x2: x + boxW - 0.18,
+      y2: ly + 0.07,
+      stroke: INK,
+      strokeWidth: 0.012,
+    })
+    ly += 0.28
+    for (const entry of legend) {
+      if (entry.dash) {
+        out.push({
+          kind: 'line',
+          x1: x + 0.18,
+          y1: ly - 0.05,
+          x2: x + 0.74,
+          y2: ly - 0.05,
+          stroke: entry.color,
+          strokeWidth: 0.022,
+          strokeDasharray: entry.dash,
+        })
+      } else {
+        out.push({
+          kind: 'circle',
+          cx: x + 0.46,
+          cy: ly - 0.05,
+          r: 0.075,
+          fill: '#ffffff',
+          stroke: entry.color,
+          strokeWidth: 0.022,
+        })
+      }
+      out.push({
+        kind: 'text',
+        x: x + 0.86,
+        y: ly,
+        text: entry.label,
+        fontSize: 0.115,
+        fill: INK,
+        fontFamily: SANS,
+        fontWeight: 600,
+      })
+      ly += 0.22
+    }
+  }
+  return out
+}
+
+/** The largest round number of feet whose bar still fits `maxIn` of paper. */
+export function chooseBarFeet(scale: number, maxIn: number): number {
+  const steps = [10, 20, 30, 40, 50, 60, 80, 100, 150, 200, 300, 400]
+  let best = steps[0] as number
+  for (const feet of steps) {
+    if (worldToSheetInches(feet * 0.3048, scale) <= maxIn) best = feet
+  }
+  return best
 }
 
 /**
@@ -488,21 +805,49 @@ function resolveSchedule(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
   const levelId = vp.levelId ?? firstLevelId(nodes)
   const of = vp.scheduleOf ?? 'doors'
   if (!levelId) {
-    return { plate: note(vp, 'no level'), live: null, title: vp.title || 'Schedule', scale: undefined }
+    return {
+      plate: note(vp, 'no level'),
+      live: null,
+      title: vp.title || 'Schedule',
+      scale: undefined,
+    }
   }
   const table =
     (of !== 'rooms' ? hostSchedule(nodes, levelId, of) : null) ??
     buildSchedule(nodes as never, levelId, of)
   const title = vp.title || table.title
   if (table.rows.length === 0) {
-    return { plate: note(vp, `${title.toLowerCase()} — nothing scheduled`), live: null, title, scale: undefined }
+    return {
+      plate: note(vp, `${title.toLowerCase()} — nothing scheduled`),
+      live: null,
+      title,
+      scale: undefined,
+    }
   }
-  return { plate: drawTable(table, vp.x, vp.y, vp.w, vp.h), live: null, title, scale: undefined }
+  // The table draws its own title and legend, so the numbered viewport label
+  // strip is suppressed rather than printing the same words twice.
+  return {
+    plate: drawTable(table, vp.x, vp.y, vp.w, vp.h, {
+      title,
+      legend: of === 'rooms' ? 'Areas are to the inside face of finish.' : SCHEDULE_LEGEND,
+    }),
+    live: null,
+    title,
+    scale: undefined,
+    noLabel: true,
+  }
+}
+
+/** The site node's north rotation in radians; 0 when there is no site node. */
+function northRotationOf(nodes: NodeMap): number {
+  const site = Object.values(nodes).find((n) => n?.type === 'site')
+  const value = site?.northRotation
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0
 }
 
 export function firstLevelId(nodes: NodeMap): string | undefined {
   const levels = Object.values(nodes).filter((n): n is AnyNodeLike => n?.type === 'level')
-  levels.sort((a, b) => (((a.level as number) ?? 0) - ((b.level as number) ?? 0)))
+  levels.sort((a, b) => ((a.level as number) ?? 0) - ((b.level as number) ?? 0))
   return levels[0]?.id
 }
 

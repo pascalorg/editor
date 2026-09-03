@@ -72,6 +72,12 @@ export const ProjectRecordNode = BaseNode.extend({
       state: z.string().default(''),
     })
     .default({ city: '', county: '', state: '' }),
+  /**
+   * What is being applied for — drives the cover subtitle ('adu', 'jadu',
+   * 'addition', 'remodel', 'residence'). Free text so an unusual project type
+   * prints itself rather than being flattened to "RESIDENCE".
+   */
+  projectType: z.string().default(''),
   documentStatus: DocumentStatus.default('preliminary'),
   revisions: z.array(Revision).default([]),
   date: z.string().default(''),
@@ -109,6 +115,8 @@ export const ViewportKind = z.enum([
   'schedule',
   'notes',
   'image',
+  /** A composed block of the cover sheet — see `cover.ts`. */
+  'cover',
 ])
 export type ViewportKind = z.infer<typeof ViewportKind>
 
@@ -183,6 +191,8 @@ export const ViewportNode = BaseNode.extend({
   pose: CoverPose.optional(),
   /** schedule only: which table. */
   scheduleOf: z.enum(['doors', 'windows', 'rooms']).optional(),
+  /** cover only: which block of the cover composition this viewport draws. */
+  coverBlock: z.enum(['title', 'index', 'data', 'notes']).optional(),
   /** notes only. */
   text: z.string().default(''),
   /** image / captured view3d only. */
@@ -190,8 +200,4 @@ export const ViewportNode = BaseNode.extend({
 }).describe('A live window onto the model, placed on a sheet.')
 export type ViewportNode = z.infer<typeof ViewportNode>
 
-export const SHEETS_KINDS = [
-  'sheets:project-record',
-  'sheets:sheet',
-  'sheets:viewport',
-] as const
+export const SHEETS_KINDS = ['sheets:project-record', 'sheets:sheet', 'sheets:viewport'] as const

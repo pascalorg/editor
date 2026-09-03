@@ -6,6 +6,9 @@ import {
   buildWindowFloorplanSchedule,
   computeDoorFloorplanLevelData,
   computeWindowFloorplanLevelData,
+  OPENING_TAG_FONT_SIZE,
+  OPENING_TAG_HEIGHT,
+  OPENING_TAG_STROKE_WIDTH,
   resolveOpeningDimensionDocumentation,
 } from './opening-documentation'
 
@@ -224,5 +227,80 @@ describe('opening construction documentation', () => {
         : undefined
     expect(outline(doorTag)?.kind === 'polygon' ? outline(doorTag)?.points.length : 0).toBe(6)
     expect(outline(windowTag)?.kind === 'polygon' ? outline(windowTag)?.points.length : 0).toBe(24)
+  })
+
+  /*
+   * TAG SIZE. The tag is emitted in world metres and read at a drawing scale,
+   * so the assertions below convert back to PAPER INCHES at 1/4" = 1'-0"
+   * (scale 48) — the size an architect actually judges a tag by.
+   */
+  const REFERENCE_SCALE = 48
+  const INCHES_PER_METRE = 39.37007874015748
+  const toPaperInches = (metres: number) => (metres * INCHES_PER_METRE) / REFERENCE_SCALE
+
+  test('the tag is 0.28 in tall with a 0.02 in outline at 1/4 inch scale', () => {
+    expect(toPaperInches(OPENING_TAG_HEIGHT)).toBeCloseTo(0.28, 6)
+    expect(toPaperInches(OPENING_TAG_STROKE_WIDTH)).toBeCloseTo(0.02, 6)
+    expect(toPaperInches(OPENING_TAG_FONT_SIZE)).toBeCloseTo(0.11, 6)
+  })
+
+  test('the drawn outline and mark text use those sizes', () => {
+    const { doorA, nodes, wall } = fixture()
+    const annotation = buildOpeningMarkAnnotation(
+      doorA,
+      wall,
+      computeDoorFloorplanLevelData({ siblings: [doorA], nodes }),
+    )
+    expect(annotation?.kind).toBe('group')
+    if (annotation?.kind !== 'group') return
+    const outline = annotation.children.find((child) => child.kind === 'polygon')
+    expect(outline?.kind === 'polygon' ? outline.strokeWidth : null).toBeCloseTo(
+      OPENING_TAG_STROKE_WIDTH,
+      9,
+    )
+    // Flat-top hexagon: the vertical span is the tag height.
+    if (outline?.kind === 'polygon') {
+      const ys = outline.points.map((p) => p[1])
+      expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(OPENING_TAG_HEIGHT, 9)
+    }
+    const label = annotation.children.find((child) => child.kind === 'text')
+    expect(label?.kind === 'text' ? label.fontSize : null).toBeCloseTo(OPENING_TAG_FONT_SIZE, 9)
+    expect(label?.kind === 'text' ? label.fontWeight : null).toBe(700)
+  })
+
+  test('the tag clears the wall face rather than sitting on it', () => {
+    const { doorA, nodes, wall } = fixture()
+    const annotation = buildOpeningMarkAnnotation(
+      doorA,
+      wall,
+      computeDoorFloorplanLevelData({ siblings: [doorA], nodes }),
+    )
+    if (annotation?.kind !== 'group') throw new Error('expected a group')
+    const outline = annotation.children.find((child) => child.kind === 'polygon')
+    if (outline?.kind !== 'polygon') throw new Error('expected an outline')
+    const nearEdge = Math.min(...outline.points.map((p) => p[1]))
+    // Wall face is at z = thickness / 2 = 0.1; the tag's near edge stands off it.
+    expect(nearEdge).toBeGreaterThan(0.1)
+    // …and a leader is drawn across that gap.
+    const leader = annotation.children.find((child) => child.kind === 'line')
+    expect(leader).toBeDefined()
+  })
+
+  test('a wide tag grows sideways, never taller', () => {
+    const { doorA, nodes, wall } = fixture()
+    const wide = { ...doorA, mark: 'D-101-EXT' }
+    const annotation = buildOpeningMarkAnnotation(
+      wide,
+      wall,
+      computeDoorFloorplanLevelData({ siblings: [wide], nodes }),
+    )
+    if (annotation?.kind !== 'group') throw new Error('expected a group')
+    const outline = annotation.children.find((child) => child.kind === 'polygon')
+    if (outline?.kind !== 'polygon') throw new Error('expected an outline')
+    const xs = outline.points.map((p) => p[0])
+    const ys = outline.points.map((p) => p[1])
+    expect(Math.max(...ys) - Math.min(...ys)).toBeCloseTo(OPENING_TAG_HEIGHT, 9)
+    // Nine characters at 0.11 in each need well over the tag's own height.
+    expect(Math.max(...xs) - Math.min(...xs)).toBeGreaterThan(OPENING_TAG_HEIGHT * 2)
   })
 })

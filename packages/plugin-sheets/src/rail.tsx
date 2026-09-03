@@ -26,12 +26,13 @@ import {
 import { useEffect, useState } from 'react'
 import { captureViewportImage } from './capture'
 import { sectionMarkers } from './drawings'
-import { generateDefaultSet } from './generate'
+import { generateDefaultSet, regenerateCover } from './generate'
 import {
   addSheet,
   addViewport,
   levelLabel,
   levels,
+  type NodeMap,
   projectRecord,
   readOrCreateProjectRecord,
   removeSheet,
@@ -42,7 +43,6 @@ import {
   updateProjectRecord,
   updateViewport,
   viewports,
-  type NodeMap,
 } from './model'
 import { printSet } from './print'
 import { PAPER_SIZES, SCALE_PRESETS, scaleLabel } from './scale'
@@ -131,7 +131,9 @@ export function Chip({
         ? 'bg-amber-500/15 text-amber-500'
         : 'bg-accent text-muted-foreground'
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium text-[10px] ${cls}`}>
+    <span
+      className={`inline-flex items-center rounded-full px-2 py-0.5 font-medium text-[10px] ${cls}`}
+    >
       {children}
     </span>
   )
@@ -592,7 +594,9 @@ export function Rail({ nodes }: { nodes: NodeMap }) {
             key={panel}
             onClick={() => S.setPanel(panel)}
             className={`flex-1 rounded-md px-2 py-1 text-[11px] capitalize ${
-              S.panel === panel ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/50'
+              S.panel === panel
+                ? 'bg-accent text-foreground'
+                : 'text-muted-foreground hover:bg-accent/50'
             }`}
           >
             {panel}
@@ -644,6 +648,27 @@ export function Rail({ nodes }: { nodes: NodeMap }) {
                 </div>
               </PanelSection>
             ))}
+            {current?.number === 'A0.0' && (
+              <PanelSection title="Cover">
+                <p className="px-1 pb-2 text-[11px] text-muted-foreground">
+                  Replaces A0.0&rsquo;s viewports with the current cover layout &mdash; project name
+                  block, hero view, sheet index, computed project data and general notes. No other
+                  sheet is touched.
+                </p>
+                <RailButton
+                  icon={<Sparkles className="h-3.5 w-3.5" />}
+                  label="Rebuild cover"
+                  onClick={() =>
+                    void run('Rebuilding the cover', () => {
+                      const result = regenerateCover()
+                      return result.ok
+                        ? `A0.0 rebuilt with ${result.viewports} viewports`
+                        : (result.reason ?? 'nothing to do')
+                    })
+                  }
+                />
+              </PanelSection>
+            )}
             {current && isSectionSheet(current, nodes) && (
               <SectionsPanel sheet={current} nodes={nodes} onAdded={(id) => S.select(id)} />
             )}
@@ -1040,9 +1065,15 @@ function LayersPanel({
           type="button"
           onClick={() => set({ locked: !viewport.locked })}
           className={`flex w-full items-center justify-center gap-1.5 rounded-md border px-2 py-1.5 text-xs ${viewport.locked ? 'border-border bg-background text-foreground hover:bg-accent' : 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/15'}`}
-          title={viewport.locked ? 'Locked — click to allow moving and resizing on the paper' : 'Unlocked — drag on the paper; click to lock'}
+          title={
+            viewport.locked
+              ? 'Locked — click to allow moving and resizing on the paper'
+              : 'Unlocked — drag on the paper; click to lock'
+          }
         >
-          {viewport.locked ? '🔒 Locked on the sheet — unlock to move' : '🔓 Unlocked — drag on the sheet, click to lock'}
+          {viewport.locked
+            ? '🔒 Locked on the sheet — unlock to move'
+            : '🔓 Unlocked — drag on the sheet, click to lock'}
         </button>
         <div className="grid grid-cols-4 gap-1">
           {(['x', 'y', 'w', 'h'] as const).map((key) => (
@@ -1094,24 +1125,32 @@ function LayersPanel({
 
 function SettingsPanel({ sheet }: { sheet: SheetNode | undefined }) {
   if (!sheet) {
-    return (
-      <p className="px-1 py-4 text-center text-muted-foreground text-xs">No sheet selected.</p>
-    )
+    return <p className="px-1 py-4 text-center text-muted-foreground text-xs">No sheet selected.</p>
   }
   const set = (patch: Partial<SheetNode>) =>
-    (useScene.getState() as unknown as {
-      updateNode: (id: string, data: Record<string, unknown>) => void
-    }).updateNode(sheet.id, patch as Record<string, unknown>)
+    (
+      useScene.getState() as unknown as {
+        updateNode: (id: string, data: Record<string, unknown>) => void
+      }
+    ).updateNode(sheet.id, patch as Record<string, unknown>)
   return (
     <PanelSection title="Sheet">
       <div className="grid grid-cols-[80px_1fr] gap-2">
         <label className={labelCls}>
           Number
-          <input className={input} value={sheet.number} onChange={(e) => set({ number: e.target.value })} />
+          <input
+            className={input}
+            value={sheet.number}
+            onChange={(e) => set({ number: e.target.value })}
+          />
         </label>
         <label className={labelCls}>
           Title
-          <input className={input} value={sheet.title} onChange={(e) => set({ title: e.target.value })} />
+          <input
+            className={input}
+            value={sheet.title}
+            onChange={(e) => set({ title: e.target.value })}
+          />
         </label>
       </div>
       <label className={labelCls}>

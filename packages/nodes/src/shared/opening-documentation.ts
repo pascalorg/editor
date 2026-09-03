@@ -141,6 +141,35 @@ export function buildWindowFloorplanSchedule(args: {
   }
 }
 
+/**
+ * TAG SIZE — sized for the paper, not for the screen.
+ *
+ * These annotations are emitted in WORLD METRES and printed at the sheet's
+ * drawing scale, so a size only means something once you name the scale it is
+ * read at. The reference is a 1/4" = 1'-0" plan (scale 48, i.e. 48 world
+ * inches per paper inch), which is what a residential floor plan is drawn at,
+ * and the targets are the ones a PlanCrafters sheet uses:
+ *
+ *   tag height   0.28 in of paper  → 0.28 × 48 / 39.3701 = 0.341 m
+ *   tag stroke   0.02 in of paper  → 0.024 m
+ *   mark text    0.11 in of paper  → 0.134 m, bold
+ *
+ * The previous values (0.32 m tall, 0.02 m stroke, 0.15 m text) drew a tag
+ * that was slightly short with a hairline outline — 0.016 in of paper, under
+ * half the intended weight — and text that overflowed it.
+ */
+const TAG_REFERENCE_SCALE = 48
+const INCHES_PER_METRE = 39.37007874015748
+/** Paper inches → world metres at the reference scale. */
+const paperInches = (inches: number): number => (inches * TAG_REFERENCE_SCALE) / INCHES_PER_METRE
+
+export const OPENING_TAG_HEIGHT = paperInches(0.28)
+export const OPENING_TAG_STROKE_WIDTH = paperInches(0.02)
+export const OPENING_TAG_FONT_SIZE = paperInches(0.11)
+export const OPENING_TAG_LEADER_WIDTH = paperInches(0.012)
+/** Clear distance from the wall face to the near edge of the tag. */
+export const OPENING_TAG_STANDOFF = paperInches(0.16)
+
 export function buildOpeningMarkAnnotation(
   opening: OpeningNode,
   wall: WallNode,
@@ -169,59 +198,69 @@ export function buildOpeningMarkAnnotation(
   const openingCenterX = wall.start[0] + dirX * opening.position[0]
   const openingCenterZ = wall.start[1] + dirZ * opening.position[0]
   const halfDepth = (wall.thickness ?? 0.1) / 2
-  const bubbleOffset = halfDepth + 0.4
-  const bubbleX = openingCenterX + normalX * bubbleOffset * side
-  const bubbleZ = openingCenterZ + normalZ * bubbleOffset * side
   const explicitMark = opening.mark?.trim()
   const mark = levelData?.markById.get(opening.id) ?? (explicitMark || fallbackMark(opening))
-  const bubbleWidth = Math.max(0.38, mark.length * 0.105 + 0.18)
-  const bubbleHeight = 0.32
+  const bubbleHeight = OPENING_TAG_HEIGHT
+  // Monospace bold sets at roughly 0.62 em; the tag keeps 0.9 of its own
+  // height as end padding so a four-character mark never touches the outline.
+  const bubbleWidth = Math.max(
+    bubbleHeight * 1.25,
+    mark.length * OPENING_TAG_FONT_SIZE * 0.62 + bubbleHeight * 0.9,
+  )
+  // The tag sits just OUTSIDE the wall face on the exterior side.
+  const bubbleOffset = halfDepth + OPENING_TAG_STANDOFF + bubbleHeight / 2
+  const bubbleX = openingCenterX + normalX * bubbleOffset * side
+  const bubbleZ = openingCenterZ + normalZ * bubbleOffset * side
   const leaderEndOffset = bubbleOffset - bubbleHeight / 2
 
-  return withFloorplanGeometryMetadata(
-    {
-      kind: 'group',
-      children: [
-        {
-          kind: 'line',
-          x1: openingCenterX + normalX * halfDepth * side,
-          y1: openingCenterZ + normalZ * halfDepth * side,
-          x2: openingCenterX + normalX * leaderEndOffset * side,
-          y2: openingCenterZ + normalZ * leaderEndOffset * side,
+  const children: FloorplanGeometry[] = []
+  // A leader only where there is actually a gap to bridge; a leader drawn
+  // under a tag that already touches the wall is just a smudge.
+  if (leaderEndOffset - halfDepth > OPENING_TAG_STROKE_WIDTH) {
+    children.push({
+      kind: 'line',
+      x1: openingCenterX + normalX * halfDepth * side,
+      y1: openingCenterZ + normalZ * halfDepth * side,
+      x2: openingCenterX + normalX * leaderEndOffset * side,
+      y2: openingCenterZ + normalZ * leaderEndOffset * side,
+      stroke,
+      strokeWidth: OPENING_TAG_LEADER_WIDTH,
+    })
+  }
+  // Door tag = hexagon, window tag = ellipse (WS3).
+  children.push(
+    opening.type === 'door'
+      ? {
+          kind: 'polygon',
+          points: hexagonPoints(bubbleX, bubbleZ, bubbleWidth, bubbleHeight),
+          fill: '#ffffff',
           stroke,
-          strokeWidth: 0.018,
+          strokeWidth: OPENING_TAG_STROKE_WIDTH,
+        }
+      : {
+          kind: 'polygon',
+          points: ellipsePoints(bubbleX, bubbleZ, bubbleWidth / 2, bubbleHeight / 2),
+          fill: '#ffffff',
+          stroke,
+          strokeWidth: OPENING_TAG_STROKE_WIDTH,
         },
-        // Door tag = hexagon, window tag = ellipse (WS3).
-        opening.type === 'door'
-          ? {
-              kind: 'polygon',
-              points: hexagonPoints(bubbleX, bubbleZ, bubbleWidth, bubbleHeight),
-              fill: '#ffffff',
-              stroke,
-              strokeWidth: 0.02,
-            }
-          : {
-              kind: 'polygon',
-              points: ellipsePoints(bubbleX, bubbleZ, bubbleWidth / 2, bubbleHeight / 2),
-              fill: '#ffffff',
-              stroke,
-              strokeWidth: 0.02,
-            },
-        {
-          kind: 'text',
-          x: bubbleX,
-          y: bubbleZ,
-          text: mark,
-          fontSize: 0.15,
-          fill: stroke,
-          fontWeight: 700,
-          fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-          textAnchor: 'middle',
-          dominantBaseline: 'middle',
-          upright: true,
-        },
-      ],
-    },
+  )
+  children.push({
+    kind: 'text',
+    x: bubbleX,
+    y: bubbleZ,
+    text: mark,
+    fontSize: OPENING_TAG_FONT_SIZE,
+    fill: stroke,
+    fontWeight: 700,
+    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+    textAnchor: 'middle',
+    dominantBaseline: 'middle',
+    upright: true,
+  })
+
+  return withFloorplanGeometryMetadata(
+    { kind: 'group', children },
     { annotationRole: 'opening-mark' },
   )
 }
@@ -373,12 +412,7 @@ function exteriorSide(wall: WallNode, fallback: -1 | 1): -1 | 1 {
  * a 24-gon — indistinguishable at tag size in both SVG and the vector PDF,
  * and it needs no change to the renderers.
  */
-function ellipsePoints(
-  cx: number,
-  cy: number,
-  rx: number,
-  ry: number,
-): Array<[number, number]> {
+function ellipsePoints(cx: number, cy: number, rx: number, ry: number): Array<[number, number]> {
   const segments = 24
   const points: Array<[number, number]> = []
   for (let index = 0; index < segments; index++) {

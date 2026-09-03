@@ -5,7 +5,7 @@
 import type { FloorplanGeometry } from '@pascal-app/core'
 import type { SheetPdfWindow } from '@pascal-app/editor'
 import { resolveViewport } from './drawings'
-import { projectRecord, siteAddress, sheets, viewports, type NodeMap } from './model'
+import { type NodeMap, projectRecord, sheets, siteAddress, viewports } from './model'
 import { paperSize, scaleLabel } from './scale'
 import type { SheetNode, ViewportNode } from './schema'
 import { buildStatusStamp, buildTitleBlock, buildViewportLabel } from './titleblock'
@@ -56,9 +56,13 @@ export function composeSheet(sheet: SheetNode, options: ComposeOptions): Compose
       })
     }
     if (drawn.scale) scalesUsed.add(drawn.scale)
-    overlay.push(
-      ...buildViewportLabel(index + 1, drawn.title, drawn.scale, vp.x, vp.y + vp.h + 0.28, vp.w),
-    )
+    // Cover blocks carry their own headings — a numbered label strip under
+    // "SHEET INDEX" would only say it twice.
+    if (!drawn.noLabel) {
+      overlay.push(
+        ...buildViewportLabel(index + 1, drawn.title, drawn.scale, vp.x, vp.y + vp.h + 0.28, vp.w),
+      )
+    }
     placements.push({ viewport: vp, title: drawn.title, scale: drawn.scale })
   })
 
