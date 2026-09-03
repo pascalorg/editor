@@ -9,6 +9,7 @@ import {
   type SceneMaterialId,
   WALL_SLOT_DEFAULT,
   WALL_SURFACE_SLOT_DEFAULTS,
+  wallAssemblyFinishRef,
   type WallNode,
   type WallSurfaceMaterialSpec,
   type WallSurfaceSide,
@@ -126,6 +127,14 @@ function resolveWallFaceMaterial(
     return getSurfaceVisibleMaterial(spec, shading)
   }
 
+  // No paint on this face: the wall ASSEMBLY's cladding (WS5) skins the
+  // exterior — a "2x6 lap siding" wall reads as lap siding without the user
+  // painting it. Painting a slot above still wins.
+  if (side === 'exterior') {
+    const finishRef = wallAssemblyFinishRef(wallNode)
+    if (finishRef) return resolveWallSlotDefault(finishRef, shading)
+  }
+
   return resolveWallSlotDefault(WALL_SLOT_DEFAULT[side], shading)
 }
 
@@ -171,7 +180,11 @@ function wallFaceMaterialSignature(
     }
     return JSON.stringify({ ref })
   }
-  return getWallSurfaceMaterialSignature(getEffectiveWallSurfaceMaterial(wallNode, side))
+  return JSON.stringify({
+    legacy: getWallSurfaceMaterialSignature(getEffectiveWallSurfaceMaterial(wallNode, side)),
+    // Changing the assembly's cladding must re-skin the face.
+    assemblyFinish: side === 'exterior' ? wallAssemblyFinishRef(wallNode) : null,
+  })
 }
 
 function wallSlotMaterialSignature(
@@ -214,6 +227,10 @@ function resolveWallFaceColor(
       return sceneMaterial ? resolveMaterial(sceneMaterial.material).color : fallback
     }
     return fallback
+  }
+  const finishRef = side === 'exterior' ? wallAssemblyFinishRef(wallNode) : null
+  if (finishRef && !hasExplicitMaterial(getEffectiveWallSurfaceMaterial(wallNode, side))) {
+    return getMaterialPresetByRef(finishRef)?.mapProperties?.color ?? fallback
   }
   return getSurfaceColor(getEffectiveWallSurfaceMaterial(wallNode, side), fallback)
 }

@@ -431,6 +431,30 @@ export const WALL_ASSEMBLY_PRESETS: readonly WallAssemblyPreset[] = [
   },
 ] as const
 
+/**
+ * The catalog material the 3D exterior face is skinned with for each
+ * assembly cladding, when the wall has no painted exterior slot of its own.
+ * This is what makes a wall that SAYS "lap siding" in its assembly LOOK like
+ * lap siding in the viewer, the elevation and the section alike. Stone has
+ * no catalog finish yet and 'none' is bare — both return null (drawn with the
+ * plain wall default). Only `library:` refs, never an invented colour.
+ */
+export const WALL_FINISH_LIBRARY_REF: Record<string, string | null> = {
+  siding: 'library:siding-lap-white',
+  'fiber-cement': 'library:siding-lap-greige',
+  stucco: 'library:concrete-stucco',
+  brick: 'library:flooring-agedbrick',
+  stone: null,
+  none: null,
+}
+
+/** `library:` ref for the wall's assembly cladding, or null when it has none. */
+export function wallAssemblyFinishRef(wall: Pick<WallNode, 'assembly'>): string | null {
+  const finish = wall.assembly?.exterior?.finish
+  if (!finish) return null
+  return WALL_FINISH_LIBRARY_REF[finish] ?? null
+}
+
 export function getWallAssemblyPreset(id: string | undefined): WallAssemblyPreset | undefined {
   if (!id) return undefined
   return WALL_ASSEMBLY_PRESETS.find((preset) => preset.id === id)

@@ -417,6 +417,8 @@ export {
   resolveWallAssembly,
   resolveWallExteriorSide,
   SIDING_LAP,
+  WALL_FINISH_LIBRARY_REF,
+  wallAssemblyFinishRef,
   STONE_VENEER_UNVERIFIED,
   STUCCO_3_COAT,
   STUD_2X4,
