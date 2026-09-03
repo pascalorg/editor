@@ -268,7 +268,30 @@ export function coverFrontPose(nodes: PoseNodes, levelId?: string): Pose | null 
     target[1] + Math.sin(el) * distance,
     target[2] + dir[1] * horizontal,
   ]
-  return { position: round3(position), target: round3(target) }
+  // Walls are LEVEL-LOCAL; the camera lives in WORLD (site) space, where the
+  // building sits at `building.position` turned by its yaw. Without this the
+  // shot framed the level origin, and a house sited on its lot drifted out of
+  // the corner of its own cover picture.
+  const frame = buildingFrame(nodes, level)
+  return { position: round3(frame(position)), target: round3(frame(target)) }
+}
+
+/** Level-local `[x, y, z]` → world, through the building that owns `levelId`. */
+function buildingFrame(nodes: PoseNodes, levelId: string | undefined): (v: Vec3) => Vec3 {
+  const level = levelId ? nodes[levelId] : undefined
+  const parentId = typeof level?.parentId === 'string' ? level.parentId : null
+  const building =
+    (parentId ? nodes[parentId] : undefined) ??
+    Object.values(nodes).find((n) => n?.type === 'building')
+  if (!building || building.type !== 'building') return (v) => v
+  const p = Array.isArray(building.position) ? (building.position as number[]) : [0, 0, 0]
+  const r = Array.isArray(building.rotation) ? (building.rotation as number[]) : [0, 0, 0]
+  const yaw = typeof r[1] === 'number' ? r[1] : 0
+  const cos = Math.cos(yaw)
+  const sin = Math.sin(yaw)
+  const [px, py, pz] = [p[0] ?? 0, p[1] ?? 0, p[2] ?? 0]
+  // three.js rotation about +Y (the convention BuildingRenderer applies).
+  return ([x, y, z]) => [px + x * cos + z * sin, py + y, pz - x * sin + z * cos]
 }
 
 function rotate2(v: [number, number], radians: number): [number, number] {
