@@ -227,6 +227,7 @@ export function SiteNodePanel() {
             setbacks?.[key] != null ? String(Math.round((setbacks[key] / METRES_PER_FOOT) * 10) / 10) : ''
           }
           inputMode="decimal"
+          onFocus={(event) => event.target.select()}
           key={`${key}-${setbacks?.[key] ?? 'none'}`}
           onBlur={(event) => {
             const raw = event.target.value.trim()
@@ -376,6 +377,7 @@ export function SiteNodePanel() {
                 Math.round(((node.northRotation ?? 0) * 180) / Math.PI * 10) / 10,
               )}
               inputMode="decimal"
+          onFocus={(event) => event.target.select()}
               key={String(node.northRotation ?? 0)}
               onBlur={(event) => {
                 const deg = Number(event.target.value.trim())
