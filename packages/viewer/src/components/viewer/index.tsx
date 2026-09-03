@@ -31,6 +31,7 @@ import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
+import { BATCH_SPIKE_ENABLED, BatchedMeshSpike } from './batched-mesh-spike'
 import FrameLimiter from './frame-limiter'
 import { Lights } from './lights'
 import { PerfMonitor } from './perf-monitor'
@@ -632,6 +633,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
             system, so a receipt closes when the user can actually see the
             edit. */}
           {(perf || PERF_OVERLAY_ENABLED) && <PerfActionSettleSystem />}
+          {BATCH_SPIKE_ENABLED && <BatchedMeshSpike />}
           {children}
         </ErrorBoundary>
       </Canvas>
