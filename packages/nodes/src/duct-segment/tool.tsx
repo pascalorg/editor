@@ -497,6 +497,9 @@ function ductEndPort(duct: DuctSegmentNode, id: 'start' | 'end'): ScenePort | nu
 const DuctSegmentTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const unit = useViewer((s) => s.unit)
+  const toolDefaults = useEditor((s) => s.toolDefaults['duct-segment']) as
+    | Partial<DraftProfile>
+    | undefined
   const cursorRef = useRef<Group>(null)
   // Cross-section profile for the next committed segment. Q toggles
   // round/rect, [ / ] steps the round diameter, and snapping the start
@@ -560,6 +563,16 @@ const DuctSegmentTool = () => {
   // Latest mouse clientY from grid:move; used so the Alt anchor knows where
   // the cursor was at key-press time.
   const lastClientYRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!toolDefaults) return
+    setProfile((current) => ({
+      shape: toolDefaults.shape ?? current.shape,
+      diameter: toolDefaults.diameter ?? current.diameter,
+      width: toolDefaults.width ?? current.width,
+      height: toolDefaults.height ?? current.height,
+    }))
+  }, [toolDefaults])
 
   const ghostFittings = useMemo(() => {
     const last = draftPoints.at(-1)

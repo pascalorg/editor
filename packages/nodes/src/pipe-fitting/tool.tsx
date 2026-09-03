@@ -107,6 +107,7 @@ function resolvePlacement(
  */
 const PipeFittingTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
+  const toolDefaults = useEditor((s) => s.toolDefaults['pipe-fitting'])
   const [placement, setPlacement] = useState<Placement | null>(null)
   const axis = useEditor((s) => s.rotationAxis)
   // Accumulated manual rotation from R/T presses. Ref (not state) so the
@@ -119,8 +120,13 @@ const PipeFittingTool = () => {
 
   // Ghost matches exactly what a click creates (the kind's defaults).
   const previewNode = useMemo(
-    () => PipeFittingNode.parse({ ...pipeFittingDefinition.defaults(), name: 'Pipe fitting' }),
-    [],
+    () =>
+      PipeFittingNode.parse({
+        ...pipeFittingDefinition.defaults(),
+        ...toolDefaults,
+        name: 'Pipe fitting',
+      }),
+    [toolDefaults],
   )
   const ghost = useMemo(() => {
     const group = buildPipeFittingGeometry(previewNode)
@@ -168,6 +174,7 @@ const PipeFittingTool = () => {
       )
       const fitting = PipeFittingNode.parse({
         ...pipeFittingDefinition.defaults(),
+        ...toolDefaults,
         name: 'Pipe fitting',
         position,
         rotation,
@@ -209,7 +216,7 @@ const PipeFittingTool = () => {
       emitter.off('grid:click', onClick)
       window.removeEventListener('keydown', onKeyDown, true)
     }
-  }, [activeLevelId, previewNode])
+  }, [activeLevelId, previewNode, toolDefaults])
 
   if (!activeLevelId || !placement) return null
 

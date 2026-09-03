@@ -105,6 +105,7 @@ function resolvePlacement(
  */
 const DuctFittingTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
+  const toolDefaults = useEditor((s) => s.toolDefaults['duct-fitting'])
   const [placement, setPlacement] = useState<Placement | null>(null)
   const axis = useEditor((s) => s.rotationAxis)
   // Accumulated manual rotation from R/T presses. Ref (not state) so the
@@ -117,8 +118,13 @@ const DuctFittingTool = () => {
 
   // Ghost matches exactly what a click creates (the kind's defaults).
   const previewNode = useMemo(
-    () => DuctFittingNode.parse({ ...ductFittingDefinition.defaults(), name: 'Duct fitting' }),
-    [],
+    () =>
+      DuctFittingNode.parse({
+        ...ductFittingDefinition.defaults(),
+        ...toolDefaults,
+        name: 'Duct fitting',
+      }),
+    [toolDefaults],
   )
   const ghost = useMemo(() => {
     const group = buildDuctFittingGeometry(previewNode)
@@ -166,6 +172,7 @@ const DuctFittingTool = () => {
       )
       const fitting = DuctFittingNode.parse({
         ...ductFittingDefinition.defaults(),
+        ...toolDefaults,
         name: 'Duct fitting',
         position,
         rotation,
@@ -207,7 +214,7 @@ const DuctFittingTool = () => {
       emitter.off('grid:click', onClick)
       window.removeEventListener('keydown', onKeyDown, true)
     }
-  }, [activeLevelId, previewNode])
+  }, [activeLevelId, previewNode, toolDefaults])
 
   if (!activeLevelId || !placement) return null
 

@@ -263,6 +263,7 @@ const CabinetTool = () => {
   const [placement, setPlacement] = useState<CabinetPlacement | null>(null)
   const [draftSegments, setDraftSegments] = useState<DraftSegment[]>([])
   const [yaw, setYaw] = useState(0)
+  const toolDefaults = useEditor((state) => state.toolDefaults.cabinet)
   const placementType = useCabinetPlacementType((s) => s.type)
   const islandMode = placementType === 'island'
   const yawRef = useRef(0)
@@ -286,10 +287,14 @@ const CabinetTool = () => {
   const facingPointRef = useRef(new Vector3())
 
   const previewNode = useMemo(() => {
-    const runDefaults = cabinetDefinition.defaults()
+    const runDefaults = CabinetNode.parse({
+      ...cabinetDefinition.defaults(),
+      ...toolDefaults,
+    })
     return CabinetModuleNode.parse({
       ...cabinetModuleDefinition.defaults(),
       ...DEFAULT_PLACEMENT_PRESET.createPatch(),
+      ...toolDefaults,
       showPlinth: runDefaults.showPlinth,
       plinthHeight: runDefaults.plinthHeight,
       toeKickDepth: runDefaults.toeKickDepth,
@@ -298,7 +303,7 @@ const CabinetTool = () => {
       countertopOverhang: runDefaults.countertopOverhang,
       countertopBackOverhang: runDefaults.countertopBackOverhang,
     })
-  }, [])
+  }, [toolDefaults])
   const placementDimensions = useMemo(() => {
     const defaults = cabinetDefinition.defaults()
     return [
@@ -816,12 +821,13 @@ const CabinetTool = () => {
       const island = islandModeRef.current
       const cabinet = CabinetNode.parse({
         ...cabinetDefinition.defaults(),
+        ...toolDefaults,
         name: island ? 'Kitchen Island' : 'Modular Cabinet',
         position,
         rotation: yaw,
         parentId: activeLevelId,
-        depth: patch.depth ?? cabinetDefinition.defaults().depth,
-        carcassHeight: patch.carcassHeight ?? cabinetDefinition.defaults().carcassHeight,
+        depth: previewNode.depth,
+        carcassHeight: previewNode.carcassHeight,
         ...(island && {
           countertopBackOverhang: ISLAND_SEATING_OVERHANG,
           withFinishedBack: true,
@@ -831,6 +837,7 @@ const CabinetTool = () => {
         CabinetModuleNode.parse({
           ...cabinetModuleDefinition.defaults(),
           ...patch,
+          ...toolDefaults,
           name: index === 0 ? (patch.name ?? 'Base Cabinet') : `Base Cabinet ${index + 1}`,
           parentId: cabinet.id,
           position: [localX, runModuleBaseY(cabinet.plinthHeight, cabinet.showPlinth), 0],
@@ -1133,6 +1140,7 @@ const CabinetTool = () => {
     placementSnapFootprint,
     previewNode,
     publishFloorplanPreview,
+    toolDefaults,
   ])
 
   if (!activeLevelId || !placement) return null

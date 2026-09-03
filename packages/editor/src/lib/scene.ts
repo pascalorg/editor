@@ -386,11 +386,25 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
   )
 }
 
+export function normalizeSceneGraphNodes(
+  nodes: Readonly<Record<string, unknown>>,
+): Record<string, unknown> {
+  return Object.fromEntries(
+    Object.entries(nodes).map(([id, value]) => {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) return [id, value]
+      const type = (value as { type?: unknown }).type
+      if (typeof type !== 'string') return [id, value]
+      const parsed = nodeRegistry.get(type)?.schema.safeParse(value)
+      return [id, parsed?.success ? parsed.data : value]
+    }),
+  )
+}
+
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   const defaultInstalledPlugins = editorHostPanelRegistry.getDefaultInstalledPluginIds()
   if (hasUsableSceneGraph(sceneGraph)) {
     const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
-    useScene.getState().setScene(nodes as any, rootNodeIds as any, {
+    useScene.getState().setScene(normalizeSceneGraphNodes(nodes) as any, rootNodeIds as any, {
       collections: collections as any,
       materials: materials as any,
       installedPlugins: installedPlugins ?? defaultInstalledPlugins,

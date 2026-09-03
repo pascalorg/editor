@@ -82,4 +82,25 @@ describe('XR settings descriptors', () => {
 
     expect(createXRSettingPatch(settings, row, 3)).toEqual({ area: 9, width: 3 })
   })
+
+  test('includes registry tool chips for spatial placement controls', () => {
+    const node = { id: 'test_1', type: 'test' } as unknown as AnyNode
+    const chip = {
+      cycle: () => undefined,
+      labels: { cabinet: 'Type: Cabinet', island: 'Type: Island' },
+      subscribe: () => () => undefined,
+      value: () => 'cabinet',
+    }
+    const settings = {
+      ...context(node, { groups: [] }, 'tool'),
+      definition: {
+        parametrics: { groups: [] },
+        toolHints: [{ chip, key: 'I', label: 'Placement type' }],
+      } as unknown as AnyNodeDefinition,
+    }
+
+    expect(collectXRSettingRows(settings)).toEqual([
+      expect.objectContaining({ kind: 'tool-chip', label: 'Placement type' }),
+    ])
+  })
 })

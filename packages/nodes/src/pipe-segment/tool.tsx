@@ -138,10 +138,16 @@ function projectToAngleLock(
 const PipeSegmentTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
   const unit = useViewer((s) => s.unit)
-  const [system, setSystem] = useState<'waste' | 'vent'>('waste')
+  const toolDefaults = useEditor((s) => s.toolDefaults['pipe-segment']) as
+    | Partial<PipeSegmentNode>
+    | undefined
+  const initialDefaults = pipeSegmentDefinition.defaults()
+  const [system, setSystem] = useState<'waste' | 'vent'>(
+    toolDefaults?.system ?? initialDefaults.system,
+  )
   const [sloped, setSloped] = useState(false)
   const [diameter, setDiameter] = useState<number>(
-    (pipeSegmentDefinition.defaults() as { diameter: number }).diameter,
+    toolDefaults?.diameter ?? initialDefaults.diameter,
   )
   const [draftStart, setDraftStart] = useState<[number, number, number] | null>(null)
   const [cursorPos, setCursorPos] = useState<[number, number, number] | null>(null)
@@ -162,6 +168,12 @@ const PipeSegmentTool = () => {
   const startBodyRef = useRef<RunBodyHit | null>(null)
   const altAnchorRef = useRef<{ clientY: number; baseY: number } | null>(null)
   const lastClientYRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    if (!toolDefaults) return
+    if (toolDefaults.system) setSystem(toolDefaults.system)
+    if (typeof toolDefaults.diameter === 'number') setDiameter(toolDefaults.diameter)
+  }, [toolDefaults])
 
   const displayStart =
     draftStart &&
@@ -311,6 +323,7 @@ const PipeSegmentTool = () => {
       const makePipe = (from: [number, number, number], to: [number, number, number]) =>
         PipeSegmentNode.parse({
           ...pipeSegmentDefinition.defaults(),
+          ...toolDefaults,
           name: systemRef.current === 'vent' ? 'Vent' : 'Drain',
           path: [from, to],
           diameter: diameterRef.current,
@@ -634,7 +647,7 @@ const PipeSegmentTool = () => {
       altAnchorRef.current = null
       clearDrawAlignment()
     }
-  }, [activeLevelId])
+  }, [activeLevelId, toolDefaults])
 
   if (!activeLevelId) return null
 

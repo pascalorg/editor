@@ -1,5 +1,6 @@
 'use client'
 
+import { useXRWandPanelSettings } from '@/lib/xr/wand-panel-settings'
 import { XRBuildPanel } from './build-panel'
 import { XRPaintPanel } from './paint-panel'
 import {
@@ -11,6 +12,7 @@ import { XRSettingsPanel } from './settings-panel'
 import { PanelFace } from './spatial-controls'
 
 export function XRWandPanel({ handedness = 'left' }: { handedness?: XRHandedness }) {
+  const panelScale = useXRWandPanelSettings((state) => state.panelScale)
   const panels = [
     <XRPaintPanel key="paint" />,
     <XRBuildPanel key="build" />,
@@ -26,6 +28,7 @@ export function XRWandPanel({ handedness = 'left' }: { handedness?: XRHandedness
       onPointerUp={(event) => event.stopPropagation()}
       pointerEventsOrder={100}
       pointerEventsType={{ deny: 'grab' }}
+      scale={panelScale}
     >
       {panels.map((panel, index) => {
         const pose = resolveWandPanelFacePose(index, handedness)

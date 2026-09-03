@@ -35,13 +35,19 @@ function snap(value: number, step: number): number {
  */
 const HvacEquipmentTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
+  const toolDefaults = useEditor((s) => s.toolDefaults['hvac-equipment'])
   const [cursor, setCursor] = useState<[number, number, number] | null>(null)
   const [yaw, setYaw] = useState(0)
   const yawRef = useRef(0)
 
   const previewNode = useMemo(
-    () => HvacEquipmentNode.parse({ ...hvacEquipmentDefinition.defaults(), name: 'Furnace' }),
-    [],
+    () =>
+      HvacEquipmentNode.parse({
+        ...hvacEquipmentDefinition.defaults(),
+        ...toolDefaults,
+        name: 'Furnace',
+      }),
+    [toolDefaults],
   )
   const ghost = useMemo(() => {
     const group = buildHvacEquipmentGeometry(previewNode)
@@ -79,6 +85,7 @@ const HvacEquipmentTool = () => {
       const position = resolveAligned(event)
       const unit = HvacEquipmentNode.parse({
         ...hvacEquipmentDefinition.defaults(),
+        ...toolDefaults,
         name: 'Furnace',
         position,
         rotation: yawRef.current,
@@ -117,7 +124,7 @@ const HvacEquipmentTool = () => {
       window.removeEventListener('keydown', onKeyDown, true)
       clearDrawAlignment()
     }
-  }, [activeLevelId])
+  }, [activeLevelId, toolDefaults])
 
   if (!activeLevelId || !cursor) return null
 

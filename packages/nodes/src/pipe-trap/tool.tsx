@@ -25,20 +25,18 @@ function snap(value: number, step: number): number {
  */
 const PipeTrapTool = () => {
   const activeLevelId = useViewer((s) => s.selection.levelId)
+  const toolDefaults = useEditor((s) => s.toolDefaults['pipe-trap'])
   const [cursor, setCursor] = useState<[number, number, number] | null>(null)
   const [yaw, setYaw] = useState(0)
-  const [diameter] = useState(pipeTrapDefinition.defaults().diameter)
   const yawRef = useRef(0)
-  const diameterRef = useRef(diameter)
-  diameterRef.current = diameter
 
   const previewNode = useMemo(
     () =>
       PipeTrapNode.parse({
         ...pipeTrapDefinition.defaults(),
-        diameter,
+        ...toolDefaults,
       }),
-    [diameter],
+    [toolDefaults],
   )
   const ghost = useMemo(() => {
     const group = buildPipeTrapGeometry(previewNode)
@@ -63,7 +61,7 @@ const PipeTrapTool = () => {
           number,
           number,
         ],
-        diameter: diameterRef.current,
+        diameter: previewNode.diameter,
       }
     }
 
@@ -75,6 +73,7 @@ const PipeTrapTool = () => {
       const r = resolve(event)
       const trap = PipeTrapNode.parse({
         ...pipeTrapDefinition.defaults(),
+        ...toolDefaults,
         diameter: r.diameter,
         position: r.position,
         rotation: yawRef.current,
@@ -106,7 +105,7 @@ const PipeTrapTool = () => {
       emitter.off('grid:click', onClick)
       window.removeEventListener('keydown', onKeyDown, true)
     }
-  }, [activeLevelId])
+  }, [activeLevelId, previewNode.diameter, toolDefaults])
 
   if (!activeLevelId || !cursor) return null
 
@@ -122,7 +121,7 @@ const PipeTrapTool = () => {
         zIndexRange={[100, 0]}
       >
         <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs tabular-nums shadow-sm backdrop-blur">
-          <span className="font-medium text-foreground">{diameter}" Trap</span>
+          <span className="font-medium text-foreground">{previewNode.diameter}" Trap</span>
           <span aria-hidden className="text-muted-foreground">
             ·
           </span>

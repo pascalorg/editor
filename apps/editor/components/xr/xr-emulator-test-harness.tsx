@@ -8,7 +8,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { useEditor, useInteractionScope } from '@pascal-app/editor'
+import { getHistoryCommandState, useEditor, useInteractionScope } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useXR } from '@react-three/xr'
@@ -16,6 +16,7 @@ import { useEffect } from 'react'
 import { Box3, Object3D, Quaternion, Raycaster, Vector3 } from 'three'
 import { getEmulatedXRDevice } from '@/lib/xr/emulator'
 import { resolveEmulatedInputPose } from '@/lib/xr/emulator-ray'
+import { useXRWandPanelSettings } from '@/lib/xr/wand-panel-settings'
 
 type InputKind = 'controller' | 'hand'
 
@@ -34,6 +35,7 @@ export type XREmulatorTestHarness = {
   ) => Promise<boolean>
   listSceneNodes: () => { id: string; parentId: string | null; type: string }[]
   listSpatialTargets: () => string[]
+  panGodView: (delta: [number, number, number]) => Promise<boolean>
   placeToolOnGrid: (
     toolTarget: string,
     nodeType: string,
@@ -64,16 +66,29 @@ export type XREmulatorTestHarness = {
     distance?: number,
   ) => Promise<Record<string, unknown>>
   readNode: (nodeId: string) => AnyNode | undefined
+  sculptLevelPoints: (points: [number, number][], inputKind?: InputKind) => Promise<boolean>
   snapshot: () => {
+    activePaintMaterial: string | null
     hoveredTarget?: string
+    history: { canRedo: boolean; canUndo: boolean; mode: string; status: string }
+    godViewTransform: { position: number[]; rotationY: number; scale: number[] } | null
     lastGridEvent?: string
     lastNodeEvent?: string
     lastPointerEvent?: string
     levelId: string | null
     mode: string
     nodeCounts: Record<string, number>
+    paintEraser: boolean
+    paintHover: { nodeNoun: string; scopes: string[]; slotLabel: string } | null
+    paintScope: string
+    terrainBrush: { falloff: number; radius: number; shape: string; strength: number }
+    terrainSampling: boolean
+    terrainVerb: string
+    wandPanelScale: number
+    wallSnappingMode: string
     scope: string
     selectedIds: string[]
+    siteHasTerrain: boolean
     tool: string | null
     toolDefaults: Record<string, unknown>
   }
@@ -180,7 +195,7 @@ export function XREmulatorTestHarnessBridge() {
         if (globalThis.__pascalXRHoveredTarget === name) return true
         await waitForXRFrames()
       }
-      return false
+      return findTarget(name) === target
     }
 
     const aimAtNode = async (
@@ -258,24 +273,71 @@ export function XREmulatorTestHarnessBridge() {
       return false
     }
 
+    const panGodView = async (delta: [number, number, number]) => {
+      if (!(await prepareInput('controller'))) return false
+      const device = getEmulatedXRDevice()
+      const root = findTarget('xr-player-scene-root')
+      if (!(device && root)) return false
+      const deviceId = 'controller-right'
+      const transform = (await device.remote.dispatch('get_transform', { device: deviceId })) as {
+        orientation: { w: number; x: number; y: number; z: number }
+        position: { x: number; y: number; z: number }
+      }
+      await device.remote.dispatch('set_gamepad_state', {
+        buttons: [{ index: 1, value: 1 }],
+        device: deviceId,
+      })
+      await waitForXRFrames(2)
+      await device.remote.dispatch('set_transform', {
+        device: deviceId,
+        orientation: transform.orientation,
+        position: {
+          x: transform.position.x + delta[0],
+          y: transform.position.y + delta[1],
+          z: transform.position.z + delta[2],
+        },
+      })
+      await waitForXRFrames(2)
+      await device.remote.dispatch('set_gamepad_state', {
+        buttons: [{ index: 1, value: 0 }],
+        device: deviceId,
+      })
+      await waitForXRFrames()
+      return root.position.lengthSq() > 0.000_001
+    }
+
     const clickLevelPoint = async (
       point: [number, number],
       inputKind: InputKind = 'controller',
     ) => {
       if (!(await prepareInput(inputKind))) return false
       const levelId = useViewer.getState().selection.levelId
-      const level = levelId ? sceneRegistry.nodes.get(levelId) : undefined
+      const levelNode = levelId ? useScene.getState().nodes[levelId] : undefined
+      const levelObject = levelId ? sceneRegistry.nodes.get(levelId) : undefined
       const device = getEmulatedXRDevice()
-      if (!(level && device)) return false
+      if (levelNode?.type !== 'level' || !device) return false
       await device.remote.dispatch('set_transform', {
         device: `${inputKind}-left`,
         orientation: { w: 1, x: 0, y: 0, z: 0 },
         position: { x: -3, y: 1.5, z: 0 },
       })
-      level.updateWorldMatrix(true, false)
+      const buildingObject = levelNode.parentId
+        ? sceneRegistry.nodes.get(levelNode.parentId)
+        : undefined
+      levelObject?.updateWorldMatrix(true, false)
+      buildingObject?.updateWorldMatrix(true, false)
       const target = new Object3D()
-      target.position.copy(level.localToWorld(new Vector3(point[0], 0, point[1])))
-      const normal = new Vector3(0, 1, 0).transformDirection(level.matrixWorld)
+      const localPoint = new Vector3(point[0], levelNode.baseElevation, point[1])
+      target.position.copy(
+        levelObject
+          ? levelObject.localToWorld(new Vector3(point[0], 0, point[1]))
+          : buildingObject
+            ? buildingObject.localToWorld(localPoint)
+            : localPoint,
+      )
+      const normal = new Vector3(0, 1, 0)
+      if (levelObject) normal.transformDirection(levelObject.matrixWorld)
+      else if (buildingObject) normal.transformDirection(buildingObject.matrixWorld)
       target.quaternion.setFromUnitVectors(new Vector3(0, 0, 1), normal)
       target.updateMatrixWorld(true)
       if (!(await setInputPose(target, inputKind, 1.25))) return false
@@ -297,6 +359,49 @@ export function XREmulatorTestHarnessBridge() {
         if (useViewer.getState().selection.selectedIds.includes(nodeId)) return true
       }
       return false
+    }
+
+    const sculptLevelPoints = async (
+      points: [number, number][],
+      inputKind: InputKind = 'controller',
+    ) => {
+      const first = points[0]
+      if (!(first && (await prepareInput(inputKind)))) return false
+      const levelId = useViewer.getState().selection.levelId
+      const levelNode = levelId ? useScene.getState().nodes[levelId] : undefined
+      const device = getEmulatedXRDevice()
+      if (levelNode?.type !== 'level' || !device) return false
+      const buildingObject = levelNode.parentId
+        ? sceneRegistry.nodes.get(levelNode.parentId)
+        : undefined
+      buildingObject?.updateWorldMatrix(true, false)
+      const setPoint = async (point: [number, number]) => {
+        const target = new Object3D()
+        const localPoint = new Vector3(point[0], levelNode.baseElevation, point[1])
+        target.position.copy(buildingObject ? buildingObject.localToWorld(localPoint) : localPoint)
+        const normal = new Vector3(0, 1, 0)
+        if (buildingObject) normal.transformDirection(buildingObject.matrixWorld)
+        target.quaternion.setFromUnitVectors(new Vector3(0, 0, 1), normal)
+        target.updateMatrixWorld(true)
+        return setInputPose(target, inputKind, 1.25)
+      }
+      const siteId = useScene.getState().rootNodeIds[0]
+      const beforeSite = siteId ? useScene.getState().nodes[siteId] : undefined
+      const before = beforeSite?.type === 'site' ? beforeSite.terrain : undefined
+      if (!(await setPoint(first))) return false
+      if (!(await setSelectValueAndWait(1, inputKind, 'selectstart'))) return false
+      for (const point of points.slice(1)) {
+        if (!(await setPoint(point))) {
+          await setSelectValue(0, inputKind)
+          return false
+        }
+        await waitForXRFrames(2)
+      }
+      if (!(await setSelectValueAndWait(0, inputKind, 'selectend'))) return false
+      await waitForXRFrames(2)
+      const afterSite = siteId ? useScene.getState().nodes[siteId] : undefined
+      const after = afterSite?.type === 'site' ? afterSite.terrain : undefined
+      return JSON.stringify(after) !== JSON.stringify(before)
     }
 
     const clickNodeSurface = async (nodeId: string, inputKind: InputKind = 'controller') => {
@@ -514,6 +619,7 @@ export function XREmulatorTestHarnessBridge() {
         const activated = await click(toolTarget, inputKind)
         let deliveredPoints = 0
         if (activated) {
+          await waitForXRFrames(2)
           for (const point of points) {
             if (!(await clickLevelPoint(point, inputKind))) break
             deliveredPoints += 1
@@ -550,15 +656,27 @@ export function XREmulatorTestHarnessBridge() {
           deliveredHostClick,
         }
       },
+      panGodView,
       probe,
       probeNode,
       readNode: (nodeId) => useScene.getState().nodes[nodeId as AnyNode['id']],
+      sculptLevelPoints,
       snapshot: () => {
+        const godViewRoot = findTarget('xr-player-scene-root')
         const nodeCounts: Record<string, number> = {}
         for (const node of Object.values(useScene.getState().nodes)) {
           if (node) nodeCounts[node.type] = (nodeCounts[node.type] ?? 0) + 1
         }
         return {
+          activePaintMaterial: useEditor.getState().activePaintMaterial?.materialPreset ?? null,
+          godViewTransform: godViewRoot
+            ? {
+                position: godViewRoot.position.toArray(),
+                rotationY: godViewRoot.rotation.y,
+                scale: godViewRoot.scale.toArray(),
+              }
+            : null,
+          history: getHistoryCommandState(),
           hoveredTarget: globalThis.__pascalXRHoveredTarget,
           lastGridEvent: globalThis.__pascalXRLastGridEvent,
           lastNodeEvent: globalThis.__pascalXRLastNodeEvent,
@@ -566,8 +684,19 @@ export function XREmulatorTestHarnessBridge() {
           levelId: useViewer.getState().selection.levelId,
           mode: useEditor.getState().mode,
           nodeCounts,
+          paintEraser: useEditor.getState().paintEraser,
+          paintHover: useEditor.getState().paintHover,
+          paintScope: useEditor.getState().paintScope,
+          terrainBrush: useEditor.getState().terrainBrush,
+          terrainSampling: useEditor.getState().terrainSampling,
+          terrainVerb: useEditor.getState().terrainVerb,
+          wandPanelScale: useXRWandPanelSettings.getState().panelScale,
+          wallSnappingMode: useEditor.getState().snappingModeByContext.wall,
           scope: useInteractionScope.getState().scope.kind,
           selectedIds: useViewer.getState().selection.selectedIds,
+          siteHasTerrain: Object.values(useScene.getState().nodes).some(
+            (node) => node?.type === 'site' && node.terrain !== undefined,
+          ),
           tool: useEditor.getState().tool,
           toolDefaults: useEditor.getState().toolDefaults,
         }

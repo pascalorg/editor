@@ -6,6 +6,7 @@ import {
   type ParamAction,
   type ParametricDescriptor,
   type ParamField,
+  type ToolHint,
 } from '@pascal-app/core'
 
 export type XRSettingsContext = {
@@ -33,7 +34,14 @@ export type XRSettingActionRow = {
   label: string
 }
 
-export type XRSettingRow = XRSettingActionRow | XRSettingFieldRow
+export type XRSettingToolChipRow = {
+  hint: ToolHint & { chip: NonNullable<ToolHint['chip']> }
+  id: string
+  kind: 'tool-chip'
+  label: string
+}
+
+export type XRSettingRow = XRSettingActionRow | XRSettingFieldRow | XRSettingToolChipRow
 
 type ResolveXRSettingsContextInput = {
   mode: string
@@ -82,8 +90,21 @@ export function resolveXRSettingsContext({
 
 export function collectXRSettingRows(context: XRSettingsContext): XRSettingRow[] {
   const parametrics = context.definition.parametrics as ParametricDescriptor<AnyNode> | undefined
-  if (!parametrics) return []
   const rows: XRSettingRow[] = []
+
+  if (context.source === 'tool') {
+    context.definition.toolHints?.forEach((hint, index) => {
+      if (!hint.chip || (hint.visible && !hint.visible.value())) return
+      rows.push({
+        hint: hint as ToolHint & { chip: NonNullable<ToolHint['chip']> },
+        id: `tool-chip-${index}-${hint.label}`,
+        kind: 'tool-chip',
+        label: hint.label,
+      })
+    })
+  }
+
+  if (!parametrics) return rows
 
   parametrics.groups.forEach((group, groupIndex) => {
     group.fields.forEach((rawField, fieldIndex) => {

@@ -10,8 +10,15 @@ import {
   subscribeLibraryMaterials,
   toLibraryMaterialRef,
 } from '@pascal-app/core'
-import { getActivePaintMaterialLabel, useEditor } from '@pascal-app/editor'
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import {
+  cyclePaintScope,
+  getActivePaintMaterialLabel,
+  hasActivePaintMaterial,
+  type PaintHoverInfo,
+  paintScopeLabel,
+  useEditor,
+} from '@pascal-app/editor'
+import { useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { activatePaintMode } from '@/lib/build-palette'
 import { PanelIcon } from './panel-icon'
 import { getPage } from './panel-layout'
@@ -106,8 +113,14 @@ export function XRPaintPanel() {
   const activePaintMaterial = useEditor((state) => state.activePaintMaterial)
   const activePaintTarget = useEditor((state) => state.activePaintTarget)
   const paintEraser = useEditor((state) => state.paintEraser)
+  const paintHover = useEditor((state) => state.paintHover)
+  const paintScope = useEditor((state) => state.paintScope)
   const setActivePaintMaterial = useEditor((state) => state.setActivePaintMaterial)
   const setPaintEraser = useEditor((state) => state.setPaintEraser)
+  const setPaintScope = useEditor((state) => state.setPaintScope)
+  const lastPaintHover = useRef<PaintHoverInfo | null>(null)
+  if (mode !== 'material-paint') lastPaintHover.current = null
+  else if (paintHover) lastPaintHover.current = paintHover
   const libraryVersion = useSyncExternalStore(
     subscribeLibraryMaterials,
     getLibraryMaterialsVersion,
@@ -127,6 +140,15 @@ export function XRPaintPanel() {
   const materials = getMaterialsForCategory(category)
   const current = getPage(materials, page, MATERIALS_PER_PAGE)
   const selectedId = getLibraryMaterialIdFromRef(activePaintMaterial?.materialPreset)
+  const paintContext = paintHover ?? lastPaintHover.current
+  const paintEnabled = paintEraser || hasActivePaintMaterial(activePaintMaterial)
+  const availableScopes = paintContext?.scopes ?? ['single']
+  const effectivePaintScope = availableScopes.includes(paintScope) ? paintScope : 'single'
+  const scopeLabel = !paintEnabled
+    ? 'Choose a material'
+    : paintContext
+      ? `Paint: ${paintScopeLabel(effectivePaintScope, paintContext)}`
+      : 'Aim at a surface'
 
   const changeCategory = (direction: -1 | 1) => {
     if (availableCategories.length < 2) return
@@ -252,6 +274,26 @@ export function XRPaintPanel() {
           No materials in this category
         </SpatialText>
       )}
+      <SpatialButton
+        disabled={!paintEnabled || !paintContext || availableScopes.length <= 1}
+        name="xr-paint-scope"
+        onClick={() => setPaintScope(cyclePaintScope(effectivePaintScope, availableScopes))}
+        position={[0, -0.265, 0]}
+        selected={availableScopes.length > 1 && effectivePaintScope !== 'single'}
+        size={[0.47, 0.055]}
+      >
+        <SpatialText
+          anchorX="center"
+          anchorY="middle"
+          color={paintEnabled && paintContext ? XR_WAND_THEME.text : XR_WAND_THEME.muted}
+          fontSize={0.018}
+          maxWidth={0.43}
+          position={[0, 0, 0.012]}
+          textAlign="center"
+        >
+          {scopeLabel}
+        </SpatialText>
+      </SpatialButton>
       <group position={[0, -0.35, 0]}>
         {current.pageCount > 1 && (
           <SpatialButton

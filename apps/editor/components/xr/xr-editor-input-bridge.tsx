@@ -2,26 +2,52 @@
 
 import {
   type AnyNodeId,
+  advanceStroke,
+  applyHeightPatch,
+  beginStroke,
   type EventSuffix,
   emitter,
   type GridEvent,
+  minBrushRadius,
   type NodeEvent,
+  raycastTerrain,
+  type SiteNode,
   sceneRegistry,
+  surfaceHeightAt,
+  type TerrainField,
+  type TerrainStroke,
+  terrainFieldOf,
+  useLiveTerrain,
+  useScene,
 } from '@pascal-app/core'
 import {
   canDirectMoveNode,
+  clipTerrainPatchToSite,
+  commitStroke,
   createEditorApi,
   EDITOR_GRID_INPUT_NAME,
   getSpatialPointerId,
+  resolveFlattenTarget,
+  sculptFieldForSite,
   spatialPointerInput,
+  terrainPointInsideSite,
   useEditor,
   useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useXR } from '@react-three/xr'
-import { useCallback, useEffect, useRef } from 'react'
-import { Plane, Quaternion, Raycaster, Vector3 } from 'three'
+import { type MutableRefObject, useCallback, useEffect, useMemo, useRef } from 'react'
+import {
+  BufferGeometry,
+  Float32BufferAttribute,
+  Line,
+  LineBasicMaterial,
+  Plane,
+  Quaternion,
+  Raycaster,
+  Vector3,
+} from 'three'
 import { activateSelectMode } from '@/lib/build-palette'
 import {
   didXRButtonPressStart,
@@ -52,6 +78,69 @@ type XRGridNativeEvent = {
   timeStamp: number
 }
 
+type XRTerrainFocus = { radius: number; siteId: SiteNode['id']; x: number; z: number }
+const TERRAIN_RING_SEGMENTS = 64
+
+function XRTerrainBrushCursor({ focusRef }: { focusRef: MutableRefObject<XRTerrainFocus | null> }) {
+  const mode = useEditor((state) => state.mode)
+  const shape = useEditor((state) => state.terrainBrush.shape)
+  const verb = useEditor((state) => state.terrainVerb)
+  const geometry = useMemo(() => {
+    const result = new BufferGeometry()
+    result.setAttribute(
+      'position',
+      new Float32BufferAttribute(new Float32Array((TERRAIN_RING_SEGMENTS + 1) * 3), 3),
+    )
+    return result
+  }, [])
+  const line = useMemo(() => {
+    const result = new Line(
+      geometry,
+      new LineBasicMaterial({ color: '#38bdf8', depthTest: false, depthWrite: false }),
+    )
+    result.frustumCulled = false
+    result.name = 'xr-terrain-brush-cursor'
+    result.raycast = () => undefined
+    result.renderOrder = 30
+    return result
+  }, [geometry])
+
+  useEffect(
+    () => () => {
+      geometry.dispose()
+      line.material.dispose()
+    },
+    [geometry, line],
+  )
+  useFrame(() => {
+    const focus = focusRef.current
+    line.visible = mode === 'terrain-sculpt' && focus !== null
+    if (!(line.visible && focus)) return
+    const site = useScene.getState().nodes[focus.siteId]
+    if (site?.type !== 'site') return
+    const field =
+      useLiveTerrain.getState().strokeOf(site.id)?.field ??
+      terrainFieldOf(site) ??
+      sculptFieldForSite(site)
+    const positions = geometry.getAttribute('position')
+    for (let index = 0; index <= TERRAIN_RING_SEGMENTS; index += 1) {
+      const angle = (index / TERRAIN_RING_SEGMENTS) * Math.PI * 2
+      const cos = Math.cos(angle)
+      const sin = Math.sin(angle)
+      const scale =
+        shape === 'square' ? 1 / Math.max(Math.abs(cos), Math.abs(sin), Number.EPSILON) : 1
+      const x = focus.x + cos * focus.radius * scale
+      const z = focus.z + sin * focus.radius * scale
+      positions.setXYZ(index, x, surfaceHeightAt(field, x, z) + 0.02, z)
+    }
+    positions.needsUpdate = true
+    geometry.computeBoundingSphere()
+    line.material.color.set(verb === 'raise' ? '#22c55e' : verb === 'lower' ? '#ef4444' : '#38bdf8')
+  })
+
+  return <primitive object={line} />
+}
+
 function isXRNodePointer(event: NodeEvent): boolean {
   return getSpatialPointerId(event.nativeEvent) != null
 }
@@ -64,6 +153,14 @@ export function XREditorInputBridge() {
   // Logical XR pointer capture: the source that starts a scene press owns its
   // move/up stream until selectend, even when its ray crosses the wand.
   const capturedInputSource = useRef<XRInputSource | null>(null)
+  const terrainInputSources = useRef(new WeakSet<XRInputSource>())
+  const terrainStroke = useRef<{
+    field: TerrainField
+    siteId: SiteNode['id']
+    source: XRInputSource
+    stroke: TerrainStroke
+  } | null>(null)
+  const terrainFocus = useRef<XRTerrainFocus | null>(null)
   const panelInputSources = useRef(new WeakSet<XRInputSource>())
   const cancelPressed = useRef(false)
   const pointerIds = useRef(new WeakMap<XRInputSource, number>())
@@ -76,6 +173,12 @@ export function XREditorInputBridge() {
   const gridPlaneNormal = useRef(new Vector3())
   const gridPlanePoint = useRef(new Vector3())
   const selectReleaseGuard = useRef(new XRSelectReleaseGuard())
+
+  const activeSite = useCallback(() => {
+    const state = useScene.getState()
+    const node = state.rootNodeIds[0] ? state.nodes[state.rootNodeIds[0]] : undefined
+    return node?.type === 'site' ? (node as SiteNode) : null
+  }, [])
 
   const pointerIdFor = useCallback((source: XRInputSource) => {
     const existing = pointerIds.current.get(source)
@@ -113,6 +216,93 @@ export function XREditorInputBridge() {
     },
     [scene, updateRay],
   )
+
+  const terrainPoint = useCallback(
+    (frame: XRFrame, source: XRInputSource, field: TerrainField, site: SiteNode) => {
+      if (!updateRay(frame, source)) return null
+      const origin = rayOrigin.current
+      const direction = rayDirection.current
+      const hit = raycastTerrain(
+        field,
+        [origin.x, origin.y, origin.z],
+        [direction.x, direction.y, direction.z],
+      )
+      return hit && terrainPointInsideSite(site, hit.x, hit.z) ? ([hit.x, hit.z] as const) : null
+    },
+    [updateRay],
+  )
+
+  const abandonTerrainStroke = useCallback(() => {
+    const active = terrainStroke.current
+    if (!active) return false
+    terrainStroke.current = null
+    useLiveTerrain.getState().end(active.siteId)
+    return true
+  }, [])
+
+  const applyTerrainDab = useCallback(
+    (frame: XRFrame, source: XRInputSource) => {
+      const active = terrainStroke.current
+      const site = activeSite()
+      if (!(active && active.source === source && site?.id === active.siteId)) return false
+      const point = terrainPoint(frame, source, active.stroke.snapshot, site)
+      if (!point) return false
+      terrainFocus.current = {
+        radius: active.stroke.settings.radius,
+        siteId: site.id,
+        x: point[0],
+        z: point[1],
+      }
+      const brushPatch = advanceStroke(active.stroke, point[0], point[1])
+      if (!brushPatch) return false
+      const patch = clipTerrainPatchToSite(active.field, brushPatch, site)
+      active.field = applyHeightPatch(active.field, patch)
+      useLiveTerrain.getState().advance(active.siteId, active.field, patch)
+      return true
+    },
+    [activeSite, terrainPoint],
+  )
+
+  const startTerrainStroke = useCallback(
+    (frame: XRFrame, source: XRInputSource) => {
+      const site = activeSite()
+      if (!site) return false
+      const editor = useEditor.getState()
+      const field = sculptFieldForSite(site)
+      const point = terrainPoint(frame, source, field, site)
+      if (!point) return false
+      if (editor.terrainSampling) {
+        editor.setTerrainFlattenTarget(resolveFlattenTarget(field, null, point[0], point[1]))
+        return true
+      }
+      const stroke = beginStroke({
+        field,
+        settings: {
+          ...editor.terrainBrush,
+          radius: Math.max(editor.terrainBrush.radius, minBrushRadius(field)),
+        },
+        target:
+          editor.terrainVerb === 'flatten'
+            ? resolveFlattenTarget(field, editor.terrainFlattenTarget, point[0], point[1])
+            : undefined,
+        verb: editor.terrainVerb,
+      })
+      terrainStroke.current = { field, siteId: site.id, source, stroke }
+      useLiveTerrain.getState().begin(site.id, field)
+      applyTerrainDab(frame, source)
+      return true
+    },
+    [activeSite, applyTerrainDab, terrainPoint],
+  )
+
+  const finishTerrainStroke = useCallback((source: XRInputSource) => {
+    const active = terrainStroke.current
+    if (!(active && active.source === source)) return false
+    terrainStroke.current = null
+    commitStroke(active.siteId, active.field)
+    useLiveTerrain.getState().end(active.siteId)
+    return true
+  }, [])
 
   const createGridEvent = useCallback(
     (
@@ -242,11 +432,22 @@ export function XREditorInputBridge() {
       }
       capturedInputSource.current = event.inputSource
       pulseXRInputSource(event.inputSource)
+      if (useEditor.getState().mode === 'terrain-sculpt') {
+        terrainInputSources.current.add(event.inputSource)
+        startTerrainStroke(event.frame, event.inputSource)
+        return
+      }
       emitGridEvent('pointerdown', event.frame, event.inputSource, 1)
     }
     const onSelectEnd = (event: XRInputSourceEvent) => {
       if (panelInputSources.current.delete(event.inputSource)) {
         selectReleaseGuard.current.cancel(event.inputSource)
+        return
+      }
+      if (terrainInputSources.current.delete(event.inputSource)) {
+        finishTerrainStroke(event.inputSource)
+        selectReleaseGuard.current.cancel(event.inputSource)
+        capturedInputSource.current = null
         return
       }
       if (capturedInputSource.current !== event.inputSource) {
@@ -298,6 +499,12 @@ export function XREditorInputBridge() {
         selectReleaseGuard.current.cancel(event.inputSource)
         return
       }
+      if (terrainInputSources.current.delete(event.inputSource)) {
+        abandonTerrainStroke()
+        selectReleaseGuard.current.cancel(event.inputSource)
+        capturedInputSource.current = null
+        return
+      }
       if (capturedInputSource.current !== event.inputSource) {
         selectReleaseGuard.current.cancel(event.inputSource)
         return
@@ -320,8 +527,18 @@ export function XREditorInputBridge() {
       session.removeEventListener('selectstart', onSelectStart)
       session.removeEventListener('selectend', onSelectEnd)
       session.removeEventListener('selectcancel', onSelectCancel as unknown as EventListener)
+      abandonTerrainStroke()
     }
-  }, [createGridEvent, dispatchWindowPointerEvent, emitGridEvent, isWandPanelHit, session])
+  }, [
+    abandonTerrainStroke,
+    createGridEvent,
+    dispatchWindowPointerEvent,
+    emitGridEvent,
+    finishTerrainStroke,
+    isWandPanelHit,
+    session,
+    startTerrainStroke,
+  ])
 
   useFrame((_, __, frame) => {
     if (!(frame && session)) return
@@ -337,13 +554,29 @@ export function XREditorInputBridge() {
     }
     const source = selectPrimaryXRInputSource(inputSources, capturedInputSource.current)
     const panelHit = source ? isWandPanelHit(frame, source) : false
+    if (source && useEditor.getState().mode === 'terrain-sculpt' && !panelHit) {
+      const site = activeSite()
+      if (site) {
+        const field = terrainStroke.current?.stroke.snapshot ?? sculptFieldForSite(site)
+        const point = terrainPoint(frame, source, field, site)
+        const radius = Math.max(useEditor.getState().terrainBrush.radius, minBrushRadius(field))
+        terrainFocus.current = point ? { radius, siteId: site.id, x: point[0], z: point[1] } : null
+      }
+    } else if (useEditor.getState().mode !== 'terrain-sculpt' || panelHit) {
+      terrainFocus.current = null
+    }
     if (source && shouldRouteXRMove(source, capturedInputSource.current, panelHit)) {
-      emitGridEvent('move', frame, source, capturedInputSource.current ? 1 : 0)
-      spatialPointerInput.move(source, raycaster.current.ray)
+      if (useEditor.getState().mode === 'terrain-sculpt') {
+        if (capturedInputSource.current === source) applyTerrainDab(frame, source)
+      } else {
+        emitGridEvent('move', frame, source, capturedInputSource.current ? 1 : 0)
+        spatialPointerInput.move(source, raycaster.current.ray)
+      }
     }
 
     const nextCancelPressed = isXRCancelPressed(inputSources)
     if (didXRButtonPressStart(cancelPressed.current, nextCancelPressed)) {
+      abandonTerrainStroke()
       activateSelectMode()
       const rightController = inputSources.find(
         (inputSource) => inputSource.handedness === 'right' && inputSource.gamepad != null,
@@ -354,5 +587,5 @@ export function XREditorInputBridge() {
     cancelPressed.current = nextCancelPressed
   })
 
-  return null
+  return <XRTerrainBrushCursor focusRef={terrainFocus} />
 }

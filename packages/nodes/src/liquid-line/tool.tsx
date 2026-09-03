@@ -308,6 +308,7 @@ const LiquidLineTool = () => {
       // rather than folding into one mitered polyline run.
       const line = LiquidLineNode.parse({
         ...liquidLineDefinition.defaults(),
+        ...useEditor.getState().toolDefaults['liquid-line'],
         name: 'Liquid Line',
         path: [start, end],
       })
@@ -325,7 +326,10 @@ const LiquidLineTool = () => {
     const commitTrace = (target: FollowTarget) => {
       const traced = tracePath(target)
       if (!traced) return
-      const defaults = liquidLineDefinition.defaults()
+      const defaults = {
+        ...liquidLineDefinition.defaults(),
+        ...useEditor.getState().toolDefaults['liquid-line'],
+      }
       const create = []
       for (let i = 0; i < traced.length - 1; i++) {
         const a = traced[i]!

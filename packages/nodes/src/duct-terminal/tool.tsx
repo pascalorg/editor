@@ -5,6 +5,8 @@ import {
   type CeilingNode,
   DuctTerminalNode,
   emitter,
+  type GridEvent,
+  type NodeEvent,
   pointInPolygon,
   resolveCeilingHeight,
   resolveLevelId,
@@ -16,6 +18,7 @@ import {
 import {
   CursorSphere,
   getFloorStackPreviewPosition,
+  getSpatialPointerId,
   isGridSnapActive,
   isMagneticSnapActive,
   triggerSFX,
@@ -152,6 +155,7 @@ function resolvePortSnap(
 const DuctTerminalTool = () => {
   const { camera, gl } = useThree()
   const activeLevelId = useViewer((s) => s.selection.levelId)
+  const toolDefaults = useEditor((s) => s.toolDefaults['duct-terminal'])
   const [mount, setMount] = useState<Mount>('floor')
   const [placement, setPlacement] = useState<Placement | null>(null)
 
@@ -164,14 +168,18 @@ const DuctTerminalTool = () => {
   // override the manual M selection (port direction picks floor / ceiling /
   // wall), so the preview must show the inferred mount, not the toolbar one.
   const effectiveMount = placement?.mount ?? mount
-  const previewNode = useMemo(
+  const configuredNode = useMemo(
     () =>
       DuctTerminalNode.parse({
         ...ductTerminalDefinition.defaults(),
+        ...toolDefaults,
         name: 'Register',
-        mount: effectiveMount,
       }),
-    [effectiveMount],
+    [toolDefaults],
+  )
+  const previewNode = useMemo(
+    () => DuctTerminalNode.parse({ ...configuredNode, mount: effectiveMount }),
+    [configuredNode, effectiveMount],
   )
   const ghost = useMemo(() => {
     const group = buildDuctTerminalGeometry(previewNode)
@@ -184,6 +192,12 @@ const DuctTerminalTool = () => {
     })
     return group
   }, [previewNode])
+
+  useEffect(() => {
+    mountRef.current = configuredNode.mount
+    setMount(configuredNode.mount)
+    setPlacement(null)
+  }, [configuredNode.mount])
 
   useEffect(() => {
     if (!activeLevelId) return
@@ -282,6 +296,7 @@ const DuctTerminalTool = () => {
     const commit = (p: Placement) => {
       const terminal = DuctTerminalNode.parse({
         ...ductTerminalDefinition.defaults(),
+        ...toolDefaults,
         name: 'Register',
         mount: p.mount,
         position: p.position,
@@ -297,14 +312,58 @@ const DuctTerminalTool = () => {
       triggerSFX('sfx:item-place')
     }
 
-    // ---- Floor / ceiling: own raycast against a horizontal plane ----
+    const resolveGrid = (event: GridEvent): Placement => {
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      const position = alignDrawPoint(
+        [snap(event.localPosition[0], step), 0, snap(event.localPosition[2], step)],
+        { applySnap: isMagneticSnapActive(), bypass: false },
+      )
+      const snapEnabled = isGridSnapActive() || isMagneticSnapActive()
+      const mated = snapEnabled ? resolvePortSnap(position, yawRef.current) : null
+      return mated
+        ? { position: mated.position, yaw: mated.yaw, mount: mated.mount, snapped: true }
+        : { position, yaw: yawRef.current, mount: 'floor' }
+    }
+
+    const onGridMove = (event: GridEvent) => {
+      if (mountRef.current === 'floor') setPlacement(resolveGrid(event))
+    }
+
+    const onGridClick = (event: GridEvent) => {
+      if (mountRef.current === 'floor') commit(resolveGrid(event))
+    }
+
+    const resolveXRCeiling = (event: NodeEvent): Placement | null => {
+      if (mountRef.current !== 'ceiling' || event.node.type !== 'ceiling') return null
+      if (getSpatialPointerId(event.nativeEvent) == null) return null
+      const world = new Vector3(...event.position)
+      const level = activeLevelMesh()
+      const local = level ? level.worldToLocal(world) : world
+      return {
+        position: [local.x, resolveCeilingHeight(event.node, useScene.getState().nodes), local.z],
+        yaw: yawRef.current,
+        mount: 'ceiling',
+      }
+    }
+
+    const onXRNodeMove = (event: NodeEvent) => {
+      const p = resolveXRCeiling(event)
+      if (p) setPlacement(p)
+    }
+
+    const onXRNodeClick = (event: NodeEvent) => {
+      const p = resolveXRCeiling(event)
+      if (p) commit(p)
+    }
+
+    // ---- Ceiling: desktop owns a canvas ray; XR uses the spatial node ray. ----
     const onPointerMove = (e: PointerEvent) => {
-      if (mountRef.current === 'wall') return
+      if (mountRef.current !== 'ceiling') return
       setPlacement(resolvePlanar(e))
     }
 
     const onCanvasClick = (e: MouseEvent) => {
-      if (mountRef.current === 'wall') return
+      if (mountRef.current !== 'ceiling') return
       if (useViewer.getState().cameraDragging) return
       if ((e as PointerEvent).button !== undefined && (e as PointerEvent).button !== 0) return
       const p = resolvePlanar(e)
@@ -373,18 +432,26 @@ const DuctTerminalTool = () => {
 
     canvas.addEventListener('pointermove', onPointerMove)
     canvas.addEventListener('click', onCanvasClick)
+    emitter.on('grid:move', onGridMove)
+    emitter.on('grid:click', onGridClick)
+    emitter.on('node:move', onXRNodeMove)
+    emitter.on('node:click', onXRNodeClick)
     emitter.on('wall:move', onWallMove)
     emitter.on('wall:click', onWallClick)
     window.addEventListener('keydown', onKeyDown, true)
     return () => {
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('click', onCanvasClick)
+      emitter.off('grid:move', onGridMove)
+      emitter.off('grid:click', onGridClick)
+      emitter.off('node:move', onXRNodeMove)
+      emitter.off('node:click', onXRNodeClick)
       emitter.off('wall:move', onWallMove)
       emitter.off('wall:click', onWallClick)
       window.removeEventListener('keydown', onKeyDown, true)
       clearDrawAlignment()
     }
-  }, [activeLevelId, camera, gl])
+  }, [activeLevelId, camera, gl, toolDefaults])
 
   if (!activeLevelId || !placement) return null
 

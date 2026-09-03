@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
-import { useScene } from '@pascal-app/core'
+import { nodeRegistry, registerNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
+import { z } from 'zod'
 import useEditor from '../store/use-editor'
-import { syncEditorSelectionFromCurrentScene } from './scene'
+import { normalizeSceneGraphNodes, syncEditorSelectionFromCurrentScene } from './scene'
 
 const building = {
   children: ['level_scene-root'],
@@ -59,5 +60,40 @@ describe('scene selection synchronization', () => {
       levelId: level.id,
     })
     expect(useEditor.getState().phase).toBe('structure')
+  })
+})
+
+describe('scene graph normalization', () => {
+  test('materializes registered schema defaults before the graph reaches renderers', () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    try {
+      registerNode({
+        kind: 'test-scene-normalization',
+        schema: z.object({
+          id: z.string(),
+          position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+          rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
+          type: z.literal('test-scene-normalization'),
+        }),
+        schemaVersion: 1,
+      } as never)
+
+      expect(
+        normalizeSceneGraphNodes({
+          test: { id: 'test', type: 'test-scene-normalization' },
+          unknown: { id: 'unknown', type: 'unknown-kind', custom: true },
+        }),
+      ).toEqual({
+        test: {
+          id: 'test',
+          position: [0, 0, 0],
+          rotation: [0, 0, 0],
+          type: 'test-scene-normalization',
+        },
+        unknown: { id: 'unknown', type: 'unknown-kind', custom: true },
+      })
+    } finally {
+      restoreRegistry()
+    }
   })
 })

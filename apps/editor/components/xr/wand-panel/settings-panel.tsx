@@ -14,8 +14,24 @@ import {
   toLibraryMaterialRef,
   useScene,
 } from '@pascal-app/core'
-import { commitParametricNodeFields, useEditor } from '@pascal-app/editor'
-import { toggleXRPlayerMode, useViewer, useXRPlayerMode, XR_PLAYER_MODES } from '@pascal-app/viewer'
+import {
+  commitParametricNodeFields,
+  cycleSnappingModeIn,
+  getHistoryCommandState,
+  getSnappingModeLabel,
+  runRedo,
+  runUndo,
+  subscribeHistoryCommandState,
+  useEditor,
+  useInteractionScope,
+} from '@pascal-app/editor'
+import {
+  requestGodScaleReset,
+  toggleXRPlayerMode,
+  useViewer,
+  useXRPlayerMode,
+  XR_PLAYER_MODES,
+} from '@pascal-app/viewer'
 import { useMemo, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import {
@@ -25,7 +41,14 @@ import {
   resolveXRSettingsContext,
   type XRSettingFieldRow,
   type XRSettingsContext,
+  type XRSettingToolChipRow,
 } from '@/lib/xr/settings'
+import {
+  useXRWandPanelSettings,
+  XR_WAND_PANEL_SCALE_MAX,
+  XR_WAND_PANEL_SCALE_MIN,
+  XR_WAND_PANEL_SCALE_STEP,
+} from '@/lib/xr/wand-panel-settings'
 import { getPage } from './panel-layout'
 import {
   PageArrows,
@@ -37,6 +60,7 @@ import {
   SpatialButton,
 } from './spatial-controls'
 import { SpatialText } from './spatial-text'
+import { XRTerrainSettingsPanel } from './terrain-settings-panel'
 import { XR_WAND_THEME } from './theme'
 
 const ROWS_PER_PAGE = 5
@@ -140,14 +164,42 @@ function FieldControl({
   )
 }
 
+function ToolChipControl({ row }: { row: XRSettingToolChipRow }) {
+  const { chip } = row.hint
+  const value = useSyncExternalStore(chip.subscribe, chip.value, chip.value)
+  return (
+    <SettingChoice
+      label={row.label}
+      name={`xr-setting-${row.id}`}
+      onClick={chip.cycle}
+      value={chip.labels[value] ?? value}
+    />
+  )
+}
+
 function DefaultSettings() {
   const mode = useEditor((state) => state.mode)
+  const interactionIdle = useInteractionScope((state) => state.scope.kind === 'idle')
   const playerMode = useXRPlayerMode((state) => state.mode)
+  const panelScale = useXRWandPanelSettings((state) => state.panelScale)
+  const setPanelScale = useXRWandPanelSettings((state) => state.setPanelScale)
   const gridSnapStep = useEditor((state) => state.gridSnapStep)
   const cycleGridSnapStep = useEditor((state) => state.cycleGridSnapStep)
+  const wallSnappingMode = useEditor((state) => state.snappingModeByContext.wall)
+  const setSnappingMode = useEditor((state) => state.setSnappingMode)
   const selectedBuildingId = useViewer((state) => state.selection.buildingId)
   const activeLevelId = useViewer((state) => state.selection.levelId)
   const setSelection = useViewer((state) => state.setSelection)
+  const canUndo = useSyncExternalStore(
+    subscribeHistoryCommandState,
+    () => getHistoryCommandState().canUndo,
+    () => false,
+  )
+  const canRedo = useSyncExternalStore(
+    subscribeHistoryCommandState,
+    () => getHistoryCommandState().canRedo,
+    () => false,
+  )
   const resolvedBuildingId = useScene((state) => {
     if (selectedBuildingId) return selectedBuildingId
     return (
@@ -176,7 +228,58 @@ function DefaultSettings() {
 
   return (
     <>
-      <group position={[0, 0.28, 0]}>
+      <SpatialButton
+        disabled={!canUndo || !interactionIdle}
+        name="xr-setting-undo"
+        onClick={runUndo}
+        position={[-0.24, 0.3, 0]}
+        size={[0.21, 0.075]}
+      >
+        <SpatialText
+          anchorX="center"
+          anchorY="middle"
+          color={XR_WAND_THEME.text}
+          fontSize={0.023}
+          position={[0, 0, 0.012]}
+        >
+          Undo
+        </SpatialText>
+      </SpatialButton>
+      <SpatialButton
+        disabled={!canRedo || !interactionIdle}
+        name="xr-setting-redo"
+        onClick={runRedo}
+        position={[0, 0.3, 0]}
+        size={[0.21, 0.075]}
+      >
+        <SpatialText
+          anchorX="center"
+          anchorY="middle"
+          color={XR_WAND_THEME.text}
+          fontSize={0.023}
+          position={[0, 0, 0.012]}
+        >
+          Redo
+        </SpatialText>
+      </SpatialButton>
+      <SpatialButton
+        disabled={playerMode !== XR_PLAYER_MODES.GOD || !interactionIdle}
+        name="xr-setting-reset-view"
+        onClick={requestGodScaleReset}
+        position={[0.24, 0.3, 0]}
+        size={[0.21, 0.075]}
+      >
+        <SpatialText
+          anchorX="center"
+          anchorY="middle"
+          color={XR_WAND_THEME.text}
+          fontSize={0.02}
+          position={[0, 0, 0.012]}
+        >
+          Reset view
+        </SpatialText>
+      </SpatialButton>
+      <group position={[0, 0.18, 0]}>
         <SettingChoice
           label="Floor"
           name="xr-setting-floor"
@@ -184,10 +287,10 @@ function DefaultSettings() {
           value={activeLevel ? getLevelDisplayName(activeLevel) : 'No floors'}
         />
       </group>
-      <group position={[0, 0.16, 0]}>
+      <group position={[0, 0.06, 0]}>
         <SettingChoice label="Editor mode" name="xr-setting-editor-mode" value={mode} />
       </group>
-      <group position={[0, 0.04, 0]}>
+      <group position={[0, -0.06, 0]}>
         <SettingChoice
           label="Grid snap"
           name="xr-setting-grid-snap"
@@ -195,7 +298,7 @@ function DefaultSettings() {
           value={`${gridSnapStep} m`}
         />
       </group>
-      <group position={[0, -0.08, 0]}>
+      <group position={[0, -0.18, 0]}>
         <SettingChoice
           label="XR scale"
           name="xr-setting-player-mode"
@@ -203,7 +306,25 @@ function DefaultSettings() {
           value={playerMode === XR_PLAYER_MODES.GOD ? 'God' : 'Human'}
         />
       </group>
-      <PanelHint position={[0, -0.22, 0.012]}>Select an item or choose a build tool.</PanelHint>
+      <group position={[0, -0.3, 0]}>
+        <SettingStepper
+          label="Panel size"
+          max={XR_WAND_PANEL_SCALE_MAX}
+          min={XR_WAND_PANEL_SCALE_MIN}
+          name="xr-setting-panel-scale"
+          onChange={setPanelScale}
+          step={XR_WAND_PANEL_SCALE_STEP}
+          value={panelScale}
+        />
+      </group>
+      <group position={[0, -0.42, 0]}>
+        <SettingChoice
+          label="Wall snap"
+          name="xr-setting-wall-snap"
+          onClick={() => setSnappingMode('wall', cycleSnappingModeIn('wall', wallSnappingMode))}
+          value={getSnappingModeLabel(wallSnappingMode)}
+        />
+      </group>
     </>
   )
 }
@@ -253,6 +374,8 @@ export function XRSettingsPanel() {
     }
   }
 
+  if (mode === 'terrain-sculpt') return <XRTerrainSettingsPanel />
+
   return (
     <group name="xr-wand-settings-panel">
       <PanelHeader
@@ -273,7 +396,7 @@ export function XRSettingsPanel() {
                   referenceNodes={referenceNodes}
                   row={row}
                 />
-              ) : (
+              ) : row.kind === 'action' ? (
                 <SpatialButton
                   disabled={row.action.enabledIf ? !row.action.enabledIf(context.node) : false}
                   name={`xr-setting-action-${row.id}`}
@@ -295,6 +418,8 @@ export function XRSettingsPanel() {
                     {row.label}
                   </SpatialText>
                 </SpatialButton>
+              ) : (
+                <ToolChipControl row={row} />
               )}
             </group>
           ))}
