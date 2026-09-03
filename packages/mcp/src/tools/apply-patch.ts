@@ -24,7 +24,7 @@ export function registerApplyPatch(server: McpServer, bridge: SceneOperations): 
     {
       title: 'Apply patch',
       description:
-        'Apply a batch of create/update/delete operations atomically. All patches are validated before any are applied; the entire batch forms a single undo step.',
+        'Apply a batch of create/update/delete operations atomically. All patches are validated before any are applied; the entire batch forms a single undo step. Batch-first is the default: prefer one apply_patch call containing all create/update/delete ops for a build step, in stable order so later ops can reference ids created by earlier ops. A single call is atomic (all or nothing) and pays the snapshot and save cost once; do not loop one-op calls.',
       inputSchema: applyPatchInput,
       outputSchema: applyPatchOutput,
     },

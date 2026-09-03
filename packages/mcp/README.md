@@ -334,7 +334,7 @@ captured by Zundo's temporal middleware as a single undoable step.
 | `add_door` | Add a door to a wall using parametric placement. | `{ wallId, t, width?, height?, hingesSide?, swingDirection? }` | `{ doorId, localX }` |
 | `add_window` | Add a window to a wall using parametric placement and sill height. | `{ wallId, t, width?, height?, sillHeight? }` | `{ windowId, localX, sillHeight }` |
 | `furnish_room` | Place realistic furniture for a room type inside a polygon. | `{ levelId, roomType, polygon, doorWallIndex? }` | `{ placed, itemIds, skipped }` |
-| `apply_patch` | Batched create/update/delete/move, validated and dry-run before commit. | `{ patches: Patch[] }` | `{ applied: number }` |
+| `apply_patch` | Batched create/update/delete/move, validated and dry-run before commit. Batch-first is the default: send all create/update/delete ops for a build step in one atomic call (stable order, later ops may reference earlier created ids); do not loop one-op calls. | `{ patches: Patch[] }` | `{ applied: number }` |
 | `create_level` | Add a new level to a building. | `{ buildingId, elevation, height, label? }` | `{ levelId }` |
 | `create_wall` | Add a wall to a level. | `{ levelId, start, end, thickness?, height? }` | `{ wallId }` |
 | `place_item` | Place a catalog item on a level/slab/zone, ceiling, wall, or site. Slab/zone targets resolve to the parent level so floor items render and validate. | `{ catalogItemId, targetNodeId, position, rotation? }` | `{ itemId, status }` |
