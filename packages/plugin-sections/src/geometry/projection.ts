@@ -2,6 +2,14 @@ import type { FloorplanGeometry } from '@pascal-app/core'
 import { boundsOf, segmentInsidePolygon } from './math'
 import type { BuildingModel, Opening, PrismSolid, RoofSolid, WallSolid } from './scene-model'
 import {
+  type FaceHole,
+  finishHatch,
+  formatFeetInches,
+  gradeTicks,
+  scanlinesInPolygon,
+  SHINGLE_COURSE,
+} from './materials'
+import {
   DASH,
   INK,
   line,
@@ -195,12 +203,27 @@ function openingPrimitives(
   return out
 }
 
-export function projectWall(view: Projector, wall: WallSolid): ProjectedPiece | null {
+export type ProjectWallOptions = {
+  /**
+   * Draw the assembly's cladding pattern on faces whose EXTERIOR side looks
+   * at the viewer (elevations). Off for sections' background walls.
+   */
+  finish?: boolean
+}
+
+export function projectWall(
+  view: Projector,
+  wall: WallSolid,
+  options: ProjectWallOptions = {},
+): ProjectedPiece | null {
   const clipped = clipToDepthSlab(view, wall.polygon)
   const extent = uExtent(view, clipped)
   if (!extent) return null
-  const faceVisible =
-    Math.abs(wall.normal[0] * view.forward[0] + wall.normal[1] * view.forward[1]) > 0.3
+  const facing = wall.normal[0] * view.forward[0] + wall.normal[1] * view.forward[1]
+  const faceVisible = Math.abs(facing) > 0.3
+  // The exterior face points AT the viewer when its outward normal runs
+  // against the view direction.
+  const exteriorFacesViewer = facing * wall.exteriorSign < -0.3
   const primitives: FloorplanGeometry[] = [
     polygonPrimitive(rectPolygon(extent[0], drawY(wall.topY), extent[1], drawY(wall.baseY)), {
       fill: PAPER,
@@ -208,6 +231,21 @@ export function projectWall(view: Projector, wall: WallSolid): ProjectedPiece | 
       strokeWidth: WEIGHT.projected,
     }),
   ]
+  if (options.finish && exteriorFacesViewer && wall.exteriorFinish && wall.exteriorFinish !== 'none') {
+    const holes: FaceHole[] = wall.openings.map((opening) => {
+      const centre: Vec2 = [
+        wall.start[0] + wall.axis[0] * opening.along,
+        wall.start[1] + wall.axis[1] * opening.along,
+      ]
+      const half = opening.width / 2
+      const u0 = projectU(view, centre[0] - wall.axis[0] * half, centre[1] - wall.axis[1] * half)
+      const u1 = projectU(view, centre[0] + wall.axis[0] * half, centre[1] + wall.axis[1] * half)
+      return { u: [u0, u1], y: [drawY(opening.headY), drawY(opening.sillY)] }
+    })
+    primitives.push(
+      ...finishHatch(wall.exteriorFinish, extent, drawY(wall.topY), drawY(wall.baseY), holes),
+    )
+  }
   for (const opening of wall.openings) {
     primitives.push(...openingPrimitives(view, wall, opening, faceVisible))
   }
@@ -237,7 +275,16 @@ const ROOF_SAMPLES = 72
  * top surface plus the lower envelope of its deck underside, sampled over the
  * segment's own local footprint and bucketed by drawing x.
  */
-export function projectRoof(view: Projector, roof: RoofSolid): ProjectedPiece | null {
+export type ProjectRoofOptions = {
+  /** Draw shingle courses inside the roof silhouette (elevations). */
+  courses?: boolean
+}
+
+export function projectRoof(
+  view: Projector,
+  roof: RoofSolid,
+  options: ProjectRoofOptions = {},
+): ProjectedPiece | null {
   const clipped = clipToDepthSlab(view, roof.polygon)
   if (clipped.length < 3) return null
   const extent = uExtent(view, clipped)
@@ -273,12 +320,25 @@ export function projectRoof(view: Projector, roof: RoofSolid): ProjectedPiece | 
   }
   if (upper.length < 2) return null
   const outline = [...upper, ...lower.reverse()]
-  return {
-    depth: maxDepth(view, clipped),
-    primitives: [
-      polygonPrimitive(outline, { fill: PAPER, stroke: INK, strokeWidth: WEIGHT.projected }),
-    ],
+  const primitives: FloorplanGeometry[] = [
+    polygonPrimitive(outline, { fill: PAPER, stroke: INK, strokeWidth: WEIGHT.projected }),
+  ]
+  if (options.courses) {
+    // Shingle exposure foreshortened by the pitch: a course seen in elevation
+    // is `exposure · cos(pitch)` tall. The rise/run comes from the segment's
+    // ridge over its half-depth, so a flat roof gets no courses at all.
+    const halfDepth = (roof.local.maxZ - roof.local.minZ) / 2
+    const rise = roof.ridgeY - roof.plateY
+    const cosPitch = halfDepth > 1e-6 ? halfDepth / Math.hypot(halfDepth, rise) : 1
+    if (rise > 0.05) {
+      // Courses only over the TOP surface: clip against the upper envelope
+      // closed by the plate line, not the deck underside.
+      const plateY = drawY(roof.plateY)
+      const topSurface: Vec2[] = [...upper, [upper[upper.length - 1]![0], plateY], [upper[0]![0], plateY]]
+      primitives.push(...scanlinesInPolygon(topSurface, SHINGLE_COURSE * cosPitch))
+    }
   }
+  return { depth: maxDepth(view, clipped), primitives }
 }
 
 export function paintProjected(pieces: ProjectedPiece[]): FloorplanGeometry[] {
@@ -306,7 +366,7 @@ export function levelDatums(model: BuildingModel, uMin: number, uMax: number): F
       kind: 'text',
       x: uMax + overshoot,
       y: y - 0.06,
-      text: `${level.name}   ${level.baseY >= 0 ? '+' : ''}${level.baseY.toFixed(2)}`,
+      text: `${level.ordinal === 0 ? 'FINISH FLOOR' : level.name.toUpperCase()}   ${formatFeetInches(level.baseY)}`,
       fontSize: 0.15,
       fill: INK,
       textAnchor: 'end',
@@ -341,7 +401,7 @@ export function roofDatums(model: BuildingModel, uMin: number, uMax: number): Fl
         kind: 'text',
         x: uMax + overshoot,
         y: y - 0.06,
-        text: `${name}   +${elevation.toFixed(2)}`,
+        text: `${name}   ${formatFeetInches(elevation)}`,
         fontSize: 0.15,
         fill: INK,
         textAnchor: 'end',
@@ -375,8 +435,22 @@ export function gradeLine(
     min = Math.min(min, elevation)
     points.push([u, drawY(elevation)])
   }
+  const first = points[0] as Vec2
   return {
-    primitives: [polyline(points, { stroke: INK, strokeWidth: WEIGHT.cut })],
+    primitives: [
+      polyline(points, { stroke: INK, strokeWidth: WEIGHT.cut }),
+      ...gradeTicks(points),
+      {
+        kind: 'text',
+        x: first[0] - 0.1,
+        y: first[1] + 0.05,
+        text: `GRADE   ${formatFeetInches(Number.isFinite(min) ? min : 0)}`,
+        fontSize: 0.15,
+        fill: INK,
+        textAnchor: 'end',
+        dominantBaseline: 'alphabetic',
+      } as FloorplanGeometry,
+    ],
     minElevation: Number.isFinite(min) ? min : 0,
   }
 }

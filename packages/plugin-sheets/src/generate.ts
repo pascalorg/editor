@@ -33,9 +33,15 @@ import {
   viewports,
 } from './model'
 import { collectWalls, wallBounds } from './pose'
+import type { Plan, PlanSetContext } from './plans/context'
+import { mepPlans } from './plans/mep-set'
+import { energyPlans, notesPlans } from './plans/notes-set'
+import { structuralPlans } from './plans/structural-set'
 import { fitScale, SCALE_PRESETS } from './scale'
-import { DEFAULT_VIEWPORT_LAYERS, type SheetNode, type ViewportNode } from './schema'
+import { DEFAULT_VIEWPORT_LAYERS, type SheetNode } from './schema'
 import { sheetFrame } from './titleblock'
+
+export type { Plan, PlanSetContext } from './plans/context'
 
 export type GeneratedSet = { created: string[]; skipped: string[] }
 
@@ -45,12 +51,6 @@ const GAP = 0.5
 
 const ARCH_SCALES = SCALE_PRESETS.filter((p) => p.scale <= 192)
 const CIVIL_SCALES = SCALE_PRESETS.filter((p) => p.scale >= 96)
-
-export type Plan = {
-  number: string
-  title: string
-  viewports: (Omit<Partial<ViewportNode>, 'sheetId'> & { kind: ViewportNode['kind'] })[]
-}
 
 export function planDefaultSet(nodes: NodeMap): Plan[] {
   const out: Plan[] = []
@@ -86,11 +86,18 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
     ],
   })
 
-  // A2.x — one floor plan per level, with the level's room schedule.
-  const planW = FRAME.w * 0.7
+  // A2.x — one floor plan per level, with the level's room and fixture
+  // schedules beside it (the reference sets keep schedules on the plan sheet).
+  const planW = FRAME.w * 0.62
   const scheduleW = FRAME.w - planW - GAP
-  const planScale = fitScale(buildingW * 1.15, buildingH * 1.15, planW, FRAME.h - 0.6, ARCH_SCALES)
+  // 1/4" = 1'-0" is THE residential plan scale; it is used whenever the plan
+  // fits the field at it, and a larger scale only when the building is small
+  // enough that fitting is not the constraint. `fitScale` returns the largest
+  // preset that fits, so anything at or above 1/4" means 1/4" fits too.
+  const fitted = fitScale(buildingW * 1.15, buildingH * 1.15, planW, FRAME.h - 0.6, ARCH_SCALES)
+  const planScale = fitted <= 48 ? 48 : fitted
   levelNodes.forEach((level, index) => {
+    const fieldH = FRAME.h - 0.6
     out.push({
       number: `A2.${index}`,
       title: `${levelLabel(level)} floor plan`,
@@ -101,10 +108,11 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
           levelId: level.id,
           title: `Floor plan — ${levelLabel(level)}`,
           scale: planScale,
+          layers: { ...DEFAULT_VIEWPORT_LAYERS, furniture: true },
           x: FRAME.x,
           y: FRAME.y + 0.4,
           w: planW,
-          h: FRAME.h - 0.6,
+          h: fieldH,
         },
         {
           kind: 'schedule',
@@ -114,7 +122,17 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
           x: FRAME.x + planW + GAP,
           y: FRAME.y + 0.4,
           w: scheduleW,
-          h: FRAME.h - 0.6,
+          h: fieldH * 0.48,
+        },
+        {
+          kind: 'schedule',
+          scheduleOf: 'fixtures',
+          levelId: level.id,
+          title: `Fixture schedule — ${levelLabel(level)}`,
+          x: FRAME.x + planW + GAP,
+          y: FRAME.y + 0.4 + fieldH * 0.48 + GAP,
+          w: scheduleW,
+          h: fieldH * 0.52 - GAP,
         },
       ],
     })
@@ -167,7 +185,9 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
               layers: { ...DEFAULT_VIEWPORT_LAYERS, roomLabels: false, openingMarks: false },
               x: FRAME.x,
               y: FRAME.y + 0.4,
-              w: FRAME.w,
+              // The right third is left for the attic-ventilation calculation
+              // and roof notes (plans/notes-set.ts extends this sheet).
+              w: FRAME.w * 0.66,
               h: FRAME.h - 0.6,
             },
           ]
@@ -348,6 +368,32 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
           ],
   })
 
+  // Sheets owned by the plan-set modules (structural, MEP, notes, energy).
+  // A module's plan REPLACES the generic fallback with the same number, so
+  // S1.0 becomes the Bones foundation plan the moment that module lands.
+  const ctx: PlanSetContext = {
+    nodes,
+    frame: FRAME,
+    gap: GAP,
+    planScale,
+    elevationScale,
+    levels: levelNodes,
+    hasBones,
+    archScales: ARCH_SCALES,
+    civilScales: CIVIL_SCALES,
+  }
+  for (const plan of [
+    ...structuralPlans(ctx),
+    ...mepPlans(ctx),
+    ...notesPlans(ctx),
+    ...energyPlans(ctx),
+  ]) {
+    const at = out.findIndex((p) => p.number === plan.number)
+    if (at < 0) out.push(plan)
+    else if (plan.extend) out[at] = { ...out[at]!, viewports: [...out[at]!.viewports, ...plan.viewports] }
+    else out[at] = plan
+  }
+
   // SET ORDER: the architectural story reads first, then structural, then the
   // trades — stable within a group, so a second storey stays next to the first.
   const rank = (number: string): number => {
@@ -358,8 +404,11 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
     if (/^A4/.test(number)) return 3
     if (/^A5/.test(number)) return 4
     if (/^A/.test(number)) return 5
+    if (/^SN/.test(number)) return 5.9
     if (/^S/.test(number)) return 6
+    if (/^EN/.test(number)) return 7.5
     if (/^E/.test(number)) return 7
+    if (/^P/.test(number)) return 7.2
     return 8
   }
   return out

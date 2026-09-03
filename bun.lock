@@ -398,6 +398,9 @@
     "packages/plugin-sheets": {
       "name": "@pascal-app/plugin-sheets",
       "version": "0.1.0",
+      "dependencies": {
+        "@pascal-app/plugin-bones": "workspace:*",
+      },
       "devDependencies": {
         "@pascal/typescript-config": "*",
         "@types/react": "^19",

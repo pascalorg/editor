@@ -17,6 +17,7 @@
  * runs at a time.
  */
 import { INCHES_PER_METRE } from './scale'
+import { buildFixtureSchedule } from './schedule-fixtures'
 
 export type ScheduleNodes = Record<
   string,
@@ -182,8 +183,9 @@ export function buildRoomSchedule(nodes: ScheduleNodes, levelId: string): Schedu
 export function buildSchedule(
   nodes: ScheduleNodes,
   levelId: string,
-  of: 'doors' | 'windows' | 'rooms',
+  of: 'doors' | 'windows' | 'rooms' | 'fixtures',
 ): ScheduleTable {
   if (of === 'rooms') return buildRoomSchedule(nodes, levelId)
+  if (of === 'fixtures') return buildFixtureSchedule(nodes as never, levelId)
   return buildOpeningSchedule(nodes, levelId, of === 'doors' ? 'door' : 'window')
 }

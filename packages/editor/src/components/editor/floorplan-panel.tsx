@@ -11490,13 +11490,22 @@ export function FloorplanPanel({
                   paint on top of node geometry. */}
               <FloorplanAlignmentGuideLayer />
 
+              {/* The property line, its vertex handles and its edge labels are
+                  drawn in BUILDING-LOCAL metres (the frame the level's walls
+                  live in). The site-plan drawing type draws the lot itself, in
+                  SITE metres, so mounting these there paints a second lot
+                  offset by the building's own position — the "two dashed
+                  boxes" — and it shifts whenever the house moves. */}
+              {activeDrawingType !== 'site-plan' && (
               <FloorplanSiteLayer
                 dimmed={selectedIds.length > 1 || previewSelectedIds.length > 1}
                 isHighlighted={isSiteBoundaryHighlighted}
                 palette={palette}
                 sitePolygon={visibleSitePolygon}
               />
+              )}
 
+              {activeDrawingType !== 'site-plan' && (
               <FloorplanPolygonHandleLayer
                 edgeHandles={siteEdgeHandles}
                 hoveredHandleId={hoveredSiteHandleId}
@@ -11515,7 +11524,9 @@ export function FloorplanPanel({
                 unitsPerPixel={floorplanUnitsPerPixel}
                 vertexHandles={siteVertexHandles}
               />
+              )}
 
+              {activeDrawingType !== 'site-plan' && (
               <FloorplanSiteEdgeLabelLayer
                 labelBackground={isDark ? '#0f172a' : '#ffffff'}
                 labelText={isDark ? '#e2e8f0' : '#171717'}
@@ -11526,6 +11537,7 @@ export function FloorplanPanel({
                 unit={unit}
                 unitsPerPixel={floorplanUnitsPerPixel}
               />
+              )}
 
               {/* "Magnetic" wall-snap beacon — per-kind glyph at the active
                   draft / endpoint-move snap point. Same store + coord space as

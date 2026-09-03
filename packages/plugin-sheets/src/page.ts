@@ -60,7 +60,15 @@ export function composeSheet(sheet: SheetNode, options: ComposeOptions): Compose
     // "SHEET INDEX" would only say it twice.
     if (!drawn.noLabel) {
       overlay.push(
-        ...buildViewportLabel(index + 1, drawn.title, drawn.scale, vp.x, vp.y + vp.h + 0.28, vp.w),
+        ...buildViewportLabel(
+          index + 1,
+          drawn.title,
+          drawn.scale,
+          vp.x,
+          vp.y + vp.h + 0.28,
+          vp.w,
+          drawn.northDeg,
+        ),
       )
     }
     placements.push({ viewport: vp, title: drawn.title, scale: drawn.scale })

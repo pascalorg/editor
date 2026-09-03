@@ -106,10 +106,13 @@ export {
   type DrawingProvider,
   type DrawingResult,
   NO_SECTION_MARKER_NOTE,
+  type ProviderArgs,
   registerSheetDrawingProvider,
   sectionMarkers,
   splitProvidedGeometry,
+  viewportNote,
 } from './drawings'
+export { registerBuiltinSheetProviders } from './providers'
 export {
   COVER_LAYOUT,
   coverViewports,
@@ -118,6 +121,7 @@ export {
   generateDefaultSet,
   missingSheets,
   type Plan,
+  type PlanSetContext,
   planDefaultSet,
   regenerateCover,
   type SectionMarkerSpec,

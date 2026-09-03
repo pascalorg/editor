@@ -508,7 +508,7 @@ describe('buildElevationDrawing', () => {
     const texts = drawing.primitives.filter(
       (g): g is Extract<FloorplanGeometry, { kind: 'text' }> => g.kind === 'text',
     )
-    expect(texts.some((t) => t.text.includes('Ground Floor'))).toBe(true)
+    expect(texts.some((t) => t.text.startsWith('FINISH FLOOR'))).toBe(true)
     expect(texts.some((t) => t.text.startsWith('T.O. PLATE'))).toBe(true)
   })
 

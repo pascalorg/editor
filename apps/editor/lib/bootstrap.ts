@@ -11,6 +11,7 @@ import { registerEditorHostPanel, registerSitePlanContributor } from '@pascal-ap
 import { builtinPlugin } from '@pascal-app/nodes'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import {
+  registerBuiltinSheetProviders,
   registerSheetDrawingProvider,
   registerSheetsCommands,
   sheetsHostPanel,
@@ -126,6 +127,8 @@ extendPluginDiscovery(async () => [utilitiesPlugin])
 registerEditorHostPanel(utilitiesHostPanel)
 // …and on the site plan (the site layer draws only what the builder returns).
 registerSitePlanContributor('utilities', (scene) => buildUtilitiesDrawing(scene as never))
+// Built-in sheet providers: structural (Bones), electrical, plumbing, energy, general notes.
+registerBuiltinSheetProviders()
 extendPluginDiscovery(async () => [mintPlugin])
 registerEditorHostPanel(mintHostPanel)
 extendPluginDiscovery(async () => [streetscapePlugin])

@@ -36,8 +36,35 @@ import { INK, INK_SOFT, MONO, SANS } from './titleblock'
 /* ------------------------------------------------- provider registry */
 
 export type DrawingResult = {
+  /** World-metre drawing for the live window. Empty when the result is plate-only. */
   primitives: FloorplanGeometry[]
   bounds: { minX: number; minY: number; maxX: number; maxY: number }
+  /**
+   * Paper geometry in ABSOLUTE sheet inches (tables, legends, notes, keys),
+   * drawn over the live window. `args.viewport` carries the box to lay it
+   * out in. A provider may return ONLY a plate (leave `primitives` empty).
+   */
+  plate?: FloorplanGeometry[]
+  /** Everything the provider could not compute exactly — printed, never silent. */
+  warnings?: string[]
+  /** The plate carries its own heading; suppress the numbered label strip. */
+  noLabel?: boolean
+  /** Override the caption in the label strip. */
+  title?: string
+}
+
+/** What every provider is handed besides the node map. */
+export type ProviderArgs = {
+  levelId?: string
+  markerId?: string
+  direction?: 'north' | 'east' | 'south' | 'west'
+  layers: ViewportLayers
+  /** `ViewportNode.system` — structural family / MEP sub-plan. */
+  system?: string
+  /** `ViewportNode.notesKey` — which discipline's notes. */
+  notesKey?: string
+  /** The viewport box in absolute sheet inches, and its drawing scale (world:paper). */
+  viewport: { x: number; y: number; w: number; h: number; scale: number }
 }
 export type DrawingProvider = (
   nodes: NodeMap,
@@ -255,6 +282,11 @@ export type DrawnViewport = {
    * numbered viewport label strip would only repeat them.
    */
   noLabel?: boolean
+  /**
+   * Plans only: where true north points ON THE PAPER, degrees clockwise from
+   * up. Drawn as the north arrow beside the viewport title.
+   */
+  northDeg?: number
 }
 
 /**
@@ -379,6 +411,11 @@ export function resolveViewport(vp: ViewportNode, ctx: ResolveContext): DrawnVie
     case 'site-plan':
     case 'section':
     case 'elevation':
+    case 'structural':
+    case 'electrical':
+    case 'plumbing':
+    case 'energy':
+    case 'general-notes':
       return resolveProvided(vp, nodes)
     case 'schedule':
       return resolveSchedule(vp, nodes)
@@ -482,18 +519,42 @@ function resolvePlan(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
     live: { model, annotations, view: windowFor(vp, bounds, rotationDeg), rotationDeg },
     title,
     scale: vp.scale,
+    northDeg: northOnPaperDeg(nodes, rotationDeg),
   }
+}
+
+/**
+ * True north on the paper for a plan window: plan "up" (−z) is the level's
+ * north when the site carries no rotation; the site's `northRotation`
+ * (radians, clockwise from plan up) and the sheet's own plan rotation both
+ * turn it. Also accounts for the building's yaw, which rotates the level frame
+ * on the lot.
+ */
+function northOnPaperDeg(nodes: NodeMap, sheetRotationDeg: number): number {
+  const north = northRotationOf(nodes)
+  const building = Object.values(nodes).find((n) => n?.type === 'building')
+  const yaw = Array.isArray(building?.rotation) ? Number(building.rotation[1] ?? 0) : 0
+  const degrees = (north * 180) / Math.PI - (yaw * 180) / Math.PI + sheetRotationDeg
+  return ((degrees % 360) + 360) % 360
+}
+
+const PROVIDED_TITLES: Record<string, string> = {
+  'site-plan': 'Site plan',
+  section: 'Building section',
+  structural: 'Structural plan',
+  electrical: 'Electrical plan',
+  plumbing: 'Plumbing plan',
+  energy: 'Energy compliance',
+  'general-notes': 'General notes',
 }
 
 function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
   const build = provider(vp.kind)
   const title =
     vp.title ||
-    (vp.kind === 'site-plan'
-      ? 'Site plan'
-      : vp.kind === 'section'
-        ? 'Building section'
-        : `${(vp.direction ?? 'north').toUpperCase()} elevation`)
+    (vp.kind === 'elevation'
+      ? `${(vp.direction ?? 'north').toUpperCase()} elevation`
+      : (PROVIDED_TITLES[vp.kind] ?? vp.kind))
   // A section viewport with nothing to cut is the ordinary state of a fresh
   // scene, not a failure. Say how to fix it rather than "pending".
   if (vp.kind === 'section' && !vp.markerId && sectionMarkers(nodes).length === 0) {
@@ -505,12 +566,16 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
   }
   let result: DrawingResult | null = null
   try {
-    result = build(nodes, {
-      levelId: vp.levelId,
+    const args: ProviderArgs = {
+      levelId: vp.levelId ?? firstLevelId(nodes),
       markerId: vp.markerId,
       direction: vp.direction,
       layers: vp.layers,
-    })
+      system: vp.system,
+      notesKey: vp.notesKey,
+      viewport: { x: vp.x, y: vp.y, w: vp.w, h: vp.h, scale: vp.scale },
+    }
+    result = build(nodes, args as unknown as Record<string, unknown>)
   } catch (error) {
     return {
       plate: note(vp, `${vp.kind} failed: ${(error as Error).message ?? 'error'}`),
@@ -519,8 +584,21 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
       scale: vp.scale,
     }
   }
-  if (!result || result.primitives.length === 0) {
+  const plate = result?.plate ?? []
+  const warningPlate = warningsPlate(vp, result?.warnings ?? [])
+  const resolvedTitle = result?.title || title
+  if (!result || (result.primitives.length === 0 && plate.length === 0)) {
     return { plate: note(vp, `${vp.kind} — nothing to draw`), live: null, title, scale: vp.scale }
+  }
+  if (result.primitives.length === 0) {
+    // Plate-only viewport: a table, a notes block, a key. No scale applies.
+    return {
+      plate: [...plate, ...warningPlate],
+      live: null,
+      title: resolvedTitle,
+      scale: undefined,
+      noLabel: result.noLabel,
+    }
   }
   const split = splitProvidedGeometry(result.primitives, vp.layers)
   const cornerPlate =
@@ -530,7 +608,7 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
         ? siteCornerBlocks(vp, {}, northRotationOf(nodes))
         : []
   return {
-    plate: cornerPlate,
+    plate: [...cornerPlate, ...plate, ...warningPlate],
     live: {
       model: combine(split.model.length > 0 ? [{ kind: 'group', children: split.model }] : []),
       annotations: combine(
@@ -539,9 +617,41 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
       view: windowFor(vp, padBounds(result.bounds, 0.4), 0),
       rotationDeg: 0,
     },
-    title,
+    title: resolvedTitle,
     scale: vp.scale,
+    noLabel: result.noLabel,
+    northDeg:
+      vp.kind === 'site-plan' || vp.kind === 'structural' || vp.kind === 'electrical' || vp.kind === 'plumbing'
+        ? northOnPaperDeg(nodes, 0)
+        : undefined,
   }
+}
+
+/**
+ * Provider warnings, printed small in the viewport's bottom-left corner. A
+ * drawing that could not be computed exactly says so on the paper itself.
+ */
+function warningsPlate(vp: ViewportNode, warnings: string[]): FloorplanGeometry[] {
+  if (warnings.length === 0) return []
+  const lineHeight = 0.13
+  const shown = warnings.slice(0, 6)
+  return shown.map<FloorplanGeometry>((text, i) => ({
+    kind: 'text',
+    x: vp.x + 0.08,
+    y: vp.y + vp.h - 0.08 - (shown.length - 1 - i) * lineHeight,
+    text: `\u26a0 ${text}`.slice(0, 160),
+    fontSize: 0.09,
+    fill: '#b45309',
+    fontFamily: 'Helvetica, Arial, sans-serif',
+  }))
+}
+
+/** A dashed placeholder box with a message — for providers that have nothing to draw yet. */
+export function viewportNote(
+  box: { x: number; y: number; w: number; h: number },
+  message: string,
+): FloorplanGeometry[] {
+  return note(box as ViewportNode, message)
 }
 
 /* ------------------------------------------- site-plan corner blocks */
@@ -813,7 +923,7 @@ function resolveSchedule(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
     }
   }
   const table =
-    (of !== 'rooms' ? hostSchedule(nodes, levelId, of) : null) ??
+    (of === 'doors' || of === 'windows' ? hostSchedule(nodes, levelId, of) : null) ??
     buildSchedule(nodes as never, levelId, of)
   const title = vp.title || table.title
   if (table.rows.length === 0) {

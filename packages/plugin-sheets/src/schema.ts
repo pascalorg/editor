@@ -117,6 +117,16 @@ export const ViewportKind = z.enum([
   'image',
   /** A composed block of the cover sheet — see `cover.ts`. */
   'cover',
+  /** Structural plans drawn from the Bones engines — `system` picks which (providers/structural.ts). */
+  'structural',
+  /** Electrical plan derived live from Bones' NEC layout engine (providers/electrical.ts). */
+  'electrical',
+  /** Plumbing plan — fixtures from placed items + Bones' plumbing engine (providers/plumbing.ts). */
+  'plumbing',
+  /** Energy compliance summary computed from the model (providers/energy.ts). */
+  'energy',
+  /** Multi-column code-cited notes plate — `notesKey` picks the discipline (providers/general-notes.ts). */
+  'general-notes',
 ])
 export type ViewportKind = z.infer<typeof ViewportKind>
 
@@ -190,7 +200,14 @@ export const ViewportNode = BaseNode.extend({
   /** view3d only. */
   pose: CoverPose.optional(),
   /** schedule only: which table. */
-  scheduleOf: z.enum(['doors', 'windows', 'rooms']).optional(),
+  scheduleOf: z.enum(['doors', 'windows', 'rooms', 'fixtures']).optional(),
+  /**
+   * structural: 'foundation' | 'floor-framing' | 'roof-framing' | 'wall-bracing'.
+   * electrical / plumbing: reserved for sub-plans (e.g. 'lighting'); absent = the whole plan.
+   */
+  system: z.string().optional(),
+  /** general-notes: which discipline's notes ('general', 'structural', 'electrical', 'plumbing', 'energy'). */
+  notesKey: z.string().optional(),
   /** cover only: which block of the cover composition this viewport draws. */
   coverBlock: z.enum(['title', 'index', 'data', 'notes']).optional(),
   /** notes only. */

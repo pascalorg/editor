@@ -15,8 +15,9 @@ import {
   projectWall,
   roofDatums,
 } from './projection'
+import { FINISH_LABEL, type FinishKind } from './materials'
 import { type BuildingModel, buildBuildingModel } from './scene-model'
-import { INK, line, WEIGHT } from './style'
+import { INK, label, line, WEIGHT } from './style'
 import { type DrawingResult, type DrawingScene, EMPTY_BOUNDS, type Vec2 } from './types'
 
 export type ElevationDirectionArg =
@@ -119,9 +120,16 @@ export function buildElevationDrawing(
   const view = makeProjector([0, 0], forward, depthMin - 1, depthMax + 1)
 
   const projected: ProjectedPiece[] = []
+  const finishesUsed = new Map<FinishKind | 'unspecified', number>()
   for (const wall of built.walls) {
-    const piece = projectWall(view, wall)
-    if (piece) projected.push(piece)
+    const piece = projectWall(view, wall, { finish: true })
+    if (!piece) continue
+    projected.push(piece)
+    const facing = wall.normal[0] * forward[0] + wall.normal[1] * forward[1]
+    if (facing * wall.exteriorSign < -0.3) {
+      const key = wall.exteriorFinish ?? 'unspecified'
+      finishesUsed.set(key, (finishesUsed.get(key) ?? 0) + 1)
+    }
   }
   for (const prism of built.prisms) {
     // A slab's edge is only worth showing where it is exposed; drawing every
@@ -132,7 +140,7 @@ export function buildElevationDrawing(
   }
   const roofDetail: FloorplanGeometry[] = []
   for (const roof of built.roofs) {
-    const piece = projectRoof(view, roof)
+    const piece = projectRoof(view, roof, { courses: true })
     if (!piece) continue
     projected.push(piece)
     // Fascia / eave line — only meaningful when the eave edge runs across the
@@ -166,11 +174,39 @@ export function buildElevationDrawing(
     }
   }
   const grade = gradeLine(built, view, bodyBounds.minX, bodyBounds.maxX, (depthMin + depthMax) / 2)
+
+  // EXTERIOR FINISH KEY — what the patterns on this elevation stand for,
+  // listed from the assemblies actually facing the viewer. A wall with no
+  // assembly is called out as unspecified rather than dressed in a default.
+  const keyLines: string[] = []
+  for (const [finish] of [...finishesUsed.entries()].sort((a, b) => b[1] - a[1])) {
+    keyLines.push(finish === 'unspecified' ? 'WALLS: NO CLADDING SPECIFIED (set the wall assembly)' : FINISH_LABEL[finish])
+  }
+  if (built.roofs.length > 0) {
+    keyLines.push('ROOF: ASPHALT SHINGLES (assumed — roof material not modelled)')
+  }
+  if (finishesUsed.has('unspecified')) {
+    warnings.push(
+      `${finishesUsed.get('unspecified')} visible wall(s) have no assembly — drawn without a cladding pattern.`,
+    )
+  }
+  const keyTop = -grade.minElevation + 0.55
+  const finishKey: FloorplanGeometry[] = keyLines.flatMap((text, i) => [
+    label(bodyBounds.minX, keyTop + i * 0.22, `${i + 1}`, { fontSize: 0.14, fontWeight: 700 }),
+    label(bodyBounds.minX + 0.3, keyTop + i * 0.22, text, { fontSize: 0.14 }),
+  ])
+  if (keyLines.length > 0) {
+    finishKey.unshift(
+      label(bodyBounds.minX, keyTop - 0.24, 'EXTERIOR FINISH KEY', { fontSize: 0.15, fontWeight: 700 }),
+    )
+  }
+
   const primitives = [
     ...levelDatums(built, bodyBounds.minX, bodyBounds.maxX),
     ...roofDatums(built, bodyBounds.minX, bodyBounds.maxX),
     ...body,
     ...grade.primitives,
+    ...finishKey,
   ]
   const bounds = boundsFromPrimitives(primitives) ?? EMPTY_BOUNDS
   return {

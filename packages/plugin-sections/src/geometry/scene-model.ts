@@ -80,6 +80,13 @@ export type WallSolid = {
   /** Which normal side is the exterior face: +1 = along `normal`, -1 = against. */
   exteriorSign: 1 | -1
   layers: WallLayer[]
+  /**
+   * The assembly's declared cladding (`wall.assembly.exterior.finish`), or
+   * null for a wall with no assembly / a partition — drives the elevation's
+   * material rendition. Never guessed: a wall without an assembly is drawn
+   * blank and listed as "no cladding specified" in the finish key.
+   */
+  exteriorFinish: 'siding' | 'stucco' | 'brick' | 'stone' | 'fiber-cement' | 'none' | null
   baseY: number
   topY: number
   openings: Opening[]
@@ -387,6 +394,7 @@ export function buildBuildingModel(nodes: Nodes): BuildingModel {
         // applied. The cut's layer order flips with it.
         exteriorSign: assembly.exteriorSideResolved,
         layers: assembly.layers,
+        exteriorFinish: (wall.assembly?.exterior?.finish as WallSolid['exteriorFinish']) ?? null,
         baseY: baseY + (wall.supportOffset ?? 0),
         topY: baseY + (wall.supportOffset ?? 0) + (wall.height ?? DEFAULT_WALL_HEIGHT),
         openings: [],

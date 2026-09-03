@@ -365,6 +365,7 @@ export function buildViewportLabel(
   x: number,
   y: number,
   w: number,
+  northDeg?: number,
 ): FloorplanGeometry[] {
   const out: FloorplanGeometry[] = []
   out.push({ kind: 'circle', cx: x + 0.17, cy: y - 0.11, r: 0.17, fill: 'none', stroke: INK, strokeWidth: 0.014 })
@@ -373,7 +374,36 @@ export function buildViewportLabel(
   if (scale) {
     out.push(text(x + w, y, scaleLabel(scale), 0.12, { anchor: 'end', fill: INK_SOFT, weight: 600, family: MONO }))
   }
+  if (typeof northDeg === 'number' && Number.isFinite(northDeg)) {
+    // North arrow after the title: the drafting convention puts one beside
+    // every plan title (the reference set's "Proposed 1st Floor Plan" ⊕).
+    const titleWidth = Math.min(w - 1.2, 0.46 + title.length * 0.105)
+    out.push(...northArrowGlyph(x + titleWidth + 0.55, y - 0.1, 0.24, northDeg))
+  }
   out.push(line(x, y + 0.09, x + w, y + 0.09, 0.018))
   out.push(line(x, y + 0.13, x + w, y + 0.13, 0.006))
   return out
+}
+
+/**
+ * The standard north arrow: a circle, a filled half-arrow pointing at true
+ * north, and an "N". `deg` is clockwise from paper-up. Sheet inches.
+ */
+export function northArrowGlyph(cx: number, cy: number, r: number, deg: number): FloorplanGeometry[] {
+  const a = (deg * Math.PI) / 180
+  const rot = (dx: number, dy: number): readonly [number, number] => [
+    cx + dx * Math.cos(a) - dy * Math.sin(a),
+    cy + dx * Math.sin(a) + dy * Math.cos(a),
+  ]
+  const tip = rot(0, -r * 0.92)
+  const tail = rot(0, r * 0.55)
+  const left = rot(-r * 0.3, r * 0.25)
+  const right = rot(r * 0.3, r * 0.25)
+  const nAt = rot(0, -r * 1.35)
+  return [
+    { kind: 'circle', cx, cy, r, fill: 'none', stroke: INK, strokeWidth: 0.012 },
+    { kind: 'polygon', points: [tip, left, tail], fill: INK, stroke: INK, strokeWidth: 0.006 },
+    { kind: 'polygon', points: [tip, right, tail], fill: 'none', stroke: INK, strokeWidth: 0.008 },
+    text(nAt[0], nAt[1] + 0.04, 'N', 0.11, { anchor: 'middle', weight: 700 }),
+  ]
 }

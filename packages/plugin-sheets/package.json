@@ -1,7 +1,7 @@
 {
   "name": "@pascal-app/plugin-sheets",
   "version": "0.1.0",
-  "description": "Sheets — paper space inside Pascal. Live viewports drawn by Pascal's own renderer, a title block from a project record saved in the scene, layers per viewport, and one multi-sheet vector PDF.",
+  "description": "Sheets \u2014 paper space inside Pascal. Live viewports drawn by Pascal's own renderer, a title block from a project record saved in the scene, layers per viewport, and one multi-sheet vector PDF.",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -32,5 +32,8 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "typescript": "^5"
+  },
+  "dependencies": {
+    "@pascal-app/plugin-bones": "workspace:*"
   }
 }
