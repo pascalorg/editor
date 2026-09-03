@@ -32,6 +32,7 @@ import {
 import {
   flagsOf,
   formatFtIn,
+  formatInchFraction,
   type Member,
   measuredSpacing,
   memberPlanCentre,
@@ -91,9 +92,9 @@ export function beamRows(members: readonly Member[], prefix: string): BeamRow[] 
   })
 }
 
+/** A member with no nominal lumber size, described by its actual section. */
 function cross(m: Member): string {
-  const inches = (v: number) => Math.round((v / 0.0254) * 4) / 4
-  return `${inches(m.dims[2])}" × ${inches(m.dims[1])}"`
+  return `${formatInchFraction(m.dims[2], 8)} × ${formatInchFraction(m.dims[1], 8)}`
 }
 
 function plyOf(m: Member): string {
@@ -155,10 +156,20 @@ function families(members: readonly Member[]): Family[] {
   return [...map.values()].filter((f) => f.members.length >= 2)
 }
 
-/** The extent arrow + note for one family, placed on its median member. */
-function familyCallout(family: Family, p: Pen, caption: string): FloorplanGeometry[] {
+/**
+ * The extent arrow + note for one family.
+ *
+ * `slot` staggers WHICH member of the family carries the arrow, so two
+ * families running the same way (rafters over ceiling joists over purlins)
+ * do not stack their captions on the same line — the first render of the
+ * roof plan had three of them overprinted at mid-span.
+ */
+function familyCallout(family: Family, p: Pen, caption: string, slot = 0): FloorplanGeometry[] {
   const sorted = [...family.members].sort((a, b) => b.dims[0] - a.dims[0])
-  const pick = sorted[Math.floor(sorted.length / 2)] ?? sorted[0]
+  const long = sorted.filter((m) => m.dims[0] > (sorted[0]?.dims[0] ?? 0) * 0.9)
+  const pool = long.length > 0 ? long : sorted
+  const pick =
+    pool[Math.min(pool.length - 1, Math.floor(((slot + 1) * pool.length) / 6))] ?? pool[0]
   if (!pick) return []
   const seg = memberPlanSegment(pick)
   const shrink = 0.08
@@ -173,8 +184,15 @@ function familyCallout(family: Family, p: Pen, caption: string): FloorplanGeomet
   return extentArrow(a, b, caption, p)
 }
 
-/** "2x6 @ 24" O.C." — measured from the members, not assumed from the spec. */
+/**
+ * "2x6 RAFTERS @ 24\" O.C." — the spacing is MEASURED from the members'
+ * own positions, never taken from the spec, and it is only printed when the
+ * measurement is a real repeat: three or more members whose median gap lands
+ * on a tabulated o.c. column. A pair of mid-span purlins gets its size and
+ * its role and no invented spacing.
+ */
 export function spacingCaption(family: { size: string; members: Member[] }, noun: string): string {
+  if (family.members.length < 3) return `${family.size} ${noun}`
   const oc = nearestOcInches(measuredSpacing(family.members))
   return oc === null
     ? `${family.size} ${noun}`
@@ -184,6 +202,17 @@ export function spacingCaption(family: { size: string; members: Member[] }, noun
 /* ------------------------------------------------------ roof drawing */
 
 const ROOF_SKIP = new Set<Member['role']>(['wrb', 'drip-edge', 'truss-web'])
+
+/** What a family of each roof role is CALLED on the plan. */
+const ROOF_NOUNS: Partial<Record<Member['role'], string>> = {
+  rafter: 'RAFTERS',
+  'jack-rafter': 'JACK RAFTERS',
+  'truss-chord': 'TRUSSES',
+  'ceiling-joist': 'CEILING JOISTS',
+  'collar-tie': 'COLLAR TIES',
+  // The engine books mid-span purlins under the 'ridge' role.
+  ridge: 'PURLIN AT MID-SPAN',
+}
 
 export function roofFramingPrimitives(
   model: StructuralModel,
@@ -228,6 +257,7 @@ export function roofFramingPrimitives(
   const hidden: Member[] = []
   const struts: Member[] = []
   const ties: Member[] = []
+  const edges: Member[] = []
   for (const member of roof) {
     if (ROOF_SKIP.has(member.role) || member.role === 'sheathing') continue
     switch (member.role) {
@@ -258,6 +288,9 @@ export function roofFramingPrimitives(
       case 'blocking':
         ties.push(member)
         break
+      case 'fascia':
+        edges.push(member)
+        break
       default:
         stick.push(member)
     }
@@ -272,6 +305,10 @@ export function roofFramingPrimitives(
         strokeDasharray: p.dash(0.07, 0.05),
       }),
     )
+  }
+  for (const member of edges) {
+    const seg = memberPlanSegment(member)
+    out.push(line(seg.a, seg.b, { stroke: INK, strokeWidth: p.w(PEN.light) }))
   }
   for (const member of stick) {
     const seg = memberPlanSegment(member)
@@ -320,6 +357,13 @@ export function roofFramingPrimitives(
   if (stick.length > 0) {
     legend.push({ label: 'RAFTER / PURLIN / OUTLOOKER', symbol: { kind: 'line', width: 0.008 } })
   }
+  if (edges.length > 0) {
+    legend.push({
+      label: 'SUB-FASCIA / FASCIA AT EAVE AND RAKE',
+      symbol: { kind: 'line', width: 0.011 },
+      note: edges[0]?.label ?? '',
+    })
+  }
   if (chords.length > 0) {
     legend.push({
       label: 'TRUSS — TOP CHORD LIGHT, BOTTOM CHORD HEAVY',
@@ -352,21 +396,16 @@ export function roofFramingPrimitives(
   }
 
   // ── size + spacing callouts ─────────────────────────────────────────
+  let slot = 0
   for (const family of families([...stick, ...chords, ...hidden])) {
-    const noun =
-      family.role === 'truss-chord'
-        ? 'TRUSS'
-        : family.role === 'ceiling-joist'
-          ? 'CEILING JOISTS'
-          : family.role === 'collar-tie'
-            ? 'COLLAR TIES'
-            : family.role === 'outlooker'
-              ? 'OUTLOOKERS'
-              : /purlin/i.test(family.members[0]?.label ?? '')
-                ? 'PURLIN'
-                : 'RAFTERS'
+    // The NOUN comes from the member ROLE, never from its label: a rafter's
+    // own label says "purlin-supported @ mid-span", which read as a purlin
+    // and mislabelled all 52 of them in the first render.
     if (family.role === 'outlooker') continue
-    out.push(...familyCallout(family, p, spacingCaption(family, noun)))
+    if (/barge/i.test(family.members[0]?.label ?? '')) continue
+    const noun = ROOF_NOUNS[family.role] ?? family.role.replace(/-/g, ' ').toUpperCase()
+    out.push(...familyCallout(family, p, spacingCaption(family, noun), slot))
+    slot += 1
   }
 
   // ── beam tags ───────────────────────────────────────────────────────
@@ -402,7 +441,8 @@ export function roofBeamMembers(model: StructuralModel): Member[] {
   return model.members.filter(
     (m) =>
       (m.system === 'wall-framing' && (m.role === 'header' || m.role === 'lintel')) ||
-      (m.system === 'roof-framing' && (m.role === 'ridge' || m.role === 'hip' || m.role === 'valley')),
+      (m.system === 'roof-framing' &&
+        (m.role === 'ridge' || m.role === 'hip' || m.role === 'valley')),
   )
 }
 
@@ -455,9 +495,7 @@ export function floorFramingPrimitives(
     )
   }
   for (const member of posts) {
-    out.push(
-      square(memberPlanCentre(member), p.w(0.06), { fill: INK, stroke: 'none' }),
-    )
+    out.push(square(memberPlanCentre(member), p.w(0.06), { fill: INK, stroke: 'none' }))
   }
   for (const member of hangers) {
     const c = memberPlanCentre(member)
@@ -475,7 +513,8 @@ export function floorFramingPrimitives(
     )
   }
 
-  if (joists.length > 0) legend.push({ label: 'FLOOR JOIST', symbol: { kind: 'line', width: 0.008 } })
+  if (joists.length > 0)
+    legend.push({ label: 'FLOOR JOIST', symbol: { kind: 'line', width: 0.008 } })
   if (rims.length > 0) legend.push({ label: 'RIM JOIST', symbol: { kind: 'line', width: 0.024 } })
   if (girders.length > 0) {
     legend.push({
@@ -498,9 +537,9 @@ export function floorFramingPrimitives(
     })
   }
 
-  for (const family of families(joists)) {
-    out.push(...familyCallout(family, p, spacingCaption(family, 'FLOOR JOISTS')))
-  }
+  families(joists).forEach((family, i) => {
+    out.push(...familyCallout(family, p, spacingCaption(family, 'FLOOR JOISTS'), i))
+  })
 
   const rows = beamRows(girders, 'FB')
   const tagR = p.w(0.1)
@@ -552,7 +591,10 @@ function bearingWallLayer(
     })
   }
   if (hasNonBearing) {
-    legend.push({ label: 'NON-BEARING PARTITION', symbol: { kind: 'line', width: 0.006, color: INK_FAINT } })
+    legend.push({
+      label: 'NON-BEARING PARTITION',
+      symbol: { kind: 'line', width: 0.006, color: INK_FAINT },
+    })
   }
   return out
 }
@@ -579,7 +621,7 @@ export function beamScheduleTable(
       { key: 'size', label: 'SIZE', weight: 1.0 },
       { key: 'type', label: 'TYPE', weight: 1.4 },
       { key: 'location', label: 'LOCATION', weight: 1.7 },
-      { key: 'span', label: 'MAX SPAN', weight: 1.0 },
+      { key: 'span', label: 'LENGTH', weight: 1.0 },
     ],
     rows: rows.map((row) => ({
       mark: row.mark,
@@ -689,13 +731,6 @@ export function noFloorFramingNotes(model: StructuralModel): Note[] {
       text: 'Nothing on this sheet is inferred: no joist size, direction, spacing or beam has been invented to fill the page.',
     },
   ]
-}
-
-/** Structural grid / plan title used by both framing sheets. */
-export function framingTitle(model: StructuralModel, kind: 'floor' | 'roof'): string {
-  return kind === 'floor'
-    ? `Floor framing plan — ${model.levelLabel}`
-    : `Roof framing plan — ${model.levelLabel}`
 }
 
 /** Exported for the tests: the marks the roof beam schedule will carry. */

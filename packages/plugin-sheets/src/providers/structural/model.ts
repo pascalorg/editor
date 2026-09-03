@@ -33,8 +33,8 @@ import {
 } from '../../../../plugin-bones/src/jurisdiction/profiles'
 import type { AnyNodeLike, NodeMap } from '../../model'
 
-export { formatFtIn, formatIn, toFeet, toInches }
 export type { FramingSpec, JurisdictionProfile, Member, WallSlice }
+export { formatFtIn, formatIn, toFeet, toInches }
 
 export type Pt = [number, number]
 export type Bounds = { minX: number; minY: number; maxX: number; maxY: number }
@@ -128,10 +128,7 @@ function siteState(nodes: NodeMap): string | null {
  * jurisdiction from the site address, so a scene that has never been X-rayed
  * still produces a structural set — the sheet says which of the two happened.
  */
-function configFor(
-  nodes: NodeMap,
-  levelId: string,
-): { config: FramingNode; source: string } {
+function configFor(nodes: NodeMap, levelId: string): { config: FramingNode; source: string } {
   const existing = Object.values(nodes).find(
     (n) => n?.type === 'bones:framing' && n.parentId === levelId,
   )
@@ -139,23 +136,54 @@ function configFor(
     const parsed = FramingNode.safeParse(existing)
     if (parsed.success) {
       return {
-        config: parsed.data,
+        config: withAssemblyOverrides(nodes, levelId, parsed.data),
         source: `Bones X-ray node on this level (jurisdiction ${parsed.data.jurisdiction})`,
       }
     }
   }
   const state = siteState(nodes)
   return {
-    config: FramingNode.parse({
-      id: 'bonesframing_sheets',
-      type: 'bones:framing',
-      parentId: levelId,
-      jurisdiction: state ?? 'AUTO',
-    }),
+    config: withAssemblyOverrides(
+      nodes,
+      levelId,
+      FramingNode.parse({
+        id: 'bonesframing_sheets',
+        type: 'bones:framing',
+        parentId: levelId,
+        jurisdiction: state ?? 'AUTO',
+      }),
+    ),
     source: state
       ? `site address state (${state}) — no Bones X-ray node on this level`
       : 'no site state and no Bones X-ray node — generic defaults',
   }
+}
+
+/**
+ * The wall ASSEMBLY is the source of truth for how a wall is built (WS5,
+ * `wall.assembly.framing.kind`): a 2x6 wood exterior in Florida must frame as
+ * wood on paper even though Bones' FL profile defaults exteriors to CMU. So
+ * every wall on the level that declares an assembly and has no explicit
+ * per-wall override in the config gets one derived from it — wood → framed,
+ * lgs → lgs, cmu → cmu. ICF has no Bones construction and is left to the
+ * jurisdiction default (the engine's own warning covers it). Walls without an
+ * assembly keep the jurisdiction default, as before.
+ */
+function withAssemblyOverrides(nodes: NodeMap, levelId: string, config: FramingNode): FramingNode {
+  const overrides: Record<string, 'framed' | 'lgs' | 'cmu'> = {}
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'wall' || node.parentId !== levelId) continue
+    if (config.wallOverrides?.[node.id] !== undefined) continue
+    const kind = (node.assembly as { framing?: { kind?: string } } | undefined)?.framing?.kind
+    if (kind === 'wood') overrides[node.id] = 'framed'
+    else if (kind === 'lgs') overrides[node.id] = 'lgs'
+    else if (kind === 'cmu') overrides[node.id] = 'cmu'
+  }
+  if (Object.keys(overrides).length === 0) return config
+  return FramingNode.parse({
+    ...config,
+    wallOverrides: { ...(config.wallOverrides ?? {}), ...overrides },
+  })
 }
 
 /* ------------------------------------------------------------ geometry */
@@ -316,11 +344,6 @@ export function structuralModel(nodes: NodeMap, levelId?: string): StructuralMod
   return model
 }
 
-/** All levels, lowest first — the plan-set module lays out one plan each. */
-export function structuralLevels(nodes: NodeMap): AnyNodeLike[] {
-  return levelNodes(nodes)
-}
-
 /* --------------------------------------------------- climate look-up */
 
 const CLIMATE = climateData as { states?: Record<string, ClimateRow>; disclaimer?: string }
@@ -336,7 +359,9 @@ export function climateRow(code: string): ClimateRow | undefined {
 export const CLIMATE_DISCLAIMER = CLIMATE.disclaimer ?? ''
 export const ADOPTION_DISCLAIMER = ADOPTION.disclaimer ?? ''
 
-export function adoptionRow(code: string): { residentialCode?: string; ircBase?: number | null; note?: string } | undefined {
+export function adoptionRow(
+  code: string,
+): { residentialCode?: string; ircBase?: number | null; note?: string } | undefined {
   return ADOPTION.states?.[code]
 }
 
@@ -353,10 +378,14 @@ export function adoptionRow(code: string): { residentialCode?: string; ircBase?:
  * cos(pitch) exactly as a roof framing plan requires, and a rolled outlooker
  * keeps its true plan angle.
  */
-export function memberPlanSegment(m: Member): { a: Pt; b: Pt; axis: 0 | 1 | 2; planLength: number } {
+export function memberPlanSegment(m: Member): {
+  a: Pt
+  b: Pt
+  axis: 0 | 1 | 2
+  planLength: number
+} {
   const dims = m.dims
-  const axis: 0 | 1 | 2 =
-    dims[0] >= dims[1] && dims[0] >= dims[2] ? 0 : dims[1] >= dims[2] ? 1 : 2
+  const axis: 0 | 1 | 2 = dims[0] >= dims[1] && dims[0] >= dims[2] ? 0 : dims[1] >= dims[2] ? 1 : 2
   const half = dims[axis] / 2
   const [vx, , vz] = rotateLocalAxis(m.rotation, axis)
   const cx = m.position[0]
@@ -369,8 +398,7 @@ export function memberPlanSegment(m: Member): { a: Pt; b: Pt; axis: 0 | 1 | 2; p
 /** The member's plan rectangle: length axis × the widest of its other two. */
 export function memberPlanRect(m: Member): Pt[] {
   const dims = m.dims
-  const axis: 0 | 1 | 2 =
-    dims[0] >= dims[1] && dims[0] >= dims[2] ? 0 : dims[1] >= dims[2] ? 1 : 2
+  const axis: 0 | 1 | 2 = dims[0] >= dims[1] && dims[0] >= dims[2] ? 0 : dims[1] >= dims[2] ? 1 : 2
   // The cross axis drawn in plan is whichever of the other two is more
   // horizontal — for a footing (len, height, width) that is the width.
   const others: (0 | 1 | 2)[] = ([0, 1, 2] as const).filter((i) => i !== axis)
@@ -442,13 +470,38 @@ export function membersOf(
   )
 }
 
-/** Distinct member flags for a set — printed on the sheet, never swallowed. */
+/** The Bones systems an S-sheet speaks for. */
+export const STRUCTURAL_SYSTEMS_SET = new Set<Member['system']>([
+  'wall-framing',
+  'floor-framing',
+  'roof-framing',
+  'foundation',
+])
+
+/**
+ * Distinct member flags for a set — printed on the sheet, never swallowed.
+ *
+ * STRUCTURAL flags only: one `computeLevel` also flags plumbing trap arms and
+ * HVAC line-set clashes, and those belong on the P and M sheets. The first
+ * SN1 render carried nine of them under "ENGINE FLAG", which buried the one
+ * flag that mattered (a ceiling joist over its prescriptive span).
+ */
 export function flagsOf(members: readonly Member[]): string[] {
   const seen = new Set<string>()
   for (const m of members) {
-    if (m.flag) seen.add(m.flag)
+    if (m.flag && STRUCTURAL_SYSTEMS_SET.has(m.system)) seen.add(m.flag)
   }
   return [...seen]
+}
+
+/**
+ * Bones' level warnings, trimmed to the ones a STRUCTURAL reader needs — the
+ * same filter the provider applies to the warnings strip.
+ */
+export function structuralWarnings(model: StructuralModel): string[] {
+  return model.warnings.filter(
+    (w) => !/water-pipe bond|HVAC|smoke alarm|zones on this level|NEC|plumbing/i.test(w),
+  )
 }
 
 /**
@@ -511,12 +564,20 @@ export function formatInchFraction(m: number, denominator = 16): string {
   return `${sign}${w}-${num}/${den}"`
 }
 
-/** Round a measured metre spacing to the nearest tabulated o.c. column. */
+/**
+ * Round a measured metre spacing to the nearest tabulated o.c. column.
+ *
+ * Returns NULL when the measurement is not a framing spacing at all — two
+ * mid-span purlins 16 ft apart are not "@ 192 in o.c.", and printing that
+ * would be an invented callout. The caller then captions the family without
+ * a spacing.
+ */
 export function nearestOcInches(spacingM: number | null): number | null {
   if (spacingM === null) return null
   const raw = toInches(spacingM)
+  if (raw > 50) return null
   const columns = [12, 16, 19.2, 24, 32, 48]
-  let best = columns[0] ?? 16
+  let best: number | null = null
   let bestDelta = Number.POSITIVE_INFINITY
   for (const c of columns) {
     const delta = Math.abs(c - raw)
@@ -525,5 +586,5 @@ export function nearestOcInches(spacingM: number | null): number | null {
       best = c
     }
   }
-  return bestDelta <= 2.5 ? best : Math.round(raw)
+  return bestDelta <= 2.5 ? best : null
 }

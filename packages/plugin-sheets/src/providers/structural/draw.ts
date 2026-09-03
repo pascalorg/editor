@@ -255,10 +255,11 @@ export function extentArrow(a: Pt, b: Pt, label: string, p: Pen): FloorplanGeome
     ...arrowHead(b, a, head, p),
     {
       kind: 'group',
-      transform: { translate: [mid[0] - nx * offset, mid[1] - ny * offset], rotate: flip ? angle + Math.PI : angle },
-      children: [
-        text([0, 0], label, size, { anchor: 'middle', weight: 700 }),
-      ],
+      transform: {
+        translate: [mid[0] - nx * offset, mid[1] - ny * offset],
+        rotate: flip ? angle + Math.PI : angle,
+      },
+      children: [text([0, 0], label, size, { anchor: 'middle', weight: 700 })],
     },
   ]
 }

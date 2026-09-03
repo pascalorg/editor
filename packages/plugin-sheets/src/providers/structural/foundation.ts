@@ -24,15 +24,15 @@ import {
   diagonalHatch,
   dot,
   INK,
-  INK_FAINT,
   INK_MID,
+  INK_SOFT,
   line,
   PEN,
   type Pen,
   polygon,
   square,
-  tag,
   TYPE,
+  tag,
 } from './draw'
 import {
   flagsOf,
@@ -45,7 +45,6 @@ import {
   membersOf,
   type Pt,
   type StructuralModel,
-  toInches,
 } from './model'
 import type { LegendEntry, Note } from './plate'
 
@@ -149,17 +148,15 @@ export function foundationPrimitives(
   const holdDowns = membersOf(model, 'foundation', 'hold-down')
   const slabMembers = membersOf(model, 'foundation', 'slab')
   const vapor = membersOf(model, 'foundation', 'vapor-retarder')
-  const dowels = membersOf(model, 'foundation', 'rebar').filter((m) =>
-    /dowel/i.test(m.label ?? ''),
-  )
+  const dowels = membersOf(model, 'foundation', 'rebar').filter((m) => /dowel/i.test(m.label ?? ''))
 
   // ── background: the walls that bear on all this ─────────────────────
   for (const fp of model.footprints) {
     out.push(
       polygon(fp.loop, {
-        fill: fp.exterior ? '#eceef1' : '#f4f5f7',
-        stroke: INK_FAINT,
-        strokeWidth: p.w(PEN.hair),
+        fill: fp.exterior ? '#dfe3e8' : '#eef0f2',
+        stroke: INK_SOFT,
+        strokeWidth: p.w(PEN.thin),
       }),
     )
   }
@@ -261,7 +258,15 @@ export function foundationPrimitives(
     const c = memberPlanCentre(bar)
     const r = p.w(0.026)
     out.push(
-      { kind: 'circle', cx: c[0], cy: c[1], r, fill: '#ffffff', stroke: INK, strokeWidth: p.w(PEN.thin) },
+      {
+        kind: 'circle',
+        cx: c[0],
+        cy: c[1],
+        r,
+        fill: '#ffffff',
+        stroke: INK,
+        strokeWidth: p.w(PEN.thin),
+      },
       line([c[0] - r, c[1]], [c[0] + r, c[1]], { stroke: INK, strokeWidth: p.w(PEN.thin) }),
       line([c[0], c[1] - r], [c[0], c[1] + r], { stroke: INK, strokeWidth: p.w(PEN.thin) }),
     )
@@ -292,9 +297,7 @@ export function foundationPrimitives(
   for (const member of footings) {
     if (!/^Pad footing/.test(member.label ?? '')) continue
     const rect = memberPlanRect(member)
-    out.push(
-      ...diagonalHatch(rect, p.w(0.06), { stroke: INK_MID, strokeWidth: p.w(PEN.hair) }),
-    )
+    out.push(...diagonalHatch(rect, p.w(0.06), { stroke: INK_MID, strokeWidth: p.w(PEN.hair) }))
   }
 
   // ── the slab callout ────────────────────────────────────────────────
@@ -302,20 +305,17 @@ export function foundationPrimitives(
   const anchor = calloutAnchor(model)
   if (anchor && slabNote.length > 0) {
     out.push(
-      ...callout(
-        anchor.from,
-        anchor.to,
-        slabNote,
-        p,
-        { anchor: 'start', size: p.w(TYPE.small) },
-      ),
+      ...callout(anchor.from, anchor.to, slabNote, p, { anchor: 'start', size: p.w(TYPE.small) }),
     )
   }
 
   // ── the anchorage callout ───────────────────────────────────────────
   const anchorageNote = anchorageCallout(model, bolts, dowels)
   if (anchor && anchorageNote.length > 0) {
-    const from: Pt = [anchor.from[0], model.bounds.minY + (model.bounds.maxY - model.bounds.minY) * 0.78]
+    const from: Pt = [
+      anchor.from[0],
+      model.bounds.minY + (model.bounds.maxY - model.bounds.minY) * 0.78,
+    ]
     const to: Pt = [model.bounds.maxX + p.w(0.5), from[1]]
     out.push(...callout(from, to, anchorageNote, p, { anchor: 'start', size: p.w(TYPE.small) }))
   }
@@ -350,29 +350,27 @@ function calloutAnchor(model: StructuralModel): { from: Pt; to: Pt } | null {
   }
 }
 
+/**
+ * The slab callout, kept SHORT on purpose.
+ *
+ * A plan callout is a key into the notes, not the note itself: the viewport
+ * window is fitted to the drawing plus its words, so a four-line sentence
+ * hung off the building shrinks the plan by a third. The full sentences —
+ * base course, reinforcement, the vapor-retarder spec — live in the general
+ * foundation notes plate, which wraps and has room for them.
+ */
 function slabCallout(
   model: StructuralModel,
   slabMembers: readonly Member[],
   vapor: readonly Member[],
 ): string[] {
   if (slabMembers.length === 0) {
-    return model.slabs.length > 0
-      ? [
-          'SLAB NOT DERIVED BY THE FOUNDATION ENGINE',
-          '(verify: IRC R506 — slab thickness, base and vapor retarder)',
-        ]
-      : []
+    return model.slabs.length > 0 ? ['SLAB NOT DERIVED', '(verify: IRC R506)'] : []
   }
   const first = slabMembers[0] as Member
-  const thickness = formatInchFraction(first.dims[1])
-  const lines = [`${thickness} CONC. SLAB ON GRADE (IRC R506.1)`]
-  if (vapor.length > 0) {
-    const v = vapor[0] as Member
-    lines.push(`OVER ${v.label ?? '6-mil vapor retarder'} (IRC R506.2.3)`)
-  }
-  const advisory = first.advisory
-  if (advisory) lines.push(`${advisory.toUpperCase()}`)
-  lines.push('SLAB REINFORCEMENT (verify: IRC R506.2.4) — NOT MODELLED')
+  const lines = [`${formatInchFraction(first.dims[1])} CONC. SLAB ON GRADE (IRC R506.1)`]
+  if (vapor.length > 0) lines.push('OVER 6-MIL VAPOR RETARDER (R506.2.3)')
+  lines.push('REINF. NOT MODELLED (verify R506.2.4)')
   return lines
 }
 
@@ -381,18 +379,18 @@ function anchorageCallout(
   bolts: readonly Member[],
   dowels: readonly Member[],
 ): string[] {
-  if (bolts.length > 0) {
-    const bolt = bolts[0] as Member
+  const bolt = bolts[0]
+  if (bolt) {
     return [
       `A.B. ${formatInchFraction(bolt.dims[0])} DIA. @ ${formatFtIn(model.spec.anchorBoltSpacing)} O.C. MAX`,
-      `${formatIn(model.spec.anchorBoltEndDistance)} MAX FROM EACH PLATE-SECTION END, 7" MIN. EMBED`,
+      `${formatIn(model.spec.anchorBoltEndDistance)} MAX FROM PLATE ENDS`,
       '(IRC R403.1.6)',
     ]
   }
   if (dowels.length > 0) {
     return [
-      'NO SOLE-PLATE ANCHOR BOLTS — EXTERIOR WALLS ARE REINFORCED CMU',
-      'ANCHORAGE IS VERT. DOWELS LAPPING THE WALL VERTICALS IN GROUTED CELLS',
+      'NO SOLE-PLATE ANCHOR BOLTS',
+      'CMU WALLS — DOWELS IN GROUTED CELLS',
       '(IRC R606.12 / R403.1.3.2)',
     ]
   }
@@ -508,9 +506,7 @@ export function anchorageScheduleTable(model: StructuralModel): ScheduleTable {
   if (rows.length === 0) {
     issues.push('No anchorage hardware derived for this level — verify IRC R403.1.6 by hand.')
   }
-  issues.push(
-    'Braced-wall PANEL lengths are not verified from geometry (Bones wall-bracing v1 declares the method only) — verify IRC R602.10.3 / Table R602.10.5.',
-  )
+  issues.push('Braced-wall panel lengths NOT verified — see IRC R602.10.3 / Table R602.10.5.')
   return {
     title: 'Anchorage schedule',
     columns: [
@@ -525,6 +521,24 @@ export function anchorageScheduleTable(model: StructuralModel): ScheduleTable {
     rows,
     issues,
   }
+}
+
+/**
+ * The stemwall-reinforcement half of the stemwall note — written from the
+ * bars the engine ACTUALLY emitted, never from the spec alone.
+ */
+function verticalsClause(model: StructuralModel, spec: StructuralModel['spec']): string {
+  const verticals = membersOf(model, 'foundation', 'rebar').filter((m) =>
+    /stemwall vertical/i.test(m.label ?? ''),
+  )
+  if (verticals.length > 0) {
+    return `, with #4 verticals at ${spec.seismicHoldDowns ? '24"' : '48"'} o.c. and a #4 horizontal at the stemwall top`
+  }
+  const dowels = membersOf(model, 'foundation', 'rebar').filter((m) => /dowel/i.test(m.label ?? ''))
+  if (dowels.length > 0) {
+    return '. The vertical steel in this stemwall is the masonry dowel schedule below — no separate stemwall grid is placed'
+  }
+  return '. Stemwall vertical reinforcement is NOT modelled at this level of detail (verify: IRC R403.1.3.2)'
 }
 
 function groupByLabel(members: readonly Member[]): { label: string; members: Member[] }[] {
@@ -568,7 +582,11 @@ export function foundationNotes(model: StructuralModel): Note[] {
       cite: 'IRC R403.1 / R403.1.3 — (verify splice lengths)',
     },
     {
-      text: `Stemwall ${formatIn(spec.stemwallThickness)} thick from the footing top to the top of foundation, with #4 verticals at ${spec.seismicHoldDowns ? '24"' : '48"'} o.c. Grade is not modelled: the required reveal of the foundation above finished grade is assumed satisfied at the framed floor line.`,
+      // The vertical claim is CONDITIONAL on the engine having emitted them:
+      // a masonry wall gets grouted-cell dowels instead of the generic
+      // stemwall grid (foundation.ts skips the grid when a CMU layout
+      // exists), so claiming both would be claiming steel nobody places.
+      text: `Stemwall ${formatIn(spec.stemwallThickness)} thick from the footing top to the top of foundation${verticalsClause(model, spec)}. Grade is not modelled: the required reveal of the foundation above finished grade is assumed satisfied at the framed floor line.`,
       cite: 'IRC R403.1.3.2 / R404.1.6 — (verify reveal in the field)',
     },
   ]
@@ -621,14 +639,6 @@ export function foundationNotes(model: StructuralModel): Note[] {
     text: 'Contractor shall verify all dimensions and existing conditions in the field before placing concrete and report any discrepancy to the engineer of record. Do not scale these drawings.',
   })
   return notes
-}
-
-/** Anchor-bolt spacing as it appears in the callout — exported for tests. */
-export function anchorBoltCallout(model: StructuralModel): string | null {
-  const bolts = membersOf(model, 'foundation', 'anchor-bolt')
-  const bolt = bolts[0]
-  if (!bolt) return null
-  return `A.B. ${formatInchFraction(bolt.dims[0])} DIA. @ ${formatFtIn(model.spec.anchorBoltSpacing)} O.C. MAX (IRC R403.1.6)`
 }
 
 /** Total slab area actually poured by the engine, square feet. */

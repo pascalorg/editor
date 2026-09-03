@@ -18,12 +18,25 @@ import { INK, INK_SOFT, MONO, SANS } from '../../titleblock'
 
 export type Box = { x: number; y: number; w: number; h: number }
 
-/** Average glyph advance as a fraction of the em, for the sheet's sans. */
-const CHAR = 0.5
-const MONO_CHAR = 0.6
+/**
+ * Average glyph advance as a fraction of the em. Helvetica / IBM Plex Sans
+ * average about 0.50 for mixed-case prose; 0.58 buys a margin so a line
+ * measured here still fits when the PDF back end picks a wider fallback.
+ */
+const CHAR = 0.58
+const MONO_CHAR = 0.62
 
-export function fits(text: string, width: number, size: number, mono = false): boolean {
-  return text.length * size * (mono ? MONO_CHAR : CHAR) <= width
+/**
+ * Target column width, inches. A structural notes column on a real sheet is
+ * about 4-5 in wide — long enough for a sentence, short enough to scan — so
+ * a wide plate splits into as many of those as it holds rather than printing
+ * one 19-inch line.
+ */
+const TARGET_COLUMN = 4.6
+
+/** How many note columns a box of this width should use. */
+export function columnsFor(width: number): number {
+  return Math.max(1, Math.min(4, Math.round(width / TARGET_COLUMN)))
 }
 
 /** Greedy word wrap to a pixel width, in the sheet's own font metrics. */
@@ -113,7 +126,7 @@ export function notesBlock(
 ): FloorplanGeometry[] {
   const size = options.size ?? 0.098
   const lead = size * 1.32
-  const columns = Math.max(1, options.columns ?? (box.w > 7 ? 2 : 1))
+  const columns = Math.max(1, options.columns ?? columnsFor(box.w))
   const gutter = 0.3
   const colW = (box.w - gutter * (columns - 1)) / columns
   const numberW = 0.28
@@ -121,31 +134,59 @@ export function notesBlock(
   const capacity = Math.max(1, Math.floor(box.h / lead))
 
   type Line = { text: string; number?: string; cite?: boolean }
-  const lines: Line[] = []
-  notes.forEach((note, index) => {
+  // Each note is ONE block: its wrapped body plus its citation. Blocks are
+  // never split across a column boundary — an IRC citation stranded at the
+  // top of the next column belongs to nothing a reader can see.
+  const blocks: Line[][] = notes.map((note, index) => {
+    const block: Line[] = []
     const label = `${(options.startAt ?? 1) + index}.`
-    const wrapped = wrap(note.text, bodyW, size)
-    wrapped.forEach((part, i) => {
-      lines.push({ text: part, number: i === 0 ? label : undefined })
+    wrap(note.text, bodyW, size).forEach((part, i) => {
+      block.push({ text: part, number: i === 0 ? label : undefined })
     })
     if (note.cite) {
-      for (const part of wrap(note.cite, bodyW, size * 0.94)) {
-        lines.push({ text: part, cite: true })
-      }
+      for (const part of wrap(note.cite, bodyW, size * 0.94)) block.push({ text: part, cite: true })
     }
-    lines.push({ text: '' })
+    return block
   })
-  while (lines.length > 0 && (lines[lines.length - 1]?.text ?? '') === '') lines.pop()
+  const lines: Line[] = blocks.flat()
 
-  const total = capacity * columns
-  const shown = lines.slice(0, total)
+  // Balance: when everything fits, aim for an even split instead of filling
+  // the first column to the bottom and leaving the rest of the plate blank.
+  const withGaps = lines.length + Math.max(0, blocks.length - 1)
+  const target =
+    withGaps <= capacity * columns
+      ? Math.min(capacity, Math.max(1, Math.ceil(withGaps / columns)))
+      : capacity
+
+  const placed: { line: Line; col: number; row: number }[] = []
+  let col = 0
+  let row = 0
+  let dropped = 0
+  for (const block of blocks) {
+    if (row > 0 && row + block.length > target && col < columns - 1) {
+      col += 1
+      row = 0
+    }
+    if (row + block.length > capacity && col < columns - 1) {
+      col += 1
+      row = 0
+    }
+    if (row + block.length > capacity) {
+      dropped += block.length
+      continue
+    }
+    for (const line of block) {
+      placed.push({ line, col, row })
+      row += 1
+    }
+    row += 1
+  }
+
   const out: FloorplanGeometry[] = []
-  shown.forEach((entry, i) => {
-    const col = Math.floor(i / capacity)
-    const row = i % capacity
-    const x = box.x + col * (colW + gutter)
-    const y = box.y + (row + 1) * lead - size * 0.28
-    if (entry.text === '') return
+  for (const { line: entry, col: c, row: r } of placed) {
+    const x = box.x + c * (colW + gutter)
+    const y = box.y + (r + 1) * lead - size * 0.28
+    if (entry.text === '') continue
     if (entry.number) {
       out.push({
         kind: 'text',
@@ -168,13 +209,13 @@ export function notesBlock(
       fontWeight: entry.cite ? 600 : 400,
       fontFamily: entry.cite ? MONO : SANS,
     })
-  })
-  if (lines.length > total) {
+  }
+  if (dropped > 0) {
     out.push({
       kind: 'text',
       x: box.x,
       y: box.y + box.h - 0.04,
-      text: `+${lines.length - total} more note lines — enlarge this viewport`,
+      text: `+${dropped} more note lines — enlarge this viewport`,
       fontSize: 0.09,
       fill: '#b45309',
       fontFamily: SANS,
@@ -241,27 +282,34 @@ export function legendBlock(box: Box, entries: readonly LegendEntry[]): Floorpla
           })
         }
         break
-      case 'dot':
+      case 'dot': {
+        const fill = entry.symbol.color ?? INK
         out.push({
           kind: 'circle',
           cx: (x0 + x1) / 2,
           cy,
           r: 0.055,
-          fill: entry.symbol.color ?? INK,
-          stroke: 'none',
+          fill,
+          stroke: fill === '#ffffff' ? INK : 'none',
+          strokeWidth: fill === '#ffffff' ? 0.01 : 0,
         })
         break
-      case 'square':
+      }
+      case 'square': {
+        // A white swatch on white paper is not a swatch: outline it.
+        const fill = entry.symbol.color ?? INK
         out.push({
           kind: 'rect',
           x: (x0 + x1) / 2 - 0.058,
           y: cy - 0.058,
           width: 0.116,
           height: 0.116,
-          fill: entry.symbol.color ?? INK,
-          stroke: 'none',
+          fill,
+          stroke: fill === '#ffffff' ? INK : 'none',
+          strokeWidth: fill === '#ffffff' ? 0.01 : 0,
         })
         break
+      }
       case 'hatch':
         out.push({
           kind: 'rect',
@@ -279,7 +327,15 @@ export function legendBlock(box: Box, entries: readonly LegendEntry[]): Floorpla
           const bx = x0 + t - 0.18
           const by = cy + 0.09
           if (bx > x1 || ax < x0) continue
-          out.push({ kind: 'line', x1: ax, y1: ay, x2: bx, y2: by, stroke: INK, strokeWidth: 0.005 })
+          out.push({
+            kind: 'line',
+            x1: ax,
+            y1: ay,
+            x2: bx,
+            y2: by,
+            stroke: INK,
+            strokeWidth: 0.005,
+          })
         }
         break
       case 'hex':
@@ -294,7 +350,13 @@ export function legendBlock(box: Box, entries: readonly LegendEntry[]): Floorpla
             const a = (Math.PI / 3) * k - Math.PI / 2
             pts.push([cx + r * Math.cos(a), cy + r * Math.sin(a)])
           }
-          out.push({ kind: 'polygon', points: pts, fill: '#ffffff', stroke: INK, strokeWidth: 0.01 })
+          out.push({
+            kind: 'polygon',
+            points: pts,
+            fill: '#ffffff',
+            stroke: INK,
+            strokeWidth: 0.01,
+          })
         }
         out.push({
           kind: 'text',
@@ -407,53 +469,81 @@ export function stack(
   return out
 }
 
-/** A schedule block sized to its rows — for `stack`. */
+/**
+ * A schedule block sized to its rows — for `stack`.
+ *
+ * `drawTable` prints a table's ISSUES above its own origin, so the block
+ * reserves that strip at the top; without it the issues of one table land on
+ * top of the block above (caught in the first SN1 render). Issue text is not
+ * wrapped by `drawTable` either, so it is clipped to the block width here —
+ * the full sentence belongs in a notes block, which does wrap.
+ */
 export function scheduleBlock(
   table: ScheduleTable,
   title: string,
   legend?: string,
 ): { height: number; render: (at: Box) => FloorplanGeometry[]; label: string } {
-  const height = tableHeight(Math.max(1, table.rows.length), true) + 0.06
+  const issueH = table.issues.length > 0 ? 0.14 + table.issues.length * 0.16 : 0
+  const height = issueH + tableHeight(Math.max(1, table.rows.length), true) + 0.06
   return {
     label: title,
     height,
-    render: (at) => drawTable(table, at.x, at.y, at.w, at.h, { title, legend }),
+    render: (at) => {
+      const clipped: ScheduleTable = {
+        ...table,
+        issues: table.issues.map((issue) => clip(issue, at.w - 0.3, 0.1)),
+      }
+      return drawTable(clipped, at.x, at.y + issueH, at.w, at.h - issueH, {
+        title,
+        legend: legend ? clip(legend, at.w, 0.12) : undefined,
+      })
+    },
   }
+}
+
+/** Trim a single unwrapped line to a width, with an ellipsis. */
+export function clip(text: string, width: number, size: number): string {
+  const max = Math.max(8, Math.floor(width / (size * CHAR)))
+  return text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`
 }
 
 /** A block of cited notes sized to its content — for `stack`. */
 export function notesBlockSized(
   title: string,
   notes: readonly Note[],
-  columns = 1,
+  columns = 0,
   width = 0,
 ): { height: number; render: (at: Box) => FloorplanGeometry[]; label: string } {
   const size = 0.098
   const lead = size * 1.32
   const numberW = 0.28
-  const estimate = (w: number) => {
-    let count = 0
-    const bodyW = (w - 0.3 * (columns - 1)) / columns - numberW
-    for (const note of notes) {
-      count += wrap(note.text, Math.max(0.6, bodyW), size).length
-      if (note.cite) count += wrap(note.cite, Math.max(0.6, bodyW), size * 0.94).length
-      count += 1
-    }
-    return Math.ceil(count / columns) * lead
+  const w = width || 6
+  const cols = columns > 0 ? columns : columnsFor(w)
+  const bodyW = Math.max(0.6, (w - 0.3 * (cols - 1)) / cols - numberW)
+  // `notesBlock` never splits a note across a column boundary, so a column
+  // can overshoot the even split by up to one whole note. Budget for that,
+  // or the block silently prints "+N more" and drops the engine flags that
+  // are the whole point of these sheets (caught on the roof-notes plate).
+  let count = 0
+  let longest = 0
+  for (const note of notes) {
+    const block =
+      wrap(note.text, bodyW, size).length +
+      (note.cite ? wrap(note.cite, bodyW, size * 0.94).length : 0)
+    longest = Math.max(longest, block)
+    count += block + 1
   }
-  const height = 0.42 + estimate(width || 6)
+  const height = (title ? 0.42 : 0.06) + (Math.ceil(count / cols) + longest) * lead
   return {
     label: title,
     height,
     render: (at) => {
-      const head = heading(at, title)
+      const head = title ? heading(at, title) : { geometry: [], height: 0.06 }
       return [
         ...head.geometry,
-        ...notesBlock(
-          { x: at.x, y: at.y + head.height, w: at.w, h: at.h - head.height },
-          notes,
-          { columns },
-        ),
+        ...notesBlock({ x: at.x, y: at.y + head.height, w: at.w, h: at.h - head.height }, notes, {
+          columns: cols,
+        }),
       ]
     },
   }
@@ -471,10 +561,7 @@ export function legendBlockSized(
       const head = heading(at, title)
       return [
         ...head.geometry,
-        ...legendBlock(
-          { x: at.x, y: at.y + head.height, w: at.w, h: at.h - head.height },
-          entries,
-        ),
+        ...legendBlock({ x: at.x, y: at.y + head.height, w: at.w, h: at.h - head.height }, entries),
       ]
     },
   }

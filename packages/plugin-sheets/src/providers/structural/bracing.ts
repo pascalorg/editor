@@ -21,7 +21,7 @@ import {
   identifyBracedWallLines,
 } from '../../../../plugin-bones/src/engines/wall-bracing'
 import type { ScheduleTable } from '../../schedule'
-import { INK, INK_FAINT, INK_MID, line, PEN, type Pen, polygon, square, text, TYPE } from './draw'
+import { INK, INK_FAINT, INK_MID, line, PEN, type Pen, polygon, square, TYPE, text } from './draw'
 import {
   type Member,
   memberPlanCentre,
@@ -91,9 +91,7 @@ export function bracingPrimitives(
   // across the building at the line's own perpendicular offset.
   for (const fp of model.footprints) {
     if (!bracedIds.has(fp.id)) continue
-    out.push(
-      polygon(fp.loop, { fill: 'none', stroke: INK, strokeWidth: p.w(PEN.heavy) }),
-    )
+    out.push(polygon(fp.loop, { fill: 'none', stroke: INK, strokeWidth: p.w(PEN.heavy) }))
   }
 
   const margin = Math.max(0.6, (b.maxX - b.minX) * 0.05)
@@ -154,9 +152,11 @@ export function bracingPrimitives(
 
 export function bracingScheduleTable(model: StructuralModel): ScheduleTable {
   const lines = bracedWallLines(model)
+  // Terse: `drawTable` prints an issue on one unwrapped line. The full
+  // sentences are notes 4 and 5 of the braced wall notes below.
   const issues = [
-    'Panel LENGTHS are not derived. Bones wall-bracing v1 declares the method and identifies the lines; the required amount of bracing (R602.10.3) and the per-panel minimum (Table R602.10.5) must be verified by the engineer of record.',
-    'Interior braced wall lines, the CS-WSP adjacent-opening-height reduction and angled-wall corner assignment are outside the engine — verify by hand.',
+    'Panel LENGTHS not derived — verify R602.10.3 / Table R602.10.5.',
+    'Interior lines and the CS-WSP opening-height reduction are outside the engine.',
   ]
   return {
     title: 'Braced wall line schedule',
