@@ -44,6 +44,43 @@ export function resolveWallLayers(wall: WallNode): WallLayer[] {
   return resolveWallAssembly(wall).layers
 }
 
+/**
+ * The cladding an elevation draws for a wall.
+ *
+ * 1. The ASSEMBLY's declared exterior finish (WS5) — the source of truth when
+ *    the wall has one.
+ * 2. Otherwise the PAINTED material: a library / user material ref on the
+ *    exterior face slots (`wall.slots`, values like `library:siding/lap`) or
+ *    the legacy `material.preset` / `materialPreset`, read by name —
+ *    "siding", "stucco" / "plaster", "brick", "stone" / "masonry",
+ *    "fiber-cement" / "hardie". This is how a wall painted from the Pascal
+ *    material library or a user's own library still gets its symbol on paper.
+ * 3. Otherwise null — drawn blank and listed as "no cladding specified".
+ */
+export function exteriorFinishOf(
+  wall: Pick<WallNode, 'assembly' | 'slots' | 'material' | 'materialPreset'>,
+): WallSolid['exteriorFinish'] {
+  const declared = wall.assembly?.exterior?.finish as WallSolid['exteriorFinish'] | undefined
+  if (declared) return declared
+  const candidates: string[] = []
+  const slots = (wall.slots ?? {}) as Record<string, string>
+  for (const [slot, ref] of Object.entries(slots)) {
+    if (/exterior/i.test(slot) && typeof ref === 'string') candidates.push(ref)
+  }
+  if (typeof wall.materialPreset === 'string') candidates.push(wall.materialPreset)
+  const legacy = wall.material as { preset?: string; texture?: { url?: string } } | undefined
+  if (legacy?.preset) candidates.push(legacy.preset)
+  if (legacy?.texture?.url) candidates.push(legacy.texture.url)
+  for (const name of candidates.map((c) => c.toLowerCase())) {
+    if (/fiber|hardie|cement/.test(name)) return 'fiber-cement'
+    if (/siding|lap|batten|clapboard|shiplap/.test(name)) return 'siding'
+    if (/stucco|plaster/.test(name)) return 'stucco'
+    if (/brick/.test(name)) return 'brick'
+    if (/stone|masonry|rubble/.test(name)) return 'stone'
+  }
+  return null
+}
+
 // ---------------------------------------------------------------------------
 // Solids
 // ---------------------------------------------------------------------------
@@ -394,7 +431,7 @@ export function buildBuildingModel(nodes: Nodes): BuildingModel {
         // applied. The cut's layer order flips with it.
         exteriorSign: assembly.exteriorSideResolved,
         layers: assembly.layers,
-        exteriorFinish: (wall.assembly?.exterior?.finish as WallSolid['exteriorFinish']) ?? null,
+        exteriorFinish: exteriorFinishOf(wall),
         baseY: baseY + (wall.supportOffset ?? 0),
         topY: baseY + (wall.supportOffset ?? 0) + (wall.height ?? DEFAULT_WALL_HEIGHT),
         openings: [],
