@@ -529,7 +529,7 @@ export function ensureSectionMarkers(nodes: NodeMap): AnyNodeLike[] {
     name: `Section ${spec.label}`,
     parentId: spec.levelId,
     visible: true,
-    metadata: { createdBy: 'sheets:default-set' },
+    metadata: { createdBy: 'sheets-default-set' },
     label: spec.label,
     levelId: spec.levelId,
     start: spec.start,
