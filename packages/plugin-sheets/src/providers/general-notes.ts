@@ -1,20 +1,684 @@
 /**
- * 'general-notes' sheet drawing provider — STUB. Returns null (the viewport prints
- * "general-notes — nothing to draw") until the owning workstream lands it.
+ * 'general-notes' sheet drawing provider — the paper a permit set carries
+ * that is not a drawing.
  *
- * Contract: `(nodes, args: ProviderArgs) => DrawingResult | null` — world
- * metres in `primitives`/`bounds` for the live window, and/or absolute
- * sheet-inch geometry in `plate` laid out inside `args.viewport`.
+ * `args.notesKey` selects which block:
+ *   'general'           A0.1's dedicated code-cited notes sheet, flowed into
+ *                       as many columns as the viewport is wide.
+ *   'attic-ventilation' the R806 venting calculation + diagram, sized for the
+ *                       right-hand column of A3.0 beside the roof plan.
+ *   'roof'              the short roof-plan note block.
+ *
+ * Everything is emitted as a PLATE — absolute sheet inches inside
+ * `args.viewport` — because none of it is a window onto the model.
+ *
+ * THE ONE RULE THIS FILE KEEPS: nothing is printed that the repo cannot
+ * source. The code name comes out of Bones' researched adoption table, the
+ * climate zone out of its wall-assembly table, the attic area out of the roof
+ * segments' own footprints. Where a section number is uncertain the note says
+ * "(verify: …)" rather than looking authoritative. Where the sheet runs out of
+ * paper it says "continued on next sheet" and warns, rather than dropping
+ * notes silently.
  */
+import type { FloorplanGeometry } from '@pascal-app/core'
+import { drawTable, tableHeight } from '../draw-table'
 import type { DrawingProvider, DrawingResult, ProviderArgs } from '../drawings'
 import type { NodeMap } from '../model'
+import { computeAtticVentilation, R806_1_NOTES, R806_2_EXCEPTION_CONDITIONS } from '../notes/attic'
+import {
+  generalNoteSections,
+  type Note,
+  type NoteSection,
+  noteLine,
+  roofNotes,
+} from '../notes/general'
+import { codeHeaderLine, type Jurisdiction, resolveJurisdiction } from '../notes/jurisdiction'
+import type { ScheduleTable } from '../schedule'
+import { INK, INK_SOFT, SANS } from '../titleblock'
 
-export function buildGeneralNotesDrawing(_nodes: NodeMap, _args: ProviderArgs): DrawingResult | null {
-  return null
+/* ------------------------------------------------------------ metrics */
+
+/** Approximate set width per character, as a fraction of the font size. */
+const CHAR_W = 0.55
+
+const NOTE_SIZE = 0.13
+const NOTE_LEAD = 0.178
+const HEAD_SIZE = 0.175
+const TITLE_SIZE = 0.26
+/** Strip at the bottom of a viewport the host paints provider warnings into. */
+const WARNING_BAND = 0.82
+/** Body type in the attic-ventilation block, matched to the notes columns. */
+const ATTIC_BODY = 0.115
+const ATTIC_LEAD = 0.155
+
+export type Box = { x: number; y: number; w: number; h: number }
+
+export function measureIn(value: string, fontSize: number): number {
+  return value.length * fontSize * CHAR_W
+}
+
+/** Break a paragraph into lines that fit `maxW` inches at `fontSize`. */
+export function wrapToWidth(value: string, fontSize: number, maxW: number): string[] {
+  const max = Math.max(8, Math.floor(maxW / (fontSize * CHAR_W)))
+  const out: string[] = []
+  let line = ''
+  for (const word of value.split(/\s+/).filter(Boolean)) {
+    const next = line ? `${line} ${word}` : word
+    if (line && next.length > max) {
+      out.push(line)
+      line = word
+    } else {
+      line = next
+    }
+  }
+  if (line) out.push(line)
+  return out.length > 0 ? out : ['']
+}
+
+/**
+ * How many columns a notes field of width `w` gets. Column width is held near
+ * 6.3 in — about 88 characters at a 0.13 in note, the measure dense notes
+ * read comfortably at — so a full ARCH D field lands on five columns like the
+ * reference sheet and a narrow strip lands on one.
+ */
+export function columnsFor(
+  w: number,
+  gap = 0.3,
+  target = 6.3,
+  max = 6,
+): { count: number; width: number; gap: number } {
+  const count = Math.min(max, Math.max(1, Math.round((w + gap) / (target + gap))))
+  return { count, width: (w - gap * (count - 1)) / count, gap }
+}
+
+/* ------------------------------------------------------------ drawing */
+
+function text(
+  x: number,
+  y: number,
+  value: string,
+  size: number,
+  opts: {
+    weight?: number
+    fill?: string
+    family?: string
+    anchor?: 'start' | 'middle' | 'end'
+  } = {},
+): FloorplanGeometry {
+  return {
+    kind: 'text',
+    x,
+    y,
+    text: value,
+    fontSize: size,
+    fill: opts.fill ?? INK,
+    fontWeight: opts.weight ?? 400,
+    fontFamily: opts.family ?? SANS,
+    textAnchor: opts.anchor ?? 'start',
+    dominantBaseline: 'alphabetic',
+  }
+}
+
+function rule(x: number, y: number, w: number, width = 0.02, stroke = INK): FloorplanGeometry {
+  return { kind: 'line', x1: x, y1: y, x2: x + w, y2: y, stroke, strokeWidth: width }
+}
+
+/* -------------------------------------------------------- column flow */
+
+/** One unbreakable run of lines — a section heading, or one numbered note. */
+type Block = {
+  lines: { value: string; size: number; weight: number; indent: number }[]
+  /** Height the block occupies, inches, including its trailing space. */
+  height: number
+  /** Draw a heavy rule under the first line (section headings). */
+  ruled?: boolean
+}
+
+function headingBlock(title: string): Block {
+  return {
+    lines: [{ value: title.toUpperCase(), size: HEAD_SIZE, weight: 800, indent: 0 }],
+    height: HEAD_SIZE + 0.22,
+    ruled: true,
+  }
+}
+
+/** Hanging indent: the number sits proud, every line after it is inset. */
+const NOTE_INDENT = NOTE_SIZE * CHAR_W * 4
+
+/**
+ * Wrap with a hanging indent — the continuation lines have LESS room than the
+ * first, and must be wrapped to that narrower measure or they run past the
+ * column they were flowed into.
+ */
+export function wrapHanging(
+  value: string,
+  fontSize: number,
+  width: number,
+  indent: number,
+): string[] {
+  const first = Math.max(8, Math.floor(width / (fontSize * CHAR_W)))
+  const rest = Math.max(8, Math.floor((width - indent) / (fontSize * CHAR_W)))
+  const out: string[] = []
+  let line = ''
+  for (const word of value.split(/\s+/).filter(Boolean)) {
+    const limit = out.length === 0 ? first : rest
+    const next = line ? `${line} ${word}` : word
+    if (line && next.length > limit) {
+      out.push(line)
+      line = word
+    } else {
+      line = next
+    }
+  }
+  if (line) out.push(line)
+  return out.length > 0 ? out : ['']
+}
+
+/** A numbered note as a block — the citation is part of the flowed text. */
+function noteBlock(index: number, note: Note, width: number): Block {
+  const lines = wrapHanging(noteLine(index, note), NOTE_SIZE, width, NOTE_INDENT)
+  return {
+    lines: lines.map((value, i) => ({
+      value,
+      size: NOTE_SIZE,
+      weight: 400,
+      indent: i === 0 ? 0 : NOTE_INDENT,
+    })),
+    height: lines.length * NOTE_LEAD + 0.06,
+  }
+}
+
+function blocksFor(sections: NoteSection[], width: number): Block[] {
+  const blocks: Block[] = []
+  for (const section of sections) {
+    blocks.push(headingBlock(section.title))
+    section.notes.forEach((note, i) => {
+      blocks.push(noteBlock(i + 1, note, width))
+    })
+  }
+  return blocks
+}
+
+/**
+ * Pack blocks into columns, top to bottom then left to right. A block is
+ * never split; a heading that would land in the last two lines of a column is
+ * pushed to the next one so it never orphans from its first note.
+ */
+export function packColumns(
+  blocks: Block[],
+  columnCount: number,
+  columnHeight: number,
+): { placed: { block: Block; column: number; y: number }[]; overflow: number } {
+  const placed: { block: Block; column: number; y: number }[] = []
+  let column = 0
+  let cursor = 0
+  for (let i = 0; i < blocks.length; i++) {
+    const block = blocks[i] as Block
+    const orphan = block.ruled === true && cursor + block.height + NOTE_LEAD * 2 > columnHeight
+    if (cursor + block.height > columnHeight || orphan) {
+      column += 1
+      cursor = 0
+      if (column >= columnCount) return { placed, overflow: blocks.length - i }
+    }
+    placed.push({ block, column, y: cursor })
+    cursor += block.height
+  }
+  return { placed, overflow: 0 }
+}
+
+/**
+ * BALANCE the columns instead of filling them.
+ *
+ * Greedy top-to-bottom filling would pour a hundred notes into the left three
+ * columns of a five-column field and leave the right two blank, which reads as
+ * a mistake rather than as a layout. So the column height starts at the even
+ * share — total content ÷ column count — and grows only until everything
+ * fits, which spreads the notes across every column and leaves one even band
+ * of white at the foot of the sheet. Content that genuinely does not fit the
+ * field still overflows at the full height, and still says so.
+ */
+export function balancedColumnHeight(
+  blocks: Block[],
+  columnCount: number,
+  maxHeight: number,
+): number {
+  const total = blocks.reduce((sum, block) => sum + block.height, 0)
+  const tallest = blocks.reduce((max, block) => Math.max(max, block.height), 0)
+  let height = Math.max(total / columnCount, tallest + 0.02)
+  for (let i = 0; i < 80 && height < maxHeight; i += 1) {
+    if (packColumns(blocks, columnCount, height).overflow === 0) return height
+    height = Math.min(maxHeight, height * 1.03)
+  }
+  return maxHeight
+}
+
+function drawBlocks(
+  placed: { block: Block; column: number; y: number }[],
+  origin: { x: number; y: number },
+  columns: { count: number; width: number; gap: number },
+): FloorplanGeometry[] {
+  const out: FloorplanGeometry[] = []
+  for (const { block, column, y } of placed) {
+    const cx = origin.x + column * (columns.width + columns.gap)
+    let cy = origin.y + y
+    block.lines.forEach((line, i) => {
+      cy += line.size
+      out.push(text(cx + line.indent, cy, line.value, line.size, { weight: line.weight }))
+      if (i === 0 && block.ruled === true) {
+        out.push(rule(cx, cy + 0.06, columns.width, 0.018))
+        cy += 0.06
+      }
+      cy += NOTE_LEAD - line.size
+    })
+  }
+  return out
+}
+
+/* -------------------------------------------------------- notes sheet */
+
+function notesPlate(
+  box: Box,
+  title: string,
+  sections: NoteSection[],
+  j: Jurisdiction,
+): { plate: FloorplanGeometry[]; warnings: string[] } {
+  const out: FloorplanGeometry[] = []
+  const warnings: string[] = []
+
+  // Header: the sheet title, then the one line saying what the section
+  // numbers under it actually refer to.
+  out.push(text(box.x, box.y + TITLE_SIZE, title.toUpperCase(), TITLE_SIZE, { weight: 800 }))
+  out.push(rule(box.x, box.y + TITLE_SIZE + 0.1, box.w, 0.03))
+  const headLines = wrapToWidth(codeHeaderLine(j), 0.11, box.w)
+  headLines.forEach((line, i) => {
+    out.push(text(box.x, box.y + TITLE_SIZE + 0.34 + i * 0.155, line, 0.11, { weight: 700 }))
+  })
+  const headerH = TITLE_SIZE + 0.34 + headLines.length * 0.155 + 0.14
+
+  // Footer band: the caveats the data files themselves carry, kept clear of
+  // the strip the host paints provider warnings into.
+  const caveatLines = j.caveats
+    .slice(0, 4)
+    .flatMap((line) => wrapToWidth(`▸ ${line}`, 0.095, box.w - 0.2))
+  const footerH = caveatLines.length > 0 ? caveatLines.length * 0.13 + 0.24 : 0
+  const footerTop = box.y + box.h - WARNING_BAND - footerH
+  if (caveatLines.length > 0) {
+    out.push({
+      kind: 'rect',
+      x: box.x,
+      y: footerTop,
+      width: box.w,
+      height: footerH,
+      fill: '#fffbeb',
+      stroke: '#b45309',
+      strokeWidth: 0.012,
+    })
+    caveatLines.forEach((line, i) => {
+      out.push(text(box.x + 0.1, footerTop + 0.18 + i * 0.13, line, 0.095, { fill: '#92400e' }))
+    })
+  }
+
+  const columns = columnsFor(box.w)
+  const origin = { x: box.x, y: box.y + headerH }
+  const columnHeight = Math.max(1, footerTop - origin.y - 0.16)
+
+  const blocks = blocksFor(sections, columns.width)
+  const balanced = balancedColumnHeight(blocks, columns.count, columnHeight)
+  const { placed, overflow } = packColumns(blocks, columns.count, balanced)
+  out.push(...drawBlocks(placed, origin, columns))
+
+  if (overflow > 0) {
+    out.push(
+      text(
+        origin.x + (columns.count - 1) * (columns.width + columns.gap),
+        origin.y + balanced + 0.13,
+        `(continued on next sheet — ${overflow} more items)`,
+        0.105,
+        { weight: 700, fill: '#b45309' },
+      ),
+    )
+    warnings.push(
+      `${overflow} of ${blocks.length} note blocks did not fit this viewport — enlarge it or add a second notes sheet.`,
+    )
+  }
+  return { plate: out, warnings }
+}
+
+/* --------------------------------------------------- attic ventilation */
+
+function feetInchesFromMetres(metres: number): string {
+  const totalInches = Math.round(metres * 39.3700787401575)
+  const feet = Math.floor(totalInches / 12)
+  return `${feet}'-${totalInches - feet * 12}"`
+}
+
+function commas(value: number, places = 0): string {
+  return value.toLocaleString('en-US', {
+    minimumFractionDigits: places,
+    maximumFractionDigits: places,
+  })
+}
+
+/**
+ * A small section through a vented attic: intake low, exhaust high. Drawn
+ * rather than described because the reference sheet's venting block carries a
+ * diagram and it is the fastest way to say "high AND low, both".
+ */
+function ventDiagram(box: Box): FloorplanGeometry[] {
+  const out: FloorplanGeometry[] = []
+  const w = Math.min(box.w, 4.8)
+  const h = box.h
+  const x = box.x + (box.w - w) / 2
+  const y = box.y
+  const apex: [number, number] = [x + w / 2, y + 0.14]
+  const eaveY = y + h - 0.42
+  out.push({
+    kind: 'polyline',
+    points: [[x, eaveY], apex, [x + w, eaveY]],
+    fill: 'none',
+    stroke: INK,
+    strokeWidth: 0.022,
+  })
+  // Ceiling plane with an insulation band under it.
+  out.push({
+    kind: 'rect',
+    x: x + 0.4,
+    y: eaveY,
+    width: w - 0.8,
+    height: 0.11,
+    fill: '#e5e7eb',
+    stroke: 'none',
+  })
+  out.push(rule(x + 0.4, eaveY, w - 0.8, 0.016))
+  // Ridge exhaust, up and out.
+  out.push({
+    kind: 'line',
+    x1: apex[0],
+    y1: apex[1],
+    x2: apex[0],
+    y2: y - 0.18,
+    stroke: INK,
+    strokeWidth: 0.018,
+  })
+  out.push({
+    kind: 'polygon',
+    points: [
+      [apex[0], y - 0.28],
+      [apex[0] - 0.055, y - 0.15],
+      [apex[0] + 0.055, y - 0.15],
+    ],
+    fill: INK,
+    stroke: 'none',
+  })
+  out.push(text(apex[0] + 0.12, y - 0.16, 'UPPER VENT 40–50 %', 0.1, { fill: INK_SOFT }))
+  // Eave intakes, in and up under the sheathing.
+  for (const dir of [1, -1] as const) {
+    const sx = dir === 1 ? x + 0.06 : x + w - 0.06
+    out.push({
+      kind: 'polyline',
+      points: [
+        [sx - dir * 0.4, eaveY - 0.06],
+        [sx + dir * 0.16, eaveY - 0.06],
+        [sx + dir * 0.38, eaveY - 0.34],
+      ],
+      fill: 'none',
+      stroke: INK,
+      strokeWidth: 0.016,
+    })
+    out.push({
+      kind: 'polygon',
+      points: [
+        [sx + dir * 0.46, eaveY - 0.44],
+        [sx + dir * 0.28, eaveY - 0.28],
+        [sx + dir * 0.4, eaveY - 0.22],
+      ],
+      fill: INK,
+      stroke: 'none',
+    })
+  }
+  out.push(text(x, y + h + 0.02, 'EAVE / SOFFIT INTAKE — BALANCE', 0.1, { fill: INK_SOFT }))
+  out.push(
+    text(x + w, y + h + 0.02, '1" MIN. AIRSPACE AT BAFFLE (R806.3)', 0.1, {
+      fill: INK_SOFT,
+      anchor: 'end',
+    }),
+  )
+  return out
+}
+
+function atticPlate(
+  nodes: NodeMap,
+  box: Box,
+  j: Jurisdiction,
+): { plate: FloorplanGeometry[]; warnings: string[] } {
+  const vent = computeAtticVentilation(nodes)
+  const out: FloorplanGeometry[] = []
+
+  out.push(text(box.x, box.y + 0.22, 'ROOF VENTING CALCULATION & DIAGRAM', 0.22, { weight: 800 }))
+  out.push(rule(box.x, box.y + 0.3, box.w, 0.028))
+  out.push(
+    text(
+      box.x,
+      box.y + 0.5,
+      `Attic ventilation per ${j.resolved ? j.codeShort : 'IRC 2021'} — Section R806.`,
+      0.115,
+      { fill: INK_SOFT },
+    ),
+  )
+
+  let cursor = box.y + 0.72
+
+  // ── the vented area, segment by segment ──────────────────────────────
+  const areaTable: ScheduleTable = {
+    title: 'VENTED ATTIC AREA',
+    columns: [
+      { key: 'mark', label: 'ROOF', weight: 0.7 },
+      { key: 'type', label: 'TYPE', weight: 0.9 },
+      { key: 'pitch', label: 'PITCH', weight: 0.8 },
+      { key: 'size', label: 'FOOTPRINT', weight: 1.7 },
+      { key: 'area', label: 'AREA SF', weight: 1 },
+    ],
+    rows: vent.segments.map((segment, i) => ({
+      mark: `R${i + 1}`,
+      type: segment.roofType.toUpperCase(),
+      pitch: segment.pitch,
+      size: `${feetInchesFromMetres(segment.widthM)} × ${feetInchesFromMetres(segment.depthM)}`,
+      area: commas(segment.areaSqFt),
+    })),
+    issues: [],
+  }
+  areaTable.rows.push({
+    mark: 'TOTAL',
+    type: '',
+    pitch: '',
+    size: 'VENTED ATTIC AREA',
+    area: commas(vent.areaSqFt),
+  })
+  // +0.02 guards the row-capacity division in `drawTable` against the
+  // floating-point shortfall that silently drops the last row.
+  const areaH = tableHeight(areaTable.rows.length) + 0.02
+  out.push(
+    ...drawTable(areaTable, box.x, cursor, box.w, areaH, {
+      title: areaTable.title,
+      legend: 'Footprint under the roof — segment width × depth. Eave overhangs excluded.',
+    }),
+  )
+  cursor += areaH + 0.34
+
+  // ── required net free area, both ratios ──────────────────────────────
+  const sqFt150 = vent.required150SqIn / 144
+  const sqFt300 = vent.required300SqIn / 144
+  const reqTable: ScheduleTable = {
+    title: 'REQUIRED NET FREE VENTILATING AREA',
+    columns: [
+      { key: 'mark', label: 'SECTION', weight: 0.9 },
+      { key: 'rule', label: 'BASIS', weight: 2.6 },
+      { key: 'ratio', label: 'RATIO', weight: 0.7 },
+      { key: 'area', label: 'REQUIRED NFA', weight: 1.9 },
+    ],
+    rows: [
+      {
+        mark: 'R806.2',
+        rule: 'Minimum vent area — no conditions',
+        ratio: '1/150',
+        area: `${sqFt150.toFixed(2)} SF = ${commas(vent.required150SqIn)} SQ IN`,
+      },
+      {
+        mark: 'R806.2',
+        rule: 'Exception — both conditions below met',
+        ratio: '1/300',
+        area: `${sqFt300.toFixed(2)} SF = ${commas(vent.required300SqIn)} SQ IN`,
+      },
+      {
+        mark: '',
+        rule: '· upper portion (ridge / gable / off-ridge), 40–50 %',
+        ratio: '',
+        area: `${commas(vent.upperShare.minSqIn)} – ${commas(vent.upperShare.maxSqIn)} SQ IN`,
+      },
+      {
+        mark: '',
+        rule: '· balance at eave / soffit / frieze, 50–60 %',
+        ratio: '',
+        area: `${commas(vent.lowerShare.minSqIn)} – ${commas(vent.lowerShare.maxSqIn)} SQ IN`,
+      },
+    ],
+    issues: [],
+  }
+  const reqH = tableHeight(reqTable.rows.length) + 0.02
+  out.push(
+    ...drawTable(reqTable, box.x, cursor, box.w, reqH, {
+      title: reqTable.title,
+      legend: 'Both ratios are printed; Pascal does not choose between them.',
+    }),
+  )
+  cursor += reqH + 0.4
+
+  // ── what the 1/300 exception costs ───────────────────────────────────
+  out.push(
+    text(box.x, cursor, 'R806.2 EXCEPTION — BOTH CONDITIONS REQUIRED', 0.135, { weight: 800 }),
+  )
+  cursor += 0.19
+  for (const condition of R806_2_EXCEPTION_CONDITIONS) {
+    for (const line of wrapToWidth(condition, ATTIC_BODY, box.w)) {
+      cursor += ATTIC_LEAD
+      out.push(text(box.x, cursor, line, ATTIC_BODY))
+    }
+    cursor += 0.06
+  }
+
+  // ── the diagram ──────────────────────────────────────────────────────
+  cursor += 0.5
+  out.push(...ventDiagram({ x: box.x, y: cursor, w: box.w, h: 1.3 }))
+  cursor += 1.58
+
+  // ── R806.1, and the refusal to pick a vent product ───────────────────
+  out.push(text(box.x, cursor, 'R806.1 VENTILATION REQUIRED', 0.135, { weight: 800 }))
+  cursor += 0.19
+  for (const note of R806_1_NOTES) {
+    for (const line of wrapToWidth(note, ATTIC_BODY, box.w)) {
+      cursor += ATTIC_LEAD
+      out.push(text(box.x, cursor, line, ATTIC_BODY))
+    }
+    cursor += 0.06
+  }
+
+  const warnings = [...vent.warnings]
+  if (cursor > box.y + box.h - WARNING_BAND) {
+    warnings.unshift('Venting block is taller than its viewport — enlarge it.')
+  }
+
+  // ── the roof notes, in whatever column is left ───────────────────────
+  // A3.0's right-hand strip is a whole sheet tall and the venting block only
+  // needs its top third. Rather than leave two feet of blank paper beside the
+  // roof plan, the roof's own note block finishes the column.
+  const remaining = box.y + box.h - WARNING_BAND - cursor - 0.5
+  if (remaining > 2) {
+    const roofBlocks = blocksFor(roofNotes(j), box.w)
+    const { placed, overflow } = packColumns(roofBlocks, 1, remaining)
+    out.push(
+      ...drawBlocks(placed, { x: box.x, y: cursor + 0.5 }, { count: 1, width: box.w, gap: 0 }),
+    )
+    if (overflow > 0) warnings.push(`${overflow} roof notes did not fit beside the roof plan.`)
+  }
+
+  return { plate: out, warnings }
+}
+
+/* ----------------------------------------------------------- provider */
+
+export function buildGeneralNotesDrawing(nodes: NodeMap, args: ProviderArgs): DrawingResult | null {
+  const vp = args.viewport
+  if (!vp || vp.w <= 0 || vp.h <= 0) return null
+  const box: Box = { x: vp.x, y: vp.y, w: vp.w, h: vp.h }
+  const j = resolveJurisdiction(nodes)
+  const key = args.notesKey ?? 'general'
+  const empty = { minX: 0, minY: 0, maxX: 0, maxY: 0 }
+
+  if (key === 'attic-ventilation') {
+    const { plate, warnings } = atticPlate(nodes, box, j)
+    return {
+      primitives: [],
+      bounds: empty,
+      plate,
+      warnings,
+      noLabel: true,
+      title: 'Roof venting calculation',
+    }
+  }
+
+  if (key === 'roof') {
+    const { plate, warnings } = notesPlate(box, 'Roof notes', roofNotes(j), j)
+    return { primitives: [], bounds: empty, plate, warnings, noLabel: true, title: 'Roof notes' }
+  }
+
+  const { plate, warnings } = notesPlate(box, 'General notes', generalNoteSections(j), j)
+  return { primitives: [], bounds: empty, plate, warnings, noLabel: true, title: 'General notes' }
 }
 
 export function registerGeneralNotesProvider(
   register: (key: string, provider: DrawingProvider) => void,
 ): void {
-  register('general-notes', (nodes, args) => buildGeneralNotesDrawing(nodes, args as unknown as ProviderArgs))
+  register('general-notes', (nodes, args) =>
+    buildGeneralNotesDrawing(nodes, args as unknown as ProviderArgs),
+  )
+}
+
+/* ----------------------------------------------------------- for tests */
+
+/**
+ * The flowed layout without the geometry — what the fit test asserts on: do
+ * all the notes land inside the columns of a full ARCH D field, and does any
+ * single line run past its column?
+ */
+export function layoutGeneralNotes(
+  box: Box,
+  sections: NoteSection[],
+): {
+  columns: number
+  columnWidth: number
+  blocks: number
+  overflow: number
+  longestLineIn: number
+} {
+  const columns = columnsFor(box.w)
+  const blocks = blocksFor(sections, columns.width)
+  // Matches `notesPlate`: header (~0.9 in) + a four-line caveat band.
+  const columnHeight = Math.max(1, box.h - 0.95 - WARNING_BAND - 0.9)
+  const balanced = balancedColumnHeight(blocks, columns.count, columnHeight)
+  const { overflow } = packColumns(blocks, columns.count, balanced)
+  const longestLineIn = blocks.reduce(
+    (max, block) =>
+      block.lines.reduce(
+        (m, line) => Math.max(m, measureIn(line.value, line.size) + line.indent),
+        max,
+      ),
+    0,
+  )
+  return {
+    columns: columns.count,
+    columnWidth: columns.width,
+    blocks: blocks.length,
+    overflow,
+    longestLineIn,
+  }
 }

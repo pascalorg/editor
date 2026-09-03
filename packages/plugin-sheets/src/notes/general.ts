@@ -280,7 +280,7 @@ export function generalNoteSections(j: Jurisdiction): NoteSection[] {
         },
         {
           text: 'Provide each bathroom with an openable window of not less than 3 sq ft with half openable, or with local exhaust of 50 cfm intermittent or 20 cfm continuous discharged to the outdoors.',
-          cite: 'R303.3, Table M1507.4',
+          cite: 'R303.3, Table M1505.4.4',
         },
         {
           text: 'Habitable rooms, hallways and portions of basements containing them shall have a ceiling height of not less than 7 ft; bathrooms, toilet rooms and laundry rooms not less than 6 ft 8 in.',
@@ -616,23 +616,28 @@ export function generalNoteSections(j: Jurisdiction): NoteSection[] {
           cite: 'M1502.4.1, M1502.4.2, M1502.3',
         },
         {
-          text: 'Limit dryer exhaust duct length to 35 ft, reduced 5 ft for each 90-degree bend and 2-1/2 ft for each 45-degree bend, unless the manufacturer’s permitted length is posted at the dryer connection.',
-          cite: 'M1502.4.5',
+          text: 'Limit dryer exhaust developed length to 35 ft from the transition duct to the terminal, reduced 5 ft for each 4 in 90-degree elbow and 2-1/2 ft for each 45-degree elbow, unless the manufacturer’s permitted length is posted at the dryer connection.',
+          cite: 'M1502.4.6.1, Table M1502.4.6.1',
           verify: true,
         },
         {
           text: 'Exhaust range hoods to the outdoors through a single-wall duct with a backdraft damper. Where the kitchen exhaust rate exceeds 400 cfm, provide compensating makeup air interlocked with the exhaust.',
-          cite: 'M1503.3, M1503.6',
+          cite: 'M1503.6',
           verify: true,
         },
         {
           text: 'Provide local exhaust to the outdoors: not less than 50 cfm intermittent or 20 cfm continuous at each bathroom, and 100 cfm intermittent or 25 cfm continuous at the kitchen. Do not terminate an exhaust duct in an attic, crawl space or soffit.',
-          cite: 'Table M1507.4, M1507.2',
+          cite: 'Table M1505.4.4',
           verify: true,
         },
         {
-          text: 'Provide whole-house mechanical ventilation at the rate the ventilation table requires for the floor area and number of bedrooms, with controls that operate it automatically and a readily accessible manual override.',
-          cite: 'M1505.4, Table M1505.4.3(1)',
+          text: 'Terminate exhaust ducts not less than 3 ft from property lines, operable openings and gravity air intakes, and not less than 10 ft from a mechanical air intake unless the terminal is 3 ft above it.',
+          cite: 'M1504.3',
+          verify: true,
+        },
+        {
+          text: 'Provide continuous whole-house mechanical ventilation at the rate the ventilation table gives for the conditioned floor area and the number of bedrooms, with controls that operate it automatically and a readily accessible manual override.',
+          cite: 'M1505.4.3, Table M1505.4.3(1)',
           verify: true,
         },
         {
@@ -661,37 +666,33 @@ export function generalNoteSections(j: Jurisdiction): NoteSection[] {
 
 /** The short roof-specific note block ('roof' notesKey). */
 export function roofNotes(j: Jurisdiction): NoteSection[] {
-  return [
+  const notes: Note[] = [
     {
-      title: 'Roof plan notes',
-      notes: [
-        {
-          text: 'Roof pitches are shown by the slope arrows; each arrow points down-slope and carries the rise in 12 for that plane.',
-          cite: '',
-        },
-        {
-          text: 'The dashed line at the perimeter is the eave / rake edge of the roof including the overhang; the solid line is the wall line below.',
-          cite: '',
-        },
-        {
-          text: 'Ventilate enclosed attics and enclosed rafter spaces per the ventilation calculation on this sheet. Protect openings against the entrance of rain and snow.',
-          cite: 'R806.1, R806.2',
-        },
-        {
-          text: 'Provide a minimum 1 in air space between the insulation and the roof sheathing at every vented eave, and install a baffle in each ventilated rafter or truss bay.',
-          cite: 'R806.3',
-        },
-        {
-          text: 'Provide drip edge at eaves and rakes, valley flashing, and step and counter-flashing at every vertical surface. Flash all roof penetrations.',
-          cite: 'R905.2.8',
-          verify: true,
-        },
-        {
-          text: 'Tie the roof assembly down to resist the design wind uplift with approved connectors, continuous from the rafter or truss to the foundation.',
-          cite: 'R802.11',
-          when: (jur) => jur.hurricaneTies || (jur.ultimateWindMph ?? 0) >= 115,
-        },
-      ].filter((note) => !note.when || note.when(j)),
+      text: 'Roof pitches are shown by the slope arrows; each arrow points down-slope and carries the rise in 12 for that plane.',
+      cite: '',
+    },
+    {
+      text: 'The dashed line at the perimeter is the eave / rake edge of the roof including the overhang; the solid line is the wall line below.',
+      cite: '',
+    },
+    {
+      text: 'Ventilate enclosed attics and enclosed rafter spaces per the ventilation calculation on this sheet. Protect openings against the entrance of rain and snow.',
+      cite: 'R806.1, R806.2',
+    },
+    {
+      text: 'Provide a minimum 1 in air space between the insulation and the roof sheathing at every vented eave, and install a baffle in each ventilated rafter or truss bay.',
+      cite: 'R806.3',
+    },
+    {
+      text: 'Provide drip edge at eaves and rakes, valley flashing, and step and counter-flashing at every vertical surface. Flash all roof penetrations.',
+      cite: 'R905.2.8',
+      verify: true,
+    },
+    {
+      text: 'Tie the roof assembly down to resist the design wind uplift with approved connectors, continuous from the rafter or truss to the foundation.',
+      cite: 'R802.11',
+      when: (jur) => jur.hurricaneTies || (jur.ultimateWindMph ?? 0) >= 115,
     },
   ]
+  return [{ title: 'Roof plan notes', notes: notes.filter((note) => !note.when || note.when(j)) }]
 }

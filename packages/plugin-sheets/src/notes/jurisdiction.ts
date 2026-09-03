@@ -18,8 +18,8 @@
  * came out of a data file with a citation attached or is flagged as unknown.
  */
 import adoptionData from '../../../plugin-bones/data/jurisdictions-adoption.json'
-import assembliesData from '../../../plugin-bones/data/wall-assemblies.json'
 import climateData from '../../../plugin-bones/data/jurisdictions-climate.json'
+import assembliesData from '../../../plugin-bones/data/wall-assemblies.json'
 import type { NodeMap } from '../model'
 import { projectRecord, siteAddress, siteNode } from '../model'
 
@@ -49,18 +49,19 @@ type ClimateRow = {
 
 const ADOPTION = (adoptionData as { states?: Record<string, AdoptionRow> }).states ?? {}
 const CLIMATE = (climateData as { states?: Record<string, ClimateRow> }).states ?? {}
-const EXTERIOR = (
-  assembliesData as {
-    exterior?: {
-      stateClimateZone?: Record<string, string>
-      stateClimateZoneCitation?: string
-      insulationByClimateZone?: Record<
-        string,
-        { value?: string; compliance2021?: string[]; citation?: string }
-      >
+const EXTERIOR =
+  (
+    assembliesData as {
+      exterior?: {
+        stateClimateZone?: Record<string, string>
+        stateClimateZoneCitation?: string
+        insulationByClimateZone?: Record<
+          string,
+          { value?: string; compliance2021?: string[]; citation?: string }
+        >
+      }
     }
-  }
-).exterior ?? {}
+  ).exterior ?? {}
 
 /** What the notes cite when the site has no state on it. */
 export const FALLBACK_CODE = 'IRC 2021'
