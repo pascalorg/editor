@@ -269,7 +269,12 @@ export const PerfPanel = () => {
                 ? `${stats.queueMs.toFixed(1)}ms (max ${stats.queueMaxMs.toFixed(1)})`
                 : '—'}
             </Row>
-            <Row name="draw">{stats.drawCalls}</Row>
+            <Row name="draw">
+              {stats.drawCalls}
+              {stats.batchInstances > 0
+                ? ` (${stats.batchInstances} batched · ${stats.batchMeshes} mesh)`
+                : ''}
+            </Row>
             <Row name="tri">{`${(stats.triangles / 1000).toFixed(1)}k`}</Row>
             <Row name="mem">
               {`${stats.geometries} geo  ${stats.textures} tex  ${mb(stats.gpuBytes)}`}

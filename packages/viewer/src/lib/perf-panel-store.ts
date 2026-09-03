@@ -19,6 +19,15 @@ export type PerfStats = {
   queueMs: number
   queueMaxMs: number
   drawCalls: number
+  /**
+   * Instances drawn through batch containers this frame, and how many batch
+   * meshes hold them. On WebGPU each batched instance still counts once in
+   * `drawCalls` (the backend loops drawIndexed per visible instance), so
+   * without this row a batched scene looks no cheaper than an unbatched one —
+   * the saving is in encode cost per call, not call count.
+   */
+  batchInstances: number
+  batchMeshes: number
   triangles: number
   dirty: number
   dirtyDetail: string
