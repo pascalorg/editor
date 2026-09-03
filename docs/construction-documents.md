@@ -76,3 +76,16 @@ Shared files everyone may append ONE line to (re-read immediately before editing
 - Report defects honestly; nothing papered over. No invented code values: cite bones data or mark unverified.
 - `bun test` in the packages you touch must stay green; `bunx tsc --noEmit -p <package>` clean.
 - Theme tokens only (bg-background, text-foreground, border-border, bg-card, text-muted-foreground, bg-primary …).
+
+## Status 2026-09-02 (evening) — what is wired, how to run it
+
+- Run: `cd apps/editor && bun run dev` → http://localhost:3002/scene/plancrafters-cottage (first load ~40 s).
+- `packages/core` and `packages/nodes` resolve to `dist/`: run `bun run build` in each after editing them.
+  `packages/editor` and every `packages/plugin-*` resolve to `src/`.
+- After a dependency change, delete `apps/editor/.next` before restarting `next dev` or Turbopack keeps a stale "Module not found".
+- Bones lives at `packages/plugin-bones`, a mirror of the local clone (`packages/plugin-bones/SOURCE.md` has the sync command).
+- Sheets: Ctrl+K → "Generate default sheet set", then "Open sheets". Viewports are locked by default (Layers tab → unlock).
+- Site: scene tree → Site header → floating Site card → address → Find parcel. 2D → "Site plan" chip draws the lot.
+- Utilities: rail icon → Draw utility line / Place pole / Place service point. Linked endpoints follow the pole and the meter.
+- Framing: Plugins → install Bones → Bones panel → "⚡ X-Ray this level".
+- Sections: Sections panel → Section marker tool (two clicks) → sheets A5.0 → add viewport.
