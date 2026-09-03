@@ -262,9 +262,36 @@ const ringPerimeterFt = (ring) => {
    number within ~400 m on a county layer that indexes situs numbers, and
    returns that lot LABELED as a number match — or an honest miss. Never a
    confident neighbour. */
+/* Street-type words, for finding where a street name ENDS when the address
+   arrives without a comma before the city ("1424 58th street sacramento ca
+   95819" — the studio and the API both see that form). */
+const _STREET_TYPE_RE = /^(LANE|LN|STREET|ST|DRIVE|DR|AVENUE|AVE|AV|ROAD|RD|COURT|CT|PLACE|PL|WAY|BOULEVARD|BLVD|CIRCLE|CIR|TERRACE|TER|TRAIL|TRL|PARKWAY|PKWY|HIGHWAY|HWY|LOOP|RUN|PASS|PATH|ALLEY|ALY|SQUARE|SQ|CRESCENT|CRES|COVE|CV|BEND|BND)\.?$/i;
+const _POST_DIR_RE = /^(N|S|E|W|NE|NW|SE|SW|NORTH|SOUTH|EAST|WEST)\.?$/i;
 const requestedStreet = (address) => {
   const m = String(address || '').match(/^\s*\d+[\w-]*\s+([^,]+?)(?:,|$)/);
-  return m ? m[1].trim() : '';
+  if (!m) return '';
+  /* 2026-09-03 ("1424 58th Street Sacramento" — the lot came back as
+     "nearest, VERIFY" and the picker opened on a neighbourhood map): with no
+     comma after the street, the city / state / zip rode INTO the requested
+     street ("58th street sacramento"), every geocoder's honest "58th St"
+     then read as a SUBSTITUTED street, and the guard built for the Fair
+     Oaks case fired on a perfectly good address. The street ends at its
+     type word (plus one post-directional: "Fair Oaks Blvd N"); the type
+     word is only recognised past the first token, so "St Andrews Way" keeps
+     its Saint. A street with no type word ("Minnesota Creek") keeps every
+     word up to the comma, minus a trailing "<STATE> <ZIP>". */
+  const tokens = m[1].trim().split(/\s+/);
+  for (let i = 1; i < tokens.length; i++) {
+    if (_STREET_TYPE_RE.test(tokens[i])) {
+      const keep = i + 1 < tokens.length && _POST_DIR_RE.test(tokens[i + 1]) ? i + 2 : i + 1;
+      tokens.length = keep;
+      break;
+    }
+  }
+  return tokens.join(' ')
+    .replace(/\s+[A-Za-z]{2}\s+\d{5}(?:-\d{4})?$/, '')
+    .replace(/\s+\d{5}(?:-\d{4})?$/, '')
+    .trim();
 };
 const _STREET_ALIASES = { MT: 'MOUNT', ST: 'SAINT', FT: 'FORT', N: 'NORTH', S: 'SOUTH', E: 'EAST', W: 'WEST' };
 const _streetTokens = (street) => streetCore(street)
