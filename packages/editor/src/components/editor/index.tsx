@@ -14,11 +14,22 @@ import {
 import {
   type HoverStyles,
   InteractiveSystem,
+  PERF_OVERLAY_ENABLED,
+  recordPerfSample,
   SceneEnvironment,
   useViewer,
   Viewer,
 } from '@pascal-app/viewer'
-import { memo, type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import {
+  memo,
+  Profiler,
+  type ProfilerOnRenderCallback,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from 'react'
 import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
@@ -54,7 +65,7 @@ import { PanelManager } from '../ui/panels/panel-manager'
 import { ErrorBoundary } from '../ui/primitives/error-boundary'
 import { useSidebarStore } from '../ui/primitives/sidebar'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/primitives/tooltip'
-import { SceneLoader } from '../ui/scene-loader'
+import { SceneLoader, SceneLoadFailed } from '../ui/scene-loader'
 import { AppSidebar } from '../ui/sidebar/app-sidebar'
 import type { ExtraPanel } from '../ui/sidebar/icon-rail'
 import { SettingsPanel, type SettingsPanelProps } from '../ui/sidebar/panels/settings-panel'
@@ -102,6 +113,9 @@ const PAINT_CURSOR_BADGE_OFFSET_X = 14
 const PAINT_CURSOR_BADGE_OFFSET_Y = 14
 const SCENE_READY_FALLBACK_MS = 8000
 type PaintCursorBadgeState = 'empty' | 'ready' | 'blocked'
+const recordEditorRender: ProfilerOnRenderCallback = (_id, _phase, actualDuration) => {
+  if (PERF_OVERLAY_ENABLED) recordPerfSample('react-render', actualDuration)
+}
 const EDITOR_HOVER_STYLES: HoverStyles = {
   default: { visibleColor: 0x00_aa_ff, hiddenColor: 0xf3_ff_47, strength: 5, pulse: true },
   delete: { visibleColor: 0xef_44_44, hiddenColor: 0x99_1b_1b, strength: 6, pulse: false },
@@ -1241,7 +1255,61 @@ const ViewerCanvas = memo(function ViewerCanvas({
   )
 })
 
-export default function Editor({
+function PreviewStage({
+  isFirstPersonMode,
+  mode,
+  onModeChange,
+  showLoader,
+  viewerContent,
+}: {
+  isFirstPersonMode: boolean
+  mode: ViewerStageMode
+  onModeChange: (mode: ViewerStageMode) => void
+  showLoader: boolean
+  viewerContent: ReactNode
+}) {
+  const hasFloorplan = useScene((state) =>
+    Object.values(state.nodes).some((node) => node.type === 'level'),
+  )
+
+  const handleModeChange = useCallback(
+    (nextMode: ViewerStageMode) => {
+      if (nextMode !== '3d') useEditor.getState().setFirstPersonMode(false)
+      onModeChange(nextMode)
+    },
+    [onModeChange],
+  )
+
+  const stageMode = isFirstPersonMode || !hasFloorplan ? '3d' : mode
+  const stageModes = hasFloorplan && !isFirstPersonMode ? undefined : (['3d'] as const)
+
+  return (
+    <div className="dark relative h-full w-full overflow-hidden bg-neutral-100 text-foreground">
+      {isFirstPersonMode ? (
+        <FirstPersonOverlay onExit={() => useEditor.getState().setFirstPersonMode(false)} />
+      ) : (
+        <ViewerOverlay
+          hideBottomBar={stageMode !== '3d'}
+          onBack={() => useEditor.getState().setPreviewMode(false)}
+        />
+      )}
+
+      <ViewerStage
+        className="absolute inset-0"
+        mode={stageMode}
+        modes={stageModes}
+        onModeChange={handleModeChange}
+        showCompass={hasFloorplan && !isFirstPersonMode}
+        showSwitcher={hasFloorplan && !isFirstPersonMode}
+        switcherClassName={`${PREVIEW_STAGE_SWITCHER_POSITION} ${showLoader ? 'z-[70]' : ''}`}
+      >
+        {viewerContent}
+      </ViewerStage>
+    </div>
+  )
+}
+
+function EditorContent({
   layoutVersion = 'v1',
   appMenuButton,
   sidebarTop,
@@ -1287,6 +1355,11 @@ export default function Editor({
 
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
+  // A failed `onLoad` is shown as an error with a retry, never as an empty
+  // scene: an editor that renders the default scaffold after a failed load
+  // autosaves that scaffold over the real project.
+  const [sceneLoadError, setSceneLoadError] = useState<unknown>(null)
+  const [sceneLoadAttempt, setSceneLoadAttempt] = useState(0)
   const [sceneReadyKey, setSceneReadyKey] = useState(0)
   const [isViewerSceneReady, setIsViewerSceneReady] = useState(false)
   const [previewStageMode, setPreviewStageMode] = useState<ViewerStageMode>('3d')
@@ -1328,6 +1401,7 @@ export default function Editor({
 
     async function load() {
       isLoadingSceneRef.current = true
+      setSceneLoadError(null)
       setHasLoadedInitialScene(false)
       setIsViewerSceneReady(false)
       setIsSceneLoading(true)
@@ -1336,6 +1410,7 @@ export default function Editor({
       // Session groups are not scene-graph state — clear on every load/switch.
       useSessionGroups.getState().clearGroups()
 
+      let failed = false
       try {
         const sceneGraph = onLoad ? await onLoad() : loadSceneFromLocalStorage()
         if (!cancelled) {
@@ -1343,19 +1418,23 @@ export default function Editor({
           setIsViewerSceneReady(false)
           setSceneReadyKey((key) => key + 1)
         }
-      } catch {
+      } catch (error) {
+        // Leave the store unloaded and the autosave loop in its loading
+        // state: nothing may be written until a load actually succeeds.
+        failed = true
         if (!cancelled) {
-          applySceneGraphToEditor(null)
-          setIsViewerSceneReady(false)
-          setSceneReadyKey((key) => key + 1)
+          console.error('[editor] scene load failed', error)
+          setSceneLoadError(error ?? new Error('Scene load failed'))
         }
       } finally {
         if (!cancelled) {
           setIsSceneLoading(false)
-          setHasLoadedInitialScene(true)
-          requestAnimationFrame(() => {
-            isLoadingSceneRef.current = false
-          })
+          if (!failed) {
+            setHasLoadedInitialScene(true)
+            requestAnimationFrame(() => {
+              isLoadingSceneRef.current = false
+            })
+          }
         }
       }
     }
@@ -1365,7 +1444,11 @@ export default function Editor({
     return () => {
       cancelled = true
     }
-  }, [onLoad, isLoadingSceneRef])
+  }, [onLoad, isLoadingSceneRef, sceneLoadAttempt])
+
+  const retrySceneLoad = useCallback(() => {
+    setSceneLoadAttempt((attempt) => attempt + 1)
+  }, [])
 
   // Apply preview scene when version preview mode changes
   useEffect(() => {
@@ -1536,7 +1619,11 @@ export default function Editor({
         <FloorplanModeCoordinator />
         {visibleLoader && (
           <div className="fixed inset-0 z-60">
-            <SceneLoader className="bg-background" />
+            {sceneLoadError ? (
+              <SceneLoadFailed className="bg-background" onRetry={retrySceneLoad} />
+            ) : (
+              <SceneLoader className="bg-background" />
+            )}
           </div>
         )}
 
@@ -1606,7 +1693,11 @@ export default function Editor({
       <FloorplanModeCoordinator />
       {visibleLoader && (
         <div className="fixed inset-0 z-60">
-          <SceneLoader className="bg-background" />
+          {sceneLoadError ? (
+            <SceneLoadFailed className="bg-background" onRetry={retrySceneLoad} />
+          ) : (
+            <SceneLoader className="bg-background" />
+          )}
         </div>
       )}
 
@@ -1654,5 +1745,13 @@ export default function Editor({
         </ViewerOverlays>
       )}
     </div>
+  )
+}
+
+export default function Editor(props: EditorProps) {
+  return (
+    <Profiler id="editor" onRender={recordEditorRender}>
+      <EditorContent {...props} />
+    </Profiler>
   )
 }

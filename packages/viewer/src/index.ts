@@ -74,6 +74,7 @@ export {
 } from './lib/csg-utils'
 export { disposeObject3DResources } from './lib/dispose-object3d'
 export type { EdgeMode } from './lib/edge-style'
+export { PERF_OVERLAY_ENABLED } from './lib/gpu-perf'
 export {
   computeHeroFraming,
   DEFAULT_FRAMING_EXCLUDED_TYPES,
@@ -127,6 +128,8 @@ export {
   WHITE_PALETTE,
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
+export * from './lib/perf-actions'
+export * from './lib/perf-tracks'
 export {
   detectRendererCapability,
   initializeGpuRenderer,

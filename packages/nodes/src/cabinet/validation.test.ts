@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test'
-import { CabinetModuleNode, CabinetNode } from '@pascal-app/core'
+import { type AnyNode, CabinetModuleNode, CabinetNode, LevelNode } from '@pascal-app/core'
 import { validateCabinetRun } from './validation'
 
 test('validateCabinetRun accepts a flush modular base run', () => {
@@ -112,6 +112,38 @@ test('validateCabinetRun warns when a top cabinet is too short to be practical s
     expect.objectContaining({
       code: 'top-cabinet-too-short',
       nodeIds: [module.id],
+    }),
+  )
+})
+
+test('validateCabinetRun warns when a finished module exceeds the ceiling', () => {
+  const level = LevelNode.parse({ id: 'level_validation-ceiling', height: 2.5 })
+  const run = CabinetNode.parse({
+    id: 'cabinet_validation-ceiling-run',
+    parentId: level.id,
+  })
+  const module = CabinetModuleNode.parse({
+    id: 'cabinet-module_validation-ceiling',
+    parentId: run.id,
+    position: [0, 0.1, 0],
+    carcassHeight: 2.07,
+    topFinish: 'trim',
+    topFinishHeight: 0.4,
+  })
+
+  const report = validateCabinetRun(run, [module], {
+    nodes: {
+      [level.id]: level,
+      [run.id]: run,
+      [module.id]: module,
+    } as Record<string, AnyNode>,
+  })
+
+  expect(report.valid).toBe(true)
+  expect(report.warnings).toContainEqual(
+    expect.objectContaining({
+      code: 'ceiling-overflow',
+      nodeIds: [run.id, module.id],
     }),
   )
 })

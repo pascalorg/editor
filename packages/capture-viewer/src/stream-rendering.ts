@@ -10,6 +10,7 @@ import {
 const GLB_MEDIA_TYPES = new Set(['model/gltf-binary', 'model/gltf+json'])
 const USDZ_MEDIA_TYPES = new Set(['model/vnd.usdz+zip'])
 const PLY_MEDIA_TYPES = new Set(['application/ply', 'application/vnd.ply', 'model/ply'])
+const JSON_MEDIA_TYPES = new Set(['application/json'])
 
 export type CaptureModelFormat = 'gltf' | 'usdz'
 
@@ -24,6 +25,7 @@ export function isCaptureStreamRenderable(
   if (layerKey === 'deviceMotion') {
     return (
       stream.availability === 'live' ||
+      streamHydratesJsonPayload(stream) ||
       DeviceMotionTrajectorySchema.safeParse(stream.inline).success
     )
   }
@@ -31,11 +33,31 @@ export function isCaptureStreamRenderable(
     return (
       stream.availability === 'live' ||
       isCapturePointCloudArtifact(stream.artifact) ||
+      streamHydratesJsonPayload(stream) ||
       PointCloudPayloadSchema.safeParse(stream.inline).success
     )
   }
-  if (layerKey === 'surfaceMesh') return SurfaceMeshPayloadSchema.safeParse(stream.inline).success
+  if (layerKey === 'surfaceMesh') {
+    return (
+      streamHydratesJsonPayload(stream) || SurfaceMeshPayloadSchema.safeParse(stream.inline).success
+    )
+  }
   return false
+}
+
+const JSON_PAYLOAD_LAYER_KEYS = new Set(['deviceMotion', 'pointCloud', 'surfaceMesh'])
+
+/**
+ * Extracted viewer previews (device motion, point cloud, surface mesh) are
+ * archived as JSON payload artifacts whose content matches the inline shape.
+ * One predicate decides both renderability and runtime hydration, so a
+ * stream can never be declared renderable without a hydration path.
+ */
+export function streamHydratesJsonPayload(stream: CaptureStreamDescriptor): boolean {
+  const artifact = stream.artifact
+  if (!artifact || stream.inline != null) return false
+  if (!JSON_PAYLOAD_LAYER_KEYS.has(captureLayerKey(stream))) return false
+  return JSON_MEDIA_TYPES.has(artifact.mediaType) || hasExtension(artifact.uri, ['.json'])
 }
 
 export function isCaptureModelArtifact(artifact: CaptureArtifactReference | undefined): boolean {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { ROTATE_HANDLE_DRAG_LABEL } from './contextual-help'
+import { GROUP_MOVE_DRAG_LABEL, ROTATE_HANDLE_DRAG_LABEL } from './contextual-help'
 import {
   cycleSnappingModeIn,
   DEFAULT_SNAPPING_MODE,
@@ -49,10 +49,22 @@ describe('resolveSnapFlags', () => {
 })
 
 describe('per-context snapping', () => {
-  it('items default to grid with no angle lock', () => {
-    expect(defaultSnappingModeFor('item')).toBe('grid')
+  it('items default to magnetic alignment with no angle lock', () => {
+    expect(defaultSnappingModeFor('item')).toBe('lines')
     expect(snappingModesFor('item')).toEqual(['lines', 'grid', 'off'])
     expect(snappingModesFor('item')).not.toContain('angles')
+  })
+
+  it('group moves use the magnetic item context by default', () => {
+    const context = snapContextOf({
+      scope: { kind: 'handle-drag', handle: GROUP_MOVE_DRAG_LABEL },
+      mode: 'select',
+      tool: null,
+      profileOf: () => undefined,
+    })
+
+    expect(context).toBe('item')
+    expect(resolveSnapFlags(defaultSnappingModeFor(context!)).magnetic).toBe(true)
   })
 
   it('walls default to grid and expose the angle lock; polygons do NOT', () => {

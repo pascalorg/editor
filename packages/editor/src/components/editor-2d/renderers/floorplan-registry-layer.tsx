@@ -26,7 +26,7 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { beginPerfAction, cancelPerfAction, commitPerfAction, useViewer } from '@pascal-app/viewer'
 import {
   type ComponentProps,
   memo,
@@ -248,6 +248,7 @@ export function cancelFloorplanAffordanceDrag(
   for (const id of drag.session.affectedIds) effects.clearPreview(id)
   effects.endReshapeScope(drag)
   effects.clearDragFeedback?.()
+  cancelPerfAction()
   return true
 }
 
@@ -310,6 +311,14 @@ export function floorplanAffordanceReshapeScope(
     return { kind: 'handle-drag', nodeId, handle: ROTATE_HANDLE_DRAG_LABEL }
   }
   return null
+}
+
+function floorplanAffordancePerfAction(node: AnyNode, affordance: string): string {
+  if (affordance.includes('endpoint')) return `drag:${node.type}-endpoint`
+  if (affordance.includes('resize')) return 'drag:resize'
+  if (affordance.includes('rotate')) return 'drag:rotate'
+  if (affordance.includes('move')) return 'drag:move'
+  return 'drag:reshape'
 }
 
 /**
@@ -1095,6 +1104,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       event.stopPropagation()
       suppressBoxSelectForPointer(event)
 
+      beginPerfAction(floorplanAffordancePerfAction(node, affordance), `${node.type}:${node.id}`)
       const session = handler.start({
         node,
         payload,
@@ -1257,6 +1267,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           drag.historyPaused = false
         }
         drag.session.commit()
+        commitPerfAction()
         sfxEmitter.emit('sfx:structure-build')
         clearSurfacePlanSnapFeedback()
         endReshapeScope(drag)
@@ -1298,6 +1309,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
           drag.historyPaused = false
         }
         useScene.getState().updateNodes(finalUpdates)
+        commitPerfAction()
         sfxEmitter.emit('sfx:structure-build')
       } else {
         // Either no net change or canCommit() rejected — revert and
@@ -1311,6 +1323,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
         }
         const overrides = useLiveNodeOverrides.getState()
         for (const id of drag.session.affectedIds) overrides.clear(id)
+        cancelPerfAction()
       }
 
       clearSurfacePlanSnapFeedback()

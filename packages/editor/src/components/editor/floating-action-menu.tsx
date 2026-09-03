@@ -790,7 +790,13 @@ export function FloatingActionMenu() {
           >
             {menuVisibility.actions ? (
               <NodeActionMenu
-                onFind={node && canFindNode ? handleFind : undefined}
+                onFind={
+                  node &&
+                  canFindNode &&
+                  nodeRegistry.get(node.type)?.presentation?.findInCatalog !== false
+                    ? handleFind
+                    : undefined
+                }
                 onAddHole={
                   !editLocked && node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined
                 }

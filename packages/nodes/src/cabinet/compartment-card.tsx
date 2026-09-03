@@ -1,7 +1,7 @@
 'use client'
 
 import { SegmentedControl, SliderControl, ToggleControl } from '@pascal-app/editor'
-import { ArrowDown, ArrowUp, Minus, Plus, Trash } from 'lucide-react'
+import { ArrowDown, ArrowUp, FlipHorizontal2, Minus, Plus, Trash } from 'lucide-react'
 import {
   type CabinetCompartment,
   type CabinetCompartmentType,
@@ -325,6 +325,28 @@ export function CompartmentCard({
               value={compartmentDoorType(compartment, width)}
             />
           </div>
+          <button
+            className="flex h-8 w-full items-center justify-center gap-1.5 rounded-md border border-border/40 bg-[#2C2C2E] text-xs font-medium text-foreground transition-colors hover:bg-[#343437] disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={
+              compartmentDoorType(compartment, width) !== 'single-left' &&
+              compartmentDoorType(compartment, width) !== 'single-right'
+            }
+            onClick={() => {
+              const doorType = compartmentDoorType(compartment, width)
+              if (doorType === 'single-left' || doorType === 'single-right') {
+                onReplace(
+                  patchCompartment(compartment, {
+                    doorType: doorType === 'single-left' ? 'single-right' : 'single-left',
+                  }),
+                )
+              }
+            }}
+            title="Flip the door hinge to the opposite side"
+            type="button"
+          >
+            <FlipHorizontal2 className="h-3.5 w-3.5" />
+            Flip hinge
+          </button>
           <Stepper
             label="Shelves inside"
             max={8}

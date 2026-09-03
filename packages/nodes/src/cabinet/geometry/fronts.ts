@@ -461,7 +461,7 @@ function resolveHandlePlacement(
   }
 }
 
-function addHandleFeature(
+export function addHandleFeature(
   group: Object3D,
   node: CabinetGeometryNode,
   materials: CabinetSlotMaterials,

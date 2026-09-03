@@ -111,6 +111,8 @@ const cabinetBoxFields = {
   frontThickness: z.number().min(0.01).max(0.05).default(0.018),
   frontGap: z.number().min(0.001).max(0.02).default(0.003),
   frontStyle: CabinetFrontStyleSchema.default('slab'),
+  // Fridge-only: replace the appliance door face with a cabinet-matched panel.
+  panelReady: z.boolean().default(false),
   handleStyle: z.enum(['none', 'bar', 'cutout', 'hole', 'knob']).default('bar'),
   handlePosition: z.enum(['auto', 'top', 'center']).default('auto'),
   frontOverlay: z.enum(['full', 'inset']).default('full'),
@@ -139,6 +141,8 @@ export const CabinetNode = BaseNode.extend({
     .optional(),
   // Countertop material dropping to the floor on exposed run ends.
   withWaterfall: z.boolean().default(false),
+  // Add matching decorative panels to ends that are not joined to another run.
+  withFinishedEnds: z.boolean().default(false),
   ...cabinetBoxFields,
 }).describe('Parametric modular cabinet run node')
 

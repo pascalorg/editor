@@ -1,3 +1,4 @@
+import type { AnyNodeId } from '@pascal-app/core'
 import type { FloorPlacementClickTriggerEvent } from '../shared/floor-placement'
 import { planToRunLocal, runLocalToPlan } from './run-layout'
 import { CABINET_BASE_WIDTH } from './run-ops'
@@ -13,6 +14,8 @@ export type StretchAnchor = {
   position: [number, number, number]
   yaw: number
   snappedToWall: boolean
+  wallId?: AnyNodeId
+  wallLocalX?: number
   wallSurfaceNormal?: [number, number, number]
   forcedDirection?: 1 | -1
   leadingWidth?: number
@@ -120,6 +123,12 @@ export function createCabinetContinuousContinuation({
     ]),
     yaw: anchor.yaw,
     snappedToWall: anchor.snappedToWall,
+    ...(anchor.wallId && anchor.wallLocalX != null
+      ? {
+          wallId: anchor.wallId,
+          wallLocalX: anchor.wallLocalX + endLocalX + stretch.direction * (previewWidth / 2),
+        }
+      : {}),
     wallSurfaceNormal: anchor.wallSurfaceNormal,
   } satisfies StretchAnchor
 

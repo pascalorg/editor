@@ -23,6 +23,7 @@ import {
   createSurfaceRoleMaterial,
   type RenderShading,
 } from '../../lib/materials'
+import { timeSpan } from '../../lib/perf-tracks'
 import useViewer from '../../store/use-viewer'
 
 /**
@@ -163,7 +164,11 @@ export const GeometrySystem = () => {
       }
       levelDataByBatch.set(
         key,
-        (def.computeLevelData as (s: ReadonlyArray<AnyNode>) => unknown)(siblings),
+        timeSpan(
+          'geometry',
+          () => (def.computeLevelData as (s: ReadonlyArray<AnyNode>) => unknown)(siblings),
+          { name: 'geometry:levelData' },
+        ),
       )
     }
 
@@ -210,16 +215,21 @@ export const GeometrySystem = () => {
       // The builder is typed against the kind's specific node — at the
       // generic system level we lose that refinement, so the cast lands
       // here. Builders are responsible for trusting their schema.
-      const built = (
-        builder as (
-          n: AnyNode,
-          c: GeometryContext,
-          shading: RenderShading,
-          textures: boolean,
-          colorPreset: ColorPreset,
-          sceneTheme: string,
-        ) => { children: unknown[] }
-      )(effectiveNode, ctx, shading, textures, colorPreset, sceneTheme) as unknown as Group
+      const built = timeSpan(
+        'geometry',
+        () =>
+          (
+            builder as (
+              n: AnyNode,
+              c: GeometryContext,
+              shading: RenderShading,
+              textures: boolean,
+              colorPreset: ColorPreset,
+              sceneTheme: string,
+            ) => { children: unknown[] }
+          )(effectiveNode, ctx, shading, textures, colorPreset, sceneTheme) as unknown as Group,
+        { name: `geometry:${node.type}`, properties: [['node', id]] },
+      )
 
       if (!textures && def.surfaceRole) {
         applyDefaultSurfaceRole(built, def.surfaceRole, colorPreset, sceneTheme)

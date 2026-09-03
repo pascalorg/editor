@@ -27,7 +27,7 @@ import {
   LevelNode,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import { ClipboardPaste, Copy, GripVertical, MoreVertical, Plus, Trash2 } from 'lucide-react'
 import {
   type ButtonHTMLAttributes,
@@ -637,13 +637,14 @@ export function FloatingLevelSelector() {
                         onDuplicate={(preset) => handleDuplicateLevel(level, preset)}
                         onPaste={() => handlePasteToLevel(level)}
                         onRequestDelete={() => setDeletingLevel(level)}
-                        onSelect={() =>
+                        onSelect={() => {
+                          if (!isSelected) markPerfAction('level-switch', level.id)
                           setSelection(
                             resolvedBuildingId
                               ? { buildingId: resolvedBuildingId, levelId: level.id }
                               : { levelId: level.id },
                           )
-                        }
+                        }}
                       />
 
                       {showGapBelow && !draggingLevelId && (

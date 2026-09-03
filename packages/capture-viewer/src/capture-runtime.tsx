@@ -27,6 +27,7 @@ import {
   useState,
 } from 'react'
 import type { Object3D } from 'three'
+import { rewriteLoopbackAssetUrl } from './asset-url'
 import { resolveCaptureFrameMatrix } from './frame'
 import { isCaptureSessionVisible, isCaptureStreamVisible } from './layer-visibility'
 import { CaptureDeviceMotionLayer } from './layers/device-motion-layer'
@@ -39,6 +40,7 @@ import {
   isCaptureModelArtifact,
   isCapturePointCloudArtifact,
   isCaptureStreamRenderable,
+  streamHydratesJsonPayload,
 } from './stream-rendering'
 import { parseDeviceTrajectoryPackets, parseDeviceTrajectoryPayload } from './trajectory'
 
@@ -248,6 +250,10 @@ export function CaptureStreamLayer({
   const artifactUrl = useResolvedArtifact(source, stream.artifact)
   const layerKey = captureLayerKey(stream)
   const Renderer = renderers[layerKey] ?? renderers[stream.kind]
+  // Extracted previews archive the inline payload shape as a JSON artifact.
+  const payloadArtifactUrl = streamHydratesJsonPayload(stream) ? artifactUrl : null
+  const fetchedPayload = useJsonArtifactPayload(payloadArtifactUrl)
+  const payload = stream.inline ?? fetchedPayload
   const frameId = packets.at(-1)?.frameId ?? stream.frameId ?? stream.artifact?.frameId
   const frameMatrix = useMemo(
     () => resolveCaptureFrameMatrix(descriptor, frameId),
@@ -255,16 +261,31 @@ export function CaptureStreamLayer({
   )
   const trajectory = useMemo(() => {
     if (layerKey !== 'deviceMotion') return null
-    const inline = DeviceMotionTrajectorySchema.safeParse(stream.inline)
+    const inline = DeviceMotionTrajectorySchema.safeParse(payload)
     return inline.success
       ? parseDeviceTrajectoryPayload(inline.data)
       : parseDeviceTrajectoryPackets(packets.map((packet) => packet.payload))
-  }, [layerKey, packets, stream.inline])
+  }, [layerKey, packets, payload])
   const motionPlaybackKey = useMemo(() => {
     if (layerKey !== 'deviceMotion') return ''
-    const inlineVersion = packets.length === 0 ? JSON.stringify(stream.inline ?? null) : ''
+    // Fetched payloads can be megabytes — key them by artifact identity and
+    // load state instead of stringifying their content.
+    const inlineVersion =
+      packets.length === 0
+        ? stream.inline != null
+          ? JSON.stringify(stream.inline)
+          : `${payloadArtifactUrl ?? ''}:${fetchedPayload ? 'loaded' : 'pending'}`
+        : ''
     return [descriptor.revisionId ?? '', streamEpoch, inlineVersion].join(':')
-  }, [descriptor.revisionId, layerKey, packets.length, stream.inline, streamEpoch])
+  }, [
+    descriptor.revisionId,
+    fetchedPayload,
+    layerKey,
+    packets.length,
+    payloadArtifactUrl,
+    stream.inline,
+    streamEpoch,
+  ])
   if (frameId && !frameMatrix) {
     throw new Error(`Capture stream ${stream.id} references an invalid frame: ${frameId}.`)
   }
@@ -305,12 +326,12 @@ export function CaptureStreamLayer({
         artifactUrl={
           isCapturePointCloudArtifact(stream.artifact) ? (artifactUrl ?? undefined) : undefined
         }
-        inline={stream.inline}
+        inline={payload}
         packets={stream.availability === 'live' ? packets : []}
       />
     )
   } else if (layerKey === 'surfaceMesh') {
-    content = <CaptureSurfaceMeshLayer inline={stream.inline} />
+    content = <CaptureSurfaceMeshLayer inline={payload} />
   }
   if (!(content && frameMatrix)) return content
   return (
@@ -318,6 +339,34 @@ export function CaptureStreamLayer({
       {content}
     </group>
   )
+}
+
+function useJsonArtifactPayload(url: string | null): unknown {
+  const [error, setError] = useState<Error | null>(null)
+  const [payload, setPayload] = useState<unknown>(null)
+
+  useEffect(() => {
+    setError(null)
+    setPayload(null)
+    if (!url) return
+    const abort = new AbortController()
+    void fetch(rewriteLoopbackAssetUrl(url), { signal: abort.signal })
+      .then(async (response) => {
+        if (!response.ok) throw new Error(`Could not load ${url}: ${response.status}`)
+        return (await response.json()) as unknown
+      })
+      .then((data) => {
+        if (!abort.signal.aborted) setPayload(data)
+      })
+      .catch((cause: unknown) => {
+        if (abort.signal.aborted) return
+        setError(cause instanceof Error ? cause : new Error(`Could not load ${url}.`))
+      })
+    return () => abort.abort()
+  }, [url])
+
+  if (error) throw error
+  return payload
 }
 
 function useResolvedArtifact(

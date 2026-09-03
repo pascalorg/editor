@@ -5,6 +5,7 @@ import {
   type AnyNodeId,
   type Cursor,
   createSceneApi,
+  type HandleDragModifiers,
   runAsSingleSceneHistoryStep,
   useLiveNodeOverrides,
   useScene,
@@ -46,6 +47,7 @@ export type HandleDragStartContext = {
 
 export type HandleDragMoveContext = {
   event: PointerEvent
+  modifiers: HandleDragModifiers
   getPointerRay: GetPointerRay
   intersectPlane: IntersectPlane
 }
@@ -177,6 +179,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
 
     let lastPatch: Partial<AnyNode> | null = null
     let historyPaused = true
+    let altKey = event.nativeEvent.altKey
 
     const resumeHistory = () => {
       if (!historyPaused) return
@@ -185,7 +188,12 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     }
 
     const onMove = (moveEvent: PointerEvent) => {
-      const patch = session.move({ event: moveEvent, getPointerRay, intersectPlane })
+      const patch = session.move({
+        event: moveEvent,
+        modifiers: { altKey },
+        getPointerRay,
+        intersectPlane,
+      })
       if (!patch) return
       lastPatch = patch
       useLiveNodeOverrides.getState().set(overrideId, patch as Record<string, unknown>)
@@ -199,6 +207,7 @@ export function useHandleDrag(args: UseHandleDragArgs) {
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
       window.removeEventListener('keydown', onKeyDown, true)
+      window.removeEventListener('keyup', onKeyUp, true)
       if (document.body.style.cursor === cursor) {
         document.body.style.cursor = ''
       }
@@ -240,11 +249,18 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     // Escape / ⌘Z abort the drag — capture phase so they win over the global
     // use-keyboard arms (⌘Z must never history-jump under a live pointer).
     const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') {
+        altKey = true
+        return
+      }
       if (e.key !== 'Escape' && !isHistoryShortcut(e)) return
       e.preventDefault()
       e.stopPropagation()
       swallowNextClick()
       onCancel()
+    }
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') altKey = false
     }
 
     dragCleanupRef.current = onCancel
@@ -252,5 +268,6 @@ export function useHandleDrag(args: UseHandleDragArgs) {
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)
     window.addEventListener('keydown', onKeyDown, true)
+    window.addEventListener('keyup', onKeyUp, true)
   }
 }

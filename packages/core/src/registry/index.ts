@@ -6,6 +6,7 @@ export type {
   HandleAnchor,
   HandleAxis,
   HandleDescriptor,
+  HandleDragModifiers,
   HandleList,
   HandlePlacement,
   HandlePortal,

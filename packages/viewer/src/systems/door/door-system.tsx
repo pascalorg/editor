@@ -28,6 +28,7 @@ import {
   type RenderShading,
   resolveMaterialRef,
 } from '../../lib/materials'
+import { timeSpan } from '../../lib/perf-tracks'
 import useViewer from '../../store/use-viewer'
 import { getOpeningCutoutProxyDepth } from '../wall/opening-cutout-geometry'
 
@@ -122,7 +123,11 @@ export const DoorSystem = () => {
   }, [sceneMaterials])
 
   useFrame(() => {
-    if (dirtyNodes.size === 0) return
+    // Doors mid-swing rebuild every tick via their `doorAnimations` entry —
+    // the tween is a needs-frame signal, not dirty-set work (the set must be
+    // able to reach zero while an animation runs).
+    const animatingDoorIds = Object.keys(useInteractive.getState().doorAnimations) as AnyNodeId[]
+    if (dirtyNodes.size === 0 && animatingDoorIds.length === 0) return
     const frameJoineryMaterial = createSurfaceRoleMaterial('joinery', colorPreset)
     baseMaterial = textures ? getBaseMaterial(shading) : frameJoineryMaterial
     frameMaterial = textures ? getBaseMaterial(shading) : frameJoineryMaterial
@@ -142,6 +147,9 @@ export const DoorSystem = () => {
       if (node?.type !== 'door') return
       dirtyDoorIds.push(id as AnyNodeId)
     })
+    for (const id of animatingDoorIds) {
+      if (nodes[id]?.type === 'door' && !dirtyDoorIds.includes(id)) dirtyDoorIds.push(id)
+    }
 
     const useProgressiveDoorRebuilds = dirtyDoorIds.length > DOOR_PROGRESSIVE_DIRTY_THRESHOLD
     const frameStartedAt = performance.now()
@@ -169,7 +177,9 @@ export const DoorSystem = () => {
       // rebuild reflects the in-flight drag without zustand churn. When
       // no override is set this returns the scene node unchanged.
       const effectiveNode = getEffectiveNode(node as DoorNode)
-      updateDoorMesh(effectiveNode, mesh)
+      timeSpan('door', () => updateDoorMesh(effectiveNode, mesh), {
+        properties: [['node', id]],
+      })
       clearDirty(id as AnyNodeId)
       rebuiltDoorsThisFrame += 1
 

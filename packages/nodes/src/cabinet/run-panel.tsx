@@ -6,7 +6,7 @@ import type {
   CabinetModuleNode as CabinetModuleNodeType,
   CabinetNode as CabinetNodeType,
 } from '@pascal-app/core'
-import { createSceneApi, useScene } from '@pascal-app/core'
+import { createSceneApi, resolveLevelId, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   PanelSection,
@@ -16,8 +16,9 @@ import {
   ToggleControl,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Plus, Trash } from 'lucide-react'
-import { useCallback, useMemo } from 'react'
+import { Copy, Equal as EqualIcon, Plus, Trash } from 'lucide-react'
+import { useCallback, useMemo, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import {
   metadataForSelectedWidth,
   metadataWithPresetWidthDebt,
@@ -44,6 +45,10 @@ import {
   backAlignZ,
   bumpCabinetRunLayoutRevision,
   cabinetMetadataRecord,
+  cabinetRunArrayPlan,
+  cabinetRunWidthEqualizationPlan,
+  duplicateCabinetModuleAlongRun,
+  equalizeCabinetRunWidths,
   nestedCornerRunPositionOverrides,
   resolveCabinetType,
   runModuleBaseY,
@@ -57,6 +62,12 @@ import {
   reflowCabinetRunModules,
   stackForCabinet,
 } from './stack'
+import {
+  CABINET_WALL_HEIGHT_PRESETS,
+  type CabinetWallHeightPresetId,
+  cabinetWallHeightPresetById,
+  cabinetWallHeightPresetId,
+} from './wall-height-presets'
 
 export type CabinetEditableNode = CabinetNodeType | CabinetModuleNodeType
 
@@ -70,6 +81,44 @@ const RUN_MODULE_SYNC_PATCH_KEYS = new Set<keyof CabinetNodeType>([
 ])
 const RUN_DEPTH_PATCH_KEY = 'depth'
 const MIN_TRIMMED_CORNER_PRESET_WIDTH = 0.05
+
+function selectCabinetRunPlanningNodes(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  runId: AnyNodeId,
+): AnyNode[] {
+  const run = nodes[runId]
+  if (run?.type !== 'cabinet') return []
+
+  const relevantIds = new Set<AnyNodeId>()
+  const addWithAncestors = (node: AnyNode | undefined) => {
+    let current = node
+    const visited = new Set<AnyNodeId>()
+    while (current && !visited.has(current.id as AnyNodeId)) {
+      const currentId = current.id as AnyNodeId
+      visited.add(currentId)
+      relevantIds.add(currentId)
+      current = current.parentId ? nodes[current.parentId as AnyNodeId] : undefined
+    }
+  }
+
+  addWithAncestors(run)
+  for (const childId of run.children ?? []) addWithAncestors(nodes[childId as AnyNodeId])
+
+  const levelId = resolveLevelId(run, nodes as Record<string, AnyNode>)
+  for (const candidate of Object.values(nodes)) {
+    if (
+      candidate?.type === 'wall' &&
+      resolveLevelId(candidate, nodes as Record<string, AnyNode>) === levelId
+    ) {
+      addWithAncestors(candidate)
+    }
+  }
+
+  return [...relevantIds].flatMap((id) => {
+    const node = nodes[id]
+    return node ? [node] : []
+  })
+}
 
 const FRONT_STYLE_OPTIONS = [
   { value: 'slab', label: 'Slab' },
@@ -405,9 +454,48 @@ export function CabinetRunPanel({
   onClose: () => void
 }) {
   const setSelection = useViewer((s) => s.setSelection)
+  const planningNodeList = useScene(
+    useShallow((state) =>
+      selectCabinetRunPlanningNodes(
+        state.nodes as Record<AnyNodeId, AnyNode>,
+        node.id as AnyNodeId,
+      ),
+    ),
+  )
+  const planningNodes = useMemo(
+    () =>
+      Object.fromEntries(planningNodeList.map((planningNode) => [planningNode.id, planningNode])),
+    [planningNodeList],
+  ) as Record<AnyNodeId, AnyNode>
+  const planningNode = (planningNodes[node.id as AnyNodeId] as CabinetNodeType | undefined) ?? node
   const sortedModules = useMemo(
     () => [...modules].sort((a, b) => a.position[0] - b.position[0]),
     [modules],
+  )
+  const [arraySourceId, setArraySourceId] = useState<AnyNodeId | null>(null)
+  const [arrayCopyCount, setArrayCopyCount] = useState(2)
+  const [arraySpacing, setArraySpacing] = useState(0)
+  const [arrayDirection, setArrayDirection] = useState<'left' | 'right'>('right')
+  const widthEqualization = useMemo(
+    () => cabinetRunWidthEqualizationPlan(planningNode, planningNodes),
+    [planningNode, planningNodes],
+  )
+  const arraySource = useMemo(
+    () =>
+      sortedModules.find(
+        (module) => module.id === arraySourceId && module.moduleKind !== 'corner-filler',
+      ) ?? sortedModules.find((module) => module.moduleKind !== 'corner-filler'),
+    [arraySourceId, sortedModules],
+  )
+  const arrayPlan = useMemo(
+    () =>
+      cabinetRunArrayPlan(planningNode, planningNodes, {
+        copyCount: arrayCopyCount,
+        direction: arrayDirection,
+        sourceModuleId: arraySource?.id ?? null,
+        spacing: arraySpacing,
+      }),
+    [arrayCopyCount, arrayDirection, arraySource?.id, arraySpacing, planningNode, planningNodes],
   )
 
   const updateRun = useCallback(
@@ -428,7 +516,47 @@ export function CabinetRunPanel({
     [node, setSelection],
   )
 
+  const equalizeWidths = useCallback(() => {
+    equalizeCabinetRunWidths({ run: node, sceneApi: createSceneApi(useScene) })
+  }, [node])
+
+  const equalizeWidthsTitle = !widthEqualization.ok
+    ? widthEqualization.reason === 'not-enough-modules'
+      ? 'At least two standard base cabinets are required'
+      : 'The available run width cannot satisfy the cabinet width limits'
+    : widthEqualization.changed
+      ? 'Equalize all resizeable standard base cabinets in this run'
+      : 'The resizeable cabinet widths are already equal'
+
+  const duplicateAlongRun = useCallback(() => {
+    if (!arraySource) return
+    const copiedIds = duplicateCabinetModuleAlongRun({
+      copyCount: arrayCopyCount,
+      direction: arrayDirection,
+      run: node,
+      sceneApi: createSceneApi(useScene),
+      sourceModuleId: arraySource.id as AnyNodeId,
+      spacing: arraySpacing,
+    })
+    if (copiedIds?.length) setSelection({ selectedIds: [node.id as AnyNodeId] })
+  }, [arrayCopyCount, arrayDirection, arraySpacing, arraySource, node, setSelection])
+
+  const duplicateAlongRunTitle = !arrayPlan.ok
+    ? arrayPlan.reason === 'no-source'
+      ? 'Choose a standard or appliance module as the source'
+      : arrayPlan.reason === 'invalid-options'
+        ? 'Choose a copy count from 1 to 20 and spacing from 0 to 2 m'
+        : 'There is not enough room in this run for the requested array'
+    : `Create ${arrayCopyCount} ${arraySource?.name || 'module'} cop${arrayCopyCount === 1 ? 'y' : 'ies'}`
+
   const dimensionProfile = cabinetDimensionProfileId(node)
+  const wallHeightPreset = cabinetWallHeightPresetId(node)
+  const applyWallHeightPreset = useCallback(
+    (presetId: CabinetWallHeightPresetId) => {
+      updateRun({ carcassHeight: cabinetWallHeightPresetById(presetId).value })
+    },
+    [updateRun],
+  )
   const applyDimensionProfile = useCallback(
     (profileId: CabinetDimensionProfileId) => {
       const profile = cabinetDimensionProfileById(profileId)
@@ -484,6 +612,20 @@ export function CabinetRunPanel({
                 </div>
               </button>
               <button
+                aria-label={`Use ${module.name || `Module ${index + 1}`} as array source`}
+                className="mr-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-border/50 text-muted-foreground transition-colors hover:bg-white/8 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+                disabled={module.moduleKind === 'corner-filler'}
+                onClick={() => setArraySourceId(module.id as AnyNodeId)}
+                title={
+                  module.moduleKind === 'corner-filler'
+                    ? 'Corner fillers cannot be used as array sources'
+                    : 'Use this module as the array source'
+                }
+                type="button"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+              <button
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-red-500/20 bg-red-500/8 text-red-300 transition-colors hover:bg-red-500/15 hover:text-red-200 disabled:opacity-30"
                 disabled={modules.length <= 1}
                 onClick={() => deleteModule(module)}
@@ -507,6 +649,75 @@ export function CabinetRunPanel({
               onClick={() => addModule('right')}
             />
           </div>
+          <ActionButton
+            className="mt-2 w-full"
+            disabled={!widthEqualization.ok || !widthEqualization.changed}
+            icon={<EqualIcon className="h-4 w-4" />}
+            label="Equalize widths"
+            onClick={equalizeWidths}
+            title={equalizeWidthsTitle}
+          />
+          <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
+            Balances standard base cabinets while keeping appliance and corner-filler widths fixed.
+          </p>
+        </div>
+      </PanelSection>
+
+      <PanelSection title="Duplicate along run">
+        <div className="space-y-2 px-1 pb-2">
+          <div className="rounded-lg border border-border/40 bg-[#252527] px-2 py-2">
+            <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              Source module
+            </div>
+            <div className="truncate pt-1 text-xs font-medium text-foreground">
+              {arraySource?.name ||
+                (arraySource ? moduleSummary(arraySource) : 'No eligible module')}
+            </div>
+          </div>
+          <SliderControl
+            label="Copies"
+            max={20}
+            min={1}
+            onChange={(value) => setArrayCopyCount(Math.round(value))}
+            precision={0}
+            step={1}
+            value={arrayCopyCount}
+          />
+          <SliderControl
+            label="Spacing"
+            max={2}
+            min={0}
+            onChange={setArraySpacing}
+            precision={2}
+            step={0.01}
+            unit="m"
+            value={arraySpacing}
+          />
+          <div>
+            <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Direction
+            </div>
+            <SegmentedControl
+              onChange={(value) => setArrayDirection(value as 'left' | 'right')}
+              options={[
+                { value: 'left', label: 'Left' },
+                { value: 'right', label: 'Right' },
+              ]}
+              value={arrayDirection}
+            />
+          </div>
+          <ActionButton
+            className="w-full"
+            disabled={!arrayPlan.ok}
+            icon={<Copy className="h-4 w-4" />}
+            label="Create array"
+            onClick={duplicateAlongRun}
+            title={duplicateAlongRunTitle}
+          />
+          <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
+            Copies include the source cabinet structure and any attached wall cabinet. Existing
+            modules stay fixed; the requested array must fit in the available run space.
+          </p>
         </div>
       </PanelSection>
 
@@ -528,6 +739,30 @@ export function CabinetRunPanel({
               />
               <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
                 Applies depth, carcass, plinth, and countertop thickness to this run.
+              </p>
+            </div>
+          )}
+          {node.runTier === 'wall' && (
+            <div>
+              <div className="px-1 pb-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                Height preset
+              </div>
+              <SegmentedControl
+                mixed={wallHeightPreset === 'custom'}
+                onChange={(value) => applyWallHeightPreset(value as CabinetWallHeightPresetId)}
+                options={CABINET_WALL_HEIGHT_PRESETS.map((preset) => ({
+                  label: (
+                    <span className="flex flex-col items-center leading-3">
+                      <span>{preset.label}</span>
+                      <span className="text-[9px] text-muted-foreground">{preset.metricLabel}</span>
+                    </span>
+                  ),
+                  value: preset.id,
+                }))}
+                value={wallHeightPreset === 'custom' ? '18' : wallHeightPreset}
+              />
+              <p className="px-1 pt-1 text-[10px] leading-4 text-muted-foreground">
+                Common wall-cabinet heights. Use the slider below for a custom height.
               </p>
             </div>
           )}
@@ -618,6 +853,11 @@ export function CabinetRunPanel({
             checked={node.withFinishedBack}
             label="Finished back"
             onChange={(checked) => updateRun({ withFinishedBack: checked })}
+          />
+          <ToggleControl
+            checked={node.withFinishedEnds}
+            label="Finished end panels"
+            onChange={(checked) => updateRun({ withFinishedEnds: checked })}
           />
           {node.withCountertop && (
             <ToggleControl

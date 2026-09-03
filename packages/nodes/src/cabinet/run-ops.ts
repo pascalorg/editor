@@ -5,7 +5,9 @@ import {
   type CabinetModuleNode,
   type CabinetNode,
   calculateLevelMiters,
+  cloneNodesInto,
   getWallPlanFootprint,
+  nodeRegistry,
   resolveLevelId,
   type SceneApi,
   selectionProxyIdFromMetadata,
@@ -15,6 +17,8 @@ import { MAX_CABINET_WIDTH, MIN_CABINET_WIDTH } from './resize-limits'
 import {
   moduleMaxX,
   moduleMinX,
+  planRunModuleInsertion,
+  planRunModuleWidthEqualization,
   planToRunLocal,
   runLocalToPlan,
   runLocalXExtent,
@@ -29,6 +33,7 @@ import {
 import {
   backAnchoredModuleZ,
   DEFAULT_CEILING_HEIGHT,
+  defaultCabinetStack,
   hoodCompartmentHeight,
   newCabinetCompartment,
   stackForCabinet,
@@ -330,10 +335,10 @@ export function wallBottomHeightForTallAlignment() {
 }
 
 /** Resolve the remaining vertical space above a wall/tall module. */
-export function cabinetCeilingGap(
+function cabinetCeilingContext(
   node: CabinetModuleNode,
   nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
-): number {
+): { ceilingHeight: number; worldY: number } {
   let worldY = node.position[1]
   let current: AnyNode = node
   const visited = new Set<AnyNodeId>()
@@ -358,9 +363,32 @@ export function cabinetCeilingGap(
     level?.type === 'level' && typeof level.height === 'number'
       ? level.height
       : DEFAULT_CEILING_HEIGHT
+  return { ceilingHeight, worldY }
+}
+
+/** Resolve the remaining vertical space above a wall/tall module. */
+export function cabinetCeilingGap(
+  node: CabinetModuleNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): number {
+  const { ceilingHeight, worldY } = cabinetCeilingContext(node, nodes)
   const currentTop =
     worldY + node.carcassHeight + (node.withCountertop ? node.countertopThickness : 0)
   return Math.min(1.2, Math.max(0, ceilingHeight - currentTop))
+}
+
+/** Resolve how far a module's carcass and top finish extend above the ceiling. */
+export function cabinetModuleCeilingOverflow(
+  node: CabinetModuleNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+): number {
+  const { ceilingHeight, worldY } = cabinetCeilingContext(node, nodes)
+  const currentTop =
+    worldY +
+    node.carcassHeight +
+    (node.withCountertop ? node.countertopThickness : 0) +
+    (node.topFinish === 'top-cabinet' || node.topFinish === 'trim' ? node.topFinishHeight : 0)
+  return Math.max(0, currentTop - ceilingHeight)
 }
 
 /** Local Z offset that makes a shallower wall cabinet's back flush with its deeper base. */
@@ -444,6 +472,309 @@ export function cabinetModulesForRun(
   return (run.children ?? [])
     .map((id) => nodes[id as AnyNodeId])
     .filter((child): child is CabinetModuleNode => child?.type === 'cabinet-module')
+}
+
+const EQUALIZABLE_CABINET_COMPARTMENTS = new Set(['shelf', 'drawer', 'door'])
+
+export function cabinetModuleCanEqualizeWidth(
+  module: CabinetModuleNode,
+  run: CabinetNode,
+): boolean {
+  return (
+    module.moduleKind !== 'corner-filler' &&
+    resolveCabinetType(module, run) === 'base' &&
+    stackForCabinet(module).every((compartment) =>
+      EQUALIZABLE_CABINET_COMPARTMENTS.has(compartment.type),
+    )
+  )
+}
+
+export function cabinetRunWidthEqualizationPlan(
+  run: CabinetNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+) {
+  const modules = cabinetModulesForRun(run, nodes)
+  const equalizedIds = new Set(
+    modules
+      .filter((module) => cabinetModuleCanEqualizeWidth(module, run))
+      .map((module) => module.id),
+  )
+  const minimumWidthById = new Map(
+    modules
+      .filter((module) => equalizedIds.has(module.id))
+      .map((module) => [
+        module.id,
+        cornerSourceLink(module.metadata) ? MIN_TRIMMED_CORNER_CONNECTED_WIDTH : MIN_CABINET_WIDTH,
+      ]),
+  )
+  const maximumWidthById = new Map(
+    modules
+      .filter((module) => equalizedIds.has(module.id))
+      .map((module) => [module.id, MAX_CABINET_WIDTH]),
+  )
+  return planRunModuleWidthEqualization({
+    modules,
+    equalizedIds,
+    minimumWidthById,
+    maximumWidthById,
+  })
+}
+
+export function equalizeCabinetRunWidths({
+  run,
+  sceneApi,
+}: {
+  run: CabinetNode
+  sceneApi: SceneApi
+}): boolean {
+  const liveRun = sceneApi.get<CabinetNode>(run.id as AnyNodeId)
+  if (!liveRun) return false
+  const previousModules = cabinetModulesForRun(liveRun, sceneApi.nodes())
+  const plan = cabinetRunWidthEqualizationPlan(liveRun, sceneApi.nodes())
+  if (!plan.ok || !plan.changed) return false
+
+  sceneApi.pauseHistory()
+  try {
+    for (const planned of plan.modules) {
+      const module = sceneApi.get<CabinetModuleNode>(planned.id as AnyNodeId)
+      if (!module || module.parentId !== liveRun.id) throw new Error('Cabinet run changed')
+      const nextPosition: CabinetModuleNode['position'] = [
+        planned.position[0],
+        module.position[1],
+        planned.position[2],
+      ]
+      const nestedCornerOverrides = nestedCornerRunPositionOverrides(
+        module,
+        nextPosition,
+        sceneApi.nodes(),
+      )
+      sceneApi.update(module.id as AnyNodeId, {
+        position: nextPosition,
+        width: planned.width,
+      })
+      for (const [id, override] of nestedCornerOverrides) sceneApi.update(id, override)
+
+      const wallChild = wallChildOf(module, sceneApi.nodes())
+      if (wallChild) {
+        sceneApi.update(wallChild.id as AnyNodeId, {
+          position: [0, wallChild.position[1], backAlignZ(module.depth, wallChild.depth)],
+          width: planned.width,
+        })
+      }
+    }
+    syncCornerRunsFromRunSources({
+      baseLayout: 'width-only',
+      previousModules,
+      run: sceneApi.get<CabinetNode>(liveRun.id as AnyNodeId) ?? liveRun,
+      sceneApi,
+    })
+    bumpCabinetRunLayoutRevision(sceneApi, liveRun)
+    sceneApi.resumeHistory()
+    return true
+  } catch {
+    sceneApi.restoreAll()
+    sceneApi.resumeHistory()
+    return false
+  }
+}
+
+export type CabinetRunArrayDirection = 'left' | 'right'
+
+export type CabinetRunArrayPlan =
+  | {
+      ok: true
+      sourceModuleId: AnyNodeId
+      positions: CabinetModuleNode['position'][]
+    }
+  | {
+      ok: false
+      reason: 'no-source' | 'invalid-options' | 'no-space'
+    }
+
+export function cabinetRunArrayPlan(
+  run: CabinetNode,
+  nodes: Readonly<Partial<Record<AnyNodeId, AnyNode>>>,
+  options: {
+    sourceModuleId: AnyNodeId | null
+    copyCount: number
+    spacing: number
+    direction: CabinetRunArrayDirection
+  },
+): CabinetRunArrayPlan {
+  if (!options.sourceModuleId) return { ok: false, reason: 'no-source' }
+  if (
+    !Number.isInteger(options.copyCount) ||
+    options.copyCount < 1 ||
+    options.copyCount > 20 ||
+    !Number.isFinite(options.spacing) ||
+    options.spacing < 0 ||
+    options.spacing > 2
+  ) {
+    return { ok: false, reason: 'invalid-options' }
+  }
+
+  const modules = cabinetModulesForRun(run, nodes)
+  const source = modules.find((module) => module.id === options.sourceModuleId)
+  if (!source || source.moduleKind === 'corner-filler') {
+    return { ok: false, reason: 'no-source' }
+  }
+
+  const direction = options.direction === 'left' ? -1 : 1
+  const step = source.width + options.spacing
+  const positions = Array.from(
+    { length: options.copyCount },
+    (_, index) =>
+      [
+        source.position[0] + direction * step * (index + 1),
+        source.position[1],
+        source.position[2],
+      ] as CabinetModuleNode['position'],
+  )
+  const epsilon = CABINET_EDGE_EPSILON
+
+  for (const position of positions) {
+    const minX = position[0] - source.width / 2
+    const maxX = position[0] + source.width / 2
+    const overlaps = modules.some((module) => {
+      if (module.id === source.id) return false
+      return moduleMinX(module) < maxX - epsilon && moduleMaxX(module) > minX + epsilon
+    })
+    if (overlaps) return { ok: false, reason: 'no-space' }
+  }
+
+  const constraints = runWallConstraints(run, modules, nodes)
+  const currentMinX = Math.min(...modules.map(moduleMinX))
+  const currentMaxX = Math.max(...modules.map(moduleMaxX))
+  const plannedMinX = Math.min(
+    currentMinX,
+    ...positions.map((position) => position[0] - source.width / 2),
+  )
+  const plannedMaxX = Math.max(
+    currentMaxX,
+    ...positions.map((position) => position[0] + source.width / 2),
+  )
+  if (
+    (constraints.left.constrained &&
+      currentMinX - plannedMinX > constraints.left.slack + epsilon) ||
+    (constraints.right.constrained && plannedMaxX - currentMaxX > constraints.right.slack + epsilon)
+  ) {
+    return { ok: false, reason: 'no-space' }
+  }
+
+  return { ok: true, sourceModuleId: source.id, positions }
+}
+
+function cleanCabinetArrayMetadata(metadata: CabinetEditableNode['metadata']) {
+  const {
+    cabinetCornerDerivedRun: _derived,
+    cabinetCornerSourceLink: _source,
+    isNew: _isNew,
+    nodeSelectionProxyId: _proxy,
+    ...rest
+  } = cabinetMetadataRecord(metadata)
+  return rest
+}
+
+function cabinetArrayCloneNodes(
+  source: CabinetModuleNode,
+  position: CabinetModuleNode['position'],
+  sceneApi: SceneApi,
+): AnyNode[] | null {
+  const subtree = sceneApi.getSubtree(source.id as AnyNodeId)
+  if (!subtree) return null
+
+  const duplicable = nodeRegistry.get(source.type)?.capabilities?.duplicable
+  const prepared =
+    duplicable && typeof duplicable === 'object' && duplicable.prepareSubtreeClone
+      ? duplicable.prepareSubtreeClone({
+          root: subtree.root,
+          descendants: subtree.descendants,
+          rootId: source.id as AnyNodeId,
+          rootPatch: { position },
+          nodes: sceneApi.nodes(),
+        })
+      : null
+  const root = {
+    ...(prepared?.root ?? subtree.root),
+    metadata: cleanCabinetArrayMetadata((prepared?.root ?? subtree.root).metadata),
+  } as CabinetModuleNode
+  root.position = position
+  const descendants = (prepared?.descendants ?? subtree.descendants).map(
+    (node) =>
+      ({
+        ...node,
+        metadata: cleanCabinetArrayMetadata(node.metadata),
+      }) as AnyNode,
+  )
+  return cloneNodesInto([root, ...descendants], {
+    parentId: source.parentId as AnyNodeId,
+    rootId: source.id as AnyNodeId,
+    position,
+  }).nodes
+}
+
+export function duplicateCabinetModuleAlongRun({
+  run,
+  sceneApi,
+  sourceModuleId,
+  copyCount,
+  spacing,
+  direction,
+}: {
+  run: CabinetNode
+  sceneApi: SceneApi
+  sourceModuleId: AnyNodeId | null
+  copyCount: number
+  spacing: number
+  direction: CabinetRunArrayDirection
+}): AnyNodeId[] | null {
+  const liveRun = sceneApi.get<CabinetNode>(run.id as AnyNodeId)
+  if (!liveRun) return null
+  const plan = cabinetRunArrayPlan(liveRun, sceneApi.nodes(), {
+    copyCount,
+    direction,
+    sourceModuleId,
+    spacing,
+  })
+  if (!plan.ok) return null
+  const source = sceneApi.get<CabinetModuleNode>(plan.sourceModuleId)
+  if (!source) return null
+
+  const clonedNodes: AnyNode[] = []
+  const clonedRootIds: AnyNodeId[] = []
+  for (const position of plan.positions) {
+    const clone = cabinetArrayCloneNodes(source, position, sceneApi)
+    if (!clone || clone.length === 0) return null
+    clonedRootIds.push(clone[0]!.id as AnyNodeId)
+    clonedNodes.push(...clone)
+  }
+
+  sceneApi.pauseHistory()
+  try {
+    const createMany = sceneApi.createMany
+    const clonedRootIdSet = new Set(clonedRootIds)
+    if (createMany) {
+      createMany(
+        clonedNodes.map((node) =>
+          clonedRootIdSet.has(node.id as AnyNodeId)
+            ? { node, parentId: liveRun.id as AnyNodeId }
+            : { node },
+        ),
+      )
+    } else {
+      for (const node of clonedNodes) {
+        const isRoot = clonedRootIdSet.has(node.id as AnyNodeId)
+        sceneApi.upsert(node, isRoot ? (liveRun.id as AnyNodeId) : undefined)
+      }
+    }
+    bumpCabinetRunLayoutRevision(sceneApi, liveRun)
+    sceneApi.resumeHistory()
+    return clonedRootIds
+  } catch {
+    sceneApi.restoreAll()
+    sceneApi.resumeHistory()
+    return null
+  }
 }
 
 export function backAlignedRunDepthOverrides(
@@ -753,8 +1084,44 @@ export function cornerSourceModulesForRun(
   )
 }
 
+export function cornerPinnedEndsForRun(
+  modules: readonly CabinetModuleNode[],
+): Partial<Record<'left' | 'right', boolean>> {
+  if (modules.length === 0) return {}
+  const sorted = sortRunModules(modules)
+  const leftEdge = moduleMinX(sorted[0]!)
+  const rightEdge = moduleMaxX(sorted.at(-1)!)
+  const pinned: Partial<Record<'left' | 'right', boolean>> = {}
+  for (const module of sorted) {
+    const side = cornerSourceLink(module.metadata)?.side
+    if (side === 'left' && Math.abs(moduleMinX(module) - leftEdge) <= CABINET_EDGE_EPSILON) {
+      pinned.left = true
+    }
+    if (side === 'right' && Math.abs(moduleMaxX(module) - rightEdge) <= CABINET_EDGE_EPSILON) {
+      pinned.right = true
+    }
+  }
+  return pinned
+}
+
 function doorStack(shelfCount: number) {
   return [{ ...newCabinetCompartment('door'), shelfCount }]
+}
+
+function cloneCabinetStack(module: CabinetModuleNode): CabinetModuleNode['stack'] {
+  return stackForCabinet(module).map((compartment) => ({
+    ...compartment,
+    id: newCabinetCompartment(compartment.type).id,
+  }))
+}
+
+const STORAGE_COMPARTMENT_TYPES = new Set(['shelf', 'drawer', 'door'])
+
+function sideAdditionStack(module: CabinetModuleNode): CabinetModuleNode['stack'] | undefined {
+  const stack = stackForCabinet(module)
+  return stack.every((compartment) => STORAGE_COMPARTMENT_TYPES.has(compartment.type))
+    ? cloneCabinetStack(module)
+    : defaultCabinetStack(module)
 }
 
 function cloneWallCabinetStack(
@@ -1702,6 +2069,11 @@ function upsertCabinetRunWithModules({
       countertopOverhang: runTier === 'base' ? sourceRun.countertopOverhang : 0,
       showPlinth: false,
       withCountertop: false,
+      frontGap: sourceRun.frontGap,
+      frontStyle: sourceRun.frontStyle,
+      frontOverlay: sourceRun.frontOverlay,
+      handleStyle: sourceRun.handleStyle,
+      handlePosition: sourceRun.handlePosition,
       moduleKind: patch.moduleKind ?? 'standard',
       ...(patch.openSide ? { openSide: patch.openSide } : {}),
       ...(patch.cornerShelf ? { cornerShelf: true } : {}),
@@ -2112,7 +2484,10 @@ function syncDerivedCornerRun({
         frontOverlay: sourceRun.frontOverlay,
         handleStyle: sourceRun.handleStyle,
         handlePosition: sourceRun.handlePosition,
-        stack: doorStack(layout.connectedShelfCount),
+        stack:
+          role === 'base-leg' && entry.name === 'Base Cabinet'
+            ? cloneCabinetStack(sourceModule)
+            : doorStack(layout.connectedShelfCount),
         metadata: entry.metadata,
       } as Partial<AnyNode>,
     )
@@ -2143,16 +2518,40 @@ function syncDerivedCornerRun({
 export function syncCornerRunsFromSourceModule({
   baseLayout = 'full',
   module,
+  previousModule,
   run,
   sceneApi,
 }: {
   baseLayout?: CornerBaseLayout
   module: CabinetModuleNode
+  previousModule?: CabinetModuleNode
   run: CabinetNode
   sceneApi: SceneApi
 }) {
   const link = cornerSourceLink(module.metadata)
   if (!link) return
+  if (previousModule) {
+    const previousEdge =
+      link.side === 'left' ? moduleMinX(previousModule) : moduleMaxX(previousModule)
+    const nextEdge = link.side === 'left' ? moduleMinX(module) : moduleMaxX(module)
+    const edgeShift = nextEdge - previousEdge
+    if (Math.abs(edgeShift) > CABINET_EDGE_EPSILON) {
+      for (const runId of link.linkedRunIds) {
+        const linkedRun = sceneApi.get<CabinetNode>(runId)
+        if (linkedRun?.type !== 'cabinet' || linkedRun.parentId !== run.id) continue
+        sceneApi.update(
+          linkedRun.id as AnyNodeId,
+          {
+            position: [
+              linkedRun.position[0] + edgeShift,
+              linkedRun.position[1],
+              linkedRun.position[2],
+            ],
+          } as Partial<AnyNode>,
+        )
+      }
+    }
+  }
   for (const runId of link.linkedRunIds) {
     const linkedRun = sceneApi.get<CabinetNode>(runId)
     if (linkedRun?.type !== 'cabinet') continue
@@ -2227,11 +2626,13 @@ export function syncCornerRunsFromRunSources({
 export function previewCornerRunsFromRunSources({
   baseLayout = 'full',
   initialOverrides = [],
+  previousModules = [],
   run,
   sceneApi,
 }: {
   baseLayout?: CornerBaseLayout
   initialOverrides?: ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]>
+  previousModules?: readonly CabinetModuleNode[]
   run: CabinetNode
   sceneApi: SceneApi
 }): ReadonlyArray<readonly [AnyNodeId, Partial<AnyNode>]> {
@@ -2256,14 +2657,19 @@ export function previewCornerRunsFromRunSources({
     markDirty: () => {},
   }
 
-  syncCornerRunsFromRunSources({ baseLayout, run, sceneApi: previewSceneApi })
+  syncCornerRunsFromRunSources({
+    baseLayout,
+    previousModules,
+    run,
+    sceneApi: previewSceneApi,
+  })
   return [...overrides]
 }
 
 /**
  * Insert a new base module flush against the anchor's side (or the run's
- * outer edge with no anchor). Gap-checked — returns null when a flush
- * neighbor leaves no room for a standard-width unit.
+ * outer edge with no anchor). A full run is reflowed when the anchor has a
+ * flush neighbor, subject to wall and filler capacity.
  */
 export function planCabinetModuleSideAddition({
   anchorModule,
@@ -2277,19 +2683,27 @@ export function planCabinetModuleSideAddition({
   side: 'left' | 'right'
 }): CabinetModuleNode | null {
   const modules = cabinetModulesForRun(run, nodes)
-  const x = sideInsertX({
+  const directX = sideInsertX({
     anchorModule,
     modules,
     side,
     width: CABINET_BASE_WIDTH,
     epsilon: CABINET_EDGE_EPSILON,
   })
+  const x =
+    directX ??
+    (anchorModule
+      ? side === 'left'
+        ? moduleMinX(anchorModule) - CABINET_BASE_WIDTH / 2
+        : moduleMaxX(anchorModule) + CABINET_BASE_WIDTH / 2
+      : null)
   if (x == null) return null
   const sortedModules = sortRunModules(modules)
   const depthSource =
     anchorModule ?? (side === 'left' ? sortedModules[0] : sortedModules.at(-1)) ?? null
   const depth = depthSource?.depth ?? run.depth
   const z = depthSource ? backAnchoredModuleZ(depthSource.position[2], depthSource.depth, depth) : 0
+  const structureSource = anchorModule ?? depthSource
   const width = resolveSideAddedModuleWidth({
     centerX: x,
     centerZ: z,
@@ -2301,7 +2715,7 @@ export function planCabinetModuleSideAddition({
     sourceNode: depthSource ?? run,
   })
   if (width < MIN_CORNER_CONNECTED_WIDTH - WALL_CLEARANCE_EPSILON) return null
-  return CabinetModuleNodeSchema.parse({
+  const module = CabinetModuleNodeSchema.parse({
     name: `Base Cabinet ${modules.length + 1}`,
     parentId: run.id,
     position: [
@@ -2318,7 +2732,32 @@ export function planCabinetModuleSideAddition({
     countertopOverhang: run.countertopOverhang,
     showPlinth: false,
     withCountertop: false,
+    frontGap: structureSource?.frontGap ?? run.frontGap,
+    frontStyle: structureSource?.frontStyle ?? run.frontStyle,
+    frontOverlay: structureSource?.frontOverlay ?? run.frontOverlay,
+    handleStyle: structureSource?.handleStyle ?? run.handleStyle,
+    handlePosition: structureSource?.handlePosition ?? run.handlePosition,
+    ...(structureSource ? { stack: sideAdditionStack(structureSource) } : {}),
   })
+  if (directX == null && anchorModule) {
+    const insertionPlan = planRunModuleInsertion({
+      modules,
+      insertion: {
+        id: module.id,
+        position: module.position,
+        width: module.width,
+      },
+      wallConstraints: runWallConstraints(run, modules, nodes),
+      fillerIds: new Set(
+        modules
+          .filter((candidate) => candidate.moduleKind === 'corner-filler')
+          .map((candidate) => candidate.id),
+      ),
+      preserveEnds: cornerPinnedEndsForRun(modules),
+    })
+    if (!insertionPlan.ok) return null
+  }
+  return module
 }
 
 export function addCabinetModuleSide({
@@ -2332,16 +2771,55 @@ export function addCabinetModuleSide({
   sceneApi: SceneApi
   side: 'left' | 'right'
 }): AnyNodeId | null {
+  const nodes = sceneApi.nodes()
+  const modules = cabinetModulesForRun(run, nodes)
+  const directX = sideInsertX({
+    anchorModule,
+    modules,
+    side,
+    width: CABINET_BASE_WIDTH,
+    epsilon: CABINET_EDGE_EPSILON,
+  })
   const module = planCabinetModuleSideAddition({
     anchorModule,
-    nodes: sceneApi.nodes(),
+    nodes,
     run,
     side,
   })
   if (!module) return null
-  sceneApi.upsert(module as AnyNode, run.id as AnyNodeId)
+  let committedModule = module
+  if (directX == null && anchorModule) {
+    const result = planRunModuleInsertion({
+      modules,
+      insertion: {
+        id: module.id,
+        position: module.position,
+        width: module.width,
+      },
+      wallConstraints: runWallConstraints(run, modules, nodes),
+      fillerIds: new Set(
+        modules
+          .filter((candidate) => candidate.moduleKind === 'corner-filler')
+          .map((candidate) => candidate.id),
+      ),
+      preserveEnds: cornerPinnedEndsForRun(modules),
+    })
+    if (!result.ok) return null
+    for (const planned of result.modules) {
+      sceneApi.update(planned.id as AnyNodeId, {
+        position: planned.position,
+        width: planned.width,
+      })
+    }
+    committedModule = CabinetModuleNodeSchema.parse({
+      ...module,
+      position: result.inserted.position,
+      width: result.inserted.width,
+    })
+  }
+  sceneApi.upsert(committedModule as AnyNode, run.id as AnyNodeId)
   bumpCabinetRunLayoutRevision(sceneApi, run)
-  return module.id
+  return committedModule.id
 }
 
 /**
@@ -2456,7 +2934,7 @@ export function addCornerRun({
             name: 'Base Cabinet',
             width: connectedWidth,
             openSide: 'left' as const,
-            stack: doorStack(connectedShelfCount),
+            stack: cloneCabinetStack(sourceModule),
           },
         ]
       : [
@@ -2464,7 +2942,7 @@ export function addCornerRun({
             name: 'Base Cabinet',
             width: connectedWidth,
             openSide: 'right' as const,
-            stack: doorStack(connectedShelfCount),
+            stack: cloneCabinetStack(sourceModule),
           },
           {
             name: 'Corner Filler',

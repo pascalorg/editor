@@ -24,13 +24,14 @@ import {
   vec3,
   vec4,
 } from 'three/tsl'
-import { RenderPipeline, type WebGPURenderer } from 'three/webgpu'
+import { RenderPipeline, TimestampQuery, type WebGPURenderer } from 'three/webgpu'
 import { backdropGradient, deepSkyColor, horizonHazeColor } from '../../lib/backdrop'
 import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
-import { PERF_OVERLAY_ENABLED, pushGpuSample } from '../../lib/gpu-perf'
+import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { inkedEdges } from '../../lib/ink-edges'
 import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
+import { recordPerfSample, timeSpan } from '../../lib/perf-tracks'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
 import useViewer from '../../store/use-viewer'
@@ -150,6 +151,36 @@ function sanitizeOutlineObjects(objects: Object3D[]) {
   }
 
   objects.length = nextIndex
+}
+
+// Two independent GPU readings per frame, both `?perf`-only:
+//  - `gpu-render`: three's WebGPU timestamp queries — the summed GPU duration of
+//    the frame's render passes, measured on the device. The only honest "GPU ms".
+//  - `gpu-queue`: submit → `onSubmittedWorkDone()` wall time. That covers queue
+//    backlog and CPU work that ran before the microtask got to resume, so it is
+//    a backpressure signal, not GPU time.
+// `resolveTimestampsAsync` returns the previous resolve's value while one is in
+// flight, so calling it every frame is safe (and required — the query pool warns
+// once it fills).
+function recordFrameGpuTiming(renderer: any, submittedAt: number): void {
+  const queue = renderer.backend?.device?.queue as
+    | { onSubmittedWorkDone?: () => Promise<void> }
+    | undefined
+  queue?.onSubmittedWorkDone?.().then(() => {
+    recordPerfSample('gpu-queue', performance.now() - submittedAt)
+  })
+
+  // Off unless the device advertised 'timestamp-query' at init — the backend
+  // clears its own flag when the feature is missing, so this is the truth.
+  if (renderer.backend?.trackTimestamp !== true) return
+  renderer
+    .resolveTimestampsAsync?.(TimestampQuery.RENDER)
+    ?.then((ms: number | undefined) => {
+      if (typeof ms === 'number' && ms > 0) recordPerfSample('gpu-render', ms)
+    })
+    .catch(() => {
+      // Pool disposed mid-flight (pipeline rebuild / unmount) — nothing to report.
+    })
 }
 
 const PostProcessingPasses = ({
@@ -719,40 +750,26 @@ const PostProcessingPasses = ({
           ;(renderer as any).setClearAlpha(clearAlpha)
         }
         const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
-        ;(renderer as any).render(scene, camera)
-        if (PERF_OVERLAY_ENABLED) {
-          const queue = (renderer as any).backend?.device?.queue as
-            | { onSubmittedWorkDone?: () => Promise<void> }
-            | undefined
-          queue?.onSubmittedWorkDone?.().then(() => {
-            pushGpuSample(performance.now() - submittedAt)
-          })
-        }
+        timeSpan('render-encode', () => {
+          ;(renderer as any).render(scene, camera)
+        })
+        if (PERF_OVERLAY_ENABLED) recordFrameGpuTiming(renderer, submittedAt)
       } catch (fallbackError) {
         console.error('[viewer/post-processing] Fallback render failed.', fallbackError)
       }
       return
     }
 
+    const pipeline = renderPipelineRef.current
     try {
       // Clear alpha=0 so background pixels in the output MRT attachment (index 0) get a=0,
       // making scenePassColor.a a reliable geometry mask (geometry pixels write a=1 via output node).
       ;(renderer as any).setClearAlpha(0)
       const submittedAt = PERF_OVERLAY_ENABLED ? performance.now() : 0
-      renderPipelineRef.current.render()
-      if (PERF_OVERLAY_ENABLED) {
-        // device.queue.onSubmittedWorkDone() resolves once the GPU has
-        // finished the work we just submitted — the delta from our submit
-        // timestamp is a clean per-frame GPU duration. Doesn't block CPU
-        // (no await) and works for the custom RenderPipeline path that
-        // bypasses three.js's timestamp-query infrastructure.
-        const queue = (renderer as any).backend?.device?.queue as
-          | { onSubmittedWorkDone?: () => Promise<void> }
-          | undefined
-        queue?.onSubmittedWorkDone?.().then(() => {
-          pushGpuSample(performance.now() - submittedAt)
-        })
-      }
+      timeSpan('render-encode', () => {
+        pipeline.render()
+      })
+      if (PERF_OVERLAY_ENABLED) recordFrameGpuTiming(renderer, submittedAt)
     } catch (error) {
       hasPipelineErrorRef.current = true
       // A failed MRT pass may leave its target bound; clear it before the fallback render.

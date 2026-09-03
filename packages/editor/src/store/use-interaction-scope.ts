@@ -1,6 +1,12 @@
 'use client'
 
 import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
+import {
+  beginPerfAction,
+  commitPerfAction,
+  getActivePerfActionId,
+  hasUncommittedPerfAction,
+} from '@pascal-app/viewer'
 import { useRef } from 'react'
 import { create } from 'zustand'
 import { useShallow } from 'zustand/react/shallow'
@@ -45,9 +51,60 @@ export type InteractionScopeState = {
   endIf: (match: (scope: ActiveInteractionScope) => boolean) => void
 }
 
+// Perf action ledger (`?perf`): every 3D gesture funnels through this store, so
+// begin/end are the one generic bracket for action-cost receipts. A more
+// specific call site (use-drag-action, the 2D floorplan layer) may have begun
+// its own action first — yield to it while ITS gesture is in flight, but a
+// merely-settling previous action must not swallow a new gesture. The scope
+// remembers the id it began and commits only that action at `end`, so a
+// specific site's receipt (or a cancelled one finalized via
+// markToolCancelConsumed) is never committed by the generic bracket. Known
+// limit: a scope-begun gesture cancelled through a path that skips
+// markToolCancelConsumed still commits at end and bills its revert as settle.
+let scopePerfActionId: number | null = null
+
+function beginScopePerfAction(scope: ActiveInteractionScope): void {
+  if (hasUncommittedPerfAction()) return
+  switch (scope.kind) {
+    case 'moving':
+      scopePerfActionId = beginPerfAction('drag:move', scope.nodeType)
+      break
+    case 'placing':
+      scopePerfActionId = beginPerfAction(
+        `place:${scope.node?.type ?? 'node'}`,
+        scope.node?.id ?? '',
+      )
+      break
+    case 'reshaping': {
+      const nodeType = useScene.getState().nodes[scope.nodeId as AnyNodeId]?.type
+      scopePerfActionId = beginPerfAction(
+        `drag:${nodeType ? `${nodeType}-` : ''}${scope.reshape}`,
+        scope.nodeId,
+      )
+      break
+    }
+    case 'handle-drag':
+      scopePerfActionId = beginPerfAction(`drag:${scope.handle}`, scope.nodeId)
+      break
+    default:
+      // drafting / mesh-editing are long-lived modes, not gestures
+      break
+  }
+}
+
+function commitScopePerfAction(): void {
+  if (scopePerfActionId !== null && getActivePerfActionId() === scopePerfActionId) {
+    commitPerfAction()
+  }
+  scopePerfActionId = null
+}
+
 const useInteractionScope = create<InteractionScopeState>((set, get) => ({
   scope: IDLE_SCOPE,
-  begin: (scope) => set({ scope }),
+  begin: (scope) => {
+    beginScopePerfAction(scope)
+    set({ scope })
+  },
   update: (patch) =>
     set((state) => {
       if (state.scope.kind === 'idle') return state
@@ -56,12 +113,16 @@ const useInteractionScope = create<InteractionScopeState>((set, get) => ({
     }),
   end: () => {
     if (get().scope.kind === 'idle') return
+    commitScopePerfAction()
     set({ scope: IDLE_SCOPE })
   },
   endIf: (match) => {
     const scope = get().scope
     if (scope.kind === 'idle') return
-    if (match(scope)) set({ scope: IDLE_SCOPE })
+    if (match(scope)) {
+      commitScopePerfAction()
+      set({ scope: IDLE_SCOPE })
+    }
   },
 }))
 

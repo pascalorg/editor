@@ -5,7 +5,7 @@ import {
   type GridEvent,
   sceneRegistry,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { timeSpan, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Plane, Raycaster, Vector2, Vector3 } from 'three'
@@ -109,7 +109,7 @@ export function useGridEvents(gridY: number) {
 
     const handlePointerMove = (e: PointerEvent) => {
       // Emit move even if camera is dragging, so tools like PolygonEditor still work
-      emit('move', e)
+      timeSpan('pointer', () => emit('move', e))
     }
 
     const handleDoubleClick = (e: MouseEvent) => {

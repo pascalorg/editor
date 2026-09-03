@@ -41,6 +41,7 @@ import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
 import { setGroupsSortedByMaterial } from '../../lib/geometry-groups'
 import { freezeObjectTransform } from '../../lib/static-transform'
+import { timeSpan } from '../../lib/perf-tracks'
 import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
 import { clearLevelMiterCache, getCachedLevelMiters } from './level-miter-cache'
 import {
@@ -590,7 +591,7 @@ export const WallSystem = () => {
       }
 
       const levelWalls = getLevelWalls(levelId)
-      const miterData = getCachedLevelMiters(levelId, levelWalls)
+      const miterData = timeSpan('wall-miter', () => getCachedLevelMiters(levelId, levelWalls))
       const rebuiltWallIds = new Set<string>()
 
       // Update dirty walls — always, no throttling. The dragged wall must
@@ -611,7 +612,9 @@ export const WallSystem = () => {
 
         const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
         if (mesh) {
-          updateWallGeometry(wallId, miterData)
+          timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData), {
+            properties: [['node', wallId]],
+          })
           clearDirty(wallId as AnyNodeId)
           rebuiltWalls.add(wallId)
           rebuiltWallIds.add(wallId)
@@ -652,7 +655,7 @@ export const WallSystem = () => {
       for (const [levelId, pendingIds] of pendingAdjacentByLevel) {
         if (pendingIds.size === 0) continue
         const levelWalls = getLevelWalls(levelId)
-        const miterData = getCachedLevelMiters(levelId, levelWalls)
+        const miterData = timeSpan('wall-miter', () => getCachedLevelMiters(levelId, levelWalls))
         for (const wallId of Array.from(pendingIds)) {
           if (useProgressiveAdjacentRebuilds) {
             if (rebuiltAdjacentThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) {
@@ -668,7 +671,9 @@ export const WallSystem = () => {
 
           const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
           if (mesh) {
-            updateWallGeometry(wallId, miterData)
+            timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData), {
+              properties: [['node', wallId]],
+            })
             rebuiltWalls.add(wallId)
           }
           pendingIds.delete(wallId)
@@ -1183,7 +1188,9 @@ export function generateExtrudedWall(
   let resultBrush = wallBrush
   for (const cutoutBrush of cutoutBrushes) {
     prepareBrushForCSG(cutoutBrush)
-    const newResult = csgEvaluator.evaluate(resultBrush, cutoutBrush, SUBTRACTION)
+    const newResult = timeSpan('wall-csg', () =>
+      csgEvaluator.evaluate(resultBrush, cutoutBrush, SUBTRACTION),
+    )
     prepareBrushForCSG(newResult)
     if (resultBrush !== wallBrush) {
       csgGeometry(resultBrush).dispose()
