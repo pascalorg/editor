@@ -515,10 +515,9 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   useEffect(() => cancelPoseApplication, [cancelPoseApplication])
 
   useEffect(() => {
-    // Dev-only: deterministic camera poses for screenshot/automation tooling.
-    // A getter, not a snapshot — drei recreates the impl when the default
-    // camera changes, so a captured instance goes stale.
-    if (process.env.NODE_ENV !== 'development') return
+    // Deterministic camera poses for screenshot/automation tooling.
+    // No NODE_ENV gate: process is undefined client-side (Turbopack
+    // does not replace it in source-aliased packages), so gating throws.
     const w = window as typeof window & {
       __pascalCameraControls?: (() => CameraControlsImpl | null) | null
     }
@@ -528,11 +527,14 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     }
   }, [])
 
+  const previousLevelIdRef = useRef<AnyNodeId | null>(null)
   useEffect(() => {
     if (isPreviewMode || isFirstPersonMode || isRestoringFirstPersonPose()) return
+    const previousLevelId = previousLevelIdRef.current
+    previousLevelIdRef.current = currentLevelId
     // Analytic destination, not `sceneRegistry` mesh position: a level created
     // this frame still sits at y=0 (LevelSystem lerps it later), and a mode
-    // switch leaves every level mid-lerp — the camera must pan to where the
+    // switch leaves every level mid-lerp - the camera must pan to where the
     // level will settle, in the CURRENT presentation mode.
     const targetY = currentLevelId
       ? getLevelPresentationY(currentLevelId, useScene.getState().nodes, levelMode)
@@ -540,8 +542,16 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     if (!controls.current) return
     if (firstLoad.current) {
       firstLoad.current = false
-      controls.current.setLookAt(20, 20, 20, 0, 0, 0, true)
+      // A freshly applied scene is framed by the auto-frame emit; only a
+      // scene-less editor gets the default pose.
+      if (Object.keys(useScene.getState().nodes).length === 0) {
+        controls.current.setLookAt(20, 20, 20, 0, 0, 0, true)
+      }
+      return
     }
+    // null → level is the initial scene load; only real level switches move
+    // the camera, or they would clobber the auto-framed pose.
+    if (!previousLevelId || previousLevelId === currentLevelId) return
     controls.current.getTarget(currentTarget)
     // Idempotence guard: skip when already there — also swallows the thumbnail
     // generator's synchronous stacked→restore levelMode round-trip.
