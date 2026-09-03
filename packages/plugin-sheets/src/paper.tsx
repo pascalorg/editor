@@ -32,6 +32,7 @@ function Primitives({
   screenUnitsPerPixel?: number
   sceneRotationDeg?: number
 }) {
+
   return (
     <>
       {list.map((geometry, i) => (
@@ -192,11 +193,19 @@ export function Paper({
     [composed.placements, selectedId],
   )
 
+  // Wheel zoom needs preventDefault, and React registers wheel as passive — attach natively.
+  useEffect(() => {
+    const host = hostRef.current
+    if (!host) return
+    const handler = (event: WheelEvent) => onWheel(event as unknown as React.WheelEvent)
+    host.addEventListener('wheel', handler, { passive: false })
+    return () => host.removeEventListener('wheel', handler)
+  }, [onWheel])
+
   return (
     <div
       ref={hostRef}
       className="relative h-full w-full overflow-hidden bg-muted/40"
-      onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
