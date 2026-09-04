@@ -292,6 +292,7 @@ export * from './registry'
 export { useRegistryVersion } from './registry/use-registry-version'
 export * from './schema'
 export * from './services'
+export { getLevelIndex, type LevelIndex } from './services/level-index'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
   acquireSceneHistoryPause,
@@ -464,3 +465,4 @@ export {
   type ValidationSeverity,
   validateBuildJson,
 } from './validation/validate-build-json'
+export * from './multiplayer'

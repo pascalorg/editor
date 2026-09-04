@@ -2,8 +2,8 @@
   "name": "editor",
   "private": true,
   "scripts": {
-    "build": "turbo run build",
-    "dev": "dotenv -e ./.env -e ./.env.defaults -- turbo run dev --env-mode=loose",
+    "build": "rm -rf node_modules apps/editor/node_modules apps/ifc-converter/node_modules packages/*/node_modules tooling/*/node_modules && bun install --linker=hoisted && chmod -R +x node_modules/.bin node_modules/@turbo && turbo run build --filter=editor && mkdir -p apps/editor/.next/standalone/apps/editor/public apps/editor/.next/standalone/apps/editor/.next/static && cp -r apps/editor/public/. apps/editor/.next/standalone/apps/editor/public/ && cp -r apps/editor/.next/static/. apps/editor/.next/standalone/apps/editor/.next/static/ && cp apps/editor/hostinger-server.js apps/editor/.next/standalone/server.js",
+    "dev": "set -a && . ./.env 2>/dev/null; set +a; turbo run dev --env-mode=loose",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",
     "format": "biome format --write",
@@ -13,6 +13,7 @@
     "check:fix": "biome check --write",
     "check-types": "turbo run check-types",
     "test": "turbo run test",
+    "sync-panel": "node scripts/sync-panel.mjs",
     "kill": "lsof -ti:3002 | xargs kill -9 2>/dev/null || echo 'No processes found on port 3002'",
     "clean:cache": "rm -rf apps/*/.next apps/*/.swc apps/*/.turbo packages/*/.turbo tooling/*/.turbo .turbo node_modules/.cache",
     "restart": "bun kill && bun clean:cache && bun dev",
@@ -23,9 +24,14 @@
     "release:editor": "gh workflow run release.yml -f package=editor -f bump=patch",
     "release:nodes": "gh workflow run release.yml -f package=nodes -f bump=patch",
     "release:mcp": "gh workflow run release.yml -f package=mcp -f bump=patch",
-    "release:cli": "gh workflow run release.yml -f package=cli -f bump=patch",
     "release:minor": "gh workflow run release.yml -f package=all -f bump=minor",
     "release:major": "gh workflow run release.yml -f package=all -f bump=major"
+  },
+  "dependencies": {
+    "lib0": "^0.2.117",
+    "ws": "^8.21.3",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.32"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
@@ -44,6 +50,7 @@
     "@types/react-dom": "19.2.3",
     "@types/three": "0.184.1",
     "next": "16.3.0",
+    "postcss": "8.5.23",
     "react-grab": "0.1.50",
     "three": "0.185.1"
   },
@@ -60,6 +67,7 @@
   "workspaces": [
     "apps/*",
     "packages/*",
-    "tooling/*"
+    "tooling/*",
+    "!packages/lingo"
   ]
 }

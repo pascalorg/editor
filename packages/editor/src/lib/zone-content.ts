@@ -2,12 +2,15 @@ import {
   type AnyNode,
   type AnyNodeId,
   type CeilingNode,
+  getZoneTakeoffExtensions,
   type ItemNode,
   pointInPolygon2D,
   pointOnSegment,
   type SlabNode,
   type WallNode,
   type ZoneNode,
+  type ZoneTakeoffExtension,
+  type ZoneTakeoffReport,
 } from '@pascal-app/core'
 
 type Point2D = [number, number]
@@ -96,6 +99,79 @@ function wallLiesOnZoneBoundary(wall: WallNode, polygon: Point2D[]): boolean {
   })
 }
 
+/**
+ * The objects standing inside a zone, whatever kind they are.
+ *
+ * Separate from `collectZoneContentIds`, which answers a different question.
+ * That one gathers the fabric a zone is made of — its boundary walls and the
+ * slab and ceiling that match its footprint — plus `item` nodes, and it drives
+ * "Delete with contents". This one answers "what is standing in here", which is
+ * what a contents list shows.
+ *
+ * Kind-agnostic on purpose. `collectZoneContentIds` tests `node.type === 'item'`
+ * and so sees none of the objects a plugin contributes — a rack is
+ * `warehouse:pallet-rack`, not `item` — which is why a zone full of racking
+ * reported nothing inside it. Anything parented to the zone's level that has a
+ * position and is not part of the zone's own fabric is tested here, so a kind
+ * added later is included without this function being touched again.
+ *
+ * Containment is `pointInPolygonWithTolerance`, the same predicate the delete
+ * path uses for items. The repo has several point-in-polygon implementations
+ * with different boundary rules; reusing this one keeps the list agreeing with
+ * the action the user reaches for next.
+ */
+export function collectZoneObjectIds(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  zone: ZoneNode,
+): AnyNodeId[] {
+  const levelId = zone.parentId
+  if (!levelId) return []
+
+  const footprint = zone.polygon.map((point) => [point[0], point[1]] as Point2D)
+
+  // The zone's own fabric, not things standing in it. Walls, slabs and ceilings
+  // are matched by shape rather than by a point, and a zone never contains
+  // another zone.
+  const fabric = new Set(['wall', 'slab', 'ceiling', 'zone'])
+
+  return Object.values(nodes)
+    .filter((node) => {
+      if (node.parentId !== levelId) return false
+      if (fabric.has(node.type)) return false
+      const position = (node as { position?: unknown }).position
+      if (!Array.isArray(position) || position.length < 3) return false
+      const [x, , z] = position as number[]
+      if (typeof x !== 'number' || typeof z !== 'number') return false
+      return pointInPolygonWithTolerance([x, z], footprint)
+    })
+    .map((node) => node.id as AnyNodeId)
+}
+
+/**
+ * Display labels of everything standing in a zone, one entry per node.
+ *
+ * Labels rather than `{ label, count }` pairs, and counting left to the caller,
+ * because this is read through `useShallow`: that compares array elements with
+ * `Object.is`, so a freshly built object is never equal to its predecessor and
+ * the subscription reports a change on every single render. Strings compare by
+ * value, so an unchanged zone yields an unchanged snapshot and the render
+ * settles. Returning objects here once took the editor down with a React 185
+ * render loop the moment a zone's panel opened.
+ */
+export function collectZoneObjectLabels(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  zone: ZoneNode,
+  displayName: (node: AnyNode, nodes: Readonly<Record<AnyNodeId, AnyNode>>) => string,
+): string[] {
+  const labels: string[] = []
+  for (const id of collectZoneObjectIds(nodes, zone)) {
+    const node = nodes[id]
+    if (!node) continue
+    labels.push(displayName(node, nodes) || node.type)
+  }
+  return labels
+}
+
 export function collectZoneContentIds(
   nodes: Readonly<Record<AnyNodeId, AnyNode>>,
   zone: ZoneNode,
@@ -127,4 +203,43 @@ export function collectZoneContentIds(
       ...floorItems.map((item) => item.id as AnyNodeId),
     ]),
   )
+}
+
+const EMPTY_TAKEOFF_REPORTS: readonly ZoneTakeoffReport[] = []
+
+/**
+ * Resolves detailed takeoff reports for the contents standing inside a zone
+ * by evaluating all registered (or explicitly provided) ZoneTakeoffExtensions.
+ *
+ * Discovers content IDs via `collectZoneObjectIds(nodes, zone)`, checks
+ * `supportsZone({ zone, contentIds, nodes })`, invokes `deriveTakeoff(...)`,
+ * and returns `ZoneTakeoffReport[]`.
+ *
+ * Returns a stable empty array when no reports are derived to protect callers
+ * using shallow equality against infinite render loops.
+ */
+export function resolveZoneTakeoffReports(
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+  zone: ZoneNode,
+  extensions?: readonly ZoneTakeoffExtension[],
+): ZoneTakeoffReport[] {
+  const activeExtensions = extensions ?? getZoneTakeoffExtensions()
+  if (!activeExtensions || activeExtensions.length === 0) {
+    return EMPTY_TAKEOFF_REPORTS as ZoneTakeoffReport[]
+  }
+
+  const contentIds = collectZoneObjectIds(nodes, zone)
+  const args = { zone, contentIds, nodes }
+
+  const reports: ZoneTakeoffReport[] = []
+  for (const ext of activeExtensions) {
+    if (ext.supportsZone(args)) {
+      const report = ext.deriveTakeoff(args)
+      if (report) {
+        reports.push(report)
+      }
+    }
+  }
+
+  return reports.length === 0 ? (EMPTY_TAKEOFF_REPORTS as ZoneTakeoffReport[]) : reports
 }

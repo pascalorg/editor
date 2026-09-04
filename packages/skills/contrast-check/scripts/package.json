@@ -1,0 +1,8 @@
+{
+  "name": "contrast-check-scripts",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "wcag-contrast": "^3.0.0"
+  }
+}

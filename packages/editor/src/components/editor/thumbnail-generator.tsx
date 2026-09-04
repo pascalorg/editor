@@ -36,14 +36,38 @@ interface ThumbnailGeneratorProps {
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
 }
 
+/**
+ * Hands the captured image to the browser's download.
+ *
+ * The object URL is revoked on the next task rather than immediately: Safari
+ * reads the href after the click returns, and revoking synchronously gives it
+ * a dead URL and a silently missing file.
+ */
+function saveSnapshotToDisk(blob: Blob, mime: string) {
+  const extension = mime.split('/')[1]?.split('+')[0] ?? 'png'
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  const url = URL.createObjectURL(blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `pascal-snapshot-${stamp}.${extension}`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 0)
+}
+
 /** Metres ahead of a controls-less camera to place the stored snapshot target. */
 const FIRST_PERSON_TARGET_DISTANCE = 8
 
-function clampSnapshotSize(width: number, height: number): { w: number; h: number } {
+function clampSnapshotSize(
+  width: number,
+  height: number,
+  ceiling: number = SNAPSHOT_MAX_EDGE,
+): { w: number; h: number } {
   const maxEdge = Math.max(width, height)
-  if (maxEdge <= SNAPSHOT_MAX_EDGE) return { w: width, h: height }
+  if (maxEdge <= ceiling) return { w: width, h: height }
 
-  const scale = SNAPSHOT_MAX_EDGE / maxEdge
+  const scale = ceiling / maxEdge
   return { w: Math.round(width * scale), h: Math.round(height * scale) }
 }
 
@@ -100,11 +124,18 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       cropRegion?: { x: number; y: number; width: number; height: number },
       standardSize?: { w: number; h: number },
       transparent = false,
+      intent: 'scene-preview' | 'download' = 'scene-preview',
+      encoding?: { mime?: string; quality?: number; maxEdge?: number },
     ) => {
       const standardW = standardSize?.w ?? THUMBNAIL_WIDTH
       const standardH = standardSize?.h ?? THUMBNAIL_HEIGHT
+      const mime = encoding?.mime ?? SNAPSHOT_MIME
+      const quality = encoding?.quality ?? SNAPSHOT_QUALITY
+      const maxEdge = encoding?.maxEdge ?? SNAPSHOT_MAX_EDGE
       if (isGenerating.current) return
-      if (!onThumbnailCaptureRef.current) return
+      // A download needs nowhere to put the image but the user's disk, so it
+      // runs whether or not the host wired up a preview handler.
+      if (intent === 'scene-preview' && !onThumbnailCaptureRef.current) return
 
       isGenerating.current = true
 
@@ -257,7 +288,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           let outH: number
 
           if (captureMode === 'viewport') {
-            ;({ w: outW, h: outH } = clampSnapshotSize(width, height))
+            ;({ w: outW, h: outH } = clampSnapshotSize(width, height, maxEdge))
             const offscreen = document.createElement('canvas')
             offscreen.width = outW
             offscreen.height = outH
@@ -267,8 +298,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             blob = await new Promise<Blob>((resolve, reject) =>
               offscreen.toBlob(
                 (b) => (b ? resolve(b) : reject(new Error('Canvas capture failed'))),
-                SNAPSHOT_MIME,
-                SNAPSHOT_QUALITY,
+                mime,
+                quality,
               ),
             )
           } else if (captureMode === 'area' && cropRegion) {
@@ -276,7 +307,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             const sy = Math.round(cropRegion.y * height)
             const sourceW = Math.round(cropRegion.width * width)
             const sourceH = Math.round(cropRegion.height * height)
-            ;({ w: outW, h: outH } = clampSnapshotSize(sourceW, sourceH))
+            ;({ w: outW, h: outH } = clampSnapshotSize(sourceW, sourceH, maxEdge))
             const offscreen = document.createElement('canvas')
             offscreen.width = outW
             offscreen.height = outH
@@ -286,8 +317,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             blob = await new Promise<Blob>((resolve, reject) =>
               offscreen.toBlob(
                 (b) => (b ? resolve(b) : reject(new Error('Canvas capture failed'))),
-                SNAPSHOT_MIME,
-                SNAPSHOT_QUALITY,
+                mime,
+                quality,
               ),
             )
           } else {
@@ -315,8 +346,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             blob = await new Promise<Blob>((resolve, reject) =>
               offscreen.toBlob(
                 (b) => (b ? resolve(b) : reject(new Error('Canvas capture failed'))),
-                SNAPSHOT_MIME,
-                SNAPSHOT_QUALITY,
+                mime,
+                quality,
               ),
             )
           }
@@ -325,9 +356,25 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           cameraData.resolution = { w: outW, h: outH }
         }
 
-        onThumbnailCaptureRef.current?.(blob, cameraData)
+        if (intent === 'download') {
+          saveSnapshotToDisk(blob, mime)
+        } else {
+          onThumbnailCaptureRef.current?.(blob, cameraData)
+        }
+        // Announce the outcome. `SnapshotCaptureOverlay` sits in 'capturing'
+        // from the moment it asks for a thumbnail and leaves it only on one of
+        // these two events — without them its spinner never stops, whether the
+        // capture worked or not.
+        //
+        // Emitted after the hand-off rather than after the consumer finishes:
+        // `onThumbnailCapture` is fire-and-forget by contract (the app's handler
+        // is async and best-effort, and drops an oversized image without
+        // complaint), so "the capture produced an image and it has been handed
+        // over" is the strongest claim this point can honestly make.
+        emitter.emit('snapshot:saved')
       } catch (error) {
         console.error('❌ Failed to generate thumbnail:', error)
+        emitter.emit('snapshot:failed')
       } finally {
         isGenerating.current = false
       }
@@ -342,8 +389,6 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   //    to their true positions first for a consistent auto-thumbnail angle.
   // The caller owns policy (when to fire, whether the tab is visible).
   useEffect(() => {
-    if (!onThumbnailCapture) return
-
     const handleGenerateThumbnail = async (event: {
       captureMode?: 'standard' | 'viewport' | 'area'
       cropRegion?: { x: number; y: number; width: number; height: number }
@@ -353,6 +398,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       // onto arbitrary palette backgrounds); scene snapshots — studio renders
       // and project thumbnails — composite the theme backdrop + sky.
       transparent?: boolean
+      intent?: 'scene-preview' | 'download'
+      mime?: string
+      quality?: number
+      maxEdge?: number
     }) => {
       await generate(
         event.snapLevels === true,
@@ -360,12 +409,14 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         event.cropRegion,
         event.standardSize,
         event.transparent === true,
+        event.intent ?? 'scene-preview',
+        { mime: event.mime, quality: event.quality, maxEdge: event.maxEdge },
       )
     }
 
     emitter.on('camera-controls:generate-thumbnail', handleGenerateThumbnail)
     return () => emitter.off('camera-controls:generate-thumbnail', handleGenerateThumbnail)
-  }, [generate, onThumbnailCapture])
+  }, [generate])
 
   // Go-to-camera: animate camera to a saved snapshot position/target
   useEffect(() => {

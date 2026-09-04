@@ -6,7 +6,7 @@ import Image from 'next/image'
 import { Fragment } from 'react'
 import { cn } from './../../../lib/utils'
 import useEditor from './../../../store/use-editor'
-import { ActionButton } from './action-button'
+import { ActionButton, COMPACT_GROUP } from './action-button'
 import { MeasurementControl } from './measurement-control'
 
 type ControlId = 'select' | 'box-select' | 'zone' | 'delete'
@@ -50,7 +50,7 @@ const controls: ControlConfig[] = [
   },
 ]
 
-export function ControlModes() {
+export function ControlModes({ compact = false }: { compact?: boolean }) {
   const mode = useEditor((state) => state.mode)
   const phase = useEditor((state) => state.phase)
   const selectionTool = useEditor((state) => state.floorplanSelectionTool)
@@ -95,13 +95,17 @@ export function ControlModes() {
         setStructureLayer('zones')
         armToolMode({ mode: 'build', tool: 'zone' })
       }
+    } else if (id === 'delete') {
+      // Toggle, like zone: clicking the active delete button returns to select
+      // instead of re-arming delete, so the mode never sticks with no way out.
+      armToolMode({ mode: getIsActive('delete') ? 'select' : 'delete' })
     } else {
       armToolMode({ mode: id })
     }
   }
 
   return (
-    <div className="flex items-center gap-1">
+    <div className={cn('flex items-center', compact ? COMPACT_GROUP : 'gap-1')}>
       {controls.map((c) => {
         const ModeIcon = c.icon
         const isImageMode = Boolean(c.imageSrc)

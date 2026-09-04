@@ -1,0 +1,167 @@
+{
+  "root": false,
+  "$schema": "https://biomejs.dev/schemas/2.4.16/schema.json",
+  // House lint stack (D22): Ultracite presets over Biome, triple-pinned —
+  // this file, the lefthook pre-commit command, and the devDeps all name
+  // @biomejs/biome 2.4.16 + ultracite 7.8.2. Config over comments: when a rule
+  // fights how this codebase actually works, turn it off HERE with a reason.
+  "extends": ["ultracite/biome/core", "ultracite/biome/next", "ultracite/biome/react"],
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
+  "files": {
+    "includes": [
+      "!packages/lingo/bench/*.json",
+      // Generated copies of bench data (scripts/sync-site.mjs) — same as the
+      // bench source exclusion above.
+      "!apps/site/src/data/*.json",
+      "!packages/lingo/tests/corpus",
+      "!packages/lingo/demo",
+      "!apps/site/public",
+      // shadcn-managed primitives (house rule, same as the sibling repos):
+      "!apps/site/src/components/ui",
+      "!**/.next*",
+      "!**/dist",
+      "!bun.lock"
+    ]
+  },
+  "formatter": {
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 100
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "single",
+      "jsxQuoteStyle": "double",
+      "semicolons": "asNeeded",
+      "trailingCommas": "all"
+    }
+  },
+  "linter": {
+    "rules": {
+      "style": {
+        // Strict TS + noUncheckedIndexedAccess makes `!` after a guard
+        // idiomatic (hot paths in suggest.ts, registry.ts).
+        "noNonNullAssertion": "off",
+        // Recursive-descent grammar reads as condition chains; nested
+        // ternaries are the established house style here.
+        "noNestedTernary": "off",
+        // `arr[arr.length - 1]` stays: .at() adds a call on D17-measured hot
+        // paths for no semantic gain.
+        "useAtIndex": "off",
+        // Fable- and Codex-authored modules mix T[] / Array<T> and
+        // interface / type by local readability; not worth a churn pass.
+        "useConsistentArrayType": "off",
+        "useConsistentTypeDefinitions": "off",
+        "useShorthandAssign": "off",
+        // Exhaustive switches over closed unions: TS checks them; a default
+        // clause would be dead code.
+        "useDefaultSwitchClause": "off",
+        // Indexed loops with position math (registry matchKey) are the hot
+        // path; for-of over strings allocates an iterator.
+        "useForOf": "off",
+        // Parser state threading mutates parameters deliberately.
+        "noParameterAssign": "off",
+        // Quantity/QuantityRange fields: readonly-ification is a public-API
+        // semantics question, not a lint fix — revisit deliberately.
+        "useReadonlyClassProperties": "off",
+        // Subpath entries (./core, ./date, …) ARE barrels — that's the
+        // packaging design (plan 001); grammar.ts is a load-bearing facade
+        // (imports never moved — see wiki/conventions.md).
+        "noExportedImports": "off",
+        // The lingoInput namespace merge carries the .get() static; DOM
+        // controller constructor properties are deliberate.
+        "noNamespace": "off",
+        "noParameterProperties": "off",
+        // Sole violation is a two-default test helper; reordering its params
+        // would churn call sites for zero clarity gain.
+        "useDefaultParameterLast": "off"
+      },
+      "performance": {
+        // A text parser runs regexes inside functions by design; perf is
+        // gated by the bench suite (D17/D19), not by regex placement.
+        "useTopLevelRegex": "off",
+        "noBarrelFile": "off",
+        // `import * as React` is the required shape for the react entry.
+        "noNamespaceImport": "off",
+        // Single use (errors.ts): builds issue.data minus suggestions on a
+        // fresh copy; the undefined-assign autofix would change
+        // Object.keys() semantics and attach empty data objects.
+        "noDelete": "off"
+      },
+      "complexity": {
+        // Hand-rolled recursive descent (D3): grammar functions are long and
+        // branchy on purpose; splitting them hides the grammar.
+        "noExcessiveCognitiveComplexity": "off",
+        "useLiteralKeys": "off",
+        "noVoid": "off",
+        "noForEach": "off"
+      },
+      "suspicious": {
+        // D17 char-mask prescreen and friends are bitwise by design.
+        "noBitwiseOperators": "off",
+        // Async-contract functions without awaits are deliberate: Next server
+        // actions, Standard Schema validate (async by interface), eval CLI.
+        "useAwait": "off",
+        // `while ((m = scan()))` is the scanner idiom in registry/tests.
+        "noAssignInExpressions": "off",
+        // Empty catch = feature probe (bench harness, clipboard demo).
+        "noEmptyBlockStatements": "off"
+      },
+      "correctness": {
+        // tsc (strict) owns undeclared/ambient-type resolution; biome
+        // false-positives on TS ambient types.
+        "noUndeclaredVariables": "off",
+        // Hook deps are owned by eslint react-hooks (RC sweep green) and
+        // react-doctor triage — deliberate subscribe-only effects exist.
+        "useExhaustiveDependencies": "off",
+        // Public signatures keep reserved params (formatCompound's opts is
+        // documented API surface); internal cases reviewed 2026-07-04.
+        "noUnusedFunctionParameters": "off"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["apps/site/**"],
+      "linter": {
+        "rules": {
+          "security": {
+            // Site-only: shiki-rendered code HTML and JSON-LD structured
+            // data are the two sanctioned dangerouslySetInnerHTML uses.
+            "noDangerouslySetInnerHtml": "off"
+          },
+          "a11y": {
+            // Base UI render-prop anchors (<a aria-label .../> as Button
+            // render) receive slotted children at runtime — biome sees an
+            // empty anchor; the DOM isn't one. WCAG-audited 2026-07-04.
+            "useAnchorContent": "off",
+            // Logo decides decorative-vs-named at runtime (aria-hidden or
+            // accessible name from props) — static analysis can't see it.
+            "noSvgWithoutTitle": "off",
+            // role="group" on styled flex containers stays: fieldset's UA
+            // styling (min-inline-size, borders) breaks the layouts.
+            "useSemanticElements": "off",
+            // Escape/arrow-key handling on the role="dialog" container is
+            // the APG modal pattern.
+            "noNoninteractiveElementInteractions": "off",
+            // role="list" on <ul> is kept deliberately: Safari/VoiceOver drop
+            // list semantics when list-style is removed (Tailwind preflight).
+            "noRedundantRoles": "off"
+          },
+          "suspicious": {
+            // Static split-text (per-char/word spans) and positional JSON
+            // rows never reorder — index keys are correct there.
+            "noArrayIndexKey": "off",
+            // Callback unions keep `| void`: side-effect-only handlers must
+            // stay assignable (undefined would reject inferred-void fns).
+            "noConfusingVoidType": "off"
+          }
+        }
+      }
+    }
+  ]
+}

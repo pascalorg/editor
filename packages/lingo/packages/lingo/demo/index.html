@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>lingo — playground</title>
+    <style>
+    :root {
+      --bg: #0b0d10;
+      --panel: #14181d;
+      --line: #232a32;
+      --text: #e8edf2;
+      --dim: #8b98a5;
+      --accent: #5eead4;
+      --bad: #f87171;
+      --warn: #fbbf24;
+      --ok: #4ade80;
+      color-scheme: dark;
+    }
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      padding: 3rem 1.25rem 6rem;
+      margin: 0;
+      font:
+        15px / 1.55 ui-sans-serif,
+        system-ui,
+        -apple-system,
+        sans-serif;
+      color: var(--text);
+      background: var(--bg);
+    }
+    main {
+      display: grid;
+      gap: 2.5rem;
+      max-width: 880px;
+      margin: 0 auto;
+    }
+    h1 {
+      margin: 0;
+      font-size: 1.6rem;
+      letter-spacing: -0.02em;
+    }
+    h1 span {
+      color: var(--accent);
+    }
+    p.lede {
+      margin: 0.4rem 0 0;
+      color: var(--dim);
+    }
+    section {
+      padding: 1.5rem;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+    }
+    h2 {
+      margin: 0 0 0.25rem;
+      font-size: 1.05rem;
+    }
+    h2 + p {
+      margin: 0 0 1rem;
+      font-size: 0.9rem;
+      color: var(--dim);
+    }
+    input[type="text"] {
+      width: 100%;
+      padding: 0.7rem 0.9rem;
+      font:
+        16px / 1.4 ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        monospace;
+      color: var(--text);
+      outline: none;
+      background: #0e1116;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      transition: border-color 0.12s ease;
+    }
+    input[type="text"]:focus {
+      border-color: var(--accent);
+    }
+    /* lingo state hooks — this is the whole "theme" */
+    input[data-lingo][data-state="invalid"][data-touched] {
+      border-color: var(--bad);
+    }
+    input[data-lingo][data-state="valid"] {
+      border-color: color-mix(in oklab, var(--ok) 45%, var(--line));
+    }
+    input[data-lingo][data-approx] {
+      border-style: dashed;
+    }
+    .hint {
+      min-height: 1.4em;
+      margin-top: 0.45rem;
+      font-size: 0.9rem;
+      color: var(--accent);
+    }
+    .error {
+      min-height: 1.4em;
+      margin-top: 0.25rem;
+      font-size: 0.9rem;
+      color: var(--bad);
+    }
+    pre {
+      padding: 0.9rem 1rem;
+      margin: 0.9rem 0 0;
+      overflow-x: auto;
+      font-size: 12.5px;
+      background: #0e1116;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+      margin-top: 0.8rem;
+    }
+    .chips button {
+      padding: 0.25rem 0.7rem;
+      font-size: 12.5px;
+      color: var(--dim);
+      cursor: pointer;
+      background: transparent;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+    }
+    .chips button:hover {
+      color: var(--text);
+      border-color: var(--accent);
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1rem;
+    }
+    @media (max-width: 640px) {
+      .row {
+        grid-template-columns: 1fr;
+      }
+    }
+    label {
+      display: block;
+      margin-bottom: 0.35rem;
+      font-size: 0.85rem;
+      color: var(--dim);
+    }
+    .ok-badge {
+      color: var(--ok);
+    }
+    .warn-badge {
+      color: var(--warn);
+    }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <h1>lingo-<span>input</span> playground</h1>
+        <p class="lede">Type like a human. Get canonical values. Zero dependencies.</p>
+      </header>
+
+      <section>
+        <h2>Parse anything</h2>
+        <p>Quantities, compounds, ranges, tolerances, conversions, fuzzy words, typos.</p>
+        <input id="free" type="text" value='5&#39;11"' autocomplete="off" spellcheck="false">
+        <div class="chips" id="chips"></div>
+        <pre id="free-out"></pre>
+      </section>
+
+      <section>
+        <h2>A meters-only form field that understands feet</h2>
+        <p>
+          Backend receives canonical meters via a hidden input. Try <code>5'11</code>,
+          <code>180cm</code>, <code>2 f</code> (incomplete ≠ invalid), or <code>banana</code>.
+        </p>
+        <form id="height-form">
+          <div class="row">
+            <div>
+              <label for="height">Your height — any way you like</label>
+              <input id="height" type="text" placeholder='try 5&#39;11" or 180 cm'>
+              <div class="hint" id="height-hint"></div>
+              <div class="error" id="height-error"></div>
+            </div>
+            <div>
+              <label>What the form will submit</label>
+              <pre id="height-submit">–</pre>
+            </div>
+          </div>
+        </form>
+      </section>
+
+      <section>
+        <h2>Two-way</h2>
+        <p>Everything formatted is re-parseable — humanize and dehumanize are the same grammar.</p>
+        <pre id="two-way"></pre>
+      </section>
+    </main>
+
+    <script src="./lingo.demo.js"></script>
+    <script>
+    'use strict'
+    const $ = (s) => document.querySelector(s)
+
+    // --- free parse box
+    const EXAMPLES = [
+      '5\'11"',
+      '72 in to cm',
+      'between 5 and 10 kg',
+      '10 ± 0.5 mm',
+      'an hour and a half',
+      'a few minutes',
+      "it's hot",
+      '1,5 kg',
+      '3×10^5 m',
+      '500 KB',
+      '5 meterz',
+      'under 10 minutes',
+      '1½ cups',
+      'three days ago',
+    ]
+    const chips = $('#chips')
+    for (const ex of EXAMPLES) {
+      const b = document.createElement('button')
+      b.type = 'button'
+      b.textContent = ex
+      b.onclick = () => {
+        $('#free').value = ex
+        renderFree()
+      }
+      chips.append(b)
+    }
+    function renderFree() {
+      const text = $('#free').value
+      let r
+      if (/\b(ago|tomorrow|yesterday|next|last|today|now)\b/i.test(text) && lingo.parseDate) {
+        r = lingo.parseDate(text)
+        if (!r.ok) {
+          r = lingo.lingo(text, { kind: text.match(/hot|cold|warm/i) ? 'temperature' : undefined })
+        }
+      } else {
+        r = lingo.lingo(text, {
+          kind: /hot|cold|warm|freezing|chilly|mild/i.test(text) ? 'temperature' : undefined,
+        })
+      }
+      $('#free-out').textContent = JSON.stringify(
+        r,
+        (k, v) => (v instanceof Date ? v.toString() : v),
+        2,
+      )
+    }
+    $('#free').addEventListener('input', renderFree)
+    renderFree()
+
+    // --- form field (requires the dom layer in the bundle)
+    if (lingo.lingoInput) {
+      const field = lingo.lingoInput($('#height'), {
+        kind: 'length',
+        unit: 'm',
+        name: 'height_m',
+        errorElement: '#height-error',
+        hintElement: '#height-hint',
+      })
+      const show = () => {
+        const hidden = document.querySelector('input[name="height_m"]')
+        $('#height-submit').textContent =
+          hidden && hidden.value ? `height_m = ${hidden.value}` : '–'
+      }
+      $('#height').addEventListener('lingo:change', show)
+      document.addEventListener('input', show)
+    } else {
+      $('#height-hint').textContent =
+        'dom layer not in this bundle yet — run: node scripts/demo.mjs'
+    }
+
+    // --- two-way panel
+    const lines = []
+    try {
+      const q = lingo.parseQuantity('1.9999 m').quantity
+      lines.push(
+        `parse("1.9999 m").format({compound:['ft','in']})  → "${q.format({ compound: ['ft', 'in'] })}"`,
+      )
+      const back = lingo.parseQuantity(q.format({ compound: ['ft', 'in'] })).quantity
+      lines.push(`…parsed back → ${back.to('m').value.toFixed(4)} m  (round-trip ✓)`)
+      lines.push(
+        `quantity(1500,'m').toBest().format() → "${lingo.quantity(1500, 'm').toBest().format()}"`,
+      )
+      lines.push(
+        `describeTemperature(parse("30°C")) → "${lingo.describeTemperature(lingo.parseQuantity('30°C').quantity)}"`,
+      )
+      if (lingo.humanizeDate) {
+        const d = new Date(Date.now() - 3 * 864e5)
+        lines.push(`humanizeDate(threeDaysAgo) → "${lingo.humanizeDate(d)}"`)
+        lines.push(
+          `parseDate(humanizeDate(threeDaysAgo)) → ${lingo.parseDate(lingo.humanizeDate(d)).date.toDateString()}`,
+        )
+      }
+    } catch (e) {
+      lines.push(String(e))
+    }
+    $('#two-way').textContent = lines.join('\n')
+    </script>
+  </body>
+</html>

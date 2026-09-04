@@ -19,7 +19,7 @@ import useEditor from '../../../store/use-editor'
 import { useUploadStore } from '../../../store/use-upload'
 import { SliderControl } from '../controls/slider-control'
 import { Popover, PopoverContent, PopoverTrigger } from '../primitives/popover'
-import { ActionButton } from './action-button'
+import { ActionButton, COMPACT_GROUP } from './action-button'
 
 const MAX_FILE_SIZE = 200 * 1024 * 1024 // 200MB
 const ACCEPTED_FILE_TYPES = '.glb,.gltf,image/jpeg,image/png,image/webp,image/gif'
@@ -119,8 +119,15 @@ function UploadButton({ onError }: { onError: (message: string | null) => void }
           setShowGuides(true)
           setSelectedReferenceId(guide.id)
           setSelection({ selectedIds: [], zoneId: null })
-        } catch {
-          onError('Could not add that guide image.')
+        } catch (error) {
+          // The reason must survive: this path swallowed a secure-context
+          // TypeError for a whole debugging session.
+          console.error('[guide-image]', error)
+          onError(
+            error instanceof Error && error.message
+              ? `Could not add that guide image: ${error.message}`
+              : 'Could not add that guide image.',
+          )
         } finally {
           setIsAddingGuide(false)
         }
@@ -943,9 +950,9 @@ function RiserControl() {
 
 // ── Exports ─────────────────────────────────────────────────────────────────
 
-export function SecondaryToggles() {
+export function SecondaryToggles({ compact = false }: { compact?: boolean }) {
   return (
-    <div className="flex items-center gap-1">
+    <div className={cn('flex items-center', compact ? COMPACT_GROUP : 'gap-1')}>
       <ReferencesControl />
     </div>
   )

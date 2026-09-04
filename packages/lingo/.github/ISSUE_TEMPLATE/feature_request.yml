@@ -1,0 +1,40 @@
+name: ✨ Feature request
+description: A new input form, unit, kind, locale idiom, API, or integration
+labels: ["enhancement", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Concrete inputs and expected outputs are the fastest path to a
+        decision. For locale idioms, one real sentence a native speaker would
+        type is worth a page of description.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What should lingo understand or do?
+      description: Concrete inputs → expected outputs.
+      placeholder: |
+        "2 stone 4 lb"  →  quantity, mass, 14.5 kg
+        "quinze jours"  →  duration, 2 weeks
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: Why
+      description: The use case — form field, LLM tool argument, MCP server, etc.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope notes (optional)
+      description: >
+        Anything you already know: prior art, ambiguity hazards ("oz" is mass
+        and volume), locale concerns. See `plans/` for how specs are written
+        and `wiki/research/locale-idioms.md` for the idiom checklist.
+    validations:
+      required: false

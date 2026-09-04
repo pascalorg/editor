@@ -57,6 +57,9 @@
     "tailwind-merge": "^3.5.0",
     "three-bvh-csg": "^0.0.18",
     "three-mesh-bvh": "~0.9.8",
+    "lib0": "^0.2.117",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.32",
     "zod": ">=4.5.4 <4.6",
     "zustand": "^5.0.11"
   },

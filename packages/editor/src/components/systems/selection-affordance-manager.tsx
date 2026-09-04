@@ -8,6 +8,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, Suspense, useMemo } from 'react'
+import { useIsNodeIdEditLocked } from '../../lib/edit-lock'
 import { getRegistryAffordanceTool } from '../tools/shared/affordance-dispatch'
 import type {
   SelectionAffordanceHistoryApi,
@@ -29,10 +30,12 @@ import type {
  */
 export function SelectionAffordanceManager() {
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const selectedId = selectedIds.length === 1 ? (selectedIds[0] as AnyNodeId) : null
   const selectedNode = useScene((s) => {
-    if (selectedIds.length !== 1) return null
-    return s.nodes[selectedIds[0] as AnyNodeId] ?? null
+    if (!selectedId) return null
+    return s.nodes[selectedId] ?? null
   })
+  const editLocked = useIsNodeIdEditLocked(selectedId)
   const readOnly = useScene((s) => s.readOnly)
   const sceneApi = useMemo(() => createSceneApi(useScene), [])
   const historyApi = useMemo<SelectionAffordanceHistoryApi>(
@@ -73,7 +76,7 @@ export function SelectionAffordanceManager() {
     return getRegistryAffordanceTool(selectedNode.type, 'selection')
   }, [selectedNode])
 
-  if (!(Component && selectedNode)) return null
+  if (!(Component && selectedNode) || editLocked) return null
   return (
     <Suspense fallback={null}>
       <Component

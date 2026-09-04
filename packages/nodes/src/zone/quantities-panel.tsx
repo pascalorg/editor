@@ -1,37 +1,53 @@
 'use client'
 
 import {
+  type AnyNode,
   deriveZoneQuantityReport,
   resolveAutoZonePolygon,
   useLiveNodeOverrides,
+  useRegistryVersion,
   useScene,
   type ZoneNode,
   type ZoneQuantityValue,
+  type ZoneTakeoffReport,
 } from '@pascal-app/core'
 import {
+  ActionButton,
+  collectZoneObjectIds,
+  collectZoneObjectLabels,
   formatAreaLabel,
   formatLinearMeasurement,
   formatVolumeLabel,
   MetricControl,
   PanelSection,
+  resolveNodeDisplayName,
+  resolveZoneTakeoffReports,
   ToggleControl,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
+import { Download } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { deriveZoneRackFootprints, type ZoneRackFootprint } from './zone-racks'
 
 type Point2D = readonly [number, number]
 
-function ZonePlanSketch({
+export function ZonePlanSketch({
   edgeLengths,
   metricNotation,
+  nodes,
   polygon,
+  racks,
   unit,
+  zone,
 }: {
   edgeLengths: readonly number[]
   metricNotation: 'meters' | 'millimeters'
+  nodes?: Readonly<Record<string, AnyNode>>
   polygon: readonly Point2D[]
+  racks?: readonly ZoneRackFootprint[]
   unit: 'metric' | 'imperial'
+  zone?: ZoneNode
 }) {
   if (polygon.length < 3) {
     return (
@@ -63,6 +79,10 @@ function ZonePlanSketch({
     [0, 0] as [number, number],
   )
 
+  const projection = { minX, maxX, minY, maxY, scale, offsetX, offsetY }
+  const effectiveRacks =
+    racks ?? (nodes && zone ? deriveZoneRackFootprints(nodes, zone, projection) : [])
+
   return (
     <svg
       aria-label="Top view with zone edge dimensions"
@@ -84,6 +104,21 @@ function ZonePlanSketch({
         strokeLinejoin="round"
         strokeWidth="1.5"
       />
+      {effectiveRacks.map((rack) => (
+        <g key={rack.id} className="zone-minimap-rack">
+          <polygon
+            data-rack-id={rack.id}
+            fill="#f8fafc"
+            fillOpacity="0.9"
+            points={rack.points
+              .map((point) => `${point[0].toFixed(2)},${point[1].toFixed(2)}`)
+              .join(' ')}
+            stroke="#0e7490"
+            strokeLinejoin="round"
+            strokeWidth="1"
+          />
+        </g>
+      ))}
       {projected.map((start, index) => {
         const end = projected[(index + 1) % projected.length]
         if (!end) return null
@@ -321,6 +356,7 @@ export default function ZoneQuantitiesPanel() {
   const unit = useViewer((state) => state.unit)
   const metricNotation = useViewer((state) => state.metricNotation)
   const nodes = useScene((state) => state.nodes)
+  const registryVersion = useRegistryVersion()
   const zone = selectedZoneId ? (nodes[selectedZoneId] as ZoneNode | undefined) : undefined
   const livePolygon = useLiveNodeOverrides((state) =>
     selectedZoneId ? state.overrides.get(selectedZoneId)?.polygon : undefined,
@@ -355,12 +391,26 @@ export default function ZoneQuantitiesPanel() {
     () => (effectiveZone ? deriveZoneQuantityReport(effectiveZone, effectiveNodes) : null),
     [effectiveNodes, effectiveZone],
   )
+  const takeoffReports = useMemo(() => {
+    if (!effectiveZone) return []
+    // Track registry version to re-derive takeoff reports when plugins load asynchronously
+    void registryVersion
+    return resolveZoneTakeoffReports(effectiveNodes, effectiveZone)
+  }, [effectiveNodes, effectiveZone, registryVersion])
 
   if (!effectiveZone || !report) return null
 
   return (
     <>
       <RoomDocumentationPanel zone={effectiveZone} />
+      {takeoffReports.map((takeoff) => (
+        <ZoneTakeoffSection
+          key={takeoff.id}
+          nodes={effectiveNodes}
+          report={takeoff}
+          zone={effectiveZone}
+        />
+      ))}
       <PanelSection
         title={effectiveZone.spaceRole === 'room' ? 'Room quantities' : 'Zone quantities'}
       >
@@ -382,8 +432,10 @@ export default function ZoneQuantitiesPanel() {
         <ZonePlanSketch
           edgeLengths={report.edgeLengths}
           metricNotation={metricNotation}
+          nodes={effectiveNodes}
           polygon={effectiveZone.polygon}
           unit={unit}
+          zone={effectiveZone}
         />
 
         <div className="flex flex-col gap-1.5">
@@ -407,6 +459,186 @@ export default function ZoneQuantitiesPanel() {
           />
         </div>
       </PanelSection>
+
+      <ZoneContentsSection zone={effectiveZone} />
     </>
+  )
+}
+
+function ZoneTakeoffSection({
+  nodes,
+  report,
+  zone,
+}: {
+  nodes?: Readonly<Record<string, AnyNode>>
+  report: ZoneTakeoffReport
+  zone?: ZoneNode
+}) {
+  const [exporting, setExporting] = useState(false)
+
+  const handleExportBom = async () => {
+    if (!nodes || !zone || exporting) return
+    setExporting(true)
+    try {
+      const contentIds = collectZoneObjectIds(nodes, zone)
+      // @ts-ignore - Dynamically loaded optional external plugin
+      const warehouse = (await import('@ovurrsl/plugin-warehouse')) as any
+      if (
+        typeof warehouse?.calculateWarehouseBOM === 'function' &&
+        typeof warehouse?.exportWarehouseBomPdf === 'function'
+      ) {
+        const bom = warehouse.calculateWarehouseBOM(nodes, {
+          filterNodeIds: contentIds,
+          zoneName: zone.name,
+          scopeLabel: `Zone ${zone.name}`,
+        })
+        await warehouse.exportWarehouseBomPdf(bom)
+      }
+    } catch (error) {
+      console.error('Failed to export Zone Bill of Materials PDF:', error)
+    } finally {
+      setExporting(false)
+    }
+  }
+
+  return (
+    <PanelSection title={report.title}>
+      {report.metrics.length > 0 && (
+        <div className="grid grid-cols-2 gap-1.5">
+          {report.metrics.map((metric) => (
+            <div
+              key={metric.key}
+              className="flex flex-col justify-between rounded-md border border-cyan-950/20 bg-[#f8faf7] p-2 text-slate-950 dark:border-border/60 dark:bg-card dark:text-card-foreground shadow-2xs"
+            >
+              <div className="flex items-center justify-between gap-1 text-muted-foreground text-[10px]">
+                <span className="truncate">{metric.label}</span>
+                {metric.abbreviation && (
+                  <span className="font-mono text-[9px] text-cyan-800 dark:text-cyan-400 font-semibold">
+                    {metric.abbreviation}
+                  </span>
+                )}
+              </div>
+              <div className="mt-1 flex items-baseline gap-1">
+                <span className="font-semibold font-mono text-base tracking-tight text-foreground tabular-nums">
+                  {typeof metric.value === 'number' ? metric.value.toLocaleString() : metric.value}
+                </span>
+              </div>
+              {metric.sublabel && (
+                <span className="mt-0.5 truncate text-[9px] text-muted-foreground">
+                  {metric.sublabel}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {report.breakdown && report.breakdown.length > 0 && (
+        <div className="flex flex-col gap-1.5 pt-1">
+          <div className="font-medium text-[11px] text-muted-foreground">Detailed breakdown</div>
+          {report.breakdown.map((item) => (
+            <div
+              key={item.id}
+              className="flex flex-col rounded-md border border-border/50 bg-muted/20 px-2.5 py-1.5 text-xs"
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <span className="font-medium text-foreground">{item.label}</span>
+                <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
+                  {typeof item.count === 'number' ? item.count.toLocaleString() : item.count}
+                </span>
+              </div>
+              {item.details && (
+                <div className="mt-0.5 text-[10px] text-muted-foreground">{item.details}</div>
+              )}
+              {item.submetrics && item.submetrics.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 border-border/40 border-t pt-1 font-mono text-[10px] text-muted-foreground">
+                  {item.submetrics.map((sub, sIdx) => (
+                    <span key={sIdx}>
+                      <span className="text-muted-foreground/70">{sub.label}: </span>
+                      <span className="text-foreground">
+                        {typeof sub.value === 'number' ? sub.value.toLocaleString() : sub.value}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {nodes && zone && (
+        <div className="pt-2">
+          <ActionButton
+            disabled={exporting}
+            icon={<Download className="h-3.5 w-3.5" />}
+            label={exporting ? 'Exporting BOM...' : 'Export Bill of Materials'}
+            onClick={handleExportBom}
+          />
+        </div>
+      )}
+    </PanelSection>
+  )
+}
+
+/**
+ * What is standing in this zone, grouped by kind.
+ *
+ * Grouped rather than listed one row per node: a zone of racking is a hundred
+ * identical entries, and "Pallet Rack x 96" is the answer to "what is in here",
+ * where ninety-six rows of the same words is not.
+ */
+function ZoneContentsSection({ zone }: { zone: ZoneNode | undefined }) {
+  /**
+   * The selector returns STRINGS, and the grouping happens outside it.
+   *
+   * `useShallow` compares array elements with `Object.is`, so a selector that
+   * builds fresh `{ label, count }` objects is never equal to its own previous
+   * result. The snapshot then counts as changed on every render, which is an
+   * infinite render loop — React 185, and the panel took the whole editor down
+   * with it. Every other `useShallow` in this codebase maps ids to nodes that
+   * already exist; none constructs a new object, and that is the reason.
+   *
+   * `effectiveZone` rather than the stored zone, so the count tracks the
+   * polygon actually on screen while a zone is dragged or is derived from its
+   * boundary walls.
+   */
+  const labels = useScene(
+    useShallow((state) =>
+      zone ? collectZoneObjectLabels(state.nodes, zone, resolveNodeDisplayName) : [],
+    ),
+  )
+
+  const groups = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const label of labels) counts.set(label, (counts.get(label) ?? 0) + 1)
+    return [...counts.entries()]
+      .map(([label, count]) => ({ label, count }))
+      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label))
+  }, [labels])
+
+  const total = labels.length
+
+  return (
+    <PanelSection title="Zone contents">
+      {groups.length === 0 ? (
+        <p className="text-muted-foreground text-xs">Nothing standing in this zone.</p>
+      ) : (
+        <div className="flex flex-col gap-1.5">
+          {groups.map((group) => (
+            <div className="flex items-baseline justify-between gap-3 text-xs" key={group.label}>
+              <span className="min-w-0 truncate text-foreground">{group.label}</span>
+              <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
+                {group.count}
+              </span>
+            </div>
+          ))}
+          <div className="mt-1 flex items-baseline justify-between gap-3 border-border/50 border-t pt-1.5 text-xs">
+            <span className="text-muted-foreground">Total</span>
+            <span className="shrink-0 font-mono text-foreground tabular-nums">{total}</span>
+          </div>
+        </div>
+      )}
+    </PanelSection>
   )
 }

@@ -40,6 +40,7 @@ import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
 import { setGroupsSortedByMaterial } from '../../lib/geometry-groups'
+import { freezeObjectTransform } from '../../lib/static-transform'
 import { timeSpan } from '../../lib/perf-tracks'
 import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
 import { clearLevelMiterCache, getCachedLevelMiters } from './level-miter-cache'
@@ -827,6 +828,12 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   mesh.position.set(node.start[0], slabElevation, node.start[1])
   const angle = Math.atan2(node.end[1] - node.start[1], node.end[0] - node.start[0])
   mesh.rotation.y = -angle
+  // Duvar mesh'inin transformunu YALNIZ bu fonksiyon yazar (canlı sürükleme
+  // dahil — override'lı düğüm buradan geçer), o yüzden burada damgalayıp
+  // dondurmak güvenli: 456 duvar kare başına matris compose etmeyi bırakır,
+  // her geometri güncellemesi donmuş matrisi yeniden damgalar. Sıra tuzağı
+  // için lib/static-transform.ts.
+  freezeObjectTransform(mesh)
 }
 
 const WALL_UV_Y_AXIS = new THREE.Vector3(0, 1, 0)

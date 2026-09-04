@@ -15,7 +15,7 @@ export const doorParametrics: ParametricDescriptor<DoorNode> = {
       label: 'Dimensions',
       fields: [
         { key: 'width', kind: 'number', unit: 'm', min: 0.5, max: 1000, step: 0.05 },
-        { key: 'height', kind: 'number', unit: 'm', min: 1.0, max: 1000, step: 0.05 },
+        { key: 'height', kind: 'number', unit: 'm', min: 1.0, step: 0.05 },
       ],
     },
     {

@@ -1,0 +1,56 @@
+import { defineKind } from '../core/types'
+
+export const current = defineKind({
+  kind: 'current',
+  baseUnit: 'A',
+  units: [
+    {
+      id: 'μA',
+      symbol: 'μA',
+      name: 'microampere',
+      aliases: ['microamperes', 'microamp', 'microamps', 'uA'],
+      factor: 1e-6,
+      system: 'shared',
+      best: 0,
+    },
+    {
+      id: 'mA',
+      symbol: 'mA',
+      name: 'milliampere',
+      aliases: ['milliamperes', 'milliamp', 'milliamps'],
+      caseExact: ['mA'],
+      factor: 1e-3,
+      system: 'shared',
+      best: 1,
+    },
+    {
+      id: 'A',
+      symbol: 'A',
+      name: 'ampere',
+      aliases: ['amperes', 'amp', 'amps'],
+      caseExact: ['A'],
+      factor: 1,
+      system: 'shared',
+      best: 2,
+    },
+    {
+      id: 'kA',
+      symbol: 'kA',
+      name: 'kiloampere',
+      aliases: ['kiloamperes', 'kiloamp', 'kiloamps'],
+      factor: 1000,
+      system: 'shared',
+      best: 3,
+    },
+    {
+      id: 'MA',
+      symbol: 'MA',
+      name: 'megaampere',
+      aliases: ['megaamperes', 'megaamp', 'megaamps'],
+      caseExact: ['MA'],
+      factor: 1e6,
+      system: 'shared',
+      best: 4,
+    },
+  ],
+} as const)

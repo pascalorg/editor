@@ -1,0 +1,133 @@
+name: Deploy bundle
+
+# Plugins compile into the app, so a plugin release only reaches the site
+# through a rebuild. Run this after pinning a new plugin commit, or send a
+# repository_dispatch from the plugin repo to have it run itself.
+on:
+  workflow_dispatch:
+  push:
+    branches: [integration]
+    paths:
+      - 'apps/editor/**'
+      - 'packages/**'
+      - 'bun.lock'
+  repository_dispatch:
+    types: [plugin-updated]
+
+concurrency:
+  group: deploy-bundle
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+          MYSQL_DATABASE: digitaltwin
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.0
+
+
+      # The hoisted linker keeps the standalone output free of symlinks, which
+      # break once the host moves the deployed directory.
+      - name: Install
+        run: bun install --linker=hoisted
+
+      - name: Build
+        run: bunx turbo run build --filter=editor
+
+      # The standalone output omits both of these by design.
+      - name: Complete the standalone output
+        run: |
+          mkdir -p apps/editor/.next/standalone/apps/editor/public \
+                   apps/editor/.next/standalone/apps/editor/.next/static
+          cp -r apps/editor/public/. apps/editor/.next/standalone/apps/editor/public/
+          cp -r apps/editor/.next/static/. apps/editor/.next/standalone/apps/editor/.next/static/
+
+      # Lift the app to the top level: the host picks the directory holding
+      # package.json, and a nested second one sends it to the wrong place.
+      - name: Assemble the bundle
+        run: |
+          mkdir -p bundle
+          cp -a apps/editor/.next/standalone/apps/editor/.next bundle/.next
+          cp -a apps/editor/.next/standalone/apps/editor/public bundle/public
+          cp -a apps/editor/.next/standalone/apps/editor/server.js bundle/server.js
+          cp .github/deploy/package.json bundle/package.json
+          cp .github/deploy/README.md bundle/README.md
+          cp .github/deploy/setup-native.mjs bundle/setup-native.mjs
+          # The boot hook runs these against the live database; they are read
+          # from disk at runtime, so they must travel with the bundle.
+          cp -a apps/editor/panel/migrations bundle/panel-migrations
+          printf 'node_modules/\n' > bundle/.gitignore
+
+      # MySQL is required in production: with no database configured the
+      # server must refuse to boot rather than silently write to a local
+      # SQLite file the host wipes on release.
+      - name: Smoke test — boot without a database must fail
+        run: |
+          cd bundle
+          npm install --no-audit --no-fund
+          npm run build
+          set +e
+          timeout 20 node server.js
+          status=$?
+          set -e
+          if [ "$status" = "0" ] || [ "$status" = "124" ]; then
+            echo "server started (or kept running) without a database; expected a startup failure"
+            exit 1
+          fi
+          echo "refused to boot without a database (exit $status), as intended"
+
+      - name: Smoke test — serve against MySQL
+        env:
+          DIGITALTWIN_MYSQL_URL: mysql://root@127.0.0.1:3306/digitaltwin
+        run: |
+          cd bundle
+          node server.js &
+          for _ in $(seq 1 30); do
+            sleep 2
+            body=$(curl -s http://127.0.0.1:3000/api/health || true)
+            echo "$body" | grep -q '"status":"ok"' && break
+          done
+          echo "health: $body"
+          echo "$body" | grep -q '"backend":"mysql"' || { echo "expected backend=mysql"; exit 1; }
+          echo "$body" | grep -q '"db":"ok"' || { echo "expected db=ok"; exit 1; }
+          curl -sf -o /dev/null http://127.0.0.1:3000/ || { echo "home page failed"; exit 1; }
+
+      # The bundle is a fresh tree force-pushed over the deployment repository,
+      # which would drop a `.env` committed there to survive a panel that
+      # forgets its variables. Carry the published one across.
+      - name: Publish
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          cd bundle
+          rm -rf node_modules
+          remote="https://x-access-token:${DEPLOY_TOKEN}@github.com/ovurrsl/digitaltwin.git"
+          git init -q
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git remote add origin "$remote"
+          if git fetch -q --depth=1 origin main 2>/dev/null; then
+            if git cat-file -e FETCH_HEAD:.env 2>/dev/null; then
+              git show FETCH_HEAD:.env > .env
+              echo "carried the existing .env across (contents not logged)"
+            fi
+          fi
+          git add -A
+          git commit -q -m "Build from ${GITHUB_SHA::7}"
+          git push -q --force "$remote" HEAD:main

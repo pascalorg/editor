@@ -15,6 +15,7 @@ import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { OrthographicCamera, Plane, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
+import { isNodeIdEditLocked } from '../../lib/edit-lock'
 import { isHistoryShortcut } from '../../lib/history'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useEditor from '../../store/use-editor'
@@ -70,13 +71,21 @@ export function GroupRotateHandle() {
   const nodes = useScene((s) => s.nodes)
   // Re-measure the pivot/corner once the meshes settle after a scene change.
   const meshEpoch = useMeshSettleEpoch(nodes)
+  // Lock state feeds the participant filter; subscribe so a lock toggle re-derives it.
+  const sceneLocked = useViewer((s) => s.sceneLocked)
+  const lockedCategories = useViewer((s) => s.lockedCategories)
+  const lockActive = sceneLocked || lockedCategories.size > 0
 
+  // Locked nodes are excluded from the rotated set (they stay put); if fewer
+  // than two transformable nodes remain, the gizmo does not appear.
   const participantIds = useMemo(
     () =>
       selectedIds.filter(
-        (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
+        (id) =>
+          classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null &&
+          !(lockActive && isNodeIdEditLocked(id as AnyNodeId)),
       ),
-    [selectedIds, levelId, nodes],
+    [selectedIds, levelId, nodes, lockActive],
   )
 
   // Gate on the explicit selection (so a single connected wall still gets the

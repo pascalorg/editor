@@ -1,0 +1,83 @@
+name: Extension Repository (GitHub Pages)
+
+# Publishes a Blender remote extension repository at
+#   https://pascalorg.github.io/pascal-blender/index.json
+# Users add that URL once in Preferences > Get Extensions > Repositories
+# (+ > Add Remote Repository) and install + auto-update from inside Blender.
+# archive_url entries are rewritten to point at the GitHub Release assets so
+# Pages only hosts the small index + HTML listing.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  publish-repo:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download the latest release zip
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p site
+          # Only the latest version goes in the index — Blender resolves one
+          # entry per extension id, and older zips stay downloadable from
+          # their GitHub Releases anyway.
+          gh release download --pattern "*.zip" --dir site
+          ls -la site
+
+      - name: Download Blender 4.5 LTS
+        run: |
+          curl -L https://download.blender.org/release/Blender4.5/blender-4.5.3-linux-x64.tar.xz -o blender.tar.xz
+          mkdir blender && tar -xf blender.tar.xz -C blender --strip-components=1
+
+      - name: Generate extension repository index
+        run: ./blender/blender --command extension server-generate --repo-dir site --html
+
+      - name: Point archive URLs at GitHub Release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - << 'EOF'
+          import json, re, subprocess
+
+          index_path = "site/index.json"
+          index = json.load(open(index_path))
+          releases = json.loads(subprocess.check_output(
+              ["gh", "release", "list", "--json", "tagName"]).decode())
+          tags = [r["tagName"] for r in releases]
+          for entry in index["data"]:
+              zip_name = entry["archive_url"].lstrip("./")
+              version = entry["version"]
+              tag = next((t for t in tags if t.lstrip("v") == version), None)
+              if tag:
+                  entry["archive_url"] = (
+                      "https://github.com/pascalorg/pascal-blender/releases/download/"
+                      f"{tag}/{zip_name}"
+                  )
+          json.dump(index, open(index_path, "w"), indent=1)
+          EOF
+          # zips no longer need to be hosted on Pages
+          rm -f site/*.zip
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

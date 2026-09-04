@@ -18,6 +18,8 @@ export type {
 } from './handles'
 export {
   bakePolicyOf,
+  categoryOf,
+  categoryOfDef,
   discoverPlugins,
   extendPluginDiscovery,
   getHostRefFields,
@@ -25,10 +27,12 @@ export {
   getNodePluginId,
   getRegistryVersion,
   getSelectableKinds,
+  getZoneTakeoffExtensions,
   hasRegistry3DMoveTool,
   isDrawnViaTool,
   isDrawnViaToolKind,
   isNodeKindEnabled,
+  isPluginContributedKind,
   isPresettable,
   isPresettableKind,
   isRegistryMovable,
@@ -40,8 +44,10 @@ export {
   onRegistryChange,
   type PluginDiscovery,
   registerNode,
+  registerZoneTakeoffExtension,
   resolveFacingIndicator,
   setPluginDiscovery,
+  type VisibilityCategory,
 } from './registry'
 export {
   type CascadeContext,
@@ -166,4 +172,20 @@ export type {
   ToolOption,
   ToolOptionChoice,
   Vec2,
+  ZoneTakeoffBreakdownItem,
+  ZoneTakeoffExtension,
+  ZoneTakeoffMetric,
+  ZoneTakeoffReport,
 } from './types'
+export { useRegistryVersion } from './use-registry-version'
+export {
+  PluginManager,
+  pluginManager,
+  type LazyPluginAuthor,
+  type LazyPluginDescriptor,
+  type LazyPluginLoadedResult,
+  type PanelRegistrar,
+  type PluginManagerSnapshot,
+  type PluginState,
+  type PluginStatus,
+} from './plugin-manager'

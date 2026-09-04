@@ -2,6 +2,7 @@ import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
 import type { AnyNode, AnyNodeId, AnyNodeType } from '@pascal-app/core/schema'
 import type { ActiveSceneMeta, Patch, SceneBridge, ValidationResult } from '../bridge/scene-bridge'
 import type {
+  PresenceClaim,
   ProjectCreateOptions,
   ProjectStatus,
   SceneEvent,
@@ -10,7 +11,11 @@ import type {
   SceneListOptions,
   SceneMeta,
   SceneMutateOptions,
+  ScenePresence,
+  SceneRevisionMeta,
   SceneSaveOptions,
+  SceneShare,
+  SceneShareRole,
   SceneStore,
   SceneWithGraph,
 } from '../storage/types'
@@ -73,6 +78,37 @@ export interface SceneOperations {
   renameStoredScene(id: string, newName: string, options?: SceneMutateOptions): Promise<SceneMeta>
   appendSceneEvent(options: SceneEventAppendOptions): Promise<SceneEvent | null>
   listSceneEvents(id: string, options?: SceneEventListOptions): Promise<SceneEvent[]>
+
+  readonly canShareScenes: boolean
+  listSceneShares(sceneId: string): Promise<SceneShare[]>
+  setSceneShares(sceneId: string, shares: SceneShare[], grantedBy?: string | null): Promise<void>
+  getSceneShareRole(sceneId: string, userId: string): Promise<SceneShareRole | null>
+
+  readonly canReadSceneRevisions: boolean
+  readonly canUpdateThumbnail: boolean
+  listSceneRevisions(sceneId: string): Promise<SceneRevisionMeta[]>
+  loadSceneRevision(sceneId: string, version: number): Promise<SceneGraph | null>
+  updateSceneThumbnail(sceneId: string, thumbnailUrl: string | null): Promise<void>
+
+  readonly canTrackPresence: boolean
+  touchScenePresence(
+    sceneId: string,
+    userId: string,
+    email: string | null,
+    opts: { claimEditor: boolean },
+  ): Promise<PresenceClaim>
+  transferPresenceEditor(
+    sceneId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<PresenceClaim>
+  transferScenePresenceEditor?(
+    sceneId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<PresenceClaim>
+  listScenePresence(sceneId: string): Promise<ScenePresence[]>
+  releaseScenePresence(sceneId: string, userId: string): Promise<void>
 }
 
 export function createSceneOperations(options: CreateSceneOperationsOptions): SceneOperations {
@@ -106,6 +142,33 @@ class SceneOperationsFacade implements SceneOperations {
 
   get canListSceneEvents(): boolean {
     return typeof this.#store?.listSceneEvents === 'function'
+  }
+
+  get canShareScenes(): boolean {
+    return (
+      typeof this.#store?.listSceneShares === 'function' &&
+      typeof this.#store?.setSceneShares === 'function' &&
+      typeof this.#store?.getSceneShareRole === 'function'
+    )
+  }
+
+  get canReadSceneRevisions(): boolean {
+    return (
+      typeof this.#store?.listSceneRevisions === 'function' &&
+      typeof this.#store?.loadSceneRevision === 'function'
+    )
+  }
+
+  get canUpdateThumbnail(): boolean {
+    return typeof this.#store?.updateThumbnail === 'function'
+  }
+
+  get canTrackPresence(): boolean {
+    return (
+      typeof this.#store?.touchPresence === 'function' &&
+      typeof this.#store?.listScenePresence === 'function' &&
+      typeof this.#store?.releaseScenePresence === 'function'
+    )
   }
 
   get canCreateProject(): boolean {
@@ -309,6 +372,87 @@ class SceneOperationsFacade implements SceneOperations {
       throw new Error('scene_events_unavailable')
     }
     return store.listSceneEvents(id, options)
+  }
+
+  async listSceneShares(sceneId: string): Promise<SceneShare[]> {
+    const store = this.requireStore()
+    if (!store.listSceneShares) throw new Error('scene_shares_unavailable')
+    return store.listSceneShares(sceneId)
+  }
+
+  async setSceneShares(
+    sceneId: string,
+    shares: SceneShare[],
+    grantedBy?: string | null,
+  ): Promise<void> {
+    const store = this.requireStore()
+    if (!store.setSceneShares) throw new Error('scene_shares_unavailable')
+    return store.setSceneShares(sceneId, shares, grantedBy)
+  }
+
+  async getSceneShareRole(sceneId: string, userId: string): Promise<SceneShareRole | null> {
+    const store = this.requireStore()
+    if (!store.getSceneShareRole) throw new Error('scene_shares_unavailable')
+    return store.getSceneShareRole(sceneId, userId)
+  }
+
+  async listSceneRevisions(sceneId: string): Promise<SceneRevisionMeta[]> {
+    const store = this.requireStore()
+    if (!store.listSceneRevisions) throw new Error('scene_revisions_unavailable')
+    return store.listSceneRevisions(sceneId)
+  }
+
+  async loadSceneRevision(sceneId: string, version: number): Promise<SceneGraph | null> {
+    const store = this.requireStore()
+    if (!store.loadSceneRevision) throw new Error('scene_revisions_unavailable')
+    return store.loadSceneRevision(sceneId, version)
+  }
+
+  async updateSceneThumbnail(sceneId: string, thumbnailUrl: string | null): Promise<void> {
+    const store = this.requireStore()
+    if (!store.updateThumbnail) throw new Error('thumbnail_unavailable')
+    return store.updateThumbnail(sceneId, thumbnailUrl)
+  }
+
+  async touchScenePresence(
+    sceneId: string,
+    userId: string,
+    email: string | null,
+    opts: { claimEditor: boolean },
+  ): Promise<PresenceClaim> {
+    const store = this.requireStore()
+    if (!store.touchPresence) throw new Error('presence_unavailable')
+    return store.touchPresence(sceneId, userId, email, opts)
+  }
+
+  async transferPresenceEditor(
+    sceneId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<PresenceClaim> {
+    const store = this.requireStore()
+    if (!store.transferPresenceEditor) throw new Error('presence_unavailable')
+    return store.transferPresenceEditor(sceneId, fromUserId, toUserId)
+  }
+
+  async transferScenePresenceEditor(
+    sceneId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<PresenceClaim> {
+    return this.transferPresenceEditor(sceneId, fromUserId, toUserId)
+  }
+
+  async listScenePresence(sceneId: string): Promise<ScenePresence[]> {
+    const store = this.requireStore()
+    if (!store.listScenePresence) throw new Error('presence_unavailable')
+    return store.listScenePresence(sceneId)
+  }
+
+  async releaseScenePresence(sceneId: string, userId: string): Promise<void> {
+    const store = this.requireStore()
+    if (!store.releaseScenePresence) throw new Error('presence_unavailable')
+    return store.releaseScenePresence(sceneId, userId)
   }
 
   private requireBridge(): SceneBridge {

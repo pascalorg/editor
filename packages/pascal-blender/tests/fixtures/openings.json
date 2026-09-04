@@ -1,0 +1,200 @@
+{
+  "nodes": {
+    "building_openings0000001": {
+      "object": "node",
+      "id": "building_openings0000001",
+      "type": "building",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "level_openings000000001"
+      ]
+    },
+    "level_openings000000001": {
+      "object": "node",
+      "id": "level_openings000000001",
+      "type": "level",
+      "parentId": "building_openings0000001",
+      "visible": true,
+      "metadata": {},
+      "level": 0,
+      "children": [
+        "slab_openings0000000001",
+        "wall_openings0000000001",
+        "wall_openings0000000002"
+      ]
+    },
+    "slab_openings0000000001": {
+      "object": "node",
+      "id": "slab_openings0000000001",
+      "type": "slab",
+      "parentId": "level_openings000000001",
+      "visible": true,
+      "metadata": {},
+      "polygon": [
+        [
+          0,
+          0
+        ],
+        [
+          10,
+          0
+        ],
+        [
+          10,
+          6
+        ],
+        [
+          0,
+          6
+        ]
+      ],
+      "elevation": 0.05
+    },
+    "wall_openings0000000001": {
+      "object": "node",
+      "id": "wall_openings0000000001",
+      "type": "wall",
+      "parentId": "level_openings000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        0,
+        0
+      ],
+      "end": [
+        10,
+        0
+      ],
+      "thickness": 0.15,
+      "height": 2.8,
+      "children": [
+        "door_openings0000000001",
+        "window_openings000000001"
+      ]
+    },
+    "wall_openings0000000002": {
+      "object": "node",
+      "id": "wall_openings0000000002",
+      "type": "wall",
+      "parentId": "level_openings000000001",
+      "visible": true,
+      "metadata": {},
+      "start": [
+        0,
+        0
+      ],
+      "end": [
+        0,
+        6
+      ],
+      "children": [
+        "window_openings000000002"
+      ]
+    },
+    "door_openings0000000001": {
+      "object": "node",
+      "id": "door_openings0000000001",
+      "type": "door",
+      "parentId": "wall_openings0000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        2.0,
+        1.05,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "side": "front",
+      "wallId": "wall_openings0000000001",
+      "width": 0.9,
+      "height": 2.1,
+      "hingesSide": "right",
+      "swingDirection": "outward",
+      "segments": [
+        {
+          "type": "glass",
+          "heightRatio": 0.3,
+          "columnRatios": [
+            0.5,
+            0.5
+          ],
+          "dividerThickness": 0.03
+        },
+        {
+          "type": "panel",
+          "heightRatio": 0.5,
+          "columnRatios": [
+            1
+          ],
+          "panelDepth": -0.01,
+          "panelInset": 0.05
+        },
+        {
+          "type": "empty",
+          "heightRatio": 0.2
+        }
+      ],
+      "handle": true,
+      "handleHeight": 1.05,
+      "handleSide": "left",
+      "panicBar": true,
+      "panicBarHeight": 1.0,
+      "doorCloser": true
+    },
+    "window_openings000000001": {
+      "object": "node",
+      "id": "window_openings000000001",
+      "type": "window",
+      "parentId": "wall_openings0000000001",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        6.0,
+        1.5,
+        0
+      ],
+      "rotation": [
+        0,
+        3.141592653589793,
+        0
+      ],
+      "side": "back",
+      "wallId": "wall_openings0000000001",
+      "width": 2.0,
+      "height": 1.2,
+      "columnRatios": [
+        0.6,
+        0.4
+      ],
+      "rowRatios": [
+        0.5,
+        0.5
+      ],
+      "sill": true,
+      "sillDepth": 0.1
+    },
+    "window_openings000000002": {
+      "object": "node",
+      "id": "window_openings000000002",
+      "type": "window",
+      "parentId": "wall_openings0000000002",
+      "visible": true,
+      "metadata": {},
+      "position": [
+        3.0,
+        1.5,
+        0
+      ],
+      "sill": false
+    }
+  },
+  "rootNodeIds": [
+    "building_openings0000001"
+  ]
+}

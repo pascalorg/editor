@@ -1,0 +1,9 @@
+{
+  "name": "image-analysis-scripts",
+  "private": true,
+  "type": "commonjs",
+  "dependencies": {
+    "extract-colors": "^4.2.1",
+    "get-pixels": "^3.3.3"
+  }
+}

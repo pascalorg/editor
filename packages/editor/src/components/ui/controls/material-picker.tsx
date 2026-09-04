@@ -31,7 +31,7 @@ export type MaterialPickerProps = {
 // No 'All': the browse surfaces (Items / Rooms / Build) dropped it and default
 // to the Pascal library — the combined list buried the curated set.
 const SOURCE_FILTERS: { id: MaterialSourceFilter; label: string }[] = [
-  { id: 'pascal', label: 'Pascal' },
+  { id: 'pascal', label: 'DigitalTwin' },
   { id: 'mine', label: 'Mine' },
   { id: 'workspace', label: 'Workspace' },
   { id: 'community', label: 'Community' },

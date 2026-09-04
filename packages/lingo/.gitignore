@@ -1,0 +1,32 @@
+# dependencies & caches
+node_modules/
+.turbo/
+
+# build output
+dist/
+coverage/
+*.tsbuildinfo
+
+# next.js (site variants; apps/site/.gitignore covers the standard set)
+.next-dev/
+.next-build/
+
+# generated artifacts (rebuilt by scripts — never hand-edited)
+packages/lingo/demo/lingo.demo.js
+packages/lingo/bench/ai-eval.json
+
+# env — commit only *.example
+.env*
+!.env.example
+
+# local tool state (agent skill caches may reappear anywhere)
+.claude/settings.local.json
+/.playwright-mcp
+**/.agents/
+**/skills/react-doctor/
+
+# os / logs
+*.log
+.DS_Store
+.vercel
+/video

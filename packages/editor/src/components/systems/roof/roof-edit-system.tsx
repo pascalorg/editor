@@ -31,6 +31,7 @@ import * as THREE from 'three'
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { LineBasicNodeMaterial, MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
+import { useIsNodeIdEditLocked } from '../../../lib/edit-lock'
 import { isHistoryShortcut } from '../../../lib/history'
 import { getHoveredRoofSegmentOutlineProxyName } from '../../../lib/roof-hover-outline-proxy'
 import useInteractionScope, { useMovingNode } from '../../../store/use-interaction-scope'
@@ -1029,6 +1030,7 @@ function RoofTrimHandles() {
     return node?.type === 'roof-segment' ? (node as RoofSegmentNode) : null
   })
   const readOnly = useScene((s) => s.readOnly)
+  const editLocked = useIsNodeIdEditLocked(selectedId)
   const liveOverrideKey = useLiveNodeOverrides((s) =>
     segment ? JSON.stringify(s.overrides.get(segment.id) ?? null) : null,
   )
@@ -1059,7 +1061,8 @@ function RoofTrimHandles() {
 
   const showTrimPlanes = shouldShowTrimPlanes(liveSegment?.metadata)
 
-  if (readOnly || !segment || !liveSegment || !showTrimPlanes) return null
+  // A locked roof exposes no trim-drag handles (Structure lock / sceneLocked).
+  if (editLocked || readOnly || !segment || !liveSegment || !showTrimPlanes) return null
 
   const trim = normalizeRoofSegmentTrim(liveSegment)
   const activeRh = getActiveRoofHeight(liveSegment)

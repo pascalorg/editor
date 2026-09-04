@@ -1,0 +1,17 @@
+schema_version = "1.0.0"
+
+id = "pascal_blender"
+version = "0.2.1"
+name = "Pascal Scene Importer"
+tagline = "Import Pascal editor scenes as clean, lossless Blender projects"
+maintainer = "Julien Brissonneau"
+type = "add-on"
+website = "https://github.com/pascalorg/pascal-blender"
+tags = ["Import-Export", "Scene"]
+license = ["SPDX:MIT"]
+
+blender_version_min = "4.2.0"
+
+[permissions]
+network = "Download GLB furniture assets referenced by the scene"
+files = "Cache downloaded assets"

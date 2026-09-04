@@ -20,6 +20,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { memo, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from 'react'
 import { create } from 'zustand'
 import { GROUP_MOVE_DRAG_LABEL, GROUP_ROTATE_DRAG_LABEL } from '../../lib/contextual-help'
+import { isNodeIdEditLocked } from '../../lib/edit-lock'
 import { applyFloorplanAlignment } from '../../lib/floorplan/apply-alignment'
 import { clientToPlan } from '../../lib/floorplan/plan-coords'
 import { isHistoryShortcut } from '../../lib/history'
@@ -95,6 +96,9 @@ export function startFloorplanGroupMove(
 ): boolean {
   const { selectedIds, levelId } = useViewer.getState().selection
   if (selectedIds.length < 2 || !selectedIds.includes(nodeId)) return false
+  // Grabbing the move dot of a locked node never arms a move — parity with the
+  // 3D group move (armGroupMove3d).
+  if (isNodeIdEditLocked(nodeId)) return false
   const sceneNodes = useScene.getState().nodes
   // The pressed element itself must transform — dragging a selected door /
   // window (which rides its host wall) keeps today's single-node behavior.
@@ -120,7 +124,9 @@ export function startFloorplanGroupMove(
   const engage = (): Session | null => {
     const nodes = useScene.getState().nodes
     const participantIds = selectedIds.filter(
-      (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
+      (id) =>
+        classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null &&
+        !isNodeIdEditLocked(id as AnyNodeId),
     )
     // Move the full connected wall/fence component, mirroring the 3D gizmo.
     const fullIds = expandToComponent(participantIds, nodes, levelId)
@@ -407,8 +413,12 @@ export function startFloorplanGroupRotate(event: {
   const { selectedIds, levelId } = useViewer.getState().selection
   if (selectedIds.length < 2) return false
   const nodes = useScene.getState().nodes
+  // Locked nodes are excluded from the rotated set (they stay put); parity with
+  // the 3D group rotate gizmo.
   const participantIds = selectedIds.filter(
-    (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
+    (id) =>
+      classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null &&
+      !isNodeIdEditLocked(id as AnyNodeId),
   )
   if (participantIds.length === 0) return false
   const fullIds = expandToComponent(participantIds, nodes, levelId)

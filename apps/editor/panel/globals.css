@@ -1,0 +1,308 @@
+@import 'tailwindcss';
+
+/*
+ * Token scale lifted verbatim from the prototype's <helmet> block, which itself
+ * came from apps/editor/app/globals.css + styles/elevation.css. The raw --dt-*
+ * variables stay as the source of truth so a value can be traced straight back
+ * to the design file; @theme inline republishes them as Tailwind utilities.
+ */
+
+@custom-variant dark (&:where([data-dt-theme='dark'], [data-dt-theme='dark'] *));
+
+:root {
+  /* Document-level rules (links, scrollbar) must always resolve, even before a
+     [data-dt-theme] ancestor exists — hence these fallbacks. */
+  --dt-fg: oklch(0.985 0 0);
+  --dt-brand: #ffc629;
+  --dt-scroll: rgba(255, 255, 255, 0.15);
+  --dt-wordmark: rgb(240, 240, 240);
+}
+
+[data-dt-theme='dark'] {
+  --dt-bg: oklch(0.205 0 0);
+  --dt-fg: oklch(0.985 0 0);
+  --dt-sidebar: oklch(0.205 0 0);
+  --dt-popover: oklch(0.205 0 0);
+  --dt-muted: oklch(0.269 0 0);
+  --dt-muted-fg: oklch(0.708 0 0);
+  --dt-accent: oklch(0.235 0 0);
+  --dt-primary: #ffc629;
+  --dt-primary-fg: #0a0a0a;
+  --dt-navy: #002d74;
+  --dt-hero: #0a1b3d;
+  --dt-grid-line: rgba(255, 255, 255, 0.16);
+  --dt-border: oklch(1 0 0 / 10%);
+  --dt-border-soft: oklch(1 0 0 / 6%);
+  --dt-input: oklch(1 0 0 / 15%);
+  --dt-ring: #ffc629;
+  --dt-destructive: oklch(0.704 0.191 22.216);
+  --dt-panel: #2c2c2e;
+  --dt-panel-hi: #3e3e3e;
+  --dt-hover: rgba(255, 255, 255, 0.08);
+  --dt-field: rgba(255, 255, 255, 0.04);
+  --dt-surface: rgba(255, 255, 255, 0.02);
+  --dt-grid: rgba(255, 255, 255, 0.06);
+  --dt-scroll: rgba(255, 255, 255, 0.15);
+  /* Placeholder text is still text. Was 0.55, which measured 2.98:1 on the field
+     surface — the sample URL in the webhook form was the one screen where a hint
+     the user is meant to read was the least readable thing on the page. */
+  --dt-placeholder: oklch(0.6 0 0);
+  --dt-wordmark: rgb(240, 240, 240);
+  --dt-brand: #ffc629;
+  /* Brand as *text*. On the dark theme the brand colour already clears 4.5:1,
+     so the two are the same value here; see the light block for why they split. */
+  --dt-brand-fg: #ffc629;
+  --dt-shell: #0a0a0a;
+  --dt-warn: #e0b44a;
+  --dt-ok: #4ade80;
+  --dt-e2: 0 0 0 1px rgba(0, 0, 0, 0.12), 0 1px 1px -0.5px rgba(0, 0, 0, 0.18),
+    0 3px 3px -1.5px rgba(0, 0, 0, 0.18);
+  --dt-e4: inset 0 1px 0 0 rgba(255, 255, 255, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.04),
+    0 6px 6px -3px rgba(0, 0, 0, 0.18), 0 12px 12px -6px rgba(0, 0, 0, 0.18);
+}
+
+[data-dt-theme='light'] {
+  --dt-bg: oklch(0.998 0 0);
+  --dt-fg: oklch(0.145 0 0);
+  --dt-sidebar: oklch(0.985 0 0);
+  --dt-popover: oklch(0.998 0 0);
+  --dt-muted: oklch(0.97 0 0);
+  /* Was 0.556 (#737373). Secondary copy in this UI runs down to 8 px, and at
+     that size #737373 measured 4.08:1 on the hover surface — under AA. Darkened
+     until the smallest muted text clears 4.5:1 on the lightest background it
+     ever sits on. */
+  --dt-muted-fg: oklch(0.52 0 0);
+  --dt-accent: oklch(0.97 0 0);
+  --dt-primary: #ffc629;
+  --dt-primary-fg: #0a0a0a;
+  --dt-navy: #002d74;
+  --dt-hero: oklch(0.965 0.012 265);
+  --dt-grid-line: rgba(0, 45, 116, 0.16);
+  --dt-border: oklch(0.922 0 0);
+  --dt-border-soft: oklch(0.95 0 0);
+  --dt-input: oklch(0.922 0 0);
+  --dt-ring: #002d74;
+  --dt-destructive: oklch(0.577 0.245 27.325);
+  --dt-panel: oklch(0.97 0 0);
+  --dt-panel-hi: oklch(0.93 0 0);
+  --dt-hover: rgba(0, 0, 0, 0.05);
+  --dt-field: oklch(0.985 0 0);
+  --dt-surface: oklch(0.985 0 0);
+  --dt-grid: rgba(0, 0, 0, 0.06);
+  --dt-scroll: rgba(0, 0, 0, 0.15);
+  /* Same rule, other direction: 0.72 was 2.2:1 on the light field surface. */
+  --dt-placeholder: oklch(0.55 0 0);
+  --dt-wordmark: rgb(0, 45, 116);
+  --dt-brand: #b98800;
+  /* Amber on a near-white surface is 1.35:1 — brand text was effectively
+     unreadable in this theme, and axe failed every screen that used it. This is
+     the same hue carried down to 5.4:1 on the lightest surface in the UI.
+     `--dt-brand` keeps its lighter value for dots, fills and borders, which
+     carry no text and are not held to the contrast rule. */
+  --dt-brand-fg: #7a5a00;
+  --dt-shell: oklch(0.94 0 0);
+  --dt-warn: #b07d0a;
+  --dt-ok: #1a7f45;
+  --dt-e2: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 1px 1px -0.5px rgba(0, 0, 0, 0.06),
+    0 3px 3px -1.5px rgba(0, 0, 0, 0.06);
+  --dt-e4: 0 0 0 1px rgba(0, 0, 0, 0.06), 0 3px 3px -1.5px rgba(0, 0, 0, 0.06),
+    0 6px 6px -3px rgba(0, 0, 0, 0.06), 0 12px 12px -6px rgba(0, 0, 0, 0.06);
+}
+
+@theme inline {
+  --color-bg: var(--dt-bg);
+  --color-fg: var(--dt-fg);
+  --color-sidebar: var(--dt-sidebar);
+  --color-popover: var(--dt-popover);
+  --color-muted: var(--dt-muted);
+  --color-muted-fg: var(--dt-muted-fg);
+  --color-accent: var(--dt-accent);
+  --color-primary: var(--dt-primary);
+  --color-primary-fg: var(--dt-primary-fg);
+  --color-navy: var(--dt-navy);
+  --color-hero: var(--dt-hero);
+  --color-border: var(--dt-border);
+  --color-border-soft: var(--dt-border-soft);
+  --color-input: var(--dt-input);
+  --color-ring: var(--dt-ring);
+  --color-destructive: var(--dt-destructive);
+  --color-panel: var(--dt-panel);
+  --color-panel-hi: var(--dt-panel-hi);
+  --color-hover: var(--dt-hover);
+  --color-field: var(--dt-field);
+  --color-surface: var(--dt-surface);
+  --color-shell: var(--dt-shell);
+  --color-brand: var(--dt-brand);
+  --color-brand-fg: var(--dt-brand-fg);
+  --color-warn: var(--dt-warn);
+  --color-ok: var(--dt-ok);
+  --color-wordmark: var(--dt-wordmark);
+
+  --font-sans: var(--font-barlow), system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* 6 px inputs/badges · 10 px buttons/lists · 14 px cards/dialogs */
+  --radius-field: 6px;
+  --radius-control: 10px;
+  --radius-card: 14px;
+
+  --shadow-e2: var(--dt-e2);
+  --shadow-e4: var(--dt-e4);
+
+  --animate-dt-fade: dtFade 0.25s ease;
+  --animate-dt-scale: dtScale 0.16s ease;
+  --animate-dt-drop: dtDrop 0.2s ease;
+  --animate-dt-shake: dtShake 0.4s ease;
+  --animate-dt-slide-r: dtSlideR 0.26s cubic-bezier(0.16, 1, 0.3, 1);
+  --animate-dt-spin: dtSpin 0.7s linear infinite;
+  --animate-dt-pulse: dtPulse 2s ease infinite;
+  --animate-dt-shimmer: dtShimmer 1.4s ease infinite;
+  --animate-dt-grid: dtGridScroll 45s linear infinite;
+}
+
+@keyframes dtFade {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes dtScale {
+  from { opacity: 0; transform: scale(0.97); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes dtDrop {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes dtShake {
+  0%, 100% { transform: none; }
+  25% { transform: translateX(-3px); }
+  75% { transform: translateX(3px); }
+}
+@keyframes dtSpin {
+  to { transform: rotate(360deg); }
+}
+@keyframes dtShimmer {
+  0%, 100% { opacity: 0.35; }
+  50% { opacity: 0.8; }
+}
+@keyframes dtPulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@keyframes dtSlideR {
+  from { opacity: 0; transform: translateX(26px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes dtDash {
+  from { stroke-dashoffset: 220; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes dtGridScroll {
+  0% { transform: perspective(500px) rotateX(60deg) translateY(0); }
+  100% { transform: perspective(500px) rotateX(60deg) translateY(50px); }
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--dt-shell);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  font-family: var(--font-barlow), system-ui, sans-serif;
+}
+
+input,
+button,
+textarea,
+select {
+  font-family: inherit;
+}
+
+a {
+  color: var(--dt-fg);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--dt-brand);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--dt-placeholder);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--dt-scroll);
+  border-radius: 9999px;
+}
+
+/* Horizontal strips scroll without a visible bar overlapping their content —
+   the fix for the overlap reported on the mobile tab strip and filter rows. */
+.dt-scroll-x {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.dt-scroll-x::-webkit-scrollbar {
+  display: none;
+  height: 0;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+label:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--dt-ring);
+  outline-offset: 2px;
+}
+
+button {
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease,
+    opacity 0.15s ease,
+    box-shadow 0.15s ease,
+    transform 0.1s ease;
+}
+button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+input,
+select,
+textarea {
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

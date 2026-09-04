@@ -12,6 +12,9 @@ interface PanelSectionProps {
   className?: string
 }
 
+const MotionDiv = motion.div as any
+const MotionButton = motion.button as any
+
 export function PanelSection({
   title,
   children,
@@ -21,12 +24,12 @@ export function PanelSection({
   const [isExpanded, setIsExpanded] = useState(defaultExpanded)
 
   return (
-    <motion.div
+    <MotionDiv
       className={cn('flex shrink-0 flex-col overflow-hidden border-border/50 border-b', className)}
       layout
       transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
     >
-      <motion.button
+      <MotionButton
         className={cn(
           'group/section flex h-10 shrink-0 items-center justify-between px-3 transition-all duration-200',
           isExpanded
@@ -45,11 +48,11 @@ export function PanelSection({
             isExpanded ? 'text-foreground' : 'opacity-0 group-hover/section:opacity-100',
           )}
         />
-      </motion.button>
+      </MotionButton>
 
       <AnimatePresence initial={false}>
         {isExpanded && (
-          <motion.div
+          <MotionDiv
             animate={{ height: 'auto', opacity: 1 }}
             className="overflow-hidden"
             exit={{ height: 0, opacity: 0 }}
@@ -57,9 +60,9 @@ export function PanelSection({
             transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
           >
             <div className="flex flex-col gap-1.5 p-3 pt-2">{children}</div>
-          </motion.div>
+          </MotionDiv>
         )}
       </AnimatePresence>
-    </motion.div>
+    </MotionDiv>
   )
 }

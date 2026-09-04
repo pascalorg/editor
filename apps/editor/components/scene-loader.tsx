@@ -3,21 +3,17 @@
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
-import {
-  applySceneGraphToEditor,
-  Editor,
-  type SceneGraph,
-  type SidebarTab,
-} from '@pascal-app/editor'
-import { Hammer, Layers, Settings } from 'lucide-react'
-import Image from 'next/image'
-import Link from 'next/link'
+import { applySceneGraphToEditor, Editor, type SceneGraph, useEditor } from '@pascal-app/editor'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, startTransition } from 'react'
+import { AccountSettingsSection } from '@/components/account-settings-section'
+import { useSession } from '@/components/auth/session-provider'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
-import { cn } from '@/lib/utils'
-import { BuildTab } from './build-tab'
+import { usePluginManager } from '@/lib/plugins/use-plugin-manager'
+import { PluginManagerModal } from '@/components/plugin-manager/PluginManagerModal'
+import { EDITOR_SIDEBAR_TABS } from './editor-sidebar-tabs'
+import { useScenePresence } from './use-scene-presence'
 import { CommunityViewerToolbarLeft, CommunityViewerToolbarRight } from './viewer-toolbar'
 
 export interface SceneMeta {
@@ -33,60 +29,47 @@ export interface SceneMeta {
   nodeCount: number
 }
 
-const SIDEBAR_TABS: (SidebarTab & { component: React.ComponentType })[] = [
-  {
-    id: 'site',
-    label: 'Scene',
-    component: () => null, // Built-in SitePanel handles this
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Layers className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/scene.webp"
-        width={32}
-      />
-    ),
-  },
-  {
-    id: 'build',
-    label: 'Build',
-    component: BuildTab,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Hammer className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/build.webp"
-        width={32}
-      />
-    ),
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    component: () => null,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Settings className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/settings.webp"
-        width={32}
-      />
-    ),
-  },
-]
+// Card previews are stored inline in the scenes row, so they must stay small:
+// a ~256px JPEG at moderate quality is a few KB and reads clearly at card size.
+const THUMBNAIL_MAX_DIM = 256
+const THUMBNAIL_QUALITY = 0.55
+const THUMBNAIL_MAX_CHARS = 60_000
+
+/**
+ * Shrinks a captured snapshot to a small JPEG data URL. Runs in the browser
+ * (canvas), returns null if a 2D context is unavailable.
+ */
+async function downscaleToDataUrl(
+  blob: Blob,
+  maxDim: number,
+  quality: number,
+): Promise<string | null> {
+  const bitmap = await createImageBitmap(blob)
+  try {
+    const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height))
+    const width = Math.max(1, Math.round(bitmap.width * scale))
+    const height = Math.max(1, Math.round(bitmap.height * scale))
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return null
+    ctx.drawImage(bitmap, 0, 0, width, height)
+    return canvas.toDataURL('image/jpeg', quality)
+  } finally {
+    bitmap.close?.()
+  }
+}
 
 interface SceneLoaderProps {
   initialScene: SceneGraph
   meta: SceneMeta
+  /**
+   * View-only account: the scene opens in preview and nothing is ever saved.
+   * The server refuses a viewer's writes anyway (403) — this stops the client
+   * from attempting them and from showing editing affordances on load.
+   */
+  readOnly?: boolean
 }
 
 interface LiveSceneEvent {
@@ -108,7 +91,7 @@ function isLightPreviewQuery(searchParams: URLSearchParams): boolean {
   return disable.split(',').some((p) => p.trim() === 'postFx')
 }
 
-export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
+export function SceneLoader({ initialScene, meta, readOnly = false }: SceneLoaderProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)
@@ -120,6 +103,38 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const suppressRemoteSaveUntilRef = useRef(0)
   const [conflict, setConflict] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const { user, openAuth } = useSession()
+
+  const presence = useScenePresence(meta.id, true)
+  // Before presence loads, fall back to the server `readOnly` prop so an
+  // editable canvas never flashes for someone who is not the lease holder.
+  const forcedReadOnly = presence.loaded ? !presence.canEdit || !presence.isEditor : readOnly
+  const forcedReadOnlyRef = useRef(forcedReadOnly)
+  useEffect(() => {
+    forcedReadOnlyRef.current = forcedReadOnly
+  }, [forcedReadOnly])
+
+  useEffect(() => {
+    if (forcedReadOnly) {
+      useEditor.getState().setPreviewMode(true)
+      // A forced viewer must stay in preview even if the viewer overlay's
+      // "back" button tries to exit it — re-assert on any store change.
+      const unsub = useEditor.subscribe((s) => {
+        if (!s.isPreviewMode) useEditor.getState().setPreviewMode(true)
+      })
+      return unsub
+    }
+    // Leverage React Concurrent Mode transition for smooth role handoff
+    startTransition(() => {
+      useEditor.getState().setPreviewMode(false)
+    })
+  }, [forcedReadOnly])
+
+  useEffect(() => {
+    if (initialScene.installedPlugins && initialScene.installedPlugins.length > 0) {
+      void usePluginManager.getState().syncWithScene(initialScene.installedPlugins)
+    }
+  }, [initialScene])
 
   const lightPreview = isLightPreviewQuery(searchParams)
 
@@ -127,6 +142,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
 
   const handleSave = useCallback(
     async (graph: SceneGraph, options?: { keepalive?: boolean }) => {
+      if (forcedReadOnlyRef.current) return
       const graphJson = sceneGraphSignature(graph)
       const isRecentRemoteApply = Date.now() < suppressRemoteSaveUntilRef.current
       if (lastRemoteGraphJsonRef.current === graphJson) {
@@ -179,6 +195,12 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
           return
         }
 
+        if (response.status === 401) {
+          setSaveError('Sign in to save your changes.')
+          openAuth()
+          return
+        }
+
         if (!response.ok) {
           setSaveError(`Save failed (${response.status})`)
           return
@@ -192,7 +214,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         setSaveError(error instanceof Error ? error.message : 'Save failed')
       }
     },
-    [meta.id, meta.name],
+    [meta.id, meta.name, openAuth],
   )
 
   useEffect(() => {
@@ -227,15 +249,23 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   }, [meta.id])
 
   const handleThumb = useCallback(
-    async (_blob: Blob) => {
-      // TODO(phase7): upload thumbnail via POST /api/scenes/[id]/thumbnail.
-      // Stub endpoint is not yet implemented in v0.1 — skip upload for now.
-      await fetch(`/api/scenes/${meta.id}/thumbnail`, {
-        method: 'POST',
-        // Intentionally no body — endpoint is a stub.
-      }).catch(() => {
-        // Swallow errors silently; thumbnail upload is best-effort.
-      })
+    async (blob: Blob) => {
+      // A non-lease holder never owns the scene write; the server would refuse it.
+      if (forcedReadOnlyRef.current) return
+      try {
+        const dataUrl = await downscaleToDataUrl(blob, THUMBNAIL_MAX_DIM, THUMBNAIL_QUALITY)
+        // The thumbnail lives inline in the scenes row (a TEXT column); an
+        // oversized data URL would be rejected server-side, so drop it here
+        // rather than send a doomed request.
+        if (!dataUrl || dataUrl.length > THUMBNAIL_MAX_CHARS) return
+        await fetch(`/api/scenes/${meta.id}/thumbnail`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dataUrl }),
+        })
+      } catch {
+        // Best-effort: a missing card preview is not worth surfacing an error.
+      }
     },
     [meta.id],
   )
@@ -271,28 +301,17 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
           <p className="font-medium text-destructive text-xs">{saveError}</p>
         </div>
       )}
-      <div className="pointer-events-none absolute top-4 right-4 z-40 flex flex-col items-end gap-1 md:top-14 md:flex-row md:items-center md:gap-2">
-        <button
-          aria-pressed={lightPreview}
-          className={cn(
-            'pointer-events-auto rounded-md border border-border px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur',
-            lightPreview ? 'bg-accent' : 'bg-background/90 hover:bg-accent/40',
-          )}
-          onClick={() =>
-            router.push(lightPreview ? `/scene/${meta.id}` : `/scene/${meta.id}?disable=postFx`)
-          }
-          title="Skip the post-processing pipeline — lighter on the GPU, no ambient occlusion or selection outlines"
-          type="button"
-        >
-          Light preview
-        </button>
-        <Link
-          className="pointer-events-auto rounded-md border border-border bg-background/90 px-3 py-1.5 font-medium text-xs shadow-sm backdrop-blur hover:bg-accent/40"
-          href="/scenes"
-        >
-          All scenes
-        </Link>
-      </div>
+      {/*
+        "Light preview" and "All scenes" used to float over the canvas here and
+        are gone. Both were navigation sitting on top of the drawing: the first
+        reloaded the page onto `?disable=postFx`, the second linked to `/scenes`
+        — and the Scenes rail already answers the second from inside the editor,
+        without leaving it.
+
+        `disablePostFx` below is unaffected. `?disable=postFx` is still read
+        (`isLightPreviewQuery`), so the flag keeps working for anyone measuring
+        GPU cost; what went away is a permanent button for a diagnostic.
+      */}
       <Editor
         disablePostFx={lightPreview}
         layoutVersion="v2"
@@ -300,10 +319,17 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         onSave={handleSave}
         onThumbnailCapture={handleThumb}
         projectId={meta.projectId ?? 'default'}
-        sidebarTabs={SIDEBAR_TABS}
-        viewerToolbarLeft={<CommunityViewerToolbarLeft />}
+        settingsPanelProps={{ accountSection: <AccountSettingsSection /> }}
+        sidebarTabs={EDITOR_SIDEBAR_TABS}
+        viewerToolbarLeft={
+          <CommunityViewerToolbarLeft
+            currentUserId={user?.id}
+            presence={presence}
+          />
+        }
         viewerToolbarRight={<CommunityViewerToolbarRight />}
       />
+      <PluginManagerModal />
     </div>
   )
 }

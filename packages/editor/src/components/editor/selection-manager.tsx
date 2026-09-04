@@ -45,6 +45,7 @@ import {
   resolveDirectRotationPatch,
   shouldStartDirectMoveDrag,
 } from '../../lib/direct-manipulation'
+import { isNodeEditLocked } from '../../lib/edit-lock'
 import { createEditorApi } from '../../lib/editor-api'
 import { selectionEnabled } from '../../lib/interaction/scope'
 import {
@@ -1277,6 +1278,8 @@ export const SelectionManager = () => {
         selectedIds: useViewer.getState().selection.selectedIds,
       })
       if (!canDirectMoveNode(node)) return
+      // A locked node can be selected and inspected but never moved.
+      if (isNodeEditLocked(node)) return
       const currentSelectedIds = useViewer.getState().selection.selectedIds
       const allowPlainDrag = nodeRegistry.get(node.type)?.capabilities?.movable?.directDrag === true
       if (
@@ -1651,6 +1654,12 @@ export const SelectionManager = () => {
           nodes: useScene.getState().nodes,
           selectedIds: selectedIdsBeforeRouting,
         })
+
+        // A locked node is view-only — a whole-scene lock OR its category being
+        // locked. Consume the click (so it neither selects nor falls through to
+        // an empty-space deselect) but never select the node or arm a move.
+        if (isNodeEditLocked(nodeToSelect)) return
+
         // Clicking any node (e.g. the slab surface outside a hole) exits slab
         // hole-edit mode. The hole handles + hit mesh stopPropagation, so a
         // click reaching here means the user clicked outside the hole.
@@ -1927,8 +1936,10 @@ export const SelectionManager = () => {
           useEditor.getState().setStructureLayer(targetStructureLayer)
         }
 
+        // A locked node is view-only: the dive may still change phase to let the
+        // user look inside, but it never selects the dived (locked) node.
         const strategy = SELECTION_STRATEGIES[targetPhase || currentPhase]
-        if (strategy) {
+        if (strategy && !isNodeEditLocked(node)) {
           strategy.handleSelect(
             node,
             event.nativeEvent,
@@ -1989,6 +2000,10 @@ export const SelectionManager = () => {
       if (!isNodeInCurrentLevel(node)) return
 
       event.stopPropagation()
+
+      // A locked node (whole-scene lock or its category) can't be deleted, even
+      // in the sledgehammer delete mode — consume the click but delete nothing.
+      if (isNodeEditLocked(node)) return
 
       // Play appropriate SFX
       emitDeleteSFX(node.type)

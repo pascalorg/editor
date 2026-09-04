@@ -16,6 +16,11 @@
       "import": "./dist/server.js",
       "default": "./dist/server.js"
     },
+    "./env": {
+      "types": "./dist/lib/env.d.ts",
+      "import": "./dist/lib/env.js",
+      "default": "./dist/lib/env.js"
+    },
     "./storage": {
       "types": "./dist/storage/index.d.ts",
       "import": "./dist/storage/index.js",
@@ -60,6 +65,7 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
     "@pascal-app/lingo": "^0.2.0",
+    "mysql2": "^3.15.4",
     "zod": ">=4.5.4 <4.6"
   },
   "devDependencies": {

@@ -1,14 +1,18 @@
 import { getFloorStackedPosition } from '../../hooks/spatial-grid/floor-placed-elevation'
 import type { AnyNode, AnyNodeId, StairNode, StairSegmentNode } from '../../schema'
 import { DEFAULT_LEVEL_HEIGHT } from '../../services/level-height'
+import { getLevelIndex } from '../../services/level-index'
 import { getLevelFloorToFloorHeight } from '../../services/storey'
 
 export function resolveStairTotalRise(stair: StairNode, nodes: Record<string, AnyNode>): number {
   if (stair.totalRise !== undefined) return stair.totalRise
 
-  const level = Object.values(nodes).find(
-    (node) => node.type === 'level' && node.children.includes(stair.id),
-  )
+  // Membership (level.children), not the parent chain: a legacy stair can sit
+  // in a level's children with a stale or absent parentId, and the linear
+  // find this replaces resolved through membership. The opening sync calls
+  // this per stair per surface, so it must not rescan the scene.
+  const levelId = getLevelIndex(nodes as Record<AnyNodeId, AnyNode>).levelOfChild.get(stair.id)
+  const level = levelId ? nodes[levelId] : undefined
 
   if (stair.deckSlabId) {
     const deck = nodes[stair.deckSlabId]

@@ -728,9 +728,15 @@ export default function DoorPanel() {
           unit="m"
           value={Math.round(node.width * 100) / 100}
         />
+        {/*
+          No ceiling. A truck drive-through door is 4.5–5 m tall, so 4 m
+          refused exactly the door a warehouse needs. Width is left alone
+          because its bound is derived from the door type
+          (`maxDoorWidth` — 6 m for a garage door, 3 m otherwise), which is a
+          real distinction rather than a guessed number.
+        */}
         <SliderControl
           label="Height"
-          max={1000}
           min={1.0}
           onChange={(v) =>
             handleUpdate({

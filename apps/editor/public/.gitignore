@@ -1,0 +1,4 @@
+# Copied from node_modules/web-ifc/ by scripts/copy-web-ifc-wasm.mjs
+# (runs on predev / prebuild).
+web-ifc.wasm
+web-ifc-mt.wasm

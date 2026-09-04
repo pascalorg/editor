@@ -689,9 +689,9 @@ async function matchesRecordedEditorProcess(
   paths: PascalPaths,
   state: EditorState,
 ): Promise<boolean> {
-  if (process.platform === 'win32') return false
   const runtimeDirectory = path.resolve(state.runtimeDirectory)
   if (!runtimeDirectory.startsWith(`${path.resolve(paths.runtime)}${path.sep}`)) return false
+  if (process.platform === 'win32') return isProcessRunning(state.pid)
   let expectedEntrypoint: string
   try {
     const manifest = await readRuntimeManifest(runtimeDirectory)
@@ -704,9 +704,10 @@ async function matchesRecordedEditorProcess(
 }
 
 async function matchesRecordedMcpProcess(paths: PascalPaths, state: EditorState): Promise<boolean> {
-  if (process.platform === 'win32' || !state.mcp) return false
+  if (!state.mcp) return false
   const runtimeDirectory = path.resolve(state.runtimeDirectory)
   if (!runtimeDirectory.startsWith(`${path.resolve(paths.runtime)}${path.sep}`)) return false
+  if (process.platform === 'win32') return isProcessRunning(state.mcp.pid)
   let expectedEntrypoint: string
   try {
     const manifest = await readRuntimeManifest(runtimeDirectory)

@@ -22,6 +22,70 @@ const NO_RAYCAST = () => null
 /** green-500 — matches the item placement box's "placeable" state. */
 const DEFAULT_COLOR = 0x22_c5_5e
 
+/**
+ * Module-level unit geometry, scaled per frame through the mesh transform —
+ * NEVER rebuilt or disposed mid-drag.
+ *
+ * The previous version minted a `BoxGeometry`/`PlaneGeometry` per dimension
+ * change and disposed the old one in an effect cleanup. During a resize drag
+ * that is once per frame, and WebGPU may still be executing the command
+ * buffer that references the disposed buffers — the renderer then drops the
+ * ENTIRE frame's command buffer ("Vertex buffer slot … was not set"), which
+ * blanks the whole scene for a frame, not just this overlay. Unit geometry +
+ * `scale` moves the per-frame change into the object matrix, where it
+ * belongs, and the shared buffers live for the session.
+ */
+const UNIT_EDGES = (() => {
+  const box = new BoxGeometry(1, 1, 1)
+  const edges = new EdgesGeometry(box)
+  box.dispose()
+  return edges
+})()
+
+const UNIT_PLANE = (() => {
+  const plane = new PlaneGeometry(1, 1)
+  plane.rotateX(-Math.PI / 2)
+  return plane
+})()
+
+/**
+ * Materials by colour — two in practice (placeable green / blocked red).
+ * Cached for the same reason the geometry is shared: disposing a material the
+ * in-flight pass still references is the same command-buffer drop, and a
+ * colour flip happens mid-drag by design.
+ */
+const edgeMaterials = new Map<number, LineBasicNodeMaterial>()
+const planeMaterials = new Map<number, MeshBasicNodeMaterial>()
+
+function getEdgeMaterial(color: number): LineBasicNodeMaterial {
+  let material = edgeMaterials.get(color)
+  if (!material) {
+    material = new LineBasicNodeMaterial({
+      color,
+      linewidth: 3,
+      depthTest: false,
+      depthWrite: false,
+    })
+    edgeMaterials.set(color, material)
+  }
+  return material
+}
+
+function getPlaneMaterial(color: number): MeshBasicNodeMaterial {
+  let material = planeMaterials.get(color)
+  if (!material) {
+    material = new MeshBasicNodeMaterial({
+      color,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    })
+    material.opacityNode = smoothstep(0, 0.7, distance(uv(), vec2(0.5, 0.5))).mul(0.6)
+    planeMaterials.set(color, material)
+  }
+  return material
+}
+
 type LocalBounds = { size: [number, number, number]; center: [number, number, number] }
 
 /**
@@ -113,47 +177,8 @@ export function DragBoundingBox({
   const minY = cy - h / 2
   const groundY = minY + 0.01
 
-  const edgeGeometry = useMemo(() => {
-    const box = new BoxGeometry(w, h, d)
-    const edges = new EdgesGeometry(box)
-    box.dispose()
-    return edges
-  }, [w, h, d])
-
-  // Flat on the ground (XZ) at the box's base, nudged up 0.01m to avoid
-  // z-fighting with slabs.
-  const planeGeometry = useMemo(() => {
-    const plane = new PlaneGeometry(w, d)
-    plane.rotateX(-Math.PI / 2)
-    plane.translate(cx, groundY, cz)
-    return plane
-  }, [w, d, cx, groundY, cz])
-
-  const edgeMaterial = useMemo(
-    () => new LineBasicNodeMaterial({ color, linewidth: 3, depthTest: false, depthWrite: false }),
-    [color],
-  )
-
-  const planeMaterial = useMemo(() => {
-    const material = new MeshBasicNodeMaterial({
-      color,
-      transparent: true,
-      depthTest: false,
-      depthWrite: false,
-    })
-    material.opacityNode = smoothstep(0, 0.7, distance(uv(), vec2(0.5, 0.5))).mul(0.6)
-    return material
-  }, [color])
-
-  useEffect(
-    () => () => {
-      edgeGeometry.dispose()
-      planeGeometry.dispose()
-      edgeMaterial.dispose()
-      planeMaterial.dispose()
-    },
-    [edgeGeometry, planeGeometry, edgeMaterial, planeMaterial],
-  )
+  const edgeMaterial = getEdgeMaterial(color)
+  const planeMaterial = getPlaneMaterial(color)
 
   // Publish the facing pose to the editor-side overlay (the single triangle
   // renderer) rather than drawing it here. The node origin is `position`; the
@@ -176,19 +201,22 @@ export function DragBoundingBox({
   return (
     <group position={position} rotation={[0, rotationY, 0]}>
       <mesh
-        geometry={planeGeometry}
+        geometry={UNIT_PLANE}
         layers={EDITOR_LAYER}
         material={planeMaterial}
+        position={[cx, groundY, cz]}
         raycast={NO_RAYCAST}
         renderOrder={999}
+        scale={[w, 1, d]}
       />
       <lineSegments
-        geometry={edgeGeometry}
+        geometry={UNIT_EDGES}
         layers={EDITOR_LAYER}
         material={edgeMaterial}
         position={[cx, cy, cz]}
         raycast={NO_RAYCAST}
         renderOrder={999}
+        scale={[w, h, d]}
       />
     </group>
   )

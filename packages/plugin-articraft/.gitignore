@@ -1,0 +1,16 @@
+node_modules
+dist
+.articraft
+__pycache__
+.pytest_cache
+*.pyc
+.venv
+.turbo
+*.tsbuildinfo
+.DS_Store
+.env*
+!.env.example
+.venv
+__pycache__
+.pytest_cache
+runs

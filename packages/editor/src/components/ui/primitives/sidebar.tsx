@@ -198,6 +198,11 @@ function SidebarResizer({ side }: { side: 'left' | 'right' }) {
     setIsDragging(true)
     document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
+    // Capture the pointer so this element is guaranteed the matching `pointerup`
+    // or `pointercancel`. Without it the release is delivered to whatever the
+    // cursor happens to be over, and a release outside the window is not
+    // delivered at all — which is how the drag got stuck on.
+    e.currentTarget.setPointerCapture(e.pointerId)
   }
 
   React.useEffect(() => {
@@ -207,7 +212,8 @@ function SidebarResizer({ side }: { side: 'left' | 'right' }) {
       setWidth(Math.max(288, Math.min(newWidth, 800)))
     }
 
-    const handlePointerUp = () => {
+    const endResize = () => {
+      if (!isResizing.current) return
       isResizing.current = false
       setIsDragging(false)
       document.body.style.cursor = ''
@@ -215,11 +221,22 @@ function SidebarResizer({ side }: { side: 'left' | 'right' }) {
     }
 
     window.addEventListener('pointermove', handlePointerMove)
-    window.addEventListener('pointerup', handlePointerUp)
+    window.addEventListener('pointerup', endResize)
+    // `pointerup` alone leaves the drag latched on whenever the gesture ends
+    // some other way: the browser or OS cancelling it, the pointer being lost
+    // to browser chrome, a touch turning into a scroll. `isResizing` then stays
+    // true for the rest of the session, so every later mouse move keeps
+    // resizing the sidebar and every click is swallowed by a drag the user
+    // finished long ago — including clicks meant for the panel's scrollbar.
+    window.addEventListener('pointercancel', endResize)
+    // Belt and braces for the case the capture itself is taken away.
+    window.addEventListener('lostpointercapture', endResize)
 
     return () => {
       window.removeEventListener('pointermove', handlePointerMove)
-      window.removeEventListener('pointerup', handlePointerUp)
+      window.removeEventListener('pointerup', endResize)
+      window.removeEventListener('pointercancel', endResize)
+      window.removeEventListener('lostpointercapture', endResize)
     }
   }, [setWidth, side, setIsDragging])
 
@@ -227,7 +244,11 @@ function SidebarResizer({ side }: { side: 'left' | 'right' }) {
     <div
       className={cn(
         'absolute top-0 bottom-0 z-50 w-2 cursor-col-resize transition-colors hover:bg-primary/50',
-        side === 'left' ? '-right-1' : '-left-1',
+        // Sits entirely OUTSIDE the panel. At `-right-1` the 8px handle
+        // straddled the edge, putting 4px of itself at z-50 over the scroll
+        // container's scrollbar — so aiming for the bar grabbed the resize
+        // handle and the sidebar resized instead of the list scrolling.
+        side === 'left' ? '-right-2' : '-left-2',
       )}
       onPointerDown={handlePointerDown}
     />

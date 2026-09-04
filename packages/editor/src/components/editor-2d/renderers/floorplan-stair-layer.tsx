@@ -1,11 +1,12 @@
 'use client'
 
-import type { Point2D, StairNode, StairSegmentNode } from '@pascal-app/core'
+import type { AnyNodeId, Point2D, StairNode, StairSegmentNode } from '@pascal-app/core'
 import {
   memo,
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
+import { isNodeIdEditLocked } from '../../../lib/edit-lock'
 import {
   buildSvgAnnularSectorPath,
   buildSvgArcPath,
@@ -466,7 +467,8 @@ export const FloorplanStairLayer = memo(function FloorplanStairLayer({
             onPointerDown={
               canFocusStairs && stairSelected
                 ? (event) => {
-                    if (event.button === 0) {
+                    // A locked stair can be selected but not moved from the plan.
+                    if (event.button === 0 && !isNodeIdEditLocked(stair.id as AnyNodeId)) {
                       onStairPointerDown(stair.id, event)
                     }
                   }

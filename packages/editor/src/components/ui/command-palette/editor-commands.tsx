@@ -37,6 +37,7 @@ import {
   Video,
 } from 'lucide-react'
 import { useEffect } from 'react'
+import { filterEditableIds } from '../../../lib/edit-lock'
 import { getHistoryCommandState, runRedo, runUndo } from '../../../lib/history'
 import { deleteLevelWithFallbackSelection } from '../../../lib/level-selection'
 import { useCommandRegistry } from '../../../store/use-command-registry'
@@ -74,11 +75,11 @@ export function EditorCommands() {
     }
 
     return register([
-      // ── Scene ────────────────────────────────────────────────────────────
+      // ── Project ──────────────────────────────────────────────────────────
       {
         id: 'editor.tool.wall',
         label: 'Wall Tool',
-        group: 'Scene',
+        group: 'Project',
         icon: <Square className="h-4 w-4" />,
         keywords: ['draw', 'build', 'structure'],
         execute: () => activateTool('wall'),
@@ -86,7 +87,7 @@ export function EditorCommands() {
       {
         id: 'editor.tool.slab',
         label: 'Slab Tool',
-        group: 'Scene',
+        group: 'Project',
         icon: <Layers className="h-4 w-4" />,
         keywords: ['floor', 'build'],
         execute: () => activateTool('slab'),
@@ -94,7 +95,7 @@ export function EditorCommands() {
       {
         id: 'editor.tool.ceiling',
         label: 'Ceiling Tool',
-        group: 'Scene',
+        group: 'Project',
         icon: <Grid3X3 className="h-4 w-4" />,
         keywords: ['top', 'build'],
         execute: () => activateTool('ceiling'),
@@ -102,7 +103,7 @@ export function EditorCommands() {
       {
         id: 'editor.tool.door',
         label: 'Door Tool',
-        group: 'Scene',
+        group: 'Project',
         icon: <DoorOpen className="h-4 w-4" />,
         keywords: ['opening', 'entrance'],
         execute: () => activateTool('door'),
@@ -110,7 +111,7 @@ export function EditorCommands() {
       {
         id: 'editor.tool.window',
         label: 'Window Tool',
-        group: 'Scene',
+        group: 'Project',
         icon: <AppWindow className="h-4 w-4" />,
         keywords: ['opening', 'glass'],
         execute: () => activateTool('window'),
@@ -118,7 +119,7 @@ export function EditorCommands() {
       {
         id: 'editor.tool.item',
         label: 'Item Tool',
-        group: 'Scene',
+        group: 'Project',
         icon: <Package className="h-4 w-4" />,
         keywords: ['furniture', 'object', 'asset', 'furnish'],
         execute: () => activateTool('item'),
@@ -126,7 +127,7 @@ export function EditorCommands() {
       {
         id: 'editor.tool.stair',
         label: 'Stair Tool',
-        group: 'Scene',
+        group: 'Project',
         icon: <ArrowRight className="h-4 w-4" />,
         keywords: ['stairs', 'staircase', 'flight', 'landing', 'steps'],
         execute: () => activateTool('stair'),
@@ -134,7 +135,7 @@ export function EditorCommands() {
       {
         id: 'editor.tool.zone',
         label: 'Zone Tool',
-        group: 'Scene',
+        group: 'Project',
         icon: <Hexagon className="h-4 w-4" />,
         keywords: ['area', 'room', 'space'],
         execute: () => activateTool('zone'),
@@ -142,7 +143,7 @@ export function EditorCommands() {
       {
         id: 'editor.delete-selection',
         label: 'Delete Selection',
-        group: 'Scene',
+        group: 'Project',
         icon: <Trash2 className="h-4 w-4" />,
         keywords: ['remove', 'erase'],
         shortcut: ['⌫'],
@@ -150,13 +151,14 @@ export function EditorCommands() {
         execute: () =>
           run(() => {
             const { selectedIds } = useViewer.getState().selection
-            useScene.getState().deleteNodes(selectedIds as any[])
+            const deletable = filterEditableIds(selectedIds as AnyNodeId[])
+            if (deletable.length > 0) useScene.getState().deleteNodes(deletable)
           }),
       },
       {
         id: 'editor.mode.material-paint',
         label: 'Material Paint',
-        group: 'Scene',
+        group: 'Project',
         icon: <PaintBucket className="h-4 w-4" />,
         keywords: ['paint', 'material', 'texture', 'bucket', 'surface'],
         shortcut: ['P'],
@@ -170,7 +172,7 @@ export function EditorCommands() {
       {
         id: 'editor.mode.terrain-sculpt',
         label: 'Sculpt Terrain',
-        group: 'Scene',
+        group: 'Project',
         icon: <Mountain className="h-4 w-4" />,
         keywords: ['terrain', 'ground', 'elevation', 'sculpt', 'hill', 'slope', 'grade', 'dig'],
         shortcut: ['G'],
@@ -364,7 +366,7 @@ export function EditorCommands() {
       // ── Export & Share ───────────────────────────────────────────────────
       {
         id: 'editor.export.json',
-        label: 'Export Scene (JSON)',
+        label: 'Export Project (JSON)',
         group: 'Export & Share',
         icon: <FileJson className="h-4 w-4" />,
         keywords: ['export', 'download', 'json', 'save', 'data'],
@@ -377,7 +379,7 @@ export function EditorCommands() {
             const url = URL.createObjectURL(blob)
             Object.assign(document.createElement('a'), {
               href: url,
-              download: `scene_${new Date().toISOString().split('T')[0]}.json`,
+              download: `project_${new Date().toISOString().split('T')[0]}.json`,
             }).click()
             URL.revokeObjectURL(url)
           }),

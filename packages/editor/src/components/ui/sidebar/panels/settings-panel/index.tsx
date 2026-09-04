@@ -10,6 +10,7 @@ import { TreeView, VisualJson } from '@visual-json/react'
 import { Camera, Check, Copy, Download, Map as MapIcon, Save, Trash2, Upload } from 'lucide-react'
 import {
   type KeyboardEvent,
+  type ReactNode,
   type SyntheticEvent,
   useCallback,
   useEffect,
@@ -26,6 +27,7 @@ import {
   DialogTrigger,
 } from './../../../../../components/ui/primitives/dialog'
 import { Input } from './../../../../../components/ui/primitives/input'
+import { Slider } from './../../../../../components/ui/primitives/slider'
 import { Switch } from './../../../../../components/ui/primitives/switch'
 import useEditor, { selectDefaultBuildingAndLevel } from './../../../../../store/use-editor'
 import useFloorplanMode from './../../../../../store/use-floorplan-mode'
@@ -180,12 +182,19 @@ export interface SettingsPanelProps {
     field: 'isPrivate' | 'showScansPublic' | 'showGuidesPublic',
     value: boolean,
   ) => Promise<void>
+  /**
+   * Host-owned account section (who is signed in, their access, a way out) —
+   * rendered above everything else. The host owns identity and sessions, not
+   * this package, so it is a slot rather than a built-in section.
+   */
+  accountSection?: ReactNode
 }
 
 export function SettingsPanel({
   projectId,
   projectVisibility,
   onVisibilityChange,
+  accountSection,
 }: SettingsPanelProps = {}) {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const copyResetTimeoutRef = useRef<number | null>(null)
@@ -198,8 +207,11 @@ export function SettingsPanel({
   const resetSelection = useViewer((state) => state.resetSelection)
   const modelExport = useEditor((state) => state.modelExport)
   const shadows = useViewer((state) => state.shadows)
+  const walkthroughAutoSpeed = useViewer((state) => state.walkthroughAutoSpeed)
+  const walkthroughSpeedMultiplier = useViewer((state) => state.walkthroughSpeedMultiplier)
   const setPhase = useEditor((state) => state.setPhase)
   const floorplanMode = useFloorplanMode((state) => state.mode)
+  const setFloorplanMode = useFloorplanMode((state) => state.setMode)
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [exportOnlyVisible, setExportOnlyVisible] = useState(true)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
@@ -360,6 +372,8 @@ export function SettingsPanel({
 
   return (
     <div className="flex flex-col gap-6 p-3">
+      {accountSection}
+
       {projectId && (
         <div className="space-y-2">
           <label className="font-medium text-muted-foreground text-xs uppercase">Project</label>
@@ -443,6 +457,47 @@ export function SettingsPanel({
         </div>
       )}
 
+      {/*
+        Walkthrough pace.
+
+        Both switches write to the viewer store rather than a scene field: the
+        comfortable speed depends on the person and their machine, not on the
+        building, so it follows the browser profile the way theme and units do.
+      */}
+      <div className="space-y-3">
+        <label className="font-medium text-muted-foreground text-xs uppercase">Walkthrough</label>
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="font-medium text-sm">Scale speed to building</div>
+            <div className="text-muted-foreground text-xs">
+              Walk faster in a warehouse than in a house
+            </div>
+          </div>
+          <Switch
+            checked={walkthroughAutoSpeed}
+            onCheckedChange={(checked) => useViewer.getState().setWalkthroughAutoSpeed(checked)}
+          />
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="font-medium text-sm">Speed</div>
+            <span className="text-muted-foreground text-xs">
+              {walkthroughSpeedMultiplier.toFixed(1)}×
+            </span>
+          </div>
+          <Slider
+            max={3}
+            min={0.5}
+            onValueChange={(values: number[]) => {
+              const next = values[0]
+              if (next !== undefined) useViewer.getState().setWalkthroughSpeedMultiplier(next)
+            }}
+            step={0.1}
+            value={[walkthroughSpeedMultiplier]}
+          />
+        </div>
+      </div>
+
       {/* Export Section */}
       <div className="space-y-4">
         <label className="font-medium text-muted-foreground text-xs uppercase">Export</label>
@@ -489,7 +544,18 @@ export function SettingsPanel({
         <div className="space-y-2">
           <div className="flex items-center justify-between font-medium text-muted-foreground text-xs">
             <span>Floor plan</span>
-            <span>{floorplanMode === 'default' ? 'Default mode' : 'Expert mode'}</span>
+            <span className="flex items-center gap-2">
+              {floorplanMode === 'default' ? 'Default mode' : 'Expert mode'}
+              {floorplanMode === 'expert' && (
+                <Button
+                  className="h-auto w-auto justify-start p-0 font-medium text-primary text-xs underline"
+                  onClick={() => setFloorplanMode('default')}
+                  variant="link"
+                >
+                  Switch to Default
+                </Button>
+              )}
+            </span>
           </div>
           <Button
             className="w-full justify-start gap-2"

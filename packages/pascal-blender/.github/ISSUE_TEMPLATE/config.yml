@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & help
+    url: https://github.com/pascalorg/pascal-blender/discussions
+    about: Ask anything — setup, workflows, rendering imported scenes
+  - name: Pascal editor issues
+    url: https://github.com/pascalorg/editor/issues
+    about: Bugs in the editor itself (not the Blender importer)

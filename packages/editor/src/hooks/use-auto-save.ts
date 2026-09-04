@@ -133,7 +133,8 @@ export function useAutoSave({
 
   // Stable subscription to scene changes
   useEffect(() => {
-    let lastNodesSnapshot = JSON.stringify(useScene.getState().nodes)
+    let lastNodesRef = useScene.getState().nodes
+    let lastRootNodeIdsRef = useScene.getState().rootNodeIds
     const storedNodeCount = createStoredNodeCountTracker(
       Object.keys(useScene.getState().nodes).length,
     )
@@ -203,7 +204,8 @@ export function useAutoSave({
 
     const unsubscribe = useScene.subscribe((state) => {
       if (isLoadingSceneRef.current) {
-        lastNodesSnapshot = JSON.stringify(state.nodes)
+        lastNodesRef = state.nodes
+        lastRootNodeIdsRef = state.rootNodeIds
         storedNodeCount.trackLoadedGraph(Object.keys(state.nodes).length)
         lastCollectionsRef = state.collections
         lastMaterialsRef = state.materials
@@ -213,22 +215,25 @@ export function useAutoSave({
 
       if (isVersionPreviewModeRef.current) {
         setSaveStatus('paused')
-        lastNodesSnapshot = JSON.stringify(state.nodes)
+        lastNodesRef = state.nodes
+        lastRootNodeIdsRef = state.rootNodeIds
         lastCollectionsRef = state.collections
         lastMaterialsRef = state.materials
         lastInstalledPluginsRef = state.installedPlugins
         return
       }
 
-      const currentNodesSnapshot = JSON.stringify(state.nodes)
+      // $O(1) dirty checking across all persisted scene graph slices
       const changed =
-        currentNodesSnapshot !== lastNodesSnapshot ||
+        state.nodes !== lastNodesRef ||
+        state.rootNodeIds !== lastRootNodeIdsRef ||
         state.collections !== lastCollectionsRef ||
         state.materials !== lastMaterialsRef ||
         state.installedPlugins !== lastInstalledPluginsRef
       if (!changed) return
 
-      lastNodesSnapshot = currentNodesSnapshot
+      lastNodesRef = state.nodes
+      lastRootNodeIdsRef = state.rootNodeIds
       lastCollectionsRef = state.collections
       lastMaterialsRef = state.materials
       lastInstalledPluginsRef = state.installedPlugins

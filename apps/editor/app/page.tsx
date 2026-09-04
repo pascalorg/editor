@@ -1,116 +1,50 @@
-'use client'
+import { getSession } from '@panel/lib/auth/session'
+import type { SceneGraph } from '@pascal-app/editor'
+import { redirect } from 'next/navigation'
+import { SceneLoader, type SceneMeta } from '@/components/scene-loader'
+import { canEdit, getSessionUser } from '@/lib/auth/session'
+import { getSceneOperations } from '@/lib/scene-store-server'
+import { loadOrCreateWorkspaceScene } from '@/lib/workspace-scene'
 
-import { Editor, ItemsPanel } from '@pascal-app/editor'
-import { Hammer, Layers, Package, Settings } from 'lucide-react'
-import Image from 'next/image'
-import Link from 'next/link'
-import { BuildTab } from '@/components/build-tab'
-import {
-  CommunityViewerToolbarLeft,
-  CommunityViewerToolbarRight,
-} from '@/components/viewer-toolbar'
+export const dynamic = 'force-dynamic'
 
-// The open-source editor only ships the built-in catalog (no uploaded items),
-// so the Library/Community/Mine source chips and tag filters add nothing —
-// drop them and keep the panel to plain categories.
-function EditorItemsPanel() {
-  return <ItemsPanel showSourceFilter={false} showTagFilters={false} />
-}
+/**
+ * The front door. A visitor who has not finished signing in is sent to the
+ * console screen that matches their state; a signed-in one gets the editor
+ * rendered right here — no redirect, so the address bar stays on the bare
+ * domain, which is how the operator wants the editor addressed.
+ *
+ * **It renders `<SceneLoader>`, not a bare `<Editor>`, and that is the whole
+ * point of this route.** A bare `<Editor>` has no `onSave`, and the editor's
+ * fallback in that case is `localStorage` — so the front door used to draw
+ * warehouses into one browser profile and never touch the database. Going
+ * through `SceneLoader` puts it on the same path as `/scene/[id]`: `PUT
+ * /api/scenes/[id]`, `If-Match` version checks, conflict handling and the live
+ * event stream, all for free. See `lib/workspace-scene.ts` for why the row is
+ * found by `projectId` rather than by name.
+ */
+export default async function Root() {
+  const session = await getSession({ touch: false })
 
-const SIDEBAR_TABS = [
-  {
-    id: 'site',
-    label: 'Scene',
-    component: () => null,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Layers className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/scene.webp"
-        width={32}
-      />
-    ),
-  },
-  {
-    id: 'build',
-    label: 'Build',
-    component: BuildTab,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Hammer className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/build.webp"
-        width={32}
-      />
-    ),
-  },
-  {
-    id: 'items',
-    label: 'Items',
-    component: EditorItemsPanel,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Package className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/couch.webp"
-        width={32}
-      />
-    ),
-  },
-  {
-    id: 'settings',
-    label: 'Settings',
-    component: () => null,
-    mobileDefaultSnap: 0.5,
-    mobileIcon: <Settings className="h-5 w-5" />,
-    icon: (
-      <Image
-        alt=""
-        className="h-8 w-8 object-contain"
-        height={32}
-        src="/icons/settings.webp"
-        width={32}
-      />
-    ),
-  },
-]
+  if (!session) redirect('/signin')
+  if (session.mfaPending) redirect('/mfa')
+  if (session.user.mustChangePassword) redirect('/welcome')
 
-const PROJECT_ID = 'local-editor'
+  // View-only accounts have no business in the editing surface: they land on
+  // their scene list and open scenes in preview.
+  const user = await getSessionUser()
+  if (!user) redirect('/signin')
+  if (!canEdit(user)) redirect('/scenes')
 
-export default function Home() {
-  return (
-    <div className="relative h-screen w-screen">
-      {PROJECT_ID === 'local-editor' && (
-        <div className="pointer-events-none absolute top-14 left-1/2 z-40 -translate-x-1/2">
-          <div className="pointer-events-none flex max-w-[min(92vw,42rem)] flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs shadow-sm backdrop-blur">
-            <span className="text-muted-foreground">
-              Blank canvas — saved scenes are under Scenes (not this page).
-            </span>
-            <Link
-              className="pointer-events-auto font-medium text-foreground hover:underline"
-              href="/scenes"
-            >
-              Open saved scenes
-            </Link>
-          </div>
-        </div>
-      )}
-      <Editor
-        layoutVersion="v2"
-        projectId={PROJECT_ID}
-        sidebarTabs={SIDEBAR_TABS}
-        viewerToolbarLeft={<CommunityViewerToolbarLeft />}
-        viewerToolbarRight={<CommunityViewerToolbarRight />}
-      />
-    </div>
-  )
+  const workspace = await loadOrCreateWorkspaceScene(user.id)
+
+  // The row above carries metadata, not the graph. Loading it separately keeps
+  // the create path from having to round-trip a graph it just wrote.
+  const operations = await getSceneOperations()
+  const loaded = (await operations.loadStoredScene(workspace.id)) as {
+    graph?: SceneGraph
+  } | null
+  const graph = loaded?.graph ?? ({ nodes: {}, rootNodeIds: [] } as unknown as SceneGraph)
+
+  return <SceneLoader initialScene={graph} meta={workspace as unknown as SceneMeta} />
 }

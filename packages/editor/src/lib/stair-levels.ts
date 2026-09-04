@@ -2,6 +2,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   DEFAULT_LEVEL_HEIGHT,
+  getLevelIndex,
   LevelNode,
   type LevelNode as LevelNodeType,
   resolveBuildingForLevel,
@@ -31,21 +32,16 @@ function getBuildingLevels(
   const building = nodes[buildingId as AnyNodeId]
   if (building?.type !== 'building') return source ? [source] : []
 
-  const levels = new Map<string, LevelNodeType>()
-  if (source) levels.set(source.id, source)
-
-  for (const childId of building.children ?? []) {
-    const child = nodes[childId as AnyNodeId]
-    if (isLevelNode(child)) levels.set(child.id, child)
+  // Shared index instead of a scene rescan: panels ask this on every render,
+  // and the rescan variant walked all nodes per call.
+  const indexed = getLevelIndex(nodes as Record<AnyNodeId, AnyNode>).levelsByBuilding.get(
+    building.id,
+  )
+  const levels = [...(indexed ?? [])]
+  if (source && !levels.some((level) => level.id === source.id)) {
+    return sortLevelsByHeight([...levels, source])
   }
-
-  for (const candidate of Object.values(nodes)) {
-    if (isLevelNode(candidate) && candidate.parentId === building.id) {
-      levels.set(candidate.id, candidate)
-    }
-  }
-
-  return sortLevelsByHeight(Array.from(levels.values()))
+  return levels
 }
 
 export function getBuildingLevelsForLevel(

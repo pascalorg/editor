@@ -1,17 +1,65 @@
-import type { SceneStore } from './types'
+import { resolveMysqlUrl } from './mysql-scene-store'
+import { SceneInvalidError, type SceneStore } from './types'
 
+export { readEnv } from '../lib/env'
+export * from './mysql-scene-store'
 export * from './slug'
 export * from './sqlite-scene-store'
 export * from './types'
 
 /**
- * Factory for Pascal's local-first scene store.
+ * Factory for the scene store.
  *
- * The store is backed by the runtime's built-in SQLite driver. By default it
- * writes to `~/.pascal/data/pascal.db`; set `PASCAL_DB_PATH` for an exact file
- * path or `PASCAL_DATA_DIR` for a directory containing `pascal.db`.
+ * Defaults to the local-first SQLite backend; set `DIGITALTWIN_DB_PATH` for an
+ * exact file path or `DIGITALTWIN_DATA_DIR` for a directory to hold it.
+ *
+ * Set `DIGITALTWIN_MYSQL_URL` (or the HOST/USER/DATABASE trio) to store scenes
+ * in MySQL.
+ *
+ * **In production MySQL is required and there is no way around it.** There used
+ * to be one — `DIGITALTWIN_ALLOW_SQLITE=1`, meant for a throwaway production
+ * run — and it was removed on purpose. A scene written to a host's filesystem
+ * is gone at the next redeploy, and the variable put that outcome one typo, or
+ * one copied `.env`, away. An escape hatch that is convenient for a five-minute
+ * experiment and catastrophic for a customer's warehouse is not worth keeping
+ * for the experiment's sake: run the experiment with `NODE_ENV` unset, which is
+ * what a throwaway run actually is.
  */
 export async function createSceneStore(env?: NodeJS.ProcessEnv): Promise<SceneStore> {
+  const resolved = env ?? process.env
+  const mysqlUrl = resolveMysqlUrl(resolved)
+  if (mysqlUrl) {
+    const mod = await import('./mysql-scene-store')
+    const store = new mod.MysqlSceneStore({ env })
+    console.log(`[digitaltwin:storage] backend=mysql ${describeMysqlTarget(mysqlUrl)}`)
+    return store
+  }
+
+  if (resolved.NODE_ENV === 'production') {
+    throw new SceneInvalidError(
+      'No MySQL configuration found. Scenes must live in MySQL in production: a scene ' +
+        'written to the local filesystem is lost on the next redeploy. ' +
+        'Set DIGITALTWIN_MYSQL_URL (mysql://user:password@host:3306/database) or all of ' +
+        'DIGITALTWIN_MYSQL_HOST, DIGITALTWIN_MYSQL_USER and DIGITALTWIN_MYSQL_DATABASE ' +
+        '(plus DIGITALTWIN_MYSQL_PASSWORD/_PORT as needed). ' +
+        'There is no SQLite override in production; unset NODE_ENV for a local run.',
+    )
+  }
+
   const mod = await import('./sqlite-scene-store')
-  return new mod.SqliteSceneStore({ env })
+  const store = new mod.SqliteSceneStore({ env })
+  console.log(
+    `[digitaltwin:storage] backend=sqlite path=${store.databasePath} (set DIGITALTWIN_MYSQL_URL to use MySQL)`,
+  )
+  return store
+}
+
+/** Host and database only — the URL carries a password. */
+function describeMysqlTarget(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return `host=${parsed.hostname}:${parsed.port || '3306'} database=${parsed.pathname.replace(/^\//, '')}`
+  } catch {
+    return 'target=unparseable'
+  }
 }

@@ -40,6 +40,7 @@ import {
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
+import { useIsNodeIdEditLocked } from '../../lib/edit-lock'
 import {
   clearStructuralElevationGuide,
   getFenceBaseElevationForNodes,
@@ -155,9 +156,13 @@ export function WallMoveSideHandles() {
     const node = selectedId ? state.nodes[selectedId as AnyNodeId] : null
     return node?.type === 'wall' || node?.type === 'fence' ? node : null
   })
+  // A locked wall keeps its selection outline but exposes no side / height /
+  // endpoint handles (blocked under a Structure lock and under sceneLocked).
+  const editLocked = useIsNodeIdEditLocked(selectedId as AnyNodeId | null)
 
   const shouldRender =
     Boolean(selectedNode) &&
+    !editLocked &&
     !isFloorplanHovered &&
     mode !== 'delete' &&
     !movingNode &&

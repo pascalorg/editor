@@ -4,6 +4,7 @@ import type { ZodObject, z } from 'zod'
 import type { MaterialSchema, MaterialTarget } from '../schema/material'
 import type { AssetInput, ItemNode } from '../schema/nodes/item'
 import type { MeasurementFeatureReference, MeasurementPoint } from '../schema/nodes/measurement'
+import type { ZoneNode } from '../schema/nodes/zone'
 import type { SceneMaterial, SceneMaterialId } from '../schema/scene-material'
 import type { AnyNode, AnyNodeId } from '../schema/types'
 import type { HandleList } from './handles'
@@ -959,12 +960,54 @@ export type InspectorExtension = {
   component: LazyComponent
 }
 
+export type ZoneTakeoffMetric = {
+  key: string
+  label: string
+  value: string | number
+  abbreviation?: string
+  sublabel?: string
+}
+
+export type ZoneTakeoffBreakdownItem = {
+  id: string
+  label: string
+  count: number
+  details?: string
+  submetrics?: Array<{ label: string; value: string | number }>
+}
+
+export type ZoneTakeoffReport = {
+  id: string
+  title: string
+  icon?: IconRef
+  metrics: ZoneTakeoffMetric[]
+  breakdown?: ZoneTakeoffBreakdownItem[]
+}
+
+export type ZoneTakeoffExtension = {
+  id: string
+  pluginId: string
+  supportsZone: (args: {
+    zone: ZoneNode
+    contentIds: AnyNodeId[]
+    nodes: Readonly<Record<AnyNodeId, AnyNode>>
+  }) => boolean
+  deriveTakeoff: (args: {
+    zone: ZoneNode
+    contentIds: AnyNodeId[]
+    nodes: Readonly<Record<AnyNodeId, AnyNode>>
+  }) => ZoneTakeoffReport | null
+  component?: LazyComponent
+}
+
 export type Plugin = {
   id: string
   apiVersion: 1
   nodes?: AnyNodeDefinition[]
   /** Sections contributed to the floating node inspector card. */
   inspectorExtensions?: InspectorExtension[]
+  /** Extensions that compute detailed takeoff and statistics for zones. */
+  zoneTakeoffExtensions?: ZoneTakeoffExtension[]
 }
 
 // ─── NodeDefinition ──────────────────────────────────────────────────
@@ -1590,6 +1633,18 @@ export type Capabilities = {
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
   /**
+   * This kind passes vertically through floors and wants the openings cut for
+   * it — a lift, a spiral conveyor, anything whose shaft crosses a slab.
+   *
+   * Declaring it puts the kind into the same sync that already maintains the
+   * elevator's cutouts: the holes are tagged with the node's id, so moving or
+   * deleting the node moves or removes exactly its own holes and leaves the
+   * user's manual cutouts alone. A kind that writes holes itself cannot get
+   * that — a `manual` hole is indistinguishable from one the user drew, so the
+   * old one is stranded on every move.
+   */
+  verticalOpening?: VerticalOpeningConfig
+  /**
    * Plan footprint this kind exposes to the alignment-anchor pool when it
    * isn't `floorPlaced` and isn't a structural primitive the bridge handles
    * directly (wall, slab). Lets a kind self-describe where it sits in plan
@@ -2012,6 +2067,28 @@ export type MovableConfig = {
    */
   groupMoveSnap?: (args: GroupMoveSnapArgs) => [number, number, number] | null
   /**
+   * Kind-owned validity test for a candidate drop, run on every pointer move
+   * of a drag. Returning false paints the drag box red and refuses the drop;
+   * Alt forces it, exactly as it does for `floorPlaced.collides`.
+   *
+   * `collides` answers the same question from the spatial grid, which compares
+   * plan rectangles and sees no Y at all. That is right for furniture on a
+   * floor and wrong for anything whose usable volume is mostly air: to the grid
+   * a conveyor threading the walkway under a racking run is indistinguishable
+   * from one driven through its uprights, so such kinds must leave `collides`
+   * off — and then nothing checked their moves at all. They could be placed
+   * correctly and then dragged into solid steel.
+   *
+   * Declaring this does not switch `collides` on: the two compose, and a kind
+   * may declare either, both, or neither.
+   */
+  canMoveTo?: (args: {
+    node: AnyNode
+    position: [number, number, number]
+    rotationY: number
+    nodes: Readonly<Record<string, AnyNode>>
+  }) => boolean
+  /**
    * Optional rotation-aware group-move snap. This is additive to the original
    * `groupMoveSnap` contract so existing v1 plugins remain valid.
    */
@@ -2263,6 +2340,39 @@ export type FloorPlacedFootprintsResolver = (
  * `applies` is an optional predicate to skip nodes that share a kind but
  * are mounted off-floor (items attached to a wall / ceiling).
  */
+/**
+ * How a kind describes the shaft it needs cut through floors.
+ *
+ * Both members are functions of the node so a kind can size its opening from
+ * its own parameters — a conveyor's helix diameter, a lift's car plus its
+ * clearances — rather than the host guessing from a bounding box.
+ */
+export type VerticalOpeningConfig = {
+  /**
+   * The opening in world XZ, as a closed polygon. Include whatever clearance
+   * the kind needs: the sync cuts exactly this.
+   */
+  polygon: (node: AnyNode, nodes: Readonly<Record<string, AnyNode>>) => Array<[number, number]>
+  /**
+   * Whether this node passes through the given surface. Called once per
+   * candidate surface, so the kind decides its own service range — a lift
+   * serving floors 1-3 answers true for 2 and 3 and false for 4.
+   *
+   * `surface` matters because a level's slab and its ceiling sit at opposite
+   * ends of the level: for a shaft spanning floors 1-3 the cut slabs are 2 and
+   * 3, while the cut ceilings are 1 and 2. A predicate that cannot tell them
+   * apart is wrong at one end or the other — it either leaves the ceiling of
+   * the bottom floor sealed across the shaft, or cuts a hole in the ceiling of
+   * the top one.
+   */
+  servesLevel: (
+    node: AnyNode,
+    levelId: string,
+    nodes: Readonly<Record<string, AnyNode>>,
+    surface: 'slab' | 'ceiling',
+  ) => boolean
+}
+
 export type FloorPlacedConfig = {
   footprint?: FloorPlacedFootprintResolver
   footprints?: FloorPlacedFootprintsResolver

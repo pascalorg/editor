@@ -2,6 +2,7 @@ import { afterAll, beforeAll, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { WallNode } from '@pascal-app/core/schema'
 import { NextRequest } from 'next/server'
 
 /**
@@ -14,14 +15,23 @@ import { NextRequest } from 'next/server'
 const tempDir = mkdtempSync(join(tmpdir(), 'scenes-put-guard-'))
 const SCENE_ID = 'wipe-guard-scene'
 
-// A minimal graph that passes `apiGraphSchema`: a foreign-typed node is held
-// to the BaseNode envelope only, so it stays independent of builtin schemas.
+// A minimal graph that passes `apiGraphSchema`, built by calling the kind's own
+// schema rather than hand-writing a literal.
+//
+// Upstream's fixture was two `qa:box` nodes, on the reasoning that a
+// foreign-typed node is held to the BaseNode envelope only. That is true of
+// upstream's validator and false of this fork's: `graph-schema.ts` routes a
+// plugin kind to that plugin's own `def.schema` and everything unclaimed to
+// `AnyNode`, so an invented kind is refused and every save in this suite came
+// back 400 `invalid_request` before it ever reached the guard under test.
+const wallA = WallNode.parse({ start: [0, 0], end: [4, 0] })
+const wallB = WallNode.parse({ start: [4, 0], end: [4, 4] })
 const POPULATED_GRAPH = {
   nodes: {
-    n1: { id: 'n1', type: 'qa:box' },
-    n2: { id: 'n2', type: 'qa:box' },
+    [wallA.id]: wallA,
+    [wallB.id]: wallB,
   },
-  rootNodeIds: ['n1'],
+  rootNodeIds: [wallA.id],
 }
 // FILE NAME MATTERS: scene-store-server.test.ts calls mock.module() on
 // '@pascal-app/mcp/operations', and bun module mocks leak process-wide to
@@ -119,9 +129,10 @@ test('the rejected PUT leaves the stored scene untouched', async () => {
 })
 
 test('a populated save still goes through', async () => {
+  const wallC = WallNode.parse({ start: [4, 4], end: [0, 4] })
   const graph = {
-    nodes: { ...POPULATED_GRAPH.nodes, n3: { id: 'n3', type: 'qa:box' } },
-    rootNodeIds: ['n1'],
+    nodes: { ...POPULATED_GRAPH.nodes, [wallC.id]: wallC },
+    rootNodeIds: [wallA.id],
   }
   const response = await PUT(putRequest({ graph }, 1), params)
 

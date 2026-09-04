@@ -1,0 +1,272 @@
+# Repository topology and upstream merges
+
+Plain-language version of the same picture, for whoever operates this rather
+than edits it: `OTOMASYON.md`.
+
+## Two branches, and why
+
+| Branch | What it is |
+|---|---|
+| `main` | A pure mirror of `pascalorg/editor`. No commit of ours ever lands here, which is what makes taking upstream free — the mirror can only fast-forward, so it never conflicts. |
+| `integration` | **The default branch.** Everything this fork adds lives here, and it is what the deploy builds from. Every workflow that pushes, pushes here. |
+
+Scheduled workflows run only from the default branch, which is why
+`integration` is it. Point `vars.INTEGRATION_BRANCH` at another name to move
+it; every workflow reads that variable and falls back to `integration`.
+
+## Which change goes to which repository
+
+| What changed | Repository | How it gets there |
+|---|---|---|
+| Editor (this codebase) | `ovurrsl/editor` — fork of `pascalorg/editor` | Commit on `integration` |
+| Console / panel | `ovurrsl/panel` — the console's home | Automatic inbound: `pull-panel` vendors it into `apps/editor/panel` hourly, type-checks, pushes to `integration`, then dispatches the deploy. The outbound `sync-panel` is manual now — for seeding the console repository from here, not for routine work. |
+| Warehouse plugin | `ovurrsl/plugin-warehouse` | Automatic: `bump-plugin` compares the pin in `apps/editor/package.json` against the plugin's `main` hourly, moves it, relocks, type-checks, pushes, and dispatches the deploy. Nothing to do by hand. |
+| Upstream editor | `pascalorg/editor` | `mirror-upstream` fast-forwards `main` daily and opens one long-lived pull request into `integration`. **Merging it is the one manual step in the whole chain** — see below. |
+| What the server runs | `ovurrsl/Digitaltwin` | Build artifacts only — published by the deploy workflow (or a manual publish). Never commit source here; the host redeploys from it. Step-by-step: `YAYINLAMA.md` |
+
+Every automatic path above ends at `deploy-bundle`, which refuses to publish
+unless the build succeeds and both boot smoke tests pass. That is the reason
+none of them needs a human in the middle.
+
+## Pulling updates from pascalorg/editor
+
+`mirror-upstream` keeps `main` on upstream's tip and opens a pull request from
+`main` into `integration` whenever `integration` is behind it — not only on the
+run that moved the mirror, because `main` can also be advanced by hand and
+gating on "did this job push?" loses those updates silently.
+
+The `upstream-check` workflow (weekly, or run it manually from the Actions tab)
+does a trial merge and reports which files would conflict — read its summary
+before merging for real.
+
+Resolving the pull request locally:
+
+```
+git remote add upstream https://github.com/pascalorg/editor.git   # once
+git fetch upstream
+git checkout integration
+git merge upstream/main
+```
+
+Most of this repository's additions live in files upstream does not have, so
+they merge silently: `apps/editor/panel/`, `apps/editor/lib/auth/`,
+`apps/editor/app/(panel)/`, the deploy/relock/sync workflows, the deploy
+scaffold under `.github/deploy/`.
+
+## Upstream files that carry local changes — conflict rules
+
+| File | Rule when it conflicts |
+|---|---|
+| `AGENTS.md` (and its `CLAUDE.md` / `GEMINI.md` / copilot symlinks) | Keep our fork block at the top, take upstream's body below it. The block is delimited by `FORK BLOCK` / `END FORK BLOCK` comments and says which branch to work on — without it an agent reads instructions written for `pascalorg/editor` and commits to `main`. |
+| `apps/editor/app/page.tsx` | Keep ours. Upstream's root page is the editor composition; ours is the session router. Upstream's changes to the editor composition belong in `apps/editor/components/editor-app.tsx` — port them there by hand. |
+| `apps/editor/components/editor-app.tsx` | Ours only (upstream has no such file), but it is a moved copy of upstream's old `app/page.tsx` — apply upstream's `app/page.tsx` improvements here. |
+| `apps/editor/app/layout.tsx` | Merge both; keep the `export const dynamic = 'force-dynamic'` block (the host's CDN caches static HTML across deploys and serves dead assets without it). |
+| `apps/editor/lib/graph-schema.ts` | Keep ours: API validation must consult each plugin's own node schemas, not a static union. Port upstream's non-plugin changes around that. |
+| `apps/editor/app/api/scenes/**`, `lib/auth/guard.ts` | Merge both; keep the ownership/role checks (`authorizeSceneMutation`, `canEdit`). |
+| `apps/editor/components/scene-loader.tsx` | Merge both; keep the `readOnly` prop and the console-session `useSession` wiring. |
+| `apps/editor/app/scenes/`, `app/scene/[id]/` | Merge both; keep the console-session gating and the navigation that points Home at `/`. Scene administration lives in the console's 3D scenes tab, not in a standalone page. |
+| `apps/editor/next.config.ts` | Merge both; keep `serverExternalPackages: ['@node-rs/argon2']` and the standalone/output settings. |
+| `apps/editor/package.json`, `bun.lock`, `biome.jsonc` | Merge both, and keep the `@ovurrsl/plugin-warehouse` pin — upstream has no such dependency, so a wholesale "take theirs" silently removes the warehouse racks. After changing dependencies by hand, dispatch the Relock workflow from the Actions tab to regenerate `bun.lock` on a real runner. |
+| `apps/editor/app/api/health/route.ts` | Keep ours — it exercises the scene store, and `deploy-bundle`'s second smoke test is only meaningful because of that. Upstream's version answers `ok` without touching the database, so taking it turns the release gate into a rubber stamp. Do take their `version` / `instanceId` fields: they are the only way to read which build is actually live. |
+| `apps/editor/lib/bootstrap.ts` | Merge both — register upstream's `mintPlugin` **and** `warehousePlugin`. `extendPluginDiscovery` composes, so this is two calls rather than a choice; `setPluginDiscovery` would drop everything registered before it. Both plugins must also stay in `serverExternalPackages` (`next.config.ts`) and in `apps/editor/package.json`. |
+| `apps/ifc-converter/next-env.d.ts` | Take upstream's deletion. Next regenerates it on every build and upstream has it in `.gitignore`; tracking it only buys a conflict at every Next upgrade. It has nothing to do with the IFC feature — that is `apps/ifc-converter/` plus the editor's own import button, and neither is affected. |
+| root `package.json` | Keep ours: `build` (the Hostinger standalone chain the deploy copies `hostinger-server.js` into), `dev`, and `sync-panel`. Take everything else from upstream — `test`, `engines.node`, `packageManager`, `overrides.next`. `test` had gone missing on our side, so `bun test` at the root ran nothing at all. `release:cli` is deliberately not taken: we do not publish the CLI. |
+| `apps/editor/next.config.ts` (output) | Keep `output: 'standalone'` **unconditional**. Upstream gates it behind `PASCAL_PORTABLE_BUILD=1`; taking that produces a green build with no standalone directory to serve, and the deploy fails at the copy step rather than at the build. `outputFileTracingRoot` is **not** taken — not because it is proven harmful, but because every deploy that has ever worked here was built without it and the bundle only ever copies `standalone/apps/editor/`. Leave it out until someone has a reason and a green deploy to go with it. |
+| root `package.json` `overrides` ↔ `.github/deploy/package.json` | **Bump them together or not at all.** These two files never see each other: the first fixes what the app is BUILT with, the second what the bundle RUNS. beta.5 raised `overrides.next` to 16.3.0 and left the bundle on 16.2.9 — a `.next` output from one Next served by another. Nothing errors: build green, assemble green, the server boots, connects to MySQL, applies migrations, says ready, and then resolves no routes at all. `/api/health` returned an empty body for a full minute with not one line in the log, twice. `apps/editor/lib/deploy-bundle.test.ts` now asserts the two agree, so this cannot recur silently. |
+| `packages/mcp/src/storage/sqlite-scene-store.ts` | Keep ours. The fork split the shared helpers into `scene-store-shared.ts` so `mysql-scene-store.ts` can use them; upstream still has everything inlined, so taking theirs re-inlines the helpers and breaks the MySQL store — which is the backend production actually runs. Port upstream's behavioural fixes into `scene-store-shared.ts` instead. |
+| `packages/viewer/src/components/viewer/index.tsx` | Take upstream's. The GPU-capability check and the unsupported-GPU fallback were extracted into `lib/renderer-capability.ts` and `components/viewer/unsupported-gpu-fallback.tsx` upstream; our inline copies are simply the older version of the same code. Re-apply one thing after taking theirs: the fallback text says "Pascal", and ours says "DigitalTwin". |
+| `apps/editor/lib/graph-schema.test.ts` | Merge both suites into one file. The two sides wrote independent tests at the same path — upstream covers the envelope (asset-URL allowlist, nesting, materials), ours covers plugin-kind validation. Neither subsumes the other. |
+| `packages/viewer/src/systems/wall/wall-cutout.tsx` | **Fork perf fix (2026-08-07):** the slab-support / plane-top chain runs only for highlighted walls, behind `resolveSelectionHighlight`'s thunk. Measured at roughly half of frame CPU on a warehouse-scale scene, spent on walls whose answer was discarded. Keep the thunk when merging; it is being proposed upstream, so take upstream's version if they fix it themselves. |
+| `packages/core/src/lib/space-detection.ts` | **Keep the missing upper area bound (2026-08-11).** Upstream drops any detected face over 10 000 m²; we dropped only that half of the test, keeping the `< 0.5` floor. The bound cost us five things at once on every building past it — `Space`, auto slab, auto ceiling, auto zone, and `wallClosesRoom`, so the wall tool would not auto-close either — with no error anywhere. Warehouses are 12 000–30 000 m², so for this fork it is not an edge case, it is the normal size. It was not guarding the outer face (already dropped by `signedArea <= 0`, since `nextEdge` walks interior faces counter-clockwise) and it was not a cost guard (the polygon is already built when the check runs). `warehouse-scale rooms` in `space-detection.test.ts` sweeps 100 m² → 30 000 m² and fails on any reinstated ceiling. Proposed upstream; take theirs if they land it. |
+
+| `packages/core/src/systems/stair/{stair-opening-sync,stair-rise}.ts`, `packages/editor/src/lib/stair-levels.ts` | **Fork perf fix (2026-08-13, #19):** kat sorguları `services/level-index.ts` üzerinden (fork'a özgü yeni dosya, WeakMap-memo). Upstream hâlâ her çağrıda tüm sahneyi tarar — 5 000 düğümlü sahnede kat eklemek 2,6 s. Merge'de indeks çağrılarını koru, upstream'in davranış düzeltmelerini indeksli hâlin üstüne uygula. Bekçi: `stair-opening-sync.test.ts` içindeki Proxy `ownKeys` sayacı — upstream'in tarayan hâli geri gelirse kırmızı yanar. |
+| `packages/nodes/src/{wall,ceiling,column}/{panel.tsx,parametrics.ts}`, `packages/editor/src/components/ui/floating-level-selector.tsx` | **Keep ours: no `max` at all (2026-08-24).** Upstream raised the room-envelope caps from 6 m to 20 m (#642, #650). A cap is still a cap: fork PR #17 removed thirteen of them because a warehouse clear height is 10–12 m and high-bay is past 15, and because `SliderControl` clamps *typed* input as well as drag — so a dragged 120 m wall silently became 20 m the moment anyone touched the Length field. No schema has an upper bound; the floors stay. Ceiling is the subtle one: the real constraint is `getCeilingClampBound`, and `Math.min(20, maxHeight)` overrides it exactly as `Math.min(6, maxHeight)` did. Take upstream's *structural* changes around the control (e.g. the `!managedByLeanTo` wrapper on the column height slider) and leave the `max` off. |
+| `apps/editor/package.json` → `@pascal-app/plugin-trees` | Ours is `workspace:*` against the vendored `packages/plugin-trees`; upstream consumes it as `github:pascalorg/plugin-trees#<sha>` and bumps that sha. Keeping `workspace:*` is what the vendored copy requires, and the cost is that trees stops receiving upstream's updates. **Open question, not a settled rule** — switching to the github pin means deciding what happens to `packages/plugin-trees` (and `packages/plugin-articraft` beside it), which is its own change with its own build to prove. Do not do it inside an upstream merge. |
+| `apps/editor/components/scene-loader.tsx` (floating buttons) | Also drop upstream's `Light preview` / `All scenes` overlay block. Both were navigation sitting on top of the drawing; the Scenes rail answers the second from inside the editor and `?disable=postFx` still drives `disablePostFx`, so the flag survives without a permanent button for a diagnostic. |
+| `packages/editor/src/components/ui/sidebar/panels/site-panel/tree-node.tsx` | Take upstream's `getTreeNodeComponent` export (their `tree-node.test.ts` imports it) but keep our `def.tree` gate **inside** it, returning `undefined` for a kind that declares no `tree`. Upstream falls back unconditionally, and a level's row maps every one of its children to a `TreeNode` — so an unconditional fallback draws rows for `roof-segment`, `stair-segment`, the duct and pipe fittings and `guide`. Their test only asserts two unnamed kinds route to the *same* thing, which `undefined === undefined` satisfies. |
+| `apps/editor/lib/api-put-empty-guard.test.ts` | Rebuild the fixture. Upstream's is two `qa:box` nodes, correct against upstream's validator and wrong against ours: `lib/graph-schema.ts` routes a plugin kind to that plugin's own `def.schema` and everything unclaimed to `AnyNode`, so an invented kind is refused and every save in the suite returns 400 `invalid_request` before reaching the guard under test. Build the nodes by calling a real kind's schema (`WallNode.parse(...)`) — the same rule the 2026-08-10 log draws from `graph-schema.test.ts`, hit a second time. |
+| `packages/viewer/src/components/viewer/scene-bvh.tsx` | **Fork perf fix (2026-08-13, #20):** tek seferlik mount taraması `lib/scene-bvh-maintainer.ts`'e (fork'a özgü) bağlanan sürekli/bütçeli bakıma çevrildi — upstream'in hâli sahne boş doldurulmadan tarar ve hiçbir şey indekslemez (gezinme süresinin %62'si kaba kuvvet raycast). Merge'de maintainer bağlantısını koru; upstream bileşen API'sine ne eklerse porte et. |
+| `packages/viewer/src/components/renderers/parametric-node-renderer.tsx`, `systems/wall/wall-system.tsx`, `systems/floor-elevation/floor-elevation-system.tsx` | **Fork perf fix (2026-08-13, #21):** statik matris dondurma — parametrik grup `useStaticTransform` ile, duvar mesh'i `updateWallGeometry` sonunda `freezeObjectTransform` ile donar; kat yükseltme yazımı `stampFrozenTransform` ile damgalar. Sıra tuzağı (`matrixAutoUpdate=false` ÖNCE gelirse nesne orijinde çizilir) `lib/static-transform.ts`'te belgeli ve testli. Merge'de üç çağrıyı da koru — upstream'de yoklar ve kaybolmaları hata değil sessiz yavaşlama üretir. |
+
+After any upstream merge: `bun run check && bun run check-types`, build, and
+let CI plus the deploy workflow's boot smoke tests confirm nothing broke
+before publishing to `ovurrsl/Digitaltwin`.
+
+---
+
+## Before you publish: keep a way back
+
+Tag or branch the commit the **currently live** deploy was built from, and push
+it, before merging anything large. The live sha is the `head_sha` of the last
+successful `Deploy bundle` run — not the head of `integration`, which usually
+sits ahead of it.
+
+```sh
+LIVE=$(…head_sha of the last successful Deploy bundle run…)
+git branch rollback/$(date +%F)-pre-upstream "$LIVE"
+git push origin refs/heads/rollback/$(date +%F)-pre-upstream
+```
+
+Push it as `refs/heads/…` explicitly. A branch and a tag of the same name make
+the short refspec ambiguous and the push is refused.
+
+Rolling back is then:
+
+```sh
+git checkout integration
+git reset --hard rollback/<the one you made>
+git push --force-with-lease origin integration
+# then run `Deploy bundle` by hand from the Actions tab
+```
+
+The database is **not** covered by this. Scenes live in MySQL, so a rollback
+returns the code and leaves the data where it is — which is what you want for a
+bad build, and no help at all for a bad migration.
+
+---
+
+## Log of upstream takes
+
+One entry per merge. The point is not history for its own sake: it records what
+was *decided* and what bit us, so the next take is cheaper than this one was.
+
+### 2026-08-24 — beta.5 → 7f629b8c, 55 commits
+
+**What came in.** Lean-to roof extensions with automatic drainage (#651, #690),
+Blender-style custom mesh editing (#638), synchronized 2D viewer modes (#672),
+shared-parameter editing across a homogeneous multi-selection (#680),
+plugin inspector-card extensions (#667), an empty-graph save guard, a batch of
+wall hover/pick correctness fixes (#683, #686, #687, #689, #697), and the
+autosave fix that stopped scenes being wiped during the load window (#682).
+
+**Thirty-five files conflicted. Five of them were not real conflicts.**
+`integration` carries cherry-picks of upstream #607, #608 and #638, so git saw
+two independent additions of the same path and reported add/add. Four of the
+five were byte-identical to the upstream commit they were picked from, and the
+fifth differed by one defensive `?.`. **Check this first on any add/add
+conflict** — `git diff origin/integration:<file> <upstream-sha>:<file>` answers
+it in a second, and taking upstream outright is then strictly an upgrade,
+because upstream has since fixed the same file (#686, #687).
+
+**The empty-graph guard's tests failed for the reason the last log predicted.**
+Upstream's fixture builds two `qa:box` nodes on the reasoning that a foreign
+kind is held to the BaseNode envelope. True upstream, false here — and all
+three tests came back 400 `invalid_request` without ever reaching the guard.
+This is the *second* time an upstream suite has been merged against this fork's
+plugin-aware `graph-schema.ts`. The rule from 2026-08-10 stands and is now
+worth stating as a habit rather than a lesson: **when an upstream test fails
+right after a merge, check whether it is testing upstream's implementation
+before you touch the implementation.**
+
+**A merge tool that eats newlines is worse than one that fails.** The
+conflict-resolution pass here was scripted with a regex whose `\n?` swallowed
+the trailing newline of every kept block. It produced things like
+`from '../../lib/edit-lock'import { getFloatingMenuScale }` and
+`registerEditorHostPanel({ ... })extendPluginDiscovery(...)` in six files.
+Biome caught most of them and `check-types` caught the rest, but one — a
+duplicate `export { createEditorApi }` in `packages/editor/src/index.tsx` —
+was a *semantic* duplicate git had auto-merged, not a scripting slip, and it is
+the kind of thing a conflict-free auto-merge produces without telling anyone.
+**Run `bun run check && bun run check-types && bun run test` before believing a
+merge with no remaining markers.**
+
+**`bun.lock` cannot be regenerated from a sandbox, and this is by design.**
+Upstream bumped `plugin-bones` to `85238a8e`; the lockfile records the sha512
+of each GitHub tarball, and `api.github.com` tarball fetches for repositories
+outside this session's scope return 403. The lock is therefore committed
+unchanged and the **Relock** workflow is dispatched on the merge branch
+afterwards — it exists precisely for this and pushes back to the branch it was
+dispatched on. Until it runs, CI's `--frozen-lockfile` is expected to fail on
+the bones hash and nothing else.
+
+**Plan item 4.3, folded in while `next.config.ts` was already open:**
+`@pascal-app/plugin-articraft` is now in `transpilePackages`. It ships raw
+TypeScript (`"main": "./src/index.ts"`), `lib/bootstrap.ts` imports it, and it
+had never been listed. It builds today only because bun's symlink layout drops
+its real path outside `node_modules` and Next compiles it anyway — a linker
+change would have broken it with no warning.
+
+### 2026-08-10 — beta.2 → beta.5, 56 commits
+
+**Why it was 56 and not a handful.** `mirror-upstream` had been failing every
+night since 7 August and nobody noticed, because nothing user-visible breaks
+when the mirror stops — the editor keeps building from a frozen `main`. See the
+`MIRROR_TOKEN` note in `OTOMASYON.md`. **Check that the mirror is green before
+assuming you are up to date.**
+
+**What we gained that we actually wanted:** the `materials` persistence fix
+(below), the per-level base-elevation control, webp snapshot encoding, and the
+GPU-capability refactor with its tests.
+
+**The bug this merge uncovered, and the one worth remembering.** Upstream's
+`#597` found that `materials` was never named in the persistence schemas.
+`z.object()` strips what it does not name, so every custom surface was silently
+deleted on save — no error, no log, and the scene reopens looking merely
+"reset". Our fork had the same hole in two places, and one of them was missing
+`installedPlugins` as well, so a warehouse scene forgot which pack it needed.
+
+The general rule that falls out of it: **in `apps/editor/lib/graph-schema.ts`
+and `packages/mcp/src/storage/scene-store-shared.ts`, the field list IS the set
+of things that survive a save.** A field missing there is not a validation
+error, it is deletion. Treat any upstream change to those two files as
+load-bearing.
+
+**Two traps in the tooling, both fixed here:**
+
+- `Relock` pinned bun `1.3.0` while CI installed with `1.3.14`. A lockfile
+  written by the older bun is rewritten by the newer one, and
+  `--frozen-lockfile` turns that into a failed build — a relock producing a
+  lockfile CI then rejects. Keep the two pinned to the same version as
+  `packageManager`.
+- The lockfile would not **converge**: two relocks in a row each rewrote it.
+  `postcss` is a transitive dependency of both Next and Tailwind at different
+  patch versions, and with nothing pinning it, bun broke the tie differently on
+  every run. `--frozen-lockfile` can never pass against an oscillating
+  lockfile, however many times you relock. Fixed by pinning `postcss` in the
+  root `overrides`, next to `next` and `three`, which are there for the same
+  reason. **If a frozen-lockfile failure survives a relock, suspect
+  oscillation rather than staleness** — run the relock twice and diff.
+
+**A mistake worth not repeating:** upstream's `graph-schema.test.ts` was merged
+alongside ours, but upstream's suite tests upstream's implementation — including
+an asset-URL allowlist our fork's version does not implement. Merging their
+tests while keeping our implementation fails in CI. Either port the behaviour or
+keep only the tests that match what the file actually does.
+
+**The biggest single thing this merge bought, and it looked like a regression.**
+Taking upstream's root `package.json` restored the `test` script. Ours had none,
+so `turbo run test` had no root entry point and **the entire test suite had been
+dark in CI** — every package, not just `apps/editor`. Nobody removed it on
+purpose; it fell out of an earlier edit and CI stayed green because a suite that
+never runs never fails.
+
+Seven tests failed the moment it came back. **None was caused by upstream's
+code.** They were latent, written and never once executed:
+
+- Six were upstream's own, all built on a hand-written `trees:tree` object
+  literal. Upstream validates a foreign kind against the base envelope, so a
+  five-field literal is enough there; this fork validates it against the trees
+  plugin's own schema, where it is not. Fixtures are now built by calling the
+  plugin's schema, which also mints the branded id — a literal is only as
+  correct as its author's memory of a package we do not control.
+- One was ours, and it is the more interesting: it derived a node id from the
+  kind's local part (`warehouse:live-rack` → `live-rack_t1`) on the assumption
+  that the two always match. They do not — that kind brands its ids
+  `live-racking_`. The id prefix is **persisted user data**, so the plugin
+  cannot be renamed to close the gap; the test asks the schema for an id
+  instead of guessing one.
+
+Two rules fall out of this, and they are worth more than the fix:
+
+1. **A green CI is only evidence if you know what it ran.** After any change to
+   root scripts or to `turbo.json`, check the run's task count — `Tasks: N
+   successful, M total` — not just its colour.
+2. **Never hand-write a fixture for a schema you do not own.** Build it by
+   calling that schema. It costs one line and it cannot rot silently.
+
+Recorded for later, found while reading the plugin during this: the live-rack
+placement tool writes `name: 'Live Racking'` on commit. That is the same
+fixed-name defect already fixed in every kind's `defaults()`, in a second place
+the manifest-wide guard does not reach — it inspects `defaults()`, not tools.
+It costs the tree its derived label for that kind. Not touched here; this merge
+carries no feature work.

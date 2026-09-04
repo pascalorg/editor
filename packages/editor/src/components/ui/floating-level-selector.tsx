@@ -236,9 +236,15 @@ function LevelRow({
               side="right"
               sideOffset={8}
             >
+              {/*
+                No upper bound: a wall set to follow its storey takes this
+                number, so a 6 m cap here capped every such wall too — and a
+                warehouse storey is 10–12 m. `LevelNode.height` is an unbounded
+                `z.number()`. The presets below stay house-sized because they
+                are shortcuts, not limits.
+              */}
               <SliderControl
                 label="Level height"
-                max={20}
                 min={1}
                 onChange={(v) => updateNode(level.id, { height: v })}
                 precision={3}
@@ -571,7 +577,7 @@ export function FloatingLevelSelector() {
 
   return (
     <>
-      <div className="pointer-events-auto absolute top-14 left-3 z-20">
+      <div className="pointer-events-auto absolute top-16 left-4 z-30">
         <div className="relative">
           {/* Floating + at top edge */}
           {!draggingLevelId && (

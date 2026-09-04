@@ -185,8 +185,22 @@ const treeNodeByType: Record<string, TreeNodeComponent> = {
   item: ItemTreeNode,
 }
 
-export function getTreeNodeComponent(nodeType: string): TreeNodeComponent {
-  return treeNodeByType[nodeType] ?? RegistryTreeNode
+/**
+ * The row component for a kind, or `undefined` when the kind draws no row.
+ *
+ * A kind the map doesn't name falls through to the generic row when it declares
+ * `def.tree`. Without a fallback a registry kind absent from the map drew NO row
+ * at all, so plugin objects were missing from the scene tree entirely — the
+ * `def.tree.label` was computed and never reached a reader.
+ *
+ * Gated on `def.tree` rather than on mere registration, which is where this
+ * differs from upstream's unconditional fallback: plenty of registered kinds are
+ * sub-parts that must stay out of the tree (`roof-segment`, `stair-segment`, the
+ * duct and pipe fittings, `guide`), and a level's row maps every one of its
+ * children to a `TreeNode`. Declaring `tree` is the kind saying it belongs there.
+ */
+export function getTreeNodeComponent(nodeType: string): TreeNodeComponent | undefined {
+  return treeNodeByType[nodeType] ?? (nodeRegistry.get(nodeType)?.tree ? RegistryTreeNode : undefined)
 }
 
 export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: TreeNodeProps) {
@@ -201,6 +215,7 @@ export const TreeNode = memo(function TreeNode({ nodeId, depth = 0, isLast }: Tr
   if (shouldHide) return null
   if (!nodeType) return null
   const Component = getTreeNodeComponent(nodeType)
+  if (!Component) return null
   return <Component depth={depth} isLast={isLast} nodeId={nodeId} />
 })
 

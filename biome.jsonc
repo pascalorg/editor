@@ -107,10 +107,36 @@
       "!**/build",
       "!**/public",
       "!**/components/ui",
-      "!**/next-env.d.ts"
+      "!**/next-env.d.ts",
+      // Foreign trees copied in whole, not authored here and not shipped as
+      // our source: `lingo` is a second monorepo (its own biome.jsonc used to
+      // abort this config outright), `pascal-blender` is a Python add-on plus
+      // JSON fixtures, `skills` is a markdown skill collection. Each carries
+      // its own house style; linting them here reports only that difference.
+      "!packages/lingo",
+      "!packages/pascal-blender",
+      "!packages/skills"
     ]
   },
   "overrides": [
+    {
+      // Vendored sources we still compile and ship: the console (synced from
+      // ovurrsl/panel) and the two upstream plugin packages. Their hooks
+      // intentionally pin effect dependencies; re-deriving them here would
+      // change runtime behavior, so the rule is off for these subtrees only.
+      "includes": [
+        "apps/editor/panel/**",
+        "packages/plugin-articraft/**",
+        "packages/plugin-trees/**"
+      ],
+      "linter": {
+        "rules": {
+          "correctness": {
+            "useExhaustiveDependencies": "off"
+          }
+        }
+      }
+    },
     {
       "includes": ["packages/editor/components/debug/react-scan.tsx"],
       "assist": {

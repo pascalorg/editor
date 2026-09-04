@@ -582,10 +582,19 @@ export default function ColumnPanel() {
             ))}
           </select>
         )}
+        {/*
+          No ceiling. A column carries the roof, so its height is the
+          building's clear height — 10–12 m in a warehouse, past 15 in
+          high-bay. `ColumnNode.height` is `z.number().positive()` with no
+          upper bound, and `SliderControl` clamps typed input as well as drag,
+          so a 6 m cap did not limit the column, it silently shortened it.
+          Upstream raised the cap to 20 m rather than dropping it; the same
+          defect at a larger number, so the wrapper below is taken and the
+          `max` is not.
+        */}
         {!managedByLeanTo && (
           <SliderControl
             label="Height"
-            max={1000}
             min={0.8}
             onChange={(value) => handleUpdate({ height: value })}
             precision={2}

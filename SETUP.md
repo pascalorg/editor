@@ -28,26 +28,24 @@ cp .env.example .env
 
 Local development and the official hosted editor work without any environment variables.
 
-## Docker
+## Docker — removed in this fork
 
-```bash
-docker compose up -d
-```
+Upstream ships a `Dockerfile` and `docker-compose.yml`. **They are deleted
+here, on purpose.**
 
-The editor will be running at **http://localhost:3000**. Saved scenes live in
-the `pascal-data` volume, so they survive `docker compose down`.
+They declared a `/data` volume and stated that saved scenes live in SQLite
+inside it, with no MySQL variable anywhere in either file. This fork runs on
+MySQL and treats "scenes live in the database" as a hard requirement, so those
+files described a second, contradictory way to install the product — one that
+would have stored a customer's warehouses in a container volume, silently, and
+looked entirely normal while doing it. Nobody deploys this fork with them
+(production is Hostinger, built by `deploy-bundle`), so they were pure
+opportunity for a future mistake.
 
-Docker defaults `MINT_PASCAL_HOST_ORIGIN` to `http://localhost:3000`. Override
-it when hosting Pascal at another origin:
+If Docker is ever wanted here, it comes back carrying the MySQL configuration
+and without the volume — not by restoring upstream's copy.
 
-```bash
-MINT_PASCAL_HOST_ORIGIN=https://pascal.example.com docker compose up -d
-```
-
-Keep the container port at 3000: the `/scenes` page fetches its own API through
-a base URL that only `NEXT_PUBLIC_APP_URL` can override, and Next inlines that
-value at build time, so remapping the port to something else makes the page
-return 500.
+Deployment for this fork: `YAYINLAMA.md`.
 
 ## CLI-managed editor
 

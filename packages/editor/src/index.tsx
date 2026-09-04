@@ -243,7 +243,12 @@ export { TerrainSculptPanel } from './components/ui/controls/terrain-sculpt-pane
 export { ToggleControl } from './components/ui/controls/toggle-control'
 export { ToolOptionsPanel } from './components/ui/controls/tool-options-panel'
 export { FloatingLevelSelector } from './components/ui/floating-level-selector'
-export { CATALOG_ITEMS } from './components/ui/item-catalog/catalog-items'
+export { CATALOG_ITEMS, type CatalogItem } from './components/ui/item-catalog/catalog-items'
+export {
+  ItemCatalog,
+  type ItemCatalogItem,
+  type ItemCatalogProps,
+} from './components/ui/item-catalog/item-catalog'
 // Item collections UI — used by the kind-owned ItemPanel in nodes/.
 export { CollectionsPopover } from './components/ui/panels/collections/collections-popover'
 // Phase 5 Stage E — kinds with bespoke editors (slab holes list,
@@ -331,6 +336,7 @@ export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 export { markToolCancelConsumed } from './hooks/use-keyboard'
 export { useReducedMotion } from './hooks/use-reduced-motion'
 export { type Selection, useSelection } from './hooks/use-selection'
+export { useTemporalCounts } from './hooks/use-temporal-counts'
 export {
   clearPlacementSurface,
   getPlacementSurface,
@@ -359,6 +365,7 @@ export {
   continuationContextOf,
   nextContinuation,
 } from './lib/continuation'
+export { filterEditableIds, isNodeEditLocked, isNodeIdEditLocked } from './lib/edit-lock'
 export { createEditorApi } from './lib/editor-api'
 export {
   clearStructuralElevationGuide,
@@ -511,6 +518,9 @@ export {
   metersToLinearUnit,
   squareMetersToAreaUnit,
 } from './lib/measurements'
+// Zone membership and node naming — read by the zone kind's own panel, which
+// lives in `packages/nodes` and so can only reach these through the barrel.
+export { resolveNodeDisplayName } from './lib/node-display-name'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
   addFreshPlacementMetadata,
@@ -596,6 +606,12 @@ export {
   snapBuildingLocalToWorldGrid,
   snapWorldXZForActiveBuilding,
 } from './lib/world-grid-snap'
+export {
+  collectZoneContentIds,
+  collectZoneObjectIds,
+  collectZoneObjectLabels,
+  resolveZoneTakeoffReports,
+} from './lib/zone-content'
 export { subscribeCameraPose } from './store/camera-pose-store'
 export { default as useAlignmentGuides } from './store/use-alignment-guides'
 export { default as useAudio } from './store/use-audio'

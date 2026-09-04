@@ -75,6 +75,23 @@ const snapToGridStep = (value: number) => {
 /** 45° steps, matching the GLB item placement rotation. */
 const ROTATION_STEP = Math.PI / 4
 
+/**
+ * Whether a move gets the green/red validity box at all.
+ *
+ * The box is the only thing that drives `recomputeValidity`, so this doubles as
+ * "is this kind's move validated". It used to be `collides` alone, which meant
+ * a kind that had to leave `collides` off — because the spatial grid compares
+ * plan rectangles and sees no Y — had **no** move validation whatsoever. Such a
+ * kind could be placed correctly and then dragged straight into solid steel,
+ * with the placement gate it does have never consulted again.
+ *
+ * Either source turns it on. Neither is the default, so every kind that
+ * declares only `movable` keeps the plain arrow cursor it has always had.
+ */
+export function showsValidityBox(collides: boolean, declaresCanMoveTo: boolean): boolean {
+  return collides || declaresCanMoveTo
+}
+
 export function resolveMoveRotationStep(
   freeRotation: number,
   delta: number,
@@ -352,9 +369,15 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       null,
     [dragBounds, node],
   )
+  // Kind-owned 3D validity — see `MovableConfig.canMoveTo`. A kind that
+  // declares it gets the same red/green box and Alt override as a `collides`
+  // kind, which is the whole point: refusing a drop with no visual reason
+  // reads as the object simply refusing to move.
+  const movableValidityConfig = nodeRegistry.get(node.type)?.capabilities?.movable
+  const canMoveTo = movableValidityConfig?.canMoveTo ?? null
   const boxDimensions = useMemo(
-    () => (collides || parentFrameCollides ? resolvedFootprint : null),
-    [collides, parentFrameCollides, resolvedFootprint],
+    () => (showsValidityBox(collides || parentFrameCollides, canMoveTo !== null) ? resolvedFootprint : null),
+    [collides, parentFrameCollides, canMoveTo, resolvedFootprint],
   )
   const [valid, setValid] = useState(true)
   const previewRotationY = useCallback(
@@ -611,7 +634,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         dimensions: footprint.dimensions,
         rotation: footprint.rotation,
       }))
-      const { valid: placeable } =
+      const { valid: gridPlaceable } =
         resolvedFootprints.length > 0
           ? spatialGridManager.canPlaceOnFloorFootprints(levelId, resolvedFootprints, [node.id])
           : boxDimensions
@@ -623,6 +646,13 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
                 [node.id],
               )
             : { valid: true }
+      const kindAllows =
+        canMoveTo?.({
+          node: effectiveNode,
+          position: livePosition,
+          rotationY: liveRotation,
+          nodes: useScene.getState().nodes,
+        }) ?? true
       const kindValid = movableValidityConfig?.isValidPosition
         ? movableValidityConfig.isValidPosition({
             node: effectiveNode,
@@ -632,7 +662,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
             nodes: useScene.getState().nodes as Record<string, AnyNode>,
           })
         : true
-      const positionValid = placeable && kindValid
+      const positionValid = gridPlaceable && kindAllows && kindValid
       validRef.current = positionValid
       setValid(positionValid)
     }

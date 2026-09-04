@@ -43,6 +43,7 @@ import * as THREE from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import { useReducedMotion } from '../../hooks/use-reduced-motion'
 import { resolveMoveActionNode } from '../../lib/direct-manipulation'
+import { useIsNodeIdEditLocked } from '../../lib/edit-lock'
 import { getFloatingMenuScale } from '../../lib/floating-menu-scale'
 import {
   createFreshPlacementSubtree,
@@ -324,6 +325,9 @@ export function FloatingActionMenu() {
   // Subscribe just to the selected node so unrelated scene updates do not
   // re-render this menu.
   const node = useScene((s) => (selectedId ? (s.nodes[selectedId as AnyNodeId] ?? null) : null))
+  // A locked node keeps the menu (for inspect + Duplicate) but hides every edit
+  // action — Move / Delete / Curve / Add-hole and the kind-specific quick actions.
+  const editLocked = useIsNodeIdEditLocked(selectedId as AnyNodeId | null)
   const quickActionNodes = useScene(useShallow((s) => collectQuickActionNodes(s.nodes, selectedId)))
   const quickActions = useMemo<NodeQuickAction[]>(
     () =>
@@ -793,10 +797,13 @@ export function FloatingActionMenu() {
                     ? handleFind
                     : undefined
                 }
-                onAddHole={node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined}
+                onAddHole={
+                  !editLocked && node && HOLE_TYPES.includes(node.type) ? handleAddHole : undefined
+                }
                 onCurve={
-                  (node?.type === 'fence' && !isSplineFence(node) && !isCurvedWall(node)) ||
-                  (node?.type === 'wall' && canCurveSelectedWall)
+                  !editLocked &&
+                  ((node?.type === 'fence' && !isSplineFence(node) && !isCurvedWall(node)) ||
+                    (node?.type === 'wall' && canCurveSelectedWall))
                     ? handleCurve
                     : undefined
                 }
@@ -805,10 +812,15 @@ export function FloatingActionMenu() {
                   // `capabilities.movable`, a `floorplanMoveTarget`, or a
                   // 3D `affordanceTools.move` mover gets the Move button.
                   // Adding a new movable kind never touches this file.
-                  node && isRegistryMovable(node.type) ? handleMove : undefined
+                  !editLocked && node && isRegistryMovable(node.type) ? handleMove : undefined
                 }
-                onDelete={handleDelete}
+                onDelete={editLocked ? undefined : handleDelete}
                 onDuplicate={
+                  // Locked like every other edit here. Duplicating under a lock
+                  // wrote the copy at the source's exact position, where the same
+                  // lock then made it unselectable and undeletable — an invisible
+                  // node nothing in the UI could reach.
+                  !editLocked &&
                   node &&
                   node.type !== 'spawn' &&
                   !DELETE_ONLY_TYPES.includes(node.type) &&
@@ -820,7 +832,7 @@ export function FloatingActionMenu() {
                 onPointerUp={(e) => e.stopPropagation()}
               />
             ) : null}
-            {menuVisibility.actions && quickActions.length > 0 ? (
+            {menuVisibility.actions && !editLocked && quickActions.length > 0 ? (
               <div
                 className="pointer-events-auto mt-1 inline-flex w-max items-center justify-center gap-0.5 rounded-lg border border-border/50 bg-background/90 px-1.5 py-1 shadow-md backdrop-blur-md"
                 onPointerDown={(e) => e.stopPropagation()}

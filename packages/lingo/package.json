@@ -1,0 +1,34 @@
+{
+  "name": "lingo-monorepo",
+  "private": true,
+  "packageManager": "bun@1.3.14",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "kill": "node scripts/kill-dev.mjs",
+    "clean:cache": "rm -rf apps/*/.next apps/*/.next-dev apps/*/.next-build apps/*/.turbo packages/*/.turbo .turbo node_modules/.cache",
+    "restart": "bun kill && bun run clean:cache && bun dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "size": "turbo run size",
+    "check": "turbo run check",
+    "lint": "bun x ultracite@7.8.2 check",
+    "lint:fix": "bun x ultracite@7.8.2 fix",
+    "bench": "bun run --filter @pascal-app/lingo bench",
+    "ai-eval": "bun run --filter @pascal-app/lingo ai-eval",
+    "demo": "bun run --filter @pascal-app/lingo demo",
+    "site:dev": "bun run --filter lingo-site dev",
+    "site:sync": "node scripts/sync-site.mjs",
+    "postinstall": "lefthook install || true"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.16",
+    "lefthook": "^2.1.6",
+    "turbo": "^2.5.0",
+    "ultracite": "7.8.2"
+  }
+}

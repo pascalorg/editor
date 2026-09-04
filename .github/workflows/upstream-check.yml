@@ -1,0 +1,41 @@
+name: Upstream check
+
+# Trial-merges pascalorg/editor into this branch and reports what would
+# conflict, so an upstream pull is never a surprise. Read-only: the merge is
+# aborted and nothing is pushed. Conflict rules per file live in UPSTREAM.md.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  trial-merge:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Attempt the merge
+        run: |
+          git config user.name 'trial-merge'
+          git config user.email 'trial-merge@localhost'
+          git remote add upstream https://github.com/pascalorg/editor.git
+          git fetch --quiet upstream main
+
+          echo '## Upstream trial merge' >> "$GITHUB_STEP_SUMMARY"
+          behind=$(git rev-list --count HEAD..upstream/main)
+          echo "Commits upstream is ahead by: **$behind**" >> "$GITHUB_STEP_SUMMARY"
+
+          if git merge --no-commit --no-ff upstream/main >/dev/null 2>&1; then
+            echo 'Merges **cleanly** — no conflicts.' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'Conflicting files (see UPSTREAM.md for the rule per file):' >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            git diff --name-only --diff-filter=U >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+          git merge --abort 2>/dev/null || true

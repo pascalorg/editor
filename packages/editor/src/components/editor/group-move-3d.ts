@@ -15,6 +15,7 @@ import {
 import { useViewer } from '@pascal-app/viewer'
 import { type Camera, Plane, type Raycaster, Vector2, Vector3 } from 'three'
 import { GROUP_MOVE_DRAG_LABEL } from '../../lib/contextual-help'
+import { isNodeIdEditLocked } from '../../lib/edit-lock'
 import { isHistoryShortcut } from '../../lib/history'
 import { sfxEmitter } from '../../lib/sfx-bus'
 import useAlignmentGuides from '../../store/use-alignment-guides'
@@ -71,6 +72,8 @@ export function armGroupMove3d(args: {
   const { nodeId, clientX, clientY, pointerId, camera, raycaster, domElement } = args
   const { selectedIds, levelId } = useViewer.getState().selection
   if (selectedIds.length < 2 || !selectedIds.includes(nodeId)) return false
+  // Grabbing a locked node never arms a move — it stays put and selectable.
+  if (isNodeIdEditLocked(nodeId)) return false
   const sceneNodes = useScene.getState().nodes
   if (classifyParticipant(sceneNodes[nodeId], levelId, sceneNodes) === null) return false
 
@@ -99,7 +102,9 @@ export function armGroupMove3d(args: {
   const engage = (): Session | null => {
     const nodes = useScene.getState().nodes
     const participantIds = selectedIds.filter(
-      (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
+      (id) =>
+        classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null &&
+        !isNodeIdEditLocked(id as AnyNodeId),
     )
     // Move the full connected wall/fence component, mirroring the 2D session.
     const fullIds = expandToComponent(participantIds, nodes, levelId)

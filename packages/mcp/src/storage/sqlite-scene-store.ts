@@ -1,12 +1,25 @@
-import { createHash } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import type { SceneGraph } from '@pascal-app/core/clone-scene-graph'
-import { z } from 'zod'
+import { readEnv } from '../lib/env'
+import {
+  assertValidName,
+  countGraphNodes,
+  DEFAULT_LIST_LIMIT,
+  editorUrlForScene,
+  hashGraphJson,
+  parseGraph,
+  presenceCutoffIso,
+  resolveMaxSceneBytes,
+  SCENE_EVENT_HISTORY,
+  SCENE_REVISION_HISTORY,
+  serializeGraph,
+} from './scene-store-shared'
 import { generateSlug, isValidSlug, sanitizeSlug } from './slug'
 import { openSqliteDatabase, type SqliteDatabase } from './sqlite-driver'
 import {
+  type PresenceClaim,
   type ProjectCreateOptions,
   type ProjectStatus,
   type SceneEvent,
@@ -17,17 +30,16 @@ import {
   type SceneMeta,
   type SceneMutateOptions,
   SceneNotFoundError,
+  type ScenePresence,
+  type SceneRevisionMeta,
   type SceneSaveOptions,
+  type SceneShare,
+  type SceneShareRole,
   type SceneStore,
   SceneTooLargeError,
   SceneVersionConflictError,
   type SceneWithGraph,
 } from './types'
-
-const DEFAULT_MAX_SCENE_BYTES = 10 * 1024 * 1024
-const DEFAULT_LIST_LIMIT = 100
-const MAX_NAME_LENGTH = 200
-const MIN_NAME_LENGTH = 1
 
 export interface SqliteSceneStoreOptions {
   /** Exact SQLite database file path. If omitted, resolved from env. */
@@ -70,37 +82,23 @@ interface ProjectPlaceholder {
   updatedAt: string
 }
 
-// `z.object()` strips keys it doesn't name, so every field that must survive a
-// save→load round trip has to be listed here. Values stay `unknown` rather than
-// being validated against `SceneMaterial`/`Collection`: nothing validates on the
-// way in, and `parseGraph` throws, so a strict shape here would let one odd
-// stored value make a saved scene permanently unloadable. Validation belongs on
-// the write path, where the caller can still react to it.
-const GraphSchema = z.object({
-  nodes: z.record(z.string(), z.unknown()),
-  rootNodeIds: z.array(z.string()),
-  collections: z.record(z.string(), z.unknown()).optional(),
-  materials: z.record(z.string(), z.unknown()).optional(),
-  installedPlugins: z.array(z.string()).optional(),
-})
-
 /**
- * Resolves Pascal's local SQLite database path.
+ * Resolves the local SQLite database path. Only the two configuration
+ * variables are renamed; the default locations keep their historical names so
+ * an existing local database is still found.
  *
  * Precedence:
- * 1. `PASCAL_DB_PATH`
- * 2. `PASCAL_DATA_DIR/pascal.db`
+ * 1. `DIGITALTWIN_DB_PATH`
+ * 2. `DIGITALTWIN_DATA_DIR/pascal.db`
  * 3. On Windows: `%APPDATA%/Pascal/data/pascal.db`
  * 4. `$XDG_DATA_HOME/pascal/data/pascal.db`
  * 5. `$HOME/.pascal/data/pascal.db`
  */
 export function resolveDefaultDatabasePath(env: NodeJS.ProcessEnv = process.env): string {
-  if (env.PASCAL_DB_PATH && env.PASCAL_DB_PATH.length > 0) {
-    return env.PASCAL_DB_PATH
-  }
-  if (env.PASCAL_DATA_DIR && env.PASCAL_DATA_DIR.length > 0) {
-    return path.join(env.PASCAL_DATA_DIR, 'pascal.db')
-  }
+  const dbPath = readEnv(env, 'DB_PATH')
+  if (dbPath) return dbPath
+  const dataDir = readEnv(env, 'DATA_DIR')
+  if (dataDir) return path.join(dataDir, 'pascal.db')
   if (process.platform === 'win32') {
     const appData = env.APPDATA
     if (appData && appData.length > 0) {
@@ -113,26 +111,6 @@ export function resolveDefaultDatabasePath(env: NodeJS.ProcessEnv = process.env)
     return path.join(xdg, 'pascal', 'data', 'pascal.db')
   }
   return path.join(os.homedir(), '.pascal', 'data', 'pascal.db')
-}
-
-function resolveMaxSceneBytes(
-  env: NodeJS.ProcessEnv | undefined,
-  explicit: number | undefined,
-): number {
-  if (explicit !== undefined) {
-    if (!Number.isInteger(explicit) || explicit <= 0) {
-      throw new SceneInvalidError('maxSceneBytes must be a positive integer')
-    }
-    return explicit
-  }
-
-  const raw = env?.PASCAL_MAX_SCENE_BYTES
-  if (raw === undefined || raw === '') return DEFAULT_MAX_SCENE_BYTES
-  const parsed = Number.parseInt(raw, 10)
-  if (!Number.isInteger(parsed) || parsed <= 0) {
-    throw new SceneInvalidError('PASCAL_MAX_SCENE_BYTES must be a positive integer')
-  }
-  return parsed
 }
 
 function rowToMeta(row: SceneRow): SceneMeta {
@@ -153,15 +131,6 @@ function rowToMeta(row: SceneRow): SceneMeta {
     published: true,
     graphHash: hashGraphJson(row.graph_json),
   }
-}
-
-function editorUrlForScene(id: string): string {
-  const origin = process.env.PASCAL_EDITOR_ORIGIN?.replace(/\/$/, '')
-  return origin ? `${origin}/scene/${encodeURIComponent(id)}` : `/editor/${id}`
-}
-
-function hashGraphJson(graphJson: string): string {
-  return createHash('sha256').update(graphJson).digest('hex')
 }
 
 function rowToProjectStatus(row: SceneRow): ProjectStatus {
@@ -212,53 +181,6 @@ function placeholderToProjectStatus(project: ProjectPlaceholder): ProjectStatus 
   }
 }
 
-function assertValidName(name: string): void {
-  if (typeof name !== 'string') {
-    throw new SceneInvalidError('Scene name must be a string')
-  }
-  const trimmed = name.trim()
-  if (trimmed.length < MIN_NAME_LENGTH || name.length > MAX_NAME_LENGTH) {
-    throw new SceneInvalidError(
-      `Scene name must be ${MIN_NAME_LENGTH}-${MAX_NAME_LENGTH} characters (got ${name.length})`,
-    )
-  }
-}
-
-function serializeGraph(graph: SceneGraph): string {
-  return JSON.stringify(graph)
-}
-
-function parseGraph(raw: string, context: string): SceneGraph {
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(raw)
-  } catch (err) {
-    throw new SceneInvalidError(
-      `Failed to parse scene graph for ${context}: ${err instanceof Error ? err.message : String(err)}`,
-    )
-  }
-
-  const result = GraphSchema.safeParse(parsed)
-  if (!result.success) {
-    throw new SceneInvalidError(`Scene graph for ${context} has invalid shape: ${result.error}`)
-  }
-
-  const graph = result.data
-  for (const [nodeId, node] of Object.entries(graph.nodes)) {
-    if (!node || typeof node !== 'object' || Array.isArray(node)) {
-      throw new SceneInvalidError(`Scene graph for ${context} has non-object node at "${nodeId}"`)
-    }
-    const typeField = (node as { type?: unknown }).type
-    if (typeof typeField !== 'string' || typeField.length === 0) {
-      throw new SceneInvalidError(
-        `Scene graph for ${context} has node "${nodeId}" missing a string "type"`,
-      )
-    }
-  }
-
-  return graph as SceneGraph
-}
-
 function asSceneRow(value: unknown): SceneRow | null {
   if (!value || typeof value !== 'object') return null
   return value as SceneRow
@@ -276,6 +198,61 @@ function rowToSceneEvent(row: SceneEventRow): SceneEvent {
 }
 
 /**
+ * Drop every revision of this scene older than the newest
+ * {@link SCENE_REVISION_HISTORY}.
+ *
+ * Mirrors `MysqlSceneStore.trimRevisions` deliberately: the two stores are
+ * asserted to behave identically by `store.test.ts`, and a retention policy
+ * that held on only one of them would be a policy nobody could rely on.
+ * Called inside the caller's write transaction, so the insert and the eviction
+ * commit together.
+ */
+function trimRevisions(db: SqliteDatabase, sceneId: string): void {
+  const oldestKept = db
+    .query(
+      `SELECT version FROM scene_revisions
+         WHERE scene_id = ?
+         ORDER BY version DESC
+         LIMIT 1 OFFSET ?`,
+    )
+    .get(sceneId, SCENE_REVISION_HISTORY - 1) as { version: number } | null | undefined
+
+  // Fewer revisions than the window: nothing has been pushed out yet.
+  if (!oldestKept) return
+
+  db.query('DELETE FROM scene_revisions WHERE scene_id = ? AND version < ?').run(
+    sceneId,
+    oldestKept.version,
+  )
+}
+
+/**
+ * Drop every live-sync event of this scene older than the newest
+ * {@link SCENE_EVENT_HISTORY}.
+ *
+ * Ordered by `event_id`, not `version`: several events can share a version, and
+ * `event_id` is the column the SSE cursor advances through — the only ordering
+ * that matches what a client considers "newer".
+ */
+function trimSceneEvents(db: SqliteDatabase, sceneId: string): void {
+  const oldestKept = db
+    .query(
+      `SELECT event_id FROM scene_events
+         WHERE scene_id = ?
+         ORDER BY event_id DESC
+         LIMIT 1 OFFSET ?`,
+    )
+    .get(sceneId, SCENE_EVENT_HISTORY - 1) as { event_id: number } | null | undefined
+
+  if (!oldestKept) return
+
+  db.query('DELETE FROM scene_events WHERE scene_id = ? AND event_id < ?').run(
+    sceneId,
+    oldestKept.event_id,
+  )
+}
+
+/**
  * SQLite-backed implementation of `SceneStore`.
  *
  * Uses one local database file, WAL mode, and transaction-scoped version checks
@@ -287,9 +264,9 @@ export class SqliteSceneStore implements SceneStore {
   readonly databasePath: string
 
   private readonly maxSceneBytes: number
-  private readonly projectPlaceholders = new Map<string, ProjectPlaceholder>()
   private db: SqliteDatabase | null = null
   private dbPromise: Promise<SqliteDatabase> | null = null
+  private writeQueue: Promise<unknown> = Promise.resolve()
 
   constructor(opts: SqliteSceneStoreOptions = {}) {
     const env = opts.env ?? process.env
@@ -298,26 +275,30 @@ export class SqliteSceneStore implements SceneStore {
   }
 
   async createProject(opts: ProjectCreateOptions): Promise<ProjectStatus> {
-    const db = await this.database()
-    assertValidName(opts.name)
-    const id = opts.id ? sanitizeSlug(opts.id) : this.generateUniqueId(db)
-    if (!isValidSlug(id)) {
-      throw new SceneInvalidError(`Invalid project id after sanitization: "${id}"`)
-    }
-    if (this.getRow(db, id)) {
-      throw new SceneInvalidError(`Project with id "${id}" already exists`)
-    }
-    const now = new Date().toISOString()
-    const project: ProjectPlaceholder = {
-      id,
-      name: opts.name,
-      ownerId: opts.ownerId ?? null,
-      thumbnailUrl: null,
-      createdAt: now,
-      updatedAt: now,
-    }
-    this.projectPlaceholders.set(id, project)
-    return placeholderToProjectStatus(project)
+    return this.withWriteTransaction((db) => {
+      assertValidName(opts.name)
+      const id = opts.id ? sanitizeSlug(opts.id) : this.generateUniqueId(db)
+      if (!isValidSlug(id)) {
+        throw new SceneInvalidError(`Invalid project id after sanitization: "${id}"`)
+      }
+      if (this.getRow(db, id)) {
+        throw new SceneInvalidError(`Project with id "${id}" already exists`)
+      }
+      const now = new Date().toISOString()
+      const project: ProjectPlaceholder = {
+        id,
+        name: opts.name,
+        ownerId: opts.ownerId ?? null,
+        thumbnailUrl: null,
+        createdAt: now,
+        updatedAt: now,
+      }
+      db.query(
+        `INSERT INTO project_placeholders (id, name, owner_id, thumbnail_url, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      ).run(id, project.name, project.ownerId, project.thumbnailUrl, now, now)
+      return placeholderToProjectStatus(project)
+    })
   }
 
   async getProjectStatus(id: string): Promise<ProjectStatus | null> {
@@ -325,7 +306,7 @@ export class SqliteSceneStore implements SceneStore {
     const safeId = sanitizeSlug(id)
     const row = this.getRow(db, safeId)
     if (row) return rowToProjectStatus(row)
-    const placeholder = this.projectPlaceholders.get(safeId)
+    const placeholder = this.getPlaceholder(db, safeId)
     return placeholder ? placeholderToProjectStatus(placeholder) : null
   }
 
@@ -343,7 +324,7 @@ export class SqliteSceneStore implements SceneStore {
       }
 
       const existing = this.getRow(db, id)
-      const placeholder = this.projectPlaceholders.get(id)
+      const placeholder = this.getPlaceholder(db, id)
 
       if (existing && providedId !== undefined && opts.expectedVersion === undefined) {
         throw new SceneInvalidError(
@@ -428,8 +409,9 @@ export class SqliteSceneStore implements SceneStore {
            scene_id, version, graph_json, author_kind, author_id, created_at
          ) VALUES (?, ?, ?, ?, ?, ?)`,
       ).run(id, version, graphJson, 'mcp', ownerId, now)
+      trimRevisions(db, id)
 
-      this.projectPlaceholders.delete(id)
+      db.query('DELETE FROM project_placeholders WHERE id = ?').run(id)
 
       return {
         id,
@@ -471,6 +453,11 @@ export class SqliteSceneStore implements SceneStore {
     if (opts.ownerId !== undefined) {
       clauses.push('owner_id = ?')
       bindings.push(opts.ownerId)
+    } else if (opts.viewerId !== undefined) {
+      // Owned by the viewer OR shared with them. `ownerId` wins when both are
+      // set (an explicit owner query), so this branch is `else if`.
+      clauses.push('(owner_id = ? OR id IN (SELECT scene_id FROM scene_shares WHERE user_id = ?))')
+      bindings.push(opts.viewerId, opts.viewerId)
     }
 
     const requestedLimit = opts.limit ?? DEFAULT_LIST_LIMIT
@@ -536,6 +523,7 @@ export class SqliteSceneStore implements SceneStore {
              scene_id, version, graph_json, author_kind, author_id, created_at
            ) VALUES (?, ?, ?, ?, ?, ?)`,
       ).run(safeId, nextVersion, existing.graph_json, 'mcp', existing.owner_id, now)
+      trimRevisions(db, safeId)
 
       return {
         ...rowToMeta(existing),
@@ -563,6 +551,7 @@ export class SqliteSceneStore implements SceneStore {
            ) VALUES (?, ?, ?, ?, ?)`,
         )
         .run(safeId, opts.version, opts.kind, now, graphJson)
+      trimSceneEvents(db, safeId)
 
       return {
         eventId: Number(result.lastInsertRowid),
@@ -594,10 +583,242 @@ export class SqliteSceneStore implements SceneStore {
     return rows.map((row) => rowToSceneEvent(row as SceneEventRow))
   }
 
+  async listSceneShares(sceneId: string): Promise<SceneShare[]> {
+    const db = await this.database()
+    const rows = db
+      .query('SELECT user_id, role FROM scene_shares WHERE scene_id = ? ORDER BY granted_at ASC')
+      .all(sanitizeSlug(sceneId)) as Array<{ user_id: string; role: string }>
+    return rows.map((r) => ({ userId: r.user_id, role: r.role as SceneShareRole }))
+  }
+
+  async setSceneShares(
+    sceneId: string,
+    shares: SceneShare[],
+    grantedBy: string | null = null,
+  ): Promise<void> {
+    const safeId = sanitizeSlug(sceneId)
+    const now = new Date().toISOString()
+    await this.withWriteTransaction((db) => {
+      db.query('DELETE FROM scene_shares WHERE scene_id = ?').run(safeId)
+      const insert = db.query(
+        `INSERT INTO scene_shares (scene_id, user_id, role, granted_by, granted_at)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      for (const share of shares) {
+        insert.run(safeId, share.userId, share.role, grantedBy, now)
+      }
+    })
+  }
+
+  async getSceneShareRole(sceneId: string, userId: string): Promise<SceneShareRole | null> {
+    const db = await this.database()
+    const row = db
+      .query('SELECT role FROM scene_shares WHERE scene_id = ? AND user_id = ?')
+      .get(sanitizeSlug(sceneId), userId) as { role: string } | null | undefined
+    return row ? (row.role as SceneShareRole) : null
+  }
+
+  async listSceneRevisions(sceneId: string): Promise<SceneRevisionMeta[]> {
+    const db = await this.database()
+    const rows = db
+      .query(
+        `SELECT version, author_kind, created_at, graph_json
+           FROM scene_revisions
+          WHERE scene_id = ?
+          ORDER BY version DESC`,
+      )
+      .all(sanitizeSlug(sceneId)) as Array<{
+      version: number
+      author_kind: string
+      created_at: string
+      graph_json: string
+    }>
+    return rows.map((r) => ({
+      version: Number(r.version),
+      createdAt: r.created_at,
+      authorKind: r.author_kind,
+      nodeCount: countGraphNodes(r.graph_json),
+      sizeBytes: Buffer.byteLength(r.graph_json, 'utf8'),
+    }))
+  }
+
+  async loadSceneRevision(sceneId: string, version: number): Promise<SceneGraph | null> {
+    const db = await this.database()
+    const row = db
+      .query('SELECT graph_json FROM scene_revisions WHERE scene_id = ? AND version = ?')
+      .get(sanitizeSlug(sceneId), version) as { graph_json: string } | null | undefined
+    if (!row) return null
+    return parseGraph(row.graph_json, `${sceneId}@${version}`)
+  }
+
+  async updateThumbnail(sceneId: string, thumbnailUrl: string | null): Promise<void> {
+    return this.withWriteTransaction((db) => {
+      db.query('UPDATE scenes SET thumbnail_url = ? WHERE id = ?').run(
+        thumbnailUrl,
+        sanitizeSlug(sceneId),
+      )
+    })
+  }
+
+  async touchPresence(
+    sceneId: string,
+    userId: string,
+    email: string | null,
+    opts: { claimEditor: boolean },
+  ): Promise<PresenceClaim> {
+    const safeId = sanitizeSlug(sceneId)
+    const now = new Date().toISOString()
+    const cutoff = presenceCutoffIso(Date.now())
+    return this.withWriteTransaction((db) => {
+      // Prune stale rows first — this is what frees the lease when a tab closed
+      // without a clean release. After this, any is_editor row is a live holder.
+      db.query('DELETE FROM scene_presence WHERE scene_id = ? AND last_seen < ?').run(
+        safeId,
+        cutoff,
+      )
+      const editorRow = db
+        .query(
+          'SELECT user_id, email FROM scene_presence WHERE scene_id = ? AND is_editor = 1 LIMIT 1',
+        )
+        .get(safeId) as { user_id: string; email: string | null } | null | undefined
+
+      let isEditor: boolean
+      let editorUserId: string | null
+      let editorEmail: string | null
+      if (editorRow) {
+        isEditor = editorRow.user_id === userId
+        editorUserId = editorRow.user_id
+        editorEmail = editorRow.user_id === userId ? email : editorRow.email
+      } else if (opts.claimEditor) {
+        isEditor = true
+        editorUserId = userId
+        editorEmail = email
+      } else {
+        isEditor = false
+        editorUserId = null
+        editorEmail = null
+      }
+
+      db.query(
+        `INSERT INTO scene_presence (scene_id, user_id, email, last_seen, is_editor)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(scene_id, user_id)
+           DO UPDATE SET email = excluded.email, last_seen = excluded.last_seen, is_editor = excluded.is_editor`,
+      ).run(safeId, userId, email, now, isEditor ? 1 : 0)
+
+      return { isEditor, editorUserId, editorEmail }
+    })
+  }
+
+  async transferPresenceEditor(
+    sceneId: string,
+    fromUserId: string,
+    toUserId: string,
+  ): Promise<PresenceClaim> {
+    const safeId = sanitizeSlug(sceneId)
+    const cutoff = presenceCutoffIso(Date.now())
+    return this.withWriteTransaction((db) => {
+      // Prune stale rows first
+      db.query('DELETE FROM scene_presence WHERE scene_id = ? AND last_seen < ?').run(
+        safeId,
+        cutoff,
+      )
+
+      const editorRow = db
+        .query(
+          'SELECT user_id, email FROM scene_presence WHERE scene_id = ? AND is_editor = 1 LIMIT 1',
+        )
+        .get(safeId) as { user_id: string; email: string | null } | null | undefined
+
+      // If fromUserId is not the current active editor, return current claim without transferring
+      if (!editorRow || editorRow.user_id !== fromUserId) {
+        return {
+          isEditor: false,
+          editorUserId: editorRow ? editorRow.user_id : null,
+          editorEmail: editorRow ? editorRow.email : null,
+        }
+      }
+
+      // Check if toUserId is active in scene_presence for sceneId
+      const targetUser = db
+        .query(
+          'SELECT user_id, email FROM scene_presence WHERE scene_id = ? AND user_id = ? LIMIT 1',
+        )
+        .get(safeId, toUserId) as { user_id: string; email: string | null } | null | undefined
+
+      if (!targetUser) {
+        // Target user is not active, no transfer occurs
+        return {
+          isEditor: true,
+          editorUserId: editorRow.user_id,
+          editorEmail: editorRow.email,
+        }
+      }
+
+      if (fromUserId === toUserId) {
+        return {
+          isEditor: true,
+          editorUserId: fromUserId,
+          editorEmail: editorRow.email,
+        }
+      }
+
+      // In an atomic transaction, update fromUserId to is_editor = 0 and toUserId to is_editor = 1
+      db.query('UPDATE scene_presence SET is_editor = 0 WHERE scene_id = ? AND user_id = ?').run(
+        safeId,
+        fromUserId,
+      )
+      db.query('UPDATE scene_presence SET is_editor = 1 WHERE scene_id = ? AND user_id = ?').run(
+        safeId,
+        toUserId,
+      )
+
+      return {
+        isEditor: false,
+        editorUserId: targetUser.user_id,
+        editorEmail: targetUser.email,
+      }
+    })
+  }
+
+  async listScenePresence(sceneId: string): Promise<ScenePresence[]> {
+    const db = await this.database()
+    const cutoff = presenceCutoffIso(Date.now())
+    const rows = db
+      .query(
+        `SELECT user_id, email, is_editor, last_seen
+           FROM scene_presence
+          WHERE scene_id = ? AND last_seen >= ?
+          ORDER BY is_editor DESC, last_seen ASC`,
+      )
+      .all(sanitizeSlug(sceneId), cutoff) as Array<{
+      user_id: string
+      email: string | null
+      is_editor: number
+      last_seen: string
+    }>
+    return rows.map((r) => ({
+      userId: r.user_id,
+      email: r.email,
+      isEditor: r.is_editor === 1,
+      lastSeen: r.last_seen,
+    }))
+  }
+
+  async releaseScenePresence(sceneId: string, userId: string): Promise<void> {
+    return this.withWriteTransaction((db) => {
+      db.query('DELETE FROM scene_presence WHERE scene_id = ? AND user_id = ?').run(
+        sanitizeSlug(sceneId),
+        userId,
+      )
+    })
+  }
+
   close(): void {
     this.db?.close()
     this.db = null
     this.dbPromise = null
+    this.writeQueue = Promise.resolve()
   }
 
   private async database(): Promise<SqliteDatabase> {
@@ -650,6 +871,15 @@ export class SqliteSceneStore implements SceneStore {
         FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE
       );
 
+      CREATE TABLE IF NOT EXISTS project_placeholders (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        owner_id TEXT,
+        thumbnail_url TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
       CREATE TABLE IF NOT EXISTS scene_events (
         event_id INTEGER PRIMARY KEY AUTOINCREMENT,
         scene_id TEXT NOT NULL,
@@ -662,23 +892,81 @@ export class SqliteSceneStore implements SceneStore {
 
       CREATE INDEX IF NOT EXISTS scene_events_scene_event_idx
         ON scene_events(scene_id, event_id);
+
+      CREATE TABLE IF NOT EXISTS scene_shares (
+        scene_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('viewer', 'editor')),
+        granted_by TEXT,
+        granted_at TEXT NOT NULL,
+        PRIMARY KEY (scene_id, user_id),
+        FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS scene_shares_user_idx
+        ON scene_shares(user_id);
+
+      CREATE TABLE IF NOT EXISTS scene_presence (
+        scene_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        email TEXT,
+        last_seen TEXT NOT NULL,
+        is_editor INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (scene_id, user_id),
+        FOREIGN KEY (scene_id) REFERENCES scenes(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS scene_presence_scene_seen_idx
+        ON scene_presence(scene_id, last_seen);
     `)
   }
 
   private async withWriteTransaction<T>(fn: (db: SqliteDatabase) => T | Promise<T>): Promise<T> {
-    const db = await this.database()
-    db.exec('BEGIN IMMEDIATE')
-    try {
-      const result = await fn(db)
-      db.exec('COMMIT')
-      return result
-    } catch (err) {
+    const runTransaction = async (): Promise<T> => {
+      const db = await this.database()
+      db.exec('BEGIN IMMEDIATE')
       try {
-        db.exec('ROLLBACK')
-      } catch {
-        // Ignore rollback errors so the original failure is preserved.
+        const result = await fn(db)
+        db.exec('COMMIT')
+        return result
+      } catch (err) {
+        try {
+          db.exec('ROLLBACK')
+        } catch {
+          // Ignore rollback errors so the original failure is preserved.
+        }
+        throw err
       }
-      throw err
+    }
+
+    const current = this.writeQueue.catch(() => {}).then(runTransaction)
+    this.writeQueue = current.catch(() => {})
+    return current
+  }
+
+  private getPlaceholder(db: SqliteDatabase, id: string): ProjectPlaceholder | null {
+    const row = db
+      .query(
+        `SELECT id, name, owner_id, thumbnail_url, created_at, updated_at
+           FROM project_placeholders
+          WHERE id = ?`,
+      )
+      .get(id) as {
+      id: string
+      name: string
+      owner_id: string | null
+      thumbnail_url: string | null
+      created_at: string
+      updated_at: string
+    } | null
+    if (!row) return null
+    return {
+      id: row.id,
+      name: row.name,
+      ownerId: row.owner_id,
+      thumbnailUrl: row.thumbnail_url,
+      createdAt: row.created_at,
+      updatedAt: row.updated_at,
     }
   }
 

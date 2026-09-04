@@ -57,3 +57,4 @@ og-test
 .claude/launch.json
 .claude/settings.local.json
 .vscode/launch.json
+.agents/

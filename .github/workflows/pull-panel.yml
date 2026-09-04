@@ -1,0 +1,125 @@
+name: Pull console
+
+# The console is developed in ovurrsl/panel and vendored here
+# (apps/editor/panel). This pulls it inward — the direction that matters now
+# that the console repository is its home.
+#
+# Gated on a type check, deliberately. Pushing straight to the integration
+# branch is what makes this automatic, and automatic without a gate means one
+# bad console commit quietly breaks the branch the deploy builds from. If the
+# check fails the job goes red and nothing is pushed, which is the signal.
+#
+# Needs PANEL_TOKEN — the same secret the outbound sync uses, but read-only is
+# enough here. Without it the job says so and stops, rather than failing with a
+# confusing git error.
+on:
+  workflow_dispatch:
+  # ovurrsl/panel can fire this when it changes; until it does, the schedule
+  # below is what keeps the copy current.
+  repository_dispatch:
+    types: [panel-updated]
+  schedule:
+    - cron: '17 * * * *'
+
+concurrency:
+  group: pull-console
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  # To hand off to the deploy. A push made with GITHUB_TOKEN starts no runs, so
+  # without this the console would land on the branch and stop there.
+  actions: write
+
+jobs:
+  pull:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for the console token
+        id: token
+        env:
+          PANEL_TOKEN: ${{ secrets.PANEL_TOKEN }}
+        run: |
+          if [ -z "$PANEL_TOKEN" ]; then
+            echo 'PANEL_TOKEN is not set — add a token with read access to'
+            echo 'ovurrsl/panel under Settings > Secrets > Actions to enable this.'
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      # A scheduled run starts on the default branch, so the branch to update is
+      # named rather than inherited. Set the INTEGRATION_BRANCH repository
+      # variable to move it; the fallback is the branch it is today.
+      - name: Check out the integration branch
+        if: steps.token.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ vars.INTEGRATION_BRANCH || 'integration' }}
+
+      - name: Check out the console
+        if: steps.token.outputs.available == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: ovurrsl/panel
+          token: ${{ secrets.PANEL_TOKEN }}
+          path: panel-upstream
+
+      - name: Apply the pull
+        if: steps.token.outputs.available == 'true'
+        id: pull
+        run: |
+          # `tee` would otherwise report its own exit status and swallow a
+          # crashed sync — the default shell here is `bash -e`, not `-eo
+          # pipefail`.
+          set -o pipefail
+          node scripts/sync-panel.mjs --panel panel-upstream --pull | tee pull.log
+
+          # Scoped to exactly the paths the commit below stages. A bare
+          # `git status --porcelain` is never empty in this job: `pull.log` and
+          # the `panel-upstream/` checkout are both untracked and neither is
+          # ignored. Unscoped, `changed` is therefore always true, and every
+          # hourly run where the console did not move would reach `git commit`
+          # with nothing staged and go red.
+          if [ -z "$(git status --porcelain -- 'apps/editor/panel' 'apps/editor/app/(panel)' 'apps/editor/app/api')" ]; then
+            echo 'changed=false' >> "$GITHUB_OUTPUT"
+          else
+            echo 'changed=true' >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: oven-sh/setup-bun@v2
+        if: steps.token.outputs.available == 'true' && steps.pull.outputs.changed == 'true'
+
+      - name: Install dependencies
+        if: steps.token.outputs.available == 'true' && steps.pull.outputs.changed == 'true'
+        run: bun install --frozen-lockfile
+
+      # The gate. A console change that does not compile here must not reach the
+      # branch the bundle is built from.
+      - name: Type check
+        if: steps.token.outputs.available == 'true' && steps.pull.outputs.changed == 'true'
+        run: bun run check-types
+
+      - name: Commit to the integration branch
+        if: steps.token.outputs.available == 'true' && steps.pull.outputs.changed == 'true'
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          # Only the vendored paths — the sync writes nowhere else, and naming
+          # them keeps an unrelated stray file out of the commit.
+          git add 'apps/editor/panel' 'apps/editor/app/(panel)' 'apps/editor/app/api'
+          git commit -m "$(printf 'chore(panel): pull the console\n\n%s' "$(cat pull.log)")"
+          git push
+
+      # Handed off explicitly, because the push above cannot do it: a push made
+      # with GITHUB_TOKEN starts no workflow runs. Without this the console
+      # lands on the branch and the site never rebuilds — the chain would look
+      # wired and quietly stop one step short.
+      - name: Build and publish
+        if: steps.token.outputs.available == 'true' && steps.pull.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh workflow run deploy-bundle.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "${{ vars.INTEGRATION_BRANCH || 'integration' }}"

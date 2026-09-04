@@ -172,14 +172,21 @@ function RightColumn({
   overlays?: ReactNode
   stageOverlay?: ReactNode
 }) {
+  const isPreviewMode = useEditor((s) => s.isPreviewMode)
+
   return (
     <div
       className="relative flex min-w-0 flex-1 flex-col overflow-hidden"
-      style={{
-        borderTopLeftRadius: 16,
-        clipPath: 'inset(0 0 0 0 round 16px 0 0 0)',
-        boxShadow: '-4px -2px 16px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.04)',
-      }}
+      style={
+        isPreviewMode
+          ? undefined
+          : {
+              borderTopLeftRadius: 16,
+              clipPath: 'inset(0 0 0 0 round 16px 0 0 0)',
+              boxShadow:
+                '-4px -2px 16px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.04)',
+            }
+      }
     >
       {/* Viewer toolbar */}
       {(toolbarLeft || toolbarRight) && (
@@ -228,6 +235,7 @@ export interface EditorLayoutV2Props {
   viewerContent: ReactNode
   overlays?: ReactNode
   stageOverlay?: ReactNode
+  isPreviewMode?: boolean
 }
 
 export function EditorLayoutV2({
@@ -240,21 +248,25 @@ export function EditorLayoutV2({
   viewerContent,
   overlays,
   stageOverlay,
+  isPreviewMode: propIsPreviewMode,
 }: EditorLayoutV2Props) {
+  const storeIsPreviewMode = useEditor((s) => s.isPreviewMode)
+  const isPreviewMode = propIsPreviewMode ?? storeIsPreviewMode
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const isMobile = useIsMobile()
 
   if (isMobile) {
     return (
       <EditorLayoutMobile
-        navbarSlot={navbarSlot}
-        overlays={overlays}
+        isPreviewMode={isPreviewMode}
+        navbarSlot={isPreviewMode ? undefined : navbarSlot}
+        overlays={isPreviewMode ? undefined : overlays}
         renderTabContent={renderTabContent}
         sidebarOverlay={sidebarOverlay}
         sidebarTabs={sidebarTabs.filter((t) => !t.noPanel)}
         viewerContent={viewerContent}
-        viewerToolbarLeft={viewerToolbarLeft}
-        viewerToolbarRight={viewerToolbarRight}
+        viewerToolbarLeft={isPreviewMode ? undefined : viewerToolbarLeft}
+        viewerToolbarRight={isPreviewMode ? undefined : viewerToolbarRight}
       />
     )
   }
@@ -262,11 +274,11 @@ export function EditorLayoutV2({
   return (
     <div className="dark flex h-full w-full flex-col bg-sidebar text-foreground">
       {/* Top navbar */}
-      {navbarSlot}
+      {!isPreviewMode && navbarSlot}
 
       {/* Main content: left column + right column */}
       <div className="flex min-h-0 flex-1">
-        {!isCaptureMode && sidebarTabs.length > 0 && (
+        {!isCaptureMode && !isPreviewMode && sidebarTabs.length > 0 && (
           <LeftColumn
             renderTabContent={renderTabContent}
             sidebarOverlay={sidebarOverlay}
@@ -274,10 +286,10 @@ export function EditorLayoutV2({
           />
         )}
         <RightColumn
-          overlays={overlays}
+          overlays={!isPreviewMode ? overlays : undefined}
           stageOverlay={stageOverlay}
-          toolbarLeft={isCaptureMode ? undefined : viewerToolbarLeft}
-          toolbarRight={isCaptureMode ? undefined : viewerToolbarRight}
+          toolbarLeft={isCaptureMode || isPreviewMode ? undefined : viewerToolbarLeft}
+          toolbarRight={isCaptureMode || isPreviewMode ? undefined : viewerToolbarRight}
         >
           {viewerContent}
         </RightColumn>

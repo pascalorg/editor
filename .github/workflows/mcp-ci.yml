@@ -2,7 +2,7 @@ name: mcp-ci
 
 on:
   push:
-    branches: [main]
+    branches: [integration]
     paths:
       - 'packages/mcp/**'
       - 'packages/core/**'
@@ -32,6 +32,7 @@ jobs:
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.3.14
+
 
       - name: Install
         run: bun install --frozen-lockfile

@@ -778,7 +778,19 @@ function extractRooms(walls: WallNode[]): ExtractedRoom[] {
 
       const signedArea = polygonArea(polygon)
       if (signedArea <= 0) continue
-      if (signedArea < 0.5 || signedArea > 10_000) continue
+      // Lower bound only. There used to be an upper one at 10 000 m², and it
+      // silently deleted every building bigger than that: no `Space`, no auto
+      // slab, no auto ceiling, no auto zone, and `wallClosesRoom` returning
+      // false so the wall tool would not even auto-close the outline. A
+      // 100 × 120 m distribution warehouse is 12 000 m² and hit all five.
+      //
+      // It read like a guard against the outer face, but the outer face is
+      // already gone: `nextEdge` walks interior faces counter-clockwise, so
+      // the outer one comes out clockwise and `signedArea <= 0` above drops
+      // it. And it cannot have been a cost guard either — the polygon is
+      // fully built by this point, so a rejection here saves nothing that was
+      // not already spent. The lower bound stays: it drops degenerate faces.
+      if (signedArea < 0.5) continue
 
       const signature = polygonSignature(polygon)
       if (rooms.some((room) => polygonSignature(room.polygon) === signature)) continue

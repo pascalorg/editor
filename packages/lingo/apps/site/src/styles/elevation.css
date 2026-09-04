@@ -1,0 +1,50 @@
+/*
+ * Shared corner smoothing utilities.
+ *
+ * Raised surface shadows live in src/app/globals.css as --surface-ring and
+ * --shadow-raise-* so Pass 9 has one surface-depth source of truth.
+ */
+
+/* ════════════════════════════════════════
+   Corner Smoothing: Progressive Enhancement
+   Composable: pair with any rounded-* class.
+   Usage: class="rounded-2xl corner-smooth"
+   ════════════════════════════════════════ */
+@layer utilities {
+  .corner-smooth {
+    corner-shape: squircle;
+  }
+}
+
+/* ════════════════════════════════════════
+   Nested Radii: concentric corner geometry
+   inner_radius = outer_radius - gap (padding).
+   The inset also inherits the parent's corner-shape,
+   so a squircle frame yields squircle inner corners
+   (progressive enhancement; falls back to the arc).
+
+   Usage:
+     <div class="nested-frame corner-smooth rounded-2xl p-2">
+       <div class="nested-inset p-4">...</div>
+     </div>
+   Override radius/gap per call:
+     class="... [--nested-frame-radius:var(--radius-3xl)] [--nested-frame-gap:calc(var(--spacing)*4)]"
+   Rule: do NOT add a rounded-* class to the same child as
+   nested-inset: let nested-inset own border-radius.
+   ════════════════════════════════════════ */
+@utility nested-frame {
+  --nested-frame-radius: 1rem; /* matches rounded-2xl (16px); override per call */
+  --nested-frame-gap: calc(
+    var(--spacing) *
+    2
+  ); /* matches p-2 (8px); override per call */
+  --nested-inset-radius: max(
+    0px,
+    calc(var(--nested-frame-radius) - var(--nested-frame-gap))
+  );
+}
+
+@utility nested-inset {
+  border-radius: var(--nested-inset-radius, 0.5rem);
+  corner-shape: inherit;
+}

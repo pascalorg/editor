@@ -26,6 +26,7 @@ import {
 import { steppedRotation } from '../components/tools/item/placement-math'
 import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
 import { toggleDoorOpenState } from '../lib/door-interaction'
+import { filterEditableIds, isNodeIdEditLocked } from '../lib/edit-lock'
 import { guideEmitter } from '../lib/guide-events'
 import { runRedo, runUndo } from '../lib/history'
 import { isActive } from '../lib/interaction/scope'
@@ -41,9 +42,11 @@ import { groupCurrentSelection, ungroupCurrentSelection } from '../store/use-ses
 // References (guide/scan) are selected via `useEditor.selectedReferenceId`, not
 // the viewer selection, so selection-based key arms (R/T rotate) need this
 // separate lookup. Locked guides don't rotate, matching direct manipulation.
-function getRotatableSelectedReference() {
+export function getRotatableSelectedReference() {
+  if (useViewer.getState().sceneLocked) return null
   const refId = useEditor.getState().selectedReferenceId
   if (!refId) return null
+  if (isNodeIdEditLocked(refId as AnyNodeId)) return null
   const node = useScene.getState().nodes[refId as AnyNodeId]
   if (!node || (node.type !== 'guide' && node.type !== 'scan')) return null
   if (useEditor.getState().guideUi[refId]?.locked === true) return null
@@ -57,11 +60,12 @@ function getRotatableSelectedReference() {
 // `updateNodes` call = one undo step. Returns false when the selection holds
 // no transformable participants so the caller can fall through to the
 // single-selection arms.
-function rotateGroupSelection(direction: 1 | -1): boolean {
+export function rotateGroupSelection(direction: 1 | -1): boolean {
   const { selectedIds, levelId } = useViewer.getState().selection
-  if (selectedIds.length <= 1) return false
+  const editableSelectedIds = filterEditableIds(selectedIds as AnyNodeId[])
+  if (editableSelectedIds.length <= 1) return false
   const nodes = useScene.getState().nodes
-  const participantIds = selectedIds.filter(
+  const participantIds = editableSelectedIds.filter(
     (id) => classifyParticipant(nodes[id as AnyNodeId], levelId, nodes) !== null,
   )
   if (participantIds.length === 0) return false
@@ -205,17 +209,16 @@ export const canRunGlobalRotationShortcut = () =>
 export const canCycleSnappingModeShortcut = (hasActiveContext = getActiveSnapContext() != null) =>
   hasActiveContext
 
-export const useKeyboard = ({
+export function bindKeyboardShortcuts({
   isVersionPreviewMode = false,
   disabled = false,
 }: {
   isVersionPreviewMode?: boolean
   disabled?: boolean
-} = {}) => {
-  useEffect(() => {
-    if (disabled) {
-      return
-    }
+} = {}) {
+  if (disabled || typeof window === 'undefined') {
+    return () => {}
+  }
 
     // True while an active placement tool owns R/T. Door/window tools flip the
     // draft, item / lean-to placement rotates its draft, and the roof tool turns
@@ -414,7 +417,10 @@ export const useKeyboard = ({
       } else if (e.key === 'x' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
-        useEditor.getState().armToolMode({ mode: 'delete' })
+        // Toggle: X enters delete mode, and pressing X again leaves it — so the
+        // mode never gets stuck "on" with no way back from the same key.
+        const editor = useEditor.getState()
+        editor.armToolMode(editor.mode === 'delete' ? { mode: 'select' } : { mode: 'delete' })
       } else if (e.key === 'p' && !e.metaKey && !e.ctrlKey) {
         if (isVersionPreviewMode) return
         e.preventDefault()
@@ -536,10 +542,13 @@ export const useKeyboard = ({
         }
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
+          const selectedId = selectedNodeIds[0]!
+          if (isNodeIdEditLocked(selectedId)) return
           const sceneNodes = useScene.getState().nodes
-          const selectedNode = sceneNodes[selectedNodeIds[0]!]
+          const selectedNode = sceneNodes[selectedId]
           const node = selectedNode ? resolveDirectManipulationNode(selectedNode, sceneNodes) : null
-          if (node?.type === 'door') {
+          if (!node || isNodeIdEditLocked(node.id)) return
+          if (node.type === 'door') {
             e.preventDefault()
             useScene.getState().updateNode(node.id, {
               side: node.side === 'front' ? 'back' : 'front',
@@ -549,7 +558,7 @@ export const useKeyboard = ({
               useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
             }
             sfxEmitter.emit('sfx:item-rotate')
-          } else if (node?.type === 'window') {
+          } else if (node.type === 'window') {
             // Windows: R flips side (front ↔ back, rotation += π). Open/
             // close toggle for operable windows lives on E.
             e.preventDefault()
@@ -561,7 +570,7 @@ export const useKeyboard = ({
               useScene.getState().dirtyNodes.add(node.parentId as AnyNodeId)
             }
             sfxEmitter.emit('sfx:item-rotate')
-          } else if (node && nodeRegistry.get(node.type)?.keyboardActions?.r?.appliesTo(node)) {
+          } else if (nodeRegistry.get(node.type)?.keyboardActions?.r?.appliesTo(node)) {
             // Registry-driven R action. Skylight uses this for open/
             // close toggling; future kinds with custom R behaviour
             // declare it on their `def.keyboardActions` without
@@ -570,7 +579,7 @@ export const useKeyboard = ({
             e.preventDefault()
             nodeRegistry.get(node.type)?.keyboardActions?.r?.run(node)
             sfxEmitter.emit('sfx:item-rotate')
-          } else if (node && 'rotation' in node) {
+          } else if ('rotation' in node) {
             e.preventDefault()
             // Round to the nearest 45° then step one increment (not a blind +45°).
             if (typeof node.rotation === 'number') {
@@ -616,23 +625,26 @@ export const useKeyboard = ({
         }
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
+          const selectedId = selectedNodeIds[0]!
+          if (isNodeIdEditLocked(selectedId)) return
           const sceneNodes = useScene.getState().nodes
-          const selectedNode = sceneNodes[selectedNodeIds[0]!]
+          const selectedNode = sceneNodes[selectedId]
           const node = selectedNode ? resolveDirectManipulationNode(selectedNode, sceneNodes) : null
-          if (node?.type === 'door') {
+          if (!node || isNodeIdEditLocked(node.id)) return
+          if (node.type === 'door') {
             // Door's open/close moved to E; T is a no-op for doors so
             // it doesn't free-rotate a wall-bound node by π/4.
             e.preventDefault()
-          } else if (node?.type === 'window') {
+          } else if (node.type === 'window') {
             // Window's open/close moved to E; T is a no-op so it doesn't
             // free-rotate a wall-bound node by π/4.
             e.preventDefault()
-          } else if (node && nodeRegistry.get(node.type)?.keyboardActions?.t?.appliesTo(node)) {
+          } else if (nodeRegistry.get(node.type)?.keyboardActions?.t?.appliesTo(node)) {
             // Registry-driven T action. Same shape as the R arm above.
             e.preventDefault()
             nodeRegistry.get(node.type)?.keyboardActions?.t?.run(node)
             sfxEmitter.emit('sfx:item-rotate')
-          } else if (node && 'rotation' in node) {
+          } else if ('rotation' in node) {
             e.preventDefault()
             // Round to the nearest 45° then step one increment back.
             if (typeof node.rotation === 'number') {
@@ -656,19 +668,22 @@ export const useKeyboard = ({
         // which now flips the opening (side + π rotation).
         const selectedNodeIds = useViewer.getState().selection.selectedIds as AnyNodeId[]
         if (selectedNodeIds.length === 1) {
-          const node = useScene.getState().nodes[selectedNodeIds[0]!]
-          const registryE = node && nodeRegistry.get(node.type)?.keyboardActions?.e
-          if (node && registryE?.appliesTo(node)) {
+          const selectedId = selectedNodeIds[0]!
+          if (isNodeIdEditLocked(selectedId)) return
+          const node = useScene.getState().nodes[selectedId]
+          if (!node || isNodeIdEditLocked(node.id)) return
+          const registryE = nodeRegistry.get(node.type)?.keyboardActions?.e
+          if (registryE?.appliesTo(node)) {
             // Registry-driven E interaction. Same shape as the R/T arms.
             e.preventDefault()
             registryE.run(node)
             sfxEmitter.emit('sfx:item-rotate')
-          } else if (node?.type === 'door' && node.openingKind !== 'opening') {
+          } else if (node.type === 'door' && node.openingKind !== 'opening') {
             e.preventDefault()
             toggleDoorOpenState(node.id)
             sfxEmitter.emit('sfx:item-rotate')
           } else if (
-            node?.type === 'window' &&
+            node.type === 'window' &&
             node.openingKind !== 'opening' &&
             (node.windowType === 'sliding' ||
               node.windowType === 'casement' ||
@@ -704,7 +719,7 @@ export const useKeyboard = ({
 
         // Delete selected zone when no explicit element selection is active.
         const selectedZoneId = useViewer.getState().selection.zoneId
-        if (selectedZoneId) {
+        if (selectedZoneId && !isNodeIdEditLocked(selectedZoneId as AnyNodeId)) {
           sfxEmitter.emit('sfx:structure-delete')
           useScene.getState().deleteNode(selectedZoneId as AnyNodeId)
           useViewer.getState().setSelection({ zoneId: null })
@@ -775,15 +790,23 @@ export const useKeyboard = ({
       }
     }
 
-    window.addEventListener('keydown', handleSessionGroupKeyDown, true)
-    window.addEventListener('keydown', handleKeyDown)
-    window.addEventListener('keyup', handleKeyUp)
-    return () => {
-      window.removeEventListener('keydown', handleSessionGroupKeyDown, true)
-      window.removeEventListener('keydown', handleKeyDown)
-      window.removeEventListener('keyup', handleKeyUp)
-    }
-  }, [disabled, isVersionPreviewMode])
+  window.addEventListener('keydown', handleSessionGroupKeyDown, true)
+  window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('keyup', handleKeyUp)
+  return () => {
+    window.removeEventListener('keydown', handleSessionGroupKeyDown, true)
+    window.removeEventListener('keydown', handleKeyDown)
+    window.removeEventListener('keyup', handleKeyUp)
+  }
+}
+
+export const useKeyboard = (opts?: {
+  isVersionPreviewMode?: boolean
+  disabled?: boolean
+}) => {
+  useEffect(() => {
+    return bindKeyboardShortcuts(opts)
+  }, [opts?.disabled, opts?.isVersionPreviewMode])
 
   return null
 }

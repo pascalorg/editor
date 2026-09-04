@@ -1,5 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
+import { authorizeSceneMutation, authorizeSceneRead } from '@/lib/auth/guard'
+import { publishedSceneIds } from '@/lib/auth/site-scenes'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
 import { apiGraphSchema } from '@/lib/graph-schema'
 import {
@@ -48,6 +50,12 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (!scene) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
+    // The origin guard above proves where the request came from, not who sent
+    // it. Without this a scene id was enough to read the drawing.
+    const auth = await authorizeSceneRead(id, scene.ownerId ?? null, {
+      published: (await publishedSceneIds()).has(id),
+    })
+    if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
     return sceneApiJson(request, scene, {
       headers: { ETag: `"${scene.version}"` },
     })
@@ -91,6 +99,20 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     if (!existing) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
     }
+    const auth = await authorizeSceneMutation(id, existing.ownerId)
+    if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
+
+    // Single-active-editor lease: if another account currently holds the live
+    // edit lease on this scene, refuse this save so two editors can't clobber
+    // each other. A free lease (no fresh holder) is allowed. The live editor
+    // UI keeps a non-holder in preview, so this is a server-side safety net.
+    if (auth.user && operations.canTrackPresence) {
+      const editor = (await operations.listScenePresence(id)).find((p) => p.isEditor)
+      if (editor && editor.userId !== auth.user.id) {
+        return sceneApiJson(request, { error: 'scene_locked_by_editor' }, { status: 423 })
+      }
+    }
+
     if (
       !parsed.data.force &&
       isEmptyGraphOverwrite(countGraphNodes(parsed.data.graph), existing.nodeCount)
@@ -133,6 +155,12 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
   const operations = await getSceneOperations()
   try {
+    const existing = await operations.loadStoredScene(id)
+    if (!existing) {
+      return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
+    }
+    const auth = await authorizeSceneMutation(id, existing.ownerId)
+    if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
     const removed = await operations.deleteStoredScene(id, { expectedVersion: ifMatch })
     if (!removed) {
       return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
@@ -174,6 +202,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
   const operations = await getSceneOperations()
   try {
+    const existing = await operations.loadStoredScene(id)
+    if (!existing) {
+      return sceneApiJson(request, { error: 'not_found' }, { status: 404 })
+    }
+    const auth = await authorizeSceneMutation(id, existing.ownerId)
+    if (!auth.ok) return sceneApiJson(request, { error: auth.error }, { status: auth.status })
     const meta = await operations.renameStoredScene(id, parsed.data.name, { expectedVersion })
     return sceneApiJson(request, meta, {
       headers: { ETag: `"${meta.version}"` },

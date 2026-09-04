@@ -11,6 +11,7 @@ import {
 import { useLayoutEffect, useRef } from 'react'
 import type { Group } from 'three'
 import { useNodeEvents } from '../../hooks/use-node-events'
+import { useStaticTransform } from '../../hooks/use-static-transform'
 import { NodeRenderer } from './node-renderer'
 
 /**
@@ -80,6 +81,19 @@ export const ParametricNodeRenderer = ({ node }: { node: AnyNode }) => {
     liveTransform?.rotation !== undefined
       ? [baseRotation[0], liveTransform.rotation, baseRotation[2]]
       : baseRotation
+
+  // Parametric kinds are the scene's static bulk (columns, shelves, every
+  // registry-driven kind without its own renderer). Freeze the group's local
+  // matrix while nothing moves it live; a live transform or override means a
+  // drag is writing outside React, so auto-update runs for its duration.
+  // The FloorElevationSystem's imperative Y lift stays visible because it
+  // stamps frozen objects after writing (`stampFrozenTransform`).
+  useStaticTransform(
+    ref,
+    liveTransform !== undefined || liveOverride !== undefined,
+    position,
+    rotation,
+  )
 
   return (
     <group

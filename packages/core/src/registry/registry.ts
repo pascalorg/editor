@@ -5,6 +5,7 @@ import type {
   InspectorExtension,
   NodeRegistry,
   Plugin,
+  ZoneTakeoffExtension,
 } from './types'
 
 const HOST_API_VERSION = 1 as const
@@ -17,6 +18,10 @@ const pluginIdsByKind = new Map<string, string>()
 // test reset alongside `pluginIdsByKind`. Consumers re-derive on the
 // registry-version bump — plugins load asynchronously, after first mount.
 const inspectorExtensionsByKind = new Map<string, InspectorExtension[]>()
+
+// Zone takeoff extensions contributed by plugins (`Plugin.zoneTakeoffExtensions`).
+// Filled by `loadPlugin`, cleared by the test reset alongside `pluginIdsByKind`.
+const zoneTakeoffExtensions: ZoneTakeoffExtension[] = []
 
 // ---------------------------------------------------------------------------
 // Registry change notification. Plugin kinds register ASYNCHRONOUSLY (app
@@ -129,6 +134,7 @@ class NodeRegistryImpl implements NodeRegistry {
     this.defs.clear()
     pluginIdsByKind.clear()
     inspectorExtensionsByKind.clear()
+    zoneTakeoffExtensions.length = 0
     notifyRegistryChanged()
   }
 
@@ -185,7 +191,40 @@ export function getInspectorExtensions(kind: string): InspectorExtension[] {
 }
 
 /**
- * Whether a registered kind should participate in a project. Kinds registered
+ * Register a zone takeoff extension directly.
+ * Replaces existing extension with the same ID, or appends.
+ */
+export function registerZoneTakeoffExtension(extension: ZoneTakeoffExtension): void {
+  const existing = zoneTakeoffExtensions.findIndex((e) => e.id === extension.id)
+  if (existing >= 0) {
+    zoneTakeoffExtensions[existing] = extension
+  } else {
+    zoneTakeoffExtensions.push(extension)
+  }
+  notifyRegistryChanged()
+}
+
+/**
+ * Zone takeoff extensions registered across all loaded plugins, in load order.
+ */
+export function getZoneTakeoffExtensions(): readonly ZoneTakeoffExtension[] {
+  return zoneTakeoffExtensions
+}
+
+/**
+ * Whether a kind was contributed by an installed plugin rather than by the host.
+ *
+ * Asked of the registry rather than of the kind string, so it stays true for a
+ * plugin added later and no caller has to write a prefix like `warehouse:` into
+ * host code. Kinds the host registers directly, and those from the built-in
+ * plugin, are not plugin-contributed.
+ */
+export function isPluginContributedKind(kind: string): boolean {
+  const pluginId = getNodePluginId(kind)
+  return !!pluginId && pluginId !== BUILTIN_PLUGIN_ID
+}
+
+/** * Whether a registered kind should participate in a project. Kinds registered
  * directly by the host and the built-in plugin are always enabled. An omitted
  * install list means a legacy scene whose plugin state predates persistence, so
  * loaded plugins remain visible for backward compatibility.
@@ -309,6 +348,50 @@ export function isPresettableKind(kind: string): boolean {
 }
 
 /**
+ * Broad, user-facing grouping used by the editor's category visibility /
+ * lock controls. Deliberately coarser than {@link NodeCategory} +
+ * `paletteSection`: those describe the tool palette; these four describe the
+ * "layers" a user toggles as a whole (structure, furnish, zone, site).
+ */
+export type VisibilityCategory = 'structure' | 'furnish' | 'zone' | 'site'
+
+// Scene-hierarchy containers. They own the recursive render of every descendant
+// (site → building → level → content), so they are NEVER assigned a visibility
+// category — hiding or per-category-locking one would take its whole subtree
+// with it, which is not what a "hide site content" toggle means. `sceneLocked`
+// still governs them (it locks everything regardless of category).
+const CONTAINER_KINDS = new Set(['site', 'building', 'level'])
+
+/**
+ * The {@link VisibilityCategory} a definition belongs to, or `null` for the
+ * structural containers that must never be gated as a category. Pure: reads
+ * only the definition. `paletteSection` wins where present, falling back to the
+ * coarse {@link NodeCategory} (which is what the palette itself defaults to).
+ */
+export function categoryOfDef(def: AnyNodeDefinition): VisibilityCategory | null {
+  if (CONTAINER_KINDS.has(def.kind)) return null
+  const paletteSection = def.presentation?.paletteSection
+  // Furnish covers the host furniture kinds (item / cabinet / shelf) and every
+  // warehouse plugin kind (rack / pallet / conveyor / …), all `category:'furnish'`.
+  if (def.category === 'furnish' || paletteSection === 'furnish') return 'furnish'
+  if (def.kind === 'zone') return 'zone'
+  const section = paletteSection ?? def.category
+  if (section === 'structure') return 'structure'
+  if (section === 'site') return 'site'
+  return 'structure'
+}
+
+/**
+ * The {@link VisibilityCategory} for a registered kind. Unregistered kinds fall
+ * back to `'structure'`; containers (site/building/level) return `null`.
+ */
+export function categoryOf(kind: string): VisibilityCategory | null {
+  const def = nodeRegistry.get(kind)
+  if (!def) return 'structure'
+  return categoryOfDef(def)
+}
+
+/**
  * Resolve a kind's facing-triangle config, or `null` when it has none.
  * `{ reversed }` says whether the triangle points along the node's local -Z
  * (its front) instead of +Z. One reader (the editor-side `<FacingPoseIndicator>`
@@ -373,8 +456,17 @@ export async function loadPlugin(plugin: Plugin): Promise<void> {
       extensionsChanged = true
     }
   }
+  for (const extension of plugin.zoneTakeoffExtensions ?? []) {
+    const existing = zoneTakeoffExtensions.findIndex((e) => e.id === extension.id)
+    if (existing >= 0) {
+      zoneTakeoffExtensions[existing] = extension
+    } else {
+      zoneTakeoffExtensions.push(extension)
+    }
+    extensionsChanged = true
+  }
   // Nodes already notified per `registerNode`; bump once more so a plugin
-  // that only contributes inspector extensions still re-renders consumers.
+  // that only contributes inspector/takeoff extensions still re-renders consumers.
   if (extensionsChanged) notifyRegistryChanged()
 }
 

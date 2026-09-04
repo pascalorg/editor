@@ -1,0 +1,188 @@
+{
+  "version": 1,
+  "package": {
+    "name": "@pascal-app/lingo",
+    "version": "0.1.0"
+  },
+  "target": "backend",
+  "createdAt": "2026-07-04T14:12:20.224Z",
+  "runtime": {
+    "node": "v24.5.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "v8": "13.6.233.10-node.21"
+  },
+  "corpus": {
+    "version": 2,
+    "kind": "generated-english",
+    "description": "Deterministic English-like cases generated from built-in unit aliases, number forms, qualifiers, ranges, conversions, typos, dates, durations, and sentence templates."
+  },
+  "results": [
+    {
+      "type": "throughput",
+      "group": "backend/core",
+      "name": "parseQuantity simple",
+      "iterations": 200000,
+      "samples": 11,
+      "caseCount": 900,
+      "medianMs": 405.8940419999999,
+      "opsPerSec": 492739.4327212126,
+      "usPerOp": 2.0294702099999995
+    },
+    {
+      "type": "throughput",
+      "group": "backend/core",
+      "name": "lingo mixed grammar",
+      "iterations": 200000,
+      "samples": 11,
+      "caseCount": 791,
+      "medianMs": 513.0569580000001,
+      "opsPerSec": 389820.2663104706,
+      "usPerOp": 2.5652847900000006
+    },
+    {
+      "type": "throughput",
+      "group": "backend/frontend-shared",
+      "name": "partialState typing",
+      "iterations": 200000,
+      "samples": 11,
+      "caseCount": 474,
+      "medianMs": 725.9022499999992,
+      "opsPerSec": 275519.1900837891,
+      "usPerOp": 3.6295112499999957
+    },
+    {
+      "type": "throughput",
+      "group": "backend/date",
+      "name": "parseDate mixed",
+      "iterations": 200000,
+      "samples": 11,
+      "caseCount": 103,
+      "medianMs": 588.8076669999973,
+      "opsPerSec": 339669.4900713664,
+      "usPerOp": 2.9440383349999864
+    },
+    {
+      "type": "throughput",
+      "group": "backend/date",
+      "name": "parseDuration mixed",
+      "iterations": 200000,
+      "samples": 11,
+      "caseCount": 169,
+      "medianMs": 237.16675000000032,
+      "opsPerSec": 843288.5301164676,
+      "usPerOp": 1.1858337500000016
+    },
+    {
+      "type": "throughput",
+      "group": "backend/format",
+      "name": "format quantity",
+      "iterations": 200000,
+      "samples": 11,
+      "caseCount": 1,
+      "medianMs": 85.92704099999901,
+      "opsPerSec": 2327556.0018411702,
+      "usPerOp": 0.429635204999995
+    },
+    {
+      "type": "throughput",
+      "group": "backend/date",
+      "name": "humanizeDate",
+      "iterations": 200000,
+      "samples": 11,
+      "caseCount": 1,
+      "medianMs": 82.56791699999667,
+      "opsPerSec": 2422248.341326184,
+      "usPerOp": 0.4128395849999833
+    },
+    {
+      "type": "throughput",
+      "group": "backend/date",
+      "name": "humanizeDuration",
+      "iterations": 200000,
+      "samples": 11,
+      "caseCount": 1,
+      "medianMs": 1.032375000002503,
+      "opsPerSec": 193728054.24338552,
+      "usPerOp": 0.005161875000012514
+    },
+    {
+      "type": "throughput",
+      "group": "backend/slow-path",
+      "name": "typo fix with kind",
+      "iterations": 40000,
+      "samples": 11,
+      "caseCount": 218,
+      "medianMs": 525.5844169999982,
+      "opsPerSec": 76105.75714614487,
+      "usPerOp": 13.139610424999955
+    },
+    {
+      "type": "throughput",
+      "group": "backend/slow-path",
+      "name": "unknown unit suggestions",
+      "iterations": 40000,
+      "samples": 11,
+      "caseCount": 240,
+      "medianMs": 1571.083166999997,
+      "opsPerSec": 25460.141665434876,
+      "usPerOp": 39.277079174999926
+    },
+    {
+      "type": "throughput",
+      "group": "backend/bulk",
+      "name": "unknown unit typos off",
+      "iterations": 200000,
+      "samples": 11,
+      "caseCount": 240,
+      "medianMs": 363.45795799999905,
+      "opsPerSec": 550269.9709769473,
+      "usPerOp": 1.8172897899999954
+    },
+    {
+      "type": "throughput",
+      "group": "backend/strictness",
+      "name": "strict confirm candidate",
+      "iterations": 200000,
+      "samples": 11,
+      "caseCount": 224,
+      "medianMs": 1315.796957999999,
+      "opsPerSec": 151999.13541675793,
+      "usPerOp": 6.5789847899999945
+    },
+    {
+      "type": "throughput",
+      "group": "backend/extraction",
+      "name": "free text scan",
+      "iterations": 40000,
+      "samples": 11,
+      "caseCount": 260,
+      "medianMs": 747.2050420000014,
+      "opsPerSec": 53532.8293461916,
+      "usPerOp": 18.680126050000034
+    }
+  ],
+  "probes": [
+    {
+      "type": "latency",
+      "group": "backend/latency",
+      "name": "50k no match",
+      "samples": 11,
+      "medianMs": 0.3411250000062864
+    },
+    {
+      "type": "latency",
+      "group": "backend/latency",
+      "name": "20k unknown tail",
+      "samples": 11,
+      "medianMs": 0.16045900000608526
+    },
+    {
+      "type": "latency",
+      "group": "backend/latency",
+      "name": "500-digit number",
+      "samples": 11,
+      "medianMs": 0.003958000001148321
+    }
+  ]
+}

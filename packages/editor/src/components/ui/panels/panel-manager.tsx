@@ -22,7 +22,7 @@ import {
   type WindowNode,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useDeferredValue, useEffect, useState } from 'react'
 import { useIsMobile } from '../../../hooks/use-mobile'
 import { shouldShowEditingControls } from '../../../lib/interaction/overlay-policy'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -223,28 +223,31 @@ export function PanelManager({
 }) {
   const isMobile = useIsMobile()
   const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const deferredSelectedIds = useDeferredValue(selectedIds)
   const selectedZoneId = useViewer((s) => s.selection.zoneId)
+  const deferredSelectedZoneId = useDeferredValue(selectedZoneId)
   const setSelection = useViewer((s) => s.setSelection)
   const selectedReferenceId = useEditor((s) => s.selectedReferenceId)
+  const deferredReferenceId = useDeferredValue(selectedReferenceId)
   const readOnly = useScene((s) => s.readOnly)
   // Only subscribe to the *type* of the single-selected node — string primitive
   // so we don't re-render on unrelated scene mutations.
   const selectedNodeType = useScene((s) => {
-    if (selectedIds.length !== 1) return null
-    const id = selectedIds[0]
+    if (deferredSelectedIds.length !== 1) return null
+    const id = deferredSelectedIds[0]
     return id ? (s.nodes[id as AnyNodeId]?.type ?? null) : null
   })
   const selectedNode = useScene((s) => {
-    if (selectedIds.length !== 1) return null
-    const id = selectedIds[0]
+    if (deferredSelectedIds.length !== 1) return null
+    const id = deferredSelectedIds[0]
     return id ? (s.nodes[id as AnyNodeId] ?? null) : null
   })
   const homogeneousType = useScene((s) =>
-    selectedIds.length > 1 ? resolveHomogeneousSelection(selectedIds, s.nodes) : null,
+    deferredSelectedIds.length > 1 ? resolveHomogeneousSelection(deferredSelectedIds, s.nodes) : null,
   )
   const multiBreakdown = useScene((s) =>
-    selectedIds.length > 1
-      ? formatSelectionBreakdown(selectedIds.map((id) => s.nodes[id as AnyNodeId]?.type))
+    deferredSelectedIds.length > 1
+      ? formatSelectionBreakdown(deferredSelectedIds.map((id) => s.nodes[id as AnyNodeId]?.type))
       : '',
   )
 
@@ -272,10 +275,10 @@ export function PanelManager({
   if (!shouldShowEditingControls(readOnly)) return null
 
   if (isMobile) {
-    if (selectedReferenceId) {
+    if (deferredReferenceId) {
       return <MobilePanelLayer isReference={true} node={null} panel={<ReferencePanel />} />
     }
-    if (selectedIds.length > 1) {
+    if (deferredSelectedIds.length > 1) {
       return (
         <MobileMultiPanelLayer
           breakdown={multiBreakdown}
@@ -300,16 +303,16 @@ export function PanelManager({
   }
 
   // Show reference panel if a reference is selected
-  if (selectedReferenceId) {
+  if (deferredReferenceId) {
     return <ReferencePanel />
   }
 
-  if (selectedZoneId && selectedIds.length === 0) {
+  if (deferredSelectedZoneId && deferredSelectedIds.length === 0) {
     return (
       <ParametricInspector
         footer={inspectorFooter}
-        key={selectedZoneId}
-        nodeId={selectedZoneId as AnyNodeId}
+        key={deferredSelectedZoneId}
+        nodeId={deferredSelectedZoneId as AnyNodeId}
         onClose={() => setSelection({ zoneId: null })}
       />
     )
@@ -317,7 +320,7 @@ export function PanelManager({
 
   // Multi-selection: parametric inspector when every resolved id shares a type,
   // otherwise the actions-only panel. Mobile uses the same panels in a sheet.
-  if (selectedIds.length > 1) {
+  if (deferredSelectedIds.length > 1) {
     if (homogeneousType) {
       return <MultiParametricInspector footer={multiSelectionFooter} />
     }

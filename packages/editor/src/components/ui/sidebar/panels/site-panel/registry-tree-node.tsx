@@ -4,6 +4,7 @@ import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { memo, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
+import { resolveNodeDisplayName } from '../../../../../lib/node-display-name'
 import { editorHostTreeChildrenRegistry } from '../../../../../lib/host-tree-children'
 import { resolveNodeSnapTarget, SnapTargetIcon } from '../../../snap-target-badge'
 import { InlineRenameInput } from './inline-rename-input'
@@ -73,7 +74,8 @@ export const RegistryTreeNode = memo(function RegistryTreeNode({
     )
   const snapTarget = resolveNodeSnapTarget(node)
   const defaultName =
-    node ? tree?.label?.(node, useScene.getState().nodes) || node.name || presentation?.label || 'Node' : 'Node'
+    resolveNodeDisplayName(node, useScene.getState().nodes) ||
+    (node ? tree?.label?.(node, useScene.getState().nodes) || node.name || presentation?.label || 'Node' : 'Node')
   const hasChildren = children.length > 0 || hasHostChildren
 
   useEffect(() => {

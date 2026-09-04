@@ -2,10 +2,17 @@
 
 import { emitter } from '@pascal-app/core'
 import Image from 'next/image'
+import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
-import { ActionButton } from './action-button'
+import { ActionButton, COMPACT_GROUP } from './action-button'
 
-export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
+export function CameraActions({
+  hideOrbit = false,
+  compact = false,
+}: {
+  hideOrbit?: boolean
+  compact?: boolean
+}) {
   // Orbit stays useful in 2D-only (it spins the synced floorplan view), but
   // top view only tilts the hidden 3D camera — pointless without the canvas.
   const is2dOnly = useEditor((s) => s.viewMode === '2d')
@@ -23,7 +30,7 @@ export function CameraActions({ hideOrbit = false }: { hideOrbit?: boolean }) {
   }
 
   return (
-    <div className="flex items-center gap-1">
+    <div className={cn('flex items-center', compact ? COMPACT_GROUP : 'gap-1')}>
       {!hideOrbit && (
         <>
           {/* Orbit CCW */}

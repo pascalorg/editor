@@ -1,0 +1,116 @@
+name: Mirror upstream
+
+# `main` in this fork is a clean mirror of pascalorg/editor — no local commits,
+# ever. That is what makes taking upstream free: the mirror can only ever
+# fast-forward, so this job never has a decision to make and never conflicts.
+#
+# Everything this fork adds lives on the integration branch, which is also the
+# default branch. Upstream reaches it through the pull request opened below,
+# where the conflicts are — and where a human belongs. UPSTREAM.md carries the
+# rule per file.
+#
+# Deliberately NOT a force push. If `main` has diverged, someone committed to
+# the mirror and the job should fail loudly rather than erase it.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 5 * * *'
+
+concurrency:
+  group: mirror-upstream
+  cancel-in-progress: true
+
+# `MIRROR_TOKEN` rather than the built-in token, and the reason is one line in
+# a rejected push:
+#
+#   ! [remote rejected] upstream/main -> main (refusing to allow a GitHub App
+#     to create or update workflow `.github/workflows/ci.yml` without
+#     `workflows` permission)
+#
+# Upstream edits its own CI from time to time, and when it does, the commit
+# carrying that edit cannot be pushed by `GITHUB_TOKEN` — there is no
+# `workflows` scope to grant it in the block below; the permission exists only
+# on a PAT or an App installation. So the mirror ran green for months, hit
+# upstream's first `ci.yml` change on 7 August, and failed every night after
+# that. Nothing else broke, which is why it went unnoticed for four days: the
+# editor kept building from a mirror that had quietly stopped moving.
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Checkout stores these credentials for every later `git push` in the
+          # job, so the token has to be set HERE — swapping only the push line
+          # would leave the built-in token in the remote and change nothing.
+          token: ${{ secrets.MIRROR_TOKEN }}
+
+      - name: Fast-forward main to upstream
+        id: mirror
+        env:
+          BASE: ${{ vars.INTEGRATION_BRANCH || 'integration' }}
+        run: |
+          git remote add upstream https://github.com/pascalorg/editor.git
+          git fetch --quiet upstream main
+          git fetch --quiet origin \
+            "+refs/heads/main:refs/remotes/origin/main" \
+            "+refs/heads/$BASE:refs/remotes/origin/$BASE"
+
+          if [ "$(git rev-parse upstream/main)" = "$(git rev-parse origin/main)" ]; then
+            echo 'the mirror is current'
+          else
+            # Refuse rather than erase: a mirror that cannot fast-forward is a
+            # mirror somebody has committed to.
+            if ! git merge-base --is-ancestor origin/main upstream/main; then
+              echo "origin/main is not an ancestor of upstream/main — it has local commits." >&2
+              echo 'Move them to the integration branch; this job will not force over them.' >&2
+              exit 1
+            fi
+
+            git push origin upstream/main:refs/heads/main
+            echo "main fast-forwarded to $(git rev-parse --short upstream/main)"
+          fi
+
+          # The pull request is owed whenever the integration branch is behind
+          # the mirror — NOT only on the run that moved the mirror. `main` can
+          # also be advanced by hand, and gating on "did this job push?" drops
+          # those updates on the floor: 42 upstream commits once sat on `main`
+          # with no pull request pointing at them for exactly this reason.
+          behind=$(git rev-list --count "refs/remotes/origin/$BASE..upstream/main")
+          echo "$behind upstream commit(s) not yet in $BASE"
+          echo "behind=$behind" >> "$GITHUB_OUTPUT"
+          if [ "$behind" -gt 0 ]; then
+            echo 'owed=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'owed=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      # One long-lived pull request rather than one per update: it accumulates
+      # whatever upstream has added since the last time somebody took it, and
+      # GitHub shows the conflicts against the integration branch as they arise.
+      - name: Open or update the pull request into the integration branch
+        if: steps.mirror.outputs.owed == 'true'
+        env:
+          # The same token as the push, so the pull request is authored by it
+          # rather than by the App. A pull request opened by `GITHUB_TOKEN`
+          # starts no workflow runs, which would leave this one sitting with no
+          # CI on it — the one pull request whose whole job is to be reviewed
+          # before a human merges hundreds of upstream commits.
+          GH_TOKEN: ${{ secrets.MIRROR_TOKEN }}
+          BASE: ${{ vars.INTEGRATION_BRANCH || 'integration' }}
+          BEHIND: ${{ steps.mirror.outputs.behind }}
+        run: |
+          body=$(printf '`main` mirrors `pascalorg/editor` and is **%s commit(s)** ahead of `%s`.\n\nThis carries those changes into the integration branch, where everything this fork adds lives. Conflicts are expected — the rule for each file that regularly conflicts is in `UPSTREAM.md`, and the `Upstream check` workflow reports the list before you start.\n\n---\n_Generated by [Claude Code](https://claude.ai/code)_\n' "$BEHIND" "$BASE")
+
+          state=$(gh pr view main --repo "$GITHUB_REPOSITORY" --json state -q .state 2>/dev/null || true)
+          if [ "$state" = 'OPEN' ]; then
+            gh pr edit main --repo "$GITHUB_REPOSITORY" --body "$body"
+          else
+            gh pr create --repo "$GITHUB_REPOSITORY" --head main --base "$BASE" \
+              --title 'Take upstream' --body "$body"
+          fi

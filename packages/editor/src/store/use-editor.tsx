@@ -193,7 +193,14 @@ export type CatalogCategory =
   | 'window'
   | 'door'
 
-export type StructureLayer = 'zones' | 'elements'
+/**
+ * Which list the site panel's element area is showing.
+ *
+ * `assets` pairs with `phase === 'furnish'` rather than `structure`: plugin
+ * objects are furnish-category, they are just kept in their own list so a hall
+ * of racking does not bury the host's furniture (and vice versa).
+ */
+export type StructureLayer = 'zones' | 'elements' | 'assets'
 
 export type FloorplanSelectionTool = 'click' | 'marquee'
 export type GridSnapStep = 0.5 | 0.25 | 0.1 | 0.05
@@ -706,7 +713,12 @@ export function normalizePersistedEditorUiState(
     })
   }
 
-  const structureLayer = state?.structureLayer === 'zones' ? 'zones' : 'elements'
+  const structureLayer =
+    state?.structureLayer === 'zones'
+      ? 'zones'
+      : state?.structureLayer === 'assets'
+        ? 'assets'
+        : 'elements'
 
   if (mode !== 'build') {
     return withMaterializedToolMode({

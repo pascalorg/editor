@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "command -v jq >/dev/null 2>&1 && f=$(jq -r '.tool_input.file_path // empty') && [ -n \"$f\" ] && bun x ultracite@7.8.2 fix \"$f\" || bun x ultracite@7.8.2 fix"
+          }
+        ]
+      }
+    ]
+  }
+}
