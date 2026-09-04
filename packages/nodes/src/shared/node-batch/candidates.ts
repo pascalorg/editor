@@ -28,15 +28,18 @@ const hiddenMeshesByNode = new Map<string, Mesh[]>()
 /**
  * Batchable meshes of one subtree. Recurses manually and cuts at the first
  * invisible node — `traverse` would descend into hidden branches (a toggled-off
- * variant, a cutout group) and batch meshes the renderer never draws.
+ * variant, a cutout group) — and at any HOSTED child node's registered group:
+ * an item can host other items (a shelf's books), whose groups mount inside
+ * the host's. Packing those would freeze the child at the host's join pose
+ * with no release of its own (it is not a store member).
  */
-function collectMeshes(object: Object3D, out: Mesh[]): void {
-  if (object.visible === false) return
+function collectMeshes(object: Object3D, out: Mesh[], hostedRoots: ReadonlySet<Object3D>): void {
+  if (object.visible === false || hostedRoots.has(object)) return
   const mesh = object as Mesh
   if (mesh.isMesh && mesh.name !== 'cutout' && mesh.layers.isEnabled(SCENE_LAYER)) {
     out.push(mesh)
   }
-  for (const child of object.children) collectMeshes(child, out)
+  for (const child of object.children) collectMeshes(child, out, hostedRoots)
 }
 
 /**
@@ -114,8 +117,17 @@ export function collectBatchCandidate(nodeId: string): BatchCandidate | null {
   const levelRoot = sceneRegistry.nodes.get(levelId)
   if (!levelRoot) return null
 
+  const hostedRoots = new Set<Object3D>()
+  const children = (node as { children?: unknown }).children
+  if (Array.isArray(children)) {
+    for (const childId of children) {
+      const childGroup = sceneRegistry.nodes.get(String(childId))
+      if (childGroup) hostedRoots.add(childGroup)
+    }
+  }
+
   const meshes: Mesh[] = []
-  collectMeshes(group, meshes)
+  collectMeshes(group, meshes, hostedRoots)
   if (meshes.length === 0) return null
 
   levelRoot.updateWorldMatrix(true, false)
