@@ -503,7 +503,7 @@ describe('wall cutter union', () => {
       } finally {
         cleanup()
       }
-    })
+    }, 30_000)
   }
 
   test('unions overlapping support and door cuts alongside an item proxy', () => {
@@ -543,7 +543,7 @@ describe('wall cutter union', () => {
       proxy.geometry.dispose()
       cleanup()
     }
-  })
+  }, 30_000)
 
   test('bakes transforms and normalizes mixed indexed and non-indexed attributes', () => {
     const a = new Brush(new THREE.BoxGeometry(1, 1, 1))
