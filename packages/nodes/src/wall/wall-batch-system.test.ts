@@ -72,10 +72,10 @@ function takeFrameCallback(): FrameCallback {
   return callback
 }
 
-function setupBatchedLevel() {
+function setupBatchedLevel(count = 8) {
   const root = new Object3D()
   const material = new MeshBasicMaterial()
-  const wallIds = Array.from({ length: 8 }, (_, index) => `wall_${index}`)
+  const wallIds = Array.from({ length: count }, (_, index) => `wall_${index}`)
   const walls = wallIds.map((id) => registerWall(id, material))
   for (const wall of walls) root.add(wall)
   sceneRegistry.nodes.set('level', root)
@@ -241,5 +241,25 @@ describe('WallBatchSystem cutaway releases', () => {
 
     expect(root.children.some((child) => child.name === 'wall-batch')).toBe(true)
     expect(walls.every((wall) => !wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
+  })
+
+  test('a hovered wall does not hold the settle window open', () => {
+    const { root, runFrame, walls } = setupBatchedLevel(9)
+    for (const wall of walls) wall.userData.wallHidden = true
+    nowMs = 200
+    runFrame({} as never, 0)
+    for (const wall of walls) wall.userData.wallHidden = false
+    useViewer.setState({ hoveredId: 'wall_0' } as never)
+
+    nowMs = 400
+    runFrame({} as never, 0)
+    nowMs = 581
+    runFrame({} as never, 0)
+    nowMs = 762
+    runFrame({} as never, 0)
+
+    expect(root.children.some((child) => child.name === 'wall-batch')).toBe(true)
+    expect(walls.slice(1).every((wall) => !wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
+    expect(walls[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
   })
 })

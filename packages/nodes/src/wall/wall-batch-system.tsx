@@ -455,7 +455,7 @@ function runBatchFrame(
     changed = true
   }
   lastCutawayHiddenWalls = cutawayHiddenWalls
-  const excludedNodeIds = cutawayHiddenWalls
+  const excludedNodeIds = new Set(cutawayHiddenWalls)
   for (const nodeId of tintedWalls) excludedNodeIds.add(nodeId)
 
   // A theme, texture or material-library switch re-makes every wall's
