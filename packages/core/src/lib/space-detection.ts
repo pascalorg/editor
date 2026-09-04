@@ -445,9 +445,10 @@ function autoRoomVerticalPlacements(
     const base = roomFloorPlane(wallBases)
     if (base === undefined) continue
 
-    const wallTops = boundaryWalls.map((wall, index) =>
-      resolveWallTop(wall, storeyHeight, wallBases[index] ?? base),
-    )
+    const wallTops = boundaryWalls.flatMap((wall, index) => {
+      const b = wallBases[index] ?? base
+      return [resolveWallTop(wall, storeyHeight, b, 0), resolveWallTop(wall, storeyHeight, b, 1)]
+    })
     const top = roomCeilingPlane(wallTops)
     if (top === undefined) continue
 
@@ -1207,6 +1208,7 @@ function wallGeometrySignature(wall: WallNode, nodes: Record<string, any>, level
     // value: it resolves to the storey plane, so it must not alias an
     // explicit height of the same magnitude in the trigger signature.
     wall.height == null ? 'plane' : wall.height.toFixed(4),
+    (wall.endHeightOffset ?? 0).toFixed(4),
     wall.supportSlabId ?? 'elected',
     (wall.supportOffset ?? 0).toFixed(4),
     getClampedWallCurveOffset(wall).toFixed(4),

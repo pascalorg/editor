@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  clampWallEndHeightOffset,
   DEFAULT_LEVEL_HEIGHT,
   type DoorNode,
   getAdjacentWallIds,
@@ -453,9 +454,9 @@ function getWallBandSplitPlanes(wall: WallNode, effectiveWallHeight: number): nu
   const planes = [bands.lowerTop]
   if (bands.count >= 3) planes.push(bands.middleTop)
   if (bands.count >= 4) planes.push(bands.upperTop)
+  const maxWallHeight = effectiveWallHeight + Math.max(0, wall.endHeightOffset ?? 0)
   return planes.filter(
-    (plane) =>
-      plane > WALL_BAND_SPLIT_EPSILON && plane < effectiveWallHeight - WALL_BAND_SPLIT_EPSILON,
+    (plane) => plane > WALL_BAND_SPLIT_EPSILON && plane < maxWallHeight - WALL_BAND_SPLIT_EPSILON,
   )
 }
 
@@ -966,6 +967,39 @@ function mergeWallTerrainFill(
   return merged
 }
 
+/**
+ * Tilts a wall's top edge along its length so the `end` side sits taller (or
+ * shorter) than the `start` side — e.g. a knee wall following a single-pitch
+ * roof slope — instead of requiring a non-rectangular footprint. Only
+ * vertices sitting exactly at the flat extruded top (`topY`) move.
+ *
+ * Evaluates the linear plane equation `slope * localX` continuously across
+ * all top vertices (including mitered corner vertices extending beyond [0, L])
+ * so the extruded top face remains a single coplanar surface without corner
+ * creases or triangulation folds.
+ */
+function applyWallEndHeightSlope(
+  geometry: THREE.BufferGeometry,
+  wallNode: WallNode,
+  wallLength: number,
+  topY: number,
+  bodyHeight: number,
+): void {
+  const rawOffset = wallNode.endHeightOffset
+  if (!rawOffset || wallLength < 1e-9) {
+    return
+  }
+  const endHeightOffset = clampWallEndHeightOffset(rawOffset, bodyHeight)
+  const slope = endHeightOffset / wallLength
+  const position = geometry.getAttribute('position') as THREE.BufferAttribute
+
+  for (let i = 0; i < position.count; i++) {
+    if (Math.abs(position.getY(i) - topY) > 1e-4) continue
+    position.setY(i, topY + slope * position.getX(i))
+  }
+  position.needsUpdate = true
+}
+
 export function generateExtrudedWall(
   wallNode: WallNode,
   childrenNodes: AnyNode[],
@@ -980,7 +1014,7 @@ export function generateExtrudedWall(
 ): THREE.BufferGeometry {
   const wallStart: Point2D = { x: wallNode.start[0], y: wallNode.start[1] }
   const wallEnd: Point2D = { x: wallNode.end[0], y: wallNode.end[1] }
-  const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation)
+  const topElevation = resolveWallTop(wallNode, storeyHeight, slabElevation, 0)
   const effectiveWallHeight = topElevation - slabElevation
   const effectiveBaseElevation = Math.min(baseElevation, slabElevation)
   const localBottom = effectiveBaseElevation - slabElevation
@@ -1049,9 +1083,9 @@ export function generateExtrudedWall(
     bevelEnabled: false,
   })
 
-  // Rotate so extrusion direction (Z) becomes height direction (Y)
   geometry.rotateX(-Math.PI / 2)
   if (Math.abs(localBottom) > 1e-9) geometry.translate(0, localBottom, 0)
+  applyWallEndHeightSlope(geometry, wallNode, L, localBottom + height, effectiveWallHeight)
   geometry.computeVertexNormals()
   assignWallMaterialGroups(geometry, wallNode, boundaryEdges, effectiveWallHeight)
   ensureRenderableGeometryAttributes(geometry)
@@ -1150,7 +1184,7 @@ export function generateExtrudedWall(
   // Apply base-profile and opening cutouts in one CSG pass.
   const cutoutBrushes = [
     ...baseProfileCutouts,
-    ...collectCutoutBrushes(wallNode, childrenNodes, thickness),
+    ...collectCutoutBrushes(wallNode, childrenNodes, thickness, effectiveWallHeight),
   ]
   if (cutoutBrushes.length === 0) {
     const splitGeometry = splitGeometryAtHorizontalPlanes(
@@ -1224,6 +1258,7 @@ function collectCutoutBrushes(
   wallNode: WallNode,
   childrenNodes: AnyNode[],
   wallThickness: number,
+  effectiveWallHeight?: number,
 ): Brush[] {
   const brushes: Brush[] = []
   const wallMesh = sceneRegistry.nodes.get(wallNode.id) as THREE.Mesh
@@ -1237,7 +1272,7 @@ function collectCutoutBrushes(
     if (child.type !== 'item' && child.type !== 'window' && child.type !== 'door') continue
 
     if (child.type === 'door' || child.type === 'window') {
-      brushes.push(createOpeningCutoutBrush(child, wallThickness))
+      brushes.push(createOpeningCutoutBrush(child, wallThickness, wallNode, effectiveWallHeight))
       continue
     }
 
@@ -1295,17 +1330,38 @@ function collectCutoutBrushes(
   return brushes
 }
 
-function createOpeningCutoutBrush(opening: DoorNode | WindowNode, wallThickness: number): Brush {
+function createOpeningCutoutBrush(
+  opening: DoorNode | WindowNode,
+  wallThickness: number,
+  wallNode?: WallNode,
+  effectiveWallHeight?: number,
+): Brush {
   const halfWidth = opening.width / 2
   const bottom = opening.position[1] - opening.height / 2
   const bottomPadding = getOpeningCutoutBottomPadding(opening, bottom)
+  let top = opening.position[1] + opening.height / 2
+
+  if (wallNode && effectiveWallHeight !== undefined) {
+    const endHeightOffset = clampWallEndHeightOffset(wallNode.endHeightOffset, effectiveWallHeight)
+    const dx = wallNode.end[0] - wallNode.start[0]
+    const dz = wallNode.end[1] - wallNode.start[1]
+    const wallLength = Math.hypot(dx, dz)
+    if (wallLength > 1e-4) {
+      const slope = endHeightOffset / wallLength
+      const leftCeiling = effectiveWallHeight + slope * (opening.position[0] - halfWidth)
+      const rightCeiling = effectiveWallHeight + slope * (opening.position[0] + halfWidth)
+      const minCeiling = Math.min(leftCeiling, rightCeiling)
+      top = Math.min(top, minCeiling)
+    }
+  }
+
   const geometry = buildOpeningCutoutGeometry(
     opening,
     {
       left: opening.position[0] - halfWidth,
       right: opening.position[0] + halfWidth,
       bottom: bottom - bottomPadding,
-      top: opening.position[1] + opening.height / 2,
+      top,
     },
     wallThickness * 2,
     wallThickness,

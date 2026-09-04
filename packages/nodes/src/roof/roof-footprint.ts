@@ -235,7 +235,7 @@ export function resolveRoofWallTopElevation(
     0,
     sourceLevelY +
       getWallBaseElevationForNodes(wall, completeNodes) +
-      getWallEffectiveHeightForNodes(wall, completeNodes) -
+      getWallEffectiveHeightForNodes(wall, completeNodes, 0) -
       targetLevelY,
   )
 }

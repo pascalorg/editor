@@ -444,6 +444,8 @@ export {
   type WallPlanPoint,
 } from './systems/wall/wall-move'
 export {
+  clampWallEndHeightOffset,
+  MIN_WALL_END_HEIGHT,
   MIN_WALL_HEIGHT,
   resolveWallEffectiveHeight,
   resolveWallTop,

@@ -147,8 +147,19 @@ function preparedWallHeight(
       },
     }
   }
+  if (Math.abs(node.endHeightOffset ?? 0) > 1e-5) {
+    return {
+      height: null,
+      diagnostic: {
+        severity: 'error',
+        code: 'unsupported_wall_print_slope',
+        message: `Wall ${node.id} has a sloped top that does not yet have a canonical printable solid.`,
+        nodeIds: [node.id],
+      },
+    }
+  }
 
-  const height = getWallEffectiveHeightForNodes(node, nodes)
+  const height = getWallEffectiveHeightForNodes(node, nodes, 0)
   if (!Number.isFinite(height) || height <= 1e-7) {
     return {
       height: null,

@@ -1,5 +1,9 @@
 import type { AnyNode, AnyNodeId, WallNode } from '@pascal-app/core'
-import { resolveWallOpeningCeiling } from '../shared/wall-opening-ceiling'
+import {
+  readHostWallCeiling,
+  toWallCeilingSceneReader,
+  type WallCeilingSceneReader,
+} from '../shared/wall-opening-ceiling'
 
 /**
  * Default sill height (metres from the floor to the BOTTOM of a window) for a
@@ -36,11 +40,14 @@ export function wallLocalToWorld(
 }
 
 /**
- * Clamps window center position so it stays fully within wall bounds. The Y
- * ceiling is the wall's RESOLVED top (storey plane for plane-bound walls,
- * stored height for explicit ones, minus the elected slab base) — `nodes` is
- * required because a plane-bound wall's top lives on its level, not on the
- * wall record.
+ * Clamps window center (localX, localY) within wall bounds.
+ *
+ * Y is bounded to keep the window's bottom above 0 (floor level) AND its top
+ * below the wall's effective ceiling, sampled at both edges of the opening
+ * span (left and right). The ceiling is the wall's RESOLVED top (storey plane
+ * for plane-bound walls, stored height for explicit ones, minus the elected
+ * slab base) — `nodes` is required because a plane-bound wall's top lives on
+ * its level, not on the wall record.
  */
 export function clampToWall(
   wallNode: WallNode,
@@ -48,16 +55,53 @@ export function clampToWall(
   localY: number,
   width: number,
   height: number,
-  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
-): { clampedX: number; clampedY: number } {
+  sceneOrNodes: Readonly<Record<AnyNodeId, AnyNode>> | WallCeilingSceneReader,
+): { clampedX: number; clampedY: number; fits: boolean } {
   const dx = wallNode.end[0] - wallNode.start[0]
   const dz = wallNode.end[1] - wallNode.start[1]
-  const wallLength = Math.sqrt(dx * dx + dz * dz)
-  const wallHeight = resolveWallOpeningCeiling(wallNode, nodes)
+  const wallLength = Math.hypot(dx, dz)
 
-  const clampedX = Math.max(width / 2, Math.min(wallLength - width / 2, localX))
-  const clampedY = Math.max(height / 2, Math.min(wallHeight - height / 2, localY))
-  return { clampedX, clampedY }
+  const minX = width / 2
+  const maxX = wallLength - width / 2
+
+  if (width > wallLength) {
+    return { clampedX: wallLength / 2, clampedY: height / 2, fits: false }
+  }
+
+  const sceneReader = toWallCeilingSceneReader(sceneOrNodes)
+  const startCeiling = readHostWallCeiling(wallNode.id, sceneReader, 0)
+  const endCeiling = readHostWallCeiling(wallNode.id, sceneReader, wallLength)
+  const slope = (endCeiling - startCeiling) / wallLength
+
+  let fitMinX = minX
+  let fitMaxX = maxX
+
+  if (Math.abs(slope) < 1e-6) {
+    if (startCeiling < height - 1e-4) {
+      return { clampedX: Math.max(minX, Math.min(maxX, localX)), clampedY: height / 2, fits: false }
+    }
+  } else if (slope > 0) {
+    // Upward slope: lowest ceiling point for window span is at left edge (x - width/2)
+    const minCenterForHeight = (height - startCeiling) / slope + width / 2
+    fitMinX = Math.max(minX, minCenterForHeight)
+  } else {
+    // Downward slope: lowest ceiling point for window span is at right edge (x + width/2)
+    const maxCenterForHeight = (height - startCeiling) / slope - width / 2
+    fitMaxX = Math.min(maxX, maxCenterForHeight)
+  }
+
+  if (fitMinX > fitMaxX + 1e-4) {
+    return { clampedX: Math.max(minX, Math.min(maxX, localX)), clampedY: height / 2, fits: false }
+  }
+
+  const clampedX = Math.max(fitMinX, Math.min(fitMaxX, localX))
+  const leftCeil = startCeiling + slope * (clampedX - width / 2)
+  const rightCeil = startCeiling + slope * (clampedX + width / 2)
+  const ceilingAtX = Math.min(leftCeil, rightCeil)
+
+  const effectiveHeight = Math.min(height, Math.max(0.01, ceilingAtX))
+  const clampedY = Math.max(effectiveHeight / 2, Math.min(ceilingAtX - effectiveHeight / 2, localY))
+  return { clampedX, clampedY, fits: true }
 }
 
 /**

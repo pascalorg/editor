@@ -96,6 +96,8 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
     roof: 'structural',
     zone: 'structural',
     block: 'structural',
+    door: 'item',
+    window: 'item',
   }
   const profileOf = (t: string) => declared[t]
   const profileOfNode = (id: string) =>
@@ -158,7 +160,7 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
   })
 
   it('an undeclared kind (no snapProfile) gets no snap context', () => {
-    expect(ctx({ kind: 'moving', nodeType: 'door' })).toBeNull()
+    expect(ctx({ kind: 'moving', nodeType: 'unknown_plugin_kind' })).toBeNull()
     expect(ctx({ kind: 'idle' }, 'build', 'shelf')).toBeNull()
   })
 
@@ -189,5 +191,25 @@ describe('snapContextOf (profile-driven, node-declared)', () => {
         draftDirectionalOf,
       }),
     ).toBe('polygon')
+  })
+  it('moving scope resolves active snap context when moving a window or door', () => {
+    expect(
+      snapContextOf({
+        scope: { kind: 'moving', nodeType: 'window' },
+        mode: 'select',
+        tool: null,
+        profileOf,
+        profileOfNode,
+      }),
+    ).toBe('item')
+    expect(
+      snapContextOf({
+        scope: { kind: 'moving', nodeType: 'door' },
+        mode: 'select',
+        tool: null,
+        profileOf,
+        profileOfNode,
+      }),
+    ).toBe('item')
   })
 })

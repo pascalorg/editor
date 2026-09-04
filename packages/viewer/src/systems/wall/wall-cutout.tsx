@@ -245,6 +245,7 @@ export const WallCutout = () => {
           wallNode,
           getWallPlaneTop(wallNode, levelId, sceneState.nodes),
           support.elevation,
+          0,
         )
         const shouldSelectionHighlight =
           isSelectionHighlighted && !getWallFaceBandConfig(wallNode, effectiveWallHeight).enabled
