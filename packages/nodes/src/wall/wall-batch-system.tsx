@@ -152,6 +152,7 @@ function toCandidate(
 
   const mesh = sceneRegistry.nodes.get(nodeId) as Mesh | undefined
   if (!mesh?.visible) return null
+  if (mesh.userData.wallHidden === true) return null
   // Solo's shadow-caster-only pass and the viewer's isolation filter both
   // hide a wall by taking it off the scene layer. Sewing it in would put it
   // back on screen through the merged mesh, which neither asked for.
@@ -170,15 +171,14 @@ function toCandidate(
  *
  * The merged mesh captures one material set when it is sewn and nothing
  * re-reads it, so batching is only sound while every batched wall's materials
- * hold still. That is true in one wall mode. `cutaway` re-assigns materials
- * from the camera's facing test as the view turns, `down` makes every wall
- * see-through and `translucent` does the same by definition — in all three the
- * merged copy would keep drawing walls the cutaway pass has since turned to
- * glass. Isolation is the other stand-down: it hides the level root the merged
- * mesh hangs off, which would leave a focused batched wall drawn by nobody.
+ * hold still. That is true in `up`; in `cutaway`, walls stamped `wallHidden`
+ * are released per wall in the same frame because WallCutout runs at priority
+ * 0 and this system at 5. `down` and `translucent` make every wall see-through.
+ * Isolation is the other stand-down: it hides the level root the merged mesh
+ * hangs off, which would leave a focused batched wall drawn by nobody.
  */
 export function canBatchWalls(wallMode: WallMode, isolationActive: boolean): boolean {
-  return !isolationActive && wallMode === 'up'
+  return !isolationActive && (wallMode === 'up' || wallMode === 'cutaway')
 }
 
 /**
@@ -399,6 +399,25 @@ function runBatchFrame(
     changed = true
   }
 
+  // Only cutaway hides walls one by one; `up` hides none and the other modes
+  // stand the batch down, so the stamp scan is worth a frame only there.
+  const cutawayHiddenWalls = new Set<string>()
+  if (useViewer.getState().wallMode === 'cutaway') {
+    for (const nodeId of wallIds) {
+      const mesh = sceneRegistry.nodes.get(nodeId)
+      if (mesh?.userData.wallHidden === true) cutawayHiddenWalls.add(nodeId)
+    }
+  }
+  for (const nodeId of cutawayHiddenWalls) {
+    const record = batchByNode.get(nodeId)
+    if (!record) continue
+    releaseWall(nodeId)
+    staleLevels.add(record.levelId)
+    changed = true
+  }
+  const excludedNodeIds = cutawayHiddenWalls
+  for (const nodeId of tintedWalls) excludedNodeIds.add(nodeId)
+
   // A theme, texture or material-library switch re-makes every wall's
   // materials without marking a single node, so the merged copies have to be
   // sewn again from the new ones. See `appearanceChanged`.
@@ -421,13 +440,11 @@ function runBatchFrame(
     }
   }
 
-  // Two things make merging unsound, and both are handled the same way: the
-  // batch stands down for as long as they hold, and sews the floors back
-  // together once they lift. Isolation hides everything outside the focused
-  // subtree, and a level's merged mesh hangs off the level root — so it goes
-  // dark with everything else, leaving a focused batched wall drawn by nobody.
-  // Every wall mode but `up` re-assigns wall materials the merged mesh does not
-  // follow. See `canBatchWalls`.
+  // Isolation, `down` and `translucent` make batching unsound, so the batch
+  // stands down while they hold and sews the floors back together once they
+  // lift. `cutaway` stays live because WallCutout stamps hidden walls at
+  // priority 0 and this system releases them per wall at priority 5 in the
+  // same frame. See `canBatchWalls`.
   const suspended = !canBatchWalls(useViewer.getState().wallMode, isIsolationActive())
   if (suspended !== batchingSuspended) {
     batchingSuspended = suspended
@@ -466,8 +483,8 @@ function runBatchFrame(
   }
 
   for (const levelId of staleLevels) {
-    if (unbatchedWallCount(levelId, tintedWalls) >= MIN_BATCH_WALLS) {
-      mergeLevel(levelId, tintedWalls)
+    if (unbatchedWallCount(levelId, excludedNodeIds) >= MIN_BATCH_WALLS) {
+      mergeLevel(levelId, excludedNodeIds)
     }
   }
   staleLevels.clear()
