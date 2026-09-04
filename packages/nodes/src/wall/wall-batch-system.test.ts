@@ -12,6 +12,7 @@ import {
   MeshBasicMaterial,
   Object3D,
 } from 'three'
+import { revealAllBatchedHolds } from '../shared/node-batch/candidates'
 import {
   collectTintedWalls,
   collectWallBatchCandidates,
@@ -19,7 +20,6 @@ import {
   revealBatchedWallsForCapture,
   WallBatchSystem,
 } from './wall-batch-system'
-import { revealAllBatchedHolds } from '../shared/node-batch/candidates'
 
 type FrameCallback = Parameters<typeof useFrame>[0]
 let frameCallback: FrameCallback | null = null
