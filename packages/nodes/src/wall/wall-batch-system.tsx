@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNodeId, sceneRegistry, useScene, type WallNode } from '@pascal-app/core'
+import { type AnyNodeId, emitter, sceneRegistry, useScene, type WallNode } from '@pascal-app/core'
 import {
   drainRebuiltWalls,
   getPendingWallRebuildCount,
@@ -107,6 +107,17 @@ function skipRaycast() {
 function showOwnGeometry(nodeId: string) {
   const mesh = sceneRegistry.nodes.get(nodeId) as Mesh | undefined
   if (mesh) revealBatchedWall(mesh)
+}
+
+export function revealBatchedWallsForCapture(): void {
+  for (const nodeId of batchByNode.keys()) showOwnGeometry(nodeId)
+}
+
+export function holdBatchedWallsAfterCapture(): void {
+  for (const nodeId of batchByNode.keys()) {
+    const mesh = sceneRegistry.nodes.get(nodeId)
+    if (mesh) hideBatchedWall(mesh)
+  }
 }
 
 /** Hands a wall back to itself: the merged mesh stops drawing it, it resumes. */
@@ -328,6 +339,20 @@ export const WallBatchSystem = () => {
   const wakeRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   useFrame(() => runBatchFrame(invalidate, wakeRef), 5)
+
+  // Captures and exports clone the scene and prune whatever is off the scene
+  // layer, so the sources come back for the capture and go under again after
+  // it. The node batch used to reveal them as a side effect of its own sweep
+  // (shared hold reason) and nothing ever re-hid them: every batched wall
+  // drew twice for the rest of the session.
+  useEffect(() => {
+    emitter.on('thumbnail:before-capture', revealBatchedWallsForCapture)
+    emitter.on('thumbnail:after-capture', holdBatchedWallsAfterCapture)
+    return () => {
+      emitter.off('thumbnail:before-capture', revealBatchedWallsForCapture)
+      emitter.off('thumbnail:after-capture', holdBatchedWallsAfterCapture)
+    }
+  }, [])
 
   // Scripted-probe hook, ?perf sessions only (mirrors __itemBatch): the
   // panel has no row for the merged wall batch, so probes read it here.

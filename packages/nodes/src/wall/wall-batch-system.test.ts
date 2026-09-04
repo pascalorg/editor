@@ -12,9 +12,12 @@ import {
   MeshBasicMaterial,
   Object3D,
 } from 'three'
+import { revealAllBatchedHolds } from '../shared/node-batch/candidates'
 import {
   collectTintedWalls,
   collectWallBatchCandidates,
+  holdBatchedWallsAfterCapture,
+  revealBatchedWallsForCapture,
   WallBatchSystem,
 } from './wall-batch-system'
 
@@ -261,5 +264,21 @@ describe('WallBatchSystem cutaway releases', () => {
     expect(root.children.some((child) => child.name === 'wall-batch')).toBe(true)
     expect(walls.slice(1).every((wall) => !wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
     expect(walls[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+  })
+})
+
+describe('WallBatchSystem capture holds', () => {
+  test("the node batch's reveal sweep leaves batched walls held", () => {
+    const { walls } = setupBatchedLevel()
+    revealAllBatchedHolds()
+    expect(walls.every((wall) => !wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
+  })
+
+  test('sources come back for a capture and go under again after it', () => {
+    const { walls } = setupBatchedLevel()
+    revealBatchedWallsForCapture()
+    expect(walls.every((wall) => wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
+    holdBatchedWallsAfterCapture()
+    expect(walls.every((wall) => !wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
   })
 })

@@ -36,7 +36,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import { Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
+import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
 import { setGroupsSortedByMaterial } from '../../lib/geometry-groups'
@@ -82,6 +82,126 @@ function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
 
 function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
+}
+
+function isBoxCutout(brush: Brush, bounds: THREE.Box3): boolean {
+  const geometry = csgGeometry(brush)
+  const positions = geometry.getAttribute('position')
+  if ((geometry.index?.count ?? positions.count) !== 36) return false
+
+  const vertex = new THREE.Vector3()
+  const corners = new Set<number>()
+  for (let index = 0; index < positions.count; index++) {
+    vertex.fromBufferAttribute(positions, index).applyMatrix4(brush.matrixWorld)
+    let corner = 0
+    for (const [bit, axis] of ['x', 'y', 'z'].entries()) {
+      const coordinate = axis as 'x' | 'y' | 'z'
+      if (Math.abs(vertex[coordinate] - bounds.min[coordinate]) <= 1e-6) continue
+      if (Math.abs(vertex[coordinate] - bounds.max[coordinate]) > 1e-6) return false
+      corner |= 1 << bit
+    }
+    corners.add(corner)
+  }
+  // A rotated box's AABB can contain another cutter without the solid doing so.
+  return corners.size === 8
+}
+
+export function mergeWallCutoutBrushes(brushes: readonly Brush[]): {
+  cutter: Brush | null
+  fallbackBrushes: Brush[]
+  droppedCount: number
+} {
+  const cutouts = brushes.map((brush) => {
+    prepareBrushForCSG(brush)
+    const geometry = csgGeometry(brush)
+    geometry.computeBoundingBox()
+    const bounds = geometry.boundingBox!.clone().applyMatrix4(brush.matrixWorld)
+    return {
+      brush,
+      bounds,
+      containerBounds: bounds.clone().expandByScalar(1e-5),
+      isBox: isBoxCutout(brush, bounds),
+    }
+  })
+  const retained: typeof cutouts = []
+  for (const cutout of cutouts) {
+    if (cutout.isBox) {
+      if (
+        retained.some((other) => other.isBox && other.containerBounds.containsBox(cutout.bounds))
+      ) {
+        continue
+      }
+      for (let index = retained.length - 1; index >= 0; index--) {
+        const other = retained[index]!
+        if (other.isBox && cutout.containerBounds.containsBox(other.bounds)) {
+          retained.splice(index, 1)
+        }
+      }
+    }
+    retained.push(cutout)
+  }
+  const droppedCount = cutouts.length - retained.length
+  const bounds = retained.map((cutout) => cutout.bounds.clone().expandByScalar(1e-6))
+  const parents = retained.map((_, index) => index)
+  const root = (index: number): number => {
+    while (parents[index] !== index) {
+      parents[index] = parents[parents[index]!]!
+      index = parents[index]!
+    }
+    return index
+  }
+  for (let a = 0; a < retained.length; a++) {
+    for (let b = a + 1; b < retained.length; b++) {
+      if (bounds[a]!.intersectsBox(bounds[b]!)) parents[root(b)] = root(a)
+    }
+  }
+  const groups = new Map<number, Brush[]>()
+  retained.forEach(({ brush }, index) => {
+    const key = root(index)
+    const group = groups.get(key) ?? []
+    group.push(brush)
+    groups.set(key, group)
+  })
+
+  const geometries: THREE.BufferGeometry[] = []
+  const intermediateGeometries = new Set<THREE.BufferGeometry>()
+  const fallbackBrushes: Brush[] = []
+  try {
+    for (const group of groups.values()) {
+      // Long unions of coplanar openings can grow explosively; subtract these directly.
+      if (group.length > 4) {
+        fallbackBrushes.push(...group)
+        continue
+      }
+      let result = group[0]!
+      for (let index = 1; index < group.length; index++) {
+        const next = csgEvaluator.evaluate(result, group[index]!, ADDITION)
+        intermediateGeometries.add(csgGeometry(next))
+        if (intermediateGeometries.delete(csgGeometry(result))) csgGeometry(result).dispose()
+        result = next
+      }
+      const source = csgGeometry(result)
+      const geometry = source.index ? source.toNonIndexed() : source.clone()
+      geometries.push(geometry)
+      geometry.applyMatrix4(result.matrixWorld)
+      for (const attribute of Object.keys(geometry.attributes)) {
+        if (!csgEvaluator.attributes.includes(attribute)) geometry.deleteAttribute(attribute)
+      }
+    }
+
+    if (geometries.length === 0) return { cutter: null, fallbackBrushes, droppedCount }
+
+    // CSG material indices are temporary: assignWallMaterialGroups classifies
+    // the final faces, including reveals, into the wall's semantic slots.
+    const merged = mergeGeometries(geometries, false)
+    if (!merged) throw new Error('Unable to merge wall cutout geometries')
+    const cutter = new Brush(merged)
+    prepareBrushForCSG(cutter)
+    return { cutter, fallbackBrushes, droppedCount }
+  } finally {
+    for (const geometry of geometries) geometry.dispose()
+    for (const geometry of intermediateGeometries) geometry.dispose()
+  }
 }
 
 type WallBoundaryEdgeTag = 'front' | 'back' | 'base'
@@ -482,8 +602,38 @@ const DRAG_FLUSH_MS = 80
 const MAX_WALL_REBUILDS_PER_FRAME = 8
 const WALL_PROGRESSIVE_DIRTY_THRESHOLD = MAX_WALL_REBUILDS_PER_FRAME
 const WALL_PROGRESSIVE_TIME_BUDGET_MS = 8
+const HEAVY_WALL_OPENINGS = 6
 let lastWallDirtyAtMs = 0
 const pendingAdjacentByLevel = new Map<string, Set<string>>()
+
+export function shouldDeferWallRebuild(
+  wallId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+  rebuiltThisFrame: number,
+  elapsedMs: number,
+): boolean {
+  if (rebuiltThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) return true
+  if (rebuiltThisFrame === 0) return false
+  if (elapsedMs >= WALL_PROGRESSIVE_TIME_BUDGET_MS) return true
+  const wall = nodes[wallId as AnyNodeId]
+  if (wall?.type !== 'wall') return false
+  let cutouts = 0
+  for (const childId of getEffectiveWall(wall).children ?? []) {
+    const child = nodes[childId]
+    if (
+      child?.type === 'door' ||
+      child?.type === 'window' ||
+      (child?.type === 'item' &&
+        (
+          sceneRegistry.nodes.get(childId)?.getObjectByName('cutout') as THREE.Mesh | undefined
+        )?.geometry?.getAttribute('position')?.count)
+    ) {
+      cutouts++
+      if (cutouts >= HEAVY_WALL_OPENINGS) return true
+    }
+  }
+  return false
+}
 
 // Walls whose geometry this system replaced since the last drain.
 //
@@ -582,6 +732,7 @@ export const WallSystem = () => {
     const useProgressiveWallRebuilds = dirtyWallCount > WALL_PROGRESSIVE_DIRTY_THRESHOLD
     let rebuiltWallsThisFrame = 0
     const rebuildFrameStartedAt = now
+    let deferWallRebuilds = false
 
     // Process each level that has dirty walls
     for (const [levelId, dirtyWallIds] of dirtyWallsByLevel) {
@@ -597,16 +748,17 @@ export const WallSystem = () => {
       // follow the cursor with full fidelity (cutouts and all). Large imports
       // enter the progressive path so initial load can't lock the tab.
       for (const wallId of dirtyWallIds) {
-        if (useProgressiveWallRebuilds) {
-          if (rebuiltWallsThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) {
-            break
-          }
-          if (
-            rebuiltWallsThisFrame > 0 &&
-            performance.now() - rebuildFrameStartedAt >= WALL_PROGRESSIVE_TIME_BUDGET_MS
-          ) {
-            break
-          }
+        if (
+          useProgressiveWallRebuilds &&
+          shouldDeferWallRebuild(
+            wallId,
+            nodes,
+            rebuiltWallsThisFrame,
+            performance.now() - rebuildFrameStartedAt,
+          )
+        ) {
+          deferWallRebuilds = true
+          break
         }
 
         const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
@@ -623,6 +775,7 @@ export const WallSystem = () => {
       }
 
       if (rebuiltWallIds.size === 0) {
+        if (deferWallRebuilds) break
         continue
       }
 
@@ -639,6 +792,7 @@ export const WallSystem = () => {
           pending.add(wallId)
         }
       }
+      if (deferWallRebuilds) break
     }
 
     // Trailing-edge flush: if no new dirty marks for DRAG_FLUSH_MS, the
@@ -650,22 +804,24 @@ export const WallSystem = () => {
       const useProgressiveAdjacentRebuilds = pendingCount > WALL_PROGRESSIVE_DIRTY_THRESHOLD
       let rebuiltAdjacentThisFrame = 0
       const adjacentFrameStartedAt = performance.now()
+      let deferAdjacentRebuilds = false
 
       for (const [levelId, pendingIds] of pendingAdjacentByLevel) {
         if (pendingIds.size === 0) continue
         const levelWalls = getLevelWalls(levelId)
         const miterData = timeSpan('wall-miter', () => getCachedLevelMiters(levelId, levelWalls))
         for (const wallId of Array.from(pendingIds)) {
-          if (useProgressiveAdjacentRebuilds) {
-            if (rebuiltAdjacentThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) {
-              break
-            }
-            if (
-              rebuiltAdjacentThisFrame > 0 &&
-              performance.now() - adjacentFrameStartedAt >= WALL_PROGRESSIVE_TIME_BUDGET_MS
-            ) {
-              break
-            }
+          if (
+            useProgressiveAdjacentRebuilds &&
+            shouldDeferWallRebuild(
+              wallId,
+              nodes,
+              rebuiltAdjacentThisFrame,
+              performance.now() - adjacentFrameStartedAt,
+            )
+          ) {
+            deferAdjacentRebuilds = true
+            break
           }
 
           const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
@@ -684,8 +840,9 @@ export const WallSystem = () => {
         }
 
         if (
-          useProgressiveAdjacentRebuilds &&
-          rebuiltAdjacentThisFrame >= MAX_WALL_REBUILDS_PER_FRAME
+          deferAdjacentRebuilds ||
+          (useProgressiveAdjacentRebuilds &&
+            rebuiltAdjacentThisFrame >= MAX_WALL_REBUILDS_PER_FRAME)
         ) {
           break
         }
@@ -806,6 +963,9 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   const newGeo = applyWorldPlanarWallUVs(builtGeo, wallWorldMatrix)
 
   mesh.geometry.dispose()
+  // A degenerate rebuild (zero-length or fully cut wall) yields as few vertices
+  // as the mount-time placeholder; the stamp keeps the sweep from re-marking it.
+  newGeo.userData.built = true
   mesh.geometry = newGeo
   // Update collision mesh
   const collisionMesh = mesh.getObjectByName('collision-mesh') as THREE.Mesh
@@ -1147,7 +1307,6 @@ export function generateExtrudedWall(
     baseProfileCutouts.push(new Brush(cutoutGeometry))
   }
 
-  // Apply base-profile and opening cutouts in one CSG pass.
   const cutoutBrushes = [
     ...baseProfileCutouts,
     ...collectCutoutBrushes(wallNode, childrenNodes, thickness),
@@ -1177,24 +1336,37 @@ export function generateExtrudedWall(
   const wallBrush = new Brush(geometry)
   wallBrush.updateMatrixWorld()
 
-  // Subtract each cutout from the wall
+  let mergedCutter: Brush | null = null
   let resultBrush = wallBrush
-  for (const cutoutBrush of cutoutBrushes) {
-    prepareBrushForCSG(cutoutBrush)
-    const newResult = timeSpan('wall-csg', () =>
-      csgEvaluator.evaluate(resultBrush, cutoutBrush, SUBTRACTION),
+  try {
+    const properties: Array<[string, string]> = []
+    const merged = timeSpan(
+      'wall-csg-union',
+      () => {
+        const cutouts = mergeWallCutoutBrushes(cutoutBrushes)
+        properties.push(['droppedCutouts', String(cutouts.droppedCount)])
+        return cutouts
+      },
+      { properties },
     )
-    prepareBrushForCSG(newResult)
-    if (resultBrush !== wallBrush) {
-      csgGeometry(resultBrush).dispose()
-    }
-    resultBrush = newResult
-  }
-
-  // Clean up
-  csgGeometry(wallBrush).dispose()
-  for (const brush of cutoutBrushes) {
-    csgGeometry(brush).dispose()
+    mergedCutter = merged.cutter
+    timeSpan('wall-csg', () => {
+      if (mergedCutter) {
+        resultBrush = csgEvaluator.evaluate(resultBrush, mergedCutter, SUBTRACTION)
+      }
+      for (const cutter of merged.fallbackBrushes) {
+        const next = csgEvaluator.evaluate(resultBrush, cutter, SUBTRACTION)
+        if (resultBrush !== wallBrush) csgGeometry(resultBrush).dispose()
+        resultBrush = next
+      }
+    })
+  } catch (error) {
+    if (resultBrush !== wallBrush) csgGeometry(resultBrush).dispose()
+    throw error
+  } finally {
+    csgGeometry(wallBrush).dispose()
+    if (mergedCutter) csgGeometry(mergedCutter).dispose()
+    for (const brush of cutoutBrushes) csgGeometry(brush).dispose()
   }
 
   const resultGeometry = csgGeometry(resultBrush)

@@ -261,6 +261,14 @@ function resolveTrimProfile(kind: TrimKind, trim: WallTrimConfig) {
   )
 }
 
+export function hasWallTreatments(node: WallNode): boolean {
+  return !!(
+    (node.skirting?.enabled ?? WALL_SKIRTING_DEFAULT.enabled) ||
+    (node.crown?.enabled ?? WALL_CROWN_DEFAULT.enabled) ||
+    (node.chairRail?.enabled ?? WALL_CHAIR_RAIL_DEFAULT.enabled)
+  )
+}
+
 export function wallTreatmentProudOffsets(node: WallNode): number[] {
   const offsets = new Set<number>()
   const configs: Array<[TrimKind, WallTrimConfig | undefined]> = [
