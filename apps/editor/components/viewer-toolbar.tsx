@@ -10,6 +10,10 @@ import {
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
+  getHistoryCommandState,
+  runRedo,
+  runUndo,
+  subscribeHistoryCommandState,
   useEditor,
   useFloorplanAnnotationVisibility,
   useFloorplanMode,
@@ -37,6 +41,7 @@ import {
   Layers3,
   Magnet,
   PenLine,
+  Redo2,
   Ruler,
   ScanLine,
   SlidersHorizontal,
@@ -44,9 +49,10 @@ import {
   SquareUserRound,
   SwatchBook,
   Tag,
+  Undo2,
 } from 'lucide-react'
 import Image from 'next/image'
-import { type ReactNode, useCallback } from 'react'
+import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { cn } from '@/lib/utils'
 import { Tooltip, TooltipContent, TooltipTrigger } from './toolbar-tooltip'
@@ -686,10 +692,69 @@ function PreviewButton() {
   )
 }
 
+// Undo/Redo toolbar controls. They subscribe to the shared history state
+// (`history.ts`) so buttons enable/disable as the scene history grows, and
+// route through `runUndo`/`runRedo` so they honor a collaborative host
+// delegate when one is installed. Keyboard shortcuts (Ctrl/Cmd+Z and
+// Ctrl/Cmd+Shift+Z) are wired separately in `use-keyboard.ts` and land here
+// via the same state subscription.
+function HistoryControls() {
+  const [state, setState] = useState(() => getHistoryCommandState())
+
+  useEffect(() => {
+    return subscribeHistoryCommandState(() => setState(getHistoryCommandState()))
+  }, [])
+
+  const undo = () => {
+    if (!getHistoryCommandState().canUndo) return
+    runUndo()
+  }
+
+  const redo = () => {
+    if (!getHistoryCommandState().canRedo) return
+    runRedo()
+  }
+
+  return (
+    <div className={TOOLBAR_CONTAINER}>
+      <ToolbarTooltip label="Undo (Ctrl+Z)">
+        <button
+          aria-label="Undo"
+          aria-disabled={!state.canUndo}
+          className={cn(
+            TOOLBAR_BTN,
+            !state.canUndo && 'cursor-default opacity-40 hover:bg-transparent hover:text-inherit',
+          )}
+          onClick={undo}
+          type="button"
+        >
+          <Undo2 className="h-4 w-4" />
+        </button>
+      </ToolbarTooltip>
+      <div className="my-1.5 w-px bg-border/50" />
+      <ToolbarTooltip label="Redo (Ctrl+Shift+Z)">
+        <button
+          aria-label="Redo"
+          aria-disabled={!state.canRedo}
+          className={cn(
+            TOOLBAR_BTN,
+            !state.canRedo && 'cursor-default opacity-40 hover:bg-transparent hover:text-inherit',
+          )}
+          onClick={redo}
+          type="button"
+        >
+          <Redo2 className="h-4 w-4" />
+        </button>
+      </ToolbarTooltip>
+    </div>
+  )
+}
+
 export function CommunityViewerToolbarLeft() {
   return (
     <>
       <CollapseSidebarButton />
+      <HistoryControls />
       <ViewModeControl />
     </>
   )
