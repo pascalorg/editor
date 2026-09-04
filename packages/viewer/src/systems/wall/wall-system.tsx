@@ -84,14 +84,65 @@ function csgGeometry(brush: Brush): THREE.BufferGeometry {
   return brush.geometry as unknown as THREE.BufferGeometry
 }
 
-export function mergeWallCutoutBrushes(brushes: readonly Brush[]): Brush {
-  const bounds = brushes.map((brush) => {
+function isBoxCutout(brush: Brush, bounds: THREE.Box3): boolean {
+  const geometry = csgGeometry(brush)
+  const positions = geometry.getAttribute('position')
+  if ((geometry.index?.count ?? positions.count) !== 36) return false
+
+  const vertex = new THREE.Vector3()
+  const corners = new Set<number>()
+  for (let index = 0; index < positions.count; index++) {
+    vertex.fromBufferAttribute(positions, index).applyMatrix4(brush.matrixWorld)
+    let corner = 0
+    for (const [bit, axis] of ['x', 'y', 'z'].entries()) {
+      const coordinate = axis as 'x' | 'y' | 'z'
+      if (Math.abs(vertex[coordinate] - bounds.min[coordinate]) <= 1e-6) continue
+      if (Math.abs(vertex[coordinate] - bounds.max[coordinate]) > 1e-6) return false
+      corner |= 1 << bit
+    }
+    corners.add(corner)
+  }
+  // A rotated box's AABB can contain another cutter without the solid doing so.
+  return corners.size === 8
+}
+
+export function mergeWallCutoutBrushes(brushes: readonly Brush[]): {
+  cutter: Brush | null
+  fallbackBrushes: Brush[]
+  droppedCount: number
+} {
+  const cutouts = brushes.map((brush) => {
     prepareBrushForCSG(brush)
     const geometry = csgGeometry(brush)
     geometry.computeBoundingBox()
-    return geometry.boundingBox!.clone().applyMatrix4(brush.matrixWorld).expandByScalar(1e-6)
+    const bounds = geometry.boundingBox!.clone().applyMatrix4(brush.matrixWorld)
+    return {
+      brush,
+      bounds,
+      containerBounds: bounds.clone().expandByScalar(1e-5),
+      isBox: isBoxCutout(brush, bounds),
+    }
   })
-  const parents = brushes.map((_, index) => index)
+  const retained: typeof cutouts = []
+  for (const cutout of cutouts) {
+    if (cutout.isBox) {
+      if (
+        retained.some((other) => other.isBox && other.containerBounds.containsBox(cutout.bounds))
+      ) {
+        continue
+      }
+      for (let index = retained.length - 1; index >= 0; index--) {
+        const other = retained[index]!
+        if (other.isBox && cutout.containerBounds.containsBox(other.bounds)) {
+          retained.splice(index, 1)
+        }
+      }
+    }
+    retained.push(cutout)
+  }
+  const droppedCount = cutouts.length - retained.length
+  const bounds = retained.map((cutout) => cutout.bounds.clone().expandByScalar(1e-6))
+  const parents = retained.map((_, index) => index)
   const root = (index: number): number => {
     while (parents[index] !== index) {
       parents[index] = parents[parents[index]!]!
@@ -99,13 +150,13 @@ export function mergeWallCutoutBrushes(brushes: readonly Brush[]): Brush {
     }
     return index
   }
-  for (let a = 0; a < brushes.length; a++) {
-    for (let b = a + 1; b < brushes.length; b++) {
+  for (let a = 0; a < retained.length; a++) {
+    for (let b = a + 1; b < retained.length; b++) {
       if (bounds[a]!.intersectsBox(bounds[b]!)) parents[root(b)] = root(a)
     }
   }
   const groups = new Map<number, Brush[]>()
-  brushes.forEach((brush, index) => {
+  retained.forEach(({ brush }, index) => {
     const key = root(index)
     const group = groups.get(key) ?? []
     group.push(brush)
@@ -114,8 +165,14 @@ export function mergeWallCutoutBrushes(brushes: readonly Brush[]): Brush {
 
   const geometries: THREE.BufferGeometry[] = []
   const intermediateGeometries = new Set<THREE.BufferGeometry>()
+  const fallbackBrushes: Brush[] = []
   try {
     for (const group of groups.values()) {
+      // Long unions of coplanar openings can grow explosively; subtract these directly.
+      if (group.length > 4) {
+        fallbackBrushes.push(...group)
+        continue
+      }
       let result = group[0]!
       for (let index = 1; index < group.length; index++) {
         const next = csgEvaluator.evaluate(result, group[index]!, ADDITION)
@@ -132,13 +189,15 @@ export function mergeWallCutoutBrushes(brushes: readonly Brush[]): Brush {
       }
     }
 
+    if (geometries.length === 0) return { cutter: null, fallbackBrushes, droppedCount }
+
     // CSG material indices are temporary: assignWallMaterialGroups classifies
     // the final faces, including reveals, into the wall's semantic slots.
     const merged = mergeGeometries(geometries, false)
     if (!merged) throw new Error('Unable to merge wall cutout geometries')
     const cutter = new Brush(merged)
     prepareBrushForCSG(cutter)
-    return cutter
+    return { cutter, fallbackBrushes, droppedCount }
   } finally {
     for (const geometry of geometries) geometry.dispose()
     for (const geometry of intermediateGeometries) geometry.dispose()
@@ -1245,7 +1304,6 @@ export function generateExtrudedWall(
     baseProfileCutouts.push(new Brush(cutoutGeometry))
   }
 
-  // Apply base-profile and opening cutouts in one CSG pass.
   const cutoutBrushes = [
     ...baseProfileCutouts,
     ...collectCutoutBrushes(wallNode, childrenNodes, thickness),
@@ -1275,13 +1333,33 @@ export function generateExtrudedWall(
   const wallBrush = new Brush(geometry)
   wallBrush.updateMatrixWorld()
 
-  let mergedCutter: Brush | undefined
-  let resultBrush: Brush
+  let mergedCutter: Brush | null = null
+  let resultBrush = wallBrush
   try {
-    mergedCutter = timeSpan('wall-csg-union', () => mergeWallCutoutBrushes(cutoutBrushes))
-    resultBrush = timeSpan('wall-csg', () =>
-      csgEvaluator.evaluate(wallBrush, mergedCutter!, SUBTRACTION),
+    const properties: Array<[string, string]> = []
+    const merged = timeSpan(
+      'wall-csg-union',
+      () => {
+        const cutouts = mergeWallCutoutBrushes(cutoutBrushes)
+        properties.push(['droppedCutouts', String(cutouts.droppedCount)])
+        return cutouts
+      },
+      { properties },
     )
+    mergedCutter = merged.cutter
+    timeSpan('wall-csg', () => {
+      if (mergedCutter) {
+        resultBrush = csgEvaluator.evaluate(resultBrush, mergedCutter, SUBTRACTION)
+      }
+      for (const cutter of merged.fallbackBrushes) {
+        const next = csgEvaluator.evaluate(resultBrush, cutter, SUBTRACTION)
+        if (resultBrush !== wallBrush) csgGeometry(resultBrush).dispose()
+        resultBrush = next
+      }
+    })
+  } catch (error) {
+    if (resultBrush !== wallBrush) csgGeometry(resultBrush).dispose()
+    throw error
   } finally {
     csgGeometry(wallBrush).dispose()
     if (mergedCutter) csgGeometry(mergedCutter).dispose()

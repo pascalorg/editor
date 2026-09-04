@@ -51,7 +51,7 @@ function chainedSubtract(wall: Brush, cutters: Brush[], evaluator: Evaluator): B
 function generateChainedReference(wall: WallNode, openings: Opening[]): THREE.BufferGeometry {
   const cutters = openings.map((opening) => openingBrush(opening, wall.thickness))
   return withChainedSubtraction(cutters, () =>
-    generateExtrudedWall(wall, openings, calculateLevelMiters([wall])),
+    generateExtrudedWall(wall, openings.slice(0, 1), calculateLevelMiters([wall])),
   )
 }
 
@@ -169,11 +169,12 @@ describe('wall cutter union', () => {
   for (const [name, centers, widths, unions] of [
     ['overlapping', [2, 2.5], [1, 1], 1],
     ['sharing a face', [2, 3], [1, 1], 1],
-    ['nested', [2, 2], [2, 1], 1],
-    ['identical', [2, 2], [1, 1], 1],
+    ['nested', [2, 2], [2, 1], 0],
+    ['identical', [2, 2], [1, 1], 0],
+    ['four overlapping', [2, 2.5, 3, 3.5], [1, 1, 1, 1], 3],
     ['transitively overlapping with a disjoint shell', [2, 3.5, 2.75, 6], [1, 1, 1, 1], 2],
   ] as const) {
-    test(`unions ${name} cutouts before subtraction`, () => {
+    test(`combines ${name} cutouts before subtraction`, () => {
       const { wall, windowAt, cleanup } = fixture()
       const openings = centers.map((x, index) => windowAt(x, widths[index]))
       const spy = spyOn(Evaluator.prototype, 'evaluate')
@@ -181,6 +182,192 @@ describe('wall cutter union', () => {
         const actual = generateExtrudedWall(wall, openings, calculateLevelMiters([wall]))
         expect(spy.mock.calls.filter((call) => call[2] === ADDITION)).toHaveLength(unions)
         expect(spy.mock.calls.filter((call) => call[2] === SUBTRACTION)).toHaveLength(1)
+        spy.mockRestore()
+        const reference = generateChainedReference(wall, openings)
+        expectEquivalent(actual, reference)
+        actual.dispose()
+        reference.dispose()
+      } finally {
+        spy.mockRestore()
+        cleanup()
+      }
+    })
+  }
+
+  test('collapses 20 coincident boxes to the first cutter and preserves the single-cutout wall', () => {
+    const { wall, windowAt, cleanup } = fixture()
+    const openings = Array.from({ length: 20 }, () => windowAt(2))
+    const brushes = openings.map((opening) => openingBrush(opening, wall.thickness))
+    const spy = spyOn(Evaluator.prototype, 'evaluate')
+    try {
+      const merged = mergeWallCutoutBrushes(brushes)
+      expect(merged.droppedCount).toBe(19)
+      expect(merged.fallbackBrushes).toHaveLength(0)
+      expect(merged.cutter!.geometry.getAttribute('position').array).toEqual(
+        brushes[0]!.geometry.getAttribute('position').array,
+      )
+      merged.cutter!.geometry.dispose()
+      expect(spy).not.toHaveBeenCalled()
+      const actual = generateExtrudedWall(wall, openings, calculateLevelMiters([wall]))
+      expect(spy.mock.calls.map((call) => call[2])).toEqual([SUBTRACTION])
+      spy.mockRestore()
+      const reference = generateChainedReference(wall, openings.slice(0, 1))
+      expectEquivalent(actual, reference)
+      expect(actual.groups).toEqual(reference.groups)
+      actual.dispose()
+      reference.dispose()
+    } finally {
+      spy.mockRestore()
+      for (const brush of brushes) brush.geometry.dispose()
+      cleanup()
+    }
+  })
+
+  test('dedupes the 8/8/4 door clusters before deciding whether to union', () => {
+    const { wall: originalWall, cleanup } = fixture()
+    const wall = WallNode.parse({ ...originalWall, end: [1.3, 0] })
+    const unique = [0.45, 0.67, 0.85].map((x) =>
+      DoorNode.parse({ wallId: wall.id, position: [x, 1.05, 0], width: 0.9, height: 2.1 }),
+    )
+    const openings = unique.flatMap((door, index) =>
+      Array.from({ length: index === 2 ? 4 : 8 }, () => DoorNode.parse({ ...door, id: undefined })),
+    )
+    const spy = spyOn(Evaluator.prototype, 'evaluate')
+    try {
+      const actual = generateExtrudedWall(wall, openings, calculateLevelMiters([wall]))
+      expect(spy.mock.calls.map((call) => call[2])).toEqual([ADDITION, ADDITION, SUBTRACTION])
+      spy.mockRestore()
+      const reference = generateChainedReference(wall, unique)
+      expectEquivalent(actual, reference)
+      actual.dispose()
+      reference.dispose()
+    } finally {
+      spy.mockRestore()
+      cleanup()
+    }
+  })
+
+  for (const reverse of [false, true]) {
+    test(`drops a strictly contained box with the container ${reverse ? 'last' : 'first'}`, () => {
+      const outer = new Brush(new THREE.BoxGeometry(2, 2, 2))
+      const inner = new Brush(new THREE.BoxGeometry(0.5, 0.5, 0.5).toNonIndexed())
+      outer.position.set(3, 2, 1)
+      inner.position.set(3.25, 2.25, 1.25)
+      const spy = spyOn(Evaluator.prototype, 'evaluate')
+      try {
+        const merged = mergeWallCutoutBrushes(reverse ? [inner, outer] : [outer, inner])
+        expect(merged.droppedCount).toBe(1)
+        expect(merged.fallbackBrushes).toHaveLength(0)
+        expect(spy).not.toHaveBeenCalled()
+        merged.cutter!.geometry.computeBoundingBox()
+        expect(merged.cutter!.geometry.boundingBox).toEqual(
+          new THREE.Box3(new THREE.Vector3(2, 1, 0), new THREE.Vector3(4, 3, 2)),
+        )
+        merged.cutter!.geometry.dispose()
+      } finally {
+        spy.mockRestore()
+        outer.geometry.dispose()
+        inner.geometry.dispose()
+      }
+    })
+
+    test(`keeps a coincident arch with the box ${reverse ? 'last' : 'first'}`, () => {
+      const { wall, windowAt, cleanup } = fixture()
+      const box = openingBrush(windowAt(2), wall.thickness)
+      const arch = openingBrush(
+        WindowNode.parse({ ...windowAt(2), openingShape: 'arch' }),
+        wall.thickness,
+      )
+      const spy = spyOn(Evaluator.prototype, 'evaluate')
+      try {
+        expect(arch.geometry.boundingBox).toEqual(box.geometry.boundingBox)
+        const merged = mergeWallCutoutBrushes(reverse ? [arch, box] : [box, arch])
+        expect(merged.droppedCount).toBe(0)
+        expect(spy.mock.calls.map((call) => call[2])).toEqual([ADDITION])
+        merged.cutter!.geometry.dispose()
+      } finally {
+        spy.mockRestore()
+        box.geometry.dispose()
+        arch.geometry.dispose()
+        cleanup()
+      }
+    })
+  }
+
+  for (const [offset, droppedCount] of [
+    [0.000005, 1],
+    [0.00002, 0],
+  ] as const) {
+    test(`uses a 1e-5 containment tolerance for boxes offset by ${offset}`, () => {
+      const a = new Brush(new THREE.BoxGeometry(1, 1, 1))
+      const b = new Brush(new THREE.BoxGeometry(1, 1, 1))
+      b.position.x = offset
+      try {
+        const merged = mergeWallCutoutBrushes([a, b])
+        expect(merged.droppedCount).toBe(droppedCount)
+        merged.cutter!.geometry.dispose()
+      } finally {
+        a.geometry.dispose()
+        b.geometry.dispose()
+      }
+    })
+  }
+
+  test('does not use a rotated box AABB as a solid container', () => {
+    const outer = new Brush(new THREE.BoxGeometry(2, 2, 1))
+    outer.rotation.z = Math.PI / 4
+    const inner = new Brush(new THREE.BoxGeometry(0.2, 0.2, 0.2))
+    inner.position.set(1, 1, 0)
+    try {
+      const merged = mergeWallCutoutBrushes([outer, inner])
+      expect(merged.droppedCount).toBe(0)
+      merged.cutter!.geometry.dispose()
+    } finally {
+      outer.geometry.dispose()
+      inner.geometry.dispose()
+    }
+  })
+
+  for (const includeSmallGroups of [false, true]) {
+    test(`subtracts six overlapping boxes sequentially ${includeSmallGroups ? 'after small groups' : 'without a merged cutter'}`, () => {
+      const { wall, windowAt, cleanup } = fixture()
+      const openings = [1, 1.5, 2, 2.5, 3, 3.5].map((x) => windowAt(x))
+      if (includeSmallGroups) openings.push(windowAt(5, 0.5), windowAt(6.5), windowAt(7))
+      const brushes = openings.map((opening) => openingBrush(opening, wall.thickness))
+      const merged = mergeWallCutoutBrushes(brushes)
+      expect(merged.droppedCount).toBe(0)
+      expect(merged.fallbackBrushes).toEqual(brushes.slice(0, 6))
+      expect(merged.cutter !== null).toBe(includeSmallGroups)
+      merged.cutter?.geometry.dispose()
+      for (const brush of brushes) brush.geometry.dispose()
+
+      const disposed = new Map<THREE.BufferGeometry, number>()
+      const evaluate = Evaluator.prototype.evaluate
+      const spy = spyOn(Evaluator.prototype, 'evaluate').mockImplementation(function (
+        this: Evaluator,
+        a: Brush,
+        b: Brush,
+        operation: typeof SUBTRACTION,
+      ) {
+        const result = evaluate.call(this, a, b, operation)
+        for (const brush of [a, b, result]) {
+          if (disposed.has(brush.geometry)) continue
+          disposed.set(brush.geometry, 0)
+          brush.geometry.addEventListener('dispose', () => {
+            disposed.set(brush.geometry, disposed.get(brush.geometry)! + 1)
+          })
+        }
+        return result
+      })
+      try {
+        const actual = generateExtrudedWall(wall, openings, calculateLevelMiters([wall]))
+        expect(spy.mock.calls.map((call) => call[2])).toEqual([
+          ...(includeSmallGroups ? [ADDITION, SUBTRACTION] : []),
+          ...Array.from({ length: 6 }, () => SUBTRACTION),
+        ])
+        expect(disposed.get(actual)).toBe(0)
+        disposed.delete(actual)
+        expect([...disposed.values()].every((count) => count === 1)).toBe(true)
         spy.mockRestore()
         const reference = generateChainedReference(wall, openings)
         expectEquivalent(actual, reference)
@@ -371,7 +558,8 @@ describe('wall cutter union', () => {
       'color',
       new THREE.Float32BufferAttribute(a.geometry.getAttribute('position').count * 3, 3),
     )
-    const cutter = mergeWallCutoutBrushes([a, b, c])
+    const { cutter: mergedCutter } = mergeWallCutoutBrushes([a, b, c])
+    const cutter = mergedCutter!
     try {
       expect(Object.keys(cutter.geometry.attributes).sort()).toEqual([
         'normal',
