@@ -19,6 +19,21 @@ function skipRaycast() {
   // intentionally empty
 }
 
+/** Interleaved attributes carry their version on the shared buffer. */
+function positionVersion(geometry: BufferGeometry): number {
+  const attribute = geometry.attributes.position as
+    | { version?: number; data?: { version?: number } }
+    | undefined
+  return attribute?.version ?? attribute?.data?.version ?? -1
+}
+
+type PackedGeometry = {
+  id: number
+  positionVersion: number
+  vertices: number
+  indices: number
+}
+
 type InstanceRecord = {
   nodeId: string
   geometry: BufferGeometry
@@ -30,12 +45,14 @@ type BatchRecord = {
   levelId: string
   material: Material
   batched: BatchedMesh
-  /** geometry.uuid → BatchedMesh geometry id */
-  geometryIds: Map<string, number>
-  /** geometry.uuid → live instance count; at zero the mapping is dropped so a
-   * rejoin re-packs current vertex content (a rebuilt geometry can reuse its
-   * uuid) instead of instancing the copy captured at first join. */
-  geometryRefs: Map<string, number>
+  /**
+   * geometry.uuid → the packed copy's id plus a content stamp. The mapping
+   * survives release/rejoin cycles (hover churn must not grow the buffer),
+   * and the stamp — position version + counts — detects a geometry rebuilt
+   * in place under the same uuid, which then re-packs instead of instancing
+   * stale vertices.
+   */
+  geometryIds: Map<string, PackedGeometry>
   instances: InstanceRecord[]
   capacity: { instances: number; vertices: number; indices: number }
   used: { vertices: number; indices: number }
@@ -96,7 +113,7 @@ export class NodeBatchStore implements NodeBatchStoreApi {
 
       const newGeometries = new Map<string, BufferGeometry>()
       for (const entry of entries) {
-        if (!record?.geometryIds.has(entry.geometry.uuid)) {
+        if (!record || !this.packedMatches(record, entry.geometry)) {
           newGeometries.set(entry.geometry.uuid, entry.geometry)
         }
       }
@@ -126,7 +143,9 @@ export class NodeBatchStore implements NodeBatchStoreApi {
       }
 
       for (const entry of entries) {
-        let geometryId = record.geometryIds.get(entry.geometry.uuid)
+        let geometryId = this.packedMatches(record, entry.geometry)
+          ? record.geometryIds.get(entry.geometry.uuid)!.id
+          : undefined
         if (geometryId === undefined) {
           // Signature grouping should make this infallible; a throw here mid-
           // frame would still leave half-joined bookkeeping, so a geometry
@@ -137,14 +156,10 @@ export class NodeBatchStore implements NodeBatchStoreApi {
           } catch {
             continue
           }
-          record.geometryIds.set(entry.geometry.uuid, geometryId)
+          record.geometryIds.set(entry.geometry.uuid, this.stamp(geometryId, entry.geometry))
           record.used.vertices += vertexCount(entry.geometry)
           record.used.indices += indexCount(entry.geometry)
         }
-        record.geometryRefs.set(
-          entry.geometry.uuid,
-          (record.geometryRefs.get(entry.geometry.uuid) ?? 0) + 1,
-        )
         const instanceId = record.batched.addInstance(geometryId)
         record.batched.setMatrixAt(instanceId, entry.matrixInLevel)
         joined.push(entry)
@@ -195,19 +210,8 @@ export class NodeBatchStore implements NodeBatchStoreApi {
       if (!record) continue
       const remaining: InstanceRecord[] = []
       for (const instance of record.instances) {
-        if (instance.nodeId === nodeId) {
-          record.batched.deleteInstance(instance.instanceId)
-          const uuid = instance.geometry.uuid
-          const refs = (record.geometryRefs.get(uuid) ?? 1) - 1
-          if (refs <= 0) {
-            record.geometryRefs.delete(uuid)
-            record.geometryIds.delete(uuid)
-          } else {
-            record.geometryRefs.set(uuid, refs)
-          }
-        } else {
-          remaining.push(instance)
-        }
+        if (instance.nodeId === nodeId) record.batched.deleteInstance(instance.instanceId)
+        else remaining.push(instance)
       }
       record.instances = remaining
       if (remaining.length === 0) this.disposeBatch(key, record)
@@ -273,6 +277,10 @@ export class NodeBatchStore implements NodeBatchStoreApi {
     batched.castShadow = true
     batched.receiveShadow = true
     batched.perObjectFrustumCulled = true
+    // Whole-container culling would use a bounding sphere computed at first
+    // cull — instances joining farther out later could vanish with the whole
+    // batch. Per-instance culling above already handles visibility.
+    batched.frustumCulled = false
     batched.matrixAutoUpdate = false
     batched.matrix.identity()
     batched.raycast = skipRaycast
@@ -282,7 +290,6 @@ export class NodeBatchStore implements NodeBatchStoreApi {
       material,
       batched,
       geometryIds: new Map(),
-      geometryRefs: new Map(),
       instances: [],
       capacity: {
         instances: Math.max(8, instanceCount * 2),
@@ -314,23 +321,38 @@ export class NodeBatchStore implements NodeBatchStoreApi {
       old.used.indices + extraIndices,
     )
     for (const instance of survivors) {
-      let geometryId = next.geometryIds.get(instance.geometry.uuid)
+      let geometryId = next.geometryIds.get(instance.geometry.uuid)?.id
       if (geometryId === undefined) {
         geometryId = next.batched.addGeometry(instance.geometry)
-        next.geometryIds.set(instance.geometry.uuid, geometryId)
+        next.geometryIds.set(instance.geometry.uuid, this.stamp(geometryId, instance.geometry))
         next.used.vertices += vertexCount(instance.geometry)
         next.used.indices += indexCount(instance.geometry)
       }
-      next.geometryRefs.set(
-        instance.geometry.uuid,
-        (next.geometryRefs.get(instance.geometry.uuid) ?? 0) + 1,
-      )
       instance.instanceId = next.batched.addInstance(geometryId)
       next.batched.setMatrixAt(instance.instanceId, instance.matrix)
     }
     next.instances = survivors
     this.batches.set(key, next)
     return next
+  }
+
+  private packedMatches(record: BatchRecord | undefined, geometry: BufferGeometry): boolean {
+    const packed = record?.geometryIds.get(geometry.uuid)
+    if (!packed) return false
+    return (
+      packed.positionVersion === positionVersion(geometry) &&
+      packed.vertices === vertexCount(geometry) &&
+      packed.indices === indexCount(geometry)
+    )
+  }
+
+  private stamp(id: number, geometry: BufferGeometry): PackedGeometry {
+    return {
+      id,
+      positionVersion: positionVersion(geometry),
+      vertices: vertexCount(geometry),
+      indices: indexCount(geometry),
+    }
   }
 
   private disposeBatch(key: string, record: BatchRecord): void {
