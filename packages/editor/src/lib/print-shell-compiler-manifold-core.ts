@@ -1,6 +1,10 @@
-import ManifoldModule, { type Manifold as ManifoldSolid, type ManifoldToplevel } from 'manifold-3d'
+import type { Manifold as ManifoldSolid, ManifoldToplevel } from 'manifold-3d'
 import type { PrintShellCompileDiagnostic } from './print-shell-compiler-baseline'
-import type { ManifoldCompileOutput, ManifoldMeshData } from './print-shell-compiler-protocol'
+import type {
+  ManifoldCompileOutput,
+  ManifoldMeshData,
+  ManifoldRuntimeOptions,
+} from './print-shell-compiler-protocol'
 
 let modulePromise: Promise<ManifoldToplevel> | null = null
 const MANIFOLD_OUTPUT_WELD_EPSILON_METERS = 2e-5
@@ -8,14 +12,59 @@ const COLLINEAR_SEAM_CROSS_LENGTH_SQ = 1e-20
 
 type Triangle = [number, number, number]
 
-async function getManifoldModule(wasmUrl?: string): Promise<ManifoldToplevel> {
-  modulePromise ??= ManifoldModule(wasmUrl ? { locateFile: () => wasmUrl } : undefined).then(
-    (module) => {
+type ManifoldFactory = (config?: {
+  locateFile?: (path: string) => string
+}) => Promise<ManifoldToplevel>
+
+// manifold-3d's emscripten glue awaits import('node:module') behind a Node
+// check. The branch never executes in a browser, but webpack refuses to
+// *build* a graph that can reach it, so a static specifier here poisons every
+// external bundler that compiles this package's source (#715). The factory is
+// therefore loaded through an import() no bundler can trace: the bare
+// specifier resolves wherever node-style resolution exists at runtime (bun
+// tests, dev servers, bundlers that inline it anyway), and the version-pinned
+// CDN copy covers bundled browser builds that left the specifier unresolved —
+// emscripten then locates manifold.wasm relative to the glue's own URL. Hosts
+// that can't reach the CDN (offline, CSP) pass their own URLs through
+// configureManifoldRuntime.
+const MANIFOLD_VERSION = '3.5.1'
+const FALLBACK_MODULE_URL = `https://cdn.jsdelivr.net/npm/manifold-3d@${MANIFOLD_VERSION}/manifold.js`
+
+function importUntraced(specifier: string): Promise<{ default: ManifoldFactory }> {
+  return import(/* webpackIgnore: true */ /* @vite-ignore */ specifier)
+}
+
+async function loadManifoldFactory(moduleUrl?: string): Promise<ManifoldFactory> {
+  const specifiers = moduleUrl ? [moduleUrl] : ['manifold-3d', FALLBACK_MODULE_URL]
+  let lastError: unknown
+  for (const specifier of specifiers) {
+    try {
+      return (await importUntraced(specifier)).default
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Failed to load manifold-3d.')
+}
+
+async function getManifoldModule(runtime?: ManifoldRuntimeOptions): Promise<ManifoldToplevel> {
+  modulePromise ??= loadManifoldFactory(runtime?.moduleUrl)
+    .then((factory) => {
+      const wasmUrl = runtime?.wasmUrl
+      return factory(wasmUrl ? { locateFile: () => wasmUrl } : undefined)
+    })
+    .then((module) => {
       module.setup()
       return module
-    },
-  )
-  return modulePromise
+    })
+  try {
+    return await modulePromise
+  } catch (error) {
+    // A transient load failure (offline, blocked CDN) must not poison every
+    // later compile attempt with the cached rejection.
+    modulePromise = null
+    throw error
+  }
 }
 
 function manifoldMesh(
@@ -211,7 +260,7 @@ function elapsed(startedAt: number): number {
 
 export async function compileManifoldMeshData(
   meshes: ManifoldMeshData[],
-  wasmUrl?: string,
+  runtime?: ManifoldRuntimeOptions,
 ): Promise<ManifoldCompileOutput> {
   const startedAt = performance.now()
   const sourceNodeIds = Array.from(new Set(meshes.map((mesh) => mesh.nodeId))).sort()
@@ -238,7 +287,7 @@ export async function compileManifoldMeshData(
   }
 
   try {
-    const module = await getManifoldModule(wasmUrl)
+    const module = await getManifoldModule(runtime)
     for (const mesh of meshes) {
       try {
         solids.push(new module.Manifold(manifoldMesh(module, mesh)))

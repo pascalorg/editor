@@ -10,7 +10,7 @@ const workerScope = self as unknown as {
 }
 
 workerScope.addEventListener('message', async (event) => {
-  const output = await compileManifoldMeshData(event.data.meshes)
+  const output = await compileManifoldMeshData(event.data.meshes, event.data.runtime)
   const response: ManifoldWorkerResponse = { id: event.data.id, ...output }
   const transfer: Transferable[] = []
   if (response.status === 'compiled') {

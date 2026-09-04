@@ -529,6 +529,8 @@ export {
   editorHostPanelRegistry,
   registerEditorHostPanel,
 } from './lib/plugin-panels'
+export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
+export type { ManifoldRuntimeOptions } from './lib/print-shell-compiler-protocol'
 export {
   createQuickMeasurementPointerScheduler,
   quickMeasurementContext,
