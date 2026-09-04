@@ -270,6 +270,11 @@ export const PerfPanel = () => {
                 : '—'}
             </Row>
             <Row name="draw">{stats.drawCalls}</Row>
+            {stats.batch.containers > 0 && (
+              <Row name="batch">
+                {`${stats.batch.items} items · ${stats.batch.instances} inst · ${stats.batch.containers} mesh`}
+              </Row>
+            )}
             <Row name="tri">{`${(stats.triangles / 1000).toFixed(1)}k`}</Row>
             <Row name="mem">
               {`${stats.geometries} geo  ${stats.textures} tex  ${mb(stats.gpuBytes)}`}

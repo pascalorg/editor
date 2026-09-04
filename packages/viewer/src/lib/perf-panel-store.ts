@@ -20,6 +20,7 @@ export type PerfStats = {
   queueMaxMs: number
   drawCalls: number
   triangles: number
+  batch: PerfBatchStats
   dirty: number
   dirtyDetail: string
   geometries: number
@@ -52,4 +53,27 @@ export function usePerfStats(): PerfStats | null {
     () => current,
     () => null,
   )
+}
+
+/**
+ * Batch membership, published by the batch systems themselves (the panel's
+ * collector cannot read their stores across packages). Stable truth — items
+ * and instances currently drawn through batch containers — unlike the
+ * per-pass `_multiDrawCount`, which snapshots whichever camera (main, shadow,
+ * outline) culled the batch last and flips between passes. On WebGPU each
+ * batched instance still counts once in `drawCalls` (the backend loops
+ * drawIndexed per visible instance), so without this row a batched scene
+ * looks no cheaper than an unbatched one — the saving is encode cost per
+ * call, not call count.
+ */
+export type PerfBatchStats = { items: number; instances: number; containers: number }
+
+let batchStats: PerfBatchStats = { items: 0, instances: 0, containers: 0 }
+
+export function publishPerfBatchStats(stats: PerfBatchStats): void {
+  batchStats = stats
+}
+
+export function readPerfBatchStats(): PerfBatchStats {
+  return batchStats
 }
