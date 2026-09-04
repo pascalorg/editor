@@ -39,6 +39,13 @@ const store = new NodeBatchStore(
  */
 const changedNodes = new Set<string>()
 const staleNodes = new Set<string>()
+/**
+ * Members whose wave joined only part of their meshes (the rest fell under
+ * MIN_BATCH_ENTRIES). `store.has` locks them out of later waves, so a new
+ * placement releases them for a full re-collect — the new copy may be what
+ * makes their leftover buckets viable.
+ */
+const partialNodes = new Set<string>()
 /** Last frame's batchable ids, for the add/remove diff below. */
 let knownNodeIds: ReadonlySet<string> | null = null
 // Probe-only counters (?perf sessions read them via __itemBatch).
@@ -88,6 +95,7 @@ function appearanceChanged(): boolean {
 function resetModuleState() {
   changedNodes.clear()
   staleNodes.clear()
+  partialNodes.clear()
   knownNodeIds = null
   lastNodeChangeAtMs = 0
   batchingSuspended = false
@@ -111,6 +119,7 @@ function publishBatchStats() {
 }
 
 function releaseNode(nodeId: string) {
+  partialNodes.delete(nodeId)
   if (store.release(nodeId)) {
     revealBatchedNode(nodeId)
     publishBatchStats()
@@ -220,10 +229,15 @@ function runBatchFrame(
     }
     // A newly placed copy can be what pushes an under-threshold bucket over
     // MIN_BATCH_ENTRIES — earlier copies were dropped from staleNodes when
-    // their wave came up short, so re-stale everything unbatched.
+    // their wave came up short, so re-stale everything unbatched, and release
+    // partial members so their leftover meshes get re-offered too.
     if (added) {
       for (const nodeId of nodeIds) {
         if (!store.has(nodeId)) staleNodes.add(nodeId)
+      }
+      for (const nodeId of [...partialNodes]) {
+        releaseNode(nodeId)
+        staleNodes.add(nodeId)
       }
     }
   }
@@ -290,8 +304,11 @@ function runBatchFrame(
     if (bucket) bucket.push(entry)
     else joinedByNode.set(entry.nodeId, [entry])
   }
-  for (const [nodeId, entries] of joinedByNode) {
-    hideBatchedNode({ nodeId, levelId: entries[0]!.levelId, entries })
+  for (const candidate of candidates) {
+    const joinedEntries = joinedByNode.get(candidate.nodeId)
+    if (!joinedEntries) continue
+    hideBatchedNode({ nodeId: candidate.nodeId, levelId: candidate.levelId, entries: joinedEntries })
+    if (joinedEntries.length < candidate.entries.length) partialNodes.add(candidate.nodeId)
   }
   staleNodes.clear()
   for (const nodeId of deferred) staleNodes.add(nodeId)

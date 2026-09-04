@@ -12,11 +12,11 @@ import {
   LIBRARY_MATERIAL_REF_PREFIX,
   type LightEffect,
   SCENE_MATERIAL_REF_PREFIX,
+  sceneRegistry,
   toLibraryMaterialRef,
   useInteractive,
   useLiveNodeOverrides,
   useRegistry,
-  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import {
