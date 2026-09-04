@@ -414,7 +414,7 @@ export const WallBatchSystem = () => {
  * "did this wall move" on its own, and the per-frame cost is the size of the
  * dirty set rather than the size of the floor.
  */
-function runBatchFrame(
+export function runBatchFrame(
   invalidate: () => void,
   wakeRef: { current: ReturnType<typeof setTimeout> | null },
 ) {

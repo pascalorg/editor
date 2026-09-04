@@ -1,9 +1,6 @@
-import { afterAll, afterEach, describe, expect, mock, spyOn, test } from 'bun:test'
+import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { sceneRegistry, useScene } from '@pascal-app/core'
 import { SCENE_LAYER, useViewer } from '@pascal-app/viewer'
-import type { useFrame } from '@react-three/fiber'
-import { createElement } from 'react'
-import { renderToString } from 'react-dom/server'
 import {
   BufferGeometry,
   Float32BufferAttribute,
@@ -18,22 +15,12 @@ import {
   collectWallBatchCandidates,
   holdBatchedWallsAfterCapture,
   revealBatchedWallsForCapture,
-  WallBatchSystem,
+  runBatchFrame,
 } from './wall-batch-system'
 
-type FrameCallback = Parameters<typeof useFrame>[0]
-let frameCallback: FrameCallback | null = null
 let nowMs = 0
-const fiber = await import('@react-three/fiber')
-
-mock.module('@react-three/fiber', () => ({
-  ...fiber,
-  useFrame: (callback: FrameCallback) => {
-    frameCallback = callback
-  },
-  useThree: (selector: (state: { invalidate: () => void }) => unknown) =>
-    selector({ invalidate: () => undefined }),
-}))
+const wakeRef: { current: ReturnType<typeof setTimeout> | null } = { current: null }
+const runFrame = (_state?: unknown, _delta?: number) => runBatchFrame(() => undefined, wakeRef)
 
 const performanceNow = spyOn(performance, 'now').mockImplementation(() => nowMs)
 
@@ -41,7 +28,7 @@ const registeredIds: string[] = []
 
 afterEach(() => {
   useViewer.setState({ wallMode: 'down' } as never)
-  frameCallback?.({} as never, 0)
+  runFrame()
   for (const id of registeredIds.splice(0)) {
     const object = sceneRegistry.nodes.get(id)
     if (!(object instanceof Mesh)) continue
@@ -52,7 +39,6 @@ afterEach(() => {
   sceneRegistry.clear()
   useScene.setState({ nodes: {}, rootNodeIds: [] } as never)
   useViewer.setState({ hoverHighlightMode: 'default', hoveredId: null, wallMode: 'up' } as never)
-  frameCallback = null
 })
 
 afterAll(() => {
@@ -67,12 +53,6 @@ function registerWall(id: string, material: Material = new MeshBasicMaterial()) 
   sceneRegistry.byType.wall.add(id)
   registeredIds.push(id)
   return mesh
-}
-
-function takeFrameCallback(): FrameCallback {
-  const callback = frameCallback
-  if (!callback) throw new Error('frame callback expected')
-  return callback
 }
 
 function setupBatchedLevel(count = 8) {
@@ -103,9 +83,6 @@ function setupBatchedLevel(count = 8) {
     hoveredId: null,
   } as never)
 
-  frameCallback = null
-  renderToString(createElement(WallBatchSystem))
-  const runFrame = takeFrameCallback()
   nowMs = 0
   runFrame({} as never, 0)
   nowMs = 181
