@@ -131,6 +131,7 @@ export {
 } from './lib/materials'
 export { mergedOutline } from './lib/merged-outline-node'
 export * from './lib/perf-actions'
+export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-store'
 export * from './lib/perf-tracks'
 export {
   detectRendererCapability,
@@ -270,5 +271,3 @@ export {
 } from './systems/window/window-animation-system'
 export { buildWindowPreviewMesh, WindowSystem } from './systems/window/window-system'
 export { ZoneSystem } from './systems/zone/zone-system'
-
-export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-store'

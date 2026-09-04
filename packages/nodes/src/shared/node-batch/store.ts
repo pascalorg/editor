@@ -1,10 +1,10 @@
 import { BatchedMesh, type BufferGeometry, type Material, type Matrix4, type Object3D } from 'three'
 import type {
-  GetLevelRoot,
+  BatchCandidate,
   BatchEntry,
+  GetLevelRoot,
   NodeBatchStats,
   NodeBatchStoreApi,
-  BatchCandidate,
 } from './types'
 
 /**
@@ -77,11 +77,7 @@ export class NodeBatchStore implements NodeBatchStoreApi {
     for (const candidate of candidates) {
       for (const entry of candidate.entries) {
         if (vertexCount(entry.geometry) === 0) continue
-        const key = batchKey(
-          entry.levelId,
-          entry.material.uuid,
-          attributeSignature(entry.geometry),
-        )
+        const key = batchKey(entry.levelId, entry.material.uuid, attributeSignature(entry.geometry))
         const bucket = byBatch.get(key)
         if (bucket) bucket.push(entry)
         else byBatch.set(key, [entry])
