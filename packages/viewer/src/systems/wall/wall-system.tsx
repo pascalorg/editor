@@ -963,6 +963,9 @@ function updateWallGeometry(wallId: string, miterData: WallMiterData) {
   const newGeo = applyWorldPlanarWallUVs(builtGeo, wallWorldMatrix)
 
   mesh.geometry.dispose()
+  // A degenerate rebuild (zero-length or fully cut wall) yields as few vertices
+  // as the mount-time placeholder; the stamp keeps the sweep from re-marking it.
+  newGeo.userData.built = true
   mesh.geometry = newGeo
   // Update collision mesh
   const collisionMesh = mesh.getObjectByName('collision-mesh') as THREE.Mesh
