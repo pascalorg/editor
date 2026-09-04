@@ -310,6 +310,9 @@ const houseNumberOf = (address) => {
   const m = String(address || '').match(/^\s*(\d+)/);
   return m ? m[1] : '';
 };
+/* a leading number is a HOUSE number only when it stands alone ("1424",
+   "1424A") — "58th Street" starts with digits but has none */
+const hasHouseNumber = (address) => /^\s*\d+[A-Za-z]?\s+\S/.test(String(address || ''));
 
 const geocodeCensus = async (address) => {
   const url = 'https://geocoding.geo.census.gov/geocoder/locations/onelineaddress'
@@ -1137,6 +1140,14 @@ const parcelResolve = async (address) => {
   const dims = lotDimsFromAreaPerim(lotAreaSqFt, lotPerimeterFt);
   const bounds = ringsBounds(rings);
 
+  // NO HOUSE NUMBER ("58th Street, Sacramento"): the geocoder returns the
+  // street's centroid and the lot under it is just whoever lives there. Say
+  // so — the studio then opens the picker instead of trusting it.
+  if (!note && !lp && source !== 'approximate' && !hasHouseNumber(address)) {
+    note = 'no house number in "' + String(address || '').trim() + '" — this is the lot nearest the street\'s centre point, not a match. Add the number or pick the lot on the map.';
+    source = source + '-nearest-verify';
+  }
+
   const parcelOut = {
     // candidate lists span the validated per-state schemas (gis-coverage.md); pick() is
     // case-insensitive, so one representative spelling per distinct key is enough.
@@ -1441,6 +1452,139 @@ const esriSuggest = async (q, limit) => {
   return out;
 };
 
+/* ---- WHAT YOU TYPED IS WHAT YOU GET (2026-09-03, "1424 58th Street,
+   Sacramento" — Aaron: "CA has been broken for weeks") ----
+   Photon (OSM) carries no house number for most US lots, so a numbered query
+   came back as the BARE STREET plus same-number houses in other cities ("1424
+   Sacramento St, San Francisco", "1424 Carrie St, West Sacramento"), and the
+   Census/Esri fallbacks — which both know the address exactly — only ran when
+   Photon returned NOTHING, which it never does. The studio then applied the
+   bare street and built the lot at the street's centroid.
+   Now: a numbered query asks Esri's address index (suggest → magicKey
+   coordinates, keyless, ~50 ms) IN PARALLEL with Photon, and a row survives
+   only if EVERY word the user typed is a prefix of a word in it — street
+   types, directionals and state names normalised on both sides. Rows that
+   carry the typed house number come first; bare streets are offered only
+   when no provider knows the number (the studio prepends the typed number
+   and resolves through the county's own situs index). Pure helpers are
+   exported for the tests. */
+const _TOKEN_ALIAS = {
+  street: 'st', avenue: 'ave', av: 'ave', road: 'rd', drive: 'dr', boulevard: 'blvd', lane: 'ln',
+  court: 'ct', place: 'pl', circle: 'cir', terrace: 'ter', trail: 'trl', parkway: 'pkwy',
+  highway: 'hwy', alley: 'aly', square: 'sq', crescent: 'cres', grove: 'gr', north: 'n', south: 's',
+  east: 'e', west: 'w', northeast: 'ne', northwest: 'nw', southeast: 'se', southwest: 'sw',
+  mount: 'mt', saint: 'st', fort: 'ft',
+};
+const _normToken = (t) => {
+  const s = String(t || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return _TOKEN_ALIAS[s] || s;
+};
+const addressTokens = (s) => {
+  let text = ' ' + String(s || '').toLowerCase().replace(/\b(usa|u\.s\.a\.|united states|australia)\b/g, ' ') + ' ';
+  // full state names -> abbreviations so "california" and "CA" are the same word
+  for (const [name, ab] of Object.entries(US_STATE_ABBR)) if (text.includes(' ' + name + ' ')) text = text.split(' ' + name + ' ').join(' ' + ab.toLowerCase() + ' ');
+  for (const [name, ab] of Object.entries(AU_STATE_ABBR)) if (text.includes(' ' + name + ' ')) text = text.split(' ' + name + ' ').join(' ' + ab.toLowerCase() + ' ');
+  return text.split(/[\s,.#]+/).map(_normToken).filter(Boolean);
+};
+const suggestionHaystack = (s) => addressTokens([s && s.line1, s && s.line2, s && s.label].filter(Boolean).join(' '));
+const suggestionNumber = (s) => (String((s && s.line1) || '').match(/^\s*(\d+)[A-Za-z]?\b/) || [])[1] || '';
+/* every typed word must begin some word of the suggestion; ignoreNumber
+   lets a bare street pass for a numbered query (the fallback tier) */
+const suggestionConsistent = (s, q, opts) => {
+  const hay = suggestionHaystack(s);
+  if (!hay.length) return false;
+  let want = addressTokens(q);
+  if (opts && opts.ignoreNumber) want = want.filter((t, i) => !(i === 0 && /^\d/.test(t)));
+  // streetOnly: number + street must agree; the city may be misspelt
+  // ("sacrmaento") — the address index already corrected it
+  if (opts && opts.streetOnly) want = addressTokens(houseNumberOf(q) + ' ' + requestedStreet(q));
+  return want.every((t) => hay.some((h) => h === t || (t.length >= 2 && h.startsWith(t)) || (/^\d+$/.test(t) && /^\d+[a-z]+$/.test(h) && h.startsWith(t))));
+};
+/* order: rows carrying the typed house number first (address-index rows
+   before OSM rows), then exact-word matches, then the rest. Stable. */
+const rankSuggestions = (list, q) => {
+  const hn = (String(q || '').match(/^\s*(\d+)[A-Za-z]?\b/) || [])[1] || '';
+  const want = addressTokens(q);
+  const score = (s) => {
+    let sc = 0;
+    if (hn && suggestionNumber(s) === hn) sc += 100;
+    if (s && s.kind === 'address') sc += 10;
+    const hay = suggestionHaystack(s);
+    for (const t of want) if (hay.includes(t)) sc += 1;
+    return sc;
+  };
+  return (Array.isArray(list) ? list : []).map((s, i) => ({ s, i, sc: score(s) }))
+    .sort((a, b) => (b.sc - a.sc) || (a.i - b.i)).map((x) => x.s);
+};
+const dedupeSuggestions = (list) => {
+  const seen = new Set(); const out = [];
+  for (const s of (Array.isArray(list) ? list : [])) {
+    if (!s) continue;
+    const k = [suggestionNumber(s), addressTokens(s.line1).join(' '), _normToken(s.city), _normToken(s.state)].join('|');
+    if (seen.has(k)) continue; seen.add(k); out.push(s);
+  }
+  return out;
+};
+/* one Esri suggest row ("1424 58th St, Sacramento, CA, 95819, USA" /
+   "12 Myrtle Grove, North Shore, Geelong, Victoria, 3214, AUS") -> suggestion */
+const esriSuggestionFromText = (text, magicKey) => {
+  const parts = String(text || '').split(',').map((t) => t.trim()).filter(Boolean);
+  if (parts.length < 3) return null;
+  const countryRaw = parts[parts.length - 1];
+  const cc = /^AUS$/i.test(countryRaw) ? 'AU' : (/^USA$/i.test(countryRaw) ? 'US' : '');
+  if (!cc) return null;
+  let i = parts.length - 2;
+  let postcode = '';
+  if (/^\d{4,5}(-\d{4})?$/.test(parts[i])) { postcode = parts[i]; i--; }
+  const st = stateAbbr(parts[i], cc); i--;
+  const line1 = parts[0];
+  const city = i >= 1 ? parts[1] : '';
+  const line2 = [city, st, postcode].filter(Boolean).join(' ');
+  return {
+    label: [line1, city, st, cc === 'AU' ? 'Australia' : 'United States'].filter(Boolean).join(', '),
+    line1, line2, city, state: st, postcode,
+    country: cc === 'AU' ? 'Australia' : 'United States', countrycode: cc,
+    lat: null, lng: null, kind: 'address', magicKey: magicKey || '',
+  };
+};
+const _ESRI_GEO = 'https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/';
+/* Esri address-index type-ahead: suggest (text + magicKey), then the magicKey
+   candidates in parallel for rooftop coordinates. Address-level rows only. */
+const esriAddressSuggest = async (q, opts) => {
+  const limit = Math.max(1, Math.min(8, (opts && opts.limit) || 6));
+  const au = !!(opts && opts.au);
+  let url = _ESRI_GEO + 'suggest?text=' + encodeURIComponent(q) + '&countryCode=' + (au ? 'AUS' : 'USA')
+    + '&category=' + encodeURIComponent('Point Address,Street Address,Subaddress') + '&maxSuggestions=' + limit + '&f=json';
+  if (opts && Number.isFinite(Number(opts.lat)) && Number.isFinite(Number(opts.lng))) url += '&location=' + Number(opts.lng) + ',' + Number(opts.lat);
+  let j = null;
+  try { j = await getJson(url, 5000); } catch (e) { return []; }
+  const rows = [];
+  for (const s of ((j && j.suggestions) || [])) {
+    if (s && s.isCollection) continue;
+    const row = esriSuggestionFromText(s.text, s.magicKey);
+    if (row) rows.push(row);
+  }
+  await Promise.all(rows.map(async (row) => {
+    if (!row.magicKey) return;
+    try {
+      const c = await getJson(_ESRI_GEO + 'findAddressCandidates?SingleLine=' + encodeURIComponent(row.label.replace(/, (United States|Australia)$/, ''))
+        + '&magicKey=' + encodeURIComponent(row.magicKey) + '&outFields=Addr_type,StAddr,City,RegionAbbr,Postal&maxLocations=1&f=json', 5000);
+      const cand = c && c.candidates && c.candidates[0];
+      if (!cand || !cand.location) return;
+      const at = cand.attributes || {};
+      if (Number.isFinite(Number(cand.location.y)) && Number.isFinite(Number(cand.location.x))) { row.lat = Number(cand.location.y); row.lng = Number(cand.location.x); }
+      if (at.StAddr) row.line1 = String(at.StAddr).trim();
+      if (at.City) row.city = String(at.City).trim();
+      if (at.RegionAbbr) row.state = String(at.RegionAbbr).trim();
+      if (at.Postal) row.postcode = String(at.Postal).trim();
+      row.line2 = [row.city, row.state, row.postcode].filter(Boolean).join(' ');
+      row.label = [row.line1, row.city, row.state, row.country].filter(Boolean).join(', ');
+    } catch (e) { /* keep the parsed row without coords */ }
+    delete row.magicKey;
+  }));
+  return rows;
+};
+
 const autocomplete = async (q, opts) => {
   const query = String(q || '').trim();
   if (query.length < 3) return [];
@@ -1482,6 +1626,8 @@ const autocomplete = async (q, opts) => {
     }
   }
   const au = auQuery(query);                 // recognisably Australian -> AU box
+    const numbered = /^\d+[A-Za-z]?\s+\S/.test(query);
+    const esriP = numbered ? esriAddressSuggest(query, { limit, au, lat: opts && opts.lat, lng: opts && opts.lng }).catch(() => []) : Promise.resolve([]);
     const hasBias = opts && Number.isFinite(Number(opts.lat)) && Number.isFinite(Number(opts.lng));
     const bLat = hasBias ? Number(opts.lat) : (au ? -25.5 : 39.5);   // centre of AU / CONUS
     const bLng = hasBias ? Number(opts.lng) : (au ? 134.0 : -98.35);
@@ -1489,7 +1635,7 @@ const autocomplete = async (q, opts) => {
       + '&lang=en&lat=' + bLat + '&lon=' + bLng
       + '&bbox=' + (au ? AU_BBOX : US_BBOX);   // minLon,minLat,maxLon,maxLat
     let j = null;
-    try { j = await getJson(url, 8000); } catch (e) { return []; }
+    try { j = await getJson(url, 8000); } catch (e) { j = null; }
     const seen = new Set(); const all = [];
     for (const f of (j && j.features) || []) {
       const s = photonToSuggestion(f);
@@ -1498,7 +1644,17 @@ const autocomplete = async (q, opts) => {
       if (seen.has(k)) continue; seen.add(k);
       all.push(s);
     }
-    out = keepTypedState(au ? auOnlySuggestions(all) : usOnlySuggestions(all), query).slice(0, limit);
+    const esriRows = await esriP;
+    const pool = keepTypedState(au ? auOnlySuggestions(esriRows.concat(all)) : usOnlySuggestions(esriRows.concat(all)), query);
+    // tier 1: rows consistent with every typed word (house number included)
+    let kept = pool.filter((s) => suggestionConsistent(s, query));
+    // tier 2: no provider knows the number -> the street itself, never a
+    // different number or a different street
+    if (!kept.length && numbered) kept = pool.filter((s) => !suggestionNumber(s) && suggestionConsistent(s, query, { ignoreNumber: true }));
+    // tier 3: the city was misspelt — an address-index row with the typed
+    // number AND street is still that address (Esri corrected the city)
+    if (!kept.length && numbered) kept = pool.filter((s) => s.kind === 'address' && suggestionNumber(s) === houseNumberOf(query) && suggestionConsistent(s, query, { streetOnly: true }));
+    out = dedupeSuggestions(rankSuggestions(kept, query)).slice(0, limit);
   }
   // LAST-RESORT: the US CENSUS geocoder — authoritative for rural addresses
   // Photon/OSM has never heard of (Steve, Jul 23: "4255 Project Rd,
@@ -1525,7 +1681,7 @@ const autocomplete = async (q, opts) => {
           lat, lng,
         });
       }
-      const kept = keepTypedState(cens, query);   // never a same-street match in another state
+      const kept = keepTypedState(cens, query).filter((s) => suggestionConsistent(s, query));   // never a same-street match in another state
       if (kept.length) out = kept;
     } catch (e) { /* keyless fallback — never throws the type-ahead */ }
   }
@@ -1533,7 +1689,7 @@ const autocomplete = async (q, opts) => {
   // Photon and the Census both miss (11343 Arno Rd, Galt - a rooftop match)
   if ((!out || !out.length) && /\d/.test(query)) {
     try {
-      const es = keepTypedState(await esriSuggest(query, limit), query);
+      const es = keepTypedState(await esriSuggest(query, limit), query).filter((s) => suggestionConsistent(s, query));
       if (es.length) out = es.slice(0, limit);
     } catch (e) { /* keyless fallback - never throws the type-ahead */ }
   }
@@ -2178,6 +2334,13 @@ module.exports = {
   // typed-state consistency + AU lot/plan (pure/testable)
   typedStateOf,
   keepTypedState,
+  // what-you-typed consistency (pure/testable)
+  addressTokens,
+  suggestionConsistent,
+  rankSuggestions,
+  dedupeSuggestions,
+  esriSuggestionFromText,
+  esriAddressSuggest,
   auLotPlanOf,
   resolveAuLotPlan,
   esriSuggest,
@@ -2185,6 +2348,7 @@ module.exports = {
   requestedStreet,
   streetMatches,
   houseNumberOf,
+  hasHouseNumber,
   situsNumberOf,
   sameNumberNearby,
   // Australia + country routing (pure/testable)
