@@ -50,7 +50,7 @@ import {
   metersToLinearUnit,
   squareMetersToAreaUnit,
 } from './../../../../../lib/measurements'
-import { createLocalGuideImage } from './../../../../../lib/local-guide-image'
+import { createLocalGuideImage, createLocalScan } from './../../../../../lib/local-guide-image'
 import { editorHostTreeChildrenRegistry } from './../../../../../lib/host-tree-children'
 import { cn } from './../../../../../lib/utils'
 import useEditor from './../../../../../store/use-editor'
@@ -566,6 +566,22 @@ const LevelReferences = memo(function LevelReferences({
       return
     }
 
+    if (!onUploadAsset) {
+      useUploadStore.getState().startUpload(levelId, 'scan', file.name)
+      useUploadStore.getState().setStatus(levelId, 'uploading')
+
+      try {
+        const { scan, url } = await createLocalScan({ createNode, file, levelId })
+        setSelectedReferenceId(scan.id)
+        setSelection({ selectedIds: [], zoneId: null })
+        useUploadStore.getState().setResult(levelId, url)
+        window.setTimeout(() => useUploadStore.getState().clearUpload(levelId), 600)
+      } catch {
+        useUploadStore.getState().setError(levelId, 'Could not add that scan.')
+      }
+      return
+    }
+
     if (!projectId) {
       useUploadStore.getState().startUpload(levelId, 'scan', file.name)
       useUploadStore.getState().setError(levelId, 'No active project. Please open a project first.')
@@ -573,7 +589,7 @@ const LevelReferences = memo(function LevelReferences({
     }
 
     clearUpload(levelId)
-    onUploadAsset?.(projectId, levelId, file, type)
+    onUploadAsset(projectId, levelId, file, type)
   }
 
   const handleDelete = async (nodeId: string, e: React.MouseEvent) => {
