@@ -55,8 +55,10 @@ function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode | undefined
   if (node.type === 'item' || node.type === 'column') {
     return parent.type === 'level' ? (parent.id as string) : null
   }
-  // door / window: host wall → its level
-  if (parent.type !== 'wall') return null
+  // door / window: host wall → its level. A hidden wall hides its openings
+  // through group visibility — batch instances hang off the level root and
+  // would keep drawing them.
+  if (parent.type !== 'wall' || parent.visible === false) return null
   const level = parent.parentId ? nodes[parent.parentId] : undefined
   return level?.type === 'level' ? (level.id as string) : null
 }
@@ -93,12 +95,16 @@ export function collectBatchCandidate(nodeId: string): BatchCandidate | null {
   const group = sceneRegistry.nodes.get(nodeId)
   if (!group) return null
   // Items hold their dirty mark until the GLB settles; other kinds mount
-  // their real geometry synchronously and carry no such flag.
-  if (
-    node.type === 'item' &&
-    (group.userData as { itemModelSettled?: boolean }).itemModelSettled !== true
-  ) {
-    return null
+  // their real geometry synchronously and carry no such flag. A GLB that
+  // ships clips autoplays its first one even without an interactive effect
+  // (ItemAnimation's no-effect fallback) — static batching would freeze it.
+  if (node.type === 'item') {
+    const userData = group.userData as {
+      itemModelSettled?: boolean
+      itemHasAnimations?: boolean
+    }
+    if (userData.itemModelSettled !== true) return null
+    if (userData.itemHasAnimations === true) return null
   }
 
   // A live override on the node (or, for hosted openings, on the host wall)

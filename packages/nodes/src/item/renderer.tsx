@@ -16,6 +16,7 @@ import {
   useInteractive,
   useLiveNodeOverrides,
   useRegistry,
+  sceneRegistry,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -584,8 +585,13 @@ const LoadedModelRenderer = ({
   // Mounting past the suspense gate means the GLB resolved — the item's build
   // work is done (`ItemSystem` may clear its dirty mark, scene-ready may fire).
   useEffect(() => {
+    // Clip presence, not just the effect path: with no animEffect,
+    // <ItemAnimation> still autoplays the first clip, and the node batch must
+    // keep such items out of static batches (shared/node-batch/candidates).
+    const group = sceneRegistry.nodes.get(node.id)
+    if (group) group.userData.itemHasAnimations = animations.length > 0
     markSettled()
-  }, [markSettled])
+  }, [markSettled, node.id, animations])
   const shading = useViewer((s) => s.shading)
   const textures = useViewer((s) => s.textures)
   const colorPreset = useViewer((s) => s.colorPreset)

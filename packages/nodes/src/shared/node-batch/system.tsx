@@ -211,10 +211,20 @@ function runBatchFrame(
       staleNodes.delete(nodeId)
       changed = true
     }
+    let added = false
     for (const nodeId of nodeIds) {
       if (knownNodeIds.has(nodeId) || store.has(nodeId)) continue
       staleNodes.add(nodeId)
+      added = true
       changed = true
+    }
+    // A newly placed copy can be what pushes an under-threshold bucket over
+    // MIN_BATCH_ENTRIES — earlier copies were dropped from staleNodes when
+    // their wave came up short, so re-stale everything unbatched.
+    if (added) {
+      for (const nodeId of nodeIds) {
+        if (!store.has(nodeId)) staleNodes.add(nodeId)
+      }
     }
   }
   knownNodeIds = nodeIds
