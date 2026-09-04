@@ -307,7 +307,11 @@ function runBatchFrame(
   for (const candidate of candidates) {
     const joinedEntries = joinedByNode.get(candidate.nodeId)
     if (!joinedEntries) continue
-    hideBatchedNode({ nodeId: candidate.nodeId, levelId: candidate.levelId, entries: joinedEntries })
+    hideBatchedNode({
+      nodeId: candidate.nodeId,
+      levelId: candidate.levelId,
+      entries: joinedEntries,
+    })
     if (joinedEntries.length < candidate.entries.length) partialNodes.add(candidate.nodeId)
   }
   staleNodes.clear()
