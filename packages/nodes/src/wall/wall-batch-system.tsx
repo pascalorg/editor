@@ -328,6 +328,34 @@ export const WallBatchSystem = () => {
 
   useFrame(() => runBatchFrame(invalidate, wakeRef), 5)
 
+  // Scripted-probe hook, ?perf sessions only (mirrors __itemBatch): the
+  // panel has no row for the merged wall batch, so probes read it here.
+  useEffect(() => {
+    if (!new URLSearchParams(window.location.search).has('perf')) return
+    const probe = {
+      stats: () => {
+        let batches = 0
+        for (const records of batchesByLevel.values()) batches += records.length
+        let hidden = 0
+        for (const nodeId of sceneRegistry.byType.wall ?? EMPTY_IDS) {
+          if (sceneRegistry.nodes.get(nodeId)?.userData.wallHidden === true) hidden++
+        }
+        return {
+          walls: batchByNode.size,
+          batches,
+          levels: batchesByLevel.size,
+          hidden,
+          suspended: batchingSuspended,
+          wallMode: useViewer.getState().wallMode,
+        }
+      },
+    }
+    ;(window as unknown as { __wallBatch?: unknown }).__wallBatch = probe
+    return () => {
+      delete (window as unknown as { __wallBatch?: unknown }).__wallBatch
+    }
+  }, [])
+
   useEffect(
     () => () => {
       if (wakeRef.current) clearTimeout(wakeRef.current)
