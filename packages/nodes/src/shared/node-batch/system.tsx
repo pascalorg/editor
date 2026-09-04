@@ -1,6 +1,13 @@
 'use client'
 
-import { type AnyNodeId, emitter, sceneRegistry, useInteractive, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  sceneRegistry,
+  useInteractive,
+  useLiveNodeOverrides,
+  useScene,
+} from '@pascal-app/core'
 import { isIsolationActive, publishPerfBatchStats, useViewer } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
@@ -46,6 +53,14 @@ const staleNodes = new Set<string>()
  * makes their leftover buckets viable.
  */
 const partialNodes = new Set<string>()
+/**
+ * Candidates whose whole wave fell under MIN_BATCH_ENTRIES. When a NEW
+ * leftover appears (the missing bucket-mate arriving late — it was deferred
+ * as selected/dirty/loading when its peers' wave ran), the whole set is
+ * re-offered in one wave so the bucket finally tallies together. A stable
+ * leftover set re-offers nothing, so genuinely small scenes stay quiet.
+ */
+const leftoverNodes = new Set<string>()
 /** Last frame's batchable ids, for the add/remove diff below. */
 let knownNodeIds: ReadonlySet<string> | null = null
 // Probe-only counters (?perf sessions read them via __itemBatch).
@@ -96,6 +111,7 @@ function resetModuleState() {
   changedNodes.clear()
   staleNodes.clear()
   partialNodes.clear()
+  leftoverNodes.clear()
   knownNodeIds = null
   lastNodeChangeAtMs = 0
   batchingSuspended = false
@@ -120,6 +136,7 @@ function publishBatchStats() {
 
 function releaseNode(nodeId: string) {
   partialNodes.delete(nodeId)
+  leftoverNodes.delete(nodeId)
   if (store.release(nodeId)) {
     revealBatchedNode(nodeId)
     publishBatchStats()
@@ -180,6 +197,16 @@ function runBatchFrame(
 
   const tinted = collectTintedNodes(nodeIds)
   for (const nodeId of tinted) {
+    if (!store.has(nodeId)) continue
+    releaseNode(nodeId)
+    staleNodes.add(nodeId)
+    changed = true
+  }
+
+  // A live override on a batched node — a collaborator's remote drag, a
+  // programmatic move — has no local selection to tint it; the batch copy
+  // would freeze at the join pose while the real meshes move.
+  for (const nodeId of useLiveNodeOverrides.getState().overrides.keys()) {
     if (!store.has(nodeId)) continue
     releaseNode(nodeId)
     staleNodes.add(nodeId)
@@ -281,9 +308,16 @@ function runBatchFrame(
   waveDebug.runs++
   waveDebug.stale = staleNodes.size
   waveDebug.nullCandidates = 0
+  const overrides = useLiveNodeOverrides.getState()
   for (const nodeId of staleNodes) {
     if (store.has(nodeId)) continue
-    if (tinted.has(nodeId) || dirty.has(nodeId as AnyNodeId)) {
+    // Overrides defer like tint/dirt — an in-flight gesture ends with a
+    // commit whose mark re-offers the node; dropping it here would strand it.
+    if (
+      tinted.has(nodeId) ||
+      dirty.has(nodeId as AnyNodeId) ||
+      overrides.get(nodeId) !== undefined
+    ) {
       deferred.add(nodeId)
       continue
     }
@@ -304,9 +338,17 @@ function runBatchFrame(
     if (bucket) bucket.push(entry)
     else joinedByNode.set(entry.nodeId, [entry])
   }
+  let newLeftovers = false
+  for (const candidate of candidates) {
+    if (!joinedByNode.has(candidate.nodeId)) {
+      if (!leftoverNodes.has(candidate.nodeId)) newLeftovers = true
+      leftoverNodes.add(candidate.nodeId)
+    }
+  }
   for (const candidate of candidates) {
     const joinedEntries = joinedByNode.get(candidate.nodeId)
     if (!joinedEntries) continue
+    leftoverNodes.delete(candidate.nodeId)
     hideBatchedNode({
       nodeId: candidate.nodeId,
       levelId: candidate.levelId,
@@ -316,6 +358,9 @@ function runBatchFrame(
   }
   staleNodes.clear()
   for (const nodeId of deferred) staleNodes.add(nodeId)
+  // A new leftover may be the bucket-mate its peers were missing — re-offer
+  // the whole set together next wave.
+  if (newLeftovers) for (const nodeId of leftoverNodes) staleNodes.add(nodeId)
   publishBatchStats()
 }
 
