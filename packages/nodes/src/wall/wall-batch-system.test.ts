@@ -222,4 +222,24 @@ describe('WallBatchSystem cutaway releases', () => {
     expect(root.children.find((child) => child.name === 'wall-batch')).not.toBe(batch)
     expect(walls.every((wall) => !wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
   })
+
+  test('re-sews a settled level once its hidden walls become visible again', () => {
+    const { root, runFrame, walls } = setupBatchedLevel()
+    for (const wall of walls) wall.userData.wallHidden = true
+
+    nowMs = 200
+    runFrame({} as never, 0)
+    nowMs = 381
+    runFrame({} as never, 0)
+    expect(walls.every((wall) => wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
+
+    for (const wall of walls) wall.userData.wallHidden = false
+    nowMs = 400
+    runFrame({} as never, 0)
+    nowMs = 581
+    runFrame({} as never, 0)
+
+    expect(root.children.some((child) => child.name === 'wall-batch')).toBe(true)
+    expect(walls.every((wall) => !wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
+  })
 })

@@ -90,6 +90,7 @@ const batchByNode = new Map<string, BatchRecord>()
 const staleLevels = new Set<string>()
 const changedWalls = new Set<string>()
 const EMPTY_IDS: ReadonlySet<string> = new Set()
+let lastCutawayHiddenWalls: ReadonlySet<string> = EMPTY_IDS
 let knownWallCount = -1
 let lastWallChangeAtMs = 0
 let batchingSuspended = false
@@ -362,6 +363,7 @@ export const WallBatchSystem = () => {
       for (const levelId of [...batchesByLevel.keys()]) disposeLevelBatches(levelId)
       changedWalls.clear()
       staleLevels.clear()
+      lastCutawayHiddenWalls = EMPTY_IDS
       knownWallCount = -1
       batchingSuspended = false
       lastAppearance.shading = undefined
@@ -443,6 +445,16 @@ function runBatchFrame(
     staleLevels.add(record.levelId)
     changed = true
   }
+  // A stamp that lifts hands the wall back to its own draw call, and nothing
+  // else marks the level — so the flip itself has to, or the wall would stay
+  // out of the merged mesh until an unrelated edit re-sews the floor.
+  for (const nodeId of lastCutawayHiddenWalls) {
+    if (cutawayHiddenWalls.has(nodeId)) continue
+    const node = nodes[nodeId as AnyNodeId]
+    if (node?.type === 'wall' && node.parentId) staleLevels.add(node.parentId)
+    changed = true
+  }
+  lastCutawayHiddenWalls = cutawayHiddenWalls
   const excludedNodeIds = cutawayHiddenWalls
   for (const nodeId of tintedWalls) excludedNodeIds.add(nodeId)
 
