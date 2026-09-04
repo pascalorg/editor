@@ -39,9 +39,10 @@ const store = new NodeBatchStore(
  */
 const changedNodes = new Set<string>()
 const staleNodes = new Set<string>()
+/** Last frame's batchable ids, for the add/remove diff below. */
+let knownNodeIds: ReadonlySet<string> | null = null
 // Probe-only counters (?perf sessions read them via __itemBatch).
 const waveDebug = { runs: 0, stale: 0, candidates: 0, joined: 0, nullCandidates: 0 }
-let knownNodeCount = -1
 let lastNodeChangeAtMs = 0
 let batchingSuspended = false
 
@@ -87,7 +88,7 @@ function appearanceChanged(): boolean {
 function resetModuleState() {
   changedNodes.clear()
   staleNodes.clear()
-  knownNodeCount = -1
+  knownNodeIds = null
   lastNodeChangeAtMs = 0
   batchingSuspended = false
   lastAppearance.shading = undefined
@@ -196,24 +197,27 @@ function runBatchFrame(
     changed = true
   }
 
-  // Deleted nodes carry no mark of their own; the count moving is the tell.
-  if (nodeIds.size !== knownNodeCount) {
-    if (knownNodeCount >= 0) {
-      for (const nodeId of [...store.nodeIds()]) {
-        if (nodeIds.has(nodeId)) continue
-        releaseNode(nodeId)
-        changed = true
-      }
-      for (const nodeId of nodeIds) {
-        if (!store.has(nodeId)) staleNodes.add(nodeId)
-      }
-      changed = true
-    } else {
-      for (const nodeId of nodeIds) staleNodes.add(nodeId)
+  // Deleted nodes carry no mark of their own, so membership is diffed by id
+  // against last frame's registry — a size comparison would miss a same-size
+  // add-and-remove (compound undo, paste-replace) and leave the removed
+  // node's instances drawing as ghosts.
+  if (knownNodeIds === null) {
+    for (const nodeId of nodeIds) staleNodes.add(nodeId)
+    changed = true
+  } else {
+    for (const nodeId of knownNodeIds) {
+      if (nodeIds.has(nodeId)) continue
+      if (store.has(nodeId)) releaseNode(nodeId)
+      staleNodes.delete(nodeId)
       changed = true
     }
-    knownNodeCount = nodeIds.size
+    for (const nodeId of nodeIds) {
+      if (knownNodeIds.has(nodeId) || store.has(nodeId)) continue
+      staleNodes.add(nodeId)
+      changed = true
+    }
   }
+  knownNodeIds = nodeIds
 
   // Isolation hides everything outside the focused subtree; batches hang off
   // level roots and would go dark with them, leaving members drawn by nobody

@@ -32,6 +32,10 @@ type BatchRecord = {
   batched: BatchedMesh
   /** geometry.uuid → BatchedMesh geometry id */
   geometryIds: Map<string, number>
+  /** geometry.uuid → live instance count; at zero the mapping is dropped so a
+   * rejoin re-packs current vertex content (a rebuilt geometry can reuse its
+   * uuid) instead of instancing the copy captured at first join. */
+  geometryRefs: Map<string, number>
   instances: InstanceRecord[]
   capacity: { instances: number; vertices: number; indices: number }
   used: { vertices: number; indices: number }
@@ -137,6 +141,10 @@ export class NodeBatchStore implements NodeBatchStoreApi {
           record.used.vertices += vertexCount(entry.geometry)
           record.used.indices += indexCount(entry.geometry)
         }
+        record.geometryRefs.set(
+          entry.geometry.uuid,
+          (record.geometryRefs.get(entry.geometry.uuid) ?? 0) + 1,
+        )
         const instanceId = record.batched.addInstance(geometryId)
         record.batched.setMatrixAt(instanceId, entry.matrixInLevel)
         joined.push(entry)
@@ -187,8 +195,19 @@ export class NodeBatchStore implements NodeBatchStoreApi {
       if (!record) continue
       const remaining: InstanceRecord[] = []
       for (const instance of record.instances) {
-        if (instance.nodeId === nodeId) record.batched.deleteInstance(instance.instanceId)
-        else remaining.push(instance)
+        if (instance.nodeId === nodeId) {
+          record.batched.deleteInstance(instance.instanceId)
+          const uuid = instance.geometry.uuid
+          const refs = (record.geometryRefs.get(uuid) ?? 1) - 1
+          if (refs <= 0) {
+            record.geometryRefs.delete(uuid)
+            record.geometryIds.delete(uuid)
+          } else {
+            record.geometryRefs.set(uuid, refs)
+          }
+        } else {
+          remaining.push(instance)
+        }
       }
       record.instances = remaining
       if (remaining.length === 0) this.disposeBatch(key, record)
@@ -263,6 +282,7 @@ export class NodeBatchStore implements NodeBatchStoreApi {
       material,
       batched,
       geometryIds: new Map(),
+      geometryRefs: new Map(),
       instances: [],
       capacity: {
         instances: Math.max(8, instanceCount * 2),
@@ -301,6 +321,10 @@ export class NodeBatchStore implements NodeBatchStoreApi {
         next.used.vertices += vertexCount(instance.geometry)
         next.used.indices += indexCount(instance.geometry)
       }
+      next.geometryRefs.set(
+        instance.geometry.uuid,
+        (next.geometryRefs.get(instance.geometry.uuid) ?? 0) + 1,
+      )
       instance.instanceId = next.batched.addInstance(geometryId)
       next.batched.setMatrixAt(instance.instanceId, instance.matrix)
     }
