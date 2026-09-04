@@ -45,7 +45,7 @@ function firstBlockingMessage(report: PrintExportReport | PrintLevelBundleReport
 export async function preparePrintExport(
   modelExport: ModelExport,
   onlyVisible: boolean,
-  format: PrintModelExportFormat = 'print-3mf',
+  format: PrintModelExportFormat,
 ): Promise<PreparedPrintExport> {
   const artifact = await modelExport(format, {
     onlyVisible,
@@ -75,13 +75,13 @@ export async function preparePrintExport(
 
 export function PrintExportButton({ onlyVisible }: { onlyVisible: boolean }) {
   const modelExport = useEditor((state) => state.modelExport)
-  const [isExporting, setIsExporting] = useState(false)
+  const [exportingFormat, setExportingFormat] = useState<PrintModelExportFormat | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const handleExport = async (format: PrintModelExportFormat) => {
     if (!modelExport) return
 
-    setIsExporting(true)
+    setExportingFormat(format)
     setError(null)
     try {
       const prepared = await preparePrintExport(modelExport, onlyVisible, format)
@@ -89,14 +89,16 @@ export function PrintExportButton({ onlyVisible }: { onlyVisible: boolean }) {
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '3D print export failed.')
     } finally {
-      setIsExporting(false)
+      setExportingFormat(null)
     }
   }
+
+  const isExporting = exportingFormat !== null
 
   return (
     <>
       <Button
-        aria-busy={isExporting}
+        aria-busy={exportingFormat === 'print-3mf'}
         className="w-full justify-start gap-2"
         disabled={isExporting || !modelExport}
         onClick={() => void handleExport('print-3mf')}
@@ -106,14 +108,14 @@ export function PrintExportButton({ onlyVisible }: { onlyVisible: boolean }) {
         Export 3D print 3MF
       </Button>
       <Button
-        aria-busy={isExporting}
+        aria-busy={exportingFormat === 'print-stl'}
         className="w-full justify-start gap-2"
         disabled={isExporting || !modelExport}
         onClick={() => void handleExport('print-stl')}
         variant="outline"
       >
         <Printer className="size-4" />
-        Export 3D print STL files
+        Export 3D print STL
       </Button>
       {error && (
         <div className="flex gap-2 text-destructive text-xs">
