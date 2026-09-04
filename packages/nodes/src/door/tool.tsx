@@ -33,6 +33,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { BoxGeometry, EdgesGeometry, type Group, type LineSegments, Vector3 } from 'three'
 import { LineBasicNodeMaterial } from 'three/webgpu'
 import {
+  shouldFollowOpeningGrid,
+  shouldHandleOpeningHostLeave,
+} from '../shared/opening-grid-follow'
+import {
   clearOpeningGuides3D,
   publishOpeningGuidesForWallEvent,
 } from '../shared/opening-guides-runtime'
@@ -522,7 +526,16 @@ const DoorTool: React.FC = () => {
       event.stopPropagation()
     }
 
-    const onWallLeave = () => {
+    // XR runtimes deliver selectend as a grid click, but do not replay the
+    // R3F wall pointer-up event. Commit the latest valid wall hover so a
+    // controller/hand release places the opening on the wall it visibly hit.
+    const onXRGridClick = (event: GridEvent) => {
+      if (event.nativeEvent?.pointerType !== 'xr' || !lastWallEvent) return
+      onWallClick(lastWallEvent)
+    }
+
+    const onWallLeave = (event: WallEvent) => {
+      if (!shouldHandleOpeningHostLeave(event.nativeEvent)) return
       if (hostKind !== 'wall') return
       lastWallEvent = null
       destroyDraft()
@@ -540,7 +553,15 @@ const DoorTool: React.FC = () => {
       // timeStamp) — it owns the frame and has snapped the draft, so skip the
       // floor follow this tick.
       const ts = event.nativeEvent?.timeStamp ?? -1
-      if (ts === lastMeshEventTime) return
+      if (
+        !shouldFollowOpeningGrid({
+          eventTime: ts,
+          hasActiveHost: hostKind !== null,
+          lastHostEventTime: lastMeshEventTime,
+          pointerType: event.nativeEvent?.pointerType,
+        })
+      )
+        return
       // Fresh floor-only frame: the cursor is off any wall/roof. Drop any draft
       // and free-follow the cursor with the invalid (unplaceable) ghost.
       hostKind = null
@@ -716,6 +737,7 @@ const DoorTool: React.FC = () => {
     emitter.on('wall:enter', onWallHover)
     emitter.on('wall:move', onWallHover)
     emitter.on('wall:click', onWallClick)
+    emitter.on('grid:click', onXRGridClick)
     emitter.on('wall:leave', onWallLeave)
     emitter.on('roof:enter', onRoofHover)
     emitter.on('roof:move', onRoofHover)
@@ -741,6 +763,7 @@ const DoorTool: React.FC = () => {
       emitter.off('wall:enter', onWallHover)
       emitter.off('wall:move', onWallHover)
       emitter.off('wall:click', onWallClick)
+      emitter.off('grid:click', onXRGridClick)
       emitter.off('wall:leave', onWallLeave)
       emitter.off('roof:enter', onRoofHover)
       emitter.off('roof:move', onRoofHover)

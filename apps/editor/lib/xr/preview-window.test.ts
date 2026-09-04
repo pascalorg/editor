@@ -18,4 +18,13 @@ describe('XR preview scene handoff', () => {
     expect(createXRPreviewSceneSnapshot(state)).toEqual(state)
     expect(createXRPreviewSceneSnapshot(state).nodes.wall_1).toBe(wall)
   })
+
+  test('runs room-surface synchronization in the standalone XR editor', async () => {
+    const source = await Bun.file(
+      new URL('../../components/xr/xr-preview-environment.tsx', import.meta.url),
+    ).text()
+
+    expect(source).toContain('initSpaceDetectionSync(useScene, useEditor)')
+    expect(source).toContain('unsubscribeSpaceDetection()')
+  })
 })

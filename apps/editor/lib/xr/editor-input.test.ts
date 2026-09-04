@@ -3,6 +3,7 @@ import {
   didXRButtonPressStart,
   isXRCancelPressed,
   pulseXRInputSource,
+  replayXRWallOpeningRelease,
   resolveXRReleaseAction,
   selectPrimaryXRInputSource,
   shouldReleaseCapturedXRInput,
@@ -79,6 +80,23 @@ describe('XR editor input routing', () => {
     expect(resolveXRReleaseAction({ mode: 'select', placementDrag: true, scopeKind: 'idle' })).toBe(
       'finish-placement-drag',
     )
+  })
+
+  test('restores a wall opening draft before committing an XR release', () => {
+    const wallEvent = { node: { id: 'wall_test' } }
+    const emitted: string[] = []
+    let draftExists = false
+    let placements = 0
+
+    expect(
+      replayXRWallOpeningRelease(wallEvent, (suffix) => {
+        emitted.push(suffix)
+        if (suffix === 'move') draftExists = true
+        if (suffix === 'click' && draftExists) placements += 1
+      }),
+    ).toBe(true)
+    expect(emitted).toEqual(['move', 'click'])
+    expect(placements).toBe(1)
   })
 
   test('keeps the input source that owns the active press', () => {

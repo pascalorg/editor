@@ -21,6 +21,9 @@ import { useXRWandPanelSettings } from '@/lib/xr/wand-panel-settings'
 
 type InputKind = 'controller' | 'hand'
 
+const XR_INPUT_EVENT_TIMEOUT_MS = 150
+const XR_FRAME_TIMEOUT_MS = 100
+
 export type XREmulatorTestHarness = {
   aimAt: (name: string, inputKind?: InputKind) => Promise<boolean>
   aimAtNode: (nodeId: string, inputKind?: InputKind, distance?: number) => Promise<boolean>
@@ -126,10 +129,13 @@ export function XREmulatorTestHarnessBridge() {
 
     const waitForXRFrames = (count = 1) =>
       new Promise<void>((resolve) => {
+        const timeout = window.setTimeout(resolve, XR_FRAME_TIMEOUT_MS)
         const next = (remaining: number) => {
           session.requestAnimationFrame(() => {
-            if (remaining === 1) resolve()
-            else next(remaining - 1)
+            if (remaining === 1) {
+              window.clearTimeout(timeout)
+              resolve()
+            } else next(remaining - 1)
           })
         }
         next(count)
@@ -186,10 +192,19 @@ export function XREmulatorTestHarnessBridge() {
       return matches[0]
     }
 
+    const waitForTarget = async (name: string) => {
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        const target = findTarget(name)
+        if (target) return target
+        await waitForXRFrames()
+      }
+      return undefined
+    }
+
     const aimAt = async (name: string, inputKind: InputKind = 'controller') => {
       globalThis.__pascalXRHoveredTarget = undefined
       if (!(await prepareInput(inputKind))) return false
-      const target = findTarget(name)
+      const target = await waitForTarget(name)
       if (!(target && (await setInputPose(target, inputKind)))) return false
       if (inputKind === 'hand') return true
       for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -266,24 +281,33 @@ export function XREmulatorTestHarnessBridge() {
       return true
     }
 
+    const waitForInputEvent = (inputKind: InputKind, eventType: 'selectend' | 'selectstart') =>
+      new Promise<boolean>((resolve) => {
+        const timeout = window.setTimeout(() => {
+          session.removeEventListener(eventType, listener)
+          resolve(false)
+        }, XR_INPUT_EVENT_TIMEOUT_MS)
+        const listener = (event: XRInputSourceEvent) => {
+          const matchesKind =
+            inputKind === 'hand' ? event.inputSource.hand != null : !event.inputSource.hand
+          if (event.inputSource.handedness !== 'right' || !matchesKind) return
+          window.clearTimeout(timeout)
+          session.removeEventListener(eventType, listener)
+          resolve(true)
+        }
+        session.addEventListener(eventType, listener)
+      })
+
     const setSelectValueAndWait = async (
       value: 0 | 1,
       inputKind: InputKind,
       eventType: 'selectend' | 'selectstart',
     ) => {
-      const eventReceived = new Promise<void>((resolve) => {
-        const listener = (event: XRInputSourceEvent) => {
-          const matchesKind =
-            inputKind === 'hand' ? event.inputSource.hand != null : !event.inputSource.hand
-          if (event.inputSource.handedness !== 'right' || !matchesKind) return
-          session.removeEventListener(eventType, listener)
-          resolve()
-        }
-        session.addEventListener(eventType, listener)
-      })
+      const eventReceived = waitForInputEvent(inputKind, eventType)
       if (!(await setSelectValue(value, inputKind))) return false
+      await waitForXRFrames(2)
       await eventReceived
-      return true
+      return eventReceived
     }
 
     const click = async (name: string, inputKind: InputKind = 'controller') => {
@@ -291,8 +315,8 @@ export function XREmulatorTestHarnessBridge() {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         if (attempt > 0 && !(await aimAt(name, inputKind))) return false
         globalThis.__pascalXRLastPointerEvent = undefined
-        if (!(await setSelectValueAndWait(1, inputKind, 'selectstart'))) return false
-        if (!(await setSelectValueAndWait(0, inputKind, 'selectend'))) return false
+        await setSelectValueAndWait(1, inputKind, 'selectstart')
+        await setSelectValueAndWait(0, inputKind, 'selectend')
         if (globalThis.__pascalXRLastPointerEvent === `click:${name}`) return true
       }
       return false
@@ -368,8 +392,8 @@ export function XREmulatorTestHarnessBridge() {
       if (!(await setInputPose(target, inputKind, 1.25))) return false
       await waitForXRFrames(2)
       globalThis.__pascalXRLastGridEvent = undefined
-      if (!(await setSelectValueAndWait(1, inputKind, 'selectstart'))) return false
-      if (!(await setSelectValueAndWait(0, inputKind, 'selectend'))) return false
+      await setSelectValueAndWait(1, inputKind, 'selectstart')
+      await setSelectValueAndWait(0, inputKind, 'selectend')
       await waitForXRFrames(2)
       const lastGridEvent = globalThis.__pascalXRLastGridEvent as string | undefined
       return lastGridEvent?.startsWith('click:') === true
@@ -379,8 +403,8 @@ export function XREmulatorTestHarnessBridge() {
       if (!(await aimAtNode(nodeId, inputKind))) return false
       for (let attempt = 0; attempt < 3; attempt += 1) {
         if (attempt > 0 && !(await aimAtNode(nodeId, inputKind))) return false
-        if (!(await setSelectValueAndWait(1, inputKind, 'selectstart'))) return false
-        if (!(await setSelectValueAndWait(0, inputKind, 'selectend'))) return false
+        await setSelectValueAndWait(1, inputKind, 'selectstart')
+        await setSelectValueAndWait(0, inputKind, 'selectend')
         if (useViewer.getState().selection.selectedIds.includes(nodeId)) return true
       }
       return false
@@ -456,8 +480,8 @@ export function XREmulatorTestHarnessBridge() {
       for (let attempt = 0; attempt < 3; attempt += 1) {
         if (attempt > 0 && !(await aimAtNodeFace())) return false
         globalThis.__pascalXRLastNodeEvent = undefined
-        if (!(await setSelectValueAndWait(1, inputKind, 'selectstart'))) return false
-        if (!(await setSelectValueAndWait(0, inputKind, 'selectend'))) return false
+        await setSelectValueAndWait(1, inputKind, 'selectstart')
+        await setSelectValueAndWait(0, inputKind, 'selectend')
         await waitForXRFrames(2)
         if (globalThis.__pascalXRLastNodeEvent === `click:${nodeId}`) return true
       }
@@ -467,7 +491,7 @@ export function XREmulatorTestHarnessBridge() {
     const drag = async (names: string[], inputKind: InputKind = 'controller') => {
       const first = names[0]
       if (!(first && (await aimAt(first, inputKind)))) return false
-      if (!(await setSelectValueAndWait(1, inputKind, 'selectstart'))) return false
+      await setSelectValueAndWait(1, inputKind, 'selectstart')
       await waitForXRFrames(2)
       for (const name of names.slice(1)) {
         if (!(await aimAt(name, inputKind))) {
@@ -475,7 +499,7 @@ export function XREmulatorTestHarnessBridge() {
           return false
         }
       }
-      if (!(await setSelectValueAndWait(0, inputKind, 'selectend'))) return false
+      await setSelectValueAndWait(0, inputKind, 'selectend')
       await waitForXRFrames()
       return globalThis.__pascalXRLastPointerEvent === `click:${names.at(-1)}`
     }
@@ -490,9 +514,9 @@ export function XREmulatorTestHarnessBridge() {
       if (!useViewer.getState().selection.selectedIds.includes(nodeId)) {
         if (!(await clickNode(nodeId, inputKind))) return false
       }
-      const initialPosition = registered.getWorldPosition(new Vector3())
+      const initialNodeState = JSON.stringify(useScene.getState().nodes[nodeId as AnyNodeId])
       if (!(await aimAtNode(nodeId, inputKind))) return false
-      if (!(await setSelectValueAndWait(1, inputKind, 'selectstart'))) return false
+      await setSelectValueAndWait(1, inputKind, 'selectstart')
       await waitForXRFrames(2)
       const floorTarget = new Object3D()
       floorTarget.position.fromArray(worldPoint)
@@ -500,9 +524,9 @@ export function XREmulatorTestHarnessBridge() {
       floorTarget.updateMatrixWorld(true)
       await setInputPose(floorTarget, inputKind, 1.25)
       await waitForXRFrames(2)
-      if (!(await setSelectValueAndWait(0, inputKind, 'selectend'))) return false
+      await setSelectValueAndWait(0, inputKind, 'selectend')
       await waitForXRFrames()
-      return registered.getWorldPosition(new Vector3()).distanceTo(initialPosition) > 0.001
+      return JSON.stringify(useScene.getState().nodes[nodeId as AnyNodeId]) !== initialNodeState
     }
 
     const probe = async (name: string, inputKind: InputKind = 'controller') => {

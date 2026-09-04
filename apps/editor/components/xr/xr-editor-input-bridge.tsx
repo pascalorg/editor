@@ -19,8 +19,10 @@ import {
   terrainFieldOf,
   useLiveTerrain,
   useScene,
+  type WallEvent,
 } from '@pascal-app/core'
 import {
+  cancelActiveTool,
   canDirectMoveNode,
   clipTerrainPatchToSite,
   commitStroke,
@@ -43,16 +45,17 @@ import {
   Float32BufferAttribute,
   Line,
   LineBasicMaterial,
+  type Object3D,
   Plane,
   Quaternion,
   Raycaster,
   Vector3,
 } from 'three'
-import { activateSelectMode } from '@/lib/build-palette'
 import {
   didXRButtonPressStart,
   isXRCancelPressed,
   pulseXRInputSource,
+  replayXRWallOpeningRelease,
   resolveXRReleaseAction,
   selectPrimaryXRInputSource,
   shouldReleaseCapturedXRInput,
@@ -80,6 +83,12 @@ type XRGridNativeEvent = {
 
 type XRTerrainFocus = { radius: number; siteId: SiteNode['id']; x: number; z: number }
 const TERRAIN_RING_SEGMENTS = 64
+
+const xrInputSourceKey = (source: XRInputSource) =>
+  `${source.handedness}:${source.targetRayMode}:${Boolean(source.hand)}`
+
+const sameXRInputSource = (a: XRInputSource | null, b: XRInputSource | null) =>
+  a === b || (a != null && b != null && xrInputSourceKey(a) === xrInputSourceKey(b))
 
 function XRTerrainBrushCursor({ focusRef }: { focusRef: MutableRefObject<XRTerrainFocus | null> }) {
   const mode = useEditor((state) => state.mode)
@@ -153,7 +162,9 @@ export function XREditorInputBridge() {
   // Logical XR pointer capture: the source that starts a scene press owns its
   // move/up stream until selectend, even when its ray crosses the wand.
   const capturedInputSource = useRef<XRInputSource | null>(null)
-  const terrainInputSources = useRef(new WeakSet<XRInputSource>())
+  const lastXRWallEvent = useRef<WallEvent | null>(null)
+  const lastSyntheticWallEvent = useRef<WallEvent | null>(null)
+  const terrainInputSources = useRef(new Set<string>())
   const terrainStroke = useRef<{
     field: TerrainField
     siteId: SiteNode['id']
@@ -161,7 +172,7 @@ export function XREditorInputBridge() {
     stroke: TerrainStroke
   } | null>(null)
   const terrainFocus = useRef<XRTerrainFocus | null>(null)
-  const panelInputSources = useRef(new WeakSet<XRInputSource>())
+  const panelInputSources = useRef(new Set<string>())
   const cancelPressed = useRef(false)
   const pointerIds = useRef(new WeakMap<XRInputSource, number>())
   const nextPointerId = useRef(10_000)
@@ -227,7 +238,17 @@ export function XREditorInputBridge() {
         [origin.x, origin.y, origin.z],
         [direction.x, direction.y, direction.z],
       )
-      return hit && terrainPointInsideSite(site, hit.x, hit.z) ? ([hit.x, hit.z] as const) : null
+      if (hit && terrainPointInsideSite(site, hit.x, hit.z)) return [hit.x, hit.z] as const
+
+      // A site without persisted terrain has an implicit ground plane. Keep XR
+      // strokes usable before the first terrain sample exists; the terrain
+      // raycast only covers the finite heightfield once it has a valid hit.
+      if (Math.abs(direction.y) < 1e-6) return null
+      const t = -origin.y / direction.y
+      if (t < 0) return null
+      const x = origin.x + direction.x * t
+      const z = origin.z + direction.z * t
+      return terrainPointInsideSite(site, x, z) ? ([x, z] as const) : null
     },
     [updateRay],
   )
@@ -244,7 +265,8 @@ export function XREditorInputBridge() {
     (frame: XRFrame, source: XRInputSource) => {
       const active = terrainStroke.current
       const site = activeSite()
-      if (!(active && active.source === source && site?.id === active.siteId)) return false
+      if (!(active && sameXRInputSource(active.source, source) && site?.id === active.siteId))
+        return false
       const point = terrainPoint(frame, source, active.stroke.snapshot, site)
       if (!point) return false
       terrainFocus.current = {
@@ -297,7 +319,7 @@ export function XREditorInputBridge() {
 
   const finishTerrainStroke = useCallback((source: XRInputSource) => {
     const active = terrainStroke.current
-    if (!(active && active.source === source)) return false
+    if (!(active && sameXRInputSource(active.source, source))) return false
     terrainStroke.current = null
     commitStroke(active.siteId, active.field)
     useLiveTerrain.getState().end(active.siteId)
@@ -376,6 +398,73 @@ export function XREditorInputBridge() {
     [createGridEvent],
   )
 
+  const emitWallOpeningHover = useCallback(
+    (frame: XRFrame, source: XRInputSource): boolean => {
+      if (!updateRay(frame, source)) return false
+
+      let nearest:
+        | {
+            distance: number
+            event: WallEvent
+          }
+        | undefined
+      const nativeEvent = {
+        button: 0,
+        buttons: 0,
+        inputSource: source,
+        openingHoverBridge: true,
+        pointerId: pointerIdFor(source),
+        pointerType: 'xr',
+        stopImmediatePropagation: () => undefined,
+        stopPropagation: () => undefined,
+        target: gl.domElement,
+        timeStamp: performance.now(),
+      }
+      const registeredObjects = new Set(sceneRegistry.nodes.values())
+
+      for (const node of Object.values(useScene.getState().nodes)) {
+        if (node?.type !== 'wall') continue
+        const object = sceneRegistry.nodes.get(node.id)
+        if (!object) continue
+        object.updateWorldMatrix(true, true)
+        const hit = raycaster.current.intersectObject(object, true).find((intersection) => {
+          let current: Object3D | null = intersection.object
+          while (current && current !== object) {
+            if (registeredObjects.has(current)) return false
+            current = current.parent
+          }
+          return current === object
+        })
+        if (!(hit?.face && (!nearest || hit.distance < nearest.distance))) continue
+        const localPoint = object.worldToLocal(hit.point.clone())
+        nearest = {
+          distance: hit.distance,
+          event: {
+            localPosition: [localPoint.x, localPoint.y, localPoint.z],
+            nativeEvent: nativeEvent as never,
+            node,
+            normal: [hit.face.normal.x, hit.face.normal.y, hit.face.normal.z],
+            object: hit.object,
+            position: [hit.point.x, hit.point.y, hit.point.z],
+            stopPropagation: () => undefined,
+          },
+        }
+      }
+
+      if (!nearest) {
+        const previous = lastSyntheticWallEvent.current
+        if (previous) emitter.emit('wall:leave', previous)
+        lastSyntheticWallEvent.current = null
+        return false
+      }
+
+      lastSyntheticWallEvent.current = nearest.event
+      emitter.emit('wall:move', nearest.event)
+      return true
+    },
+    [gl, pointerIdFor, updateRay],
+  )
+
   const dispatchWindowPointerEvent = useCallback(
     (type: 'pointerup' | 'pointercancel', source: XRInputSource) => {
       window.dispatchEvent(
@@ -423,34 +512,53 @@ export function XREditorInputBridge() {
   useEffect(() => {
     if (!session) return
 
+    const rememberXRWallEvent = (event: WallEvent) => {
+      lastXRWallEvent.current = event
+    }
+    const clearXRWallEvent = (event: WallEvent) => {
+      if (capturedInputSource.current != null) return
+      lastXRWallEvent.current = null
+    }
+    emitter.on('wall:enter', rememberXRWallEvent)
+    emitter.on('wall:move', rememberXRWallEvent)
+    emitter.on('wall:leave', clearXRWallEvent)
+
     const onSelectStart = (event: XRInputSourceEvent) => {
       selectReleaseGuard.current.start(event.inputSource)
       if (isWandPanelHit(event.frame, event.inputSource)) {
-        panelInputSources.current.add(event.inputSource)
+        panelInputSources.current.add(xrInputSourceKey(event.inputSource))
         pulseXRInputSource(event.inputSource, 0.1, 20)
         return
       }
       capturedInputSource.current = event.inputSource
       pulseXRInputSource(event.inputSource)
       if (useEditor.getState().mode === 'terrain-sculpt') {
-        terrainInputSources.current.add(event.inputSource)
+        terrainInputSources.current.add(xrInputSourceKey(event.inputSource))
         startTerrainStroke(event.frame, event.inputSource)
         return
       }
       emitGridEvent('pointerdown', event.frame, event.inputSource, 1)
     }
     const onSelectEnd = (event: XRInputSourceEvent) => {
-      if (panelInputSources.current.delete(event.inputSource)) {
+      const releaseMode = useEditor.getState().mode
+      const releaseTool = useEditor.getState().tool
+      const wallOpeningToolActive =
+        releaseMode === 'build' && (releaseTool === 'door' || releaseTool === 'window')
+      if (panelInputSources.current.delete(xrInputSourceKey(event.inputSource))) {
         selectReleaseGuard.current.cancel(event.inputSource)
         return
       }
-      if (terrainInputSources.current.delete(event.inputSource)) {
+      if (releaseMode === 'terrain-sculpt') {
+        terrainInputSources.current.delete(xrInputSourceKey(event.inputSource))
         finishTerrainStroke(event.inputSource)
         selectReleaseGuard.current.cancel(event.inputSource)
         capturedInputSource.current = null
         return
       }
-      if (capturedInputSource.current !== event.inputSource) {
+      if (
+        !sameXRInputSource(capturedInputSource.current, event.inputSource) &&
+        !wallOpeningToolActive
+      ) {
         selectReleaseGuard.current.cancel(event.inputSource)
         return
       }
@@ -458,7 +566,7 @@ export function XREditorInputBridge() {
       const handledSpatialRelease = spatialPointerInput.release(event.inputSource)
 
       const pressDrag = useEditor.getState().placementDragMode
-      const mode = useEditor.getState().mode
+      const mode = releaseMode
       const scope = useInteractionScope.getState().scope
       const releaseAction = resolveXRReleaseAction({
         mode,
@@ -473,7 +581,15 @@ export function XREditorInputBridge() {
       emitGridEvent('pointerup', event.frame, event.inputSource, 0)
       dispatchWindowPointerEvent('pointerup', event.inputSource)
 
-      if (handledSpatialRelease) {
+      if (wallOpeningToolActive && lastXRWallEvent.current) {
+        replayXRWallOpeningRelease(lastXRWallEvent.current, (suffix, wallEvent) => {
+          if (suffix === 'move') emitter.emit('wall:move', wallEvent)
+          else emitter.emit('wall:click', wallEvent)
+        })
+        lastXRWallEvent.current = null
+      }
+
+      if (handledSpatialRelease && !wallOpeningToolActive) {
         selectReleaseGuard.current.cancel(event.inputSource)
       } else if (releaseAction === 'finish-placement-drag') {
         useViewer.getState().setInputDragging(false)
@@ -495,17 +611,17 @@ export function XREditorInputBridge() {
       capturedInputSource.current = null
     }
     const onSelectCancel = (event: XRInputSourceEvent) => {
-      if (panelInputSources.current.delete(event.inputSource)) {
+      if (panelInputSources.current.delete(xrInputSourceKey(event.inputSource))) {
         selectReleaseGuard.current.cancel(event.inputSource)
         return
       }
-      if (terrainInputSources.current.delete(event.inputSource)) {
+      if (terrainInputSources.current.delete(xrInputSourceKey(event.inputSource))) {
         abandonTerrainStroke()
         selectReleaseGuard.current.cancel(event.inputSource)
         capturedInputSource.current = null
         return
       }
-      if (capturedInputSource.current !== event.inputSource) {
+      if (!sameXRInputSource(capturedInputSource.current, event.inputSource)) {
         selectReleaseGuard.current.cancel(event.inputSource)
         return
       }
@@ -528,6 +644,9 @@ export function XREditorInputBridge() {
       session.removeEventListener('selectend', onSelectEnd)
       session.removeEventListener('selectcancel', onSelectCancel as unknown as EventListener)
       abandonTerrainStroke()
+      emitter.off('wall:enter', rememberXRWallEvent)
+      emitter.off('wall:move', rememberXRWallEvent)
+      emitter.off('wall:leave', clearXRWallEvent)
     }
   }, [
     abandonTerrainStroke,
@@ -565,11 +684,22 @@ export function XREditorInputBridge() {
     } else if (useEditor.getState().mode !== 'terrain-sculpt' || panelHit) {
       terrainFocus.current = null
     }
-    if (source && shouldRouteXRMove(source, capturedInputSource.current, panelHit)) {
+    if (
+      source &&
+      shouldRouteXRMove(source, capturedInputSource.current, panelHit) &&
+      (capturedInputSource.current == null ||
+        sameXRInputSource(capturedInputSource.current, source))
+    ) {
       if (useEditor.getState().mode === 'terrain-sculpt') {
         if (capturedInputSource.current === source) applyTerrainDab(frame, source)
       } else {
         emitGridEvent('move', frame, source, capturedInputSource.current ? 1 : 0)
+        const editor = useEditor.getState()
+        if (editor.mode === 'build' && (editor.tool === 'door' || editor.tool === 'window')) {
+          emitWallOpeningHover(frame, source)
+        } else {
+          lastSyntheticWallEvent.current = null
+        }
         spatialPointerInput.move(source, raycaster.current.ray)
       }
     }
@@ -577,7 +707,7 @@ export function XREditorInputBridge() {
     const nextCancelPressed = isXRCancelPressed(inputSources)
     if (didXRButtonPressStart(cancelPressed.current, nextCancelPressed)) {
       abandonTerrainStroke()
-      activateSelectMode()
+      cancelActiveTool()
       const rightController = inputSources.find(
         (inputSource) => inputSource.handedness === 'right' && inputSource.gamepad != null,
       )

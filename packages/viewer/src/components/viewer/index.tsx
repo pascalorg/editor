@@ -585,7 +585,10 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
               },
             })
             if (result.status === 'ready') {
-              if (!xr) installEmptyDrawGuard(result.renderer)
+              // XR uses the same WebGL-backed WebGPURenderer as the editor's
+              // desktop fallback. Empty transient geometries are unsafe in
+              // both paths because they submit a draw with no position buffer.
+              installEmptyDrawGuard(result.renderer)
               return result.renderer
             }
 

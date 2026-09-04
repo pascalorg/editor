@@ -329,7 +329,7 @@ export type { SaveStatus } from './hooks/use-auto-save'
 // can express their affordances declaratively in their own folder.
 export { type UseDragActionArgs, useDragAction } from './hooks/use-drag-action'
 // Phase 5 Stage D — extras for kind-owned placement tools (FenceTool etc.).
-export { markToolCancelConsumed } from './hooks/use-keyboard'
+export { cancelActiveTool, markToolCancelConsumed } from './hooks/use-keyboard'
 export { useReducedMotion } from './hooks/use-reduced-motion'
 export { type Selection, useSelection } from './hooks/use-selection'
 export {
@@ -542,7 +542,7 @@ export { hasRoofFaceChildOverlap, type RoofWallHit, resolveRoofWallHit } from '.
 export type { SceneGraph } from './lib/scene'
 export { applySceneGraphToEditor } from './lib/scene'
 export { movementSfxStepKey } from './lib/sfx/movement-tick'
-export { triggerSFX } from './lib/sfx-bus'
+export { emitDeleteSFX, triggerSFX } from './lib/sfx-bus'
 export { playSFX, type SFXName, type SFXPlaybackOptions } from './lib/sfx-player'
 export {
   clearSlabSnapFeedback,
@@ -632,6 +632,7 @@ export {
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
+  selectDefaultBuildingAndLevel,
 } from './store/use-editor'
 export { default as useFacingPose, type FacingPose } from './store/use-facing-pose'
 export { default as useFenceCurveDraft } from './store/use-fence-curve-draft'

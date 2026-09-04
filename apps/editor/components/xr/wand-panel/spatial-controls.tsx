@@ -161,7 +161,15 @@ export function PanelFace() {
   )
 }
 
-export function PanelHeader({ mark, title }: { mark?: string; title: string }) {
+export function PanelHeader({
+  mark,
+  onDelete,
+  title,
+}: {
+  mark?: string
+  onDelete?: () => void
+  title: string
+}) {
   return (
     <>
       <SpatialText
@@ -179,10 +187,29 @@ export function PanelHeader({ mark, title }: { mark?: string; title: string }) {
           anchorY="middle"
           color={muted}
           fontSize={0.024}
-          position={[0.35, 0.45, 0.012]}
+          position={[onDelete ? 0.08 : 0.35, 0.45, 0.012]}
         >
           {mark}
         </SpatialText>
+      )}
+      {onDelete && (
+        <SpatialButton
+          color="#7f1d1d"
+          name="xr-setting-delete"
+          onClick={onDelete}
+          position={[0.29, 0.45, 0]}
+          size={[0.14, 0.06]}
+        >
+          <SpatialText
+            anchorX="center"
+            anchorY="middle"
+            color="#fecaca"
+            fontSize={0.017}
+            position={[0, 0, 0.012]}
+          >
+            Delete
+          </SpatialText>
+        </SpatialButton>
       )}
       <SpatialLine
         color={border}

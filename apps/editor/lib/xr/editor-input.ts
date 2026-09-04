@@ -32,6 +32,16 @@ export type XRReleaseAction =
   | 'finish-placement-drag'
   | 'ignore'
 
+export function replayXRWallOpeningRelease<T>(
+  event: T | null,
+  emit: (suffix: 'move' | 'click', event: T) => void,
+): boolean {
+  if (!event) return false
+  emit('move', event)
+  emit('click', event)
+  return true
+}
+
 export function resolveXRReleaseAction({
   mode,
   placementDrag,

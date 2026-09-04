@@ -1,11 +1,13 @@
 'use client'
 
+import { initSpaceDetectionSync, SiteNode, useScene } from '@pascal-app/core'
 import {
   applySceneGraphToEditor,
   Grid,
   NodeArrowHandles,
   type SceneGraph,
   SelectionManager,
+  selectDefaultBuildingAndLevel,
   ToolManager,
   useEditor,
   WallMoveSideHandles,
@@ -38,6 +40,44 @@ function endXRSession(session?: XRSession) {
 type PreviewScene = {
   graph: SceneGraph
   name: string
+}
+
+function ensureXRPreviewSite(graph: SceneGraph): SceneGraph {
+  const rootNodeIds = graph.rootNodeIds ?? []
+  const sourceNodes = graph.nodes as Record<string, { id: string; type: string; parentId?: string }>
+  const existingSite = rootNodeIds.some((id) => sourceNodes[id]?.type === 'site')
+  if (existingSite) return graph
+
+  const buildingIds = Object.values(sourceNodes)
+    .filter((node) => node?.type === 'building')
+    .map((node) => node.id)
+  if (buildingIds.length === 0) return graph
+
+  const site = SiteNode.parse({
+    id: 'site_xr_preview' as never,
+    type: 'site',
+    name: 'XR Preview Site',
+    polygon: {
+      type: 'polygon',
+      points: [
+        [-100, -100],
+        [100, -100],
+        [100, 100],
+        [-100, 100],
+      ],
+    },
+    children: buildingIds,
+  })
+  const nodes = Object.fromEntries(
+    Object.entries(sourceNodes).map(([id, node]) =>
+      node?.type === 'building' ? [id, { ...node, parentId: site.id }] : [id, node],
+    ),
+  )
+  return {
+    ...graph,
+    nodes: { ...nodes, [site.id]: site },
+    rootNodeIds: [site.id],
+  }
 }
 
 function XREditorScene() {
@@ -73,6 +113,11 @@ export function XRPreviewEnvironment({
   const sessionRequest = useRef<Promise<void> | null>(null)
   const playerMode = useXRPlayerMode((state) => state.mode)
   const selectedIds = useViewer((state) => state.selection.selectedIds)
+
+  useEffect(() => {
+    const unsubscribeSpaceDetection = initSpaceDetectionSync(useScene, useEditor)
+    return () => unsubscribeSpaceDetection()
+  }, [])
 
   useEffect(() => {
     let cancelled = false
@@ -121,7 +166,8 @@ export function XRPreviewEnvironment({
 
   useEffect(() => {
     if (!(editorReady && scene)) return
-    applySceneGraphToEditor(scene.graph)
+    applySceneGraphToEditor(ensureXRPreviewSite(scene.graph))
+    selectDefaultBuildingAndLevel()
     useEditor.setState({ mode: 'select', tool: null })
     return () => applySceneGraphToEditor(null)
   }, [editorReady, scene])
@@ -148,6 +194,11 @@ export function XRPreviewEnvironment({
     if (!(session && runtime.status === 'ready' && runtime.source === 'emulated')) return
     return mountEmulatorControls()
   }, [runtime, session])
+
+  useEffect(() => {
+    if (!session) return
+    useEditor.setState({ mode: 'select', tool: null })
+  }, [session])
 
   const enterVR = useCallback(async () => {
     if (runtime.status !== 'ready' || session || sessionRequest.current) return

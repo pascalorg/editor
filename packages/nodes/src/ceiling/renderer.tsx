@@ -13,6 +13,7 @@ import {
   createSurfaceRoleMaterial,
   NodeRenderer,
   resolveSurfaceColor,
+  useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
@@ -27,6 +28,7 @@ function createEmptyGeometry() {
 
 export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
   const ref = useRef<Mesh>(null!)
+  const handlers = useNodeEvents(node, 'ceiling')
   const placeholderGeometry = useMemo(createEmptyGeometry, [])
   const gridPlaceholderGeometry = useMemo(createEmptyGeometry, [])
 
@@ -116,6 +118,7 @@ export const CeilingRenderer = ({ node }: { node: CeilingNode }) => {
       material={materials.bottomMaterial}
       position={position}
       ref={ref}
+      {...handlers}
     >
       <mesh
         geometry={gridPlaceholderGeometry}
