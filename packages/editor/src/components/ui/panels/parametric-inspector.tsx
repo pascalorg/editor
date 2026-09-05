@@ -18,6 +18,7 @@ import { resolveMoveActionNode } from '../../../lib/direct-manipulation'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { collectZoneContentIds } from '../../../lib/zone-content'
 import useEditor from '../../../store/use-editor'
+import { IconRefImage } from '../icon-ref'
 import { ActionButton, ActionGroup } from '../controls/action-button'
 import { PanelSection } from '../controls/panel-section'
 import { ParametricFieldControl } from './parametric-field-control'
@@ -244,10 +245,9 @@ function ParamActionButton({ action, nodeId }: { action: ParamAction<AnyNode>; n
 function renderIcon(ref: IconRef | undefined): React.ReactNode | undefined {
   if (!ref) return undefined
   if (ref.kind === 'url') {
-    // Plain <img> here so the inspector doesn't pull in next/image's
-    // server-only requirements (the file is `'use client'`). Same
-    // 16x16 box the legacy panels use.
-    return <img alt="" className="h-4 w-4 shrink-0 object-contain" src={ref.src} />
+    // No next/image here: the inspector is `'use client'` and next/image
+    // drags in server-only requirements. Same 16x16 box the legacy panels use.
+    return <IconRefImage className="h-4 w-4 shrink-0" src={ref.src} />
   }
   if (ref.kind === 'iconify') {
     return <Icon height={16} icon={ref.name} width={16} />
