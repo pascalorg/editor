@@ -50,13 +50,13 @@ export function placementFromScene(): { placement: Placement | null; frontageFt:
 }
 
 /**
- * Remove everything a previous run generated (the building carries the tag;
- * its subtree goes with it) and any building that is still an empty shell —
+ * Remove any building that is still an empty shell (and, when a caller asks
+ * for a clean slate, the tagged generated building too) —
  * a new scene opens with a "Level 0" nobody has drawn in, and left standing
  * it would put a blank floor plan in the sheet set beside the generated one.
  * A building with a single wall in it is somebody's work and stays.
  */
-export function removeGenerated(): number {
+export function removeGenerated(includeGenerated = false): number {
   const s = useScene.getState()
   const nodes = s.nodes as Record<string, { id: string; type?: string; parentId?: string | null; metadata?: { generatedBy?: string }; children?: string[] }>
   const hasWork = (buildingId: string): boolean =>
@@ -68,16 +68,47 @@ export function removeGenerated(): number {
       })
     })
   const doomed = Object.values(nodes)
-    .filter((n) => n.type === 'building' && (n.metadata?.generatedBy === GENERATED_BY || !hasWork(n.id)))
+    .filter(
+      (n) => n.type === 'building' && ((includeGenerated && n.metadata?.generatedBy === GENERATED_BY) || !hasWork(n.id)),
+    )
     .map((n) => n.id)
   if (doomed.length > 0) s.deleteNodes(doomed as never)
   return doomed.length
 }
 
+type SceneNode = {
+  id: string
+  type?: string
+  parentId?: string | null
+  metadata?: { generatedBy?: string }
+  children?: string[]
+}
+
+/** The building a previous run made, with its level, when the scene still has it. */
+function generatedBuilding(): { buildingId: string; levelId: string } | null {
+  const nodes = useScene.getState().nodes as Record<string, SceneNode>
+  const building = Object.values(nodes).find(
+    (n) => n.type === 'building' && n.metadata?.generatedBy === GENERATED_BY,
+  )
+  if (!building) return null
+  const level = Object.values(nodes).find((n) => n.type === 'level' && n.parentId === building.id)
+  return level ? { buildingId: building.id, levelId: level.id } : null
+}
+
 function applyDocument(document: PlanDocument, meta: { seed: number | null; template: string | null; options?: RollOptions }): RunSummary {
   const { placement } = placementFromScene()
+  const scene = useScene.getState()
+  const nodes = scene.nodes as Record<string, SceneNode>
+  const site = Object.values(nodes).find((n) => n.type === 'site')
+  // Reuse the previous building only where it already hangs off the site;
+  // one that landed at the root (a scene that had no site then) is rebuilt
+  // under the site so the site plan and the cover find it.
+  const previous = generatedBuilding()
+  const reuse = previous && (!site || nodes[previous.buildingId]?.parentId === site.id) ? previous : null
   const built = buildHouse(document, {
     placement,
+    siteId: site?.id ?? null,
+    reuse,
     generation: { seed: meta.seed, template: meta.template, options: meta.options ?? {}, at: new Date().toISOString() },
   })
   const summary: RunSummary = {
@@ -91,9 +122,27 @@ function applyDocument(document: PlanDocument, meta: { seed: number | null; temp
     placed: placement !== null,
   }
   if (!built.ok) return summary
-  removeGenerated()
-  const scene = useScene.getState()
-  scene.createNodes(built.ops.map((op) => ({ node: op.node as never, parentId: op.parentId as never })))
+  if (reuse) {
+    // Replace the level's contents in place. Section markers stay: the
+    // default cuts run through the plan's centre lines, and a generated
+    // house is centred on its level, so they still cut the new house.
+    const level = nodes[reuse.levelId]
+    const contents = (level?.children ?? []).filter((id) => nodes[id]?.type !== 'section-marker')
+    if (contents.length > 0) scene.deleteNodes(contents as never)
+    const [buildingOp, levelOp, ...rest] = built.ops
+    if (buildingOp) {
+      const { id: _id, type: _type, parentId: _parent, children: _children, ...patch } = buildingOp.node as Record<string, unknown>
+      scene.updateNode(reuse.buildingId as never, patch as never)
+    }
+    if (levelOp) {
+      const { id: _id, type: _type, parentId: _parent, children: _children, ...patch } = levelOp.node as Record<string, unknown>
+      scene.updateNode(reuse.levelId as never, patch as never)
+    }
+    scene.createNodes(rest.map((op) => ({ node: op.node as never, parentId: op.parentId as never })))
+  } else {
+    removeGenerated(true)
+    scene.createNodes(built.ops.map((op) => ({ node: op.node as never, parentId: op.parentId as never })))
+  }
   if (built.levelId) {
     useViewer.getState().setSelection({ buildingId: built.buildingId as never, levelId: built.levelId as never })
   }

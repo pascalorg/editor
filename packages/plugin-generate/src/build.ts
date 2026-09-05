@@ -46,6 +46,15 @@ export type Placement = {
 
 export type BuildOptions = {
   placement?: Placement | null
+  /** The site node the building attaches to when there is no placement (no parcel polygon yet). */
+  siteId?: string | null
+  /**
+   * Regenerating: keep these building / level ids so everything that points
+   * at them — sheet viewports, section markers, the selection — survives.
+   * The caller replaces the level's contents; the building and level ops in
+   * the result carry the new position / rotation / height to apply.
+   */
+  reuse?: { buildingId: string; levelId: string } | null
   /** Recorded on the building so "same again" can find the seed and options. */
   generation?: Record<string, unknown>
 }
@@ -139,9 +148,9 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
 
   const ops: NodeOp[] = []
   const errors: string[] = []
-  const siteId = options.placement?.siteId ?? null
-  const buildingId = generateId('building')
-  const levelId = generateId('level')
+  const siteId = options.placement?.siteId ?? options.siteId ?? null
+  const buildingId = options.reuse?.buildingId ?? generateId('building')
+  const levelId = options.reuse?.levelId ?? generateId('level')
   const ceilingM = round(doc.ceiling * IN)
 
   // ── walls ────────────────────────────────────────────────────────────

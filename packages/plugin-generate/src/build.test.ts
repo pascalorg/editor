@@ -107,6 +107,16 @@ describe('Poppy builds into Pascal nodes', () => {
     expect(level.height).toBeCloseTo(2.7432, 4)
   })
 
+  test('regenerating keeps the building and level ids it is handed', () => {
+    const again = buildHouse(POPPY, { reuse: { buildingId: 'building_keep', levelId: 'level_keep' }, siteId: 'site_x' })
+    expect(again.ok).toBe(true)
+    expect(again.buildingId).toBe('building_keep')
+    expect(again.levelId).toBe('level_keep')
+    expect(ofType(again.ops, 'building')[0]?.parentId).toBe('site_x')
+    expect(ofType(again.ops, 'level')[0]?.parentId).toBe('building_keep')
+    expect(ofType(again.ops, 'wall').every((w) => w.parentId === 'level_keep')).toBe(true)
+  })
+
   test('placed on a parcel: square to the street, at the front setback, attached to the site', () => {
     // A 60 × 100 ft lot whose street edge runs along +x at z = 0; envelope inset 25/7/20.
     const envelope: [number, number][] = [
