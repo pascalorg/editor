@@ -22,7 +22,13 @@ export function endpointsOf(m: Member): [Vector3, Vector3] {
   const vertical = m.dims[1] > m.dims[0]
   const a = new Vector3(...m.position)
   const half = vertical ? new Vector3(0, m.dims[1] / 2, 0) : axis
-  return [a.clone().add(half), a.clone().sub(half)]
+  // Rebuilding endpoints from centre + rotated half-length leaves ~1e-16 of
+  // noise (a wall-centreline point comes back as z = -2e-16), which a
+  // point-in-polygon test on a room boundary reads as OUTSIDE. Snap to a
+  // nanometre: the engine's own numbers are untouched.
+  const snap = (v: Vector3): Vector3 =>
+    new Vector3(Math.round(v.x * 1e9) / 1e9 + 0, Math.round(v.y * 1e9) / 1e9 + 0, Math.round(v.z * 1e9) / 1e9 + 0)
+  return [snap(a.clone().add(half)), snap(a.clone().sub(half))]
 }
 
 export function segDist(p: Vector3, a: Vector3, b: Vector3): number {

@@ -6,6 +6,7 @@
  */
 
 import { DEFAULT_SPEC, type FramingSpec } from '../core/spec'
+import { stableFixtures, stableMembers } from '../core/stable'
 import type {
   Fixture,
   Member,
@@ -1349,8 +1350,8 @@ function computeLevelUncached(
   })
 
   return {
-    members,
-    fixtures,
+    members: stableMembers(members),
+    fixtures: stableFixtures(fixtures),
     warnings,
     jurisdiction: code,
     spec,

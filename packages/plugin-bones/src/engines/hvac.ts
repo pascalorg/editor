@@ -725,7 +725,10 @@ function nearestExteriorExit(walls: WallSlice[], p: Pt): { at: Pt; wall: WallSli
     const [ax, az] = wall.start
     const point = projectOnto([ax, az], [wall.end[0], wall.end[1]], p)
     const d = Math.hypot(point[0] - p[0], point[1] - p[1])
-    if (d < bestDist) {
+    // Ties (within a micrometre) keep the first wall in iteration order —
+    // the same rule electHeatPumpExit applies, so a rotated plan does not
+    // let platform trig noise pick the exit.
+    if (d < bestDist - 1e-6) {
       bestDist = d
       best = { at: point, wall }
     }
@@ -1167,8 +1170,13 @@ export function electHeatPumpExit(
   }
   if (candidates.length === 0) return null
   // Stable sort keeps wall order on ties — the same wall nearestExteriorExit
-  // (strict <, iteration order) elected before validation existed.
-  candidates.sort((a, b) => a.d - b.d)
+  // (strict <, iteration order) elected before validation existed. A tie is
+  // decided at a micrometre: an equipment room equidistant from two walls
+  // (the SW-corner laundry, 1.5 m from both) came out ~1e-16 apart once the
+  // plan was rotated, and which wall won depended on the platform's trig —
+  // the polish pins (azimuth 33.7°) elected the WEST wall on Windows.
+  const quantised = (d: number): number => Math.round(d * 1e6) / 1e6
+  candidates.sort((a, b) => quantised(a.d) - quantised(b.d))
   // Per-candidate stand-off: t/2 + 24" face clearance + cabinet depth/2
   // (condenserStandoff) — the spot is the CABINET CENTER, so the face
   // clearance is honest for THIS wall's thickness, not a flat guess.

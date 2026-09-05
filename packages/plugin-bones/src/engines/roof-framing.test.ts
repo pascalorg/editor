@@ -1503,20 +1503,27 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
   //    the square-hip apex trim (residual 1) moves only width==depth
   //    shapes (none pinned); the hip/crown R802.4.3 flag (residual 2)
   //    moves only sub-3:12 hip ridges + the mansard crown (none pinned).
+  // 2026-09-04 INTENDED-CHANGE (stable output, core/stable.ts): every member's
+  //  position/dims/length is rounded to a nanometre at the frameRoofs and
+  //  computeLevel boundaries, so the bytes no longer depend on the platform's
+  //  libm. The valley pin (rotated wing) had never matched on Windows — the
+  //  same received hash on every commit back to e8b9057 — and the eleven
+  //  single-shape pins change only because exact-looking values like the
+  //  rafter length now print with ≤ 9 decimals. ALL twelve recaptured here.
   const hashOf = (members: Member[]): string =>
     createHash('sha256').update(JSON.stringify(members)).digest('hex').slice(0, 16)
   const PINS: [string, Partial<RoofSegmentSlice>, Partial<FramingSpec>, string][] = [
-    ['gable-300', {}, {}, '0630b9f861ee5f6c'],
-    ['gable-400', {}, { detail: '400' }, '956ef4b91c7d838c'],
-    ['gable-200', {}, { detail: '200' }, '34f8a921c61c82e3'],
-    ['gable-400-windy', {}, { detail: '400', hurricaneTies: true }, 'a408ae61e9011a01'],
-    ['gable-big-400', { width: 10, depth: 12 }, { detail: '400' }, '9488d2b7f7a2c3c9'],
-    ['shed-300', { roofType: 'shed' }, {}, '76e8a43f3f95a947'],
-    ['shed-400', { roofType: 'shed' }, { detail: '400' }, '56128ff5e8d68001'],
-    ['shed-200', { roofType: 'shed' }, { detail: '200' }, '4da5818e22a231e4'],
-    ['shed-big-400', { roofType: 'shed', depth: 8 }, { detail: '400' }, '0d54b38723e03603'],
-    ['flat-400', { roofType: 'flat' }, { detail: '400' }, 'e5d74f2bb9f51fd1'],
-    ['gambrel-400', { roofType: 'gambrel' }, { detail: '400' }, 'e4ec28401bfd49a8'],
+    ['gable-300', {}, {}, '3b704275f8d68a55'],
+    ['gable-400', {}, { detail: '400' }, '22c8feebf2afb242'],
+    ['gable-200', {}, { detail: '200' }, '891f8a0b75255a96'],
+    ['gable-400-windy', {}, { detail: '400', hurricaneTies: true }, '92243f96acce17e8'],
+    ['gable-big-400', { width: 10, depth: 12 }, { detail: '400' }, '99d78960b8c86f74'],
+    ['shed-300', { roofType: 'shed' }, {}, '57e556e92bde16e7'],
+    ['shed-400', { roofType: 'shed' }, { detail: '400' }, '9a9a7d7cf826ac7c'],
+    ['shed-200', { roofType: 'shed' }, { detail: '200' }, '9131426f760c4438'],
+    ['shed-big-400', { roofType: 'shed', depth: 8 }, { detail: '400' }, '96e207441a7c9c3f'],
+    ['flat-400', { roofType: 'flat' }, { detail: '400' }, '953c25cdb23c0ffb'],
+    ['gambrel-400', { roofType: 'gambrel' }, { detail: '400' }, '9f9f232aa25f42d3'],
   ]
 
   for (const [name, over, sp, pin] of PINS) {
@@ -1532,7 +1539,7 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
       [],
       { ...DEFAULT_SPEC, detail: '400' },
     )
-    expect(hashOf(members)).toBe('2ef111d64bcdd8d9')
+    expect(hashOf(members)).toBe('6a82868f2962fd08')
   })
 })
 

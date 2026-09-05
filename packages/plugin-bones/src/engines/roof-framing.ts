@@ -24,6 +24,7 @@
 
 import { LUMBER_CROSS_SECTIONS, type LumberSize } from '../lumber'
 import { DEFAULT_SPEC, type FramingSpec, tableSpanFor } from '../core/spec'
+import { stableMembers } from '../core/stable'
 import type { Member, WallSlice } from '../core/types'
 import { feet, formatIn, inches } from '../core/units'
 
@@ -257,7 +258,7 @@ export function frameRoofs(
       }
     }
   }
-  return members
+  return stableMembers(members)
 }
 
 type Emit = (
