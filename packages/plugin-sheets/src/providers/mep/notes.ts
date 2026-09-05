@@ -16,11 +16,28 @@
  */
 import electricalRules from '../../../../plugin-bones/data/electrical-rules.json'
 import mepRules from '../../../../plugin-bones/data/mep-rules.json'
+import { adoptionRow } from '../structural/model'
 
 export const ELECTRICAL_BASIS = electricalRules.codeBasis.primary
 export const ELECTRICAL_ALARM_BASIS = electricalRules.codeBasis.smokeCoAlarms
 export const RULES_DISCLAIMER = electricalRules.disclaimer
 export const MEP_BASIS = mepRules.basis
+
+/**
+ * The plumbing basis as a permit sheet states it: the code the rules were
+ * written from (the data file's own line, minus its "consulted via …"
+ * sourcing aside, which is about where the text was read, not what governs)
+ * and, when the jurisdiction is a US state in the adoption data, the code
+ * that state adopted. The sourcing aside stays in the data file.
+ */
+export function mepBasisLine(jurisdiction: string): string {
+  const basis = MEP_BASIS.split('.')[0]?.replace(/\s*\((?:consulted|via)[^)]*\)/i, '') ?? ''
+  const adoption = adoptionRow(jurisdiction.toUpperCase())
+  const adopted = adoption?.residentialCode
+    ? ` Adopted code — ${jurisdiction.toUpperCase()}: ${adoption.residentialCode}.`
+    : ''
+  return `${basis}.${adopted}`
+}
 
 const e = electricalRules
 const p = mepRules.plumbing

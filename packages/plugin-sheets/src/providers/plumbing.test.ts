@@ -198,10 +198,17 @@ describe('P1.0 reads the fixtures the user placed', () => {
     }
     // What the data does not carry is flagged, never faked.
     expect(text).toContain('verify:')
-    // The key is on the notes plate too — and it claims only the letters
-    // this level's fixtures actually carry.
-    expect(text).toContain('Hot water from the water heater')
-    expect(text).not.toContain('Gas supply')
+    // The key prints once per sheet, beside the plan — not again on the
+    // notes plate — and it claims only the letters this level's fixtures
+    // actually carry.
+    expect(text).not.toContain('Hot water from the water heater')
+    const plan = buildPlumbingDrawing(
+      SCENE,
+      args({ system: 'plan', viewport: { x: 1, y: 1, w: 20, h: 14, scale: 48 } }),
+    )
+    const planText = plateText(plan?.plate ?? [])
+    expect(planText).toContain('Hot water from the water heater')
+    expect(planText).not.toContain('Gas supply')
   })
 
   test('the key lists only letters that are on the drawing', () => {

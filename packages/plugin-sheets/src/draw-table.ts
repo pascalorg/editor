@@ -31,6 +31,27 @@ export const SCHEDULE_LEGEND = 'Sizes are nominal; RO per manufacturer.'
  * the right edge of their cell. `mark` stays LEFT: it is an identifier, and a
  * schedule reads down its mark column.
  */
+/**
+ * Fit a cell's text to its column: shrink to 80 % of the size first, then cut
+ * with an ellipsis. A value that silently ran into the next column read as
+ * that column's value, which a schedule must never do.
+ */
+function fitCell(
+  value: string,
+  maxW: number,
+  size: number,
+  mono: boolean,
+): { text: string; fontSize: number } {
+  const k = mono ? 0.6 : 0.54
+  const width = (s: string, fs: number) => s.length * fs * k
+  if (width(value, size) <= maxW) return { text: value, fontSize: size }
+  const floor = size * 0.8
+  const shrunk = Math.max(floor, maxW / Math.max(1, value.length * k))
+  if (width(value, shrunk) <= maxW) return { text: value, fontSize: shrunk }
+  const chars = Math.max(1, Math.floor(maxW / (floor * k)) - 1)
+  return { text: `${value.slice(0, chars)}…`, fontSize: floor }
+}
+
 const NUMERIC_KEYS = new Set([
   'width',
   'height',
@@ -169,15 +190,16 @@ export function drawTable(
     table.columns.forEach((column, i) => {
       const cw = widths[i] ?? 0
       const numeric = isNumericColumn(column.key, column.label)
-      const value = String(row[column.key] ?? '')
+      const mono = i === 0 || numeric
+      const fitted = fitCell(String(row[column.key] ?? ''), cw - PAD * 2, 0.115, mono)
       out.push({
         kind: 'text',
         x: numeric ? bx + cw - PAD : bx + PAD,
         y: ry + ROW_H - 0.08,
-        text: value,
-        fontSize: 0.115,
+        text: fitted.text,
+        fontSize: fitted.fontSize,
         fill: INK,
-        fontFamily: i === 0 || numeric ? MONO : SANS,
+        fontFamily: mono ? MONO : SANS,
         fontWeight: i === 0 ? 700 : 400,
         textAnchor: numeric ? 'end' : 'start',
       })

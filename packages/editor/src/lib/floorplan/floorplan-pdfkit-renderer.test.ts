@@ -83,7 +83,7 @@ describe('renderFloorplanGeometryToPdfKit', () => {
     )
 
     expect([...new Set(baseFonts)]).toEqual(['Courier'])
-    expect([...new Set(fontSizes)]).toEqual(['1.6'])
+    expect([...new Set(fontSizes)]).toEqual(['2'])
   })
 })
 

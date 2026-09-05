@@ -185,6 +185,12 @@ function areaTable(model: EnvelopeModel): ScheduleTable {
   }
 }
 
+/** The schedule prints W101 / D101; a bare resolved number gets the prefix. */
+function scheduleMark(prefix: 'W' | 'D', mark: string | undefined): string {
+  if (!mark) return '—'
+  return /^\d+$/.test(mark) ? `${prefix}${mark}` : mark
+}
+
 function fenestrationTable(model: EnvelopeModel): ScheduleTable {
   return {
     title: 'FENESTRATION SCHEDULE',
@@ -198,7 +204,7 @@ function fenestrationTable(model: EnvelopeModel): ScheduleTable {
       { key: 'shgc', label: 'SHGC', weight: 1 },
     ],
     rows: model.fenestration.map((row) => ({
-      mark: row.mark || '—',
+      mark: scheduleMark('W', row.mark),
       type: row.type.replace(/[-_]/g, ' ').toUpperCase(),
       face: row.orientation,
       size: `${feetInches(row.widthM)} × ${feetInches(row.heightM)}`,

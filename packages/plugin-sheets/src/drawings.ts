@@ -232,6 +232,23 @@ const FOUNDATION_PLAN_TYPES = new Set([
   'measurement',
 ])
 
+/**
+ * The kinds a FLOOR PLAN does not show: the roof and what rides on it live on
+ * the roof plan (A3.0). The roof kind draws its ridges, drip edge and pitch
+ * arrows as one group, so it is all-or-nothing per drawing type.
+ */
+const FLOOR_PLAN_EXCLUDED_TYPES = new Set([
+  'roof',
+  'roof-segment',
+  'gutter',
+  'downspout',
+  'ridge-vent',
+  'box-vent',
+  'eyebrow-vent',
+  'turbine-vent',
+  'solar-panel',
+])
+
 /** Whether a node type is drawn under this viewport's layer switches. */
 export function acceptsNode(layers: ViewportLayers, type: string, category?: string): boolean {
   if (FURNITURE_TYPES.has(type)) return layers.furniture
@@ -257,6 +274,9 @@ export function acceptsNodeForDrawing(
 ): boolean {
   if (drawingType === 'roof-plan' && !ROOF_PLAN_TYPES.has(type)) return false
   if (drawingType === 'foundation-plan' && !FOUNDATION_PLAN_TYPES.has(type)) return false
+  if ((drawingType ?? 'floor-plan') === 'floor-plan' && FLOOR_PLAN_EXCLUDED_TYPES.has(type)) {
+    return false
+  }
   return acceptsNode(layers, type, category)
 }
 

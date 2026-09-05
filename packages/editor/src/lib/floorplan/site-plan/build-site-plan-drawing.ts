@@ -9,6 +9,7 @@ import {
   migrateSiteMetadata,
   type SceneSnapshot,
   type SiteNode,
+  unionPolygons,
   type WallNode,
 } from '@pascal-app/core'
 import {
@@ -168,6 +169,31 @@ export function levelFootprintLoops(
   return loops
 }
 
+/**
+ * The outer ring(s) of a set of wall bands: their union, minus any ring that
+ * lies inside another (a room enclosed by partitions is a hole in the union,
+ * not a second building). Falls back to the bands themselves when the union
+ * yields nothing.
+ */
+export function footprintOutline(loops: readonly Pt[][]): Pt[][] {
+  const rings = unionPolygons(loops.map((loop) => loop.map((p) => [p[0], p[1]]))) as Pt[][]
+  if (rings.length === 0) return [...loops]
+  const inside = (p: Pt, ring: Pt[]): boolean => {
+    let hit = false
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const a = ring[i] as Pt
+      const b = ring[j] as Pt
+      if (a[1] > p[1] !== b[1] > p[1] && p[0] < ((b[0] - a[0]) * (p[1] - a[1])) / (b[1] - a[1]) + a[0]) {
+        hit = !hit
+      }
+    }
+    return hit
+  }
+  return rings.filter((ring, i) =>
+    !rings.some((other, j) => j !== i && ring[0] !== undefined && inside(ring[0], other)),
+  )
+}
+
 function unionBounds(loops: readonly Pt[][]): Bounds | null {
   const all: Pt[] = []
   for (const loop of loops) all.push(...loop)
@@ -288,8 +314,11 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
     })
   }
 
-  // ── Building footprint (level-0 wall bands, site-transformed) ────────
-  for (const loop of footprintLoops) {
+  // ── Building footprint — the OUTLINE of the level-0 walls ─────────────
+  // A site plan shows the building's edge on the lot; the partitions inside
+  // it are the floor plan's business, so the wall bands are unioned and only
+  // the outer rings are kept.
+  for (const loop of footprintOutline(footprintLoops)) {
     primitives.push({
       kind: 'polygon',
       points: loop,
@@ -326,7 +355,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
   const lotBounds = polygonBounds(lot)
 
   // ── North arrow, top-right of the lot ────────────────────────────────
-  const arrowSize = Math.max(1.5, Math.min(4, (lotBounds.maxY - lotBounds.minY) * 0.12))
+  const arrowSize = Math.max(1.2, Math.min(2.2, (lotBounds.maxY - lotBounds.minY) * 0.07))
   primitives.push(
     northArrow(
       [lotBounds.maxX + arrowSize * 1.4, lotBounds.minY + arrowSize * 1.2],

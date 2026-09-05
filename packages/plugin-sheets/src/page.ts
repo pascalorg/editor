@@ -88,6 +88,7 @@ export function composeSheet(sheet: SheetNode, options: ComposeOptions): Compose
       : undefined,
     sheetOrdinal: Math.max(1, sheets(nodes).findIndex((s) => s.id === sheet.id) + 1),
     sheetCount: sheets(nodes).length,
+    plotDate: localIsoDate(new Date()),
   }
   const titleBlock = buildTitleBlock(titleBlockInput)
   overlay.push(...buildStatusStamp(titleBlockInput))
@@ -107,4 +108,10 @@ export function composeSheet(sheet: SheetNode, options: ComposeOptions): Compose
 
 export function composeAll(options: ComposeOptions): ComposedSheet[] {
   return sheets(options.nodes).map((sheet) => composeSheet(sheet, options))
+}
+
+/** The composing machine's calendar date, not UTC's — a set printed at 9 pm is dated today. */
+function localIsoDate(date: Date): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
 }

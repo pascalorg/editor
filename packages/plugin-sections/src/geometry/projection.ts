@@ -150,6 +150,22 @@ function maxDepth(view: Projector, poly: readonly Vec2[]): number {
   return max
 }
 
+/**
+ * A wall's projected span: its u-extent on the drawing and its far depth —
+ * the same key `paintProjected` sorts on, so "strictly smaller depth" means
+ * "painted later, i.e. in front". Null when the wall is outside the depth
+ * slab or edge-on to the view.
+ */
+export function wallSpan(
+  view: Projector,
+  wall: WallSolid,
+): { u: [number, number]; depth: number } | null {
+  const clipped = clipToDepthSlab(view, wall.polygon)
+  const extent = uExtent(view, clipped)
+  if (!extent) return null
+  return { u: extent, depth: maxDepth(view, clipped) }
+}
+
 /** Openings drawn on a wall face that actually faces the viewer. */
 function openingPrimitives(
   view: Projector,

@@ -37,12 +37,15 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
   const stroke = showSelectedChrome && palette ? palette.selectedStroke : node.color
   const isRoom = node.spaceRole === 'room'
   const fillOpacity = isRoom ? (isSelected ? 0.12 : 0.04) : isSelected ? 0.28 : 0.16
+  // On paper a room is its label, not a colour: the wash and the zone-coloured
+  // text are editor chrome. Same ink the wall kind prints in.
+  const onPaper = floorplanContext.purpose === 'document'
 
   const children: FloorplanGeometry[] = [
     {
       kind: 'polygon',
       points,
-      fill: node.color,
+      fill: onPaper && isRoom ? 'none' : node.color,
       fillOpacity,
       stroke,
       strokeWidth: showSelectedChrome ? 0.08 : 0.05,
@@ -110,7 +113,7 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
         view?.unit ?? 'metric',
         floorplanContext.purpose === 'document' ? 'document' : 'editor',
         floorplanContext.metricNotation,
-        stroke,
+        onPaper ? DOCUMENT_INK : stroke,
       ),
     )
     if (floorplanContext.automaticDimensions) {
@@ -141,6 +144,8 @@ export function buildZoneFloorplan(node: ZoneNode, ctx: GeometryContext): Floorp
   return { kind: 'group', children }
 }
 
+/** Plan ink on paper — the same hex `wall/floorplan.ts` prints in. */
+const DOCUMENT_INK = '#111827'
 const ZONE_LABEL_FONT_SIZE = 0.2
 const ROOM_NAME_FONT_SIZE = 0.2
 const ROOM_NUMBER_FONT_SIZE = 0.16

@@ -179,6 +179,8 @@ export function siteAddress(nodes: NodeMap): {
   state: string
   zip: string
   apn: string
+  /** The parcel record's county, as the resolver wrote it ("Hillsborough"). */
+  county: string
 } {
   const site = siteNode(nodes)
   const address = isObj(site?.address) ? site.address : {}
@@ -189,7 +191,36 @@ export function siteAddress(nodes: NodeMap): {
     state: str(address.state),
     zip: str(address.zip),
     apn: str(parcel.apn),
+    county: str(parcel.county),
   }
+}
+
+export type SiteAddressFallback = ReturnType<typeof siteAddress>
+
+/**
+ * The jurisdiction line the cover and every title block print. The record's
+ * typed jurisdiction wins; otherwise it is derived from what the parcel
+ * resolver wrote onto the site (city from the address, county and state from
+ * the parcel record) — the same facts the notes sheets already cite the
+ * adopted code from. Empty when neither source has anything.
+ */
+export function jurisdictionLine(
+  record:
+    | {
+        jurisdiction?: { city?: string; county?: string; state?: string }
+        identity?: { address?: { city?: string; state?: string } }
+      }
+    | undefined,
+  fallback: SiteAddressFallback | undefined,
+): string {
+  const j = record?.jurisdiction
+  const declared = [j?.city, j?.county, j?.state].filter(Boolean).join(', ')
+  if (declared) return declared
+  const city = record?.identity?.address?.city || fallback?.city || ''
+  const state = record?.identity?.address?.state || fallback?.state || ''
+  const rawCounty = fallback?.county ?? ''
+  const county = rawCounty ? (/county/i.test(rawCounty) ? rawCounty : `${rawCounty} County`) : ''
+  return [city, county, state].filter(Boolean).join(', ')
 }
 
 export function updateProjectRecord(patch: Record<string, unknown>): void {

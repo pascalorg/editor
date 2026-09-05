@@ -16,7 +16,9 @@ import type { FloorplanPdfDocument } from './floorplan-pdfkit-document'
 const DIMENSION_LINE_WIDTH_PT = 0.5
 const DIMENSION_TICK_WIDTH_PT = 0.75
 const DIMENSION_TEXT_FONT_FAMILY = 'Courier'
-const DIMENSION_TEXT_FONT_SIZE_PT = 8
+// 10 pt Courier has a ~6 pt cap height — the 3/32 in dimension text an
+// architectural sheet is read at; 8 pt printed at 5 pt caps on ARCH D.
+const DIMENSION_TEXT_FONT_SIZE_PT = 10
 const DIMENSION_TEXT_FONT_WEIGHT = 400
 const DIMENSION_BASELINE_OFFSET_PT = 5
 const DEFAULT_ANNOTATION_FONT_SIZE_PT = 8

@@ -23,7 +23,7 @@
  */
 import type { FloorplanGeometry } from '@pascal-app/core'
 import type { AnyNodeLike, NodeMap } from './model'
-import { levelLabel, levels, projectRecord, siteAddress, siteNode } from './model'
+import { jurisdictionLine, levelLabel, levels, projectRecord, siteAddress, siteNode } from './model'
 import { INK, INK_SOFT, MONO, SANS } from './titleblock'
 
 /** The display face the big cover title is set in, with real fallbacks. */
@@ -367,10 +367,26 @@ export function projectSubtitle(nodes: NodeMap): string {
     case 'residence':
     case 'house':
     case '':
-      return raw ? 'NEW SINGLE-FAMILY RESIDENCE' : 'RESIDENCE'
+      return raw ? 'NEW SINGLE-FAMILY RESIDENCE' : derivedOccupancy(nodes)
     default:
       return raw.toUpperCase()
   }
+}
+
+/**
+ * With no project type typed in, the occupancy is read off the model: one
+ * building with one kitchen is one dwelling unit, which is what the IRC set
+ * these sheets are drawn under is for. Anything else stays the plain word —
+ * "new" is never assumed, that is the record's to say.
+ */
+function derivedOccupancy(nodes: NodeMap): string {
+  let buildings = 0
+  let kitchens = 0
+  for (const node of Object.values(nodes)) {
+    if (node?.type === 'building') buildings += 1
+    if (node?.type === 'zone' && /kitchen/i.test(String(node.name ?? ''))) kitchens += 1
+  }
+  return buildings === 1 && kitchens === 1 ? 'SINGLE-FAMILY RESIDENCE' : 'RESIDENCE'
 }
 
 /* ------------------------------------------------------------- blocks */
@@ -471,8 +487,7 @@ function buildCoverTitle({ nodes, x, y, w }: CoverBlockInput): FloorplanGeometry
   }
 
   const apn = record?.identity?.apn || fallback.apn
-  const j = record?.jurisdiction
-  const jurisdiction = [j?.city, j?.county, j?.state].filter(Boolean).join(', ')
+  const jurisdiction = jurisdictionLine(record, fallback)
   const meta = [
     `APN  ${apn || UNKNOWN}`,
     `JURISDICTION  ${(jurisdiction || UNKNOWN).toUpperCase()}`,

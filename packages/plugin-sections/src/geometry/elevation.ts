@@ -14,12 +14,13 @@ import {
   projectU,
   projectWall,
   roofDatums,
+  wallSpan,
 } from './projection'
 import { projectItem } from './items'
 import { FINISH_LABEL, type FinishKind } from './materials'
 import { openingTag } from './openings'
 import { openingCentreU } from './projection'
-import { type BuildingModel, buildBuildingModel } from './scene-model'
+import { type BuildingModel, buildBuildingModel, type WallSolid } from './scene-model'
 import { INK, label, line, WEIGHT } from './style'
 import { type DrawingResult, type DrawingScene, EMPTY_BOUNDS, type Vec2 } from './types'
 
@@ -127,23 +128,47 @@ export function buildElevationDrawing(
   const finishColors = new Map<FinishKind, string>()
   const colorCounts = new Map<string, number>()
   const tags: FloorplanGeometry[] = []
-  for (const wall of built.walls) {
+  // Hidden-line for what the paint order does not cover: the walls are
+  // painted back-to-front as opaque silhouettes, so a partition's door
+  // behind the front wall is hidden on paper — but its tag, drawn on top of
+  // everything, and its "no cladding" entry in the finish key were not. A
+  // point on a wall counts as covered when a strictly nearer wall's span
+  // holds it in u and in height.
+  const spans = built.walls.map((wall) => ({ wall, span: wallSpan(view, wall) }))
+  const covered = (self: WallSolid, u: number, y: number, depth: number): boolean =>
+    spans.some(
+      ({ wall, span }) =>
+        wall !== self &&
+        span !== null &&
+        span.depth < depth - 1e-6 &&
+        u > span.u[0] + 1e-6 &&
+        u < span.u[1] - 1e-6 &&
+        y > wall.baseY + 1e-6 &&
+        y < wall.topY - 1e-6,
+    )
+  for (const { wall, span } of spans) {
     const piece = projectWall(view, wall, { finish: true })
-    if (!piece) continue
+    if (!piece || !span) continue
     projected.push(piece)
     const facing = wall.normal[0] * forward[0] + wall.normal[1] * forward[1]
-    if (facing * wall.exteriorSign < -0.3) {
-      const key = wall.exteriorFinish ?? 'unspecified'
-      finishesUsed.set(key, (finishesUsed.get(key) ?? 0) + 1)
-      if (wall.exteriorFinish && wall.claddingColor) {
-        finishColors.set(wall.exteriorFinish, wall.claddingColor)
-        colorCounts.set(wall.claddingColor, (colorCounts.get(wall.claddingColor) ?? 0) + 1)
-      }
-      // Mark tags over the openings on the faces that look at the viewer —
-      // the same D### / W### the schedule prints.
-      for (const opening of wall.openings) {
-        tags.push(...openingTag(opening, openingCentreU(view, wall, opening), drawY(opening.headY) - 0.09))
-      }
+    if (facing * wall.exteriorSign >= -0.3) continue
+    const yMid = (wall.baseY + wall.topY) / 2
+    const faceShows = [0.25, 0.5, 0.75].some(
+      (t) => !covered(wall, span.u[0] + (span.u[1] - span.u[0]) * t, yMid, span.depth),
+    )
+    if (!faceShows) continue
+    const key = wall.exteriorFinish ?? 'unspecified'
+    finishesUsed.set(key, (finishesUsed.get(key) ?? 0) + 1)
+    if (wall.exteriorFinish && wall.claddingColor) {
+      finishColors.set(wall.exteriorFinish, wall.claddingColor)
+      colorCounts.set(wall.claddingColor, (colorCounts.get(wall.claddingColor) ?? 0) + 1)
+    }
+    // Mark tags over the openings that actually show — the same D### / W###
+    // the schedule prints.
+    for (const opening of wall.openings) {
+      const u = openingCentreU(view, wall, opening)
+      if (covered(wall, u, (opening.sillY + opening.headY) / 2, span.depth)) continue
+      tags.push(...openingTag(opening, u, drawY(opening.headY) - 0.09))
     }
   }
   // Whatever is placed in the scene, where it stands: trees, the condenser,

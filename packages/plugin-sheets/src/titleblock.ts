@@ -17,6 +17,7 @@
  * with system fallbacks, the family the PlanCrafters sheets are set in.
  */
 import type { FloorplanGeometry } from '@pascal-app/core'
+import { jurisdictionLine, type SiteAddressFallback } from './model'
 import type { ProjectRecordNode } from './schema'
 import { scaleLabel } from './scale'
 
@@ -36,7 +37,9 @@ export type TitleBlockInput = {
   title: string
   record: ProjectRecordNode | undefined
   /** Address fallback from the site node when the record has none typed in. */
-  addressFallback?: { street: string; city: string; state: string; zip: string; apn: string }
+  addressFallback?: SiteAddressFallback
+  /** The date this sheet was composed (ISO), printed when the record has no date typed in. */
+  plotDate?: string
   /** Printed in the scale field; a sheet with mixed scales says "AS NOTED". */
   scaleText?: string
   /** The whole set, for the cover sheet's index. */
@@ -239,8 +242,7 @@ export function buildTitleBlock(input: TitleBlockInput): FloorplanGeometry[] {
 
   // OWNER / JURISDICTION / APN.
   y += 0.26 * k
-  const j = record?.jurisdiction
-  const jurisdiction = [j?.city, j?.county, j?.state].filter(Boolean).join(', ')
+  const jurisdiction = jurisdictionLine(record, input.addressFallback)
   leftText(`OWNER: ${record?.owner?.name || '—'}`, y, 0.13 * k)
   leftText(`JURISDICTION: ${jurisdiction || '—'}`, y + 0.26 * k, 0.13 * k)
   leftText(`APN: ${apnOf(input) || '—'}`, y + 0.52 * k, 0.13 * k)
@@ -249,7 +251,8 @@ export function buildTitleBlock(input: TitleBlockInput): FloorplanGeometry[] {
 
   // DATE / SCALE.
   y += 0.26 * k
-  leftText(`DATE: ${record?.date || '—'}`, y, 0.13 * k)
+  const date = record?.date || (input.plotDate ? `${input.plotDate} (PLOT DATE)` : '')
+  leftText(`DATE: ${date || '—'}`, y, 0.13 * k)
   leftText(`SCALE: ${input.scaleText || 'AS NOTED'}`, y + 0.26 * k, 0.13 * k)
   if (record?.drawnBy) leftText(`DRAWN BY: ${record.drawnBy}`, y + 0.52 * k, 0.13 * k)
   y += (record?.drawnBy ? 0.82 : 0.56) * k
@@ -310,8 +313,10 @@ export function buildTitleBlock(input: TitleBlockInput): FloorplanGeometry[] {
   hr(nbY)
   centered(input.title.toUpperCase(), nbY + 0.42 * k, 0.2 * k, 700)
   hr(nbY + 0.9 * k)
+  // The number sits high enough that "SHEET n OF m" clears its baseline in
+  // print, where the display face falls back to a wider Helvetica Bold.
   out.push(
-    text(cx, nbY + 1.95 * k, input.number, 0.85 * k, {
+    text(cx, nbY + 1.72 * k, input.number, 0.85 * k, {
       anchor: 'middle',
       weight: 800,
       family: '"Big Shoulders Display", "IBM Plex Sans", Helvetica, Arial, sans-serif',
@@ -319,7 +324,7 @@ export function buildTitleBlock(input: TitleBlockInput): FloorplanGeometry[] {
   )
   if (input.sheetOrdinal && input.sheetCount) {
     out.push(
-      text(cx, y0 + h - 0.16 * k, `SHEET ${input.sheetOrdinal} OF ${input.sheetCount}`, 0.11 * k, {
+      text(cx, y0 + h - 0.14 * k, `SHEET ${input.sheetOrdinal} OF ${input.sheetCount}`, 0.11 * k, {
         anchor: 'middle',
         family: MONO,
       }),

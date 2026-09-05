@@ -80,6 +80,54 @@ function openingsOnLevel(nodes: ScheduleNodes, levelId: string, type: 'door' | '
   return out
 }
 
+/**
+ * The room an opening serves: the zone whose polygon holds the point just
+ * inside the wall at the opening — for an exterior wall that is the one room
+ * behind it, which is what R310 asks about. A wall's whole `boundaryWallIds`
+ * list would make every window on a long exterior wall "in" every room along
+ * it. Null when no zone contains either side (then the wall list is the
+ * fallback).
+ */
+function roomAtOpening(nodes: ScheduleNodes, opening: Opening): string | null {
+  const wall = opening.wallId ? nodes[opening.wallId] : undefined
+  const start = Array.isArray(wall?.start) ? (wall.start as number[]) : null
+  const end = Array.isArray(wall?.end) ? (wall.end as number[]) : null
+  if (!start || !end) return null
+  const dx = num(end[0]) - num(start[0])
+  const dz = num(end[1]) - num(start[1])
+  const length = Math.hypot(dx, dz)
+  if (length < 1e-6) return null
+  const ax = dx / length
+  const az = dz / length
+  const cx = num(start[0]) + ax * opening.along
+  const cz = num(start[1]) + az * opening.along
+  const reach = num(wall?.thickness, 0.15) / 2 + 0.12
+  const probes: [number, number][] = [
+    [cx - az * reach, cz + ax * reach],
+    [cx + az * reach, cz - ax * reach],
+  ]
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'zone' || node.parentId !== wall?.parentId) continue
+    const ring = Array.isArray(node.polygon) ? (node.polygon as number[][]) : []
+    if (ring.length < 3 || typeof node.name !== 'string') continue
+    if (probes.some((p) => pointInRing(p, ring))) return node.name
+  }
+  return null
+}
+
+function pointInRing(p: [number, number], ring: readonly number[][]): boolean {
+  let inside = false
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const xi = num(ring[i]?.[0])
+    const zi = num(ring[i]?.[1])
+    const xj = num(ring[j]?.[0])
+    const zj = num(ring[j]?.[1])
+    const crosses = zi > p[1] !== zj > p[1] && p[0] < ((xj - xi) * (p[1] - zi)) / (zj - zi || 1e-12) + xi
+    if (crosses) inside = !inside
+  }
+  return inside
+}
+
 /** Zones (rooms) whose boundary includes `wallId`. */
 function roomsOnWall(nodes: ScheduleNodes, wallId: string): string[] {
   const names: string[] = []
@@ -165,7 +213,8 @@ export function enrichOpeningSchedule(
   const groups = new Map<string, { row: ScheduleRow; marks: string[]; egress: Set<string>; tempered: Set<string> }>()
   for (const row of table.rows) {
     const opening = byMark.get(row.mark ?? '')
-    const rooms = opening?.wallId ? roomsOnWall(nodes, opening.wallId) : []
+    const room = opening ? roomAtOpening(nodes, opening) : null
+    const rooms = room ? [room] : opening?.wallId ? roomsOnWall(nodes, opening.wallId) : []
     const egress = opening ? egressNote(opening, rooms) : ''
     const tempered = opening
       ? (temperedReason(opening, opening.wallId ? (doorsByWall.get(opening.wallId) ?? []) : []) ?? '')
@@ -201,7 +250,12 @@ export function enrichOpeningSchedule(
     columns.splice(at >= 0 ? at + 1 : columns.length, 0, column)
   }
   insertAfter('mark', { key: 'qty', label: 'QTY', weight: 0.5 })
-  if (of === 'windows') columns.push({ key: 'egress', label: 'EGRESS', weight: 1.6 })
+  // A collapsed row lists every mark it stands for; the column grows with the
+  // longest list so "D102, D104, D110, D111" never runs into TYPE.
+  const markColumn = columns.find((c) => c.key === 'mark')
+  const longestMark = rows.reduce((n, row) => Math.max(n, (row.mark ?? '').length), 0)
+  if (markColumn) markColumn.weight = Math.max(markColumn.weight, longestMark * 0.085)
+  if (of === 'windows') columns.push({ key: 'egress', label: 'EGRESS', weight: 2.4 })
   columns.push({ key: 'tempered', label: 'TEMPERED', weight: 1.1 })
   columns.push({ key: 'status', label: 'STATUS', weight: 0.7 })
 

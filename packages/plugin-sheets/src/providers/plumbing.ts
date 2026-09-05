@@ -43,7 +43,7 @@ import { basePlan } from './mep/base-plan'
 import { type PlacedItem, placedPlumbingItems, serviceLetters } from './mep/items'
 import { columnsOf, type PlateLayout, plateLayout } from './mep/layout'
 import { fixturesOf, mepModel } from './mep/model'
-import { MEP_BASIS, PLUMBING_KEY, plumbingNotes, RULES_DISCLAIMER } from './mep/notes'
+import { mepBasisLine, PLUMBING_KEY, plumbingNotes, RULES_DISCLAIMER } from './mep/notes'
 import {
   type Box,
   capWarnings,
@@ -263,7 +263,7 @@ export function buildPlumbingDrawing(nodes: NodeMap, args: ProviderArgs): Drawin
     return {
       primitives: [],
       bounds: EMPTY_BOUNDS,
-      plate: notesOnly(box, placedPlumbingItems(nodes, levelId).items),
+      plate: notesOnly(box, mepModel(nodes, levelId)?.jurisdiction ?? 'AUTO'),
       noLabel: true,
       title: 'Plumbing notes',
     }
@@ -303,7 +303,7 @@ export function buildPlumbingDrawing(nodes: NodeMap, args: ProviderArgs): Drawin
           },
           PLUMBING_EMPTY_NOTE,
         ),
-        ...notesOnly(notesBox, items),
+        ...notesOnly(notesBox, model?.jurisdiction ?? 'AUTO'),
       ],
       warnings: capWarnings(warnings),
       noLabel: true,
@@ -433,6 +433,7 @@ export function buildPlumbingDrawing(nodes: NodeMap, args: ProviderArgs): Drawin
     pipeKeys: [...pipeKeys.values()],
     bonesLegend: [...bonesLegend.values()],
     withNotes: args.system !== 'plan',
+    jurisdiction: model?.jurisdiction ?? 'AUTO',
   })
 
   if (!plumbing.some((f) => f.kind === 'water-heater')) {
@@ -479,8 +480,9 @@ function plumbingPlates(input: {
   pipeKeys: readonly PipeStyle[]
   bonesLegend: readonly { key: string; label: string; build: (s: sym.SymbolStyle) => FloorplanGeometry[] }[]
   withNotes: boolean
+  jurisdiction: string
 }): FloorplanGeometry[] {
-  const { layout, items, pipeKeys, bonesLegend, withNotes } = input
+  const { layout, items, pipeKeys, bonesLegend, withNotes, jurisdiction } = input
   const out: FloorplanGeometry[] = []
   const notes = plumbingNotes()
 
@@ -530,7 +532,7 @@ function plumbingPlates(input: {
     if (!withNotes) return out
     const y = col.y + used + 0.18
     block(out, { ...col, y, h: Math.max(0.8, col.y + col.h - y) }, 'Plumbing notes', (inner) =>
-      drawNotes(out, inner, notes, 0.1),
+      drawNotes(out, inner, notes, jurisdiction, 0.1),
     )
     return out
   }
@@ -554,7 +556,7 @@ function plumbingPlates(input: {
     if (slice.length === 0) return
     block(out, inner, index === 0 ? 'Plumbing notes' : 'Plumbing notes (cont.)', (b) =>
       index === rest.length - 1
-        ? drawNotes(out, b, slice, 0.092, index * perColumn)
+        ? drawNotes(out, b, slice, jurisdiction, 0.092, index * perColumn)
         : notesColumn(out, b, slice, 0.092, index * perColumn).height,
     )
   })
@@ -577,16 +579,16 @@ function usedKeyRows(items: readonly PlacedItem[]): { letter: string; label: str
   return rows.length > 0 ? rows : PLUMBING_KEY
 }
 
-function notesOnly(box: Box, items: readonly PlacedItem[]): FloorplanGeometry[] {
+/**
+ * The notes viewport: the cited notes alone. The plumbing key and piping key
+ * are the plan viewport's plates, printed once beside the plan; a second key
+ * here was the same box twice on P1.0.
+ */
+function notesOnly(box: Box, jurisdiction: string): FloorplanGeometry[] {
   const out: FloorplanGeometry[] = []
   const notes = plumbingNotes()
-  const rows = usedKeyRows(items)
   const inner: Box = { x: box.x + PAD, y: box.y + PAD, w: box.w - PAD * 2, h: box.h - PAD * 2 }
-  const keyH = Math.min(inner.h * 0.34, 0.34 + rows.length * 0.3)
-  block(out, { ...inner, h: keyH }, 'Plumbing key', (b) => keyBlock(out, b, rows).height)
-
-  const notesTop = inner.y + keyH + 0.2
-  const notesBox: Box = { ...inner, y: notesTop, h: Math.max(0.8, inner.y + inner.h - notesTop) }
+  const notesBox: Box = { ...inner, h: Math.max(0.8, inner.h) }
   const columns = columnsOf(notesBox, notesColumnCount(notesBox.w))
   const count = columns.length
   const perColumn = Math.ceil(notes.length / count)
@@ -595,7 +597,7 @@ function notesOnly(box: Box, items: readonly PlacedItem[]): FloorplanGeometry[] 
     if (slice.length === 0) return
     block(out, column, index === 0 ? 'Plumbing notes' : 'Plumbing notes (cont.)', (b) =>
       index === columns.length - 1
-        ? drawNotes(out, b, slice, 0.1, index * perColumn)
+        ? drawNotes(out, b, slice, jurisdiction, 0.1, index * perColumn)
         : notesColumn(out, b, slice, 0.1, index * perColumn).height,
     )
   })
@@ -606,6 +608,7 @@ function drawNotes(
   out: FloorplanGeometry[],
   box: Box,
   notes: readonly string[],
+  jurisdiction: string,
   fontSize: number,
   startIndex = 0,
 ): number {
@@ -621,7 +624,7 @@ function drawNotes(
   used += caption(
     out,
     { ...box, y: box.y + used + 0.06, h: 0.7 },
-    `Basis: ${MEP_BASIS.split('.')[0]}. ${RULES_DISCLAIMER}`,
+    `Basis: ${mepBasisLine(jurisdiction)} ${RULES_DISCLAIMER}`,
   )
   return used
 }

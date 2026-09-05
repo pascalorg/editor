@@ -228,14 +228,37 @@ function configFor(nodes: NodeMap, levelId: string): FramingNode {
     if (node.showElectrical !== false && node.showPlumbing !== false) return node
     return { ...node, showElectrical: true, showPlumbing: true }
   }
+  // No X-ray node: the jurisdiction comes from the site address, exactly as
+  // the structural sheets resolve it, so E1.0 and S1.0 cite the same state.
   return FramingNode.parse({
     id: `bonesframing_sheets_${levelId}`,
     type: 'bones:framing',
     parentId: levelId,
     showElectrical: true,
     showPlumbing: true,
+    jurisdiction: siteState(nodes) ?? 'AUTO',
   })
 }
+
+/** The two-letter state on the site record, when there is one. */
+function siteState(nodes: NodeMap): string | null {
+  const site = Object.values(nodes).find((n) => n?.type === 'site')
+  const address = site?.address as { state?: unknown } | undefined
+  const parcel = site?.parcel as { state?: unknown } | undefined
+  const raw = (address?.state ?? parcel?.state) as unknown
+  if (typeof raw !== 'string') return null
+  const code = raw.trim().toUpperCase()
+  return /^[A-Z]{2}$/.test(code) ? code : null
+}
+
+/**
+ * `computeLevel` runs every Bones system, so its warning list carries the
+ * framing, bracing and foundation engines' lines too. Those print on the
+ * S-sheets, which are drawn from the same run; on E1.0 / P1.0 they are noise
+ * about another discipline.
+ */
+const STRUCTURAL_WARNING =
+  /R602\.10|braced wall|hold-down|slab-on-grade|\bfooting|\bfoundation\b|\brafter|\bjoist|sheathing|Framing derived/i
 
 type CacheEntry = Map<string, MepModel>
 const cache = new WeakMap<object, CacheEntry>()
@@ -316,7 +339,7 @@ export function mepModel(nodes: NodeMap, levelId: string | undefined): MepModel 
       fixtures: result.fixtures,
       members: result.members,
       walls: result.walls,
-      warnings: [...result.warnings],
+      warnings: result.warnings.filter((w) => !STRUCTURAL_WARNING.test(w)),
       jurisdiction: result.jurisdiction,
       serviceSync,
     }

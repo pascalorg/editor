@@ -113,7 +113,7 @@ export function mepPlans(ctx: PlanSetContext): Plan[] {
         kind: 'plumbing',
         system: 'notes',
         levelId: levels[0]?.id,
-        title: 'Plumbing notes & key',
+        title: 'Plumbing notes',
         layers: { ...TRADE_LAYERS },
         x: frame.x + planW + gap,
         y: fieldY,
