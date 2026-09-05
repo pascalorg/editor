@@ -35,6 +35,7 @@
         "@pascal-app/mcp": "*",
         "@pascal-app/nodes": "*",
         "@pascal-app/plugin-bones": "workspace:*",
+        "@pascal-app/plugin-generate": "workspace:*",
         "@pascal-app/plugin-plans": "*",
         "@pascal-app/plugin-sections": "*",
         "@pascal-app/plugin-sheets": "*",
@@ -356,6 +357,24 @@
         "react": "^18 || ^19",
         "three": "^0.185",
         "zod": "^4",
+        "zustand": "^5",
+      },
+    },
+    "packages/plugin-generate": {
+      "name": "@pascal-app/plugin-generate",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@pascal/typescript-config": "*",
+        "@types/react": "^19",
+        "@types/react-dom": "^19",
+        "typescript": "^5",
+      },
+      "peerDependencies": {
+        "@pascal-app/core": ">=0.9.1 <2",
+        "@pascal-app/editor": ">=0.9.1 <2",
+        "lucide-react": "*",
+        "react": "^18 || ^19",
+        "react-dom": "^18 || ^19",
         "zustand": "^5",
       },
     },
@@ -896,6 +915,8 @@
     "@pascal-app/nodes": ["@pascal-app/nodes@workspace:packages/nodes"],
 
     "@pascal-app/plugin-bones": ["@pascal-app/plugin-bones@workspace:packages/plugin-bones"],
+
+    "@pascal-app/plugin-generate": ["@pascal-app/plugin-generate@workspace:packages/plugin-generate"],
 
     "@pascal-app/plugin-plans": ["@pascal-app/plugin-plans@workspace:packages/plugin-plans"],
 
@@ -2214,6 +2235,8 @@
     "@oxc-parser/binding-wasm32-wasi/@emnapi/runtime": ["@emnapi/runtime@1.10.0", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA=="],
 
     "@oxc-resolver/binding-wasm32-wasi/@emnapi/runtime": ["@emnapi/runtime@1.10.0", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-ewvYlk86xUoGI0zQRNq/mC+16R1QeDlKQy21Ki3oSYXNgLb45GV1P6A0M+/s6nyCuNDqe5VpaY84BzXGwVbwFA=="],
+
+    "@pascal-app/plugin-generate/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@pascal-app/plugin-plans/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 

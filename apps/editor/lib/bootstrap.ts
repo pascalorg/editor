@@ -10,6 +10,7 @@ import {
 import { registerEditorHostPanel, registerSitePlanContributor } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
+import { generateHostPanel, generatePlugin, registerGenerateCommands } from '@pascal-app/plugin-generate'
 import {
   registerBuiltinSheetProviders,
   registerSheetDrawingProvider,
@@ -106,6 +107,10 @@ extendPluginDiscovery(async () => [bonesPlugin])
 // Opt-in: Bones ships uninstalled — users enable it per scene from the
 // Plugins panel (engineering X-ray is a specialist view, not a default).
 registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: false })
+// Generate: complete houses from a seed or a template (Ctrl+K → Generate house).
+extendPluginDiscovery(async () => [generatePlugin])
+registerEditorHostPanel(generateHostPanel)
+registerGenerateCommands()
 // Plans (PlanCrafters remote engine) is parked — see docs/construction-documents.md.
 // Sheets: paper space, drawn by Pascal's own renderer (Ctrl+K → Open sheets).
 extendPluginDiscovery(async () => [sheetsPlugin])

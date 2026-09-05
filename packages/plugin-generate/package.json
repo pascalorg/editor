@@ -1,0 +1,37 @@
+{
+  "name": "@pascal-app/plugin-generate",
+  "version": "0.1.0",
+  "description": "Generate — complete houses from a seed or an authored plan document, the way PlanCrafters' Generate / Random buttons do: declare intent (rooms, adjacency, roof, style), derive the engineering (walls, openings, zones, slab, roof) as Pascal nodes.",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "peerDependencies": {
+    "@pascal-app/core": ">=0.9.1 <2",
+    "@pascal-app/editor": ">=0.9.1 <2",
+    "lucide-react": "*",
+    "react": "^18 || ^19",
+    "react-dom": "^18 || ^19",
+    "zustand": "^5"
+  },
+  "devDependencies": {
+    "@pascal/typescript-config": "*",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5"
+  }
+}
