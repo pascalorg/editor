@@ -1,10 +1,12 @@
-# Mirrored package
+# Bones lives here now
 
-This directory is a working-tree mirror of the local Bones clone at
-`C:\Dev\Plan Crafters Integration\plugin-bones` (git source of truth, local
-commits only, never pushed). Turbopack cannot resolve a `file:` dependency that
-lives outside this monorepo, so the tree is copied in as a workspace package.
+`packages/plugin-bones` is the source of truth for Bones in this workspace as of
+2026-09-04. It began as a working-tree mirror of the local clone at
+`C:\Dev\Plan Crafters Integration\plugin-bones` (last synced at that clone's
+commit c280b3f — the two trees were byte-identical when the mirror was retired),
+because Turbopack cannot resolve a `file:` dependency outside the monorepo.
 
-Sync after committing in the clone:
-
-    robocopy "C:\Dev\Plan Crafters Integration\plugin-bones" packages\plugin-bones /MIR /XD node_modules .git dist .turbo /XF bun.lockb
+The clone is kept only as history; nothing syncs from it any more. Edit Bones
+here, commit here (local commits only — this workspace never pushes to any
+pascalorg remote), and treat `git log -- packages/plugin-bones` as its history
+from this point on.
