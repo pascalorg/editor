@@ -49,15 +49,27 @@ export function placementFromScene(): { placement: Placement | null; frontageFt:
   }
 }
 
-/** Remove everything a previous run generated (the building carries the tag; its subtree goes with it). */
+/**
+ * Remove everything a previous run generated (the building carries the tag;
+ * its subtree goes with it) and any building that is still an empty shell —
+ * a new scene opens with a "Level 0" nobody has drawn in, and left standing
+ * it would put a blank floor plan in the sheet set beside the generated one.
+ * A building with a single wall in it is somebody's work and stays.
+ */
 export function removeGenerated(): number {
   const s = useScene.getState()
-  const doomed = Object.values(s.nodes)
-    .filter((n) => {
-      const node = n as { type?: string; metadata?: { generatedBy?: string } }
-      return node.type === 'building' && node.metadata?.generatedBy === GENERATED_BY
+  const nodes = s.nodes as Record<string, { id: string; type?: string; parentId?: string | null; metadata?: { generatedBy?: string }; children?: string[] }>
+  const hasWork = (buildingId: string): boolean =>
+    Object.values(nodes).some((n) => {
+      if (n.type !== 'level' || n.parentId !== buildingId) return false
+      return (n.children ?? []).some((c) => {
+        const child = nodes[c]
+        return child !== undefined && child.type !== 'slab' && child.type !== 'ceiling'
+      })
     })
-    .map((n) => (n as { id: string }).id)
+  const doomed = Object.values(nodes)
+    .filter((n) => n.type === 'building' && (n.metadata?.generatedBy === GENERATED_BY || !hasWork(n.id)))
+    .map((n) => n.id)
   if (doomed.length > 0) s.deleteNodes(doomed as never)
   return doomed.length
 }
