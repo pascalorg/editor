@@ -245,9 +245,34 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     }
     return null
   }
-  const doorNode = (wall: WallRun, at: number, widthIn: number, kind: 'door' | 'open' | 'exterior' | 'garage', name: string) => {
+  /**
+   * Which side of `wall` a plan point lies on: +1 on the wall's +normal
+   * ("front") side, -1 behind it. The door kinds draw their leaf / track
+   * from `swingDirection`, and 'inward' means the +normal side, so the
+   * swing is chosen per wall from where the room being entered actually is.
+   */
+  const sideOf = (wall: WallRun, u: number, v: number): 1 | -1 => {
+    const p = toLocal([u, v])
+    const dx = wall.end[0] - wall.start[0]
+    const dz = wall.end[1] - wall.start[1]
+    const nx = -dz
+    const nz = dx
+    return (p[0] - wall.start[0]) * nx + (p[1] - wall.start[1]) * nz >= 0 ? 1 : -1
+  }
+  const doorNode = (
+    wall: WallRun,
+    at: number,
+    widthIn: number,
+    kind: 'door' | 'open' | 'exterior' | 'garage',
+    name: string,
+    /** +1: the door swings (or the overhead track runs) to the wall's +normal side. */
+    swingSide: 1 | -1,
+  ) => {
     const isGarage = kind === 'garage'
     const heightIn = isGarage ? GARAGE_DOOR_H : DOOR_H
+    // A hinged leaf swings to the +normal side on 'inward'; the garage
+    // builders put their mechanism on the OPPOSITE side of 'inward'.
+    const swingDirection = (isGarage ? swingSide === -1 : swingSide === 1) ? 'inward' : 'outward'
     reserve(wall.id, at, widthIn)
     doors += 1
     ops.push({
@@ -261,7 +286,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         height: round(heightIn * IN),
         doorType: isGarage ? 'garage-sectional' : 'hinged',
         openingKind: kind === 'open' ? 'opening' : 'door',
-        swingDirection: 'inward',
+        swingDirection,
         metadata: { generatedBy: GENERATED_BY, attach: kind },
       },
       parentId: wall.id,
@@ -313,7 +338,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       warnings.push(`"${edge.a}"–"${edge.b}": no clear spot for a ${width}" ${edge.kind} on their shared wall.`)
       continue
     }
-    doorNode(best.wall, at, width, edge.kind === 'open' ? 'open' : 'door', `${edge.a} + ${edge.b} ${edge.kind === 'open' ? 'opening' : 'door'}`)
+    const into = sideOf(best.wall, (B.u0 + B.u1) / 2, (B.v0 + B.v1) / 2)
+    doorNode(best.wall, at, width, edge.kind === 'open' ? 'open' : 'door', `${edge.a} + ${edge.b} ${edge.kind === 'open' ? 'opening' : 'door'}`, into)
   }
 
   // ── the front door ────────────────────────────────────────────────────
@@ -340,7 +366,9 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   else {
     const at = seat(frontChoice.wall.id, frontChoice.span, EXTERIOR_DOOR_W, 0.5)
     if (at === null) errors.push(`no room for the front door on "${frontRoom.name}".`)
-    else doorNode(frontChoice.wall, at, EXTERIOR_DOOR_W, 'exterior', 'Front door')
+    else {
+      doorNode(frontChoice.wall, at, EXTERIOR_DOOR_W, 'exterior', 'Front door', sideOf(frontChoice.wall, (frontRoom.u0 + frontRoom.u1) / 2, (frontRoom.v0 + frontRoom.v1) / 2))
+    }
   }
 
   // ── garage doors ──────────────────────────────────────────────────────
@@ -355,7 +383,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const width = bay.span[1] - bay.span[0] >= GARAGE_DOOR_W + 24 ? GARAGE_DOOR_W : 9 * 12
     const at = seat(bay.wall.id, bay.span, width)
     if (at === null) warnings.push(`no room for an overhead door on "${room.name}".`)
-    else doorNode(bay.wall, at, width, 'garage', `${room.name} overhead door`)
+    else doorNode(bay.wall, at, width, 'garage', `${room.name} overhead door`, sideOf(bay.wall, (room.u0 + room.u1) / 2, (room.v0 + room.v1) / 2))
   }
 
   // ── windows: bedrooms first (egress), then by kind ────────────────────
@@ -482,7 +510,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   }
 
   // ── roof ──────────────────────────────────────────────────────────────
-  const roofOps = roofFor(doc, style, W, D, exteriorT, ceilingM, levelId, warnings)
+  const roofOps = roofFor(doc, style, rooms, toLocal, exteriorT, ceilingM, levelId, warnings)
 
   // ── building on the parcel ────────────────────────────────────────────
   let position: [number, number, number] = [0, 0, 0]
@@ -555,11 +583,18 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   }
 }
 
+/**
+ * One roof segment over the house's own rectangle and one over each garage
+ * wing, so an L-shaped footprint does not get a single box roof hanging over
+ * the notch. Wings ride under a ridge that runs front-to-back (the gable
+ * faces the street, the way an attached garage is roofed) and Pascal's roof
+ * system merges the segments where they meet.
+ */
 function roofFor(
   doc: NormalizedDocument,
   style: StylePreset,
-  W: number,
-  D: number,
+  rooms: readonly NormalizedRoom[],
+  toLocal: (p: Pt) => Pt,
   exteriorT: number,
   ceilingM: number,
   levelId: string,
@@ -569,17 +604,11 @@ function roofFor(
   const pitchTwelfths = doc.roof.pitch ?? style.pitch
   const overhangIn = doc.roof.overhang ?? style.overhangIn
   const roofId = generateId('roof')
-  const segId = generateId('rseg')
   const gables = doc.roof.gables
-  // Ridge direction: gable ends on front/back put the ridge along the depth;
-  // otherwise along the width (the long way for a hip).
-  const ridgeAlongDepth =
-    gables.includes('front') || gables.includes('back') || (form !== 'gable' && D > W && !gables.length)
-  const widthM = round((ridgeAlongDepth ? D : W) * IN + exteriorT)
-  const depthM = round((ridgeAlongDepth ? W : D) * IN + exteriorT)
   const roofType = form === 'flat' ? 'flat' : form === 'shed' ? 'shed' : form === 'hip' ? 'hip' : 'gable'
   if (form === 'flat') warnings.push('flat roof: drawn as a flat roof segment; the roof plan shows no pitch arrows.')
-  return [
+  const pitchDeg = round((Math.atan(pitchTwelfths / 12) * 180) / Math.PI, 3)
+  const ops: NodeOp[] = [
     {
       node: {
         id: roofId,
@@ -592,25 +621,47 @@ function roofFor(
       },
       parentId: levelId,
     },
-    {
+  ]
+  const segment = (name: string, rect: { u0: number; v0: number; u1: number; v1: number }, ridgeAlongDepth: boolean) => {
+    const w = rect.u1 - rect.u0
+    const d = rect.v1 - rect.v0
+    const centre = toLocal([(rect.u0 + rect.u1) / 2, (rect.v0 + rect.v1) / 2])
+    ops.push({
       node: {
-        id: segId,
+        id: generateId('rseg'),
         type: 'roof-segment',
-        name: 'Main roof',
+        name,
         parentId: roofId,
-        position: [0, 0, 0],
+        position: [centre[0], 0, centre[1]],
         rotation: ridgeAlongDepth ? -Math.PI / 2 : 0,
         roofType,
-        width: widthM,
-        depth: depthM,
+        width: round((ridgeAlongDepth ? d : w) * IN + exteriorT),
+        depth: round((ridgeAlongDepth ? w : d) * IN + exteriorT),
         wallHeight: 0.5,
-        pitch: round((Math.atan(pitchTwelfths / 12) * 180) / Math.PI, 3),
+        pitch: pitchDeg,
         overhang: round(overhangIn * IN),
         metadata: { generatedBy: GENERATED_BY },
       },
       parentId: roofId,
-    },
-  ]
+    })
+  }
+  const house = rooms.filter((r) => r.kind !== 'garage')
+  const wings = rooms.filter((r) => r.kind === 'garage')
+  const main = {
+    u0: Math.min(...house.map((r) => r.u0)),
+    v0: Math.min(...house.map((r) => r.v0)),
+    u1: Math.max(...house.map((r) => r.u1)),
+    v1: Math.max(...house.map((r) => r.v1)),
+  }
+  const W = main.u1 - main.u0
+  const D = main.v1 - main.v0
+  // Ridge direction: gable ends on front/back put the ridge along the depth;
+  // otherwise along the width (the long way for a hip).
+  const ridgeAlongDepth =
+    gables.includes('front') || gables.includes('back') || (form !== 'gable' && D > W && !gables.length)
+  segment('Main roof', main, ridgeAlongDepth)
+  for (const wing of wings) segment(`${wing.name} roof`, wing, true)
+  return ops
 }
 
 /** "HALL / HALL 2" reads as "HALL": a numbered twin of a member is the same room continued. */
