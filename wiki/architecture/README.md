@@ -26,6 +26,7 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 | [inspector-field-limits](inspector-field-limits.md) | When a numeric inspector field may and may not have `min`/`max` — no arbitrary caps on dimensions |
 | [vertical-model](vertical-model.md) | Stored level heights, plane-bound wall/ceiling tops, slab placement + thickness, support hosts, clamp rules, and the load migration |
 | [events](events.md) | Typed event bus — emitting and listening to node and grid events |
+| [plan-footprint](plan-footprint.md) | Shared pure XZ footprint AABB / corners / gap overlap (spatial-grid + MCP) |
 | [creating-rules](creating-rules.md) | How to add or update a page in this folder |
 
 ## Reading order for an architecture review
