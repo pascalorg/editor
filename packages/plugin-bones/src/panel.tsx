@@ -17,7 +17,7 @@ import { effectiveViewMode, type FramingNode, type ViewMode } from './framing/sc
 import { buildPlanSet, planSetHtml, relativeLevelBaseY } from './plans/plan-set'
 import { characteristicsCsv, characteristicsRows } from './engines/characteristics'
 import { computeTakeoff, cutList, cutListCsv, takeoffCsv } from './engines/takeoff'
-import { guessJurisdiction } from './jurisdiction/guess'
+import { guessJurisdiction, siteStateOf } from './jurisdiction/guess'
 import { jurisdictionOptions, profileFor } from './jurisdiction/profiles'
 import { LUMBER_CROSS_SECTIONS, LUMBER_SIZES, type LumberSize } from './lumber'
 import {
@@ -123,7 +123,8 @@ function XraySection({
   // Client-only guess: the timezone differs between SSR and browser, which
   // would desync hydration — render a stable label first, fill in on mount.
   const [guess, setGuess] = useState<{ code: string; reason: string } | null>(null)
-  useEffect(() => setGuess(guessJurisdiction()), [])
+  const siteState = useScene((s) => siteStateOf(s.nodes as Record<string, unknown>))
+  useEffect(() => setGuess(guessJurisdiction(undefined, siteState)), [siteState])
   const options = useMemo(() => jurisdictionOptions(), [])
   // Day-9 declutter: warnings fold into a collapsed drawer, repeated-class
   // lines grouped — PANEL presentation only; result.warnings stays verbatim

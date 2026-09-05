@@ -65,7 +65,7 @@ import {
 } from '../engines/wall-framing'
 import { LUMBER_CROSS_SECTIONS } from '../lumber'
 import { applyJurisdiction, nonIrcCodeWarning, profileFor } from '../jurisdiction/profiles'
-import { resolveJurisdiction } from '../jurisdiction/guess'
+import { resolveJurisdiction, siteStateOf } from '../jurisdiction/guess'
 import type { TakeoffAreas } from '../engines/takeoff'
 import {
   framedAssembly,
@@ -467,7 +467,7 @@ function computeLevelUncached(
     }
   }
 
-  const { code } = resolveJurisdiction(config.jurisdiction)
+  const { code } = resolveJurisdiction(config.jurisdiction, siteStateOf(nodes))
   const profile = profileFor(code)
   let spec: FramingSpec = {
     ...DEFAULT_SPEC,

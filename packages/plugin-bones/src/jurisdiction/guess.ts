@@ -93,11 +93,32 @@ export type JurisdictionGuess = {
   reason: string
 }
 
+/**
+ * The two-letter US state on the scene's site node (address first, then the
+ * parcel record), or null. The site is the strongest signal there is for
+ * where a building will be permitted; the browser's timezone only says where
+ * the DESIGNER sits.
+ */
+export function siteStateOf(nodes: Record<string, unknown>): string | null {
+  for (const node of Object.values(nodes)) {
+    const n = node as { type?: unknown; address?: { state?: unknown }; parcel?: { state?: unknown } }
+    if (n?.type !== 'site') continue
+    const raw = n.address?.state ?? n.parcel?.state
+    if (typeof raw !== 'string') continue
+    const code = raw.trim().toUpperCase()
+    if (/^[A-Z]{2}$/.test(code)) return code
+  }
+  return null
+}
+
 export function guessJurisdiction(
   /** Test seam: inject the browser signals instead of reading them (gates
    * the zone→code table + locale fallbacks without faking `Intl`). */
   signals?: { tz?: string; lang?: string },
+  /** The site's state when the scene has one — beats every browser signal. */
+  siteState?: string | null,
 ): JurisdictionGuess {
+  if (siteState) return { code: siteState, reason: `site address state (${siteState})` }
   try {
     const tz = signals?.tz ?? Intl.DateTimeFormat().resolvedOptions().timeZone ?? ''
     const byTz = TZ_STATE[tz]
@@ -117,8 +138,11 @@ export function guessJurisdiction(
   return { code: 'INTL', reason: 'no locale signal' }
 }
 
-/** Resolve the config value: 'AUTO' → the browser guess, else pass-through. */
-export function resolveJurisdiction(configured: string): { code: string; auto: boolean } {
+/** Resolve the config value: 'AUTO' → the site's state, else the browser guess; anything else passes through. */
+export function resolveJurisdiction(
+  configured: string,
+  siteState?: string | null,
+): { code: string; auto: boolean } {
   if (configured !== 'AUTO') return { code: configured, auto: false }
-  return { code: guessJurisdiction().code, auto: true }
+  return { code: guessJurisdiction(undefined, siteState).code, auto: true }
 }
