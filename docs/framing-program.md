@@ -261,9 +261,7 @@ W15 Ceiling joists as a framer laps them — DONE 2026-09-06 (see log; the open 
     spacing off the members.
 
 W16 Roof intersections and the hip — DONE 2026-09-06 in six parts (see log W16a–f;
-    open: the intersection LINE of a hip wing through a hip end plane or a porch graze
-    has no valley board — the wood under the other roof is cut, the line needs its
-    detail): valleys for a wing on a lower plate and for hip wings / hip mains; mid-run
+    the intersection LINE itself landed as W19): valleys for a wing on a lower plate and for hip wings / hip mains; mid-run
     purlins + struts on all four hip planes; a parallel wing running under the main
     buried, its straddlers cut, the main's rake trim cut where the wing's plane carries
     on; stub joists in the hip end strips; the valley join trimmed with the knife (the
@@ -281,6 +279,21 @@ W18 Shed rafters on interior bearing walls — DONE 2026-09-06 (see log): the mo
     house's rafters bear on the partitions running with the eaves (span checked between
     supports), those partitions framed up to the underside as bearing walls; the shed's
     pediment studs inscribed under the plane; the shed plane known to the burial test.
+
+W19 Roof joins framed as overframes — DONE 2026-09-06 (see log W19a / W19b; open: a
+    hip porch too low to pierce its house slope ends its jacks over the eave with no
+    sleeper on the plate, the ranch's rear entrance sits at the inside corner between
+    the main and the wing): every pair of crossing roofs the model reads — a wing on
+    the long plane, a wing through a hip end plane, a porch hip at the eave, a
+    user-drawn crossing — is framed the California way from the roofs' facets: the
+    larger roof runs through, the smaller roof's members are cut by their own bottoms
+    against the larger roof's deck-and-sleeper stack, its rafters end as valley jacks
+    on 2x sleepers laid flat on that deck along the level set, the larger roof's eave
+    tails, deck and trim are cut where the smaller roof rides clear over them; a crease
+    without fall is a DEAD VALLEY and a gable that stops short of the slope is named;
+    the auto roof carries a hip wing two runs in and the porch cover is pitched and
+    reached to pierce the house slope 0.9 m inside the wall (a shed cover's ledger held
+    under the eave); the valley pair passes the volume gate at last.
 
 ## Log
 
@@ -1111,3 +1124,83 @@ W18 Shed rafters on interior bearing walls — DONE 2026-09-06 (see log): the mo
   gable untouched) — Bones 2,105, plugin-sheets 235, typecheck clean.
   Honest gap: the wing's rafters that cross the main's plane end at the
   cut with no valley board or sleeper — the line needs its detail.
+
+- 2026-09-06 midday: **W19a — the line has its detail: every crossing pair
+  framed as an overframe (California) valley.** The W16 family cut the fake
+  wood but left the intersection line unframed, and the valley member sat
+  inside the main's deck. The join is now read off the roofs' FACETS
+  (`roofFacets`: the planes and plan polygons of a gable, hip or shed,
+  overhangs included) as level sets of the height difference
+  (`levelSets`): the crease at zero, the sleeper line where the smaller
+  roof's plane clears the larger roof's deck-and-sleeper stack
+  (`overframeStack`). One knife (`trimPairs`) replaces trimValleyJoins
+  and trimOverlaps. Inside the larger roof's plate its structure runs
+  through; the smaller roof's plane-riding members are cut by their OWN
+  bottom against the stack — a dropped end rafter, a hip board, the deck
+  and the rake outlookers each by what they are (`memberFrame`) — and its
+  plate wood by its bottom against the attic. In the larger roof's eave
+  zone the same band holds: the eave keeps its tails and deck under the
+  band and loses them where the smaller roof rides clear over (panels cut
+  in strips, `clipPanelBy` — breaking at the plate line, a strip covered
+  where ANY point across it is, so two decks cut against each other never
+  share a plan point), its fascia and drip edge wherever the smaller roof's
+  deck rises into them, the smaller roof's fascia stopping past the larger
+  roof's at the inside corner; a smaller roof tucked clear under the tails
+  is left alone. A rafter cut at the band is a VALLEY JACK and says so.
+  `emitSleepers` lays a 2x8 flat on the larger roof's underlayment along
+  the sleeper line over the plates — the box up the facet normal
+  (`eulerFromBasis`), boards meeting at a corner mitred — never in the
+  eave corner. A roof's plane counts only where it is LIVE (`roofLiveAt`:
+  no larger roof riding above it there): the ranch's wing carried under the
+  main no longer cuts the porch that meets the main above it.
+  `detectValleys` now asks a gable wing to reach the pierce point too, and
+  a hip main serves any wing whose apex stays on the long plane. The
+  reporter says how every pair was framed (the overframe with its creases
+  and plan length; a smaller roof wholly under, or riding over; an edge
+  graze), names a gable whose ridge stops short (its rake end a wall
+  standing on the roof), and names every crease falling under ¼ in 12 a
+  DEAD VALLEY. The valley-pair volume-gate case that "stayed disabled"
+  since round 2 passes, and twelve more crossing pairs with it (a wing
+  reaching, on a lower plate, above the eave; hip wings reaching and
+  short; the pyramid exhibit; a wing on a hip main's long plane and past
+  it; parallel gables; the ranch's wing and porch, before and after W19b).
+  Tests: roof-framing (the valley describe, the jacks, the labels, B6a /
+  B6b, B8c, W16c / W16f rewritten for the sleepers; the valley pair pin
+  recaptured with its note, the eleven single-roof pins hold),
+  interpenetration +2, compute.multistorey B8c reworded — Bones 2,106,
+  plugin-sheets 235, typecheck clean. Honest gaps: a hip porch too low to
+  pierce (its ridge within the sleeper band of the eave) ends its jacks
+  over the larger roof's eave with no sleeper on the plate (W19b keeps the
+  generator clear of it); the sleeper is one flat board — no valley
+  flashing member; the box model cannot bevel the jacks (the label says
+  cut on site).
+
+- 2026-09-06 midday: **W19b — the generator makes joins Bones can frame.**
+  The auto roof carries a HIP wing two runs into its neighbour: its ridge
+  reaches the pierce point and its near hip end buries itself under the
+  neighbour's roof (one run left that hip end facing the main's end plane
+  in the 3.35 m dead valley the ranch used to have; a gable still reaches
+  one run; a shallow neighbour caps the reach). The porch cover is sized
+  against the house roof it dies into (`coverGeometry`, handed the plate
+  and pitch by build.ts): a gable / hip cover keeps the style pitch under
+  the 6:12 cap, steepens until its ridge pierces the house slope 0.9 m
+  inside the wall (the ranch's 4:12 hip porch goes to 5.4:12), then lifts
+  its beam toward the plate, and runs in to the pierce point measured from
+  the wall CENTRELINE (the box starts at the face — half a wall short and
+  detectValleys refused it), a hip one run further; a shed cover keeps its
+  ledger 2 in under the plate — the pitch flattened toward 1:12, then the
+  beam lowered to 7 ft, then a flat canopy (the farmhouse and craftsman
+  rear patio sheds, whose ledgers stood 0.9 m ABOVE the wing's plate, now
+  sit at 1:12 on a 7.7 ft beam); the summary carries the pitch, beam
+  height and pierce, and a cover that still cannot reach says so.
+  Headless: the farmhouse, ranch and craftsman porches are classic valley
+  joins again (quiet), the ranch wing one falling 5.32 m valley with no
+  dead crease; the ranch roof framing sheet shows the wing's jacks ending
+  on the two sleepers meeting at its ridge end. QA loop 72 sets, no
+  crashes; monorepo 6,441 with the three Windows-environmental cli
+  failures. Tests: derive +1, porch +4 (and the hip test's reach) —
+  plugin-roof 20, plugin-generate 74, editor typecheck clean. Open: the
+  ranch's rear entrance lands at the inside corner between the main and
+  the wing (its cover overlaps the main's body — a layout rule for doors
+  near inside corners is wanted); a porch on a hip END wall overframes
+  onto the end plane (real valleys, not the classic join).
