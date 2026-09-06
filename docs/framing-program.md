@@ -532,3 +532,34 @@ W13 Finishes: PlanCrafters' style palettes applied — siding / roofing / trim /
   the deck stair are Pascal nodes, not framed; Bones still ignores a wall's
   `supportSlabId` (garage walls frame from the plate line); the roll's
   parti puts the rear slider on a side wall more often than the back.
+
+- 2026-09-06 afternoon: **W11b — walls the host's way: level-height walls,
+  garage walls down to their pad.** Two defects found while checking the
+  raised farmhouse's framing. (1) Bones framed every generated wall 2.5 m
+  tall (its default for a wall with no explicit `height`) while Pascal
+  draws such a wall to the level's wall plane (core `resolveWallTop` /
+  `getWallPlaneTop`: the floor-to-floor line, or the underside of a
+  covering slab of the storey above) — a 9 ft house had 24 cm of air
+  between its top plates and the rafters. `extractWalls` now takes a
+  `WallDatum` from compute (plane top per wall run, support-slab base) and
+  resolves the extent the host's way; explicit heights are untouched
+  (2,034 pins held). (2) The garage walls on a raised house carry
+  `supportSlabId` = the pad at grade, but Bones framed them from the plate
+  line, 18 in above the pad. The wall slice now carries `baseY` (the pad's
+  surface in the framing datum) with the body grown down to it; compute
+  frames them slab-bearing (PT sole plate on the pad, `slabBearingIds`)
+  and moves everything framed on them — skeleton, layers, devices — down
+  by `baseY`; the foundation runs a per-wall datum (`plateW` / `raisedW`):
+  stemwall to the pad, no mudsill, bolts / washers / hold-downs seated at
+  the pad, the house walls keep the raised mudsill. The generator's
+  collinear-run merge now stops at the garage boundary (`mergeRuns` group)
+  so the garage's front wall is its own run and all three garage walls
+  drop whole (before, the merged house+garage front wall stayed on the
+  platform). Tests: `compute.wall-base.test.ts` 6 (plane top with and
+  without a covering slab, explicit heights, the pad walls' plates / studs /
+  stemwall / bolts / layers, the house unchanged), generate 51, Bones
+  2,034, both typecheck. Headless: farmhouse + craftsman rolls report
+  "3 walls on the garage pad at grade". Open: the roll's garage door wall
+  and the house/garage separation wall on a slab house with a 4 in drop
+  (same mechanism, untested live); a wall on a slab ABOVE the plate line
+  (a deck-borne wall) lifts whole but the foundation ignores it.

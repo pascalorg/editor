@@ -22,11 +22,17 @@ export type Run = {
   rooms?: number[]
 }
 
-/** Runs merge when they are the same wall: the same two rooms, or the same exterior side. */
-function mergeKey(run: Run): string {
-  if (run.left === -1) return 'out-left'
-  if (run.right === -1) return 'out-right'
-  return `${run.left}:${run.right}`
+/**
+ * Runs merge when they are the same wall: the same two rooms, or the same
+ * exterior side — within the same `group` when the caller names one (the
+ * garage's walls stand on their own pad, so its exterior runs never merge
+ * into the house's collinear ones, W11b).
+ */
+function mergeKey(run: Run, group?: (run: Run) => string): string {
+  const g = group ? `${group(run)}|` : ''
+  if (run.left === -1) return `${g}out-left`
+  if (run.right === -1) return `${g}out-right`
+  return `${g}${run.left}:${run.right}`
 }
 
 const key = (p: [number, number]) => `${p[0]},${p[1]}`
@@ -39,7 +45,12 @@ const key = (p: [number, number]) => `${p[0]},${p[1]}`
 export function edgePieces(rects: readonly Rect[], grid: number): Run[] {
   const horizontal = new Map<string, { left: number; right: number }>()
   const vertical = new Map<string, { left: number; right: number }>()
-  const touch = (map: Map<string, { left: number; right: number }>, k: string, side: 'left' | 'right', i: number) => {
+  const touch = (
+    map: Map<string, { left: number; right: number }>,
+    k: string,
+    side: 'left' | 'right',
+    i: number,
+  ) => {
     const cur = map.get(k) ?? { left: -1, right: -1 }
     cur[side] = i
     map.set(k, cur)
@@ -66,8 +77,12 @@ export function edgePieces(rects: readonly Rect[], grid: number): Run[] {
   return out
 }
 
-/** Merge collinear, touching pieces of the same wall into runs (exterior walls run the whole side). */
-export function mergeRuns(pieces: readonly Run[]): Run[] {
+/**
+ * Merge collinear, touching pieces of the same wall into runs (exterior
+ * walls run the whole side). `group` splits runs that would otherwise
+ * merge — pieces in different groups stay separate walls.
+ */
+export function mergeRuns(pieces: readonly Run[], group?: (piece: Run) => string): Run[] {
   const sorted = [...pieces].sort((p, q) => {
     if (p.horizontal !== q.horizontal) return p.horizontal ? -1 : 1
     const pk = p.horizontal ? p.a[1] : p.a[0]
@@ -84,7 +99,7 @@ export function mergeRuns(pieces: readonly Run[]): Run[] {
     if (
       last &&
       last.horizontal === piece.horizontal &&
-      mergeKey(last) === mergeKey(piece) &&
+      mergeKey(last, group) === mergeKey(piece, group) &&
       key(last.b) === key(piece.a)
     ) {
       last.b = piece.b

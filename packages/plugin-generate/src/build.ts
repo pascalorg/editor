@@ -16,6 +16,7 @@ import {
   generateId,
   getWallAssemblyPreset,
 } from '@pascal-app/core'
+import { deriveRoof, type RoofIntent, roofNodesFor, type WallInput } from '@pascal-app/plugin-roof'
 import {
   type NormalizedDocument,
   type NormalizedRoom,
@@ -25,9 +26,7 @@ import {
   type RoomKind,
   validateDocument,
 } from './document'
-import { deriveRoof, type RoofIntent, roofNodesFor, type WallInput } from '@pascal-app/plugin-roof'
 import { type FoundationChoice, foundationFor } from './foundation'
-import { type PorchPolicy, type PorchSummary, porchFor } from './porch'
 import {
   edgePieces,
   GRID_IN_DEFAULT,
@@ -36,6 +35,7 @@ import {
   pointInRing,
   type Run,
 } from './geometry'
+import { type PorchPolicy, type PorchSummary, porchFor } from './porch'
 import { type StylePreset, styleFor } from './styles'
 
 export const GENERATED_BY = 'pascal:generate'
@@ -202,10 +202,20 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       .filter((e) => e.kind === 'zone')
       .map((e) => pairKey(indexOf(rooms, e.a), indexOf(rooms, e.b))),
   )
+  // The garage stands on its own pad (below): its exterior runs never merge
+  // into the house's collinear ones, so each garage wall can drop to the pad
+  // whole (W11b — a merged front wall left the garage half floating).
+  const garageRoomIndex = new Set(
+    rooms.map((r, i) => (r.kind === 'garage' ? i : -1)).filter((i) => i >= 0),
+  )
   const runs = mergeRuns(
     edgePieces(rooms, grid).filter(
       (p) => !(p.left !== -1 && p.right !== -1 && zonePairs.has(pairKey(p.left, p.right))),
     ),
+    (p) => {
+      const inside = [p.left, p.right].filter((i) => i !== -1)
+      return inside.length > 0 && inside.every((i) => garageRoomIndex.has(i)) ? 'garage' : 'house'
+    },
   )
   const exteriorPreset = getWallAssemblyPreset(style.exteriorAssembly)
   const interiorPreset = getWallAssemblyPreset('interior-2x4-drywall')

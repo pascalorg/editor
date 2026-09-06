@@ -18,10 +18,10 @@
  * alone still frames a standalone wall correctly (hints default to none).
  */
 
-import { LUMBER_CROSS_SECTIONS, type LumberSize } from '../lumber'
 import { DEFAULT_SPEC, type FramingSpec, headerFor } from '../core/spec'
 import type { Member, OpeningSlice, WallSlice } from '../core/types'
 import { feet, formatFtIn, formatIn, inches } from '../core/units'
+import { LUMBER_CROSS_SECTIONS, type LumberSize } from '../lumber'
 import {
   BRACED_PANEL_MIN_LENGTH,
   PORTAL_OPENING_MIN_SPAN,
@@ -325,9 +325,7 @@ export function frameWall(
     runMid,
     t / 2,
     runLen,
-    hints.slabBearing
-      ? `PT sole plate on slab (R317.1)${spliceNote}`
-      : `Bottom plate${spliceNote}`,
+    hints.slabBearing ? `PT sole plate on slab (R317.1)${spliceNote}` : `Bottom plate${spliceNote}`,
     undefined,
     hints.slabBearing ? 'pt-lumber' : undefined,
   )
@@ -815,8 +813,7 @@ export function frameWall(
     const cTop = Math.min(H, studTop + UPLIFT_CONNECTOR_HEIGHT / 2)
     const clearOf = (p: number): boolean =>
       surfaceSpots.every(
-        (s) =>
-          Math.abs(s.u - p) >= UPLIFT_STRAP_WIDTH - EPS || s.y1 <= cBottom || s.y0 >= cTop,
+        (s) => Math.abs(s.u - p) >= UPLIFT_STRAP_WIDTH - EPS || s.y1 <= cBottom || s.y0 >= cTop,
       ) &&
       p >= u0 + UPLIFT_STRAP_WIDTH / 2 - EPS &&
       p <= u1 - UPLIFT_STRAP_WIDTH / 2 + EPS
@@ -885,15 +882,7 @@ export function frameWall(
     const bu = (left + right) / 2
     for (const y of tee.heights) {
       if (y > studTop - t) continue
-      emit(
-        'backing',
-        studSize,
-        [blockLen, t, wFit],
-        bu,
-        y,
-        blockLen,
-        'Partition backing (ladder)',
-      )
+      emit('backing', studSize, [blockLen, t, wFit], bu, y, blockLen, 'Partition backing (ladder)')
     }
   }
 
@@ -1038,13 +1027,9 @@ export function detectTees(walls: WallSlice[]): Tee[] {
         )
         if (cross < 0.3) continue
         const [ax, az] = through.start
-        const proj =
-          (p[0] - ax) * through.dir[0] + (p[1] - az) * through.dir[1]
+        const proj = (p[0] - ax) * through.dir[0] + (p[1] - az) * through.dir[1]
         if (proj < through.thickness || proj > through.length - through.thickness) continue
-        const foot: [number, number] = [
-          ax + through.dir[0] * proj,
-          az + through.dir[1] * proj,
-        ]
+        const foot: [number, number] = [ax + through.dir[0] * proj, az + through.dir[1] * proj]
         const dist = Math.hypot(p[0] - foot[0], p[1] - foot[1])
         if (dist > (through.thickness + partition.thickness) / 2 + EPS) continue
         tees.push({ through, u: proj, stem: partition, stemEnd: which })
@@ -1103,9 +1088,7 @@ export function frameHints(
     // corners give k = 1; at 20–60° the square-cut run must retreat
     // (1+|cosθ|)/sinθ half-thicknesses to clear the through wall's sloped
     // face, and the cap lap extends the same factor. Capped at 4.
-    const crossD = Math.abs(
-      through.dir[0] * butting.dir[1] - through.dir[1] * butting.dir[0],
-    )
+    const crossD = Math.abs(through.dir[0] * butting.dir[1] - through.dir[1] * butting.dir[0])
     const dotD = Math.abs(through.dir[0] * butting.dir[0] + through.dir[1] * butting.dir[1])
     const k = crossD < 0.1 ? 1 : Math.min(4, (1 + dotD) / crossD)
     const extend = (k * butting.thickness) / 2
@@ -1123,10 +1106,12 @@ export function frameHints(
       overrides?.get(through.id)?.construction === 'lgs' ||
       overrides?.get(butting.id)?.construction === 'lgs'
     if (!steelCorner) {
-      if (throughEnd === 'start') throughHints.capStartDelta = (throughHints.capStartDelta ?? 0) + extend
+      if (throughEnd === 'start')
+        throughHints.capStartDelta = (throughHints.capStartDelta ?? 0) + extend
       else throughHints.capEndDelta = (throughHints.capEndDelta ?? 0) + extend
       const buttingHints = hintFor(butting)
-      if (buttingEnd === 'start') buttingHints.capStartDelta = (buttingHints.capStartDelta ?? 0) + shorten
+      if (buttingEnd === 'start')
+        buttingHints.capStartDelta = (buttingHints.capStartDelta ?? 0) + shorten
       else buttingHints.capEndDelta = (buttingHints.capEndDelta ?? 0) + shorten
     }
     const buttingHints = hintFor(butting)
@@ -1134,7 +1119,8 @@ export function frameHints(
     // near face — k half-thicknesses back from the centerline corner
     // (round-10 gate; round-14 obliques).
     const inset = (k * through.thickness) / 2
-    if (buttingEnd === 'start') buttingHints.startInset = Math.max(buttingHints.startInset ?? 0, inset)
+    if (buttingEnd === 'start')
+      buttingHints.startInset = Math.max(buttingHints.startInset ?? 0, inset)
     else buttingHints.endInset = Math.max(buttingHints.endInset ?? 0, inset)
   }
 
@@ -1160,8 +1146,7 @@ export function frameHints(
       0.2,
       Math.abs(tee.stem.dir[0] * tee.through.dir[1] - tee.stem.dir[1] * tee.through.dir[0]),
     )
-    const inset =
-      (tee.through.thickness + tee.stem.thickness * cosTheta) / (2 * sinTheta)
+    const inset = (tee.through.thickness + tee.stem.thickness * cosTheta) / (2 * sinTheta)
     if (tee.stemEnd === 'start') stemHints.startInset = Math.max(stemHints.startInset ?? 0, inset)
     else stemHints.endInset = Math.max(stemHints.endInset ?? 0, inset)
   }
@@ -1173,6 +1158,9 @@ export function frameHints(
 export type FrameWallsOptions = {
   /** Walls bear on a concrete slab (ground level) — see FrameHints.slabBearing. */
   slabBearing?: boolean
+  /** Walls that bear on concrete whatever the level does — the garage walls
+   * on their pad at grade beside a raised platform (W11b). */
+  slabBearingIds?: ReadonlySet<string>
   /** A slabbed storey exists above this level — see FrameHints.storeyAbove
    * (CS-PF 24" first-of-two-storeys minimum, Figure R602.10.6.4). Leave
    * undefined when unknown: single-storey is then ASSUMED and stated. */
@@ -1282,11 +1270,12 @@ export function frameWalls(
   const members: Member[] = []
   for (const wall of walls) {
     const h = hints.get(wall.id) ?? {}
+    const own = opts?.slabBearingIds?.has(wall.id) ? { slabBearing: true } : {}
     members.push(
       ...frameWall(
         wall,
         specForWall(spec, overrides?.get(wall.id)),
-        hasLevelContext ? { ...h, ...level } : h,
+        hasLevelContext || opts?.slabBearingIds?.has(wall.id) ? { ...h, ...level, ...own } : h,
       ),
     )
   }

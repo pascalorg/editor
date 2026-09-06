@@ -404,6 +404,13 @@ export function buildFoundation(
   for (const wall of walls) {
     // Curved walls are framed segment-wise later; skip like wall-framing v1.
     if (wall.curved) continue
+    // A wall standing on its own slab BELOW the plate line (the garage pad
+    // at grade beside a raised platform, W11b) has its plate there: the
+    // stemwall tops out at the pad, the sole plate bears on the pad (no
+    // mudsill), the bolts and hold-downs seat at the pad.
+    const onLowerSlab = wall.baseY !== undefined && wall.baseY < plate - EPS
+    const plateW = onLowerSlab ? (wall.baseY as number) : plate
+    const raisedW = onLowerSlab ? undefined : raised
 
     const [dx, dz] = wall.dir
     const [sx, sz] = wall.start
@@ -527,7 +534,7 @@ export function buildFoundation(
       // slab/plate line (y = 0). See INTERIOR_BEARING_MIN_LENGTH ASSUMPTION.
       // A raised floor carries its interior walls on the platform (joists,
       // girders on pads) — no thickened footing in the crawl space.
-      if (!fabDetail || raised) continue
+      if (!fabDetail || raisedW) continue
       if (len <= INTERIOR_BEARING_MIN_LENGTH) {
         // Short interior walls are normally non-bearing partitions — but one
         // whose BOTH ends land on footing-carrying walls is a link in the
@@ -673,7 +680,7 @@ export function buildFoundation(
     // 8"-frost minimum where footing top = y 0) put the FOOTING where the
     // slab would pour — carve the field around it. Default frost depths
     // keep the footing top below the slab bottom: no band, slab runs over.
-    if (!raised && footingTop > -SLAB_THICKNESS + EPS) {
+    if (!raisedW && footingTop > plateW - SLAB_THICKNESS + EPS) {
       carveBands.push(bandOf(runCenterU, runLen, spec.footingWidth))
     }
     pourBands.push({
@@ -694,17 +701,18 @@ export function buildFoundation(
     // continuous pour. ASSUMPTION: grade is not modeled — R404.1.6's 6" stem
     // reveal above grade is assumed satisfied since y=0 is the framed floor
     // line.
-    const stemHeight = plate - footingTop
+    const stemHeight = plateW - footingTop
     const stemRun = runFor(spec.stemwallThickness)
+    const exposed = plateW - grade // the flat plate line or the raised stem top above grade; zero for a pad at grade
     if (stemHeight > EPS) {
       emit(
         'stemwall',
         [stemRun.len, stemHeight, spec.stemwallThickness],
         stemRun.center,
-        plate - stemHeight / 2,
+        plateW - stemHeight / 2,
         stemRun.len,
         'concrete',
-        `Stemwall ${formatIn(spec.stemwallThickness)}${grade < -EPS ? ` — ${formatIn(-grade + (raised ? plate : 0))} exposed above grade` : ''}`,
+        `Stemwall ${formatIn(spec.stemwallThickness)}${exposed > EPS ? ` — ${formatIn(exposed)} exposed above grade` : ''}`,
       )
       // The slab pours AGAINST the stemwall (R403.1) — the field strips
       // stop at its faces; anchor bolts/hold-downs live inside this band.
@@ -722,7 +730,7 @@ export function buildFoundation(
       if (fabDetail) {
         const spacing = spec.seismicHoldDowns ? VERTICAL_SPACING_SEISMIC : VERTICAL_SPACING
         const barBottom = footingBottom + REBAR_BOTTOM_COVER
-        const barTop = plate - REBAR_TOP_COVER
+        const barTop = plateW - REBAR_TOP_COVER
         const barHeight = barTop - barBottom
         // CMU-based walls: the DOWELS below are the verticals — the
         // generic grid would double the steel beside them (B18b).
@@ -770,7 +778,7 @@ export function buildFoundation(
             'rebar',
             [stemRun.len, REBAR_SIDE, REBAR_SIDE],
             stemRun.center,
-            plate - REBAR_TOP_COVER - REBAR_SIDE / 2,
+            plateW - REBAR_TOP_COVER - REBAR_SIDE / 2,
             stemRun.len,
             'steel',
             '#4 horizontal — top of stemwall (R403.1.3.1)',
@@ -788,15 +796,15 @@ export function buildFoundation(
     // ---- mudsill (raised floor) ----
     // R317.1(2) / R404.1.6: a pressure-treated 2x sill on the stemwall top
     // carries the rim and joists; the anchor bolts below run through it.
-    if (raised) {
+    if (raisedW) {
       emit(
         'mudsill',
-        [stemRun.len, PLATE_THICKNESS, raised.sillWidth],
+        [stemRun.len, PLATE_THICKNESS, raisedW.sillWidth],
         stemRun.center,
-        plate + PLATE_THICKNESS / 2,
+        plateW + PLATE_THICKNESS / 2,
         stemRun.len,
         'pt-lumber',
-        `Mudsill ${formatIn(raised.sillWidth)} PT on the stemwall (R317.1(2)) — anchor bolts R403.1.6`,
+        `Mudsill ${formatIn(raisedW.sillWidth)} PT on the stemwall (R317.1(2)) — anchor bolts R403.1.6`,
       )
     }
 
@@ -808,7 +816,7 @@ export function buildFoundation(
     // stemwall and sticking up through the plate line (nut + washer land
     // on the sill). Bolts follow the PLATE (wall length), not the
     // extended pour.
-    const boltCenterY = plate - BOLT_EMBEDMENT + BOLT_HEIGHT / 2
+    const boltCenterY = plateW - BOLT_EMBEDMENT + BOLT_HEIGHT / 2
     for (const u of boltUs) {
       emit(
         'anchor-bolt',
@@ -829,7 +837,7 @@ export function buildFoundation(
           'plate-washer',
           [PLATE_WASHER_SIDE, PLATE_WASHER_THICKNESS, PLATE_WASHER_SIDE],
           u,
-          plate + PLATE_THICKNESS + PLATE_WASHER_THICKNESS / 2,
+          plateW + PLATE_THICKNESS + PLATE_WASHER_THICKNESS / 2,
           PLATE_WASHER_SIDE,
           'steel',
           '3×3×0.229" plate washer (R602.11.1)',
@@ -854,7 +862,7 @@ export function buildFoundation(
           'hold-down',
           [HOLD_DOWN_SIDE, HOLD_DOWN_HEIGHT, HOLD_DOWN_SIDE],
           u,
-          plate + HOLD_DOWN_HEIGHT / 2, // base bears on the plate line up the post
+          plateW + HOLD_DOWN_HEIGHT / 2, // base bears on the plate line up the post
           HOLD_DOWN_HEIGHT,
           'steel',
           'HDU hold-down',

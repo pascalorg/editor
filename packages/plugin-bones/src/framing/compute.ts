@@ -23,9 +23,13 @@ import {
   extractServiceOverrides,
   extractSlabs,
   extractWalls,
-  SLEEPING_NAME_RE,
   type LevelSlice,
+  SLEEPING_NAME_RE,
+  type WallDatum,
 } from '../core/wall-model'
+import { type DerivedDevice, deriveWallDevices } from '../device/derive'
+import { extractDeviceOverrides } from '../device/overrides'
+import { type BuildingCharacteristics, computeCharacteristics } from '../engines/characteristics'
 import {
   type CmuDowelLayout,
   cmuDowelPositions,
@@ -34,8 +38,7 @@ import {
   mixedCmuWall,
   snapCmuHeight,
 } from '../engines/cmu'
-import { type BuildingCharacteristics, computeCharacteristics } from '../engines/characteristics'
-import { layoutWallLayers } from '../engines/wall-layers'
+import { frameDeck } from '../engines/deck-framing'
 import {
   applyDeviceOverrides,
   layoutElectrical,
@@ -44,14 +47,13 @@ import {
   routeWiring,
   wallPlan,
 } from '../engines/electrical'
-import { deriveWallDevices, type DerivedDevice } from '../device/derive'
-import { extractDeviceOverrides } from '../device/overrides'
-import { flagLinesetTradeCrossings, layoutHvac } from '../engines/hvac'
-import { layoutPlumbing, placeMeterSpot } from '../engines/plumbing'
-import { buildFoundation } from '../engines/foundation'
-import { frameDeck } from '../engines/deck-framing'
 import { frameFloor } from '../engines/floor-framing'
-import { detectUnframedRoofIntersections, frameRoofs, extractRoofs } from '../engines/roof-framing'
+import { buildFoundation } from '../engines/foundation'
+import { flagLinesetTradeCrossings, layoutHvac } from '../engines/hvac'
+import { lgsFrameWalls } from '../engines/lgs-wall-framing'
+import { layoutPlumbing, placeMeterSpot } from '../engines/plumbing'
+import { detectUnframedRoofIntersections, extractRoofs, frameRoofs } from '../engines/roof-framing'
+import type { TakeoffAreas } from '../engines/takeoff'
 import { bracingWarnings, crossReferenceHoldDowns } from '../engines/wall-bracing'
 import {
   dedupeFoundationStraps,
@@ -61,17 +63,16 @@ import {
   studSizeFor,
   upliftPathWarnings,
 } from '../engines/wall-framing'
-import { LUMBER_CROSS_SECTIONS } from '../lumber'
-import { applyJurisdiction, nonIrcCodeWarning, profileFor } from '../jurisdiction/profiles'
+import { layoutWallLayers } from '../engines/wall-layers'
 import { resolveJurisdiction, siteStateOf } from '../jurisdiction/guess'
-import type { TakeoffAreas } from '../engines/takeoff'
+import { applyJurisdiction, nonIrcCodeWarning, profileFor } from '../jurisdiction/profiles'
+import { LUMBER_CROSS_SECTIONS } from '../lumber'
 import {
-  framedAssembly,
   type FramingNode,
+  framedAssembly,
   type WallConstruction,
   type WallEngineeringOverride,
 } from './schema'
-import { lgsFrameWalls } from '../engines/lgs-wall-framing'
 
 export type ComputeResult = {
   members: Member[]
@@ -545,7 +546,68 @@ function computeLevelUncached(
   // in-progress GROUND storey keeps interior walls, so the takeoff never
   // books sheathing the layer engine can't render (checklist S4).
   const { slabs, probeSlabs, hasLowerStorey } = probeSlabsFor(nodes, levelId, levels)
-  const rawWalls = extractWalls(nodes, levelId, probeSlabs, hasLowerStorey)
+  // The level's vertical datum for the walls (W11b), the host's way: a wall
+  // with no explicit height reaches the wall plane — the floor-to-floor
+  // line, lowered to the underside of a covering slab of the storey above
+  // over its run (core getWallPlaneTop) — and a wall on a support slab at
+  // another height (the garage pad at grade beside a raised platform)
+  // stands on it: base = that slab's surface in the framing datum, where
+  // the highest slab's surface is the plate line (foundation emitSlabField).
+  const levelAboveForPlane = levels[levelIndex + 1]
+  const floorToFloor = levelAboveForPlane
+    ? levelAboveForPlane.baseY - (levels[levelIndex]?.baseY ?? 0)
+    : (levels[levelIndex]?.height ?? 2.7)
+  const coveringSlabs = levelAboveForPlane
+    ? extractSlabs(nodes, levelAboveForPlane.id).filter((s) => s.kind !== 'deck')
+    : []
+  const slabTopElevation =
+    slabs.length > 0
+      ? Math.max(...slabs.filter((s) => s.kind !== 'deck').map((s) => s.elevation))
+      : 0
+  const insidePoly = (
+    p: readonly [number, number],
+    poly: readonly (readonly [number, number])[],
+  ): boolean => {
+    let inside = false
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [xi, zi] = poly[i] as readonly [number, number]
+      const [xj, zj] = poly[j] as readonly [number, number]
+      if (zi > p[1] !== zj > p[1] && p[0] < ((xj - xi) * (p[1] - zi)) / (zj - zi) + xi)
+        inside = !inside
+    }
+    return inside
+  }
+  const wallDatum: WallDatum = {
+    planeTopFor: (start, end) => {
+      let plane = floorToFloor
+      for (const slab of coveringSlabs) {
+        const underside = floorToFloor + (slab.elevation - slab.thickness)
+        if (underside >= plane) continue
+        // the wall runs under the slab when any of five stations along its centreline does
+        let covered = false
+        for (let i = 0; i <= 4 && !covered; i++) {
+          const t = 0.1 + 0.2 * i
+          const p: [number, number] = [
+            start[0] + (end[0] - start[0]) * t,
+            start[1] + (end[1] - start[1]) * t,
+          ]
+          covered = insidePoly(p, slab.polygon) && !slab.holes.some((h) => insidePoly(p, h))
+        }
+        if (covered) plane = underside
+      }
+      return plane
+    },
+    supportBaseFor: (slabId) => {
+      const slab = slabs.find((s) => s.id === slabId)
+      return slab ? slab.elevation - slabTopElevation : null
+    },
+  }
+  const rawWalls = extractWalls(nodes, levelId, probeSlabs, hasLowerStorey, wallDatum)
+  // Walls standing below the plate line (on the garage pad): their members
+  // are framed from y = 0 like any wall and moved down onto their slab at
+  // the end (`baseYById`); the foundation reads `baseY` itself.
+  const baseYById = new Map<string, number>()
+  for (const w of rawWalls) if (w.baseY !== undefined) baseYById.set(w.id, w.baseY)
   const { walls, duplicateOf } = dedupeColinearWalls(rawWalls)
   if (duplicateOf.size > 0) {
     warnings.push(
@@ -727,10 +789,21 @@ function computeLevelUncached(
     // is not.
     const levelAbove = levels[levelIndex + 1]
     const storeyAbove = levelAbove !== undefined && extractSlabs(nodes, levelAbove.id).length > 0
+    // Walls on their own slab below the plate line (the garage pad beside
+    // a raised platform) bear on concrete whatever the level does.
+    const slabBearingIds = new Set(
+      [...baseYById].filter(([, y]) => y < 0 && isGroundLevel).map(([id]) => id),
+    )
+    if (slabBearingIds.size > 0 && raisedFloor) {
+      warnings.push(
+        `${slabBearingIds.size} wall${slabBearingIds.size === 1 ? '' : 's'} on the garage pad at grade — framed down to the pad (${formatIn(-Math.min(...[...baseYById.values()]))} below the platform) on a PT sole plate, stemwall to the pad`,
+      )
+    }
     members.push(
       ...frameWalls(framed, spec, engineering, {
         // A raised floor's plates sit on the platform, not on concrete.
         slabBearing: isGroundLevel && !raisedFloor,
+        ...(slabBearingIds.size > 0 ? { slabBearingIds } : {}),
         storeyAbove,
         // Steel neighbors participate in the corner/tee hint graph so a
         // lumber wall butting a steel one insets exactly like it would
@@ -1464,6 +1537,26 @@ function computeLevelUncached(
   const characteristics = computeCharacteristics(activeWalls, activeRooms, slabs, spec, code, {
     ...(hasSteelWalls ? { steelWalls: true } : {}),
   })
+
+  // Walls on a support slab below the plate line: everything framed ON the
+  // wall (its skeleton, layers, devices, pipes) was laid out from y = 0 —
+  // move it down onto the slab. The foundation placed its own members from
+  // the wall's `baseY` already; roof members sourced by a wall (gable
+  // infill) sit on the plate line and stay.
+  if (baseYById.size > 0) {
+    for (let i = 0; i < members.length; i++) {
+      const m = members[i] as Member
+      const baseY = baseYById.get(m.sourceId)
+      if (baseY === undefined || m.system === 'foundation' || m.system === 'roof-framing') continue
+      members[i] = { ...m, position: [m.position[0], m.position[1] + baseY, m.position[2]] }
+    }
+    for (let i = 0; i < fixtures.length; i++) {
+      const f = fixtures[i] as (typeof fixtures)[number]
+      const baseY = baseYById.get(f.sourceId)
+      if (baseY === undefined) continue
+      fixtures[i] = { ...f, position: [f.position[0], f.position[1] + baseY, f.position[2]] }
+    }
+  }
 
   return {
     members: stableMembers(members),

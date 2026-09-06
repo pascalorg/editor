@@ -6,7 +6,6 @@
  * windows carry their center height in `position[1]`.
  */
 
-import { inches } from './units'
 import type {
   OpeningSlice,
   RoomSlice,
@@ -16,6 +15,7 @@ import type {
   SlabSlice,
   WallSlice,
 } from './types'
+import { inches } from './units'
 
 // Minimal structural views of the host nodes we read — kept local so the
 // extractor compiles against any @pascal-app/core >=0.9 without depending on
@@ -162,6 +162,16 @@ export function extractWalls(
    * attic blanket-exterior rule (an in-progress ground storey with no
    * slabs/rooms anywhere must NOT frame its partitions as exterior). */
   hasLowerStorey = false,
+  /**
+   * The level's vertical datum (W11b) — how the HOST resolves a wall's
+   * extent (core `resolveWallTop` / `getWallPlaneTop`): a wall with no
+   * explicit height reaches the level's wall plane (the floor-to-floor
+   * line, or the underside of a covering slab above), and a wall whose
+   * `supportSlabId` names a slab at another height stands on that slab
+   * with its top unchanged. Absent = the historical 2.5 m default and the
+   * plate line (standalone callers, tests).
+   */
+  datum?: WallDatum,
 ): WallSlice[] {
   const walls: WallSlice[] = []
   for (const node of Object.values(nodes)) {
@@ -192,6 +202,26 @@ export function extractWalls(
     const back = node.backSide
     const exterior = front === 'exterior' || back === 'exterior'
 
+    // Vertical extent the host's way (W11b): the top is the explicit height
+    // or the level's wall plane; a support slab at another height moves the
+    // BASE there (a positive base lifts an explicit-height wall whole, a
+    // negative one grows the body down to the slab — core resolveWallTop).
+    const explicitHeight = node.height != null ? num(node.height, DEFAULT_WALL_HEIGHT) : null
+    const supportId =
+      typeof node.supportSlabId === 'string' && node.supportSlabId !== 'ground'
+        ? node.supportSlabId
+        : null
+    const base = supportId && datum ? (datum.supportBaseFor(supportId) ?? 0) : 0
+    const top =
+      explicitHeight !== null
+        ? base > 0
+          ? base + explicitHeight
+          : explicitHeight
+        : datum
+          ? datum.planeTopFor(start, end)
+          : DEFAULT_WALL_HEIGHT
+    const onSupport = supportId !== null && Math.abs(base) > 1e-6
+
     walls.push({
       id: String(node.id ?? ''),
       start,
@@ -199,7 +229,8 @@ export function extractWalls(
       length,
       dir: [dx / length, dz / length],
       thickness: num(node.thickness, DEFAULT_WALL_THICKNESS),
-      height: num(node.height, DEFAULT_WALL_HEIGHT),
+      height: top - base,
+      ...(onSupport ? { baseY: base, supportSlabId: supportId } : {}),
       // Assembly-declared core (WS5). Folded ONLY when the host declares it,
       // so an assembly-less wall's slice stays byte-identical to before.
       ...(assemblyFraming
@@ -230,6 +261,14 @@ export function extractWalls(
 }
 
 /** Extract slabs on `levelId` for floor framing / foundation outlines. */
+/** The level's vertical datum for wall extraction — see `extractWalls`. */
+export type WallDatum = {
+  /** Level-local y of the wall plane over this wall's run (floor-to-floor, or a covering slab's underside). */
+  planeTopFor: (start: readonly [number, number], end: readonly [number, number]) => number
+  /** Level-local y of a support slab's walking surface in the framing datum, or null when the id names no slab on the level. */
+  supportBaseFor: (slabId: string) => number | null
+}
+
 export function extractSlabs(nodes: NodesRecord, levelId: string): SlabSlice[] {
   const slabs: SlabSlice[] = []
   for (const node of Object.values(nodes)) {

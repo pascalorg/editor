@@ -361,6 +361,18 @@ export type WallSlice = {
   openings: OpeningSlice[]
   /** Curved walls are framed segment-wise later; v1 flags them. */
   curved: boolean
+  /**
+   * Level-local y the wall STANDS ON when the host's `supportSlabId`
+   * names a slab at a different height than the plate line — the garage
+   * walls on their pad at grade beside a raised platform (W11b). The
+   * wall's `height` is already the body from this base up to the top
+   * (Pascal `resolveWallTop`: the top stays where it was, the body grows
+   * down to the support). Absent = the plate line (0), every scene drawn
+   * before this byte-identical.
+   */
+  baseY?: number
+  /** The slab node the wall stands on (set with `baseY`). */
+  supportSlabId?: string
 }
 
 /**
