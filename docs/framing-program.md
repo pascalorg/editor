@@ -260,6 +260,13 @@ W15 Ceiling joists as a framer laps them — DONE 2026-09-06 (see log; the open 
     partitions named as bearing walls in the level warnings; the details sheet reads the
     spacing off the members.
 
+W16 Roof intersections and the hip — DONE 2026-09-06 in three parts (see log W16a/b/c;
+    open: the ranch's hip wing through the main's hip end plane, the porch grazing the
+    garage wing, no attic separation wall over the buried wing): valleys for a wing on a
+    lower plate and for hip wings / hip mains; mid-run purlins + struts on all four hip
+    planes; a parallel wing running under the main buried, its straddlers cut at the
+    junction, the main's rake trim cut where the wing's plane carries on.
+
 ## Log
 
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
@@ -952,3 +959,24 @@ W15 Ceiling joists as a framer laps them — DONE 2026-09-06 (see log; the open 
   white / barn-red door). Tests: plan-set +2 (the record → rows, partial
   and empty records; the sheet's rows, swatches, ordering, absence) —
   Bones 2,089, panel typechecks.
+
+- 2026-09-06 early morning: **W16d — the hip end strips get their stub
+  joists.** The joist band stops `cjEndClear` short of each hip end wall
+  (a few inches at 40°, 0.46–0.74 m on a 4:12 roof) and every hip joist
+  wore the "end-triangle stub joists not modeled" statement. Where the
+  strip is wide enough, `frameHip` now frames STUB joists perpendicular to
+  the main run at the o.c. stations between the side eaves' clearances —
+  sistered beside the end-plane jacks and the king (the mains' beside-
+  rafter convention), the eave end clipped to the end plane (the B6
+  inscribed box), the inner end butting the last full joist's piece at
+  that station (base or lapped, one thickness over) on a Simpson LUS
+  hanger, that joist named as the header to double (verify). The 400
+  statement now says what was framed: stubs tying the end eaves to the
+  last full joist, or — on a steep hip whose joists reach within a few
+  inches of the end walls — that there is no strip to frame and the last
+  full joist ties the end plane. The volume gate allows the stub hanger
+  contact (the W9 hardware convention) and the hip family stays SAT-clean.
+  Tests: W16d describe +2 (a 4:12 hip's stubs at both ends, hung, on the
+  plate, inside the clearances; the ranch-class hip frames strips, the
+  40° hip none, LOD 200 none), the B7 statement expectations reworded,
+  two main-joist tests read past the stubs — Bones 2,091, typecheck clean.

@@ -222,7 +222,11 @@ describe('over-span flag matrix', () => {
     expect(
       flagged(frameRoofs([seg({ roofType: 'hip', depth: 3.8 })], [], DEFAULT_SPEC)),
     ).toHaveLength(0)
-    const cjs = byRole(frameRoofs([seg({ roofType: 'hip' })], [], DEFAULT_SPEC), 'ceiling-joist')
+    // (the W16d end-strip stubs are short spec-size sticks — the MAIN joists size up)
+    const cjs = byRole(
+      frameRoofs([seg({ roofType: 'hip' })], [], DEFAULT_SPEC),
+      'ceiling-joist',
+    ).filter((cj) => !cj.label?.startsWith('Stub'))
     expect(cjs.length).toBeGreaterThan(0)
     for (const cj of cjs) {
       expect(cj.size).toBe('2x10')

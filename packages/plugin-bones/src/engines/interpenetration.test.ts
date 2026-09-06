@@ -141,6 +141,8 @@ const ALLOWED: ReadonlySet<string> = new Set(
     ['hanger', 'blocking'],
     ['hanger', 'header'],
     ['hanger', 'rafter'],
+    // …and the hip end-strip stub joists hung on the last full joist (W16d)
+    ['hanger', 'ceiling-joist'],
     ['hanger', 'top-plate'],
     ['hanger', 'cap-plate'],
     // Anchor hardware threads through the sill into the concrete below.

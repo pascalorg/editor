@@ -1362,7 +1362,7 @@ describe('LOD-400 B7a: hip ceiling joists across the short span (R802.4.2)', () 
     // beside the same side jack — the raw map emitted two joists at ONE spot
     const m25 = cjOf(
       frameRoofs([seg({ roofType: 'hip', pitch: (25 * Math.PI) / 180 })], [], DEFAULT_SPEC),
-    )
+    ).filter((cj) => !cj.label?.startsWith('Stub')) // the W16d stubs run the other way
     expect(m25.length).toBeGreaterThan(0)
     const us = m25.map((cj) => cj.position[0] as number).sort((a, b) => a - b)
     for (let i = 1; i < us.length; i++) {
@@ -1580,9 +1580,13 @@ describe('B7 fix round: end-plane thrust statement prints (F1) + crown bearing h
     const cjs = cjOf(members)
     expect(cjs.length).toBeGreaterThan(0)
     for (const cj of cjs) {
-      expect(cj.flag).toContain('end-triangle stub joists not modeled')
-      expect(cj.flag).toContain('verify tie detail (R802.4.2)')
-      // never MASKS the over-span honesty — composes ' | ' onto it
+      expect(cj.flag).toContain('hip end planes:')
+      expect(cj.flag).toContain('verify the end-plane tie detail (R802.4.2)')
+    }
+    // the MAIN joists never MASK the over-span honesty — they compose ' | ' onto it
+    const mains = cjs.filter((cj) => !cj.label?.startsWith('Stub'))
+    expect(mains.length).toBeGreaterThan(0)
+    for (const cj of mains) {
       expect(cj.flag).toContain('Ceiling joist over prescriptive span')
       expect(cj.flag).toContain(' | ')
     }
@@ -1616,11 +1620,13 @@ describe('B7 fix round: end-plane thrust statement prints (F1) + crown bearing h
   test('the statement reaches a takeoff Flags row on the hip compose (P4 prints it)', () => {
     const members = frameRoofs([seg({ roofType: 'hip', width: 10, depth: 12 })], [], at400)
     const rows = computeTakeoff(members, [])
-    const row = rows.find(
-      (r) => r.section === 'Flags' && r.detail.includes('end-triangle stub joists not modeled'),
+    const flagged = rows.filter(
+      (r) =>
+        r.section === 'Flags' && r.detail.includes('verify the end-plane tie detail (R802.4.2)'),
     )
-    expect(row).toBeDefined()
-    expect(row?.quantity).toBe(cjOf(members).length)
+    expect(flagged.length).toBeGreaterThan(0)
+    // every joist — main pieces (composed with their over-span flag) and stubs — books once
+    expect(flagged.reduce((n, r) => n + r.quantity, 0)).toBe(cjOf(members).length)
   })
 
   test('300 stays quiet (the B6 stated-gap convention); a compact 400 hip carries ONLY the statement', () => {
@@ -1628,13 +1634,16 @@ describe('B7 fix round: end-plane thrust statement prints (F1) + crown bearing h
     for (const cj of cjOf(at300)) {
       expect(cj.flag ?? '').not.toContain('stub joists')
     }
-    // a span-legal 400 hip: the statement is the WHOLE flag (nothing to compose)
+    // a span-legal 400 hip: the statement is the WHOLE flag (nothing to
+    // compose) — at 40° the joists reach within 0.2 m of the end walls, so
+    // there is no stub strip and the flag says so
     const compact = frameRoofs([seg({ roofType: 'hip', depth: 3.8 })], [], at400)
     const cjs = cjOf(compact)
     expect(cjs.length).toBeGreaterThan(0)
+    expect(cjs.some((cj) => cj.label?.startsWith('Stub'))).toBe(false)
     for (const cj of cjs) {
-      expect(cj.flag).toBe(
-        'hip end planes: rafter ties parallel to the end-plane span + end-triangle stub joists not modeled (collar ties ride the ridge portion only) — verify tie detail (R802.4.2)',
+      expect(cj.flag).toMatch(
+        /^hip end planes: the joists reach within \d\.\d\d m of the end walls \(no stub strip to frame\); the last full joist ties the end plane — double it as a header; collar ties ride the ridge portion only — verify the end-plane tie detail \(R802\.4\.2\)$/,
       )
     }
   })
@@ -2667,7 +2676,7 @@ describe('W15: ceiling joists sized from the table, lapped over the interior bea
     for (const cj of cjs) {
       expect(cj.size).toBe('2x8') // 4.1 m and 4.9 m pieces: both past the 2x6 row, within the 2x8 row
       expect(cj.flag).not.toContain('over prescriptive span')
-      expect(cj.flag).toContain('end-triangle stub joists not modeled') // the B7 statement still rides
+      expect(cj.flag).toContain('verify the end-plane tie detail (R802.4.2)') // the B7 statement still rides
       expect(cj.label).toContain('lapped 12" over bearing partition p_long')
       expect(cj.label).toContain('2x8 from the R802.5.1(2) table')
       expect(Math.abs(longAxis(cj).x)).toBeCloseTo(1, 5)
@@ -3090,5 +3099,93 @@ describe('W16c: buried parallel wings', () => {
     const hip = seg({ id: 'h', roofType: 'hip', width: 12, depth: 6 })
     expect(roofPlaneAt(hip, 5, 0)).toBeCloseTo(3.0 + 1 * Math.tan(hip.pitch), 9)
     expect(roofPlaneAt(seg({ roofType: 'shed' }), 0, 0)).toBeNull()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// W16d: hip end strips — stub joists from the end walls to the last full joist
+// ---------------------------------------------------------------------------
+
+describe('W16d: hip end-strip stub joists', () => {
+  const IN = 0.0254
+  const T = 1.5 * IN
+  const at400 = { ...DEFAULT_SPEC, detail: '400' as const }
+  // a 4:12 hip (18.4°): the joists stop cjEndClear ≈ 0.46 m short of the end
+  // walls (2x6 joists: 5.5"/tan + 1.5") — a strip wide enough for stubs
+  const roof = seg({ roofType: 'hip', width: 12, depth: 8, pitch: Math.atan(4 / 12) })
+  const members = frameRoofs([roof], [], at400)
+  const cjs = byRole(members, 'ceiling-joist')
+  const stubs = cjs.filter((cj) => cj.label?.startsWith('Stub'))
+  const mains = cjs.filter((cj) => !cj.label?.startsWith('Stub'))
+  const hangers = byRole(members, 'hanger')
+
+  test("stubs run along the ridge axis at both ends, between the side eaves' clearances, hung on the last full joist", () => {
+    expect(stubs.length).toBeGreaterThan(0)
+    expect(hangers.length).toBe(stubs.length)
+    const lastEast = Math.max(...mains.map((m) => m.position[0] as number))
+    const lastWest = Math.min(...mains.map((m) => m.position[0] as number))
+    for (const s of stubs) {
+      expect(Math.abs(longAxis(s).x)).toBeCloseTo(1, 5)
+      const x0 = (s.position[0] as number) - s.dims[0] / 2
+      const x1 = (s.position[0] as number) + s.dims[0] / 2
+      const east = (s.position[0] as number) > 0
+      // the outer end at the end wall (clipped a little on this low pitch), the
+      // inner end on the face of a last-joist piece (base or lapped)
+      if (east) {
+        expect(x1).toBeCloseTo(
+          6 -
+            Math.max(
+              0,
+              (5.5 * IN - (5.5 * IN) / Math.cos(roof.pitch)) / Math.tan(roof.pitch) + 0.002,
+            ),
+          3,
+        )
+        expect(
+          Math.abs(x0 - (lastEast + T / 2)) <= T + 1e-6 ||
+            Math.abs(x0 - (lastEast + T / 2 - T)) <= 1e-6,
+        ).toBe(true)
+      } else {
+        expect(x0).toBeCloseTo(
+          -6 +
+            Math.max(
+              0,
+              (5.5 * IN - (5.5 * IN) / Math.cos(roof.pitch)) / Math.tan(roof.pitch) + 0.002,
+            ),
+          3,
+        )
+      }
+      expect(Math.abs(s.position[2] as number)).toBeLessThanOrEqual(
+        4 - (5.5 * IN) / Math.tan(roof.pitch) - T - 0.002 + 1e-6,
+      )
+      expect(s.flag).toContain('stub joists tie the end eaves to the last full joist')
+      expect(s.size).toBe('2x6')
+    }
+    // a hanger wraps every stub's inner end, on the last joist's face
+    for (const h of hangers) {
+      expect(h.material).toBe('steel')
+      expect(h.label).toContain('Simpson LUS26 (or equal)')
+      expect(
+        stubs.some((s) => Math.abs((s.position[2] as number) - (h.position[2] as number)) < 1e-9),
+      ).toBe(true)
+    }
+    // every stub stands on the plate like the mains
+    for (const s of stubs) expect((s.position[1] as number) - s.dims[1] / 2).toBeCloseTo(3.0, 9)
+  })
+
+  test('the ranch-class hip (4:12, 13 m) frames its strips; a 40° hip has none; LOD 200 none', () => {
+    const ranch = frameRoofs(
+      [seg({ roofType: 'hip', width: 17.37, depth: 13.26, pitch: Math.atan(4 / 12) })],
+      [],
+      DEFAULT_SPEC,
+    )
+    expect(byRole(ranch, 'ceiling-joist').some((cj) => cj.label?.startsWith('Stub'))).toBe(true)
+    const steep = frameRoofs([seg({ roofType: 'hip', width: 12, depth: 8 })], [], at400)
+    expect(byRole(steep, 'ceiling-joist').some((cj) => cj.label?.startsWith('Stub'))).toBe(false)
+    for (const cj of byRole(steep, 'ceiling-joist'))
+      expect(cj.flag).toContain('no stub strip to frame')
+    const schematic = frameRoofs([roof], [], { ...DEFAULT_SPEC, detail: '200' })
+    expect(byRole(schematic, 'ceiling-joist').some((cj) => cj.label?.startsWith('Stub'))).toBe(
+      false,
+    )
   })
 })

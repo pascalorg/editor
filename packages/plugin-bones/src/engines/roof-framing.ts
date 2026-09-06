@@ -2362,10 +2362,6 @@ function frameHip(
   // case). One statement class on the joists at 400 (the B6 shed-drip
   // stated-gap convention), composed ' | ' onto whatever over-span
   // honesty a joist already carries (the M2 flag-composition rule).
-  const cjEndGapFlag =
-    spec.detail === '400'
-      ? 'hip end planes: rafter ties parallel to the end-plane span + end-triangle stub joists not modeled (collar ties ride the ridge portion only) — verify tie detail (R802.4.2)'
-      : undefined
   const cjClearsRidge = ridgeHalf <= 0.05 || plateY + cjD + 0.002 <= ridgeY + seat - cjRidgeD
   // the stations are shared with the purlin struts below (W16b)
   const cjStations: number[] = []
@@ -2381,6 +2377,68 @@ function frameHip(
       if (prev !== undefined && u - prev < cjT - EPS) continue
       cjStations.push(u)
     }
+    // ---- the end strips (W16d): stub joists from each end wall to the last full joist ----
+    // The band stops cjEndClear short of each end wall. Where that strip is
+    // wide enough (a low pitch), STUB joists run perpendicular to the main
+    // joists at the o.c. stations between the side eaves' clearances —
+    // from the end wall's plate (eave end clipped to the end plane, the B6
+    // convention) to the last full joist's near face, hung on it; that
+    // joist doubles as the header (the label says verify). Where the
+    // joists already reach within a few inches of the end wall there is no
+    // strip to frame, and the flag says that instead.
+    const [stubT, stubD] = LUMBER_CROSS_SECTIONS[spec.ceilingJoistSize]
+    const stubClip = cjClipFor(stubD)
+    const stubClear = cjEndClearFor(stubD)
+    // The stubs run WITH the end-plane jacks (and the king on the centre
+    // line): sister beside any they land on, toward the centre, deduped —
+    // the main joists' besideRafter convention.
+    const endJacks: number[] = [0]
+    for (let d = spec.rafterSpacing; d < run - halfT; d += spec.rafterSpacing) endJacks.push(d, -d)
+    const besideEndJack = (v0: number): number => {
+      const clash = endJacks.find((jv) => Math.abs(jv - v0) < halfT + stubT / 2 - EPS)
+      if (clash === undefined) return v0
+      return clash + (clash >= 0 ? -1 : 1) * (halfT + stubT / 2)
+    }
+    const stubStations: number[] = []
+    if (run - stubClear > stubT) {
+      const snappedStubs = layout(-(run - stubClear), run - stubClear, cjPlan.spacing, stubT / 2)
+        .map(besideEndJack)
+        .sort((a, b) => a - b)
+      for (const v of snappedStubs) {
+        const prev = stubStations[stubStations.length - 1]
+        if (prev !== undefined && v - prev < stubT - EPS) continue
+        if (Math.abs(v) + stubT / 2 > run - stubClear + EPS) continue
+        stubStations.push(v)
+      }
+    }
+    const stubs: { se: 1 | -1; v: number; outer: number; inner: number }[] = []
+    let endGap = 0
+    if (spec.detail !== '200') {
+      for (const se of [1, -1] as const) {
+        const last = se === 1 ? cjStations[cjStations.length - 1] : cjStations[0]
+        if (last === undefined) continue
+        endGap = Math.max(endGap, longHalf - Math.abs(last) - cjT / 2)
+        for (const v of stubStations) {
+          // the last joist's piece at this station may be the lapped one, a thickness over
+          const inner = last + cjPlan.lapOffsetAt(last, v) + se * (cjT / 2)
+          const outer = se * (longHalf - stubClip)
+          if (Math.abs(outer - inner) < 0.3) continue
+          stubs.push({ se, v, outer, inner })
+        }
+      }
+    }
+    // B7 fix round (skeptic F1): the END planes' thrust story must PRINT —
+    // the end-plane jacks and kings thrust along the LONG axis; the stubs
+    // (or the last full joist, where the strip is too narrow for them) are
+    // the tie, and the reader verifies it. One statement class on the
+    // joists at 400, composed onto whatever over-span honesty a joist
+    // already carries (the M2 flag-composition rule).
+    const cjEndGapFlag =
+      spec.detail === '400'
+        ? stubs.length > 0
+          ? 'hip end planes: stub joists tie the end eaves to the last full joist (double it as a header); collar ties ride the ridge portion only — verify the end-plane tie detail (R802.4.2)'
+          : `hip end planes: the joists reach within ${fmtM(endGap)} of the end walls (no stub strip to frame); the last full joist ties the end plane — double it as a header; collar ties ride the ridge portion only — verify the end-plane tie detail (R802.4.2)`
+        : undefined
     const cjLabel = (size: LumberSize) =>
       `Ceiling joist ${size} — rafter tie (R802.4.2)${
         spec.detail === '400' ? ', ends clipped to the roof slope' : ''
@@ -2396,6 +2454,41 @@ function frameHip(
         plateY,
         cjLabel,
         cjEndGapFlag,
+      )
+    }
+    const stubLabel = `Stub ceiling joist ${spec.ceilingJoistSize} — rafter tie (R802.4.2) for the hip end plane, perpendicular to the main joists: eave end clipped to the end plane, hung on the last full joist (double it as a header — verify) (R802.5.2.1)`
+    const hangerT = inches(0.75)
+    for (const st of stubs) {
+      const len = Math.abs(st.outer - st.inner)
+      const mid = (st.outer + st.inner) / 2
+      emit(
+        'ceiling-joist',
+        spec.ceilingJoistSize,
+        [len, stubD, stubT],
+        alongX ? [mid, plateY + stubD / 2, st.v] : [st.v, plateY + stubD / 2, mid],
+        alongX ? 0 : -Math.PI / 2,
+        0,
+        len,
+        'lumber',
+        stubLabel,
+        undefined,
+        cjEndGapFlag,
+      )
+      // the face-mount hanger on the last full joist, wrapping the stub's end
+      const hx = st.inner + st.se * (hangerT / 2)
+      emit(
+        'hanger',
+        undefined,
+        [hangerT, stubD, inches(3)],
+        alongX ? [hx, plateY + stubD / 2, st.v] : [st.v, plateY + stubD / 2, hx],
+        alongX ? 0 : -Math.PI / 2,
+        0,
+        hangerT,
+        'steel',
+        partLabel(
+          hangerFor(spec.ceilingJoistSize),
+          `${spec.ceilingJoistSize} stub ceiling joist to the doubled last joist`,
+        ),
       )
     }
   }
