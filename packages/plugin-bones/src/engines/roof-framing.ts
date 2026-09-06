@@ -293,7 +293,10 @@ export function frameRoofs(
       }
     }
   }
-  return stableMembers(members)
+  // W16c: a parallel wing running under the main — its buried members go,
+  // the straddlers are cut at the junction (every LOD: buried wood is not
+  // schematic, it is wrong).
+  return stableMembers(buryWings(roofs, members))
 }
 
 type Emit = (
@@ -4147,6 +4150,272 @@ export function detectValleys(roofs: RoofSegmentSlice[]): ValleyLine[] {
 }
 
 // ---------------------------------------------------------------------------
+// Buried parallel wings (W16c) — a wing whose ridge runs WITH the main's and
+// whose roof lies at or under the main's wherever they overlap: the garage
+// wing set beside and behind the house, its rear plane continuing the
+// main's, its west end inside the house. The wing's members inside the
+// main's footprint are fake wood (the main's rafters ARE that plane; the
+// wing's front plane there sits in the main's attic), and the main's rake
+// overhang over the wing's continuing plane is fake trim. Both are cut.
+// ---------------------------------------------------------------------------
+
+export type BuriedWing = {
+  major: RoofSegmentSlice
+  minor: RoofSegmentSlice
+  /** The wing's buried extent along the main's ridge axis (main frame). */
+  x0: number
+  x1: number
+}
+
+/** The wing's roof may stand this far above the main's and still count as under it. */
+const BURIAL_TOLERANCE = 0.02
+/** Eave trim (fascia, drip edge) hangs this far past the overhang tip — inside the zones. */
+const EAVE_TRIM = 0.3
+
+/**
+ * Rafter centre-plane height (level y, seat excluded) of a gable or hip at
+ * a segment-local plan point — the plane keeps going past the eaves (the
+ * overhang) and past a hip end; null for shapes the burial test skips.
+ */
+export function roofPlaneAt(roof: RoofSegmentSlice, xl: number, zl: number): number | null {
+  const tan = Math.tan(roof.pitch)
+  const base = roof.position[1] + roof.wallHeight
+  if (roof.roofType === 'gable') return base + (roof.depth / 2 - Math.abs(zl)) * tan
+  if (roof.roofType === 'hip') {
+    const alongX = roof.width >= roof.depth
+    const run = Math.min(roof.width, roof.depth) / 2
+    const longHalf = Math.max(roof.width, roof.depth) / 2
+    const cross = alongX ? Math.abs(zl) : Math.abs(xl)
+    const long = alongX ? Math.abs(xl) : Math.abs(zl)
+    return base + Math.min(run - cross, longHalf - long) * tan
+  }
+  return null
+}
+
+/** Level plan point → a segment's local (x along its ridge axis, z across). */
+function toSegmentPlan(roof: RoofSegmentSlice, px: number, pz: number): [number, number] {
+  const dx = px - roof.position[0]
+  const dz = pz - roof.position[2]
+  const cos = Math.cos(roof.yaw)
+  const sin = Math.sin(roof.yaw)
+  return [dx * cos - dz * sin, dx * sin + dz * cos]
+}
+
+/** The plan reach of a segment's eave overhang. */
+const tipOf = (roof: RoofSegmentSlice) => roof.overhang * Math.cos(roof.pitch)
+
+/**
+ * Parallel pairs where the WING (minor) lies at or under the MAIN (major)
+ * across their whole overlap — sampled on a 0.2 m grid over the overlap of
+ * the main's footprint (plus its eave zone) with the wing's. A pair that
+ * qualifies both ways (two equal roofs side by side) keeps the larger
+ * footprint as the main. Wings that rise above the main anywhere in the
+ * overlap are a real intersection and stay with the unframed warning.
+ */
+export function detectBuriedWings(roofs: RoofSegmentSlice[]): BuriedWing[] {
+  const found = new Map<string, BuriedWing>()
+  for (const major of roofs) {
+    if (roofPlaneAt(major, 0, 0) === null) continue
+    for (const minor of roofs) {
+      if (minor === major || roofPlaneAt(minor, 0, 0) === null) continue
+      if (Math.abs(Math.sin(minor.yaw - major.yaw)) > 0.01) continue // parallel ridges only
+      // vertical envelopes must interleave — a cupola floating above the
+      // ridge is stacking, not a join (the B8c reporter's own screen)
+      if (
+        minor.position[1] >= segPeakY(major) - EPS ||
+        major.position[1] >= segPeakY(minor) - EPS
+      ) {
+        continue
+      }
+      const [cx, cz] = toSegmentPlan(major, minor.position[0], minor.position[2])
+      const fx0 = Math.max(-major.width / 2, cx - minor.width / 2)
+      const fx1 = Math.min(major.width / 2, cx + minor.width / 2)
+      const fz0 = Math.max(-major.depth / 2, cz - minor.depth / 2)
+      const fz1 = Math.min(major.depth / 2, cz + minor.depth / 2)
+      if (fx1 - fx0 < 0.1 || fz1 - fz0 < 0.1) continue // footprints must overlap
+      // sample the overlap, the main's eave zone included
+      const tip = tipOf(major)
+      const z0 = Math.max(-major.depth / 2 - tip, cz - minor.depth / 2)
+      const z1 = Math.min(major.depth / 2 + tip, cz + minor.depth / 2)
+      const nx = Math.max(2, Math.ceil((fx1 - fx0) / 0.2) + 1)
+      const nz = Math.max(2, Math.ceil((z1 - z0) / 0.2) + 1)
+      let under = true
+      for (let i = 0; i < nx && under; i++) {
+        const x = fx0 + ((fx1 - fx0) * i) / (nx - 1)
+        for (let j = 0; j < nz; j++) {
+          const z = z0 + ((z1 - z0) * j) / (nz - 1)
+          const yMajor = roofPlaneAt(major, x, z) as number
+          // the wing's plane at the same level point (its surfaces are symmetric — a
+          // reversed wing reads the same)
+          const yMinor = roofPlaneAt(minor, x - cx, z - cz) as number
+          if (yMinor > yMajor + BURIAL_TOLERANCE) {
+            under = false
+            break
+          }
+        }
+      }
+      if (!under) continue
+      const key = major.id < minor.id ? `${major.id}|${minor.id}` : `${minor.id}|${major.id}`
+      const prior = found.get(key)
+      if (
+        prior !== undefined &&
+        prior.major.width * prior.major.depth >= major.width * major.depth
+      ) {
+        continue
+      }
+      found.set(key, { major, minor, x0: fx0, x1: fx1 })
+    }
+  }
+  return [...found.values()]
+}
+
+/** A member's long axis (its box +X) as a level unit vector, from the three XYZ euler. */
+export function memberAxis(m: Member): [number, number, number] {
+  const [rx, ry, rz] = m.rotation
+  const cx = Math.cos(rx)
+  const sx = Math.sin(rx)
+  const cy = Math.cos(ry)
+  const sy = Math.sin(ry)
+  const cz = Math.cos(rz)
+  const sz = Math.sin(rz)
+  return [cy * cz, cx * sz + sx * sy * cz, sx * sz - cx * sy * cz]
+}
+
+/**
+ * Cut a member to the parts NOT covered by `covered(px, pz)`: sampled every
+ * 0.1 m along its axis, each boundary bisected to 5 mm; pieces under 0.15 m
+ * are dropped; a member with no plan length (a strut, a stud) is kept or
+ * dropped whole by its centre. Kept pieces carry `note` on the label.
+ */
+export function clipMemberBy(
+  m: Member,
+  covered: (px: number, pz: number) => boolean,
+  note: string,
+): Member[] {
+  const axis = memberAxis(m)
+  const L = m.dims[0]
+  const plan = Math.hypot(axis[0], axis[2])
+  const at = (s: number): [number, number, number] => [
+    m.position[0] + axis[0] * s,
+    m.position[1] + axis[1] * s,
+    m.position[2] + axis[2] * s,
+  ]
+  const coveredAt = (s: number) => {
+    const p = at(s)
+    return covered(p[0], p[2])
+  }
+  if (plan < 0.3 || L < 0.2) return coveredAt(0) ? [] : [m]
+  const n = Math.max(2, Math.ceil(L / 0.1) + 1)
+  const step = L / (n - 1)
+  const cov: boolean[] = []
+  for (let i = 0; i < n; i++) cov.push(coveredAt(-L / 2 + step * i))
+  if (cov.every((c) => !c)) return [m]
+  if (cov.every((c) => c)) return []
+  const edge = (sIn: number, sOut: number): number => {
+    // bisect between an uncovered sample (sIn) and a covered one (sOut)
+    let a = sIn
+    let b = sOut
+    for (let k = 0; k < 6; k++) {
+      const mid = (a + b) / 2
+      if (coveredAt(mid)) b = mid
+      else a = mid
+    }
+    return (a + b) / 2
+  }
+  const out: Member[] = []
+  let i = 0
+  while (i < n) {
+    if (cov[i]) {
+      i++
+      continue
+    }
+    let j = i
+    while (j + 1 < n && !cov[j + 1]) j++
+    const a = i === 0 ? -L / 2 : edge(-L / 2 + step * i, -L / 2 + step * (i - 1))
+    const b = j === n - 1 ? L / 2 : edge(-L / 2 + step * j, -L / 2 + step * (j + 1))
+    const len = b - a
+    if (len >= 0.15) {
+      const sMid = (a + b) / 2
+      out.push({
+        ...m,
+        position: at(sMid),
+        length: Math.abs(m.length - L) < 1e-9 ? len : (m.length * len) / L,
+        dims: [len, m.dims[1], m.dims[2]],
+        label: `${m.label ?? ''}${note}`,
+      })
+    }
+    i = j + 1
+  }
+  return out
+}
+
+/**
+ * Apply the burials: the wing's members inside the main's footprint (and
+ * its eave zone) go; the main's overhang members over the wing's continuing
+ * plane (its rake ladder and barge beyond the gable line where the wing's
+ * plane carries on at or above the main's) go too. Straddling members —
+ * the wing's ridge, purlins, fascia, deck courses; the main's outlookers
+ * and barges — are cut at the boundary and say so.
+ */
+export function buryWings(roofs: RoofSegmentSlice[], members: Member[]): Member[] {
+  const wings = detectBuriedWings(roofs)
+  if (wings.length === 0) return members
+  let out = members
+  for (const w of wings) {
+    const { major, minor } = w
+    const tipM = tipOf(major)
+    const tipW = tipOf(minor)
+    const inMajorFootprint = (px: number, pz: number) => {
+      const [x, z] = toSegmentPlan(major, px, pz)
+      return Math.abs(x) <= major.width / 2 + EPS && Math.abs(z) <= major.depth / 2 + EPS
+    }
+    const inMajorEaveZone = (px: number, pz: number) => {
+      const [x, z] = toSegmentPlan(major, px, pz)
+      return (
+        Math.abs(x) <= major.width / 2 + EPS &&
+        Math.abs(z) <= major.depth / 2 + tipM + EAVE_TRIM + EPS
+      )
+    }
+    const inMinorReach = (px: number, pz: number) => {
+      const [x, z] = toSegmentPlan(minor, px, pz)
+      return (
+        Math.abs(x) <= minor.width / 2 + minor.overhang + EAVE_TRIM + EPS &&
+        Math.abs(z) <= minor.depth / 2 + tipW + EAVE_TRIM + EPS
+      )
+    }
+    const minorCovered = (px: number, pz: number) => inMajorEaveZone(px, pz)
+    const majorCovered = (px: number, pz: number) => {
+      // only the main's RAKE zone past its gable line — its own eave tails
+      // over the shared eave stay (the wing's duplicates are the ones removed)
+      const [xm, zm] = toSegmentPlan(major, px, pz)
+      if (Math.abs(xm) <= major.width / 2 + EPS || !inMinorReach(px, pz)) return false
+      const [xw, zw] = toSegmentPlan(minor, px, pz)
+      const yMajor = roofPlaneAt(major, xm, zm) as number
+      const yMinor = roofPlaneAt(minor, xw, zw) as number
+      return yMajor <= yMinor + BURIAL_TOLERANCE
+    }
+    const minorNote = ` — cut at the main roof ${major.id} (the wing runs under it there; bearing / ledger at the main wall — verify)`
+    const majorNote = ` — cut where the wing ${minor.id} carries the plane on (no rake there)`
+    const next: Member[] = []
+    for (const m of out) {
+      if (m.sourceId === minor.id) next.push(...clipMemberBy(m, minorCovered, minorNote))
+      else if (m.sourceId === major.id) next.push(...clipMemberBy(m, majorCovered, majorNote))
+      else next.push(m)
+    }
+    out = next
+  }
+  return out
+}
+
+/** The level warnings for buried wings — the junction the model does not draw. */
+export function buriedWingWarnings(roofs: RoofSegmentSlice[]): string[] {
+  return detectBuriedWings(roofs).map(
+    (w) =>
+      `wing ${w.minor.id} runs under roof ${w.major.id} (ridges parallel, the wing's roof at or below the main's over ${fmtM(w.x1 - w.x0)} of overlap): the wing's members inside the main's footprint are removed and its ridge, purlins and eave members cut at the main's end-wall line, the main's rake trim cut where the wing's plane carries on — flashing where the wing's planes die into the main roof, a ledger or bearing at the main's end wall, and (a garage wing) the dwelling–garage separation carried to the roof deck (R302.6): verify the junction detail`,
+  )
+}
+
+// ---------------------------------------------------------------------------
 // B8c: unframed roof intersections — the labeling contract, never silent
 // ---------------------------------------------------------------------------
 
@@ -4242,7 +4511,8 @@ export function detectUnframedRoofIntersections(roofs: RoofSegmentSlice[]): stri
   const key = (x: string, y: string): string => (x < y ? `${x}|${y}` : `${y}|${x}`)
   const served = new Set<string>()
   for (const v of detectValleys(roofs)) served.add(key(v.major.id, v.minorId))
-  const out: string[] = []
+  for (const w of detectBuriedWings(roofs)) served.add(key(w.major.id, w.minor.id))
+  const out: string[] = [...buriedWingWarnings(roofs)]
   for (let i = 0; i < roofs.length; i++) {
     for (let j = i + 1; j < roofs.length; j++) {
       const a = roofs[i] as RoofSegmentSlice

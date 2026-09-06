@@ -851,3 +851,35 @@ W15 Ceiling joists as a framer laps them — DONE 2026-09-06 (see log; the open 
   flags, the no-fix and 200 cases), spans matrix updated (20 × 18 flags,
   14 × 12 fixed), the square-hip test reads past the purlins — Bones
   2,079, typecheck clean.
+
+- 2026-09-06 small hours: **W16c — the parallel garage wing no longer
+  frames inside the house.** The generator's garage wing sits beside and
+  behind the main, ridge parallel, same pitch and plate, its rear eave on
+  the main's rear eave line and its west 3.35 m inside the house: its
+  rear plane IS the main's rear plane there and its front plane sits in
+  the main's attic — 40-odd fake rafters, joists, studs and a ridge
+  running into the house, and the main's rear rake ladder hanging inside
+  the merged plane. `detectBuriedWings` finds parallel pairs whose wing
+  lies at or under the main across their whole overlap (both surfaces
+  sampled on a 0.2 m grid, the vertical envelopes interleaving — a cupola
+  floating above the ridge is stacking); `buryWings` then drops the
+  wing's members inside the main's footprint + eave zone and cuts the
+  straddlers (ridge, purlins, fascia, drip edge, deck courses) at the
+  gable line with a label note, and cuts the main's rake trim past its
+  gable line wherever the wing's plane carries on (the rear barge stops
+  at the wing's ridge line, the outlookers and fascia ends at the gable
+  line). `clipMemberBy` samples along a member's axis (0.1 m, bisected
+  boundaries) — usable by any engine. The reporter names the junction:
+  flashing where the wing's planes die into the main roof, a ledger or
+  bearing at the main's end wall, the garage separation carried to the
+  deck (R302.6). Wings that rise above the main anywhere (the taller,
+  steeper, or the ranch's hip wing through the main's hip end plane)
+  are real intersections and keep the unframed warning. Headless: the
+  farmhouse and craftsman wings keep zero members west of the gable line,
+  the ridge starts on it, 18–20 cut members, the main's east rear barge
+  cut at the wing ridge line. Tests: W16c describe +3 (detection and its
+  refusals incl. the hip pair, the cut census against the wing / main
+  framed alone, the clipper and plane helpers) — Bones 2,082, typecheck
+  clean. Honest gaps: the porch grazing the garage wing by 0.6 m still
+  warns (perpendicular, not a join); the wing's remaining west gable
+  studs are gone but no attic separation wall is framed in their place.

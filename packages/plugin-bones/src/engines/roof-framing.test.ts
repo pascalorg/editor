@@ -10,9 +10,13 @@ import {
   ceilingJoistBearingsFor,
   ceilingJoistBearingWarnings,
   ceilingJoistSizeFor,
+  clipMemberBy,
+  detectBuriedWings,
   detectUnframedRoofIntersections,
   extractRoofs,
   frameRoofs,
+  memberAxis,
+  roofPlaneAt,
   type RoofSegmentSlice,
 } from './roof-framing'
 import { computeTakeoff } from './takeoff'
@@ -2936,5 +2940,155 @@ describe('W16b: hip purlins + struts halve the commons, kings and long jacks', (
     expect(big.some((m) => m.label?.startsWith('Purlin'))).toBe(false)
     const schematic = frameRoofs([roof], [], { ...DEFAULT_SPEC, detail: '200' })
     expect(schematic.some((m) => m.label?.startsWith('Purlin'))).toBe(false)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// W16c: a parallel wing running under the main roof — buried members go,
+// straddlers are cut at the junction
+// ---------------------------------------------------------------------------
+
+describe('W16c: buried parallel wings', () => {
+  // the generated farmhouse: main 13.87 × 13.11 gable, the garage wing 10.06 ×
+  // 6.71 set 8.61 m east and 3.20 m back — same pitch, same plate, its rear
+  // eave on the main's rear eave line, its west 3.35 m inside the house
+  const pitch = (33.69 * Math.PI) / 180
+  const main = seg({
+    id: 'main',
+    width: 13.87,
+    depth: 13.11,
+    position: [-3.35, 2.74, 0],
+    pitch,
+    overhang: 0.43,
+    wallHeight: 0,
+  })
+  const wing = seg({
+    id: 'wing',
+    width: 10.06,
+    depth: 6.71,
+    position: [5.26, 2.74, -3.2],
+    pitch,
+    overhang: 0.43,
+    wallHeight: 0,
+  })
+  const gableLine = -3.35 + 13.87 / 2 // x = 3.585, the main's east gable line
+
+  test('the wing is detected under the main over their 3.355 m overlap; a wing that rises above is not', () => {
+    const found = detectBuriedWings([main, wing])
+    expect(found).toHaveLength(1)
+    expect(found[0]?.major.id).toBe('main')
+    expect(found[0]?.minor.id).toBe('wing')
+    expect((found[0]?.x1 ?? 0) - (found[0]?.x0 ?? 0)).toBeCloseTo(3.355, 6)
+    // the same wing on a taller plate pokes through the main's rear plane
+    const tall = seg({ ...wing, id: 'tall', position: [5.26, 3.24, -3.2] })
+    expect(detectBuriedWings([main, tall])).toHaveLength(0)
+    // …and a steeper wing tops the main's plane at its ridge
+    const steep = seg({ ...wing, id: 'steep', pitch: (45 * Math.PI) / 180 })
+    expect(detectBuriedWings([main, steep])).toHaveLength(0)
+    // the ranch: hip main and hip wing at the same offsets — the wing's west
+    // hip end rises through the main's east hip plane: a real intersection
+    const hipMain = seg({ ...main, id: 'hipmain', roofType: 'hip', depth: 13.26 })
+    const hipWing = seg({ ...wing, id: 'hipwing', roofType: 'hip', position: [5.26, 2.74, -3.28] })
+    expect(detectBuriedWings([hipMain, hipWing])).toHaveLength(0)
+    expect(detectUnframedRoofIntersections([hipMain, hipWing])).toHaveLength(1)
+  })
+
+  test('the wing keeps nothing inside the main; its ridge, purlins, fascia and deck are cut at the gable line', () => {
+    const at400 = { ...DEFAULT_SPEC, detail: '400' as const }
+    const members = frameRoofs([main, wing], [], at400)
+    const alone = frameRoofs([wing], [], at400)
+    const wingMembers = members.filter((m) => m.sourceId === 'wing')
+    expect(wingMembers.length).toBeGreaterThan(0)
+    expect(wingMembers.length).toBeLessThan(alone.length)
+    for (const m of wingMembers) {
+      // every kept wing member lies east of the gable line (its west end, if cut, on it)
+      const axis = memberAxis(m)
+      const westEnd = (m.position[0] as number) - Math.abs(axis[0]) * (m.dims[0] / 2)
+      expect(westEnd).toBeGreaterThanOrEqual(gableLine - 0.01)
+    }
+    const ridge = wingMembers.filter((m) => m.role === 'ridge' && m.label?.startsWith('Ridge'))
+    expect(ridge).toHaveLength(1)
+    expect((ridge[0]?.position[0] as number) - (ridge[0]?.dims[0] ?? 0) / 2).toBeCloseTo(
+      gableLine,
+      2,
+    )
+    expect(ridge[0]?.label).toContain('cut at the main roof main')
+    // the wing's west gable studs, west barge and outlookers are gone
+    expect(
+      wingMembers.some(
+        (m) => m.label?.includes('Gable stud') && (m.position[0] as number) < gableLine,
+      ),
+    ).toBe(false)
+    // no wing rafter station inside the main
+    for (const r of wingMembers.filter((m) => m.role === 'rafter')) {
+      expect(r.position[0] as number).toBeGreaterThan(gableLine)
+    }
+    // the main keeps every member inside its own footprint…
+    const mainAlone = frameRoofs([main], [], at400)
+    const mainMembers = members.filter((m) => m.sourceId === 'main')
+    const inside = (m: Member) =>
+      Math.abs((m.position[0] as number) + 3.35) <= 13.87 / 2 &&
+      Math.abs(m.position[2] as number) <= 13.11 / 2
+    expect(mainMembers.filter(inside).length).toBe(mainAlone.filter(inside).length)
+    // …and loses rake trim only where the wing's plane carries on (rear, below the wing ridge line)
+    const cutTrim = mainMembers.filter((m) => m.label?.includes('no rake there'))
+    expect(cutTrim.length).toBeGreaterThan(0)
+    for (const m of cutTrim) {
+      // a cut piece either stops at the gable line (fascia, outlookers) or is
+      // the rake trim itself past it, kept only where the main's plane is exposed
+      const axis = memberAxis(m)
+      const eastEnd = (m.position[0] as number) + Math.abs(axis[0]) * (m.dims[0] / 2)
+      if ((m.position[0] as number) <= gableLine)
+        expect(eastEnd).toBeLessThanOrEqual(gableLine + 0.02)
+      else expect(m.position[2] as number).toBeGreaterThan(-3.2 - 0.5)
+    }
+    expect(cutTrim.some((m) => m.role === 'outlooker')).toBe(true)
+    // the reporter says what happened and stops calling it unframed
+    const warnings = detectUnframedRoofIntersections([main, wing])
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('wing wing runs under roof main')
+    expect(warnings[0]).not.toContain('not framed')
+    // the reverse ordering is never taken: the main is the larger footprint
+    expect(detectBuriedWings([wing, main])[0]?.major.id).toBe('main')
+  })
+
+  test('clipMemberBy cuts along the member axis and drops covered stubs; roofPlaneAt reads both shapes', () => {
+    const box: Member = {
+      system: 'roof-framing',
+      role: 'ridge',
+      size: '2x8',
+      dims: [4, 0.184, 0.038],
+      length: 4,
+      position: [0, 3, 0],
+      rotation: [0, 0, 0],
+      material: 'lumber',
+      sourceId: 'r',
+      label: 'Ridge 2x8',
+    }
+    // covered west of x = 1: one piece from 1 to 2
+    const cut = clipMemberBy(box, (px) => px < 1, ' — cut')
+    expect(cut).toHaveLength(1)
+    expect(cut[0]?.dims[0]).toBeCloseTo(1, 2)
+    expect(cut[0]?.position[0]).toBeCloseTo(1.5, 2)
+    expect(cut[0]?.label).toBe('Ridge 2x8 — cut')
+    // covered in the middle: two pieces
+    expect(clipMemberBy(box, (px) => Math.abs(px) < 0.5, '')).toHaveLength(2)
+    // covered everywhere / nowhere
+    expect(clipMemberBy(box, () => true, '')).toHaveLength(0)
+    expect(clipMemberBy(box, () => false, '')).toEqual([box])
+    // a yawed member cuts along its own axis
+    const yawed: Member = { ...box, rotation: [0, -Math.PI / 2, 0] } // +X → +Z
+    const c2 = clipMemberBy(yawed, (_px, pz) => pz < 0, '')
+    expect(c2).toHaveLength(1)
+    expect(c2[0]?.position[2]).toBeCloseTo(1, 2)
+    // memberAxis follows the emitter's yaw convention
+    const ax = memberAxis(yawed)
+    expect(ax[2]).toBeCloseTo(1, 9)
+    // planes: the gable's rises to its ridge; the hip's clips at its end planes
+    expect(roofPlaneAt(main, 0, 0)).toBeCloseTo(2.74 + (13.11 / 2) * Math.tan(pitch), 9)
+    expect(roofPlaneAt(main, 0, 13.11 / 2)).toBeCloseTo(2.74, 9)
+    const hip = seg({ id: 'h', roofType: 'hip', width: 12, depth: 6 })
+    expect(roofPlaneAt(hip, 5, 0)).toBeCloseTo(3.0 + 1 * Math.tan(hip.pitch), 9)
+    expect(roofPlaneAt(seg({ roofType: 'shed' }), 0, 0)).toBeNull()
   })
 })
