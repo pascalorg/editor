@@ -282,8 +282,8 @@ W18 Shed rafters on interior bearing walls — DONE 2026-09-06 (see log): the mo
 
 W19 Roof joins framed as overframes — DONE 2026-09-06 (see log W19a / W19b; open: a
     hip porch too low to pierce its house slope ends its jacks over the eave with no
-    sleeper on the plate, the ranch's rear entrance sits at the inside corner between
-    the main and the wing): every pair of crossing roofs the model reads — a wing on
+    sleeper on the plate; a porch on a hip END wall overframes onto the end plane with
+    real valleys rather than the classic join): every pair of crossing roofs the model reads — a wing on
     the long plane, a wing through a hip end plane, a porch hip at the eave, a
     user-drawn crossing — is framed the California way from the roofs' facets: the
     larger roof runs through, the smaller roof's members are cut by their own bottoms
@@ -1200,10 +1200,11 @@ W19 Roof joins framed as overframes — DONE 2026-09-06 (see log W19a / W19b; op
   crashes; monorepo 6,441 with the three Windows-environmental cli
   failures. Tests: derive +1, porch +4 (and the hip test's reach) —
   plugin-roof 20, plugin-generate 74, editor typecheck clean. Open: the
-  ranch's rear entrance lands at the inside corner between the main and
-  the wing (its cover overlaps the main's body — a layout rule for doors
-  near inside corners is wanted); a porch on a hip END wall overframes
-  onto the end plane (real valleys, not the classic join).
+  ranch's rear entrance sits on the main's hip END wall beside the wing —
+  its cover overframes onto the end plane with two real valleys (not the
+  classic join) and its eave overhang grazes the wing's; a layout rule
+  keeping a rear door clear of an inside corner would make it a classic
+  join.
 
 - 2026-09-06 afternoon: **W19a follow-up — a roof level with a larger one is
   that roof's plane.** The ranch's front porch met the main AND the wing
