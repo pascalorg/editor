@@ -529,7 +529,6 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
 
   const previousLevelIdRef = useRef<AnyNodeId | null>(null)
   const previousLevelModeRef = useRef(levelMode)
-  const skippedInitialLevelSelectRef = useRef(false)
   useEffect(() => {
     if (isPreviewMode || isFirstPersonMode || isRestoringFirstPersonPose()) return
     const previousLevelId = previousLevelIdRef.current
@@ -547,23 +546,17 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     if (firstLoad.current) {
       firstLoad.current = false
       // A freshly applied scene is framed by the auto-frame emit; only a
-      // scene-less editor gets the default pose.
+      // scene-less editor gets the default pose. Do not skip later
+      // null → level here: a site-phase load starts with no level, and the
+      // first pick (or a delayed auto-select) still has to pan.
       if (Object.keys(useScene.getState().nodes).length === 0) {
         controls.current.setLookAt(20, 20, 20, 0, 0, 0, true)
       }
       return
     }
-    if (previousLevelId) skippedInitialLevelSelectRef.current = true
     const levelChanged = previousLevelId !== currentLevelId
     const modeChanged = previousLevelMode !== levelMode
     if (!levelChanged && !modeChanged) return
-    // First null → level is scene auto-select; auto-frame owns that pose.
-    // After the user has followed a level, clearing it (building click,
-    // breadcrumb, resetSelection) and picking one again must pan.
-    if (!previousLevelId && currentLevelId && !skippedInitialLevelSelectRef.current) {
-      skippedInitialLevelSelectRef.current = true
-      return
-    }
     if (!currentLevelId) return
     controls.current.getTarget(currentTarget)
     // Idempotence guard: skip when already there — also swallows the thumbnail

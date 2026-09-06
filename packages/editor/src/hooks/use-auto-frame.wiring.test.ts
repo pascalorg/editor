@@ -25,19 +25,18 @@ describe('camera auto-frame wiring (shipped sources)', () => {
     expect(controls).not.toContain('process.env.NODE_ENV ===')
   })
 
-  test('level-follow skips first null->level transition and default pose only when scene empty', () => {
+  test('level-follow pans on level or mode change after first load, default pose only when scene empty', () => {
     const controls = readShipped('components/editor/custom-camera-controls.tsx')
     expect(controls).toContain('previousLevelIdRef')
     expect(controls).toContain('previousLevelModeRef')
-    expect(controls).toContain('skippedInitialLevelSelectRef')
     expect(controls).toContain('Object.keys(useScene.getState().nodes).length === 0')
-    expect(controls).toContain(
-      'if (!previousLevelId && currentLevelId && !skippedInitialLevelSelectRef.current)',
-    )
     expect(controls).toContain('if (!levelChanged && !modeChanged) return')
+    expect(controls).toContain('if (!currentLevelId) return')
+    expect(controls).toContain('controls.current.moveTo(currentTarget.x, targetY, currentTarget.z, true)')
     expect(controls).not.toContain(
       'if (!previousLevelId || previousLevelId === currentLevelId) return',
     )
+    expect(controls).not.toContain('skippedInitialLevelSelectRef')
   })
 
   test('useAutoFrame hook still emits fit-scene on empty->non-empty edge', () => {
