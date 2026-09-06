@@ -37,12 +37,9 @@ export {
 // ============================================================================
 
 export {
-  aabbsOverlapPlan,
   type PlanAabb,
   type PlanVec2,
   planFootprintAABB,
-  planFootprintAABBForItem,
-  planFootprintAABBFromCorners,
   planFootprintCorners,
 } from '../../lib/plan-footprint'
 
