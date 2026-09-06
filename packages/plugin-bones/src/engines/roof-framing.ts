@@ -272,26 +272,17 @@ export function frameRoofs(
       }
     }
   }
-  // Valleys where two gable segments cross (LOD 350).
-  let trimmed: Member[] = members
-  if (spec.detail !== '200') {
-    const valleys = detectValleys(roofs)
-    for (const valley of valleys) emitValley(valley, spec, members)
-    // W16e: the join is trimmed with the knife, not a flag — the wing's
-    // rafters inside the main go (the valley jacks ARE those rafters), the
-    // wing's other members are cut where they run under the main's plane,
-    // the main's eave trim is cut where it runs under the wing's planes.
-    trimmed = trimValleyJoins(valleys, roofs, members)
-  }
   // W16c: a parallel wing running under the main — its buried members go,
   // the straddlers are cut at the junction (every LOD: buried wood is not
-  // schematic, it is wrong). W16f: every other overlapping pair is trimmed
-  // the same way where the smaller roof runs under the larger one.
-  const served = new Set<string>()
-  if (spec.detail !== '200') {
-    for (const v of detectValleys(roofs)) served.add(pairKeyOf(v.major.id, v.minorId))
-  }
-  return stableMembers(trimOverlaps(roofs, buryWings(roofs, trimmed), served))
+  // schematic, it is wrong).
+  const buried = buryWings(roofs, members)
+  // W19: every other crossing pair is an OVERFRAME join — the larger roof
+  // runs through, the smaller roof's members are cut where they run under
+  // its deck (its rafters end as valley jacks), and at 300 / 400 a valley
+  // sleeper lies flat on the larger roof's deck under those jack ends.
+  const trimmed = trimPairs(roofs, buried, spec)
+  if (spec.detail !== '200') emitSleepers(roofs, spec, trimmed)
+  return stableMembers(trimmed)
 }
 
 const pairKeyOf = (a: string, b: string): string => (a < b ? `${a}|${b}` : `${b}|${a}`)
@@ -4177,10 +4168,11 @@ const VALLEY_EAVE_TOLERANCE = 0.05
 const VALLEY_MIN_FOOT_RUN = 0.1
 
 /**
- * The main roof's frame for a join: the half-length of the LONG plane the
- * wing may pierce (a gable's full width; a hip's ridge portion — the wing
- * must stay clear of the hip ends), null for shapes not modeled (a hip
- * whose ridge runs across its depth, sheds, flats, gambrels, mansards).
+ * The main roof's frame for a join: the half-length of the LONG plane's
+ * ridge portion (a gable's full width; a hip's ridge — the plane widens
+ * from there toward the eave, and the wing's apex must stay on it), null
+ * for shapes not modeled (a hip whose ridge runs across its depth, sheds,
+ * flats, gambrels, mansards).
  */
 function valleyMajorFrame(major: RoofSegmentSlice): { longHalf: number } | null {
   if (major.roofType === 'gable') return { longHalf: major.width / 2 }
@@ -4253,9 +4245,16 @@ export function detectValleys(roofs: RoofSegmentSlice[]): ValleyLine[] {
       const near = Math.abs(cz) - halfAlong
       if (near >= run1 - EPS) continue // never reaches the major slope
       if (Math.abs(cz) + halfAlong <= run1 + EPS) continue // fully buried
-      if (Math.abs(cx) + r2 > majorFrame.longHalf + EPS) continue // past the long plane
       const zApex = run1 - rise2 / tan1
-      if (minorFrame.hip && near > zApex + EPS) continue // the hip ridge stops short
+      // the wing's ridge must reach the pierce point: a hip's near end
+      // would otherwise sit on the main roof, a gable's rake would stand
+      // above it as a wall — the overframe reporter names both
+      if (near > zApex + EPS) continue
+      // the wing must sit on the main's LONG plane: its feet inside that
+      // plane's eave span, its apex inside the plane at the apex's own
+      // cross distance (a hip main's plane narrows toward the ridge)
+      if (Math.abs(cx) + r2 > major.width / 2 + EPS) continue // past the eave span
+      if (major.roofType === 'hip' && Math.abs(cx) > majorFrame.longHalf + zApex + EPS) continue // the apex would land on a hip end plane
       // the foot: where the wing plane reaches the main eave height, inboard
       // of the wing eave by drop/tanθ₂ (zero for a level join)
       const footRun = r2 - drop / tan2
@@ -4275,82 +4274,701 @@ export function detectValleys(roofs: RoofSegmentSlice[]): ValleyLine[] {
 }
 
 // ---------------------------------------------------------------------------
-// Valley join trims (W16e) — the overlay convention made honest with the
-// knife. California-valley practice: the MAIN roof is framed and decked
-// straight through; the WING'S rafters are jacks from its ridge down to the
-// valley (emitValley emits them), its deck and everything else stop at the
-// valley line, and the main's eave trim (fascia, drip edge) comes out where
-// the wing's planes pass over it.
+// Overframe joins (W19) — every pair of crossing roofs framed the California
+// way. The LARGER roof runs through (its rafters and deck complete); the
+// SMALLER roof's members are cut wherever they run under the larger roof's
+// deck, its rafters end as VALLEY JACKS on a 2x VALLEY SLEEPER laid flat on
+// that deck along the cut line, and the larger roof's eave trim is cut where
+// the smaller roof passes over it. The line is read off the roofs' FACETS
+// (the planes and plan polygons of a gable, hip or shed, overhangs included)
+// as the level set {smaller − larger = stack} of the height difference, so
+// a wing on the long plane, a wing through a hip end plane, a porch hip at
+// the eave and a user-drawn crossing all get the same detail. A crease with
+// no fall is a DEAD VALLEY and is reported (detectUnframedRoofIntersections).
 // ---------------------------------------------------------------------------
 
-/**
- * Trim every served valley pair: the wing's rafters inside the main's
- * footprint go (the jacks are those rafters, ridge to valley); its other
- * members are cut wherever they sit inside the main's footprint under the
- * main's plane (beyond the valley); the main's fascia and drip edge are cut
- * wherever they sit inside the wing's reach under the wing's planes.
- */
-export function trimValleyJoins(
-  valleys: readonly ValleyLine[],
-  roofs: readonly RoofSegmentSlice[],
-  members: Member[],
-): Member[] {
-  const pairs = new Map<string, { major: RoofSegmentSlice; minor: RoofSegmentSlice }>()
-  for (const v of valleys) {
-    const minor = roofs.find((r) => r.id === v.minorId)
-    if (minor === undefined) continue
-    pairs.set(`${v.major.id}|${minor.id}`, { major: v.major, minor })
+/** A sleeper sits this far above the underlayment; a jack's cut end this far above the sleeper. */
+const OVERFRAME_CLEAR = 0.002
+/** A crease falling less than this (rise over plan run) is a dead valley — ¼ in 12. */
+const DEAD_VALLEY_FALL = 1 / 48
+/** …when it is at least this long in plan (a corner nick is not a valley). */
+const DEAD_VALLEY_MIN = 0.3
+/** Shortest sleeper worth a board. */
+const SLEEPER_MIN = 0.15
+/** Two sleeper ends closer than this meet in a mitre. */
+const SLEEPER_JOIN = 0.03
+/** The crease crossing test steps this far either side of the line. */
+const CREASE_STEP = 0.1
+
+/** Valley sleeper stock: one size deeper than the rafters, laid FLAT. */
+const sleeperSizeFor = (spec: FramingSpec): LumberSize => ridgeSizeFor(spec.rafterSize)
+
+export type OverframeStack = {
+  /** The sleeper's underside above the larger roof's rafter plane, along the normal. */
+  normal: number
+  /** Vertical height of the smaller roof's plane over the larger one where its rafters end (on the sleeper). */
+  rafters: number
+  /** …where its ridge, hips and purlins end (deeper stock, tops flush with the rafters). */
+  boards: number
+  /** …where its deck ends. */
+  deck: number
+  thickness: number
+  width: number
+}
+
+/** The stack on the larger roof's plane at a join: rafter, deck, underlayment, sleeper. */
+export function overframeStack(spec: FramingSpec, major: RoofSegmentSlice): OverframeStack {
+  const rd = LUMBER_CROSS_SECTIONS[spec.rafterSize][1]
+  const rdBoard = LUMBER_CROSS_SECTIONS[ridgeSizeFor(spec.rafterSize)][1]
+  const [sT, sW] = LUMBER_CROSS_SECTIONS[sleeperSizeFor(spec)]
+  const cos = Math.cos(major.pitch)
+  const deckTop = rd + ROOF_DECK_T + UNDERLAYMENT_T + OVERFRAME_CLEAR
+  const sleeperTop = deckTop + sT + OVERFRAME_CLEAR
+  return {
+    normal: deckTop,
+    rafters: sleeperTop / cos,
+    boards: (sleeperTop + rdBoard - rd) / cos,
+    deck: (sleeperTop - rd) / cos,
+    thickness: sT,
+    width: sW,
   }
-  let out = members
-  for (const { major, minor } of pairs.values()) {
-    const inFootprint = (roof: RoofSegmentSlice, px: number, pz: number) => {
-      const [x, z] = toSegmentPlan(roof, px, pz)
-      return Math.abs(x) <= roof.width / 2 + EPS && Math.abs(z) <= roof.depth / 2 + EPS
+}
+
+/** One roof plane, y = c + gx·X + gz·Z over a convex plan polygon — LEVEL coordinates. */
+export type Facet = {
+  c: number
+  gx: number
+  gz: number
+  poly: readonly (readonly [number, number])[]
+}
+
+/** Half a 2x barge: a gable's rake reach ends at the barge's OUTER face, not its centre. */
+const BARGE_HALF = inches(0.75)
+
+/** The plan reach of a segment's rafters past its plate: [along its ridge axis, across]. */
+export function roofReach(roof: RoofSegmentSlice): [number, number] {
+  const tip = tipOf(roof)
+  return roof.roofType === 'hip' ? [tip, tip] : [roof.overhang + BARGE_HALF, tip]
+}
+
+/**
+ * The facets of a gable, hip or shed — each plane with the plan polygon it
+ * covers, overhangs included (a rake widens a gable / shed by the overhang,
+ * an eave by its plan tip) — carried into level coordinates through the
+ * segment yaw; null for the shapes the join model does not read (flat,
+ * gambrel, mansard, dutch). The polygons tile the roof: on each, that
+ * plane IS `roofPlaneAt`.
+ */
+export function roofFacets(roof: RoofSegmentSlice): Facet[] | null {
+  const tan = Math.tan(roof.pitch)
+  const base = roof.position[1] + roof.wallHeight
+  const [ox, oz] = roofReach(roof)
+  const W = roof.width / 2
+  const D = roof.depth / 2
+  type Local = { a: number; bx: number; bz: number; poly: [number, number][] }
+  const locals: Local[] = []
+  if (roof.roofType === 'gable' || roof.roofType === 'shed') {
+    // the +Z plane falls toward +Z (a shed's one plane, its high edge
+    // overhanging unless it hangs on a ledger); a gable mirrors it
+    const high = roof.roofType === 'shed' ? (roof.attach === 'high' ? 0 : oz) : 0
+    const zIn = roof.roofType === 'shed' ? -D - high : 0
+    locals.push({
+      a: D * tan,
+      bx: 0,
+      bz: -tan,
+      poly: [
+        [-W - ox, zIn],
+        [W + ox, zIn],
+        [W + ox, D + oz],
+        [-W - ox, D + oz],
+      ],
+    })
+    if (roof.roofType === 'gable') {
+      locals.push({
+        a: D * tan,
+        bx: 0,
+        bz: tan,
+        poly: [
+          [-W - ox, 0],
+          [W + ox, 0],
+          [W + ox, -D - oz],
+          [-W - ox, -D - oz],
+        ],
+      })
     }
-    const inReach = (roof: RoofSegmentSlice, px: number, pz: number) => {
-      const [x, z] = toSegmentPlan(roof, px, pz)
-      const tip = tipOf(roof)
-      return (
-        Math.abs(x) <= roof.width / 2 + roof.overhang + EAVE_TRIM + EPS &&
-        Math.abs(z) <= roof.depth / 2 + tip + EAVE_TRIM + EPS
-      )
+  } else if (roof.roofType === 'hip') {
+    const alongX = roof.width >= roof.depth
+    const run = Math.min(W, D)
+    const longHalf = Math.max(W, D)
+    const inner = longHalf - run
+    const tip = oz
+    const at = (u: number, v: number): [number, number] => (alongX ? [u, v] : [v, u])
+    for (const s of [1, -1] as const) {
+      // the side planes fall ACROSS, from the ridge line to the long eaves
+      locals.push({
+        a: run * tan,
+        bx: alongX ? 0 : -s * tan,
+        bz: alongX ? -s * tan : 0,
+        poly: [
+          at(-inner, 0),
+          at(inner, 0),
+          at(longHalf + tip, s * (run + tip)),
+          at(-(longHalf + tip), s * (run + tip)),
+        ],
+      })
+      // the end planes fall ALONG, from the ridge ends to the end eaves
+      locals.push({
+        a: longHalf * tan,
+        bx: alongX ? -s * tan : 0,
+        bz: alongX ? 0 : -s * tan,
+        poly: [
+          at(s * inner, 0),
+          at(s * (longHalf + tip), run + tip),
+          at(s * (longHalf + tip), -(run + tip)),
+        ],
+      })
     }
-    const planeOf = (roof: RoofSegmentSlice, px: number, pz: number): number | null => {
-      const [x, z] = toSegmentPlan(roof, px, pz)
-      return roofPlaneAt(roof, x, z)
+  } else return null
+  const cos = Math.cos(roof.yaw)
+  const sin = Math.sin(roof.yaw)
+  const [X0, , Z0] = roof.position
+  return locals.map((f) => {
+    const gx = f.bx * cos + f.bz * sin
+    const gz = -f.bx * sin + f.bz * cos
+    return {
+      c: base + f.a - gx * X0 - gz * Z0,
+      gx,
+      gz,
+      poly: f.poly.map(([x, z]) => [X0 + x * cos + z * sin, Z0 - x * sin + z * cos] as const),
     }
-    const minorRafterCovered = (px: number, pz: number) => inFootprint(major, px, pz)
-    // a wing member inside the main is buried where the wing's plane runs
-    // under the main's (beyond the valley) OR where the member itself sits
-    // under the main's plane (a ceiling joist or purlin of the wing at plate
-    // height inside the house — under the exposed wing roof, but inside the
-    // main's attic all the same); a collar tie up in the wing's exposed
-    // attic stays
-    const minorCoveredFor = (m: Member) => {
-      const top = m.position[1] + m.dims[1] / 2
-      return (px: number, pz: number) => {
-        if (!inFootprint(major, px, pz)) return false
-        const yMinor = planeOf(minor, px, pz)
-        const yMajor = planeOf(major, px, pz)
-        if (yMinor === null || yMajor === null) return false
-        return yMinor <= yMajor + BURIAL_TOLERANCE || top <= yMajor + BURIAL_TOLERANCE
+  })
+}
+
+/** One piece of a level set — a line on the larger roof's facet. */
+export type Locus = {
+  a: readonly [number, number, number]
+  b: readonly [number, number, number]
+  /** Unit plan direction in which the smaller roof rises over the larger. */
+  up: readonly [number, number]
+  /** The larger roof's facet under the line. */
+  facet: Facet
+}
+
+const signedArea2 = (poly: Facet['poly']): number => {
+  let sum = 0
+  for (let k = 0; k < poly.length; k++) {
+    const p = poly[k] as readonly [number, number]
+    const q = poly[(k + 1) % poly.length] as readonly [number, number]
+    sum += p[0] * q[1] - q[0] * p[1]
+  }
+  return sum / 2
+}
+
+/** Parameter range of the line P0 + t·dir inside a convex polygon, null when it misses. */
+function clipLineToPolygon(
+  P0: readonly [number, number],
+  dir: readonly [number, number],
+  poly: Facet['poly'],
+): [number, number] | null {
+  const orient = signedArea2(poly) >= 0 ? 1 : -1
+  let t0 = Number.NEGATIVE_INFINITY
+  let t1 = Number.POSITIVE_INFINITY
+  for (let k = 0; k < poly.length; k++) {
+    const p = poly[k] as readonly [number, number]
+    const q = poly[(k + 1) % poly.length] as readonly [number, number]
+    const ex = q[0] - p[0]
+    const ez = q[1] - p[1]
+    // inside: orient · cross(edge, P − p) ≥ 0 — affine in t
+    const alpha = orient * (ex * (P0[1] - p[1]) - ez * (P0[0] - p[0]))
+    const beta = orient * (ex * dir[1] - ez * dir[0])
+    if (Math.abs(beta) < 1e-12) {
+      if (alpha < -1e-9) return null
+      continue
+    }
+    const t = -alpha / beta
+    if (beta > 0) t0 = Math.max(t0, t)
+    else t1 = Math.min(t1, t)
+  }
+  return t1 - t0 > 1e-9 ? [t0, t1] : null
+}
+
+/**
+ * The lines {smaller − larger = offset} of the two roofs' height difference:
+ * one per pair of facets whose planes cross, clipped to both facets'
+ * polygons (the larger roof's deck under the line, the smaller roof's
+ * members over it). Level-set pieces join end to end across facet edges.
+ */
+export function levelSets(
+  minor: RoofSegmentSlice,
+  major: RoofSegmentSlice,
+  offset: number,
+): Locus[] {
+  const fa = roofFacets(minor)
+  const fb = roofFacets(major)
+  if (fa === null || fb === null) return []
+  const out: Locus[] = []
+  for (const A of fa) {
+    for (const B of fb) {
+      const nx = A.gx - B.gx
+      const nz = A.gz - B.gz
+      const rel = Math.hypot(nx, nz)
+      if (rel < 1e-9) continue // parallel planes — a continuation, no line
+      const d = offset + B.c - A.c
+      const ux = nx / rel
+      const uz = nz / rel
+      const P0: [number, number] = [(ux * d) / rel, (uz * d) / rel]
+      const dir: [number, number] = [-uz, ux]
+      const ta = clipLineToPolygon(P0, dir, A.poly)
+      if (ta === null) continue
+      const tb = clipLineToPolygon(P0, dir, B.poly)
+      if (tb === null) continue
+      const t0 = Math.max(ta[0], tb[0])
+      const t1 = Math.min(ta[1], tb[1])
+      if (t1 - t0 < 1e-6) continue
+      const at = (t: number): [number, number, number] => {
+        const X = P0[0] + dir[0] * t
+        const Z = P0[1] + dir[1] * t
+        return [X, B.c + B.gx * X + B.gz * Z, Z]
+      }
+      out.push({ a: at(t0), b: at(t1), up: [ux, uz], facet: B })
+    }
+  }
+  return out
+}
+
+const surfaceAt = (roof: RoofSegmentSlice, px: number, pz: number): number | null => {
+  const [x, z] = toSegmentPlan(roof, px, pz)
+  return roofPlaneAt(roof, x, z)
+}
+
+/**
+ * A roof's surface is LIVE at a plan point when no larger roof whose
+ * rafter reach covers the point rides above it there — a wing carried under
+ * the main roof has no plane of its own where a porch meets the main above
+ * it, so no pair may cut against that plane, lay a sleeper on it or read a
+ * crease from it. `except` is the pair's other roof (a pair reads its own
+ * crossing).
+ */
+export function roofLiveAt(
+  roofs: readonly RoofSegmentSlice[],
+  roof: RoofSegmentSlice,
+  px: number,
+  pz: number,
+  except?: RoofSegmentSlice,
+): boolean {
+  const [x, z] = toSegmentPlan(roof, px, pz)
+  const y = roofPlaneAt(roof, x, z)
+  if (y === null) return false
+  const area = roof.width * roof.depth
+  for (const r of roofs) {
+    if (r === roof || r === except || r.width * r.depth <= area) continue
+    const [xr, zr] = toSegmentPlan(r, px, pz)
+    const yr = roofPlaneAt(r, xr, zr)
+    if (yr === null) continue
+    const [ox, oz] = roofReach(r)
+    if (Math.abs(xr) > r.width / 2 + ox + EPS || Math.abs(zr) > r.depth / 2 + oz + EPS) continue
+    if (yr > y + BURIAL_TOLERANCE) return false
+  }
+  return true
+}
+
+/** True where both roofs of a pair are live at the point — where their crossing is real. */
+function pairOwns(
+  roofs: readonly RoofSegmentSlice[],
+  major: RoofSegmentSlice,
+  minor: RoofSegmentSlice,
+  px: number,
+  pz: number,
+): boolean {
+  return roofLiveAt(roofs, major, px, pz, minor) && roofLiveAt(roofs, minor, px, pz, major)
+}
+
+export type OverframePair = { major: RoofSegmentSlice; minor: RoofSegmentSlice }
+
+/**
+ * The crossing pairs the overframe join serves: both shapes readable, the
+ * vertical envelopes interleaving, the rafter reaches overlapping, not a
+ * buried parallel wing (W16c cuts those). The larger footprint is the
+ * roof that runs through.
+ */
+export function overframePairs(roofs: readonly RoofSegmentSlice[]): OverframePair[] {
+  const buried = new Set<string>()
+  for (const w of detectBuriedWings([...roofs])) buried.add(pairKeyOf(w.major.id, w.minor.id))
+  const out: OverframePair[] = []
+  for (let i = 0; i < roofs.length; i++) {
+    for (let j = i + 1; j < roofs.length; j++) {
+      const a = roofs[i] as RoofSegmentSlice
+      const b = roofs[j] as RoofSegmentSlice
+      if (buried.has(pairKeyOf(a.id, b.id))) continue
+      if (roofPlaneAt(a, 0, 0) === null || roofPlaneAt(b, 0, 0) === null) continue
+      if (a.position[1] >= segPeakY(b) - EPS || b.position[1] >= segPeakY(a) - EPS) continue
+      if (!footprintsOverlap(a, b, true)) continue
+      const major = a.width * a.depth >= b.width * b.depth ? a : b
+      const minor = major === a ? b : a
+      if (!pairOwnsSomewhere(roofs, major, minor)) continue
+      out.push({ major, minor })
+    }
+  }
+  return out
+}
+
+/** Sampled over the smaller roof's plate: does the pair own any point of the overlap? */
+function pairOwnsSomewhere(
+  roofs: readonly RoofSegmentSlice[],
+  major: RoofSegmentSlice,
+  minor: RoofSegmentSlice,
+): boolean {
+  const [mox, moz] = roofReach(major)
+  const cos = Math.cos(minor.yaw)
+  const sin = Math.sin(minor.yaw)
+  const n = 9
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const xl = (-0.5 + i / (n - 1)) * minor.width
+      const zl = (-0.5 + j / (n - 1)) * minor.depth
+      const px = minor.position[0] + xl * cos + zl * sin
+      const pz = minor.position[2] - xl * sin + zl * cos
+      const [xm, zm] = toSegmentPlan(major, px, pz)
+      if (Math.abs(xm) > major.width / 2 + mox || Math.abs(zm) > major.depth / 2 + moz) continue
+      if (pairOwns(roofs, major, minor, px, pz)) return true
+    }
+  }
+  return false
+}
+
+export type RoofCrease = {
+  major: RoofSegmentSlice
+  minor: RoofSegmentSlice
+  a: readonly [number, number, number]
+  b: readonly [number, number, number]
+  /** Rise over plan run along the line. */
+  fall: number
+  /** Plan length. */
+  plan: number
+}
+
+/**
+ * The creases where the two roofs' surfaces cross (the smaller roof above
+ * on one side, below on the other) — the valley lines of the join; a
+ * touch, a continuation or a wing wholly under the other roof has none.
+ */
+export function roofCreases(roofs: readonly RoofSegmentSlice[]): RoofCrease[] {
+  const out: RoofCrease[] = []
+  for (const { major, minor } of overframePairs(roofs)) {
+    const owned = (px: number, pz: number) => pairOwns(roofs, major, minor, px, pz)
+    for (const l of levelSets(minor, major, 0).flatMap((piece) => clipLocusTo(piece, owned))) {
+      const mx = (l.a[0] + l.b[0]) / 2
+      const mz = (l.a[2] + l.b[2]) / 2
+      const diff = (px: number, pz: number): number =>
+        (surfaceAt(minor, px, pz) ?? 0) - (surfaceAt(major, px, pz) ?? 0)
+      const over = diff(mx + l.up[0] * CREASE_STEP, mz + l.up[1] * CREASE_STEP)
+      const under = diff(mx - l.up[0] * CREASE_STEP, mz - l.up[1] * CREASE_STEP)
+      if (over <= BURIAL_TOLERANCE || under >= -BURIAL_TOLERANCE) continue
+      const plan = Math.hypot(l.b[0] - l.a[0], l.b[2] - l.a[2])
+      if (plan < 1e-6) continue
+      out.push({ major, minor, a: l.a, b: l.b, fall: Math.abs(l.b[1] - l.a[1]) / plan, plan })
+    }
+  }
+  return out
+}
+
+/** A member's local frame (unit X, Y, Z in level space) from its three XYZ euler. */
+export function memberFrame(m: Member): {
+  x: [number, number, number]
+  y: [number, number, number]
+  z: [number, number, number]
+} {
+  const [rx, ry, rz] = m.rotation
+  const a = Math.cos(rx)
+  const b = Math.sin(rx)
+  const c = Math.cos(ry)
+  const d = Math.sin(ry)
+  const e = Math.cos(rz)
+  const f = Math.sin(rz)
+  return {
+    x: [c * e, a * f + b * e * d, b * f - a * e * d],
+    y: [-c * f, a * e - b * f * d, b * e + a * f * d],
+    z: [d, -b * c, a * c],
+  }
+}
+
+/** Deck panels are split into strips this wide (down the slope) before a cut. */
+const PANEL_STRIP = 0.2
+
+/**
+ * Cut a wide flat member (a deck panel, its membrane) the way clipMemberBy
+ * cuts a stick: split into strips across its width first — breaking where
+ * `boundary` changes across the width, so no strip straddles the larger
+ * roof's plate line — and count a strip covered wherever ANY point across
+ * its width is, so two decks cut against each other never share a plan
+ * point (a line crossing the panel diagonally leaves a staircase, never a
+ * buried triangle). A panel none of whose plan samples is covered stays
+ * whole.
+ */
+export function clipPanelBy(
+  m: Member,
+  covered: (px: number, pz: number) => boolean,
+  note: string,
+  boundary?: (px: number, pz: number) => boolean,
+): Member[] {
+  const w = m.dims[2]
+  const f = memberFrame(m)
+  const plan = (s: number, t: number): [number, number] => [
+    m.position[0] + f.x[0] * s + f.z[0] * t,
+    m.position[2] + f.x[2] * s + f.z[2] * t,
+  ]
+  let any = false
+  for (let i = 0; i < 7 && !any; i++) {
+    for (let j = 0; j < 7; j++) {
+      const p = plan((-0.5 + i / 6) * m.dims[0], (-0.5 + j / 6) * w)
+      if (covered(p[0], p[1])) {
+        any = true
+        break
       }
     }
-    const majorTrimCovered = (px: number, pz: number) => {
-      if (!inReach(minor, px, pz)) return false
-      const yMinor = planeOf(minor, px, pz)
-      const yMajor = planeOf(major, px, pz)
-      return yMinor !== null && yMajor !== null && yMajor < yMinor - BURIAL_TOLERANCE
+  }
+  if (!any) return [m]
+  // strip boundaries: uniform, plus every boundary transition across the width
+  const cuts = new Set<number>([-w / 2, w / 2])
+  for (let k = 1; k < Math.ceil(w / PANEL_STRIP); k++)
+    cuts.add(-w / 2 + (w * k) / Math.ceil(w / PANEL_STRIP))
+  if (boundary !== undefined) {
+    const side = (t: number) => {
+      const p = plan(0, t)
+      return boundary(p[0], p[1])
     }
-    const minorNote = ` — cut at the valley with roof ${major.id} (the wing stops at the main's plane)`
-    const majorNote = ` — cut where the wing ${minor.id} passes over the eave`
+    const steps = Math.max(2, Math.ceil(w / 0.02))
+    let prev = side(-w / 2)
+    for (let k = 1; k <= steps; k++) {
+      const t = -w / 2 + (w * k) / steps
+      const cur = side(t)
+      if (cur !== prev) {
+        let a = t - w / steps
+        let b = t
+        for (let it = 0; it < 8; it++) {
+          const mid = (a + b) / 2
+          if (side(mid) === prev) a = mid
+          else b = mid
+        }
+        cuts.add((a + b) / 2)
+      }
+      prev = cur
+    }
+  }
+  const edges = [...cuts].sort((p, q) => p - q)
+  const out: Member[] = []
+  for (let k = 0; k + 1 < edges.length; k++) {
+    const w0 = edges[k] as number
+    const w1 = edges[k + 1] as number
+    if (w1 - w0 < 0.005) continue
+    const wc = (w0 + w1) / 2
+    const strip: Member = {
+      ...m,
+      dims: [m.dims[0], m.dims[1], w1 - w0],
+      position: [
+        m.position[0] + f.z[0] * wc,
+        m.position[1] + f.z[1] * wc,
+        m.position[2] + f.z[2] * wc,
+      ],
+    }
+    // across the strip: its two edges and its centre line
+    const across = [w0 - wc + 0.002, 0, w1 - wc - 0.002]
+    const stripCovered = (px: number, pz: number) =>
+      across.some((t) => covered(px + f.z[0] * t, pz + f.z[2] * t))
+    out.push(...clipMemberBy(strip, stripCovered, note))
+  }
+  return out
+}
+
+/** The smaller roof's eave trim stops this far past the larger roof's trim at an inside corner (the mitre). */
+const TRIM_MITRE = 0.1
+/** …where its plane is within a fascia's height of the larger roof's (the two fascias would cross). */
+const FASCIA_H = 0.15
+/** Roles whose box rides the roof plane — their bottom against that plane sets the stack they clear. */
+const ON_PLANE = new Set<Member['role']>([
+  'rafter',
+  'jack-rafter',
+  'hip',
+  'valley',
+  'ridge',
+  'outlooker',
+  'sheathing',
+  'wrb',
+])
+
+/** The larger roof's eave keeps at least this much past the sleeper line under the smaller roof (vertical). */
+const OVERHANG_KEEP = 0.2
+/** The smaller roof's plate-height wood keeps this much clear past the kept eave's end (vertical). */
+const PLATE_WOOD_CLEAR = 0.1
+/** A fascia pair's depth past the rafter tips — the smaller roof's trim reaches this far past its rafters. */
+const TRIM_DEPTH = 0.06
+/** The smaller roof's plate-height wood stops this far past the larger roof's plate line. */
+const PLATE_CLEAR = 0.01
+
+/**
+ * The knife, by zone. INSIDE THE LARGER ROOF'S PLATE that roof is the
+ * structure: the smaller roof's plane-riding members are cut where its
+ * plane clears the larger roof's deck-and-sleeper stack by less than their
+ * own seat (the bare plane at 200), its plate-height wood (joists, fascia,
+ * ties, studs) wherever it sits inside the larger roof's attic or rafter
+ * zone; a valley sleeper takes the jack ends. IN THE LARGER ROOF'S EAVE
+ * ZONE the same sleeper band holds — the larger roof's tails and deck are
+ * kept under the band and cut where the smaller roof rides clear over
+ * them, its fascia and drip edge wherever the smaller roof's deck rises
+ * into them; the smaller roof's plate-height wood is cut where it pokes
+ * into the tails that stay; a smaller roof tucked clear under the tails
+ * is left alone; a sleeper runs over the plates only, never the eave
+ * corner; at an inside corner the smaller roof's fascia stops past the
+ * larger roof's. A rafter cut at a sleeper is a valley jack and says so;
+ * panels are cut in strips.
+ */
+export function trimPairs(
+  roofs: readonly RoofSegmentSlice[],
+  members: Member[],
+  spec: FramingSpec,
+): Member[] {
+  let out = members
+  const schematic = spec.detail === '200'
+  for (const { major, minor } of overframePairs(roofs)) {
+    const stack = overframeStack(spec, major)
+    const deckTopV = schematic ? BURIAL_TOLERANCE : stack.normal / Math.cos(major.pitch)
+    // the larger roof's plate line carries its end walls (gable studs on the
+    // line) — the attic reaches half a wall past it
+    const wallHalf = Math.max(0.07, (major.wallThickness ?? 0.14) / 2)
+    // the sleeper's box reaches this far up the smaller roof's rise past its
+    // contact line (its lift's plan shift and half its width, at the two
+    // roofs' combined slope) — the larger roof's eave keeps its deck at least
+    // that far, so no board ever hangs past the deck's cut end
+    const sleeperFoot =
+      ((stack.normal + stack.thickness / 2) * Math.sin(major.pitch) + stack.width / 2) *
+        (Math.tan(major.pitch) + Math.tan(minor.pitch)) +
+      0.03
+    const bandTop = schematic
+      ? BURIAL_TOLERANCE
+      : stack.rafters + Math.max(OVERHANG_KEEP, sleeperFoot)
+    const [mox, moz] = roofReach(major)
+    const [nox, noz] = roofReach(minor)
+    const inMajorPlate = (px: number, pz: number, margin = 0) => {
+      const [x, z] = toSegmentPlan(major, px, pz)
+      return (
+        Math.abs(x) <= major.width / 2 + margin + EPS &&
+        Math.abs(z) <= major.depth / 2 + margin + EPS
+      )
+    }
+    const inMajorReach = (px: number, pz: number, extra = 0) => {
+      const [x, z] = toSegmentPlan(major, px, pz)
+      return (
+        Math.abs(x) <= major.width / 2 + mox + extra + EPS &&
+        Math.abs(z) <= major.depth / 2 + moz + extra + EPS
+      )
+    }
+    const inMinorReach = (px: number, pz: number, extra = 0) => {
+      const [x, z] = toSegmentPlan(minor, px, pz)
+      return (
+        Math.abs(x) <= minor.width / 2 + nox + extra + EPS &&
+        Math.abs(z) <= minor.depth / 2 + noz + extra + EPS
+      )
+    }
+    // a smaller roof whose deck top stays under the larger roof's tails is clear of them
+    const clearUnder =
+      (LUMBER_CROSS_SECTIONS[spec.rafterSize][1] + ROOF_DECK_T + UNDERLAYMENT_T) /
+        Math.cos(minor.pitch) +
+      0.005
+    const isTrim = (role: Member['role']) => role === 'fascia' || role === 'drip-edge'
+    const owned = (px: number, pz: number) => roofLiveAt(roofs, major, px, pz, minor)
+    const minorCoveredFor = (m: Member) => {
+      // the member's bottom face against its own roof plane at its centre:
+      // a rafter sits on the plane, a dropped end rafter under it, a hip
+      // or ridge board (deeper, top flush) under it, the deck and the rake
+      // outlookers above it — the stack it must clear grows by that much
+      const frame = memberFrame(m)
+      const upY = Math.max(0.2, Math.abs(frame.y[1]))
+      const bottomV = m.position[1] - m.dims[1] / 2 / upY
+      const top = m.position[1] + m.dims[1] / 2
+      const planeAtCentre = surfaceAt(minor, m.position[0], m.position[2])
+      const onPlane = ON_PLANE.has(m.role) && planeAtCentre !== null
+      const below = onPlane ? (planeAtCentre as number) - bottomV : 0
+      const inStack =
+        schematic || !onPlane ? BURIAL_TOLERANCE : Math.max(BURIAL_TOLERANCE, stack.rafters + below)
+      const trim = isTrim(m.role)
+      return (px: number, pz: number) => {
+        if (!inMajorReach(px, pz, trim ? TRIM_MITRE : 0)) return false
+        if (!owned(px, pz)) return false
+        const yMinor = surfaceAt(minor, px, pz)
+        const yMajor = surfaceAt(major, px, pz)
+        if (yMinor === null || yMajor === null) return false
+        // the smaller roof's fascia stops past the larger roof's at an
+        // inside corner (the mitre band beyond the larger roof's tip)
+        if (trim && !inMajorReach(px, pz)) return yMinor <= yMajor + FASCIA_H
+        const diff = yMinor - yMajor
+        if (inMajorPlate(px, pz, onPlane ? wallHalf : Math.max(wallHalf, PLATE_CLEAR))) {
+          if (diff <= inStack) return true
+          if (onPlane) return false
+          // plate-height wood inside the larger roof's attic or rafter zone
+          return bottomV <= yMajor + deckTopV
+        }
+        // the larger roof's eave zone: the same sleeper band — never a roof
+        // tucked clear under the tails
+        if (onPlane) return diff > -clearUnder && diff <= inStack
+        // plate-height wood poking into the tails that stay (they go only
+        // past the band), clear of the kept eave's end
+        return top > yMajor && diff <= bandTop + PLATE_WOOD_CLEAR
+      }
+    }
+    const minorDeckTopV =
+      (LUMBER_CROSS_SECTIONS[spec.rafterSize][1] + ROOF_DECK_T + UNDERLAYMENT_T) /
+      Math.cos(minor.pitch)
+    const majorCoveredFor = (m: Member) => {
+      const trim = isTrim(m.role)
+      // a plane-riding member's square end face leans past its cut by its
+      // depth's rise — the cut lands that much inside the plate line so the
+      // corner stops AT the line
+      const lean = ON_PLANE.has(m.role) ? m.dims[1] * Math.sin(major.pitch) : 0
+      const bottomV = m.position[1] - m.dims[1] / 2
+      return (px: number, pz: number) => {
+        if (inMajorPlate(px, pz, -lean)) return false
+        if (!inMinorReach(px, pz, trim ? EAVE_TRIM : TRIM_DEPTH)) return false
+        if (!owned(px, pz)) return false
+        const yMinor = surfaceAt(minor, px, pz)
+        const yMajor = surfaceAt(major, px, pz)
+        if (yMinor === null || yMajor === null) return false
+        // the trim goes wherever the smaller roof's deck top rises into it
+        if (trim) return yMinor + minorDeckTopV > bottomV - 0.005
+        // the eave keeps its tails and deck under the sleeper band; past it
+        // they go where the smaller roof rides over
+        return yMajor + bandTop < yMinor
+      }
+    }
+    const minorNote = schematic
+      ? ` — cut where it runs under roof ${major.id} (schematic)`
+      : ` — cut where it runs under roof ${major.id}'s deck (overframe)`
+    const jackNote = ` — from the ridge to the valley sleeper on roof ${major.id} (overframe; bevel cut on site)`
+    const majorNote = ` — cut where roof ${minor.id} rides over the eave`
+    const isPanel = (m: Member) => m.role === 'sheathing' || m.role === 'wrb'
     const next: Member[] = []
     for (const m of out) {
       if (m.sourceId === minor.id) {
-        if (m.role === 'rafter') next.push(...clipMemberBy(m, minorRafterCovered, minorNote))
-        else next.push(...clipMemberBy(m, minorCoveredFor(m), minorNote))
-      } else if (m.sourceId === major.id && (m.role === 'fascia' || m.role === 'drip-edge')) {
-        next.push(...clipMemberBy(m, majorTrimCovered, majorNote))
+        const covered = minorCoveredFor(m)
+        const pieces = isPanel(m)
+          ? clipPanelBy(m, covered, '', inMajorPlate)
+          : clipMemberBy(m, covered, '')
+        const whole = pieces.length === 1 && pieces[0] === m
+        for (const p of pieces) {
+          if (whole) next.push(p)
+          else if (!schematic && m.role === 'rafter' && /^Rafter\b/.test(m.label ?? '')) {
+            next.push({
+              ...p,
+              role: 'jack-rafter',
+              label: `${(m.label ?? '').replace(/^Rafter\b/, 'Valley jack')}${jackNote}`,
+            })
+          } else next.push({ ...p, label: `${m.label ?? ''}${minorNote}` })
+        }
+      } else if (m.sourceId === major.id) {
+        const covered = majorCoveredFor(m)
+        const pieces = isPanel(m)
+          ? clipPanelBy(m, covered, majorNote, inMajorPlate)
+          : clipMemberBy(m, covered, majorNote)
+        next.push(...pieces)
       } else next.push(m)
     }
     out = next
@@ -4358,88 +4976,181 @@ export function trimValleyJoins(
   return out
 }
 
-// ---------------------------------------------------------------------------
-// Partial overlaps (W16f) — any two roofs whose footprints overlap and whose
-// envelopes interleave, not joined by valleys and not a full burial: the
-// SMALLER roof is the secondary (a hip wing on a hip main, a porch hip at
-// the eave, a porch grazing the garage wing) and is trimmed wherever it
-// runs inside the larger roof's footprint under the larger roof's plane —
-// its fake wood in the other attic goes, what rises above stays; the larger
-// roof keeps its structure (California practice: the lower roof runs
-// through) and loses only its eave trim where the smaller roof passes over
-// it. The intersection LINE itself is still not framed (the B8c warning
-// says so); this only removes the wood that could never be there.
-// ---------------------------------------------------------------------------
-
-/**
- * Trim every overlapping pair `served` does not cover (valley pairs cut
- * their own way). Pairs whose planes the model cannot read (a flat, a
- * gambrel, a mansard, a dutch) are left alone.
- */
-export function trimOverlaps(
-  roofs: readonly RoofSegmentSlice[],
-  members: Member[],
-  served: ReadonlySet<string>,
-): Member[] {
-  let out = members
-  for (let i = 0; i < roofs.length; i++) {
-    for (let j = i + 1; j < roofs.length; j++) {
-      const a = roofs[i] as RoofSegmentSlice
-      const b = roofs[j] as RoofSegmentSlice
-      const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`
-      if (served.has(key)) continue
-      if (roofPlaneAt(a, 0, 0) === null || roofPlaneAt(b, 0, 0) === null) continue
-      if (a.position[1] >= segPeakY(b) - EPS || b.position[1] >= segPeakY(a) - EPS) continue
-      if (!footprintsOverlap(a, b)) continue
-      const major = a.width * a.depth >= b.width * b.depth ? a : b
-      const minor = major === a ? b : a
-      const inFootprint = (roof: RoofSegmentSlice, px: number, pz: number) => {
-        const [x, z] = toSegmentPlan(roof, px, pz)
-        return Math.abs(x) <= roof.width / 2 + EPS && Math.abs(z) <= roof.depth / 2 + EPS
-      }
-      const inReach = (roof: RoofSegmentSlice, px: number, pz: number) => {
-        const [x, z] = toSegmentPlan(roof, px, pz)
-        return (
-          Math.abs(x) <= roof.width / 2 + roof.overhang + EAVE_TRIM + EPS &&
-          Math.abs(z) <= roof.depth / 2 + tipOf(roof) + EAVE_TRIM + EPS
-        )
-      }
-      const planeOf = (roof: RoofSegmentSlice, px: number, pz: number): number | null => {
-        const [x, z] = toSegmentPlan(roof, px, pz)
-        return roofPlaneAt(roof, x, z)
-      }
-      // the smaller roof's members: gone where they sit inside the larger
-      // roof's footprint under its plane (by the roof plane there, or by the
-      // member's own top for the wood at plate height)
-      const minorCoveredFor = (m: Member) => {
-        const top = m.position[1] + m.dims[1] / 2
-        return (px: number, pz: number) => {
-          if (!inFootprint(major, px, pz)) return false
-          const yMinor = planeOf(minor, px, pz)
-          const yMajor = planeOf(major, px, pz)
-          if (yMinor === null || yMajor === null) return false
-          return yMinor <= yMajor + BURIAL_TOLERANCE || top <= yMajor + BURIAL_TOLERANCE
-        }
-      }
-      const majorTrimCovered = (px: number, pz: number) => {
-        if (!inReach(minor, px, pz)) return false
-        const yMinor = planeOf(minor, px, pz)
-        const yMajor = planeOf(major, px, pz)
-        return yMinor !== null && yMajor !== null && yMajor < yMinor - BURIAL_TOLERANCE
-      }
-      const minorNote = ` — cut where it runs under roof ${major.id} (the junction itself is not framed — verify)`
-      const majorNote = ` — cut where roof ${minor.id} passes over the eave`
-      const next: Member[] = []
-      for (const m of out) {
-        if (m.sourceId === minor.id) next.push(...clipMemberBy(m, minorCoveredFor(m), minorNote))
-        else if (m.sourceId === major.id && (m.role === 'fascia' || m.role === 'drip-edge')) {
-          next.push(...clipMemberBy(m, majorTrimCovered, majorNote))
-        } else next.push(m)
-      }
-      out = next
+/** The parts of a locus inside `keep` (sampled every 0.05 m, edges bisected). */
+function clipLocusTo(l: Locus, keep: (px: number, pz: number) => boolean): Locus[] {
+  const n = Math.max(2, Math.ceil(Math.hypot(l.b[0] - l.a[0], l.b[2] - l.a[2]) / 0.05) + 1)
+  const at = (t: number): [number, number, number] => [
+    l.a[0] + (l.b[0] - l.a[0]) * t,
+    l.a[1] + (l.b[1] - l.a[1]) * t,
+    l.a[2] + (l.b[2] - l.a[2]) * t,
+  ]
+  const keepAt = (t: number) => {
+    const p = at(t)
+    return keep(p[0], p[2])
+  }
+  const edge = (tIn: number, tOut: number): number => {
+    let a = tIn
+    let b = tOut
+    for (let k = 0; k < 8; k++) {
+      const mid = (a + b) / 2
+      if (keepAt(mid)) a = mid
+      else b = mid
     }
+    return (a + b) / 2
+  }
+  const out: Locus[] = []
+  const ts = Array.from({ length: n }, (_, i) => i / (n - 1))
+  const ok = ts.map(keepAt)
+  let i = 0
+  while (i < n) {
+    if (!ok[i]) {
+      i++
+      continue
+    }
+    let j = i
+    while (j + 1 < n && ok[j + 1]) j++
+    const t0 = i === 0 ? 0 : edge(ts[i] as number, ts[i - 1] as number)
+    const t1 = j === n - 1 ? 1 : edge(ts[j] as number, ts[j + 1] as number)
+    if (t1 - t0 > 1e-6) out.push({ ...l, a: at(t0), b: at(t1) })
+    i = j + 1
   }
   return out
+}
+
+/** XYZ euler of the frame whose columns are the member's local X, Y, Z (three's XYZ extraction). */
+export function eulerFromBasis(
+  ex: readonly [number, number, number],
+  ey: readonly [number, number, number],
+  ez: readonly [number, number, number],
+): [number, number, number] {
+  const m13 = ez[0]
+  const y = Math.asin(Math.max(-1, Math.min(1, m13)))
+  if (Math.abs(m13) < 0.9999999) {
+    return [Math.atan2(-ez[1], ez[2]), y, Math.atan2(-ey[0], ex[0])]
+  }
+  return [Math.atan2(ey[2], ey[1]), y, 0]
+}
+
+/**
+ * The valley sleepers of every overframe pair: one 2x board laid flat on
+ * the larger roof's underlayment along each piece of the level set where
+ * the smaller roof's rafters end (the knife cuts them there), boards that
+ * meet at a corner mitred so their boxes never share volume.
+ */
+export function emitSleepers(
+  roofs: readonly RoofSegmentSlice[],
+  spec: FramingSpec,
+  members: Member[],
+): void {
+  const size = sleeperSizeFor(spec)
+  for (const { major, minor } of overframePairs(roofs)) {
+    const stack = overframeStack(spec, major)
+    const inPlate = (roof: RoofSegmentSlice, px: number, pz: number) => {
+      const [x, z] = toSegmentPlan(roof, px, pz)
+      return Math.abs(x) <= roof.width / 2 + EPS && Math.abs(z) <= roof.depth / 2 + EPS
+    }
+    const [mox, moz] = roofReach(major)
+    const onDeck = (px: number, pz: number) => {
+      const [x, z] = toSegmentPlan(major, px, pz)
+      return (
+        Math.abs(x) <= major.width / 2 + mox - stack.width / 2 + EPS &&
+        Math.abs(z) <= major.depth / 2 + moz - stack.width / 2 + EPS
+      )
+    }
+    // the boards lie on the deck top, up the facet normal from the level set
+    // — their contact line is what must stay where the larger roof's deck
+    // is kept: over its own plate, or over the smaller roof's plate in
+    // its eave zone (never in the eave corner)
+    const loci = levelSets(minor, major, stack.rafters).flatMap((l) => {
+      const nLen = Math.hypot(l.facet.gx, 1, l.facet.gz)
+      const sx = (-l.facet.gx / nLen) * stack.normal
+      const sz = (-l.facet.gz / nLen) * stack.normal
+      return clipLocusTo(
+        l,
+        (px, pz) =>
+          pairOwns(roofs, major, minor, px, pz) &&
+          onDeck(px + sx, pz + sz) &&
+          (inPlate(major, px + sx, pz + sz) || inPlate(minor, px + sx, pz + sz)),
+      )
+    })
+    const lengthOf = (l: Locus) => Math.hypot(l.b[0] - l.a[0], l.b[1] - l.a[1], l.b[2] - l.a[2])
+    const unit = (
+      from: readonly [number, number, number],
+      to: readonly [number, number, number],
+    ): [number, number, number] => {
+      const d = Math.hypot(to[0] - from[0], to[1] - from[1], to[2] - from[2]) || 1
+      return [(to[0] - from[0]) / d, (to[1] - from[1]) / d, (to[2] - from[2]) / d]
+    }
+    type End = {
+      i: number
+      end: 'a' | 'b'
+      p: readonly [number, number, number]
+      d: [number, number, number]
+    }
+    const ends: End[] = []
+    loci.forEach((l, i) => {
+      ends.push({ i, end: 'a', p: l.a, d: unit(l.a, l.b) })
+      ends.push({ i, end: 'b', p: l.b, d: unit(l.b, l.a) })
+    })
+    const trims = loci.map(() => ({ a: 0, b: 0 }))
+    for (const e of ends) {
+      for (const f of ends) {
+        if (e.i === f.i) continue
+        if (Math.hypot(e.p[0] - f.p[0], e.p[1] - f.p[1], e.p[2] - f.p[2]) > SLEEPER_JOIN) continue
+        const cosPhi = Math.max(
+          -1,
+          Math.min(1, e.d[0] * f.d[0] + e.d[1] * f.d[1] + e.d[2] * f.d[2]),
+        )
+        const phi = Math.acos(cosPhi)
+        if (phi > Math.PI - 0.01) continue // collinear — a butt joint
+        const trim = Math.min(stack.width / 2 / Math.tan(phi / 2), lengthOf(loci[e.i] as Locus) / 3)
+        const t = trims[e.i] as { a: number; b: number }
+        t[e.end] = Math.max(t[e.end], trim)
+      }
+    }
+    loci.forEach((l, i) => {
+      const L0 = lengthOf(l)
+      const t = trims[i] as { a: number; b: number }
+      const L = L0 - t.a - t.b
+      if (L < SLEEPER_MIN) return
+      const u = unit(l.a, l.b)
+      const a: [number, number, number] = [
+        l.a[0] + u[0] * t.a,
+        l.a[1] + u[1] * t.a,
+        l.a[2] + u[2] * t.a,
+      ]
+      const b: [number, number, number] = [
+        l.b[0] - u[0] * t.b,
+        l.b[1] - u[1] * t.b,
+        l.b[2] - u[2] * t.b,
+      ]
+      const nLen = Math.hypot(l.facet.gx, 1, l.facet.gz)
+      const n: [number, number, number] = [-l.facet.gx / nLen, 1 / nLen, -l.facet.gz / nLen]
+      const z: [number, number, number] = [
+        u[1] * n[2] - u[2] * n[1],
+        u[2] * n[0] - u[0] * n[2],
+        u[0] * n[1] - u[1] * n[0],
+      ]
+      const lift = stack.normal + stack.thickness / 2
+      members.push({
+        system: 'roof-framing',
+        role: 'valley',
+        size,
+        dims: [L, stack.thickness, stack.width],
+        length: L,
+        position: [
+          (a[0] + b[0]) / 2 + n[0] * lift,
+          (a[1] + b[1]) / 2 + n[1] * lift,
+          (a[2] + b[2]) / 2 + n[2] * lift,
+        ],
+        rotation: eulerFromBasis(u, n, z),
+        material: 'lumber',
+        sourceId: major.id,
+        label: `Valley sleeper ${size} flat on the sheathing of roof ${major.id} — roof ${minor.id}'s valley jacks bevel onto it (overframe / California valley; the rafters under it carry the smaller roof — verify)`,
+        flag: onePieceFlag('Valley sleeper', L),
+      })
+    })
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -4774,9 +5485,10 @@ function segPeakY(r: RoofSegmentSlice): number {
   return r.position[1] + r.wallHeight + Math.max(0, rise)
 }
 
-/** Plan-rectangle overlap (2D OBB SAT on the two segments' yawed footprints),
+/** Plan-rectangle overlap (2D OBB SAT on the two segments' yawed footprints
+ * — the plates, or with `reach` the rafters' plan reach past them),
  * requiring REAL penetration past INTERSECT_MARGIN on every axis. */
-function footprintsOverlap(a: RoofSegmentSlice, b: RoofSegmentSlice): boolean {
+function footprintsOverlap(a: RoofSegmentSlice, b: RoofSegmentSlice, reach = false): boolean {
   // Local +X / +Z in the (x, z) plan under a three Y-rotation — the emitter
   // convention: +X → (cosψ, −sinψ), +Z → (sinψ, cosψ).
   const axesOf = (r: RoofSegmentSlice): [number, number][] => {
@@ -4790,8 +5502,10 @@ function footprintsOverlap(a: RoofSegmentSlice, b: RoofSegmentSlice): boolean {
   const ax = axesOf(a)
   const bx = axesOf(b)
   const t: [number, number] = [b.position[0] - a.position[0], b.position[2] - a.position[2]]
-  const halfA = [a.width / 2, a.depth / 2]
-  const halfB = [b.width / 2, b.depth / 2]
+  const [rax, raz] = reach ? roofReach(a) : [0, 0]
+  const [rbx, rbz] = reach ? roofReach(b) : [0, 0]
+  const halfA = [a.width / 2 + rax, a.depth / 2 + raz]
+  const halfB = [b.width / 2 + rbx, b.depth / 2 + rbz]
   const radius = (axes: [number, number][], half: number[], axis: [number, number]): number =>
     axes.reduce(
       (sum, u, i) => sum + Math.abs((u[0] ?? 0) * axis[0] + (u[1] ?? 0) * axis[1]) * (half[i] ?? 0),
@@ -4805,107 +5519,152 @@ function footprintsOverlap(a: RoofSegmentSlice, b: RoofSegmentSlice): boolean {
 }
 
 /**
- * B8c: overlapping segment pairs the valley detector does NOT serve. A hip
- * wing into a gable main — or a skewed, parallel, buried or eave-mismatched
- * gable pair — frames straight through with NO members, and the detector's
- * perpendicular-gable×gable assumption used to live only in its docblock:
- * silence broke the labeling contract. Every non-qualifying overlap now
- * surfaces as ONE computeLevel warning per pair ('roof intersection not
- * framed — valley detail required …'), printed verbatim in the P4 schedules
- * flag block. Full hip-plane valley framing stays out of scope (v1 = the
- * warning). Touching edges (adjacent wings) and vertically separated stacks
- * (a cupola floating above the main ridge) never warn; pairs detectValleys
- * frames are already served — their members ARE the answer.
+ * Which way a crease-less overlap goes: sampled over the smaller roof's
+ * plate footprint inside the larger roof's reach — 'under' when the smaller
+ * roof never rises above the larger one there, 'over' when it never dips
+ * below, 'edge' when the footprints only graze.
+ */
+function overlapSide(
+  roofs: readonly RoofSegmentSlice[],
+  minor: RoofSegmentSlice,
+  major: RoofSegmentSlice,
+): 'under' | 'over' | 'edge' | 'none' {
+  const [mox, moz] = roofReach(major)
+  let over = 0
+  let under = 0
+  let owned = 0
+  const n = 9
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const xl = (-0.5 + i / (n - 1)) * minor.width
+      const zl = (-0.5 + j / (n - 1)) * minor.depth
+      const cos = Math.cos(minor.yaw)
+      const sin = Math.sin(minor.yaw)
+      const px = minor.position[0] + xl * cos + zl * sin
+      const pz = minor.position[2] - xl * sin + zl * cos
+      const [xm, zm] = toSegmentPlan(major, px, pz)
+      if (Math.abs(xm) > major.width / 2 + mox || Math.abs(zm) > major.depth / 2 + moz) continue
+      if (!pairOwns(roofs, major, minor, px, pz)) continue
+      owned++
+      const diff = (surfaceAt(minor, px, pz) ?? 0) - (surfaceAt(major, px, pz) ?? 0)
+      if (diff > BURIAL_TOLERANCE) over++
+      else if (diff < -BURIAL_TOLERANCE) under++
+    }
+  }
+  if (owned === 0) return 'none'
+  if (over === 0 && under === 0) return 'edge'
+  return over === 0 ? 'under' : under === 0 ? 'over' : 'edge'
+}
+
+/**
+ * A gable wing whose ridge stops inside the larger roof ABOVE its surface:
+ * the wing's rake end is a triangular wall standing on that roof. Returns
+ * how far short of the pierce point the ridge stops and the wall's height
+ * at the ridge, or null.
+ */
+function standingRakeEnd(
+  minor: RoofSegmentSlice,
+  major: RoofSegmentSlice,
+): { short: number; height: number } | null {
+  if (minor.roofType !== 'gable') return null
+  const ridgeY = minor.position[1] + minor.wallHeight + (minor.depth / 2) * Math.tan(minor.pitch)
+  const cos = Math.cos(minor.yaw)
+  const sin = Math.sin(minor.yaw)
+  const [mox, moz] = roofReach(major)
+  let best: { short: number; height: number } | null = null
+  for (const sx of [1, -1] as const) {
+    const xl = sx * (minor.width / 2)
+    const px = minor.position[0] + xl * cos
+    const pz = minor.position[2] - xl * sin
+    const [xm, zm] = toSegmentPlan(major, px, pz)
+    if (Math.abs(xm) > major.width / 2 + mox || Math.abs(zm) > major.depth / 2 + moz) continue
+    const yMajor = surfaceAt(major, px, pz)
+    if (yMajor === null) continue
+    const height = ridgeY - yMajor
+    if (height <= BURIAL_TOLERANCE) continue
+    // how far the ridge would have to run on for the larger roof to reach it —
+    // along the ridge, at the larger roof's rise per metre in that direction
+    const step = 0.05
+    const px2 = px + sx * cos * step
+    const pz2 = pz - sx * sin * step
+    const y2 = surfaceAt(major, px2, pz2)
+    const grade = y2 === null ? 0 : (y2 - yMajor) / step
+    const short = grade > EPS ? height / grade : Number.POSITIVE_INFINITY
+    if (!Number.isFinite(short)) continue
+    if (best === null || short > best.short) best = { short, height }
+  }
+  return best
+}
+
+/**
+ * B8c: the labeling contract for every crossing pair — never silent. The
+ * classic join detectValleys reads (a wing on the long plane, its ridge
+ * reaching the slope) is served by the overframe knife and its sleepers and
+ * stays quiet — its members ARE the answer. Every other readable crossing
+ * says how it was framed (an overframe valley with its creases, or a
+ * smaller roof wholly under the larger one), and any crease that does not
+ * fall is a DEAD VALLEY. Pairs the model cannot read (a flat, a gambrel, a
+ * mansard, a dutch) keep the 'not framed — valley detail required' line.
+ * Touching edges and vertically separated stacks (a cupola floating above
+ * the main ridge) never warn.
  */
 export function detectUnframedRoofIntersections(roofs: RoofSegmentSlice[]): string[] {
-  const key = (x: string, y: string): string => (x < y ? `${x}|${y}` : `${y}|${x}`)
-  const served = new Set<string>()
-  for (const v of detectValleys(roofs)) served.add(key(v.major.id, v.minorId))
-  for (const w of detectBuriedWings(roofs)) served.add(key(w.major.id, w.minor.id))
+  const quiet = new Set<string>()
+  for (const v of detectValleys(roofs)) quiet.add(pairKeyOf(v.major.id, v.minorId))
+  const buried = new Set<string>()
+  for (const w of detectBuriedWings(roofs)) buried.add(pairKeyOf(w.major.id, w.minor.id))
   const out: string[] = [...buriedWingWarnings(roofs)]
+  const creases = roofCreases(roofs)
   for (let i = 0; i < roofs.length; i++) {
     for (let j = i + 1; j < roofs.length; j++) {
       const a = roofs[i] as RoofSegmentSlice
       const b = roofs[j] as RoofSegmentSlice
-      if (served.has(key(a.id, b.id))) continue
+      const key = pairKeyOf(a.id, b.id)
+      if (buried.has(key)) continue
       // vertical envelopes must interleave — plan overlap alone is stacking
       if (a.position[1] >= segPeakY(b) - EPS || b.position[1] >= segPeakY(a) - EPS) continue
-      if (!footprintsOverlap(a, b)) continue
-      out.push(
-        `roof intersection not framed — valley detail required (${a.roofType} ${a.id} × ${b.roofType} ${b.id}: only a gable / hip wing joining a gable / hip main at right angles on its long plane, ridge reaching the main slope, wing eave at or below the main eave, is modeled; the smaller roof's members under the larger one are cut, the larger roof's eave trim under the smaller one too — the line itself needs its detail)`,
-      )
+      if (!footprintsOverlap(a, b, true)) continue
+      if (roofPlaneAt(a, 0, 0) === null || roofPlaneAt(b, 0, 0) === null) {
+        out.push(
+          `roof intersection not framed — valley detail required (${a.roofType} ${a.id} × ${b.roofType} ${b.id}: only gable, hip and shed planes are read; a flat, gambrel, mansard or dutch segment crossing another roof gets no cut and no sleeper)`,
+        )
+        continue
+      }
+      const major = a.width * a.depth >= b.width * b.depth ? a : b
+      const minor = major === a ? b : a
+      const own = creases.filter((c) => c.major === major && c.minor === minor)
+      if (!quiet.has(key)) {
+        if (own.length === 0) {
+          const side = overlapSide(roofs, minor, major)
+          // a third roof on top of their whole overlap: that roof's pairs say it all
+          if (side === 'none') continue
+          out.push(
+            side === 'under'
+              ? `roof ${minor.id} (${minor.roofType}) runs under roof ${major.id} (${major.roofType}) wherever they overlap — its members there are removed, nothing crosses the larger roof's plane (a ledger or bearing where it meets that roof's wall — verify)`
+              : side === 'over'
+                ? `roof ${minor.id} (${minor.roofType}) rides over roof ${major.id} (${major.roofType}) wherever they overlap — nothing of it is cut, the larger roof's eave tails and trim are cut under it; it bears on nothing of that roof (a ledger or posts at the wall — verify)`
+                : `roof ${minor.id} (${minor.roofType}) and roof ${major.id} (${major.roofType}) overlap only at their edges — the lower members are cut where they meet; verify the junction`,
+          )
+        } else {
+          const plan = own.reduce((sum, c) => sum + c.plan, 0)
+          out.push(
+            `roof intersection framed as an overframe (California) valley — ${minor.roofType} ${minor.id} over ${major.roofType} ${major.id}, ${own.length} crease${own.length === 1 ? '' : 's'}, ${fmtM(plan)} in plan: the larger roof runs through, the smaller roof's rafters end as valley jacks on 2x valley sleepers laid flat on its sheathing, its eave trim cut where the smaller roof passes over — flashing, the sleepers' nailing and the load on the rafters under the overframe by detail (verify)`,
+          )
+        }
+      }
+      const stands = standingRakeEnd(minor, major)
+      if (stands !== null) {
+        out.push(
+          `roof ${minor.id}'s ridge stops ${fmtM(stands.short)} short of roof ${major.id}'s slope — its rake end stands above that roof as a triangular wall ${fmtM(stands.height)} tall at the ridge (siding and flashing there, or carry the wing to the slope)`,
+        )
+      }
+      for (const c of own) {
+        if (c.plan < DEAD_VALLEY_MIN || c.fall >= DEAD_VALLEY_FALL) continue
+        out.push(
+          `dead valley — the crease between roof ${minor.id} and roof ${major.id} runs ${fmtM(c.plan)} with ${c.fall < 1e-6 ? 'no fall' : `${(c.fall * 12).toFixed(1)} in 12 of fall`} (under ¼ in 12): water pools along it; a cricket or a roof revision is required`,
+        )
+      }
     }
   }
   return out
-}
-
-/** Emit one valley member (one size deeper than the rafters — it carries jacks). */
-function emitValley(valley: ValleyLine, spec: FramingSpec, members: Member[]) {
-  const emit = emitter(valley.major, members)
-  const size = ridgeSizeFor(spec.rafterSize)
-  const [t, rd] = LUMBER_CROSS_SECTIONS[size]
-  const { foot, apex } = valley
-  const ux = apex[0] - foot[0]
-  const uy = apex[1] - foot[1]
-  const uz = apex[2] - foot[2]
-  const plan = Math.hypot(ux, uz)
-  const len = Math.hypot(plan, uy)
-  if (len < 0.2) return
-  const psi = Math.atan2(-uz, ux) // +X toward the uphill direction
-  const tilt = Math.atan2(uy, plan)
-  // The valley line is the plane intersection; the board bears bottom-on-plate
-  // at its foot like every rafter (see frameGable), lifted by its plumb half-depth.
-  const seat = rd / (2 * Math.cos(tilt))
-  emit(
-    'valley',
-    size,
-    [len, rd, t],
-    [(foot[0] + apex[0]) / 2, (foot[1] + apex[1]) / 2 + seat, (foot[2] + apex[2]) / 2],
-    psi,
-    tilt,
-    len,
-    'lumber',
-    `Valley ${size}${
-      spec.detail === '400' ? ` — plumb ${Math.round((tilt * 180) / Math.PI)}°, cheek cuts 45°` : ''
-    }`,
-    undefined,
-    spec.detail === '200' ? undefined : onePieceFlag('Valley', len),
-  )
-
-  // ---- valley jacks (LOD 400 completion of the 350 valley line) ----
-  // The penetrating wing's rafters shorten onto the valley (California-
-  // valley practice): at each o.c. station along the wing ridge (the major's
-  // Z axis here), a jack runs on the WING's slope from its ridge line down
-  // to the valley, with a cheek cut where it lands.
-  const [jt, jd] = LUMBER_CROSS_SECTIONS[spec.rafterSize]
-  const s = Math.sign(foot[0] - apex[0]) // which side of the wing ridge
-  const r2 = Math.abs(foot[0] - apex[0]) // wing slope run (along major X)
-  const rise2 = apex[1] - foot[1]
-  const theta2 = Math.atan2(rise2, r2)
-  const jackSeat = jd / (2 * Math.cos(theta2))
-  const zSpan = foot[2] - apex[2] // signed: apex → eave foot along major Z
-  const cx = apex[0]
-  for (let dz = spec.rafterSpacing; Math.abs(dz) < Math.abs(zSpan) - jt; dz += spec.rafterSpacing) {
-    const z = apex[2] + Math.sign(zSpan) * dz
-    // valley point at this station: linear from apex (run 0) to foot (run r2)
-    const frac = Math.abs(dz / zSpan)
-    const jackRun = r2 * frac
-    if (jackRun < 0.15) continue
-    const xv = cx + s * jackRun
-    const yv = apex[1] - jackRun * Math.tan(theta2)
-    const jackLen = Math.hypot(jackRun, apex[1] - yv)
-    emit(
-      'jack-rafter',
-      spec.rafterSize,
-      [jackLen, jd, jt],
-      [(cx + xv) / 2, (apex[1] + yv) / 2 + jackSeat, z],
-      s === 1 ? Math.PI : 0, // +X (uphill) points toward the wing ridge
-      theta2,
-      jackLen,
-      'lumber',
-      `Valley jack ${spec.rafterSize}${spec.detail === '400' ? ' — cheek 45° at the valley' : ''}`,
-      undefined,
-      slopeRafterFlag(spec, jackRun, jackLen, 'Valley jack'),
-    )
-  }
 }

@@ -4,6 +4,7 @@ import { DEFAULT_SPEC } from '../core/spec'
 import type { Member, OpeningSlice, RoomSlice, SlabSlice, WallSlice } from '../core/types'
 import { inches } from '../core/units'
 import type { PlacedFixtureSlice } from '../core/wall-model'
+import { frameAtticSeparations, frameBearingWallsToRoof } from './attic-walls'
 import {
   COURSE_HEIGHT,
   cmuDowelPositions,
@@ -13,7 +14,6 @@ import {
   mixedCmuWall,
 } from './cmu'
 import { applyDeviceOverrides, layoutElectrical, pointInPolygon } from './electrical'
-import { frameAtticSeparations, frameBearingWallsToRoof } from './attic-walls'
 import { frameFloor } from './floor-framing'
 import { buildFoundation } from './foundation'
 import { lgsFrameWalls } from './lgs-wall-framing'
@@ -793,13 +793,192 @@ describe('interpenetration gate — structural members never share volume', () =
     }
   })
 
-  // Two intersecting segments still interpenetrate where the wing meets the
-  // main roof: proper overframing (California valley) stops the wing's
-  // near-slope rafters and ceiling joists AT the valley boards instead of
-  // running them through the main roof's volume. That is the multi-segment
-  // clipping feature - tracked for the next round; the valley boards and
-  // jacks themselves already exist.
-  test.todo('roof framing: intersecting gable pair clips at the valley (overframing)', () => {})
+  test('roof framing: W19 overframe — the gable valley pair composes SAT-clean (the wing cut at the sleepers, the main through)', () => {
+    const members = frameRoofs(
+      [
+        roofSeg(),
+        roofSeg({
+          id: 'roofseg_wing',
+          width: 4,
+          depth: 4,
+          yaw: Math.PI / 2,
+          position: [1, 2.5, 4],
+        }),
+      ],
+      [],
+      spec400,
+    )
+    expect(members.filter((m) => m.role === 'valley')).toHaveLength(2)
+    expect(violations(members)).toEqual([])
+  })
+
+  test('roof framing: W19 overframe — every crossing pair the join model reads composes SAT-clean', () => {
+    const pitch4 = Math.atan(4 / 12)
+    const ranchMain = roofSeg({
+      id: 'main',
+      roofType: 'hip',
+      width: 13.87,
+      depth: 13.26,
+      position: [-3.35, 2.74, 0],
+      pitch: pitch4,
+      overhang: 0.43,
+      wallHeight: 0,
+    })
+    const cases: [string, RoofSegmentSlice[]][] = [
+      [
+        'gable wing reaching the slope (6 × 4)',
+        [
+          roofSeg(),
+          roofSeg({ id: 'wing', width: 6, depth: 4, yaw: Math.PI / 2, position: [1, 2.5, 4] }),
+        ],
+      ],
+      [
+        'gable wing on a lower plate',
+        [
+          roofSeg(),
+          roofSeg({ id: 'wing', width: 4, depth: 4, yaw: Math.PI / 2, position: [1, 2.25, 4] }),
+        ],
+      ],
+      [
+        'gable wing whose eave sits above the main eave',
+        [
+          roofSeg(),
+          roofSeg({ id: 'wing', width: 4, depth: 4, yaw: Math.PI / 2, position: [1, 2.8, 4] }),
+        ],
+      ],
+      [
+        'hip wing reaching the pierce point (10 × 4)',
+        [
+          roofSeg(),
+          roofSeg({
+            id: 'hipwing',
+            roofType: 'hip',
+            width: 10,
+            depth: 4,
+            yaw: Math.PI / 2,
+            position: [1, 2.5, 4],
+          }),
+        ],
+      ],
+      [
+        'short hip wing — its hip end faces the slope (dead valley)',
+        [
+          roofSeg(),
+          roofSeg({
+            id: 'shortwing',
+            roofType: 'hip',
+            width: 8,
+            depth: 4,
+            yaw: Math.PI / 2,
+            position: [1, 2.5, 4],
+          }),
+        ],
+      ],
+      [
+        'hip pyramid into a gable main (the B8c audit exhibit)',
+        [
+          roofSeg(),
+          roofSeg({
+            id: 'hipwing',
+            roofType: 'hip',
+            width: 4,
+            depth: 4,
+            yaw: Math.PI / 2,
+            position: [1, 2.5, 4],
+          }),
+        ],
+      ],
+      [
+        'gable wing on a hip main, apex on the long plane',
+        [
+          roofSeg({ id: 'hipmain', roofType: 'hip', width: 12, depth: 6 }),
+          roofSeg({ id: 'wing', width: 6, depth: 4, yaw: Math.PI / 2, position: [1, 2.5, 4] }),
+        ],
+      ],
+      [
+        'gable wing into a hip end plane',
+        [
+          roofSeg({ id: 'hipmain', roofType: 'hip', width: 12, depth: 6 }),
+          roofSeg({ id: 'atend', width: 6, depth: 4, yaw: Math.PI / 2, position: [3, 2.5, 4] }),
+        ],
+      ],
+      [
+        'parallel gables overlapping (dead valley)',
+        [roofSeg(), roofSeg({ id: 'par', position: [2, 2.5, 3] })],
+      ],
+      [
+        "the ranch: a hip wing through the hip main's end plane",
+        [
+          ranchMain,
+          roofSeg({
+            id: 'hipwing',
+            roofType: 'hip',
+            width: 10.06,
+            depth: 6.71,
+            position: [5.26, 2.74, -3.28],
+            pitch: pitch4,
+            overhang: 0.43,
+            wallHeight: 0,
+          }),
+        ],
+      ],
+      [
+        'the ranch: the hip wing carried two runs in (W19b massing)',
+        [
+          ranchMain,
+          roofSeg({
+            id: 'hipwing',
+            roofType: 'hip',
+            width: 10.06 + 3.355,
+            depth: 6.71,
+            position: [5.26 - 3.355 / 2, 2.74, -3.28],
+            pitch: pitch4,
+            overhang: 0.43,
+            wallHeight: 0,
+          }),
+        ],
+      ],
+      [
+        'the ranch: a porch hip at the eave',
+        [
+          ranchMain,
+          roofSeg({
+            id: 'porch',
+            roofType: 'hip',
+            width: 2.9,
+            depth: 2.44,
+            yaw: -Math.PI / 2,
+            position: [-2.36, 2.49, -6.95],
+            pitch: pitch4,
+            overhang: 0.43,
+            wallHeight: 0,
+          }),
+        ],
+      ],
+      [
+        'the ranch: the porch hip carried to the pierce point (W19b)',
+        [
+          ranchMain,
+          roofSeg({
+            id: 'porch',
+            roofType: 'hip',
+            width: 2.9 + 0.47,
+            depth: 2.44,
+            yaw: -Math.PI / 2,
+            position: [-2.36, 2.49, -6.95 + 0.235],
+            pitch: pitch4,
+            overhang: 0.43,
+            wallHeight: 0,
+          }),
+        ],
+      ],
+    ]
+    const results = cases.map(([name, roofs]) => ({
+      name,
+      v: violations(frameRoofs(roofs, [], spec400)).slice(0, 3),
+    }))
+    expect(results).toEqual(cases.map(([name]) => ({ name, v: [] })))
+  })
 
   test('roof framing: WINDY flat — B8b hurricane ties compose SAT-clean beside joists and rims', () => {
     // Non-vacuous: ties must exist (2 per joist). The connectors nail to the

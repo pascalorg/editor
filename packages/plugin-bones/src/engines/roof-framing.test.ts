@@ -16,8 +16,10 @@ import {
   extractRoofs,
   frameRoofs,
   memberAxis,
-  roofPlaneAt,
+  overframeStack,
   type RoofSegmentSlice,
+  roofCreases,
+  roofPlaneAt,
   shedBearingWallIds,
 } from './roof-framing'
 import { computeTakeoff } from './takeoff'
@@ -545,7 +547,7 @@ describe('frameRoofs — dutch gable (hip skirt + gablet)', () => {
   })
 })
 
-describe('frameRoofs — valleys where two gables cross (LOD 350)', () => {
+describe('frameRoofs — valleys where two gables cross: the overframe join (W19)', () => {
   const major = seg() // 8 × 6, ridge on X, run 3
   const minor = seg({
     id: 'roofseg_wing',
@@ -557,74 +559,88 @@ describe('frameRoofs — valleys where two gables cross (LOD 350)', () => {
   const members = frameRoofs([major, minor], [], DEFAULT_SPEC)
   const valleys = byRole(members, 'valley')
   const theta = major.pitch
-  const rise2 = 2 * Math.tan(theta)
+  const tan = Math.tan(theta)
+  const rise2 = 2 * tan
+  // the two planes: the wing's y = 3.0 + (2 − |x − 1|)·tan, the main's y = 3.0 + (3 − |z|)·tan
+  const wingPlane = (x: number, plate = 3.0) => plate + (2 - Math.abs(x - 1)) * tan
+  const mainPlane = (z: number) => 3.0 + (3 - Math.abs(z)) * tan
+  const stack = overframeStack(DEFAULT_SPEC, major)
+  const facetNormal = new Vector3(0, Math.cos(theta), Math.sin(theta)) // the main's +z plane
 
-  test('exactly two valleys, one each side of the wing ridge', () => {
+  /** The sleeper's box rides the main's deck: its local Y is the facet normal, its
+   * centre one lift up that normal from the level set {wing − main = the rafter stack}. */
+  const expectOnDeck = (v: Member, plate = 3.0) => {
+    const c = new Vector3(...v.position)
+    const lift = stack.normal + stack.thickness / 2
+    expect(c.y - mainPlane(c.z)).toBeCloseTo(lift / Math.cos(theta), 3)
+    const y = new Vector3(0, 1, 0).applyEuler(new Euler(...v.rotation, 'XYZ'))
+    expect(y.dot(facetNormal)).toBeCloseTo(1, 5)
+    const p = c.clone().sub(facetNormal.clone().multiplyScalar(lift))
+    expect(wingPlane(p.x, plate) - mainPlane(p.z)).toBeCloseTo(stack.rafters, 2)
+    expect(v.size).toBe('2x8')
+    expect(v.dims[1]).toBeCloseTo(stack.thickness, 9)
+    expect(v.dims[2]).toBeCloseTo(stack.width, 9)
+    expect(v.label).toContain('Valley sleeper 2x8 flat on the sheathing of roof roofseg_test')
+    expect(v.sourceId).toBe(major.id)
+  }
+
+  test('exactly two sleepers, one each side of the wing ridge', () => {
     expect(valleys).toHaveLength(2)
+    const xs = valleys.map((v) => v.position[0] as number).sort((a, b) => a - b)
+    expect(xs[0] as number).toBeLessThan(1)
+    expect(xs[1] as number).toBeGreaterThan(1)
   })
 
-  test('numeric endpoints: eave foot → ridge-pierce apex (45° plan for equal pitch)', () => {
-    const baseY = 2.5 + 0.5
-    // the 2x8 valley bears bottom-on-plate at its foot: lifted by its own plumb half-depth
-    const vSeat = (7.25 * 0.0254) / (2 * Math.cos(Math.atan2(rise2, 2 * Math.SQRT2)))
+  test('each sleeper lies flat on the main deck along the sleeper line — 45° in plan for equal pitches', () => {
     for (const v of valleys) {
+      expectOnDeck(v)
       const axis = longAxis(v)
+      expect(Math.abs(axis.x)).toBeCloseTo(Math.abs(axis.z), 5)
+      // from the wing's rake line inside the main (z = 2 − 0.3) down toward the main eave
       const e1 = new Vector3(...v.position).add(axis.clone().multiplyScalar(v.length / 2))
       const e2 = new Vector3(...v.position).sub(axis.clone().multiplyScalar(v.length / 2))
-      const apex = e1.y > e2.y ? e1 : e2
-      const foot = e1.y > e2.y ? e2 : e1
-      expect(apex.x).toBeCloseTo(1, 5) // wing centerline
-      expect(apex.y).toBeCloseTo(baseY + vSeat + rise2, 5)
-      expect(apex.z).toBeCloseTo(1, 5) // run1 − rise2/tanθ = 3 − 2
-      expect(foot.y).toBeCloseTo(baseY + vSeat, 5)
-      expect(foot.z).toBeCloseTo(3, 5) // the major eave line
-      expect(Math.abs(foot.x - 1)).toBeCloseTo(2, 5) // ± the wing run
-      // equal pitches → 45° in plan
-      expect(Math.abs(apex.z - foot.z)).toBeCloseTo(Math.abs(apex.x - foot.x), 5)
+      const inner = e1.z < e2.z ? e1 : e2
+      const outer = e1.z < e2.z ? e2 : e1
+      expect(inner.z).toBeGreaterThan(1.6)
+      expect(inner.z).toBeLessThan(2.0)
+      expect(outer.z).toBeGreaterThan(2.9)
+    }
+    // the creases themselves rise from the main eave to the wing's rake line at 45°
+    const creases = roofCreases([major, minor])
+    expect(creases).toHaveLength(2)
+    for (const c of creases) {
+      expect(c.fall).toBeCloseTo(tan / Math.SQRT2, 3)
+      expect(Math.abs(c.b[0] - c.a[0])).toBeCloseTo(Math.abs(c.b[2] - c.a[2]), 5)
     }
   })
 
-  test('parallel or distant segments produce no valleys', () => {
+  test('parallel or distant segments produce no sleepers', () => {
     const parallel = seg({ id: 'p', position: [0, 2.5, 8] })
     expect(byRole(frameRoofs([major, parallel], [], DEFAULT_SPEC), 'valley')).toHaveLength(0)
   })
 
-  test('W16: a wing on a LOWER plate (the porch gable) joins — feet inboard by drop/tanθ, apex that much lower', () => {
+  test('W16: a wing on a LOWER plate (the porch gable) joins — its sleepers ride the main deck on the lower level set', () => {
     const drop = 0.25
-    const low = seg({ ...minor, position: [1, 2.5 - drop, 4] })
-    const members = frameRoofs([major, low], [], DEFAULT_SPEC)
-    const vs = byRole(members, 'valley')
+    const low = seg({ ...minor, width: 6, position: [1, 2.5 - drop, 4] })
+    const joined = frameRoofs([major, low], [], DEFAULT_SPEC)
+    const vs = byRole(joined, 'valley')
     expect(vs).toHaveLength(2)
-    const tan = Math.tan(theta) // equal pitches
-    const footRun = 2 - drop / tan
-    const rise = 2 * tan - drop // the wing ridge above the MAIN eave
-    const baseY = 2.5 + 0.5
-    const vSeat = (7.25 * 0.0254) / (2 * Math.cos(Math.atan2(rise, footRun * Math.SQRT2)))
-    for (const v of vs) {
-      const axis = longAxis(v)
-      const e1 = new Vector3(...v.position).add(axis.clone().multiplyScalar(v.length / 2))
-      const e2 = new Vector3(...v.position).sub(axis.clone().multiplyScalar(v.length / 2))
-      const apex = e1.y > e2.y ? e1 : e2
-      const foot = e1.y > e2.y ? e2 : e1
-      expect(apex.x).toBeCloseTo(1, 5)
-      expect(apex.y).toBeCloseTo(baseY + vSeat + rise, 5)
-      expect(apex.z).toBeCloseTo(3 - rise / tan, 5)
-      expect(foot.y).toBeCloseTo(baseY + vSeat, 5)
-      expect(foot.z).toBeCloseTo(3, 5) // still the main eave line
-      expect(Math.abs(foot.x - 1)).toBeCloseTo(footRun, 5)
-    }
-    // the valley jacks still run the wing's own pitch from its ridge to the valley
-    const jacks = byRole(members, 'jack-rafter').filter((j) => j.label?.includes('Valley jack'))
+    for (const v of vs) expectOnDeck(v, 3.0 - drop)
+    // the valley jacks still run the wing's own pitch from its ridge to the sleeper
+    const jacks = byRole(joined, 'jack-rafter').filter((j) => j.label?.includes('Valley jack'))
     expect(jacks.length).toBeGreaterThan(0)
     for (const j of jacks) expect(Math.abs(j.rotation[2] as number)).toBeCloseTo(theta, 5)
-    // a wing whose eave sits ABOVE the main eave is still not modeled
-    const high = seg({ ...minor, position: [1, 2.8, 4] })
-    expect(byRole(frameRoofs([major, high], [], DEFAULT_SPEC), 'valley')).toHaveLength(0)
-    expect(detectUnframedRoofIntersections([major, high])).toHaveLength(1)
+    // a wing reaching the slope on the lower plate is the classic join — quiet
     expect(detectUnframedRoofIntersections([major, low])).toHaveLength(0)
+    // a wing whose eave sits ABOVE the main eave is no classic join, but the
+    // overframe reads it all the same: sleepers, and a line saying so
+    const high = seg({ ...minor, position: [1, 2.8, 4] })
+    expect(byRole(frameRoofs([major, high], [], DEFAULT_SPEC), 'valley')).toHaveLength(2)
+    const warnings = detectUnframedRoofIntersections([major, high])
+    expect(warnings[0]).toContain('framed as an overframe (California) valley')
   })
 
-  test('W16: hip wings join when their ridge reaches the pierce point; hip mains join on the long plane', () => {
+  test('W16: hip wings join when their ridge reaches the pierce point; hip mains join wherever the apex stays on the long plane', () => {
     // a 10 × 4 hip wing: ridge half 3 → its near ridge end (z = 1) IS the pierce point
     const hipWing = seg({
       id: 'hipwing',
@@ -637,19 +653,33 @@ describe('frameRoofs — valleys where two gables cross (LOD 350)', () => {
     const joined = frameRoofs([major, hipWing], [], DEFAULT_SPEC)
     expect(byRole(joined, 'valley')).toHaveLength(2)
     expect(detectUnframedRoofIntersections([major, hipWing])).toHaveLength(0)
-    // an 8 × 4 hip wing: ridge half 2 → the ridge ends at z = 2, short of z = 1 — its hip end would sit on the main
+    // an 8 × 4 hip wing: ridge half 2 → the ridge ends at z = 2, short of z = 1 —
+    // its hip end faces the main slope head-on: three sleepers (two valleys and
+    // the flat crease between them) and the DEAD VALLEY is reported
     const shortWing = seg({ ...hipWing, id: 'shortwing', width: 8 })
-    expect(byRole(frameRoofs([major, shortWing], [], DEFAULT_SPEC), 'valley')).toHaveLength(0)
-    expect(detectUnframedRoofIntersections([major, shortWing])).toHaveLength(1)
-    // a 12 × 6 hip main: ridge portion ±3 — the wing at x = 1 (run 2) stays on the long plane…
+    expect(byRole(frameRoofs([major, shortWing], [], DEFAULT_SPEC), 'valley')).toHaveLength(3)
+    const short = detectUnframedRoofIntersections([major, shortWing])
+    expect(short).toHaveLength(2)
+    expect(short[0]).toContain('framed as an overframe (California) valley')
+    expect(short[1]).toContain('dead valley')
+    expect(short[1]).toContain('1.00 m with no fall')
+    // a 12 × 6 hip main: a reaching gable wing at x = 1 stays on the long plane…
     const hipMain = seg({ id: 'hipmain', roofType: 'hip', width: 12, depth: 6 })
-    const onMain = frameRoofs([hipMain, minor], [], DEFAULT_SPEC)
-    expect(byRole(onMain, 'valley')).toHaveLength(2)
-    expect(detectUnframedRoofIntersections([hipMain, minor])).toHaveLength(0)
-    // …while the same wing at x = 2 would run into the hip end plane
-    const atEnd = seg({ ...minor, id: 'atend', position: [2, 2.5, 4] })
-    expect(byRole(frameRoofs([hipMain, atEnd], [], DEFAULT_SPEC), 'valley')).toHaveLength(0)
-    expect(detectUnframedRoofIntersections([hipMain, atEnd])).toHaveLength(1)
+    const reaching = seg({ ...minor, width: 6 })
+    expect(byRole(frameRoofs([hipMain, reaching], [], DEFAULT_SPEC), 'valley')).toHaveLength(2)
+    expect(detectUnframedRoofIntersections([hipMain, reaching])).toHaveLength(0)
+    // …and so does one at x = 2 (its apex at z = 1 sits inside the plane, which
+    // reaches |x| ≤ 3 + 1 there), while one at x = 4.5 runs into the hip end plane
+    const atEnd = seg({ ...reaching, id: 'atend', position: [2, 2.5, 4] })
+    expect(byRole(frameRoofs([hipMain, atEnd], [], DEFAULT_SPEC), 'valley')).toHaveLength(2)
+    expect(detectUnframedRoofIntersections([hipMain, atEnd])).toHaveLength(0)
+    const pastEnd = seg({ ...reaching, id: 'pastend', position: [4.5, 2.5, 4] })
+    expect(
+      byRole(frameRoofs([hipMain, pastEnd], [], DEFAULT_SPEC), 'valley').length,
+    ).toBeGreaterThan(0)
+    const past = detectUnframedRoofIntersections([hipMain, pastEnd])
+    expect(past.length).toBeGreaterThan(0)
+    expect(past[0]).toContain('framed as an overframe (California) valley')
   })
 })
 
@@ -754,7 +784,7 @@ describe('frameRoofs — spec-driven sizing + cut data (LOD 400)', () => {
   })
 })
 
-describe('frameRoofs — valley jacks land on the valley (round-2 gap)', () => {
+describe('frameRoofs — valley jacks land on the sleeper (round-2 gap, W19)', () => {
   const major = seg() // 8 × 6, ridge on X, run 3
   const minor = seg({
     id: 'roofseg_wing',
@@ -766,27 +796,37 @@ describe('frameRoofs — valley jacks land on the valley (round-2 gap)', () => {
   const members = frameRoofs([major, minor], [], DEFAULT_SPEC)
   const jacks = byRole(members, 'jack-rafter').filter((j) => j.label?.includes('Valley jack'))
   const baseY = 2.5 + 0.5
-  const rise2 = 2 * Math.tan(major.pitch)
+  const tan = Math.tan(major.pitch)
+  const rise2 = 2 * tan
   // 2x6 valley jacks bear bottom-on-plane: lifted by their plumb half-depth
   const jSeat = (5.5 * 0.0254) / (2 * Math.cos(major.pitch))
+  const wingPlane = (x: number) => baseY + (2 - Math.abs(x - 1)) * tan
+  const mainPlane = (z: number) => baseY + (3 - Math.abs(z)) * tan
+  const stack = overframeStack(DEFAULT_SPEC, major)
 
-  test('jacks exist on both sides of the wing ridge, top on the ridge, bottom ON the valley', () => {
+  test('jacks exist on both sides of the wing ridge, top at the ridge, bottom on the sleeper line', () => {
     expect(jacks.length).toBeGreaterThanOrEqual(4)
+    let checked = 0
     for (const j of jacks) {
       const axis = longAxis(j)
       const e1 = new Vector3(...j.position).add(axis.clone().multiplyScalar(j.length / 2))
       const e2 = new Vector3(...j.position).sub(axis.clone().multiplyScalar(j.length / 2))
       const top = e1.y > e2.y ? e1 : e2
       const bot = e1.y > e2.y ? e2 : e1
-      // top on the wing ridge line (x = 1 at the wing ridge height)
-      expect(top.x).toBeCloseTo(1, 5)
-      expect(top.y).toBeCloseTo(baseY + jSeat + rise2, 5)
-      // bottom on the valley: the valley plan line runs 45° from the apex
-      // (1, 1) to the foot (3, 3) — x-offset from the wing ridge = z − z*
-      expect(Math.abs(bot.x - 1)).toBeCloseTo(bot.z - 1, 4)
-      // and on the major slope plane: y = eave + (run1 − z)·tanθ
-      expect(bot.y).toBeCloseTo(baseY + jSeat + (3 - bot.z) * Math.tan(major.pitch), 4)
+      // the rake-end rafters are dropped an outlooker under the plane — their
+      // cut sits that much higher up the slope; the rest end exactly where
+      // the wing plane clears the main's deck-and-sleeper stack
+      const mid = new Vector3(...j.position)
+      if (wingPlane(mid.x) + jSeat - mid.y > 0.01) continue
+      checked++
+      // the wing's own rafters, cut: their top stops at the ridge face
+      expect(Math.abs(top.x - 1)).toBeLessThan(0.1)
+      expect(Math.abs(top.y - (baseY + jSeat + rise2))).toBeLessThan(0.1)
+      expect(bot.y).toBeCloseTo(wingPlane(bot.x) + jSeat, 3)
+      expect(wingPlane(bot.x) - mainPlane(bot.z)).toBeCloseTo(stack.rafters, 2)
+      expect(j.label).toContain('from the ridge to the valley sleeper on roof roofseg_test')
     }
+    expect(checked).toBeGreaterThanOrEqual(4)
   })
 
   test('jacks shorten toward the apex', () => {
@@ -822,17 +862,18 @@ describe('frameRoofs — 400 cut-angle labels are pinned (round-3: deletable tex
     expect(ridge.label).toContain('rafter plumb cuts 40°')
   })
 
-  test('valley + valley jacks carry their cheek-cut call-outs', () => {
+  test('the valley sleeper and the valley jacks carry their bevel call-outs', () => {
     const major = seg()
     const minor = seg({ id: 'wing', width: 4, depth: 4, yaw: Math.PI / 2, position: [1, 2.5, 4] })
     const members = frameRoofs([major, minor], [], at400)
     const valley = byRole(members, 'valley')[0] as Member
-    expect(valley.label).toContain('cheek cuts 45°')
-    expect(valley.label).toMatch(/plumb \d+°/)
+    expect(valley.label).toContain('flat on the sheathing')
+    expect(valley.label).toContain("roof wing's valley jacks bevel onto it")
     const vjack = byRole(members, 'jack-rafter').find((j) =>
       j.label?.includes('Valley jack'),
     ) as Member
-    expect(vjack.label).toContain('cheek 45°')
+    expect(vjack.label).toMatch(/plumb cut \d+°/)
+    expect(vjack.label).toContain('bevel cut on site')
   })
 
   test('at 300 the fabrication cut data stays out of the labels', () => {
@@ -1073,10 +1114,17 @@ describe('LOD-400 B6a: roof deck panels per slope plane (R803.2)', () => {
           expect(wing(x)).toBeGreaterThanOrEqual(main(z) - 0.1)
       }
     }
-    // the wing lost deck area to the cut; the main's deck is untouched
+    // the wing lost deck area to the cut; the main's deck loses only its eave
+    // band where the wing rides clear over it (W19) — strips, a few percent
     const area = (ms: Member[]) => ms.reduce((a, m) => a + m.dims[0] * m.dims[2], 0)
     expect(area(minorDeck)).toBeLessThan(area(deckOf(alone)))
-    expect(majorDeck.length).toBe(deckOf(frameRoofs([major], [], DEFAULT_SPEC)).length)
+    const mainAlone = area(deckOf(frameRoofs([major], [], DEFAULT_SPEC)))
+    expect(area(majorDeck)).toBeLessThan(mainAlone)
+    expect(area(majorDeck)).toBeGreaterThan(0.95 * mainAlone)
+    for (const m of majorDeck) {
+      if (!m.label?.includes('rides over the eave')) continue
+      expect(Math.abs(m.position[2] as number)).toBeGreaterThan(2.9)
+    }
   })
 })
 
@@ -1144,7 +1192,11 @@ describe('LOD-400 B6b: underlayment rides every deck panel 1:1 (R905.1.1)', () =
     expect(wingMembrane.length).toBeGreaterThan(0)
     // W16e: the membrane is cut with the deck — no overlay flag rides it
     for (const u of wingMembrane) expect(u.flag ?? '').not.toContain('trim to the valley line')
-    expect(wingMembrane.some((u) => u.label?.includes('cut at the valley'))).toBe(true)
+    expect(
+      wingMembrane.some((u) =>
+        u.label?.includes("cut where it runs under roof roofseg_test's deck"),
+      ),
+    ).toBe(true)
   })
 })
 
@@ -1762,6 +1814,13 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
   //  the main go, its deck / membrane / drip edge are cut at the valley, the
   //  main's eave fascia + drip edge are cut under the wing — the valley pair
   //  recaptured.
+  // 2026-09-06 INTENDED-CHANGE (W19 overframe join): the valley member is a
+  //  SLEEPER flat on the main's deck along the level set where the wing's
+  //  plane clears the deck-and-sleeper stack, the wing's own rafters are the
+  //  valley jacks (cut there, relabelled), the wing's deck / ridge / joists are
+  //  cut by their own bottoms against that stack, the main's eave deck and
+  //  tails are cut in strips where the wing rides clear over them — the
+  //  valley pair recaptured; the eleven single-roof pins hold.
   const hashOf = (members: Member[]): string =>
     createHash('sha256').update(JSON.stringify(members)).digest('hex').slice(0, 16)
   const PINS: [string, Partial<RoofSegmentSlice>, Partial<FramingSpec>, string][] = [
@@ -1794,7 +1853,7 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
       [],
       { ...DEFAULT_SPEC, detail: '400' },
     )
-    expect(hashOf(members)).toBe('59f6dda3a7a133e4')
+    expect(hashOf(members)).toBe('28d19c718978d555')
   })
 })
 
@@ -2271,10 +2330,19 @@ describe('LOD-400 B8b: flat-roof joists tie BOTH bearing ends under high wind (R
 // LOD-400 B8c: unframed roof intersections warn — never silent
 // ---------------------------------------------------------------------------
 
-describe('LOD-400 B8c: overlapping segment pairs the valley detector skips WARN', () => {
-  const PHRASE = 'roof intersection not framed — valley detail required'
+describe('LOD-400 B8c: every crossing pair says how it was framed — never silent (W19)', () => {
+  const OVERFRAME = 'framed as an overframe (California) valley'
+  const reaching = (over: Partial<RoofSegmentSlice> = {}) =>
+    seg({
+      id: 'roofseg_wing',
+      width: 6,
+      depth: 4,
+      yaw: Math.PI / 2,
+      position: [1, 2.5, 4],
+      ...over,
+    })
 
-  test('the audit exhibit: a hip wing into a gable main frames NO valley members — and now warns', () => {
+  test('the audit exhibit: a hip pyramid into a gable main frames its sleepers now — and its hip end faces the slope in a DEAD valley', () => {
     const major = seg()
     const wing = seg({
       id: 'roofseg_hipwing',
@@ -2284,53 +2352,66 @@ describe('LOD-400 B8c: overlapping segment pairs the valley detector skips WARN'
       yaw: Math.PI / 2,
       position: [1, 2.5, 4], // same crossing the gable×gable valley pair uses
     })
-    // the silence being closed: zero valley boards, zero valley jacks
     const members = frameRoofs([major, wing], [], DEFAULT_SPEC)
-    expect(byRole(members, 'valley')).toHaveLength(0)
-    expect(members.some((m) => m.label?.includes('Valley jack'))).toBe(false)
-    // …so the detector must say so, naming both segments
+    expect(byRole(members, 'valley').length).toBeGreaterThanOrEqual(3)
     const warnings = detectUnframedRoofIntersections([major, wing])
-    expect(warnings).toHaveLength(1)
-    expect(warnings[0]).toContain(PHRASE)
+    expect(warnings).toHaveLength(2)
+    expect(warnings[0]).toContain(OVERFRAME)
     expect(warnings[0]).toContain('roofseg_hipwing')
     expect(warnings[0]).toContain('roofseg_test')
+    expect(warnings[1]).toContain('dead valley')
+    expect(warnings[1]).toContain('3.00 m with no fall')
   })
 
-  test('a QUALIFYING perpendicular gable×gable pair stays quiet — its members ARE the answer', () => {
+  test('a QUALIFYING perpendicular gable×gable pair whose ridge reaches the slope stays quiet — its sleepers and jacks ARE the answer', () => {
     const major = seg()
-    const minor = seg({
-      id: 'roofseg_wing',
-      width: 4,
-      depth: 4,
-      yaw: Math.PI / 2,
-      position: [1, 2.5, 4],
-    })
-    expect(byRole(frameRoofs([major, minor], [], DEFAULT_SPEC), 'valley')).toHaveLength(2)
-    expect(detectUnframedRoofIntersections([major, minor])).toHaveLength(0)
+    expect(byRole(frameRoofs([major, reaching()], [], DEFAULT_SPEC), 'valley')).toHaveLength(2)
+    expect(detectUnframedRoofIntersections([major, reaching()])).toHaveLength(0)
+    // the same wing stopping a metre short of the slope is no classic join:
+    // its rake end stands on the main roof as a wall, and the reporter says so
+    const short = reaching({ width: 4 })
+    const warnings = detectUnframedRoofIntersections([major, short])
+    expect(warnings).toHaveLength(2)
+    expect(warnings[0]).toContain(OVERFRAME)
+    expect(warnings[1]).toContain("roof roofseg_wing's ridge stops 1.00 m short")
+    expect(warnings[1]).toContain('triangular wall 0.84 m tall')
   })
 
-  test('non-qualifying gable pairs warn: parallel overlap, fully BURIED cross, eave mismatch', () => {
+  test('non-qualifying gable pairs say what they are: a parallel overlap is a dead valley, a buried cross is removed, a lifted wing overframes', () => {
     const major = seg()
-    // parallel ridges, footprints overlapping — the ⊥ test skips the pair
-    expect(
-      detectUnframedRoofIntersections([major, seg({ id: 'par', position: [2, 2.5, 3] })]),
-    ).toHaveLength(1)
-    // perpendicular but fully buried inside the major (never crosses the eave)
+    // parallel ridges, footprints overlapping — the two planes meet head-on
+    const par = detectUnframedRoofIntersections([major, seg({ id: 'par', position: [2, 2.5, 3] })])
+    expect(par).toHaveLength(2)
+    expect(par[0]).toContain(OVERFRAME)
+    expect(par[1]).toContain('dead valley')
+    expect(par[1]).toContain('no fall')
+    // perpendicular but fully buried inside the major (never crosses its plane)
     const buried = seg({ id: 'bur', width: 3, depth: 2, yaw: Math.PI / 2, position: [0, 2.5, 0] })
-    expect(detectUnframedRoofIntersections([major, buried])).toHaveLength(1)
-    // qualifying geometry, but the eaves mismatch > 0.05 — detectValleys refuses it
+    const bur = detectUnframedRoofIntersections([major, buried])
+    expect(bur).toHaveLength(1)
+    expect(bur[0]).toContain('runs under roof roofseg_test')
+    expect(bur[0]).toContain('its members there are removed')
+    expect(frameRoofs([major, buried], [], DEFAULT_SPEC).some((m) => m.sourceId === 'bur')).toBe(
+      false,
+    )
+    // qualifying geometry, but the eaves mismatch > 0.05 — not the classic join, overframed all the same
     const lifted = seg({ id: 'lif', width: 4, depth: 4, yaw: Math.PI / 2, position: [1, 2.8, 4] })
-    expect(detectUnframedRoofIntersections([major, lifted])).toHaveLength(1)
+    const lif = detectUnframedRoofIntersections([major, lifted])
+    expect(lif[0]).toContain(OVERFRAME)
+    expect(lif.some((w) => w.includes("roof lif's ridge stops"))).toBe(true)
   })
 
-  test('adjacent wings never warn: shared edge and a 3 cm graze are composition, not intersection', () => {
+  test('adjacent wings: a shared edge and a 3 cm graze overlap only at their eaves — the edge line, nothing framed', () => {
     const major = seg() // x ∈ [−4, 4]
-    expect(
-      detectUnframedRoofIntersections([major, seg({ id: 'abut', position: [8, 2.5, 0] })]),
-    ).toHaveLength(0)
-    expect(
-      detectUnframedRoofIntersections([major, seg({ id: 'graze', position: [7.97, 2.5, 0] })]),
-    ).toHaveLength(0)
+    for (const wing of [
+      seg({ id: 'abut', position: [8, 2.5, 0] }),
+      seg({ id: 'graze', position: [7.97, 2.5, 0] }),
+    ]) {
+      const warnings = detectUnframedRoofIntersections([major, wing])
+      expect(warnings).toHaveLength(1)
+      expect(warnings[0]).toContain('overlap only at their edges')
+      expect(byRole(frameRoofs([major, wing], [], DEFAULT_SPEC), 'valley')).toHaveLength(0)
+    }
   })
 
   test('vertically separated stacks never warn (a cupola floats above the main ridge)', () => {
@@ -2347,15 +2428,8 @@ describe('LOD-400 B8c: overlapping segment pairs the valley detector skips WARN'
     ).toHaveLength(1)
   })
 
-  test('three wings: the served valley pair stays quiet while the hip wing warns once', () => {
+  test('three wings: the reaching gable wing stays quiet while the hip pyramid warns twice', () => {
     const major = seg()
-    const gableWing = seg({
-      id: 'roofseg_wing',
-      width: 4,
-      depth: 4,
-      yaw: Math.PI / 2,
-      position: [1, 2.5, 4],
-    })
     const hipWing = seg({
       id: 'roofseg_hipwing',
       roofType: 'hip',
@@ -2364,9 +2438,9 @@ describe('LOD-400 B8c: overlapping segment pairs the valley detector skips WARN'
       yaw: Math.PI / 2,
       position: [-2, 2.5, -4],
     })
-    const warnings = detectUnframedRoofIntersections([major, gableWing, hipWing])
-    expect(warnings).toHaveLength(1)
-    expect(warnings[0]).toContain('roofseg_hipwing')
+    const warnings = detectUnframedRoofIntersections([major, reaching(), hipWing])
+    expect(warnings).toHaveLength(2)
+    for (const w of warnings) expect(w).toContain('roofseg_hipwing')
   })
 })
 
@@ -3046,7 +3120,8 @@ describe('W16c: buried parallel wings', () => {
     const hipMain = seg({ ...main, id: 'hipmain', roofType: 'hip', depth: 13.26 })
     const hipWing = seg({ ...wing, id: 'hipwing', roofType: 'hip', position: [5.26, 2.74, -3.28] })
     expect(detectBuriedWings([hipMain, hipWing])).toHaveLength(0)
-    expect(detectUnframedRoofIntersections([hipMain, hipWing])).toHaveLength(1)
+    // the overframe line and the dead valley its hip end makes against the main's end plane (W19)
+    expect(detectUnframedRoofIntersections([hipMain, hipWing])).toHaveLength(2)
   })
 
   test('the wing keeps nothing inside the main; its ridge, purlins, fascia and deck are cut at the gable line', () => {
@@ -3353,25 +3428,31 @@ describe('W16f: partial overlaps are trimmed', () => {
     }
     expect(buried).toBe(0)
     expect(risen).toBeGreaterThan(0)
-    expect(wingMembers.some((m) => m.label?.includes('cut where it runs under roof main'))).toBe(
-      true,
-    )
-    // the main's east eave trim is cut where the wing passes over it
+    expect(
+      wingMembers.some((m) => m.label?.includes("cut where it runs under roof main's deck")),
+    ).toBe(true)
+    // the main's east eave trim is cut where the wing rides over it
     const mainTrim = members.filter(
       (m) => m.sourceId === 'main' && (m.role === 'fascia' || m.role === 'drip-edge'),
     )
-    expect(
-      mainTrim.some((m) => m.label?.includes('cut where roof wing passes over the eave')),
-    ).toBe(true)
-    // the main's structure runs through
+    expect(mainTrim.some((m) => m.label?.includes('cut where roof wing rides over the eave'))).toBe(
+      true,
+    )
+    // the main's structure runs through: every rafter and jack inside its plate is still there
     const mainRafters = (ms: Member[]) =>
       ms.filter((m) => m.sourceId === 'main' && (m.role === 'rafter' || m.role === 'jack-rafter'))
         .length
-    expect(mainRafters(members)).toBe(mainRafters(frameRoofs([main], [], at400)))
+    expect(mainRafters(members)).toBeGreaterThanOrEqual(mainRafters(frameRoofs([main], [], at400)))
+    // W19: the line has its detail — sleepers on the main's deck, and the
+    // wing's hip end facing the main's end plane is named a dead valley
+    expect(
+      members.filter((m) => m.role === 'valley' && m.sourceId === 'main').length,
+    ).toBeGreaterThan(0)
     const warnings = detectUnframedRoofIntersections([main, wing])
-    expect(warnings).toHaveLength(1)
-    expect(warnings[0]).toContain('not framed')
-    expect(warnings[0]).toContain('the line itself needs its detail')
+    expect(warnings).toHaveLength(2)
+    expect(warnings[0]).toContain('framed as an overframe (California) valley')
+    expect(warnings[1]).toContain('dead valley')
+    expect(warnings[1]).toContain('3.35 m with no fall')
   })
 
   test('a porch hip at the eave: its near end inside the main goes, its outer roof stays', () => {

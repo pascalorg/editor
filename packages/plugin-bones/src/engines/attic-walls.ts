@@ -159,7 +159,10 @@ export function frameWallsToRoof(
   if (roofs.length === 0 || separations.length === 0) return { members, warnings }
   const what = kind === 'separation' ? 'dwelling–garage separation' : 'shed bearing partition'
   const joists = roofMembers.filter((m) => m.role === 'ceiling-joist')
-  const obstacles = roofMembers.filter((m) => OBSTACLES.has(m.role))
+  // …a valley SLEEPER (W19) lies on the deck, above every stud top
+  const obstacles = roofMembers.filter(
+    (m) => OBSTACLES.has(m.role) && !m.label?.startsWith('Valley sleeper'),
+  )
   // walls framed earlier in this pass: their studs and plates are obstacles
   // to the next wall, and a later plate is cut around an earlier one where
   // the two cross (one plate runs through, the other butts it)

@@ -1,9 +1,9 @@
 import { describe, expect, test } from 'bun:test'
-import { baselineConfig, baselineScene } from './baseline-scene'
-import { computeTakeoff } from '../engines/takeoff'
 import { extractLevels, extractWalls } from '../core/wall-model'
-import { FramingNode } from './schema'
+import { computeTakeoff } from '../engines/takeoff'
+import { baselineConfig, baselineScene } from './baseline-scene'
 import { computeLevel } from './compute'
+import { FramingNode } from './schema'
 
 /**
  * Prod report (2026-08-15, "starter house"): a two-storey house wore its
@@ -1175,8 +1175,8 @@ describe('LOD-400 B7: hip thrust members ride computeLevel end-to-end', () => {
   })
 })
 
-describe('LOD-400 B8c: unframed roof intersections reach the computeLevel warnings', () => {
-  const PHRASE = 'roof intersection not framed — valley detail required'
+describe('LOD-400 B8c: roof intersection lines reach the computeLevel warnings (W19: framed as overframe valleys)', () => {
+  const PHRASE = 'roof intersection framed as an overframe (California) valley'
 
   /** Single-storey scene with a gable main + a hip wing punching its eave. */
   function hipWingScene() {
@@ -1216,7 +1216,7 @@ describe('LOD-400 B8c: unframed roof intersections reach the computeLevel warnin
     return nodes
   }
 
-  test('a hip wing into the gable main warns (P4 prints computeLevel warnings verbatim)', () => {
+  test('a hip wing into the gable main says how it was framed (P4 prints computeLevel warnings verbatim)', () => {
     const cfg = FramingNode.parse({
       id: 'bonesframing_b8c',
       parentId: 'lvl0',
@@ -1228,8 +1228,10 @@ describe('LOD-400 B8c: unframed roof intersections reach the computeLevel warnin
     expect(hits).toHaveLength(1)
     expect(hits[0]).toContain('roofMain')
     expect(hits[0]).toContain('roofWing')
-    // the wing still framed straight through — no valley members exist
-    expect(result.members.some((m) => m.role === 'valley')).toBe(false)
+    // the pyramid's hip end faces the main slope head-on — the dead valley is named
+    expect(result.warnings.some((w) => w.includes('dead valley'))).toBe(true)
+    // W19: the line has its detail — valley sleepers on the main's deck
+    expect(result.members.some((m) => m.role === 'valley')).toBe(true)
   })
 
   test('LOD 200 stays schematic (valleys are not framed there either — no code claims)', () => {
