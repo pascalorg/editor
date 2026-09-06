@@ -22,6 +22,7 @@
  * direction. Verified numerically in the tests by rotating (1,0,0).
  */
 
+import { ROOF_SHEATHING } from '../core/shell-sync'
 import { DEFAULT_SPEC, type FramingSpec, tableSpanFor } from '../core/spec'
 import { stableMembers } from '../core/stable'
 import type { Member, WallSlice } from '../core/types'
@@ -1000,8 +1001,8 @@ function emitCeilingJoistPieces(
 // Roof deck (LOD-400 B6) — R803.2 sheathing on the rafter planes
 // ---------------------------------------------------------------------------
 
-/** 7/16" WSP roof deck (R803.2, fastened per Table R602.3(1)). */
-const ROOF_DECK_T = inches(7 / 16)
+/** 7/16" WSP roof deck (R803.2, fastened per Table R602.3(1)) — the sheet core/shell-sync.ts hands the shell. */
+const ROOF_DECK_T = ROOF_SHEATHING
 /** Strip height (plan run) when tiling TAPERED planes (hip/skirt). Each
  * strip takes its width at its UPHILL edge so it stays inside the hip/arris
  * lines — the under-tile per hip edge is ≈ run·strip·taper/cosθ, so the

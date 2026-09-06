@@ -40,6 +40,9 @@
  * ids and writes the ops.
  */
 import type { NodeOp } from './build'
+// Bones by relative path (see plugin-roof/run.ts): the cover's slab is the
+// rafter depth plus sheathing Bones frames.
+import { roofShellThickness } from '../../plugin-bones/src/core/shell-sync'
 import type { StylePreset } from './styles'
 
 export type Pt = [number, number]
@@ -549,6 +552,10 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         depth: round(pillar.size),
         shaftProfile: pillar.tapered ? 'tapered' : 'straight',
         shaftTaper: pillar.tapered ? 0.3 : 0,
+        // the shaft IS the post's full section (the column renderer's default
+        // shaft is 72 % of the width — a 6x6 read as a 4x4 beside Bones' 6x6)
+        shaftStartScale: 1,
+        shaftEndScale: 1,
         baseStyle: 'none',
         capitalStyle: 'none',
         edgeSoftness: 0.008,
@@ -759,6 +766,8 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         wallThickness: banded ? round(PORCH_BEAM_W) : 0,
         pitch: round(pitchDeg),
         overhang: round(input.overhang),
+        // the slab is the rafter and its sheathing — what Bones frames
+        deckThickness: round(roofShellThickness()),
         metadata: { ...meta, roof: roofMeta },
       },
       parentId: ids.roof,

@@ -8,6 +8,10 @@ import { useViewer } from '@pascal-app/viewer'
 import { type AutoRoofResult, type AutoRoofSegment, deriveRoof, type RoofIntent } from './derive'
 import type { Pt, WallInput } from './geometry'
 import { type AutoRoofOptions, summarise, useAutoRoof } from './store'
+// Bones by relative path (its package exports only the root entry — the same
+// arrangement plugin-sheets uses): the roof slab the shell draws must be the
+// rafter depth plus sheathing Bones frames, or the two are different roofs.
+import { roofShellThickness } from '../../plugin-bones/src/core/shell-sync'
 
 /** Stamped on the roof group the engine makes, so a rebuild replaces it and nothing else. */
 export const AUTO_ROOF = 'pascal:roof'
@@ -118,6 +122,8 @@ function segmentNode(s: AutoRoofSegment): Record<string, unknown> {
     wallThickness: round(s.wallThickness),
     pitch: s.pitch,
     overhang: round(s.overhang),
+    // the slab is the rafter and its sheathing — what Bones frames
+    deckThickness: round(roofShellThickness()),
     metadata: { generatedBy: AUTO_ROOF },
   }
 }

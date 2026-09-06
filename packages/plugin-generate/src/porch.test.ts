@@ -113,6 +113,9 @@ describe('a full farmhouse porch', () => {
     for (const p of posts) {
       expect(p.supportSlabId).toBe('slab_porch')
       expect(p.width).toBeCloseTo(5.5 * IN, 9)
+      // the shaft is the full 6x6, the same post Bones frames
+      expect(p.shaftStartScale).toBe(1)
+      expect(p.shaftEndScale).toBe(1)
       // to the underside of the beam band (a 6x8 under its 2x plate)
       expect(p.height).toBeCloseTo(PORCH_COVER_HEIGHT + PORCH_FLOOR_DROP - PORCH_BAND, 9)
       expect(p.shaftProfile).toBe('straight')
@@ -162,6 +165,8 @@ describe('a full farmhouse porch', () => {
     // the segment's wall band IS the beam: its top the bearing line, its bottom the posts' top
     expect(seg.wallHeight).toBeCloseTo(PORCH_BAND, 9)
     expect(seg.wallThickness).toBeCloseTo(5.5 * IN, 9)
+    // the cover's slab is Bones' 2x6 rafter plus its 7/16 in sheathing
+    expect(seg.deckThickness).toBeCloseTo(5.5 * IN + (7 / 16) * IN, 5)
     expect((seg.position as number[])[1]).toBeCloseTo(0.05 + PORCH_COVER_HEIGHT - PORCH_BAND, 9)
     const ceiling = byType(r.ops, 'ceiling')[0]!
     expect(ceiling).toBeDefined()

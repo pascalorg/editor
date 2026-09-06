@@ -712,6 +712,27 @@ G22 The WebGPU "Vertex buffer slot 0 … was not set" error.
   Bones 2,118, editor typecheck clean. Not yet looked at: the rear shed
   cover's beam slab and the ceilings from below.
 
+- 2026-09-06 late: **Batch L — the shell reads Bones' numbers (Steve: "the
+  posts look dainty … should be 6x6 and match the framing view … the roof
+  framing and thickness on this and the main roof syncs with bones, and
+  posts sync with bones, only way to pull this off correctly").** Two
+  causes. The posts: the column renderer draws its shaft at 72 % of the
+  node's width by default, so a 5½ in column read as a 4x4 beside Bones'
+  6x6 — the generator's posts now set the shaft to the full section. The
+  roofs: every generated segment used the schema's placeholder
+  `deckThickness` (0.1 m) while Bones framed a 2x6 rafter under 7/16 in
+  sheathing — new `plugin-bones/src/core/shell-sync.ts`
+  (`roofShellThickness(spec)` = rafter depth + sheathing, `ROOF_SHEATHING`
+  shared with the roof engine) is read by the auto-roof plugin (every main
+  roof and wing, the panel's rebuild too) and by the porch cover, both by
+  relative path the way plugin-sheets reads Bones, so the slab the viewer
+  draws is the rafter and its sheet. Seen in the editor on the farmhouse
+  (seed 777): full 6x6 posts under the beam band, the thicker roof slab.
+  Tests: porch (shaft scales, the cover's deck) — generate 94, roof 20,
+  Bones 2,118, editor typecheck clean. The WebGPU "Vertex buffer slot 0"
+  fix (Batch I) had not reached the editor: the nodes package is consumed
+  from `dist`, which was rebuilt only now — reload the editor page.
+
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
   reference folder; Pascal roof node, Bones roof/wall framing, generate build, site
   and parcel code read. Diagnosis above. Starting W1.
