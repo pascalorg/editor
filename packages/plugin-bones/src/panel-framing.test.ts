@@ -8,6 +8,8 @@ import {
   roofSystemValue,
   shedCeilingPatch,
   shedCeilingValue,
+  postPadPatch,
+  postPadValue,
   LGS_MACHINE_NONE,
   LGS_MACHINE_NONE_LABEL,
   lgsMachineGroups,
@@ -149,6 +151,16 @@ describe('Shed ceiling control value + writes (the same byte-parity contract)', 
     expect(shedCeilingPatch('joists')).toEqual({ shedCeiling: 'joists' })
     expect(shedCeilingPatch('none')).toEqual({ shedCeiling: undefined })
     expect('shedCeiling' in FramingNode.parse({})).toBe(false)
+  })
+})
+
+describe('Post pad control value + writes (the same byte-parity contract)', () => {
+  test('absent == 24 in; a set size reads back; 24 REMOVES the key', () => {
+    expect(postPadValue({})).toBe(24)
+    expect(postPadValue({ postPadIn: 18 })).toBe(18)
+    expect(postPadPatch(18)).toEqual({ postPadIn: 18 })
+    expect(postPadPatch(24)).toEqual({ postPadIn: undefined })
+    expect('postPadIn' in FramingNode.parse({})).toBe(false)
   })
 })
 

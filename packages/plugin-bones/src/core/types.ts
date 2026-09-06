@@ -391,6 +391,24 @@ export type WallSlice = {
  */
 export type SlabKind = 'floor' | 'slab' | 'deck'
 
+/**
+ * A porch post — a `column` node the generator stood under an entrance's
+ * cover (`metadata.porch`), read for the porch bearing (engines/porch-framing)
+ * and its pad footing. Level-local.
+ */
+export type PorchPostSlice = {
+  id: string
+  plan: readonly [number, number]
+  /** The post's base: grade under a deck, the slab top of a concrete porch. */
+  baseY: number
+  /** The column's own height — its top is the cover's bearing line. */
+  height: number
+  /** Square section, metres (5½ in for a 6x6). */
+  size: number
+  /** Which entrance it belongs to ('front' / 'rear'), so a house's porches frame apart. */
+  entrance?: string
+}
+
 /** A slab outline for floor framing / foundation, level-local. */
 export type SlabSlice = {
   id: string

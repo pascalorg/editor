@@ -22,6 +22,7 @@ import {
   extractPlacedFixtures,
   extractRooms,
   extractServiceOverrides,
+  extractPorchPosts,
   extractSlabs,
   extractWalls,
   type LevelSlice,
@@ -41,6 +42,7 @@ import {
 } from '../engines/cmu'
 import { frameAtticSeparations, frameBearingWallsToRoof } from '../engines/attic-walls'
 import { frameDeck } from '../engines/deck-framing'
+import { framePorches } from '../engines/porch-framing'
 import {
   applyDeviceOverrides,
   layoutElectrical,
@@ -578,6 +580,7 @@ function computeLevelUncached(
   if (config.lgsMachine !== undefined) spec = { ...spec, lgsMachine: config.lgsMachine }
   if (config.roofSystem !== undefined) spec = { ...spec, roofSystem: config.roofSystem }
   if (config.shedCeiling !== undefined) spec = { ...spec, shedCeiling: config.shedCeiling }
+  if (config.postPadIn !== undefined) spec = { ...spec, postPadIn: config.postPadIn }
   // 400 (fabrication) builds ON TOP of the code-sized pass — jurisdiction applies to both.
   if (config.detail !== '200') {
     spec = applyJurisdiction(spec, profile)
@@ -1089,6 +1092,15 @@ function computeLevelUncached(
     }
   }
 
+  // ── the porch bearing: 6x8 beam + plate on the 6x6 posts (PlanCrafters porchWall) ──
+  const porchPosts = extractPorchPosts(nodes, levelId)
+  if (porchPosts.length > 0 && config.showRoof) {
+    const porchRoofs = extractRoofs(nodes, levelId)
+    const porch = framePorches(porchPosts, activeWalls, porchRoofs, spec)
+    members.push(...porch.members)
+    warnings.push(...porch.warnings)
+  }
+
   if (config.showRoof) {
     // Roof segments live wherever the designer drew them — porch roofs on
     // the ground level, the main roof on its own level on top. ONE X-ray
@@ -1229,9 +1241,21 @@ function computeLevelUncached(
     // upper storey renders (walls only sister joists, so [] reproduces the
     // girder/post layout exactly) and pour an R403.1/R407.3 pad under each
     // (buildFoundation carves the slab field around them).
-    const girderPosts: { plan: readonly [number, number]; sourceId: string; gradeY?: number }[] = []
+    const girderPosts: {
+      plan: readonly [number, number]
+      sourceId: string
+      gradeY?: number
+      kind?: string
+    }[] = []
     const ownGrade = (plan: readonly [number, number]) =>
       hilly ? { gradeY: gradeAt(plan[0], plan[1]) } : {}
+    // The porch posts (the generator's 6x6 columns under an entrance's
+    // cover) bear on pads too — R403.1 / R407.3, PlanCrafters' porchWall.
+    if (isGroundLevel) {
+      for (const post of porchPosts) {
+        girderPosts.push({ plan: post.plan, sourceId: post.id, kind: 'porch post', ...ownGrade(post.plan) })
+      }
+    }
     const above = levels[levelIndex + 1]
     if (above) {
       const aboveSlabs = extractSlabs(nodes, above.id)

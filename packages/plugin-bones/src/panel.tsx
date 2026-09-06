@@ -32,6 +32,9 @@ import {
   roofSystemPatch,
   roofSystemValue,
   type ShedCeilingValue,
+  POST_PAD_OPTIONS,
+  postPadPatch,
+  postPadValue,
   shedCeilingPatch,
   shedCeilingValue,
 } from './panel-framing'
@@ -629,6 +632,16 @@ function RoofRow({ framingNode }: { framingNode: FramingNode & { id: string } })
           over the partitions under them. A porch shed on a ledger has no ceiling.
         </span>
       )}
+      <span className="text-sidebar-foreground/60">Post pads (in)</span>
+      <SegmentedControl
+        onChange={(v: string) => write(postPadPatch(Number(v)))}
+        options={POST_PAD_OPTIONS.map((n) => ({ label: String(n), value: String(n) }))}
+        value={String(postPadValue(framingNode))}
+      />
+      <span className="text-sidebar-foreground/50">
+        The pad footing under every porch, deck and girder post — on the foundation plan and its
+        schedule. 24 in is the R403.1 pad the engine pours by itself.
+      </span>
       {system === 'truss' && (
         <span className="text-sidebar-foreground/50">
           Gable segments frame as trusses; webbing is representative — design by truss manufacturer

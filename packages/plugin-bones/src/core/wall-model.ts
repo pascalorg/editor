@@ -14,6 +14,7 @@ import type {
   SlabKind,
   SlabSlice,
   WallSlice,
+  PorchPostSlice,
 } from './types'
 import { inches } from './units'
 
@@ -295,6 +296,37 @@ export function extractSlabs(nodes: NodesRecord, levelId: string): SlabSlice[] {
     })
   }
   return slabs
+}
+
+/**
+ * The porch posts on a level: `column` nodes carrying the generator's
+ * `metadata.porch` (the entrance they belong to). A post standing on a slab
+ * (`supportSlabId`) has its base at that slab's elevation; a deck's post
+ * carries its own base (the grade under it) in its position.
+ */
+export function extractPorchPosts(nodes: NodesRecord, levelId: string): PorchPostSlice[] {
+  const out: PorchPostSlice[] = []
+  for (const node of Object.values(nodes)) {
+    if (node.type !== 'column' || node.parentId !== levelId) continue
+    if (node.visible === false) continue
+    const meta = node.metadata as { porch?: { entrance?: unknown } } | undefined
+    const porch = meta?.porch
+    if (!porch || typeof porch !== 'object') continue
+    const pos = Array.isArray(node.position) ? (node.position as number[]) : [0, 0, 0]
+    const support = typeof node.supportSlabId === 'string' ? nodes[node.supportSlabId] : undefined
+    const slabY =
+      support?.type === 'slab' && typeof support.elevation === 'number' ? support.elevation : 0
+    const width = num(node.width, 0.14)
+    out.push({
+      id: String(node.id ?? ''),
+      plan: [num(pos[0], 0), num(pos[2], 0)],
+      baseY: num(pos[1], 0) + slabY,
+      height: num(node.height, 2.5),
+      size: Math.max(width, num(node.depth, width)),
+      entrance: typeof porch.entrance === 'string' ? porch.entrance : undefined,
+    })
+  }
+  return out
 }
 
 /** The decking thickness a deck slab declares (`metadata.decking`), when its slab is decking + rim band. */

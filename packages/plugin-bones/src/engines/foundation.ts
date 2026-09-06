@@ -163,7 +163,13 @@ export const DOWEL_SHORT_LAP_FLAG =
  */
 export type FoundationOptions = {
   cmu?: Map<string, CmuDowelLayout>
-  girderPosts?: { plan: readonly [number, number]; sourceId: string; gradeY?: number }[]
+  girderPosts?: {
+    plan: readonly [number, number]
+    sourceId: string
+    gradeY?: number
+    /** What stands on the pad, for its label — 'girder post' when absent. */
+    kind?: string
+  }[]
   /**
    * GRADE, level-local (≤ 0). The footing bottom sits `spec.footingDepth`
    * (the frost line) below THIS, not below the plate line; girder pads pour
@@ -1014,7 +1020,9 @@ export function buildFoundation(
         b: [px + s / 2, pz],
         w: s,
       })
-      let side = PAD_FOOTING_SIDE
+      // the spec's pad size when the panel set one (every post at once), else the 24 in pad
+      const standard = spec.postPadIn !== undefined ? inches(spec.postPadIn) : PAD_FOOTING_SIDE
+      let side = standard
       while (
         side >= PAD_FOOTING_MIN - EPS &&
         pourBands.some((o) => plansOverlap(bandFor(side), o.band))
@@ -1030,7 +1038,7 @@ export function buildFoundation(
         continue
       }
       const band = bandFor(side)
-      const clipped = side < PAD_FOOTING_SIDE - EPS
+      const clipped = side < standard - EPS
       // the pad's top is the post's own grade on a hill (R507.3 / R403.1)
       const padTop = post.gradeY ?? grade
       members.push({
@@ -1042,7 +1050,7 @@ export function buildFoundation(
         rotation: [0, 0, 0],
         material: 'concrete',
         sourceId: post.sourceId,
-        label: `Pad footing ${formatIn(side)}×${formatIn(side)}×${formatIn(INTERIOR_FOOTING_DEPTH)} — girder post (R403.1/R407.3)`,
+        label: `Pad footing ${formatIn(side)}×${formatIn(side)}×${formatIn(INTERIOR_FOOTING_DEPTH)} — ${post.kind ?? 'girder post'} (R403.1/R407.3)`,
         advisory: `pad sized prescriptively — verify per R403.1(1) loads; lateral restraint at the post base per R407.3${clipped ? '; clipped beside an adjacent pour' : ''}`,
       })
       pourBands.push({ band, memberIdx: members.length - 1 })

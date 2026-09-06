@@ -18,6 +18,7 @@ export const LUMBER_SIZES = [
   '4x10',
   '4x12',
   '6x6',
+  '6x8',
 ] as const
 
 export type LumberSize = (typeof LUMBER_SIZES)[number]
@@ -38,6 +39,7 @@ export const LUMBER_CROSS_SECTIONS: Record<LumberSize, readonly [number, number]
   '4x10': [3.5 * INCH, 9.25 * INCH],
   '4x12': [3.5 * INCH, 11.25 * INCH],
   '6x6': [5.5 * INCH, 5.5 * INCH],
+  '6x8': [5.5 * INCH, 7.25 * INCH],
 }
 
 /** Standard stock length default — 8 ft. */

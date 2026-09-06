@@ -339,6 +339,13 @@ export type FramingSpec = {
    * (the same byte-parity rule as roofSystem). Consumed by frameShed.
    */
   shedCeiling?: 'none' | 'joists'
+  /**
+   * The pad footing under a porch / deck / girder post, inches square.
+   * ABSENT means the engine's 24 in (R403.1 prescriptive pad); set from the
+   * panel to change every post pad at once (Steve: "standard footing size,
+   * make it so it can be changed easily"). Same byte-parity rule.
+   */
+  postPadIn?: number
 }
 
 export const DEFAULT_SPEC: FramingSpec = {

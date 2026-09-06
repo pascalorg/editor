@@ -75,6 +75,20 @@ export function shedCeilingPatch(next: ShedCeilingValue): { shedCeiling: 'joists
   return { shedCeiling: next === 'joists' ? 'joists' : undefined }
 }
 
+/** The post pad sizes the panel offers, inches square (the 24 in pad is the engine's default). */
+export const POST_PAD_OPTIONS = [16, 18, 20, 24] as const
+export type PostPadValue = (typeof POST_PAD_OPTIONS)[number]
+
+/** The Post pad control's resolved value — absent means the engine's 24 in. */
+export function postPadValue(node: Pick<FramingNode, 'postPadIn'>): number {
+  return typeof node.postPadIn === 'number' && node.postPadIn > 0 ? node.postPadIn : 24
+}
+
+/** Write patch for the Post pad control: 24 REMOVES the key (the byte-parity contract). */
+export function postPadPatch(next: number): { postPadIn: number | undefined } {
+  return { postPadIn: next === 24 ? undefined : next }
+}
+
 /** The Machine select's 'no machine' sentinel (a native select can't carry
  * undefined) and its honest label — steel with no machine IS generic AISI. */
 export const LGS_MACHINE_NONE = ''

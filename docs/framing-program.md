@@ -656,6 +656,36 @@ G22 The WebGPU "Vertex buffer slot 0 … was not set" error.
   94, editor typecheck clean. Next: G18 / G20 — Bones frames the porch
   cover on its posts with pad footings.
 
+- 2026-09-06 late: **Batch J — Bones frames the porch bearing (G18, G20).**
+  New `engines/porch-framing.ts` (`framePorches`), PlanCrafters'
+  `F.porchWall` in Bones: the generator's porch posts (`column` nodes with
+  `metadata.porch`, read by `extractPorchPosts` — base at the slab or the
+  grade under a deck, the column's own height as the cover's bearing line)
+  define the beam line; a 6x8 girder (new lumber size, 5½ × 7¼) spans post
+  face to post face under a single 2x6 top plate whose top is the bearing
+  line; each post is a 6x6 from its base to the girder's underside; a gable
+  or hip cover that dies into the house roof gets the two side girders
+  (6x8 + plate) from the corner posts to the house wall face — the nearest
+  exterior wall running with the beam line — while a shed on a ledger
+  takes none (its rafters bear at the wall). Posts off a straight line, a
+  single post, no cover over the line: nothing framed, said in a warning.
+  The pediment studs the roof engine already stands on the plate line are
+  the gable wall on that beam. G20: compute passes the porch posts to the
+  foundation engine with the girder posts, so every one gets an R403.1 /
+  R407.3 pad footing ("Pad footing 24×24×12 — porch post"), on the
+  foundation plan and its schedule; the pad size is now the spec's
+  `postPadIn` (absent = the engine's 24 in), set from the Bones panel's
+  "Post pads (in)" control (16 / 18 / 20 / 24, 24 removes the key — the
+  byte-parity rule), for every porch, deck and girder post at once. Probed
+  headlessly on the farmhouse (seed 1308856731): front porch 6x8 girder
+  4.10 m on four 6x6 posts (3 bays, widest 67½ in), two side girders 75¼ in
+  to the wall face, the rear deck's beam on its four posts, seven pads (one
+  post bears on a poured run). Tests: porch-framing +6 (girder and plate
+  under the bearing line, posts base to girder underside, side girders,
+  none on a ledger shed, off-line / single post refusals, two entrances
+  apart), panel-framing +1 — Bones 2,119, editor typecheck clean. Not yet
+  looked at in the editor's Framing view.
+
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
   reference folder; Pascal roof node, Bones roof/wall framing, generate build, site
   and parcel code read. Diagnosis above. Starting W1.
