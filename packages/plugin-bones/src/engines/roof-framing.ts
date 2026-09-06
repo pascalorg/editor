@@ -285,9 +285,16 @@ export function frameRoofs(
   }
   // W16c: a parallel wing running under the main — its buried members go,
   // the straddlers are cut at the junction (every LOD: buried wood is not
-  // schematic, it is wrong).
-  return stableMembers(buryWings(roofs, trimmed))
+  // schematic, it is wrong). W16f: every other overlapping pair is trimmed
+  // the same way where the smaller roof runs under the larger one.
+  const served = new Set<string>()
+  if (spec.detail !== '200') {
+    for (const v of detectValleys(roofs)) served.add(pairKeyOf(v.major.id, v.minorId))
+  }
+  return stableMembers(trimOverlaps(roofs, buryWings(roofs, trimmed), served))
 }
+
+const pairKeyOf = (a: string, b: string): string => (a < b ? `${a}|${b}` : `${b}|${a}`)
 
 type Emit = (
   role: Member['role'],
@@ -4352,6 +4359,90 @@ export function trimValleyJoins(
 }
 
 // ---------------------------------------------------------------------------
+// Partial overlaps (W16f) — any two roofs whose footprints overlap and whose
+// envelopes interleave, not joined by valleys and not a full burial: the
+// SMALLER roof is the secondary (a hip wing on a hip main, a porch hip at
+// the eave, a porch grazing the garage wing) and is trimmed wherever it
+// runs inside the larger roof's footprint under the larger roof's plane —
+// its fake wood in the other attic goes, what rises above stays; the larger
+// roof keeps its structure (California practice: the lower roof runs
+// through) and loses only its eave trim where the smaller roof passes over
+// it. The intersection LINE itself is still not framed (the B8c warning
+// says so); this only removes the wood that could never be there.
+// ---------------------------------------------------------------------------
+
+/**
+ * Trim every overlapping pair `served` does not cover (valley pairs cut
+ * their own way). Pairs whose planes the model cannot read (a flat, a
+ * gambrel, a mansard, a dutch) are left alone.
+ */
+export function trimOverlaps(
+  roofs: readonly RoofSegmentSlice[],
+  members: Member[],
+  served: ReadonlySet<string>,
+): Member[] {
+  let out = members
+  for (let i = 0; i < roofs.length; i++) {
+    for (let j = i + 1; j < roofs.length; j++) {
+      const a = roofs[i] as RoofSegmentSlice
+      const b = roofs[j] as RoofSegmentSlice
+      const key = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`
+      if (served.has(key)) continue
+      if (roofPlaneAt(a, 0, 0) === null || roofPlaneAt(b, 0, 0) === null) continue
+      if (a.position[1] >= segPeakY(b) - EPS || b.position[1] >= segPeakY(a) - EPS) continue
+      if (!footprintsOverlap(a, b)) continue
+      const major = a.width * a.depth >= b.width * b.depth ? a : b
+      const minor = major === a ? b : a
+      const inFootprint = (roof: RoofSegmentSlice, px: number, pz: number) => {
+        const [x, z] = toSegmentPlan(roof, px, pz)
+        return Math.abs(x) <= roof.width / 2 + EPS && Math.abs(z) <= roof.depth / 2 + EPS
+      }
+      const inReach = (roof: RoofSegmentSlice, px: number, pz: number) => {
+        const [x, z] = toSegmentPlan(roof, px, pz)
+        return (
+          Math.abs(x) <= roof.width / 2 + roof.overhang + EAVE_TRIM + EPS &&
+          Math.abs(z) <= roof.depth / 2 + tipOf(roof) + EAVE_TRIM + EPS
+        )
+      }
+      const planeOf = (roof: RoofSegmentSlice, px: number, pz: number): number | null => {
+        const [x, z] = toSegmentPlan(roof, px, pz)
+        return roofPlaneAt(roof, x, z)
+      }
+      // the smaller roof's members: gone where they sit inside the larger
+      // roof's footprint under its plane (by the roof plane there, or by the
+      // member's own top for the wood at plate height)
+      const minorCoveredFor = (m: Member) => {
+        const top = m.position[1] + m.dims[1] / 2
+        return (px: number, pz: number) => {
+          if (!inFootprint(major, px, pz)) return false
+          const yMinor = planeOf(minor, px, pz)
+          const yMajor = planeOf(major, px, pz)
+          if (yMinor === null || yMajor === null) return false
+          return yMinor <= yMajor + BURIAL_TOLERANCE || top <= yMajor + BURIAL_TOLERANCE
+        }
+      }
+      const majorTrimCovered = (px: number, pz: number) => {
+        if (!inReach(minor, px, pz)) return false
+        const yMinor = planeOf(minor, px, pz)
+        const yMajor = planeOf(major, px, pz)
+        return yMinor !== null && yMajor !== null && yMajor < yMinor - BURIAL_TOLERANCE
+      }
+      const minorNote = ` — cut where it runs under roof ${major.id} (the junction itself is not framed — verify)`
+      const majorNote = ` — cut where roof ${minor.id} passes over the eave`
+      const next: Member[] = []
+      for (const m of out) {
+        if (m.sourceId === minor.id) next.push(...clipMemberBy(m, minorCoveredFor(m), minorNote))
+        else if (m.sourceId === major.id && (m.role === 'fascia' || m.role === 'drip-edge')) {
+          next.push(...clipMemberBy(m, majorTrimCovered, majorNote))
+        } else next.push(m)
+      }
+      out = next
+    }
+  }
+  return out
+}
+
+// ---------------------------------------------------------------------------
 // Buried parallel wings (W16c) — a wing whose ridge runs WITH the main's and
 // whose roof lies at or under the main's wherever they overlap: the garage
 // wing set beside and behind the house, its rear plane continuing the
@@ -4741,7 +4832,7 @@ export function detectUnframedRoofIntersections(roofs: RoofSegmentSlice[]): stri
       if (a.position[1] >= segPeakY(b) - EPS || b.position[1] >= segPeakY(a) - EPS) continue
       if (!footprintsOverlap(a, b)) continue
       out.push(
-        `roof intersection not framed — valley detail required (${a.roofType} ${a.id} × ${b.roofType} ${b.id}: only a gable / hip wing joining a gable / hip main at right angles on its long plane, ridge reaching the main slope, wing eave at or below the main eave, is modeled)`,
+        `roof intersection not framed — valley detail required (${a.roofType} ${a.id} × ${b.roofType} ${b.id}: only a gable / hip wing joining a gable / hip main at right angles on its long plane, ridge reaching the main slope, wing eave at or below the main eave, is modeled; the smaller roof's members under the larger one are cut, the larger roof's eave trim under the smaller one too — the line itself needs its detail)`,
       )
     }
   }

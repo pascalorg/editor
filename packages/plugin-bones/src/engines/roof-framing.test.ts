@@ -3291,3 +3291,128 @@ describe('W18: shed rafters bear on interior partitions', () => {
     }
   })
 })
+
+// ---------------------------------------------------------------------------
+// W16f: partial overlaps — the smaller roof trimmed where it runs under the
+// larger one, the larger roof's eave trim cut where the smaller passes over
+// ---------------------------------------------------------------------------
+
+describe('W16f: partial overlaps are trimmed', () => {
+  const at400 = { ...DEFAULT_SPEC, detail: '400' as const }
+  // the generated ranch: a near-square 4:12 hip main and a hip wing set beside
+  // and behind it — the wing's west hip end rises through the main's east hip
+  // plane (a real intersection), the rest of its west end sits in the main's attic
+  const pitch = Math.atan(4 / 12)
+  const main = seg({
+    id: 'main',
+    roofType: 'hip',
+    width: 13.87,
+    depth: 13.26,
+    position: [-3.35, 2.74, 0],
+    pitch,
+    overhang: 0.43,
+    wallHeight: 0,
+  })
+  const wing = seg({
+    id: 'wing',
+    roofType: 'hip',
+    width: 10.06,
+    depth: 6.71,
+    position: [5.26, 2.74, -3.28],
+    pitch,
+    overhang: 0.43,
+    wallHeight: 0,
+  })
+  const plane = (roof: RoofSegmentSlice, px: number, pz: number) => {
+    const dx = px - roof.position[0]
+    const dz = pz - roof.position[2]
+    const cos = Math.cos(roof.yaw)
+    const sin = Math.sin(roof.yaw)
+    return roofPlaneAt(roof, dx * cos - dz * sin, dx * sin + dz * cos) as number
+  }
+  const inside = (roof: RoofSegmentSlice, px: number, pz: number) =>
+    Math.abs(px - roof.position[0]) <= roof.width / 2 &&
+    Math.abs(pz - roof.position[2]) <= roof.depth / 2
+
+  test("the hip wing keeps nothing inside the main under the main's plane; what rises through it stays; the pair still warns", () => {
+    expect(detectBuriedWings([main, wing])).toHaveLength(0) // not a full burial
+    const members = frameRoofs([main, wing], [], at400)
+    const alone = frameRoofs([wing], [], at400)
+    const wingMembers = members.filter((m) => m.sourceId === 'wing')
+    expect(wingMembers.length).toBeGreaterThan(0)
+    expect(wingMembers.length).toBeLessThan(alone.length + 20) // cut, not multiplied
+    let buried = 0
+    let risen = 0
+    for (const m of wingMembers) {
+      const [px, , pz] = m.position
+      if (!inside(main, px, pz)) continue
+      const top = m.position[1] + m.dims[1] / 2
+      if (plane(wing, px, pz) <= plane(main, px, pz) + 0.02 && top <= plane(main, px, pz) + 0.02)
+        buried++
+      else risen++
+    }
+    expect(buried).toBe(0)
+    expect(risen).toBeGreaterThan(0)
+    expect(wingMembers.some((m) => m.label?.includes('cut where it runs under roof main'))).toBe(
+      true,
+    )
+    // the main's east eave trim is cut where the wing passes over it
+    const mainTrim = members.filter(
+      (m) => m.sourceId === 'main' && (m.role === 'fascia' || m.role === 'drip-edge'),
+    )
+    expect(
+      mainTrim.some((m) => m.label?.includes('cut where roof wing passes over the eave')),
+    ).toBe(true)
+    // the main's structure runs through
+    const mainRafters = (ms: Member[]) =>
+      ms.filter((m) => m.sourceId === 'main' && (m.role === 'rafter' || m.role === 'jack-rafter'))
+        .length
+    expect(mainRafters(members)).toBe(mainRafters(frameRoofs([main], [], at400)))
+    const warnings = detectUnframedRoofIntersections([main, wing])
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('not framed')
+    expect(warnings[0]).toContain('the line itself needs its detail')
+  })
+
+  test('a porch hip at the eave: its near end inside the main goes, its outer roof stays', () => {
+    const porch = seg({
+      id: 'porch',
+      roofType: 'hip',
+      width: 2.9,
+      depth: 2.44,
+      yaw: -Math.PI / 2,
+      position: [-2.36, 2.49, -6.95],
+      pitch,
+      overhang: 0.43,
+      wallHeight: 0,
+    })
+    const members = frameRoofs([main, porch], [], at400)
+    const porchMembers = members.filter((m) => m.sourceId === 'porch')
+    expect(porchMembers.length).toBeGreaterThan(0)
+    for (const m of porchMembers) {
+      const [px, , pz] = m.position
+      if (!inside(main, px, pz)) continue
+      const top = m.position[1] + m.dims[1] / 2
+      // anything left inside the main rises above its plane
+      expect(
+        top > plane(main, px, pz) + 0.02 || plane(porch, px, pz) > plane(main, px, pz) + 0.02,
+      ).toBe(true)
+    }
+    // outside the main the porch is whole: its outer ceiling joists and eave fascia are there
+    expect(
+      porchMembers.some(
+        (m) => m.role === 'ceiling-joist' && !inside(main, m.position[0], m.position[2]),
+      ),
+    ).toBe(true)
+  })
+
+  test('a pair the model cannot read (a flat beside a gable) is left alone', () => {
+    const gable = seg()
+    const flat = seg({ id: 'flat', roofType: 'flat', width: 4, depth: 4, position: [3, 2.5, 2] })
+    const together = frameRoofs([gable, flat], [], DEFAULT_SPEC).filter(
+      (m) => m.sourceId === 'flat',
+    ).length
+    const alone = frameRoofs([flat], [], DEFAULT_SPEC).length
+    expect(together).toBe(alone)
+  })
+})

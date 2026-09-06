@@ -1082,3 +1082,28 @@ W18 Shed rafters on interior bearing walls — DONE 2026-09-06 (see log): the mo
   fails the volume gate (the jacks' boxes overlap the main's deck in the
   wedge at the line — LOD 350 geometry, the gate case stays disabled);
   the wing's rafter stations and the jack stations differ by up to a bay.
+
+- 2026-09-06 morning: **W16f — every other overlapping pair trimmed.** The
+  ranch's hip wing set beside its near-square hip main rises through the
+  main's east hip plane (a real intersection the model does not frame) —
+  and until now the rest of the wing's west end, its rafters, joists and
+  studs inside the main's attic, framed on regardless; the porch hips at
+  the eave and the porch grazing the garage wing did the same. `trimOverlaps`
+  runs after the valleys and the full burials: for every remaining pair
+  whose footprints overlap and envelopes interleave, the SMALLER roof is
+  cut wherever it sits inside the larger one's footprint under the larger
+  roof's plane (by the plane there, or by the member's own top for wood at
+  plate height), the larger roof keeps its structure (the lower roof runs
+  through, California practice) and loses only its fascia and drip edge
+  where the smaller roof passes over them. What rises above the larger
+  roof stays — the intersection LINE itself is still not framed, and the
+  B8c warning says both things now. Pairs with a plane the model cannot
+  read (flat, gambrel, mansard, dutch) are left alone. Headless: ranch,
+  modern and farmhouse — zero members of any other roof centred inside
+  the main under its plane (98 / 47 / 17 cut pieces); QA loop 72 sets, no
+  crashes. Tests: W16f describe +3 (the ranch pair: nothing buried, the
+  risen hip end kept, the main's structure count unchanged, its east eave
+  trim cut, the warning kept; the porch hip at the eave; a flat beside a
+  gable untouched) — Bones 2,105, plugin-sheets 235, typecheck clean.
+  Honest gap: the wing's rafters that cross the main's plane end at the
+  cut with no valley board or sleeper — the line needs its detail.
