@@ -701,8 +701,7 @@ export function applyFinishes(
         break
       }
       case 'fence': {
-        const onDeck = /deck/i.test(String(n.name ?? ''))
-        n.color = onDeck && f.wood.style !== 'painted' ? f.wood.hex : f.trim.hex
+        n.color = railHex(f, n)
         out.rails++
         break
       }
@@ -716,11 +715,39 @@ export function applyFinishes(
       case 'stair': {
         if (String(n.materialPreset ?? '').includes(DECK_PLANK_PRESET))
           n.materialPreset = f.wood.deckRef
+        // the flight's guard in the landing's rail colour (Steve: "if it's a
+        // modern rail the stair should be the modern rail and match in
+        // guardrail colours"); a cable rail reads as the metal it is
+        if (typeof n.railingMode === 'string' && n.railingMode !== 'none') {
+          const cable = n.railingStyle === 'cable'
+          n.railingMaterial = {
+            preset: 'custom',
+            properties: {
+              color: railHex(f, n),
+              roughness: cable ? 0.45 : 0.8,
+              metalness: cable ? 0.5 : 0,
+              opacity: 1,
+              transparent: false,
+              side: 'front',
+            },
+          }
+          out.rails++
+        }
         break
       }
     }
   }
   return out
+}
+
+/**
+ * A rail's colour: the deck's rails and its flight's guard take the wood
+ * stain (a painted style paints them); everything else the trim colour —
+ * the guards and the flights read as one.
+ */
+function railHex(f: Finishes, n: N): string {
+  const onDeck = /deck/i.test(String(n.name ?? ''))
+  return onDeck && f.wood.style !== 'painted' ? f.wood.hex : f.trim.hex
 }
 
 /** One line for the run summary and the panel. */

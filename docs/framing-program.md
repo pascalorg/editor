@@ -642,8 +642,10 @@ the next tests, so we ensure errors are gone"
 G23 The presentation posts ARE the framing's posts: the beam band ends at the
     posts (centred on the post lines the way Bones' girder is), the posts
     square, sharp-cornered, one piece — sizes from Bones' lumber table.
-G24 The white blocks on wall tops where walls connect — not reproduced yet
-    (see Batch M); needs the node's name from the inspector.
+G24 The white blocks on wall tops where walls connect — the editor's ceiling
+    corner grab-brackets, one per ceiling corner on the level (Batch N).
+G28 Rails by style, and the flight's guard matching the landing's: cable on
+    the moderns, balusters on a bottom rail everywhere else, one colour.
 G25 Interior: a flat ceiling in every room; the walls painted inside (the
     library's light grey — no "Seattle grey" in the catalog; one line adds it).
 G26 Rear deck posts at the right elevation (they were being lifted onto the
@@ -704,6 +706,34 @@ G27 Procedural house mode: draw or generate, modify, save the house INTO the
   garage walls bare), build (a ceiling per zone), Bones `extractPorchPosts`
   (slab / ground / terrain) — generate 95, Bones 2,119, sections 23, roof
   20, editor typecheck clean.
+
+- 2026-09-06 night: **Batch N — the white blocks named, the rails by style
+  (G24, G28).** G24 (Steve: "if I hover over it it shows the room area —
+  solved it, not sure where that is"): clicking one selected "WIC ceiling"
+  — they are the editor's `CeilingSelectionAffordanceSystem`, light-grey
+  corner brackets plus a hit cube at every corner of every ceiling on the
+  selected level (gated on a level being selected, which clicking a wall
+  or visiting the 2D plan does — hence "not at first generation"). A
+  generated house now has a ceiling in every room, so every wall junction
+  grew one. The brackets now show only for the ceiling under the pointer
+  or the selected one — the affordance is for the ceiling you are about
+  to grab. G28: the fence gains a `baseStyle: 'raised'` (core schema,
+  viewer fence-system, the fence panel): the base is a bottom rail held
+  `groundClearance` above the ground with the infill ending on it and the
+  end posts to the ground — the generator's baluster guards use it (2x4
+  bottom rail 3½ in over the decking, 2x4 top rail), so the craftsman's
+  balusters no longer run to the decking. The stair gains
+  `railingStyle: 'cable'` (2 in posts on the post-and-rail stations, a
+  flat cap rail, ½ in cables 3 in apart running with the flight; the
+  stair panel offers it); the generator's flights take cable on the
+  moderns and post-and-rail elsewhere, and `applyFinishes` paints the
+  flight's guard (`railingMaterial`) with the same rule as the fences —
+  the deck's stain, else the trim colour — so a flight and the guard it
+  meets are one rail. Tests: viewer fence-system (raised base: bottom
+  rail at the clearance, pickets on it, posts to the ground; grounded
+  kickboard unchanged) +2, porch (raised guards, the flight's style per
+  style), finishes (the flight's guard colour). generate 95, viewer
+  fence 2, editor typecheck clean; core, viewer and nodes dist rebuilt.
 
 - 2026-09-06 late: **Batch I — stair guards, the elevations, the WebGPU error
   (G19, G21, G22; G17 checked).** Stair node: `railingStyle` ('balusters' |

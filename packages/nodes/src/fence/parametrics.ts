@@ -28,7 +28,7 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
         {
           key: 'baseStyle',
           kind: 'enum',
-          options: ['grounded', 'floating'],
+          options: ['grounded', 'floating', 'raised'],
           display: 'segmented',
         },
         { key: 'showInfill', kind: 'boolean' },

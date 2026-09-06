@@ -143,7 +143,14 @@ describe('a full farmhouse porch', () => {
       expect(f.slatGap).toBeCloseTo(3.5 * IN, 9)
       expect(f.height).toBeCloseTo(GUARD_HEIGHT, 9)
       expect(f.supportSlabId).toBe('slab_porch')
+      // the balusters end on a 2x4 bottom rail 3½ in over the decking, under a 2x4 top rail
+      expect(f.baseStyle).toBe('raised')
+      expect(f.groundClearance).toBeCloseTo(3.5 * IN, 9)
+      expect(f.baseHeight).toBeCloseTo(3.5 * IN, 9)
+      expect(f.topRailHeight).toBeCloseTo(3.5 * IN, 9)
     }
+    // the flight's guard is the same build: posts, top and bottom rails, pickets
+    expect(stair.railingStyle).toBe('post-and-rail')
   })
 
   test('the flight: 8½ in rise → two risers, 60 in wide, climbing toward the porch from grade', () => {
@@ -342,6 +349,9 @@ describe('landing, rails and pillars by style (PlanCrafters entrance presets)', 
     expect(rail.style).toBe('horizontal')
     expect(rail.slatGap).toBeCloseTo(3 * IN, 9)
     expect(rail.postSize).toBeCloseTo(2 * IN, 9)
+    expect(rail.baseStyle).toBe('grounded')
+    // the modern's flight carries the same cable rail
+    expect(byType(modern.ops, 'stair')[0]!.railingStyle).toBe('cable')
     expect(porchFor(input(), ids()).summary?.railStyle).toBe('baluster')
   })
 

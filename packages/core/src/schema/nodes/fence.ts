@@ -4,7 +4,14 @@ import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
 export const FenceStyle = z.enum(['slat', 'rail', 'privacy', 'horizontal'])
-export const FenceBaseStyle = z.enum(['floating', 'grounded'])
+/**
+ * 'grounded' — a kickboard on the ground; 'floating' — no base, the panel
+ * held `groundClearance` up on posts that reach the ground; 'raised' — the
+ * base is a BOTTOM RAIL held `groundClearance` above the ground with the
+ * infill ending on it, the posts to the ground: a deck guard (IRC R312 —
+ * pickets between a top and a bottom rail, the gap under the rail below 4 in).
+ */
+export const FenceBaseStyle = z.enum(['floating', 'grounded', 'raised'])
 export const FencePostCap = z.enum(['none', 'flat', 'pyramid'])
 
 export const FenceNode = BaseNode.extend({
@@ -64,7 +71,7 @@ export const FenceNode = BaseNode.extend({
   - supportOffset: manual vertical offset from the elected support surface
   - curveOffset: midpoint sagitta offset used to bend the fence into an arc (ignored when path is set)
   - baseHeight/postSpacing/postSize/topRailHeight: exact geometric controls from the plan3D fence model
-  - groundClearance/edgeInset/baseStyle: fence support and inset configuration
+  - groundClearance/edgeInset/baseStyle: fence support and inset configuration ('raised': the base is a bottom rail groundClearance above the ground, posts to the ground) ('raised': the base is a bottom rail groundClearance above the ground, posts to the ground) ('raised': the base is a bottom rail groundClearance above the ground, posts to the ground)
   - showInfill: whether to draw intermediate posts/slats between end posts
   - color/style: visual appearance options
   `,

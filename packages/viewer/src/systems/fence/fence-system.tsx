@@ -284,12 +284,14 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
   const panelDepth = Math.max(fence.thickness, 0.03)
   const clearance = Math.max(fence.groundClearance, 0)
   const isFloating = fence.baseStyle === 'floating'
+  // 'raised': the kickboard becomes a bottom rail `clearance` up; the posts still reach the ground
+  const isRaised = fence.baseStyle === 'raised'
   const showInfill = fence.showInfill ?? true
 
   const baseHeight = Math.max(fence.baseHeight, 0.04)
   const topRailHeight = Math.max(fence.topRailHeight, 0.01)
   const verticalHeight = Math.max(fence.height - baseHeight - topRailHeight, 0.08)
-  const baseY = isFloating ? clearance : 0
+  const baseY = isFloating || isRaised ? clearance : 0
 
   // Square posts stand proud of the recessed boards on both faces.
   const postWidth = Math.max(fence.postSize * 1.4, 0.04)
@@ -422,8 +424,11 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
   const spacing = Math.max(fence.postSpacing * styleDefaults.spacingFactor, postWidth * 1.2)
   const edgeInset = Math.max(fence.edgeInset ?? 0.015, 0.005)
   const isFloating = fence.baseStyle === 'floating'
+  // 'raised': the base is a guard's bottom rail held `clearance` above the
+  // ground, the pickets ending on it; the end posts run to the ground
+  const isRaised = fence.baseStyle === 'raised'
   const showInfill = fence.showInfill ?? true
-  const baseY = isFloating ? clearance : 0
+  const baseY = isFloating || isRaised ? clearance : 0
   const effectiveBaseHeight = baseHeight
   const startInsetT = Math.min(0.499, edgeInset / length)
   const endInsetT = Math.max(0.501, 1 - edgeInset / length)
@@ -440,16 +445,19 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
       ),
     )
 
-    base.push(
-      ...createFenceCurveBlockParts(
-        fence,
-        0,
-        1,
-        baseY + effectiveBaseHeight + verticalHeight * 0.15,
-        topRailHeight * 0.8,
-        panelDepth * 0.35,
-      ),
-    )
+    // the grounded kickboard's thin band above it — not on a bottom rail
+    if (!isRaised) {
+      base.push(
+        ...createFenceCurveBlockParts(
+          fence,
+          0,
+          1,
+          baseY + effectiveBaseHeight + verticalHeight * 0.15,
+          topRailHeight * 0.8,
+          panelDepth * 0.35,
+        ),
+      )
+    }
   }
 
   const count = showInfill ? Math.max(2, Math.floor((length - edgeInset * 2) / spacing) + 1) : 2
@@ -458,7 +466,7 @@ function createFenceParts(fence: FenceNode): FenceSlotParts {
   for (let index = 0; index < count; index += 1) {
     const t = count === 1 ? 0.5 : startInsetT + (endInsetT - startInsetT) * (index / (count - 1))
     const isEdgePost = index === 0 || index === count - 1
-    const fullHeightPost = !showInfill || (isFloating && isEdgePost)
+    const fullHeightPost = !showInfill || ((isFloating || isRaised) && isEdgePost)
     const postHeight = fullHeightPost
       ? effectiveBaseHeight + verticalHeight + topRailHeight + clearance
       : verticalHeight

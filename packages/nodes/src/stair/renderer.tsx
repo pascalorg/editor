@@ -207,7 +207,9 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
   const midRailHeight = Math.max(railHeight * 0.45, 0.35)
   const railRadius = 0.022
   const balusterRadius = 0.018
-  const postAndRail = stair.railingStyle === 'post-and-rail' && stair.stairType === 'straight'
+  const postAndRail =
+    (stair.railingStyle === 'post-and-rail' || stair.railingStyle === 'cable') &&
+    stair.stairType === 'straight'
 
   if ((stair.railingMode ?? 'none') === 'none') {
     return null
@@ -228,6 +230,7 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
           >
             {segmentPath.sidePaths.map((sidePath, sideIndex) => (
               <PostAndRailGuard
+                cable={stair.railingStyle === 'cable'}
                 key={`${segmentPath.layout.segment.id}-${sidePath.side}-${sideIndex}`}
                 material={material}
                 points={sidePath.points.map(
@@ -516,6 +519,11 @@ const GUARD_BOTTOM_RAIL = 0.1
 /** 1½ in pickets at a 4 in clear gap (R312.1.3: the 4 in sphere). */
 const GUARD_PICKET = 0.0381
 const GUARD_PICKET_GAP = 0.1
+/** A cable rail: 2 in posts, ½ in cables 3 in apart, the first 3 in over the nosings, under a flat cap rail. */
+const CABLE_POST = 0.0508
+const CABLE_D = 0.0127
+const CABLE_PITCH = 0.0762
+const CABLE_BOTTOM = 0.0762
 const BOX_GEOMETRY = new THREE.BoxGeometry(1, 1, 1)
 
 /** A rectangular bar from `start` to `end`, `t` wide across the flight and `d` tall. */
@@ -567,18 +575,22 @@ function RailBar({
  * apart — always one at the bottom, one at the top unless `topPost` is off
  * (the rail then dies into whatever post already stands there) — a top rail
  * at `railHeight`, a bottom rail 4 in over the nosings, and 1½ in pickets
- * between the rails at a 4 in gap, skipped where a post stands.
+ * between the rails at a 4 in gap, skipped where a post stands. `cable`
+ * keeps the post stations but builds the modern deck's rail: 2 in posts, a
+ * flat cap rail, and ½ in cables 3 in apart running with the flight.
  */
 function PostAndRailGuard({
   points,
   railHeight,
   topPost,
   material,
+  cable = false,
 }: {
   points: [number, number, number][]
   railHeight: number
   topPost: boolean
   material: THREE.Material
+  cable?: boolean
 }) {
   const parts = useMemo(() => {
     if (points.length < 2) return null
@@ -623,6 +635,56 @@ function PostAndRailGuard({
   const bottomRailCentre = GUARD_BOTTOM_RAIL + GUARD_RAIL_D / 2
   const picketBottom = GUARD_BOTTOM_RAIL + GUARD_RAIL_D
   const picketTop = railHeight - GUARD_RAIL_D
+  const postSize = cable ? CABLE_POST : GUARD_POST
+  if (cable) {
+    // cable runs from 3 in over the nosings up to the cap rail, 3 in apart
+    const capCentre = railHeight - GUARD_RAIL_T / 2
+    const cables: number[] = []
+    for (let y = CABLE_BOTTOM; y < railHeight - GUARD_RAIL_T - CABLE_PITCH / 2; y += CABLE_PITCH)
+      cables.push(y)
+    return (
+      <group>
+        {posts.map((p, i) => (
+          <mesh
+            castShadow
+            dispose={null}
+            geometry={BOX_GEOMETRY}
+            key={`post-${i}`}
+            material={material}
+            name="stair-railing-post"
+            position={[p.x, p.y + (railHeight + 0.05) / 2, p.z]}
+            receiveShadow
+            scale={[postSize, railHeight + 0.05, postSize]}
+            userData={STAIR_RAILING_SLOT_USER_DATA}
+          />
+        ))}
+        {v.slice(0, -1).map((p, i) => {
+          const q = v[i + 1]!
+          return (
+            <group key={`cables-${i}`}>
+              <RailBar
+                d={GUARD_RAIL_T}
+                end={[q.x, q.y + capCentre, q.z]}
+                material={material}
+                start={[p.x, p.y + capCentre, p.z]}
+                t={GUARD_RAIL_D}
+              />
+              {cables.map((y) => (
+                <RailBar
+                  d={CABLE_D}
+                  end={[q.x, q.y + y, q.z]}
+                  key={`cable-${y.toFixed(4)}`}
+                  material={material}
+                  start={[p.x, p.y + y, p.z]}
+                  t={CABLE_D}
+                />
+              ))}
+            </group>
+          )
+        })}
+      </group>
+    )
+  }
   return (
     <group>
       {posts.map((p, i) => (

@@ -637,7 +637,8 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         // a deck stair's guard: 4x4 posts ≤ 4 ft apart, top and bottom rails,
         // pickets — and no top post where the porch's flanking 6x6 already
         // stands, so the rail dies into it (Steve, 2026-09-06)
-        railingStyle: 'post-and-rail',
+        // the flight's guard matches the landing's: cable on the moderns
+        railingStyle: railStyleFor(style) === 'cable' ? 'cable' : 'post-and-rail',
         railingTopPost: flankAt === null,
         children: [ids.stairSegment],
         metadata: meta,
@@ -692,8 +693,13 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
           slatGap: cable ? inches(3) : inches(3.5),
           postSpacing: inches(cable ? 48 : 18),
           postSize: inches(cable ? 2 : 3.5),
-          baseHeight: inches(3),
-          baseStyle: 'grounded',
+          // balusters end on a 2x4 bottom rail held 3½ in over the decking
+          // (Steve: "the balusters go to the decking, should go to bottom
+          // rail") under a 2x4 top rail — the flight's guard is built the
+          // same way; a cable rail keeps its 3 in kickboard on the deck
+          baseHeight: inches(cable ? 3 : 3.5),
+          baseStyle: cable ? 'grounded' : 'raised',
+          ...(cable ? {} : { groundClearance: inches(3.5), topRailHeight: inches(3.5) }),
           postCap: 'flat',
           supportSlabId: ids.slab,
           metadata: meta,

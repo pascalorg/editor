@@ -150,6 +150,10 @@ describe('applied to a generated house', () => {
     const rails = nodes.filter((n) => n.type === 'fence')
     expect(rails.length).toBeGreaterThan(0)
     for (const r of rails) expect(r.color).toBe(f.trim.hex) // farmhouse: painted rails everywhere
+    // the flights' guards match: the same colour as the rails they meet
+    const flights = nodes.filter((n) => n.type === 'stair' && n.railingMode && n.railingMode !== 'none')
+    expect(flights.length).toBeGreaterThan(0)
+    for (const s of flights) expect(s.railingMaterial?.properties?.color).toBe(f.trim.hex)
     const decks = nodes.filter((n) => n.type === 'slab' && n.metadata?.floor === 'deck')
     expect(decks.length).toBeGreaterThan(0)
     for (const d of decks) expect(d.materialPreset).toBe('library:wood-floorplank1')

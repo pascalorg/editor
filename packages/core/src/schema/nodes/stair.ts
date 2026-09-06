@@ -11,9 +11,11 @@ export const StairRailingMode = z.enum(['none', 'left', 'right', 'both'])
  * at every nosing with two round rails (the original); 'post-and-rail' —
  * the way a deck stair is built: 4x4 posts no more than 4 ft apart (two on a
  * short flight), a top rail and a bottom rail following the flight, 1½ in
- * pickets between them at a 4 in-sphere gap (IRC R312.1.3).
+ * pickets between them at a 4 in-sphere gap (IRC R312.1.3); 'cable' — the
+ * same posts as 2 in slim posts, a flat cap rail, and ½ in cables 3 in apart
+ * running with the flight (the modern deck's cable rail).
  */
-export const StairRailingStyle = z.enum(['balusters', 'post-and-rail'])
+export const StairRailingStyle = z.enum(['balusters', 'post-and-rail', 'cable'])
 export const StairType = z.enum(['straight', 'curved', 'spiral'])
 export const StairTopLandingMode = z.enum(['none', 'integrated'])
 export const StairSlabOpeningMode = z.enum(['none', 'destination'])
@@ -101,8 +103,8 @@ export const StairNode = BaseNode.extend({
   - showStepSupports: whether spiral stairs render step support brackets
   - railingMode: whether to render railings and on which side(s)
   - railingHeight: top height of the railing above the stair surface
-  - railingStyle: 'balusters' (round balusters at every nosing, two round rails) | 'post-and-rail' (4x4 posts ≤ 4 ft apart, top and bottom rails, 1½ in pickets at a 4 in gap — a deck stair)
-  - railingTopPost: post-and-rail only — false leaves the top post out so the rail dies into a post already standing there (a porch post)
+  - railingStyle: 'balusters' (round balusters at every nosing, two round rails) | 'post-and-rail' (4x4 posts ≤ 4 ft apart, top and bottom rails, 1½ in pickets at a 4 in gap — a deck stair) | 'cable' (2 in posts, a flat cap rail, ½ in cables 3 in apart)
+  - railingTopPost: post-and-rail / cable only — false leaves the top post out so the rail dies into a post already standing there (a porch post)
   - children: array of StairSegmentNode IDs for straight stairs
   `,
 )
