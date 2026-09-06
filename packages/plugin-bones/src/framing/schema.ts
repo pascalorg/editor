@@ -132,7 +132,7 @@ export type WallOverride = z.infer<typeof WallOverride>
 export const BonesDetail = z.enum(['200', '300', '400'])
 
 /**
- * The X-ray's view mode — ONE field so the three states are structurally
+ * The X-ray's view mode — ONE field so the states are structurally
  * exclusive (user round 2026-08-20):
  * - 'off'      — the FINISHED house: host walls closed and normal, only the
  *                finished-surface fixtures (outlets, switches, lights…) show.
@@ -142,8 +142,12 @@ export const BonesDetail = z.enum(['200', '300', '400'])
  * - 'basement' — the under-the-house view: foundation, drainage and buried
  *                pipes read through everything; the house above fades to a
  *                barely-visible orientation shell.
+ * - 'framing'  — framing ONLY (Steve, 2026-09-05: "a button show all framing
+ *                only"): the level's whole shell — walls, roof, slabs, ceilings,
+ *                openings, furniture — is hidden while the mode is on and every
+ *                member and fixture draws solid; the house reads as its frame.
  */
-export const ViewMode = z.enum(['off', 'xray', 'basement'])
+export const ViewMode = z.enum(['off', 'xray', 'basement', 'framing'])
 export type ViewMode = z.infer<typeof ViewMode>
 
 /**
@@ -157,7 +161,7 @@ export function effectiveViewMode(node: {
   seeThrough?: unknown
 }): ViewMode {
   const v = node.viewMode
-  if (v === 'off' || v === 'xray' || v === 'basement') return v
+  if (v === 'off' || v === 'xray' || v === 'basement' || v === 'framing') return v
   return node.seeThrough === false ? 'off' : 'xray'
 }
 
@@ -246,7 +250,7 @@ export const FramingNode = BaseNode.extend({
   - detail: '200' generic members, '300' jurisdiction/code-sized, '400' fabrication (connections, routing, fastener data)
   - studSpacingIn: stud spacing on-center in inches (16 default, 24, or 12 — the three IRC Table R602.3(5) columns)
   - show*: per-system visibility (walls, floor, roof, foundation, electrical, plumbing, hvac — all default on)
-  - viewMode: 'off' (finished house — walls closed, only surface fixtures show) | 'xray' (engineering X-ray, default) | 'basement' (under-the-house view: foundation/buried pipes read through a faint house shell)
+  - viewMode: 'off' (finished house — walls closed, only surface fixtures show) | 'xray' (engineering X-ray, default) | 'basement' (under-the-house view: foundation/buried pipes read through a faint house shell) | 'framing' (framing only: the level's shell is hidden, every member solid)
   - wallOverrides: per-wall construction override — 'framed' (lumber), 'cmu' (concrete block), 'lgs' (light-gauge steel: C-stud/track members per IRC R603, sheet-goods layers book exactly like a framed wall), 'skip', or the object form { construction, cmuHeightM?, studSize?, spacingIn?, insulation?, insulationR?, cladding? }: cmuHeightM makes a mixed wall (CMU up to a course-snapped height, framed above); studSize ('2x4'|'2x6') + spacingIn (12|16|24) re-size the framing (on 'lgs' they pick the depth-matched steel web: 2x4→350, 2x6→550); insulation ('none'|'batt'|'blown'|'spray-foam') + insulationR fill the stud bays with labeled batts; cladding picks the exterior finish (vinyl|fiberCement|stucco|brickVeneer|wood|eifs)
   - roofSystem: 'stick' (default when absent — site-cut rafters + ceiling joists) | 'truss' (pre-engineered gable trusses at rafter spacing: 2x4 top/bottom chords, representative webbing labeled as manufacturer-designed, bottom chord is the rafter tie so ceiling joists/collar ties/ridge board are omitted; non-gable segments stay stick-framed with an honest flag; spans over 40 ft flag engineering)
   - framingSystem: 'lumber' (default when absent) | 'lgs' (cold-formed steel, IRC R603 — otherwise-framed walls frame as steel C-stud/track assemblies; explicit per-wall overrides and the FL CMU exterior default still win); lgsMachine: roll-forming machine key from data/lgs-profiles.json (e.g. 'framecad/f325it') — profiles resolve through it with the honest fallback status on labels, and any resolution a verified machine cannot roll raises a per-level can't-roll warning (generic AISI dims substituted). Machine scope: constrains + brands — at detail 300/400 members are byte-identical with or without it (labels/flags/warnings only); at 200 it narrows the generic pick to its thinnest rollable variant, and a verified vendor-own profile draws the vendor's published dims

@@ -239,6 +239,25 @@ describe('setXrayViewMode — the control IS the switch (off-boundary only)', ()
     expect(viewer.state.wallMode).toBe('up')
   })
 
+  test('xray ↔ framing never touches wall mode; framing → off releases like xray → off', () => {
+    const { store, state } = fakeScene(scene())
+    const viewer = fakeViewer('cutaway')
+    const framing = activateXray(store, 'level_1', viewer.store)
+    const node = () => state.nodes[framing.id] as { id: string; viewMode?: unknown }
+
+    setXrayViewMode(store, node(), 'framing', viewer.store)
+    expect(effectiveViewMode(node())).toBe('framing')
+    setXrayViewMode(store, node(), 'basement', viewer.store)
+    setXrayViewMode(store, node(), 'framing', viewer.store)
+    expect(viewer.writes).toEqual(['down']) // only the activation write
+
+    setXrayViewMode(store, node(), 'off', viewer.store)
+    expect(viewer.state.wallMode).toBe('cutaway')
+    // …and off → framing imposes low walls again, like off → xray
+    setXrayViewMode(store, node(), 'framing', viewer.store)
+    expect(viewer.state.wallMode).toBe('down')
+  })
+
   test('off with walls manually changed since: restore is skipped (user choice respected)', () => {
     const { store, state } = fakeScene(scene())
     const viewer = fakeViewer('cutaway')
@@ -384,5 +403,7 @@ describe('creation defaults (schema pins)', () => {
     expect(effectiveViewMode({ seeThrough: true })).toBe('xray')
     expect(effectiveViewMode({})).toBe('xray') // legacy node, absent keys
     expect(effectiveViewMode({ viewMode: 'garbage' })).toBe('xray')
+    expect(effectiveViewMode({ viewMode: 'framing' })).toBe('framing')
+    expect(FramingNode.parse({ viewMode: 'framing' }).viewMode).toBe('framing')
   })
 })

@@ -36,6 +36,7 @@ import {
 } from './condenser-asset'
 import { effectiveNodesFor, throttleTrailing } from './live'
 import { effectiveViewMode, type FramingNode, type ViewMode } from './schema'
+import { isFrameMember, shellNodeIds } from './shell'
 
 /**
  * The X-ray renderer: derives every member for this node's level and draws
@@ -393,7 +394,9 @@ function splitAssetMembers(
   mode: ViewMode,
   condenserAsset: Object3D | null | undefined,
 ): { boxed: Member[]; condensers: Member[] } {
-  if (!condenserAsset || mode !== 'xray') return { boxed: members, condensers: [] }
+  if (!condenserAsset || (mode !== 'xray' && mode !== 'framing')) {
+    return { boxed: members, condensers: [] }
+  }
   const condensers = members.filter(isCondenserCabinet)
   if (condensers.length === 0) return { boxed: members, condensers }
   return { boxed: members.filter((m) => !isCondenserCabinet(m)), condensers }
@@ -555,7 +558,12 @@ function collectBuckets(
         }
         continue
       }
-      // mode === 'xray'
+      // 'framing': the frame alone — sheet layers (gypsum, sheathing, WRB,
+      // cladding, insulation, deck, subfloor) are skipped, and with them
+      // every face-carrying bucket, so nothing is left for the dollhouse
+      // cut to open; the members draw exactly as in 'xray'.
+      if (mode === 'framing' && !isFrameMember(member)) continue
+      // mode === 'xray' | 'framing'
       if (member.face) {
         // Assembly layers: bucket PER FACE NORMAL (quantized) AND per source
         // wall, so the dollhouse cut can classify each wall's near/far face
@@ -1094,7 +1102,8 @@ export const FramingRenderer = ({ node }: { node: FramingNode }) => {
   const [condenserAsset, setCondenserAsset] = useState<Object3D | null>(() =>
     condenserAssetSnapshot(),
   )
-  const wantsCondenserAsset = mode === 'xray' && active.members.some(isCondenserCabinet)
+  const wantsCondenserAsset =
+    (mode === 'xray' || mode === 'framing') && active.members.some(isCondenserCabinet)
   useEffect(() => {
     if (condenserAsset || !wantsCondenserAsset) return
     let disposed = false
@@ -1184,6 +1193,47 @@ export const FramingRenderer = ({ node }: { node: FramingNode }) => {
     [active],
   )
 
+  // FRAMING ONLY (Steve, 2026-09-05: "a button show all framing only"): the
+  // level's shell — every non-bones node under the level, see shell.ts — is
+  // hidden by writing the host Object3Ds' `.visible` each frame, the same
+  // imperative channel the dollhouse cut uses for wall faces. Per frame
+  // because the host's own renders re-assert `visible` from the node
+  // (`<group visible={node.visible}>`). Nothing is written to the scene: no
+  // persisted `visible` flips, no undo entries, and leaving the mode (or
+  // unmounting) hands every object back its node's own `visible`. Roof
+  // rebuilds keep running while hidden: the roof system gates on the
+  // merged mesh's own flag, which stays true under a hidden parent.
+  const hiddenShell = useRef<Set<string>>(new Set())
+  const applyShellVisibility = (hide: boolean) => {
+    const table = nodesRef.current as Record<
+      string,
+      { type?: unknown; children?: unknown; visible?: unknown } | undefined
+    >
+    if (!hide) {
+      if (hiddenShell.current.size === 0) return
+      for (const id of hiddenShell.current) {
+        const obj = sceneRegistry.nodes.get(id as Parameters<typeof sceneRegistry.nodes.get>[0])
+        if (obj) obj.visible = table[id]?.visible !== false
+      }
+      hiddenShell.current.clear()
+      return
+    }
+    const levelId = node.parentId
+    if (typeof levelId !== 'string') return
+    for (const id of shellNodeIds(table, levelId)) {
+      const obj = sceneRegistry.nodes.get(id as Parameters<typeof sceneRegistry.nodes.get>[0])
+      if (!obj) continue
+      if (obj.visible) obj.visible = false
+      hiddenShell.current.add(id)
+    }
+  }
+  const restoreShell = useRef(applyShellVisibility)
+  restoreShell.current = applyShellVisibility
+  useEffect(() => () => restoreShell.current(false), [])
+  useEffect(() => {
+    if (mode !== 'framing') restoreShell.current(false)
+  }, [mode])
+
   // Dollhouse cut (round 13; camera-POSITION rewrite night-8): assembly-
   // layer buckets carry their face normal — the face on the CAMERA'S side
   // of the wall plane opens so you look INTO the cavity, and the far face
@@ -1192,8 +1242,10 @@ export const FramingRenderer = ({ node }: { node: FramingNode }) => {
   // simply removed.
   useFrame(({ camera }) => {
     attachForeign()
+    applyShellVisibility(mode === 'framing')
     // The dollhouse cut is an X-ray affordance: 'off' has no face buckets
-    // at all, 'basement' keeps its faint shell intact from every angle.
+    // at all, 'basement' keeps its faint shell intact from every angle, and
+    // 'framing' has no shell left to cut.
     if (mode !== 'xray') return
     // Camera position in the LEVEL's local plan frame: levels move in Y
     // across stacked/exploded/solo (XZ shared), and worldToLocal also

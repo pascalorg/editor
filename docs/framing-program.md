@@ -186,8 +186,9 @@ W2  DONE 2026-09-05 — Auto roof engine `packages/plugin-roof`: exterior loop �
     Rail panel + commands. Generate calls it.
 W3  DONE with W1 + W2 — Walls under every roof form: per-wall roof role metadata (eave / gable-end /
     shed-high / rake) written by the engine; framing from W1; elevations unchanged.
-W4  "Framing only" view mode in Bones (shell hidden, members for every system) +
-    panel button + command.
+W4  DONE — "Framing only" view mode in Bones: a fourth view mode `framing` on the
+    X-ray node; the level's shell is hidden, sheet layers skipped, every frame
+    member solid. Panel button "Framing" beside Normal / X-ray / Subfloor.
 W5  Lot drop-in: Generate panel address box → parcel → site polygon/address/parcel →
     setbacks default (PlanCrafters planning defaults front 20 / side 5 / rear 15 ft,
     `setbacksSource` says so) → front edge from the nearest OSM road (server route
@@ -264,3 +265,32 @@ W9  Simpson hardware catalogue in Bones: H2.5A rafter/truss to plate, A35 at
   and a 14.7 ft rise at 8:12 — PlanCrafters' policy A5 says very wide boxes may
   prefer a hip per style; no threshold is written there, so none was invented.
 - W3 is covered: roles come from W2, the framing above the plate from W1.
+
+- 2026-09-06 early: **W4 landed** — the "show all framing only" button. Bones'
+  `ViewMode` gains `framing` (schema, `effectiveViewMode`, panel segmented
+  control: Normal / X-ray / Subfloor / Framing). In that mode the framing
+  renderer hides the level's SHELL — every non-`bones:*` node under the level
+  (walls with their openings, roofs and segments, slabs, ceilings, stairs,
+  zones, furniture; `framing/shell.ts` walks the tree, so a plugin's nodes are
+  shell too) — by writing the host Object3Ds' `.visible` each frame through
+  the scene registry, the same imperative channel as the dollhouse cut; nothing
+  is written to the scene, no undo entries, and leaving the mode (or unmounting)
+  hands every object back its node's own `visible`. Members draw exactly as in
+  X-ray except the SURFACE roles are skipped (`SURFACE_ROLES`: drywall,
+  sheathing — wall and roof deck —, WRB, cladding, insulation, subfloor, vapor
+  retarder, drip edge), so studs, plates, headers, rafters, ridges, joists,
+  hardware, foundation concrete and the MEP runs the panel's toggles allow read
+  unobstructed; with no face-carrying buckets the dollhouse cut has nothing to
+  open. Wall-mode contract unchanged: off → framing imposes low walls like off →
+  xray, framing ↔ xray ↔ basement never touch wall mode, framing → off releases
+  under the same other-X-ray-live rule (activation tests extended). Roof
+  rebuilds keep running while hidden — the roof system gates on the merged
+  mesh's own flag, which stays true under a hidden parent. Tests: `shell.test.ts`
+  (tree walk, bones exclusion, cycles, role filter) + activation; Bones 1,994
+  green, typecheck clean. Verified live on the rolled farmhouse (scene
+  b13c13b54a7a, Bones installed for it): Framing shows rafters, ridge, ceiling
+  joists, gable studs, wall studs and headers, the garage wing's frame, the
+  condenser and the duct/wire runs, on the bare site; the roof deck, walls and
+  slab are gone. Known: the hidden walls still catch pointer events (their
+  collision meshes are not visible-gated), so clicking a stud selects the wall
+  behind it — harmless, noted for a later pass.

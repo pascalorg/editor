@@ -136,7 +136,9 @@ export function activateXray(
  * The panel's view-mode control: write `viewMode` and apply the wall-mode
  * side of the contract for the off-boundary transitions. The control IS the
  * switch (unlike config knobs it drives wall mode on every off↔on flip);
- * between the two active modes wall mode never moves.
+ * between the active modes (xray / basement / framing) wall mode never
+ * moves — 'framing' hides the shell in the renderer, so the walls being
+ * low underneath is harmless and the restore on 'off' stays one rule.
  */
 export function setXrayViewMode(
   scene: SceneLike,

@@ -213,6 +213,7 @@ function XraySection({
           { label: 'Normal', value: 'off' },
           { label: 'X-ray', value: 'xray' },
           { label: 'Subfloor', value: 'basement' },
+          { label: 'Framing', value: 'framing' },
         ]}
         value={effectiveViewMode(framingNode)}
       />
