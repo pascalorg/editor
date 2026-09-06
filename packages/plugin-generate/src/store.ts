@@ -2,6 +2,7 @@
  * Panel state: the options form, the seed, and the last run's summary.
  */
 import { create } from 'zustand'
+import type { PorchSummary } from './porch'
 import { randomSeed } from './rng'
 import type { RollOptions } from './roll'
 
@@ -10,10 +11,20 @@ export type RunSummary = {
   name: string
   seed: number | null
   template: string | null
-  stats: { rooms: number; walls: number; doors: number; windows: number; zones: number; livingSqFt: number; footprintSqFt: number } | null
+  stats: {
+    rooms: number
+    walls: number
+    doors: number
+    windows: number
+    zones: number
+    livingSqFt: number
+    footprintSqFt: number
+  } | null
   errors: string[]
   warnings: string[]
   placed: boolean
+  /** The entrance that was built (porch.ts), when the run succeeded. */
+  porch?: PorchSummary | null
 }
 
 type GenerateState = {

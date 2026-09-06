@@ -1,11 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { buildHouse, type NodeOp } from './build'
-import { outlineRing, ringArea } from './geometry'
 import { normalizeDocument } from './document'
+import { outlineRing, ringArea } from './geometry'
+import { styleFor } from './styles'
 import { POPPY } from './templates/poppy'
 
 type N = Record<string, any>
-const ofType = (ops: NodeOp[], type: string): N[] => ops.filter((op) => op.node.type === type).map((op) => op.node)
+const ofType = (ops: NodeOp[], type: string): N[] =>
+  ops.filter((op) => op.node.type === type).map((op) => op.node)
 
 describe('Poppy builds into Pascal nodes', () => {
   const result = buildHouse(POPPY)
@@ -42,7 +44,9 @@ describe('Poppy builds into Pascal nodes', () => {
     expect(interior.length).toBeGreaterThan(0)
     for (const w of interior) expect(w.assembly.preset).toBe('interior-2x4-drywall')
     // The open plan has NO partition between living, dining and kitchen.
-    expect(interior.some((w) => /LIVING \+ DINING|DINING \+ KITCHEN|LIVING \+ KITCHEN/.test(w.name))).toBe(false)
+    expect(
+      interior.some((w) => /LIVING \+ DINING|DINING \+ KITCHEN|LIVING \+ KITCHEN/.test(w.name)),
+    ).toBe(false)
   })
 
   test('one door per door attachment plus the front door, seated inside their walls', () => {
@@ -76,10 +80,14 @@ describe('Poppy builds into Pascal nodes', () => {
     expect(byName('LIVING window').length).toBe(2)
     // Openings on one wall never overlap.
     const byWall = new Map<string, N[]>()
-    for (const o of [...doors, ...windows]) byWall.set(o.parentId, [...(byWall.get(o.parentId) ?? []), o])
+    for (const o of [...doors, ...windows])
+      byWall.set(o.parentId, [...(byWall.get(o.parentId) ?? []), o])
     for (const list of byWall.values()) {
-      const spans = list.map((o) => [o.position[0] - o.width / 2, o.position[0] + o.width / 2]).sort((a, b) => a[0]! - b[0]!)
-      for (let i = 1; i < spans.length; i++) expect(spans[i]![0]).toBeGreaterThanOrEqual(spans[i - 1]![1]! - 1e-9)
+      const spans = list
+        .map((o) => [o.position[0] - o.width / 2, o.position[0] + o.width / 2])
+        .sort((a, b) => a[0]! - b[0]!)
+      for (let i = 1; i < spans.length; i++)
+        expect(spans[i]![0]).toBeGreaterThanOrEqual(spans[i - 1]![1]! - 1e-9)
     }
   })
 
@@ -107,7 +115,9 @@ describe('Poppy builds into Pascal nodes', () => {
     const level0 = ofType(ops, 'level')[0] as N
     expect(seg.position[1]).toBeCloseTo(level0.height, 6)
     // every exterior wall knows what it carries
-    const roles = ofType(ops, 'wall').filter((w) => w.metadata.wallType === 'ext2x6').map((w) => w.metadata.roof?.role)
+    const roles = ofType(ops, 'wall')
+      .filter((w) => w.metadata.wallType === 'ext2x6')
+      .map((w) => w.metadata.roof?.role)
     expect(roles.every((r) => r === 'eave' || r === 'gable-end')).toBe(true)
     expect(roles.filter((r) => r === 'gable-end').length).toBe(2)
     const level = ofType(ops, 'level')[0] as N
@@ -115,13 +125,42 @@ describe('Poppy builds into Pascal nodes', () => {
   })
 
   test('regenerating keeps the building and level ids it is handed', () => {
-    const again = buildHouse(POPPY, { reuse: { buildingId: 'building_keep', levelId: 'level_keep' }, siteId: 'site_x' })
+    const again = buildHouse(POPPY, {
+      reuse: { buildingId: 'building_keep', levelId: 'level_keep' },
+      siteId: 'site_x',
+    })
     expect(again.ok).toBe(true)
     expect(again.buildingId).toBe('building_keep')
     expect(again.levelId).toBe('level_keep')
     expect(ofType(again.ops, 'building')[0]?.parentId).toBe('site_x')
     expect(ofType(again.ops, 'level')[0]?.parentId).toBe('building_keep')
     expect(ofType(again.ops, 'wall').every((w) => w.parentId === 'level_keep')).toBe(true)
+  })
+
+  test('the entrance: a porch centred on the front door, its steps to grade, the building 8 in above grade', () => {
+    const built = buildHouse(POPPY)
+    expect(built.ok).toBe(true)
+    const building = ofType(built.ops, 'building')[0] as N
+    expect(building.position[1]).toBeCloseTo(8 * 0.0254, 9)
+    const door = ofType(built.ops, 'door').find((d) => (d as N).name === 'Front door') as N
+    expect(door).toBeDefined()
+    const porch = ofType(built.ops, 'slab').find((s) => (s as N).name === 'Porch') as N
+    expect(porch).toBeDefined()
+    expect(porch.elevation).toBeCloseTo(0.05 - 4 * 0.0254, 9)
+    const posts = ofType(built.ops, 'column')
+    expect(posts.length).toBeGreaterThanOrEqual(2)
+    for (const p of posts) expect((p as N).supportSlabId).toBe(porch.id)
+    const stair = ofType(built.ops, 'stair')[0] as N
+    expect(stair.deckSlabId).toBe(porch.id)
+    expect(stair.stepCount).toBe(1) // 6 in from grade to the porch top
+    const segs = ofType(built.ops, 'roof-segment') as N[]
+    expect(segs.some((s) => /Porch/.test(String(s.name)))).toBe(true)
+    expect(built.porch?.policy).toBe(styleFor(POPPY.style ?? 'cottage').porch)
+    // the porch sits on the front door's wall, outside its exterior face
+    const wall = ofType(built.ops, 'wall').find((w) => (w as N).id === door.parentId) as N
+    const wz = (wall.start as number[])[1] as number
+    const poly = porch.polygon as [number, number][]
+    for (const p of poly) expect(Math.abs(p[1] - wz)).toBeGreaterThan(0.08)
   })
 
   test('placed on a parcel: square to the street, at the front setback, attached to the site', () => {

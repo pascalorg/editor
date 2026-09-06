@@ -10,7 +10,7 @@ import { useViewer } from '@pascal-app/viewer'
 import { buildHouse, GENERATED_BY, type Placement } from './build'
 import type { PlanDocument } from './document'
 import { crossesSetback, type EdgeFit, envelopeEdges, refaceCandidates, refaceNote } from './fit'
-import { rollDocument, type RollOptions } from './roll'
+import { type RollOptions, rollDocument } from './roll'
 import { type RunSummary, useGenerate } from './store'
 import { TEMPLATES } from './templates/poppy'
 
@@ -44,7 +44,11 @@ export function placementFromScene(): {
   const edges = envelopeEdges(envelope)
   const street = edges[i]
   return {
-    placement: { siteId: site.id, envelope: envelope.map((e) => [e[0], e[1]] as [number, number]), frontEdge: i },
+    placement: {
+      siteId: site.id,
+      envelope: envelope.map((e) => [e[0], e[1]] as [number, number]),
+      frontEdge: i,
+    },
     frontageFt: street ? street.frontageFt : null,
     depthFt: street ? street.depthFt : null,
     edges,
@@ -60,7 +64,16 @@ export function placementFromScene(): {
  */
 export function removeGenerated(includeGenerated = false): number {
   const s = useScene.getState()
-  const nodes = s.nodes as Record<string, { id: string; type?: string; parentId?: string | null; metadata?: { generatedBy?: string }; children?: string[] }>
+  const nodes = s.nodes as Record<
+    string,
+    {
+      id: string
+      type?: string
+      parentId?: string | null
+      metadata?: { generatedBy?: string }
+      children?: string[]
+    }
+  >
   const hasWork = (buildingId: string): boolean =>
     Object.values(nodes).some((n) => {
       if (n.type !== 'level' || n.parentId !== buildingId) return false
@@ -71,7 +84,9 @@ export function removeGenerated(includeGenerated = false): number {
     })
   const doomed = Object.values(nodes)
     .filter(
-      (n) => n.type === 'building' && ((includeGenerated && n.metadata?.generatedBy === GENERATED_BY) || !hasWork(n.id)),
+      (n) =>
+        n.type === 'building' &&
+        ((includeGenerated && n.metadata?.generatedBy === GENERATED_BY) || !hasWork(n.id)),
     )
     .map((n) => n.id)
   if (doomed.length > 0) s.deleteNodes(doomed as never)
@@ -102,7 +117,8 @@ function applyDocument(
   meta: { seed: number | null; template: string | null; options?: RollOptions },
   placementOverride?: Placement | null,
 ): RunSummary {
-  const placement = placementOverride === undefined ? placementFromScene().placement : placementOverride
+  const placement =
+    placementOverride === undefined ? placementFromScene().placement : placementOverride
   const scene = useScene.getState()
   const nodes = scene.nodes as Record<string, SceneNode>
   const site = Object.values(nodes).find((n) => n.type === 'site')
@@ -110,12 +126,18 @@ function applyDocument(
   // one that landed at the root (a scene that had no site then) is rebuilt
   // under the site so the site plan and the cover find it.
   const previous = generatedBuilding()
-  const reuse = previous && (!site || nodes[previous.buildingId]?.parentId === site.id) ? previous : null
+  const reuse =
+    previous && (!site || nodes[previous.buildingId]?.parentId === site.id) ? previous : null
   const built = buildHouse(document, {
     placement,
     siteId: site?.id ?? null,
     reuse,
-    generation: { seed: meta.seed, template: meta.template, options: meta.options ?? {}, at: new Date().toISOString() },
+    generation: {
+      seed: meta.seed,
+      template: meta.template,
+      options: meta.options ?? {},
+      at: new Date().toISOString(),
+    },
   })
   const summary: RunSummary = {
     ok: built.ok,
@@ -126,6 +148,7 @@ function applyDocument(
     errors: built.errors,
     warnings: built.warnings,
     placed: placement !== null,
+    porch: built.ok ? built.porch : null,
   }
   if (!built.ok) return summary
   if (reuse) {
@@ -137,20 +160,38 @@ function applyDocument(
     if (contents.length > 0) scene.deleteNodes(contents as never)
     const [buildingOp, levelOp, ...rest] = built.ops
     if (buildingOp) {
-      const { id: _id, type: _type, parentId: _parent, children: _children, ...patch } = buildingOp.node as Record<string, unknown>
+      const {
+        id: _id,
+        type: _type,
+        parentId: _parent,
+        children: _children,
+        ...patch
+      } = buildingOp.node as Record<string, unknown>
       scene.updateNode(reuse.buildingId as never, patch as never)
     }
     if (levelOp) {
-      const { id: _id, type: _type, parentId: _parent, children: _children, ...patch } = levelOp.node as Record<string, unknown>
+      const {
+        id: _id,
+        type: _type,
+        parentId: _parent,
+        children: _children,
+        ...patch
+      } = levelOp.node as Record<string, unknown>
       scene.updateNode(reuse.levelId as never, patch as never)
     }
-    scene.createNodes(rest.map((op) => ({ node: op.node as never, parentId: op.parentId as never })))
+    scene.createNodes(
+      rest.map((op) => ({ node: op.node as never, parentId: op.parentId as never })),
+    )
   } else {
     removeGenerated(true)
-    scene.createNodes(built.ops.map((op) => ({ node: op.node as never, parentId: op.parentId as never })))
+    scene.createNodes(
+      built.ops.map((op) => ({ node: op.node as never, parentId: op.parentId as never })),
+    )
   }
   if (built.levelId) {
-    useViewer.getState().setSelection({ buildingId: built.buildingId as never, levelId: built.levelId as never })
+    useViewer
+      .getState()
+      .setSelection({ buildingId: built.buildingId as never, levelId: built.levelId as never })
   }
   return summary
 }
@@ -158,7 +199,19 @@ function applyDocument(
 /** Roll a house from the panel's seed and options and put it in the scene. */
 export function generateHouse(overrides: RollOptions = {}): RunSummary {
   const S = useGenerate.getState()
-  if (S.running) return S.last ?? { ok: false, name: '', seed: null, template: null, stats: null, errors: ['already running'], warnings: [], placed: false }
+  if (S.running)
+    return (
+      S.last ?? {
+        ok: false,
+        name: '',
+        seed: null,
+        template: null,
+        stats: null,
+        errors: ['already running'],
+        warnings: [],
+        placed: false,
+      }
+    )
   S.setRunning(true)
   try {
     const { placement, edges } = placementFromScene()
@@ -185,7 +238,11 @@ export function generateHouse(overrides: RollOptions = {}): RunSummary {
         break
       }
     }
-    const summary = applyDocument(rolled.document, { seed: rolled.seed, template: null, options: rolled.options }, placed)
+    const summary = applyDocument(
+      rolled.document,
+      { seed: rolled.seed, template: null, options: rolled.options },
+      placed,
+    )
     summary.warnings = [...rolled.warnings, ...summary.warnings]
     useGenerate.getState().setLast(summary)
     return summary
@@ -199,7 +256,16 @@ export function generateTemplate(id: string): RunSummary {
   const template = TEMPLATES.find((t) => t.id === id)
   const S = useGenerate.getState()
   if (!template) {
-    const summary: RunSummary = { ok: false, name: id, seed: null, template: id, stats: null, errors: [`no template "${id}"`], warnings: [], placed: false }
+    const summary: RunSummary = {
+      ok: false,
+      name: id,
+      seed: null,
+      template: id,
+      stats: null,
+      errors: [`no template "${id}"`],
+      warnings: [],
+      placed: false,
+    }
     S.setLast(summary)
     return summary
   }

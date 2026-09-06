@@ -52,6 +52,14 @@ export type RoofSegmentSlice = {
   wallHeight: number
   /** Segment wall thickness — infill studs above the plate fit inside it. */
   wallThickness?: number
+  /**
+   * How the segment meets a wall it leans on (`metadata.roof.attach`): `high`
+   * = a shed whose high edge bears on a LEDGER at the house wall (no
+   * pediment, no overhang there, rafters on hangers) — the porch roof.
+   */
+  attach?: 'high'
+  /** An OPEN roof (`metadata.roof.open`): posts and a beam under the eaves, no walls — no rake studs. */
+  open?: boolean
   // Shape ratios for the multi-face types — host schema fields with the
   // ROOF_SHAPE_DEFAULTS values (roof-segment.ts in @pascal-app/core).
   gambrelLowerWidthRatio?: number
@@ -82,6 +90,16 @@ const num = (v: unknown, fallback: number): number =>
  * the roof group's transform into the slice. Walks parentId links so it
  * tolerates intermediate grouping nodes.
  */
+/** `metadata.roof.{attach, open}` on a segment — the porch's hints (see RoofSegmentSlice). */
+function roofHints(node: Record<string, unknown>): Pick<RoofSegmentSlice, 'attach' | 'open'> {
+  const meta = node.metadata as { roof?: { attach?: unknown; open?: unknown } } | null | undefined
+  const roof = meta && typeof meta === 'object' ? meta.roof : undefined
+  const out: Pick<RoofSegmentSlice, 'attach' | 'open'> = {}
+  if (roof?.attach === 'high') out.attach = 'high'
+  if (roof?.open === true) out.open = true
+  return out
+}
+
 export function extractRoofs(nodes: NodesRecord, levelId: string): RoofSegmentSlice[] {
   const slices: RoofSegmentSlice[] = []
   for (const node of Object.values(nodes)) {
@@ -140,6 +158,7 @@ export function extractRoofs(nodes: NodesRecord, levelId: string): RoofSegmentSl
       overhang: num(node.overhang, 0.3),
       wallHeight: num(node.wallHeight, 0.5),
       wallThickness: num(node.wallThickness, 0.1),
+      ...roofHints(node),
       gambrelLowerWidthRatio: num(node.gambrelLowerWidthRatio, SHAPE_DEFAULTS.gambrelLowerWidthRatio),
       gambrelLowerHeightRatio: num(node.gambrelLowerHeightRatio, SHAPE_DEFAULTS.gambrelLowerHeightRatio),
       mansardSteepWidthRatio: num(node.mansardSteepWidthRatio, SHAPE_DEFAULTS.mansardSteepWidthRatio),
@@ -1494,62 +1513,109 @@ function frameShed(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[])
   const [t, rd] = LUMBER_CROSS_SECTIONS[spec.rafterSize]
   const theta = roof.pitch
   const cosT = Math.cos(theta)
+  // ATTACHED (the porch roof, `metadata.roof.attach: 'high'`): the high edge
+  // bears on a LEDGER at the house wall — no overhang past it, no pediment,
+  // rafters on hangers. OPEN (`metadata.roof.open`): posts and a beam under
+  // the low eave, the sides open — no rake studs.
+  const attached = roof.attach === 'high'
+  const open = roof.open === true
+  const highOverhang = attached ? 0 : roof.overhang
   // Single plane over the whole depth, rising toward +Z's opposite: the host
   // shed rises across the full depth (run = depth).
-  const slopeLen = roof.depth / cosT + 2 * roof.overhang
+  const slopeLen = roof.depth / cosT + roof.overhang + highOverhang
   const tan = Math.tan(theta)
   const plateY = roof.wallHeight
   const seat = rd / (2 * cosT) // bottom face bears on the plates (see frameGable)
   const lowY = plateY + seat
   const midY = lowY + (roof.depth / 2) * tan
+  // The rafter box is centred on its own span: with an attached high edge the
+  // span is one overhang shorter, so its centre moves down-slope by half.
+  const zCentre = attached ? (roof.overhang * cosT) / 2 : 0
+  const yCentre = midY - zCentre * tan
   // Span discipline: the shed's horizontal projection is the FULL depth and
   // no ceiling joists exist below to strut a purlin to — flag only (S1).
   const shedFlag = slopeRafterFlag(spec, roof.depth, slopeLen)
-  for (const x of layout(-roof.width / 2, roof.width / 2, spec.rafterSpacing, t / 2)) {
+  const stations = layout(-roof.width / 2, roof.width / 2, spec.rafterSpacing, t / 2)
+  for (const x of stations) {
     emit(
       'rafter',
       spec.rafterSize,
       [slopeLen, rd, t],
-      [x, midY, 0],
+      [x, yCentre, zCentre],
       Math.PI / 2,
       theta,
       slopeLen,
       'lumber',
-      `Rafter ${spec.rafterSize} (shed)`,
+      `Rafter ${spec.rafterSize} (shed${attached ? ', on the ledger' : ''})`,
       undefined,
       shedFlag,
     )
     if (spec.hurricaneTies) {
       tieAt(emit, spec, x, roof.depth / 2, plateY)
-      tieAt(emit, spec, x, -roof.depth / 2, plateY + roof.depth * tan)
+      if (!attached) tieAt(emit, spec, x, -roof.depth / 2, plateY + roof.depth * tan)
     }
   }
 
-  // ---- infill above the plate: the high-side pediment and both raking sides
-  // (the plane rises from the low eave at +Z to the high edge at −Z). This is
-  // the shed's "front wall" — real studs on the plate, not a picture.
-  infillStuds(emit, spec, roof, {
-    plateY,
-    alongX: true,
-    at: -roof.depth / 2,
-    from: -roof.width / 2,
-    to: roof.width / 2,
-    topAt: () => roof.depth * tan,
-    topSlope: 0,
-    label: infillLabel(spec, 'Pediment stud (shed high wall)'),
-    bearing: true,
-  })
-  for (const sx of [1, -1] as const) {
+  if (attached) {
+    // The ledger: the rafter-size board on the wall face along the high edge,
+    // its top flush with the rafter tops there; one face-mount hanger per
+    // rafter. The Simpson model is sized to the rafter (LUS-series for
+    // sawn 2x); its nailing is the catalogue's — not restated here.
+    const highRafterY = lowY + roof.depth * tan // rafter centreline at the high edge
+    const topAtWall = highRafterY + rd / (2 * cosT)
+    emit(
+      'ledger',
+      spec.rafterSize,
+      [roof.width, rd, t],
+      [0, topAtWall - rd / 2, -roof.depth / 2 + t / 2],
+      0,
+      0,
+      roof.width,
+      'lumber',
+      `Ledger ${spec.rafterSize} at the house wall — fastened to the wall framing, rafters on face-mount hangers`,
+    )
+    for (const x of stations) {
+      emit(
+        'hanger',
+        undefined,
+        [inches(3), rd, inches(0.75)],
+        [x, topAtWall - rd / 2, -roof.depth / 2 + t + inches(0.75) / 2],
+        0,
+        0,
+        inches(3),
+        'steel',
+        `Simpson LUS-series face-mount hanger — ${spec.rafterSize} rafter to the ledger, nailing per the Simpson catalogue`,
+      )
+    }
+  } else {
+    // ---- infill above the plate: the high-side pediment (the plane rises
+    // from the low eave at +Z to the high edge at −Z). This is the shed's
+    // "front wall" — real studs on the plate, not a picture.
     infillStuds(emit, spec, roof, {
       plateY,
-      alongX: false,
-      at: sx * (roof.width / 2),
-      from: -roof.depth / 2,
-      to: roof.depth / 2,
-      topAt: (z) => (roof.depth / 2 - z) * tan,
-      topSlope: tan,
-      label: infillLabel(spec, 'Rake stud (shed side wall)'),
+      alongX: true,
+      at: -roof.depth / 2,
+      from: -roof.width / 2,
+      to: roof.width / 2,
+      topAt: () => roof.depth * tan,
+      topSlope: 0,
+      label: infillLabel(spec, 'Pediment stud (shed high wall)'),
+      bearing: true,
     })
+  }
+  if (!open) {
+    for (const sx of [1, -1] as const) {
+      infillStuds(emit, spec, roof, {
+        plateY,
+        alongX: false,
+        at: sx * (roof.width / 2),
+        from: -roof.depth / 2,
+        to: roof.depth / 2,
+        topAt: (z) => (roof.depth / 2 - z) * tan,
+        topSlope: tan,
+        label: infillLabel(spec, 'Rake stud (shed side wall)'),
+      })
+    }
   }
 
   // ---- deck over the single plane (B6): high tip → low tip, both
@@ -1560,7 +1626,7 @@ function frameShed(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[])
     alongXAxis: true,
     u0: -roof.width / 2,
     u1: roof.width / 2,
-    zTop: -roof.depth / 2 - roof.overhang * cosT + deckGap(theta),
+    zTop: -roof.depth / 2 - highOverhang * cosT + deckGap(theta),
     zBot: roof.depth / 2 + roof.overhang * cosT - deckGap(theta),
     yTop: midY + (roof.depth / 2 + roof.overhang * cosT - deckGap(theta)) * Math.tan(theta),
     rafterDepth: rd,

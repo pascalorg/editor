@@ -26,12 +26,23 @@ import {
   validateDocument,
 } from './document'
 import { deriveRoof, type RoofIntent, roofNodesFor, type WallInput } from '@pascal-app/plugin-roof'
+import { type PorchSummary, porchFor } from './porch'
 import { edgePieces, GRID_IN_DEFAULT, mergeRuns, outlineRing, pointInRing, type Run } from './geometry'
 import { type StylePreset, styleFor } from './styles'
 
 export const GENERATED_BY = 'pascal:generate'
 const IN = 0.0254
 const FT = 0.3048
+/**
+ * A slab-on-grade house stands with its top of slab 8 in above grade
+ * (IRC R404.1.6 / R317.1: the foundation and the wood on it clear the ground;
+ * PlanCrafters' TERRAIN-DATUM-SPEC: top of foundation ≥ 8 in above the
+ * highest grade under the house). The building node carries it, so every
+ * level-local number stays as it was and the porch steps have a rise.
+ */
+export const SLAB_ABOVE_GRADE_M = 8 * IN
+/** The house slab's walking surface above the level plane. */
+export const SLAB_ELEVATION_M = 0.05
 
 export type Pt = [number, number]
 
@@ -79,6 +90,8 @@ export type BuildResult = {
   }
   buildingId: string | null
   levelId: string | null
+  /** What the entrance got — PlanCrafters' porch policy, built. */
+  porch: PorchSummary | null
 }
 
 type WallRun = Run & { id: string; exterior: boolean; length: number; start: Pt; end: Pt; thickness: number }
@@ -125,6 +138,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     errors,
     warnings,
     stats: { rooms: 0, walls: 0, doors: 0, windows: 0, zones: 0, livingSqFt: 0, footprintSqFt: 0 },
+    porch: null,
     buildingId: null,
     levelId: null,
   })
@@ -372,12 +386,15 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   const ext = exteriorWallsOf(frontRoom)
   const frontChoice =
     ext.find((e) => e.edge === 'front') ?? ext.find((e) => e.edge === 'left' || e.edge === 'right') ?? ext[0]
+  // The placed front door — the porch centres on it (PlanCrafters' centering invariant).
+  let frontDoor: { wall: WallRun; at: number } | null = null
   if (!frontChoice) errors.push(`the front-door room "${frontRoom.name}" has no exterior wall.`)
   else {
     const at = seat(frontChoice.wall.id, frontChoice.span, EXTERIOR_DOOR_W, 0.5)
     if (at === null) errors.push(`no room for the front door on "${frontRoom.name}".`)
     else {
       doorNode(frontChoice.wall, at, EXTERIOR_DOOR_W, 'exterior', 'Front door', sideOf(frontChoice.wall, (frontRoom.u0 + frontRoom.u1) / 2, (frontRoom.v0 + frontRoom.v1) / 2))
+      frontDoor = { wall: frontChoice.wall, at }
     }
   }
 
@@ -512,7 +529,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       parentId: levelId,
       polygon: outlineLocal,
       holes: [],
-      elevation: 0.05,
+      elevation: SLAB_ELEVATION_M,
       thickness: 0.1016,
       metadata: { generatedBy: GENERATED_BY },
     },
@@ -522,8 +539,55 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   // ── roof: derived from the walls by the auto roof engine ─────────────
   const roofOps = roofFor(doc, style, ops, ceilingM, levelId, warnings)
 
+  // ── the porch: the entrance built PlanCrafters' way (porch.ts) ─────────
+  let porchSummary: PorchSummary | null = null
+  const porchOps: NodeOp[] = []
+  if (frontDoor) {
+    const w = frontDoor.wall
+    const dxw = w.end[0] - w.start[0]
+    const dzw = w.end[1] - w.start[1]
+    const lw = Math.hypot(dxw, dzw) || 1
+    const nxw = -dzw / lw
+    const nzw = dxw / lw
+    const midw: Pt = [(w.start[0] + w.end[0]) / 2, (w.start[1] + w.end[1]) / 2]
+    const houseOnFront = pointInRing(ring.map(toLocal), midw[0] + nxw * 0.2, midw[1] + nzw * 0.2)
+    const outward: Pt = houseOnFront ? [-nxw, -nzw] : [nxw, nzw]
+    const bayWidth = rooms.filter((r) => r.kind === 'living' || r.kind === 'entry').reduce((s, r) => s + (r.u1 - r.u0), 0) * IN
+    const porchPitch = Math.min(style.pitch, 6)
+    const porch = porchFor(
+      {
+        policy: style.porch,
+        style,
+        levelId,
+        wall: { start: w.start, end: w.end, thickness: w.thickness },
+        doorAt: frontDoor.at * IN,
+        doorWidth: EXTERIOR_DOOR_W * IN,
+        outward,
+        bayWidth,
+        floorElevation: SLAB_ELEVATION_M,
+        gradeY: -SLAB_ABOVE_GRADE_M,
+        overhang: (style.overhangIn * IN) / Math.cos(Math.atan(porchPitch / 12)),
+        wallRole: (
+          (ops.find((op) => op.node.id === w.id)?.node.metadata as { roof?: { role?: string } } | undefined)?.roof
+        )?.role,
+      },
+      {
+        slab: generateId('slab'),
+        roof: generateId('roof'),
+        segment: generateId('rseg'),
+        stair: generateId('stair'),
+        stairSegment: generateId('sseg'),
+        column: () => generateId('column'),
+        fence: () => generateId('fence'),
+      },
+    )
+    porchOps.push(...porch.ops)
+    warnings.push(...porch.warnings)
+    porchSummary = porch.summary
+  }
+
   // ── building on the parcel ────────────────────────────────────────────
-  let position: [number, number, number] = [0, 0, 0]
+  let position: [number, number, number] = [0, SLAB_ABOVE_GRADE_M, 0]
   let yaw = 0
   const placement = options.placement
   if (placement && placement.envelope.length >= 3) {
@@ -548,7 +612,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     // Level-local −z is the house front; world = R(yaw)·local: (0,−1) → (−sin, −cos).
     yaw = Math.atan2(-nx, -nz)
     const halfD = (D * IN) / 2 + exteriorT / 2
-    position = [round(mx - nx * halfD), 0, round(mz - nz * halfD)]
+    position = [round(mx - nx * halfD), SLAB_ABOVE_GRADE_M, round(mz - nz * halfD)]
     if (W * IN > el) warnings.push(`the house is ${(W / 12).toFixed(0)}' wide but the buildable frontage is ${(el / FT).toFixed(0)}' — check the side setbacks.`)
   }
 
@@ -580,7 +644,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
 
   const livingSqFt = rooms.filter((r) => r.kind !== 'garage').reduce((s, r) => s + area(r), 0) / 144
   const footprintSqFt = (W * D) / 144
-  const ordered: NodeOp[] = [buildingOp, levelOp, slabOp, ...ops, ...zoneOps, ...roofOps]
+  const ordered: NodeOp[] = [buildingOp, levelOp, slabOp, ...ops, ...zoneOps, ...roofOps, ...porchOps]
   if (errors.length > 0) return { ...empty(errors), warnings }
   return {
     ok: true,
@@ -588,6 +652,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     errors,
     warnings,
     stats: { rooms: rooms.length, walls: walls.length, doors, windows, zones, livingSqFt: Math.round(livingSqFt), footprintSqFt: Math.round(footprintSqFt) },
+    porch: porchSummary,
     buildingId,
     levelId,
   }

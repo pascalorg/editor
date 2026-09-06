@@ -196,8 +196,12 @@ W5  DONE — Lot drop-in: `@pascal-app/plugin-lot` (Lot panel + the address box 
     (garage dropped, reface to the widest edge). Terrain from USGS elevation is
     NOT part of it yet (the datum rules in TERRAIN-DATUM-SPEC touch the
     foundation engine) — a later pass.
-W6  Porch: from the plan's front door + style policy → dropped slab, posts, beam,
-    porch roof segment (gable / hip / shed), rails, steps. Rear patio later.
+W6  DONE — Porch: PlanCrafters' entrance tool built from Pascal nodes
+    (`plugin-generate/src/porch.ts`): the landing slab 4 in below the finish floor,
+    posts, guards, the flight to grade, and a porch roof segment (gable / hip /
+    flat canopy) on the beam line. Slab houses now stand 8 in above grade
+    (`SLAB_ABOVE_GRADE_M`). Rear patio / deck, the porch beam and post footings in
+    Bones, and a covered-under-the-main-roof porch are later.
 W7  Styles and palettes applied: exterior assembly + siding colour + trim + door +
     roof material per style, palette rolled as a unit.
 W8  Wall assemblies by role: plumbing 2x6 behind wet rooms, garage separation,
@@ -206,6 +210,47 @@ W8  Wall assemblies by role: plumbing 2x6 behind wet rooms, garage separation,
 W9  Simpson hardware catalogue in Bones: H2.5A rafter/truss to plate, A35 at
     blocking, LUS hangers at ledger-hung joists, ABU post bases / AC caps at porch
     posts, HDU/HTT hold-downs, straps — labels with model and nailing; takeoff rows.
+
+
+## Mandate additions (Steve, 2026-09-06, mid-session)
+
+Verbatim intent, folded into the plan below:
+- The front porch brings in the gable options and everything PlanCrafters has: all
+  the rail options and styles (cable rail for modern), the rear entrances, the
+  wood styles, colour / trim styles, window styles — "basically all the stuff
+  PlanCrafters uses for procedural".
+- Improve the algorithm to size by lot the way PlanCrafters does; face toward the
+  street. Pascal has an API coming soon for lots.
+- "Ensure it's all working, get eyes on it all, check all the sections"; bring over
+  the structural sections and everything that works in PlanCrafters, with
+  variables tied to framing the plans — "the whole enchilada".
+- Houses have raised-floor options, slab, stepped footing on hills, floor framing
+  when it is not a slab; porches front and rear can be slabs or decks, with
+  correct framing.
+
+W10 Porch options (PlanCrafters entrance tool, all of it): roofType gable / shed /
+    hip / flat / trellis / none per style and per entrance; pillar styles square /
+    round / tapered / craftsman / stucco with sizes; railing styles baluster / cable
+    (modern) with post sizes and spacing; landing concrete or WOOD DECK with real
+    deck framing (ledger, joists, beam on the porch posts, F.deck); the rear
+    entrance at the slider (covered patio, raised deck on a hill, trellis for
+    modern / ranch / craftsman); porch ceiling closed / cathedral; the Bones side:
+    posts on pad footings, the porch beam, the ledger (done for sheds), hangers.
+W11 Foundations: slab-on-grade (today), RAISED floor (stem walls + crawl space,
+    floor framing: joists, girders, piers, rim, subfloor — Bones floor-framing
+    engine), stepped footings on a hill from the terrain (TERRAIN-DATUM-SPEC: house
+    datum = highest grade + 8 in, stem exposure on the low side), the garage as
+    slab-on-stem regardless; Bones told the grade so footing depth is measured
+    from the ground, not the floor line.
+W12 Structural sections and details tied to framing variables (PlanCrafters
+    details.js + section2d): eave, rake, ridge, foundation / stem / slab edge,
+    porch ledger, deck ledger, stair — drawn from the SAME numbers Bones frames
+    with (rafter size, plate height, stem height, footing), placed on the sheets;
+    review every section the Sections plugin cuts today against the framed model.
+W13 Finishes: PlanCrafters' style palettes applied — siding / roofing / trim /
+    door colours per style rolled as a unit, window styles (grid, casing, sill),
+    wood styles; the finish schedule on the sheets (part of W7, listed here so
+    nothing is lost).
 
 ## Log
 
@@ -352,3 +397,54 @@ W9  Simpson hardware catalogue in Bones: H2.5A rafter/truss to plate, A35 at
   elevation (TERRAIN-DATUM-SPEC), roads laid as Streetscape nodes (that
   plugin is external to the repo), a narrow-lot single-column parti for 24 ft
   city lots (the roller warns honestly instead).
+
+- 2026-09-06 early morning: **W6 landed — the porch.** `porch.ts` ports
+  PlanCrafters' entrance tool (gen.js `applyPorch` / `addEntrance`, model.js
+  `makeEntrance` / `entranceGeom` / `entranceFlight`) onto Pascal's own kinds,
+  pure and tested (15 cases): the entrance centres on the PLACED front door and
+  never cantilevers past a house corner (it shrinks to the door wall's own span
+  with 6 in to spare — with a garage the facade is the short wall beside it);
+  'full' spans the living + entry bay clamped 10–20 ft × 7 ft deep, 'entry' is
+  8 × 6 ft, and the no-porch styles still get a 4–7 ft covered stoop, 5 ft deep,
+  two slim posts, flat canopy. Nodes: a `slab` landing stepped 4 in below the
+  finish floor (PORCH_FLOOR_DROP, concrete); `column` posts at the outer corners
+  and ≤ 8 ft apart (7 in full / 5½ in entry / 6 in stoop, craftsman tapered),
+  standing on the landing through `supportSlabId`; `fence` guards at 36 in
+  (R312) on a full porch or wherever the landing is > 30 in above grade, the
+  outer rail split at the steps; a `stair` flight to grade centred on the door
+  (`deckSlabId` = the landing, so the rise is the landing's elevation over the
+  flight's base), risers solved as PlanCrafters does (ceil(rise / 7¾ in) then
+  relaxed while the riser still passes R311.7.5.1), 11 in treads, ≥ 36 in wide,
+  rails on the flight only when it climbs > 30 in; a porch roof as a
+  `roof-segment` on the beam line 96 in above the finish floor (entrance.ceilingH)
+  — gable for gable styles and hip for hip styles, ridge square to the wall and
+  the box reaching INTO the house by its run so the planes meet at a valley (the
+  auto roof's wing convention; the CSG union hides the part inside the main roof),
+  pitch capped at 6:12; a flat canopy for the shed / no-porch styles whose back
+  overhang meets the wall face. **How the roof meets the house** is decided by
+  the door wall's roof role from the auto roof: an eave or hip-end wall carries
+  a slope, so a gable / hip porch ridge dies into it (the wing convention, a
+  valley); a gable end, rake, shed high wall or flat roof has nothing to die
+  into, so the porch roof is a SHED on a LEDGER at the wall face, never steeper
+  than 4:12 — PlanCrafters' "no die-in" case. Bones frames that shed for real:
+  `metadata.roof.attach: 'high'` = the rafters stop at the wall and hang on a
+  ledger (new `ledger` role, the rafter size, top flush with the rafter tops)
+  with a Simpson LUS-series hanger per rafter and ties at the beam only;
+  `metadata.roof.open` = no rake studs across an open side; no pediment inside
+  the house wall (`roof-framing.porch.test.ts`, 7 cases; the plain shed is
+  byte-identical, pins held). Verified headlessly on the live scene: the
+  gable-front farmhouse's porch is 11 rafters on a ledger, 11 hangers, deck,
+  zero studs, zero roof-intersection warnings — the first cut had put a gable
+  porch INTO a gable end and Bones framed 96 phantom members inside the attic.
+  **Datum:** the generated building now stands with
+  its top of slab 8 in above the site plane (`SLAB_ABOVE_GRADE_M`, IRC R404.1.6 /
+  R317.1, TERRAIN-DATUM-SPEC) — carried on the building node so every level-local
+  number is unchanged; the porch flight's base sits at −8 in level-local, on the
+  ground. Bones still reads grade at the level plane (its footing depth is
+  measured from the floor line — the TERRAIN-DATUM work is to teach it the
+  site). The run summary and the Generate panel report the porch. Verified live
+  on the Land Park scene: a farmhouse rolled with a 20 × 7 ft full porch — gable
+  dying into the main roof, four posts, guards, one 5.97 in riser at the door.
+  Not done: the rear entrance (covered patio / deck / trellis at the slider), the
+  porch beam + post pad footings in Bones (columns are not framed today), the
+  under-the-main-roof porch, wood-framed porch floors on raised foundations.

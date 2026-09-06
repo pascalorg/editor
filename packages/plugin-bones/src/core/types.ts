@@ -28,6 +28,8 @@ export type MemberRole =
   | 'king-stud'
   | 'trimmer'
   | 'header'
+  /** A porch / lean-to roof's board on the house wall that the rafters hang from. */
+  | 'ledger'
   | 'sill'
   | 'cripple'
   | 'blocking'

@@ -157,6 +157,15 @@ export default function GeneratePanel() {
               {S.last.stats.livingSqFt.toLocaleString('en-US')} sf living · {S.last.stats.footprintSqFt.toLocaleString('en-US')} sf footprint
               {S.last.seed !== null ? ` · seed ${S.last.seed}` : ''}
               {!S.last.placed && <span> · no parcel in the scene — placed at the origin</span>}
+              {S.last.porch && (
+                <>
+                  <br />
+                  porch: {S.last.porch.policy === 'none' ? 'covered stoop' : `${S.last.porch.policy} porch`} {S.last.porch.widthFt}' × {S.last.porch.depthFt}' ·{' '}
+                  {S.last.porch.roof === 'flat' ? 'flat canopy' : `${S.last.porch.roof} roof`} · {S.last.porch.posts} posts
+                  {S.last.porch.guard ? ' · 36" guard' : ''}
+                  {S.last.porch.risers > 0 ? ` · ${S.last.porch.risers} riser${S.last.porch.risers === 1 ? '' : 's'} @ ${S.last.porch.riserIn.toFixed(2)}"` : ' · at grade'}
+                </>
+              )}
             </div>
           )}
           {S.last.errors.map((e) => (
