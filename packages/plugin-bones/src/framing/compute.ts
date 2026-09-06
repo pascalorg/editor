@@ -39,6 +39,7 @@ import {
   mixedCmuWall,
   snapCmuHeight,
 } from '../engines/cmu'
+import { frameAtticSeparations } from '../engines/attic-walls'
 import { frameDeck } from '../engines/deck-framing'
 import {
   applyDeviceOverrides,
@@ -1168,6 +1169,27 @@ function computeLevelUncached(
           )
         }
       }
+    }
+  }
+
+  // W17: the dwelling–garage separation carried to the roof deck (R302.6)
+  // — attic walls over the separation walls, under this level's own roofs,
+  // framed against the roof members just composed (the ridge, purlins,
+  // ties and struts they must not pass through).
+  if (config.showRoof && spec.detail !== '200') {
+    const separations = activeWalls.filter(
+      (w) => !w.curved && garageSideOf(w, activeRooms) !== null,
+    )
+    const roofsHere = separations.length > 0 ? extractRoofs(nodes, levelId) : []
+    if (roofsHere.length > 0) {
+      const attic = frameAtticSeparations(
+        separations,
+        roofsHere,
+        members.filter((m) => m.system === 'roof-framing'),
+        spec,
+      )
+      members.push(...attic.members)
+      warnings.push(...attic.warnings)
     }
   }
 

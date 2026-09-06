@@ -13,6 +13,7 @@ import {
   mixedCmuWall,
 } from './cmu'
 import { applyDeviceOverrides, layoutElectrical, pointInPolygon } from './electrical'
+import { frameAtticSeparations } from './attic-walls'
 import { frameFloor } from './floor-framing'
 import { buildFoundation } from './foundation'
 import { lgsFrameWalls } from './lgs-wall-framing'
@@ -884,6 +885,29 @@ describe('interpenetration gate — structural members never share volume', () =
       }).toEqual({ name, cj: true, v: [] })
     }
   })
+  test('roof framing: W17 attic separation walls compose SAT-clean under the gable and the hip', () => {
+    // the separation walls cross the roofs; their studs stop under the
+    // planes and skip the ridge, purlins, ties and struts by design
+    const separations = [
+      wall({ id: 'sep_a', start: [1, -3], end: [1, 3], exterior: false, height: 3.0 }),
+      wall({ id: 'sep_b', start: [-4, 1.5], end: [4, 1.5], exterior: false, height: 3.0 }),
+    ]
+    for (const [name, over] of [
+      ['gable', {}],
+      ['gableBig', { width: 10, depth: 12 }],
+      ['hip', { roofType: 'hip', width: 12, depth: 8, pitch: Math.atan(4 / 12) }],
+    ] as [string, Partial<RoofSegmentSlice>][]) {
+      const roof = roofSeg(over)
+      const roofMembers = frameRoofs([roof], [], spec400)
+      const attic = frameAtticSeparations(separations, [roof], roofMembers, spec400)
+      expect({
+        name,
+        studs: attic.members.some((m) => m.role === 'stud'),
+        v: violations([...roofMembers, ...attic.members]),
+      }).toEqual({ name, studs: true, v: [] })
+    }
+  })
+
   test('roof framing: W15 lapped ceiling joists over a partition compose SAT-clean across the family', () => {
     // a partition with the ridge 0.6 m off centre (gable / gambrel / the
     // skirts) and one with the long axis of the 10 × 12 hip — every case

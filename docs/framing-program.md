@@ -267,6 +267,12 @@ W16 Roof intersections and the hip — DONE 2026-09-06 in three parts (see log W
     planes; a parallel wing running under the main buried, its straddlers cut at the
     junction, the main's rake trim cut where the wing's plane carries on.
 
+W17 Attic separation over the garage — DONE 2026-09-06 (see log): the dwelling–garage
+    separation carried above the ceiling to the roof deck (Table R302.6) where the
+    attics connect — a flat plate on the ceiling joists, studs to the roof underside,
+    stations under the roof's own members left open; a separation on a gable end rides
+    the gable-end studs (said), one under a hip end has no attic (said).
+
 ## Log
 
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
@@ -990,3 +996,30 @@ W16 Roof intersections and the hip — DONE 2026-09-06 in three parts (see log W
   there is none. The three `packages/cli` failures (private-storage mode
   bits on a fresh home, the managed-runtime force-stop pair) are Windows
   environment failures untouched by this work. Editor app typecheck clean.
+
+- 2026-09-06 morning: **W17 — the attic separation over the garage.** New
+  engine `engines/attic-walls.ts`: for every dwelling–garage separation
+  wall (compute's `garageSideOf` pick) under this level's roofs it frames
+  the wall ABOVE the ceiling — a flat 2x plate on the tallest ceiling joist
+  it crosses, studs at the wall's stud spacing from that plate up to the
+  lowest roof underside over the stud's plan rectangle (`roofUndersideAt`
+  = the rafters' bottom-face plane, 5 mm clear), a station skipped where
+  the roof's own wood sits in its reach (the ridge board and purlins,
+  collar ties, purlin struts, hips, valleys, gable studs) or where the
+  stud would be shorter than 6 in; a later plate is cut around an earlier
+  crossing plate, and earlier attic members are obstacles to later walls.
+  Honesty first: a separation that lies on a gable segment's end line IS
+  the gable-end infill the roof engine already frames (the generator's
+  garage hangs off the main's gable end — every farmhouse and craftsman),
+  so nothing is added and the warning says to gypsum that infill to the
+  deck; under a hip end the roof meets the plate and there is no attic to
+  separate — said too. The volume gate composes the attic walls SAT-clean
+  under the gable, the big gable with purlins and the 4:12 hip. Tests:
+  attic-walls.test +6 (the plane read, a wall across the ridge — plate on
+  the joists, studs at 16" to the underside, the ridge-board station,
+  eave stations; the ridge-line wall's tops under the board and clear of
+  the gable studs; the gable-end and hip-end cases; outside / curved / no
+  roof; a purlin-line wall blocked, a clear one level), interpenetration
+  +1 — Bones 2,098, plugin-sheets 235, typecheck clean. Honest gaps: no
+  gypsum members on the attic wall (the note carries it); the attic wall's
+  top plate along the slope is not modelled (studs cut to the slope).
