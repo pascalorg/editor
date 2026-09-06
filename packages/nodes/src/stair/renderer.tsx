@@ -19,7 +19,7 @@ import {
   useNodeEvents,
   useViewer,
 } from '@pascal-app/viewer'
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import { type ReactElement, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three'
 import { createPlaceholderGeometry } from '../shared/placeholder-geometry'
 import {
@@ -207,9 +207,11 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
   const midRailHeight = Math.max(railHeight * 0.45, 0.35)
   const railRadius = 0.022
   const balusterRadius = 0.018
+  // every guard style but the original balusters is the DCA 6 deck-stair guard
   const postAndRail =
-    (stair.railingStyle === 'post-and-rail' || stair.railingStyle === 'cable') &&
-    stair.stairType === 'straight'
+    (stair.railingStyle ?? 'balusters') !== 'balusters' && stair.stairType === 'straight'
+  const guardInfill: GuardInfill =
+    stair.railingStyle === 'cable' ? 'cable' : stair.railingStyle === 'boards' ? 'boards' : 'balusters'
 
   if ((stair.railingMode ?? 'none') === 'none') {
     return null
@@ -229,14 +231,16 @@ function StairRailings({ stair, material }: { stair: StairNode; material: THREE.
             rotation-y={segmentPath.layout.rotation}
           >
             {segmentPath.sidePaths.map((sidePath, sideIndex) => (
-              <PostAndRailGuard
-                cable={stair.railingStyle === 'cable'}
+              <StairGuard
+                infill={guardInfill}
                 key={`${segmentPath.layout.segment.id}-${sidePath.side}-${sideIndex}`}
                 material={material}
                 points={sidePath.points.map(
                   (p) => [p[2], p[1], p[0]] as [number, number, number],
                 )}
+                postThrough={stair.railingPostThrough === true}
                 railHeight={railHeight}
+                reach={stair.railingTopReach ?? 0}
                 topPost={stair.railingTopPost !== false}
               />
             ))}
@@ -507,26 +511,51 @@ function resolveStairSlotMaterial(
   return resolveSlotDefaultMaterial(defaultRef, shading)
 }
 
-/** A 4x4 post: 3½ in square (IRC-typical guard post). */
+/**
+ * The deck-stair guard the AWC Deck Construction Guide (DCA 6) draws,
+ * dressed lumber in metres: 4x4 posts no more than 4 ft apart (Steve:
+ * "post 4x4 every 4'"), a 2x6 cap rail flat on top, a 2x4 top rail on edge
+ * under it, and the infill — 2x2 balusters on a 2x4 bottom rail at a 3½ in
+ * clear gap (under the 4 in sphere, IRC R312.1.3), ½ in cables 3 in apart,
+ * or 1x6 boards 3½ in apart — every member straight with the flight.
+ */
 const GUARD_POST = 0.0889
-/** Posts no more than 4 ft apart along the flight (Steve: "post 4x4 every 4'"). */
 const GUARD_POST_SPACING = 1.2192
-/** A 2x4 rail on edge: 1½ × 3½ in. */
+const GUARD_CAP_T = 0.0381
+const GUARD_CAP_W = 0.1397
 const GUARD_RAIL_T = 0.0381
 const GUARD_RAIL_D = 0.0889
-/** The bottom rail rides this far above the nosing line. */
-const GUARD_BOTTOM_RAIL = 0.1
-/** 1½ in pickets at a 4 in clear gap (R312.1.3: the 4 in sphere). */
-const GUARD_PICKET = 0.0381
-const GUARD_PICKET_GAP = 0.1
-/** A cable rail: 2 in posts, ½ in cables 3 in apart, the first 3 in over the nosings, under a flat cap rail. */
-const CABLE_POST = 0.0508
+/** The bottom rail's underside this far over the nosing line. */
+const GUARD_BOTTOM_CLEAR = 0.0889
+const GUARD_BALUSTER = 0.0381
+const GUARD_BALUSTER_GAP = 0.0889
 const CABLE_D = 0.0127
 const CABLE_PITCH = 0.0762
 const CABLE_BOTTOM = 0.0762
+const BOARD_D = 0.1397
+const BOARD_T = 0.019
+const BOARD_GAP = 0.0889
+/** A post run through the cap stands this far above it, under a 1 in cap of its own. */
+const POST_ABOVE_CAP = 0.0762
+const POST_CAP_T = 0.0254
 const BOX_GEOMETRY = new THREE.BoxGeometry(1, 1, 1)
+const UP = new THREE.Vector3(0, 1, 0)
 
-/** A rectangular bar from `start` to `end`, `t` wide across the flight and `d` tall. */
+/**
+ * The rotation that lays a unit box's x along `direction` with its y kept
+ * plumb-ish (the section's depth perpendicular to the slope in the vertical
+ * plane) — `setFromUnitVectors` alone rolls a sloped bar about its axis.
+ */
+function barQuaternion(direction: THREE.Vector3): THREE.Quaternion {
+  const x = direction.clone().normalize()
+  const z = new THREE.Vector3().crossVectors(x, UP)
+  if (z.lengthSq() < 1e-9) z.set(0, 0, 1)
+  z.normalize()
+  const y = new THREE.Vector3().crossVectors(z, x).normalize()
+  return new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z))
+}
+
+/** A rectangular bar from `start` to `end`, `t` wide across the flight and `d` deep (perpendicular to its run). */
 function RailBar({
   start,
   end,
@@ -544,20 +573,13 @@ function RailBar({
   const b = useMemo(() => new THREE.Vector3(...end), [end])
   const direction = useMemo(() => b.clone().sub(a), [a, b])
   const length = Math.max(direction.length(), 0.01)
-  const quaternion = useMemo(
-    () =>
-      new THREE.Quaternion().setFromUnitVectors(
-        new THREE.Vector3(1, 0, 0),
-        direction.clone().normalize(),
-      ),
-    [direction],
-  )
+  const quaternion = useMemo(() => barQuaternion(direction), [direction])
   const mid = useMemo(() => a.clone().add(b).multiplyScalar(0.5), [a, b])
   return (
     <mesh
       castShadow
       dispose={null}
-              geometry={BOX_GEOMETRY}
+      geometry={BOX_GEOMETRY}
       material={material}
       name="stair-railing-rail"
       position={[mid.x, mid.y, mid.z]}
@@ -569,170 +591,142 @@ function RailBar({
   )
 }
 
+type GuardInfill = 'balusters' | 'cable' | 'boards'
+
 /**
- * One side's guard, deck-stair style: the nosing line `points` (bottom of the
- * flight first, in the segment's frame) carries 4x4 posts no more than 4 ft
- * apart — always one at the bottom, one at the top unless `topPost` is off
- * (the rail then dies into whatever post already stands there) — a top rail
- * at `railHeight`, a bottom rail 4 in over the nosings, and 1½ in pickets
- * between the rails at a 4 in gap, skipped where a post stands. `cable`
- * keeps the post stations but builds the modern deck's rail: 2 in posts, a
- * flat cap rail, and ½ in cables 3 in apart running with the flight.
+ * One side's guard. `points` is the flight's rail path in the segment's
+ * frame (bottom first): its first and last points sit half a tread past the
+ * nosings at the same height — a bend no rail is built with — so the guard
+ * runs on the straight slope through the nosings, from the first point's
+ * station to the last's and `reach` further along the slope to the post it
+ * dies into when `topPost` is off (a porch's 6x6 set back from the deck
+ * edge). Posts at the bottom, the top (unless `topPost` is off) and every
+ * ≤ 4 ft between; a 2x6 cap flat over them (or the posts run through it
+ * with `postThrough`), the 2x4 top rail on edge under the cap, and the
+ * infill straight with the flight.
  */
-function PostAndRailGuard({
+function StairGuard({
   points,
   railHeight,
   topPost,
+  reach,
+  postThrough,
+  infill,
   material,
-  cable = false,
 }: {
   points: [number, number, number][]
   railHeight: number
   topPost: boolean
+  reach: number
+  postThrough: boolean
+  infill: GuardInfill
   material: THREE.Material
-  cable?: boolean
 }) {
   const parts = useMemo(() => {
     if (points.length < 2) return null
     const v = points.map((p) => new THREE.Vector3(...p))
-    // arc length along the polyline and a sampler on it
-    const cum = [0]
-    for (let i = 1; i < v.length; i++) cum.push(cum[i - 1]! + v[i]!.distanceTo(v[i - 1]!))
-    const total = cum[cum.length - 1]!
-    if (total < 0.05) return null
-    const at = (s: number): THREE.Vector3 => {
-      const clamped = Math.min(Math.max(s, 0), total)
-      for (let i = 1; i < v.length; i++) {
-        if (clamped <= cum[i]! + 1e-9) {
-          const seg = cum[i]! - cum[i - 1]!
-          const t = seg > 1e-9 ? (clamped - cum[i - 1]!) / seg : 0
-          return v[i - 1]!.clone().lerp(v[i]!, t)
-        }
-      }
-      return v[v.length - 1]!.clone()
-    }
-    // posts: bottom, top (optional), and enough between for ≤ 4 ft bays
-    const run = Math.hypot(v[v.length - 1]!.x - v[0]!.x, v[v.length - 1]!.z - v[0]!.z)
+    const n0 = v.length >= 4 ? v[1]! : v[0]!
+    const n1 = v.length >= 4 ? v[v.length - 2]! : v[v.length - 1]!
+    let dir = n1.clone().sub(n0)
+    if (dir.lengthSq() < 1e-9) dir = v[v.length - 1]!.clone().sub(v[0]!)
+    const runLen = Math.hypot(dir.x, dir.z)
+    if (runLen < 1e-6) return null
+    const h = new THREE.Vector3(dir.x / runLen, 0, dir.z / runLen)
+    const slope = dir.y / runLen
+    const sOf = (p: THREE.Vector3) => (p.x - n0.x) * h.x + (p.z - n0.z) * h.z
+    const sBottom = sOf(v[0]!)
+    const sTop = sOf(v[v.length - 1]!) + Math.max(reach, 0)
+    const run = sTop - sBottom
+    if (run < 0.05) return null
+    const at = (s: number) => new THREE.Vector3(n0.x + h.x * s, n0.y + slope * s, n0.z + h.z * s)
     const bays = Math.max(1, Math.ceil(run / GUARD_POST_SPACING))
     const postS: number[] = []
     for (let i = 0; i <= bays; i++) {
       if (i === bays && !topPost) continue
-      postS.push((total * i) / bays)
+      postS.push(sBottom + (run * i) / bays)
     }
-    const posts = postS.map((s) => at(s))
-    // pickets along the run, clear of the posts
-    const pickets: THREE.Vector3[] = []
-    const pitch = GUARD_PICKET + GUARD_PICKET_GAP
-    for (let s = pitch; s < total - GUARD_PICKET; s += pitch) {
-      if (postS.some((ps) => Math.abs(ps - s) < GUARD_POST / 2 + GUARD_PICKET)) continue
-      pickets.push(at(s))
+    const balusters: THREE.Vector3[] = []
+    if (infill === 'balusters') {
+      const pitch = GUARD_BALUSTER + GUARD_BALUSTER_GAP
+      for (let s = sBottom + pitch; s < sTop - GUARD_BALUSTER; s += pitch) {
+        if (postS.some((ps) => Math.abs(ps - s) < GUARD_POST / 2 + GUARD_BALUSTER)) continue
+        balusters.push(at(s))
+      }
     }
-    return { v, posts, pickets }
-  }, [points, topPost])
+    return { a: at(sBottom), b: at(sTop), posts: postS.map(at), balusters, slopeLen: Math.hypot(1, slope) }
+  }, [points, topPost, reach, infill])
   if (!parts) return null
-  const { v, posts, pickets } = parts
-  const topRailCentre = railHeight - GUARD_RAIL_D / 2
-  const bottomRailCentre = GUARD_BOTTOM_RAIL + GUARD_RAIL_D / 2
-  const picketBottom = GUARD_BOTTOM_RAIL + GUARD_RAIL_D
-  const picketTop = railHeight - GUARD_RAIL_D
-  const postSize = cable ? CABLE_POST : GUARD_POST
-  if (cable) {
-    // cable runs from 3 in over the nosings up to the cap rail, 3 in apart
-    const capCentre = railHeight - GUARD_RAIL_T / 2
-    const cables: number[] = []
-    for (let y = CABLE_BOTTOM; y < railHeight - GUARD_RAIL_T - CABLE_PITCH / 2; y += CABLE_PITCH)
-      cables.push(y)
-    return (
-      <group>
-        {posts.map((p, i) => (
-          <mesh
-            castShadow
-            dispose={null}
-            geometry={BOX_GEOMETRY}
-            key={`post-${i}`}
-            material={material}
-            name="stair-railing-post"
-            position={[p.x, p.y + (railHeight + 0.05) / 2, p.z]}
-            receiveShadow
-            scale={[postSize, railHeight + 0.05, postSize]}
-            userData={STAIR_RAILING_SLOT_USER_DATA}
-          />
-        ))}
-        {v.slice(0, -1).map((p, i) => {
-          const q = v[i + 1]!
-          return (
-            <group key={`cables-${i}`}>
-              <RailBar
-                d={GUARD_RAIL_T}
-                end={[q.x, q.y + capCentre, q.z]}
-                material={material}
-                start={[p.x, p.y + capCentre, p.z]}
-                t={GUARD_RAIL_D}
-              />
-              {cables.map((y) => (
-                <RailBar
-                  d={CABLE_D}
-                  end={[q.x, q.y + y, q.z]}
-                  key={`cable-${y.toFixed(4)}`}
-                  material={material}
-                  start={[p.x, p.y + y, p.z]}
-                  t={CABLE_D}
-                />
-              ))}
-            </group>
-          )
-        })}
-      </group>
-    )
+  const { a, b, posts, balusters, slopeLen } = parts
+  const topRailBottom = railHeight - GUARD_CAP_T - GUARD_RAIL_D
+  const bottomRailTop = GUARD_BOTTOM_CLEAR + GUARD_RAIL_D
+  const postH = railHeight + 0.05 + (postThrough ? POST_ABOVE_CAP : -GUARD_CAP_T)
+  // a bar parallel to the slope, its centre `y` (vertical) over the nosing line
+  const bar = (key: string, y: number, t: number, d: number) => (
+    <RailBar
+      d={d}
+      end={[b.x, b.y + y, b.z]}
+      key={key}
+      material={material}
+      start={[a.x, a.y + y, a.z]}
+      t={t}
+    />
+  )
+  // a sloped bar's plumb centre for a member whose UNDERSIDE clears `y` vertically
+  const centreOver = (underside: number, d: number) => underside + (d * slopeLen) / 2
+  const runs: ReactElement[] = []
+  runs.push(bar('cap', railHeight - GUARD_CAP_T / 2, GUARD_CAP_W, GUARD_CAP_T))
+  runs.push(bar('top-rail', centreOver(topRailBottom, GUARD_RAIL_D), GUARD_RAIL_T, GUARD_RAIL_D))
+  if (infill === 'balusters') {
+    runs.push(bar('bottom-rail', centreOver(GUARD_BOTTOM_CLEAR, GUARD_RAIL_D), GUARD_RAIL_T, GUARD_RAIL_D))
+  } else if (infill === 'cable') {
+    for (let y = CABLE_BOTTOM; y < topRailBottom - CABLE_D; y += CABLE_PITCH)
+      runs.push(bar(`cable-${y.toFixed(4)}`, y + CABLE_D / 2, CABLE_D, CABLE_D))
+  } else {
+    for (let y = BOARD_GAP; y + BOARD_D <= topRailBottom + 1e-6; y += BOARD_D + BOARD_GAP)
+      runs.push(bar(`board-${y.toFixed(4)}`, centreOver(y, BOARD_D), BOARD_T, BOARD_D))
   }
   return (
     <group>
       {posts.map((p, i) => (
-        <mesh
-          castShadow
-          dispose={null}
+        <group key={`post-${i}`}>
+          <mesh
+            castShadow
+            dispose={null}
+            geometry={BOX_GEOMETRY}
+            material={material}
+            name="stair-railing-post"
+            position={[p.x, p.y - 0.05 + postH / 2, p.z]}
+            receiveShadow
+            scale={[GUARD_POST, postH, GUARD_POST]}
+            userData={STAIR_RAILING_SLOT_USER_DATA}
+          />
+          {postThrough ? (
+            <mesh
+              castShadow
+              dispose={null}
               geometry={BOX_GEOMETRY}
-          key={`post-${i}`}
-          material={material}
-          name="stair-railing-post"
-          position={[p.x, p.y + (railHeight + 0.05) / 2, p.z]}
-          receiveShadow
-          scale={[GUARD_POST, railHeight + 0.05, GUARD_POST]}
-          userData={STAIR_RAILING_SLOT_USER_DATA}
-        />
+              material={material}
+              name="stair-railing-post-cap"
+              position={[p.x, p.y - 0.05 + postH + POST_CAP_T / 2, p.z]}
+              receiveShadow
+              scale={[GUARD_POST + 0.0508, POST_CAP_T, GUARD_POST + 0.0508]}
+              userData={STAIR_RAILING_SLOT_USER_DATA}
+            />
+          ) : null}
+        </group>
       ))}
-      {v.slice(0, -1).map((p, i) => {
-        const q = v[i + 1]!
-        return (
-          <group key={`rails-${i}`}>
-            <RailBar
-              d={GUARD_RAIL_D}
-              end={[q.x, q.y + topRailCentre, q.z]}
-              material={material}
-              start={[p.x, p.y + topRailCentre, p.z]}
-              t={GUARD_RAIL_T}
-            />
-            <RailBar
-              d={GUARD_RAIL_D}
-              end={[q.x, q.y + bottomRailCentre, q.z]}
-              material={material}
-              start={[p.x, p.y + bottomRailCentre, p.z]}
-              t={GUARD_RAIL_T}
-            />
-          </group>
-        )
-      })}
-      {pickets.map((p, i) => (
+      {runs}
+      {balusters.map((p, i) => (
         <mesh
           castShadow
           dispose={null}
-              geometry={BOX_GEOMETRY}
-          key={`picket-${i}`}
+          geometry={BOX_GEOMETRY}
+          key={`baluster-${i}`}
           material={material}
           name="stair-railing-picket"
-          position={[p.x, p.y + (picketBottom + picketTop) / 2, p.z]}
+          position={[p.x, p.y + (bottomRailTop + topRailBottom) / 2, p.z]}
           receiveShadow
-          scale={[GUARD_PICKET, Math.max(0.05, picketTop - picketBottom), GUARD_PICKET]}
+          scale={[GUARD_BALUSTER, Math.max(0.05, topRailBottom - bottomRailTop), GUARD_BALUSTER]}
           userData={STAIR_RAILING_SLOT_USER_DATA}
         />
       ))}

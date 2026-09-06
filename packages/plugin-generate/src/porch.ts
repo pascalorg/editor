@@ -597,6 +597,14 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
     })
   }
 
+  // The guard's line: the POST line (6 in inside the landing edge, where
+  // the 6x6s stand) when there is a cover, the deck edge when there is
+  // none — the flight's guard reaches the same line.
+  const guardInset = along.length > 0 ? inset : Math.max(pillar.size, inches(3.5)) / 2
+  const guardLine = depth - guardInset
+  const guardEdge = hw - guardInset
+  const cable = railStyle === 'cable'
+
   // ── steps to grade ────────────────────────────────────────────────────
   let run = 0
   if (risers > 0) {
@@ -637,9 +645,15 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         // a deck stair's guard: 4x4 posts ≤ 4 ft apart, top and bottom rails,
         // pickets — and no top post where the porch's flanking 6x6 already
         // stands, so the rail dies into it (Steve, 2026-09-06)
-        // the flight's guard matches the landing's: cable on the moderns
+        // the flight's guard is the landing's guard carried down the flight
+        // (Steve: "carry the guardrail style to the stair too"): cable on the
+        // moderns, balusters elsewhere; with a guard on the landing its top
+        // rails run past the landing edge along the slope into the post the
+        // guard already stands there (the flanking 6x6 on the post line, or
+        // the guard's own 4x4 at the flight's edge) — no post of its own
         railingStyle: railStyleFor(style) === 'cable' ? 'cable' : 'post-and-rail',
-        railingTopPost: flankAt === null,
+        railingTopPost: !(guard && railStyle),
+        railingTopReach: guard && railStyle ? round(guardInset) : 0,
         children: [ids.stairSegment],
         metadata: meta,
       },
@@ -666,10 +680,23 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
 
   // ── guards ────────────────────────────────────────────────────────────
   let rails = 0
+  // The guard runs on the POST line (Steve: "the rail would go into the
+  // bigger posts … never a 4x4 post by it"): along the 6x6s' line one
+  // section per bay, each dying into the 6x6 at its ends, and down the
+  // sides from a 4x4 at the house wall into the corner 6x6. A landing
+  // without a cover has no 6x6s: its guard runs at the deck edge on its
+  // own 4x4s. Every section is the DCA 6 deck guard (fence style 'guard'),
+  // its infill the style's — balusters or cable.
   if (guard && railStyle) {
-    const railInset = Math.max(pillar.size, inches(3.5)) / 2
-    const cable = railStyle === 'cable'
-    const rail = (a0: number, o0: number, a1: number, o1: number) => {
+    const station = (a: number) => along.some((s) => Math.abs(s - a) < 1e-6)
+    const rail = (
+      a0: number,
+      o0: number,
+      a1: number,
+      o1: number,
+      startPost: boolean,
+      endPost: boolean,
+    ) => {
       const s = P(a0, o0)
       const e = P(a1, o1)
       if (Math.hypot(e[0] - s[0], e[1] - s[1]) < inches(12)) return
@@ -682,24 +709,21 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
           parentId: input.levelId,
           start: s,
           end: e,
-          // balusters: vertical infill under the 4 in-sphere rule (R312.1.3)
-          // — the viewer's 'slat' fence draws a picket every 0.3 × postSpacing
-          // between its two end posts, so 18 in here is 5.4 in on centre, a
-          // 3.5 in clear gap between 2 in pickets (72 in read as open boxes);
-          // cable: horizontal runs 3 in apart on slim posts every 4 ft
-          style: cable ? 'horizontal' : 'slat',
+          // AWC DCA 6: 4x4 posts ≤ 6 ft apart, a 2x6 cap flat over a 2x4
+          // top rail; balusters 2x2 on a 2x4 bottom rail 3½ in over the
+          // decking at a 3½ in clear gap (R312.1.3's 4 in sphere); cable
+          // ½ in runs 3 in apart from 3 in over the decking
+          style: 'guard',
+          guardInfill: cable ? 'cable' : 'balusters',
           height: round(GUARD_HEIGHT),
-          thickness: cable ? inches(0.5) : inches(1.5),
-          slatGap: cable ? inches(3) : inches(3.5),
-          postSpacing: inches(cable ? 48 : 18),
-          postSize: inches(cable ? 2 : 3.5),
-          // balusters end on a 2x4 bottom rail held 3½ in over the decking
-          // (Steve: "the balusters go to the decking, should go to bottom
-          // rail") under a 2x4 top rail — the flight's guard is built the
-          // same way; a cable rail keeps its 3 in kickboard on the deck
-          baseHeight: inches(cable ? 3 : 3.5),
-          baseStyle: cable ? 'grounded' : 'raised',
-          ...(cable ? {} : { groundClearance: inches(3.5), topRailHeight: inches(3.5) }),
+          thickness: inches(0.75),
+          slatGap: inches(cable ? 3 : 3.5),
+          postSpacing: 6 * FT,
+          postSize: inches(3.5),
+          groundClearance: inches(cable ? 3 : 3.5),
+          // false: the rails die into the post already standing there
+          startPost,
+          endPost,
           postCap: 'flat',
           supportSlabId: ids.slab,
           metadata: meta,
@@ -707,23 +731,26 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         parentId: input.levelId,
       })
     }
-    const o = depth - railInset
-    // sides, from the wall face to the outer post line
-    rail(-hw + railInset, 0, -hw + railInset, o)
-    rail(hw - railInset, 0, hw - railInset, o)
-    // the outer edge, either side of the stair opening, one rail section
-    // per bay so its end posts land at the porch posts (Steve: "the posts
-    // for rails go between" the columns; the flight takes the first bay)
+    // sides: a 4x4 at the wall, the rails into the corner post
+    rail(-guardEdge, 0, -guardEdge, guardLine, true, !station(-guardEdge))
+    rail(guardEdge, 0, guardEdge, guardLine, true, !station(guardEdge))
+    // the outer edge, either side of the stair opening, one section per
+    // bay between the 6x6s; a bay end that is no 6x6 (the flight's edge
+    // when the corner posts flank it, an uncovered landing) gets a 4x4
     const outer = (a0: number, a1: number) => {
-      const stops = [a0, ...along.filter((a) => a > a0 + inches(6) && a < a1 - inches(6)), a1]
-      for (let i = 0; i + 1 < stops.length; i++) rail(stops[i] as number, o, stops[i + 1] as number, o)
+      const stops = [a0, ...along.filter((a) => a > a0 + 1e-6 && a < a1 - 1e-6), a1]
+      for (let i = 0; i + 1 < stops.length; i++) {
+        const s0 = stops[i] as number
+        const s1 = stops[i + 1] as number
+        rail(s0, guardLine, s1, guardLine, !station(s0), !station(s1))
+      }
     }
-    const half = risers > 0 ? stairWidth / 2 : 0
     if (risers > 0) {
-      outer(-hw + railInset, -half)
-      outer(half, hw - railInset)
+      const stop = flankAt ?? stairWidth / 2
+      outer(-guardEdge, -stop)
+      outer(stop, guardEdge)
     } else {
-      outer(-hw + railInset, hw - railInset)
+      outer(-guardEdge, guardEdge)
     }
   }
 

@@ -3,7 +3,18 @@ import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
 import { MaterialSchema } from '../material'
 
-export const FenceStyle = z.enum(['slat', 'rail', 'privacy', 'horizontal'])
+/**
+ * 'guard' — a deck guard built the way the AWC's Deck Construction Guide
+ * (DCA 6) draws one: 4x4 posts no more than `postSpacing` apart, a 2x6 cap
+ * rail flat on top, a 2x4 top rail on edge under it, and the infill
+ * `guardInfill` chooses — 2x2 balusters on a 2x4 bottom rail at a ≤ 4 in
+ * clear gap (IRC R312.1.3), ½ in cables `slatGap` apart, or horizontal
+ * boards `slatGap` apart. `startPost` / `endPost` false leave that end's
+ * post out so the rails die into a post already standing there (a porch's
+ * 6x6); `postThrough` runs the posts past the cap with a cap of their own.
+ */
+export const FenceStyle = z.enum(['slat', 'rail', 'privacy', 'horizontal', 'guard'])
+export const FenceGuardInfill = z.enum(['balusters', 'cable', 'boards'])
 /**
  * 'grounded' — a kickboard on the ground; 'floating' — no base, the panel
  * held `groundClearance` up on posts that reach the ground; 'raised' — the
@@ -58,6 +69,11 @@ export const FenceNode = BaseNode.extend({
   postCap: FencePostCap.default('pyramid'),
   baseStyle: FenceBaseStyle.default('grounded'),
   showInfill: z.boolean().default(true),
+  // `guard` style only — see FenceStyle.
+  guardInfill: FenceGuardInfill.default('balusters'),
+  startPost: z.boolean().default(true),
+  endPost: z.boolean().default(true),
+  postThrough: z.boolean().default(false),
   color: z.string().default('#ffffff'),
   style: FenceStyle.default('slat'),
 }).describe(
@@ -73,8 +89,9 @@ export const FenceNode = BaseNode.extend({
   - baseHeight/postSpacing/postSize/topRailHeight: exact geometric controls from the plan3D fence model
   - groundClearance/edgeInset/baseStyle: fence support and inset configuration ('raised': the base is a bottom rail groundClearance above the ground, posts to the ground) ('raised': the base is a bottom rail groundClearance above the ground, posts to the ground) ('raised': the base is a bottom rail groundClearance above the ground, posts to the ground)
   - showInfill: whether to draw intermediate posts/slats between end posts
-  - color/style: visual appearance options
+  - color/style: visual appearance options ('guard': a DCA 6 deck guard — guardInfill balusters | cable | boards, startPost / endPost false where the rails die into a standing post, postThrough for posts past the cap)
   `,
 )
 
+export type FenceGuardInfill = z.infer<typeof FenceGuardInfill>
 export type FenceNode = z.infer<typeof FenceNode>

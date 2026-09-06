@@ -646,6 +646,12 @@ G24 The white blocks on wall tops where walls connect — the editor's ceiling
     corner grab-brackets, one per ceiling corner on the level (Batch N).
 G28 Rails by style, and the flight's guard matching the landing's: cable on
     the moderns, balusters on a bottom rail everywhere else, one colour.
+G29 A real railing system (Steve: "go hard on railing systems … look up the
+    national wood association"): guard posts 4x4 or the rail dies into the
+    6x6 — never a 4x4 beside it; a 2x6 flat cap over a 2x4 top rail, the
+    bottom rail; the guard's style carried down the flight; cables straight,
+    never bent mid-air; the post through the cap with a cap as an option;
+    the rear porch's rotated top rail.
 G25 Interior: a flat ceiling in every room; the walls painted inside (the
     library's light grey — no "Seattle grey" in the catalog; one line adds it).
 G26 Rear deck posts at the right elevation (they were being lifted onto the
@@ -734,6 +740,43 @@ G27 Procedural house mode: draw or generate, modify, save the house INTO the
   kickboard unchanged) +2, porch (raised guards, the flight's style per
   style), finishes (the flight's guard colour). generate 95, viewer
   fence 2, editor typecheck clean; core, viewer and nodes dist rebuilt.
+
+- 2026-09-06 night: **Batch O — the railing system (G29).** Built to the
+  AWC Deck Construction Guide (DCA 6) guard: 4x4 posts, a 2x6 cap rail
+  flat on top, a 2x4 top rail on edge under it, and the infill — 2x2
+  balusters on a 2x4 bottom rail at a 3½ in clear gap, ½ in cables 3 in
+  apart, or 1x6 boards. The fence gains `style: 'guard'` with
+  `guardInfill` (balusters | cable | boards), `startPost` / `endPost`
+  (false: that end's post is left out so the rails die into the post
+  already standing there) and `postThrough` (posts 3 in past the cap under
+  a cap of their own — the fence panel carries all four); the viewer's
+  fence-system builds it (`createGuardFenceParts`). The generator's guards
+  now run ON THE POST LINE (6 in inside the landing edge, where the 6x6s
+  stand): one section per bay between the 6x6s with no posts of its own,
+  the sides from a 4x4 at the house wall into the corner 6x6 — the 4x4
+  standing beside every 6x6 is gone (it came from the guard running 2¾ in
+  inside the edge while the posts stood 6 in inside it, two lines 3¼ in
+  apart). An uncovered landing has no 6x6s and keeps its own 4x4s at the
+  deck edge. Cable rails get 4x4 posts too (DCA 6), not the 2 in pins.
+  The stair guard is rewritten (`StairGuard`): the flight's rail path
+  starts and ends half a tread past the nosings at the same height — the
+  bend the cables made mid-air — so the guard now runs on the straight
+  slope through the nosings, from the bottom station to the top and
+  `railingTopReach` further along the slope into the post it dies into
+  (the generator sets it to the 6 in between the landing edge and the post
+  line, `railingTopPost` off whenever the landing has a guard); a 2x6 cap,
+  2x4 top rail, and the infill straight with the flight — 'post-and-rail'
+  (balusters on a 2x4 bottom rail), 'cable', or the new 'boards';
+  `railingPostThrough` runs the posts past the cap with a cap. The sloped
+  bars' orientation is built from a basis (x along the run, y plumb in the
+  vertical plane) — `setFromUnitVectors` rolled them about their axis,
+  the "rotated top rail" on the rear deck. Not done: DCA 6's graspable
+  handrail on flights of four or more risers (the generator's flights are
+  two or three) — noted for a taller entrance. Tests: viewer fence-system
+  +3 (the guard's members, ends without posts, post-through, cable), porch
+  (the guard on the post line dying into the 6x6s, the flight's reach and
+  top post, the modern's cable guard on 4x4s). generate 95, viewer fence
+  5, editor typecheck clean; core, viewer and nodes dist rebuilt.
 
 - 2026-09-06 late: **Batch I — stair guards, the elevations, the WebGPU error
   (G19, G21, G22; G17 checked).** Stair node: `railingStyle` ('balusters' |

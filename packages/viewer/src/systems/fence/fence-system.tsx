@@ -406,7 +406,119 @@ function createHorizontalFenceParts(fence: FenceNode): FenceSlotParts {
   return { posts, infill, base, rail }
 }
 
+/** Dressed lumber the guard is built from, metres. */
+const IN = 0.0254
+const GUARD_CAP_T = 1.5 * IN
+const GUARD_CAP_W = 5.5 * IN
+const GUARD_RAIL_T = 1.5 * IN
+const GUARD_RAIL_D = 3.5 * IN
+const GUARD_BALUSTER = 1.5 * IN
+const GUARD_BOARD_D = 5.5 * IN
+const GUARD_CABLE = 0.5 * IN
+const GUARD_POST_ABOVE_CAP = 3 * IN
+const GUARD_POST_CAP_T = 1 * IN
+
+/**
+ * A deck guard the way the AWC Deck Construction Guide (DCA 6) draws one:
+ * 4x4 posts (`postSize`) no more than `postSpacing` apart — the two ends
+ * counted as posts whether drawn or not (`startPost` / `endPost` false:
+ * the rails die into a post already standing there, a porch's 6x6) — a 2x6
+ * cap rail flat over the posts, a 2x4 top rail on edge under it, and the
+ * infill: balusters (2x2 on a 2x4 bottom rail `groundClearance` over the
+ * deck, `slatGap` clear), cable (½ in runs `slatGap` apart from
+ * `groundClearance` up), or boards (`thickness` × 5½ in, `slatGap` apart
+ * from `groundClearance` up). `postThrough` runs the posts 3 in past the
+ * cap under a cap of their own (`postCap`). Slots: posts / infill / base
+ * (the bottom rail) / rail (cap + top rail).
+ */
+function createGuardFenceParts(fence: FenceNode): FenceSlotParts {
+  const posts: FencePart[] = []
+  const infill: FencePart[] = []
+  const base: FencePart[] = []
+  const rail: FencePart[] = []
+  const length = Math.max(getFenceCenterlineLength(fence), 0.01)
+  const H = Math.max(fence.height, 0.4)
+  const postW = Math.max(fence.postSize, 0.02)
+  const clearance = Math.max(fence.groundClearance, 0)
+  const gap = Math.max(fence.slatGap ?? 0.09, 0.01)
+  const infillKind = fence.guardInfill ?? 'balusters'
+  const through = fence.postThrough === true
+  const capTop = H
+  const capBottom = H - GUARD_CAP_T
+  const topRailBottom = capBottom - GUARD_RAIL_D
+  const bays = Math.max(1, Math.ceil(length / Math.max(fence.postSpacing, postW * 2)))
+  const stations: number[] = []
+  for (let i = 0; i <= bays; i++) stations.push(i / bays)
+
+  // posts: to the cap's underside, or through it with a cap
+  const postH = through ? capTop + GUARD_POST_ABOVE_CAP : capBottom
+  for (const [i, t] of stations.entries()) {
+    if (i === 0 && fence.startPost === false) continue
+    if (i === stations.length - 1 && fence.endPost === false) continue
+    const frame = getFencePointAt(fence, t)
+    posts.push({
+      position: [frame.point.x, postH / 2, frame.point.y],
+      rotationY: -frame.tangentAngle,
+      scale: [postW, postH, postW],
+    })
+    if (through && (fence.postCap ?? 'flat') !== 'none') {
+      const cap = fence.postCap ?? 'flat'
+      if (cap === 'pyramid') {
+        posts.push({
+          position: [frame.point.x, postH + postW * 0.45, frame.point.y],
+          rotationY: -frame.tangentAngle,
+          scale: [postW * 1.18, postW * 0.9, postW * 1.18],
+          shape: 'pyramid',
+        })
+      } else {
+        posts.push({
+          position: [frame.point.x, postH + GUARD_POST_CAP_T / 2, frame.point.y],
+          rotationY: -frame.tangentAngle,
+          scale: [postW + 2 * IN, GUARD_POST_CAP_T, postW + 2 * IN],
+        })
+      }
+    }
+  }
+
+  // the cap rail flat over the posts and the 2x4 top rail on edge under it
+  rail.push(...createFenceCurveBlockParts(fence, 0, 1, capBottom + GUARD_CAP_T / 2, GUARD_CAP_T, GUARD_CAP_W))
+  rail.push(...createFenceCurveBlockParts(fence, 0, 1, topRailBottom + GUARD_RAIL_D / 2, GUARD_RAIL_D, GUARD_RAIL_T))
+
+  const postHalfT = postW / 2 / length
+  const clearOfPosts = (t: number, halfT: number) =>
+    !stations.some((s) => Math.abs(s - t) < postHalfT + halfT)
+
+  if (infillKind === 'balusters') {
+    // the 2x4 bottom rail `clearance` over the deck, the balusters on it
+    const bottomRailTop = clearance + GUARD_RAIL_D
+    base.push(...createFenceCurveBlockParts(fence, 0, 1, clearance + GUARD_RAIL_D / 2, GUARD_RAIL_D, GUARD_RAIL_T))
+    const balH = Math.max(topRailBottom - bottomRailTop, 0.05)
+    const pitch = GUARD_BALUSTER + gap
+    const halfT = GUARD_BALUSTER / 2 / length
+    for (let s = pitch; s < length - GUARD_BALUSTER; s += pitch) {
+      const t = s / length
+      if (!clearOfPosts(t, halfT)) continue
+      const part = createFenceCurveBlockPart(fence, t - halfT, t + halfT, bottomRailTop + balH / 2, balH, GUARD_BALUSTER)
+      if (part) infill.push(part)
+    }
+  } else if (infillKind === 'cable') {
+    // ½ in cables `gap` apart from `clearance` up to under the top rail
+    for (let y = clearance; y < topRailBottom - GUARD_CABLE; y += gap) {
+      infill.push(...createFenceCurveBlockParts(fence, 0, 1, y + GUARD_CABLE / 2, GUARD_CABLE, GUARD_CABLE))
+    }
+  } else {
+    // boards `gap` apart from `clearance` up to under the top rail
+    const boardT = Math.max(fence.thickness, 0.012)
+    for (let y = clearance; y + GUARD_BOARD_D <= topRailBottom + 1e-6; y += GUARD_BOARD_D + gap) {
+      infill.push(...createFenceCurveBlockParts(fence, 0, 1, y + GUARD_BOARD_D / 2, GUARD_BOARD_D, boardT))
+    }
+  }
+
+  return { posts, infill, base, rail }
+}
+
 function createFenceParts(fence: FenceNode): FenceSlotParts {
+  if (fence.style === 'guard') return createGuardFenceParts(fence)
   if (fence.style === 'horizontal') return createHorizontalFenceParts(fence)
 
   const posts: FencePart[] = []

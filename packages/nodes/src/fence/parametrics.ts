@@ -22,9 +22,19 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
         {
           key: 'style',
           kind: 'enum',
-          options: ['slat', 'rail', 'privacy', 'horizontal'],
+          options: ['slat', 'rail', 'privacy', 'horizontal', 'guard'],
           display: 'segmented',
         },
+        {
+          key: 'guardInfill',
+          kind: 'enum',
+          options: ['balusters', 'cable', 'boards'],
+          display: 'segmented',
+          visibleIf: (n) => n.style === 'guard',
+        },
+        { key: 'startPost', kind: 'boolean', visibleIf: (n) => n.style === 'guard' },
+        { key: 'endPost', kind: 'boolean', visibleIf: (n) => n.style === 'guard' },
+        { key: 'postThrough', kind: 'boolean', visibleIf: (n) => n.style === 'guard' },
         {
           key: 'baseStyle',
           kind: 'enum',
@@ -69,7 +79,7 @@ export const fenceParametrics: ParametricDescriptor<FenceNode> = {
           key: 'postCap',
           kind: 'enum',
           options: ['none', 'flat', 'pyramid'],
-          visibleIf: (n) => n.style === 'horizontal',
+          visibleIf: (n) => n.style === 'horizontal' || n.style === 'guard',
         },
         {
           key: 'slatGap',

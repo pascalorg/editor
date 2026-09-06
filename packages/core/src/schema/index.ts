@@ -123,7 +123,7 @@ export {
   ElevatorShaftStyle,
 } from './nodes/elevator'
 export { EyebrowVentMaterialRole, EyebrowVentNode } from './nodes/eyebrow-vent'
-export { FenceBaseStyle, FenceNode, FenceStyle } from './nodes/fence'
+export { FenceBaseStyle, FenceGuardInfill, FenceNode, FenceStyle } from './nodes/fence'
 export { GuideNode, GuideScaleReference } from './nodes/guide'
 export {
   computeGutterEaveY,

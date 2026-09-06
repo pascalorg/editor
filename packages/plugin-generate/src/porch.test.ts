@@ -139,18 +139,41 @@ describe('a full farmhouse porch', () => {
   test('a 36 in guard on the sides and either side of the steps, hosted on the slab', () => {
     expect(rails).toHaveLength(4)
     for (const f of rails) {
-      expect(f.style).toBe('slat') // balusters, 3.5 in gap under the 4 in-sphere rule
+      // the DCA 6 deck guard: 4x4 posts ≤ 6 ft, balusters at a 3½ in gap on a
+      // bottom rail 3½ in over the decking
+      expect(f.style).toBe('guard')
+      expect(f.guardInfill).toBe('balusters')
       expect(f.slatGap).toBeCloseTo(3.5 * IN, 9)
       expect(f.height).toBeCloseTo(GUARD_HEIGHT, 9)
       expect(f.supportSlabId).toBe('slab_porch')
-      // the balusters end on a 2x4 bottom rail 3½ in over the decking, under a 2x4 top rail
-      expect(f.baseStyle).toBe('raised')
+      expect(f.postSize).toBeCloseTo(3.5 * IN, 9)
+      expect(f.postSpacing).toBeCloseTo(6 * FT, 9)
       expect(f.groundClearance).toBeCloseTo(3.5 * IN, 9)
-      expect(f.baseHeight).toBeCloseTo(3.5 * IN, 9)
-      expect(f.topRailHeight).toBeCloseTo(3.5 * IN, 9)
     }
-    // the flight's guard is the same build: posts, top and bottom rails, pickets
+    // the guard runs on the post line (6 in inside the landing edge) and dies
+    // into the 6x6s: the sides start with a 4x4 at the wall and end in the
+    // corner post; the front sections run 6x6 to 6x6 with no post of their own
+    const posts = byType(r.ops, 'column')
+    const postLine = Math.min(...posts.map((p) => (p.position as number[])[2]!))
+    const sides = rails.filter((f) => Math.abs((f.start as number[])[1]! + 0.085) < 1e-6) // from the wall face
+    const front = rails.filter((f) => Math.abs((f.start as number[])[1]! - postLine) < 1e-6)
+    expect(sides).toHaveLength(2)
+    expect(front).toHaveLength(2)
+    for (const f of sides) {
+      expect((f.end as number[])[1]).toBeCloseTo(postLine, 6)
+      expect(f.startPost).toBe(true)
+      expect(f.endPost).toBe(false)
+    }
+    for (const f of front) {
+      expect(f.startPost).toBe(false)
+      expect(f.endPost).toBe(false)
+      expect((f.end as number[])[1]).toBeCloseTo(postLine, 6)
+    }
+    // the flight's guard is the same build, its rails reaching 6 in past the
+    // landing edge along the slope into the flanking 6x6 — no top post of its own
     expect(stair.railingStyle).toBe('post-and-rail')
+    expect(stair.railingTopPost).toBe(false)
+    expect(stair.railingTopReach).toBeCloseTo(6 * IN, 9)
   })
 
   test('the flight: 8½ in rise → two risers, 60 in wide, climbing toward the porch from grade', () => {
@@ -346,10 +369,11 @@ describe('landing, rails and pillars by style (PlanCrafters entrance presets)', 
     )
     expect(modern.summary?.railStyle).toBe('cable')
     const rail = byType(modern.ops, 'fence')[0]!
-    expect(rail.style).toBe('horizontal')
+    expect(rail.style).toBe('guard')
+    expect(rail.guardInfill).toBe('cable')
     expect(rail.slatGap).toBeCloseTo(3 * IN, 9)
-    expect(rail.postSize).toBeCloseTo(2 * IN, 9)
-    expect(rail.baseStyle).toBe('grounded')
+    expect(rail.postSize).toBeCloseTo(3.5 * IN, 9) // 4x4 posts on a cable rail too (DCA 6)
+    expect(rail.groundClearance).toBeCloseTo(3 * IN, 9)
     // the modern's flight carries the same cable rail
     expect(byType(modern.ops, 'stair')[0]!.railingStyle).toBe('cable')
     expect(porchFor(input(), ids()).summary?.railStyle).toBe('baluster')

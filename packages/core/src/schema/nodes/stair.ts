@@ -15,7 +15,7 @@ export const StairRailingMode = z.enum(['none', 'left', 'right', 'both'])
  * same posts as 2 in slim posts, a flat cap rail, and ½ in cables 3 in apart
  * running with the flight (the modern deck's cable rail).
  */
-export const StairRailingStyle = z.enum(['balusters', 'post-and-rail', 'cable'])
+export const StairRailingStyle = z.enum(['balusters', 'post-and-rail', 'cable', 'boards'])
 export const StairType = z.enum(['straight', 'curved', 'spiral'])
 export const StairTopLandingMode = z.enum(['none', 'integrated'])
 export const StairSlabOpeningMode = z.enum(['none', 'destination'])
@@ -76,6 +76,10 @@ export const StairNode = BaseNode.extend({
   // 'post-and-rail' only: false leaves the TOP post out so the rail dies
   // into a post that already stands there (a porch's 6x6 beside the flight).
   railingTopPost: z.boolean().default(true),
+  // Guard styles: how far past the top nosing, along the slope, the rails run
+  // to die into the post standing there (a porch post set back from the edge).
+  railingTopReach: z.number().min(0).default(0),
+  railingPostThrough: z.boolean().default(false),
   // Child stair segment IDs
   children: z.array(StairSegmentNode.shape.id).default([]),
 }).describe(
@@ -103,8 +107,9 @@ export const StairNode = BaseNode.extend({
   - showStepSupports: whether spiral stairs render step support brackets
   - railingMode: whether to render railings and on which side(s)
   - railingHeight: top height of the railing above the stair surface
-  - railingStyle: 'balusters' (round balusters at every nosing, two round rails) | 'post-and-rail' (4x4 posts ≤ 4 ft apart, top and bottom rails, 1½ in pickets at a 4 in gap — a deck stair) | 'cable' (2 in posts, a flat cap rail, ½ in cables 3 in apart)
-  - railingTopPost: post-and-rail / cable only — false leaves the top post out so the rail dies into a post already standing there (a porch post)
+  - railingStyle: 'balusters' (round balusters at every nosing, two round rails) | the DCA 6 deck-stair guard — 4x4 posts ≤ 4 ft apart, a 2x6 cap rail with a 2x4 top rail under it, and the infill: 'post-and-rail' (2x2 balusters on a 2x4 bottom rail, 4 in gap), 'cable' (½ in cables 3 in apart, straight with the flight), 'boards' (1x6 boards with the flight)
+  - railingTopPost: guard styles only — false leaves the top post out so the rails die into a post already standing there (a porch post); railingTopReach runs the rails that far past the top nosing along the slope to reach it
+  - railingPostThrough: guard styles — the posts run past the cap rail and get a cap of their own
   - children: array of StairSegmentNode IDs for straight stairs
   `,
 )

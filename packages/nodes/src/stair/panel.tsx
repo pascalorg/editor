@@ -50,6 +50,7 @@ const RAILING_STYLE_OPTIONS: { label: string; value: StairRailingStyle }[] = [
   { label: 'Balusters', value: 'balusters' },
   { label: 'Post & rail', value: 'post-and-rail' },
   { label: 'Cable', value: 'cable' },
+  { label: 'Boards', value: 'boards' },
 ]
 
 const STAIR_TYPE_OPTIONS: { label: string; value: StairType }[] = [
