@@ -659,7 +659,13 @@ function frameSlab(
       // the post tail punched ~0.23 m through the bearing plane.
       const postTop = topY - gd
       const postHeight = Math.max(0.1, postTop + storeyBelowHeight)
-      for (let p = s + POST_SPACING / 2; p < e; p += POST_SPACING) {
+      // Interior stations only, evenly spaced so no bay is over POST_SPACING:
+      // the girder's ENDS bear on the stemwall (a pocket or pier, R502.6) —
+      // a post a foot from the wall bore nothing and its pad could not fit
+      // beside the perimeter footing (the "bears without a pad" flag).
+      const bays = Math.max(1, Math.ceil((e - s) / POST_SPACING))
+      for (let i = 1; i < bays; i++) {
+        const p = s + ((e - s) * i) / bays
         emit(
           'post',
           '4x4',

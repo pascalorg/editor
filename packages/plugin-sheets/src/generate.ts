@@ -86,8 +86,9 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
     ],
   })
 
-  // A2.x — one floor plan per level, with the level's room and fixture
-  // schedules beside it (the reference sets keep schedules on the plan sheet).
+  // A2.x — one floor plan per level with the level's room schedule beside
+  // it. The door, window and fixture schedules have their own sheets (A8.0,
+  // P1.0) and are not repeated here (Steve, 2026-09-06).
   const planW = FRAME.w * 0.62
   const scheduleW = FRAME.w - planW - GAP
   // 1/4" = 1'-0" is THE residential plan scale; it is used whenever the plan
@@ -122,17 +123,7 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
           x: FRAME.x + planW + GAP,
           y: FRAME.y + 0.4,
           w: scheduleW,
-          h: fieldH * 0.48,
-        },
-        {
-          kind: 'schedule',
-          scheduleOf: 'fixtures',
-          levelId: level.id,
-          title: `Fixture schedule — ${levelLabel(level)}`,
-          x: FRAME.x + planW + GAP,
-          y: FRAME.y + 0.4 + fieldH * 0.48 + GAP,
-          w: scheduleW,
-          h: fieldH * 0.52 - GAP,
+          h: fieldH,
         },
       ],
     })
@@ -298,21 +289,37 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
           label: (m.name as string) || (m.label as string) || `Section ${i + 1}`,
         }))
       : defaultSectionMarkers(nodes).map((spec) => ({ label: `Section ${spec.label}` }))
+  // A5.0 — the section cuts stacked on the left, the assembly schedule down the right
+  const sectionW = FRAME.w * 0.68
   out.push({
     number: 'A5.0',
     title: 'Building sections',
     viewports:
       plannedCuts.length > 0
-        ? plannedCuts.map((cut, i) => ({
-            kind: 'section' as const,
-            markerId: cut.id,
-            title: cut.label,
-            scale: elevationScale,
-            x: FRAME.x,
-            y: FRAME.y + 0.4 + i * ((FRAME.h - 0.6) / plannedCuts.length),
-            w: FRAME.w,
-            h: (FRAME.h - 0.6) / plannedCuts.length - GAP,
-          }))
+        ? [
+            ...plannedCuts.map((cut, i) => ({
+              kind: 'section' as const,
+              markerId: cut.id,
+              title: cut.label,
+              scale: elevationScale,
+              x: FRAME.x,
+              y: FRAME.y + 0.4 + i * ((FRAME.h - 0.6) / plannedCuts.length),
+              w: sectionW,
+              h: (FRAME.h - 0.6) / plannedCuts.length - GAP,
+            })),
+            // the assemblies the cuts pass through, as a schedule (Steve:
+            // "ensure the wall assemblies are correct")
+            {
+              kind: 'notes' as const,
+              notesKey: 'assemblies',
+              levelId: levelNodes[0]?.id,
+              title: 'Wall, roof & floor assemblies',
+              x: FRAME.x + sectionW + GAP,
+              y: FRAME.y + 0.4,
+              w: FRAME.w - sectionW - GAP,
+              h: FRAME.h - 0.6,
+            },
+          ]
         : [
             // No walls at all: nothing to cut, and an invented cut through
             // nothing would be a lie. The section viewport prints

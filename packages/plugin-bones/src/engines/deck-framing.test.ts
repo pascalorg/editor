@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_SPEC } from '../core/spec'
-import type { Member, SlabSlice, WallSlice } from '../core/types'
+import type { Member, PorchPostSlice, SlabSlice, WallSlice } from '../core/types'
 import { inches } from '../core/units'
 import { LUMBER_CROSS_SECTIONS } from '../lumber'
 import { DECK_BEAM_INSET, frameDeck, ledgerEdgeOf } from './deck-framing'
@@ -202,5 +202,31 @@ describe('other decks', () => {
         [REAR],
       ).members,
     ).toHaveLength(0)
+  })
+})
+
+describe('a deck under a porch cover', () => {
+  // two 6x6 porch posts on the deck's outer beam line (16 in in from the
+  // free edge), the way the generator stands them
+  const posts = (v: number): PorchPostSlice[] =>
+    [2 + 1, 2 + 16 * FT - 1].map((x, i) => ({
+      id: `column_${i}`,
+      plan: [x, 9.144 + v] as const,
+      baseY: -0.9,
+      height: 3.5,
+      size: inches(5.5),
+      entrance: 'rear',
+    }))
+
+  test('the beam bears on the 6x6s: no 4x4 posts of its own, the beam says so; posts off the line change nothing', () => {
+    const outer = 12 * FT - DECK_BEAM_INSET
+    const on = frameDeck(deck(), [REAR], DEFAULT_SPEC, HIGH, posts(outer))
+    expect(on.members.filter((m) => m.role === 'post')).toHaveLength(0)
+    expect(on.members.filter((m) => m.role === 'post-base')).toHaveLength(0)
+    const beam = on.members.find((m) => m.role === 'girder')!
+    expect(beam.label).toContain('bears on the porch 6x6 posts')
+    const off = frameDeck(deck(), [REAR], DEFAULT_SPEC, HIGH, posts(outer - 0.6))
+    expect(off.members.filter((m) => m.role === 'post').length).toBeGreaterThan(0)
+    expect(off.members.find((m) => m.role === 'girder')!.label).not.toContain('porch')
   })
 })

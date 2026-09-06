@@ -253,6 +253,11 @@ describe('the details sheet', () => {
       'openinghead',
       'deckledger',
       'porchledger',
+      'deckguard',
+      'stairguard',
+      'gableend',
+      'fireblock',
+      'windowjamb',
     ])
     // the callouts, before the column wraps them
     const notes = DETAILS.map((d) =>
@@ -270,7 +275,7 @@ describe('the details sheet', () => {
     expect(notes[4]).toContain('DECK JOIST 2X8 PT')
     expect(notes[5]).toContain('RAFTER 2X6 ON SIMPSON LUS')
     const sheets = detailsSheetBodies(v, frame)
-    expect(sheets).toHaveLength(1)
+    expect(sheets).toHaveLength(2)
     const body = sheets[0]!.body
     expect(body).toContain('2X6')
     expect(body).toContain('H2.5A')
@@ -316,7 +321,7 @@ describe('the details sheet', () => {
     )
     const sheets = detailsSheetBodies(slab, frame)
     expect(sheets).toHaveLength(1)
-    expect(sheets[0]!.count).toBe(2)
+    expect(sheets[0]!.count).toBe(3)
     const notes = DETAILS.filter((d) => d.applies(slab)).map((d) =>
       d
         .draw(slab)

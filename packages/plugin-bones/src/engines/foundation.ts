@@ -163,6 +163,8 @@ export const DOWEL_SHORT_LAP_FLAG =
  */
 export type FoundationOptions = {
   cmu?: Map<string, CmuDowelLayout>
+  /** False when no interior wall carries a load (a trussed single storey) — no thickened footings under partitions. */
+  interiorBearing?: boolean
   girderPosts?: {
     plan: readonly [number, number]
     sourceId: string
@@ -552,8 +554,10 @@ export function buildFoundation(
       // monolithically with it — 12" deep × footing width, top at the
       // slab/plate line (y = 0). See INTERIOR_BEARING_MIN_LENGTH ASSUMPTION.
       // A raised floor carries its interior walls on the platform (joists,
-      // girders on pads) — no thickened footing in the crawl space.
-      if (!fabDetail || raisedW) continue
+      // girders on pads) — no thickened footing in the crawl space. A
+      // trussed single storey clear-spans its exterior walls: its
+      // partitions bear nothing (`interiorBearing` false) — no footing.
+      if (!fabDetail || raisedW || options.interiorBearing === false) continue
       if (len <= INTERIOR_BEARING_MIN_LENGTH) {
         // Short interior walls are normally non-bearing partitions — but one
         // whose BOTH ends land on footing-carrying walls is a link in the

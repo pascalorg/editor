@@ -38,10 +38,16 @@ export type NoteSection = {
   notes: Note[]
 }
 
-/** How a note's citation reads on the paper. */
+/**
+ * How a note's citation reads on the paper: the code's name in front of the
+ * section — "IRC" here, re-tagged to the adopted code's own name (FBC-R,
+ * CRC …) by the sheet's retag pass (`retagCode`, drawings.ts) so a Florida
+ * set cites the Florida Building Code and a Sacramento set the CRC.
+ */
 export function citation(note: Note): string {
   if (!note.cite) return '(drafting standard)'
-  return note.verify ? `(verify: ${note.cite})` : `(${note.cite})`
+  const cite = /^(IRC|Table|Figure)\b/.test(note.cite) ? note.cite : `IRC ${note.cite}`
+  return note.verify ? `(verify: ${cite})` : `(${cite})`
 }
 
 /** One flowable line of note text: the number, the sentence, the citation. */

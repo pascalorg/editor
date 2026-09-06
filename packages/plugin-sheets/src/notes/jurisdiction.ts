@@ -66,6 +66,73 @@ const EXTERIOR =
 /** What the notes cite when the site has no state on it. */
 export const FALLBACK_CODE = 'IRC 2021'
 
+/**
+ * The identifier a section is cited under. An IRC adoption keeps the IRC's
+ * section numbers, so the number is the same everywhere — the NAME in front
+ * of it is what a plan checker expects to see (Steve, 2026-09-06: "ensure
+ * the code sections change to the correct identifier by area"): Florida
+ * cites the Florida Building Code, Residential; California the California
+ * Residential Code. States whose adopted code is the IRC itself, amended,
+ * cite the IRC. Only names known for certain are listed.
+ */
+const CODE_TAGS: Record<string, string> = {
+  FL: 'FBC-R',
+  CA: 'CRC',
+  NC: 'NCRC',
+  NY: 'RCNYS',
+}
+
+/** The tag a jurisdiction's citations carry — 'IRC' unless the state publishes its own edition. */
+export function codeTagOf(state: string, resolved: boolean): string {
+  return resolved && CODE_TAGS[state] ? (CODE_TAGS[state] as string) : 'IRC'
+}
+
+/**
+ * Re-tag a line of sheet text for the jurisdiction: the "IRC" in front of a
+ * section, table or figure number becomes the adopted code's name. The
+ * IRC's own name where it is named as the BASE of an adoption ("2021 IRC
+ * base") is left alone — that sentence is about the IRC.
+ */
+export function retagCode(text: string, tag: string): string {
+  if (tag === 'IRC' || !text.includes('IRC')) return text
+  return text
+    .replace(/\bIRC 20\d\d(?=\s+(?:[RPMGEN]\d|Table|Figure))/g, tag)
+    .replace(/\bIRC(?=\s+(?:[RPMGEN]\d|Table|Figure|Section|Chapter|App))/g, tag)
+    // a citation wrapped after its code name: "(IRC" at the end of one line, "R302.11)" on the next
+    .replace(/\(IRC$/, `(${tag}`)
+    .replace(/\(verify: IRC$/, `(verify: ${tag}`)
+}
+
+/**
+ * Florida's counties the parcel services rarely return, read off the site's
+ * coordinates instead — printed as INFERRED, never as fact. Miami-Dade and
+ * Broward are the High-Velocity Hurricane Zone (FBC-R R301.2.1.1 / the
+ * adoption table's special regimes) and, with Monroe, IECC zone 1A (the
+ * "(1A Miami/Keys)" of the climate table). The boxes are the counties'
+ * inhabited extents; the Everglades share of Miami-Dade below 25.3° is
+ * left to Monroe's box, which is where the Keys are.
+ */
+type CountyBox = {
+  county: string
+  hvhz: boolean
+  zone: '1A' | null
+  lat: [number, number]
+  lng: [number, number]
+}
+const FL_COUNTY_BOXES: CountyBox[] = [
+  { county: 'Miami-Dade', hvhz: true, zone: '1A', lat: [25.3, 25.98], lng: [-80.88, -80.1] },
+  { county: 'Broward', hvhz: true, zone: '1A', lat: [25.95, 26.35], lng: [-80.9, -80.05] },
+  { county: 'Monroe', hvhz: false, zone: '1A', lat: [24.4, 25.3], lng: [-82.2, -80.25] },
+]
+
+/** The Florida county a site's coordinates fall in, when it is one the code treats specially. */
+export function inferFloridaCounty(lng: number, lat: number): CountyBox | null {
+  for (const box of FL_COUNTY_BOXES) {
+    if (lat >= box.lat[0] && lat <= box.lat[1] && lng >= box.lng[0] && lng <= box.lng[1]) return box
+  }
+  return null
+}
+
 /* -------------------------------------------------------------- shape */
 
 export type Jurisdiction = {
@@ -82,6 +149,14 @@ export type Jurisdiction = {
   ircBase: number | null
   /** True when the code name was read from the data file rather than assumed. */
   resolved: boolean
+  /** The name citations carry in front of a section number: 'FBC-R', 'CRC', 'IRC'. */
+  codeTag: string
+  /** The county was read off the site's coordinates, not the record — printed as such. */
+  countyInferred: boolean
+  /** The site's [lng, lat] from the parcel record, when it has one. */
+  siteLngLat: [number, number] | null
+  /** The HVHZ wind-speed range from the climate table ('170–180 mph'), when the site is in it. */
+  windRange: string | null
   /** IECC climate zone label ('2A'), or null when the state is unknown. */
   climateZone: string | null
   /** The raw zone string, which may name split counties: '2A (1A Miami/Keys)'. */
@@ -159,7 +234,7 @@ export function resolveJurisdiction(nodes: NodeMap): Jurisdiction {
   const state = resolveState(nodes)
   const adoption = state ? ADOPTION[state] : undefined
   const climate = state ? CLIMATE[state] : undefined
-  const zone = climateZoneOf(state)
+  const zone: { label: string | null; key: string | null; raw: string | null }  = climateZoneOf(state)
   const insulation = zone.key ? EXTERIOR.insulationByClimateZone?.[zone.key] : undefined
 
   const record = projectRecord(nodes) as unknown as
@@ -168,10 +243,43 @@ export function resolveJurisdiction(nodes: NodeMap): Jurisdiction {
   const site = siteNode(nodes)
   const parcel = (site?.parcel ?? {}) as Record<string, unknown>
   const address = siteAddress(nodes)
-  const county = str(record?.jurisdiction?.county) || str(parcel.county)
+  let county = str(record?.jurisdiction?.county) || str(parcel.county)
   const city = str(record?.jurisdiction?.city) || address.city
+  const origin = Array.isArray(parcel.originLngLat) ? (parcel.originLngLat as unknown[]) : null
+  const siteLngLat: [number, number] | null =
+    origin && typeof origin[0] === 'number' && typeof origin[1] === 'number'
+      ? [origin[0], origin[1]]
+      : null
 
   const caveats: string[] = []
+  // Florida: HVHZ and zone 1A are county facts; without a county on the
+  // record the coordinates say which county, and the sheet says it was inferred.
+  let countyInferred = false
+  let box: CountyBox | null = null
+  if (state === 'FL' && siteLngLat) {
+    box = inferFloridaCounty(siteLngLat[0], siteLngLat[1])
+    if (box && !county) {
+      county = box.county
+      countyInferred = true
+    } else if (box && county && !county.toLowerCase().startsWith(box.county.toLowerCase())) {
+      box = null
+    }
+  }
+  const hvhz = climate?.flags?.hvhz === true && box?.hvhz === true
+  if (countyInferred) {
+    caveats.push(
+      `County inferred from the site coordinates (${county}) — the parcel record carries none; verify.`,
+    )
+  }
+  if (box?.zone) {
+    zone.label = box.zone
+    zone.key = box.zone.charAt(0)
+  }
+  const windRange = (() => {
+    if (!hvhz) return null
+    const m = /HVHZ[^0-9]*(\d+)\s*-\s*(\d+)\s*mph/i.exec(str(climate?.windNote))
+    return m ? `${m[1]}–${m[2]} mph` : null
+  })()
   if (!state) {
     caveats.push(
       'No state on the site node — notes cite IRC 2021. Set the project jurisdiction and re-issue.',
@@ -188,7 +296,14 @@ export function resolveJurisdiction(nodes: NodeMap): Jurisdiction {
   )
   if (zone.raw && /\(/.test(zone.raw)) {
     caveats.push(
-      `Climate zone varies by county in ${adoption?.name ?? state} (${zone.raw}) — confirm the site's zone with the AHJ.`,
+      box?.zone
+        ? `Climate zone ${box.zone} — ${county} County (the state table reads "${zone.raw}"); confirm with the AHJ.`
+        : `Climate zone varies by county in ${adoption?.name ?? state} (${zone.raw}) — confirm the site's zone with the AHJ.`,
+    )
+  }
+  if (hvhz) {
+    caveats.push(
+      `${county} County is in the High-Velocity Hurricane Zone — HVHZ provisions (opening protection, roof uplift and product approvals) apply throughout; ultimate design wind speed ${windRange ?? 'per the ASCE 7 map'} — verify.`,
     )
   }
   if (climate?.caveat) caveats.push(climate.caveat)
@@ -202,6 +317,10 @@ export function resolveJurisdiction(nodes: NodeMap): Jurisdiction {
     codeShort: shortCode(adoption),
     ircBase: adoption ? (adoption.ircBase ?? null) : 2021,
     resolved: Boolean(adoption),
+    codeTag: codeTagOf(state, Boolean(adoption)),
+    countyInferred,
+    siteLngLat,
+    windRange,
     climateZone: zone.label,
     climateZoneRaw: zone.raw,
     climateZoneCitation: str(EXTERIOR.stateClimateZoneCitation),
@@ -218,7 +337,7 @@ export function resolveJurisdiction(nodes: NodeMap): Jurisdiction {
     windNote: str(climate?.windNote),
     termiteRisk: str(climate?.termiteRisk),
     seismicSdc: str(climate?.seismicSdc),
-    hvhz: climate?.flags?.hvhz === true,
+    hvhz,
     hurricaneTies: climate?.flags?.hurricaneTies === true,
     caveats,
     specialRegimes: adoption?.specialRegimes ?? [],

@@ -28,6 +28,7 @@ import { buildCoverBlock, type CoverBlock } from './cover'
 import { drawTable, SCHEDULE_LEGEND } from './draw-table'
 import type { AnyNodeLike, NodeMap } from './model'
 import { levelLabel, sheets } from './model'
+import { codeTagOf, resolveState, retagCode } from './notes/jurisdiction'
 import { scaleLabel, sheetInchesToWorld, worldToSheetInches } from './scale'
 import { adaptSchedule, buildSchedule, type ScheduleTable } from './schedule'
 import { enrichOpeningSchedule } from './schedule-openings'
@@ -605,6 +606,7 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
       scale: vp.scale,
     }
   }
+  if (result) result = retagResult(result, nodes)
   const plate = result?.plate ?? []
   const warningPlate = warningsPlate(vp, result?.warnings ?? [])
   const resolvedTitle = result?.title || title
@@ -665,6 +667,48 @@ function warningsPlate(vp: ViewportNode, warnings: string[]): FloorplanGeometry[
     fill: '#b45309',
     fontFamily: 'Helvetica, Arial, sans-serif',
   }))
+}
+
+/**
+ * The jurisdiction's code name on every citation a provider printed: the
+ * providers write "IRC R403.1.6" (the base code's numbering, which every
+ * IRC adoption keeps), and a Florida set reads "FBC-R R403.1.6", a
+ * California set "CRC R403.1.6" (`retagCode`). Text primitives and the
+ * `text` of anything nested in a group are walked; nothing else changes.
+ */
+const TAG_CACHE = new WeakMap<object, string>()
+function codeTagFor(nodes: NodeMap): string {
+  const hit = TAG_CACHE.get(nodes as object)
+  if (hit) return hit
+  const state = resolveState(nodes)
+  // resolved = the adoption table knows the state; the tag map is keyed the same way
+  const tag = codeTagOf(state, Boolean(state))
+  TAG_CACHE.set(nodes as object, tag)
+  return tag
+}
+
+function retagGeometry(g: FloorplanGeometry, tag: string): FloorplanGeometry {
+  const rec = g as unknown as { text?: unknown; children?: unknown[] }
+  let out = g
+  if (typeof rec.text === 'string' && rec.text.includes('IRC')) {
+    out = { ...(g as object), text: retagCode(rec.text, tag) } as FloorplanGeometry
+  }
+  if (Array.isArray(rec.children)) {
+    const children = (rec.children as FloorplanGeometry[]).map((c) => retagGeometry(c, tag))
+    out = { ...(out as object), children } as FloorplanGeometry
+  }
+  return out
+}
+
+export function retagResult(result: DrawingResult, nodes: NodeMap): DrawingResult {
+  const tag = codeTagFor(nodes)
+  if (tag === 'IRC') return result
+  return {
+    ...result,
+    primitives: result.primitives.map((g) => retagGeometry(g, tag)),
+    plate: result.plate?.map((g) => retagGeometry(g, tag)),
+    warnings: result.warnings?.map((w) => retagCode(w, tag)),
+  }
 }
 
 /** A dashed placeholder box with a message — for providers that have nothing to draw yet. */

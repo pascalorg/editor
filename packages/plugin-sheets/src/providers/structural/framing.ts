@@ -587,7 +587,10 @@ function bearingWallLayer(
     legend.push({
       label: 'BEARING WALL',
       symbol: { kind: 'line', width: 0.02 },
-      note: 'All exterior walls are bearing walls.',
+      note:
+        model.roofSystem === 'truss'
+          ? 'Exterior walls carry the trusses; interior partitions are non-bearing (girder-truss bearing points per the truss layout).'
+          : 'Exterior walls; interior partitions the ceiling joists lap over (R802.5.2.1) and interior walls over 8 ft (thickened footing).',
     })
   }
   if (hasNonBearing) {

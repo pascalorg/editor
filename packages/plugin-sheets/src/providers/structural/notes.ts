@@ -76,12 +76,14 @@ export function designCriteria(
     },
     {
       label: 'Ultimate design wind speed, Vult',
-      value: climate?.ultimateWindMph ? `${climate.ultimateWindMph} mph` : 'not in the data',
-      cite: 'IRC Table R301.2(1) / Figure R301.2(2) — state typical value',
+      value: model.windLabel,
+      cite: model.hvhz
+        ? 'FBC-R R301.2.1.1 HVHZ / ASCE 7 Figure 26.5-1B'
+        : 'IRC Table R301.2(1) / Figure R301.2(2) — state typical value',
     },
     {
       label: 'Wind exposure category',
-      value: 'B assumed (verify)',
+      value: model.hvhz ? 'C assumed — coastal (verify)' : 'B assumed (verify)',
       cite: '(verify: IRC R301.2.1.4 — terrain is not modelled by the scene)',
     },
     {
@@ -225,7 +227,7 @@ export function fasteningScheduleTable(): ScheduleTable {
     mark: prettyConnection(key),
     nail: value.nail
       ? String(value.nail)
-          .replace('-common', 'd common')
+          .replace('-common', ' common')
           .replace(/^(\d+)d/, '$1d')
       : '',
     qty:

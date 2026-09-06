@@ -20,10 +20,10 @@
  * paper it says "continued on next sheet" and warns, rather than dropping
  * notes silently.
  */
-import type { FloorplanGeometry } from '@pascal-app/core'
+import { type FloorplanGeometry, resolveWallAssembly } from '@pascal-app/core'
 import { drawTable, tableHeight } from '../draw-table'
 import type { DrawingProvider, DrawingResult, ProviderArgs } from '../drawings'
-import type { NodeMap } from '../model'
+import type { AnyNodeLike, NodeMap } from '../model'
 import { computeAtticVentilation, R806_1_NOTES, R806_2_EXCEPTION_CONDITIONS } from '../notes/attic'
 import {
   generalNoteSections,
@@ -33,6 +33,8 @@ import {
   roofNotes,
 } from '../notes/general'
 import { codeHeaderLine, type Jurisdiction, resolveJurisdiction } from '../notes/jurisdiction'
+import { prescriptiveRequirements } from '../notes/prescriptive'
+import { formatInchFraction, structuralModel } from './structural/model'
 import type { ScheduleTable } from '../schedule'
 import { INK, INK_SOFT, SANS } from '../titleblock'
 
@@ -604,6 +606,151 @@ function atticPlate(
   return { plate: out, warnings }
 }
 
+/* -------------------------------------------------------- assemblies */
+
+/**
+ * The assemblies the sections cut through, as a schedule: every wall
+ * assembly the level's walls carry (layers outside → in from
+ * `resolveWallAssembly`, the framing from the Bones spec that framed it),
+ * the roof/ceiling (the finish schedule's roofing, the sheathing and
+ * rafters or trusses Bones framed, the ceiling insulation the energy code
+ * asks for) and the floor (the platform Bones framed, or the slab). Every
+ * R-value is the jurisdiction data's or reads "(verify)"; every layer
+ * thickness is the assembly's own. Fire ratings print where a wall carries
+ * one (the garage separation, a wall within 5 ft of a lot line).
+ */
+function assembliesPlate(
+  nodes: NodeMap,
+  box: Box,
+  j: Jurisdiction,
+  levelId: string | undefined,
+): { plate: FloorplanGeometry[]; warnings: string[] } {
+  const warnings: string[] = []
+  const model = structuralModel(nodes, levelId)
+  const spec = model?.spec
+  const inch = (m: number) => `${formatInchFraction(m)}"`
+  const spacing = (m: number) => `${Math.round(m / 0.0254)}" o.c.`
+  const level = levelId ? nodes[levelId] : undefined
+  const building = typeof level?.parentId === 'string' ? nodes[level.parentId] : undefined
+  const finishes = (building?.metadata as { finishes?: { roof?: { label?: string } } } | undefined)
+    ?.finishes
+  const requirements = prescriptiveRequirements(j)
+  const req = (component: string): string =>
+    requirements.rows.find((r) => r.component === component)?.value ?? '(verify)'
+  const wallR = j.wallInsulation ? j.wallInsulation.value.replace(/^R(\d)/, 'R-$1') : '(verify)'
+
+  type Row = { mark: string; assembly: string; construction: string; insulation: string; fire: string; ref: string }
+  const rows: Row[] = []
+
+  // walls, grouped by their assembly preset (or their bare thickness)
+  const walls = Object.values(nodes).filter(
+    (n) => n?.type === 'wall' && (!levelId || n.parentId === levelId) && n.visible !== false,
+  )
+  const groups = new Map<string, { wall: AnyNodeLike; count: number; exterior: boolean; garage: boolean; rated: string }>()
+  for (const wall of walls) {
+    const assembly = wall.assembly as { preset?: string } | undefined
+    const meta = (wall.metadata ?? {}) as Record<string, unknown>
+    const rated = typeof meta.fireRated === 'string' ? meta.fireRated : ''
+    const garage = meta.role === 'garage-separation'
+    const key = `${assembly?.preset ?? `wall-${Math.round(((wall.thickness as number) ?? 0) * 1000)}`}|${garage}|${rated}`
+    const hit = groups.get(key)
+    if (hit) hit.count += 1
+    else
+      groups.set(key, {
+        wall,
+        count: 1,
+        exterior: wall.frontSide === 'exterior' || wall.backSide === 'exterior' || meta.wallType === 'ext2x6',
+        garage,
+        rated,
+      })
+  }
+  let w = 1
+  for (const g of [...groups.values()].sort((a, b) => Number(b.exterior) - Number(a.exterior))) {
+    const resolved = resolveWallAssembly(g.wall as never)
+    const stud = g.exterior ? spec?.exteriorStudSize : (spec as { interiorStudSize?: string } | undefined)?.interiorStudSize
+    const layers = resolved.layers
+      .map((layer) =>
+        layer.role === 'framing'
+          ? `${stud ?? layer.material} studs @ ${spec ? spacing(spec.studSpacing) : '16" o.c.'}${g.exterior ? ` + ${wallR} cavity` : ''}`
+          : `${inch(layer.thickness)} ${layer.material}`,
+      )
+      .join(' / ')
+    const fire = g.rated
+      ? `1-HR both sides — 5/8" Type X gyp. (${g.rated})`
+      : g.garage
+        ? '1/2" gyp. bd. on the garage side (R302.6)'
+        : '—'
+    rows.push({
+      mark: `W${w++}`,
+      assembly: `${g.exterior ? 'EXTERIOR WALL' : g.garage ? 'GARAGE SEPARATION' : 'INTERIOR PARTITION'} (${g.count})`,
+      construction: layers,
+      insulation: g.exterior ? `${wallR} (${j.wallInsulation?.citation ?? 'verify'})` : '—',
+      fire,
+      ref: g.exterior ? 'R602.3, R703' : 'R602.3, R702.3',
+    })
+  }
+  if (rows.length === 0) warnings.push('No walls on this level — no wall assemblies to schedule.')
+
+  // roof / ceiling
+  if (spec) {
+    const roofing = finishes?.roof?.label ? `${finishes.roof.label} roofing` : 'roofing per schedule'
+    const structure =
+      model?.roofSystem === 'truss'
+        ? `pre-engineered trusses @ ${spacing(spec.rafterSpacing)} (deferred submittal, R802.10.1)`
+        : `${spec.rafterSize} rafters @ ${spacing(spec.rafterSpacing)} / ${spec.ceilingJoistSize} clg. joists @ ${spacing(spec.ceilingJoistSpacing)}`
+    rows.push({
+      mark: 'R1',
+      assembly: 'ROOF / CEILING',
+      construction: `${roofing} / underlayment (R905) / 7/16" WSP sheathing (R803.2) / ${structure} / 1/2" gyp. bd. ceiling`,
+      insulation: `${req('Ceiling / attic')} at the ceiling, vented attic (R806)`,
+      fire: '—',
+      ref: 'R802, R803, R905',
+    })
+  }
+
+  // floor
+  if (model) {
+    rows.push(
+      model.raisedFloor
+        ? {
+            mark: 'F1',
+            assembly: 'FLOOR — FRAMED PLATFORM',
+            construction: `finish flooring / 23/32" T&G WSP subfloor (R503.2) / floor joists per S2.0 @ ${spec ? spacing(spec.joistSpacing) : '16" o.c.'} / crawl space, Class I vapor retarder on grade (R408)`,
+            insulation: `${req('Floor')} between joists`,
+            fire: '—',
+            ref: 'R502, R503, R408',
+          }
+        : {
+            mark: 'F1',
+            assembly: 'FLOOR — SLAB ON GRADE',
+            construction: 'finish flooring / 3-1/2" min. concrete slab (R506.1) / 6-mil vapor retarder (R506.2.3) / 4" base course / treated fill (R318)',
+            insulation: `${req('Slab edge (R-value / depth)')} slab edge`,
+            fire: '—',
+            ref: 'R506, R318',
+          },
+    )
+  }
+
+  const table: ScheduleTable = {
+    title: 'ASSEMBLIES',
+    columns: [
+      { key: 'mark', label: 'MARK', weight: 0.7 },
+      { key: 'assembly', label: 'ASSEMBLY', weight: 2 },
+      { key: 'construction', label: 'CONSTRUCTION — OUTSIDE TO INSIDE / TOP TO BOTTOM', weight: 5.2 },
+      { key: 'insulation', label: 'INSULATION', weight: 2.2 },
+      { key: 'fire', label: 'FIRE', weight: 2 },
+      { key: 'ref', label: 'REF', weight: 1.1 },
+    ],
+    rows: rows.map((r) => ({ ...r })),
+    issues: [],
+  }
+  const plate = drawTable(table, box.x, box.y, box.w, box.h, {
+    title: 'WALL, ROOF & FLOOR ASSEMBLIES',
+    legend: `Layers from each wall's assembly; framing from the Bones spec that framed it; insulation from the ${j.codeShort} prescriptive table where the data cites it.`,
+  })
+  return { plate, warnings }
+}
+
 /* ----------------------------------------------------------- provider */
 
 export function buildGeneralNotesDrawing(nodes: NodeMap, args: ProviderArgs): DrawingResult | null {
@@ -629,6 +776,18 @@ export function buildGeneralNotesDrawing(nodes: NodeMap, args: ProviderArgs): Dr
   if (key === 'roof') {
     const { plate, warnings } = notesPlate(box, 'Roof notes', roofNotes(j), j)
     return { primitives: [], bounds: empty, plate, warnings, noLabel: true, title: 'Roof notes' }
+  }
+
+  if (key === 'assemblies') {
+    const { plate, warnings } = assembliesPlate(nodes, box, j, args.levelId)
+    return {
+      primitives: [],
+      bounds: empty,
+      plate,
+      warnings,
+      noLabel: true,
+      title: 'Wall, roof & floor assemblies',
+    }
   }
 
   const { plate, warnings } = notesPlate(box, 'General notes', generalNoteSections(j), j)

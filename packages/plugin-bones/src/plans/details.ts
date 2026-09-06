@@ -49,6 +49,8 @@ export type DetailVariables = {
     ceilingJoistSpacingIn: number
     ties: boolean
     fascia: boolean
+    /** Pre-engineered trusses: the "rafter" is the top chord. */
+    truss: boolean
   } | null
   foundation: {
     type: 'slab' | 'raised'
@@ -67,7 +69,16 @@ export type DetailVariables = {
   } | null
   deck: { joist: LumberSize; joistDepthIn: number } | null
   porchLedger: { rafter: LumberSize; rafterDepthIn: number } | null
+  /** The porch cover's 6x6 posts were framed (a guard runs into them). */
+  porchPosts: boolean
+  /** A guard is built: a deck's edge or a porch's post line. */
+  guard: boolean
+  /** The energy code's prescriptive values for the site (null = not citable: the note says "per energy code"). */
+  insulation: { wallR: string; ceilingR: string | null; floorR: string | null }
 }
+
+/** What the sheets hand the details from the jurisdiction's prescriptive table. */
+export type DetailInsulation = { wallR?: string | null; ceilingR?: string | null; floorR?: string | null }
 
 function mode<T>(values: T[]): T | null {
   const counts = new Map<T, number>()
@@ -137,6 +148,7 @@ export function detailVariables(
   members: Member[],
   spec: FramingSpec = DEFAULT_SPEC,
   foundation?: DetailFoundation | null,
+  insulation?: DetailInsulation | null,
 ): DetailVariables {
   const wall = members.filter((m) => m.system === 'wall-framing')
   const studSizes = wall
@@ -157,8 +169,13 @@ export function detailVariables(
     .map((m) => m.size as LumberSize)
   const headerSize = mode(headerSizes)
   const roofMembers = members.filter((m) => m.system === 'roof-framing')
+  // a trussed roof's sloped top chords are its rafters for the eave's purposes
+  const truss = roofMembers.some((m) => m.role === 'truss-chord')
   const rafters = roofMembers.filter(
-    (m) => m.role === 'rafter' && isLumber(m.size) && !/ledger|porch/i.test(m.label ?? ''),
+    (m) =>
+      (m.role === 'rafter' || (m.role === 'truss-chord' && Math.abs(m.rotation[2]) > 0.01)) &&
+      isLumber(m.size) &&
+      !/ledger|porch/i.test(m.label ?? ''),
   )
   const rafterSize = mode(rafters.map((m) => m.size as LumberSize))
   const pitchAngle = median(
@@ -197,13 +214,16 @@ export function detailVariables(
     (m) => m.role === 'rafter' && isLumber(m.size) && /ledger|porch|shed/i.test(m.label ?? ''),
   )
   const roofLedger = roofMembers.some((m) => m.role === 'ledger')
+  const porchPosts = members.some((m) => m.role === 'post' && /porch post/i.test(m.label ?? ''))
+  const wallR =
+    insulation?.wallR?.replace(/^R(\d)/, 'R-$1') ?? (studDepth >= 5 ? 'R-21' : 'R-15')
   return {
     stud: {
       size: studSize,
       depthIn: round(studDepth),
       spacingIn: Math.round(spec.studSpacing / IN),
       plates: spec.topPlateCount,
-      batt: studDepth >= 5 ? 'R-21' : 'R-15',
+      batt: wallR,
     },
     layers: {
       claddingIn: layer('cladding', 0.75),
@@ -223,6 +243,7 @@ export function detailVariables(
             ceilingJoistSpacingIn: cjSpacingIn ?? Math.round(spec.ceilingJoistSpacing / IN),
             ties: roofMembers.some((m) => /hurricane tie|H2\.5/i.test(m.label ?? '')),
             fascia: roofMembers.some((m) => m.role === 'fascia'),
+            truss,
           }
         : null,
     foundation:
@@ -267,6 +288,13 @@ export function detailVariables(
             ),
           }
         : null,
+    porchPosts,
+    guard: (deckLedger && deckJoists.length > 0) || porchPosts,
+    insulation: {
+      wallR,
+      ceilingR: insulation?.ceilingR?.replace(/^R(\d)/, 'R-$1') ?? null,
+      floorR: insulation?.floorR?.replace(/^R(\d)/, 'R-$1') ?? null,
+    },
   }
 }
 
@@ -684,16 +712,24 @@ const eaveDetail: DetailDef = {
     )
     S.note('ROOF SHTG — 8d @ 6" O.C. E.N. INCL. INTO BLOCKING (R803.2)', bmx, zAt(bmx) + memD + 0.8)
     S.note(
-      `RAFTER ${nominal(r.rafter)} @ ${r.spacingIn}" O.C. — ${r.pitchRise}:12 (R802.4.1)`,
+      r.truss
+        ? `TRUSS TOP CHORD ${nominal(r.rafter)} @ ${r.spacingIn}" O.C. — ${r.pitchRise}:12, MFR DESIGN (R802.10)`
+        : `RAFTER ${nominal(r.rafter)} @ ${r.spacingIn}" O.C. — ${r.pitchRise}:12 (R802.4.1)`,
       spanX * 0.35,
       zAt(spanX * 0.35) + memD / 2,
     )
     S.note(
-      `CLG JOIST ${r.ceilingJoist ? nominal(r.ceilingJoist) : '2X6'} @ ${r.ceilingJoistSpacingIn}" O.C. — FACE-NAIL TO RAFTER PER T. R802.5.2 + (3) 8d TOE TO PLATE`,
+      r.truss
+        ? 'TRUSS BOTTOM CHORD ON THE PLATE — THE CEILING MEMBER AND RAFTER TIE (R802.10.1); NO NOTCHING'
+        : `CLG JOIST ${r.ceilingJoist ? nominal(r.ceilingJoist) : '2X6'} @ ${r.ceilingJoistSpacingIn}" O.C. — FACE-NAIL TO RAFTER PER T. R802.5.2 + (3) 8d TOE TO PLATE`,
       8.5,
       3.4,
     )
-    S.note('CLG INSUL PER ENERGY CODE (R-38 TYP) — BAFFLE 1" MIN AIR @ VENT', spanX - 5, 6.8)
+    S.note(
+      `CLG INSUL ${v.insulation.ceilingR ? `${v.insulation.ceilingR} (N1102.1.3)` : 'PER ENERGY CODE'} — BAFFLE 1" MIN AIR @ VENT (R806.3)`,
+      spanX - 5,
+      6.8,
+    )
     if (r.fascia)
       S.note(
         '2X FASCIA + GUTTER PER PLAN — VENTED SOFFIT, CONT. 2" STRIP VENT',
@@ -869,6 +905,385 @@ const porchLedgerDetail: DetailDef = {
   },
 }
 
+
+// ---- 7. DECK / PORCH GUARD @ RIM (AWC DCA 6) ---------------------------------
+/**
+ * The guard the fence and stair nodes build (DCA 6's guard: 4x4 posts, a
+ * 2x6 cap flat over a 2x4 top rail, 2x2 balusters on a 2x4 bottom rail),
+ * at its post: the post bolted through the rim and the blocking beside it
+ * with a tension tie into the joist — the connection that keeps a 200 lb
+ * top-rail load from prying the post off the deck (Table R301.5).
+ */
+const guardDetail: DetailDef = {
+  id: 'deckguard',
+  title: 'DECK / PORCH GUARD @ POST',
+  applies: (v) => v.guard,
+  draw(v) {
+    const S = sketch()
+    const jd = v.deck?.joistDepthIn ?? 9.25
+    const H = 36
+    const onDeck = v.deck !== null
+    if (onDeck) {
+      // decking over the joist bay, the rim at x = 0, a joist and the post's blocking behind it
+      S.rect(-16, 1, 17.5, 1, WOOD)
+      S.rect(-16, 0, 16, jd, BAY)
+      S.xRect(-16, 0, 1.5, jd, WOOD2)
+      S.xRect(-7, 0, 1.5, jd, WOOD2)
+      S.xRect(0, 0, 1.5, jd)
+      // (2) 1/2" through-bolts, washers both ends; the tension tie on the joist
+      for (const bz of [-2, -(jd - 2)]) {
+        S.line(-7.6, bz, 5.6, bz, NAIL, 1.4)
+        S.dot(5.3, bz, 0.5, NAIL)
+        S.dot(-7.3, bz, 0.5, NAIL)
+      }
+      S.rect(-5.5, -(jd - 5.5), 4.5, 2.4, '#6d7a86')
+      S.line(-5.5, -(jd - 4.3), 5.3, -(jd - 4.3), NAIL, 1.4)
+    } else {
+      // a concrete porch: the post on a standoff base, anchored to the slab
+      S.rect(-16, 1, 24, 5, CONC)
+      S.rect(1.2, 1.5, 4.1, 1.2, '#6d7a86')
+      S.line(3.25, 1.5, 3.25, -3.5, NAIL, 1.4)
+      S.rect(-18, -4, 28, 4, EARTH)
+    }
+    // the 4x4 post from the rim bottom (or the slab) to the cap
+    S.rect(1.5, H + 1, 3.5, H + 1 + (onDeck ? jd : -1.5), WOOD)
+    // 2x6 cap flat over the post; 2x4 top and bottom rails on edge; a 2x2 baluster between them
+    S.xRect(0.5, H + 2.5, 5.5, 1.5, WOOD)
+    S.xRect(2.5, H + 1, 1.5, 3.5, '#efe6d4')
+    S.xRect(2.5, 8, 1.5, 3.5, '#efe6d4')
+    S.rect(2.5, H - 2.5, 1.5, H - 2.5 - 8, '#efe6d4')
+    // the guard height, decking to cap
+    S.line(9, 1, 9, H + 2.5, '#333', 0.8)
+    S.line(8.2, 1, 9.8, 1, '#333', 0.8)
+    S.line(8.2, H + 2.5, 9.8, H + 2.5, '#333', 0.8)
+    S.text(9.8, (H + 3.5) / 2, `${fmtIn(H)} MIN`, 'start')
+    S.note('2x6 CAP RAIL FLAT OVER THE POSTS — POSTS ≤ 6\'-0" O.C. (AWC DCA 6)', 3.25, H + 1.75)
+    S.note(
+      '2x4 TOP & BOTTOM RAILS ON EDGE; 2x2 BALUSTERS @ 5" O.C. — 3-1/2" CLR (4" SPHERE, R312.1.3)',
+      3.25,
+      (H + 4.5) / 2,
+    )
+    S.note('BOTTOM RAIL UNDERSIDE ≤ 4" ABOVE DECKING (R312.1.3)', 3.25, 6.5)
+    S.note(
+      `GUARD ${fmtIn(H)} MIN ABOVE THE WALKING SURFACE (R312.1.2) — 200 LB CONCENTRATED LOAD (TABLE R301.5)`,
+      9.2,
+      H - 6,
+    )
+    if (onDeck) {
+      S.note(
+        `4x4 PT GUARD POST — (2) 1/2"Ø THRU-BOLTS + WASHERS THRU THE RIM & BLOCKING, SIMPSON DTT2Z TENSION TIE TO THE JOIST (DCA 6 FIG. 24; R507.9.2 / R301.5)`,
+        3.25,
+        -(jd / 2),
+      )
+      S.note('2x BLOCKING BETWEEN JOISTS @ EACH POST (DCA 6)', -6.25, -(jd / 2) + 1.5)
+      S.note(`${nominal(v.deck?.joist ?? '2x8')} PT RIM & JOISTS PER PLAN (R507.5, R507.6)`, 0.75, -1)
+      S.note('DECKING — 5/4 PT OR COMPOSITE, 1/8" GAPS', -8, 1.5)
+    } else {
+      S.note(
+        `6x6 PORCH POST ON SIMPSON ${postBaseFor('6x6').model} STANDOFF BASE — 5/8"Ø ANCHOR INTO THE SLAB (R507.4.1, R317.1)`,
+        3.25,
+        2.1,
+      )
+      S.note('CONC. PORCH SLAB PER FOUNDATION PLAN', -8, 3.5)
+    }
+    return S
+  },
+}
+
+// ---- 8. STAIR GUARD & HANDRAIL -----------------------------------------------
+/**
+ * The entrance flight's guard, in elevation: the DCA 6 stair guard the
+ * stair node builds — 4x4 posts at the bottom and every ≤ 4 ft, the top
+ * rails dying into the porch's 6x6 — with the code's numbers on it: riser,
+ * tread, the guard height off the nosing line, the handrail a flight of
+ * four or more risers must carry.
+ */
+const stairGuardDetail: DetailDef = {
+  id: 'stairguard',
+  title: 'STAIR GUARD & HANDRAIL',
+  applies: (v) => v.guard,
+  draw(v) {
+    const S = sketch()
+    const rise = 7
+    const run = 11
+    const n = 3
+    const top = rise * n
+    const H = 36
+    const nose = (x: number) => rise + (x / run) * rise
+    // grade and the landing (deck edge at x = n × run)
+    S.rect(-10, 0, 10 + n * run + 6, 4, EARTH)
+    S.rect(-6, 0, 6, 4, CONC)
+    // the stringer band under the nosings, the treads and risers
+    S.poly(
+      [
+        [0, nose(0) - 1.5],
+        [n * run, top - 1.5],
+        [n * run, top - 1.5 - 9.25],
+        [0, nose(0) - 1.5 - 9.25],
+      ],
+      WOOD2,
+    )
+    for (let i = 0; i < n; i++) {
+      const x = i * run
+      const z = rise * (i + 1)
+      S.rect(x - 1, z, run + 1, 1.5, WOOD)
+      S.line(x, z - 1.5, x, z - rise, '#5a4a38', 1)
+    }
+    // the deck / porch landing
+    S.rect(n * run, top + 1, 8, top + 1 - 4, WOOD)
+    // posts: 4x4 at the bottom, the porch 6x6 at the top
+    S.rect(-1.5, nose(0) + H + 1.5, 3.5, nose(0) + H + 1.5 + 6, WOOD)
+    S.rect(n * run + 1, top + H + 8, 5.5, top + H + 8 + 10, WOOD)
+    // cap rail 2x6 sloped 36" over the nosing line, the 2x4 top rail under it, the bottom rail 4" over the nosings
+    const capZ = (x: number) => nose(x) + H
+    S.poly(
+      [
+        [-1.5, capZ(-1.5)],
+        [n * run + 1, capZ(n * run + 1)],
+        [n * run + 1, capZ(n * run + 1) + 1.5],
+        [-1.5, capZ(-1.5) + 1.5],
+      ],
+      WOOD,
+    )
+    S.poly(
+      [
+        [2, capZ(2) - 3.5],
+        [n * run + 1, capZ(n * run + 1) - 3.5],
+        [n * run + 1, capZ(n * run + 1)],
+        [2, capZ(2)],
+      ],
+      '#efe6d4',
+    )
+    S.poly(
+      [
+        [2, nose(2) + 4],
+        [n * run + 1, nose(n * run + 1) + 4],
+        [n * run + 1, nose(n * run + 1) + 7.5],
+        [2, nose(2) + 7.5],
+      ],
+      '#efe6d4',
+    )
+    for (let x = 6; x < n * run - 1; x += 5) {
+      S.rect(x - 0.75, capZ(x) - 3.5, 1.5, capZ(x) - 3.5 - (nose(x) + 7.5), '#efe6d4')
+    }
+    // the handrail a 4+ riser flight adds: 34"–38" over the nosings, graspable
+    S.line(0, nose(0) + 34, n * run, nose(n * run) + 34, INK, 1.6, '5 3')
+    // the guard height, off the nosing line
+    const gx = n * run - 4
+    S.line(gx, nose(gx), gx, capZ(gx) + 1.5, '#333', 0.8)
+    S.text(gx + 0.6, nose(gx) + H / 2, `${fmtIn(H)} MIN`, 'start')
+    S.note(
+      `RISERS ≤ 7-3/4", TREADS ≥ 10" (R311.7.5.1, R311.7.5.2); ${n} RISERS @ ${fmtIn(rise)} SHOWN — PER PLAN`,
+      run,
+      rise * 2 - 0.75,
+    )
+    S.note('2x12 PT STRINGERS @ 16" O.C. — 5" MIN THROAT, HANGERS AT THE RIM (R311.7, R507.6)', run * 1.5, nose(run * 1.5) - 6)
+    S.note('STRINGERS BEAR ON A CONC. LANDING PAD — 36" × THE STAIR WIDTH (R311.7.6)', -3, 2)
+    S.note(
+      `GUARD ${fmtIn(H)} MIN, MEASURED VERTICALLY FROM THE NOSING LINE (R312.1.2); 4" SPHERE BETWEEN PICKETS, 6" IN THE TREAD/RISER TRIANGLE (R312.1.3)`,
+      gx + 0.3,
+      nose(gx) + H * 0.8,
+    )
+    S.note('2x6 CAP + 2x4 TOP & BOTTOM RAILS FOLLOW THE FLIGHT; 2x2 PICKETS @ 5" O.C.', run * 1.2, capZ(run * 1.2) + 0.75)
+    S.note(
+      '4x4 PT POST AT THE BOTTOM AND EVERY ≤ 4\'-0" — RAILS DIE INTO THE PORCH 6x6 AT THE TOP (NO POST BESIDE IT)',
+      0.25,
+      nose(0) + H / 2,
+    )
+    S.note(
+      'HANDRAIL WHERE 4 OR MORE RISERS: 34"–38" ABOVE NOSINGS, GRASPABLE TYPE I (1-1/4"–2") OR TYPE II, RETURNED TO THE POSTS (R311.7.8)',
+      run * 2,
+      nose(run * 2) + 34,
+    )
+    return S
+  },
+}
+
+// ---- 9. GABLE END — SHEAR TRANSFER & BRACING ---------------------------------
+/**
+ * The gable end from the attic side: the end frame (a truss or the gable
+ * studs on the plate), blocked to the roof at the wall line so the
+ * diaphragm's shear reaches the wall, strapped for uplift, and braced back
+ * into the attic — the horizontal braces on the bottom chords and the
+ * diagonals that keep a tall gable end from hinging in a hurricane (the
+ * Florida gable-end detail, R602.10.8.2's connections to roof framing).
+ */
+const gableEndDetail: DetailDef = {
+  id: 'gableend',
+  title: 'GABLE END — SHEAR TRANSFER & BRACING',
+  applies: (v) => v.roof !== null,
+  draw(v) {
+    const S = sketch()
+    const r = v.roof as NonNullable<DetailVariables['roof']>
+    const slope = r.pitchRise / 12
+    const half = 72
+    const peak = half * slope
+    const d = v.stud.depthIn
+    // the wall below the plate, the double top plate, the gable end frame above it
+    S.rect(-half, 0, 2 * half, 14, BAY)
+    S.xRect(-half, 0, 2 * half, 1.5)
+    S.xRect(-half, -1.5, 2 * half, 1.5)
+    for (let x = -half + 16; x < half; x += 16) S.rect(x - 0.75, 0, 1.5, 14, WOOD2)
+    S.poly(
+      [
+        [-half, 0],
+        [half, 0],
+        [0, peak],
+      ],
+      '#f1ede6',
+    )
+    // top chords / rafters, the bottom chord on the plate, gable studs @ 24" o.c.
+    S.poly([[-half, 0], [0, peak], [0, peak + 3.5 / Math.cos(Math.atan(slope))], [-half, 3.5]], WOOD)
+    S.poly([[half, 0], [0, peak], [0, peak + 3.5 / Math.cos(Math.atan(slope))], [half, 3.5]], WOOD)
+    S.xRect(-half, 3.5, 2 * half, 3.5, WOOD)
+    for (let x = -half + 24; x < half; x += 24) {
+      const zTop = peak - Math.abs(x) * slope
+      S.rect(x - 0.75, zTop, 1.5, zTop - 3.5, WOOD2)
+    }
+    // horizontal braces (2x4 flat, seen end-on) back into the attic: on the bottom chord every 4 ft, and mid-height on studs over 4 ft
+    for (let x = -half + 24; x < half; x += 48) {
+      S.rect(x - 0.75, 5.5, 3.5, 1.5, '#8a6a3a')
+      const zTop = peak - Math.abs(x) * slope
+      if (zTop > 48 + 3.5) S.rect(x - 0.75, zTop / 2 + 1.5, 3.5, 1.5, '#8a6a3a')
+    }
+    // the diagonal braces to the bottom chords, blocking between the end frame and the next truss at the wall line, the straps
+    S.line(-12, peak - 12 * slope - 6, -40, 5.5, '#8a6a3a', 2.2, '6 3')
+    S.line(12, peak - 12 * slope - 6, 40, 5.5, '#8a6a3a', 2.2, '6 3')
+    for (let x = -half + 24; x < half; x += 24) {
+      const zTop = peak - Math.abs(x) * slope
+      S.rect(x - 12, zTop - 0.5 + 12 * slope * (x < 0 ? -1 : 1) * 0, 1.5, 3.5, NAIL)
+    }
+    for (const x of [-half + 8, -8, 8, half - 8]) S.line(x, -1.5, x, 4.5, FLASH, 1.6)
+    S.note(
+      `GABLE END ${r.truss ? 'TRUSS' : 'FRAME'} ON THE DOUBLE TOP PLATE — ${r.truss ? 'MFR DESIGN' : `GABLE STUDS 2x4 @ 24" O.C., ${nominal(r.rafter)} RAFTERS`}; VERTICAL STUDS @ 24" O.C. (R602.3)`,
+      -half + 30,
+      1.75,
+    )
+    S.note(
+      'FULL-DEPTH 2x BLOCKING BETWEEN THE END FRAME AND THE NEXT TRUSS/RAFTER @ 24" O.C. — ROOF SHTG EDGE-NAILED 8d @ 6" TO THE BLOCKING, BLOCKING TO THE PLATE (3) 16d TOE OR SIMPSON A35 EA. (R602.10.8.2, R803.2)',
+      -half + 12,
+      peak - (half - 12) * slope - 2,
+    )
+    S.note(
+      `${HURRICANE_TIE.model} OR LSTA STRAP AT EACH TRUSS/RAFTER AND AT THE GABLE END FRAME — UPLIFT (R802.11)${v.stud ? '' : ''}`,
+      -half + 8,
+      1.5,
+    )
+    S.note(
+      '2x4 HORIZONTAL BRACES ON THE BOTTOM CHORDS @ 4\'-0" O.C., BACK 3 TRUSSES (6\'-0") MIN — (2) 16d @ EACH CHORD; AT MID-HEIGHT OF GABLE STUDS OVER 4\'-0" (R602.10.8.2(2) LATERAL SUPPORT — VERIFY WITH THE TRUSS MFR / LOCAL GABLE-END DETAIL)',
+      -half + 24 + 1,
+      6.25,
+    )
+    S.note('2x4 DIAGONAL BRACE FROM THE GABLE STUD TO THE BRACE @ THE 3RD TRUSS — (2) 16d EA. END', -26, peak - 26 * slope - 3 - (peak - 26 * slope - 6 - 5.5) / 2)
+    S.note('WALL SHTG CONTINUOUS OVER THE PLATE TO THE END FRAME OR CS16 STRAPS STUD-TO-GABLE STUD @ 48" O.C. (R602.3.3)', half - 20, 8)
+    return S
+  },
+}
+
+// ---- 10. FIREBLOCKING & DRAFTSTOPPING ----------------------------------------
+/**
+ * Where a house's concealed spaces are cut off from each other (R302.11):
+ * the plates at the ceiling line, the soffit / drop that would let a wall
+ * bay open into a horizontal space, penetrations through the plates, the
+ * stair stringers — and the materials that count.
+ */
+const fireblockDetail: DetailDef = {
+  id: 'fireblock',
+  title: 'FIREBLOCKING @ SOFFIT & PENETRATIONS',
+  applies: () => true,
+  draw(v) {
+    const S = sketch()
+    const d = v.stud.depthIn
+    const gy = Math.max(0.4, v.layers.drywallIn)
+    const H = 30
+    // the wall: stud bay, plates at the ceiling line (z = 0), gypsum inside (x > d)
+    S.rect(0, 0, d, H, BAY)
+    S.batt(0, -1.8, -(H - 2), d)
+    S.xRect(0, 0, d, 1.5)
+    S.xRect(0, -1.5, d, 1.5)
+    S.rect(-0.5, 0, 0.5, H, SHTG)
+    // the ceiling joist bay above the plate and the ceiling gypsum
+    S.rect(-0.5, 12, 30, 12, '#f1ede6')
+    S.rect(d, 0, 26, gy, GYP)
+    // a kitchen soffit hung 12" below the ceiling, 24" into the room, framed with 2x2s
+    const sz = -12
+    S.rect(d + gy, sz, 24, 12 + sz - sz, '#faf8f4')
+    S.rect(d + gy, sz, 24, gy, GYP)
+    S.rect(d + gy + 24, 0, gy, 12, GYP)
+    S.xRect(d + gy, sz + 1.5, 1.5, 1.5, WOOD2)
+    S.xRect(d + gy + 24 - 1.5, sz + 1.5, 1.5, 1.5, WOOD2)
+    S.xRect(d + gy + 24 - 1.5, -1.5, 1.5, 1.5, WOOD2)
+    // the fireblock: solid 2x in the stud bay at the soffit line; the block closing the soffit to the ceiling
+    S.xRect(0, sz + 0.75, d, 1.5, '#c94b3b')
+    S.xRect(d + gy + 24 - 1.5, -1.5 - 1.5, 1.5, 1.5, '#c94b3b')
+    // a pipe through the top plate, packed
+    S.dot(d / 2, -0.75, 1.2, '#dfe7ee')
+    S.rect(d / 2 - 1.9, 1.6, 3.8, 1.6, '#c94b3b')
+    S.rect(d, gy, 26, 0, GYP)
+    S.note('DOUBLE TOP PLATE — THE FIREBLOCK AT THE CEILING LINE (R302.11(1))', d / 2, -0.75)
+    S.note(
+      'SOLID 2x FIREBLOCK IN EVERY STUD BAY AT THE SOFFIT / DROPPED-CEILING LINE — THE WALL BAY MAY NOT OPEN INTO A HORIZONTAL SPACE (R302.11(2))',
+      d / 2,
+      sz,
+    )
+    S.note('2x BLOCK CLOSING THE SOFFIT TO THE CEILING (R302.11(2)) — GYP BD SOFFIT (R702.3)', d + gy + 23.25, -2.25)
+    S.note('MINERAL WOOL OR APPROVED FIRE CAULK PACKED AROUND PIPES, DUCTS, CABLES AND VENTS AT PLATES (R302.11(4))', d / 2, 2.4)
+    S.note(
+      'MATERIALS: 2x NOMINAL LUMBER, (2) 1x, 23/32" WSP, 1/2" GYP BD, MINERAL WOOL (R302.11.1); HORIZONTAL FIREBLOCKING @ 10\'-0" MAX IN CONCEALED FURRED SPACES (R302.11(1))',
+      d / 2,
+      -(H - 6),
+    )
+    S.note('FIREBLOCK STAIR STRINGERS AT THE TOP AND BOTTOM OF THE RUN (R302.11(3)); DRAFTSTOP CONCEALED FLOOR-CEILING SPACES OVER 1,000 SF (R302.12)', d / 2, -(H - 14))
+    return S
+  },
+}
+
+// ---- 11. WINDOW JAMB — FLASHING SEQUENCE -------------------------------------
+/**
+ * The opening in plan at the jamb (king and jack studs, the sheathing,
+ * the WRB, the fin and its flashing, the cladding held off the frame) with
+ * the flashing sequence numbered the way the WRB manufacturer's and ASTM
+ * E2112's installation is written: pan, fins, jambs, head, WRB over.
+ */
+const windowJambDetail: DetailDef = {
+  id: 'windowjamb',
+  title: 'WINDOW JAMB & FLASHING SEQUENCE',
+  applies: (v) => v.header !== null,
+  draw(v) {
+    const S = sketch()
+    const d = v.stud.depthIn
+    const cl = Math.max(0.6, v.layers.claddingIn)
+    const sh = Math.max(0.4, v.layers.sheathingIn)
+    const gy = Math.max(0.4, v.layers.drywallIn)
+    // plan: x through the wall (outside at the left), z along the wall (the opening above z = 3)
+    S.rect(-cl - sh, 0, cl, 2.6, CLAD)
+    S.rect(-sh, 0, sh, 3, SHTG)
+    S.xRect(0, 0, d, 1.5, WOOD) // king stud
+    S.xRect(0, 1.5, d, 1.5, WOOD2) // jack (trimmer)
+    S.rect(d, 0, gy, 3, GYP)
+    S.rect(d - 0.75, 3, 0.75, 6, WOOD2) // jamb extension / casing
+    // the window frame in the opening with its nailing fin on the sheathing
+    S.rect(-sh - 0.6, 3, 2.6, 3, '#dfe7ee')
+    S.rect(-sh - 0.1, 2.6, 0.1, 1.6, '#9aa4ae')
+    S.line(-sh + 0.9, 4.2, -sh + 0.9, 9, '#7f8a95', 1.2)
+    // WRB on the sheathing; jamb flashing over the fin lapping the WRB; sealant at the fin and at the frame edge
+    S.line(-sh - 0.05, 0, -sh - 0.05, 2.7, FLASH, 1.1, '4 2')
+    S.line(-sh - 0.2, 1.0, -sh - 0.2, 4.2, FLASH, 1.6)
+    S.dot(-sh - 0.3, 2.9, 0.3, '#333')
+    S.dot(-cl - sh - 0.2, 2.8, 0.3, '#333')
+    S.text(-sh - 2.2, 1.6, '3', 'middle')
+    S.text(-sh - 2.2, 3.4, '2', 'middle')
+    S.note(`KING + JACK STUDS ${nominal(v.stud.size)} — HEADER ${v.header ? nominal(v.header.size) : ''} PER PLAN (R602.7)`, d / 2, 0.75)
+    S.note('1 — SILL PAN FLASHING FIRST: TURN UP 4"–6" AT THE JAMBS, BACK DAM AT THE INTERIOR (R703.4)', -sh - 0.2, 0.3)
+    S.note('2 — WINDOW SET PLUMB IN A BEAD OF SEALANT BEHIND THE FIN (SIDES + HEAD, NOT THE SILL); FIN NAILED PER MFR (R609.1)', -sh - 0.1, 3.4)
+    S.note('3 — JAMB FLASHING (4" MIN SELF-ADHERED) OVER THE FIN, LAPPING THE WRB BELOW AND THE PAN', -sh - 0.2, 1.6)
+    S.note('4 — HEAD FLASHING OVER THE TOP FIN; 5 — WRB LAPPED OVER THE HEAD FLASHING, SHINGLE-STYLE (R703.4, R703.2)', -sh - 0.05, 2.2)
+    S.note(`6 — CLADDING HELD 1/4"–3/8" OFF THE FRAME, SEALANT + BACKER ROD; ${fmtIn(cl)} CLADDING O/ WRB`, -cl - sh + cl / 2, 1.3)
+    S.note('INTERIOR: LOW-EXPANSION FOAM OR BACKER + SEALANT AT THE SHIM SPACE (AIR BARRIER, N1102.4.1.1); JAMB EXTENSION + CASING', d, 4.5)
+    return S
+  },
+}
+
 export const DETAILS: DetailDef[] = [
   wallDetail,
   foundationDetail,
@@ -876,6 +1291,11 @@ export const DETAILS: DetailDef[] = [
   openingDetail,
   deckLedgerDetail,
   porchLedgerDetail,
+  guardDetail,
+  stairGuardDetail,
+  gableEndDetail,
+  fireblockDetail,
+  windowJambDetail,
 ]
 
 // ---------------------------------------------------------------------------
@@ -1120,6 +1540,7 @@ export function variablesLine(v: DetailVariables): string {
       ? `${v.foundation.type === 'raised' ? 'raised floor' : 'slab on grade'} — footing ${fmtIn(v.foundation.footingWIn)}×${fmtIn(v.foundation.footingHIn)}, stem ${fmtIn(v.foundation.stemWIn)}, F.F. ${fmtFtIn(v.foundation.ffAboveGradeIn)} above grade${v.foundation.stepped ? ', footings stepped' : ''}`
       : '',
     v.deck ? `deck joists ${nominal(v.deck.joist)} PT` : '',
+    `insulation ${v.insulation.wallR} walls${v.insulation.ceilingR ? `, ${v.insulation.ceilingR} ceiling` : ''} (energy code)`,
   ].filter((p) => p.length > 0)
   return `Variables read from the framed model: ${parts.join(' · ')}`
 }

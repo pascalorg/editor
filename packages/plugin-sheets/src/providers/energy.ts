@@ -321,7 +321,14 @@ function climateBlock(
   out.push(...heading(x, y, w, 'Climate zone & design data'))
   let cursor = y + 0.22
   const rows: [string, string][] = [
-    ['IECC climate zone', j.climateZone ? j.climateZoneRaw || j.climateZone : 'NOT ESTABLISHED'],
+    [
+      'IECC climate zone',
+      j.climateZone
+        ? j.climateZoneRaw && j.climateZoneRaw !== j.climateZone
+          ? `${j.climateZone} — state table: ${j.climateZoneRaw}`
+          : j.climateZone
+        : 'NOT ESTABLISHED',
+    ],
     [
       'Jurisdiction',
       [j.city, j.county && `${j.county} County`, j.stateName].filter(Boolean).join(', ') ||

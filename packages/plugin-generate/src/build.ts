@@ -41,6 +41,8 @@ import { type PorchPolicy, type PorchSummary, porchFor } from './porch'
 import { type StylePreset, styleFor } from './styles'
 
 export const GENERATED_BY = 'pascal:generate'
+/** Roofs spanning more than this are trussed (a 2x10 ceiling joist at 16 in o.c. spans 19.8 ft one piece — R802.5.1(2)); site-cut framing needs a bearing line inside that. */
+export const TRUSS_SPAN_FT = 24
 const IN = 0.0254
 const FT = 0.3048
 /**
@@ -1190,6 +1192,15 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     )
   }
 
+  const spanFt = Math.min(W, D) / 12
+  const structure: { roofSystem: 'stick' | 'truss'; reason: string } =
+    spanFt > TRUSS_SPAN_FT
+      ? {
+          roofSystem: 'truss',
+          reason: `${spanFt.toFixed(0)} ft roof span — past the site-cut rafter / ceiling-joist tables without an interior bearing line; pre-engineered trusses, design deferred (R802.10.1)`,
+        }
+      : { roofSystem: 'stick', reason: `${spanFt.toFixed(0)} ft roof span — site-cut rafters and ceiling joists` }
+  if (structure.roofSystem === 'truss') warnings.push(`Roof framing: ${structure.reason}.`)
   // ── building on the parcel: placed above, standing on its datum ───────
   const position: [number, number, number] = [planX, buildingY, planZ]
 
@@ -1212,6 +1223,13 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
           ffAboveGradeIn: foundation.ffAboveGradeIn,
           source: foundation.source,
         },
+        // The roof system Bones frames and the sheets draw (structureOf):
+        // site-cut rafters and ceiling joists lap over an interior bearing
+        // partition, and a deep open plan has none where the joists need it
+        // — past 24 ft the roof is pre-engineered trusses, the way a Florida
+        // or PlanCrafters house is built (truss design a deferred submittal,
+        // R802.10.1); interior partitions are then non-bearing.
+        structure,
         // the finish schedule — the palette applied below (finishes.ts)
         finishes,
       },

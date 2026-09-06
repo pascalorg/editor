@@ -111,6 +111,23 @@ function otherXrayLive(
  * the renderer's auto-heal never re-seeds (and never resurrects a service
  * point the user later deletes). Walls go Low as part of the same click.
  */
+/**
+ * The roof system the building asks for (`building.metadata.structure.roofSystem`,
+ * written by the generator: trusses past its span limit) — the node created
+ * for the level starts from it, so the 3D framing and the sheets agree.
+ */
+export function roofSystemOf(
+  nodes: Record<string, unknown>,
+  levelId: string,
+): 'stick' | 'truss' | null {
+  const level = nodes[levelId] as { parentId?: string } | undefined
+  const building = level?.parentId
+    ? (nodes[level.parentId] as { metadata?: { structure?: { roofSystem?: unknown } } } | undefined)
+    : undefined
+  const system = building?.metadata?.structure?.roofSystem
+  return system === 'truss' || system === 'stick' ? system : null
+}
+
 export function activateXray(
   scene: SceneLike,
   levelId: string,
@@ -118,9 +135,11 @@ export function activateXray(
 ): FramingNode {
   const state = scene.getState()
   const services = buildServicePointNodes(state.nodes, levelId)
+  const roofSystem = roofSystemOf(state.nodes, levelId)
   const framing = FramingNode.parse({
     jurisdiction: 'AUTO',
     servicesSeeded: services.length > 0,
+    ...(roofSystem ? { roofSystem } : {}),
   })
   state.applyNodeChanges({
     create: [

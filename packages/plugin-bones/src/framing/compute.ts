@@ -1068,6 +1068,8 @@ function computeLevelUncached(
       members.push(...frameFloor(pouredSlabs, activeWalls, spec, storeyBelowHeight))
     }
     if (deckSlabs.length > 0) {
+      // the porch cover's posts, so a covered deck's beam bears on them
+      const coverPosts = extractPorchPosts(nodes, levelId, ground)
       const below = levels[levelIndex - 1]
       const deckGrade = isGroundLevel
         ? gradeY
@@ -1083,7 +1085,7 @@ function computeLevelUncached(
           const cz = deck.polygon.reduce((s, p) => s + p[1], 0) / deck.polygon.length
           deckGradeHere = gradeAt(cx, cz)
         }
-        deckMembers.push(...frameDeck(deck, activeWalls, spec, deckGradeHere).members)
+        deckMembers.push(...frameDeck(deck, activeWalls, spec, deckGradeHere, coverPosts).members)
       }
       if (hilly && isGroundLevel) seatPostsOnGrade(deckMembers, gradeAt)
       members.push(...deckMembers)
@@ -1319,6 +1321,8 @@ function computeLevelUncached(
         girderPosts,
         gradeY,
         raised,
+        // trusses clear-span the exterior walls: a single storey's partitions bear nothing
+        interiorBearing: !(spec.roofSystem === 'truss' && !levels[levelIndex + 1]),
         ...(hilly ? { gradeAt } : {}),
       }),
     )

@@ -77,9 +77,11 @@ describe('the default set', () => {
     // The scene has walls, so the sheet gets the longitudinal and transverse
     // default cuts rather than one empty placeholder.
     const sections = planDefaultSet(scene()).find((p) => p.number === 'A5.0')!
-    expect(sections.viewports).toHaveLength(2)
-    expect(sections.viewports.map((v) => v.kind)).toEqual(['section', 'section'])
-    expect(sections.viewports.map((v) => v.title)).toEqual(['Section A', 'Section B'])
+    // two cuts down the left, the assembly schedule down the right
+    expect(sections.viewports).toHaveLength(3)
+    expect(sections.viewports.map((v) => v.kind)).toEqual(['section', 'section', 'notes'])
+    expect(sections.viewports.slice(0, 2).map((v) => v.title)).toEqual(['Section A', 'Section B'])
+    expect(sections.viewports[2]).toMatchObject({ notesKey: 'assemblies' })
     // The markers themselves are created by `ensureSectionMarkers` at generate
     // time; planning alone leaves the ids unbound.
     expect(sections.viewports[0]?.markerId).toBeUndefined()

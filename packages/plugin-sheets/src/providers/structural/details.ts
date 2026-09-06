@@ -31,6 +31,8 @@ import {
   variablesLine,
 } from '../../../../plugin-bones/src/plans/details'
 import type { NodeMap } from '../../model'
+import { resolveJurisdiction } from '../../notes/jurisdiction'
+import { prescriptiveRequirements } from '../../notes/prescriptive'
 import { dot, INK, INK_MID, INK_SOFT, line, PEN, polygon, polyline, text, TYPE } from './draw'
 import type { StructuralModel } from './model'
 import { type Box, heading, wrap } from './plate'
@@ -60,10 +62,19 @@ export function detailsFor(
   const parentId = model.level?.parentId
   const building = typeof parentId === 'string' ? nodes[parentId] : undefined
   const record = foundationOf(building as Record<string, unknown> | undefined)
-  const v = detailVariables(model.members, model.spec, {
-    type: record.type,
-    ffAboveGradeIn: record.ffAboveGradeM / IN,
-  })
+  // the insulation the site's energy code asks for — only values the data cites
+  const j = resolveJurisdiction(nodes)
+  const rows = prescriptiveRequirements(j).rows
+  const cited = (component: string): string | null => {
+    const row = rows.find((r) => r.component === component)
+    return row?.cited ? row.value : null
+  }
+  const v = detailVariables(
+    model.members,
+    model.spec,
+    { type: record.type, ffAboveGradeIn: record.ffAboveGradeM / IN },
+    { wallR: j.wallInsulation?.value ?? null, ceilingR: cited('Ceiling / attic'), floorR: cited('Floor') },
+  )
   return { v, defs: DETAILS.filter((d) => d.applies(v)) }
 }
 

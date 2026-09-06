@@ -30,7 +30,7 @@
  * Members ride the `floor-framing` system so the Floor toggle shows them.
  */
 import { DEFAULT_SPEC, type FramingSpec } from '../core/spec'
-import type { Member, SlabSlice, WallSlice } from '../core/types'
+import type { Member, PorchPostSlice, SlabSlice, WallSlice } from '../core/types'
 import { inches } from '../core/units'
 import { LUMBER_CROSS_SECTIONS, type LumberSize } from '../lumber'
 import { joistSizeFor } from './floor-framing'
@@ -107,6 +107,8 @@ export function frameDeck(
   walls: readonly WallSlice[],
   spec: FramingSpec = DEFAULT_SPEC,
   gradeY = 0,
+  /** The porch cover's 6x6 posts (porch-framing frames them to grade on their own pads): a beam line two or more of them stand on bears on THEM. */
+  porchPosts: readonly PorchPostSlice[] = [],
 ): DeckFrame {
   const members: Member[] = []
   const poly = slab.polygon
@@ -318,7 +320,19 @@ export function frameDeck(
   const beamLines = freestanding ? [nearLine, farLine] : [farLine]
   const [pt, pw] = LUMBER_CROSS_SECTIONS['4x4']
   const bLen = dropped ? width - 2 * DECK_POST_END_INSET : width - 2 * t
+  // Under a porch cover the 6x6 posts standing on the beam line carry the
+  // deck beam too — one post, one pad (Steve, 2026-09-06: "the post should
+  // go to the footing"): a beam line with two or more of them within a foot
+  // gets no 4x4 posts of its own (their pads would not fit beside the 6x6s'
+  // either — that was the "girder post bears without a pad footing" flag).
+  const porchOnLine = (bv: number): number =>
+    porchPosts.filter((p) => {
+      const u = (p.plan[0] - A[0]) * U[0] + (p.plan[1] - A[1]) * U[1]
+      const v = (p.plan[0] - A[0]) * V[0] + (p.plan[1] - A[1]) * V[1]
+      return Math.abs(v - bv) <= inches(12) && u >= u0 - inches(6) && u <= u1 + inches(6)
+    }).length
   for (const bv of beamLines) {
+    const carried = porchOnLine(bv) >= 2
     emit(
       'girder',
       beamSize,
@@ -327,14 +341,15 @@ export function frameDeck(
       yawU,
       bLen,
       'pt-lumber',
-      dropped
+      (dropped
         ? 'Deck beam 4x8 PT, dropped — joists bear on it (span per Table R507.5(1), verify)'
-        : `Deck flush beam ${joistSize} PT doubled with the rim — joists hung on it (span per Table R507.5(1), verify)`,
+        : `Deck flush beam ${joistSize} PT doubled with the rim — joists hung on it (span per Table R507.5(1), verify)`) +
+        (carried ? ' — bears on the porch 6x6 posts (framed with the porch cover, R507.5.1)' : ''),
     )
     if (!dropped)
       for (const u of stations)
         hangerAt(u, bv + (bv < depth / 2 ? 1 : -1) * (t / 2 + inches(0.75) / 2))
-    if (!canPost) continue
+    if (!canPost || carried) continue
     const n = Math.max(2, Math.ceil(bLen / DECK_POST_SPACING) + 1)
     const p0 = (u0 + u1) / 2 - bLen / 2 + DECK_POST_END_INSET
     const span = bLen - 2 * DECK_POST_END_INSET

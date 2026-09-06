@@ -25,7 +25,8 @@ import climateData from '../../../../plugin-bones/data/jurisdictions-climate.jso
 import type { FramingSpec } from '../../../../plugin-bones/src/core/spec'
 import type { Member, WallSlice } from '../../../../plugin-bones/src/core/types'
 import { formatFtIn, formatIn, toFeet, toInches } from '../../../../plugin-bones/src/core/units'
-import { computeLevel } from '../../../../plugin-bones/src/framing/compute'
+import { computeLevel, foundationOf } from '../../../../plugin-bones/src/framing/compute'
+import { resolveJurisdiction } from '../../notes/jurisdiction'
 import { FramingNode } from '../../../../plugin-bones/src/framing/schema'
 import {
   type JurisdictionProfile,
@@ -80,6 +81,14 @@ export type StructuralModel = {
   bounds: Bounds
   /** Bones' own warnings for this level, plus ours. */
   warnings: string[]
+  /** The ground storey is a framed platform over a crawl space (the building's foundation record). */
+  raisedFloor: boolean
+  /** The site is in Florida's High-Velocity Hurricane Zone (county inferred or recorded). */
+  hvhz: boolean
+  /** The design wind speed as the criteria table prints it, with its provenance. */
+  windLabel: string
+  /** 'truss' when the roof is pre-engineered trusses (interior partitions then bear nothing on a single storey). */
+  roofSystem: 'stick' | 'truss'
 }
 
 /* ------------------------------------------------------------- caching */
@@ -128,15 +137,30 @@ function siteState(nodes: NodeMap): string | null {
  * jurisdiction from the site address, so a scene that has never been X-rayed
  * still produces a structural set — the sheet says which of the two happened.
  */
+/** The roof system the building asks for (the generator writes it past its span limit). */
+function roofSystemOf(nodes: NodeMap, levelId: string): 'stick' | 'truss' | null {
+  const level = nodes[levelId]
+  const building = typeof level?.parentId === 'string' ? nodes[level.parentId] : undefined
+  const system = (building?.metadata as { structure?: { roofSystem?: unknown } } | undefined)
+    ?.structure?.roofSystem
+  return system === 'truss' || system === 'stick' ? system : null
+}
+
 function configFor(nodes: NodeMap, levelId: string): { config: FramingNode; source: string } {
   const existing = Object.values(nodes).find(
     (n) => n?.type === 'bones:framing' && n.parentId === levelId,
   )
+  const roofSystem = roofSystemOf(nodes, levelId)
   if (existing) {
     const parsed = FramingNode.safeParse(existing)
     if (parsed.success) {
+      // the node's own choice stands; an unset one takes the building's
+      const config =
+        parsed.data.roofSystem === undefined && roofSystem
+          ? { ...parsed.data, roofSystem }
+          : parsed.data
       return {
-        config: withAssemblyOverrides(nodes, levelId, parsed.data),
+        config: withAssemblyOverrides(nodes, levelId, config),
         source: `Bones X-ray node on this level (jurisdiction ${parsed.data.jurisdiction})`,
       }
     }
@@ -151,6 +175,7 @@ function configFor(nodes: NodeMap, levelId: string): { config: FramingNode; sour
         type: 'bones:framing',
         parentId: levelId,
         jurisdiction: state ?? 'AUTO',
+        ...(roofSystem ? { roofSystem } : {}),
       }),
     ),
     source: state
@@ -225,6 +250,7 @@ function wallFootprints(
   nodes: NodeMap,
   levelId: string,
   walls: WallSlice[],
+  bearingRule: { interiorBearing: boolean; lapWallIds: Set<string> },
 ): { id: string; loop: Pt[]; exterior: boolean; bearing: boolean }[] {
   const wallNodes = Object.values(nodes).filter(
     (n) => n?.type === 'wall' && n.parentId === levelId && n.visible !== false,
@@ -241,11 +267,16 @@ function wallFootprints(
       id: node.id,
       loop: poly.map((p) => [p.x, p.y] as Pt),
       exterior: slice?.exterior ?? false,
-      // Bones' own bearing ASSUMPTION (engines/foundation.ts
-      // INTERIOR_BEARING_MIN_LENGTH): an interior wall over 2.4 m is treated
-      // as bearing and gets a thickened footing. Same rule here so the plan
-      // and the footings agree about which walls bear.
-      bearing: (slice?.exterior ?? false) || (slice?.length ?? 0) > 2.4,
+      // Which interior walls bear: with site-cut framing, the partitions the
+      // ceiling joists lap over (the roof engine names them) and — Bones'
+      // foundation assumption, INTERIOR_BEARING_MIN_LENGTH — any interior
+      // wall over 2.4 m, which gets a thickened footing; under a trussed
+      // single storey none of them (the trusses clear-span). The same rule
+      // the foundation engine used, so the plans and the footings agree.
+      bearing:
+        (slice?.exterior ?? false) ||
+        (bearingRule.interiorBearing &&
+          (bearingRule.lapWallIds.has(node.id) || (slice?.length ?? 0) > 2.4)),
     })
   }
   return out
@@ -303,7 +334,19 @@ export function structuralModel(nodes: NodeMap, levelId?: string): StructuralMod
   const result = computeLevel(nodes as never, config)
   const profile = profileFor(result.jurisdiction)
   const index = all.findIndex((l) => l.id === id)
-  const footprints = wallFootprints(nodes, id, result.walls)
+  const hasAbove = index >= 0 && index < all.length - 1
+  const trussed = result.spec.roofSystem === 'truss'
+  // the partitions the ceiling joists lap over, named by the roof engine
+  const lapWallIds = new Set<string>()
+  for (const m of result.members) {
+    if (m.role !== 'ceiling-joist') continue
+    const text = `${m.label ?? ''} ${(m as { flag?: string }).flag ?? ''}`
+    for (const hit of text.matchAll(/partition (wall_[A-Za-z0-9]+)/g)) lapWallIds.add(hit[1] as string)
+  }
+  const footprints = wallFootprints(nodes, id, result.walls, {
+    interiorBearing: !(trussed && !hasAbove),
+    lapWallIds,
+  })
   const slabs = slabOutlines(nodes, id)
 
   let bounds: Bounds | null = null
@@ -315,6 +358,25 @@ export function structuralModel(nodes: NodeMap, levelId?: string): StructuralMod
   }
 
   const warnings = [...result.warnings]
+  const site = resolveJurisdiction(nodes)
+  const parentId = level?.parentId
+  const building = typeof parentId === 'string' ? nodes[parentId] : undefined
+  const raisedFloor = foundationOf(building as Record<string, unknown> | undefined).type === 'raised'
+  const climate = climateRow(result.jurisdiction)
+  const windLabel = site.windRange
+    ? `${site.windRange} (HVHZ — ${site.county} County; ASCE 7 map — verify)`
+    : climate?.ultimateWindMph
+      ? `${climate.ultimateWindMph} mph (state typical — verify against the ASCE 7 map)`
+      : 'not in the data'
+  // R602.10's prescriptive bracing is written for ultimate wind speeds to
+  // 140 mph; above that (and in the HVHZ) the lateral system is designed
+  // (R301.2.1.1: AWC WFCM, ICC 600, ASCE 7). The S4.0 braced-wall plan then
+  // shows the lines to design against, not a prescriptive answer.
+  if (site.hvhz || (climate?.ultimateWindMph ?? 0) > 140) {
+    warnings.push(
+      `Ultimate design wind speed ${site.windRange ?? `${climate?.ultimateWindMph} mph`} exceeds the 140 mph limit of R602.10 prescriptive wall bracing — lateral design per R301.2.1.1 (AWC WFCM / ICC 600 / ASCE 7) by the engineer of record; braced wall lines shown for that design.`,
+    )
+  }
   if (!Object.values(nodes).some((n) => n?.type === 'bones:framing' && n.parentId === id)) {
     warnings.unshift(
       `Framing derived with default Bones settings — ${source}. X-ray this level in Bones to drive these sheets from its own config.`,
@@ -339,6 +401,10 @@ export function structuralModel(nodes: NodeMap, levelId?: string): StructuralMod
     slabs,
     bounds: bounds ?? { minX: -6, minY: -6, maxX: 6, maxY: 6 },
     warnings,
+    raisedFloor,
+    hvhz: site.hvhz,
+    windLabel,
+    roofSystem: trussed ? 'truss' : 'stick',
   }
   byNodes.set(id, model)
   return model

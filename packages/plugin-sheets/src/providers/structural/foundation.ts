@@ -365,6 +365,8 @@ function slabCallout(
   vapor: readonly Member[],
 ): string[] {
   if (slabMembers.length === 0) {
+    // a raised floor has no slab: the crawl space is the finished floor's underside
+    if (model.raisedFloor) return ['CRAWL SPACE — NO SLAB', 'CLASS I VAPOR RETARDER ON GRADE (IRC R408.1)']
     return model.slabs.length > 0 ? ['SLAB NOT DERIVED', '(verify: IRC R506)'] : []
   }
   const first = slabMembers[0] as Member

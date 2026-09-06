@@ -90,18 +90,8 @@ export function projectItem(view: Projector, item: ItemSolid): ProjectedPiece | 
     primitives.push(
       line([uMin, yTop + 0.04], [uMax, yTop + 0.04], { stroke: ITEM_INK, strokeWidth: 0.004 }),
     )
-    if (uMax - uMin > 0.45 && item.topY - item.baseY > 0.3) {
-      primitives.push({
-        kind: 'text',
-        x: (uMin + uMax) / 2,
-        y: (yTop + yBottom) / 2,
-        text: item.name.toUpperCase().slice(0, 18),
-        fontSize: Math.min(0.11, (uMax - uMin) / Math.max(4, item.name.length * 0.7)),
-        fill: ITEM_INK,
-        textAnchor: 'middle',
-        dominantBaseline: 'central',
-      } as FloorplanGeometry)
-    }
+    // no name on the box: a section reads its furniture as silhouettes, the
+    // way the reference sets draw them (the fixture schedule names them)
   }
   return { depth, primitives }
 }

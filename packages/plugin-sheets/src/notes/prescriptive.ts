@@ -98,7 +98,9 @@ export function prescriptiveRequirements(j: Jurisdiction): {
   notes: string[]
 } {
   const code = energyCodeLabel(j)
-  const { label, key } = climateZoneOf(j.state)
+  // the resolved zone — a county inside the state's split moves it (Miami-Dade → 1A)
+  const label = j.climateZone ?? climateZoneOf(j.state).label
+  const key = label ? (label.startsWith('4C') ? '4M' : label.charAt(0)) : climateZoneOf(j.state).key
   const verify = `per ${code.short} Table R402.1.2 (verify)`
   const rows: RequirementRow[] = []
 
