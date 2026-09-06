@@ -2049,17 +2049,55 @@ const AXIS_CROSS_MIN = 0.5
  * sectionSheet and the wall-plan A-A cut mark, so the mark follows the slide.
  */
 export function sectionCutX(members: Member[]): number | null {
+  return sectionCut(members, 0)
+}
+
+/** Rotation-aware z half-extent (plan projection) — `xExtentOf` mirrored
+ * onto the other plan axis for the longitudinal section (W12c). */
+export function zExtentOf(m: Member): number {
+  const [rx, ry, rz] = m.rotation
+  if (rx !== 0) {
+    const cy = Math.cos(ry)
+    const sy = Math.sin(ry)
+    return (Math.abs(sy * Math.cos(rz)) * m.dims[0] + Math.abs(cy) * m.dims[2]) / 2
+  }
+  return (
+    (Math.abs(Math.sin(m.rotation[1])) * m.dims[0] +
+      Math.abs(Math.cos(m.rotation[1])) * m.dims[2]) /
+    2
+  )
+}
+
+/** Half-extent of a member along a plan axis (0 = x, 2 = z). */
+const extentAlong = (m: Member, axis: 0 | 2): number => (axis === 0 ? xExtentOf(m) : zExtentOf(m))
+
+/** |component| of the member's unit long axis along a plan axis. */
+function axisFrac(m: Member, axis: 0 | 2): number {
+  const { a, b } = memberAxis(m, 0)
+  const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
+  return len < 1e-9 ? 0 : Math.abs(b[axis] - a[axis]) / len
+}
+
+/**
+ * The cut plane for a section normal to a plan axis (0 = the transverse
+ * A-A cut at an x, 2 = the longitudinal B-B cut at a z): the midpoint of
+ * the members' extents along it, slid off any member whose axis lies
+ * along the plane (the sectionCutX contract, W12c generalised).
+ */
+export function sectionCut(members: Member[], axis: 0 | 2): number | null {
   let minX = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
   for (const m of members) {
-    minX = Math.min(minX, m.position[0])
-    maxX = Math.max(maxX, m.position[0])
+    minX = Math.min(minX, m.position[axis])
+    maxX = Math.max(maxX, m.position[axis])
   }
   if (!Number.isFinite(minX)) return null
   const mid = (minX + maxX) / 2
   const parallelAt = (cutX: number): number =>
     members.filter(
-      (m) => axisXFrac(m) < AXIS_CROSS_MIN && Math.abs(m.position[0] - cutX) <= xExtentOf(m),
+      (m) =>
+        axisFrac(m, axis) < AXIS_CROSS_MIN &&
+        Math.abs(m.position[axis] - cutX) <= extentAlong(m, axis),
     ).length
   let best = mid
   let bestCount = parallelAt(mid)
@@ -2395,10 +2433,14 @@ function elevationSheets(members: Member[], opts: PlanSetOptions): PlanSheet[] {
   return sheets
 }
 
-function sectionSheet(members: Member[], opts: PlanSetOptions): PlanSheet | null {
+function sectionSheet(members: Member[], opts: PlanSetOptions, axis: 0 | 2 = 0): PlanSheet | null {
   if (members.length === 0) return null
-  const cutX = sectionCutX(members)
+  const cutX = sectionCut(members, axis)
   if (cutX === null) return null
+  // W12c: the plane's normal is `axis`; the view's horizontal is `across`
+  // (transverse A-A: cut at an x, z runs across the sheet; longitudinal
+  // B-B: cut at a z, x runs across — looking north, as the south elevation)
+  const across: 0 | 2 = axis === 0 ? 2 : 0
   const BAND = 0.9
   // Poché membership (round-3 N3 rework): the plane must SLICE ACROSS the
   // stick — its extent touches the plane AND its axis is perpendicular-ish
@@ -2407,10 +2449,11 @@ function sectionSheet(members: Member[], opts: PlanSetOptions): PlanSheet | null
   // beyond-work like the rest of the band. Extents stay rotation-aware
   // (round-2: center-only tests dropped the very walls the cut slices).
   const crossesCut = (m: Member): boolean =>
-    Math.abs(m.position[0] - cutX) <= xExtentOf(m) && axisXFrac(m) >= AXIS_CROSS_MIN
-  const inBand = (m: Member): boolean => Math.abs(m.position[0] - cutX) < BAND + xExtentOf(m)
-  const proj = (p: [number, number, number]): [number, number] => [p[2], -p[1]]
-  const depth = (p: [number, number, number]): number => p[0]
+    Math.abs(m.position[axis] - cutX) <= extentAlong(m, axis) && axisFrac(m, axis) >= AXIS_CROSS_MIN
+  const inBand = (m: Member): boolean =>
+    Math.abs(m.position[axis] - cutX) < BAND + extentAlong(m, axis)
+  const proj = (p: [number, number, number]): [number, number] => [p[across], -p[1]]
+  const depth = (p: [number, number, number]): number => (axis === 0 ? p[0] : -p[2])
   // Section poché (round-3 scorecard N3 rework): EVERY band member prints
   // as light 'beyond' line work at reduced opacity; the cut cross-section
   // is a separate explicit FILLED RECT at the plane∩member intersection.
@@ -2462,11 +2505,11 @@ function sectionSheet(members: Member[], opts: PlanSetOptions): PlanSheet | null
     if (!crossesCut(m)) continue
     const lift = m.levelId ? (opts.levelBaseY?.[m.levelId] ?? 0) : 0
     const { a, b } = memberAxis(m, lift)
-    const dx = b[0] - a[0]
+    const dx = b[axis] - a[axis] // along the plane normal
     const dy = b[1] - a[1]
-    const dz = b[2] - a[2]
-    const t = Math.abs(dx) < 1e-9 ? 0.5 : Math.min(1, Math.max(0, (cutX - a[0]) / dx))
-    const cz = a[2] + t * dz
+    const dz = b[across] - a[across] // across the view
+    const t = Math.abs(dx) < 1e-9 ? 0.5 : Math.min(1, Math.max(0, (cutX - a[axis]) / dx))
+    const cz = a[across] + t * dz
     const cyW = a[1] + t * dy
     const dims = m.dims
     // ROLLED plate members (roof deck/underlayment, outlookers — B6
@@ -2484,9 +2527,9 @@ function sectionSheet(members: Member[], opts: PlanSetOptions): PlanSheet | null
       )
       continue
     }
-    const axis = dims[0] >= dims[1] && dims[0] >= dims[2] ? 0 : dims[1] >= dims[2] ? 1 : 2
-    const hDim = axis === 0 ? dims[2] : dims[0] // plan cross thickness
-    const vDim = axis === 1 ? Math.min(dims[0], dims[2]) : dims[1] // vertical thickness
+    const longAxis = dims[0] >= dims[1] && dims[0] >= dims[2] ? 0 : dims[1] >= dims[2] ? 1 : 2
+    const hDim = longAxis === 0 ? dims[2] : dims[0] // plan cross thickness
+    const vDim = longAxis === 1 ? Math.min(dims[0], dims[2]) : dims[1] // vertical thickness
     const planL = Math.hypot(dx, dz)
     const ux = planL < 1e-9 ? 1 : Math.abs(dx) / planL
     const pitchL = Math.hypot(dx, dy)
@@ -2515,8 +2558,8 @@ function sectionSheet(members: Member[], opts: PlanSetOptions): PlanSheet | null
   const gradeY = -inches(opts.foundation?.ffAboveGradeIn ?? 0)
   const gy = f.sy(-gradeY)
   const grade = `<line x1="${MARGIN - 14}" y1="${gy.toFixed(1)}" x2="${W - MARGIN - 258 + 14}" y2="${gy.toFixed(1)}" stroke="#222" stroke-width="2.5"/>`
-  const annotations = sectionAnnotations(members, opts, f, cutX, inBand, crossesCut, gradeY)
-  const title = 'Section A-A (transverse)'
+  const annotations = sectionAnnotations(members, opts, f, axis, inBand, crossesCut, gradeY)
+  const title = axis === 0 ? 'Section A-A (transverse)' : 'Section B-B (longitudinal)'
   return {
     title,
     svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#fff"/>${segSvg(beyond, f)}${poche.join('')}${grade}${annotations}<text x="${MARGIN}" y="${MARGIN + 4}" font-size="11" font-family="Helvetica, Arial, sans-serif" fill="#333">Cut ${BAND.toFixed(1)} m band (plane slid clear of along-plane walls) — dark rects = cut cross-sections the plane slices, open rects = cut rebar, light = beyond; dimensions and callouts read from the framed members</text>${chrome(title, opts, f.scale, strokeLegend(members, inBand, 16), { ratio: f.ratio, northArrow: false })}</svg>`,
@@ -2540,11 +2583,12 @@ function sectionAnnotations(
   members: Member[],
   opts: PlanSetOptions,
   f: NonNullable<ReturnType<typeof fitSegs>>,
-  cutX: number,
+  axis: 0 | 2,
   inBand: (m: Member) => boolean,
   crossesCut: (m: Member) => boolean,
   gradeY: number,
 ): string {
+  const across: 0 | 2 = axis === 0 ? 2 : 0
   const v = detailVariables(members, opts.spec ?? DEFAULT_SPEC, opts.foundation ?? null)
   const liftOf = (m: Member) => (m.levelId ? (opts.levelBaseY?.[m.levelId] ?? 0) : 0)
   const top = (m: Member) => m.position[1] + liftOf(m) + m.dims[1] / 2
@@ -2563,8 +2607,8 @@ function sectionAnnotations(
   let wallZMax = Number.NEGATIVE_INFINITY
   for (const m of cutPlates) {
     const half = Math.min(m.dims[0], m.dims[2]) / 2
-    wallZMin = Math.min(wallZMin, m.position[2] - half)
-    wallZMax = Math.max(wallZMax, m.position[2] + half)
+    wallZMin = Math.min(wallZMin, m.position[across] - half)
+    wallZMax = Math.max(wallZMax, m.position[across] + half)
   }
   const haveWalls = Number.isFinite(wallZMin) && wallZMax - wallZMin > 1
   const plates = band.filter(
@@ -2579,11 +2623,14 @@ function sectionAnnotations(
   )
   const ridgeTop = ridges.length > 0 ? Math.max(...ridges.map(top)) : null
   // the eave tips: the fascias the plane slices (a porch roof's fascia in
-  // the band but off the plane is not this section's eave)
-  const fascia = band.filter(
-    (m) => m.system === 'roof-framing' && m.role === 'fascia' && crossesCut(m),
+  // the band but off the plane is not this section's eave); on the
+  // longitudinal cut the rake's barge rafters are the tips
+  const tails = band.filter(
+    (m) =>
+      m.system === 'roof-framing' &&
+      crossesCut(m) &&
+      (m.role === 'fascia' || (m.role === 'rafter' && /Barge/i.test(m.label ?? ''))),
   )
-  const tails = fascia.length > 0 ? fascia : band.filter((m) => m.role === 'rafter')
   // each side's eave tip is the fascia NEAREST the wall line beyond it (a
   // porch roof's fascia further out is that roof's eave, not this one's)
   let tipZMin = Number.POSITIVE_INFINITY
@@ -2595,8 +2642,8 @@ function sectionAnnotations(
     let rightNear = Number.POSITIVE_INFINITY
     for (const m of tails) {
       const { a, b } = memberAxis(m, liftOf(m))
-      const zLo = Math.min(a[2], b[2]) - m.dims[2] / 2
-      const zHi = Math.max(a[2], b[2]) + m.dims[2] / 2
+      const zLo = Math.min(a[across], b[across]) - m.dims[2] / 2
+      const zHi = Math.max(a[across], b[across]) + m.dims[2] / 2
       const yLo = Math.min(a[1], b[1])
       if (zHi < wallZMin - 0.05 && zHi > leftNear) {
         leftNear = zHi
@@ -2645,12 +2692,12 @@ function sectionAnnotations(
     vertical ? L(x - 3, y + 3, x + 3, y - 3, 1) : L(x - 3, y + 3, x + 3, y - 3, 1)
   /** Vertical dimension string at sheet x between world heights yA < yB —
    * the label runs along a long string, sits horizontally beside a short one. */
-  const dimV = (px: number, yA: number, yB: number, label: string): string => {
+  const dimV = (px: number, yA: number, yB: number, label: string, alongAlways = false): string => {
     const a = f.sy(-yA)
     const b = f.sy(-yB)
     if (Math.abs(a - b) < 6) return ''
     const mid = (a + b) / 2
-    const along = Math.abs(a - b) >= label.length * 5.2
+    const along = alongAlways || Math.abs(a - b) >= label.length * 5.2
     return (
       L(px, a, px, b) +
       tick(px, a, true) +
@@ -2688,11 +2735,13 @@ function sectionAnnotations(
       const ff = 0
       if (ff - gradeY > 0.05)
         out.push(dimV(pxIn, gradeY, ff, `${ftIn(ff - gradeY)} FF ABOVE GRADE`))
+      // the outer column's tall strings always read along their line — at a
+      // small scale a horizontal label would collide with the inner column's
       if (plateTop !== null && plateTop > ff + 0.5) {
-        out.push(dimV(px, ff, plateTop, `${ftIn(plateTop - ff)} FF TO T.O. PLATE`))
+        out.push(dimV(px, ff, plateTop, `${ftIn(plateTop - ff)} FF TO T.O. PLATE`, true))
       }
       if (plateTop !== null && ridgeTop !== null && ridgeTop > plateTop + 0.3) {
-        out.push(dimV(px, plateTop, ridgeTop, `${ftIn(ridgeTop - plateTop)} PLATE TO RIDGE`))
+        out.push(dimV(px, plateTop, ridgeTop, `${ftIn(ridgeTop - plateTop)} PLATE TO RIDGE`, true))
       }
       if (footingBottom !== null && gradeY - footingBottom > 0.1) {
         out.push(dimV(px, footingBottom, gradeY, `${ftIn(gradeY - footingBottom)} FTG BELOW GRADE`))
@@ -3641,6 +3690,9 @@ export function buildPlanSet(
   sheets.push(...elevationSheets(members, opts))
   const section = sectionSheet(members, opts)
   if (section) sheets.push(section)
+  // W12c: the longitudinal section, cut across the other plan axis
+  const longitudinal = sectionSheet(members, opts, 2)
+  if (longitudinal) sheets.push(longitudinal)
   sheets.push(...detailsSheets(members, opts))
   // The roof-coverage flag prints on the roof sheet AND joins the schedules
   // flag block (opts.warnings handling) so it survives a text-only read.

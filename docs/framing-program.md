@@ -910,3 +910,21 @@ W15 Ceiling joists as a framer laps them — DONE 2026-09-06 (see log; the open 
   gaps: no wall poché fill (the cut plates / studs print as the dark cut
   rects the band already drew); no interior-wall strings; the longitudinal
   section is still not cut.
+
+- 2026-09-06 early morning: **W12c — Section B-B, the longitudinal cut.**
+  The section machinery took an axis: `sectionCut(members, axis)` slides
+  the plane off along-plane members on either plan axis (`zExtentOf`
+  mirrors `xExtentOf`), the sheet projects the other axis across (B-B
+  looks north like the south elevation), the poché slices along the
+  plane normal, and the annotations read the across coordinate — on B-B
+  the gable-end plates give the out-to-out, the rake's barge rafters the
+  overhangs, the ridge its height. The tall strings' labels always run
+  along their lines (a small-scale horizontal label collided with the
+  inner column). The B-B sheet follows A-A in every set; the cover index
+  picks it up. Verified on the rendered farmhouse (1:200, the long house
+  with its wing) and ranch (1:250). Tests: plan-set +1 (a synthetic
+  gable-end pair with a ridge: out-to-out 26'-8.5", plate and ridge
+  strings, ordering after A-A), the title-list expectation gains the
+  sheet — Bones 2,086, typecheck clean. Honest gaps: no section marker
+  lines on the plan sheets yet (A-A never had one either); the rafters
+  seen end-on read as ticks, not a roof outline.

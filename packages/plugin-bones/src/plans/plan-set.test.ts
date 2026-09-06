@@ -91,6 +91,7 @@ describe('buildPlanSet', () => {
       'East elevation (framing)',
       'West elevation (framing)',
       'Section A-A (transverse)',
+      'Section B-B (longitudinal)',
       'Typical details',
       'Schedules + takeoff',
     ])
@@ -4824,7 +4825,7 @@ describe('W12b: section annotations read the framed members', () => {
       length: 6,
       position: [0, 3.5, 1.5],
       rotation: [0.5, 0, 0],
-      material: 'osb',
+
       size: undefined,
       sourceId: 'r',
     }),
@@ -4876,5 +4877,75 @@ describe('W12b: section annotations read the framed members', () => {
     expect(svg).not.toContain('OUT TO OUT')
     expect(svg).not.toContain('TO T.O. PLATE')
     expect(svg).not.toContain('RAFTERS @')
+  })
+})
+
+describe('W12c: the longitudinal section', () => {
+  test('B-B cuts across z and reads x: gable-end plates give the out-to-out, the ridge its height', () => {
+    // gable-end walls' plates along Z at x = ±4 (outer faces ±4.07), a ridge along X
+    const along = (over: Partial<Member>): Member => member({ rotation: [0, 0, 0], ...over })
+    const members = [-4, 4].flatMap((x) => [
+      member({
+        system: 'wall-framing',
+        role: 'bottom-plate',
+        size: '2x6',
+        dims: [6, 0.038, 0.14],
+        length: 6,
+        position: [x, 0.019, 0],
+        rotation: [0, -Math.PI / 2, 0],
+        sourceId: 'w',
+      }),
+      member({
+        system: 'wall-framing',
+        role: 'top-plate',
+        size: '2x6',
+        dims: [6, 0.038, 0.14],
+        length: 6,
+        position: [x, 2.683, 0],
+        rotation: [0, -Math.PI / 2, 0],
+        sourceId: 'w',
+      }),
+      member({
+        system: 'wall-framing',
+        role: 'cap-plate',
+        size: '2x6',
+        dims: [6, 0.038, 0.14],
+        length: 6,
+        position: [x, 2.721, 0],
+        rotation: [0, -Math.PI / 2, 0],
+        sourceId: 'w',
+      }),
+      member({
+        system: 'wall-framing',
+        role: 'stud',
+        size: '2x6',
+        dims: [0.038, 2.626, 0.14],
+        length: 2.626,
+        position: [x, 1.35, 0.4],
+        rotation: [0, -Math.PI / 2, 0],
+        sourceId: 'w',
+      }),
+    ])
+    members.push(
+      along({
+        system: 'roof-framing',
+        role: 'ridge',
+        size: '2x8',
+        dims: [8.8, 0.184, 0.038],
+        length: 8.8,
+        position: [0, 4.408, 0],
+        sourceId: 'r',
+      }),
+    )
+    const sheets = buildPlanSet(members, [], {})
+    const bb = sheets.find((s) => s.title === 'Section B-B (longitudinal)')?.svg ?? ''
+    expect(bb).toContain(`26'-8.5&quot; OUT TO OUT OF STUDS`) // 8.14 m along x
+    expect(bb).toContain(`9'-0&quot; FF TO T.O. PLATE`)
+    expect(bb).toContain(`5'-9.5&quot; PLATE TO RIDGE`)
+    // the transverse sheet still comes first and measures nothing across z here
+    const titles = sheets.map((s) => s.title)
+    expect(titles.indexOf('Section A-A (transverse)')).toBeLessThan(
+      titles.indexOf('Section B-B (longitudinal)'),
+    )
   })
 })
