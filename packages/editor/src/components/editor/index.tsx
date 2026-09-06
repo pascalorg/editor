@@ -44,13 +44,13 @@ import {
   type LocalProjectPresentationPersistence,
 } from '../../lib/local-project-presentation-persistence'
 import { type ActivePaintMaterial, hasActivePaintMaterial } from '../../lib/material-paint'
-import { computeSceneBoundsXZ } from '../../lib/scene-bounds'
 import {
   applySceneGraphToEditor,
   loadSceneFromLocalStorage,
   type SceneGraph,
   writePersistedSelection,
 } from '../../lib/scene'
+import { computeSceneBoundsXZ } from '../../lib/scene-bounds'
 import { disposeSFXBus, initSFXBus } from '../../lib/sfx-bus'
 import { type CameraHintAction, useCameraHintFocus } from '../../store/use-camera-hint-focus'
 import useEditor from '../../store/use-editor'
