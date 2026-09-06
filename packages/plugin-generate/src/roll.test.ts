@@ -64,7 +64,8 @@ describe('the roller', () => {
       }
     }
     expect(built).toBe(50 * 18)
-  })
+    // 900 builds: past bun's 5 s default when the whole monorepo runs at once
+  }, 20_000)
 
   test('shrinks to the buildable frontage before it warns', () => {
     const wide = rollDocument(3, { beds: 4, baths: 3, garage: true, style: 'ranch' })
