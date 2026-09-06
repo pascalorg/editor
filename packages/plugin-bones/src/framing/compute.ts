@@ -101,6 +101,10 @@ export type ComputeResult = {
    * (the same objects the cached result and the engines hold) — do not
    * mutate. */
   walls: WallSlice[]
+  /** The building's foundation record as framed (slab / raised, finish
+   * floor above grade) — the details sheet draws the foundation detail
+   * from it (W12). */
+  foundation: { type: 'slab' | 'raised'; ffAboveGradeIn: number }
 }
 
 /**
@@ -187,8 +191,7 @@ export function groundGradeOf(
   if (!building) return null
   const siteId = typeof building.parentId === 'string' ? building.parentId : null
   const site = siteId ? nodes[siteId] : undefined
-  if (site?.type !== 'site' || !site.terrain || typeof site.terrain !== 'object')
-    return null
+  if (site?.type !== 'site' || !site.terrain || typeof site.terrain !== 'object') return null
   const data = site.terrain as object
   let field = terrainCache.get(data)
   if (field === undefined) {
@@ -549,6 +552,7 @@ function computeLevelUncached(
       duplicateOf: {},
       devices: [],
       walls: [],
+      foundation: { type: 'slab', ffAboveGradeIn: 0 },
     }
   }
 
@@ -1673,5 +1677,9 @@ function computeLevelUncached(
     duplicateOf: Object.fromEntries(duplicateOf),
     devices,
     walls: activeWalls,
+    foundation: {
+      type: foundation.type,
+      ffAboveGradeIn: Math.round(foundation.ffAboveGradeM / inches(1)),
+    },
   }
 }

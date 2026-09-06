@@ -243,7 +243,7 @@ W11 Foundations — flat ground DONE; hills DONE 2026-09-06 as W14 (see log; the
     stepped footings and the taller stem / basement from sampled terrain
     (TERRAIN-DATUM-SPEC), Bones reading a wall's `supportSlabId` so the garage
     walls frame down to their slab, dropped girders with piers in the crawl space.
-W12 Structural sections and details tied to framing variables (PlanCrafters
+W12 Structural sections and details tied to framing variables — details sheet DONE 2026-09-06 (see log; section2d port open) (PlanCrafters
     details.js + section2d): eave, rake, ridge, foundation / stem / slab edge,
     porch ledger, deck ledger, stair — drawn from the SAME numbers Bones frames
     with (rafter size, plate height, stem height, footing), placed on the sheets;
@@ -623,3 +623,39 @@ W13 Finishes: PlanCrafters' style palettes applied — siding / roofing / trim /
   to the DB only through the Save button (autosave is localStorage), so a
   dev-server HMR reload mid-run drops the in-memory scene — do the live
   checks with no source edits in flight.
+
+- 2026-09-06 night: **W12 landed — typical details sheet, drawn from the
+  framed model.** PlanCrafters' `details.js` (the automated draftsman —
+  parametric construction details drawn live from model variables) is
+  ported into the Bones plan set as `plans/details.ts`: a registry of six
+  details — TYPICAL EXTERIOR WALL, FOUNDATION @ EXT. WALL (slab or raised),
+  TYPICAL EAVE, WINDOW HEAD & SILL, DECK LEDGER @ RIM, PORCH ROOF LEDGER @
+  WALL — each `applies(v)` gated and drawn in world inches from
+  `DetailVariables`, and every variable READ FROM WHAT WAS FRAMED
+  (`detailVariables(members, spec, foundation)`): the deepest stud in use
+  and the spec spacing, the sheathing / cladding / gyp thicknesses the
+  layer engine laid, the most common header the wall engine sized, the
+  rafter and ceiling joist the roof engine placed and the pitch from their
+  rotation, H2.5A ties and fascia when emitted, the footing width × height
+  and stem thickness the foundation poured, the stem exposure from its own
+  label, slab vs raised and the floor height from the foundation record
+  that now rides `ComputeResult.foundation`, stepped footings flagged in
+  red when the hill stepped them, the deck joist the deck engine hung on
+  its ledger, the porch rafter on the roof ledger. `detailsSheetBodies`
+  lays the applicable details on 3 × 2 panels, fits each drawing to its
+  panel (the caption prints the scale the fit produced, to the nearest
+  1/8" = 1'-0"), packs the callouts into a leader column, numbers the
+  hex bubbles, and the footer line says which variables were read. The
+  sheet lands after Section A-A ("Typical details"); the panel passes the
+  resolved spec and the foundation record. Tests: `details.test.ts` 10
+  (variables from a framed fixture, slab fallback, stepped flag, label
+  parsing, sheet composition, panel containment, scale labels); plan-set
+  116 (title list + the metre-bar check skipped for the details sheet);
+  Bones 2,050, typecheck clean. Rendered headless for the rolled farmhouse
+  (CA: 8" stem, 16 × 8 footing, 5/8" A.B. @ 48" with plate washers, #4
+  verticals @ 24", 2x6 rafters @ 24" at 8:12, 2x6 ceiling joists, 2x8 PT
+  deck joists) and eyeballed in the dev server. Open: the eave overhang
+  prints "PER PLAN" (16 in drawn — the rafter tail length is not read
+  back yet); the eave dimension text can brush a leader; no SIP variants;
+  the section sheet is still the member cut, not PlanCrafters' section2d
+  with poché + labels — that's the next sheet to bring over.

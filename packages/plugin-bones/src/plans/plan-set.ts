@@ -10,20 +10,22 @@
  * plugin dependency-free while producing a real, shareable plan set.
  */
 
+import { DEFAULT_SPEC, type FramingSpec } from '../core/spec'
 import type { Fixture, Member, OpeningSlice, WallSlice } from '../core/types'
 import { formatFtIn, inches } from '../core/units'
 import { type BuildingCharacteristics, zeroAreaNa } from '../engines/characteristics'
 import { openingSpans } from '../engines/electrical'
-import { computeTakeoff, type TakeoffAreas } from '../engines/takeoff'
 import { profileFamily } from '../engines/lgs-profiles'
+import { computeTakeoff, type TakeoffAreas } from '../engines/takeoff'
 import {
-  DUCT_COLORS,
-  PLUMBING_COLORS,
   circuitColor,
   circuitZoneHint,
+  DUCT_COLORS,
   hvacDuctColor,
+  PLUMBING_COLORS,
   plumbingPipeColor,
 } from './circuit-colors'
+import { type DetailFoundation, detailsSheetBodies, detailVariables } from './details'
 
 export type PlanSheet = { title: string; svg: string }
 
@@ -79,6 +81,12 @@ export type PlanSetOptions = {
    * TODO(panel wiring — sibling pilot owns panel.tsx): the
    * ExportPlansButton hookup is the one-liner `areas: result.areas`. */
   areas?: TakeoffAreas
+  /** The resolved framing spec — the typical-details sheet reads stud /
+   * rafter / bolt spacings from it (W12). Absent → DEFAULT_SPEC. */
+  spec?: FramingSpec
+  /** The foundation as framed (compute `result.foundation`) — the
+   * foundation detail draws slab vs raised and the floor height from it. */
+  foundation?: DetailFoundation | null
 }
 
 // Sheet canvas (landscape letter at 96dpi: 11in × 8.5in).
@@ -216,7 +224,8 @@ const HARDWARE_GLYPHS = {
   /** CS-PF portal hold-down post MARKER — open square OVER the post's
    * lumber rect (the post is real structure and keeps its rect; before
    * NIGHT-10 it keyed only through a roleSizes-cap accident). */
-  'portal-post': '<rect x="-3.5" y="-3.5" width="7" height="7" fill="none" stroke="#444" stroke-width="0.9"/>',
+  'portal-post':
+    '<rect x="-3.5" y="-3.5" width="7" height="7" fill="none" stroke="#444" stroke-width="0.9"/>',
   /** LGS R603.3.3 horizontal strap bracing (Phase 1) — double bar (the
    * strap rows on both faces). Joined the NIGHT-10 grammar with its role:
    * 20 straps drew as unkeyed ~0.04 px flecks before (the B9 class). */
@@ -259,7 +268,11 @@ const hardwareRowText = (m: Member): string => {
 }
 
 const esc = (s: string): string =>
-  s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('"', '&quot;')
+  s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
 
 const deg = (rad: number): number => (rad * 180) / Math.PI
 
@@ -340,7 +353,11 @@ function chrome(
   opts: PlanSetOptions,
   scale: number,
   extra = '',
-  { scaleBar = true, ratio, northArrow }: { scaleBar?: boolean; ratio?: number; northArrow?: boolean } = {},
+  {
+    scaleBar = true,
+    ratio,
+    northArrow,
+  }: { scaleBar?: boolean; ratio?: number; northArrow?: boolean } = {},
 ): string {
   const meterPx = scale
   const meters = Math.max(1, Math.round(180 / Math.max(1e-6, meterPx)))
@@ -402,7 +419,13 @@ function chrome(
  * system, scale snapped DOWN to a standard architectural ratio so the bar
  * reads 1:50 / 1:75 / 1:100…, gutter reserved on every sheet uniformly.
  */
-type SetTransform = { scale: number; ratio: number; X: (x: number) => number; Z: (z: number) => number; gutter: number }
+type SetTransform = {
+  scale: number
+  ratio: number
+  X: (x: number) => number
+  Z: (z: number) => number
+  gutter: number
+}
 
 /** 96dpi: px per meter at ratio 1:n = 96/0.0254/n. */
 const RATIOS = [20, 25, 50, 75, 100, 125, 150, 200, 250, 500]
@@ -488,10 +511,7 @@ function planSheet(
       stroked.add(m)
       byRole.set(m.role, [...(byRole.get(m.role) ?? []), seg])
     }
-    const lineHit = (
-      p: Seg,
-      q: Seg,
-    ): [number, number] | null => {
+    const lineHit = (p: Seg, q: Seg): [number, number] | null => {
       // intersection of the two centerlines — the true corner vertex
       const d1: [number, number] = [p.b[0] - p.a[0], p.b[1] - p.a[1]]
       const d2: [number, number] = [q.b[0] - q.a[0], q.b[1] - q.a[1]]
@@ -748,11 +768,14 @@ function planSheet(
     const fill =
       m.system === 'electrical' && m.role === 'wire-run'
         ? circuitColor(m.sourceId)
-        : ((m.system === 'plumbing' || m.system === 'hvac') && m.role === 'pipe-run'
+        : (((m.system === 'plumbing' || m.system === 'hvac') && m.role === 'pipe-run'
             ? plumbingPipeColor(m.sourceId)
             : m.system === 'hvac' && m.role === 'duct-run'
               ? hvacDuctColor(m.sourceId)
-              : null) ?? (def.fill[m.role] ?? def.fill.default ?? '#ddd')
+              : null) ??
+          def.fill[m.role] ??
+          def.fill.default ??
+          '#ddd')
     // Deck strips print translucent with a hairline seam — same hue as the
     // legend swatch, but the framing linework stays legible through them.
     // …and the ROOF deck joins it (B6 round-1 F1c: opaque slope panels
@@ -1027,7 +1050,10 @@ function planSheet(
       // t reaches ±44 (association at ~0.56 m still read fine in round 1)
       // and n adds ±8 — the bars-cross-own invariant below keeps wide n
       // candidates honest on thin pipes (seam round 3, R3).
-      outer: for (const t of [0, 2, -2, 4, -4, 6, -6, 8, -8, 10, -10, 12, -12, 14, -14, 16, -16, 20, -20, 24, -24, 28, -28, 32, -32, 36, -36, 40, -40, 44, -44]) {
+      outer: for (const t of [
+        0, 2, -2, 4, -4, 6, -6, 8, -8, 10, -10, 12, -12, 14, -14, 16, -16, 20, -20, 24, -24, 28,
+        -28, 32, -32, 36, -36, 40, -40, 44, -44,
+      ]) {
         for (const n of [0, 3, -3, 5, -5, 8, -8]) {
           const px = k.x + axK * t - ayK * n
           const py = k.y + ayK * t + axK * n
@@ -1036,7 +1062,10 @@ function planSheet(
             if (r.sourceId === k.sourceId) return m2
             return Math.min(
               m2,
-              tickPoints(px, py).reduce((m3, [qx, qy]) => Math.min(m3, pipeDist(qx, qy, r)), Number.POSITIVE_INFINITY),
+              tickPoints(px, py).reduce(
+                (m3, [qx, qy]) => Math.min(m3, pipeDist(qx, qy, r)),
+                Number.POSITIVE_INFINITY,
+              ),
             )
           }, Number.POSITIVE_INFINITY)
           const bubbleGap = placed.reduce(
@@ -1180,7 +1209,12 @@ function planSheet(
           // round 4 F1: arrows were the one glyph family still blind to
           // TEXT rects — the converged interior ticks evicted an arrow
           // into the kitchen cite. 6 px keeps the glyph body clear.
-          if (!textRects.every((r) => Math.abs(r.x - px) >= r.hw + 6 || Math.abs(r.y - py) >= r.hh + 6)) continue
+          if (
+            !textRects.every(
+              (r) => Math.abs(r.x - px) >= r.hw + 6 || Math.abs(r.y - py) >= r.hh + 6,
+            )
+          )
+            continue
           spot = { x: px, y: py }
           break
         }
@@ -1301,7 +1335,9 @@ function planSheet(
     }
     const onSheet = (s: TextSpot): boolean => {
       const left = leftOf(s)
-      return left > MARGIN + 2 && left + sewerW < W - MARGIN - 2 && s.y > MARGIN + 10 && s.y < H - MARGIN
+      return (
+        left > MARGIN + 2 && left + sewerW < W - MARGIN - 2 && s.y > MARGIN + 10 && s.y < H - MARGIN
+      )
     }
     const bubbleClear = (s: TextSpot): boolean => {
       const cx3 = leftOf(s) + sewerW / 2
@@ -1319,8 +1355,7 @@ function planSheet(
     const clamped = textSpots.map(clampToSheet)
     const textsClear = (s: TextSpot): boolean =>
       textClearOfTexts(leftOf(s) + sewerW / 2, s.y, sewerW / 2, 5)
-    const centerOffPipes = (s: TextSpot): boolean =>
-      clearOfPipes(leftOf(s) + sewerW / 2, s.y, 5)
+    const centerOffPipes = (s: TextSpot): boolean => clearOfPipes(leftOf(s) + sewerW / 2, s.y, 5)
     const spot2 =
       clamped.find((s) => onSheet(s) && bubbleClear(s) && textsClear(s) && pipeClear(s)) ??
       clamped.find((s) => onSheet(s) && bubbleClear(s) && textsClear(s) && centerOffPipes(s)) ??
@@ -1356,9 +1391,7 @@ function planSheet(
     const LABEL_H = 10
     const rects: { x: number; y: number; w: number }[] = []
     const clashes = (x: number, y: number, w: number): boolean =>
-      rects.some(
-        (r) => Math.abs(r.x - x) < (r.w + w) / 2 + 2 && Math.abs(r.y - y) < LABEL_H + 2,
-      ) ||
+      rects.some((r) => Math.abs(r.x - x) < (r.w + w) / 2 + 2 && Math.abs(r.y - y) < LABEL_H + 2) ||
       // device bubbles are r=7 circles — keep the label rect clear of them
       placed.some((q) => Math.abs(q.x - x) < w / 2 + 9 && Math.abs(q.y - y) < LABEL_H / 2 + 9)
     for (const [circuit, list] of runs) {
@@ -1585,9 +1618,7 @@ function planSheet(
             ...(mine.some((m) => m.sourceId === 'ges-ibt') ? ['IB'] : []),
           ]
         : []
-    const usedTags = [
-      ...new Set([...devs.map(deviceTag), ...memberTags]),
-    ]
+    const usedTags = [...new Set([...devs.map(deviceTag), ...memberTags])]
     let trow = legendLines.length
     for (const tag of usedTags) {
       const y = MARGIN + 14 + trow * 14
@@ -1620,7 +1651,9 @@ function planSheet(
     // the column cap continue in a SECOND column.
     const CIRCUIT_ROWS_PER_COL = 22
     let circuitIdx = 0
-    for (const [circuit, sample] of [...circuits.entries()].sort(([a], [b]) => a.localeCompare(b))) {
+    for (const [circuit, sample] of [...circuits.entries()].sort(([a], [b]) =>
+      a.localeCompare(b),
+    )) {
       const col = Math.floor(circuitIdx / CIRCUIT_ROWS_PER_COL)
       const rowInCol = circuitIdx % CIRCUIT_ROWS_PER_COL
       const colX = MARGIN + col * 230
@@ -1889,10 +1922,23 @@ function planSheet(
 // their longest local axis: honest line-art framing, no hidden-face solver.
 // ---------------------------------------------------------------------------
 
-type Seg = { x1: number; y1: number; x2: number; y2: number; w: number; depth: number; color: string; dashed?: boolean; opacity?: number }
+type Seg = {
+  x1: number
+  y1: number
+  x2: number
+  y2: number
+  w: number
+  depth: number
+  color: string
+  dashed?: boolean
+  opacity?: number
+}
 
 /** World-space endpoints of a member's longest axis + its stroke thickness. */
-function memberAxis(m: Member, lift: number): { a: [number, number, number]; b: [number, number, number]; w: number } {
+function memberAxis(
+  m: Member,
+  lift: number,
+): { a: [number, number, number]; b: [number, number, number]; w: number } {
   const dims = m.dims
   const axis = dims[0] >= dims[1] && dims[0] >= dims[2] ? 0 : dims[1] >= dims[2] ? 1 : 2
   const half = dims[axis] / 2
@@ -1967,9 +2013,7 @@ function xExtentOf(m: Member): number {
   if (rx !== 0) {
     const cy = Math.cos(ry)
     const sy = Math.sin(ry)
-    return (
-      (Math.abs(cy * Math.cos(rz)) * m.dims[0] + Math.abs(sy) * m.dims[2]) / 2
-    )
+    return (Math.abs(cy * Math.cos(rz)) * m.dims[0] + Math.abs(sy) * m.dims[2]) / 2
   }
   return (
     (Math.abs(Math.cos(m.rotation[1])) * m.dims[0] +
@@ -2156,7 +2200,7 @@ function rafterSpacingNote(members: Member[], opts: PlanSetOptions): string | nu
   }
   const mode = [...buckets.values()].sort((a, b) => b.length - a.length)[0] as number[]
   if (mode.length * 2 < gaps.length) return fallback // no dominant gap
-  const inches = (mode.reduce((s, g) => s + g, 0) / mode.length) / 0.0254
+  const inches = mode.reduce((s, g) => s + g, 0) / mode.length / 0.0254
   const std = [12, 16, 19.2, 24].find((s) => Math.abs(inches - s) <= 0.6)
   return std !== undefined ? `${word} @ ${std}" O.C.${tail}` : fallback
 }
@@ -2206,7 +2250,10 @@ function memberSegs(
   return segs.sort((p, q) => p.depth - q.depth)
 }
 
-function fitSegs(segs: Seg[], fixedRatio?: number): { sx: (x: number) => number; sy: (y: number) => number; scale: number; ratio: number } | null {
+function fitSegs(
+  segs: Seg[],
+  fixedRatio?: number,
+): { sx: (x: number) => number; sy: (y: number) => number; scale: number; ratio: number } | null {
   if (segs.length === 0) return null
   let minX = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
@@ -2222,7 +2269,8 @@ function fitSegs(segs: Seg[], fixedRatio?: number): { sx: (x: number) => number;
   const availH = H - 2 * MARGIN - TITLE_H - 30
   const raw = Math.min(availW / Math.max(0.1, maxX - minX), availH / Math.max(0.1, maxY - minY))
   const ppm = 96 / 0.0254
-  const ratio = fixedRatio ?? (RATIOS.find((r) => ppm / r <= raw) ?? (RATIOS[RATIOS.length - 1] as number))
+  const ratio =
+    fixedRatio ?? RATIOS.find((r) => ppm / r <= raw) ?? (RATIOS[RATIOS.length - 1] as number)
   const scale = ppm / ratio
   const ox = MARGIN + (availW - (maxX - minX) * scale) / 2
   // Vertical centering in the TRUE free field (round-3 P1: elevations and
@@ -2287,13 +2335,38 @@ function elevationDatums(segs: Seg[], f: NonNullable<ReturnType<typeof fitSegs>>
   return parts.join('')
 }
 
-const ELEVATIONS: { key: string; title: string; proj: (p: [number, number, number]) => [number, number]; depth: (p: [number, number, number]) => number }[] = [
-  { key: 'south', title: 'South elevation (framing)', proj: (p) => [p[0], -p[1]], depth: (p) => -p[2] },
-  { key: 'north', title: 'North elevation (framing)', proj: (p) => [-p[0], -p[1]], depth: (p) => p[2] },
+const ELEVATIONS: {
+  key: string
+  title: string
+  proj: (p: [number, number, number]) => [number, number]
+  depth: (p: [number, number, number]) => number
+}[] = [
+  {
+    key: 'south',
+    title: 'South elevation (framing)',
+    proj: (p) => [p[0], -p[1]],
+    depth: (p) => -p[2],
+  },
+  {
+    key: 'north',
+    title: 'North elevation (framing)',
+    proj: (p) => [-p[0], -p[1]],
+    depth: (p) => p[2],
+  },
   // Standing EAST of the building looking west, north (−z) is screen-RIGHT
   // (blueprint round-2: both sheets printed mirrored).
-  { key: 'east', title: 'East elevation (framing)', proj: (p) => [-p[2], -p[1]], depth: (p) => p[0] },
-  { key: 'west', title: 'West elevation (framing)', proj: (p) => [p[2], -p[1]], depth: (p) => -p[0] },
+  {
+    key: 'east',
+    title: 'East elevation (framing)',
+    proj: (p) => [-p[2], -p[1]],
+    depth: (p) => p[0],
+  },
+  {
+    key: 'west',
+    title: 'West elevation (framing)',
+    proj: (p) => [p[2], -p[1]],
+    depth: (p) => -p[0],
+  },
 ]
 
 function elevationSheets(members: Member[], opts: PlanSetOptions): PlanSheet[] {
@@ -2395,8 +2468,7 @@ function sectionSheet(members: Member[], opts: PlanSetOptions): PlanSheet | null
     const wPx = Math.max(cutBar ? 2.5 : 1.5, sliceW * f.scale)
     const hPx = Math.max(cutBar ? 2.5 : 1.5, sliceH * f.scale)
     const dashed =
-      m.system === 'foundation' ||
-      (m.system === 'plumbing' && m.position[1] + m.dims[1] / 2 < 0.02)
+      m.system === 'foundation' || (m.system === 'plumbing' && m.position[1] + m.dims[1] / 2 < 0.02)
         ? ' stroke="#222" stroke-width="0.9" stroke-dasharray="5 3"'
         : ''
     poche.push(
@@ -2412,6 +2484,28 @@ function sectionSheet(members: Member[], opts: PlanSetOptions): PlanSheet | null
     title,
     svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#fff"/>${segSvg(beyond, f)}${poche.join('')}${grade}<text x="${MARGIN}" y="${MARGIN + 4}" font-size="11" font-family="Helvetica, Arial, sans-serif" fill="#333">Cut ${BAND.toFixed(1)} m band (plane slid clear of along-plane walls) — dark rects = cut cross-sections the plane slices, open rects = cut rebar, light = beyond</text>${chrome(title, opts, f.scale, strokeLegend(members, inBand, 16), { ratio: f.ratio, northArrow: false })}</svg>`,
   }
+}
+
+/**
+ * Typical details (W12 — PlanCrafters details.js): parametric construction
+ * details drawn from the FRAMED model — the stud, header, rafter, joist
+ * sizes the engines placed, the layers they laid, the footing and stem
+ * they poured. 3 × 2 panels per sheet, each fitted to its panel with the
+ * scale the fit produced; the footer says which variables were read.
+ */
+function detailsSheets(members: Member[], opts: PlanSetOptions): PlanSheet[] {
+  if (members.length === 0) return []
+  const v = detailVariables(members, opts.spec ?? DEFAULT_SPEC, opts.foundation ?? null)
+  const frame = {
+    x: MARGIN,
+    y: MARGIN + 14,
+    w: W - 2 * MARGIN - 258,
+    h: H - MARGIN - TITLE_H - 14 - 30,
+  }
+  return detailsSheetBodies(v, frame).map((sheet) => ({
+    title: sheet.title,
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#fff"/>${sheet.body}<text x="${MARGIN}" y="${H - TITLE_H - 22}" font-size="9" font-family="Helvetica, Arial, sans-serif" fill="#333">${esc(sheet.footer)}</text>${chrome(sheet.title, opts, 1, '', { scaleBar: false, northArrow: false })}</svg>`,
+  }))
 }
 
 function coverSheet(members: Member[], opts: PlanSetOptions, index: string[]): PlanSheet | null {
@@ -2824,7 +2918,9 @@ function schedulesSheets(
     if (cur.length > 0) flagPages.push(cur)
     for (const [fp, lines] of flagPages.entries()) {
       const title =
-        flagPages.length > 1 ? `Flags (continued ${fp + 1}/${flagPages.length})` : 'Flags (continued)'
+        flagPages.length > 1
+          ? `Flags (continued ${fp + 1}/${flagPages.length})`
+          : 'Flags (continued)'
       const body = lines
         .map(
           (l) =>
@@ -2887,8 +2983,7 @@ export function assignOpeningMarks(walls: WallSlice[]): OpeningMark[] {
 /** Along-wall coordinate of a member's center (plan projection onto dir). */
 function memberU(m: Member, wall: WallSlice): number {
   return (
-    (m.position[0] - wall.start[0]) * wall.dir[0] +
-    (m.position[2] - wall.start[1]) * wall.dir[1]
+    (m.position[0] - wall.start[0]) * wall.dir[0] + (m.position[2] - wall.start[1]) * wall.dir[1]
   )
 }
 
@@ -2920,10 +3015,7 @@ const BB_AS_LINTEL_TOL = inches(2) + inches(0.375) / 2
  * members also carry is WALL-scoped (the S7 compression aggregate) and
  * prints prefixed 'wall <id>:' so it never reads opening-scoped.
  */
-function openingRowInfo(
-  marks: OpeningMark[],
-  members: Member[],
-): Map<OpeningMark, OpeningRowInfo> {
+function openingRowInfo(marks: OpeningMark[], members: Member[]): Map<OpeningMark, OpeningRowInfo> {
   const out = new Map<OpeningMark, OpeningRowInfo>()
   type WallRec = {
     heads: Member[]
@@ -2934,9 +3026,12 @@ function openingRowInfo(
   const byWall = new Map<string, WallRec>()
   for (const m of members) {
     if (m.system !== 'wall-framing') continue
-    const rec =
-      byWall.get(m.sourceId) ??
-      { heads: [], sills: [], bondBeams: [], wallFlags: new Set<string>() }
+    const rec = byWall.get(m.sourceId) ?? {
+      heads: [],
+      sills: [],
+      bondBeams: [],
+      wallFlags: new Set<string>(),
+    }
     if (m.role === 'header' || m.role === 'lintel') rec.heads.push(m)
     else if (m.role === 'sill') rec.sills.push(m)
     else {
@@ -2985,8 +3080,14 @@ function openingRowInfo(
     runPhase(pairs.filter((p) => !p.contained))
     return into
   }
-  const headOf = assign((rec) => rec.heads, () => true)
-  const sillOf = assign((rec) => rec.sills, (mk) => mk.opening.kind === 'window')
+  const headOf = assign(
+    (rec) => rec.heads,
+    () => true,
+  )
+  const sillOf = assign(
+    (rec) => rec.sills,
+    (mk) => mk.opening.kind === 'window',
+  )
   for (const mk of marks) {
     const rec = byWall.get(mk.wall.id)
     const head = headOf.get(mk) ?? null
@@ -3225,12 +3326,11 @@ export function buildPlanSet(
   sheets.push(...elevationSheets(members, opts))
   const section = sectionSheet(members, opts)
   if (section) sheets.push(section)
+  sheets.push(...detailsSheets(members, opts))
   // The roof-coverage flag prints on the roof sheet AND joins the schedules
   // flag block (opts.warnings handling) so it survives a text-only read.
   const roofWarn = roofCoverageWarning(members)
-  const schedOpts = roofWarn
-    ? { ...opts, warnings: [...(opts.warnings ?? []), roofWarn] }
-    : opts
+  const schedOpts = roofWarn ? { ...opts, warnings: [...(opts.warnings ?? []), roofWarn] } : opts
   // Door + window schedule (B21d) — no walls passed / zero openings → none.
   // Small tables FOLD into the Schedules + takeoff sheet (examiner round-1);
   // bigger ones get dedicated sheet(s) before the takeoff, after the
@@ -3247,7 +3347,11 @@ export function buildPlanSet(
     sheets.push(...openingScheduleSheets(openingTable, opts))
   }
   sheets.push(...takeoff.sheets)
-  const cover = coverSheet(members, opts, sheets.map((sh) => sh.title))
+  const cover = coverSheet(
+    members,
+    opts,
+    sheets.map((sh) => sh.title),
+  )
   if (cover) sheets.unshift(cover)
   // SHEET n/N in every title block (blueprint C6) — patch the placeholder
   // after the census is known.
@@ -3259,9 +3363,7 @@ export function buildPlanSet(
 
 /** Self-contained printable document — Print → Save as PDF gives the plan set. */
 export function planSetHtml(sheets: PlanSheet[], opts: PlanSetOptions = {}): string {
-  const pages = sheets
-    .map((s) => `<section class="sheet">${s.svg}</section>`)
-    .join('\n')
+  const pages = sheets.map((s) => `<section class="sheet">${s.svg}</section>`).join('\n')
   return `<!doctype html>
 <html><head><meta charset="utf-8"><title>${esc(opts.projectName ?? 'Pascal')} — Full plans (LOD ${opts.detail ?? '400'})</title>
 <style>

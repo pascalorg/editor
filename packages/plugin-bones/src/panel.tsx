@@ -11,12 +11,11 @@ import {
   setXrayViewMode,
   type ViewerLike,
 } from './activation'
-import { computeLevel } from './framing/compute'
 import { extractLevels } from './core/wall-model'
-import { effectiveViewMode, type FramingNode, type ViewMode } from './framing/schema'
-import { buildPlanSet, planSetHtml, relativeLevelBaseY } from './plans/plan-set'
 import { characteristicsCsv, characteristicsRows } from './engines/characteristics'
 import { computeTakeoff, cutList, cutListCsv, takeoffCsv } from './engines/takeoff'
+import { computeLevel } from './framing/compute'
+import { effectiveViewMode, type FramingNode, type ViewMode } from './framing/schema'
 import { guessJurisdiction, siteStateOf } from './jurisdiction/guess'
 import { jurisdictionOptions, profileFor } from './jurisdiction/profiles'
 import { LUMBER_CROSS_SECTIONS, LUMBER_SIZES, type LumberSize } from './lumber'
@@ -24,16 +23,17 @@ import {
   type FramingSystemValue,
   framingSystemPatch,
   framingSystemValue,
-  type RoofSystemValue,
-  roofSystemPatch,
-  roofSystemValue,
   LGS_MACHINE_NONE,
   LGS_MACHINE_NONE_LABEL,
   lgsMachineGroups,
   lgsMachinePatch,
   lgsMachineSelectExtra,
+  type RoofSystemValue,
+  roofSystemPatch,
+  roofSystemValue,
 } from './panel-framing'
 import { groupWarnings, warningCount } from './panel-warnings'
+import { buildPlanSet, planSetHtml, relativeLevelBaseY } from './plans/plan-set'
 import { useBonesStore } from './store'
 
 const LUMBER_KIND: string = 'bones:lumber'
@@ -45,8 +45,7 @@ const setPluginTool = (tool: string) => {
 }
 
 const METERS_PER_INCH = 0.0254
-const inchesLabel = (m: number) =>
-  `${(m / METERS_PER_INCH).toFixed(2).replace(/\.?0+$/, '')}"`
+const inchesLabel = (m: number) => `${(m / METERS_PER_INCH).toFixed(2).replace(/\.?0+$/, '')}"`
 
 /**
  * The Bones panel — the control room for the engineering X-ray. One click
@@ -89,7 +88,11 @@ export default function BonesPanel() {
           (the plugin's wall Engineering extension) — the sidebar mirror
           cluttered the rail (user round 2026-08-20). Service points place
           themselves at activation; no button (same round). */}
-      <XraySection activeLevelId={activeLevelId ?? null} framingNode={framingNode} result={result} />
+      <XraySection
+        activeLevelId={activeLevelId ?? null}
+        framingNode={framingNode}
+        result={result}
+      />
 
       {framingNode && result && <TakeoffSection result={result} />}
       {framingNode && result && <CharacteristicsSection result={result} />}
@@ -133,11 +136,12 @@ function XraySection({
 
   const toggle = (key: keyof FramingNode) => {
     if (!framingNode) return
-    useScene
-      .getState()
-      .updateNode(framingNode.id as AnyNodeId, {
+    useScene.getState().updateNode(
+      framingNode.id as AnyNodeId,
+      {
         [key]: !framingNode[key],
-      } as Partial<AnyNode> as never)
+      } as Partial<AnyNode> as never,
+    )
   }
 
   if (!activeLevelId) {
@@ -250,11 +254,12 @@ function XraySection({
         <div className="w-28">
           <SegmentedControl
             onChange={(v: string) =>
-              useScene
-                .getState()
-                .updateNode(framingNode.id as AnyNodeId, {
+              useScene.getState().updateNode(
+                framingNode.id as AnyNodeId,
+                {
                   studSpacingIn: Number(v) as 12 | 16 | 24,
-                } as Partial<AnyNode> as never)
+                } as Partial<AnyNode> as never,
+              )
             }
             options={[
               { label: '12', value: '12' },
@@ -375,9 +380,7 @@ function TakeoffSection({ result }: { result: NonNullable<ReturnType<typeof comp
           </button>
           <button
             className="rounded-md border border-sidebar-border/60 px-2 py-0.5 text-[10px] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent"
-            onClick={() =>
-              navigator.clipboard?.writeText(cutListCsv(cutList(result.members)))
-            }
+            onClick={() => navigator.clipboard?.writeText(cutListCsv(cutList(result.members)))}
             title="Every wood member: size × exact cut length × qty"
             type="button"
           >
@@ -391,7 +394,9 @@ function TakeoffSection({ result }: { result: NonNullable<ReturnType<typeof comp
         {sections.map(([section, sectionRows], index) => (
           <details className="group" key={section} open={index === 0 && section !== 'Flags'}>
             <summary className="flex cursor-pointer items-center justify-between text-[11px] text-sidebar-foreground/80">
-              <span className={section === 'Flags' ? 'font-medium text-amber-500/90' : 'font-medium'}>
+              <span
+                className={section === 'Flags' ? 'font-medium text-amber-500/90' : 'font-medium'}
+              >
                 {section}
               </span>
               <span className="text-[10px] text-sidebar-foreground/40">{sectionRows.length}</span>
@@ -593,9 +598,7 @@ function LumberSection() {
 function RoofRow({ framingNode }: { framingNode: FramingNode & { id: string } }) {
   const system = roofSystemValue(framingNode)
   const write = (patch: Record<string, unknown>) =>
-    useScene
-      .getState()
-      .updateNode(framingNode.id as AnyNodeId, patch as Partial<AnyNode> as never)
+    useScene.getState().updateNode(framingNode.id as AnyNodeId, patch as Partial<AnyNode> as never)
   return (
     <div className="flex flex-col gap-1 text-xs">
       <span className="text-sidebar-foreground/60">Roof</span>
@@ -609,8 +612,8 @@ function RoofRow({ framingNode }: { framingNode: FramingNode & { id: string } })
       />
       {system === 'truss' && (
         <span className="text-sidebar-foreground/50">
-          Gable segments frame as trusses; webbing is representative — design by truss
-          manufacturer (deferred submittal). Other shapes stay stick-framed and flag it.
+          Gable segments frame as trusses; webbing is representative — design by truss manufacturer
+          (deferred submittal). Other shapes stay stick-framed and flag it.
         </span>
       )}
     </div>
@@ -620,9 +623,7 @@ function RoofRow({ framingNode }: { framingNode: FramingNode & { id: string } })
 function FramingRow({ framingNode }: { framingNode: FramingNode & { id: string } }) {
   const system = framingSystemValue(framingNode)
   const write = (patch: Record<string, unknown>) =>
-    useScene
-      .getState()
-      .updateNode(framingNode.id as AnyNodeId, patch as Partial<AnyNode> as never)
+    useScene.getState().updateNode(framingNode.id as AnyNodeId, patch as Partial<AnyNode> as never)
   const extra = lgsMachineSelectExtra(framingNode.lgsMachine)
   return (
     <div className="flex flex-col gap-1 text-xs">
@@ -790,7 +791,9 @@ function ExportPlansButton({
   codeName?: string
 }) {
   const levelName = useScene((s) =>
-    activeLevelId ? ((s.nodes[activeLevelId] as { name?: string } | undefined)?.name ?? 'Level') : 'Level',
+    activeLevelId
+      ? ((s.nodes[activeLevelId] as { name?: string } | undefined)?.name ?? 'Level')
+      : 'Level',
   )
   return (
     <button
@@ -820,6 +823,10 @@ function ExportPlansButton({
           // openings feed the door/window schedule sheet (B21d) — live
           // memo references, never mutated
           walls: result.walls,
+          // the typical-details sheet draws from the resolved spec and the
+          // foundation as framed (W12)
+          spec: result.spec,
+          foundation: result.foundation,
           // gross-fallback areas so LOD-200 paper books the SAME takeoff
           // rows as the panel (C5 — one source of truth)
           areas: result.areas,
@@ -827,9 +834,7 @@ function ExportPlansButton({
           // level-local, so absolute elevations put an upper-storey owner's
           // roof a full storey too high on elevations/section (round-6)
           levelBaseY: relativeLevelBaseY(
-            extractLevels(
-              useScene.getState().nodes as Record<string, Record<string, unknown>>,
-            ),
+            extractLevels(useScene.getState().nodes as Record<string, Record<string, unknown>>),
             activeLevelId,
           ),
         })

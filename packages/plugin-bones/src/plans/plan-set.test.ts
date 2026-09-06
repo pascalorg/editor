@@ -4,11 +4,11 @@ import type { Fixture, Member, OpeningSlice, RoomSlice, SlabSlice, WallSlice } f
 import { feet, formatFtIn, inches } from '../core/units'
 import type { BuildingCharacteristics } from '../engines/characteristics'
 import { buildFoundation } from '../engines/foundation'
-import { applyJurisdiction, profileFor } from '../jurisdiction/profiles'
 import { layoutHvac } from '../engines/hvac'
+import { lgsFrameWalls } from '../engines/lgs-wall-framing'
 import { layoutPlumbing } from '../engines/plumbing'
 import { frameWalls } from '../engines/wall-framing'
-import { lgsFrameWalls } from '../engines/lgs-wall-framing'
+import { applyJurisdiction, profileFor } from '../jurisdiction/profiles'
 import { assignOpeningMarks, buildPlanSet, planSetHtml, relativeLevelBaseY } from './plan-set'
 
 const member = (over: Partial<Member>): Member => ({
@@ -38,9 +38,26 @@ describe('buildPlanSet', () => {
     const members = [
       member({}),
       member({ role: 'girder', size: '4x10' }),
-      member({ system: 'wall-framing', role: 'stud', size: '2x4', dims: [0.038, 2.3, 0.089], rotation: [0, Math.PI / 4, 0] }),
-      member({ system: 'foundation', role: 'footing', size: undefined, material: 'concrete', dims: [4, 0.2, 0.4] }),
-      member({ system: 'roof-framing', role: 'rafter', dims: [3.5, 0.14, 0.038], rotation: [0, Math.PI / 2, 0.7] }),
+      member({
+        system: 'wall-framing',
+        role: 'stud',
+        size: '2x4',
+        dims: [0.038, 2.3, 0.089],
+        rotation: [0, Math.PI / 4, 0],
+      }),
+      member({
+        system: 'foundation',
+        role: 'footing',
+        size: undefined,
+        material: 'concrete',
+        dims: [4, 0.2, 0.4],
+      }),
+      member({
+        system: 'roof-framing',
+        role: 'rafter',
+        dims: [3.5, 0.14, 0.038],
+        rotation: [0, Math.PI / 2, 0.7],
+      }),
       member({
         system: 'electrical',
         role: 'wire-run',
@@ -74,6 +91,7 @@ describe('buildPlanSet', () => {
       'East elevation (framing)',
       'West elevation (framing)',
       'Section A-A (transverse)',
+      'Typical details',
       'Schedules + takeoff',
     ])
     // no plumbing/hvac members → no MEP sheet
@@ -82,6 +100,7 @@ describe('buildPlanSet', () => {
       expect(s.svg).toContain('<svg xmlns="http://www.w3.org/2000/svg"')
       expect(s.svg).toContain('viewBox="0 0 1056 816"')
       if (s.title === 'Cover') continue // hero layout: title + index, no chrome block
+      if (s.title.startsWith('Typical details')) continue // per-detail scale captions, no metre bar
       expect(s.svg).toContain('Demo House')
       expect(s.svg).toContain('Ground Floor')
       expect(s.svg).toContain('Jurisdiction: FL')
@@ -147,8 +166,21 @@ describe('planSetHtml', () => {
 describe('cover / elevations / section (round: standard set)', () => {
   test('cover leads with title + sheet index; elevations carry a grade line', () => {
     const members = [
-      member({ system: 'wall-framing', role: 'stud', dims: [0.04, 2.4, 0.09], position: [1, 1.2, 0], rotation: [0, 0, 0] }),
-      member({ system: 'roof-framing', role: 'rafter', dims: [3, 0.04, 0.09], position: [2, 0.5, 1], rotation: [0, 0, 0.5], levelId: 'lvlroof' }),
+      member({
+        system: 'wall-framing',
+        role: 'stud',
+        dims: [0.04, 2.4, 0.09],
+        position: [1, 1.2, 0],
+        rotation: [0, 0, 0],
+      }),
+      member({
+        system: 'roof-framing',
+        role: 'rafter',
+        dims: [3, 0.04, 0.09],
+        position: [2, 0.5, 1],
+        rotation: [0, 0, 0.5],
+        levelId: 'lvlroof',
+      }),
     ]
     const sheets = buildPlanSet(members, [], {
       projectName: 'Two Storey',
@@ -236,9 +268,14 @@ describe('MEP sheet — plumbing system colors + slope note (plumbing rebuild)',
     const mep = buildPlanSet(members, [], {}).find((s) => s.title.startsWith('Plumbing'))
     const svg = mep?.svg ?? ''
     const rectsOf = (color: string): [number, number][] =>
-      [...svg.matchAll(
-        new RegExp(`<rect[^>]*fill="${color}"[^>]*transform="translate\\(([-\\d.]+) ([-\\d.]+)\\)`, 'g'),
-      )].map((m) => [Number(m[1]), Number(m[2])])
+      [
+        ...svg.matchAll(
+          new RegExp(
+            `<rect[^>]*fill="${color}"[^>]*transform="translate\\(([-\\d.]+) ([-\\d.]+)\\)`,
+            'g',
+          ),
+        ),
+      ].map((m) => [Number(m[1]), Number(m[2])])
     const suctionRects = rectsOf('#35b8c9')
     const liquidRects = rectsOf('#d98134')
     // both pipes DRAW (transform-bearing rects — legend swatches don't count)
@@ -509,8 +546,9 @@ describe('BUILDING CHARACTERISTICS block on the schedules sheet', () => {
       coolingMoistureRegime: null,
     }
     const svg2 =
-      buildPlanSet([member({})], [], { characteristics: bare })
-        .find((s) => s.title.startsWith('Schedules'))?.svg ?? ''
+      buildPlanSet([member({})], [], { characteristics: bare }).find((s) =>
+        s.title.startsWith('Schedules'),
+      )?.svg ?? ''
     // wrap-safe fragments (the ~100-char column breaks these phrases)
     expect(svg2).toContain('MANUAL J-LITE load,')
     expect(svg2).toContain('sensible-only — no latent')
@@ -602,9 +640,7 @@ describe('round-3 fixCheck2 — EM symbol, SE legend row, notes wrap', () => {
       fixture({ meta: { circuit: 'GEN-1', breakerA: 15, gaugeAwg: 14 } }),
       fixture({ kind: 'electric-meter', position: [3, 1.4, 0] }),
     ]
-    const elec = buildPlanSet(members, fixtures, {}).find((s) =>
-      s.title.startsWith('Electrical'),
-    )
+    const elec = buildPlanSet(members, fixtures, {}).find((s) => s.title.startsWith('Electrical'))
     const svg = elec?.svg ?? ''
     expect(svg).toContain('>EM</text>')
     expect(svg).toContain('electric meter')
@@ -635,9 +671,7 @@ describe('round-3 fixCheck2 — EM symbol, SE legend row, notes wrap', () => {
       }),
     ]
     const fixtures = [fixture({ meta: { circuit: 'GEN-1', breakerA: 15, gaugeAwg: 14 } })]
-    const elec = buildPlanSet(members, fixtures, {}).find((s) =>
-      s.title.startsWith('Electrical'),
-    )
+    const elec = buildPlanSet(members, fixtures, {}).find((s) => s.title.startsWith('Electrical'))
     const svg = elec?.svg ?? ''
     expect(svg).toContain('SE cable 2 AWG Cu — street → meter → panel (NEC 230)')
     expect(svg).not.toContain('—A/—AWG · service-entrance')
@@ -670,7 +704,11 @@ describe('round-3 fixCheck2 — EM symbol, SE legend row, notes wrap', () => {
         position: [x, -0.05 - 2.4384 / 2, 3],
       })
     const members = [
-      wire('GES-1', 'GEC 8 AWG Cu — grounding electrode conductor (NEC 250.66) — grade run to rod 1', 1),
+      wire(
+        'GES-1',
+        'GEC 8 AWG Cu — grounding electrode conductor (NEC 250.66) — grade run to rod 1',
+        1,
+      ),
       wire('GES-2', 'Water-pipe bond 8 AWG Cu — metal water service (NEC 250.104(A))', 2),
       rod(1, 1),
       rod(2, 2.83),
@@ -715,7 +753,8 @@ describe('round-3 fixCheck2 — EM symbol, SE legend row, notes wrap', () => {
         wallR: 21,
         // long citation pushes the notes line past 100 chars — pre-fix it
         // was clip()ed and the disclaimers fell off the sheet
-        citation: '2021 IECC Table R402.1.3 as amended by the state energy conservation construction code',
+        citation:
+          '2021 IECC Table R402.1.3 as amended by the state energy conservation construction code',
       },
       uaWPerK: 30.1,
       designHeatLossW: 662,
@@ -767,9 +806,13 @@ describe('blueprint round-3 — poché, cut mark, legends, wrap, coverage, dowel
     // exactly ONE dark cut rect (the plate); its full length prints as
     // beyond-linework — never a whole-member dark line
     expect([...svg.matchAll(/<rect [^>]*fill="#222"/g)]).toHaveLength(1)
-    expect(svg).not.toMatch(/<line [^>]*stroke="#222" stroke-width="[\d.]+" stroke-linecap="butt"\/>/)
+    expect(svg).not.toMatch(
+      /<line [^>]*stroke="#222" stroke-width="[\d.]+" stroke-linecap="butt"\/>/,
+    )
     const beyond = [
-      ...svg.matchAll(/<line [^>]*stroke="#caa06a" stroke-width="[\d.]+" stroke-linecap="butt" opacity="0.6"\/>/g),
+      ...svg.matchAll(
+        /<line [^>]*stroke="#caa06a" stroke-width="[\d.]+" stroke-linecap="butt" opacity="0.6"\/>/g,
+      ),
     ]
     // out-of-band studs are not drawn: the cut plate + 1 in-band stud
     expect(beyond).toHaveLength(2)
@@ -837,8 +880,7 @@ describe('blueprint round-3 — poché, cut mark, legends, wrap, coverage, dowel
         }),
       )
     }
-    const svg =
-      buildPlanSet(bolts, [], {}).find((s) => s.title.startsWith('Schedules'))?.svg ?? ''
+    const svg = buildPlanSet(bolts, [], {}).find((s) => s.title.startsWith('Schedules'))?.svg ?? ''
     // the R403.1.6 citation survives intact on the wrapped second line
     expect(svg).toContain('(R403.1.6))')
     expect(svg).not.toMatch(/R40[^)<]*…/)
@@ -849,7 +891,13 @@ describe('blueprint round-3 — poché, cut mark, legends, wrap, coverage, dowel
   test('roof plan flags grid-coverage gaps; full rafter coverage stays clean', () => {
     const shell = [stud(0, 0), stud(10, 0), stud(10, 8), stud(0, 8)]
     const rafter = (dims: [number, number, number], x: number, z: number, rz = 0): Member =>
-      member({ system: 'roof-framing', role: 'rafter', dims, position: [x, 2.6, z], rotation: [0, 0, rz] })
+      member({
+        system: 'roof-framing',
+        role: 'rafter',
+        dims,
+        position: [x, 2.6, z],
+        rotation: [0, 0, rz],
+      })
     const sheets = buildPlanSet(
       [...shell, rafter([2, 0.14, 0.04], 1, 0.5, 0.3), rafter([2, 0.14, 0.04], 1, 1.5, 0.3)],
       [],
@@ -886,7 +934,13 @@ describe('blueprint round-3 — poché, cut mark, legends, wrap, coverage, dowel
       stud(0, 9),
     ]
     const rafter = (dims: [number, number, number], x: number, z: number): Member =>
-      member({ system: 'roof-framing', role: 'rafter', dims, position: [x, 2.6, z], rotation: [0, 0, 0] })
+      member({
+        system: 'roof-framing',
+        role: 'rafter',
+        dims,
+        position: [x, 2.6, z],
+        rotation: [0, 0, 0],
+      })
     const mainRoof: Member[] = []
     for (let z = 0; z <= 9.01; z += 0.75) mainRoof.push(rafter([14.2, 0.14, 0.04], 7, z))
     const sheets = buildPlanSet([...shell, ...mainRoof], [], {})
@@ -917,7 +971,14 @@ describe('blueprint round-3 — poché, cut mark, legends, wrap, coverage, dowel
         position: [x, -0.2, 0],
       })
     const members = [
-      member({ system: 'foundation', role: 'footing', size: undefined, material: 'concrete', dims: [4, 0.2, 0.4], position: [2, -0.3, 0] }),
+      member({
+        system: 'foundation',
+        role: 'footing',
+        size: undefined,
+        material: 'concrete',
+        dims: [4, 0.2, 0.4],
+        position: [2, -0.3, 0],
+      }),
       steel('anchor-bolt', [0.016, 0.23, 0.016], 1),
       steel('anchor-bolt', [0.016, 0.23, 0.016], 3),
       steel('rebar', [0.013, 0.55, 0.013], 1.5),
@@ -925,8 +986,7 @@ describe('blueprint round-3 — poché, cut mark, legends, wrap, coverage, dowel
       // horizontal continuous bar keeps its rect — only VERTICAL dowels circle
       steel('rebar', [4, 0.013, 0.013], 2),
     ]
-    const svg =
-      buildPlanSet(members, [], {}).find((s) => s.title === 'Foundation plan')?.svg ?? ''
+    const svg = buildPlanSet(members, [], {}).find((s) => s.title === 'Foundation plan')?.svg ?? ''
     // 2 dowels drawn open + 1 legend swatch
     expect([...svg.matchAll(/r="2\.6" fill="none"/g)]).toHaveLength(3)
     // 2 bolts drawn filled + 1 legend swatch
@@ -975,14 +1035,20 @@ describe('round-3 scorecard fix batch — N3 poché granularity, P4 label nudge,
     // exactly ONE dark poché RECT — the joist the plane slices across; the
     // wall members print as 0.6-opacity beyond work, never solid
     expect([...section.matchAll(/<rect [^>]*fill="#222"/g)]).toHaveLength(1)
-    expect(section).not.toMatch(/<line [^>]*stroke="#222" stroke-width="[\d.]+" stroke-linecap="butt"\/>/)
+    expect(section).not.toMatch(
+      /<line [^>]*stroke="#222" stroke-width="[\d.]+" stroke-linecap="butt"\/>/,
+    )
     const beyond = [
-      ...section.matchAll(/stroke="#caa06a" stroke-width="[\d.]+" stroke-linecap="butt" opacity="0.6"/g),
+      ...section.matchAll(
+        /stroke="#caa06a" stroke-width="[\d.]+" stroke-linecap="butt" opacity="0.6"/g,
+      ),
     ]
     expect(beyond).toHaveLength(3)
     // the cut joist's remaining length joins the beyond line work too
     // (floor-framing stroke at 0.6 — never a whole-member dark bar)
-    expect(section).toMatch(/stroke="#b98d55" stroke-width="[\d.]+" stroke-linecap="butt" opacity="0.6"/)
+    expect(section).toMatch(
+      /stroke="#b98d55" stroke-width="[\d.]+" stroke-linecap="butt" opacity="0.6"/,
+    )
     // the shared cutX helper slid the plane OFF the wall's axis — the A-A
     // mark on the wall plan no longer sits at the wall's x
     const wallSheet = sheets.find((s) => s.title === 'Wall framing plan')?.svg ?? ''
@@ -1036,7 +1102,9 @@ describe('round-3 scorecard fix batch — N3 poché granularity, P4 label nudge,
     const svg =
       buildPlanSet(members, [], {}).find((s) => s.title.startsWith('Electrical'))?.svg ?? ''
     const labels = [
-      ...svg.matchAll(/<text x="(-?[\d.]+)" y="(-?[\d.]+)" font-size="8" font-weight="bold"[^>]*>([^<]+)<\/text>/g),
+      ...svg.matchAll(
+        /<text x="(-?[\d.]+)" y="(-?[\d.]+)" font-size="8" font-weight="bold"[^>]*>([^<]+)<\/text>/g,
+      ),
     ].map((m) => ({ x: Number(m[1]), y: Number(m[2]), text: m[3] as string }))
     // every circuit with a run ≥40px gets exactly ONE label
     expect(labels.map((l) => l.text).sort()).toEqual([...ids].sort())
@@ -1117,7 +1185,11 @@ describe('round-3 fixCheck — filled-rect cut poché + full flag list', () => {
     ]
     const svg =
       buildPlanSet(members, [], {}).find((s) => s.title.startsWith('Section A-A'))?.svg ?? ''
-    const rects = [...svg.matchAll(/<rect x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="#222"/g)]
+    const rects = [
+      ...svg.matchAll(
+        /<rect x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="#222"/g,
+      ),
+    ]
     // 2 courses + 1 footing, every one VISIBLE (≥1.5px both axes)
     expect(rects).toHaveLength(3)
     for (const r of rects) {
@@ -1147,19 +1219,26 @@ describe('round-3 fixCheck — filled-rect cut poché + full flag list', () => {
     const svg =
       buildPlanSet(members, [], {}).find((s) => s.title.startsWith('Section A-A'))?.svg ?? ''
     // recover px/m from the two vertical stud lines (z=0 vs z=5)
-    const vlines = [...svg.matchAll(/<line x1="(-?[\d.]+)" y1="(-?[\d.]+)" x2="(-?[\d.]+)" y2="(-?[\d.]+)" stroke="#caa06a"/g)]
+    const vlines = [
+      ...svg.matchAll(
+        /<line x1="(-?[\d.]+)" y1="(-?[\d.]+)" x2="(-?[\d.]+)" y2="(-?[\d.]+)" stroke="#caa06a"/g,
+      ),
+    ]
       .filter((m) => m[1] === m[3])
       .map((m) => Number(m[1]))
     expect(vlines).toHaveLength(2)
     const scale = Math.abs((vlines[0] as number) - (vlines[1] as number)) / 5
-    const rect = /<rect x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="#222"/.exec(svg)
+    const rect =
+      /<rect x="(-?[\d.]+)" y="(-?[\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="#222"/.exec(svg)
     expect(rect).not.toBeNull()
     const darkWidthM = Number(rect?.[3]) / scale
     expect(darkWidthM).toBeLessThanOrEqual(0.7)
     expect(darkWidthM).toBeGreaterThan(0) // …but it exists
     // the plate's full length still prints — as light beyond work, dark only
     // at the slice (whole-member plan extent here is ~2.7m of view width)
-    expect(svg).toMatch(/stroke="#caa06a" stroke-width="[\d.]+" stroke-linecap="butt" opacity="0.6"/)
+    expect(svg).toMatch(
+      /stroke="#caa06a" stroke-width="[\d.]+" stroke-linecap="butt" opacity="0.6"/,
+    )
   })
 
   test('C5 gate: 7 flags ALL print on the schedules sheets — the reserve grows, nothing truncates', () => {
@@ -1238,8 +1317,22 @@ describe('round-3 carried cosmetics — P1 pagination balance, vertical centerin
   const house = (rafterSpacingM = 0.6096, rafterCount = 16): Member[] => {
     const members: Member[] = []
     for (let x = 0; x <= 10.01; x += 2) for (const z of [0, 8]) members.push(stud(x, z))
-    members.push(member({ system: 'wall-framing', role: 'top-plate', dims: [10, 0.04, 0.09], position: [5, 2.42, 0] }))
-    members.push(member({ system: 'wall-framing', role: 'top-plate', dims: [10, 0.04, 0.09], position: [5, 2.42, 8] }))
+    members.push(
+      member({
+        system: 'wall-framing',
+        role: 'top-plate',
+        dims: [10, 0.04, 0.09],
+        position: [5, 2.42, 0],
+      }),
+    )
+    members.push(
+      member({
+        system: 'wall-framing',
+        role: 'top-plate',
+        dims: [10, 0.04, 0.09],
+        position: [5, 2.42, 8],
+      }),
+    )
     for (let i = 0; i < rafterCount; i++) {
       members.push(
         member({
@@ -1251,7 +1344,14 @@ describe('round-3 carried cosmetics — P1 pagination balance, vertical centerin
         }),
       )
     }
-    members.push(member({ system: 'roof-framing', role: 'ridge', dims: [10, 0.19, 0.04], position: [5, 4.4, 4] }))
+    members.push(
+      member({
+        system: 'roof-framing',
+        role: 'ridge',
+        dims: [10, 0.19, 0.04],
+        position: [5, 4.4, 4],
+      }),
+    )
     return members
   }
 
@@ -1291,7 +1391,8 @@ describe('round-3 carried cosmetics — P1 pagination balance, vertical centerin
   }
 
   const takeoffLineCount = (svg: string): number =>
-    [...svg.matchAll(/font-size="10" font-family="Helvetica, Arial, sans-serif" fill="#222"/g)].length
+    [...svg.matchAll(/font-size="10" font-family="Helvetica, Arial, sans-serif" fill="#222"/g)]
+      .length
 
   test('P1 gate: the reserve consumes the SECOND column — a takeoff past the old both-columns-shrunk cap stays on ONE sheet', () => {
     // 68 takeoff lines + 3 flags + characteristics: the old cap was
@@ -1309,10 +1410,14 @@ describe('round-3 carried cosmetics — P1 pagination balance, vertical centerin
     for (const f of flags) expect(svg).toContain(f)
     // …and no second-column row runs under the characteristics block
     let maxCol1RowY = 0
-    for (const m of svg.matchAll(/<text x="(\d+)" y="(\d+)" font-size="10" font-family="Helvetica, Arial, sans-serif" fill="#222"/g)) {
+    for (const m of svg.matchAll(
+      /<text x="(\d+)" y="(\d+)" font-size="10" font-family="Helvetica, Arial, sans-serif" fill="#222"/g,
+    )) {
       if (Number(m[1]) >= 528) maxCol1RowY = Math.max(maxCol1RowY, Number(m[2]))
     }
-    const charTop = Number(/<text x="528" y="(\d+)" font-size="10" font-weight="bold"/.exec(svg)?.[1])
+    const charTop = Number(
+      /<text x="528" y="(\d+)" font-size="10" font-weight="bold"/.exec(svg)?.[1],
+    )
     expect(Number.isFinite(charTop)).toBe(true)
     expect(maxCol1RowY).toBeLessThan(charTop)
   })
@@ -1333,7 +1438,9 @@ describe('round-3 carried cosmetics — P1 pagination balance, vertical centerin
       buildPlanSet(house(), [], {}).find((s) => s.title.startsWith('South elevation'))?.svg ?? ''
     const STROKES = ['#8b8f96', '#caa06a', '#b98d55', '#a97e48', '#c2803d', '#6f8fa8', '#8fa8a0']
     const ys: number[] = []
-    for (const m of south.matchAll(/<line x1="(-?[\d.]+)" y1="(-?[\d.]+)" x2="(-?[\d.]+)" y2="(-?[\d.]+)" stroke="(#[0-9a-f]{6})"/g)) {
+    for (const m of south.matchAll(
+      /<line x1="(-?[\d.]+)" y1="(-?[\d.]+)" x2="(-?[\d.]+)" y2="(-?[\d.]+)" stroke="(#[0-9a-f]{6})"/g,
+    )) {
       if (STROKES.includes(m[5] as string)) ys.push(Number(m[2]), Number(m[4]))
     }
     const top = Math.min(...ys)
@@ -1365,7 +1472,9 @@ describe('round-3 carried cosmetics — P1 pagination balance, vertical centerin
     expect(yOf('T.O. PLATE +2.42m')).toBeLessThan(yOf('GRADE 0.00m'))
     // every elevation carries the datums
     for (const dir of ['North', 'East', 'West']) {
-      const sheet = buildPlanSet(house(), [], {}).find((s) => s.title.startsWith(`${dir} elevation`))
+      const sheet = buildPlanSet(house(), [], {}).find((s) =>
+        s.title.startsWith(`${dir} elevation`),
+      )
       expect(sheet?.svg).toContain('>GRADE 0.00m</text>')
       expect(sheet?.svg).toContain('T.O. PLATE +2.42m')
     }
@@ -1416,13 +1525,15 @@ describe('round-3 carried cosmetics — P1 pagination balance, vertical centerin
       )
     }
     const roof =
-      buildPlanSet(irregular, [], { studSpacingIn: 16 }).find((s) => s.title === 'Roof framing plan')
-        ?.svg ?? ''
+      buildPlanSet(irregular, [], { studSpacingIn: 16 }).find(
+        (s) => s.title === 'Roof framing plan',
+      )?.svg ?? ''
     expect(roof).toContain('RAFTERS @ 16&quot; O.C. — VERIFY')
     // spec spacing follows the option
     const roof24 =
-      buildPlanSet(irregular, [], { studSpacingIn: 24 }).find((s) => s.title === 'Roof framing plan')
-        ?.svg ?? ''
+      buildPlanSet(irregular, [], { studSpacingIn: 24 }).find(
+        (s) => s.title === 'Roof framing plan',
+      )?.svg ?? ''
     expect(roof24).toContain('RAFTERS @ 24&quot; O.C. — VERIFY')
     // ridge only, no rafters → no note at all
     const noRafters =
@@ -1436,8 +1547,20 @@ describe('elevation orientation + section membership (blueprint round-2)', () =>
     // two studs on an east wall: zNear=1, zFar=7 — standing EAST, the z=7
     // (south) stud must print LEFT of the z=1 stud
     const members = [
-      member({ system: 'wall-framing', role: 'stud', dims: [0.04, 2.4, 0.09], position: [8, 1.2, 1], rotation: [0, 0, 0] }),
-      member({ system: 'wall-framing', role: 'stud', dims: [0.04, 2.4, 0.09], position: [8, 1.2, 7], rotation: [0, 0, 0] }),
+      member({
+        system: 'wall-framing',
+        role: 'stud',
+        dims: [0.04, 2.4, 0.09],
+        position: [8, 1.2, 1],
+        rotation: [0, 0, 0],
+      }),
+      member({
+        system: 'wall-framing',
+        role: 'stud',
+        dims: [0.04, 2.4, 0.09],
+        position: [8, 1.2, 7],
+        rotation: [0, 0, 0],
+      }),
     ]
     const sheets = buildPlanSet(members, [], {})
     const east = sheets.find((s) => s.title.startsWith('East elevation'))
@@ -1450,8 +1573,20 @@ describe('elevation orientation + section membership (blueprint round-2)', () =>
   test('section includes walls whose extent crosses the cut band', () => {
     // long wall plate centered away from the cut midpoint but crossing it
     const members = [
-      member({ system: 'wall-framing', role: 'bottom-plate', dims: [10, 0.04, 0.09], position: [5, 0.02, 0], rotation: [0, 0, 0] }),
-      member({ system: 'wall-framing', role: 'stud', dims: [0.04, 2.4, 0.09], position: [0.2, 1.2, 4], rotation: [0, 0, 0] }),
+      member({
+        system: 'wall-framing',
+        role: 'bottom-plate',
+        dims: [10, 0.04, 0.09],
+        position: [5, 0.02, 0],
+        rotation: [0, 0, 0],
+      }),
+      member({
+        system: 'wall-framing',
+        role: 'stud',
+        dims: [0.04, 2.4, 0.09],
+        position: [0.2, 1.2, 4],
+        rotation: [0, 0, 0],
+      }),
     ]
     const sheets = buildPlanSet(members, [], {})
     const section = sheets.find((s) => s.title.startsWith('Section A-A'))
@@ -1682,10 +1817,15 @@ describe('B17 round 2 — plate-like members stroke at their TRUE thickness on s
   test('section: the CROSSING strip still cuts as a dark rect — true width × true 3-1/2" height (unchanged)', () => {
     const svg = sheets().find((s) => s.title.startsWith('Section'))?.svg ?? ''
     const scale = PPM / ratioOf(svg)
-    const rects = [...svg.matchAll(/<rect x="[\d.-]+" y="[\d.-]+" width="([\d.]+)" height="([\d.]+)" fill="#222"/g)]
+    const rects = [
+      ...svg.matchAll(
+        /<rect x="[\d.-]+" y="[\d.-]+" width="([\d.]+)" height="([\d.]+)" fill="#222"/g,
+      ),
+    ]
     expect(rects.length).toBeGreaterThanOrEqual(1)
     const slabRect = rects.find(
-      (r) => Math.abs(Number(r[1]) - 1.1 * scale) < 2 && Math.abs(Number(r[2]) - SLAB_T * scale) < 2,
+      (r) =>
+        Math.abs(Number(r[1]) - 1.1 * scale) < 2 && Math.abs(Number(r[2]) - SLAB_T * scale) < 2,
     )
     expect(slabRect).toBeDefined()
   })
@@ -1895,11 +2035,34 @@ describe('sleeve crossings + sewer marker on composed scenes (examiner round 3)'
       xwall('w_n', [10, 8], [0, 8]),
       xwall('w_w', [0, 8], [0, 0]),
     ]
-    const powder = [room('r_pow', 'bathroom', [[0, 0], [1, 0], [1, 2], [0, 2]], ['w_s'])]
+    const powder = [
+      room(
+        'r_pow',
+        'bathroom',
+        [
+          [0, 0],
+          [1, 0],
+          [1, 2],
+          [0, 2],
+        ],
+        ['w_s'],
+      ),
+    ]
     const p = layoutPlumbing(shell, powder, specFrost, [], {
       sewerExit: { position: [-0.8, 0, 0.9] },
     })
-    const f = buildFoundation(shell, [slab([[0, 0], [10, 0], [10, 8], [0, 8]])], specFrost)
+    const f = buildFoundation(
+      shell,
+      [
+        slab([
+          [0, 0],
+          [10, 0],
+          [10, 8],
+          [0, 8],
+        ]),
+      ],
+      specFrost,
+    )
     const mep = buildPlanSet([...p.members, ...f], p.fixtures, {}).find((s) =>
       s.title.startsWith('Plumbing'),
     )
@@ -1919,11 +2082,42 @@ describe('sleeve crossings + sewer marker on composed scenes (examiner round 3)'
       xwall('u_c2', [7, 2], [7, 6]),
     ]
     const uRooms = [
-      room('r_ubath', 'bathroom', [[8, 2], [11, 2], [11, 6], [8, 6]], ['u_e']),
-      room('r_ukitchen', 'kitchen', [[1, 2], [4, 2], [4, 6], [1, 6]], ['u_w']),
+      room(
+        'r_ubath',
+        'bathroom',
+        [
+          [8, 2],
+          [11, 2],
+          [11, 6],
+          [8, 6],
+        ],
+        ['u_e'],
+      ),
+      room(
+        'r_ukitchen',
+        'kitchen',
+        [
+          [1, 2],
+          [4, 2],
+          [4, 6],
+          [1, 6],
+        ],
+        ['u_w'],
+      ),
     ]
     const p = layoutPlumbing(uWalls, uRooms, specFrost)
-    const f = buildFoundation(uWalls, [slab([[0, 0], [12, 0], [12, 8], [0, 8]])], specFrost)
+    const f = buildFoundation(
+      uWalls,
+      [
+        slab([
+          [0, 0],
+          [12, 0],
+          [12, 8],
+          [0, 8],
+        ]),
+      ],
+      specFrost,
+    )
     const mep = buildPlanSet([...p.members, ...f], p.fixtures, {}).find((s) =>
       s.title.startsWith('Plumbing'),
     )
@@ -1958,7 +2152,9 @@ describe('sleeve crossings + sewer marker on composed scenes (examiner round 3)'
     expect(glyph).not.toBeNull()
     const gx = Number(glyph?.[1])
     const gy = Number(glyph?.[2])
-    const bubbles = [...svg.matchAll(/<g transform="translate\((-?[\d.]+) (-?[\d.]+)\)"><circle r="7"/g)]
+    const bubbles = [
+      ...svg.matchAll(/<g transform="translate\((-?[\d.]+) (-?[\d.]+)\)"><circle r="7"/g),
+    ]
     expect(bubbles.length).toBeGreaterThan(0)
     for (const b of bubbles) {
       expect(Math.hypot(Number(b[1]) - gx, Number(b[2]) - gy)).toBeGreaterThanOrEqual(12)
@@ -2010,9 +2206,11 @@ describe('glyph layer vs pipe rects (post-merge seam round)', () => {
   const PIPE_FILLS = ['#8fb0c4', '#4a7dbf', '#c0504d', '#35b8c9', '#d98134']
   type SvgRect = { w: number; h: number; fill: string; x: number; y: number; rot: number }
   const svgRects = (svg: string, fills: string[]): SvgRect[] =>
-    [...svg.matchAll(
-      /<rect x="[^"]*" y="[^"]*" width="([\d.]+)" height="([\d.]+)" fill="(#[0-9a-f]{6})"[^/]*translate\((-?[\d.]+) (-?[\d.]+)\) rotate\((-?[\d.]+)\)/g,
-    )]
+    [
+      ...svg.matchAll(
+        /<rect x="[^"]*" y="[^"]*" width="([\d.]+)" height="([\d.]+)" fill="(#[0-9a-f]{6})"[^/]*translate\((-?[\d.]+) (-?[\d.]+)\) rotate\((-?[\d.]+)\)/g,
+      ),
+    ]
       .filter((m) => fills.includes(m[3] as string))
       .map((m) => ({
         w: Number(m[1]),
@@ -2053,9 +2251,11 @@ describe('glyph layer vs pipe rects (post-merge seam round)', () => {
       (m) => [Number(m[1]), Number(m[2])],
     )
   const parseTicks = (svg: string): { x: number; y: number; rot: number }[] =>
-    [...svg.matchAll(
-      /M-2\.5 -6 L-2\.5 6 M2\.5 -6 L2\.5 6" stroke="#41637a"[^/]*translate\((-?[\d.]+) (-?[\d.]+)\) rotate\((-?[\d.]+)\)/g,
-    )].map((m) => ({ x: Number(m[1]), y: Number(m[2]), rot: Number(m[3]) }))
+    [
+      ...svg.matchAll(
+        /M-2\.5 -6 L-2\.5 6 M2\.5 -6 L2\.5 6" stroke="#41637a"[^/]*translate\((-?[\d.]+) (-?[\d.]+)\) rotate\((-?[\d.]+)\)/g,
+      ),
+    ].map((m) => ({ x: Number(m[1]), y: Number(m[2]), rot: Number(m[3]) }))
   /** The tick's 4 bar-tip endpoints (bars at ±2.5 along, spanning ±6). */
   const tickTips = (t: { x: number; y: number; rot: number }): [number, number][] => {
     const a = (t.rot * Math.PI) / 180
@@ -2115,13 +2315,54 @@ describe('glyph layer vs pipe rects (post-merge seam round)', () => {
       swall('w_mid', [5, 0], [5, 8], false),
     ]
     const rooms = [
-      sroom('r_bath', 'bathroom', [[5, 0], [10, 0], [10, 4], [5, 4]], ['w_s']),
-      sroom('r_kitchen', 'kitchen', [[0, 0], [5, 0], [5, 4], [0, 4]], ['w_s']),
-      sroom('r_laundry', 'laundry', [[0, 4], [5, 4], [5, 8], [0, 8]], ['w_w']),
+      sroom(
+        'r_bath',
+        'bathroom',
+        [
+          [5, 0],
+          [10, 0],
+          [10, 4],
+          [5, 4],
+        ],
+        ['w_s'],
+      ),
+      sroom(
+        'r_kitchen',
+        'kitchen',
+        [
+          [0, 0],
+          [5, 0],
+          [5, 4],
+          [0, 4],
+        ],
+        ['w_s'],
+      ),
+      sroom(
+        'r_laundry',
+        'laundry',
+        [
+          [0, 4],
+          [5, 4],
+          [5, 8],
+          [0, 8],
+        ],
+        ['w_w'],
+      ),
     ]
     const p = layoutPlumbing(walls, rooms, specFrost)
     const h = layoutHvac(walls, rooms, specFrost, { heatPump: { position: [9.5, 0, -0.5] } })
-    const f = buildFoundation(walls, [sslab([[0, 0], [10, 0], [10, 8], [0, 8]])], specFrost)
+    const f = buildFoundation(
+      walls,
+      [
+        sslab([
+          [0, 0],
+          [10, 0],
+          [10, 8],
+          [0, 8],
+        ]),
+      ],
+      specFrost,
+    )
     const members = [...p.members, ...h.members, ...f]
     const mep = buildPlanSet(members, [...p.fixtures, ...h.fixtures], {}).find((s) =>
       s.title.startsWith('Plumbing'),
@@ -2157,9 +2398,11 @@ describe('glyph layer vs pipe rects (post-merge seam round)', () => {
 
   test('arrows regression: census stable and bubble-clean on the seam compose', () => {
     const svg = frostMepSvg()
-    const arrows = [...svg.matchAll(
-      /M-3\.5 -3 L4\.5 0 L-3\.5 3 Z" fill="#41637a" transform="translate\((-?[\d.]+) (-?[\d.]+)\)/g,
-    )].map((m) => [Number(m[1]), Number(m[2])] as [number, number])
+    const arrows = [
+      ...svg.matchAll(
+        /M-3\.5 -3 L4\.5 0 L-3\.5 3 Z" fill="#41637a" transform="translate\((-?[\d.]+) (-?[\d.]+)\)/g,
+      ),
+    ].map((m) => [Number(m[1]), Number(m[2])] as [number, number])
     expect(arrows.length).toBeGreaterThanOrEqual(5) // pre-seam census: 5
     const bubbles = parseBubbles(svg)
     // FAIL-2 gate: no arrow center within 4 px of any FOREIGN-class pipe
@@ -2217,9 +2460,11 @@ describe('glyph layer vs pipe rects (post-merge seam round)', () => {
     ]
     const mep = buildPlanSet(members, [], {}).find((s) => s.title.startsWith('Plumbing'))
     const svg = mep?.svg ?? ''
-    const arrows = [...svg.matchAll(
-      /M-3\.5 -3 L4\.5 0 L-3\.5 3 Z" fill="#41637a" transform="translate\((-?[\d.]+) (-?[\d.]+)\)/g,
-    )].map((m) => [Number(m[1]), Number(m[2])] as [number, number])
+    const arrows = [
+      ...svg.matchAll(
+        /M-3\.5 -3 L4\.5 0 L-3\.5 3 Z" fill="#41637a" transform="translate\((-?[\d.]+) (-?[\d.]+)\)/g,
+      ),
+    ].map((m) => [Number(m[1]), Number(m[2])] as [number, number])
     expect(arrows.length).toBe(1) // census: the shadowed run still prints
     const rails = svgRects(svg, ['#35b8c9', '#d98134'])
     expect(rails.length).toBe(2)
@@ -2296,9 +2541,11 @@ describe('glyph layer vs pipe rects (post-merge seam round)', () => {
     const svg = buildPlanSet(members, [], {}).find((s) => s.title.startsWith('Plumbing'))?.svg ?? ''
     expect(svg).toContain('scale 1:20') // offsets above assume this ratio
     // the elbow coordinate is DEAD: zero arrows anywhere near a foreign rect
-    const arrows = [...svg.matchAll(
-      /M-3\.5 -3 L4\.5 0 L-3\.5 3 Z" fill="#41637a" transform="translate\((-?[\d.]+) (-?[\d.]+)\)/g,
-    )]
+    const arrows = [
+      ...svg.matchAll(
+        /M-3\.5 -3 L4\.5 0 L-3\.5 3 Z" fill="#41637a" transform="translate\((-?[\d.]+) (-?[\d.]+)\)/g,
+      ),
+    ]
     expect(arrows.length).toBe(0)
     expect(arrowDrops(svg)).toBe(1)
     expect(svg).toContain('dwv-arrow dropped (crowded): dwv-branch-x')
@@ -2312,9 +2559,11 @@ describe('glyph layer vs pipe rects (post-merge seam round)', () => {
     expect(printed + arrowDrops(svg)).toBe(eligibleArrows(members, svg))
     // and every PRINTED arrow honors the 4 px foreign margin (no tier-3 lies)
     const foreign = svgRects(svg, ['#35b8c9', '#d98134', '#4a7dbf', '#c0504d', '#b5aa97'])
-    const pts = [...svg.matchAll(
-      /M-3\.5 -3 L4\.5 0 L-3\.5 3 Z" fill="#41637a" transform="translate\((-?[\d.]+) (-?[\d.]+)\)/g,
-    )].map((m) => [Number(m[1]), Number(m[2])] as [number, number])
+    const pts = [
+      ...svg.matchAll(
+        /M-3\.5 -3 L4\.5 0 L-3\.5 3 Z" fill="#41637a" transform="translate\((-?[\d.]+) (-?[\d.]+)\)/g,
+      ),
+    ].map((m) => [Number(m[1]), Number(m[2])] as [number, number])
     for (const [ax, ay] of pts) {
       for (const r of foreign) expect(rectDist(ax, ay, r)).toBeGreaterThanOrEqual(4)
     }
@@ -2393,7 +2642,9 @@ describe('glyph layer vs pipe rects (post-merge seam round)', () => {
       expect(ticks.length).toBeGreaterThan(0)
       const crowdedTicks = (svg.match(/<!-- sleeve-tick crowded:/g) ?? []).length
       for (const t of ticks) {
-        const tipOk = foreign.every((r) => tickTips(t).every(([qx, qy]) => rectDist(qx, qy, r) >= 4))
+        const tipOk = foreign.every((r) =>
+          tickTips(t).every(([qx, qy]) => rectDist(qx, qy, r) >= 4),
+        )
         const bubOk = bubbles.every(([bx, by]) => Math.hypot(bx - t.x, by - t.y) >= 12)
         if (!(tipOk && bubOk)) {
           expect({ name, at: [t.x, t.y], crowdedTicks }.crowdedTicks).toBeGreaterThan(0)
@@ -2407,14 +2658,25 @@ describe('glyph layer vs pipe rects (post-merge seam round)', () => {
         const t = ticks.reduce((b, k) =>
           Math.hypot(k.x - cx, k.y - cy) < Math.hypot(b.x - cx, b.y - cy) ? k : b,
         )
-        expect(textHits(cx, cy, citeW + 2, 5 + 2, { w: 7, h: 13.6, fill: '', x: t.x, y: t.y, rot: t.rot })).toBe(false)
+        expect(
+          textHits(cx, cy, citeW + 2, 5 + 2, {
+            w: 7,
+            h: 13.6,
+            fill: '',
+            x: t.x,
+            y: t.y,
+            rot: t.rot,
+          }),
+        ).toBe(false)
       }
       // --- arrows: census accounts drops; printed ones clear pipes,
       // bubbles AND text rects (round-4 F1: an arrow printed INSIDE the
       // kitchen cite on both courtyards) ---
-      const arrows = [...svg.matchAll(
-        /M-3\.5 -3 L4\.5 0 L-3\.5 3 Z" fill="#41637a" transform="translate\((-?[\d.]+) (-?[\d.]+)\)/g,
-      )].map((m) => [Number(m[1]), Number(m[2])] as [number, number])
+      const arrows = [
+        ...svg.matchAll(
+          /M-3\.5 -3 L4\.5 0 L-3\.5 3 Z" fill="#41637a" transform="translate\((-?[\d.]+) (-?[\d.]+)\)/g,
+        ),
+      ].map((m) => [Number(m[1]), Number(m[2])] as [number, number])
       expect({ name, n: arrows.length + arrowDrops(svg) }.n).toBe(eligibleArrows(members, svg))
       for (const [ax, ay] of arrows) {
         for (const r of foreign) expect(rectDist(ax, ay, r)).toBeGreaterThanOrEqual(4)
@@ -2481,16 +2743,21 @@ describe('glyph layer vs pipe rects (post-merge seam round)', () => {
     const own = svgRects(svg, ['#8fb0c4'])
     const bubbles = parseBubbles(svg)
     // crowded provenance comments sit immediately before their tick path
-    const crowded = [...svg.matchAll(
-      /<!-- sleeve-tick crowded: (\S+) t=(-?\d+) n=(-?\d+) score=(-?[\d.]+) -->\s*<path d="M-2\.5 -6 L-2\.5 6 M2\.5 -6 L2\.5 6" stroke="#41637a"[^/]*translate\((-?[\d.]+) (-?[\d.]+)\) rotate\((-?[\d.]+)\)/g,
-    )].map((m) => ({
+    const crowded = [
+      ...svg.matchAll(
+        /<!-- sleeve-tick crowded: (\S+) t=(-?\d+) n=(-?\d+) score=(-?[\d.]+) -->\s*<path d="M-2\.5 -6 L-2\.5 6 M2\.5 -6 L2\.5 6" stroke="#41637a"[^/]*translate\((-?[\d.]+) (-?[\d.]+)\) rotate\((-?[\d.]+)\)/g,
+      ),
+    ].map((m) => ({
       t: Number(m[2]),
       n: Number(m[3]),
       x: Number(m[5]),
       y: Number(m[6]),
       rot: Number(m[7]),
     }))
-    const T_GRID = [0, 2, -2, 4, -4, 6, -6, 8, -8, 10, -10, 12, -12, 14, -14, 16, -16, 20, -20, 24, -24, 28, -28, 32, -32, 36, -36, 40, -40, 44, -44]
+    const T_GRID = [
+      0, 2, -2, 4, -4, 6, -6, 8, -8, 10, -10, 12, -12, 14, -14, 16, -16, 20, -20, 24, -24, 28, -28,
+      32, -32, 36, -36, 40, -40, 44, -44,
+    ]
     const N_GRID = [0, 3, -3, 5, -5, 8, -8]
     let sawCrowded = 0
     for (const t of ticks) {
@@ -2533,7 +2800,10 @@ describe('glyph layer vs pipe rects (post-merge seam round)', () => {
           const ss = Math.sin(a2)
           const dx = px - r.x
           const dy = py - r.y
-          return Math.abs(dx * cc + dy * ss) <= r.w / 2 && Math.abs(-dx * ss + dy * cc) <= 6 + r.h / 2 - 2
+          return (
+            Math.abs(dx * cc + dy * ss) <= r.w / 2 &&
+            Math.abs(-dx * ss + dy * cc) <= 6 + r.h / 2 - 2
+          )
         })
       const chosen = scoreAt(t.x, t.y)
       let bestAlt = Number.NEGATIVE_INFINITY
@@ -2562,12 +2832,43 @@ describe('glyph layer vs pipe rects (post-merge seam round)', () => {
       swall('u_c2', [7, 2], [7, 6]),
     ]
     const uRooms = [
-      sroom('r_ubath', 'bathroom', [[8, 2], [11, 2], [11, 6], [8, 6]], ['u_e']),
-      sroom('r_ukitchen', 'kitchen', [[1, 2], [4, 2], [4, 6], [1, 6]], ['u_w']),
+      sroom(
+        'r_ubath',
+        'bathroom',
+        [
+          [8, 2],
+          [11, 2],
+          [11, 6],
+          [8, 6],
+        ],
+        ['u_e'],
+      ),
+      sroom(
+        'r_ukitchen',
+        'kitchen',
+        [
+          [1, 2],
+          [4, 2],
+          [4, 6],
+          [1, 6],
+        ],
+        ['u_w'],
+      ),
     ]
     const p = layoutPlumbing(uWalls, uRooms, specFrost)
     const h = layoutHvac(uWalls, uRooms, specFrost, { heatPump: { position: [12.5, 0, hpZ] } })
-    const f = buildFoundation(uWalls, [sslab([[0, 0], [12, 0], [12, 8], [0, 8]])], specFrost)
+    const f = buildFoundation(
+      uWalls,
+      [
+        sslab([
+          [0, 0],
+          [12, 0],
+          [12, 8],
+          [0, 8],
+        ]),
+      ],
+      specFrost,
+    )
     const members = [...p.members, ...h.members, ...f]
     const mep = buildPlanSet(members, [...p.fixtures, ...h.fixtures], {}).find((s) =>
       s.title.startsWith('Plumbing'),
@@ -2609,22 +2910,21 @@ describe('glyph layer vs pipe rects (post-merge seam round)', () => {
     )
     expect(glyph).not.toBeNull()
     for (const [bx, by] of bubbles) {
-      expect(
-        Math.hypot(bx - Number(glyph?.[1]), by - Number(glyph?.[2])),
-      ).toBeGreaterThanOrEqual(12)
+      expect(Math.hypot(bx - Number(glyph?.[1]), by - Number(glyph?.[2]))).toBeGreaterThanOrEqual(
+        12,
+      )
     }
     // FAIL-1 gates: the marker text never overprints a SLEEVE cite (the
     // round-1 tier 2 laid it 11.6 px from the exit cite) …
-    const cites = [...svg.matchAll(
-      /<text x="(-?[\d.]+)" y="(-?[\d.]+)"[^>]*>SLEEVE \(P2603\.4\)/g,
-    )].map((m) => [Number(m[1]), Number(m[2]) - 3] as [number, number])
+    const cites = [
+      ...svg.matchAll(/<text x="(-?[\d.]+)" y="(-?[\d.]+)"[^>]*>SLEEVE \(P2603\.4\)/g),
+    ].map((m) => [Number(m[1]), Number(m[2]) - 3] as [number, number])
     expect(cites.length).toBeGreaterThan(0)
     const citeW = 'SLEEVE (P2603.4)'.length * 6
     for (const [cx, cy] of cites) {
       expect(Math.hypot(cx - cxT, cy - ty)).toBeGreaterThanOrEqual(12)
       // and the rects themselves separate (axis test, 4 px pad)
-      const apart =
-        Math.abs(cx - cxT) >= citeW / 2 + wTxt / 2 + 4 || Math.abs(cy - ty) >= 14
+      const apart = Math.abs(cx - cxT) >= citeW / 2 + wTxt / 2 + 4 || Math.abs(cy - ty) >= 14
       expect(apart).toBe(true)
     }
     // … and never crosses the water-heater equipment box (unregistered in
@@ -2710,10 +3010,15 @@ describe('door + window schedule (LOD-400 B21d)', () => {
   /** The composed exhibit: 4-wall shell + a floating tall-door wall. */
   const scene = (): { walls: WallSlice[]; members: Member[] } => {
     const walls = [
-      bwall('w_s', [0, 0], [8, 0], [
-        opening('d1', 'door', 2, 0.914, 2.032, 0, 0.965, 2.083),
-        opening('n1', 'window', 5, 1.219, 1.219, 0.914, 1.27, 1.27),
-      ]),
+      bwall(
+        'w_s',
+        [0, 0],
+        [8, 0],
+        [
+          opening('d1', 'door', 2, 0.914, 2.032, 0, 0.965, 2.083),
+          opening('n1', 'window', 5, 1.219, 1.219, 0.914, 1.27, 1.27),
+        ],
+      ),
       bwall('w_e', [8, 0], [8, 6], [opening('n2', 'window', 3, 0.61, 0.61, 1.2, 0.66, 0.66)]),
       // 16-ft garage door — past the prescriptive header span (engineered)
       bwall('w_n', [8, 6], [0, 6], [opening('d2', 'door', 4, 4.877, 2.134, 0, 4.928, 2.185)]),
@@ -2731,9 +3036,11 @@ describe('door + window schedule (LOD-400 B21d)', () => {
       .replaceAll('&amp;', '&')
   /** Mark cells: bold #222 at the MARK column (x=48). */
   const parseMarks = (svg: string): { mark: string; y: number }[] =>
-    [...svg.matchAll(
-      /<text x="48" y="(\d+)" font-size="10" font-weight="bold"[^>]*fill="#222">([DW]\d+)<\/text>/g,
-    )].map((m) => ({ mark: m[2] as string, y: Number(m[1]) }))
+    [
+      ...svg.matchAll(
+        /<text x="48" y="(\d+)" font-size="10" font-weight="bold"[^>]*fill="#222">([DW]\d+)<\/text>/g,
+      ),
+    ].map((m) => ({ mark: m[2] as string, y: Number(m[1]) }))
   /** Read one non-bold cell at (x, y). */
   const cellAt = (svg: string, x: number, y: number): string | null => {
     const m = svg.match(
@@ -2751,9 +3058,11 @@ describe('door + window schedule (LOD-400 B21d)', () => {
     sheets.find((s) => s.svg.includes('>MARK</text>'))?.svg ?? ''
   /** Wall-plan mark bubbles (r=8 white circles with the mark text). */
   const parseBubbles = (svg: string): { x: number; y: number; mark: string }[] =>
-    [...svg.matchAll(
-      /<g transform="translate\((-?[\d.]+) (-?[\d.]+)\)"><circle r="8"[^/]*\/><text[^>]*>([DW]\d+)<\/text>/g,
-    )].map((m) => ({ x: Number(m[1]), y: Number(m[2]), mark: m[3] as string }))
+    [
+      ...svg.matchAll(
+        /<g transform="translate\((-?[\d.]+) (-?[\d.]+)\)"><circle r="8"[^/]*\/><text[^>]*>([DW]\d+)<\/text>/g,
+      ),
+    ].map((m) => ({ x: Number(m[1]), y: Number(m[2]), mark: m[3] as string }))
   const memberUOn = (m: Member, wall: WallSlice): number =>
     (m.position[0] - wall.start[0]) * wall.dir[0] + (m.position[2] - wall.start[1]) * wall.dir[1]
 
@@ -2773,9 +3082,7 @@ describe('door + window schedule (LOD-400 B21d)', () => {
     // D1: the 16-ft garage door on w_n framed an ENGINEERED header — the
     // row says by-supplier, never the drawn placeholder stick
     const yD1 = rowY.get('D1') as number
-    const d1Header = members.find(
-      (m) => m.role === 'header' && m.sourceId === 'w_n',
-    ) as Member
+    const d1Header = members.find((m) => m.role === 'header' && m.sourceId === 'w_n') as Member
     expect(d1Header.material).toBe('engineered')
     expect(cellAt(svg, 92, yD1)).toBe('door')
     expect(cellAt(svg, 302, yD1)).toBe(`${formatFtIn(4.928)} × ${formatFtIn(2.185)}`)
@@ -2805,9 +3112,7 @@ describe('door + window schedule (LOD-400 B21d)', () => {
     expect(cellAt(svg, 522, yW1)).toBe(w1Header.size as string)
     // D3: the tall door's composed header flag prints VERBATIM (P4) — the
     // member's own flag string, wrap-reassembled from the sheet text
-    const d3Header = members.find(
-      (m) => m.role === 'header' && m.sourceId === 'w_t',
-    ) as Member
+    const d3Header = members.find((m) => m.role === 'header' && m.sourceId === 'w_t') as Member
     expect(d3Header.flag).toBeDefined()
     expect(d3Header.flag).toContain('does not fit between the RO and the plates')
     expect(allText(svg)).toContain(d3Header.flag as string)
@@ -2829,10 +3134,15 @@ describe('door + window schedule (LOD-400 B21d)', () => {
     // u≈2.578 — PAST the u=1.0 window. The old greedy nearest-in-mark-order
     // join gave D1 the window's stick, W1 '—', and dropped all three
     // composed ENGINEERED flags from paper.
-    const wx = bwall('w_x', [0, 0], [8, 0], [
-      opening('gd', 'door', 0.5, 4.877, 2.134, 0, 4.928, 2.185),
-      opening('wn', 'window', 1.0, 0.61, 0.61, 1.2, 0.66, 0.66),
-    ])
+    const wx = bwall(
+      'w_x',
+      [0, 0],
+      [8, 0],
+      [
+        opening('gd', 'door', 0.5, 4.877, 2.134, 0, 4.928, 2.185),
+        opening('wn', 'window', 1.0, 0.61, 0.61, 1.2, 0.66, 0.66),
+      ],
+    )
     const members = frameWalls([wx], spec400)
     const heads = members.filter((m) => m.role === 'header')
     expect(heads.length).toBe(2)
@@ -3148,7 +3458,18 @@ describe('door + window schedule (LOD-400 B21d)', () => {
     const { walls, members } = foldScene()
     // bulk floor framing drives the takeoff past one page: 10 sizes ×
     // 7 stock-length buckets of joists (+ bd-ft rows) ≈ 80+ rows
-    const sizes = ['2x4', '2x6', '2x8', '2x10', '2x12', '4x4', '4x6', '4x8', '4x10', '4x12'] as const
+    const sizes = [
+      '2x4',
+      '2x6',
+      '2x8',
+      '2x10',
+      '2x12',
+      '4x4',
+      '4x6',
+      '4x8',
+      '4x10',
+      '4x12',
+    ] as const
     const bulk: Member[] = []
     for (const size of sizes) {
       for (const L of [2, 2.6, 3.2, 3.9, 4.5, 5.2, 5.8]) {
@@ -3237,9 +3558,23 @@ describe('door + window schedule (LOD-400 B21d)', () => {
     // frames a 4x10 where INTL frames a 4x8; the HEADER cell reads the
     // member back, so paper moves EXACTLY where the members do (and the
     // B11 assumption LABEL never leaks into the cell — size verbatim).
-    const w56 = bwall('w_hdr', [0, 0], [6, 0], [
-      opening('nb', 'window', 3, inches(56) - inches(1.5), 1.0, 0.9, inches(56), 1.0 + inches(1.5)),
-    ])
+    const w56 = bwall(
+      'w_hdr',
+      [0, 0],
+      [6, 0],
+      [
+        opening(
+          'nb',
+          'window',
+          3,
+          inches(56) - inches(1.5),
+          1.0,
+          0.9,
+          inches(56),
+          1.0 + inches(1.5),
+        ),
+      ],
+    )
     const composeAt = (
       code: string,
     ): { svg: string; cover: string; sheets: { title: string; svg: string }[]; header: Member } => {
@@ -3275,9 +3610,23 @@ describe('door + window schedule (LOD-400 B21d)', () => {
     // Round 1 left the honesty device on member labels alone: nothing on
     // the 18-sheet set said the header sizing assumes ≤ 24 ft building
     // width — exactly what a builder of a wider footprint must read.
-    const w56 = bwall('w_hdr', [0, 0], [6, 0], [
-      opening('nb', 'window', 3, inches(56) - inches(1.5), 1.0, 0.9, inches(56), 1.0 + inches(1.5)),
-    ])
+    const w56 = bwall(
+      'w_hdr',
+      [0, 0],
+      [6, 0],
+      [
+        opening(
+          'nb',
+          'window',
+          3,
+          inches(56) - inches(1.5),
+          1.0,
+          0.9,
+          inches(56),
+          1.0 + inches(1.5),
+        ),
+      ],
+    )
     const sheetsAt = (code: string): { title: string; svg: string }[] => {
       const spec = applyJurisdiction({ ...DEFAULT_SPEC, detail: '400' as const }, profileFor(code))
       return buildPlanSet(frameWalls([w56], spec), [], {
@@ -3288,7 +3637,9 @@ describe('door + window schedule (LOD-400 B21d)', () => {
     const coverOf = (sheets: { title: string; svg: string }[]): string =>
       sheets.find((s) => s.title === 'Cover')?.svg ?? ''
     const vtCover = coverOf(sheetsAt('VT'))
-    expect(vtCover).toContain('DESIGN CRITERIA — headers sized per Table R602.7(1) @ 70 psf ground snow')
+    expect(vtCover).toContain(
+      'DESIGN CRITERIA — headers sized per Table R602.7(1) @ 70 psf ground snow',
+    )
     expect(vtCover).toContain('≤ 24 ft building width, roof-and-ceiling loading assumed')
     const mnCover = coverOf(sheetsAt('MN'))
     expect(mnCover).toContain('@ 50 psf ground snow')
@@ -3297,7 +3648,10 @@ describe('door + window schedule (LOD-400 B21d)', () => {
     // paper) — the line prints ONLY when a band applies
     const intlSheets = sheetsAt('INTL')
     expect(coverOf(intlSheets)).not.toContain('DESIGN CRITERIA')
-    const spec400 = applyJurisdiction({ ...DEFAULT_SPEC, detail: '400' as const }, profileFor('INTL'))
+    const spec400 = applyJurisdiction(
+      { ...DEFAULT_SPEC, detail: '400' as const },
+      profileFor('INTL'),
+    )
     const withoutOption = buildPlanSet(frameWalls([w56], spec400), [], { walls: [w56] })
     expect(intlSheets.map((s) => s.svg)).toEqual(withoutOption.map((s) => s.svg))
   })
@@ -3368,8 +3722,7 @@ describe('B18 paper round — anchorage on paper', () => {
     const spec = applyJurisdiction({ ...DEFAULT_SPEC, detail: '400' as const }, profileFor('CA'))
     const wall = garageWall()
     const members = buildFoundation([wall], [], spec)
-    const svg =
-      buildPlanSet(members, [], {}).find((s) => s.title === 'Foundation plan')?.svg ?? ''
+    const svg = buildPlanSet(members, [], {}).find((s) => s.title === 'Foundation plan')?.svg ?? ''
     expect(svg).toContain('anchor bolts @') // row still prints, underived hop and all
   })
 
@@ -3429,9 +3782,10 @@ describe('B18 paper round — anchorage on paper', () => {
         sourceId: 'slab_up',
       })
     const svg =
-      buildPlanSet([pad(2), pad(4.5)], [], {}).find((s) => s.title === 'Foundation plan')?.svg ??
-      ''
-    expect(svg).toContain('post pad 24&quot;×24&quot;×12&quot; — under girder posts (R403.1/R407.3) — 2 pcs')
+      buildPlanSet([pad(2), pad(4.5)], [], {}).find((s) => s.title === 'Foundation plan')?.svg ?? ''
+    expect(svg).toContain(
+      'post pad 24&quot;×24&quot;×12&quot; — under girder posts (R403.1/R407.3) — 2 pcs',
+    )
     // a CLIPPED pad (F3) books its own row at its true size
     const clipped = member({
       system: 'foundation',
@@ -3446,8 +3800,7 @@ describe('B18 paper round — anchorage on paper', () => {
       sourceId: 'slab_up',
     })
     const svg2 =
-      buildPlanSet([pad(2), clipped], [], {}).find((s) => s.title === 'Foundation plan')?.svg ??
-      ''
+      buildPlanSet([pad(2), clipped], [], {}).find((s) => s.title === 'Foundation plan')?.svg ?? ''
     expect(svg2).toContain('post pad 23&quot;×23&quot;×12&quot;')
     expect(svg2).toContain('post pad 24&quot;×24&quot;×12&quot;')
   })
@@ -3547,9 +3900,11 @@ describe('B6 fix F1 — rolled plates foreshorten on plan; deck is layer-0 trans
   test('printed deck extent == the TRUE plan band, foreshortened by cos(roll) — no eave spill, no ridge overlap', () => {
     const svg = roofSvg(roofMembers)
     // the deck rects are the only translucent shapes on the roof sheet
-    const deckRects = [...svg.matchAll(
-      /<rect x="[^"]*" y="[^"]*" width="([\d.]+)" height="([\d.]+)"[^>]*fill-opacity="0\.35"[^>]*translate\(([\d.-]+) ([\d.-]+)\)/g,
-    )]
+    const deckRects = [
+      ...svg.matchAll(
+        /<rect x="[^"]*" y="[^"]*" width="([\d.]+)" height="([\d.]+)"[^>]*fill-opacity="0\.35"[^>]*translate\(([\d.-]+) ([\d.-]+)\)/g,
+      ),
+    ]
     expect(deckRects).toHaveLength(2) // one per slope — the membrane is NOT drawn
     // recover the shared scale from the ridge rect (unrolled, known length)
     const ridge = roofMembers.find((m) => m.role === 'ridge') as Member
@@ -3675,9 +4030,11 @@ describe('B6 fix F1 — rolled plates foreshorten on plan; deck is layer-0 trans
       material: 'lumber',
     })
     const svg =
-      buildPlanSet([wall, member({ system: 'wall-framing', role: 'stud', size: '2x4' })], [], {}).find(
-        (s) => s.title.startsWith('Wall'),
-      )?.svg ?? ''
+      buildPlanSet(
+        [wall, member({ system: 'wall-framing', role: 'stud', size: '2x4' })],
+        [],
+        {},
+      ).find((s) => s.title.startsWith('Wall'))?.svg ?? ''
     expect(svg).not.toContain('WSP roof deck')
   })
 })
@@ -3699,8 +4056,7 @@ describe('B6 fix F5 — the section cuts a rolled plate as its TRUE sloped band,
 
   test('deck poché rects rotate with the roll; no wide UN-rotated dark chord survives', () => {
     const members = frameRoofs([roofSeg()], [], at400)
-    const svg =
-      buildPlanSet(members, [], {}).find((s) => s.title.startsWith('Section'))?.svg ?? ''
+    const svg = buildPlanSet(members, [], {}).find((s) => s.title.startsWith('Section'))?.svg ?? ''
     // the two slope panels cut as ±40°-rotated thin bands
     const rotated = [...svg.matchAll(/<rect [^>]*fill="#222"[^>]*rotate\((-?40\.00)\)"\/>/g)]
     expect(rotated.length).toBeGreaterThanOrEqual(2)
@@ -3712,7 +4068,9 @@ describe('B6 fix F5 — the section cuts a rolled plate as its TRUE sloped band,
     const bandPx = Math.max(
       ...rotated.map((r) => Number((r[0].match(/width="([\d.]+)"/) ?? [])[1])),
     )
-    for (const m of svg.matchAll(/<rect x="[^"]*" y="[^"]*" width="([\d.]+)"[^>]*fill="#222"(?![^>]*rotate)/g)) {
+    for (const m of svg.matchAll(
+      /<rect x="[^"]*" y="[^"]*" width="([\d.]+)"[^>]*fill="#222"(?![^>]*rotate)/g,
+    )) {
       expect(Number(m[1])).toBeLessThan(bandPx / 2)
     }
   })
@@ -3778,18 +4136,23 @@ describe('NIGHT-10 — keyed hardware glyphs + derived legend rows (B9/B10 debt)
   /** Garage front: 16-ft door RO centered — both returns take the CS-PF
    * portal set on SDC-D (the B9 exhibit). */
   const garage = (): WallSlice =>
-    wall('garage_front', [0, 0], [6.1, 0], [
-      {
-        id: 'gd',
-        kind: 'door',
-        u: 3.05,
-        width: feet(16) - T2,
-        height: 2.13,
-        sillHeight: 0,
-        roughWidth: feet(16),
-        roughHeight: 2.13 + T2,
-      },
-    ])
+    wall(
+      'garage_front',
+      [0, 0],
+      [6.1, 0],
+      [
+        {
+          id: 'gd',
+          kind: 'door',
+          u: 3.05,
+          width: feet(16) - T2,
+          height: 2.13,
+          sillHeight: 0,
+          roughWidth: feet(16),
+          roughHeight: 2.13 + T2,
+        },
+      ],
+    )
   const caSpec = () =>
     applyJurisdiction({ ...DEFAULT_SPEC, detail: '400' as const }, profileFor('CA'))
   const laSpec = () =>
@@ -3898,7 +4261,9 @@ describe('NIGHT-10 — keyed hardware glyphs + derived legend rows (B9/B10 debt)
     // other glyph (the seismic plate line packs bolts @4 ft + HDUs at both
     // wall ends) — and no crowded fallback was needed
     const dots = [
-      ...drawingOf(svg).matchAll(/<circle cx="(-?[\d.]+)" cy="(-?[\d.]+)" r="2\.2" fill="#444"\/>/g),
+      ...drawingOf(svg).matchAll(
+        /<circle cx="(-?[\d.]+)" cy="(-?[\d.]+)" r="2\.2" fill="#444"\/>/g,
+      ),
     ].map((m) => ({ x: Number(m[1]), y: Number(m[2]) }))
     expect(dots.length).toBeGreaterThan(4) // the bolt field is really there
     for (const s of spots) {
@@ -3910,34 +4275,42 @@ describe('NIGHT-10 — keyed hardware glyphs + derived legend rows (B9/B10 debt)
     expect(drawingOf(svg)).not.toContain('hardware-glyph crowded')
     // …and each glyph stays within the deterministic dodge ring of its
     // true member position (symbols never wander)
-    const t = fitTransform(svg, members.filter((m) => m.role === 'anchor-bolt'))
+    const t = fitTransform(
+      svg,
+      members.filter((m) => m.role === 'anchor-bolt'),
+    )
     anchoredToTruth(spots, hdus, t)
   })
 
   test('LA-windy compose: all three uplift roles census 1:1, de-collide at plan-coincident spots, and key with WFCM cites', () => {
     const walls = [
-      wall('w_s', [0, 0], [8, 0], [
-        {
-          id: 'd1',
-          kind: 'door',
-          u: 2,
-          width: 0.9,
-          height: 2.1,
-          sillHeight: 0,
-          roughWidth: 0.938,
-          roughHeight: 2.138,
-        },
-        {
-          id: 'w1',
-          kind: 'window',
-          u: 5.5,
-          width: 1.2,
-          height: 1.2,
-          sillHeight: 0.9,
-          roughWidth: 1.238,
-          roughHeight: 1.238,
-        },
-      ]),
+      wall(
+        'w_s',
+        [0, 0],
+        [8, 0],
+        [
+          {
+            id: 'd1',
+            kind: 'door',
+            u: 2,
+            width: 0.9,
+            height: 2.1,
+            sillHeight: 0,
+            roughWidth: 0.938,
+            roughHeight: 2.138,
+          },
+          {
+            id: 'w1',
+            kind: 'window',
+            u: 5.5,
+            width: 1.2,
+            height: 1.2,
+            sillHeight: 0.9,
+            roughWidth: 1.238,
+            roughHeight: 1.238,
+          },
+        ],
+      ),
       wall('w_e', [8, 0], [8, 6]),
     ]
     const members = [
@@ -4074,7 +4447,7 @@ describe('NIGHT-10 — LOD-200 paper books the areas-fallback takeoff rows (C5, 
     const { computeTakeoff } = require('../engines/takeoff') as typeof import('../engines/takeoff')
     const r = compute200()
     // the fallback is live: LOD-200 frames no wall layers, areas are real
-    expect((r.areas.wallSheathingM2 ?? 0)).toBeGreaterThan(0)
+    expect(r.areas.wallSheathingM2 ?? 0).toBeGreaterThan(0)
     expect(r.members.some((m) => m.role === 'sheathing' && m.system === 'wall-framing')).toBe(false)
     const panelRows = computeTakeoff(r.members, r.fixtures, r.areas)
     const fallback = panelRows.filter((row) => row.section === 'Sheathing')
@@ -4133,8 +4506,26 @@ describe('LGS steel walls on paper (Phase 1 round-1 P6)', () => {
     curved: false,
   })
   const lgsOpenings: OpeningSlice[] = [
-    { id: 'd1', kind: 'door', u: 2, width: 0.9, height: 2.1, sillHeight: 0, roughWidth: 0.95, roughHeight: 2.15 },
-    { id: 'n1', kind: 'window', u: 6, width: 1.2, height: 1.2, sillHeight: 0.9, roughWidth: 1.25, roughHeight: 1.25 },
+    {
+      id: 'd1',
+      kind: 'door',
+      u: 2,
+      width: 0.9,
+      height: 2.1,
+      sillHeight: 0,
+      roughWidth: 0.95,
+      roughHeight: 2.15,
+    },
+    {
+      id: 'n1',
+      kind: 'window',
+      u: 6,
+      width: 1.2,
+      height: 1.2,
+      sillHeight: 0.9,
+      roughWidth: 1.25,
+      roughHeight: 1.25,
+    },
   ]
 
   for (const detail of ['400', '200'] as const) {
@@ -4229,8 +4620,26 @@ describe('LGS paper identity (Phase 1 round-1 F3)', () => {
     // members were unkeyed beside 'stud — 2x6'. Cap removed — this gate
     // pins every drawn family to a row (a restored cap dies here).
     const openings: OpeningSlice[] = [
-      { id: 'd', kind: 'door', u: 2, width: 0.9, height: 2.1, sillHeight: 0, roughWidth: 0.9381, roughHeight: 2.1381 },
-      { id: 'w', kind: 'window', u: 5.5, width: 1.2, height: 1.2, sillHeight: 0.9, roughWidth: 1.2381, roughHeight: 1.2381 },
+      {
+        id: 'd',
+        kind: 'door',
+        u: 2,
+        width: 0.9,
+        height: 2.1,
+        sillHeight: 0,
+        roughWidth: 0.9381,
+        roughHeight: 2.1381,
+      },
+      {
+        id: 'w',
+        kind: 'window',
+        u: 5.5,
+        width: 1.2,
+        height: 1.2,
+        sillHeight: 0.9,
+        roughWidth: 1.2381,
+        roughHeight: 1.2381,
+      },
     ]
     const lumberW = { ...mkWall('w_wood', [0, 0], [8, 0]), openings }
     const steelW = { ...mkWall('w_steel', [0, 4], [8, 4]), openings }
@@ -4249,7 +4658,9 @@ describe('LGS paper identity (Phase 1 round-1 F3)', () => {
       members.filter((m) => m.profile !== undefined).map((m) => m.role as string),
     )
     const lumberRoles = new Set(
-      members.filter((m) => m.size !== undefined && m.material !== 'steel').map((m) => m.role as string),
+      members
+        .filter((m) => m.size !== undefined && m.material !== 'steel')
+        .map((m) => m.role as string),
     )
     expect(steelRoles.size + lumberRoles.size).toBeGreaterThan(13) // the cap class is non-vacuous
     for (const role of steelRoles) {
