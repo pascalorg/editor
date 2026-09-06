@@ -10,8 +10,9 @@
  *
  * The plugin declares no node kinds; it is commands + a rail panel.
  */
-import type { Plugin } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, type Plugin, useScene } from '@pascal-app/core'
 import { type CommandAction, type EditorHostPanel, useCommandRegistry } from '@pascal-app/editor'
+import { stairFollowPatches } from './porch-follow'
 import { generateHouse, generateTemplate } from './run'
 import { useGenerate } from './store'
 import { TEMPLATES } from './templates/poppy'
@@ -45,10 +46,42 @@ export const generateHostPanel = {
 
 let commandsRegistered = false
 
-/** Register the Ctrl+K commands. Idempotent (HMR-safe). */
+/**
+ * The porch posts follow their stair: whenever a generated entrance's stair
+ * moves along the porch edge, the two flanking posts slide with it
+ * (porch-follow.ts). One store subscription; the patches it writes move
+ * columns, never stairs, so it cannot feed itself.
+ */
+function subscribePorchFollow(): void {
+  type Nodes = Record<string, AnyNode | undefined>
+  useScene.subscribe((state, previous) => {
+    const nodes = state.nodes as unknown as Nodes
+    const before = previous.nodes as unknown as Nodes
+    if (nodes === before) return
+    for (const node of Object.values(nodes)) {
+      if (!node || node.type !== 'stair') continue
+      const prior = before[node.id]
+      if (!prior || prior === node) continue
+      const was = (prior as { position?: unknown }).position
+      const now = (node as { position?: unknown }).position
+      if (!Array.isArray(was) || was === now) continue
+      const patches = stairFollowPatches(
+        nodes as unknown as Parameters<typeof stairFollowPatches>[0],
+        node.id,
+        { position: was as [number, number, number] },
+      )
+      for (const patch of patches) {
+        state.updateNode(patch.id as AnyNodeId, { position: patch.position } as Partial<AnyNode>)
+      }
+    }
+  })
+}
+
+/** Register the Ctrl+K commands and the porch-follow subscription. Idempotent (HMR-safe). */
 export function registerGenerateCommands(): void {
   if (commandsRegistered || typeof window === 'undefined') return
   commandsRegistered = true
+  subscribePorchFollow()
   const actions: CommandAction[] = [
     {
       id: 'generate.house',

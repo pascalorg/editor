@@ -491,9 +491,12 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
   // never over 8 ft. A stair so wide that its flanking posts would crowd
   // the corners lets the corner posts flank it.
   const along: number[] = []
+  /** Where the flight's flanking pair stands, either side of a = 0 (null: no flight). */
+  let flankAt: number | null = null
   if (form !== 'none') {
     const edge = hw - inset
     const flank = risers > 0 ? stairWidth / 2 + pillar.size / 2 + inches(1) : null
+    flankAt = flank
     const anchors =
       flank !== null && flank < edge - 2 * pillar.size
         ? [-edge, -flank, flank, edge]
@@ -534,7 +537,12 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         capitalStyle: 'none',
         edgeSoftness: 0.008,
         ...(pillar.stucco ? { materialPreset: 'library:concrete-stucco' } : {}),
-        metadata: meta,
+        // the pair each side of the flight: the posts that follow a moved
+        // stair (porch-follow.ts)
+        metadata: {
+          ...meta,
+          post: { flank: flankAt !== null && Math.abs(Math.abs(a) - flankAt) < 1e-6 },
+        },
       },
       parentId: input.levelId,
     })

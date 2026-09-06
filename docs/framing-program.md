@@ -561,6 +561,31 @@ G16 Slab houses get concrete porches front and rear; the porch ceiling is 9 ft (
   Bones' framing sections (the cut through the framed model) as a Sheets
   drawing; the Bones panel's own plan set keeps printing its details too.
 
+- 2026-09-06 night: **Batch H — the porch posts follow the stair (G5b).**
+  The generator tags the pair of posts each side of the flight
+  (`metadata.post.flank`); new `porch-follow.ts` (`stairFollowPatches`)
+  reads a generated entrance's stair after a move, takes the component of
+  the move ALONG the porch edge (the stair's local +x, square to its run)
+  and slides the two flanking posts of that entrance by it — a move square
+  to the edge moves nothing, a nudge under 2 mm nothing, a hand-made stair
+  nothing. `registerGenerateCommands` (bootstrap) adds one scene-store
+  subscription that diffs stair positions and writes the column patches
+  (columns only, so it cannot feed itself). Tests: porch-follow +4 —
+  plugin-generate 94, editor typecheck clean. NOT yet exercised in the
+  editor by dragging a stair (the pane cannot drag; the pure function is
+  tested, the subscription is a dozen lines).
+
+  Status at the end of 2026-09-06 (Steve's evening list): done G1, G2, G3,
+  G4, G5 (both parts), G6 (it was the shell view), G7, G8, G9 (details; the
+  fixture schedule already existed and now has fixtures to list), G10, G11,
+  G12, G13, G14, G16. Open: G15 (an "auto porch entrance" panel — post size,
+  rail style, roof form editable after generation; today the generator's
+  6x6 / balusters / cover form are fixed at generation and editable only
+  node by node), the catalog's vanity width for small baths, Bones'
+  framing sections on the Sheets tool. Commits since the backup push
+  (f58bb085): 4ef9816a, 4a10589a, 25c611a3, a8a486d6, ec01f13e, e81367fb,
+  c2985f2a and this one — not pushed (Steve: local is fine).
+
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
   reference folder; Pascal roof node, Bones roof/wall framing, generate build, site
   and parcel code read. Diagnosis above. Starting W1.
