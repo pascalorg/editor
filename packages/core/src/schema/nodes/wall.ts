@@ -124,9 +124,29 @@ export const WALL_SURFACE_SLOT_DEFAULTS = {
   crownExterior: WALL_CROWN_SLOT_DEFAULT,
   chairRailInterior: WALL_CHAIR_RAIL_SLOT_DEFAULT,
   chairRailExterior: WALL_CHAIR_RAIL_SLOT_DEFAULT,
+  // The foundation under a wall's underpinning (see WallNode.underpinning):
+  // the concrete stemwall between the finish carried down over the floor
+  // platform and the ground.
+  foundation: 'library:concrete-raw',
 } as const
 
 export type WallSurfaceSlotId = keyof typeof WALL_SURFACE_SLOT_DEFAULTS
+
+/**
+ * What a wall carries BELOW its base on a house standing above the ground:
+ * `rim` metres of its exterior finish continued down over the floor
+ * platform's edge (subfloor, rim joist, mudsill), then the foundation —
+ * the concrete stemwall, painted through the `foundation` slot — `stem`
+ * metres more to the ground (with `fillToTerrain`, to the terrain wherever
+ * that is lower). The wall body, its top and its openings are unchanged,
+ * and the framers ignore it (Bones pours its own stemwall from the
+ * building's foundation record).
+ */
+export const WallUnderpinning = z.object({
+  rim: z.number().min(0),
+  stem: z.number().min(0),
+})
+export type WallUnderpinning = z.infer<typeof WallUnderpinning>
 
 // ---------------------------------------------------------------------------
 // Wall assembly (WS5)
@@ -252,6 +272,8 @@ export const WallNode = BaseNode.extend({
   // Extend downward from the authored wall base to the terrain while keeping
   // the wall body height and top unchanged.
   fillToTerrain: z.boolean().optional(),
+  // The finish and the foundation carried below the base — see WallUnderpinning.
+  underpinning: WallUnderpinning.optional(),
   faceBands: WallFaceBandConfig.optional(),
   skirting: WallTrimConfig.optional(),
   crown: WallTrimConfig.optional(),
@@ -270,6 +292,8 @@ export const WallNode = BaseNode.extend({
     source of truth and thickness is re-derived from it on every edit
   - height: height in meters
   - fillToTerrain: extends the wall downward to the terrain without changing its authored height
+  - underpinning: { rim, stem } — the finish carried rim metres below the base over the floor
+    platform's edge, then stem metres of concrete stemwall to the ground (the foundation slot)
   - curveOffset: midpoint sagitta offset used to bend the wall into an arc
   - start: start point of the wall in level coordinate system
   - end: end point of the wall in level coordinate system

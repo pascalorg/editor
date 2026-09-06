@@ -37,6 +37,7 @@ const WALL_ARRAY_SLOT_INDEX: Partial<Record<WallSurfaceSlotId, number>> = {
   middleExterior: 8,
   upperExterior: 9,
   topExterior: 10,
+  foundation: 11,
 }
 const WALL_INDEX_SLOT = new Map<number, WallSurfaceSlotId>(
   Object.entries(WALL_ARRAY_SLOT_INDEX).map(([slotId, index]) => [

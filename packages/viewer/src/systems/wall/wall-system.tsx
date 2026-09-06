@@ -72,6 +72,7 @@ const WALL_BAND_SLOT_MATERIAL_INDEX: Record<WallSurfaceSlotId, number> = {
   crownExterior: 0,
   chairRailInterior: 0,
   chairRailExterior: 0,
+  foundation: 11,
 }
 
 function computeGeometryBoundsTree(geometry: THREE.BufferGeometry) {
@@ -227,11 +228,15 @@ function distanceToWallBoundaryEdge(point: THREE.Vector2, edge: TaggedWallBounda
 }
 
 function getWallFaceMaterialIndex(
-  wall: Pick<WallNode, 'frontSide' | 'backSide' | 'height' | 'faceBands'>,
+  wall: Pick<WallNode, 'frontSide' | 'backSide' | 'height' | 'faceBands' | 'underpinning'>,
   face: 'front' | 'back',
   y: number,
   effectiveWallHeight: number,
 ): number {
+  // The underpinning's stemwall: everything under the rim depth is concrete.
+  if (wall.underpinning && y < -wall.underpinning.rim + WALL_BAND_SPLIT_EPSILON) {
+    return WALL_BAND_SLOT_MATERIAL_INDEX.foundation
+  }
   const semantic = face === 'front' ? wall.frontSide : wall.backSide
   const fallback: WallSurfaceSide = face === 'front' ? 'interior' : 'exterior'
   const side = semantic === 'interior' || semantic === 'exterior' ? semantic : fallback
@@ -934,27 +939,72 @@ function buildWallTerrainFillGeometry(
   return buildTerrainPerimeterFillGeometry(localPoints, bottomY, 0)
 }
 
+/**
+ * The underpinning under a wall (`WallNode.underpinning`): a skirt of the
+ * wall's own faces `rim` deep below the base, then the stemwall skirt from
+ * there down `stem` more — or to the terrain wherever that is lower when
+ * the wall also fills to terrain. Two fills, split at the rim depth, so the
+ * material groups can paint the stem concrete and the rim in the finish.
+ */
+function buildWallUnderpinningGeometry(
+  perimeter: Point2D[],
+  worldToLocal: (point: Point2D) => { x: number; z: number },
+  wallBaseElevation: number,
+  wall: Pick<WallNode, 'underpinning'>,
+  terrainBottomAt: WallTerrainBottomSampler | undefined,
+): THREE.BufferGeometry[] {
+  const underpinning = wall.underpinning
+  if (!underpinning) return []
+  const worldPoints = densifyClosedWallPerimeter(perimeter)
+  if (worldPoints.length < 3) return []
+  const localPoints = worldPoints.map(worldToLocal)
+  const rimBottom = -underpinning.rim
+  const fills: THREE.BufferGeometry[] = []
+  if (underpinning.rim > 1e-6) {
+    const rim = buildTerrainPerimeterFillGeometry(
+      localPoints,
+      worldPoints.map(() => rimBottom),
+      0,
+    )
+    if (rim) fills.push(rim)
+  }
+  const stemBottom = worldPoints.map((point) => {
+    let y = rimBottom - underpinning.stem
+    if (terrainBottomAt) {
+      const terrainElevation = terrainBottomAt(point.x, point.y)
+      if (terrainElevation != null) y = Math.min(y, terrainElevation - wallBaseElevation)
+    }
+    return y
+  })
+  if (stemBottom.some((y) => y < rimBottom - 1e-6)) {
+    const stem = buildTerrainPerimeterFillGeometry(localPoints, stemBottom, rimBottom)
+    if (stem) fills.push(stem)
+  }
+  return fills
+}
+
 function mergeWallTerrainFill(
   body: THREE.BufferGeometry,
-  fill: THREE.BufferGeometry | null,
+  fills: (THREE.BufferGeometry | null)[],
   wall: WallNode,
   boundaryEdges: TaggedWallBoundaryEdge[],
   effectiveWallHeight: number,
 ): THREE.BufferGeometry {
-  if (!fill) return body
+  const present = fills.filter((fill): fill is THREE.BufferGeometry => fill !== null)
+  if (present.length === 0) return body
 
   const bodyGeometry = body.index ? body.toNonIndexed() : body
   if (bodyGeometry !== body) body.dispose()
   ensureRenderableGeometryAttributes(bodyGeometry)
-  ensureRenderableGeometryAttributes(fill)
-  const merged = mergeGeometries([bodyGeometry, fill], false)
+  for (const fill of present) ensureRenderableGeometryAttributes(fill)
+  const merged = mergeGeometries([bodyGeometry, ...present], false)
   if (!merged) {
-    fill.dispose()
+    for (const fill of present) fill.dispose()
     return bodyGeometry
   }
 
   bodyGeometry.dispose()
-  fill.dispose()
+  for (const fill of present) fill.dispose()
   merged.computeVertexNormals()
   assignWallMaterialGroups(merged, wall, boundaryEdges, effectiveWallHeight)
   ensureRenderableGeometryAttributes(merged)
@@ -1024,9 +1074,20 @@ export function generateExtrudedWall(
   // Convert polygon to local coordinates
   const localPoints = polyPoints.map(worldToLocal)
   const boundaryEdges = buildTaggedWallBoundaryEdges(wallNode, localPoints, miterData)
-  const terrainFill = terrainBottomAt
-    ? buildWallTerrainFillGeometry(polyPoints, worldToLocal, slabElevation, terrainBottomAt)
-    : null
+  // An underpinned wall's stem skirt reaches the terrain itself; the plain
+  // terrain fill is for a wall with no underpinning.
+  const underpinningFills = buildWallUnderpinningGeometry(
+    polyPoints,
+    worldToLocal,
+    slabElevation,
+    wallNode,
+    terrainBottomAt,
+  )
+  const terrainFill =
+    terrainBottomAt && !wallNode.underpinning
+      ? buildWallTerrainFillGeometry(polyPoints, worldToLocal, slabElevation, terrainBottomAt)
+      : null
+  const belowBaseFills = [terrainFill, ...underpinningFills]
 
   // Build THREE.js shape
   // Shape uses (x, y) where we map: shape.x = local.x, shape.y = -local.z
@@ -1157,7 +1218,7 @@ export function generateExtrudedWall(
     ensureRenderableGeometryAttributes(splitGeometry)
     return mergeWallTerrainFill(
       splitGeometry,
-      terrainFill,
+      belowBaseFills,
       wallNode,
       boundaryEdges,
       effectiveWallHeight,
@@ -1201,7 +1262,7 @@ export function generateExtrudedWall(
 
   return mergeWallTerrainFill(
     splitResultGeometry,
-    terrainFill,
+    belowBaseFills,
     wallNode,
     boundaryEdges,
     effectiveWallHeight,

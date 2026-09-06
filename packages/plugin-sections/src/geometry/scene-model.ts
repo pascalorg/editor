@@ -184,6 +184,13 @@ export type WallSolid = {
   claddingColor: string | null
   baseY: number
   topY: number
+  /**
+   * What the wall carries below its base (`WallNode.underpinning`): the
+   * finish carried down to `rimBottomY` over the floor platform's edge,
+   * the concrete stemwall from there down to `stemBottomY`. Null for a wall
+   * that stops at its base.
+   */
+  underpinning: { rimBottomY: number; stemBottomY: number } | null
   openings: Opening[]
   levelId: string | null
 }
@@ -697,6 +704,13 @@ export function buildBuildingModel(nodes: Nodes): BuildingModel {
         claddingColor: claddingColorOf(wall),
         baseY: baseY + (wall.supportOffset ?? 0),
         topY: baseY + (wall.supportOffset ?? 0) + (wall.height ?? DEFAULT_WALL_HEIGHT),
+        underpinning: wall.underpinning
+          ? {
+              rimBottomY: baseY + (wall.supportOffset ?? 0) - wall.underpinning.rim,
+              stemBottomY:
+                baseY + (wall.supportOffset ?? 0) - wall.underpinning.rim - wall.underpinning.stem,
+            }
+          : null,
         openings: [],
         levelId: levelId === '__orphan__' ? null : levelId,
       }

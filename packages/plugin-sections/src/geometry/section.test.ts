@@ -527,6 +527,29 @@ describe('buildElevationDrawing', () => {
     expect(texts.some((t) => t.text.startsWith('T.O. PLATE'))).toBe(true)
   })
 
+  test('an underpinned wall shows its finish down over the rim and the stemwall below in concrete, on the elevation and in the cut', () => {
+    const s = scene()
+    ;(s.nodes.wall_s as unknown as { underpinning: { rim: number; stem: number } }).underpinning = {
+      rim: 0.25,
+      stem: 0.2,
+    }
+    const south = buildElevationDrawing(s, 'south')
+    const rects = polygons(south.primitives).map((p) => ({ ...extent(p), fill: p.fill }))
+    // the face rectangle reaches 0.25 m below the base
+    expect(rects.some((r) => Math.abs(r.bottom + 0.25) < 1e-6 && Math.abs(r.top - WALL_HEIGHT) < 1e-6)).toBe(true)
+    // the stemwall band: concrete grey from -0.25 down to -0.45
+    const stem = rects.find((r) => r.fill === '#b7b7be' && Math.abs(r.top + 0.25) < 1e-6)
+    expect(stem).toBeDefined()
+    expect(stem!.bottom).toBeCloseTo(-0.45, 9)
+    // the cut through the south wall shows the same stem band across the wall
+    const cut = buildSectionDrawing(s, { start: [3.5, -1], end: [3.5, 5] })
+    const cutStem = polygons(cut.primitives)
+      .map((p) => ({ ...extent(p), fill: p.fill }))
+      .find((r) => r.fill === '#b7b7be' && Math.abs(r.top + 0.25) < 1e-6 && Math.abs(r.bottom + 0.45) < 1e-6)
+    expect(cutStem).toBeDefined()
+    expect(cutStem!.x1 - cutStem!.x0).toBeCloseTo(WALL_THICKNESS, 6)
+  })
+
   test('the grade line sits at 0.00 with no terrain', () => {
     const drawing = buildElevationDrawing(scene(), 'south')
     const grade = drawing.primitives.find(

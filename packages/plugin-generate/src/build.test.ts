@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { buildHouse, type NodeOp } from './build'
+import { buildHouse, type NodeOp, PLATFORM_RIM_M } from './build'
 import { normalizeDocument } from './document'
 import { outlineRing, ringArea } from './geometry'
 import { rollDocument } from './roll'
@@ -195,6 +195,31 @@ describe('Poppy builds into Pascal nodes', () => {
     const onGarage = (ofType(built.ops, 'wall') as N[]).filter((w) => w.supportSlabId === garage.id)
     expect(onGarage.length).toBeGreaterThanOrEqual(2)
     for (const w of onGarage) expect(w.name).toBe('Exterior wall')
+    // the house's exterior walls carry the platform rim in siding and the
+    // stemwall to grade under it; the garage's walls, on the pad, nothing
+    const exterior = (ofType(built.ops, 'wall') as N[]).filter((w) => w.name === 'Exterior wall')
+    for (const w of exterior) {
+      if (w.supportSlabId === garage.id) {
+        expect(w.underpinning).toBeUndefined()
+        continue
+      }
+      expect(w.fillToTerrain).toBe(true)
+      expect(w.underpinning.rim).toBeCloseTo(PLATFORM_RIM_M, 9)
+      // 18 in above grade less the platform: the stem shows the rest
+      expect(w.underpinning.stem).toBeCloseTo(18 * 0.0254 - PLATFORM_RIM_M, 3)
+    }
+    const interior = (ofType(built.ops, 'wall') as N[]).filter((w) => w.name !== 'Exterior wall')
+    for (const w of interior) expect(w.underpinning).toBeUndefined()
+  })
+
+  test("a slab house's exterior walls carry the slab edge and stem to grade in concrete, no rim", () => {
+    const built = buildHouse(POPPY)
+    const exterior = (ofType(built.ops, 'wall') as N[]).filter((w) => w.name === 'Exterior wall')
+    expect(exterior.length).toBeGreaterThan(0)
+    for (const w of exterior) {
+      expect(w.underpinning).toEqual({ rim: 0, stem: 8 * 0.0254 })
+      expect(w.fillToTerrain).toBe(true)
+    }
   })
 
   test('a rear slider opens onto the yard and gets its own entrance: a deck on the raised farmhouse, a patio on the slab Poppy', () => {

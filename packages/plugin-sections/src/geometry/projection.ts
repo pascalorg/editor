@@ -19,6 +19,7 @@ import {
   line,
   PAPER,
   POCHE_ROOF,
+  POCHE_SLAB,
   polygon as polygonPrimitive,
   polyline,
   rectPolygon,
@@ -224,13 +225,29 @@ export function projectWall(
   // The face is painted in the cladding's own colour when the exterior looks
   // at the viewer and the material rendition is on; otherwise paper white.
   const clad = options.finish && exteriorFacesViewer
+  // The finish runs down over the floor platform's rim; the stemwall shows
+  // below it in concrete (WallSolid.underpinning).
+  const faceBottom = wall.underpinning ? wall.underpinning.rimBottomY : wall.baseY
   const primitives: FloorplanGeometry[] = [
-    polygonPrimitive(rectPolygon(extent[0], drawY(wall.topY), extent[1], drawY(wall.baseY)), {
+    polygonPrimitive(rectPolygon(extent[0], drawY(wall.topY), extent[1], drawY(faceBottom)), {
       fill: clad ? (wall.claddingColor ?? PAPER) : PAPER,
       stroke: INK,
       strokeWidth: WEIGHT.projected,
     }),
   ]
+  if (wall.underpinning && wall.underpinning.stemBottomY < faceBottom - 1e-6) {
+    primitives.push(
+      polygonPrimitive(
+        rectPolygon(
+          extent[0],
+          drawY(faceBottom),
+          extent[1],
+          drawY(wall.underpinning.stemBottomY),
+        ),
+        { fill: POCHE_SLAB, stroke: INK, strokeWidth: WEIGHT.projected },
+      ),
+    )
+  }
   if (options.finish && exteriorFacesViewer && wall.exteriorFinish && wall.exteriorFinish !== 'none') {
     const holes: FaceHole[] = wall.openings.map((opening) => {
       const centre: Vec2 = [
@@ -243,7 +260,7 @@ export function projectWall(
       return { u: [u0, u1], y: [drawY(opening.headY), drawY(opening.sillY)] }
     })
     primitives.push(
-      ...finishHatch(wall.exteriorFinish, extent, drawY(wall.topY), drawY(wall.baseY), holes),
+      ...finishHatch(wall.exteriorFinish, extent, drawY(wall.topY), drawY(faceBottom), holes),
     )
   }
   for (const opening of wall.openings) {

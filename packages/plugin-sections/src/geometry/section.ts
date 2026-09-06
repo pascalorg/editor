@@ -138,6 +138,35 @@ function cutWall(spec: SectionSpec, view: Projector, wall: WallSolid): Floorplan
         )
       }
     }
+    if (wall.underpinning) {
+      // Below the base: the cladding layer down over the platform's rim, and
+      // the stemwall under it across the wall's whole thickness.
+      const { rimBottomY, stemBottomY } = wall.underpinning
+      const cladding = bands.find((band) => band.layer.role === 'exterior-finish')
+      if (cladding && wall.baseY - rimBottomY > 1e-4) {
+        out.push(
+          polygonPrimitive(
+            rectPolygon(cladding.u0, drawY(wall.baseY), cladding.u1, drawY(rimBottomY)),
+            {
+              fill: wall.claddingColor ?? LAYER_FILL['exterior-finish'],
+              stroke: INK,
+              strokeWidth: WEIGHT.cutLayer,
+              strokeLinejoin: 'miter',
+            },
+          ),
+        )
+      }
+      if (rimBottomY - stemBottomY > 1e-4) {
+        out.push(
+          polygonPrimitive(rectPolygon(span.u0, drawY(rimBottomY), span.u1, drawY(stemBottomY)), {
+            fill: POCHE_SLAB,
+            stroke: INK,
+            strokeWidth: WEIGHT.cut,
+            strokeLinejoin: 'miter',
+          }),
+        )
+      }
+    }
     if (hit) {
       // Head and sill lines across the full band — the opening the plane
       // passes through reads as a void with its two horizontal members.

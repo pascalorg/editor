@@ -475,6 +475,7 @@ export function getWallMaterialHash(
     middleExterior: wallSlotMaterialSignature(wallNode, 'middleExterior', sceneMaterials),
     upperExterior: wallSlotMaterialSignature(wallNode, 'upperExterior', sceneMaterials),
     topExterior: wallSlotMaterialSignature(wallNode, 'topExterior', sceneMaterials),
+    foundation: wallSlotMaterialSignature(wallNode, 'foundation', sceneMaterials),
   })
 }
 
@@ -525,8 +526,10 @@ export function getMaterialsForWall(
         resolveWallSlotMaterial(wallNode, 'middleExterior', shading, sceneMaterials),
         resolveWallSlotMaterial(wallNode, 'upperExterior', shading, sceneMaterials),
         resolveWallSlotMaterial(wallNode, 'topExterior', shading, sceneMaterials),
+        // index 11: the underpinning's stemwall (WallNode.underpinning)
+        resolveWallSlotMaterial(wallNode, 'foundation', shading, sceneMaterials),
       ]
-    : Array.from({ length: 11 }, () => wallRoleMaterial)
+    : Array.from({ length: 12 }, () => wallRoleMaterial)
 
   const wallRoleColor = resolveSurfaceColor('wall', colorPreset, sceneTheme)
   const invisible: WallMaterialArray = [
@@ -549,6 +552,7 @@ export function getMaterialsForWall(
         'middleExterior',
         'upperExterior',
         'topExterior',
+        'foundation',
       ] as WallSurfaceSlotId[]
     ).map((slotId) =>
       createInvisibleWallMaterial(
@@ -580,6 +584,7 @@ export function getMaterialsForWall(
         'middleExterior',
         'upperExterior',
         'topExterior',
+        'foundation',
       ] as WallSurfaceSlotId[]
     ).map((slotId) =>
       createTranslucentWallMaterial(

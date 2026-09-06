@@ -434,6 +434,37 @@ G16 Slab houses get concrete porches front and rear; the porch ceiling is 9 ft (
   timeout on this box (5.07 s once, 4.x s on rerun) — environmental, not a
   regression.
 
+- 2026-09-06 evening: **Batch D — the wall carries its underpinning (G14, the
+  shell and the drawings).** A generated house's walls stopped at the floor
+  and the raised platform floated over the ground. Pascal's wall node had
+  only `fillToTerrain` (the wall's own faces to the terrain, one material,
+  nothing without a terrain field). New on the wall: `underpinning: { rim,
+  stem }` — the exterior finish carried `rim` m below the base over the
+  platform's edge (subfloor, rim joist, mudsill), then the concrete stemwall
+  `stem` m more to the ground (to the terrain wherever that is lower, with
+  `fillToTerrain`), painted through a new `foundation` wall slot (default
+  concrete-raw, material index 11, paintable). The viewer builds two skirts
+  under the body, split at the rim depth, so the material groups paint the
+  rim in the wall's finish and the stem in concrete; the sections plugin's
+  elevation carries the cladding and its hatch down to the rim and draws the
+  stem band below in slab poché, the cut shows the cladding layer down over
+  the rim and the stem across the wall. The generator: every exterior wall
+  on the house floor gets `fillToTerrain` and its underpinning — raised
+  house rim = `PLATFORM_RIM_M` (3/4 in subfloor + 2x10 + 2x mudsill under
+  the wall base, 0.24 m; Bones sizes its own joists so its stem top can
+  differ by a joist size), stem = the rest of the way to the grade under
+  the wall's midpoint; slab house rim 0, stem = 8 in to grade in concrete;
+  the garage's walls on the pad carry nothing. Bones already pours the
+  raised stemwall to the mudsill with the joists over it (compute's
+  `raised.stemTop`), so the framing view and the shell agree to a joist
+  size. Seen in the editor on the farmhouse: siding down over the rim, a
+  grey stem to the ground under every wall. Tests: sections +1 (elevation
+  face to the rim, stem band, the cut's stem), build +1 and the raised
+  farmhouse's walls — sections 22, generate 76, Bones 2,107, sheets 235,
+  core wall 11, viewer wall 45, nodes wall 125, editor typecheck clean.
+  Open on G14: the foundation DETAIL drawing for a raised floor (stem +
+  mudsill + rim + joist) — check what Bones' details already draw.
+
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
   reference folder; Pascal roof node, Bones roof/wall framing, generate build, site
   and parcel code read. Diagnosis above. Starting W1.

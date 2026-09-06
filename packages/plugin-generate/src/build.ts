@@ -52,6 +52,14 @@ const FT = 0.3048
 export const SLAB_ABOVE_GRADE_M = 8 * IN
 /** The house slab's walking surface above the level plane. */
 export const SLAB_ELEVATION_M = 0.05
+/**
+ * A raised floor's platform under the finish floor, as the shell shows it:
+ * the 3/4 in subfloor, a 2x10 joist (the common floor joist — Bones sizes
+ * its own from the span table, so its stem top can differ by a joist size)
+ * and the 2x PT mudsill. Measured from the wall base (level y = 0, 5 cm
+ * under the finish floor) down to the top of the stemwall.
+ */
+export const PLATFORM_RIM_M = Math.round((0.019 + 9.25 * IN + 1.5 * IN - SLAB_ELEVATION_M) * 1e6) / 1e6
 
 export type Pt = [number, number]
 
@@ -955,6 +963,26 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       const op = ops.find((o) => o.node.id === wall.id)
       if (op) op.node.supportSlabId = garageSlabId
     }
+  }
+
+  // ── the underpinning: siding down over the rim, the stemwall to grade ──
+  // Every exterior wall standing on the house floor carries what is under
+  // it (Steve, 2026-09-06: "the siding go down to grade and the raised
+  // floor … should be standard stemwall"): a raised house its finish down
+  // over the platform's rim then the concrete stem to the ground, a slab
+  // house the slab edge and stem in concrete from the wall base down; on a
+  // hill the stem follows the terrain (`fillToTerrain`). The garage's walls
+  // stand on the pad at grade and carry nothing.
+  for (const wall of walls) {
+    if (!wall.exterior) continue
+    const op = ops.find((o) => o.node.id === wall.id)
+    if (!op || op.node.supportSlabId !== undefined) continue
+    const mx = (wall.start[0] + wall.end[0]) / 2
+    const mz = (wall.start[1] + wall.end[1]) / 2
+    const rim = raisedFloor ? PLATFORM_RIM_M : 0
+    const stem = Math.max(0, round(-rim - localGrade(mx, mz)))
+    op.node.fillToTerrain = true
+    op.node.underpinning = { rim, stem }
   }
 
   // ── roof: derived from the walls by the auto roof engine ─────────────
