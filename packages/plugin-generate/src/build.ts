@@ -118,7 +118,7 @@ export type BuildResult = {
 }
 
 /** What a wall IS in the house (W8): its assembly, its thickness and what Bones does with it follow. */
-export type WallRole = 'exterior' | 'partition' | 'plumbing' | 'garage-separation'
+export type WallRole = 'exterior' | 'partition' | 'garage-separation'
 
 type WallRun = Run & {
   id: string
@@ -163,6 +163,29 @@ const WINDOWS: Partial<
 const EXTERIOR_DOOR_W = 36
 /** The rear slider: a 6-0 patio door. */
 const REAR_DOOR_W = 72
+/**
+ * A sliding patio door is GLAZED: two glass lites over a low rail — the
+ * editor's own 'Sliding' preset (nodes/door panel `frenchDoorSegments`),
+ * repeated here so a generated slider never renders as a solid slab.
+ */
+const SLIDING_DOOR_SEGMENTS = [
+  {
+    type: 'glass' as const,
+    heightRatio: 0.76,
+    columnRatios: [1, 1],
+    dividerThickness: 0.025,
+    panelDepth: 0.01,
+    panelInset: 0.04,
+  },
+  {
+    type: 'panel' as const,
+    heightRatio: 0.24,
+    columnRatios: [1],
+    dividerThickness: 0.03,
+    panelDepth: 0.012,
+    panelInset: 0.035,
+  },
+]
 const GARAGE_DOOR_W = 16 * 12
 const GARAGE_DOOR_H = 7 * 12
 const DOOR_H = 80
@@ -246,9 +269,10 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   // ── wall ROLES (W8 — PlanCrafters WALL_TYPES + applyGarageProtection) ──
   // exterior by style; the walls between the garage and the house are the
   // R302.6 separation (Bones puts the 1/2 in gypsum on the garage side and
-  // says so); a partition bounding a bath or laundry is the 2x6 plumbing
-  // wall so the 3 in stack fits inside it; everything else is a 2x4
-  // partition.
+  // says so), framed 2x6 like the exterior wall whose line they carry on;
+  // every other partition is 2x4. (A per-run 2x6 "plumbing wall" behind
+  // the baths jogged every wall line it touched — Steve, 2026-09-06: the
+  // stack finds its wall on site; the plan reads clean.)
   const kindsBeside = (run: Run): RoomKind[] =>
     [run.left, run.right].filter((i) => i !== -1).map((i) => (rooms[i] as NormalizedRoom).kind)
   const roleOf = (run: Run, exterior: boolean): WallRole => {
@@ -256,7 +280,6 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const kinds = kindsBeside(run)
     const garage = kinds.filter((k) => k === 'garage').length
     if (garage === 1 && kinds.length === 2) return 'garage-separation'
-    if (kinds.some((k) => k === 'bath' || k === 'laundry')) return 'plumbing'
     return 'partition'
   }
 
@@ -272,7 +295,11 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       length,
       start,
       end,
-      thickness: exterior ? exteriorT : roleOf(run, false) === 'plumbing' ? plumbingT : interiorT,
+      thickness: exterior
+        ? exteriorT
+        : roleOf(run, false) === 'garage-separation'
+          ? plumbingT
+          : interiorT,
       role: roleOf(run, exterior),
     }
   })
@@ -303,14 +330,18 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         assembly:
           wall.role === 'exterior'
             ? exteriorPreset.assembly
-            : wall.role === 'plumbing'
+            : wall.role === 'garage-separation'
               ? plumbingPreset.assembly
               : interiorPreset.assembly,
         frontSide: wall.exterior ? (frontInside ? 'interior' : 'exterior') : 'unknown',
         backSide: wall.exterior ? (backInside ? 'interior' : 'exterior') : 'unknown',
         metadata: {
           generatedBy: GENERATED_BY,
-          wallType: wall.exterior ? 'ext2x6' : wall.role === 'plumbing' ? 'int2x6' : 'int2x4',
+          wallType: wall.exterior
+            ? 'ext2x6'
+            : wall.role === 'garage-separation'
+              ? 'int2x6'
+              : 'int2x4',
           role: wall.role,
           rooms: roomNames(wall),
           // the dwelling–garage separation: 1/2 in gypsum on the garage side
@@ -415,6 +446,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         width: round(widthIn * IN),
         height: round(heightIn * IN),
         doorType: isGarage ? 'garage-sectional' : doorType,
+        ...(doorType === 'sliding' && !isGarage ? { segments: SLIDING_DOOR_SEGMENTS } : {}),
         openingKind: kind === 'open' ? 'opening' : 'door',
         swingDirection,
         metadata: { generatedBy: GENERATED_BY, attach: kind, ...(extraMeta ?? {}) },

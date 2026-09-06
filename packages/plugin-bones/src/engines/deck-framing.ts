@@ -167,7 +167,8 @@ export function frameDeck(
     ? undefined
     : 'deck joist span past the table — verify per R507.6'
   const [t, d] = LUMBER_CROSS_SECTIONS[joistSize]
-  const topY = slab.elevation - slab.thickness // joist tops, under the decking
+  // joist tops under the decking — the slab may be decking + the rim band
+  const topY = slab.elevation - (slab.decking ?? slab.thickness)
   const centerY = topY - d / 2
   // The beam: dropped when a post of at least the minimum height fits under
   // a 4x8 below the joists; else flush with the joists (doubled rim); if even

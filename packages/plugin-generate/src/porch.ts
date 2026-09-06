@@ -307,6 +307,17 @@ export function coverGeometry(
   }
 }
 
+/**
+ * The joist / rim band a deck's edge shows under its decking: the joist
+ * depth its span wants (the deck joist table's 2x8 / 2x10 / 2x12 ladder,
+ * by depth) — Bones sizes the joists themselves.
+ */
+export function deckRimDepth(depth: number): number {
+  if (depth <= 8 * FT) return inches(7.25)
+  if (depth <= 12 * FT) return inches(9.25)
+  return inches(11.25)
+}
+
 export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
   const warnings: string[] = []
   const { style, policy, wall, outward } = input
@@ -378,6 +389,10 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
   const rise = landingTop - input.gradeY
   const guard = policy === 'full' || policy === 'deck' || wood || rise > GUARD_REQUIRED_ABOVE
   const railStyle = guard ? railStyleFor(style) : null
+  // The flight (built below): its width sets the guard opening and the
+  // posts that flank it.
+  const risers = riserCount(rise)
+  const stairWidth = Math.max(MIN_STAIR_WIDTH, Math.min(inches(60), width - inches(4)))
   // The front is a porch whatever its floor; the rear is named by what it is.
   const name =
     entrance === 'front'
@@ -404,11 +419,18 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
       polygon: corners,
       holes: [],
       elevation: round(landingTop),
-      thickness: wood ? DECKING_THICKNESS : inches(4),
+      // A deck's slab is the decking AND the joist / rim band under it, so
+      // its edge reads as the fascia board it is; Bones frames the joists
+      // under the decking thickness it is told (`metadata.decking`).
+      thickness: wood ? DECKING_THICKNESS + deckRimDepth(depth) : inches(4),
       materialPreset: wood ? 'library:wood-floorplank1' : 'library:concrete-raw',
       // Bones: a 'deck' is framed (ledger, joists, beam on posts to grade); a
       // 'porch-slab' is poured at its elevation.
-      metadata: { ...meta, floor: wood ? 'deck' : 'porch-slab' },
+      metadata: {
+        ...meta,
+        floor: wood ? 'deck' : 'porch-slab',
+        ...(wood ? { decking: DECKING_THICKNESS } : {}),
+      },
     },
     parentId: input.levelId,
   })
@@ -444,10 +466,26 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
     )
   }
   const postHeight = cover.coverY - landingTop
+  // Posts: one at each outer corner, one each side of the stair opening
+  // (the flight is centred on the door, a = 0), and the bays between them
+  // never over 8 ft. A stair so wide that its flanking posts would crowd
+  // the corners lets the corner posts flank it.
   const along: number[] = []
   if (form !== 'none') {
-    const bays = Math.max(1, Math.ceil((width - 2 * inset) / MAX_POST_SPACING))
-    for (let i = 0; i <= bays; i++) along.push(-hw + inset + ((width - 2 * inset) * i) / bays)
+    const edge = hw - inset
+    const flank = risers > 0 ? stairWidth / 2 + pillar.size / 2 + inches(1) : null
+    const anchors =
+      flank !== null && flank < edge - 2 * pillar.size
+        ? [-edge, -flank, flank, edge]
+        : [-edge, edge]
+    for (let i = 0; i + 1 < anchors.length; i++) {
+      const a0 = anchors[i] as number
+      const a1 = anchors[i + 1] as number
+      along.push(a0)
+      const bays = Math.max(1, Math.ceil((a1 - a0) / MAX_POST_SPACING))
+      for (let b = 1; b < bays; b++) along.push(a0 + ((a1 - a0) * b) / bays)
+    }
+    along.push(anchors[anchors.length - 1] as number)
   }
   for (const a of along) {
     const [px, pz] = P(a, depth - inset)
@@ -478,14 +516,14 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
   }
 
   // ── steps to grade ────────────────────────────────────────────────────
-  const risers = riserCount(rise)
-  const stairWidth = Math.max(MIN_STAIR_WIDTH, Math.min(inches(60), width - inches(4)))
   let run = 0
   if (risers > 0) {
     run = risers * TREAD_RUN
-    // The flight climbs along its local +x; rotation turns +x onto the
-    // inward direction (−outward), so the bottom of the flight sits `run`
-    // beyond the landing edge and the top tread meets the landing.
+    // The stair node's run ascends along its OWN local +Z (the low end is
+    // its −Z side — see the stair definition's facing indicator), and its
+    // yaw maps local +Z onto (sin θ, cos θ). Turning +Z onto the inward
+    // direction (−outward) puts the bottom of the flight `run` beyond the
+    // landing edge and the top tread at the landing.
     const [bx, bz] = P(0, depth + run)
     const inward: Pt = [-outward[0], -outward[1]]
     ops.push({
@@ -495,7 +533,7 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         name: `${name} steps`,
         parentId: input.levelId,
         position: [bx, round(input.gradeY), bz],
-        rotation: round(Math.atan2(-inward[1], inward[0])),
+        rotation: round(Math.atan2(inward[0], inward[1])),
         stairType: 'straight',
         fromLevelId: null,
         toLevelId: null,

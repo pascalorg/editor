@@ -324,22 +324,22 @@ describe('wall roles (W8 — assemblies by what the wall is)', () => {
   const built = buildHouse(doc)
   const walls = ofType(built.ops, 'wall') as N[]
 
-  test('exterior by style, the garage separation tagged, bath / laundry partitions 2x6 plumbing walls, the rest 2x4', () => {
+  test('exterior by style, the garage separation a 2x6 on the exterior line, every other partition 2x4 (no plumbing-wall jogs)', () => {
     const roles = new Set(walls.map((w) => w.metadata.role))
     expect(roles.has('exterior')).toBe(true)
     expect(roles.has('garage-separation')).toBe(true)
-    expect(roles.has('plumbing')).toBe(true)
+    expect(roles.has('plumbing')).toBe(false)
     expect(roles.has('partition')).toBe(true)
     for (const w of walls) {
       if (w.metadata.role === 'exterior') expect(w.assembly.preset).toBe('exterior-2x6-siding')
-      if (w.metadata.role === 'plumbing') {
+      if (w.metadata.role === 'partition') {
+        expect(w.assembly.preset).toBe('interior-2x4-drywall')
+        expect(w.metadata.wallType).toBe('int2x4')
+      }
+      if (w.metadata.role === 'garage-separation') {
         expect(w.assembly.preset).toBe('interior-2x6-plumbing')
         expect(w.metadata.wallType).toBe('int2x6')
         expect(w.thickness).toBeGreaterThan(0.15)
-        expect(w.metadata.rooms.some((n: string) => /BATH|LAUNDRY/.test(n))).toBe(true)
-      }
-      if (w.metadata.role === 'garage-separation') {
-        expect(w.assembly.preset).toBe('interior-2x4-drywall')
         expect(w.metadata.fireSeparation).toBe('IRC Table R302.6')
         expect(w.metadata.rooms).toContain('GARAGE')
       }

@@ -103,8 +103,10 @@ describe('a full farmhouse porch', () => {
     expect(slab.elevation).toBeCloseTo(0.05 - PORCH_FLOOR_DROP, 9)
   })
 
-  test('posts at the outer corners and no more than 8 ft apart, 7 in square, standing on the porch slab', () => {
-    expect(posts.length).toBe(4) // 20 ft − 2 × 6 in = 19 ft → three bays
+  test('posts at the outer corners and flanking the steps, no bay over 8 ft, 7 in square, standing on the porch slab', () => {
+    // corners at ±9.5 ft, one each side of the 60 in flight (±34.5 in) — four
+    // posts, the widest bay 6.6 ft
+    expect(posts.length).toBe(4)
     for (const p of posts) {
       expect(p.supportSlabId).toBe('slab_porch')
       expect(p.width).toBeCloseTo(7 * IN, 9)
@@ -117,6 +119,10 @@ describe('a full farmhouse porch', () => {
     expect(xs[3]).toBeCloseTo(20 * FT + 10 * FT - 6 * IN, 6)
     for (let i = 1; i < xs.length; i++)
       expect(xs[i]! - xs[i - 1]!).toBeLessThanOrEqual(8 * FT + 1e-9)
+    // the flanking pair straddles the flight with a post's half and an inch to spare
+    const flank = 30 * IN + 3.5 * IN + 1 * IN
+    expect(xs[1]).toBeCloseTo(20 * FT - flank, 6)
+    expect(xs[2]).toBeCloseTo(20 * FT + flank, 6)
   })
 
   test('a 36 in guard on the sides and either side of the steps, hosted on the slab', () => {
@@ -142,8 +148,8 @@ describe('a full farmhouse porch', () => {
     const pos = stair.position as number[]
     expect(pos[0]).toBeCloseTo(20 * FT, 6)
     expect(pos[2]).toBeCloseTo(-0.085 - 7 * FT - TREAD_RUN, 6)
-    // local +x must point into the house (+z): three.js yaw −π/2
-    expect(stair.rotation).toBeCloseTo(-Math.PI / 2, 5)
+    // the stair's run ascends along its own +Z; yaw 0 keeps +Z on +z (into the house)
+    expect(stair.rotation).toBeCloseTo(0, 5)
     expect(stair.railingMode).toBe('none')
   })
 
@@ -266,7 +272,8 @@ describe('policy', () => {
     expect(Math.min(...zs)).toBeCloseTo(0.085, 6)
     expect(Math.max(...zs)).toBeCloseTo(0.085 + 7 * FT, 6)
     const stair = byType(r.ops, 'stair')[0]!
-    expect(stair.rotation).toBeCloseTo(Math.PI / 2, 5)
+    // outward +z: the run must climb toward −z — yaw π
+    expect(Math.abs(stair.rotation as number)).toBeCloseTo(Math.PI, 5)
   })
 })
 
@@ -276,7 +283,9 @@ describe('landing, rails and pillars by style (PlanCrafters entrance presets)', 
     const deck = byType(r.ops, 'slab')[0]!
     expect(deck.name).toBe('Porch')
     expect(deck.elevation).toBeCloseTo(0.05 - 1 * IN, 9)
-    expect(deck.thickness).toBeCloseTo(1.5 * IN, 9)
+    // decking over the joist / rim band: a 7 ft deck shows a 2x8 rim
+    expect(deck.thickness).toBeCloseTo(1.5 * IN + 7.25 * IN, 9)
+    expect((deck.metadata as { decking: number }).decking).toBeCloseTo(1.5 * IN, 9)
     expect((deck.metadata as { floor: string }).floor).toBe('deck')
     expect(deck.materialPreset).toBe('library:wood-floorplank1')
     expect(r.summary?.landing).toBe('wood')
@@ -338,7 +347,7 @@ describe('the rear entrance', () => {
     expect(r.summary?.guard).toBe(false)
     expect(byType(r.ops, 'slab')[0]!.name).toBe('Rear patio')
     expect(byType(r.ops, 'roof-segment')[0]!.name).toBe('Rear patio gable')
-    expect(byType(r.ops, 'column').length).toBe(3) // 9 ft between the corner posts needs one between (≤ 8 ft)
+    expect(byType(r.ops, 'column').length).toBe(4) // the corners and the pair flanking the step
   })
 
   test('a slab house behind a no-porch style: a plain landing 10 × 6 ft, no cover, no posts', () => {

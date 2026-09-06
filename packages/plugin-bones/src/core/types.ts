@@ -401,6 +401,12 @@ export type SlabSlice = {
   /** Absent = 'floor' (every slab drawn before the tag existed). */
   kind?: SlabKind
   /**
+   * A deck whose slab is decking PLUS the joist / rim band (the generator's
+   * `metadata.decking`): the joists frame under this much, not the whole
+   * thickness. Absent = the whole slab thickness is decking.
+   */
+  decking?: number
+  /**
    * An OUTDOOR floor (a deck, a porch pad): exactly the outdoors the
    * exterior-side probes hunt for — never coverage. Without this a porch
    * slab against the front wall read as 'covered' and the wall under the

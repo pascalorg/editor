@@ -291,9 +291,16 @@ export function extractSlabs(nodes: NodesRecord, levelId: string): SlabSlice[] {
       thickness: num(node.thickness, 0.05),
       kind: slabKindOf(node.metadata),
       outdoor: slabIsOutdoor(node.metadata),
+      decking: slabDeckingOf(node.metadata),
     })
   }
   return slabs
+}
+
+/** The decking thickness a deck slab declares (`metadata.decking`), when its slab is decking + rim band. */
+export function slabDeckingOf(metadata: unknown): number | undefined {
+  const decking = (metadata as { decking?: unknown } | null | undefined)?.decking
+  return typeof decking === 'number' && decking > 0 ? decking : undefined
 }
 
 /** A deck or a porch pad: an outdoor floor, never probe coverage. */

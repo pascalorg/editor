@@ -620,7 +620,8 @@ export function applyFinishes(
       }
       case 'door': {
         if (m.attach === 'exterior') {
-          n.slots = { ...slotsOf(n), panel: f.door.ref }
+          // a glazed slider's low rail is trim-coloured like its frame
+          n.slots = { ...slotsOf(n), panel: n.doorType === 'sliding' ? f.trim.ref : f.door.ref }
           out.doors++
         } else if (m.attach === 'garage') {
           n.slots = { ...slotsOf(n), panel: f.trim.ref }
@@ -638,6 +639,11 @@ export function applyFinishes(
           }
         }
         n.edgeMaterialPreset = f.trim.ref
+        // the wall band the roof builds above the plate — a gable's
+        // triangle, a shed's high wall and raked sides — is sided like the
+        // walls under it (the viewer's fallback reads the wall ASSEMBLY's
+        // finish, which the palette does not touch)
+        n.wallMaterialPreset = f.siding.ref
         out.roofs++
         break
       }
