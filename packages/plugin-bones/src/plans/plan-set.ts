@@ -1916,8 +1916,38 @@ function planSheet(
       ? `<rect x="${MARGIN - 4}" y="${MARGIN - 6}" width="${legendW}" height="${legendRows * 14 + 14}" fill="#ffffff" fill-opacity="0.92" stroke="#ccc" stroke-width="0.5"/>${legendLines.join('')}`
       : ''
 
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#fff"/>${shapes.join('')}${chrome(def.title, opts, scale, legend, { ratio: t.ratio })}</svg>`
+  // W12d: the B-B section marker joins the A-A cut mark on the wall
+  // framing plan (the one sheet that carries cut marks — the foundation
+  // sheet stays a pure-transform witness).
+  const markers = def.key === 'wall' ? sectionMarkers(members, fixtures, t) : ''
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#fff"/>${shapes.join('')}${markers}${chrome(def.title, opts, scale, legend, { ratio: t.ratio })}</svg>`
   return { title: def.title, svg }
+}
+
+/**
+ * The B-B section marker (W12d): a dashed cut line at `sectionCut(2)`
+ * running across the plan along x, a lettered bubble just past the
+ * drawing's extents at each end — beside the A-A mark the wall plan
+ * already prints (its line runs along z at `sectionCut(0)`).
+ */
+function sectionMarkers(members: Member[], fixtures: Fixture[], t: SetTransform): string {
+  const b = planBounds(members, fixtures)
+  if (!b) return ''
+  const cutZ = sectionCut(members, 2)
+  const bubble = (x: number, y: number, letter: string) =>
+    `<circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="9" fill="#fff" stroke="#222" stroke-width="1.2"/><text x="${x.toFixed(1)}" y="${(y + 3.5).toFixed(1)}" font-size="10" font-weight="bold" font-family="Helvetica, Arial, sans-serif" fill="#222" text-anchor="middle">${letter}</text>`
+  const parts: string[] = []
+  if (cutZ !== null) {
+    const y = t.Z(cutZ)
+    const x0 = t.X(b.minX) - 16
+    const x1 = t.X(b.maxX) + 16
+    parts.push(
+      `<line x1="${(x0 + 9).toFixed(1)}" y1="${y.toFixed(1)}" x2="${(x1 - 9).toFixed(1)}" y2="${y.toFixed(1)}" stroke="#222" stroke-width="1" stroke-dasharray="9 4 2 4"/>`,
+      bubble(x0, y, 'B'),
+      bubble(x1, y, 'B'),
+    )
+  }
+  return parts.join('')
 }
 
 /** Schedules sheet: takeoff rows + engineering flags, as printable text. */

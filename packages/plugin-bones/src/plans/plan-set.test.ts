@@ -4949,3 +4949,54 @@ describe('W12c: the longitudinal section', () => {
     )
   })
 })
+
+describe('W12d: section markers on the structural plans', () => {
+  test('B-B bubbles join A-A on the wall framing plan; no marks elsewhere', () => {
+    const members = [
+      member({
+        system: 'wall-framing',
+        role: 'bottom-plate',
+        size: '2x6',
+        dims: [6, 0.038, 0.14],
+        length: 6,
+        position: [0, 0.019, 3],
+        rotation: [0, 0, 0],
+        sourceId: 'w',
+      }),
+      member({
+        system: 'wall-framing',
+        role: 'bottom-plate',
+        size: '2x6',
+        dims: [6, 0.038, 0.14],
+        length: 6,
+        position: [0, 0.019, -3],
+        rotation: [0, 0, 0],
+        sourceId: 'w',
+      }),
+      member({
+        system: 'electrical',
+        role: 'wire-run',
+        size: undefined,
+        dims: [4, 0.01, 0.01],
+        length: 4,
+        position: [1, 2.4, 0],
+        rotation: [0, 0, 0],
+        material: 'copper',
+        sourceId: 'e',
+      }),
+    ]
+    const sheets = buildPlanSet(members, [], {})
+    const wall = sheets.find((s) => s.title === 'Wall framing plan')?.svg ?? ''
+    const bubbles = (svg: string, letter: string) =>
+      (svg.match(new RegExp(`text-anchor="middle">${letter}</text>`, 'g')) ?? []).length
+    expect(bubbles(wall, 'B')).toBe(2)
+    expect(wall).toContain('stroke-dasharray="9 4 2 4"')
+    // the existing A-A mark keeps its own two bubbles beside it
+    expect([...wall.matchAll(/>A<\/text>/g)]).toHaveLength(2)
+    const electrical = sheets.find((s) => s.title === 'Electrical rough-in plan')?.svg ?? ''
+    expect(electrical.length).toBeGreaterThan(0)
+    expect(bubbles(electrical, 'B')).toBe(0)
+    const foundation = sheets.find((s) => s.title === 'Foundation plan')?.svg ?? ''
+    expect(bubbles(foundation, 'B')).toBe(0)
+  })
+})

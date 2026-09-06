@@ -928,3 +928,11 @@ W15 Ceiling joists as a framer laps them — DONE 2026-09-06 (see log; the open 
   sheet — Bones 2,086, typecheck clean. Honest gaps: no section marker
   lines on the plan sheets yet (A-A never had one either); the rafters
   seen end-on read as ticks, not a roof outline.
+
+- 2026-09-06 early morning: **W12d — the B-B cut mark.** The wall framing
+  plan already printed the A-A cut mark (a dashed line at the section's
+  slid cut, lettered bubbles at both ends); the longitudinal B-B mark now
+  prints beside it the same way, at `sectionCut(2)` running along x. The
+  wall plan stays the one sheet with cut marks (the foundation sheet is
+  the pure-transform witness; the MEP sheets stay clear). Test: plan-set
+  +1 — Bones 2,087, typecheck clean.
