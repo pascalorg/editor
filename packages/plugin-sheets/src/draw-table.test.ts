@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { FloorplanGeometry } from '@pascal-app/core'
-import { drawTable, isNumericColumn, ROW_H, SCHEDULE_LEGEND, tableHeight } from './draw-table'
+import { drawTable, isNumericColumn, LINE_H, measureTable, ROW_H, SCHEDULE_LEGEND, tableHeight } from './draw-table'
 import type { ScheduleTable } from './schedule'
 
 const table: ScheduleTable = {
@@ -119,5 +119,45 @@ describe('table layout', () => {
   test('tableHeight accounts for the title and legend', () => {
     expect(tableHeight(3, false)).toBeCloseTo(0.28 + 3 * 0.24, 9)
     expect(tableHeight(3, true)).toBeCloseTo(0.3 + 0.22 + 0.28 + 3 * 0.24, 9)
+  })
+})
+
+describe('wrapped cells', () => {
+  const table = {
+    title: 'T',
+    columns: [
+      { key: 'mark', label: 'MARK', weight: 0.6 },
+      { key: 'text', label: 'TEXT', weight: 3 },
+    ],
+    rows: [
+      { mark: 'W1', text: 'short' },
+      { mark: 'W2', text: 'a sentence long enough that a two inch column has to break it over several lines of the row' },
+    ],
+    issues: [],
+  }
+
+  test('a long cell wraps onto more lines and its row grows; a short one keeps the standard row', () => {
+    const plate = drawTable(table, 0, 0, 2.6, 10, { wrap: true })
+    const texts = plate.filter((g) => g.kind === 'text') as { text: string; y: number }[]
+    const w2 = texts.filter((t) => t.text.startsWith('a sentence') || texts.indexOf(t) > 0)
+    expect(w2.length).toBeGreaterThan(2)
+    expect(texts.some((t) => t.text.endsWith('…'))).toBe(false)
+    // the second row is taller than the first by whole lines
+    const measured = measureTable(table, 2.6, { wrap: true })
+    expect(measured).toBeGreaterThan(tableHeight(2, false))
+    expect(((measured - tableHeight(2, false)) / LINE_H) % 1).toBeCloseTo(0, 6)
+  })
+
+  test('without the option the same cell is cut with an ellipsis and the row stays fixed', () => {
+    const plate = drawTable(table, 0, 0, 2.6, 10, {})
+    const texts = plate.filter((g) => g.kind === 'text') as { text: string }[]
+    expect(texts.some((t) => t.text.endsWith('…'))).toBe(true)
+    expect(measureTable(table, 2.6, {})).toBeCloseTo(tableHeight(2, false), 9)
+  })
+
+  test('rows that do not fit at their wrapped height are dropped behind a "+N more" line', () => {
+    const plate = drawTable(table, 0, 0, 2.6, 0.28 + 0.24 + 0.1, { wrap: true })
+    const texts = plate.filter((g) => g.kind === 'text') as { text: string }[]
+    expect(texts.some((t) => t.text.startsWith('+'))).toBe(true)
   })
 })

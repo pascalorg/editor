@@ -70,6 +70,9 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
   const polygon = (site?.polygon as { points?: [number, number][] } | undefined)?.points ?? []
   const lotW = polygon.length ? extent(polygon.map((p) => p[0])) : 40
   const lotH = polygon.length ? extent(polygon.map((p) => p[1])) : 40
+  // The fire separation table (R302.1) sits beside the plan: the distances
+  // a plan checker reads off the site plan, and the walls they rate.
+  const siteW = FRAME.w * 0.6
   out.push({
     number: 'A1.0',
     title: 'Site plan',
@@ -77,10 +80,20 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
       {
         kind: 'site-plan',
         title: 'Site plan',
-        scale: fitScale(lotW, lotH, FRAME.w, FRAME.h - 0.6, CIVIL_SCALES),
+        scale: fitScale(lotW, lotH, siteW, FRAME.h - 0.6, CIVIL_SCALES),
         x: FRAME.x,
         y: FRAME.y + 0.4,
-        w: FRAME.w,
+        w: siteW,
+        h: FRAME.h - 0.6,
+      },
+      {
+        kind: 'general-notes',
+        notesKey: 'fire-separation',
+        levelId: levelNodes[0]?.id,
+        title: 'Fire separation distance',
+        x: FRAME.x + siteW + GAP,
+        y: FRAME.y + 0.4,
+        w: FRAME.w - siteW - GAP,
         h: FRAME.h - 0.6,
       },
     ],
@@ -290,7 +303,7 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
         }))
       : defaultSectionMarkers(nodes).map((spec) => ({ label: `Section ${spec.label}` }))
   // A5.0 — the section cuts stacked on the left, the assembly schedule down the right
-  const sectionW = FRAME.w * 0.68
+  const sectionW = FRAME.w * 0.6
   out.push({
     number: 'A5.0',
     title: 'Building sections',
@@ -310,7 +323,7 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
             // the assemblies the cuts pass through, as a schedule (Steve:
             // "ensure the wall assemblies are correct")
             {
-              kind: 'notes' as const,
+              kind: 'general-notes' as const,
               notesKey: 'assemblies',
               levelId: levelNodes[0]?.id,
               title: 'Wall, roof & floor assemblies',

@@ -142,6 +142,11 @@ export function generalNoteSections(j: Jurisdiction): NoteSection[] {
           cite: 'R401.2',
         },
         {
+          text: 'Determine the FEMA flood hazard zone and base flood elevation for the site from the effective Flood Insurance Rate Map before construction. Where any part of the lot lies in a flood hazard area, construct to the flood-resistant provisions: the lowest floor at or above the required elevation, flood-damage-resistant materials below it, and an Elevation Certificate at completion.',
+          cite: 'R322.1, Table R301.2(1)',
+          verify: true,
+        },
+        {
           text: `Bear the bottom of all exterior footings not less than ${frost} in below finished grade${j.frostLineNote ? ` — ${j.frostLineNote.replace(/\.$/, '')}` : ''}.`,
           cite: 'R403.1.4',
           when: hasFrostDepth,

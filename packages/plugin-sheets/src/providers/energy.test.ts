@@ -190,16 +190,15 @@ describe('the prescriptive table', () => {
     expect(byComponent['Wood-frame wall']?.value).toContain('R-13 cavity')
     expect(byComponent['Wood-frame wall']?.source).toContain('IECC Table R402.1.3')
     // Zone 2 is inside the zones 1–3 SHGC maximum the data file cites.
-    expect(byComponent['Glazed fenestration SHGC']?.value).toBe('≤ 0.30')
+    expect(byComponent['Glazed fenestration SHGC']?.value).toBe('≤ 0.25')
+    // the rest of Table R402.1.2 for zone 2: floor R-13, no slab requirement, U 0.40 / 0.65
+    expect(byComponent.Floor?.value).toBe('R-13')
+    expect(byComponent['Slab edge (R-value / depth)']?.value).toBe('NR (no requirement)')
+    expect(byComponent['Fenestration U-factor']?.value).toBe('≤ 0.40')
+    expect(byComponent['Skylight U-factor']?.value).toBe('≤ 0.65')
 
     // Not citable: printed as a blank the reader must fill.
-    for (const component of [
-      'Mass wall',
-      'Floor',
-      'Slab edge (R-value / depth)',
-      'Fenestration U-factor',
-      'Skylight U-factor',
-    ]) {
+    for (const component of ['Mass wall']) {
       expect(byComponent[component]?.cited).toBe(false)
       expect(byComponent[component]?.value).toBe('per FBC-EC 2023 Table R402.1.2 (verify)')
     }

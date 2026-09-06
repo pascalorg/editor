@@ -56,6 +56,17 @@ describe('the default set', () => {
     expect([...numbers].map(rank)).toEqual([...numbers].map(rank).sort((a, b) => a - b))
   })
 
+  test('A1.0 is the site plan with the fire separation table beside it', () => {
+    const a1 = planDefaultSet(scene()).find((p) => p.number === 'A1.0')!
+    expect(a1.viewports.map((v) => v.kind)).toEqual(['site-plan', 'general-notes'])
+    const [site, fire] = a1.viewports
+    expect(fire?.notesKey).toBe('fire-separation')
+    expect(fire?.levelId).toBeDefined()
+    // the plan keeps two thirds of the field, the table the rest, nothing overlapping
+    expect(site!.x + site!.w).toBeLessThanOrEqual(fire!.x)
+    expect(fire!.x + fire!.w).toBeLessThanOrEqual(FRAME.x + FRAME.w + 1e-6)
+  })
+
   test('one floor-plan sheet per level', () => {
     const numbers = planDefaultSet(scene(3)).map((p) => p.number)
     expect(numbers.filter((n) => /^A2\./.test(n))).toEqual(['A2.0', 'A2.1', 'A2.2'])
@@ -79,7 +90,7 @@ describe('the default set', () => {
     const sections = planDefaultSet(scene()).find((p) => p.number === 'A5.0')!
     // two cuts down the left, the assembly schedule down the right
     expect(sections.viewports).toHaveLength(3)
-    expect(sections.viewports.map((v) => v.kind)).toEqual(['section', 'section', 'notes'])
+    expect(sections.viewports.map((v) => v.kind)).toEqual(['section', 'section', 'general-notes'])
     expect(sections.viewports.slice(0, 2).map((v) => v.title)).toEqual(['Section A', 'Section B'])
     expect(sections.viewports[2]).toMatchObject({ notesKey: 'assemblies' })
     // The markers themselves are created by `ensureSectionMarkers` at generate

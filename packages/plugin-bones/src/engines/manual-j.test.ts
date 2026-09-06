@@ -145,7 +145,7 @@ describe('Manual-J-lite — hand-computed load (the bite gate)', () => {
     expect(load.uaCeilingWPerK).toBeCloseTo(uaCeiling, 9)
     expect(load.envelopeW).toBeCloseTo(envelopeW, 9)
 
-    // solar: N 1.8 m², S 2.4 m², E 1.0 m² × factor × SHGC 0.3
+    // solar: N 1.8 m², S 2.4 m², E 1.0 m² × factor × SHGC 0.3 (the load-calc assumption, above the zone 0–3 code maximum)
     const solarW =
       (1.8 * SOLAR_W_PER_M2.N + 2.4 * SOLAR_W_PER_M2.S + 1.0 * SOLAR_W_PER_M2.E) * SHGC_ASSUMED
     expect(load.solarW).toBeCloseTo(solarW, 9)

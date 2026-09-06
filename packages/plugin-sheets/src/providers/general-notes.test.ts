@@ -243,6 +243,19 @@ describe('the general notes plate', () => {
     expect(body).toContain('LOCAL AMENDMENTS ARE NOT INCLUDED')
   })
 
+  test('the fire separation key prints the R302.1 table for the cottage: every exterior wall measured, none rated', () => {
+    const fire = buildGeneralNotesDrawing(SCENE, args({ x: 1, y: 1, w: 10.5, h: 20 }, 'fire-separation'))
+    expect(fire?.title).toBe('Fire separation distance')
+    const text = textOf(fire?.plate)
+    expect(text).toContain('FIRE SEPARATION DISTANCE — R302.1')
+    expect(text).toContain('TO LOT LINE')
+    expect(text).toContain('(street)')
+    expect(text).not.toContain('1-HR BOTH SIDES')
+    expect(text).toContain('measured at a right angle')
+    expect(fire?.warnings).toEqual([])
+    eyeball('fire-separation', fire?.plate)
+  })
+
   test('the roof note block is a separate, shorter key', () => {
     const roof = buildGeneralNotesDrawing(SCENE, args({ x: 1, y: 1, w: 9, h: 8 }, 'roof'))
     expect(roof?.title).toBe('Roof notes')

@@ -86,6 +86,7 @@ export function designCriteria(
       value: model.hvhz ? 'C assumed — coastal (verify)' : 'B assumed (verify)',
       cite: '(verify: IRC R301.2.1.4 — terrain is not modelled by the scene)',
     },
+    ...windDesignRows(model),
     {
       label: 'Ground snow load, pg',
       value: climate ? `${climate.groundSnowLoadPsf ?? 0} psf` : 'not in the data',
@@ -123,6 +124,50 @@ export function designCriteria(
     },
   ]
   return out
+}
+
+/**
+ * The wind design data a Florida set (FBC-R R301.2.1.1.1) and any high-wind
+ * site must show beside Vult: the nominal speed the older tables are keyed
+ * on (Vasd = Vult × √0.6, IRC R301.2.1.3), whether the site is in the
+ * wind-borne debris region, the enclosure classification with its internal
+ * pressure coefficient, and where the component-and-cladding pressures
+ * come from. Nothing here is derived from the model beyond the wind speed
+ * the climate data carries, so every row says "verify".
+ */
+function windDesignRows(model: StructuralModel): { label: string; value: string; cite: string }[] {
+  const speeds = [...model.windLabel.matchAll(/(\d{2,3})/g)].map((m) => Number(m[1])).filter((v) => v >= 85 && v <= 250)
+  const vasd = speeds.map((v) => Math.round(v * Math.sqrt(0.6)))
+  const vult = speeds.length > 0 ? Math.max(...speeds) : null
+  const debris = model.hvhz
+    ? 'Yes — HVHZ; glazed openings impact-rated or protected (R301.2.1.2)'
+    : vult !== null && vult >= 140
+      ? 'Yes — opening protection per R301.2.1.2 (verify: ≥ 140 mph)'
+      : 'Verify — ≥ 130 mph within 1 mi of the coast, or ≥ 140 mph (R202)'
+  return [
+    {
+      label: 'Nominal design wind speed, Vasd',
+      value: vasd.length > 0 ? `${vasd.join('–')} mph (Vult × √0.6)` : 'not derived (verify)',
+      cite: 'IRC R301.2.1.3 / Table R301.2.1.3',
+    },
+    {
+      label: 'Wind-borne debris region',
+      value: debris,
+      cite: 'IRC R301.2.1.2 / R202',
+    },
+    {
+      label: 'Enclosure classification / GCpi',
+      value: 'Enclosed, GCpi ±0.18 — openings protected where required (verify)',
+      cite: '(verify: ASCE 7 26.2, Table 26.13-1)',
+    },
+    {
+      label: 'Components & cladding pressures',
+      value: model.hvhz
+        ? 'ASCE 7 Ch. 30 — HVHZ; NOA design pressures per opening (verify)'
+        : 'IRC Table R301.2(2) × Table R301.2(3), per opening (verify)',
+      cite: model.hvhz ? '(verify: FBC-R R301.2.1.1 / ASCE 7 Ch. 30)' : '(verify: IRC R301.2.1.1 / Tables R301.2(2), R301.2(3))',
+    },
+  ]
 }
 
 /* ----------------------------------------------------------- notes */

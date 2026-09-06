@@ -437,6 +437,9 @@ export function footingScheduleTable(model: StructuralModel): ScheduleTable {
 function describeFooting(label: string): string {
   if (/^Footing/.test(label)) return 'CONT. WALL FOOTING'
   if (/Interior thickened/.test(label)) return 'THICKENED SLAB FOOTING (INT. BEARING)'
+  // Bones names what stands on a pad: "Pad footing 24"×24"×12" — porch post (R403.1/R407.3)"
+  const pad = /^Pad footing .*? — ([^(]+?)\s*\(/.exec(label)
+  if (pad) return `PAD FOOTING AT ${(pad[1] as string).trim().toUpperCase()}`
   if (/^Pad footing/.test(label)) return 'PAD FOOTING AT GIRDER POST'
   return label.toUpperCase()
 }

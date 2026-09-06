@@ -220,6 +220,10 @@ export function computeEnvelope(
   }
   const site = siteNode(nodes)
   const northRotationDeg = num(site?.northRotation) ?? 0
+  // the building's turn on the lot: a plan normal is rotated by the yaw
+  // before its bearing is read (world = R(yaw)·local, +x → (cos, −sin))
+  const building = level && typeof level.parentId === 'string' ? nodes[level.parentId] : undefined
+  const yaw = Array.isArray(building?.rotation) ? num(building.rotation[1]) ?? 0 : 0
 
   const members = resolvedId ? subtree(nodes, resolvedId) : []
 
@@ -285,10 +289,21 @@ export function computeEnvelope(
     if (wall.type !== 'wall' || wall.visible === false) continue
     const normal = outwardNormal(wall)
     if (!normal) {
-      unknownSides += 1
+      // a partition (the generator's role, or both sides interior) is inside
+      // the envelope by definition — only a wall nobody classified is unknown
+      const meta = (wall.metadata ?? {}) as { role?: unknown }
+      const interior =
+        meta.role === 'partition' ||
+        meta.role === 'garage-separation' ||
+        (wall.frontSide === 'interior' && wall.backSide === 'interior')
+      if (!interior) unknownSides += 1
       continue
     }
-    const bearing = bearingOf(normal[0], normal[1], northRotationDeg)
+    const bearing = bearingOf(
+      normal[0] * Math.cos(yaw) + normal[1] * Math.sin(yaw),
+      -normal[0] * Math.sin(yaw) + normal[1] * Math.cos(yaw),
+      northRotationDeg,
+    )
     const orientation = orientationOf(bearing)
     wallOrientation.set(wall.id, orientation)
     const height = num(wall.height) ?? levelHeightM
@@ -311,7 +326,7 @@ export function computeEnvelope(
   }
   if (unknownSides > 0) {
     warnings.push(
-      `${unknownSides} wall${unknownSides === 1 ? '' : 's'} on this level ${unknownSides === 1 ? 'has' : 'have'} no exterior face marked (frontSide/backSide) and ${unknownSides === 1 ? 'is' : 'are'} excluded from the envelope.`,
+      `${unknownSides} wall${unknownSides === 1 ? '' : 's'} on this level ${unknownSides === 1 ? 'has' : 'have'} no exterior face marked (frontSide/backSide) and no partition role — ${unknownSides === 1 ? 'it is' : 'they are'} excluded from the envelope.`,
     )
   }
 
@@ -384,9 +399,9 @@ export function computeEnvelope(
       'Windows carry no U-factor or SHGC in the model — the fenestration schedule reads "PER NFRC LABEL"; enter the ordered product’s rated values before submittal.',
     )
   }
-  if (northRotationDeg === 0 && !site?.northRotation) {
+  if (num(site?.northRotation) === null) {
     warnings.push(
-      'Site north rotation is 0° (not set) — orientations assume plan −z is north. Set the site’s north before relying on the orientation split.',
+      'Site north rotation is not set — orientations assume site −y is north. Set the site’s north before relying on the orientation split.',
     )
   }
 

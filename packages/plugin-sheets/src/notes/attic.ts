@@ -80,7 +80,16 @@ export function computeAtticVentilation(nodes: NodeMap): AtticVentilation {
   const segments: AtticSegment[] = []
   let areaSqM = 0
 
+  let openPorches = 0
   for (const node of roofSegments(nodes)) {
+    // an open porch or deck cover has no attic under it — the generator
+    // marks its segments (metadata.roof.open / role 'porch'); they are not
+    // part of the vented area
+    const meta = (node.metadata ?? {}) as { roof?: { open?: unknown; role?: unknown } }
+    if (meta.roof?.open === true || meta.roof?.role === 'porch') {
+      openPorches += 1
+      continue
+    }
     const width = num(node.width)
     const depth = num(node.depth)
     if (width === null || depth === null || width <= 0 || depth <= 0) {
@@ -106,6 +115,11 @@ export function computeAtticVentilation(nodes: NodeMap): AtticVentilation {
 
   if (segments.length === 0) {
     warnings.push('No roof segments in this scene — the attic area cannot be computed.')
+  }
+  if (openPorches > 0) {
+    warnings.push(
+      `${openPorches} open porch roof segment${openPorches === 1 ? '' : 's'} excluded — no attic under an open porch or deck cover.`,
+    )
   }
   if (segments.length > 1) {
     warnings.push(

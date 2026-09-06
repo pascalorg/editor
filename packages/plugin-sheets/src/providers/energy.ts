@@ -337,7 +337,11 @@ function climateBlock(
     ['Adopted residential code', j.resolved ? j.codeShort : 'NOT ESTABLISHED — IRC 2021 assumed'],
     [
       'Ultimate design wind speed',
-      j.ultimateWindMph ? `${j.ultimateWindMph} mph (state typical)` : '—',
+      j.hvhz && j.windRange
+        ? `${j.windRange} (HVHZ — ${j.county} County; verify)`
+        : j.ultimateWindMph
+          ? `${j.ultimateWindMph} mph (state typical)`
+          : '—',
     ],
     ['Plan north rotation', `${model.northRotationDeg.toFixed(0)}°`],
   ]

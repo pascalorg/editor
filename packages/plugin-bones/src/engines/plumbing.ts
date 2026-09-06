@@ -1510,7 +1510,7 @@ function placedPlumbing(
     position: [meterPlan[0], METER_Y, meterPlan[1]],
     rotationY: 0,
     sourceId: meterWall.id,
-    label: `Water service meter — ¾" min (P2903.7)${meterInPanelSpace ? ' — ⚠ in panel dedicated space (NEC 110.26(E))' : ''}`,
+    label: `Water service meter — ¾" min (P2903.7)${meterInPanelSpace ? ' — in panel dedicated space (NEC 110.26(E))' : ''}`,
   })
 
   // ---- water heater: garage wall like the electrical panel (tank, M1307.3

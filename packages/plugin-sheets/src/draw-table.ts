@@ -36,13 +36,25 @@ export const SCHEDULE_LEGEND = 'Sizes are nominal; RO per manufacturer.'
  * with an ellipsis. A value that silently ran into the next column read as
  * that column's value, which a schedule must never do.
  */
+/**
+ * Average glyph width as a fraction of the font size: the mono face is
+ * fixed; the sans face runs ~0.54 in mixed case and wider in caps, which is
+ * what a schedule's ASSEMBLY column is set in.
+ */
+function glyphK(value: string, mono: boolean): number {
+  if (mono) return 0.6
+  const letters = value.replace(/[^A-Za-z]/g, '')
+  const caps = letters.replace(/[^A-Z]/g, '').length
+  return letters.length > 0 && caps / letters.length > 0.6 ? 0.66 : 0.54
+}
+
 function fitCell(
   value: string,
   maxW: number,
   size: number,
   mono: boolean,
 ): { text: string; fontSize: number } {
-  const k = mono ? 0.6 : 0.54
+  const k = glyphK(value, mono)
   const width = (s: string, fs: number) => s.length * fs * k
   if (width(value, size) <= maxW) return { text: value, fontSize: size }
   const floor = size * 0.8
@@ -82,6 +94,75 @@ export type DrawTableOptions = {
   title?: string
   /** Printed small and grey under the title. */
   legend?: string
+  /**
+   * Wrap long cells onto further lines instead of cutting them: a row grows
+   * by `LINE_H` per extra line (the mark and numeric columns never wrap).
+   * For the assembly and fire-separation schedules, whose cells are
+   * sentences; the opening schedules keep their fixed rows.
+   */
+  wrap?: boolean
+}
+
+/** Extra height per wrapped line beyond the first. */
+export const LINE_H = 0.165
+const MAX_LINES = 6
+
+/** Word-wrap `value` to a column `maxW` wide at `size`, hard-breaking a word that is wider than the column on its own. */
+function wrapCell(value: string, maxW: number, size: number, mono: boolean): string[] {
+  const k = glyphK(value, mono)
+  const chars = Math.max(4, Math.floor(maxW / (size * k)))
+  const lines: string[] = []
+  let line = ''
+  for (const raw of value.split(/\s+/).filter(Boolean)) {
+    let word = raw
+    while (word.length > chars) {
+      if (line) {
+        lines.push(line)
+        line = ''
+      }
+      lines.push(word.slice(0, chars))
+      word = word.slice(chars)
+    }
+    if (line && line.length + 1 + word.length > chars) {
+      lines.push(line)
+      line = word
+    } else line = line ? `${line} ${word}` : word
+  }
+  if (line) lines.push(line)
+  if (lines.length > MAX_LINES) {
+    const kept = lines.slice(0, MAX_LINES)
+    kept[MAX_LINES - 1] = `${(kept[MAX_LINES - 1] ?? '').slice(0, Math.max(1, chars - 1))}…`
+    return kept
+  }
+  return lines.length > 0 ? lines : ['']
+}
+
+type RowLayout = { cells: { lines: string[]; fontSize: number }[]; height: number }
+
+/** Every row's cells laid into its columns — one line each, or wrapped when the option asks. */
+function layoutRows(table: ScheduleTable, widths: number[], wrap: boolean): RowLayout[] {
+  return table.rows.map((row) => {
+    const cells = table.columns.map((column, i) => {
+      const cw = widths[i] ?? 0
+      const numeric = isNumericColumn(column.key, column.label)
+      const mono = i === 0 || numeric
+      const value = String(row[column.key] ?? '')
+      if (wrap && !mono) return { lines: wrapCell(value, cw - PAD * 2, 0.115, mono), fontSize: 0.115 }
+      const fitted = fitCell(value, cw - PAD * 2, 0.115, mono)
+      return { lines: [fitted.text], fontSize: fitted.fontSize }
+    })
+    const lines = Math.max(1, ...cells.map((c) => c.lines.length))
+    return { cells, height: ROW_H + (lines - 1) * LINE_H }
+  })
+}
+
+/** The height `drawTable` will use for `table` at width `w` — title, legend, header and every (wrapped) row. */
+export function measureTable(table: ScheduleTable, w: number, options: DrawTableOptions = {}): number {
+  const totalWeight = table.columns.reduce((s, c) => s + c.weight, 0)
+  const widths = table.columns.map((c) => (w * c.weight) / totalWeight)
+  const rows = layoutRows(table, widths, options.wrap ?? false)
+  const head = options.title ? TITLE_H + LEGEND_H : 0
+  return head + HEADER_H + rows.reduce((s, r) => s + r.height, 0)
 }
 
 export function drawTable(
@@ -139,9 +220,18 @@ export function drawTable(
   const widths = table.columns.map((c) => (w * c.weight) / totalWeight)
   const available = h - (top - y)
 
-  const capacity = Math.max(0, Math.floor((available - HEADER_H) / ROW_H))
+  // How many rows fit: every row at its own height (a wrapped row is taller),
+  // with a row held back for the "+N more" line when they do not all fit.
+  const laid = layoutRows(table, widths, options.wrap ?? false)
+  let capacity = 0
+  let used = HEADER_H
+  for (const row of laid) {
+    if (used + row.height > available + 1e-9) break
+    used += row.height
+    capacity += 1
+  }
   const overflow = table.rows.length > capacity
-  const rows = overflow ? table.rows.slice(0, Math.max(0, capacity - 1)) : table.rows
+  const rows = overflow ? laid.slice(0, Math.max(0, capacity - 1)) : laid
 
   // Header band: bold caps on a dark ground, with a heavy rule beneath it.
   out.push({
@@ -181,43 +271,45 @@ export function drawTable(
   })
 
   // Body.
+  let ry = top + HEADER_H
   rows.forEach((row, r) => {
-    const ry = top + HEADER_H + r * ROW_H
     if (r % 2 === 1) {
-      out.push({ kind: 'rect', x, y: ry, width: w, height: ROW_H, fill: ZEBRA, stroke: 'none' })
+      out.push({ kind: 'rect', x, y: ry, width: w, height: row.height, fill: ZEBRA, stroke: 'none' })
     }
     let bx = x
     table.columns.forEach((column, i) => {
       const cw = widths[i] ?? 0
       const numeric = isNumericColumn(column.key, column.label)
       const mono = i === 0 || numeric
-      const fitted = fitCell(String(row[column.key] ?? ''), cw - PAD * 2, 0.115, mono)
-      out.push({
-        kind: 'text',
-        x: numeric ? bx + cw - PAD : bx + PAD,
-        y: ry + ROW_H - 0.08,
-        text: fitted.text,
-        fontSize: fitted.fontSize,
-        fill: INK,
-        fontFamily: mono ? MONO : SANS,
-        fontWeight: i === 0 ? 700 : 400,
-        textAnchor: numeric ? 'end' : 'start',
+      const cell = row.cells[i] ?? { lines: [''], fontSize: 0.115 }
+      cell.lines.forEach((text, line) => {
+        out.push({
+          kind: 'text',
+          x: numeric ? bx + cw - PAD : bx + PAD,
+          y: ry + ROW_H - 0.08 + line * LINE_H,
+          text,
+          fontSize: cell.fontSize,
+          fill: INK,
+          fontFamily: mono ? MONO : SANS,
+          fontWeight: i === 0 ? 700 : 400,
+          textAnchor: numeric ? 'end' : 'start',
+        })
       })
       bx += cw
     })
+    ry += row.height
     out.push({
       kind: 'line',
       x1: x,
-      y1: ry + ROW_H,
+      y1: ry,
       x2: x + w,
-      y2: ry + ROW_H,
+      y2: ry,
       stroke: INK_SOFT,
       strokeWidth: 0.005,
     })
   })
 
   if (overflow) {
-    const ry = top + HEADER_H + rows.length * ROW_H
     out.push({
       kind: 'text',
       x: x + PAD,
@@ -229,7 +321,7 @@ export function drawTable(
     })
   }
 
-  const bodyH = HEADER_H + (rows.length + (overflow ? 1 : 0)) * ROW_H
+  const bodyH = ry - top + (overflow ? ROW_H : 0)
   // Outline + column separators.
   out.push({
     kind: 'rect',

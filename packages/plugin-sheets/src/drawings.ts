@@ -28,6 +28,7 @@ import { buildCoverBlock, type CoverBlock } from './cover'
 import { drawTable, SCHEDULE_LEGEND } from './draw-table'
 import type { AnyNodeLike, NodeMap } from './model'
 import { levelLabel, sheets } from './model'
+import { fireSeparationMarks } from './notes/fire-separation'
 import { codeTagOf, resolveState, retagCode } from './notes/jurisdiction'
 import { scaleLabel, sheetInchesToWorld, worldToSheetInches } from './scale'
 import { adaptSchedule, buildSchedule, type ScheduleTable } from './schedule'
@@ -528,11 +529,17 @@ function resolvePlan(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
       acceptsNodeForDrawing(vp.layers, node.type, category, vp.drawingType),
   })
   const model = combine(entries.map((e) => e.model))
-  const annotations = combine(entries.map((e) => e.annotations))
+  const rotationDeg = editor.resolveSheetRotationDeg(nodes as never, levelId as never)
+  // the walls Table R302.1(1) rates carry their mark on the floor plan
+  const marks =
+    (vp.drawingType ?? 'floor-plan') === 'floor-plan' ? fireSeparationMarks(nodes, levelId, rotationDeg) : []
+  const annotations = combine([
+    ...entries.map((e) => e.annotations),
+    ...(marks.length > 0 ? [{ kind: 'group', children: marks } as FloorplanGeometry] : []),
+  ])
   if (!model && !annotations) {
     return { plate: note(vp, 'nothing on this level to draw'), live: null, title, scale: vp.scale }
   }
-  const rotationDeg = editor.resolveSheetRotationDeg(nodes as never, levelId as never)
   const bounds = vp.crop
     ? vp.crop
     : padBounds(unionBounds(geometryListBounds([model]), geometryListBounds([annotations])), 0.4)

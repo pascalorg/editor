@@ -21,7 +21,7 @@
  * notes silently.
  */
 import { type FloorplanGeometry, resolveWallAssembly } from '@pascal-app/core'
-import { drawTable, tableHeight } from '../draw-table'
+import { drawTable, measureTable, tableHeight } from '../draw-table'
 import type { DrawingProvider, DrawingResult, ProviderArgs } from '../drawings'
 import type { AnyNodeLike, NodeMap } from '../model'
 import { computeAtticVentilation, R806_1_NOTES, R806_2_EXCEPTION_CONDITIONS } from '../notes/attic'
@@ -32,7 +32,8 @@ import {
   noteLine,
   roofNotes,
 } from '../notes/general'
-import { codeHeaderLine, type Jurisdiction, resolveJurisdiction } from '../notes/jurisdiction'
+import { fireSeparation, type FireSeparationWall, formatSeparation, isExteriorWall } from '../notes/fire-separation'
+import { codeHeaderLine, type Jurisdiction, resolveJurisdiction, retagCode } from '../notes/jurisdiction'
 import { prescriptiveRequirements } from '../notes/prescriptive'
 import { formatInchFraction, structuralModel } from './structural/model'
 import type { ScheduleTable } from '../schedule'
@@ -628,7 +629,7 @@ function assembliesPlate(
   const warnings: string[] = []
   const model = structuralModel(nodes, levelId)
   const spec = model?.spec
-  const inch = (m: number) => `${formatInchFraction(m)}"`
+  const inch = (m: number) => formatInchFraction(m)
   const spacing = (m: number) => `${Math.round(m / 0.0254)}" o.c.`
   const level = levelId ? nodes[levelId] : undefined
   const building = typeof level?.parentId === 'string' ? nodes[level.parentId] : undefined
@@ -646,11 +647,17 @@ function assembliesPlate(
   const walls = Object.values(nodes).filter(
     (n) => n?.type === 'wall' && (!levelId || n.parentId === levelId) && n.visible !== false,
   )
+  // a wall within 5 ft of the lot line is rated whether or not anyone wrote it on the node
+  const separation = fireSeparation(nodes, levelId)
+  const nearLine = (id: string): string => {
+    const hit = separation.walls.find((w) => w.wallId === id && w.wallRule === 'rated')
+    return hit && hit.distance !== null ? `R302.1 — ${formatSeparation(hit.distance)} to the lot line` : ''
+  }
   const groups = new Map<string, { wall: AnyNodeLike; count: number; exterior: boolean; garage: boolean; rated: string }>()
   for (const wall of walls) {
     const assembly = wall.assembly as { preset?: string } | undefined
     const meta = (wall.metadata ?? {}) as Record<string, unknown>
-    const rated = typeof meta.fireRated === 'string' ? meta.fireRated : ''
+    const rated = typeof meta.fireRated === 'string' ? meta.fireRated : nearLine(wall.id)
     const garage = meta.role === 'garage-separation'
     const key = `${assembly?.preset ?? `wall-${Math.round(((wall.thickness as number) ?? 0) * 1000)}`}|${garage}|${rated}`
     const hit = groups.get(key)
@@ -659,7 +666,7 @@ function assembliesPlate(
       groups.set(key, {
         wall,
         count: 1,
-        exterior: wall.frontSide === 'exterior' || wall.backSide === 'exterior' || meta.wallType === 'ext2x6',
+        exterior: isExteriorWall(wall),
         garage,
         rated,
       })
@@ -676,13 +683,13 @@ function assembliesPlate(
       )
       .join(' / ')
     const fire = g.rated
-      ? `1-HR both sides — 5/8" Type X gyp. (${g.rated})`
+      ? `1-HR both sides (ASTM E119): 5/8" Type X gyp. each face of the studs, e.g. UL U305 — verify the listed assembly. ${g.rated}`
       : g.garage
         ? '1/2" gyp. bd. on the garage side (R302.6)'
         : '—'
     rows.push({
       mark: `W${w++}`,
-      assembly: `${g.exterior ? 'EXTERIOR WALL' : g.garage ? 'GARAGE SEPARATION' : 'INTERIOR PARTITION'} (${g.count})`,
+      assembly: `${g.exterior ? (g.rated ? 'EXTERIOR WALL — RATED' : 'EXTERIOR WALL') : g.garage ? 'GARAGE SEPARATION' : 'INTERIOR PARTITION'} (${g.count})`,
       construction: layers,
       insulation: g.exterior ? `${wallR} (${j.wallInsulation?.citation ?? 'verify'})` : '—',
       fire,
@@ -735,19 +742,133 @@ function assembliesPlate(
     title: 'ASSEMBLIES',
     columns: [
       { key: 'mark', label: 'MARK', weight: 0.7 },
-      { key: 'assembly', label: 'ASSEMBLY', weight: 2 },
-      { key: 'construction', label: 'CONSTRUCTION — OUTSIDE TO INSIDE / TOP TO BOTTOM', weight: 5.2 },
-      { key: 'insulation', label: 'INSULATION', weight: 2.2 },
-      { key: 'fire', label: 'FIRE', weight: 2 },
+      { key: 'assembly', label: 'ASSEMBLY', weight: 1.8 },
+      { key: 'construction', label: 'CONSTRUCTION — OUTSIDE TO INSIDE / TOP TO BOTTOM', weight: 4.6 },
+      { key: 'insulation', label: 'INSULATION', weight: 2.1 },
+      { key: 'fire', label: 'FIRE', weight: 2.6 },
       { key: 'ref', label: 'REF', weight: 1.1 },
     ],
-    rows: rows.map((r) => ({ ...r })),
+    rows: rows.map((r) =>
+      Object.fromEntries(Object.entries(r).map(([k, v]) => [k, retagCode(v, j.codeTag)])),
+    ),
     issues: [],
   }
   const plate = drawTable(table, box.x, box.y, box.w, box.h, {
     title: 'WALL, ROOF & FLOOR ASSEMBLIES',
     legend: `Layers from each wall's assembly; framing from the Bones spec that framed it; insulation from the ${j.codeShort} prescriptive table where the data cites it.`,
+    wrap: true,
   })
+  return { plate, warnings }
+}
+
+/**
+ * Fire separation distance, as the site plan's table: every exterior wall
+ * of the level, how far its face stands from the lot line at a right angle
+ * (R202), how far the roof projects toward it, and what Table R302.1(1)
+ * asks of the wall, the projection and the openings at that distance. The
+ * walls the table rates are the ones the floor plan marks and the
+ * assembly schedule lists as rated; a wall that breaks its rule (openings
+ * where none are permitted, a roof too close) is called out.
+ */
+function fireSeparationPlate(
+  nodes: NodeMap,
+  box: Box,
+  levelId: string | undefined,
+): { plate: FloorplanGeometry[]; warnings: string[] } {
+  const fs = fireSeparation(nodes, levelId)
+  const warnings = fs.walls.flatMap((w) => w.issues.map((issue) => `${w.faces} wall: ${issue}`))
+  const plate: FloorplanGeometry[] = []
+  const ft = (m: number | null): string => (m === null ? '—' : formatSeparation(m))
+  const wallCell = (w: FireSeparationWall): string =>
+    w.toStreet ? 'none (street)' : w.wallRule === 'rated' ? '1-HR BOTH SIDES' : 'none'
+  const projectionCell = (w: FireSeparationWall): string =>
+    w.projectionRule === 'not-permitted'
+      ? 'NOT PERMITTED'
+      : w.projectionRule === 'rated-underside'
+        ? '1-HR UNDERSIDE'
+        : w.toStreet
+          ? 'none (street)'
+          : 'none'
+  const openingsCell = (w: FireSeparationWall): string => {
+    const pct = w.wallArea > 0 ? `${Math.round((w.openingArea / w.wallArea) * 100)}%` : '—'
+    const rule =
+      w.openingRule === 'not-permitted'
+        ? 'NONE PERMITTED'
+        : w.openingRule === 'limit-25'
+          ? '25% MAX'
+          : 'unlimited'
+    return `${w.openings} (${pct}) — ${rule}`
+  }
+  // the lot edge the face looks at rides with the distance: 3 ft (left), 20 ft (street)
+  const edgeOf = (w: FireSeparationWall): string => (w.edge ? (w.edge === 'front' ? 'street' : w.edge) : '?')
+  const rows = fs.walls.map((w) => ({
+    wall: `${w.name.toUpperCase()}${w.roofRole ? ` — ${w.roofRole.replace('-', ' ')}` : ''}`,
+    faces: w.faces,
+    distance: `${ft(w.distance)} (${edgeOf(w)})`,
+    rating: wallCell(w),
+    projection:
+      w.projectionDistance !== null && w.projectionDistance < 0
+        ? `${w.projectionKind} ${ft(w.projection)} → OVER THE LINE by ${ft(-w.projectionDistance)}`
+        : `${w.projectionKind} ${ft(w.projection)} → ${ft(w.projectionDistance)}`,
+    projectionRule: projectionCell(w),
+    openings: openingsCell(w),
+  }))
+  const table: ScheduleTable = {
+    title: 'FIRE SEPARATION',
+    columns: [
+      { key: 'wall', label: 'WALL', weight: 2.1 },
+      { key: 'faces', label: 'FACES', weight: 0.65 },
+      { key: 'distance', label: 'TO LOT LINE', weight: 1.4 },
+      { key: 'rating', label: 'WALL RATING', weight: 1.4 },
+      { key: 'projection', label: 'PROJECTION → LINE', weight: 1.5 },
+      { key: 'projectionRule', label: 'PROJECTION', weight: 1.4 },
+      { key: 'openings', label: 'OPENINGS', weight: 1.9 },
+    ],
+    rows,
+    issues: [],
+  }
+  const tableOptions = {
+    title: 'Fire separation distance — R302.1',
+    legend:
+      'Table R302.1(1): wall < 5 ft 1-hr both sides · projection < 2 ft not permitted, 2–5 ft 1-hr underside · openings < 3 ft none, 3–5 ft 25% max · penetrations < 3 ft per R302.4',
+    wrap: true,
+  }
+  if (fs.measured) {
+    plate.push(...drawTable(table, box.x, box.y, box.w, box.h, tableOptions))
+  } else {
+    plate.push({
+      kind: 'text',
+      x: box.x,
+      y: box.y + 0.21,
+      text: 'FIRE SEPARATION DISTANCE — R302.1',
+      fontSize: 0.24,
+      fill: INK,
+      fontWeight: 800,
+      fontFamily: SANS,
+    })
+  }
+  // the caveats, wrapped under the table
+  const top = box.y + (fs.measured ? measureTable(table, box.w, tableOptions) + 0.3 : 0.6)
+  const chars = Math.max(30, Math.floor(box.w / (0.11 * CHAR_W)))
+  let y = top
+  for (const caveat of fs.caveats) {
+    const words = caveat.split(/\s+/)
+    const lines: string[] = []
+    let line = ''
+    for (const word of words) {
+      if (line && line.length + 1 + word.length > chars) {
+        lines.push(line)
+        line = word
+      } else line = line ? `${line} ${word}` : word
+    }
+    if (line) lines.push(line)
+    for (const text of lines) {
+      if (y > box.y + box.h - 0.2) break
+      plate.push({ kind: 'text', x: box.x, y, text, fontSize: 0.11, fill: INK_SOFT, fontFamily: SANS })
+      y += 0.16
+    }
+    y += 0.06
+  }
   return { plate, warnings }
 }
 
@@ -776,6 +897,18 @@ export function buildGeneralNotesDrawing(nodes: NodeMap, args: ProviderArgs): Dr
   if (key === 'roof') {
     const { plate, warnings } = notesPlate(box, 'Roof notes', roofNotes(j), j)
     return { primitives: [], bounds: empty, plate, warnings, noLabel: true, title: 'Roof notes' }
+  }
+
+  if (key === 'fire-separation') {
+    const { plate, warnings } = fireSeparationPlate(nodes, box, args.levelId)
+    return {
+      primitives: [],
+      bounds: empty,
+      plate,
+      warnings,
+      noLabel: true,
+      title: 'Fire separation distance',
+    }
   }
 
   if (key === 'assemblies') {

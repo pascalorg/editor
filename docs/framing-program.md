@@ -661,7 +661,171 @@ G27 Procedural house mode: draw or generate, modify, save the house INTO the
     shows every option — no black box. Design in
     docs/procedural-generation.md §7; building it is next.
 
+## Mandate additions (Steve, 2026-09-06 late night — the submittal review)
+
+Verbatim: "okay keep checking this and the plans, make sure the frmaing sheets
+are correct, has correct footings for slabs, check irc / crc standards, ensure
+it can work correctly and make the details looks great, check them all, and
+look through the plans, each sheet each item, ensure they are all accurate and
+would be ready for submittal, review the florida standard submission see if we
+are misisng and submissions for florida, ensure the code sections change to
+correct idenitfer by area as needed or if irc covers florida, if not make sure
+florida works correctly, irc area are the priority, make sure hte energy calc
+works correctly, and really go top to bottom, generate a design, review that
+the guradrail details are accurate, ledge details with flashing, make the
+window details better, look up architectural standards, ensure the sheets
+adjust correctly if the floor plan is chaged, we dont need the window and
+fixture and door scheudle son the floor plan sheet, we have a detaicated sheet
+fo rhtat, ensure the wall assemblies are correct, top to bottom check get it
+working correctly, thank you! check stud walls are to code, show fire blocking,
+ensure our structural sheets show correct framing for beaintg wall, shear
+transfer details for gable walls, include fire walls if under 5' to peroty
+line, try a florida address ge thte lot in, then gerneate a hosue, cehck the
+alg is workign correctly, get it all working thanks!"
+
+G30 Every citation names the code the jurisdiction adopted — FBC-R in
+    Florida, CRC in California, the IRC where the IRC is the code — and the
+    IRC areas come first.
+G31 Florida works: the county (HVHZ, zone 1A) read off the site when the
+    parcel record has none, the HVHZ wind range on the structural notes,
+    the energy rows for the resolved zone, the Florida submission checked.
+G32 Slabs have their footings; the structural sheets show the bearing walls
+    as framed (trusses or stick, bearing partitions only where the joists
+    lap); stud walls to code; fireblocking shown.
+G33 Details that read: guard @ post (DCA 6), stair guard & handrail, ledger
+    with flashing, window jamb & flashing sequence, gable-end shear transfer
+    & bracing, fireblocking.
+G34 No window / fixture / door schedules on the floor plan sheet (A8.0 and
+    P1.0 carry them); the wall assemblies as a schedule, correct.
+G35 A wall under 5 ft from the lot line is a fire wall (R302.1): rated on
+    the plan, in the assembly schedule, with the distances on the site plan.
+G36 The sheets follow the plan: move the house or change the plan and every
+    sheet re-reads it on the next draw.
+G37 A Florida address, the lot in, a house generated on it, the algorithm
+    checked end to end (scripts/demo/generate-and-print.ts).
+
 ## Log (continued)
+
+- 2026-09-07 small hours: **Batch P, second pass — the rest of the review
+  (G31, G32, G35, G36).** The plan mark on a rated wall now runs along the
+  wall (a group turned to the face's angle) and is turned to read
+  left-to-right on the paper, or bottom-to-top when the wall stands
+  vertical there — the sheet's own plan rotation is passed in, so the
+  Florida farmhouse (turned 178° on its lot) reads upright. The energy
+  sheet: the wall azimuths now include the building's yaw (EW1 358°, EW3
+  178° on the turned farmhouse — they read 0°/180° before, as if the house
+  sat square to the site), the "23 walls have no exterior face marked"
+  caveat no longer counts partitions (a wall with the generator's partition
+  role, or interior on both sides, is inside the envelope by definition),
+  "north not set" prints only when the site carries no rotation at all (a
+  geocoded site's 0 is a value), and the wind row carries the HVHZ range.
+  The prescriptive table now carries the rest of 2021 IECC Table R402.1.2
+  from mep-rules.json by zone — floor R, slab edge, fenestration and
+  skylight U-factors, SHGC by zone with NR in 5–8 — the 0.30 the data
+  called the "zones 1–3 maximum" was the 2009 IECC figure; the table now
+  prints 0.25, and the Manual-J-lite load keeps 0.30 as a stated
+  conservative assumption (its note says so; the sizing exhibits and the
+  master baseline are pinned to it). SN1 gains the wind design data FBC-R
+  R301.2.1.1.1 asks for beside Vult: Vasd = Vult × √0.6 (132–139 mph for
+  the HVHZ range), the wind-borne debris region, the enclosure
+  classification with GCpi ±0.18, and where the components-and-cladding
+  pressures come from (ASCE 7 Ch. 30 / NOA in the HVHZ, Tables R301.2(2)
+  and (3) elsewhere) — all "verify", none derived from the model. A0.1's
+  foundation notes gain the flood determination (FEMA zone and BFE off the
+  effective FIRM, R322 where the lot is in a flood hazard area). The
+  footing schedule names what a pad carries — PAD FOOTING AT PORCH POST on
+  the ranch, not "at girder post" for every pad. A3.0's venting calculation
+  no longer counts an open porch or deck cover as attic (the farmhouse's
+  three segments were the house plus two porch roofs); the water meter's
+  panel-space note carried its own ⚠ inside the label, so it printed
+  "⚠ ⚠" — the glyph is the warning band's to add. The ranch (slab) on the
+  same lot: S1.0 draws the slab, the stem wall and its 16 × 8 footing 30 in
+  below top of foundation (18 in of stem above grade + the 12 in Florida
+  embedment), five porch-post pads, no interior thickened footings under
+  the trussed roof; S5.0's FOUNDATION @ EXT. WALL is the stem-wall detail
+  with the slab on it. Tests: fire-separation (the label's turn at four
+  sheet rotations), energy (the R402.1.2 rows for zone 2) — plugin-sheets
+  258, Bones full suite, editor typecheck clean. Gap: the structural
+  plate's stacked schedules size themselves before they know their column
+  width, so they cannot wrap — the new SN1 values are written short
+  instead; wrapping them wants `scheduleBlock` handed its width.
+
+- 2026-09-06 late night: **Batch P — the submittal review: code identifiers,
+  Florida, structure, the assembly schedule, five details, fire separation
+  (G30–G37).** The pipeline first: `scripts/demo/generate-and-print.ts`
+  drops a preset lot in through the running dev server's parcel API (the
+  Miami Shores preset — 1247 NE 104th St, a GIS parcel with no county on
+  it), generates the farmhouse (seed 777, no garage) in process, lays the
+  default set out, prints the PDF and keeps the scene graph;
+  `scripts/demo/sheets-to-svg.tsx` renders any scene's sheets to SVG
+  through the workspace's own React renderer, served from
+  `apps/editor/public/tmp-sheets` for the Browser pane. G30: providers
+  write "IRC R403.1.6"; `retagCode` (notes/jurisdiction.ts) renames every
+  citation per sheet — FBC-R, CRC, NCRC, RCNYS — at the text-primitive
+  level in drawings.ts, leaving "2021 IRC base" alone; `citation()` in
+  general.ts prints the code name so the retag has something to find. G31:
+  `resolveJurisdiction` infers the Florida county from `parcel.originLngLat`
+  when the record has none (Miami-Dade / Broward → HVHZ, those and Monroe
+  → zone 1A), prints the inference as a caveat, parses the HVHZ 170–180 mph
+  range onto SN1 with exposure C on the coast, and the prescriptive rows
+  follow the resolved zone (Miami: ceiling R-30, wall R-13 — the S5 wall
+  section's batt and the eave's ceiling note read them); past 140 mph the
+  model warns that R602.10 bracing does not apply (R301.2.1.1). G32: the
+  generator writes `building.metadata.structure` — trusses past a 24 ft
+  span (R802.10.1 deferred submittal), stick below — and both the sheets'
+  framing model and the Bones X-ray node start from it; a trussed single
+  storey's partitions are non-bearing (no thickened footings, the S2.0
+  legend says so), a stick house's ceiling-joist lap partitions bear; S1.0
+  says CRAWL SPACE — NO SLAB on a raised floor; a deck under a porch cover
+  bears its beam on the 6x6 porch posts (no 4x4s beside them, no colliding
+  pads); girder posts stand at even interior stations. G33: S5.x gains
+  DECK / PORCH GUARD @ POST (DCA 6: through-bolts, DTT2Z, cap, rails,
+  balusters, the 4 in sphere), STAIR GUARD & HANDRAIL, GABLE END — SHEAR
+  TRANSFER & BRACING (blocking, straps, horizontal and diagonal braces),
+  FIREBLOCKING @ SOFFIT & PENETRATIONS (R302.11), WINDOW JAMB & FLASHING
+  SEQUENCE — eleven details over S5.0 and S5.1. G34: A2.x keeps the plan
+  and the room schedule; A5.0 carries a WALL, ROOF & FLOOR ASSEMBLIES
+  schedule (layers from each wall's assembly, framing from the Bones spec,
+  insulation from the prescriptive data, a FIRE column); sections draw
+  furniture without names. G35: `notes/fire-separation.ts` measures every
+  exterior wall of the lowest level at a right angle from its outer face to
+  the lot ring (R202 — the least along the face, rounded DOWN to the inch;
+  a street face measured to the centreline is called a lower bound), the
+  roof's projection toward it (the eave, or a porch roof hung off the
+  wall), the openings in it, and applies Table R302.1(1): wall < 5 ft
+  1-hr both sides; projection < 2 ft not permitted, 2–5 ft 1-hr underside;
+  openings < 3 ft none, 3–5 ft 25% max. A1.0 now splits 60/40 with the
+  FIRE SEPARATION DISTANCE table (walls, distance and lot edge, rating,
+  projection, openings, the caveats — GIS parcel not a survey); the floor
+  plan marks a rated wall with a heavy dashed line and "1-HR RATED WALL
+  (R302.1) — 3'-8" TO LOT LINE"; the assembly schedule splits the rated
+  wall into its own row (5/8" Type X each face, e.g. UL U305 — verify).
+  `drawTable` gained wrapped cells (`wrap: true`, rows grow by LINE_H per
+  line, `measureTable` for what sits under) — the assembly and fire tables
+  are sentences, and an ellipsis in a schedule is a lie; a wrapped cell is
+  retagged whole (a split "IRC / N1102.1.3" escaped the sheet-level pass).
+  G36: the check — the generated Florida scene, then the same scene with
+  the building slid west until its west face stands 3 ft off the lot line
+  (`scratchpad/move-scene.py`), both rendered: the site plan's yard reads
+  3'-9", the fire table rates the W wall at 3'-8" (right edge) with 2
+  openings at 15% → 25% MAX and the rear deck roof (13'-0" past the face)
+  OVER THE LINE by 9'-3" → NOT PERMITTED, printed as a warning; A2.0
+  carries the mark; A5.0 gains the W2 EXTERIOR WALL — RATED row; the
+  unmoved scene rates nothing. G37: the Florida farmhouse end to end —
+  FBC-R citations, "County inferred from the site coordinates", HVHZ on
+  SN1 (170–180 mph), trusses on S3.0 (12.5 m span flagged for the truss
+  package), CRAWL SPACE on S1.0, the assembly table, S5.0 + S5.1. Tests:
+  jurisdiction +4, fire-separation +12, draw-table +3, general-notes +1,
+  generate (A1.0 / A5.0 viewports), deck-framing +1, details (11
+  registered) — plugin-sheets 258, Bones 153/69/144 on the touched suites,
+  generate 95, sections 23, editor typecheck clean. Honest gaps: the plan
+  mark's text is horizontal (the text primitive rotates with the plan, not
+  the wall); an uncovered deck is not treated as a projection (the caveat
+  says so); R302.1's exceptions 2–5 (accessory structures, foundation
+  vents) are not modelled; braced-wall panel lengths are still not verified
+  by the engine; the cover reads "Untitled project" until the project
+  record is filled in.
+
 
 - 2026-09-06 night: **Batch M — the posts are the framing's posts, the deck
   posts on the ground, ceilings and paint inside (G23, G25, G26; G24 open).**

@@ -10,15 +10,15 @@
  *                  hvac.manualJLite.ceilingRByZone  (+ its own citation)
  *   wood wall R    packages/plugin-bones/data/wall-assemblies.json
  *                  exterior.insulationByClimateZone (+ its own citation)
- *   SHGC           mep-rules.json hvac.manualJLite.shgcAssumed — whose note
- *                  cites it as the zone 1–3 MAXIMUM, so it is printed as a
- *                  citation only in zones 1–3 and as "(verify)" elsewhere.
+ *   floor R, slab edge, fenestration U, skylight U, SHGC
+ *                  mep-rules.json hvac.manualJLite.*ByZone — the rest of
+ *                  2021 IECC Table R402.1.2 by zone digit (SHGC is NR in
+ *                  zones 5–8 and says so)
  *
- * Mass wall, floor, slab edge, fenestration U, skylight U, envelope air
- * leakage and duct leakage are in NO data file here. They print
- * "per <adopted energy code> Table R402.1.2 (verify)" and nothing else. That
- * is the whole point: a blank the reader must fill is honest, an invented
- * number is not.
+ * Mass wall, envelope air leakage and duct leakage are in NO data file here.
+ * They print "per <adopted energy code> Table R402.1.2 (verify)" and nothing
+ * else. That is the whole point: a blank the reader must fill is honest, an
+ * invented number is not.
  */
 import mepRules from '../../../plugin-bones/data/mep-rules.json'
 import assemblies from '../../../plugin-bones/data/wall-assemblies.json'
@@ -32,6 +32,11 @@ const MJ = (
         ceilingRNote?: string
         shgcAssumed?: number
         shgcNote?: string
+        shgcByZone?: Record<string, number>
+        fenestrationUByZone?: Record<string, number>
+        skylightUByZone?: Record<string, number>
+        floorRByZone?: Record<string, number>
+        slabEdgeByZone?: Record<string, string>
       }
     }
   }
@@ -132,22 +137,43 @@ export function prescriptiveRequirements(j: Jurisdiction): {
   )
 
   rows.push({ component: 'Mass wall', value: verify, source: '—', cited: false })
-  rows.push({ component: 'Floor', value: verify, source: '—', cited: false })
-  rows.push({ component: 'Slab edge (R-value / depth)', value: verify, source: '—', cited: false })
-  rows.push({ component: 'Fenestration U-factor', value: verify, source: '—', cited: false })
-  rows.push({ component: 'Skylight U-factor', value: verify, source: '—', cited: false })
 
-  const zoneDigit = key ? Number.parseInt(key, 10) : Number.NaN
-  const shgc = MJ?.shgcAssumed
+  // the rest of Table R402.1.2 the data carries by zone digit (4C reads as zone 4)
+  const R402 = '2021 IECC Table R402.1.2 (mep-rules.json)'
+  const digit = key === '4M' ? '4' : key
+  const floorR = digit ? MJ?.floorRByZone?.[digit] : undefined
   rows.push(
-    shgc !== undefined && zoneDigit >= 1 && zoneDigit <= 3
-      ? {
-          component: 'Glazed fenestration SHGC',
-          value: `≤ ${shgc.toFixed(2)}`,
-          source: '2021 IECC Table R402.1.2, zones 1–3 max (mep-rules.json)',
-          cited: true,
-        }
-      : { component: 'Glazed fenestration SHGC', value: verify, source: '—', cited: false },
+    floorR !== undefined
+      ? { component: 'Floor', value: `R-${floorR}`, source: R402, cited: true }
+      : { component: 'Floor', value: verify, source: '—', cited: false },
+  )
+  const slab = digit ? MJ?.slabEdgeByZone?.[digit] : undefined
+  rows.push(
+    slab !== undefined
+      ? { component: 'Slab edge (R-value / depth)', value: slab === 'NR' ? 'NR (no requirement)' : slab, source: R402, cited: true }
+      : { component: 'Slab edge (R-value / depth)', value: verify, source: '—', cited: false },
+  )
+  const fenU = digit ? MJ?.fenestrationUByZone?.[digit] : undefined
+  rows.push(
+    fenU !== undefined
+      ? { component: 'Fenestration U-factor', value: `≤ ${fenU.toFixed(2)}`, source: R402, cited: true }
+      : { component: 'Fenestration U-factor', value: verify, source: '—', cited: false },
+  )
+  const skyU = digit ? MJ?.skylightUByZone?.[digit] : undefined
+  rows.push(
+    skyU !== undefined
+      ? { component: 'Skylight U-factor', value: `≤ ${skyU.toFixed(2)}`, source: R402, cited: true }
+      : { component: 'Skylight U-factor', value: verify, source: '—', cited: false },
+  )
+
+  const zoneDigit = digit ? Number.parseInt(digit, 10) : Number.NaN
+  const shgc = digit ? MJ?.shgcByZone?.[digit] : undefined
+  rows.push(
+    shgc !== undefined
+      ? { component: 'Glazed fenestration SHGC', value: `≤ ${shgc.toFixed(2)}`, source: R402, cited: true }
+      : zoneDigit >= 5 && zoneDigit <= 8 && MJ?.shgcByZone
+        ? { component: 'Glazed fenestration SHGC', value: 'NR (no requirement)', source: R402, cited: true }
+        : { component: 'Glazed fenestration SHGC', value: verify, source: '—', cited: false },
   )
 
   rows.push({
