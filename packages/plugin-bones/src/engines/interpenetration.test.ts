@@ -13,7 +13,7 @@ import {
   mixedCmuWall,
 } from './cmu'
 import { applyDeviceOverrides, layoutElectrical, pointInPolygon } from './electrical'
-import { frameAtticSeparations } from './attic-walls'
+import { frameAtticSeparations, frameBearingWallsToRoof } from './attic-walls'
 import { frameFloor } from './floor-framing'
 import { buildFoundation } from './foundation'
 import { lgsFrameWalls } from './lgs-wall-framing'
@@ -906,6 +906,20 @@ describe('interpenetration gate — structural members never share volume', () =
         v: violations([...roofMembers, ...attic.members]),
       }).toEqual({ name, studs: true, v: [] })
     }
+  })
+
+  test('roof framing: W18 shed rafters over bearing partitions + the walls carried to the underside compose SAT-clean', () => {
+    const shed = roofSeg({ roofType: 'shed', width: 10, depth: 8, pitch: Math.atan(4 / 12) })
+    const partitions = [
+      wall({ id: 'p_a', start: [-5, -1.5], end: [5, -1.5], exterior: false, height: 3.0 }),
+      wall({ id: 'p_b', start: [-5, 1.5], end: [5, 1.5], exterior: false, height: 3.0 }),
+      wall({ id: 'p_c', start: [0.5, -4], end: [0.5, 4], exterior: false, height: 3.0 }),
+    ]
+    const roofMembers = frameRoofs([shed], partitions, spec400)
+    expect(roofMembers.some((m) => m.role === 'rafter' && m.label?.includes('bears on'))).toBe(true)
+    const carried = frameBearingWallsToRoof(partitions.slice(0, 2), [shed], roofMembers, spec400)
+    expect(carried.members.some((m) => m.role === 'stud')).toBe(true)
+    expect(violations([...roofMembers, ...carried.members])).toEqual([])
   })
 
   test('roof framing: W15 lapped ceiling joists over a partition compose SAT-clean across the family', () => {

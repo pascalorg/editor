@@ -254,7 +254,7 @@ export function frameRoofs(
       // model should fake — only a top-level gable segment trusses out.
       if (truss) frameGableTruss(roof, spec, members)
       else frameGable(roof, spec, members, walls)
-    } else if (roof.roofType === 'shed') frameShed(roof, spec, members)
+    } else if (roof.roofType === 'shed') frameShed(roof, spec, members, walls)
     else if (roof.roofType === 'hip') frameHip(roof, spec, members, walls)
     else if (roof.roofType === 'flat') frameFlat(roof, spec, members)
     else if (roof.roofType === 'gambrel') frameGambrel(roof, spec, members, walls)
@@ -2031,7 +2031,12 @@ function frameGableTruss(roof: RoofSegmentSlice, spec: FramingSpec, members: Mem
   }
 }
 
-function frameShed(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) {
+function frameShed(
+  roof: RoofSegmentSlice,
+  spec: FramingSpec,
+  members: Member[],
+  walls: readonly WallSlice[] = [],
+) {
   const emit = emitter(roof, members)
   const [t, rd] = LUMBER_CROSS_SECTIONS[spec.rafterSize]
   const theta = roof.pitch
@@ -2056,10 +2061,35 @@ function frameShed(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[])
   const zCentre = attached ? (roof.overhang * cosT) / 2 : 0
   const yCentre = midY - zCentre * tan
   // Span discipline: the shed's horizontal projection is the FULL depth and
-  // no ceiling joists exist below to strut a purlin to — flag only (S1).
-  const shedFlag = slopeRafterFlag(spec, roof.depth, slopeLen)
+  // no ceiling joists exist below to strut a purlin to. W18: the interior
+  // partitions running WITH the eaves under the plane are the rafters'
+  // interior bearing (the mono-pitch house has no other answer) — each
+  // rafter stays one stick, continuous over them, and its span check is
+  // the longest projection BETWEEN supports (R802.4.1); compute frames
+  // those walls up to the underside (`frameBearingWallsToRoof`). No
+  // partition under a station → the honest flag, as before.
+  const bearings =
+    spec.detail === '200'
+      ? []
+      : ceilingJoistBearingsFor(roof, walls, true, roof.depth, roof.width / 2)
+  const rafterRun = (x: number): { run: number; ids: string[] } => {
+    const covering = bearings
+      .filter((b) => x >= b.cover[0] - EPS && x <= b.cover[1] + EPS)
+      .sort((p, q) => p.at - q.at)
+    const edges = [-roof.depth / 2, ...covering.map((b) => b.at), roof.depth / 2]
+    let run = 0
+    for (let i = 0; i + 1 < edges.length; i++) {
+      run = Math.max(run, (edges[i + 1] as number) - (edges[i] as number))
+    }
+    return { run, ids: covering.map((b) => b.wallId) }
+  }
   const stations = layout(-roof.width / 2, roof.width / 2, spec.rafterSpacing, t / 2)
   for (const x of stations) {
+    const { run, ids } = rafterRun(x)
+    const bearingNote =
+      ids.length === 0
+        ? ''
+        : ` — bears on interior wall${ids.length > 1 ? 's' : ''} ${ids.join(' and ')} (${fmtM(run)} longest projection between supports, R802.4.1)`
     emit(
       'rafter',
       spec.rafterSize,
@@ -2069,9 +2099,9 @@ function frameShed(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[])
       theta,
       slopeLen,
       'lumber',
-      `Rafter ${spec.rafterSize} (shed${attached ? ', on the ledger' : ''})`,
+      `Rafter ${spec.rafterSize} (shed${attached ? ', on the ledger' : ''})${bearingNote}`,
       undefined,
-      shedFlag,
+      slopeRafterFlag(spec, run, slopeLen),
     )
     if (spec.hurricaneTies) {
       tieAt(emit, spec, x, roof.depth / 2, plateY)
@@ -2114,13 +2144,18 @@ function frameShed(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[])
     // ---- infill above the plate: the high-side pediment (the plane rises
     // from the low eave at +Z to the high edge at −Z). This is the shed's
     // "front wall" — real studs on the plate, not a picture.
+    // The plane slopes ACROSS this wall (down toward +Z): the stud's inner
+    // face sits (offset + depth/2) inboard of the high edge, where the
+    // rafter underside is that much lower — inscribe the top there (W18
+    // gate: the flat-topped pediment studs poked into the rafters).
+    const pedimentZone = infillZone(spec, roof)
     infillStuds(emit, spec, roof, {
       plateY,
       alongX: true,
       at: -roof.depth / 2,
       from: -roof.width / 2,
       to: roof.width / 2,
-      topAt: () => roof.depth * tan,
+      topAt: () => (roof.depth - pedimentZone.offset - pedimentZone.depth / 2) * tan,
       topSlope: 0,
       label: infillLabel(spec, 'Pediment stud (shed high wall)'),
       bearing: true,
@@ -4274,6 +4309,8 @@ export function roofPlaneAt(roof: RoofSegmentSlice, xl: number, zl: number): num
   const tan = Math.tan(roof.pitch)
   const base = roof.position[1] + roof.wallHeight
   if (roof.roofType === 'gable') return base + (roof.depth / 2 - Math.abs(zl)) * tan
+  // the shed's one plane rises from the low eave at +Z to the high edge at −Z (frameShed)
+  if (roof.roofType === 'shed') return base + (roof.depth / 2 - zl) * tan
   if (roof.roofType === 'hip') {
     const alongX = roof.width >= roof.depth
     const run = Math.min(roof.width, roof.depth) / 2
@@ -4498,6 +4535,21 @@ export function buryWings(roofs: RoofSegmentSlice[], members: Member[]): Member[
     out = next
   }
   return out
+}
+
+/**
+ * The interior walls the shed rafters bear on (W18), read off the rafter
+ * labels `frameShed` wrote — compute frames those walls to the underside.
+ */
+export function shedBearingWallIds(members: readonly Member[]): string[] {
+  const ids = new Set<string>()
+  for (const m of members) {
+    if (m.role !== 'rafter') continue
+    const hit = / bears on interior walls? (.+?) \(/.exec(m.label ?? '')
+    if (hit === null) continue
+    for (const id of (hit[1] as string).split(' and ')) ids.add(id)
+  }
+  return [...ids]
 }
 
 /** The level warnings for buried wings — the junction the model does not draw. */

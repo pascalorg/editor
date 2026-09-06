@@ -18,6 +18,7 @@ import {
   memberAxis,
   roofPlaneAt,
   type RoofSegmentSlice,
+  shedBearingWallIds,
 } from './roof-framing'
 import { computeTakeoff } from './takeoff'
 
@@ -1715,6 +1716,10 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
   //  big gable's over-span flag says why it cannot lap; gable-300/400/
   //  400-windy/big-400, gambrel-400 and the valley pair recaptured; gable-200
   //  (schematic), shed and flat hold byte-for-byte.
+  // 2026-09-06 INTENDED-CHANGE (W18 gate): the shed's pediment studs inscribe
+  //  their tops under the plane that slopes ACROSS the high wall (the flat-
+  //  topped studs poked into the rafters) — the four shed pins recaptured;
+  //  flat holds.
   const hashOf = (members: Member[]): string =>
     createHash('sha256').update(JSON.stringify(members)).digest('hex').slice(0, 16)
   const PINS: [string, Partial<RoofSegmentSlice>, Partial<FramingSpec>, string][] = [
@@ -1723,10 +1728,10 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
     ['gable-200', {}, { detail: '200' }, '10cd4729a3ac84ed'],
     ['gable-400-windy', {}, { detail: '400', hurricaneTies: true }, 'e58ddc4c6e3bc418'],
     ['gable-big-400', { width: 10, depth: 12 }, { detail: '400' }, '3a58ab246f27ca38'],
-    ['shed-300', { roofType: 'shed' }, {}, 'd31a6792780eb6c5'],
-    ['shed-400', { roofType: 'shed' }, { detail: '400' }, '2c6b8aa2da96aa7f'],
-    ['shed-200', { roofType: 'shed' }, { detail: '200' }, 'fb1e2b997418aad8'],
-    ['shed-big-400', { roofType: 'shed', depth: 8 }, { detail: '400' }, '962b2fa2b3fb2e01'],
+    ['shed-300', { roofType: 'shed' }, {}, '5a56e8b978f47366'],
+    ['shed-400', { roofType: 'shed' }, { detail: '400' }, '995c6cb97c650f69'],
+    ['shed-200', { roofType: 'shed' }, { detail: '200' }, 'ba9d40224b37077a'],
+    ['shed-big-400', { roofType: 'shed', depth: 8 }, { detail: '400' }, '438b332d1554775b'],
     ['flat-400', { roofType: 'flat' }, { detail: '400' }, '953c25cdb23c0ffb'],
     ['gambrel-400', { roofType: 'gambrel' }, { detail: '400' }, '0e2586e8b0504a28'],
   ]
@@ -3098,7 +3103,13 @@ describe('W16c: buried parallel wings', () => {
     expect(roofPlaneAt(main, 0, 13.11 / 2)).toBeCloseTo(2.74, 9)
     const hip = seg({ id: 'h', roofType: 'hip', width: 12, depth: 6 })
     expect(roofPlaneAt(hip, 5, 0)).toBeCloseTo(3.0 + 1 * Math.tan(hip.pitch), 9)
-    expect(roofPlaneAt(seg({ roofType: 'shed' }), 0, 0)).toBeNull()
+    // the shed's plane rises toward −z (W18 reads it for the bearing walls); flats are not modelled
+    expect(roofPlaneAt(seg({ roofType: 'shed' }), 0, 0)).toBeCloseTo(
+      3.0 + 3 * Math.tan((40 * Math.PI) / 180),
+      9,
+    )
+    expect(roofPlaneAt(seg({ roofType: 'shed' }), 0, 3)).toBeCloseTo(3.0, 9)
+    expect(roofPlaneAt(seg({ roofType: 'flat' }), 0, 0)).toBeNull()
   })
 })
 
@@ -3187,5 +3198,54 @@ describe('W16d: hip end-strip stub joists', () => {
     expect(byRole(schematic, 'ceiling-joist').some((cj) => cj.label?.startsWith('Stub'))).toBe(
       false,
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// W18: shed rafters bear on the interior partitions under them
+// ---------------------------------------------------------------------------
+
+describe('W18: shed rafters bear on interior partitions', () => {
+  // a 10 × 8 shed @ 20°: an 8 m projection is far past the 2x6 @ 24" row (3.57 m)
+  const roof = seg({ roofType: 'shed', width: 10, depth: 8, pitch: (20 * Math.PI) / 180 })
+
+  test('no partition: every rafter flags the full projection, as before', () => {
+    const rafters = byRole(frameRoofs([roof], [], DEFAULT_SPEC), 'rafter')
+    expect(rafters.length).toBeGreaterThan(0)
+    for (const r of rafters) {
+      expect(r.flag).toContain('Rafter over prescriptive span — 8.00 m')
+      expect(r.label).not.toContain('bears on')
+    }
+    expect(shedBearingWallIds(rafters)).toEqual([])
+  })
+
+  test('two partitions with the eaves split the projection into pieces the table carries — no flag, the label names them', () => {
+    const walls = [wallSlice('p_a', [-5, -1.5], [5, -1.5]), wallSlice('p_b', [-5, 1.5], [5, 1.5])]
+    const members = frameRoofs([roof], walls, DEFAULT_SPEC)
+    const rafters = byRole(members, 'rafter')
+    expect(rafters.length).toBeGreaterThan(0)
+    for (const r of rafters) {
+      expect(r.flag ?? '').not.toContain('over prescriptive span')
+      expect(r.label).toContain(
+        'bears on interior walls p_a and p_b (3.00 m longest projection between supports, R802.4.1)',
+      )
+      expect(r.length).toBeCloseTo(8 / Math.cos(roof.pitch) + 0.6, 6) // still one stick
+    }
+    expect(shedBearingWallIds(members).sort()).toEqual(['p_a', 'p_b'])
+    // one partition leaves a 5.5 m piece — still over the row, still honest
+    const one = byRole(frameRoofs([roof], [walls[0] as WallSlice], DEFAULT_SPEC), 'rafter')
+    for (const r of one) {
+      expect(r.flag).toContain('Rafter over prescriptive span — 5.50 m')
+      expect(r.label).toContain('bears on interior wall p_a (5.50 m')
+    }
+    // a partition covering half the width: only the rafters over it bear
+    const half = wallSlice('p_half', [-5, 0], [0, 0])
+    const mixed = byRole(frameRoofs([roof], [half], DEFAULT_SPEC), 'rafter')
+    expect(mixed.some((r) => r.label?.includes('bears on'))).toBe(true)
+    expect(mixed.some((r) => !r.label?.includes('bears on'))).toBe(true)
+    for (const r of mixed) {
+      if (r.label?.includes('bears on')) expect(r.position[0] as number).toBeLessThanOrEqual(0.02)
+      else expect(r.position[0] as number).toBeGreaterThan(0)
+    }
   })
 })

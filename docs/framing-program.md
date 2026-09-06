@@ -273,6 +273,11 @@ W17 Attic separation over the garage — DONE 2026-09-06 (see log): the dwelling
     stations under the roof's own members left open; a separation on a gable end rides
     the gable-end studs (said), one under a hip end has no attic (said).
 
+W18 Shed rafters on interior bearing walls — DONE 2026-09-06 (see log): the mono-pitch
+    house's rafters bear on the partitions running with the eaves (span checked between
+    supports), those partitions framed up to the underside as bearing walls; the shed's
+    pediment studs inscribed under the plane; the shed plane known to the burial test.
+
 ## Log
 
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
@@ -1023,3 +1028,34 @@ W17 Attic separation over the garage — DONE 2026-09-06 (see log): the dwelling
   +1 — Bones 2,098, plugin-sheets 235, typecheck clean. Honest gaps: no
   gypsum members on the attic wall (the note carries it); the attic wall's
   top plate along the slope is not modelled (studs cut to the slope).
+
+- 2026-09-06 morning: **W18 — shed rafters bear on the interior partitions
+  under them.** The mono-pitch modern house flagged every rafter (a 13 m
+  projection against a 3.57 m row) because the shed framer knew no
+  bearing but the eaves. `frameShed` now plans against the level's walls
+  the way the joists do (`ceilingJoistBearingsFor`: partitions running
+  with the eaves, ≥ 1.5 m, full height, 0.65 m clear of the eave lines):
+  each rafter stays one stick, continuous over the partitions covering
+  its station, and its span check is the longest projection BETWEEN
+  supports (R802.4.1); the label names the walls it bears on, and the
+  honest flag stays where no partition runs under a station (the garage
+  wing, the great room). `compute` reads those wall ids off the labels
+  (`shedBearingWallIds`) and frames them up to the rafters' underside
+  with the W17 machinery generalised (`frameWallsToRoof`, kind 'bearing'
+  — no flat plate where no joists carry the wall: the studs stand on the
+  wall's own top plate; labels and the level warning say "frame as
+  BEARING, sloped top plate not modelled, load path to verify").
+  `roofPlaneAt` learned the shed's plane (it rises from the low eave at
+  +Z), which also lets the W16c burial test see shed pairs — the mono
+  house's shed wing now buries under its main. The volume gate exposed a
+  pre-existing shed defect: the pediment studs' flat tops poked into the
+  rafters (the plane slopes ACROSS the high wall) — inscribed now at the
+  stud's inner face; the four shed hash pins recaptured with the note.
+  Headless mono house: 11 partitions carry the rafters (91 studs), rafter
+  over-span flags 42 → 35 with the garage wing (its own 6.71 m rafters
+  and the great-room pieces remain honest). QA loop over 6 styles × 3
+  seeds × garage × terrain: 72 sets, no crashes. Tests: roof-framing
+  +2 (no partition / two partitions / one / half cover), attic-walls +1
+  (bearing kind, no plate, taller studs upslope), interpenetration +1,
+  the seat test's pediment expectation — Bones 2,102, plugin-sheets 235,
+  typecheck clean.

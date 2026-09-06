@@ -7,7 +7,12 @@
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_SPEC } from '../core/spec'
 import type { Member, WallSlice } from '../core/types'
-import { frameAtticSeparations, onGableEnd, roofUndersideAt } from './attic-walls'
+import {
+  frameAtticSeparations,
+  frameBearingWallsToRoof,
+  onGableEnd,
+  roofUndersideAt,
+} from './attic-walls'
 import { frameRoofs, type RoofSegmentSlice } from './roof-framing'
 
 const IN = 0.0254
@@ -205,5 +210,42 @@ describe('W17: attic separation walls', () => {
     expect(studs.length).toBeGreaterThan(10)
     const heights = new Set(studs.map((s) => Math.round(s.dims[1] * 1e6)))
     expect(heights.size).toBe(1)
+  })
+})
+
+describe('W18: bearing partitions carried up to a shed roof', () => {
+  test('no ceiling joists under a shed: studs stand on the wall top, no extra plate; the warning says bearing', () => {
+    const shed = seg({
+      id: 'shed',
+      roofType: 'shed',
+      width: 10,
+      depth: 8,
+      pitch: (20 * Math.PI) / 180,
+    })
+    const walls = [wallSlice('p_a', [-5, -1.5], [5, -1.5]), wallSlice('p_b', [-5, 1.5], [5, 1.5])]
+    const roofMembers = frameRoofs([shed], walls, DEFAULT_SPEC)
+    const { members, warnings } = frameBearingWallsToRoof(walls, [shed], roofMembers, DEFAULT_SPEC)
+    const studs = byRole(members, 'stud')
+    expect(byRole(members, 'bottom-plate')).toHaveLength(0) // nothing to lay a plate on
+    expect(studs.length).toBeGreaterThan(20)
+    for (const s of studs) {
+      expect(s.position[1] - s.dims[1] / 2).toBeCloseTo(3.0, 9) // on the wall's own top plate
+      expect(s.label).toContain('Bearing partition stud')
+      expect(s.label).toContain('R802.4.1')
+      // under the shed plane: the underside rises toward −z
+      const z = s.position[2]
+      const under = Math.min(
+        roofUndersideAt([shed], s.position[0] - T / 2, z) as number,
+        roofUndersideAt([shed], s.position[0] + T / 2, z) as number,
+      )
+      expect(s.position[1] + s.dims[1] / 2).toBeLessThanOrEqual(under - 0.005 + 1e-9)
+    }
+    // the wall further up the slope carries taller studs
+    const tall = studs.filter((s) => s.position[2] < 0).map((s) => s.dims[1])
+    const short = studs.filter((s) => s.position[2] > 0).map((s) => s.dims[1])
+    expect(Math.min(...tall)).toBeGreaterThan(Math.max(...short))
+    expect(warnings).toHaveLength(1)
+    expect(warnings[0]).toContain('shed bearing: 2 interior partitions carry the shed rafters')
+    expect(warnings[0]).toContain('frame them as BEARING')
   })
 })

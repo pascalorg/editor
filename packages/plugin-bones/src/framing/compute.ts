@@ -39,7 +39,7 @@ import {
   mixedCmuWall,
   snapCmuHeight,
 } from '../engines/cmu'
-import { frameAtticSeparations } from '../engines/attic-walls'
+import { frameAtticSeparations, frameBearingWallsToRoof } from '../engines/attic-walls'
 import { frameDeck } from '../engines/deck-framing'
 import {
   applyDeviceOverrides,
@@ -59,6 +59,7 @@ import {
   detectUnframedRoofIntersections,
   extractRoofs,
   frameRoofs,
+  shedBearingWallIds,
 } from '../engines/roof-framing'
 import type { TakeoffAreas } from '../engines/takeoff'
 import { bracingWarnings, crossReferenceHoldDowns } from '../engines/wall-bracing'
@@ -1180,16 +1181,22 @@ function computeLevelUncached(
     const separations = activeWalls.filter(
       (w) => !w.curved && garageSideOf(w, activeRooms) !== null,
     )
-    const roofsHere = separations.length > 0 ? extractRoofs(nodes, levelId) : []
-    if (roofsHere.length > 0) {
-      const attic = frameAtticSeparations(
-        separations,
-        roofsHere,
-        members.filter((m) => m.system === 'roof-framing'),
-        spec,
-      )
+    const roofMembersHere = members.filter((m) => m.system === 'roof-framing')
+    // W18: the interior partitions a shed's rafters bear on, named on the
+    // rafter labels — framed up to the underside as bearing walls
+    const bearingIds = new Set(shedBearingWallIds(roofMembersHere))
+    const bearing = activeWalls.filter((w) => bearingIds.has(w.id))
+    const roofsHere =
+      separations.length > 0 || bearing.length > 0 ? extractRoofs(nodes, levelId) : []
+    if (roofsHere.length > 0 && separations.length > 0) {
+      const attic = frameAtticSeparations(separations, roofsHere, roofMembersHere, spec)
       members.push(...attic.members)
       warnings.push(...attic.warnings)
+    }
+    if (roofsHere.length > 0 && bearing.length > 0) {
+      const carried = frameBearingWallsToRoof(bearing, roofsHere, roofMembersHere, spec)
+      members.push(...carried.members)
+      warnings.push(...carried.warnings)
     }
   }
 

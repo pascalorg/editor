@@ -68,6 +68,9 @@ export interface AtticSeparationResult {
   warnings: string[]
 }
 
+/** What the wall above the ceiling is: the garage separation, or a bearing partition under a shed's rafters (W18). */
+export type WallToRoofKind = 'separation' | 'bearing'
+
 /** Level plan point → a segment's local (x along its ridge axis, z across). */
 function toLocal(roof: RoofSegmentSlice, px: number, pz: number): [number, number] {
   const dx = px - roof.position[0]
@@ -127,9 +130,34 @@ export function frameAtticSeparations(
   roofMembers: readonly Member[],
   spec: FramingSpec,
 ): AtticSeparationResult {
+  return frameWallsToRoof(separations, roofs, roofMembers, spec, 'separation')
+}
+
+/**
+ * The interior partitions a shed's rafters bear on (W18), framed from
+ * their plates up to the rafters' underside — the same machinery as the
+ * garage separation, worded for bearing.
+ */
+export function frameBearingWallsToRoof(
+  bearing: readonly WallSlice[],
+  roofs: readonly RoofSegmentSlice[],
+  roofMembers: readonly Member[],
+  spec: FramingSpec,
+): AtticSeparationResult {
+  return frameWallsToRoof(bearing, roofs, roofMembers, spec, 'bearing')
+}
+
+export function frameWallsToRoof(
+  separations: readonly WallSlice[],
+  roofs: readonly RoofSegmentSlice[],
+  roofMembers: readonly Member[],
+  spec: FramingSpec,
+  kind: WallToRoofKind,
+): AtticSeparationResult {
   const members: Member[] = []
   const warnings: string[] = []
   if (roofs.length === 0 || separations.length === 0) return { members, warnings }
+  const what = kind === 'separation' ? 'dwelling–garage separation' : 'shed bearing partition'
   const joists = roofMembers.filter((m) => m.role === 'ceiling-joist')
   const obstacles = roofMembers.filter((m) => OBSTACLES.has(m.role))
   // walls framed earlier in this pass: their studs and plates are obstacles
@@ -178,8 +206,11 @@ export function frameAtticSeparations(
         joistTop = Math.max(joistTop, j.position[1] + j.dims[1] / 2)
       }
     }
+    // a flat plate only where joists carry the wall; with none (a shed's
+    // vaulted ceiling) the studs stand on the wall's own top plate
+    const onJoists = joistTop > wallTop + EPS
     const plateBottom = joistTop
-    const plateTop = plateBottom + t
+    const plateTop = onJoists ? plateBottom + t : wallTop
     const framed: { u: number; height: number }[] = []
     let tooShort = 0
     const [dx, dz] = wall.dir
@@ -251,6 +282,10 @@ export function frameAtticSeparations(
     for (const [a, b] of pieces) {
       const plateLen = b - a
       if (plateLen < 0.3) continue
+      if (!onJoists) {
+        placedPlates.push({ start: wall.start, dir: wall.dir, u0: a, u1: b, wFit })
+        continue
+      }
       const plate: Member = {
         system: 'wall-framing',
         role: 'bottom-plate',
@@ -261,9 +296,10 @@ export function frameAtticSeparations(
         rotation: [0, yaw, 0],
         material: 'lumber',
         sourceId: wall.id,
-        label: `Attic separation wall plate ${studSize} flat on the ceiling joists — the dwelling–garage separation carried to the roof deck (R302.6)${
-          joistTop > wallTop + EPS ? '; shim to the shallower lapped joist pieces' : ''
-        }${cuts.length > 0 ? '; butts the crossing separation wall' : ''}`,
+        label:
+          kind === 'separation'
+            ? `Attic separation wall plate ${studSize} flat on the ceiling joists — the dwelling–garage separation carried to the roof deck (R302.6); shim to the shallower lapped joist pieces${cuts.length > 0 ? '; butts the crossing separation wall' : ''}`
+            : `Bearing partition plate ${studSize} flat on the ceiling joists — the wall carried up to the shed rafters it bears (R802.4.1); shim to the shallower joist pieces${cuts.length > 0 ? '; butts the crossing wall' : ''}`,
       }
       members.push(plate)
       placed.push(plate)
@@ -283,7 +319,10 @@ export function frameAtticSeparations(
         rotation: [0, yaw, 0],
         material: 'lumber',
         sourceId: wall.id,
-        label: `Attic separation stud ${studSize} — dwelling–garage separation to the roof deck (R302.6), top cut to the roof slope`,
+        label:
+          kind === 'separation'
+            ? `Attic separation stud ${studSize} — dwelling–garage separation to the roof deck (R302.6), top cut to the roof slope`
+            : `Bearing partition stud ${studSize} — the wall carried up to the shed rafters it bears, top cut to the roof slope (sloped top plate not modelled; R802.4.1 span between supports)`,
       }
       members.push(stud)
       placed.push(stud)
@@ -291,17 +330,19 @@ export function frameAtticSeparations(
   }
   if (studs > 0) {
     warnings.push(
-      `attic separation: the dwelling–garage separation is carried above the ceiling to the roof deck on ${wallsFramed} wall${wallsFramed === 1 ? '' : 's'} (${studs} studs on a flat plate over the ceiling joists) — 1/2 in gypsum on the garage side up to the deck (Table R302.6); stations under the ridge, purlins, ties, struts, hips and valleys are left open for that wood`,
+      kind === 'separation'
+        ? `attic separation: the dwelling–garage separation is carried above the ceiling to the roof deck on ${wallsFramed} wall${wallsFramed === 1 ? '' : 's'} (${studs} studs on a flat plate over the ceiling joists) — 1/2 in gypsum on the garage side up to the deck (Table R302.6); stations under the ridge, purlins, ties, struts, hips and valleys are left open for that wood`
+        : `shed bearing: ${wallsFramed} interior partition${wallsFramed === 1 ? '' : 's'} carr${wallsFramed === 1 ? 'ies' : 'y'} the shed rafters and ${wallsFramed === 1 ? 'is' : 'are'} framed up to their underside (${studs} studs, tops cut to the slope; the sloped top plate is not modelled) — frame ${wallsFramed === 1 ? 'it' : 'them'} as BEARING: double top plate, studs stacked, the load path to the foundation (girder / thickened slab) to verify (R802.4.1)`,
     )
   }
   if (noAttic > 0) {
     warnings.push(
-      `attic separation: the roof meets the plate along ${noAttic} dwelling–garage separation wall${noAttic === 1 ? '' : 's'} (a hip end) — no attic above ${noAttic === 1 ? 'it' : 'them'} to separate; the wall's own garage-side gypsum reaches the deck (Table R302.6)`,
+      `attic separation: the roof meets the plate along ${noAttic} ${what} wall${noAttic === 1 ? '' : 's'} (a hip end) — no attic above ${noAttic === 1 ? 'it' : 'them'} to separate; the wall's own garage-side gypsum reaches the deck (Table R302.6)`,
     )
   }
   if (onGableEnds > 0) {
     warnings.push(
-      `attic separation: ${onGableEnds} dwelling–garage separation wall${onGableEnds === 1 ? ' lies' : 's lie'} on a gable end — the gable-end studs above the plate are that separation: 1/2 in gypsum on the garage side of that infill up to the deck (Table R302.6)`,
+      `attic separation: ${onGableEnds} ${what} wall${onGableEnds === 1 ? ' lies' : 's lie'} on a gable end — the gable-end studs above the plate are that separation: 1/2 in gypsum on the garage side of that infill up to the deck (Table R302.6)`,
     )
   }
   return { members, warnings }

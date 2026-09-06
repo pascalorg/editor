@@ -157,7 +157,9 @@ describe('seating: the wall above the plate is framed', () => {
     expect(rake.length).toBeGreaterThan(8)
     for (const s of pediment) {
       expect(s.position[2]).toBeCloseTo(-roof.depth / 2, 9)
-      expect(s.dims[1]).toBeCloseTo(roof.depth * Math.tan(PITCH), 6)
+      // W18 gate: the top inscribes under the plane at the stud's INNER face —
+      // the plane slopes across this wall, half the stud depth in from the edge
+      expect(s.dims[1]).toBeCloseTo((roof.depth - s.dims[2] / 2) * Math.tan(PITCH), 6)
     }
     for (const s of rake) {
       expect(Math.abs(s.position[0] as number)).toBeCloseTo(roof.width / 2, 9)
