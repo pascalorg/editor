@@ -295,7 +295,123 @@ W19 Roof joins framed as overframes — DONE 2026-09-06 (see log W19a / W19b; op
     reached to pierce the house slope 0.9 m inside the wall (a shed cover's ledger held
     under the eave); the valley pair passes the volume gate at last.
 
+## Mandate additions (Steve, 2026-09-06 evening — after the W19 backup)
+
+Verbatim intent from the generated-house review, folded into G1–G11 below:
+- "bones is missing on this scene i created, wanted to check framing"
+- Mono roof: "i still cant see the front wall in the shed roofs … like there's a
+  setting hiding the wall … i saw the framing working in the wall above the wall";
+  "the side walls … show like the inside of the shed roof wall not the outside lined
+  up and normal like gable roofs has"; "shed roofs need ceiling joist option that goes
+  across or no ceiling joist"
+- "on procedural house generation the material in the gable area isnt updating"
+- Porches: "some posts are in the entrance of the porches in the middle, they should
+  have a post to each side of the stair and if the person adjusts the stair it moves
+  the posts"; "i cant see the deck framing below and should have a fascia board";
+  "the stairs are rotated 90 … they need to rotate -90"
+- "make sure the exterior sliding glass doors are not the closet slabs, should be glazing"
+- "we have a sheet generation tool, the structural details are to be in that"
+- "i dont see any furniture in the procedural generation or kitchen layouts using their
+  tooling, make sure sinks and cabinets are facing the correct directions, bathroom have
+  standard layout, typically vanity, toilet shower or tub, auto fixtures, auto schedules"
+- "some of the interior walls on procedural are 2x6 and jump from 2x4 and leave jogs in
+  the wall, like master bath has 2x6 for some reason, shared wall from garage should be
+  2x6 so it aligns with exterior wall"
+
+G1  Bones missing on a created scene — find why the panel / rail is absent there.
+G2  Shed roof walls in the shell: the high wall above the plate, the raked side walls
+    clad on the OUTSIDE like a gable end.
+G3  Shed ceiling: a Bones option — joists across at the low plate, or none (vaulted).
+G4  The gable / shed pediment takes the palette siding (roof segment `wallMaterialPreset`).
+G5  Porch posts flank the stair (one each side), corners + ≤ 8 ft bays; posts follow a
+    moved stair.
+G6  Deck: a visible rim / fascia band, the framing inside it; Bones joists under the decking.
+G7  Porch and deck stairs run the stair node's own way (+Z ascends) — the −90° fix.
+G8  Exterior sliders are glazed patio doors, not painted slabs.
+G9  Structural details, sections and the finish schedule in the Sheets tool.
+G10 Furniture, kitchen and bath layouts from the item catalog, facing the right way;
+    auto fixtures; schedules.
+G11 Partitions are 2x4 everywhere (no plumbing 2x6 jogs); the garage separation is
+    2x6 on the exterior wall's line.
+
+Added later the same evening (Steve, verbatim): "the garage door rails go out from the
+garage doors still"; "the gable on porches doesnt show up, and the posts should go down
+to the grade wherever that might be, and stairs need rails that go down, look at plan
+crafters system for how rails work, we use nice 6x6 posts typically on these entrances,
+not 4x4, but users can change that on auto porch entrance, not sure how the auto porch
+entrance tool works / plug in if we have one, also dont see the siding go down to grade
+and the raised floor if its up should be standard stemwall and floor joist sit over the
+stemwall and details reflect those for foundation, the rail shown here not sure why but
+its like boxes, the posts for rails go between and the stair goes through the width of
+the first two posts typically".
+
+G12 Garage overhead door faces the street so its tracks run inside.
+G13 Porch gable pediment renders; porch posts run to grade (6x6 by default, user-set);
+    stair rails down the flight; rail posts between the columns, the flight through
+    the first bay; the guard infill drawn as balusters / cable, not boxes.
+G14 Raised floor: a concrete stemwall from footing to mudsill visible in the shell,
+    siding carried down over the rim, floor joists over the stemwall, the foundation
+    details on the sheets reflecting it.
+G15 An "auto porch entrance" tool / panel: the porch's post size, rail style and roof
+    form editable after generation.
+
+Later still (Steve, verbatim): "also make sure there are slab porches on slab houses,
+and make the ceiling raise a bit larger than the house ceiling height for entrances in
+front like 8'6 ceiling on 8' house or maybe 9' ceiling on porches then some where
+ceiling height top plate matches, porches drop down 1" from inside finish floor so its
+a bit different but they always step down out of the house, front or back works this
+way, 1.5" max, think that covers it all for now".
+
+G16 Slab houses get concrete porches front and rear; the porch ceiling is 9 ft (never
+    under the house plate — a 9 ft house matches plates); every porch floor steps DOWN
+    out of the house, front or back, by 1 in (wood) to 1½ in (concrete), never more.
+
 ## Log
+
+- 2026-09-06 evening: **Batch A — the generated houses reviewed (G4–G8, G11).**
+  Stairs turned the stair node's own way (its run ascends along +Z; the porch
+  had assumed +X); exterior sliders glazed (76 % glass in two columns over a
+  24 % panel) instead of the closet slab; posts one each side of the flight
+  and at the corners, bays ≤ 8 ft, nothing in the entrance; the deck slab is
+  the decking plus its joist band so the rim reads as a fascia (Bones frames
+  under the decking it is told, `metadata.decking`); every partition 2x4 (no
+  2x6 plumbing wall jogs), the garage separation the 2x6 on the exterior
+  wall's line. Tests: porch and build expectations — plugin-generate 74,
+  Bones 2,107.
+
+- 2026-09-06 evening: **Batch B — the shed roof's walls, the pediment's siding,
+  the garage tracks, Bones on every scene, the porch rule (G1, G2, G4, G12,
+  G13 part, G16).** The viewer skipped the hollow wall band for EVERY shed
+  segment (upstream's lean-to work: a lean-to's high side is its host wall,
+  its ends the inset infill panels) — so a house's mono-pitch roof floated
+  over plate-height walls and its ends showed the infill's inside face.
+  `isLeanToShedSegment` (the lean-to assembly's side-infill fields) now gates
+  that: a plain shed carries the same hollow wall band a gable does — the
+  high wall and the raked side walls, on the wall faces, in the wall/trim
+  slot — and no inset panels; its deck edges are fascia (the deck slot) like
+  a gable's. The roof material slots read: 0 = the wall band above the plate
+  (`edgeMaterialPreset`), 1/2 = deck edge + soffit (`wallMaterialPreset`),
+  3 = shingle top; the generator had them crossed (trim on the band, siding
+  on the fascia and soffit) — the band takes the palette siding, fascia and
+  soffit the trim, so the gable AND the porch pediment now render sided (the
+  porch pediment was the same crossed slot). The garage overhead door is
+  flipped to face the street so its tracks run inside (`side: 'back'` +
+  rotation π). Bones is `defaultInstalled` so it is on a fresh scene. Porch
+  rule (G16): PORCH_FLOOR_DROP 1½ in (was PlanCrafters' 4 in), PORCH_COVER_HEIGHT
+  9 ft and the gable / hip beam never under the house plate (`coverGeometry`
+  takes the higher of the two; the shed cover stays the one that must hang
+  under the plate); slab houses already pour concrete porches front and rear
+  (`porch-slab`). Seen in the editor: the modern-mono's high wall and raked
+  ends in siding from both sides; the farmhouse porch gable sided with its
+  beam at the plate; the ranch garage door's tracks inside, its face clean.
+  Tests: viewer roof shed test rewritten (band faces on the wall planes, no
+  inset panels), finishes slot test, porch / build expectations for the drop
+  and the 9 ft beam — viewer roof 12, plugin-generate 74, Bones 2,107,
+  sheets 235, sections 21, roof 20, editor typecheck clean. Open from Steve's
+  list: G3 shed ceiling joists, G5b posts following a moved stair, G6 (why
+  the deck framing is not seen below), G9 sheets details, G10 furnishing,
+  G13 posts to grade / 6x6 / stair rails / rail infill, G14 stemwall, G15
+  the porch panel.
 
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
   reference folder; Pascal roof node, Bones roof/wall framing, generate build, site

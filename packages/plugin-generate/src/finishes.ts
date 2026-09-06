@@ -638,12 +638,12 @@ export function applyFinishes(
             properties: { color: f.roof.hex, roughness: 0.55, metalness: 0.45 },
           }
         }
-        n.edgeMaterialPreset = f.trim.ref
-        // the wall band the roof builds above the plate — a gable's
-        // triangle, a shed's high wall and raked sides — is sided like the
-        // walls under it (the viewer's fallback reads the wall ASSEMBLY's
-        // finish, which the palette does not touch)
-        n.wallMaterialPreset = f.siding.ref
+        // the viewer's roof slots: 'edge' is the wall band the roof builds
+        // above the plate (a gable's triangle, a shed's high wall and raked
+        // sides) — sided like the walls under it; 'wall' is the deck edge
+        // (fascia) and the soffit — painted trim
+        n.edgeMaterialPreset = f.siding.ref
+        n.wallMaterialPreset = f.trim.ref
         out.roofs++
         break
       }

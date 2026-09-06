@@ -443,6 +443,11 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         name,
         parentId: wall.id,
         position: [round(at * IN), round((heightIn / 2) * IN), 0],
+        // An overhead door's tracks run to the door's BACK (its local −Z).
+        // The door faces the wall's +normal side by default; when the garage
+        // lies on that side the door is turned to face the street so the
+        // tracks run inside (Steve, 2026-09-06: "the garage door rails go out").
+        ...(isGarage && swingSide === 1 ? { rotation: [0, Math.PI, 0], side: 'back' } : {}),
         width: round(widthIn * IN),
         height: round(heightIn * IN),
         doorType: isGarage ? 'garage-sectional' : doorType,

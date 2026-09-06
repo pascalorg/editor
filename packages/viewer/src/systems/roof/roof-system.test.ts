@@ -53,7 +53,7 @@ describe('roof system shed geometry', () => {
     return { geometry, roofSideX, sideInfillNormals, sideInfillX }
   }
 
-  test('keeps standalone shed side infill inside the overhanging roof edge', () => {
+  test('a standalone shed carries a full-height wall band like a gable: the high wall and the raked side walls sit on the wall faces, sided in the wall/trim slot', () => {
     const segment = RoofSegmentNode.parse({
       id: 'rseg_shed',
       type: 'roof-segment',
@@ -67,16 +67,59 @@ describe('roof system shed geometry', () => {
       deckThickness: 0.1,
       shingleThickness: 0.05,
     })
-    const wallSideX = segment.width / 2
-    const { geometry, roofSideX, sideInfillNormals, sideInfillX } = inspectShedGeometry(segment)
+    const geometry = generateRoofSegmentGeometry(segment)
+    const position = geometry.getAttribute('position')
+    const index = geometry.getIndex()!
+    const a = new THREE.Vector3()
+    const b = new THREE.Vector3()
+    const c = new THREE.Vector3()
+    const normal = new THREE.Vector3()
+    const edge = new THREE.Vector3()
+    const outerX = segment.width / 2 + segment.wallThickness / 2
+    const outerZ = segment.depth / 2 + segment.wallThickness / 2
+    const highWallTop = segment.wallHeight + segment.depth * Math.tan((25 * Math.PI) / 180)
 
-    expect(sideInfillNormals).toHaveLength(2)
-    expect(sideInfillX.length).toBeGreaterThan(0)
-    expect(sideInfillNormals.every((panelNormal) => Math.abs(panelNormal.x) > 0.95)).toBe(true)
-    expect(sideInfillNormals.every((panelNormal) => Math.abs(panelNormal.z) < 0.05)).toBe(true)
-    expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeLessThan(wallSideX - 0.05)
-    expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeGreaterThan(wallSideX - 0.15)
-    expect(Math.max(...roofSideX)).toBeGreaterThan(wallSideX + segment.overhang * 0.5)
+    // outward-facing wall-band faces (slot 0) on the outer wall planes
+    let highWallTopY = -Infinity
+    let leftRakeTopY = -Infinity
+    let rightRakeTopY = -Infinity
+    let insetPanels = 0
+    for (const group of geometry.groups) {
+      for (let i = group.start; i < group.start + group.count; i += 3) {
+        a.fromBufferAttribute(position, index.getX(i))
+        b.fromBufferAttribute(position, index.getX(i + 1))
+        c.fromBufferAttribute(position, index.getX(i + 2))
+        normal.subVectors(b, a).cross(edge.subVectors(c, a)).normalize()
+        const top = Math.max(a.y, b.y, c.y)
+        if (group.materialIndex === 0) {
+          const onHighWall = [a, b, c].every((p) => Math.abs(p.z + outerZ) < 1e-3)
+          if (onHighWall && normal.z < -0.95 && Math.abs(a.x + b.x + c.x) / 3 < segment.width / 2) {
+            highWallTopY = Math.max(highWallTopY, top)
+          }
+          if ([a, b, c].every((p) => Math.abs(p.x + outerX) < 1e-3) && normal.x < -0.95) {
+            leftRakeTopY = Math.max(leftRakeTopY, top)
+          }
+          if ([a, b, c].every((p) => Math.abs(p.x - outerX) < 1e-3) && normal.x > 0.95) {
+            rightRakeTopY = Math.max(rightRakeTopY, top)
+          }
+        }
+        // the lean-to's inset infill panels (slot 2, pulled inside the wall
+        // face, above the plate) must not appear on a standalone shed
+        if (
+          group.materialIndex === 2 &&
+          Math.abs(normal.x) > 0.95 &&
+          normal.x * (a.x + b.x + c.x) > 0 &&
+          [a, b, c].every((p) => Math.abs(p.x) < segment.width / 2 - 0.02 && p.y > segment.wallHeight)
+        ) {
+          insetPanels++
+        }
+      }
+    }
+
+    expect(highWallTopY).toBeGreaterThan(highWallTop - 0.3)
+    expect(leftRakeTopY).toBeGreaterThan(highWallTop - 0.3)
+    expect(rightRakeTopY).toBeGreaterThan(highWallTop - 0.3)
+    expect(insetPanels).toBe(0)
 
     geometry.dispose()
   })

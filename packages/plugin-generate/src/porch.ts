@@ -4,8 +4,9 @@
  * `entranceFlight`), built from Pascal's own nodes. One builder serves the
  * FRONT porch and the REAR entrance:
  *
- *   - the landing: a concrete `slab` stepped `PORCH_FLOOR_DROP` below the
- *     finish floor on a slab house, or a WOOD DECK (`metadata.floor: 'deck'`,
+ *   - the landing: a concrete `slab` stepped `PORCH_FLOOR_DROP` (1½ in) below
+ *     the finish floor on a slab house — every slab house gets its concrete
+ *     porches, front and rear — or a WOOD DECK (`metadata.floor: 'deck'`,
  *     decking one inch below the threshold so it sheds water) on a raised
  *     house — Bones frames the deck (ledger, joists, beam on posts, pads);
  *   - `column` posts at the outer corners, ≤ 8 ft apart, sized and shaped by
@@ -17,7 +18,8 @@
  *     way PlanCrafters solves them (ceil(rise / 7¾ in) then relaxed while the
  *     riser still passes R311.7.5.1), 11 in treads, ≥ 36 in wide;
  *   - a cover as a `roof-segment` seated on the beam line (`PORCH_COVER_HEIGHT`
- *     above the finish floor): a gable or hip whose ridge runs square to the
+ *     — 9 ft — above the finish floor, or the house plate if that is higher):
+ *     a gable or hip whose ridge runs square to the
  *     house wall INTO the slope above it (the auto roof's wing convention),
  *     a shed on a ledger where the wall has no slope to die into, a flat
  *     canopy for the modern styles, or none (a bare landing).
@@ -45,14 +47,25 @@ const IN = 0.0254
 const FT = 0.3048
 const inches = (n: number): number => n * IN
 
-/** A concrete landing steps 4 in below the interior finish floor (PlanCrafters PORCH_FLOOR_DROP). */
-export const PORCH_FLOOR_DROP = inches(4)
+/**
+ * A porch floor always steps DOWN out of the house, front or back, and by
+ * very little: 1 in to 1½ in max below the interior finish floor (Steve,
+ * 2026-09-06 — PlanCrafters' 4 in drop is not how the houses are built).
+ * Concrete takes the full 1½ in.
+ */
+export const PORCH_FLOOR_DROP = inches(1.5)
 /** Wood decking rides 1 in below the threshold so water sheds away from the door (PlanCrafters entranceFlight). */
 export const DECK_DROP = inches(1)
 /** Decking boards (5/4 or 2x) — the deck node's own thickness; Bones hangs the joists under it. */
 export const DECKING_THICKNESS = inches(1.5)
-/** Post / cover height above the finish floor (PlanCrafters entrance.ceilingH = 96). */
-export const PORCH_COVER_HEIGHT = inches(96)
+/**
+ * The porch ceiling — the cover beam over the finish floor: 9 ft (Steve,
+ * 2026-09-06: "8'6 ceiling on an 8' house, or maybe 9' … then somewhere the
+ * top plate matches"), and never under the house plate — a 9 ft house
+ * matches plates, a taller house lifts the porch beam to its own plate
+ * (`coverGeometry`). PlanCrafters' entrance.ceilingH was 96.
+ */
+export const PORCH_COVER_HEIGHT = 9 * FT
 /** IRC R312.1.1: a guard where the walking surface is more than 30 in above grade. */
 export const GUARD_REQUIRED_ABOVE = inches(30)
 export const GUARD_HEIGHT = inches(36)
@@ -240,15 +253,17 @@ export interface CoverGeometry {
 /**
  * Size the cover against the house roof (PlanCrafters sizes the porch by
  * style alone; Bones frames the join, so the join must be a real one).
- * A gable / hip cover dying into the slope: the style pitch (capped at
- * MAX_PORCH_PITCH), steepened until the ridge pierces the house slope
- * PIERCE_MIN inside the wall, then — if the cap still leaves it short —
- * the beam raised toward the plate; the box runs in to the pierce point,
- * a hip one run further so its near hip end buries itself under the
- * house roof. A shed cover: the ledger held LEDGER_CLEAR under the plate,
- * the pitch flattened toward 1:12, then the beam lowered to the headroom
- * floor, then a flat canopy. Without house data the legacy sizes hold
- * (one run in, the style pitch).
+ * A gable / hip cover rides over the house slope: its beam at the porch
+ * ceiling height or the house plate, whichever is higher (a porch plate
+ * never sits under the house plate); the style pitch (capped at
+ * MAX_PORCH_PITCH), steepened if the ridge would pierce the house slope
+ * less than PIERCE_MIN inside the wall (a beam level with the plate under
+ * a steep main roof); the box runs in to the pierce point, a hip one run
+ * further so its near hip end buries itself under the house roof. A shed
+ * cover hangs on a ledger, so it is the one cover that must stay UNDER the
+ * plate: the ledger held LEDGER_CLEAR below it, the pitch flattened toward
+ * 1:12, then the beam lowered to the headroom floor, then a flat canopy.
+ * Without house data the legacy sizes hold (one run in, the style pitch).
  */
 export function coverGeometry(
   input: Pick<PorchInput, 'floorElevation' | 'housePlateY' | 'housePitch'>,
@@ -289,13 +304,12 @@ export function coverGeometry(
     return { form, coverY: floorCover, pitch: stylePitch, into: run, pierce: 0 }
   }
   const pierceAt = (cy: number, p: number) => ((run * p) / 12 - (houseY - cy)) / houseTan
-  let coverY = floorCover
+  // the beam never under the house plate: a 9 ft house matches plates, a
+  // taller one lifts the porch ceiling to its own plate
+  const coverY = Math.max(floorCover, houseY)
   let pitch = stylePitch
   if (pierceAt(coverY, pitch) < PIERCE_MIN) {
     pitch = Math.min(MAX_PORCH_PITCH, ((houseY - coverY + PIERCE_MIN * houseTan) / run) * 12)
-  }
-  if (pierceAt(coverY, pitch) < PIERCE_MIN) {
-    coverY = Math.min(houseY - LEDGER_CLEAR, houseY - ((run * pitch) / 12 - PIERCE_MIN * houseTan))
   }
   const pierce = Math.max(0, pierceAt(coverY, pitch))
   return {

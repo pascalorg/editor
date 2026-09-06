@@ -149,13 +149,13 @@ describe('Poppy builds into Pascal nodes', () => {
     expect(door).toBeDefined()
     const porch = ofType(built.ops, 'slab').find((s) => (s as N).name === 'Porch') as N
     expect(porch).toBeDefined()
-    expect(porch.elevation).toBeCloseTo(0.05 - 4 * 0.0254, 9)
+    expect(porch.elevation).toBeCloseTo(0.05 - 1.5 * 0.0254, 9) // 1½ in step down out of the house
     const posts = ofType(built.ops, 'column')
     expect(posts.length).toBeGreaterThanOrEqual(2)
     for (const p of posts) expect((p as N).supportSlabId).toBe(porch.id)
     const stair = ofType(built.ops, 'stair')[0] as N
     expect(stair.deckSlabId).toBe(porch.id)
-    expect(stair.stepCount).toBe(1) // 6 in from grade to the porch top
+    expect(stair.stepCount).toBe(2) // 8½ in from grade to the porch top
     const segs = ofType(built.ops, 'roof-segment') as N[]
     expect(segs.some((s) => /Porch/.test(String(s.name)))).toBe(true)
     expect(built.porch?.policy).toBe(styleFor(POPPY.style ?? 'cottage').porch)

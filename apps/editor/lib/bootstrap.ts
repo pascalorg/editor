@@ -106,9 +106,11 @@ export async function loadExternalPlugins(): Promise<void> {
 extendPluginDiscovery(async () => [treesPlugin])
 registerEditorHostPanel(treesHostPanel)
 extendPluginDiscovery(async () => [bonesPlugin])
-// Opt-in: Bones ships uninstalled — users enable it per scene from the
-// Plugins panel (engineering X-ray is a specialist view, not a default).
-registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: false })
+// Bones ships INSTALLED: the engineering X-ray, the framing view and the
+// blueprints are how a generated house gets checked, and a scene made on a
+// fresh browser had no Bones rail item at all (Steve, 2026-09-06: "bones is
+// missing on this scene"). The Plugins panel still uninstalls it per scene.
+registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: true })
 // Auto roof: the roof derived from the walls (Ctrl+K → Auto roof). Generate builds through the same engine.
 extendPluginDiscovery(async () => [roofPlugin])
 registerEditorHostPanel(roofHostPanel)

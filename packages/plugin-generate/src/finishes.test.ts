@@ -126,7 +126,8 @@ describe('applied to a generated house', () => {
     for (const d of interior) expect(d.slots).toBeUndefined()
     const roof = nodes.find((n) => n.type === 'roof')!
     expect(roof.topMaterialPreset).toBe(`library:${f.roof.library}`)
-    expect(roof.edgeMaterialPreset).toBe(f.trim.ref)
+    expect(roof.edgeMaterialPreset).toBe(f.siding.ref)
+    expect(roof.wallMaterialPreset).toBe(f.trim.ref)
     const posts = nodes.filter((n) => n.type === 'column' && n.name === 'Porch post')
     expect(posts.length).toBeGreaterThan(0)
     for (const p of posts) expect(p.materialPreset).toBe(f.trim.ref)

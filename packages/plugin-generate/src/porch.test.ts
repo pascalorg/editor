@@ -89,7 +89,7 @@ describe('a full farmhouse porch', () => {
   const flight = byType(r.ops, 'stair-segment')[0]!
   const seg = byType(r.ops, 'roof-segment')[0]!
 
-  test('the landing is centred on the door, outside the wall face, 4 in below the finish floor', () => {
+  test('the landing is centred on the door, outside the wall face, 1½ in below the finish floor', () => {
     expect(r.summary?.widthFt).toBe(20) // bay 26 − 2 = 24 → clamped to 20
     expect(r.summary?.depthFt).toBe(7)
     const poly = slab.polygon as [number, number][]
@@ -135,19 +135,19 @@ describe('a full farmhouse porch', () => {
     }
   })
 
-  test('the flight: 6 in rise → one riser, 60 in wide, climbing toward the porch from grade', () => {
-    // porch top = 0.05 − 0.1016 = −0.0516; grade −0.2032 → rise 0.1516 m (5.97 in)
-    expect(r.summary?.risers).toBe(1)
+  test('the flight: 8½ in rise → two risers, 60 in wide, climbing toward the porch from grade', () => {
+    // porch top = 0.05 − 0.0381 = 0.0119; grade −0.2032 → rise 0.2151 m (8.47 in)
+    expect(r.summary?.risers).toBe(2)
     expect(stair.deckSlabId).toBe('slab_porch')
-    expect(stair.totalRise).toBeCloseTo(0.1516, 6)
+    expect(stair.totalRise).toBeCloseTo(0.2151, 6)
     expect((stair.position as number[])[1]).toBeCloseTo(-8 * IN, 9)
     expect(stair.width).toBeCloseTo(60 * IN, 9)
-    expect(flight.length).toBeCloseTo(TREAD_RUN, 9)
-    expect(flight.height).toBeCloseTo(0.1516, 6)
-    // bottom of the flight one tread beyond the porch edge, on the door's axis
+    expect(flight.length).toBeCloseTo(2 * TREAD_RUN, 9)
+    expect(flight.height).toBeCloseTo(0.2151, 6)
+    // bottom of the flight two treads beyond the porch edge, on the door's axis
     const pos = stair.position as number[]
     expect(pos[0]).toBeCloseTo(20 * FT, 6)
-    expect(pos[2]).toBeCloseTo(-0.085 - 7 * FT - TREAD_RUN, 6)
+    expect(pos[2]).toBeCloseTo(-0.085 - 7 * FT - 2 * TREAD_RUN, 6)
     // the stair's run ascends along its own +Z; yaw 0 keeps +Z on +z (into the house)
     expect(stair.rotation).toBeCloseTo(0, 5)
     expect(stair.railingMode).toBe('none')
@@ -381,7 +381,7 @@ describe('the cover sized against the house roof (W19b)', () => {
   const plate = 0.05 + 9 * FT // a 9 ft plate over the house floor at 0.05
   const tan4 = 4 / 12
 
-  test('a hip porch under a 9 ft plate at 4:12 steepens until its ridge pierces 0.9 m in, and runs in to that point plus one run', () => {
+  test('a hip porch on a 9 ft house sits its beam at the plate, keeps its 4:12, and runs in to the pierce point plus one run', () => {
     const r = porchFor(
       input({
         policy: 'entry',
@@ -397,23 +397,22 @@ describe('the cover sized against the house roof (W19b)', () => {
     // entry porch: 8 ft wide (run 4 ft), 6 ft deep, beam 6 in inside the edge
     const run = 4 * FT
     const beamLine = 6 * FT - 6 * IN
-    const drop = plate - (0.05 + PORCH_COVER_HEIGHT)
-    // at the ranch's own 4:12 the ridge would pierce only 0.3 m in — steepened (under the 6:12 cap)
-    expect(((run * 4) / 12 - drop) / tan4).toBeLessThan(PIERCE_MIN)
-    const needed = ((drop + PIERCE_MIN * tan4) / run) * 12
-    expect(needed).toBeLessThan(6)
-    expect(seg.pitch).toBeCloseTo(Math.atan(needed / 12) * (180 / Math.PI), 6)
-    expect(r.summary?.roofPitch).toBeCloseTo(needed, 5)
-    const pierce = PIERCE_MIN
+    // the 9 ft porch ceiling IS the 9 ft plate: the beam level with it, and at
+    // the ranch's own 4:12 the ridge pierces the same 4:12 slope one run in
+    expect(plate).toBeCloseTo(0.05 + PORCH_COVER_HEIGHT, 9)
+    expect(seg.pitch).toBeCloseTo(Math.atan(4 / 12) * (180 / Math.PI), 6)
+    expect(r.summary?.roofPitch).toBeCloseTo(4, 5)
+    const pierce = ((run * 4) / 12) / tan4
+    expect(pierce).toBeGreaterThan(PIERCE_MIN)
     expect(r.summary?.roofPierceM).toBeCloseTo(pierce, 5)
     // the box starts at the wall face; the pierce is measured from the plate line (the wall centreline)
     expect(seg.width).toBeCloseTo(beamLine + 0.17 / 2 + pierce + 0.05 + run, 5)
-    expect((seg.position as number[])[1]).toBeCloseTo(0.05 + PORCH_COVER_HEIGHT, 6) // the beam stayed at 8 ft
-    expect(r.summary?.coverHeightIn).toBeCloseTo(96, 1)
+    expect((seg.position as number[])[1]).toBeCloseTo(plate, 6) // the beam at the plate
+    expect(r.summary?.coverHeightIn).toBeCloseTo(108, 1)
     expect(r.warnings.some((w) => w.includes('pierces'))).toBe(false)
   })
 
-  test('a gable porch that cannot reach at the 6:12 cap lifts its beam toward the plate', () => {
+  test('a gable porch under a tall plate lifts its beam to that plate; a shallow one that still cannot pierce 0.9 m says so', () => {
     // a 12 ft wide porch (run 6 ft) under a 10 ft plate at 8:12
     const high = 0.05 + 10 * FT
     const cover = coverGeometry(
@@ -424,19 +423,21 @@ describe('the cover sized against the house roof (W19b)', () => {
       6 * FT,
     )
     expect(cover.pitch).toBe(6)
-    // the beam rises just enough: the 6:12 rise less the 0.9 m of house rise
-    expect(cover.coverY).toBeCloseTo(high - ((6 * FT * 6) / 12 - PIERCE_MIN * (8 / 12)), 6)
-    expect(cover.coverY).toBeGreaterThan(0.05 + PORCH_COVER_HEIGHT)
-    expect(cover.coverY).toBeLessThanOrEqual(high - LEDGER_CLEAR + 1e-9)
-    expect(cover.pierce).toBeCloseTo(PIERCE_MIN, 6)
-    expect(cover.into).toBeCloseTo(PIERCE_MIN + 0.05, 6)
-    // a 5 ft porch under the same roof cannot reach even with the beam at the plate — it says so
+    // the porch beam never sits under the house plate: lifted to it
+    expect(high).toBeGreaterThan(0.05 + PORCH_COVER_HEIGHT)
+    expect(cover.coverY).toBeCloseTo(high, 9)
+    // level with the plate, the 6:12 rise over the run pierces the 8:12 slope
+    const pierce = ((6 * FT * 6) / 12) / (8 / 12)
+    expect(pierce).toBeGreaterThan(PIERCE_MIN)
+    expect(cover.pierce).toBeCloseTo(pierce, 6)
+    expect(cover.into).toBeCloseTo(pierce + 0.05, 6)
+    // under a 12:12 main roof the 8 ft entry porch's 6:12 ridge (capped) reaches only 0.6 m in — it says so
     const r = porchFor(
       input({
         policy: 'entry',
         style: styleFor('farmhouse'),
         housePlateY: high,
-        housePitch: 8,
+        housePitch: 12,
         doorAt: 6 * FT,
         wall: { start: [0, 0], end: [12 * FT, 0], thickness: 0.17 },
       }),
@@ -446,14 +447,15 @@ describe('the cover sized against the house roof (W19b)', () => {
     expect(r.warnings.some((w) => w.includes('pierces the house slope only'))).toBe(true)
   })
 
-  test('a shed cover on a gable-end wall keeps its ledger under the house plate: the pitch flattens, then the beam drops, then a canopy', () => {
+  test('a shed cover on a gable-end wall keeps its ledger under the house plate: the beam drops under it at 1:12, lower plates drop it to the headroom floor, then a canopy', () => {
     const r = porchFor(input({ wallRole: 'gable-end', housePlateY: plate }), ids())
     const seg = byType(r.ops, 'roof-segment')[0]!
     expect(seg.roofType).toBe('shed')
     const beamLine = 7 * FT - 6 * IN
-    const fit = ((plate - LEDGER_CLEAR - (0.05 + PORCH_COVER_HEIGHT)) / beamLine) * 12
-    expect(fit).toBeLessThan(4)
-    expect(seg.pitch).toBeCloseTo(Math.atan(fit / 12) * (180 / Math.PI), 6)
+    // the 9 ft porch ceiling would put the beam AT the plate — a ledger
+    // cannot hang there, so the beam drops to 1:12 under the ledger line
+    expect(seg.pitch).toBeCloseTo(Math.atan(1 / 12) * (180 / Math.PI), 6)
+    expect((seg.position as number[])[1]).toBeCloseTo(plate - LEDGER_CLEAR - beamLine / 12, 5)
     // a deeper cover under a lower plate: the beam drops to the headroom floor at 1:12
     const low = coverGeometry(
       { floorElevation: 0.05, housePlateY: 0.05 + 8.2 * FT },
@@ -476,7 +478,7 @@ describe('the cover sized against the house roof (W19b)', () => {
     expect(flat.form).toBe('flat')
   })
 
-  test('without house data the legacy sizes hold: one run in, the style pitch, the 8 ft beam', () => {
+  test('without house data the legacy sizes hold: one run in, the style pitch, the 9 ft beam', () => {
     const cover = coverGeometry({ floorElevation: 0.05 }, { pitch: 8 }, 'hip', 1.2, 2)
     expect(cover).toEqual({
       form: 'hip',

@@ -636,7 +636,7 @@ function updateMergedRoofGeometry(
       totalDeckSlab = brushes.deckSlab
     }
 
-    if (child.roofType === 'shed') {
+    if (isLeanToShedSegment(child)) {
       brushes.wallBrush.geometry.dispose()
       brushes.innerBrush.geometry.dispose()
     } else {
@@ -1004,6 +1004,25 @@ const TRIM_CUT_EPSILON = 0.002
 const ROOF_EDGE_MATERIAL_INDEX = 0
 const ROOF_INSET_WALL_MATERIAL_INDEX = 2
 const DUTCH_RAKE_SIDE_MATERIAL_INDEX = 1
+
+/**
+ * A lean-to's shed segment (the lean-to assembly writes the side-infill
+ * fields) has no wall band of its own: its high side is the host wall and
+ * its ends are the inset infill panels. Every other shed — a house's
+ * mono-pitch roof, hand-placed or generated — carries the same hollow wall
+ * band a gable does (the high wall and the raked side walls above the
+ * plate), sided in the wall/trim slot like a gable's pediment.
+ */
+function isLeanToShedSegment(node: RoofSegmentNode): boolean {
+  return (
+    node.roofType === 'shed' &&
+    (node.shedSideInfillSpan !== undefined ||
+      node.shedSideInfillMinX !== undefined ||
+      node.shedSideInfillMaxX !== undefined ||
+      node.shedFootprintPieces !== undefined ||
+      node.shedOpenEndSides !== undefined)
+  )
+}
 const DUTCH_RAKE_TOP_MATERIAL_INDEX = 3
 const DUTCH_RAKE_SLOPE_SEAT_OFFSET = 0.0002
 
@@ -1409,11 +1428,11 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
   const horizontalOverhang = overhang * cosTheta
   const deckExt = wallThickness / 2 + horizontalOverhang
 
-  const shedRoofSideMaterialRule =
-    roofType === 'shed'
-      ? (normal: THREE.Vector3) =>
-          normal.y > SHINGLE_SURFACE_EPSILON ? 3 : ROOF_EDGE_MATERIAL_INDEX
-      : undefined
+  // a lean-to's deck and shingle edges take the wall/trim slot (its only
+  // trim); a house shed's edges are fascia like a gable's — the deck slot
+  const shedRoofSideMaterialRule = isLeanToShedSegment(node)
+    ? (normal: THREE.Vector3) => (normal.y > SHINGLE_SURFACE_EPSILON ? 3 : ROOF_EDGE_MATERIAL_INDEX)
+    : undefined
   const deckTopGeo = getVol(deckExt, verticalRt, 0, 1, false, shedRoofSideMaterialRule)
   const deckBotGeo = getVol(deckExt, 0, -5, 0, true)
 
@@ -1531,7 +1550,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     )
   }
 
-  const shedRoofSideMaterialIndex = roofType === 'shed' ? ROOF_EDGE_MATERIAL_INDEX : 1
+  const shedRoofSideMaterialIndex = isLeanToShedSegment(node) ? ROOF_EDGE_MATERIAL_INDEX : 1
   const shinBotGeo = createGeometryFromFaces(botFaces, (normal) =>
     normal.y > SHINGLE_SURFACE_EPSILON ? 3 : shedRoofSideMaterialIndex,
   )
@@ -1690,7 +1709,7 @@ export function generateRoofSegmentGeometry(
     prepareBrushForCSG(shinDeck)
     let combined = shinDeck
     let hollowWall: Brush | null = null
-    if (node.roofType !== 'shed') {
+    if (!isLeanToShedSegment(node)) {
       hollowWall = csgEvaluator.evaluate(wallBrush, innerBrush, SUBTRACTION)
       prepareBrushForCSG(hollowWall)
       combined = csgEvaluator.evaluate(shinDeck, hollowWall, ADDITION)
@@ -2782,7 +2801,9 @@ function buildDutchRakeBoards(
 }
 
 function createShedInsetEndPanelGeometry(node: RoofSegmentNode): THREE.BufferGeometry | null {
-  if (node.roofType !== 'shed') return null
+  // a house shed has real end walls in its wall band; only a lean-to
+  // needs the inset infill panels
+  if (!isLeanToShedSegment(node)) return null
 
   const trim = normalizeRoofSegmentTrim(node)
   const openEndSides = readShedOpenEndSides(node)
