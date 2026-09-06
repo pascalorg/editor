@@ -256,7 +256,8 @@ describe('frameRoofs — SQUARE hip: degenerate pyramid apex trim (NIGHT-10 resi
   }
 
   test('no ridge board; ONE common pair parked at u = −t/2 (the trim reference)', () => {
-    expect(byRole(members, 'ridge')).toHaveLength(0)
+    // (the W16b purlins ride the 'ridge' role, the gable convention — not a ridge board)
+    expect(byRole(members, 'ridge').filter((m) => !m.label?.startsWith('Purlin'))).toHaveLength(0)
     const commons = members.filter((m) => m.label?.includes('(hip common)'))
     expect(commons).toHaveLength(2)
     for (const c of commons) expect(c.position[0]).toBeCloseTo(-t / 2, 6)
@@ -2834,5 +2835,106 @@ describe('W15: ceiling joists sized from the table, lapped over the interior bea
       expect(cj.flag).toContain('2x10 @ 16" o.c. (the deepest R802.5.1(2) row)')
       expect(cj.label).not.toContain('tightened')
     }
+  })
+})
+
+// ---------------------------------------------------------------------------
+// W16b: the hip purlin fix — mid-run purlins on all four planes, 2x4 struts
+// to the ceiling joists (R802.5.1)
+// ---------------------------------------------------------------------------
+
+describe('W16b: hip purlins + struts halve the commons, kings and long jacks', () => {
+  const IN = 0.0254
+  const T = 1.5 * IN
+  const RD = 5.5 * IN
+  // 14 × 12 hip @ 40°: run 6 > 3.57 (2x6 @ 24"), halved 3 fits — ridge half 1
+  const roof = seg({ roofType: 'hip', width: 14, depth: 12 })
+  const members = frameRoofs([roof], [], DEFAULT_SPEC)
+  const purlins = members.filter((m) => m.role === 'ridge' && m.label?.startsWith('Purlin'))
+  const struts = byRole(members, 'post')
+  const cjs = byRole(members, 'ceiling-joist')
+  const theta = roof.pitch
+  const tan = Math.tan(theta)
+  const eaveY = roof.position[1] + roof.wallHeight + RD / (2 * Math.cos(theta))
+  const purlinTop = (run: number) => eaveY + run * tan - RD / (2 * Math.cos(theta)) - (T / 2) * tan
+
+  test('four purlins: two along the ridge at ±run/2, two across at the joist line nearest half the end run', () => {
+    expect(purlins).toHaveLength(4)
+    const long = purlins.filter((p) => Math.abs(longAxis(p).x) > 0.99)
+    const end = purlins.filter((p) => Math.abs(longAxis(p).z) > 0.99)
+    expect(long).toHaveLength(2)
+    expect(end).toHaveLength(2)
+    const setback = (Math.SQRT2 * T) / 2 + T
+    for (const p of long) {
+      expect(Math.abs(p.position[2] as number)).toBeCloseTo(3, 6)
+      expect(p.position[0]).toBeCloseTo(0, 6)
+      expect(p.length).toBeCloseTo(2 * (1 + 3 - setback), 6)
+      expect((p.position[1] as number) + p.dims[1] / 2).toBeCloseTo(purlinTop(3), 6)
+      expect(p.label).toContain('long-plane rafters (R802.5.1)')
+    }
+    for (const p of end) {
+      const line = p.position[0] as number
+      // over a real joist line, within a bay of the half-run line x = ±4
+      expect(cjs.some((cj) => Math.abs((cj.position[0] as number) - line) < 1e-9)).toBe(true)
+      expect(Math.abs(Math.abs(line) - 4)).toBeLessThanOrEqual(
+        DEFAULT_SPEC.ceilingJoistSpacing + 1e-9,
+      )
+      const runFromEave = 1 + 6 - Math.abs(line)
+      expect(p.length).toBeCloseTo(2 * (Math.abs(line) - 1 - setback), 6)
+      expect((p.position[1] as number) + p.dims[1] / 2).toBeCloseTo(purlinTop(runFromEave), 6)
+      expect(p.label).toContain('end-plane rafters (R802.5.1)')
+    }
+  })
+
+  test('every strut stands on a joist piece and reaches its purlin underside', () => {
+    expect(struts.length).toBeGreaterThanOrEqual(8)
+    for (const s of struts) {
+      expect(s.size).toBe('2x4')
+      const sx = s.position[0] as number
+      const sz = s.position[2] as number
+      const foot = (s.position[1] as number) - s.length / 2
+      const top = (s.position[1] as number) + s.length / 2
+      const under = cjs.find(
+        (cj) =>
+          Math.abs((cj.position[0] as number) - sx) < 1e-9 &&
+          sz >= (cj.position[2] as number) - cj.length / 2 - 1e-9 &&
+          sz <= (cj.position[2] as number) + cj.length / 2 + 1e-9,
+      )
+      expect(under).toBeDefined()
+      expect(foot).toBeCloseTo(
+        ((under as Member).position[1] as number) + (under as Member).dims[1] / 2,
+        8,
+      )
+      const purlin = purlins.find(
+        (p) => Math.abs((p.position[1] as number) - p.dims[1] / 2 - top) < 1e-8,
+      )
+      expect(purlin).toBeDefined()
+    }
+    // the end purlins' struts all stand on the one joist line under them
+    const onOne = struts.filter((s) => s.label?.includes('ONE joist line'))
+    expect(onOne.length).toBeGreaterThanOrEqual(2)
+  })
+
+  test('commons, kings and the jacks crossing a purlin are supported, not flagged; corner jacks untouched', () => {
+    const rafters = byRole(members, 'rafter')
+    expect(rafters.length).toBeGreaterThan(0)
+    for (const r of rafters) {
+      expect(r.flag ?? '').not.toContain('over prescriptive span')
+      expect(r.label).toContain('purlin-supported @ mid-run (R802.5.1)')
+    }
+    const jacks = byRole(members, 'jack-rafter')
+    const long = jacks.filter((j) => j.label?.includes('purlin-supported'))
+    const short = jacks.filter((j) => !j.label?.includes('purlin-supported'))
+    expect(long.length).toBeGreaterThan(0)
+    expect(short.length).toBeGreaterThan(0)
+    for (const j of jacks) expect(j.flag ?? '').not.toContain('over prescriptive span')
+    for (const j of short) expect(j.length).toBeLessThan(4.5)
+  })
+
+  test('no fix past the table (20 × 18) and none at LOD 200', () => {
+    const big = frameRoofs([seg({ roofType: 'hip', width: 20, depth: 18 })], [], DEFAULT_SPEC)
+    expect(big.some((m) => m.label?.startsWith('Purlin'))).toBe(false)
+    const schematic = frameRoofs([roof], [], { ...DEFAULT_SPEC, detail: '200' })
+    expect(schematic.some((m) => m.label?.startsWith('Purlin'))).toBe(false)
   })
 })

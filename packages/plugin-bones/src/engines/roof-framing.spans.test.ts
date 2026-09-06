@@ -192,8 +192,10 @@ describe('over-span flag matrix', () => {
     expect(flagged(small)).toHaveLength(0)
   })
 
-  test('hip: commons/kings flag on a big footprint; jacks flag on their OWN bearing run', () => {
-    const members = frameRoofs([seg({ roofType: 'hip', width: 14, depth: 12 })], [], DEFAULT_SPEC)
+  test('hip: commons/kings flag on a footprint the purlin fix cannot halve; jacks flag on their OWN bearing run', () => {
+    // 20 × 18 hip: run 9, halved 4.5 > 3.57 — no purlin fix, the honest flags stay
+    const members = frameRoofs([seg({ roofType: 'hip', width: 20, depth: 18 })], [], DEFAULT_SPEC)
+    expect(members.some((m) => m.label?.includes('Purlin'))).toBe(false)
     const commons = byRole(members, 'rafter') // hip commons + kings
     expect(commons.length).toBeGreaterThan(0)
     for (const r of commons) expect(r.flag).toContain('over prescriptive span')
@@ -202,6 +204,17 @@ describe('over-span flag matrix', () => {
     const jacks = byRole(members, 'jack-rafter')
     expect(jacks.some((j) => j.flag?.includes('Jack rafter over prescriptive span'))).toBe(true)
     for (const j of jacks.filter((x) => x.length < 2)) expect(j.flag).toBeUndefined()
+    // the 14 × 12 hip (run 6, halved 3 ≤ 3.57) takes the W16b purlin fix instead:
+    // commons, kings and the jacks crossing the purlin line are supported, not flagged
+    const fixed = frameRoofs([seg({ roofType: 'hip', width: 14, depth: 12 })], [], DEFAULT_SPEC)
+    expect(fixed.filter((m) => m.role === 'ridge' && m.label?.startsWith('Purlin ')).length).toBe(4)
+    for (const r of byRole(fixed, 'rafter')) {
+      expect(r.flag ?? '').not.toContain('over prescriptive span')
+      expect(r.label).toContain('purlin-supported @ mid-run (R802.5.1)')
+    }
+    for (const j of byRole(fixed, 'jack-rafter')) {
+      expect(j.flag ?? '').not.toContain('over prescriptive span')
+    }
     // a compact hip (run 1.9, B7 ceiling joists spanning 3.8 ≤ 3.90) stays
     // clean — the DEFAULT 8×6 hip's 6 m one-piece ceiling joists step up the
     // R802.5.1(2) ladder to 2x10 (6.04 m @ 16") with no partition to lap

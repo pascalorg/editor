@@ -826,3 +826,28 @@ W15 Ceiling joists as a framer laps them — DONE 2026-09-06 (see log; the open 
   describe +2 (the lowered wing's feet / apex / jacks, the eave-above
   refusal, hip wing long / short, hip main long plane / end plane) —
   Bones 2,075, typecheck clean.
+
+- 2026-09-06 small hours: **W16b — the hip purlin fix.** Hip commons,
+  kings and long jacks over the rafter table only flagged (the gable had
+  purlins + struts since B-round; the hip did not): the ranch's 13 m hip
+  wore 38 "over prescriptive span" rafters. `frameHip` now hoists its
+  ceiling-joist planning above the commons and, when the halved run fits
+  the table, joists exist and the struts have height, frames a purlin
+  under each of the four planes at half the run (rafter stock on edge,
+  set back off the hip lines) with 2x4 struts ≤ 4 ft o.c. to the joists:
+  the long-plane purlins cross the joist stations (a strut per joist
+  line, on the lapped piece under the purlin line); an end-plane purlin
+  runs WITH the joists, so it sits over the joist line nearest half the
+  end run — its height taken at that line — and every strut of it bears
+  on that one joist (the label says so, verify it). Commons / kings /
+  jacks crossing a purlin are checked on the longer piece either side of
+  it, labelled purlin-supported (+ the splice-over-purlin note past 20
+  ft), no longer flagged; corner jacks short of the purlin are untouched;
+  a hip whose halved run still exceeds the table (20 × 18) keeps its
+  honest flags; LOD 200 stays schematic. Headless ranch: 38 rafter / jack
+  flags → 0, 30 struts all on wood, the family SAT-clean. Tests: W16b
+  describe +4 (four purlins placed and sized, struts on joists reaching
+  the purlin undersides, the end purlins' one-joist struts, the halved
+  flags, the no-fix and 200 cases), spans matrix updated (20 × 18 flags,
+  14 × 12 fixed), the square-hip test reads past the purlins — Bones
+  2,079, typecheck clean.

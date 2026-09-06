@@ -2288,199 +2288,6 @@ function frameHip(
     }
   }
 
-  // ---- common rafters on the two long planes, between the hips ----
-  const commonCuts = rafterCutData(spec, theta, rd)
-  // Same ridge-face bearing + inscribed plumb cuts as the gable commons.
-  const cRidgeFace = hipRidgeT / 2
-  const cPlumbInset = (rd / 2) * tan
-  const commonSlopeLen = run / cosT + roof.overhang - cRidgeFace / cosT - 2 * cPlumbInset
-  const commonFaceY = ridgeY - cRidgeFace * tan
-  // Span discipline: hip commons/kings project `run` horizontally. Ceiling
-  // joists exist under the ridge portion since B7, but the purlin+strut fix
-  // stays a follow-up (the gable machinery assumes full-width joist lines;
-  // the hip band stops short of the end planes) — flag only (S1).
-  const commonFlag = slopeRafterFlag(spec, run, commonSlopeLen)
-  for (const u of commons) {
-    for (const side of [1, -1] as const) {
-      const tipPlan = run + roof.overhang * cosT
-      const x = alongX ? u : side * ((tipPlan + cRidgeFace) / 2)
-      const z = alongX ? side * ((tipPlan + cRidgeFace) / 2) : u
-      // Rising axis must point from the ±X eave tip toward the ridge at x=0:
-      // +X side ⇒ horizontal −X ⇒ ψ = π; −X side ⇒ ψ = 0.
-      const psi = alongX ? (side * Math.PI) / 2 : side === 1 ? Math.PI : 0
-      emit(
-        'rafter',
-        spec.rafterSize,
-        [commonSlopeLen, rd, t],
-        [x, (eaveY - roof.overhang * Math.sin(theta) + commonFaceY) / 2, z],
-        psi,
-        theta,
-        commonSlopeLen,
-        'lumber',
-        `Rafter ${spec.rafterSize} (hip common)${commonCuts}`,
-        undefined,
-        commonFlag,
-      )
-      if (spec.hurricaneTies) {
-        tieAt(emit, spec, alongX ? u : side * run, alongX ? side * run : u, plateY)
-      }
-    }
-  }
-
-  // ---- jack rafters on the four triangular planes (LOD 350) ----
-  // Side planes: past each ridge end the trapezoid tapers — jacks at o.c.
-  // shorten from the full common run down to nothing at the corner, each
-  // landing on the hip (plan line |cross| = |long| − ridgeHalf).
-  // End planes: mirrored — jacks run along the LONG axis from the end eave
-  // to the hip, with a full-run king common on the plane's centerline.
-  if (spec.detail !== '200') {
-    const cuts = rafterCutData(spec, theta, rd)
-    const jackLabel = (jackRun: number) =>
-      `Jack rafter ${spec.rafterSize}${
-        spec.detail === '400' ? ` — ${formatIn(jackRun / cosT)} slope, cheek 45°` : ''
-      }${cuts}`
-    // A jack's cheek bears on the hip's SIDE FACE, not its centerline: in
-    // plan the 45° hip face sits √2·t/2 before the line, the jack's own
-    // half-thickness adds t/2, and the square-ended box needs its plumb
-    // inset — all pulled off the top of the run (round-10 gate).
-    const jackSetback = (Math.SQRT2 * t) / 2 + t / 2 + (rd / 2) * Math.sin(theta)
-    const emitSloped = (
-      role: Member['role'],
-      long: number,
-      cross: number,
-      longIsX: boolean,
-      psi: number,
-      jackRun: number,
-      label: string,
-    ) => {
-      // Member from eave tip (cross extent run + overhang·cosT) up to the
-      // hip bearing (cross extent = run − jackRun + setback).
-      const bearingRun = jackRun - jackSetback
-      if (bearingRun / cosT + roof.overhang < 0.2) return
-      // Tail plumb cut: inscribe the square-ended box like the gable commons.
-      const tailPlan = (rd / 2) * Math.sin(theta)
-      const tipCross = run + roof.overhang * cosT - tailPlan
-      const topCross = run - bearingRun
-      const midCross = ((tipCross + topCross) / 2) * Math.sign(cross)
-      const tipY = eaveY - roof.overhang * Math.sin(theta) + tailPlan * tan
-      const topY = eaveY + bearingRun * tan
-      const len = bearingRun / cosT + roof.overhang - (rd / 2) * tan
-      emit(
-        role,
-        spec.rafterSize,
-        [len, rd, t],
-        longIsX ? [long, (tipY + topY) / 2, midCross] : [midCross, (tipY + topY) / 2, long],
-        psi,
-        theta,
-        len,
-        'lumber',
-        label,
-        undefined,
-        // a near-full-length jack is the same span class as a common —
-        // checked on its OWN bearing run (short corner jacks stay quiet)
-        slopeRafterFlag(spec, bearingRun, len, 'Jack rafter'),
-      )
-    }
-    for (const se of [1, -1] as const) {
-      // side-plane jacks: stations past the ridge end toward the corner
-      for (let d = spec.rafterSpacing; d < run - halfT; d += spec.rafterSpacing) {
-        const jackRun = run - d
-        for (const sc of [1, -1] as const) {
-          const long = se * (ridgeHalf + d)
-          const psi = alongX ? (sc * Math.PI) / 2 : sc === 1 ? Math.PI : 0
-          emitSloped('jack-rafter', long, sc, alongX, psi, jackRun, jackLabel(jackRun))
-          // Uplift path applies to every bearing rafter — jacks included
-          // (round-2 advisory: hip jacks had no ties in high-wind specs).
-          if (spec.hurricaneTies) {
-            tieAt(emit, spec, alongX ? long : sc * run, alongX ? sc * run : long, plateY)
-          }
-        }
-      }
-      // end-plane: king common on the centerline runs the full hip run…
-      {
-        const psi = alongX ? (se === 1 ? Math.PI : 0) : (se * Math.PI) / 2
-        const tipCross = run + roof.overhang * cosT
-        const tipY = eaveY - roof.overhang * Math.sin(theta)
-        // The king's top bears where the two HIPS converge, not on ridge
-        // end-grain alone: pull back like a jack cheek (half hip thickness
-        // at 45° + the plumb inset) — at 60° pitch the un-set-back king
-        // buried its top corner in both hips (round-14).
-        const kingSetback = (Math.SQRT2 * t) / 2 + (rd / 2) * Math.sin(theta)
-        const midLong = se * (ridgeHalf + kingSetback + (tipCross - kingSetback) / 2)
-        // Inscribed: both ends are plumb cuts (hip junction + tail).
-        const len = (run - kingSetback) / cosT + roof.overhang - 2 * cPlumbInset
-        // Center height at the box's own top cut (ridgeY − setback·tanθ),
-        // NOT the apex — averaging tipY with the full apex floated the box
-        // ~t·sinθ·√2/2 proud of the slope plane along its normal while the
-        // plan center honored the setback (latent round-14 residue the B6
-        // deck exposed: king × deck SAT hits on every hip).
-        const kingMidY = (tipY + ridgeY - kingSetback * tan) / 2
-        emit(
-          'rafter',
-          spec.rafterSize,
-          [len, rd, t],
-          alongX ? [midLong, kingMidY, 0] : [0, kingMidY, midLong],
-          psi,
-          theta,
-          len,
-          'lumber',
-          `King common ${spec.rafterSize} (hip end)${cuts}`,
-          undefined,
-          slopeRafterFlag(spec, run, len),
-        )
-        if (spec.hurricaneTies) {
-          tieAt(
-            emit,
-            spec,
-            alongX ? se * (ridgeHalf + run) : 0,
-            alongX ? 0 : se * (ridgeHalf + run),
-            plateY,
-          )
-        }
-      }
-      // …and jacks step down each side of it
-      for (let v = spec.rafterSpacing; v < run - halfT; v += spec.rafterSpacing) {
-        const jackRun = run - v
-        for (const sv of [1, -1] as const) {
-          // On the end plane the RUN direction is the long axis: reuse
-          // emitSloped with axes swapped (long ↔ cross).
-          const psi = alongX ? (se === 1 ? Math.PI : 0) : (se * Math.PI) / 2
-          const bearingRun = jackRun - jackSetback
-          if (bearingRun / cosT + roof.overhang < 0.2) continue
-          const tailPlan = (rd / 2) * Math.sin(theta)
-          const tipCross = ridgeHalf + run + roof.overhang * cosT - tailPlan
-          const topCross = ridgeHalf + v + jackSetback
-          const midLong = (se * (tipCross + topCross)) / 2
-          const tipY = eaveY - roof.overhang * Math.sin(theta) + tailPlan * tan
-          const topY = eaveY + bearingRun * tan
-          const len = bearingRun / cosT + roof.overhang - (rd / 2) * tan
-          emit(
-            'jack-rafter',
-            spec.rafterSize,
-            [len, rd, t],
-            alongX ? [midLong, (tipY + topY) / 2, sv * v] : [sv * v, (tipY + topY) / 2, midLong],
-            psi,
-            theta,
-            len,
-            'lumber',
-            jackLabel(jackRun),
-            undefined,
-            slopeRafterFlag(spec, bearingRun, len, 'Jack rafter'),
-          )
-          if (spec.hurricaneTies) {
-            tieAt(
-              emit,
-              spec,
-              alongX ? se * (ridgeHalf + run) : sv * v,
-              alongX ? sv * v : se * (ridgeHalf + run),
-              plateY,
-            )
-          }
-        }
-      }
-    }
-  }
-
   // ---- ceiling joists across the short span (LOD-400 B7a, R802.4.2) ----
   // The gable machinery mirrored: joists at o.c. stations along the LONG
   // axis span the short footprint dimension at the eave line — the rafter
@@ -2557,6 +2364,8 @@ function frameHip(
       ? 'hip end planes: rafter ties parallel to the end-plane span + end-triangle stub joists not modeled (collar ties ride the ridge portion only) — verify tie detail (R802.4.2)'
       : undefined
   const cjClearsRidge = ridgeHalf <= 0.05 || plateY + cjD + 0.002 <= ridgeY + seat - cjRidgeD
+  // the stations are shared with the purlin struts below (W16b)
+  const cjStations: number[] = []
   if (cjLen >= 0.3 && cjBandHalf > cjT && cjClearsRidge) {
     // Two neighboring stations can snap beside the SAME jack (the layout's
     // guaranteed end station lands next to a grid station at some pitches)
@@ -2564,7 +2373,6 @@ function frameHip(
     const snapped = layout(-cjBandHalf, cjBandHalf, cjPlan.spacing, cjT / 2)
       .map((u0) => besideRafter(u0, cjT / 2))
       .sort((a, b) => a - b)
-    const cjStations: number[] = []
     for (const u of snapped) {
       const prev = cjStations[cjStations.length - 1]
       if (prev !== undefined && u - prev < cjT - EPS) continue
@@ -2586,6 +2394,373 @@ function frameHip(
         cjLabel,
         cjEndGapFlag,
       )
+    }
+  }
+
+  // ---- common rafters on the two long planes, between the hips ----
+  const commonCuts = rafterCutData(spec, theta, rd)
+  // Same ridge-face bearing + inscribed plumb cuts as the gable commons.
+  const cRidgeFace = hipRidgeT / 2
+  const cPlumbInset = (rd / 2) * tan
+  const commonSlopeLen = run / cosT + roof.overhang - cRidgeFace / cosT - 2 * cPlumbInset
+  const commonFaceY = ridgeY - cRidgeFace * tan
+  // ---- span discipline (R802.4.1): the mid-run purlin fix, or the honest flag ----
+  // Hip commons / kings / long jacks project `run` horizontally. W16b: the
+  // gable's purlin + 2x4 strut fix on all four planes — a purlin under each
+  // plane at half the run (stock = rafter stock, on edge), struts ≤ 4 ft
+  // o.c. down to the ceiling joists. The long-plane purlins cross the joist
+  // stations (a strut on every joist line); an END-plane purlin runs WITH
+  // the joists, so it sits over the joist station nearest half the end run
+  // and its struts all bear on that one joist (said on the label — verify
+  // it). The fix holds only when the halved run fits the table, the struts
+  // have real height above the joists, and joists exist to bear on; each
+  // member is then checked on its longest projection between supports.
+  const allowable = rafterAllowable(spec)
+  const overSpan = allowable !== undefined && run > allowable + EPS
+  const purlinRun = run / 2
+  // The purlin under a plane at run `r` from its eave: underside off the
+  // rafter centre line (bottom-on-plate seating, see frameGable), a plumb
+  // board meeting the sloped underside at its downhill top corner.
+  const purlinTopAt = (r: number) => eaveY + r * tan - rd / (2 * cosT) - (t / 2) * tan
+  const purlinTop = purlinTopAt(purlinRun)
+  const strutTop = purlinTop - rd
+  const strutBot = plateY + cjD
+  // A purlin's plan extent stops short of the hip lines (the box meets the
+  // 45° hip face √2·t/2 before the line; one more thickness clears the drop).
+  const purlinSetback = (Math.SQRT2 * t) / 2 + t
+  const longPurlinHalf = ridgeHalf + purlinRun - purlinSetback
+  const purlinFix =
+    spec.detail !== '200' &&
+    overSpan &&
+    purlinRun <= (allowable ?? 0) + EPS &&
+    strutTop - strutBot >= inches(3) &&
+    cjStations.length > 0 &&
+    longPurlinHalf > 0.15
+  type EndPurlin = { line: number; runFromEave: number; half: number; top: number }
+  const endPurlinFor = (se: 1 | -1): EndPurlin | null => {
+    if (!purlinFix) return null
+    const want = se * (ridgeHalf + purlinRun)
+    let line: number | undefined
+    for (const u of cjStations) {
+      if (line === undefined || Math.abs(u - want) < Math.abs(line - want)) line = u
+    }
+    // a joist line more than a bay off the half-run line is no bearing here
+    if (line === undefined || Math.abs(line - want) > cjPlan.spacing + EPS) return null
+    const runFromEave = ridgeHalf + run - Math.abs(line)
+    const half = Math.abs(line) - ridgeHalf - purlinSetback
+    const top = purlinTopAt(runFromEave)
+    if (half < 0.15 || runFromEave < 0.1 || top - rd - strutBot < inches(3)) return null
+    return { line, runFromEave, half, top }
+  }
+  const endPurlinPos = endPurlinFor(1)
+  const endPurlinNeg = endPurlinFor(-1)
+  const endPurlinOf = (se: 1 | -1) => (se === 1 ? endPurlinPos : endPurlinNeg)
+  /** The span check with a purlin at run `purlinAt` from the eave (null =
+   * none): the member's longest projection between supports. */
+  const slopeFlagFixed = (
+    bearingRun: number,
+    len: number,
+    purlinAt: number | null,
+    what = 'Rafter',
+  ) => {
+    if (purlinAt === null || bearingRun <= purlinAt + EPS) {
+      return slopeRafterFlag(spec, bearingRun, len, what)
+    }
+    // purlin-supported: the longer piece either side of the purlin must fit
+    // the table; the stock-length story rides the label's splice note
+    const effective = Math.max(purlinAt, bearingRun - purlinAt)
+    const allowable = rafterAllowable(spec)
+    return allowable !== undefined && effective > allowable + EPS
+      ? rafterOverSpanFlag(spec, effective, allowable, what)
+      : undefined
+  }
+  const purlinNoteFor = (bearingRun: number, purlinAt: number | null, len: number) =>
+    purlinAt !== null && bearingRun > purlinAt + EPS
+      ? ` — purlin-supported @ mid-run (R802.5.1)${
+          len > MAX_ONE_PIECE + EPS ? '; splice over purlin bearing' : ''
+        }`
+      : ''
+  const longPurlinAt = purlinFix ? purlinRun : null
+  const commonFlag = slopeFlagFixed(run, commonSlopeLen, longPurlinAt)
+  for (const u of commons) {
+    for (const side of [1, -1] as const) {
+      const tipPlan = run + roof.overhang * cosT
+      const x = alongX ? u : side * ((tipPlan + cRidgeFace) / 2)
+      const z = alongX ? side * ((tipPlan + cRidgeFace) / 2) : u
+      // Rising axis must point from the ±X eave tip toward the ridge at x=0:
+      // +X side ⇒ horizontal −X ⇒ ψ = π; −X side ⇒ ψ = 0.
+      const psi = alongX ? (side * Math.PI) / 2 : side === 1 ? Math.PI : 0
+      emit(
+        'rafter',
+        spec.rafterSize,
+        [commonSlopeLen, rd, t],
+        [x, (eaveY - roof.overhang * Math.sin(theta) + commonFaceY) / 2, z],
+        psi,
+        theta,
+        commonSlopeLen,
+        'lumber',
+        `Rafter ${spec.rafterSize} (hip common)${commonCuts}${purlinNoteFor(run, longPurlinAt, commonSlopeLen)}`,
+        undefined,
+        commonFlag,
+      )
+      if (spec.hurricaneTies) {
+        tieAt(emit, spec, alongX ? u : side * run, alongX ? side * run : u, plateY)
+      }
+    }
+  }
+
+  // ---- jack rafters on the four triangular planes (LOD 350) ----
+  // Side planes: past each ridge end the trapezoid tapers — jacks at o.c.
+  // shorten from the full common run down to nothing at the corner, each
+  // landing on the hip (plan line |cross| = |long| − ridgeHalf).
+  // End planes: mirrored — jacks run along the LONG axis from the end eave
+  // to the hip, with a full-run king common on the plane's centerline.
+  if (spec.detail !== '200') {
+    const cuts = rafterCutData(spec, theta, rd)
+    const jackLabel = (jackRun: number) =>
+      `Jack rafter ${spec.rafterSize}${
+        spec.detail === '400' ? ` — ${formatIn(jackRun / cosT)} slope, cheek 45°` : ''
+      }${cuts}`
+    // A jack's cheek bears on the hip's SIDE FACE, not its centerline: in
+    // plan the 45° hip face sits √2·t/2 before the line, the jack's own
+    // half-thickness adds t/2, and the square-ended box needs its plumb
+    // inset — all pulled off the top of the run (round-10 gate).
+    const jackSetback = (Math.SQRT2 * t) / 2 + t / 2 + (rd / 2) * Math.sin(theta)
+    const emitSloped = (
+      role: Member['role'],
+      long: number,
+      cross: number,
+      longIsX: boolean,
+      psi: number,
+      jackRun: number,
+      label: string,
+      purlinAt: number | null,
+    ) => {
+      // Member from eave tip (cross extent run + overhang·cosT) up to the
+      // hip bearing (cross extent = run − jackRun + setback).
+      const bearingRun = jackRun - jackSetback
+      if (bearingRun / cosT + roof.overhang < 0.2) return
+      // Tail plumb cut: inscribe the square-ended box like the gable commons.
+      const tailPlan = (rd / 2) * Math.sin(theta)
+      const tipCross = run + roof.overhang * cosT - tailPlan
+      const topCross = run - bearingRun
+      const midCross = ((tipCross + topCross) / 2) * Math.sign(cross)
+      const tipY = eaveY - roof.overhang * Math.sin(theta) + tailPlan * tan
+      const topY = eaveY + bearingRun * tan
+      const len = bearingRun / cosT + roof.overhang - (rd / 2) * tan
+      emit(
+        role,
+        spec.rafterSize,
+        [len, rd, t],
+        longIsX ? [long, (tipY + topY) / 2, midCross] : [midCross, (tipY + topY) / 2, long],
+        psi,
+        theta,
+        len,
+        'lumber',
+        `${label}${purlinNoteFor(bearingRun, purlinAt, len)}`,
+        undefined,
+        // a near-full-length jack is the same span class as a common —
+        // checked on its OWN bearing run (short corner jacks stay quiet);
+        // with the purlin fix a jack crossing the purlin line is halved
+        slopeFlagFixed(bearingRun, len, purlinAt, 'Jack rafter'),
+      )
+    }
+    for (const se of [1, -1] as const) {
+      // side-plane jacks: stations past the ridge end toward the corner
+      for (let d = spec.rafterSpacing; d < run - halfT; d += spec.rafterSpacing) {
+        const jackRun = run - d
+        for (const sc of [1, -1] as const) {
+          const long = se * (ridgeHalf + d)
+          const psi = alongX ? (sc * Math.PI) / 2 : sc === 1 ? Math.PI : 0
+          emitSloped(
+            'jack-rafter',
+            long,
+            sc,
+            alongX,
+            psi,
+            jackRun,
+            jackLabel(jackRun),
+            longPurlinAt,
+          )
+          // Uplift path applies to every bearing rafter — jacks included
+          // (round-2 advisory: hip jacks had no ties in high-wind specs).
+          if (spec.hurricaneTies) {
+            tieAt(emit, spec, alongX ? long : sc * run, alongX ? sc * run : long, plateY)
+          }
+        }
+      }
+      // end-plane: king common on the centerline runs the full hip run…
+      {
+        const psi = alongX ? (se === 1 ? Math.PI : 0) : (se * Math.PI) / 2
+        const tipCross = run + roof.overhang * cosT
+        const tipY = eaveY - roof.overhang * Math.sin(theta)
+        // The king's top bears where the two HIPS converge, not on ridge
+        // end-grain alone: pull back like a jack cheek (half hip thickness
+        // at 45° + the plumb inset) — at 60° pitch the un-set-back king
+        // buried its top corner in both hips (round-14).
+        const kingSetback = (Math.SQRT2 * t) / 2 + (rd / 2) * Math.sin(theta)
+        const midLong = se * (ridgeHalf + kingSetback + (tipCross - kingSetback) / 2)
+        // Inscribed: both ends are plumb cuts (hip junction + tail).
+        const len = (run - kingSetback) / cosT + roof.overhang - 2 * cPlumbInset
+        // Center height at the box's own top cut (ridgeY − setback·tanθ),
+        // NOT the apex — averaging tipY with the full apex floated the box
+        // ~t·sinθ·√2/2 proud of the slope plane along its normal while the
+        // plan center honored the setback (latent round-14 residue the B6
+        // deck exposed: king × deck SAT hits on every hip).
+        const kingMidY = (tipY + ridgeY - kingSetback * tan) / 2
+        emit(
+          'rafter',
+          spec.rafterSize,
+          [len, rd, t],
+          alongX ? [midLong, kingMidY, 0] : [0, kingMidY, midLong],
+          psi,
+          theta,
+          len,
+          'lumber',
+          `King common ${spec.rafterSize} (hip end)${cuts}${purlinNoteFor(run, endPurlinOf(se)?.runFromEave ?? null, len)}`,
+          undefined,
+          slopeFlagFixed(run, len, endPurlinOf(se)?.runFromEave ?? null),
+        )
+        if (spec.hurricaneTies) {
+          tieAt(
+            emit,
+            spec,
+            alongX ? se * (ridgeHalf + run) : 0,
+            alongX ? 0 : se * (ridgeHalf + run),
+            plateY,
+          )
+        }
+      }
+      // …and jacks step down each side of it
+      for (let v = spec.rafterSpacing; v < run - halfT; v += spec.rafterSpacing) {
+        const jackRun = run - v
+        for (const sv of [1, -1] as const) {
+          // On the end plane the RUN direction is the long axis: reuse
+          // emitSloped with axes swapped (long ↔ cross).
+          const psi = alongX ? (se === 1 ? Math.PI : 0) : (se * Math.PI) / 2
+          const bearingRun = jackRun - jackSetback
+          if (bearingRun / cosT + roof.overhang < 0.2) continue
+          const tailPlan = (rd / 2) * Math.sin(theta)
+          const tipCross = ridgeHalf + run + roof.overhang * cosT - tailPlan
+          const topCross = ridgeHalf + v + jackSetback
+          const midLong = (se * (tipCross + topCross)) / 2
+          const tipY = eaveY - roof.overhang * Math.sin(theta) + tailPlan * tan
+          const topY = eaveY + bearingRun * tan
+          const len = bearingRun / cosT + roof.overhang - (rd / 2) * tan
+          emit(
+            'jack-rafter',
+            spec.rafterSize,
+            [len, rd, t],
+            alongX ? [midLong, (tipY + topY) / 2, sv * v] : [sv * v, (tipY + topY) / 2, midLong],
+            psi,
+            theta,
+            len,
+            'lumber',
+            `${jackLabel(jackRun)}${purlinNoteFor(bearingRun, endPurlinOf(se)?.runFromEave ?? null, len)}`,
+            undefined,
+            slopeFlagFixed(bearingRun, len, endPurlinOf(se)?.runFromEave ?? null, 'Jack rafter'),
+          )
+          if (spec.hurricaneTies) {
+            tieAt(
+              emit,
+              spec,
+              alongX ? se * (ridgeHalf + run) : sv * v,
+              alongX ? sv * v : se * (ridgeHalf + run),
+              plateY,
+            )
+          }
+        }
+      }
+    }
+  }
+
+  // ---- mid-run purlins + 2x4 struts on the four planes (W16b, R802.5.1) ----
+  if (purlinFix) {
+    const purlinSize = spec.rafterSize
+    const [sT, sW] = LUMBER_CROSS_SECTIONS[STRUT_SIZE]
+    const strutLabel = (onOne: boolean) =>
+      `Purlin strut ${STRUT_SIZE} @ ≤4 ft o.c. — bears on ceiling joist${
+        onOne
+          ? ' (every strut of this end purlin on ONE joist line — verify the joist for the strut loads)'
+          : 's (assumed bearing, R802.5.1)'
+      }`
+    // the joist stations run along the LONG axis; `spansZ` = the joists run
+    // along local Z (alongX: the ridge on X)
+    const spansZ = alongX
+    /** A strut from the joist piece under (station, u) up to a purlin underside at `top`. */
+    const strut = (station: number, u: number, top: number, onOne: boolean) => {
+      const piece = cjPlan.pieceAt(station, u)
+      const footY = plateY + (piece?.d ?? cjPlan.dMax)
+      const len = top - rd - footY
+      if (len < inches(3)) return
+      const x = station + cjPlan.lapOffsetAt(station, u)
+      emit(
+        'post',
+        STRUT_SIZE,
+        [sT, len, sW],
+        spansZ ? [x, top - rd - len / 2, u] : [u, top - rd - len / 2, x],
+        spansZ ? 0 : Math.PI / 2,
+        0,
+        len,
+        'lumber',
+        strutLabel(onOne),
+      )
+    }
+    // long planes: a purlin along the ridge axis at ±run/2, a strut on every
+    // joist line nearest the ≤ 4 ft stations
+    const longLen = 2 * longPurlinHalf
+    for (const side of [1, -1] as const) {
+      const cross = side * purlinRun
+      emit(
+        'ridge',
+        purlinSize,
+        [longLen, rd, t],
+        alongX ? [0, purlinTop - rd / 2, cross] : [cross, purlinTop - rd / 2, 0],
+        alongX ? 0 : -Math.PI / 2,
+        0,
+        longLen,
+        'lumber',
+        `Purlin ${purlinSize} @ mid-run under the long-plane rafters (R802.5.1) — halves the ${fmtM(run)} projection${splicedNote(spec, longLen, 'struts')}`,
+      )
+      const lines = cjStations.filter((u) => Math.abs(u) <= longPurlinHalf - sT / 2 + EPS)
+      const feet = new Set<number>()
+      for (
+        let sx = -longPurlinHalf + sT / 2 + STRUT_SPACING / 2;
+        sx < longPurlinHalf - sT / 2;
+        sx += STRUT_SPACING
+      ) {
+        let best: number | undefined
+        for (const u of lines) {
+          if (best === undefined || Math.abs(u - sx) < Math.abs(best - sx)) best = u
+        }
+        if (best !== undefined) feet.add(best)
+      }
+      for (const u of feet) strut(u, cross, purlinTop, false)
+    }
+    // end planes: a purlin ACROSS the ridge axis over the joist line nearest
+    // half the end run; its struts all bear on that joist
+    for (const se of [1, -1] as const) {
+      const ep = endPurlinOf(se)
+      if (ep === null) continue
+      const endLen = 2 * ep.half
+      emit(
+        'ridge',
+        purlinSize,
+        [endLen, rd, t],
+        alongX ? [ep.line, ep.top - rd / 2, 0] : [0, ep.top - rd / 2, ep.line],
+        alongX ? -Math.PI / 2 : 0,
+        0,
+        endLen,
+        'lumber',
+        `Purlin ${purlinSize} @ ${fmtM(ep.runFromEave)} up the end-plane rafters (R802.5.1) — set over the ceiling joist line ${fmtM(Math.abs(ep.line))} off centre; splits the ${fmtM(run)} projection${splicedNote(spec, endLen, 'struts')}`,
+      )
+      for (
+        let su = -ep.half + sW / 2 + STRUT_SPACING / 2;
+        su < ep.half - sW / 2;
+        su += STRUT_SPACING
+      ) {
+        strut(ep.line, su, ep.top, true)
+      }
     }
   }
 
