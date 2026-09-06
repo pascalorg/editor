@@ -118,7 +118,8 @@ describe('a full farmhouse porch', () => {
   test('a 36 in guard on the sides and either side of the steps, hosted on the slab', () => {
     expect(rails).toHaveLength(4)
     for (const f of rails) {
-      expect(f.style).toBe('rail')
+      expect(f.style).toBe('slat') // balusters, 3.5 in gap under the 4 in-sphere rule
+      expect(f.slatGap).toBeCloseTo(3.5 * IN, 9)
       expect(f.height).toBeCloseTo(GUARD_HEIGHT, 9)
       expect(f.supportSlabId).toBe('slab_porch')
     }
@@ -193,7 +194,10 @@ describe('policy', () => {
   })
 
   test('a hip style gets a hip porch roof on an eave or hip-end wall', () => {
-    const r = porchFor(input({ policy: 'entry', style: styleFor('ranch'), wallRole: 'hip-end' }), ids())
+    const r = porchFor(
+      input({ policy: 'entry', style: styleFor('ranch'), wallRole: 'hip-end' }),
+      ids(),
+    )
     expect(byType(r.ops, 'roof-segment')[0]!.roofType).toBe('hip')
     expect(r.summary?.attach).toBe('valley')
   })
@@ -204,7 +208,11 @@ describe('policy', () => {
     expect(r.summary?.attach).toBe('ledger')
     expect(seg.roofType).toBe('shed')
     expect(seg.pitch).toBeCloseTo(Math.atan(4 / 12) * (180 / Math.PI), 6)
-    expect((seg.metadata as { roof: Record<string, unknown> }).roof).toEqual({ role: 'porch', attach: 'high', open: true })
+    expect((seg.metadata as { roof: Record<string, unknown> }).roof).toEqual({
+      role: 'porch',
+      attach: 'high',
+      open: true,
+    })
     // the box runs from the wall face to the beam line; +z points outward (toward −z world here)
     expect(seg.width).toBeCloseTo(20 * FT, 6)
     expect(seg.depth).toBeCloseTo(6.5 * FT, 6)
@@ -255,5 +263,103 @@ describe('policy', () => {
     expect(Math.max(...zs)).toBeCloseTo(0.085 + 7 * FT, 6)
     const stair = byType(r.ops, 'stair')[0]!
     expect(stair.rotation).toBeCloseTo(Math.PI / 2, 5)
+  })
+})
+
+describe('landing, rails and pillars by style (PlanCrafters entrance presets)', () => {
+  test('a raised house gets a wood deck: decking 1 in below the threshold, a guard, wood steps', () => {
+    const r = porchFor(input({ landing: 'wood', gradeY: -18 * IN }), ids())
+    const deck = byType(r.ops, 'slab')[0]!
+    expect(deck.name).toBe('Porch')
+    expect(deck.elevation).toBeCloseTo(0.05 - 1 * IN, 9)
+    expect(deck.thickness).toBeCloseTo(1.5 * IN, 9)
+    expect((deck.metadata as { floor: string }).floor).toBe('deck')
+    expect(deck.materialPreset).toBe('wood-floorplank1')
+    expect(r.summary?.landing).toBe('wood')
+    expect(r.summary?.guard).toBe(true)
+    expect(r.summary?.risers).toBe(3) // 17 in of rise
+    const stair = byType(r.ops, 'stair')[0]!
+    expect(stair.fillToFloor).toBe(false)
+    expect(stair.materialPreset).toBe('wood-floorplank1')
+  })
+
+  test('the moderns get cable rail on slim posts; the rest balusters', () => {
+    const modern = porchFor(
+      input({ style: styleFor('modern'), policy: 'deck', landing: 'wood', gradeY: -18 * IN }),
+      ids(),
+    )
+    expect(modern.summary?.railStyle).toBe('cable')
+    const rail = byType(modern.ops, 'fence')[0]!
+    expect(rail.style).toBe('horizontal')
+    expect(rail.slatGap).toBeCloseTo(3 * IN, 9)
+    expect(rail.postSize).toBeCloseTo(2 * IN, 9)
+    expect(porchFor(input(), ids()).summary?.railStyle).toBe('baluster')
+  })
+
+  test('the stucco ranch gets 13 in stucco piers; craftsman tapered posts; farmhouse square 7 in', () => {
+    const ranch = porchFor(input({ style: styleFor('ranch'), policy: 'entry' }), ids())
+    const pier = byType(ranch.ops, 'column')[0]!
+    expect(pier.name).toBe('Porch pier')
+    expect(pier.width).toBeCloseTo(13 * IN, 9)
+    expect(pier.materialPreset).toBe('concrete-stucco')
+    const craftsman = byType(
+      porchFor(input({ style: styleFor('craftsman'), policy: 'entry' }), ids()).ops,
+      'column',
+    )[0]!
+    expect(craftsman.shaftProfile).toBe('tapered')
+    expect(byType(porchFor(input(), ids()).ops, 'column')[0]!.width).toBeCloseTo(7 * IN, 9)
+  })
+})
+
+describe('the rear entrance', () => {
+  // the rear wall runs along −x at z = 30 ft (the house is at −z), the slider 20 ft along
+  const rear = (over: Partial<PorchInput> = {}) =>
+    input({
+      entrance: 'rear',
+      wall: { start: [40 * FT, 30 * FT], end: [0, 30 * FT], thickness: 0.17 },
+      doorAt: 20 * FT,
+      doorWidth: 72 * IN,
+      outward: [0, 1],
+      bayWidth: 18 * FT,
+      wallRole: 'eave',
+      ...over,
+    })
+
+  test('a slab house behind a porch style: a covered concrete patio 10 × 7 ft, no guard at one riser', () => {
+    const r = porchFor(rear({ policy: 'patio' }), ids())
+    expect(r.summary?.entrance).toBe('rear')
+    expect(r.summary?.widthFt).toBe(10)
+    expect(r.summary?.depthFt).toBe(7)
+    expect(r.summary?.roof).toBe('gable')
+    expect(r.summary?.guard).toBe(false)
+    expect(byType(r.ops, 'slab')[0]!.name).toBe('Rear patio')
+    expect(byType(r.ops, 'roof-segment')[0]!.name).toBe('Rear patio gable')
+    expect(byType(r.ops, 'column').length).toBe(3) // 9 ft between the corner posts needs one between (≤ 8 ft)
+  })
+
+  test('a slab house behind a no-porch style: a plain landing 10 × 6 ft, no cover, no posts', () => {
+    const r = porchFor(rear({ policy: 'landing', style: styleFor('modern') }), ids())
+    expect(r.summary?.roof).toBe('none')
+    expect(byType(r.ops, 'roof')).toHaveLength(0)
+    expect(byType(r.ops, 'column')).toHaveLength(0)
+    expect(r.summary?.depthFt).toBe(6)
+    expect(byType(r.ops, 'slab')[0]!.name).toBe('Rear landing')
+  })
+
+  test('a raised house: a 12 ft deep wood deck as wide as the room, guarded, covered for a porch style and bare for a modern', () => {
+    const farm = porchFor(rear({ policy: 'deck', landing: 'wood', gradeY: -18 * IN }), ids())
+    expect(farm.summary?.widthFt).toBe(18) // the room is 18 ft wide: max(16, min(room, 20))
+    expect(farm.summary?.depthFt).toBe(12)
+    expect(farm.summary?.guard).toBe(true)
+    expect(farm.summary?.roof).toBe('gable')
+    expect(byType(farm.ops, 'slab')[0]!.name).toBe('Rear deck')
+    expect(byType(farm.ops, 'column')[0]!.width).toBeCloseTo(7 * IN, 9)
+    const modern = porchFor(
+      rear({ policy: 'deck', landing: 'wood', gradeY: -18 * IN, style: styleFor('modern') }),
+      ids(),
+    )
+    expect(modern.summary?.roof).toBe('none')
+    expect(byType(modern.ops, 'column')).toHaveLength(0)
+    expect(modern.summary?.railStyle).toBe('cable')
   })
 })

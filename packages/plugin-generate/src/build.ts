@@ -27,8 +27,15 @@ import {
 } from './document'
 import { deriveRoof, type RoofIntent, roofNodesFor, type WallInput } from '@pascal-app/plugin-roof'
 import { type FoundationChoice, foundationFor } from './foundation'
-import { type PorchSummary, porchFor } from './porch'
-import { edgePieces, GRID_IN_DEFAULT, mergeRuns, outlineRing, pointInRing, type Run } from './geometry'
+import { type PorchPolicy, type PorchSummary, porchFor } from './porch'
+import {
+  edgePieces,
+  GRID_IN_DEFAULT,
+  mergeRuns,
+  outlineRing,
+  pointInRing,
+  type Run,
+} from './geometry'
 import { type StylePreset, styleFor } from './styles'
 
 export const GENERATED_BY = 'pascal:generate'
@@ -93,11 +100,20 @@ export type BuildResult = {
   levelId: string | null
   /** What the entrance got — PlanCrafters' porch policy, built. */
   porch: PorchSummary | null
+  /** The rear entrance at the slider (deck / covered patio / landing), when a rear wall took one. */
+  rear: PorchSummary | null
   /** Slab or raised, and how far the finish floor stands above grade. */
   foundation: FoundationChoice | null
 }
 
-type WallRun = Run & { id: string; exterior: boolean; length: number; start: Pt; end: Pt; thickness: number }
+type WallRun = Run & {
+  id: string
+  exterior: boolean
+  length: number
+  start: Pt
+  end: Pt
+  thickness: number
+}
 
 const round = (v: number, d = 4): number => Math.round(v * 10 ** d) / 10 ** d
 
@@ -118,7 +134,9 @@ const KIND_FLOOR: Record<RoomKind, string> = {
 }
 
 /** Window program by room kind: width × height (in), sill height (in), count, window type. */
-const WINDOWS: Partial<Record<RoomKind, { w: number; h: number; sill: number; count: number; type: string }>> = {
+const WINDOWS: Partial<
+  Record<RoomKind, { w: number; h: number; sill: number; count: number; type: string }>
+> = {
   bed: { w: 48, h: 60, sill: 36, count: 1, type: 'double-hung' },
   living: { w: 36, h: 60, sill: 36, count: 2, type: 'double-hung' },
   dining: { w: 36, h: 60, sill: 36, count: 1, type: 'double-hung' },
@@ -128,6 +146,8 @@ const WINDOWS: Partial<Record<RoomKind, { w: number; h: number; sill: number; co
 }
 
 const EXTERIOR_DOOR_W = 36
+/** The rear slider: a 6-0 patio door. */
+const REAR_DOOR_W = 72
 const GARAGE_DOOR_W = 16 * 12
 const GARAGE_DOOR_H = 7 * 12
 const DOOR_H = 80
@@ -142,6 +162,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     warnings,
     stats: { rooms: 0, walls: 0, doors: 0, windows: 0, zones: 0, livingSqFt: 0, footprintSqFt: 0 },
     porch: null,
+    rear: null,
     foundation: null,
     buildingId: null,
     levelId: null,
@@ -153,7 +174,10 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   const grid = GRID_IN_DEFAULT
 
   const ring = outlineRing(rooms, grid)
-  if (!ring) return empty(['the rooms do not form one closed outline — a room is detached or the plan has a hole.'])
+  if (!ring)
+    return empty([
+      'the rooms do not form one closed outline — a room is detached or the plan has a hole.',
+    ])
 
   // Local frame: u along the front (→ x), v into the lot (→ z); the plan is
   // centred on its footprint so the building node's position is its middle.
@@ -174,14 +198,19 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
 
   // ── walls ────────────────────────────────────────────────────────────
   const zonePairs = new Set(
-    doc.edges.filter((e) => e.kind === 'zone').map((e) => pairKey(indexOf(rooms, e.a), indexOf(rooms, e.b))),
+    doc.edges
+      .filter((e) => e.kind === 'zone')
+      .map((e) => pairKey(indexOf(rooms, e.a), indexOf(rooms, e.b))),
   )
   const runs = mergeRuns(
-    edgePieces(rooms, grid).filter((p) => !(p.left !== -1 && p.right !== -1 && zonePairs.has(pairKey(p.left, p.right)))),
+    edgePieces(rooms, grid).filter(
+      (p) => !(p.left !== -1 && p.right !== -1 && zonePairs.has(pairKey(p.left, p.right))),
+    ),
   )
   const exteriorPreset = getWallAssemblyPreset(style.exteriorAssembly)
   const interiorPreset = getWallAssemblyPreset('interior-2x4-drywall')
-  if (!exteriorPreset || !interiorPreset) return empty(['wall assembly presets are missing from core.'])
+  if (!exteriorPreset || !interiorPreset)
+    return empty(['wall assembly presets are missing from core.'])
   const exteriorT = assemblyThickness(exteriorPreset.assembly)
   const interiorT = assemblyThickness(interiorPreset.assembly)
 
@@ -190,7 +219,15 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const start = toLocal(run.a)
     const end = toLocal(run.b)
     const length = run.horizontal ? run.b[0] - run.a[0] : run.b[1] - run.a[1]
-    return { ...run, id: generateId('wall'), exterior, length, start, end, thickness: exterior ? exteriorT : interiorT }
+    return {
+      ...run,
+      id: generateId('wall'),
+      exterior,
+      length,
+      start,
+      end,
+      thickness: exterior ? exteriorT : interiorT,
+    }
   })
   const roomNames = (run: Run): string[] =>
     (run.rooms ?? [run.left, run.right].filter((i) => i !== -1)).map((i) => rooms[i]?.name ?? '')
@@ -204,11 +241,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const nz = dx / len
     const mid: Pt = [(wall.start[0] + wall.end[0]) / 2, (wall.start[1] + wall.end[1]) / 2]
     const probe = (sign: number): boolean =>
-      pointInRing(
-        ring.map(toLocal),
-        mid[0] + nx * sign * 0.2,
-        mid[1] + nz * sign * 0.2,
-      )
+      pointInRing(ring.map(toLocal), mid[0] + nx * sign * 0.2, mid[1] + nz * sign * 0.2)
     const frontInside = probe(1)
     const backInside = probe(-1)
     ops.push({
@@ -223,7 +256,11 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         assembly: wall.exterior ? exteriorPreset.assembly : interiorPreset.assembly,
         frontSide: wall.exterior ? (frontInside ? 'interior' : 'exterior') : 'unknown',
         backSide: wall.exterior ? (backInside ? 'interior' : 'exterior') : 'unknown',
-        metadata: { generatedBy: GENERATED_BY, wallType: wall.exterior ? 'ext2x6' : 'int2x4', rooms: roomNames(wall) },
+        metadata: {
+          generatedBy: GENERATED_BY,
+          wallType: wall.exterior ? 'ext2x6' : 'int2x4',
+          rooms: roomNames(wall),
+        },
       },
       parentId: levelId,
     })
@@ -254,7 +291,13 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   const clear = (wallId: string, at: number, width: number): boolean =>
     !(reserved.get(wallId) ?? []).some(([a, b]) => at - width / 2 < b + 6 && at + width / 2 > a - 6)
   /** Best centre for an opening of `width` inside [s0, s1], keeping `clearance` from the ends and clear of other openings. */
-  const seat = (wallId: string, span: [number, number], width: number, prefer = 0.5, clearance = 6): number | null => {
+  const seat = (
+    wallId: string,
+    span: [number, number],
+    width: number,
+    prefer = 0.5,
+    clearance = 6,
+  ): number | null => {
     const lo = span[0] + clearance + width / 2
     const hi = span[1] - clearance - width / 2
     if (hi < lo) return null
@@ -295,6 +338,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     name: string,
     /** +1: the door swings (or the overhead track runs) to the wall's +normal side. */
     swingSide: 1 | -1,
+    doorType: 'hinged' | 'sliding' = 'hinged',
   ) => {
     const isGarage = kind === 'garage'
     const heightIn = isGarage ? GARAGE_DOOR_H : DOOR_H
@@ -312,7 +356,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         position: [round(at * IN), round((heightIn / 2) * IN), 0],
         width: round(widthIn * IN),
         height: round(heightIn * IN),
-        doorType: isGarage ? 'garage-sectional' : 'hinged',
+        doorType: isGarage ? 'garage-sectional' : doorType,
         openingKind: kind === 'open' ? 'opening' : 'door',
         swingDirection,
         metadata: { generatedBy: GENERATED_BY, attach: kind },
@@ -321,7 +365,10 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     })
   }
   const sharedWalls = (ia: number, ib: number): WallRun[] =>
-    walls.filter((w) => !w.exterior && ((w.left === ia && w.right === ib) || (w.left === ib && w.right === ia)))
+    walls.filter(
+      (w) =>
+        !w.exterior && ((w.left === ia && w.right === ib) || (w.left === ib && w.right === ia)),
+    )
   for (const edge of doc.edges) {
     if (edge.kind === 'zone') continue
     const ia = indexOf(rooms, edge.a)
@@ -358,16 +405,27 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const preferred = edge.kind === 'open' ? 72 : closet ? 30 : bath ? 30 : 32
     const width = Math.min(preferred, Math.floor((spanW - 2 * clearance) / 2) * 2)
     if (width < 24) {
-      warnings.push(`"${edge.a}"–"${edge.b}": their shared wall is ${spanW}" — too short for a ${edge.kind}.`)
+      warnings.push(
+        `"${edge.a}"–"${edge.b}": their shared wall is ${spanW}" — too short for a ${edge.kind}.`,
+      )
       continue
     }
     const at = seat(best.wall.id, best.span, width, 0.5, clearance)
     if (at === null) {
-      warnings.push(`"${edge.a}"–"${edge.b}": no clear spot for a ${width}" ${edge.kind} on their shared wall.`)
+      warnings.push(
+        `"${edge.a}"–"${edge.b}": no clear spot for a ${width}" ${edge.kind} on their shared wall.`,
+      )
       continue
     }
     const into = sideOf(best.wall, (B.u0 + B.u1) / 2, (B.v0 + B.v1) / 2)
-    doorNode(best.wall, at, width, edge.kind === 'open' ? 'open' : 'door', `${edge.a} + ${edge.b} ${edge.kind === 'open' ? 'opening' : 'door'}`, into)
+    doorNode(
+      best.wall,
+      at,
+      width,
+      edge.kind === 'open' ? 'open' : 'door',
+      `${edge.a} + ${edge.b} ${edge.kind === 'open' ? 'opening' : 'door'}`,
+      into,
+    )
   }
 
   // ── the front door ────────────────────────────────────────────────────
@@ -376,20 +434,30 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     rooms.find((r) => (r.kind === 'entry' || r.kind === 'living') && r.v0 === v0) ||
     rooms.find((r) => r.kind === 'entry' || r.kind === 'living') ||
     (rooms[0] as NormalizedRoom)
-  const exteriorWallsOf = (room: NormalizedRoom): { wall: WallRun; span: [number, number]; edge: PlanEdge }[] => {
+  const exteriorWallsOf = (
+    room: NormalizedRoom,
+  ): { wall: WallRun; span: [number, number]; edge: PlanEdge }[] => {
     const out: { wall: WallRun; span: [number, number]; edge: PlanEdge }[] = []
     for (const wall of walls) {
       if (!wall.exterior) continue
       const span = spansOf(wall, room)
       if (!span) continue
-      const edge: PlanEdge = wall.horizontal ? (wall.a[1] === room.v0 ? 'front' : 'back') : wall.a[0] === room.u0 ? 'left' : 'right'
+      const edge: PlanEdge = wall.horizontal
+        ? wall.a[1] === room.v0
+          ? 'front'
+          : 'back'
+        : wall.a[0] === room.u0
+          ? 'left'
+          : 'right'
       out.push({ wall, span, edge })
     }
     return out
   }
   const ext = exteriorWallsOf(frontRoom)
   const frontChoice =
-    ext.find((e) => e.edge === 'front') ?? ext.find((e) => e.edge === 'left' || e.edge === 'right') ?? ext[0]
+    ext.find((e) => e.edge === 'front') ??
+    ext.find((e) => e.edge === 'left' || e.edge === 'right') ??
+    ext[0]
   // The placed front door — the porch centres on it (PlanCrafters' centering invariant).
   let frontDoor: { wall: WallRun; at: number } | null = null
   if (!frontChoice) errors.push(`the front-door room "${frontRoom.name}" has no exterior wall.`)
@@ -397,8 +465,74 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const at = seat(frontChoice.wall.id, frontChoice.span, EXTERIOR_DOOR_W, 0.5)
     if (at === null) errors.push(`no room for the front door on "${frontRoom.name}".`)
     else {
-      doorNode(frontChoice.wall, at, EXTERIOR_DOOR_W, 'exterior', 'Front door', sideOf(frontChoice.wall, (frontRoom.u0 + frontRoom.u1) / 2, (frontRoom.v0 + frontRoom.v1) / 2))
+      doorNode(
+        frontChoice.wall,
+        at,
+        EXTERIOR_DOOR_W,
+        'exterior',
+        'Front door',
+        sideOf(
+          frontChoice.wall,
+          (frontRoom.u0 + frontRoom.u1) / 2,
+          (frontRoom.v0 + frontRoom.v1) / 2,
+        ),
+      )
       frontDoor = { wall: frontChoice.wall, at }
+    }
+  }
+
+  // ── the rear door: a 72 in slider from the biggest open living / dining
+  // room onto the yard (PlanCrafters: "exterior rear = slider to yard") ──
+  // Preference: a slider from a living / dining / kitchen room on the BACK
+  // wall; else one on a side wall of those rooms (the roll's parti puts the
+  // primary suite and the laundry across the back); else a 3-0 door from
+  // the laundry / mud room or a hall on the back wall.
+  let rearDoor: { wall: WallRun; at: number; room: NormalizedRoom; width: number } | null = null
+  {
+    type Face = {
+      room: NormalizedRoom
+      face: { wall: WallRun; span: [number, number]; edge: PlanEdge }
+      width: number
+      name: string
+      doorType: 'sliding' | 'hinged'
+    }
+    const faces: Face[] = []
+    const social = rooms.filter(
+      (r) => r.kind === 'living' || r.kind === 'dining' || r.kind === 'kitchen',
+    )
+    for (const room of social) {
+      for (const face of exteriorWallsOf(room)) {
+        if (face.edge === 'back')
+          faces.push({ room, face, width: REAR_DOOR_W, name: 'Rear slider', doorType: 'sliding' })
+      }
+    }
+    for (const room of social) {
+      for (const face of exteriorWallsOf(room)) {
+        if (face.edge === 'left' || face.edge === 'right')
+          faces.push({ room, face, width: REAR_DOOR_W, name: 'Side slider', doorType: 'sliding' })
+      }
+    }
+    for (const room of rooms.filter((r) => r.kind === 'laundry' || r.kind === 'hall')) {
+      for (const face of exteriorWallsOf(room)) {
+        if (face.edge === 'back')
+          faces.push({ room, face, width: EXTERIOR_DOOR_W, name: 'Rear door', doorType: 'hinged' })
+      }
+    }
+    for (const c of faces) {
+      if (c.face.span[1] - c.face.span[0] < c.width + 12) continue
+      const at = seat(c.face.wall.id, c.face.span, c.width, 0.5)
+      if (at === null) continue
+      doorNode(
+        c.face.wall,
+        at,
+        c.width,
+        'exterior',
+        c.name,
+        sideOf(c.face.wall, (c.room.u0 + c.room.u1) / 2, (c.room.v0 + c.room.v1) / 2),
+        c.doorType,
+      )
+      rearDoor = { wall: c.face.wall, at, room: c.room, width: c.width }
+      break
     }
   }
 
@@ -414,12 +548,25 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const width = bay.span[1] - bay.span[0] >= GARAGE_DOOR_W + 24 ? GARAGE_DOOR_W : 9 * 12
     const at = seat(bay.wall.id, bay.span, width)
     if (at === null) warnings.push(`no room for an overhead door on "${room.name}".`)
-    else doorNode(bay.wall, at, width, 'garage', `${room.name} overhead door`, sideOf(bay.wall, (room.u0 + room.u1) / 2, (room.v0 + room.v1) / 2))
+    else
+      doorNode(
+        bay.wall,
+        at,
+        width,
+        'garage',
+        `${room.name} overhead door`,
+        sideOf(bay.wall, (room.u0 + room.u1) / 2, (room.v0 + room.v1) / 2),
+      )
   }
 
   // ── windows: bedrooms first (egress), then by kind ────────────────────
   let windows = 0
-  const windowNode = (wall: WallRun, at: number, spec: { w: number; h: number; sill: number; type: string }, name: string) => {
+  const windowNode = (
+    wall: WallRun,
+    at: number,
+    spec: { w: number; h: number; sill: number; type: string },
+    name: string,
+  ) => {
     reserve(wall.id, at, spec.w)
     windows += 1
     ops.push({
@@ -437,20 +584,34 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       parentId: wall.id,
     })
   }
-  const orderedRooms = [...rooms].sort((a, b) => (a.kind === 'bed' ? 0 : 1) - (b.kind === 'bed' ? 0 : 1))
+  const orderedRooms = [...rooms].sort(
+    (a, b) => (a.kind === 'bed' ? 0 : 1) - (b.kind === 'bed' ? 0 : 1),
+  )
   for (const room of orderedRooms) {
     const spec = WINDOWS[room.kind]
     if (!spec) continue
     const faces = exteriorWallsOf(room)
     if (faces.length === 0) {
-      if (room.kind === 'bed') errors.push(`bedroom "${room.name}" has no exterior wall for an egress window.`)
+      if (room.kind === 'bed')
+        errors.push(`bedroom "${room.name}" has no exterior wall for an egress window.`)
       continue
     }
     // Widest face first; bedrooms prefer a side or back face (the front
     // face carries the entry and the porch), living rooms the front.
     const preference = (edge: PlanEdge): number =>
-      room.kind === 'living' ? (edge === 'front' ? 0 : 1) : room.kind === 'bed' ? (edge === 'front' ? 1 : 0) : 0
-    faces.sort((p, q) => preference(p.edge) - preference(q.edge) || q.span[1] - q.span[0] - (p.span[1] - p.span[0]))
+      room.kind === 'living'
+        ? edge === 'front'
+          ? 0
+          : 1
+        : room.kind === 'bed'
+          ? edge === 'front'
+            ? 1
+            : 0
+          : 0
+    faces.sort(
+      (p, q) =>
+        preference(p.edge) - preference(q.edge) || q.span[1] - q.span[0] - (p.span[1] - p.span[0]),
+    )
     let placed = 0
     for (const face of faces) {
       const want = spec.count - placed
@@ -491,7 +652,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         })
       if (members.length === 0) continue
       for (const m of members) used.add(m.i)
-      const lead = [...members].sort((p, q) => area(q.room) - area(p.room))[0]?.room as NormalizedRoom
+      const lead = [...members].sort((p, q) => area(q.room) - area(p.room))[0]
+        ?.room as NormalizedRoom
       zoneOps.push({
         node: {
           id: generateId('zone'),
@@ -509,14 +671,21 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
           ceilingHeight: ceilingByRoom(lead),
           enclosureStatus: 'auto',
           color: lead.kind === 'bed' ? '#8b5cf6' : lead.kind === 'bath' ? '#06b6d4' : '#0ea5e9',
-          metadata: { generatedBy: GENERATED_BY, rooms: members.map((m) => m.room.name), kind: lead.kind },
+          metadata: {
+            generatedBy: GENERATED_BY,
+            rooms: members.map((m) => m.room.name),
+            kind: lead.kind,
+          },
         },
         parentId: levelId,
       })
       zones += 1
     }
     for (const [i, room] of rooms.entries()) {
-      if (!used.has(i)) warnings.push(`room "${room.name}" was not found as an enclosed space — no zone was made for it.`)
+      if (!used.has(i))
+        warnings.push(
+          `room "${room.name}" was not found as an enclosed space — no zone was made for it.`,
+        )
     }
   } catch (error) {
     warnings.push(`zone detection failed (${(error as Error).message}) — no zones were made.`)
@@ -567,13 +736,19 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         elevation: round(SLAB_ELEVATION_M - ffAboveGradeM),
         thickness: 0.1016,
         materialPreset: 'concrete-raw',
-        metadata: { generatedBy: GENERATED_BY, floor: 'garage-slab-at-grade', dropIn: foundation.ffAboveGradeIn },
+        metadata: {
+          generatedBy: GENERATED_BY,
+          floor: 'garage-slab-at-grade',
+          dropIn: foundation.ffAboveGradeIn,
+        },
       },
       parentId: levelId,
     })
     // The garage's exterior walls stand on the garage slab (their base drops
     // to it; the separation wall stays on the house floor).
-    const garageIndex = new Set(rooms.map((r, i) => (r.kind === 'garage' ? i : -1)).filter((i) => i >= 0))
+    const garageIndex = new Set(
+      rooms.map((r, i) => (r.kind === 'garage' ? i : -1)).filter((i) => i >= 0),
+    )
     for (const wall of walls) {
       if (!wall.exterior) continue
       const beside = (wall.rooms ?? [wall.left, wall.right]).filter((i) => i !== -1)
@@ -586,11 +761,19 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   // ── roof: derived from the walls by the auto roof engine ─────────────
   const roofOps = roofFor(doc, style, ops, ceilingM, levelId, warnings)
 
-  // ── the porch: the entrance built PlanCrafters' way (porch.ts) ─────────
+  // ── the entrances, built PlanCrafters' way (porch.ts): the front porch on
+  // the front door, the rear patio / landing / deck on the slider ────────
   let porchSummary: PorchSummary | null = null
+  let rearSummary: PorchSummary | null = null
   const porchOps: NodeOp[] = []
-  if (frontDoor) {
-    const w = frontDoor.wall
+  const entranceFor = (
+    door: { wall: WallRun; at: number },
+    policy: PorchPolicy,
+    entrance: 'front' | 'rear',
+    bayWidth: number,
+    doorWidth: number,
+  ): PorchSummary | null => {
+    const w = door.wall
     const dxw = w.end[0] - w.start[0]
     const dzw = w.end[1] - w.start[1]
     const lw = Math.hypot(dxw, dzw) || 1
@@ -599,24 +782,29 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const midw: Pt = [(w.start[0] + w.end[0]) / 2, (w.start[1] + w.end[1]) / 2]
     const houseOnFront = pointInRing(ring.map(toLocal), midw[0] + nxw * 0.2, midw[1] + nzw * 0.2)
     const outward: Pt = houseOnFront ? [-nxw, -nzw] : [nxw, nzw]
-    const bayWidth = rooms.filter((r) => r.kind === 'living' || r.kind === 'entry').reduce((s, r) => s + (r.u1 - r.u0), 0) * IN
     const porchPitch = Math.min(style.pitch, 6)
-    const porch = porchFor(
+    const built = porchFor(
       {
-        policy: style.porch,
+        policy,
         style,
         levelId,
+        entrance,
+        // a raised house gets wood decks, a slab house concrete (PlanCrafters
+        // uses wood on hills; a raised platform is the same call on flat ground)
+        landing: raisedFloor ? 'wood' : 'concrete',
         wall: { start: w.start, end: w.end, thickness: w.thickness },
-        doorAt: frontDoor.at * IN,
-        doorWidth: EXTERIOR_DOOR_W * IN,
+        doorAt: door.at * IN,
+        doorWidth: doorWidth * IN,
         outward,
         bayWidth,
         floorElevation: SLAB_ELEVATION_M,
         gradeY: -ffAboveGradeM,
         overhang: (style.overhangIn * IN) / Math.cos(Math.atan(porchPitch / 12)),
         wallRole: (
-          (ops.find((op) => op.node.id === w.id)?.node.metadata as { roof?: { role?: string } } | undefined)?.roof
-        )?.role,
+          ops.find((op) => op.node.id === w.id)?.node.metadata as
+            | { roof?: { role?: string } }
+            | undefined
+        )?.roof?.role,
       },
       {
         slab: generateId('slab'),
@@ -628,9 +816,28 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         fence: () => generateId('fence'),
       },
     )
-    porchOps.push(...porch.ops)
-    warnings.push(...porch.warnings)
-    porchSummary = porch.summary
+    porchOps.push(...built.ops)
+    warnings.push(...built.warnings)
+    return built.summary
+  }
+  if (frontDoor) {
+    const bayWidth =
+      rooms
+        .filter((r) => r.kind === 'living' || r.kind === 'entry')
+        .reduce((s, r) => s + (r.u1 - r.u0), 0) * IN
+    porchSummary = entranceFor(frontDoor, style.porch, 'front', bayWidth, EXTERIOR_DOOR_W)
+  }
+  if (rearDoor) {
+    // PlanCrafters applyPorch, rear: a raised house → a deck; a slab house →
+    // a covered patio for the porch styles, a plain landing otherwise.
+    const policy: PorchPolicy = raisedFloor ? 'deck' : style.porch !== 'none' ? 'patio' : 'landing'
+    rearSummary = entranceFor(
+      rearDoor,
+      policy,
+      'rear',
+      (rearDoor.room.u1 - rearDoor.room.u0) * IN,
+      rearDoor.width,
+    )
   }
 
   // ── building on the parcel ────────────────────────────────────────────
@@ -660,7 +867,10 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     yaw = Math.atan2(-nx, -nz)
     const halfD = (D * IN) / 2 + exteriorT / 2
     position = [round(mx - nx * halfD), ffAboveGradeM, round(mz - nz * halfD)]
-    if (W * IN > el) warnings.push(`the house is ${(W / 12).toFixed(0)}' wide but the buildable frontage is ${(el / FT).toFixed(0)}' — check the side setbacks.`)
+    if (W * IN > el)
+      warnings.push(
+        `the house is ${(W / 12).toFixed(0)}' wide but the buildable frontage is ${(el / FT).toFixed(0)}' — check the side setbacks.`,
+      )
   }
 
   const buildingOp: NodeOp = {
@@ -677,7 +887,11 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         style: style.key,
         document: input,
         // PlanCrafters' foundation record — Bones reads it (foundationOf)
-        foundation: { type: foundation.type, ffAboveGradeIn: foundation.ffAboveGradeIn, source: foundation.source },
+        foundation: {
+          type: foundation.type,
+          ffAboveGradeIn: foundation.ffAboveGradeIn,
+          source: foundation.source,
+        },
       },
     },
     parentId: siteId ?? undefined,
@@ -698,15 +912,33 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
 
   const livingSqFt = rooms.filter((r) => r.kind !== 'garage').reduce((s, r) => s + area(r), 0) / 144
   const footprintSqFt = (W * D) / 144
-  const ordered: NodeOp[] = [buildingOp, levelOp, slabOp, ...garageSlabOps, ...ops, ...zoneOps, ...roofOps, ...porchOps]
+  const ordered: NodeOp[] = [
+    buildingOp,
+    levelOp,
+    slabOp,
+    ...garageSlabOps,
+    ...ops,
+    ...zoneOps,
+    ...roofOps,
+    ...porchOps,
+  ]
   if (errors.length > 0) return { ...empty(errors), warnings }
   return {
     ok: true,
     ops: ordered,
     errors,
     warnings,
-    stats: { rooms: rooms.length, walls: walls.length, doors, windows, zones, livingSqFt: Math.round(livingSqFt), footprintSqFt: Math.round(footprintSqFt) },
+    stats: {
+      rooms: rooms.length,
+      walls: walls.length,
+      doors,
+      windows,
+      zones,
+      livingSqFt: Math.round(livingSqFt),
+      footprintSqFt: Math.round(footprintSqFt),
+    },
     porch: porchSummary,
+    rear: rearSummary,
     foundation,
     buildingId,
     levelId,
@@ -742,7 +974,12 @@ function roofFor(
       frontSide: op.node.frontSide as string,
       backSide: op.node.backSide as string,
     }))
-  const edgeNormal: Record<PlanEdge, [number, number]> = { front: [0, -1], back: [0, 1], left: [-1, 0], right: [1, 0] }
+  const edgeNormal: Record<PlanEdge, [number, number]> = {
+    front: [0, -1],
+    back: [0, 1],
+    left: [-1, 0],
+    right: [1, 0],
+  }
   const intent: RoofIntent = {
     form: form === 'flat' ? 'flat' : form === 'shed' ? 'shed' : form === 'hip' ? 'hip' : 'gable',
     pitchTwelfths,
@@ -753,16 +990,25 @@ function roofFor(
   }
   const result = deriveRoof(walls, ceilingM, intent)
   warnings.push(...result.warnings)
-  if (form === 'flat') warnings.push('flat roof: drawn as a flat roof segment; the roof plan shows no pitch arrows.')
+  if (form === 'flat')
+    warnings.push('flat roof: drawn as a flat roof segment; the roof plan shows no pitch arrows.')
   for (const op of ops) {
     const role = result.roles[op.node.id as string]
     if (!role) continue
-    op.node.metadata = { ...((op.node.metadata as Record<string, unknown> | undefined) ?? {}), roof: { role } }
+    op.node.metadata = {
+      ...((op.node.metadata as Record<string, unknown> | undefined) ?? {}),
+      roof: { role },
+    }
   }
-  return roofNodesFor(result, levelId, { roofId: generateId('roof'), segmentId: () => generateId('rseg') }, {
-    source: GENERATED_BY,
-    intent: { form, pitchInTwelfths: pitchTwelfths, overhangIn, gables: doc.roof.gables },
-  })
+  return roofNodesFor(
+    result,
+    levelId,
+    { roofId: generateId('roof'), segmentId: () => generateId('rseg') },
+    {
+      source: GENERATED_BY,
+      intent: { form, pitchInTwelfths: pitchTwelfths, overhangIn, gables: doc.roof.gables },
+    },
+  )
 }
 
 /** "HALL / HALL 2" reads as "HALL": a numbered twin of a member is the same room continued. */
@@ -782,4 +1028,3 @@ function pairKey(a: number, b: number): string {
 function area(r: NormalizedRoom): number {
   return (r.u1 - r.u0) * (r.v1 - r.v0)
 }
-

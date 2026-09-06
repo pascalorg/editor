@@ -51,7 +51,9 @@ describe('Poppy builds into Pascal nodes', () => {
   })
 
   test('one door per door attachment plus the front door, seated inside their walls', () => {
-    const front = doors.filter((d) => d.metadata.attach === 'exterior')
+    const exterior = doors.filter((d) => d.metadata.attach === 'exterior')
+    expect(exterior.length).toBe(2) // the front door and the rear entrance
+    const front = exterior.filter((d) => d.name === 'Front door')
     expect(front.length).toBe(1)
     expect(front[0]?.width).toBeCloseTo(0.9144, 4)
     expect(doors.filter((d) => d.metadata.attach === 'door').length).toBe(4)
@@ -172,7 +174,11 @@ describe('Poppy builds into Pascal nodes', () => {
     expect(built.foundation?.ffAboveGradeIn).toBe(18)
     const building = ofType(built.ops, 'building')[0] as N
     expect(building.position[1]).toBeCloseTo(18 * 0.0254, 9)
-    expect(building.metadata.foundation).toEqual({ type: 'raised', ffAboveGradeIn: 18, source: built.foundation?.source })
+    expect(building.metadata.foundation).toEqual({
+      type: 'raised',
+      ffAboveGradeIn: 18,
+      source: built.foundation?.source,
+    })
     const slabs = ofType(built.ops, 'slab') as N[]
     const platform = slabs.find((s) => s.name === 'Floor platform')!
     expect(platform.thickness).toBeCloseTo(0.019, 9)
@@ -191,11 +197,37 @@ describe('Poppy builds into Pascal nodes', () => {
     for (const w of onGarage) expect(w.name).toBe('Exterior wall')
   })
 
+  test('a rear slider opens onto the yard and gets its own entrance: a deck on the raised farmhouse, a patio on the slab Poppy', () => {
+    const farm = buildHouse(
+      rollDocument(1499472249, { style: 'farmhouse', beds: 3, baths: 2, garage: true }).document,
+    )
+    const slider = ofType(farm.ops, 'door').find((d) => /slider|Rear door/.test((d as N).name)) as N
+    expect(slider).toBeDefined()
+    if (/slider/.test(slider.name)) {
+      expect(slider.doorType).toBe('sliding')
+      expect(slider.width).toBeCloseTo(72 * 0.0254, 9)
+    } else {
+      expect(slider.doorType).toBe('hinged')
+    }
+    expect(farm.rear?.policy).toBe('deck')
+    expect(farm.rear?.landing).toBe('wood')
+    expect(farm.porch?.landing).toBe('wood')
+    expect((ofType(farm.ops, 'slab') as N[]).map((s) => s.name)).toContain('Rear deck')
+    // the Poppy is a modern (porch 'none') on a slab: a bare concrete landing at the rear door
+    const poppy = buildHouse(POPPY)
+    expect(poppy.rear?.policy).toBe('landing')
+    expect(poppy.rear?.landing).toBe('concrete')
+  })
+
   test('the Poppy (24 ft wide) is a slab house at 8 in, one slab, no garage slab', () => {
     const built = buildHouse(POPPY)
     expect(built.foundation?.type).toBe('slab')
     expect(built.foundation?.ffAboveGradeIn).toBe(8)
-    expect((ofType(built.ops, 'slab') as N[]).map((s) => s.name)).toEqual(['Slab on grade', 'Porch'])
+    expect((ofType(built.ops, 'slab') as N[]).map((s) => s.name)).toEqual([
+      'Slab on grade',
+      'Porch',
+      'Rear landing',
+    ])
   })
 
   test('placed on a parcel: square to the street, at the front setback, attached to the site', () => {

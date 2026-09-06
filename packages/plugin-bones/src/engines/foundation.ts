@@ -578,7 +578,10 @@ export function buildFoundation(
       // The thickened section IS slab concrete poured monolithically — the
       // field strips stop at its faces (booked once, drawn once).
       carveBands.push(bandOf(iCenter, iLen, spec.footingWidth))
-      pourBands.push({ band: bandOf(iCenter, iLen, spec.footingWidth), memberIdx: members.length - 1 })
+      pourBands.push({
+        band: bandOf(iCenter, iLen, spec.footingWidth),
+        memberIdx: members.length - 1,
+      })
       // Rebar rides "every footing run" — including interior thickened ones.
       emitFootingBars(iCenter, iLen, -INTERIOR_FOOTING_DEPTH, spec.footingWidth)
       // Interior CMU bearing walls anchor through their cells too (B18b).
@@ -639,7 +642,11 @@ export function buildFoundation(
         if (segLen >= 2 * MIN_BOLT_EDGE) boltUs.push(seg.a + segLen / 2)
         continue
       }
-      for (const u of anchorBoltPositions(segLen, spec.anchorBoltSpacing, spec.anchorBoltEndDistance)) {
+      for (const u of anchorBoltPositions(
+        segLen,
+        spec.anchorBoltSpacing,
+        spec.anchorBoltEndDistance,
+      )) {
         boltUs.push(seg.a + u)
       }
     }
@@ -669,7 +676,10 @@ export function buildFoundation(
     if (!raised && footingTop > -SLAB_THICKNESS + EPS) {
       carveBands.push(bandOf(runCenterU, runLen, spec.footingWidth))
     }
-    pourBands.push({ band: bandOf(runCenterU, runLen, spec.footingWidth), memberIdx: members.length - 1 })
+    pourBands.push({
+      band: bandOf(runCenterU, runLen, spec.footingWidth),
+      memberIdx: members.length - 1,
+    })
 
     // ---- footing rebar (LOD 350) ----
     if (fabDetail) {
@@ -927,17 +937,23 @@ export function buildFoundation(
   // fill below the retarder are NOT modeled (R506.2.2) — the scene carries
   // no grade/terrain data; the takeoff books the labeled slab + membrane.
   if (hasSlab) {
+    // A level with a lower slab (the garage pad at grade beside a house
+    // floor) pours each field at ITS surface: the highest slab keeps the
+    // plate line, the others drop by their elevation difference.
+    const topElevation = Math.max(...slabs.map((s) => s.elevation))
     if (raised) {
-      // Crawl space: no field — the exposed earth gets a Class I vapor
-      // retarder (R408) at grade, tiled like the field so the takeoff books
-      // its area.
-      for (const slab of slabs) emitSlabField(slab, carveBands, members, { top: grade, groundCover: true })
+      // Crawl space: no field under the platform — the exposed earth gets a
+      // Class I vapor retarder (R408) at grade, tiled like the field so the
+      // takeoff books its area. Concrete KINDS beside the platform (the
+      // garage pad at grade, a porch slab) still pour at their own surface.
+      for (const slab of slabs) {
+        if (slab.kind === 'slab')
+          emitSlabField(slab, carveBands, members, { top: slab.elevation - topElevation })
+        else emitSlabField(slab, carveBands, members, { top: grade, groundCover: true })
+      }
     } else {
-      // A level with a lower slab (the garage pad at grade beside a house
-      // floor) pours each field at ITS surface: the highest slab keeps the
-      // plate line, the others drop by their elevation difference.
-      const topElevation = Math.max(...slabs.map((s) => s.elevation))
-      for (const slab of slabs) emitSlabField(slab, carveBands, members, { top: slab.elevation - topElevation })
+      for (const slab of slabs)
+        emitSlabField(slab, carveBands, members, { top: slab.elevation - topElevation })
     }
   }
 
@@ -1221,7 +1237,8 @@ function emitSlabField(
           rotation: [0, 0, 0],
           material: 'pvc',
           sourceId: slab.id,
-          label: 'Crawl space ground cover — Class I vapor retarder (6-mil polyethylene) on the exposed earth (R408)',
+          label:
+            'Crawl space ground cover — Class I vapor retarder (6-mil polyethylene) on the exposed earth (R408)',
         })
         continue
       }

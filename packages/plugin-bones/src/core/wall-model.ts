@@ -12,6 +12,7 @@ import type {
   RoomSlice,
   ServiceOverrides,
   ServicePointOverride,
+  SlabKind,
   SlabSlice,
   WallSlice,
 } from './types'
@@ -120,12 +121,16 @@ function applyExteriorFallback(
     }
     return
   }
-  const inPoly = (p: readonly [number, number], poly: readonly (readonly [number, number])[]): boolean => {
+  const inPoly = (
+    p: readonly [number, number],
+    poly: readonly (readonly [number, number])[],
+  ): boolean => {
     let inside = false
     for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
       const [xi, zi] = poly[i] as readonly [number, number]
       const [xj, zj] = poly[j] as readonly [number, number]
-      if (zi > p[1] !== zj > p[1] && p[0] < ((xj - xi) * (p[1] - zi)) / (zj - zi) + xi) inside = !inside
+      if (zi > p[1] !== zj > p[1] && p[0] < ((xj - xi) * (p[1] - zi)) / (zj - zi) + xi)
+        inside = !inside
     }
     return inside
   }
@@ -245,11 +250,27 @@ export function extractSlabs(nodes: NodesRecord, levelId: string): SlabSlice[] {
       holes,
       elevation: num(node.elevation, 0.05),
       thickness: num(node.thickness, 0.05),
+      kind: slabKindOf(node.metadata),
+      outdoor: slabIsOutdoor(node.metadata),
     })
   }
   return slabs
 }
 
+/** A deck or a porch pad: an outdoor floor, never probe coverage. */
+export function slabIsOutdoor(metadata: unknown): boolean {
+  const floor = (metadata as { floor?: unknown } | null | undefined)?.floor
+  return floor === 'deck' || floor === 'porch-slab'
+}
+
+/** The generator's `metadata.floor` tag → what the slab is (see SlabKind). */
+export function slabKindOf(metadata: unknown): SlabKind {
+  const floor = (metadata as { floor?: unknown } | null | undefined)?.floor
+  if (floor === 'deck') return 'deck'
+  if (floor === 'slab-on-grade' || floor === 'garage-slab-at-grade' || floor === 'porch-slab')
+    return 'slab'
+  return 'floor'
+}
 
 // ---------------------------------------------------------------------------
 // Placed sanitary fixtures — the items the USER dropped (toilet, shower…)
@@ -413,7 +434,13 @@ export function extractLevels(nodes: NodesRecord): LevelSlice[] {
     e.baseY = (cumulative.get(e.buildingId) ?? 0) + e.baseElevation
     cumulative.set(e.buildingId, e.baseY + e.height)
   }
-  return sorted.map(({ id, level, height, baseY, buildingId }) => ({ id, level, height, baseY, buildingId }))
+  return sorted.map(({ id, level, height, baseY, buildingId }) => ({
+    id,
+    level,
+    height,
+    baseY,
+    buildingId,
+  }))
 }
 
 /** Sleeping-area name words — the bedroom row below, and exported so the

@@ -34,10 +34,7 @@ import {
   mixedCmuWall,
   snapCmuHeight,
 } from '../engines/cmu'
-import {
-  type BuildingCharacteristics,
-  computeCharacteristics,
-} from '../engines/characteristics'
+import { type BuildingCharacteristics, computeCharacteristics } from '../engines/characteristics'
 import { layoutWallLayers } from '../engines/wall-layers'
 import {
   applyDeviceOverrides,
@@ -52,6 +49,7 @@ import { extractDeviceOverrides } from '../device/overrides'
 import { flagLinesetTradeCrossings, layoutHvac } from '../engines/hvac'
 import { layoutPlumbing, placeMeterSpot } from '../engines/plumbing'
 import { buildFoundation } from '../engines/foundation'
+import { frameDeck } from '../engines/deck-framing'
 import { frameFloor } from '../engines/floor-framing'
 import { detectUnframedRoofIntersections, frameRoofs, extractRoofs } from '../engines/roof-framing'
 import { bracingWarnings, crossReferenceHoldDowns } from '../engines/wall-bracing'
@@ -167,7 +165,6 @@ const memo = new WeakMap<
   { nodes: Record<string, Record<string, unknown>>; result: ComputeResult }
 >()
 
-
 /** The building's foundation record: floor system and finish floor above grade (metres). */
 export type FoundationRecord = { type: 'slab' | 'raised'; ffAboveGradeM: number }
 
@@ -177,10 +174,16 @@ export type FoundationRecord = { type: 'slab' | 'raised'; ffAboveGradeM: number 
  * record). Anything else reads as slab-on-grade at the plate line.
  */
 export function foundationOf(building: Record<string, unknown> | undefined): FoundationRecord {
-  const meta = building?.metadata as { foundation?: { type?: unknown; ffAboveGradeIn?: unknown } } | null | undefined
+  const meta = building?.metadata as
+    | { foundation?: { type?: unknown; ffAboveGradeIn?: unknown } }
+    | null
+    | undefined
   const f = meta && typeof meta === 'object' ? meta.foundation : undefined
   const type = f?.type === 'raised' ? 'raised' : 'slab'
-  const inchesUp = typeof f?.ffAboveGradeIn === 'number' && Number.isFinite(f.ffAboveGradeIn) ? f.ffAboveGradeIn : 0
+  const inchesUp =
+    typeof f?.ffAboveGradeIn === 'number' && Number.isFinite(f.ffAboveGradeIn)
+      ? f.ffAboveGradeIn
+      : 0
   return { type, ffAboveGradeM: Math.max(0, inchesUp) * 0.0254 }
 }
 
@@ -237,10 +240,7 @@ export function splitBattsAroundBlocking(members: Member[], blocking: Member[]):
       const m = members[i] as Member
       if (m.role !== 'insulation' || m.sourceId !== block.sourceId) continue
       // both boxes are centered on the wall line — colinear overlap test
-      const du = Math.hypot(
-        m.position[0] - block.position[0],
-        m.position[2] - block.position[2],
-      )
+      const du = Math.hypot(m.position[0] - block.position[0], m.position[2] - block.position[2])
       if (du > (m.dims[0] + block.dims[0]) / 2 - 0.005) continue
       const yLo = m.position[1] - m.dims[1] / 2
       const yHi = m.position[1] + m.dims[1] / 2
@@ -281,7 +281,10 @@ const EXTRA_SERVICE_KEY: Record<string, 'thermostat' | 'heatPump' | 'electricMet
 function extractExtraServiceOverrides(
   nodes: Record<string, Record<string, unknown>>,
   levelId: string,
-): { overrides: Pick<ServiceOverrides, 'thermostat' | 'heatPump' | 'electricMeter'>; duplicates: string[] } {
+): {
+  overrides: Pick<ServiceOverrides, 'thermostat' | 'heatPump' | 'electricMeter'>
+  duplicates: string[]
+} {
   const winners = new Map<
     'thermostat' | 'heatPump' | 'electricMeter',
     { id: string; node: Record<string, unknown> }
@@ -356,12 +359,17 @@ export function probeSlabsFor(
     })()
   const levelIndex = scoped.findIndex((l) => l.id === levelId)
   const slabs = extractSlabs(nodes, levelId)
-  let probeSlabs = slabs
-  if (slabs.length === 0) {
+  // Outdoor floors (a deck, a porch pad) are exactly the outdoors the probes
+  // hunt for: they never count as coverage, on this level or the one below
+  // (W10b — a porch slab against the front wall made the wall under the
+  // porch read interior and lose its sheathing, WRB and siding).
+  const indoor = (list: SlabSlice[]) => list.filter((s) => !s.outdoor)
+  let probeSlabs = indoor(slabs)
+  if (probeSlabs.length === 0) {
     for (let i = levelIndex - 1; i >= 0; i--) {
       const lowerId = scoped[i]?.id
       if (!lowerId) continue
-      const lower = extractSlabs(nodes, lowerId)
+      const lower = indoor(extractSlabs(nodes, lowerId))
       if (lower.length > 0) {
         probeSlabs = lower
         break
@@ -445,8 +453,7 @@ export function dedupeColinearWalls(rawWalls: WallSlice[]): {
     for (const o of w.openings) {
       const px = w.start[0] + w.dir[0] * o.u
       const pz = w.start[1] + w.dir[1] * o.u
-      const u =
-        (px - kept.start[0]) * kept.dir[0] + (pz - kept.start[1]) * kept.dir[1]
+      const u = (px - kept.start[0]) * kept.dir[0] + (pz - kept.start[1]) * kept.dir[1]
       if (u < -0.05 || u > kept.length + 0.05) continue
       const twin = merged.some(
         (k) => Math.abs(k.u - u) < 0.15 && Math.abs(k.roughWidth - o.roughWidth) < 0.15,
@@ -698,7 +705,8 @@ function computeLevelUncached(
         const h = hintMap.get(w.id)
         if (!h) continue
         const insetSum = (h.startInset ?? 0) + (h.endInset ?? 0)
-        const minRun = 4 * LUMBER_CROSS_SECTIONS[studSizeFor(w, specForWall(spec, engineering.get(w.id)))][0]
+        const minRun =
+          4 * LUMBER_CROSS_SECTIONS[studSizeFor(w, specForWall(spec, engineering.get(w.id)))][0]
         if (insetSum > 0 && w.length - insetSum < minRun) {
           warnings.push(
             `Wall ${w.id}: run shorter than its junction insets — framing re-extends to the ${(minRun * 100).toFixed(0)}cm minimum, verify`,
@@ -718,8 +726,7 @@ function computeLevelUncached(
     // in the same building is a storey; an attic/roof level (no slabs)
     // is not.
     const levelAbove = levels[levelIndex + 1]
-    const storeyAbove =
-      levelAbove !== undefined && extractSlabs(nodes, levelAbove.id).length > 0
+    const storeyAbove = levelAbove !== undefined && extractSlabs(nodes, levelAbove.id).length > 0
     members.push(
       ...frameWalls(framed, spec, engineering, {
         // A raised floor's plates sit on the platform, not on concrete.
@@ -760,9 +767,7 @@ function computeLevelUncached(
     // ride the SAME pass: their sheet-goods stack is byte-identical to a
     // framed twin's (F1 — the batt layout is steel-aware via the
     // engineering map's construction).
-    members.push(
-      ...layoutWallLayers(assemblies, activeRooms, spec, code, probeSlabs, engineering),
-    )
+    members.push(...layoutWallLayers(assemblies, activeRooms, spec, code, probeSlabs, engineering))
     members.push(...cmuWalls(masonry, spec))
     for (const { wall, seam } of mixed) {
       const neighbors = activeWalls.filter((w) => w.id !== wall.id && !w.curved)
@@ -791,12 +796,16 @@ function computeLevelUncached(
   // Rooms with no flooring at all deserve a call-out regardless of level
   // (quality round-2: a phantom room had no slab and nothing said so).
   if (slabs.length > 0) {
-    const inPoly = (p: readonly [number, number], poly: readonly (readonly [number, number])[]): boolean => {
+    const inPoly = (
+      p: readonly [number, number],
+      poly: readonly (readonly [number, number])[],
+    ): boolean => {
       let inside = false
       for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
         const [xi, zi] = poly[i] as readonly [number, number]
         const [xj, zj] = poly[j] as readonly [number, number]
-        if (zi > p[1] !== zj > p[1] && p[0] < ((xj - xi) * (p[1] - zi)) / (zj - zi) + xi) inside = !inside
+        if (zi > p[1] !== zj > p[1] && p[0] < ((xj - xi) * (p[1] - zi)) / (zj - zi) + xi)
+          inside = !inside
       }
       return inside
     }
@@ -824,19 +833,35 @@ function computeLevelUncached(
     }
   }
 
+  // What each slab node IS (SlabKind, from the generator's `metadata.floor`
+  // tag): the storey floor, concrete at its own elevation (a garage pad or
+  // porch slab at grade beside a raised house), or a wood deck. Decks are
+  // framed by the deck engine on every level and never poured; 'slab'
+  // kinds are poured by the foundation and never framed; only the floor
+  // kind is a platform on a raised house.
+  const deckSlabs = slabs.filter((s) => s.kind === 'deck')
+  const pouredSlabs = slabs.filter((s) => s.kind !== 'deck')
+  const platformSlabs = slabs.filter((s) => s.kind !== 'deck' && s.kind !== 'slab')
+
   // The ground level's own framed platform (raised floor) — its girder posts
   // need pads from the foundation pass below.
   let groundPlatform: Member[] = []
+  // Decks (PlanCrafters F.deck / W10b): PT joists on a ledger at the house
+  // wall, rims, a dropped 4x8 beam on 4x4 posts down to the grade below
+  // (the yard on a ground storey, the storey below's floor plane on an
+  // upper one — a balcony deck stands on posts too). Their posts get pads
+  // from the foundation pass like the platform's girder posts.
+  const deckMembers: Member[] = []
   if (config.showFloor) {
     if (isGroundLevel && raisedFloor) {
       // RAISED floor: the platform hangs under the floor slab node (the
       // subfloor) exactly like an upper storey's — joists, rim, girders —
       // and its posts run down to the crawl grade, where the foundation
       // pours their pads.
-      if (slabs.length === 0) {
+      if (platformSlabs.length === 0) {
         warnings.push('No floor platform on this level — rooms have no floor to derive')
       } else {
-        groundPlatform = frameFloor(slabs, activeWalls, spec, Math.max(0.1, -gradeY))
+        groundPlatform = frameFloor(platformSlabs, activeWalls, spec, Math.max(0.1, -gradeY))
         members.push(...groundPlatform)
         warnings.push(
           `Ground floor is a framed platform over a crawl space (finish floor ${Math.round(foundation.ffAboveGradeM / 0.0254)}" above grade) — joists on a PT mudsill on the stemwall, girder posts on pads, Class I ground cover (R408)`,
@@ -867,10 +892,23 @@ function computeLevelUncached(
       // Host floor-to-floor is baseY delta (resolveLevelFloorToFloorHeight),
       // not the raw storey height — baseElevation offsets count too.
       const below = levels[levelIndex - 1]
-      const storeyBelowHeight = below
-        ? (levels[levelIndex]?.baseY ?? 0) - below.baseY
-        : 2.4
-      members.push(...frameFloor(slabs, activeWalls, spec, storeyBelowHeight))
+      const storeyBelowHeight = below ? (levels[levelIndex]?.baseY ?? 0) - below.baseY : 2.4
+      members.push(...frameFloor(pouredSlabs, activeWalls, spec, storeyBelowHeight))
+    }
+    if (deckSlabs.length > 0) {
+      const below = levels[levelIndex - 1]
+      const deckGrade = isGroundLevel
+        ? gradeY
+        : -(
+            (levels[levelIndex]?.baseY ?? 0) -
+            (below?.baseY ?? (levels[levelIndex]?.baseY ?? 0) - 2.4)
+          )
+      for (const deck of deckSlabs)
+        deckMembers.push(...frameDeck(deck, activeWalls, spec, deckGrade).members)
+      members.push(...deckMembers)
+      warnings.push(
+        `${deckSlabs.length === 1 ? 'A wood deck' : `${deckSlabs.length} wood decks`} framed — PT joists hung on a ledger at the house, a beam (dropped 4x8, or a flush doubled rim on a low deck) on 4x4 posts to grade, pads under the posts (IRC R507)`,
+      )
     }
   }
 
@@ -942,9 +980,9 @@ function computeLevelUncached(
                 // stratum. mountLevelId is RENDER-ONLY: the sheets draw these
                 // owner-local (re-verify: the levelId tag double-lifted them
                 // on elevations). A lived storey's porch roof stays flush.
-                (slabs.length === 0 && rooms.length === 0 && hasLowerStorey
-                  ? framed.map((m) => ({ ...m, mountLevelId: level.id, strataAbove: true as const }))
-                  : framed)
+                slabs.length === 0 && rooms.length === 0 && hasLowerStorey
+                ? framed.map((m) => ({ ...m, mountLevelId: level.id, strataAbove: true as const }))
+                : framed
               : framed.map((m) =>
                   level.level > myOrdinal
                     ? { ...m, levelId: level.id, strataAbove: true as const }
@@ -996,9 +1034,15 @@ function computeLevelUncached(
         }
       }
     }
-    // A raised floor's OWN girder posts bear on pads at the crawl grade too.
+    // A raised floor's OWN girder posts bear on pads at the crawl grade too,
+    // and so do the deck posts (R507.3: a footing under every deck post).
     for (const m of groundPlatform) {
-      if (m.role === 'post') girderPosts.push({ plan: [m.position[0], m.position[2]], sourceId: m.sourceId })
+      if (m.role === 'post')
+        girderPosts.push({ plan: [m.position[0], m.position[2]], sourceId: m.sourceId })
+    }
+    for (const m of deckMembers) {
+      if (m.role === 'post')
+        girderPosts.push({ plan: [m.position[0], m.position[2]], sourceId: m.sourceId })
     }
     // The stemwall tops out under the platform: the lowest joist / rim bottom
     // less the mudsill.
@@ -1010,11 +1054,19 @@ function computeLevelUncached(
         joistBottom = Math.min(joistBottom, m.position[1] - m.dims[1] / 2)
       }
       if (Number.isFinite(joistBottom)) {
-        raised = { stemTop: joistBottom - inches(1.5), sillWidth: LUMBER_CROSS_SECTIONS[spec.exteriorStudSize][1] }
+        raised = {
+          stemTop: joistBottom - inches(1.5),
+          sillWidth: LUMBER_CROSS_SECTIONS[spec.exteriorStudSize][1],
+        }
       }
     }
     members.push(
-      ...buildFoundation(activeWalls, slabs, spec, { cmu: cmuAnchorage, girderPosts, gradeY, raised }),
+      ...buildFoundation(activeWalls, pouredSlabs, spec, {
+        cmu: cmuAnchorage,
+        girderPosts,
+        gradeY,
+        raised,
+      }),
     )
     // B9c: tie the foundation's SDC-D hold-downs to the wall framing above
     // them, both directions (a hold-down with no post above / a portal post
@@ -1233,8 +1285,7 @@ function computeLevelUncached(
     const hasLevelAbove =
       levelIndex >= 0 &&
       levels.slice(levelIndex + 1).some((l) => {
-        const lived =
-          extractSlabs(nodes, l.id).length > 0 || extractRooms(nodes, l.id).length > 0
+        const lived = extractSlabs(nodes, l.id).length > 0 || extractRooms(nodes, l.id).length > 0
         if (!lived) return false
         return Object.values(nodes).some(
           (n) => n.type === 'wall' && n.parentId === l.id && n.visible !== false,
@@ -1333,7 +1384,11 @@ function computeLevelUncached(
     if (hvacSilent || plumbingSilent) {
       const indoor = activeRooms.filter((room) => room.category !== 'outdoor')
       const systems =
-        hvacSilent && plumbingSilent ? 'HVAC + plumbing are' : hvacSilent ? 'HVAC is' : 'plumbing is'
+        hvacSilent && plumbingSilent
+          ? 'HVAC + plumbing are'
+          : hvacSilent
+            ? 'HVAC is'
+            : 'plumbing is'
       if (activeRooms.length === 0) {
         warnings.push(
           `no indoor zones on this level — ${systems} derived from rooms; draw zones here or X-ray the storey that has them`,

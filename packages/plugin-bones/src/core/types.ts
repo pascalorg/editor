@@ -363,6 +363,18 @@ export type WallSlice = {
   curved: boolean
 }
 
+/**
+ * What a slab node IS, read from the generator's `metadata.floor` tag
+ * (packages/plugin-generate build.ts / porch.ts):
+ *   - 'floor' — the storey's floor (no tag, 'platform', anything unknown):
+ *     a framed platform on a raised house, the slab-on-grade otherwise;
+ *   - 'slab'  — concrete at its own elevation whatever the house stands on
+ *     ('slab-on-grade', 'garage-slab-at-grade', 'porch-slab'): the
+ *     foundation pours it, nothing frames it;
+ *   - 'deck'  — a wood deck: the deck engine frames it, nothing pours it.
+ */
+export type SlabKind = 'floor' | 'slab' | 'deck'
+
 /** A slab outline for floor framing / foundation, level-local. */
 export type SlabSlice = {
   id: string
@@ -370,6 +382,15 @@ export type SlabSlice = {
   holes: readonly (readonly (readonly [number, number])[])[]
   elevation: number
   thickness: number
+  /** Absent = 'floor' (every slab drawn before the tag existed). */
+  kind?: SlabKind
+  /**
+   * An OUTDOOR floor (a deck, a porch pad): exactly the outdoors the
+   * exterior-side probes hunt for — never coverage. Without this a porch
+   * slab against the front wall read as 'covered' and the wall under the
+   * porch lost its sheathing, WRB and siding (W10b).
+   */
+  outdoor?: boolean
 }
 
 /** A named room (Pascal zone) — drives GFCI, wet walls, registers. */

@@ -149,6 +149,7 @@ function applyDocument(
     warnings: built.warnings,
     placed: placement !== null,
     porch: built.ok ? built.porch : null,
+    rear: built.ok ? built.rear : null,
     foundation: built.ok ? built.foundation : null,
   }
   if (!built.ok) return summary

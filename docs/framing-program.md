@@ -228,7 +228,7 @@ Verbatim intent, folded into the plan below:
   when it is not a slab; porches front and rear can be slabs or decks, with
   correct framing.
 
-W10 Porch options (PlanCrafters entrance tool, all of it): roofType gable / shed /
+W10 Porch options — DONE 2026-09-06 (see log; trellis covers, the porch ceiling and post-to-beam details still open): roofType gable / shed /
     hip / flat / trellis / none per style and per entrance; pillar styles square /
     round / tapered / craftsman / stucco with sizes; railing styles baluster / cable
     (modern) with post sizes and spacing; landing concrete or WOOD DECK with real
@@ -477,3 +477,58 @@ W13 Finishes: PlanCrafters' style palettes applied — siding / roofing / trim /
   crawl-space girders are flush on hangers rather than dropped on piers, and
   the terrain branches (Δ ≥ 12 in → taller stem, Δ > 30 in → basement, stepped
   footings) wait for sampled grade under the footprint.
+
+- 2026-09-06 midday: **W10 landed — porch options, rear entrances, decks with
+  framing.** `porch.ts` rewritten around PlanCrafters' entrance policies: the
+  policy is `full` / `entry` / `patio` / `landing` / `deck` / `none`, the
+  cover picks its form from the wall's roof ROLE (`porchRoofForm`: a gable
+  dies into an eave wall as a valley; a shed hangs on a ledger under a
+  gable end or a rake; flat for the modern; none for a landing / deck on a
+  modern), the floor is a concrete landing 4 in below the finish floor on a
+  slab house or a WOOD DECK 1 in below it on a raised house
+  (`metadata.floor: 'deck'`, 1-1/2 in decking), the guard is a baluster
+  rail or a CABLE rail (horizontal fence style, 3 in gaps, 2 in posts at
+  48 in) for the moderns, the pillars are tapered craftsman piers or 13 in
+  stucco piers for the stucco + hip styles, and the flight's risers come
+  from the real rise. The REAR entrance (`build.ts`): a 6-0 slider from a
+  living / dining / kitchen room on the back wall, else on a side wall of
+  those rooms ("Side slider" — the roll's parti puts the primary suite and
+  the laundry across the back), else a 3-0 door from the laundry / mud room
+  or a hall; the rear gets a deck on a raised house, a covered patio on a
+  slab house with a porch style, a bare landing otherwise. Front + rear
+  summaries ride the run and the Generate panel. Bones (W10b): slab nodes
+  carry a KIND from the generator's tag (`SlabKind` 'floor' | 'slab' |
+  'deck' — `slabKindOf`), and `compute` frames / pours each by what it is:
+  the floor kind is the platform on a raised house or the slab-on-grade,
+  the slab kind (garage pad at grade, porch pad) is poured by the
+  foundation at its own surface even beside a raised platform (before this
+  the raised branch put a ground cover under the garage pad and framed
+  joists across it), the deck kind goes to the new DECK ENGINE
+  (`engines/deck-framing.ts`, PlanCrafters `F.deck`): a PT ledger on the
+  house edge (the deck edge lying on an exterior wall, LUS hangers per
+  joist, R507.9 cited), PT joists from the span table square to the ledger,
+  rims on the free edges, a BEAM carrying the free end — dropped 4x8 16 in
+  in from the edge on 4x4 posts when a ≥ 6 in post fits, else FLUSH (a
+  second joist-size board doubled with the rim, the joists hung on it: the
+  low-deck detail the 18 in raised house actually gets, 10 in posts) — and
+  a pad footing under every post at grade through the same `girderPosts`
+  path as the platform; a deck whose frame reaches below grade (a deck
+  drawn off an 8 in slab house) gets no posts and a flag on every member
+  instead of negative-height stubs. Freestanding decks get beams at both
+  ends. **Defect found and fixed on the way:** an outdoor slab outside a
+  wall (a deck, a porch pad — since W6) made the layer engine's exterior-
+  side probe read the wall as covered on both sides, so the wall under the
+  porch lost its sheathing, WRB and siding; slabs now carry `outdoor` and
+  `probeSlabsFor` keeps them out of the coverage on this level and the one
+  below. Verified headless (roll 1499472249 farmhouse, a craftsman, the
+  Poppy: platform + garage pad at grade + two flush-beam decks on pads,
+  walls behind the entrances keep their layers; the Poppy pours its porch
+  and landing pads and frames nothing) and live on the Land Park scene
+  (seed 325877780 farmhouse: the rear deck's ledger, joists, doubled rim
+  and three posts on pads in Framing view). Tests: deck engine 10,
+  compute.deck 8, porch 22, build 12 — Bones 2,028, generate 51, editor
+  typecheck clean. Honest gaps: the porch roof's own posts still bear on
+  the deck with no blocking / post-to-beam detail; a deck's guard posts and
+  the deck stair are Pascal nodes, not framed; Bones still ignores a wall's
+  `supportSlabId` (garage walls frame from the plate line); the roll's
+  parti puts the rear slider on a side wall more often than the back.

@@ -26,6 +26,7 @@ export type RunSummary = {
   placed: boolean
   /** The entrance that was built (porch.ts), when the run succeeded. */
   porch?: PorchSummary | null
+  rear?: PorchSummary | null
   foundation?: FoundationChoice | null
 }
 

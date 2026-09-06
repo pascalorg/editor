@@ -164,14 +164,17 @@ export default function GeneratePanel() {
                   {S.last.foundation.ffAboveGradeIn}" above grade ({S.last.foundation.source})
                 </>
               )}
-              {S.last.porch && (
-                <>
-                  <br />
-                  porch: {S.last.porch.policy === 'none' ? 'covered stoop' : `${S.last.porch.policy} porch`} {S.last.porch.widthFt}' × {S.last.porch.depthFt}' ·{' '}
-                  {S.last.porch.roof === 'flat' ? 'flat canopy' : `${S.last.porch.roof} roof`} · {S.last.porch.posts} posts
-                  {S.last.porch.guard ? ' · 36" guard' : ''}
-                  {S.last.porch.risers > 0 ? ` · ${S.last.porch.risers} riser${S.last.porch.risers === 1 ? '' : 's'} @ ${S.last.porch.riserIn.toFixed(2)}"` : ' · at grade'}
-                </>
+              {[S.last.porch, S.last.rear].map((e) =>
+                e ? (
+                  <span key={e.entrance}>
+                    <br />
+                    {e.entrance === 'rear' ? 'rear' : 'porch'}: {e.policy === 'none' ? 'covered stoop' : e.policy === 'full' || e.policy === 'entry' ? `${e.policy} porch` : e.policy}{' '}
+                    ({e.landing}) {e.widthFt}' × {e.depthFt}' · {e.roof === 'none' ? 'no cover' : e.roof === 'flat' ? 'flat canopy' : `${e.roof} roof`}
+                    {e.posts > 0 ? ` · ${e.posts} posts` : ''}
+                    {e.guard ? ` · 36" ${e.railStyle === 'cable' ? 'cable rail' : 'guard'}` : ''}
+                    {e.risers > 0 ? ` · ${e.risers} riser${e.risers === 1 ? '' : 's'} @ ${e.riserIn.toFixed(2)}"` : ' · at grade'}
+                  </span>
+                ) : null,
               )}
             </div>
           )}
