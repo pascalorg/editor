@@ -1002,6 +1002,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         bayWidth,
         floorElevation: SLAB_ELEVATION_M,
         gradeY: flightGrade,
+        gradeAt: localGrade,
         overhang: (style.overhangIn * IN) / Math.cos(Math.atan(porchPitch / 12)),
         // the cover is sized against the house roof it dies into (W19b)
         housePlateY: ceilingM,

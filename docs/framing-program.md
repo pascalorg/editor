@@ -413,6 +413,27 @@ G16 Slab houses get concrete porches front and rear; the porch ceiling is 9 ft (
   G13 posts to grade / 6x6 / stair rails / rail infill, G14 stemwall, G15
   the porch panel.
 
+- 2026-09-06 evening: **Batch C — the porch the way Steve builds it (G13).**
+  Every entrance post is a 6x6 (`ENTRANCE_POST`, 5.5 in; the stucco ranch
+  keeps its 13 in piers, craftsman its taper); on a deck each post is ONE
+  member from the grade under it (`PorchInput.gradeAt`, the build's
+  `localGrade`) up through the deck edge to the beam — no `supportSlabId`,
+  its height the beam over that grade — while a concrete porch's posts stand
+  on the slab, which is on grade itself. The flight gets handrails at three
+  or more risers (PlanCrafters' rule; IRC asks at four) as well as over a
+  guarded landing. The guard's "boxes": the viewer's 'slat' fence draws a
+  picket every 0.3 × postSpacing between its two end posts, so 72 in gave
+  21 in open rectangles — 18 in now reads as balusters 5.4 in on centre (a
+  3.5 in clear gap); and the outer rail runs in one section per bay between
+  the porch posts, so its end posts land at the columns and the flight takes
+  the first bay. Seen in the editor on the farmhouse (seed 1308856731):
+  balusters, wood handrails down the steps, the posts passing the deck rim
+  to the ground. Tests: porch +1 (posts to grade / on the slab), the 6x6 and
+  bay-section expectations — plugin-generate 75, Bones 2,107, editor
+  typecheck clean. Note: the roller's 50-seed test sits at bun's 5 s default
+  timeout on this box (5.07 s once, 4.x s on rerun) — environmental, not a
+  regression.
+
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
   reference folder; Pascal roof node, Bones roof/wall framing, generate build, site
   and parcel code read. Diagnosis above. Starting W1.

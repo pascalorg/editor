@@ -9,8 +9,9 @@
  *     porches, front and rear — or a WOOD DECK (`metadata.floor: 'deck'`,
  *     decking one inch below the threshold so it sheds water) on a raised
  *     house — Bones frames the deck (ledger, joists, beam on posts, pads);
- *   - `column` posts at the outer corners, ≤ 8 ft apart, sized and shaped by
- *     the style (craftsman tapers them, the stucco ranch gets 13 in piers);
+ *   - `column` posts (6x6) at the outer corners, one each side of the flight,
+ *     ≤ 8 ft apart, shaped by the style (craftsman tapers them, the stucco
+ *     ranch gets 13 in piers); on a deck each runs from grade to the beam;
  *   - `fence` guards (36 in, IRC R312) on a full porch and every deck — and
  *     on any landing more than 30 in above grade, where the code demands
  *     one: balusters at a 4 in-sphere gap, or cable rail for the moderns;
@@ -120,8 +121,10 @@ export interface PorchInput {
   bayWidth: number
   /** Finish floor: the house floor's walking surface, level-local y. */
   floorElevation: number
-  /** Grade, level-local y (negative when the building stands above the site). */
+  /** Grade at the foot of the steps, level-local y (negative when the building stands above the site). */
   gradeY: number
+  /** Grade under any plan point, level-local y — a deck's posts run down to it. Default: `gradeY` everywhere. */
+  gradeAt?: (x: number, z: number) => number
   /** Eave overhang for the cover, metres along the slope. */
   overhang: number
   /** The door wall's roof role from the auto roof (`metadata.roof.role`); absent = stop at the wall. */
@@ -222,19 +225,22 @@ export function railStyleFor(style: StylePreset): RailStyle {
   return style.key.startsWith('modern') ? 'cable' : 'baluster'
 }
 
-/** The posts: craftsman tapered, the stucco ranch's 13 in piers, else square (PlanCrafters pillarStyle). */
+/** The entrance post: a 6x6 (Steve, 2026-09-06: "nice 6x6 posts typically on these entrances, not 4x4"). */
+export const ENTRANCE_POST = inches(5.5)
+
+/**
+ * The posts: a 6x6 everywhere (craftsman's tapered), the stucco ranch's
+ * 13 in piers (PlanCrafters pillarStyle). The size is the user's to change
+ * on the porch afterwards (G15).
+ */
 export function pillarFor(
   style: StylePreset,
   policy: PorchPolicy,
 ): { size: number; tapered: boolean; stucco: boolean } {
-  if (policy === 'none') return { size: inches(6), tapered: false, stucco: false }
+  if (policy === 'none') return { size: ENTRANCE_POST, tapered: false, stucco: false }
   const stucco = style.exteriorAssembly === 'exterior-2x6-stucco' && style.roofForm === 'hip'
   if (stucco) return { size: STUCCO_PIER, tapered: false, stucco: true }
-  return {
-    size: policy === 'full' || policy === 'deck' ? inches(7) : inches(5.5),
-    tapered: style.key === 'craftsman',
-    stucco: false,
-  }
+  return { size: ENTRANCE_POST, tapered: style.key === 'craftsman', stucco: false }
 }
 
 /** What the cover becomes once it is sized against the house roof. */
@@ -503,16 +509,21 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
   }
   for (const a of along) {
     const [px, pz] = P(a, depth - inset)
+    // A deck's post is one 6x6 from its footing to the beam, through the
+    // deck's edge (Steve: "the posts should go down to the grade wherever
+    // that might be"); a concrete porch's stands on the slab, which is on
+    // grade itself.
+    const footY = wood ? round(input.gradeAt?.(px, pz) ?? input.gradeY) : null
     ops.push({
       node: {
         id: ids.column(),
         type: 'column',
         name: pillar.stucco ? 'Porch pier' : 'Porch post',
         parentId: input.levelId,
-        position: [px, 0, pz],
+        position: [px, footY ?? 0, pz],
         rotation: round(Math.atan2(-az, ax)),
-        supportSlabId: ids.slab,
-        height: round(postHeight),
+        ...(footY === null ? { supportSlabId: ids.slab } : {}),
+        height: round(footY === null ? postHeight : cover.coverY - footY),
         style: 'plain',
         crossSection: 'square',
         width: round(pillar.size),
@@ -559,7 +570,10 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         thickness: inches(4),
         fillToFloor: !wood,
         materialPreset: wood ? 'library:wood-floorplank1' : 'library:concrete-raw',
-        railingMode: rise > GUARD_REQUIRED_ABOVE ? 'both' : 'none',
+        // handrails down the flight: PlanCrafters gives a flight of three or
+        // more risers its rails (IRC R311.7.8 asks at four); a guarded
+        // landing's flight always has them
+        railingMode: risers >= 3 || rise > GUARD_REQUIRED_ABOVE ? 'both' : 'none',
         railingHeight: inches(34),
         children: [ids.stairSegment],
         metadata: meta,
@@ -603,13 +617,16 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
           parentId: input.levelId,
           start: s,
           end: e,
-          // balusters: vertical infill under the 4 in-sphere rule (R312.1.3);
-          // cable: horizontal runs 3 in apart on slim posts
+          // balusters: vertical infill under the 4 in-sphere rule (R312.1.3)
+          // — the viewer's 'slat' fence draws a picket every 0.3 × postSpacing
+          // between its two end posts, so 18 in here is 5.4 in on centre, a
+          // 3.5 in clear gap between 2 in pickets (72 in read as open boxes);
+          // cable: horizontal runs 3 in apart on slim posts every 4 ft
           style: cable ? 'horizontal' : 'slat',
           height: round(GUARD_HEIGHT),
           thickness: cable ? inches(0.5) : inches(1.5),
           slatGap: cable ? inches(3) : inches(3.5),
-          postSpacing: inches(cable ? 48 : 72),
+          postSpacing: inches(cable ? 48 : 18),
           postSize: inches(cable ? 2 : 3.5),
           baseHeight: inches(3),
           baseStyle: 'grounded',
@@ -624,13 +641,19 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
     // sides, from the wall face to the outer post line
     rail(-hw + railInset, 0, -hw + railInset, o)
     rail(hw - railInset, 0, hw - railInset, o)
-    // the outer edge, either side of the stair opening
+    // the outer edge, either side of the stair opening, one rail section
+    // per bay so its end posts land at the porch posts (Steve: "the posts
+    // for rails go between" the columns; the flight takes the first bay)
+    const outer = (a0: number, a1: number) => {
+      const stops = [a0, ...along.filter((a) => a > a0 + inches(6) && a < a1 - inches(6)), a1]
+      for (let i = 0; i + 1 < stops.length; i++) rail(stops[i] as number, o, stops[i + 1] as number, o)
+    }
     const half = risers > 0 ? stairWidth / 2 : 0
     if (risers > 0) {
-      rail(-hw + railInset, o, -half, o)
-      rail(half, o, hw - railInset, o)
+      outer(-hw + railInset, -half)
+      outer(half, hw - railInset)
     } else {
-      rail(-hw + railInset, o, hw - railInset, o)
+      outer(-hw + railInset, hw - railInset)
     }
   }
 
