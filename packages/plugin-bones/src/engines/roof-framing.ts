@@ -273,30 +273,20 @@ export function frameRoofs(
     }
   }
   // Valleys where two gable segments cross (LOD 350).
+  let trimmed: Member[] = members
   if (spec.detail !== '200') {
     const valleys = detectValleys(roofs)
     for (const valley of valleys) emitValley(valley, spec, members)
-    // B6: a valley MINOR's deck plane keeps running past the valley line
-    // (the detector's stated overlay-framing assumption — its rafters
-    // already overlay the main roof). Cheap honesty over expensive
-    // clipping — as a FLAG, not a label suffix: labels never print on the
-    // sheets, flags reach the takeoff Flags rows and the schedules flag
-    // block (round-1 examiner F3: zero paper hits while the un-clipped
-    // panels visibly overlaid the major).
-    const minors = new Set(valleys.map((v) => v.minorId))
-    if (minors.size > 0) {
-      for (const m of members) {
-        if ((m.role === 'sheathing' || m.role === 'wrb') && minors.has(m.sourceId)) {
-          m.flag =
-            'roof deck/underlayment overlays the main roof past the valley — trim to the valley line on site (overlay framing)'
-        }
-      }
-    }
+    // W16e: the join is trimmed with the knife, not a flag — the wing's
+    // rafters inside the main go (the valley jacks ARE those rafters), the
+    // wing's other members are cut where they run under the main's plane,
+    // the main's eave trim is cut where it runs under the wing's planes.
+    trimmed = trimValleyJoins(valleys, roofs, members)
   }
   // W16c: a parallel wing running under the main — its buried members go,
   // the straddlers are cut at the junction (every LOD: buried wood is not
   // schematic, it is wrong).
-  return stableMembers(buryWings(roofs, members))
+  return stableMembers(buryWings(roofs, trimmed))
 }
 
 type Emit = (
@@ -4273,6 +4263,90 @@ export function detectValleys(roofs: RoofSegmentSlice[]): ValleyLine[] {
         })
       }
     }
+  }
+  return out
+}
+
+// ---------------------------------------------------------------------------
+// Valley join trims (W16e) — the overlay convention made honest with the
+// knife. California-valley practice: the MAIN roof is framed and decked
+// straight through; the WING'S rafters are jacks from its ridge down to the
+// valley (emitValley emits them), its deck and everything else stop at the
+// valley line, and the main's eave trim (fascia, drip edge) comes out where
+// the wing's planes pass over it.
+// ---------------------------------------------------------------------------
+
+/**
+ * Trim every served valley pair: the wing's rafters inside the main's
+ * footprint go (the jacks are those rafters, ridge to valley); its other
+ * members are cut wherever they sit inside the main's footprint under the
+ * main's plane (beyond the valley); the main's fascia and drip edge are cut
+ * wherever they sit inside the wing's reach under the wing's planes.
+ */
+export function trimValleyJoins(
+  valleys: readonly ValleyLine[],
+  roofs: readonly RoofSegmentSlice[],
+  members: Member[],
+): Member[] {
+  const pairs = new Map<string, { major: RoofSegmentSlice; minor: RoofSegmentSlice }>()
+  for (const v of valleys) {
+    const minor = roofs.find((r) => r.id === v.minorId)
+    if (minor === undefined) continue
+    pairs.set(`${v.major.id}|${minor.id}`, { major: v.major, minor })
+  }
+  let out = members
+  for (const { major, minor } of pairs.values()) {
+    const inFootprint = (roof: RoofSegmentSlice, px: number, pz: number) => {
+      const [x, z] = toSegmentPlan(roof, px, pz)
+      return Math.abs(x) <= roof.width / 2 + EPS && Math.abs(z) <= roof.depth / 2 + EPS
+    }
+    const inReach = (roof: RoofSegmentSlice, px: number, pz: number) => {
+      const [x, z] = toSegmentPlan(roof, px, pz)
+      const tip = tipOf(roof)
+      return (
+        Math.abs(x) <= roof.width / 2 + roof.overhang + EAVE_TRIM + EPS &&
+        Math.abs(z) <= roof.depth / 2 + tip + EAVE_TRIM + EPS
+      )
+    }
+    const planeOf = (roof: RoofSegmentSlice, px: number, pz: number): number | null => {
+      const [x, z] = toSegmentPlan(roof, px, pz)
+      return roofPlaneAt(roof, x, z)
+    }
+    const minorRafterCovered = (px: number, pz: number) => inFootprint(major, px, pz)
+    // a wing member inside the main is buried where the wing's plane runs
+    // under the main's (beyond the valley) OR where the member itself sits
+    // under the main's plane (a ceiling joist or purlin of the wing at plate
+    // height inside the house — under the exposed wing roof, but inside the
+    // main's attic all the same); a collar tie up in the wing's exposed
+    // attic stays
+    const minorCoveredFor = (m: Member) => {
+      const top = m.position[1] + m.dims[1] / 2
+      return (px: number, pz: number) => {
+        if (!inFootprint(major, px, pz)) return false
+        const yMinor = planeOf(minor, px, pz)
+        const yMajor = planeOf(major, px, pz)
+        if (yMinor === null || yMajor === null) return false
+        return yMinor <= yMajor + BURIAL_TOLERANCE || top <= yMajor + BURIAL_TOLERANCE
+      }
+    }
+    const majorTrimCovered = (px: number, pz: number) => {
+      if (!inReach(minor, px, pz)) return false
+      const yMinor = planeOf(minor, px, pz)
+      const yMajor = planeOf(major, px, pz)
+      return yMinor !== null && yMajor !== null && yMajor < yMinor - BURIAL_TOLERANCE
+    }
+    const minorNote = ` — cut at the valley with roof ${major.id} (the wing stops at the main's plane)`
+    const majorNote = ` — cut where the wing ${minor.id} passes over the eave`
+    const next: Member[] = []
+    for (const m of out) {
+      if (m.sourceId === minor.id) {
+        if (m.role === 'rafter') next.push(...clipMemberBy(m, minorRafterCovered, minorNote))
+        else next.push(...clipMemberBy(m, minorCoveredFor(m), minorNote))
+      } else if (m.sourceId === major.id && (m.role === 'fascia' || m.role === 'drip-edge')) {
+        next.push(...clipMemberBy(m, majorTrimCovered, majorNote))
+      } else next.push(m)
+    }
+    out = next
   }
   return out
 }

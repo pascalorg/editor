@@ -1059,3 +1059,26 @@ W18 Shed rafters on interior bearing walls — DONE 2026-09-06 (see log): the mo
   (bearing kind, no plate, taller studs upslope), interpenetration +1,
   the seat test's pediment expectation — Bones 2,102, plugin-sheets 235,
   typecheck clean.
+
+- 2026-09-06 morning: **W16e — the valley join trimmed with the knife.** The
+  valley model kept the wing's full rafters running through the main roof
+  ("overlay framing") beside the valley jacks it also emitted, and hung an
+  "overlay — trim on site" flag on the wing's deck. Now `trimValleyJoins`
+  runs after the valleys: the wing's rafters inside the main's footprint go
+  (the valley jacks ARE those rafters, ridge to valley); every other wing
+  member is cut wherever it sits inside the main under the main's plane —
+  beyond the valley, or at plate height inside the house (its ceiling
+  joists, a purlin; a collar tie up in the exposed wing attic stays); the
+  main's fascia and drip edge are cut wherever the wing's planes pass over
+  them (the wing's roof covers that eave). The main's rafters and deck run
+  through underneath (California valley). The overlay flag is retired —
+  its three tests now assert the cut deck / membrane / rafters and the cut
+  main fascia at 400; the valley pair pin recaptured (twice: the first
+  cut missed the wing's joists at plate height). Headless farmhouse porch:
+  zero porch rafters inside the main (6 jacks), porch ridge / deck / wrb /
+  eave trim and the main's eave trim cut, one collar tie left in the
+  porch's exposed attic; QA loop 72 sets, no crashes. Bones 2,102,
+  plugin-sheets 235, typecheck clean. Honest gaps: the valley pair still
+  fails the volume gate (the jacks' boxes overlap the main's deck in the
+  wedge at the line — LOD 350 geometry, the gate case stays disabled);
+  the wing's rafter stations and the jack stations differ by up to a bay.

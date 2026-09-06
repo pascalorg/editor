@@ -1043,7 +1043,7 @@ describe('LOD-400 B6a: roof deck panels per slope plane (R803.2)', () => {
     expect(deckOf(members)).toHaveLength(0)
   })
 
-  test('valley MINOR deck carries the overlay trim FLAG (prints in the Flags block); the major stays clean', () => {
+  test('valley MINOR deck is TRIMMED at the valley (W16e): no strip runs on under the main, no overlay flag; the major deck runs through', () => {
     const major = seg()
     const minor = seg({
       id: 'roofseg_wing',
@@ -1053,17 +1053,30 @@ describe('LOD-400 B6a: roof deck panels per slope plane (R803.2)', () => {
       position: [1, 2.5, 4],
     })
     const members = frameRoofs([major, minor], [], DEFAULT_SPEC)
+    const alone = frameRoofs([minor], [], DEFAULT_SPEC)
     const minorDeck = deckOf(members).filter((m) => m.sourceId === 'roofseg_wing')
     const majorDeck = deckOf(members).filter((m) => m.sourceId === major.id)
     expect(minorDeck.length).toBeGreaterThan(0)
-    // FLAG, not a label suffix — round-1 examiner F3: the label note never
-    // printed anywhere across 13 sheets. Flags reach the takeoff Flags rows
-    // and the schedules flag block.
+    // the overlay flag is retired — the deck is cut instead
+    for (const m of [...minorDeck, ...majorDeck]) expect(m.flag ?? '').not.toContain('valley')
+    // the wing's planes: y = 3.0 + (2 − |x − 1|)·tan; the main's: y = 3.0 + (3 − |z|)·tan
+    const tan = Math.tan(major.pitch)
+    const wing = (x: number) => 3.0 + (2 - Math.abs(x - 1)) * tan
+    const main = (z: number) => 3.0 + (3 - Math.abs(z)) * tan
+    // every kept wing strip end sits where the wing plane is at/above the main plane
     for (const m of minorDeck) {
-      expect(m.flag).toContain('trim to the valley line')
-      expect(m.label).not.toContain('valley overlay')
+      const axis = longAxis(m)
+      for (const sgn of [-1, 1]) {
+        const x = (m.position[0] as number) + sgn * axis.x * (m.dims[0] / 2)
+        const z = (m.position[2] as number) + sgn * axis.z * (m.dims[0] / 2)
+        if (Math.abs(x) <= 4 && Math.abs(z) <= 3)
+          expect(wing(x)).toBeGreaterThanOrEqual(main(z) - 0.1)
+      }
     }
-    for (const m of majorDeck) expect(m.flag ?? '').not.toContain('valley')
+    // the wing lost deck area to the cut; the main's deck is untouched
+    const area = (ms: Member[]) => ms.reduce((a, m) => a + m.dims[0] * m.dims[2], 0)
+    expect(area(minorDeck)).toBeLessThan(area(deckOf(alone)))
+    expect(majorDeck.length).toBe(deckOf(frameRoofs([major], [], DEFAULT_SPEC)).length)
   })
 })
 
@@ -1129,7 +1142,9 @@ describe('LOD-400 B6b: underlayment rides every deck panel 1:1 (R905.1.1)', () =
     const members = frameRoofs([major, minor], [], DEFAULT_SPEC)
     const wingMembrane = members.filter((m) => m.role === 'wrb' && m.sourceId === 'roofseg_wing')
     expect(wingMembrane.length).toBeGreaterThan(0)
-    for (const u of wingMembrane) expect(u.flag).toContain('trim to the valley line')
+    // W16e: the membrane is cut with the deck — no overlay flag rides it
+    for (const u of wingMembrane) expect(u.flag ?? '').not.toContain('trim to the valley line')
+    expect(wingMembrane.some((u) => u.label?.includes('cut at the valley'))).toBe(true)
   })
 })
 
@@ -1231,7 +1246,7 @@ describe('B6 fix round: trim gaps are flagged members, not commit-message asides
     }
   })
 
-  test('the valley overlay flag reaches the takeoff Flags section', () => {
+  test('W16e: the wing keeps no rafter inside the main (the valley jacks are those rafters); no overlay flag books', () => {
     const major = seg()
     const minor = seg({
       id: 'roofseg_wing',
@@ -1241,12 +1256,35 @@ describe('B6 fix round: trim gaps are flagged members, not commit-message asides
       position: [1, 2.5, 4],
     })
     const members = frameRoofs([major, minor], [], DEFAULT_SPEC)
-    const rows = computeTakeoff(members, [])
-    const row = rows.find(
-      (r) => r.section === 'Flags' && r.detail.includes('trim to the valley line'),
+    const wingRafters = members.filter(
+      (m) => m.sourceId === 'roofseg_wing' && m.role === 'rafter' && !m.label?.includes('Barge'),
     )
-    expect(row).toBeDefined()
-    expect(row?.quantity).toBeGreaterThan(0)
+    expect(wingRafters.length).toBeGreaterThan(0)
+    // every kept wing rafter runs outside the main's footprint (|z| > 3)
+    for (const r of wingRafters) expect(Math.abs(r.position[2] as number)).toBeGreaterThan(3)
+    const jacks = members.filter((m) => m.label?.includes('Valley jack'))
+    expect(jacks.length).toBeGreaterThan(0)
+    // nothing of the wing's ridge runs on under the main past the apex (z = 1) —
+    // this fixture's ridge ends at z = 2, above the main plane, so it is untouched
+    const ridge = members.find((m) => m.sourceId === 'roofseg_wing' && m.role === 'ridge') as Member
+    const zLo = (ridge.position[2] as number) - ridge.dims[0] / 2
+    expect(zLo).toBeGreaterThanOrEqual(1 - 0.06)
+    // the main's eave fascia (LOD 400 trim) is cut where the wing passes over
+    // it: its pieces avoid x ∈ (−1, 3) on the +z eave
+    const at400 = frameRoofs([major, minor], [], { ...DEFAULT_SPEC, detail: '400' })
+    const mainFascia = at400.filter(
+      (m) => m.sourceId === major.id && m.role === 'fascia' && (m.position[2] as number) > 3,
+    )
+    expect(mainFascia.length).toBeGreaterThan(1)
+    for (const f of mainFascia) {
+      const x0 = (f.position[0] as number) - f.dims[0] / 2
+      const x1 = (f.position[0] as number) + f.dims[0] / 2
+      expect(x1 <= -1 + 0.08 || x0 >= 3 - 0.08).toBe(true)
+    }
+    const rows = computeTakeoff(members, [])
+    expect(
+      rows.some((r) => r.section === 'Flags' && r.detail.includes('trim to the valley line')),
+    ).toBe(false)
   })
 })
 
@@ -1720,6 +1758,10 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
   //  their tops under the plane that slopes ACROSS the high wall (the flat-
   //  topped studs poked into the rafters) — the four shed pins recaptured;
   //  flat holds.
+  // 2026-09-06 INTENDED-CHANGE (W16e valley trims): the wing's rafters inside
+  //  the main go, its deck / membrane / drip edge are cut at the valley, the
+  //  main's eave fascia + drip edge are cut under the wing — the valley pair
+  //  recaptured.
   const hashOf = (members: Member[]): string =>
     createHash('sha256').update(JSON.stringify(members)).digest('hex').slice(0, 16)
   const PINS: [string, Partial<RoofSegmentSlice>, Partial<FramingSpec>, string][] = [
@@ -1752,7 +1794,7 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
       [],
       { ...DEFAULT_SPEC, detail: '400' },
     )
-    expect(hashOf(members)).toBe('2dfdcb2bb5b904a0')
+    expect(hashOf(members)).toBe('59f6dda3a7a133e4')
   })
 })
 
