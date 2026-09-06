@@ -568,6 +568,44 @@ describe('wall bracing (S4.0)', () => {
   })
 })
 
+describe('typical details (S5.x)', () => {
+  test('the details plate draws the wall, foundation, eave and opening details from the framed variables, numbered and scaled', () => {
+    const result = draw(cottage(), 'details', {
+      viewport: { x: 1, y: 1, w: 33, h: 21, scale: 48 },
+    })
+    expect(result.primitives).toHaveLength(0)
+    const t = textOf(result.plate ?? [])
+    expect(t).toContain('TYPICAL DETAILS')
+    expect(t).toContain('TYPICAL EXTERIOR WALL')
+    expect(t).toContain('FOUNDATION @ EXT. WALL')
+    expect(t).toContain('TYPICAL EAVE')
+    expect(t).toContain('WINDOW HEAD & SILL')
+    // every panel prints the scale the sheet allowed, never a nominal
+    expect(t).toMatch(/SCALE: [\d/-]+" = 1'-0"/)
+    // the stud the wall engine framed is what the wall detail calls out
+    expect(t).toMatch(/2X[46] STUDS @ \d+" O\.C\./)
+    writeSvg('s5-details', result.plate ?? [], 0.4)
+  })
+
+  test('the set plans an S5.0 sheet for the details', () => {
+    const nodes = cottage()
+    const plans = structuralPlans({
+      nodes,
+      frame: { x: 1, y: 1, w: 30, h: 21 },
+      gap: 0.5,
+      planScale: 48,
+      elevationScale: 48,
+      levels: Object.values(nodes).filter((n) => n?.type === 'level'),
+      hasBones: false,
+      archScales: [],
+      civilScales: [],
+    } as never)
+    const details = plans.find((p) => p.number === 'S5.0')
+    expect(details).toBeDefined()
+    expect(details?.viewports[0]?.system).toBe('details')
+  })
+})
+
 describe('structural notes (SN1)', () => {
   test('design criteria come from the jurisdiction data with their caveats', () => {
     const result = draw(cottage(), 'notes', {

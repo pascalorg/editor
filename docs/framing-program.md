@@ -536,6 +536,31 @@ G16 Slab houses get concrete porches front and rear; the porch ceiling is 9 ft (
   60 in tub in the catalog would furnish the small baths the way they are
   built; a fixture / furniture schedule on the sheets (G9).
 
+- 2026-09-06 night: **Batch G — the typical details on the Sheets tool
+  (G9).** The Sheets tool already drew the S-series live from Bones (S1.0
+  foundation, S2.x floor framing, S3.0 roof framing, S4.0 bracing, SN1
+  notes, their schedules) and carries a fixture schedule that the placed
+  items now feed; what it lacked was Bones' typical details, which only the
+  Bones panel's own plan set printed. New `providers/structural/details.ts`:
+  the `details` system (and `details-2` … for the next page) renders Bones'
+  `DETAILS` — typical exterior wall, foundation at the exterior wall, eave,
+  window head and sill, the deck and porch ledgers where they apply — from
+  `detailVariables(members, spec, foundation)` (the stud, rafter and joist
+  sizes and spacings the engines used, the assembly layers, the footing and
+  stem poured, the finish floor above grade from the building's foundation
+  record) into plate geometry: each detail fitted to a 3 × 2 panel at the
+  largest scale that fits (printed under the caption — never a nominal),
+  its notes packed down a right column with elbow leaders to their anchors,
+  a numbered hexagon caption, the provenance line as the plate's subtitle.
+  `structural-set.ts` plans S5.0 (S5.1 … when more than six apply). Looked
+  at as SVG in the browser pane: four panels on the cottage — wall section
+  with its batt and layers, foundation with slab and stem, eave with
+  rafter, tie and blocking, window head and sill. Tests: structural +2
+  (the plate's titles, scale line and the framed stud callout; the set
+  plans S5.0) — plugin-sheets 237, editor typecheck clean. Open on G9:
+  Bones' framing sections (the cut through the framed model) as a Sheets
+  drawing; the Bones panel's own plan set keeps printing its details too.
+
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
   reference folder; Pascal roof node, Bones roof/wall framing, generate build, site
   and parcel code read. Diagnosis above. Starting W1.

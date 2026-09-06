@@ -22,6 +22,9 @@
  *   wall-bracing ........... S4.0 plan: IRC R602.10 braced wall lines
  *   bracing-schedules ...... BRACED WALL LINE SCHEDULE + notes
  *   notes .................. SN1: design criteria, materials, fastening
+ *   details ................ S5.x: the typical details (wall, foundation, eave,
+ *                            opening, deck and porch ledgers) drawn from the
+ *                            framed variables; `details-2` … for the next page
  *
  * THE RULE THIS FILE KEEPS: no invented numbers. Every dimension, spacing and
  * size printed here is either a member's own geometry, a value from the
@@ -42,6 +45,7 @@ import {
   bracingScheduleTable,
   hasBracedWallLines,
 } from './structural/bracing'
+import { detailsPageCount, detailsPlate } from './structural/details'
 import { pen } from './structural/draw'
 import {
   anchorageScheduleTable,
@@ -98,8 +102,11 @@ export const STRUCTURAL_SYSTEMS = [
   'wall-bracing',
   'bracing-schedules',
   'notes',
+  'details',
 ] as const
 export type StructuralSystem = (typeof STRUCTURAL_SYSTEMS)[number]
+
+export { detailsPageCount }
 
 export function buildStructuralDrawing(nodes: NodeMap, args: ProviderArgs): DrawingResult | null {
   const box: Box = args.viewport
@@ -114,6 +121,17 @@ export function buildStructuralDrawing(nodes: NodeMap, args: ProviderArgs): Draw
     return plateOnly(viewportNote(box, noWallsNote(model)), `Structural — ${model.levelLabel}`, [
       `${model.levelLabel} has no walls: the framing engines have nothing to derive.`,
     ])
+  }
+
+  // the typical details paginate: 'details', 'details-2', 'details-3' …
+  if (system === 'details' || String(system).startsWith('details-')) {
+    const page = Math.max(1, Number.parseInt(String(system).split('-')[1] ?? '1', 10) || 1)
+    const drawn = detailsPlate(model, nodes, box, page)
+    return plateOnly(
+      drawn.plate,
+      page > 1 ? `Typical details (${page})` : 'Typical details',
+      [...drawn.warnings, ...modelWarnings(model)],
+    )
   }
 
   switch (system) {

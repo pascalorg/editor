@@ -1,6 +1,8 @@
 /**
  * The S-series, as sheets.
  *
+ *   S5.x  Typical details               six framed details a sheet, from the
+ *                                       ground storey's variables
  *   S1.0  Foundation & anchorage plan  plan + footing/anchorage schedules,
  *                                      foundation legend, cited notes
  *   S2.x  Floor framing plan           one per level that HAS a framed floor
@@ -19,7 +21,7 @@
  * foundation-plan fallback; numbers this module does not return keep whatever
  * the generator planned.
  */
-import { hasBracedWallLines, structuralModel } from '../providers/structural'
+import { detailsPageCount, hasBracedWallLines, structuralModel } from '../providers/structural'
 import { DEFAULT_VIEWPORT_LAYERS } from '../schema'
 import type { Plan, PlanSetContext } from './context'
 
@@ -262,6 +264,30 @@ export function structuralPlans(ctx: PlanSetContext): Plan[] {
       },
     ],
   })
+
+  /* ── S5.x — typical details, from the ground storey's framed variables ── */
+  if (foundationModel) {
+    const pages = detailsPageCount(foundationModel, ctx.nodes)
+    for (let page = 1; page <= pages; page++) {
+      const title = page > 1 ? `Typical details (${page})` : 'Typical details'
+      plans.push({
+        number: `S5.${page - 1}`,
+        title,
+        viewports: [
+          {
+            kind: 'structural',
+            system: page > 1 ? `details-${page}` : 'details',
+            levelId: ground.id,
+            title,
+            x: frame.x,
+            y: top,
+            w: frame.w,
+            h: fieldH,
+          },
+        ],
+      })
+    }
+  }
 
   return plans
 }
