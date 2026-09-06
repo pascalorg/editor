@@ -4,7 +4,7 @@
  * the parcel, select its level. The heavy lifting is pure (`roll.ts`,
  * `build.ts`); this file is the only one that touches the stores.
  */
-import { useScene } from '@pascal-app/core'
+import { heightAt, type SiteNode, terrainFieldOf, useScene } from '@pascal-app/core'
 import { buildSitePlanDrawing } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { buildHouse, GENERATED_BY, type Placement } from './build'
@@ -128,9 +128,12 @@ function applyDocument(
   const previous = generatedBuilding()
   const reuse =
     previous && (!site || nodes[previous.buildingId]?.parentId === site.id) ? previous : null
+  // The ground: the site's USGS heightfield, when the lot drop-in read one.
+  const field = site ? terrainFieldOf(site as unknown as SiteNode) : null
   const built = buildHouse(document, {
     placement,
     siteId: site?.id ?? null,
+    gradeAt: field ? (x, z) => heightAt(field, x, z) : null,
     reuse,
     generation: {
       seed: meta.seed,

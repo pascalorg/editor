@@ -5,6 +5,7 @@
  * this and instances the result.
  */
 
+import { decodeTerrainField, heightAt, type TerrainField } from '@pascal-app/core'
 import { DEFAULT_SPEC, type FramingSpec } from '../core/spec'
 import { stableFixtures, stableMembers } from '../core/stable'
 import type {
@@ -168,6 +169,65 @@ const memo = new WeakMap<
 
 /** The building's foundation record: floor system and finish floor above grade (metres). */
 export type FoundationRecord = { type: 'slab' | 'raised'; ffAboveGradeM: number }
+
+/** Decoded heightfields by their persisted data object — decoding is not free and the scene store is immutable-by-convention. */
+const terrainCache = new WeakMap<object, TerrainField | null>()
+
+/**
+ * The GROUND under a level (W14): the site's USGS heightfield (the lot
+ * drop-in wrote it; `site.terrain`) read through the building's position
+ * and yaw, as a level-local function of plan position. `null` when the
+ * building's site carries no terrain — flat ground, the constant grade.
+ */
+export function groundGradeOf(
+  nodes: Record<string, Record<string, unknown>>,
+  building: Record<string, unknown> | undefined,
+  levelBaseY: number,
+): ((x: number, z: number) => number) | null {
+  if (!building) return null
+  const siteId = typeof building.parentId === 'string' ? building.parentId : null
+  const site = siteId ? nodes[siteId] : undefined
+  if (site?.type !== 'site' || !site.terrain || typeof site.terrain !== 'object')
+    return null
+  const data = site.terrain as object
+  let field = terrainCache.get(data)
+  if (field === undefined) {
+    field = decodeTerrainField(data)
+    terrainCache.set(data, field)
+  }
+  if (!field) return null
+  const pos = Array.isArray(building.position) ? (building.position as number[]) : [0, 0, 0]
+  const rot = Array.isArray(building.rotation) ? (building.rotation as number[]) : [0, 0, 0]
+  const px = pos[0] ?? 0
+  const py = pos[1] ?? 0
+  const pz = pos[2] ?? 0
+  const yaw = rot[1] ?? 0
+  const cos = Math.cos(yaw)
+  const sin = Math.sin(yaw)
+  const f = field
+  // world = position + R(yaw)·local (three.js: local +x → (cos, −sin), local +z → (sin, cos))
+  return (x, z) => heightAt(f, px + x * cos + z * sin, pz - x * sin + z * cos) - py - levelBaseY
+}
+
+/** Posts (platform girders, decks) run to their OWN grade on a hill (R507.3, R407.3). */
+export function seatPostsOnGrade(
+  members: Member[],
+  gradeAt: (x: number, z: number) => number,
+): void {
+  for (let i = 0; i < members.length; i++) {
+    const m = members[i] as Member
+    if (m.role !== 'post' || m.system !== 'floor-framing') continue
+    const top = m.position[1] + m.dims[1] / 2
+    const bottom = gradeAt(m.position[0], m.position[2])
+    if (!Number.isFinite(bottom) || top - bottom < 0.05) continue
+    members[i] = {
+      ...m,
+      dims: [m.dims[0], top - bottom, m.dims[2]],
+      length: top - bottom,
+      position: [m.position[0], (top + bottom) / 2, m.position[2]],
+    }
+  }
+}
 
 /**
  * `metadata.foundation` on the building node — `{ type: 'slab' | 'raised',
@@ -531,6 +591,18 @@ function computeLevelUncached(
   const foundation = foundationOf(myBuilding ? nodes[myBuilding] : undefined)
   const gradeY = isGroundLevel ? -foundation.ffAboveGradeM : 0
   const raisedFloor = isGroundLevel && foundation.type === 'raised'
+  // The ground under this level (W14): the site's heightfield through the
+  // building, level-local — or the constant grade on flat ground (every
+  // scene without terrain byte-identical).
+  const ground = isGroundLevel
+    ? groundGradeOf(
+        nodes,
+        myBuilding ? nodes[myBuilding] : undefined,
+        levels[levelIndex]?.baseY ?? 0,
+      )
+    : null
+  const hilly = ground !== null
+  const gradeAt: (x: number, z: number) => number = ground ?? (() => gradeY)
 
   // Slabs feed the exterior fallback: hosts often mark BOTH wall faces
   // 'interior' (quality round-1 A1) — flooring says which side is in.
@@ -935,6 +1007,7 @@ function computeLevelUncached(
         warnings.push('No floor platform on this level — rooms have no floor to derive')
       } else {
         groundPlatform = frameFloor(platformSlabs, activeWalls, spec, Math.max(0.1, -gradeY))
+        if (hilly) seatPostsOnGrade(groundPlatform, gradeAt)
         members.push(...groundPlatform)
         warnings.push(
           `Ground floor is a framed platform over a crawl space (finish floor ${Math.round(foundation.ffAboveGradeM / 0.0254)}" above grade) — joists on a PT mudsill on the stemwall, girder posts on pads, Class I ground cover (R408)`,
@@ -976,8 +1049,17 @@ function computeLevelUncached(
             (levels[levelIndex]?.baseY ?? 0) -
             (below?.baseY ?? (levels[levelIndex]?.baseY ?? 0) - 2.4)
           )
-      for (const deck of deckSlabs)
-        deckMembers.push(...frameDeck(deck, activeWalls, spec, deckGrade).members)
+      for (const deck of deckSlabs) {
+        // the deck's beam is chosen against the grade under its middle; each post then runs to its own
+        let deckGradeHere = deckGrade
+        if (hilly && isGroundLevel) {
+          const cx = deck.polygon.reduce((s, p) => s + p[0], 0) / deck.polygon.length
+          const cz = deck.polygon.reduce((s, p) => s + p[1], 0) / deck.polygon.length
+          deckGradeHere = gradeAt(cx, cz)
+        }
+        deckMembers.push(...frameDeck(deck, activeWalls, spec, deckGradeHere).members)
+      }
+      if (hilly && isGroundLevel) seatPostsOnGrade(deckMembers, gradeAt)
       members.push(...deckMembers)
       warnings.push(
         `${deckSlabs.length === 1 ? 'A wood deck' : `${deckSlabs.length} wood decks`} framed — PT joists hung on a ledger at the house, a beam (dropped 4x8, or a flush doubled rim on a low deck) on 4x4 posts to grade, pads under the posts (IRC R507)`,
@@ -1095,7 +1177,9 @@ function computeLevelUncached(
     // upper storey renders (walls only sister joists, so [] reproduces the
     // girder/post layout exactly) and pour an R403.1/R407.3 pad under each
     // (buildFoundation carves the slab field around them).
-    const girderPosts: { plan: readonly [number, number]; sourceId: string }[] = []
+    const girderPosts: { plan: readonly [number, number]; sourceId: string; gradeY?: number }[] = []
+    const ownGrade = (plan: readonly [number, number]) =>
+      hilly ? { gradeY: gradeAt(plan[0], plan[1]) } : {}
     const above = levels[levelIndex + 1]
     if (above) {
       const aboveSlabs = extractSlabs(nodes, above.id)
@@ -1110,12 +1194,31 @@ function computeLevelUncached(
     // A raised floor's OWN girder posts bear on pads at the crawl grade too,
     // and so do the deck posts (R507.3: a footing under every deck post).
     for (const m of groundPlatform) {
-      if (m.role === 'post')
-        girderPosts.push({ plan: [m.position[0], m.position[2]], sourceId: m.sourceId })
+      if (m.role !== 'post') continue
+      const plan: [number, number] = [m.position[0], m.position[2]]
+      girderPosts.push({ plan, sourceId: m.sourceId, ...ownGrade(plan) })
     }
     for (const m of deckMembers) {
-      if (m.role === 'post')
-        girderPosts.push({ plan: [m.position[0], m.position[2]], sourceId: m.sourceId })
+      if (m.role !== 'post') continue
+      const plan: [number, number] = [m.position[0], m.position[2]]
+      girderPosts.push({ plan, sourceId: m.sourceId, ...ownGrade(plan) })
+    }
+    if (hilly) {
+      // how much the ground falls under this level's walls — the reader's cue for the stepped footings
+      let hi = Number.NEGATIVE_INFINITY
+      let lo = Number.POSITIVE_INFINITY
+      for (const w of activeWalls) {
+        for (const p of [w.start, w.end]) {
+          const g = gradeAt(p[0], p[1])
+          hi = Math.max(hi, g)
+          lo = Math.min(lo, g)
+        }
+      }
+      if (Number.isFinite(hi) && Number.isFinite(lo)) {
+        warnings.push(
+          `Hillside: the ground under this level falls ${formatIn(hi - lo)} — footings stepped down the hill (R403.1.5), stemwalls grown to match, girder and deck posts on pads at their own grade`,
+        )
+      }
     }
     // The stemwall tops out under the platform: the lowest joist / rim bottom
     // less the mudsill.
@@ -1139,6 +1242,7 @@ function computeLevelUncached(
         girderPosts,
         gradeY,
         raised,
+        ...(hilly ? { gradeAt } : {}),
       }),
     )
     // B9c: tie the foundation's SDC-D hold-downs to the wall framing above

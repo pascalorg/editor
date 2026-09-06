@@ -236,7 +236,7 @@ W10 Porch options — DONE 2026-09-06 (see log; trellis covers, the porch ceilin
     entrance at the slider (covered patio, raised deck on a hill, trellis for
     modern / ranch / craftsman); porch ceiling closed / cathedral; the Bones side:
     posts on pad footings, the porch beam, the ledger (done for sheds), hangers.
-W11 Foundations — flat ground DONE: slab-on-grade or a RAISED floor (crawl space)
+W11 Foundations — flat ground DONE; hills DONE 2026-09-06 as W14 (see log; the daylight basement builder is open): slab-on-grade or a RAISED floor (crawl space)
     chosen PlanCrafters' way, the building datum above grade, Bones framing the
     platform, mudsill, stem from the frost line below GRADE, pads at grade, ground
     cover, and the garage slab at grade with its walls standing on it. Still to do:
@@ -563,3 +563,57 @@ W13 Finishes: PlanCrafters' style palettes applied — siding / roofing / trim /
   and the house/garage separation wall on a slab house with a 4 in drop
   (same mechanism, untested live); a wall on a slab ABOVE the plate line
   (a deck-borne wall) lifts whole but the foundation ignores it.
+
+- 2026-09-06 evening: **W14 landed — hills: USGS terrain on the lot,
+  hillside foundations, stepped footings.** Three layers. (1) The lot
+  drop-in (`packages/editor/src/lib/lot/terrain.ts`, PlanCrafters
+  terrain.js `sampleGrid`) sends a 9 × 9 grid over the padded lot bbox to
+  the existing `/api/parcel/elevation` route (USGS EPQS, keyless, feet),
+  takes the ground at the lot centre as the datum (the site plane y = 0)
+  and writes a bilinear heightfield into `site.terrain` — the same field
+  the sculpt tool edits and every placement / raycast / drape already
+  reads — with the read's provenance on `site.metadata.terrainSample`
+  (source, grid, holes, datum, relief). A lot flatter than 6 in writes
+  nothing (and clears a previous lot's hill); every failure says why and
+  writes nothing; the status line says "terrain: 117.4' of fall across the
+  lot (USGS, 79 pts, 2 unread)". (2) The generator (`build.ts`) now places
+  the building FIRST (x, z, yaw), samples the site's heightfield under the
+  outline (corners, every 2 m along the edges, the centre — `gradeAt` from
+  `terrainFieldOf` + `heightAt` in run.ts), and `foundationFor` takes the
+  PlanCrafters `applyFoundation` hillside branches: > 30 in of fall is
+  basement territory — a 36 in stem with an honest "daylight basement not
+  modelled yet" note — and ≥ 12 in raises the house on a stem sized to the
+  fall (24–36 in, to the half foot); the building's y is the finish floor
+  above the HIGHEST grade under the footprint (TERRAIN-DATUM-SPEC A:
+  nothing wood below grade anywhere), the garage pad drops to ITS local
+  grade (`garageDefaultDrop`: stem − rise, 2–48 in), and each entrance's
+  flight rises from the ground where it lands (a porch on the downhill
+  side of a steep lot gets the flight it really needs — 21 risers on the
+  Placerville run, which is the honest answer and also the cue that the
+  entrance wants the uphill side or a terrace: open). (3) Bones
+  (`groundGradeOf` in compute — the site heightfield read through the
+  building's position / yaw, level-local; flat ground = the constant
+  grade, every scene without terrain byte-identical): the foundation's
+  footing run is sampled every 0.3 m and split into LEVEL segments holding
+  the ground within one 24 in step, each bottoming at the deepest frost
+  line under it, with a vertical step block between neighbours (IRC
+  R403.1.5; a sliver segment folds into its deeper neighbour; a step over
+  24 in flags); the stemwall pours per segment and says how much shows;
+  the girder and deck posts run to their OWN grade (`seatPostsOnGrade`)
+  and their pads pour there; the crawl-space ground cover drapes strip by
+  strip. Tests: `terrain.test.ts` 6, `foundation.test.ts` +3 hillside
+  branches, `build.test.ts` +4 (flat-from-heightfield parity, gentle /
+  downhill / steep slopes), `compute.hillside.test.ts` 6 (stepped and
+  level footings, stem growth, posts and pads at their own grade, draped
+  cover, the flat control) — editor lot 21, generate 58, Bones 2,040,
+  every package typechecks. Live on the Land Park scene: the Placerville
+  foothill preset dropped in with 117 ft of fall across the 2.4-acre lot,
+  136 in under the footprint → 36 in stem, garage pad at its own grade,
+  the hillside note in the run. Honest gaps: no daylight basement builder
+  yet (PlanCrafters' `basement` type: 8 ft walls, 24 in stem); the house is
+  still placed at the front setback square to the street — on a steep lot
+  PlanCrafters would also weigh the slope (and a 21-riser porch says the
+  entrance belongs uphill); the stem height is not yet fed back into the
+  entrance policy (a deck on a 36 in stem reads fine, a slab landing does
+  not arise); the USGS read is ~12 s and holes interpolate (2 of 81
+  unread on the Placerville run).

@@ -248,3 +248,68 @@ describe('Poppy builds into Pascal nodes', () => {
     expect(building.position[0]).toBeCloseTo(18.288 / 2, 3)
   })
 })
+
+describe('on a hill (the site carries a USGS heightfield → gradeAt)', () => {
+  const doc = rollDocument(1499472249, {
+    style: 'farmhouse',
+    beds: 3,
+    baths: 2,
+    garage: true,
+  }).document
+  const IN = 0.0254
+  const buildingOf = (r: ReturnType<typeof buildHouse>) => ofType(r.ops, 'building')[0] as N
+  const garageSlabOf = (r: ReturnType<typeof buildHouse>) =>
+    (ofType(r.ops, 'slab') as N[]).find((s) => s.name === 'Garage slab') as N
+
+  test('flat ground read from a heightfield matches no heightfield at all', () => {
+    const flat = buildHouse(doc, { gradeAt: () => 0 })
+    const none = buildHouse(doc)
+    expect(flat.foundation?.type).toBe(none.foundation?.type)
+    expect(flat.foundation?.ffAboveGradeIn).toBe(none.foundation?.ffAboveGradeIn)
+    expect(flat.foundation?.terrain?.reliefIn).toBe(0)
+    expect(buildingOf(flat).position[1]).toBeCloseTo(buildingOf(none).position[1], 9)
+    expect(garageSlabOf(flat).elevation).toBeCloseTo(garageSlabOf(none).elevation, 9)
+  })
+
+  test('a gentle slope raises the house on a stem sized to the fall, standing on the high side', () => {
+    // 2 % up towards +x: the garage wing (to the right, +x) is uphill
+    const r = buildHouse(doc, { gradeAt: (x) => 0.02 * x })
+    const f = r.foundation!
+    expect(f.type).toBe('raised')
+    expect(f.terrain).toBeDefined()
+    expect(f.terrain!.reliefIn).toBeGreaterThanOrEqual(12)
+    expect(f.ffAboveGradeIn).toBeGreaterThanOrEqual(24)
+    expect(f.ffAboveGradeIn).toBeLessThanOrEqual(36)
+    expect(f.source).toContain('hillside')
+    // the finish floor stands ff above the HIGHEST grade under the footprint
+    expect(buildingOf(r).position[1]).toBeCloseTo(f.terrain!.highestM + f.ffAboveGradeIn * IN, 3)
+    // the garage pad sits at its own grade: the datum is the HIGHEST point of the
+    // whole footprint, so the drop is never less than the stem — and an uphill
+    // garage (this slope) drops far less than a downhill one
+    const g = garageSlabOf(r)
+    expect(g.metadata.dropIn).toBeGreaterThanOrEqual(f.ffAboveGradeIn)
+    expect(g.metadata.dropIn).toBeLessThan(f.ffAboveGradeIn + 6)
+    const downhill = garageSlabOf(buildHouse(doc, { gradeAt: (x) => -0.02 * x }))
+    expect(downhill.metadata.dropIn).toBeGreaterThan(g.metadata.dropIn + 6)
+    expect(g.elevation).toBeCloseTo(0.05 - g.metadata.dropIn * IN, 2)
+    expect(r.warnings.some((w) => /hillside/.test(w))).toBe(true)
+  })
+
+  test('a slope falling towards the garage drops the pad further, never past 48 in', () => {
+    const r = buildHouse(doc, { gradeAt: (x) => -0.02 * x })
+    const g = garageSlabOf(r)
+    expect(g.metadata.dropIn).toBeGreaterThan(r.foundation!.ffAboveGradeIn)
+    expect(g.metadata.dropIn).toBeLessThanOrEqual(48)
+    const steep = buildHouse(doc, { gradeAt: (x) => -0.1 * x })
+    expect(garageSlabOf(steep).metadata.dropIn).toBe(48)
+  })
+
+  test('over 30 in of fall is basement territory: a 36 in stem, said honestly, and longer flights at the entrances', () => {
+    const r = buildHouse(doc, { gradeAt: (_x, z) => 0.06 * z })
+    const f = r.foundation!
+    expect(f.ffAboveGradeIn).toBe(36)
+    expect(f.source).toContain('basement')
+    // the front (−z) is downhill of the house datum: the porch flight rises the full stem and the fall to the landing
+    expect(r.porch?.risers ?? 0).toBeGreaterThan(Math.ceil(36 / 7.75))
+  })
+})

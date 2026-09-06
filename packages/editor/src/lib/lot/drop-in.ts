@@ -12,6 +12,10 @@
  *   4. The scene's site node is updated (created at the root when the scene
  *      has none) and a building that fell outside the new ring is
  *      re-centred on it — `building.position` only, never the walls.
+ *   5. `/api/parcel/elevation` — USGS ground over the lot into the site's
+ *      heightfield (`site.terrain`, terrain.ts; fail-soft, flat lots write
+ *      nothing), so the generator's foundation and Bones' footings can read
+ *      the hill.
  *
  * Used by the Lot rail panel, the Generate panel (drop in, then generate)
  * and the Site inspector's "Find parcel", so every path behaves the same.
@@ -37,6 +41,7 @@ import {
   type ParcelResolveData,
   sitePatchFromParcel,
 } from './lot-patch'
+import { describeTerrainSample, sampleLotTerrain, type TerrainSampleSummary } from './terrain'
 
 export interface LotDropInResult {
   ok: boolean
@@ -47,6 +52,10 @@ export interface LotDropInResult {
   recentred?: boolean
   /** Why no roads were used, when the road lookup failed ('' when it worked). */
   roadsFailure?: string
+  /** The USGS terrain read, when it worked (flat lots write no heightfield). */
+  terrain?: TerrainSampleSummary | null
+  /** Why no terrain was read ('' when it worked). */
+  terrainFailure?: string
   /** One status line. */
   message: string
 }
@@ -57,6 +66,9 @@ export interface DropInOptions {
   /** Skip the road lookup (the front edge stays north-facing). */
   roads?: boolean
   roadsRadiusM?: number
+  /** Skip the USGS terrain read (the ground stays flat). */
+  terrain?: boolean
+  terrainDeadlineMs?: number
   fetchImpl?: typeof fetch
 }
 
@@ -149,6 +161,40 @@ export async function dropInLot(
     }
   useScene.getState().updateNode(site.id as AnyNodeId, computed.patch as Partial<AnyNode>)
 
+  // The ground over the lot — fail-soft. A sloping lot writes the
+  // heightfield; a flat one (or a failed read) clears any terrain the
+  // previous lot left behind so the site never shows another parcel's hill.
+  let terrain: TerrainSampleSummary | null = null
+  let terrainFailure = ''
+  if (options.terrain !== false && data.originLngLat) {
+    const read = await sampleLotTerrain(computed.patch.polygon?.points ?? [], data.originLngLat, {
+      fetchImpl,
+      ...(options.terrainDeadlineMs ? { deadlineMs: options.terrainDeadlineMs } : {}),
+    })
+    if (read.ok && read.summary) {
+      terrain = read.summary
+      const current = useScene.getState().nodes[site.id as AnyNodeId]
+      const meta =
+        current &&
+        typeof current.metadata === 'object' &&
+        current.metadata !== null &&
+        !Array.isArray(current.metadata)
+          ? (current.metadata as Record<string, unknown>)
+          : {}
+      useScene.getState().updateNode(
+        site.id as AnyNodeId,
+        {
+          terrain: read.terrain,
+          metadata: { ...meta, terrainSample: read.summary },
+        } as unknown as Partial<AnyNode>,
+      )
+    } else {
+      terrainFailure = read.reason ?? 'no terrain'
+    }
+  } else if (options.terrain === false) {
+    terrainFailure = 'skipped'
+  }
+
   // Centre the building on the lot when its footprint fell outside the new ring.
   let recentred = false
   const after = useScene.getState()
@@ -177,6 +223,7 @@ export async function dropInLot(
   const extra = [
     recentred ? 'building re-centred' : '',
     roadsFailure && roadsFailure !== 'skipped' ? `roads unavailable (${roadsFailure})` : '',
+    describeTerrainSample(terrain, terrainFailure),
   ]
   return {
     ok: true,
@@ -184,6 +231,8 @@ export async function dropInLot(
     summary: computed.summary,
     recentred,
     roadsFailure,
+    terrain,
+    terrainFailure,
     message: describeLotSummary(computed.summary, extra.filter(Boolean)),
   }
 }

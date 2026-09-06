@@ -44,6 +44,10 @@ const EPS = 1e-6
  * 8" is the near-universal residential pour (two courses of 2x8 form stock).
  */
 const FOOTING_HEIGHT = inches(8)
+/** IRC R403.1.5 stepped footings: no step taller than 24 in, runs no shorter. */
+const FOOTING_STEP = inches(24)
+/** Grade sampling pitch along a footing run on a hill. */
+const FOOTING_SAMPLE = 0.3
 
 /** Anchor bolt: 1/2" min per R403.1.6 — we model the common 5/8" J-bolt. */
 const BOLT_SIDE = inches(5 / 8)
@@ -158,7 +162,7 @@ export const DOWEL_SHORT_LAP_FLAG =
  */
 export type FoundationOptions = {
   cmu?: Map<string, CmuDowelLayout>
-  girderPosts?: { plan: readonly [number, number]; sourceId: string }[]
+  girderPosts?: { plan: readonly [number, number]; sourceId: string; gradeY?: number }[]
   /**
    * GRADE, level-local (≤ 0). The footing bottom sits `spec.footingDepth`
    * (the frost line) below THIS, not below the plate line; girder pads pour
@@ -166,6 +170,14 @@ export type FoundationOptions = {
    * existing scene byte-identical.
    */
   gradeY?: number
+  /**
+   * The GROUND under the level as a function of plan position (level-local
+   * y — the site's USGS heightfield read through the building, W14). When
+   * present the footings step down the hill (R403.1.5), the stemwalls grow
+   * with them, pads pour at each post's own grade and the crawl-space
+   * ground cover drapes strip by strip. Absent = flat ground at `gradeY`.
+   */
+  gradeAt?: (x: number, z: number) => number
   /**
    * A RAISED floor (crawl space): the stemwall tops out at `stemTop` (the
    * underside of the mudsill, below the framed platform) instead of the
@@ -658,67 +670,166 @@ export function buildFoundation(
       }
     }
 
-    // ---- footing ----
-    // R403.1.4.1: bearing must sit below the frost line → footing BOTTOM at
-    // -spec.footingDepth (jurisdiction-resolved). Width from spec (Table
-    // R403.1(1) sizing), centered under the wall so the load path is axial.
-    // A sliver plate section that can't hold the R403.1.6 layout flags HERE
-    // — the run that carries the section (a zero-bolt sliver has no bolt
-    // member to carry it).
-    emit(
-      'footing',
-      [runLen, FOOTING_HEIGHT, spec.footingWidth],
-      runCenterU,
-      footingBottom + FOOTING_HEIGHT / 2,
-      runLen,
-      'concrete',
-      `Footing ${formatIn(spec.footingWidth)}×${formatIn(FOOTING_HEIGHT)}`,
-      0,
-      shortSections > 0 ? SHORT_PLATE_SECTION_FLAG : undefined,
-    )
+    // ---- footing (stepped down a hill, R403.1.5) ----
+    // R403.1.4.1: bearing must sit below the frost line under the LOCAL
+    // grade. Flat ground: one run with its bottom at grade − footingDepth
+    // (jurisdiction-resolved). A hill (`options.gradeAt`, the site's USGS
+    // heightfield): the run is sampled along its length and split into
+    // LEVEL segments, each holding the ground within one FOOTING_STEP
+    // (24 in) and bottoming at the deepest frost line under it, a vertical
+    // step block between neighbours — the bottom never above the frost
+    // line at any point (IRC R403.1.5: steps ≤ 24 in, runs ≥ 24 in).
+    // Width from spec (Table R403.1(1) sizing), centered under the wall so
+    // the load path is axial. A sliver plate section that can't hold the
+    // R403.1.6 layout flags HERE — on the first segment.
+    const stemRun = runFor(spec.stemwallThickness)
+    const runStart = runCenterU - runLen / 2
+    const runEnd = runCenterU + runLen / 2
+    const gradeAlong = (u: number): number => {
+      if (!options.gradeAt) return grade
+      const p = place(u, 0)
+      const g = options.gradeAt(p[0], p[2])
+      return Number.isFinite(g) ? g : grade
+    }
+    type FootingSegment = { a: number; b: number; bottom: number; gradeMin: number }
+    const segments: FootingSegment[] = []
+    if (!options.gradeAt) {
+      segments.push({ a: runStart, b: runEnd, bottom: footingBottom, gradeMin: grade })
+    } else {
+      const count = Math.max(2, Math.ceil(runLen / FOOTING_SAMPLE) + 1)
+      const us: number[] = []
+      const gs: number[] = []
+      for (let i = 0; i < count; i++) {
+        const u = runStart + (runLen * i) / (count - 1)
+        us.push(u)
+        gs.push(gradeAlong(u))
+      }
+      const required = gs.map((g) => g - spec.footingDepth)
+      // walk the run: a segment holds stations whose frost lines lie within
+      // one step of each other and bottoms at the deepest of them
+      let s0 = 0
+      let segMax = required[0] as number
+      let segMin = required[0] as number
+      const close = (end: number) => {
+        const a = s0 === 0 ? runStart : ((us[s0 - 1] as number) + (us[s0] as number)) / 2
+        const b = end === count ? runEnd : ((us[end - 1] as number) + (us[end] as number)) / 2
+        segments.push({ a, b, bottom: segMin, gradeMin: Math.min(...gs.slice(s0, end)) })
+      }
+      for (let i = 1; i < count; i++) {
+        const r = required[i] as number
+        // the next segment bottoms at ITS first station: keep this one short
+        // enough that the step to it stays within FOOTING_STEP
+        const inc = Math.abs(r - (required[i - 1] as number))
+        if (Math.max(segMax, r) - Math.min(segMin, r) <= FOOTING_STEP - inc + EPS) {
+          segMax = Math.max(segMax, r)
+          segMin = Math.min(segMin, r)
+          continue
+        }
+        close(i)
+        s0 = i
+        segMax = r
+        segMin = r
+      }
+      close(count)
+      // a sliver segment (under a 24 in run) folds into its deeper neighbour
+      for (let i = segments.length - 1; i >= 0 && segments.length > 1; i--) {
+        const seg = segments[i] as FootingSegment
+        if (seg.b - seg.a >= FOOTING_STEP - EPS) continue
+        const prev = segments[i - 1]
+        const next = segments[i + 1]
+        const into = prev && (!next || prev.bottom <= next.bottom) ? prev : next
+        if (!into) continue
+        into.a = Math.min(into.a, seg.a)
+        into.b = Math.max(into.b, seg.b)
+        into.bottom = Math.min(into.bottom, seg.bottom)
+        into.gradeMin = Math.min(into.gradeMin, seg.gradeMin)
+        segments.splice(i, 1)
+      }
+    }
+    const stepped = segments.length > 1
+    let footingTopMax = Number.NEGATIVE_INFINITY
+    segments.forEach((seg, si) => {
+      const segLen = seg.b - seg.a
+      const segCenter = (seg.a + seg.b) / 2
+      footingTopMax = Math.max(footingTopMax, seg.bottom + FOOTING_HEIGHT)
+      emit(
+        'footing',
+        [segLen, FOOTING_HEIGHT, spec.footingWidth],
+        segCenter,
+        seg.bottom + FOOTING_HEIGHT / 2,
+        segLen,
+        'concrete',
+        `Footing ${formatIn(spec.footingWidth)}×${formatIn(FOOTING_HEIGHT)}${stepped ? ` — step ${si + 1} of ${segments.length}, stepped down the hill (R403.1.5)` : ''}`,
+        0,
+        si === 0 && shortSections > 0 ? SHORT_PLATE_SECTION_FLAG : undefined,
+      )
+      pourBands.push({
+        band: bandOf(segCenter, segLen, spec.footingWidth),
+        memberIdx: members.length - 1,
+      })
+      // ---- footing rebar (LOD 350) ----
+      if (fabDetail) {
+        emitFootingBars(segCenter, segLen, seg.bottom, spec.footingWidth)
+      }
+      // the vertical step to the next segment: a block the footing's width
+      const next = segments[si + 1]
+      if (next && Math.abs(next.bottom - seg.bottom) > EPS) {
+        const lo = Math.min(seg.bottom, next.bottom)
+        const hi = Math.max(seg.bottom, next.bottom) + FOOTING_HEIGHT
+        const rise = hi - lo - FOOTING_HEIGHT
+        emit(
+          'footing',
+          [FOOTING_HEIGHT, hi - lo, spec.footingWidth],
+          seg.b,
+          (lo + hi) / 2,
+          FOOTING_HEIGHT,
+          'concrete',
+          `Footing step ${formatIn(rise)} — stepped footing (R403.1.5)`,
+          0,
+          rise > FOOTING_STEP + EPS ? 'footing step over 24" — verify (R403.1.5)' : undefined,
+        )
+      }
+    })
     // Shallow specs (footing top inside the slab's vertical band, e.g. the
     // 8"-frost minimum where footing top = y 0) put the FOOTING where the
     // slab would pour — carve the field around it. Default frost depths
     // keep the footing top below the slab bottom: no band, slab runs over.
-    if (!raisedW && footingTop > plateW - SLAB_THICKNESS + EPS) {
+    if (!raisedW && footingTopMax > plateW - SLAB_THICKNESS + EPS) {
       carveBands.push(bandOf(runCenterU, runLen, spec.footingWidth))
-    }
-    pourBands.push({
-      band: bandOf(runCenterU, runLen, spec.footingWidth),
-      memberIdx: members.length - 1,
-    })
-
-    // ---- footing rebar (LOD 350) ----
-    if (fabDetail) {
-      emitFootingBars(runCenterU, runLen, footingBottom, spec.footingWidth)
     }
 
     // ---- stemwall ----
-    // From the footing top up to y = 0 (plate line / top of foundation).
-    // With the default 12" frost depth this is a short 4" curb; cold-climate
-    // jurisdiction profiles (42"+ frost) grow it into a real stemwall.
-    // Extended through corners exactly like the footing so the corner is one
-    // continuous pour. ASSUMPTION: grade is not modeled — R404.1.6's 6" stem
-    // reveal above grade is assumed satisfied since y=0 is the framed floor
-    // line.
-    const stemHeight = plateW - footingTop
-    const stemRun = runFor(spec.stemwallThickness)
-    const exposed = plateW - grade // the flat plate line or the raised stem top above grade; zero for a pad at grade
-    if (stemHeight > EPS) {
+    // From each footing segment's top up to the plate line (top of
+    // foundation) — one pour per segment, so a stepped footing carries a
+    // stemwall that grows down the hill. With the default 12" frost depth
+    // on flat ground this is a short 4" curb; cold-climate jurisdiction
+    // profiles (42"+ frost) grow it into a real stemwall. Extended through
+    // corners exactly like the footing so the corner is one continuous
+    // pour. The exposure label is the segment's deepest grade.
+    const stemStart = stemRun.center - stemRun.len / 2
+    const stemEnd = stemRun.center + stemRun.len / 2
+    segments.forEach((seg, si) => {
+      const a = si === 0 ? stemStart : seg.a
+      const b = si === segments.length - 1 ? stemEnd : seg.b
+      const segLen = b - a
+      const segCenter = (a + b) / 2
+      const stemHeight = plateW - (seg.bottom + FOOTING_HEIGHT)
+      const exposed = plateW - seg.gradeMin // the flat plate line or the raised stem top above grade; zero for a pad at grade
+      if (stemHeight <= EPS || segLen <= EPS) return
       emit(
         'stemwall',
-        [stemRun.len, stemHeight, spec.stemwallThickness],
-        stemRun.center,
+        [segLen, stemHeight, spec.stemwallThickness],
+        segCenter,
         plateW - stemHeight / 2,
-        stemRun.len,
+        segLen,
         'concrete',
         `Stemwall ${formatIn(spec.stemwallThickness)}${exposed > EPS ? ` — ${formatIn(exposed)} exposed above grade` : ''}`,
       )
       // The slab pours AGAINST the stemwall (R403.1) — the field strips
       // stop at its faces; anchor bolts/hold-downs live inside this band.
-      carveBands.push(bandOf(stemRun.center, stemRun.len, spec.stemwallThickness))
+      carveBands.push(bandOf(segCenter, segLen, spec.stemwallThickness))
       pourBands.push({
-        band: bandOf(stemRun.center, stemRun.len, spec.stemwallThickness),
+        band: bandOf(segCenter, segLen, spec.stemwallThickness),
         memberIdx: members.length - 1,
       })
 
@@ -729,15 +840,14 @@ export function buildFoundation(
       // stemwall top so the mudsill seat stays clean.
       if (fabDetail) {
         const spacing = spec.seismicHoldDowns ? VERTICAL_SPACING_SEISMIC : VERTICAL_SPACING
-        const barBottom = footingBottom + REBAR_BOTTOM_COVER
+        const barBottom = seg.bottom + REBAR_BOTTOM_COVER
         const barTop = plateW - REBAR_TOP_COVER
         const barHeight = barTop - barBottom
         // CMU-based walls: the DOWELS below are the verticals — the
         // generic grid would double the steel beside them (B18b).
         if (barHeight > EPS && !cmuInfo) {
-          // Layout runs over the stemwall's interlocked extent (incl. the
-          // through-corner reach), mapped back to wall-local u.
-          const stemStartDelta = (sign.start * spec.stemwallThickness) / 2
+          // Layout runs over the stemwall segment's extent (incl. the
+          // through-corner reach at the ends), mapped back to wall-local u.
           // Verticals share the stemwall with the anchor bolts and both
           // layouts anchor to the run ends — wherever the two spacings
           // share a multiple they landed at the SAME (x,z) with ~5in of
@@ -746,16 +856,16 @@ export function buildFoundation(
           // emitted layout (per plate section, B18a) so the nudge never
           // drifts from the bolts.
           const clearOfBolts = (u: number): number => {
-            const clash = boltUs.find((b) => Math.abs(b - u) < inches(3))
+            const clash = boltUs.find((b0) => Math.abs(b0 - u) < inches(3))
             if (clash === undefined) return u
             const shifted = u + inches(4) * (u <= clash ? -1 : 1)
             return Math.max(inches(2), Math.min(len - inches(2), shifted))
           }
-          for (const p of anchorBoltPositions(stemRun.len, spacing, REBAR_END_COVER)) {
+          for (const p of anchorBoltPositions(segLen, spacing, REBAR_END_COVER)) {
             emit(
               'rebar',
               [REBAR_SIDE, barHeight, REBAR_SIDE],
-              clearOfBolts(p - stemStartDelta),
+              clearOfBolts(a + p),
               (barBottom + barTop) / 2,
               barHeight,
               'steel',
@@ -776,16 +886,16 @@ export function buildFoundation(
         if (spec.seismicHoldDowns) {
           emit(
             'rebar',
-            [stemRun.len, REBAR_SIDE, REBAR_SIDE],
-            stemRun.center,
+            [segLen, REBAR_SIDE, REBAR_SIDE],
+            segCenter,
             plateW - REBAR_TOP_COVER - REBAR_SIDE / 2,
-            stemRun.len,
+            segLen,
             'steel',
             '#4 horizontal — top of stemwall (R403.1.3.1)',
           )
         }
       }
-    }
+    })
 
     // ---- CMU wall dowels (LOD 350, B18b) ----
     // Rise from the perimeter footing mat past y = 0 into the grouted
@@ -917,12 +1027,14 @@ export function buildFoundation(
       }
       const band = bandFor(side)
       const clipped = side < PAD_FOOTING_SIDE - EPS
+      // the pad's top is the post's own grade on a hill (R507.3 / R403.1)
+      const padTop = post.gradeY ?? grade
       members.push({
         system: 'foundation',
         role: 'footing',
         dims: [side, INTERIOR_FOOTING_DEPTH, side],
         length: side,
-        position: [px, grade - INTERIOR_FOOTING_DEPTH / 2, pz],
+        position: [px, padTop - INTERIOR_FOOTING_DEPTH / 2, pz],
         rotation: [0, 0, 0],
         material: 'concrete',
         sourceId: post.sourceId,
@@ -957,7 +1069,12 @@ export function buildFoundation(
       for (const slab of slabs) {
         if (slab.kind === 'slab')
           emitSlabField(slab, carveBands, members, { top: slab.elevation - topElevation })
-        else emitSlabField(slab, carveBands, members, { top: grade, groundCover: true })
+        else
+          emitSlabField(slab, carveBands, members, {
+            top: grade,
+            groundCover: true,
+            ...(options.gradeAt ? { topAt: options.gradeAt } : {}),
+          })
       }
     } else {
       for (const slab of slabs)
@@ -1160,7 +1277,9 @@ function emitSlabField(
   slab: SlabSlice,
   bands: CarveBand[],
   members: Member[],
-  where: { top: number; groundCover?: boolean } = { top: 0 },
+  where: { top: number; groundCover?: boolean; topAt?: (x: number, z: number) => number } = {
+    top: 0,
+  },
 ): void {
   const polygon = slab.polygon
   const top = where.top
@@ -1236,12 +1355,15 @@ function emitSlabField(
       const dimsFor = (t: number): [number, number, number] =>
         runAxis === 'x' ? [len, t, width] : [width, t, len]
       if (groundCover) {
+        // on a hill the cover drapes strip by strip at the local grade
+        const at = pos(0)
+        const stripTop = where.topAt ? where.topAt(at[0], at[2]) : top
         members.push({
           system: 'foundation',
           role: 'vapor-retarder',
           dims: dimsFor(VAPOR_RETARDER_THICKNESS),
           length: Math.max(len, width),
-          position: pos(top - VAPOR_RETARDER_THICKNESS / 2),
+          position: pos(stripTop - VAPOR_RETARDER_THICKNESS / 2),
           rotation: [0, 0, 0],
           material: 'pvc',
           sourceId: slab.id,

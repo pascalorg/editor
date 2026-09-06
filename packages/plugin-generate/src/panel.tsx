@@ -10,7 +10,8 @@ import { useGenerate } from './store'
 import { STYLES } from './styles'
 import { TEMPLATES } from './templates/poppy'
 
-const field = 'w-full rounded-md border border-sidebar-border/60 bg-sidebar px-2 py-1.5 text-xs text-sidebar-foreground'
+const field =
+  'w-full rounded-md border border-sidebar-border/60 bg-sidebar px-2 py-1.5 text-xs text-sidebar-foreground'
 const label = 'mb-1 block font-mono text-[10px] text-sidebar-foreground/60 uppercase tracking-wider'
 
 export default function GeneratePanel() {
@@ -25,8 +26,9 @@ export default function GeneratePanel() {
           <Home className="h-4 w-4" /> Generate
         </div>
         <p className="text-[11px] text-sidebar-foreground/60">
-          A complete house from a seed: rooms, walls, doors, egress windows, zones, slab and roof, placed on the parcel at the front setback. Leave a field on
-          “roll” and the seed decides it.
+          A complete house from a seed: rooms, walls, doors, egress windows, zones, slab and roof,
+          placed on the parcel at the front setback. Leave a field on “roll” and the seed decides
+          it.
         </p>
       </div>
 
@@ -39,14 +41,19 @@ export default function GeneratePanel() {
           }}
         />
         <p className="mt-1.5 text-[11px] text-sidebar-foreground/50">
-          The parcel, the streets and the front edge drop in first; the house is then placed on the buildable envelope facing the street.
+          The parcel, the streets and the front edge drop in first; the house is then placed on the
+          buildable envelope facing the street.
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-2 px-3">
         <div className="col-span-2">
           <span className={label}>Style</span>
-          <select className={field} value={S.options.style ?? ''} onChange={(e) => S.setOptions({ style: e.target.value || undefined })}>
+          <select
+            className={field}
+            value={S.options.style ?? ''}
+            onChange={(e) => S.setOptions({ style: e.target.value || undefined })}
+          >
             <option value="">roll</option>
             {STYLES.map((s) => (
               <option key={s.key} value={s.key}>
@@ -57,7 +64,13 @@ export default function GeneratePanel() {
         </div>
         <div>
           <span className={label}>Bedrooms</span>
-          <select className={field} value={beds} onChange={(e) => S.setOptions({ beds: (Number(e.target.value) || undefined) as 2 | 3 | 4 | undefined })}>
+          <select
+            className={field}
+            value={beds}
+            onChange={(e) =>
+              S.setOptions({ beds: (Number(e.target.value) || undefined) as 2 | 3 | 4 | undefined })
+            }
+          >
             <option value={0}>roll</option>
             <option value={2}>2</option>
             <option value={3}>3</option>
@@ -66,7 +79,15 @@ export default function GeneratePanel() {
         </div>
         <div>
           <span className={label}>Baths</span>
-          <select className={field} value={baths} onChange={(e) => S.setOptions({ baths: (Number(e.target.value) || undefined) as 1 | 2 | 3 | undefined })}>
+          <select
+            className={field}
+            value={baths}
+            onChange={(e) =>
+              S.setOptions({
+                baths: (Number(e.target.value) || undefined) as 1 | 2 | 3 | undefined,
+              })
+            }
+          >
             <option value={0}>roll</option>
             <option value={1}>1</option>
             <option value={2}>2</option>
@@ -78,7 +99,9 @@ export default function GeneratePanel() {
           <select
             className={field}
             value={garage === undefined ? '' : garage ? 'yes' : 'no'}
-            onChange={(e) => S.setOptions({ garage: e.target.value === '' ? undefined : e.target.value === 'yes' })}
+            onChange={(e) =>
+              S.setOptions({ garage: e.target.value === '' ? undefined : e.target.value === 'yes' })
+            }
           >
             <option value="">roll</option>
             <option value="yes">attached</option>
@@ -94,7 +117,12 @@ export default function GeneratePanel() {
               value={S.seed}
               onChange={(e) => S.setSeed(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
             />
-            <button type="button" onClick={S.reroll} className="rounded-md border border-sidebar-border/60 px-2 hover:bg-sidebar-accent" title="New seed">
+            <button
+              type="button"
+              onClick={S.reroll}
+              className="rounded-md border border-sidebar-border/60 px-2 hover:bg-sidebar-accent"
+              title="New seed"
+            >
               <Dices className="h-3.5 w-3.5" />
             </button>
           </div>
@@ -110,7 +138,11 @@ export default function GeneratePanel() {
           disabled={S.running}
           className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-primary px-3 py-2 font-semibold text-primary-foreground text-xs shadow-sm disabled:opacity-60"
         >
-          {S.running ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+          {S.running ? (
+            <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Sparkles className="h-3.5 w-3.5" />
+          )}
           Generate house
         </button>
         <button
@@ -126,10 +158,15 @@ export default function GeneratePanel() {
           <Dices className="h-3.5 w-3.5" /> Random
         </button>
       </div>
-      <p className="px-3 text-[11px] text-sidebar-foreground/50">Also: Ctrl+K → “Generate house”. Generating again replaces the generated building; hand-built ones are left alone.</p>
+      <p className="px-3 text-[11px] text-sidebar-foreground/50">
+        Also: Ctrl+K → “Generate house”. Generating again replaces the generated building;
+        hand-built ones are left alone.
+      </p>
 
       <div className="mt-3 border-sidebar-border/50 border-t p-3">
-        <div className="mb-2 font-mono text-[10px] text-sidebar-foreground/60 uppercase tracking-wider">Templates</div>
+        <div className="mb-2 font-mono text-[10px] text-sidebar-foreground/60 uppercase tracking-wider">
+          Templates
+        </div>
         {TEMPLATES.map((t) => (
           <button
             key={t.id}
@@ -148,38 +185,64 @@ export default function GeneratePanel() {
 
       {S.last && (
         <div className="border-sidebar-border/50 border-t p-3 text-[11px]">
-          <div className="mb-1 font-mono text-[10px] text-sidebar-foreground/60 uppercase tracking-wider">Last run</div>
+          <div className="mb-1 font-mono text-[10px] text-sidebar-foreground/60 uppercase tracking-wider">
+            Last run
+          </div>
           <div className="font-semibold text-xs">{S.last.name}</div>
           {S.last.stats && (
             <div className="mt-1 text-sidebar-foreground/70">
-              {S.last.stats.rooms} rooms · {S.last.stats.walls} walls · {S.last.stats.doors} doors · {S.last.stats.windows} windows · {S.last.stats.zones} zones
+              {S.last.stats.rooms} rooms · {S.last.stats.walls} walls · {S.last.stats.doors} doors ·{' '}
+              {S.last.stats.windows} windows · {S.last.stats.zones} zones
               <br />
-              {S.last.stats.livingSqFt.toLocaleString('en-US')} sf living · {S.last.stats.footprintSqFt.toLocaleString('en-US')} sf footprint
+              {S.last.stats.livingSqFt.toLocaleString('en-US')} sf living ·{' '}
+              {S.last.stats.footprintSqFt.toLocaleString('en-US')} sf footprint
               {S.last.seed !== null ? ` · seed ${S.last.seed}` : ''}
               {!S.last.placed && <span> · no parcel in the scene — placed at the origin</span>}
               {S.last.foundation && (
                 <>
                   <br />
-                  foundation: {S.last.foundation.type === 'raised' ? 'raised floor over a crawl space' : 'slab on grade'}, finish floor{' '}
-                  {S.last.foundation.ffAboveGradeIn}" above grade ({S.last.foundation.source})
+                  foundation:{' '}
+                  {S.last.foundation.type === 'raised'
+                    ? 'raised floor over a crawl space'
+                    : 'slab on grade'}
+                  , finish floor {S.last.foundation.ffAboveGradeIn}" above grade (
+                  {S.last.foundation.source})
+                  {S.last.foundation.terrain
+                    ? ` · ground under the footprint: ${Math.round(S.last.foundation.terrain.reliefIn)}" of fall`
+                    : ''}
                 </>
               )}
               {[S.last.porch, S.last.rear].map((e) =>
                 e ? (
                   <span key={e.entrance}>
                     <br />
-                    {e.entrance === 'rear' ? 'rear' : 'porch'}: {e.policy === 'none' ? 'covered stoop' : e.policy === 'full' || e.policy === 'entry' ? `${e.policy} porch` : e.policy}{' '}
-                    ({e.landing}) {e.widthFt}' × {e.depthFt}' · {e.roof === 'none' ? 'no cover' : e.roof === 'flat' ? 'flat canopy' : `${e.roof} roof`}
+                    {e.entrance === 'rear' ? 'rear' : 'porch'}:{' '}
+                    {e.policy === 'none'
+                      ? 'covered stoop'
+                      : e.policy === 'full' || e.policy === 'entry'
+                        ? `${e.policy} porch`
+                        : e.policy}{' '}
+                    ({e.landing}) {e.widthFt}' × {e.depthFt}' ·{' '}
+                    {e.roof === 'none'
+                      ? 'no cover'
+                      : e.roof === 'flat'
+                        ? 'flat canopy'
+                        : `${e.roof} roof`}
                     {e.posts > 0 ? ` · ${e.posts} posts` : ''}
                     {e.guard ? ` · 36" ${e.railStyle === 'cable' ? 'cable rail' : 'guard'}` : ''}
-                    {e.risers > 0 ? ` · ${e.risers} riser${e.risers === 1 ? '' : 's'} @ ${e.riserIn.toFixed(2)}"` : ' · at grade'}
+                    {e.risers > 0
+                      ? ` · ${e.risers} riser${e.risers === 1 ? '' : 's'} @ ${e.riserIn.toFixed(2)}"`
+                      : ' · at grade'}
                   </span>
                 ) : null,
               )}
             </div>
           )}
           {S.last.errors.map((e) => (
-            <div key={e} className="mt-1 rounded-md border border-destructive/40 bg-destructive/10 p-1.5 text-destructive">
+            <div
+              key={e}
+              className="mt-1 rounded-md border border-destructive/40 bg-destructive/10 p-1.5 text-destructive"
+            >
               {e}
             </div>
           ))}

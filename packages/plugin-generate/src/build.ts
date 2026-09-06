@@ -26,7 +26,7 @@ import {
   type RoomKind,
   validateDocument,
 } from './document'
-import { type FoundationChoice, foundationFor } from './foundation'
+import { type FoundationChoice, foundationFor, type TerrainUnderFootprint } from './foundation'
 import {
   edgePieces,
   GRID_IN_DEFAULT,
@@ -77,6 +77,14 @@ export type BuildOptions = {
   reuse?: { buildingId: string; levelId: string } | null
   /** Recorded on the building so "same again" can find the seed and options. */
   generation?: Record<string, unknown>
+  /**
+   * The ground: site-local metres (x, z) → grade y above the site plane
+   * (the site's USGS heightfield, `heightAt`). Absent / null = flat ground
+   * at the plane. Decides the foundation (hillside branches), the
+   * building's datum (finish floor above the HIGHEST grade under the
+   * footprint), the garage drop and every entrance's rise.
+   */
+  gradeAt?: ((x: number, z: number) => number) | null
 }
 
 export type NodeOp = { node: Record<string, unknown>; parentId?: string }
@@ -701,10 +709,99 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     warnings.push(`zone detection failed (${(error as Error).message}) — no zones were made.`)
   }
 
+  // ── where the building stands on the parcel (x, z, yaw) ──────────────
+  // Decided before the foundation: the grade under the placed footprint
+  // picks the foundation and the datum.
+  let planX = 0
+  let planZ = 0
+  let yaw = 0
+  const placement = options.placement
+  if (placement && placement.envelope.length >= 3) {
+    const env = placement.envelope
+    const i = ((placement.frontEdge % env.length) + env.length) % env.length
+    const p = env[i] as Pt
+    const q = env[(i + 1) % env.length] as Pt
+    const cx = env.reduce((s, e) => s + e[0], 0) / env.length
+    const cz = env.reduce((s, e) => s + e[1], 0) / env.length
+    const ex = q[0] - p[0]
+    const ez = q[1] - p[1]
+    const el = Math.hypot(ex, ez) || 1
+    let nx = -ez / el
+    let nz = ex / el
+    const mx = (p[0] + q[0]) / 2
+    const mz = (p[1] + q[1]) / 2
+    // The outward normal points away from the envelope's centre.
+    if ((mx - cx) * nx + (mz - cz) * nz < 0) {
+      nx = -nx
+      nz = -nz
+    }
+    // Level-local −z is the house front; world = R(yaw)·local: (0,−1) → (−sin, −cos).
+    yaw = Math.atan2(-nx, -nz)
+    const halfD = (D * IN) / 2 + exteriorT / 2
+    planX = round(mx - nx * halfD)
+    planZ = round(mz - nz * halfD)
+    if (W * IN > el)
+      warnings.push(
+        `the house is ${(W / 12).toFixed(0)}' wide but the buildable frontage is ${(el / FT).toFixed(0)}' — check the side setbacks.`,
+      )
+  }
+  /** Level-local plan (x, z) → site-local plan: world = position + R(yaw)·local (three.js yaw: +x → (cos, −sin)). */
+  const toSite = (x: number, z: number): Pt => [
+    planX + x * Math.cos(yaw) + z * Math.sin(yaw),
+    planZ - x * Math.sin(yaw) + z * Math.cos(yaw),
+  ]
+  const gradeAt = options.gradeAt ?? null
+  /** Site grade under a level-local plan point (0 on flat ground). */
+  const siteGrade = (x: number, z: number): number => {
+    if (!gradeAt) return 0
+    const [sx, sz] = toSite(x, z)
+    const g = gradeAt(sx, sz)
+    return Number.isFinite(g) ? g : 0
+  }
+
+  // ── the ground under the footprint (TERRAIN-DATUM-SPEC) ──────────────
+  // Sampled at the outline's corners, along its edges and at its centre:
+  // the HIGHEST grade is the datum the house stands on, the fall picks the
+  // foundation.
+  let terrain: TerrainUnderFootprint | null = null
+  if (gradeAt) {
+    const outline = ring.map(toLocal)
+    const stations: Pt[] = []
+    for (let i = 0; i < outline.length; i++) {
+      const a = outline[i] as Pt
+      const b = outline[(i + 1) % outline.length] as Pt
+      const n = Math.max(1, Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 2))
+      for (let k = 0; k < n; k++)
+        stations.push([a[0] + ((b[0] - a[0]) * k) / n, a[1] + ((b[1] - a[1]) * k) / n])
+    }
+    stations.push([
+      outline.reduce((s, p) => s + p[0], 0) / outline.length,
+      outline.reduce((s, p) => s + p[1], 0) / outline.length,
+    ])
+    const heights = stations.map((p) => siteGrade(p[0], p[1]))
+    const highestM = Math.max(...heights)
+    const lowestM = Math.min(...heights)
+    terrain = {
+      reliefIn: round((highestM - lowestM) / IN, 1),
+      highestM,
+      lowestM,
+      samples: stations.length,
+    }
+  }
+
   // ── the foundation: slab on grade or a raised floor (foundation.ts) ───
-  const foundation = foundationFor(style, input.mode === 'adu' ? 'adu' : '1story', W / 12)
+  const foundation = foundationFor(style, input.mode === 'adu' ? 'adu' : '1story', W / 12, terrain)
   const ffAboveGradeM = round(foundation.ffAboveGradeIn * IN)
   const raisedFloor = foundation.type === 'raised'
+  /** The building's datum: the finish floor stands `ffAboveGrade` above the HIGHEST grade under the footprint. */
+  const buildingY = round((terrain?.highestM ?? 0) + ffAboveGradeM)
+  /** Level-local grade under a level-local plan point (−ff on flat ground). */
+  const localGrade = (x: number, z: number): number => round(siteGrade(x, z) - buildingY)
+  if (terrain && terrain.reliefIn >= 12) {
+    warnings.push(
+      `hillside: ${Math.round(terrain.reliefIn)}" of fall under the footprint — the finish floor stands ${foundation.ffAboveGradeIn}" above the high side; Bones steps the footings down the hill.`,
+    )
+  }
 
   // ── the floor under the house, the garage slab at grade ───────────────
   // A slab house pours one slab; a raised house carries a framed platform
@@ -735,6 +832,10 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   const garageRing = garageRooms.length > 0 ? outlineRing(garageRooms, grid) : null
   if (garageRing) {
     const garageSlabId = generateId('slab')
+    const gc = garageRing.map(toLocal)
+    const gcx = gc.reduce((s, p) => s + p[0], 0) / gc.length
+    const gcz = gc.reduce((s, p) => s + p[1], 0) / gc.length
+    const garageDropM = Math.min(48 * IN, Math.max(2 * IN, -localGrade(gcx, gcz)))
     garageSlabOps.push({
       node: {
         id: garageSlabId,
@@ -743,13 +844,16 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         parentId: levelId,
         polygon: garageRing.map(toLocal),
         holes: [],
-        elevation: round(SLAB_ELEVATION_M - ffAboveGradeM),
+        // PlanCrafters garageDefaultDrop: the pad's top at the garage's OWN
+        // natural grade — the stem height less the local rise, kept between
+        // 2 in and 48 in below the finish floor.
+        elevation: round(SLAB_ELEVATION_M - garageDropM),
         thickness: 0.1016,
         materialPreset: 'concrete-raw',
         metadata: {
           generatedBy: GENERATED_BY,
           floor: 'garage-slab-at-grade',
-          dropIn: foundation.ffAboveGradeIn,
+          dropIn: round(garageDropM / IN, 1),
         },
       },
       parentId: levelId,
@@ -792,6 +896,10 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const midw: Pt = [(w.start[0] + w.end[0]) / 2, (w.start[1] + w.end[1]) / 2]
     const houseOnFront = pointInRing(ring.map(toLocal), midw[0] + nxw * 0.2, midw[1] + nzw * 0.2)
     const outward: Pt = houseOnFront ? [-nxw, -nzw] : [nxw, nzw]
+    // The flight lands on the ground out past the landing — on a hill the
+    // rise there is the real one (PlanCrafters garageStepFlight: "however
+    // big it computes").
+    const flightGrade = localGrade(midw[0] + outward[0] * 2.5, midw[1] + outward[1] * 2.5)
     const porchPitch = Math.min(style.pitch, 6)
     const built = porchFor(
       {
@@ -808,7 +916,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         outward,
         bayWidth,
         floorElevation: SLAB_ELEVATION_M,
-        gradeY: -ffAboveGradeM,
+        gradeY: flightGrade,
         overhang: (style.overhangIn * IN) / Math.cos(Math.atan(porchPitch / 12)),
         wallRole: (
           ops.find((op) => op.node.id === w.id)?.node.metadata as
@@ -850,38 +958,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     )
   }
 
-  // ── building on the parcel ────────────────────────────────────────────
-  let position: [number, number, number] = [0, ffAboveGradeM, 0]
-  let yaw = 0
-  const placement = options.placement
-  if (placement && placement.envelope.length >= 3) {
-    const env = placement.envelope
-    const i = ((placement.frontEdge % env.length) + env.length) % env.length
-    const p = env[i] as Pt
-    const q = env[(i + 1) % env.length] as Pt
-    const cx = env.reduce((s, e) => s + e[0], 0) / env.length
-    const cz = env.reduce((s, e) => s + e[1], 0) / env.length
-    const ex = q[0] - p[0]
-    const ez = q[1] - p[1]
-    const el = Math.hypot(ex, ez) || 1
-    let nx = -ez / el
-    let nz = ex / el
-    const mx = (p[0] + q[0]) / 2
-    const mz = (p[1] + q[1]) / 2
-    // The outward normal points away from the envelope's centre.
-    if ((mx - cx) * nx + (mz - cz) * nz < 0) {
-      nx = -nx
-      nz = -nz
-    }
-    // Level-local −z is the house front; world = R(yaw)·local: (0,−1) → (−sin, −cos).
-    yaw = Math.atan2(-nx, -nz)
-    const halfD = (D * IN) / 2 + exteriorT / 2
-    position = [round(mx - nx * halfD), ffAboveGradeM, round(mz - nz * halfD)]
-    if (W * IN > el)
-      warnings.push(
-        `the house is ${(W / 12).toFixed(0)}' wide but the buildable frontage is ${(el / FT).toFixed(0)}' — check the side setbacks.`,
-      )
-  }
+  // ── building on the parcel: placed above, standing on its datum ───────
+  const position: [number, number, number] = [planX, buildingY, planZ]
 
   const buildingOp: NodeOp = {
     node: {

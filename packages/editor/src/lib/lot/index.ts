@@ -20,3 +20,17 @@ export {
   STREET_CLASSES,
   sitePatchFromParcel,
 } from './lot-patch'
+export {
+  coarseHeightAt,
+  DEFAULT_GRID_N,
+  describeTerrainSample,
+  fieldFromSamples,
+  gridOver,
+  localMetresToLngLat,
+  MIN_RELIEF_M,
+  type SampleGrid,
+  type SampleOptions,
+  sampleLotTerrain,
+  type TerrainSampleResult,
+  type TerrainSampleSummary,
+} from './terrain'
