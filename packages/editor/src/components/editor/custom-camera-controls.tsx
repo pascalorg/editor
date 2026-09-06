@@ -528,10 +528,14 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   }, [])
 
   const previousLevelIdRef = useRef<AnyNodeId | null>(null)
+  const previousLevelModeRef = useRef(levelMode)
+  const skippedInitialLevelSelectRef = useRef(false)
   useEffect(() => {
     if (isPreviewMode || isFirstPersonMode || isRestoringFirstPersonPose()) return
     const previousLevelId = previousLevelIdRef.current
+    const previousLevelMode = previousLevelModeRef.current
     previousLevelIdRef.current = currentLevelId
+    previousLevelModeRef.current = levelMode
     // Analytic destination, not `sceneRegistry` mesh position: a level created
     // this frame still sits at y=0 (LevelSystem lerps it later), and a mode
     // switch leaves every level mid-lerp - the camera must pan to where the
@@ -549,9 +553,18 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       }
       return
     }
-    // null → level is the initial scene load; only real level switches move
-    // the camera, or they would clobber the auto-framed pose.
-    if (!previousLevelId || previousLevelId === currentLevelId) return
+    if (previousLevelId) skippedInitialLevelSelectRef.current = true
+    const levelChanged = previousLevelId !== currentLevelId
+    const modeChanged = previousLevelMode !== levelMode
+    if (!levelChanged && !modeChanged) return
+    // First null → level is scene auto-select; auto-frame owns that pose.
+    // After the user has followed a level, clearing it (building click,
+    // breadcrumb, resetSelection) and picking one again must pan.
+    if (!previousLevelId && currentLevelId && !skippedInitialLevelSelectRef.current) {
+      skippedInitialLevelSelectRef.current = true
+      return
+    }
+    if (!currentLevelId) return
     controls.current.getTarget(currentTarget)
     // Idempotence guard: skip when already there — also swallows the thumbnail
     // generator's synchronous stacked→restore levelMode round-trip.
