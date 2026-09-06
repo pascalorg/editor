@@ -1,7 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import {
+  coverGeometry,
   GUARD_HEIGHT,
+  LEDGER_CLEAR,
   MAX_RISER,
+  MIN_COVER_HEIGHT,
+  PIERCE_MIN,
   PORCH_COVER_HEIGHT,
   PORCH_FLOOR_DROP,
   type PorchIds,
@@ -361,5 +365,116 @@ describe('the rear entrance', () => {
     expect(modern.summary?.roof).toBe('none')
     expect(byType(modern.ops, 'column')).toHaveLength(0)
     expect(modern.summary?.railStyle).toBe('cable')
+  })
+})
+
+describe('the cover sized against the house roof (W19b)', () => {
+  const plate = 0.05 + 9 * FT // a 9 ft plate over the house floor at 0.05
+  const tan4 = 4 / 12
+
+  test('a hip porch under a 9 ft plate at 4:12 steepens until its ridge pierces 0.9 m in, and runs in to that point plus one run', () => {
+    const r = porchFor(
+      input({
+        policy: 'entry',
+        style: styleFor('ranch'),
+        wallRole: 'eave',
+        housePlateY: plate,
+        housePitch: 4,
+      }),
+      ids(),
+    )
+    const seg = byType(r.ops, 'roof-segment')[0]!
+    expect(seg.roofType).toBe('hip')
+    // entry porch: 8 ft wide (run 4 ft), 6 ft deep, beam 6 in inside the edge
+    const run = 4 * FT
+    const beamLine = 6 * FT - 6 * IN
+    const drop = plate - (0.05 + PORCH_COVER_HEIGHT)
+    // at the ranch's own 4:12 the ridge would pierce only 0.3 m in — steepened (under the 6:12 cap)
+    expect(((run * 4) / 12 - drop) / tan4).toBeLessThan(PIERCE_MIN)
+    const needed = ((drop + PIERCE_MIN * tan4) / run) * 12
+    expect(needed).toBeLessThan(6)
+    expect(seg.pitch).toBeCloseTo(Math.atan(needed / 12) * (180 / Math.PI), 6)
+    expect(r.summary?.roofPitch).toBeCloseTo(needed, 5)
+    const pierce = PIERCE_MIN
+    expect(r.summary?.roofPierceM).toBeCloseTo(pierce, 5)
+    // the box starts at the wall face; the pierce is measured from the plate line (the wall centreline)
+    expect(seg.width).toBeCloseTo(beamLine + 0.17 / 2 + pierce + 0.05 + run, 5)
+    expect((seg.position as number[])[1]).toBeCloseTo(0.05 + PORCH_COVER_HEIGHT, 6) // the beam stayed at 8 ft
+    expect(r.summary?.coverHeightIn).toBeCloseTo(96, 1)
+    expect(r.warnings.some((w) => w.includes('pierces'))).toBe(false)
+  })
+
+  test('a gable porch that cannot reach at the 6:12 cap lifts its beam toward the plate', () => {
+    // a 12 ft wide porch (run 6 ft) under a 10 ft plate at 8:12
+    const high = 0.05 + 10 * FT
+    const cover = coverGeometry(
+      { floorElevation: 0.05, housePlateY: high, housePitch: 8 },
+      { pitch: 8 },
+      'gable',
+      6 * FT,
+      6 * FT,
+    )
+    expect(cover.pitch).toBe(6)
+    // the beam rises just enough: the 6:12 rise less the 0.9 m of house rise
+    expect(cover.coverY).toBeCloseTo(high - ((6 * FT * 6) / 12 - PIERCE_MIN * (8 / 12)), 6)
+    expect(cover.coverY).toBeGreaterThan(0.05 + PORCH_COVER_HEIGHT)
+    expect(cover.coverY).toBeLessThanOrEqual(high - LEDGER_CLEAR + 1e-9)
+    expect(cover.pierce).toBeCloseTo(PIERCE_MIN, 6)
+    expect(cover.into).toBeCloseTo(PIERCE_MIN + 0.05, 6)
+    // a 5 ft porch under the same roof cannot reach even with the beam at the plate — it says so
+    const r = porchFor(
+      input({
+        policy: 'entry',
+        style: styleFor('farmhouse'),
+        housePlateY: high,
+        housePitch: 8,
+        doorAt: 6 * FT,
+        wall: { start: [0, 0], end: [12 * FT, 0], thickness: 0.17 },
+      }),
+      ids(),
+    )
+    expect(r.summary?.roofPierceM ?? 0).toBeLessThan(PIERCE_MIN)
+    expect(r.warnings.some((w) => w.includes('pierces the house slope only'))).toBe(true)
+  })
+
+  test('a shed cover on a gable-end wall keeps its ledger under the house plate: the pitch flattens, then the beam drops, then a canopy', () => {
+    const r = porchFor(input({ wallRole: 'gable-end', housePlateY: plate }), ids())
+    const seg = byType(r.ops, 'roof-segment')[0]!
+    expect(seg.roofType).toBe('shed')
+    const beamLine = 7 * FT - 6 * IN
+    const fit = ((plate - LEDGER_CLEAR - (0.05 + PORCH_COVER_HEIGHT)) / beamLine) * 12
+    expect(fit).toBeLessThan(4)
+    expect(seg.pitch).toBeCloseTo(Math.atan(fit / 12) * (180 / Math.PI), 6)
+    // a deeper cover under a lower plate: the beam drops to the headroom floor at 1:12
+    const low = coverGeometry(
+      { floorElevation: 0.05, housePlateY: 0.05 + 8.2 * FT },
+      { pitch: 8 },
+      'shed',
+      3,
+      3.5,
+    )
+    expect(low.form).toBe('shed')
+    expect(low.pitch).toBeCloseTo(1, 6)
+    expect(low.coverY).toBeGreaterThanOrEqual(0.05 + MIN_COVER_HEIGHT - 1e-9)
+    // lower still: a flat canopy
+    const flat = coverGeometry(
+      { floorElevation: 0.05, housePlateY: 0.05 + 7.3 * FT },
+      { pitch: 8 },
+      'shed',
+      3,
+      3.5,
+    )
+    expect(flat.form).toBe('flat')
+  })
+
+  test('without house data the legacy sizes hold: one run in, the style pitch, the 8 ft beam', () => {
+    const cover = coverGeometry({ floorElevation: 0.05 }, { pitch: 8 }, 'hip', 1.2, 2)
+    expect(cover).toEqual({
+      form: 'hip',
+      coverY: 0.05 + PORCH_COVER_HEIGHT,
+      pitch: 6,
+      into: 1.2,
+      pierce: 0,
+    })
   })
 })

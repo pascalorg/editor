@@ -66,6 +66,14 @@ export const MAX_POST_SPACING = 8 * FT
 export const MAX_PORCH_PITCH = 6
 /** A shed porch roof against the house never steeper than 4:12. */
 export const MAX_SHED_PORCH_PITCH = 4
+/** A gable / hip cover's ridge runs at least this far INTO the house slope past the wall (3 ft). */
+export const PIERCE_MIN = 0.9
+/** A shed cover's ledger sits at least this far under the house plate. */
+export const LEDGER_CLEAR = inches(2)
+/** The lowest cover beam over the porch floor (headroom). */
+export const MIN_COVER_HEIGHT = 7 * FT
+/** The flattest shed cover before it becomes a flat canopy. */
+export const MIN_SHED_PITCH = 1
 /** The stucco ranch's entry piers (PlanCrafters "grand stucco entrance"): 13 in square. */
 export const STUCCO_PIER = inches(13)
 
@@ -105,6 +113,16 @@ export interface PorchInput {
   overhang: number
   /** The door wall's roof role from the auto roof (`metadata.roof.role`); absent = stop at the wall. */
   wallRole?: string
+  /**
+   * The house's top plate, level-local y (the auto roof's origin). With
+   * `housePitch` the cover is sized against the house roof: a gable / hip
+   * cover pitched up and carried in until its ridge pierces the slope a
+   * full PIERCE_MIN inside the wall (Bones lays the valley sleepers on the
+   * plate then), a shed cover's ledger kept under the house eave.
+   */
+  housePlateY?: number
+  /** The house roof's pitch in twelfths (with `housePlateY`). */
+  housePitch?: number
   /** Concrete (slab house) or a wood deck (raised house). Default concrete. */
   landing?: PorchLanding
   /** Front porch or rear entrance — names and the summary. Default front. */
@@ -128,6 +146,11 @@ export interface PorchSummary {
   widthFt: number
   depthFt: number
   roof: PorchRoofForm
+  /** The cover's pitch in twelfths (0 for a canopy) and its beam height over the floor, inches. */
+  roofPitch: number
+  coverHeightIn: number
+  /** A gable / hip cover's ridge pierce point inside the wall, metres (0 without house data). */
+  roofPierceM: number
   attach: PorchAttach
   posts: number
   rails: number
@@ -198,6 +221,89 @@ export function pillarFor(
     size: policy === 'full' || policy === 'deck' ? inches(7) : inches(5.5),
     tapered: style.key === 'craftsman',
     stucco: false,
+  }
+}
+
+/** What the cover becomes once it is sized against the house roof. */
+export interface CoverGeometry {
+  form: PorchRoofForm
+  /** The cover's beam / plate line, level-local y. */
+  coverY: number
+  /** Twelfths. */
+  pitch: number
+  /** How far a gable / hip box runs INTO the house past the wall face (0 for a shed / canopy). */
+  into: number
+  /** The ridge's pierce point inside the wall, metres (gable / hip with house data). */
+  pierce: number
+}
+
+/**
+ * Size the cover against the house roof (PlanCrafters sizes the porch by
+ * style alone; Bones frames the join, so the join must be a real one).
+ * A gable / hip cover dying into the slope: the style pitch (capped at
+ * MAX_PORCH_PITCH), steepened until the ridge pierces the house slope
+ * PIERCE_MIN inside the wall, then — if the cap still leaves it short —
+ * the beam raised toward the plate; the box runs in to the pierce point,
+ * a hip one run further so its near hip end buries itself under the
+ * house roof. A shed cover: the ledger held LEDGER_CLEAR under the plate,
+ * the pitch flattened toward 1:12, then the beam lowered to the headroom
+ * floor, then a flat canopy. Without house data the legacy sizes hold
+ * (one run in, the style pitch).
+ */
+export function coverGeometry(
+  input: Pick<PorchInput, 'floorElevation' | 'housePlateY' | 'housePitch'>,
+  style: Pick<StylePreset, 'pitch'>,
+  form: PorchRoofForm,
+  run: number,
+  shedDepth: number,
+  /** Half the door wall: the box starts at the wall FACE, the house roof's plate line is the wall centreline. */
+  wallHalf = 0,
+): CoverGeometry {
+  const floorCover = input.floorElevation + PORCH_COVER_HEIGHT
+  if (form === 'flat' || form === 'none')
+    return { form, coverY: floorCover, pitch: 0, into: 0, pierce: 0 }
+  const houseY = input.housePlateY
+  if (form === 'shed') {
+    const stylePitch = Math.min(style.pitch, MAX_SHED_PORCH_PITCH)
+    if (houseY === undefined)
+      return { form, coverY: floorCover, pitch: stylePitch, into: 0, pierce: 0 }
+    const ledgerY = houseY - LEDGER_CLEAR
+    const fit = (cy: number) =>
+      Math.min(stylePitch, ((ledgerY - cy) / Math.max(shedDepth, 0.1)) * 12)
+    let coverY = floorCover
+    let pitch = fit(coverY)
+    if (pitch < MIN_SHED_PITCH - 1e-9) {
+      coverY = Math.max(
+        input.floorElevation + MIN_COVER_HEIGHT,
+        ledgerY - (shedDepth * MIN_SHED_PITCH) / 12,
+      )
+      pitch = fit(coverY)
+    }
+    if (pitch < MIN_SHED_PITCH - 1e-9)
+      return { form: 'flat', coverY: floorCover, pitch: 0, into: 0, pierce: 0 }
+    return { form, coverY, pitch, into: 0, pierce: 0 }
+  }
+  const stylePitch = Math.min(style.pitch, MAX_PORCH_PITCH)
+  const houseTan = input.housePitch !== undefined ? input.housePitch / 12 : 0
+  if (houseY === undefined || houseTan <= 0) {
+    return { form, coverY: floorCover, pitch: stylePitch, into: run, pierce: 0 }
+  }
+  const pierceAt = (cy: number, p: number) => ((run * p) / 12 - (houseY - cy)) / houseTan
+  let coverY = floorCover
+  let pitch = stylePitch
+  if (pierceAt(coverY, pitch) < PIERCE_MIN) {
+    pitch = Math.min(MAX_PORCH_PITCH, ((houseY - coverY + PIERCE_MIN * houseTan) / run) * 12)
+  }
+  if (pierceAt(coverY, pitch) < PIERCE_MIN) {
+    coverY = Math.min(houseY - LEDGER_CLEAR, houseY - ((run * pitch) / 12 - PIERCE_MIN * houseTan))
+  }
+  const pierce = Math.max(0, pierceAt(coverY, pitch))
+  return {
+    form,
+    coverY,
+    pitch,
+    into: wallHalf + pierce + 0.05 + (form === 'hip' ? run : 0),
+    pierce,
   }
 }
 
@@ -309,10 +415,35 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
 
   // ── posts (for a cover) ───────────────────────────────────────────────
   const attach = porchAttach(input.wallRole)
-  const form = porchRoofForm(style, policy, attach)
   const pillar = pillarFor(style, policy)
   const inset = Math.min(inches(6), hw / 3, depth / 3)
-  const postHeight = input.floorElevation + PORCH_COVER_HEIGHT - landingTop
+  // The cover bears on the beam over the posts (one inset in from the
+  // landing's outer edge); its eave overhangs the landing from there.
+  const beamLine = depth - inset
+  const cover = coverGeometry(
+    input,
+    style,
+    porchRoofForm(style, policy, attach),
+    width / 2,
+    beamLine,
+    wall.thickness / 2,
+  )
+  const form = cover.form
+  if (form === 'flat' && porchRoofForm(style, policy, attach) === 'shed') {
+    warnings.push(
+      `${name}: a shed cover would not fit under the house eave even at 1:12 with the beam at 7 ft — a flat canopy instead.`,
+    )
+  }
+  if (
+    (form === 'gable' || form === 'hip') &&
+    input.housePlateY !== undefined &&
+    cover.pierce < PIERCE_MIN - 1e-6
+  ) {
+    warnings.push(
+      `${name}: the ${form} cover's ridge pierces the house slope only ${cover.pierce.toFixed(2)} m inside the wall (${PIERCE_MIN} m wanted) — the valley lands near the eave; verify the join.`,
+    )
+  }
+  const postHeight = cover.coverY - landingTop
   const along: number[] = []
   if (form !== 'none') {
     const bays = Math.max(1, Math.ceil((width - 2 * inset) / MAX_POST_SPACING))
@@ -453,17 +584,9 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
 
   // ── cover ─────────────────────────────────────────────────────────────
   if (form !== 'none') {
-    const plateY = input.floorElevation + PORCH_COVER_HEIGHT
-    const pitch =
-      form === 'flat'
-        ? 0
-        : form === 'shed'
-          ? Math.min(style.pitch, MAX_SHED_PORCH_PITCH)
-          : Math.min(style.pitch, MAX_PORCH_PITCH)
+    const plateY = cover.coverY
+    const pitch = cover.pitch
     const pitchDeg = Math.atan(pitch / 12) * (180 / Math.PI)
-    // The cover bears on the beam over the posts (one inset in from the
-    // landing's outer edge); its eave overhangs the landing from there.
-    const beamLine = depth - inset
     let segWidth: number
     let segDepth: number
     let centre: Pt
@@ -471,13 +594,13 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
     let roofMeta: Record<string, unknown>
     if (form === 'gable' || form === 'hip') {
       // Ridge square to the wall (segment x along `outward`); the box spans
-      // the width across and reaches INTO the house by its run so its planes
-      // meet the main roof at a valley — the auto roof's wing convention.
-      // Rotation turns segment +x onto −outward (into the house).
-      const run_ = width / 2
-      segWidth = beamLine + run_
+      // the width across and reaches INTO the house to the ridge's pierce
+      // point (a hip one run further, burying its near hip end) so its
+      // planes meet the main roof at a valley — the auto roof's wing
+      // convention. Rotation turns segment +x onto −outward (into the house).
+      segWidth = beamLine + cover.into
       segDepth = width
-      centre = P(0, (beamLine - run_) / 2)
+      centre = P(0, (beamLine - cover.into) / 2)
       yaw = Math.atan2(outward[1], -outward[0])
       roofMeta = { role: 'porch', open: true }
     } else if (form === 'shed') {
@@ -543,6 +666,9 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
       widthFt: round(width / FT),
       depthFt: round(depth / FT),
       roof: form,
+      roofPitch: round(cover.pitch),
+      coverHeightIn: Math.round(((cover.coverY - input.floorElevation) / IN) * 10) / 10,
+      roofPierceM: round(cover.pierce),
       attach,
       posts: along.length,
       rails,

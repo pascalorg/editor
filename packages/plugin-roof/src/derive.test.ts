@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { deriveRoof, type RoofIntent } from './derive'
-import { decomposeRectilinear, mergeCollinear, popSide, type Pt, traceExteriorLoop, type WallInput } from './geometry'
+import {
+  decomposeRectilinear,
+  mergeCollinear,
+  type Pt,
+  popSide,
+  traceExteriorLoop,
+  type WallInput,
+} from './geometry'
 
 const PLATE = 2.7432
 
@@ -126,7 +133,16 @@ describe('deriveRoof on a rectangle', () => {
   })
 
   test('explicit gables turn the ridge: front/back gables on a wide house run the ridge front-to-back', () => {
-    const r = deriveRoof(walls, PLATE, intent({ gables: [[0, -1], [0, 1]] }))
+    const r = deriveRoof(
+      walls,
+      PLATE,
+      intent({
+        gables: [
+          [0, -1],
+          [0, 1],
+        ],
+      }),
+    )
     const s = r.segments[0]!
     expect(s.width).toBeCloseTo(6, 9)
     expect(s.depth).toBeCloseTo(10, 9)
@@ -196,6 +212,37 @@ describe('deriveRoof on an L', () => {
     expect(Math.abs(Math.cos(wing.rotation))).toBeLessThan(1e-9) // ridge front-to-back
     expect(wing.position[2]).toBeCloseTo(8 + 5 / 2 - 3 / 2, 9)
     expect(r.coverage).toBe(1)
+  })
+
+  test('a hip wing runs TWO runs into the main: its ridge reaches the pierce point and its near hip end buries itself (W19)', () => {
+    const r = deriveRoof(L, PLATE, intent({ style: 'ranch' }))
+    const wing = r.segments[1]!
+    expect(wing.roofType).toBe('hip')
+    // the wing is 6 wide (run 3): 5 deep, carried 6 m into the main (its 8 m depth allows it)
+    expect(wing.width).toBeCloseTo(11, 9)
+    expect(wing.depth).toBeCloseTo(6, 9)
+    expect(wing.position[2]).toBeCloseTo(8 + 5 / 2 - 3, 9)
+    // the ridge (width − 2·run = 5 m) starts one run inside the main's eave — the pierce point
+    // at a uniform pitch — and the near hip end runs on another 3 m under the main roof
+    const ridgeNearEnd = wing.position[2] - wing.width / 2 + 3
+    expect(ridgeNearEnd).toBeCloseTo(8 - 3, 9)
+    // a gable wing still reaches one run
+    const farm = deriveRoof(L, PLATE, intent({ style: 'farmhouse' }))
+    expect(farm.segments[1]!.width).toBeCloseTo(8, 9)
+    // a neighbour shallower than two runs caps the reach: a 14 × 6 main with an
+    // 8 × 4 wing (run 4, two runs 8) carries the wing 5.99 m in, not 8
+    const shallow = ring([
+      [0, 0],
+      [14, 0],
+      [14, 6],
+      [8, 6],
+      [8, 10],
+      [0, 10],
+    ])
+    const capped = deriveRoof(shallow, PLATE, intent({ style: 'ranch' }))
+    expect(capped.segments[0]!.width).toBeCloseTo(14, 9)
+    const wing2 = capped.segments[1]!
+    expect(wing2.width).toBeCloseTo(4 + 6 - 0.01, 6)
   })
 
   test('farmhouse gables everything; ranch hips everything; cottage gables the main only', () => {

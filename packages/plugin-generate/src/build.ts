@@ -966,6 +966,9 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         floorElevation: SLAB_ELEVATION_M,
         gradeY: flightGrade,
         overhang: (style.overhangIn * IN) / Math.cos(Math.atan(porchPitch / 12)),
+        // the cover is sized against the house roof it dies into (W19b)
+        housePlateY: ceilingM,
+        housePitch: doc.roof.pitch ?? style.pitch,
         wallRole: (
           ops.find((op) => op.node.id === w.id)?.node.metadata as
             | { roof?: { role?: string } }

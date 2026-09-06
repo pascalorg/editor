@@ -30,8 +30,8 @@ import {
   type Loop,
   mergeCollinear,
   outwardNormal,
-  popSide,
   type Pt,
+  popSide,
   rectArea,
   toFrame,
   traceExteriorLoop,
@@ -115,20 +115,38 @@ const axisNormal = (ridge: 'a' | 'b', sign: 1 | -1): Pt => (ridge === 'a' ? [sig
 export function deriveRoof(walls: WallInput[], plateY: number, intent: RoofIntent): AutoRoofResult {
   const warnings: string[] = []
   const frontDir: Pt = intent.frontDir ?? [0, -1]
-  const thickness = Math.max(...walls.filter((w) => w.frontSide === 'exterior' || w.backSide === 'exterior').map((w) => w.thickness), 0.1)
+  const thickness = Math.max(
+    ...walls
+      .filter((w) => w.frontSide === 'exterior' || w.backSide === 'exterior')
+      .map((w) => w.thickness),
+    0.1,
+  )
 
   // ── the loop, in the building's own frame ──────────────────────────────
   let loop = traceExteriorLoop(walls)
   if (!loop) {
-    warnings.push('exterior walls do not close one loop — roof derived over the walls’ bounding box; verify')
+    warnings.push(
+      'exterior walls do not close one loop — roof derived over the walls’ bounding box; verify',
+    )
     loop = bboxLoop(walls)
-    if (!loop) return { ok: false, segments: [], roles: {}, warnings: ['no walls to roof'], coverage: 0, masses: 0, popped: false }
+    if (!loop)
+      return {
+        ok: false,
+        segments: [],
+        roles: {},
+        warnings: ['no walls to roof'],
+        coverage: 0,
+        masses: 0,
+        popped: false,
+      }
   }
   loop = mergeCollinear(loop)
   const frame = frameFor(loop)
   let polyF = loop.pts.map((p) => toFrame(frame, p))
   if (!isRectilinear(polyF)) {
-    warnings.push('footprint is not rectilinear — one roof over its bounding box; verify the roof plan')
+    warnings.push(
+      'footprint is not rectilinear — one roof over its bounding box; verify the roof plan',
+    )
     const bb = boundsOf(polyF)
     polyF = [
       [bb.a0, bb.b0],
@@ -163,19 +181,37 @@ export function deriveRoof(walls: WallInput[], plateY: number, intent: RoofInten
         : 'b'
   rects = absorbShallowEndPopouts(rects, mainRidge)
 
-  const popped = intent.form !== 'shed' && intent.form !== 'flat' && popSide(polyF, frontF) > POPPED_DEPTH
+  const popped =
+    intent.form !== 'shed' && intent.form !== 'flat' && popSide(polyF, frontF) > POPPED_DEPTH
   const masses = planMasses(rects, mainRidge, intent, explicit, frontF, popped)
   if (popped && masses.some((m) => m.roofType === 'hip') && intent.form === 'gable') {
-    warnings.push('footprint pops toward the street — hip roof everywhere (a gable across the pop-out never resolves)')
+    warnings.push(
+      'footprint pops toward the street — hip roof everywhere (a gable across the pop-out never resolves)',
+    )
   }
 
   // ── coverage gate ─────────────────────────────────────────────────────
-  let coverage = coverageOf(polyF, masses.map((m) => m.roof))
+  let coverage = coverageOf(
+    polyF,
+    masses.map((m) => m.roof),
+  )
   let finalMasses = masses
   if (coverage < COVERAGE_FLOOR) {
-    warnings.push(`roof covered ${Math.round(coverage * 100)}% of the footprint — fell back to one hip over the bounding box; verify`)
-    finalMasses = planMasses([boundsOf(polyF)], mainRidge, { ...intent, form: intent.form === 'shed' || intent.form === 'flat' ? intent.form : 'hip' }, [], frontF, false)
-    coverage = coverageOf(polyF, finalMasses.map((m) => m.roof))
+    warnings.push(
+      `roof covered ${Math.round(coverage * 100)}% of the footprint — fell back to one hip over the bounding box; verify`,
+    )
+    finalMasses = planMasses(
+      [boundsOf(polyF)],
+      mainRidge,
+      { ...intent, form: intent.form === 'shed' || intent.form === 'flat' ? intent.form : 'hip' },
+      [],
+      frontF,
+      false,
+    )
+    coverage = coverageOf(
+      polyF,
+      finalMasses.map((m) => m.roof),
+    )
   }
 
   // ── segments ──────────────────────────────────────────────────────────
@@ -189,7 +225,9 @@ export function deriveRoof(walls: WallInput[], plateY: number, intent: RoofInten
     const alongB = r.b1 - r.b0
     if (m.roofType === 'shed') {
       // slope falls toward the segment's +Z: +Z must point toward the street
-      const low = dot([(r.a0 + r.a1) / 2, (r.b0 + r.b1) / 2], lowEdge.dir) - (lowEdge.dir[0] !== 0 ? alongA : alongB) / 2
+      const low =
+        dot([(r.a0 + r.a1) / 2, (r.b0 + r.b1) / 2], lowEdge.dir) -
+        (lowEdge.dir[0] !== 0 ? alongA : alongB) / 2
       const hiAxisIsA = Math.abs(lowEdge.dir[0]) > 0.5
       const streetDir: Pt = [-lowEdge.hiDir[0], -lowEdge.hiDir[1]]
       const street = fromFrameDir(frame, streetDir)
@@ -233,7 +271,10 @@ export function deriveRoof(walls: WallInput[], plateY: number, intent: RoofInten
   }
 }
 
-const fromFrameDir = (f: Frame, d: Pt): Pt => [d[0] * f.u[0] + d[1] * f.v[0], d[0] * f.u[1] + d[1] * f.v[1]]
+const fromFrameDir = (f: Frame, d: Pt): Pt => [
+  d[0] * f.u[0] + d[1] * f.v[0],
+  d[0] * f.u[1] + d[1] * f.v[1],
+]
 
 function bboxLoop(walls: WallInput[]): Loop | null {
   const pts = walls.flatMap((w) => [w.start, w.end])
@@ -271,7 +312,12 @@ function absorbShallowEndPopouts(rects: Bounds[], ridge: 'a' | 'b'): Bounds[] {
     const span = Math.min(s1, c1) - Math.max(s0, c0)
     const atEnd = Math.abs(r0 - m1) < 0.01 || Math.abs(r1 - m0) < 0.01
     const insideAcross = s0 >= c0 - 0.01 && s1 <= c1 + 0.01
-    if (atEnd && insideAcross && depth <= CONTINUATION_MAX_DEPTH && span >= CONTINUATION_MIN_SPAN * (c1 - c0)) {
+    if (
+      atEnd &&
+      insideAcross &&
+      depth <= CONTINUATION_MAX_DEPTH &&
+      span >= CONTINUATION_MIN_SPAN * (c1 - c0)
+    ) {
       if (ridge === 'a') {
         main.a0 = Math.min(main.a0, r.a0)
         main.a1 = Math.max(main.a1, r.a1)
@@ -287,7 +333,11 @@ function absorbShallowEndPopouts(rects: Bounds[], ridge: 'a' | 'b'): Bounds[] {
 }
 
 /** The gable vocabulary per style, PlanCrafters gen.js `assignRoofGables`. */
-function gableVocabulary(style: string | undefined, isMain: boolean, capFacesStreet: boolean): boolean {
+function gableVocabulary(
+  style: string | undefined,
+  isMain: boolean,
+  capFacesStreet: boolean,
+): boolean {
   const s = (style ?? '').toLowerCase()
   if (s.includes('farmhouse')) return true
   if (s.includes('craftsman')) return isMain || capFacesStreet
@@ -296,7 +346,14 @@ function gableVocabulary(style: string | undefined, isMain: boolean, capFacesStr
   return true
 }
 
-function planMasses(rects: Bounds[], mainRidge: 'a' | 'b', intent: RoofIntent, explicit: readonly Pt[], frontF: Pt, popped: boolean): Mass[] {
+function planMasses(
+  rects: Bounds[],
+  mainRidge: 'a' | 'b',
+  intent: RoofIntent,
+  explicit: readonly Pt[],
+  frontF: Pt,
+  popped: boolean,
+): Mass[] {
   const main = rects[0] as Bounds
   const masses: Mass[] = rects.map((rect, i) => {
     const isMain = i === 0
@@ -307,16 +364,17 @@ function planMasses(rects: Bounds[], mainRidge: 'a' | 'b', intent: RoofIntent, e
     // wing's proportions). A free-standing mass takes its long axis.
     const shared = isMain
       ? null
-      : ([axisNormal('a', 1), axisNormal('a', -1), axisNormal('b', 1), axisNormal('b', -1)] as Pt[]).find((n) =>
-          rects.some((o, j) => j !== i && touchesAcross(rect, o, n)),
-        )
+      : (
+          [axisNormal('a', 1), axisNormal('a', -1), axisNormal('b', 1), axisNormal('b', -1)] as Pt[]
+        ).find((n) => rects.some((o, j) => j !== i && touchesAcross(rect, o, n)))
     const ridge: 'a' | 'b' = isMain ? mainRidge : shared ? (shared[0] !== 0 ? 'a' : 'b') : longAxis
     let roofType: RoofForm = intent.form
     const gableEnds: Pt[] = []
     if (intent.form === 'gable' || intent.form === 'hip') {
       const ends: Pt[] = [axisNormal(ridge, 1), axisNormal(ridge, -1)]
       // which ridge ends are free caps (not buried in a neighbour)
-      const outerCap = (n: Pt): boolean => !rects.some((o, j) => j !== i && touchesAcross(rect, o, n))
+      const outerCap = (n: Pt): boolean =>
+        !rects.some((o, j) => j !== i && touchesAcross(rect, o, n))
       const capFacesStreet = ends.some((n) => outerCap(n) && dot(n, frontF) > 0.7)
       let gable: boolean
       if (explicit.length > 0) gable = ends.some((n) => explicit.some((g) => dot(g, n) > 0.7))
@@ -325,16 +383,31 @@ function planMasses(rects: Bounds[], mainRidge: 'a' | 'b', intent: RoofIntent, e
       roofType = gable ? 'gable' : 'hip'
       if (gable) for (const n of ends) if (outerCap(n) || isMain) gableEnds.push(n)
     }
-    return { rect, roof: { ...rect }, ridge, roofType, gableEnds, name: isMain ? 'Main roof' : `Wing ${i} roof` }
+    return {
+      rect,
+      roof: { ...rect },
+      ridge,
+      roofType,
+      gableEnds,
+      name: isMain ? 'Main roof' : `Wing ${i} roof`,
+    }
   })
-  // run each wing into its neighbour so its planes die in the neighbour's slope
+  // run each wing into its neighbour so its planes die in the neighbour's
+  // slope: a gable's ridge reaches the pierce point one run in (the pitch is
+  // uniform); a hip's ridge must reach it too, and its near hip end has to
+  // bury itself beyond it — one run more — or that hip end would face the
+  // neighbour's slope head-on in a dead valley (Bones W19 names it)
   for (let i = 1; i < masses.length; i++) {
     const m = masses[i] as Mass
     const run = (m.ridge === 'a' ? m.rect.b1 - m.rect.b0 : m.rect.a1 - m.rect.a0) / 2
+    const into = m.roofType === 'hip' ? 2 * run : run
     for (const n of [axisNormal(m.ridge, 1), axisNormal(m.ridge, -1)]) {
       const neighbour = rects.find((o, j) => j !== i && touchesAcross(m.rect, o, n))
       if (!neighbour) continue
-      const reach = Math.min(run, (n[0] !== 0 ? neighbour.a1 - neighbour.a0 : neighbour.b1 - neighbour.b0) - 0.01)
+      const reach = Math.min(
+        into,
+        (n[0] !== 0 ? neighbour.a1 - neighbour.a0 : neighbour.b1 - neighbour.b0) - 0.01,
+      )
       if (n[0] > 0) m.roof.a1 += reach
       else if (n[0] < 0) m.roof.a0 -= reach
       else if (n[1] > 0) m.roof.b1 += reach
@@ -369,7 +442,10 @@ type ShedLowEdge = { hiDir: Pt; dir: Pt; low: number }
  * the rise, and every mass's own low edge measures its knee wall from there.
  */
 function shedLowEdge(masses: Mass[], frontF: Pt): ShedLowEdge {
-  const hiDir: Pt = Math.abs(frontF[0]) >= Math.abs(frontF[1]) ? [-Math.sign(frontF[0]) || -1, 0] : [0, -Math.sign(frontF[1]) || -1]
+  const hiDir: Pt =
+    Math.abs(frontF[0]) >= Math.abs(frontF[1])
+      ? [-Math.sign(frontF[0]) || -1, 0]
+      : [0, -Math.sign(frontF[1]) || -1]
   let low = Number.POSITIVE_INFINITY
   for (const m of masses) {
     const corners: Pt[] = [
@@ -381,7 +457,14 @@ function shedLowEdge(masses: Mass[], frontF: Pt): ShedLowEdge {
   return { hiDir, dir: hiDir, low }
 }
 
-function wallRoles(loop: Loop, frame: Frame, polyF: readonly Pt[], masses: Mass[], shed: ShedLowEdge, form: RoofForm): Record<string, WallRoofRole> {
+function wallRoles(
+  loop: Loop,
+  frame: Frame,
+  polyF: readonly Pt[],
+  masses: Mass[],
+  shed: ShedLowEdge,
+  form: RoofForm,
+): Record<string, WallRoofRole> {
   const roles: Record<string, WallRoofRole> = {}
   for (let i = 0; i < loop.edges.length; i++) {
     const e = loop.edges[i] as { a: Pt; b: Pt; wallIds: string[] }
@@ -397,7 +480,13 @@ function wallRoles(loop: Loop, frame: Frame, polyF: readonly Pt[], masses: Mass[
       for (const m of masses) {
         const onA = Math.abs(a[0] - b[0]) < 0.01
         const line = onA ? a[0] : a[1]
-        const edgeCoord = onA ? (n[0] > 0 ? m.rect.a1 : m.rect.a0) : n[1] > 0 ? m.rect.b1 : m.rect.b0
+        const edgeCoord = onA
+          ? n[0] > 0
+            ? m.rect.a1
+            : m.rect.a0
+          : n[1] > 0
+            ? m.rect.b1
+            : m.rect.b0
         if (Math.abs(line - edgeCoord) > 0.02) continue
         const lo = Math.min(onA ? a[1] : a[0], onA ? b[1] : b[0])
         const hi = Math.max(onA ? a[1] : a[0], onA ? b[1] : b[0])
@@ -406,7 +495,11 @@ function wallRoles(loop: Loop, frame: Frame, polyF: readonly Pt[], masses: Mass[
         if (Math.min(hi, mhi) - Math.max(lo, mlo) < 0.1) continue
         const alongRidge = (m.ridge === 'a' && !onA) || (m.ridge === 'b' && onA)
         if (alongRidge) role = 'eave'
-        else role = m.roofType === 'gable' && m.gableEnds.some((g) => dot(g, n) > 0.7) ? 'gable-end' : 'hip-end'
+        else
+          role =
+            m.roofType === 'gable' && m.gableEnds.some((g) => dot(g, n) > 0.7)
+              ? 'gable-end'
+              : 'hip-end'
         break
       }
     }
