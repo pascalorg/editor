@@ -260,12 +260,16 @@ W15 Ceiling joists as a framer laps them — DONE 2026-09-06 (see log; the open 
     partitions named as bearing walls in the level warnings; the details sheet reads the
     spacing off the members.
 
-W16 Roof intersections and the hip — DONE 2026-09-06 in three parts (see log W16a/b/c;
-    open: the ranch's hip wing through the main's hip end plane, the porch grazing the
-    garage wing, no attic separation wall over the buried wing): valleys for a wing on a
-    lower plate and for hip wings / hip mains; mid-run purlins + struts on all four hip
-    planes; a parallel wing running under the main buried, its straddlers cut at the
-    junction, the main's rake trim cut where the wing's plane carries on.
+W16 Roof intersections and the hip — DONE 2026-09-06 in six parts (see log W16a–f;
+    open: the intersection LINE of a hip wing through a hip end plane or a porch graze
+    has no valley board — the wood under the other roof is cut, the line needs its
+    detail): valleys for a wing on a lower plate and for hip wings / hip mains; mid-run
+    purlins + struts on all four hip planes; a parallel wing running under the main
+    buried, its straddlers cut, the main's rake trim cut where the wing's plane carries
+    on; stub joists in the hip end strips; the valley join trimmed with the knife (the
+    wing's rafters inside the main replaced by the jacks, its deck cut at the line, the
+    main's eave trim cut under the wing); every other overlapping pair trimmed where the
+    smaller roof runs under the larger. The attic separation over the garage is W17.
 
 W17 Attic separation over the garage — DONE 2026-09-06 (see log): the dwelling–garage
     separation carried above the ceiling to the roof deck (Table R302.6) where the
