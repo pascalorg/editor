@@ -4567,7 +4567,9 @@ export function roofLiveAt(
     if (yr === null) continue
     const [ox, oz] = roofReach(r)
     if (Math.abs(xr) > r.width / 2 + ox + EPS || Math.abs(zr) > r.depth / 2 + oz + EPS) continue
-    if (yr > y + BURIAL_TOLERANCE) return false
+    // above it, or level with it — a wing whose plane continues the main's
+    // is the main's plane there, not a second roof to frame against
+    if (yr >= y - BURIAL_TOLERANCE) return false
   }
   return true
 }

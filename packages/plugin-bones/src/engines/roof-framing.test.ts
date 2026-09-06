@@ -19,6 +19,7 @@ import {
   overframeStack,
   type RoofSegmentSlice,
   roofCreases,
+  roofLiveAt,
   roofPlaneAt,
   shedBearingWallIds,
 } from './roof-framing'
@@ -3181,6 +3182,57 @@ describe('W16c: buried parallel wings', () => {
     expect(warnings[0]).not.toContain('not framed')
     // the reverse ordering is never taken: the main is the larger footprint
     expect(detectBuriedWings([wing, main])[0]?.major.id).toBe('main')
+  })
+
+  test('roofLiveAt: a wing whose plane continues the main is the main there — not a second roof to frame a porch against (W19)', () => {
+    // the ranch: the hip wing's south plane continues the main's; a porch on
+    // that eave met both roofs and got its sleepers twice
+    const pitch = Math.atan(4 / 12)
+    const main = seg({
+      id: 'main',
+      roofType: 'hip',
+      width: 17.37,
+      depth: 13.26,
+      position: [-3.35, 2.74, 0],
+      pitch,
+      overhang: 0.43,
+      wallHeight: 0,
+    })
+    const wing = seg({
+      id: 'wing',
+      roofType: 'hip',
+      width: 13.41,
+      depth: 6.71,
+      position: [5.33, 2.74, -3.28],
+      pitch,
+      overhang: 0.43,
+      wallHeight: 0,
+    })
+    const porch = seg({
+      id: 'porch',
+      roofType: 'hip',
+      width: 3.94,
+      depth: 2.44,
+      yaw: -Math.PI / 2,
+      position: [-0.61, 2.49, -6.43],
+      pitch: Math.atan(5.4 / 12),
+      overhang: 0.43,
+      wallHeight: 0,
+    })
+    const roofs = [main, wing, porch]
+    // on the main's south eave inside the wing's rect the two planes are level: the wing is not live
+    expect(roofLiveAt(roofs, wing, -0.85, -6.5, porch)).toBe(false)
+    expect(roofLiveAt(roofs, main, -0.85, -6.5, porch)).toBe(true)
+    // out on the wing's own east end it is
+    expect(roofLiveAt(roofs, wing, 9, -3.28)).toBe(true)
+    // …and the porch's sleepers come once, on the main
+    const sleepers = frameRoofs(roofs, [], { ...DEFAULT_SPEC, detail: '400' }).filter(
+      (m) => m.role === 'valley' && (m.position[2] as number) < -6,
+    )
+    expect(sleepers.length).toBeGreaterThan(0)
+    for (const s of sleepers) expect(s.sourceId).toBe('main')
+    const keys = new Set(sleepers.map((s) => s.position.map((v) => v.toFixed(3)).join(',')))
+    expect(keys.size).toBe(sleepers.length)
   })
 
   test('clipMemberBy cuts along the member axis and drops covered stubs; roofPlaneAt reads both shapes', () => {

@@ -1204,3 +1204,15 @@ W19 Roof joins framed as overframes — DONE 2026-09-06 (see log W19a / W19b; op
   the wing (its cover overlaps the main's body — a layout rule for doors
   near inside corners is wanted); a porch on a hip END wall overframes
   onto the end plane (real valleys, not the classic join).
+
+- 2026-09-06 afternoon: **W19a follow-up — a roof level with a larger one is
+  that roof's plane.** The ranch's front porch met the main AND the wing
+  whose south plane continues the main's along that eave, and got its two
+  sleepers twice (once per pair). `roofLiveAt` now treats a larger roof at
+  the same height as riding above: a continuation wing is not a second roof
+  to frame against, cut against or lay a sleeper on. Seen in the editor:
+  the regenerated ranch (seed 777, 4 bd) in the Framing view shows the
+  wing's jacks ending on the flat sleeper along the main's end plane, and
+  its roof framing sheet the two sleepers meeting at the wing's ridge end.
+  Test: W16c +1 (the wing not live on the shared eave, live on its own end;
+  the porch's sleepers once, on the main) — Bones 2,107.
