@@ -12,11 +12,12 @@ function posts(): PorchPostSlice[] {
   const baseY = -0.4572 // grade, 18 in under the floor
   const coverY = 2.79 // the cover's bearing line (a 9 ft porch ceiling over the 0.05 floor)
   const z = -2.05
+  // the generator's columns stop under the beam band: a 6x8 under its 2x plate (8¾ in)
   return [-2.9, -0.86, 0.86, 2.9].map((x, i) => ({
     id: `column_${i + 1}`,
     plan: [x, z] as const,
     baseY,
-    height: coverY - baseY,
+    height: coverY - inches(8.75) - baseY,
     size: inches(5.5),
     entrance: 'front',
   }))

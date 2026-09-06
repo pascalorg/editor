@@ -347,6 +347,8 @@ export function slabKindOf(metadata: unknown): SlabKind {
   if (floor === 'deck') return 'deck'
   if (floor === 'slab-on-grade' || floor === 'garage-slab-at-grade' || floor === 'porch-slab')
     return 'slab'
+  // a beam the generator shows as a slab (a shed cover's beam): trim, never framed or poured
+  if (floor === 'porch-beam') return 'trim'
   return 'floor'
 }
 

@@ -431,7 +431,8 @@ export function probeSlabsFor(
       return all.filter((l) => l.buildingId === myBuilding)
     })()
   const levelIndex = scoped.findIndex((l) => l.id === levelId)
-  const slabs = extractSlabs(nodes, levelId)
+  // a 'trim' slab (the generator's beam box under a shed cover) is neither a floor nor a pour
+  const slabs = extractSlabs(nodes, levelId).filter((s) => s.kind !== 'trim')
   // Outdoor floors (a deck, a porch pad) are exactly the outdoors the probes
   // hunt for: they never count as coverage, on this level or the one below
   // (W10b — a porch slab against the front wall made the wall under the

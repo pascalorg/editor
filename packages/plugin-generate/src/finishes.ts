@@ -647,6 +647,12 @@ export function applyFinishes(
         out.roofs++
         break
       }
+      case 'ceiling': {
+        // a porch ceiling is painted with the trim
+        // the slot model (a flat tint the ceiling renderer reads); the legacy preset path is not used
+        if ((n.metadata as { porch?: unknown } | undefined)?.porch) n.slots = { surface: f.trim.ref }
+        break
+      }
       case 'column': {
         if (typeof n.materialPreset !== 'string') {
           n.materialPreset = f.trim.ref

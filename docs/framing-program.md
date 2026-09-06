@@ -688,6 +688,30 @@ G22 The WebGPU "Vertex buffer slot 0 … was not set" error.
   their pads, the 6x8 girder and plate under the pediment studs, the side
   girders back to the wall, the deck's joists and the flight's stringers.
 
+- 2026-09-06 late: **Batch K — the entrance the shell shows (Steve: "none of
+  the generated porches show the beam, the post should go to the below of
+  the beam, and they don't have ceilings, not really a true front entrance"
+  / "I can see them on the bones framing layer though, so it's the
+  presentation side").** The cover's beam is now in the model, not only in
+  Bones: a gable / hip / flat cover's roof segment carries a wall band
+  `PORCH_BAND` tall (the 6x8 beam plus its 2x plate, 8¾ in) and 5½ in
+  thick, seated `PORCH_BAND` under the bearing line — the band IS the beam
+  under the eaves and the pediment stands on it; a shed cover on a ledger
+  keeps no band (its raked sides would close the porch) and gets a beam
+  SLAB along the low eave post to post (`metadata.floor: 'porch-beam'`, a
+  new Bones slab kind 'trim' that no engine frames or pours). Every post
+  stops under the beam. A `ceiling` node closes the porch at the beam's
+  underside, painted with the trim. Bones' porch engine takes the posts'
+  top as the beam's underside now (girder on the posts, plate on the
+  girder, cover on the plate — the same lines). Checked on the reproduced
+  auto-roof flow (Generate, then the Auto roof panel's "Rebuild roof from
+  walls"): the porch pediment renders after the rebuild too. Seen in the
+  editor on the farmhouse (seed 777): the beam across under the pediment,
+  posts ending under it. Tests: porch expectations (band height and seat,
+  posts under the band, the ceiling), Bones porch fixture — generate 94,
+  Bones 2,118, editor typecheck clean. Not yet looked at: the rear shed
+  cover's beam slab and the ceilings from below.
+
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
   reference folder; Pascal roof node, Bones roof/wall framing, generate build, site
   and parcel code read. Diagnosis above. Starting W1.

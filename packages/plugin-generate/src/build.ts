@@ -1132,6 +1132,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         slab: generateId('slab'),
         roof: generateId('roof'),
         segment: generateId('rseg'),
+        beam: generateId('slab'),
+        ceiling: generateId('ceiling'),
         stair: generateId('stair'),
         stairSegment: generateId('sseg'),
         column: () => generateId('column'),

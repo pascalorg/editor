@@ -31,6 +31,8 @@ function porchNodes(): { nodes: Record<string, N>; stairId: string } {
       segment: 'rseg_porch',
       stair: 'stair_porch',
       stairSegment: 'sseg_porch',
+      beam: 'slab_beam',
+      ceiling: 'ceiling_porch',
       column: () => `column_${++n}`,
       fence: () => `fence_${++n}`,
     },

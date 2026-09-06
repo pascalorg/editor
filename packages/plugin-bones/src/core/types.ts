@@ -389,7 +389,7 @@ export type WallSlice = {
  *     foundation pours it, nothing frames it;
  *   - 'deck'  — a wood deck: the deck engine frames it, nothing pours it.
  */
-export type SlabKind = 'floor' | 'slab' | 'deck'
+export type SlabKind = 'floor' | 'slab' | 'deck' | 'trim'
 
 /**
  * A porch post — a `column` node the generator stood under an entrance's

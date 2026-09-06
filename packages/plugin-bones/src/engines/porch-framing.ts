@@ -115,12 +115,13 @@ function framePorch(
   }
   const size = Math.max(...posts.map((p) => p.size))
   const postSize: LumberSize = size > inches(5) ? '6x6' : '4x4'
-  const coverY = Math.max(...posts.map((p) => p.baseY + p.height))
+  // the posts stop under the beam (the generator's columns end at the band's
+  // underside); the beam sits on them, the plate on the beam, the cover on the plate
+  const beamBottom = Math.max(...posts.map((p) => p.baseY + p.height))
   const [plateT] = LUMBER_CROSS_SECTIONS[PLATE_SIZE]
   const [beamW, beamD] = LUMBER_CROSS_SECTIONS[BEAM_SIZE]
-  const plateY = coverY - plateT / 2
-  const beamY = coverY - plateT - beamD / 2
-  const beamBottom = coverY - plateT - beamD
+  const beamY = beamBottom + beamD / 2
+  const plateY = beamBottom + beamD + plateT / 2
   const yaw = yawOf(dir)
   const sorted = [...posts].sort((p, q) => along(p.plan) - along(q.plan))
   const s0 = along((sorted[0] as PorchPostSlice).plan) - size / 2

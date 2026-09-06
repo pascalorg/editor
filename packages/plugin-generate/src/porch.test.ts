@@ -6,6 +6,7 @@ import {
   MAX_RISER,
   MIN_COVER_HEIGHT,
   PIERCE_MIN,
+  PORCH_BAND,
   PORCH_COVER_HEIGHT,
   PORCH_FLOOR_DROP,
   type PorchIds,
@@ -29,6 +30,8 @@ function ids(): PorchIds {
     stair: 'stair_porch',
     stairSegment: 'stair-segment_porch',
     column: () => `column_${n++}`,
+    beam: 'slab_beam',
+    ceiling: 'ceiling_porch',
     fence: () => `fence_${n++}`,
   }
 }
@@ -110,7 +113,8 @@ describe('a full farmhouse porch', () => {
     for (const p of posts) {
       expect(p.supportSlabId).toBe('slab_porch')
       expect(p.width).toBeCloseTo(5.5 * IN, 9)
-      expect(p.height).toBeCloseTo(PORCH_COVER_HEIGHT + PORCH_FLOOR_DROP, 9)
+      // to the underside of the beam band (a 6x8 under its 2x plate)
+      expect(p.height).toBeCloseTo(PORCH_COVER_HEIGHT + PORCH_FLOOR_DROP - PORCH_BAND, 9)
       expect(p.shaftProfile).toBe('straight')
       expect((p.position as number[])[1]).toBe(0)
     }
@@ -155,8 +159,14 @@ describe('a full farmhouse porch', () => {
 
   test('a gable porch roof on the beam line, ridge square to the wall, reaching into the house by its run', () => {
     expect(seg.roofType).toBe('gable')
-    expect(seg.wallHeight).toBe(0)
-    expect((seg.position as number[])[1]).toBeCloseTo(0.05 + PORCH_COVER_HEIGHT, 9)
+    // the segment's wall band IS the beam: its top the bearing line, its bottom the posts' top
+    expect(seg.wallHeight).toBeCloseTo(PORCH_BAND, 9)
+    expect(seg.wallThickness).toBeCloseTo(5.5 * IN, 9)
+    expect((seg.position as number[])[1]).toBeCloseTo(0.05 + PORCH_COVER_HEIGHT - PORCH_BAND, 9)
+    const ceiling = byType(r.ops, 'ceiling')[0]!
+    expect(ceiling).toBeDefined()
+    expect(ceiling.height).toBeCloseTo(0.05 + PORCH_COVER_HEIGHT - PORCH_BAND, 9)
+    expect(byType(r.ops, 'slab').some((s) => s.name === 'Porch beam')).toBe(false)
     expect(seg.pitch).toBeCloseTo(Math.atan(6 / 12) * (180 / Math.PI), 6) // 8:12 farmhouse capped at 6:12
     expect(seg.depth).toBeCloseTo(20 * FT, 6) // across the ridge: the porch width
     expect(seg.width).toBeCloseTo(6.5 * FT + 10 * FT, 6) // along the ridge: the beam line (7 ft − 6 in) + run (half the width)
@@ -431,7 +441,7 @@ describe('the cover sized against the house roof (W19b)', () => {
     expect(r.summary?.roofPierceM).toBeCloseTo(pierce, 5)
     // the box starts at the wall face; the pierce is measured from the plate line (the wall centreline)
     expect(seg.width).toBeCloseTo(beamLine + 0.17 / 2 + pierce + 0.05 + run, 5)
-    expect((seg.position as number[])[1]).toBeCloseTo(plate, 6) // the beam at the plate
+    expect((seg.position as number[])[1]).toBeCloseTo(plate - PORCH_BAND, 6) // the band's top at the plate
     expect(r.summary?.coverHeightIn).toBeCloseTo(108, 1)
     expect(r.warnings.some((w) => w.includes('pierces'))).toBe(false)
   })

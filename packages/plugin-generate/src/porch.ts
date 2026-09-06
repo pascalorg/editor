@@ -90,6 +90,17 @@ export const MIN_COVER_HEIGHT = 7 * FT
 export const MIN_SHED_PITCH = 1
 /** The stucco ranch's entry piers (PlanCrafters "grand stucco entrance"): 13 in square. */
 export const STUCCO_PIER = inches(13)
+/**
+ * The cover's bearing band the shell shows (Steve, 2026-09-06: "none of the
+ * generated porches show the beam, the post should go to the below of the
+ * beam"): PlanCrafters' 6x8 beam (7¼ in) under its single 2x plate (1½ in),
+ * 5½ in wide — the roof segment's wall band on a gable / hip / flat cover,
+ * a beam slab along the low eave of a shed on a ledger. The posts stop
+ * under it; Bones frames the girder, plate and posts to the same lines.
+ */
+export const PORCH_BEAM_D = inches(7.25)
+export const PORCH_BEAM_W = inches(5.5)
+export const PORCH_BAND = PORCH_BEAM_D + inches(1.5)
 
 export type PorchPolicy = 'full' | 'entry' | 'none' | 'patio' | 'landing' | 'deck'
 export type PorchRoofForm = 'gable' | 'hip' | 'shed' | 'flat' | 'none'
@@ -149,6 +160,9 @@ export interface PorchIds {
   slab: string
   roof: string
   segment: string
+  /** The cover's beam slab (a shed on a ledger) and its ceiling. */
+  beam: string
+  ceiling: string
   stair: string
   stairSegment: string
   column: () => string
@@ -485,7 +499,9 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
       `${name}: the ${form} cover's ridge pierces the house slope only ${cover.pierce.toFixed(2)} m inside the wall (${PIERCE_MIN} m wanted) — the valley lands near the eave; verify the join.`,
     )
   }
-  const postHeight = cover.coverY - landingTop
+  // the posts stop under the beam band; the band's top is the bearing line
+  const beamBottom = cover.coverY - PORCH_BAND
+  const postHeight = beamBottom - landingTop
   // Posts: one at each outer corner, one each side of the stair opening
   // (the flight is centred on the door, a = 0), and the bays between them
   // never over 8 ft. A stair so wide that its flanking posts would crowd
@@ -526,7 +542,7 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         position: [px, footY ?? 0, pz],
         rotation: round(Math.atan2(-az, ax)),
         ...(footY === null ? { supportSlabId: ids.slab } : {}),
-        height: round(footY === null ? postHeight : cover.coverY - footY),
+        height: round(footY === null ? postHeight : beamBottom - footY),
         style: 'plain',
         crossSection: 'square',
         width: round(pillar.size),
@@ -723,24 +739,67 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
       },
       parentId: input.levelId,
     })
+    // A gable / hip / flat cover carries its beam as the segment's wall
+    // band: the band's top is the bearing line, its bottom the posts' top.
+    // A shed on a ledger keeps no band (its raked sides would close the
+    // porch) — its beam is a slab along the low eave, post to post.
+    const banded = roofMeta.attach !== 'high'
     ops.push({
       node: {
         id: ids.segment,
         type: 'roof-segment',
         name: form === 'flat' ? `${name} canopy` : `${name} ${form}`,
         parentId: ids.roof,
-        position: [centre[0], round(plateY), centre[1]],
+        position: [centre[0], round(banded ? plateY - PORCH_BAND : plateY), centre[1]],
         rotation: round(yaw),
         roofType: form,
         width: round(segWidth),
         depth: round(segDepth),
-        wallHeight: 0,
-        wallThickness: 0,
+        wallHeight: banded ? round(PORCH_BAND) : 0,
+        wallThickness: banded ? round(PORCH_BEAM_W) : 0,
         pitch: round(pitchDeg),
         overhang: round(input.overhang),
         metadata: { ...meta, roof: roofMeta },
       },
       parentId: ids.roof,
+    })
+    if (!banded && along.length >= 2) {
+      const a0 = Math.min(...along) - pillar.size / 2
+      const a1 = Math.max(...along) + pillar.size / 2
+      const o = depth - inset
+      ops.push({
+        node: {
+          id: ids.beam,
+          type: 'slab',
+          name: `${name} beam`,
+          parentId: input.levelId,
+          polygon: [
+            P(a0, o - PORCH_BEAM_W / 2),
+            P(a1, o - PORCH_BEAM_W / 2),
+            P(a1, o + PORCH_BEAM_W / 2),
+            P(a0, o + PORCH_BEAM_W / 2),
+          ],
+          holes: [],
+          elevation: round(plateY),
+          thickness: round(PORCH_BAND),
+          metadata: { ...meta, floor: 'porch-beam' },
+        },
+        parentId: input.levelId,
+      })
+    }
+    // the porch ceiling — a flat ceiling under the cover at the beam's underside
+    ops.push({
+      node: {
+        id: ids.ceiling,
+        type: 'ceiling',
+        name: `${name} ceiling`,
+        parentId: input.levelId,
+        polygon: corners,
+        holes: [],
+        height: round(plateY - PORCH_BAND),
+        metadata: meta,
+      },
+      parentId: input.levelId,
     })
   }
 
