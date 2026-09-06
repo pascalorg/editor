@@ -586,6 +586,76 @@ G16 Slab houses get concrete porches front and rear; the porch ceiling is 9 ft (
   (f58bb085): 4ef9816a, 4a10589a, 25c611a3, a8a486d6, ec01f13e, e81367fb,
   c2985f2a and this one — not pushed (Steve: local is fine).
 
+## Mandate additions (Steve, 2026-09-06 late — the entrances)
+
+Verbatim: "i see your gable is still missing on the porch also porch beams should
+be sized correctly, girder, and the gable wall on it look at plan crafters works,
+also your stair rails are not framing correctly, they do posts typically every
+4' so if the stair length is less than 4' then you have two posts, the rail for
+auto porch stair should die into the 6x6 posts, the rail style on the stair from
+pascal isnt good it goes to each tread not how rails work typically, has bottom
+rail top rail and pickets infill, post 4x4 every 4' is how it works, also add
+footings below any post, should be standard footing size make it so it can be
+changed easily and is smart with the plans, lets get more into this area now on
+entrances, foundations were looking great, elevations looking good but missing
+fascia boards from roof, show rails and all features and the roofing material
+isnt in color and matching its still black and white, ensure elevations are
+projecting trees and anything else in the scene correctly, also saw these
+errors :: THREE.WebGPURenderer: Uncaptured WebGPU GPUValidationError: Vertex
+buffer slot 0 required by [RenderPipeline "renderPipeline_MeshBasicMaterial_157"]
+was not set."
+
+G17 The porch gable pediment (3D) — checked on the cottage and the farmhouse
+    (seeds 1308856731, 777): it renders; the open gable in Steve's shot is a
+    tab that had not reloaded the rebuilt viewer. Watch it.
+G18 Bones frames the porch cover the way PlanCrafters' porchWall does: a 6x8
+    beam and a plate along each open bearing line on 6x6 posts to grade, pad
+    footings under the posts (a standard size in the spec, changeable, on the
+    foundation plan), the pediment studs on the beam at the open gable end.
+G19 Stair guards: 4x4 posts every ≤ 4 ft (two on a short flight), top and
+    bottom rails, pickets; the porch stair's rail dies into the 6x6 posts.
+G20 Footings below every post, standard size, easy to change, on the plans.
+G21 Elevations: fascia boards, rails and every feature, the roofing in colour,
+    trees and everything else in the scene projected.
+G22 The WebGPU "Vertex buffer slot 0 … was not set" error.
+
+## Log (continued)
+
+- 2026-09-06 late: **Batch I — stair guards, the elevations, the WebGPU error
+  (G19, G21, G22; G17 checked).** Stair node: `railingStyle` ('balusters' |
+  'post-and-rail') and `railingTopPost`; the stair renderer's post-and-rail
+  guard puts 4x4 posts on the nosing line no more than 4 ft apart (bottom
+  always, top unless `railingTopPost` is off — the generator turns it off
+  when the porch's flanking 6x6 stands there, so the rail dies into it),
+  a 2x4 top rail at the guard height and a bottom rail 4 in over the
+  nosings following the flight, 1½ in pickets at a 4 in gap between them,
+  skipped at the posts; the stair panel gets a Balusters / Post & rail
+  control; the generator's flights use post-and-rail. G22: the stair
+  renderer's shared baluster, rail and box geometries are module constants
+  and every mesh using one now carries `dispose={null}` — React disposed
+  them when a regenerated house unmounted its stairs, and the next stair
+  drew a disposed buffer (a cylinder of 8 segments is 96 indices — the
+  DrawIndexed(96) in the error). Elevations (plugin-sections): new
+  `FeatureSolid`s — porch posts (columns, on their slab), guards (fences,
+  outline with a top rail band and pickets), flights (their box with a
+  tread line per riser, from the stair's own position, rotation and
+  segment length) and the trees plugin's trees (trunk and canopy at their
+  height with a stand-in spread of 60 % of height, 40 % for evergreens,
+  said in a warning — the plugin records no width) — painted in depth
+  order with the walls; the roof prints in the roofing the building records
+  (`metadata.finishes.roof.hex`; a textured shingle preset's catalog colour
+  is its base tint, which drew the roof white); the eave LINE is now a
+  1x8 fascia board hanging from the eave in the trim colour
+  (`metadata.finishes.trim.hex`, else paper), and a gable end gets its
+  rake boards under both slopes. Generated items write `scale` out
+  explicitly so a headless reader sees the store's node. Seen as SVG in the
+  browser pane on the ranch (seed 1308856731, garage): forest-green roof
+  with courses, white fascia along the eaves, the porch's posts and gable
+  on the east elevation, the tree. Tests: sections +1 (post, guard, flight,
+  tree, roof colour, fascia colour) — sections 23, nodes stair 17, generate
+  94, editor typecheck clean. Next: G18 / G20 — Bones frames the porch
+  cover on its posts with pad footings.
+
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
   reference folder; Pascal roof node, Bones roof/wall framing, generate build, site
   and parcel code read. Diagnosis above. Starting W1.

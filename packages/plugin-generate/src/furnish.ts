@@ -838,6 +838,9 @@ export function furnishRooms(input: FurnishInput): FurnishResult {
           parentId: input.levelId,
           position: [round(x), 0, round(z)],
           rotation: [0, round(p.yaw, 6), 0],
+          // the schema's default, written out so a headless reader (the sections
+          // plugin's item boxes) sees the same node the store would
+          scale: [1, 1, 1],
           asset,
           metadata: {
             generatedBy: input.generatedBy,

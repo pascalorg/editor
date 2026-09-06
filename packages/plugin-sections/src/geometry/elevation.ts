@@ -1,5 +1,5 @@
 import type { FloorplanGeometry } from '@pascal-app/core'
-import { projectItem } from './items'
+import { projectFeature, projectItem } from './items'
 import { FINISH_LABEL, type FinishKind } from './materials'
 import { padBounds } from './math'
 import { openingTag } from './openings'
@@ -21,8 +21,11 @@ import {
   wallSpan,
 } from './projection'
 import { type BuildingModel, buildBuildingModel, type WallSolid } from './scene-model'
-import { INK, label, line, WEIGHT } from './style'
+import { INK, label, line, PAPER, polygon as polygonPrimitive, rectPolygon, WEIGHT } from './style'
 import { type DrawingResult, type DrawingScene, EMPTY_BOUNDS, type Vec2 } from './types'
+
+/** A 1x8 finish fascia (7¼ in) hanging from the eave line. */
+const FASCIA_BOARD = 0.184
 
 export type ElevationDirectionArg =
   | 'north'
@@ -177,6 +180,11 @@ export function buildElevationDrawing(
     const piece = projectItem(view, item)
     if (piece) projected.push(piece)
   }
+  // The porch posts, the guards, the flights and the trees, where they stand.
+  for (const feature of built.features) {
+    const piece = projectFeature(view, feature)
+    if (piece) projected.push(piece)
+  }
   for (const prism of built.prisms) {
     // A slab's edge is only worth showing where it is exposed; drawing every
     // interior slab as a full-width band would black out the elevation.
@@ -209,11 +217,14 @@ export function buildElevationDrawing(
       gableFinish,
       gableColor,
       pitchFlag: true,
+      fasciaColor: built.trimHex,
     })
     if (!piece) continue
     projected.push(piece)
-    // Fascia / eave line — only meaningful when the eave edge runs across the
-    // view (the segment's down-slope axis pointing at or away from us).
+    // The fascia board along the eave — where the eave edge runs across the
+    // view (the segment's down-slope axis pointing at or away from us): a
+    // 1x8 in the trim colour hanging from the eave line, drawn with the
+    // roof detail so it stands in front of the wall it caps.
     const alignment = Math.abs(roof.axisZ[0] * view.forward[0] + roof.axisZ[1] * view.forward[1])
     if (alignment > 0.7) {
       const corners: Vec2[] = [
@@ -223,11 +234,13 @@ export function buildElevationDrawing(
         roof.toWorld(roof.local.minX, roof.local.maxZ),
       ]
       const us = corners.map((c) => projectU(view, c[0], c[1]))
+      const u0 = Math.min(...us)
+      const u1 = Math.max(...us)
       roofDetail.push(
-        line([Math.min(...us), drawY(roof.eaveY)], [Math.max(...us), drawY(roof.eaveY)], {
-          stroke: INK,
-          strokeWidth: WEIGHT.detail,
-        }),
+        polygonPrimitive(
+          rectPolygon(u0, drawY(roof.eaveY), u1, drawY(roof.eaveY) + FASCIA_BOARD),
+          { fill: built.trimHex ?? PAPER, stroke: INK, strokeWidth: WEIGHT.detail },
+        ),
       )
     }
   }

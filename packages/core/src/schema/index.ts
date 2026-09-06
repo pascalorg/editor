@@ -283,6 +283,7 @@ export {
   getEffectiveStairSurfaceMaterial,
   StairNode,
   StairRailingMode,
+  StairRailingStyle,
   StairSlabOpeningMode,
   StairTopLandingMode,
   StairType,

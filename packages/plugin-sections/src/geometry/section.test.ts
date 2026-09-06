@@ -550,6 +550,35 @@ describe('buildElevationDrawing', () => {
     expect(cutStem!.x1 - cutStem!.x0).toBeCloseTo(WALL_THICKNESS, 6)
   })
 
+  test('a porch post, a guard, a flight and a tree stand in the elevation; the roof takes the recorded roofing colour', () => {
+    const s = scene()
+    const add = (n: Record<string, unknown>) => {
+      ;(s.nodes as Record<string, unknown>)[n.id as string] = n
+    }
+    add({ object: 'node', id: 'column_1', type: 'column', parentId: 'level_1', visible: true, metadata: {}, children: [], position: [1, 0, 5], rotation: 0, height: 2.4, width: 0.14, depth: 0.14 })
+    add({ object: 'node', id: 'fence_1', type: 'fence', parentId: 'level_1', visible: true, metadata: {}, children: [], start: [1.5, 5], end: [4, 5], height: 0.9, thickness: 0.04 })
+    add({ object: 'node', id: 'stair_1', type: 'stair', parentId: 'level_1', visible: true, metadata: {}, children: ['sseg_1'], position: [3, 0, 6], rotation: Math.PI, width: 1, totalRise: 0.5, stepCount: 3, stairType: 'straight' })
+    add({ object: 'node', id: 'sseg_1', type: 'stair-segment', parentId: 'stair_1', visible: true, metadata: {}, children: [], segmentType: 'stair', length: 0.84, width: 1, height: 0.5, stepCount: 3 })
+    add({ object: 'node', id: 'tree_1', type: 'trees:tree', parentId: null, visible: true, metadata: {}, children: [], position: [-3, 0, 6], rotation: [0, 0, 0], preset: 'oak', height: 6 })
+    ;(s.nodes.building_1 as unknown as { metadata: Record<string, unknown> }).metadata = {
+      finishes: { roof: { label: 'comp shingle — weathered', hex: '#6e6256' }, trim: { hex: '#f4f1ea' } },
+    }
+    const south = buildElevationDrawing(s, 'south')
+    const rects = polygons(south.primitives).map((p) => ({ ...extent(p), fill: p.fill }))
+    // the post: a 0.14 m box 2.4 m tall
+    expect(rects.some((r) => Math.abs(r.x1 - r.x0 - 0.14) < 1e-6 && Math.abs(r.top - 2.4) < 1e-6)).toBe(true)
+    // the guard: 2.5 m wide, 0.9 m tall
+    expect(rects.some((r) => Math.abs(r.x1 - r.x0 - 2.5) < 1e-6 && Math.abs(r.top - 0.9) < 1e-6)).toBe(true)
+    // the flight: 1 m wide, 0.5 m of rise
+    expect(rects.some((r) => Math.abs(r.x1 - r.x0 - 1) < 1e-6 && Math.abs(r.top - 0.5) < 1e-6)).toBe(true)
+    // the tree: a canopy of the trees plugin's stand-in spread (60 % of 6 m)
+    expect(polygons(south.primitives).some((p) => p.fill === '#e5efe0' && p.points.length === 36)).toBe(true)
+    expect(south.warnings.some((w) => w.includes('stand-in spread'))).toBe(true)
+    // the roof surface fills in the recorded roofing colour, the fascia in the trim colour
+    expect(polygons(south.primitives).some((p) => p.fill === '#6e6256')).toBe(true)
+    expect(polygons(south.primitives).some((p) => p.fill === '#f4f1ea')).toBe(true)
+  })
+
   test('the grade line sits at 0.00 with no terrain', () => {
     const drawing = buildElevationDrawing(scene(), 'south')
     const grade = drawing.primitives.find(

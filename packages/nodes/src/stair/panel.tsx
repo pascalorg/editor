@@ -8,6 +8,7 @@ import {
   type SlabNode,
   type StairNode,
   type StairRailingMode,
+  type StairRailingStyle,
   type StairSegmentNode,
   StairSegmentNode as StairSegmentNodeSchema,
   type StairSlabOpeningMode,
@@ -44,6 +45,10 @@ const RAILING_MODE_OPTIONS: { label: string; value: StairRailingMode }[] = [
   { label: 'Left', value: 'left' },
   { label: 'Right', value: 'right' },
   { label: 'Both', value: 'both' },
+]
+const RAILING_STYLE_OPTIONS: { label: string; value: StairRailingStyle }[] = [
+  { label: 'Balusters', value: 'balusters' },
+  { label: 'Post & rail', value: 'post-and-rail' },
 ]
 
 const STAIR_TYPE_OPTIONS: { label: string; value: StairType }[] = [
@@ -617,16 +622,23 @@ export default function StairPanel() {
           value={node.railingMode ?? 'none'}
         />
         {(node.railingMode ?? 'none') !== 'none' && (
-          <SliderControl
-            label="Height"
-            max={1.4}
-            min={0.7}
-            onChange={(value) => handleUpdate({ railingHeight: value })}
-            precision={2}
-            step={0.02}
-            unit="m"
-            value={Math.round((node.railingHeight ?? 0.92) * 100) / 100}
-          />
+          <>
+            <SegmentedControl
+              onChange={(value) => handleUpdate({ railingStyle: value })}
+              options={RAILING_STYLE_OPTIONS}
+              value={node.railingStyle ?? 'balusters'}
+            />
+            <SliderControl
+              label="Height"
+              max={1.4}
+              min={0.7}
+              onChange={(value) => handleUpdate({ railingHeight: value })}
+              precision={2}
+              step={0.02}
+              unit="m"
+              value={Math.round((node.railingHeight ?? 0.92) * 100) / 100}
+            />
+          </>
         )}
       </PanelSection>
 

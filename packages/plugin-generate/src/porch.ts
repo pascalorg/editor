@@ -583,6 +583,11 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         // landing's flight always has them
         railingMode: risers >= 3 || rise > GUARD_REQUIRED_ABOVE ? 'both' : 'none',
         railingHeight: inches(34),
+        // a deck stair's guard: 4x4 posts ≤ 4 ft apart, top and bottom rails,
+        // pickets — and no top post where the porch's flanking 6x6 already
+        // stands, so the rail dies into it (Steve, 2026-09-06)
+        railingStyle: 'post-and-rail',
+        railingTopPost: flankAt === null,
         children: [ids.stairSegment],
         metadata: meta,
       },

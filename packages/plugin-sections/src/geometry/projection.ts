@@ -307,7 +307,16 @@ export type ProjectRoofOptions = {
    * Absent → the gable is left blank.
    */
   gableFinish?: 'siding' | 'stucco' | 'brick' | 'stone' | 'fiber-cement' | 'none' | null
+  /**
+   * The trim colour for the rake boards drawn along a gable end's slopes
+   * (a 1x8 under the roof edge). Absent → paper white; the boards are drawn
+   * only with `courses` (elevations).
+   */
+  fasciaColor?: string | null
 }
+
+/** A 1x8 rake / fascia board (7¼ in), measured down the slope's edge. */
+const RAKE_BOARD = 0.184
 
 export function projectRoof(
   view: Projector,
@@ -401,6 +410,17 @@ export function projectRoof(
         textAnchor: 'start',
         dominantBaseline: 'alphabetic',
       } as FloorplanGeometry,
+    )
+  }
+  if (options.courses && gableEnd) {
+    // the rake boards: a band under the two slopes of the gable end
+    const upperBand = [...upper, ...[...upper].reverse().map(([u, y]) => [u, y + RAKE_BOARD] as Vec2)]
+    primitives.push(
+      polygonPrimitive(upperBand, {
+        fill: options.fasciaColor ?? PAPER,
+        stroke: INK,
+        strokeWidth: WEIGHT.detail,
+      }),
     )
   }
   if (options.courses) {

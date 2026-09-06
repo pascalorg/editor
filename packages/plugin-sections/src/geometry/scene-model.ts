@@ -243,17 +243,202 @@ export type LevelInfo = {
 /** The roof finish the generator recorded on the building (`metadata.finishes.roof`), if any. */
 export type RoofFinishRecord = { label: string; hex: string | null }
 
+/**
+ * The built features that are neither walls nor placed items but stand in
+ * an elevation all the same: porch posts (`column`), guards (`fence`), the
+ * flights (`stair`) and the trees plugin's trees. Each is its plan footprint
+ * raised between `baseY` and `topY`; a stair carries its riser count for the
+ * tread lines, a tree its canopy spread.
+ */
+export type FeatureSolid = {
+  kind: 'feature'
+  feature: 'column' | 'fence' | 'stair' | 'tree'
+  id: string
+  polygon: Vec2[]
+  baseY: number
+  topY: number
+  risers?: number
+  spread?: number
+  levelId: string | null
+}
+
 export type BuildingModel = {
   walls: WallSolid[]
   prisms: PrismSolid[]
   roofs: RoofSolid[]
   items: ItemSolid[]
+  features: FeatureSolid[]
   levels: LevelInfo[]
   /** World elevation of the ground at a plan point. */
   gradeAt: (x: number, z: number) => number
   warnings: string[]
   /** The recorded roofing finish — null when no building carries the record. */
   roofFinish: RoofFinishRecord | null
+  /** The recorded trim colour (`metadata.finishes.trim.hex`) — fascia and rake boards; null without it. */
+  trimHex: string | null
+}
+
+/** The trim colour off the first building's `metadata.finishes.trim`, duck-typed like the roof finish. */
+export function trimHexOf(nodes: Nodes): string | null {
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'building') continue
+    const meta = (node as { metadata?: unknown }).metadata
+    const finishes = meta && typeof meta === 'object' ? (meta as { finishes?: unknown }).finishes : undefined
+    const trim = finishes && typeof finishes === 'object' ? (finishes as { trim?: unknown }).trim : undefined
+    const hex = trim && typeof trim === 'object' ? (trim as { hex?: unknown }).hex : undefined
+    if (typeof hex === 'string' && hex.length > 0) return hex
+  }
+  return null
+}
+
+/** A tree's canopy spread as a share of its height — a stand-in, the trees plugin carries no width. */
+const TREE_SPREAD = { deciduous: 0.6, evergreen: 0.4 } as const
+
+/**
+ * Posts, guards, flights and trees, as plan footprints between two
+ * elevations. A column or fence standing on a slab (`supportSlabId`) stands
+ * at that slab's elevation; a straight stair's footprint runs from its
+ * position up its own +z by its segments' length; a tree under the site is
+ * in world coordinates already, one under a level rides the level.
+ */
+function collectFeatures(
+  nodes: Nodes,
+  elevations: Map<string, { baseY: number }>,
+  warnings: string[],
+): FeatureSolid[] {
+  const out: FeatureSolid[] = []
+  let trees = 0
+  const slabElevation = (id: unknown): number => {
+    if (typeof id !== 'string') return 0
+    const slab = nodes[id as AnyNodeId] as { type?: string; elevation?: number } | undefined
+    return slab?.type === 'slab' && typeof slab.elevation === 'number' ? slab.elevation : 0
+  }
+  const box = (cx: number, cz: number, w: number, d: number, yaw: number): Vec2[] =>
+    (
+      [
+        [-w / 2, -d / 2],
+        [w / 2, -d / 2],
+        [w / 2, d / 2],
+        [-w / 2, d / 2],
+      ] as Vec2[]
+    ).map(([x, z]) => {
+      const [rx, rz] = rotateVec(x, z, yaw)
+      return [cx + rx, cz + rz] as Vec2
+    })
+  for (const node of Object.values(nodes)) {
+    if (!node || node.visible === false) continue
+    const n = node as Record<string, unknown>
+    const type = String(n.type)
+    const levelId = findLevelId(node, nodes)
+    const levelBase = elevations.get(levelId ?? '')?.baseY ?? 0
+    if (type === 'column') {
+      const p = n.position as number[] | undefined
+      if (!p) continue
+      const w = typeof n.width === 'number' ? n.width : typeof n.radius === 'number' ? n.radius * 2 : 0.1
+      const d = typeof n.depth === 'number' ? n.depth : w
+      const h = typeof n.height === 'number' ? n.height : 2.5
+      const yaw = typeof n.rotation === 'number' ? n.rotation : 0
+      const baseY = levelBase + (p[1] ?? 0) + slabElevation(n.supportSlabId)
+      out.push({
+        kind: 'feature',
+        feature: 'column',
+        id: String(n.id),
+        polygon: box(p[0] ?? 0, p[2] ?? 0, w, d, yaw),
+        baseY,
+        topY: baseY + h,
+        levelId,
+      })
+    } else if (type === 'fence') {
+      const s = n.start as number[] | undefined
+      const e = n.end as number[] | undefined
+      if (!s || !e) continue
+      const dx = (e[0] ?? 0) - (s[0] ?? 0)
+      const dz = (e[1] ?? 0) - (s[1] ?? 0)
+      const len = Math.hypot(dx, dz)
+      if (len < 1e-4) continue
+      const t = typeof n.thickness === 'number' ? Math.max(n.thickness, 0.03) : 0.08
+      const h = typeof n.height === 'number' ? n.height : 1
+      const yaw = -Math.atan2(dz, dx)
+      const baseY = levelBase + slabElevation(n.supportSlabId) + (typeof n.supportOffset === 'number' ? n.supportOffset : 0)
+      out.push({
+        kind: 'feature',
+        feature: 'fence',
+        id: String(n.id),
+        polygon: box(((s[0] ?? 0) + (e[0] ?? 0)) / 2, ((s[1] ?? 0) + (e[1] ?? 0)) / 2, len, t, yaw),
+        baseY,
+        topY: baseY + h,
+        levelId,
+      })
+    } else if (type === 'stair') {
+      if (n.stairType !== undefined && n.stairType !== 'straight') continue
+      const p = n.position as number[] | undefined
+      if (!p) continue
+      const children = Array.isArray(n.children) ? (n.children as string[]) : []
+      let run = 0
+      for (const id of children) {
+        const seg = nodes[id as AnyNodeId] as { type?: string; length?: number } | undefined
+        if (seg?.type === 'stair-segment' && typeof seg.length === 'number') run += seg.length
+      }
+      if (run < 1e-4) continue
+      const w = typeof n.width === 'number' ? n.width : 1
+      const rise = typeof n.totalRise === 'number' ? n.totalRise : 0
+      const yaw = typeof n.rotation === 'number' ? n.rotation : 0
+      // the run climbs along the stair's local +z: local (x, z) → world
+      // (x cos + z sin, −x sin + z cos), the same map the stair node uses
+      const corners: Vec2[] = (
+        [
+          [-w / 2, 0],
+          [w / 2, 0],
+          [w / 2, run],
+          [-w / 2, run],
+        ] as Vec2[]
+      ).map(([x, z]) => [
+        (p[0] ?? 0) + x * Math.cos(yaw) + z * Math.sin(yaw),
+        (p[2] ?? 0) - x * Math.sin(yaw) + z * Math.cos(yaw),
+      ])
+      const baseY = levelBase + (p[1] ?? 0)
+      out.push({
+        kind: 'feature',
+        feature: 'stair',
+        id: String(n.id),
+        polygon: corners,
+        baseY,
+        topY: baseY + rise,
+        risers: typeof n.stepCount === 'number' ? n.stepCount : undefined,
+        levelId,
+      })
+    } else if (type === 'trees:tree') {
+      const p = n.position as number[] | undefined
+      if (!p) continue
+      const h = typeof n.height === 'number' ? n.height : 7
+      const preset = String(n.preset ?? 'oak')
+      const growth =
+        n.treeType === 'evergreen' || n.treeType === 'deciduous'
+          ? (n.treeType as 'evergreen' | 'deciduous')
+          : preset === 'pine'
+            ? 'evergreen'
+            : 'deciduous'
+      const spread = h * TREE_SPREAD[growth]
+      const baseY = levelBase + (p[1] ?? 0)
+      trees += 1
+      out.push({
+        kind: 'feature',
+        feature: 'tree',
+        id: String(n.id),
+        polygon: box(p[0] ?? 0, p[2] ?? 0, spread, spread, 0),
+        baseY,
+        topY: baseY + h,
+        spread,
+        levelId,
+      })
+    }
+  }
+  if (trees > 0) {
+    warnings.push(
+      `${trees} tree(s) drawn as a trunk and canopy at their height with a stand-in spread (${Math.round(TREE_SPREAD.deciduous * 100)} % of height, ${Math.round(TREE_SPREAD.evergreen * 100)} % for evergreens) — the trees plugin records no width.`,
+    )
+  }
+  return out
 }
 
 /**
@@ -764,19 +949,27 @@ export function buildBuildingModel(nodes: Nodes): BuildingModel {
   const stairCount = Object.values(nodes).filter((node) => node?.type === 'stair').length
   if (stairCount > 0) {
     warnings.push(
-      `${stairCount} stair(s) in the scene are not cut or projected — stair geometry is built by the stair system's tread/stringer meshes, which this builder does not read.`,
+      `${stairCount} stair(s) drawn as their flight's box with a tread line per riser in elevation; a section cut does not pass through them (the stair system's tread and stringer meshes are not read here).`,
     )
   }
 
   const items = collectItems(nodes, elevations, warnings)
+  const features = collectFeatures(nodes, elevations, warnings)
+  const roofFinish = roofFinishOf(nodes)
+  // The roofing the building records (the generator's palette — the finish
+  // key's swatch) is what the roof prints in: a textured shingle preset's
+  // catalog colour is its base tint, not the roofing colour the reader sees.
+  if (roofFinish?.hex) for (const roof of roofs) roof.color = roofFinish.hex
   return {
     walls,
     prisms,
     roofs,
     items,
+    features,
     levels,
     gradeAt: terrainSampler(nodes, warnings),
     warnings,
-    roofFinish: roofFinishOf(nodes),
+    roofFinish,
+    trimHex: trimHexOf(nodes),
   }
 }
