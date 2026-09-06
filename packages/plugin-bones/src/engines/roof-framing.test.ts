@@ -582,6 +582,69 @@ describe('frameRoofs — valleys where two gables cross (LOD 350)', () => {
     const parallel = seg({ id: 'p', position: [0, 2.5, 8] })
     expect(byRole(frameRoofs([major, parallel], [], DEFAULT_SPEC), 'valley')).toHaveLength(0)
   })
+
+  test('W16: a wing on a LOWER plate (the porch gable) joins — feet inboard by drop/tanθ, apex that much lower', () => {
+    const drop = 0.25
+    const low = seg({ ...minor, position: [1, 2.5 - drop, 4] })
+    const members = frameRoofs([major, low], [], DEFAULT_SPEC)
+    const vs = byRole(members, 'valley')
+    expect(vs).toHaveLength(2)
+    const tan = Math.tan(theta) // equal pitches
+    const footRun = 2 - drop / tan
+    const rise = 2 * tan - drop // the wing ridge above the MAIN eave
+    const baseY = 2.5 + 0.5
+    const vSeat = (7.25 * 0.0254) / (2 * Math.cos(Math.atan2(rise, footRun * Math.SQRT2)))
+    for (const v of vs) {
+      const axis = longAxis(v)
+      const e1 = new Vector3(...v.position).add(axis.clone().multiplyScalar(v.length / 2))
+      const e2 = new Vector3(...v.position).sub(axis.clone().multiplyScalar(v.length / 2))
+      const apex = e1.y > e2.y ? e1 : e2
+      const foot = e1.y > e2.y ? e2 : e1
+      expect(apex.x).toBeCloseTo(1, 5)
+      expect(apex.y).toBeCloseTo(baseY + vSeat + rise, 5)
+      expect(apex.z).toBeCloseTo(3 - rise / tan, 5)
+      expect(foot.y).toBeCloseTo(baseY + vSeat, 5)
+      expect(foot.z).toBeCloseTo(3, 5) // still the main eave line
+      expect(Math.abs(foot.x - 1)).toBeCloseTo(footRun, 5)
+    }
+    // the valley jacks still run the wing's own pitch from its ridge to the valley
+    const jacks = byRole(members, 'jack-rafter').filter((j) => j.label?.includes('Valley jack'))
+    expect(jacks.length).toBeGreaterThan(0)
+    for (const j of jacks) expect(Math.abs(j.rotation[2] as number)).toBeCloseTo(theta, 5)
+    // a wing whose eave sits ABOVE the main eave is still not modeled
+    const high = seg({ ...minor, position: [1, 2.8, 4] })
+    expect(byRole(frameRoofs([major, high], [], DEFAULT_SPEC), 'valley')).toHaveLength(0)
+    expect(detectUnframedRoofIntersections([major, high])).toHaveLength(1)
+    expect(detectUnframedRoofIntersections([major, low])).toHaveLength(0)
+  })
+
+  test('W16: hip wings join when their ridge reaches the pierce point; hip mains join on the long plane', () => {
+    // a 10 × 4 hip wing: ridge half 3 → its near ridge end (z = 1) IS the pierce point
+    const hipWing = seg({
+      id: 'hipwing',
+      roofType: 'hip',
+      width: 10,
+      depth: 4,
+      yaw: Math.PI / 2,
+      position: [1, 2.5, 4],
+    })
+    const joined = frameRoofs([major, hipWing], [], DEFAULT_SPEC)
+    expect(byRole(joined, 'valley')).toHaveLength(2)
+    expect(detectUnframedRoofIntersections([major, hipWing])).toHaveLength(0)
+    // an 8 × 4 hip wing: ridge half 2 → the ridge ends at z = 2, short of z = 1 — its hip end would sit on the main
+    const shortWing = seg({ ...hipWing, id: 'shortwing', width: 8 })
+    expect(byRole(frameRoofs([major, shortWing], [], DEFAULT_SPEC), 'valley')).toHaveLength(0)
+    expect(detectUnframedRoofIntersections([major, shortWing])).toHaveLength(1)
+    // a 12 × 6 hip main: ridge portion ±3 — the wing at x = 1 (run 2) stays on the long plane…
+    const hipMain = seg({ id: 'hipmain', roofType: 'hip', width: 12, depth: 6 })
+    const onMain = frameRoofs([hipMain, minor], [], DEFAULT_SPEC)
+    expect(byRole(onMain, 'valley')).toHaveLength(2)
+    expect(detectUnframedRoofIntersections([hipMain, minor])).toHaveLength(0)
+    // …while the same wing at x = 2 would run into the hip end plane
+    const atEnd = seg({ ...minor, id: 'atend', position: [2, 2.5, 4] })
+    expect(byRole(frameRoofs([hipMain, atEnd], [], DEFAULT_SPEC), 'valley')).toHaveLength(0)
+    expect(detectUnframedRoofIntersections([hipMain, atEnd])).toHaveLength(1)
+  })
 })
 
 describe('frameRoofs — rake framing + fascia (LOD 350/400)', () => {

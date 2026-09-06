@@ -3855,7 +3855,7 @@ function frameDutch(
 }
 
 // ---------------------------------------------------------------------------
-// Valleys — two gable segments crossing at right angles (LOD 350)
+// Valleys — a wing joining a main roof at right angles (LOD 350)
 // ---------------------------------------------------------------------------
 
 export type ValleyLine = {
@@ -3868,26 +3868,69 @@ export type ValleyLine = {
   apex: readonly [number, number, number]
 }
 
+/** A wing's eave may sit this far ABOVE the main eave and still join (tolerance). */
+const VALLEY_EAVE_TOLERANCE = 0.05
+/** A foot closer than this to the wing ridge is no valley (the wing barely clears the eave). */
+const VALLEY_MIN_FOOT_RUN = 0.1
+
 /**
- * Detect valley lines between pairs of GABLE segments whose ridges cross at
- * right angles with matching eave heights — the classic L/T roof join. The
- * valley is the intersection of the two slope planes: it rises from the
- * point where the minor's eave meets the major's eave edge to the point
- * where the minor's ridge pierces the major's slope. ASSUMPTIONS: hip/shed
- * joins and skewed (non-perpendicular) crossings are not detected; the
- * penetrating segment's rafters overlay the main roof (overlay framing).
+ * The main roof's frame for a join: the half-length of the LONG plane the
+ * wing may pierce (a gable's full width; a hip's ridge portion — the wing
+ * must stay clear of the hip ends), null for shapes not modeled (a hip
+ * whose ridge runs across its depth, sheds, flats, gambrels, mansards).
+ */
+function valleyMajorFrame(major: RoofSegmentSlice): { longHalf: number } | null {
+  if (major.roofType === 'gable') return { longHalf: major.width / 2 }
+  if (major.roofType === 'hip' && major.width >= major.depth) {
+    return { longHalf: Math.max(0, major.width / 2 - major.depth / 2) }
+  }
+  return null
+}
+
+/**
+ * The wing's frame for a join: its ridge half-length along the main's Z
+ * (a gable's full width; a hip's ridge portion) — a hip wing must carry
+ * its ridge all the way to the pierce point, or its near hip end would sit
+ * on the main roof (a hip-dormer termination this model does not frame).
+ */
+function valleyMinorFrame(minor: RoofSegmentSlice): { hip: boolean; ridgeHalf: number } | null {
+  if (minor.roofType === 'gable') return { hip: false, ridgeHalf: minor.width / 2 }
+  if (minor.roofType === 'hip' && minor.width >= minor.depth) {
+    return { hip: true, ridgeHalf: Math.max(0, minor.width / 2 - minor.depth / 2) }
+  }
+  return null
+}
+
+/**
+ * Detect valley lines where a WING (gable or hip) joins a MAIN roof (gable
+ * or hip) at right angles — the classic L/T join and the porch gable into
+ * the main slope. The valley is the intersection of the two slope planes:
+ * it rises from the point where the wing's plane reaches the main eave
+ * height on the main eave line to the point where the wing's ridge pierces
+ * the main slope. A wing whose eave sits BELOW the main eave (the porch
+ * roof on its lower plate — W16) joins with its feet moved inboard of the
+ * wing eave by drop/tan(wing pitch) and its apex that much lower; a wing
+ * whose eave is above the main eave is not modeled. ASSUMPTIONS: skewed
+ * (non-perpendicular) crossings, joins onto a hip end plane and short hip
+ * wings are not detected (they warn); the penetrating segment's rafters
+ * overlay the main roof (overlay framing).
  */
 export function detectValleys(roofs: RoofSegmentSlice[]): ValleyLine[] {
   const out: ValleyLine[] = []
   for (const major of roofs) {
-    if (major.roofType !== 'gable') continue
+    const majorFrame = valleyMajorFrame(major)
+    if (majorFrame === null) continue
     for (const minor of roofs) {
-      if (minor === major || minor.roofType !== 'gable') continue
+      if (minor === major) continue
+      const minorFrame = valleyMinorFrame(minor)
+      if (minorFrame === null) continue
       const rel = minor.yaw - major.yaw
       if (Math.abs(Math.abs(Math.sin(rel)) - 1) > 0.01) continue // ⊥ only
       const eaveMajor = major.position[1] + major.wallHeight
       const eaveMinor = minor.position[1] + minor.wallHeight
-      if (Math.abs(eaveMajor - eaveMinor) > 0.05) continue
+      // the wing eave below the main eave (≥ 0), or a hair above
+      const drop = Math.max(0, eaveMajor - eaveMinor)
+      if (eaveMinor - eaveMajor > VALLEY_EAVE_TOLERANCE) continue
       // minor center in the major's segment frame (inverse of the emitter Ry)
       const dxl = minor.position[0] - major.position[0]
       const dzl = minor.position[2] - major.position[2]
@@ -3896,22 +3939,30 @@ export function detectValleys(roofs: RoofSegmentSlice[]): ValleyLine[] {
       const cx = dxl * cos - dzl * sin
       const cz = dxl * sin + dzl * cos
       const run1 = major.depth / 2
-      const rise1 = run1 * Math.tan(major.pitch)
+      const tan1 = Math.tan(major.pitch)
+      const rise1 = run1 * tan1
       const r2 = minor.depth / 2 // minor slope run — maps onto the major X axis
-      const rise2 = r2 * Math.tan(minor.pitch)
+      const tan2 = Math.tan(minor.pitch)
+      const rise2 = r2 * tan2 - drop // the wing ridge above the MAIN eave
+      if (rise2 <= EPS) continue // never clears the main eave
       if (rise2 > rise1 + EPS) continue // minor tops out above the major ridge
-      const halfAlong = minor.width / 2 // minor ridge half-length, on major Z
+      const halfAlong = minorFrame.ridgeHalf // minor ridge half-length, on major Z
       const near = Math.abs(cz) - halfAlong
       if (near >= run1 - EPS) continue // never reaches the major slope
       if (Math.abs(cz) + halfAlong <= run1 + EPS) continue // fully buried
-      if (Math.abs(cx) + r2 > major.width / 2 + EPS) continue // past the gable end
+      if (Math.abs(cx) + r2 > majorFrame.longHalf + EPS) continue // past the long plane
+      const zApex = run1 - rise2 / tan1
+      if (minorFrame.hip && near > zApex + EPS) continue // the hip ridge stops short
+      // the foot: where the wing plane reaches the main eave height, inboard
+      // of the wing eave by drop/tanθ₂ (zero for a level join)
+      const footRun = r2 - drop / tan2
+      if (footRun < VALLEY_MIN_FOOT_RUN) continue
       const sz = cz >= 0 ? 1 : -1
-      const zApex = run1 - rise2 / Math.tan(major.pitch)
       for (const s of [1, -1] as const) {
         out.push({
           major,
           minorId: minor.id,
-          foot: [cx + s * r2, major.wallHeight, sz * run1],
+          foot: [cx + s * footRun, major.wallHeight, sz * run1],
           apex: [cx, major.wallHeight + rise2, sz * zApex],
         })
       }
@@ -4026,7 +4077,7 @@ export function detectUnframedRoofIntersections(roofs: RoofSegmentSlice[]): stri
       if (a.position[1] >= segPeakY(b) - EPS || b.position[1] >= segPeakY(a) - EPS) continue
       if (!footprintsOverlap(a, b)) continue
       out.push(
-        `roof intersection not framed — valley detail required (${a.roofType} ${a.id} × ${b.roofType} ${b.id}: only perpendicular gable×gable valleys are modeled)`,
+        `roof intersection not framed — valley detail required (${a.roofType} ${a.id} × ${b.roofType} ${b.id}: only a gable / hip wing joining a gable / hip main at right angles on its long plane, ridge reaching the main slope, wing eave at or below the main eave, is modeled)`,
       )
     }
   }

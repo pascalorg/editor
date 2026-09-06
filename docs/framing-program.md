@@ -805,3 +805,24 @@ W15 Ceiling joists as a framer laps them — DONE 2026-09-06 (see log; the open 
   so garage wings read the limited-storage row; the partitions are named
   bearing but the wall engine still frames them like any partition (no
   double plate / stacked stud check); flat-roof joists are not lapped.
+
+- 2026-09-06 small hours: **W16a — valleys for the porch gable and for hip
+  wings / hip mains.** `detectValleys` was gable×gable, same eave height,
+  only; every generated porch gable (its plate 25 cm under the main's)
+  and every hip join warned "valley detail required" and framed nothing.
+  Now a gable or hip WING joins a gable or hip MAIN at right angles on the
+  main's long plane: a wing eave BELOW the main eave moves the valley feet
+  inboard of the wing eave by drop/tan(wing pitch) along the main eave
+  line and lowers the apex by the drop (the plane intersection, the jacks
+  still on the wing's pitch); a hip wing must carry its ridge to the
+  pierce point (a shorter ridge would sit its hip end on the main — that
+  still warns); a hip main joins only within its ridge portion (a wing
+  into a hip end plane warns). The warning text names the modeled class.
+  Headless: the farmhouse and craftsman porch gables now carry their two
+  valleys + jacks; still open: the parallel-offset garage wing (its rear
+  plane coplanar with the main's, its buried west end still framed — the
+  next round), the ranch's hip wings into the near-square main's hip end
+  planes, and a porch grazing the garage wing by 0.6 m. Tests: valley
+  describe +2 (the lowered wing's feet / apex / jacks, the eave-above
+  refusal, hip wing long / short, hip main long plane / end plane) —
+  Bones 2,075, typecheck clean.
