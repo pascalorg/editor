@@ -11,6 +11,7 @@ import { registerEditorHostPanel, registerSitePlanContributor } from '@pascal-ap
 import { builtinPlugin } from '@pascal-app/nodes'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import { generateHostPanel, generatePlugin, registerGenerateCommands } from '@pascal-app/plugin-generate'
+import { lotHostPanel, lotPlugin } from '@pascal-app/plugin-lot'
 import { registerRoofCommands, roofHostPanel, roofPlugin } from '@pascal-app/plugin-roof'
 import {
   registerBuiltinSheetProviders,
@@ -113,6 +114,8 @@ extendPluginDiscovery(async () => [roofPlugin])
 registerEditorHostPanel(roofHostPanel)
 registerRoofCommands()
 // Generate: complete houses from a seed or a template (Ctrl+K → Generate house).
+extendPluginDiscovery(async () => [lotPlugin])
+registerEditorHostPanel(lotHostPanel)
 extendPluginDiscovery(async () => [generatePlugin])
 registerEditorHostPanel(generateHostPanel)
 registerGenerateCommands()

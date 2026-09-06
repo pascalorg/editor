@@ -1,18 +1,11 @@
 'use client'
 
-import {
-  type AnyNode,
-  type AnyNodeId,
-  type BuildingNode,
-  type SiteNode,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNode, type SiteNode, useScene } from '@pascal-app/core'
 import {
   ActionButton,
   ActionGroup,
-  buildingRecentreOffset,
-  buildSitePlanDrawing,
   describeSiteEdges,
+  dropInLot,
   PanelSection,
   PanelWrapper,
 } from '@pascal-app/editor'
@@ -31,22 +24,6 @@ interface Suggestion {
   postcode?: string
   lat?: number
   lng?: number
-}
-
-interface ResolveResponse {
-  ok: boolean
-  error?: string
-  apn?: string
-  county?: string
-  state?: string
-  zip?: string
-  zoning?: string
-  lotAreaSqFt?: number
-  originLngLat?: [number, number]
-  geocodedBy?: string
-  matchPrecision?: string
-  notes?: string[]
-  polygonM?: [number, number][]
 }
 
 /**
@@ -119,6 +96,10 @@ export function SiteNodePanel() {
 
   const edges = useMemo(() => describeSiteEdges(node ?? null), [node])
 
+  // One engine for every path (Lot panel, Generate, here): resolve the
+  // parcel, map the streets, pick the street-facing edge, default the
+  // setbacks when the site has none, re-centre a building that fell outside
+  // the new ring. See @pascal-app/editor `dropInLot`.
   const findParcel = useCallback(async () => {
     if (!node) return
     const address = query.trim()
@@ -127,88 +108,27 @@ export function SiteNodePanel() {
       return
     }
     setBusy(true)
-    setStatus('Looking up the parcel…')
+    setStatus('Looking up the parcel and the streets around it…')
     try {
-      const response = await fetch('/api/parcel/resolve', {
-        body: JSON.stringify({
+      const result = await dropInLot(
+        {
           address,
           ...(picked?.lat != null && picked?.lng != null
             ? { latitude: picked.lat, longitude: picked.lng, state: picked.state }
             : {}),
-        }),
-        headers: { 'content-type': 'application/json' },
-        method: 'POST',
-      })
-      const data = (await response.json()) as ResolveResponse
-      if (!data.ok || !data.polygonM || data.polygonM.length < 3) {
-        setStatus(data.error ? `No parcel: ${data.error}` : 'No parcel found for that address.')
-        return
-      }
-
-      update({
-        address: {
-          street: picked?.line1 ?? address,
+          street: picked?.line1,
           city: picked?.city,
-          state: data.state || picked?.state,
-          zip: data.zip || picked?.postcode,
+          zip: picked?.postcode,
         },
-        parcel: {
-          apn: data.apn,
-          county: data.county,
-          layer: data.geocodedBy,
-          lotAreaSqFt: data.lotAreaSqFt,
-          notes: data.notes,
-          originLngLat: data.originLngLat,
-          resolvedAt: new Date().toISOString(),
-          source: 'gis-parcel',
-          state: data.state,
-        },
-        polygon: { points: data.polygonM, type: 'polygon' },
-        ...(data.zoning && !node.zone ? { zone: data.zoning } : {}),
-        // A new lot invalidates a front-edge index picked on the old ring.
-        frontEdge: undefined,
-      })
-
-      // Centre the building on the lot when its footprint fell outside the new
-      // ring. Writes `building.position` — never the walls.
-      const scene = useScene.getState()
-      const drawing = buildSitePlanDrawing({
-        collections: scene.collections,
-        installedPlugins: scene.installedPlugins,
-        materials: scene.materials,
-        nodes: scene.nodes,
-        rootNodeIds: scene.rootNodeIds,
-      })
-      const offset = buildingRecentreOffset(drawing.meta.lot, drawing.meta.footprintBounds)
-      let centred = false
-      if (offset && drawing.meta.buildingId) {
-        const building = scene.nodes[drawing.meta.buildingId as AnyNodeId] as
-          | BuildingNode
-          | undefined
-        if (building) {
-          scene.updateNode(building.id, {
-            position: [
-              building.position[0] + offset[0],
-              building.position[1],
-              building.position[2] + offset[1],
-            ],
-          })
-          centred = true
-        }
-      }
-
-      const area = data.lotAreaSqFt ? `${Math.round(data.lotAreaSqFt).toLocaleString()} sq ft` : ''
-      setStatus(
-        `Lot set — ${[data.apn ? `APN ${data.apn}` : '', area, data.county].filter(Boolean).join(' · ')}${
-          centred ? ' · building re-centred' : ''
-        }`,
+        { siteId: node.id },
       )
+      setStatus(result.message)
     } catch (error) {
       setStatus(error instanceof Error ? error.message : 'Parcel lookup failed.')
     } finally {
       setBusy(false)
     }
-  }, [node, picked, query, update])
+  }, [node, picked, query])
 
   if (!node) return null
 

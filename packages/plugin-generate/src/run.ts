@@ -9,6 +9,7 @@ import { buildSitePlanDrawing } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { buildHouse, GENERATED_BY, type Placement } from './build'
 import type { PlanDocument } from './document'
+import { crossesSetback, type EdgeFit, envelopeEdges, refaceCandidates, refaceNote } from './fit'
 import { rollDocument, type RollOptions } from './roll'
 import { type RunSummary, useGenerate } from './store'
 import { TEMPLATES } from './templates/poppy'
@@ -16,13 +17,19 @@ import { TEMPLATES } from './templates/poppy'
 const FT = 0.3048
 
 /** The parcel's buildable envelope and street edge, when the scene has a site. */
-export function placementFromScene(): { placement: Placement | null; frontageFt: number | null; depthFt: number | null } {
+export function placementFromScene(): {
+  placement: Placement | null
+  frontageFt: number | null
+  depthFt: number | null
+  /** Every envelope edge as a frontage with its square-on depth (feet). */
+  edges: EdgeFit[]
+} {
   const s = useScene.getState()
   const site = Object.values(s.nodes).find((n) => (n as { type?: string }).type === 'site') as
     | { id: string; polygon?: { points?: [number, number][] } }
     | undefined
   if (!site || !site.polygon?.points || site.polygon.points.length < 3) {
-    return { placement: null, frontageFt: null, depthFt: null }
+    return { placement: null, frontageFt: null, depthFt: null, edges: [] }
   }
   const drawing = buildSitePlanDrawing({
     nodes: s.nodes,
@@ -32,20 +39,15 @@ export function placementFromScene(): { placement: Placement | null; frontageFt:
     installedPlugins: s.installedPlugins ?? [],
   } as never)
   const envelope = drawing.meta.envelope
-  if (envelope.length < 3) return { placement: null, frontageFt: null, depthFt: null }
+  if (envelope.length < 3) return { placement: null, frontageFt: null, depthFt: null, edges: [] }
   const i = drawing.meta.frontEdge
-  const p = envelope[i] as [number, number]
-  const q = envelope[(i + 1) % envelope.length] as [number, number]
-  const frontage = Math.hypot(q[0] - p[0], q[1] - p[1])
-  // Depth: from the front edge's midpoint straight back to the far side of the envelope.
-  const mx = (p[0] + q[0]) / 2
-  const my = (p[1] + q[1]) / 2
-  let depth = 0
-  for (const e of envelope) depth = Math.max(depth, Math.hypot(e[0] - mx, e[1] - my))
+  const edges = envelopeEdges(envelope)
+  const street = edges[i]
   return {
     placement: { siteId: site.id, envelope: envelope.map((e) => [e[0], e[1]] as [number, number]), frontEdge: i },
-    frontageFt: frontage / FT,
-    depthFt: depth / FT,
+    frontageFt: street ? street.frontageFt : null,
+    depthFt: street ? street.depthFt : null,
+    edges,
   }
 }
 
@@ -95,8 +97,12 @@ function generatedBuilding(): { buildingId: string; levelId: string } | null {
   return level ? { buildingId: building.id, levelId: level.id } : null
 }
 
-function applyDocument(document: PlanDocument, meta: { seed: number | null; template: string | null; options?: RollOptions }): RunSummary {
-  const { placement } = placementFromScene()
+function applyDocument(
+  document: PlanDocument,
+  meta: { seed: number | null; template: string | null; options?: RollOptions },
+  placementOverride?: Placement | null,
+): RunSummary {
+  const placement = placementOverride === undefined ? placementFromScene().placement : placementOverride
   const scene = useScene.getState()
   const nodes = scene.nodes as Record<string, SceneNode>
   const site = Object.values(nodes).find((n) => n.type === 'site')
@@ -155,15 +161,31 @@ export function generateHouse(overrides: RollOptions = {}): RunSummary {
   if (S.running) return S.last ?? { ok: false, name: '', seed: null, template: null, stats: null, errors: ['already running'], warnings: [], placed: false }
   S.setRunning(true)
   try {
-    const { frontageFt, depthFt } = placementFromScene()
-    const options: RollOptions = {
+    const { placement, edges } = placementFromScene()
+    const optionsFor = (edge: EdgeFit | undefined): RollOptions => ({
       ...S.options,
       ...overrides,
-      ...(frontageFt ? { maxWidthFt: Math.floor(frontageFt) } : {}),
-      ...(depthFt ? { maxDepthFt: Math.floor(depthFt) } : {}),
+      ...(edge && edge.frontageFt > 0 ? { maxWidthFt: Math.floor(edge.frontageFt) } : {}),
+      ...(edge && edge.depthFt > 0 ? { maxDepthFt: Math.floor(edge.depthFt) } : {}),
+    })
+    const street = placement ? edges[placement.frontEdge] : undefined
+    let rolled = rollDocument(S.seed, optionsFor(street))
+    let placed = placement
+    // PlanCrafters' generateFit: the roll could not narrow the plan to the
+    // street frontage — face the widest lot edge that takes it, and say so.
+    // A reface that still crosses a setback is not taken; the street-facing
+    // run and its warnings stand.
+    if (placement && street && crossesSetback(rolled.warnings)) {
+      for (const alt of refaceCandidates(edges, placement.frontEdge)) {
+        const trial = rollDocument(S.seed, optionsFor(alt))
+        if (crossesSetback(trial.warnings)) continue
+        rolled = trial
+        rolled.warnings.push(refaceNote(street, alt))
+        placed = { ...placement, frontEdge: alt.index }
+        break
+      }
     }
-    const rolled = rollDocument(S.seed, options)
-    const summary = applyDocument(rolled.document, { seed: rolled.seed, template: null, options: rolled.options })
+    const summary = applyDocument(rolled.document, { seed: rolled.seed, template: null, options: rolled.options }, placed)
     summary.warnings = [...rolled.warnings, ...summary.warnings]
     useGenerate.getState().setLast(summary)
     return summary

@@ -676,7 +676,11 @@ export {
   castYardDimensions,
   classifyEdges,
   describeSiteEdges,
+  detectFrontEdgeFromRoads,
   FloorplanDrawingTypeSwitch,
+  type FrontEdgeMatch,
+  type RoadCenterline,
+  streetCore,
   FloorplanSitePlanLayer,
   formatFeetInches,
   registerSitePlanContributor,
@@ -690,6 +694,26 @@ export {
   EDITOR_DRAWING_TYPE_OPTIONS,
   type EditorDrawingType,
 } from './store/use-drawing-view'
+// Lot drop-in — address → parcel → streets → front edge → setbacks, on the
+// site node. Consumed by @pascal-app/plugin-lot, plugin-generate and the
+// Site inspector.
+export {
+  DEFAULT_SETBACKS_FT,
+  DEFAULT_SETBACKS_M,
+  DEFAULT_SETBACKS_SOURCE,
+  describeFrontEdge,
+  describeLotSummary,
+  type DropInInput,
+  type DropInOptions,
+  dropInLot,
+  findSiteNode,
+  type LotDropInResult,
+  type LotRoad,
+  type LotSummary,
+  type ParcelResolveData,
+  sitePatchFromParcel,
+  STREET_CLASSES,
+} from './lib/lot'
 // Sheets (WS2) — headless floor-plan geometry collection + the multi-sheet
 // vector PDF writer. Consumed by @pascal-app/plugin-sheets.
 export {

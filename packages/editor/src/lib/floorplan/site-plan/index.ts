@@ -11,6 +11,7 @@ export {
   type Bounds,
   boundsInsidePolygon,
   castYardDimensions,
+  castYardDimensionsOriented,
   classifyEdges,
   compassLabel,
   edgeHeadingDeg,
@@ -32,5 +33,12 @@ export {
   type YardDimension,
   type YardSide,
 } from './geometry'
+export {
+  detectFrontEdgeFromRoads,
+  FRONT_EDGE_PARALLEL_DEG,
+  type FrontEdgeMatch,
+  type RoadCenterline,
+  streetCore,
+} from './front-edge'
 export { FloorplanSitePlanLayer } from './site-plan-layer'
 export { registerSitePlanContributor, sitePlanContributions, type SitePlanContributor } from './contributors'

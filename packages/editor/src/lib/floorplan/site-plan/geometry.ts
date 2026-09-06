@@ -255,9 +255,13 @@ export function setbackForRole(setbacks: SetbackInputs, role: EdgeRole): number 
  * concave lot a reflex corner can self-intersect, in which case the caller
  * still gets a ring but it is advisory, not a legal envelope.
  *
- * Returns `[]` when the polygon has fewer than 3 points, when any offset line
- * pair is parallel (no intersection), or when the result inverts (setbacks
- * larger than the lot).
+ * Adjacent offset lines that are parallel (a straight run split by a
+ * surplus vertex) have no intersection: the shared vertex is then simply
+ * pushed inward along the current edge's own offset, instead of the whole
+ * envelope being refused.
+ *
+ * Returns `[]` when the polygon has fewer than 3 points or when the result
+ * inverts (setbacks larger than the lot).
  */
 export function setbackEnvelope(
   points: readonly Pt[],
@@ -291,7 +295,13 @@ export function setbackEnvelope(
     const prev = lines[(i - 1 + n) % n] as (typeof lines)[number]
     const cur = lines[i] as (typeof lines)[number]
     const denom = prev.dx * cur.dy - prev.dy * cur.dx
-    if (Math.abs(denom) < 1e-9) return []
+    if (Math.abs(denom) < 1e-9) {
+      // Parallel neighbours: no corner to find — the vertex moves inward
+      // along the current edge's offset (exact when both edges share a
+      // setback, the nearest sane point when they do not).
+      out.push([cur.ax, cur.ay])
+      continue
+    }
     const t = ((cur.ax - prev.ax) * cur.dy - (cur.ay - prev.ay) * cur.dx) / denom
     out.push([prev.ax + prev.dx * t, prev.ay + prev.dy * t])
   }
@@ -369,6 +379,65 @@ export function castYardDimensions(
     const hit = rayToPolygon(lot, c.from, c.dx, c.dy)
     if (!hit) continue
     out.push({ side: c.side, from: c.from, to: hit.point, distance: hit.distance })
+  }
+  return out
+}
+
+/**
+ * Yard dimensions for a building TURNED on its lot. The footprint's bounds
+ * are taken in the building's own frame (`yaw`, the building node's Y
+ * rotation), and the four edge midpoints cast square to the house's faces
+ * out to the lot line — the yards a plan checker measures. With `yaw` 0 this
+ * is the axis-aligned cast above; with a house square to a diagonal lot the
+ * axis-aligned bbox sticks out past the real corners and reads a front yard
+ * inches short of the setback it actually meets (Land Park, 2026-09-06).
+ * `side` is the compass direction nearest the cast, so labels keep reading
+ * N / S / E / W.
+ */
+export function castYardDimensionsOriented(
+  lot: readonly Pt[],
+  footprintLoops: readonly (readonly Pt[])[],
+  yaw: number,
+): YardDimension[] {
+  if (lot.length < 3) return []
+  const c = Math.cos(yaw)
+  const s = Math.sin(yaw)
+  // world = (c·lx + s·lz, −s·lx + c·lz)  ⇒  local = (c·wx − s·wz, s·wx + c·wz)
+  const toLocal = (p: Pt): Pt => [c * p[0] - s * p[1], s * p[0] + c * p[1]]
+  const toWorld = (p: Pt): Pt => [c * p[0] + s * p[1], -s * p[0] + c * p[1]]
+  let minX = Number.POSITIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  for (const loop of footprintLoops) {
+    for (const p of loop) {
+      const [x, z] = toLocal(p)
+      if (x < minX) minX = x
+      if (x > maxX) maxX = x
+      if (z < minZ) minZ = z
+      if (z > maxZ) maxZ = z
+    }
+  }
+  if (!Number.isFinite(minX)) return []
+  const midX = (minX + maxX) / 2
+  const midZ = (minZ + maxZ) / 2
+  const casts: { from: Pt; dir: Pt }[] = [
+    { from: [midX, minZ], dir: [0, -1] },
+    { from: [midX, maxZ], dir: [0, 1] },
+    { from: [minX, midZ], dir: [-1, 0] },
+    { from: [maxX, midZ], dir: [1, 0] },
+  ]
+  const sides: YardSide[] = ['north', 'east', 'south', 'west']
+  const out: YardDimension[] = []
+  for (const cast of casts) {
+    const from = toWorld(cast.from)
+    const [dx, dy] = toWorld(cast.dir)
+    const hit = rayToPolygon(lot, from, dx, dy)
+    if (!hit) continue
+    // heading of the cast: plan up (−y) is north, +x east
+    const heading = ((Math.atan2(dx, -dy) * 180) / Math.PI + 360) % 360
+    const side = sides[Math.round(heading / 90) % 4] as YardSide
+    out.push({ side, from, to: hit.point, distance: hit.distance })
   }
   return out
 }

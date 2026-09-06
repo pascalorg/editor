@@ -189,11 +189,13 @@ W3  DONE with W1 + W2 — Walls under every roof form: per-wall roof role metada
 W4  DONE — "Framing only" view mode in Bones: a fourth view mode `framing` on the
     X-ray node; the level's shell is hidden, sheet layers skipped, every frame
     member solid. Panel button "Framing" beside Normal / X-ray / Subfloor.
-W5  Lot drop-in: Generate panel address box → parcel → site polygon/address/parcel →
-    setbacks default (PlanCrafters planning defaults front 20 / side 5 / rear 15 ft,
-    `setbacksSource` says so) → front edge from the nearest OSM road (server route
-    to Overpass, fallback north-facing) → house placed on the envelope. Preset lots
-    for testing.
+W5  DONE — Lot drop-in: `@pascal-app/plugin-lot` (Lot panel + the address box the
+    Generate panel embeds), `/api/parcel/roads` (OpenStreetMap streets in the lot's
+    frame), the street-facing front edge, planning-default setbacks, ring cleanup,
+    PlanCrafters' preset lots, and generate fitting the plan to the frontage
+    (garage dropped, reface to the widest edge). Terrain from USGS elevation is
+    NOT part of it yet (the datum rules in TERRAIN-DATUM-SPEC touch the
+    foundation engine) — a later pass.
 W6  Porch: from the plan's front door + style policy → dropped slab, posts, beam,
     porch roof segment (gable / hip / shed), rails, steps. Rear patio later.
 W7  Styles and palettes applied: exterior assembly + siding colour + trim + door +
@@ -294,3 +296,59 @@ W9  Simpson hardware catalogue in Bones: H2.5A rafter/truss to plate, A35 at
   slab are gone. Known: the hidden walls still catch pointer events (their
   collision meshes are not visible-gated), so clicking a stud selects the wall
   behind it — harmless, noted for a later pass.
+
+- 2026-09-06 small hours: **W5 landed — the lot drops in.** One engine in the
+  editor package, `dropInLot` (`packages/editor/src/lib/lot`): address or a
+  picked suggestion's coordinates → `/api/parcel/resolve` (the recorded parcel
+  ring, APN, county, zoning) → `/api/parcel/roads` (new route: every OSM
+  highway way within ~720 ft, projected into the site frame in metres with
+  the parcel's own origin; Overpass mirrors asked two at a time, first good
+  answer wins, fail-soft; `overpass.osm.ch` is a Swiss extract and was dropped
+  after it answered a Sacramento query with nothing) → `sitePatchFromParcel`
+  (pure, tested): the ring cleaned, the front edge from the streets, north
+  up, PlanCrafters' planning-default setbacks (20 / 5 / 15 ft, `setbacksSource`
+  says so; never overwriting existing ones), every decision written into
+  `parcel.notes` → the site node updated (created at the root when a scene
+  has none) → a building outside the new ring re-centred. Three callers, one
+  path: the new Lot rail panel, the Generate panel's "Drop in lot & generate"
+  (drop in, then `generateHouse`), and the Site inspector's Find parcel
+  (`packages/nodes`, rebuilt). Preset lots are PlanCrafters' 28 real
+  addresses, verbatim. Front edge: `detectFrontEdgeFromRoads` ports
+  `SITE.detectFrontEdge` — parallel within 30°, road on the outward side,
+  nearest wins, the addressed street beats a closer cross street on a corner
+  lot; only street classes count (an alley behind the lot never claims the
+  frontage); within 1.5 m of distance the LONGER edge wins.
+  **What the first live run taught:** the Land Park registry ring came back
+  with 13 vertices — a nine-segment curb-return arc of ~1 m edges. The
+  detector picked a 1 m sliver of the arc as "the" front edge, the sliver
+  took the 20 ft setback while the real 30 ft frontage beside it took 5 ft,
+  the offset lines crossed, `setbackEnvelope` returned nothing, and the house
+  landed at the origin unplaced ("no parcel in the scene"). Fixes, all
+  tested on that ring as a fixture (`clean-ring.test.ts`): `cleanLotRing`
+  drops duplicates, merges collinear vertices and squares corner arcs and
+  small chamfers (runs of edges ≤ 3.5 m, ≤ 12 m long, between long edges
+  meeting at ≥ 20°) to the corner the long edges make — 13 → 4 vertices,
+  said so in the notes, the recorded lot area untouched; `setbackEnvelope`
+  no longer refuses a ring over one parallel neighbour pair (the vertex
+  moves inward along its own offset instead). **Second live run:** placed and
+  facing Castro Way, but the rolled farmhouse was 58.5' wide on a 39'
+  frontage (the two-column parti's floor with a garage). PlanCrafters'
+  `generateFit` ported (`fit.ts`): the roll now drops a garage the seed
+  rolled before squeezing rooms to their floors on a narrow frontage (a
+  garage the user asked for stays and warns), and when the street frontage
+  still cannot take the plan the house is refaced to the widest envelope
+  edge that can, with a note — never a reface that still crosses a setback.
+  Yard dimensions on the site plan are now cast square to the house's own
+  faces (`castYardDimensionsOriented`, the building's yaw): the axis-aligned
+  bbox cast read 19'-9" on a 20 ft front yard for a house square to a
+  diagonal lot. **Third live run (scene 021cd5337dd3, Land Park preset):**
+  "Lot set — APN 013-0044-001-0000 · 5,422 sq ft · Sacramento · fronts Castro
+  Way (edge 1)", a 2 bd / 1 ba modern rolled without the garage ("the
+  buildable frontage (39.0') cannot take an attached garage beside the
+  house"), no setback crossing, the house inside the lot at the front
+  setback, autosaved (version 4). Tests: roads parser 5, front edge 8,
+  lot patch 7, ring cleanup 8, yards 4, fit 6, roll +2; editor 832 / app 49 /
+  generate 24 green; every package typechecks. Not done: terrain from USGS
+  elevation (TERRAIN-DATUM-SPEC), roads laid as Streetscape nodes (that
+  plugin is external to the repo), a narrow-lot single-column parti for 24 ft
+  city lots (the roller warns honestly instead).

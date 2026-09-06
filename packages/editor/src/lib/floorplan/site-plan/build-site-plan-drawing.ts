@@ -15,7 +15,7 @@ import {
 import {
   type Bounds,
   boundsInsidePolygon,
-  castYardDimensions,
+  castYardDimensionsOriented,
   compassLabel,
   edgeHeadingDeg,
   edgeLength,
@@ -330,8 +330,10 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
     })
   }
 
-  // ── Yard dimensions — bbox edge midpoints out to the lot line ────────
-  const yards = footprintBounds ? castYardDimensions(lot, footprintBounds) : []
+  // ── Yard dimensions — the house's own faces, square out to the lot line ──
+  const yards = footprintLoops.length
+    ? castYardDimensionsOriented(lot, footprintLoops, building?.rotation?.[1] ?? 0)
+    : []
   for (const yard of yards) {
     const dx = yard.to[0] - yard.from[0]
     const dy = yard.to[1] - yard.from[1]

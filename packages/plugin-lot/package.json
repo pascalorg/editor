@@ -1,7 +1,7 @@
 {
-  "name": "@pascal-app/plugin-generate",
+  "name": "@pascal-app/plugin-lot",
   "version": "0.1.0",
-  "description": "Generate — complete houses from a seed or an authored plan document, the way PlanCrafters' Generate / Random buttons do: declare intent (rooms, adjacency, roof, style), derive the engineering (walls, openings, zones, slab, roof) as Pascal nodes.",
+  "description": "Lot — drop a real parcel into the scene from an address or a preset lot the way PlanCrafters does: the GIS ring, APN and zoning, the streets around it from OpenStreetMap, the street-facing front edge, planning-default setbacks, and a house placed on the envelope when Generate runs.",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -33,9 +33,5 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "typescript": "^5"
-  },
-  "dependencies": {
-    "@pascal-app/plugin-lot": "workspace:*",
-    "@pascal-app/plugin-roof": "workspace:*"
   }
 }

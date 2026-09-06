@@ -51,7 +51,7 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
   const beds = options.beds ?? (mode === 'adu' ? pick(rng, [2, 2, 3] as const) : pick(rng, [2, 3, 3, 4] as const))
   const baths =
     options.baths ?? (mode === 'adu' ? 1 : beds >= 4 ? pick(rng, [2, 3] as const) : pick(rng, [1, 2, 2] as const))
-  const garage = options.garage ?? (mode === 'adu' ? false : rng() < 0.6)
+  let garage = options.garage ?? (mode === 'adu' ? false : rng() < 0.6)
 
   // ── program, jittered ────────────────────────────────────────────────
   const wide = style.longLow
@@ -77,15 +77,36 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
   // Shrink ladder against the lot frontage — the great room gives first,
   // then dining, kitchen, bedrooms and the foyer, never below their floors.
   const maxW = options.maxWidthFt ?? Number.POSITIVE_INFINITY
-  let guard = 200
-  while (totalW() > maxW && guard-- > 0) {
-    if (greatW > 13) greatW -= 0.5
-    else if (dw > 8.5) dw -= 0.5
-    else if (kw > 12) kw -= 0.5
-    else if (bedW > 10) bedW -= 0.5
-    else if (officeW > 8) officeW -= 0.5
-    else if (foyW > 5.5) foyW -= 0.5
-    else break
+  const nominal = { greatW, dw, kw, bedW, officeW, foyW }
+  const shrink = () => {
+    let guard = 200
+    while (totalW() > maxW && guard-- > 0) {
+      if (greatW > 13) greatW -= 0.5
+      else if (dw > 8.5) dw -= 0.5
+      else if (kw > 12) kw -= 0.5
+      else if (bedW > 10) bedW -= 0.5
+      else if (officeW > 8) officeW -= 0.5
+      else if (foyW > 5.5) foyW -= 0.5
+      else break
+    }
+  }
+  shrink()
+  // A narrow frontage cannot take a garage beside the house (the two-column
+  // parti's floor is ~38' without one, ~58' with): a garage the seed rolled
+  // goes before a room is squeezed to its floor; one the user asked for
+  // stays and the warning below says what it costs.
+  if (totalW() > maxW && garage && options.garage === undefined) {
+    garage = false
+    greatW = nominal.greatW
+    dw = nominal.dw
+    kw = nominal.kw
+    bedW = nominal.bedW
+    officeW = nominal.officeW
+    foyW = nominal.foyW
+    shrink()
+    warnings.push(
+      `the buildable frontage (${maxW.toFixed(1)}') cannot take an attached garage beside the house — rolled without one; set Garage to "attached" to force it.`,
+    )
   }
   if (totalW() > maxW) {
     warnings.push(

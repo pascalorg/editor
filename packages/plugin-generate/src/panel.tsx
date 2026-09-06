@@ -3,6 +3,7 @@
  * seed), the Generate button, the templates, and the last run's summary —
  * counts, the warnings the builder raised, and the errors when it refused.
  */
+import { LotAddressBox } from '@pascal-app/plugin-lot'
 import { Dices, Home, RefreshCw, Sparkles } from 'lucide-react'
 import { generateHouse, generateTemplate } from './run'
 import { useGenerate } from './store'
@@ -26,6 +27,19 @@ export default function GeneratePanel() {
         <p className="text-[11px] text-sidebar-foreground/60">
           A complete house from a seed: rooms, walls, doors, egress windows, zones, slab and roof, placed on the parcel at the front setback. Leave a field on
           “roll” and the seed decides it.
+        </p>
+      </div>
+
+      <div className="border-sidebar-border/50 border-b px-3 pb-3">
+        <div className={label}>Lot</div>
+        <LotAddressBox
+          buttonLabel="Drop in lot & generate"
+          onDone={(result) => {
+            if (result.ok) generateHouse()
+          }}
+        />
+        <p className="mt-1.5 text-[11px] text-sidebar-foreground/50">
+          The parcel, the streets and the front edge drop in first; the house is then placed on the buildable envelope facing the street.
         </p>
       </div>
 
