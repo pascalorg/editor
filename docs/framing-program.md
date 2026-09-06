@@ -683,8 +683,10 @@ G22 The WebGPU "Vertex buffer slot 0 … was not set" error.
   post bears on a poured run). Tests: porch-framing +6 (girder and plate
   under the bearing line, posts base to girder underside, side girders,
   none on a ledger shed, off-line / single post refusals, two entrances
-  apart), panel-framing +1 — Bones 2,119, editor typecheck clean. Not yet
-  looked at in the editor's Framing view.
+  apart), panel-framing +1 — Bones 2,119, editor typecheck clean. Seen in
+  the editor's Framing view on the farmhouse (seed 777): the 6x6 posts on
+  their pads, the 6x8 girder and plate under the pediment studs, the side
+  girders back to the wall, the deck's joists and the flight's stringers.
 
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
   reference folder; Pascal roof node, Bones roof/wall framing, generate build, site
