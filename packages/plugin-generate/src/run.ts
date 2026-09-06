@@ -5,7 +5,7 @@
  * `build.ts`); this file is the only one that touches the stores.
  */
 import { heightAt, type SiteNode, terrainFieldOf, useScene } from '@pascal-app/core'
-import { buildSitePlanDrawing } from '@pascal-app/editor'
+import { buildSitePlanDrawing, CATALOG_ITEMS } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { buildHouse, GENERATED_BY, type Placement } from './build'
 import type { PlanDocument } from './document'
@@ -134,6 +134,8 @@ function applyDocument(
     placement,
     siteId: site?.id ?? null,
     gradeAt: field ? (x, z) => heightAt(field, x, z) : null,
+    // the fixtures and furniture come from the editor's item catalog
+    catalog: CATALOG_ITEMS,
     reuse,
     generation: {
       seed: meta.seed,

@@ -194,6 +194,7 @@ export default function GeneratePanel() {
             <div className="mt-1 text-sidebar-foreground/70">
               {S.last.stats.rooms} rooms · {S.last.stats.walls} walls · {S.last.stats.doors} doors ·{' '}
               {S.last.stats.windows} windows · {S.last.stats.zones} zones
+              {S.last.stats.items > 0 ? ` · ${S.last.stats.items} items` : ''}
               <br />
               {S.last.stats.livingSqFt.toLocaleString('en-US')} sf living ·{' '}
               {S.last.stats.footprintSqFt.toLocaleString('en-US')} sf footprint

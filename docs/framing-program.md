@@ -484,6 +484,57 @@ G16 Slab houses get concrete porches front and rear; the porch ceiling is 9 ft (
   Framing view the deck's slab, fence and stair stay drawn (the studs show,
   the decking still covers the joists) — the shell hider only reaches
   objects in the scene registry; next.
+  (Resolved: on a clean mount the Framing view hides all 103 shell nodes
+  (none missing from the registry) and the deck's joists, rim and posts
+  show with the decking, rails and stair gone — the miss was hot-reload
+  state from mid-session edits plus clicking the "Framing" row label
+  instead of the view-mode button. G6 is the shell view: the decking
+  covers the joists there by design; the rim now shows.)
+
+- 2026-09-06 night: **Batch F — the house is furnished (G10: fixtures,
+  furniture, the plumbing follows).** New `plugin-generate/src/furnish.ts`:
+  a pure pass over the rooms — each a plan-inch rectangle with four edges
+  (wall half thickness, exterior or not, the openings seated in it, which
+  the build pass now records as it seats doors and windows) — placing
+  catalog items by room kind. An item stands AGAINST an edge with its back
+  to the wall, turned so its front (+z, the catalog convention the editor's
+  wall placement uses) faces the room's inward normal, or free-standing
+  facing a target (chairs their table, the sofa the TV); nothing in the
+  36 in clear zone before a door or cased opening, nothing tall with its
+  back on a window it would block, nothing overlapping (2 in breathing
+  room; a kitchen run is continuous). Recipes: bed (double under 10 ft,
+  else single) heading the wall without door or window, nightstands
+  beside, dresser on another wall; bath — the wet wall is the longest
+  door-free wall, the tub across the end wall when it takes 92 in, else
+  the shower in the corner at the wet wall (or on the wet wall's low end
+  when both end walls have doors), the toilet 18 in on, the vanity next
+  toward the door; kitchen — the run under the window with the sink unit
+  centred on it (or slid off a doorway), the range then a counter one way,
+  the fridge then a counter the other, the fridge and range moving to the
+  wall square to the run when the run cannot take them; dining table
+  centred (shifted off a door swing, turned when only that fits) with four
+  chairs; TV on a blank interior wall, sofa facing it from 9 ft down to
+  5 ft, coffee table between; desk under the office window, bookshelf;
+  washer in the laundry. What does not fit is left out and said so — the
+  catalog's only vanity is a 72 in double, so most baths get toilet and
+  shower and a warning; a 7 x 8 dining room cannot take the 85 in table.
+  The build pass takes `BuildOptions.catalog` (run.ts passes the editor's
+  `CATALOG_ITEMS`), emits the items on the level (`metadata.furnish`
+  room / kind / role) and counts them in `stats.items` (the panel prints
+  it); a probe can read the pass's decisions through `furnishTrace`. Bones
+  reads the sanitary items straight off the level (`extractPlacedFixtures`)
+  so the plumbing follows the placed toilets, showers, tubs, washer and
+  kitchen sink. Seen in the editor's floor plan on the farmhouse (seed
+  1308856731): beds with their heads to the walls, the baths' toilet and
+  shower, the dining set, the great room's sofa and TV, the kitchen run
+  with the range at the corner, the washer. Tests: furnish.test (facing,
+  bedroom, baths 5 x 8 / 13 x 9, kitchen under the window, fridge clear
+  of the glass, living, dining, office, laundry, the item nodes, a missing
+  catalog entry) +13, build +1 (Poppy furnished from the fixture catalog,
+  every item on the level inside the footprint; none without a catalog) —
+  plugin-generate 90, editor typecheck clean. Open: a narrower vanity and a
+  60 in tub in the catalog would furnish the small baths the way they are
+  built; a fixture / furniture schedule on the sheets (G9).
 
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
   reference folder; Pascal roof node, Bones roof/wall framing, generate build, site

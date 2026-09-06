@@ -36,6 +36,7 @@ import {
   pointInRing,
   type Run,
 } from './geometry'
+import { type CatalogAsset, type FurnishRoom, furnishRooms } from './furnish'
 import { type PorchPolicy, type PorchSummary, porchFor } from './porch'
 import { type StylePreset, styleFor } from './styles'
 
@@ -94,6 +95,14 @@ export type BuildOptions = {
    * footprint), the garage drop and every entrance's rise.
    */
   gradeAt?: ((x: number, z: number) => number) | null
+  /**
+   * The item catalog to furnish from (the editor's `CATALOG_ITEMS`): the
+   * fixtures and furniture placed by room kind (furnish.ts). Absent / empty
+   * = an unfurnished house.
+   */
+  catalog?: readonly CatalogAsset[] | null
+  /** A probe's look at the furnishing pass's decisions (never shown to the user). */
+  furnishTrace?: (line: string) => void
 }
 
 export type NodeOp = { node: Record<string, unknown>; parentId?: string }
@@ -112,6 +121,8 @@ export type BuildResult = {
     /** Conditioned floor area, square feet (garage excluded). */
     livingSqFt: number
     footprintSqFt: number
+    /** Fixtures and furniture placed from the catalog (0 without one). */
+    items: number
   }
   buildingId: string | null
   levelId: string | null
@@ -206,7 +217,16 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     ops: [],
     errors,
     warnings,
-    stats: { rooms: 0, walls: 0, doors: 0, windows: 0, zones: 0, livingSqFt: 0, footprintSqFt: 0 },
+    stats: {
+      rooms: 0,
+      walls: 0,
+      doors: 0,
+      windows: 0,
+      zones: 0,
+      livingSqFt: 0,
+      footprintSqFt: 0,
+      items: 0,
+    },
     porch: null,
     rear: null,
     foundation: null,
@@ -384,6 +404,14 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     list.push([at - width / 2, at + width / 2])
     reserved.set(wallId, list)
   }
+  /** Every opening seated, for the furnishing pass (its clear zones, the windows). */
+  const placedOpenings: {
+    wallId: string
+    at: number
+    width: number
+    kind: 'door' | 'open' | 'window'
+    sillIn?: number
+  }[] = []
   const clear = (wallId: string, at: number, width: number): boolean =>
     !(reserved.get(wallId) ?? []).some(([a, b]) => at - width / 2 < b + 6 && at + width / 2 > a - 6)
   /** Best centre for an opening of `width` inside [s0, s1], keeping `clearance` from the ends and clear of other openings. */
@@ -443,6 +471,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     // builders put their mechanism on the OPPOSITE side of 'inward'.
     const swingDirection = (isGarage ? swingSide === -1 : swingSide === 1) ? 'inward' : 'outward'
     reserve(wall.id, at, widthIn)
+    placedOpenings.push({ wallId: wall.id, at, width: widthIn, kind: kind === 'open' ? 'open' : 'door' })
     doors += 1
     ops.push({
       node: {
@@ -679,6 +708,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     name: string,
   ) => {
     reserve(wall.id, at, spec.w)
+    placedOpenings.push({ wallId: wall.id, at, width: spec.w, kind: 'window', sillIn: spec.sill })
     windows += 1
     ops.push({
       node: {
@@ -985,6 +1015,63 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     op.node.underpinning = { rim, stem }
   }
 
+  // ── furnishing: fixtures and furniture from the catalog (furnish.ts) ──
+  // Each room hands the pass its four edges — the wall's half thickness,
+  // whether it is exterior, and the openings seated in it (plan inches along
+  // the edge) — and gets its fixtures back as item nodes on the level.
+  const furnishRoomOf = (room: NormalizedRoom): FurnishRoom => {
+    const edgeOf = (edge: PlanEdge) => {
+      const onEdge = walls.filter((wall) => {
+        if (wall.horizontal) {
+          const line = edge === 'front' ? room.v0 : edge === 'back' ? room.v1 : null
+          if (line === null || wall.a[1] !== line) return false
+          return Math.min(wall.b[0], room.u1) - Math.max(wall.a[0], room.u0) > 0
+        }
+        const line = edge === 'left' ? room.u0 : edge === 'right' ? room.u1 : null
+        if (line === null || wall.a[0] !== line) return false
+        return Math.min(wall.b[1], room.v1) - Math.max(wall.a[1], room.v0) > 0
+      })
+      const along = edge === 'front' || edge === 'back' ? ([room.u0, room.u1] as const) : ([room.v0, room.v1] as const)
+      const openings = onEdge.flatMap((wall) =>
+        placedOpenings
+          .filter((o) => o.wallId === wall.id)
+          .map((o) => {
+            const centre = (wall.horizontal ? wall.a[0] : wall.a[1]) + o.at
+            return { a: centre - o.width / 2, b: centre + o.width / 2, kind: o.kind, sillIn: o.sillIn }
+          })
+          .filter((o) => o.b > along[0] && o.a < along[1]),
+      )
+      return {
+        exterior: onEdge.some((wall) => wall.exterior),
+        halfIn: onEdge.length > 0 ? Math.max(...onEdge.map((wall) => wall.thickness / IN / 2)) : 0,
+        openings,
+      }
+    }
+    return {
+      name: room.name,
+      kind: room.kind,
+      u0: room.u0,
+      v0: room.v0,
+      u1: room.u1,
+      v1: room.v1,
+      edges: { front: edgeOf('front'), back: edgeOf('back'), left: edgeOf('left'), right: edgeOf('right') },
+    }
+  }
+  const furnished =
+    options.catalog && options.catalog.length > 0
+      ? furnishRooms({
+          rooms: rooms.map(furnishRoomOf),
+          catalog: options.catalog,
+          levelId,
+          ids: () => generateId('item'),
+          toLocal,
+          generatedBy: GENERATED_BY,
+          trace: options.furnishTrace,
+        })
+      : { ops: [], warnings: [], placed: 0 }
+  warnings.push(...furnished.warnings)
+  const furnishOps: NodeOp[] = furnished.ops
+
   // ── roof: derived from the walls by the auto roof engine ─────────────
   const roofOps = roofFor(doc, style, ops, ceilingM, levelId, warnings)
 
@@ -1126,6 +1213,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     ...garageSlabOps,
     ...ops,
     ...zoneOps,
+    ...furnishOps,
     ...roofOps,
     ...porchOps,
   ]
@@ -1145,6 +1233,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       zones,
       livingSqFt: Math.round(livingSqFt),
       footprintSqFt: Math.round(footprintSqFt),
+      items: furnished.placed,
     },
     porch: porchSummary,
     rear: rearSummary,

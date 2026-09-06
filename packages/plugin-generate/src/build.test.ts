@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { buildHouse, type NodeOp, PLATFORM_RIM_M } from './build'
+import { FIXTURE_CATALOG } from './furnish.fixture'
 import { normalizeDocument } from './document'
 import { outlineRing, ringArea } from './geometry'
 import { rollDocument } from './roll'
@@ -210,6 +211,35 @@ describe('Poppy builds into Pascal nodes', () => {
     }
     const interior = (ofType(built.ops, 'wall') as N[]).filter((w) => w.name !== 'Exterior wall')
     for (const w of interior) expect(w.underpinning).toBeUndefined()
+  })
+
+  test('with the catalog the house is furnished: fixtures in the baths and kitchen, furniture in the rooms, every item on the level inside the footprint; without it nothing', () => {
+    const built = buildHouse(POPPY, { catalog: FIXTURE_CATALOG })
+    expect(built.ok).toBe(true)
+    const items = ofType(built.ops, 'item') as N[]
+    expect(items.length).toBeGreaterThan(5)
+    expect(built.stats.items).toBe(items.length)
+    const ids = items.map((i) => (i.asset as N).id as string)
+    expect(ids).toContain('toilet')
+    expect(ids).toContain('kitchen')
+    expect(ids.some((id) => id.endsWith('-bed'))).toBe(true)
+    const level = ofType(built.ops, 'level')[0] as N
+    const slab = ofType(built.ops, 'slab').find((s) => (s as N).name === 'Slab on grade') as N
+    const xs = (slab.polygon as [number, number][]).map((p) => p[0])
+    const zs = (slab.polygon as [number, number][]).map((p) => p[1])
+    for (const i of items) {
+      expect(i.parentId).toBe(level.id)
+      expect((i.metadata as N).generatedBy).toBe('pascal:generate')
+      expect(((i.metadata as N).furnish as N).room).toBeTruthy()
+      const [x, y, z] = i.position as [number, number, number]
+      expect(y).toBe(0)
+      expect(x).toBeGreaterThan(Math.min(...xs))
+      expect(x).toBeLessThan(Math.max(...xs))
+      expect(z).toBeGreaterThan(Math.min(...zs))
+      expect(z).toBeLessThan(Math.max(...zs))
+    }
+    expect(buildHouse(POPPY).stats.items).toBe(0)
+    expect(ofType(buildHouse(POPPY).ops, 'item')).toHaveLength(0)
   })
 
   test("a slab house's exterior walls carry the slab edge and stem to grade in concrete, no rim", () => {

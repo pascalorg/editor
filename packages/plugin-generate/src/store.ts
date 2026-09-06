@@ -21,6 +21,7 @@ export type RunSummary = {
     zones: number
     livingSqFt: number
     footprintSqFt: number
+    items: number
   } | null
   errors: string[]
   warnings: string[]
