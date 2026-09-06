@@ -40,8 +40,11 @@ describe('verify: gable rafter endpoints land on the tail cut and the ridge face
   const theta = roof.pitch
   const run = roof.depth / 2
   const baseY = roof.position[1] + roof.wallHeight
-  const ridgeY = baseY + run * Math.tan(theta)
-  const tipY = baseY - roof.overhang * Math.sin(theta)
+  // bottom-on-plate seating: the centre line runs one plumb half-depth above
+  // the plane through the plate
+  const seat = (5.5 * 0.0254) / (2 * Math.cos(theta))
+  const ridgeY = baseY + seat + run * Math.tan(theta)
+  const tipY = baseY + seat - roof.overhang * Math.sin(theta)
   const tipZ = run + roof.overhang * Math.cos(theta)
   // 2x6 rafters bear on the 2x8 ridge FACE (half thickness off center) and
   // the box is inscribed between its plumb cuts: each end pulls back
@@ -94,6 +97,7 @@ describe('verify: hip geometry (alongX = width >= depth)', () => {
     const rt = 1.5 * 0.0254
     const hipTilt = Math.atan2(run * Math.tan(theta), run * Math.SQRT2)
     const hipInset = Math.SQRT2 * (rt / 2 + t / 2) + (rd / 2) * Math.tan(hipTilt)
+    const hipSeat = rd / (2 * Math.cos(hipTilt)) // bottom-on-plate: the hip's own plumb half-depth
     const planPull = (hipInset * Math.cos(hipTilt)) / Math.SQRT2 // per plan axis
     const cornersSeen = new Set<string>()
     for (const h of hips) {
@@ -101,11 +105,11 @@ describe('verify: hip geometry (alongX = width >= depth)', () => {
       const top = e1.y > e2.y ? e1 : e2
       const bot = e1.y > e2.y ? e2 : e1
       // top slid down the 45° diagonal from the ridge end (±1, ridgeY, 0)
-      expect(top.y).toBeCloseTo(ridgeY - hipInset * Math.sin(hipTilt), 6)
+      expect(top.y).toBeCloseTo(ridgeY + hipSeat - hipInset * Math.sin(hipTilt), 6)
       expect(Math.abs(top.x)).toBeCloseTo(1 + planPull, 6)
       expect(Math.abs(top.z)).toBeCloseTo(planPull, 6)
       // bottom still lands exactly on its corner (±4, eaveY, ±3)
-      expect(bot.y).toBeCloseTo(baseY, 6)
+      expect(bot.y).toBeCloseTo(baseY + hipSeat, 6)
       expect(Math.abs(bot.x)).toBeCloseTo(4, 6)
       expect(Math.abs(bot.z)).toBeCloseTo(3, 6)
       cornersSeen.add(`${Math.sign(bot.x)},${Math.sign(bot.z)}`)
@@ -139,15 +143,16 @@ describe('verify: hip with width < depth (alongX=false branch)', () => {
     const rt = 1.5 * 0.0254
     const hipTilt = Math.atan2(run * Math.tan(theta), run * Math.SQRT2)
     const hipInset = Math.SQRT2 * (rt / 2 + t / 2) + (rd / 2) * Math.tan(hipTilt)
+    const hipSeat = rd / (2 * Math.cos(hipTilt)) // bottom-on-plate: the hip's own plumb half-depth
     const planPull = (hipInset * Math.cos(hipTilt)) / Math.SQRT2
     for (const h of hips) {
       const [e1, e2] = endpoints(h)
       const top = e1.y > e2.y ? e1 : e2
       const bot = e1.y > e2.y ? e2 : e1
-      expect(top.y).toBeCloseTo(ridgeY - hipInset * Math.sin(hipTilt), 6)
+      expect(top.y).toBeCloseTo(ridgeY + hipSeat - hipInset * Math.sin(hipTilt), 6)
       expect(Math.abs(top.x)).toBeCloseTo(planPull, 6)
       expect(Math.abs(top.z)).toBeCloseTo(1 + planPull, 6)
-      expect(bot.y).toBeCloseTo(baseY, 6)
+      expect(bot.y).toBeCloseTo(baseY + hipSeat, 6)
       expect(Math.abs(bot.x)).toBeCloseTo(3, 6)
       expect(Math.abs(bot.z)).toBeCloseTo(4, 6)
     }
@@ -160,8 +165,9 @@ describe('verify: hip with width < depth (alongX=false branch)', () => {
     const rd = 5.5 * 0.0254
     const rt = 1.5 * 0.0254
     const inset = (rd / 2) * Math.tan(theta)
+    const seat = rd / (2 * Math.cos(theta)) // bottom-on-plate seating
     const faceX = rt / 2
-    const faceY = ridgeY - faceX * Math.tan(theta)
+    const faceY = ridgeY + seat - faceX * Math.tan(theta)
     for (const r of commons) {
       const [e1, e2] = endpoints(r)
       const top = e1.y > e2.y ? e1 : e2
@@ -170,7 +176,7 @@ describe('verify: hip with width < depth (alongX=false branch)', () => {
       expect(top.y).toBeCloseTo(faceY - inset * Math.sin(theta), 6)
       expect(Math.abs(top.x)).toBeCloseTo(faceX + inset * Math.cos(theta), 6)
       // low end at the inscribed tail cut on ±X
-      expect(bot.y).toBeCloseTo(tipY + inset * Math.sin(theta), 6)
+      expect(bot.y).toBeCloseTo(tipY + seat + inset * Math.sin(theta), 6)
       expect(Math.abs(bot.x)).toBeCloseTo(tipX - inset * Math.cos(theta), 6)
     }
   })
@@ -217,6 +223,7 @@ describe('verify: shed slope matches host (high at −Z, low at +Z)', () => {
   const roof = seg({ roofType: 'shed' })
   const theta = roof.pitch
   const baseY = roof.position[1] + roof.wallHeight
+  const seat = (5.5 * 0.0254) / (2 * Math.cos(theta)) // bottom-on-plate seating
   const rafters = frameRoofs([roof], [], DEFAULT_SPEC).filter((m) => m.role === 'rafter')
 
   test('rafter plane hits wallHeight at z=+depth/2 and wallHeight+depth·tanθ at z=−depth/2', () => {
@@ -230,8 +237,8 @@ describe('verify: shed slope matches host (high at −Z, low at +Z)', () => {
       // interpolate the rafter line at the footprint edges
       const slope = (hi.y - lo.y) / (hi.z - lo.z)
       const yAt = (z: number) => lo.y + slope * (z - lo.z)
-      expect(yAt(roof.depth / 2)).toBeCloseTo(baseY, 6)
-      expect(yAt(-roof.depth / 2)).toBeCloseTo(baseY + roof.depth * Math.tan(theta), 6)
+      expect(yAt(roof.depth / 2)).toBeCloseTo(baseY + seat, 6)
+      expect(yAt(-roof.depth / 2)).toBeCloseTo(baseY + seat + roof.depth * Math.tan(theta), 6)
     }
   })
 })
@@ -244,14 +251,18 @@ describe('verify: collar ties at pitch extremes span between the slope planes', 
       const run = roof.depth / 2
       const baseY = roof.position[1] + roof.wallHeight
       const rise = run * Math.tan(theta)
-      const ridgeY = baseY + rise
+      // bottom-on-plate seating: the centre line runs `seat` above the plate
+      // plane; the ridge board's top rides the rafter tops, one more `seat` up
+      const seat = (5.5 * 0.0254) / (2 * Math.cos(theta))
+      const eaveY = baseY + seat
+      const ridgeY = eaveY + rise
       // Round-14: the upper-third line CLAMPS beneath the ridge's bottom
       // face (2x8 ridge for 2x6 rafters) so low pitches never bury the tie.
       const rdd = 7.25 * 0.0254
       const ctD = 3.5 * 0.0254
-      const collarY = Math.min(baseY + (2 / 3) * rise, ridgeY - rdd - ctD / 2 - 0.005)
+      const collarY = Math.min(eaveY + (2 / 3) * rise, ridgeY + seat - rdd - ctD / 2 - 0.005)
       const ties = frameRoofs([roof], [], DEFAULT_SPEC).filter((m) => m.role === 'collar-tie')
-      if (collarY <= baseY + 0.2) {
+      if (collarY <= eaveY + 0.2) {
         // pitch so low the tie has no room — engine skips them entirely
         expect(ties).toHaveLength(0)
         return

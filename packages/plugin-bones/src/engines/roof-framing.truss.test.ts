@@ -115,13 +115,15 @@ describe('a trussed gable', () => {
 
   test('webbing is a king post + two struts per truss and is LABELED representative', () => {
     const webs = byRole(m, 'truss-web')
-    expect(webs).toHaveLength(bottoms.length * 3)
+    // interior trusses only: the two gable-end trusses are a different product
+    // (vertical webs at the stud module, framed as infill studs)
+    expect(webs).toHaveLength((bottoms.length - 2) * 3)
     for (const w of webs) {
       expect(w.size).toBe('2x4')
       expect(w.label).toContain('representative')
     }
     const posts = webs.filter((w) => w.label?.includes('king post'))
-    expect(posts).toHaveLength(bottoms.length)
+    expect(posts).toHaveLength(bottoms.length - 2)
     // the king post stands plumb on the ridge line
     for (const p of posts) expect(Math.abs(p.position[2] - seg().position[2])).toBeLessThan(1e-6)
   })

@@ -3,6 +3,7 @@ import {
   type AnyNode,
   type AnyNodeId,
   collectAlignmentAnchors,
+  DEFAULT_LEVEL_HEIGHT,
   emitter,
   type GridEvent,
   type LevelNode,
@@ -34,7 +35,6 @@ import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../../stor
 import { useFloorplanDraftPreview } from '../../../store/use-floorplan-draft-preview'
 import { CursorSphere } from '../shared/cursor-sphere'
 
-const DEFAULT_WALL_HEIGHT = 0.5
 const DEFAULT_PITCH_DEG = 40
 const GRID_OFFSET = 0.02
 
@@ -49,6 +49,21 @@ function resolveRoofDraftPlacement(
     depth: quarterTurn ? footprintWidth : footprintDepth,
     rotation: -parentRotation + (quarterTurn ? Math.PI / 2 : 0),
   }
+}
+
+/**
+ * Where a roof drawn on `levelId` bears. A roof sits on the plate of the walls
+ * it covers: on a storey with walls that is the storey height, and the roof
+ * origin goes there with NO knee wall — the eave line is the plate and the
+ * framing seats on it. A walls-free storey (a dedicated roof level over the
+ * storey below) has its plate at its own floor, so the origin stays at 0.
+ * Either way a segment's `wallHeight` is an explicit knee wall the user adds
+ * afterwards, never the way the roof reaches its bearing.
+ */
+function roofPlateY(levelId: string, nodes: Readonly<Record<string, AnyNode>>): number {
+  if (getLevelWalls(levelId, nodes).length === 0) return 0
+  const level = nodes[levelId] as LevelNode | undefined
+  return level?.height ?? DEFAULT_LEVEL_HEIGHT
 }
 
 // Walls that are direct children of a level.
@@ -176,8 +191,11 @@ const commitRoofPlacement = (
       targetRoof.rotation,
     )
 
+    const sibling = targetRoof.children
+      .map((id) => nodes[id as AnyNodeId])
+      .find((node): node is RoofSegmentNode => node?.type === 'roof-segment')
     const segment = RoofSegmentNode.parse({
-      wallHeight: DEFAULT_WALL_HEIGHT,
+      wallHeight: sibling?.wallHeight ?? 0,
       pitch: DEFAULT_PITCH_DEG,
       roofType: 'gable',
       ...defaults,
@@ -203,9 +221,9 @@ const commitRoofPlacement = (
     roofRotation,
   )
 
-  // Create the segment first (centered in its new parent)
+  // Create the segment first (centered in its new parent), seated on the plate
   const segment = RoofSegmentNode.parse({
-    wallHeight: DEFAULT_WALL_HEIGHT,
+    wallHeight: 0,
     pitch: DEFAULT_PITCH_DEG,
     roofType: 'gable',
     ...defaults,
@@ -215,12 +233,13 @@ const commitRoofPlacement = (
     rotation: placement.rotation,
   })
 
-  // Create the roof container. Segment-shaped params (roofType, pitch, …) are
-  // dropped by the RoofNode schema; surface materials in `defaults` carry over.
+  // Create the roof container at the plate. Segment-shaped params (roofType,
+  // pitch, …) are dropped by the RoofNode schema; surface materials in
+  // `defaults` carry over.
   const roof = RoofNode.parse({
     ...defaults,
     name,
-    position: [centerX, 0, centerZ],
+    position: [centerX, roofPlateY(levelId, nodes), centerZ],
     children: [segment.id],
   })
 
@@ -400,6 +419,8 @@ export const RoofTool: React.FC = () => {
   const cursorRef = useRef<Group>(null)
   const outlineRef = useRef<Line>(null!)
   const currentLevelId = useViewer((state) => state.selection.levelId)
+  // The draft ghost sits where the roof will: on the plate of the level's walls.
+  const ghostPlateY = useScene((state) => (currentLevelId ? roofPlateY(currentLevelId, state.nodes) : 0))
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const setSelection = useViewer((state) => state.setSelection)
 
@@ -631,12 +652,7 @@ export const RoofTool: React.FC = () => {
       previewDimensions.width,
       quarterTurn,
     )
-    return buildRoofGhostGeometry(
-      placement.width,
-      placement.depth,
-      DEFAULT_WALL_HEIGHT,
-      DEFAULT_PITCH_DEG,
-    )
+    return buildRoofGhostGeometry(placement.width, placement.depth, 0, DEFAULT_PITCH_DEG)
   }, [previewDimensions, quarterTurn])
 
   const roofGhostEdges = useMemo(() => {
@@ -646,12 +662,7 @@ export const RoofTool: React.FC = () => {
       previewDimensions.width,
       quarterTurn,
     )
-    return buildRoofGhostEdges(
-      placement.width,
-      placement.depth,
-      DEFAULT_WALL_HEIGHT,
-      DEFAULT_PITCH_DEG,
-    )
+    return buildRoofGhostEdges(placement.width, placement.depth, 0, DEFAULT_PITCH_DEG)
   }, [previewDimensions, quarterTurn])
 
   useEffect(
@@ -697,7 +708,7 @@ export const RoofTool: React.FC = () => {
       {previewDimensions && previewDimensions.length > 0.1 && previewDimensions.width > 0.1 && (
         <group
           layers={EDITOR_LAYER}
-          position={[previewDimensions.centerX, levelY + GRID_OFFSET, previewDimensions.centerZ]}
+          position={[previewDimensions.centerX, levelY + ghostPlateY + GRID_OFFSET, previewDimensions.centerZ]}
           rotation={[0, quarterTurn ? Math.PI / 2 : 0, 0]}
         >
           {roofGhostGeometry && (

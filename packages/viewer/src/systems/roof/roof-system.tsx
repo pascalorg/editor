@@ -1365,7 +1365,13 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     const dV = Math.max(0.01, depth + 2 * wExt)
 
     const autoDrop = wExt * tanTheta
-    const whV = Math.max(0.01, wallHeight - autoDrop + vOffset)
+    // The eave at this volume's outer plane sits `autoDrop` under the
+    // segment's wall height so the deck plane passes through the wall
+    // centre line at exactly `wallHeight`. Never clamp it: a plate-seated
+    // roof (wallHeight 0) puts that eave BELOW the origin, and clamping it
+    // up lifted the whole deck off the plate. `safeBaseY` below keeps the
+    // wall band a real volume under any eave.
+    const whV = wallHeight - autoDrop + vOffset
 
     let rhV = activeRh
     if (activeRh > 0) {

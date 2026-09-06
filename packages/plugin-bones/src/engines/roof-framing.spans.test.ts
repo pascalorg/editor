@@ -106,13 +106,10 @@ describe('audit repro — 10×12 gable @40° gets the real purlin fix', () => {
     const purlin = members.find(
       (m) => m.label?.startsWith('Purlin 2x6') && (m.position[2] as number) > 0,
     ) as Member
-    // rafter underside at the purlin line (plumb): centerline slope line
-    // through the ridge face minus rd/(2cosθ) vertical
-    const ridgeT = 1.5 * 0.0254 // 2x8 ridge thickness
-    const ridgeFaceZ = ridgeT / 2
-    const ridgeY = baseY + 6 * tan
-    const ridgeFaceY = ridgeY - ridgeFaceZ * tan
-    const underside = ridgeFaceY - (3 - ridgeFaceZ) * tan - rd / (2 * Math.cos(theta))
+    // rafter underside at the purlin line: the rafters bear bottom-on-plate,
+    // so the underside plane passes through the plate at the wall line
+    // (run 6) and rises at tanθ — at the purlin line (run 3) that is 3·tanθ
+    const underside = baseY + 3 * tan
     const top = (purlin.position[1] as number) + rd / 2
     // plumb purlin: the DOWNHILL top corner (z + t/2) touches the plane
     expect(top + (t / 2) * tan).toBeCloseTo(underside, 9)

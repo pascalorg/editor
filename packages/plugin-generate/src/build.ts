@@ -598,6 +598,14 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
  * the notch. Wings ride under a ridge that runs front-to-back (the gable
  * faces the street, the way an attached garage is roofed) and Pascal's roof
  * system merges the segments where they meet.
+ *
+ * Seating: the roof group sits at the top of the plate (the ceiling height)
+ * with NO knee wall — `wallHeight 0` — so the eave line IS the plate and the
+ * framing bears on it. Segment footprints run to the exterior wall CENTRE
+ * lines and carry the exterior wall thickness, so the gable band the segment
+ * renders above the plate is the same wall as the one below it; the eave
+ * overhang is measured from that wall line in plan, as PlanCrafters does,
+ * and converted to the slope length the node stores.
  */
 function roofFor(
   doc: NormalizedDocument,
@@ -624,7 +632,7 @@ function roofFor(
         type: 'roof',
         name: 'Roof',
         parentId: levelId,
-        position: [0, round(ceilingM - 0.5), 0],
+        position: [0, round(ceilingM), 0],
         rotation: 0,
         metadata: { generatedBy: GENERATED_BY, intent: { form, pitchInTwelfths: pitchTwelfths, overhangIn, gables } },
       },
@@ -644,11 +652,12 @@ function roofFor(
         position: [centre[0], 0, centre[1]],
         rotation: ridgeAlongDepth ? -Math.PI / 2 : 0,
         roofType,
-        width: round((ridgeAlongDepth ? d : w) * IN + exteriorT),
-        depth: round((ridgeAlongDepth ? w : d) * IN + exteriorT),
-        wallHeight: 0.5,
+        width: round((ridgeAlongDepth ? d : w) * IN),
+        depth: round((ridgeAlongDepth ? w : d) * IN),
+        wallHeight: 0,
+        wallThickness: round(exteriorT, 6),
         pitch: pitchDeg,
-        overhang: round(overhangIn * IN),
+        overhang: round((overhangIn * IN) / Math.cos((pitchDeg * Math.PI) / 180)),
         metadata: { generatedBy: GENERATED_BY },
       },
       parentId: roofId,

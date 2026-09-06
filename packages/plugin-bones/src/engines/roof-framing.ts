@@ -50,6 +50,8 @@ export type RoofSegmentSlice = {
   pitch: number
   overhang: number
   wallHeight: number
+  /** Segment wall thickness — infill studs above the plate fit inside it. */
+  wallThickness?: number
   // Shape ratios for the multi-face types — host schema fields with the
   // ROOF_SHAPE_DEFAULTS values (roof-segment.ts in @pascal-app/core).
   gambrelLowerWidthRatio?: number
@@ -137,6 +139,7 @@ export function extractRoofs(nodes: NodesRecord, levelId: string): RoofSegmentSl
       pitch: (num(node.pitch, 40) * Math.PI) / 180,
       overhang: num(node.overhang, 0.3),
       wallHeight: num(node.wallHeight, 0.5),
+      wallThickness: num(node.wallThickness, 0.1),
       gambrelLowerWidthRatio: num(node.gambrelLowerWidthRatio, SHAPE_DEFAULTS.gambrelLowerWidthRatio),
       gambrelLowerHeightRatio: num(node.gambrelLowerHeightRatio, SHAPE_DEFAULTS.gambrelLowerHeightRatio),
       mansardSteepWidthRatio: num(node.mansardSteepWidthRatio, SHAPE_DEFAULTS.mansardSteepWidthRatio),
@@ -534,6 +537,10 @@ const DECK_MIN = 0.1
  * the fascia band at the eave (the ridge-vent / drip-edge seams). */
 const deckGap = (theta: number): number => (ROOF_DECK_T / 2) * Math.sin(theta) + 0.002
 
+/** The gap at a RIDGE (or purlin) board: the board's top rides the rafter
+ * tops, so the panels must also stay clear of its half thickness in plan. */
+const ridgeDeckGap = (theta: number, boardT: number): number => boardT / 2 + deckGap(theta)
+
 const DECK_LABEL =
   'Roof sheathing 7/16" WSP — 8d @ 6"/12" edges/field (R803.2, Table R602.3(1))'
 
@@ -682,6 +689,17 @@ function deckPlane(
  * continuation S16 never builds, so this class states exactly what holds
  * (its compute also carries the non-IRC confession — CA-NU is NBC).
  */
+/**
+ * The roof-to-wall connector the plans call out: Simpson Strong-Tie H2.5A
+ * (or an equal listed connector) at every rafter or truss bearing, nailed
+ * (5) 8d×1½" into the rafter and (5) 8d×1½" into the double top plate —
+ * the catalog nailing for that part. The IRC names no manufacturer
+ * (R802.11 asks for the uplift connection); the part is what a permit set
+ * prints, so the member says it.
+ */
+export const HURRICANE_TIE_LABEL =
+  'hurricane tie — Simpson H2.5A or equal, (5) 8d×1½" to the rafter + (5) 8d×1½" to the plate (R802.11)'
+
 function tieAt(emit: Emit, spec: FramingSpec, x: number, z: number, y: number) {
   emit(
     'blocking',
@@ -693,12 +711,105 @@ function tieAt(emit: Emit, spec: FramingSpec, x: number, z: number, y: number) {
     inches(3),
     'steel',
     spec.highWindUplift
-      ? 'hurricane tie'
+      ? HURRICANE_TIE_LABEL
       : spec.highWindTiesOnly
-        ? 'hurricane tie (roof-to-wall ties only — high-wind wall/foundation uplift continuation not modeled for this jurisdiction (no prescriptive-uplift flag in its researched data); verify against the governing code)'
-        : 'hurricane tie (roof-to-wall ties only — wall/foundation uplift path not modeled below 130 mph design wind)',
+        ? `${HURRICANE_TIE_LABEL} (roof-to-wall ties only — high-wind wall/foundation uplift continuation not modeled for this jurisdiction (no prescriptive-uplift flag in its researched data); verify against the governing code)`
+        : `${HURRICANE_TIE_LABEL} (roof-to-wall ties only — wall/foundation uplift path not modeled below 130 mph design wind)`,
   )
 }
+
+/** Shorter than this and the infill stud is a shim, not a stud. */
+const INFILL_STUD_MIN = inches(3)
+
+/**
+ * Framed infill above the plate on a wall the roof rises over — the gable
+ * triangle, a shed's high-side pediment and its raking sides, a gambrel's end
+ * profile. Studs at the wall's o.c. module stand ON the double top plate and
+ * run up to the underside of the rafter over the wall, tops cut to the slope
+ * (the box inscribes under it). PlanCrafters frames the same triangle
+ * (framing.js: "the framing view showed an empty triangle with the end
+ * rafters floating"); without it a shed's high wall has nothing above the
+ * plate. Stud depth fits the wall the segment declares so the studs never
+ * grow past the wall faces (the wall framer's fitAcross rule).
+ *
+ * `alongX`: the wall runs along the segment X axis at z = `at` and the
+ * stations are x; otherwise it runs along Z at x = `at`. `topAt(u)` is the
+ * rafter-underside height ABOVE the plate at station u; `topSlope` its
+ * |dy/du|, which sets the plumb-cut inset.
+ */
+/**
+ * Where the infill studs sit across the wall line. A segment over a real wall
+ * (`wallThickness` > 0) centres the studs on the wall line, depth fitted to
+ * the wall. A synthetic inner shape (the dutch gablet: `wallThickness` 0 —
+ * nothing below its plate but the skirt) stands its studs INBOARD of the
+ * line at full depth, so they never reach over the skirt deck. `inboard` is
+ * how far the stud zone extends inside the wall line — the ceiling joists'
+ * and purlins' end bands stop there.
+ */
+function infillZone(spec: FramingSpec, roof: RoofSegmentSlice): { depth: number; inboard: number; offset: number } {
+  const [, studDepth] = LUMBER_CROSS_SECTIONS[spec.exteriorStudSize]
+  const wall = roof.wallThickness ?? 0.1
+  if (wall > EPS) {
+    const depth = Math.min(studDepth, wall)
+    return { depth, inboard: depth / 2, offset: 0 }
+  }
+  return { depth: studDepth, inboard: studDepth, offset: studDepth / 2 }
+}
+
+/** Table R602.3(5) laterally-unsupported stud heights: bearing walls 10 ft
+ * (any listed size); non-bearing 2x4 14 ft, 2x6 20 ft. Past them the wall is
+ * an engineered / balloon-framed wall, and the stud says so. */
+function infillHeightFlag(spec: FramingSpec, h: number, bearing: boolean, what: string): string | undefined {
+  const limit = bearing ? feet(10) : spec.exteriorStudSize === '2x4' ? feet(14) : feet(20)
+  if (h <= limit + EPS) return undefined
+  return `${what} ${fmtM(h)} tall exceeds the Table R602.3(5) ${
+    bearing ? 'bearing-wall 10 ft' : `non-bearing ${spec.exteriorStudSize} ${Math.round(limit / feet(1))} ft`
+  } stud height — engineered or balloon-framed wall required (R602.3.1); verify`
+}
+
+function infillStuds(
+  emit: Emit,
+  spec: FramingSpec,
+  roof: RoofSegmentSlice,
+  opts: {
+    plateY: number
+    alongX: boolean
+    at: number
+    from: number
+    to: number
+    topAt: (u: number) => number
+    topSlope: number
+    label: string
+    /** The studs carry rafter ends (a shed's high wall) — the bearing height limit applies. */
+    bearing?: boolean
+  },
+) {
+  const [t] = LUMBER_CROSS_SECTIONS[spec.exteriorStudSize]
+  const zone = infillZone(spec, roof)
+  const { plateY, alongX, at, from, to, topAt, topSlope, label, bearing = false } = opts
+  // `at` is the wall line; a synthetic shape's studs shift inboard (toward the roof centre).
+  const line = at - Math.sign(at) * zone.offset
+  for (let u = from + spec.studSpacing; u < to - t / 2 - EPS; u += spec.studSpacing) {
+    const h = topAt(u) - (t / 2) * topSlope
+    if (h < INFILL_STUD_MIN) continue
+    emit(
+      'stud',
+      spec.exteriorStudSize,
+      [t, h, zone.depth],
+      alongX ? [u, plateY + h / 2, line] : [line, plateY + h / 2, u],
+      alongX ? 0 : -Math.PI / 2,
+      0,
+      h,
+      'lumber',
+      label,
+      undefined,
+      infillHeightFlag(spec, h, bearing, label.split(' ')[0] ?? 'Stud'),
+    )
+  }
+}
+
+const infillLabel = (spec: FramingSpec, what: string): string =>
+  `${what} ${spec.exteriorStudSize} @ ${ocIn(spec.studSpacing)} o.c. — on the top plate, cut to the rafter`
 
 function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) {
   const emit = emitter(roof, members)
@@ -709,8 +820,16 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
   const cosT = Math.cos(theta)
   const run = roof.depth / 2
   const rise = run * tan
-  const eaveY = roof.wallHeight
+  // The rafter's BOTTOM face bears on the plate: its centre line runs `seat`
+  // (half the plumb depth) above the plane through the plate top — the way
+  // PlanCrafters lifts every rafter and the flat framer already seats its
+  // joists. Plate-bound members (ceiling joists, ties, struts) keep `plateY`;
+  // everything that rides the rafters follows `eaveY`.
+  const plateY = roof.wallHeight
+  const seat = rd / (2 * cosT)
+  const eaveY = plateY + seat
   const ridgeY = eaveY + rise
+  const halfWall = infillZone(spec, roof).inboard
   // Rafters bear on the ridge FACES: each plumb cut stops half the ridge
   // thickness short of the centerline (round-10 gate: centerline rafters
   // buried themselves in the ridge AND in the opposite slope's rafters).
@@ -744,7 +863,7 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
   const purlinYUnder = ridgeFaceY - (purlinZ - ridgeFaceZ) * tan - rd / (2 * cosT)
   const purlinTop = purlinYUnder - (t / 2) * tan
   const strutTop = purlinTop - rd // purlin stock = rafter stock, on edge
-  const strutBot = eaveY + cjD // ceiling-joist top face
+  const strutBot = plateY + cjD // ceiling-joist top face
   // The purlin fix only holds when the HALVED projection fits the table AND
   // the struts have real height down to the ceiling-joist bearing (S1: no
   // floating struts) AND the roof is wide enough for a real purlin between
@@ -799,7 +918,7 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
         undefined,
         rafterFlag,
       )
-      if (spec.hurricaneTies) tieAt(emit, spec, x, side * run, eaveY)
+      if (spec.hurricaneTies) tieAt(emit, spec, x, side * run, plateY)
     }
   }
 
@@ -921,7 +1040,8 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
     'ridge',
     ridgeSize,
     [ridgeLen, rdd, rt],
-    [0, ridgeY - rdd / 2, 0],
+    // top flush with the rafter tops — one plumb half-depth above the centre-line apex
+    [0, ridgeY + seat - rdd / 2, 0],
     0,
     0,
     ridgeLen,
@@ -937,15 +1057,16 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
   // offset (rafter top + half deck) leaves the conventional vent gap at
   // the ridge instead of crossing the centerline.
   for (const side of [1, -1] as const) {
+    const gapTop = ridgeDeckGap(theta, rt)
     deckPlane(emit, spec, {
       theta,
       side,
       alongXAxis: true,
       u0: hasRake ? -(roof.width / 2 + roof.overhang) : -roof.width / 2,
       u1: hasRake ? roof.width / 2 + roof.overhang : roof.width / 2,
-      zTop: deckGap(theta),
+      zTop: gapTop,
       zBot: run + roof.overhang * cosT - deckGap(theta),
-      yTop: ridgeY - deckGap(theta) * tan,
+      yTop: ridgeY - gapTop * tan,
       rafterDepth: rd,
     })
   }
@@ -964,7 +1085,8 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
     return clash + (clash >= 0 ? -1 : 1) * (halfT + half)
   }
   const cjFlag = ceilingJoistFlag(spec, roof.depth)
-  const cjStations = layout(-roof.width / 2, roof.width / 2, spec.ceilingJoistSpacing, cjT / 2).map(
+  // Stations stay inside the end walls' inner faces — the gable studs own the wall plane.
+  const cjStations = layout(-(roof.width / 2 - halfWall), roof.width / 2 - halfWall, spec.ceilingJoistSpacing, cjT / 2).map(
     (x0) => besideRafter(x0, cjT / 2),
   )
   // B6: the deck rides the rafter-TOP plane, and near the eave a square
@@ -976,7 +1098,7 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
   const cjClip =
     spec.detail === '200' || tan <= EPS
       ? 0
-      : Math.max(0, (cjD - rd / (2 * cosT)) / tan + 0.002)
+      : Math.max(0, (cjD - rd / cosT) / tan + 0.002)
   const cjLen = roof.depth - 2 * cjClip
   for (const x of cjStations) {
     if (cjLen < 0.3) break
@@ -985,7 +1107,7 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
       'ceiling-joist',
       spec.ceilingJoistSize,
       [cjLen, cjD, cjT],
-      [x, eaveY + cjD / 2, 0],
+      [x, plateY + cjD / 2, 0],
       -Math.PI / 2,
       0,
       cjLen,
@@ -994,6 +1116,23 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
       undefined,
       cjFlag,
     )
+  }
+
+  // ---- gable-end infill: studs on the plate up to the end rafter ----
+  {
+    const endDrop = hasRake ? olT / cosT : 0
+    for (const sx of [1, -1] as const) {
+      infillStuds(emit, spec, roof, {
+        plateY,
+        alongX: false,
+        at: sx * (roof.width / 2),
+        from: -roof.depth / 2,
+        to: roof.depth / 2,
+        topAt: (z) => (run - Math.abs(z)) * tan - endDrop,
+        topSlope: tan,
+        label: infillLabel(spec, 'Gable stud'),
+      })
+    }
   }
 
   // ---- mid-span purlin + 2x4 struts (R802.5.1) when the table ran out ----
@@ -1005,7 +1144,9 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
   if (purlinFix) {
     const first = xs[0] ?? -roof.width / 2
     const last = xs[xs.length - 1] ?? roof.width / 2
-    const purlinLen = last - first - t
+    // …and inside the gable studs' wall plane at either end.
+    const purlinHalf = Math.min((last - first - t) / 2, roof.width / 2 - halfWall - 0.002)
+    const purlinLen = 2 * purlinHalf
     if (purlinLen > 0.3) {
       const cx = (first + last) / 2
       const [sT, sW] = LUMBER_CROSS_SECTIONS[STRUT_SIZE]
@@ -1053,13 +1194,17 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
   // Upper third — but never INTO the ridge: at ≤12° pitch the upper-third
   // line sits above the ridge's bottom face (round-14). Clamp beneath it.
   const [, ctDepth] = LUMBER_CROSS_SECTIONS['2x4']
-  const ridgeBottom = ridgeY - rdd
+  const ridgeBottom = ridgeY + seat - rdd
   const collarY = Math.min(eaveY + (2 / 3) * rise, ridgeBottom - ctDepth / 2 - 0.005)
   const collarLen = (2 * (ridgeY - collarY)) / tan
   if (collarLen > 0.3 && collarY > eaveY + 0.2) {
     const [ctT, ctD] = LUMBER_CROSS_SECTIONS['2x4']
     xs.forEach((x, i) => {
-      if (i % 2 !== 0) return
+      // Interior pairs only, every other one: the gable-end pair is braced by
+      // the gable studs standing in the wall under it (a tie there would
+      // share the studs' volume), and R802.4.6's 4 ft o.c. is kept between
+      // the ties that remain.
+      if (i === 0 || i === xs.length - 1 || (i - 1) % 2 !== 0) return
       // Face-nailed to the rafter side (toward the roof center) — a tie ON
       // the rafter plane interpenetrates both slopes' rafters.
       const cx = x + (x >= 0 ? -1 : 1) * (halfT + ctT / 2)
@@ -1119,7 +1264,12 @@ function frameGableTruss(roof: RoofSegmentSlice, spec: FramingSpec, members: Mem
   const cosT = Math.cos(theta)
   const run = roof.depth / 2
   const rise = run * tan
-  const eaveY = roof.wallHeight
+  const plateY = roof.wallHeight
+  // Heel joint: the top chord bears ON the bottom chord over the plate, so
+  // its centre line runs one chord depth plus half its plumb depth above the
+  // plate at the wall line (the bottom chord lies flat on the plate).
+  const seat = cd + cd / (2 * cosT)
+  const eaveY = plateY + seat
   const ridgeY = eaveY + rise
   // No ridge board: each chord's plumb cut lands ON the centerline (the
   // stick gable's ridgeFaceZ = 0); the inscribed plumb inset keeps the two
@@ -1158,21 +1308,22 @@ function frameGableTruss(roof: RoofSegmentSlice, spec: FramingSpec, members: Mem
         'lumber',
         `Truss top chord ${TRUSS_STOCK}${dropped.has(x) ? ' (dropped gable-end truss)' : ''}`,
       )
-      if (spec.hurricaneTies) tieAt(emit, spec, x, side * run, eaveY)
+      if (spec.hurricaneTies) tieAt(emit, spec, x, side * run, plateY)
     }
     // ---- bottom chord: flat on the wall line, wall line to wall line ----
     // Its top corner at the eave would poke through the deck plane exactly
     // like a ceiling joist's end — the box inscribes under the chord slope;
     // the span/buy length stays the full depth. 200 keeps the schematic box.
-    const clip =
-      spec.detail === '200' || tan <= EPS ? 0 : Math.max(0, (cd - cd / (2 * cosT)) / tan + 0.002)
+    // The heel puts the top chord's underside exactly on the bottom chord's
+    // top face at the wall line — only the seam margin is needed.
+    const clip = spec.detail === '200' || tan <= EPS ? 0 : 0.002
     const bcLen = roof.depth - 2 * clip
     if (bcLen > 0.3) {
       emit(
         'truss-chord',
         TRUSS_STOCK,
         [bcLen, cd, t],
-        [x, eaveY + cd / 2 - drop, 0],
+        [x, plateY + cd / 2 - drop, 0],
         -Math.PI / 2,
         0,
         bcLen,
@@ -1182,9 +1333,12 @@ function frameGableTruss(roof: RoofSegmentSlice, spec: FramingSpec, members: Mem
         spanFlag,
       )
     }
+    // A gable-END truss is a different product — vertical webs at the wall's
+    // stud module (framed below as infill studs), no king post or struts.
+    if (x === xs[0] || x === xs[xs.length - 1]) continue
     // ---- webbing (representative): king post + two struts ----
-    const webBot = eaveY + cd - drop // bottom chord top face
-    const peakUnder = ridgeY - cd / cosT - drop // top-chord underside at the peak
+    const webBot = plateY + cd - drop // bottom chord top face
+    const peakUnder = ridgeY - cd / (2 * cosT) - drop // top-chord underside at the peak
     const kpLen = peakUnder - webBot
     if (kpLen > 0.25) {
       emit(
@@ -1223,6 +1377,24 @@ function frameGableTruss(roof: RoofSegmentSlice, spec: FramingSpec, members: Mem
           )
         }
       }
+    }
+  }
+
+  // ---- gable-end truss verticals: studs on the plate up to the end chord ----
+  {
+    const endDrop = hasRake ? olT / cosT : 0
+    for (const sx of [1, -1] as const) {
+      infillStuds(emit, spec, roof, {
+        plateY,
+        alongX: false,
+        at: sx * (roof.width / 2),
+        from: -roof.depth / 2,
+        to: roof.depth / 2,
+        // chord underside = plate + one chord depth at the wall line
+        topAt: (z) => cd + (run - Math.abs(z)) * tan - endDrop,
+        topSlope: tan,
+        label: `Gable-end truss vertical ${spec.exteriorStudSize} @ ${ocIn(spec.studSpacing)} o.c. — manufacturer's gable-end truss`,
+      })
     }
   }
 
@@ -1325,8 +1497,11 @@ function frameShed(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[])
   // Single plane over the whole depth, rising toward +Z's opposite: the host
   // shed rises across the full depth (run = depth).
   const slopeLen = roof.depth / cosT + 2 * roof.overhang
-  const lowY = roof.wallHeight
-  const midY = lowY + (roof.depth / 2) * Math.tan(theta)
+  const tan = Math.tan(theta)
+  const plateY = roof.wallHeight
+  const seat = rd / (2 * cosT) // bottom face bears on the plates (see frameGable)
+  const lowY = plateY + seat
+  const midY = lowY + (roof.depth / 2) * tan
   // Span discipline: the shed's horizontal projection is the FULL depth and
   // no ceiling joists exist below to strut a purlin to — flag only (S1).
   const shedFlag = slopeRafterFlag(spec, roof.depth, slopeLen)
@@ -1345,9 +1520,36 @@ function frameShed(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[])
       shedFlag,
     )
     if (spec.hurricaneTies) {
-      tieAt(emit, spec, x, roof.depth / 2, lowY)
-      tieAt(emit, spec, x, -roof.depth / 2, lowY + roof.depth * Math.tan(theta))
+      tieAt(emit, spec, x, roof.depth / 2, plateY)
+      tieAt(emit, spec, x, -roof.depth / 2, plateY + roof.depth * tan)
     }
+  }
+
+  // ---- infill above the plate: the high-side pediment and both raking sides
+  // (the plane rises from the low eave at +Z to the high edge at −Z). This is
+  // the shed's "front wall" — real studs on the plate, not a picture.
+  infillStuds(emit, spec, roof, {
+    plateY,
+    alongX: true,
+    at: -roof.depth / 2,
+    from: -roof.width / 2,
+    to: roof.width / 2,
+    topAt: () => roof.depth * tan,
+    topSlope: 0,
+    label: infillLabel(spec, 'Pediment stud (shed high wall)'),
+    bearing: true,
+  })
+  for (const sx of [1, -1] as const) {
+    infillStuds(emit, spec, roof, {
+      plateY,
+      alongX: false,
+      at: sx * (roof.width / 2),
+      from: -roof.depth / 2,
+      to: roof.depth / 2,
+      topAt: (z) => (roof.depth / 2 - z) * tan,
+      topSlope: tan,
+      label: infillLabel(spec, 'Rake stud (shed side wall)'),
+    })
   }
 
   // ---- deck over the single plane (B6): high tip → low tip, both
@@ -1382,7 +1584,10 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
   const cosT = Math.cos(theta)
   const run = Math.min(roof.width, roof.depth) / 2
   const rise = run * tan
-  const eaveY = roof.wallHeight
+  // Bottom-on-plate bearing (see frameGable): commons and jacks ride `eaveY`.
+  const plateY = roof.wallHeight
+  const seat = rd / (2 * cosT)
+  const eaveY = plateY + seat
   const ridgeY = eaveY + rise
   // Ridge shrinks by the hip run at each end, along the LONG axis.
   const alongX = roof.width >= roof.depth
@@ -1397,7 +1602,7 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
       'ridge',
       ridgeSize,
       [ridgeHalf * 2, rdd, rt],
-      [0, ridgeY - rdd / 2, 0],
+      [0, ridgeY + seat - rdd / 2, 0],
       alongX ? 0 : -Math.PI / 2,
       0,
       ridgeHalf * 2,
@@ -1420,6 +1625,11 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
   // Each hip runs from a ridge end down to its footprint corner: horizontal
   // run = run·√2 (45° plan diagonal), drop = rise.
   const hipTilt = Math.atan2(rise, run * Math.SQRT2)
+  // A hip bears bottom-on-plate too, lifted by ITS plumb half-depth — shallower
+  // than the commons', so its top sits a little under the commons' top planes:
+  // the dropped hip the sheathing wants.
+  const hipEaveY = plateY + rd / (2 * Math.cos(hipTilt))
+  const hipRidgeY = hipEaveY + rise
   // The hip's top cut bears on the ridge END, not inside it: pull the upper
   // end down-slope until the box clears the ridge body (half ridge thickness
   // + half hip thickness in plan, diagonal at 45°) plus the plumb-cut inset
@@ -1467,13 +1677,13 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
       // Slide the START point down the diagonal by the inset's plan component.
       const slide = (insetSe * Math.cos(hipTilt)) / planLen
       const start: [number, number] = [end[0] + dx * slide, end[1] + dz * slide]
-      const startY = ridgeY - insetSe * Math.sin(hipTilt)
+      const startY = hipRidgeY - insetSe * Math.sin(hipTilt)
       const yawTo = Math.atan2(-dz, dx) // +X box onto the plan diagonal
       emit(
         'hip',
         spec.rafterSize,
         [hipLenSe, rd, t],
-        [(start[0] + corner[0]) / 2, (startY + eaveY) / 2, (start[1] + corner[1]) / 2],
+        [(start[0] + corner[0]) / 2, (startY + hipEaveY) / 2, (start[1] + corner[1]) / 2],
         yawTo + Math.PI, // point downhill (from ridge end toward the corner)
         hipTilt,
         hipLenSe,
@@ -1523,7 +1733,7 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
         commonFlag,
       )
       if (spec.hurricaneTies) {
-        tieAt(emit, spec, alongX ? u : side * run, alongX ? side * run : u, eaveY)
+        tieAt(emit, spec, alongX ? u : side * run, alongX ? side * run : u, plateY)
       }
     }
   }
@@ -1595,7 +1805,7 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
           // Uplift path applies to every bearing rafter — jacks included
           // (round-2 advisory: hip jacks had no ties in high-wind specs).
           if (spec.hurricaneTies) {
-            tieAt(emit, spec, alongX ? long : sc * run, alongX ? sc * run : long, eaveY)
+            tieAt(emit, spec, alongX ? long : sc * run, alongX ? sc * run : long, plateY)
           }
         }
       }
@@ -1637,7 +1847,7 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
             spec,
             alongX ? se * (ridgeHalf + run) : 0,
             alongX ? 0 : se * (ridgeHalf + run),
-            eaveY,
+            plateY,
           )
         }
       }
@@ -1676,7 +1886,7 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
               spec,
               alongX ? se * (ridgeHalf + run) : sv * v,
               alongX ? sv * v : se * (ridgeHalf + run),
-              eaveY,
+              plateY,
             )
           }
         }
@@ -1699,7 +1909,7 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
   // Clearance vs the end-plane rafter UNDERSIDES (centerline − rd/(2cosθ)
   // vertical, descending to the end eave at tanθ); + one hip thickness for
   // the hip boxes' plan band crossing the joist line at the corner runs.
-  const cjEndClear = tan <= EPS ? longHalf : (cjD + rd / (2 * cosT)) / tan + t + 0.002
+  const cjEndClear = tan <= EPS ? longHalf : cjD / tan + t + 0.002
   const cjBandHalf = longHalf - cjEndClear
   // Sister BESIDE any parallel rafter plane — the long-plane commons AND
   // the side-plane jacks past the ridge ends (both run with the joists) —
@@ -1723,7 +1933,7 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
   const cjClip =
     spec.detail === '200' || tan <= EPS
       ? 0
-      : Math.max(0, (cjD - rd / (2 * cosT)) / tan + 0.002)
+      : Math.max(0, (cjD - rd / cosT) / tan + 0.002)
   const cjLen = shortSpan - 2 * cjClip
   const cjFlag = ceilingJoistFlag(spec, shortSpan)
   // B7 fix round (skeptic F1): the END planes' thrust story must PRINT,
@@ -1747,7 +1957,7 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
   // collar-tie low-pitch skip convention; the hip/crown ridge's own
   // R802.4.3 flag rides the ridge member itself — B8a extension, NIGHT-10).
   const [, cjRidgeD] = LUMBER_CROSS_SECTIONS[ridgeSizeFor(spec.rafterSize)]
-  const cjClearsRidge = ridgeHalf <= 0.05 || eaveY + cjD + 0.002 <= ridgeY - cjRidgeD
+  const cjClearsRidge = ridgeHalf <= 0.05 || plateY + cjD + 0.002 <= ridgeY + seat - cjRidgeD
   if (cjLen >= 0.3 && cjBandHalf > cjT && cjClearsRidge) {
     // Two neighboring stations can snap beside the SAME jack (the layout's
     // guaranteed end station lands next to a grid station at some pitches)
@@ -1766,7 +1976,7 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
         'ceiling-joist',
         spec.ceilingJoistSize,
         [cjLen, cjD, cjT],
-        alongX ? [u, eaveY + cjD / 2, 0] : [0, eaveY + cjD / 2, u],
+        alongX ? [u, plateY + cjD / 2, 0] : [0, plateY + cjD / 2, u],
         alongX ? -Math.PI / 2 : 0,
         0,
         cjLen,
@@ -1790,7 +2000,7 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
   if (ridgeHalf > 0.05 && tan > EPS) {
     const [ctT, ctD] = LUMBER_CROSS_SECTIONS['2x4']
     const [, ctRdd] = LUMBER_CROSS_SECTIONS[ridgeSizeFor(spec.rafterSize)]
-    const ridgeBottom = ridgeY - ctRdd
+    const ridgeBottom = ridgeY + seat - ctRdd
     const collarY = Math.min(eaveY + (2 / 3) * rise, ridgeBottom - ctD / 2 - 0.005)
     const collarLen = (2 * (ridgeY - collarY)) / tan
     if (collarLen > 0.3 && collarY > eaveY + 0.2) {
@@ -1823,12 +2033,14 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
   if (spec.detail !== '200') {
     const deckR = run + roof.overhang * cosT
     const gap = deckGap(theta)
+    // the ridge board rides the rafter tops (frameGable) — the first strip clears its body
+    const gapRidge = ridgeHalf > 0.05 ? ridgeDeckGap(theta, hipRidgeT) : gap
     const panels: DeckPanelSpec[] = []
     for (let z0 = 0; z0 < deckR - EPS; z0 += DECK_STRIP) {
       const z1 = Math.min(z0 + DECK_STRIP, deckR)
       // ridge/eave seams: first strip clears the mirrored plane, last
       // strip clears the fascia band (in-plane strip joints stay exact).
-      const zt = Math.max(z0, gap)
+      const zt = Math.max(z0, gapRidge)
       const zb = Math.min(z1, deckR - gap)
       const hwLong = ridgeHalf + z0 - DECK_CLEAR
       const hwEnd = z0 - DECK_CLEAR
@@ -2045,8 +2257,12 @@ function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
   const upperRise = activeRh - lowerRise
   const upperRun = run - lowerRun
   const phi = Math.atan2(upperRise, upperRun)
-  const eaveY = roof.wallHeight
+  // Bottom-on-plate bearing on the lower plane (see frameGable).
+  const plateY = roof.wallHeight
+  const seat = rd / (2 * cosT)
+  const eaveY = plateY + seat
   const breakY = eaveY + lowerRise
+  const halfWall = infillZone(spec, roof).inboard
   const ridgeY = eaveY + activeRh
   const breakZ = upperRun // kink plan line: |z| = run − lowerRun
   const lowerLen = lowerRun / cosT + roof.overhang
@@ -2118,7 +2334,28 @@ function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
         undefined,
         upperFlag,
       )
-      if (spec.hurricaneTies) tieAt(emit, spec, x, side * run, eaveY)
+      if (spec.hurricaneTies) tieAt(emit, spec, x, side * run, plateY)
+    }
+  }
+
+  // ---- gable-end infill under the gambrel profile (eave → break → ridge) ----
+  {
+    const endDrop = hasRake ? olT / cosT : 0
+    const under = (z: number): number => {
+      const d = Math.abs(z)
+      return d >= breakZ ? (run - d) * tan : lowerRise + (breakZ - d) * tanPhi
+    }
+    for (const sx of [1, -1] as const) {
+      infillStuds(emit, spec, roof, {
+        plateY,
+        alongX: false,
+        at: sx * (roof.width / 2),
+        from: -roof.depth / 2,
+        to: roof.depth / 2,
+        topAt: (z) => under(z) - endDrop,
+        topSlope: tan,
+        label: infillLabel(spec, 'Gable stud'),
+      })
     }
   }
 
@@ -2208,9 +2445,9 @@ function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
       alongXAxis: true,
       u0: hasRake ? -(roof.width / 2 + roof.overhang) : -roof.width / 2,
       u1: hasRake ? roof.width / 2 + roof.overhang : roof.width / 2,
-      zTop: deckGap(phi),
+      zTop: ridgeDeckGap(phi, gRt),
       zBot: breakZ - deckGap(phi),
-      yTop: ridgeY - deckGap(phi) * tanPhi,
+      yTop: ridgeY - ridgeDeckGap(phi, gRt) * tanPhi,
       rafterDepth: rd,
     })
   }
@@ -2224,12 +2461,12 @@ function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
   const cjClip =
     spec.detail === '200' || tan <= EPS
       ? 0
-      : Math.max(0, (cjD - rd / (2 * cosT)) / tan + 0.002)
+      : Math.max(0, (cjD - rd / cosT) / tan + 0.002)
   const cjLen = roof.depth - 2 * cjClip
   const cjStations: number[] =
     cjLen < 0.3
       ? []
-      : layout(-roof.width / 2, roof.width / 2, spec.ceilingJoistSpacing, cjT / 2).map((x0) => {
+      : layout(-(roof.width / 2 - halfWall), roof.width / 2 - halfWall, spec.ceilingJoistSpacing, cjT / 2).map((x0) => {
           // sister BESIDE a coincident rafter plane, toward the center (round-14)
           const clash = xs.find((rx) => Math.abs(rx - x0) < halfT + cjT / 2 - EPS)
           return clash === undefined ? x0 : clash + (clash >= 0 ? -1 : 1) * (halfT + cjT / 2)
@@ -2242,7 +2479,7 @@ function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
   // B8a fix-round advisory: the gambrel MAIN ridge is carried by the shallow
   // UPPER planes — their slope φ decides the R802.4.3 question, same code
   // class as the gable (a 15° gambrel composes with sub-3:12 uppers).
-  emit('ridge', ridgeSize, [ridgeLen, rdd, rt], [0, ridgeY - rdd / 2, 0], 0, 0, ridgeLen, 'lumber', `Ridge ${ridgeSize}${splicedNote(spec, ridgeLen, 'rafter pairs (ridge board)')}`, undefined, ridgeBeamFlagFor(spec, tanPhi))
+  emit('ridge', ridgeSize, [ridgeLen, rdd, rt], [0, ridgeY + seat - rdd / 2, 0], 0, 0, ridgeLen, 'lumber', `Ridge ${ridgeSize}${splicedNote(spec, ridgeLen, 'rafter pairs (ridge board)')}`, undefined, ridgeBeamFlagFor(spec, tanPhi))
 
   // B8d: R802.5.1 — the break purlins carried EVERY rafter joint with ZERO
   // struts. 2x4 struts ≤ 4 ft o.c. drop from the purlin underside to the
@@ -2252,8 +2489,10 @@ function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
   // break too low for a real strut, or no joists at all) the purlin FLAGS
   // instead of bearing on air — members preferred, honesty as fallback.
   const [sT, sW] = LUMBER_CROSS_SECTIONS[STRUT_SIZE]
-  const strutTop = breakY - rdd // purlin underside
-  const strutBot = eaveY + cjD // ceiling-joist top face
+  // The break purlin's top meets the rafter UNDERSIDES at the kink — `seat`
+  // below the centre-line break.
+  const strutTop = breakY - seat - rdd // purlin underside
+  const strutBot = plateY + cjD // ceiling-joist top face
   const strutLen = strutTop - strutBot
   const strutStations = new Set<number>()
   if (spec.detail !== '200' && strutLen >= inches(3) && cjStations.length > 0) {
@@ -2270,6 +2509,8 @@ function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
     }
   }
   const strutsLand = strutStations.size > 0
+  // the break purlins stop inside the gable studs' wall zone at either end
+  const purlinLen = roof.width - 2 * halfWall - 0.004
   const breakPurlinFlag =
     spec.detail === '200' || strutsLand
       ? undefined
@@ -2278,16 +2519,16 @@ function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
     emit(
       'ridge',
       ridgeSize,
-      [roof.width, rdd, rt],
-      [0, breakY - rdd / 2, side * breakZ],
+      [purlinLen, rdd, rt],
+      [0, breakY - seat - rdd / 2, side * breakZ],
       0,
       0,
-      roof.width,
+      purlinLen,
       'lumber',
       `Purlin ${ridgeSize} @ gambrel break${
         strutsLand
-          ? splicedNote(spec, roof.width, 'struts')
-          : splicedNote(spec, roof.width, 'rafter joints — verify strut support (R802.5.1)')
+          ? splicedNote(spec, purlinLen, 'struts')
+          : splicedNote(spec, purlinLen, 'rafter joints — verify strut support (R802.5.1)')
       }`,
       undefined,
       breakPurlinFlag,
@@ -2309,7 +2550,7 @@ function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
 
   // ceiling joists at the eave + collar ties in the upper third
   for (const x of cjStations) {
-    emit('ceiling-joist', spec.ceilingJoistSize, [cjLen, cjD, cjT], [x, eaveY + cjD / 2, 0], -Math.PI / 2, 0, cjLen, 'lumber', `Ceiling joist ${spec.ceilingJoistSize}${spec.detail === '400' ? ' — rafter tie (R802.4.2), ends clipped to the roof slope' : ''}`, undefined, cjFlag)
+    emit('ceiling-joist', spec.ceilingJoistSize, [cjLen, cjD, cjT], [x, plateY + cjD / 2, 0], -Math.PI / 2, 0, cjLen, 'lumber', `Ceiling joist ${spec.ceilingJoistSize}${spec.detail === '400' ? ' — rafter tie (R802.4.2), ends clipped to the roof slope' : ''}`, undefined, cjFlag)
   }
   const collarY = eaveY + (2 / 3) * activeRh
   if (collarY > breakY) {
@@ -2317,7 +2558,8 @@ function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
     if (collarLen > 0.3) {
       const [ctT, ctD] = LUMBER_CROSS_SECTIONS['2x4']
       xs.forEach((x, i) => {
-        if (i % 2 !== 0) return
+        // interior pairs only, every other one — the gable studs brace the end pair (frameGable)
+        if (i === 0 || i === xs.length - 1 || (i - 1) % 2 !== 0) return
         // face-nailed beside the rafter, toward the roof center (round-14)
         const cx = x + (x >= 0 ? -1 : 1) * (halfT + ctT / 2)
         emit('collar-tie', '2x4', [collarLen, ctD, ctT], [cx, collarY, 0], -Math.PI / 2, 0, collarLen, 'lumber', 'Collar tie 2x4', undefined, spec.detail === '200' ? undefined : onePieceFlag('Collar tie', collarLen))
@@ -2390,7 +2632,7 @@ function frameSkirt(
   const emit = emitter(roof, members)
   const [t, rd] = LUMBER_CROSS_SECTIONS[spec.rafterSize]
   const halfT = t / 2
-  const eaveY = roof.wallHeight
+  const plateY = roof.wallHeight
   const { sideRun, endRun, rise, label } = opts
   const sideTheta = Math.atan2(rise, sideRun)
   const endTheta = Math.atan2(rise, endRun)
@@ -2416,8 +2658,9 @@ function frameSkirt(
     const faceFlag = slopeRafterFlag(spec, runH, len)
     const tipOut = half + roof.overhang * cosT
     const topOut = half - runH + topSetback
-    const tipY = eaveY - roof.overhang * Math.sin(theta)
-    const topY = eaveY + rise - topSetback * Math.tan(theta)
+    const seat = rd / (2 * cosT) // bottom face bears on the plate (see frameGable)
+    const tipY = plateY + seat - roof.overhang * Math.sin(theta)
+    const topY = plateY + seat + rise - topSetback * Math.tan(theta)
     for (const u of stations) {
       for (const side of [1, -1] as const) {
         const cross = (side * (tipOut + topOut)) / 2
@@ -2435,7 +2678,7 @@ function frameSkirt(
           undefined,
           faceFlag,
         )
-        if (spec.hurricaneTies) tieAt(emit, spec, stationIsX ? u : side * half, stationIsX ? side * half : u, eaveY)
+        if (spec.hurricaneTies) tieAt(emit, spec, stationIsX ? u : side * half, stationIsX ? side * half : u, plateY)
       }
     }
   }
@@ -2500,7 +2743,7 @@ function frameSkirt(
             u1: hw,
             zTop: zt,
             zBot: zb,
-            yTop: eaveY + rise - (zt - zTopEdge) * Math.tan(theta),
+            yTop: plateY + rd / (2 * cosT) + rise - (zt - zTopEdge) * Math.tan(theta),
           })
         }
       }
@@ -2526,7 +2769,7 @@ function frameSkirt(
         'hip',
         spec.rafterSize,
         [hipLen, rd, t],
-        [(corner[0] + top[0]) / 2, eaveY + rise / 2, (corner[1] + top[1]) / 2],
+        [(corner[0] + top[0]) / 2, plateY + rd / (2 * Math.cos(hipTilt)) + rise / 2, (corner[1] + top[1]) / 2],
         yawTo + Math.PI,
         hipTilt,
         hipLen,
@@ -2562,11 +2805,11 @@ function frameSkirt(
       ? 0
       : spanTan <= EPS
         ? Number.POSITIVE_INFINITY
-        : Math.max(0, (cjD - rd / (2 * Math.cos(spanTheta))) / spanTan + 0.002)
+        : Math.max(0, (cjD - rd / Math.cos(spanTheta)) / spanTan + 0.002)
   const cjEndClear =
     bandTan <= EPS
       ? Number.POSITIVE_INFINITY
-      : (cjD + rd / (2 * Math.cos(bandTheta))) / bandTan + t + 0.002
+      : cjD / bandTan + t + 0.002
   const cjLen = shortSpan - 2 * cjClip
   const cjBandHalf = longHalf - cjEndClear
   if (cjLen >= 0.3 && cjBandHalf > cjT && cjClip <= spanRun && cjEndClear <= bandRun) {
@@ -2607,7 +2850,7 @@ function frameSkirt(
         'ceiling-joist',
         spec.ceilingJoistSize,
         [cjLen, cjD, cjT],
-        spansZ ? [u, eaveY + cjD / 2, 0] : [0, eaveY + cjD / 2, u],
+        spansZ ? [u, plateY + cjD / 2, 0] : [0, plateY + cjD / 2, u],
         spansZ ? -Math.PI / 2 : 0,
         0,
         cjLen,
@@ -2680,8 +2923,11 @@ function frameMansard(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
   if (spec.detail === '400') {
     const emit = emitter(roof, members)
     const [, fD] = LUMBER_CROSS_SECTIONS[FASCIA_SIZE]
+    const [, rdS] = LUMBER_CROSS_SECTIONS[spec.rafterSize]
     const tipOut = roof.overhang * Math.cos(roof.pitch)
-    const fasciaY = roof.wallHeight - roof.overhang * Math.sin(roof.pitch) + fD / 2
+    // the skirt rafters bear bottom-on-plate (frameSkirt): the fascia rides their lifted tails
+    const fasciaY =
+      roof.wallHeight + rdS / (2 * Math.cos(roof.pitch)) - roof.overhang * Math.sin(roof.pitch) + fD / 2
     const halfW = roof.width / 2 + tipOut
     const halfD = roof.depth / 2 + tipOut
     for (const side of [1, -1] as const) {
@@ -2729,6 +2975,8 @@ function frameDutch(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
       pitch: Math.atan2(upperRise, waistHalfShort),
       overhang: 0,
       wallHeight: roof.wallHeight + skirtRise,
+      // no wall under the gablet's plate — its infill studs stand inboard (infillZone)
+      wallThickness: 0,
     }
     frameGable(gablet, innerSpec(spec), members)
   }
@@ -2737,8 +2985,11 @@ function frameDutch(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
   if (spec.detail === '400') {
     const emit = emitter(roof, members)
     const [, fD] = LUMBER_CROSS_SECTIONS[FASCIA_SIZE]
+    const [, rdS] = LUMBER_CROSS_SECTIONS[spec.rafterSize]
     const tipOut = roof.overhang * Math.cos(roof.pitch)
-    const fasciaY = roof.wallHeight - roof.overhang * Math.sin(roof.pitch) + fD / 2
+    // the skirt rafters bear bottom-on-plate (frameSkirt): the fascia rides their lifted tails
+    const fasciaY =
+      roof.wallHeight + rdS / (2 * Math.cos(roof.pitch)) - roof.overhang * Math.sin(roof.pitch) + fD / 2
     const halfW = roof.width / 2 + tipOut
     const halfD = roof.depth / 2 + tipOut
     for (const side of [1, -1] as const) {
@@ -2941,11 +3192,14 @@ function emitValley(valley: ValleyLine, spec: FramingSpec, members: Member[]) {
   if (len < 0.2) return
   const psi = Math.atan2(-uz, ux) // +X toward the uphill direction
   const tilt = Math.atan2(uy, plan)
+  // The valley line is the plane intersection; the board bears bottom-on-plate
+  // at its foot like every rafter (see frameGable), lifted by its plumb half-depth.
+  const seat = rd / (2 * Math.cos(tilt))
   emit(
     'valley',
     size,
     [len, rd, t],
-    [(foot[0] + apex[0]) / 2, (foot[1] + apex[1]) / 2, (foot[2] + apex[2]) / 2],
+    [(foot[0] + apex[0]) / 2, (foot[1] + apex[1]) / 2 + seat, (foot[2] + apex[2]) / 2],
     psi,
     tilt,
     len,
@@ -2969,6 +3223,7 @@ function emitValley(valley: ValleyLine, spec: FramingSpec, members: Member[]) {
   const r2 = Math.abs(foot[0] - apex[0]) // wing slope run (along major X)
   const rise2 = apex[1] - foot[1]
   const theta2 = Math.atan2(rise2, r2)
+  const jackSeat = jd / (2 * Math.cos(theta2))
   const zSpan = foot[2] - apex[2] // signed: apex → eave foot along major Z
   const cx = apex[0]
   for (let dz = spec.rafterSpacing; Math.abs(dz) < Math.abs(zSpan) - jt; dz += spec.rafterSpacing) {
@@ -2984,7 +3239,7 @@ function emitValley(valley: ValleyLine, spec: FramingSpec, members: Member[]) {
       'jack-rafter',
       spec.rafterSize,
       [jackLen, jd, jt],
-      [(cx + xv) / 2, (apex[1] + yv) / 2, z],
+      [(cx + xv) / 2, (apex[1] + yv) / 2 + jackSeat, z],
       s === 1 ? Math.PI : 0, // +X (uphill) points toward the wing ridge
       theta2,
       jackLen,

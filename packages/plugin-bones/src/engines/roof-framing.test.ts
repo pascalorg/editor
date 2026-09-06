@@ -116,7 +116,11 @@ describe('frameRoofs — gable', () => {
     expect(r.size).toBe('2x8') // rafters 2x6 → ridge 2x8
     const rise = (roof.depth / 2) * Math.tan(theta)
     const ridgeDepth = 7.25 * 0.0254
-    expect(r.position[1]).toBeCloseTo(2.5 + 0.5 + rise - ridgeDepth / 2, 4)
+    // Bottom-on-plate seating (2026-09-05): the rafter centre line runs one
+    // plumb half-depth (`seat`) above the plane through the plate, and the
+    // ridge board's top rides the rafter TOPS — one more `seat` up.
+    const seat = (5.5 * 0.0254) / (2 * Math.cos(theta))
+    expect(r.position[1]).toBeCloseTo(2.5 + 0.5 + 2 * seat + rise - ridgeDepth / 2, 4)
     expect(longAxis(r).x).toBeCloseTo(1, 5) // along X
   })
 
@@ -130,7 +134,10 @@ describe('frameRoofs — gable', () => {
     // (cjD − rd/(2cosθ))/tanθ (+2 mm seam). Flag math keeps the full 6 m.
     const rd = 5.5 * 0.0254
     const cjD = 5.5 * 0.0254
-    const clip = (cjD - rd / (2 * Math.cos(theta))) / Math.tan(theta) + 0.002
+    // The rafter underside now meets the plate at the wall line, so the joist
+    // end clears the deck (one rafter depth above the plate, plumb) with no
+    // clip at all when cjD < rd/cosθ — the clip floors at zero.
+    const clip = Math.max(0, (cjD - rd / Math.cos(theta)) / Math.tan(theta) + 0.002)
     expect((cjs[0] as Member).length).toBeCloseTo(6 - 2 * clip, 5)
   })
 
@@ -139,7 +146,8 @@ describe('frameRoofs — gable', () => {
     expect(ties.length).toBeGreaterThan(0)
     const rise = (roof.depth / 2) * Math.tan(theta)
     for (const tie of ties) {
-      expect(tie.position[1]).toBeCloseTo(2.5 + 0.5 + (2 / 3) * rise, 4)
+      // upper third of the seated rafters: the plate plane plus `seat`
+      expect(tie.position[1]).toBeCloseTo(2.5 + 0.5 + (5.5 * 0.0254) / (2 * Math.cos(theta)) + (2 / 3) * rise, 4)
     }
     // collar length = 2·(remaining rise)/tanθ
     expect((ties[0] as Member).length).toBeCloseTo((2 * (rise / 3)) / Math.tan(theta), 4)
@@ -252,14 +260,15 @@ describe('frameRoofs — SQUARE hip: degenerate pyramid apex trim (NIGHT-10 resi
       const [e1, e2] = endpoints(h)
       const top = e1.y > e2.y ? e1 : e2
       const bot = e1.y > e2.y ? e2 : e1
-      // corners stay EXACT — the trim moves only the apex end
-      expect(bot.y).toBeCloseTo(baseY, 6)
+      // corners stay EXACT — the trim moves only the apex end (the hip bears
+      // bottom-on-plate, lifted by its own plumb half-depth)
+      expect(bot.y).toBeCloseTo(baseY + rd / (2 * Math.cos(hipTilt)), 6)
       expect(Math.abs(bot.x)).toBeCloseTo(run, 6)
       expect(Math.abs(bot.z)).toBeCloseTo(run, 6)
       cornersSeen.add(`${Math.sign(bot.x)},${Math.sign(bot.z)}`)
       const inset = bot.x < 0 ? baseInset + extra : baseInset
       expect(h.length).toBeCloseTo(fullDiag - inset, 6)
-      expect(top.y).toBeCloseTo(baseY + rise - inset * Math.sin(hipTilt), 6)
+      expect(top.y).toBeCloseTo(baseY + rd / (2 * Math.cos(hipTilt)) + rise - inset * Math.sin(hipTilt), 6)
       // the far-face bearing: the trimmed hips' tops start PAST the common
       // pair's far face plane (x = −t), never inside the pair
       if (bot.x < 0) expect(top.x).toBeLessThanOrEqual(-t + 1e-9)
@@ -330,10 +339,10 @@ describe('frameRoofs — hip jack rafters (LOD 350)', () => {
     const upper = top.y > bot.y ? top : bot
     const lower = top.y > bot.y ? bot : top
     expect(upper.z).toBeCloseTo(3 - bearingRun, 5) // clear of the hip face
-    expect(upper.y).toBeCloseTo(baseY + bearingRun * Math.tan(theta), 5)
+    expect(upper.y).toBeCloseTo(baseY + rd / (2 * Math.cos(theta)) + bearingRun * Math.tan(theta), 5)
     // lower end at the inscribed tail cut
     expect(lower.z).toBeCloseTo(3 + roof.overhang * Math.cos(theta) - tailPlan, 5)
-    expect(lower.y).toBeCloseTo(baseY - roof.overhang * Math.sin(theta) + tailPlan * Math.tan(theta), 5)
+    expect(lower.y).toBeCloseTo(baseY + rd / (2 * Math.cos(theta)) - roof.overhang * Math.sin(theta) + tailPlan * Math.tan(theta), 5)
   })
 
   test('jacks shorten as they approach the corner', () => {
@@ -428,7 +437,9 @@ describe('frameRoofs — gambrel (host ratios wr=0.5, hr=0.6)', () => {
     const ridges = byRole(members, 'ridge')
     const ridge = ridges.find((r) => !r.label?.includes('Purlin')) as Member
     const rdd = 7.25 * 0.0254
-    expect(ridge.position[1]).toBeCloseTo(baseY + activeRh - rdd / 2, 5)
+    // seated lower rafters lift the whole profile by `seat`; the ridge top rides the rafter tops
+    const seat = (5.5 * 0.0254) / (2 * Math.cos(theta))
+    expect(ridge.position[1]).toBeCloseTo(baseY + 2 * seat + activeRh - rdd / 2, 5)
     const purlins = ridges.filter((r) => r.label?.includes('Purlin'))
     expect(purlins).toHaveLength(2)
     for (const p of purlins) {
@@ -465,7 +476,9 @@ describe('frameRoofs — mansard (skirt + shallow hip top)', () => {
     expect(ridge.length).toBeCloseTo(6.2 - 2 * 2.1, 4)
     const upperRise = skirtRise / 0.7 - skirtRise
     const rdd = 7.25 * 0.0254
-    expect(ridge.position[1]).toBeCloseTo(baseY + skirtRise + upperRise - rdd / 2, 5)
+    // the crown is a hip framed at its own (shallow) pitch, seated on the skirt top
+    const crownSeat = (5.5 * 0.0254) / (2 * Math.cos(Math.atan2(upperRise, 2.1)))
+    expect(ridge.position[1]).toBeCloseTo(baseY + skirtRise + 2 * crownSeat + upperRise - rdd / 2, 5)
   })
 })
 
@@ -481,7 +494,9 @@ describe('frameRoofs — dutch gable (hip skirt + gablet)', () => {
     const ridge = byRole(members, 'ridge')[0] as Member
     expect(ridge.length).toBeCloseTo(2 * 2.45, 4)
     const rdd = 7.25 * 0.0254
-    expect(ridge.position[1]).toBeCloseTo(baseY + 2 * skirtRise - rdd / 2, 5)
+    // the gablet frames as a gable at 40° (upperRise = skirtRise over the 1.5 waist half)
+    const gabletSeat = (5.5 * 0.0254) / (2 * Math.cos(roof.pitch))
+    expect(ridge.position[1]).toBeCloseTo(baseY + 2 * skirtRise + 2 * gabletSeat - rdd / 2, 5)
     expect(longAxis(ridge).x).toBeCloseTo(1, 5) // along the long axis
   })
 
@@ -519,6 +534,8 @@ describe('frameRoofs — valleys where two gables cross (LOD 350)', () => {
 
   test('numeric endpoints: eave foot → ridge-pierce apex (45° plan for equal pitch)', () => {
     const baseY = 2.5 + 0.5
+    // the 2x8 valley bears bottom-on-plate at its foot: lifted by its own plumb half-depth
+    const vSeat = (7.25 * 0.0254) / (2 * Math.cos(Math.atan2(rise2, 2 * Math.SQRT2)))
     for (const v of valleys) {
       const axis = longAxis(v)
       const e1 = new Vector3(...v.position).add(axis.clone().multiplyScalar(v.length / 2))
@@ -526,9 +543,9 @@ describe('frameRoofs — valleys where two gables cross (LOD 350)', () => {
       const apex = e1.y > e2.y ? e1 : e2
       const foot = e1.y > e2.y ? e2 : e1
       expect(apex.x).toBeCloseTo(1, 5) // wing centerline
-      expect(apex.y).toBeCloseTo(baseY + rise2, 5)
+      expect(apex.y).toBeCloseTo(baseY + vSeat + rise2, 5)
       expect(apex.z).toBeCloseTo(1, 5) // run1 − rise2/tanθ = 3 − 2
-      expect(foot.y).toBeCloseTo(baseY, 5)
+      expect(foot.y).toBeCloseTo(baseY + vSeat, 5)
       expect(foot.z).toBeCloseTo(3, 5) // the major eave line
       expect(Math.abs(foot.x - 1)).toBeCloseTo(2, 5) // ± the wing run
       // equal pitches → 45° in plan
@@ -652,6 +669,8 @@ describe('frameRoofs — valley jacks land on the valley (round-2 gap)', () => {
   const jacks = byRole(members, 'jack-rafter').filter((j) => j.label?.includes('Valley jack'))
   const baseY = 2.5 + 0.5
   const rise2 = 2 * Math.tan(major.pitch)
+  // 2x6 valley jacks bear bottom-on-plane: lifted by their plumb half-depth
+  const jSeat = (5.5 * 0.0254) / (2 * Math.cos(major.pitch))
 
   test('jacks exist on both sides of the wing ridge, top on the ridge, bottom ON the valley', () => {
     expect(jacks.length).toBeGreaterThanOrEqual(4)
@@ -663,12 +682,12 @@ describe('frameRoofs — valley jacks land on the valley (round-2 gap)', () => {
       const bot = e1.y > e2.y ? e2 : e1
       // top on the wing ridge line (x = 1 at the wing ridge height)
       expect(top.x).toBeCloseTo(1, 5)
-      expect(top.y).toBeCloseTo(baseY + rise2, 5)
+      expect(top.y).toBeCloseTo(baseY + jSeat + rise2, 5)
       // bottom on the valley: the valley plan line runs 45° from the apex
       // (1, 1) to the foot (3, 3) — x-offset from the wing ridge = z − z*
       expect(Math.abs(bot.x - 1)).toBeCloseTo(bot.z - 1, 4)
       // and on the major slope plane: y = eave + (run1 − z)·tanθ
-      expect(bot.y).toBeCloseTo(baseY + (3 - bot.z) * Math.tan(major.pitch), 4)
+      expect(bot.y).toBeCloseTo(baseY + jSeat + (3 - bot.z) * Math.tan(major.pitch), 4)
     }
   })
 
@@ -766,10 +785,11 @@ describe('LOD-400 B6a: roof deck panels per slope plane (R803.2)', () => {
       // plane normal: (0, cosθ, ±sinθ)
       expect(n.y).toBeCloseTo(Math.cos(roof.pitch), 6)
       expect(Math.abs(n.z)).toBeCloseTo(Math.sin(roof.pitch), 6)
-      // the apex (ridge line) lies ON the rafter-centerline plane; the deck
-      // center sits exactly one half rafter + half deck up the normal
+      // the apex (ridge line) lies ON the rafter-UNDERSIDE plane (bottom-on-
+      // plate seating); the deck center sits one full rafter + half deck up
+      // the normal
       const d = new Vector3(...m.position).sub(apex).dot(n)
-      expect(d).toBeCloseTo(RD / 2 + DECK_T / 2, 6)
+      expect(d).toBeCloseTo(RD + DECK_T / 2, 6)
     }
   })
 
@@ -1118,7 +1138,9 @@ describe('LOD-400 B7a: hip ceiling joists across the short span (R802.4.2)', () 
   test('audit repro census: joists present at a sane count vs span/spacing', () => {
     // stations at 16" o.c. along the long axis, band pulled off the end
     // planes: 2·(longHalf − cjEndClear)/spacing ± the layout end snap
-    const cjEndClear = (CJ_D + RD / (2 * Math.cos(theta))) / Math.tan(theta) + T + 0.002
+    // the end-plane rafter undersides meet the plate at the end eaves: a joist
+    // top clears them past cjD/tanθ, plus one hip thickness and the seam
+    const cjEndClear = CJ_D / Math.tan(theta) + T + 0.002
     const bandHalf = 6 - cjEndClear
     const floor = Math.floor((2 * bandHalf) / DEFAULT_SPEC.ceilingJoistSpacing) - 1
     expect(cjs.length).toBeGreaterThanOrEqual(floor)
@@ -1132,7 +1154,7 @@ describe('LOD-400 B7a: hip ceiling joists across the short span (R802.4.2)', () 
 
   test('joists span the SHORT axis at the eave line, ends inscribed in the B6 clip', () => {
     // width 10 < depth 12 → joists run along X (the commons span direction)
-    const clip = (CJ_D - RD / (2 * Math.cos(theta))) / Math.tan(theta) + 0.002
+    const clip = Math.max(0, (CJ_D - RD / Math.cos(theta)) / Math.tan(theta) + 0.002)
     for (const cj of cjs) {
       const axis = longAxis(cj)
       expect(Math.abs(axis.x)).toBeCloseTo(1, 5)
@@ -1225,12 +1247,13 @@ describe('LOD-400 B7b: hip collar ties on the ridge portion (R802.4.6)', () => {
   const ties = byRole(members, 'collar-tie')
   const baseY = roof.position[1] + roof.wallHeight
   const rise = 5 * Math.tan(theta)
+  const seat = (5.5 * 0.0254) / (2 * Math.cos(theta)) // bottom-on-plate seating
 
   test('every other common pair carries a tie in the upper third, on the ridge portion only', () => {
     // commons on the 2 m ridge portion at 24" o.c. → 5 stations → 3 ties
     expect(ties).toHaveLength(3)
     for (const tie of ties) {
-      expect(tie.position[1]).toBeCloseTo(baseY + (2 / 3) * rise, 4)
+      expect(tie.position[1]).toBeCloseTo(baseY + seat + (2 / 3) * rise, 4)
       // stationed along the ridge (Z here), never past the ridge ends
       expect(Math.abs(tie.position[2] as number)).toBeLessThanOrEqual(1)
       // spans between the two LONG planes (along X), centered
@@ -1243,7 +1266,7 @@ describe('LOD-400 B7b: hip collar ties on the ridge portion (R802.4.6)', () => {
   })
 
   test('tie endpoints lie ON the long slope planes (regression-style reconstruction)', () => {
-    const ridgeY = baseY + rise
+    const ridgeY = baseY + seat + rise
     for (const tie of ties) {
       const axis = longAxis(tie)
       const e1 = new Vector3(...tie.position).add(axis.clone().multiplyScalar(tie.length / 2))
@@ -1303,8 +1326,8 @@ describe('LOD-400 B7c: mansard/dutch ceiling joists + inner thrust story (R802.4
     const members = frameRoofs([roof], [], at400)
     const theta = roof.pitch
     const main = cjOf(members).filter((cj) => Math.abs((cj.position[1] as number) - (baseY + CJ_D / 2)) < 1e-6)
-    const clip = (CJ_D - RD / (2 * Math.cos(theta))) / Math.tan(theta) + 0.002
-    const clear = (CJ_D + RD / (2 * Math.cos(theta))) / Math.tan(theta) + T + 0.002
+    const clip = Math.max(0, (CJ_D - RD / Math.cos(theta)) / Math.tan(theta) + 0.002)
+    const clear = CJ_D / Math.tan(theta) + T + 0.002
     const bandHalf = 5 - clear
     const floor = Math.floor((2 * bandHalf) / DEFAULT_SPEC.ceilingJoistSpacing) - 1
     expect(main.length).toBeGreaterThanOrEqual(floor)
@@ -1327,9 +1350,10 @@ describe('LOD-400 B7c: mansard/dutch ceiling joists + inner thrust story (R802.4
       (cj) => Math.abs((cj.position[1] as number) - (baseY + skirtRise + CJ_D / 2)) < 1e-6,
     )
     expect(upper.length).toBeGreaterThan(0)
-    // the DEFAULT crown computes ~8.8° — too flat for a collar tie band
-    // (the gable low-pitch skip convention): pinned at zero, not fake wood
-    expect(byRole(members, 'collar-tie')).toHaveLength(0)
+    // the DEFAULT crown computes ~8.8°: with the ridge board riding the
+    // rafter tops a 2x4 tie fits under it, so the crown's ridge portion ties
+    // per R802.4.6 too (it used to be pinned at zero when the ridge sat lower)
+    expect(byRole(members, 'collar-tie').length).toBeGreaterThan(0)
     // a steep mansard's crown is a real hip — its ridge portion ties
     const steep = frameRoofs([seg({ roofType: 'mansard', pitch: (55 * Math.PI) / 180 })], [], at400)
     const ties = byRole(steep, 'collar-tie')
@@ -1510,20 +1534,28 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
   //  same received hash on every commit back to e8b9057 — and the eleven
   //  single-shape pins change only because exact-looking values like the
   //  rafter length now print with ≤ 9 decimals. ALL twelve recaptured here.
+  // 2026-09-05 INTENDED-CHANGE (bottom-on-plate seating, gable infill studs):
+  //  every sloped member (rafters, hips, jacks, barges, valleys) now bears with
+  //  its BOTTOM face on the eave plane — centre lines lifted one plumb half-depth
+  //  — ridge/purlin boards ride flush with the rafter tops, ceiling joists and
+  //  hurricane ties stay on the plate, the deck clears the lifted ridge body,
+  //  collar ties skip the gable-end pair, and gable/pediment/rake studs frame the
+  //  wall above the plate. The tie label names the part (H2.5A). ALL twelve
+  //  recaptured here; flat-400 holds (its joists already sat bottom-on-plate).
   const hashOf = (members: Member[]): string =>
     createHash('sha256').update(JSON.stringify(members)).digest('hex').slice(0, 16)
   const PINS: [string, Partial<RoofSegmentSlice>, Partial<FramingSpec>, string][] = [
-    ['gable-300', {}, {}, '3b704275f8d68a55'],
-    ['gable-400', {}, { detail: '400' }, '22c8feebf2afb242'],
-    ['gable-200', {}, { detail: '200' }, '891f8a0b75255a96'],
-    ['gable-400-windy', {}, { detail: '400', hurricaneTies: true }, '92243f96acce17e8'],
-    ['gable-big-400', { width: 10, depth: 12 }, { detail: '400' }, '99d78960b8c86f74'],
-    ['shed-300', { roofType: 'shed' }, {}, '57e556e92bde16e7'],
-    ['shed-400', { roofType: 'shed' }, { detail: '400' }, '9a9a7d7cf826ac7c'],
-    ['shed-200', { roofType: 'shed' }, { detail: '200' }, '9131426f760c4438'],
-    ['shed-big-400', { roofType: 'shed', depth: 8 }, { detail: '400' }, '96e207441a7c9c3f'],
+    ['gable-300', {}, {}, 'f4d3be4117fdfaf8'],
+    ['gable-400', {}, { detail: '400' }, 'e49ebeead33afe8b'],
+    ['gable-200', {}, { detail: '200' }, '10cd4729a3ac84ed'],
+    ['gable-400-windy', {}, { detail: '400', hurricaneTies: true }, 'a2bc8ba8af0c5346'],
+    ['gable-big-400', { width: 10, depth: 12 }, { detail: '400' }, '7088623f71804e08'],
+    ['shed-300', { roofType: 'shed' }, {}, 'd31a6792780eb6c5'],
+    ['shed-400', { roofType: 'shed' }, { detail: '400' }, '2c6b8aa2da96aa7f'],
+    ['shed-200', { roofType: 'shed' }, { detail: '200' }, 'fb1e2b997418aad8'],
+    ['shed-big-400', { roofType: 'shed', depth: 8 }, { detail: '400' }, '962b2fa2b3fb2e01'],
     ['flat-400', { roofType: 'flat' }, { detail: '400' }, '953c25cdb23c0ffb'],
-    ['gambrel-400', { roofType: 'gambrel' }, { detail: '400' }, '9f9f232aa25f42d3'],
+    ['gambrel-400', { roofType: 'gambrel' }, { detail: '400' }, '90ad76c1f4b0fe3f'],
   ]
 
   for (const [name, over, sp, pin] of PINS) {
@@ -1539,7 +1571,7 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
       [],
       { ...DEFAULT_SPEC, detail: '400' },
     )
-    expect(hashOf(members)).toBe('6a82868f2962fd08')
+    expect(hashOf(members)).toBe('60f3fad47ed6993f')
   })
 })
 
@@ -1553,13 +1585,12 @@ describe('NIGHT-10: sub-130 mph roof ties state their wall-path scope (B10 skept
   // byte-equal to INTL — no connectors, no straps, no foundation path. The
   // tie member itself now says so; ≥ 130 mph keeps the plain label because
   // B10's wall hardware IS the continuation there.
-  const PLAIN = 'hurricane tie'
-  const BELT =
-    'hurricane tie (roof-to-wall ties only — wall/foundation uplift path not modeled below 130 mph design wind)'
+  const PLAIN = 'hurricane tie — Simpson H2.5A or equal, (5) 8d×1½" to the rafter + (5) 8d×1½" to the plate (R802.11)'
+  const BELT = `${PLAIN} (roof-to-wall ties only — wall/foundation uplift path not modeled below 130 mph design wind)`
   // ≥130 mph WITHOUT the researched flag (CANADA r1 skeptic — today exactly
   // CA-NU at 140 mph): 'below 130' would be false, plain would overclaim.
   const TIES_ONLY =
-    'hurricane tie (roof-to-wall ties only — high-wind wall/foundation uplift continuation not modeled for this jurisdiction (no prescriptive-uplift flag in its researched data); verify against the governing code)'
+    `${PLAIN} (roof-to-wall ties only — high-wind wall/foundation uplift continuation not modeled for this jurisdiction (no prescriptive-uplift flag in its researched data); verify against the governing code)`
   const beltSpec: FramingSpec = { ...DEFAULT_SPEC, detail: '400', hurricaneTies: true }
   const fullSpec: FramingSpec = { ...beltSpec, highWindUplift: true }
   const tiesOf = (ms: Member[]) => ms.filter((m) => m.label?.startsWith(PLAIN))
