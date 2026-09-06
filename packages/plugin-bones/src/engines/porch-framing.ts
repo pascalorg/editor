@@ -27,6 +27,7 @@
  * read (posts on no line, no cover over them) frames nothing and says so.
  */
 
+import { PORCH_BEAM_SIZE as BEAM_SIZE, PORCH_PLATE_SIZE as PLATE_SIZE } from '../core/shell-sync'
 import type { FramingSpec } from '../core/spec'
 import type { Member, PorchPostSlice, WallSlice } from '../core/types'
 import { formatIn, inches } from '../core/units'
@@ -34,9 +35,6 @@ import { LUMBER_CROSS_SECTIONS, type LumberSize } from '../lumber'
 import type { RoofSegmentSlice } from './roof-framing'
 
 const EPS = 1e-6
-/** PlanCrafters porchWall: a 6x8 beam under a single 2x plate. */
-const BEAM_SIZE: LumberSize = '6x8'
-const PLATE_SIZE: LumberSize = '2x6'
 /** A wall within this of the beam line, running with it, is the house wall the side beams reach. */
 const HOUSE_WALL_REACH = 8
 /** Posts closer than this to a straight line through them are on that line. */

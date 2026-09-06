@@ -118,6 +118,8 @@ export type BuildResult = {
     doors: number
     windows: number
     zones: number
+    /** One flat ceiling per room (zone). */
+    ceilings: number
     /** Conditioned floor area, square feet (garage excluded). */
     livingSqFt: number
     footprintSqFt: number
@@ -223,6 +225,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       doors: 0,
       windows: 0,
       zones: 0,
+      ceilings: 0,
       livingSqFt: 0,
       footprintSqFt: 0,
       items: 0,
@@ -774,6 +777,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   // ── zones from the walls, named from the rooms ────────────────────────
   const wallNodes = ops.filter((op) => op.node.type === 'wall').map((op) => op.node)
   let zones = 0
+  let ceilings = 0
   const zoneOps: NodeOp[] = []
   const ceilingByRoom = (room: NormalizedRoom): number => round((room.ceil ?? doc.ceiling) * IN)
   try {
@@ -795,6 +799,27 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       for (const m of members) used.add(m.i)
       const lead = [...members].sort((p, q) => area(q.room) - area(p.room))[0]
         ?.room as NormalizedRoom
+      const roomCeiling = ceilingByRoom(lead)
+      // the room's ceiling: a flat GWB lid on the zone's polygon, following
+      // the level top (a room pinned lower than the storey keeps its own)
+      zoneOps.push({
+        node: {
+          id: generateId('ceiling'),
+          type: 'ceiling',
+          name: `${zoneName(members.map((m) => m.room.name))} ceiling`,
+          parentId: levelId,
+          polygon: space.polygon.map((p) => [round(p[0]), round(p[1])]),
+          holes: [],
+          ...(roomCeiling < ceilingM - 1e-6 ? { height: roomCeiling } : {}),
+          metadata: {
+            generatedBy: GENERATED_BY,
+            rooms: members.map((m) => m.room.name),
+            kind: lead.kind,
+          },
+        },
+        parentId: levelId,
+      })
+      ceilings += 1
       zoneOps.push({
         node: {
           id: generateId('zone'),
@@ -809,7 +834,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
           floorFinish: lead.floor ?? KIND_FLOOR[lead.kind],
           wallFinish: lead.kind === 'garage' ? 'GWB' : 'GWB, PAINT',
           ceilingFinish: 'GWB, PAINT',
-          ceilingHeight: ceilingByRoom(lead),
+          ceilingHeight: roomCeiling,
           enclosureStatus: 'auto',
           color: lead.kind === 'bed' ? '#8b5cf6' : lead.kind === 'bath' ? '#06b6d4' : '#0ea5e9',
           metadata: {
@@ -1118,6 +1143,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         floorElevation: SLAB_ELEVATION_M,
         gradeY: flightGrade,
         gradeAt: localGrade,
+        terrain: terrain !== null,
         overhang: (style.overhangIn * IN) / Math.cos(Math.atan(porchPitch / 12)),
         // the cover is sized against the house roof it dies into (W19b)
         housePlateY: ceilingM,
@@ -1233,6 +1259,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       doors,
       windows,
       zones,
+      ceilings,
       livingSqFt: Math.round(livingSqFt),
       footprintSqFt: Math.round(footprintSqFt),
       items: furnished.placed,

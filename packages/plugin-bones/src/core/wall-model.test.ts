@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { classifyRoom, extractLevels, extractRooms, extractSlabs, extractWalls } from './wall-model'
+import { classifyRoom, extractLevels, extractPorchPosts, extractRooms, extractSlabs, extractWalls } from './wall-model'
 
 /** Synthetic scene records shaped exactly like the host stores them. */
 const nodes: Record<string, Record<string, unknown>> = {
@@ -259,5 +259,37 @@ describe('extractPlacedFixtures — placed items are the plumbing demand points'
     expect(toilet?.plan).toEqual([10.9, 6.95])
     const shower = placed.find((p) => p.kind === 'shower')
     expect(shower?.hot).toBe(true)
+  })
+})
+
+describe('extractPorchPosts', () => {
+  const column = (over: Record<string, unknown>) => ({
+    id: 'column_1',
+    type: 'column',
+    parentId: 'level_1',
+    position: [1, 0, -2],
+    width: 0.1397,
+    depth: 0.1397,
+    height: 2.4,
+    metadata: { porch: { entrance: 'front' } },
+    ...over,
+  })
+
+  test('a post on a slab stands at the slab; one hosted on the ground stands on the ground under it, its authored y on top', () => {
+    const nodes = {
+      level_1: { id: 'level_1', type: 'level' },
+      slab_1: { id: 'slab_1', type: 'slab', parentId: 'level_1', elevation: 0.05, polygon: [] },
+      column_1: column({ supportSlabId: 'slab_1' }),
+      column_2: column({ id: 'column_2', supportSlabId: 'ground' }),
+      column_3: column({ id: 'column_3', supportSlabId: 'ground', position: [3, -0.2, -2] }),
+    } as unknown as Parameters<typeof extractPorchPosts>[0]
+    const ground = (x: number) => (x > 2 ? -0.6 : -0.4)
+    const flat = extractPorchPosts(nodes, 'level_1')
+    expect(flat.find((p) => p.id === 'column_1')?.baseY).toBeCloseTo(0.05, 9)
+    expect(flat.find((p) => p.id === 'column_2')?.baseY).toBeCloseTo(0, 9)
+    const hill = extractPorchPosts(nodes, 'level_1', ground)
+    expect(hill.find((p) => p.id === 'column_1')?.baseY).toBeCloseTo(0.05, 9)
+    expect(hill.find((p) => p.id === 'column_2')?.baseY).toBeCloseTo(-0.4, 9)
+    expect(hill.find((p) => p.id === 'column_3')?.baseY).toBeCloseTo(-0.8, 9)
   })
 })

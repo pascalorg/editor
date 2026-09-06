@@ -1094,7 +1094,7 @@ function computeLevelUncached(
   }
 
   // ── the porch bearing: 6x8 beam + plate on the 6x6 posts (PlanCrafters porchWall) ──
-  const porchPosts = extractPorchPosts(nodes, levelId)
+  const porchPosts = extractPorchPosts(nodes, levelId, ground)
   if (porchPosts.length > 0 && config.showRoof) {
     const porchRoofs = extractRoofs(nodes, levelId)
     const porch = framePorches(porchPosts, activeWalls, porchRoofs, spec)

@@ -113,9 +113,13 @@ describe('a full farmhouse porch', () => {
     for (const p of posts) {
       expect(p.supportSlabId).toBe('slab_porch')
       expect(p.width).toBeCloseTo(5.5 * IN, 9)
-      // the shaft is the full 6x6, the same post Bones frames
+      // the shaft is the full 6x6, the same post Bones frames: square,
+      // sharp-cornered, one piece — not the renderer's rounded tube
       expect(p.shaftStartScale).toBe(1)
       expect(p.shaftEndScale).toBe(1)
+      expect(p.shaftCornerRadius).toBe(0)
+      expect(p.edgeSoftness).toBe(0)
+      expect(p.shaftSegmentCount).toBe(1)
       // to the underside of the beam band (a 6x8 under its 2x plate)
       expect(p.height).toBeCloseTo(PORCH_COVER_HEIGHT + PORCH_FLOOR_DROP - PORCH_BAND, 9)
       expect(p.shaftProfile).toBe('straight')
@@ -173,15 +177,28 @@ describe('a full farmhouse porch', () => {
     expect(ceiling.height).toBeCloseTo(0.05 + PORCH_COVER_HEIGHT - PORCH_BAND, 9)
     expect(byType(r.ops, 'slab').some((s) => s.name === 'Porch beam')).toBe(false)
     expect(seg.pitch).toBeCloseTo(Math.atan(6 / 12) * (180 / Math.PI), 6) // 8:12 farmhouse capped at 6:12
-    expect(seg.depth).toBeCloseTo(20 * FT, 6) // across the ridge: the porch width
-    expect(seg.width).toBeCloseTo(6.5 * FT + 10 * FT, 6) // along the ridge: the beam line (7 ft − 6 in) + run (half the width)
+    // the beam band is centred on the post lines (Bones' girder is): across
+    // the ridge the box spans the corner posts' outer faces — the 20 ft
+    // landing less the 6 in insets plus one post; along the ridge it runs
+    // from the front posts' outer face (7 ft − 6 in + 2¾ in) into the house
+    // by one run (half the span)
+    const across = 20 * FT - 12 * IN + 5.5 * IN
+    const beamOut = 6.5 * FT + 2.75 * IN
+    expect(seg.depth).toBeCloseTo(across, 6)
+    expect(seg.width).toBeCloseTo(beamOut + across / 2, 6)
     expect(r.summary?.attach).toBe('valley')
     // ridge along z: rotation ±π/2
     expect(Math.abs(Math.cos(seg.rotation as number))).toBeLessThan(1e-5)
     const pos = seg.position as number[]
     expect(pos[0]).toBeCloseTo(20 * FT, 6)
-    // centre between the beam line (−0.085 − 6.5 ft) and the reach (−0.085 + 10 ft)
-    expect(pos[2]).toBeCloseTo(-0.085 + (10 * FT - 6.5 * FT) / 2, 6)
+    // centre between the beam's outer face and the reach
+    expect(pos[2]).toBeCloseTo(-0.085 + (across / 2 - beamOut) / 2, 6)
+    // the beam's outer face is the posts' outer face: the front band's
+    // outer plane sits half a post past the post line, so a post standing
+    // on the line is flush with it, never proud of the beam's end
+    const posts = byType(r.ops, 'column')
+    const postLine = Math.min(...posts.map((p) => (p.position as number[])[2]!))
+    expect(pos[2]! - seg.width! / 2).toBeCloseTo(postLine - 2.75 * IN, 6)
   })
 
   test('ops are parent-first: roof before its segment, stair before its flight', () => {
@@ -193,14 +210,15 @@ describe('a full farmhouse porch', () => {
 })
 
 describe('policy', () => {
-  test('an entry porch is 8 ft, 6 ft deep, no guard, 5½ in posts; craftsman tapers them', () => {
+  test('an entry porch is 8 ft, 6 ft deep, no guard, 5½ in posts — the craftsman too (one sawn 6x6, no taper)', () => {
     const r = porchFor(input({ policy: 'entry', style: styleFor('craftsman') }), ids())
     expect(r.summary?.widthFt).toBe(8)
     expect(r.summary?.depthFt).toBe(6)
     expect(byType(r.ops, 'fence')).toHaveLength(0)
     const posts = byType(r.ops, 'column')
     expect(posts).toHaveLength(2)
-    expect(posts[0]!.shaftProfile).toBe('tapered')
+    expect(posts[0]!.shaftProfile).toBe('straight')
+    expect(posts[0]!.shaftTaper).toBe(0)
     expect(posts[0]!.width).toBeCloseTo(5.5 * IN, 9)
   })
 
@@ -215,7 +233,8 @@ describe('policy', () => {
     expect(seg.roofType).toBe('flat')
     expect(seg.pitch).toBe(0)
     // the canopy box stops one overhang short of the wall so its back overhang meets the face
-    expect(seg.width).toBeCloseTo(4.5 * FT - 14 * IN, 6)
+    // out to the posts' outer face (2¾ in past the post line), less the back overhang
+    expect(seg.width).toBeCloseTo(4.5 * FT + 2.75 * IN - 14 * IN, 6)
   })
 
   test('a hip style gets a hip porch roof on an eave or hip-end wall', () => {
@@ -240,10 +259,10 @@ describe('policy', () => {
     })
     // the box runs from the wall face to the beam line; +z points outward (toward −z world here)
     expect(seg.width).toBeCloseTo(20 * FT, 6)
-    expect(seg.depth).toBeCloseTo(6.5 * FT, 6)
+    expect(seg.depth).toBeCloseTo(6.5 * FT + 2.75 * IN, 6) // out to the posts' outer face
     expect(Math.abs(Math.cos(seg.rotation as number) + 1)).toBeLessThan(1e-5)
     const pos = seg.position as number[]
-    expect(pos[2]).toBeCloseTo(-0.085 - (6.5 * FT) / 2, 6)
+    expect(pos[2]).toBeCloseTo(-0.085 - (6.5 * FT + 2.75 * IN) / 2, 6)
     // no role at all (no auto roof) also stops at the wall
     expect(porchFor(input({ wallRole: undefined }), ids()).summary?.attach).toBe('ledger')
   })
@@ -326,7 +345,7 @@ describe('landing, rails and pillars by style (PlanCrafters entrance presets)', 
     expect(porchFor(input(), ids()).summary?.railStyle).toBe('baluster')
   })
 
-  test('the stucco ranch gets 13 in stucco piers; craftsman tapered posts; farmhouse square 6x6', () => {
+  test('the stucco ranch gets 13 in stucco piers; craftsman and farmhouse square 6x6', () => {
     const ranch = porchFor(input({ style: styleFor('ranch'), policy: 'entry' }), ids())
     const pier = byType(ranch.ops, 'column')[0]!
     expect(pier.name).toBe('Porch pier')
@@ -336,7 +355,8 @@ describe('landing, rails and pillars by style (PlanCrafters entrance presets)', 
       porchFor(input({ style: styleFor('craftsman'), policy: 'entry' }), ids()).ops,
       'column',
     )[0]!
-    expect(craftsman.shaftProfile).toBe('tapered')
+    expect(craftsman.shaftProfile).toBe('straight')
+    expect(craftsman.width).toBeCloseTo(5.5 * IN, 9)
     expect(byType(porchFor(input(), ids()).ops, 'column')[0]!.width).toBeCloseTo(5.5 * IN, 9)
   })
 
@@ -351,10 +371,30 @@ describe('landing, rails and pillars by style (PlanCrafters entrance presets)', 
     for (const p of posts) {
       const foot = (p.position as number[])[1]!
       expect(foot).toBeCloseTo((p.position as number[])[0]! > 20 * FT ? -24 * IN : -18 * IN, 9)
-      expect(p.supportSlabId).toBeUndefined()
+      // hosted on the GROUND, so the viewer never elects the deck it passes through
+      expect(p.supportSlabId).toBe('ground')
       expect(p.height).toBeCloseTo(beam - foot, 6)
       expect(p.width).toBeCloseTo(5.5 * IN, 9)
     }
+    const flight = byType(deck.ops, 'stair')[0]!
+    expect((flight.position as number[])[1]).toBeCloseTo(-18 * IN, 9)
+    // on a terrain site the ground lift IS the grade: the post and the
+    // flight are authored at 0 and keep their heights
+    const hill = porchFor(
+      input({
+        landing: 'wood',
+        gradeY: -18 * IN,
+        gradeAt: (x) => (x > 20 * FT ? -24 * IN : -18 * IN),
+        terrain: true,
+      }),
+      ids(),
+    )
+    for (const p of byType(hill.ops, 'column')) {
+      expect((p.position as number[])[1]).toBe(0)
+      expect(p.supportSlabId).toBe('ground')
+      expect(p.height).toBeCloseTo(beam - ((p.position as number[])[0]! > 20 * FT ? -24 * IN : -18 * IN), 6)
+    }
+    expect((byType(hill.ops, 'stair')[0]!.position as number[])[1]).toBe(0)
     const slab = porchFor(input({ gradeY: -18 * IN }), ids())
     for (const p of byType(slab.ops, 'column')) {
       expect(p.supportSlabId).toBe('slab_porch')
@@ -433,9 +473,11 @@ describe('the cover sized against the house roof (W19b)', () => {
     )
     const seg = byType(r.ops, 'roof-segment')[0]!
     expect(seg.roofType).toBe('hip')
-    // entry porch: 8 ft wide (run 4 ft), 6 ft deep, beam 6 in inside the edge
-    const run = 4 * FT
-    const beamLine = 6 * FT - 6 * IN
+    // entry porch: 8 ft wide, 6 ft deep, beam 6 in inside the edge; the box
+    // spans the piers' outer faces (the stucco ranch's 13 in piers: run =
+    // half of 8 ft − 12 in + 13 in) and runs out to the front piers' outer face
+    const run = (8 * FT - 12 * IN + 13 * IN) / 2
+    const beamLine = 6 * FT - 6 * IN + 6.5 * IN
     // the 9 ft porch ceiling IS the 9 ft plate: the beam level with it, and at
     // the ranch's own 4:12 the ridge pierces the same 4:12 slope one run in
     expect(plate).toBeCloseTo(0.05 + PORCH_COVER_HEIGHT, 9)
@@ -490,11 +532,12 @@ describe('the cover sized against the house roof (W19b)', () => {
     const r = porchFor(input({ wallRole: 'gable-end', housePlateY: plate }), ids())
     const seg = byType(r.ops, 'roof-segment')[0]!
     expect(seg.roofType).toBe('shed')
-    const beamLine = 7 * FT - 6 * IN
+    const beamLine = 7 * FT - 6 * IN + 2.75 * IN // out to the posts' outer face
     // the 9 ft porch ceiling would put the beam AT the plate — a ledger
     // cannot hang there, so the beam drops to 1:12 under the ledger line
     expect(seg.pitch).toBeCloseTo(Math.atan(1 / 12) * (180 / Math.PI), 6)
     expect((seg.position as number[])[1]).toBeCloseTo(plate - LEDGER_CLEAR - beamLine / 12, 5)
+    expect(seg.depth).toBeCloseTo(beamLine, 6)
     // a deeper cover under a lower plate: the beam drops to the headroom floor at 1:12
     const low = coverGeometry(
       { floorElevation: 0.05, housePlateY: 0.05 + 8.2 * FT },

@@ -304,7 +304,12 @@ export function extractSlabs(nodes: NodesRecord, levelId: string): SlabSlice[] {
  * (`supportSlabId`) has its base at that slab's elevation; a deck's post
  * carries its own base (the grade under it) in its position.
  */
-export function extractPorchPosts(nodes: NodesRecord, levelId: string): PorchPostSlice[] {
+export function extractPorchPosts(
+  nodes: NodesRecord,
+  levelId: string,
+  /** The sculpted ground under a level-local plan point (null / absent on a flat site): a post hosted on the ground (`supportSlabId: 'ground'`) stands on it, its authored y on top. */
+  ground?: ((x: number, z: number) => number) | null,
+): PorchPostSlice[] {
   const out: PorchPostSlice[] = []
   for (const node of Object.values(nodes)) {
     if (node.type !== 'column' || node.parentId !== levelId) continue
@@ -316,11 +321,14 @@ export function extractPorchPosts(nodes: NodesRecord, levelId: string): PorchPos
     const support = typeof node.supportSlabId === 'string' ? nodes[node.supportSlabId] : undefined
     const slabY =
       support?.type === 'slab' && typeof support.elevation === 'number' ? support.elevation : 0
+    // the viewer lifts a ground-hosted node by the ground under it (terrain-support.ts)
+    const groundY =
+      node.supportSlabId === 'ground' && ground ? ground(num(pos[0], 0), num(pos[2], 0)) : 0
     const width = num(node.width, 0.14)
     out.push({
       id: String(node.id ?? ''),
       plan: [num(pos[0], 0), num(pos[2], 0)],
-      baseY: num(pos[1], 0) + slabY,
+      baseY: num(pos[1], 0) + slabY + groundY,
       height: num(node.height, 2.5),
       size: Math.max(width, num(node.depth, width)),
       entrance: typeof porch.entrance === 'string' ? porch.entrance : undefined,

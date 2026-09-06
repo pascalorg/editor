@@ -42,7 +42,7 @@
 import type { NodeOp } from './build'
 // Bones by relative path (see plugin-roof/run.ts): the cover's slab is the
 // rafter depth plus sheathing Bones frames.
-import { roofShellThickness } from '../../plugin-bones/src/core/shell-sync'
+import { porchBeam, porchPostSize, roofShellThickness } from '../../plugin-bones/src/core/shell-sync'
 import type { StylePreset } from './styles'
 
 export type Pt = [number, number]
@@ -101,9 +101,10 @@ export const STUCCO_PIER = inches(13)
  * a beam slab along the low eave of a shed on a ledger. The posts stop
  * under it; Bones frames the girder, plate and posts to the same lines.
  */
-export const PORCH_BEAM_D = inches(7.25)
-export const PORCH_BEAM_W = inches(5.5)
-export const PORCH_BAND = PORCH_BEAM_D + inches(1.5)
+const BEAM = porchBeam()
+export const PORCH_BEAM_D = BEAM.depth
+export const PORCH_BEAM_W = BEAM.width
+export const PORCH_BAND = BEAM.band
 
 export type PorchPolicy = 'full' | 'entry' | 'none' | 'patio' | 'landing' | 'deck'
 export type PorchRoofForm = 'gable' | 'hip' | 'shed' | 'flat' | 'none'
@@ -139,6 +140,14 @@ export interface PorchInput {
   gradeY: number
   /** Grade under any plan point, level-local y — a deck's posts run down to it. Default: `gradeY` everywhere. */
   gradeAt?: (x: number, z: number) => number
+  /**
+   * The site carries a terrain field. The viewer lifts a ground-hosted
+   * node (`supportSlabId: 'ground'`) by the sculpted ground under it, so on
+   * a terrain site a post or flight to grade is authored at y = 0 and the
+   * ground puts it down; on a flat site the ground lift is 0 and the node
+   * carries its grade itself. Default false.
+   */
+  terrain?: boolean
   /** Eave overhang for the cover, metres along the slope. */
   overhang: number
   /** The door wall's roof role from the auto roof (`metadata.roof.role`); absent = stop at the wall. */
@@ -243,7 +252,7 @@ export function railStyleFor(style: StylePreset): RailStyle {
 }
 
 /** The entrance post: a 6x6 (Steve, 2026-09-06: "nice 6x6 posts typically on these entrances, not 4x4"). */
-export const ENTRANCE_POST = inches(5.5)
+export const ENTRANCE_POST = porchPostSize()
 
 /**
  * The posts: a 6x6 everywhere (craftsman's tapered), the stucco ranch's
@@ -253,11 +262,13 @@ export const ENTRANCE_POST = inches(5.5)
 export function pillarFor(
   style: StylePreset,
   policy: PorchPolicy,
-): { size: number; tapered: boolean; stucco: boolean } {
-  if (policy === 'none') return { size: ENTRANCE_POST, tapered: false, stucco: false }
+): { size: number; stucco: boolean } {
+  if (policy === 'none') return { size: ENTRANCE_POST, stucco: false }
   const stucco = style.exteriorAssembly === 'exterior-2x6-stucco' && style.roofForm === 'hip'
-  if (stucco) return { size: STUCCO_PIER, tapered: false, stucco: true }
-  return { size: ENTRANCE_POST, tapered: style.key === 'craftsman', stucco: false }
+  if (stucco) return { size: STUCCO_PIER, stucco: true }
+  // the craftsman's tapered box column is a wrap around the same 6x6 —
+  // not drawn: the post the shell shows IS the post Bones frames
+  return { size: ENTRANCE_POST, stucco: false }
 }
 
 /** What the cover becomes once it is sized against the house roof. */
@@ -479,12 +490,20 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
   // The cover bears on the beam over the posts (one inset in from the
   // landing's outer edge); its eave overhangs the landing from there.
   const beamLine = depth - inset
+  // The beam band is centred on the post lines the way Bones' girder is —
+  // its outer faces flush with the posts' outer faces (Steve: "the posts
+  // still don't go to the end of the beam"): the cover's box runs out to
+  // the front posts' outer face and across to the corner posts' outer
+  // faces; the house side is unchanged. The eave overhangs from there.
+  const postHalf = pillar.size / 2
+  const beamOut = beamLine + postHalf
+  const across = 2 * (hw - inset) + pillar.size
   const cover = coverGeometry(
     input,
     style,
     porchRoofForm(style, policy, attach),
-    width / 2,
-    beamLine,
+    across / 2,
+    beamOut,
     wall.thickness / 2,
   )
   const form = cover.form
@@ -542,23 +561,30 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         type: 'column',
         name: pillar.stucco ? 'Porch pier' : 'Porch post',
         parentId: input.levelId,
-        position: [px, footY ?? 0, pz],
+        // A deck's post is hosted on the GROUND, never elected onto the deck
+        // it passes through (the viewer's floor stacking would lift it onto
+        // the decking); on a terrain site the ground lift puts it down.
+        position: [px, footY === null || input.terrain ? 0 : footY, pz],
         rotation: round(Math.atan2(-az, ax)),
-        ...(footY === null ? { supportSlabId: ids.slab } : {}),
+        supportSlabId: footY === null ? ids.slab : 'ground',
         height: round(footY === null ? postHeight : beamBottom - footY),
         style: 'plain',
         crossSection: 'square',
         width: round(pillar.size),
         depth: round(pillar.size),
-        shaftProfile: pillar.tapered ? 'tapered' : 'straight',
-        shaftTaper: pillar.tapered ? 0.3 : 0,
+        // one sawn post: square, sharp-cornered, no rings — the column
+        // renderer's rounded corners and segment seams read as a tube
+        shaftProfile: 'straight',
+        shaftTaper: 0,
+        shaftSegmentCount: 1,
+        shaftCornerRadius: 0,
         // the shaft IS the post's full section (the column renderer's default
         // shaft is 72 % of the width — a 6x6 read as a 4x4 beside Bones' 6x6)
         shaftStartScale: 1,
         shaftEndScale: 1,
         baseStyle: 'none',
         capitalStyle: 'none',
-        edgeSoftness: 0.008,
+        edgeSoftness: 0,
         ...(pillar.stucco ? { materialPreset: 'library:concrete-stucco' } : {}),
         // the pair each side of the flight: the posts that follow a moved
         // stair (porch-follow.ts)
@@ -588,7 +614,9 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         type: 'stair',
         name: `${name} steps`,
         parentId: input.levelId,
-        position: [bx, round(input.gradeY), bz],
+        // the flight rests on the ground: on a terrain site the viewer's
+        // ground lift is its grade, on a flat site it carries the grade itself
+        position: [bx, input.terrain ? 0 : round(input.gradeY), bz],
         rotation: round(Math.atan2(inward[0], inward[1])),
         stairType: 'straight',
         fromLevelId: null,
@@ -709,9 +737,9 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
       // point (a hip one run further, burying its near hip end) so its
       // planes meet the main roof at a valley — the auto roof's wing
       // convention. Rotation turns segment +x onto −outward (into the house).
-      segWidth = beamLine + cover.into
-      segDepth = width
-      centre = P(0, (beamLine - cover.into) / 2)
+      segWidth = beamOut + cover.into
+      segDepth = across
+      centre = P(0, (beamOut - cover.into) / 2)
       yaw = Math.atan2(outward[1], -outward[0])
       roofMeta = { role: 'porch', open: true }
     } else if (form === 'shed') {
@@ -720,16 +748,16 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
       // (segment −z); Bones frames the high edge as a ledger with hangers
       // and no pediment, the sides open (no rake studs).
       segWidth = width
-      segDepth = beamLine
-      centre = P(0, beamLine / 2)
+      segDepth = beamOut
+      centre = P(0, beamOut / 2)
       yaw = Math.atan2(outward[0], outward[1])
       roofMeta = { role: 'porch', attach: 'high', open: true }
     } else {
       // Flat canopy: the box stops one overhang short of the wall so its
       // back overhang meets the wall face.
-      segWidth = beamLine - input.overhang
-      segDepth = width
-      centre = P(0, (beamLine + input.overhang) / 2)
+      segWidth = beamOut - input.overhang
+      segDepth = across
+      centre = P(0, (beamOut + input.overhang) / 2)
       yaw = Math.atan2(outward[1], -outward[0])
       roofMeta = { role: 'porch', open: true }
     }

@@ -110,8 +110,24 @@ describe('applied to a generated house', () => {
     const ext = nodes.filter((n) => n.type === 'wall' && n.metadata?.wallType === 'ext2x6')
     expect(ext.length).toBeGreaterThan(0)
     for (const w of ext) expect(w.slots?.exterior).toBe(f.siding.ref)
-    for (const w of nodes.filter((n) => n.type === 'wall' && n.metadata?.wallType !== 'ext2x6'))
-      expect(w.slots?.exterior).toBeUndefined()
+    // inside: the interior paint on every wall not bounding only the
+    // garage — an exterior wall's inner face, both faces of a partition;
+    // the garage's own walls keep bare GWB
+    expect(f.interior.ref).toBe('library:preset-lightgrey')
+    expect(f.interior.hex).toMatch(/^#[0-9a-f]{6}$/)
+    const garageOnly = (w: N) =>
+      (w.metadata?.rooms as string[]).every((r: string) => /garage/i.test(r))
+    for (const w of ext) {
+      if (garageOnly(w)) expect(w.slots?.interior).toBeUndefined()
+      else expect(w.slots?.interior).toBe(f.interior.ref)
+    }
+    const partitions = nodes.filter((n) => n.type === 'wall' && n.metadata?.wallType !== 'ext2x6')
+    expect(partitions.length).toBeGreaterThan(0)
+    for (const w of partitions) {
+      expect(w.slots?.interior).toBe(f.interior.ref)
+      expect(w.slots?.exterior).toBe(f.interior.ref)
+    }
+    expect(ext.some(garageOnly)).toBe(true) // this roll has a garage: its walls stay GWB
     const windows = nodes.filter((n) => n.type === 'window')
     expect(windows.length).toBeGreaterThan(0)
     for (const w of windows) {

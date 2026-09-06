@@ -192,3 +192,73 @@ PlanCrafters does not use an LLM to place walls — ever. The chat produces an L
 document (`apply_floor_plan`) and the engine solves the geometry deterministically,
 reconciling room bands so their sum equals the stated footprint exactly. Keep that
 split in Pascal: models may author documents; only code places walls.
+
+## 7. Procedural house mode — design (Steve, 2026-09-06; not built yet)
+
+Two asks, one system. **(a) Save a house into the algorithm:** draw or
+generate a house, modify it in the editor, and save it as a new *design* the
+generator can roll from — the library of designs grows with use. **(b) A
+procedural settings page:** every option and rule the generator uses, on one
+page, editable — "so it's not a black box".
+
+### 7.1 What a saved design is
+
+The generator already separates the authored document (L1 + L2, §1) from the
+derived engineering. A saved design is exactly that document, recovered FROM
+the scene:
+
+- **rooms** — every generated zone's polygon on the plan grid (name, kind,
+  the 6 in grid it snaps to), with the edits the user made (a moved wall
+  changes the zone; a renamed room changes its kind by name);
+- **envelope** — the outline the walls close;
+- **openings intent** — the door attachments (which room-pair, which wall,
+  the door's kind) and the windows the user kept, added or removed;
+- **L2 intent** — style key, roof form and pitch, ceiling height, porch
+  policy, foundation record, the palette index (all already on
+  `building.metadata.generation` / `.document` / `.finishes`);
+- **pins** — per-room overrides (a cathedral ceiling, a floor finish).
+
+The reverse pass (`scene → document`) is the missing piece: the generator
+writes `metadata.rooms` on walls, `metadata.kind` and `rooms` on zones and
+ceilings, `metadata.attach` on doors, and the full input document on the
+building — so most of it is a read, not a re-derivation. Hand-built houses
+(no generator metadata) get the same pass with heuristics: zones from the
+walls (`detectSpacesForLevel`), kinds from names, doors by the rooms they
+join. What cannot be read is listed on the save dialog, never guessed.
+
+### 7.2 Where it lives
+
+`packages/plugin-generate/src/templates/` already carries authored designs
+(the Poppy). A saved design is one more entry — a document plus a
+`provenance` record (saved from which scene, seed, when) — stored in the
+user's design library (the editor's saved-scenes store is the natural home;
+a JSON export/import for sharing). The panel's TEMPLATES list shows them
+beside the built-ins; **Random** can roll the library's designs (a design
+is a document; the roll's variations — beds, baths, garage, style — apply
+on top of it the way `rollDocument` applies them to a footprint).
+
+### 7.3 The settings page
+
+A route (`/procedural`) that renders every knob from the generator's own
+tables, grouped as the pipeline runs (§2): lot and placement (setbacks,
+frontage rules), the footprint roll (width/depth ranges, aspect limits),
+the room program per bedroom count, the wall assemblies (`styles.ts`), door
+and window rules (egress sizes, sill heights), the entrance policies
+(`porch.ts` constants: post spacing, inset, cover heights, the beam and post
+sizes from Bones' table), the foundation rules (`foundation.ts`), the
+palettes and finishes (`finishes.ts`), the furnishing recipes
+(`furnish.ts`), and Bones' framing spec. Each value shows its source (file,
+constant, the PlanCrafters rule it mirrors) and, where it is a design
+choice rather than a code minimum, is editable — edits become a
+`generation.options` override the roll reads, saved with the design. Code
+minimums (IRC egress, stair rise) are shown and locked, with the section
+cited.
+
+### 7.4 Order of work
+
+1. `documentFromScene(nodes, buildingId)` — the reverse pass, with tests on
+   the Poppy round trip (generate → read back → generate again is the same
+   house) and on a hand-drawn scene.
+2. The design library store + the panel's Save-as-design and the list.
+3. The settings page, read-only first (every table rendered from source),
+   then the editable subset as `generation.options`.

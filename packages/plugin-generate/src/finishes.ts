@@ -472,8 +472,19 @@ export interface Finishes {
   shutter: { hex: string; preset: string }
   windows: { type: PascalWindowType; grid: WindowGrid }
   wood: { style: WoodStyle; label: string; hex: string; deckRef: string }
+  /** The interior wall paint — every finished room's walls, both faces of a partition. */
+  interior: { ref: string; preset: string; label: string; hex: string }
   products: { siding: string; roof: string; paint: string; trim: string }
 }
+
+/**
+ * The interior wall paint (Steve, 2026-09-06: "should be Seattle grey walls
+ * on the inside, not unfinished like this on generation"). The library's
+ * flat paints carry no "Seattle grey"; its cool light grey is the one
+ * nearest that read — a named colour is one catalog entry away. Read from
+ * the catalog so a renamed or removed preset fails loudly, never silently.
+ */
+export const INTERIOR_PAINT_PRESET = 'preset-lightgrey'
 
 /** The library's flat colour presets, from the catalog (never hand-typed). */
 export function colourPresets(): { id: string; hex: string }[] {
@@ -559,7 +570,21 @@ export function finishesFor(style: StylePreset, paletteIndex: number | null | un
       hex: woodStyle === 'painted' ? palette.trim : wood.hex,
       deckRef: ref(DECK_PLANK_PRESET),
     },
+    interior: interiorPaint(),
     products: PRODUCTS[style.key] ?? (PRODUCTS.farmhouse as (typeof PRODUCTS)[string]),
+  }
+}
+
+/** The interior paint from the catalog (label and hex are the catalog's own). */
+export function interiorPaint(): Finishes['interior'] {
+  const entry = MATERIAL_CATALOG.find((m) => m.id === INTERIOR_PAINT_PRESET)
+  if (!entry || typeof entry.previewColor !== 'string')
+    throw new Error(`finishes: the material library has no flat paint "${INTERIOR_PAINT_PRESET}"`)
+  return {
+    ref: ref(INTERIOR_PAINT_PRESET),
+    preset: INTERIOR_PAINT_PRESET,
+    label: entry.label,
+    hex: entry.previewColor,
   }
 }
 
@@ -594,6 +619,8 @@ export function applyFinishes(
   f: Finishes,
 ): {
   walls: number
+  /** Walls painted inside (every wall not bounding only the garage). */
+  painted: number
   windows: number
   doors: number
   roofs: number
@@ -601,17 +628,30 @@ export function applyFinishes(
   posts: number
   decks: number
 } {
-  const out = { walls: 0, windows: 0, doors: 0, roofs: 0, rails: 0, posts: 0, decks: 0 }
+  const out = { walls: 0, painted: 0, windows: 0, doors: 0, roofs: 0, rails: 0, posts: 0, decks: 0 }
   for (const op of ops) {
     const n = op.node as N
     const m = meta(n)
     switch (n.type) {
-      case 'wall':
+      case 'wall': {
+        // the garage's own walls keep bare GWB (the zone schedule says 'GWB');
+        // every other wall is painted — an exterior wall inside, a partition
+        // on both faces (the separation's garage face too: painted is usual)
+        const rooms = Array.isArray(m.rooms) ? (m.rooms as unknown[]).map(String) : []
+        const garageOnly = rooms.length > 0 && rooms.every((r) => /garage/i.test(r))
         if (m.wallType === 'ext2x6') {
           n.slots = { ...slotsOf(n), exterior: f.siding.ref }
           out.walls++
         }
+        if (!garageOnly) {
+          n.slots =
+            m.wallType === 'ext2x6'
+              ? { ...slotsOf(n), interior: f.interior.ref }
+              : { ...slotsOf(n), interior: f.interior.ref, exterior: f.interior.ref }
+          out.painted++
+        }
         break
+      }
       case 'window': {
         n.slots = { ...slotsOf(n), frame: f.trim.ref }
         n.windowType = windowTypeFor(f, Number(n.width ?? 0), Number(n.height ?? 0))
@@ -686,5 +726,5 @@ export function applyFinishes(
 /** One line for the run summary and the panel. */
 export function describeFinishes(f: Finishes): string {
   const grid = f.windows.grid === 'none' ? '' : `, ${f.windows.grid} grid (recorded, not drawn)`
-  return `${f.paletteName}: ${f.siding.label.toLowerCase()} · ${f.roof.label.toLowerCase()} · trim ${f.trim.hex} · door ${f.door.hex} · windows ${f.windows.type}${grid} · rails ${f.wood.style === 'painted' ? 'painted trim' : f.wood.label.toLowerCase()} · ${f.products.siding} / ${f.products.roof} · paint ${f.products.paint}, trim ${f.products.trim}`
+  return `${f.paletteName}: ${f.siding.label.toLowerCase()} · ${f.roof.label.toLowerCase()} · trim ${f.trim.hex} · door ${f.door.hex} · windows ${f.windows.type}${grid} · rails ${f.wood.style === 'painted' ? 'painted trim' : f.wood.label.toLowerCase()} · inside ${f.interior.label.toLowerCase()} · ${f.products.siding} / ${f.products.roof} · paint ${f.products.paint}, trim ${f.products.trim}`
 }

@@ -95,6 +95,20 @@ describe('Poppy builds into Pascal nodes', () => {
     }
   })
 
+  test('every room gets a flat ceiling on its zone polygon, following the level top', () => {
+    const ceilings = ofType(ops, 'ceiling').filter((c) => !String(c.name).startsWith('Porch'))
+    expect(ceilings.length).toBe(zones.length)
+    expect(result.stats.ceilings).toBe(zones.length)
+    for (const c of ceilings) {
+      const zone = zones.find((z) => `${z.name} ceiling` === c.name)!
+      expect(zone).toBeDefined()
+      expect(c.polygon).toEqual(zone.polygon)
+      expect(c.parentId).toBe(result.levelId)
+      // the Poppy's rooms are all at the 9 ft storey: no explicit height
+      expect(c.height).toBeUndefined()
+    }
+  })
+
   test('zones come from the walls: the open plan is one room, the others their own', () => {
     const names = zones.map((z) => z.name).sort()
     expect(names).toContain('LIVING / DINING / KITCHEN')

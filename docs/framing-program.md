@@ -619,7 +619,91 @@ G21 Elevations: fascia boards, rails and every feature, the roofing in colour,
     trees and everything else in the scene projected.
 G22 The WebGPU "Vertex buffer slot 0 … was not set" error.
 
+**Steve, 2026-09-06 (night), verbatim:** "okay i noticed in presentation view
+the posts still dont go to end of beam, literally bring the framing in just
+major posts, not studs, into the view and use those, the presentation view
+can add like gingerbread on it and change the colors and things as it wants,
+also i noticed when houses are generated and this was before where walls
+connect it has these white things on top of the wall and they poke out, thats
+not how it should look and looks terrible, not sure if those things over the
+walls come from bones or the base software but it sucks lol! nice work btw! i
+dont see interior ceiling being generated, also should be seattle grey walls
+on the inside not unfinished like this on generation, keep cleaning up, also
+add a procedural house mode, where someone can draw or generate a house,
+modify it, and save it into the procedural algorithm, that way this is
+expandable with more designs, also include a procedural mode where it opens a
+page and lets me see all the options and settings for procedural so its not a
+black box … ohh yeah and your rear deck posts are not at the right elevation
+and poking through the roof, the posts on all auto porches look rounded edges,
+not true wood framing and they have notches like looks like tube and weird,
+not wood … and then maybe reset the dev server and toss onto a new port for
+the next tests, so we ensure errors are gone"
+
+G23 The presentation posts ARE the framing's posts: the beam band ends at the
+    posts (centred on the post lines the way Bones' girder is), the posts
+    square, sharp-cornered, one piece — sizes from Bones' lumber table.
+G24 The white blocks on wall tops where walls connect — not reproduced yet
+    (see Batch M); needs the node's name from the inspector.
+G25 Interior: a flat ceiling in every room; the walls painted inside (the
+    library's light grey — no "Seattle grey" in the catalog; one line adds it).
+G26 Rear deck posts at the right elevation (they were being lifted onto the
+    deck by the viewer's floor stacking).
+G27 Procedural house mode: draw or generate, modify, save the house INTO the
+    procedural algorithm as a new design; and a procedural settings page that
+    shows every option — no black box. Design in
+    docs/procedural-generation.md §7; building it is next.
+
 ## Log (continued)
+
+- 2026-09-06 night: **Batch M — the posts are the framing's posts, the deck
+  posts on the ground, ceilings and paint inside (G23, G25, G26; G24 open).**
+  G23: `shell-sync.ts` now also carries the porch sizes (`PORCH_BEAM_SIZE`
+  6x8, `PORCH_PLATE_SIZE` 2x6, `PORCH_POST_SIZE` 6x6, `porchBeam()`,
+  `porchPostSize()`); the porch engine frames from those names and the
+  generator's `PORCH_BEAM_D/W`, `PORCH_BAND` and `ENTRANCE_POST` are read
+  from them — one table. The cover's box now runs out to the front posts'
+  OUTER face and across to the corner posts' outer faces (`beamOut`,
+  `across` in porch.ts), so the beam band is centred on the post lines the
+  way Bones' girder is and a post is flush with the beam's end, never proud
+  of it; the eave overhangs from there (the 6 in inset less half a post is
+  well inside every style's overhang). The posts: `shaftCornerRadius` 0,
+  `edgeSoftness` 0, `shaftSegmentCount` 1, straight — the column renderer's
+  rounded corners (default 1.4 in radius on a 5½ in post) and 24 overlapping
+  taper segments were the "tube with notches"; the craftsman's taper is
+  dropped (a tapered box column is a wrap around the same 6x6 — presentation
+  gingerbread for later, not the post). G26: a deck's post had no
+  `supportSlabId`, and the viewer's floor stacking ELECTED the deck it
+  passes through as its host (the footprint overlaps the decking), lifting
+  the whole post by the deck's height above grade — hence through the roof.
+  Every deck post and the flight are now hosted on the ground
+  (`supportSlabId: 'ground'`, core's GROUND_SUPPORT_ID); on a terrain site
+  the viewer's ground lift IS the grade, so the node is authored at y = 0
+  (`PorchInput.terrain`, set by build.ts when the site carries a
+  heightfield), on a flat site it carries its grade itself. Bones'
+  `extractPorchPosts` and the Sections plugin's column features resolve a
+  ground-hosted post the same way (Bones through its `ground` function,
+  Sections through the terrain sampler at the column's world point). G25:
+  build.ts writes one `ceiling` node per zone (the zone's polygon, following
+  the level top; a room pinned lower keeps its own height) — `stats.ceilings`;
+  finishes.ts gains `interior` (the catalog's `preset-lightgrey`, read from
+  the catalog so a rename fails loudly) and `applyFinishes` paints every wall
+  not bounding only the garage: an exterior wall's `slots.interior`, both
+  faces of a partition; the garage's own walls keep bare GWB as the zone
+  schedule says. G24: NOT reproduced — the same seed (1034238772, craftsman)
+  regenerated in the editor shows no blocks on the wall tops inside or on
+  the gable wall outside, and a headless probe of Bones' output for that
+  house finds only ceiling devices (lights, alarms, registers at the
+  ceiling plane) and the electrical runs along the plates, none at wall
+  junctions. Candidates ruled in for Steve to check by clicking one: the
+  Bones fixtures a finished house shows (`SURFACE_FIXTURE_KINDS` in the
+  framing renderer draws them as plain coloured boxes even with the X-ray
+  off), which float at the ceiling plane when no ceiling exists — the
+  ceilings now generated may simply hide them. Tests: porch (sharp posts,
+  the box to the posts' faces on gable / hip / shed / canopy, ground-hosted
+  deck posts and flight, the terrain case), finishes (the interior paint,
+  garage walls bare), build (a ceiling per zone), Bones `extractPorchPosts`
+  (slab / ground / terrain) — generate 95, Bones 2,119, sections 23, roof
+  20, editor typecheck clean.
 
 - 2026-09-06 late: **Batch I — stair guards, the elevations, the WebGPU error
   (G19, G21, G22; G17 checked).** Stair node: `railingStyle` ('balusters' |

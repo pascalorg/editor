@@ -305,6 +305,7 @@ function collectFeatures(
   nodes: Nodes,
   elevations: Map<string, { baseY: number }>,
   warnings: string[],
+  gradeAt: (x: number, z: number) => number,
 ): FeatureSolid[] {
   const out: FeatureSolid[] = []
   let trees = 0
@@ -312,6 +313,26 @@ function collectFeatures(
     if (typeof id !== 'string') return 0
     const slab = nodes[id as AnyNodeId] as { type?: string; elevation?: number } | undefined
     return slab?.type === 'slab' && typeof slab.elevation === 'number' ? slab.elevation : 0
+  }
+  // A node hosted on the ground (`supportSlabId: 'ground'`) stands on the
+  // sculpted ground under it — the viewer's terrain lift (terrain-support.ts):
+  // the site's grade at the node's world plan point, measured from the level base.
+  const groundLift = (levelId: string | null, levelBase: number, x: number, z: number): number => {
+    const level = levelId ? (nodes[levelId as AnyNodeId] as { parentId?: string } | undefined) : undefined
+    const building = level?.parentId
+      ? (nodes[level.parentId as AnyNodeId] as
+          | { position?: number[]; rotation?: number[] | number }
+          | undefined)
+      : undefined
+    const bp = building?.position ?? [0, 0, 0]
+    const yaw = Array.isArray(building?.rotation)
+      ? (building.rotation[1] ?? 0)
+      : typeof building?.rotation === 'number'
+        ? building.rotation
+        : 0
+    const wx = (bp[0] ?? 0) + x * Math.cos(yaw) + z * Math.sin(yaw)
+    const wz = (bp[2] ?? 0) - x * Math.sin(yaw) + z * Math.cos(yaw)
+    return gradeAt(wx, wz) - levelBase
   }
   const box = (cx: number, cz: number, w: number, d: number, yaw: number): Vec2[] =>
     (
@@ -338,7 +359,12 @@ function collectFeatures(
       const d = typeof n.depth === 'number' ? n.depth : w
       const h = typeof n.height === 'number' ? n.height : 2.5
       const yaw = typeof n.rotation === 'number' ? n.rotation : 0
-      const baseY = levelBase + (p[1] ?? 0) + slabElevation(n.supportSlabId)
+      const baseY =
+        levelBase +
+        (p[1] ?? 0) +
+        (n.supportSlabId === 'ground'
+          ? groundLift(levelId, levelBase, p[0] ?? 0, p[2] ?? 0)
+          : slabElevation(n.supportSlabId))
       out.push({
         kind: 'feature',
         feature: 'column',
@@ -954,7 +980,8 @@ export function buildBuildingModel(nodes: Nodes): BuildingModel {
   }
 
   const items = collectItems(nodes, elevations, warnings)
-  const features = collectFeatures(nodes, elevations, warnings)
+  const gradeAt = terrainSampler(nodes, warnings)
+  const features = collectFeatures(nodes, elevations, warnings, gradeAt)
   const roofFinish = roofFinishOf(nodes)
   // The roofing the building records (the generator's palette — the finish
   // key's swatch) is what the roof prints in: a textured shingle preset's
@@ -967,7 +994,7 @@ export function buildBuildingModel(nodes: Nodes): BuildingModel {
     items,
     features,
     levels,
-    gradeAt: terrainSampler(nodes, warnings),
+    gradeAt,
     warnings,
     roofFinish,
     trimHex: trimHexOf(nodes),
