@@ -92,6 +92,165 @@ export type PlanSetOptions = {
   /** The foundation as framed (compute `result.foundation`) — the
    * foundation detail draws slab vs raised and the floor height from it. */
   foundation?: DetailFoundation | null
+  /** The exterior finish schedule (W13b) — what the generator's palette put
+   * on the building, as plain rows (`finishScheduleFrom` reads the building
+   * node's `metadata.finishes`). Absent / null → no finish sheet. */
+  finishes?: FinishSchedule | null
+}
+
+/** One line of the finish schedule sheet. */
+export type FinishRow = {
+  item: string
+  finish: string
+  /** A CSS hex colour, when the finish has one. */
+  colour?: string
+  product?: string
+  note?: string
+}
+
+export type FinishSchedule = {
+  style?: string
+  palette?: string
+  rows: FinishRow[]
+}
+
+const str = (v: unknown): string | undefined =>
+  typeof v === 'string' && v.length > 0 ? v : undefined
+const rec = (v: unknown): Record<string, unknown> =>
+  typeof v === 'object' && v !== null ? (v as Record<string, unknown>) : {}
+
+/**
+ * The finish schedule from a building's `metadata.finishes` as the
+ * generator writes it (plugin-generate `Finishes`: siding / roof / trim /
+ * door / shutter / windows / wood / products) — duck-typed, so a hand-made
+ * building without the record yields null and any field the record lacks
+ * is simply left off its row. Bones never imports the generator.
+ */
+export function finishScheduleFrom(meta: unknown): FinishSchedule | null {
+  const f = rec(meta)
+  if (Object.keys(f).length === 0) return null
+  const siding = rec(f.siding)
+  const roof = rec(f.roof)
+  const trim = rec(f.trim)
+  const door = rec(f.door)
+  const shutter = rec(f.shutter)
+  const windows = rec(f.windows)
+  const wood = rec(f.wood)
+  const products = rec(f.products)
+  const rows: FinishRow[] = []
+  if (str(siding.label)) {
+    rows.push({
+      item: 'SIDING',
+      finish: str(siding.label) as string,
+      colour: str(siding.hex),
+      product: str(products.siding),
+    })
+  }
+  if (str(roof.label)) {
+    rows.push({
+      item: 'ROOFING',
+      finish: str(roof.label) as string,
+      colour: str(roof.hex),
+      product: str(products.roof),
+      note: roof.metal === true ? 'metal — no library texture, flat colour' : undefined,
+    })
+  }
+  if (str(trim.hex)) {
+    rows.push({
+      item: 'TRIM + FASCIA',
+      finish: 'painted',
+      colour: str(trim.hex),
+      product: str(products.trim),
+    })
+  }
+  if (str(door.hex)) {
+    rows.push({
+      item: 'ENTRY DOOR',
+      finish: 'painted',
+      colour: str(door.hex),
+      product: str(products.paint),
+    })
+  }
+  if (str(shutter.hex)) {
+    rows.push({
+      item: 'SHUTTERS',
+      finish: 'painted',
+      colour: str(shutter.hex),
+      note: 'recorded, not modelled',
+    })
+  }
+  if (str(windows.type)) {
+    const grid = str(windows.grid)
+    rows.push({
+      item: 'WINDOWS',
+      finish: str(windows.type) as string,
+      note: grid && grid !== 'none' ? `${grid} grid — recorded, not drawn` : undefined,
+    })
+  }
+  if (str(wood.label) || str(wood.style)) {
+    rows.push({
+      item: 'DECK + RAILS',
+      finish: (str(wood.label) ?? str(wood.style)) as string,
+      colour: str(wood.hex),
+    })
+  }
+  if (rows.length === 0) return null
+  return { style: str(f.style), palette: str(f.paletteName), rows }
+}
+
+/**
+ * The finish schedule sheet (W13b): the palette the generator put on the
+ * building, one row per surface — item, finish, a colour swatch with its
+ * hex, the product line, notes. Colours print approximate; the sheet says
+ * so. No schedule → no sheet.
+ */
+function finishScheduleSheet(opts: PlanSetOptions): PlanSheet | null {
+  const fs = opts.finishes
+  if (!fs || fs.rows.length === 0) return null
+  const FONT = 'font-family="Helvetica, Arial, sans-serif"'
+  const cols = {
+    item: MARGIN,
+    finish: MARGIN + 130,
+    colour: MARGIN + 340,
+    product: MARGIN + 470,
+    note: MARGIN + 680,
+  }
+  const lineH = 18
+  const y0 = MARGIN + 46
+  const head =
+    `<text x="${cols.item}" y="${y0}" font-size="10" font-weight="bold" ${FONT} fill="#111">ITEM</text>` +
+    `<text x="${cols.finish}" y="${y0}" font-size="10" font-weight="bold" ${FONT} fill="#111">FINISH</text>` +
+    `<text x="${cols.colour}" y="${y0}" font-size="10" font-weight="bold" ${FONT} fill="#111">COLOUR</text>` +
+    `<text x="${cols.product}" y="${y0}" font-size="10" font-weight="bold" ${FONT} fill="#111">PRODUCT</text>` +
+    `<text x="${cols.note}" y="${y0}" font-size="10" font-weight="bold" ${FONT} fill="#111">NOTE</text>` +
+    `<line x1="${MARGIN}" y1="${y0 + 5}" x2="${W - MARGIN}" y2="${y0 + 5}" stroke="#222" stroke-width="0.8"/>`
+  const body = fs.rows
+    .map((r, i) => {
+      const y = y0 + lineH * (i + 1) + 4
+      const swatch = r.colour
+        ? `<rect x="${cols.colour}" y="${y - 10}" width="22" height="12" fill="${esc(r.colour)}" stroke="#222" stroke-width="0.6"/><text x="${cols.colour + 28}" y="${y}" font-size="10" ${FONT} fill="#222">${esc(r.colour.toUpperCase())}</text>`
+        : `<text x="${cols.colour}" y="${y}" font-size="10" ${FONT} fill="#222">—</text>`
+      return (
+        `<text x="${cols.item}" y="${y}" font-size="10" font-weight="bold" ${FONT} fill="#222">${esc(r.item)}</text>` +
+        `<text x="${cols.finish}" y="${y}" font-size="10" ${FONT} fill="#222">${esc(clip(r.finish, 36))}</text>` +
+        swatch +
+        `<text x="${cols.product}" y="${y}" font-size="10" ${FONT} fill="#222">${esc(clip(r.product ?? '—', 36))}</text>` +
+        `<text x="${cols.note}" y="${y}" font-size="9" ${FONT} fill="#555">${esc(clip(r.note ?? '', 40))}</text>`
+      )
+    })
+    .join('')
+  const heading = [
+    fs.style ? `${fs.style} style` : null,
+    fs.palette ? `palette “${fs.palette}”` : null,
+  ]
+    .filter((x): x is string => x !== null)
+    .join(' · ')
+  const noteY = y0 + lineH * (fs.rows.length + 2) + 4
+  const title = 'Finish schedule'
+  return {
+    title,
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#fff"/><text x="${MARGIN}" y="${MARGIN + 4}" font-size="13" font-weight="bold" ${FONT} fill="#111">Exterior finish schedule${heading ? ` — ${esc(heading)}` : ''}</text><text x="${MARGIN}" y="${MARGIN + 20}" font-size="10" ${FONT} fill="#333">The palette applied to the model as one unit (siding, roofing, trim, door, windows, wood) — the library material references on the building; colours print approximate, verify with samples.</text>${head}${body}<text x="${MARGIN}" y="${noteY}" font-size="9" ${FONT} fill="#555">Interior finishes: 1/2" gypsum board on walls and ceilings, paint grade; the dwelling–garage separation face per the wall framing plan legend (Table R302.6).</text>${chrome(title, opts, 40, '', { scaleBar: false })}</svg>`,
+  }
 }
 
 // Sheet canvas (landscape letter at 96dpi: 11in × 8.5in).
@@ -3743,6 +3902,9 @@ export function buildPlanSet(
   if (openingTable && !takeoff.folded) {
     sheets.push(...openingScheduleSheets(openingTable, opts))
   }
+  // W13b: the exterior finish schedule, when the building carries one
+  const finishSheet = finishScheduleSheet(opts)
+  if (finishSheet) sheets.push(finishSheet)
   sheets.push(...takeoff.sheets)
   const cover = coverSheet(
     members,

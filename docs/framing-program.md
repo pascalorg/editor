@@ -248,7 +248,7 @@ W12 Structural sections and details tied to framing variables — details sheet 
     porch ledger, deck ledger, stair — drawn from the SAME numbers Bones frames
     with (rafter size, plate height, stem height, footing), placed on the sheets;
     review every section the Sections plugin cuts today against the framed model.
-W13 Finishes — DONE 2026-09-06 (see log; muntin grids recorded not drawn, no finish schedule sheet yet): PlanCrafters' style palettes applied — siding / roofing / trim /
+W13 Finishes — DONE 2026-09-06, finish schedule sheet DONE 2026-09-06 (see log W13b; muntin grids recorded not drawn): PlanCrafters' style palettes applied — siding / roofing / trim /
     door colours per style rolled as a unit, window styles (grid, casing, sill),
     wood styles; the finish schedule on the sheets (part of W7, listed here so
     nothing is lost).
@@ -936,3 +936,19 @@ W15 Ceiling joists as a framer laps them — DONE 2026-09-06 (see log; the open 
   wall plan stays the one sheet with cut marks (the foundation sheet is
   the pure-transform witness; the MEP sheets stay clear). Test: plan-set
   +1 — Bones 2,087, typecheck clean.
+
+- 2026-09-06 early morning: **W13b — the finish schedule sheet.** The plan
+  set prints the exterior finish schedule when the level's building
+  carries the generator's palette record (`metadata.finishes`):
+  `finishScheduleFrom` reads it duck-typed into plain rows (Bones never
+  imports the generator) — siding, roofing, trim + fascia, entry door,
+  shutters, windows (the grid noted as recorded, not drawn), deck + rails
+  — each with its finish, a colour swatch with the hex, the product line
+  and a note; the sheet heads with the style and palette name, says the
+  colours print approximate, and carries a one-line interior finish note.
+  It sits after the door + window schedule, before the takeoff; the cover
+  index lists it; no record → no sheet. The Bones panel wires it from the
+  active level's building. Verified on the rendered farmhouse (navy /
+  white / barn-red door). Tests: plan-set +2 (the record → rows, partial
+  and empty records; the sheet's rows, swatches, ordering, absence) —
+  Bones 2,089, panel typechecks.

@@ -33,7 +33,7 @@ import {
   roofSystemValue,
 } from './panel-framing'
 import { groupWarnings, warningCount } from './panel-warnings'
-import { buildPlanSet, planSetHtml, relativeLevelBaseY } from './plans/plan-set'
+import { buildPlanSet, finishScheduleFrom, planSetHtml, relativeLevelBaseY } from './plans/plan-set'
 import { useBonesStore } from './store'
 
 const LUMBER_KIND: string = 'bones:lumber'
@@ -779,6 +779,19 @@ function JurisdictionPicker({
  * electrical rough-in, MEP) plus schedules + takeoff, paginated for the
  * browser's Print → Save as PDF. Pure client-side, nothing persisted.
  */
+/** The `metadata.finishes` record on the building that owns `levelId`, or null. */
+function buildingFinishesOf(levelId: string | null): unknown {
+  if (!levelId) return null
+  const nodes = useScene.getState().nodes as Record<string, Record<string, unknown> | undefined>
+  const level = nodes[levelId]
+  const buildingId = typeof level?.parentId === 'string' ? level.parentId : null
+  const building = buildingId ? nodes[buildingId] : undefined
+  const meta = building?.metadata
+  return typeof meta === 'object' && meta !== null
+    ? ((meta as Record<string, unknown>).finishes ?? null)
+    : null
+}
+
 function ExportPlansButton({
   result,
   framingNode,
@@ -827,6 +840,9 @@ function ExportPlansButton({
           // foundation as framed (W12)
           spec: result.spec,
           foundation: result.foundation,
+          // the exterior finish schedule (W13b): the generator's palette
+          // record on the level's building, when there is one
+          finishes: finishScheduleFrom(buildingFinishesOf(activeLevelId)),
           // gross-fallback areas so LOD-200 paper books the SAME takeoff
           // rows as the panel (C5 — one source of truth)
           areas: result.areas,

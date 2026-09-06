@@ -9,7 +9,13 @@ import { lgsFrameWalls } from '../engines/lgs-wall-framing'
 import { layoutPlumbing } from '../engines/plumbing'
 import { frameWalls } from '../engines/wall-framing'
 import { applyJurisdiction, profileFor } from '../jurisdiction/profiles'
-import { assignOpeningMarks, buildPlanSet, planSetHtml, relativeLevelBaseY } from './plan-set'
+import {
+  assignOpeningMarks,
+  buildPlanSet,
+  finishScheduleFrom,
+  planSetHtml,
+  relativeLevelBaseY,
+} from './plan-set'
 
 const member = (over: Partial<Member>): Member => ({
   system: 'floor-framing',
@@ -4998,5 +5004,96 @@ describe('W12d: section markers on the structural plans', () => {
     expect(bubbles(electrical, 'B')).toBe(0)
     const foundation = sheets.find((s) => s.title === 'Foundation plan')?.svg ?? ''
     expect(bubbles(foundation, 'B')).toBe(0)
+  })
+})
+
+describe('W13b: the finish schedule sheet', () => {
+  const finishes = {
+    style: 'farmhouse',
+    palette: 2,
+    paletteName: 'Classic White',
+    siding: {
+      id: 'siding-lap-white',
+      kind: 'lap',
+      label: 'Lap siding, white',
+      hex: '#f4f1ea',
+      ref: 'library:siding-lap-white',
+    },
+    roof: {
+      id: 'roof-charcoal',
+      label: 'Architectural shingle, charcoal',
+      hex: '#3a3a3a',
+      library: 'roof-charcoal',
+    },
+    trim: { hex: '#ffffff', ref: 'library:preset-white', preset: 'preset-white' },
+    door: { hex: '#1f3a5f', ref: 'library:preset-navy', preset: 'preset-navy' },
+    shutter: { hex: '#1f1f1f', preset: 'preset-black' },
+    windows: { type: 'double-hung', grid: '2x2' },
+    wood: {
+      style: 'stained',
+      label: 'Cedar, natural stain',
+      hex: '#a0703c',
+      deckRef: 'library:wood-floorplank1',
+    },
+    products: {
+      siding: 'James Hardie HardiePlank',
+      roof: 'GAF Timberline HDZ',
+      paint: 'Sherwin-Williams Emerald',
+      trim: 'Azek PVC',
+    },
+  }
+
+  test('finishScheduleFrom reads the generator record, duck-typed; nothing → null', () => {
+    const fs = finishScheduleFrom(finishes)
+    expect(fs?.style).toBe('farmhouse')
+    expect(fs?.palette).toBe('Classic White')
+    expect(fs?.rows.map((r) => r.item)).toEqual([
+      'SIDING',
+      'ROOFING',
+      'TRIM + FASCIA',
+      'ENTRY DOOR',
+      'SHUTTERS',
+      'WINDOWS',
+      'DECK + RAILS',
+    ])
+    expect(fs?.rows[0]).toMatchObject({
+      finish: 'Lap siding, white',
+      colour: '#f4f1ea',
+      product: 'James Hardie HardiePlank',
+    })
+    expect(fs?.rows[5]?.note).toContain('2x2 grid')
+    expect(finishScheduleFrom(null)).toBeNull()
+    expect(finishScheduleFrom({})).toBeNull()
+    expect(finishScheduleFrom({ style: 'x' })).toBeNull() // no surface rows
+    // a partial record keeps what it has
+    expect(finishScheduleFrom({ siding: { label: 'Board and batten' } })?.rows).toHaveLength(1)
+  })
+
+  test('the sheet prints the rows with swatches and sits before the takeoff; absent without a record', () => {
+    const members = [
+      member({}),
+      member({
+        system: 'wall-framing',
+        role: 'stud',
+        dims: [0.04, 2.4, 0.09],
+        position: [0.2, 1.2, 4],
+      }),
+    ]
+    const withSheet = buildPlanSet(members, [], { finishes: finishScheduleFrom(finishes) })
+    const titles = withSheet.map((s) => s.title)
+    expect(titles).toContain('Finish schedule')
+    expect(titles.indexOf('Finish schedule')).toBeLessThan(
+      titles.findIndex((x) => x.startsWith('Schedules')),
+    )
+    const svg = withSheet.find((s) => s.title === 'Finish schedule')?.svg ?? ''
+    expect(svg).toContain('Exterior finish schedule — farmhouse style · palette “Classic White”')
+    expect(svg).toContain('Lap siding, white')
+    expect(svg).toContain('fill="#f4f1ea"') // the swatch
+    expect(svg).toContain('#F4F1EA')
+    expect(svg).toContain('GAF Timberline HDZ')
+    expect(svg).toContain('2x2 grid — recorded, not drawn')
+    expect(buildPlanSet(members, [], {}).map((s) => s.title)).not.toContain('Finish schedule')
+    // the cover index lists it
+    expect(withSheet.find((s) => s.title === 'Cover')?.svg).toContain('Finish schedule')
   })
 })
