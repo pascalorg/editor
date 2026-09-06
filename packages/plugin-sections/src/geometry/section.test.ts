@@ -458,6 +458,21 @@ describe('gable roof', () => {
 })
 
 describe('buildElevationDrawing', () => {
+  test('the finish key names the roofing the building records, else says what it assumes', () => {
+    const texts = (d: ReturnType<typeof buildElevationDrawing>) =>
+      d.primitives.filter((p) => p.kind === 'text').map((p) => (p as { text: string }).text)
+    expect(texts(buildElevationDrawing(scene(), 'south'))).toContain(
+      'ROOF: ASPHALT SHINGLES (assumed — roof material not modelled)',
+    )
+    const s = scene()
+    ;(s.nodes.building_1 as unknown as { metadata: Record<string, unknown> }).metadata = {
+      finishes: { roof: { label: 'architectural shingles — charcoal', hex: '#3a3d40' } },
+    }
+    const labelled = texts(buildElevationDrawing(s, 'south'))
+    expect(labelled).toContain('ROOF: ARCHITECTURAL SHINGLES — CHARCOAL (#3a3d40)')
+    expect(labelled.some((t) => t.includes('assumed'))).toBe(false)
+  })
+
   test('the south elevation is 6 m wide across the outer wall faces', () => {
     const drawing = buildElevationDrawing(scene(), 'south')
     const white = polygons(drawing.primitives).filter((p) => p.fill === '#ffffff')

@@ -11,14 +11,14 @@ import {
   getEffectiveRoofSurfaceMaterial,
   getLevelElevations,
   getMaterialPresetByRef,
-  getScaledDimensions,
-  type ItemNode,
-  parseMaterialRef,
   getRoofSegmentVisibleTopBounds,
+  getScaledDimensions,
   getSegmentSlopeFrame,
   getWallPlanFootprint,
   getWallThickness,
+  type ItemNode,
   type LevelNode,
+  parseMaterialRef,
   type RoofNode,
   type RoofSegmentNode,
   resolveWallAssembly,
@@ -27,8 +27,8 @@ import {
   surfaceHeightAt,
   type WallAssemblyLayer,
   type WallNode,
-  wallAssemblyFinishRef,
   type WindowNode,
+  wallAssemblyFinishRef,
 } from '@pascal-app/core'
 import { resolveMarkDetail } from '@pascal-app/editor'
 import { rotateY, unrotateY } from './math'
@@ -233,6 +233,9 @@ export type LevelInfo = {
   height: number
 }
 
+/** The roof finish the generator recorded on the building (`metadata.finishes.roof`), if any. */
+export type RoofFinishRecord = { label: string; hex: string | null }
+
 export type BuildingModel = {
   walls: WallSolid[]
   prisms: PrismSolid[]
@@ -242,6 +245,30 @@ export type BuildingModel = {
   /** World elevation of the ground at a plan point. */
   gradeAt: (x: number, z: number) => number
   warnings: string[]
+  /** The recorded roofing finish — null when no building carries the record. */
+  roofFinish: RoofFinishRecord | null
+}
+
+/**
+ * The roofing finish off the first building's `metadata.finishes` as the
+ * generator writes it (plugin-generate `Finishes.roof`: label + hex) —
+ * duck-typed, so a hand-made building without the record yields null.
+ */
+export function roofFinishOf(nodes: Nodes): RoofFinishRecord | null {
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'building') continue
+    const meta = (node as { metadata?: unknown }).metadata
+    const finishes =
+      meta && typeof meta === 'object' ? (meta as { finishes?: unknown }).finishes : undefined
+    const roof =
+      finishes && typeof finishes === 'object' ? (finishes as { roof?: unknown }).roof : undefined
+    if (!roof || typeof roof !== 'object') continue
+    const label = (roof as { label?: unknown }).label
+    if (typeof label !== 'string' || label.length === 0) continue
+    const hex = (roof as { hex?: unknown }).hex
+    return { label, hex: typeof hex === 'string' && hex.length > 0 ? hex : null }
+  }
+  return null
 }
 
 function isType<T extends AnyNode>(node: AnyNode | undefined, type: string): node is T {
@@ -263,9 +290,10 @@ function findLevelId(node: AnyNode, nodes: Nodes): string | null {
 /** Catalog colour behind a `library:` material ref, else null. */
 function libraryColor(ref: string | null | undefined): string | null {
   if (!ref || parseMaterialRef(ref)?.kind !== 'library') return null
-  const preset = getMaterialPresetByRef(ref) as
-    | { previewColor?: string; mapProperties?: { color?: string } }
-    | null
+  const preset = getMaterialPresetByRef(ref) as {
+    previewColor?: string
+    mapProperties?: { color?: string }
+  } | null
   return preset?.previewColor ?? preset?.mapProperties?.color ?? null
 }
 
@@ -277,13 +305,15 @@ export function claddingColorOf(wall: WallNode): string | null {
 }
 
 function roofColorOf(roof: RoofNode, segment: RoofSegmentNode): string | null {
-  const own = (segment as { topMaterialPreset?: string; materialPreset?: string }).topMaterialPreset
-    ?? (segment as { materialPreset?: string }).materialPreset
+  const own =
+    (segment as { topMaterialPreset?: string; materialPreset?: string }).topMaterialPreset ??
+    (segment as { materialPreset?: string }).materialPreset
   const spec = getEffectiveRoofSurfaceMaterial(roof, 'top')
   return (
     libraryColor(own) ??
     libraryColor(spec.materialPreset) ??
-    ((spec.material as { properties?: { color?: string } } | undefined)?.properties?.color ?? null)
+    (spec.material as { properties?: { color?: string } } | undefined)?.properties?.color ??
+    null
   )
 }
 
@@ -329,9 +359,11 @@ function collectOpenings(
       rows: !isDoor ? (win.rowRatios?.length ?? 1) : 1,
       mark: marks.get(hosted.id) ?? (typeof loose.mark === 'string' ? loose.mark : ''),
       openingKind: kind,
-      openingShape: typeof loose.openingShape === 'string' ? (loose.openingShape as string) : 'rectangle',
+      openingShape:
+        typeof loose.openingShape === 'string' ? (loose.openingShape as string) : 'rectangle',
       construction: loose.constructionType === 'masonry' ? 'masonry' : 'framed',
-      frameThickness: typeof loose.frameThickness === 'number' ? (loose.frameThickness as number) : 0.05,
+      frameThickness:
+        typeof loose.frameThickness === 'number' ? (loose.frameThickness as number) : 0.05,
       columnRatios: !isDoor ? [...(win.columnRatios ?? [1])] : [1],
       rowRatios: !isDoor ? [...(win.rowRatios ?? [1])] : [1],
       ...(isDoor
@@ -372,7 +404,11 @@ function rotateVec(x: number, y: number, angle: number): Vec2 {
  * `[along, height, offset]` and the wall's own yaw — the same maths the floor
  * plan uses, so an item lands on paper where it lands in plan.
  */
-function collectItems(nodes: Nodes, elevations: Map<string, { baseY: number }>, warnings: string[]): ItemSolid[] {
+function collectItems(
+  nodes: Nodes,
+  elevations: Map<string, { baseY: number }>,
+  warnings: string[],
+): ItemSolid[] {
   const items: ItemSolid[] = []
   let nested = 0
   for (const node of Object.values(nodes)) {
@@ -440,7 +476,9 @@ function collectItems(nodes: Nodes, elevations: Map<string, { baseY: number }>, 
     })
   }
   if (nested > 0) {
-    warnings.push(`${nested} item(s) hosted on other items / roof faces are not drawn (their frame is the host mesh).`)
+    warnings.push(
+      `${nested} item(s) hosted on other items / roof faces are not drawn (their frame is the host mesh).`,
+    )
   }
   return items
 }
@@ -717,5 +755,14 @@ export function buildBuildingModel(nodes: Nodes): BuildingModel {
   }
 
   const items = collectItems(nodes, elevations, warnings)
-  return { walls, prisms, roofs, items, levels, gradeAt: terrainSampler(nodes, warnings), warnings }
+  return {
+    walls,
+    prisms,
+    roofs,
+    items,
+    levels,
+    gradeAt: terrainSampler(nodes, warnings),
+    warnings,
+    roofFinish: roofFinishOf(nodes),
+  }
 }

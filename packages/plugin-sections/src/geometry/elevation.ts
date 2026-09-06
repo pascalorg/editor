@@ -1,11 +1,15 @@
 import type { FloorplanGeometry } from '@pascal-app/core'
+import { projectItem } from './items'
+import { FINISH_LABEL, type FinishKind } from './materials'
 import { padBounds } from './math'
+import { openingTag } from './openings'
 import {
   boundsFromPrimitives,
   drawY,
   gradeLine,
   levelDatums,
   makeProjector,
+  openingCentreU,
   type ProjectedPiece,
   paintProjected,
   projectDepth,
@@ -16,10 +20,6 @@ import {
   roofDatums,
   wallSpan,
 } from './projection'
-import { projectItem } from './items'
-import { FINISH_LABEL, type FinishKind } from './materials'
-import { openingTag } from './openings'
-import { openingCentreU } from './projection'
 import { type BuildingModel, buildBuildingModel, type WallSolid } from './scene-model'
 import { INK, label, line, WEIGHT } from './style'
 import { type DrawingResult, type DrawingScene, EMPTY_BOUNDS, type Vec2 } from './types'
@@ -204,7 +204,12 @@ export function buildElevationDrawing(
   }
   const roofDetail: FloorplanGeometry[] = []
   for (const roof of built.roofs) {
-    const piece = projectRoof(view, roof, { courses: true, gableFinish, gableColor, pitchFlag: true })
+    const piece = projectRoof(view, roof, {
+      courses: true,
+      gableFinish,
+      gableColor,
+      pitchFlag: true,
+    })
     if (!piece) continue
     projected.push(piece)
     // Fascia / eave line — only meaningful when the eave edge runs across the
@@ -244,10 +249,21 @@ export function buildElevationDrawing(
   // assembly is called out as unspecified rather than dressed in a default.
   const keyLines: string[] = []
   for (const [finish] of [...finishesUsed.entries()].sort((a, b) => b[1] - a[1])) {
-    keyLines.push(finish === 'unspecified' ? 'WALLS: NO CLADDING SPECIFIED (set the wall assembly)' : FINISH_LABEL[finish])
+    keyLines.push(
+      finish === 'unspecified'
+        ? 'WALLS: NO CLADDING SPECIFIED (set the wall assembly)'
+        : FINISH_LABEL[finish],
+    )
   }
   if (built.roofs.length > 0) {
-    keyLines.push('ROOF: ASPHALT SHINGLES (assumed — roof material not modelled)')
+    // the roofing the generator recorded on the building (the finish
+    // schedule's ROOFING row); a hand-made model says what it assumes
+    const finish = built.roofFinish
+    keyLines.push(
+      finish
+        ? `ROOF: ${finish.label.toUpperCase()}${finish.hex ? ` (${finish.hex})` : ''}`
+        : 'ROOF: ASPHALT SHINGLES (assumed — roof material not modelled)',
+    )
   }
   if (finishesUsed.has('unspecified')) {
     warnings.push(
@@ -259,7 +275,11 @@ export function buildElevationDrawing(
   const finishKey: FloorplanGeometry[] = keyLines.flatMap((text, i) => {
     const finish = keyFinishes[i]
     const swatch =
-      finish && finish !== 'unspecified' ? finishColors.get(finish) ?? null : i === keyLines.length - 1 && built.roofs.length > 0 ? (built.roofs[0]?.color ?? null) : null
+      finish && finish !== 'unspecified'
+        ? (finishColors.get(finish) ?? null)
+        : i === keyLines.length - 1 && built.roofs.length > 0
+          ? (built.roofFinish?.hex ?? built.roofs[0]?.color ?? null)
+          : null
     const y = keyTop + i * 0.22
     return [
       label(bodyBounds.minX, y, `${i + 1}`, { fontSize: 0.14, fontWeight: 700 }),
@@ -282,7 +302,10 @@ export function buildElevationDrawing(
   })
   if (keyLines.length > 0) {
     finishKey.unshift(
-      label(bodyBounds.minX, keyTop - 0.24, 'EXTERIOR FINISH KEY', { fontSize: 0.15, fontWeight: 700 }),
+      label(bodyBounds.minX, keyTop - 0.24, 'EXTERIOR FINISH KEY', {
+        fontSize: 0.15,
+        fontWeight: 700,
+      }),
     )
   }
 

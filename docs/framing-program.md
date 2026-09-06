@@ -1217,3 +1217,12 @@ W19 Roof joins framed as overframes — DONE 2026-09-06 (see log W19a / W19b; op
   its roof framing sheet the two sleepers meeting at the wing's ridge end.
   Test: W16c +1 (the wing not live on the shared eave, live on its own end;
   the porch's sleepers once, on the main) — Bones 2,107.
+
+- 2026-09-06 afternoon: **the elevation finish key names the roofing.** The
+  Sections plugin's elevations printed "ROOF: ASPHALT SHINGLES (assumed —
+  roof material not modelled)" under every house while the Bones finish
+  schedule listed the palette's roofing. `buildBuildingModel` now reads the
+  building's `metadata.finishes.roof` (label + hex, duck-typed like the
+  finish schedule) and the key prints it in the finish's own colour; a
+  hand-made model without the record keeps the assumed line. Test: sections
+  +1 — plugin-sections 21, editor typecheck clean.
