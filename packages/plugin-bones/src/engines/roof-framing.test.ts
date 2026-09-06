@@ -205,6 +205,39 @@ describe('frameRoofs — shed', () => {
     // slope length spans the whole depth
     expect((rafters[0] as Member).length).toBeGreaterThan(6)
   })
+
+  test('vaulted by default: no ceiling joists under the plane', () => {
+    expect(byRole(members, 'ceiling-joist')).toHaveLength(0)
+  })
+
+  test("spec.shedCeiling 'joists': ceiling joists across the depth on the low plate, low end clipped to the rafter underside, high end square", () => {
+    const roof = seg({ roofType: 'shed' })
+    const joists = byRole(
+      frameRoofs([roof], [], { ...DEFAULT_SPEC, shedCeiling: 'joists' }),
+      'ceiling-joist',
+    )
+    expect(joists.length).toBeGreaterThanOrEqual(12)
+    const tan = Math.tan(roof.pitch)
+    for (const j of joists) {
+      // on the low plate: the box bottom at the plate (world y: the segment's y + wallHeight), running along Z
+      expect(j.position[1] - j.dims[1] / 2).toBeCloseTo(roof.position[1] + roof.wallHeight, 6)
+      const axis = longAxis(j)
+      expect(Math.abs(axis.z)).toBeGreaterThan(0.99)
+      // high (−Z) end at the high plate line; low (+Z) end d/tanθ short of the eave line
+      const zHigh = j.position[2] - j.length / 2
+      const zLow = j.position[2] + j.length / 2
+      expect(zHigh).toBeCloseTo(-roof.depth / 2, 6)
+      expect(roof.depth / 2 - zLow).toBeCloseTo(j.dims[1] / tan + 0.002, 6)
+      expect(j.label).toContain('shed')
+    }
+    // and never on a porch shed hanging on a ledger
+    const onLedger = frameRoofs(
+      [seg({ roofType: 'shed', attach: 'high' })],
+      [],
+      { ...DEFAULT_SPEC, shedCeiling: 'joists' },
+    )
+    expect(byRole(onLedger, 'ceiling-joist')).toHaveLength(0)
+  })
 })
 
 describe('frameRoofs — hip', () => {

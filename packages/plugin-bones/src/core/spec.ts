@@ -331,6 +331,14 @@ export type FramingSpec = {
    * src/engines/roof-framing.ts (`frameRoofs` forks per gable segment).
    */
   roofSystem?: 'stick' | 'truss'
+  /**
+   * A shed (mono-pitch) segment's ceiling: 'joists' — ceiling joists
+   * across the depth on the low plate, lapped over the partitions like a
+   * gable's (a flat ceiling under the single plane) — or 'none', the
+   * vaulted underside (the engine's original output). ABSENT means 'none'
+   * (the same byte-parity rule as roofSystem). Consumed by frameShed.
+   */
+  shedCeiling?: 'none' | 'joists'
 }
 
 export const DEFAULT_SPEC: FramingSpec = {

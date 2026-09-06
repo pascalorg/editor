@@ -6,6 +6,8 @@ import {
   framingSystemValue,
   roofSystemPatch,
   roofSystemValue,
+  shedCeilingPatch,
+  shedCeilingValue,
   LGS_MACHINE_NONE,
   LGS_MACHINE_NONE_LABEL,
   lgsMachineGroups,
@@ -133,6 +135,20 @@ describe('stored-but-not-an-option keys stay visible (never a silently lying sel
       key: 'acme/rocket',
       label: 'acme/rocket (not in catalog)',
     })
+  })
+})
+
+describe('Shed ceiling control value + writes (the same byte-parity contract)', () => {
+  test("absent == none (vaulted); only 'joists' selects Joists", () => {
+    expect(shedCeilingValue({})).toBe('none')
+    expect(shedCeilingValue({ shedCeiling: 'none' })).toBe('none')
+    expect(shedCeilingValue({ shedCeiling: 'joists' })).toBe('joists')
+  })
+
+  test('Joists stores joists; None REMOVES the key', () => {
+    expect(shedCeilingPatch('joists')).toEqual({ shedCeiling: 'joists' })
+    expect(shedCeilingPatch('none')).toEqual({ shedCeiling: undefined })
+    expect('shedCeiling' in FramingNode.parse({})).toBe(false)
   })
 })
 

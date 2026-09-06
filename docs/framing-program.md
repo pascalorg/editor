@@ -464,6 +464,26 @@ G16 Slab houses get concrete porches front and rear; the porch ceiling is 9 ft (
   core wall 11, viewer wall 45, nodes wall 125, editor typecheck clean.
   Open on G14: the foundation DETAIL drawing for a raised floor (stem +
   mudsill + rim + joist) — check what Bones' details already draw.
+  (Checked: `plans/details.ts` already draws the raised foundation detail —
+  mudsill + anchor bolt + rim + joist bay + subfloor + wall stub — from
+  `detailVariables`, so G14's detail is covered.)
+
+- 2026-09-06 evening: **Batch E — the shed's ceiling joists (G3).** A
+  mono-pitch segment framed vaulted only. New Bones level option
+  `shedCeiling: 'none' | 'joists'` (schema, spec, compute — absent means
+  none, the roofSystem byte-parity rule): with 'joists', `frameShed` plans
+  ceiling joists across the depth on the LOW plate with the W15 planner
+  (sized per station from the table, lapped over the partitions under
+  them, stations snapped beside a rafter), the low-eave end clipped d/tanθ
+  where the rafter's bottom face leaves the plate, the high end square under
+  the pediment; a porch shed on a ledger frames none. The panel's Roof
+  block gets a "Shed ceiling — Vaulted / Joists" control (Vaulted removes
+  the key). Tests: roof-framing +2 (vaulted by default; joists on the plate,
+  along Z, ends where they should be, none on a ledger), panel-framing +2 —
+  Bones 2,111, editor typecheck clean. Found while checking G6: in the
+  Framing view the deck's slab, fence and stair stay drawn (the studs show,
+  the decking still covers the joists) — the shell hider only reaches
+  objects in the scene registry; next.
 
 - 2026-09-05 evening: program started. PlanCrafters sources fetched into the
   reference folder; Pascal roof node, Bones roof/wall framing, generate build, site

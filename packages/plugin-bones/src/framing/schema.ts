@@ -244,6 +244,15 @@ export const FramingNode = BaseNode.extend({
    * output byte-equal when this key is missing).
    */
   roofSystem: z.enum(['stick', 'truss']).optional(),
+  /**
+   * A shed (mono-pitch) segment's ceiling: 'joists' (ceiling joists
+   * across the depth on the low plate — a flat ceiling under the single
+   * plane, lapped over the partitions like a gable's) or 'none' (the
+   * vaulted underside — the engine's original output). OPTIONAL with NO
+   * zod default: absent round-trips ABSENT and means 'none' (the
+   * roofSystem byte-parity rule).
+   */
+  shedCeiling: z.enum(['none', 'joists']).optional(),
 }).describe(
   `Bones framing config (engineering X-ray) — one per level.
   - jurisdiction: US state code ('CA'), 'INTL', or 'AUTO' (guessed from the browser locale/timezone)
@@ -252,6 +261,7 @@ export const FramingNode = BaseNode.extend({
   - show*: per-system visibility (walls, floor, roof, foundation, electrical, plumbing, hvac — all default on)
   - viewMode: 'off' (finished house — walls closed, only surface fixtures show) | 'xray' (engineering X-ray, default) | 'basement' (under-the-house view: foundation/buried pipes read through a faint house shell) | 'framing' (framing only: the level's shell is hidden, every member solid)
   - wallOverrides: per-wall construction override — 'framed' (lumber), 'cmu' (concrete block), 'lgs' (light-gauge steel: C-stud/track members per IRC R603, sheet-goods layers book exactly like a framed wall), 'skip', or the object form { construction, cmuHeightM?, studSize?, spacingIn?, insulation?, insulationR?, cladding? }: cmuHeightM makes a mixed wall (CMU up to a course-snapped height, framed above); studSize ('2x4'|'2x6') + spacingIn (12|16|24) re-size the framing (on 'lgs' they pick the depth-matched steel web: 2x4→350, 2x6→550); insulation ('none'|'batt'|'blown'|'spray-foam') + insulationR fill the stud bays with labeled batts; cladding picks the exterior finish (vinyl|fiberCement|stucco|brickVeneer|wood|eifs)
+  - shedCeiling: 'none' (default when absent — a shed segment's underside stays vaulted) | 'joists' (ceiling joists across the depth on the shed's low plate, lapped over the partitions under them like a gable's)
   - roofSystem: 'stick' (default when absent — site-cut rafters + ceiling joists) | 'truss' (pre-engineered gable trusses at rafter spacing: 2x4 top/bottom chords, representative webbing labeled as manufacturer-designed, bottom chord is the rafter tie so ceiling joists/collar ties/ridge board are omitted; non-gable segments stay stick-framed with an honest flag; spans over 40 ft flag engineering)
   - framingSystem: 'lumber' (default when absent) | 'lgs' (cold-formed steel, IRC R603 — otherwise-framed walls frame as steel C-stud/track assemblies; explicit per-wall overrides and the FL CMU exterior default still win); lgsMachine: roll-forming machine key from data/lgs-profiles.json (e.g. 'framecad/f325it') — profiles resolve through it with the honest fallback status on labels, and any resolution a verified machine cannot roll raises a per-level can't-roll warning (generic AISI dims substituted). Machine scope: constrains + brands — at detail 300/400 members are byte-identical with or without it (labels/flags/warnings only); at 200 it narrows the generic pick to its thinnest rollable variant, and a verified vendor-own profile draws the vendor's published dims
   All framing members are derived live from the level's walls/openings/slabs/roofs; deleting this node removes the X-ray without touching the model.`,

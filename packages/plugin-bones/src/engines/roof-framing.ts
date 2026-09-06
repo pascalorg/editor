@@ -2097,6 +2097,65 @@ function frameShed(
     }
   }
 
+  // ---- ceiling joists across the depth (spec.shedCeiling 'joists') ----
+  // A flat ceiling under the single plane: joists on the low plate running
+  // with the rafters, lapped over the partitions under them like a gable's
+  // (W15 planner). Their low-eave end meets the rafter underside where it
+  // leaves the plate — clipped there like the gable's ties (the rafter's
+  // bottom face rises from the plate at tanθ, so a joist `d` deep meets it
+  // d/tanθ inboard); the high end sits under the pediment and keeps its
+  // square cut. A porch shed on a ledger has no ceiling to frame.
+  if (spec.shedCeiling === 'joists' && !attached) {
+    const halfWall = infillZone(spec, roof).inboard
+    const cjPlan = planCeilingJoists(roof, walls, spec, {
+      spansZ: true,
+      span: roof.depth,
+      bandHalf: roof.width / 2,
+      parallel: stations,
+      parallelHalfT: t / 2,
+      stationHalfFor: () => roof.width / 2 - halfWall,
+    })
+    const cjT = cjPlan.t
+    const besideRafter = (x0: number, half: number): number => {
+      const clash = stations.find((rx) => Math.abs(rx - x0) < t / 2 + half - EPS)
+      if (clash === undefined) return x0
+      return clash + (clash >= 0 ? -1 : 1) * (t / 2 + half)
+    }
+    const cjStations = layout(
+      -(roof.width / 2 - halfWall),
+      roof.width / 2 - halfWall,
+      cjPlan.spacing,
+      cjT / 2,
+    ).map((x0) => besideRafter(x0, cjT / 2))
+    const lowClipFor = (d: number) =>
+      spec.detail === '200' || tan <= EPS ? 0 : Math.max(0, d / tan + 0.002)
+    const label = (size: LumberSize) =>
+      `Ceiling joist ${size} (shed — across the depth on the low plate${spec.detail === '400' ? ', low end clipped to the rafter underside' : ''})`
+    for (const station of cjStations) {
+      const v = cjPlan.at(station)
+      const shift = v.breaks.length > 0 ? cjPlan.shiftAt(station) : 0
+      for (const piece of v.pieces) {
+        // clip the LOW (+Z) end only — the high end is square under the pediment
+        const to = piece.to >= roof.depth / 2 - EPS ? piece.to - lowClipFor(piece.d) : piece.to
+        const len = to - piece.from
+        if (len < 0.3) continue
+        emit(
+          'ceiling-joist',
+          piece.size,
+          [len, piece.d, piece.t],
+          [station + (piece.index % 2 === 1 ? shift : 0), plateY + piece.d / 2, (piece.from + to) / 2],
+          -Math.PI / 2,
+          0,
+          len,
+          'lumber',
+          `${label(piece.size)}${piece.note}`,
+          undefined,
+          piece.flag,
+        )
+      }
+    }
+  }
+
   if (attached) {
     // The ledger: the rafter-size board on the wall face along the high edge,
     // its top flush with the rafter tops there; one face-mount hanger per

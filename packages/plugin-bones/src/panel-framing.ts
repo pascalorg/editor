@@ -60,6 +60,21 @@ export function roofSystemPatch(next: RoofSystemValue): { roofSystem: 'truss' | 
   return { roofSystem: next === 'truss' ? 'truss' : undefined }
 }
 
+export type ShedCeilingValue = 'none' | 'joists'
+
+/** The Shed ceiling control's resolved value — absent means none (vaulted). */
+export function shedCeilingValue(node: Pick<FramingNode, 'shedCeiling'>): ShedCeilingValue {
+  return node.shedCeiling === 'joists' ? 'joists' : 'none'
+}
+
+/**
+ * Write patch for the Shed ceiling control. Joists stores `'joists'`; None
+ * REMOVES the key — the roofSystem byte-parity contract.
+ */
+export function shedCeilingPatch(next: ShedCeilingValue): { shedCeiling: 'joists' | undefined } {
+  return { shedCeiling: next === 'joists' ? 'joists' : undefined }
+}
+
 /** The Machine select's 'no machine' sentinel (a native select can't carry
  * undefined) and its honest label — steel with no machine IS generic AISI. */
 export const LGS_MACHINE_NONE = ''

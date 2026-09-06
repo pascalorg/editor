@@ -577,6 +577,7 @@ function computeLevelUncached(
   if (config.framingSystem !== undefined) spec = { ...spec, framingSystem: config.framingSystem }
   if (config.lgsMachine !== undefined) spec = { ...spec, lgsMachine: config.lgsMachine }
   if (config.roofSystem !== undefined) spec = { ...spec, roofSystem: config.roofSystem }
+  if (config.shedCeiling !== undefined) spec = { ...spec, shedCeiling: config.shedCeiling }
   // 400 (fabrication) builds ON TOP of the code-sized pass — jurisdiction applies to both.
   if (config.detail !== '200') {
     spec = applyJurisdiction(spec, profile)

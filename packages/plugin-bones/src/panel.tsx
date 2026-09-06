@@ -31,6 +31,9 @@ import {
   type RoofSystemValue,
   roofSystemPatch,
   roofSystemValue,
+  type ShedCeilingValue,
+  shedCeilingPatch,
+  shedCeilingValue,
 } from './panel-framing'
 import { groupWarnings, warningCount } from './panel-warnings'
 import { buildPlanSet, finishScheduleFrom, planSetHtml, relativeLevelBaseY } from './plans/plan-set'
@@ -597,6 +600,7 @@ function LumberSection() {
  */
 function RoofRow({ framingNode }: { framingNode: FramingNode & { id: string } }) {
   const system = roofSystemValue(framingNode)
+  const shedCeiling = shedCeilingValue(framingNode)
   const write = (patch: Record<string, unknown>) =>
     useScene.getState().updateNode(framingNode.id as AnyNodeId, patch as Partial<AnyNode> as never)
   return (
@@ -610,6 +614,21 @@ function RoofRow({ framingNode }: { framingNode: FramingNode & { id: string } })
         ]}
         value={system}
       />
+      <span className="text-sidebar-foreground/60">Shed ceiling</span>
+      <SegmentedControl
+        onChange={(v: string) => write(shedCeilingPatch(v as ShedCeilingValue))}
+        options={[
+          { label: 'Vaulted', value: 'none' },
+          { label: 'Joists', value: 'joists' },
+        ]}
+        value={shedCeiling}
+      />
+      {shedCeiling === 'joists' && (
+        <span className="text-sidebar-foreground/50">
+          Mono-pitch (shed) segments get ceiling joists across the depth on the low plate, lapped
+          over the partitions under them. A porch shed on a ledger has no ceiling.
+        </span>
+      )}
       {system === 'truss' && (
         <span className="text-sidebar-foreground/50">
           Gable segments frame as trusses; webbing is representative — design by truss manufacturer
