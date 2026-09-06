@@ -159,6 +159,21 @@ export const DOWEL_SHORT_LAP_FLAG =
 export type FoundationOptions = {
   cmu?: Map<string, CmuDowelLayout>
   girderPosts?: { plan: readonly [number, number]; sourceId: string }[]
+  /**
+   * GRADE, level-local (≤ 0). The footing bottom sits `spec.footingDepth`
+   * (the frost line) below THIS, not below the plate line; girder pads pour
+   * with their tops here. Absent / 0 = grade at the plate line — every
+   * existing scene byte-identical.
+   */
+  gradeY?: number
+  /**
+   * A RAISED floor (crawl space): the stemwall tops out at `stemTop` (the
+   * underside of the mudsill, below the framed platform) instead of the
+   * plate line, a PT mudsill `sillWidth` wide rides it with the anchor
+   * bolts through, interior walls bear on the platform (no thickened
+   * footings), and the slab field gives way to a ground cover.
+   */
+  raised?: { stemTop: number; sillWidth: number }
 }
 
 /** Pad footing under an interior girder post: 24" square (R403.1 sizing
@@ -358,6 +373,15 @@ export function buildFoundation(
   const hasSlab = slabs.length > 0
   const fabDetail = spec.detail !== '200' // LOD 350 gate
   const lod400 = spec.detail === '400'
+  // Datum: grade and the plate line (the stemwall top). Slab-on-grade with
+  // no site data has both at y = 0; a house standing above grade lowers the
+  // footing by the same amount, and a raised floor drops the stem top to
+  // the mudsill under the platform.
+  const grade = Math.min(0, options.gradeY ?? 0)
+  const raised = options.raised
+  const plate = raised ? raised.stemTop : 0
+  const footingBottom = grade - spec.footingDepth
+  const footingTop = footingBottom + FOOTING_HEIGHT
   // Plan rectangles the slab field must pour AGAINST, never through: every
   // foundation element whose volume reaches into the slab's vertical band
   // (stemwalls top at y=0 always; interior thickened footings too; the
@@ -501,7 +525,9 @@ export function buildFoundation(
       // under bearing walls; on a slab that is a thickened section poured
       // monolithically with it — 12" deep × footing width, top at the
       // slab/plate line (y = 0). See INTERIOR_BEARING_MIN_LENGTH ASSUMPTION.
-      if (!fabDetail) continue
+      // A raised floor carries its interior walls on the platform (joists,
+      // girders on pads) — no thickened footing in the crawl space.
+      if (!fabDetail || raised) continue
       if (len <= INTERIOR_BEARING_MIN_LENGTH) {
         // Short interior walls are normally non-bearing partitions — but one
         // whose BOTH ends land on footing-carrying walls is a link in the
@@ -629,7 +655,7 @@ export function buildFoundation(
       'footing',
       [runLen, FOOTING_HEIGHT, spec.footingWidth],
       runCenterU,
-      -spec.footingDepth + FOOTING_HEIGHT / 2,
+      footingBottom + FOOTING_HEIGHT / 2,
       runLen,
       'concrete',
       `Footing ${formatIn(spec.footingWidth)}×${formatIn(FOOTING_HEIGHT)}`,
@@ -640,14 +666,14 @@ export function buildFoundation(
     // 8"-frost minimum where footing top = y 0) put the FOOTING where the
     // slab would pour — carve the field around it. Default frost depths
     // keep the footing top below the slab bottom: no band, slab runs over.
-    if (-spec.footingDepth + FOOTING_HEIGHT > -SLAB_THICKNESS + EPS) {
+    if (!raised && footingTop > -SLAB_THICKNESS + EPS) {
       carveBands.push(bandOf(runCenterU, runLen, spec.footingWidth))
     }
     pourBands.push({ band: bandOf(runCenterU, runLen, spec.footingWidth), memberIdx: members.length - 1 })
 
     // ---- footing rebar (LOD 350) ----
     if (fabDetail) {
-      emitFootingBars(runCenterU, runLen, -spec.footingDepth, spec.footingWidth)
+      emitFootingBars(runCenterU, runLen, footingBottom, spec.footingWidth)
     }
 
     // ---- stemwall ----
@@ -658,17 +684,17 @@ export function buildFoundation(
     // continuous pour. ASSUMPTION: grade is not modeled — R404.1.6's 6" stem
     // reveal above grade is assumed satisfied since y=0 is the framed floor
     // line.
-    const stemHeight = spec.footingDepth - FOOTING_HEIGHT
+    const stemHeight = plate - footingTop
     const stemRun = runFor(spec.stemwallThickness)
     if (stemHeight > EPS) {
       emit(
         'stemwall',
         [stemRun.len, stemHeight, spec.stemwallThickness],
         stemRun.center,
-        -stemHeight / 2,
+        plate - stemHeight / 2,
         stemRun.len,
         'concrete',
-        `Stemwall ${formatIn(spec.stemwallThickness)}`,
+        `Stemwall ${formatIn(spec.stemwallThickness)}${grade < -EPS ? ` — ${formatIn(-grade + (raised ? plate : 0))} exposed above grade` : ''}`,
       )
       // The slab pours AGAINST the stemwall (R403.1) — the field strips
       // stop at its faces; anchor bolts/hold-downs live inside this band.
@@ -685,8 +711,8 @@ export function buildFoundation(
       // stemwall top so the mudsill seat stays clean.
       if (fabDetail) {
         const spacing = spec.seismicHoldDowns ? VERTICAL_SPACING_SEISMIC : VERTICAL_SPACING
-        const barBottom = -spec.footingDepth + REBAR_BOTTOM_COVER
-        const barTop = -REBAR_TOP_COVER
+        const barBottom = footingBottom + REBAR_BOTTOM_COVER
+        const barTop = plate - REBAR_TOP_COVER
         const barHeight = barTop - barBottom
         // CMU-based walls: the DOWELS below are the verticals — the
         // generic grid would double the steel beside them (B18b).
@@ -734,7 +760,7 @@ export function buildFoundation(
             'rebar',
             [stemRun.len, REBAR_SIDE, REBAR_SIDE],
             stemRun.center,
-            -REBAR_TOP_COVER - REBAR_SIDE / 2,
+            plate - REBAR_TOP_COVER - REBAR_SIDE / 2,
             stemRun.len,
             'steel',
             '#4 horizontal — top of stemwall (R403.1.3.1)',
@@ -747,7 +773,22 @@ export function buildFoundation(
     // Rise from the perimeter footing mat past y = 0 into the grouted
     // cells, one beside each wall vertical (also with NO stemwall — the
     // shallow footing tops out at the block seat).
-    if (fabDetail && cmuInfo) emitDowels(cmuInfo, -spec.footingDepth)
+    if (fabDetail && cmuInfo) emitDowels(cmuInfo, footingBottom)
+
+    // ---- mudsill (raised floor) ----
+    // R317.1(2) / R404.1.6: a pressure-treated 2x sill on the stemwall top
+    // carries the rim and joists; the anchor bolts below run through it.
+    if (raised) {
+      emit(
+        'mudsill',
+        [stemRun.len, PLATE_THICKNESS, raised.sillWidth],
+        stemRun.center,
+        plate + PLATE_THICKNESS / 2,
+        stemRun.len,
+        'pt-lumber',
+        `Mudsill ${formatIn(raised.sillWidth)} PT on the stemwall (R317.1(2)) — anchor bolts R403.1.6`,
+      )
+    }
 
     // ---- anchor bolts ----
     // R403.1.6: max spacing (6' o.c. default, tighter in SDC D via the
@@ -757,7 +798,7 @@ export function buildFoundation(
     // stemwall and sticking up through the plate line (nut + washer land
     // on the sill). Bolts follow the PLATE (wall length), not the
     // extended pour.
-    const boltCenterY = -BOLT_EMBEDMENT + BOLT_HEIGHT / 2
+    const boltCenterY = plate - BOLT_EMBEDMENT + BOLT_HEIGHT / 2
     for (const u of boltUs) {
       emit(
         'anchor-bolt',
@@ -778,7 +819,7 @@ export function buildFoundation(
           'plate-washer',
           [PLATE_WASHER_SIDE, PLATE_WASHER_THICKNESS, PLATE_WASHER_SIDE],
           u,
-          PLATE_THICKNESS + PLATE_WASHER_THICKNESS / 2,
+          plate + PLATE_THICKNESS + PLATE_WASHER_THICKNESS / 2,
           PLATE_WASHER_SIDE,
           'steel',
           '3×3×0.229" plate washer (R602.11.1)',
@@ -803,7 +844,7 @@ export function buildFoundation(
           'hold-down',
           [HOLD_DOWN_SIDE, HOLD_DOWN_HEIGHT, HOLD_DOWN_SIDE],
           u,
-          HOLD_DOWN_HEIGHT / 2, // base bears on the plate line (y = 0) up the post
+          plate + HOLD_DOWN_HEIGHT / 2, // base bears on the plate line up the post
           HOLD_DOWN_HEIGHT,
           'steel',
           'HDU hold-down',
@@ -863,7 +904,7 @@ export function buildFoundation(
         role: 'footing',
         dims: [side, INTERIOR_FOOTING_DEPTH, side],
         length: side,
-        position: [px, -INTERIOR_FOOTING_DEPTH / 2, pz],
+        position: [px, grade - INTERIOR_FOOTING_DEPTH / 2, pz],
         rotation: [0, 0, 0],
         material: 'concrete',
         sourceId: post.sourceId,
@@ -886,7 +927,18 @@ export function buildFoundation(
   // fill below the retarder are NOT modeled (R506.2.2) — the scene carries
   // no grade/terrain data; the takeoff books the labeled slab + membrane.
   if (hasSlab) {
-    for (const slab of slabs) emitSlabField(slab, carveBands, members)
+    if (raised) {
+      // Crawl space: no field — the exposed earth gets a Class I vapor
+      // retarder (R408) at grade, tiled like the field so the takeoff books
+      // its area.
+      for (const slab of slabs) emitSlabField(slab, carveBands, members, { top: grade, groundCover: true })
+    } else {
+      // A level with a lower slab (the garage pad at grade beside a house
+      // floor) pours each field at ITS surface: the highest slab keeps the
+      // plate line, the others drop by their elevation difference.
+      const topElevation = Math.max(...slabs.map((s) => s.elevation))
+      for (const slab of slabs) emitSlabField(slab, carveBands, members, { top: slab.elevation - topElevation })
+    }
   }
 
   return members
@@ -1080,8 +1132,15 @@ function bandRunInterval(
  * mirrors the field 1:1, so member-derived areas agree by construction
  * (checklist S4).
  */
-function emitSlabField(slab: SlabSlice, bands: CarveBand[], members: Member[]): void {
+function emitSlabField(
+  slab: SlabSlice,
+  bands: CarveBand[],
+  members: Member[],
+  where: { top: number; groundCover?: boolean } = { top: 0 },
+): void {
   const polygon = slab.polygon
+  const top = where.top
+  const groundCover = where.groundCover === true
   if (polygon.length < 3) return
   const box = planBounds(polygon)
   const spanX = box.maxX - box.minX
@@ -1152,12 +1211,26 @@ function emitSlabField(slab: SlabSlice, bands: CarveBand[], members: Member[]): 
         runAxis === 'x' ? [(s + e) / 2, y, c] : [c, y, (s + e) / 2]
       const dimsFor = (t: number): [number, number, number] =>
         runAxis === 'x' ? [len, t, width] : [width, t, len]
+      if (groundCover) {
+        members.push({
+          system: 'foundation',
+          role: 'vapor-retarder',
+          dims: dimsFor(VAPOR_RETARDER_THICKNESS),
+          length: Math.max(len, width),
+          position: pos(top - VAPOR_RETARDER_THICKNESS / 2),
+          rotation: [0, 0, 0],
+          material: 'pvc',
+          sourceId: slab.id,
+          label: 'Crawl space ground cover — Class I vapor retarder (6-mil polyethylene) on the exposed earth (R408)',
+        })
+        continue
+      }
       members.push({
         system: 'foundation',
         role: 'slab',
         dims: dimsFor(SLAB_THICKNESS),
         length: Math.max(len, width),
-        position: pos(-SLAB_THICKNESS / 2),
+        position: pos(top - SLAB_THICKNESS / 2),
         rotation: [0, 0, 0],
         material: 'concrete',
         sourceId: slab.id,
@@ -1169,7 +1242,7 @@ function emitSlabField(slab: SlabSlice, bands: CarveBand[], members: Member[]): 
         role: 'vapor-retarder',
         dims: dimsFor(VAPOR_RETARDER_THICKNESS),
         length: Math.max(len, width),
-        position: pos(-SLAB_THICKNESS - VAPOR_RETARDER_THICKNESS / 2),
+        position: pos(top - SLAB_THICKNESS - VAPOR_RETARDER_THICKNESS / 2),
         rotation: [0, 0, 0],
         material: 'pvc',
         sourceId: slab.id,

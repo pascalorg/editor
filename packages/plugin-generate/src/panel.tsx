@@ -157,6 +157,13 @@ export default function GeneratePanel() {
               {S.last.stats.livingSqFt.toLocaleString('en-US')} sf living · {S.last.stats.footprintSqFt.toLocaleString('en-US')} sf footprint
               {S.last.seed !== null ? ` · seed ${S.last.seed}` : ''}
               {!S.last.placed && <span> · no parcel in the scene — placed at the origin</span>}
+              {S.last.foundation && (
+                <>
+                  <br />
+                  foundation: {S.last.foundation.type === 'raised' ? 'raised floor over a crawl space' : 'slab on grade'}, finish floor{' '}
+                  {S.last.foundation.ffAboveGradeIn}" above grade ({S.last.foundation.source})
+                </>
+              )}
               {S.last.porch && (
                 <>
                   <br />

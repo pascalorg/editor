@@ -26,6 +26,7 @@ import {
   validateDocument,
 } from './document'
 import { deriveRoof, type RoofIntent, roofNodesFor, type WallInput } from '@pascal-app/plugin-roof'
+import { type FoundationChoice, foundationFor } from './foundation'
 import { type PorchSummary, porchFor } from './porch'
 import { edgePieces, GRID_IN_DEFAULT, mergeRuns, outlineRing, pointInRing, type Run } from './geometry'
 import { type StylePreset, styleFor } from './styles'
@@ -92,6 +93,8 @@ export type BuildResult = {
   levelId: string | null
   /** What the entrance got — PlanCrafters' porch policy, built. */
   porch: PorchSummary | null
+  /** Slab or raised, and how far the finish floor stands above grade. */
+  foundation: FoundationChoice | null
 }
 
 type WallRun = Run & { id: string; exterior: boolean; length: number; start: Pt; end: Pt; thickness: number }
@@ -139,6 +142,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     warnings,
     stats: { rooms: 0, walls: 0, doors: 0, windows: 0, zones: 0, livingSqFt: 0, footprintSqFt: 0 },
     porch: null,
+    foundation: null,
     buildingId: null,
     levelId: null,
   })
@@ -518,22 +522,65 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     warnings.push(`zone detection failed (${(error as Error).message}) — no zones were made.`)
   }
 
-  // ── slab under the outline ────────────────────────────────────────────
+  // ── the foundation: slab on grade or a raised floor (foundation.ts) ───
+  const foundation = foundationFor(style, input.mode === 'adu' ? 'adu' : '1story', W / 12)
+  const ffAboveGradeM = round(foundation.ffAboveGradeIn * IN)
+  const raisedFloor = foundation.type === 'raised'
+
+  // ── the floor under the house, the garage slab at grade ───────────────
+  // A slab house pours one slab; a raised house carries a framed platform
+  // (the slab node is its 3/4 in subfloor — Bones hangs the joists under
+  // it). Either way the GARAGE gets its own slab with its top at grade,
+  // PlanCrafters' garageDefaultDrop on flat ground (the garage never sits on
+  // the raised floor), and the garage's exterior walls stand on that slab.
   const slabId = generateId('slab')
-  const outlineLocal = ring.map(toLocal)
+  const garageRooms = rooms.filter((r) => r.kind === 'garage')
+  const houseRooms = rooms.filter((r) => r.kind !== 'garage')
+  const houseRing = garageRooms.length > 0 ? (outlineRing(houseRooms, grid) ?? ring) : ring
   const slabOp: NodeOp = {
     node: {
       id: slabId,
       type: 'slab',
-      name: 'Slab on grade',
+      name: raisedFloor ? 'Floor platform' : 'Slab on grade',
       parentId: levelId,
-      polygon: outlineLocal,
+      polygon: houseRing.map(toLocal),
       holes: [],
       elevation: SLAB_ELEVATION_M,
-      thickness: 0.1016,
-      metadata: { generatedBy: GENERATED_BY },
+      // 3/4 in subfloor over joists, or the 4 in slab
+      thickness: raisedFloor ? 0.019 : 0.1016,
+      metadata: { generatedBy: GENERATED_BY, floor: raisedFloor ? 'platform' : 'slab-on-grade' },
     },
     parentId: levelId,
+  }
+  const garageSlabOps: NodeOp[] = []
+  const garageRing = garageRooms.length > 0 ? outlineRing(garageRooms, grid) : null
+  if (garageRing) {
+    const garageSlabId = generateId('slab')
+    garageSlabOps.push({
+      node: {
+        id: garageSlabId,
+        type: 'slab',
+        name: 'Garage slab',
+        parentId: levelId,
+        polygon: garageRing.map(toLocal),
+        holes: [],
+        elevation: round(SLAB_ELEVATION_M - ffAboveGradeM),
+        thickness: 0.1016,
+        materialPreset: 'concrete-raw',
+        metadata: { generatedBy: GENERATED_BY, floor: 'garage-slab-at-grade', dropIn: foundation.ffAboveGradeIn },
+      },
+      parentId: levelId,
+    })
+    // The garage's exterior walls stand on the garage slab (their base drops
+    // to it; the separation wall stays on the house floor).
+    const garageIndex = new Set(rooms.map((r, i) => (r.kind === 'garage' ? i : -1)).filter((i) => i >= 0))
+    for (const wall of walls) {
+      if (!wall.exterior) continue
+      const beside = (wall.rooms ?? [wall.left, wall.right]).filter((i) => i !== -1)
+      if (beside.length === 0 || !beside.every((i) => garageIndex.has(i))) continue
+      const op = ops.find((o) => o.node.id === wall.id)
+      if (op) op.node.supportSlabId = garageSlabId
+    }
   }
 
   // ── roof: derived from the walls by the auto roof engine ─────────────
@@ -565,7 +612,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         outward,
         bayWidth,
         floorElevation: SLAB_ELEVATION_M,
-        gradeY: -SLAB_ABOVE_GRADE_M,
+        gradeY: -ffAboveGradeM,
         overhang: (style.overhangIn * IN) / Math.cos(Math.atan(porchPitch / 12)),
         wallRole: (
           (ops.find((op) => op.node.id === w.id)?.node.metadata as { roof?: { role?: string } } | undefined)?.roof
@@ -587,7 +634,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   }
 
   // ── building on the parcel ────────────────────────────────────────────
-  let position: [number, number, number] = [0, SLAB_ABOVE_GRADE_M, 0]
+  let position: [number, number, number] = [0, ffAboveGradeM, 0]
   let yaw = 0
   const placement = options.placement
   if (placement && placement.envelope.length >= 3) {
@@ -612,7 +659,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     // Level-local −z is the house front; world = R(yaw)·local: (0,−1) → (−sin, −cos).
     yaw = Math.atan2(-nx, -nz)
     const halfD = (D * IN) / 2 + exteriorT / 2
-    position = [round(mx - nx * halfD), SLAB_ABOVE_GRADE_M, round(mz - nz * halfD)]
+    position = [round(mx - nx * halfD), ffAboveGradeM, round(mz - nz * halfD)]
     if (W * IN > el) warnings.push(`the house is ${(W / 12).toFixed(0)}' wide but the buildable frontage is ${(el / FT).toFixed(0)}' — check the side setbacks.`)
   }
 
@@ -624,7 +671,14 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       parentId: siteId,
       position,
       rotation: [0, round(yaw, 6), 0],
-      metadata: { generatedBy: GENERATED_BY, generation: options.generation ?? {}, style: style.key, document: input },
+      metadata: {
+        generatedBy: GENERATED_BY,
+        generation: options.generation ?? {},
+        style: style.key,
+        document: input,
+        // PlanCrafters' foundation record — Bones reads it (foundationOf)
+        foundation: { type: foundation.type, ffAboveGradeIn: foundation.ffAboveGradeIn, source: foundation.source },
+      },
     },
     parentId: siteId ?? undefined,
   }
@@ -644,7 +698,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
 
   const livingSqFt = rooms.filter((r) => r.kind !== 'garage').reduce((s, r) => s + area(r), 0) / 144
   const footprintSqFt = (W * D) / 144
-  const ordered: NodeOp[] = [buildingOp, levelOp, slabOp, ...ops, ...zoneOps, ...roofOps, ...porchOps]
+  const ordered: NodeOp[] = [buildingOp, levelOp, slabOp, ...garageSlabOps, ...ops, ...zoneOps, ...roofOps, ...porchOps]
   if (errors.length > 0) return { ...empty(errors), warnings }
   return {
     ok: true,
@@ -653,6 +707,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     warnings,
     stats: { rooms: rooms.length, walls: walls.length, doors, windows, zones, livingSqFt: Math.round(livingSqFt), footprintSqFt: Math.round(footprintSqFt) },
     porch: porchSummary,
+    foundation,
     buildingId,
     levelId,
   }

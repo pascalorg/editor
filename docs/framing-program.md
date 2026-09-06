@@ -236,12 +236,13 @@ W10 Porch options (PlanCrafters entrance tool, all of it): roofType gable / shed
     entrance at the slider (covered patio, raised deck on a hill, trellis for
     modern / ranch / craftsman); porch ceiling closed / cathedral; the Bones side:
     posts on pad footings, the porch beam, the ledger (done for sheds), hangers.
-W11 Foundations: slab-on-grade (today), RAISED floor (stem walls + crawl space,
-    floor framing: joists, girders, piers, rim, subfloor — Bones floor-framing
-    engine), stepped footings on a hill from the terrain (TERRAIN-DATUM-SPEC: house
-    datum = highest grade + 8 in, stem exposure on the low side), the garage as
-    slab-on-stem regardless; Bones told the grade so footing depth is measured
-    from the ground, not the floor line.
+W11 Foundations — flat ground DONE: slab-on-grade or a RAISED floor (crawl space)
+    chosen PlanCrafters' way, the building datum above grade, Bones framing the
+    platform, mudsill, stem from the frost line below GRADE, pads at grade, ground
+    cover, and the garage slab at grade with its walls standing on it. Still to do:
+    stepped footings and the taller stem / basement from sampled terrain
+    (TERRAIN-DATUM-SPEC), Bones reading a wall's `supportSlabId` so the garage
+    walls frame down to their slab, dropped girders with piers in the crawl space.
 W12 Structural sections and details tied to framing variables (PlanCrafters
     details.js + section2d): eave, rake, ridge, foundation / stem / slab edge,
     porch ledger, deck ledger, stair — drawn from the SAME numbers Bones frames
@@ -448,3 +449,31 @@ W13 Finishes: PlanCrafters' style palettes applied — siding / roofing / trim /
   Not done: the rear entrance (covered patio / deck / trellis at the slider), the
   porch beam + post pad footings in Bones (columns are not framed today), the
   under-the-main-roof porch, wood-framed porch floors on raised foundations.
+
+- 2026-09-06 morning: **W11 landed (flat ground) — foundations.** Generate picks
+  the foundation the way PlanCrafters' `applyFoundation` does off terrain
+  (`foundation.ts`): the long-low ranch, an ADU or a footprint ≤ 34 ft is a
+  SLAB house with the top of slab 8 in above grade; everything else is RAISED
+  with the finish floor 18 in up (three risers at the door). The record rides
+  the building node (`metadata.foundation = { type, ffAboveGradeIn, source }`)
+  and the building's y is that height. A raised house's floor node is its
+  3/4 in subfloor ("Floor platform"); the GARAGE always gets its own slab with
+  its top at grade (`garageDefaultDrop` on flat ground) and its exterior
+  walls carry `supportSlabId` so they stand on it — the house floor and the
+  garage slab together cover exactly the rooms. Bones (`foundationOf` in
+  compute, `gradeY` / `raised` options on `buildFoundation`): the footing
+  bottom sits the frost depth below GRADE, not below the plate line (a slab
+  house 8 in up gets 8 in more stemwall, labelled "exposed above grade");
+  a raised floor is framed as a platform (joists, rim, flush girders on 4x4
+  posts down to the crawl grade, pads poured with their tops at grade), a PT
+  mudsill on the stemwall with the anchor bolts, hold-downs and plate washers
+  moved to it, no slab field but a Class I ground cover at grade (R408),
+  untreated sole plates on the platform, no interior thickened footings; a
+  level whose slabs sit at different heights pours each field at its own
+  surface (the garage pad). Nothing changes for a scene without the record
+  (2,001 pins held; `compute.raised.test.ts` 8 cases, `foundation.test.ts`,
+  build +2). Honest gaps: Bones does not yet read a wall's `supportSlabId`
+  (the garage walls frame from the plate line, 8–18 in above their slab),
+  crawl-space girders are flush on hangers rather than dropped on piers, and
+  the terrain branches (Δ ≥ 12 in → taller stem, Δ > 30 in → basement, stepped
+  footings) wait for sampled grade under the footprint.

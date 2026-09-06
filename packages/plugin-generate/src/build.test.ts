@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { buildHouse, type NodeOp } from './build'
 import { normalizeDocument } from './document'
 import { outlineRing, ringArea } from './geometry'
+import { rollDocument } from './roll'
 import { styleFor } from './styles'
 import { POPPY } from './templates/poppy'
 
@@ -161,6 +162,40 @@ describe('Poppy builds into Pascal nodes', () => {
     const wz = (wall.start as number[])[1] as number
     const poly = porch.polygon as [number, number][]
     for (const p of poly) expect(Math.abs(p[1] - wz)).toBeGreaterThan(0.08)
+  })
+
+  test('a wide farmhouse is raised: the floor is a platform, the garage slab sits at grade and its walls stand on it', () => {
+    const rolled = rollDocument(1499472249, { style: 'farmhouse', beds: 3, baths: 2, garage: true })
+    const built = buildHouse(rolled.document)
+    expect(built.ok).toBe(true)
+    expect(built.foundation?.type).toBe('raised')
+    expect(built.foundation?.ffAboveGradeIn).toBe(18)
+    const building = ofType(built.ops, 'building')[0] as N
+    expect(building.position[1]).toBeCloseTo(18 * 0.0254, 9)
+    expect(building.metadata.foundation).toEqual({ type: 'raised', ffAboveGradeIn: 18, source: built.foundation?.source })
+    const slabs = ofType(built.ops, 'slab') as N[]
+    const platform = slabs.find((s) => s.name === 'Floor platform')!
+    expect(platform.thickness).toBeCloseTo(0.019, 9)
+    const garage = slabs.find((s) => s.name === 'Garage slab')!
+    expect(garage).toBeDefined()
+    expect(garage.elevation).toBeCloseTo(0.05 - 18 * 0.0254, 6)
+    // the garage footprint is not part of the house platform
+    const platformArea = Math.abs(ringArea(platform.polygon as [number, number][]))
+    const garageArea = Math.abs(ringArea(garage.polygon as [number, number][]))
+    expect(garageArea).toBeGreaterThan(30)
+    // together they cover exactly the rooms (the roll's footprint is the house rectangle plus the garage bump)
+    const roomsM2 = rolled.document.rooms.reduce((s, r) => s + r.w * r.d, 0) * 0.09290304
+    expect(platformArea + garageArea).toBeCloseTo(roomsM2, 0)
+    const onGarage = (ofType(built.ops, 'wall') as N[]).filter((w) => w.supportSlabId === garage.id)
+    expect(onGarage.length).toBeGreaterThanOrEqual(2)
+    for (const w of onGarage) expect(w.name).toBe('Exterior wall')
+  })
+
+  test('the Poppy (24 ft wide) is a slab house at 8 in, one slab, no garage slab', () => {
+    const built = buildHouse(POPPY)
+    expect(built.foundation?.type).toBe('slab')
+    expect(built.foundation?.ffAboveGradeIn).toBe(8)
+    expect((ofType(built.ops, 'slab') as N[]).map((s) => s.name)).toEqual(['Slab on grade', 'Porch'])
   })
 
   test('placed on a parcel: square to the street, at the front setback, attached to the site', () => {

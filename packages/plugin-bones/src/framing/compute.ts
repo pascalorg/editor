@@ -167,6 +167,23 @@ const memo = new WeakMap<
   { nodes: Record<string, Record<string, unknown>>; result: ComputeResult }
 >()
 
+
+/** The building's foundation record: floor system and finish floor above grade (metres). */
+export type FoundationRecord = { type: 'slab' | 'raised'; ffAboveGradeM: number }
+
+/**
+ * `metadata.foundation` on the building node — `{ type: 'slab' | 'raised',
+ * ffAboveGradeIn }`, written by the generator (PlanCrafters' foundation
+ * record). Anything else reads as slab-on-grade at the plate line.
+ */
+export function foundationOf(building: Record<string, unknown> | undefined): FoundationRecord {
+  const meta = building?.metadata as { foundation?: { type?: unknown; ffAboveGradeIn?: unknown } } | null | undefined
+  const f = meta && typeof meta === 'object' ? meta.foundation : undefined
+  const type = f?.type === 'raised' ? 'raised' : 'slab'
+  const inchesUp = typeof f?.ffAboveGradeIn === 'number' && Number.isFinite(f.ffAboveGradeIn) ? f.ffAboveGradeIn : 0
+  return { type, ffAboveGradeM: Math.max(0, inchesUp) * 0.0254 }
+}
+
 export function computeLevel(
   nodes: Record<string, Record<string, unknown>>,
   config: FramingNode,
@@ -499,6 +516,13 @@ function computeLevelUncached(
   const levels = allLevels.filter((l) => l.buildingId === myBuilding)
   const levelIndex = levels.findIndex((l) => l.id === levelId)
   const isGroundLevel = levelIndex <= 0
+  // The FOUNDATION record (PlanCrafters' model.foundation, carried on the
+  // building node's metadata by the generator): the floor system and how far
+  // the finish floor stands above grade. Absent = slab-on-grade with grade at
+  // the plate line, which keeps every existing scene byte-identical.
+  const foundation = foundationOf(myBuilding ? nodes[myBuilding] : undefined)
+  const gradeY = isGroundLevel ? -foundation.ffAboveGradeM : 0
+  const raisedFloor = isGroundLevel && foundation.type === 'raised'
 
   // Slabs feed the exterior fallback: hosts often mark BOTH wall faces
   // 'interior' (quality round-1 A1) — flooring says which side is in.
@@ -698,7 +722,8 @@ function computeLevelUncached(
       levelAbove !== undefined && extractSlabs(nodes, levelAbove.id).length > 0
     members.push(
       ...frameWalls(framed, spec, engineering, {
-        slabBearing: isGroundLevel,
+        // A raised floor's plates sit on the platform, not on concrete.
+        slabBearing: isGroundLevel && !raisedFloor,
         storeyAbove,
         // Steel neighbors participate in the corner/tee hint graph so a
         // lumber wall butting a steel one insets exactly like it would
@@ -716,7 +741,7 @@ function computeLevelUncached(
       ).length
       const lgs = lgsFrameWalls(steel, spec, engineering, {
         hintWalls: assemblies,
-        slabBearing: isGroundLevel,
+        slabBearing: isGroundLevel && !raisedFloor,
         groundSnowLoadPsf: profile.groundSnowLoadPsf,
         ultimateWindMph: profile.ultimateWindMph,
         storeys,
@@ -799,8 +824,25 @@ function computeLevelUncached(
     }
   }
 
+  // The ground level's own framed platform (raised floor) — its girder posts
+  // need pads from the foundation pass below.
+  let groundPlatform: Member[] = []
   if (config.showFloor) {
-    if (isGroundLevel) {
+    if (isGroundLevel && raisedFloor) {
+      // RAISED floor: the platform hangs under the floor slab node (the
+      // subfloor) exactly like an upper storey's — joists, rim, girders —
+      // and its posts run down to the crawl grade, where the foundation
+      // pours their pads.
+      if (slabs.length === 0) {
+        warnings.push('No floor platform on this level — rooms have no floor to derive')
+      } else {
+        groundPlatform = frameFloor(slabs, activeWalls, spec, Math.max(0.1, -gradeY))
+        members.push(...groundPlatform)
+        warnings.push(
+          `Ground floor is a framed platform over a crawl space (finish floor ${Math.round(foundation.ffAboveGradeM / 0.0254)}" above grade) — joists on a PT mudsill on the stemwall, girder posts on pads, Class I ground cover (R408)`,
+        )
+      }
+    } else if (isGroundLevel) {
       // Ground floors are slab-on-grade here — the FOUNDATION owns that
       // geometry, and since B17 it actually BUILDS it (slab field members +
       // vapor retarder, buildFoundation). Say so instead of silently doing
@@ -954,7 +996,26 @@ function computeLevelUncached(
         }
       }
     }
-    members.push(...buildFoundation(activeWalls, slabs, spec, { cmu: cmuAnchorage, girderPosts }))
+    // A raised floor's OWN girder posts bear on pads at the crawl grade too.
+    for (const m of groundPlatform) {
+      if (m.role === 'post') girderPosts.push({ plan: [m.position[0], m.position[2]], sourceId: m.sourceId })
+    }
+    // The stemwall tops out under the platform: the lowest joist / rim bottom
+    // less the mudsill.
+    let raised: { stemTop: number; sillWidth: number } | undefined
+    if (raisedFloor && groundPlatform.length > 0) {
+      let joistBottom = Number.POSITIVE_INFINITY
+      for (const m of groundPlatform) {
+        if (m.role !== 'joist' && m.role !== 'rim-joist') continue
+        joistBottom = Math.min(joistBottom, m.position[1] - m.dims[1] / 2)
+      }
+      if (Number.isFinite(joistBottom)) {
+        raised = { stemTop: joistBottom - inches(1.5), sillWidth: LUMBER_CROSS_SECTIONS[spec.exteriorStudSize][1] }
+      }
+    }
+    members.push(
+      ...buildFoundation(activeWalls, slabs, spec, { cmu: cmuAnchorage, girderPosts, gradeY, raised }),
+    )
     // B9c: tie the foundation's SDC-D hold-downs to the wall framing above
     // them, both directions (a hold-down with no post above / a portal post
     // with no hold-down below gets flagged). Only when BOTH systems are in
