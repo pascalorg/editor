@@ -34,6 +34,7 @@ import type { Member, SlabSlice, WallSlice } from '../core/types'
 import { inches } from '../core/units'
 import { LUMBER_CROSS_SECTIONS, type LumberSize } from '../lumber'
 import { joistSizeFor } from './floor-framing'
+import { hangerFor, partLabel, postBaseFor, postCapFor } from './hardware'
 
 type Pt = readonly [number, number]
 
@@ -231,7 +232,7 @@ export function frameDeck(
       yawU,
       inches(3),
       'steel',
-      `Simpson LUS-series face-mount hanger — ${joistSize} deck joist, nailing per the Simpson catalogue`,
+      partLabel(hangerFor(joistSize), `${joistSize} PT deck joist`),
     )
 
   // ---- joists: span v, laid out along u ----
@@ -348,6 +349,29 @@ export function frameDeck(
         'pt-lumber',
         'Deck post 4x4 PT to grade (Table R507.4) — on a pad footing, restrained at the base (R507.3, R507.4.1)',
       )
+      // the base on the pad (R507.4.1 restraint) and, under a dropped beam, the cap
+      emit(
+        'post-base',
+        undefined,
+        [pt + inches(0.5), inches(1), pw + inches(0.5)],
+        at(u, bv, gradeY + inches(0.5)),
+        yawU,
+        inches(1),
+        'steel',
+        partLabel(postBaseFor('4x4'), '4x4 PT deck post on its pad footing (R507.4.1)'),
+      )
+      if (dropped) {
+        emit(
+          'post-cap',
+          undefined,
+          [pt + inches(0.5), inches(2), beamThick + inches(0.5)],
+          at(u, bv, postTop + inches(1)),
+          yawU,
+          inches(2),
+          'steel',
+          partLabel(postCapFor('4x4'), '4x4 PT deck post to the dropped 4x8 beam (R507.5.1)'),
+        )
+      }
     }
   }
 

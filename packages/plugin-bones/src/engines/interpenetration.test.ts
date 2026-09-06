@@ -1,19 +1,25 @@
 import { describe, expect, test } from 'bun:test'
 import { Euler, Matrix4, Vector3 } from 'three'
 import { DEFAULT_SPEC } from '../core/spec'
-import type { Member, OpeningSlice, SlabSlice, WallSlice } from '../core/types'
+import type { Member, OpeningSlice, RoomSlice, SlabSlice, WallSlice } from '../core/types'
 import { inches } from '../core/units'
-import { COURSE_HEIGHT, MIXED_CORNER_FLAG, cmuDowelPositions, cmuWall, cmuWalls, mixedCmuWall } from './cmu'
+import type { PlacedFixtureSlice } from '../core/wall-model'
+import {
+  COURSE_HEIGHT,
+  cmuDowelPositions,
+  cmuWall,
+  cmuWalls,
+  MIXED_CORNER_FLAG,
+  mixedCmuWall,
+} from './cmu'
 import { applyDeviceOverrides, layoutElectrical, pointInPolygon } from './electrical'
 import { frameFloor } from './floor-framing'
 import { buildFoundation } from './foundation'
+import { lgsFrameWalls } from './lgs-wall-framing'
 import { layoutPlumbing } from './plumbing'
 import { frameRoofs, type RoofSegmentSlice } from './roof-framing'
 import { dedupeFoundationStraps, frameWall, frameWalls } from './wall-framing'
-import { lgsFrameWalls } from './lgs-wall-framing'
 import { layoutWallLayers } from './wall-layers'
-import type { PlacedFixtureSlice } from '../core/wall-model'
-import type { RoomSlice } from '../core/types'
 
 /**
  * Repo-wide interpenetration gate (round-10): no two STRUCTURAL members of
@@ -82,9 +88,12 @@ function toObb(member: Member): Obb {
 
 function aabbTouch(a: Obb, b: Obb): boolean {
   return (
-    a.min.x <= b.max.x && a.max.x >= b.min.x &&
-    a.min.y <= b.max.y && a.max.y >= b.min.y &&
-    a.min.z <= b.max.z && a.max.z >= b.min.z
+    a.min.x <= b.max.x &&
+    a.max.x >= b.min.x &&
+    a.min.y <= b.max.y &&
+    a.max.y >= b.min.y &&
+    a.min.z <= b.max.z &&
+    a.max.z >= b.min.z
   )
 }
 
@@ -120,6 +129,12 @@ function obbOverlap(a: Obb, b: Obb): boolean {
 const ALLOWED: ReadonlySet<string> = new Set(
   [
     // Hangers wrap the carried member AND face-mount on the carrier.
+    // post bases wrap the post on its pad, post caps wrap the post under the beam (W9 — the hanger convention)
+    ['post-base', 'post'],
+    ['post-base', 'footing'],
+    ['post-base', 'stemwall'],
+    ['post-cap', 'post'],
+    ['post-cap', 'girder'],
     ['hanger', 'joist'],
     ['hanger', 'girder'],
     ['hanger', 'rim-joist'],
@@ -330,7 +345,9 @@ function rectWalls(): WallSlice[] {
 describe('interpenetration gate — structural members never share volume', () => {
   test('wall framing: openings, thick wall, short wall', () => {
     expect(violations(frameWall(wall({ openings: [door(2), window_(4.2)] }), spec400))).toEqual([])
-    expect(violations(frameWall(wall({ thickness: 0.15, openings: [window_(3)] }), spec400))).toEqual([])
+    expect(
+      violations(frameWall(wall({ thickness: 0.15, openings: [window_(3)] }), spec400)),
+    ).toEqual([])
     expect(violations(frameWall(wall({ end: [1.2, 0] }), spec400))).toEqual([])
   })
 
@@ -373,7 +390,12 @@ describe('interpenetration gate — structural members never share volume', () =
         id: 'room_r',
         name: 'room',
         category: 'other' as const,
-        polygon: [[0, 0], [6, 0], [6, 4], [0, 4]] as [number, number][],
+        polygon: [
+          [0, 0],
+          [6, 0],
+          [6, 4],
+          [0, 4],
+        ] as [number, number][],
         boundaryWallIds: ['w_s', 'w_e', 'w_n', 'w_w'],
         ceilingHeight: 2.7,
       },
@@ -401,14 +423,17 @@ describe('interpenetration gate — structural members never share volume', () =
         id: 'room_r',
         name: 'room',
         category: 'other' as const,
-        polygon: [[0, 0], [6, 0], [6, 4], [0, 4]] as [number, number][],
+        polygon: [
+          [0, 0],
+          [6, 0],
+          [6, 4],
+          [0, 4],
+        ] as [number, number][],
         boundaryWallIds: ['w_s', 'w_e', 'w_n', 'w_w'],
         ceilingHeight: 2.7,
       },
     ]
-    const overrides = new Map(
-      rectangle.map((w) => [w.id, { insulation: 'batt' as const }]),
-    )
+    const overrides = new Map(rectangle.map((w) => [w.id, { insulation: 'batt' as const }]))
     const combined = [
       ...frameWalls(rectangle, spec400),
       ...layoutWallLayers(rectangle, rooms, spec400, 'NY', [], overrides),
@@ -429,7 +454,12 @@ describe('interpenetration gate — structural members never share volume', () =
         id: 'room_r',
         name: 'room',
         category: 'other' as const,
-        polygon: [[0, 0], [6, 0], [6, 4], [0, 4]] as [number, number][],
+        polygon: [
+          [0, 0],
+          [6, 0],
+          [6, 4],
+          [0, 4],
+        ] as [number, number][],
         boundaryWallIds: ['w_thick'],
         ceilingHeight: 2.7,
       },
@@ -459,7 +489,12 @@ describe('interpenetration gate — structural members never share volume', () =
         id: 'room_r',
         name: 'room',
         category: 'other' as const,
-        polygon: [[0, 0], [6, 0], [6, 4], [0, 4]] as [number, number][],
+        polygon: [
+          [0, 0],
+          [6, 0],
+          [6, 4],
+          [0, 4],
+        ] as [number, number][],
         boundaryWallIds: ['w_s', 'w_e', 'w_n', 'w_w'],
         ceilingHeight: 2.7,
       },
@@ -467,16 +502,23 @@ describe('interpenetration gate — structural members never share volume', () =
     for (const th of [0.09, 0.1, 0.114, 0.13, 0.15, 0.164, 0.165, 0.2]) {
       for (const studSize of [undefined, '2x4' as const, '2x6' as const]) {
         const rect = [
-          wall({ id: 'w_s', start: [0, 0], end: [6, 0], thickness: th, openings: [door(2), window_(4.2)] }),
+          wall({
+            id: 'w_s',
+            start: [0, 0],
+            end: [6, 0],
+            thickness: th,
+            openings: [door(2), window_(4.2)],
+          }),
           wall({ id: 'w_e', start: [6, 0], end: [6, 4], thickness: th }),
           wall({ id: 'w_n', start: [6, 4], end: [0, 4], thickness: th, openings: [window_(3)] }),
           wall({ id: 'w_w', start: [0, 4], end: [0, 0], thickness: th }),
         ]
-        const framingOv = new Map(
-          rect.map((w) => [w.id, studSize ? { studSize } : {}]),
-        )
+        const framingOv = new Map(rect.map((w) => [w.id, studSize ? { studSize } : {}]))
         const layerOv = new Map(
-          rect.map((w) => [w.id, { ...(studSize ? { studSize } : {}), insulation: 'batt' as const }]),
+          rect.map((w) => [
+            w.id,
+            { ...(studSize ? { studSize } : {}), insulation: 'batt' as const },
+          ]),
         )
         const combined = [
           ...frameWalls(rect, spec400, framingOv),
@@ -502,32 +544,52 @@ describe('interpenetration gate — structural members never share volume', () =
         id: 'room_r',
         name: 'room',
         category: 'other' as const,
-        polygon: [[0, 0], [8, 0], [8, 6], [0, 6]] as [number, number][],
+        polygon: [
+          [0, 0],
+          [8, 0],
+          [8, 6],
+          [0, 6],
+        ] as [number, number][],
         boundaryWallIds: ['w_th'],
         ceilingHeight: 2.7,
       },
     ]
     const cases: { name: string; stem: WallSlice }[] = [
       // stem END lands on the through wall (forward)
-      { name: 'perpendicular-fwd', stem: wall({ id: 'w_stem', start: [4, 3], end: [4, 0], exterior: false }) },
+      {
+        name: 'perpendicular-fwd',
+        stem: wall({ id: 'w_stem', start: [4, 3], end: [4, 0], exterior: false }),
+      },
       // stem START lands on the through wall (reverse direction)
-      { name: 'perpendicular-rev', stem: wall({ id: 'w_stem', start: [4, 0], end: [4, 3], exterior: false }) },
+      {
+        name: 'perpendicular-rev',
+        stem: wall({ id: 'w_stem', start: [4, 0], end: [4, 3], exterior: false }),
+      },
       // oblique 45° stem into the through wall
-      { name: 'oblique-45', stem: wall({ id: 'w_stem', start: [5.5, 1.5], end: [4, 0], exterior: false }) },
+      {
+        name: 'oblique-45',
+        stem: wall({ id: 'w_stem', start: [5.5, 1.5], end: [4, 0], exterior: false }),
+      },
       // shallow oblique ~27°
-      { name: 'oblique-27', stem: wall({ id: 'w_stem', start: [6, 1], end: [4, 0], exterior: false }) },
+      {
+        name: 'oblique-27',
+        stem: wall({ id: 'w_stem', start: [6, 1], end: [4, 0], exterior: false }),
+      },
     ]
     for (const c of cases) {
       const through = wall({ id: 'w_th', start: [0, 0], end: [8, 0] })
       const set = [through, c.stem]
-      const combined = [
-        ...frameWalls(set, spec400),
-        ...layoutWallLayers(set, rooms, spec400, 'NY'),
-      ]
+      const combined = [...frameWalls(set, spec400), ...layoutWallLayers(set, rooms, spec400, 'NY')]
       expect(violations(combined), c.name).toEqual([])
       // non-vacuous: the stem really framed and layered
-      expect(combined.some((m) => m.sourceId === 'w_stem' && m.role === 'stud'), c.name).toBe(true)
-      expect(combined.some((m) => m.sourceId === 'w_stem' && m.role === 'drywall'), c.name).toBe(true)
+      expect(
+        combined.some((m) => m.sourceId === 'w_stem' && m.role === 'stud'),
+        c.name,
+      ).toBe(true)
+      expect(
+        combined.some((m) => m.sourceId === 'w_stem' && m.role === 'drywall'),
+        c.name,
+      ).toBe(true)
     }
   })
 
@@ -547,7 +609,12 @@ describe('interpenetration gate — structural members never share volume', () =
         id: 'room_r',
         name: 'room',
         category: 'other' as const,
-        polygon: [[0, 0], [6, 0], [6, 4], [0, 4]] as [number, number][],
+        polygon: [
+          [0, 0],
+          [6, 0],
+          [6, 4],
+          [0, 4],
+        ] as [number, number][],
         boundaryWallIds: ['w_s', 'w_e', 'w_n', 'w_w'],
         ceilingHeight: 2.7,
       },
@@ -631,7 +698,18 @@ describe('interpenetration gate — structural members never share volume', () =
     expect(
       violations(
         frameFloor(
-          [slab(rect(6, 9), { holes: [[[2, 3], [4, 3], [4, 5], [2, 5]]] })],
+          [
+            slab(rect(6, 9), {
+              holes: [
+                [
+                  [2, 3],
+                  [4, 3],
+                  [4, 5],
+                  [2, 5],
+                ],
+              ],
+            }),
+          ],
           [],
           spec400,
         ),
@@ -666,10 +744,7 @@ describe('interpenetration gate — structural members never share volume', () =
       const th = (deg * Math.PI) / 180
       const cos = Math.cos(th)
       const sin = Math.sin(th)
-      const rot = (x: number, z: number): [number, number] => [
-        x * cos - z * sin,
-        x * sin + z * cos,
-      ]
+      const rot = (x: number, z: number): [number, number] => [x * cos - z * sin, x * sin + z * cos]
       const poly = [rot(0, 0), rot(6, 0), rot(6, 9), rot(0, 9)]
       expect({
         deg,
@@ -839,7 +914,18 @@ describe('interpenetration gate — structural members never share volume', () =
     // itself, the perimeter kit, or reach into the hole.
     const members = buildFoundation(
       rectWalls(),
-      [slab(rect(6, 4), { holes: [[[2, 1.2], [3.2, 1.2], [3.2, 2.8], [2, 2.8]]] })],
+      [
+        slab(rect(6, 4), {
+          holes: [
+            [
+              [2, 1.2],
+              [3.2, 1.2],
+              [3.2, 2.8],
+              [2, 2.8],
+            ],
+          ],
+        }),
+      ],
       spec400,
     )
     const field = members.filter((m) => m.role === 'slab')
@@ -900,7 +986,12 @@ describe('interpenetration gate — structural members never share volume', () =
         id: 'room_g',
         name: 'Garage',
         category: 'garage',
-        polygon: [[0, 0], [6.4, 0], [6.4, 4], [0, 4]],
+        polygon: [
+          [0, 0],
+          [6.4, 0],
+          [6.4, 4],
+          [0, 4],
+        ],
         boundaryWallIds: ['w_s', 'w_e', 'w_n', 'w_w'],
         ceilingHeight: 2.44,
       },
@@ -1070,8 +1161,7 @@ describe('interpenetration gate — structural members never share volume', () =
     const walls = rectWalls().map((w) => ({
       ...w,
       thickness: 0.2032,
-      openings:
-        w.id === 'w_s' ? [door(2), window_(4.2)] : w.id === 'w_n' ? [window_(3)] : [],
+      openings: w.id === 'w_s' ? [door(2), window_(4.2)] : w.id === 'w_n' ? [window_(3)] : [],
     }))
     const cmuMap = new Map(walls.map((w) => [w.id, cmuDowelPositions(w)]))
     const foundation = buildFoundation(walls, [slab(rect(6, 4))], seismic400, { cmu: cmuMap })
@@ -1159,9 +1249,7 @@ describe('interpenetration gate — structural members never share volume', () =
         // capped at the zone bar top — 20" real lap at 0.61 m, 4" at 1 course
         expect((d.position[1] ?? 0) + d.dims[1] / 2).toBeCloseTo(layout.barTop, 6)
         expect(d.label).toContain(`laps CMU wall vertical ${seamReq === 0.61 ? '20"' : '4"'}`)
-        expect(d.flag).toBe(
-          '#5 dowel lap short of 48d_b — hook into bond beam per detail, verify',
-        )
+        expect(d.flag).toBe('#5 dowel lap short of 48d_b — hook into bond beam per detail, verify')
       }
       const composed = [
         ...foundation,
@@ -1298,13 +1386,24 @@ describe('night-5 skeptic round: tee edge cases', () => {
     // Corner-candidate (endpoint within tol of the through end) that LOSES
     // the tie-break used to shadow the tee probe → zero layer inset.
     const through = wall({ id: 'w_th', start: [0, 0], end: [1, 0], thickness: 0.114 })
-    const stem = wall({ id: 'w_stem', start: [0.87, 0], end: [0.87, 3], thickness: 0.2, exterior: false })
+    const stem = wall({
+      id: 'w_stem',
+      start: [0.87, 0],
+      end: [0.87, 3],
+      thickness: 0.2,
+      exterior: false,
+    })
     const rooms = [
       {
         id: 'room_r',
         name: 'room',
         category: 'other' as const,
-        polygon: [[0, 0], [1, 0], [1, 3], [0, 3]] as [number, number][],
+        polygon: [
+          [0, 0],
+          [1, 0],
+          [1, 3],
+          [0, 3],
+        ] as [number, number][],
         boundaryWallIds: ['w_th'],
         ceilingHeight: 2.7,
       },
@@ -1324,7 +1423,13 @@ describe('night-5 skeptic round: tee edge cases', () => {
 
   test('c: MIXED 45° stem into a framed through wall uses the width-aware retreat', () => {
     const through = wall({ id: 'w_th', start: [0, 0], end: [8, 0] })
-    const stem = wall({ id: 'w_stem', start: [5.5, 1.5], end: [4, 0], thickness: 0.2, exterior: false })
+    const stem = wall({
+      id: 'w_stem',
+      start: [5.5, 1.5],
+      end: [4, 0],
+      thickness: 0.2,
+      exterior: false,
+    })
     const { members } = mixedCmuWall(stem, spec400, 0.6096, [through, stem])
     const framing = frameWalls([through], spec400)
     expect(violations([...members, ...framing])).toEqual([])
@@ -1338,7 +1443,13 @@ describe('ship-gate follow-up: blocking bears on joists, never on rim or air', (
     // block overlapped the rim until a ~50mm skin. Joist-coverage truth
     // kills the block instead.
     const members = frameFloor(
-      [slab([[0, 0], [3.5, 0.18], [0, 0.36]])],
+      [
+        slab([
+          [0, 0],
+          [3.5, 0.18],
+          [0, 0.36],
+        ]),
+      ],
       [],
       spec400,
     )
@@ -1354,7 +1465,17 @@ describe('ship-gate follow-up: blocking bears on joists, never on rim or air', (
   })
 
   test('needle sliver: zero joists ⇒ zero blocking (no lumber bearing on air)', () => {
-    const members = frameFloor([slab([[0, 0], [5, 0.1], [0, 0.2]])], [], spec400)
+    const members = frameFloor(
+      [
+        slab([
+          [0, 0],
+          [5, 0.1],
+          [0, 0.2],
+        ]),
+      ],
+      [],
+      spec400,
+    )
     expect(members.filter((m) => m.role === 'joist')).toHaveLength(0)
     expect(members.filter((m) => m.role === 'blocking')).toHaveLength(0)
     // the tip rim×rim miter residual — same queued class, pinned exactly
@@ -1500,9 +1621,16 @@ describe('under-floor DWV vs footings + floor platform (drainage gate)', () => {
   // a framed platform (joists/girder/rims) hung under the slab surface.
   const structureFor = (spec: typeof spec400): Member[] =>
     [...buildFoundation(shell, slabs, spec), ...frameFloor(slabs, shell, spec, 2.4)].filter((m) =>
-      ['footing', 'stemwall', 'slab-edge', 'joist', 'rim-joist', 'girder', 'blocking', 'subfloor'].includes(
-        m.role,
-      ),
+      [
+        'footing',
+        'stemwall',
+        'slab-edge',
+        'joist',
+        'rim-joist',
+        'girder',
+        'blocking',
+        'subfloor',
+      ].includes(m.role),
     )
   const CONCRETE = new Set(['footing', 'stemwall', 'slab-edge'])
   // Deep frost foundation (footingDepth 60"): the stemwall reaches WELL
@@ -1580,10 +1708,7 @@ describe('under-floor DWV vs footings + floor platform (drainage gate)', () => {
       dfu: 1,
       drainIn: 1.25,
     }
-    const { members } = layoutPlumbing(shell, wetRoomsExterior, specFrost, [
-      ...placedSet,
-      flushLav,
-    ])
+    const { members } = layoutPlumbing(shell, wetRoomsExterior, specFrost, [...placedSet, flushLav])
     expect(drainClashes(members, structureFor(specFrost))).toEqual([])
     // the flush lav's drop is pulled to the inboard junction
     const trap = members.find((m) => m.sourceId === 'dwv-trap-lav2' && m.dims[1] > m.dims[0])
@@ -1626,9 +1751,7 @@ describe('under-floor DWV vs footings + floor platform (drainage gate)', () => {
     expect(sleevedMains.length).toBeGreaterThanOrEqual(1)
     // R4a: every through-floor drop stays INSIDE the 1 m room — the
     // unclamped ±0.4 offsets put the toilet drop inside the west stemwall
-    const drops = members.filter(
-      (m) => m.sourceId.startsWith('dwv-trap-') && m.dims[1] > m.dims[0],
-    )
+    const drops = members.filter((m) => m.sourceId.startsWith('dwv-trap-') && m.dims[1] > m.dims[0])
     expect(drops.length).toBeGreaterThan(0)
     for (const d of drops) {
       expect(pointInPolygon([d.position[0], d.position[2]], powder[0]?.polygon ?? [])).toBe(true)
@@ -1691,9 +1814,16 @@ describe('under-floor DWV vs footings + floor platform (drainage gate)', () => {
       ...buildFoundation(uWalls, uSlabs, specFrost),
       ...frameFloor(uSlabs, uWalls, specFrost, 2.4),
     ].filter((m) =>
-      ['footing', 'stemwall', 'slab-edge', 'joist', 'rim-joist', 'girder', 'blocking', 'subfloor'].includes(
-        m.role,
-      ),
+      [
+        'footing',
+        'stemwall',
+        'slab-edge',
+        'joist',
+        'rim-joist',
+        'girder',
+        'blocking',
+        'subfloor',
+      ].includes(m.role),
     )
     const { members } = layoutPlumbing(uWalls, uRooms, specFrost)
     expect(drainClashes(members, uStructure)).toEqual([])
@@ -1797,7 +1927,12 @@ describe('high-wind uplift hardware composes SAT-clean (LOD-400 B10 / S1)', () =
         id: 'room_r',
         name: 'room',
         category: 'other',
-        polygon: [[0, 0], [6, 0], [6, 4], [0, 4]],
+        polygon: [
+          [0, 0],
+          [6, 0],
+          [6, 4],
+          [0, 4],
+        ],
         boundaryWallIds: ['w_s', 'w_e', 'w_n', 'w_w'],
         ceilingHeight: 2.7,
       },
@@ -1852,7 +1987,12 @@ describe('high-wind uplift hardware composes SAT-clean (LOD-400 B10 / S1)', () =
         id: 'room_g',
         name: 'Garage',
         category: 'garage',
-        polygon: [[0, 0], [6.4, 0], [6.4, 4], [0, 4]],
+        polygon: [
+          [0, 0],
+          [6.4, 0],
+          [6.4, 4],
+          [0, 4],
+        ],
         boundaryWallIds: ['w_s', 'w_e', 'w_n', 'w_w'],
         ceilingHeight: 2.44,
       },
@@ -1889,13 +2029,20 @@ describe('LGS steel walls compose SAT-clean (Phase 1 / S1)', () => {
     const eng = lgsMap(['w_lgs'])
     const { members } = lgsFrameWalls([w], spec400, eng)
     // non-vacuous: the full member family is present
-    for (const role of ['bottom-plate', 'top-plate', 'stud', 'king-stud', 'trimmer', 'header', 'sill', 'cripple', 'strap-bracing']) {
+    for (const role of [
+      'bottom-plate',
+      'top-plate',
+      'stud',
+      'king-stud',
+      'trimmer',
+      'header',
+      'sill',
+      'cripple',
+      'strap-bracing',
+    ]) {
       expect(members.some((m) => m.role === role)).toBe(true)
     }
-    const composed = [
-      ...members,
-      ...layoutWallLayers([w], [], spec400, 'TX', [], eng),
-    ]
+    const composed = [...members, ...layoutWallLayers([w], [], spec400, 'TX', [], eng)]
     expect(violations(composed)).toEqual([])
   })
 
@@ -1905,14 +2052,24 @@ describe('LGS steel walls compose SAT-clean (Phase 1 / S1)', () => {
     // defects. Two synthetic lumber members in the exact nest pose:
     const nest: Member[] = [
       {
-        system: 'wall-framing', role: 'bottom-plate', dims: [2, 0.038, 0.089],
-        length: 2, position: [1, 0.019, 0], rotation: [0, 0, 0],
-        material: 'lumber', sourceId: 'w_x',
+        system: 'wall-framing',
+        role: 'bottom-plate',
+        dims: [2, 0.038, 0.089],
+        length: 2,
+        position: [1, 0.019, 0],
+        rotation: [0, 0, 0],
+        material: 'lumber',
+        sourceId: 'w_x',
       },
       {
-        system: 'wall-framing', role: 'stud', dims: [0.038, 2.3, 0.089],
-        length: 2.3, position: [1, 1.15 + 0.002, 0], rotation: [0, 0, 0],
-        material: 'lumber', sourceId: 'w_x',
+        system: 'wall-framing',
+        role: 'stud',
+        dims: [0.038, 2.3, 0.089],
+        length: 2.3,
+        position: [1, 1.15 + 0.002, 0],
+        rotation: [0, 0, 0],
+        material: 'lumber',
+        sourceId: 'w_x',
       },
     ]
     expect(violations(nest).length).toBeGreaterThan(0)
@@ -2008,10 +2165,9 @@ describe('LGS steel walls compose SAT-clean (Phase 1 / S1)', () => {
       exterior: true,
       openings: [door(2), window_(6)],
     })
-    const eng = new Map([[
-      'w_ins',
-      { construction: 'lgs' as const, insulation: 'batt' as const, insulationR: 13 },
-    ]])
+    const eng = new Map([
+      ['w_ins', { construction: 'lgs' as const, insulation: 'batt' as const, insulationR: 13 }],
+    ])
     const steel = lgsFrameWalls([w], spec400, eng)
     const layers = layoutWallLayers([w], [], spec400, 'TX', [], eng)
     expect(layers.some((m) => m.role === 'insulation')).toBe(true)
@@ -2156,6 +2312,8 @@ describe('LGS steel walls compose SAT-clean (Phase 1 / S1)', () => {
     const eng = lgsMap(['w_tall'])
     const { members } = lgsFrameWalls([w], spec24, eng)
     expect(members.filter((m) => m.role === 'strap-bracing').length).toBe(4)
-    expect(violations([...members, ...layoutWallLayers([w], [], spec24, 'TX', [], eng)])).toEqual([])
+    expect(violations([...members, ...layoutWallLayers([w], [], spec24, 'TX', [], eng)])).toEqual(
+      [],
+    )
   })
 })

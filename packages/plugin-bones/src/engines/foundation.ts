@@ -36,6 +36,7 @@ import { formatIn, inches } from '../core/units'
 import type { CmuDowelLayout } from './cmu'
 import { openingSpans } from './electrical'
 import { intersectIntervals, polygonSpans, subtractInterval } from './floor-framing'
+import { HOLD_DOWN, PLATE_WASHER, partLabel, postBaseFor } from './hardware'
 
 const EPS = 1e-6
 
@@ -950,7 +951,7 @@ export function buildFoundation(
           plateW + PLATE_THICKNESS + PLATE_WASHER_THICKNESS / 2,
           PLATE_WASHER_SIDE,
           'steel',
-          '3×3×0.229" plate washer (R602.11.1)',
+          partLabel(PLATE_WASHER, 'sill plate anchorage'),
         )
       }
     }
@@ -975,7 +976,10 @@ export function buildFoundation(
           plateW + HOLD_DOWN_HEIGHT / 2, // base bears on the plate line up the post
           HOLD_DOWN_HEIGHT,
           'steel',
-          'HDU hold-down',
+          partLabel(
+            HOLD_DOWN,
+            'braced-wall end post to the foundation (seismic, R602.10.6.4 / lateral design)',
+          ),
         )
       }
     }
@@ -1043,6 +1047,18 @@ export function buildFoundation(
       })
       pourBands.push({ band, memberIdx: members.length - 1 })
       carveBands.push(band)
+      // the post's base on the pad: Simpson ABU (ZMAX on PT) — the R407.3 / R507.4.1 restraint
+      members.push({
+        system: 'foundation',
+        role: 'post-base',
+        dims: [inches(4), inches(1), inches(4)],
+        length: inches(1),
+        position: [px, padTop + inches(0.5), pz],
+        rotation: [0, 0, 0],
+        material: 'steel',
+        sourceId: post.sourceId,
+        label: partLabel(postBaseFor('4x4'), '4x4 post on its pad footing (R407.3 / R507.4.1)'),
+      })
     }
   }
 

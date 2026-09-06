@@ -15,10 +15,11 @@
  * (slab.elevation − slab.thickness).
  */
 
-import { LUMBER_CROSS_SECTIONS, type LumberSize } from '../lumber'
 import { DEFAULT_SPEC, type FramingSpec } from '../core/spec'
 import type { Member, SlabSlice, WallSlice } from '../core/types'
 import { feet, inches } from '../core/units'
+import { LUMBER_CROSS_SECTIONS, type LumberSize } from '../lumber'
+import { hangerFor, partLabel } from './hardware'
 
 const EPS = 1e-9
 /** Ignore clipped joist segments shorter than this — unbuildable slivers. */
@@ -32,7 +33,12 @@ const BEARING_TOLERANCE = inches(1.5)
 type Pt = readonly [number, number]
 
 /** Axis-aligned bounds of a polygon. */
-function bounds(polygon: readonly Pt[]): { minX: number; maxX: number; minZ: number; maxZ: number } {
+function bounds(polygon: readonly Pt[]): {
+  minX: number
+  maxX: number
+  minZ: number
+  maxZ: number
+} {
   let minX = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
   let minZ = Number.POSITIVE_INFINITY
@@ -100,7 +106,10 @@ export function joistSizeFor(span: number, spec: FramingSpec): LumberSize | null
 
 /** Subtract an interval from a list of spans. Exported for the foundation
  * engine's slab-field strips (B17) — one carve implementation repo-wide. */
-export function subtractInterval(spans: [number, number][], cut: [number, number]): [number, number][] {
+export function subtractInterval(
+  spans: [number, number][],
+  cut: [number, number],
+): [number, number][] {
   const out: [number, number][] = []
   for (const [s, e] of spans) {
     if (cut[1] <= s + EPS || cut[0] >= e - EPS) {
@@ -266,7 +275,11 @@ function frameSlab(
 
   // ---- joist rows ----
   const rows: number[] = []
-  for (let c = layoutStart + t / 2; c <= layoutStart + layoutLength - t / 2 + EPS; c += spec.joistSpacing) {
+  for (
+    let c = layoutStart + t / 2;
+    c <= layoutStart + layoutLength - t / 2 + EPS;
+    c += spec.joistSpacing
+  ) {
     rows.push(c)
   }
   const lastRow = layoutStart + layoutLength - t / 2
@@ -309,7 +322,7 @@ function frameSlab(
       0,
       inches(3),
       'steel',
-      `Joist hanger (LUS) @ ${host}`,
+      partLabel(hangerFor(size), `${size} joist @ ${host}`),
     )
   }
 
@@ -606,7 +619,10 @@ function frameSlab(
     // (round-9); hang the cut ends that face a stair opening on the
     // trimmers at the carved faces.
     for (const hole of holeFrames) {
-      if (hole.run[0] < girder.cross + gt / 2 + 2 * t && hole.run[1] > girder.cross - gt / 2 - 2 * t) {
+      if (
+        hole.run[0] < girder.cross + gt / 2 + 2 * t &&
+        hole.run[1] > girder.cross - gt / 2 - 2 * t
+      ) {
         const carve: [number, number] = [hole.cross[0] - 2 * t, hole.cross[1] + 2 * t]
         for (const [s, e] of girder.presence) {
           if (Math.abs(e - carve[0]) < EPS * 10 && e - s > MIN_SEGMENT) {
@@ -693,9 +709,7 @@ function frameSlab(
       // rim-poke window when a cross edge landed just past mid (ship-gate
       // round 2, 5 SAT pairs on an L-notch at mid + t + 8mm).
       const coveredBy = (ri: number): boolean =>
-        (rowJoistSpans[ri] ?? []).some(
-          ([s, e]) => mid - t / 2 > s + EPS && mid + t / 2 < e - EPS,
-        )
+        (rowJoistSpans[ri] ?? []).some(([s, e]) => mid - t / 2 > s + EPS && mid + t / 2 < e - EPS)
       if (!coveredBy(i) || !coveredBy(i + 1)) continue
       // Skip blocking that would land inside a stairwell hole — tested
       // against the BLOCK'S full extent, not the bay center (ship-gate
@@ -728,10 +742,7 @@ function frameSlab(
       for (const [gs, ge] of girder.presence) {
         // A girder only bears where it EXISTS (round-6: wing rows cut at an
         // absent girder passed silently with extent-less bearing lines).
-        bearings.push(
-          { u: girder.cut[0], cross: [gs, ge] },
-          { u: girder.cut[1], cross: [gs, ge] },
-        )
+        bearings.push({ u: girder.cut[0], cross: [gs, ge] }, { u: girder.cut[1], cross: [gs, ge] })
       }
     }
     for (const hole of holeFrames) {
@@ -811,7 +822,8 @@ export function validateJoistBearing(
     // end at a header face, body over the opening) slipped through — the
     // check is now intrusion-based, tolerating only the 1.5" bearing seat.
     for (const hole of holes) {
-      const inBand = cross > hole.cross[0] + BEARING_TOLERANCE && cross < hole.cross[1] - BEARING_TOLERANCE
+      const inBand =
+        cross > hole.cross[0] + BEARING_TOLERANCE && cross < hole.cross[1] - BEARING_TOLERANCE
       const intrusion =
         Math.min(center + half, hole.run[1] - BEARING_TOLERANCE) -
         Math.max(center - half, hole.run[0] + BEARING_TOLERANCE)
@@ -832,7 +844,8 @@ export function validateJoistBearing(
     const center = runAxis === 'x' ? (m.position[2] as number) : (m.position[0] as number)
     const line = runAxis === 'x' ? (m.position[0] as number) : (m.position[2] as number)
     for (const hole of holes) {
-      const lineInHole = line > hole.run[0] + BEARING_TOLERANCE && line < hole.run[1] - BEARING_TOLERANCE
+      const lineInHole =
+        line > hole.run[0] + BEARING_TOLERANCE && line < hole.run[1] - BEARING_TOLERANCE
       const intrusion =
         Math.min(center + half, hole.cross[1] - BEARING_TOLERANCE) -
         Math.max(center - half, hole.cross[0] + BEARING_TOLERANCE)
@@ -859,8 +872,7 @@ export function validateJoistBearing(
       const near = (a: number, b: number) => Math.abs(a - b) < BEARING_TOLERANCE
       const onPolygon = sampled.some((spans) =>
         spans.some(
-          ([s, e]) =>
-            near(end, s) || near(end, e) || near(end, s + rimT) || near(end, e - rimT),
+          ([s, e]) => near(end, s) || near(end, e) || near(end, s + rimT) || near(end, e - rimT),
         ),
       )
       const onCarve = holes.some(
@@ -897,7 +909,11 @@ function dominantAngle(polygon: SlabSlice['polygon']): number {
   return best
 }
 
-const rotPt = (p: readonly [number, number], c: readonly [number, number], ang: number): [number, number] => {
+const rotPt = (
+  p: readonly [number, number],
+  c: readonly [number, number],
+  ang: number,
+): [number, number] => {
   const cos = Math.cos(ang)
   const sin = Math.sin(ang)
   const dx = p[0] - c[0]

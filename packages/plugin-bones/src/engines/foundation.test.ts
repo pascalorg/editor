@@ -642,7 +642,7 @@ describe('buildFoundation — seismic hold-downs', () => {
     expect(us[1]).toBeCloseTo(4 - inset, 6)
     for (const h of holdDowns) {
       expect(h.material).toBe('steel')
-      expect(h.label).toBe('HDU hold-down')
+      expect(h.label).toContain('Simpson HDU2-SDS2.5 (or equal) hold-down')
       expect(h.dims[0]).toBeCloseTo(inches(3), 6)
       expect(h.dims[1]).toBeCloseTo(inches(12), 6)
       expect(h.dims[2]).toBeCloseTo(inches(3), 6)

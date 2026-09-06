@@ -17,6 +17,7 @@
  */
 import { DEFAULT_SPEC, type FramingSpec } from '../core/spec'
 import type { Member } from '../core/types'
+import { HOLD_DOWN, HURRICANE_TIE, hangerFor, postBaseFor } from '../engines/hardware'
 import { LUMBER_CROSS_SECTIONS, type LumberSize } from '../lumber'
 
 const IN = 0.0254
@@ -486,6 +487,11 @@ const foundationDetail: DetailDef = {
         stemW / 2 + 5,
         stemTop + 3,
       )
+      S.note(
+        `GIRDER POSTS ON PADS W/ SIMPSON ${postBaseFor('4x4').model} BASES${f.plateWashers ? ` — SIMPSON ${HOLD_DOWN.model} HOLD-DOWNS @ BRACED WALL ENDS` : ''}`,
+        stemW / 2 + 12,
+        ftgTop,
+      )
       if (f.stepped)
         S.note(
           'FOOTINGS STEPPED DOWN THE HILL — STEPS ≤ 24", RUNS ≥ 24" (R403.1.5) — SEE FOUNDATION PLAN',
@@ -658,7 +664,7 @@ const eaveDetail: DetailDef = {
       )
     S.note(
       r.ties
-        ? 'FULL-DEPTH 2X BLOCKING + SIMPSON H2.5A @ EA. RAFTER (R802.11) — SHEAR + UPLIFT TRANSFER'
+        ? `FULL-DEPTH 2X BLOCKING + SIMPSON ${HURRICANE_TIE.model} @ EA. RAFTER (R802.11) — SHEAR + UPLIFT TRANSFER`
         : 'FULL-DEPTH 2X BLOCKING — 8d TOE-NAIL @ 6" O.C. TO PLATE (OR A35) — SHEAR TRANSFER',
       bx1 - 1.5,
       0.6,
@@ -757,7 +763,7 @@ const deckLedgerDetail: DetailDef = {
       -0.75,
       -0.8,
     )
-    S.note('JOIST HANGER EA. JOIST (SIMPSON LUS OR EQ.)', -3.6, -3.5)
+    S.note(`JOIST HANGER EA. JOIST — SIMPSON ${hangerFor(dk.joist).model} OR EQ.`, -3.6, -3.5)
     S.note(`DECK JOIST ${nominal(dk.joist)} PT PER PLAN (R507.6)`, -9, -1.5)
     S.note("LATERAL LOAD CONNECTION REQ'D — R507.9.2 (2 LOCATIONS)", sh + 2.5, 0)
     S.note('NO SHEATHING GAP — BOLT THRU RIM, VERIFY MEMBER', sh + 0.75, 6)
@@ -816,7 +822,7 @@ const porchLedgerDetail: DetailDef = {
     S.note('STEP FLASHING 4"×4" MIN EA. COURSE — LAP WRB OVER (R903.2)', -sh, zAt(-sh - 6) + 3)
     S.note('KICKOUT DIVERTER @ EAVE TERMINATION — TO GUTTER', rx0 + 1, zAt(rx0) + 3)
     S.note(
-      `2X LEDGER — LAG OR THRU-BOLT TO STUDS @ 16" O.C. (VERIFY); RAFTER ${nominal(p.rafter)} ON SIMPSON LUS HANGER`,
+      `2X LEDGER — LAG OR THRU-BOLT TO STUDS @ 16" O.C. (VERIFY); RAFTER ${nominal(p.rafter)} ON SIMPSON ${hangerFor(p.rafter).model} HANGER`,
       -sh - 0.75,
       rd / 2,
     )

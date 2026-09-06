@@ -104,6 +104,10 @@ export type MemberRole =
   /** Bottom-plate-to-foundation uplift strap (anchorage per schedule). */
   | 'foundation-strap'
   | 'plate-washer'
+  /** Post base at a post standing on concrete (Simpson ABU, W9). */
+  | 'post-base'
+  /** Post cap at a dropped beam bearing on a post (Simpson AC, W9). */
+  | 'post-cap'
   | 'jack-rafter'
   | 'outlooker'
   | 'fascia'

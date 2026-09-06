@@ -207,7 +207,7 @@ W7  Styles and palettes applied — DONE 2026-09-06 (see W13 log): exterior asse
 W8  Wall assemblies by role: plumbing 2x6 behind wet rooms, garage separation,
     porch pony walls, exterior by style; new cited presets; assemblies panel with
     "assign by role".
-W9  Simpson hardware catalogue in Bones: H2.5A rafter/truss to plate, A35 at
+W9  Simpson hardware catalogue in Bones — DONE 2026-09-06 (see log; A35 / CS16 members open): H2.5A rafter/truss to plate, A35 at
     blocking, LUS hangers at ledger-hung joists, ABU post bases / AC caps at porch
     posts, HDU/HTT hold-downs, straps — labels with model and nailing; takeoff rows.
 
@@ -699,3 +699,29 @@ W13 Finishes — DONE 2026-09-06 (see log; muntin grids recorded not drawn, no f
   classic shingle texture (the library has no closer textures — labelled);
   shutters are recorded, not modelled; no finish schedule sheet in the
   Bones plan set yet (the schedule rides the building metadata).
+
+- 2026-09-06 night: **W9 landed — Simpson hardware named on the members and
+  booked by model.** `engines/hardware.ts` is the catalogue: face-mount
+  hangers by joist size (LUS24 / LUS26 / LUS28 / LUS210, HUS212 for 2x12,
+  the -2 doubles), H2.5A ties, ABU44Z / ABU66Z post bases (ZMAX on PT),
+  AC4Z / AC6Z post caps, HDU2-SDS2.5 hold-downs, BPS 5/8-3 bearing plates,
+  CS16 portal strap, A35 framing angle — each with the catalogue fastening
+  and "or equal"; a size off a table says VERIFY. Every engine prints the
+  part through `partLabel`: floor hangers by the joist they hang, deck
+  hangers at the ledger and flush beam, porch rafters on the roof ledger,
+  hold-downs and plate washers in the foundation; the deck engine adds an
+  ABU base at every post and an AC cap under a dropped beam; the foundation
+  seats an ABU base on every pad it pours (crawl-space girder posts, deck
+  posts). New roles `post-base` / `post-cap`; the takeoff books hangers,
+  post bases, post caps, ties and hold-downs by model most-common-first
+  (`modelsSummary`: "Simpson LUS28 ×12, LUS210 ×4 (or equal)"); the
+  details sheet prints the same parts (LUS by the deck joist, H2.5A at the
+  eave, ABU bases + HDU hold-downs in the foundation detail). The volume
+  gate allows the base / cap contacts the way it allows hangers (symbolic
+  solid hardware around the member). Tests: `hardware.test.ts` 6
+  (catalogue, labels round-trip, deck bases / caps, takeoff rows),
+  foundation / plan-set legend expectations follow the new labels — Bones
+  2,056, typecheck clean. Honest gaps: A35 angles at the eave blocking and
+  the CS16 strap ride the labels / details only (no members yet); ledger
+  bolts (R507.9.1.3(1)) and the garage-door portal hardware are still
+  generic notes.

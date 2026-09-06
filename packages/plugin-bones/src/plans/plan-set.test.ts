@@ -4256,7 +4256,7 @@ describe('NIGHT-10 — keyed hardware glyphs + derived legend rows (B9/B10 debt)
     const svg = sheetOf(buildPlanSet(members, [], { walls }), 'Foundation plan')
     const spots = glyphSpots(svg, 'hold-down')
     expect(spots).toHaveLength(hdus.length) // census
-    expect(svg).toContain(esc2(`HDU hold-down — ${hdus.length} pcs`)) // keyed row
+    expect(svg).toContain(esc2(`hold-down (seismic, R602.10.6.4 / lateral design) — ${hdus.length} pcs`)) // keyed row, the Simpson part named (W9)
     // de-collision: every HDU glyph clears every anchor-bolt dot and every
     // other glyph (the seismic plate line packs bolts @4 ft + HDUs at both
     // wall ends) — and no crowded fallback was needed

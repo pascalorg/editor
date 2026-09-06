@@ -58,11 +58,12 @@
  */
 
 import fastening from '../../data/fastening-schedule.json'
-import { profileFamily } from './lgs-profiles'
 import type { Fixture, FixtureKind, Member } from '../core/types'
 import { formatFtIn, toFeet } from '../core/units'
 import { LUMBER_SIZES, type LumberSize } from '../lumber'
 import { circuitSchedule } from './electrical'
+import { HOLD_DOWN, HURRICANE_TIE, modelOf } from './hardware'
+import { profileFamily } from './lgs-profiles'
 
 export type TakeoffRow = {
   section: string
@@ -270,6 +271,20 @@ const ROLE_CONNECTIONS: Partial<Record<Member['role'], Connection[]>> = {
   fascia: [{ nail: '16d-common', perFt: 0.75 }],
 }
 
+/** "Simpson LUS28 ×12, LUS210 ×4 (or equal)": the models on the members of one role, most common first. */
+export function modelsSummary(members: Member[], role: Member['role']): string {
+  const counts = new Map<string, number>()
+  for (const m of members) {
+    if (m.role !== role) continue
+    const model = modelOf(m.label) ?? 'unspecified'
+    counts.set(model, (counts.get(model) ?? 0) + 1)
+  }
+  const parts = [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([model, n]) => `${model} ×${n}`)
+  return parts.length > 0 ? `Simpson ${parts.join(', ')} (or equal)` : 'unspecified'
+}
+
 /** Hardware nail loads (json `hardware` block). */
 const HANGER_NAILS = fastening.hardware['joist-hanger'].nailsPer
 const TIE_NAILS = fastening.hardware['hurricane-tie'].nailsPer
@@ -431,7 +446,13 @@ export function computeTakeoff(
       engineeredHeaders.length,
       'pcs',
     )
-    push('Wall framing', 'Engineered header (LVL/PSL — by supplier)', 'linear feet', round1(lf), 'lf')
+    push(
+      'Wall framing',
+      'Engineered header (LVL/PSL — by supplier)',
+      'linear feet',
+      round1(lf),
+      'lf',
+    )
   }
 
   // Framing nails from the member counts (per-role connection list).
@@ -459,12 +480,8 @@ export function computeTakeoff(
   const hasSheathingMembers = members.some(
     (m) => m.role === 'sheathing' && m.system === 'wall-framing',
   )
-  const hasDrywallMembers = members.some(
-    (m) => m.role === 'drywall' && m.system === 'wall-framing',
-  )
-  const wspSheets = hasSheathingMembers
-    ? 0
-    : Math.ceil((areas.wallSheathingM2 ?? 0) / SHEET_M2)
+  const hasDrywallMembers = members.some((m) => m.role === 'drywall' && m.system === 'wall-framing')
+  const wspSheets = hasSheathingMembers ? 0 : Math.ceil((areas.wallSheathingM2 ?? 0) / SHEET_M2)
   // Subfloor books from the DECK MEMBERS when the floor engine emitted
   // them (LOD-400 audit B3: the area path booked 33 sheets against zero
   // geometry — booked == built now); the area path stays as the LOD-200
@@ -478,7 +495,13 @@ export function computeTakeoff(
   )
   const drywallSheets = hasDrywallMembers ? 0 : Math.ceil((areas.drywallM2 ?? 0) / SHEET_M2)
   if (wspSheets > 0) {
-    push('Sheathing', 'Wall sheathing 7/16" WSP', '4x8 sheets, gross (openings cut out)', wspSheets, 'sheets')
+    push(
+      'Sheathing',
+      'Wall sheathing 7/16" WSP',
+      '4x8 sheets, gross (openings cut out)',
+      wspSheets,
+      'sheets',
+    )
     addNails('8d-common', wspSheets * fastening.connections['wallSheathing-sheet'].count)
   }
   if (subfloorSheets > 0) {
@@ -552,9 +575,7 @@ export function computeTakeoff(
     }
     const section = SECTION_OF[m.system]
     const detail =
-      section === 'Foundation'
-        ? (FOUNDATION_POUR[m.role] ?? 'other pours')
-        : 'lintels/beams'
+      section === 'Foundation' ? (FOUNDATION_POUR[m.role] ?? 'other pours') : 'lintels/beams'
     const key = `${section}|${detail}`
     const pour = concretePours.get(key) ?? { section, detail, m3: 0 }
     pour.m3 += m.dims[0] * m.dims[1] * m.dims[2]
@@ -688,7 +709,10 @@ export function computeTakeoff(
       (m) =>
         m.system === 'wall-framing' &&
         m.profile !== undefined &&
-        (m.role === 'stud' || m.role === 'king-stud' || m.role === 'trimmer' || m.role === 'cripple'),
+        (m.role === 'stud' ||
+          m.role === 'king-stud' ||
+          m.role === 'trimmer' ||
+          m.role === 'cripple'),
     ).length
     if (verticals > 0) {
       push(
@@ -817,9 +841,7 @@ export function computeTakeoff(
     // its lap factor, so a purchaser knows this number carries no waste.
     const underTiled = members.some(
       (m) =>
-        m.role === 'sheathing' &&
-        m.system === 'roof-framing' &&
-        m.label?.includes('under-tile'),
+        m.role === 'sheathing' && m.system === 'roof-framing' && m.label?.includes('under-tile'),
     )
     // Stated waste (B21e): net member area stays the quantity; the +10%
     // offcut order figure prints beside it. The under-tile caveat is a
@@ -882,8 +904,7 @@ export function computeTakeoff(
   }
 
   // ---- STEEL hardware: counted by ROLE (never label regex) ----
-  const roleCount = (role: Member['role']): number =>
-    members.filter((m) => m.role === role).length
+  const roleCount = (role: Member['role']): number => members.filter((m) => m.role === role).length
   const holdDowns = roleCount('hold-down')
   const plateWashers = roleCount('plate-washer')
   const hangers = roleCount('hanger')
@@ -927,7 +948,13 @@ export function computeTakeoff(
     push('Foundation', 'Plate washers 3x3', 'SDC D₀–D₂ (R602.11.1)', plateWashers, 'pcs')
   }
   if (holdDowns > 0) {
-    push('Foundation', 'Hold-downs', 'braced wall ends (seismic)', holdDowns, 'pcs')
+    push(
+      'Foundation',
+      'Hold-downs',
+      `Simpson ${HOLD_DOWN.model} or equal — braced wall ends (seismic)`,
+      holdDowns,
+      'pcs',
+    )
   }
   if (portalStraps > 0) {
     push(
@@ -974,11 +1001,43 @@ export function computeTakeoff(
     )
   }
   if (hangers > 0) {
-    push('Floor', 'Joist hangers', 'LUS-series @ girders/headers', hangers, 'pcs')
+    push(
+      'Floor',
+      'Joist hangers',
+      `${modelsSummary(members, 'hanger')} @ girders / headers / ledgers`,
+      hangers,
+      'pcs',
+    )
     addNails('10d-common', hangers * HANGER_NAILS)
   }
+  const postBases = roleCount('post-base')
+  if (postBases > 0) {
+    push(
+      'Foundation',
+      'Post bases',
+      `${modelsSummary(members, 'post-base')} — posts on pads, 5/8" anchor each (R407.3 / R507.4.1)`,
+      postBases,
+      'pcs',
+    )
+  }
+  const postCaps = roleCount('post-cap')
+  if (postCaps > 0) {
+    push(
+      'Floor',
+      'Post caps',
+      `${modelsSummary(members, 'post-cap')} — dropped beam to post`,
+      postCaps,
+      'pcs',
+    )
+  }
   if (hurricaneTies > 0) {
-    push('Roof', 'Hurricane ties', 'rafter/plate uplift (R802.11)', hurricaneTies, 'pcs')
+    push(
+      'Roof',
+      'Hurricane ties',
+      `Simpson ${HURRICANE_TIE.model} or equal — rafter/plate uplift (R802.11)`,
+      hurricaneTies,
+      'pcs',
+    )
     addNails('8d-common', hurricaneTies * TIE_NAILS)
   }
 
@@ -1040,7 +1099,8 @@ export function computeTakeoff(
       linesetRuns.add(m.sourceId.replace(/^lineset-(?:suction|liquid)-/, ''))
     } else if (m.role === 'pipe-run' || m.role === 'vent-stack') {
       const sizeIn = Math.round((Math.min(m.dims[1], m.dims[2]) / 0.0254) * 8) / 8
-      const materialName = m.material === 'copper' ? 'Copper' : m.material === 'pvc' ? 'PVC' : 'Pipe'
+      const materialName =
+        m.material === 'copper' ? 'Copper' : m.material === 'pvc' ? 'PVC' : 'Pipe'
       const key = `${m.system}|${materialName}|${sizeIn}`
       const tally = pipeTallies.get(key) ?? {
         section: SECTION_OF[m.system],
@@ -1097,8 +1157,7 @@ export function computeTakeoff(
   // DISCHARGE pipe books above as ordinary ¾" copper lf; these are the
   // fixtures/fabrications around the tank. Straps: one physical strap =
   // one sourceId (wh-strap-upper / wh-strap-lower), several band segments.
-  const whCount = (sid: string): number =>
-    members.some((m) => m.sourceId === sid) ? 1 : 0
+  const whCount = (sid: string): number => (members.some((m) => m.sourceId === sid) ? 1 : 0)
   const tpValves = whCount('wh-tp-valve')
   const whPans = whCount('wh-pan')
   const whStands = whCount('wh-stand')
@@ -1161,7 +1220,13 @@ export function computeTakeoff(
     )
   }
   if (seCableLf > 0) {
-    push('Electrical', 'SE cable 2 AWG Cu', 'street → meter → panel (NEC 230)', round1(seCableLf), 'lf')
+    push(
+      'Electrical',
+      'SE cable 2 AWG Cu',
+      'street → meter → panel (NEC 230)',
+      round1(seCableLf),
+      'lf',
+    )
   }
   // ---- grounding electrode system (B12): rows mirror the members 1:1 ----
   const groundRods = members.filter((m) => m.role === 'ground-rod').length
@@ -1226,7 +1291,8 @@ export function computeTakeoff(
     if (m.role === 'pipe-run' && m.sourceId.startsWith('lineset-')) continue // soft copper — bent, not fitted
     if (m.role === 'pipe-run') {
       const sizeIn = Math.round((Math.min(m.dims[1], m.dims[2]) / 0.0254) * 8) / 8
-      const materialName = m.material === 'copper' ? 'Copper' : m.material === 'pvc' ? 'PVC' : 'Pipe'
+      const materialName =
+        m.material === 'copper' ? 'Copper' : m.material === 'pvc' ? 'PVC' : 'Pipe'
       const key = `${m.system}|${materialName}|${sizeIn}|${m.sourceId}`
       const chain = fittingChains.get(key) ?? {
         section: SECTION_OF[m.system],
@@ -1321,10 +1387,18 @@ export function computeTakeoff(
   // B14a: every outdoor WR receptacle wears an extra-duty while-in-use
   // cover [NEC 406.9(B)(1)] — a real line item, booked 1:1 with the boxes.
   const inUseCovers = fixtures.filter((f) => f.kind === 'receptacle-wr-gfci').length
-  if (gangBoxes > 0) push('Electrical', 'Device boxes (1-gang)', 'receptacles + switches', gangBoxes, 'pcs')
+  if (gangBoxes > 0)
+    push('Electrical', 'Device boxes (1-gang)', 'receptacles + switches', gangBoxes, 'pcs')
   if (inUseCovers > 0)
-    push('Electrical', 'In-use covers (extra-duty)', 'NEC 406.9(B) wet-location while-in-use', inUseCovers, 'pcs')
-  if (ceilingBoxes > 0) push('Electrical', 'Ceiling boxes', 'lights + smoke/CO alarms', ceilingBoxes, 'pcs')
+    push(
+      'Electrical',
+      'In-use covers (extra-duty)',
+      'NEC 406.9(B) wet-location while-in-use',
+      inUseCovers,
+      'pcs',
+    )
+  if (ceilingBoxes > 0)
+    push('Electrical', 'Ceiling boxes', 'lights + smoke/CO alarms', ceilingBoxes, 'pcs')
   if (panelCans > 0) push('Electrical', 'Panel cans', 'load center enclosures', panelCans, 'pcs')
 
   // ---- Electrical circuits (panel schedule) ----
@@ -1354,9 +1428,7 @@ export function computeTakeoff(
     kindCounts.set(f.kind, entry)
   }
   if (condensers.length > 0) {
-    const totalTons = round1(
-      condensers.reduce((sum, f) => sum + (Number(f.meta?.tons) || 0), 0),
-    )
+    const totalTons = round1(condensers.reduce((sum, f) => sum + (Number(f.meta?.tons) || 0), 0))
     // PER-UNIT tonnage on the row (Manual-J-lite batch): '2 × 3 tons', with
     // the sizing basis the fixture labels carry — the buy line must say what
     // each cabinet IS, not only the sum. Mixed per-unit tonnage (no engine
@@ -1496,7 +1568,13 @@ export function takeoffCsv(rows: TakeoffRow[]): string {
   return [
     'section,item,detail,quantity,unit',
     ...rows.map((r) =>
-      [csvField(r.section), csvField(r.item), csvField(r.detail), String(r.quantity), csvField(r.unit)].join(','),
+      [
+        csvField(r.section),
+        csvField(r.item),
+        csvField(r.detail),
+        String(r.quantity),
+        csvField(r.unit),
+      ].join(','),
     ),
   ].join('\n')
 }
