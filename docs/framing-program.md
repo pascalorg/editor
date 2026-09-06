@@ -616,4 +616,10 @@ W13 Finishes: PlanCrafters' style palettes applied — siding / roofing / trim /
   entrance belongs uphill); the stem height is not yet fed back into the
   entrance policy (a deck on a 36 in stem reads fine, a slab landing does
   not arise); the USGS read is ~12 s and holes interpolate (2 of 81
-  unread on the Placerville run).
+  unread on the Placerville run). Live Bones on that run: "Hillside: the ground
+  under this level falls 136.09\" — footings stepped down the hill", "3 walls
+  on the garage pad at grade (48\" below the platform)", the porch deck's posts
+  stepping down the slope in Framing view. Note: the editor saves the scene
+  to the DB only through the Save button (autosave is localStorage), so a
+  dev-server HMR reload mid-run drops the in-memory scene — do the live
+  checks with no source edits in flight.
