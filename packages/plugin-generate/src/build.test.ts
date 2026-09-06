@@ -101,8 +101,15 @@ describe('Poppy builds into Pascal nodes', () => {
     const seg = ofType(ops, 'roof-segment')[0] as N
     expect(seg.roofType).toBe('gable')
     expect(seg.pitch).toBeCloseTo((Math.atan(9 / 12) * 180) / Math.PI, 2)
-    expect(seg.rotation).toBeCloseTo(-Math.PI / 2, 6) // ridge along the depth: gables front and back
+    expect(Math.abs(Math.sin(seg.rotation))).toBeCloseTo(1, 6) // ridge along the depth: gables front and back
     expect(seg.width).toBeGreaterThan(seg.depth)
+    expect(seg.wallHeight).toBe(0) // seated on the plate
+    const level0 = ofType(ops, 'level')[0] as N
+    expect(seg.position[1]).toBeCloseTo(level0.height, 6)
+    // every exterior wall knows what it carries
+    const roles = ofType(ops, 'wall').filter((w) => w.metadata.wallType === 'ext2x6').map((w) => w.metadata.roof?.role)
+    expect(roles.every((r) => r === 'eave' || r === 'gable-end')).toBe(true)
+    expect(roles.filter((r) => r === 'gable-end').length).toBe(2)
     const level = ofType(ops, 'level')[0] as N
     expect(level.height).toBeCloseTo(2.7432, 4)
   })

@@ -37,6 +37,7 @@
         "@pascal-app/plugin-bones": "workspace:*",
         "@pascal-app/plugin-generate": "workspace:*",
         "@pascal-app/plugin-plans": "*",
+        "@pascal-app/plugin-roof": "workspace:*",
         "@pascal-app/plugin-sections": "*",
         "@pascal-app/plugin-sheets": "*",
         "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#1c04ec9ccb3fa8124ec56dfc1026567cbbc51aef",
@@ -363,6 +364,9 @@
     "packages/plugin-generate": {
       "name": "@pascal-app/plugin-generate",
       "version": "0.1.0",
+      "dependencies": {
+        "@pascal-app/plugin-roof": "workspace:*",
+      },
       "devDependencies": {
         "@pascal/typescript-config": "*",
         "@types/react": "^19",
@@ -390,6 +394,25 @@
       "peerDependencies": {
         "@pascal-app/core": ">=0.9.1 <1",
         "@pascal-app/editor": ">=0.9.1 <1",
+        "lucide-react": "*",
+        "react": "^18 || ^19",
+        "react-dom": "^18 || ^19",
+        "zustand": "^5",
+      },
+    },
+    "packages/plugin-roof": {
+      "name": "@pascal-app/plugin-roof",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@pascal/typescript-config": "*",
+        "@types/react": "^19",
+        "@types/react-dom": "^19",
+        "typescript": "^5",
+      },
+      "peerDependencies": {
+        "@pascal-app/core": ">=0.9.1 <2",
+        "@pascal-app/editor": ">=0.9.1 <2",
+        "@pascal-app/viewer": ">=0.9.1 <2",
         "lucide-react": "*",
         "react": "^18 || ^19",
         "react-dom": "^18 || ^19",
@@ -919,6 +942,8 @@
     "@pascal-app/plugin-generate": ["@pascal-app/plugin-generate@workspace:packages/plugin-generate"],
 
     "@pascal-app/plugin-plans": ["@pascal-app/plugin-plans@workspace:packages/plugin-plans"],
+
+    "@pascal-app/plugin-roof": ["@pascal-app/plugin-roof@workspace:packages/plugin-roof"],
 
     "@pascal-app/plugin-sections": ["@pascal-app/plugin-sections@workspace:packages/plugin-sections"],
 
@@ -2239,6 +2264,8 @@
     "@pascal-app/plugin-generate/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@pascal-app/plugin-plans/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
+
+    "@pascal-app/plugin-roof/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 
     "@pascal-app/plugin-sections/typescript": ["typescript@5.9.3", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-jl1vZzPDinLr9eUt3J/t7V6FgNEw9QjvBPdysz9KfQDD41fQrC2Y4vKQdiaUpFT4bXlb1RHhLpp8wtm6M5TgSw=="],
 

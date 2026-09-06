@@ -11,6 +11,7 @@ import { registerEditorHostPanel, registerSitePlanContributor } from '@pascal-ap
 import { builtinPlugin } from '@pascal-app/nodes'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import { generateHostPanel, generatePlugin, registerGenerateCommands } from '@pascal-app/plugin-generate'
+import { registerRoofCommands, roofHostPanel, roofPlugin } from '@pascal-app/plugin-roof'
 import {
   registerBuiltinSheetProviders,
   registerSheetDrawingProvider,
@@ -107,6 +108,10 @@ extendPluginDiscovery(async () => [bonesPlugin])
 // Opt-in: Bones ships uninstalled — users enable it per scene from the
 // Plugins panel (engineering X-ray is a specialist view, not a default).
 registerEditorHostPanel({ ...bonesHostPanel, defaultInstalled: false })
+// Auto roof: the roof derived from the walls (Ctrl+K → Auto roof). Generate builds through the same engine.
+extendPluginDiscovery(async () => [roofPlugin])
+registerEditorHostPanel(roofHostPanel)
+registerRoofCommands()
 // Generate: complete houses from a seed or a template (Ctrl+K → Generate house).
 extendPluginDiscovery(async () => [generatePlugin])
 registerEditorHostPanel(generateHostPanel)

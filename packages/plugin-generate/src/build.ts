@@ -25,6 +25,7 @@ import {
   type RoomKind,
   validateDocument,
 } from './document'
+import { deriveRoof, type RoofIntent, roofNodesFor, type WallInput } from '@pascal-app/plugin-roof'
 import { edgePieces, GRID_IN_DEFAULT, mergeRuns, outlineRing, pointInRing, type Run } from './geometry'
 import { type StylePreset, styleFor } from './styles'
 
@@ -518,8 +519,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     parentId: levelId,
   }
 
-  // ── roof ──────────────────────────────────────────────────────────────
-  const roofOps = roofFor(doc, style, rooms, toLocal, exteriorT, ceilingM, levelId, warnings)
+  // ── roof: derived from the walls by the auto roof engine ─────────────
+  const roofOps = roofFor(doc, style, ops, ceilingM, levelId, warnings)
 
   // ── building on the parcel ────────────────────────────────────────────
   let position: [number, number, number] = [0, 0, 0]
@@ -593,26 +594,17 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
 }
 
 /**
- * One roof segment over the house's own rectangle and one over each garage
- * wing, so an L-shaped footprint does not get a single box roof hanging over
- * the notch. Wings ride under a ridge that runs front-to-back (the gable
- * faces the street, the way an attached garage is roofed) and Pascal's roof
- * system merges the segments where they meet.
- *
- * Seating: the roof group sits at the top of the plate (the ceiling height)
- * with NO knee wall — `wallHeight 0` — so the eave line IS the plate and the
- * framing bears on it. Segment footprints run to the exterior wall CENTRE
- * lines and carry the exterior wall thickness, so the gable band the segment
- * renders above the plate is the same wall as the one below it; the eave
- * overhang is measured from that wall line in plan, as PlanCrafters does,
- * and converted to the slope length the node stores.
+ * The roof comes from the walls, through the auto roof engine (plugin-roof):
+ * the exterior loop becomes masses, each mass a segment seated on the plate,
+ * gable or hip by the style's vocabulary and the massing, a shed rising away
+ * from the street. The plan document's intent (form, pitch, overhang, the
+ * gable edges) is the engine's intent; the house faces its own −Z. Every
+ * exterior wall op is stamped with the role it carries under that roof.
  */
 function roofFor(
   doc: NormalizedDocument,
   style: StylePreset,
-  rooms: readonly NormalizedRoom[],
-  toLocal: (p: Pt) => Pt,
-  exteriorT: number,
+  ops: NodeOp[],
   ceilingM: number,
   levelId: string,
   warnings: string[],
@@ -620,66 +612,37 @@ function roofFor(
   const form = doc.roof.form === 'auto' ? style.roofForm : doc.roof.form
   const pitchTwelfths = doc.roof.pitch ?? style.pitch
   const overhangIn = doc.roof.overhang ?? style.overhangIn
-  const roofId = generateId('roof')
-  const gables = doc.roof.gables
-  const roofType = form === 'flat' ? 'flat' : form === 'shed' ? 'shed' : form === 'hip' ? 'hip' : 'gable'
+  const walls: WallInput[] = ops
+    .filter((op) => op.node.type === 'wall')
+    .map((op) => ({
+      id: op.node.id as string,
+      start: op.node.start as [number, number],
+      end: op.node.end as [number, number],
+      thickness: op.node.thickness as number,
+      frontSide: op.node.frontSide as string,
+      backSide: op.node.backSide as string,
+    }))
+  const edgeNormal: Record<PlanEdge, [number, number]> = { front: [0, -1], back: [0, 1], left: [-1, 0], right: [1, 0] }
+  const intent: RoofIntent = {
+    form: form === 'flat' ? 'flat' : form === 'shed' ? 'shed' : form === 'hip' ? 'hip' : 'gable',
+    pitchTwelfths,
+    overhang: overhangIn * IN,
+    style: style.key,
+    gables: doc.roof.gables.map((g) => edgeNormal[g]),
+    frontDir: [0, -1],
+  }
+  const result = deriveRoof(walls, ceilingM, intent)
+  warnings.push(...result.warnings)
   if (form === 'flat') warnings.push('flat roof: drawn as a flat roof segment; the roof plan shows no pitch arrows.')
-  const pitchDeg = round((Math.atan(pitchTwelfths / 12) * 180) / Math.PI, 3)
-  const ops: NodeOp[] = [
-    {
-      node: {
-        id: roofId,
-        type: 'roof',
-        name: 'Roof',
-        parentId: levelId,
-        position: [0, round(ceilingM), 0],
-        rotation: 0,
-        metadata: { generatedBy: GENERATED_BY, intent: { form, pitchInTwelfths: pitchTwelfths, overhangIn, gables } },
-      },
-      parentId: levelId,
-    },
-  ]
-  const segment = (name: string, rect: { u0: number; v0: number; u1: number; v1: number }, ridgeAlongDepth: boolean) => {
-    const w = rect.u1 - rect.u0
-    const d = rect.v1 - rect.v0
-    const centre = toLocal([(rect.u0 + rect.u1) / 2, (rect.v0 + rect.v1) / 2])
-    ops.push({
-      node: {
-        id: generateId('rseg'),
-        type: 'roof-segment',
-        name,
-        parentId: roofId,
-        position: [centre[0], 0, centre[1]],
-        rotation: ridgeAlongDepth ? -Math.PI / 2 : 0,
-        roofType,
-        width: round((ridgeAlongDepth ? d : w) * IN),
-        depth: round((ridgeAlongDepth ? w : d) * IN),
-        wallHeight: 0,
-        wallThickness: round(exteriorT, 6),
-        pitch: pitchDeg,
-        overhang: round((overhangIn * IN) / Math.cos((pitchDeg * Math.PI) / 180)),
-        metadata: { generatedBy: GENERATED_BY },
-      },
-      parentId: roofId,
-    })
+  for (const op of ops) {
+    const role = result.roles[op.node.id as string]
+    if (!role) continue
+    op.node.metadata = { ...((op.node.metadata as Record<string, unknown> | undefined) ?? {}), roof: { role } }
   }
-  const house = rooms.filter((r) => r.kind !== 'garage')
-  const wings = rooms.filter((r) => r.kind === 'garage')
-  const main = {
-    u0: Math.min(...house.map((r) => r.u0)),
-    v0: Math.min(...house.map((r) => r.v0)),
-    u1: Math.max(...house.map((r) => r.u1)),
-    v1: Math.max(...house.map((r) => r.v1)),
-  }
-  const W = main.u1 - main.u0
-  const D = main.v1 - main.v0
-  // Ridge direction: gable ends on front/back put the ridge along the depth;
-  // otherwise along the width (the long way for a hip).
-  const ridgeAlongDepth =
-    gables.includes('front') || gables.includes('back') || (form !== 'gable' && D > W && !gables.length)
-  segment('Main roof', main, ridgeAlongDepth)
-  for (const wing of wings) segment(`${wing.name} roof`, wing, true)
-  return ops
+  return roofNodesFor(result, levelId, { roofId: generateId('roof'), segmentId: () => generateId('rseg') }, {
+    source: GENERATED_BY,
+    intent: { form, pitchInTwelfths: pitchTwelfths, overhangIn, gables: doc.roof.gables },
+  })
 }
 
 /** "HALL / HALL 2" reads as "HALL": a numbered twin of a member is the same room continued. */

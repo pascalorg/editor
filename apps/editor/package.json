@@ -15,6 +15,7 @@
     "@iconify/react": "^6.0.2",
     "@pascal-app/plugin-bones": "workspace:*",
     "@pascal-app/plugin-generate": "workspace:*",
+    "@pascal-app/plugin-roof": "workspace:*",
     "@pascal-app/plugin-plans": "*",
     "@pascal-app/plugin-sheets": "*",
     "@pascal-app/plugin-sections": "*",

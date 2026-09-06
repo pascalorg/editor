@@ -1,7 +1,7 @@
 {
-  "name": "@pascal-app/plugin-generate",
+  "name": "@pascal-app/plugin-roof",
   "version": "0.1.0",
-  "description": "Generate — complete houses from a seed or an authored plan document, the way PlanCrafters' Generate / Random buttons do: declare intent (rooms, adjacency, roof, style), derive the engineering (walls, openings, zones, slab, roof) as Pascal nodes.",
+  "description": "Auto roof — derive the roof from the exterior walls the way PlanCrafters' roof engine does: the wall loop becomes masses, each mass a plate-seated roof segment, gable or hip by the style's vocabulary and the massing, a shed rising away from the street, every wall told what it carries.",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",
@@ -23,6 +23,7 @@
   "peerDependencies": {
     "@pascal-app/core": ">=0.9.1 <2",
     "@pascal-app/editor": ">=0.9.1 <2",
+    "@pascal-app/viewer": ">=0.9.1 <2",
     "lucide-react": "*",
     "react": "^18 || ^19",
     "react-dom": "^18 || ^19",
@@ -33,8 +34,5 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "typescript": "^5"
-  },
-  "dependencies": {
-    "@pascal-app/plugin-roof": "workspace:*"
   }
 }

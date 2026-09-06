@@ -180,11 +180,11 @@ W1  DONE 2026-09-05 — Roof seated on the plate (Bones + tool + generate + view
     - Roof tool: sit on the plate when the level has walls, `wallHeight 0`.
     - Generate: origin `ceiling`, `wallHeight 0`.
     - Byte pins recaptured with the intended-change note.
-W2  Auto roof engine `packages/plugin-roof`: exterior loop → collinear merge →
+W2  DONE 2026-09-05 — Auto roof engine `packages/plugin-roof`: exterior loop → collinear merge →
     pop-out continuation → rectangle masses → massing class → style gable policy +
     sanity rules → segments (plate-seated) → coverage gate → hip fallback.
     Rail panel + commands. Generate calls it.
-W3  Walls under every roof form: per-wall roof role metadata (eave / gable-end /
+W3  DONE with W1 + W2 — Walls under every roof form: per-wall roof role metadata (eave / gable-end /
     shed-high / rake) written by the engine; framing from W1; elevations unchanged.
 W4  "Framing only" view mode in Bones (shell hidden, members for every system) +
     panel button + command.
@@ -233,3 +233,34 @@ W9  Simpson hardware catalogue in Bones: H2.5A rafter/truss to plate, A35 at
   recaptured (flat held), numeric expectations moved to the seated convention,
   new `roof-framing.seat.test.ts` states the contract. Bones 1,988 / editor 805
   / generate 16 green. Not yet verified visually in the browser — next.
+
+- 2026-09-05 night: **W2 landed** — `packages/plugin-roof`. Pure engine
+  (`geometry.ts`, `derive.ts`): trace the exterior wall loop (every corner joins
+  exactly two exterior walls, else fall back to the walls' box with a warning),
+  merge collinear runs, work in the building's own frame (u along the longest
+  edge), decompose the rectilinear footprint into the largest rectangles (main
+  first, wings after), absorb a shallow pop-out on a gable end (≤ 8 ft, ≥ 60 %
+  of the end) under the continued main roof, classify POPPED massing with
+  PlanCrafters' `popSide` (> 24" toward the street → hip everything), apply the
+  style vocabulary (farmhouse all gable, craftsman main + street-facing caps,
+  cottage main only, ranch/modern hip, explicit plan-document gables override
+  and fix the ridge axis), run each wing's ridge OUT from its shared wall and
+  reach it into the neighbour by its run so the planes meet (the perpendicular
+  gable pair Bones frames as a valley), sheds rise away from the street with a
+  knee wall only where a mass sits inboard of the governing low eave, coverage
+  gate (< 98 % → one hip over the box, warned), and a role for every exterior
+  wall (eave / gable-end / hip-end / shed-high / rake / flat). Segments are
+  plate-seated (`wallHeight 0`, `wallThickness` = the exterior wall). Scene glue
+  (`run.ts`): rebuild replaces only roofs tagged `pascal:roof`, writes
+  `metadata.roof.role` on the walls, reads the street direction from the site's
+  front edge turned by the building yaw. Rail panel (form / style / pitch /
+  overhang / Rebuild + last run) and `roof.auto` command. Generate now builds
+  its roof through the engine (`roofFor` → `deriveRoof`) and stamps wall roles;
+  its `roofFor` box roof is gone. 19 engine tests; generate 16; editor app
+  typechecks. Verified live: a rolled farmhouse with a garage (main gable +
+  perpendicular garage gable reaching into the main, 100 % coverage) and the
+  same house rebuilt as a ranch through the panel (two hips). One observation
+  for the roller, not the roof: a 45 × 44 ft two-column parti gives a 22 ft run
+  and a 14.7 ft rise at 8:12 — PlanCrafters' policy A5 says very wide boxes may
+  prefer a hip per style; no threshold is written there, so none was invented.
+- W3 is covered: roles come from W2, the framing above the plate from W1.
