@@ -274,13 +274,13 @@ describe('landing, rails and pillars by style (PlanCrafters entrance presets)', 
     expect(deck.elevation).toBeCloseTo(0.05 - 1 * IN, 9)
     expect(deck.thickness).toBeCloseTo(1.5 * IN, 9)
     expect((deck.metadata as { floor: string }).floor).toBe('deck')
-    expect(deck.materialPreset).toBe('wood-floorplank1')
+    expect(deck.materialPreset).toBe('library:wood-floorplank1')
     expect(r.summary?.landing).toBe('wood')
     expect(r.summary?.guard).toBe(true)
     expect(r.summary?.risers).toBe(3) // 17 in of rise
     const stair = byType(r.ops, 'stair')[0]!
     expect(stair.fillToFloor).toBe(false)
-    expect(stair.materialPreset).toBe('wood-floorplank1')
+    expect(stair.materialPreset).toBe('library:wood-floorplank1')
   })
 
   test('the moderns get cable rail on slim posts; the rest balusters', () => {
@@ -301,7 +301,7 @@ describe('landing, rails and pillars by style (PlanCrafters entrance presets)', 
     const pier = byType(ranch.ops, 'column')[0]!
     expect(pier.name).toBe('Porch pier')
     expect(pier.width).toBeCloseTo(13 * IN, 9)
-    expect(pier.materialPreset).toBe('concrete-stucco')
+    expect(pier.materialPreset).toBe('library:concrete-stucco')
     const craftsman = byType(
       porchFor(input({ style: styleFor('craftsman'), policy: 'entry' }), ids()).ops,
       'column',

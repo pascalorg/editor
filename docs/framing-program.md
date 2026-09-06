@@ -202,7 +202,7 @@ W6  DONE — Porch: PlanCrafters' entrance tool built from Pascal nodes
     flat canopy) on the beam line. Slab houses now stand 8 in above grade
     (`SLAB_ABOVE_GRADE_M`). Rear patio / deck, the porch beam and post footings in
     Bones, and a covered-under-the-main-roof porch are later.
-W7  Styles and palettes applied: exterior assembly + siding colour + trim + door +
+W7  Styles and palettes applied — DONE 2026-09-06 (see W13 log): exterior assembly + siding colour + trim + door +
     roof material per style, palette rolled as a unit.
 W8  Wall assemblies by role: plumbing 2x6 behind wet rooms, garage separation,
     porch pony walls, exterior by style; new cited presets; assemblies panel with
@@ -248,7 +248,7 @@ W12 Structural sections and details tied to framing variables — details sheet 
     porch ledger, deck ledger, stair — drawn from the SAME numbers Bones frames
     with (rafter size, plate height, stem height, footing), placed on the sheets;
     review every section the Sections plugin cuts today against the framed model.
-W13 Finishes: PlanCrafters' style palettes applied — siding / roofing / trim /
+W13 Finishes — DONE 2026-09-06 (see log; muntin grids recorded not drawn, no finish schedule sheet yet): PlanCrafters' style palettes applied — siding / roofing / trim /
     door colours per style rolled as a unit, window styles (grid, casing, sill),
     wood styles; the finish schedule on the sheets (part of W7, listed here so
     nothing is lost).
@@ -659,3 +659,43 @@ W13 Finishes: PlanCrafters' style palettes applied — siding / roofing / trim /
   back yet); the eave dimension text can brush a leader; no SIP variants;
   the section sheet is still the member cut, not PlanCrafters' section2d
   with poché + labels — that's the next sheet to bring over.
+
+- 2026-09-06 late: **W7 / W13 landed — finishes as one unit.** `finishes.ts`
+  ports PlanCrafters' curated theme palettes (gen.js PALETTES, 4–5 per
+  style, siding surface + trim + door + shutter that go together), its
+  siding and roofing material table (model.js), the products and paint
+  codes (STYLES sidingProduct / roofProduct / paintSW / trimSW) and the
+  per-style fenestration (STYLE_WINDOWS + stampWindowStyle). The roll draws
+  the palette index as its LAST draw (every earlier outcome holds);
+  `finishesFor(style, palette)` resolves one `Finishes` unit and
+  `applyFinishes` puts it on the nodes: the siding on every exterior
+  wall's `slots.exterior` (lap and board-and-batten as the library's
+  `siding-*` textures; stucco colours as flat colour presets on the stucco
+  assembly), the roofing on the roof node (`topMaterialPreset` for the
+  comp-shingle / tile textures, a metal `topMaterial` for standing seam),
+  the trim on the fascia (`edgeMaterialPreset`), the window frames, the
+  painted porch posts and the garage door, the door colour on the entrance
+  doors, the wood style on deck rails (cedar / walnut / natural hex, or the
+  trim colour when painted) and the plank texture on decks and wood
+  stairs; window operation types follow the style (double-hung / sliders /
+  fixed picture glass, a wide low light becomes a picture window, a small
+  privacy light a slider). Colours that must be library references snap
+  to the NEAREST flat colour preset read from `MATERIAL_CATALOG` — never a
+  hand-typed id. The unit is recorded on the building
+  (`metadata.finishes`) and printed on the run / panel line ("sage / cream
+  / walnut door: lap siding — sage · comp shingle — charcoal · trim … ·
+  windows double-hung, colonial grid (recorded, not drawn) · rails painted
+  trim · James Hardie HardiePlank / CertainTeed Landmark · paint SW 7005,
+  trim SW 6258"). **Defect found and fixed:** the porch / deck slab, stair
+  and stucco pier presets were bare ids (`wood-floorplank1`) — Pascal's
+  renderers resolve `library:<id>` only, so every deck and landing had
+  been drawing in the default material; prefixed now. Tests:
+  `finishes.test.ts` 9 (tables against the catalog, snapping, wrap,
+  per-style units, applied to a rolled farmhouse and the Poppy), porch /
+  build expectations updated (the Poppy's egress windows are sliders now,
+  by style) — generate 68, typecheck clean. Honest gaps: no muntin grids
+  in Pascal windows (recorded, not drawn); board-and-batten white uses the
+  cream texture, batten black the charcoal one, shingle green / slate the
+  classic shingle texture (the library has no closer textures — labelled);
+  shutters are recorded, not modelled; no finish schedule sheet in the
+  Bones plan set yet (the schedule rides the building metadata).

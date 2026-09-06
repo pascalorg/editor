@@ -48,9 +48,12 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
   const warnings: string[] = []
   const mode = options.mode ?? '1story'
   const style = styleFor(options.style ?? pick(rng, STYLE_KEYS))
-  const beds = options.beds ?? (mode === 'adu' ? pick(rng, [2, 2, 3] as const) : pick(rng, [2, 3, 3, 4] as const))
+  const beds =
+    options.beds ??
+    (mode === 'adu' ? pick(rng, [2, 2, 3] as const) : pick(rng, [2, 3, 3, 4] as const))
   const baths =
-    options.baths ?? (mode === 'adu' ? 1 : beds >= 4 ? pick(rng, [2, 3] as const) : pick(rng, [1, 2, 2] as const))
+    options.baths ??
+    (mode === 'adu' ? 1 : beds >= 4 ? pick(rng, [2, 3] as const) : pick(rng, [1, 2, 2] as const))
   let garage = options.garage ?? (mode === 'adu' ? false : rng() < 0.6)
 
   // ── program, jittered ────────────────────────────────────────────────
@@ -116,7 +119,10 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
   // Wide-lot bias: spend slack on the great room and bedrooms.
   if (wide && Number.isFinite(maxW)) {
     let g = 200
-    const target = Math.min(maxW - 2, snap((gd + kd) * (1.6 + rng() * 0.15)) + (garage ? garageW : 0))
+    const target = Math.min(
+      maxW - 2,
+      snap((gd + kd) * (1.6 + rng() * 0.15)) + (garage ? garageW : 0),
+    )
     while (totalW() < target && g-- > 0) {
       if (greatW < snap(gd * 1.5)) greatW += 0.5
       else if (bedW < 13.5) bedW += 0.5
@@ -146,7 +152,9 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
   let D = snap(Math.max(leftD(), rightD(), garage ? garageD : 0))
   const maxD = options.maxDepthFt ?? Number.POSITIVE_INFINITY
   if (D > maxD) {
-    warnings.push(`the plan is ${D.toFixed(1)}' deep but the buildable depth is ${maxD.toFixed(1)}' — it will cross the rear setback.`)
+    warnings.push(
+      `the plan is ${D.toFixed(1)}' deep but the buildable depth is ${maxD.toFixed(1)}' — it will cross the rear setback.`,
+    )
   }
   if (gd < bedD + HALL_W) gd = snap(bedD + HALL_W) // the foyer must reach the hall
   // Stretch the shallower column to the back wall: the primary bedroom first
@@ -162,7 +170,12 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
   const attach: NonNullable<PlanDocument['attach']> = []
   // Bedroom band across the front of the left column.
   let u = 0
-  const bedNames = beds === 2 ? ['BEDROOM 2'] : beds === 3 ? ['BEDROOM 2', 'BEDROOM 3'] : ['BEDROOM 2', 'BEDROOM 3', 'BEDROOM 4']
+  const bedNames =
+    beds === 2
+      ? ['BEDROOM 2']
+      : beds === 3
+        ? ['BEDROOM 2', 'BEDROOM 3']
+        : ['BEDROOM 2', 'BEDROOM 3', 'BEDROOM 4']
   for (const name of bedNames) {
     rooms.push({ name, kind: 'bed', x: u, y: 0, w: bedW, d: bedD, floor: 'LVP' })
     attach.push(['HALL', name, 'door'])
@@ -177,7 +190,15 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
   rooms.push({ name: 'HALL', kind: 'hall', x: 0, y: hallTop, w: CW, d: HALL_W, floor: 'LVP' })
   const legTop = hallTop + HALL_W
   const legBottom = legTop + legLen
-  rooms.push({ name: 'HALL 2', kind: 'hall', x: bathW, y: legTop, w: HALL_W, d: legLen, floor: 'LVP' })
+  rooms.push({
+    name: 'HALL 2',
+    kind: 'hall',
+    x: bathW,
+    y: legTop,
+    w: HALL_W,
+    d: legLen,
+    floor: 'LVP',
+  })
   attach.push(['HALL', 'HALL 2', 'zone'])
   // Service column left of the hall leg.
   let v = legTop
@@ -190,30 +211,95 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
     attach.push(['HALL 2', 'POWDER', 'door'])
     v += powderD
   }
-  rooms.push({ name: 'LINEN', kind: 'closet', x: 0, y: v, w: bathW, d: legBottom - v, floor: 'LVP' })
+  rooms.push({
+    name: 'LINEN',
+    kind: 'closet',
+    x: 0,
+    y: v,
+    w: bathW,
+    d: legBottom - v,
+    floor: 'LVP',
+  })
   attach.push(['HALL 2', 'LINEN', 'door'])
   // Suite column right of the hall leg: closet, then the bath against the bedroom.
   const suiteX = bathW + HALL_W
   const suiteW = CW - suiteX
   if (baths >= 2) {
-    rooms.push({ name: 'WIC', kind: 'closet', x: suiteX, y: legTop, w: suiteW, d: legLen - 8, floor: 'LVP' })
-    rooms.push({ name: 'PRIMARY BATH', kind: 'bath', x: suiteX, y: legBottom - 8, w: suiteW, d: 8, floor: 'TILE' })
+    rooms.push({
+      name: 'WIC',
+      kind: 'closet',
+      x: suiteX,
+      y: legTop,
+      w: suiteW,
+      d: legLen - 8,
+      floor: 'LVP',
+    })
+    rooms.push({
+      name: 'PRIMARY BATH',
+      kind: 'bath',
+      x: suiteX,
+      y: legBottom - 8,
+      w: suiteW,
+      d: 8,
+      floor: 'TILE',
+    })
     attach.push(['PRIMARY BATH', 'WIC', 'door'])
     attach.push(['PRIMARY BEDROOM', 'PRIMARY BATH', 'door'])
   } else {
-    rooms.push({ name: 'WIC', kind: 'closet', x: suiteX, y: legTop, w: suiteW, d: legLen, floor: 'LVP' })
+    rooms.push({
+      name: 'WIC',
+      kind: 'closet',
+      x: suiteX,
+      y: legTop,
+      w: suiteW,
+      d: legLen,
+      floor: 'LVP',
+    })
     attach.push(['PRIMARY BEDROOM', 'WIC', 'door'])
   }
   // The primary bedroom across the back of the left column.
-  rooms.push({ name: 'PRIMARY BEDROOM', kind: 'bed', x: 0, y: legBottom, w: CW, d: D - legBottom, primary: true, floor: 'LVP' })
+  rooms.push({
+    name: 'PRIMARY BEDROOM',
+    kind: 'bed',
+    x: 0,
+    y: legBottom,
+    w: CW,
+    d: D - legBottom,
+    primary: true,
+    floor: 'LVP',
+  })
   attach.push(['HALL 2', 'PRIMARY BEDROOM', 'door'])
   // Public rooms on the right: foyer + great room across the front, dining and kitchen behind, laundry behind the kitchen.
   rooms.push({ name: 'FOYER', kind: 'entry', x: CW, y: 0, w: foyW, d: gd, floor: 'TILE' })
-  rooms.push({ name: 'GREAT ROOM', kind: 'living', x: CW + foyW, y: 0, w: greatW, d: gd, floor: 'LVP' })
+  rooms.push({
+    name: 'GREAT ROOM',
+    kind: 'living',
+    x: CW + foyW,
+    y: 0,
+    w: greatW,
+    d: gd,
+    floor: 'LVP',
+  })
   rooms.push({ name: 'DINING', kind: 'dining', x: CW, y: gd, w: dw, d: kd, floor: 'LVP' })
   rooms.push({ name: 'KITCHEN', kind: 'kitchen', x: CW + dw, y: gd, w: kw, d: kd, floor: 'TILE' })
-  rooms.push({ name: 'MUD ROOM', kind: 'entry', x: CW, y: gd + kd, w: dw, d: laundryBandD, floor: 'TILE' })
-  rooms.push({ name: 'LAUNDRY', kind: 'laundry', x: CW + dw, y: gd + kd, w: kw, d: laundryBandD, floor: 'TILE' })
+  rooms.push({
+    name: 'MUD ROOM',
+    kind: 'entry',
+    x: CW,
+    y: gd + kd,
+    w: dw,
+    d: laundryBandD,
+    floor: 'TILE',
+  })
+  rooms.push({
+    name: 'LAUNDRY',
+    kind: 'laundry',
+    x: CW + dw,
+    y: gd + kd,
+    w: kw,
+    d: laundryBandD,
+    floor: 'TILE',
+  })
   attach.push(['LAUNDRY', 'MUD ROOM', 'door'])
   attach.push(['FOYER', 'GREAT ROOM', 'open'])
   attach.push(['HALL', 'FOYER', 'open'])
@@ -222,13 +308,22 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
   attach.push(['DINING', 'KITCHEN', 'zone'])
   attach.push(['KITCHEN', 'LAUNDRY', 'door'])
   if (garage) {
-    rooms.push({ name: 'GARAGE', kind: 'garage', x: CW + RW, y: 0, w: garageW, d: garageD, floor: 'CONC' })
+    rooms.push({
+      name: 'GARAGE',
+      kind: 'garage',
+      x: CW + RW,
+      y: 0,
+      w: garageW,
+      d: garageD,
+      floor: 'CONC',
+    })
     attach.push(['GARAGE', 'KITCHEN', 'door'])
   }
 
   // ── roof intent from the style ───────────────────────────────────────
   const W = CW + RW
-  const gables: PlanEdge[] = style.roofForm === 'gable' ? (D > W ? ['front', 'back'] : ['left', 'right']) : []
+  const gables: PlanEdge[] =
+    style.roofForm === 'gable' ? (D > W ? ['front', 'back'] : ['left', 'right']) : []
   const document: PlanDocument = {
     roomcode: 1,
     name: `${style.label} ${beds} bd / ${baths} ba (seed ${seed})`,
@@ -240,7 +335,7 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
     rooms,
     attach,
     frontDoor: 'FOYER',
-    finishes: { siding: style.siding, roofMat: style.roofMat },
+    finishes: { siding: style.siding, roofMat: style.roofMat, palette: Math.floor(rng() * 8) },
   }
   return {
     seed,

@@ -2,6 +2,7 @@
  * Panel state: the options form, the seed, and the last run's summary.
  */
 import { create } from 'zustand'
+import type { Finishes } from './finishes'
 import type { FoundationChoice } from './foundation'
 import type { PorchSummary } from './porch'
 import { randomSeed } from './rng'
@@ -28,6 +29,7 @@ export type RunSummary = {
   porch?: PorchSummary | null
   rear?: PorchSummary | null
   foundation?: FoundationChoice | null
+  finishes?: Finishes | null
 }
 
 type GenerateState = {

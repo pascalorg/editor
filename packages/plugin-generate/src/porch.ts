@@ -299,7 +299,7 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
       holes: [],
       elevation: round(landingTop),
       thickness: wood ? DECKING_THICKNESS : inches(4),
-      materialPreset: wood ? 'wood-floorplank1' : 'concrete-raw',
+      materialPreset: wood ? 'library:wood-floorplank1' : 'library:concrete-raw',
       // Bones: a 'deck' is framed (ledger, joists, beam on posts to grade); a
       // 'porch-slab' is poured at its elevation.
       metadata: { ...meta, floor: wood ? 'deck' : 'porch-slab' },
@@ -339,7 +339,7 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         baseStyle: 'none',
         capitalStyle: 'none',
         edgeSoftness: 0.008,
-        ...(pillar.stucco ? { materialPreset: 'concrete-stucco' } : {}),
+        ...(pillar.stucco ? { materialPreset: 'library:concrete-stucco' } : {}),
         metadata: meta,
       },
       parentId: input.levelId,
@@ -375,7 +375,7 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         stepCount: risers,
         thickness: inches(4),
         fillToFloor: !wood,
-        materialPreset: wood ? 'wood-floorplank1' : 'concrete-raw',
+        materialPreset: wood ? 'library:wood-floorplank1' : 'library:concrete-raw',
         railingMode: rise > GUARD_REQUIRED_ABOVE ? 'both' : 'none',
         railingHeight: inches(34),
         children: [ids.stairSegment],

@@ -154,6 +154,7 @@ function applyDocument(
     porch: built.ok ? built.porch : null,
     rear: built.ok ? built.rear : null,
     foundation: built.ok ? built.foundation : null,
+    finishes: built.ok ? built.finishes : null,
   }
   if (!built.ok) return summary
   if (reuse) {

@@ -75,7 +75,7 @@ describe('Poppy builds into Pascal nodes', () => {
       expect(w.length).toBe(1)
       expect(w[0]?.width).toBeCloseTo(1.2192, 4)
       expect(w[0]?.height).toBeCloseTo(1.524, 4)
-      expect(w[0]?.windowType).toBe('double-hung')
+      expect(w[0]?.windowType).toBe('sliding') // the Poppy is a modern: sliders (finishes.ts WINDOW_STYLES)
       const wall = walls.find((x) => x.id === w[0]?.parentId) as N
       expect(wall.metadata.wallType).toBe('ext2x6')
     }

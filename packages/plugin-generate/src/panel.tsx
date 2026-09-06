@@ -5,6 +5,7 @@
  */
 import { LotAddressBox } from '@pascal-app/plugin-lot'
 import { Dices, Home, RefreshCw, Sparkles } from 'lucide-react'
+import { describeFinishes } from './finishes'
 import { generateHouse, generateTemplate } from './run'
 import { useGenerate } from './store'
 import { STYLES } from './styles'
@@ -210,6 +211,12 @@ export default function GeneratePanel() {
                   {S.last.foundation.terrain
                     ? ` · ground under the footprint: ${Math.round(S.last.foundation.terrain.reliefIn)}" of fall`
                     : ''}
+                </>
+              )}
+              {S.last.finishes && (
+                <>
+                  <br />
+                  finishes: {describeFinishes(S.last.finishes)}
                 </>
               )}
               {[S.last.porch, S.last.rear].map((e) =>

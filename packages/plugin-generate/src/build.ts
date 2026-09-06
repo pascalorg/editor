@@ -26,6 +26,7 @@ import {
   type RoomKind,
   validateDocument,
 } from './document'
+import { applyFinishes, type Finishes, finishesFor } from './finishes'
 import { type FoundationChoice, foundationFor, type TerrainUnderFootprint } from './foundation'
 import {
   edgePieces,
@@ -112,6 +113,8 @@ export type BuildResult = {
   rear: PorchSummary | null
   /** Slab or raised, and how far the finish floor stands above grade. */
   foundation: FoundationChoice | null
+  /** The palette applied as one unit (finishes.ts) — siding, roofing, trim, door, windows, wood. */
+  finishes: Finishes | null
 }
 
 type WallRun = Run & {
@@ -172,12 +175,15 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     porch: null,
     rear: null,
     foundation: null,
+    finishes: null,
     buildingId: null,
     levelId: null,
   })
   if (!validation.ok) return empty(validation.errors)
   const doc = normalizeDocument(input)
   const style = styleFor(doc.style)
+  // The finish palette — PlanCrafters' curated theme, one unit per roll (finishes.ts).
+  const finishes = finishesFor(style, doc.finishes.palette)
   const rooms = doc.rooms
   const grid = GRID_IN_DEFAULT
 
@@ -980,6 +986,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
           ffAboveGradeIn: foundation.ffAboveGradeIn,
           source: foundation.source,
         },
+        // the finish schedule — the palette applied below (finishes.ts)
+        finishes,
       },
     },
     parentId: siteId ?? undefined,
@@ -1010,6 +1018,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     ...roofOps,
     ...porchOps,
   ]
+  // ── finishes: the palette on every exterior surface, as one unit ──────
+  applyFinishes(ordered, finishes)
   if (errors.length > 0) return { ...empty(errors), warnings }
   return {
     ok: true,
@@ -1028,6 +1038,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     porch: porchSummary,
     rear: rearSummary,
     foundation,
+    finishes,
     buildingId,
     levelId,
   }
