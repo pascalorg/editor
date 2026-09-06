@@ -243,7 +243,7 @@ W11 Foundations — flat ground DONE; hills DONE 2026-09-06 as W14 (see log; the
     stepped footings and the taller stem / basement from sampled terrain
     (TERRAIN-DATUM-SPEC), Bones reading a wall's `supportSlabId` so the garage
     walls frame down to their slab, dropped girders with piers in the crawl space.
-W12 Structural sections and details tied to framing variables — details sheet DONE 2026-09-06 (see log; section2d port open) (PlanCrafters
+W12 Structural sections and details tied to framing variables — details sheet DONE 2026-09-06, section annotations DONE 2026-09-06 (see log W12b) (PlanCrafters
     details.js + section2d): eave, rake, ridge, foundation / stem / slab edge,
     porch ledger, deck ledger, stair — drawn from the SAME numbers Bones frames
     with (rafter size, plate height, stem height, footing), placed on the sheets;
@@ -883,3 +883,30 @@ W15 Ceiling joists as a framer laps them — DONE 2026-09-06 (see log; the open 
   clean. Honest gaps: the porch grazing the garage wing by 0.6 m still
   warns (perpendicular, not a join); the wing's remaining west gable
   studs are gone but no attic separation wall is framed in their place.
+
+- 2026-09-06 small hours: **W12b — the section reads like a section
+  (the PlanCrafters section2d port).** Section A-A was a cut band of
+  members with a grade line at the level plane and no numbers. Now
+  `sectionAnnotations` measures the FRAMED members the plane slices —
+  the eave walls' plates (outer faces, plate tops), the ridge board, the
+  fascias nearest each wall (outer face), the continuous footing — and
+  prints: FF above grade (the foundation's finish-floor height — the
+  grade line now sits there, 18 in under a raised floor, not at the
+  level plane), FF to top of plate, plate to ridge, footing below grade,
+  out-to-out of studs and both overhangs, to the nearest half inch; and
+  callouts with leaders for the rafters + pitch, the roof deck, ceiling
+  joists, studs + plates + batt + gypsum, the floor (joists on the PT
+  mudsill or the slab on its vapor retarder) and the stem on its footing
+  with the anchor bolts — the same `detailVariables` the typical details
+  print, so the two sheets can never disagree. The fit steps one ratio
+  coarser while the drawing leaves under 250 px for the strings and
+  slides left so the callout column has room; short vertical strings
+  label horizontally beside the line. A porch roof's fascia in the band
+  no longer reads as this section's eave (each side's tip is the fascia
+  nearest the wall beyond it). Verified on the rendered farmhouse and
+  ranch sheets. Tests: plan-set +3 (a synthetic transverse slice — every
+  string and callout with the numbers off the members; the slab variant;
+  a lone joist prints nothing) — Bones 2,085, typecheck clean. Honest
+  gaps: no wall poché fill (the cut plates / studs print as the dark cut
+  rects the band already drew); no interior-wall strings; the longitudinal
+  section is still not cut.

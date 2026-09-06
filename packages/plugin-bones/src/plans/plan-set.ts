@@ -25,7 +25,12 @@ import {
   PLUMBING_COLORS,
   plumbingPipeColor,
 } from './circuit-colors'
-import { type DetailFoundation, detailsSheetBodies, detailVariables } from './details'
+import {
+  type DetailFoundation,
+  detailsSheetBodies,
+  detailVariables,
+  stationSpacingIn,
+} from './details'
 
 export type PlanSheet = { title: string; svg: string }
 
@@ -2008,7 +2013,7 @@ const STROKE_LEGEND_NAMES: Record<string, string> = {
  * panels, outlookers) project both local axes exactly — the yaw-only read
  * fed sectionCutX/crossesCut a garbage extent off a rolled panel's euler
  * (B6 round-1 F1). */
-function xExtentOf(m: Member): number {
+export function xExtentOf(m: Member): number {
   const [rx, ry, rz] = m.rotation
   if (rx !== 0) {
     const cy = Math.cos(ry)
@@ -2025,7 +2030,7 @@ function xExtentOf(m: Member): number {
 /** |x-component| of the member's unit long axis. Below AXIS_CROSS_MIN the
  * axis lies parallel-ish to the section plane (angle to the plane normal
  * ≥ 60°) — a wall run or stud, not a stick the plane slices across. */
-function axisXFrac(m: Member): number {
+export function axisXFrac(m: Member): number {
   const { a, b } = memberAxis(m, 0)
   const len = Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2])
   return len < 1e-9 ? 0 : Math.abs(b[0] - a[0]) / len
@@ -2043,7 +2048,7 @@ const AXIS_CROSS_MIN = 0.5
  * the plane wins — a clear stud bay when one exists. ONE helper shared by
  * sectionSheet and the wall-plan A-A cut mark, so the mark follows the slide.
  */
-function sectionCutX(members: Member[]): number | null {
+export function sectionCutX(members: Member[]): number | null {
   let minX = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
   for (const m of members) {
@@ -2416,8 +2421,36 @@ function sectionSheet(members: Member[], opts: PlanSetOptions): PlanSheet | null
     ...s,
     opacity: 0.6,
   }))
-  const f = fitSegs(beyond)
-  if (!f) return null
+  const f0 = fitSegs(beyond)
+  if (!f0) return null
+  // W12b: the annotations need room — two dimension columns left of the
+  // drawing, a callout column right of it. Refit one ratio coarser while
+  // the drawing leaves less than that, then slide it left so the callouts
+  // get the slack (the fit centres; the sheet reads better left-anchored).
+  const fieldRight = W - MARGIN - 258
+  const extentPx = (g: NonNullable<typeof f0>): [number, number] => {
+    let lo = Number.POSITIVE_INFINITY
+    let hi = Number.NEGATIVE_INFINITY
+    for (const sgm of beyond) {
+      lo = Math.min(lo, g.sx(sgm.x1), g.sx(sgm.x2))
+      hi = Math.max(hi, g.sx(sgm.x1), g.sx(sgm.x2))
+    }
+    return [lo, hi]
+  }
+  let fitted = f0
+  for (let guard = 0; guard < 3; guard++) {
+    const [lo, hi] = extentPx(fitted)
+    if (fieldRight - MARGIN - (hi - lo) >= 250) break
+    const next = RATIOS[RATIOS.indexOf(fitted.ratio) + 1]
+    if (next === undefined) break
+    const coarser = fitSegs(beyond, next)
+    if (!coarser) break
+    fitted = coarser
+  }
+  const [loPx] = extentPx(fitted)
+  const slide = Math.max(0, loPx - (MARGIN + 70))
+  const fBase = fitted
+  const f: NonNullable<typeof f0> = { ...fBase, sx: (x: number) => fBase.sx(x) - slide }
   // Cut poché rects: sized from dims + yaw — width ≈ the member's thickness
   // across the view at the cut (an oblique crossing widens by 1/|planUx|,
   // capped at the full projected extent), height ≈ its vertical extent at
@@ -2477,13 +2510,295 @@ function sectionSheet(members: Member[], opts: PlanSetOptions): PlanSheet | null
         : `<rect x="${(f.sx(cz) - wPx / 2).toFixed(1)}" y="${(f.sy(-cyW) - hPx / 2).toFixed(1)}" width="${wPx.toFixed(1)}" height="${hPx.toFixed(1)}" fill="#222"${dashed}/>`,
     )
   }
-  const gy = f.sy(0)
+  // W12b: the grade line sits where the foundation put it — the finish
+  // floor's height above grade (a raised floor's 18 in), not the level plane
+  const gradeY = -inches(opts.foundation?.ffAboveGradeIn ?? 0)
+  const gy = f.sy(-gradeY)
   const grade = `<line x1="${MARGIN - 14}" y1="${gy.toFixed(1)}" x2="${W - MARGIN - 258 + 14}" y2="${gy.toFixed(1)}" stroke="#222" stroke-width="2.5"/>`
+  const annotations = sectionAnnotations(members, opts, f, cutX, inBand, crossesCut, gradeY)
   const title = 'Section A-A (transverse)'
   return {
     title,
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#fff"/>${segSvg(beyond, f)}${poche.join('')}${grade}<text x="${MARGIN}" y="${MARGIN + 4}" font-size="11" font-family="Helvetica, Arial, sans-serif" fill="#333">Cut ${BAND.toFixed(1)} m band (plane slid clear of along-plane walls) — dark rects = cut cross-sections the plane slices, open rects = cut rebar, light = beyond</text>${chrome(title, opts, f.scale, strokeLegend(members, inBand, 16), { ratio: f.ratio, northArrow: false })}</svg>`,
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}"><rect width="${W}" height="${H}" fill="#fff"/>${segSvg(beyond, f)}${poche.join('')}${grade}${annotations}<text x="${MARGIN}" y="${MARGIN + 4}" font-size="11" font-family="Helvetica, Arial, sans-serif" fill="#333">Cut ${BAND.toFixed(1)} m band (plane slid clear of along-plane walls) — dark rects = cut cross-sections the plane slices, open rects = cut rebar, light = beyond; dimensions and callouts read from the framed members</text>${chrome(title, opts, f.scale, strokeLegend(members, inBand, 16), { ratio: f.ratio, northArrow: false })}</svg>`,
   }
+}
+
+/**
+ * Section annotations (W12b — the PlanCrafters section2d port): the
+ * dimension strings and callouts a plans examiner reads on a building
+ * section, every number taken from the FRAMED members in the cut band —
+ * grade to finish floor, floor to top of plate, plate to ridge, footing
+ * depth below grade, the building width between the outer stud faces and
+ * the eave overhangs; callouts for the rafters (with the pitch), roof
+ * deck, ceiling joists, studs and plates with the batt, the floor
+ * (joists on the mudsill or the slab on its vapor retarder) and the stem
+ * on its footing — sizes and spacings read by `detailVariables`, the
+ * same variables the typical details print. Every string that has no
+ * member to measure is left out rather than guessed.
+ */
+function sectionAnnotations(
+  members: Member[],
+  opts: PlanSetOptions,
+  f: NonNullable<ReturnType<typeof fitSegs>>,
+  cutX: number,
+  inBand: (m: Member) => boolean,
+  crossesCut: (m: Member) => boolean,
+  gradeY: number,
+): string {
+  const v = detailVariables(members, opts.spec ?? DEFAULT_SPEC, opts.foundation ?? null)
+  const liftOf = (m: Member) => (m.levelId ? (opts.levelBaseY?.[m.levelId] ?? 0) : 0)
+  const top = (m: Member) => m.position[1] + liftOf(m) + m.dims[1] / 2
+  const bottom = (m: Member) => m.position[1] + liftOf(m) - m.dims[1] / 2
+  const band = members.filter((m) => !m.face && m.role !== 'wire-run' && inBand(m))
+  // ---- the geometry the strings measure ----
+  // the two eave walls the plane slices — their PLATES cross it (studs stand
+  // along the plane): outer plate faces = the outer stud faces, plate tops
+  const cutPlates = band.filter(
+    (m) =>
+      m.system === 'wall-framing' &&
+      (m.role === 'top-plate' || m.role === 'cap-plate' || m.role === 'bottom-plate') &&
+      crossesCut(m),
+  )
+  let wallZMin = Number.POSITIVE_INFINITY
+  let wallZMax = Number.NEGATIVE_INFINITY
+  for (const m of cutPlates) {
+    const half = Math.min(m.dims[0], m.dims[2]) / 2
+    wallZMin = Math.min(wallZMin, m.position[2] - half)
+    wallZMax = Math.max(wallZMax, m.position[2] + half)
+  }
+  const haveWalls = Number.isFinite(wallZMin) && wallZMax - wallZMin > 1
+  const plates = band.filter(
+    (m) =>
+      m.system === 'wall-framing' &&
+      (m.role === 'top-plate' || m.role === 'cap-plate') &&
+      crossesCut(m),
+  )
+  const plateTop = plates.length > 0 ? Math.max(...plates.map(top)) : null
+  const ridges = band.filter(
+    (m) => m.system === 'roof-framing' && m.role === 'ridge' && !m.label?.startsWith('Purlin'),
+  )
+  const ridgeTop = ridges.length > 0 ? Math.max(...ridges.map(top)) : null
+  // the eave tips: the fascias the plane slices (a porch roof's fascia in
+  // the band but off the plane is not this section's eave)
+  const fascia = band.filter(
+    (m) => m.system === 'roof-framing' && m.role === 'fascia' && crossesCut(m),
+  )
+  const tails = fascia.length > 0 ? fascia : band.filter((m) => m.role === 'rafter')
+  // each side's eave tip is the fascia NEAREST the wall line beyond it (a
+  // porch roof's fascia further out is that roof's eave, not this one's)
+  let tipZMin = Number.POSITIVE_INFINITY
+  let tipZMax = Number.NEGATIVE_INFINITY
+  let tipY = Number.POSITIVE_INFINITY
+  if (Number.isFinite(wallZMin)) {
+    // the nearest fascia beyond each wall, measured to its OUTER face
+    let leftNear = Number.NEGATIVE_INFINITY
+    let rightNear = Number.POSITIVE_INFINITY
+    for (const m of tails) {
+      const { a, b } = memberAxis(m, liftOf(m))
+      const zLo = Math.min(a[2], b[2]) - m.dims[2] / 2
+      const zHi = Math.max(a[2], b[2]) + m.dims[2] / 2
+      const yLo = Math.min(a[1], b[1])
+      if (zHi < wallZMin - 0.05 && zHi > leftNear) {
+        leftNear = zHi
+        tipZMin = zLo
+        tipY = Math.min(tipY, yLo)
+      }
+      if (zLo > wallZMax + 0.05 && zLo < rightNear) {
+        rightNear = zLo
+        tipZMax = zHi
+        tipY = Math.min(tipY, yLo)
+      }
+    }
+  }
+  const footings = band.filter(
+    (m) => m.system === 'foundation' && m.role === 'footing' && !/Pad footing/i.test(m.label ?? ''),
+  )
+  const footingBottom = footings.length > 0 ? Math.min(...footings.map(bottom)) : null
+  const floorJoists = band.filter((m) => m.system === 'floor-framing' && m.role === 'joist')
+  const modeOf = (values: string[]): string | null => {
+    const counts = new Map<string, number>()
+    for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1)
+    let best: string | null = null
+    let n = 0
+    for (const [v, c] of counts) {
+      if (c > n) {
+        best = v
+        n = c
+      }
+    }
+    return best
+  }
+  const floorJoistSize =
+    floorJoists.length > 0 ? modeOf(floorJoists.map((m) => m.size ?? '')) : null
+  const floorJoistSpacingIn = stationSpacingIn(floorJoists)
+  const cjs = band.filter((m) => m.role === 'ceiling-joist')
+  const deck = band.some((m) => m.system === 'roof-framing' && m.role === 'sheathing')
+
+  // ---- drawing helpers (sheet px) ----
+  const T = (x: number, y: number, s: string, anchor = 'start', size = 9, rotate = 0) =>
+    `<text x="${x.toFixed(1)}" y="${y.toFixed(1)}" font-size="${size}" font-family="Helvetica, Arial, sans-serif" fill="#222" text-anchor="${anchor}"${
+      rotate ? ` transform="rotate(${rotate} ${x.toFixed(1)} ${y.toFixed(1)})"` : ''
+    }>${esc(s)}</text>`
+  const L = (x1: number, y1: number, x2: number, y2: number, w = 0.8) =>
+    `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="#222" stroke-width="${w}"/>`
+  const tick = (x: number, y: number, vertical: boolean) =>
+    vertical ? L(x - 3, y + 3, x + 3, y - 3, 1) : L(x - 3, y + 3, x + 3, y - 3, 1)
+  /** Vertical dimension string at sheet x between world heights yA < yB —
+   * the label runs along a long string, sits horizontally beside a short one. */
+  const dimV = (px: number, yA: number, yB: number, label: string): string => {
+    const a = f.sy(-yA)
+    const b = f.sy(-yB)
+    if (Math.abs(a - b) < 6) return ''
+    const mid = (a + b) / 2
+    const along = Math.abs(a - b) >= label.length * 5.2
+    return (
+      L(px, a, px, b) +
+      tick(px, a, true) +
+      tick(px, b, true) +
+      L(px - 6, a, px + 6, a, 0.5) +
+      L(px - 6, b, px + 6, b, 0.5) +
+      (along ? T(px - 3, mid, label, 'middle', 9, -90) : T(px - 6, mid + 3, label, 'end'))
+    )
+  }
+  /** Horizontal dimension string at sheet y between world z positions. */
+  const dimH = (py: number, zA: number, zB: number, label: string): string => {
+    const a = f.sx(Math.min(zA, zB))
+    const b = f.sx(Math.max(zA, zB))
+    if (b - a < 6) return ''
+    return (
+      L(a, py, b, py) +
+      tick(a, py, false) +
+      tick(b, py, false) +
+      L(a, py - 6, a, py + 6, 0.5) +
+      L(b, py - 6, b, py + 6, 0.5) +
+      T((a + b) / 2, py - 3, label, 'middle')
+    )
+  }
+  const out: string[] = []
+  // plan convention: feet-inches to the nearest half inch
+  const ftIn = (m: number) => formatFtIn(Math.round(Math.max(0, m) / inches(0.5)) * inches(0.5))
+
+  // ---- vertical strings, left of the building ----
+  const leftZ = Number.isFinite(tipZMin) ? Math.min(tipZMin, wallZMin) : wallZMin
+  if (Number.isFinite(leftZ)) {
+    // the tall strings on the outer column, the short foundation strings inboard
+    const px = Math.max(MARGIN + 16, f.sx(leftZ) - 30)
+    const pxIn = px + 18
+    {
+      const ff = 0
+      if (ff - gradeY > 0.05)
+        out.push(dimV(pxIn, gradeY, ff, `${ftIn(ff - gradeY)} FF ABOVE GRADE`))
+      if (plateTop !== null && plateTop > ff + 0.5) {
+        out.push(dimV(px, ff, plateTop, `${ftIn(plateTop - ff)} FF TO T.O. PLATE`))
+      }
+      if (plateTop !== null && ridgeTop !== null && ridgeTop > plateTop + 0.3) {
+        out.push(dimV(px, plateTop, ridgeTop, `${ftIn(ridgeTop - plateTop)} PLATE TO RIDGE`))
+      }
+      if (footingBottom !== null && gradeY - footingBottom > 0.1) {
+        out.push(dimV(px, footingBottom, gradeY, `${ftIn(gradeY - footingBottom)} FTG BELOW GRADE`))
+      }
+    }
+  }
+  // ---- horizontal strings: the width between the outer stud faces, the overhangs ----
+  if (haveWalls && footingBottom !== null) {
+    const py = f.sy(-footingBottom) + 22
+    if (py < H - TITLE_H - 24)
+      out.push(dimH(py, wallZMin, wallZMax, `${ftIn(wallZMax - wallZMin)} OUT TO OUT OF STUDS`))
+  } else if (haveWalls) {
+    const py = f.sy(-Math.min(0, gradeY)) + 22
+    out.push(dimH(py, wallZMin, wallZMax, `${ftIn(wallZMax - wallZMin)} OUT TO OUT OF STUDS`))
+  }
+  if (haveWalls && Number.isFinite(tipZMin) && Number.isFinite(tipY)) {
+    const py = f.sy(-tipY) + 14
+    if (wallZMin - tipZMin > 0.1)
+      out.push(dimH(py, tipZMin, wallZMin, `${ftIn(wallZMin - tipZMin)} OH`))
+    if (tipZMax - wallZMax > 0.1)
+      out.push(dimH(py, wallZMax, tipZMax, `${ftIn(tipZMax - wallZMax)} OH`))
+  }
+
+  // ---- callouts, a column right of the building with leaders ----
+  const rightZ = Number.isFinite(tipZMax) ? Math.max(tipZMax, wallZMax) : wallZMax
+  const fieldRight = W - MARGIN - 258
+  if (Number.isFinite(rightZ)) {
+    const colX = Math.min(fieldRight - 4, f.sx(rightZ) + 26)
+    const room = fieldRight - f.sx(rightZ)
+    const callouts: { y: number; z: number; lines: string[] }[] = []
+    if (v.roof !== null && plateTop !== null && ridgeTop !== null && haveWalls) {
+      const z = wallZMax * 0.55
+      const y = plateTop + (ridgeTop - plateTop) * (1 - Math.abs(z) / Math.max(0.1, wallZMax))
+      callouts.push({
+        y,
+        z,
+        lines: [
+          `${v.roof.rafter} RAFTERS @ ${v.roof.spacingIn}" O.C. — ${v.roof.pitchRise}:12`,
+          ...(deck ? ['7/16" WSP ROOF DECK (R803.2)'] : []),
+          ...(v.roof.ties ? ['H2.5A TIES @ EA. RAFTER'] : []),
+        ],
+      })
+    }
+    if (v.roof?.ceilingJoist && cjs.length > 0 && plateTop !== null) {
+      const cj = cjs[0] as Member
+      callouts.push({
+        y: plateTop + cj.dims[1] / 2,
+        z: wallZMax * 0.35,
+        lines: [`${v.roof.ceilingJoist} CLG JOISTS @ ${v.roof.ceilingJoistSpacingIn}" O.C.`],
+      })
+    }
+    if (haveWalls && plateTop !== null) {
+      callouts.push({
+        y: plateTop / 2,
+        z: wallZMax,
+        lines: [
+          `${v.stud.size} STUDS @ ${v.stud.spacingIn}" O.C., ${v.stud.plates === 2 ? 'DBL' : 'SGL'} TOP PLATE`,
+          `${v.stud.batt} BATT, ${v.layers.drywallIn}" GYP INSIDE`,
+        ],
+      })
+    }
+    if (v.foundation !== null && haveWalls) {
+      const fnd = v.foundation
+      if (fnd.type === 'raised' && floorJoistSize) {
+        callouts.push({
+          y: -0.12,
+          z: wallZMax * 0.7,
+          lines: [
+            `${floorJoistSize} FLOOR JOISTS${floorJoistSpacingIn ? ` @ ${floorJoistSpacingIn}" O.C.` : ''} ON PT MUDSILL`,
+          ],
+        })
+      } else if (fnd.type === 'slab') {
+        callouts.push({
+          y: -inches(fnd.slabIn) * 0.5,
+          z: wallZMax * 0.7,
+          lines: [`${fnd.slabIn}" CONC. SLAB ON VAPOR RETARDER (R506)`],
+        })
+      }
+      if (footingBottom !== null) {
+        callouts.push({
+          y: footingBottom + inches(fnd.footingHIn) / 2,
+          z: wallZMax,
+          lines: [
+            `${fnd.stemWIn}" STEM ON ${fnd.footingWIn}"×${fnd.footingHIn}" CONT. FTG${fnd.stepped ? ', STEPPED' : ''}`,
+            `5/8" A.B. @ ${Math.round(fnd.boltSpacingIn / 12)}'-0" O.C.${fnd.plateWashers ? ' W/ PLATE WASHERS' : ''}`,
+          ],
+        })
+      }
+    }
+    // stack the labels top-down at the column, each leader to its point
+    callouts.sort((p, q) => q.y - p.y)
+    let lastBottom = MARGIN + 18
+    const wide = room > 170
+    for (const c of callouts) {
+      const py = f.sy(-c.y)
+      const tx = wide ? colX : fieldRight - 4
+      const anchor = wide ? 'start' : 'end'
+      const ty = Math.max(py, lastBottom + 4)
+      const h = c.lines.length * 11
+      out.push(L(f.sx(c.z), py, wide ? tx - 4 : tx + 2, ty + 3, 0.7))
+      out.push(`<circle cx="${f.sx(c.z).toFixed(1)}" cy="${py.toFixed(1)}" r="1.6" fill="#222"/>`)
+      c.lines.forEach((line, i) => out.push(T(tx, ty + 3 + i * 11, line, anchor)))
+      lastBottom = ty + h
+    }
+  }
+  return out.join('')
 }
 
 /**

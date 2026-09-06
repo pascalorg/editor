@@ -4256,7 +4256,9 @@ describe('NIGHT-10 — keyed hardware glyphs + derived legend rows (B9/B10 debt)
     const svg = sheetOf(buildPlanSet(members, [], { walls }), 'Foundation plan')
     const spots = glyphSpots(svg, 'hold-down')
     expect(spots).toHaveLength(hdus.length) // census
-    expect(svg).toContain(esc2(`hold-down (seismic, R602.10.6.4 / lateral design) — ${hdus.length} pcs`)) // keyed row, the Simpson part named (W9)
+    expect(svg).toContain(
+      esc2(`hold-down (seismic, R602.10.6.4 / lateral design) — ${hdus.length} pcs`),
+    ) // keyed row, the Simpson part named (W9)
     // de-collision: every HDU glyph clears every anchor-bolt dot and every
     // other glyph (the seismic plate line packs bolts @4 ft + HDUs at both
     // wall ends) — and no crowded fallback was needed
@@ -4688,5 +4690,191 @@ describe('LGS paper identity (Phase 1 round-1 F3)', () => {
     // and no generic rect fleck is drawn for the strap role (glyph replaces it)
     const glyphCount = (svg.match(/M-3\.4 -1\.3 H3\.4/g) ?? []).length
     expect(glyphCount).toBeGreaterThanOrEqual(straps.length + 1) // per-mark + legend swatch
+  })
+})
+
+describe('W12b: section annotations read the framed members', () => {
+  // a transverse slice: eave-wall plates along X at z = ±3 (outer faces ±3.07),
+  // studs, a ridge 1.76 m over the plates, fascias 0.4 m past the walls, a
+  // footing 0.6 m under the floor, floor joists, ceiling joists and rafters
+  const along = (over: Partial<Member>): Member => member({ rotation: [0, 0, 0], ...over })
+  const walls = [-3, 3].flatMap((z) => [
+    along({
+      system: 'wall-framing',
+      role: 'bottom-plate',
+      size: '2x6',
+      dims: [6, 0.038, 0.14],
+      length: 6,
+      position: [0, 0.019, z],
+      sourceId: 'w',
+    }),
+    along({
+      system: 'wall-framing',
+      role: 'top-plate',
+      size: '2x6',
+      dims: [6, 0.038, 0.14],
+      length: 6,
+      position: [0, 2.683, z],
+      sourceId: 'w',
+    }),
+    along({
+      system: 'wall-framing',
+      role: 'cap-plate',
+      size: '2x6',
+      dims: [6, 0.038, 0.14],
+      length: 6,
+      position: [0, 2.721, z],
+      sourceId: 'w',
+    }),
+    along({
+      system: 'wall-framing',
+      role: 'stud',
+      size: '2x6',
+      dims: [0.038, 2.626, 0.14],
+      length: 2.626,
+      position: [0.4, 1.35, z],
+      sourceId: 'w',
+    }),
+    along({
+      system: 'foundation',
+      role: 'footing',
+      dims: [6, 0.2, 0.4],
+      length: 6,
+      position: [0, -0.5, z],
+      material: 'concrete',
+      size: undefined,
+      sourceId: 'f',
+    }),
+    along({
+      system: 'foundation',
+      role: 'stemwall',
+      dims: [6, 0.35, 0.2],
+      length: 6,
+      position: [0, -0.2, z],
+      material: 'concrete',
+      size: undefined,
+      sourceId: 'f',
+    }),
+    along({
+      system: 'roof-framing',
+      role: 'fascia',
+      size: '2x6',
+      dims: [6, 0.14, 0.038],
+      length: 6,
+      position: [0, 2.6, z * (3.4 / 3)],
+      sourceId: 'r',
+    }),
+  ])
+  const roof = [
+    along({
+      system: 'roof-framing',
+      role: 'ridge',
+      size: '2x8',
+      dims: [6, 0.184, 0.038],
+      length: 6,
+      position: [0, 4.408, 0],
+      sourceId: 'r',
+    }),
+    ...[-1, 1].map((s) =>
+      member({
+        system: 'roof-framing',
+        role: 'rafter',
+        size: '2x6',
+        dims: [3.6, 0.14, 0.038],
+        length: 3.6,
+        position: [0.4, 3.6, s * 1.6],
+        rotation: [0, -Math.PI / 2, s * 0.5],
+        sourceId: 'r',
+      }),
+    ),
+    member({
+      system: 'roof-framing',
+      role: 'ceiling-joist',
+      size: '2x6',
+      dims: [6, 0.14, 0.038],
+      length: 6,
+      position: [0.4, 2.81, 0],
+      rotation: [0, -Math.PI / 2, 0],
+      sourceId: 'r',
+    }),
+    member({
+      system: 'roof-framing',
+      role: 'ceiling-joist',
+      size: '2x6',
+      dims: [6, 0.14, 0.038],
+      length: 6,
+      position: [0.8, 2.81, 0],
+      rotation: [0, -Math.PI / 2, 0],
+      sourceId: 'r',
+    }),
+    member({
+      system: 'roof-framing',
+      role: 'ceiling-joist',
+      size: '2x6',
+      dims: [6, 0.14, 0.038],
+      length: 6,
+      position: [1.2, 2.81, 0],
+      rotation: [0, -Math.PI / 2, 0],
+      sourceId: 'r',
+    }),
+    along({
+      system: 'roof-framing',
+      role: 'sheathing',
+      dims: [6, 0.011, 1.2],
+      length: 6,
+      position: [0, 3.5, 1.5],
+      rotation: [0.5, 0, 0],
+      material: 'osb',
+      size: undefined,
+      sourceId: 'r',
+    }),
+  ]
+  const floor = [0.4, 0.8, 1.2].map((x) =>
+    member({
+      system: 'floor-framing',
+      role: 'joist',
+      size: '2x10',
+      dims: [6, 0.235, 0.038],
+      length: 6,
+      position: [x, -0.12, 0],
+      rotation: [0, -Math.PI / 2, 0],
+      sourceId: 's',
+    }),
+  )
+  const members = [...walls, ...roof, ...floor]
+  const sectionOf = (opts: Parameters<typeof buildPlanSet>[2]) =>
+    buildPlanSet(members, [], opts).find((s) => s.title.startsWith('Section A-A'))?.svg ?? ''
+
+  test('a raised floor: every string and callout, the numbers off the members', () => {
+    const svg = sectionOf({ foundation: { type: 'raised', ffAboveGradeIn: 18 } })
+    expect(svg).toContain(`20'-1.5&quot; OUT TO OUT OF STUDS`) // 6.14 m plate face to plate face
+    expect(svg).toContain(`9'-0&quot; FF TO T.O. PLATE`) // cap plate top 2.74
+    expect(svg).toContain(`5'-9.5&quot; PLATE TO RIDGE`) // ridge top 4.5
+    expect(svg).toContain(`1'-6&quot; FF ABOVE GRADE`)
+    expect(svg).toContain(`0'-5.5&quot; FTG BELOW GRADE`) // footing bottom −0.6, grade −0.457: 5.6 in
+    expect(svg).toContain(`OH`) // the fascias 0.4 m past the walls
+    expect(svg).toContain('2x6 RAFTERS @')
+    expect(svg).toContain('7/16&quot; WSP ROOF DECK')
+    expect(svg).toContain('2x6 CLG JOISTS @ 16&quot; O.C.')
+    expect(svg).toContain('2x6 STUDS @')
+    expect(svg).toContain('DBL TOP PLATE')
+    expect(svg).toContain('2x10 FLOOR JOISTS @ 16&quot; O.C. ON PT MUDSILL')
+    expect(svg).toContain('CONT. FTG')
+    expect(svg).not.toContain('CONC. SLAB')
+  })
+
+  test('a slab: the slab callout, the grade 8 in under the floor', () => {
+    const svg = sectionOf({ foundation: { type: 'slab', ffAboveGradeIn: 8 } })
+    expect(svg).toContain('CONC. SLAB ON VAPOR RETARDER (R506)')
+    expect(svg).toContain(`0'-8&quot; FF ABOVE GRADE`)
+    expect(svg).not.toContain('FLOOR JOISTS')
+  })
+
+  test('nothing to measure, nothing guessed: a lone joist prints no strings', () => {
+    const svg =
+      buildPlanSet([member({})], [], {}).find((s) => s.title.startsWith('Section A-A'))?.svg ?? ''
+    expect(svg).not.toContain('OUT TO OUT')
+    expect(svg).not.toContain('TO T.O. PLATE')
+    expect(svg).not.toContain('RAFTERS @')
   })
 })
