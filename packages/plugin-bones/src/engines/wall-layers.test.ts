@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_SPEC } from '../core/spec'
 import type { RoomSlice, WallSlice } from '../core/types'
-import { exteriorSide, layoutWallLayers, type WallLayerOverride } from './wall-layers'
+import { inches } from '../core/units'
+import { exteriorSide, garageSideOf, layoutWallLayers, type WallLayerOverride } from './wall-layers'
 
 const spec400 = { ...DEFAULT_SPEC, detail: '400' as const }
 
@@ -47,7 +48,12 @@ describe('exteriorSide', () => {
     // on blank-canvas scenes before zones exist.
     const slab = {
       id: 'slab_1',
-      polygon: [[0, 0], [6, 0], [6, 4], [0, 4]] as [number, number][],
+      polygon: [
+        [0, 0],
+        [6, 0],
+        [6, 4],
+        [0, 4],
+      ] as [number, number][],
       holes: [],
       elevation: 0,
       thickness: 0.2,
@@ -61,7 +67,16 @@ describe('exteriorSide', () => {
     expect(exteriorSide(wall(), [roomAbove])).toBe(-1)
     expect(exteriorSide(wall({ exterior: false }), [roomAbove])).toBe(null)
     // rooms on both sides → ambiguous → null
-    const roomBelow: RoomSlice = { ...roomAbove, id: 'room_b', polygon: [[0, -4], [6, -4], [6, 0], [0, 0]] }
+    const roomBelow: RoomSlice = {
+      ...roomAbove,
+      id: 'room_b',
+      polygon: [
+        [0, -4],
+        [6, -4],
+        [6, 0],
+        [0, 0],
+      ],
+    }
     expect(exteriorSide(wall(), [roomAbove, roomBelow])).toBe(null)
   })
 })
@@ -92,7 +107,8 @@ describe('layoutWallLayers', () => {
 
   test('exterior wall (NY→vinyl): gypsum inside; sheathing→WRB→cladding outside, stacked outward', () => {
     const layers = layoutWallLayers([wall()], [roomAbove], spec400, 'NY')
-    const bySide = (side: number) => layers.filter((m) => Math.sign(m.position[2] as number) === side)
+    const bySide = (side: number) =>
+      layers.filter((m) => Math.sign(m.position[2] as number) === side)
     // interior face (+1, toward the room): gypsum only
     const inside = bySide(1)
     expect(inside.every((m) => m.role === 'drywall')).toBe(true)
@@ -103,9 +119,7 @@ describe('layoutWallLayers', () => {
       expect(outside.some((m) => m.role === role)).toBe(true)
     }
     const offsetOf = (role: string) =>
-      Math.abs(
-        (outside.find((m) => m.role === role)?.position[2] as number) ?? 0,
-      )
+      Math.abs((outside.find((m) => m.role === role)?.position[2] as number) ?? 0)
     expect(offsetOf('sheathing')).toBeLessThan(offsetOf('wrb'))
     expect(offsetOf('wrb')).toBeLessThan(offsetOf('cladding'))
     // sheathing is the researched 7/16" WSP
@@ -160,7 +174,9 @@ describe('layoutWallLayers', () => {
   })
 
   test('LOD 200 emits no layers', () => {
-    expect(layoutWallLayers([wall()], [roomAbove], { ...DEFAULT_SPEC, detail: '200' }, 'NY')).toEqual([])
+    expect(
+      layoutWallLayers([wall()], [roomAbove], { ...DEFAULT_SPEC, detail: '200' }, 'NY'),
+    ).toEqual([])
   })
 })
 
@@ -173,7 +189,17 @@ describe('layoutWallLayers', () => {
 describe('layoutWallLayers — per-wall cladding override', () => {
   test('stucco override on one wall: cement plaster + doubled WRB there only', () => {
     const wallB = wall({ id: 'wall_B', start: [0, 8], end: [6, 8] })
-    const roomB: RoomSlice = { ...roomAbove, id: 'room_b2', polygon: [[0, 8], [6, 8], [6, 12], [0, 12]], boundaryWallIds: ['wall_B'] }
+    const roomB: RoomSlice = {
+      ...roomAbove,
+      id: 'room_b2',
+      polygon: [
+        [0, 8],
+        [6, 8],
+        [6, 12],
+        [0, 12],
+      ],
+      boundaryWallIds: ['wall_B'],
+    }
     const layers = layoutWallLayers(
       [wall(), wallB],
       [roomAbove, roomB],
@@ -182,7 +208,8 @@ describe('layoutWallLayers — per-wall cladding override', () => {
       [],
       new Map([['wall_B', { cladding: 'stucco' }]]),
     )
-    const of = (id: string, role: string) => layers.filter((m) => m.sourceId === id && m.role === role)
+    const of = (id: string, role: string) =>
+      layers.filter((m) => m.sourceId === id && m.role === role)
     // overridden wall: stucco cladding, TWO wrb layers (R703.7.3)
     expect(of('wall_B', 'cladding')[0]?.label?.toLowerCase()).toContain('cement plaster')
     expect(of('wall_B', 'wrb')).toHaveLength(2)
@@ -338,9 +365,7 @@ describe('INTL fallback parity (verify S6: hint said R-30, members said R-13)', 
       (DATA.exterior.insulationByClimateZone['4'].value as string).replace(/^R/i, ''),
       10,
     )
-    const overrides = new Map<string, WallLayerOverride>([
-      ['wall_L', { insulation: 'batt' }],
-    ])
+    const overrides = new Map<string, WallLayerOverride>([['wall_L', { insulation: 'batt' }]])
     const layers = layoutWallLayers([wall()], [roomAbove], spec400, 'INTL', [], overrides)
     const batts = layers.filter((m) => m.role === 'insulation')
     expect(batts.length).toBeGreaterThan(0)
@@ -430,9 +455,7 @@ describe('climate-zone labels live (LOD-400 B4 rider: the raw-value zone lookup 
 
 describe('brick veneer air gap occupies space (verify S9: collapsed airspace)', () => {
   test('the wythe sits a full 1" gap beyond the WRB face', () => {
-    const overrides = new Map<string, WallLayerOverride>([
-      ['wall_L', { cladding: 'brickVeneer' }],
-    ])
+    const overrides = new Map<string, WallLayerOverride>([['wall_L', { cladding: 'brickVeneer' }]])
     const layers = layoutWallLayers([wall()], [roomAbove], spec400, 'NY', [], overrides)
     const wrb = layers.find((m) => m.role === 'wrb')
     const veneer = layers.find((m) => m.role === 'cladding')
@@ -444,5 +467,70 @@ describe('brick veneer air gap occupies space (verify S9: collapsed airspace)', 
       Math.abs((veneer?.position[2] as number) - (wrb?.position[2] as number)) -
       ((wrb?.dims[2] as number) + (veneer?.dims[2] as number)) / 2
     expect(gap).toBeCloseTo(0.0254, 3)
+  })
+})
+
+describe('the dwelling–garage separation (W8, Table R302.6)', () => {
+  const sepWall = wall({ id: 'sep', start: [4, 0], end: [4, 4] })
+  const garage: RoomSlice = {
+    id: 'garage',
+    name: 'GARAGE',
+    category: 'garage',
+    ceilingHeight: 2.7,
+    polygon: [
+      [4, 0],
+      [8, 0],
+      [8, 4],
+      [4, 4],
+    ],
+    boundaryWallIds: ['sep'],
+  }
+  const kitchen: RoomSlice = {
+    id: 'kitchen',
+    name: 'KITCHEN',
+    category: 'kitchen',
+    ceilingHeight: 2.7,
+    polygon: [
+      [0, 0],
+      [4, 0],
+      [4, 4],
+      [0, 4],
+    ],
+    boundaryWallIds: ['sep'],
+  }
+
+  test('garageSideOf finds the garage face, and only when the other face is the dwelling', () => {
+    expect(garageSideOf(sepWall, [garage, kitchen])).not.toBeNull()
+    expect(garageSideOf(sepWall, [kitchen])).toBeNull()
+    expect(garageSideOf(sepWall, [garage])).toBeNull()
+    expect(
+      garageSideOf(sepWall, [garage, { ...kitchen, id: 'yard', category: 'outdoor' }]),
+    ).toBeNull()
+  })
+
+  test('the garage face takes the Table R302.6 layer, the house face the ordinary gypsum', () => {
+    const members = layoutWallLayers([sepWall], [garage, kitchen], DEFAULT_SPEC, 'NY')
+    const gyp = members.filter((m) => m.role === 'drywall')
+    expect(gyp.length).toBeGreaterThan(0)
+    // the garage lies at +x of the wall: its face normal points +x
+    const garageFace = gyp.filter((m) => (m.face?.[0] ?? 0) > 0)
+    const houseFace = gyp.filter((m) => (m.face?.[0] ?? 0) < 0)
+    expect(garageFace.length).toBeGreaterThan(0)
+    expect(houseFace.length).toBeGreaterThan(0)
+    for (const g of garageFace) {
+      expect(g.label).toContain('garage side')
+      expect(g.label).toContain('R302.6')
+      expect(g.dims[2]).toBeCloseTo(inches(0.5), 6)
+    }
+    for (const g of houseFace) expect(g.label).not.toContain('R302.6')
+    // a plain partition between two rooms of the dwelling is untouched
+    const plain = layoutWallLayers(
+      [sepWall],
+      [kitchen, { ...garage, id: 'dining', category: 'other' }],
+      DEFAULT_SPEC,
+      'NY',
+    )
+    for (const g of plain.filter((m) => m.role === 'drywall'))
+      expect(g.label).not.toContain('R302.6')
   })
 })

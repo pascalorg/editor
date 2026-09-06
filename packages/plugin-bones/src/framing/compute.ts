@@ -64,7 +64,7 @@ import {
   studSizeFor,
   upliftPathWarnings,
 } from '../engines/wall-framing'
-import { layoutWallLayers } from '../engines/wall-layers'
+import { garageSideOf, layoutWallLayers } from '../engines/wall-layers'
 import { resolveJurisdiction, siteStateOf } from '../jurisdiction/guess'
 import { applyJurisdiction, nonIrcCodeWarning, profileFor } from '../jurisdiction/profiles'
 import { LUMBER_CROSS_SECTIONS } from '../lumber'
@@ -917,6 +917,16 @@ function computeLevelUncached(
     // framed twin's (F1 — the batt layout is steel-aware via the
     // engineering map's construction).
     members.push(...layoutWallLayers(assemblies, activeRooms, spec, code, probeSlabs, engineering))
+    // The dwelling–garage separation (W8, Table R302.6): say which walls
+    // carry it and what the door through it must be (R302.5.1).
+    const separationWalls = assemblies.filter(
+      (w) => !w.curved && garageSideOf(w, activeRooms) !== null,
+    )
+    if (separationWalls.length > 0) {
+      warnings.push(
+        `${separationWalls.length} dwelling–garage separation wall${separationWalls.length === 1 ? '' : 's'} — 1/2 in gypsum on the garage side (Table R302.6); the door through it 20-minute rated, solid core, self-closing and self-latching (R302.5.1); no habitable room above the garage on this level, so no Type X ceiling is called for here`,
+      )
+    }
     members.push(...cmuWalls(masonry, spec))
     for (const { wall, seam } of mixed) {
       const neighbors = activeWalls.filter((w) => w.id !== wall.id && !w.curved)

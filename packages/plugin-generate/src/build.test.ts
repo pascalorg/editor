@@ -313,3 +313,47 @@ describe('on a hill (the site carries a USGS heightfield → gradeAt)', () => {
     expect(r.porch?.risers ?? 0).toBeGreaterThan(Math.ceil(36 / 7.75))
   })
 })
+
+describe('wall roles (W8 — assemblies by what the wall is)', () => {
+  const doc = rollDocument(1499472249, {
+    style: 'farmhouse',
+    beds: 3,
+    baths: 2,
+    garage: true,
+  }).document
+  const built = buildHouse(doc)
+  const walls = ofType(built.ops, 'wall') as N[]
+
+  test('exterior by style, the garage separation tagged, bath / laundry partitions 2x6 plumbing walls, the rest 2x4', () => {
+    const roles = new Set(walls.map((w) => w.metadata.role))
+    expect(roles.has('exterior')).toBe(true)
+    expect(roles.has('garage-separation')).toBe(true)
+    expect(roles.has('plumbing')).toBe(true)
+    expect(roles.has('partition')).toBe(true)
+    for (const w of walls) {
+      if (w.metadata.role === 'exterior') expect(w.assembly.preset).toBe('exterior-2x6-siding')
+      if (w.metadata.role === 'plumbing') {
+        expect(w.assembly.preset).toBe('interior-2x6-plumbing')
+        expect(w.metadata.wallType).toBe('int2x6')
+        expect(w.thickness).toBeGreaterThan(0.15)
+        expect(w.metadata.rooms.some((n: string) => /BATH|LAUNDRY/.test(n))).toBe(true)
+      }
+      if (w.metadata.role === 'garage-separation') {
+        expect(w.assembly.preset).toBe('interior-2x4-drywall')
+        expect(w.metadata.fireSeparation).toBe('IRC Table R302.6')
+        expect(w.metadata.rooms).toContain('GARAGE')
+      }
+      if (w.metadata.role === 'partition') expect(w.metadata.wallType).toBe('int2x4')
+    }
+  })
+
+  test('the door from the garage into the house is the rated, self-closing one', () => {
+    const doors = ofType(built.ops, 'door') as N[]
+    const rated = doors.filter((d) => d.metadata.fireRated)
+    expect(rated).toHaveLength(1)
+    expect(rated[0]!.name).toContain('GARAGE')
+    expect(rated[0]!.name).toContain('20-min rated')
+    expect(rated[0]!.metadata.fireRated).toContain('R302.5.1')
+    expect(rated[0]!.doorType).toBe('hinged')
+  })
+})

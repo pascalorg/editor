@@ -117,8 +117,12 @@ export type BuildResult = {
   finishes: Finishes | null
 }
 
+/** What a wall IS in the house (W8): its assembly, its thickness and what Bones does with it follow. */
+export type WallRole = 'exterior' | 'partition' | 'plumbing' | 'garage-separation'
+
 type WallRun = Run & {
   id: string
+  role: WallRole
   exterior: boolean
   length: number
   start: Pt
@@ -233,10 +237,28 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   )
   const exteriorPreset = getWallAssemblyPreset(style.exteriorAssembly)
   const interiorPreset = getWallAssemblyPreset('interior-2x4-drywall')
-  if (!exteriorPreset || !interiorPreset)
+  const plumbingPreset = getWallAssemblyPreset('interior-2x6-plumbing')
+  if (!exteriorPreset || !interiorPreset || !plumbingPreset)
     return empty(['wall assembly presets are missing from core.'])
   const exteriorT = assemblyThickness(exteriorPreset.assembly)
   const interiorT = assemblyThickness(interiorPreset.assembly)
+  const plumbingT = assemblyThickness(plumbingPreset.assembly)
+  // ── wall ROLES (W8 — PlanCrafters WALL_TYPES + applyGarageProtection) ──
+  // exterior by style; the walls between the garage and the house are the
+  // R302.6 separation (Bones puts the 1/2 in gypsum on the garage side and
+  // says so); a partition bounding a bath or laundry is the 2x6 plumbing
+  // wall so the 3 in stack fits inside it; everything else is a 2x4
+  // partition.
+  const kindsBeside = (run: Run): RoomKind[] =>
+    [run.left, run.right].filter((i) => i !== -1).map((i) => (rooms[i] as NormalizedRoom).kind)
+  const roleOf = (run: Run, exterior: boolean): WallRole => {
+    if (exterior) return 'exterior'
+    const kinds = kindsBeside(run)
+    const garage = kinds.filter((k) => k === 'garage').length
+    if (garage === 1 && kinds.length === 2) return 'garage-separation'
+    if (kinds.some((k) => k === 'bath' || k === 'laundry')) return 'plumbing'
+    return 'partition'
+  }
 
   const walls: WallRun[] = runs.map((run) => {
     const exterior = run.left === -1 || run.right === -1
@@ -250,7 +272,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       length,
       start,
       end,
-      thickness: exterior ? exteriorT : interiorT,
+      thickness: exterior ? exteriorT : roleOf(run, false) === 'plumbing' ? plumbingT : interiorT,
+      role: roleOf(run, exterior),
     }
   })
   const roomNames = (run: Run): string[] =>
@@ -277,13 +300,23 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         start: wall.start,
         end: wall.end,
         thickness: round(wall.thickness, 6),
-        assembly: wall.exterior ? exteriorPreset.assembly : interiorPreset.assembly,
+        assembly:
+          wall.role === 'exterior'
+            ? exteriorPreset.assembly
+            : wall.role === 'plumbing'
+              ? plumbingPreset.assembly
+              : interiorPreset.assembly,
         frontSide: wall.exterior ? (frontInside ? 'interior' : 'exterior') : 'unknown',
         backSide: wall.exterior ? (backInside ? 'interior' : 'exterior') : 'unknown',
         metadata: {
           generatedBy: GENERATED_BY,
-          wallType: wall.exterior ? 'ext2x6' : 'int2x4',
+          wallType: wall.exterior ? 'ext2x6' : wall.role === 'plumbing' ? 'int2x6' : 'int2x4',
+          role: wall.role,
           rooms: roomNames(wall),
+          // the dwelling–garage separation: 1/2 in gypsum on the garage side
+          // (IRC Table R302.6 'from the residence and attics'); Type X only on
+          // a ceiling below habitable rooms — none on a one-storey house
+          ...(wall.role === 'garage-separation' ? { fireSeparation: 'IRC Table R302.6' } : {}),
         },
       },
       parentId: levelId,
@@ -363,6 +396,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     /** +1: the door swings (or the overhead track runs) to the wall's +normal side. */
     swingSide: 1 | -1,
     doorType: 'hinged' | 'sliding' = 'hinged',
+    extraMeta?: Record<string, unknown>,
   ) => {
     const isGarage = kind === 'garage'
     const heightIn = isGarage ? GARAGE_DOOR_H : DOOR_H
@@ -383,7 +417,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         doorType: isGarage ? 'garage-sectional' : doorType,
         openingKind: kind === 'open' ? 'opening' : 'door',
         swingDirection,
-        metadata: { generatedBy: GENERATED_BY, attach: kind },
+        metadata: { generatedBy: GENERATED_BY, attach: kind, ...(extraMeta ?? {}) },
       },
       parentId: wall.id,
     })
@@ -442,13 +476,21 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       continue
     }
     const into = sideOf(best.wall, (B.u0 + B.u1) / 2, (B.v0 + B.v1) / 2)
+    // the door from the garage into the house is a 20-minute rated,
+    // self-closing, self-latching solid door (IRC R302.5.1) — never an
+    // opening, never into a sleeping room (the roll never draws one)
+    const garageDoor = edge.kind !== 'open' && [A.kind, B.kind].includes('garage')
     doorNode(
       best.wall,
       at,
       width,
       edge.kind === 'open' ? 'open' : 'door',
-      `${edge.a} + ${edge.b} ${edge.kind === 'open' ? 'opening' : 'door'}`,
+      `${edge.a} + ${edge.b} ${edge.kind === 'open' ? 'opening' : garageDoor ? 'door (20-min rated, self-closing)' : 'door'}`,
       into,
+      'hinged',
+      garageDoor
+        ? { fireRated: 'IRC R302.5.1 — 20-minute rated, solid core, self-closing self-latching' }
+        : undefined,
     )
   }
 

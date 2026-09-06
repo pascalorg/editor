@@ -204,7 +204,7 @@ W6  DONE — Porch: PlanCrafters' entrance tool built from Pascal nodes
     Bones, and a covered-under-the-main-roof porch are later.
 W7  Styles and palettes applied — DONE 2026-09-06 (see W13 log): exterior assembly + siding colour + trim + door +
     roof material per style, palette rolled as a unit.
-W8  Wall assemblies by role: plumbing 2x6 behind wet rooms, garage separation,
+W8  Wall assemblies by role — DONE 2026-09-06 (see log; the assign-by-role panel is open): plumbing 2x6 behind wet rooms, garage separation,
     porch pony walls, exterior by style; new cited presets; assemblies panel with
     "assign by role".
 W9  Simpson hardware catalogue in Bones — DONE 2026-09-06 (see log; A35 / CS16 members open): H2.5A rafter/truss to plate, A35 at
@@ -725,3 +725,30 @@ W13 Finishes — DONE 2026-09-06 (see log; muntin grids recorded not drawn, no f
   the CS16 strap ride the labels / details only (no members yet); ledger
   bolts (R507.9.1.3(1)) and the garage-door portal hardware are still
   generic notes.
+
+- 2026-09-06 late night: **W8 landed — wall assemblies by what the wall
+  is.** The generator classifies every wall run (`WallRole`: exterior /
+  partition / plumbing / garage-separation — PlanCrafters WALL_TYPES +
+  applyGarageProtection): exterior by style as before; a partition
+  bounding a bath or laundry is the 2x6 plumbing wall
+  (`interior-2x6-plumbing`, `wallType int2x6`) so the 3 in DWV stack fits
+  inside it; the walls between the garage and the house are tagged the
+  Table R302.6 separation; everything else stays a 2x4 partition. The
+  door from the garage into the house is named and tagged the 20-minute
+  rated, solid-core, self-closing self-latching door (R302.5.1). Bones'
+  layer engine now applies its own researched `garageSeparation` data
+  (`wall-assemblies.json` — 1/2 in gypsum "applied to the garage side",
+  Table R302.6; Type X is a ceiling-below-habitable-rooms matter and a
+  local amendment on walls, so it is NOT drawn): `garageSideOf(wall,
+  rooms)` finds the face toward the garage when the other face is the
+  dwelling, that face's gypsum is labelled the separation with the cite,
+  and compute tells the reader which walls carry it and what the door must
+  be. Tests: build.test +2 (roles, presets, thickness, the rated door),
+  wall-layers.test +2 (garageSideOf gating, the R302.6 layer on the
+  garage face only) — generate 70, Bones 2,058, both typecheck. Honest
+  gaps: the plumbing wall is every bath / laundry partition, not the one
+  wall the stack actually rises in (Bones picks its wet wall from the
+  boundary walls; making them all 2x6 guarantees the fit at the cost of a
+  few thicker partitions); porch pony walls are not generated; the "assign
+  by role" assemblies panel is not built (the generator assigns, the
+  inspector still edits per wall).

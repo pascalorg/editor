@@ -29,6 +29,7 @@ import { DEFAULT_SPEC, type FramingSpec } from '../core/spec'
 import type { Member, MemberRole, RoomSlice, SlabSlice, WallSlice } from '../core/types'
 import { inches } from '../core/units'
 import { LUMBER_CROSS_SECTIONS } from '../lumber'
+import { LGS_JACKS_PER_SIDE, LGS_STUD_THICKNESS, LGS_TRACK_FLANGE } from './lgs-wall-framing'
 import {
   DOUBLE_TRIMMER_SPAN,
   FIRE_BLOCK_HEIGHT,
@@ -39,11 +40,6 @@ import {
   studSizeFor,
   type WallFramingOverride,
 } from './wall-framing'
-import {
-  LGS_JACKS_PER_SIDE,
-  LGS_STUD_THICKNESS,
-  LGS_TRACK_FLANGE,
-} from './lgs-wall-framing'
 
 type Pt = readonly [number, number]
 
@@ -51,6 +47,8 @@ type LayerSpec = { role: string; thicknessIn: number; material: string; citation
 type ZoneInsulation = { value?: string; battThicknessIn?: number }
 type Assemblies = {
   interior: { layers: LayerSpec[] }
+  /** The dwelling–garage separation (Table R302.6): its garage-side layer is the last drywall entry. */
+  garageSeparation?: { layers: LayerSpec[] }
   exterior: {
     sheathing: { layers: LayerSpec[] }
     wrb: { layers: LayerSpec[]; stuccoDoubleLayer?: boolean }
@@ -87,10 +85,7 @@ function pointInPolygon(p: Pt, polygon: readonly (readonly [number, number])[]):
 }
 
 /** Plan normal of a wall for side +1: rotate dir by -90° (matches faceOf). */
-const normalOf = (wall: WallSlice, side: 1 | -1): Pt => [
-  -wall.dir[1] * side,
-  wall.dir[0] * side,
-]
+const normalOf = (wall: WallSlice, side: 1 | -1): Pt => [-wall.dir[1] * side, wall.dir[0] * side]
 
 /** Which side (+1/−1) of an exterior wall faces OUTDOORS. FLOORING is the
  * automatic signal (round-13 user feedback): the side standing over a slab
@@ -123,6 +118,32 @@ export function exteriorSide(
   const plusRoom = inRoom(pPlus)
   const minusRoom = inRoom(pMinus)
   if (plusRoom !== minusRoom) return plusRoom ? -1 : 1
+  return null
+}
+
+/**
+ * Which side (+1/−1) of an interior wall faces the GARAGE when the other
+ * side faces a room of the dwelling — the Table R302.6 separation; null
+ * for every other wall (no garage, garage both sides, outdoors beside).
+ */
+export function garageSideOf(wall: WallSlice, rooms: RoomSlice[]): 1 | -1 | null {
+  const mid: Pt = [
+    wall.start[0] + (wall.dir[0] * wall.length) / 2,
+    wall.start[1] + (wall.dir[1] * wall.length) / 2,
+  ]
+  const probeDist = wall.thickness / 2 + 0.15
+  const categoryAt = (side: 1 | -1): RoomSlice['category'] | null => {
+    const n = normalOf(wall, side)
+    const p: Pt = [mid[0] + n[0] * probeDist, mid[1] + n[1] * probeDist]
+    const room = rooms.find((r) => pointInPolygon(p, r.polygon))
+    return room ? room.category : null
+  }
+  const plus = categoryAt(1)
+  const minus = categoryAt(-1)
+  const dwelling = (c: RoomSlice['category'] | null) =>
+    c !== null && c !== 'garage' && c !== 'outdoor'
+  if (plus === 'garage' && dwelling(minus)) return 1
+  if (minus === 'garage' && dwelling(plus)) return -1
   return null
 }
 
@@ -316,7 +337,11 @@ export function layoutWallLayers(
         }
         const center = offset + t / 2
         for (const band of bands) {
-          const len = band.u1 - band.u0 - (band.u0 < 0.02 ? inset.start : 0) - (band.u1 > wall.length - 0.02 ? inset.end : 0)
+          const len =
+            band.u1 -
+            band.u0 -
+            (band.u0 < 0.02 ? inset.start : 0) -
+            (band.u1 > wall.length - 0.02 ? inset.end : 0)
           if (len < 0.02) continue
           const u0 = band.u0 + (band.u0 < 0.02 ? inset.start : 0)
           const uMid = u0 + len / 2
@@ -345,9 +370,25 @@ export function layoutWallLayers(
 
     const gypsum = DATA.interior.layers.filter((l) => l.role === 'drywall').slice(0, 1)
     if (extSide === null) {
-      // interior partition: gypsum both faces
-      emitStack(1, gypsum)
-      emitStack(-1, gypsum)
+      // interior partition: gypsum both faces. The dwelling–garage
+      // separation (W8): the face toward the garage takes the Table R302.6
+      // layer — 1/2 in gypsum "applied to the garage side" — labelled as
+      // the separation; the house face keeps the ordinary finish. Type X is
+      // a ceiling matter (habitable rooms above) and a local amendment on
+      // walls, so it is not drawn here.
+      const garageSide = garageSideOf(wall, rooms)
+      const separation = DATA.garageSeparation?.layers.filter((l) => l.role === 'drywall').at(-1)
+      const garageLayer: LayerSpec[] =
+        garageSide !== null && separation
+          ? [
+              {
+                ...separation,
+                material: 'gypsum board 1/2 in, garage side — dwelling–garage separation',
+              },
+            ]
+          : gypsum
+      emitStack(1, garageSide === 1 ? garageLayer : gypsum)
+      emitStack(-1, garageSide === -1 ? garageLayer : gypsum)
     } else {
       // interior face: gypsum (+ vapor retarder note by climate zone —
       // keyed by the NORMALIZED zone, and the map holds objects whose
@@ -356,23 +397,18 @@ export function layoutWallLayers(
       const vapor = zoneKey
         ? DATA.exterior.vaporRetarderClassByZone?.[zoneKey]?.required
         : undefined
-      emitStack(
-        (-extSide) as 1 | -1,
-        gypsum,
-        vapor ? ` — vapor retarder ${vapor}, R702.7` : '',
-      )
+      emitStack(-extSide as 1 | -1, gypsum, vapor ? ` — vapor retarder ${vapor}, R702.7` : '')
       // exterior face, inside→out: sheathing → WRB (×2 under stucco) → cladding
       const wrbLayers = [...DATA.exterior.wrb.layers]
       if (claddingKey === 'stucco' && wrbLayers[0]) {
-        wrbLayers.push({ ...wrbLayers[0], material: `${wrbLayers[0].material} (2nd layer under stucco)` })
+        wrbLayers.push({
+          ...wrbLayers[0],
+          material: `${wrbLayers[0].material} (2nd layer under stucco)`,
+        })
       }
       emitStack(
         extSide,
-        [
-          ...DATA.exterior.sheathing.layers,
-          ...wrbLayers,
-          ...(cladding?.layers ?? []),
-        ],
+        [...DATA.exterior.sheathing.layers, ...wrbLayers, ...(cladding?.layers ?? [])],
         rValue ? ` — cavity ${rValue} (zone ${zone})` : '',
       )
     }
