@@ -203,12 +203,19 @@ describe('over-span flag matrix', () => {
     expect(jacks.some((j) => j.flag?.includes('Jack rafter over prescriptive span'))).toBe(true)
     for (const j of jacks.filter((x) => x.length < 2)) expect(j.flag).toBeUndefined()
     // a compact hip (run 1.9, B7 ceiling joists spanning 3.8 ≤ 3.90) stays
-    // clean — the DEFAULT 8×6 hip now honestly flags its 6 m one-piece
-    // ceiling joists per R802.5.1 (they exist since B7)
-    expect(flagged(frameRoofs([seg({ roofType: 'hip', depth: 3.8 })], [], DEFAULT_SPEC))).toHaveLength(0)
+    // clean — the DEFAULT 8×6 hip's 6 m one-piece ceiling joists step up the
+    // R802.5.1(2) ladder to 2x10 (6.04 m @ 16") with no partition to lap
+    // over (W15): no flag, the label tells the sizing story
+    expect(
+      flagged(frameRoofs([seg({ roofType: 'hip', depth: 3.8 })], [], DEFAULT_SPEC)),
+    ).toHaveLength(0)
     const cjs = byRole(frameRoofs([seg({ roofType: 'hip' })], [], DEFAULT_SPEC), 'ceiling-joist')
     expect(cjs.length).toBeGreaterThan(0)
-    for (const cj of cjs) expect(cj.flag).toContain('Ceiling joist over prescriptive span')
+    for (const cj of cjs) {
+      expect(cj.size).toBe('2x10')
+      expect(cj.flag).toBeUndefined()
+      expect(cj.label).toContain('2x10 from the R802.5.1(2) table for the 6.00 m span (spec 2x6)')
+    }
   })
 
   test('flat: the 10.5 m dead-level joist flags (audit class: 10.7 m flat-roof joist)', () => {

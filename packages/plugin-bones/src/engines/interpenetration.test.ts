@@ -882,6 +882,34 @@ describe('interpenetration gate — structural members never share volume', () =
       }).toEqual({ name, cj: true, v: [] })
     }
   })
+  test('roof framing: W15 lapped ceiling joists over a partition compose SAT-clean across the family', () => {
+    // a partition with the ridge 0.6 m off centre (gable / gambrel / the
+    // skirts) and one with the long axis of the 10 × 12 hip — every case
+    // must actually lap (non-vacuous), and nothing may share volume: the
+    // lapped piece sits beside its mate, clear of the rafter planes.
+    const partitions = [
+      wall({ id: 'p_a', start: [-4, 0.6], end: [4, 0.6], exterior: false }),
+      wall({ id: 'p_b', start: [-0.4, -6], end: [-0.4, 6], exterior: false }),
+    ]
+    const cases: [string, Partial<RoofSegmentSlice>][] = [
+      ['gable', {}],
+      ['gableBig', { width: 10, depth: 12 }],
+      ['gable25', { pitch: (25 * Math.PI) / 180 }],
+      ['hip', { roofType: 'hip', width: 10, depth: 12 }],
+      ['gambrel', { roofType: 'gambrel' }],
+      ['dutch', { roofType: 'dutch', width: 16, depth: 10 }],
+      ['mansard', { roofType: 'mansard', width: 10, depth: 8 }],
+    ]
+    for (const [name, over] of cases) {
+      const members = frameRoofs([roofSeg(over)], partitions, spec400)
+      expect({
+        name,
+        lapped: members.some((m) => m.role === 'ceiling-joist' && m.label?.includes('lapped')),
+        v: violations(members),
+      }).toEqual({ name, lapped: true, v: [] })
+    }
+  })
+
   const UNUSED = () => {
     expect(
       violations(

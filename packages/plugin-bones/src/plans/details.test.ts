@@ -8,6 +8,7 @@ import { describe, expect, test } from 'bun:test'
 import { DEFAULT_SPEC } from '../core/spec'
 import type { Member } from '../core/types'
 import { inches } from '../core/units'
+import { frameRoofs, type RoofSegmentSlice } from '../engines/roof-framing'
 import {
   DETAILS,
   detailsSheetBodies,
@@ -15,6 +16,7 @@ import {
   parseFtIn,
   renderDetail,
   scaleLabel,
+  stationSpacingIn,
   variablesLine,
 } from './details'
 
@@ -343,5 +345,33 @@ describe('the details sheet', () => {
     expect(scaleLabel(96 / 12 / 2)).toBe(`1/2" = 1'-0"`)
     expect(scaleLabel(96 / 12 / 4)).toBe(`1/4" = 1'-0"`)
     expect(scaleLabel(96 / 12 / 8)).toBe(`1/8" = 1'-0"`)
+  })
+})
+
+describe('W15: the sheet reads the ceiling-joist spacing off the members', () => {
+  const seg = (depth: number): RoofSegmentSlice => ({
+    id: 'roofseg_w15',
+    roofType: 'gable',
+    position: [0, 2.5, 0],
+    yaw: 0,
+    width: 10,
+    depth,
+    pitch: (40 * Math.PI) / 180,
+    overhang: 0.3,
+    wallHeight: 0.5,
+  })
+  const cjs = (members: Member[]) => members.filter((x) => x.role === 'ceiling-joist')
+
+  test('16" by default; 12" once the roof engine tightened a 22-ft wing — the variables follow', () => {
+    const at16 = frameRoofs([seg(6.0)], [], DEFAULT_SPEC)
+    expect(stationSpacingIn(cjs(at16))).toBe(16)
+    const at12 = frameRoofs([seg(6.71)], [], DEFAULT_SPEC)
+    expect(stationSpacingIn(cjs(at12))).toBe(12)
+    const v = detailVariables(at12, DEFAULT_SPEC)
+    expect(v.roof?.ceilingJoistSpacingIn).toBe(12)
+    expect(v.roof?.ceilingJoist).toBe('2x10')
+    // too few members to vote → the spec's spacing stands
+    expect(stationSpacingIn(cjs(at12).slice(0, 2))).toBeNull()
+    expect(detailVariables(at16.slice(0, 0), DEFAULT_SPEC).roof).toBeNull()
   })
 })

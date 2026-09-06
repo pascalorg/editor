@@ -252,6 +252,13 @@ W13 Finishes — DONE 2026-09-06 (see log; muntin grids recorded not drawn, no f
     door colours per style rolled as a unit, window styles (grid, casing, sill),
     wood styles; the finish schedule on the sheets (part of W7, listed here so
     nothing is lost).
+W15 Ceiling joists as a framer laps them — DONE 2026-09-06 (see log; the open great-room
+    span and the no-storage attic table are open): every joist line planned against the
+    interior partitions that run with the ridge, lapped 12 in over as many of them as the
+    stock needs (R802.5.2.1), each piece sized from Table R802.5.1(2) on its own span,
+    12 in o.c. when that clears a flag, the honest flag only past the deepest row; the
+    partitions named as bearing walls in the level warnings; the details sheet reads the
+    spacing off the members.
 
 ## Log
 
@@ -752,3 +759,49 @@ W13 Finishes — DONE 2026-09-06 (see log; muntin grids recorded not drawn, no f
   few thicker partitions); porch pony walls are not generated; the "assign
   by role" assemblies panel is not built (the generator assigns, the
   inspector still edits per wall).
+
+- 2026-09-06 small hours: **W15 landed — ceiling joists lapped over the
+  interior bearing partitions and sized from the table.** Until now every
+  ceiling joist was one stick eave to eave at the spec size, so every
+  generated house wore 70-odd "over prescriptive span" flags on its main
+  roof (13 m deep; the 2x6 @ 16" row stops at 3.90 m). `roof-framing.ts`
+  now plans the joists the way a framer buys them (`planCeilingJoists`):
+  the interior partitions running WITH the ridge (±10°, ≥ 1.5 m, full
+  height, 0.65 m clear of the eave lines) are found in the segment's
+  frame (`ceilingJoistBearingsFor`, level → segment-local, the inverse of
+  the emitter yaw); per station the partitions covering it break the line
+  into pieces — walking from the −eave, the fewest laps that keep each
+  piece within the spec stock's row, breaking at the next partition
+  anyway when the row is already passed; each piece is sized on its own
+  support-to-support span up the 2x ladder (`ceilingJoistSizeFor`: 2x6 →
+  2x8 → 2x10, the table's deepest row; a hip ridge overhead caps the
+  depth); when a piece still flags at the spec spacing and the 12" column
+  clears flags the whole segment's stations go 12" o.c.; only past all of
+  that does the over-span flag ride the member, naming the partitions it
+  is lapped over (or saying none runs under it). Pieces lap 12 in
+  (R802.5.2.1, nailed per Table R802.5.2(1)), odd pieces set beside their
+  mates one thickness over (toward the roof centre, off the rafter
+  planes, inside the station band); labels carry the lap, the sizing and
+  the spacing story; purlin struts land on the piece under their purlin
+  line; gable, hip, gambrel and the mansard / dutch skirts all use it (the
+  crown / gablet joists at the skirt top see no partitions). `compute`
+  warns which partitions carry laps — frame them as BEARING (double top
+  plate, studs over the girder / thickened slab). The details sheet reads
+  the joist spacing off the members (`stationSpacingIn`) so a tightened
+  wing prints 12". LOD 200 keeps the schematic one-piece joist. Headless
+  on the generated houses: farmhouse main roof 70 flagged joists → 20
+  pieces (the great-room side: 10.97 m from the eave to the kitchen
+  wall), craftsman 68 → 15, ranch 84 → 18; the 22-ft wings go 2x10 @ 12"
+  (they keep the 20-ft one-piece stock note); every strut foot on wood;
+  the volume gate clean across the family with partitions. Tests:
+  roof-framing.test +11 (sizing ladder, partition gating, the yawed
+  frame, lap geometry, half-cover, three-piece lines, the skipped lap,
+  the 12" fallback, struts, warnings), interpenetration +1, details +1,
+  multistorey / spans / seat expectations updated, six B7 hash pins
+  recaptured (INTENDED-CHANGE noted) — Bones 2,073, typecheck clean.
+  Honest gaps: an open great room with no partition for 11 m stays
+  flagged (a real plan carries a flush beam or trusses there — no beam
+  engine yet); the no-storage attic table R802.5.1(1) is not in the data,
+  so garage wings read the limited-storage row; the partitions are named
+  bearing but the wall engine still frames them like any partition (no
+  double plate / stacked stud check); flat-roof joists are not lapped.

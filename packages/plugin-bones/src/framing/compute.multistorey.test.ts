@@ -111,7 +111,7 @@ describe('multi-storey elevations (prod 2026-08-15)', () => {
     expect(roof.every((m) => m.strataAbove !== true && m.mountLevelId === undefined)).toBe(true)
   })
 
-  test('span tables reach computeLevel: honest R802.5.1 flags on the 5.6 m ceiling joists (B2/S10)', () => {
+  test('span tables reach computeLevel: the 5.6 m ceiling joists size up per R802.5.1(2); a 7 m span still flags (B2/S10, W15)', () => {
     const nodes = twoStoreyScene()
     const node = bones('bonesframing_0', 'lvl0')
     nodes.bonesframing_0 = node as unknown as Record<string, unknown>
@@ -123,16 +123,35 @@ describe('multi-storey elevations (prod 2026-08-15)', () => {
     expect(rafters.length).toBeGreaterThan(0)
     expect(rafters.every((m) => !m.flag)).toBe(true)
     expect(roof.some((m) => m.role === 'post')).toBe(false)
-    // …but the ONE-PIECE 5.6 m ceiling joists exceed 2x6 @16" limited
-    // storage (3.90 m): the honest flag rides through to the takeoff
+    // …the ONE-PIECE 5.6 m ceiling joists exceed 2x6 @16" limited storage
+    // (3.90 m) and no partition runs under them: W15 steps them up the
+    // R802.5.1(2) ladder to 2x10 (6.04 m) — no flag, the label says why
     const cjs = roof.filter((m) => m.role === 'ceiling-joist')
     expect(cjs.length).toBeGreaterThan(0)
-    expect(cjs.every((m) => m.flag?.includes('R802.5.1'))).toBe(true)
+    expect(cjs.every((m) => m.size === '2x10' && m.flag === undefined)).toBe(true)
+    expect(cjs.every((m) => m.label?.includes('2x10 from the R802.5.1(2) table'))).toBe(true)
     const rows = computeTakeoff(result.members, result.fixtures, result.areas)
-    const flagRow = rows.find(
+    expect(
+      rows.some(
+        (r) => r.section === 'Flags' && r.detail.includes('Ceiling joist over prescriptive span'),
+      ),
+    ).toBe(false)
+    // a 7 m span is past the deepest row: the honest flag rides through to the takeoff
+    const wide = twoStoreyScene()
+    ;(wide.roofseg as Record<string, unknown>).depth = 7
+    const node2 = bones('bonesframing_0', 'lvl0')
+    wide.bonesframing_0 = node2 as unknown as Record<string, unknown>
+    const result2 = computeLevel(wide, node2)
+    const cjs2 = result2.members.filter(
+      (m) => m.system === 'roof-framing' && m.role === 'ceiling-joist',
+    )
+    expect(cjs2.length).toBeGreaterThan(0)
+    expect(cjs2.every((m) => m.flag?.includes('R802.5.1'))).toBe(true)
+    const rows2 = computeTakeoff(result2.members, result2.fixtures, result2.areas)
+    const flagRow = rows2.find(
       (r) => r.section === 'Flags' && r.detail.includes('Ceiling joist over prescriptive span'),
     )
-    expect(flagRow?.quantity).toBe(cjs.length)
+    expect(flagRow?.quantity).toBe(cjs2.length)
   })
 
   test('a shared roof is framed by exactly one X-ray — the highest storey wins', () => {
@@ -176,14 +195,24 @@ describe('interior-storey hvac routes in soffits (checklist M1)', () => {
       type: 'zone',
       parentId: 'lvl0',
       name: 'Bedroom',
-      polygon: [[0, 0], [8, 0], [8, 5], [0, 5]],
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 5],
+        [0, 5],
+      ],
     }
     nodes.z1 = {
       id: 'z1',
       type: 'zone',
       parentId: 'lvl1',
       name: 'Bedroom',
-      polygon: [[0, 0], [8, 0], [8, 5], [0, 5]],
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 5],
+        [0, 5],
+      ],
     }
     return nodes
   }
@@ -214,9 +243,7 @@ describe('interior-storey hvac routes in soffits (checklist M1)', () => {
     const node = hvacBones('bonesframing_h1', 'lvl1')
     nodes.bonesframing_h1 = node as unknown as Record<string, unknown>
     const result = computeLevel(nodes, node)
-    const trunk = result.members.filter(
-      (m) => m.system === 'hvac' && m.label?.startsWith('Trunk'),
-    )
+    const trunk = result.members.filter((m) => m.system === 'hvac' && m.label?.startsWith('Trunk'))
     expect(trunk.length).toBeGreaterThan(0)
     // the attic plane sits above the wall top — that's the roof level's space
     expect(Math.max(...trunk.map((m) => m.position[1] + m.dims[1] / 2))).toBeGreaterThan(2.5)
@@ -315,12 +342,7 @@ describe('multi-storey — verify-round defect gates', () => {
 describe('gable walls on slab-less levels (prod starter house, day board B 2026-08-16)', () => {
   /** Host scenes routinely mark BOTH wall faces 'interior' — these walls
    * carry no frontSide/backSide at all, so everything rides the fallback. */
-  const bareWall = (
-    id: string,
-    level: string,
-    start: [number, number],
-    end: [number, number],
-  ) => ({
+  const bareWall = (id: string, level: string, start: [number, number], end: [number, number]) => ({
     id,
     type: 'wall',
     parentId: level,
@@ -372,9 +394,7 @@ describe('gable walls on slab-less levels (prod starter house, day board B 2026-
     nodes.bonesframing_roof = node as unknown as Record<string, unknown>
     const result = computeLevel(nodes, node)
     for (const wallId of ['wroofa', 'wroofb']) {
-      const roles = new Set(
-        result.members.filter((m) => m.sourceId === wallId).map((m) => m.role),
-      )
+      const roles = new Set(result.members.filter((m) => m.sourceId === wallId).map((m) => m.role))
       expect(roles.has('sheathing')).toBe(true)
       expect(roles.has('wrb')).toBe(true)
       expect(roles.has('cladding')).toBe(true)
@@ -461,12 +481,7 @@ describe('gable walls on slab-less levels (prod starter house, day board B 2026-
 
 describe('takeoff/member consistency (checklist S4, verify round 2026-08-16)', () => {
   /** Bare walls: no frontSide/backSide — everything rides the fallback. */
-  const bareWall = (
-    id: string,
-    level: string,
-    start: [number, number],
-    end: [number, number],
-  ) => ({
+  const bareWall = (id: string, level: string, start: [number, number], end: [number, number]) => ({
     id,
     type: 'wall',
     parentId: level,
@@ -650,11 +665,39 @@ describe('hvac attic detection — gable-walled roof level (re-verify round)', (
     delete nodes.lvl1
     ;(nodes.bldg as Record<string, unknown>).children = ['lvl0', 'lvlroof']
     nodes.slab0 = {
-      id: 'slab0', type: 'slab', parentId: 'lvl0',
-      polygon: [[0, 0], [8, 0], [8, 5], [0, 5]], holes: [], elevation: 0.05, thickness: 0.1,
+      id: 'slab0',
+      type: 'slab',
+      parentId: 'lvl0',
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 5],
+        [0, 5],
+      ],
+      holes: [],
+      elevation: 0.05,
+      thickness: 0.1,
     }
-    nodes.zone0 = { id: 'zone0', type: 'zone', parentId: 'lvl0', name: 'Living', polygon: [[0, 0], [8, 0], [8, 5], [0, 5]] }
-    ;(nodes.lvl0 as Record<string, unknown>).children = ['w0a', 'w0b', 'w0c', 'w0d', 'slab0', 'zone0']
+    nodes.zone0 = {
+      id: 'zone0',
+      type: 'zone',
+      parentId: 'lvl0',
+      name: 'Living',
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 5],
+        [0, 5],
+      ],
+    }
+    ;(nodes.lvl0 as Record<string, unknown>).children = [
+      'w0a',
+      'w0b',
+      'w0c',
+      'w0d',
+      'slab0',
+      'zone0',
+    ]
     nodes.gableA = wall('gableA', 'lvlroof', [0, 2.5], [1.5, 2.5])
     nodes.gableB = wall('gableB', 'lvlroof', [6.5, 2.5], [8, 2.5])
     const node = bones('bonesframing_hvac', 'lvl0')
@@ -696,8 +739,16 @@ describe('exploded stratum — owner ON the roof level (F1b closure, prod report
     delete nodes.w1d
     ;(nodes.bldg as Record<string, unknown>).children = ['lvl0']
     nodes.roofG = {
-      id: 'roofG', type: 'roof-segment', parentId: 'lvl0', position: [4, 2.5, 2.5],
-      rotation: 0, roofType: 'gable', width: 8.6, depth: 5.6, pitch: 30, thickness: 0.2,
+      id: 'roofG',
+      type: 'roof-segment',
+      parentId: 'lvl0',
+      position: [4, 2.5, 2.5],
+      rotation: 0,
+      roofType: 'gable',
+      width: 8.6,
+      depth: 5.6,
+      pitch: 30,
+      thickness: 0.2,
     }
     const node = bones('bonesframing_g', 'lvl0')
     nodes.bonesframing_g = node as unknown as Record<string, unknown>
@@ -710,13 +761,31 @@ describe('exploded stratum — owner ON the roof level (F1b closure, prod report
     const nodes = twoStoreyScene()
     delete nodes.roofseg
     nodes.slab0 = {
-      id: 'slab0', type: 'slab', parentId: 'lvl0',
-      polygon: [[0, 0], [8, 0], [8, 5], [0, 5]], holes: [], elevation: 0.05, thickness: 0.1,
+      id: 'slab0',
+      type: 'slab',
+      parentId: 'lvl0',
+      polygon: [
+        [0, 0],
+        [8, 0],
+        [8, 5],
+        [0, 5],
+      ],
+      holes: [],
+      elevation: 0.05,
+      thickness: 0.1,
     }
     ;(nodes.lvl0 as Record<string, unknown>).children = ['w0a', 'w0b', 'w0c', 'w0d', 'slab0']
     nodes.porch = {
-      id: 'porch', type: 'roof-segment', parentId: 'lvl0', position: [50, 2.5, 2],
-      rotation: 0, roofType: 'shed', width: 3, depth: 2, pitch: 15, thickness: 0.15,
+      id: 'porch',
+      type: 'roof-segment',
+      parentId: 'lvl0',
+      position: [50, 2.5, 2],
+      rotation: 0,
+      roofType: 'shed',
+      width: 3,
+      depth: 2,
+      pitch: 15,
+      thickness: 0.15,
     }
     const node = bones('bonesframing_0', 'lvl0')
     nodes.bonesframing_0 = node as unknown as Record<string, unknown>
@@ -742,7 +811,14 @@ describe('LOD-400 B3: subfloor booked == built', () => {
         [8, 5],
         [0, 5],
       ],
-      holes: [[[3, 2], [4.2, 2], [4.2, 4.6], [3, 4.6]]],
+      holes: [
+        [
+          [3, 2],
+          [4.2, 2],
+          [4.2, 4.6],
+          [3, 4.6],
+        ],
+      ],
       elevation: 0,
       thickness: 0.3,
     }
@@ -805,9 +881,7 @@ describe('upper-storey plumbing truth (skeptic S2, feat/underfloor-dwv)', () => 
     const ground = computeLevel(grounded, plumbedBones('bonesframing_gnd', 'lvl0'))
     expect(ground.warnings.some((w) => w.includes('riser to the storey below'))).toBe(false)
     expect(
-      ground.members.some(
-        (m) => m.sourceId === 'dwv-main' && m.label?.includes('sewer/septic'),
-      ),
+      ground.members.some((m) => m.sourceId === 'dwv-main' && m.label?.includes('sewer/septic')),
     ).toBe(true)
   })
 })
@@ -877,9 +951,7 @@ describe('LOD-400 B17: slab-on-grade booked == built, ground storeys only', () =
     // the storey floor is the JOIST platform + deck, not a pour
     expect(result.members.some((m) => m.role === 'joist')).toBe(true)
     const rows = computeTakeoff(result.members, result.fixtures, result.areas)
-    expect(
-      rows.some((r) => r.item === 'Concrete' && r.detail.includes('slab field')),
-    ).toBe(false)
+    expect(rows.some((r) => r.item === 'Concrete' && r.detail.includes('slab field'))).toBe(false)
     expect(rows.some((r) => r.item === 'Vapor retarder 6-mil poly')).toBe(false)
   })
 
@@ -1028,8 +1100,7 @@ describe('LOD-400 B18d: upper-storey girder posts bear on ground pads end-to-end
   test('pads join the foundation footings pour; a storey with no floor above pours none', () => {
     const rows = computeTakeoff(ground.members, ground.fixtures, ground.areas)
     const footings = rows.find(
-      (r) =>
-        r.section === 'Foundation' && r.item === 'Concrete' && r.detail.startsWith('footings'),
+      (r) => r.section === 'Foundation' && r.item === 'Concrete' && r.detail.startsWith('footings'),
     )
     expect(footings).toBeDefined()
     const single = girderScene()
@@ -1040,8 +1111,7 @@ describe('LOD-400 B18d: upper-storey girder posts bear on ground pads end-to-end
     expect(noUpper.members.filter((m) => m.label?.startsWith('Pad footing'))).toHaveLength(0)
     const soloRows = computeTakeoff(noUpper.members, noUpper.fixtures, noUpper.areas)
     const soloFootings = soloRows.find(
-      (r) =>
-        r.section === 'Foundation' && r.item === 'Concrete' && r.detail.startsWith('footings'),
+      (r) => r.section === 'Foundation' && r.item === 'Concrete' && r.detail.startsWith('footings'),
     )
     expect(Number(footings?.quantity)).toBeGreaterThan(Number(soloFootings?.quantity))
   })
@@ -1066,11 +1136,22 @@ describe('LOD-400 B7: hip thrust members ride computeLevel end-to-end', () => {
     delete nodes.w1d
     ;(nodes.bldg as Record<string, unknown>).children = ['lvl0']
     nodes.roofH = {
-      id: 'roofH', type: 'roof-segment', parentId: 'lvl0', position: [4, 2.5, 2.5],
-      rotation: 0, roofType: 'hip', width: 10, depth: 12, pitch: 40, thickness: 0.2,
+      id: 'roofH',
+      type: 'roof-segment',
+      parentId: 'lvl0',
+      position: [4, 2.5, 2.5],
+      rotation: 0,
+      roofType: 'hip',
+      width: 10,
+      depth: 12,
+      pitch: 40,
+      thickness: 0.2,
     }
     const cfg = FramingNode.parse({
-      id: 'bonesframing_b7', parentId: 'lvl0', jurisdiction: 'TX', detail: '400',
+      id: 'bonesframing_b7',
+      parentId: 'lvl0',
+      jurisdiction: 'TX',
+      detail: '400',
     })
     const result = computeLevel(nodes, cfg)
     const cjs = result.members.filter(
@@ -1085,8 +1166,12 @@ describe('LOD-400 B7: hip thrust members ride computeLevel end-to-end', () => {
     expect(ties.every((m) => m.label?.includes('R802.4.6'))).toBe(true)
     // S4 free ride: the sticks land on the existing Roof lumber pcs rows
     const rows = computeTakeoff(result.members, result.fixtures, result.areas)
-    expect(rows.some((r) => r.section === 'Roof' && r.item === '2x4' && r.unit === 'pcs')).toBe(true)
-    expect(rows.some((r) => r.section === 'Roof' && r.item === '2x6' && r.unit === 'pcs')).toBe(true)
+    expect(rows.some((r) => r.section === 'Roof' && r.item === '2x4' && r.unit === 'pcs')).toBe(
+      true,
+    )
+    expect(rows.some((r) => r.section === 'Roof' && r.item === '2x6' && r.unit === 'pcs')).toBe(
+      true,
+    )
   })
 })
 
@@ -1105,19 +1190,38 @@ describe('LOD-400 B8c: unframed roof intersections reach the computeLevel warnin
     delete nodes.w1d
     ;(nodes.bldg as Record<string, unknown>).children = ['lvl0']
     nodes.roofMain = {
-      id: 'roofMain', type: 'roof-segment', parentId: 'lvl0', position: [4, 2.5, 2.5],
-      rotation: 0, roofType: 'gable', width: 8.6, depth: 5.6, pitch: 40, thickness: 0.2,
+      id: 'roofMain',
+      type: 'roof-segment',
+      parentId: 'lvl0',
+      position: [4, 2.5, 2.5],
+      rotation: 0,
+      roofType: 'gable',
+      width: 8.6,
+      depth: 5.6,
+      pitch: 40,
+      thickness: 0.2,
     }
     nodes.roofWing = {
-      id: 'roofWing', type: 'roof-segment', parentId: 'lvl0', position: [4, 2.5, 5.5],
-      rotation: Math.PI / 2, roofType: 'hip', width: 3, depth: 3, pitch: 40, thickness: 0.2,
+      id: 'roofWing',
+      type: 'roof-segment',
+      parentId: 'lvl0',
+      position: [4, 2.5, 5.5],
+      rotation: Math.PI / 2,
+      roofType: 'hip',
+      width: 3,
+      depth: 3,
+      pitch: 40,
+      thickness: 0.2,
     }
     return nodes
   }
 
   test('a hip wing into the gable main warns (P4 prints computeLevel warnings verbatim)', () => {
     const cfg = FramingNode.parse({
-      id: 'bonesframing_b8c', parentId: 'lvl0', jurisdiction: 'TX', detail: '400',
+      id: 'bonesframing_b8c',
+      parentId: 'lvl0',
+      jurisdiction: 'TX',
+      detail: '400',
     })
     const result = computeLevel(hipWingScene(), cfg)
     const hits = result.warnings.filter((w) => w.includes(PHRASE))
@@ -1130,7 +1234,10 @@ describe('LOD-400 B8c: unframed roof intersections reach the computeLevel warnin
 
   test('LOD 200 stays schematic (valleys are not framed there either — no code claims)', () => {
     const cfg = FramingNode.parse({
-      id: 'bonesframing_b8c200', parentId: 'lvl0', jurisdiction: 'TX', detail: '200',
+      id: 'bonesframing_b8c200',
+      parentId: 'lvl0',
+      jurisdiction: 'TX',
+      detail: '200',
     })
     const result = computeLevel(hipWingScene(), cfg)
     expect(result.warnings.some((w) => w.includes(PHRASE))).toBe(false)

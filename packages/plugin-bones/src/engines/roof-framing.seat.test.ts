@@ -58,7 +58,8 @@ describe('seating: sloped members bear bottom-on-plate at the wall line', () => 
       const side = (r.position[2] as number) > 0 ? 1 : -1
       // dropped gable-end rafters carry the outlooker ladder one 2x4 lower
       const [olT] = LUMBER_CROSS_SECTIONS['2x4']
-      const atEnd = Math.abs(Math.abs(r.position[0] as number) - (roof.width / 2 - inchesT())) < 1e-6
+      const atEnd =
+        Math.abs(Math.abs(r.position[0] as number) - (roof.width / 2 - inchesT())) < 1e-6
       const drop = atEnd ? olT / Math.cos(PITCH) : 0
       expect(bottomFaceYAt(r, 'z', side * (roof.depth / 2))).toBeCloseTo(PLATE - drop, 6)
     }
@@ -70,7 +71,10 @@ describe('seating: sloped members bear bottom-on-plate at the wall line', () => 
     expect(rafters.length).toBeGreaterThan(4)
     for (const r of rafters) {
       expect(bottomFaceYAt(r, 'z', roof.depth / 2)).toBeCloseTo(PLATE, 6)
-      expect(bottomFaceYAt(r, 'z', -roof.depth / 2)).toBeCloseTo(PLATE + roof.depth * Math.tan(PITCH), 6)
+      expect(bottomFaceYAt(r, 'z', -roof.depth / 2)).toBeCloseTo(
+        PLATE + roof.depth * Math.tan(PITCH),
+        6,
+      )
     }
   })
 
@@ -100,10 +104,13 @@ describe('seating: sloped members bear bottom-on-plate at the wall line', () => 
     const ridge = byRole(members, 'ridge')[0] as Member
     const rise = (roof.depth / 2) * Math.tan(PITCH)
     // rafter top plane apex = plate + plumb depth + rise
-    expect((ridge.position[1] as number) + ridge.dims[1] / 2).toBeCloseTo(PLATE + rd / Math.cos(PITCH) + rise, 6)
-    const [, cjD] = LUMBER_CROSS_SECTIONS[spec.ceilingJoistSize]
+    expect((ridge.position[1] as number) + ridge.dims[1] / 2).toBeCloseTo(
+      PLATE + rd / Math.cos(PITCH) + rise,
+      6,
+    )
+    // W15 sizes the joist from the table (a 2x10 here) — its own depth decides
     for (const cj of byRole(members, 'ceiling-joist')) {
-      expect((cj.position[1] as number) - cjD / 2).toBeCloseTo(PLATE, 8)
+      expect((cj.position[1] as number) - cj.dims[1] / 2).toBeCloseTo(PLATE, 8)
     }
     const ties = members.filter((m) => m.label?.startsWith('hurricane tie'))
     expect(ties.length).toBeGreaterThan(0)
@@ -155,14 +162,19 @@ describe('seating: the wall above the plate is framed', () => {
     for (const s of rake) {
       expect(Math.abs(s.position[0] as number)).toBeCloseTo(roof.width / 2, 9)
       const z = s.position[2] as number
-      expect(s.dims[1]).toBeCloseTo((roof.depth / 2 - z) * Math.tan(PITCH) - (s.dims[0] / 2) * Math.tan(PITCH), 6)
+      expect(s.dims[1]).toBeCloseTo(
+        (roof.depth / 2 - z) * Math.tan(PITCH) - (s.dims[0] / 2) * Math.tan(PITCH),
+        6,
+      )
     }
   })
 
   test('a pediment past the bearing stud table says so', () => {
     // 8 m deep at 6:12 rises 4 m — past the Table R602.3(5) 10 ft bearing height
     const roof = seg({ roofType: 'shed', depth: 8 })
-    const flagged = studsOf(frameRoofs([roof], [], DEFAULT_SPEC), 'Pediment stud').filter((s) => s.flag)
+    const flagged = studsOf(frameRoofs([roof], [], DEFAULT_SPEC), 'Pediment stud').filter(
+      (s) => s.flag,
+    )
     expect(flagged.length).toBeGreaterThan(0)
     expect(flagged[0]?.flag).toContain('R602.3(5)')
   })

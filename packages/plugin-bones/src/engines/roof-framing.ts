@@ -26,7 +26,7 @@ import { DEFAULT_SPEC, type FramingSpec, tableSpanFor } from '../core/spec'
 import { stableMembers } from '../core/stable'
 import type { Member, WallSlice } from '../core/types'
 import { feet, formatIn, inches } from '../core/units'
-import { LUMBER_CROSS_SECTIONS, type LumberSize } from '../lumber'
+import { LUMBER_CROSS_SECTIONS, LUMBER_SIZES, type LumberSize } from '../lumber'
 import { hangerFor, partLabel } from './hardware'
 
 const EPS = 1e-6
@@ -235,12 +235,12 @@ function layout(from: number, to: number, spacing: number, halfT: number): numbe
 }
 
 /**
- * Frame every roof segment. `_walls` reserved for LOD 400 bearing checks
- * (rafters bearing on actual top plates instead of the segment eave line).
+ * Frame every roof segment. `walls` are the level's walls: the interior
+ * partitions the ceiling joists lap over (W15, `planCeilingJoists`).
  */
 export function frameRoofs(
   roofs: RoofSegmentSlice[],
-  _walls: WallSlice[],
+  walls: WallSlice[],
   spec: FramingSpec = DEFAULT_SPEC,
 ): Member[] {
   const members: Member[] = []
@@ -253,13 +253,13 @@ export function frameRoofs(
       // and-gablet combination roof is a specialty truss set no prescriptive
       // model should fake — only a top-level gable segment trusses out.
       if (truss) frameGableTruss(roof, spec, members)
-      else frameGable(roof, spec, members)
+      else frameGable(roof, spec, members, walls)
     } else if (roof.roofType === 'shed') frameShed(roof, spec, members)
-    else if (roof.roofType === 'hip') frameHip(roof, spec, members)
+    else if (roof.roofType === 'hip') frameHip(roof, spec, members, walls)
     else if (roof.roofType === 'flat') frameFlat(roof, spec, members)
-    else if (roof.roofType === 'gambrel') frameGambrel(roof, spec, members)
-    else if (roof.roofType === 'mansard') frameMansard(roof, spec, members)
-    else if (roof.roofType === 'dutch') frameDutch(roof, spec, members)
+    else if (roof.roofType === 'gambrel') frameGambrel(roof, spec, members, walls)
+    else if (roof.roofType === 'mansard') frameMansard(roof, spec, members, walls)
+    else if (roof.roofType === 'dutch') frameDutch(roof, spec, members, walls)
     // Truss mode on a non-gable segment: hip sets, mono trusses and mansard
     // packages are manufacturer-designed geometries — modeling one would be
     // an invented design. The segment stays stick-framed and SAYS SO (the
@@ -531,23 +531,478 @@ function splicedNote(spec: FramingSpec, length: number, over: string): string {
   return length > MAX_ONE_PIECE + EPS ? ` — spliced over ${over}` : ''
 }
 
-/** Ceiling-joist span flag (R802.5.1) — the joist is emitted ONE PIECE with
- * bearing modeled only at the eave walls, so `span` is its full length. */
-function ceilingJoistFlag(spec: FramingSpec, span: number): string | undefined {
-  if (spec.detail === '200') return undefined
-  const allowable = tableSpanFor(
-    spec.ceilingJoistSpans,
-    spec.ceilingJoistSize,
-    spec.ceilingJoistSpacing,
-  )
-  if (allowable !== undefined && span > allowable + EPS) {
-    return (
-      `Ceiling joist over prescriptive span — ${fmtM(span)} > ${fmtM(allowable)} allowable ` +
-      `(${spec.ceilingJoistSize} @ ${ocIn(spec.ceilingJoistSpacing)} o.c., SPF #2, ` +
-      `R802.5.1(2) limited storage) — lap over interior bearing or engineered member required`
+/**
+ * Ceiling joists: sized from the table, lapped over the interior bearing
+ * partition (R802.5.1 / R802.5.2.1) — W15.
+ *
+ * A one-piece joist eave to eave rarely fits Table R802.5.1(2): the
+ * generator's houses span 5–7 m and the 2x6 @ 16" row stops at 3.90 m. A
+ * framer never buys a 2x6 for that — he laps the joists over the interior
+ * partition that runs with the ridge (12 in on site; R802.5.2.1 asks ≥ 3
+ * in, nailed together per Table R802.5.2(1) so the tie still resists the
+ * rafter thrust), and where no partition runs under a station he goes up
+ * the table (2x8, 2x10 — the deepest row) or calls an engineered member.
+ * The planner answers per STATION: the partition covering that station
+ * nearest mid-span carries the lap; stations past every partition stay
+ * one piece. Each piece is checked against the table on ITS span (eave
+ * line to the partition centreline — conservative by the plate width);
+ * the size steps up the 2x ladder from the spec stock until a row spans
+ * it, and only when the deepest row still cannot span the piece does the
+ * over-span flag ride the member. LOD 200 keeps the schematic one-piece
+ * joist at the spec size (no flags there, as before).
+ */
+
+/** Lap at the bearing partition — the site convention (R802.5.2.1 minimum 3 in). */
+export const CJ_LAP = inches(12)
+/** A partition this close (m) to an eave line is the eave wall itself or a
+ * closet wall beside it — never the mid-span bearing. */
+const CJ_BEARING_EAVE_CLEAR = 0.65
+/** Shorter partitions are closet returns (the floor engine's bearing-wall
+ * length convention, `BEARING_WALL_MIN`). */
+const CJ_BEARING_MIN_LENGTH = 1.5
+/** A wall shorter than this is a pony / knee wall — nothing to lap on. */
+const CJ_BEARING_MIN_HEIGHT = 1.8
+/** "Runs with the ridge" tolerance (the floor engine's ±10° convention). */
+const CJ_BEARING_ANGLE_TAN = Math.tan((10 * Math.PI) / 180)
+
+/** An interior partition the joists can lap over, in the segment's frame. */
+export interface CeilingJoistBearing {
+  wallId: string
+  /** Partition centreline along the JOIST axis (span-centre origin, m). */
+  at: number
+  /** Extent along the ridge axis the partition covers, clipped to the roof. */
+  cover: readonly [number, number]
+}
+
+/** One buy-length piece along the joist axis (span-centre origin), UNCLIPPED. */
+export interface CeilingJoistPiece {
+  from: number
+  to: number
+  /** Order along the axis from the −eave: odd pieces sit beside their mates, one thickness over. */
+  index: number
+  size: LumberSize
+  /** Stock thickness / depth (m). */
+  t: number
+  d: number
+  /** The support-to-support span the size was chosen for (m). */
+  span: number
+  /** Table span for `size` at the plan spacing (undefined = no row). */
+  allowable: number | undefined
+  /** Over-span flag when even the deepest row cannot span the piece. */
+  flag: string | undefined
+  /** Label suffix — the lap, the sizing and the spacing story ('' when none applies). */
+  note: string
+}
+
+/** The joist line at one station: the partitions it laps over and its pieces. */
+export interface CeilingJoistVariant {
+  /** Partitions the line breaks at, −eave → +eave (empty = one piece). */
+  breaks: CeilingJoistBearing[]
+  pieces: CeilingJoistPiece[]
+  /** The deepest piece. */
+  dMax: number
+}
+
+export interface CeilingJoistPlan {
+  /** Joist stock thickness (every 2x row shares it). */
+  t: number
+  /** The deepest joist any station emits — the strut-bearing / band gate. */
+  dMax: number
+  /** Station spacing — the spec's, or 12" when tightening removed over-span flags. */
+  spacing: number
+  /** Partitions available to the segment, nearest mid-span first. */
+  bearings: CeilingJoistBearing[]
+  /** The joist line at a station (its ridge-axis coordinate). */
+  at: (ridge: number) => CeilingJoistVariant
+  /** The first piece covering joist-axis coordinate `u` at `station` (the base piece at a lap). */
+  pieceAt: (station: number, u: number) => CeilingJoistPiece | undefined
+  /** Sideways shift of the odd pieces at `station` (beside their mates). */
+  shiftAt: (station: number) => number
+  /** Sideways shift of the piece covering `u` at `station` (0 on even pieces). */
+  lapOffsetAt: (station: number, u: number) => number
+}
+
+/**
+ * Interior partitions that can carry a ceiling-joist lap: straight, ≥ 1.5
+ * m long, full height, running WITH the ridge (±10°), well inside the
+ * eave lines. `spansZ` = the joists run along segment-local Z (stations
+ * along X — the gable convention); `span` = the eave-to-eave span; `bandHalf`
+ * = the roof's half-extent along the ridge axis. Nearest mid-span first.
+ */
+export function ceilingJoistBearingsFor(
+  roof: RoofSegmentSlice,
+  walls: readonly WallSlice[],
+  spansZ: boolean,
+  span: number,
+  bandHalf: number,
+): CeilingJoistBearing[] {
+  const cos = Math.cos(roof.yaw)
+  const sin = Math.sin(roof.yaw)
+  // level-local → segment-local: the inverse of emitter()'s yaw
+  // (wx = x·cos + z·sin, wz = −x·sin + z·cos).
+  const toLocal = (p: readonly [number, number]): [number, number] => {
+    const dx = p[0] - roof.position[0]
+    const dz = p[1] - roof.position[2]
+    return [dx * cos - dz * sin, dx * sin + dz * cos]
+  }
+  const out: CeilingJoistBearing[] = []
+  for (const wall of walls) {
+    if (wall.exterior || wall.curved) continue
+    if (wall.length < CJ_BEARING_MIN_LENGTH || wall.height < CJ_BEARING_MIN_HEIGHT) continue
+    const a = toLocal(wall.start)
+    const b = toLocal(wall.end)
+    const spanA = spansZ ? a[1] : a[0]
+    const spanB = spansZ ? b[1] : b[0]
+    const ridgeA = spansZ ? a[0] : a[1]
+    const ridgeB = spansZ ? b[0] : b[1]
+    if (Math.abs(spanB - spanA) > CJ_BEARING_ANGLE_TAN * Math.abs(ridgeB - ridgeA)) continue
+    const at = (spanA + spanB) / 2
+    if (Math.abs(at) > span / 2 - CJ_BEARING_EAVE_CLEAR) continue
+    const lo = Math.max(-bandHalf, Math.min(ridgeA, ridgeB))
+    const hi = Math.min(bandHalf, Math.max(ridgeA, ridgeB))
+    if (hi - lo < CJ_BEARING_MIN_LENGTH - EPS) continue
+    out.push({ wallId: wall.id, at, cover: [lo, hi] })
+  }
+  return out.sort((p, q) => Math.abs(p.at) - Math.abs(q.at) || p.wallId.localeCompare(q.wallId))
+}
+
+/**
+ * The smallest 2x stock from the spec size up whose Table R802.5.1(2) row
+ * spans `span` at `spacing`, never deeper than `maxDepth` (a hip ridge
+ * overhead caps it). `fits` false = the deepest eligible row still falls
+ * short — the spec stock is returned with the honest flag to follow.
+ */
+export function ceilingJoistSizeFor(
+  spec: FramingSpec,
+  span: number,
+  maxDepth = Number.POSITIVE_INFINITY,
+  spacing = spec.ceilingJoistSpacing,
+): { size: LumberSize; allowable: number | undefined; fits: boolean; deepest: LumberSize } {
+  const stock = spec.ceilingJoistSize
+  const stockAllowable = tableSpanFor(spec.ceilingJoistSpans, stock, spacing)
+  if (stockAllowable === undefined) {
+    return { size: stock, allowable: undefined, fits: true, deepest: stock }
+  }
+  if (span <= stockAllowable + EPS) {
+    return { size: stock, allowable: stockAllowable, fits: true, deepest: stock }
+  }
+  const start = Math.max(0, LUMBER_SIZES.indexOf(stock))
+  let deepest: LumberSize = stock
+  let deepestAllowable = stockAllowable
+  for (const candidate of LUMBER_SIZES.slice(start + 1)) {
+    if (!candidate.startsWith('2x')) continue
+    const allowable = tableSpanFor(spec.ceilingJoistSpans, candidate, spacing)
+    if (allowable === undefined) continue
+    if (LUMBER_CROSS_SECTIONS[candidate][1] > maxDepth + EPS) break
+    deepest = candidate
+    deepestAllowable = allowable
+    if (span <= allowable + EPS)
+      return { size: candidate, allowable, fits: true, deepest: candidate }
+  }
+  return { size: stock, allowable: deepestAllowable, fits: false, deepest }
+}
+
+/**
+ * The partitions a joist line breaks at: walking from the −eave, the
+ * fewest laps that keep every piece within the spec stock's row — each
+ * break the farthest partition the stock still reaches; when the next
+ * partition is already past the row the line breaks there anyway (the
+ * piece sizes up, or flags). Partitions closer than two laps to the last
+ * break are skipped (the pieces would overlap each other).
+ */
+function ceilingJoistBreaks(
+  covering: readonly CeilingJoistBearing[],
+  span: number,
+  stockAllowable: number | undefined,
+): CeilingJoistBearing[] {
+  const out: CeilingJoistBearing[] = []
+  if (stockAllowable === undefined) return out
+  const sorted = [...covering].sort((a, b) => a.at - b.at)
+  let s = -span / 2
+  for (;;) {
+    if (span / 2 - s <= stockAllowable + EPS) break
+    const ahead = sorted.filter((b) => b.at - s >= 2 * CJ_LAP)
+    if (ahead.length === 0) break
+    const within = ahead.filter((b) => b.at - s <= stockAllowable + EPS)
+    const pick = (within.length > 0 ? within[within.length - 1] : ahead[0]) as CeilingJoistBearing
+    out.push(pick)
+    s = pick.at
+  }
+  return out
+}
+
+function ceilingJoistVariantFor(
+  spec: FramingSpec,
+  spacing: number,
+  span: number,
+  covering: readonly CeilingJoistBearing[],
+  maxDepth: number,
+  tightened: boolean,
+): CeilingJoistVariant {
+  const stock = spec.ceilingJoistSize
+  const [stockT, stockD] = LUMBER_CROSS_SECTIONS[stock]
+  if (spec.detail === '200') {
+    return {
+      breaks: [],
+      pieces: [
+        {
+          from: -span / 2,
+          to: span / 2,
+          index: 0,
+          size: stock,
+          t: stockT,
+          d: stockD,
+          span,
+          allowable: undefined,
+          flag: undefined,
+          note: '',
+        },
+      ],
+      dMax: stockD,
+    }
+  }
+  const stockAllowable = tableSpanFor(spec.ceilingJoistSpans, stock, spacing)
+  const breaks = ceilingJoistBreaks(covering, span, stockAllowable)
+  const edges = [-span / 2, ...breaks.map((b) => b.at), span / 2]
+  const oc = `${ocIn(spacing)} o.c.`
+  const spacingNote = tightened
+    ? ` — @ ${oc}, tightened from ${ocIn(spec.ceilingJoistSpacing)} o.c. for the span (R802.5.1(2))`
+    : ''
+  const pieces: CeilingJoistPiece[] = []
+  for (let i = 0; i + 1 < edges.length; i++) {
+    const a = edges[i] as number
+    const b = edges[i + 1] as number
+    const pieceSpan = b - a
+    const sized = ceilingJoistSizeFor(spec, pieceSpan, maxDepth, spacing)
+    const [t, d] = LUMBER_CROSS_SECTIONS[sized.size]
+    const before = breaks[i - 1]
+    const after = breaks[i]
+    const names = [before?.wallId, after?.wallId].filter((n): n is string => n !== undefined)
+    const plural = names.length > 1 ? 's' : ''
+    const lapNote =
+      names.length === 0
+        ? ''
+        : ` — lapped ${formatIn(CJ_LAP)} over bearing partition${plural} ${names.join(' and ')} (R802.5.2.1; nailed together per Table R802.5.2(1))`
+    const sizeNote =
+      sized.size === stock
+        ? ''
+        : ` — ${sized.size} from the R802.5.1(2) table for the ${fmtM(pieceSpan)} span (spec ${stock})`
+    let flag: string | undefined
+    if (!sized.fits && sized.allowable !== undefined) {
+      const deepest = `${sized.deepest} @ ${oc}${sized.deepest === stock ? '' : ' (the deepest R802.5.1(2) row)'}`
+      flag =
+        names.length === 0
+          ? `Ceiling joist over prescriptive span — ${fmtM(pieceSpan)} > ${fmtM(sized.allowable)} allowable ` +
+            `(${deepest}, SPF #2, R802.5.1(2) limited storage) — no interior partition runs with the ridge ` +
+            'under these joists to lap over (R802.5.2.1); engineered member required'
+          : `Ceiling joist over prescriptive span — even lapped over partition${plural} ${names.join(' and ')} ` +
+            `the ${fmtM(pieceSpan)} piece exceeds ${fmtM(sized.allowable)} allowable ` +
+            `(${deepest}, SPF #2, R802.5.1(2) limited storage) — engineered member required`
+    } else {
+      const buy = pieceSpan + (before ? CJ_LAP / 2 : 0) + (after ? CJ_LAP / 2 : 0)
+      flag = onePieceFlag('Ceiling joist', buy)
+    }
+    pieces.push({
+      from: before ? a - CJ_LAP / 2 : a,
+      to: after ? b + CJ_LAP / 2 : b,
+      index: i,
+      size: sized.size,
+      t,
+      d,
+      span: pieceSpan,
+      allowable: sized.allowable,
+      flag,
+      note: `${lapNote}${sizeNote}${spacingNote}`,
+    })
+  }
+  return { breaks, pieces, dMax: Math.max(...pieces.map((p) => p.d)) }
+}
+
+/** The tighter spacing the planner may fall back to (the 12" column of the table). */
+const CJ_TIGHT_SPACING = inches(12)
+
+/**
+ * Plan a segment's ceiling joists against the level's walls. `spansZ`,
+ * `span`, `bandHalf` as in `ceilingJoistBearingsFor`; `maxDepth` caps the
+ * stock (a hip ridge board overhead). `parallel` = the ridge-axis stations
+ * of members running WITH the joists (rafter planes, jacks) the shifted
+ * pieces must not land in; `stationHalfFor(depth)` bounds the shift.
+ *
+ * The stations along the band see different partition sets (a hall wall
+ * covers the middle, a bedroom wall one end); every set is planned on its
+ * own. When some piece still flags at the spec spacing and the 12" column
+ * clears flags, the whole segment's joists go to 12" o.c. — the table's
+ * own next move before an engineered member.
+ */
+export function planCeilingJoists(
+  roof: RoofSegmentSlice,
+  walls: readonly WallSlice[],
+  spec: FramingSpec,
+  opts: {
+    spansZ: boolean
+    span: number
+    bandHalf: number
+    maxDepth?: number
+    parallel: readonly number[]
+    parallelHalfT: number
+    stationHalfFor: (depth: number) => number
+  },
+): CeilingJoistPlan {
+  const maxDepth = opts.maxDepth ?? Number.POSITIVE_INFINITY
+  const schematic = spec.detail === '200'
+  const bearings = schematic
+    ? []
+    : ceilingJoistBearingsFor(roof, walls, opts.spansZ, opts.span, opts.bandHalf)
+  const coveringAt = (ridge: number): CeilingJoistBearing[] =>
+    bearings.filter((b) => ridge >= b.cover[0] - EPS && ridge <= b.cover[1] + EPS)
+  const keyOf = (cov: readonly CeilingJoistBearing[]) => cov.map((b) => b.wallId).join('|')
+  // the partition sets that occur along the band (sampled; the ends included)
+  const sets = new Map<string, CeilingJoistBearing[]>()
+  sets.set('', [])
+  const SAMPLE = 0.1
+  for (let r = -opts.bandHalf; r <= opts.bandHalf + EPS; r += SAMPLE) {
+    const cov = coveringAt(r)
+    sets.set(keyOf(cov), cov)
+  }
+  const build = (spacing: number, tightened: boolean) => {
+    const m = new Map<string, CeilingJoistVariant>()
+    for (const [k, cov] of sets) {
+      m.set(k, ceilingJoistVariantFor(spec, spacing, opts.span, cov, maxDepth, tightened))
+    }
+    return m
+  }
+  const overSpanCount = (m: Map<string, CeilingJoistVariant>) => {
+    let n = 0
+    for (const v of m.values()) {
+      for (const p of v.pieces) if (p.flag?.startsWith('Ceiling joist over prescriptive span')) n++
+    }
+    return n
+  }
+  let spacing = spec.ceilingJoistSpacing
+  let variants = build(spacing, false)
+  if (!schematic && spacing > CJ_TIGHT_SPACING + EPS && overSpanCount(variants) > 0) {
+    const tight = build(CJ_TIGHT_SPACING, true)
+    if (overSpanCount(tight) < overSpanCount(variants)) {
+      spacing = CJ_TIGHT_SPACING
+      variants = tight
+    }
+  }
+  const tightened = spacing !== spec.ceilingJoistSpacing
+  const at = (ridge: number): CeilingJoistVariant => {
+    const cov = coveringAt(ridge)
+    const k = keyOf(cov)
+    let v = variants.get(k)
+    if (v === undefined) {
+      v = ceilingJoistVariantFor(spec, spacing, opts.span, cov, maxDepth, tightened)
+      variants.set(k, v)
+    }
+    return v
+  }
+  const dMax = Math.max(...[...variants.values()].map((v) => v.dMax))
+  const t = LUMBER_CROSS_SECTIONS[spec.ceilingJoistSize][0]
+  const clashes = (x: number, half: number) =>
+    opts.parallel.some((rx) => Math.abs(rx - x) < opts.parallelHalfT + half - EPS)
+  const shiftAt = (station: number): number => {
+    const v = at(station)
+    if (v.breaks.length === 0) return 0
+    // beside its mate toward the roof centre, unless a rafter plane sits
+    // there — then the other side; always inside the station band.
+    const toward = station > 0 ? -t : t
+    const stationHalf = opts.stationHalfFor(v.dMax)
+    for (const shift of [toward, -toward]) {
+      const x = station + shift
+      if (Math.abs(x) + t / 2 > stationHalf + EPS) continue
+      if (clashes(x, t / 2)) continue
+      return shift
+    }
+    return toward
+  }
+  const pieceAt = (station: number, u: number): CeilingJoistPiece | undefined =>
+    at(station).pieces.find((p) => u >= p.from - EPS && u <= p.to + EPS)
+  const lapOffsetAt = (station: number, u: number): number => {
+    const piece = pieceAt(station, u)
+    return piece !== undefined && piece.index % 2 === 1 ? shiftAt(station) : 0
+  }
+  return { t, dMax, spacing, bearings, at, pieceAt, shiftAt, lapOffsetAt }
+}
+
+/** Clip a piece's eave end(s) by `clip` (the B6 inscribed box); span-centre origin. */
+export function clipCeilingJoistPiece(
+  piece: Pick<CeilingJoistPiece, 'from' | 'to'>,
+  span: number,
+  clip: number,
+): { from: number; to: number } {
+  const from = piece.from <= -span / 2 + EPS ? piece.from + clip : piece.from
+  const to = piece.to >= span / 2 - EPS ? piece.to - clip : piece.to
+  return { from, to }
+}
+
+/**
+ * Level warnings for the lapped joists: which partitions carry the laps —
+ * they must be framed as BEARING walls (the wall engine frames every
+ * partition alike; the load path below is the reader's check).
+ */
+export function ceilingJoistBearingWarnings(members: readonly Member[]): string[] {
+  const byWall = new Map<string, number>()
+  for (const m of members) {
+    if (m.role !== 'ceiling-joist') continue
+    const hit = / over bearing partitions? (.+?) \(R802\.5\.2\.1/.exec(m.label ?? '')
+    if (hit === null) continue
+    for (const id of (hit[1] as string).split(' and ')) byWall.set(id, (byWall.get(id) ?? 0) + 1)
+  }
+  if (byWall.size === 0) return []
+  const list = [...byWall.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .map(([id, n]) => `${id} (${n} joist pieces)`)
+    .join(', ')
+  return [
+    `ceiling joists lap over interior partition${byWall.size === 1 ? '' : 's'} ${list} ` +
+      '(R802.5.2.1) — frame as BEARING: double top plate, studs stacked over the floor girder / ' +
+      'thickened slab below, the lap nailed per Table R802.5.2(1)',
+  ]
+}
+
+/**
+ * Emit the planned joist piece(s) at a station (W15): the base piece at
+ * the station, the lapped piece beside it (`lapOffsetAt`), each clipped at
+ * its eave end by `clipFor(depth)` (the B6 inscribed box). `spansZ` = the
+ * joist axis is segment-local Z (the +X box yawed −π/2), else X.
+ */
+function emitCeilingJoistPieces(
+  emit: Emit,
+  plan: CeilingJoistPlan,
+  station: number,
+  spansZ: boolean,
+  span: number,
+  clipFor: (depth: number) => number,
+  plateY: number,
+  labelFor: (size: LumberSize) => string,
+  extraFlag?: string,
+): void {
+  const v = plan.at(station)
+  const shift = v.breaks.length > 0 ? plan.shiftAt(station) : 0
+  for (const piece of v.pieces) {
+    const { from, to } = clipCeilingJoistPiece(piece, span, clipFor(piece.d))
+    const len = to - from
+    if (len < 0.3) continue
+    const centre = (from + to) / 2
+    const x = station + (piece.index % 2 === 1 ? shift : 0)
+    const flag =
+      [piece.flag, extraFlag].filter((f): f is string => f !== undefined).join(' | ') || undefined
+    emit(
+      'ceiling-joist',
+      piece.size,
+      [len, piece.d, piece.t],
+      spansZ ? [x, plateY + piece.d / 2, centre] : [centre, plateY + piece.d / 2, x],
+      spansZ ? -Math.PI / 2 : 0,
+      0,
+      len,
+      'lumber',
+      `${labelFor(piece.size)}${piece.note}`,
+      undefined,
+      flag,
     )
   }
-  return onePieceFlag('Ceiling joist', span)
 }
 
 // ---------------------------------------------------------------------------
@@ -863,7 +1318,12 @@ function infillStuds(
 const infillLabel = (spec: FramingSpec, what: string): string =>
   `${what} ${spec.exteriorStudSize} @ ${ocIn(spec.studSpacing)} o.c. — on the top plate, cut to the rafter`
 
-function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) {
+function frameGable(
+  roof: RoofSegmentSlice,
+  spec: FramingSpec,
+  members: Member[],
+  walls: readonly WallSlice[] = [],
+) {
   const emit = emitter(roof, members)
   const [t, rd] = LUMBER_CROSS_SECTIONS[spec.rafterSize]
   const halfT = t / 2
@@ -901,8 +1361,20 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
 
   // ---- span discipline (R802.4.1): mid-span purlin fix, or the honest flag ----
   // Ceiling-joist stock decides the strut bearing plane (they exist in every
-  // gable — the rafter ties of R802.4.2), so it is resolved up here.
-  const [cjT, cjD] = LUMBER_CROSS_SECTIONS[spec.ceilingJoistSize]
+  // gable — the rafter ties of R802.4.2), so it is resolved up here. W15:
+  // the joists are planned against the interior partitions — sized per
+  // station from the table, lapped over the partition under them — and
+  // the strut gate below rides the deepest joist the plan emits.
+  const cjPlan = planCeilingJoists(roof, walls, spec, {
+    spansZ: true,
+    span: roof.depth,
+    bandHalf: roof.width / 2,
+    parallel: xs,
+    parallelHalfT: halfT,
+    stationHalfFor: () => roof.width / 2 - halfWall,
+  })
+  const cjT = cjPlan.t
+  const cjD = cjPlan.dMax
   const allowable = rafterAllowable(spec)
   const overSpan = allowable !== undefined && run > allowable + EPS
   // Purlin line at half the run: the rafter UNDERSIDE there (centerline lies
@@ -1144,12 +1616,11 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
     if (clash === undefined) return x0
     return clash + (clash >= 0 ? -1 : 1) * (halfT + half)
   }
-  const cjFlag = ceilingJoistFlag(spec, roof.depth)
   // Stations stay inside the end walls' inner faces — the gable studs own the wall plane.
   const cjStations = layout(
     -(roof.width / 2 - halfWall),
     roof.width / 2 - halfWall,
-    spec.ceilingJoistSpacing,
+    cjPlan.spacing,
     cjT / 2,
   ).map((x0) => besideRafter(x0, cjT / 2))
   // B6: the deck rides the rafter-TOP plane, and near the eave a square
@@ -1158,25 +1629,14 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
   // INSCRIBES inside the clip exactly like the rafters' plumb-cut boxes.
   // Span/flag math stays on the FULL depth (the buy length). LOD 200 has
   // no deck and keeps the schematic full box.
-  const cjClip =
-    spec.detail === '200' || tan <= EPS ? 0 : Math.max(0, (cjD - rd / cosT) / tan + 0.002)
-  const cjLen = roof.depth - 2 * cjClip
+  const cjClipFor = (d: number) =>
+    spec.detail === '200' || tan <= EPS ? 0 : Math.max(0, (d - rd / cosT) / tan + 0.002)
+  // W15: per station — the plan's size, its pieces lapped over the
+  // partition below. +X box yawed onto +Z: ψ = -π/2 (three: +X → (cosψ, 0, -sinψ)).
+  const cjLabel = (size: LumberSize) =>
+    `Ceiling joist ${size}${spec.detail === '400' ? ' — rafter tie (R802.4.2), ends clipped to the roof slope' : ''}`
   for (const x of cjStations) {
-    if (cjLen < 0.3) break
-    // +X box yawed onto +Z: ψ = -π/2 (three: +X → (cosψ, 0, -sinψ)).
-    emit(
-      'ceiling-joist',
-      spec.ceilingJoistSize,
-      [cjLen, cjD, cjT],
-      [x, plateY + cjD / 2, 0],
-      -Math.PI / 2,
-      0,
-      cjLen,
-      'lumber',
-      `Ceiling joist ${spec.ceilingJoistSize}${spec.detail === '400' ? ' — rafter tie (R802.4.2), ends clipped to the roof slope' : ''}`,
-      undefined,
-      cjFlag,
-    )
+    emitCeilingJoistPieces(emit, cjPlan, x, true, roof.depth, cjClipFor, plateY, cjLabel)
   }
 
   // ---- gable-end infill: studs on the plate up to the end rafter ----
@@ -1233,14 +1693,20 @@ function frameGable(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
           `Purlin ${spec.rafterSize} @ mid-span under rafters (R802.5.1) — halves the ${fmtM(run)} projection${splicedNote(spec, purlinLen, 'struts')}`,
         )
         for (const sx of stations) {
+          // W15: the foot lands on the joist piece under THIS purlin line —
+          // the lapped piece sits one thickness over, and may be deeper.
+          const footX = sx + cjPlan.lapOffsetAt(sx, side * purlinZ)
+          const footY = plateY + (cjPlan.pieceAt(sx, side * purlinZ)?.d ?? cjPlan.dMax)
+          const len = strutTop - footY
+          if (len < inches(3)) continue
           emit(
             'post',
             STRUT_SIZE,
-            [sT, strutLen, sW],
-            [sx, (strutTop + strutBot) / 2, side * purlinZ],
+            [sT, len, sW],
+            [footX, (strutTop + footY) / 2, side * purlinZ],
             0,
             0,
-            strutLen,
+            len,
             'lumber',
             `Purlin strut ${STRUT_SIZE} @ ≤4 ft o.c. — bears on ceiling joists (assumed bearing, R802.5.1)`,
           )
@@ -1695,7 +2161,12 @@ function frameShed(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[])
   })
 }
 
-function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) {
+function frameHip(
+  roof: RoofSegmentSlice,
+  spec: FramingSpec,
+  members: Member[],
+  walls: readonly WallSlice[] = [],
+) {
   const emit = emitter(roof, members)
   const [t, rd] = LUMBER_CROSS_SECTIONS[spec.rafterSize]
   const halfT = t / 2
@@ -2020,13 +2491,7 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
   // hip boxes stay clear above the joist top: past longHalf − cjEndClear a
   // jack/king underside descends into the joist — the small triangular end
   // ceilings ride a stub-joist follow-up (honesty over fake wood).
-  const [cjT, cjD] = LUMBER_CROSS_SECTIONS[spec.ceilingJoistSize]
   const shortSpan = 2 * run
-  // Clearance vs the end-plane rafter UNDERSIDES (centerline − rd/(2cosθ)
-  // vertical, descending to the end eave at tanθ); + one hip thickness for
-  // the hip boxes' plan band crossing the joist line at the corner runs.
-  const cjEndClear = tan <= EPS ? longHalf : cjD / tan + t + 0.002
-  const cjBandHalf = longHalf - cjEndClear
   // Sister BESIDE any parallel rafter plane — the long-plane commons AND
   // the side-plane jacks past the ridge ends (both run with the joists) —
   // snapped toward the roof center (the gable besideRafter convention).
@@ -2036,6 +2501,35 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
       cjParallel.push(ridgeHalf + d, -(ridgeHalf + d))
     }
   }
+  // The joists CROSS the ridge line at plan center — on a near-flat hip
+  // (an inner mansard crown can compute a ~5° pitch) the ridge board's
+  // underside descends INTO the joist band; no room = no fake wood (the
+  // collar-tie low-pitch skip convention; the hip/crown ridge's own
+  // R802.4.3 flag rides the ridge member itself — B8a extension, NIGHT-10).
+  // W15: that headroom also CAPS the stock the planner may size up to.
+  const [, cjRidgeD] = LUMBER_CROSS_SECTIONS[ridgeSizeFor(spec.rafterSize)]
+  const cjHeadroom =
+    ridgeHalf <= 0.05 ? Number.POSITIVE_INFINITY : ridgeY + seat - cjRidgeD - plateY - 0.002
+  // Clearance vs the end-plane rafter UNDERSIDES (centerline − rd/(2cosθ)
+  // vertical, descending to the end eave at tanθ); + one hip thickness for
+  // the hip boxes' plan band crossing the joist line at the corner runs.
+  const cjEndClearFor = (d: number) => (tan <= EPS ? longHalf : d / tan + t + 0.002)
+  // W15: planned against the interior partitions — the long axis is the
+  // ridge axis, so a partition running with the ridge carries the lap;
+  // the band and the ridge check ride the deepest joist the plan emits.
+  const cjPlan = planCeilingJoists(roof, walls, spec, {
+    spansZ: alongX,
+    span: shortSpan,
+    bandHalf: longHalf,
+    maxDepth: cjHeadroom,
+    parallel: cjParallel,
+    parallelHalfT: halfT,
+    stationHalfFor: (d) => longHalf - cjEndClearFor(d),
+  })
+  const cjT = cjPlan.t
+  const cjD = cjPlan.dMax
+  const cjEndClear = cjEndClearFor(cjD)
+  const cjBandHalf = longHalf - cjEndClear
   const besideRafter = (u0: number, half: number): number => {
     const clash = cjParallel.find((ru) => Math.abs(ru - u0) < halfT + half - EPS)
     if (clash === undefined) return u0
@@ -2046,10 +2540,9 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
   // corner never pokes the deck riding the rafter TOPs. Span/flag math
   // stays on the FULL short span (the buy length); LOD 200 has no deck and
   // keeps the schematic full box (the gable cjClip convention).
-  const cjClip =
-    spec.detail === '200' || tan <= EPS ? 0 : Math.max(0, (cjD - rd / cosT) / tan + 0.002)
-  const cjLen = shortSpan - 2 * cjClip
-  const cjFlag = ceilingJoistFlag(spec, shortSpan)
+  const cjClipFor = (d: number) =>
+    spec.detail === '200' || tan <= EPS ? 0 : Math.max(0, (d - rd / cosT) / tan + 0.002)
+  const cjLen = shortSpan - 2 * cjClipFor(cjD)
   // B7 fix round (skeptic F1): the END planes' thrust story must PRINT,
   // not live in code comments — the two end planes' rafters (jacks +
   // kings, thrusting along the LONG axis at the end eaves) get no
@@ -2063,20 +2556,12 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
     spec.detail === '400'
       ? 'hip end planes: rafter ties parallel to the end-plane span + end-triangle stub joists not modeled (collar ties ride the ridge portion only) — verify tie detail (R802.4.2)'
       : undefined
-  const cjComposedFlag =
-    [cjFlag, cjEndGapFlag].filter((f): f is string => f !== undefined).join(' | ') || undefined
-  // The joists CROSS the ridge line at plan center — on a near-flat hip
-  // (an inner mansard crown can compute a ~5° pitch) the ridge board's
-  // underside descends INTO the joist band; no room = no fake wood (the
-  // collar-tie low-pitch skip convention; the hip/crown ridge's own
-  // R802.4.3 flag rides the ridge member itself — B8a extension, NIGHT-10).
-  const [, cjRidgeD] = LUMBER_CROSS_SECTIONS[ridgeSizeFor(spec.rafterSize)]
   const cjClearsRidge = ridgeHalf <= 0.05 || plateY + cjD + 0.002 <= ridgeY + seat - cjRidgeD
   if (cjLen >= 0.3 && cjBandHalf > cjT && cjClearsRidge) {
     // Two neighboring stations can snap beside the SAME jack (the layout's
     // guaranteed end station lands next to a grid station at some pitches)
     // — collapse any snapped pair closer than one joist thickness.
-    const snapped = layout(-cjBandHalf, cjBandHalf, spec.ceilingJoistSpacing, cjT / 2)
+    const snapped = layout(-cjBandHalf, cjBandHalf, cjPlan.spacing, cjT / 2)
       .map((u0) => besideRafter(u0, cjT / 2))
       .sort((a, b) => a - b)
     const cjStations: number[] = []
@@ -2085,21 +2570,21 @@ function frameHip(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) 
       if (prev !== undefined && u - prev < cjT - EPS) continue
       cjStations.push(u)
     }
+    const cjLabel = (size: LumberSize) =>
+      `Ceiling joist ${size} — rafter tie (R802.4.2)${
+        spec.detail === '400' ? ', ends clipped to the roof slope' : ''
+      }`
     for (const u of cjStations) {
-      emit(
-        'ceiling-joist',
-        spec.ceilingJoistSize,
-        [cjLen, cjD, cjT],
-        alongX ? [u, plateY + cjD / 2, 0] : [0, plateY + cjD / 2, u],
-        alongX ? -Math.PI / 2 : 0,
-        0,
-        cjLen,
-        'lumber',
-        `Ceiling joist ${spec.ceilingJoistSize} — rafter tie (R802.4.2)${
-          spec.detail === '400' ? ', ends clipped to the roof slope' : ''
-        }`,
-        undefined,
-        cjComposedFlag,
+      emitCeilingJoistPieces(
+        emit,
+        cjPlan,
+        u,
+        alongX,
+        shortSpan,
+        cjClipFor,
+        plateY,
+        cjLabel,
+        cjEndGapFlag,
       )
     }
   }
@@ -2452,7 +2937,12 @@ function frameFlat(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[])
  * finishes the run to the ridge (getPrimarySlopeRun/-RiseFraction in
  * @pascal-app/core).
  */
-function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) {
+function frameGambrel(
+  roof: RoofSegmentSlice,
+  spec: FramingSpec,
+  members: Member[],
+  walls: readonly WallSlice[] = [],
+) {
   const emit = emitter(roof, members)
   const [t, rd] = LUMBER_CROSS_SECTIONS[spec.rafterSize]
   const halfT = t / 2
@@ -2687,20 +3177,29 @@ function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
 
   // ceiling-joist stations, HOISTED — the break struts below bear on them
   // (same math + order as the old inline loop: byte-equal joists).
-  const [cjT, cjD] = LUMBER_CROSS_SECTIONS[spec.ceilingJoistSize]
-  const cjFlag = ceilingJoistFlag(spec, roof.depth)
+  // W15: planned against the interior partitions (the gable convention).
+  const cjPlan = planCeilingJoists(roof, walls, spec, {
+    spansZ: true,
+    span: roof.depth,
+    bandHalf: roof.width / 2,
+    parallel: xs,
+    parallelHalfT: halfT,
+    stationHalfFor: () => roof.width / 2 - halfWall,
+  })
+  const cjT = cjPlan.t
+  const cjD = cjPlan.dMax
   // B6: end boxes inscribe inside the field clip to the STEEP lower plane
   // (the gable convention above) — the deck rides the rafter tops.
-  const cjClip =
-    spec.detail === '200' || tan <= EPS ? 0 : Math.max(0, (cjD - rd / cosT) / tan + 0.002)
-  const cjLen = roof.depth - 2 * cjClip
+  const cjClipFor = (d: number) =>
+    spec.detail === '200' || tan <= EPS ? 0 : Math.max(0, (d - rd / cosT) / tan + 0.002)
+  const cjLen = roof.depth - 2 * cjClipFor(cjD)
   const cjStations: number[] =
     cjLen < 0.3
       ? []
       : layout(
           -(roof.width / 2 - halfWall),
           roof.width / 2 - halfWall,
-          spec.ceilingJoistSpacing,
+          cjPlan.spacing,
           cjT / 2,
         ).map((x0) => {
           // sister BESIDE a coincident rafter plane, toward the center (round-14)
@@ -2782,14 +3281,19 @@ function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
       breakPurlinFlag,
     )
     for (const sx of strutStations) {
+      // W15: the foot lands on the joist piece under THIS purlin line.
+      const footX = sx + cjPlan.lapOffsetAt(sx, side * breakZ)
+      const footY = plateY + (cjPlan.pieceAt(sx, side * breakZ)?.d ?? cjPlan.dMax)
+      const len = strutTop - footY
+      if (len < inches(3)) continue
       emit(
         'post',
         STRUT_SIZE,
-        [sT, strutLen, sW],
-        [sx, (strutTop + strutBot) / 2, side * breakZ],
+        [sT, len, sW],
+        [footX, (strutTop + footY) / 2, side * breakZ],
         0,
         0,
-        strutLen,
+        len,
         'lumber',
         `Purlin strut ${STRUT_SIZE} @ ≤4 ft o.c. — bears on ceiling joists (assumed bearing, R802.5.1)`,
       )
@@ -2797,20 +3301,10 @@ function frameGambrel(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
   }
 
   // ceiling joists at the eave + collar ties in the upper third
+  const cjLabel = (size: LumberSize) =>
+    `Ceiling joist ${size}${spec.detail === '400' ? ' — rafter tie (R802.4.2), ends clipped to the roof slope' : ''}`
   for (const x of cjStations) {
-    emit(
-      'ceiling-joist',
-      spec.ceilingJoistSize,
-      [cjLen, cjD, cjT],
-      [x, plateY + cjD / 2, 0],
-      -Math.PI / 2,
-      0,
-      cjLen,
-      'lumber',
-      `Ceiling joist ${spec.ceilingJoistSize}${spec.detail === '400' ? ' — rafter tie (R802.4.2), ends clipped to the roof slope' : ''}`,
-      undefined,
-      cjFlag,
-    )
+    emitCeilingJoistPieces(emit, cjPlan, x, true, roof.depth, cjClipFor, plateY, cjLabel)
   }
   const collarY = eaveY + (2 / 3) * activeRh
   if (collarY > breakY) {
@@ -2909,6 +3403,7 @@ function frameSkirt(
     rise: number
     label: string
   },
+  walls: readonly WallSlice[] = [],
 ) {
   const emit = emitter(roof, members)
   const [t, rd] = LUMBER_CROSS_SECTIONS[spec.rafterSize]
@@ -3084,7 +3579,6 @@ function frameSkirt(
   // dutch gablet model their own joists + R802.4.6 collar ties at the
   // skirt top. A degenerate skirt whose planes never rise clear of the
   // joist band emits nothing (honesty over buried wood).
-  const [cjT, cjD] = LUMBER_CROSS_SECTIONS[spec.ceilingJoistSize]
   const spansZ = roof.depth <= roof.width // joists run along the short axis
   const shortSpan = Math.min(roof.width, roof.depth)
   const longHalf = Math.max(roof.width, roof.depth) / 2
@@ -3094,27 +3588,42 @@ function frameSkirt(
   const bandRun = spansZ ? endRun : sideRun
   const spanTan = Math.tan(spanTheta)
   const bandTan = Math.tan(bandTheta)
-  const cjClip =
+  // the parallel skirt rafters (the two faces whose rafter stations run
+  // with the joists) — the planner keeps the lapped piece out of them
+  const spanStationHalf = spansZ ? roof.width / 2 - endRun - t : roof.depth / 2 - sideRun - t
+  const parallel = layout(-spanStationHalf, spanStationHalf, spec.rafterSpacing, halfT)
+  const cjEndClearFor = (d: number) =>
+    bandTan <= EPS ? Number.POSITIVE_INFINITY : d / bandTan + t + 0.002
+  // W15: planned against the interior partitions (the hip convention).
+  const cjPlan = planCeilingJoists(roof, walls, spec, {
+    spansZ,
+    span: shortSpan,
+    bandHalf: longHalf,
+    parallel,
+    parallelHalfT: halfT,
+    stationHalfFor: (d) => longHalf - cjEndClearFor(d),
+  })
+  const cjT = cjPlan.t
+  const cjD = cjPlan.dMax
+  const cjClipFor = (d: number) =>
     spec.detail === '200'
       ? 0
       : spanTan <= EPS
         ? Number.POSITIVE_INFINITY
-        : Math.max(0, (cjD - rd / Math.cos(spanTheta)) / spanTan + 0.002)
-  const cjEndClear = bandTan <= EPS ? Number.POSITIVE_INFINITY : cjD / bandTan + t + 0.002
+        : Math.max(0, (d - rd / Math.cos(spanTheta)) / spanTan + 0.002)
+  const cjClip = cjClipFor(cjD)
+  const cjEndClear = cjEndClearFor(cjD)
   const cjLen = shortSpan - 2 * cjClip
   const cjBandHalf = longHalf - cjEndClear
   if (cjLen >= 0.3 && cjBandHalf > cjT && cjClip <= spanRun && cjEndClear <= bandRun) {
-    // sister BESIDE the parallel skirt rafters (the two faces whose rafter
-    // stations run with the joists), snapped toward the center, snapped
-    // pairs deduped — the hip/gable convention.
-    const spanStationHalf = spansZ ? roof.width / 2 - endRun - t : roof.depth / 2 - sideRun - t
-    const parallel = layout(-spanStationHalf, spanStationHalf, spec.rafterSpacing, halfT)
+    // sister BESIDE the parallel skirt rafters, snapped toward the center,
+    // snapped pairs deduped — the hip/gable convention.
     const besideRafter = (u0: number): number => {
       const clash = parallel.find((ru) => Math.abs(ru - u0) < halfT + cjT / 2 - EPS)
       if (clash === undefined) return u0
       return clash + (clash >= 0 ? -1 : 1) * (halfT + cjT / 2)
     }
-    const snapped = layout(-cjBandHalf, cjBandHalf, spec.ceilingJoistSpacing, cjT / 2)
+    const snapped = layout(-cjBandHalf, cjBandHalf, cjPlan.spacing, cjT / 2)
       .map(besideRafter)
       .sort((a, b) => a - b)
     const cjStations: number[] = []
@@ -3123,7 +3632,6 @@ function frameSkirt(
       if (prev !== undefined && u - prev < cjT - EPS) continue
       cjStations.push(u)
     }
-    const cjFlag = ceilingJoistFlag(spec, shortSpan)
     // B7 fix round (skeptic F1): the same end-plane thrust statement the
     // hip prints — the skirt END faces' rafters get no parallel tie and
     // the band stops short of the corner triangles. 400-only (B6 stated-
@@ -3132,23 +3640,21 @@ function frameSkirt(
       spec.detail === '400'
         ? `${label.toLowerCase()} end faces: rafter ties parallel to the end-face span + end-triangle stub joists not modeled — verify tie detail (R802.4.2)`
         : undefined
-    const cjComposedFlag =
-      [cjFlag, cjEndGapFlag].filter((f): f is string => f !== undefined).join(' | ') || undefined
+    const cjLabel = (size: LumberSize) =>
+      `Ceiling joist ${size} — rafter tie (R802.4.2)${
+        spec.detail === '400' ? ', ends clipped to the roof slope' : ''
+      }`
     for (const u of cjStations) {
-      emit(
-        'ceiling-joist',
-        spec.ceilingJoistSize,
-        [cjLen, cjD, cjT],
-        spansZ ? [u, plateY + cjD / 2, 0] : [0, plateY + cjD / 2, u],
-        spansZ ? -Math.PI / 2 : 0,
-        0,
-        cjLen,
-        'lumber',
-        `Ceiling joist ${spec.ceilingJoistSize} — rafter tie (R802.4.2)${
-          spec.detail === '400' ? ', ends clipped to the roof slope' : ''
-        }`,
-        undefined,
-        cjComposedFlag,
+      emitCeilingJoistPieces(
+        emit,
+        cjPlan,
+        u,
+        spansZ,
+        shortSpan,
+        cjClipFor,
+        plateY,
+        cjLabel,
+        cjEndGapFlag,
       )
     }
   }
@@ -3164,7 +3670,12 @@ function innerSpec(spec: FramingSpec): FramingSpec {
  * mansardSteepWidthRatio at the schema pitch, rising mansardSteepHeightRatio
  * of the peak height), finished with a shallow hip over the inset rectangle.
  */
-function frameMansard(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) {
+function frameMansard(
+  roof: RoofSegmentSlice,
+  spec: FramingSpec,
+  members: Member[],
+  walls: readonly WallSlice[] = [],
+) {
   const swr = roof.mansardSteepWidthRatio ?? SHAPE_DEFAULTS.mansardSteepWidthRatio
   const shr = roof.mansardSteepHeightRatio ?? SHAPE_DEFAULTS.mansardSteepHeightRatio
   const minSpan = Math.min(roof.width, roof.depth)
@@ -3173,12 +3684,18 @@ function frameMansard(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
   const activeRh = skirtRise / shr
   const upperRise = activeRh - skirtRise
 
-  frameSkirt(roof, spec, members, {
-    sideRun: inset,
-    endRun: inset,
-    rise: skirtRise,
-    label: 'Mansard skirt',
-  })
+  frameSkirt(
+    roof,
+    spec,
+    members,
+    {
+      sideRun: inset,
+      endRun: inset,
+      rise: skirtRise,
+      label: 'Mansard skirt',
+    },
+    walls,
+  )
 
   // upper deck: a shallow hip over the inset rectangle
   const innerRun = minSpan / 2 - inset
@@ -3251,7 +3768,12 @@ function frameMansard(roof: RoofSegmentSlice, spec: FramingSpec, members: Member
  * waist rectangle (getDutchRoofMetrics in @pascal-app/core; the gablet barge
  * rake is treated as 0 — the waist end-walls carry the gablet).
  */
-function frameDutch(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]) {
+function frameDutch(
+  roof: RoofSegmentSlice,
+  spec: FramingSpec,
+  members: Member[],
+  walls: readonly WallSlice[] = [],
+) {
   const dwr = roof.dutchHipWidthRatio ?? SHAPE_DEFAULTS.dutchHipWidthRatio
   const dhr = roof.dutchHipHeightRatio ?? SHAPE_DEFAULTS.dutchHipHeightRatio
   const waistRatio = roof.dutchWaistLengthRatio ?? SHAPE_DEFAULTS.dutchWaistLengthRatio
@@ -3266,12 +3788,18 @@ function frameDutch(roof: RoofSegmentSlice, spec: FramingSpec, members: Member[]
   const waistHalfShort = Math.max(0, minSpan / 2 - inset)
   const endRun = maxSpan / 2 - waistHalfLong
 
-  frameSkirt(roof, spec, members, {
-    sideRun: alongX ? inset : endRun,
-    endRun: alongX ? endRun : inset,
-    rise: skirtRise,
-    label: 'Dutch skirt',
-  })
+  frameSkirt(
+    roof,
+    spec,
+    members,
+    {
+      sideRun: alongX ? inset : endRun,
+      endRun: alongX ? endRun : inset,
+      rise: skirtRise,
+      label: 'Dutch skirt',
+    },
+    walls,
+  )
 
   // gablet over the waist rectangle
   if (waistHalfLong > 0.2 && waistHalfShort > 0.1 && upperRise > EPS) {

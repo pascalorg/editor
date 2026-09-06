@@ -97,6 +97,42 @@ const isLumber = (s: unknown): s is LumberSize =>
   typeof s === 'string' && s in LUMBER_CROSS_SECTIONS
 
 /** Read the detail variables from what was framed. */
+/**
+ * The station spacing (in) of a joist family read off the members: the
+ * largest group (one roof) spreads its stations along one axis; the gaps
+ * between neighbouring stations vote for 12 / 16 / 24 within ±2 in (a
+ * station sistered beside a rafter sits 1.5 in off the grid; the lapped
+ * pieces beside their mates are closer than 3 in and do not vote).
+ */
+export function stationSpacingIn(members: readonly Member[]): number | null {
+  const bySource = new Map<string, Member[]>()
+  for (const m of members) bySource.set(m.sourceId, [...(bySource.get(m.sourceId) ?? []), m])
+  const group = [...bySource.values()].sort((a, b) => b.length - a.length)[0]
+  if (group === undefined || group.length < 3) return null
+  const xs = group.map((m) => m.position[0])
+  const zs = group.map((m) => m.position[2])
+  const range = (v: number[]) => Math.max(...v) - Math.min(...v)
+  const coords = [...new Set((range(xs) >= range(zs) ? xs : zs).map((v) => Math.round(v * 1000)))]
+    .sort((a, b) => a - b)
+    .map((v) => v / 1000 / IN)
+  const gaps: number[] = []
+  for (let i = 1; i < coords.length; i++) {
+    const g = (coords[i] as number) - (coords[i - 1] as number)
+    if (g > 3) gaps.push(g)
+  }
+  if (gaps.length === 0) return null
+  let best: number | null = null
+  let bestVotes = 0
+  for (const c of [12, 16, 24]) {
+    const votes = gaps.filter((g) => Math.abs(g - c) <= 2).length
+    if (votes > bestVotes) {
+      best = c
+      bestVotes = votes
+    }
+  }
+  return best
+}
+
 export function detailVariables(
   members: Member[],
   spec: FramingSpec = DEFAULT_SPEC,
@@ -133,6 +169,8 @@ export function detailVariables(
       .filter((m) => m.role === 'ceiling-joist' && isLumber(m.size))
       .map((m) => m.size as LumberSize),
   )
+  // W15 may tighten a segment's joists to 12" o.c. — read the spacing off the members
+  const cjSpacingIn = stationSpacingIn(roofMembers.filter((m) => m.role === 'ceiling-joist'))
   const fnd = members.filter((m) => m.system === 'foundation')
   const footings = fnd.filter(
     (m) => m.role === 'footing' && !/Pad footing|Footing step|thickened/i.test(m.label ?? ''),
@@ -182,7 +220,7 @@ export function detailVariables(
             spacingIn: Math.round(spec.rafterSpacing / IN),
             pitchRise: pitchAngle === null ? 6 : Math.max(1, Math.round(Math.tan(pitchAngle) * 12)),
             ceilingJoist: cjSize,
-            ceilingJoistSpacingIn: Math.round(spec.ceilingJoistSpacing / IN),
+            ceilingJoistSpacingIn: cjSpacingIn ?? Math.round(spec.ceilingJoistSpacing / IN),
             ties: roofMembers.some((m) => /hurricane tie|H2\.5/i.test(m.label ?? '')),
             fascia: roofMembers.some((m) => m.role === 'fascia'),
           }

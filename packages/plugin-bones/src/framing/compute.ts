@@ -53,7 +53,12 @@ import { buildFoundation } from '../engines/foundation'
 import { flagLinesetTradeCrossings, layoutHvac } from '../engines/hvac'
 import { lgsFrameWalls } from '../engines/lgs-wall-framing'
 import { layoutPlumbing, placeMeterSpot } from '../engines/plumbing'
-import { detectUnframedRoofIntersections, extractRoofs, frameRoofs } from '../engines/roof-framing'
+import {
+  ceilingJoistBearingWarnings,
+  detectUnframedRoofIntersections,
+  extractRoofs,
+  frameRoofs,
+} from '../engines/roof-framing'
 import type { TakeoffAreas } from '../engines/takeoff'
 import { bracingWarnings, crossReferenceHoldDowns } from '../engines/wall-bracing'
 import {
@@ -1130,6 +1135,9 @@ function computeLevelUncached(
         const myOrdinal = levels[levelIndex]?.level ?? Number.POSITIVE_INFINITY
         for (const { level, roofs } of levelRoofs) {
           const framed = frameRoofs(roofs, activeWalls, spec)
+          // W15: which interior partitions the ceiling joists lap over —
+          // they must be framed as bearing walls (the reader's check).
+          warnings.push(...ceilingJoistBearingWarnings(framed))
           // B8c: segment pairs the valley detector does NOT serve (a hip
           // wing into a gable main, skewed/parallel/buried gable pairs)
           // frame straight through with no members — that gap must PRINT,
