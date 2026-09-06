@@ -24,7 +24,7 @@ import type { AnyNodeLike, NodeMap } from '../model'
 import { structuralPlans } from '../plans/structural-set'
 import { DEFAULT_VIEWPORT_LAYERS } from '../schema'
 import { buildStructuralDrawing, STRUCTURAL_SYSTEMS } from './structural'
-import { structuralModel } from './structural/model'
+import { flagsOf, structuralModel } from './structural/model'
 
 const SCRATCH =
   'C:/Users/steve/AppData/Local/Temp/claude/C--Dev-Pascal/a595fb05-e3d2-4d5c-afdf-c017ab20e61b/scratchpad'
@@ -595,8 +595,12 @@ describe('structural notes (SN1)', () => {
     const text = textOf(
       draw(nodes, 'notes', { viewport: { x: 1, y: 1, w: 33, h: 21, scale: 48 } }).plate ?? [],
     )
-    const flagged = model.members.filter((m) => m.flag)
+    // the notes print the STRUCTURAL flags (flagsOf) — a plumbing or HVAC
+    // flag belongs on the P / M sheets; since W15 lapped the cottage's
+    // ceiling joists its structural flags can be none at all
+    const flagged = flagsOf(model.members)
     if (flagged.length > 0) expect(text).toContain('ENGINE FLAG')
+    else expect(text).not.toContain('ENGINE FLAG')
     expect(text).toContain('MODEL WARNING')
   })
 })

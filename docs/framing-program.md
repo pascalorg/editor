@@ -980,3 +980,13 @@ W16 Roof intersections and the hip — DONE 2026-09-06 in three parts (see log W
   plate, inside the clearances; the ranch-class hip frames strips, the
   40° hip none, LOD 200 none), the B7 statement expectations reworded,
   two main-joist tests read past the stubs — Bones 2,091, typecheck clean.
+
+- 2026-09-06 morning: monorepo run after the roof round — 6,425 tests: the
+  sheets' SN1 "every engine flag reaches the paper" test assumed the
+  cottage always carries a STRUCTURAL flag (its one-piece ceiling joists);
+  W15 lapped and sized them, so the only flags left were HVAC / plumbing,
+  which the S notes rightly leave to the P / M sheets — the test now reads
+  `flagsOf` (the structural set) and expects no ENGINE FLAG line when
+  there is none. The three `packages/cli` failures (private-storage mode
+  bits on a fresh home, the managed-runtime force-stop pair) are Windows
+  environment failures untouched by this work. Editor app typecheck clean.
