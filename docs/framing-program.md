@@ -820,8 +820,8 @@ G52 Roof framing: rafters plumb-cut (mitered) to the ridge board and to the
     hip commons open).
 G53 Electrical and plumbing routing reviewed against how houses are built:
     what runs through walls, what runs through the attic and drops into
-    the wall, what runs under the slab (electrical done, S2; plumbing S3).
-G54 Sewer runs under the house to the street or the rear — a setting.
+    the wall, what runs under the slab (electrical S2, plumbing S3 — done).
+G54 Sewer runs under the house to the street or the rear — a setting (done, S3).
 G55 The electrical service drops in overhead from the pole or comes
     underground — a setting; the main panel is outside on the left or
     right side, favouring the garage (done, S2).
@@ -829,11 +829,47 @@ G56 HVAC: real system styles and transitions, sized for the house; the
     ducts work; Manual J load calcs automated onto the plans.
 G57 Hot and cold water: under the slab where that is the practice (the
     slab states), in the walls where it is not — reviewed and set by
-    jurisdiction.
+    jurisdiction (done, S3: attic / under-slab / crawl / walls by state and floor).
 G58 The generation exposes the options: HVAC system and type, service
     entrance, sewer direction, water routing.
 
 ## Log (continued)
+
+- 2026-09-07: **Batch S3 — the sewer to the street or the rear, the
+  water meter at the property line, the supply through the attic / under
+  the slab / in the crawl space (G54, G57, G53 plumbing).** The plumbing
+  review: the building drain left through whichever exterior wall was
+  nearest the stack and stopped 0.6 m outside it; the water meter sat on
+  the house wall; the hot and cold home runs bored through the studs on
+  the wall graph on every house. Now, with the street frame: the exit is
+  the nearest point on an exterior wall FACING the chosen side
+  (`sewerSide` 'street' — the default — or 'rear'), and a 4 in sewer
+  lateral runs on from the exit cleanout to the property line at
+  1/8 in/ft (P3005.3) with a two-way cleanout there (the tap and the
+  easement are the utility's — labelled verify; the rear line is assumed
+  at the same distance as the front setback). The water meter stands in
+  its box at grade 0.3 m inside the property line, and a buried ¾ in
+  service (below the footing depth standing in for frost, P2603.5)
+  Manhattans to the house entry and rises sleeved into the entry riser —
+  the cold-main source id, so the connectivity gate walks it. The supply
+  route (`waterRoute`): 'walls' keeps the wall-graph planes; 'attic'
+  rises up the source wall, crosses level over the tallest plate and the
+  caller's riser drops to the stub; 'under-slab' / 'crawl' drop under the
+  floor plane (just over the drains' plane) and rise. The default
+  answers Steve's question: the crawl space under a raised floor; on a
+  slab the ATTIC in FL / TX / GA / SC / NC / AL / MS / LA / TN / OK / AR
+  (PEX home runs down the walls — today's practice), UNDER the slab in
+  CA / AZ / NV / NM (the older copper practice), the walls elsewhere and
+  when the state is unknown. Every run says which on its label. Tests:
+  plumbing.services +8 (street / rear exits and laterals, the legacy
+  no-street case, the meter box and buried service, the default table,
+  attic / under-slab / walls runs); connectivity, safety, MEP and SAT
+  gates green; the master baseline recaptured once more (the baseline's
+  doors give it a street, and TX now runs its supply through the attic).
+  Honest gaps: the room-category fallback path (no placed fixtures) takes
+  the sewer side but not the lateral or the meter box; the attic crossing
+  is one level plane (no joist-bay discipline); the under-slab plane sits
+  0.12 m over the drains' plane and can still cross a sloping drain leg.
 
 - 2026-09-07: **Batch S2 — the street frame, the meter-main on a side
   wall, wiring across the attic, the service drop from the pole (G53,

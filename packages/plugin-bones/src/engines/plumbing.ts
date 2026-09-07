@@ -51,6 +51,7 @@ import type {
 } from '../core/types'
 import { feet, inches, toFeet } from '../core/units'
 import type { PlacedFixtureSlice } from '../core/wall-model'
+import { outwardNormal } from './street'
 import {
   buildWallGraph,
   clearOfOpenings,
@@ -258,6 +259,159 @@ export function placeWhSpot(
   const height = tank ? 1.5 : 0.6
   const bottom = tank ? inches(18) : 1.2 // M1307.3 garage ignition height
   return { wall: whWall, u: whU, tank, heightAff: bottom + height / 2 }
+}
+
+/**
+ * What the plumbing engine reads beyond the walls, rooms and spec (compute
+ * threads them; direct callers may omit them and get the legacy planes):
+ * the supply-route default rides the foundation and the state, the attic
+ * plane sits over the tallest plate, the meter box and the sewer lateral
+ * stand at grade.
+ */
+export type PlumbingContext = {
+  raisedFloor?: boolean
+  stateCode?: string
+  /** Level-local y of the attic run plane (over the tallest wall's plates). */
+  atticY?: number
+  /** Level-local y of grade at the house. */
+  groundY?: number
+}
+
+/** The slab states whose practice runs the supply through the ATTIC (PEX). */
+const ATTIC_SUPPLY_STATES = new Set(['FL', 'TX', 'GA', 'SC', 'NC', 'AL', 'MS', 'LA', 'TN', 'OK', 'AR'])
+/** The slab states whose older practice ran copper UNDER the slab. */
+const UNDER_SLAB_SUPPLY_STATES = new Set(['CA', 'AZ', 'NV', 'NM'])
+
+/**
+ * The supply route when the panel set none (Steve: "do hot and cold water
+ * go into the walls? I thought those run under the slab typically? or is
+ * that CA only?"): the crawl space under a raised floor; on a slab the
+ * attic in the hot-humid / warm slab states (PEX home runs down the
+ * walls), under the slab in the desert-West states (the older copper
+ * practice), the walls elsewhere and when the state is unknown.
+ */
+export function defaultWaterRoute(context: PlumbingContext): NonNullable<FramingSpec['waterRoute']> {
+  if (context.raisedFloor) return 'crawl'
+  const st = (context.stateCode ?? '').toUpperCase()
+  if (ATTIC_SUPPLY_STATES.has(st)) return 'attic'
+  if (UNDER_SLAB_SUPPLY_STATES.has(st)) return 'under-slab'
+  return 'walls'
+}
+
+/** The lot line's projection along `dir`: the walls' extent that way plus the setback. */
+function lotLineAlong(walls: WallSlice[], dir: readonly [number, number], setbackM: number): number {
+  let maxWall = Number.NEGATIVE_INFINITY
+  for (const w of walls) for (const p of [w.start, w.end]) maxWall = Math.max(maxWall, p[0] * dir[0] + p[1] * dir[1])
+  return maxWall + setbackM
+}
+
+/**
+ * Sewer exit TOWARD a side (spec.sewerSide with spec.street): the nearest
+ * point on an exterior wall whose outward normal faces that way — the
+ * street wall or the rear wall — carried 0.6 m out when the stack already
+ * stands on it; the nearest-anywhere exit when no wall faces that way.
+ */
+function sewerExitToward(walls: WallSlice[], rooms: RoomSlice[], stackAt: Pt, core: Pt, dir: readonly [number, number]): Pt {
+  const straight = walls.filter((w) => !w.curved && w.length >= 0.1)
+  let best: { point: Pt; distance: number; n: readonly [number, number] } | null = null
+  for (const wall of straight) {
+    if (!wall.exterior) continue
+    const n = outwardNormal(wall, rooms, straight)
+    if (n[0] * dir[0] + n[1] * dir[1] < 0.5) continue
+    const { point, distance } = nearestOnWall(wall, stackAt)
+    if (!best || distance < best.distance) best = { point, distance, n }
+  }
+  if (!best) return sewerExitFrom(walls, stackAt, core)
+  let exit: Pt = best.point
+  if (manhattanDist(stackAt, exit) < 0.3) exit = [exit[0] + best.n[0] * 0.6, exit[1] + best.n[1] * 0.6]
+  return exit
+}
+
+/** The exit the spec asks for: toward the street / the rear when the street is known, else the nearest. */
+function sewerExitFor(spec: FramingSpec, walls: WallSlice[], rooms: RoomSlice[], stackAt: Pt, core: Pt): Pt {
+  const street = spec.street
+  if (!street) return sewerExitFrom(walls, stackAt, core)
+  const dir: readonly [number, number] = spec.sewerSide === 'rear' ? [-street.dir[0], -street.dir[1]] : street.dir
+  return sewerExitToward(walls, rooms, stackAt, core, dir)
+}
+
+/**
+ * The sewer lateral: from the exit cleanout on to the property line at
+ * 1/8 in/ft (a 4 in lateral, P3005.3), with a two-way cleanout there — the
+ * tap into the main and the easement are the utility's (verify). Street
+ * side: the front setback; rear side: the same distance assumed.
+ */
+function sewerLateral(
+  members: Member[],
+  fixtures: Fixture[],
+  spec: FramingSpec,
+  walls: WallSlice[],
+  exit: Pt,
+  arriveY: number,
+  groundY: number,
+): void {
+  const street = spec.street
+  if (!street) return
+  const rear = spec.sewerSide === 'rear'
+  const dir: readonly [number, number] = rear ? [-street.dir[0], -street.dir[1]] : street.dir
+  const lot = lotLineAlong(walls, dir, street.setbackM)
+  const exitProj = exit[0] * dir[0] + exit[1] * dir[1]
+  const run = lot - exitProj
+  if (run < 0.3) return
+  const to: Pt = [exit[0] + dir[0] * run, exit[1] + dir[1] * run]
+  const lateral: PipeSpec = {
+    side: pipeSide(4),
+    material: 'pvc',
+    role: 'pipe-run',
+    sourceId: 'dwv-lateral',
+    label: `4" sewer lateral — to the ${rear ? 'rear / alley' : 'street'} main at the property line, 1/8"/ft (P3005.3; the tap and the easement are the utility's — verify)`,
+  }
+  leg(members, lateral, exit, to, arriveY, true, 0.05, 0.125 / 12)
+  fixtures.push({
+    system: 'plumbing',
+    kind: 'cleanout',
+    position: [to[0], groundY + 0.15, to[1]],
+    rotationY: 0,
+    sourceId: 'dwv-lateral',
+    label: `Cleanout @ property line — two-way (P3005.2; ${rear ? 'rear' : 'street'} side)`,
+  })
+}
+
+/**
+ * Supply route (spec.waterRoute): 'walls' — the wall-graph planes; 'attic'
+ * — up the source wall, level across the attic, the drop is the caller's;
+ * 'under-slab' / 'crawl' — down the source wall, level under the floor, the
+ * rise is the caller's. Returns the y the run ENDS at over / under `to`
+ * (the plane itself for 'walls'), so the caller's riser to the stub starts
+ * there and nothing is drawn twice.
+ */
+function supplyRoute(
+  members: Member[],
+  spec: PipeSpec,
+  graph: ReturnType<typeof buildWallGraph>,
+  from: WallPoint,
+  to: WallPoint,
+  y: number,
+  walls: WallSlice[],
+  route: NonNullable<FramingSpec['waterRoute']>,
+  planes: { atticY: number; underY: number },
+): number {
+  if (route === 'walls') {
+    routePipe(members, spec, graph, from, to, y, walls)
+    return y
+  }
+  const a = wallPlan(from) as Pt
+  const b = wallPlan(to) as Pt
+  const yRun = route === 'attic' ? planes.atticY : planes.underY
+  const note =
+    route === 'attic'
+      ? ' (attic run — down the wall to the stub)'
+      : route === 'crawl'
+        ? ' (in the crawl space — up through the floor to the stub)'
+        : ' (under the slab — up through the slab to the stub, sleeved P2603.4)'
+  riser(members, spec, a, y, yRun)
+  manhattan(members, { ...spec, label: `${spec.label}${note}` }, a, b, yRun, false)
+  return yRun
 }
 
 /**
@@ -1033,6 +1187,7 @@ function placedPlumbing(
   placed: PlacedFixtureSlice[],
   overrides?: ServiceOverrides,
   groundLevel = true,
+  context: PlumbingContext = {},
 ): { members: Member[]; fixtures: Fixture[] } {
   const members: Member[] = []
   const fixtures: Fixture[] = []
@@ -1404,7 +1559,7 @@ function placedPlumbing(
   // re-slope toward wherever it stands), at 1/4"/ft ----
   const core: Pt = [wx, wz]
   const exit: Pt =
-    overridePlanPoint(walls, overrides?.sewerExit) ?? sewerExitFrom(walls, stackAt, core)
+    overridePlanPoint(walls, overrides?.sewerExit) ?? sewerExitFor(spec, walls, rooms, stackAt, core)
   const drainTable = rules.plumbing?.dwv?.maxDfuBuildingDrainBySizeAtQuarterInSlope ?? {}
   const cap3 = drainTable['3'] ?? 42
   const cap4 = drainTable['4'] ?? 216
@@ -1422,7 +1577,7 @@ function placedPlumbing(
   // there is no foundation and no sewer: the run is a branch main that
   // NEEDS a riser to the storey below — say so instead of printing
   // foundation fiction (S2).
-  drainManhattan(
+  const mainArriveY = drainManhattan(
     members,
     {
       side: pipeSide(mainSize),
@@ -1455,6 +1610,8 @@ function placedPlumbing(
       ? 'Cleanout @ sewer exit (P3005.2.1)'
       : 'Cleanout @ drain main terminus (P3005.2)',
   })
+  // the lateral on to the property line (street known, ground storey)
+  if (groundLevel && spec.street) sewerLateral(members, fixtures, spec, walls, exit, mainArriveY, context.groundY ?? 0)
 
   // ---- re-vents: one per wet wall, rising to 6" above the flood rim and
   // returning to the stack along the wall graph (P3104.4). The map is
@@ -1504,14 +1661,46 @@ function placedPlumbing(
   const panelClashFlag = meterInPanelSpace
     ? `TRADE CLASH: water meter + cold main sit in the electrical panel's dedicated space (NEC 110.26(E) — no foreign piping over the panel footprint); move the water entry along the wall`
     : undefined
+  // With the street known the METER stands at the property line in a box
+  // at grade (the utility's), and a buried service line runs to the house
+  // entry on the wall the engine chose; without it the meter is the entry.
+  const meterBox: Pt | null =
+    spec.street && groundLevel
+      ? (() => {
+          const dir = spec.street.dir
+          const lot = lotLineAlong(straight, dir, spec.street.setbackM)
+          const proj = meterPlan[0] * dir[0] + meterPlan[1] * dir[1]
+          const run = lot - 0.3 - proj
+          return run > 0.5 ? ([meterPlan[0] + dir[0] * run, meterPlan[1] + dir[1] * run] as Pt) : null
+        })()
+      : null
+  const groundYHere = context.groundY ?? 0
+  // The FIXTURE stays at the house entry — it is what the electrical GES
+  // bonds (NEC 250.104, within 5 ft of the entry) and where the cold main
+  // starts; the meter box at the property line is drawn as equipment.
   fixtures.push({
     system: 'plumbing',
     kind: 'water-meter',
     position: [meterPlan[0], METER_Y, meterPlan[1]],
     rotationY: 0,
     sourceId: meterWall.id,
-    label: `Water service meter — ¾" min (P2903.7)${meterInPanelSpace ? ' — in panel dedicated space (NEC 110.26(E))' : ''}`,
+    label: meterBox
+      ? `Water entry — ¾" min service from the meter at the property line (P2903.7); bond here (NEC 250.104)`
+      : `Water service meter — ¾" min (P2903.7)${meterInPanelSpace ? ' — in panel dedicated space (NEC 110.26(E))' : ''}`,
   })
+  if (meterBox) {
+    members.push({
+      system: 'plumbing',
+      role: 'equipment',
+      dims: [0.5, 0.3, 0.35],
+      length: 0.5,
+      position: [meterBox[0], groundYHere + 0.15, meterBox[1]],
+      rotation: [0, Math.atan2(-spec.street!.dir[1], spec.street!.dir[0]), 0],
+      material: 'concrete',
+      sourceId: 'water-service',
+      label: "Water meter box at the property line (the utility's) — ¾\" min service to the house (P2903.7)",
+    })
+  }
 
   // ---- water heater: garage wall like the electrical panel (tank, M1307.3
   // 18" ignition height) — else tankless on an exterior wall at 1.2 m AFF —
@@ -1694,6 +1883,19 @@ function placedPlumbing(
     }
     // The meter riser is the pipe that physically stands in the panel's
     // dedicated space when the trades collide — it carries the warning.
+    // the buried service from the meter box at the property line to the
+    // house entry, below frost (P2603.5 — the footing depth stands in for
+    // the frost line), rising sleeved through the slab into the entry
+    if (meterBox) {
+      const burial = groundYHere - Math.max(0.45, spec.footingDepth + 0.15)
+      const service: PipeSpec = {
+        ...mainSpec,
+        label: `Water service ¾" — buried from the meter box to the house entry, below frost (P2603.5 / P2603.4 sleeve at the slab)`,
+      }
+      riser(members, service, meterBox, groundYHere + 0.05, burial)
+      manhattan(members, service, meterBox, meterPlan, burial, false)
+      riser(members, service, meterPlan, burial, METER_Y)
+    }
     riser(
       members,
       panelClashFlag ? { ...mainSpec, flag: panelClashFlag } : mainSpec,
@@ -1701,10 +1903,15 @@ function placedPlumbing(
       METER_Y,
       SUPPLY_COLD_Y,
     )
-    routePipe(members, mainSpec, graph, meterAnchor, whAnchor, SUPPLY_COLD_Y, walls)
+    // the supply route: the walls' planes, the attic, or under the floor
+    const waterRoute = spec.waterRoute ?? defaultWaterRoute(context)
+    let tallest = 0
+    for (const w of straight) tallest = Math.max(tallest, w.height)
+    const planes = { atticY: context.atticY ?? tallest + 0.15, underY: base + 0.12 }
+    const mainEnd = supplyRoute(members, mainSpec, graph, meterAnchor, whAnchor, SUPPLY_COLD_Y, walls, waterRoute, planes)
     // Manifold riser at the WH wall bay: crosses every stepped cold plane,
     // then feeds the tank inlet.
-    riser(members, mainSpec, whWallPlan, SUPPLY_COLD_Y, whCenterY)
+    riser(members, mainSpec, whWallPlan, mainEnd, whCenterY)
     leg(members, mainSpec, whWallPlan, whPlan, whCenterY, false, 0.015)
     const hotMain: PipeSpec = {
       side: SUPPLY_MAIN,
@@ -1728,8 +1935,8 @@ function placedPlumbing(
         sourceId: `cold-${a.f.id}`,
         label: `Cold ½" — ${KIND_LABEL[a.f.kind]}`,
       }
-      routePipe(members, cold, graph, whAnchor, a.anchor, coldY, walls)
-      riser(members, cold, a.plan, coldY, a.stubY)
+      const coldEnd = supplyRoute(members, cold, graph, whAnchor, a.anchor, coldY, walls, waterRoute, planes)
+      riser(members, cold, a.plan, coldEnd, a.stubY)
       if (a.island) {
         manhattan(
           members,
@@ -1769,9 +1976,9 @@ function placedPlumbing(
           a.plan[0] + a.anchor.wall.dir[0] * 0.025,
           a.plan[1] + a.anchor.wall.dir[1] * 0.025,
         ]
-        routePipe(members, hot, graph, whAnchor, a.anchor, hotY, walls)
-        leg(members, hot, a.plan, hotAt, hotY, false, 0.01)
-        riser(members, hot, hotAt, hotY, a.stubY)
+        const hotEnd = supplyRoute(members, hot, graph, whAnchor, a.anchor, hotY, walls, waterRoute, planes)
+        leg(members, hot, a.plan, hotAt, hotEnd, false, 0.01)
+        riser(members, hot, hotAt, hotEnd, a.stubY)
         if (a.island) {
           manhattan(
             members,
@@ -1822,9 +2029,10 @@ export function layoutPlumbing(
   /** False on upper storeys: no foundation to sleeve, no sewer to reach —
    * the drain main truthfully labels its missing riser instead (S2). */
   groundLevel = true,
+  context: PlumbingContext = {},
 ): { members: Member[]; fixtures: Fixture[] } {
   if (placed.length > 0) {
-    const result = placedPlumbing(walls, rooms, spec, placed, overrides, groundLevel)
+    const result = placedPlumbing(walls, rooms, spec, placed, overrides, groundLevel, context)
     // Placed fixtures but no usable walls → let the fallback try (it
     // returns empty on wall-less scenes too, but never crashes).
     if (result.members.length > 0 || result.fixtures.length > 0) return result
@@ -2177,7 +2385,7 @@ function roomPlumbing(
   // (or the sewer-exit service node, verbatim), buried, at 1/4"/ft ----
   const totalDfu = wetRooms.reduce((sum, r) => sum + (DFU_BY_CATEGORY[r.category] ?? 2), 0)
   const exit: Pt =
-    overridePlanPoint(walls, overrides?.sewerExit) ?? sewerExitFrom(walls, stackAt, core)
+    overridePlanPoint(walls, overrides?.sewerExit) ?? sewerExitFor(spec, walls, rooms, stackAt, core)
   const undersized = totalDfu > MAIN_CAPACITY_DFU
   // Every main leg that passes through concrete carries its own P2603.4
   // sleeve note (per-crossing, R2); legs shallower than a wall's footing

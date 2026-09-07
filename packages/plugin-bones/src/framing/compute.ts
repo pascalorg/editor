@@ -1556,6 +1556,8 @@ function computeLevelUncached(
     // Placed sanitary items are the demand points; the engine's
     // room-category inference is only the fallback (slice hoisted above —
     // shared with the electrical sink-radius/counter/basin machinery).
+    let tallestWall = 0
+    for (const w of activeWalls) tallestWall = Math.max(tallestWall, w.height)
     const plumbing = layoutPlumbing(
       activeWalls,
       activeRooms,
@@ -1563,6 +1565,7 @@ function computeLevelUncached(
       placedFixtures,
       services,
       isGroundLevel,
+      { raisedFloor, stateCode: code, atticY: tallestWall + 0.15, groundY: gradeY },
     )
     members.push(...plumbing.members)
     fixtures.push(...plumbing.fixtures)
