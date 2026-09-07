@@ -103,66 +103,117 @@ function querySnapshot(raycaster: THREE.Raycaster): unknown[] | undefined {
   return snapshot
 }
 
-function createCachedRaycast() {
-  const queries = new Map<
-    RootState,
-    {
-      snapshot: unknown[]
-      subtrees: Map<THREE.Object3D, THREE.Intersection[]>
-    }
-  >()
-  const fallback = new Set<RootState>()
+type CachedQuery = {
+  generation: number
+  snapshot: unknown[] | undefined
+  revision: number
+  fallback: boolean
+  subtrees: WeakMap<THREE.Object3D, { generation: number; start: number; end: number }>
+  hits: THREE.Intersection[]
+  objectHits: THREE.Intersection[]
+}
 
-  function collect(
-    object: THREE.Object3D,
-    raycaster: THREE.Raycaster,
-    cache: Map<THREE.Object3D, THREE.Intersection[]>,
-  ): THREE.Intersection[] {
-    const cached = cache.get(object)
-    if (cached) return cached
-    const hits: THREE.Intersection[] = []
+function distanceOrder(a: THREE.Intersection, b: THREE.Intersection) {
+  return a.distance - b.distance
+}
+
+function createCachedRaycast() {
+  const queries = new WeakMap<RootState, CachedQuery>()
+  const activeQueries: CachedQuery[] = []
+  const rootHits: THREE.Intersection[] = []
+  let generation = 0
+  let revision = 0
+
+  function collect(object: THREE.Object3D, raycaster: THREE.Raycaster, query: CachedQuery) {
+    // Only R3F-managed objects can also appear as independently queried event roots.
+    const managed = (object as Instance<THREE.Object3D>['object']).__r3f !== undefined
+    const cached = managed ? query.subtrees.get(object) : undefined
+    const { hits, objectHits } = query
+    if (cached?.generation === generation) {
+      for (let i = cached.start; i < cached.end; i++) hits.push(hits[i]!)
+      return
+    }
+    const start = hits.length
     // Three's runtime accepts false as a recursion barrier, although its declaration says void.
-    const result: unknown = object.layers.test(raycaster.layers)
-      ? object.raycast(raycaster, hits)
-      : undefined
+    let result: unknown
+    if (object.layers.test(raycaster.layers)) {
+      result = object.raycast(raycaster, objectHits)
+      for (let i = 0; i < objectHits.length; i++) hits.push(objectHits[i]!)
+      objectHits.length = 0
+    }
     if (result !== false) {
       const children = object.children
       for (let i = 0, length = children.length; i < length; i++) {
-        for (const hit of collect(children[i]!, raycaster, cache)) hits.push(hit)
+        collect(children[i]!, raycaster, query)
       }
     }
-    cache.set(object, hits)
-    return hits
+    if (cached) {
+      cached.generation = generation
+      cached.start = start
+      cached.end = hits.length
+    } else if (managed) {
+      query.subtrees.set(object, { generation, start, end: hits.length })
+    }
   }
 
   return {
     clear() {
-      queries.clear()
-      fallback.clear()
+      generation++
+      revision = 0
+      for (const query of activeQueries) {
+        query.hits.length = 0
+        query.objectHits.length = 0
+        query.snapshot = undefined
+      }
+      activeQueries.length = 0
+      rootHits.length = 0
     },
     intersectObject(object: THREE.Object3D, state: RootState) {
       const { raycaster } = state
-      if (fallback.has(state)) return raycaster.intersectObject(object, true)
-      const snapshot = querySnapshot(raycaster)
       let query = queries.get(state)
-      if (
-        !snapshot ||
-        (query &&
-          (snapshot.length !== query.snapshot.length ||
-            snapshot.some((value, index) => !Object.is(value, query!.snapshot[index]))))
-      ) {
-        queries.delete(state)
-        fallback.add(state)
-        return raycaster.intersectObject(object, true)
-      }
       if (!query) {
-        query = { snapshot, subtrees: new Map() }
+        query = {
+          generation: -1,
+          snapshot: undefined,
+          revision: -1,
+          fallback: false,
+          subtrees: new WeakMap(),
+          hits: [],
+          objectHits: [],
+        }
         queries.set(state, query)
       }
-      // Sort a replay copy: the cached subtree must retain raycast/child emission order for ties.
-      return collect(object, raycaster, query.subtrees)
-        .slice()
-        .sort((a, b) => a.distance - b.distance)
+      if (query.generation !== generation) {
+        query.generation = generation
+        query.snapshot = querySnapshot(raycaster)
+        query.fallback = !query.snapshot
+        query.revision = revision
+        activeQueries.push(query)
+      } else if (query.revision !== revision && !query.fallback) {
+        // Any layer can mutate another query; cached replay alone cannot change it.
+        const snapshot = querySnapshot(raycaster)
+        query.fallback =
+          !snapshot ||
+          snapshot.length !== query.snapshot!.length ||
+          snapshot.some((value, index) => !Object.is(value, query!.snapshot![index]))
+        query.revision = revision
+      }
+      if (query.fallback) {
+        revision++
+        return raycaster.intersectObject(object, true)
+      }
+
+      let range = query.subtrees.get(object)
+      if (range?.generation !== generation) {
+        revision++
+        collect(object, raycaster, query)
+        range = query.subtrees.get(object)!
+      }
+      // Sorting must not disturb subtree emission order, including equal-distance hits.
+      rootHits.length = 0
+      for (let i = range.start; i < range.end; i++) rootHits.push(query.hits[i]!)
+      if (rootHits.length > 1) rootHits.sort(distanceOrder)
+      return rootHits
     },
   }
 }
@@ -203,6 +254,10 @@ function releaseInternalPointerCapture(
 }
 
 function createEvents(store: RootStore) {
+  // Nested pointer events from raycast/compute callbacks need separate scratch storage.
+  const collectors: ReturnType<typeof createCachedRaycast>[] = []
+  let collectionDepth = 0
+
   /** Calculates delta */
   function calculateDistance(event: DomEvent) {
     const { internal } = store.getState()
@@ -213,15 +268,17 @@ function createEvents(store: RootStore) {
 
   /** Returns true if an instance has a valid pointer-event registered, this excludes scroll, clicks etc */
   function filterPointerEvents(objects: THREE.Object3D[]) {
-    return objects.filter((obj) =>
-      ['Move', 'Over', 'Enter', 'Out', 'Leave'].some(
-        (name) =>
-          (obj as Instance<THREE.Object3D>['object']).__r3f?.handlers[
-            // biome-ignore lint/style/useTemplate: Keep the vendored dispatch identical to R3F 9.6.1.
-            ('onPointer' + name) as keyof EventHandlers
-          ],
-      ),
-    )
+    return objects.filter((obj) => {
+      const handlers = (obj as Instance<THREE.Object3D>['object']).__r3f?.handlers
+      return (
+        handlers &&
+        (handlers.onPointerMove ||
+          handlers.onPointerOver ||
+          handlers.onPointerEnter ||
+          handlers.onPointerOut ||
+          handlers.onPointerLeave)
+      )
+    })
   }
 
   function intersect(event: DomEvent, filter?: (objects: THREE.Object3D[]) => THREE.Object3D[]) {
@@ -243,48 +300,45 @@ function createEvents(store: RootStore) {
       state.events.compute?.(event, state)
     }
 
-    const collector = createCachedRaycast()
+    collectors[collectionDepth] ??= createCachedRaycast()
+    const collector = collectors[collectionDepth++]!
+    let hits: THREE.Intersection<THREE.Object3D>[] = []
+    try {
+      for (let i = 0; i < eventsObjects.length; i++) {
+        const obj = eventsObjects[i]!
+        const layer = getRootState(obj)
+        if (!layer?.events.enabled || layer.raycaster.camera === null) continue
 
-    function handleRaycast(obj: THREE.Object3D) {
-      const state = getRootState(obj)
-      // Skip event handling when noEvents is set, or when the raycasters camera is null
-      // biome-ignore lint/complexity/useOptionalChain: Keep the vendored dispatch identical to R3F 9.6.1.
-      if (!state || !state.events.enabled || state.raycaster.camera === null) return []
-
-      // When the camera is undefined we have to call the event layers update function
-      if (state.raycaster.camera === undefined) {
-        // A layer compute may mutate another layer or opaque plugin state.
-        collector.clear()
-        state.events.compute?.(event, state, state.previousRoot?.getState())
-        // If the camera is still undefined we have to skip this layer entirely
-        if (state.raycaster.camera === undefined) state.raycaster.camera = null!
+        if (layer.raycaster.camera === undefined) {
+          // A layer compute may mutate another layer or opaque plugin state.
+          collector.clear()
+          layer.events.compute?.(event, layer, layer.previousRoot?.getState())
+          if (layer.raycaster.camera === undefined) layer.raycaster.camera = null!
+        }
+        if (layer.raycaster.camera) {
+          const rootHits = collector.intersectObject(obj, layer)
+          for (let j = 0; j < rootHits.length; j++) hits.push(rootHits[j]!)
+        }
       }
-
-      // Intersect object by object
-      return state.raycaster.camera ? collector.intersectObject(obj, state) : []
+    } finally {
+      // User filters and dispatch can perform independent raycasts or change the scene.
+      collector.clear()
+      collectionDepth--
     }
 
-    // Collect events
-    let hits: THREE.Intersection<THREE.Object3D>[] = eventsObjects
-      // Intersect objects
-      .flatMap(handleRaycast)
-      // Sort by event priority and distance
+    hits = hits
       .sort((a, b) => {
         const aState = getRootState(a.object)
         const bState = getRootState(b.object)
         if (!aState || !bState) return a.distance - b.distance
         return bState.events.priority - aState.events.priority || a.distance - b.distance
       })
-      // Filter out duplicates
       .filter((item) => {
         const id = makeId(item as Intersection)
         if (duplicates.has(id)) return false
         duplicates.add(id)
         return true
       })
-
-    // User filters and dispatch can perform independent raycasts or change the scene.
-    collector.clear()
 
     // https://github.com/mrdoob/three.js/issues/16031
     // Allow custom userland intersect sort order, this likely only makes sense on the root filter

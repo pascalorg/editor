@@ -1,3 +1,4 @@
+import { afterEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import {
@@ -20,11 +21,6 @@ import * as THREE from 'three'
 import { createWithEqualityFn } from 'zustand/traditional'
 import { BATCHED_LAYER } from './layers'
 import { createPascalPointerEvents } from './pointer-events'
-
-// The package runs Bun tests; the same differential suite also runs directly under Vitest.
-const { afterEach, describe, expect, test } = await (process.versions.bun
-  ? import('bun:test')
-  : import('vitest'))
 
 extend({ Group: THREE.Group })
 
@@ -134,7 +130,6 @@ async function fixture(factory: Factory) {
   })
   const store = _roots.get(canvas)!.store
   const state = store.getState()
-  // Vitest externalizes R3F as CJS; use the same Three module as our synthetic meshes/collector.
   state.raycaster = new THREE.Raycaster()
   state.raycaster.firstHitOnly = false
   const compute = state.events.compute!
@@ -692,6 +687,65 @@ describe('R3F 9.6.1 pointer-event differential', () => {
         raycaster.params.Line.threshold += 1
       }
       f.state.internal.interaction = [a, b, parent]
+      f.send('onPointerMove')
+    })
+  })
+
+  test('an already-computed layer can invalidate another layer after cached replay', async () => {
+    await differential((f) => {
+      const { parent, a, b } = nested(f)
+      const portalRoot = f.group('portal-root')
+      const portalMesh = f.mesh('portal-mesh')
+      const layer = createWithEqualityFn<RootState>(() => ({
+        ...f.state,
+        previousRoot: f.store,
+        raycaster: new THREE.Raycaster(),
+        events: {
+          ...f.state.events,
+          compute(_event, state) {
+            state.raycaster.setFromCamera(state.pointer, state.camera)
+          },
+        },
+      }))
+      for (const object of [portalRoot, portalMesh])
+        (object as Instance<THREE.Object3D>['object']).__r3f!.root = layer
+      const raycast = portalMesh.raycast
+      portalMesh.raycast = (raycaster, hits) => {
+        raycast.call(portalMesh, raycaster, hits)
+        f.state.raycaster.ray.direction.x = 1
+      }
+      f.state.internal.interaction = [portalRoot, parent, a, portalMesh, b]
+      f.send('onPointerMove')
+    })
+  })
+
+  test('nested pointer collection keeps the outer scratch storage intact', async () => {
+    await differential((f) => {
+      const { a } = nested(f)
+      const raycast = a.raycast
+      let nestedEvent = false
+      a.raycast = (raycaster, hits) => {
+        raycast.call(a, raycaster, hits)
+        if (!nestedEvent) {
+          nestedEvent = true
+          f.send('onPointerMove')
+        }
+      }
+      f.send('onPointerMove')
+      f.send('onPointerMove')
+    })
+  })
+
+  test('a throwing raycast releases scratch storage before the next pointer event', async () => {
+    await differential((f) => {
+      const { a } = nested(f)
+      const raycast = a.raycast
+      a.raycast = (raycaster, hits) => {
+        raycast.call(a, raycaster, hits)
+        throw new Error('raycast failed')
+      }
+      expect(() => f.send('onPointerMove')).toThrow('raycast failed')
+      a.raycast = raycast
       f.send('onPointerMove')
     })
   })

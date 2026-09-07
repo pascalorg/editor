@@ -42,8 +42,7 @@
     "@types/react": "^19.2.2",
     "@types/react-dom": "19.2.2",
     "@types/three": "^0.184.0",
-    "typescript": "6.0.3",
-    "vitest": "5.0.0"
+    "typescript": "6.0.3"
   },
   "keywords": [
     "3d",
