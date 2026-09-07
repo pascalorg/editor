@@ -122,7 +122,8 @@ function corners(member: Member, levelBase: number): Vec3[] {
   for (const sx of [-0.5, 0.5]) {
     for (const sy of [-0.5, 0.5]) {
       for (const sz of [-0.5, 0.5]) {
-        const local: Vec3 = [dx * sx, dy * sy, dz * sz]
+        // a plumb-cut member (Member.shear) is a sheared box: x' = x + y·shear
+        const local: Vec3 = [dx * sx + dy * sy * (member.shear ?? 0), dy * sy, dz * sz]
         const r = rotate(local, member.rotation)
         out.push([px + r[0], py + r[1] + levelBase, pz + r[2]])
       }

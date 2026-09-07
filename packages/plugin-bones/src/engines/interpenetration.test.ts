@@ -50,6 +50,14 @@ type Obb = {
   axes: [Vector3, Vector3, Vector3]
   /** half extents AFTER the skin shrink */
   half: [number, number, number]
+  /**
+   * Half-EDGE vectors (world), the skin applied — a plumb-cut member
+   * (Member.shear) is a parallelepiped, not a box: its y edge leans
+   * x' = x + y·shear, so the SAT reads edges and face normals, not axes.
+   */
+  edges: [Vector3, Vector3, Vector3]
+  /** Unit face normals (world) — the box's axes when unsheared. */
+  normals: [Vector3, Vector3, Vector3]
   /** world-space AABB for prefiltering */
   min: Vector3
   max: Vector3
@@ -71,16 +79,29 @@ function toObb(member: Member): Obb {
     Math.max(1e-4, member.dims[2] / 2 - SKIN),
   ]
   const center = new Vector3(member.position[0], member.position[1], member.position[2])
-  // AABB of the OBB: center ± Σ |axis_i| · half_i
+  const shear = member.shear ?? 0
+  const edges: [Vector3, Vector3, Vector3] = [
+    axes[0].clone().multiplyScalar(half[0]),
+    axes[1].clone().add(axes[0].clone().multiplyScalar(shear)).multiplyScalar(half[1]),
+    axes[2].clone().multiplyScalar(half[2]),
+  ]
+  const normals: [Vector3, Vector3, Vector3] = [
+    new Vector3().crossVectors(edges[1], edges[2]).normalize(),
+    new Vector3().crossVectors(edges[2], edges[0]).normalize(),
+    new Vector3().crossVectors(edges[0], edges[1]).normalize(),
+  ]
+  // AABB of the parallelepiped: center ± Σ |edge_i|
   const ext = new Vector3(
-    Math.abs(axes[0].x) * half[0] + Math.abs(axes[1].x) * half[1] + Math.abs(axes[2].x) * half[2],
-    Math.abs(axes[0].y) * half[0] + Math.abs(axes[1].y) * half[1] + Math.abs(axes[2].y) * half[2],
-    Math.abs(axes[0].z) * half[0] + Math.abs(axes[1].z) * half[1] + Math.abs(axes[2].z) * half[2],
+    Math.abs(edges[0].x) + Math.abs(edges[1].x) + Math.abs(edges[2].x),
+    Math.abs(edges[0].y) + Math.abs(edges[1].y) + Math.abs(edges[2].y),
+    Math.abs(edges[0].z) + Math.abs(edges[1].z) + Math.abs(edges[2].z),
   )
   return {
     center,
     axes,
     half,
+    edges,
+    normals,
     min: center.clone().sub(ext),
     max: center.clone().add(ext),
     member,
@@ -98,20 +119,20 @@ function aabbTouch(a: Obb, b: Obb): boolean {
   )
 }
 
-/** Projected radius of an OBB onto a unit axis. */
+/** Projected radius of a (possibly sheared) box onto a unit axis: Σ |half-edge · axis|. */
 function radius(o: Obb, axis: Vector3): number {
   return (
-    Math.abs(o.axes[0].dot(axis)) * o.half[0] +
-    Math.abs(o.axes[1].dot(axis)) * o.half[1] +
-    Math.abs(o.axes[2].dot(axis)) * o.half[2]
+    Math.abs(o.edges[0].dot(axis)) + Math.abs(o.edges[1].dot(axis)) + Math.abs(o.edges[2].dot(axis))
   )
 }
 
 function obbOverlap(a: Obb, b: Obb): boolean {
   const t = new Vector3().subVectors(b.center, a.center)
-  const axes: Vector3[] = [...a.axes, ...b.axes]
-  for (const ax of a.axes) {
-    for (const bx of b.axes) {
+  // separating axes of two parallelepipeds: each one's face normals, and
+  // every cross of one's edge directions with the other's
+  const axes: Vector3[] = [...a.normals, ...b.normals]
+  for (const ax of a.edges) {
+    for (const bx of b.edges) {
       const cross = new Vector3().crossVectors(ax, bx)
       // parallel axes produce a degenerate cross — the face axes cover it
       if (cross.lengthSq() > 1e-8) axes.push(cross.normalize())

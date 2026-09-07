@@ -28,7 +28,15 @@ import {
   lgsMachineGroups,
   lgsMachinePatch,
   lgsMachineSelectExtra,
+  type RafterSpacingValue,
+  type RoofStockValue,
   type RoofSystemValue,
+  RAFTER_SPACING_OPTIONS,
+  rafterSpacingPatch,
+  rafterSpacingValue,
+  ROOF_STOCK_OPTIONS,
+  roofStockPatch,
+  roofStockValue,
   roofSystemPatch,
   roofSystemValue,
   type ShedCeilingValue,
@@ -638,6 +646,38 @@ function RoofRow({ framingNode }: { framingNode: FramingNode & { id: string } })
         options={POST_PAD_OPTIONS.map((n) => ({ label: String(n), value: String(n) }))}
         value={String(postPadValue(framingNode))}
       />
+      {(
+        [
+          ['rafterSize', 'Rafters'],
+          ['ridgeSize', 'Ridge board'],
+          ['ceilingJoistSize', 'Ceiling joists'],
+        ] as const
+      ).map(([key, label]) => (
+        <div className="flex flex-col gap-1" key={key}>
+          <span className="text-sidebar-foreground/60">{label}</span>
+          <SegmentedControl
+            onChange={(v: string) => write(roofStockPatch(key, v as RoofStockValue | 'auto'))}
+            options={[
+              { label: 'Auto', value: 'auto' },
+              ...ROOF_STOCK_OPTIONS.map((s) => ({ label: s, value: s })),
+            ]}
+            value={roofStockValue(framingNode, key)}
+          />
+        </div>
+      ))}
+      <span className="text-sidebar-foreground/60">Rafter spacing (in o.c.)</span>
+      <SegmentedControl
+        onChange={(v: string) => write(rafterSpacingPatch(v === 'auto' ? 'auto' : (Number(v) as RafterSpacingValue)))}
+        options={[
+          { label: 'Auto', value: 'auto' },
+          ...RAFTER_SPACING_OPTIONS.map((n) => ({ label: String(n), value: String(n) })),
+        ]}
+        value={String(rafterSpacingValue(framingNode))}
+      />
+      <span className="text-sidebar-foreground/50">
+        Auto is the jurisdiction's table: rafters by span and snow band, the ridge one size deeper than
+        the rafters. A size forced under the table still prints the span flag.
+      </span>
       <span className="text-sidebar-foreground/50">
         The pad footing under every porch, deck and girder post — on the foundation plan and its
         schedule. 24 in is the R403.1 pad the engine pours by itself.

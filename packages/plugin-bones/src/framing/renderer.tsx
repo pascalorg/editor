@@ -235,6 +235,8 @@ type Bucket = {
     dims: readonly [number, number, number]
     position: readonly [number, number, number]
     rotation: readonly [number, number, number]
+    /** Member.shear — plumb-cut ends. */
+    shear?: number
   }[]
   /** Assembly-layer face normal — the dollhouse cut hides camera-facing buckets. */
   face?: readonly [number, number]
@@ -339,6 +341,9 @@ const bucketIndex = new WeakMap<Group, Map<string, InstancedMesh[]>>()
 /** Scratch objects for matrix composition — module-level singletons (the
  * renderer is single-threaded; buildGroup/patchGroup never re-enter). */
 const scratchMatrix = new Matrix4()
+const scratchShear = new Matrix4()
+const scratchScaleMatrix = new Matrix4()
+const UNIT_SCALE = new Vector3(1, 1, 1)
 const scratchQuaternion = new Quaternion()
 const scratchScale = new Vector3()
 const scratchTranslation = new Vector3()
@@ -353,6 +358,7 @@ export function composeEntryMatrix(
   position: readonly [number, number, number],
   rotation: readonly [number, number, number],
   out: Matrix4,
+  shear = 0,
 ): Matrix4 {
   scratchEuler.set(rotation[0], rotation[1], rotation[2])
   scratchQuaternion.setFromEuler(scratchEuler)
@@ -362,14 +368,20 @@ export function composeEntryMatrix(
     Math.max(dims[1], 0.001),
     Math.max(dims[2], 0.001),
   )
-  return out.compose(scratchTranslation, scratchQuaternion, scratchScale)
+  if (!shear) return out.compose(scratchTranslation, scratchQuaternion, scratchScale)
+  // plumb-cut ends (Member.shear): T · R · Shear(x += y·shear) · Scale — the
+  // shear acts on the metre-sized box, before the member's rotation
+  out.compose(scratchTranslation, scratchQuaternion, UNIT_SCALE)
+  scratchShear.makeShear(0, 0, shear, 0, 0, 0)
+  scratchScaleMatrix.makeScale(scratchScale.x, scratchScale.y, scratchScale.z)
+  return out.multiply(scratchShear).multiply(scratchScaleMatrix)
 }
 
 /** Write a bucket's instance matrices into its mesh set (solid + ghost copy
  * share indices) and flag the GPU upload. */
 function writeMatrices(bucket: Bucket, meshes: InstancedMesh[]) {
   bucket.entries.forEach((entry, i) => {
-    composeEntryMatrix(entry.dims, entry.position, entry.rotation, scratchMatrix)
+    composeEntryMatrix(entry.dims, entry.position, entry.rotation, scratchMatrix, entry.shear)
     for (const mesh of meshes) mesh.setMatrixAt(i, scratchMatrix)
   })
   for (const mesh of meshes) mesh.instanceMatrix.needsUpdate = true
@@ -524,13 +536,14 @@ function collectBuckets(
     face: readonly [number, number] | undefined,
     treatment: BucketTreatment,
     sourceId?: string,
+    shear?: number,
   ) => {
     let bucket = buckets.get(key)
     if (!bucket) {
       bucket = { color, entries: [], face, treatment, sourceId }
       buckets.set(key, bucket)
     }
-    bucket.entries.push({ dims, position, rotation })
+    bucket.entries.push({ dims, position, rotation, ...(shear ? { shear } : {}) })
   }
 
   if (mode !== 'off') {
@@ -552,9 +565,9 @@ function collectBuckets(
             : run
               ? 'ghosted-through'
               : 'ghosted'
-          push(`${color}|${treatment}`, color, member.dims, member.position, member.rotation, undefined, treatment)
+          push(`${color}|${treatment}`, color, member.dims, member.position, member.rotation, undefined, treatment, undefined, member.shear)
         } else {
-          push(`${color}|faint`, color, member.dims, member.position, member.rotation, undefined, 'faint')
+          push(`${color}|faint`, color, member.dims, member.position, member.rotation, undefined, 'faint', undefined, member.shear)
         }
         continue
       }
@@ -577,7 +590,7 @@ function collectBuckets(
       // MEP members read through the OPENED near faces of the dollhouse cut
       // (ghosting them made every wall look transparent, round-13), and the
       // under-floor stratum stays hidden behind real geometry by design.
-      push(`${color}|solid`, color, member.dims, member.position, member.rotation, undefined, 'solid')
+      push(`${color}|solid`, color, member.dims, member.position, member.rotation, undefined, 'solid', undefined, member.shear)
     }
   }
   for (const fixture of fixtures) {

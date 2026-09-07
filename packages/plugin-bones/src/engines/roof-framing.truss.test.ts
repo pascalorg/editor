@@ -103,14 +103,15 @@ describe('a trussed gable', () => {
     }
   })
 
-  test('top chords run tip to peak on the rafter slope planes, no ridge-face setback', () => {
+  test('top chords run tip to peak on the rafter slope planes, no ridge-face setback, sheared to their plumb cuts (G52)', () => {
     const roof = seg()
     const run = roof.depth / 2
     const cosT = Math.cos(roof.pitch)
-    const [, cd] = LUMBER_CROSS_SECTIONS['2x4']
-    const plumbInset = (cd / 2) * Math.tan(roof.pitch)
-    const expected = run / cosT + roof.overhang - 2 * plumbInset
-    for (const t of tops) expect(Math.abs(t.length - expected)).toBeLessThan(1e-6)
+    const expected = run / cosT + roof.overhang
+    for (const t of tops) {
+      expect(Math.abs(t.length - expected)).toBeLessThan(1e-6)
+      expect(t.shear).toBeCloseTo(Math.tan(roof.pitch), 9)
+    }
   })
 
   test('webbing is a king post + two struts per truss and is LABELED representative', () => {

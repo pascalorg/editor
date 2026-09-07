@@ -121,6 +121,32 @@ describe('frameRoofs — gable', () => {
     expect(axis.z).toBeCloseTo(-Math.cos(theta), 5)
   })
 
+  test('rafters are plumb-cut by shear: the box runs the full face-to-tip length, sheared by tan(pitch) signed with its slope', () => {
+    const plus = rafters.find((r) => (r.position[2] as number) > 0) as Member
+    const minus = rafters.find((r) => (r.position[2] as number) < 0) as Member
+    // both slopes rise toward the ridge with the same +θ tilt ([0, ±π/2, θ]),
+    // so the plumb plane reads x = x0 + y·tanθ in each rafter's own frame
+    expect(plus.shear).toBeCloseTo(Math.tan(theta), 9)
+    expect(minus.shear).toBeCloseTo(Math.tan(theta), 9)
+    // the centre-line length: eave tip to the ridge FACE, no inscribed pull-back
+    const rd = 5.5 * 0.0254
+    const ridgeT = 1.5 * 0.0254
+    const run = roof.depth / 2
+    const full = run / Math.cos(theta) + roof.overhang - ridgeT / 2 / Math.cos(theta)
+    expect(plus.length).toBeCloseTo(full, 6)
+    expect(plus.dims[0]).toBeCloseTo(full, 6)
+    // the sheared box's ridge-end top corner lands on the ridge face plane:
+    // local (L/2 + (rd/2)·shear, rd/2) rotated by θ has the same slope-axis
+    // reach as the centre-line end plus the plumb overshoot
+    expect((rd / 2) * (plus.shear as number)).toBeCloseTo((rd / 2) * Math.tan(theta), 9)
+  })
+
+  test('the ridge board takes the panel override; auto stays one size deeper', () => {
+    const forced = frameRoofs([roof], [], { ...DEFAULT_SPEC, ridgeSize: '2x12' })
+    expect((byRole(forced, 'ridge')[0] as Member).size).toBe('2x12')
+    expect((byRole(members, 'ridge')[0] as Member).size).toBe('2x8')
+  })
+
   test('ridge runs along the width at the peak, one size deeper', () => {
     const ridge = byRole(members, 'ridge')
     expect(ridge).toHaveLength(1)
@@ -857,7 +883,13 @@ describe('frameRoofs — valley jacks land on the sleeper (round-2 gap, W19)', (
       expect(Math.abs(top.x - 1)).toBeLessThan(0.1)
       expect(Math.abs(top.y - (baseY + jSeat + rise2))).toBeLessThan(0.1)
       expect(bot.y).toBeCloseTo(wingPlane(bot.x) + jSeat, 3)
-      expect(wingPlane(bot.x) - mainPlane(bot.z)).toBeCloseTo(stack.rafters, 2)
+      // G52: the jack keeps the rafter's plumb-cut shear, so its cut end is
+      // pulled back (d/2)·|shear| up the slope — the sheared corners land ON
+      // the sleeper line, one pull down the slope from the centre-line end
+      const pull = (j.dims[1] / 2) * Math.abs(j.shear ?? 0)
+      const down = top.clone().sub(bot).normalize().multiplyScalar(-pull)
+      const cut = bot.clone().add(down)
+      expect(wingPlane(cut.x) - mainPlane(cut.z)).toBeCloseTo(stack.rafters, 2)
       expect(j.label).toContain('from the ridge to the valley sleeper on roof roofseg_test')
     }
     expect(checked).toBeGreaterThanOrEqual(4)
@@ -1855,18 +1887,29 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
   //  cut by their own bottoms against that stack, the main's eave deck and
   //  tails are cut in strips where the wing rides clear over them — the
   //  valley pair recaptured; the eleven single-roof pins hold.
+  // 2026-09-07 INTENDED-CHANGE (G52 plumb cuts): common rafters, shed rafters
+  //  and truss top chords are SHEARED to their plumb cuts (Member.shear =
+  //  tan θ) and run the full face-to-tip centre-line length — no inscribed
+  //  pull-back, so the ridge end lands flat on the ridge face and the tail
+  //  flat behind the sub-fascia (Steve: "your roof framing doesn't miter to
+  //  the ridge board … the rafter should miter to the rim"). The nine gable /
+  //  shed pins and the valley pair recaptured; flat and gambrel hold (the
+  //  gambrel's own rafters are still square-ended — next). Barge rafters and
+  //  the rake drip edges share the rafters' plumb cuts; a valley jack cut at
+  //  the sleeper pulls its cut end back by (d/2)·|shear| so the sheared
+  //  corners stop at the sleeper line.
   const hashOf = (members: Member[]): string =>
     createHash('sha256').update(JSON.stringify(members)).digest('hex').slice(0, 16)
   const PINS: [string, Partial<RoofSegmentSlice>, Partial<FramingSpec>, string][] = [
-    ['gable-300', {}, {}, 'bb9a8bf89d3738df'],
-    ['gable-400', {}, { detail: '400' }, 'abfd1e91302e4b46'],
-    ['gable-200', {}, { detail: '200' }, '10cd4729a3ac84ed'],
-    ['gable-400-windy', {}, { detail: '400', hurricaneTies: true }, 'e58ddc4c6e3bc418'],
-    ['gable-big-400', { width: 10, depth: 12 }, { detail: '400' }, '3a58ab246f27ca38'],
-    ['shed-300', { roofType: 'shed' }, {}, '5a56e8b978f47366'],
-    ['shed-400', { roofType: 'shed' }, { detail: '400' }, '995c6cb97c650f69'],
-    ['shed-200', { roofType: 'shed' }, { detail: '200' }, 'ba9d40224b37077a'],
-    ['shed-big-400', { roofType: 'shed', depth: 8 }, { detail: '400' }, '438b332d1554775b'],
+    ['gable-300', {}, {}, '6d14f6b5d2f8dd30'],
+    ['gable-400', {}, { detail: '400' }, '9c67b7223683429b'],
+    ['gable-200', {}, { detail: '200' }, '5321a97aaeb9fa9c'],
+    ['gable-400-windy', {}, { detail: '400', hurricaneTies: true }, '2e7722b13922ef98'],
+    ['gable-big-400', { width: 10, depth: 12 }, { detail: '400' }, '5006a9ba8f5a9849'],
+    ['shed-300', { roofType: 'shed' }, {}, 'be07fec1fd555cb2'],
+    ['shed-400', { roofType: 'shed' }, { detail: '400' }, '8b2bc910d3aeadeb'],
+    ['shed-200', { roofType: 'shed' }, { detail: '200' }, '1efb03053e701e7e'],
+    ['shed-big-400', { roofType: 'shed', depth: 8 }, { detail: '400' }, '663c38cb33db9385'],
     ['flat-400', { roofType: 'flat' }, { detail: '400' }, '953c25cdb23c0ffb'],
     ['gambrel-400', { roofType: 'gambrel' }, { detail: '400' }, '0e2586e8b0504a28'],
   ]
@@ -1887,7 +1930,7 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
       [],
       { ...DEFAULT_SPEC, detail: '400' },
     )
-    expect(hashOf(members)).toBe('28d19c718978d555')
+    expect(hashOf(members)).toBe('324939c2b01dc19a')
   })
 })
 

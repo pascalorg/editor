@@ -346,6 +346,14 @@ export type FramingSpec = {
    * make it so it can be changed easily"). Same byte-parity rule.
    */
   postPadIn?: number
+  /**
+   * The ridge board's stock when the panel set it (Steve: "ensure ridge
+   * board and rafters size correctly and are easily adjustable in
+   * settings"). ABSENT means one size deeper than the rafters. The rafter
+   * size, spacing and ceiling-joist size overrides write straight into
+   * `rafterSize` / `rafterSpacing` / `ceilingJoistSize`.
+   */
+  ridgeSize?: LumberSize
 }
 
 export const DEFAULT_SPEC: FramingSpec = {

@@ -1,4 +1,24 @@
 import { describe, expect, test } from 'bun:test'
+import { Matrix4, Vector3 } from 'three'
+import { composeEntryMatrix } from './renderer'
+
+describe('composeEntryMatrix — plumb-cut shear', () => {
+  test('a sheared box moves its top edge along +x by y·shear; the centre and the bottom edge midline stay', () => {
+    const m = composeEntryMatrix([2, 0.2, 0.05], [10, 5, 3], [0, 0, 0], new Matrix4(), 0.5)
+    const centre = new Vector3(0, 0, 0).applyMatrix4(m)
+    expect(centre.x).toBeCloseTo(10, 9)
+    expect(centre.y).toBeCloseTo(5, 9)
+    // unit-box corner (+0.5, +0.5, 0) → metres (1, 0.1) → sheared x = 1 + 0.1·0.5
+    const top = new Vector3(0.5, 0.5, 0).applyMatrix4(m)
+    expect(top.x).toBeCloseTo(10 + 1 + 0.05, 9)
+    expect(top.y).toBeCloseTo(5.1, 9)
+    const bottom = new Vector3(0.5, -0.5, 0).applyMatrix4(m)
+    expect(bottom.x).toBeCloseTo(10 + 1 - 0.05, 9)
+    // no shear: the plain compose
+    const plain = composeEntryMatrix([2, 0.2, 0.05], [10, 5, 3], [0, 0, 0], new Matrix4())
+    expect(new Vector3(0.5, 0.5, 0).applyMatrix4(plain).x).toBeCloseTo(11, 9)
+  })
+})
 import { Mesh } from 'three'
 import type { Fixture, Member, MemberMaterial, MemberRole } from '../core/types'
 import {

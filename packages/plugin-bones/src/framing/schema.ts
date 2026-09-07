@@ -259,6 +259,18 @@ export const FramingNode = BaseNode.extend({
    * round-trips absent (the roofSystem byte-parity rule).
    */
   postPadIn: z.number().positive().optional(),
+  /**
+   * Roof stock overrides (Steve: "ensure ridge board and rafters size
+   * correctly and are easily adjustable in settings"). Each is OPTIONAL
+   * with NO zod default — absent means the jurisdiction's table (rafters
+   * 2x6 rising with the snow band; ridge one size deeper than the rafters;
+   * ceiling joists per the spec) and round-trips absent. Sizes are nominal
+   * lumber keys ('2x6', '2x8', '2x10', '2x12'); spacing is inches o.c.
+   */
+  rafterSize: z.enum(['2x6', '2x8', '2x10', '2x12']).optional(),
+  rafterSpacingIn: z.union([z.literal(12), z.literal(16), z.literal(24)]).optional(),
+  ridgeSize: z.enum(['2x6', '2x8', '2x10', '2x12']).optional(),
+  ceilingJoistSize: z.enum(['2x6', '2x8', '2x10', '2x12']).optional(),
 }).describe(
   `Bones framing config (engineering X-ray) — one per level.
   - jurisdiction: US state code ('CA'), 'INTL', or 'AUTO' (guessed from the browser locale/timezone)

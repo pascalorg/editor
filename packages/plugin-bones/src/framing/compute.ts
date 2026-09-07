@@ -582,6 +582,12 @@ function computeLevelUncached(
   if (config.roofSystem !== undefined) spec = { ...spec, roofSystem: config.roofSystem }
   if (config.shedCeiling !== undefined) spec = { ...spec, shedCeiling: config.shedCeiling }
   if (config.postPadIn !== undefined) spec = { ...spec, postPadIn: config.postPadIn }
+  // roof stock overrides from the panel — the rafter table stays the
+  // jurisdiction's, so a 2x6 forced where the table wants a 2x8 still flags
+  if (config.rafterSize !== undefined) spec = { ...spec, rafterSize: config.rafterSize }
+  if (config.rafterSpacingIn !== undefined) spec = { ...spec, rafterSpacing: inches(config.rafterSpacingIn) }
+  if (config.ridgeSize !== undefined) spec = { ...spec, ridgeSize: config.ridgeSize }
+  if (config.ceilingJoistSize !== undefined) spec = { ...spec, ceilingJoistSize: config.ceilingJoistSize }
   // 400 (fabrication) builds ON TOP of the code-sized pass — jurisdiction applies to both.
   if (config.detail !== '200') {
     spec = applyJurisdiction(spec, profile)
@@ -1248,6 +1254,8 @@ function computeLevelUncached(
       plan: readonly [number, number]
       sourceId: string
       gradeY?: number
+      /** The post's seat above its pad (a post on a poured slab: the slab top). */
+      seatY?: number
       kind?: string
       postSize?: LumberSize
       pierSize?: number
@@ -1264,7 +1272,12 @@ function computeLevelUncached(
           kind: post.pier ? 'porch pier' : 'porch post',
           postSize: post.pier ? '4x4' : '6x6',
           ...(post.pier ? { pierSize: post.size } : {}),
-          ...ownGrade(post.plan),
+          // on a poured porch slab the pad tops out at the slab's underside
+          // and the post seats on the slab (Steve: the pier's wood hung
+          // above its footing); elsewhere the pad is at the post's grade
+          ...(post.onSlab
+            ? { gradeY: post.onSlab.bottom, seatY: post.onSlab.top }
+            : ownGrade(post.plan)),
         })
       }
     }

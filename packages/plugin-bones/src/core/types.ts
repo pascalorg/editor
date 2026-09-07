@@ -155,6 +155,16 @@ export type Member = {
   sourceId: string
   /** Optional human label ("Header 4x8 over D101"). */
   label?: string
+  /**
+   * PLUMB-CUT ends. The box is sheared in its local X–Y plane — every
+   * point moves x' = x + y·shear — so its two end faces are the parallel
+   * cut planes instead of squares: a rafter's plumb cuts at the ridge
+   * face and at the tail (where the sub-fascia face-nails), tan of its
+   * pitch signed with its Z rotation. `length` stays the centre-line
+   * length between the cut planes (the cut length for takeoff). Absent =
+   * a square-ended box.
+   */
+  shear?: number
   /** Set when the prescriptive tables run out (engineered beam required). */
   flag?: string
   /** Level whose transform this member follows when it belongs to ANOTHER
@@ -411,6 +421,14 @@ export type PorchPostSlice = {
   size: number
   /** Which entrance it belongs to ('front' / 'rear'), so a house's porches frame apart. */
   entrance?: string
+  /**
+   * The poured slab the post stands ON (a concrete porch): its top is the
+   * post's seat (`baseY`), its underside where the pad footing tops out —
+   * the pad is monolithic with the slab, the post base and the pier's
+   * anchor bolts seat at the slab top. Absent for a deck post (its pad is
+   * at grade under it) and for a post hosted on the ground.
+   */
+  onSlab?: { top: number; bottom: number }
   /**
    * A BUILT-UP pier (the stucco column): a 2x4 box — plates, corner studs,
    * studs at 12 in o.c. at most, sheathing, lath and stucco — wrapping the

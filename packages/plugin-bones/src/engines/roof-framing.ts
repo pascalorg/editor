@@ -212,6 +212,11 @@ function ridgeBeamFlagFor(spec: FramingSpec, slopeTan: number): string | undefin
     : undefined
 }
 
+/** The ridge the spec asks for (the panel's override), else one size deeper than the rafters. */
+function ridgeStockFor(spec: FramingSpec): LumberSize {
+  return spec.ridgeSize ?? ridgeSizeFor(spec.rafterSize)
+}
+
 /** Ridge stock: one size deeper than the rafters (practice: R802.3 ridge ≥ rafter cut depth). */
 function ridgeSizeFor(rafterSize: LumberSize): LumberSize {
   switch (rafterSize) {
@@ -300,6 +305,8 @@ type Emit = (
   label?: string,
   roll?: number,
   flag?: string,
+  /** Plumb-cut ends: shear the box by tan(tilt) so both end faces stand vertical (Member.shear). */
+  plumb?: boolean,
 ) => void
 
 /**
@@ -324,8 +331,11 @@ export function eulerYawRoll(yaw: number, roll: number): [number, number, number
 function emitter(roof: RoofSegmentSlice, members: Member[]): Emit {
   const cos = Math.cos(roof.yaw)
   const sin = Math.sin(roof.yaw)
-  return (role, size, dims, segPos, extraYaw, tilt, length, material, label, roll, flag) => {
+  return (role, size, dims, segPos, extraYaw, tilt, length, material, label, roll, flag, plumb) => {
     const [x, y, z] = segPos
+    // the plumb plane in the member's own frame: rotating Z by `tilt`
+    // lifts +X, so world-vertical reads (sin, cos) there — x = x0 + y·tan(tilt)
+    const shear = plumb && !roll && Math.abs(tilt) > 1e-9 ? Math.tan(tilt) : 0
     // three Y-rotation of the segment-local offset: +X → (cos, 0, -sin).
     const wx = x * cos + z * sin
     const wz = -x * sin + z * cos
@@ -341,6 +351,7 @@ function emitter(roof: RoofSegmentSlice, members: Member[]): Emit {
       sourceId: roof.id,
       label,
       flag,
+      ...(shear ? { shear } : {}),
     })
   }
 }
@@ -1337,17 +1348,18 @@ function frameGable(
   // Rafters bear on the ridge FACES: each plumb cut stops half the ridge
   // thickness short of the centerline (round-10 gate: centerline rafters
   // buried themselves in the ridge AND in the opposite slope's rafters).
-  const [ridgeT] = LUMBER_CROSS_SECTIONS[ridgeSizeFor(spec.rafterSize)]
+  const [ridgeT] = LUMBER_CROSS_SECTIONS[ridgeStockFor(spec)]
   const ridgeFaceZ = ridgeT / 2
   const ridgeFaceY = ridgeY - ridgeFaceZ * tan
 
   // ---- rafters, both slopes ----
   // Slope length: overhung eave tip to the ridge face, along the slope.
-  // Both ends are PLUMB cuts; a square-ended box's corners overshoot each
-  // cut plane by (rd/2)·tanθ, so the box is inscribed — pulled back that
-  // much per end (centers stay on the face→tip midpoint).
-  const plumbInset = (rd / 2) * tan
-  const slopeLen = run / cosT + roof.overhang - ridgeFaceZ / cosT - 2 * plumbInset
+  // Both ends are PLUMB cuts — the box is SHEARED (Member.shear) so its end
+  // faces are the vertical cut planes: the ridge end lands flat on the
+  // ridge face, the tail flat behind the sub-fascia (Steve: "your roof
+  // framing doesn't miter to the ridge board … the rafter should miter to
+  // the rim"). The centre-line length is face → tip.
+  const slopeLen = run / cosT + roof.overhang - ridgeFaceZ / cosT
   const cuts = rafterCutData(spec, theta, rd)
   const xs = layout(-roof.width / 2, roof.width / 2, spec.rafterSpacing, halfT)
 
@@ -1433,6 +1445,7 @@ function frameGable(
         `Rafter ${spec.rafterSize}${cuts}${purlinNote}`,
         undefined,
         rafterFlag,
+        true,
       )
       if (spec.hurricaneTies) tieAt(emit, spec, x, side * run, plateY)
     }
@@ -1475,6 +1488,9 @@ function frameGable(
           slopeLen,
           'lumber',
           `Barge rafter ${spec.rafterSize} (rake)${splicedNote(spec, slopeLen, 'outlooker bearings')}`,
+          undefined,
+          undefined,
+          true,
         )
       }
       // outlookers ladder up both slopes at 4' o.c.
@@ -1547,6 +1563,9 @@ function frameGable(
             slopeLen,
             'steel',
             'Drip edge — rake (R905.2.8.5)',
+            undefined,
+            undefined,
+            true,
           )
         }
       }
@@ -1557,7 +1576,7 @@ function frameGable(
   // B8a (see ridgeBeamFlagFor): sub-3:12 ridge boards PRINT the R802.4.3
   // gap instead of upgrading to a beam silently. 200 stays schematic.
   const ridgeBeamFlag = ridgeBeamFlagFor(spec, tan)
-  const ridgeSize = ridgeSizeFor(spec.rafterSize)
+  const ridgeSize = ridgeStockFor(spec)
   const [rt, rdd] = LUMBER_CROSS_SECTIONS[ridgeSize]
   const ridgeLen = roof.width + 2 * roof.overhang
   emit(
@@ -1791,10 +1810,9 @@ function frameGableTruss(roof: RoofSegmentSlice, spec: FramingSpec, members: Mem
   const eaveY = plateY + seat
   const ridgeY = eaveY + rise
   // No ridge board: each chord's plumb cut lands ON the centerline (the
-  // stick gable's ridgeFaceZ = 0); the inscribed plumb inset keeps the two
-  // opposing boxes off each other at the peak.
-  const plumbInset = (cd / 2) * tan
-  const slopeLen = run / cosT + roof.overhang - 2 * plumbInset
+  // stick gable's ridgeFaceZ = 0); the chords are sheared to their plumb
+  // cuts, so the two meet face to face at the peak.
+  const slopeLen = run / cosT + roof.overhang
   const xs = layout(-roof.width / 2, roof.width / 2, spec.rafterSpacing, halfT)
   const tipY = eaveY - roof.overhang * Math.sin(theta)
   const deferred =
@@ -1826,6 +1844,9 @@ function frameGableTruss(roof: RoofSegmentSlice, spec: FramingSpec, members: Mem
         slopeLen,
         'lumber',
         `Truss top chord ${TRUSS_STOCK}${dropped.has(x) ? ' (dropped gable-end truss)' : ''}`,
+        undefined,
+        undefined,
+        true,
       )
       if (spec.hurricaneTies) tieAt(emit, spec, x, side * run, plateY)
     }
@@ -1939,6 +1960,9 @@ function frameGableTruss(roof: RoofSegmentSlice, spec: FramingSpec, members: Mem
           slopeLen,
           'lumber',
           `Barge rafter ${TRUSS_STOCK} (rake)${splicedNote(spec, slopeLen, 'outlooker bearings')}`,
+          undefined,
+          undefined,
+          true,
         )
       }
       for (const side of [1, -1] as const) {
@@ -2013,6 +2037,9 @@ function frameGableTruss(roof: RoofSegmentSlice, spec: FramingSpec, members: Mem
             slopeLen,
             'steel',
             'Drip edge — rake (R905.2.8.5)',
+            undefined,
+            undefined,
+            true,
           )
         }
       }
@@ -2091,6 +2118,7 @@ function frameShed(
       `Rafter ${spec.rafterSize} (shed${attached ? ', on the ledger' : ''})${bearingNote}`,
       undefined,
       slopeRafterFlag(spec, run, slopeLen),
+      true,
     )
     if (spec.hurricaneTies) {
       tieAt(emit, spec, x, roof.depth / 2, plateY)
@@ -2273,7 +2301,7 @@ function frameHip(
 
   // ---- ridge ----
   if (ridgeHalf > 0.05) {
-    const ridgeSize = ridgeSizeFor(spec.rafterSize)
+    const ridgeSize = ridgeStockFor(spec)
     const [rt, rdd] = LUMBER_CROSS_SECTIONS[ridgeSize]
     emit(
       'ridge',
@@ -2309,7 +2337,7 @@ function frameHip(
   // end down-slope until the box clears the ridge body (half ridge thickness
   // + half hip thickness in plan, diagonal at 45°) plus the plumb-cut inset
   // of the square-ended box (round-10 gate).
-  const [hipRidgeT] = LUMBER_CROSS_SECTIONS[ridgeSizeFor(spec.rafterSize)]
+  const [hipRidgeT] = LUMBER_CROSS_SECTIONS[ridgeStockFor(spec)]
   const hipInset = Math.SQRT2 * (hipRidgeT / 2 + t / 2) + (rd / 2) * Math.tan(hipTilt)
   // Long-plane common stations (also consumed by the apex trim below and the
   // collar-tie band): layout() guarantees an end station at ridgeHalf − halfT.
@@ -2400,7 +2428,7 @@ function frameHip(
   // collar-tie low-pitch skip convention; the hip/crown ridge's own
   // R802.4.3 flag rides the ridge member itself — B8a extension, NIGHT-10).
   // W15: that headroom also CAPS the stock the planner may size up to.
-  const [, cjRidgeD] = LUMBER_CROSS_SECTIONS[ridgeSizeFor(spec.rafterSize)]
+  const [, cjRidgeD] = LUMBER_CROSS_SECTIONS[ridgeStockFor(spec)]
   const cjHeadroom =
     ridgeHalf <= 0.05 ? Number.POSITIVE_INFINITY : ridgeY + seat - cjRidgeD - plateY - 0.002
   // Clearance vs the end-plane rafter UNDERSIDES (centerline − rd/(2cosθ)
@@ -2579,6 +2607,9 @@ function frameHip(
   // ---- common rafters on the two long planes, between the hips ----
   const commonCuts = rafterCutData(spec, theta, rd)
   // Same ridge-face bearing + inscribed plumb cuts as the gable commons.
+  // (G52 note: the hip commons are still square-ended, inscribed boxes —
+  // the hip's seat / span / byte-equal gates read square corners; shearing
+  // them is the next step, with those gates recaptured together.)
   const cRidgeFace = hipRidgeT / 2
   const cPlumbInset = (rd / 2) * tan
   const commonSlopeLen = run / cosT + roof.overhang - cRidgeFace / cosT - 2 * cPlumbInset
@@ -2952,7 +2983,7 @@ function frameHip(
   // clamped beneath the ridge bottom at low pitches (round-14 convention).
   if (ridgeHalf > 0.05 && tan > EPS) {
     const [ctT, ctD] = LUMBER_CROSS_SECTIONS['2x4']
-    const [, ctRdd] = LUMBER_CROSS_SECTIONS[ridgeSizeFor(spec.rafterSize)]
+    const [, ctRdd] = LUMBER_CROSS_SECTIONS[ridgeStockFor(spec)]
     const ridgeBottom = ridgeY + seat - ctRdd
     const collarY = Math.min(eaveY + (2 / 3) * rise, ridgeBottom - ctD / 2 - 0.005)
     const collarLen = (2 * (ridgeY - collarY)) / tan
@@ -3327,7 +3358,7 @@ function frameGambrel(
 
   // Purlin/ridge stock decides the bearing faces (round-14: lower and
   // upper planes shared 59mm at every kink and both buried in the ridge).
-  const [gRt] = LUMBER_CROSS_SECTIONS[ridgeSizeFor(spec.rafterSize)]
+  const [gRt] = LUMBER_CROSS_SECTIONS[ridgeStockFor(spec)]
   const lowerInset = (rd / 2) * tan // plumb-cut inscribing, lower plane
   const tanPhi = Math.tan(phi)
   const upperInset = (rd / 2) * tanPhi
@@ -3562,7 +3593,7 @@ function frameGambrel(
         })
 
   // ridge + a purlin under each kink (the classic gambrel joint support)
-  const ridgeSize = ridgeSizeFor(spec.rafterSize)
+  const ridgeSize = ridgeStockFor(spec)
   const [rt, rdd] = LUMBER_CROSS_SECTIONS[ridgeSize]
   const ridgeLen = roof.width + 2 * roof.overhang
   // B8a fix-round advisory: the gambrel MAIN ridge is carried by the shallow
@@ -4361,7 +4392,7 @@ const SLEEPER_JOIN = 0.03
 const CREASE_STEP = 0.1
 
 /** Valley sleeper stock: one size deeper than the rafters, laid FLAT. */
-const sleeperSizeFor = (spec: FramingSpec): LumberSize => ridgeSizeFor(spec.rafterSize)
+const sleeperSizeFor = (spec: FramingSpec): LumberSize => ridgeStockFor(spec)
 
 export type OverframeStack = {
   /** The sleeper's underside above the larger roof's rafter plane, along the normal. */
@@ -4379,7 +4410,7 @@ export type OverframeStack = {
 /** The stack on the larger roof's plane at a join: rafter, deck, underlayment, sleeper. */
 export function overframeStack(spec: FramingSpec, major: RoofSegmentSlice): OverframeStack {
   const rd = LUMBER_CROSS_SECTIONS[spec.rafterSize][1]
-  const rdBoard = LUMBER_CROSS_SECTIONS[ridgeSizeFor(spec.rafterSize)][1]
+  const rdBoard = LUMBER_CROSS_SECTIONS[ridgeStockFor(spec)][1]
   const [sT, sW] = LUMBER_CROSS_SECTIONS[sleeperSizeFor(spec)]
   const cos = Math.cos(major.pitch)
   const deckTop = rd + ROOF_DECK_T + UNDERLAYMENT_T + OVERFRAME_CLEAR
@@ -5399,8 +5430,12 @@ export function clipMemberBy(
     }
     let j = i
     while (j + 1 < n && !cov[j + 1]) j++
-    const a = i === 0 ? -L / 2 : edge(-L / 2 + step * i, -L / 2 + step * (i - 1))
-    const b = j === n - 1 ? L / 2 : edge(-L / 2 + step * j, -L / 2 + step * (j + 1))
+    // a plumb-cut member (Member.shear) keeps its shear on the piece; at an
+    // end the CUT made, the sheared corners would lean past the cut line by
+    // (d/2)·|shear| — that end pulls back so the corners stop at the line
+    const pull = m.shear ? (m.dims[1] / 2) * Math.abs(m.shear) : 0
+    const a = i === 0 ? -L / 2 : edge(-L / 2 + step * i, -L / 2 + step * (i - 1)) + pull
+    const b = j === n - 1 ? L / 2 : edge(-L / 2 + step * j, -L / 2 + step * (j + 1)) - pull
     const len = b - a
     if (len >= 0.15) {
       const sMid = (a + b) / 2

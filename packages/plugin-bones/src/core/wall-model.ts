@@ -358,6 +358,14 @@ export function extractPorchPosts(
     const post = (meta as { post?: { pier?: unknown } } | undefined)?.post
     const material = typeof node.materialPreset === 'string' ? node.materialPreset : ''
     const pier = post?.pier === true || /stucco/i.test(material) || size > inches(10)
+    // standing on a poured slab: the pad goes under the slab, the seat is its top
+    const onSlab =
+      support?.type === 'slab' && slabKindOf(support.metadata) === 'slab'
+        ? {
+            top: slabY,
+            bottom: slabY - num(support.thickness, 0.1),
+          }
+        : undefined
     out.push({
       id: String(node.id ?? ''),
       plan: [num(pos[0], 0), num(pos[2], 0)],
@@ -366,6 +374,7 @@ export function extractPorchPosts(
       size,
       entrance: typeof porch.entrance === 'string' ? porch.entrance : undefined,
       ...(pier ? { pier: true } : {}),
+      ...(onSlab ? { onSlab } : {}),
     })
   }
   return out

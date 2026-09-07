@@ -75,6 +75,41 @@ export function shedCeilingPatch(next: ShedCeilingValue): { shedCeiling: 'joists
   return { shedCeiling: next === 'joists' ? 'joists' : undefined }
 }
 
+/** The roof stock the panel offers — nominal 2x depths. */
+export const ROOF_STOCK_OPTIONS = ['2x6', '2x8', '2x10', '2x12'] as const
+export type RoofStockValue = (typeof ROOF_STOCK_OPTIONS)[number]
+/** Rafter spacings the panel offers, inches o.c. */
+export const RAFTER_SPACING_OPTIONS = [12, 16, 24] as const
+export type RafterSpacingValue = (typeof RAFTER_SPACING_OPTIONS)[number]
+
+/** A roof stock control's resolved value — absent means 'auto' (the table's). */
+export function roofStockValue(
+  node: Pick<FramingNode, 'rafterSize' | 'ridgeSize' | 'ceilingJoistSize'>,
+  key: 'rafterSize' | 'ridgeSize' | 'ceilingJoistSize',
+): RoofStockValue | 'auto' {
+  const v = node[key]
+  return v && (ROOF_STOCK_OPTIONS as readonly string[]).includes(v) ? (v as RoofStockValue) : 'auto'
+}
+
+/** Write patch for a roof stock control — 'auto' REMOVES the key (byte parity). */
+export function roofStockPatch(
+  key: 'rafterSize' | 'ridgeSize' | 'ceilingJoistSize',
+  next: RoofStockValue | 'auto',
+): Record<string, RoofStockValue | undefined> {
+  return { [key]: next === 'auto' ? undefined : next }
+}
+
+/** The rafter spacing control's resolved value — absent means 'auto' (the spec's 24 in). */
+export function rafterSpacingValue(node: Pick<FramingNode, 'rafterSpacingIn'>): RafterSpacingValue | 'auto' {
+  const v = node.rafterSpacingIn
+  return v === 12 || v === 16 || v === 24 ? v : 'auto'
+}
+
+/** Write patch for the rafter spacing control — 'auto' REMOVES the key. */
+export function rafterSpacingPatch(next: RafterSpacingValue | 'auto'): { rafterSpacingIn: RafterSpacingValue | undefined } {
+  return { rafterSpacingIn: next === 'auto' ? undefined : next }
+}
+
 /** The post pad sizes the panel offers, inches square (the 24 in pad is the engine's default). */
 export const POST_PAD_OPTIONS = [16, 18, 20, 24] as const
 export type PostPadValue = (typeof POST_PAD_OPTIONS)[number]

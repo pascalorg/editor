@@ -782,7 +782,106 @@ G48 A porch the user adjusts re-frames; the auto roof follows wall edits
     live once on (on by default for a generated house, can be turned off).
 G49 Every house type's elevation sheets reviewed (all six read, R6).
 
+## Mandate additions (Steve, 2026-09-07 — the framing view and the MEP)
+
+Steve, with two viewer screenshots (the built-up porch pier in the framing
+view, its 2x4 box hanging above the footing pad; the farmhouse's front
+stoop with its posts, rails and stair):
+
+> in your house gen framing on the posts build up ones, there a gap where
+> the wood doesnt go down to teeh footing, lets get that orkign correctly,
+> also your rails and stair in the front are missing some rails on the left
+> and right coming out fromthee columns on left and right side, also your
+> rail on tehe stair top rail need to come over the cap, also your rof
+> framing doesnt miter to eh ridge board, ensure ridge board and rafterts
+> size correctly and are easily adjust abl in settigns somehow, also your
+> rim the raftetr should miter to tht, also review your electical and
+> plumbing in bones, seems like they all run through the wALLS IS THAT
+> COMMON AS SHOWN? sewage shoulod run under the house from the street or
+> reaer as a setting, and the electrical line an pole should drop iin or be
+> beloe, review athat also i want teh hvac to make sure it real workd
+> styles and trasitions, sied correctly for thehouse, include manual j load
+> calcs automatted to the plans, make sure the ducts and stuff work
+> correctly, aso i noticed the electricacl panel is on the side, the main
+> panel is to the utside usuall yon left or right side, favoring the
+> garage, electrical typicallyruns throught he attic right? then down into
+> the wall ? do hot and cold water go into the walls? i thought those run
+> under the slab typically? or isthat ca only? review how thatworks too and
+> provide the optiosn to teh user on egnration for hvac system and type
+> etcc... time to expand and fix a lot, thankis!!
+
+G50 The built-up pier's 2x4 box goes down to its footing — no gap between
+    the bottom plate and the pad (done, S1).
+G51 Porch guards: the rails that come out from the flanking columns on
+    either side of the stair; the stair's top rail runs over the newel cap.
+G52 Roof framing: rafters plumb-cut (mitered) to the ridge board and to the
+    rim / fascia; ridge board and rafters sized correctly; the sizes easy
+    to adjust in the settings (gable / shed / truss done, settings done, S1;
+    hip commons open).
+G53 Electrical and plumbing routing reviewed against how houses are built:
+    what runs through walls, what runs through the attic and drops into
+    the wall, what runs under the slab.
+G54 Sewer runs under the house to the street or the rear — a setting.
+G55 The electrical service drops in overhead from the pole or comes
+    underground — a setting; the main panel is outside on the left or
+    right side, favouring the garage.
+G56 HVAC: real system styles and transitions, sized for the house; the
+    ducts work; Manual J load calcs automated onto the plans.
+G57 Hot and cold water: under the slab where that is the practice (the
+    slab states), in the walls where it is not — reviewed and set by
+    jurisdiction.
+G58 The generation exposes the options: HVAC system and type, service
+    entrance, sewer direction, water routing.
+
 ## Log (continued)
+
+- 2026-09-07: **Batch S1 — the pier seats on its slab, the front guard
+  comes out from the columns, rafters plumb-cut by shear, roof stock in
+  the settings (G50, G51, G52).** G50: on the ranch the pier's 2x4 box
+  and its 4x4 started at the porch slab top (y 0.012) while the pad
+  footing and the ABU sat at grade (−0.46) — the wood hung 18 in above its
+  footing. A post on a poured porch slab now carries `onSlab` (the slab's
+  top and underside, wall-model); compute passes the foundation
+  `gradeY` = the slab's underside and `seatY` = its top; the pad is poured
+  under the slab (monolithic, labelled so, the slab field not carved
+  around it), the post base and the pier's two anchor bolts seat at the
+  slab top. Probe: pad −0.395..−0.090, ABU 0.012..0.037, box from 0.012.
+  G51: Steve's screenshot was the ENTRY porch — 8 ft wide, its corner
+  6x6s flanking a 60 in flight a foot away — and the front guard only ran
+  outward from the flank stations, so nothing stood between the columns
+  and the stair. The outer sections now run from the flight's edge to
+  each corner through every post (a 4x4 at the flight's edge, the
+  flight's own rails reaching it); a section under 6 in is no section
+  (the full porch's flank post stands an inch off the flight — that
+  sliver is still skipped). G52: rafters were "inscribed" boxes pulled
+  back (rd/2)·tanθ from each plumb-cut plane, so their square corners
+  left wedge gaps at the ridge face and behind the fascia. `Member.shear`
+  (x' = x + y·shear) makes a box's end faces the parallel cut planes; the
+  renderer folds it into the instance matrix (T·R·Shear·Scale — still one
+  InstancedMesh per colour), the section cutter shears its corners, and
+  the roof emitter's `plumb` flag sets shear = tan(tilt). Common rafters,
+  shed rafters and truss top chords run the full face-to-tip length,
+  sheared, and so are the barge rafters and the rake drip edges that
+  share the rafters' slope length; a valley jack cut at a sleeper keeps
+  the shear and pulls its cut end back (d/2)·|shear| so the sheared
+  corners stop at the sleeper line. The interpenetration gate's OBB is a
+  parallelepiped now (half-edge vectors and face normals, the SAT over
+  normals + edge crosses) so a sheared member is tested by its real cut
+  faces. The hip commons are still inscribed (the hip's seat / span /
+  byte-equal gates read square corners — next, recaptured together), and
+  jacks / hips keep their compound cuts as boxes. Settings: the framing
+  node takes `rafterSize`, `rafterSpacingIn`, `ridgeSize`,
+  `ceilingJoistSize` (absent = the jurisdiction's table; the panel's Roof
+  block offers Auto / 2x6–2x12 and 12 / 16 / 24 in); `spec.ridgeSize`
+  wins over one-size-deeper. Tests: foundation +1, wall-model +1, porch
+  +1 (the entry case), roof +2 (shear and length, the ridge override),
+  renderer +1 (the sheared matrix), regression / truss expectations
+  rewritten, nine gable / shed hash pins and the valley pair recaptured
+  with the intended-change note; Bones green, sheets providers 116,
+  editor typecheck clean. Not looked at in the 3D viewer this batch: the
+  stair's top rail "over the cap" (G51's second half — the generated
+  stair already asks for `railingPostThrough: false`, cap flat over the
+  posts; what Steve's screenshot shows needs the editor scene).
 
 - 2026-09-07: **Batch R6 — every house type's elevations looked at (G49);
   Bones takes a hand-drawn porch (G47); notes on G43 / G48.** Rendered and

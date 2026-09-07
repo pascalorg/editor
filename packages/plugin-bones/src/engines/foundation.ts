@@ -176,6 +176,14 @@ export type FoundationOptions = {
     postSize?: LumberSize
     /** A built-up pier's finished section: its bottom plate is bolted to the pad as well. */
     pierSize?: number
+    /**
+     * Where the post actually seats when that is ABOVE the pad — a post on
+     * a poured porch slab seats on the slab top while its pad (monolithic
+     * with the slab) tops out at the slab's underside (`gradeY`). The post
+     * base and a pier's anchor bolts go at the seat, and the slab field is
+     * not carved around a pad that lies under it.
+     */
+    seatY?: number
   }[]
   /**
    * GRADE, level-local (≤ 0). The footing bottom sits `spec.footingDepth`
@@ -1048,8 +1056,11 @@ export function buildFoundation(
       }
       const band = bandFor(side)
       const clipped = side < standard - EPS
-      // the pad's top is the post's own grade on a hill (R507.3 / R403.1)
+      // the pad's top is the post's own grade on a hill (R507.3 / R403.1) —
+      // or the underside of the poured slab the post stands on
       const padTop = post.gradeY ?? grade
+      const underSlab = post.seatY !== undefined && post.seatY > padTop + EPS
+      const seat = post.seatY ?? padTop
       members.push({
         system: 'foundation',
         role: 'footing',
@@ -1059,11 +1070,11 @@ export function buildFoundation(
         rotation: [0, 0, 0],
         material: 'concrete',
         sourceId: post.sourceId,
-        label: `Pad footing ${formatIn(side)}×${formatIn(side)}×${formatIn(INTERIOR_FOOTING_DEPTH)} — ${post.kind ?? 'girder post'} (R403.1/R407.3)`,
+        label: `Pad footing ${formatIn(side)}×${formatIn(side)}×${formatIn(INTERIOR_FOOTING_DEPTH)} — ${post.kind ?? 'girder post'}${underSlab ? ', under the porch slab (monolithic)' : ''} (R403.1/R407.3)`,
         advisory: `pad sized prescriptively — verify per R403.1(1) loads; lateral restraint at the post base per R407.3${clipped ? '; clipped beside an adjacent pour' : ''}`,
       })
       pourBands.push({ band, memberIdx: members.length - 1 })
-      carveBands.push(band)
+      if (!underSlab) carveBands.push(band)
       // the post's base on the pad: Simpson ABU (ZMAX on PT) — the R407.3 / R507.4.1 restraint
       const postSize = post.postSize ?? '4x4'
       const baseSide = LUMBER_CROSS_SECTIONS[postSize]?.[0] ?? inches(3.5)
@@ -1072,11 +1083,11 @@ export function buildFoundation(
         role: 'post-base',
         dims: [baseSide + inches(0.5), inches(1), baseSide + inches(0.5)],
         length: inches(1),
-        position: [px, padTop + inches(0.5), pz],
+        position: [px, seat + inches(0.5), pz],
         rotation: [0, 0, 0],
         material: 'steel',
         sourceId: post.sourceId,
-        label: partLabel(postBaseFor(postSize), `${postSize} ${post.kind ?? 'post'} on its pad footing (R407.3 / R507.4.1)`),
+        label: partLabel(postBaseFor(postSize), `${postSize} ${post.kind ?? 'post'} on its pad footing${underSlab ? ', seated on the slab over it' : ''} (R407.3 / R507.4.1)`),
       })
       // a built-up pier's bottom plate is bolted down too: two 5/8 in
       // anchor bolts through the plate, one each side of the post
@@ -1088,11 +1099,11 @@ export function buildFoundation(
             role: 'anchor-bolt',
             dims: [BOLT_SIDE, BOLT_HEIGHT, BOLT_SIDE],
             length: BOLT_HEIGHT,
-            position: [px + dx, padTop - BOLT_EMBEDMENT + BOLT_HEIGHT / 2, pz],
+            position: [px + dx, seat - BOLT_EMBEDMENT + BOLT_HEIGHT / 2, pz],
             rotation: [0, 0, 0],
             material: 'steel',
             sourceId: post.sourceId,
-            label: '5/8" anchor bolt — built-up pier bottom plate to the pad (R403.1.6 / R407.3)',
+            label: `5/8" anchor bolt — built-up pier bottom plate to the ${underSlab ? 'slab' : 'pad'} (R403.1.6 / R407.3)`,
           })
         }
       }

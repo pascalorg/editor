@@ -1211,6 +1211,31 @@ describe('buildFoundation — girder-post pad footings (B18d)', () => {
     expect(onPerimeter.filter((m) => m.label?.startsWith('Pad footing'))).toHaveLength(0)
   })
 
+  test('a pier on a poured porch slab: the pad tops out at the slab underside, the post base and the pier bolts seat on the slab top, the slab is not carved', () => {
+    const m = buildFoundation(perimeter, [bigSlab as never], DEFAULT_SPEC, {
+      girderPosts: [
+        {
+          plan: [4, 3],
+          sourceId: 'column_pier',
+          kind: 'porch pier',
+          postSize: '4x4',
+          pierSize: inches(13),
+          gradeY: -0.09,
+          seatY: 0.012,
+        },
+      ],
+    })
+    const pad = m.find((x) => x.label?.startsWith('Pad footing'))!
+    expect(pad.position[1] + pad.dims[1] / 2).toBeCloseTo(-0.09, 9)
+    expect(pad.label).toContain('under the porch slab')
+    const base = m.find((x) => x.role === 'post-base')!
+    expect(base.position[1] - base.dims[1] / 2).toBeCloseTo(0.012, 9)
+    const bolts = m.filter((x) => x.role === 'anchor-bolt' && x.label?.includes('pier'))
+    expect(bolts).toHaveLength(2)
+    for (const b of bolts) expect(b.position[1] + b.dims[1] / 2).toBeGreaterThan(0.012)
+    for (const b of bolts) expect(b.label).toContain('to the slab')
+  })
+
   test('coincident posts pour ONE pad (two girder lines meeting)', () => {
     const doubled = buildFoundation(perimeter, [bigSlab as never], DEFAULT_SPEC, {
       girderPosts: [

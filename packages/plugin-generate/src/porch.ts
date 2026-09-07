@@ -711,7 +711,9 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
     ) => {
       const s = P(a0, o0)
       const e = P(a1, o1)
-      if (Math.hypot(e[0] - s[0], e[1] - s[1]) < inches(12)) return
+      // a section shorter than a post and a picket is no section (the
+      // flank post's face stands an inch off the flight's edge)
+      if (Math.hypot(e[0] - s[0], e[1] - s[1]) < inches(6)) return
       rails++
       ops.push({
         node: {
@@ -747,8 +749,11 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
     rail(-guardEdge, 0, -guardEdge, guardLine, true, !station(-guardEdge))
     rail(guardEdge, 0, guardEdge, guardLine, true, !station(guardEdge))
     // the outer edge, either side of the stair opening, one section per
-    // bay between the 6x6s; a bay end that is no 6x6 (the flight's edge
-    // when the corner posts flank it, an uncovered landing) gets a 4x4
+    // bay between the 6x6s — from the FLIGHT'S EDGE out to the corner,
+    // through every post on the way (Steve: "missing some rails on the
+    // left and right coming out from the columns"); a bay end that is no
+    // 6x6 (the flight's edge when the posts stand wide of it, an uncovered
+    // landing) gets a 4x4, and the flight's own rails reach it
     const outer = (a0: number, a1: number) => {
       const stops = [a0, ...along.filter((a) => a > a0 + 1e-6 && a < a1 - 1e-6), a1]
       for (let i = 0; i + 1 < stops.length; i++) {
@@ -758,7 +763,7 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
       }
     }
     if (risers > 0) {
-      const stop = flankAt ?? stairWidth / 2
+      const stop = stairWidth / 2
       outer(-guardEdge, -stop)
       outer(stop, guardEdge)
     } else {

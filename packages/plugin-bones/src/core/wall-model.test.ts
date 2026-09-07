@@ -293,6 +293,23 @@ describe('extractPorchPosts', () => {
     expect(hill.find((p) => p.id === 'column_3')?.baseY).toBeCloseTo(-0.8, 9)
   })
 
+  test('a post on a poured porch slab carries the slab it seats on (top and underside); a deck post carries none', () => {
+    const nodes = {
+      level_1: { id: 'level_1', type: 'level' },
+      pad: { id: 'pad', type: 'slab', parentId: 'level_1', elevation: 0.012, thickness: 0.1016, polygon: [], metadata: { floor: 'porch-slab' } },
+      deck: { id: 'deck', type: 'slab', parentId: 'level_1', elevation: 0.3, thickness: 0.05, polygon: [], metadata: { floor: 'deck' } },
+      column_1: column({ id: 'column_1', supportSlabId: 'pad' }),
+      column_2: column({ id: 'column_2', supportSlabId: 'ground', position: [3, -0.4, -2] }),
+      column_3: column({ id: 'column_3', supportSlabId: 'deck' }),
+    } as unknown as Parameters<typeof extractPorchPosts>[0]
+    const posts = extractPorchPosts(nodes, 'level_1')
+    const onPad = posts.find((p) => p.id === 'column_1')!
+    expect(onPad.onSlab?.top).toBeCloseTo(0.012, 9)
+    expect(onPad.onSlab?.bottom).toBeCloseTo(0.012 - 0.1016, 9)
+    expect(posts.find((p) => p.id === 'column_2')?.onSlab).toBeUndefined()
+    expect(posts.find((p) => p.id === 'column_3')?.onSlab).toBeUndefined()
+  })
+
   test('drawn by hand: an untagged column on a deck or porch pad is a porch post grouped by its slab; one on a floor slab or on the ground is not', () => {
     const nodes = {
       level_1: { id: 'level_1', type: 'level' },

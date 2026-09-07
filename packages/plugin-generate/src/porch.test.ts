@@ -176,6 +176,30 @@ describe('a full farmhouse porch', () => {
     expect(stair.railingTopReach).toBeCloseTo(6 * IN, 9)
   })
 
+  test('an entry porch (8 ft, its corner posts flanking the 60 in flight a foot away): the front guard comes out from each column to the flight edge, a 4x4 there', () => {
+    // Steve's screenshot: the corner columns stood a foot outside the flight
+    // and nothing ran between them and the stair
+    const entry = porchFor(input({ policy: 'entry', gradeY: -36 * IN }), ids())
+    const cols = byType(entry.ops, 'column').filter((c) => (c.metadata as { porch?: unknown }).porch)
+    expect(cols).toHaveLength(2)
+    const line = Math.min(...cols.map((c) => (c.position as number[])[2]!))
+    const front = byType(entry.ops, 'fence').filter(
+      (f) => Math.abs((f.start as number[])[1]! - line) < 1e-6 && Math.abs((f.end as number[])[1]! - line) < 1e-6,
+    )
+    expect(front).toHaveLength(2)
+    const colX = cols.map((c) => (c.position as number[])[0]!).sort((a, b) => a - b)
+    const edges = [20 * FT - 30 * IN, 20 * FT + 30 * IN]
+    for (const f of front) {
+      const x = [(f.start as number[])[0]!, (f.end as number[])[0]!].sort((a, b) => a - b)
+      // one end in a corner column (no post of its own), the other at the flight's edge with a 4x4
+      const atCorner = colX.some((c) => Math.abs(c - x[0]!) < 1e-6 || Math.abs(c - x[1]!) < 1e-6)
+      const atEdge = edges.some((e) => Math.abs(e - x[0]!) < 1e-6 || Math.abs(e - x[1]!) < 1e-6)
+      expect(atCorner && atEdge).toBe(true)
+      expect([f.startPost, f.endPost].filter(Boolean)).toHaveLength(1)
+      expect(x[1]! - x[0]!).toBeCloseTo(12 * IN, 6)
+    }
+  })
+
   test('the flight: 8½ in rise → two risers, 60 in wide, climbing toward the porch from grade', () => {
     // porch top = 0.05 − 0.0381 = 0.0119; grade −0.2032 → rise 0.2151 m (8.47 in)
     expect(r.summary?.risers).toBe(2)

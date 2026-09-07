@@ -47,11 +47,12 @@ describe('verify: gable rafter endpoints land on the tail cut and the ridge face
   const tipY = baseY + seat - roof.overhang * Math.sin(theta)
   const tipZ = run + roof.overhang * Math.cos(theta)
   // 2x6 rafters bear on the 2x8 ridge FACE (half thickness off center) and
-  // the box is inscribed between its plumb cuts: each end pulls back
-  // (rd/2)·tanθ along the slope (round-10 interpenetration fixes).
+  // G52 (2026-09-07): the box is SHEARED to its plumb cuts (Member.shear =
+  // tanθ) and its centre line runs tail cut → ridge face with no inscribed
+  // pull-back; the sheared corners land ON the cut planes.
   const rt = 1.5 * 0.0254
   const rd = 5.5 * 0.0254
-  const inset = (rd / 2) * Math.tan(theta)
+  const inset = 0
   const faceZ = rt / 2
   const faceY = ridgeY - faceZ * Math.tan(theta)
   const members = frameRoofs([roof], [], DEFAULT_SPEC)
@@ -59,8 +60,9 @@ describe('verify: gable rafter endpoints land on the tail cut and the ridge face
     (m) => m.role === 'rafter' && !m.label?.includes('Barge'),
   )
 
-  test('every common on both slopes spans tail cut → ridge face, inscribed', () => {
+  test('every common on both slopes spans tail cut → ridge face, sheared to the plumb cuts', () => {
     expect(rafters.length).toBeGreaterThan(0)
+    for (const r of rafters) expect(r.shear).toBeCloseTo(Math.tan(theta), 9)
     // the two dropped gable-end rafters sit one outlooker thickness lower
     const olT = 1.5 * 0.0254
     const xs = rafters.map((r) => r.position[0])
