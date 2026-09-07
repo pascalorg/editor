@@ -51,6 +51,22 @@ describe('Poppy builds into Pascal nodes', () => {
     ).toBe(false)
   })
 
+  test("the front door wears the style's leaf: a half-lite on the farmhouse, an arched four-panel on the cottage", () => {
+    const farmhouse = ofType(buildHouse({ ...POPPY, style: 'farmhouse' }).ops, 'door').find((d) => (d as N).name === 'Front door') as N
+    const segments = farmhouse.segments as { type: string; heightRatio: number }[]
+    expect(segments[0]?.type).toBe('glass')
+    expect(segments.map((s) => s.heightRatio).reduce((a, b) => a + b, 0)).toBeCloseTo(1, 9)
+    expect((farmhouse.metadata as { doorStyle?: string }).doorStyle).toBe('half-lite')
+    const cottage = ofType(buildHouse({ ...POPPY, style: 'cottage' }).ops, 'door').find((d) => (d as N).name === 'Front door') as N
+    expect(cottage.openingShape).toBe('arch')
+    expect((cottage.segments as { type: string }[]).every((s) => s.type === 'panel')).toBe(true)
+    // the cottage's gable ends carry a king post each; the farmhouse's none
+    const ornaments = (ops: readonly { node: Record<string, unknown> }[]) =>
+      ops.filter((op) => op.node.type === 'column' && (op.node.metadata as { ornament?: string }).ornament === 'gable' && (op.node.name as string) === 'Gable king post')
+    expect(ornaments(buildHouse({ ...POPPY, style: 'cottage' }).ops).length).toBeGreaterThan(0)
+    expect(ornaments(buildHouse({ ...POPPY, style: 'farmhouse' }).ops)).toHaveLength(0)
+  })
+
   test('one door per door attachment plus the front door, seated inside their walls', () => {
     const exterior = doors.filter((d) => d.metadata.attach === 'exterior')
     expect(exterior.length).toBe(2) // the front door and the rear entrance

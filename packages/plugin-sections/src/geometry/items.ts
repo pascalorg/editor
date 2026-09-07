@@ -178,6 +178,35 @@ export function projectFeature(view: Projector, f: FeatureSolid): ProjectedPiece
     case 'column':
       primitives.push(outline())
       break
+    case 'ornament': {
+      // a king post with two braces: the post from the base to the split
+      // (56 % up, as the column builds it), the arms to the top corners
+      // the braces span the ornament's PROJECTED width: the full Y seen face
+      // on, a bare post seen edge on from the other elevations
+      const o = f.ornament ?? { spread: uMax - uMin, braceWidth: 0.09 }
+      const spread = Math.min(o.spread, uMax - uMin)
+      const cx = (uMin + uMax) / 2
+      const splitY = yBottom + (yTop - yBottom) * 0.56
+      const w = o.braceWidth
+      const bar = (a: Vec2, b: Vec2): FloorplanGeometry => {
+        const dx = b[0] - a[0]
+        const dy = b[1] - a[1]
+        const len = Math.hypot(dx, dy) || 1
+        const nx = (-dy / len) * (w / 2)
+        const ny = (dx / len) * (w / 2)
+        return polygon(
+          [
+            [a[0] + nx, a[1] + ny],
+            [b[0] + nx, b[1] + ny],
+            [b[0] - nx, b[1] - ny],
+            [a[0] - nx, a[1] - ny],
+          ],
+          boxStyle,
+        )
+      }
+      primitives.push(bar([cx, yBottom], [cx, splitY]), bar([cx, splitY], [cx - spread / 2, yTop]), bar([cx, splitY], [cx + spread / 2, yTop]))
+      break
+    }
     case 'fence': {
       if (f.guard) primitives.push(...guardPrimitives(f.guard, uMin, uMax, yTop, yBottom))
       else {

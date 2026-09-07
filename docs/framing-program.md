@@ -782,6 +782,32 @@ G49 Every house type's elevation sheets reviewed.
 
 ## Log (continued)
 
+- 2026-09-07: **Batch R4 — the gingerbread and the front doors (G46).**
+  The catalog is GLB meshes on a CDN, so nothing new could be modelled;
+  every piece is a parametric node the editor already builds. `TrimSpec`
+  (styles.ts) names what a style wears — `postCapital` (the column's own
+  `wood-bracket` capital, 12 in tall, 10 in deep, two tiers, on the
+  craftsman's and the cottage's 6x6s), `gableOrnament` (`king-post`: a
+  Y-frame column — a 2x4 post with two braces fanned under the rakes, no
+  plates — standing on the beam band at the centre of an open porch gable
+  and on the plate just outside every gable-end wall of the house, its
+  spread 55 % of the gable or 3 m at most) and `frontDoor` (the leaf's own
+  panel / glass segments: the farmhouse's half-lite, the craftsman's three
+  lights over two panels, the ranch's six-panel, the moderns' full-lite,
+  the cottage's four-panel under an arched opening). Bones frames none of
+  it: an ornament column carries no porch tag, so `extractPorchPosts` never
+  sees it; the elevation draws an ornament as the Y it is (post to the
+  56 % split, two arms to the top corners) rather than a box. Tests: porch
+  +1 (brackets and the king post on the craftsman, neither on the
+  farmhouse), build +1 (the doors' leaves, the house gables' king posts),
+  the entry-porch count scoped to tagged posts — generate 97, sections 28,
+  editor typecheck clean. Seen on the Miami Shores craftsman: two house
+  king posts 2.87 m tall, the porch king post, brackets on six posts.
+  Honest gaps: the gingerbread vocabulary is one ornament (a king post with
+  braces) and one bracket; vergeboards, spandrels between posts and corbels
+  under the eaves are next; the king post in a very low porch gable comes
+  out short (0.42 m on the craftsman's 4:12 cover).
+
 - 2026-09-07: **Batch R3 — the auto roof follows the walls (G48).**
   `plugin-roof/src/follow.ts` (pure): which roof follows (`followRoofOf` — a
   derived roof carrying an `autoRoof` record, never a porch cover, not one

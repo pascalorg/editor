@@ -39,6 +39,7 @@
  * house front is −z), y up from the level plane. Pure — the caller supplies
  * ids and writes the ops.
  */
+import { trimOf } from './styles'
 import type { NodeOp } from './build'
 // Bones by relative path (see plugin-roof/run.ts): the cover's slab is the
 // rafter depth plus sheathing Bones frames.
@@ -488,6 +489,7 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
   // ── posts (for a cover) ───────────────────────────────────────────────
   const attach = porchAttach(input.wallRole)
   const pillar = pillarFor(style, policy)
+  const trim = trimOf(style)
   const inset = Math.min(inches(6), hw / 3, depth / 3)
   // The cover bears on the beam over the posts (one inset in from the
   // landing's outer edge); its eave overhangs the landing from there.
@@ -585,7 +587,11 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         shaftStartScale: 1,
         shaftEndScale: 1,
         baseStyle: 'none',
-        capitalStyle: 'none',
+        // the craftsman's and the cottage's brackets at the post top — the
+        // column's own wood-bracket capital; the post Bones frames is unchanged
+        ...(trim.postCapital === 'wood-bracket' && !pillar.stucco
+          ? { capitalStyle: 'wood-bracket', capitalHeight: inches(12), bracketDepth: inches(10), bracketTierCount: 2 }
+          : { capitalStyle: 'none' }),
         edgeSoftness: 0,
         ...(pillar.stucco ? { materialPreset: 'library:concrete-stucco' } : {}),
         // the pair each side of the flight: the posts that follow a moved
@@ -813,6 +819,44 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
       },
       parentId: input.levelId,
     })
+    // The gingerbread in an open gable: a king post with two braces under
+    // the rakes — a Y-frame column standing on the beam band at the gable's
+    // centre, its arms fanned across the porch (Steve: "add some
+    // gingerbread to the gables on porches"). No porch tag: Bones frames
+    // posts, not ornament.
+    if (form === 'gable' && trim.gableOrnament === 'king-post') {
+      const rise = (across / 2) * (pitch / 12)
+      const acrossDir: Pt = [-outward[1], outward[0]]
+      const centreAt = P(0, beamOut - inches(3))
+      ops.push({
+        node: {
+          id: ids.column(),
+          type: 'column',
+          name: `${name} gable king post`,
+          parentId: input.levelId,
+          position: [centreAt[0], round(plateY), centreAt[1]],
+          rotation: round(Math.atan2(-acrossDir[1], acrossDir[0])),
+          height: round(Math.max(inches(12), rise - inches(6))),
+          style: 'plain',
+          crossSection: 'square',
+          width: inches(3.5),
+          depth: inches(3.5),
+          supportStyle: 'y-frame',
+          braceWidth: inches(3.5),
+          braceDepth: inches(1.5),
+          braceTopSpread: round(Math.max(inches(24), across * 0.55)),
+          bracePlateEnabled: false,
+          shaftProfile: 'straight',
+          shaftSegmentCount: 1,
+          shaftCornerRadius: 0,
+          baseStyle: 'none',
+          capitalStyle: 'none',
+          edgeSoftness: 0,
+          metadata: { generatedBy: meta.generatedBy, ornament: 'gable', entrance: (meta as { porch?: { entrance?: string } }).porch?.entrance },
+        },
+        parentId: input.levelId,
+      })
+    }
     // A gable / hip / flat cover carries its beam as the segment's wall
     // band: the band's top is the bearing line, its bottom the posts' top.
     // A shed on a ledger keeps no band (its raked sides would close the

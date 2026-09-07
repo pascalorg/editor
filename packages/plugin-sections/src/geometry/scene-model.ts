@@ -282,7 +282,7 @@ export type FlightRun = {
 
 export type FeatureSolid = {
   kind: 'feature'
-  feature: 'column' | 'fence' | 'stair' | 'tree'
+  feature: 'column' | 'fence' | 'stair' | 'tree' | 'ornament'
   id: string
   polygon: Vec2[]
   baseY: number
@@ -291,6 +291,8 @@ export type FeatureSolid = {
   spread?: number
   guard?: GuardStyle
   flight?: FlightRun
+  /** A gable's king post: the spread of its two braces at the top, its member width. */
+  ornament?: { spread: number; braceWidth: number }
   levelId: string | null
 }
 
@@ -421,6 +423,22 @@ function collectFeatures(
         (n.supportSlabId === 'ground'
           ? groundLift(levelId, levelBase, p[0] ?? 0, p[2] ?? 0)
           : slabElevation(n.supportSlabId))
+      const meta = n.metadata as { ornament?: unknown } | undefined
+      if (meta?.ornament === 'gable' && n.supportStyle === 'y-frame') {
+        // the king post: its braces span `braceTopSpread` across the column's local x
+        const spread = typeof n.braceTopSpread === 'number' ? n.braceTopSpread : 0.9
+        out.push({
+          kind: 'feature',
+          feature: 'ornament',
+          id: String(n.id),
+          polygon: box(p[0] ?? 0, p[2] ?? 0, spread, d, yaw),
+          baseY,
+          topY: baseY + h,
+          ornament: { spread, braceWidth: typeof n.braceWidth === 'number' ? n.braceWidth : w },
+          levelId,
+        })
+        continue
+      }
       out.push({
         kind: 'feature',
         feature: 'column',

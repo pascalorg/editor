@@ -38,7 +38,7 @@ import {
 } from './geometry'
 import { type CatalogAsset, type FurnishRoom, furnishRooms } from './furnish'
 import { type PorchPolicy, type PorchSummary, porchFor } from './porch'
-import { type StylePreset, styleFor } from './styles'
+import { FRONT_DOOR_SEGMENTS, type StylePreset, trimOf, styleFor } from './styles'
 
 export const GENERATED_BY = 'pascal:generate'
 /** Roofs spanning more than this are trussed (a 2x10 ceiling joist at 16 in o.c. spans 19.8 ft one piece — R802.5.1(2)); site-cut framing needs a bearing line inside that. */
@@ -622,6 +622,15 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
           (frontRoom.v0 + frontRoom.v1) / 2,
         ),
       )
+      // the front door wears the style's leaf (Steve: "style more front
+      // door options"): its panel / glass segments, the cottage's arch
+      const front = ops[ops.length - 1]?.node
+      if (front && front.type === 'door') {
+        const trim = trimOf(style)
+        front.segments = FRONT_DOOR_SEGMENTS[trim.frontDoor]
+        if (trim.frontDoor === 'cottage-arch') front.openingShape = 'arch'
+        front.metadata = { ...((front.metadata as Record<string, unknown>) ?? {}), doorStyle: trim.frontDoor }
+      }
       frontDoor = { wall: frontChoice.wall, at }
     }
   }
@@ -1346,7 +1355,7 @@ function roofFor(
       roof: { role },
     }
   }
-  return roofNodesFor(
+  const roofOps = roofNodesFor(
     result,
     levelId,
     { roofId: generateId('roof'), segmentId: () => generateId('rseg') },
@@ -1355,6 +1364,59 @@ function roofFor(
       intent: { form, pitchInTwelfths: pitchTwelfths, overhangIn, gables: doc.roof.gables },
     },
   )
+  // The gingerbread in the house gables: a king post with two braces under
+  // the rakes on every gable-end wall, standing on the plate just outside
+  // the wall face (Steve: "gingerbread into the gables on the houses").
+  if (trimOf(style).gableOrnament === 'king-post') {
+    const main = result.segments[0]
+    if (main && form === 'gable') {
+      const rise = (main.depth / 2) * Math.tan((main.pitch * Math.PI) / 180)
+      for (const op of ops) {
+        if (op.node.type !== 'wall' || result.roles[op.node.id as string] !== 'gable-end') continue
+        const start = op.node.start as [number, number]
+        const end = op.node.end as [number, number]
+        const len = Math.hypot(end[0] - start[0], end[1] - start[1])
+        if (len < 1e-6) continue
+        const dir: [number, number] = [(end[0] - start[0]) / len, (end[1] - start[1]) / len]
+        const normal: [number, number] = [-dir[1], dir[0]]
+        const sign = op.node.frontSide === 'exterior' ? 1 : -1
+        const off = ((op.node.thickness as number) ?? 0.15) / 2 + 2 * IN
+        const mid: [number, number] = [
+          (start[0] + end[0]) / 2 + normal[0] * sign * off,
+          (start[1] + end[1]) / 2 + normal[1] * sign * off,
+        ]
+        roofOps.push({
+          node: {
+            id: generateId('column'),
+            type: 'column',
+            name: 'Gable king post',
+            parentId: levelId,
+            position: [round(mid[0]), round(ceilingM), round(mid[1])],
+            rotation: round(Math.atan2(-dir[1], dir[0])),
+            height: round(Math.max(12 * IN, rise - 10 * IN)),
+            style: 'plain',
+            crossSection: 'square',
+            width: 3.5 * IN,
+            depth: 3.5 * IN,
+            supportStyle: 'y-frame',
+            braceWidth: 3.5 * IN,
+            braceDepth: 1.5 * IN,
+            braceTopSpread: round(Math.min(len * 0.5, 3)),
+            bracePlateEnabled: false,
+            shaftProfile: 'straight',
+            shaftSegmentCount: 1,
+            shaftCornerRadius: 0,
+            baseStyle: 'none',
+            capitalStyle: 'none',
+            edgeSoftness: 0,
+            metadata: { generatedBy: GENERATED_BY, ornament: 'gable', wallId: op.node.id },
+          },
+          parentId: levelId,
+        })
+      }
+    }
+  }
+  return roofOps
 }
 
 /** "HALL / HALL 2" reads as "HALL": a numbered twin of a member is the same room continued. */

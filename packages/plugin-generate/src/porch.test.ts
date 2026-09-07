@@ -245,11 +245,30 @@ describe('policy', () => {
     expect(r.summary?.widthFt).toBe(8)
     expect(r.summary?.depthFt).toBe(6)
     expect(byType(r.ops, 'fence')).toHaveLength(0)
-    const posts = byType(r.ops, 'column')
+    // the posts (the craftsman's gable king post is ornament, not a post)
+    const posts = byType(r.ops, 'column').filter((c) => (c.metadata as { porch?: unknown }).porch)
     expect(posts).toHaveLength(2)
     expect(posts[0]!.shaftProfile).toBe('straight')
     expect(posts[0]!.shaftTaper).toBe(0)
     expect(posts[0]!.width).toBeCloseTo(5.5 * IN, 9)
+  })
+
+  test("the craftsman's posts carry wood brackets and its gable a king post; the farmhouse's carry neither", () => {
+    const craftsman = porchFor(input({ policy: 'full', style: styleFor('craftsman') }), ids())
+    const columns = byType(craftsman.ops, 'column')
+    const posts = columns.filter((c) => (c.metadata as { porch?: unknown }).porch)
+    expect(posts.length).toBeGreaterThan(1)
+    for (const post of posts) expect(post.capitalStyle).toBe('wood-bracket')
+    const ornament = columns.filter((c) => (c.metadata as { ornament?: unknown }).ornament === 'gable')
+    expect(ornament).toHaveLength(1)
+    expect(ornament[0]!.supportStyle).toBe('y-frame')
+    // Bones frames posts by their porch tag — the ornament carries none
+    expect((ornament[0]!.metadata as { porch?: unknown }).porch).toBeUndefined()
+    const farmhouse = porchFor(input({ policy: 'full', style: styleFor('farmhouse') }), ids())
+    for (const post of byType(farmhouse.ops, 'column')) {
+      expect(post.capitalStyle).toBe('none')
+      expect((post.metadata as { ornament?: unknown }).ornament).toBeUndefined()
+    }
   })
 
   test('a no-porch style still gets a covered stoop: 6 ft, 5 ft deep, two 6 in posts, flat canopy meeting the wall', () => {
