@@ -42,6 +42,21 @@ import {
   sitePatchFromParcel,
 } from './lot-patch'
 import { describeTerrainSample, sampleLotTerrain, type TerrainSampleSummary } from './terrain'
+import {
+  answered,
+  type CodeBasisData,
+  describeDossier,
+  type Dossier,
+  fetchDossier,
+  type FloodData,
+  frontageSegmentsMetres,
+  type ParcelData,
+  parcelRingMetres,
+  setbacksCitation,
+  setbacksFromZoning,
+  siteFactsFromDossier,
+  type ZoningData,
+} from './dossier'
 
 export interface LotDropInResult {
   ok: boolean
@@ -56,6 +71,9 @@ export interface LotDropInResult {
   terrain?: TerrainSampleSummary | null
   /** Why no terrain was read ('' when it worked). */
   terrainFailure?: string
+  /** The Pascal Map dossier's status line, or why none was read ('' when it worked). */
+  dossierLine?: string
+  dossierFailure?: string
   /** One status line. */
   message: string
 }
@@ -69,6 +87,8 @@ export interface DropInOptions {
   /** Skip the USGS terrain read (the ground stays flat). */
   terrain?: boolean
   terrainDeadlineMs?: number
+  /** Skip the Pascal Map dossier (the parcel / roads / elevation routes alone). */
+  dossier?: boolean
   fetchImpl?: typeof fetch
 }
 
@@ -108,22 +128,92 @@ export async function dropInLot(
   if (!address && !hasCoords)
     return { ok: false, error: 'address is required', message: 'Type an address first.' }
 
-  let data: ParcelResolveData
-  try {
-    data = await postJson<ParcelResolveData>(fetchImpl, '/api/parcel/resolve', {
+  // The Pascal Map dossier first — the parcel with its frontage, the
+  // zoning, flood, code basis, utilities, soils, wetlands, structures and
+  // boundaries in one read. Where its parcel plane covers the lot the ring
+  // comes from it; where it does not, the parcel route below stands and
+  // the sections that DID answer (flood, utilities, …) still ride the site.
+  let dossier: Dossier | null = null
+  let dossierFailure = ''
+  if (options.dossier !== false) {
+    const read = await fetchDossier(fetchImpl, {
       address,
-      ...(hasCoords
-        ? { latitude: input.latitude, longitude: input.longitude, state: input.state }
-        : {}),
+      ...(hasCoords ? { latitude: input.latitude, longitude: input.longitude } : {}),
     })
-  } catch (error) {
-    const message = error instanceof Error ? error.message : 'Parcel lookup failed.'
-    return { ok: false, error: message, message }
+    if (read.ok) dossier = read.dossier
+    else dossierFailure = read.reason
+  } else dossierFailure = 'skipped'
+  const dossierParcel = dossier ? answered<ParcelData>(dossier, 'parcel') : null
+  const dossierOrigin: [number, number] | null =
+    dossier && Number.isFinite(dossier.point?.lng) && Number.isFinite(dossier.point?.lat)
+      ? [dossier.point.lng, dossier.point.lat]
+      : null
+  const dossierRing = dossierParcel && dossierOrigin ? parcelRingMetres(dossierParcel, dossierOrigin) : []
+
+  let data: ParcelResolveData
+  if (dossier && dossierParcel && dossierOrigin && dossierRing.length >= 3) {
+    const boundaries = answered<{ state?: string | null; zip?: string | null; county?: { name?: string | null } }>(dossier, 'boundaries')
+    const zoning = answered<ZoningData>(dossier, 'zoning')
+    const state = boundaries?.state ?? input.state
+    data = {
+      ok: true,
+      apn: dossierParcel.parcel_key,
+      county: dossierParcel.county?.name ?? boundaries?.county?.name ?? undefined,
+      state: state ?? undefined,
+      zip: dossierParcel.situs_address?.zip ?? boundaries?.zip ?? undefined,
+      zoning: zoning?.district,
+      lotAreaSqFt: typeof dossierParcel.area_m2 === 'number' ? dossierParcel.area_m2 * 10.7639 : undefined,
+      originLngLat: dossierOrigin,
+      geocodedBy: 'pascal-map',
+      matchPrecision: dossier.address?.precision,
+      notes: [
+        `Parcel from Pascal Map${dossierParcel.vintage ? ` (${dossierParcel.vintage} roll)` : ''} — the county fabric; DRAFT, not a survey. Confirm corners before staking.`,
+      ],
+      polygonM: dossierRing.map((p) => [p[0], p[1]] as [number, number]),
+      address: {
+        street: dossierParcel.situs_address?.line1 ?? input.street,
+        city: dossierParcel.situs_address?.city ?? input.city,
+        state: state ?? undefined,
+        zip: dossierParcel.situs_address?.zip ?? boundaries?.zip ?? input.zip,
+      },
+    }
+  } else {
+    try {
+      data = await postJson<ParcelResolveData>(fetchImpl, '/api/parcel/resolve', {
+        address,
+        ...(hasCoords
+          ? { latitude: input.latitude, longitude: input.longitude, state: input.state }
+          : {}),
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Parcel lookup failed.'
+      return { ok: false, error: message, message }
+    }
+    if (!data.ok || !data.polygonM || data.polygonM.length < 3) {
+      const message = data.error ? `No parcel: ${data.error}` : 'No parcel found for that address.'
+      return { ok: false, error: data.error ?? 'no parcel', message }
+    }
   }
-  if (!data.ok || !data.polygonM || data.polygonM.length < 3) {
-    const message = data.error ? `No parcel: ${data.error}` : 'No parcel found for that address.'
-    return { ok: false, error: data.error ?? 'no parcel', message }
-  }
+  // what the dossier adds to the patch: the frontage, the zoning, the facts
+  const extras = dossier
+    ? (() => {
+        const zoning = answered<ZoningData>(dossier, 'zoning')
+        const zoningSection = dossier.layers?.zoning
+        const setbacks = setbacksFromZoning(zoning)
+        return {
+          frontageSegmentsM:
+            dossierParcel && dossierOrigin && data.geocodedBy === 'pascal-map'
+              ? frontageSegmentsMetres(dossierParcel, dossierOrigin)
+              : [],
+          setbacks,
+          setbacksSource: zoning && setbacks ? setbacksCitation(zoning, zoningSection?.source) : undefined,
+          dimensionalNote: zoning?.dimensional_note ?? null,
+          zone: zoning?.district,
+          facts: siteFactsFromDossier(dossier),
+          line: describeDossier(dossier),
+        }
+      })()
+    : null
 
   // Streets around the lot — fail-soft, but asked twice: the Overpass
   // mirrors time out now and then, and without the street the front edge
@@ -159,7 +249,7 @@ export async function dropInLot(
     site = SiteNode.parse({ id: generateId('site'), type: 'site', name: 'Site' })
     scene.createNodes([{ node: site as AnyNode }])
   }
-  const computed = sitePatchFromParcel(site, input, data, roads)
+  const computed = sitePatchFromParcel(site, input, data, roads, undefined, extras)
   if (!computed)
     return {
       ok: false,
@@ -231,6 +321,8 @@ export async function dropInLot(
     recentred ? 'building re-centred' : '',
     roadsFailure && roadsFailure !== 'skipped' ? `roads unavailable (${roadsFailure})` : '',
     describeTerrainSample(terrain, terrainFailure),
+    dossierFailure && dossierFailure !== 'skipped' ? `Pascal Map unavailable (${dossierFailure})` : '',
+    ...(dossier ? dossierHeadline(dossier) : []),
   ]
   return {
     ok: true,
@@ -240,6 +332,25 @@ export async function dropInLot(
     roadsFailure,
     terrain,
     terrainFailure,
+    dossierLine: dossier ? describeDossier(dossier) : '',
+    dossierFailure,
     message: describeLotSummary(computed.summary, extra.filter(Boolean)),
   }
+}
+
+/** The facts a reader wants on the status line: the flood zone and the wind speed, when the dossier answered them. */
+function dossierHeadline(dossier: Dossier): string[] {
+  const out: string[] = []
+  const flood = answered<FloodData>(dossier, 'flood')
+  if (flood?.zone_at_point?.zone) {
+    const z = flood.zone_at_point
+    out.push(
+      `flood zone ${z.zone}${typeof z.base_flood_elevation_ft === 'number' ? ` (BFE ${z.base_flood_elevation_ft} ft ${z.bfe_datum ?? ''})`.replace(/ \)$/, ')') : ''}${flood.firm_panel?.panel ? `, FIRM ${flood.firm_panel.panel}` : ''}`,
+    )
+  }
+  const code = answered<CodeBasisData>(dossier, 'code_basis')
+  if (typeof code?.wind_speed_mph === 'number') {
+    out.push(`wind ${code.wind_speed_mph} mph${code.wind_borne_debris_region ? ' (debris region)' : ''}${code.climate_zone_iecc ? `, zone ${code.climate_zone_iecc}` : ''}`)
+  }
+  return out
 }

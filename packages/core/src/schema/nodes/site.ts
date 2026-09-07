@@ -52,6 +52,53 @@ export const SiteSetbacks = z.object({
 })
 export type SiteSetbacks = z.infer<typeof SiteSetbacks>
 
+/**
+ * What the site keeps of a Pascal Map location dossier
+ * (https://map.pascal.app/api/docs): when it was assembled, the point and
+ * address it was evaluated at, every section's status / summary / source,
+ * and the geometry-free data of the sections the plan set acts on. Loose
+ * records on purpose — the platform adds fields without a version bump and
+ * the plan set ignores what it does not know. A section that did not answer
+ * (`not_covered` / `not_available`) is recorded as such: never a negative
+ * finding.
+ */
+const DossierSectionRecord = z
+  .object({
+    status: z.string(),
+    summary: z.string().optional(),
+    reason: z.string().optional(),
+    source: z
+      .object({
+        name: z.string().optional(),
+        kind: z.string().optional(),
+        vintage: z.string().optional(),
+        attribution: z.string().optional(),
+      })
+      .optional(),
+  })
+  .passthrough()
+const Facts = z.record(z.string(), z.unknown())
+export const SiteDossier = z
+  .object({
+    provider: z.string(),
+    asOf: z.string(),
+    point: z.object({ lat: z.number().optional(), lng: z.number().optional(), source: z.string().optional() }).optional(),
+    address: z.object({ formatted: z.string().optional(), precision: z.string().optional() }).optional(),
+    sections: z.record(z.string(), DossierSectionRecord),
+    parcel: Facts.optional(),
+    flood: Facts.optional(),
+    codeBasis: Facts.optional(),
+    zoning: Facts.optional(),
+    utilities: Facts.optional(),
+    soils: Facts.optional(),
+    wetlands: Facts.optional(),
+    structures: Facts.optional(),
+    elevation: Facts.optional(),
+    boundaries: Facts.optional(),
+  })
+  .passthrough()
+export type SiteDossier = z.infer<typeof SiteDossier>
+
 export const SiteNode = BaseNode.extend({
   id: objectId('site'),
   type: nodeType('site'),
@@ -92,6 +139,8 @@ export const SiteNode = BaseNode.extend({
   frontEdge: z.number().int().nonnegative().optional(),
   /** Rotation of true north relative to plan −z (up), RADIANS, clockwise. */
   northRotation: z.number().optional(),
+  /** The Pascal Map dossier the lot was dropped in with — see SiteDossier. */
+  dossier: SiteDossier.optional(),
   children: z.array(z.string()).default([]),
 }).describe(
   dedent`

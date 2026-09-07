@@ -258,6 +258,7 @@ export { ShelfNode } from './nodes/shelf'
 export {
   migrateSiteMetadata,
   SiteAddress,
+  SiteDossier,
   SiteNode,
   SiteParcel,
   SiteSetbacks,

@@ -40,6 +40,9 @@ function arg(name: string, fallback: string): string {
   return i >= 0 && process.argv[i + 1] ? (process.argv[i + 1] as string) : fallback
 }
 const LOT = arg('lot', 'Miami Shores')
+// --address "501 5th Ave N, St Petersburg, FL": any address instead of a preset —
+// the Pascal Map dossier resolves the parcel, the frontage and the facts
+const ADDRESS = arg('address', '')
 const STYLE = arg('style', 'farmhouse')
 const SEED = Number(arg('seed', '777'))
 const GARAGE = arg('garage', '')
@@ -114,14 +117,15 @@ if (!g.document) {
 
 async function main() {
   // 1. the lot
-  const preset = PRESET_LOTS.find((p) => p.label.toLowerCase().includes(LOT.toLowerCase()))
-  if (!preset) throw new Error(`no preset lot matches "${LOT}"`)
+  const preset = ADDRESS ? null : PRESET_LOTS.find((p) => p.label.toLowerCase().includes(LOT.toLowerCase()))
+  if (!ADDRESS && !preset) throw new Error(`no preset lot matches "${LOT}"`)
   const t0 = performance.now()
-  const lot = await dropInLot(presetDropInInput(preset), {
+  const lot = await dropInLot(preset ? presetDropInInput(preset) : { address: ADDRESS }, {
     fetchImpl: ((url: string, init?: RequestInit) => fetch(`${API}${url}`, init)) as never,
   })
   if (!lot.ok) throw new Error(`lot drop-in failed: ${lot.error ?? lot.message}`)
-  console.log(`lot: ${preset.label} in ${Math.round(performance.now() - t0)} ms`)
+  console.log(`lot: ${preset ? preset.label : ADDRESS} in ${Math.round(performance.now() - t0)} ms`)
+  if (lot.dossierFailure && lot.dossierFailure !== 'skipped') console.log(`  Pascal Map: ${lot.dossierFailure}`)
   // which edge fronts the street decides which way the house faces — say so
   console.log(`  ${lot.message}`)
   if (lot.summary && lot.summary.frontEdge === null)

@@ -292,6 +292,13 @@ export function computeProjectData(nodes: NodeMap): ProjectData {
   const zone = typeof site?.zone === 'string' ? site.zone : ''
   if (zone) rows.push({ label: 'ZONING', value: zone.toUpperCase() })
 
+  // ── the site's Pascal Map dossier: flood, code basis, utilities ──────
+  // (site.dossier — written by the lot drop-in; every row names its
+  // source and vintage in the basis line, and a section that did not
+  // answer is listed as such, never read as "no risk")
+  for (const row of dossierRows(site)) rows.push(row)
+  basis.push(...dossierBasis(site))
+
   return { rows, basis, unknown }
 }
 
@@ -574,5 +581,79 @@ function buildGeneralNotes({ x, y, w, h }: CoverBlockInput): FloorplanGeometry[]
     }
     ry += 0.08
   }
+  return out
+}
+
+/* --------------------------------------------- the site's dossier rows */
+
+type Dossier = {
+  provider?: string
+  asOf?: string
+  sections?: Record<string, { status?: string; source?: { name?: string; kind?: string; vintage?: string } }>
+  flood?: Record<string, unknown>
+  codeBasis?: Record<string, unknown>
+  zoning?: Record<string, unknown>
+  utilities?: Record<string, unknown>
+}
+
+function dossierOf(site: unknown): Dossier | null {
+  const d = (site as { dossier?: unknown } | null | undefined)?.dossier
+  return d && typeof d === 'object' ? (d as Dossier) : null
+}
+
+/** The project-data rows the dossier answers: flood zone, FIRM panel, design wind, climate zone, seismic, wastewater, electric. */
+export function dossierRows(site: unknown): ProjectDataRow[] {
+  const d = dossierOf(site)
+  if (!d) return []
+  const rows: ProjectDataRow[] = []
+  const flood = d.flood as
+    | { zone_at_point?: { zone?: string; base_flood_elevation_ft?: number | null; bfe_datum?: string }; firm_panel?: { panel?: string; effective_date?: string | null } }
+    | undefined
+  if (flood?.zone_at_point?.zone) {
+    const z = flood.zone_at_point
+    const bfe = typeof z.base_flood_elevation_ft === 'number' ? ` · BFE ${z.base_flood_elevation_ft} FT ${z.bfe_datum ?? ''}`.trimEnd() : ''
+    rows.push({ label: 'FLOOD ZONE', value: `${z.zone}${bfe}` })
+    if (flood.firm_panel?.panel) rows.push({ label: 'FIRM PANEL', value: `${flood.firm_panel.panel}${flood.firm_panel.effective_date ? ` (${flood.firm_panel.effective_date})` : ''}`, indent: true })
+  }
+  const code = d.codeBasis as
+    | { wind_speed_mph?: number | null; wind_borne_debris_region?: boolean | null; climate_zone_iecc?: string | null; climate_zone_title24?: string | null; seismic_design_category?: string | null; frost_depth_ft?: number | null; ground_snow_load_psf?: number | null }
+    | undefined
+  if (typeof code?.wind_speed_mph === 'number') rows.push({ label: 'DESIGN WIND (RC II)', value: `${code.wind_speed_mph} MPH${code.wind_borne_debris_region ? ' · DEBRIS REGION' : ''}` })
+  if (code?.climate_zone_iecc) rows.push({ label: 'CLIMATE ZONE (IECC)', value: code.climate_zone_iecc })
+  else if (code?.climate_zone_title24) rows.push({ label: 'CLIMATE ZONE (TITLE 24)', value: String(code.climate_zone_title24) })
+  if (code?.seismic_design_category) rows.push({ label: 'SEISMIC DESIGN CAT.', value: code.seismic_design_category })
+  if (typeof code?.frost_depth_ft === 'number' || typeof code?.ground_snow_load_psf === 'number') {
+    rows.push({
+      label: 'FROST / GROUND SNOW',
+      value: `${typeof code.frost_depth_ft === 'number' ? `${code.frost_depth_ft} FT` : '—'} / ${typeof code.ground_snow_load_psf === 'number' ? `${code.ground_snow_load_psf} PSF` : '—'}`,
+      indent: true,
+    })
+  }
+  const util = d.utilities as { wastewater?: string | null; wastewater_confidence?: string | null; electric_providers?: { name?: string }[] } | undefined
+  if (util?.wastewater) rows.push({ label: 'WASTEWATER', value: `${util.wastewater.toUpperCase()}${util.wastewater_confidence ? ` (${util.wastewater_confidence})` : ''}` })
+  const electric = util?.electric_providers?.[0]?.name
+  if (electric) rows.push({ label: 'ELECTRIC UTILITY', value: electric.toUpperCase() })
+  return rows
+}
+
+/** The provenance line under the block, and the sections that did not answer. */
+export function dossierBasis(site: unknown): string[] {
+  const d = dossierOf(site)
+  if (!d) return []
+  const sections = d.sections ?? {}
+  const answered: string[] = []
+  const missing: string[] = []
+  for (const [layer, s] of Object.entries(sections)) {
+    if (s.status === 'available' || s.status === 'empty') answered.push(layer)
+    else missing.push(layer)
+  }
+  const sourceOf = (layer: string) => {
+    const src = sections[layer]?.source
+    return src?.name ? `${layer}: ${src.name}${src.vintage ? ` (${src.vintage})` : ''}` : ''
+  }
+  const cited = ['flood', 'code_basis', 'zoning', 'utilities'].map(sourceOf).filter(Boolean)
+  const when = d.asOf ? d.asOf.slice(0, 10) : 'undated'
+  const out = [`Site facts from ${d.provider ?? 'Pascal Map'} as of ${when} — ${cited.join('; ')}. Official records and computed values, not a survey or an elevation certificate.`]
+  if (missing.length > 0) out.push(`Not answered by the dossier here (no finding, not a negative finding): ${missing.join(', ')}.`)
   return out
 }
