@@ -15,6 +15,7 @@ import {
 import { FIXTURE_CATALOG } from './furnish.fixture'
 
 const IN = 0.0254
+const M_TO_IN = 1 / IN
 const HALF_INT = 2.25 // a 2x4 partition's half thickness, inches
 const HALF_EXT = 3.25 // a 2x6 exterior wall's
 
@@ -27,11 +28,13 @@ function room(
   rect: [number, number, number, number],
   exterior: PlanEdge[] = [],
   openings: Openings = {},
+  open: PlanEdge[] = [],
 ): FurnishRoom {
   const edge = (e: PlanEdge): FurnishEdge => ({
     exterior: exterior.includes(e),
-    halfIn: exterior.includes(e) ? HALF_EXT : HALF_INT,
+    halfIn: open.includes(e) ? 0 : exterior.includes(e) ? HALF_EXT : HALF_INT,
     openings: openings[e] ?? [],
+    ...(open.includes(e) ? { open: true } : {}),
   })
   return {
     name,
@@ -58,8 +61,9 @@ const window = (centre: number, width = 48, sillIn = 36): FurnishOpening => ({
 
 let counter = 0
 const identity = (p: Pt): Pt => [p[0] * IN, p[1] * IN]
-const run = (rooms: FurnishRoom[], catalog: readonly CatalogAsset[] = FIXTURE_CATALOG) =>
+const run = (rooms: FurnishRoom[], catalog: readonly CatalogAsset[] = FIXTURE_CATALOG, rng?: () => number) =>
   furnishRooms({
+    rng,
     rooms,
     catalog,
     levelId: 'level_1',
@@ -81,7 +85,10 @@ const byRole = (r: ReturnType<typeof run>, role: string) =>
   items(r).filter((i) => i.metadata.furnish.role === role)
 /** The item's plan rectangle in inches. */
 const rectOf = (i: Item) => {
-  const ext = extents(i.asset, i.rotation[1])
+  // the node's scale is part of its footprint (a vanity narrowed to its wall)
+  const d = i.asset.dimensions
+  const sc = i.scale ?? [1, 1, 1]
+  const ext = extents({ ...i.asset, dimensions: [d[0] * sc[0], d[1] * sc[1], d[2] * sc[2]] }, i.rotation[1])
   const u = i.position[0] / IN
   const v = i.position[2] / IN
   return { u0: u - ext.u / 2, v0: v - ext.v / 2, u1: u + ext.u / 2, v1: v + ext.v / 2 }
@@ -90,8 +97,9 @@ const insideRoom = (i: Item, rm: FurnishRoom) => {
   const r = rectOf(i)
   return r.u0 >= rm.u0 - 0.6 && r.u1 <= rm.u1 + 0.6 && r.v0 >= rm.v0 - 0.6 && r.v1 <= rm.v1 + 0.6
 }
+// pieces laid back to back touch — a hundredth of an inch in is an overlap
 const overlap = (a: ReturnType<typeof rectOf>, b: ReturnType<typeof rectOf>) =>
-  a.u0 < b.u1 && a.u1 > b.u0 && a.v0 < b.v1 && a.v1 > b.v0
+  a.u0 < b.u1 - 0.01 && a.u1 > b.u0 + 0.01 && a.v0 < b.v1 - 0.01 && a.v1 > b.v0 + 0.01
 
 describe('facing', () => {
   test('an item against an edge faces the room: its front (+z) along the inward normal', () => {
@@ -159,15 +167,26 @@ describe('bedroom', () => {
 })
 
 describe('bath', () => {
-  test('a 5 x 8 bath: toilet and shower on the wet wall and across the end, the 72 in vanity does not fit — said so', () => {
-    // door on the front (short) wall; the long walls are left / right
-    const bath = room('BATH', 'bath', [0, 0, 60, 96], ['right'], { front: [door(30, 30)] })
+  test('a 5 x 8 bath: toilet and shower on the wet wall and across the end, the 72 in vanity narrowed to the wall', () => {
+    // door on the front (short) wall, hung beside the vanity's end so its
+    // swing clears it; the long walls are left / right
+    const bath = room('BATH', 'bath', [0, 0, 60, 96], ['right'], { front: [door(46, 24)] })
     const r = run([bath])
     const roles = items(r).map((i) => i.metadata.furnish.role)
     expect(roles).toContain('toilet')
     expect(roles).toContain('shower')
-    expect(roles).not.toContain('vanity')
-    expect(r.warnings.some((w) => w.includes('vanity') && w.includes('BATH'))).toBe(true)
+    expect(roles).toContain('vanity')
+    const vanity = byRole(r, 'vanity')[0]!
+    // the same catalog piece, scaled to a stock width along its own length
+    expect(vanity.asset.id).toBe('bathroom-sink')
+    expect(vanity.scale[0]).toBeLessThan(1)
+    expect([48, 36, 30].some((w) => Math.abs(vanity.scale[0] * 1.83 * M_TO_IN - w) < 0.5)).toBe(true)
+    expect(r.warnings.some((w) => w.includes('vanity') && w.includes('BATH'))).toBe(false)
+    // the same bath with the door centred on the end: its swing takes the
+    // vanity's only spot, even at 30 in — said so
+    const centred = run([room('BATH', 'bath', [0, 0, 60, 96], ['right'], { front: [door(30, 30)] })])
+    expect(byRole(centred, 'vanity')).toHaveLength(0)
+    expect(centred.warnings.some((w) => w.includes('vanity') && w.includes('BATH'))).toBe(true)
     const shower = byRole(r, 'shower')[0]!
     // across the far end: its back on the back wall
     expect(rectOf(shower).v1).toBeCloseTo(96 - HALF_INT, 1)
@@ -209,13 +228,72 @@ describe('kitchen', () => {
     const ids = items(r).map((i) => i.asset.id)
     expect(ids).toContain('stove')
     expect(ids).toContain('fridge')
-    for (const i of items(r)) {
-      expect(insideRoom(i, kitchen)).toBe(true)
-      expect(rectOf(i).v1).toBeCloseTo(144 - HALF_EXT, 1) // one run, all on the back wall
+    expect(ids).toContain('dishwasher-movn72ls')
+    const floor = items(r).filter((i) => !i.metadata.furnish.floating)
+    for (const i of floor) expect(insideRoom(i, kitchen)).toBe(true)
+    // the sink, the dishwasher beside it and the fridge stand on the run; a
+    // 16 ft run with the sink centred has 47 in a side, so the range turns
+    // the corner onto the wall at the dishwasher's end — the left (an L)
+    for (const role of ['sink', 'dishwasher', 'fridge']) {
+      expect(rectOf(byRole(r, role)[0]!).v1).toBeCloseTo(144 - HALF_EXT, 1)
     }
-    const rects = items(r).map(rectOf)
+    const dw = rectOf(byRole(r, 'dishwasher')[0]!)
+    const sk = rectOf(sink)
+    expect(Math.min(Math.abs(dw.u0 - sk.u1), Math.abs(dw.u1 - sk.u0))).toBeLessThan(1)
+    const stove = rectOf(byRole(r, 'stove')[0]!)
+    expect(stove.u0).toBeCloseTo(HALF_INT, 1) // the left wall is a partition
+    // the hood hangs over the range, off the floor
+    const hood = byRole(r, 'hood')[0]!
+    expect(hood.position[1]).toBeCloseTo(1.55, 6)
+    expect(hood.position[0]).toBeCloseTo(byRole(r, 'stove')[0]!.position[0], 6)
+    const rects = floor.map(rectOf)
     for (let i = 0; i < rects.length; i++)
       for (let j = i + 1; j < rects.length; j++) expect(overlap(rects[i]!, rects[j]!)).toBe(false)
+  })
+
+  test('a kitchen open to the great room: nothing backs onto the open edge — the range keeps to a wall', () => {
+    // no wall on the front: the room runs into the great room; the run goes
+    // on the window wall, the range that turns the corner finds the walled
+    // side, and the sofa next door never gets a range at its back
+    const kitchen = room('KITCHEN', 'kitchen', [0, 0, 192, 144], ['back', 'right'], { back: [window(96, 48, 42)] }, ['front'])
+    const r = run([kitchen], FIXTURE_CATALOG, () => 0.9)
+    for (const i of items(r).filter((x) => !x.metadata.furnish.floating)) {
+      expect(insideRoom(i, kitchen)).toBe(true)
+      // nothing within a foot of the open edge with its back to it
+      const rc = rectOf(i)
+      if (rc.v0 < 12) expect(Math.cos(i.rotation[1])).not.toBeCloseTo(1, 3)
+    }
+    const stove = byRole(r, 'stove')[0]!
+    expect(stove).toBeDefined()
+    const st = rectOf(stove)
+    const onWall =
+      Math.abs(st.v1 - (144 - HALF_EXT)) < 1 || Math.abs(st.u1 - (192 - HALF_EXT)) < 1 || Math.abs(st.u0 - HALF_INT) < 1
+    expect(onWall).toBe(true)
+  })
+
+  test('a big kitchen with a willing roll takes an island with 42 in aisles and an L on the return wall', () => {
+    const kitchen = room('KITCHEN', 'kitchen', [0, 0, 240, 204], ['back', 'right'], {
+      back: [window(120, 48, 42)],
+      front: [{ a: 20, b: 92, kind: 'open' }],
+    })
+    const r = run([kitchen], FIXTURE_CATALOG, () => 0.1)
+    const island = byRole(r, 'island')[0]!
+    expect(island).toBeDefined()
+    const isl = rectOf(island)
+    const counterDepth = 0.63 * M_TO_IN
+    // 42 in clear between the run's counter front and the island's back
+    expect(204 - HALF_EXT - counterDepth - isl.v1).toBeCloseTo(42, 0)
+    // the L: a counter on the right wall, its back on that wall
+    const leg = items(r).find(
+      (i) => i.asset.id === 'kitchen-counter' && Math.abs(rectOf(i).u1 - (240 - HALF_EXT)) < 1,
+    )
+    expect(leg).toBeDefined()
+    const rects = items(r).filter((i) => !i.metadata.furnish.floating).map(rectOf)
+    for (let i = 0; i < rects.length; i++)
+      for (let j = i + 1; j < rects.length; j++) expect(overlap(rects[i]!, rects[j]!)).toBe(false)
+    // and a roll that says no: neither
+    const plain = run([kitchen], FIXTURE_CATALOG, () => 0.9)
+    expect(byRole(plain, 'island')).toHaveLength(0)
   })
 
   test('the fridge never stands in front of a window it would block', () => {
@@ -314,14 +392,23 @@ describe('the item nodes', () => {
     }
   })
 
-  test('a catalog missing an item says so once and places the rest; halls, closets and garages get nothing', () => {
+  test('a catalog missing an item says so once and places the rest; halls and closets get nothing, a garage its car', () => {
     const catalog = FIXTURE_CATALOG.filter((a) => a.id !== 'bedside-table')
     const bed = room('BED 1', 'bed', [0, 0, 144, 144], ['back'], { front: [door(30)] })
     const hall = room('HALL', 'hall', [144, 0, 192, 144], [], { left: [door(72)] })
-    const garage = room('GARAGE', 'garage', [192, 0, 432, 288], ['front', 'back', 'right'])
+    const garage = room('GARAGE', 'garage', [192, 0, 432, 288], ['front', 'back', 'right'], {
+      front: [door(312, 192)],
+    })
     const r = run([bed, hall, garage], catalog)
     expect(r.warnings.filter((w) => w.includes('bedside-table'))).toHaveLength(1)
     expect(byRole(r, 'bed')).toHaveLength(1)
-    expect(items(r).every((i) => i.metadata.furnish.room === 'BED 1')).toBe(true)
+    expect(
+      items(r).every((i) => i.metadata.furnish.room === 'BED 1' || i.metadata.furnish.room === 'GARAGE'),
+    ).toBe(true)
+    // the car nose-in from the garage door, its length square to that wall
+    const car = byRole(r, 'car')[0]!
+    expect(car).toBeDefined()
+    expect(Math.abs(Math.cos(car.rotation[1]))).toBeGreaterThan(0.99)
+    expect(byRole(r, 'ev-charger')[0]!.position[1]).toBeCloseTo(1.2, 6)
   })
 })

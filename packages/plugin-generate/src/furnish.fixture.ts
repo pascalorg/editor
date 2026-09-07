@@ -26,6 +26,18 @@ const entry = (
 })
 
 export const FIXTURE_CATALOG: Sized[] = [
+  entry('dishwasher-movn72ls', 'kitchen', 'Dishwasher', [0.79, 1.01, 0.76]),
+  entry('hood', 'kitchen', 'Hood', [1.21, 0.52, 0.51]),
+  entry('wooden-kitchen-bar-moa2hhh4', 'kitchen', 'Kitchen Bar', [2.5, 1.06, 0.96]),
+  entry('fireplace-movn1fnn', 'furniture', 'Fireplace', [1.0, 0.83, 0.18]),
+  entry('rectangular-carpet', 'furniture', 'Rectangular Carpet', [2.78, 0.04, 1.81]),
+  entry('television', 'electronics', 'Television', [1.62, 1.07, 0.38]),
+  entry('floor-lamp', 'furniture', 'Floor Lamp', [0.7, 1.86, 0.69]),
+  entry('lounge-chair', 'furniture', 'Lounge Chair', [0.68, 1.03, 1.26]),
+  entry('cabinet', 'furniture', 'Modular Cabinet', [1.65, 1.09, 0.77]),
+  entry('office-chair', 'furniture', 'Office Chair', [0.66, 1.16, 0.69]),
+  entry('tesla', 'vehicles', 'Tesla Model Y', [1.98, 1.62, 4.76]),
+  entry('ev-wall-charger', 'electrical', 'Ev-wall-charger', [0.29, 0.65, 0.17]),
   entry('bathroom-sink', 'bathroom', 'Bathroom Sink', [1.83, 0.97, 0.63]),
   entry('toilet', 'bathroom', 'Toilet', [0.42, 0.82, 0.72]),
   entry('bathtub', 'bathroom', 'Bathtub', [2.34, 0.79, 1.11]),

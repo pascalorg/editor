@@ -768,7 +768,8 @@ feel free to keep going until we get it all done and tested".
 G42 Shed / mono roofs show the wall above the plate in elevation (done, R1).
 G43 Porch rails centred on the flanking posts and dying into them.
 G44 More procedural designs; kitchens laid out against the walls with the
-    fixtures a plan needs — more fixtures, more layouts, more options per roll.
+    fixtures a plan needs — more fixtures, more layouts, more options per roll
+    (kitchens, fixtures and the open-edge fix done, R5; more house forms open).
 G45 Stucco options: built-up stucco piers on every stucco house, framed the
     way they are built — 2x4 plates, 2x4s in the corners, studs at 12 in o.c.
     at most, sheathing, the 4x4 inside carrying the beam — anchored to the
@@ -781,6 +782,46 @@ G48 A porch the user adjusts re-frames; the auto roof follows wall edits
 G49 Every house type's elevation sheets reviewed.
 
 ## Log (continued)
+
+- 2026-09-07: **Batch R5 — the furnishing revamp (G44).** The kitchen
+  recipe now lays a continuous run (no gaps): the sink centred on the
+  window, the dishwasher beside it, then the range and a counter down the
+  longer side, the fridge down the other; a range that finds no room on the
+  run turns the corner onto the wall at the dishwasher's end (door-free
+  before doored, the door's swing kept clear either way), and only then
+  anywhere along the run — with a warning when nothing takes it. The hood
+  floats 1.55 m over the range wherever it stands. An L (counter + cabinet
+  on a door-free wall square to the run) on a 40 % roll; an island
+  (`wooden-kitchen-bar`) parallel to the run with 42 in aisles (NKBA) on a
+  70 % roll when the room is deep enough. The root of "the kitchen in the
+  middle of the room": a kitchen open to the great room has NO wall on that
+  edge, and the furnisher treated it as one — the range stood with its back
+  to the great room's TV stand. `FurnishEdge.open` (build.ts sets it when
+  no wall lies on the edge) now means: nothing stands against it, no free
+  span, counts as a doorway for the run choice. Living: the carpet under
+  the coffee table, the television on the stand (floating at stand
+  height), a floor lamp beside the sofa, a fireplace on a blank exterior
+  wall on a 50 % roll. Bath: the 72 in vanity narrowed to a stock 48 / 36 /
+  30 in when the wet wall is short — the same catalog piece with the node's
+  scale, so the plan reads a real cabinet (a 5 x 8 bath with the door hung
+  beside the vanity's end takes a 36; with the door centred on the end its
+  swing takes the vanity's only spot and the warning says so). Primary
+  bedroom: a lounge chair on a 70 % roll; dining: a sideboard on 60 %;
+  office: the chair behind the desk; garage: the car nose-in from the
+  widest door, the EV charger floating at 1.2 m beside it. The roll is the
+  house seed's own `mulberry32` (seed ^ 0x5eed): the same seed furnishes
+  the same way twice. Fixture catalog +12 entries (ids and dimensions from
+  `CATALOG_ITEMS`). Tests: generate 99 (furnish +3, expectations rewritten
+  for the run's L and the scaled vanity; the test's rect helper applies the
+  node scale, and pieces laid back to back touch — a hundredth of an inch
+  in is an overlap). Seen on the Miami Shores farmhouse: run on the W104
+  wall, island 42 in off it, range on the laundry wall with its hood, TV on
+  the great room's front wall. Honest gaps: the `kitchen` catalog piece is
+  a 94 in block (sink + counters) so a 16 ft run has no room left for the
+  range beside the dishwasher; the corner range can land far from the sink
+  when the corner wall's door pushes it along; no peninsula, no pantry, no
+  upper cabinets; the plan draws items as plain boxes (the catalog's
+  floor-plan images are not used by the sheets).
 
 - 2026-09-07: **Batch R4 — the gingerbread and the front doors (G46).**
   The catalog is GLB meshes on a CDN, so nothing new could be modelled;

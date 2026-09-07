@@ -262,7 +262,9 @@ describe('Poppy builds into Pascal nodes', () => {
       expect((i.metadata as N).generatedBy).toBe('pascal:generate')
       expect(((i.metadata as N).furnish as N).room).toBeTruthy()
       const [x, y, z] = i.position as [number, number, number]
-      expect(y).toBe(0)
+      // on the floor — unless the piece floats (a hood over the range, the television on its stand)
+      if (((i.metadata as N).furnish as N).floating) expect(y).toBeGreaterThanOrEqual(0)
+      else expect(y).toBe(0)
       expect(x).toBeGreaterThan(Math.min(...xs))
       expect(x).toBeLessThan(Math.max(...xs))
       expect(z).toBeGreaterThan(Math.min(...zs))

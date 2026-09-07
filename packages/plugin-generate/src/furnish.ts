@@ -74,11 +74,19 @@ export type FurnishEdge = {
   /** Half the wall's thickness, inches — the room's inner face is this far inside the edge line. */
   halfIn: number
   openings: FurnishOpening[]
+  /**
+   * No wall on this edge at all — the room runs straight into the next one
+   * (a kitchen open to the great room). Nothing stands with its back to it:
+   * a range there would back onto the neighbour's sofa.
+   */
+  open?: boolean
 }
 
 export type FurnishRoom = {
   name: string
   kind: RoomKind
+  /** The primary bedroom — it gets the lounge chair. */
+  primary?: boolean
   u0: number
   v0: number
   u1: number
@@ -99,6 +107,13 @@ export type FurnishInput = {
   generatedBy: string
   /** Where each decision went — for a probe, never for the user. */
   trace?: (line: string) => void
+  /**
+   * The roll's random — the choices a plan can go either way on (an island
+   * or not, an L, a fireplace, a sideboard) so one house is not every
+   * house (Steve, 2026-09-07: "so the random generates more options").
+   * Absent: every gate reads 0.5 — the tests' fixed layout.
+   */
+  rng?: () => number
 }
 
 export type FurnishResult = {
@@ -129,7 +144,15 @@ type Placed = {
   yaw: number
   rect: Rect
   role: string
+  /** A corrective scale on the node (a vanity narrowed to its wall). */
+  scale?: [number, number, number]
+  /** Off the floor, metres — a hood over the range, a television on its stand. */
+  elevationM?: number
+  /** Takes no floor: a hood, a carpet, a television — nothing collides with it. */
+  floating?: boolean
 }
+
+type Rng = () => number
 
 const EDGES: readonly PlanEdge[] = ['front', 'back', 'left', 'right']
 
@@ -270,8 +293,14 @@ class RoomBox {
       : this.inner.u1 - this.inner.u0
   }
 
+  /** No wall on this edge: the room runs into the next one. */
+  isOpen(edge: PlanEdge): boolean {
+    return this.room.edges[edge].open === true
+  }
+
+  /** A door, an opening, or no wall at all — not a wall to stand something against. */
   hasDoor(edge: PlanEdge): boolean {
-    return this.room.edges[edge].openings.some((o) => o.kind !== 'window')
+    return this.isOpen(edge) || this.room.edges[edge].openings.some((o) => o.kind !== 'window')
   }
 
   windows(edge: PlanEdge): FurnishOpening[] {
@@ -280,6 +309,7 @@ class RoomBox {
 
   /** Spans along an edge clear of doors and openings (with their side margins). */
   freeSpans(edge: PlanEdge): [number, number][] {
+    if (this.isOpen(edge)) return []
     let spans: [number, number][] = [this.spanOf(edge)]
     for (const o of this.room.edges[edge].openings) {
       if (o.kind === 'window') continue
@@ -315,8 +345,9 @@ class RoomBox {
    */
   fits(rect: Rect, heightIn: number, gap = GAP, backEdge?: PlanEdge): boolean {
     if (!inside(this.inner, rect)) return false
+    if (backEdge && this.isOpen(backEdge)) return false
     if (this.zones.some((z) => overlaps(rect, z))) return false
-    if (this.placed.some((p) => overlaps(rect, p.rect, gap))) return false
+    if (this.placed.some((p) => !p.floating && overlaps(rect, p.rect, gap))) return false
     if (backEdge) {
       for (const w of this.windows(backEdge)) {
         if (heightIn <= (w.sillIn ?? 0) + 0.5) continue
@@ -395,6 +426,14 @@ class RoomBox {
     return placed
   }
 
+  /** Put an item that takes no floor — over, under or on another — at `centre`, `elevationM` up. */
+  float(asset: Sized, centre: Pt, yaw: number, role: string, elevationM = 0): Placed {
+    const rect = rectAround(centre, extents(asset, yaw))
+    const placed: Placed = { asset, centre, yaw, rect, role, elevationM, floating: true }
+    this.placed.push(placed)
+    return placed
+  }
+
   /** Try to stand an item free at `centre`, else nearby — stepping out along both axes up to `reach`. */
   tryNear(asset: Sized, centre: Pt, yaw: number, role: string, reach = 24): Placed | null {
     for (let d = 0; d <= reach + 1e-6; d += STEP) {
@@ -448,7 +487,7 @@ function blankEdges(box: RoomBox, prefer?: (edge: PlanEdge) => number): PlanEdge
   return [...EDGES].sort((p, q) => score(p) - score(q))
 }
 
-function furnishBedroom(box: RoomBox, get: Get, warnings: string[], trace: Trace): void {
+function furnishBedroom(box: RoomBox, get: Get, warnings: string[], trace: Trace, rng: Rng): void {
   const narrow = Math.min(box.lengthOf('front'), box.lengthOf('left')) < 120
   const bed = get(narrow ? 'single-bed' : 'double-bed')
   if (!bed) return
@@ -485,9 +524,20 @@ function furnishBedroom(box: RoomBox, get: Get, warnings: string[], trace: Trace
       if (box.slideAgainst(edge, dresser, (lo + hi) / 2, 'dresser')) break
     }
   }
+  // the primary's lounge chair, in a corner away from the bed
+  const chair = get('lounge-chair')
+  if (chair && box.room.primary && rng() < 0.7) {
+    for (const edge of blankEdges(box)) {
+      if (edge === bedEdge) continue
+      const half = extents(chair, edgeYaw(edge))[edge === 'front' || edge === 'back' ? 'u' : 'v'] / 2
+      for (const side of perpendicular(edge)) {
+        if (box.against(edge, chair, box.cornerAlong(edge, side, half + GAP), 'lounge-chair')) return
+      }
+    }
+  }
 }
 
-function furnishBath(box: RoomBox, get: Get, warnings: string[], trace: Trace): void {
+function furnishBath(box: RoomBox, get: Get, warnings: string[], trace: Trace, _rng: Rng): void {
   const doorEdges = EDGES.filter((e) => box.hasDoor(e))
   // The wet wall: the longest edge without a door (a window is fine — the
   // vanity sits under it), the end wall a door-free edge square to it, the
@@ -577,19 +627,50 @@ function furnishBath(box: RoomBox, get: Get, warnings: string[], trace: Trace): 
   }
   const vanity = get('bathroom-sink')
   if (vanity) {
-    const half = extents(vanity, edgeYaw(wet))[axis] / 2
-    const v = box.slideAgainst(wet, vanity, cursor + dir * (GAP + half), 'vanity')
-    if (!v) {
+    // the catalog's vanity is 72 in wide; where the wet wall has less, the
+    // same piece narrowed to a stock width (48, 36, 30 in) — the node
+    // carries the scale, the plan reads the real cabinet
+    const fullIn = vanity.dimensions[0] * M_TO_IN
+    const widths = [fullIn, 48, 36, 30].filter((w, i, all) => w <= fullIn && all.indexOf(w) === i)
+    let placedVanity: Placed | null = null
+    for (const w of widths) {
+      const scaled: Sized = { ...vanity, dimensions: [w / M_TO_IN, vanity.dimensions[1], vanity.dimensions[2]] }
+      const half = extents(scaled, edgeYaw(wet))[axis] / 2
+      placedVanity = box.slideAgainst(wet, scaled, cursor + dir * (GAP + half), 'vanity')
+      if (placedVanity) {
+        if (w < fullIn - 1e-6) {
+          placedVanity.scale = [w / fullIn, 1, 1]
+          placedVanity.asset = vanity
+          trace(`${box.room.name}: the vanity narrowed to ${Math.round(w)} in`)
+        }
+        break
+      }
+    }
+    if (!placedVanity) {
       warnings.push(
-        `furnishing: "${box.room.name}" — the catalog's only vanity is ${Math.round(vanity.dimensions[0] * M_TO_IN)} in wide and does not fit on the wet wall; toilet and ${bathed ? bathed.role : 'bath'} placed, no vanity.`,
+        `furnishing: "${box.room.name}" — no vanity fits the wet wall even at 30 in; toilet and ${bathed ? bathed.role : 'bath'} placed, no vanity.`,
       )
     }
   }
 }
 
-function furnishKitchen(box: RoomBox, get: Get, warnings: string[], trace: Trace): void {
-  // The run: under a window (the sink centred on it) if a window wall has no
-  // door, else the longest door-free wall, else the wall with the longest free span.
+/** Clear aisle either side of an island (NKBA: 42 in). */
+const AISLE = 42
+
+/**
+ * THE KITCHEN. The run goes on a real wall — under a window with the sink
+ * centred on it when a window wall has no door, else the longest door-free
+ * wall — never on an open side of the room (an open edge is a doorway to
+ * the furnisher, so the run cannot land in the middle of a great room).
+ * Along the run from the sink: the dishwasher beside it, the range with
+ * its hood over it, a counter, a cabinet; the fridge the other way then a
+ * counter. Then, as the room allows and the roll decides: an island
+ * parallel to the run with a 42 in aisle each side, and an L — a counter
+ * and a cabinet turning the corner onto a door-free wall square to the run
+ * (Steve, 2026-09-07: "better kitchen designs and layouts … check all the
+ * fixtures and layouts, add more").
+ */
+function furnishKitchen(box: RoomBox, get: Get, warnings: string[], trace: Trace, rng: Rng): void {
   const withWindow = EDGES.filter((e) => box.windows(e).length > 0 && !box.hasDoor(e))
   const doorFree = EDGES.filter((e) => !box.hasDoor(e)).sort(
     (p, q) => box.lengthOf(q) - box.lengthOf(p),
@@ -606,18 +687,25 @@ function furnishKitchen(box: RoomBox, get: Get, warnings: string[], trace: Trace
     warnings.push(`furnishing: "${box.room.name}" has no clear wall for a kitchen run.`)
     return
   }
-  const axis = run === 'front' || run === 'back' ? 'u' : 'v'
+  const axisOf = (edge: PlanEdge) => (edge === 'front' || edge === 'back' ? 'u' : 'v')
+  const axis = axisOf(run)
   trace(`${box.room.name}: run on the ${run} wall, free ${Math.round(span[0])}–${Math.round(span[1])}${box.windows(run).length > 0 ? ', under its window' : ''}`)
-  const width = (a: Sized) => extents(a, edgeYaw(run))[axis]
+  const width = (a: Sized, edge: PlanEdge = run) => extents(a, edgeYaw(edge))[axisOf(edge)]
   const sink = get('kitchen')
   const stove = get('stove')
   const fridge = get('fridge')
   const counter = get('kitchen-counter')
   const cabinet = get('kitchen-cabinet')
+  const dishwasher = get('dishwasher-movn72ls')
+  const hood = get('hood')
+  const island = get('wooden-kitchen-bar-moa2hhh4')
   const window = box.windows(run)[0]
-  // Lay pieces back to back (a continuous run — no gap) from `from` in
-  // direction `dir`, stopping at `limit`; returns what did not fit, in order.
+  const roleOf = (piece: Sized) =>
+    piece.id === 'kitchen' ? 'sink' : piece.id === 'dishwasher-movn72ls' ? 'dishwasher' : piece.id
+  // Lay pieces back to back (a continuous run — no gap) along `edge` from
+  // `from` in direction `dir`, stopping at `limit`; returns what did not fit.
   const lay = (
+    edge: PlanEdge,
     pieces: (Sized | null)[],
     from: number,
     dir: 1 | -1,
@@ -627,30 +715,34 @@ function furnishKitchen(box: RoomBox, get: Get, warnings: string[], trace: Trace
     const left: Sized[] = []
     for (const piece of pieces) {
       if (!piece) continue
-      const w = width(piece)
+      const w = width(piece, edge)
       const along = cursor + (dir * w) / 2
       const past = dir > 0 ? along + w / 2 > limit + 1e-6 : along - w / 2 < limit - 1e-6
-      const hit = past
-        ? null
-        : box.against(run, piece, along, piece.id === 'kitchen' ? 'sink' : piece.id, 0)
+      const hit = past ? null : box.against(edge, piece, along, roleOf(piece), 0)
       if (!hit) {
         left.push(piece)
         continue
       }
+      // the hood hangs over the range, 5 ft up
+      if (piece.id === 'stove' && hood) box.float(hood, hit.centre, hit.yaw, 'hood', 1.55)
       cursor = along + (dir * w) / 2
     }
     return left
   }
   let placedAny = false
+  // the wall square to the run at the end the dishwasher side reaches — where
+  // a range that finds no room on the run turns the corner, so the sink, the
+  // dishwasher and the range stay together
+  let cornerWall: PlanEdge | null = null
   if (window && sink && span[0] <= window.a && span[1] >= window.b) {
     const centre = (window.a + window.b) / 2
-    // centred on the window, or as near as the doorways allow
     const s = box.slideAgainst(run, sink, centre, 'sink', span)
     if (s) {
       placedAny = true
       const sw = width(sink)
-      // the longer side takes the range then a counter; the other the fridge
-      // then a counter — and whatever one side could not take, the other tries
+      // the longer side takes the dishwasher, the range and its counter; the
+      // other the fridge then a counter — and what one side cannot take the
+      // other tries
       const longerUp = span[1] - (centre + sw / 2) >= centre - sw / 2 - span[0]
       const first: [number, 1 | -1, number] = longerUp
         ? [centre + sw / 2, 1, span[1]]
@@ -658,31 +750,96 @@ function furnishKitchen(box: RoomBox, get: Get, warnings: string[], trace: Trace
       const second: [number, 1 | -1, number] = longerUp
         ? [centre - sw / 2, -1, span[0]]
         : [centre + sw / 2, 1, span[1]]
-      const rest = lay([stove, counter, cabinet], ...first)
-      lay([fridge, ...rest, counter], ...second)
+      const rest = lay(run, [dishwasher, stove, counter, cabinet], ...first)
+      lay(run, [fridge, ...rest, counter], ...second)
+      const [nearLow, nearHigh] = perpendicular(run)
+      cornerWall = longerUp ? nearHigh : nearLow
     }
   }
   if (!placedAny) {
-    // from the corner: fridge, counter, sink, range, counter
+    // from the corner: fridge, counter, sink, dishwasher, range, counter
     const before = box.placed.length
-    lay([fridge, counter, sink, stove, counter, cabinet], span[0], 1, span[1])
+    lay(run, [fridge, counter, sink, dishwasher, stove, counter, cabinet], span[0], 1, span[1])
     placedAny = box.placed.length > before
   }
   if (!placedAny) warnings.push(`furnishing: "${box.room.name}" — no kitchen piece fits its walls.`)
+
+  // THE L: a counter and a cabinet turn the corner onto a door-free wall
+  // square to the run, from the corner the run reaches
+  const legs = perpendicular(run).filter((e) => !box.hasDoor(e))
+  const wantsL = rng() < 0.4
+  for (const edge of legs) {
+    if (!counter || !wantsL) break
+    const free = box.freeSpans(edge)
+    const corner = box.cornerAlong(edge, run, 0)
+    const at = free.find((f) => f[0] - 1e-6 <= corner && corner <= f[1] + 1e-6)
+    if (!at || at[1] - at[0] < 72) continue
+    const dir: 1 | -1 = corner <= (at[0] + at[1]) / 2 ? 1 : -1
+    // start past the run's own counter depth so the leg does not overlap the corner piece
+    const runDepth = counter.dimensions[2] * M_TO_IN
+    const from = corner + dir * runDepth
+    const before = box.placed.length
+    lay(edge, [counter, cabinet], from, dir, dir > 0 ? at[1] : at[0])
+    if (box.placed.length > before) {
+      trace(`${box.room.name}: an L — the leg on the ${edge} wall`)
+      break
+    }
+  }
+
+  // THE ISLAND: parallel to the run, a 42 in aisle each side, when the room
+  // is deep enough and the roll says so
+  if (island && counter && rng() < 0.7) {
+    const counterDepth = counter.dimensions[2] * M_TO_IN
+    const islandDepth = extents(island, edgeYaw(run))[axis === 'u' ? 'v' : 'u']
+    const needed = counterDepth + AISLE + islandDepth + AISLE
+    if (box.depthFrom(run) >= needed && span[1] - span[0] >= width(island) + 24) {
+      const dist = counterDepth + AISLE + islandDepth / 2
+      const mid = (span[0] + span[1]) / 2
+      const centre: Pt =
+        run === 'front'
+          ? [mid, box.inner.v0 + dist]
+          : run === 'back'
+            ? [mid, box.inner.v1 - dist]
+            : run === 'left'
+              ? [box.inner.u0 + dist, mid]
+              : [box.inner.u1 - dist, mid]
+      // the island faces the room, its back to the run
+      const hit = box.tryNear(island, centre, edgeYaw(opposite(run)), 'island', 12)
+      if (hit) trace(`${box.room.name}: an island ${Math.round(AISLE)} in off the run`)
+    }
+  }
+
   // the fridge and the range that found no room on the run go on a wall
   // square to it, in the corner next to the run (an L)
   const roles = new Set(box.placed.map((p) => p.role))
+  // the walled sides square to the run, the dishwasher's end first, then
+  // door-free before doored (a door's swing is kept clear either way); an
+  // open edge — no wall — never
+  const cornerWalls: PlanEdge[] = (cornerWall
+    ? [cornerWall, ...perpendicular(run).filter((e) => e !== cornerWall)]
+    : [...perpendicular(run)]
+  )
+    .filter((e) => !box.isOpen(e))
+    .sort((p, q) => (box.hasDoor(p) ? 1 : 0) - (box.hasDoor(q) ? 1 : 0))
   for (const piece of [fridge, stove]) {
     if (!piece || roles.has(piece.id)) continue
-    for (const edge of perpendicular(run)) {
-      if (box.hasDoor(edge)) continue
+    let hit: Placed | null = null
+    for (const edge of cornerWalls) {
       const half = extents(piece, edgeYaw(edge))[edge === 'front' || edge === 'back' ? 'u' : 'v'] / 2
-      if (box.slideAgainst(edge, piece, box.cornerAlong(edge, run, half), piece.id)) break
+      hit = box.slideAgainst(edge, piece, box.cornerAlong(edge, run, half), piece.id)
+      if (hit) break
     }
+    // last: anywhere along the run itself, past what stands there
+    if (!hit) hit = box.slideAgainst(run, piece, (span[0] + span[1]) / 2, piece.id, span)
+    if (!hit) {
+      warnings.push(`furnishing: "${box.room.name}" — no wall takes the ${piece.id}; left out.`)
+      continue
+    }
+    if (piece.id === 'stove' && hood) box.float(hood, hit.centre, hit.yaw, 'hood', 1.55)
   }
 }
 
-function furnishDining(box: RoomBox, get: Get, warnings: string[], trace: Trace): void {
+function furnishDining(box: RoomBox, get: Get, warnings: string[], trace: Trace, rng: Rng): void {
   const table = get('dining-table')
   if (!table) return
   const centre: Pt = [(box.inner.u0 + box.inner.u1) / 2, (box.inner.v0 + box.inner.v1) / 2]
@@ -719,9 +876,18 @@ function furnishDining(box: RoomBox, get: Get, warnings: string[], trace: Trace)
       box.tryAt(chair, c, yawToward(c, alongLong === 'u' ? [c[0], at[1]] : [at[0], c[1]]), 'chair')
     }
   }
+  // a sideboard on a blank wall, most houses
+  const sideboard = get('cabinet')
+  if (sideboard && rng() < 0.6) {
+    for (const edge of blankEdges(box)) {
+      const free = box.longestFree(edge)
+      if (!free) continue
+      if (box.slideAgainst(edge, sideboard, (free[0] + free[1]) / 2, 'sideboard', free)) break
+    }
+  }
 }
 
-function furnishLiving(box: RoomBox, get: Get, warnings: string[], trace: Trace): void {
+function furnishLiving(box: RoomBox, get: Get, warnings: string[], trace: Trace, rng: Rng): void {
   const tv = get('tv-stand')
   const sofa = get('sofa')
   if (!tv || !sofa) return
@@ -757,16 +923,50 @@ function furnishLiving(box: RoomBox, get: Get, warnings: string[], trace: Trace)
     return
   }
   const coffee = get('coffee-table')
-  if (coffee) {
-    const c: Pt = [
-      (placedSofa.centre[0] + tvFront[0]) / 2,
-      (placedSofa.centre[1] + tvFront[1]) / 2,
-    ]
-    box.tryAt(coffee, c, placedSofa.yaw, 'coffee-table')
+  const between: Pt = [
+    (placedSofa.centre[0] + tvFront[0]) / 2,
+    (placedSofa.centre[1] + tvFront[1]) / 2,
+  ]
+  // the carpet under the coffee table, first — it takes no floor
+  const carpet = get('rectangular-carpet')
+  if (carpet) box.float(carpet, between, placedSofa.yaw, 'carpet', 0)
+  if (coffee) box.tryAt(coffee, between, placedSofa.yaw, 'coffee-table')
+  // the television on its stand
+  const television = get('television')
+  if (television) {
+    const standTop = placedTv.asset.dimensions[1]
+    box.float(television, placedTv.centre, placedTv.yaw, 'television', standTop)
+  }
+  // a lamp at the sofa's end, on the side away from a door
+  const lamp = get('floor-lamp')
+  if (lamp) {
+    const sofaExt = extents(sofa, placedSofa.yaw)
+    const across: Pt = [-inward[1], inward[0]]
+    const lampHalf = extents(lamp, placedSofa.yaw).u / 2
+    for (const side of [1, -1]) {
+      const c: Pt = [
+        placedSofa.centre[0] + across[0] * side * (sofaExt.u / 2 + GAP + lampHalf),
+        placedSofa.centre[1] + across[1] * side * (sofaExt.v / 2 + GAP + lampHalf),
+      ]
+      if (box.tryAt(lamp, c, placedSofa.yaw, 'lamp')) break
+    }
+  }
+  // a fireplace on a blank exterior wall that is not the TV wall — half the houses
+  const fireplace = get('fireplace-movn1fnn')
+  if (fireplace && rng() < 0.5) {
+    for (const edge of blankEdges(box, (e) => (box.room.edges[e].exterior ? -8 : 0))) {
+      if (edge === tvEdge) continue
+      const free = box.longestFree(edge)
+      if (!free || free[1] - free[0] < 60) continue
+      if (box.slideAgainst(edge, fireplace, (free[0] + free[1]) / 2, 'fireplace', free)) {
+        trace(`${box.room.name}: a fireplace on the ${edge} wall`)
+        break
+      }
+    }
   }
 }
 
-function furnishOffice(box: RoomBox, get: Get, warnings: string[], _trace: Trace): void {
+function furnishOffice(box: RoomBox, get: Get, warnings: string[], _trace: Trace, _rng: Rng): void {
   const desk = get('office-table')
   if (!desk) return
   let placed: Placed | null = null
@@ -780,6 +980,19 @@ function furnishOffice(box: RoomBox, get: Get, warnings: string[], _trace: Trace
     warnings.push(`furnishing: "${box.room.name}" has no clear wall for a desk.`)
     return
   }
+  // the chair behind the desk, facing it
+  const chair = get('office-chair')
+  if (chair) {
+    const deskEdge = EDGES.find((e) => Math.abs(edgeYaw(e) - placed.yaw) < 1e-6) ?? 'front'
+    const inward = inwardOf(deskEdge)
+    const deskDepth = extents(desk, placed.yaw).v
+    const chairDepth = chair.dimensions[2] * M_TO_IN
+    const c: Pt = [
+      placed.centre[0] + inward[0] * (deskDepth / 2 + GAP + chairDepth / 2),
+      placed.centre[1] + inward[1] * (deskDepth / 2 + GAP + chairDepth / 2),
+    ]
+    box.tryNear(chair, c, yawToward(c, placed.centre), 'office-chair', 12)
+  }
   const shelf = get('bookshelf')
   if (shelf) {
     for (const edge of blankEdges(box)) {
@@ -789,7 +1002,57 @@ function furnishOffice(box: RoomBox, get: Get, warnings: string[], _trace: Trace
   }
 }
 
-function furnishLaundry(box: RoomBox, get: Get, warnings: string[], _trace: Trace): void {
+/**
+ * THE GARAGE: the car parked nose-in from the garage door, and the EV
+ * charger on the wall beside it, 4 ft up.
+ */
+function furnishGarage(box: RoomBox, get: Get, _warnings: string[], trace: Trace, _rng: Rng): void {
+  const car = get('tesla')
+  if (!car) return
+  // the garage door: the widest door on an exterior edge
+  let doorEdge: PlanEdge | null = null
+  let widest = 0
+  for (const edge of EDGES) {
+    for (const o of box.room.edges[edge].openings) {
+      if (o.kind === 'door' && o.b - o.a > widest) {
+        widest = o.b - o.a
+        doorEdge = edge
+      }
+    }
+  }
+  if (!doorEdge) return
+  // the car's nose toward the back wall: its length runs square to the door wall
+  const yaw = edgeYaw(doorEdge)
+  const inward = inwardOf(doorEdge)
+  const [lo, hi] = box.spanOf(doorEdge)
+  const along = (lo + hi) / 2
+  const depth = box.depthFrom(doorEdge)
+  const carLen = car.dimensions[2] * M_TO_IN
+  const centre: Pt =
+    doorEdge === 'front' || doorEdge === 'back'
+      ? [along, (doorEdge === 'front' ? box.inner.v0 : box.inner.v1) + inward[1] * Math.min(depth / 2, 30 + carLen / 2)]
+      : [(doorEdge === 'left' ? box.inner.u0 : box.inner.u1) + inward[0] * Math.min(depth / 2, 30 + carLen / 2), along]
+  // the car ignores the door's swing zone — it drives through that door
+  const rect = rectAround(centre, extents(car, yaw))
+  if (inside(box.inner, rect) && !box.placed.some((p) => !p.floating && overlaps(rect, p.rect))) {
+    box.placed.push({ asset: car, centre, yaw, rect, role: 'car' })
+    trace(`${box.room.name}: the car nose-in from the ${doorEdge} door`)
+  }
+  const charger = get('ev-wall-charger')
+  if (charger) {
+    for (const edge of perpendicular(doorEdge)) {
+      const free = box.longestFree(edge)
+      if (!free) continue
+      const half = extents(charger, edgeYaw(edge))[edge === 'front' || edge === 'back' ? 'u' : 'v'] / 2
+      const c = box.centreOn(edge, charger, (free[0] + free[1]) / 2)
+      void half
+      box.float(charger, c, edgeYaw(edge), 'ev-charger', 1.2)
+      break
+    }
+  }
+}
+
+function furnishLaundry(box: RoomBox, get: Get, warnings: string[], _trace: Trace, _rng: Rng): void {
   const washer = get('washing-machine')
   if (!washer) return
   for (const edge of blankEdges(box, (e) => (e === 'back' ? -2 : 0))) {
@@ -801,7 +1064,7 @@ function furnishLaundry(box: RoomBox, get: Get, warnings: string[], _trace: Trac
 }
 
 const RECIPES: Partial<
-  Record<RoomKind, (box: RoomBox, get: Get, warnings: string[], trace: Trace) => void>
+  Record<RoomKind, (box: RoomBox, get: Get, warnings: string[], trace: Trace, rng: Rng) => void>
 > = {
   bed: furnishBedroom,
   bath: furnishBath,
@@ -810,6 +1073,7 @@ const RECIPES: Partial<
   living: furnishLiving,
   office: furnishOffice,
   laundry: furnishLaundry,
+  garage: furnishGarage,
 }
 
 // ---------------------------------------------------------------------------
@@ -825,7 +1089,7 @@ export function furnishRooms(input: FurnishInput): FurnishResult {
     const recipe = RECIPES[room.kind]
     if (!recipe) continue
     const box = new RoomBox(room)
-    recipe(box, get, warnings, input.trace ?? (() => {}))
+    recipe(box, get, warnings, input.trace ?? (() => {}), input.rng ?? (() => 0.5))
     for (const p of box.placed) {
       const { tool: _tool, ...asset } = p.asset
       const [x, z] = input.toLocal(p.centre)
@@ -836,15 +1100,15 @@ export function furnishRooms(input: FurnishInput): FurnishResult {
           type: 'item',
           name: p.asset.name,
           parentId: input.levelId,
-          position: [round(x), 0, round(z)],
+          position: [round(x), round(p.elevationM ?? 0), round(z)],
           rotation: [0, round(p.yaw, 6), 0],
           // the schema's default, written out so a headless reader (the sections
           // plugin's item boxes) sees the same node the store would
-          scale: [1, 1, 1],
+          scale: p.scale ?? [1, 1, 1],
           asset,
           metadata: {
             generatedBy: input.generatedBy,
-            furnish: { room: room.name, kind: room.kind, role: p.role },
+            furnish: { room: room.name, kind: room.kind, role: p.role, ...(p.floating ? { floating: true } : {}) },
           },
         },
         parentId: input.levelId,

@@ -38,6 +38,7 @@ import {
 } from './geometry'
 import { type CatalogAsset, type FurnishRoom, furnishRooms } from './furnish'
 import { type PorchPolicy, type PorchSummary, porchFor } from './porch'
+import { mulberry32 } from './rng'
 import { FRONT_DOOR_SEGMENTS, type StylePreset, trimOf, styleFor } from './styles'
 
 export const GENERATED_BY = 'pascal:generate'
@@ -1081,11 +1082,14 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         exterior: onEdge.some((wall) => wall.exterior),
         halfIn: onEdge.length > 0 ? Math.max(...onEdge.map((wall) => wall.thickness / IN / 2)) : 0,
         openings,
+        // no wall here at all: the room runs into its neighbour
+        open: onEdge.length === 0,
       }
     }
     return {
       name: room.name,
       kind: room.kind,
+      primary: room.primary === true,
       u0: room.u0,
       v0: room.v0,
       u1: room.u1,
@@ -1093,6 +1097,9 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       edges: { front: edgeOf('front'), back: edgeOf('back'), left: edgeOf('left'), right: edgeOf('right') },
     }
   }
+  // the furnishing's own random, off the roll's seed — the same house
+  // furnishes the same way twice, a different seed differently
+  const furnishSeed = typeof options.generation?.seed === 'number' ? (options.generation.seed as number) : 0
   const furnished =
     options.catalog && options.catalog.length > 0
       ? furnishRooms({
@@ -1103,6 +1110,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
           toLocal,
           generatedBy: GENERATED_BY,
           trace: options.furnishTrace,
+          rng: mulberry32((furnishSeed ^ 0x5eed) >>> 0),
         })
       : { ops: [], warnings: [], placed: 0 }
   warnings.push(...furnished.warnings)
