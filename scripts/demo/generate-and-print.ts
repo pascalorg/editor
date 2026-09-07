@@ -43,6 +43,21 @@ const LOT = arg('lot', 'Miami Shores')
 const STYLE = arg('style', 'farmhouse')
 const SEED = Number(arg('seed', '777'))
 const GARAGE = arg('garage', '')
+// the MEP choices: --hvac heat-pump-split|ac-gas-furnace|packaged|mini-split,
+// --service overhead|underground, --sewer street|rear,
+// --water attic|under-slab|crawl|walls, --panel-side left|right, --wiring attic|walls
+const SERVICES: Record<string, string> = {}
+for (const [flag, key] of [
+  ['hvac', 'hvacSystem'],
+  ['service', 'serviceEntrance'],
+  ['sewer', 'sewerSide'],
+  ['water', 'waterRoute'],
+  ['panel-side', 'panelSide'],
+  ['wiring', 'wiringRoute'],
+] as const) {
+  const v = arg(flag, '')
+  if (v) SERVICES[key] = v
+}
 const BEDS = arg('beds', '')
 const BATHS = arg('baths', '')
 const OUT = arg(
@@ -120,7 +135,9 @@ async function main() {
     garage: GARAGE === '' ? undefined : GARAGE === 'yes',
     beds: BEDS ? (Number(BEDS) as 2 | 3 | 4) : undefined,
     baths: BATHS ? (Number(BATHS) as 1 | 2 | 3) : undefined,
+    ...(Object.keys(SERVICES).length > 0 ? { services: SERVICES as never } : {}),
   })
+  if (Object.keys(SERVICES).length > 0) console.log(`services: ${JSON.stringify(SERVICES)}`)
   const summary = generateHouse()
   if (!summary.ok) throw new Error(`generate failed: ${summary.errors.join('; ')}`)
   console.log(`house: ${summary.name} (seed ${summary.seed})`)

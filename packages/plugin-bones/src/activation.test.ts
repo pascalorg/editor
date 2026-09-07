@@ -8,6 +8,7 @@ import {
   setXrayViewMode,
   type ViewerLike,
 } from './activation'
+import { servicesOf } from './activation'
 import { effectiveViewMode, FramingNode } from './framing/schema'
 import { buildServicePointNodes, planServiceSeeding } from './service/place'
 import { SERVICE_TYPES } from './service/schema'
@@ -405,5 +406,30 @@ describe('creation defaults (schema pins)', () => {
     expect(effectiveViewMode({ viewMode: 'garbage' })).toBe('xray')
     expect(effectiveViewMode({ viewMode: 'framing' })).toBe('framing')
     expect(FramingNode.parse({ viewMode: 'framing' }).viewMode).toBe('framing')
+  })
+})
+
+describe('servicesOf — the generator\'s MEP choices seed the framing node (G58)', () => {
+  test('valid keys pass through, unknown values and keys are dropped, no building → nothing', () => {
+    const nodes: Record<string, unknown> = {
+      site_1: { id: 'site_1', type: 'site' },
+      building_1: {
+        id: 'building_1',
+        type: 'building',
+        parentId: 'site_1',
+        metadata: {
+          services: { hvacSystem: 'mini-split', sewerSide: 'rear', waterRoute: 'nonsense', bogus: 'x', panelSide: 'left' },
+        },
+      },
+      level_1: { id: 'level_1', type: 'level', parentId: 'building_1' },
+      level_2: { id: 'level_2', type: 'level' },
+    }
+    expect(servicesOf(nodes, 'level_1')).toEqual({ hvacSystem: 'mini-split', sewerSide: 'rear', panelSide: 'left' })
+    expect(servicesOf(nodes, 'level_2')).toEqual({})
+    // and the framing node parses them
+    const framing = FramingNode.parse({ jurisdiction: 'AUTO', ...servicesOf(nodes, 'level_1') })
+    expect(framing.hvacSystem).toBe('mini-split')
+    expect(framing.sewerSide).toBe('rear')
+    expect(framing.waterRoute).toBeUndefined()
   })
 })

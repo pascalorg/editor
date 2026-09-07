@@ -832,10 +832,26 @@ G57 Hot and cold water: under the slab where that is the practice (the
     slab states), in the walls where it is not — reviewed and set by
     jurisdiction (done, S3: attic / under-slab / crawl / walls by state and floor).
 G58 The generation exposes the options: HVAC system and type, service
-    entrance, sewer direction, water routing (the Bones panel's Services
-    block, S2–S4; the generate panel and the headless script next).
+    entrance, sewer direction, water routing (done: the Bones panel's Services
+    block S2–S4, the Generate panel and the headless script S5).
 
 ## Log (continued)
+
+- 2026-09-07: **Batch S5 — the MEP choices on generation (G58).** The
+  Generate panel offers HVAC system, electric service, meter-main side,
+  sewer side, water supply and branch wiring beside style / beds / baths /
+  garage (each on "auto — the state's practice" unless chosen); the roll
+  carries them (`RollOptions.services`), the builder writes them to the
+  building's `metadata.services`, and Bones' activation seeds the level's
+  framing node from them (`servicesOf`, each key validated against the
+  schema's enum — anything else dropped, never guessed), so the 3D X-ray
+  and every trade sheet answer the choice without a second click. The
+  headless script takes `--hvac`, `--service`, `--sewer`, `--water`,
+  `--panel-side`, `--wiring`. Tests: build +1 (the metadata round trip and
+  its absence), activation +1; generate and Bones green, editor typecheck
+  clean. Honest gap: a house X-rayed BEFORE the choices were made keeps
+  its framing node — change the choice in the Bones panel's Services
+  block, or remove the X-ray and activate again.
 
 - 2026-09-07: **Batch S4 — the HVAC system types, the Manual J on the
   plans: M1.0 (G56, G58).** The HVAC engine already sized ONE plan from

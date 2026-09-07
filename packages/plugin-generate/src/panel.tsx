@@ -8,6 +8,7 @@ import { Dices, Home, RefreshCw, Sparkles } from 'lucide-react'
 import { describeFinishes } from './finishes'
 import { generateHouse, generateTemplate } from './run'
 import { useGenerate } from './store'
+import { SERVICE_CHOICES, type ServiceChoices } from './roll'
 import { STYLES } from './styles'
 import { TEMPLATES } from './templates/poppy'
 
@@ -109,6 +110,28 @@ export default function GeneratePanel() {
             <option value="no">none</option>
           </select>
         </div>
+        {SERVICE_CHOICES.map((c) => (
+          <div key={c.key}>
+            <span className={label}>{c.label}</span>
+            <select
+              className={field}
+              value={S.options.services?.[c.key] ?? ''}
+              onChange={(e) => {
+                const next: ServiceChoices = { ...(S.options.services ?? {}) }
+                if (e.target.value === '') delete next[c.key]
+                else (next as Record<string, string>)[c.key] = e.target.value
+                S.setOptions({ services: Object.keys(next).length > 0 ? next : undefined })
+              }}
+            >
+              <option value="">auto (the state's practice)</option>
+              {c.values.map(([value, text]) => (
+                <option key={value} value={value}>
+                  {text}
+                </option>
+              ))}
+            </select>
+          </div>
+        ))}
         <div>
           <span className={label}>Seed</span>
           <div className="flex gap-1">

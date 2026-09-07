@@ -128,6 +128,37 @@ export function roofSystemOf(
   return system === 'truss' || system === 'stick' ? system : null
 }
 
+/** The MEP choice keys the generator writes and the framing node reads (framing/schema.ts). */
+const SERVICE_CHOICE_KEYS: Record<string, readonly string[]> = {
+  wiringRoute: ['attic', 'walls'],
+  serviceEntrance: ['overhead', 'underground'],
+  panelSide: ['auto', 'left', 'right'],
+  sewerSide: ['street', 'rear'],
+  waterRoute: ['attic', 'under-slab', 'crawl', 'walls'],
+  hvacSystem: ['heat-pump-split', 'ac-gas-furnace', 'packaged', 'mini-split'],
+}
+
+/**
+ * The MEP choices the building asks for (`building.metadata.services`,
+ * written by the generator from the Generate panel / the headless script)
+ * — the node created for the level starts from them, validated key by key
+ * against the schema's enums; anything else is dropped, never guessed.
+ */
+export function servicesOf(nodes: Record<string, unknown>, levelId: string): Record<string, string> {
+  const level = nodes[levelId] as { parentId?: string } | undefined
+  const building = level?.parentId
+    ? (nodes[level.parentId] as { metadata?: { services?: unknown } } | undefined)
+    : undefined
+  const raw = building?.metadata?.services
+  const out: Record<string, string> = {}
+  if (!raw || typeof raw !== 'object') return out
+  for (const [key, values] of Object.entries(SERVICE_CHOICE_KEYS)) {
+    const v = (raw as Record<string, unknown>)[key]
+    if (typeof v === 'string' && values.includes(v)) out[key] = v
+  }
+  return out
+}
+
 export function activateXray(
   scene: SceneLike,
   levelId: string,
@@ -140,6 +171,7 @@ export function activateXray(
     jurisdiction: 'AUTO',
     servicesSeeded: services.length > 0,
     ...(roofSystem ? { roofSystem } : {}),
+    ...servicesOf(state.nodes, levelId),
   })
   state.applyNodeChanges({
     create: [

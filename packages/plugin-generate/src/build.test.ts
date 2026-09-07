@@ -197,6 +197,16 @@ describe('Poppy builds into Pascal nodes', () => {
     for (const p of poly) expect(Math.abs(p[1] - wz)).toBeGreaterThan(0.08)
   })
 
+  test('the MEP choices on the roll ride the building metadata for Bones (G58)', () => {
+    const rolled = rollDocument(777, { style: 'ranch', beds: 3, baths: 1, garage: false, services: { hvacSystem: 'packaged', sewerSide: 'rear' } })
+    const built = buildHouse(rolled.document, { generation: { seed: 777, options: rolled.options } })
+    expect(built.ok).toBe(true)
+    const building = ofType(built.ops, 'building')[0] as N
+    expect(building.metadata.services).toEqual({ hvacSystem: 'packaged', sewerSide: 'rear' })
+    const plain = buildHouse(rollDocument(777, { style: 'ranch', beds: 3, baths: 1, garage: false }).document)
+    expect((ofType(plain.ops, 'building')[0] as N).metadata.services).toBeUndefined()
+  })
+
   test('a wide farmhouse is raised: the floor is a platform, the garage slab sits at grade and its walls stand on it', () => {
     const rolled = rollDocument(1499472249, { style: 'farmhouse', beds: 3, baths: 2, garage: true })
     const built = buildHouse(rolled.document)

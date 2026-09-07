@@ -1209,6 +1209,11 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     )
   }
 
+  const serviceChoices = (() => {
+    const gen = options.generation as { options?: { services?: unknown } } | undefined
+    const s = gen?.options?.services
+    return s && typeof s === 'object' && Object.keys(s as object).length > 0 ? (s as Record<string, string>) : null
+  })()
   const spanFt = Math.min(W, D) / 12
   const structure: { roofSystem: 'stick' | 'truss'; reason: string } =
     spanFt > TRUSS_SPAN_FT
@@ -1240,6 +1245,9 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
           ffAboveGradeIn: foundation.ffAboveGradeIn,
           source: foundation.source,
         },
+        // the MEP choices the roll carried — Bones' framing node starts from
+        // them when the level is X-rayed (activation.ts servicesOf)
+        ...(serviceChoices ? { services: serviceChoices } : {}),
         // The roof system Bones frames and the sheets draw (structureOf):
         // site-cut rafters and ceiling joists lap over an interior bearing
         // partition, and a deep open plan has none where the joists need it

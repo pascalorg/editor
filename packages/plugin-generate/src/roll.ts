@@ -21,11 +21,85 @@ import type { PlanDocument, PlanEdge } from './document'
 import { mulberry32, pick, type Rng } from './rng'
 import { STYLE_KEYS, styleFor } from './styles'
 
+/**
+ * The MEP choices a generation carries (Steve, 2026-09-07: "provide the
+ * options to the user on generation for hvac system and type etc."). They
+ * ride the building's metadata (`metadata.services`) and seed the Bones
+ * framing node when the level is X-rayed — the same keys Bones' Services
+ * block edits. Absent = the engine's practice default for the state.
+ */
+export type ServiceChoices = {
+  wiringRoute?: 'attic' | 'walls'
+  serviceEntrance?: 'overhead' | 'underground'
+  panelSide?: 'auto' | 'left' | 'right'
+  sewerSide?: 'street' | 'rear'
+  waterRoute?: 'attic' | 'under-slab' | 'crawl' | 'walls'
+  hvacSystem?: 'heat-pump-split' | 'ac-gas-furnace' | 'packaged' | 'mini-split'
+}
+
+/** The choices, their labels and their values — one table for the panel and the script. */
+export const SERVICE_CHOICES: { key: keyof ServiceChoices; label: string; values: readonly [string, string][] }[] = [
+  {
+    key: 'hvacSystem',
+    label: 'HVAC system',
+    values: [
+      ['heat-pump-split', 'split heat pump'],
+      ['ac-gas-furnace', 'AC + gas furnace'],
+      ['packaged', 'packaged unit'],
+      ['mini-split', 'ductless mini-split'],
+    ],
+  },
+  {
+    key: 'serviceEntrance',
+    label: 'Electric service',
+    values: [
+      ['overhead', 'overhead drop from a pole'],
+      ['underground', 'underground from a transformer'],
+    ],
+  },
+  {
+    key: 'panelSide',
+    label: 'Meter-main side',
+    values: [
+      ['left', 'left (from the street)'],
+      ['right', 'right (from the street)'],
+    ],
+  },
+  {
+    key: 'sewerSide',
+    label: 'Sewer to',
+    values: [
+      ['street', 'the street'],
+      ['rear', 'the rear / alley'],
+    ],
+  },
+  {
+    key: 'waterRoute',
+    label: 'Water supply',
+    values: [
+      ['attic', 'attic (PEX)'],
+      ['under-slab', 'under the slab'],
+      ['crawl', 'crawl space'],
+      ['walls', 'in the walls'],
+    ],
+  },
+  {
+    key: 'wiringRoute',
+    label: 'Branch wiring',
+    values: [
+      ['attic', 'attic, down the walls'],
+      ['walls', 'through the studs'],
+    ],
+  },
+]
+
 export type RollOptions = {
   style?: string
   beds?: 2 | 3 | 4
   baths?: 1 | 2 | 3
   garage?: boolean
+  /** The MEP choices — carried to the building's metadata for Bones. */
+  services?: ServiceChoices
   /** Buildable frontage, feet (the setback envelope's street edge). */
   maxWidthFt?: number
   /** Buildable depth, feet. */
