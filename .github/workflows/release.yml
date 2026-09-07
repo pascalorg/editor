@@ -302,9 +302,11 @@ jobs:
           {
             echo 'tags<<EOF'
             echo "ghcr.io/pascalorg/editor:$EDITOR_VERSION"
-            if [ "$BUMP" != "beta" ]; then
-              echo "ghcr.io/pascalorg/editor:latest"
-            fi
+            case "$BUMP" in
+              patch|minor|major)
+                echo "ghcr.io/pascalorg/editor:latest"
+                ;;
+            esac
             echo 'EOF'
           } >> "$GITHUB_OUTPUT"
 
@@ -316,11 +318,20 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up QEMU
+        if: inputs.package == 'editor' || inputs.package == 'all'
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        if: inputs.package == 'editor' || inputs.package == 'all'
+        uses: docker/setup-buildx-action@v3
+
       - name: Build & publish Docker image
         if: inputs.package == 'editor' || inputs.package == 'all'
         uses: docker/build-push-action@v6
         with:
           context: .
+          platforms: linux/amd64,linux/arm64
           push: ${{ inputs.dry-run == false }}
           tags: ${{ steps.docker-tags.outputs.tags }}
 
