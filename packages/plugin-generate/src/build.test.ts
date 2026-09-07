@@ -369,12 +369,13 @@ describe('on a hill (the site carries a USGS heightfield → gradeAt)', () => {
   })
 
   test('a gentle slope raises the house on a stem sized to the fall, standing on the high side', () => {
-    // 2 % up towards +x: the garage wing (to the right, +x) is uphill
-    const r = buildHouse(doc, { gradeAt: (x) => 0.02 * x })
+    // 4 % up towards +x: the garage wing (to the right, +x) is uphill — over
+    // two feet of fall under the footprint, past the built-up-pad band
+    const r = buildHouse(doc, { gradeAt: (x) => 0.04 * x })
     const f = r.foundation!
     expect(f.type).toBe('raised')
     expect(f.terrain).toBeDefined()
-    expect(f.terrain!.reliefIn).toBeGreaterThanOrEqual(12)
+    expect(f.terrain!.reliefIn).toBeGreaterThanOrEqual(24)
     expect(f.ffAboveGradeIn).toBeGreaterThanOrEqual(24)
     expect(f.ffAboveGradeIn).toBeLessThanOrEqual(36)
     expect(f.source).toContain('hillside')
@@ -386,7 +387,7 @@ describe('on a hill (the site carries a USGS heightfield → gradeAt)', () => {
     const g = garageSlabOf(r)
     expect(g.metadata.dropIn).toBeGreaterThanOrEqual(f.ffAboveGradeIn)
     expect(g.metadata.dropIn).toBeLessThan(f.ffAboveGradeIn + 6)
-    const downhill = garageSlabOf(buildHouse(doc, { gradeAt: (x) => -0.02 * x }))
+    const downhill = garageSlabOf(buildHouse(doc, { gradeAt: (x) => -0.04 * x }))
     expect(downhill.metadata.dropIn).toBeGreaterThan(g.metadata.dropIn + 6)
     expect(g.elevation).toBeCloseTo(0.05 - g.metadata.dropIn * IN, 2)
     expect(r.warnings.some((w) => /hillside/.test(w))).toBe(true)

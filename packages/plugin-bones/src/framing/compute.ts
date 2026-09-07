@@ -790,6 +790,18 @@ function computeLevelUncached(
       : null
     const street = streetFrameFor({ site, building, walls: activeWalls, rooms: activeRooms })
     if (street) spec = { ...spec, street }
+    // The site's own frost line (the Pascal Map code basis) sets the footing
+    // depth — R403.1.4.1: footing bottoms below the frost line, never less
+    // than 12 in below grade. The state table's number stands without it.
+    const codeBasis = (siteNode as { dossier?: { codeBasis?: { frost_depth_ft?: unknown } } } | undefined)?.dossier?.codeBasis
+    const frostFt = codeBasis?.frost_depth_ft
+    if (typeof frostFt === 'number' && Number.isFinite(frostFt)) {
+      const depth = Math.max(inches(12), frostFt * 0.3048)
+      if (Math.abs(depth - spec.footingDepth) > 1e-6) {
+        spec = { ...spec, footingDepth: depth }
+        warnings.push(`footing depth ${Math.round(depth / inches(1))} in below grade — the site's frost line (${frostFt} ft, Pascal Map code basis; R403.1.4.1) over the state table`)
+      }
+    }
   }
 
   if (config.showWalls) {

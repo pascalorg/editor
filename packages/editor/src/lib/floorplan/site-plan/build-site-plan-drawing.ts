@@ -9,6 +9,7 @@ import {
   migrateSiteMetadata,
   type SceneSnapshot,
   type SiteNode,
+  terrainFieldOf,
   unionPolygons,
   type WallNode,
 } from '@pascal-app/core'
@@ -29,6 +30,7 @@ import {
   type YardDimension,
 } from './geometry'
 import { sitePlanContributions } from './contributors'
+import { terrainContours } from './contours'
 
 /** Contract shared by every drawing producer (see docs/construction-documents.md). */
 export interface SitePlanDrawing {
@@ -58,6 +60,8 @@ const LABEL_SIZE = 0.9
 // same reason; these match `nodes/src/wall/floorplan.ts`.
 const INK = '#111827'
 const INK_SOFT = '#4b5563'
+/** Contour lines: the survey's brown. */
+const CONTOUR_INK = '#8b5a2b'
 const FOOTPRINT_FILL = '#374151'
 const FOOTPRINT_STROKE = '#1f2937'
 const DIMENSION_STROKE = '#334155'
@@ -298,6 +302,50 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
     strokeLinejoin: 'miter',
     metadata: { sitePlan: 'lot-line' },
   })
+
+  // ── Terrain contours — the ground's lines, at the site's interval ─────
+  // (site.contourIntervalIn, default 12 in; 0 = none): thin brown lines,
+  // every fifth heavier and labelled in feet above the survey datum when
+  // the terrain sample carries one (USGS EPQS at the lot centre), else
+  // above the site datum.
+  {
+    const intervalIn = typeof site?.contourIntervalIn === 'number' ? site.contourIntervalIn : 12
+    const field = site && intervalIn > 0 ? terrainFieldOf(site as never) : null
+    if (field) {
+      const sample = (site?.metadata as { terrainSample?: { datumFt?: unknown } } | undefined)?.terrainSample
+      const datumFt = typeof sample?.datumFt === 'number' ? sample.datumFt : null
+      const contours = terrainContours(field, intervalIn * 0.0254, lot)
+      const lines: FloorplanGeometry[] = []
+      for (const c of contours) {
+        lines.push({
+          kind: 'polyline',
+          points: c.points,
+          stroke: CONTOUR_INK,
+          strokeWidth: c.index ? 0.045 : 0.02,
+          opacity: c.index ? 0.85 : 0.6,
+          fill: 'none',
+          metadata: { sitePlan: 'contour', levelM: c.levelM },
+        })
+        if (c.index && c.points.length >= 2) {
+          const mid = c.points[Math.floor(c.points.length / 2)] as Pt
+          const ft = c.levelM / METRES_PER_FOOT + (datumFt ?? 0)
+          lines.push({
+            kind: 'text',
+            x: mid[0],
+            y: mid[1],
+            text: `${ft.toFixed(datumFt !== null ? 0 : 1)}${datumFt !== null ? '' : ' ft'}`,
+            fontSize: LABEL_SIZE * 0.45,
+            fill: CONTOUR_INK,
+            fontWeight: 500,
+            textAnchor: 'middle',
+            dominantBaseline: 'middle',
+            upright: true,
+          })
+        }
+      }
+      if (lines.length > 0) primitives.push({ kind: 'group', children: lines })
+    }
+  }
 
   // ── Setback envelope — dashed, offset inward per edge ────────────────
   const envelope = site?.setbacks ? setbackEnvelope(lot, site.setbacks, frontEdge) : []

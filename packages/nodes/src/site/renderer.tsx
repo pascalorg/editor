@@ -21,7 +21,9 @@ import {
   useViewer,
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
-import { BufferAttribute, BufferGeometry, type Group, Path, Shape, ShapeGeometry } from 'three'
+import { BufferAttribute, BufferGeometry, DoubleSide, type Group, Path, Shape, ShapeGeometry } from 'three'
+import { buildPatternedRibbon, PROPERTY_LINE_PATTERN, SETBACK_LINE_PATTERN } from './line-ribbon'
+import { resolveFrontEdge, setbackEnvelope } from './setbacks'
 import { cameraPosition, color, float, mix, positionWorld, smoothstep, vec2 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
 import { getRecessedSlabGroundHoles } from './recessed-slab-ground-holes'
@@ -306,6 +308,37 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   useEffect(() => () => boundary?.geometry.dispose(), [boundary])
   const lineGeometry = boundary?.geometry ?? null
 
+  // The PROPERTY LINE as the standard line — dark, thick, a long dash and
+  // two dots — and the SETBACK lines in black dashes, both ribbons lying on
+  // the draped ground (line-ribbon.ts). Keyed on the same grid as the
+  // boundary; a dab mid-stroke moves the thin ring only, the ribbons follow
+  // on the commit.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: keyed on the grid, not the field — see above.
+  const ribbons = useMemo(() => {
+    if (!boundary || !polygonPoints || polygonPoints.length < 3) return null
+    const field = useLiveTerrain.getState().fieldOf(node.id) ?? persistedField
+    const property = buildPatternedRibbon(boundary.ring.positions, PROPERTY_LINE_PATTERN, 0.22)
+    const setbacks = node.setbacks
+    let envelopeGeometry: BufferGeometry | null = null
+    if (setbacks) {
+      const points = polygonPoints.map(([x, z]) => [x ?? 0, z ?? 0] as [number, number])
+      const front = resolveFrontEdge(points, node.frontEdge, node.northRotation ?? 0)
+      const envelope = setbackEnvelope(points, setbacks, front)
+      if (envelope.length >= 3) {
+        const draped = buildDrapedPolyline({ points: envelope, field, lift: Y_OFFSET + 0.01, closed: true })
+        envelopeGeometry = buildPatternedRibbon(draped.positions, SETBACK_LINE_PATTERN, 0.1)
+      }
+    }
+    return { property, envelope: envelopeGeometry }
+  }, [boundary, polygonPoints, node.setbacks, node.frontEdge, node.northRotation, terrainKey, node.id])
+  useEffect(
+    () => () => {
+      ribbons?.property.dispose()
+      ribbons?.envelope?.dispose()
+    },
+    [ribbons],
+  )
+
   // Per-dab height rewrite, imperative for the same reason `TerrainRenderer`'s
   // upload is: a stroke pushes dozens of patches a second, and routing each through
   // a React render would rebuild the ring's buffers at pointer rate. The XZ of every
@@ -393,10 +426,22 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
         />
       )}
 
-      {/* Simple boundary line */}
+      {/* The property line: dark, thick, long dash + two dots, on the ground */}
+      {ribbons?.property && (
+        <mesh frustumCulled={false} geometry={ribbons.property} raycast={noopRaycast} renderOrder={9}>
+          <meshBasicMaterial color="#1c1917" depthWrite={false} side={DoubleSide} toneMapped={false} />
+        </mesh>
+      )}
+      {/* The setback envelope: black dashes */}
+      {ribbons?.envelope && (
+        <mesh frustumCulled={false} geometry={ribbons.envelope} raycast={noopRaycast} renderOrder={9}>
+          <meshBasicMaterial color="#000000" depthWrite={false} opacity={0.85} side={DoubleSide} toneMapped={false} transparent />
+        </mesh>
+      )}
+      {/* The thin ring the sculpt tool moves live */}
       {/* @ts-ignore */}
-      <line frustumCulled={false} geometry={lineGeometry} renderOrder={9}>
-        <lineBasicMaterial color="#f59e0b" linewidth={2} opacity={0.6} transparent />
+      <line frustumCulled={false} geometry={lineGeometry} renderOrder={8}>
+        <lineBasicMaterial color="#1c1917" opacity={0.5} transparent />
       </line>
     </group>
   )

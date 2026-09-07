@@ -27,7 +27,8 @@ import {
   validateDocument,
 } from './document'
 import { applyFinishes, type Finishes, finishesFor } from './finishes'
-import { type FoundationChoice, foundationFor, type TerrainUnderFootprint } from './foundation'
+import { type FoundationChoice, foundationFor, type FoundationPrefs, SLAB_FF_ABOVE_GRADE_IN, type TerrainUnderFootprint } from './foundation'
+import type { GradingPlan } from './grading'
 import {
   edgePieces,
   GRID_IN_DEFAULT,
@@ -133,6 +134,8 @@ export type BuildResult = {
   levelId: string | null
   /** What the entrance got — PlanCrafters' porch policy, built. */
   porch: PorchSummary | null
+  /** The building pad to fill into the site's terrain (a slab on a sloping lot); null when none. */
+  grading: GradingPlan | null
   /** The rear entrance at the slider (deck / covered patio / landing), when a rear wall took one. */
   rear: PorchSummary | null
   /** Slab or raised, and how far the finish floor stands above grade. */
@@ -234,6 +237,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       items: 0,
     },
     porch: null,
+    grading: null,
     rear: null,
     foundation: null,
     finishes: null,
@@ -950,14 +954,20 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   }
 
   // ── the foundation: slab on grade or a raised floor (foundation.ts) ───
-  const foundation = foundationFor(style, input.mode === 'adu' ? 'adu' : '1story', W / 12, terrain)
+  // — the rule, then the user's word (floor height / type on the roll)
+  const rollOptions = (options.generation as { options?: { floorAboveGradeIn?: unknown; foundation?: unknown } } | undefined)?.options
+  const foundationPrefs: FoundationPrefs = {
+    ...(rollOptions?.foundation === 'slab' || rollOptions?.foundation === 'raised' ? { type: rollOptions.foundation } : {}),
+    ...(typeof rollOptions?.floorAboveGradeIn === 'number' ? { ffAboveGradeIn: rollOptions.floorAboveGradeIn } : {}),
+  }
+  const foundation = foundationFor(style, input.mode === 'adu' ? 'adu' : '1story', W / 12, terrain, foundationPrefs)
   const ffAboveGradeM = round(foundation.ffAboveGradeIn * IN)
   const raisedFloor = foundation.type === 'raised'
   /** The building's datum: the finish floor stands `ffAboveGrade` above the HIGHEST grade under the footprint. */
   const buildingY = round((terrain?.highestM ?? 0) + ffAboveGradeM)
   /** Level-local grade under a level-local plan point (−ff on flat ground). */
   const localGrade = (x: number, z: number): number => round(siteGrade(x, z) - buildingY)
-  if (terrain && terrain.reliefIn >= 12) {
+  if (terrain && terrain.reliefIn >= 12 && raisedFloor) {
     warnings.push(
       `hillside: ${Math.round(terrain.reliefIn)}" of fall under the footprint — the finish floor stands ${foundation.ffAboveGradeIn}" above the high side; Bones steps the footings down the hill.`,
     )
@@ -1225,6 +1235,20 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   if (structure.roofSystem === 'truss') warnings.push(`Roof framing: ${structure.reason}.`)
   // ── building on the parcel: placed above, standing on its datum ───────
   const position: [number, number, number] = [planX, buildingY, planZ]
+  // The building PAD (grading.ts): a slab bears on fill built up to 8 in
+  // under its top all round; the plan is the footprint in site metres and
+  // the pad level — run.ts writes it into the site's heightfield. A raised
+  // floor is not graded (its stem steps down the hill).
+  const grading: GradingPlan | null =
+    foundation.type === 'slab' && terrain
+      ? {
+          polygon: ring.map((p) => toSite(p[0] * IN, p[1] * IN)),
+          padY: round(buildingY - SLAB_FF_ABOVE_GRADE_IN * IN),
+          apronM: 1.5,
+          note: `building pad: fill under the slab to ${SLAB_FF_ABOVE_GRADE_IN} in below the top of slab, blended out 1.5 m (${Math.round(terrain.reliefIn)} in of fall under the footprint)`,
+        }
+      : null
+  if (grading && terrain && terrain.reliefIn >= 6) warnings.push(`Grading: ${grading.note}.`)
 
   const buildingOp: NodeOp = {
     node: {
@@ -1307,6 +1331,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       footprintSqFt: Math.round(footprintSqFt),
       items: furnished.placed,
     },
+    grading,
     porch: porchSummary,
     rear: rearSummary,
     foundation,

@@ -848,7 +848,82 @@ G59 Pascal Map (Aymeric's geodata platform — parcels, frontage, zoning
     (Phase 0 the pipe + Phase 1 site truth DONE; Phase 2 design decisions,
     Phase 3 septic / existing structures / permits open).
 
+## Mandate additions (Steve, 2026-09-07 — the first Pascal Map house)
+
+> test 1 worked! few issues, the posts and foundation need to work on
+> grades correctly, they are up high, and the stairs should adjust to
+> grade, the stairs went up high! lol but so cool it works!!, also the
+> setback lines are not shown unless its the brown lines, maybe that
+> property lines, and the terrain around stays flat and it like goes down
+> into it, idk i want the property line to be dark and thick like line
+> then two dots dashed like standard property line, and the setbacks, if
+> we have those bring those in black and dashed to the 3d view, and ensure
+> those are adjustable with a setting in the build once it brings set
+> backs in, have a front, back, left and right adjustment for it, lets get
+> this cleaned up and working better, but my gosh amazing work, the stairs
+> should get longer if the house sits up higher, include a setting to
+> generate the house higher if they want and the foundation and stuff
+> updates, we have stepped footings and then regular just concrete
+> stemwall footings, follow the rules of going like below the frost line
+> correctly, for slabs make sure they sit with 8" on wherever the high
+> side is, then built up dirt to level it out in the front or back,
+> depends on lot slope direction, i also need the terrain lines on the
+> site plan, include a terrain setting where they can select like 6" or
+> 12" etc... for changing terrain contour lines as needed
+
+G60 Posts, foundation and stairs meet the real grade under them; the stairs
+    grow with the height the house sits at.
+G61 A "floor height above grade" setting on generation; the foundation,
+    posts and stairs follow it.
+G62 Foundations by the rules: stepped footings on a slope, plain stem-wall
+    footings on the flat, footing bottoms below the frost line; a slab sits
+    8 in above the HIGH side's grade with fill built up to level the low side.
+G63 The property line in 3D as the standard line: dark, thick, long dash +
+    two dots; the setback lines in black dashed.
+G64 Setbacks adjustable per side — front, back, left, right — once brought in.
+G65 The terrain around the house reads correctly in 3D (no flat plane the
+    house sinks into).
+G66 Terrain contour lines on the site plan, with an interval setting (6 in,
+    12 in, …).
+
 ## Log (continued)
+
+- 2026-09-07: **Batch T1 — the house meets its ground (G60–G66).** What
+  Steve saw on the St Petersburg ranch: the rule raised the house on a
+  24 in stem for 12 in of fall under the footprint, the ground under the
+  slab was left as sampled, and the property line was a thin amber
+  string. Now: a slab house stands 8 in over the HIGH side and the ground
+  under it is FILLED to the pad (`grading.ts` — fill only, never cut, an
+  apron blending out 1.5 m; written into the site's heightfield on
+  generation by run.ts and said so in the warnings), so the slab bears all
+  round and the 3D ground rises to meet it; up to 24 in of fall is a pad
+  with fill (the raise threshold was 12 in), past that the raised floor
+  with its stepped stem. The roll takes `floorAboveGradeIn` (8 / 12 / 18 /
+  24 / 30 / 36 / 48) and `foundation` (slab / raised) — the Generate
+  panel's "Floor above grade" and "Foundation" — the user's word over the
+  rule, clamped to each type's floor (8 in slab, 18 in raised) and
+  explained on the foundation's source; the stairs and posts follow the
+  height as they always did (a taller floor is a longer flight). The
+  site's frost line from the Pascal Map code basis sets Bones' footing
+  depth (R403.1.4.1, 12 in minimum), the state table standing without
+  it. In 3D the property line is a dark 22 cm ribbon in the standard
+  long-dash-two-dots pattern and the setback envelope a black dashed
+  ribbon (line-ribbon.ts, draped on the ground; setbacks.ts is the site
+  plan's envelope rule ported to the nodes package); the Generate panel
+  edits front / rear / left / right setbacks in feet on the site (left /
+  right are per-edge overrides of `side`). The site plan draws terrain
+  contours from the heightfield (contours.ts: marching squares with the
+  saddle split, segments chained, clipped to the lot, every fifth an
+  index with its elevation in feet over the EPQS datum) at the site's
+  `contourIntervalIn` (6 / 12 / 24 in, none) — the panel's "Terrain
+  contours". Seen: St Petersburg A1.0 with 30 contour strokes over the
+  block. Tests: grading +2, foundation +1, site setbacks + ribbon +3,
+  contours +2; generate 103, nodes site 65, site-plan 28, Bones framing
+  263; core rebuilt (contourIntervalIn); editor typecheck clean. Honest
+  gaps: the pad is a level fill (no cut into the high side, no retaining
+  wall); the 3D ribbons rebuild on the terrain commit, not mid-stroke;
+  contours come from the EPQS grid, not yet the dossier's 3DEP lines; the
+  stem-wall house is not graded at all (the ground stays as sampled).
 
 - 2026-09-07: **Pascal Map — Phase 0 + 1 built (G59).** The dossier
   route on the server key (`MAP_API_KEY`, apps/editor/.env.local, never

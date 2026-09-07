@@ -141,6 +141,11 @@ export const SiteNode = BaseNode.extend({
   northRotation: z.number().optional(),
   /** The Pascal Map dossier the lot was dropped in with — see SiteDossier. */
   dossier: SiteDossier.optional(),
+  /**
+   * Contour interval for the site plan's terrain lines, INCHES (6, 12, 24…).
+   * Absent = 12 in; 0 = no contours. The generate panel's terrain setting.
+   */
+  contourIntervalIn: z.number().nonnegative().optional(),
   children: z.array(z.string()).default([]),
 }).describe(
   dedent`

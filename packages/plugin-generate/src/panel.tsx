@@ -3,6 +3,7 @@
  * seed), the Generate button, the templates, and the last run's summary —
  * counts, the warnings the builder raised, and the errors when it refused.
  */
+import { type SiteNode, useScene } from '@pascal-app/core'
 import { LotAddressBox } from '@pascal-app/plugin-lot'
 import { Dices, Home, RefreshCw, Sparkles } from 'lucide-react'
 import { describeFinishes } from './finishes'
@@ -16,11 +17,42 @@ const field =
   'w-full rounded-md border border-sidebar-border/60 bg-sidebar px-2 py-1.5 text-xs text-sidebar-foreground'
 const label = 'mb-1 block font-mono text-[10px] text-sidebar-foreground/60 uppercase tracking-wider'
 
+const FT = 0.3048
+const FLOOR_HEIGHTS = [8, 12, 18, 24, 30, 36, 48] as const
+const CONTOUR_INTERVALS = [6, 12, 24] as const
+
+/** The scene's site (the lot the generator sits the house on), live. */
+function useSiteNode(): SiteNode | null {
+  return useScene((state) => {
+    for (const n of Object.values(state.nodes)) if ((n as { type?: string }).type === 'site') return n as unknown as SiteNode
+    return null
+  })
+}
+
 export default function GeneratePanel() {
   const S = useGenerate()
   const beds = S.options.beds ?? 0
   const baths = S.options.baths ?? 0
   const garage = S.options.garage
+  const site = useSiteNode()
+  const writeSite = (patch: Record<string, unknown>) => {
+    if (site) useScene.getState().updateNode(site.id as never, patch as never)
+  }
+  const setbackFt = (key: 'front' | 'rear' | 'left' | 'right'): string => {
+    const s = site?.setbacks
+    if (!s) return ''
+    const v = key === 'left' || key === 'right' ? (s[key] ?? s.side) : s[key]
+    return typeof v === 'number' ? String(Math.round((v / FT) * 10) / 10) : ''
+  }
+  const writeSetback = (key: 'front' | 'rear' | 'left' | 'right', text: string) => {
+    const feet = Number(text)
+    if (!Number.isFinite(feet) || feet < 0) return
+    const base = site?.setbacks ?? { front: 20 * FT, side: 5 * FT, rear: 15 * FT }
+    writeSite({
+      setbacks: { ...base, [key]: feet * FT },
+      setbacksSource: `${site?.setbacksSource ?? 'setbacks'} — ${key} set by hand in the Generate panel`,
+    })
+  }
   return (
     <div className="flex h-full min-h-0 flex-col overflow-y-auto text-sidebar-foreground">
       <div className="p-3">
@@ -110,6 +142,72 @@ export default function GeneratePanel() {
             <option value="no">none</option>
           </select>
         </div>
+        <div>
+          <span className={label}>Floor above grade</span>
+          <select
+            className={field}
+            value={S.options.floorAboveGradeIn ?? ''}
+            onChange={(e) => S.setOptions({ floorAboveGradeIn: e.target.value === '' ? undefined : Number(e.target.value) })}
+          >
+            <option value="">by the rule (8 in slab, 18 in raised)</option>
+            {FLOOR_HEIGHTS.map((n) => (
+              <option key={n} value={n}>
+                {n} in above the high side
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <span className={label}>Foundation</span>
+          <select
+            className={field}
+            value={S.options.foundation ?? ''}
+            onChange={(e) => S.setOptions({ foundation: e.target.value === '' ? undefined : (e.target.value as 'slab' | 'raised') })}
+          >
+            <option value="">by the grade and the style</option>
+            <option value="slab">slab on a built-up pad</option>
+            <option value="raised">raised on a stem wall (stepped on a hill)</option>
+          </select>
+        </div>
+        {site && (
+          <div className="col-span-2">
+            <span className={label}>Setbacks (ft) — front · rear · left · right</span>
+            <div className="grid grid-cols-4 gap-1">
+              {(['front', 'rear', 'left', 'right'] as const).map((key) => (
+                <input
+                  className={field}
+                  defaultValue={setbackFt(key)}
+                  inputMode="decimal"
+                  key={`${key}-${setbackFt(key)}`}
+                  onBlur={(e) => writeSetback(key, e.target.value)}
+                  placeholder={key}
+                  title={key}
+                  type="number"
+                />
+              ))}
+            </div>
+            <p className="mt-1 text-[10px] text-sidebar-foreground/50">
+              {site.setbacksSource ?? 'No setbacks yet — drop a lot in.'}
+            </p>
+          </div>
+        )}
+        {site && (
+          <div className="col-span-2">
+            <span className={label}>Terrain contours (site plan)</span>
+            <select
+              className={field}
+              value={site.contourIntervalIn ?? 12}
+              onChange={(e) => writeSite({ contourIntervalIn: Number(e.target.value) })}
+            >
+              <option value={0}>none</option>
+              {CONTOUR_INTERVALS.map((n) => (
+                <option key={n} value={n}>
+                  every {n} in
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
         {SERVICE_CHOICES.map((c) => (
           <div key={c.key}>
             <span className={label}>{c.label}</span>

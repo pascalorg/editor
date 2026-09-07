@@ -4,7 +4,8 @@
  * the parcel, select its level. The heavy lifting is pure (`roll.ts`,
  * `build.ts`); this file is the only one that touches the stores.
  */
-import { heightAt, type SiteNode, terrainFieldOf, useScene } from '@pascal-app/core'
+import { commitTerrainField, heightAt, type SiteNode, terrainFieldOf, useScene } from '@pascal-app/core'
+import { fillPad } from './grading'
 import { buildSitePlanDrawing, CATALOG_ITEMS } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { buildHouse, GENERATED_BY, type Placement } from './build'
@@ -195,6 +196,16 @@ function applyDocument(
     scene.createNodes(
       built.ops.map((op) => ({ node: op.node as never, parentId: op.parentId as never })),
     )
+  }
+  // the building pad: fill the site's ground under a slab (grading.ts)
+  if (site && field && built.grading) {
+    const graded = fillPad(field, built.grading)
+    if (graded.filledSamples > 0) {
+      scene.updateNode(site.id as never, { terrain: commitTerrainField(graded.field) } as never)
+      summary.warnings.push(
+        `Grading: ${graded.filledSamples} ground samples filled under the slab, up to ${(graded.maxFillM / 0.0254).toFixed(0)} in — the pad the slab bears on.`,
+      )
+    }
   }
   if (built.levelId) {
     useViewer

@@ -54,15 +54,61 @@ export const SLAB_FF_ABOVE_GRADE_IN = 8
 export const RAISED_FF_ABOVE_GRADE_IN = 18
 /** A footprint this narrow takes the slab path (PlanCrafters R67). */
 export const NARROW_FOOTPRINT_FT = 34
-/** PlanCrafters applyFoundation: fall ≥ this raises the house on a taller stem. */
-export const HILL_RAISED_RELIEF_IN = 12
+/**
+ * Fall ≥ this raises the house on a taller stem (PlanCrafters said 12 in;
+ * Steve, 2026-09-07: a slab sits 8 in over the HIGH side with the low side
+ * built up — so up to two feet of fall is a pad with fill, not a stem).
+ */
+export const HILL_RAISED_RELIEF_IN = 24
 /** Fall > this is basement territory (PlanCrafters); here a 36 in stem, said honestly. */
 export const HILL_BASEMENT_RELIEF_IN = 30
 /** The hillside stem band, inches (PlanCrafters clamp(snap(delta), 24, 36)). */
 export const HILL_STEM_MIN_IN = 24
 export const HILL_STEM_MAX_IN = 36
 
+/** What the user asked for on generation (roll options): a type, a height, or both. */
+export type FoundationPrefs = {
+  type?: 'slab' | 'raised'
+  /** Finish floor above the high side's grade, inches. */
+  ffAboveGradeIn?: number
+}
+
+/** A slab never stands under 8 in over grade, a raised floor never under 18 in. */
+const MIN_FF_IN: Record<FoundationType, number> = { slab: SLAB_FF_ABOVE_GRADE_IN, raised: RAISED_FF_ABOVE_GRADE_IN }
+
+/**
+ * The rule's choice, then the user's word over it: an asked type replaces
+ * the rule's type (its height the rule's, or the asked one); an asked
+ * height alone lifts the rule's type to it. Both are clamped to the
+ * type's floor and said so on the source.
+ */
 export function foundationFor(
+  style: StylePreset,
+  mode: '1story' | 'adu',
+  footprintWidthFt: number,
+  terrain?: TerrainUnderFootprint | null,
+  prefs?: FoundationPrefs | null,
+): FoundationChoice {
+  const rule = foundationByRule(style, mode, footprintWidthFt, terrain)
+  if (!prefs || (!prefs.type && !(typeof prefs.ffAboveGradeIn === 'number' && prefs.ffAboveGradeIn > 0))) return rule
+  const type: FoundationType = prefs.type ?? rule.type
+  const asked = typeof prefs.ffAboveGradeIn === 'number' && prefs.ffAboveGradeIn > 0 ? Math.round(prefs.ffAboveGradeIn) : null
+  const ff = Math.max(MIN_FF_IN[type], asked ?? (type === rule.type ? rule.ffAboveGradeIn : MIN_FF_IN[type]))
+  const what = [
+    prefs.type ? `${prefs.type} asked` : '',
+    asked !== null ? `${asked} in above grade asked${ff !== asked ? ` (held to the ${type} minimum ${MIN_FF_IN[type]} in)` : ''}` : '',
+  ]
+    .filter(Boolean)
+    .join(', ')
+  return {
+    type,
+    ffAboveGradeIn: ff,
+    source: `${what} — ${type === 'slab' ? `slab on a built-up pad, top of slab ${ff} in over the high side's grade` : `raised on a ${ff} in stem, footings stepped where the ground falls`}; the rule alone would have said: ${rule.source}`,
+    terrain: rule.terrain,
+  }
+}
+
+function foundationByRule(
   style: StylePreset,
   mode: '1story' | 'adu',
   footprintWidthFt: number,

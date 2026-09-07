@@ -100,6 +100,16 @@ export type RollOptions = {
   garage?: boolean
   /** The MEP choices — carried to the building's metadata for Bones. */
   services?: ServiceChoices
+  /**
+   * Finish floor above the HIGH side's grade, inches (Steve: "include a
+   * setting to generate the house higher if they want and the foundation
+   * and stuff updates"). Absent = the foundation rule (8 in slab, 18 in
+   * raised, taller on a hill). A slab asked higher stands on a taller
+   * built-up pad; a raised floor on a taller stem.
+   */
+  floorAboveGradeIn?: number
+  /** Force the foundation type; absent = the rule (the grade and the style decide). */
+  foundation?: 'slab' | 'raised'
   /** Buildable frontage, feet (the setback envelope's street edge). */
   maxWidthFt?: number
   /** Buildable depth, feet. */
