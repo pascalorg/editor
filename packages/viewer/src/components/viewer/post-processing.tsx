@@ -29,6 +29,7 @@ import { backdropGradient, deepSkyColor, horizonHazeColor } from '../../lib/back
 import { edgeColorFor, edgeOpacityScaleFor } from '../../lib/edge-style'
 import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { inkedEdges } from '../../lib/ink-edges'
+import { LayerPassIndex, LayerPassNode } from '../../lib/layer-pass'
 import { GRID_LAYER, OVERLAY_LAYER, SCENE_LAYER, ZONE_LAYER } from '../../lib/layers'
 import { mergedOutline } from '../../lib/merged-outline-node'
 import { recordPerfSample, timeSpan } from '../../lib/perf-tracks'
@@ -415,15 +416,19 @@ const PostProcessingPasses = ({
     outliner.hoveredObjects.length = 0
 
     let outlineNode: ReturnType<typeof mergedOutline> | null = null
+    const layerIndex = new LayerPassIndex(scene, [ZONE_LAYER, OVERLAY_LAYER])
+    const layerPasses: LayerPassNode[] = []
     try {
       const scenePass = pass(scene, camera)
       scenePass.setLayers(sceneOnlyLayers)
-      const zonePass = pass(scene, camera)
+      const zonePass = new LayerPassNode(layerIndex, camera, ZONE_LAYER, scenePass)
+      layerPasses.push(zonePass)
       zonePass.setLayers(zoneLayers)
       // Editor overlays (gizmos, move handles, tool previews, grid) on their own
       // layer, kept out of the depth/normal MRT above so the ink + SSGI ignore
       // them, then composited on top of the final image below.
-      const overlayPass = pass(scene, camera)
+      const overlayPass = new LayerPassNode(layerIndex, camera, OVERLAY_LAYER, scenePass)
+      layerPasses.push(overlayPass)
       overlayPass.setLayers(overlayLayers)
       const overlayColor = overlayPass.getTextureNode('output')
 
@@ -641,6 +646,9 @@ const PostProcessingPasses = ({
       renderPipelineRef.current = renderPipeline
       retryCountRef.current = 0
     } catch (error) {
+      layerIndex.dispose()
+      for (const layerPass of layerPasses) layerPass.dispose()
+      layerPasses.length = 0
       outlineNode?.dispose()
       outlineNode = null
       hasPipelineErrorRef.current = true
@@ -660,6 +668,8 @@ const PostProcessingPasses = ({
     }
 
     return () => {
+      layerIndex.dispose()
+      for (const layerPass of layerPasses) layerPass.dispose()
       outlineNode?.dispose()
       if (renderPipelineRef.current) {
         renderPipelineRef.current.dispose()
