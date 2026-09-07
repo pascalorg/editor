@@ -164,3 +164,45 @@ frame from the STATE profile (wind / frost / snow / SDC). The sheets print
    / CA, or drop it once the dossier covers the front edge?
 4. Freeboard: FBC's 1 ft over BFE by default, or the county's own (some
    coastal counties ask 2 ft) — a setting with the county default.
+
+## 4. What the live data showed (2026-09-07, with Steve's test key)
+
+Three dossiers recorded under `docs/reference/map-dossiers/` (plus the
+coverage scorecard) — the Phase 0 test fixtures:
+
+| Lot | parcel | zoning | code_basis | flood | elevation terrain | utilities |
+|---|---|---|---|---|---|---|
+| 1247 NE 104th St, Miami Shores (our preset) | not_covered | not_available (city GIS not connected; FLU says LDR 2.5–6 du/ac) | not_covered | zone X 0.2 %, panel 12086C0306L | point only, no parcel | FPL; no wastewater |
+| 501 5th Ave NE, St Petersburg (the docs' example; Pinellas) | 13.1 ac, 3 frontage segments, 30 neighbours | DC-3 form-based: setbacks null + verbatim note, FAR 2, code deep link | zone 2A, frost 0, snow 0, SDC A, wind 150 mph RC II, debris region TRUE, rainfall 13.8 in, 17 subsidence reports in 5 mi | AE, BFE 9 ft NAVD88, 69 % of the parcel, panel 12103C0219H | ready: 0–20.9 ft, 129 one-foot contours | sewer (likely), public water, Duke |
+| 2600 Castro Way, Sacramento (our CA preset) | 0.13 ac, NO frontage / adjacency | R-1, no dimensional data | Title 24 zone 12, SDC D (SDS 0.65 / SD1 0.42), liquefaction zone with the CGS report link, no wind value | X behind a levee, panel 06067C0190H | ready: 20.3–22.5 ft, 9 contours | SMUD |
+
+What that changes in the plan:
+
+- Coverage gates everything. Parcel + code basis are FULL in Hillsborough,
+  Orange, Pinellas, Lake, Manatee, Osceola, Pasco (zoning partial in the
+  first three) and PARCEL is full statewide in California; Miami-Dade has
+  no parcel plane yet. So Phase 1 keys off `/v1/coverage` per county and
+  the drop-in says which sections the dossier answered — today's ArcGIS
+  parcel + Overpass road path stays the fallback wherever `parcel` is
+  not_covered (Miami Shores included).
+- FRONTAGE only comes with a parcel plane that carries adjacency: the FL
+  priority counties give segments (St Pete: 3 — a corner block); the CA
+  plane gave none. The front-edge rule: frontage segments when present,
+  else the road match, else north-facing — and the status line says which.
+- The WIND VALUE is the big structural win: Pinellas reads 150 mph RC II
+  with the wind-borne debris region TRUE, where our state table sizes FL
+  as one number. Bones' hurricane ties / uplift / bracing and the S-sheet
+  criteria table should take the county value with its provenance, and
+  the window schedule the impact-glazing note.
+- FLOOD is real on the St Pete lot: AE with BFE 9 ft NAVD88 over 69 % of
+  the parcel. The finished-floor rule (BFE + freeboard) needs the site
+  elevation in the SAME datum — the terrain section gives NAVD88 contours
+  (the point elevation is EGM2008 surface: do not mix them).
+- ZONING is honest about conditional rules: DC-3 returns null setbacks
+  with the code text verbatim and the section link — print the note, keep
+  the default with VERIFY; Sacramento's R-1 returns no numbers at all.
+- We need RESIDENTIAL presets in the covered counties (Tampa / St Pete /
+  Orlando single-family lots) — every current FL preset is Miami-Dade.
+- The key lives server-side in `apps/editor/.env.local` (`MAP_API_KEY`,
+  gitignored); the headless script reads the same variable. Keys pasted
+  into chat should be rotated once the integration is wired.
