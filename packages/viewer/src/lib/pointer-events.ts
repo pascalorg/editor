@@ -23,7 +23,8 @@
  *
  * Vendored from R3F 9.6.1:
  * https://raw.githubusercontent.com/pmndrs/react-three-fiber/v9.6.1/packages/fiber/src/core/events.ts
- * Only ray collection is changed; dispatch stays upstream-owned.
+ * Ray collection is cached; camera-drag moves are throttled before stock dispatch.
+ * The throttle is a vendored-manager policy; dev ?stockEvents uses untouched R3F.
  */
 
 import {
@@ -42,6 +43,9 @@ import {
 import * as THREE from 'three'
 import { acceleratedRaycast } from 'three-mesh-bvh'
 import useViewer from '../store/use-viewer'
+
+// Keep navigation feedback at 10 Hz while avoiding raycasts for intervening moves.
+const CAMERA_DRAG_MOVE_INTERVAL_MS = 100
 
 type PointerCaptureTarget = {
   intersection: Intersection
@@ -262,6 +266,18 @@ export function createPascalPointerEvents(store: RootStore): EventManager<HTMLEl
   for (const name of Object.keys(manager.handlers!) as (keyof Events)[]) {
     manager.handlers![name] = handlePointer(name) as Events[typeof name]
   }
+  const move = manager.handlers!.onPointerMove
+  let lastCameraDragMove = Number.NEGATIVE_INFINITY
+  manager.handlers!.onPointerMove = (event) => {
+    if (useViewer.getState().cameraDragging) {
+      const now = performance.now()
+      if (now - lastCameraDragMove < CAMERA_DRAG_MOVE_INTERVAL_MS) return
+      lastCameraDragMove = now
+    } else {
+      lastCameraDragMove = Number.NEGATIVE_INFINITY
+    }
+    move(event)
+  }
   return manager
 }
 
@@ -306,14 +322,6 @@ function createEvents(store: RootStore) {
 
   /** Returns true if an instance has a valid pointer-event registered, this excludes scroll, clicks etc */
   function filterPointerEvents(objects: THREE.Object3D[]) {
-    const viewer = useViewer.getState()
-    if (viewer.cameraDragging) {
-      // The first empty move emits R3F out/leave; capture is still appended below.
-      // useNodeEvents suppresses camera-time leave, so clear its otherwise stale outline too.
-      // The next move after cameraDragging clears re-enters; inputDragging still needs hits.
-      if (viewer.hoveredId !== null) viewer.setHoveredId(null)
-      return []
-    }
     return objects.filter((obj) => {
       const handlers = (obj as Instance<THREE.Object3D>['object']).__r3f?.handlers
       return (

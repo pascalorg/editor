@@ -39,23 +39,6 @@ afterEach(() => {
 
 type Factory = typeof stockEvents
 
-// Stock's hit filter is too late to avoid raycasts. Give its move collector the same empty roots.
-const stockCameraDragEvents: Factory = (store) => {
-  const manager = stockEvents(store)
-  const move = manager.handlers!.onPointerMove
-  manager.handlers!.onPointerMove = (event) => {
-    const { internal } = store.getState()
-    const interaction = internal.interaction
-    if (useViewer.getState().cameraDragging) internal.interaction = []
-    try {
-      move(event)
-    } finally {
-      internal.interaction = interaction
-    }
-  }
-  return manager
-}
-
 type PointerData = ThreeEvent<PointerEvent>
 type Action = (name: keyof EventHandlers, event: PointerData) => void
 const handlerNames = [
@@ -332,37 +315,69 @@ function nested(f: Fixture) {
 }
 
 describe('R3F 9.6.1 pointer-event differential', () => {
-  test('camera drag leaves on its first empty move and re-enters on the first move after release', async () => {
-    await differential((f) => {
+  test('camera move bursts dispatch only the first move, then resume at 100 ms or immediately after release', async () => {
+    let now = 0
+    const clock = spyOn(performance, 'now').mockImplementation(() => now)
+    cleanups.push(() => clock.mockRestore())
+    const run = (f: Fixture, burst: boolean) => {
+      now = 0
+      useViewer.setState({ cameraDragging: true })
+      nested(f)
+      f.send('onPointerMove')
+      if (burst) {
+        const calls = new Map(f.calls)
+        const lastEvent = f.state.internal.lastEvent.current
+        for (now = 1; now < 100; now++) {
+          const before = f.trace.length
+          f.send('onPointerMove', 200)
+          // send adds a snapshot even when the manager drops the event.
+          expect(f.trace).toHaveLength(before + 1)
+          f.trace.pop()
+          expect(f.calls).toEqual(calls)
+          expect(f.state.internal.lastEvent.current).toBe(lastEvent)
+        }
+      }
+      now = 100
+      f.send('onPointerMove', 51)
+      now = 101
       useViewer.setState({ cameraDragging: false })
+      f.send('onPointerMove', 52)
+    }
+    const stock = await fixture(stockEvents)
+    run(stock, false)
+    const cached = await fixture(createPascalPointerEvents)
+    run(cached, true)
+    expect(cached.trace).toEqual(stock.trace)
+    expect(cached.calls.get('a')).toBe(3)
+    expect(cached.calls.get('b')).toBe(3)
+  })
+
+  test('hover survives camera moves and leaves empty space exactly once after release, as stock', async () => {
+    let now = 0
+    const clock = spyOn(performance, 'now').mockImplementation(() => now)
+    cleanups.push(() => clock.mockRestore())
+    await differential((f) => {
+      now = 0
+      useViewer.setState({ cameraDragging: false, hoveredId: 'item_hovered' })
       const delivered: string[] = []
       f.mesh('a', [1], handlerNames, (name) => delivered.push(name))
       f.send('onPointerMove')
-      expect(delivered).toEqual(['onPointerOver', 'onPointerEnter', 'onPointerMove'])
-      delivered.length = 0
-      f.calls.clear()
-
+      const hovered = [...f.state.internal.hovered.values()]
       useViewer.setState({ cameraDragging: true })
-      expect(f.state.internal.hovered.size).toBe(1)
       f.send('onPointerMove')
-      expect(delivered).toEqual(['onPointerOut', 'onPointerLeave'])
-      expect(f.state.internal.hovered.size).toBe(0)
-      f.send('onPointerMove', 200)
-      expect(delivered).toEqual(['onPointerOut', 'onPointerLeave'])
-      expect(f.calls.size).toBe(0)
-
+      now = 100
+      f.send('onPointerMove')
+      expect([...f.state.internal.hovered.values()]).toEqual(hovered)
+      expect(useViewer.getState().hoveredId).toBe('item_hovered')
+      expect(delivered).not.toContain('onPointerLeave')
+      now = 101
       useViewer.setState({ cameraDragging: false })
+      f.send('onPointerMove', 200)
+      f.send('onPointerMove', 200)
       expect(f.state.internal.hovered.size).toBe(0)
-      f.send('onPointerMove')
-      expect(delivered).toEqual([
-        'onPointerOut',
-        'onPointerLeave',
-        'onPointerOver',
-        'onPointerEnter',
-        'onPointerMove',
-      ])
-      expect(f.calls.get('a')).toBe(1)
-    }, stockCameraDragEvents)
+      expect(delivered.filter((name) => name === 'onPointerLeave')).toHaveLength(1)
+      expect(delivered.filter((name) => name === 'onPointerOut')).toHaveLength(1)
+    })
   })
 
   test('camera drag preserves down/up, initial click targets, click, double click, context menu and wheel', async () => {
@@ -384,8 +399,12 @@ describe('R3F 9.6.1 pointer-event differential', () => {
     })
   })
 
-  test('camera drag preserves capture delivery, propagation and release without move raycasts', async () => {
+  test('camera drag preserves capture delivery, propagation and release on admitted moves', async () => {
+    let now = 0
+    const clock = spyOn(performance, 'now').mockImplementation(() => now)
+    cleanups.push(() => clock.mockRestore())
     await differential((f) => {
+      now = 0
       useViewer.setState({ cameraDragging: false })
       f.mesh('near', [1])
       const captured = f.mesh('captured', [2], handlerNames, (name, event) => {
@@ -401,7 +420,7 @@ describe('R3F 9.6.1 pointer-event differential', () => {
       f.calls.clear()
       useViewer.setState({ cameraDragging: true })
       f.send('onPointerMove', 200)
-      expect(f.calls.size).toBe(0)
+      expect(f.calls.size).toBe(2)
       expect(f.state.internal.capturedMap.get(1)?.has(captured)).toBe(true)
       expect([...f.state.internal.hovered.values()].map((hit) => hit.eventObject.uuid)).toEqual([
         'captured',
@@ -409,11 +428,12 @@ describe('R3F 9.6.1 pointer-event differential', () => {
       f.send('onPointerUp', 200)
       expect(f.state.internal.capturedMap.size).toBe(0)
       f.calls.clear()
-      f.send('onPointerMove')
-      expect(f.calls.size).toBe(0)
+      now = 100
+      f.send('onPointerMove', 200)
+      expect(f.calls.size).toBe(2)
       expect(f.state.internal.hovered.size).toBe(0)
       useViewer.setState({ cameraDragging: false })
-    }, stockCameraDragEvents)
+    })
   })
 
   for (const inputDragging of [false, true])
@@ -432,17 +452,6 @@ describe('R3F 9.6.1 pointer-event differential', () => {
         expect(f.calls.size).toBe(2)
       })
     })
-
-  test('camera move clears the suppressed node hover even when the next move hits empty space', async () => {
-    const f = await fixture(createPascalPointerEvents)
-    useViewer.setState({ hoveredId: 'item_hovered' })
-    useViewer.setState({ cameraDragging: true })
-    f.send('onPointerMove')
-    expect(useViewer.getState().hoveredId).toBeNull()
-    useViewer.setState({ cameraDragging: false })
-    f.send('onPointerMove', 200)
-    expect(useViewer.getState().hoveredId).toBeNull()
-  })
 
   test('pins the vendored closure to the installed R3F version', () => {
     const pkg = JSON.parse(readFileSync(require.resolve('@react-three/fiber/package.json'), 'utf8'))
