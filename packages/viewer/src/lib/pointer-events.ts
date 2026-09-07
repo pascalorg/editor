@@ -41,6 +41,7 @@ import {
 } from '@react-three/fiber'
 import * as THREE from 'three'
 import { acceleratedRaycast } from 'three-mesh-bvh'
+import useViewer from '../store/use-viewer'
 
 type PointerCaptureTarget = {
   intersection: Intersection
@@ -305,6 +306,14 @@ function createEvents(store: RootStore) {
 
   /** Returns true if an instance has a valid pointer-event registered, this excludes scroll, clicks etc */
   function filterPointerEvents(objects: THREE.Object3D[]) {
+    const viewer = useViewer.getState()
+    if (viewer.cameraDragging) {
+      // The first empty move emits R3F out/leave; capture is still appended below.
+      // useNodeEvents suppresses camera-time leave, so clear its otherwise stale outline too.
+      // The next move after cameraDragging clears re-enters; inputDragging still needs hits.
+      if (viewer.hoveredId !== null) viewer.setHoveredId(null)
+      return []
+    }
     return objects.filter((obj) => {
       const handlers = (obj as Instance<THREE.Object3D>['object']).__r3f?.handlers
       return (
