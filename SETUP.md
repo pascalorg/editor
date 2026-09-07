@@ -41,6 +41,11 @@ image from GHCR; set `IMAGE_TAG` to use a release instead of `latest`:
 IMAGE_TAG=1.0.0 docker compose up -d
 ```
 
+The `editor` package must be public in the `pascalorg` organization's GHCR packages
+for unauthenticated deployments. After the first release, open the package settings
+under the organization's Packages page, set its visibility to **Public**, and connect
+it to `pascalorg/editor`. Maintainers only need to configure this once.
+
 Saved scenes live in the `pascal-data` volume, so they survive `docker compose down`.
 
 Docker defaults `MINT_PASCAL_HOST_ORIGIN` to `http://localhost:3000`. Override

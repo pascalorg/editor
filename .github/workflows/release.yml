@@ -69,6 +69,7 @@ jobs:
     environment: npm
     permissions:
       contents: write
+      packages: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -291,6 +292,37 @@ jobs:
             npm publish --access public --tag "$NPM_TAG"
             echo "📦 Published @pascal-app/editor@$EDITOR_VERSION"
           fi
+
+      - name: Prepare Docker image tags
+        if: inputs.package == 'editor' || inputs.package == 'all'
+        id: docker-tags
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          {
+            echo 'tags<<EOF'
+            echo "ghcr.io/pascalorg/editor:$EDITOR_VERSION"
+            if [ "$BUMP" != "beta" ]; then
+              echo "ghcr.io/pascalorg/editor:latest"
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        if: (inputs.package == 'editor' || inputs.package == 'all') && inputs.dry-run == false
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & publish Docker image
+        if: inputs.package == 'editor' || inputs.package == 'all'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: ${{ inputs.dry-run == false }}
+          tags: ${{ steps.docker-tags.outputs.tags }}
 
       - name: Build & publish nodes
         if: inputs.package == 'nodes' || inputs.package == 'all'
