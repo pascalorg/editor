@@ -578,10 +578,23 @@ export class MergedOutlineNode extends TempNode {
     const reversed = builder.renderer.reversedDepthBuffer
     const depthTexture = this._sceneDepthNode?.value
     const floatDepth = reversed || depthTexture?.type === FloatType
+    const depthSamples =
+      this._sceneDepthNode && builder.renderer.backend.isWebGPUBackend
+        ? (this._sceneDepthNode.passNode?.options.samples ?? builder.renderer.samples)
+        : 0
     // ── prepareMask ───────────────────────────────────────────────────────────
     const buildPrepareMask = () => {
-      const depth = (this._sceneDepthNode ?? this._depthTexUniform).sample(screenUV).r
+      let depth = (this._sceneDepthNode ?? this._depthTexUniform).sample(screenUV).r
       if (this._sceneDepthNode) {
+        // The symmetric MSAA sample positions average to the pixel center where
+        // the mask rasterizes. Average differences to avoid rounding a sum of
+        // nearly-one depths and consuming the one-ULP allowance below.
+        let depthOffset = float(0)
+        for (let sampleIndex = 1; sampleIndex < depthSamples; sampleIndex++) {
+          const sampleDepth = this._sceneDepthNode.sample(screenUV).level(sampleIndex).r
+          depthOffset = depthOffset.add(sampleDepth.sub(depth))
+        }
+        if (depthSamples > 1) depth = depth.add(depthOffset.div(depthSamples))
         // Extract the float exponent for one ULP; a relative epsilon can hide
         // centimetre-scale occlusion at long distances with conventional depth.
         const bias = floatDepth
