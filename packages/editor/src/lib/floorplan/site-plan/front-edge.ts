@@ -55,14 +55,15 @@ function better(
 /**
  * Core street name: drop the house number, a leading / trailing direction
  * and the street-type suffix so "2600 Castro Way" ↔ OSM "Castro Way" ↔
- * "S Castro".
+ * "S Castro"; OSM spells the quadrant out ("Northeast 109th Street" ↔
+ * "NE 109th St").
  */
 export function streetCore(s: string | null | undefined): string {
   return String(s ?? '')
     .toLowerCase()
     .replace(/^\s*\d+[a-z]?\s+/, '')
-    .replace(/^(n|s|e|w|ne|nw|se|sw|north|south|east|west)\s+/, '')
-    .replace(/\s+(n|s|e|w|ne|nw|se|sw|north|south|east|west)$/, '')
+    .replace(/^(n|s|e|w|ne|nw|se|sw|north|south|east|west|northeast|northwest|southeast|southwest)\s+/, '')
+    .replace(/\s+(n|s|e|w|ne|nw|se|sw|north|south|east|west|northeast|northwest|southeast|southwest)$/, '')
     .replace(
       /\b(street|st|avenue|ave|road|rd|drive|dr|lane|ln|way|court|ct|place|pl|boulevard|blvd|circle|cir|terrace|ter|trail|trl|parkway|pkwy|highway|hwy|route|rte)\b\.?/g,
       '',

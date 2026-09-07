@@ -783,6 +783,20 @@ G49 Every house type's elevation sheets reviewed.
 
 ## Log (continued)
 
+- 2026-09-07: **The house that faced the other way (lot).** Two prints of
+  the same seed came out turned 180°. Not the plan snap: the lot drop-in's
+  road lookup (Overpass mirrors, raced with a timeout) failed once in
+  about six calls, and with no street the front edge fell back to "most
+  north-facing" — on 1247 NE 104th St the street is to the SOUTH, so the
+  house turned round. `dropInLot` now asks for the roads twice before
+  giving up; `streetCore` strips a spelled-out quadrant ("Northeast 109th
+  Street" ↔ "NE 109th St") so the addressed-street rule can match OSM's
+  names; `generate-and-print` prints the lot line ("fronts Northeast 109th
+  Street (edge 1)" — 1-based) and a loud warning when the fallback stood.
+  Editor front-edge + lot tests 29. Still open: a lookup that fails twice
+  still flips; the preset lots could carry their known front edge as a
+  last resort.
+
 - 2026-09-07: **Batch R5 — the furnishing revamp (G44).** The kitchen
   recipe now lays a continuous run (no gaps): the sink centred on the
   window, the dishwasher beside it, then the range and a counter down the

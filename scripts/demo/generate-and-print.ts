@@ -107,6 +107,10 @@ async function main() {
   })
   if (!lot.ok) throw new Error(`lot drop-in failed: ${lot.error ?? lot.message}`)
   console.log(`lot: ${preset.label} in ${Math.round(performance.now() - t0)} ms`)
+  // which edge fronts the street decides which way the house faces — say so
+  console.log(`  ${lot.message}`)
+  if (lot.summary && lot.summary.frontEdge === null)
+    console.log('  warn: no street matched — the front edge is the north-facing fallback; the house may face the wrong way')
 
   // 2. the house
   const G = useGenerate.getState()

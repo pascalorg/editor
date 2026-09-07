@@ -125,22 +125,29 @@ export async function dropInLot(
     return { ok: false, error: data.error ?? 'no parcel', message }
   }
 
-  // Streets around the lot — fail-soft.
+  // Streets around the lot — fail-soft, but asked twice: the Overpass
+  // mirrors time out now and then, and without the street the front edge
+  // falls back to "most north-facing", which on a lot fronting a street to
+  // the south turns the whole house round between one run and the next.
   let roads: LotRoad[] | null = null
   let roadsFailure = ''
   if (options.roads !== false && data.originLngLat) {
-    try {
-      const [lng, lat] = data.originLngLat
-      const r = await postJson<RoadsResponse>(fetchImpl, '/api/parcel/roads', {
-        latitude: lat,
-        longitude: lng,
-        originLngLat: data.originLngLat,
-        radiusM: options.roadsRadiusM,
-      })
-      if (r.ok && Array.isArray(r.roads)) roads = r.roads
-      else roadsFailure = r.reason ?? 'no roads'
-    } catch (error) {
-      roadsFailure = error instanceof Error ? error.message : 'road lookup failed'
+    for (let attempt = 0; attempt < 2 && !roads; attempt++) {
+      try {
+        const [lng, lat] = data.originLngLat
+        const r = await postJson<RoadsResponse>(fetchImpl, '/api/parcel/roads', {
+          latitude: lat,
+          longitude: lng,
+          originLngLat: data.originLngLat,
+          radiusM: options.roadsRadiusM,
+        })
+        if (r.ok && Array.isArray(r.roads)) {
+          roads = r.roads
+          roadsFailure = ''
+        } else roadsFailure = r.reason ?? 'no roads'
+      } catch (error) {
+        roadsFailure = error instanceof Error ? error.message : 'road lookup failed'
+      }
     }
   } else if (options.roads === false) {
     roadsFailure = 'skipped'

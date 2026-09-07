@@ -19,6 +19,9 @@ describe('streetCore', () => {
     expect(streetCore('W Cass St.')).toBe('cass')
     expect(streetCore('1200 W Cass St')).toBe('cass')
     expect(streetCore('North Troy Street')).toBe('troy')
+    // OSM spells the quadrant out
+    expect(streetCore('Northeast 109th Street')).toBe('109th')
+    expect(streetCore('1247 NE 109th St')).toBe('109th')
     expect(streetCore('')).toBe('')
     expect(streetCore(null)).toBe('')
   })
