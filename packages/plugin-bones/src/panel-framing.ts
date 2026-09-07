@@ -110,6 +110,80 @@ export function rafterSpacingPatch(next: RafterSpacingValue | 'auto'): { rafterS
   return { rafterSpacingIn: next === 'auto' ? undefined : next }
 }
 
+/** The MEP routing controls: each an enum key on the framing node; 'auto' REMOVES the key. */
+export const SERVICE_CONTROLS = [
+  {
+    key: 'wiringRoute',
+    label: 'Branch wiring',
+    options: [
+      ['attic', 'Attic'],
+      ['walls', 'Walls'],
+    ],
+    note: 'Auto: across the attic and down the walls on the top storey, bored through the studs below it.',
+  },
+  {
+    key: 'serviceEntrance',
+    label: 'Service entrance',
+    options: [
+      ['overhead', 'Overhead'],
+      ['underground', 'Underground'],
+    ],
+    note: 'Auto: an overhead drop from the pole at the lot line to a mast on the meter wall.',
+  },
+  {
+    key: 'panelSide',
+    label: 'Meter-main side',
+    options: [
+      ['left', 'Left'],
+      ['right', 'Right'],
+    ],
+    note: "Seen from the street. Auto: the garage's side wall, near the front.",
+  },
+  {
+    key: 'sewerSide',
+    label: 'Sewer to',
+    options: [
+      ['street', 'Street'],
+      ['rear', 'Rear'],
+    ],
+    note: 'Auto: under the house to the street.',
+  },
+  {
+    key: 'waterRoute',
+    label: 'Water supply',
+    options: [
+      ['attic', 'Attic'],
+      ['under-slab', 'Under slab'],
+      ['crawl', 'Crawl'],
+      ['walls', 'Walls'],
+    ],
+    note: 'Auto: the attic on a slab in the slab states (PEX), the crawl space on a raised floor.',
+  },
+  {
+    key: 'hvacSystem',
+    label: 'HVAC system',
+    options: [
+      ['heat-pump-split', 'Heat pump'],
+      ['ac-gas-furnace', 'AC + furnace'],
+      ['packaged', 'Packaged'],
+      ['mini-split', 'Mini-split'],
+    ],
+    note: 'Auto: a split heat pump in the South, AC over a gas furnace elsewhere.',
+  },
+] as const
+export type ServiceControlKey = (typeof SERVICE_CONTROLS)[number]['key']
+
+/** A service control's resolved value — absent means 'auto'. */
+export function serviceControlValue(node: Partial<Record<ServiceControlKey, string | undefined>>, key: ServiceControlKey): string {
+  const v = node[key]
+  return typeof v === 'string' && v !== '' ? v : 'auto'
+}
+
+/** Write patch for a service control — 'auto' REMOVES the key (byte parity). */
+export function serviceControlPatch(key: ServiceControlKey, next: string): Record<string, string | undefined> {
+  return { [key]: next === 'auto' ? undefined : next }
+}
+
 /** The post pad sizes the panel offers, inches square (the 24 in pad is the engine's default). */
 export const POST_PAD_OPTIONS = [16, 18, 20, 24] as const
 export type PostPadValue = (typeof POST_PAD_OPTIONS)[number]

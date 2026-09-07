@@ -56,6 +56,7 @@ import { buildFoundation } from '../engines/foundation'
 import { flagLinesetTradeCrossings, layoutHvac } from '../engines/hvac'
 import { lgsFrameWalls } from '../engines/lgs-wall-framing'
 import { layoutPlumbing, placeMeterSpot } from '../engines/plumbing'
+import { streetFrameFor } from '../engines/street'
 import {
   ceilingJoistBearingWarnings,
   detectUnframedRoofIntersections,
@@ -588,6 +589,12 @@ function computeLevelUncached(
   if (config.rafterSpacingIn !== undefined) spec = { ...spec, rafterSpacing: inches(config.rafterSpacingIn) }
   if (config.ridgeSize !== undefined) spec = { ...spec, ridgeSize: config.ridgeSize }
   if (config.ceilingJoistSize !== undefined) spec = { ...spec, ceilingJoistSize: config.ceilingJoistSize }
+  // the MEP routing choices — absent keys stay absent (each engine states
+  // its practice default on the label)
+  for (const key of ['wiringRoute', 'serviceEntrance', 'panelSide', 'sewerSide', 'waterRoute', 'hvacSystem'] as const) {
+    const v = config[key]
+    if (v !== undefined) spec = { ...spec, [key]: v }
+  }
   // 400 (fabrication) builds ON TOP of the code-sized pass — jurisdiction applies to both.
   if (config.detail !== '200') {
     spec = applyJurisdiction(spec, profile)
@@ -752,6 +759,30 @@ function computeLevelUncached(
       ? room
       : { ...room, boundaryWallIds: room.boundaryWallIds.filter((id) => activeWallIds.has(id)) },
   )
+  // Where the street is — from the site's street edge and the building's
+  // yaw, else the entry door, else plan up (engines/street.ts). Every
+  // service engine reads spec.street.
+  {
+    const buildingNode = myBuilding ? nodes[myBuilding] : undefined
+    const siteNode =
+      buildingNode && typeof buildingNode.parentId === 'string' ? nodes[buildingNode.parentId] : undefined
+    const ring = siteNode?.type === 'site' ? (siteNode.polygon as { points?: unknown } | undefined)?.points : undefined
+    const site =
+      Array.isArray(ring) && ring.length >= 3
+        ? {
+            points: ring as readonly (readonly [number, number])[],
+            frontEdge: typeof siteNode?.frontEdge === 'number' ? (siteNode.frontEdge as number) : undefined,
+          }
+        : null
+    const building = buildingNode
+      ? {
+          position: Array.isArray(buildingNode.position) ? (buildingNode.position as number[]) : [0, 0, 0],
+          rotation: Array.isArray(buildingNode.rotation) ? (buildingNode.rotation as number[]) : [0, 0, 0],
+        }
+      : null
+    const street = streetFrameFor({ site, building, walls: activeWalls, rooms: activeRooms })
+    if (street) spec = { ...spec, street }
+  }
 
   if (config.showWalls) {
     // Route walls as GROUPS so cross-wall fabrication (corner assemblies,
@@ -1384,7 +1415,10 @@ function computeLevelUncached(
   if (config.showElectrical) {
     // B13a: layout-level warnings (un-placeable R314.3(2)/R315.3 alarms)
     // surface with the level warnings — never a silent drop.
-    const derived = layoutElectrical(activeWalls, activeRooms, services, warnings, placedFixtures)
+    const derived = layoutElectrical(activeWalls, activeRooms, services, warnings, placedFixtures, {
+      street: spec.street,
+      panelSide: spec.panelSide,
+    })
     // Movable outlets (Q7): moved `bones:device` nodes override the derived
     // receptacle/switch spots — code-aware (RO snap-out, stud rule +
     // blocking, height clamps, spacing advisory). Unmoved nodes are ignored
@@ -1484,7 +1518,23 @@ function computeLevelUncached(
           'water-pipe bond (NEC 250.104) not modeled — no water service entry visible; bond the metal water line at its entry',
         )
       }
-      members.push(...routeWiring(electrical, activeWalls, { waterEntry, rooms: activeRooms }))
+      // branch circuits cross the attic on the top storey (the practice),
+      // the drilled planes below it or when asked; the service comes in
+      // overhead unless asked otherwise
+      const wiringRoute = spec.wiringRoute ?? (levels[levelIndex + 1] ? 'walls' : 'attic')
+      let eaveY = 0
+      for (const w of activeWalls) eaveY = Math.max(eaveY, w.height)
+      members.push(
+        ...routeWiring(electrical, activeWalls, {
+          waterEntry,
+          rooms: activeRooms,
+          route: wiringRoute,
+          serviceEntrance: spec.serviceEntrance ?? 'overhead',
+          street: spec.street,
+          groundY: gradeY,
+          eaveY,
+        }),
+      )
       // B12 round-3 F4 (the E6 honesty class): compute routes one LEVEL,
       // so every storey with a service chain mints its own GES — while a
       // dwelling service has ONE electrode system (NEC 250.53/250.58).
@@ -1628,7 +1678,11 @@ function computeLevelUncached(
         (f) => f.kind === 'disconnect' && typeof f.meta?.circuit === 'string',
       )
       if (panelFx && disconnects.length > 0) {
-        members.push(...routeWiring([panelFx, ...disconnects], activeWalls))
+        members.push(
+          ...routeWiring([panelFx, ...disconnects], activeWalls, {
+            route: spec.wiringRoute ?? (levels[levelIndex + 1] ? 'walls' : 'attic'),
+          }),
+        )
       }
     }
   }

@@ -820,11 +820,11 @@ G52 Roof framing: rafters plumb-cut (mitered) to the ridge board and to the
     hip commons open).
 G53 Electrical and plumbing routing reviewed against how houses are built:
     what runs through walls, what runs through the attic and drops into
-    the wall, what runs under the slab.
+    the wall, what runs under the slab (electrical done, S2; plumbing S3).
 G54 Sewer runs under the house to the street or the rear — a setting.
 G55 The electrical service drops in overhead from the pole or comes
     underground — a setting; the main panel is outside on the left or
-    right side, favouring the garage.
+    right side, favouring the garage (done, S2).
 G56 HVAC: real system styles and transitions, sized for the house; the
     ducts work; Manual J load calcs automated onto the plans.
 G57 Hot and cold water: under the slab where that is the practice (the
@@ -834,6 +834,56 @@ G58 The generation exposes the options: HVAC system and type, service
     entrance, sewer direction, water routing.
 
 ## Log (continued)
+
+- 2026-09-07: **Batch S2 — the street frame, the meter-main on a side
+  wall, wiring across the attic, the service drop from the pole (G53,
+  G55, part of G58).** The electrical review, against how a house is
+  built: the branch circuits were bored through the studs at 18 in on
+  every wall and hopped walls at the corners — a slab house's wiring runs
+  across the ATTIC and drops down each wall to the box; the panel stood on
+  the longest garage wall with the meter beside it on whatever exterior
+  face was nearest — the meter-main stands OUTSIDE on a SIDE wall near the
+  front, the garage's side, with the panel back-to-back inside; the
+  service was a lateral from the walls' bbox pushed out 4 m in whichever
+  direction happened to be nearest — no street, no pole. Now: a STREET
+  FRAME (engines/street.ts, `spec.street`) — the direction from the
+  building to the street and the setback to the lot line — from the
+  site's street edge (`frontEdge`, the lot plugin's OSM match; else the
+  most north-facing edge, the site plan's own fallback) turned into the
+  level frame by the building's yaw; without a site, the exterior wall
+  carrying the widest exterior door; without that, plan up. The
+  meter-main takes the side wall square to the street that bounds the
+  garage (else the side asked for, else the utility room's side, else the
+  longer), 1.5 m back from the street corner, clear of openings; the
+  panel sits back-to-back inside at the same bay. Branch circuits:
+  `wiringRoute` 'attic' (the default on a top storey — no level above) —
+  every hop between two different walls rises through the plates, crosses
+  the attic just above the tallest plate and drops down the target wall to
+  the box, labelled so; along one wall the run stays in the stud bays at
+  drill height; 'walls' keeps the drilled planes (and is the default on a
+  storey with one above). Service entrance: 'overhead' (the default) — a
+  2 in RMC mast from the meter base to a weatherhead 0.6 m over the eave
+  and never under 3.66 m over grade (NEC 230.24(B) / 230.28), a 35 ft
+  class-5 pole 0.6 m past the lot line along the street direction (6 ft in
+  the ground, the drop attaching ~24 ft up), one slanted triplex member
+  between; 'underground' — a pad-mount transformer at the lot line and a
+  lateral with 24 in of cover (NEC 300.5) rising into the meter base. The
+  legacy bbox lateral stands only when no street frame exists (site-less
+  scenes — byte parity), and the master baseline was RECAPTURED once (its
+  scene has doors, so the entry-door fallback now gives it a street). The
+  settings: `wiringRoute`, `serviceEntrance`, `panelSide`, `sewerSide`,
+  `waterRoute`, `hvacSystem` on the framing node (Auto removes the key),
+  the panel's Services block — the sewer, water and HVAC keys are wired to
+  the spec and the UI now and read by their engines in S3 / S4. Tests:
+  street +6, electrical +6 (side wall + back-to-back meter, the asked
+  side, attic legs above every plate, overhead mast / weatherhead / pole /
+  drop, the underground pad + lateral, legacy without a street); Bones
+  2143, editor typecheck clean. Honest gaps: the attic crossing is two
+  Manhattan legs at one plane — no joist-bay discipline, no home-run
+  bundling; the pole's height and attachment are the utility's numbers,
+  not a lookup; `service/place.ts` seeds service points without the
+  street (the auto spots there are the legacy ones until it reads the
+  spec).
 
 - 2026-09-07: **Batch S1 — the pier seats on its slab, the front guard
   comes out from the columns, rafters plumb-cut by shear, roof stock in

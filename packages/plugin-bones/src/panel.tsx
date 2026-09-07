@@ -39,6 +39,9 @@ import {
   roofStockValue,
   roofSystemPatch,
   roofSystemValue,
+  SERVICE_CONTROLS,
+  serviceControlPatch,
+  serviceControlValue,
   type ShedCeilingValue,
   POST_PAD_OPTIONS,
   postPadPatch,
@@ -248,6 +251,7 @@ function XraySection({
       <FramingRow framingNode={framingNode} />
 
       <RoofRow framingNode={framingNode} />
+      <ServicesRow framingNode={framingNode} />
 
       <div className="flex gap-2">
         <div className="flex-1">
@@ -609,6 +613,32 @@ function LumberSection() {
  * (pre-engineered gable trusses). Stick REMOVES the key, so an untouched
  * scene keeps persisting byte-identically (the framingSystem contract).
  */
+/**
+ * Services row — the MEP routing choices (wiring route, service entrance,
+ * meter-main side, sewer direction, water route, HVAC system). Auto REMOVES
+ * the key, so an untouched scene persists byte-identically.
+ */
+function ServicesRow({ framingNode }: { framingNode: FramingNode & { id: string } }) {
+  const write = (patch: Record<string, unknown>) =>
+    useScene.getState().updateNode(framingNode.id as AnyNodeId, patch as Partial<AnyNode> as never)
+  return (
+    <div className="flex flex-col gap-1 text-xs">
+      <span className="text-sidebar-foreground/60">Services</span>
+      {SERVICE_CONTROLS.map((c) => (
+        <div className="flex flex-col gap-1" key={c.key}>
+          <span className="text-sidebar-foreground/60">{c.label}</span>
+          <SegmentedControl
+            onChange={(v: string) => write(serviceControlPatch(c.key, v))}
+            options={[{ label: 'Auto', value: 'auto' }, ...c.options.map(([value, label]) => ({ label, value }))]}
+            value={serviceControlValue(framingNode, c.key)}
+          />
+          <span className="text-sidebar-foreground/50">{c.note}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function RoofRow({ framingNode }: { framingNode: FramingNode & { id: string } }) {
   const system = roofSystemValue(framingNode)
   const shedCeiling = shedCeilingValue(framingNode)

@@ -24,8 +24,16 @@ import type {
   ServicePointOverride,
   WallSlice,
 } from '../core/types'
+import type { StreetFrame } from '../core/spec'
 import { feet, inches } from '../core/units'
 import type { PlacedFixtureSlice } from '../core/wall-model'
+import { leftOfStreet, outwardNormal, rightOfStreet } from './street'
+
+/** What the service placements read besides the walls and rooms (compute threads spec.street / spec.panelSide). */
+export type ServicePlacementOptions = {
+  street?: StreetFrame
+  panelSide?: 'auto' | 'left' | 'right'
+}
 
 // ---- rule constants (data/electrical-rules.json) --------------------------
 
@@ -438,6 +446,7 @@ export function layoutElectrical(
    * slice plumbing consumes): sinks/tubs drive the 210.8(A)(7)/(9) GFCI
    * radius and pin the B14c counter runs + B14d basin receptacles. */
   placed: PlacedFixtureSlice[] = [],
+  placement: ServicePlacementOptions = {},
 ): Fixture[] {
   const fixtures: Fixture[] = []
   const wetRooms = rooms.filter((r) => GFCI_CATEGORIES.has(r.category))
@@ -783,11 +792,11 @@ export function layoutElectrical(
   }
 
   // ---- service panel ----
-  const panel = placePanel(walls, rooms, overrides?.panel)
+  const panel = placePanel(walls, rooms, overrides?.panel, placement)
   if (panel) fixtures.push(panel)
 
   // ---- electric meter: street → METER → panel is the standard chain ----
-  const meter = placeElectricMeter(walls, rooms, overrides?.electricMeter)
+  const meter = placeElectricMeter(walls, rooms, overrides?.electricMeter, placement)
   if (meter) fixtures.push(meter)
 
   // ---- outdoor receptacles: front + back WR GFCI (NEC 210.52(E), B14a) ----
@@ -862,9 +871,17 @@ function garageBounding(wall: WallSlice, rooms: RoomSlice[]): RoomSlice | undefi
 export function placePanelSpot(
   walls: WallSlice[],
   rooms: RoomSlice[],
+  placement: ServicePlacementOptions = {},
 ): { wall: WallSlice; u: number; heightAff: number } | null {
   const straight = walls.filter((w) => !w.curved && w.length > 0)
   if (straight.length === 0) return null
+  // With the street known: the meter-main stands OUTSIDE on a SIDE wall
+  // near the front — the garage's side when there is one, else the side
+  // asked for, else the utility room's side, else the longer side (Steve,
+  // 2026-09-07: "the main panel is to the outside usually on left or
+  // right side, favoring the garage"); the panel sits back-to-back inside.
+  const sideSpot = placement.street ? sideWallPanelSpot(straight, rooms, placement) : null
+  if (sideSpot) return sideSpot
 
   const longest = (candidates: WallSlice[]): WallSlice | undefined =>
     candidates.reduce<WallSlice | undefined>(
@@ -879,6 +896,56 @@ export function placePanelSpot(
   // panel — every homerun then started from inside the RO and never
   // reached its anchor. Mount in the widest door-free segment instead.
   return { wall, u: panelMountU(wall), heightAff: PANEL_AFF }
+}
+
+/** How far back from the front corner the meter-main stands on its side wall. */
+const PANEL_FROM_FRONT_CORNER = 1.5
+
+/**
+ * The side-wall spot (street known): exterior walls square to the street
+ * direction, scored — bounding the garage +100, on the asked side +50, on
+ * the laundry / utility side +20, longer +1/m — mounted 1.5 m back from the
+ * street-side corner, clear of openings. Null when no wall is square to the
+ * street (the legacy longest-wall rule then stands).
+ */
+function sideWallPanelSpot(
+  straight: WallSlice[],
+  rooms: RoomSlice[],
+  placement: ServicePlacementOptions,
+): { wall: WallSlice; u: number; heightAff: number } | null {
+  const street = placement.street
+  if (!street) return null
+  const dir = street.dir
+  const asked =
+    placement.panelSide === 'left'
+      ? leftOfStreet(dir)
+      : placement.panelSide === 'right'
+        ? rightOfStreet(dir)
+        : null
+  const utility = rooms.filter(
+    (r) => r.category === 'laundry' || /laundry|utility|mech/i.test(r.name ?? ''),
+  )
+  let best: { wall: WallSlice; score: number; n: readonly [number, number] } | null = null
+  for (const wall of straight) {
+    if (!wall.exterior) continue
+    const n = outwardNormal(wall, rooms, straight)
+    if (Math.abs(n[0] * dir[0] + n[1] * dir[1]) > 0.5) continue // a front or rear wall
+    let score = wall.length
+    if (garageBounding(wall, rooms)) score += 100
+    if (asked && n[0] * asked[0] + n[1] * asked[1] > 0.5) score += 50
+    if (utility.some((r) => r.boundaryWallIds.includes(wall.id))) score += 20
+    if (!best || score > best.score) best = { wall, score, n }
+  }
+  if (!best) return null
+  const { wall } = best
+  // the street-side end of the wall, then back from that corner
+  const startProj = wall.start[0] * dir[0] + wall.start[1] * dir[1]
+  const endProj = wall.end[0] * dir[0] + wall.end[1] * dir[1]
+  const frontAtStart = startProj >= endProj
+  let u = frontAtStart ? PANEL_FROM_FRONT_CORNER : wall.length - PANEL_FROM_FRONT_CORNER
+  u = Math.max(0.4, Math.min(wall.length - 0.4, u))
+  u = clearOfOpenings(wall, u, PANEL_AFF - 0.45, PANEL_AFF + 0.45)
+  return { wall, u, heightAff: PANEL_AFF }
 }
 
 /**
@@ -956,12 +1023,13 @@ function placePanel(
   walls: WallSlice[],
   rooms: RoomSlice[],
   override?: ServicePointOverride,
+  placement: ServicePlacementOptions = {},
 ): Fixture | null {
   // A service node is the authoritative spot; auto-placement only when absent.
   const forced = overrideWallPoint(walls, override)
   const spot = forced
     ? { wall: forced.wall, u: forced.u, heightAff: override?.heightAff ?? PANEL_AFF }
-    : placePanelSpot(walls, rooms)
+    : placePanelSpot(walls, rooms, placement)
   if (!spot) return null
   const { wall, u: mountU } = spot
 
@@ -999,12 +1067,15 @@ function placePanel(
 export function placeElectricMeterSpot(
   walls: WallSlice[],
   rooms: RoomSlice[],
+  placement: ServicePlacementOptions = {},
 ): { wall: WallSlice; u: number; heightAff: number } | null {
-  const panelSpot = placePanelSpot(walls, rooms)
+  const panelSpot = placePanelSpot(walls, rooms, placement)
   if (!panelSpot) return null
   let wall = panelSpot.wall
   let u = panelSpot.u
-  if (wall.exterior) {
+  if (wall.exterior && placement.street) {
+    // the meter-main outside, the panel back-to-back inside: same bay
+  } else if (wall.exterior) {
     // Beside the panel bay, not on top of it — the service conductors stay
     // short and the panel's working space stays clear.
     u =
@@ -1030,11 +1101,12 @@ function placeElectricMeter(
   walls: WallSlice[],
   rooms: RoomSlice[],
   override?: ServicePointOverride,
+  placement: ServicePlacementOptions = {},
 ): Fixture | null {
   const forced = overrideWallPoint(walls, override)
   const spot = forced
     ? { wall: forced.wall, u: forced.u, heightAff: override?.heightAff ?? METER_AFF }
-    : placeElectricMeterSpot(walls, rooms)
+    : placeElectricMeterSpot(walls, rooms, placement)
   if (!spot) return null
   // Exterior face = the opposite of the resolved interior face; an outdoor
   // zone names the outside directly when no indoor room resolves a side.
@@ -2545,7 +2617,12 @@ export function routeWiring(
   ): void => {
     const emit: SegmentEmitter = (a, b, note = '') =>
       emitWire(circuit, gauge, a, b, `${extraNote}${note}`, conductors)
-    if (emitWallPathWith(emit, graph, from, to, runY)) return
+    // Attic route (spec.wiringRoute 'attic'): a hop to ANOTHER wall goes up
+    // through the plates, across the attic and down the target wall — the
+    // way a top storey under a roof is wired; a hop along the same wall
+    // stays in the stud bays at drill height.
+    const attic = context.route === 'attic' && from.wall.id !== to.wall.id
+    if (!attic && emitWallPathWith(emit, graph, from, to, runY)) return
     // Disconnected wall islands: a bed-height run through open room air is
     // a physically impossible cable path (checklist E4) — a real pull
     // crosses through the CEILING/joist space: rise up the source wall
@@ -2558,7 +2635,9 @@ export function routeWiring(
     // hop crossed a 4m great room at bed height of ITS ceiling).
     let yCross = Math.max(from.wall.height, to.wall.height) + 0.05
     for (const w of walls) yCross = Math.max(yCross, w.height + 0.05)
-    const note = ' (ceiling crossing — no wall path)'
+    const note = attic
+      ? ' (attic run — up through the plates, across the attic, down the wall to the box)'
+      : ' (ceiling crossing — no wall path)'
     const seg = (p: readonly [number, number, number], q: readonly [number, number, number]) => {
       if (Math.hypot(q[0] - p[0], q[1] - p[1], q[2] - p[2]) < 0.01) return
       emitWire(circuit, gauge, p, q, `${extraNote}${note}`, conductors)
@@ -2871,6 +2950,22 @@ export type ServiceCableContext = {
   /** Room footprints for the rod-spot validity scan (round-3 F3 — a rod
    * must never land inside the house). */
   rooms?: readonly RoomSlice[]
+  /**
+   * Branch-circuit route (spec.wiringRoute): 'attic' — every hop between
+   * two different walls rises through the top plates, crosses the attic
+   * and drops down the target wall to the box (the practice on a top
+   * storey under a roof); 'walls' / absent — the drilled drill-height
+   * planes along the wall graph (the legacy planes, byte parity).
+   */
+  route?: 'attic' | 'walls'
+  /** The service entrance (spec.serviceEntrance) — read only with `street`. */
+  serviceEntrance?: 'overhead' | 'underground'
+  /** Where the street is (spec.street): the pole / transformer stands at the lot line along it. */
+  street?: StreetFrame
+  /** Level-local y of grade at the meter (compute's gradeY) — the pole and the lateral depth ride it. */
+  groundY?: number
+  /** The tallest wall's top — the mast's weatherhead clears it. */
+  eaveY?: number
 }
 
 /**
@@ -2994,14 +3089,110 @@ export function routeServiceCable(
   // margin, then the closest point on that ring to the meter (shared with
   // the B14 outdoor-receptacle front pick — one definition of "street").
   const [mx, my, mz] = meter.position
-  const street = streetEdgePoint(walls, [mx, mz])
-
-  // Underground lateral (Manhattan), then the riser up into the socket —
-  // sampled against the RO boxes (a meter dragged under full-height glazing
-  // gets a flag, never a silent crossing).
-  flagged([street[0], SERVICE_LATERAL_Y, street[1]], [mx, SERVICE_LATERAL_Y, street[1]], 'street lateral (NEC 300.5)')
-  flagged([mx, SERVICE_LATERAL_Y, street[1]], [mx, SERVICE_LATERAL_Y, mz], 'street lateral (NEC 300.5)')
-  flagged([mx, SERVICE_LATERAL_Y, mz], [mx, my, mz], 'riser to meter')
+  let street = streetEdgePoint(walls, [mx, mz])
+  if (context.street) {
+    // The street is KNOWN (spec.street): the utility's side of the lot line
+    // along the street direction, in front of the meter. Overhead: a mast
+    // on the meter wall to a weatherhead over the eave, the drop to a pole
+    // at the lot line (NEC 230.24 clearances, 230.28 mast). Underground: a
+    // lateral from a pad transformer at the lot line, 24 in of cover
+    // (NEC 300.5), rising into the meter base.
+    const dir = context.street.dir
+    let maxWall = Number.NEGATIVE_INFINITY
+    for (const w of walls) for (const p of [w.start, w.end]) maxWall = Math.max(maxWall, p[0] * dir[0] + p[1] * dir[1])
+    const meterProj = mx * dir[0] + mz * dir[1]
+    const lotLine = maxWall + context.street.setbackM
+    const ground = context.groundY ?? 0
+    const at = (proj: number): readonly [number, number] => [mx + dir[0] * (proj - meterProj), mz + dir[1] * (proj - meterProj)]
+    if ((context.serviceEntrance ?? 'overhead') === 'overhead') {
+      const pole = at(lotLine + 0.6)
+      street = [pole[0], pole[1]]
+      const weatherheadY = Math.max((context.eaveY ?? 3) + 0.6, ground + 3.66)
+      // the mast: 2 in rigid conduit from the meter base up the wall face
+      const mastLen = weatherheadY - my
+      members.push({
+        system: 'electrical',
+        role: 'pipe-run',
+        dims: [0.06, mastLen, 0.06],
+        length: mastLen,
+        position: [mx, my + mastLen / 2, mz],
+        rotation: [0, 0, 0],
+        material: 'steel',
+        sourceId: 'service-entrance',
+        label: `Service mast — 2" RMC from the meter base, weatherhead ${(weatherheadY - ground).toFixed(1)} m over grade (NEC 230.24(B) drop clearance, 230.28 mast; guy above the roof line if over 30 in — verify)`,
+      })
+      members.push({
+        system: 'electrical',
+        role: 'equipment',
+        dims: [0.12, 0.16, 0.12],
+        length: 0.16,
+        position: [mx, weatherheadY + 0.08, mz],
+        rotation: [0, 0, 0],
+        material: 'steel',
+        sourceId: 'service-entrance',
+        label: 'Weatherhead + drip loop — service point (NEC 230.54)',
+      })
+      // the pole: 35 ft class 5, 6 ft in the ground; the drop attaches ~24 ft up
+      const poleH = 10.7
+      const poleBuried = 1.8
+      const attachY = ground + 7.3
+      members.push({
+        system: 'electrical',
+        role: 'post',
+        dims: [0.3, poleH, 0.3],
+        length: poleH,
+        position: [pole[0], ground - poleBuried + poleH / 2, pole[1]],
+        rotation: [0, 0, 0],
+        material: 'pt-lumber',
+        sourceId: 'service-entrance',
+        label: "Utility pole — 35 ft class 5 at the lot line (the utility's; the drop attaches ~24 ft up) — verify with the utility",
+      })
+      // the drop: triplex from the pole attachment to the weatherhead
+      const ddx = mx - pole[0]
+      const ddz = mz - pole[1]
+      const ddy = weatherheadY - attachY
+      const plan = Math.hypot(ddx, ddz)
+      const dropLen = Math.hypot(plan, ddy)
+      members.push({
+        system: 'electrical',
+        role: 'wire-run',
+        dims: [dropLen, 0.03, 0.03],
+        length: dropLen,
+        position: [(mx + pole[0]) / 2, (weatherheadY + attachY) / 2, (mz + pole[1]) / 2],
+        rotation: [0, Math.atan2(-ddz, ddx), Math.atan2(ddy, plan)],
+        material: 'copper',
+        sourceId: 'service-entrance',
+        label: `Service drop — triplex 1/0 AL, ${dropLen.toFixed(1)} m pole to weatherhead (the utility's; NEC 230.24 clearances over grade / driveway — verify)`,
+      })
+      // meter base → the mast is the riser: nothing more to draw between them
+    } else {
+      const pad = at(lotLine + 0.3)
+      street = [pad[0], pad[1]]
+      const depth = ground - 0.6
+      members.push({
+        system: 'electrical',
+        role: 'equipment',
+        dims: [1.2, 1.0, 1.0],
+        length: 1.2,
+        position: [pad[0], ground + 0.5, pad[1]],
+        rotation: [0, Math.atan2(-dir[1], dir[0]), 0],
+        material: 'steel',
+        sourceId: 'service-entrance',
+        label: "Pad-mount transformer at the lot line (the utility's) — service lateral origin",
+      })
+      flagged([pad[0], ground + 0.5, pad[1]], [pad[0], depth, pad[1]], 'service lateral — underground, 24 in cover (NEC 300.5)')
+      flagged([pad[0], depth, pad[1]], [mx, depth, pad[1]], 'service lateral — underground, 24 in cover (NEC 300.5)')
+      flagged([mx, depth, pad[1]], [mx, depth, mz], 'service lateral — underground, 24 in cover (NEC 300.5)')
+      flagged([mx, depth, mz], [mx, my, mz], 'riser to meter base (NEC 300.5(D) protection)')
+    }
+  } else {
+    // Underground lateral (Manhattan), then the riser up into the socket —
+    // sampled against the RO boxes (a meter dragged under full-height glazing
+    // gets a flag, never a silent crossing).
+    flagged([street[0], SERVICE_LATERAL_Y, street[1]], [mx, SERVICE_LATERAL_Y, street[1]], 'street lateral (NEC 300.5)')
+    flagged([mx, SERVICE_LATERAL_Y, street[1]], [mx, SERVICE_LATERAL_Y, mz], 'street lateral (NEC 300.5)')
+    flagged([mx, SERVICE_LATERAL_Y, mz], [mx, my, mz], 'riser to meter')
+  }
 
   // Meter → panel feed (NEC 230.66/230.70): socket → wall centerline, down
   // the stud bay to the service plane, wall-graph legs (RO detours + junction

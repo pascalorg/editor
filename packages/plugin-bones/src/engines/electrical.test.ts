@@ -1038,3 +1038,126 @@ describe('wall-graph junctions snap out of door ROs (round-6 pin)', () => {
     }
   })
 })
+
+
+describe('services with the street known (G53/G55): the meter-main on a side wall near the front, wiring across the attic, the drop from the pole', () => {
+  // a 10 × 8 m house, the street to the south (+z); the garage on the east
+  const street = { dir: [0, 1] as const, setbackM: 8, source: 'site' as const }
+  const front = makeWall({ id: 'wall_front', start: [0, 8], end: [10, 8], exterior: true })
+  const right = makeWall({ id: 'wall_right', start: [10, 8], end: [10, 0], exterior: true })
+  const back = makeWall({ id: 'wall_back', start: [10, 0], end: [0, 0], exterior: true })
+  const left = makeWall({ id: 'wall_left', start: [0, 0], end: [0, 8], exterior: true })
+  const divider = makeWall({ id: 'wall_div', start: [6, 0], end: [6, 8] })
+  const garage = room(
+    'garage',
+    [
+      [6, 0],
+      [10, 0],
+      [10, 8],
+      [6, 8],
+    ],
+    { boundaryWallIds: ['wall_right', 'wall_div', 'wall_front', 'wall_back'] },
+  )
+  const living = room(
+    'living',
+    [
+      [0, 0],
+      [6, 0],
+      [6, 8],
+      [0, 8],
+    ],
+    { boundaryWallIds: ['wall_left', 'wall_div', 'wall_front', 'wall_back'] },
+  )
+  const walls = [front, right, back, left, divider]
+  const rooms = [garage, living]
+
+  test("the meter-main takes the garage's side wall, 1.5 m back from the street corner; the panel sits back-to-back inside", () => {
+    const fixtures = layoutElectrical(walls, rooms, undefined, undefined, [], { street })
+    const panel = ofKind(fixtures, 'panel')[0] as Fixture
+    const meter = ofKind(fixtures, 'electric-meter')[0] as Fixture
+    expect(panel.sourceId).toBe('wall_right')
+    expect(meter.sourceId).toBe('wall_right')
+    // the street corner of the right wall is its start (z = 8): 1.5 m back → z = 6.5
+    expect(panel.position[2]).toBeCloseTo(6.5, 6)
+    expect(meter.position[2]).toBeCloseTo(6.5, 6)
+    // the panel inside the garage (x < 10), the meter outside (x > 10)
+    expect(panel.position[0]).toBeLessThan(10)
+    expect(meter.position[0]).toBeGreaterThan(10)
+  })
+
+  test('asked for the left side, the meter-main goes to the left wall even with a garage on the right', () => {
+    const fixtures = layoutElectrical(walls, rooms, undefined, undefined, [], { street, panelSide: 'left' })
+    // +50 for the asked side loses to +100 for the garage — the garage wins; a house
+    // without a garage follows the ask
+    expect(ofKind(fixtures, 'panel')[0]?.sourceId).toBe('wall_right')
+    const noGarage = layoutElectrical([front, right, back, left], [{ ...living, polygon: [[0, 0], [10, 0], [10, 8], [0, 8]] }], undefined, undefined, [], { street, panelSide: 'left' })
+    expect(ofKind(noGarage, 'panel')[0]?.sourceId).toBe('wall_left')
+  })
+
+  test("attic route: every hop between two walls rises above the plates; a hop along one wall stays at drill height", () => {
+    const fixtures = layoutElectrical(walls, rooms, undefined, undefined, [], { street })
+    const members = routeWiring(fixtures, walls, { route: 'attic', street, serviceEntrance: 'underground' })
+    const wires = members.filter((m) => m.role === 'wire-run' && m.sourceId !== 'service-entrance')
+    expect(wires.length).toBeGreaterThan(10)
+    const attic = wires.filter((m) => m.label?.includes('attic run'))
+    expect(attic.length).toBeGreaterThan(0)
+    const top = Math.max(...walls.map((w) => w.height))
+    // the horizontal attic legs run above every wall
+    for (const m of attic) {
+      const horizontal = m.dims[0] > m.dims[1]
+      if (horizontal) expect(m.position[1]).toBeGreaterThan(top)
+    }
+    // no attic-labelled leg with 'walls'
+    const drilled = routeWiring(fixtures, walls, { route: 'walls', street, serviceEntrance: 'underground' })
+    expect(drilled.filter((m) => m.label?.includes('attic run'))).toHaveLength(0)
+  })
+
+  test('overhead service: a mast on the meter wall, a weatherhead over the eave, a pole at the lot line and the drop between', () => {
+    const fixtures = layoutElectrical(walls, rooms, undefined, undefined, [], { street })
+    const members = routeWiring(fixtures, walls, { route: 'attic', street, serviceEntrance: 'overhead', groundY: -0.3, eaveY: 2.7 })
+    const mast = members.find((m) => m.label?.startsWith('Service mast'))!
+    const head = members.find((m) => m.label?.startsWith('Weatherhead'))!
+    const pole = members.find((m) => m.label?.startsWith('Utility pole'))!
+    const drop = members.find((m) => m.label?.startsWith('Service drop'))!
+    expect(mast).toBeDefined()
+    expect(head).toBeDefined()
+    expect(pole).toBeDefined()
+    expect(drop).toBeDefined()
+    // the weatherhead clears the eave by 0.6 m and stands ≥ 3.66 m over grade
+    const headBottom = head.position[1] - head.dims[1] / 2
+    expect(headBottom).toBeGreaterThanOrEqual(2.7 + 0.6 - 1e-9)
+    expect(headBottom - -0.3).toBeGreaterThanOrEqual(3.66 - 1e-9)
+    // the pole stands 0.6 m past the lot line: walls reach z = 8, setback 8 → lot line z = 16
+    expect(pole.position[2]).toBeCloseTo(16.6, 6)
+    expect(pole.role).toBe('post')
+    // the drop is one slanted member from the pole attachment to the weatherhead
+    expect(drop.length).toBeGreaterThan(8)
+    expect(members.filter((m) => m.label?.includes('street lateral'))).toHaveLength(0)
+  })
+
+  test('underground service: a pad transformer at the lot line and a lateral 24 in under grade to the meter base', () => {
+    const fixtures = layoutElectrical(walls, rooms, undefined, undefined, [], { street })
+    const members = routeWiring(fixtures, walls, { route: 'walls', street, serviceEntrance: 'underground', groundY: -0.3 })
+    const pad = members.find((m) => m.label?.startsWith('Pad-mount transformer'))!
+    expect(pad).toBeDefined()
+    expect(pad.position[2]).toBeCloseTo(16.3, 6)
+    const laterals = members.filter((m) => m.label?.includes('underground, 24 in cover'))
+    // the pad stands straight out from the meter, so one Manhattan leg is zero-length
+    expect(laterals.length).toBeGreaterThanOrEqual(2)
+    for (const m of laterals) {
+      const horizontal = m.dims[0] > m.dims[1]
+      if (horizontal) expect(m.position[1]).toBeCloseTo(-0.3 - 0.6, 6)
+    }
+    expect(members.find((m) => m.label?.startsWith('Utility pole'))).toBeUndefined()
+  })
+
+  test('no street: the legacy longest-wall panel and bbox lateral stand (byte parity)', () => {
+    const fixtures = layoutElectrical(walls, rooms)
+    const panel = ofKind(fixtures, 'panel')[0] as Fixture
+    // the garage's longest wall by the legacy rule (the 8 m right / divider walls tie at 8; front/back bound it too)
+    expect(garage.boundaryWallIds).toContain(panel.sourceId)
+    const members = routeWiring(fixtures, walls)
+    expect(members.some((m) => m.label?.includes('street lateral (NEC 300.5)'))).toBe(true)
+    expect(members.find((m) => m.label?.startsWith('Utility pole'))).toBeUndefined()
+  })
+})

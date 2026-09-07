@@ -271,6 +271,17 @@ export const FramingNode = BaseNode.extend({
   rafterSpacingIn: z.union([z.literal(12), z.literal(16), z.literal(24)]).optional(),
   ridgeSize: z.enum(['2x6', '2x8', '2x10', '2x12']).optional(),
   ceilingJoistSize: z.enum(['2x6', '2x8', '2x10', '2x12']).optional(),
+  /**
+   * MEP routing choices (see FramingSpec — each OPTIONAL with NO zod
+   * default; absent = the practice default the engine states, and round-
+   * trips absent).
+   */
+  wiringRoute: z.enum(['attic', 'walls']).optional(),
+  serviceEntrance: z.enum(['overhead', 'underground']).optional(),
+  panelSide: z.enum(['auto', 'left', 'right']).optional(),
+  sewerSide: z.enum(['street', 'rear']).optional(),
+  waterRoute: z.enum(['attic', 'under-slab', 'crawl', 'walls']).optional(),
+  hvacSystem: z.enum(['heat-pump-split', 'ac-gas-furnace', 'packaged', 'mini-split']).optional(),
 }).describe(
   `Bones framing config (engineering X-ray) — one per level.
   - jurisdiction: US state code ('CA'), 'INTL', or 'AUTO' (guessed from the browser locale/timezone)

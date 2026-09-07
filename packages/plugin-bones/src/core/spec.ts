@@ -354,6 +354,53 @@ export type FramingSpec = {
    * `rafterSize` / `rafterSpacing` / `ceilingJoistSize`.
    */
   ridgeSize?: LumberSize
+  /**
+   * Where the street is, in the level's own plan frame (engines/street.ts):
+   * from the site's street-side lot edge and the building's yaw when there
+   * is a site, else the wall carrying the entry door, else plan up. Every
+   * service engine reads it — the meter-main on a SIDE wall near the
+   * front, the sewer to the street or the rear, the service drop from the
+   * pole at the lot line. ABSENT means no street is known and the legacy
+   * bbox proxy stands (byte parity for site-less scenes).
+   */
+  street?: StreetFrame
+  /**
+   * The MEP routing choices (Steve, 2026-09-07: "review your electrical and
+   * plumbing … is that common as shown? sewage should run under the house
+   * from the street or rear as a setting, and the electrical line and pole
+   * should drop in or be below … electrical typically runs through the
+   * attic then down into the wall … hot and cold water … under the slab
+   * typically? or is that CA only? … provide the options to the user").
+   * Each ABSENT means the practice default the engine states on its labels.
+   */
+  /** Branch circuits: across the attic and down the walls (top storey under a
+   * roof — the practice), or bored through the studs (the legacy planes). */
+  wiringRoute?: 'attic' | 'walls'
+  /** Service entrance: an overhead drop from a pole at the lot line to a mast
+   * on the meter wall, or an underground lateral from a pad transformer. */
+  serviceEntrance?: 'overhead' | 'underground'
+  /** Which SIDE wall (seen from the street) takes the meter-main; auto
+   * favours the garage's side. */
+  panelSide?: 'auto' | 'left' | 'right'
+  /** The building drain leaves toward the street or the rear (alley). */
+  sewerSide?: 'street' | 'rear'
+  /** Hot / cold supply: through the attic (PEX, the slab states' practice),
+   * under the slab (older CA / AZ copper), in the crawl space, or in the
+   * walls. */
+  waterRoute?: 'attic' | 'under-slab' | 'crawl' | 'walls'
+  /** The HVAC system the plan is built around. */
+  hvacSystem?: 'heat-pump-split' | 'ac-gas-furnace' | 'packaged' | 'mini-split'
+}
+
+/**
+ * The street in the level's plan frame: `dir` points FROM the building
+ * TOWARD the street (unit), `setbackM` is the distance from the walls'
+ * street-side extent to the lot line, `source` says where it came from.
+ */
+export type StreetFrame = {
+  dir: readonly [number, number]
+  setbackM: number
+  source: 'site' | 'entry-door' | 'plan-up'
 }
 
 export const DEFAULT_SPEC: FramingSpec = {
