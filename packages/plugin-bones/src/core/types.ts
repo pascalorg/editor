@@ -360,6 +360,10 @@ export type WallSlice = {
    * the host wall carries no assembly. Only 'wood'/'lgs' feed `studSizeFor`;
    * CMU/ICF cores are framed by their own engines. */
   framingKind?: 'wood' | 'lgs' | 'cmu' | 'icf'
+  /** `assembly.exterior.finish` — the cladding the architect drew ('siding',
+   * 'stucco', 'brick', 'stone', 'fiber-cement', 'none'). Absent without an
+   * assembly; the wall-layers engine then falls back to the state default. */
+  exteriorFinish?: string
   /** True when either face is marked exterior (or unknown-but-boundary). */
   exterior: boolean
   openings: OpeningSlice[]

@@ -66,6 +66,17 @@ const DATA = assemblies as unknown as Assemblies
  * resolved WallOverride object (framing/compute.ts hands the same map to
  * frameWalls, so both engines read one truth).
  */
+/**
+ * `WallSlice.exteriorFinish` (the assembly's `exterior.finish`) → the data's
+ * cladding family. Stone has no family in the data and keeps the default.
+ */
+const ASSEMBLY_FINISH_FAMILY: Record<string, string> = {
+  siding: 'wood',
+  'fiber-cement': 'fiberCement',
+  stucco: 'stucco',
+  brick: 'brickVeneer',
+}
+
 export type WallLayerOverride = WallFramingOverride & {
   insulation?: 'none' | 'batt' | 'blown' | 'spray-foam'
   insulationR?: number
@@ -278,6 +289,12 @@ export function layoutWallLayers(
 
   const state = stateCode
   const defaultCladdingKey = DATA.exterior.defaultCladdingByState[state] ?? 'vinyl'
+  /** The data's family for a finish the wall's assembly declares — a lap-sided
+   * house in Florida is clad in siding, not in the state's stucco default. */
+  const assemblyFamily = (wall: WallSlice): string | undefined => {
+    const key = wall.exteriorFinish ? ASSEMBLY_FINISH_FAMILY[wall.exteriorFinish] : undefined
+    return key && DATA.exterior.claddings[key] ? key : undefined
+  }
   const { label: zone, key: zoneKey } = climateZoneOf(state)
   const rValue = zoneKey ? DATA.exterior.insulationByClimateZone?.[zoneKey]?.value : undefined
 
@@ -300,7 +317,7 @@ export function layoutWallLayers(
     const claddingKey =
       override?.cladding && DATA.exterior.claddings[override.cladding]
         ? override.cladding
-        : defaultCladdingKey
+        : (assemblyFamily(wall) ?? defaultCladdingKey)
     const cladding = DATA.exterior.claddings[claddingKey] ?? DATA.exterior.claddings.vinyl
     const inset = runInsets(wall, walls)
     const extSide = exteriorSide(wall, rooms, slabs)

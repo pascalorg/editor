@@ -186,6 +186,35 @@ describe('layoutWallLayers', () => {
  * double-WRB rule), other walls keep the state default, and an override-less
  * call stays byte-equal to today.
  */
+describe('layoutWallLayers — the assembly the architect drew', () => {
+  test('a lap-sided wall in Florida is clad in wood siding with one WRB, not the state stucco', () => {
+    const layers = layoutWallLayers([wall({ exteriorFinish: 'siding' })], [roomAbove], spec400, 'FL')
+    const cladding = layers.find((m) => m.role === 'cladding')
+    expect(cladding?.label?.toLowerCase()).not.toContain('cement plaster')
+    expect(cladding?.label?.toLowerCase()).toMatch(/wood|siding/)
+    expect(layers.filter((m) => m.role === 'wrb')).toHaveLength(1)
+  })
+
+  test('a stucco assembly in a vinyl state is stucco; a finish the data has no family for keeps the default', () => {
+    const stucco = layoutWallLayers([wall({ exteriorFinish: 'stucco' })], [roomAbove], spec400, 'NY')
+    expect(stucco.find((m) => m.role === 'cladding')?.label?.toLowerCase()).toContain('cement plaster')
+    const stone = layoutWallLayers([wall({ exteriorFinish: 'stone' })], [roomAbove], spec400, 'NY')
+    expect(stone.find((m) => m.role === 'cladding')?.label?.toLowerCase()).toContain('vinyl')
+  })
+
+  test('the per-wall override still wins over the assembly', () => {
+    const layers = layoutWallLayers(
+      [wall({ exteriorFinish: 'siding' })],
+      [roomAbove],
+      spec400,
+      'FL',
+      [],
+      new Map([['wall_L', { cladding: 'stucco' }]]),
+    )
+    expect(layers.find((m) => m.role === 'cladding')?.label?.toLowerCase()).toContain('cement plaster')
+  })
+})
+
 describe('layoutWallLayers — per-wall cladding override', () => {
   test('stucco override on one wall: cement plaster + doubled WRB there only', () => {
     const wallB = wall({ id: 'wall_B', start: [0, 8], end: [6, 8] })

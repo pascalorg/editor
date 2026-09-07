@@ -142,30 +142,52 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
     })
   })
 
-  // A4.0 — the four exterior elevations, 2 × 2.
-  const cellW = (FRAME.w - GAP) / 2
-  const cellH = (FRAME.h - 0.8 - GAP) / 2
-  const elevationScale = fitScale(
-    Math.max(buildingW, buildingH) * 1.1,
-    6,
-    cellW,
-    cellH,
+  // A4.0–A4.3 — one exterior elevation per sheet, the whole frame, fitted
+  // to the whole building (porches, decks and the roof's overhang included)
+  // and centred by the window — 1/4" where it fits, smaller where the house
+  // is long or tall (Steve: "maybe one elevation per sheet, ensure it
+  // always fits correctly or scales down if the house is massive").
+  const envelope = buildingEnvelope(nodes)
+  const fieldH = FRAME.h - 0.6
+  ;(['north', 'east', 'south', 'west'] as const).forEach((direction, i) => {
+    const across = direction === 'north' || direction === 'south' ? envelope.width : envelope.depth
+    // 1/4" = 1'-0" is the residential elevation scale, the same as the plan:
+    // taken whenever it fits the frame, and only stepped down when the house
+    // is too long or too tall for it (`fitScale` returns the largest preset
+    // that fits, so anything at or above 1/4" means 1/4" fits).
+    const fittedElevation = fitScale(
+      across + VIEW_MARGIN_W,
+      envelope.height + VIEW_MARGIN_H,
+      FRAME.w,
+      fieldH,
+      ARCH_SCALES,
+    )
+    out.push({
+      number: `A4.${i}`,
+      title: `${direction.charAt(0).toUpperCase()}${direction.slice(1)} elevation`,
+      viewports: [
+        {
+          kind: 'elevation' as const,
+          direction,
+          title: `${direction.toUpperCase()} elevation`,
+          scale: fittedElevation,
+          x: FRAME.x,
+          y: FRAME.y + 0.4,
+          w: FRAME.w,
+          h: fieldH,
+        },
+      ],
+    })
+  })
+  // The sections are fitted the same way, at the box they get on A5.0.
+  const fittedSection = fitScale(
+    Math.max(envelope.width, envelope.depth) + VIEW_MARGIN_W,
+    envelope.height + VIEW_MARGIN_H,
+    FRAME.w * 0.6,
+    (FRAME.h - 0.6) / 2 - GAP,
     ARCH_SCALES,
   )
-  out.push({
-    number: 'A4.0',
-    title: 'Exterior elevations',
-    viewports: (['north', 'east', 'south', 'west'] as const).map((direction, i) => ({
-      kind: 'elevation' as const,
-      direction,
-      title: `${direction.toUpperCase()} elevation`,
-      scale: elevationScale,
-      x: FRAME.x + (i % 2) * (cellW + GAP),
-      y: FRAME.y + 0.4 + Math.floor(i / 2) * (cellH + GAP),
-      w: cellW,
-      h: cellH,
-    })),
-  })
+  const elevationScale = fittedSection
 
   // A3.0 — roof plan. NOT A2.1: A2.x is one number per level, so a roof plan
   // parked at A2.1 collides with the second storey's floor plan the moment a
@@ -658,6 +680,115 @@ const GENERAL_NOTES = [
 function extent(values: number[]): number {
   if (values.length === 0) return 0
   return Math.max(...values) - Math.min(...values)
+}
+
+/**
+ * What the elevation / section builders draw beyond the geometry: the datum
+ * labels to the right (2.6 m), the GRADE label to the left (1.6 m), and the
+ * finish key under the grade line with the crawl space and footing below it.
+ * Sheet metres, added to the building's own extent before a scale is picked.
+ */
+const VIEW_MARGIN_W = 4.4
+const VIEW_MARGIN_H = 2.4
+
+export type BuildingEnvelope = {
+  /** Plan extent along level x, metres — porches, decks, posts and the roof's overhang included. */
+  width: number
+  /** Plan extent along level z. */
+  depth: number
+  /** From 1.5 m under the lowest level (the crawl space and footing a section shows) to the highest ridge. */
+  height: number
+}
+
+/**
+ * The whole building as an elevation sees it, in level-local plan metres:
+ * every wall, slab (the porch, the deck), post and roof segment with its
+ * overhang; the height from the footing to the highest ridge (the segment's
+ * plate plus its rise from the pitch). The wall footprint alone left the
+ * porch running off the paper (Steve, 2026-09-07).
+ */
+export function buildingEnvelope(nodes: NodeMap): BuildingEnvelope {
+  let minX = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  let top = Number.NEGATIVE_INFINITY
+  let bottom = Number.POSITIVE_INFINITY
+  const take = (x: number, z: number) => {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return
+    minX = Math.min(minX, x)
+    maxX = Math.max(maxX, x)
+    minZ = Math.min(minZ, z)
+    maxZ = Math.max(maxZ, z)
+  }
+  const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback)
+  const levelBase = (levelId: unknown): number => {
+    const level = typeof levelId === 'string' ? nodes[levelId] : undefined
+    return level?.type === 'level' ? num(level.baseElevation) : 0
+  }
+  for (const node of Object.values(nodes)) {
+    if (!node || node.visible === false) continue
+    switch (node.type) {
+      case 'level': {
+        const base = num(node.baseElevation)
+        bottom = Math.min(bottom, base)
+        top = Math.max(top, base + num(node.height, 2.7))
+        break
+      }
+      case 'wall': {
+        for (const key of ['start', 'end'] as const) {
+          const p = node[key]
+          if (Array.isArray(p)) take(num(p[0]), num(p[1]))
+        }
+        break
+      }
+      case 'slab': {
+        const polygon = Array.isArray(node.polygon) ? (node.polygon as unknown[]) : []
+        for (const p of polygon) if (Array.isArray(p)) take(num(p[0]), num(p[1]))
+        break
+      }
+      case 'column': {
+        const p = Array.isArray(node.position) ? (node.position as unknown[]) : null
+        if (!p) break
+        const half = Math.max(num(node.width, 0.14), num(node.depth, 0.14), num(node.radius) * 2) / 2
+        take(num(p[0]) - half, num(p[2]) - half)
+        take(num(p[0]) + half, num(p[2]) + half)
+        break
+      }
+      case 'roof-segment': {
+        const roof = typeof node.parentId === 'string' ? nodes[node.parentId] : undefined
+        const roofPos = Array.isArray(roof?.position) ? (roof.position as unknown[]) : [0, 0, 0]
+        const roofYaw = num(roof?.rotation)
+        const p = Array.isArray(node.position) ? (node.position as unknown[]) : [0, 0, 0]
+        const yaw = roofYaw + num(node.rotation)
+        const overhang = num(node.overhang)
+        const hw = num(node.width) / 2 + overhang
+        const hd = num(node.depth) / 2 + overhang
+        // segment centre in the level frame: the roof node's own turn applies first
+        const cx = num(roofPos[0]) + num(p[0]) * Math.cos(roofYaw) + num(p[2]) * Math.sin(roofYaw)
+        const cz = num(roofPos[2]) - num(p[0]) * Math.sin(roofYaw) + num(p[2]) * Math.cos(roofYaw)
+        for (const [lx, lz] of [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]] as const) {
+          take(cx + lx * Math.cos(yaw) + lz * Math.sin(yaw), cz - lx * Math.sin(yaw) + lz * Math.cos(yaw))
+        }
+        // the ridge: the plate band plus the rise over half the depth (a
+        // shed rises over its whole depth; a flat roof does not rise)
+        const pitch = (num(node.pitch) * Math.PI) / 180
+        const run = node.roofType === 'flat' ? 0 : node.roofType === 'shed' ? num(node.depth) : num(node.depth) / 2
+        const rise = Math.tan(pitch) * run
+        top = Math.max(
+          top,
+          levelBase(roof?.parentId) + num(roofPos[1]) + num(p[1]) + num(node.wallHeight) + rise + num(node.deckThickness),
+        )
+        break
+      }
+      default:
+        break
+    }
+  }
+  if (!Number.isFinite(minX)) return { width: 12, depth: 12, height: 8 }
+  if (!Number.isFinite(bottom)) bottom = 0
+  if (!Number.isFinite(top)) top = bottom + 6
+  return { width: maxX - minX, depth: maxZ - minZ, height: top - (bottom - 1.5) }
 }
 
 /**

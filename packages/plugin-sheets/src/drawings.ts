@@ -29,6 +29,7 @@ import { drawTable, SCHEDULE_LEGEND } from './draw-table'
 import type { AnyNodeLike, NodeMap } from './model'
 import { levelLabel, sheets } from './model'
 import { fireSeparationMarks } from './notes/fire-separation'
+import { sectionFraming } from './providers/section-framing'
 import { codeTagOf, resolveState, retagCode } from './notes/jurisdiction'
 import { scaleLabel, sheetInchesToWorld, worldToSheetInches } from './scale'
 import { adaptSchedule, buildSchedule, type ScheduleTable } from './schedule'
@@ -529,7 +530,7 @@ function resolvePlan(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
       acceptsNodeForDrawing(vp.layers, node.type, category, vp.drawingType),
   })
   const model = combine(entries.map((e) => e.model))
-  const rotationDeg = editor.resolveSheetRotationDeg(nodes as never, levelId as never)
+  const rotationDeg = sheetPlanRotationDeg(nodes, levelId)
   // the walls Table R302.1(1) rates carry their mark on the floor plan
   const marks =
     (vp.drawingType ?? 'floor-plan') === 'floor-plan' ? fireSeparationMarks(nodes, levelId, rotationDeg) : []
@@ -552,18 +553,63 @@ function resolvePlan(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
   }
 }
 
-/**
- * True north on the paper for a plan window: plan "up" (−z) is the level's
- * north when the site carries no rotation; the site's `northRotation`
- * (radians, clockwise from plan up) and the sheet's own plan rotation both
- * turn it. Also accounts for the building's yaw, which rotates the level frame
- * on the lot.
- */
-function northOnPaperDeg(nodes: NodeMap, sheetRotationDeg: number): number {
-  const north = northRotationOf(nodes)
+/** The first building's yaw on the lot, radians (three.js Y rotation). */
+function buildingYawRad(nodes: NodeMap): number {
   const building = Object.values(nodes).find((n) => n?.type === 'building')
-  const yaw = Array.isArray(building?.rotation) ? Number(building.rotation[1] ?? 0) : 0
-  const degrees = (north * 180) / Math.PI - (yaw * 180) / Math.PI + sheetRotationDeg
+  return Array.isArray(building?.rotation) ? Number(building.rotation[1] ?? 0) : 0
+}
+
+/**
+ * THE PLAN'S TURN ON THE PAPER.
+ *
+ * A plan is drawn north-up — but a house set square to a street that runs a
+ * couple of degrees off the survey grid would then print a couple of degrees
+ * off square, walls and dimension strings and all. So the north-up angle is
+ * SNAPPED to the nearest quarter turn: the building stands square on the
+ * paper and the north arrow carries the residual, which is what a drafter
+ * does by hand (Steve, 2026-09-07: "the north arrow should rotate not the
+ * house — the house should stay 90").
+ *
+ * Every plan of the same level takes this one number — the floor plan, the
+ * structural, electrical and plumbing plans — so the sheets agree with each
+ * other; before this the trade plans were drawn level-local at 0° while the
+ * floor plan turned by the full north-up angle.
+ */
+export function sheetPlanRotationDeg(nodes: NodeMap, levelId: string): number {
+  const exact = editor.resolveSheetRotationDeg(nodes as never, levelId as never)
+  return Number.isFinite(exact) ? Math.round(exact / 90) * 90 : 0
+}
+
+/**
+ * The turn the SITE plan takes, so the building stands square there too and
+ * the lot ring is the thing that tips. The site drawing is the level frame
+ * turned by the building's yaw, so the same paper orientation as the floor
+ * plan is `planRotation + yaw`; with the plan snapped, that is the residual
+ * the snap left over (2.2° for a house on a 2.2°-off street).
+ */
+export function sheetSiteRotationDeg(nodes: NodeMap): number {
+  const levelId = firstLevelId(nodes)
+  if (!levelId) return 0
+  return sheetPlanRotationDeg(nodes, levelId) + (buildingYawRad(nodes) * 180) / Math.PI
+}
+
+/**
+ * True north on the paper. Plan "up" (−z) is north when the site carries no
+ * rotation and the building none either; the site's `northRotation`
+ * (radians, clockwise from plan up), the BUILDING'S YAW (for a window drawn
+ * in the level's own frame — world north (0, −1) reads as (sin yaw, −cos yaw)
+ * there, i.e. yaw clockwise from up) and the window's own turn all add.
+ * A window drawn in the SITE frame ('site') takes no yaw term: its geometry
+ * is already on the lot.
+ */
+function northOnPaperDeg(
+  nodes: NodeMap,
+  sheetRotationDeg: number,
+  frame: 'level' | 'site' = 'level',
+): number {
+  const north = (northRotationOf(nodes) * 180) / Math.PI
+  const yaw = frame === 'level' ? (buildingYawRad(nodes) * 180) / Math.PI : 0
+  const degrees = north + yaw + sheetRotationDeg
   return ((degrees % 360) + 360) % 360
 }
 
@@ -613,6 +659,19 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
       scale: vp.scale,
     }
   }
+  // A building section shows the STRUCTURE too: Bones' members cut by the
+  // same plane, with a leader and a note on every family the cut passes
+  // through (Steve, 2026-09-07).
+  if (result && vp.kind === 'section' && result.primitives.length > 0) {
+    const framing = sectionFraming(nodes, vp.markerId, vp.levelId ?? firstLevelId(nodes), result.bounds)
+    if (framing.primitives.length > 0) {
+      result = {
+        ...result,
+        primitives: [...result.primitives, ...framing.primitives],
+        warnings: [...(result.warnings ?? []), ...framing.warnings],
+      }
+    }
+  }
   if (result) result = retagResult(result, nodes)
   const plate = result?.plate ?? []
   const warningPlate = warningsPlate(vp, result?.warnings ?? [])
@@ -631,11 +690,26 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
     }
   }
   const split = splitProvidedGeometry(result.primitives, vp.layers)
+  // The structural / electrical / plumbing plans are drawn in the level's own
+  // frame, like the floor plan, and take its turn; the site plan turns by the
+  // residual so the building stands square on the lot too; a section, an
+  // elevation or a plate is not a plan and never turns.
+  const levelFrame =
+    vp.kind === 'structural' || vp.kind === 'electrical' || vp.kind === 'plumbing'
+  const planLevelId = vp.levelId ?? firstLevelId(nodes)
+  const rotationDeg =
+    levelFrame && planLevelId
+      ? sheetPlanRotationDeg(nodes, planLevelId)
+      : vp.kind === 'site-plan'
+        ? sheetSiteRotationDeg(nodes)
+        : 0
+  // The corner block's needle turns with the window it sits beside.
+  const northNeedle = northRotationOf(nodes) + (rotationDeg * Math.PI) / 180
   const cornerPlate =
     vp.kind === 'site-plan' && vp.layers.siteUtilities
-      ? siteCornerBlocks(vp, nodes, northRotationOf(nodes))
+      ? siteCornerBlocks(vp, nodes, northNeedle)
       : vp.kind === 'site-plan'
-        ? siteCornerBlocks(vp, {}, northRotationOf(nodes))
+        ? siteCornerBlocks(vp, {}, northNeedle)
         : []
   return {
     plate: [...cornerPlate, ...plate, ...warningPlate],
@@ -644,16 +718,18 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
       annotations: combine(
         split.annotations.length > 0 ? [{ kind: 'group', children: split.annotations }] : [],
       ),
-      view: windowFor(vp, padBounds(result.bounds, 0.4), 0),
-      rotationDeg: 0,
+      view: windowFor(vp, padBounds(result.bounds, 0.4), rotationDeg),
+      rotationDeg,
     },
     title: resolvedTitle,
     scale: vp.scale,
     noLabel: result.noLabel,
     northDeg:
-      vp.kind === 'site-plan' || vp.kind === 'structural' || vp.kind === 'electrical' || vp.kind === 'plumbing'
-        ? northOnPaperDeg(nodes, 0)
-        : undefined,
+      vp.kind === 'site-plan'
+        ? northOnPaperDeg(nodes, rotationDeg, 'site')
+        : levelFrame
+          ? northOnPaperDeg(nodes, rotationDeg)
+          : undefined,
   }
 }
 

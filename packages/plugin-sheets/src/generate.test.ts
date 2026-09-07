@@ -59,12 +59,13 @@ describe('the default set', () => {
   test('A1.0 is the site plan with the fire separation table beside it', () => {
     const a1 = planDefaultSet(scene()).find((p) => p.number === 'A1.0')!
     expect(a1.viewports.map((v) => v.kind)).toEqual(['site-plan', 'general-notes'])
-    const [site, fire] = a1.viewports
-    expect(fire?.notesKey).toBe('fire-separation')
-    expect(fire?.levelId).toBeDefined()
+    const site = a1.viewports[0] as { x: number; w: number }
+    const fire = a1.viewports[1] as { x: number; w: number; notesKey?: string; levelId?: string }
+    expect(fire.notesKey).toBe('fire-separation')
+    expect(fire.levelId).toBeDefined()
     // the plan keeps two thirds of the field, the table the rest, nothing overlapping
-    expect(site!.x + site!.w).toBeLessThanOrEqual(fire!.x)
-    expect(fire!.x + fire!.w).toBeLessThanOrEqual(FRAME.x + FRAME.w + 1e-6)
+    expect(site.x + site.w).toBeLessThanOrEqual(fire.x)
+    expect(fire.x + fire.w).toBeLessThanOrEqual(FRAME.x + FRAME.w + 1e-6)
   })
 
   test('one floor-plan sheet per level', () => {
@@ -79,9 +80,17 @@ describe('the default set', () => {
     expect(view.pose).toBe('cover-front')
   })
 
-  test('A4.0 carries all four elevations', () => {
-    const elevations = planDefaultSet(scene()).find((p) => p.number === 'A4.0')!
-    expect(elevations.viewports.map((v) => v.direction)).toEqual(['north', 'east', 'south', 'west'])
+  test('A4.0–A4.3 carry one elevation each, north east south west, the whole frame', () => {
+    const plans = planDefaultSet(scene())
+    const sheets = ['A4.0', 'A4.1', 'A4.2', 'A4.3'].map((n) => plans.find((p) => p.number === n)!)
+    expect(sheets.map((s) => s.viewports.map((v) => v.direction))).toEqual([['north'], ['east'], ['south'], ['west']])
+    for (const sheet of sheets) {
+      const vp = sheet.viewports[0]!
+      expect(vp.kind).toBe('elevation')
+      expect(vp.w).toBeCloseTo(FRAME.w, 6)
+      expect(vp.x).toBeCloseTo(FRAME.x, 6)
+    }
+    expect(sheets.map((s) => s.title)).toEqual(['North elevation', 'East elevation', 'South elevation', 'West elevation'])
   })
 
   test('A5.0 plans the two default cuts when there are no markers', () => {

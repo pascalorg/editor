@@ -269,7 +269,7 @@ export type BuildingModel = {
   items: ItemSolid[]
   features: FeatureSolid[]
   levels: LevelInfo[]
-  /** World elevation of the ground at a plan point. */
+  /** Elevation of the ground at a plan point of the model, in the first building's own frame (its stand subtracted, its turn applied before the site is sampled). */
   gradeAt: (x: number, z: number) => number
   warnings: string[]
   /** The recorded roofing finish — null when no building carries the record. */
@@ -332,7 +332,9 @@ function collectFeatures(
         : 0
     const wx = (bp[0] ?? 0) + x * Math.cos(yaw) + z * Math.sin(yaw)
     const wz = (bp[2] ?? 0) - x * Math.sin(yaw) + z * Math.cos(yaw)
-    return gradeAt(wx, wz) - levelBase
+    // the ground in the building's own vertical frame: the terrain height
+    // less the building's stand (its y), then less the level's base
+    return gradeAt(wx, wz) - (bp[1] ?? 0) - levelBase
   }
   const box = (cx: number, cz: number, w: number, d: number, yaw: number): Vec2[] =>
     (
@@ -982,6 +984,26 @@ export function buildBuildingModel(nodes: Nodes): BuildingModel {
   const items = collectItems(nodes, elevations, warnings)
   const gradeAt = terrainSampler(nodes, warnings)
   const features = collectFeatures(nodes, elevations, warnings, gradeAt)
+  // The model is drawn in the FIRST building's own frame (walls, slabs,
+  // roofs are level-local), so the grade the drawings read is the terrain
+  // under that building, in that frame: a point (x, z) of the model is
+  // carried to the site by the building's stand and turn before the field
+  // is asked, and the height comes back less the building's y — a platform
+  // 18 in over the ground reads 18 in over its grade line.
+  const primary = Object.values(nodes).find((node) => node?.type === 'building') as
+    | { position?: number[]; rotation?: number[] | number }
+    | undefined
+  const bp = primary?.position ?? [0, 0, 0]
+  const yaw = Array.isArray(primary?.rotation)
+    ? (primary.rotation[1] ?? 0)
+    : typeof primary?.rotation === 'number'
+      ? primary.rotation
+      : 0
+  const gradeAtLocal = (x: number, z: number): number =>
+    gradeAt(
+      (bp[0] ?? 0) + x * Math.cos(yaw) + z * Math.sin(yaw),
+      (bp[2] ?? 0) - x * Math.sin(yaw) + z * Math.cos(yaw),
+    ) - (bp[1] ?? 0)
   const roofFinish = roofFinishOf(nodes)
   // The roofing the building records (the generator's palette — the finish
   // key's swatch) is what the roof prints in: a textured shingle preset's
@@ -994,7 +1016,7 @@ export function buildBuildingModel(nodes: Nodes): BuildingModel {
     items,
     features,
     levels,
-    gradeAt,
+    gradeAt: gradeAtLocal,
     warnings,
     roofFinish,
     trimHex: trimHexOf(nodes),

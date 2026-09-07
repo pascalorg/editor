@@ -704,7 +704,102 @@ G36 The sheets follow the plan: move the house or change the plan and every
 G37 A Florida address, the lot in, a house generated on it, the algorithm
     checked end to end (scripts/demo/generate-and-print.ts).
 
+## Mandate additions (Steve, 2026-09-07 — the printed set)
+
+Verbatim: "looking at the hosue on the plans its crooked, the north arrow should
+rotate not the house liek that, the hosue should stay 90, posts are going into
+the roof on elevations, upper gable is miscolored, house is cut off, maybe one
+elevation per sheet, ensure it always fits correctly or scales down if the house
+is massive or super tall, but a whole sheet and center it should work and
+schedules nicely done, building section s missing colros and framing and notes,
+and framing call outs and things liek that, the set in general is still having
+mistakes and very basic on elevations, ensure all the pascal systems come in
+clearly on this vector sections and elevations and are whats actually there,
+thanks!" — and of the 3D model: "fascia board is missing on this one i
+generated front porch fascia board left side, right side is working" … "wait it
+showed up on the fascia board on the rest, might have just been edge case!"
+
+G38 The house stays square on every plan: the north-up turn is snapped to a
+    quarter turn and the north arrow carries the residual; the site plan
+    turns the lot, not the house; every plan of a level (floor, structural,
+    electrical, plumbing) takes the same turn.
+G39 Elevations: one per sheet (A4.0–A4.3), the whole building fitted to the
+    frame and centred, scaled down only when the house is too long or tall;
+    drawn square to the building's own faces and named by the world
+    direction they look at; posts stop at the beam they carry; the gable
+    end clad like the walls.
+G40 Building sections show the structure: Bones' members cut by the section
+    plane in the details' colours, with a leader and a note on every family
+    the cut passes through (trusses/rafters, sheathing, ceiling insulation,
+    plates, studs, joists, girder, mudsill, stemwall, footing, slab) — the
+    member's own size, the spec's spacing, the code's R-value.
+G41 Elevations show what the model carries: the grade under the building
+    where it stands (a raised floor reads above its grade line), the
+    cladding the assembly declares (Bones frames siding for a sided house,
+    not the state's stucco default).
+
 ## Log (continued)
+
+- 2026-09-07: **Batch Q — the printed set: square plans, whole elevations,
+  sections with their framing (G38–G41).** Investigated with a workflow
+  (seven readers, adversarial verifiers; three finished before the credit
+  ran out — the rotation and fit root causes came back verified with
+  file:line evidence, the rest was read by hand). G38: `sheetPlanRotationDeg`
+  (drawings.ts) snaps `resolveSheetRotationDeg` to the nearest 90° — the
+  Florida house (yaw −177.8°) now draws at 180° instead of 177.8°, square,
+  and `northOnPaperDeg` (whose yaw term had the wrong sign: world north is
+  `(sin θ, −cos θ)` in the level frame, θ CLOCKWISE from up) puts the arrow
+  at 2.2°; the structural, electrical and plumbing plans, which were drawn
+  level-local at 0° while the floor plan turned 177.8°, take the same snapped
+  turn; the site plan turns by `sheetSiteRotationDeg` = plan turn + yaw = the
+  residual (2.2°), so the building stands square there and the GIS lot ring
+  is the thing that tips — its corner-block needle turns with it. G39:
+  A4.0–A4.3 carry one elevation each, the whole frame, fitted by
+  `buildingEnvelope` (walls, slabs, posts, roof segments with their overhang,
+  the ridge from the pitch, 1.5 m under the lowest level) plus the builder's
+  label margins — the wall centre-line bbox × 1.1 by a fixed 6 m that sized
+  the old 2×2 cells left the porch off the paper; the sections are fitted by
+  the same envelope. The Sections model is BUILDING-LOCAL (walls, slabs, roofs
+  are level-local; only the terrain sample was carried to the site), so a
+  named elevation is now a WORLD direction brought into the model's frame
+  (`localViewAngle` = angle + yaw, snapped to a quarter turn): the south
+  elevation shows the face that looks south (it showed the rear before — the
+  local +z face — and every view was 2.2° oblique), and the grade is sampled
+  under the building where it stands, in its frame (`gradeAt` carries the
+  point to the site and subtracts the building's stand): the raised floor
+  now reads 18 in above the GRADE line, and the ground-hosted porch posts —
+  whose base was the WORLD terrain height against level-local elevations,
+  0.6 m too high, hence through the roof — end at the beam soffit. The
+  elevations fill the frame at the largest scale that fits (3/8" for this
+  house; the label says so). G40: `providers/section-framing.ts` reproduces
+  the section's own projector from the marker (start/end/lookDirection, the
+  right axis `(−f.z, f.x)`), cuts every structural Bones member's box
+  (eight corners through the XYZ euler, the twelve edges against the plane,
+  the crossings ordered round their centroid) and draws the cross-sections in
+  the S5 palette (lumber, PT, engineered, concrete, steel) over the
+  architecture; the wall's skin layers and the hardware are left to the
+  assembly bands and the details. A leader and a wrapped note per family the
+  cut meets — on the farmhouse: 2x4 pre-engineered trusses @ 24" o.c., R-30
+  ceiling insulation, double 2x6 top plate, 2x10 floor joists @ 16" o.c.,
+  2x6 PT mudsill with 5/8" A.B. @ 6'-0", 8" stemwall, 16" × 8" footing —
+  each from the member's size, the spec's spacing or the prescriptive table.
+  Section A cuts 276 members (the truss king posts marching, the joists, the
+  studs at the walls it crosses, both footings), Section B the gable trusses
+  over the porch shed. G41: `WallSlice.exteriorFinish` carries the assembly's
+  `exterior.finish` and `layoutWallLayers` maps it to the data's family
+  (siding → wood lap, fiber-cement, stucco, brick) ahead of the state
+  default — the sided Florida house framed "3-coat cement plaster" before.
+  Tests: sections +3 (square to the faces at 3°, the quarter and half
+  turns, the grade under a raised building), wall-layers +3, generate (A4.x),
+  fire-separation label turn — plugin-sections 25, plugin-sheets 258, Bones
+  2,123, generate 95, editor typecheck clean. Honest gaps: the section's
+  far gable wall beyond a longitudinal cut is a paper silhouette (no cladding
+  in section); members beyond the cut are not drawn; the porch rake fascia
+  Steve saw missing on one seed is not reproduced (he found it an edge case);
+  elevations still draw guards as generic pickets and stairs as boxes; the
+  finish key can overlap the GRADE label at the left; the section notes are
+  a right-hand column, not placed leaders.
+
 
 - 2026-09-07 small hours: **Batch P, second pass — the rest of the review
   (G31, G32, G35, G36).** The plan mark on a rated wall now runs along the

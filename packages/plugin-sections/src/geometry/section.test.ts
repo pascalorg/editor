@@ -482,6 +482,55 @@ describe('buildElevationDrawing', () => {
     expect(widths.some((w) => Math.abs(w - expected) < 1e-6)).toBe(true)
   })
 
+  test('a building turned 3° on its lot is drawn square to its own faces; a quarter turn renames the faces', () => {
+    const s = scene()
+    const building = s.nodes['building_1' as AnyNodeId] as unknown as Record<string, unknown>
+    building.rotation = [0, 0.05, 0]
+    const drawing = buildElevationDrawing(s, 'south')
+    const white = polygons(drawing.primitives).filter((p) => p.fill === '#ffffff')
+    const widths = white.map(extent).map((e) => e.x1 - e.x0)
+    // the model is drawn in the building's own frame, so the south face
+    // still reads outer face to outer face — no 3° oblique
+    const expected = 6 + WALL_THICKNESS
+    expect(widths.some((w) => Math.abs(w - expected) < 1e-6)).toBe(true)
+    // turned a quarter (and 3°): the face that now looks south is the 4 m one
+    building.rotation = [0, Math.PI / 2 + 0.05, 0]
+    const turned = buildElevationDrawing(s, 'south')
+    const turnedWidths = polygons(turned.primitives)
+      .filter((p) => p.fill === '#ffffff')
+      .map(extent)
+      .map((e) => e.x1 - e.x0)
+    expect(turnedWidths.some((w) => Math.abs(w - (4 + WALL_THICKNESS)) < 1e-6)).toBe(true)
+    expect(turnedWidths.some((w) => Math.abs(w - expected) < 1e-6)).toBe(false)
+    // turned a half: the south elevation shows the face that now looks south
+    // — the local north wall, with its window at its sill, and no door
+    building.rotation = [0, Math.PI - 0.04, 0]
+    const half = buildElevationDrawing(s, 'south')
+    const openings = polygons(half.primitives)
+      .filter((p) => p.fill === '#ffffff' || p.fill === '#f1f5f9')
+      .map(extent)
+    const window = openings.find(
+      (e) => Math.abs(e.x1 - e.x0 - WINDOW_WIDTH) < 1e-6 && Math.abs(e.top - (WINDOW_SILL + WINDOW_HEIGHT)) < 1e-6,
+    )
+    expect(window).toBeDefined()
+    expect(window!.bottom).toBeCloseTo(WINDOW_SILL, 9)
+  })
+
+  test('the grade is read under the building where it stands, in the building\'s own frame', () => {
+    // the platform stands 0.6 m above the flat ground: the finish floor is
+    // 0.6 m over the grade line, on the elevation and in the cut
+    const s = scene()
+    const building = s.nodes['building_1' as AnyNodeId] as unknown as Record<string, unknown>
+    building.position = [12, 0.6, -30]
+    const drawing = buildElevationDrawing(s, 'south')
+    const grade = drawing.primitives.find((p) => p.kind === 'polyline') as { points: readonly (readonly number[])[] }
+    expect(grade).toBeDefined()
+    expect(grade.points.every((p) => Math.abs((p[1] ?? 0) - 0.6) < 1e-9)).toBe(true)
+    const texts = drawing.primitives.filter((p) => p.kind === 'text').map((p) => (p as { text: string }).text)
+    // -0.6 m rounds to the inch: -1'-11.6" reads -2'-0"
+    expect(texts.some((t) => t.startsWith('GRADE') && t.includes('-2'))).toBe(true)
+  })
+
   test('the south elevation shows the door at its true size', () => {
     const drawing = buildElevationDrawing(scene(), 'south')
     const door = polygons(drawing.primitives)

@@ -66,6 +66,16 @@ function extractAssemblyFraming(
   return { depth, kind }
 }
 
+/** `assembly.exterior.finish` when the host declares one — never guessed. */
+function extractAssemblyFinish(node: AnyRecord): string | undefined {
+  const assembly = node.assembly
+  if (typeof assembly !== 'object' || assembly === null) return undefined
+  const exterior = (assembly as AnyRecord).exterior
+  if (typeof exterior !== 'object' || exterior === null) return undefined
+  const finish = (exterior as AnyRecord).finish
+  return typeof finish === 'string' && finish.length > 0 ? finish : undefined
+}
+
 function extractOpening(node: AnyRecord): OpeningSlice | null {
   const type = node.type
   if (type !== 'door' && type !== 'window') return null
@@ -199,6 +209,8 @@ export function extractWalls(
 
     const assemblyFraming = extractAssemblyFraming(node)
 
+    const assemblyFinish = extractAssemblyFinish(node)
+
     const front = node.frontSide
     const back = node.backSide
     const exterior = front === 'exterior' || back === 'exterior'
@@ -240,6 +252,7 @@ export function extractWalls(
             ...(assemblyFraming.kind ? { framingKind: assemblyFraming.kind } : {}),
           }
         : {}),
+      ...(assemblyFinish ? { exteriorFinish: assemblyFinish } : {}),
       exterior,
       openings,
       curved,

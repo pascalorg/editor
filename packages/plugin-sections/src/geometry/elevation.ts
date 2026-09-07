@@ -54,15 +54,40 @@ export function elevationAngle(direction: 'north' | 'east' | 'south' | 'west'): 
   }
 }
 
+/** The first building's yaw (radians, three.js Y rotation) — the turn the whole model is drawn in. */
+export function buildingYaw(scene: DrawingScene): number {
+  for (const node of Object.values(scene.nodes)) {
+    if (node?.type !== 'building') continue
+    const rotation = (node as { rotation?: number[] | number }).rotation
+    return Array.isArray(rotation) ? (rotation[1] ?? 0) : typeof rotation === 'number' ? rotation : 0
+  }
+  return 0
+}
+
+/**
+ * A named direction is a WORLD direction (the south elevation shows the face
+ * that looks south on the lot), while the model is drawn in the building's
+ * own frame. Local → world sends +x to (cos yaw, −sin yaw), a turn by −yaw
+ * in the (x, z) plane, so the world view angle comes into the model's frame
+ * as angle + yaw — then snapped to the nearest quarter turn, so a house set
+ * 2° off the street grid is drawn square to its own faces and not 2°
+ * oblique (Steve: "the house should stay 90"; the north arrow carries the
+ * residual). An explicit angle is the author's and stays as given.
+ */
+export function localViewAngle(scene: DrawingScene, worldAngle: number): number {
+  const local = worldAngle + buildingYaw(scene)
+  return Math.round(local / (Math.PI / 2)) * (Math.PI / 2)
+}
+
 function resolveAngle(scene: DrawingScene, direction: ElevationDirectionArg): number | null {
-  if (typeof direction === 'string') return elevationAngle(direction)
+  if (typeof direction === 'string') return localViewAngle(scene, elevationAngle(direction))
   if ('angle' in direction) return direction.angle
   const marker = scene.nodes[direction.markerId as keyof typeof scene.nodes] as
     | { type?: string; direction?: string; angle?: number }
     | undefined
   if (marker?.type !== 'elevation-marker') return null
   if (marker.direction && marker.direction !== 'custom') {
-    return elevationAngle(marker.direction as 'north' | 'east' | 'south' | 'west')
+    return localViewAngle(scene, elevationAngle(marker.direction as 'north' | 'east' | 'south' | 'west'))
   }
   return marker.angle ?? Math.PI / 2
 }
