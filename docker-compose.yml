@@ -1,6 +1,6 @@
 services:
   editor:
-    build: .
+    image: ghcr.io/pascalorg/editor:${IMAGE_TAG:-latest}
     ports:
       # Keep the container port at 3000. `/scenes` fetches its own API through a
       # base URL that only `NEXT_PUBLIC_APP_URL` can override, and Next inlines

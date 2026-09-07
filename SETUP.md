@@ -34,8 +34,14 @@ Local development and the official hosted editor work without any environment va
 docker compose up -d
 ```
 
-The editor will be running at **http://localhost:3000**. Saved scenes live in
-the `pascal-data` volume, so they survive `docker compose down`.
+The editor will be running at **http://localhost:3000**. Compose pulls the official
+image from GHCR; set `IMAGE_TAG` to use a release instead of `latest`:
+
+```bash
+IMAGE_TAG=1.0.0 docker compose up -d
+```
+
+Saved scenes live in the `pascal-data` volume, so they survive `docker compose down`.
 
 Docker defaults `MINT_PASCAL_HOST_ORIGIN` to `http://localhost:3000`. Override
 it when hosting Pascal at another origin:

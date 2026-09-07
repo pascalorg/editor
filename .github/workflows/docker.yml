@@ -1,0 +1,36 @@
+name: Docker
+
+on:
+  push:
+    tags:
+      - '@pascal-app/editor@*'
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Extract release version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME##*@}" >> "$GITHUB_OUTPUT"
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and publish image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/pascalorg/editor:latest
+            ghcr.io/pascalorg/editor:${{ steps.version.outputs.version }}
