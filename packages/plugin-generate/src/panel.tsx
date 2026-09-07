@@ -22,7 +22,7 @@ export default function GeneratePanel() {
   const baths = S.options.baths ?? 0
   const garage = S.options.garage
   return (
-    <div className="flex flex-col text-sidebar-foreground">
+    <div className="flex h-full min-h-0 flex-col overflow-y-auto text-sidebar-foreground">
       <div className="p-3">
         <div className="mb-1 flex items-center gap-2 font-semibold text-sm">
           <Home className="h-4 w-4" /> Generate
