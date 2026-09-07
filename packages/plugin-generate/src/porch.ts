@@ -86,8 +86,13 @@ export const MAX_PORCH_PITCH = 6
 export const MAX_SHED_PORCH_PITCH = 4
 /** A gable / hip cover's ridge runs at least this far INTO the house slope past the wall (3 ft). */
 export const PIERCE_MIN = 0.9
-/** A shed cover's ledger sits at least this far under the house plate. */
-export const LEDGER_CLEAR = inches(2)
+/**
+ * A shed cover's ledger sits at least this far under the house plate: the
+ * cover's own shell plus 2 in, so its deck never rises through the house
+ * roof's eave plane (Steve, 2026-09-07: "the mono slope roof pokes through
+ * the front roof … moving those down a bit").
+ */
+export const LEDGER_CLEAR = inches(2) + roofShellThickness() / 2
 /** The lowest cover beam over the porch floor (headroom). */
 export const MIN_COVER_HEIGHT = 7 * FT
 /** The flattest shed cover before it becomes a flat canopy. */
@@ -352,11 +357,16 @@ export function coverGeometry(
     pitch = Math.min(MAX_PORCH_PITCH, ((houseY - coverY + PIERCE_MIN * houseTan) / run) * 12)
   }
   const pierce = Math.max(0, pierceAt(coverY, pitch))
+  // the cover's box ends BEFORE its ridge line crosses the house slope by
+  // its own shell thickness, so the end of the box stays under the house
+  // roof instead of poking out of it (Steve, 2026-09-07: "some of your
+  // side roofs poke through the … front roof")
+  const buried = Math.max(0.15, pierce - roofShellThickness() / houseTan - 0.05)
   return {
     form,
     coverY,
     pitch,
-    into: wallHalf + pierce + 0.05 + (form === 'hip' ? run : 0),
+    into: wallHalf + buried + (form === 'hip' ? run : 0),
     pierce,
   }
 }
@@ -440,7 +450,16 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
   const ops: NodeOp[] = []
   const wood = landing === 'wood'
   const landingTop = input.floorElevation - (wood ? DECK_DROP : PORCH_FLOOR_DROP)
-  const rise = landingTop - input.gradeY
+  // the ground under the landing and where the flight will land (4 ft out)
+  // — the flight's rise is to ITS foot (Steve, 2026-09-07: "your side stair
+  // on the side deck doesn't go down to grade … going to the grade behind")
+  const gradeUnder = (a: number, o: number): number => {
+    const p = P(a, o)
+    const g = input.gradeAt?.(p[0], p[1])
+    return Number.isFinite(g) ? (g as number) : input.gradeY
+  }
+  const stairFootGrade = round(gradeUnder(0, depth + inches(48)))
+  const rise = landingTop - stairFootGrade
   const guard = policy === 'full' || policy === 'deck' || wood || rise > GUARD_REQUIRED_ABOVE
   const railStyle = guard ? railStyleFor(style) : null
   // The flight (built below): its width sets the guard opening and the
@@ -475,8 +494,14 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
       elevation: round(landingTop),
       // A deck's slab is the decking AND the joist / rim band under it, so
       // its edge reads as the fascia board it is; Bones frames the joists
-      // under the decking thickness it is told (`metadata.decking`).
-      thickness: wood ? DECKING_THICKNESS + deckRimDepth(depth) : inches(4),
+      // under the decking thickness it is told (`metadata.decking`). A
+      // concrete landing is poured DOWN into the ground: its face runs from
+      // the walking surface to 4 in under the lowest grade at its corners
+      // (Steve, 2026-09-07: "concrete on the porch landing needs to go
+      // down to a little below grade").
+      thickness: wood
+        ? DECKING_THICKNESS + deckRimDepth(depth)
+        : round(Math.max(inches(4), landingTop - Math.min(gradeUnder(-hw, 0), gradeUnder(hw, 0), gradeUnder(hw, depth), gradeUnder(-hw, depth)) + inches(4))),
       materialPreset: wood ? 'library:wood-floorplank1' : 'library:concrete-raw',
       // Bones: a 'deck' is framed (ledger, joists, beam on posts to grade); a
       // 'porch-slab' is poured at its elevation.
@@ -542,8 +567,11 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
     const edge = hw - inset
     const flank = risers > 0 ? stairWidth / 2 + pillar.size / 2 + inches(1) : null
     flankAt = flank
+    // a flanking pair only where it stands a clear 3 ft in from the corner
+    // posts — closer than that the corner posts flank the flight (Steve,
+    // 2026-09-07: "your double porch posts on the rear ones look bad")
     const anchors =
-      flank !== null && flank < edge - 2 * pillar.size
+      flank !== null && flank < edge - Math.max(2 * pillar.size, 0.9)
         ? [-edge, -flank, flank, edge]
         : [-edge, edge]
     for (let i = 0; i + 1 < anchors.length; i++) {
@@ -638,7 +666,7 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         name: `${name} steps`,
         parentId: input.levelId,
         // the flight rests on the ground and carries its own grade (see `terrain`)
-        position: [bx, round(input.gradeY), bz],
+        position: [bx, stairFootGrade, bz],
         rotation: round(Math.atan2(inward[0], inward[1])),
         stairType: 'straight',
         fromLevelId: null,

@@ -71,6 +71,18 @@ export type PlanDocument = {
   }[]
   attach?: [string, string, AttachKind?][]
   frontDoor?: string
+  /**
+   * The ornament the roll chose (Steve, 2026-09-07): the gable piece
+   * (king-post / fan / vent / none), shutters, sconces at the doors, fans
+   * with lights in the rooms, and how many dormers on the front slope.
+   */
+  trim?: {
+    gable?: 'none' | 'king-post' | 'fan' | 'vent'
+    shutters?: boolean
+    sconces?: boolean
+    fans?: boolean
+    dormers?: number
+  }
   finishes?: { siding?: string; roofMat?: string; palette?: number }
 }
 
@@ -100,6 +112,13 @@ export type NormalizedDocument = {
   edges: { a: string; b: string; kind: AttachKind }[]
   frontDoorRoom: string | null
   finishes: { siding: string | null; roofMat: string | null; palette: number | null }
+  trim: {
+    gable: 'none' | 'king-post' | 'fan' | 'vent' | null
+    shutters: boolean
+    sconces: boolean
+    fans: boolean
+    dormers: number
+  }
 }
 
 export const GRID_IN = 6
@@ -164,6 +183,13 @@ export function normalizeDocument(input: PlanDocument): NormalizedDocument {
     rooms,
     edges,
     frontDoorRoom: input.frontDoor ? String(input.frontDoor).trim().toUpperCase() : null,
+    trim: {
+      gable: input.trim?.gable ?? null,
+      shutters: input.trim?.shutters === true,
+      sconces: input.trim?.sconces !== false,
+      fans: input.trim?.fans !== false,
+      dormers: Number.isFinite(input.trim?.dormers) ? Math.max(0, Math.min(3, Math.round(input.trim?.dormers as number))) : 0,
+    },
     finishes: {
       siding: input.finishes?.siding ?? null,
       roofMat: input.finishes?.roofMat ?? null,

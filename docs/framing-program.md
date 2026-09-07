@@ -934,7 +934,100 @@ G75 Water heaters with real specs and standards (type, size, UEF, circuit,
 G76 Insulation and the energy sheet correct for the state; the 3D objects
     modelled correctly.
 
+## Mandate additions (Steve, 2026-09-07 — the second 3D review, nine screenshots)
+
+> the gable gingerbread needs more options, also it comes in above the
+> roof line, kind of goes to no where maybe to the fan one i attached one
+> that looks good, also include random gable vents ones, make sure the
+> vents look good, how about vents on stucco ones, and then the one i show
+> in red on craftsman style, no on the round doors, concrete on the porch
+> landing concrete ones needs to go down to little below grade and look
+> correct, your side porches are missing the gable faces, your
+> presentation roofs dont show the true fascia board which should be 90
+> degree face and then the corner tapers in, the framing in the roof has
+> to match whats shown here on the roof, some gable gingerbread on the one
+> with double gable goes off to the left some, your double porch posts on
+> the rear ones looks bad, raised foundation has a little gap on the grade
+> on the left and right sides like its not going down under the grade,
+> wall goes across footing would step down below where needed to be below
+> frost line, add dormer option into the generation, using the pascal
+> dormer tool maybe? generate those to look nice on some random designs,
+> add sconce lights to the exterior at doors, add fans into the rooms with
+> lights on each room and living room, some of your side roofs poke
+> through the mono slope roofs pokes through front roof, not sure how to
+> do that correctly besides moving those down a bit, also add some
+> shutters to craftsman designs, make sure the lites are correct in
+> craftsman design, your side stair on the side deck doesnt go down to
+> grade on this one looks like its going to the grade behind, you also
+> need some more hip designs generated on random in different styles,
+> lets start with these fixes then ill check it again
+
+G77 Gable trim inside the gable, never above the rake, centred on the peak;
+    more kinds (the fan on a collar Steve drew, the craftsman one), random
+    gable vents that look good, vents on stucco gables too.
+G78 No round-top doors.
+G79 A concrete porch landing reads to a little below grade.
+G80 Side porches carry their gable faces.
+G81 The presentation roof shows the true fascia: a 90° face, the corner
+    tapering in; the roof framing matches it.
+G82 Single porch posts on the rear porches (no doubled posts).
+G83 The raised foundation's stem goes below grade on every side; the wall
+    steps its footing down below the frost line where the ground falls.
+G84 Dormers as a generation option (the Pascal dormer tool), on random
+    designs, looking right.
+G85 Sconce lights at exterior doors; ceiling fans with lights in every room
+    and the living room.
+G86 Side roofs never poke through the main roof (lower them).
+G87 Craftsman designs get shutters and the right window lites.
+G88 The side deck's stair goes to the grade under it.
+G89 More hip roofs on random designs across styles.
+
 ## Log (continued)
+
+- 2026-09-07: **Batch T6 — the second 3D review, first pass (G77–G89).**
+  What landed: (G77) the gable ornament is centred on the ROOF SEGMENT's
+  gable end (an L-house's long side wall put it off-centre) and every tip
+  is fitted under the rake line (`ornament.ts` `fitUnderRake`); three
+  kinds — the king post with braces, the FAN Steve drew (a collar bar a
+  third of the way up, five struts from its centre to under the rakes:
+  a Y-frame plus a V-frame column on the collar slab), a louvered VENT
+  (a block of frame boards and slats); the roll picks per house from the
+  style's list (`GABLE_ORNAMENTS_BY_STYLE`), stucco houses always the
+  vent. (G78) no arched doors — the cottage leaf is a square four-panel.
+  (G79) a concrete landing's slab runs from the walking surface to 4 in
+  under the lowest grade at its corners. (G82) a flanking pair of porch
+  posts only where it stands 3 ft clear of the corners; nearer, the
+  corners flank the flight. (G83) the stem reaches the LOWEST grade along
+  the wall plus 6 in into it. (G84) dormers on the front slope of the
+  main gable (`dormer` nodes hosted on the segment, ±28 % of its width,
+  55 % up the slope, facing the eave, 1.5 m wide with a 3 × 3 ft window)
+  — the roll gives one house in three a pair when the front is an eave
+  (farmhouse / craftsman / cottage). (G85) sconce lanterns each side of
+  the front door and beside the rear door at 66 in (blocks), a ceiling
+  fan (block: rod, hub, four blades) plus the catalog's ceiling lamp in
+  living / bed / dining / office rooms, the lamp alone in kitchen / bath /
+  hall / entry / laundry / garage / pantry. (G86) a gable / hip cover's
+  box ends before its ridge crosses the house slope by its own shell
+  thickness (no end poking out); a shed cover's ledger clears the plate by
+  2 in plus half the shell. (G87) shutters (block: two louvered leaves)
+  beside every exterior window 36 in or taller when the roll says so (70 %
+  craftsman, 40 % farmhouse / cottage); lites by style — craftsman three
+  columns over two rows (the node divides evenly, so 3-over-1 is not
+  drawable), farmhouse / cottage two-over-two. (G88) the flight's rise is
+  to the grade at ITS foot (4 ft out), not the door's. (G89) a gable style
+  rolls a hip one house in three to seven (craftsman / cottage 30 %,
+  farmhouse 15 %). The document carries `trim` (gable, shutters, sconces,
+  fans, dormers) so a seed dresses the same house twice. Seen headless
+  (craftsman seed 7, Tampa): 2 dormers on the main segment, the fan on
+  both gable ends at ±6.92 m (centred on a 13.56 m house), 6 shutter
+  pairs, 3 sconces, 5 fans + 5 fan lights + 7 ceiling lights. Seen in the
+  editor only in part: the dormers stand on the slope with their windows;
+  the fan and shutters were not eyeballed (the camera hunt ran long).
+  NOT done: (G80) the side-porch gable faces — unverified; (G81) the true
+  fascia (a plumb face, the corner tapering in) and the framing to match
+  — the roof shell is the viewer's, a separate batch. Tests: generate 105
+  (porch / build re-pinned: the buried cover end, single posts, the 14 in
+  stem, no arch).
 
 - 2026-09-07: **Batch T5 — the MEP review (G72–G76).** A probe
   (scratchpad `mep-probe.ts`: computeLevel over a generated scene per

@@ -16,6 +16,7 @@ import {
   riserCount,
   TREAD_RUN,
 } from './porch'
+import { roofShellThickness } from '../../plugin-bones/src/core/shell-sync'
 import { styleFor } from './styles'
 
 const IN = 0.0254
@@ -505,7 +506,8 @@ describe('the rear entrance', () => {
     expect(r.summary?.guard).toBe(false)
     expect(byType(r.ops, 'slab')[0]!.name).toBe('Rear patio')
     expect(byType(r.ops, 'roof-segment')[0]!.name).toBe('Rear patio gable')
-    expect(byType(r.ops, 'column').length).toBe(4) // the corners and the pair flanking the step
+    // the corners flank the step themselves — a flanking pair closer than 3 ft to a corner reads as a doubled post (Steve, 2026-09-07)
+    expect(byType(r.ops, 'column').length).toBe(3)
   })
 
   test('a slab house behind a no-porch style: a plain landing 10 × 6 ft, no cover, no posts', () => {
@@ -566,7 +568,8 @@ describe('the cover sized against the house roof (W19b)', () => {
     expect(pierce).toBeGreaterThan(PIERCE_MIN)
     expect(r.summary?.roofPierceM).toBeCloseTo(pierce, 5)
     // the box starts at the wall face; the pierce is measured from the plate line (the wall centreline)
-    expect(seg.width).toBeCloseTo(beamLine + 0.17 / 2 + pierce + 0.05 + run, 5)
+    // the box ends before its ridge crosses the house slope by its own shell (Steve, 2026-09-07: no poking through)
+    expect(seg.width).toBeCloseTo(beamLine + 0.17 / 2 + Math.max(0.15, pierce - roofShellThickness() / tan4 - 0.05) + run, 5)
     expect((seg.position as number[])[1]).toBeCloseTo(plate - PORCH_BAND, 6) // the band's top at the plate
     expect(r.summary?.coverHeightIn).toBeCloseTo(108, 1)
     expect(r.warnings.some((w) => w.includes('pierces'))).toBe(false)
@@ -590,7 +593,7 @@ describe('the cover sized against the house roof (W19b)', () => {
     const pierce = ((6 * FT * 6) / 12) / (8 / 12)
     expect(pierce).toBeGreaterThan(PIERCE_MIN)
     expect(cover.pierce).toBeCloseTo(pierce, 6)
-    expect(cover.into).toBeCloseTo(pierce + 0.05, 6)
+    expect(cover.into).toBeCloseTo(Math.max(0.15, pierce - roofShellThickness() / (8 / 12) - 0.05), 6)
     // under a 12:12 main roof the 8 ft entry porch's 6:12 ridge (capped) reaches only 0.6 m in — it says so
     const r = porchFor(
       input({
@@ -619,7 +622,8 @@ describe('the cover sized against the house roof (W19b)', () => {
     expect(seg.depth).toBeCloseTo(beamLine, 6)
     // a deeper cover under a lower plate: the beam drops to the headroom floor at 1:12
     const low = coverGeometry(
-      { floorElevation: 0.05, housePlateY: 0.05 + 8.2 * FT },
+      // (the ledger now clears the plate by 2 in plus half the shell, so the shed's floor is a little higher)
+      { floorElevation: 0.05, housePlateY: 0.05 + 8.6 * FT },
       { pitch: 8 },
       'shed',
       3,

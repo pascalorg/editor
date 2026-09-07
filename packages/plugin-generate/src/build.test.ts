@@ -58,7 +58,8 @@ describe('Poppy builds into Pascal nodes', () => {
     expect(segments.map((s) => s.heightRatio).reduce((a, b) => a + b, 0)).toBeCloseTo(1, 9)
     expect((farmhouse.metadata as { doorStyle?: string }).doorStyle).toBe('half-lite')
     const cottage = ofType(buildHouse({ ...POPPY, style: 'cottage' }).ops, 'door').find((d) => (d as N).name === 'Front door') as N
-    expect(cottage.openingShape).toBe('arch')
+    // no round-top doors (Steve, 2026-09-07): the cottage leaf stays square
+    expect(cottage.openingShape).toBeUndefined()
     expect((cottage.segments as { type: string }[]).every((s) => s.type === 'panel')).toBe(true)
     // the cottage's gable ends carry a king post each; the farmhouse's none
     const ornaments = (ops: readonly { node: Record<string, unknown> }[]) =>
@@ -247,8 +248,8 @@ describe('Poppy builds into Pascal nodes', () => {
       }
       expect(w.fillToTerrain).toBe(true)
       expect(w.underpinning.rim).toBeCloseTo(PLATFORM_RIM_M, 9)
-      // 18 in above grade less the platform: the stem shows the rest
-      expect(w.underpinning.stem).toBeCloseTo(18 * 0.0254 - PLATFORM_RIM_M, 3)
+      // 18 in above grade less the platform, plus 6 in into the ground (Steve, 2026-09-07: no gap at the grade)
+      expect(w.underpinning.stem).toBeCloseTo(18 * 0.0254 - PLATFORM_RIM_M + 6 * 0.0254, 3)
     }
     const interior = (ofType(built.ops, 'wall') as N[]).filter((w) => w.name !== 'Exterior wall')
     for (const w of interior) expect(w.underpinning).toBeUndefined()
@@ -290,7 +291,9 @@ describe('Poppy builds into Pascal nodes', () => {
     const exterior = (ofType(built.ops, 'wall') as N[]).filter((w) => w.name === 'Exterior wall')
     expect(exterior.length).toBeGreaterThan(0)
     for (const w of exterior) {
-      expect(w.underpinning).toEqual({ rim: 0, stem: 8 * 0.0254 })
+      // 8 in over grade plus 6 in into it
+      expect(w.underpinning.rim).toBe(0)
+      expect(w.underpinning.stem).toBeCloseTo(14 * 0.0254, 4)
       expect(w.fillToTerrain).toBe(true)
     }
   })

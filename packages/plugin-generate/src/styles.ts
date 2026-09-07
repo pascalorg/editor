@@ -49,6 +49,7 @@ export type TrimSpec = {
   frontDoor: FrontDoorStyle
 }
 
+/** The cottage's leaf is a square-topped four-panel now (Steve, 2026-09-07: "no on the round doors"); the key stays. */
 export type FrontDoorStyle = 'half-lite' | 'craftsman-lite' | 'six-panel' | 'full-lite' | 'cottage-arch'
 
 const NO_TRIM: TrimSpec = { postCapital: 'none', gableOrnament: 'none', frontDoor: 'six-panel' }

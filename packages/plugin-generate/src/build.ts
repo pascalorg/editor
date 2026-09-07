@@ -39,6 +39,7 @@ import {
 } from './geometry'
 import { type CatalogAsset, type FurnishRoom, furnishRooms } from './furnish'
 import { type PorchPolicy, type PorchSummary, porchFor, riserCount, TREAD_RUN } from './porch'
+import { ceilingFanTopology, fitUnderRake, type GableOrnament, louverVentTopology, sconceTopology, shutterPairTopology } from './ornament'
 import { mulberry32 } from './rng'
 import { FRONT_DOOR_SEGMENTS, type StylePreset, trimOf, styleFor } from './styles'
 
@@ -644,7 +645,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       if (front && front.type === 'door') {
         const trim = trimOf(style)
         front.segments = FRONT_DOOR_SEGMENTS[trim.frontDoor]
-        if (trim.frontDoor === 'cottage-arch') front.openingShape = 'arch'
+        // no round-top doors (Steve, 2026-09-07) — the cottage leaf stays square
         front.metadata = { ...((front.metadata as Record<string, unknown>) ?? {}), doorStyle: trim.frontDoor }
       }
       frontDoor = { wall: frontChoice.wall, at }
@@ -737,6 +738,47 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     }
   }
 
+  /** A wall's exterior face: its unit direction and outward normal (null for an interior wall). */
+  const exteriorFaceOf = (wall: WallRun): { dir: [number, number]; nx: number; nz: number } | null => {
+    const op = ops.find((o) => o.node.id === wall.id)
+    if (!op) return null
+    const len = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+    if (len < 1e-6) return null
+    const dir: [number, number] = [(wall.end[0] - wall.start[0]) / len, (wall.end[1] - wall.start[1]) / len]
+    const sign = op.node.frontSide === 'exterior' ? 1 : op.node.backSide === 'exterior' ? -1 : 0
+    if (sign === 0) return null
+    return { dir, nx: -dir[1] * sign, nz: dir[0] * sign }
+  }
+  // ── sconces at the exterior doors (Steve, 2026-09-07: "add sconce lights
+  // to the exterior at doors"): a lantern each side of the front door, one
+  // beside the rear door, 66 in up on the exterior face ──────────────────
+  const sconceAt = (wall: WallRun, at: number, doorWidthIn: number, sides: readonly (1 | -1)[], name: string) => {
+    const face = exteriorFaceOf(wall)
+    if (!face) return
+    for (const s of sides) {
+      const a = at * IN + s * ((doorWidthIn / 2) * IN + 0.3)
+      const cx = wall.start[0] + face.dir[0] * a
+      const cz = wall.start[1] + face.dir[1] * a
+      ops.push({
+        node: {
+          id: generateId('block'),
+          type: 'block',
+          name,
+          parentId: levelId,
+          position: [round(cx + face.nx * (wall.thickness / 2 + 0.005)), round(66 * IN), round(cz + face.nz * (wall.thickness / 2 + 0.005))],
+          rotation: round(Math.atan2(face.nx, face.nz)),
+          topology: sconceTopology(),
+          metadata: { generatedBy: GENERATED_BY, ornament: 'sconce', wallId: wall.id },
+        },
+        parentId: levelId,
+      })
+    }
+  }
+  if (doc.trim.sconces) {
+    if (frontDoor) sconceAt(frontDoor.wall, frontDoor.at, EXTERIOR_DOOR_W, [-1, 1], 'Entry sconce')
+    if (rearDoor) sconceAt(rearDoor.wall, rearDoor.at, rearDoor.width, [1], 'Rear door sconce')
+  }
+
   // ── windows: bedrooms first (egress), then by kind ────────────────────
   let windows = 0
   const windowNode = (
@@ -748,6 +790,16 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     reserve(wall.id, at, spec.w)
     placedOpenings.push({ wallId: wall.id, at, width: spec.w, kind: 'window', sillIn: spec.sill })
     windows += 1
+    // the lites by style (Steve, 2026-09-07: "make sure the lites are correct
+    // in craftsman design"): the craftsman's divided upper sash reads as
+    // three-over-one — the node divides evenly, so three columns over two
+    // rows; the farmhouse and the cottage two-over-two; the rest clear
+    const lites =
+      style.key === 'craftsman'
+        ? { columnRatios: [1, 1, 1], rowRatios: [1, 1] }
+        : style.key === 'farmhouse' || style.key === 'cottage'
+          ? { columnRatios: [1, 1], rowRatios: [1, 1] }
+          : {}
     ops.push({
       node: {
         id: generateId('window'),
@@ -758,10 +810,32 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         width: round(spec.w * IN),
         height: round(spec.h * IN),
         windowType: spec.type,
+        ...lites,
         metadata: { generatedBy: GENERATED_BY },
       },
       parentId: wall.id,
     })
+    // shutters on the exterior face (Steve: "add some shutters to craftsman designs")
+    if (doc.trim.shutters && wall.exterior && spec.h >= 36) {
+      const face = exteriorFaceOf(wall)
+      if (face) {
+        const cx = wall.start[0] + face.dir[0] * at * IN
+        const cz = wall.start[1] + face.dir[1] * at * IN
+        ops.push({
+          node: {
+            id: generateId('block'),
+            type: 'block',
+            name: `${name} shutters`,
+            parentId: levelId,
+            position: [round(cx + face.nx * (wall.thickness / 2 + 0.005)), round(spec.sill * IN), round(cz + face.nz * (wall.thickness / 2 + 0.005))],
+            rotation: round(Math.atan2(face.nx, face.nz)),
+            topology: shutterPairTopology(spec.w * IN, spec.h * IN),
+            metadata: { generatedBy: GENERATED_BY, ornament: 'shutters', wallId: wall.id },
+          },
+          parentId: levelId,
+        })
+      }
+    }
   }
   const orderedRooms = [...rooms].sort(
     (a, b) => (a.kind === 'bed' ? 0 : 1) - (b.kind === 'bed' ? 0 : 1),
@@ -1153,10 +1227,17 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     if (!wall.exterior) continue
     const op = ops.find((o) => o.node.id === wall.id)
     if (!op || op.node.supportSlabId !== undefined) continue
-    const mx = (wall.start[0] + wall.end[0]) / 2
-    const mz = (wall.start[1] + wall.end[1]) / 2
+    // the stem reaches the LOWEST grade along the wall and 6 in into it, so
+    // a wall across falling ground never shows a gap at its low end (Steve,
+    // 2026-09-07: "raised foundation has a little gap on the grade on the
+    // left and right sides like it's not going down under the grade")
+    let lowest = Number.POSITIVE_INFINITY
+    for (let k = 0; k <= 6; k++) {
+      const t = k / 6
+      lowest = Math.min(lowest, localGrade(wall.start[0] + (wall.end[0] - wall.start[0]) * t, wall.start[1] + (wall.end[1] - wall.start[1]) * t))
+    }
     const rim = raisedFloor ? PLATFORM_RIM_M : 0
-    const stem = Math.max(0, round(-rim - localGrade(mx, mz)))
+    const stem = Math.max(0, round(-rim - lowest + 6 * IN))
     op.node.fillToTerrain = true
     op.node.underpinning = { rim, stem }
   }
@@ -1224,6 +1305,52 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       : { ops: [], warnings: [], placed: 0 }
   warnings.push(...furnished.warnings)
   const furnishOps: NodeOp[] = furnished.ops
+  // ── ceiling fans with lights in the living rooms, a ceiling light in
+  // every other room (Steve, 2026-09-07: "add fans into the rooms with
+  // lights on each room and living room"): the fan is a block (hub, rod,
+  // four blades) under the ceiling; the light is the catalog's ceiling
+  // lamp at the same point (its light effect); without the catalog the
+  // fan alone ──────────────────────────────────────────────────────────
+  const lamp = options.catalog?.find((a) => a.id === 'ceiling-lamp') ?? null
+  const fanKinds = new Set<RoomKind>(['living', 'bed', 'dining', 'office'])
+  const lightKinds = new Set<RoomKind>(['kitchen', 'bath', 'hall', 'entry', 'laundry', 'garage', 'pantry'])
+  for (const room of rooms) {
+    const wantsFan = doc.trim.fans && fanKinds.has(room.kind)
+    if (!wantsFan && !lightKinds.has(room.kind)) continue
+    const [cx, cz] = toLocal([(room.u0 + room.u1) / 2, (room.v0 + room.v1) / 2])
+    if (wantsFan) {
+      furnishOps.push({
+        node: {
+          id: generateId('block'),
+          type: 'block',
+          name: `${room.name} ceiling fan`,
+          parentId: levelId,
+          position: [round(cx), round(ceilingM - 0.01), round(cz)],
+          rotation: 0,
+          topology: ceilingFanTopology(),
+          metadata: { generatedBy: GENERATED_BY, ornament: 'ceiling-fan', room: room.name },
+        },
+        parentId: levelId,
+      })
+    }
+    if (lamp) {
+      furnishOps.push({
+        node: {
+          id: generateId('item'),
+          type: 'item',
+          name: wantsFan ? `${room.name} fan light` : `${room.name} ceiling light`,
+          parentId: levelId,
+          position: [round(cx), round(ceilingM), round(cz)],
+          rotation: [0, 0, 0],
+          scale: [1, 1, 1],
+          asset: lamp,
+          metadata: { generatedBy: GENERATED_BY, furnish: { room: room.name, kind: room.kind, role: wantsFan ? 'fan-light' : 'ceiling-light', floating: true } },
+        },
+        parentId: levelId,
+      })
+    }
+  }
+  if (!lamp && doc.trim.fans) warnings.push('lights: the item catalog has no "ceiling-lamp" — fans drawn without their lights.')
 
   // ── roof: derived from the walls by the auto roof engine ─────────────
   const roofOps = roofFor(doc, style, ops, ceilingM, levelId, warnings)
@@ -1519,56 +1646,182 @@ function roofFor(
       intent: { form, pitchInTwelfths: pitchTwelfths, overhangIn, gables: doc.roof.gables },
     },
   )
-  // The gingerbread in the house gables: a king post with two braces under
-  // the rakes on every gable-end wall, standing on the plate just outside
-  // the wall face (Steve: "gingerbread into the gables on the houses").
-  if (trimOf(style).gableOrnament === 'king-post') {
-    const main = result.segments[0]
-    if (main && form === 'gable') {
-      const rise = (main.depth / 2) * Math.tan((main.pitch * Math.PI) / 180)
-      for (const op of ops) {
-        if (op.node.type !== 'wall' || result.roles[op.node.id as string] !== 'gable-end') continue
-        const start = op.node.start as [number, number]
-        const end = op.node.end as [number, number]
-        const len = Math.hypot(end[0] - start[0], end[1] - start[1])
-        if (len < 1e-6) continue
-        const dir: [number, number] = [(end[0] - start[0]) / len, (end[1] - start[1]) / len]
-        const normal: [number, number] = [-dir[1], dir[0]]
-        const sign = op.node.frontSide === 'exterior' ? 1 : -1
-        const off = ((op.node.thickness as number) ?? 0.15) / 2 + 2 * IN
-        const mid: [number, number] = [
-          (start[0] + end[0]) / 2 + normal[0] * sign * off,
-          (start[1] + end[1]) / 2 + normal[1] * sign * off,
-        ]
+  // The ornament in the house gables (Steve, 2026-09-07: "the gable
+  // gingerbread needs more options, also it comes in above the roof line
+  // … goes off to the left"): the kind the roll chose (a king post with
+  // braces, the fan on a collar Steve drew, a louvered vent — stucco
+  // houses always the vent), centred on the ROOF SEGMENT's gable end (not
+  // the wall's midpoint — an L-house's side wall is longer than its gable),
+  // every tip fitted UNDER the rake line.
+  const ornament: GableOrnament =
+    form !== 'gable'
+      ? 'none'
+      : style.exteriorAssembly === 'exterior-2x6-stucco'
+        ? 'vent'
+        : (doc.trim.gable ?? (trimOf(style).gableOrnament === 'king-post' ? 'king-post' : 'none'))
+  if (ornament !== 'none') {
+    const gableEnds = result.segments
+      .filter((s) => s.roofType === 'gable')
+      .flatMap((s) => {
+        const c = Math.cos(s.rotation)
+        const sn = Math.sin(s.rotation)
+        const halfSpan = s.depth / 2
+        const rise = halfSpan * Math.tan((s.pitch * Math.PI) / 180)
+        return [1, -1].map((e) => ({
+          at: [s.position[0] + (e * s.width * c) / 2, s.position[2] - (e * s.width * sn) / 2] as [number, number],
+          halfSpan,
+          rise,
+        }))
+      })
+    for (const op of ops) {
+      if (op.node.type !== 'wall' || result.roles[op.node.id as string] !== 'gable-end') continue
+      const start = op.node.start as [number, number]
+      const end = op.node.end as [number, number]
+      const len = Math.hypot(end[0] - start[0], end[1] - start[1])
+      if (len < 1e-6) continue
+      const dir: [number, number] = [(end[0] - start[0]) / len, (end[1] - start[1]) / len]
+      const normal: [number, number] = [-dir[1], dir[0]]
+      const sign = op.node.frontSide === 'exterior' ? 1 : -1
+      const thickness = (op.node.thickness as number) ?? 0.15
+      // the gable end on this wall: the segment end nearest the wall line, within its span
+      let best: { at: [number, number]; halfSpan: number; rise: number; d: number } | null = null
+      for (const g of gableEnds) {
+        const rel: [number, number] = [g.at[0] - start[0], g.at[1] - start[1]]
+        const along = rel[0] * dir[0] + rel[1] * dir[1]
+        const off = Math.abs(rel[0] * normal[0] + rel[1] * normal[1])
+        if (along < -0.3 || along > len + 0.3 || off > 0.6) continue
+        if (!best || off < best.d) best = { ...g, d: off }
+      }
+      if (!best) continue
+      const along = (best.at[0] - start[0]) * dir[0] + (best.at[1] - start[1]) * dir[1]
+      const faceOff = thickness / 2
+      const centre = (extra: number): [number, number] => [
+        start[0] + dir[0] * along + normal[0] * sign * (faceOff + extra),
+        start[1] + dir[1] * along + normal[1] * sign * (faceOff + extra),
+      ]
+      const yaw = round(Math.atan2(-dir[1], dir[0]))
+      const outwardYaw = round(Math.atan2(normal[0] * sign, normal[1] * sign))
+      const meta = { generatedBy: GENERATED_BY, ornament: 'gable', kind: ornament, wallId: op.node.id }
+      const column = (id: string, name: string, at: [number, number], y: number, height: number, supportStyle: string, spread: number): { node: Record<string, unknown>; parentId: string } => ({
+        node: {
+          id,
+          type: 'column',
+          name,
+          parentId: levelId,
+          position: [round(at[0]), round(y), round(at[1])],
+          rotation: yaw,
+          height: round(height),
+          style: 'plain',
+          crossSection: 'square',
+          width: 3.5 * IN,
+          depth: 3.5 * IN,
+          supportStyle,
+          braceWidth: 3.5 * IN,
+          braceDepth: 1.5 * IN,
+          braceTopSpread: round(spread),
+          bracePlateEnabled: false,
+          shaftProfile: 'straight',
+          shaftSegmentCount: 1,
+          shaftCornerRadius: 0,
+          baseStyle: 'none',
+          capitalStyle: 'none',
+          edgeSoftness: 0,
+          metadata: meta,
+        },
+        parentId: levelId,
+      })
+      if (ornament === 'king-post') {
+        const fit = fitUnderRake(best.halfSpan, best.rise, Math.min(best.halfSpan * 0.9, 2.4), best.rise - 0.25)
+        if (fit) roofOps.push(column(generateId('column'), 'Gable king post', centre(2 * IN), ceilingM, fit.height, 'y-frame', fit.spread))
+      } else if (ornament === 'fan') {
+        // the collar a third of the way up, the fan of five struts from its
+        // centre to under the rakes (the drawing Steve attached)
+        const collarY = Math.min(0.5, best.rise * 0.33)
+        const halfAtCollar = best.halfSpan * (1 - collarY / best.rise)
+        const riseAbove = best.rise - collarY
+        const bar = Math.max(0.6, 2 * halfAtCollar - 0.25)
+        const at = centre(2 * IN)
+        const a0: [number, number] = [at[0] - dir[0] * (bar / 2), at[1] - dir[1] * (bar / 2)]
+        const a1: [number, number] = [at[0] + dir[0] * (bar / 2), at[1] + dir[1] * (bar / 2)]
+        const bw = 0.045
+        const across = (p: [number, number], s: number): [number, number] => [p[0] + normal[0] * sign * s, p[1] + normal[1] * sign * s]
         roofOps.push({
           node: {
-            id: generateId('column'),
-            type: 'column',
-            name: 'Gable king post',
+            id: generateId('slab'),
+            type: 'slab',
+            name: 'Gable collar',
             parentId: levelId,
-            position: [round(mid[0]), round(ceilingM), round(mid[1])],
-            rotation: round(Math.atan2(-dir[1], dir[0])),
-            height: round(Math.max(12 * IN, rise - 10 * IN)),
-            style: 'plain',
-            crossSection: 'square',
-            width: 3.5 * IN,
-            depth: 3.5 * IN,
-            supportStyle: 'y-frame',
-            braceWidth: 3.5 * IN,
-            braceDepth: 1.5 * IN,
-            braceTopSpread: round(Math.min(len * 0.5, 3)),
-            bracePlateEnabled: false,
-            shaftProfile: 'straight',
-            shaftSegmentCount: 1,
-            shaftCornerRadius: 0,
-            baseStyle: 'none',
-            capitalStyle: 'none',
-            edgeSoftness: 0,
-            metadata: { generatedBy: GENERATED_BY, ornament: 'gable', wallId: op.node.id },
+            polygon: [across(a0, -bw), across(a1, -bw), across(a1, bw), across(a0, bw)].map((p) => [round(p[0]), round(p[1])]),
+            holes: [],
+            elevation: round(ceilingM + collarY + 0.04),
+            thickness: 0.04,
+            metadata: meta,
+          },
+          parentId: levelId,
+        })
+        const inner = fitUnderRake(halfAtCollar, riseAbove, halfAtCollar * 0.55, riseAbove - 0.2)
+        const outer = fitUnderRake(halfAtCollar, riseAbove, halfAtCollar * 1.3, riseAbove - 0.2)
+        if (inner) roofOps.push(column(generateId('column'), 'Gable fan (post + braces)', at, ceilingM + collarY + 0.04, inner.height, 'y-frame', inner.spread))
+        if (outer) roofOps.push(column(generateId('column'), 'Gable fan (struts)', at, ceilingM + collarY + 0.04, outer.height, 'v-frame', outer.spread))
+      } else if (ornament === 'vent') {
+        const h = Math.max(0.35, Math.min(0.75, best.rise * 0.45))
+        const w = h * 0.8
+        roofOps.push({
+          node: {
+            id: generateId('block'),
+            type: 'block',
+            name: 'Gable vent',
+            parentId: levelId,
+            position: [round(centre(0.01)[0]), round(ceilingM + best.rise * 0.42 - h / 2), round(centre(0.01)[1])],
+            rotation: outwardYaw,
+            topology: louverVentTopology(w, h, 0.05),
+            metadata: meta,
           },
           parentId: levelId,
         })
       }
+    }
+  }
+  // Dormers on the front slope of the main gable (Steve, 2026-09-07: "add
+  // dormer option into the generation, using the pascal dormer tool") — the
+  // editor's dormer node hosted on the segment, at ±28 % of its width so
+  // they clear the porch gable at the centre, 55 % of the way up the slope,
+  // facing the eave. Each is the editor's default dormer (its window is
+  // its own parametric opening).
+  if (doc.trim.dormers > 0 && form === 'gable') {
+    const main = result.segments[0]
+    const mainId = roofOps.find((o) => o.node.type === 'roof-segment')?.node.id as string | undefined
+    if (main && mainId && main.roofType === 'gable') {
+      const tan = Math.tan((main.pitch * Math.PI) / 180)
+      const halfRun = main.depth / 2
+      // the segment's local +z in the level frame is (sin r, cos r); the
+      // street is −z, so +z faces the street when cos r < 0
+      const frontSign = Math.cos(main.rotation) < 0 ? 1 : -1
+      if (halfRun >= 2.2 && halfRun * tan >= 1.1) {
+        const xs = doc.trim.dormers === 1 ? [-main.width * 0.28] : doc.trim.dormers === 2 ? [-main.width * 0.28, main.width * 0.28] : [-main.width * 0.3, 0, main.width * 0.3]
+        for (const x of xs) {
+          const z = frontSign * halfRun * 0.45
+          const y = (halfRun - Math.abs(z)) * tan
+          roofOps.push({
+            node: {
+              id: generateId('dormer'),
+              type: 'dormer',
+              name: 'Dormer',
+              parentId: mainId,
+              roofSegmentId: mainId,
+              position: [round(x), round(y), round(z)],
+              rotation: frontSign > 0 ? 0 : round(Math.PI),
+              roofType: 'gable',
+              width: 1.2,
+              depth: 1.55,
+              height: 0,
+              roofHeight: 0.49,
+              metadata: { generatedBy: GENERATED_BY, ornament: 'dormer' },
+            },
+            parentId: mainId,
+          })
+        }
+      } else warnings.push('dormers: the main slope is too short for a dormer — none drawn.')
     }
   }
   return roofOps

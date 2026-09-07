@@ -18,6 +18,7 @@
  * segment and every later pass sees a closed loop.
  */
 import type { PlanDocument, PlanEdge } from './document'
+import { GABLE_ORNAMENTS_BY_STYLE } from './ornament'
 import { mulberry32, pick, type Rng } from './rng'
 import { STYLE_KEYS, styleFor } from './styles'
 
@@ -417,9 +418,25 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
   }
 
   // ── roof intent from the style ───────────────────────────────────────
+  // The style names the form; a gable style still hips one house in a few
+  // (Steve, 2026-09-07: "some more hip designs generated on random in
+  // different styles"), and the trim the house wears is rolled here so the
+  // same seed dresses the same house twice.
   const W = CW + RW
-  const gables: PlanEdge[] =
-    style.roofForm === 'gable' ? (D > W ? ['front', 'back'] : ['left', 'right']) : []
+  const hipChance: Record<string, number> = { farmhouse: 0.15, craftsman: 0.3, cottage: 0.3 }
+  const roofForm: (typeof style)['roofForm'] =
+    style.roofForm === 'gable' && rng() < (hipChance[style.key] ?? 0) ? 'hip' : style.roofForm
+  const gables: PlanEdge[] = roofForm === 'gable' ? (D > W ? ['front', 'back'] : ['left', 'right']) : []
+  const ornaments = GABLE_ORNAMENTS_BY_STYLE[style.key] ?? ['none']
+  const stucco = style.exteriorAssembly === 'exterior-2x6-stucco'
+  const gableOrnament = roofForm === 'gable' ? (stucco ? 'vent' : pick(rng, ornaments)) : 'none'
+  const shutterStyles = new Set(['craftsman', 'farmhouse', 'cottage'])
+  const shutters = shutterStyles.has(style.key) && rng() < (style.key === 'craftsman' ? 0.7 : 0.4)
+  // dormers ride the front slope: only when the gables are on the SIDES (the
+  // front is an eave), never on the ADU, one house in three
+  const frontIsEave = roofForm === 'gable' && gables.includes('left')
+  const dormerStyles = new Set(['farmhouse', 'craftsman', 'cottage'])
+  const dormers = frontIsEave && mode !== 'adu' && dormerStyles.has(style.key) && rng() < 0.35 ? pick(rng, [1, 2, 2] as const) : 0
   const document: PlanDocument = {
     roomcode: 1,
     name: `${style.label} ${beds} bd / ${baths} ba (seed ${seed})`,
@@ -427,7 +444,8 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
     mode,
     style: style.key,
     ceiling: 9,
-    roof: { form: style.roofForm, pitch: style.pitch, overhang: style.overhangIn / 12, gables },
+    roof: { form: roofForm, pitch: style.pitch, overhang: style.overhangIn / 12, gables },
+    trim: { gable: gableOrnament, shutters, sconces: true, fans: true, dormers },
     rooms,
     attach,
     frontDoor: 'FOYER',
