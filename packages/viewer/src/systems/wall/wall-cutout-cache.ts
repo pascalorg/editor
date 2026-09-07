@@ -1,3 +1,5 @@
+// New kind-specific modules belong in nodes; viewer must not depend on nodes.
+// This extends the existing viewer-owned wall cutout and material implementation.
 import {
   type AnyNodeId,
   getLibraryMaterialsVersion,
@@ -7,10 +9,12 @@ import {
   resolveWallEffectiveHeight,
   sceneRegistry,
   spatialGridManager,
+  useLiveTransforms,
   useScene,
   type WallNode,
 } from '@pascal-app/core'
-import { type Camera, type Material, Matrix4, type Mesh, Vector3 } from 'three'
+import { type Camera, type Material, Matrix4, type Mesh, type Object3D, Vector3 } from 'three'
+import { getMaterialTextureVersion } from '../../lib/materials'
 import useViewer, { type WallMode } from '../../store/use-viewer'
 import { resolveWallMaterialVariant, type WallMaterialVariant } from './wall-material-variant'
 import {
@@ -64,6 +68,7 @@ type CachedWall = {
   negativeFacing: boolean | undefined
   hidden: boolean | undefined
   variantKey: WallMaterialVariant | undefined
+  assignedMaterials: Material | Material[] | undefined
   visibleVariant: Variant
   hiddenVariant: Variant
 }
@@ -104,37 +109,78 @@ export class WallCutoutCache {
   private cameraDirection = new Vector3()
   private cameraTarget = new Vector3()
   private lastUpdateTime = 0
-  private highlightMaps: Array<{ material: Material & { map?: unknown }; map: unknown }> = []
+  private textureVersion = -1
+  private selected = new Set<string>()
+  private highlightKey = ''
+  private transformed = new Set<string>()
+
+  subscribeLiveTransforms(): () => void {
+    return useLiveTransforms.subscribe((state, previous) => {
+      for (const [id, transform] of state.transforms) {
+        if (transform !== previous.transforms.get(id)) this.transformed.add(id)
+      }
+      for (const id of previous.transforms.keys()) {
+        if (!state.transforms.has(id)) this.transformed.add(id)
+      }
+    })
+  }
 
   update(camera: Camera, time: number): void {
     const viewer = useViewer.getState()
     const scene = useScene.getState()
     const wallIds = sceneRegistry.byType.wall!
     const libraryVersion = getLibraryMaterialsVersion()
+    const textureVersion = getMaterialTextureVersion()
     const previous = this.viewer
     const nodesChanged = this.nodes !== scene.nodes
     const registryChanged =
       this.registryRevision !== sceneRegistry.revision || this.wallCount !== wallIds.size
-    const refresh =
+    let highlightChanged = false
+    if (
       !previous ||
       nodesChanged ||
-      registryChanged ||
-      this.materials !== scene.materials ||
-      this.libraryVersion !== libraryVersion ||
-      this.highlightMaps.some(({ material, map }) => material.map !== map) ||
-      previous.wallMode !== viewer.wallMode ||
-      previous.shading !== viewer.shading ||
-      previous.textures !== viewer.textures ||
-      previous.colorPreset !== viewer.colorPreset ||
-      previous.sceneTheme !== viewer.sceneTheme ||
       previous.selection.selectedIds !== viewer.selection.selectedIds ||
       previous.previewSelectedIds !== viewer.previewSelectedIds ||
       previous.hoveredId !== viewer.hoveredId ||
       previous.hoverHighlightMode !== viewer.hoverHighlightMode
+    ) {
+      this.selected = new Set(
+        [...viewer.selection.selectedIds, ...viewer.previewSelectedIds].filter(
+          (id) => scene.nodes[id as AnyNodeId]?.type === 'wall',
+        ),
+      )
+      const hovered =
+        scene.nodes[viewer.hoveredId as AnyNodeId]?.type === 'wall' ? viewer.hoveredId : null
+      const key = `${Array.from(this.selected).sort().join('|')}::${viewer.hoverHighlightMode === 'delete' ? (hovered ?? '') : ''}::${viewer.hoverHighlightMode === 'default' ? (hovered ?? '') : ''}`
+      highlightChanged = key !== this.highlightKey
+      this.highlightKey = key
+    }
+    const appearanceChanged =
+      !previous ||
+      highlightChanged ||
+      this.materials !== scene.materials ||
+      this.libraryVersion !== libraryVersion ||
+      (this.textureVersion !== textureVersion && this.selected.size > 0) ||
+      previous.wallMode !== viewer.wallMode ||
+      previous.shading !== viewer.shading ||
+      previous.textures !== viewer.textures ||
+      previous.colorPreset !== viewer.colorPreset ||
+      previous.sceneTheme !== viewer.sceneTheme
+    const previewId = (state: typeof viewer | undefined) =>
+      state && state.hoverHighlightMode !== 'default' && state.hoverHighlightMode !== 'delete'
+        ? state.hoveredId
+        : null
+    const releasedPreview = previewId(previous) !== previewId(viewer) ? previewId(previous) : null
+    this.viewer = viewer
+    const invalidated =
+      appearanceChanged ||
+      nodesChanged ||
+      registryChanged ||
+      this.rebuilt.size > 0 ||
+      this.transformed.size > 0 ||
+      releasedPreview !== null
 
-    // Only cutaway's output depends on facing. Low always hides, translucent
-    // always draws the translucent variant and keeps pointer events enabled.
-    if (!refresh && this.rebuilt.size === 0 && viewer.wallMode !== 'cutaway') return
+    if (!invalidated && viewer.wallMode !== 'cutaway') return
 
     camera.getWorldDirection(this.cameraDirection)
     this.cameraTarget.copy(this.cameraDirection).add(camera.position)
@@ -143,7 +189,7 @@ export class WallCutoutCache {
       time - this.lastUpdateTime > 0.1 &&
       (camera.position.distanceTo(this.lastCameraPosition) > 0.5 ||
         this.cameraTarget.distanceTo(this.lastCameraTarget) > 0.3)
-    if (!refresh && this.rebuilt.size === 0 && !cameraChanged) return
+    if (!invalidated && !cameraChanged) return
 
     if (registryChanged || nodesChanged) {
       for (const [id, wall] of this.walls) {
@@ -151,21 +197,33 @@ export class WallCutoutCache {
           !wallIds.has(id) ||
           sceneRegistry.nodes.get(id) !== wall.mesh ||
           scene.nodes[id as AnyNodeId]?.type !== 'wall'
-        ) {
+        )
           this.walls.delete(id)
-        }
       }
     }
 
-    if (refresh) {
-      this.highlightMaps = []
-      const selected = new Set([...viewer.selection.selectedIds, ...viewer.previewSelectedIds])
-      for (const id of wallIds) {
-        const mesh = sceneRegistry.nodes.get(id) as Mesh | undefined
+    if (invalidated) {
+      const changedPaths = new Map<string, boolean>()
+      const pathChanged = (id: string): boolean => {
+        const cached = changedPaths.get(id)
+        if (cached !== undefined) return cached
         const node = scene.nodes[id as AnyNodeId]
-        if (!mesh || node?.type !== 'wall') continue
+        const changed =
+          this.transformed.has(id) ||
+          (nodesChanged && this.nodes?.[id as AnyNodeId] !== node) ||
+          !!(node?.parentId && pathChanged(node.parentId))
+        changedPaths.set(id, changed)
+        return changed
+      }
+      const visited = new Set<Object3D>()
+      for (const id of wallIds) {
+        const node = scene.nodes[id as AnyNodeId]
+        if (node?.type !== 'wall') continue
         let wall = this.walls.get(id)
+        const added = !wall
         if (!wall) {
+          const mesh = sceneRegistry.nodes.get(id) as Mesh | undefined
+          if (!mesh) continue
           wall = {
             mesh,
             node,
@@ -175,95 +233,99 @@ export class WallCutoutCache {
             negativeFacing: undefined,
             hidden: undefined,
             variantKey: undefined,
+            assignedMaterials: undefined,
             visibleVariant: { key: 'visible', materials: [] },
             hiddenVariant: { key: 'invisible', materials: [] },
           }
           this.walls.set(id, wall)
-          this.refreshNormal(wall)
-        } else if (nodesChanged || this.rebuilt.has(id)) {
-          this.refreshNormal(wall)
         }
+        const changed = pathChanged(id)
+        const rebuilt = this.rebuilt.has(id)
+        if (added || changed || rebuilt) this.refreshNormal(wall, visited)
         wall.node = node
-        const deleted = viewer.hoverHighlightMode === 'delete' && viewer.hoveredId === id
-        let selectionHighlighted = !deleted && selected.has(id)
-        if (selectionHighlighted) {
-          const levelId = resolveLevelId(node, scene.nodes)
-          const support = spatialGridManager.getSlabSupportForWall(
-            levelId,
-            node.start,
-            node.end,
-            node.curveOffset ?? 0,
-            node.thickness,
-            node.supportSlabId,
-          )
-          const height = resolveWallEffectiveHeight(
-            node,
-            getWallPlaneTop(node, levelId, scene.nodes),
-            support.elevation,
-          )
-          selectionHighlighted = !getWallFaceBandConfig(node, height).enabled
+        if (added || appearanceChanged || (nodesChanged && changed)) this.refreshAppearance(wall)
+        if (
+          added ||
+          appearanceChanged ||
+          changed ||
+          rebuilt ||
+          releasedPreview === id ||
+          cameraChanged
+        ) {
+          this.apply(wall, viewer.wallMode, added || appearanceChanged || (nodesChanged && changed))
         }
-        const materials = getMaterialsForWall(
-          node,
-          viewer.shading,
-          viewer.textures,
-          viewer.colorPreset,
-          viewer.sceneTheme,
-          scene.materials,
-        )
-        // Selection clones need to pick up textures that arrive after mount.
-        // Check only these few source materials, never every wall's material set.
-        if (selectionHighlighted) {
-          for (const material of materials.visible) {
-            this.highlightMaps.push({
-              material,
-              map: (material as Material & { map?: unknown }).map,
-            })
-          }
-        }
-        const variant = (hidden: boolean): Variant => {
-          const key = resolveWallMaterialVariant({
-            translucentMode: viewer.wallMode === 'translucent',
-            hidden,
-            deleteHighlighted: deleted,
-            selectionHighlighted,
-            hoverHighlighted: viewer.hoverHighlightMode === 'default' && viewer.hoveredId === id,
-          })
-          return { key, materials: materialsForVariant(key, materials) }
-        }
-        wall.visibleVariant = variant(false)
-        wall.hiddenVariant = variant(true)
-        this.apply(wall, viewer.wallMode, true)
       }
     } else {
-      for (const id of this.rebuilt) {
-        const wall = this.walls.get(id)
-        if (!wall) continue
-        this.refreshNormal(wall)
-        this.apply(wall, viewer.wallMode, true)
-      }
-      if (cameraChanged) {
-        for (const [id, wall] of this.walls) {
-          if (!this.rebuilt.has(id)) this.apply(wall, viewer.wallMode, false)
-        }
-      }
+      for (const wall of this.walls.values()) this.apply(wall, viewer.wallMode, false)
     }
     this.rebuilt.clear()
-    this.viewer = viewer
+    this.transformed.clear()
     this.nodes = scene.nodes
     this.materials = scene.materials
     this.registryRevision = sceneRegistry.revision
     this.wallCount = wallIds.size
     this.libraryVersion = libraryVersion
-    if (refresh || cameraChanged) {
+    this.textureVersion = getMaterialTextureVersion()
+    if (appearanceChanged || cameraChanged) {
       this.lastCameraPosition.copy(camera.position)
       this.lastCameraTarget.copy(this.cameraTarget)
       this.lastUpdateTime = time
     }
   }
 
-  private refreshNormal(wall: CachedWall): void {
-    wall.mesh.updateWorldMatrix(true, false)
+  private refreshAppearance(wall: CachedWall): void {
+    const viewer = this.viewer!
+    const scene = useScene.getState()
+    const node = wall.node
+    const deleted = viewer.hoverHighlightMode === 'delete' && viewer.hoveredId === node.id
+    let selectionHighlighted = !deleted && this.selected.has(node.id)
+    if (selectionHighlighted) {
+      const levelId = resolveLevelId(node, scene.nodes)
+      const support = spatialGridManager.getSlabSupportForWall(
+        levelId,
+        node.start,
+        node.end,
+        node.curveOffset ?? 0,
+        node.thickness,
+        node.supportSlabId,
+      )
+      const height = resolveWallEffectiveHeight(
+        node,
+        getWallPlaneTop(node, levelId, scene.nodes),
+        support.elevation,
+      )
+      selectionHighlighted = !getWallFaceBandConfig(node, height).enabled
+    }
+    const materials = getMaterialsForWall(
+      node,
+      viewer.shading,
+      viewer.textures,
+      viewer.colorPreset,
+      viewer.sceneTheme,
+      scene.materials,
+    )
+    const variant = (hidden: boolean): Variant => {
+      const key = resolveWallMaterialVariant({
+        translucentMode: viewer.wallMode === 'translucent',
+        hidden,
+        deleteHighlighted: deleted,
+        selectionHighlighted,
+        hoverHighlighted: viewer.hoverHighlightMode === 'default' && viewer.hoveredId === node.id,
+      })
+      return { key, materials: materialsForVariant(key, materials) }
+    }
+    wall.visibleVariant = variant(false)
+    wall.hiddenVariant = variant(true)
+  }
+
+  private refreshNormal(wall: CachedWall, visited: Set<Object3D>): void {
+    const update = (object: Object3D): void => {
+      if (visited.has(object)) return
+      if (object.parent) update(object.parent)
+      object.updateWorldMatrix(false, false)
+      visited.add(object)
+    }
+    update(wall.mesh)
     if (wall.matrix.equals(wall.mesh.matrixWorld) && wall.geometry === wall.mesh.geometry) return
     wall.matrix.copy(wall.mesh.matrixWorld)
     wall.geometry = wall.mesh.geometry
@@ -278,13 +340,22 @@ export class WallCutoutCache {
       )
     }
     const hidden = wallHiddenFromFacing(wall.node, mode, wall.negativeFacing ?? false)
-    if (!refresh && hidden === wall.hidden) return
     wall.hidden = hidden
     // The wall batch and pointer handlers consume this boolean, including
     // false on stamp lift; translucent walls must continue receiving events.
     const stamp = mode !== 'translucent' && hidden
     if (wall.mesh.userData.wallHidden !== stamp) wall.mesh.userData.wallHidden = stamp
     const variant = hidden ? wall.hiddenVariant : wall.visibleVariant
+    // Non-highlight hover owns a temporary material until its restore callback runs.
+    const viewer = this.viewer!
+    if (
+      viewer.hoveredId === wall.node.id &&
+      viewer.hoverHighlightMode !== 'default' &&
+      viewer.hoverHighlightMode !== 'delete'
+    ) {
+      if (refresh) wall.variantKey = undefined
+      return
+    }
     if (wall.variantKey !== variant.key || refresh) {
       if (
         wall.mesh.material !== variant.materials &&
@@ -293,6 +364,9 @@ export class WallCutoutCache {
         wall.mesh.material = variant.materials
       }
       wall.variantKey = variant.key
+      wall.assignedMaterials = wall.mesh.material
+    } else if (wall.mesh.material !== wall.assignedMaterials) {
+      wall.mesh.material = wall.assignedMaterials!
     }
   }
 }

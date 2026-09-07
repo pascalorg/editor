@@ -1,16 +1,33 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
 import {
+  BuildingNode,
+  LevelNode,
   MaterialPresetPayloadSchema,
   registerLibraryMaterials,
   SceneMaterial,
+  SiteNode,
   sceneRegistry,
   unregisterLibraryMaterials,
+  useLiveTransforms,
   useScene,
   WallNode,
 } from '@pascal-app/core'
-import { BoxGeometry, Group, type Material, Mesh, PerspectiveCamera, Texture, Vector3 } from 'three'
+import { act, createRoot, useFrame } from '@react-three/fiber'
+import { createElement } from 'react'
+import {
+  BoxGeometry,
+  Group,
+  type Material,
+  Mesh,
+  MeshBasicMaterial,
+  PerspectiveCamera,
+  Texture,
+  TextureLoader,
+  Vector3,
+} from 'three'
+import { applyMaterialPresetToMaterials } from '../../lib/materials'
 import useViewer from '../../store/use-viewer'
-import { getWallHideState } from './wall-cutout'
+import { getWallHideState, WallCutout } from './wall-cutout'
 import {
   sameMaterialArray,
   WALL_FACING_HYSTERESIS,
@@ -29,6 +46,7 @@ const viewerBefore = useViewer.getState()
 let cache: WallCutoutCache
 let camera: PerspectiveCamera
 let unsubscribe: () => void
+let unsubscribeTransforms: () => void
 
 function addWall(frontSide = 'exterior', backSide = 'interior') {
   const node = WallNode.parse({ start: [0, 0], end: [4, 0], frontSide, backSide })
@@ -75,13 +93,17 @@ beforeEach(() => {
     hoveredId: null,
     hoverHighlightMode: 'default',
   })
+  useLiveTransforms.getState().clearAll()
   cache = new WallCutoutCache()
+  unsubscribeTransforms = cache.subscribeLiveTransforms()
   camera = new PerspectiveCamera()
   unsubscribe = subscribeWallRebuilds((id) => cache.rebuilt.add(id))
 })
 
 afterEach(() => {
   unsubscribe()
+  unsubscribeTransforms()
+  useLiveTransforms.getState().clearAll()
   drainRebuiltWalls(new Set())
   sceneRegistry.clear()
   useScene.setState(sceneBefore)
@@ -186,10 +208,19 @@ describe('WallCutoutCache', () => {
   test('scene transform and side changes refresh facing with a stationary camera', () => {
     const { node, mesh } = addWall()
     const parent = new Group()
+    const ancestor = BuildingNode.parse({})
+    useScene.setState({
+      nodes: { [ancestor.id]: ancestor, [node.id]: { ...node, parentId: ancestor.id } },
+    })
     parent.add(mesh)
     cache.update(camera, 1)
     parent.rotation.y = Math.PI
-    useScene.setState({ nodes: { ...useScene.getState().nodes } })
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        [ancestor.id]: { ...ancestor, rotation: [0, Math.PI, 0] },
+      },
+    })
     cache.update(camera, 1.01)
     expect(mesh.userData.wallHidden).toBe(false)
     useScene.setState({
@@ -197,6 +228,238 @@ describe('WallCutoutCache', () => {
     })
     cache.update(camera, 1.02)
     expect(mesh.userData.wallHidden).toBe(true)
+  })
+
+  for (const schema of [SiteNode, BuildingNode, LevelNode]) {
+    test(`live ${schema.parse({}).type} rotation, commit and cancel refresh descendant normals`, () => {
+      const parentNode = schema.parse({})
+      const parent = new Group()
+      const { node, mesh } = addWall()
+      parent.add(mesh)
+      useScene.setState({
+        nodes: {
+          ...useScene.getState().nodes,
+          [parentNode.id]: parentNode,
+          [node.id]: { ...node, parentId: parentNode.id },
+        },
+      })
+      const nodes = useScene.getState().nodes
+      cache.update(camera, 1)
+      const publish = (rotation: number) => {
+        parent.rotation.y = rotation
+        useLiveTransforms.getState().set(parentNode.id, { position: [0, 0, 0], rotation })
+        cache.update(camera, 1.01)
+        expect(mesh.userData.wallHidden).toBe(
+          getWallHideState(node, mesh, 'cutaway', new Vector3(0, 0, -1)),
+        )
+      }
+      publish(Math.PI)
+      expect(mesh.userData.wallHidden).toBe(false)
+      publish(0)
+      publish(Math.PI)
+      expect(useScene.getState().nodes).toBe(nodes)
+      useLiveTransforms.getState().clear(parentNode.id)
+      cache.update(camera, 1.02)
+      expect(mesh.userData.wallHidden).toBe(false)
+      publish(0)
+      parent.rotation.y = Math.PI
+      useLiveTransforms.getState().clearAll()
+      cache.update(camera, 1.03)
+      expect(mesh.userData.wallHidden).toBe(false)
+    })
+  }
+
+  test('same-facing scans repair restored materials and corrupted stamps', () => {
+    const { mesh } = addWall()
+    cache.update(camera, 1)
+    const expected = mesh.material
+    mesh.material = [new MeshBasicMaterial()]
+    mesh.userData.wallHidden = false
+    camera.position.x++
+    cache.update(camera, 2)
+    expect(mesh.material).toBe(expected)
+    expect(mesh.userData.wallHidden).toBe(true)
+  })
+
+  test('paint hover preserves preview through cache updates and restores current appearance on leave', () => {
+    useViewer.setState({ wallMode: 'up' })
+    const { node, mesh } = addWall()
+    cache.update(camera, 1)
+    const original = mesh.material
+    const preview = [new MeshBasicMaterial()]
+    useViewer.setState({ hoveredId: node.id })
+    useViewer.setState({ hoverHighlightMode: 'paint-ready' })
+    mesh.material = preview
+    const normal = spyOn(mesh, 'updateWorldMatrix')
+    cache.update(camera, 1.01)
+    expect(mesh.material).toBe(preview)
+    expect(normal).not.toHaveBeenCalled()
+    useViewer.setState({ wallMode: 'cutaway' })
+    cache.update(camera, 1.02)
+    camera.position.x++
+    cache.update(camera, 2)
+    expect(mesh.material).toBe(preview)
+    mesh.material = original
+    useViewer.setState({ hoveredId: null, hoverHighlightMode: 'default' })
+    cache.update(camera, 2.01)
+    expect(mesh.material).toBe(cache.walls.get(node.id)!.hiddenVariant.materials)
+    normal.mockRestore()
+  })
+
+  test('appearance changes during preview are applied when temporary ownership ends', () => {
+    useViewer.setState({ wallMode: 'up' })
+    const { node, mesh } = addWall()
+    cache.update(camera, 1)
+    const original = mesh.material
+    const preview = [new MeshBasicMaterial()]
+    useViewer.setState({ hoveredId: node.id, hoverHighlightMode: 'paint-ready' })
+    mesh.material = preview
+    useViewer.setState({ colorPreset: 'white' })
+    cache.update(camera, 1.01)
+    expect(mesh.material).toBe(preview)
+    mesh.material = original
+    useViewer.setState({ hoveredId: null, hoverHighlightMode: 'default' })
+    cache.update(camera, 1.02)
+    expect(mesh.material).toBe(cache.walls.get(node.id)!.visibleVariant.materials)
+    expect(mesh.material).not.toBe(original)
+  })
+
+  test('a live ancestor above the level updates every descendant once', () => {
+    const building = BuildingNode.parse({})
+    const level = LevelNode.parse({ parentId: building.id })
+    const outer = new Group()
+    const inner = new Group()
+    outer.add(inner)
+    const walls = [addWall(), addWall()]
+    for (const { node, mesh } of walls) {
+      inner.add(mesh)
+      useScene.setState({
+        nodes: {
+          ...useScene.getState().nodes,
+          [building.id]: building,
+          [level.id]: level,
+          [node.id]: { ...node, parentId: level.id },
+        },
+      })
+    }
+    cache.update(camera, 1)
+    const outerUpdate = spyOn(outer, 'updateWorldMatrix')
+    const innerUpdate = spyOn(inner, 'updateWorldMatrix')
+    outer.rotation.y = Math.PI
+    useLiveTransforms.getState().set(building.id, { position: [0, 0, 0], rotation: Math.PI })
+    cache.update(camera, 1.01)
+    expect(outerUpdate).toHaveBeenCalledTimes(1)
+    expect(innerUpdate).toHaveBeenCalledTimes(1)
+    for (const { mesh } of walls) expect(mesh.userData.wallHidden).toBe(false)
+    outerUpdate.mockRestore()
+    innerUpdate.mockRestore()
+  })
+
+  test('scopes node edits to their wall paths and updates shared ancestors once', () => {
+    const parents = Array.from({ length: 4 }, () => ({
+      node: BuildingNode.parse({}),
+      mesh: new Group(),
+    }))
+    const walls = Array.from({ length: 100 }, (_, i) => {
+      const wall = addWall()
+      const parent = parents[i % 4]!
+      parent.mesh.add(wall.mesh)
+      useScene.setState({
+        nodes: {
+          ...useScene.getState().nodes,
+          [parent.node.id]: parent.node,
+          [wall.node.id]: { ...wall.node, parentId: parent.node.id },
+        },
+      })
+      return wall
+    })
+    cache.update(camera, 1)
+    const parentUpdates = parents.map(({ mesh }) => spyOn(mesh, 'updateWorldMatrix'))
+    const wallUpdates = walls.map(({ mesh }) => spyOn(mesh, 'updateWorldMatrix'))
+    const variants = walls.map(({ node }) => cache.walls.get(node.id)!.visibleVariant)
+    const unrelated = BuildingNode.parse({})
+    useScene.setState({ nodes: { ...useScene.getState().nodes, [unrelated.id]: unrelated } })
+    cache.update(camera, 1.01)
+    for (const spy of [...parentUpdates, ...wallUpdates]) expect(spy).not.toHaveBeenCalled()
+    walls.forEach(({ node }, i) => {
+      expect(cache.walls.get(node.id)!.visibleVariant).toBe(variants[i])
+    })
+    const changed = parents[0]!
+    changed.mesh.rotation.y = Math.PI
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        [changed.node.id]: { ...changed.node, rotation: [0, Math.PI, 0] },
+      },
+    })
+    cache.update(camera, 1.02)
+    parentUpdates.forEach((spy, i) => {
+      expect(spy).toHaveBeenCalledTimes(i === 0 ? 1 : 0)
+    })
+    wallUpdates.forEach((spy, i) => {
+      expect(spy).toHaveBeenCalledTimes(i % 4 === 0 ? 1 : 0)
+    })
+    walls.forEach(({ node, mesh }, i) => {
+      expect(mesh.userData.wallHidden).toBe(i % 4 !== 0)
+      if (i % 4 !== 0) expect(cache.walls.get(node.id)!.visibleVariant).toBe(variants[i])
+    })
+    for (const spy of [...parentUpdates, ...wallUpdates]) spy.mockRestore()
+  })
+
+  test('appearance changes do not revisit transforms', () => {
+    const { mesh } = addWall()
+    cache.update(camera, 1)
+    const matrix = spyOn(mesh, 'updateWorldMatrix')
+    useViewer.setState({ colorPreset: 'white' })
+    cache.update(camera, 1.01)
+    expect(matrix).not.toHaveBeenCalled()
+    matrix.mockRestore()
+  })
+
+  test('actual R3F advance renders camera stamps before rebuilds and passes them to the batch', async () => {
+    const { node, mesh } = addWall()
+    const canvas = { width: 1, height: 1, style: {} } as HTMLCanvasElement
+    const root = createRoot(canvas)
+    const rendered: boolean[] = []
+    const batched: boolean[] = []
+    let rebuild = false
+    function FrameConsumers() {
+      useFrame(() => rendered.push(mesh.userData.wallHidden), 1)
+      useFrame(() => {
+        if (!rebuild) return
+        mesh.rotation.y = Math.PI
+        notifyWallRebuilt(node.id)
+        rebuild = false
+      }, 4)
+      useFrame(() => batched.push(mesh.userData.wallHidden), 5)
+      return createElement(WallCutout)
+    }
+    await root.configure({
+      camera,
+      frameloop: 'never',
+      size: { width: 1, height: 1, top: 0, left: 0 },
+      gl: { render() {}, setSize() {}, setPixelRatio() {} } as never,
+    })
+    let store: ReturnType<typeof root.render>
+    await act(async () => {
+      store = root.render(createElement(FrameConsumers))
+    })
+    try {
+      const advance = (time: number) => store!.getState().advance(time)
+      advance(1)
+      camera.rotation.y = Math.PI
+      advance(2)
+      expect(rendered).toEqual([true, false])
+      expect(batched).toEqual(rendered)
+      rebuild = true
+      advance(3)
+      expect(rendered[2]).toBe(false)
+      advance(3.01)
+      expect(rendered[3]).toBe(true)
+      expect(batched).toEqual(rendered)
+    } finally {
+      await act(async () => root.unmount())
+    }
   })
 
   test('mode round trips immediately lift stamps and preserve low/translucent semantics', () => {
@@ -317,7 +580,7 @@ describe('WallCutoutCache', () => {
     }
   })
 
-  test('selected wall clones pick up a late texture with a stationary full-height camera', () => {
+  test('selected wall clones pick up a late texture with a stationary full-height camera', async () => {
     const { node, mesh } = addWall()
     useViewer.setState({
       wallMode: 'up',
@@ -334,13 +597,35 @@ describe('WallCutoutCache', () => {
     ).visible[1]! as Material & { map: Texture | null }
     const originalMap = source.map
     const texture = new Texture()
+    const loader = spyOn(TextureLoader.prototype, 'loadAsync').mockResolvedValue(texture)
     try {
-      source.map = texture
+      applyMaterialPresetToMaterials(
+        source,
+        MaterialPresetPayloadSchema.parse({
+          maps: { albedoMap: '/row14-late-texture.png' },
+          mapProperties: {},
+        }),
+      )
+      await new Promise((resolve) => setTimeout(resolve, 0))
       cache.update(camera, 1.01)
       expect(
-        ((mesh.material as Material[])[1] as Material & { map: Texture }).map === texture,
+        ((mesh.material as Material[])[1] as Material & { map: Texture }).map === source.map,
       ).toBe(true)
+      expect(source.map).not.toBeNull()
+      const loadedMap = source.map
+      let reads = 0
+      Object.defineProperty(source, 'map', {
+        configurable: true,
+        get: () => {
+          reads++
+          return loadedMap
+        },
+      })
+      for (let i = 0; i < 100; i++) cache.update(camera, 2 + i)
+      expect(reads).toBe(0)
+      Object.defineProperty(source, 'map', { configurable: true, writable: true, value: loadedMap })
     } finally {
+      loader.mockRestore()
       source.map = originalMap
       texture.dispose()
     }
@@ -393,4 +678,17 @@ test('hysteresis holds both sides near zero and switches beyond the band', () =>
   }
   expect(wallFacingNegative(-2 * e, false)).toBe(true)
   expect(wallFacingNegative(2 * e, true)).toBe(false)
+})
+
+test('legacy wall extensions preserve the viewer-to-nodes dependency boundary', async () => {
+  const root = new URL('../../', import.meta.url).pathname
+  for (const file of new Bun.Glob('**/*.{ts,tsx}').scanSync(root)) {
+    const source = await Bun.file(`${root}${file}`).text()
+    expect(source).not.toMatch(/(?:from|import\s*\()\s*['"]@pascal-app\/nodes/)
+  }
+  for (const file of ['wall-cutout-cache.ts', 'wall-rebuild-notifications.ts']) {
+    const source = await Bun.file(new URL(file, import.meta.url)).text()
+    expect(source.split('\n')[0]).toContain('New kind-specific modules belong in nodes')
+    expect(source.split('\n')[1]).toContain('viewer-owned')
+  }
 })

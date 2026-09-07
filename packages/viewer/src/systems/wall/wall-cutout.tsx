@@ -37,9 +37,11 @@ export const WallCutout = () => {
 
   useEffect(() => subscribeWallRebuilds((id) => cache.rebuilt.add(id)), [cache])
 
-  // Read completed transforms after WallSystem (4), before WallBatchSystem (5)
-  // consumes the hidden stamps and its independent rebuild queue.
-  useFrame(({ camera, clock }) => cache.update(camera, clock.elapsedTime), 4.5)
+  useEffect(() => cache.subscribeLiveTransforms(), [cache])
+
+  // Camera changes reach PostProcessing (1) in this frame. WallSystem (4)
+  // notifies the next frame; WallBatchSystem (5) reads this frame's stamps.
+  useFrame(({ camera, clock }) => cache.update(camera, clock.elapsedTime), 0)
 
   useEffect(() => {
     const snapshot = new Map<Mesh, Material | Material[]>()
