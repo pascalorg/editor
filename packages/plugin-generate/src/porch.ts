@@ -264,7 +264,9 @@ export function pillarFor(
   policy: PorchPolicy,
 ): { size: number; stucco: boolean } {
   if (policy === 'none') return { size: ENTRANCE_POST, stucco: false }
-  const stucco = style.exteriorAssembly === 'exterior-2x6-stucco' && style.roofForm === 'hip'
+  // every stucco house takes the built-up pier (Steve: "way more stucco
+  // options like stucco pillars"); Bones frames it as a 2x4 box on a 4x4
+  const stucco = style.exteriorAssembly === 'exterior-2x6-stucco'
   if (stucco) return { size: STUCCO_PIER, stucco: true }
   // the craftsman's tapered box column is a wrap around the same 6x6 —
   // not drawn: the post the shell shows IS the post Bones frames
@@ -590,7 +592,11 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         // stair (porch-follow.ts)
         metadata: {
           ...meta,
-          post: { flank: flankAt !== null && Math.abs(Math.abs(a) - flankAt) < 1e-6 },
+          post: {
+            flank: flankAt !== null && Math.abs(Math.abs(a) - flankAt) < 1e-6,
+            // a built-up pier: Bones frames the 2x4 box around its 4x4
+            ...(pillar.stucco ? { pier: true } : {}),
+          },
         },
       },
       parentId: input.levelId,

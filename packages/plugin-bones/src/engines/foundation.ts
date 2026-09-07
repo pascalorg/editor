@@ -37,6 +37,7 @@ import type { CmuDowelLayout } from './cmu'
 import { openingSpans } from './electrical'
 import { intersectIntervals, polygonSpans, subtractInterval } from './floor-framing'
 import { HOLD_DOWN, PLATE_WASHER, partLabel, postBaseFor } from './hardware'
+import { LUMBER_CROSS_SECTIONS, type LumberSize } from '../lumber'
 
 const EPS = 1e-6
 
@@ -171,6 +172,10 @@ export type FoundationOptions = {
     gradeY?: number
     /** What stands on the pad, for its label — 'girder post' when absent. */
     kind?: string
+    /** The post's lumber, for the base that fits it — a 4x4 when absent. */
+    postSize?: LumberSize
+    /** A built-up pier's finished section: its bottom plate is bolted to the pad as well. */
+    pierSize?: number
   }[]
   /**
    * GRADE, level-local (≤ 0). The footing bottom sits `spec.footingDepth`
@@ -1060,17 +1065,37 @@ export function buildFoundation(
       pourBands.push({ band, memberIdx: members.length - 1 })
       carveBands.push(band)
       // the post's base on the pad: Simpson ABU (ZMAX on PT) — the R407.3 / R507.4.1 restraint
+      const postSize = post.postSize ?? '4x4'
+      const baseSide = LUMBER_CROSS_SECTIONS[postSize]?.[0] ?? inches(3.5)
       members.push({
         system: 'foundation',
         role: 'post-base',
-        dims: [inches(4), inches(1), inches(4)],
+        dims: [baseSide + inches(0.5), inches(1), baseSide + inches(0.5)],
         length: inches(1),
         position: [px, padTop + inches(0.5), pz],
         rotation: [0, 0, 0],
         material: 'steel',
         sourceId: post.sourceId,
-        label: partLabel(postBaseFor('4x4'), '4x4 post on its pad footing (R407.3 / R507.4.1)'),
+        label: partLabel(postBaseFor(postSize), `${postSize} ${post.kind ?? 'post'} on its pad footing (R407.3 / R507.4.1)`),
       })
+      // a built-up pier's bottom plate is bolted down too: two 5/8 in
+      // anchor bolts through the plate, one each side of the post
+      if (post.pierSize) {
+        const off = post.pierSize / 2 - inches(3)
+        for (const dx of [-off, off]) {
+          members.push({
+            system: 'foundation',
+            role: 'anchor-bolt',
+            dims: [BOLT_SIDE, BOLT_HEIGHT, BOLT_SIDE],
+            length: BOLT_HEIGHT,
+            position: [px + dx, padTop - BOLT_EMBEDMENT + BOLT_HEIGHT / 2, pz],
+            rotation: [0, 0, 0],
+            material: 'steel',
+            sourceId: post.sourceId,
+            label: '5/8" anchor bolt — built-up pier bottom plate to the pad (R403.1.6 / R407.3)',
+          })
+        }
+      }
     }
   }
 

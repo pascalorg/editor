@@ -411,6 +411,13 @@ export type PorchPostSlice = {
   size: number
   /** Which entrance it belongs to ('front' / 'rear'), so a house's porches frame apart. */
   entrance?: string
+  /**
+   * A BUILT-UP pier (the stucco column): a 2x4 box — plates, corner studs,
+   * studs at 12 in o.c. at most, sheathing, lath and stucco — wrapping the
+   * 4x4 that carries the beam. Read off `metadata.post.pier`, a stucco
+   * material, or a section past 10 in; a 6x6 is never one.
+   */
+  pier?: boolean
 }
 
 /** A slab outline for floor framing / foundation, level-local. */

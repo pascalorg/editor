@@ -738,7 +738,69 @@ G41 Elevations show what the model carries: the grade under the building
     cladding the assembly declares (Bones frames siding for a sided house,
     not the state's stucco default).
 
+## Mandate additions (Steve, 2026-09-07 — after the printed set)
+
+Verbatim: "i noticed the shed roof or moono roofs in elevations dont show the
+upper wall above the top plate, those are not working correctly, also the
+rails in front should center onthe two columns on each side on the porches and
+connect into the post, woul dbe amazing, i also want some mroe procedural
+designs and the ones we have now, better kitchen designs and layouts, its liek
+the kitchen is in the middl eof the room, idk needs revamped on the floor plan
+side, check all teh fixtures and layouts, add more, soend some time on taht so
+the random generates more options, i want way more stucco options like stucco
+pillars, and also on the porches with gables add some gingerbread to the gables
+on porches, and gingerbread into the gables on the houses, style more front
+door options, create them into our library if you need to, just enhance
+gingerbead around the houses overall get creative, and also lets think through
+how bons will work if someone draws something from scratch that those will
+work, also the front porches, not sure if this is possible but if they adjust
+it the frmaing should adjust, also on auto build roof, once its on, if they
+change the wall or move it out make sure it updates the roof as they do it,
+they can turn it off too, default on in the plug on, especially if
+procedurally generated, keep workign throug hte plans cehck each hosue type
+and looka th televations sheets themselves" — and: "also the stucco columns
+or any built up columns, eed to be the correct frmaing orientation of 2x4s
+bottom plat top plate, 2xs in teh corners, then spaced like at least 12" o.c.
+maybe so its correct in frmaing view as well, and attached to deck or conrete
+conrrectly usually gets some hold downs, i also wnat to add the holds donws,
+feel free to keep going until we get it all done and tested".
+
+G42 Shed / mono roofs show the wall above the plate in elevation (done, R1).
+G43 Porch rails centred on the flanking posts and dying into them.
+G44 More procedural designs; kitchens laid out against the walls with the
+    fixtures a plan needs — more fixtures, more layouts, more options per roll.
+G45 Stucco options: built-up stucco piers on every stucco house, framed the
+    way they are built — 2x4 plates, 2x4s in the corners, studs at 12 in o.c.
+    at most, sheathing, the 4x4 inside carrying the beam — anchored to the
+    deck or the concrete with their hardware; hold-downs where they belong.
+G46 Gingerbread: brackets and trim in porch and house gables; more front
+    door styles; enhance the trim around the house.
+G47 Bones from scratch: a hand-drawn house frames as well as a generated one.
+G48 A porch the user adjusts re-frames; the auto roof follows wall edits
+    live once on (on by default for a generated house, can be turned off).
+G49 Every house type's elevation sheets reviewed.
+
 ## Log (continued)
+
+- 2026-09-07: **Batch R2 — the built-up stucco pier, framed (G45).** The
+  generator's `pillarFor` gives every stucco house the 13 in pier (only the
+  hip ranch had it) and tags the column `metadata.post.pier`; Bones reads
+  the tag (or a stucco material, or a section past 10 in) into
+  `PorchPostSlice.pier`, and `framePier` (porch-framing.ts) frames it the
+  way it is built: the 4x4 that carries the beam at the centre, a 2x4 box
+  around it inside the stucco (7/8 in) and the sheathing (7/16 in) — a
+  bottom and a top plate on each face, a stud in every corner with its wide
+  face along the pier's face, studs between them at 12 in o.c. at most
+  (none in a 13 in pier's 3⅜ in clear, one per face in a 24 in pier), the
+  sheathing on the four faces with lath and three-coat stucco named as the
+  finish. At the pad the post base now FITS the post (ABU44Z on the pier's
+  4x4, ABU66Z on a 6x6 porch post — every porch post had been labelled a
+  4x4's), and a pier's bottom plate gets two 5/8 in anchor bolts into the
+  pad, one each side of the post (R403.1.6 / R407.3). Tests: porch-framing
+  +2 (the 13 in and the 24 in pier) — Bones 2,125, generate 95, editor
+  typecheck clean. Seen on the Miami Shores ranch: five piers, each 1 post
+  + 8 plates + 4 studs + 4 sheets, ABU44Z bases, ten plate bolts.
+
 
 - 2026-09-07: **Batch R1 — the shed roof's wall in elevation.** Steve: "the
   shed roof or mono roofs in elevations don't show the upper wall above the

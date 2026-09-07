@@ -53,6 +53,41 @@ function cover(attach?: 'high'): RoofSegmentSlice {
   } as RoofSegmentSlice
 }
 
+describe('a built-up stucco pier', () => {
+  test('is a 4x4 inside a 2x4 box: plates, four corner studs, sheathing on four faces — no 6x6', () => {
+    const piers = posts().map((p) => ({ ...p, size: inches(13), pier: true }))
+    const { members, warnings } = framePorches(piers, [frontWall()], [cover()], DEFAULT_SPEC)
+    expect(warnings.filter((w) => w.includes('post '))).toEqual([])
+    // the pier's own members — the beam plate carries the first post's id too
+    const of = (role: string, id = 'column_1') =>
+      members.filter((m) => m.role === role && m.sourceId === id && (m.label ?? '').startsWith('Pier'))
+    expect(members.filter((m) => m.role === 'post' && m.size === '6x6')).toHaveLength(0)
+    expect(of('post').map((m) => m.size)).toEqual(['4x4'])
+    expect(of('bottom-plate')).toHaveLength(4)
+    expect(of('top-plate')).toHaveLength(4)
+    // a 13 in pier: the box is 13 − 2 × 7/8 − 2 × 7/16 = 10⅜ in; between
+    // the corner studs 3⅜ in clear — one bay, no stud between
+    expect(of('stud')).toHaveLength(4)
+    expect(of('sheathing')).toHaveLength(4)
+    const stud = of('stud')[0]!
+    expect(stud.size).toBe('2x4')
+    // the plates cap the studs: stud height = post height − two plate thicknesses
+    const post = of('post')[0]!
+    expect(stud.dims[1]).toBeCloseTo(post.dims[1] - 2 * inches(1.5), 6)
+    // the box sits inside the finished face by the stucco and the sheathing
+    const plate = of('bottom-plate')[0]!
+    expect(plate.dims[0]).toBeCloseTo(inches(13 - 2 * 7 / 8 - 2 * 7 / 16), 6)
+  })
+
+  test('a wide pier takes studs between its corners at 12 in o.c. at most', () => {
+    const piers = posts().map((p) => ({ ...p, size: inches(24), pier: true }))
+    const { members } = framePorches(piers, [frontWall()], [cover()], DEFAULT_SPEC)
+    const studs = members.filter((m) => m.role === 'stud' && m.sourceId === 'column_1')
+    // clear run 24 − 2·7/8 − 2·7/16 − 2·3.5 = 14⅜ in → two bays → one stud between, on each of four faces
+    expect(studs).toHaveLength(4 + 4)
+  })
+})
+
 describe('the porch bearing (PlanCrafters porchWall)', () => {
   const frame = framePorches(posts(), [frontWall()], [cover()], DEFAULT_SPEC)
   const beams = frame.members.filter((m) => m.role === 'girder')

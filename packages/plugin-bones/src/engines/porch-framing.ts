@@ -177,11 +177,16 @@ function framePorch(
     `Porch beam plate ${PLATE_SIZE} — the cover's rafters seat here`,
     a.id,
   )
-  // the posts: base to the beam's underside
+  // the posts: base to the beam's underside — a sawn 6x6, or a built-up
+  // pier: the 4x4 that carries the beam inside a 2x4 box
   for (const p of sorted) {
     const h = beamBottom - p.baseY
     if (h < inches(12)) {
       warnings.push(`${name}: post ${p.id} has ${formatIn(h)} between its base and the beam — not framed.`)
+      continue
+    }
+    if (p.pier) {
+      members.push(...framePier(p, h, yaw, name))
       continue
     }
     push(
@@ -284,4 +289,147 @@ function houseWallFor(
     }
   }
   return best
+}
+
+/* ------------------------------------------------------------ the pier */
+
+const PIER_POST: LumberSize = '4x4'
+const PIER_STUD: LumberSize = '2x4'
+/** Studs in a pier face at most this far apart (Steve: "spaced like at least 12 in o.c."). */
+const PIER_STUD_SPACING = inches(12)
+const PIER_SHEATHING = inches(7 / 16)
+
+/**
+ * A BUILT-UP PIER — the stucco column: the 4x4 post that carries the beam
+ * stands at the centre, and a 2x4 box is framed around it the way a wall
+ * is — a bottom plate and a top plate on each face, a stud in every corner
+ * (its 3½ in face along the pier's face), studs between them at 12 in o.c.
+ * at most, 7/16 in sheathing on the four faces; lath and the three-coat
+ * stucco are the finish. `outer` is the pier's finished section; the box
+ * is framed inside it by the stucco's thickness (7/8 in) so the finish
+ * lands on the drawn face (Steve, 2026-09-07: "the correct framing
+ * orientation of 2x4s bottom plate top plate, 2xs in the corners, then
+ * spaced like at least 12 in o.c.").
+ */
+export function framePier(p: PorchPostSlice, h: number, yaw: number, name: string): Member[] {
+  const out: Member[] = []
+  const [studT, studD] = LUMBER_CROSS_SECTIONS[PIER_STUD]
+  const [postSide] = LUMBER_CROSS_SECTIONS[PIER_POST]
+  const stucco = inches(7 / 8)
+  const box = p.size - 2 * stucco - 2 * PIER_SHEATHING // the framing's outside face to face
+  const cos = Math.cos(yaw)
+  const sin = Math.sin(yaw)
+  const at = (lx: number, y: number, lz: number): readonly [number, number, number] => [
+    p.plan[0] + lx * cos + lz * sin,
+    p.baseY + y,
+    p.plan[1] - lx * sin + lz * cos,
+  ]
+  const emit = (
+    role: Member['role'],
+    lumber: LumberSize | undefined,
+    dims: readonly [number, number, number],
+    position: readonly [number, number, number],
+    extraYaw: number,
+    length: number,
+    material: Member['material'],
+    label: string,
+  ) =>
+    out.push({
+      system: 'roof-framing',
+      role,
+      ...(lumber ? { size: lumber } : {}),
+      dims,
+      length,
+      position,
+      rotation: [0, yaw + extraYaw, 0],
+      material,
+      sourceId: p.id,
+      label,
+    })
+
+  // the post that does the work
+  emit(
+    'post',
+    PIER_POST,
+    [postSide, h, postSide],
+    at(0, h / 2, 0),
+    0,
+    h,
+    'lumber',
+    `Pier post ${PIER_POST} — carries the beam inside the built-up stucco pier, ${formatIn(h)} base to beam (R407.3)`,
+  )
+  const half = box / 2
+  const studH = h - 2 * studT
+  // plates: one on each face, flat, mitred at the corners in the shell —
+  // framed here as the four pieces of a ring
+  for (const [lx, lz, turn] of [
+    [0, half - studD / 2, 0],
+    [0, -(half - studD / 2), 0],
+    [half - studD / 2, 0, Math.PI / 2],
+    [-(half - studD / 2), 0, Math.PI / 2],
+  ] as const) {
+    for (const [role, y] of [
+      ['bottom-plate', studT / 2],
+      ['top-plate', h - studT / 2],
+    ] as const) {
+      emit(
+        role,
+        PIER_STUD,
+        [box, studT, studD],
+        at(lx, y, lz),
+        turn,
+        box,
+        'lumber',
+        `Pier ${role === 'bottom-plate' ? 'bottom' : 'top'} plate ${PIER_STUD} — built-up stucco pier${role === 'bottom-plate' ? ', anchored to the pad (R403.1.6)' : ''}`,
+      )
+    }
+  }
+  // corner studs: one per corner, its wide face along the pier's face
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      emit(
+        'stud',
+        PIER_STUD,
+        [studD, studH, studT],
+        at(sx * (half - studD / 2), studT + studH / 2, sz * (half - studT / 2)),
+        0,
+        studH,
+        'lumber',
+        `Pier corner stud ${PIER_STUD} — built-up stucco pier`,
+      )
+    }
+  }
+  // studs between the corners on each face, 12 in o.c. at most
+  const clear = box - 2 * studD
+  const bays = Math.ceil(clear / PIER_STUD_SPACING)
+  if (bays > 1) {
+    for (let i = 1; i < bays; i++) {
+      const s = -clear / 2 + (clear * i) / bays
+      for (const face of [-1, 1]) {
+        emit('stud', PIER_STUD, [studT, studH, studD], at(s, studT + studH / 2, face * (half - studD / 2)), 0, studH, 'lumber', `Pier stud ${PIER_STUD} @ ${formatIn(clear / bays)} o.c. — built-up stucco pier`)
+        emit('stud', PIER_STUD, [studD, studH, studT], at(face * (half - studD / 2), studT + studH / 2, s), 0, studH, 'lumber', `Pier stud ${PIER_STUD} @ ${formatIn(clear / bays)} o.c. — built-up stucco pier`)
+      }
+    }
+  }
+  // sheathing on the four faces, lath and stucco over it
+  const sheetOut = half + PIER_SHEATHING / 2
+  for (const [lx, lz, turn] of [
+    [0, sheetOut, 0],
+    [0, -sheetOut, 0],
+    [sheetOut, 0, Math.PI / 2],
+    [-sheetOut, 0, Math.PI / 2],
+  ] as const) {
+    emit(
+      'sheathing',
+      undefined,
+      [box + 2 * PIER_SHEATHING, h, PIER_SHEATHING],
+      at(lx, h / 2, lz),
+      turn,
+      h,
+      'engineered',
+      'Pier sheathing 7/16" WSP — lath + 3-coat stucco over it (R703.7)',
+    )
+  }
+  if (out.length > 0 && name) out[0]!.label = `${out[0]!.label} [${name}]`
+  return out
 }

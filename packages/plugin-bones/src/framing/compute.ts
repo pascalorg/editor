@@ -76,7 +76,7 @@ import {
 import { garageSideOf, layoutWallLayers } from '../engines/wall-layers'
 import { resolveJurisdiction, siteStateOf } from '../jurisdiction/guess'
 import { applyJurisdiction, nonIrcCodeWarning, profileFor } from '../jurisdiction/profiles'
-import { LUMBER_CROSS_SECTIONS } from '../lumber'
+import { type LumberSize, LUMBER_CROSS_SECTIONS } from '../lumber'
 import {
   type FramingNode,
   framedAssembly,
@@ -1249,6 +1249,8 @@ function computeLevelUncached(
       sourceId: string
       gradeY?: number
       kind?: string
+      postSize?: LumberSize
+      pierSize?: number
     }[] = []
     const ownGrade = (plan: readonly [number, number]) =>
       hilly ? { gradeY: gradeAt(plan[0], plan[1]) } : {}
@@ -1256,7 +1258,14 @@ function computeLevelUncached(
     // cover) bear on pads too — R403.1 / R407.3, PlanCrafters' porchWall.
     if (isGroundLevel) {
       for (const post of porchPosts) {
-        girderPosts.push({ plan: post.plan, sourceId: post.id, kind: 'porch post', ...ownGrade(post.plan) })
+        girderPosts.push({
+          plan: post.plan,
+          sourceId: post.id,
+          kind: post.pier ? 'porch pier' : 'porch post',
+          postSize: post.pier ? '4x4' : '6x6',
+          ...(post.pier ? { pierSize: post.size } : {}),
+          ...ownGrade(post.plan),
+        })
       }
     }
     const above = levels[levelIndex + 1]
