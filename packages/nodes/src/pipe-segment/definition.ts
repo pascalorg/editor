@@ -1,6 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
-import { pipeContinuationAffordance } from './continuation'
+import { pipeBranchAffordance, pipeContinuationAffordance } from './continuation'
 import { buildPipeSegmentFloorplan } from './floorplan'
 import { buildPipeSegmentGeometry } from './geometry'
 import { pipeSegmentParametrics } from './parametrics'
@@ -94,6 +94,7 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
   floorplanAffordances: {
     'move-path-point': createPathPointMoveAffordance('pipe-segment'),
     'continue-run': pipeContinuationAffordance,
+    'branch-run': pipeBranchAffordance,
   },
 
   // Selection-time path-point handles (drag to edit a committed run).

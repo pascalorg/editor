@@ -461,13 +461,20 @@ const DuctSegmentTool = () => {
   const run = useDistributionRunTool({
     active: !!activeLevelId,
     initialStart: continuationSeed
-      ? ([...continuationSeed.port.position] as [number, number, number])
+      ? ([...(continuationSeed.port?.position ?? continuationSeed.body?.point ?? [0, 0, 0])] as [
+          number,
+          number,
+          number,
+        ])
       : null,
-    initialConnection: continuationSeed ? { port: continuationSeed.port, body: null } : null,
+    initialConnection: continuationSeed
+      ? { port: continuationSeed.port, body: continuationSeed.body }
+      : null,
     findPort: findNearbyPort,
     findBody: (point) => findNearestRunBodyXZ(point, BODY_SNAP_RADIUS_M),
     resolveFirstY: resolveCeilingY,
     minimumFreeY: floorCenterlineY,
+    minimumSegmentLength: 0.08,
     resolveFreeEnd: (_start, end) => [
       end[0],
       ceilingModeRef.current ? resolveCeilingY(end[0], end[2]) : end[1],
@@ -621,6 +628,9 @@ const DuctSegmentTool = () => {
         cursorRef={cursorRef}
         directionMode={run.directionMode}
         extraParts={extraParts}
+        lengthInput={run.lengthInput}
+        onLengthInputChange={run.onLengthInputChange}
+        validationMessage={run.validationMessage}
         snapTarget={run.snapTarget}
         start={run.start}
         startDirection={run.startConnection.port?.direction ?? null}

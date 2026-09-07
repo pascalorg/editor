@@ -2,7 +2,7 @@ import { type AnyNode, type NodeDefinition, useScene } from '@pascal-app/core'
 import { ductBodyPaint, ductBodySlots } from '../shared/duct-body-paint'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
 import { createSegmentMoveAffordance } from '../shared/path-segment-affordance'
-import { ductContinuationAffordance } from './continuation'
+import { ductBranchAffordance, ductContinuationAffordance } from './continuation'
 import { buildDuctSegmentFloorplan } from './floorplan'
 import { buildDuctSegmentGeometry, ductPortDiameterIn } from './geometry'
 import { ductSegmentParametrics } from './parametrics'
@@ -161,6 +161,7 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
     // itself. (Length editing stays on the per-vertex hex handles.)
     'move-segment': createSegmentMoveAffordance('duct-segment'),
     'continue-run': ductContinuationAffordance,
+    'branch-run': ductBranchAffordance,
   },
 
   // Selection-time path-point handles (drag to edit a committed run).

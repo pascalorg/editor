@@ -32,6 +32,7 @@ import { planVerticalOffsets, type VerticalOffsetResult } from '../shared/pipe-v
 import { collectScenePorts, DWV_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 import { ContinuePlusHandle, HandleCube, MoveChevron } from '../shared/selection-handles'
 import {
+  activatePipeBranch,
   activatePipeContinuation,
   type PipeEndpoint,
   pipeContinuationHandlePlan,
@@ -826,6 +827,24 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
         ))}
       {draggingIndex === null &&
         !runMoving &&
+        pipe.path.slice(0, -1).map((point, index) => {
+          const next = pipe.path[index + 1]!
+          if (Math.hypot(next[0] - point[0], next[2] - point[2]) < 0.05) return null
+          return (
+            <PipeBranchHandle
+              index={index}
+              key={`branch-${index}`}
+              pipe={pipe}
+              position={[
+                (point[0] + next[0]) / 2,
+                (point[1] + next[1]) / 2,
+                (point[2] + next[2]) / 2,
+              ]}
+            />
+          )
+        })}
+      {draggingIndex === null &&
+        !runMoving &&
         pipe.path.map((p, i) => (
           <group key={`pipe-vtx${i}`}>
             <HandleCube
@@ -923,6 +942,26 @@ function PipeContinuationHandle({
         activatePipeContinuation(pipe, endpoint, plan.fittingId)
       }}
       position={plan.position}
+    />
+  )
+}
+
+function PipeBranchHandle({
+  pipe,
+  index,
+  position,
+}: {
+  pipe: PipeSegmentNode
+  index: number
+  position: Point
+}) {
+  return (
+    <ContinuePlusHandle
+      onActivate={() => {
+        triggerSFX('sfx:item-pick')
+        activatePipeBranch(pipe, index, position)
+      }}
+      position={position}
     />
   )
 }

@@ -14,7 +14,7 @@ import {
   type RunContinuationHandlePlan,
   resolveDuctContinuationHandle,
 } from '../shared/elbow-branch-continuation'
-import type { ScenePort } from '../shared/ports'
+import type { RunBodyHit, ScenePort } from '../shared/ports'
 import { ductPortDiameterIn } from './geometry'
 import type { DuctSegmentNode } from './schema'
 
@@ -22,7 +22,8 @@ export type DuctEndpoint = 'start' | 'end'
 
 export type DuctContinuationSeed = {
   duct: DuctSegmentNode
-  port: ScenePort
+  port: ScenePort | null
+  body: RunBodyHit | null
   promotedFitting?: DuctFittingNode
 }
 
@@ -31,6 +32,8 @@ type DuctContinuationDefaults = {
     nodeId?: unknown
     endpoint?: unknown
     fittingId?: unknown
+    segmentIndex?: unknown
+    point?: unknown
   }
 }
 
@@ -85,6 +88,23 @@ export function resolveDuctContinuationSeed(
   const continuation = (defaults as DuctContinuationDefaults | null)?.continuation
   const endpoint = continuation?.endpoint
   const nodeId = continuation?.nodeId
+  if (endpoint === 'branch' && typeof nodeId === 'string') {
+    const node = nodes[nodeId as AnyNodeId]
+    const segmentIndex = continuation?.segmentIndex
+    const point = continuation?.point
+    if (
+      node?.type === 'duct-segment' &&
+      typeof segmentIndex === 'number' &&
+      Array.isArray(point) &&
+      point.length === 3
+    ) {
+      return {
+        duct: node,
+        port: null,
+        body: { nodeId: node.id, segmentIndex, point: point as [number, number, number] },
+      }
+    }
+  }
   if (
     (endpoint !== 'start' && endpoint !== 'end') ||
     typeof nodeId !== 'string' ||
@@ -95,7 +115,7 @@ export function resolveDuctContinuationSeed(
   if (node?.type !== 'duct-segment') return null
   const port = ductEndpointPort(node, endpoint)
   if (!port) return null
-  if (typeof continuation?.fittingId !== 'string') return { duct: node, port }
+  if (typeof continuation?.fittingId !== 'string') return { duct: node, port, body: null }
   const fitting = nodes[continuation.fittingId as AnyNodeId]
   if (fitting?.type !== 'duct-fitting') return null
   const fittingPort = findMatedScenePorts(port, nodes).find((mate) => mate.nodeId === fitting.id)
@@ -105,8 +125,38 @@ export function resolveDuctContinuationSeed(
       ? planDuctElbowBranchPromotion(fitting, fittingPort.id)
       : planDuctTeeCrossPromotion(fitting)
   return promotion
-    ? { duct: node, port: promotion.continuationPort, promotedFitting: promotion.fitting }
+    ? {
+        duct: node,
+        port: promotion.continuationPort,
+        body: null,
+        promotedFitting: promotion.fitting,
+      }
     : null
+}
+
+export function activateDuctBranch(
+  duct: DuctSegmentNode,
+  segmentIndex: number,
+  point: [number, number, number],
+): void {
+  const segment = duct.path[segmentIndex]
+  const next = duct.path[segmentIndex + 1]
+  if (!segment || !next) return
+  const editor = useEditor.getState()
+  editor.setToolDefaults('duct-segment', {
+    continuation: { nodeId: duct.id, endpoint: 'branch', segmentIndex, point },
+    shape: duct.shape,
+    diameter: duct.diameter,
+    width: duct.width,
+    height: duct.height,
+    ductMaterial: duct.ductMaterial,
+    seamDetail: duct.seamDetail,
+    insulated: duct.insulated,
+    insulationR: duct.insulationR,
+    system: duct.system,
+  })
+  useViewer.getState().setSelection({ selectedIds: [] })
+  editor.setTool('duct-segment')
 }
 
 export function activateDuctContinuation(
@@ -145,6 +195,25 @@ export const ductContinuationAffordance: FloorplanAffordance<DuctSegmentNode> = 
       commit() {
         if (endpoint === 'start' || endpoint === 'end') {
           activateDuctContinuation(node, endpoint, fittingId)
+        }
+      },
+    }
+  },
+}
+
+export const ductBranchAffordance: FloorplanAffordance<DuctSegmentNode> = {
+  start({ node, payload }) {
+    const data = payload as { segmentIndex?: unknown; point?: unknown } | null
+    const segmentIndex = data?.segmentIndex
+    const point = data?.point
+    return {
+      affectedIds: [],
+      apply() {},
+      canCommit: () =>
+        typeof segmentIndex === 'number' && Array.isArray(point) && point.length === 3,
+      commit() {
+        if (typeof segmentIndex === 'number' && Array.isArray(point) && point.length === 3) {
+          activateDuctBranch(node, segmentIndex, point as [number, number, number])
         }
       },
     }

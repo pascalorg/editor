@@ -9,14 +9,15 @@ import {
   type RunContinuationHandlePlan,
   resolvePipeContinuationHandle,
 } from '../shared/elbow-branch-continuation'
-import type { ScenePort } from '../shared/ports'
+import type { RunBodyHit, ScenePort } from '../shared/ports'
 import type { PipeSegmentNode } from './schema'
 
 export type PipeEndpoint = 'start' | 'end'
 
 export type PipeContinuationSeed = {
   pipe: PipeSegmentNode
-  port: ScenePort
+  port: ScenePort | null
+  body: RunBodyHit | null
   promotedFitting?: PipeFittingNode
 }
 
@@ -25,6 +26,8 @@ type PipeContinuationDefaults = {
     nodeId?: unknown
     endpoint?: unknown
     fittingId?: unknown
+    segmentIndex?: unknown
+    point?: unknown
   }
 }
 
@@ -79,6 +82,23 @@ export function resolvePipeContinuationSeed(
   const continuation = (defaults as PipeContinuationDefaults | null)?.continuation
   const endpoint = continuation?.endpoint
   const nodeId = continuation?.nodeId
+  if (endpoint === 'branch' && typeof nodeId === 'string') {
+    const node = nodes[nodeId as AnyNodeId]
+    const segmentIndex = continuation?.segmentIndex
+    const point = continuation?.point
+    if (
+      node?.type === 'pipe-segment' &&
+      typeof segmentIndex === 'number' &&
+      Array.isArray(point) &&
+      point.length === 3
+    ) {
+      return {
+        pipe: node,
+        port: null,
+        body: { nodeId: node.id, segmentIndex, point: point as [number, number, number] },
+      }
+    }
+  }
   if (
     (endpoint !== 'start' && endpoint !== 'end') ||
     typeof nodeId !== 'string' ||
@@ -89,7 +109,7 @@ export function resolvePipeContinuationSeed(
   if (node?.type !== 'pipe-segment') return null
   const port = pipeEndpointPort(node, endpoint)
   if (!port) return null
-  if (typeof continuation?.fittingId !== 'string') return { pipe: node, port }
+  if (typeof continuation?.fittingId !== 'string') return { pipe: node, port, body: null }
   const fitting = nodes[continuation.fittingId as AnyNodeId]
   if (fitting?.type !== 'pipe-fitting') return null
   const fittingPort = findMatedScenePorts(port, nodes).find((mate) => mate.nodeId === fitting.id)
@@ -99,8 +119,27 @@ export function resolvePipeContinuationSeed(
       ? planPipeElbowBranchPromotion(fitting, fittingPort.id)
       : planPipeTeeCrossPromotion(fitting)
   return promotion
-    ? { pipe: node, port: promotion.continuationPort, promotedFitting: promotion.fitting }
+    ? {
+        pipe: node,
+        port: promotion.continuationPort,
+        body: null,
+        promotedFitting: promotion.fitting,
+      }
     : null
+}
+
+export function activatePipeBranch(
+  pipe: PipeSegmentNode,
+  segmentIndex: number,
+  point: [number, number, number],
+): void {
+  if (!pipe.path[segmentIndex] || !pipe.path[segmentIndex + 1]) return
+  const editor = useEditor.getState()
+  editor.setToolDefaults('pipe-segment', {
+    continuation: { nodeId: pipe.id, endpoint: 'branch', segmentIndex, point },
+  })
+  useViewer.getState().setSelection({ selectedIds: [] })
+  editor.setTool('pipe-segment')
 }
 
 export function activatePipeContinuation(
@@ -130,6 +169,25 @@ export const pipeContinuationAffordance: FloorplanAffordance<PipeSegmentNode> = 
       commit() {
         if (endpoint === 'start' || endpoint === 'end') {
           activatePipeContinuation(node, endpoint, fittingId)
+        }
+      },
+    }
+  },
+}
+
+export const pipeBranchAffordance: FloorplanAffordance<PipeSegmentNode> = {
+  start({ node, payload }) {
+    const data = payload as { segmentIndex?: unknown; point?: unknown } | null
+    const segmentIndex = data?.segmentIndex
+    const point = data?.point
+    return {
+      affectedIds: [],
+      apply() {},
+      canCommit: () =>
+        typeof segmentIndex === 'number' && Array.isArray(point) && point.length === 3,
+      commit() {
+        if (typeof segmentIndex === 'number' && Array.isArray(point) && point.length === 3) {
+          activatePipeBranch(node, segmentIndex, point as [number, number, number])
         }
       },
     }

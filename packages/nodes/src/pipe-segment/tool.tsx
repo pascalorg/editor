@@ -279,8 +279,14 @@ const PipeSegmentTool = () => {
 
   const run = useDistributionRunTool({
     active: !!activeLevelId,
-    initialStart: continuationSeed ? ([...continuationSeed.port.position] as RunPoint) : null,
-    initialConnection: continuationSeed ? { port: continuationSeed.port, body: null } : null,
+    initialStart: continuationSeed
+      ? ([
+          ...(continuationSeed.port?.position ?? continuationSeed.body?.point ?? [0, 0, 0]),
+        ] as RunPoint)
+      : null,
+    initialConnection: continuationSeed
+      ? { port: continuationSeed.port, body: continuationSeed.body }
+      : null,
     findPort: findNearbyPort,
     findBody: (point) =>
       findNearestRunBodyXZ(point, BODY_SNAP_RADIUS_M, {
@@ -288,6 +294,7 @@ const PipeSegmentTool = () => {
       }),
     resolveFirstY: floorCenterlineY,
     minimumFreeY: floorCenterlineY,
+    minimumSegmentLength: 0.05,
     resolveFreeEnd: (start, end, startConnection) => {
       if (
         !slopedRef.current ||
@@ -365,6 +372,9 @@ const PipeSegmentTool = () => {
         cursor={run.cursor}
         directionMode={run.directionMode}
         extraParts={[{ key: 'diameter', prefix: 'Ø', value: diameter * 0.0254 }]}
+        lengthInput={run.lengthInput}
+        onLengthInputChange={run.onLengthInputChange}
+        validationMessage={run.validationMessage}
         snapTarget={run.snapTarget}
         start={displayStart}
         startDirection={run.startConnection.port?.direction ?? null}

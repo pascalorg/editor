@@ -197,7 +197,7 @@ describe('duct continuation', () => {
           )
         : []
 
-    expect(handles).toHaveLength(2)
+    expect(handles).toHaveLength(3)
     const points = handles.map((handle) => handle.kind === 'midpoint-handle' && handle.point)
     expect(points[0]?.[0]).toBeCloseTo(0.5914)
     expect(points[0]?.[1]).toBeCloseTo(2)

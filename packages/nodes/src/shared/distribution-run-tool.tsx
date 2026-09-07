@@ -13,7 +13,7 @@ import {
   useEditor,
 } from '@pascal-app/editor'
 import { Html } from '@react-three/drei'
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from 'react'
+import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import type { Group } from 'three'
 import { alignDrawPoint, clearDrawAlignment } from './draw-alignment'
 import {
@@ -23,8 +23,8 @@ import {
 } from './floor-placement'
 import type { RunBodyHit, ScenePort } from './ports'
 import {
-  type RunDirectionMode,
   RunDirectionFeedback,
+  type RunDirectionMode,
   run3DDirectionCandidates,
   runHorizontalDirectionCandidates,
 } from './run-direction-feedback'
@@ -66,6 +66,8 @@ type DistributionRunToolConfig = {
   resolveFirstY?: (x: number, z: number) => number
   resolveFreeEnd?: (start: RunPoint, end: RunPoint, startConnection: RunConnection) => RunPoint
   minimumFreeY?: () => number
+  /** Minimum drawable centerline length, including fitting clearance. */
+  minimumSegmentLength?: number
   inheritFromConnection?: (connection: RunConnection) => void
   commit: (args: {
     start: RunPoint
@@ -228,6 +230,8 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
   })
   const [altActive, setAltActive] = useState(false)
   const [directionMode, setDirectionMode] = useState<RunDirectionMode>('free')
+  const [lengthInput, setLengthInput] = useState('')
+  const [validationMessage, setValidationMessage] = useState<string | null>(null)
 
   const configRef = useRef(config)
   configRef.current = config
@@ -237,9 +241,51 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
   const altAnchorRef = useRef<{ clientY: number; baseY: number } | null>(null)
   const lastClientYRef = useRef<number | null>(null)
   const lastResolvedRef = useRef<ResolvedRunPoint | null>(null)
+  const lengthInputRef = useRef('')
+
+  const updateLengthInput = useCallback((value: string) => {
+    const normalized = value.replace(',', '.').replace(/[^0-9.]/g, '')
+    const firstDot = normalized.indexOf('.')
+    const cleaned =
+      firstDot < 0
+        ? normalized
+        : `${normalized.slice(0, firstDot + 1)}${normalized.slice(firstDot + 1).replace(/\./g, '')}`
+    lengthInputRef.current = cleaned.slice(0, 12)
+    setLengthInput(lengthInputRef.current)
+  }, [])
 
   useEffect(() => {
     if (!config.active) return
+
+    const applyTypedLength = (resolved: ResolvedRunPoint): ResolvedRunPoint => {
+      const currentStart = startRef.current
+      const typed = Number.parseFloat(lengthInputRef.current)
+      if (
+        !currentStart ||
+        !Number.isFinite(typed) ||
+        typed <= 0 ||
+        resolved.port ||
+        resolved.body
+      ) {
+        return resolved
+      }
+      const direction = normalizedRunVector([
+        resolved.point[0] - currentStart[0],
+        resolved.point[1] - currentStart[1],
+        resolved.point[2] - currentStart[2],
+      ])
+      if (!direction) return resolved
+      return {
+        ...resolved,
+        point: [
+          currentStart[0] + direction[0] * typed,
+          currentStart[1] + direction[1] * typed,
+          currentStart[2] + direction[2] * typed,
+        ],
+        snapped: null,
+        directionMode: 'free',
+      }
+    }
 
     const resolvePoint = (event: FloorPlacementClickTriggerEvent): ResolvedRunPoint => {
       const adapter = configRef.current
@@ -375,6 +421,25 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
 
     const updateCursor = (resolved: ResolvedRunPoint) => {
       lastResolvedRef.current = resolved
+      const currentStart = startRef.current
+      const minimumLength = configRef.current.minimumSegmentLength ?? 0.05
+      const length = currentStart
+        ? Math.hypot(
+            resolved.point[0] - currentStart[0],
+            resolved.point[1] - currentStart[1],
+            resolved.point[2] - currentStart[2],
+          )
+        : 0
+      const typed = lengthInputRef.current
+      setValidationMessage(
+        currentStart &&
+          typed &&
+          (!Number.isFinite(Number.parseFloat(typed)) || Number.parseFloat(typed) <= 0)
+          ? 'Enter a positive length'
+          : currentStart && length < minimumLength
+            ? `Run must be at least ${minimumLength.toFixed(2)} m`
+            : null,
+      )
       setCursor(resolved.point)
       setSnapTarget(resolved.snapped)
       setEndConnection({
@@ -388,17 +453,32 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
     const commit = (end: RunPoint, connection: RunConnection) => {
       const currentStart = startRef.current
       if (!currentStart) return
+      const minimumLength = configRef.current.minimumSegmentLength ?? 0.05
+      const length = Math.hypot(
+        end[0] - currentStart[0],
+        end[1] - currentStart[1],
+        end[2] - currentStart[2],
+      )
+      if (length < minimumLength) {
+        return
+      }
       const result = configRef.current.commit({
         start: currentStart,
         end,
         startConnection: startConnectionRef.current,
         endConnection: connection,
       })
-      if (!result) return
+      if (!result) {
+        setValidationMessage('Fitting clearance is too small for this connection')
+        return
+      }
       triggerSFX('sfx:item-place')
       setStart(result.nextStart)
       setSnapTarget(null)
       setEndConnection({ port: null, body: null })
+      lengthInputRef.current = ''
+      setLengthInput('')
+      setValidationMessage(null)
       startConnectionRef.current = result.nextConnection
       altAnchorRef.current = null
       setAltActive(false)
@@ -421,7 +501,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
           return
         }
       }
-      updateCursor(resolvePoint(event))
+      updateCursor(applyTypedLength(resolvePoint(event)))
     }
 
     const onClick = (event: FloorPlacementClickTriggerEvent) => {
@@ -454,15 +534,18 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         setStart(resolved.point)
         return
       }
-      commit(resolved.point, {
+      const typedResolved = applyTypedLength(resolved)
+      commit(typedResolved.point, {
         port: resolved.port,
         body: resolved.port ? null : resolved.body,
       })
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      const tag = (event.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      const target = event.target as HTMLElement | null
+      const tag = target?.tagName
+      const isLengthField = target ? target.closest('[data-run-length-input]') !== null : false
+      if ((tag === 'INPUT' || tag === 'TEXTAREA') && !isLengthField) return
       if (event.key === 'Alt') {
         const currentStart = startRef.current
         if (!currentStart || lastClientYRef.current === null || altAnchorRef.current) return
@@ -472,6 +555,29 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
           baseY: currentStart[1],
         }
         setAltActive(true)
+        return
+      }
+      if (startRef.current && isLengthField && /^[0-9.,]$/.test(event.key)) {
+        event.stopImmediatePropagation()
+        return
+      }
+      if (startRef.current && !isLengthField && /^[0-9.,]$/.test(event.key)) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        updateLengthInput(`${lengthInputRef.current}${event.key}`)
+        return
+      }
+      if (startRef.current && event.key === 'Enter') {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        const resolved = lastResolvedRef.current
+        if (resolved) {
+          const typedResolved = applyTypedLength(resolved)
+          commit(typedResolved.point, {
+            port: typedResolved.port,
+            body: typedResolved.port ? null : typedResolved.body,
+          })
+        }
         return
       }
       configRef.current.onShortcut?.(event, startRef.current)
@@ -493,6 +599,9 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       setCursor(null)
       setSnapTarget(null)
       setEndConnection({ port: null, body: null })
+      lengthInputRef.current = ''
+      setLengthInput('')
+      setValidationMessage(null)
       startConnectionRef.current = { port: null, body: null }
       lastResolvedRef.current = null
       altAnchorRef.current = null
@@ -503,18 +612,18 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
     const unsubscribeClicks = subscribeFloorPlacementClicks(onClick)
     emitter.on('grid:move', onMove)
     emitter.on('tool:cancel', onCancel)
-    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keydown', onKeyDown, true)
     window.addEventListener('keyup', onKeyUp)
     return () => {
       unsubscribeClicks()
       emitter.off('grid:move', onMove)
       emitter.off('tool:cancel', onCancel)
-      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('keyup', onKeyUp)
       altAnchorRef.current = null
       clearDrawAlignment()
     }
-  }, [config.active])
+  }, [config.active, updateLengthInput])
 
   return {
     start,
@@ -522,6 +631,9 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
     snapTarget,
     altActive,
     directionMode,
+    lengthInput,
+    validationMessage,
+    onLengthInputChange: updateLengthInput,
     startConnection: startConnectionRef.current,
     endConnection,
   }
@@ -538,6 +650,9 @@ export function DistributionRunCursor({
   cursorRef,
   directionMode,
   startDirection,
+  lengthInput,
+  validationMessage,
+  onLengthInputChange,
 }: {
   cursor: RunPoint | null
   start: RunPoint | null
@@ -549,7 +664,15 @@ export function DistributionRunCursor({
   cursorRef?: RefObject<Group | null>
   directionMode: RunDirectionMode
   startDirection?: readonly [number, number, number] | null
+  lengthInput?: string
+  validationMessage?: string | null
+  minimumSegmentLength?: number
+  onLengthInputChange?: (value: string) => void
 }) {
+  const lengthFieldRef = useRef<HTMLInputElement>(null)
+  useEffect(() => {
+    if (start) lengthFieldRef.current?.focus()
+  }, [start])
   if (!cursor) return null
   const parts: DimensionPillPart[] = [
     ...(start
@@ -612,6 +735,27 @@ export function DistributionRunCursor({
         >
           <div className="flex flex-col items-center gap-1">
             <DimensionPill parts={parts} primary={primary} unit={unit} />
+            {start ? (
+              <label className="rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[11px] tabular-nums text-muted-foreground shadow-sm backdrop-blur">
+                Length:{' '}
+                <input
+                  className="w-20 bg-transparent text-center text-foreground outline-none"
+                  data-run-length-input
+                  inputMode="decimal"
+                  onChange={(event) => onLengthInputChange?.(event.target.value)}
+                  placeholder="type a length"
+                  ref={lengthFieldRef}
+                  type="text"
+                  value={lengthInput ?? ''}
+                />{' '}
+                m
+              </label>
+            ) : null}
+            {validationMessage ? (
+              <div className="rounded-full border border-red-500/50 bg-red-500/10 px-3 py-1 text-[11px] text-red-700 shadow-sm backdrop-blur dark:text-red-300">
+                {validationMessage}
+              </div>
+            ) : null}
             {status}
           </div>
         </Html>

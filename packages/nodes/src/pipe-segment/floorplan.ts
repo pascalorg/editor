@@ -112,6 +112,28 @@ export function buildPipeSegmentFloorplan(
         payload: { action: 'continue-run', endpoint, fittingId: plan.fittingId },
       })
     }
+
+    for (let k = 0; k < points.length - 1; k++) {
+      const a = points[k]!
+      const b = points[k + 1]!
+      const pathIndex = indexMap[k]!
+      const nextPathIndex = indexMap[k + 1]!
+      children.push({
+        kind: 'midpoint-handle',
+        point: [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2],
+        activation: 'action',
+        affordance: 'branch-run',
+        payload: {
+          action: 'branch-run',
+          segmentIndex: pathIndex,
+          point: [
+            (a[0] + b[0]) / 2,
+            (node.path[pathIndex]![1] + node.path[nextPathIndex]![1]) / 2,
+            (a[1] + b[1]) / 2,
+          ],
+        },
+      })
+    }
   }
 
   return { kind: 'group', children }

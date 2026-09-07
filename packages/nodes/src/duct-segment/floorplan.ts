@@ -121,6 +121,29 @@ export function buildDuctSegmentFloorplan(
       })
     }
 
+    for (let k = 0; k < points.length - 1; k++) {
+      const a = points[k]!
+      const b = points[k + 1]!
+      const t = 0.5
+      const pathIndex = indexMap[k]!
+      const nextPathIndex = indexMap[k + 1]!
+      children.push({
+        kind: 'midpoint-handle',
+        point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t],
+        activation: 'action',
+        affordance: 'branch-run',
+        payload: {
+          action: 'branch-run',
+          segmentIndex: pathIndex,
+          point: [
+            a[0] + (b[0] - a[0]) * t,
+            (node.path[pathIndex]![1] + node.path[nextPathIndex]![1]) / 2,
+            a[1] + (b[1] - a[1]) * t,
+          ],
+        },
+      })
+    }
+
     // Side-move arrows: a front / back pair at each segment midpoint, sliding
     // that segment perpendicular to itself. 2D twin of the 3D side-move
     // arrows. The arrows stand one duct-radius + gap off the body; `angle`

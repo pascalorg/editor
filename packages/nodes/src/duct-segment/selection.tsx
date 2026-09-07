@@ -51,6 +51,7 @@ import { planRunTranslationOffsets } from '../shared/run-translation-offset'
 import { ContinuePlusHandle, HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { planVerticalOffsets, type VerticalOffsetResult } from '../shared/vertical-offset'
 import {
+  activateDuctBranch,
   activateDuctContinuation,
   type DuctEndpoint,
   ductContinuationHandlePlan,
@@ -1343,6 +1344,25 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         (['start', 'end'] as const).map((endpoint) => (
           <DuctContinuationHandle duct={duct} endpoint={endpoint} key={endpoint} />
         ))}
+      {draggingIndex === null &&
+        !rolling &&
+        !runMoving &&
+        duct.path.slice(0, -1).map((point, index) => {
+          const next = duct.path[index + 1]!
+          if (Math.hypot(next[0] - point[0], next[2] - point[2]) < 0.05) return null
+          return (
+            <DuctBranchHandle
+              duct={duct}
+              index={index}
+              key={`branch-${index}`}
+              position={[
+                (point[0] + next[0]) / 2,
+                (point[1] + next[1]) / 2,
+                (point[2] + next[2]) / 2,
+              ]}
+            />
+          )
+        })}
       {/* Per-vertex affordances — hidden while a drag / roll is live (the window
           pointer handlers own the gesture). Each vertex shows a small cube;
           CLICKING the cube latches its directional cluster open (click again to
@@ -1464,6 +1484,26 @@ function DuctContinuationHandle({
         activateDuctContinuation(duct, endpoint, plan.fittingId)
       }}
       position={plan.position}
+    />
+  )
+}
+
+function DuctBranchHandle({
+  duct,
+  index,
+  position,
+}: {
+  duct: DuctSegmentNode
+  index: number
+  position: Point
+}) {
+  return (
+    <ContinuePlusHandle
+      onActivate={() => {
+        triggerSFX('sfx:item-pick')
+        activateDuctBranch(duct, index, position)
+      }}
+      position={position}
     />
   )
 }
