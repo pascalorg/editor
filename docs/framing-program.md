@@ -782,6 +782,28 @@ G49 Every house type's elevation sheets reviewed.
 
 ## Log (continued)
 
+- 2026-09-07: **Batch R3 — the auto roof follows the walls (G48).**
+  `plugin-roof/src/follow.ts` (pure): which roof follows (`followRoofOf` — a
+  derived roof carrying an `autoRoof` record, never a porch cover, not one
+  the user switched off with `autoRoof.follow: false`), the intent it was
+  derived with (`intentOfRoof` — the generator's plan-document terms or the
+  command's options, read back into the engine's `RoofIntent`), and what
+  counts as a wall change (`levelsWithWallChanges` — moved, stretched,
+  added, removed, hidden; a metadata write is not one, so the rebuild's own
+  role stamps cannot feed it). `refollowAutoRoof(levelId)` (run.ts) re-derives
+  IN PLACE: the roof node keeps its id, materials and record, only its
+  segments are replaced, the walls restamped, `followedAt` written. index.ts
+  subscribes to the scene, debounces a level's wall edits 150 ms and
+  re-follows; `roof.follow` (Ctrl+K) switches it per roof, on by default for
+  every derived roof — the generator's included. Headless proof
+  (`scripts/demo/roof-follow-probe.ts` on the Florida farmhouse): the rear
+  wall stretched 1 m → same roof node, same shingles, the gable segment
+  re-derived 12.50 → 13.50 m deep, the walls' roles restamped. Tests:
+  follow +3 — plugin-roof 23, editor typecheck clean. Not done live in the
+  editor's own drag (the subscription is a 20-line wiring of the tested
+  functions); the roof re-derives on the debounce after the drag settles,
+  not on every frame of it.
+
 - 2026-09-07: **Batch R2 — the built-up stucco pier, framed (G45).** The
   generator's `pillarFor` gives every stucco house the 13 in pier (only the
   hip ranch had it) and tags the column `metadata.post.pier`; Bones reads

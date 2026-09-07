@@ -6,6 +6,7 @@
 import { DEFAULT_LEVEL_HEIGHT, type AnyNode, useScene } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type AutoRoofResult, type AutoRoofSegment, deriveRoof, type RoofIntent } from './derive'
+import { followRoofOf, intentOfRoof } from './follow'
 import type { Pt, WallInput } from './geometry'
 import { type AutoRoofOptions, summarise, useAutoRoof } from './store'
 // Bones by relative path (its package exports only the root entry — the same
@@ -182,3 +183,64 @@ export function rebuildAutoRoof(
 const emptyResult = (): AutoRoofResult => ({ ok: false, segments: [], roles: {}, warnings: [], coverage: 0, masses: 0, popped: false })
 
 export type { AnyNode }
+
+/**
+ * RE-DERIVE A ROOF THAT FOLLOWS ITS WALLS, in place. The roof node stays —
+ * its id, its materials, its record — and only its segments are replaced
+ * from the level's walls as they now stand, with the intent the roof was
+ * derived with; the walls' roof roles are restamped. Returns what was
+ * derived, or null when the level has no following roof or no walls.
+ */
+export function refollowAutoRoof(levelId: string): AutoRoofResult | null {
+  const scene = useScene.getState()
+  const nodes = scene.nodes as unknown as Nodes
+  const roof = followRoofOf(nodes as never, levelId)
+  if (!roof) return null
+  const intent = intentOfRoof(roof as never)
+  if (!intent) return null
+  const walls = wallsOfLevel(nodes, levelId)
+  if (walls.length === 0) return null
+  const result = deriveRoof(walls, plateOfLevel(nodes, levelId), {
+    ...intent,
+    frontDir: intent.frontDir ?? frontDirOfLevel(nodes, levelId),
+  })
+  const oldSegments = ((roof.children ?? []) as string[]).filter((id) => nodes[id]?.type === 'roof-segment')
+  if (oldSegments.length > 0) scene.deleteNodes(oldSegments as never)
+  const ops = result.segments.map((s) => ({
+    node: { ...segmentNode(s), id: freshId('rseg'), parentId: roof.id } as never,
+    parentId: roof.id as never,
+  }))
+  if (ops.length > 0) scene.createNodes(ops)
+  const auto = ((roof.metadata as Record<string, unknown> | undefined)?.autoRoof ?? {}) as Record<string, unknown>
+  scene.updateNode(roof.id as never, {
+    metadata: {
+      ...((roof.metadata as Record<string, unknown> | undefined) ?? {}),
+      autoRoof: { ...auto, coverage: result.coverage, masses: result.masses, popped: result.popped, followedAt: new Date().toISOString() },
+    },
+  } as never)
+  for (const [wallId, role] of Object.entries(result.roles)) {
+    const wall = nodes[wallId]
+    if (!wall) continue
+    const metadata = { ...((wall.metadata as Record<string, unknown> | undefined) ?? {}), roof: { role } }
+    scene.updateNode(wallId as never, { metadata } as never)
+  }
+  useAutoRoof.getState().setLast(summarise(levelId, result))
+  return result
+}
+
+/** Switch a level's derived roof between following its walls and holding still. Returns the new state, or null without a derived roof. */
+export function setAutoRoofFollow(levelId: string, follow: boolean): boolean | null {
+  const scene = useScene.getState()
+  const nodes = scene.nodes as unknown as Nodes
+  const level = nodes[levelId]
+  for (const id of level?.children ?? []) {
+    const roof = nodes[id]
+    const auto = (roof?.metadata as { autoRoof?: Record<string, unknown> } | undefined)?.autoRoof
+    if (roof?.type !== 'roof' || !auto || auto.porch) continue
+    scene.updateNode(id as never, {
+      metadata: { ...((roof.metadata as Record<string, unknown> | undefined) ?? {}), autoRoof: { ...auto, follow } },
+    } as never)
+    return follow
+  }
+  return null
+}

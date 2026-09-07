@@ -9,9 +9,11 @@
  *
  * The plugin declares no node kinds; it is an engine + commands + a panel.
  */
-import type { Plugin } from '@pascal-app/core'
+import { type Plugin, useScene } from '@pascal-app/core'
 import { type CommandAction, type EditorHostPanel, useCommandRegistry } from '@pascal-app/editor'
-import { rebuildAutoRoof } from './run'
+import { useViewer } from '@pascal-app/viewer'
+import { followRoofOf, levelsWithWallChanges } from './follow'
+import { rebuildAutoRoof, refollowAutoRoof, setAutoRoofFollow } from './run'
 import { useAutoRoof } from './store'
 import { styleRoofForm } from './styles'
 
@@ -44,10 +46,42 @@ export const roofHostPanel = {
 
 let commandsRegistered = false
 
-/** Register the Ctrl+K command. Idempotent (HMR-safe). */
+/** How long after the last wall edit the roof re-derives — a drag emits many. */
+const FOLLOW_DEBOUNCE_MS = 150
+
+/**
+ * The derived roof follows the walls: every scene change that reshapes a
+ * wall (moved, stretched, added, removed) schedules its level's roof to
+ * re-derive from the walls as they now stand. One subscription; the
+ * rebuild writes segments and wall METADATA, which `levelsWithWallChanges`
+ * does not count, so it cannot feed itself. On by default for every
+ * derived roof; `roof.follow` switches it per roof.
+ */
+function subscribeRoofFollow(): void {
+  const pending = new Map<string, ReturnType<typeof setTimeout>>()
+  useScene.subscribe((state, previous) => {
+    if (state.nodes === previous.nodes) return
+    const levels = levelsWithWallChanges(previous.nodes as never, state.nodes as never)
+    for (const levelId of levels) {
+      if (!followRoofOf(state.nodes as never, levelId)) continue
+      const timer = pending.get(levelId)
+      if (timer) clearTimeout(timer)
+      pending.set(
+        levelId,
+        setTimeout(() => {
+          pending.delete(levelId)
+          refollowAutoRoof(levelId)
+        }, FOLLOW_DEBOUNCE_MS),
+      )
+    }
+  })
+}
+
+/** Register the Ctrl+K commands and the follow subscription. Idempotent (HMR-safe). */
 export function registerRoofCommands(): void {
   if (commandsRegistered || typeof window === 'undefined') return
   commandsRegistered = true
+  subscribeRoofFollow()
   const actions: CommandAction[] = [
     {
       id: 'roof.auto',
@@ -58,12 +92,26 @@ export function registerRoofCommands(): void {
         rebuildAutoRoof(useAutoRoof.getState().options, styleRoofForm)
       },
     },
+    {
+      id: 'roof.follow',
+      label: 'Auto roof: follow the walls on / off',
+      group: 'Roof',
+      keywords: ['roof', 'auto', 'follow', 'walls', 'live', 'update'],
+      execute: () => {
+        const levelId = useViewer.getState().selection.levelId ?? null
+        if (!levelId) return
+        const nodes = useScene.getState().nodes as never
+        const following = followRoofOf(nodes, levelId) !== null
+        setAutoRoofFollow(levelId, !following)
+      },
+    },
   ]
   useCommandRegistry.getState().register(actions)
 }
 
 export { type AutoRoofResult, type AutoRoofSegment, deriveRoof, type RoofForm, type RoofIntent, type WallRoofRole } from './derive'
 export { type Pt, type WallInput } from './geometry'
-export { AUTO_ROOF, frontDirOfLevel, plateOfLevel, rebuildAutoRoof, roofNodesFor, wallsOfLevel } from './run'
+export { followRoofOf, intentOfRoof, levelsWithWallChanges } from './follow'
+export { AUTO_ROOF, frontDirOfLevel, plateOfLevel, rebuildAutoRoof, refollowAutoRoof, roofNodesFor, setAutoRoofFollow, wallsOfLevel } from './run'
 export { useAutoRoof } from './store'
 export { STYLE_ROOF_FORMS, styleRoofForm } from './styles'
