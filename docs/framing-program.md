@@ -845,10 +845,32 @@ G58 The generation exposes the options: HVAC system and type, service
 G59 Pascal Map (Aymeric's geodata platform — parcels, frontage, zoning
     setbacks, flood, code basis, 3DEP terrain, utilities, soils, wetlands,
     structures) feeds the plan set: the plan is docs/map-integration-plan.md
-    (Phase 0 the pipe, Phase 1 site truth, Phase 2 design decisions,
-    Phase 3 septic / existing structures / permits).
+    (Phase 0 the pipe + Phase 1 site truth DONE; Phase 2 design decisions,
+    Phase 3 septic / existing structures / permits open).
 
 ## Log (continued)
+
+- 2026-09-07: **Pascal Map — Phase 0 + 1 built (G59).** The dossier
+  route on the server key (`MAP_API_KEY`, apps/editor/.env.local, never
+  the client), the typed client (`lot/dossier.ts`: projection into the
+  site frame, the parcel ring from a Polygon / MultiPolygon, the frontage
+  as segments, the front edge = the longest lot edge lying on the
+  frontage, zoning setbacks with the code citation, the geometry-free
+  facts), `site.dossier` on the site node (core rebuilt), the lot drop-in
+  reading the dossier first and falling back to the county ring + road
+  match where the parcel plane does not cover, the cover's project data
+  printing flood zone / BFE / FIRM panel / design wind + debris region /
+  climate zone / seismic category / frost + snow / wastewater / electric
+  utility with the provenance line and the sections that did not answer,
+  `--address` on the headless script. Seen live: St Petersburg (fabric
+  parcel, edge 2 from the frontage named 5th Avenue Northeast by the road
+  match, AE / BFE 9 ft, 150 mph debris region, 2A, DC-3 with its
+  conditional setbacks noted) and Miami Shores (no parcel plane: county
+  ring, flood X, FPL). Tests: dossier +8 on the two recorded dossiers, lot
+  28, sheets 258; editor typecheck clean. Next (Phase 2): the code basis
+  into Bones' jurisdiction with site provenance, flood → finished floor,
+  3DEP contours → the heightfield, residential presets in the covered
+  counties, the frontage edges and flood hatch on the site plan.
 
 - 2026-09-07: **Pascal Map — the integration plan (G59).** Read the
   OpenAPI 3.1 spec, llms.txt and the quickstart; probed health (69 county
