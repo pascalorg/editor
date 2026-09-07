@@ -48,6 +48,9 @@ import {
   getOpeningCutoutBottomPadding,
 } from './opening-cutout-geometry'
 import { sweepUnbuiltWalls, WALL_PLACEHOLDER_SWEEP_INTERVAL } from './wall-placeholder-sweep'
+import { notifyWallRebuilt } from './wall-rebuild-notifications'
+
+export { drainRebuiltWalls } from './wall-rebuild-notifications'
 
 // Reusable CSG evaluator for better performance
 const csgEvaluator = new Evaluator()
@@ -635,20 +638,6 @@ export function shouldDeferWallRebuild(
   return false
 }
 
-// Walls whose geometry this system replaced since the last drain.
-//
-// The store's dirty mark is cleared the moment a wall is rebuilt, so anything
-// running later in the same frame would never see it. This is that same
-// signal, held until a consumer picks it up. Neighbours rebuilt by the
-// trailing-edge flush land here too — those never carry a dirty mark at all.
-const rebuiltWalls = new Set<string>()
-
-/** Moves every rebuild notice collected so far into `into`. */
-export function drainRebuiltWalls(into: Set<string>): void {
-  for (const wallId of rebuiltWalls) into.add(wallId)
-  rebuiltWalls.clear()
-}
-
 /** Rebuilds this system still owes — neighbours deferred during a drag. */
 export function getPendingWallRebuildCount(): number {
   let count = 0
@@ -767,7 +756,7 @@ export const WallSystem = () => {
             properties: [['node', wallId]],
           })
           clearDirty(wallId as AnyNodeId)
-          rebuiltWalls.add(wallId)
+          notifyWallRebuilt(wallId)
           rebuiltWallIds.add(wallId)
           rebuiltWallsThisFrame += 1
         }
@@ -829,7 +818,7 @@ export const WallSystem = () => {
             timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData), {
               properties: [['node', wallId]],
             })
-            rebuiltWalls.add(wallId)
+            notifyWallRebuilt(wallId)
           }
           pendingIds.delete(wallId)
           rebuiltAdjacentThisFrame += 1
