@@ -55,6 +55,14 @@ type PointerCaptureTarget = {
 const stockIntersectObject = THREE.Raycaster.prototype.intersectObject
 const raycasterKeys = new Set(['ray', 'near', 'far', 'camera', 'layers', 'params', 'firstHitOnly'])
 const pureRaycast = Symbol('pureRaycast')
+const warnedRaycastNames = new Set<string>()
+type FallbackReason = { fnName: string; objectName: string; objectType: string }
+type PointerEventsStats = {
+  events: number
+  cachedEvents: number
+  fallbackEvents: number
+  lastFallbackReason: FallbackReason | null
+}
 const supportedRaycasts = new Set([
   THREE.Object3D.prototype.raycast,
   THREE.Mesh.prototype.raycast,
@@ -166,6 +174,7 @@ function createCachedRaycast() {
   const rootHits: THREE.Intersection[] = []
   let generation = 0
   let revision = 0
+  let unsupportedObject: THREE.Object3D | undefined
 
   function collect(
     object: THREE.Object3D,
@@ -184,7 +193,10 @@ function createCachedRaycast() {
     // Three's runtime accepts false as a recursion barrier, although its declaration says void.
     let result: unknown
     if (object.layers.test(raycaster.layers)) {
-      if (!isSupportedRaycast(object.raycast)) return false
+      if (!isSupportedRaycast(object.raycast)) {
+        unsupportedObject = object
+        return false
+      }
       result = object.raycast(raycaster, hits)
     }
     if (result !== false) {
@@ -204,7 +216,11 @@ function createCachedRaycast() {
   }
 
   return {
+    get unsupportedObject() {
+      return unsupportedObject
+    },
     clear() {
+      unsupportedObject = undefined
       generation++
       revision = 0
       for (const query of activeQueries) {
@@ -308,6 +324,22 @@ function releaseInternalPointerCapture(
 }
 
 function createEvents(store: RootStore) {
+  const stats: PointerEventsStats = {
+    events: 0,
+    cachedEvents: 0,
+    fallbackEvents: 0,
+    lastFallbackReason: null,
+  }
+  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('perf')) {
+    ;(
+      window as unknown as { __pointerEvents?: { stats: () => PointerEventsStats } }
+    ).__pointerEvents = {
+      stats: () => ({
+        ...stats,
+        lastFallbackReason: stats.lastFallbackReason ? { ...stats.lastFallbackReason } : null,
+      }),
+    }
+  }
   // Nested pointer events from raycast/compute callbacks need separate scratch storage.
   const collectors: ReturnType<typeof createCachedRaycast>[] = []
   let collectionDepth = 0
@@ -336,6 +368,7 @@ function createEvents(store: RootStore) {
   }
 
   function intersect(event: DomEvent, filter?: (objects: THREE.Object3D[]) => THREE.Object3D[]) {
+    stats.events++
     const state = store.getState()
     const duplicates = new Set<string>()
     const intersections: Intersection[] = []
@@ -377,18 +410,44 @@ function createEvents(store: RootStore) {
             ? layer.raycaster.intersectObject(obj, true)
             : collector.intersectObject(obj, layer)
           if (!rootHits) {
-            // Restart before invoking unsupported user code so stock sees each root's own accumulator.
+            const unsupported = collector.unsupportedObject
+            const reason = {
+              fnName: unsupported
+                ? unsupported.raycast.name || '(anonymous)'
+                : '(unsupported query)',
+              objectName: (unsupported ?? obj).name,
+              objectType: (unsupported ?? obj).type,
+            }
+            stats.fallbackEvents++
+            stats.lastFallbackReason = reason
+            if (
+              unsupported &&
+              process.env.NODE_ENV === 'development' &&
+              !warnedRaycastNames.has(reason.fnName)
+            ) {
+              warnedRaycastNames.add(reason.fnName)
+              console.warn(
+                `[pointer-events] Stock fallback for raycast "${reason.fnName}" on ${reason.objectType} "${reason.objectName}". Use markPureRaycast only after verifying it appends hits without reading prior hits or mutating scene/query state.`,
+              )
+            }
             // Keep this event-wide flag outside the collector: portal compute also clears its cache.
             stock = true
-            hits.length = 0
             collector.clear()
-            i = -1
+            if (unsupported) {
+              // Completed pure roots already match stock order. Retry only the interrupted root
+              // with its own accumulator before invoking any unsupported user code.
+              i--
+            } else {
+              hits.length = 0
+              i = -1
+            }
             continue
           }
           for (let j = 0; j < rootHits.length; j++) hits.push(rootHits[j]!)
         }
       }
     } finally {
+      if (!stock) stats.cachedEvents++
       // User filters and dispatch can perform independent raycasts or change the scene.
       collector.clear()
       collectionDepth--

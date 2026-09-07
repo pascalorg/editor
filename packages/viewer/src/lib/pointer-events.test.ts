@@ -314,7 +314,105 @@ function nested(f: Fixture) {
   return { parent, a, b }
 }
 
+function perfWindow(search = '?perf') {
+  const original = Object.getOwnPropertyDescriptor(globalThis, 'window')
+  const probeWindow: {
+    location: { search: string }
+    __pointerEvents?: {
+      stats: () => {
+        events: number
+        cachedEvents: number
+        fallbackEvents: number
+        lastFallbackReason: { fnName: string; objectName: string; objectType: string } | null
+      }
+    }
+  } = { location: { search } }
+  Object.defineProperty(globalThis, 'window', { configurable: true, value: probeWindow })
+  cleanups.push(() => {
+    if (original) Object.defineProperty(globalThis, 'window', original)
+    else Reflect.deleteProperty(globalThis, 'window')
+  })
+  return probeWindow
+}
+
 describe('R3F 9.6.1 pointer-event differential', () => {
+  test('handle-like two-arg raycasts cache when tagged and report fallback when untagged', async () => {
+    const probeWindow = perfWindow()
+    const { stock, cached } = await differential((f) => {
+      const parent = f.group('parent')
+      const handle = f.mesh('handle')
+      handle.name = 'move handle'
+      handle.geometry = new THREE.BoxGeometry(2, 2, 2)
+      cleanups.push(() => handle.geometry.dispose())
+      parent.add(handle)
+      f.state.scene.updateMatrixWorld(true)
+      function handleLikeRaycast(
+        this: THREE.Mesh,
+        raycaster: THREE.Raycaster,
+        hits: THREE.Intersection[],
+      ) {
+        f.calls.set('handle', (f.calls.get('handle') ?? 0) + 1)
+        THREE.Mesh.prototype.raycast.call(this, raycaster, hits)
+      }
+      handle.raycast = markPureRaycast(handleLikeRaycast)
+      f.send('onPointerMove', 51, 52)
+      f.calls.set('tagged', f.calls.get('handle')!)
+      f.calls.set('handle', 0)
+      handle.raycast = function untaggedHandleRaycast(raycaster, hits) {
+        handleLikeRaycast.call(this, raycaster, hits)
+      }
+      f.send('onPointerMove', 51, 52)
+    })
+    expect(stock.calls.get('tagged')).toBe(2)
+    expect(cached.calls.get('tagged')).toBe(1)
+    expect(cached.calls.get('handle')).toBe(2)
+    expect(probeWindow.__pointerEvents?.stats()).toEqual({
+      events: 2,
+      cachedEvents: 1,
+      fallbackEvents: 1,
+      lastFallbackReason: {
+        fnName: 'untaggedHandleRaycast',
+        objectName: 'move handle',
+        objectType: 'Mesh',
+      },
+    })
+    const snapshot = probeWindow.__pointerEvents!.stats()
+    snapshot.lastFallbackReason!.fnName = 'changed by probe caller'
+    expect(probeWindow.__pointerEvents!.stats().lastFallbackReason?.fnName).toBe(
+      'untaggedHandleRaycast',
+    )
+  })
+
+  test('only perf sessions expose counters; development warns once per offending function name', async () => {
+    const probeWindow = perfWindow('')
+    const original = process.env.NODE_ENV
+    const warn = spyOn(console, 'warn').mockImplementation(() => {})
+    cleanups.push(() => {
+      warn.mockRestore()
+      if (original === undefined) delete process.env.NODE_ENV
+      else process.env.NODE_ENV = original
+    })
+    process.env.NODE_ENV = 'development'
+    const f = await fixture(createPascalPointerEvents)
+    warn.mockClear()
+    expect(probeWindow.__pointerEvents).toBeUndefined()
+    const mesh = f.mesh('handle')
+    for (let i = 0; i < 2; i++) {
+      mesh.raycast = function offendingHandleRaycast(_raycaster, _hits) {}
+      f.send('onPointerMove')
+    }
+    expect(warn).toHaveBeenCalledTimes(1)
+    expect(warn.mock.calls[0]?.[0]).toContain('offendingHandleRaycast')
+    expect(warn.mock.calls[0]?.[0]).toContain('markPureRaycast')
+    mesh.raycast = function anotherOffendingRaycast(_raycaster, _hits) {}
+    f.send('onPointerMove')
+    expect(warn).toHaveBeenCalledTimes(2)
+    process.env.NODE_ENV = 'production'
+    mesh.raycast = function productionRaycast(_raycaster, _hits) {}
+    f.send('onPointerMove')
+    expect(warn).toHaveBeenCalledTimes(2)
+  })
+
   test('camera move bursts dispatch only the first move, then resume at 100 ms or immediately after release', async () => {
     let now = 0
     const clock = spyOn(performance, 'now').mockImplementation(() => now)
@@ -600,7 +698,7 @@ describe('R3F 9.6.1 pointer-event differential', () => {
     expect(cached.calls.get('bvh')).toBe(1)
   })
 
-  test('unsupported two-arity raycast restarts every root; the next event caches again', async () => {
+  test('unsupported two-arity raycast retains completed roots; the next event caches again', async () => {
     const { stock, cached } = await differential((f) => {
       const { parent, a, b } = nested(f)
       const raycast = b.raycast
@@ -615,7 +713,7 @@ describe('R3F 9.6.1 pointer-event differential', () => {
       f.send('onPointerMove')
     })
     expect(stock.calls.get('first-a')).toBe(2)
-    expect(cached.calls.get('first-a')).toBe(3)
+    expect(cached.calls.get('first-a')).toBe(2)
     expect(stock.calls.get('a')).toBe(2)
     expect(cached.calls.get('a')).toBe(1)
     expect(cached.calls.get('b')).toBe(1)
