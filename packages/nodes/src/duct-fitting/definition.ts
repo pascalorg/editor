@@ -1,6 +1,7 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { ductBodyPaint, ductBodySlots } from '../shared/duct-body-paint'
 import { rotateFittingNode } from '../shared/fitting-rotation'
+import { ductFittingQuickActions } from '../shared/mep-fitting-actions'
 import { buildDuctFittingFloorplan } from './floorplan'
 import { buildDuctFittingGeometry } from './geometry'
 import { ductFittingParametrics } from './parametrics'
@@ -85,6 +86,8 @@ export const ductFittingDefinition: NodeDefinition<typeof DuctFittingNode> = {
   ports: getDuctFittingPorts,
 
   floorplan: buildDuctFittingFloorplan,
+  quickActions: ductFittingQuickActions,
+  quickActionNodeScope: 'level',
 
   // R/T rotate a selected fitting ±45° around the shared active axis.
   // The default editor rotate only knows Y; fittings need X/Z for

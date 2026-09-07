@@ -170,8 +170,11 @@ export function planDuctElbowBranchPromotion(
   }))
   const directions = elbowDirections(existingPorts, connectedPortId)
   if (!directions) return null
-  const branchAngle = (directions.growth.angleTo(directions.branch) * 180) / Math.PI
-  if (branchAngle < 45 - 1e-4 || branchAngle > 135 + 1e-4) return null
+  const measuredBranchAngle = (directions.growth.angleTo(directions.branch) * 180) / Math.PI
+  if (measuredBranchAngle < 45 - 1e-4 || measuredBranchAngle > 135 + 1e-4) return null
+  // The tolerance above intentionally accepts values infinitesimally outside
+  // the schema range, so normalize before parsing the generated fitting.
+  const branchAngle = Math.min(135, Math.max(45, measuredBranchAngle))
   const phi = (branchAngle * Math.PI) / 180
   const rotation = branchRotation(
     directions.growth,

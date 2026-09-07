@@ -21,6 +21,7 @@ import {
   useDistributionRunTool,
 } from '../shared/distribution-run-tool'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
+import { PIPE_PRESETS } from '../shared/mep-presets'
 import {
   collectScenePorts,
   DWV_PORT_SYSTEMS,
@@ -66,6 +67,7 @@ const PipeSegmentTool = () => {
   const [pipeMaterial, setPipeMaterial] = useState<PipeSegmentNode['pipeMaterial']>(
     continuationSeed?.pipe.pipeMaterial ?? defaults.pipeMaterial,
   )
+  const [presetId, setPresetId] = useState('pvc-waste')
   const systemRef = useRef(system)
   systemRef.current = system
   const slopedRef = useRef(sloped)
@@ -74,6 +76,16 @@ const PipeSegmentTool = () => {
   diameterRef.current = diameter
   const pipeMaterialRef = useRef(pipeMaterial)
   pipeMaterialRef.current = pipeMaterial
+
+  const applyPreset = (id: string) => {
+    const preset = PIPE_PRESETS.find((candidate) => candidate.id === id)
+    if (!preset) return
+    setPresetId(preset.id)
+    setSystem(preset.system)
+    setPipeMaterial(preset.pipeMaterial)
+    setDiameter(preset.diameter)
+    setSloped(preset.sloped)
+  }
   const floorCenterlineY = () => runSectionHalfSizeM(diameterRef.current)
 
   const commitSegment = ({
@@ -379,13 +391,26 @@ const PipeSegmentTool = () => {
         start={displayStart}
         startDirection={run.startConnection.port?.direction ?? null}
         status={
-          <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
+          <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
             {system === 'waste'
               ? sloped
                 ? 'Waste · ¼″/ft fall'
                 : 'Waste · level'
               : 'Vent · level'}{' '}
             · Q system{system === 'waste' ? ' · S slope' : ''}
+            <select
+              className="bg-transparent text-foreground outline-none"
+              onChange={(event) => applyPreset(event.target.value)}
+              onPointerDown={(event) => event.stopPropagation()}
+              style={{ pointerEvents: 'auto' }}
+              value={presetId}
+            >
+              {PIPE_PRESETS.map((preset) => (
+                <option key={preset.id} value={preset.id}>
+                  {preset.label}
+                </option>
+              ))}
+            </select>
           </div>
         }
         unit={unit}

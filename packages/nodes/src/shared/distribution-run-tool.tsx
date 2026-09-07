@@ -1,6 +1,13 @@
 'use client'
 
-import { emitter, type GridEvent, type NodeEvent } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  emitter,
+  type GridEvent,
+  type NodeEvent,
+  sceneRegistry,
+} from '@pascal-app/core'
 import {
   CursorSphere,
   DimensionPill,
@@ -12,9 +19,10 @@ import {
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react'
-import type { Group } from 'three'
+import { type Group, Matrix3, Vector3 } from 'three'
 import { alignDrawPoint, clearDrawAlignment } from './draw-alignment'
 import {
   type FloorPlacementClickTriggerEvent,
@@ -30,6 +38,22 @@ import {
 } from './run-direction-feedback'
 
 export type RunPoint = [number, number, number]
+
+export type RunSurfaceFrame = {
+  origin: RunPoint
+  normal: RunPoint
+  tangent: RunPoint
+  bitangent: RunPoint
+}
+
+type RunPointerEvent = GridEvent | NodeEvent<AnyNode>
+
+type SurfacePointerStamp = {
+  nativeEvent: unknown
+  x: number
+  y: number
+  at: number
+}
 
 export type RunConnection = {
   port: ScenePort | null
@@ -55,6 +79,140 @@ type ResolvedRunPoint = RunConnection & {
   point: RunPoint
   snapped: RunPoint | null
   directionMode: RunDirectionMode
+}
+
+const UP: RunPoint = [0, 1, 0]
+const X_AXIS: RunPoint = [1, 0, 0]
+const Z_AXIS: RunPoint = [0, 0, 1]
+
+function dotRun(a: readonly number[], b: readonly number[]): number {
+  return a[0]! * b[0]! + a[1]! * b[1]! + a[2]! * b[2]!
+}
+
+function crossRun(a: readonly number[], b: readonly number[]): RunPoint {
+  return [
+    a[1]! * b[2]! - a[2]! * b[1]!,
+    a[2]! * b[0]! - a[0]! * b[2]!,
+    a[0]! * b[1]! - a[1]! * b[0]!,
+  ]
+}
+
+function normalizeRun(vector: readonly number[], fallback: RunPoint): RunPoint {
+  const length = Math.hypot(vector[0]!, vector[1]!, vector[2]!)
+  return length < 1e-9
+    ? [...fallback]
+    : [vector[0]! / length, vector[1]! / length, vector[2]! / length]
+}
+
+/** Build a stable 2D drawing frame for a floor, wall, ceiling, or sloped face. */
+export function createRunSurfaceFrame(
+  origin: readonly number[],
+  surfaceNormal: readonly number[] = UP,
+): RunSurfaceFrame {
+  const normal = normalizeRun(surfaceNormal, UP)
+  // Prefer the building's vertical axis for walls and sloped surfaces. For a
+  // horizontal floor/ceiling this deliberately falls back to world X so the
+  // frame remains stable and matches the existing floor grid orientation.
+  const horizontal = Math.abs(dotRun(normal, UP)) > 0.98
+  const tangent = horizontal
+    ? ([...X_AXIS] as RunPoint)
+    : normalizeRun(crossRun(UP, normal), X_AXIS)
+  const bitangent = horizontal
+    ? ([...Z_AXIS] as RunPoint)
+    : normalizeRun(crossRun(normal, tangent), Z_AXIS)
+  return {
+    origin: [origin[0]!, origin[1]!, origin[2]!],
+    normal,
+    tangent,
+    bitangent,
+  }
+}
+
+export function projectRunPointToSurface(
+  point: readonly number[],
+  frame: RunSurfaceFrame,
+): RunPoint {
+  const offset: RunPoint = [
+    point[0]! - frame.origin[0],
+    point[1]! - frame.origin[1],
+    point[2]! - frame.origin[2],
+  ]
+  const distance = dotRun(offset, frame.normal)
+  return [
+    point[0]! - frame.normal[0] * distance,
+    point[1]! - frame.normal[1] * distance,
+    point[2]! - frame.normal[2] * distance,
+  ]
+}
+
+export function snapRunPointToSurface(
+  point: readonly number[],
+  frame: RunSurfaceFrame,
+  step: number,
+): RunPoint {
+  const projected = projectRunPointToSurface(point, frame)
+  if (step <= 0) return projected
+  const offset: RunPoint = [
+    projected[0] - frame.origin[0],
+    projected[1] - frame.origin[1],
+    projected[2] - frame.origin[2],
+  ]
+  const u = snapRunValue(dotRun(offset, frame.tangent), step)
+  const v = snapRunValue(dotRun(offset, frame.bitangent), step)
+  return [
+    frame.origin[0] + frame.tangent[0] * u + frame.bitangent[0] * v,
+    frame.origin[1] + frame.tangent[1] * u + frame.bitangent[1] * v,
+    frame.origin[2] + frame.tangent[2] * u + frame.bitangent[2] * v,
+  ]
+}
+
+export function projectRunToSurfaceAngleLock(
+  from: readonly number[],
+  raw: readonly number[],
+  frame: RunSurfaceFrame,
+  sourceDirection: readonly number[] | null = null,
+): RunPoint {
+  const fromOffset: RunPoint = [
+    from[0]! - frame.origin[0],
+    from[1]! - frame.origin[1],
+    from[2]! - frame.origin[2],
+  ]
+  const rawOffset: RunPoint = [raw[0]! - from[0]!, raw[1]! - from[1]!, raw[2]! - from[2]!]
+  const rawU = dotRun(rawOffset, frame.tangent)
+  const rawV = dotRun(rawOffset, frame.bitangent)
+  const sourceU = sourceDirection ? dotRun(sourceDirection, frame.tangent) : 0
+  const sourceV = sourceDirection ? dotRun(sourceDirection, frame.bitangent) : 0
+  const sourceAngle =
+    sourceDirection && Math.hypot(sourceU, sourceV) > 1e-6
+      ? Math.atan2(sourceV, sourceU)
+      : Math.atan2(rawV, rawU)
+  const angle = Math.round(sourceAngle / ANGLE_STEP_RAD) * ANGLE_STEP_RAD
+  const distance = Math.max(0, rawU * Math.cos(angle) + rawV * Math.sin(angle))
+  const u = dotRun(fromOffset, frame.tangent) + Math.cos(angle) * distance
+  const v = dotRun(fromOffset, frame.bitangent) + Math.sin(angle) * distance
+  return [
+    frame.origin[0] + frame.tangent[0] * u + frame.bitangent[0] * v,
+    frame.origin[1] + frame.tangent[1] * u + frame.bitangent[1] * v,
+    frame.origin[2] + frame.tangent[2] * u + frame.bitangent[2] * v,
+  ]
+}
+
+/** Lock a wall run to its dominant local axis: along the wall or vertically. */
+export function projectRunToSurfaceAxisLock(
+  from: readonly number[],
+  raw: readonly number[],
+  frame: RunSurfaceFrame,
+): RunPoint {
+  const offset: RunPoint = [raw[0]! - from[0]!, raw[1]! - from[1]!, raw[2]! - from[2]!]
+  const along = dotRun(offset, frame.tangent)
+  const vertical = dotRun(offset, frame.bitangent)
+  const tangentDistance = Math.abs(along) >= Math.abs(vertical) ? along : 0
+  const bitangentDistance = Math.abs(vertical) > Math.abs(along) ? vertical : 0
+  return [
+    from[0]! + frame.tangent[0] * tangentDistance + frame.bitangent[0] * bitangentDistance,
+    from[1]! + frame.tangent[1] * tangentDistance + frame.bitangent[1] * bitangentDistance,
+    from[2]! + frame.tangent[2] * tangentDistance + frame.bitangent[2] * bitangentDistance,
+  ]
 }
 
 type DistributionRunToolConfig = {
@@ -202,8 +360,71 @@ export function stepNominalRunSize(
   return sizes[Math.min(sizes.length - 1, Math.max(0, nearest + direction))] ?? current
 }
 
-function eventPoint(event: GridEvent | NodeEvent): RunPoint {
-  return [event.localPosition[0], event.localPosition[1], event.localPosition[2]]
+function buildingLocalPoint(point: Vector3): Vector3 {
+  const buildingId = useViewer.getState().selection.buildingId
+  const building = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
+  return building ? building.worldToLocal(point) : point
+}
+
+function nodeSurfaceFrame(event: NodeEvent<AnyNode>): RunSurfaceFrame {
+  const point = new Vector3(...event.position)
+  const localPoint = buildingLocalPoint(point.clone())
+  event.object.updateWorldMatrix(true, false)
+  const normal = new Vector3(...(event.normal ?? UP)).applyNormalMatrix(
+    new Matrix3().getNormalMatrix(event.object.matrixWorld),
+  )
+  const worldNormalPoint = point.clone().add(normal)
+  const localNormalPoint = buildingLocalPoint(worldNormalPoint)
+  const localNormal = localNormalPoint.sub(localPoint).normalize()
+  return createRunSurfaceFrame(
+    [localPoint.x, localPoint.y, localPoint.z],
+    [localNormal.x, localNormal.y, localNormal.z],
+  )
+}
+
+function surfacePointFromEvent(event: RunPointerEvent): {
+  point: RunPoint
+  frame: RunSurfaceFrame
+  isHorizontal: boolean
+} {
+  if ('node' in event) {
+    const frame = nodeSurfaceFrame(event)
+    return {
+      point: [...frame.origin],
+      frame,
+      isHorizontal: Math.abs(frame.normal[1]) > 0.98,
+    }
+  }
+  const source = event.surfaceLocalPosition ?? event.localPosition
+  const point: RunPoint = [source[0], source[1], source[2]]
+  const frame = createRunSurfaceFrame(point, event.surfaceNormal ?? UP)
+  return {
+    point,
+    frame,
+    isHorizontal: event.surfaceNormal == null || Math.abs(frame.normal[1]) > 0.98,
+  }
+}
+
+function pointerCoordinates(event: RunPointerEvent): [number, number] | null {
+  const native = event.nativeEvent as { clientX?: unknown; clientY?: unknown } | undefined
+  return typeof native?.clientX === 'number' && typeof native.clientY === 'number'
+    ? [native.clientX, native.clientY]
+    : null
+}
+
+function isSameSurfacePointerEvent(
+  event: RunPointerEvent,
+  stamp: SurfacePointerStamp | null,
+): boolean {
+  if (!stamp) return false
+  if (stamp.nativeEvent === event.nativeEvent) return true
+  const coordinates = pointerCoordinates(event)
+  return (
+    coordinates !== null &&
+    coordinates[0] === stamp.x &&
+    coordinates[1] === stamp.y &&
+    Date.now() - stamp.at < 50
+  )
 }
 
 export function resolveRunCommitFromEvent<T>(
@@ -211,7 +432,14 @@ export function resolveRunCommitFromEvent<T>(
   latestResolved: T | null,
   resolveGridEvent: (event: GridEvent) => T,
 ): T | null {
-  return 'node' in event ? latestResolved : resolveGridEvent(event)
+  // A node click can arrive before the first node:move (for example when the
+  // pointer enters and clicks in one gesture). Resolve it from the surface
+  // event instead of dropping the start point. Once movement has established a
+  // cursor snapshot, keep using that snapshot so a wall click cannot jump to
+  // the clicked mesh's unrelated local frame.
+  return 'node' in event
+    ? (latestResolved ?? resolveGridEvent(event as GridEvent))
+    : resolveGridEvent(event)
 }
 
 export function useDistributionRunTool(config: DistributionRunToolConfig) {
@@ -239,6 +467,8 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
   startRef.current = start
   const startConnectionRef = useRef<RunConnection>(initialConnectionRef.current)
   const altAnchorRef = useRef<{ clientY: number; baseY: number } | null>(null)
+  const startSurfaceRef = useRef<RunSurfaceFrame | null>(null)
+  const lastSurfacePointerRef = useRef<SurfacePointerStamp | null>(null)
   const lastClientYRef = useRef<number | null>(null)
   const lastResolvedRef = useRef<ResolvedRunPoint | null>(null)
   const lengthInputRef = useRef('')
@@ -289,11 +519,14 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
 
     const resolvePoint = (event: FloorPlacementClickTriggerEvent): ResolvedRunPoint => {
       const adapter = configRef.current
-      const rawEventPoint = eventPoint(event)
+      const hit = surfacePointFromEvent(event)
       const currentStart = startRef.current
+      const surface = startSurfaceRef.current ?? hit.frame
+      const rawEventPoint = currentStart ? projectRunPointToSurface(hit.point, surface) : hit.point
       const snapEnabled = isGridSnapActive() || isMagneticSnapActive() || isAngleSnapActive()
       const gridStep = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const bypassConnections = event.nativeEvent?.altKey === true
+      const altJointPick = !currentStart && bypassConnections
       const snappedResult = (point: RunPoint, connection: RunConnection): ResolvedRunPoint => {
         clearDrawAlignment()
         return { point, snapped: point, directionMode: 'snap', ...connection }
@@ -302,31 +535,30 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       if (!currentStart) {
         const raw: RunPoint = [
           rawEventPoint[0],
-          adapter.resolveFirstY?.(rawEventPoint[0], rawEventPoint[2]) ?? 0,
+          hit.isHorizontal
+            ? (adapter.resolveFirstY?.(rawEventPoint[0], rawEventPoint[2]) ?? rawEventPoint[1])
+            : rawEventPoint[1],
           rawEventPoint[2],
         ]
-        if (!bypassConnections && snapEnabled) {
+        if ((!bypassConnections && snapEnabled) || altJointPick) {
           const port = adapter.findPort(raw)
           if (port) {
             const point: RunPoint = [...port.position]
             return snappedResult(point, { port, body: null })
           }
-          const probe: RunPoint = [
-            snapRunValue(raw[0], gridStep),
-            raw[1],
-            snapRunValue(raw[2], gridStep),
-          ]
+          const probe = snapRunPointToSurface(raw, surface, gridStep)
           const body = adapter.findBody(probe)
           if (body) return snappedResult(body.point, { port: null, body })
         }
-        const x = snapRunValue(raw[0], gridStep)
-        const z = snapRunValue(raw[2], gridStep)
-        const point = alignDrawPoint([x, adapter.resolveFirstY?.(x, z) ?? 0, z], {
-          applySnap: isMagneticSnapActive(),
-          bypass: bypassConnections,
-        })
+        const point = snapRunPointToSurface(raw, surface, gridStep)
+        const aligned = hit.isHorizontal
+          ? alignDrawPoint(point, {
+              applySnap: isMagneticSnapActive(),
+              bypass: bypassConnections,
+            })
+          : point
         return {
-          point,
+          point: aligned,
           snapped: null,
           port: null,
           body: null,
@@ -334,12 +566,12 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         }
       }
 
-      const raw: RunPoint = [rawEventPoint[0], currentStart[1], rawEventPoint[2]]
+      const raw: RunPoint = projectRunPointToSurface(rawEventPoint, surface)
       const angleLocked = isAngleSnapActive()
       const sourceDirection = startConnectionRef.current.port?.direction ?? null
       const localRay = 'localRay' in event ? event.localRay : undefined
       const cameraProjection =
-        sourceDirection && localRay
+        hit.isHorizontal && sourceDirection && localRay
           ? projectRunToCameraDirection(
               currentStart,
               localRay,
@@ -350,9 +582,11 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
           : null
       const angled = cameraProjection
         ? cameraProjection.point
-        : angleLocked
-          ? projectRunToAngleLock(currentStart, raw, sourceDirection)
-          : raw
+        : !hit.isHorizontal
+          ? projectRunToSurfaceAxisLock(currentStart, raw, surface)
+          : angleLocked
+            ? projectRunToSurfaceAngleLock(currentStart, raw, surface, sourceDirection)
+            : raw
       if (!bypassConnections && snapEnabled) {
         const candidatePort = adapter.findPort(raw)
         const sourcePort = startConnectionRef.current.port
@@ -367,11 +601,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
           const point: RunPoint = [...port.position]
           return snappedResult(point, { port, body: null })
         }
-        const probe: RunPoint = [
-          snapRunValue(raw[0], gridStep),
-          raw[1],
-          snapRunValue(raw[2], gridStep),
-        ]
+        const probe = snapRunPointToSurface(raw, surface, gridStep)
         const body = adapter.findBody(probe)
         if (body) return snappedResult(body.point, { port: null, body })
       }
@@ -380,26 +610,24 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       if (cameraProjection) {
         point = cameraProjection.point
       } else if (!angleLocked) {
-        point = [snapRunValue(angled[0], gridStep), angled[1], snapRunValue(angled[2], gridStep)]
+        point = snapRunPointToSurface(angled, surface, gridStep)
       } else {
-        const dx = angled[0] - currentStart[0]
-        const dz = angled[2] - currentStart[2]
-        const length = Math.hypot(dx, dz)
-        if (length < 1e-6) point = angled
-        else {
-          const scale = snapRunValue(length, gridStep) / length
-          point = [currentStart[0] + dx * scale, angled[1], currentStart[2] + dz * scale]
-        }
+        point = snapRunPointToSurface(angled, surface, gridStep)
       }
       const connection = { port: null, body: null }
-      if (!cameraProjection || Math.abs(cameraProjection.direction[1]) < 1e-6) {
+      if (
+        hit.isHorizontal &&
+        (!cameraProjection || Math.abs(cameraProjection.direction[1]) < 1e-6)
+      ) {
         point = adapter.resolveFreeEnd?.(currentStart, point, startConnectionRef.current) ?? point
       }
-      point[1] = Math.max(adapter.minimumFreeY?.() ?? ALT_Y_MIN_M, point[1])
-      const aligned = alignDrawPoint(point, {
-        applySnap: isMagneticSnapActive() && !angleLocked,
-        bypass: bypassConnections,
-      })
+      if (hit.isHorizontal) point[1] = Math.max(adapter.minimumFreeY?.() ?? ALT_Y_MIN_M, point[1])
+      const aligned = hit.isHorizontal
+        ? alignDrawPoint(point, {
+            applySnap: isMagneticSnapActive() && !angleLocked,
+            bypass: bypassConnections,
+          })
+        : point
       return {
         point: aligned,
         snapped: null,
@@ -484,7 +712,21 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       setAltActive(false)
     }
 
-    const onMove = (event: GridEvent) => {
+    const onMove = (event: RunPointerEvent) => {
+      if (!('node' in event) && isSameSurfacePointerEvent(event, lastSurfacePointerRef.current)) {
+        return
+      }
+      if ('node' in event) {
+        const coordinates = pointerCoordinates(event)
+        if (coordinates) {
+          lastSurfacePointerRef.current = {
+            nativeEvent: event.nativeEvent,
+            x: coordinates[0],
+            y: coordinates[1],
+            at: Date.now(),
+          }
+        }
+      }
       const clientY = (event.nativeEvent as { clientY?: number } | undefined)?.clientY
       if (typeof clientY === 'number') lastClientYRef.current = clientY
       if (altAnchorRef.current && typeof clientY === 'number') {
@@ -505,6 +747,20 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
     }
 
     const onClick = (event: FloorPlacementClickTriggerEvent) => {
+      if (!('node' in event) && isSameSurfacePointerEvent(event, lastSurfacePointerRef.current)) {
+        return
+      }
+      if ('node' in event) {
+        const coordinates = pointerCoordinates(event)
+        if (coordinates) {
+          lastSurfacePointerRef.current = {
+            nativeEvent: event.nativeEvent,
+            x: coordinates[0],
+            y: coordinates[1],
+            at: Date.now(),
+          }
+        }
+      }
       stopPlacementCommitPropagation(event)
       const currentStart = startRef.current
       if (altAnchorRef.current && currentStart) {
@@ -521,7 +777,11 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       // A NodeEvent's localPosition is local to the clicked mesh, not the
       // selected building. Commit node-surface clicks at the latest resolved
       // drafting cursor — the same building-local point shown in the preview.
-      const resolved = resolveRunCommitFromEvent(event, lastResolvedRef.current, resolvePoint)
+      const altJointClick = !currentStart && event.nativeEvent?.altKey === true
+      const resolved =
+        altJointClick || !('node' in event)
+          ? resolvePoint(event)
+          : resolveRunCommitFromEvent(event, lastResolvedRef.current, resolvePoint)
       if (!resolved) return
       if (!currentStart) {
         triggerSFX('sfx:grid-snap')
@@ -531,7 +791,11 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         }
         startConnectionRef.current = connection
         configRef.current.inheritFromConnection?.(connection)
+        startSurfaceRef.current = surfacePointFromEvent(event).frame
         setStart(resolved.point)
+        setCursor(resolved.point)
+        setSnapTarget(resolved.snapped)
+        setEndConnection({ port: null, body: null })
         return
       }
       const typedResolved = applyTypedLength(resolved)
@@ -546,6 +810,12 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       const tag = target?.tagName
       const isLengthField = target ? target.closest('[data-run-length-input]') !== null : false
       if ((tag === 'INPUT' || tag === 'TEXTAREA') && !isLengthField) return
+      if (event.key === 'Escape' && startRef.current) {
+        event.preventDefault()
+        event.stopImmediatePropagation()
+        onCancel()
+        return
+      }
       if (event.key === 'Alt') {
         const currentStart = startRef.current
         if (!currentStart || lastClientYRef.current === null || altAnchorRef.current) return
@@ -603,6 +873,8 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       setLengthInput('')
       setValidationMessage(null)
       startConnectionRef.current = { port: null, body: null }
+      startSurfaceRef.current = null
+      lastSurfacePointerRef.current = null
       lastResolvedRef.current = null
       altAnchorRef.current = null
       setAltActive(false)
@@ -611,16 +883,20 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
 
     const unsubscribeClicks = subscribeFloorPlacementClicks(onClick)
     emitter.on('grid:move', onMove)
+    emitter.on('node:move', onMove)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown, true)
     window.addEventListener('keyup', onKeyUp)
     return () => {
       unsubscribeClicks()
       emitter.off('grid:move', onMove)
+      emitter.off('node:move', onMove)
       emitter.off('tool:cancel', onCancel)
       window.removeEventListener('keydown', onKeyDown, true)
       window.removeEventListener('keyup', onKeyUp)
       altAnchorRef.current = null
+      startSurfaceRef.current = null
+      lastSurfacePointerRef.current = null
       clearDrawAlignment()
     }
   }, [config.active, updateLengthInput])
@@ -742,9 +1018,21 @@ export function DistributionRunCursor({
                   className="w-20 bg-transparent text-center text-foreground outline-none"
                   data-run-length-input
                   inputMode="decimal"
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === 'Backspace' ||
+                      event.key === 'Delete' ||
+                      event.key === 'ArrowLeft' ||
+                      event.key === 'ArrowRight'
+                    ) {
+                      event.stopPropagation()
+                    }
+                  }}
                   onChange={(event) => onLengthInputChange?.(event.target.value)}
+                  onPointerDown={(event) => event.stopPropagation()}
                   placeholder="type a length"
                   ref={lengthFieldRef}
+                  style={{ pointerEvents: 'auto' }}
                   type="text"
                   value={lengthInput ?? ''}
                 />{' '}

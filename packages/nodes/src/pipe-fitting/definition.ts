@@ -1,6 +1,7 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { useScene } from '@pascal-app/core'
 import { getRotationAxis, rotateEulerWorld } from '../shared/fitting-rotation'
+import { pipeFittingQuickActions } from '../shared/mep-fitting-actions'
 import { buildPipeFittingFloorplan } from './floorplan'
 import { buildPipeFittingGeometry } from './geometry'
 import { pipeFittingParametrics } from './parametrics'
@@ -52,6 +53,8 @@ export const pipeFittingDefinition: NodeDefinition<typeof PipeFittingNode> = {
   ports: getPipeFittingPorts,
 
   floorplan: buildPipeFittingFloorplan,
+  quickActions: pipeFittingQuickActions,
+  quickActionNodeScope: 'level',
 
   // R/T rotate a selected fitting ±45° around the shared active axis —
   // same scheme as duct fittings (the default editor rotate only knows

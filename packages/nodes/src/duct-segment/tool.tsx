@@ -635,11 +635,11 @@ const DuctSegmentTool = () => {
         start={run.start}
         startDirection={run.startConnection.port?.direction ?? null}
         status={
-          ceilingMode && !run.start ? (
-            <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
+          ceilingMode ? (
+            <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
               Ceiling · C to toggle
             </div>
-          ) : undefined
+          ) : null
         }
         unit={unit}
       />

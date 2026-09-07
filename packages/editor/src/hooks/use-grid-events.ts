@@ -8,7 +8,7 @@ import {
 import { timeSpan, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
-import { Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { Matrix3, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { getPlacementSurface } from '../lib/active-placement-surface'
 import { resolveTerrainGroundHit } from '../lib/ground-surface'
 
@@ -23,6 +23,15 @@ export function useGridEvents(gridY: number) {
   const groundPlane = useRef(new Plane(new Vector3(0, 1, 0), 0))
   const intersectionPoint = useRef(new Vector3())
 
+  type GridIntersection = {
+    point: Vector3
+    surface?: {
+      point: Vector3
+      object: Object3D
+      worldNormal?: Vector3
+    }
+  }
+
   // Update ground plane when grid Y changes
   useEffect(() => {
     groundPlane.current.constant = -gridY
@@ -31,7 +40,35 @@ export function useGridEvents(gridY: number) {
   useEffect(() => {
     const canvas = gl.domElement
 
-    const getIntersection = (nativeEvent: MouseEvent | PointerEvent): Vector3 | null => {
+    const getSurfaceIntersection = (): GridIntersection | null => {
+      const surfaceTypes = ['wall', 'ceiling', 'slab', 'roof'] as const
+      let closest: GridIntersection | null = null
+      let closestDistance = Number.POSITIVE_INFINITY
+
+      for (const type of surfaceTypes) {
+        for (const id of sceneRegistry.byType[type] ?? []) {
+          const root = sceneRegistry.nodes.get(id)
+          if (!root) continue
+          const hit = raycaster.current.intersectObject(root, true)[0]
+          if (!hit || hit.distance >= closestDistance) continue
+          closestDistance = hit.distance
+          const worldNormal = hit.face
+            ? hit.face.normal
+                .clone()
+                .applyNormalMatrix(new Matrix3().getNormalMatrix(hit.object.matrixWorld))
+                .normalize()
+            : undefined
+          closest = {
+            point: hit.point.clone(),
+            surface: { point: hit.point.clone(), object: hit.object, worldNormal },
+          }
+        }
+      }
+
+      return closest
+    }
+
+    const getIntersection = (nativeEvent: MouseEvent | PointerEvent): GridIntersection | null => {
       // Convert mouse position to normalized device coordinates (-1 to +1)
       const rect = canvas.getBoundingClientRect()
       pointer.current.x = ((nativeEvent.clientX - rect.left) / rect.width) * 2 - 1
@@ -39,6 +76,12 @@ export function useGridEvents(gridY: number) {
 
       // Update raycaster
       raycaster.current.setFromCamera(pointer.current, camera)
+
+      // R3F node events can be stopped by another mesh, so this canvas-level
+      // raycast is the reliable architectural-surface source for placement and
+      // drawing tools. Keep it separate from the ordinary grid point so tools
+      // that intentionally place on the floor retain their existing behavior.
+      const surfaceHit = getSurfaceIntersection()
 
       // Sculpted ground wins over the plane, but only while the plane IS the
       // ground (see `isSiteGroundPlane`): a plane riding a storey base or a slab
@@ -60,14 +103,19 @@ export function useGridEvents(gridY: number) {
             [direction.x, direction.y, direction.z],
             -groundPlane.current.constant,
           )
-      if (hit) return intersectionPoint.current.set(hit.x, hit.y, hit.z).clone()
+      if (hit) {
+        return {
+          point: intersectionPoint.current.set(hit.x, hit.y, hit.z).clone(),
+          surface: surfaceHit?.surface,
+        }
+      }
 
       // Intersect with ground plane
       if (raycaster.current.ray.intersectPlane(groundPlane.current, intersectionPoint.current)) {
-        return intersectionPoint.current.clone()
+        return { point: intersectionPoint.current.clone(), surface: surfaceHit?.surface }
       }
 
-      return null
+      return surfaceHit
     }
 
     const emit = (suffix: EventSuffix, nativeEvent: MouseEvent | PointerEvent) => {
@@ -77,7 +125,20 @@ export function useGridEvents(gridY: number) {
       // Convert world-space point to building-local for tools that live inside a building.
       const buildingId = useViewer.getState().selection.buildingId
       const buildingMesh = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
-      const localPoint = buildingMesh ? buildingMesh.worldToLocal(point.clone()) : point
+      const localPoint = buildingMesh ? buildingMesh.worldToLocal(point.point.clone()) : point.point
+      const surfaceLocalPoint = point.surface
+        ? buildingMesh
+          ? buildingMesh.worldToLocal(point.surface.point.clone())
+          : point.surface.point.clone()
+        : undefined
+      const localNormal = point.surface?.worldNormal
+        ? buildingMesh
+          ? buildingMesh
+              .worldToLocal(point.surface.point.clone().add(point.surface.worldNormal))
+              .sub(surfaceLocalPoint ?? localPoint)
+              .normalize()
+          : point.surface.worldNormal
+        : undefined
       const { origin, direction } = raycaster.current.ray
       const localRayOrigin = buildingMesh
         ? buildingMesh.worldToLocal(origin.clone())
@@ -88,12 +149,17 @@ export function useGridEvents(gridY: number) {
 
       const eventKey = `grid:${suffix}` as `grid:${EventSuffix}`
       const payload: GridEvent = {
-        position: [point.x, point.y, point.z],
+        position: [point.point.x, point.point.y, point.point.z],
         localPosition: [localPoint.x, localPoint.y, localPoint.z],
         localRay: {
           origin: [localRayOrigin.x, localRayOrigin.y, localRayOrigin.z],
           direction: [localRayDirection.x, localRayDirection.y, localRayDirection.z],
         },
+        surfaceLocalPosition: surfaceLocalPoint
+          ? [surfaceLocalPoint.x, surfaceLocalPoint.y, surfaceLocalPoint.z]
+          : undefined,
+        surfaceNormal: localNormal ? [localNormal.x, localNormal.y, localNormal.z] : undefined,
+        surfaceObject: point.surface?.object,
         nativeEvent: nativeEvent as any, // Type compatibility with ThreeEvent
       }
 

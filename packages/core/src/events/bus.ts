@@ -55,7 +55,7 @@ import type { AnyNode } from '../schema/types'
 
 // Base event interfaces
 export interface GridEvent {
-  /** World-space intersection point on the grid plane. */
+  /** World-space intersection point on the floor grid or a scene surface. */
   position: [number, number, number]
   /**
    * Building-local intersection point — relative to the currently selected building.
@@ -77,6 +77,12 @@ export interface GridEvent {
    * the intersection to.
    */
   object?: Object3D
+  /** Building-local point where the cursor hit an architectural surface. */
+  surfaceLocalPosition?: [number, number, number]
+  /** Building-local outward normal when the cursor hit an architectural surface. */
+  surfaceNormal?: [number, number, number]
+  /** The architectural surface object hit by the cursor, when available. */
+  surfaceObject?: Object3D
   nativeEvent: ThreeEvent<PointerEvent>
 }
 
