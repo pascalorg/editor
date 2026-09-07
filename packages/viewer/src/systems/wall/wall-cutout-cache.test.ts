@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
+import { spawnSync } from 'node:child_process'
 import {
   BuildingNode,
   LevelNode,
@@ -25,13 +26,14 @@ import {
   TextureLoader,
   Vector3,
 } from 'three'
+import { createStore, type StoreApi } from 'zustand/vanilla'
 import { applyMaterialPresetToMaterials } from '../../lib/materials'
-import useViewer from '../../store/use-viewer'
 import { getWallHideState, WallCutout } from './wall-cutout'
 import {
   sameMaterialArray,
   WALL_FACING_HYSTERESIS,
   WallCutoutCache,
+  type WallCutoutViewerState,
   wallFacingNegative,
 } from './wall-cutout-cache'
 import { getMaterialsForWall } from './wall-materials'
@@ -42,7 +44,7 @@ import {
 } from './wall-rebuild-notifications'
 
 const sceneBefore = useScene.getState()
-const viewerBefore = useViewer.getState()
+let viewerStore: StoreApi<WallCutoutViewerState>
 let cache: WallCutoutCache
 let camera: PerspectiveCamera
 let unsubscribe: () => void
@@ -83,18 +85,19 @@ function trackWrites(mesh: Mesh) {
 beforeEach(() => {
   sceneRegistry.clear()
   useScene.setState({ nodes: {}, materials: {} })
-  useViewer.setState({
+  viewerStore = createStore<WallCutoutViewerState>(() => ({
     wallMode: 'cutaway',
     shading: 'solid',
     textures: false,
     colorPreset: 'clay',
-    selection: { ...viewerBefore.selection, selectedIds: [] },
+    sceneTheme: 'studio',
+    selection: { buildingId: null, levelId: null, zoneId: null, selectedIds: [] },
     previewSelectedIds: [],
     hoveredId: null,
     hoverHighlightMode: 'default',
-  })
+  }))
   useLiveTransforms.getState().clearAll()
-  cache = new WallCutoutCache()
+  cache = new WallCutoutCache(viewerStore)
   unsubscribeTransforms = cache.subscribeLiveTransforms()
   camera = new PerspectiveCamera()
   unsubscribe = subscribeWallRebuilds((id) => cache.rebuilt.add(id))
@@ -107,12 +110,11 @@ afterEach(() => {
   drainRebuiltWalls(new Set())
   sceneRegistry.clear()
   useScene.setState(sceneBefore)
-  useViewer.setState(viewerBefore)
 })
 
 describe('WallCutoutCache', () => {
   test('camera orbit in full height never iterates cached walls or reads camera direction', () => {
-    useViewer.setState({ wallMode: 'up' })
+    viewerStore.setState({ wallMode: 'up' })
     const { mesh } = addWall()
     const writes = trackWrites(mesh)
     cache.update(camera, 1)
@@ -282,43 +284,43 @@ describe('WallCutoutCache', () => {
   })
 
   test('paint hover preserves preview through cache updates and restores current appearance on leave', () => {
-    useViewer.setState({ wallMode: 'up' })
+    viewerStore.setState({ wallMode: 'up' })
     const { node, mesh } = addWall()
     cache.update(camera, 1)
     const original = mesh.material
     const preview = [new MeshBasicMaterial()]
-    useViewer.setState({ hoveredId: node.id })
-    useViewer.setState({ hoverHighlightMode: 'paint-ready' })
+    viewerStore.setState({ hoveredId: node.id })
+    viewerStore.setState({ hoverHighlightMode: 'paint-ready' })
     mesh.material = preview
     const normal = spyOn(mesh, 'updateWorldMatrix')
     cache.update(camera, 1.01)
     expect(mesh.material).toBe(preview)
     expect(normal).not.toHaveBeenCalled()
-    useViewer.setState({ wallMode: 'cutaway' })
+    viewerStore.setState({ wallMode: 'cutaway' })
     cache.update(camera, 1.02)
     camera.position.x++
     cache.update(camera, 2)
     expect(mesh.material).toBe(preview)
     mesh.material = original
-    useViewer.setState({ hoveredId: null, hoverHighlightMode: 'default' })
+    viewerStore.setState({ hoveredId: null, hoverHighlightMode: 'default' })
     cache.update(camera, 2.01)
     expect(mesh.material).toBe(cache.walls.get(node.id)!.hiddenVariant.materials)
     normal.mockRestore()
   })
 
   test('appearance changes during preview are applied when temporary ownership ends', () => {
-    useViewer.setState({ wallMode: 'up' })
+    viewerStore.setState({ wallMode: 'up' })
     const { node, mesh } = addWall()
     cache.update(camera, 1)
     const original = mesh.material
     const preview = [new MeshBasicMaterial()]
-    useViewer.setState({ hoveredId: node.id, hoverHighlightMode: 'paint-ready' })
+    viewerStore.setState({ hoveredId: node.id, hoverHighlightMode: 'paint-ready' })
     mesh.material = preview
-    useViewer.setState({ colorPreset: 'white' })
+    viewerStore.setState({ colorPreset: 'white' })
     cache.update(camera, 1.01)
     expect(mesh.material).toBe(preview)
     mesh.material = original
-    useViewer.setState({ hoveredId: null, hoverHighlightMode: 'default' })
+    viewerStore.setState({ hoveredId: null, hoverHighlightMode: 'default' })
     cache.update(camera, 1.02)
     expect(mesh.material).toBe(cache.walls.get(node.id)!.visibleVariant.materials)
     expect(mesh.material).not.toBe(original)
@@ -410,13 +412,29 @@ describe('WallCutoutCache', () => {
     const { mesh } = addWall()
     cache.update(camera, 1)
     const matrix = spyOn(mesh, 'updateWorldMatrix')
-    useViewer.setState({ colorPreset: 'white' })
+    viewerStore.setState({ colorPreset: 'white' })
     cache.update(camera, 1.01)
     expect(matrix).not.toHaveBeenCalled()
     matrix.mockRestore()
   })
 
   test('actual R3F advance renders camera stamps before rebuilds and passes them to the batch', async () => {
+    // The level tests also leak a useFrame mock; real frame ordering needs a fresh runtime.
+    if (process.env.PASCAL_WALL_CUTOUT_FRAME_TEST !== '1') {
+      const result = spawnSync(
+        process.execPath,
+        ['test', import.meta.filename, '--test-name-pattern', 'actual R3F advance'],
+        {
+          env: { ...process.env, PASCAL_WALL_CUTOUT_FRAME_TEST: '1' },
+          encoding: 'utf8',
+          timeout: 4000,
+        },
+      )
+      const output = result.stdout + result.stderr
+      expect(result.status, output).toBe(0)
+      expect(output).toContain('1 pass')
+      return
+    }
     const { node, mesh } = addWall()
     const canvas = { width: 1, height: 1, style: {} } as HTMLCanvasElement
     const root = createRoot(canvas)
@@ -432,7 +450,7 @@ describe('WallCutoutCache', () => {
         rebuild = false
       }, 4)
       useFrame(() => batched.push(mesh.userData.wallHidden), 5)
-      return createElement(WallCutout)
+      return createElement(WallCutout, { viewerStore })
     }
     await root.configure({
       camera,
@@ -471,7 +489,7 @@ describe('WallCutoutCache', () => {
       ['translucent', false],
       ['cutaway', true],
     ] as const) {
-      useViewer.setState({ wallMode: mode })
+      viewerStore.setState({ wallMode: mode })
       cache.update(camera, 1.01)
       expect(mesh.userData.wallHidden).toBe(hidden)
       expect(cache.walls.values().next().value!.variantKey).toBe(
@@ -482,20 +500,22 @@ describe('WallCutoutCache', () => {
 
   test('appearance and highlight refreshes do not reassign an already-current material array', () => {
     const { node, mesh } = addWall()
-    useViewer.setState({ wallMode: 'up' })
+    viewerStore.setState({ wallMode: 'up' })
     const writes = trackWrites(mesh)
     cache.update(camera, 1)
-    useViewer.setState({ hoveredId: node.id })
+    viewerStore.setState({ hoveredId: node.id })
     cache.update(camera, 1.01)
     expect(writes.material).toBe(1)
-    useViewer.setState({ selection: { ...viewerBefore.selection, selectedIds: [node.id] } })
+    viewerStore.setState({
+      selection: { ...viewerStore.getState().selection, selectedIds: [node.id] },
+    })
     cache.update(camera, 1.02)
     expect(writes.material).toBe(2)
-    useViewer.setState({ previewSelectedIds: [node.id] })
+    viewerStore.setState({ previewSelectedIds: [node.id] })
     cache.update(camera, 1.03)
     expect(writes.material).toBe(2)
     expect(writes.stamp).toBe(1)
-    useViewer.setState({ hoverHighlightMode: 'delete' })
+    viewerStore.setState({ hoverHighlightMode: 'delete' })
     cache.update(camera, 1.04)
     expect(cache.walls.get(node.id)?.variantKey).toBe('delete-visible')
     expect(writes.material).toBe(3)
@@ -503,7 +523,7 @@ describe('WallCutoutCache', () => {
 
   test('all appearance inputs refresh in full height without camera movement', () => {
     const { node, mesh } = addWall()
-    useViewer.setState({ wallMode: 'up' })
+    viewerStore.setState({ wallMode: 'up' })
     cache.update(camera, 1)
     const patches = [
       { shading: 'rendered' as const },
@@ -512,9 +532,9 @@ describe('WallCutoutCache', () => {
       { textures: true },
     ]
     for (const patch of patches) {
-      useViewer.setState(patch)
+      viewerStore.setState(patch)
       cache.update(camera, 1.01)
-      const v = useViewer.getState()
+      const v = viewerStore.getState()
       expect(
         sameMaterialArray(
           mesh.material,
@@ -547,7 +567,7 @@ describe('WallCutoutCache', () => {
       slots: { interior: `scene:${material.id}`, exterior: 'library:mtl_row14_test' },
     })
     useScene.setState({ nodes: { [node.id]: painted }, materials: { [material.id]: material } })
-    useViewer.setState({ wallMode: 'up', textures: true })
+    viewerStore.setState({ wallMode: 'up', textures: true })
     cache.update(camera, 1)
     const red = (mesh.material as Material[])[1]
     useScene.setState({
@@ -582,12 +602,12 @@ describe('WallCutoutCache', () => {
 
   test('selected wall clones pick up a late texture with a stationary full-height camera', async () => {
     const { node, mesh } = addWall()
-    useViewer.setState({
+    viewerStore.setState({
       wallMode: 'up',
-      selection: { ...viewerBefore.selection, selectedIds: [node.id] },
+      selection: { ...viewerStore.getState().selection, selectedIds: [node.id] },
     })
     cache.update(camera, 1)
-    const viewer = useViewer.getState()
+    const viewer = viewerStore.getState()
     const source = getMaterialsForWall(
       node,
       viewer.shading,
@@ -633,9 +653,9 @@ describe('WallCutoutCache', () => {
 
   test('face-band changes remove whole-wall selection highlighting immediately', () => {
     const { node } = addWall()
-    useViewer.setState({
+    viewerStore.setState({
       wallMode: 'up',
-      selection: { ...viewerBefore.selection, selectedIds: [node.id] },
+      selection: { ...viewerStore.getState().selection, selectedIds: [node.id] },
     })
     cache.update(camera, 1)
     expect(cache.walls.get(node.id)?.variantKey).toBe('selection-visible')
@@ -651,7 +671,7 @@ describe('WallCutoutCache', () => {
       for (const back of ['interior', 'exterior']) {
         const { node, mesh } = addWall(front, back)
         for (const mode of ['up', 'cutaway', 'down', 'translucent'] as const) {
-          useViewer.setState({ wallMode: mode })
+          viewerStore.setState({ wallMode: mode })
           for (const angle of [0, Math.PI]) {
             camera.rotation.y = angle
             cache.update(camera, 2 + angle)

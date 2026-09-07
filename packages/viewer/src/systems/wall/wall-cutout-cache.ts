@@ -95,10 +95,25 @@ export function wallFacingNegative(dot: number, previous: boolean | undefined): 
   return previous ? dot < WALL_FACING_HYSTERESIS : dot < -WALL_FACING_HYSTERESIS
 }
 
+export type WallCutoutViewerState = Pick<
+  ReturnType<typeof useViewer.getState>,
+  | 'wallMode'
+  | 'shading'
+  | 'textures'
+  | 'colorPreset'
+  | 'sceneTheme'
+  | 'selection'
+  | 'previewSelectedIds'
+  | 'hoveredId'
+  | 'hoverHighlightMode'
+>
+
+export type WallCutoutViewerStore = { getState: () => WallCutoutViewerState }
+
 export class WallCutoutCache {
   readonly walls = new Map<string, CachedWall>()
   readonly rebuilt = new Set<string>()
-  private viewer: ReturnType<typeof useViewer.getState> | undefined
+  private viewer: WallCutoutViewerState | undefined
   private nodes: ReturnType<typeof useScene.getState>['nodes'] | undefined
   private materials: ReturnType<typeof useScene.getState>['materials'] | undefined
   private registryRevision = -1
@@ -114,6 +129,8 @@ export class WallCutoutCache {
   private highlightKey = ''
   private transformed = new Set<string>()
 
+  constructor(private readonly viewerStore: WallCutoutViewerStore = useViewer) {}
+
   subscribeLiveTransforms(): () => void {
     return useLiveTransforms.subscribe((state, previous) => {
       for (const [id, transform] of state.transforms) {
@@ -126,7 +143,7 @@ export class WallCutoutCache {
   }
 
   update(camera: Camera, time: number): void {
-    const viewer = useViewer.getState()
+    const viewer = this.viewerStore.getState()
     const scene = useScene.getState()
     const wallIds = sceneRegistry.byType.wall!
     const libraryVersion = getLibraryMaterialsVersion()

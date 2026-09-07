@@ -1,10 +1,15 @@
 import { type AnyNodeId, emitter, sceneRegistry, useScene, type WallNode } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo } from 'react'
 import type { Material } from 'three'
 import { type Mesh, Vector3 } from 'three/webgpu'
 import useViewer, { type WallMode } from '../../store/use-viewer'
-import { sameMaterialArray, WallCutoutCache, wallHiddenFromFacing } from './wall-cutout-cache'
+import {
+  sameMaterialArray,
+  WallCutoutCache,
+  type WallCutoutViewerStore,
+  wallHiddenFromFacing,
+} from './wall-cutout-cache'
 import { getMaterialsForWall, getSelectionHighlightMaterials } from './wall-materials'
 import { subscribeWallRebuilds } from './wall-rebuild-notifications'
 
@@ -30,10 +35,12 @@ export function getWallHideState(
   return wallHiddenFromFacing(wallNode, wallMode, v.dot(cameraDir) < 0)
 }
 
-export const WallCutout = () => {
-  const cacheRef = useRef<WallCutoutCache | null>(null)
-  if (!cacheRef.current) cacheRef.current = new WallCutoutCache()
-  const cache = cacheRef.current
+export const WallCutout = ({
+  viewerStore = useViewer,
+}: {
+  viewerStore?: WallCutoutViewerStore
+}) => {
+  const cache = useMemo(() => new WallCutoutCache(viewerStore), [viewerStore])
 
   useEffect(() => subscribeWallRebuilds((id) => cache.rebuilt.add(id)), [cache])
 
@@ -54,10 +61,10 @@ export const WallCutout = () => {
         if (wallNode?.type !== 'wall') return
         const mats = getMaterialsForWall(
           wallNode,
-          useViewer.getState().shading,
-          useViewer.getState().textures,
-          useViewer.getState().colorPreset,
-          useViewer.getState().sceneTheme,
+          viewerStore.getState().shading,
+          viewerStore.getState().textures,
+          viewerStore.getState().colorPreset,
+          viewerStore.getState().sceneTheme,
           useScene.getState().materials,
         )
         const current = wallMesh.material as Material | Material[]
@@ -88,7 +95,7 @@ export const WallCutout = () => {
       emitter.off('thumbnail:before-capture', restoreForCapture)
       emitter.off('thumbnail:after-capture', reapplyAfterCapture)
     }
-  }, [])
+  }, [viewerStore])
 
   return null
 }
