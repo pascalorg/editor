@@ -3,12 +3,9 @@
 
 /**
  * MergedOutlineNode — a fork of Three.js OutlineNode that processes two object
- * groups (primary = selected, secondary = hovered) in a single pass, sharing the
- * expensive non-selected depth pre-render between both groups.
- *
- * Cost comparison vs two separate OutlineNode instances:
- *   Before: depth_A + mask_A + edge_A×6 + depth_B + mask_B + edge_B×6 = 2 depth passes
- *   After:  depth_AB (shared) + mask_A + edge_A×6 + mask_B + edge_B×6 = 1 depth pass
+ * groups (primary = selected, secondary = hovered), reusing scene depth when
+ * supplied and rendering masks from small private scenes. Callers without scene
+ * depth retain one shared non-selected depth pass for both groups.
  *
  * Additional early-outs:
  *   - Both empty       → skip everything (0 passes)
@@ -16,12 +13,23 @@
  *   - Only secondary   → skip primary mask/edge/blur
  */
 
-import { DepthTexture, FloatType, type Object3D, RenderTarget, Vector2 } from 'three'
+import {
+  DepthTexture,
+  FloatType,
+  Mesh,
+  Object3D,
+  RenderTarget,
+  Scene,
+  Sprite,
+  Vector2,
+} from 'three'
 import {
   color,
   exp,
   Fn,
   float,
+  depth as fragmentDepth,
+  fwidth,
   int,
   Loop,
   min,
@@ -127,6 +135,7 @@ export class MergedOutlineNode extends TempNode {
   downSampleRatio: number
   updateBeforeType: string
 
+  private readonly _sceneDepthNode: any
   private readonly _depthRT: RenderTarget
   private readonly _depthTexUniform: any
 
@@ -166,6 +175,10 @@ export class MergedOutlineNode extends TempNode {
 
   private readonly _cacheA = new Set<Object3D>()
   private readonly _cacheB = new Set<Object3D>()
+  private readonly _proxiesA = new Map<Object3D, Mesh | Sprite>()
+  private readonly _proxiesB = new Map<Object3D, Mesh | Sprite>()
+  private readonly _maskSceneA = new Scene()
+  private readonly _maskSceneB = new Scene()
 
   // Tracks whether either group rendered last frame. We use this to decide
   // when it's safe to skip renderer state manipulation entirely — touching
@@ -189,6 +202,8 @@ export class MergedOutlineNode extends TempNode {
       primaryEdgeGlow?: any
       secondaryEdgeGlow?: any
       downSampleRatio?: number
+      /** Current depth from pass(scene, camera).getTextureNode('depth'). */
+      sceneDepthNode?: any
     } = {},
   ) {
     super('vec4')
@@ -201,8 +216,14 @@ export class MergedOutlineNode extends TempNode {
       primaryEdgeGlow = float(0),
       secondaryEdgeGlow = float(0),
       downSampleRatio = 2,
+      sceneDepthNode = null,
     } = params
 
+    this._sceneDepthNode = sceneDepthNode
+    this._maskSceneA.matrixWorldAutoUpdate = false
+    this._maskSceneB.matrixWorldAutoUpdate = false
+    this._maskSceneA.name = 'MergedOutline [ Mask A ]'
+    this._maskSceneB.name = 'MergedOutline [ Mask B ]'
     this.scene = scene
     this.camera = camera
     this.primaryObjects = primaryObjects
@@ -318,6 +339,12 @@ export class MergedOutlineNode extends TempNode {
     const { renderer } = frame
     const { camera, scene } = this
 
+    // Update the producer before resetting renderer state, even if this outline
+    // is the first consumer in the graph. NodeFrame deduplicates FRAME updates.
+    if (hasAny && this._sceneDepthNode?.passNode) {
+      frame.updateBeforeNode(this._sceneDepthNode.passNode)
+    }
+
     _rendererState = RendererUtils.resetRendererAndSceneState(renderer, scene, _rendererState)
 
     const size = renderer.getDrawingBufferSize(_size)
@@ -336,6 +363,11 @@ export class MergedOutlineNode extends TempNode {
       this._wroteGroupBLastFrame = false
     }
 
+    this._buildCache(this.primaryObjects, this._cacheA)
+    this._buildCache(this.secondaryObjects, this._cacheB)
+    const useProxiesA = this._syncProxies(this._cacheA, this._proxiesA, this._maskSceneA)
+    const useProxiesB = this._syncProxies(this._cacheB, this._proxiesB, this._maskSceneB)
+
     if (!hasAny) {
       RendererUtils.restoreRendererAndSceneState(renderer, scene, _rendererState)
       return
@@ -345,61 +377,28 @@ export class MergedOutlineNode extends TempNode {
     this._wroteGroupALastFrame = hasPrimary
     this._wroteGroupBLastFrame = hasSecondary
 
-    if (hasPrimary) this._buildCache(this.primaryObjects, this._cacheA)
-    if (hasSecondary) this._buildCache(this.secondaryObjects, this._cacheB)
-
     const savedName = scene.name
 
-    // ── 1. Shared depth pass: all objects NOT in either group ─────────────────
-    renderer.setRenderTarget(this._depthRT)
-    renderer.setRenderObjectFunction(
-      (obj: any, sc: any, cam: any, geo: any, _mat: any, grp: any, lights: any, clip: any) => {
-        if (!hasDrawableGeometry(geo)) return
-        const inCache = this._cacheA.has(obj) || this._cacheB.has(obj)
-        if (!inCache) {
-          const m = obj.isSprite ? this._depthSpriteMaterial : this._depthMaterial
-          renderer.renderObject(obj, sc, cam, geo, m, grp, lights, clip)
-        }
-      },
-    )
-    scene.name = 'MergedOutline [ Depth ]'
-    renderer.render(scene, camera)
-
-    // ── 2a. Primary mask pass ─────────────────────────────────────────────────
-    if (hasPrimary) {
-      renderer.setRenderTarget(this._groupA.maskBuffer)
+    if (!this._sceneDepthNode) {
+      renderer.setRenderTarget(this._depthRT)
       renderer.setRenderObjectFunction(
         (obj: any, sc: any, cam: any, geo: any, _mat: any, grp: any, lights: any, clip: any) => {
           if (!hasDrawableGeometry(geo)) return
-          if (this._cacheA.has(obj)) {
-            const m = obj.isSprite ? this._prepareMaskSpriteMatA : this._prepareMaskMatA
+          if (!(this._cacheA.has(obj) || this._cacheB.has(obj))) {
+            const m = obj.isSprite ? this._depthSpriteMaterial : this._depthMaterial
             renderer.renderObject(obj, sc, cam, geo, m, grp, lights, clip)
           }
         },
       )
-      scene.name = 'MergedOutline [ Mask A ]'
+      scene.name = 'MergedOutline [ Depth ]'
       renderer.render(scene, camera)
     }
 
-    // ── 2b. Secondary mask pass ───────────────────────────────────────────────
-    if (hasSecondary) {
-      renderer.setRenderTarget(this._groupB.maskBuffer)
-      renderer.setRenderObjectFunction(
-        (obj: any, sc: any, cam: any, geo: any, _mat: any, grp: any, lights: any, clip: any) => {
-          if (!hasDrawableGeometry(geo)) return
-          if (this._cacheB.has(obj)) {
-            const m = obj.isSprite ? this._prepareMaskSpriteMatB : this._prepareMaskMatB
-            renderer.renderObject(obj, sc, cam, geo, m, grp, lights, clip)
-          }
-        },
-      )
-      scene.name = 'MergedOutline [ Mask B ]'
-      renderer.render(scene, camera)
-    }
+    // The fallback depth render may have updated source matrices since sync.
+    if (hasPrimary) this._renderMask(renderer, 'A', useProxiesA)
+    if (hasSecondary) this._renderMask(renderer, 'B', useProxiesB)
 
     renderer.setRenderObjectFunction(_rendererState.renderObjectFunction)
-    this._cacheA.clear()
-    this._cacheB.clear()
     scene.name = savedName
 
     // ── 3–7. Edge detect + blur + composite per active group ──────────────────
@@ -407,6 +406,101 @@ export class MergedOutlineNode extends TempNode {
     if (hasSecondary) this._runEdgePipeline(renderer, 'B')
 
     RendererUtils.restoreRendererAndSceneState(renderer, scene, _rendererState)
+  }
+
+  private _renderMask(renderer: any, group: 'A' | 'B', useProxies: boolean) {
+    const isA = group === 'A'
+    const cache = isA ? this._cacheA : this._cacheB
+    const proxies = isA ? this._proxiesA : this._proxiesB
+    const maskScene = isA ? this._maskSceneA : this._maskSceneB
+    const material = isA ? this._prepareMaskMatA : this._prepareMaskMatB
+    const spriteMaterial = isA ? this._prepareMaskSpriteMatA : this._prepareMaskSpriteMatB
+    if (useProxies) {
+      for (const [source, proxy] of proxies) proxy.matrixWorld.copy(source.matrixWorld)
+    }
+    renderer.setRenderTarget((isA ? this._groupA : this._groupB).maskBuffer)
+    // Keep source materials on proxies for material visibility and geometry
+    // groups; substitute only at submission, just like the full-scene path.
+    renderer.setRenderObjectFunction(
+      (obj: any, sc: any, cam: any, geo: any, _mat: any, grp: any, lights: any, clip: any) => {
+        if (!hasDrawableGeometry(geo)) return
+        if (useProxies || cache.has(obj)) {
+          renderer.renderObject(
+            obj,
+            sc,
+            cam,
+            geo,
+            obj.isSprite ? spriteMaterial : material,
+            grp,
+            lights,
+            clip,
+          )
+        }
+      },
+    )
+    renderer.render(useProxies ? maskScene : this.scene, this.camera)
+  }
+
+  private _syncProxies(cache: Set<Object3D>, proxies: Map<Object3D, Mesh | Sprite>, scene: Scene) {
+    let supported = true
+    for (const source of cache) {
+      const prototype = Object.getPrototypeOf(source)
+      let visible = true
+      let attached = false
+      let customHierarchy = false
+      for (let ancestor = source; ancestor; ancestor = ancestor.parent) {
+        if (!ancestor.visible) visible = false
+        if (ancestor === this.scene) attached = true
+        if (
+          ancestor.isLOD ||
+          ancestor.isClippingGroup ||
+          (ancestor.isGroup && ancestor.renderOrder !== 0)
+        ) {
+          customHierarchy = true
+        }
+      }
+      // These types own draw-time state that a plain proxy cannot reproduce.
+      if (
+        (prototype !== Mesh.prototype && prototype !== Sprite.prototype) ||
+        source.onBeforeRender !== Object3D.prototype.onBeforeRender ||
+        source.onAfterRender !== Object3D.prototype.onAfterRender ||
+        customHierarchy
+      ) {
+        supported = false
+        continue
+      }
+      if (!hasDrawableGeometry(source.geometry)) continue
+      let proxy = proxies.get(source)
+      if (!proxy) {
+        proxy = source.isSprite
+          ? new Sprite(source.material)
+          : new Mesh(source.geometry, source.material)
+        proxy.matrixAutoUpdate = false
+        proxy.matrixWorldAutoUpdate = false
+        proxy.frustumCulled = false
+        proxies.set(source, proxy)
+        scene.add(proxy)
+      }
+      proxy.geometry = source.geometry
+      proxy.material = source.material
+      proxy.matrixWorld.copy(source.matrixWorld)
+      proxy.layers.mask = source.layers.mask
+      proxy.visible = visible && attached
+      proxy.renderOrder = source.renderOrder
+      proxy.morphTargetInfluences = source.morphTargetInfluences
+      proxy.morphTargetDictionary = source.morphTargetDictionary
+      if (source.isSprite) {
+        proxy.center.copy(source.center)
+        proxy.count = source.count
+      }
+    }
+    for (const [source, proxy] of proxies) {
+      if (!supported || !cache.has(source) || !hasDrawableGeometry(source.geometry)) {
+        scene.remove(proxy)
+        proxies.delete(source)
+      }
+    }
+    return supported
   }
 
   private _runEdgePipeline(renderer: any, group: 'A' | 'B') {
@@ -455,14 +549,28 @@ export class MergedOutlineNode extends TempNode {
     _quadMesh.render(renderer)
   }
 
-  setup(_builder: any) {
+  setup(builder: any) {
+    if (this._sceneDepthNode) {
+      builder.getNodeProperties(this).sceneDepthNode = this._sceneDepthNode
+    }
     // ── prepareMask ───────────────────────────────────────────────────────────
     const buildPrepareMask = () => {
-      const depth = this._depthTexUniform.sample(screenUV)
+      let depth = (this._sceneDepthNode ?? this._depthTexUniform).sample(screenUV)
+      if (this._sceneDepthNode) {
+        // A small depth-space bias prevents self-occlusion. With MSAA, sample 0
+        // is off-center: also cover its subpixel depth slope against our mask.
+        const samples = this._sceneDepthNode.passNode?.options.samples ?? builder.renderer.samples
+        let bias = float(2 ** -22)
+        if (samples > 1) bias = bias.add(fwidth(fragmentDepth).mul(0.5))
+        depth = builder.renderer.reversedDepthBuffer ? depth.sub(bias) : depth.add(bias)
+        depth = depth.clamp(0, 1)
+      }
       const viewZ = this.camera.isPerspectiveCamera
         ? perspectiveDepthToViewZ(depth, this._cameraNear, this._cameraFar)
         : orthographicDepthToViewZ(depth, this._cameraNear, this._cameraFar)
-      const depthTest = positionView.z.lessThanEqual(viewZ).select(1, 0)
+      const depthTest = (
+        this._sceneDepthNode ? positionView.z.lessThan(viewZ) : positionView.z.lessThanEqual(viewZ)
+      ).select(1, 0)
       return vec3(0.0, depthTest, 1.0)
     }
 
@@ -603,6 +711,12 @@ export class MergedOutlineNode extends TempNode {
   dispose() {
     this.primaryObjects.length = 0
     this.secondaryObjects.length = 0
+    this._maskSceneA.clear()
+    this._maskSceneB.clear()
+    this._proxiesA.clear()
+    this._proxiesB.clear()
+    this._cacheA.clear()
+    this._cacheB.clear()
     this._depthRT.dispose()
     this._groupA.dispose()
     this._groupB.dispose()
@@ -625,6 +739,7 @@ export class MergedOutlineNode extends TempNode {
   }
 
   private _buildCache(objects: Object3D[], cache: Set<Object3D>) {
+    cache.clear()
     for (const obj of objects) {
       obj.traverse((child: any) => {
         if (child.isMesh || child.isSprite) cache.add(child)

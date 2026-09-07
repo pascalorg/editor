@@ -414,6 +414,7 @@ const PostProcessingPasses = ({
     outliner.selectedObjects.length = 0
     outliner.hoveredObjects.length = 0
 
+    let outlineNode: ReturnType<typeof mergedOutline> | null = null
     try {
       const scenePass = pass(scene, camera)
       scenePass.setLayers(sceneOnlyLayers)
@@ -445,7 +446,7 @@ const PostProcessingPasses = ({
 
       // Depth + normal MRT — shared by SSGI (diffuse/normal) and the ink pass
       // (depth/normal). Built whenever either is active.
-      let scenePassDepth: any = null
+      const scenePassDepth = scenePass.getTextureNode('depth')
       let scenePassNormal: any = null
       let sceneNormal: any = null
       if (needsNormalMRT) {
@@ -456,7 +457,6 @@ const PostProcessingPasses = ({
             normal: packNormalToRGB(normalView),
           }),
         )
-        scenePassDepth = scenePass.getTextureNode('depth')
         scenePassNormal = scenePass.getTextureNode('normal')
         const normalTexture = scenePass.getTexture('normal')
         normalTexture.type = UnsignedByteType
@@ -551,12 +551,13 @@ const PostProcessingPasses = ({
         sceneColor = vec4(gradeRgb(sceneColor.rgb), sceneColor.a)
       }
 
-      // Single merged outline node: one shared depth pass for both selected + hovered groups.
+      // Both outline groups reuse the current scene pass depth.
       const outliner = useViewer.getState().outliner
       let compositeWithOutlines = sceneColor
       let visualAlpha = contentAlpha
       if (outlineEnabled) {
-        const outlineNode = mergedOutline(scene, camera, {
+        outlineNode = mergedOutline(scene, camera, {
+          sceneDepthNode: scenePassDepth,
           primaryObjects: outliner.selectedObjects,
           secondaryObjects: outliner.hoveredObjects,
           primaryEdgeThickness: uniform(1),
@@ -639,6 +640,8 @@ const PostProcessingPasses = ({
       renderPipelineRef.current = renderPipeline
       retryCountRef.current = 0
     } catch (error) {
+      outlineNode?.dispose()
+      outlineNode = null
       hasPipelineErrorRef.current = true
       console.error(
         '[viewer/post-processing] Failed to set up post-processing pipeline. Rendering without post FX.',
@@ -656,6 +659,7 @@ const PostProcessingPasses = ({
     }
 
     return () => {
+      outlineNode?.dispose()
       if (renderPipelineRef.current) {
         renderPipelineRef.current.dispose()
       }
