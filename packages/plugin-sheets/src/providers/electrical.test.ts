@@ -342,7 +342,7 @@ describe('the sheet the plan-set module lays out', () => {
   const plans = mepPlans(ctx)
 
   test('E1.0 and P1.0 are both planned, and E1.0 replaces the generic fallback', () => {
-    expect(plans.map((p) => p.number)).toEqual(['E1.0', 'P1.0'])
+    expect(plans.map((p) => p.number)).toEqual(['E1.0', 'P1.0', 'M1.0'])
     // Not `extend` — the generic E1.0 plan viewport is REPLACED, not added to.
     for (const plan of plans) expect(plan.extend).toBeUndefined()
   })

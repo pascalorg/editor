@@ -53,7 +53,7 @@ import {
 } from '../engines/electrical'
 import { frameFloor } from '../engines/floor-framing'
 import { buildFoundation } from '../engines/foundation'
-import { flagLinesetTradeCrossings, layoutHvac } from '../engines/hvac'
+import { type CoolingPlan, flagLinesetTradeCrossings, type HvacSystem, layoutHvac } from '../engines/hvac'
 import { lgsFrameWalls } from '../engines/lgs-wall-framing'
 import { layoutPlumbing, placeMeterSpot } from '../engines/plumbing'
 import { streetFrameFor } from '../engines/street'
@@ -104,6 +104,12 @@ export type ComputeResult = {
    * anchors) — what the `bones:device` reconciler mirrors into nodes.
    * Empty when electrical is off. */
   devices: DerivedDevice[]
+  /** The HVAC cooling plan (Manual J-lite load + Manual S selection) the
+   * level was sized by — the mechanical sheet prints it. Null when HVAC
+   * is off or the level has nothing to condition. */
+  hvacPlan: CoolingPlan | null
+  /** The HVAC system the plan is built around (spec / state default), null = legacy labels. */
+  hvacSystem: HvacSystem | null
   /** Deduped ACTIVE walls the engines framed ('skip' overrides excluded,
    * S8 merged openings included) — the OpeningSlices the plan set's
    * door/window schedule tabulates (LOD-400 B21d). Openings live on the
@@ -564,6 +570,8 @@ function computeLevelUncached(
       devices: [],
       walls: [],
       foundation: { type: 'slab', ffAboveGradeIn: 0 },
+      hvacPlan: null,
+      hvacSystem: null,
     }
   }
 
@@ -1411,6 +1419,8 @@ function computeLevelUncached(
   // points, and the B12 GES water-bond check reuses the same slice.
   const placedFixtures = extractPlacedFixtures(nodes, levelId)
 
+  let hvacPlan: CoolingPlan | null = null
+  let hvacSystem: HvacSystem | null = null
   let devices: DerivedDevice[] = []
   if (config.showElectrical) {
     // B13a: layout-level warnings (un-placeable R314.3(2)/R315.3 alarms)
@@ -1631,7 +1641,10 @@ function computeLevelUncached(
       hasLevelAbove,
       stateCode: code,
       coverage: probeSlabs,
+      atticY: activeWalls.reduce((m, w) => Math.max(m, w.height), 0) + 0.15,
     })
+    hvacPlan = hvac.plan
+    hvacSystem = hvac.system
     members.push(...hvac.members)
     fixtures.push(...hvac.fixtures)
     warnings.push(...hvac.warnings)
@@ -1837,5 +1850,7 @@ function computeLevelUncached(
       type: foundation.type,
       ffAboveGradeIn: Math.round(foundation.ffAboveGradeM / inches(1)),
     },
+    hvacPlan,
+    hvacSystem,
   }
 }

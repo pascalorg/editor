@@ -1,5 +1,5 @@
 /**
- * The MEP sheets: E1.0 electrical and P1.0 plumbing.
+ * The MEP sheets: E1.0 electrical, P1.0 plumbing and M1.0 mechanical.
  *
  * Both are derived live — see providers/electrical.ts and
  * providers/plumbing.ts. This module only decides what lands where on the
@@ -53,7 +53,7 @@ export function mepPlans(ctx: PlanSetContext): Plan[] {
   const perLevelW = columnW - (levels.length > 1 ? gap : 0)
 
   const planViewport = (
-    kind: 'electrical' | 'plumbing',
+    kind: 'electrical' | 'plumbing' | 'mechanical',
     level: { id: string },
     index: number,
     extraLayers: Record<string, boolean>,
@@ -61,7 +61,7 @@ export function mepPlans(ctx: PlanSetContext): Plan[] {
     kind,
     system: 'plan',
     levelId: level.id,
-    title: `${kind === 'electrical' ? 'Electrical' : 'Plumbing'} plan — ${levelLabel(level as never)}`,
+    title: `${kind === 'electrical' ? 'Electrical' : kind === 'plumbing' ? 'Plumbing' : 'Mechanical'} plan — ${levelLabel(level as never)}`,
     scale: planScale,
     layers: { ...TRADE_LAYERS, ...extraLayers },
     x: frame.x + index * columnW,
@@ -133,5 +133,29 @@ export function mepPlans(ctx: PlanSetContext): Plan[] {
     ],
   })
 
+  /* ---------------------------------------------------------- M1.0 */
+  // The mechanical plan with the Manual J-lite load the equipment was
+  // sized by in the right column, over the cited notes (Steve: "include
+  // manual j load calcs automated to the plans").
+  out.push({
+    number: 'M1.0',
+    title: 'Mechanical plan',
+    viewports: [
+      ...levels.map((level, index) =>
+        planViewport('mechanical', level, index, { plumbing: false, electrical: false }),
+      ),
+      {
+        kind: 'mechanical',
+        system: 'notes',
+        levelId: levels[0]?.id,
+        title: 'Manual J load and mechanical notes',
+        layers: { ...TRADE_LAYERS },
+        x: frame.x + planW + gap,
+        y: fieldY,
+        w: notesW,
+        h: fieldH,
+      },
+    ],
+  })
   return out
 }

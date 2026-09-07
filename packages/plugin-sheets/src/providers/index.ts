@@ -7,6 +7,7 @@ import { registerSheetDrawingProvider } from '../drawings'
 import { registerElectricalProvider } from './electrical'
 import { registerEnergyProvider } from './energy'
 import { registerGeneralNotesProvider } from './general-notes'
+import { registerMechanicalProvider } from './mechanical'
 import { registerPlumbingProvider } from './plumbing'
 import { registerStructuralProvider } from './structural'
 
@@ -14,6 +15,7 @@ export function registerBuiltinSheetProviders(): void {
   registerStructuralProvider(registerSheetDrawingProvider)
   registerElectricalProvider(registerSheetDrawingProvider)
   registerPlumbingProvider(registerSheetDrawingProvider)
+  registerMechanicalProvider(registerSheetDrawingProvider)
   registerEnergyProvider(registerSheetDrawingProvider)
   registerGeneralNotesProvider(registerSheetDrawingProvider)
 }

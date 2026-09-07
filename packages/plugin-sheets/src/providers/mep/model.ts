@@ -30,6 +30,7 @@
  */
 import type { AnyNodeLike, NodeMap } from '../../model'
 import type { Fixture, Member, WallSlice } from '../../../../plugin-bones/src/core/types'
+import type { CoolingPlan, HvacSystem } from '../../../../plugin-bones/src/engines/hvac'
 import { computeLevel } from '../../../../plugin-bones/src/framing/compute'
 import { FramingNode } from '../../../../plugin-bones/src/framing/schema'
 
@@ -64,6 +65,10 @@ export type MepModel = {
   jurisdiction: string
   /** How the meter got its spot, for the sheet's own honesty line. */
   serviceSync: ServiceSync | null
+  /** The HVAC cooling plan (Manual J-lite + Manual S) — the mechanical sheet prints it. */
+  hvacPlan: CoolingPlan | null
+  /** The HVAC system the plan is built around (null = the legacy labels). */
+  hvacSystem: HvacSystem | null
 }
 
 /** The synthetic `bones:service` record ids — never written to the scene. */
@@ -342,6 +347,8 @@ export function mepModel(nodes: NodeMap, levelId: string | undefined): MepModel 
       warnings: result.warnings.filter((w) => !STRUCTURAL_WARNING.test(w)),
       jurisdiction: result.jurisdiction,
       serviceSync,
+      hvacPlan: result.hvacPlan,
+      hvacSystem: result.hvacSystem,
     }
   } catch (error) {
     model = {
@@ -352,6 +359,8 @@ export function mepModel(nodes: NodeMap, levelId: string | undefined): MepModel 
       warnings: [`MEP engine failed: ${(error as Error).message ?? 'unknown error'}`],
       jurisdiction: 'AUTO',
       serviceSync,
+      hvacPlan: null,
+      hvacSystem: null,
     }
   }
   entries.set(key, model)

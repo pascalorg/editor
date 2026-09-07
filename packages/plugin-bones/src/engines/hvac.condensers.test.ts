@@ -183,7 +183,7 @@ describe('condenser sizing — area + climate zone (assumption, Manual J/S gover
     expect(flUnits[0]?.label).toContain('Manual J-lite, zone 2A design 35°C')
     expect(flUnits[0]?.meta?.sizingBasis).toBe('manual-j-lite')
     // …and the air handler sizes from the SAME plan (one system tonnage)
-    const ah = fl.fixtures.find((f) => f.label?.includes('Air handler'))
+    const ah = fl.fixtures.find((f) => f.kind === 'equipment' && typeof f.meta?.cfm === 'number')
     expect(ah?.label).toContain('Manual J-lite, zone 2A design 35°C')
     expect(ah?.meta?.tons).toBe(flUnits[0]?.meta?.totalTons)
     // No stateCode → climate zone unknown → the labeled sqft FALLBACK, with
@@ -342,7 +342,7 @@ describe('condenser row placement — outside, clear, spaced (IRC M1403 + mfr cl
 describe('line-set — one RO-clear wall penetration, wall-following pair to the air handler', () => {
   const { walls, rooms } = shell(26, 10)
   const { members, fixtures } = layoutHvac(walls, rooms, LOD400)
-  const handler = fixtures.find((f) => f.label?.includes('Air handler')) as Fixture
+  const handler = fixtures.find((f) => f.kind === 'equipment' && typeof f.meta?.cfm === 'number') as Fixture
   const units = condensersOf(fixtures)
 
   test('each unit has a suction+liquid pair whose run reaches the air handler', () => {
@@ -1060,7 +1060,7 @@ describe('condenser election validation — false-exterior walls never place the
     expect(out.fixtures.filter((f) => f.kind === 'disconnect').length).toBe(1)
     // E2 line-set continuity: the suction pair reaches the air handler AND
     // the unit on WALL rails (no AIR RUN legs, no long-run advisory)
-    const handler = out.fixtures.find((f) => f.label?.includes('Air handler')) as Fixture
+    const handler = out.fixtures.find((f) => f.kind === 'equipment' && typeof f.meta?.cfm === 'number') as Fixture
     const suction = out.members.filter(
       (m) => m.sourceId === 'lineset-suction-1' && m.role === 'pipe-run',
     )
@@ -1373,7 +1373,7 @@ describe('Manual-J-lite engine sizing — hand-derived tonnage, 5-ton split, cli
     // 2A → moisture regime A (humid) → ×1.25 latent allowance (F1)
     const designTons = sensTons * 1.25
     const handTons = Math.max(1.5, Math.ceil(designTons * 2) / 2)
-    const ah = out.fixtures.find((f) => f.label?.includes('Air handler')) as Fixture
+    const ah = out.fixtures.find((f) => f.kind === 'equipment' && typeof f.meta?.cfm === 'number') as Fixture
     expect(ah.meta?.tons).toBe(handTons)
     expect(ah.meta?.sizingBasis).toBe('manual-j-lite')
     expect(Number(ah.meta?.loadBtuH)).toBe(Math.round(designTons * 12000))
@@ -1413,7 +1413,8 @@ describe('Manual-J-lite engine sizing — hand-derived tonnage, 5-ton split, cli
     const sensRounded = Math.round(load.sensibleTons * 100) / 100
     for (let k = 0; k < units.length; k++) {
       const u = units[k] as Fixture
-      expect(u.label).toContain(`AC Condenser #${k + 1} — ${unitTons} tons`)
+      // FL: a split heat pump by the state's practice (S4) — the outdoor unit says so
+      expect(u.label).toMatch(new RegExp(`^(AC Condenser|Heat pump outdoor unit) #${k + 1} — ${unitTons} tons`))
       expect(u.label).toContain(
         `Manual J-lite, zone 2A design 35°C, ${sensRounded} t sensible × 1.25 latent (regime A)`,
       )
@@ -1428,7 +1429,7 @@ describe('Manual-J-lite engine sizing — hand-derived tonnage, 5-ton split, cli
       expect(cab.system).toBe('hvac')
       expect(cab.role).toBe('equipment')
       expect(cab.material).toBe('steel')
-      expect(cab.label).toBe(`AC condenser #${k + 1} — ${unitTons} tons outdoor unit`)
+      expect(cab.label).toMatch(new RegExp(`^(AC condenser|Heat pump outdoor unit) #${k + 1} — ${unitTons} tons outdoor unit`))
     }
     // placement machinery untouched: both units OUTSIDE the shell, on the
     // row wall, ≥ 0.6 m clear (the row composes, not just the count)
@@ -1443,7 +1444,7 @@ describe('Manual-J-lite engine sizing — hand-derived tonnage, 5-ton split, cli
     ).toBeGreaterThanOrEqual(0.6 - 1e-9)
     // multi-system honesty: ONE air handler drawn, the split stated on the
     // label AND as a level warning — never a silent single-coil 5.5-ton box
-    const ah = out.fixtures.find((f) => f.label?.includes('Air handler')) as Fixture
+    const ah = out.fixtures.find((f) => f.kind === 'equipment' && typeof f.meta?.cfm === 'number') as Fixture
     expect(
       out.warnings.some((w) =>
         w.includes('ONE air handler/duct system drawn') && w.includes('2 condensers'),
@@ -1488,10 +1489,10 @@ describe('Manual-J-lite engine sizing — hand-derived tonnage, 5-ton split, cli
     const fl = layoutHvac(walls, rooms, LOD400, undefined, { stateCode: 'FL' })
     const mn = layoutHvac(walls, rooms, LOD400, undefined, { stateCode: 'MN' })
     const flTons = Number(
-      (fl.fixtures.find((f) => f.label?.includes('Air handler')) as Fixture).meta?.tons,
+      (fl.fixtures.find((f) => f.kind === 'equipment' && typeof f.meta?.cfm === 'number') as Fixture).meta?.tons,
     )
     const mnTons = Number(
-      (mn.fixtures.find((f) => f.label?.includes('Air handler')) as Fixture).meta?.tons,
+      (mn.fixtures.find((f) => f.kind === 'equipment' && typeof f.meta?.cfm === 'number') as Fixture).meta?.tons,
     )
     // 4.86 t sensible × 1.25 → 6.079 → 6.5 selected → 2 × 3.5 = 7 installed
     // = 115.1% — a HAIR over the band, and the overrun still says so

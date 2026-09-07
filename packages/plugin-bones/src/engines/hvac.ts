@@ -552,6 +552,63 @@ export type CoolingPlan = {
   installedWithinBand: boolean
 }
 
+/** The HVAC system the plan is built around (spec.hvacSystem). */
+export type HvacSystem = NonNullable<FramingSpec['hvacSystem']>
+
+/** States whose practice is a split HEAT PUMP (mild winters, electric heat). */
+const HEAT_PUMP_STATES = new Set(['FL', 'GA', 'SC', 'NC', 'AL', 'MS', 'LA', 'TN', 'TX', 'AZ', 'NV', 'OK', 'AR', 'VA'])
+
+/**
+ * The system when the panel set none (Steve: "provide the options to the
+ * user on generation for hvac system and type"): a split heat pump in the
+ * South and Southwest, AC over a gas furnace elsewhere; NULL when the state
+ * is unknown — the legacy "air handler + AC condenser" labels then stand
+ * (byte parity for state-less scenes).
+ */
+export function defaultHvacSystem(stateCode?: string): HvacSystem | null {
+  const st = (stateCode ?? '').toUpperCase()
+  if (!US_STATES.has(st)) return null // 'INTL', 'AUTO', '' — no practice to name
+  return HEAT_PUMP_STATES.has(st) ? 'heat-pump-split' : 'ac-gas-furnace'
+}
+
+/** The fifty states and DC — a jurisdiction code outside them names no practice. */
+const US_STATES = new Set(
+  'AL AK AZ AR CA CO CT DE DC FL GA HI ID IL IN IA KS KY LA ME MD MA MI MN MS MO MT NE NV NH NJ NM NY NC ND OH OK OR PA RI SC SD TN TX UT VT VA WA WV WI WY'.split(' '),
+)
+
+/** The indoor unit's name by system (the legacy 'Air handler' with none). */
+function indoorUnitName(system: HvacSystem | null): string {
+  switch (system) {
+    case 'heat-pump-split':
+      return 'Air handler (split heat pump, electric strip backup)'
+    case 'ac-gas-furnace':
+      return 'Gas furnace (upflow, 80% AFUE min — M1401) with evaporator coil'
+    case 'packaged':
+      return 'Supply / return plenum connection — packaged unit outside (schematic)'
+    default:
+      return 'Air handler'
+  }
+}
+
+/** The outdoor unit's name by system — member labels (the legacy 'AC condenser' with none). */
+function outdoorMemberName(system: HvacSystem | null): string {
+  switch (system) {
+    case 'heat-pump-split':
+      return 'Heat pump outdoor unit'
+    case 'packaged':
+      return 'Packaged unit (heating + cooling in one cabinet on the pad; ducts through the wall)'
+    case 'mini-split':
+      return 'Mini-split outdoor unit (multi-zone)'
+    default:
+      return 'AC condenser'
+  }
+}
+
+/** The outdoor unit's name by system — fixture labels (the legacy 'AC Condenser' with none). */
+function outdoorFixtureName(system: HvacSystem | null): string {
+  return system ? outdoorMemberName(system) : 'AC Condenser'
+}
+
 /**
  * SYSTEM COOLING TONNAGE (IRC M1401.3 — equipment per ACCA Manual S from
  * Manual J loads): the MANUAL-J-LITE v1 sensible load (envelope UA ×
@@ -1524,8 +1581,10 @@ export function layoutHvac(
      * its probe slabs (probeSlabsFor); direct callers may omit it and the
      * election validates on zones + wall bands alone. */
     coverage?: readonly CoverageSlice[]
+    /** Level-local y just over the tallest plate — a furnace flue rises past it. */
+    atticY?: number
   },
-): { members: Member[]; fixtures: Fixture[]; warnings: string[] } {
+): { members: Member[]; fixtures: Fixture[]; warnings: string[]; plan: CoolingPlan | null; system: HvacSystem | null } {
   const members: Member[] = []
   const fixtures: Fixture[] = []
   const warnings: string[] = []
@@ -1537,12 +1596,12 @@ export function layoutHvac(
   // the election must see it (hvacServedRooms drops it).
   const zonesAll = rooms
   rooms = hvacServedRooms(rooms)
-  if (rooms.length === 0) return { members, fixtures, warnings }
+  if (rooms.length === 0) return { members, fixtures, warnings, plan: null, system: null }
   const fab = spec.detail !== '200'
 
   const conditioned = rooms.filter((r) => r.category !== 'garage')
   const habitable = conditioned.filter((r) => r.category !== 'hallway')
-  if (habitable.length === 0) return { members, fixtures, warnings }
+  if (habitable.length === 0) return { members, fixtures, warnings, plan: null, system: null }
 
   const areaM2 = conditioned.reduce((sum, r) => sum + polygonArea(r.polygon), 0)
   const habitableArea = habitable.reduce((sum, r) => sum + polygonArea(r.polygon), 0)
@@ -1551,6 +1610,9 @@ export function layoutHvac(
   // grille and the condenser row all size from this plan (the old engine
   // ran the AH at 1 ton/500 sqft NEXT TO condensers at 450/550/650).
   const plan = sizeCoolingPlan(walls, rooms, areaM2, context?.stateCode)
+  // the SYSTEM the plan is built around — the panel's choice, else the
+  // state's practice, else the legacy labels
+  const system: HvacSystem | null = spec.hvacSystem ?? defaultHvacSystem(context?.stateCode)
   // The system figure is the INSTALLED capacity (count × unitTons — what
   // the cabinets actually add up to; == the selection for single-unit
   // plans). The drawn single indoor coil serves the installed units, so
@@ -1628,7 +1690,7 @@ export function layoutHvac(
     rotationY: 0,
     sourceId: equipRoom.id,
     label:
-      `Air handler — ${tons} ton (${plan.sizingNote}; Manual J/S govern)` +
+      `${indoorUnitName(system)} — ${tons} ton (${plan.sizingNote}; Manual J/S govern)` +
       (plan.count > 1
         ? ` — serves ${plan.count} condensers (${plan.count} × ${plan.unitTons} t installed${
             plan.installedTons !== plan.totalTons
@@ -1638,6 +1700,7 @@ export function layoutHvac(
         : ''),
     meta: {
       tons,
+      ...(system ? { hvacSystem: system } : {}),
       // the Manual S SELECTION, when the installed sum diverged from it
       // (split rounding) — single-unit scenes carry no duplicate key
       ...(plan.installedTons !== plan.totalTons ? { selectedTons: plan.totalTons } : {}),
@@ -1657,11 +1720,35 @@ export function layoutHvac(
     },
   })
 
+  // A gas furnace vents: a 4 in B-vent from the furnace top, up through
+  // the ceiling and the attic and out above the roof (G2427 / M1801 —
+  // terminate per the vent's listing, ≥ 12 in above the roof — verify);
+  // the gas line to it is the plumbing contractor's (not modeled).
+  if (system === 'ac-gas-furnace') {
+    const flueTop = (context?.atticY ?? wallTop + 0.15) + 1.2
+    const flueBottom = 1.9
+    members.push({
+      system: 'hvac',
+      role: 'pipe-run',
+      dims: [0.1, flueTop - flueBottom, 0.1],
+      length: flueTop - flueBottom,
+      position: [equipAt[0], (flueTop + flueBottom) / 2, equipAt[1]],
+      rotation: [0, 0, 0],
+      material: 'steel',
+      sourceId: equipRoom.id,
+      label: '4" B-vent flue — furnace to above the roof (IRC G2427 / M1801; terminate ≥ 12 in above the roof per the listing — verify)',
+    })
+    warnings.push('gas furnace: the gas line to the furnace is the plumbing contractor\'s (not modeled); combustion air per G2407 — verify')
+  }
+  if (system === 'packaged') {
+    warnings.push('packaged unit: the ducts meet the unit through the exterior wall; the plenum connection is drawn at the equipment room (schematic) — verify the wall penetration and the pad')
+  }
+
   // The supply spine (axis + register drop points + keep-out footprints) —
   // ONE computation feeds the trunk emission below AND the return path's
   // keep-out checks (round-1 blocker: return tin inside supply tin).
   const spine = supplySpineOf(walls, rooms)
-  if (!spine) return { members, fixtures, warnings } // habitable ≠ 0 ⇒ unreachable
+  if (!spine) return { members, fixtures, warnings, plan, system } // habitable ≠ 0 ⇒ unreachable
 
   // Central return sized to the tonnage; flag when it can't carry the supply.
   // The GRILLE lives in a central conditioned room (hallway first, NEVER the
@@ -2389,7 +2476,7 @@ export function layoutHvac(
           rotation: [0, rotY, 0],
           material: 'steel',
           sourceId: equipRoom.id,
-          label: `AC condenser #${n} — ${plan.unitTons} tons outdoor unit`,
+          label: `${outdoorMemberName(system)} #${n} — ${plan.unitTons} tons outdoor unit`,
           ...(padCabinetFlag ? { flag: padCabinetFlag } : {}),
         })
         fixtures.push({
@@ -2398,7 +2485,7 @@ export function layoutHvac(
           position: [at[0], COND_PAD_T + COND_DIMS[1] / 2, at[1]],
           rotationY: rotY,
           sourceId: equipRoom.id,
-          label: `AC Condenser #${n} — ${plan.unitTons} tons (${sizingNote})`,
+          label: `${outdoorFixtureName(system)} #${n} — ${plan.unitTons} tons (${sizingNote})`,
           meta: {
             tons: plan.unitTons,
             equipment: 'condenser',
@@ -2879,7 +2966,69 @@ export function layoutHvac(
     })
   }
 
-  return { members, fixtures, warnings }
+  if (system === 'mini-split') return miniSplit(members, fixtures, warnings, plan, habitable, walls, equipRoom.id)
+  return { members, fixtures, warnings, plan, system }
+}
+
+/**
+ * A DUCTLESS system: no trunk, branches, registers or return — a wall head
+ * in every habitable room at 2.1 m on a boundary wall, facing the room,
+ * sized by the room's share of the plan; the outdoor unit(s) keep the
+ * condenser row (multi-zone). The line sets to the heads are the
+ * installer's — not routed, said so. The thermostat, exhaust fans and the
+ * disconnect stay.
+ */
+function miniSplit(
+  members: Member[],
+  fixtures: Fixture[],
+  warnings: string[],
+  plan: CoolingPlan,
+  habitable: RoomSlice[],
+  walls: WallSlice[],
+  equipRoomId: string,
+): { members: Member[]; fixtures: Fixture[]; warnings: string[]; plan: CoolingPlan; system: HvacSystem } {
+  const keptMembers = members.filter((m) => m.role !== 'duct-run')
+  const keptFixtures = fixtures.filter(
+    (f) =>
+      !(
+        f.kind === 'register' ||
+        f.kind === 'return' ||
+        (f.kind === 'equipment' && f.system === 'hvac' && f.meta?.equipment !== 'condenser' && f.sourceId === equipRoomId)
+      ),
+  )
+  const total = habitable.reduce((s, r) => s + polygonArea(r.polygon), 0) || 1
+  let heads = 0
+  for (const room of habitable) {
+    const c = centroid(room.polygon)
+    const boundary = walls.filter((w) => room.boundaryWallIds.includes(w.id) && !w.curved && w.length >= 1)
+    const pool = boundary.length > 0 ? boundary : walls.filter((w) => !w.curved && w.length >= 1)
+    let best: { at: Pt; wall: WallSlice; d: number } | null = null
+    for (const w of pool) {
+      const mid: Pt = [w.start[0] + w.dir[0] * (w.length / 2), w.start[1] + w.dir[1] * (w.length / 2)]
+      const d = Math.hypot(mid[0] - c[0], mid[1] - c[1])
+      if (!best || d < best.d) best = { at: mid, wall: w, d }
+    }
+    if (!best) continue
+    // the head hangs 0.15 m off the wall face, toward the room
+    const nx = c[0] - best.at[0]
+    const nz = c[1] - best.at[1]
+    const n = Math.hypot(nx, nz) || 1
+    const at: Pt = [best.at[0] + (nx / n) * (best.wall.thickness / 2 + 0.15), best.at[1] + (nz / n) * (best.wall.thickness / 2 + 0.15)]
+    const share = polygonArea(room.polygon) / total
+    const btu = Math.round((plan.installedTons * 12000 * share) / 1000) * 1000
+    heads += 1
+    keptFixtures.push({
+      system: 'hvac',
+      kind: 'equipment',
+      position: [at[0], 2.1, at[1]],
+      rotationY: Math.atan2(nx / n, nz / n),
+      sourceId: room.id,
+      label: `Ductless wall head — ${room.name} (${btu.toLocaleString('en-US')} Btu/h share of ${plan.installedTons} t; line set to the outdoor unit by the installer)`,
+      meta: { equipment: 'mini-split-head', btuH: btu, room: room.id },
+    })
+  }
+  warnings.push(`mini-split: ${heads} wall heads, no ducts; refrigerant line sets to the outdoor unit(s) not routed — by the installer (M1411)`)
+  return { members: keptMembers, fixtures: keptFixtures, warnings, plan, system: 'mini-split' }
 }
 
 // ---------------------------------------------------------------------------

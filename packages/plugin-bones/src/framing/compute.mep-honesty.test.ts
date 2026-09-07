@@ -357,7 +357,7 @@ describe('F3: condenser election validated at the computeLevel boundary (coverag
   test('the condenser lands truly OUTSIDE — south of the shell, no zone, no slab, no flag', () => {
     const nodes = misclassifiedNodes()
     const result = computeLevel(nodes, bones('lvl0'))
-    const unit = result.fixtures.find((f) => /AC Condenser #1/.test(f.label ?? ''))
+    const unit = result.fixtures.find((f) => /(AC Condenser|Heat pump outdoor unit) #1/.test(f.label ?? ''))
     expect(unit).toBeDefined()
     // pre-fix class: inside the Bathroom zone; coverage-blind mutation:
     // the covered mid-plan void. The honest spot is condenserStandoff

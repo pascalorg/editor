@@ -438,6 +438,7 @@ export function resolveViewport(vp: ViewportNode, ctx: ResolveContext): DrawnVie
     case 'structural':
     case 'electrical':
     case 'plumbing':
+    case 'mechanical':
     case 'energy':
     case 'general-notes':
       return resolveProvided(vp, nodes)
@@ -695,7 +696,10 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
   // residual so the building stands square on the lot too; a section, an
   // elevation or a plate is not a plan and never turns.
   const levelFrame =
-    vp.kind === 'structural' || vp.kind === 'electrical' || vp.kind === 'plumbing'
+    vp.kind === 'structural' ||
+    vp.kind === 'electrical' ||
+    vp.kind === 'plumbing' ||
+    vp.kind === 'mechanical'
   const planLevelId = vp.levelId ?? firstLevelId(nodes)
   const rotationDeg =
     levelFrame && planLevelId

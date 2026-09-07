@@ -826,14 +826,65 @@ G55 The electrical service drops in overhead from the pole or comes
     underground — a setting; the main panel is outside on the left or
     right side, favouring the garage (done, S2).
 G56 HVAC: real system styles and transitions, sized for the house; the
-    ducts work; Manual J load calcs automated onto the plans.
+    ducts work; Manual J load calcs automated onto the plans (system types,
+    M1.0 with the load table — S4; Manual D duct design open).
 G57 Hot and cold water: under the slab where that is the practice (the
     slab states), in the walls where it is not — reviewed and set by
     jurisdiction (done, S3: attic / under-slab / crawl / walls by state and floor).
 G58 The generation exposes the options: HVAC system and type, service
-    entrance, sewer direction, water routing.
+    entrance, sewer direction, water routing (the Bones panel's Services
+    block, S2–S4; the generate panel and the headless script next).
 
 ## Log (continued)
+
+- 2026-09-07: **Batch S4 — the HVAC system types, the Manual J on the
+  plans: M1.0 (G56, G58).** The HVAC engine already sized ONE plan from
+  the Manual J-lite load (envelope UA × ΔT + glazing solar + internal +
+  infiltration, the latent allowance by regime) and selected per Manual S
+  in half-ton steps; it drew one kind of house — an "air handler" and
+  "AC condensers" — whatever the state. Now `hvacSystem` (the panel's
+  Services block, `spec.hvacSystem`): 'heat-pump-split' (the state's
+  practice in FL / GA / SC / NC / AL / MS / LA / TN / TX / AZ / NV / OK /
+  AR / VA — an air handler with electric strip backup, heat pump outdoor
+  units), 'ac-gas-furnace' (everywhere else in the US — an upflow gas
+  furnace with the evaporator coil, AC condensers, and a 4 in B-vent flue
+  from the furnace top to 1.2 m over the tallest plate, G2427 / M1801,
+  with the gas line and combustion air flagged as the plumbing
+  contractor's), 'packaged' (one cabinet on the pad, heating + cooling;
+  the plenum connection is drawn at the equipment room and the sheet says
+  the ducts meet it through the wall — schematic, flagged), 'mini-split'
+  (no trunk, branches, registers or return: a ductless wall head in every
+  habitable room at 2.1 m on a boundary wall facing the room, sized by
+  the room's share of the installed tonnage; the outdoor unit(s) keep the
+  condenser row as multi-zone; line sets flagged as the installer's).
+  A jurisdiction that is no state ('INTL', 'AUTO') names no practice and
+  keeps the legacy labels. compute carries the cooling plan and the system
+  out (`hvacPlan`, `hvacSystem`); the MEP sheet model carries them to a
+  new M1.0 MECHANICAL PLAN (providers/mechanical.ts, viewport kind
+  'mechanical', in the level frame like E1.0 / P1.0): the attic trunk and
+  branches as double-line duct footprints, the supply registers, the
+  return grille, the indoor unit (AH / F), the outdoor unit(s) (CU), the
+  thermostat, the exhaust fans and the disconnect as symbols with a key;
+  in the right column the MANUAL J-LITE LOAD table — zone and design
+  temperatures, conditioned area and occupants, the UA split, each load
+  term in Btu/h, the sensible total, the latent allowance and the design
+  load, the Manual S selection and the installed capacity with the
+  95–115 % band verdict, the system — over eight cited mechanical notes
+  (M1401.3, M1601 / R602.6, IECC R403.3.5 duct leakage, M1602.2 return
+  air, M1505 / M1502 exhaust, M1411.3 condensate and M1305 attic access,
+  M1401.5 / NEC 440.14 outdoor unit, N1103.1.1 thermostat). Tests: the
+  condenser-asset cabinet pin, the 5-ton split and the FL-vs-MN tests
+  read the system's own names; the master baseline recaptured (TX is a
+  heat pump now); sheets 258 with M1.0 in the MEP set; Bones green;
+  editor typecheck clean. Seen on the Miami Shores farmhouse: M1.0 with
+  the ducts over the plan, the key, the load table and the notes. Honest
+  gaps: the Manual J is the LITE four-term sensible load with a regime
+  latent factor — not a room-by-room Manual J; Manual D is a trunk that
+  steps down after each takeoff, not a friction-rate duct design; the
+  packaged unit's wall penetration and the mini-split line sets are not
+  drawn; no gas piping anywhere yet; the room-by-room register cfm on the
+  sheet is the engine's area share, printed on the register labels, not a
+  schedule.
 
 - 2026-09-07: **Batch S3 — the sewer to the street or the rear, the
   water meter at the property line, the supply through the attic / under

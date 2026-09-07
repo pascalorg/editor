@@ -134,6 +134,9 @@ afterEach(() => {
   __setCondenserAssetLoaderForTests(null)
 })
 
+/** The outdoor unit's member label by system (engines/hvac.ts outdoorMemberName). */
+const OUTDOOR_UNIT = /^(AC condenser|Heat pump outdoor unit|Packaged unit|Mini-split outdoor unit)[^#]*#/
+
 describe('cabinet identification (structural, no engine change)', () => {
   test('the pinned baseline: exactly the AC-condenser members match, nothing else', () => {
     // JSON widens tuples/unions to number[]/string — the shape is the
@@ -143,12 +146,13 @@ describe('cabinet identification (structural, no engine change)', () => {
       const hits = entry.members.filter((m) => isCondenserCabinet(m))
       expect(hits.length).toBeGreaterThan(0)
       for (const hit of hits) {
-        expect(hit.label ?? '').toStartWith('AC condenser #')
+        // the outdoor unit's name follows the system (S4): AC condenser, heat pump, packaged, mini-split
+        expect(hit.label ?? '').toMatch(OUTDOOR_UNIT)
       }
       // The pad (and every other member) stays out.
       for (const m of entry.members) {
         if (!isCondenserCabinet(m)) {
-          expect((m.label ?? '').startsWith('AC condenser #')).toBe(false)
+          expect(OUTDOOR_UNIT.test(m.label ?? '')).toBe(false)
         }
       }
     }
@@ -179,7 +183,7 @@ describe('cabinet identification (structural, no engine change)', () => {
         const result = computeLevel(scene(), baselineConfig(code))
         // triple ⇔ 'AC condenser #' label — one census, zero mismatches
         const mismatches = result.members.filter(
-          (m) => isCondenserCabinet(m) !== (m.label ?? '').startsWith('AC condenser #'),
+          (m) => isCondenserCabinet(m) !== OUTDOOR_UNIT.test(m.label ?? ''),
         )
         expect(mismatches).toEqual([])
         // …and the swap target exists in every run (non-vacuous; the

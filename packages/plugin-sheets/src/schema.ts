@@ -123,6 +123,8 @@ export const ViewportKind = z.enum([
   'electrical',
   /** Plumbing plan — fixtures from placed items + Bones' plumbing engine (providers/plumbing.ts). */
   'plumbing',
+  /** Mechanical plan — ducts, registers, equipment and the Manual J load from Bones' HVAC engine (providers/mechanical.ts). */
+  'mechanical',
   /** Energy compliance summary computed from the model (providers/energy.ts). */
   'energy',
   /** Multi-column code-cited notes plate — `notesKey` picks the discipline (providers/general-notes.ts). */
