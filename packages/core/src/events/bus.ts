@@ -51,19 +51,21 @@ import type {
   WindowNode,
   ZoneNode,
 } from '../schema'
-import type { AnyNode } from '../schema/types'
+import type { AnyNode, AnyNodeId } from '../schema/types'
 
 // Base event interfaces
 export interface GridEvent {
   /** World-space intersection point on the floor grid or a scene surface. */
   position: [number, number, number]
   /**
-   * Building-local intersection point — relative to the currently selected building.
-   * Equals `position` when no building is selected.
+   * Intersection in localFrameId when specified, otherwise the selected building.
+   * Equals `position` when neither frame is available.
    * Use this for placing/committing anything that lives inside a building (walls, slabs, items, etc.).
    */
   localPosition: [number, number, number]
-  /** Pointer ray in the same building-local frame as `localPosition`. */
+  /** Explicit scene-node coordinate frame for local fields, when provided. */
+  localFrameId?: AnyNodeId
+  /** Pointer ray in the same coordinate frame as `localPosition`. */
   localRay?: {
     origin: [number, number, number]
     direction: [number, number, number]
@@ -77,12 +79,20 @@ export interface GridEvent {
    * the intersection to.
    */
   object?: Object3D
-  /** Building-local point where the cursor hit an architectural surface. */
+  /** Architectural hit in the same coordinate frame as localPosition. */
   surfaceLocalPosition?: [number, number, number]
-  /** Building-local outward normal when the cursor hit an architectural surface. */
+  /** Outward normal in the same coordinate frame as localPosition. */
   surfaceNormal?: [number, number, number]
   /** The architectural surface object hit by the cursor, when available. */
   surfaceObject?: Object3D
+  /** Semantic architectural hit for scoped placement/drafting tools. */
+  surfaceHit?: {
+    kind: 'wall' | 'ceiling' | 'slab' | 'roof'
+    hostId: AnyNodeId
+    levelId?: AnyNodeId
+    face: 'side' | 'top' | 'end' | 'unknown'
+    side?: 'front' | 'back'
+  }
   nativeEvent: ThreeEvent<PointerEvent>
 }
 

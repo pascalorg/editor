@@ -1,28 +1,10 @@
 'use client'
 
-import {
-  type AnyNode,
-  type CeilingNode,
-  type DuctFittingNode,
-  DuctSegmentNode,
-  getCeilingAt,
-  getCeilingHeightAt,
-  resolveCeilingHeight,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNode, type DuctFittingNode, DuctSegmentNode, useScene } from '@pascal-app/core'
 import { EDITOR_LAYER, triggerSFX, useEditor, usePathDraftPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import {
-  type BufferGeometry,
-  DoubleSide,
-  type Group,
-  Matrix4,
-  Path,
-  Shape,
-  ShapeGeometry,
-  Vector3,
-} from 'three'
+import { type Group, Matrix4, Vector3 } from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import {
   planCrossAtRunBody,
@@ -33,25 +15,25 @@ import {
 import {
   DistributionRunCursor,
   runDistanceSquared as dist2,
-  RUN_PREVIEW_OPACITY as PREVIEW_OPACITY,
   runSectionHalfSizeM,
   stepNominalRunSize,
   useDistributionRunTool,
 } from '../shared/distribution-run-tool'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
-import { FittingGhost } from '../shared/mep-ghost'
+import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
+import { createRunWallAttachment, type RunSurfaceTarget } from '../shared/distribution-run-contract'
 import {
   collectScenePorts,
   DUCT_PORT_SYSTEMS,
-  findNearestPortXZ,
-  findNearestRunBodyXZ,
-  findRunBodyCrossingXZ,
+  findNearestPort3D,
+  findNearestRunBody3D,
+  findRunBodyCrossingSurface,
   type RunBodyHit,
   type ScenePort,
 } from '../shared/ports'
 import { currentDuctContinuationSeed, ductEndpointPort } from './continuation'
 import { ductSegmentDefinition } from './definition'
-import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
+import { rollToContinueAcrossElbow } from './geometry'
 
 /**
  * Continuous placement tool for duct segments.
@@ -81,10 +63,6 @@ import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
  *     vertical mouse motion drives Y. Click commits the riser segment.
  *   - **[ / ]** step the duct diameter through nominal US sizes; the
  *     ghost preview and the committed node both use it.
- *   - **C** toggles ceiling-level placement: each point lands just below
- *     the ceiling actually covering it (duct top hugging that ceiling)
- *     instead of the floor, so a run tracks per-room ceiling heights.
- *     Points not under any ceiling fall back to the floor.
  *   - Esc clears an anchored start point.
  */
 /**
@@ -165,20 +143,12 @@ function continuityRollForRun(
   return continuityRollFrom(startPort, dir) ?? continuityRollFrom(endPort, dir) ?? 0
 }
 
-/**
- * Nearest typed port — duct run ends, fitting collars, anything whose
- * kind registers `def.ports` — within snap range of `point` on the XZ
- * plane. Y is ignored for the distance check (grid events ride the floor
- * while ports hang at duct height); the snap adopts the port's full 3D
- * position. The full port is returned so the commit knows what it joined
- * (auto-elbow insertion needs the port's direction and owner).
- */
 function findNearbyPort(point: [number, number, number]): ScenePort | null {
-  return findNearestPortXZ(
-    point,
-    collectScenePorts({ systems: DUCT_PORT_SYSTEMS }),
-    ENDPOINT_SNAP_RADIUS_M,
-  )
+  const ports = collectScenePorts({
+    systems: DUCT_PORT_SYSTEMS,
+    levelId: useViewer.getState().selection.levelId ?? undefined,
+  })
+  return findNearestPort3D(point, ports, ENDPOINT_SNAP_RADIUS_M)
 }
 
 /** Cross-section the tool draws with (and commits onto the node). Oval
@@ -305,6 +275,7 @@ function planDuctDraw(
   endPort: ScenePort | null,
   endBody: RunBodyHit | null,
   profile: DraftProfile,
+  surface?: RunSurfaceTarget | null,
 ): DuctDrawPlan | null {
   const length = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2])
   if (length < 1e-4) return null
@@ -344,7 +315,9 @@ function planDuctDraw(
   if (!endTee && endTeePlan) ductEnd = endRealign?.collarPoint ?? end
   let realigns = [startRealign, endRealign].filter((p) => p !== null)
 
-  const crossHit = findRunBodyCrossingXZ(start, end, BODY_SNAP_RADIUS_M)
+  const crossHit = surface
+    ? findRunBodyCrossingSurface(start, end, BODY_SNAP_RADIUS_M, surface)
+    : null
   const crossOwner = crossHit ? useScene.getState().nodes[crossHit.nodeId] : null
   const crossTappedElsewhere =
     crossHit?.nodeId === trunkBody?.nodeId || crossHit?.nodeId === endTrunkBody?.nodeId
@@ -437,29 +410,11 @@ const DuctSegmentTool = () => {
       height: continuationSeed?.duct.height ?? seeded?.height ?? defaults.height,
     }
   })
-  const [ceilingMode, setCeilingMode] = useState(false)
-  const [hoverCeiling, setHoverCeiling] = useState<CeilingNode | null>(null)
   const profileRef = useRef(profile)
   profileRef.current = profile
-  const ceilingModeRef = useRef(ceilingMode)
-  ceilingModeRef.current = ceilingMode
-
-  const floorCenterlineY = (): number => {
-    const current = profileRef.current
-    const verticalIn = current.shape === 'round' ? current.diameter : current.height
-    return runSectionHalfSizeM(verticalIn)
-  }
-
-  const resolveCeilingY = (x: number, z: number): number => {
-    const floorY = floorCenterlineY()
-    if (!ceilingModeRef.current || !activeLevelId) return floorY
-    const ceiling = getCeilingHeightAt(activeLevelId, useScene.getState().nodes, x, z)
-    if (ceiling === null) return floorY
-    return Math.max(floorY, ceiling - floorY)
-  }
-
   const run = useDistributionRunTool({
     active: !!activeLevelId,
+    toolName: 'duct-segment',
     initialStart: continuationSeed
       ? ([...(continuationSeed.port?.position ?? continuationSeed.body?.point ?? [0, 0, 0])] as [
           number,
@@ -471,21 +426,23 @@ const DuctSegmentTool = () => {
       ? { port: continuationSeed.port, body: continuationSeed.body }
       : null,
     findPort: findNearbyPort,
-    findBody: (point) => findNearestRunBodyXZ(point, BODY_SNAP_RADIUS_M),
-    resolveFirstY: resolveCeilingY,
-    minimumFreeY: floorCenterlineY,
+    findBody: (point) =>
+      findNearestRunBody3D(point, BODY_SNAP_RADIUS_M, { levelId: activeLevelId ?? undefined }),
+    surfaceClearance: (surface) =>
+      surface
+        ? runSectionHalfSizeM(
+            profileRef.current.shape === 'round'
+              ? profileRef.current.diameter
+              : profileRef.current.height,
+          )
+        : 0,
     minimumSegmentLength: 0.08,
-    resolveFreeEnd: (_start, end) => [
-      end[0],
-      ceilingModeRef.current ? resolveCeilingY(end[0], end[2]) : end[1],
-      end[2],
-    ],
     inheritFromConnection: ({ port }) => {
       if (!port) return
       const inherited = inheritProfile(port)
       if (inherited) setProfile(inherited)
     },
-    commit: ({ start, end, startConnection, endConnection }) => {
+    commit: ({ start, end, startConnection, endConnection, surfaceTarget }) => {
       if (!activeLevelId) return null
       const promotedFitting = pendingPromotionRef.current
       const plan = planDuctDraw(
@@ -496,13 +453,32 @@ const DuctSegmentTool = () => {
         endConnection.port,
         endConnection.body,
         profileRef.current,
+        surfaceTarget,
       )
       if (!plan) return null
+      const attachDuct = (node: DuctSegmentNode): DuctSegmentNode => {
+        const wallAttachment =
+          surfaceTarget?.kind === 'wall'
+            ? createRunWallAttachment(
+                surfaceTarget.hostId as Extract<AnyNode['id'], `wall_${string}`>,
+                surfaceTarget.side,
+                node.path[0]!,
+                node.path.at(-1)!,
+                surfaceTarget,
+                profileRef.current.shape === 'round'
+                  ? runSectionHalfSizeM(profileRef.current.diameter)
+                  : runSectionHalfSizeM(profileRef.current.height),
+              )
+            : undefined
+        return { ...node, wallAttachment }
+      }
+      const ducts = plan.ducts.map(attachDuct)
+      const tails = plan.tails
       useScene.getState().applyNodeChanges({
         create: [
           ...plan.fittings.map((node) => ({ node, parentId: activeLevelId })),
-          ...plan.tails.map((node) => ({ node, parentId: activeLevelId })),
-          ...plan.ducts.map((node) => ({ node, parentId: activeLevelId })),
+          ...tails.map((node) => ({ node, parentId: activeLevelId })),
+          ...ducts.map((node) => ({ node, parentId: activeLevelId })),
         ],
         update: [
           ...(promotedFitting
@@ -537,15 +513,7 @@ const DuctSegmentTool = () => {
         },
       }
     },
-    onCursorPoint: (point) => {
-      if (!ceilingModeRef.current || !activeLevelId) {
-        setHoverCeiling(null)
-        return
-      }
-      setHoverCeiling(getCeilingAt(activeLevelId, useScene.getState().nodes, point[0], point[2]))
-    },
-    onClear: () => setHoverCeiling(null),
-    onShortcut: (event, start) => {
+    onShortcut: (event) => {
       if (event.key === '[' || event.key === ']') {
         event.preventDefault()
         const next = stepNominalRunSize(
@@ -564,43 +532,32 @@ const DuctSegmentTool = () => {
           shape: current.shape === 'round' ? 'rect' : 'round',
         }))
         triggerSFX('sfx:grid-snap')
-      } else if ((event.key === 'c' || event.key === 'C') && !start) {
-        event.preventDefault()
-        setCeilingMode((value) => !value)
-        setHoverCeiling(null)
-        triggerSFX('sfx:grid-snap')
       }
     },
   })
 
-  const ghostFittings = useMemo(() => {
-    if (!(activeLevelId && run.start && run.cursor) || run.altActive) return []
-    const fittings =
-      planDuctDraw(
-        run.start,
-        run.cursor,
-        pendingPromotionRef.current ? null : run.startConnection.port,
-        run.startConnection.body,
-        run.endConnection.port,
-        run.endConnection.body,
-        profile,
-      )?.fittings ?? []
-    return fittings.map(
-      (fitting, index): DuctFittingNode => ({
-        ...fitting,
-        id: `duct-fitting_live-draft-${index}`,
-        parentId: activeLevelId,
-      }),
+  const previewPlan = useMemo(() => {
+    if (!(activeLevelId && run.start && run.cursor)) return null
+    return planDuctDraw(
+      run.start,
+      run.cursor,
+      pendingPromotionRef.current ? null : run.startConnection.port,
+      run.startConnection.body,
+      run.endConnection.port,
+      run.endConnection.body,
+      profile,
+      run.surfaceTarget,
     )
   }, [
     activeLevelId,
     profile,
-    run.altActive,
-    run.cursor,
-    run.endConnection,
     run.start,
+    run.cursor,
     run.startConnection,
+    run.endConnection,
+    run.surfaceTarget,
   ])
+  const ghostFittings = useMemo(() => previewPlan?.fittings ?? [], [previewPlan])
 
   useEffect(() => {
     usePathDraftPreview
@@ -621,8 +578,18 @@ const DuctSegmentTool = () => {
 
   return (
     <LevelOffsetGroup>
-      {ceilingMode && hoverCeiling && <CeilingHighlight ceiling={hoverCeiling} />}
       <DistributionRunCursor
+        surfaceLabel={
+          run.surfaceTarget?.kind === 'wall'
+            ? 'Wall'
+            : run.surfaceTarget?.kind === 'ceiling'
+              ? 'Ceiling'
+              : run.surfaceTarget?.kind === 'floor'
+                ? 'Floor'
+                : run.surfaceTarget
+                  ? 'Surface'
+                  : 'Free space'
+        }
         altActive={run.altActive}
         cursor={run.cursor}
         cursorRef={cursorRef}
@@ -634,13 +601,6 @@ const DuctSegmentTool = () => {
         snapTarget={run.snapTarget}
         start={run.start}
         startDirection={run.startConnection.port?.direction ?? null}
-        status={
-          ceilingMode ? (
-            <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
-              Ceiling · C to toggle
-            </div>
-          ) : null
-        }
         unit={unit}
       />
       {run.start && (
@@ -649,164 +609,13 @@ const DuctSegmentTool = () => {
           <meshBasicMaterial color="#818cf8" depthTest={false} />
         </mesh>
       )}
-      {run.start && run.cursor && (
-        <PreviewSegment
-          a={run.start}
-          b={run.cursor}
-          endPort={run.endConnection.port}
-          profile={profile}
-          startPort={run.startConnection.port}
-        />
-      )}
+      {previewPlan?.ducts.map((duct, index) => (
+        <DuctSegmentGhost duct={duct} key={index} />
+      ))}
       {ghostFittings.map((fitting) => (
         <FittingGhost fitting={fitting} key={fitting.id} />
       ))}
     </LevelOffsetGroup>
-  )
-}
-
-/**
- * Build a horizontal `ShapeGeometry` for a ceiling polygon (with holes) in
- * level-local XZ, laid flat in the XZ plane. Mirrors the ceiling renderer /
- * move-tool convention (Z negated, then rotated onto the floor plane).
- */
-function buildCeilingShape(
-  polygon: Array<[number, number]>,
-  holes: Array<Array<[number, number]>>,
-): BufferGeometry | null {
-  if (polygon.length < 3) return null
-  const shape = new Shape()
-  const first = polygon[0]!
-  shape.moveTo(first[0], -first[1])
-  for (let i = 1; i < polygon.length; i++) {
-    const pt = polygon[i]!
-    shape.lineTo(pt[0], -pt[1])
-  }
-  shape.closePath()
-  for (const holePolygon of holes) {
-    if (holePolygon.length < 3) continue
-    const hole = new Path()
-    const hf = holePolygon[0]!
-    hole.moveTo(hf[0], -hf[1])
-    for (let i = 1; i < holePolygon.length; i++) {
-      const pt = holePolygon[i]!
-      hole.lineTo(pt[0], -pt[1])
-    }
-    hole.closePath()
-    shape.holes.push(hole)
-  }
-  const geometry = new ShapeGeometry(shape)
-  geometry.rotateX(-Math.PI / 2)
-  return geometry
-}
-
-/**
- * Translucent overlay of the ceiling the cursor is under, drawn at the
- * ceiling's own height. Gives the in-flight duct point a real surface to
- * read against, so "hung against the ceiling" is visible from any angle
- * instead of being a dot floating in space.
- */
-function CeilingHighlight({ ceiling }: { ceiling: CeilingNode }) {
-  const geometry = useMemo(
-    () => buildCeilingShape(ceiling.polygon, ceiling.holes),
-    [ceiling.polygon, ceiling.holes],
-  )
-  const outline = useMemo(() => {
-    if (ceiling.polygon.length < 2) return null
-    const pts = ceiling.polygon.map(([x, z]) => new Vector3(x, 0, z))
-    const f = ceiling.polygon[0]!
-    pts.push(new Vector3(f[0], 0, f[1]))
-    return pts
-  }, [ceiling.polygon])
-  if (!geometry) return null
-  const y = resolveCeilingHeight(ceiling, useScene.getState().nodes)
-  return (
-    <group position={[0, y, 0]}>
-      <mesh geometry={geometry} layers={EDITOR_LAYER} renderOrder={1}>
-        <meshBasicMaterial
-          color="#818cf8"
-          depthWrite={false}
-          opacity={0.15}
-          side={DoubleSide}
-          transparent
-        />
-      </mesh>
-      {outline && (
-        <line>
-          <bufferGeometry
-            ref={(g) => {
-              if (g) g.setFromPoints(outline)
-            }}
-          />
-          <lineBasicMaterial color="#818cf8" opacity={0.6} transparent />
-        </line>
-      )}
-    </group>
-  )
-}
-
-function PreviewSegment({
-  a,
-  b,
-  profile,
-  startPort,
-  endPort,
-}: {
-  a: [number, number, number]
-  b: [number, number, number]
-  profile: DraftProfile
-  startPort: ScenePort | null
-  endPort: ScenePort | null
-}) {
-  const start = new Vector3(...a)
-  const end = new Vector3(...b)
-  const dir = new Vector3().subVectors(end, start)
-  const length = dir.length()
-  if (length < 1e-4) return null
-  dir.normalize()
-  const mid = new Vector3().addVectors(start, end).multiplyScalar(0.5)
-
-  // Rect AND oval ghost as a box — close enough for a translucent guide.
-  if (profile.shape !== 'round') {
-    const w = profile.width * 0.0254
-    const h = profile.height * 0.0254
-    return (
-      <mesh
-        layers={EDITOR_LAYER}
-        position={mid.toArray()}
-        ref={(m) => {
-          if (!m) return
-          // Same basis AND roll as the commit will use, so the ghost
-          // shows the orientation that actually lands.
-          const roll = continuityRollForRun(startPort, endPort, dir)
-          const { width: x, height: z } = rectSectionAxes(dir, roll)
-          m.quaternion.setFromRotationMatrix(new Matrix4().makeBasis(x, dir, z))
-        }}
-      >
-        <boxGeometry args={[w, length, h]} />
-        <meshBasicMaterial
-          color="#818cf8"
-          depthTest={false}
-          opacity={PREVIEW_OPACITY}
-          transparent
-        />
-      </mesh>
-    )
-  }
-
-  const radius = (profile.diameter * 0.0254) / 2
-  return (
-    <mesh
-      layers={EDITOR_LAYER}
-      position={mid.toArray()}
-      ref={(m) => {
-        if (!m) return
-        m.quaternion.setFromUnitVectors(new Vector3(0, 1, 0), dir)
-      }}
-    >
-      <cylinderGeometry args={[radius, radius, length, 24, 1, false]} />
-      <meshBasicMaterial color="#818cf8" depthTest={false} opacity={PREVIEW_OPACITY} transparent />
-    </mesh>
   )
 }
 

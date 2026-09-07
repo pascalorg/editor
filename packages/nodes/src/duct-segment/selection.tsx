@@ -64,6 +64,7 @@ import {
   ductContinuationHandlePlan,
 } from './continuation'
 import { INCHES_TO_METERS } from './geometry'
+import { refreshWallRunAttachment } from '../shared/wall-run-move'
 
 /** Port-snap radius for dragged run endpoints (meters, XZ). */
 const PORT_SNAP_RADIUS_M = 0.4
@@ -465,12 +466,22 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     next: Point,
     detached: boolean,
   ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
+    const wall = duct.wallAttachment
+      ? useScene.getState().nodes[duct.wallAttachment.wallId]
+      : undefined
+    const attachmentFor = (path: Point[]) =>
+      duct.wallAttachment && wall?.type === 'wall'
+        ? refreshWallRunAttachment(path, duct.wallAttachment, wall)
+        : duct.wallAttachment
     if (!detached && drag.fittingEndpoint) {
       const plan = planFittingEndpointReaim(drag.fittingEndpoint, drag.index, next)
       // Out of the fitting's buildable range — hold this frame.
       if (!plan) return null
       return [
-        { id: duct.id as AnyNodeId, data: { path: plan.path } },
+        {
+          id: duct.id as AnyNodeId,
+          data: { path: plan.path, wallAttachment: attachmentFor(plan.path) },
+        },
         { id: plan.fittingUpdate.id, data: plan.fittingUpdate.data },
         ...(drag.jointPartner
           ? [
@@ -493,7 +504,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     const path = drag.initialPath.map((p, i) => (i === drag.index ? next : p)) as Point[]
     const jointFitting = drag.jointFitting ? planDraggedJointFitting(duct, path, drag.index) : null
     return [
-      { id: duct.id as AnyNodeId, data: { path } },
+      { id: duct.id as AnyNodeId, data: { path, wallAttachment: attachmentFor(path) } },
       ...(jointFitting
         ? [
             {

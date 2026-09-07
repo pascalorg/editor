@@ -29,6 +29,7 @@ import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, type Object3D, Plane, Quaternion, Raycaster, Vector2, Vector3 } from 'three'
 import { planPipeElbowAtPort } from '../shared/auto-fitting'
+import { refreshWallRunAttachment } from '../shared/wall-run-move'
 import {
   detectFittingEndpoint,
   type FittingEndpoint,
@@ -348,12 +349,22 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     next: Point,
     detached: boolean,
   ): { id: AnyNodeId; data: Partial<AnyNode> }[] | null => {
+    const wall = pipe.wallAttachment
+      ? useScene.getState().nodes[pipe.wallAttachment.wallId]
+      : undefined
+    const attachmentFor = (path: Point[]) =>
+      pipe.wallAttachment && wall?.type === 'wall'
+        ? refreshWallRunAttachment(path, pipe.wallAttachment, wall)
+        : pipe.wallAttachment
     if (!detached && drag.fittingEndpoint) {
       const plan = planFittingEndpointReaim(drag.fittingEndpoint, drag.index, next)
       // Out of the elbow's buildable turn range — hold this frame.
       if (!plan) return null
       return [
-        { id: pipe.id as AnyNodeId, data: { path: plan.path } },
+        {
+          id: pipe.id as AnyNodeId,
+          data: { path: plan.path, wallAttachment: attachmentFor(plan.path) },
+        },
         { id: plan.fittingUpdate.id, data: plan.fittingUpdate.data },
         ...(drag.jointPartner
           ? [
@@ -376,7 +387,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
     const path = drag.initialPath.map((p, i) => (i === drag.index ? next : p)) as Point[]
     const jointFitting = drag.jointFitting ? planDraggedJointFitting(pipe, path, drag.index) : null
     return [
-      { id: pipe.id as AnyNodeId, data: { path } },
+      { id: pipe.id as AnyNodeId, data: { path, wallAttachment: attachmentFor(path) } },
       ...(jointFitting
         ? [
             {

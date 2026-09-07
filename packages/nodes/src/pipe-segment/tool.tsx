@@ -20,14 +20,16 @@ import {
   stepNominalRunSize,
   useDistributionRunTool,
 } from '../shared/distribution-run-tool'
+import { PipeFittingGhost } from '../shared/mep-ghost'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { PIPE_PRESETS } from '../shared/mep-presets'
+import { createRunWallAttachment, type RunSurfaceTarget } from '../shared/distribution-run-contract'
 import {
   collectScenePorts,
   DWV_PORT_SYSTEMS,
-  findNearestPortXZ,
-  findNearestRunBodyXZ,
-  findRunBodyCrossingXZ,
+  findNearestPort3D,
+  findNearestRunBody3D,
+  findRunBodyCrossingSurface,
   type ScenePort,
 } from '../shared/ports'
 import { currentPipeContinuationSeed, pipeEndpointPort } from './continuation'
@@ -39,11 +41,11 @@ const PORT_SNAP_RADIUS_M = 0.5
 const BODY_SNAP_RADIUS_M = 0.3
 
 function findNearbyPort(point: RunPoint): ScenePort | null {
-  return findNearestPortXZ(
-    point,
-    collectScenePorts({ systems: DWV_PORT_SYSTEMS }),
-    PORT_SNAP_RADIUS_M,
-  )
+  const ports = collectScenePorts({
+    systems: DWV_PORT_SYSTEMS,
+    levelId: useViewer.getState().selection.levelId ?? undefined,
+  })
+  return findNearestPort3D(point, ports, PORT_SNAP_RADIUS_M)
 }
 
 const PipeSegmentTool = () => {
@@ -86,18 +88,21 @@ const PipeSegmentTool = () => {
     setDiameter(preset.diameter)
     setSloped(preset.sloped)
   }
-  const floorCenterlineY = () => runSectionHalfSizeM(diameterRef.current)
 
   const commitSegment = ({
     start: rawStart,
     end,
     startConnection,
     endConnection,
+    surfaceTarget,
+    previewOnly = false,
   }: {
     start: RunPoint
     end: RunPoint
     startConnection: RunConnection
     endConnection: RunConnection
+    surfaceTarget: RunSurfaceTarget | null
+    previewOnly?: boolean
   }) => {
     if (!activeLevelId) return null
     const promotedFitting = pendingPromotionRef.current
@@ -134,17 +139,7 @@ const PipeSegmentTool = () => {
       }
     }
 
-    let start = rawStart
-    if (
-      slopedRef.current &&
-      systemRef.current === 'waste' &&
-      !startConnection.port &&
-      !startConnection.body &&
-      !endConnection.port
-    ) {
-      const horizontalRun = Math.hypot(end[0] - rawStart[0], end[2] - rawStart[2])
-      start = [rawStart[0], rawStart[1] + horizontalRun * DRAIN_SLOPE, rawStart[2]]
-    }
+    const start = rawStart
     const length = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2])
     if (length < 1e-4) return null
     const direction: RunPoint = [
@@ -177,9 +172,11 @@ const PipeSegmentTool = () => {
     let pipeStart = startBend?.collarPoint ?? startTap?.branchCollar ?? start
     let pipeEnd = endBend?.collarPoint ?? endTap?.branchCollar ?? end
     let bends = [startBend, endBend].filter((plan) => plan !== null)
-    const crossHit = findRunBodyCrossingXZ(start, end, BODY_SNAP_RADIUS_M, {
-      kinds: ['pipe-segment'],
-    })
+    const crossHit = surfaceTarget
+      ? findRunBodyCrossingSurface(start, end, BODY_SNAP_RADIUS_M, surfaceTarget, {
+          kinds: ['pipe-segment'],
+        })
+      : null
     const crossOwner = crossHit ? useScene.getState().nodes[crossHit.nodeId] : null
     let cross =
       crossHit &&
@@ -223,7 +220,23 @@ const PipeSegmentTool = () => {
         ].filter((pipe) => pipe !== null)
       : [makePipe(pipeStart, pipeEnd)]
 
-    useScene.getState().applyNodeChanges({
+    const attachPipe = (pipe: PipeSegmentNode): PipeSegmentNode => {
+      const wallAttachment =
+        surfaceTarget?.kind === 'wall'
+          ? createRunWallAttachment(
+              surfaceTarget.hostId as Extract<AnyNode['id'], `wall_${string}`>,
+              surfaceTarget.side,
+              pipe.path[0]!,
+              pipe.path.at(-1)!,
+              surfaceTarget,
+              (diameterRef.current * 0.0254) / 2,
+            )
+          : undefined
+      return { ...pipe, wallAttachment }
+    }
+    const attachedPipes = pipes.map(attachPipe)
+
+    const changes = {
       create: [
         ...bends.map((plan) => ({
           node: plan.fitting,
@@ -247,7 +260,7 @@ const PipeSegmentTool = () => {
               { node: cross.runTail, parentId: activeLevelId },
             ]
           : []),
-        ...pipes.map((node) => ({ node, parentId: activeLevelId })),
+        ...attachedPipes.map((node) => ({ node, parentId: activeLevelId })),
       ],
       update: [
         ...(promotedFitting
@@ -275,13 +288,20 @@ const PipeSegmentTool = () => {
         ...(endTap ? [endTap.runUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
         ...(cross ? [cross.runUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
       ],
-    })
-    pendingPromotionRef.current = null
-    const nextPipe = pipes.at(-1)
+    }
+    if (!previewOnly) {
+      useScene.getState().applyNodeChanges(changes)
+      pendingPromotionRef.current = null
+    }
+    const nextPipe = attachedPipes.at(-1)
     const nextStart = nextPipe ? nextPipe.path[nextPipe.path.length - 1]! : end
     const nextPort = nextPipe ? pipeEndpointPort(nextPipe, 'end') : endConnection.port
     return {
       nextStart,
+      previewPipes: attachedPipes,
+      previewFittings: changes.create
+        .map(({ node }) => node)
+        .filter((node): node is PipeFittingNode => node.type === 'pipe-fitting'),
       nextConnection: {
         port: nextPort,
         body: nextPort ? null : endConnection.body,
@@ -291,6 +311,7 @@ const PipeSegmentTool = () => {
 
   const run = useDistributionRunTool({
     active: !!activeLevelId,
+    toolName: 'pipe-segment',
     initialStart: continuationSeed
       ? ([
           ...(continuationSeed.port?.position ?? continuationSeed.body?.point ?? [0, 0, 0]),
@@ -301,19 +322,14 @@ const PipeSegmentTool = () => {
       : null,
     findPort: findNearbyPort,
     findBody: (point) =>
-      findNearestRunBodyXZ(point, BODY_SNAP_RADIUS_M, {
+      findNearestRunBody3D(point, BODY_SNAP_RADIUS_M, {
         kinds: ['pipe-segment'],
+        levelId: activeLevelId ?? undefined,
       }),
-    resolveFirstY: floorCenterlineY,
-    minimumFreeY: floorCenterlineY,
+    surfaceClearance: (surface) => (surface ? runSectionHalfSizeM(diameterRef.current) : 0),
     minimumSegmentLength: 0.05,
     resolveFreeEnd: (start, end, startConnection) => {
-      if (
-        !slopedRef.current ||
-        systemRef.current !== 'waste' ||
-        (!startConnection.port && !startConnection.body)
-      )
-        return end
+      if (!slopedRef.current || systemRef.current !== 'waste') return end
       const horizontalRun = Math.hypot(end[0] - start[0], end[2] - start[2])
       return [end[0], start[1] - horizontalRun * DRAIN_SLOPE, end[2]]
     },
@@ -348,22 +364,18 @@ const PipeSegmentTool = () => {
     },
   })
 
-  const displayStart =
-    run.start &&
-    run.cursor &&
-    sloped &&
-    system === 'waste' &&
-    !run.startConnection.port &&
-    !run.startConnection.body &&
-    !run.snapTarget &&
-    !run.altActive
-      ? ([
-          run.start[0],
-          run.start[1] +
-            Math.hypot(run.cursor[0] - run.start[0], run.cursor[2] - run.start[2]) * DRAIN_SLOPE,
-          run.start[2],
-        ] as RunPoint)
-      : run.start
+  const displayStart = run.start
+  const previewPlan =
+    run.start && run.cursor
+      ? commitSegment({
+          start: run.start,
+          end: run.cursor,
+          startConnection: run.startConnection,
+          endConnection: run.endConnection,
+          surfaceTarget: run.surfaceTarget,
+          previewOnly: true,
+        })
+      : null
 
   useEffect(() => {
     usePathDraftPreview
@@ -380,6 +392,17 @@ const PipeSegmentTool = () => {
   return (
     <LevelOffsetGroup>
       <DistributionRunCursor
+        surfaceLabel={
+          run.surfaceTarget?.kind === 'wall'
+            ? 'Wall'
+            : run.surfaceTarget?.kind === 'ceiling'
+              ? 'Ceiling'
+              : run.surfaceTarget?.kind === 'floor'
+                ? 'Floor'
+                : run.surfaceTarget
+                  ? 'Surface'
+                  : 'Free space'
+        }
         altActive={run.altActive}
         cursor={run.cursor}
         directionMode={run.directionMode}
@@ -427,9 +450,12 @@ const PipeSegmentTool = () => {
           <meshBasicMaterial color="#818cf8" depthTest={false} />
         </mesh>
       )}
-      {displayStart && run.cursor && (
-        <PreviewPipe a={displayStart} b={run.cursor} diameterIn={diameter} />
-      )}
+      {previewPlan?.previewPipes.map((pipe, index) => (
+        <PreviewPipe key={index} a={pipe.path[0]!} b={pipe.path.at(-1)!} diameterIn={diameter} />
+      ))}
+      {previewPlan?.previewFittings.map((fitting, index) => (
+        <PipeFittingGhost key={index} fitting={fitting} />
+      ))}
     </LevelOffsetGroup>
   )
 }

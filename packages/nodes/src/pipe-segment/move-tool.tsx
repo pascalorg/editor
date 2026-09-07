@@ -31,6 +31,7 @@ import {
   resolveGhostAlignment,
 } from '../shared/ghost-alignment'
 import { type RunMoveConnectivity, startRunMoveConnectivity } from '../shared/run-move-connectivity'
+import { translateWallRun } from '../shared/wall-run-move'
 
 type Vec3 = [number, number, number]
 
@@ -111,6 +112,7 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
   const hasMovedRef = useRef(false)
   const activatedAtRef = useRef<number>(Date.now())
   const prevSnapRef = useRef<[number, number] | null>(null)
+  const previewAttachmentRef = useRef(pipe.wallAttachment)
 
   useEffect(() => {
     const nodeId = node.id as AnyNodeId
@@ -151,6 +153,19 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     }
 
     const onMove = (event: GridEvent) => {
+      const attachedWall = pipe.wallAttachment
+        ? (useScene.getState().nodes[pipe.wallAttachment.wallId] as AnyNode | undefined)
+        : undefined
+      if (pipe.wallAttachment && attachedWall?.type === 'wall') {
+        const wallMove = translateWallRun(originalPath, pipe.wallAttachment, attachedWall, event)
+        if (wallMove) {
+          hasMovedRef.current = true
+          previewAttachmentRef.current = wallMove.attachment
+          setPreview(wallMove.path)
+          connectivity?.preview({ path: wallMove.path })
+          return
+        }
+      }
       const snap = isGridSnapActive() ? snapToGridStep : (v: number) => v
       let dx = snap(event.localPosition[0] - centerX)
       let dz = snap(event.localPosition[2] - centerZ)
@@ -210,6 +225,7 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         const created = PipeSegmentNode.parse({
           ...(node as Record<string, unknown>),
           path: finalPath,
+          wallAttachment: previewAttachmentRef.current,
           metadata: stripPlacementMetadataFlags(node.metadata),
           visible: true,
         })
@@ -222,7 +238,10 @@ export const MovePipeSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         useScene
           .getState()
           .updateNodes([
-            { id: nodeId, data: { path: finalPath } as Partial<AnyNode> },
+            {
+              id: nodeId,
+              data: { path: finalPath, wallAttachment: previewAttachmentRef.current } as Partial<AnyNode>,
+            },
             ...followUpdates,
           ])
         useScene.getState().markDirty(nodeId)

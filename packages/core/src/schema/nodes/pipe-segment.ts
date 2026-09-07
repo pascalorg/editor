@@ -21,6 +21,17 @@ export const PipeSegmentNode = BaseNode.extend({
   type: nodeType('pipe-segment'),
   // Polyline path in level-local meters. Minimum two points.
   path: z.array(z.tuple([z.number(), z.number(), z.number()])).min(2),
+  // Logical wall host for runs drafted on a wall. The path remains
+  // level-local; UV coordinates let wall edits reproject the run later.
+  wallAttachment: z
+    .object({
+      wallId: objectId('wall'),
+      side: z.enum(['front', 'back']),
+      startUV: z.tuple([z.number(), z.number()]),
+      endUV: z.tuple([z.number(), z.number()]),
+      offset: z.number().finite().nonnegative(),
+    })
+    .optional(),
   // Nominal pipe size in inches. Residential DWV: 1¼ (lav tailpiece) to
   // 4 (building drain); 6 covers oversized mains.
   diameter: z.number().min(1.25).max(8).default(2),

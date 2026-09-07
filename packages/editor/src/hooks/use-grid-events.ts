@@ -4,6 +4,7 @@ import {
   emitter,
   type GridEvent,
   sceneRegistry,
+  useScene,
 } from '@pascal-app/core'
 import { timeSpan, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
@@ -11,6 +12,7 @@ import { useEffect, useRef } from 'react'
 import { Matrix3, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { getPlacementSurface } from '../lib/active-placement-surface'
 import { resolveTerrainGroundHit } from '../lib/ground-surface'
+import useInteractionScope from '../store/use-interaction-scope'
 
 /**
  * Custom grid events hook that uses manual raycasting instead of mesh events.
@@ -18,6 +20,13 @@ import { resolveTerrainGroundHit } from '../lib/ground-surface'
  */
 export function useGridEvents(gridY: number) {
   const { camera, gl } = useThree()
+  const interactionScope = useInteractionScope((state) => state.scope)
+  const semanticSurfaceQueryRef = useRef(false)
+  semanticSurfaceQueryRef.current =
+    interactionScope.kind === 'placing' ||
+    interactionScope.kind === 'moving' ||
+    (interactionScope.kind === 'drafting' &&
+      (interactionScope.tool === 'duct-segment' || interactionScope.tool === 'pipe-segment'))
   const raycaster = useRef(new Raycaster())
   const pointer = useRef(new Vector2())
   const groundPlane = useRef(new Plane(new Vector3(0, 1, 0), 0))
@@ -28,6 +37,8 @@ export function useGridEvents(gridY: number) {
     surface?: {
       point: Vector3
       object: Object3D
+      hostId: AnyNodeId
+      kind: 'wall' | 'ceiling' | 'slab' | 'roof'
       worldNormal?: Vector3
     }
   }
@@ -49,7 +60,20 @@ export function useGridEvents(gridY: number) {
         for (const id of sceneRegistry.byType[type] ?? []) {
           const root = sceneRegistry.nodes.get(id)
           if (!root) continue
-          const hit = raycaster.current.intersectObject(root, true)[0]
+          const scope = useInteractionScope.getState().scope
+          const runDraft =
+            scope.kind === 'drafting' &&
+            (scope.tool === 'duct-segment' || scope.tool === 'pipe-segment')
+          const hit = raycaster.current.intersectObject(root, true).find((candidate) => {
+            if (!runDraft) return true
+            if (useScene.getState().nodes[id as AnyNodeId]?.visible === false) return false
+            let object: Object3D | null = candidate.object
+            while (object) {
+              if (!object.visible || object.userData.wallHidden === true) return false
+              object = object.parent
+            }
+            return true
+          })
           if (!hit || hit.distance >= closestDistance) continue
           closestDistance = hit.distance
           const worldNormal = hit.face
@@ -58,9 +82,17 @@ export function useGridEvents(gridY: number) {
                 .applyNormalMatrix(new Matrix3().getNormalMatrix(hit.object.matrixWorld))
                 .normalize()
             : undefined
+          if (runDraft && worldNormal && worldNormal.dot(raycaster.current.ray.direction) > 0)
+            worldNormal.negate()
           closest = {
             point: hit.point.clone(),
-            surface: { point: hit.point.clone(), object: hit.object, worldNormal },
+            surface: {
+              point: hit.point.clone(),
+              object: hit.object,
+              hostId: id as AnyNodeId,
+              kind: type,
+              worldNormal,
+            },
           }
         }
       }
@@ -81,7 +113,30 @@ export function useGridEvents(gridY: number) {
       // raycast is the reliable architectural-surface source for placement and
       // drawing tools. Keep it separate from the ordinary grid point so tools
       // that intentionally place on the floor retain their existing behavior.
-      const surfaceHit = getSurfaceIntersection()
+      // Architectural meshes are expensive to raycast and are meaningful only
+      // to an active placement/drafting interaction. Floor tools retain the
+      // ordinary terrain/grid intersection without scanning every wall.
+      const surfaceHit = semanticSurfaceQueryRef.current ? getSurfaceIntersection() : null
+
+      // A semantic architectural hit is the authoritative cursor position.
+      // Do not replace it with the terrain/grid intersection below: that would
+      // make a wall hit carry wall metadata while still placing at the ground
+      // floor, especially in perspective views.
+      if (surfaceHit) return surfaceHit
+
+      const scope = useInteractionScope.getState().scope
+      const runDraft =
+        scope.kind === 'drafting' &&
+        (scope.tool === 'duct-segment' || scope.tool === 'pipe-segment')
+      const workingSurface = getPlacementSurface()
+      if (runDraft && workingSurface) {
+        const plane = new Plane().setFromNormalAndCoplanarPoint(
+          workingSurface.normal,
+          workingSurface.point,
+        )
+        const projected = raycaster.current.ray.intersectPlane(plane, intersectionPoint.current)
+        return { point: (projected ?? workingSurface.point).clone() }
+      }
 
       // Sculpted ground wins over the plane, but only while the plane IS the
       // ground (see `isSiteGroundPlane`): a plane riding a storey base or a slab
@@ -106,13 +161,12 @@ export function useGridEvents(gridY: number) {
       if (hit) {
         return {
           point: intersectionPoint.current.set(hit.x, hit.y, hit.z).clone(),
-          surface: surfaceHit?.surface,
         }
       }
 
       // Intersect with ground plane
       if (raycaster.current.ray.intersectPlane(groundPlane.current, intersectionPoint.current)) {
-        return { point: intersectionPoint.current.clone(), surface: surfaceHit?.surface }
+        return { point: intersectionPoint.current.clone() }
       }
 
       return surfaceHit
@@ -123,7 +177,13 @@ export function useGridEvents(gridY: number) {
       if (!point) return
 
       // Convert world-space point to building-local for tools that live inside a building.
-      const buildingId = useViewer.getState().selection.buildingId
+      const scope = useInteractionScope.getState().scope
+      const runDraft =
+        scope.kind === 'drafting' &&
+        (scope.tool === 'duct-segment' || scope.tool === 'pipe-segment')
+      const buildingId = runDraft
+        ? useViewer.getState().selection.levelId
+        : useViewer.getState().selection.buildingId
       const buildingMesh = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
       const localPoint = buildingMesh ? buildingMesh.worldToLocal(point.point.clone()) : point.point
       const surfaceLocalPoint = point.surface
@@ -139,6 +199,35 @@ export function useGridEvents(gridY: number) {
               .normalize()
           : point.surface.worldNormal
         : undefined
+      const surfaceNode = point.surface
+        ? useScene.getState().nodes[point.surface.hostId]
+        : undefined
+      const wallDirection =
+        point.surface?.kind === 'wall' && surfaceNode?.type === 'wall'
+          ? (() => {
+              const dx = surfaceNode.end[0] - surfaceNode.start[0]
+              const dz = surfaceNode.end[1] - surfaceNode.start[1]
+              const length = Math.hypot(dx, dz)
+              return length > 1e-9 ? ([dx / length, 0, dz / length] as const) : null
+            })()
+          : null
+      const wallSideNormal = wallDirection
+        ? ([-wallDirection[2], 0, wallDirection[0]] as const)
+        : null
+      const wallSideDot =
+        localNormal && wallSideNormal
+          ? localNormal.x * wallSideNormal[0] +
+            localNormal.y * wallSideNormal[1] +
+            localNormal.z * wallSideNormal[2]
+          : 0
+      const surfaceFace =
+        point.surface?.kind !== 'wall'
+          ? 'unknown'
+          : Math.abs(localNormal?.y ?? 1) < 0.25 && Math.abs(wallSideDot) > 0.7
+            ? 'side'
+            : Math.abs(localNormal?.y ?? 1) > 0.7
+              ? 'top'
+              : 'end'
       const { origin, direction } = raycaster.current.ray
       const localRayOrigin = buildingMesh
         ? buildingMesh.worldToLocal(origin.clone())
@@ -149,6 +238,7 @@ export function useGridEvents(gridY: number) {
 
       const eventKey = `grid:${suffix}` as `grid:${EventSuffix}`
       const payload: GridEvent = {
+        localFrameId: buildingId ?? undefined,
         position: [point.point.x, point.point.y, point.point.z],
         localPosition: [localPoint.x, localPoint.y, localPoint.z],
         localRay: {
@@ -160,6 +250,16 @@ export function useGridEvents(gridY: number) {
           : undefined,
         surfaceNormal: localNormal ? [localNormal.x, localNormal.y, localNormal.z] : undefined,
         surfaceObject: point.surface?.object,
+        surfaceHit:
+          semanticSurfaceQueryRef.current && point.surface
+            ? {
+                kind: point.surface.kind,
+                hostId: point.surface.hostId,
+                face: surfaceFace,
+                levelId: useViewer.getState().selection.levelId ?? undefined,
+                side: surfaceFace === 'side' ? (wallSideDot >= 0 ? 'front' : 'back') : undefined,
+              }
+            : undefined,
         nativeEvent: nativeEvent as any, // Type compatibility with ThreeEvent
       }
 

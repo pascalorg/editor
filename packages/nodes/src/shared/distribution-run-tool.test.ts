@@ -5,8 +5,6 @@ import {
   projectRunToAngleLock,
   projectRunToCameraDirection,
   projectRunToSurfaceAngleLock,
-  projectRunToSurfaceAxisLock,
-  resolveRunCommitFromEvent,
   runDistanceSquared,
   runSectionHalfSizeM,
   snapRunPointToSurface,
@@ -104,49 +102,11 @@ describe('distribution run drafting helpers', () => {
     expect(point[1] - 1).toBeCloseTo(point[0])
   })
 
-  test('locks a wall run to one straight wall axis', () => {
-    const wall = createRunSurfaceFrame([2, 1, 4], [0, 0, 1])
-
-    const horizontal = projectRunToSurfaceAxisLock([2, 1, 4], [4, 1.4, 4], wall)
-    const vertical = projectRunToSurfaceAxisLock([2, 1, 4], [2.4, 4, 4], wall)
-
-    expect(horizontal[0]).toBeCloseTo(4)
-    expect(horizontal[1]).toBeCloseTo(1)
-    expect(horizontal[2]).toBeCloseTo(4)
-    expect(vertical[0]).toBeCloseTo(2)
-    expect(vertical[1]).toBeCloseTo(4)
-    expect(vertical[2]).toBeCloseTo(4)
-  })
-
   test('keeps a run on a rotated wall plane', () => {
     const diagonalWall = createRunSurfaceFrame([2, 1, 2], [Math.SQRT1_2, 0, Math.SQRT1_2])
     const projected = projectRunPointToSurface([4, 3, 0], diagonalWall)
 
     expect(projected[0] + projected[2]).toBeCloseTo(4)
     expect(projected[1]).toBeCloseTo(3)
-  })
-
-  test('commits node-surface clicks at the visible drafting cursor', () => {
-    const visibleCursor = { point: [8, 0, 6] }
-    const clickedMeshOrigin = { point: [0, 0, 0] }
-
-    const resolved = resolveRunCommitFromEvent(
-      { node: {}, localPosition: [0, 0, 0] } as never,
-      visibleCursor,
-      () => clickedMeshOrigin,
-    )
-
-    expect(resolved).toBe(visibleCursor)
-  })
-
-  test('resolves a node-surface start when no surface move preceded the click', () => {
-    const clickedSurface = { point: [3, 1.8, -2] }
-    const resolved = resolveRunCommitFromEvent(
-      { node: {}, localPosition: [99, 99, 99] } as never,
-      null,
-      () => clickedSurface,
-    )
-
-    expect(resolved).toBe(clickedSurface)
   })
 })

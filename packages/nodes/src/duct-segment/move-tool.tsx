@@ -40,6 +40,7 @@ import {
   type RunTranslationOffsetPlan,
 } from '../shared/run-translation-offset'
 import { rectSectionAxes } from './geometry'
+import { translateWallRun } from '../shared/wall-run-move'
 
 type Vec3 = [number, number, number]
 
@@ -123,6 +124,7 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
   const hasMovedRef = useRef(false)
   const activatedAtRef = useRef<number>(Date.now())
   const prevSnapRef = useRef<[number, number] | null>(null)
+  const previewAttachmentRef = useRef(duct.wallAttachment)
 
   useEffect(() => {
     const nodeId = node.id as AnyNodeId
@@ -177,6 +179,20 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
     }
 
     const onMove = (event: GridEvent) => {
+      const attachedWall = duct.wallAttachment
+        ? (useScene.getState().nodes[duct.wallAttachment.wallId] as AnyNode | undefined)
+        : undefined
+      if (duct.wallAttachment && attachedWall?.type === 'wall') {
+        const wallMove = translateWallRun(originalPath, duct.wallAttachment, attachedWall, event)
+        if (wallMove) {
+          hasMovedRef.current = true
+          previewAttachmentRef.current = wallMove.attachment
+          setPreview(wallMove.path)
+          connectivity?.preview({ path: wallMove.path })
+          setTranslationGhost(null)
+          return
+        }
+      }
       const snap = isGridSnapActive() ? snapToGridStep : (v: number) => v
       let dx = snap(event.localPosition[0] - centerX)
       let dz = snap(event.localPosition[2] - centerZ)
@@ -252,6 +268,7 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
         const created = DuctSegmentNode.parse({
           ...(node as Record<string, unknown>),
           path: finalPath,
+          wallAttachment: previewAttachmentRef.current,
           metadata: stripPlacementMetadataFlags(node.metadata),
           visible: true,
         })
@@ -275,7 +292,13 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
               parentId: node.parentId as AnyNodeId,
             })),
             update: [
-              { id: nodeId, data: { path: translationPlan.ductPath } as Partial<AnyNode> },
+              {
+                id: nodeId,
+                data: {
+                  path: translationPlan.ductPath,
+                  wallAttachment: previewAttachmentRef.current,
+                } as Partial<AnyNode>,
+              },
               ...translationPlan.updates,
             ],
           })
@@ -286,7 +309,10 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
           useScene
             .getState()
             .updateNodes([
-              { id: nodeId, data: { path: finalPath } as Partial<AnyNode> },
+              {
+                id: nodeId,
+                data: { path: finalPath, wallAttachment: previewAttachmentRef.current } as Partial<AnyNode>,
+              },
               ...followUpdates,
             ])
         }
