@@ -340,7 +340,7 @@ function climateBlock(
       j.hvhz && j.windRange
         ? `${j.windRange} (HVHZ — ${j.county} County; verify)`
         : j.ultimateWindMph
-          ? `${j.ultimateWindMph} mph (state typical)`
+          ? `${j.ultimateWindMph} mph (${j.designSource === 'site' ? 'the site — Pascal Map code basis' : 'state typical'})`
           : '—',
     ],
     ['Plan north rotation', `${model.northRotationDeg.toFixed(0)}°`],

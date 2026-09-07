@@ -1,5 +1,5 @@
 /**
- * Terrain contour lines for the site plan, from the site's heightfield.
+ * Terrain contour lines (the site plan's and the 3D view's), from the site's heightfield.
  *
  * Marching squares over the field's samples at a chosen interval: every
  * cell whose four corner heights straddle a level gets one or two segments
@@ -13,8 +13,20 @@
  * Steve (2026-09-07): "i also need the terrain lines on the site plan,
  * include a terrain setting where they can select like 6" or 12" etc".
  */
-import { heightAtSample, type TerrainField } from '@pascal-app/core'
-import { pointInPolygon, type Pt } from './geometry'
+import { heightAtSample, type TerrainField } from './terrain-field'
+
+export type Pt = readonly [number, number]
+
+/** Even–odd point-in-polygon (the site plan's rule, copied so core owns the module). */
+function pointInPolygon(points: readonly Pt[], x: number, y: number): boolean {
+  let inside = false
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const a = points[i] as Pt
+    const b = points[j] as Pt
+    if (a[1] > y !== b[1] > y && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1] || 1e-12) + a[0]) inside = !inside
+  }
+  return inside
+}
 
 export type Contour = {
   /** The level, site metres above the datum. */

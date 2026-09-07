@@ -146,6 +146,8 @@ export const SiteNode = BaseNode.extend({
    * Absent = 12 in; 0 = no contours. The generate panel's terrain setting.
    */
   contourIntervalIn: z.number().nonnegative().optional(),
+  /** Draw the contour lines on the 3D ground too (thin, translucent black). Default off. */
+  contours3d: z.boolean().optional(),
   /**
    * Surveyed contour lines in the site frame (metres, x east, z south) —
    * the Pascal Map dossier's USGS 3DEP bare-earth 1-ft lines, NAVD88 feet.

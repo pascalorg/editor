@@ -168,6 +168,13 @@ export type Jurisdiction = {
   frostLineIn: number | null
   frostLineNote: string
   ultimateWindMph: number | null
+  /** Where the wind / snow / seismic figures come from: the site's Pascal Map code basis, or the state-typical table. */
+  designSource: 'site' | 'state'
+  /** The citation the criteria table prints beside the wind speed. */
+  designCite: string
+  groundSnowLoadPsf: number | null
+  /** The site is in a wind-borne debris region (the code basis says); null when unknown. */
+  debrisRegion: boolean | null
   windNote: string
   termiteRisk: string
   seismicSdc: string
@@ -243,6 +250,18 @@ export function resolveJurisdiction(nodes: NodeMap): Jurisdiction {
   const site = siteNode(nodes)
   const parcel = (site?.parcel ?? {}) as Record<string, unknown>
   const address = siteAddress(nodes)
+  // the site's own design values — the Pascal Map code basis on the site
+  // node (ASCE 7 / FBC county wind map, IECC zone, seismic, snow)
+  const codeBasis =
+    ((site as { dossier?: { codeBasis?: Record<string, unknown> } } | undefined)?.dossier?.codeBasis ?? null) as
+      | Record<string, unknown>
+      | null
+  const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null)
+  const siteWind = num(codeBasis?.wind_speed_mph)
+  const siteSnow = num(codeBasis?.ground_snow_load_psf)
+  const siteSdc = str(codeBasis?.seismic_design_category) || null
+  const siteZone = str(codeBasis?.climate_zone_iecc) || null
+  const siteDebris = typeof codeBasis?.wind_borne_debris_region === 'boolean' ? codeBasis.wind_borne_debris_region : null
   let county = str(record?.jurisdiction?.county) || str(parcel.county)
   const city = str(record?.jurisdiction?.city) || address.city
   const origin = Array.isArray(parcel.originLngLat) ? (parcel.originLngLat as unknown[]) : null
@@ -274,6 +293,25 @@ export function resolveJurisdiction(nodes: NodeMap): Jurisdiction {
   if (box?.zone) {
     zone.label = box.zone
     zone.key = box.zone.charAt(0)
+  }
+  // the site's IECC zone beats both the state string and the county box
+  const siteZoneMatch = siteZone ? /^(\d)([ABC])?/.exec(siteZone) : null
+  if (siteZoneMatch) {
+    zone.label = `${siteZoneMatch[1]}${siteZoneMatch[2] ?? ''}`
+    zone.key = siteZoneMatch[1] === '4' && siteZoneMatch[2] === 'C' ? '4M' : (siteZoneMatch[1] as string)
+  }
+  if (siteWind !== null || siteSnow !== null || siteSdc || siteZone) {
+    caveats.push(
+      `Design values are the SITE's from the Pascal Map code basis (ASCE 7 / FBC county wind map, IECC, state seismic and snow maps): ${[
+        siteWind !== null ? `wind ${siteWind} mph` : null,
+        siteDebris === true ? 'wind-borne debris region' : null,
+        siteSdc ? `SDC ${siteSdc}` : null,
+        siteSnow !== null ? `ground snow ${siteSnow} psf` : null,
+        siteZone ? `IECC zone ${siteZone}` : null,
+      ]
+        .filter(Boolean)
+        .join(', ')} — the state-typical table stands behind them; verify with the AHJ.`,
+    )
   }
   const windRange = (() => {
     if (!hvhz) return null
@@ -333,10 +371,17 @@ export function resolveJurisdiction(nodes: NodeMap): Jurisdiction {
       : null,
     frostLineIn: typeof climate?.frostLineIn === 'number' ? climate.frostLineIn : null,
     frostLineNote: str(climate?.frostLineNote),
-    ultimateWindMph: typeof climate?.ultimateWindMph === 'number' ? climate.ultimateWindMph : null,
+    ultimateWindMph: siteWind ?? (typeof climate?.ultimateWindMph === 'number' ? climate.ultimateWindMph : null),
+    designSource: siteWind !== null ? 'site' : 'state',
+    designCite:
+      siteWind !== null
+        ? 'Pascal Map code basis — ASCE 7 / FBC county wind map (the site); verify'
+        : 'IRC Table R301.2(1) / Figure R301.2(2) — state typical value',
+    groundSnowLoadPsf: siteSnow ?? num((climate as { groundSnowLoadPsf?: unknown } | undefined)?.groundSnowLoadPsf),
+    debrisRegion: siteDebris,
     windNote: str(climate?.windNote),
     termiteRisk: str(climate?.termiteRisk),
-    seismicSdc: str(climate?.seismicSdc),
+    seismicSdc: siteSdc ?? str(climate?.seismicSdc),
     hvhz,
     hurricaneTies: climate?.flags?.hurricaneTies === true,
     caveats,

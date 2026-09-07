@@ -87,6 +87,8 @@ export type StructuralModel = {
   hvhz: boolean
   /** The design wind speed as the criteria table prints it, with its provenance. */
   windLabel: string
+  /** Snow / seismic / debris with their provenance — the site's code basis or the state table. */
+  design: { source: 'site' | 'state'; cite: string; snowPsf: number | null; sdc: string | null; debris: boolean | null }
   /** 'truss' when the roof is pre-engineered trusses (interior partitions then bear nothing on a single storey). */
   roofSystem: 'stick' | 'truss'
 }
@@ -365,16 +367,19 @@ export function structuralModel(nodes: NodeMap, levelId?: string): StructuralMod
   const climate = climateRow(result.jurisdiction)
   const windLabel = site.windRange
     ? `${site.windRange} (HVHZ — ${site.county} County; ASCE 7 map — verify)`
-    : climate?.ultimateWindMph
-      ? `${climate.ultimateWindMph} mph (state typical — verify against the ASCE 7 map)`
-      : 'not in the data'
+    : site.designSource === 'site' && site.ultimateWindMph
+      ? `${site.ultimateWindMph} mph (the site — Pascal Map code basis, ASCE 7 / FBC county map; verify)`
+      : climate?.ultimateWindMph
+        ? `${climate.ultimateWindMph} mph (state typical — verify against the ASCE 7 map)`
+        : 'not in the data'
+  const designWind = site.ultimateWindMph ?? climate?.ultimateWindMph ?? 0
   // R602.10's prescriptive bracing is written for ultimate wind speeds to
   // 140 mph; above that (and in the HVHZ) the lateral system is designed
   // (R301.2.1.1: AWC WFCM, ICC 600, ASCE 7). The S4.0 braced-wall plan then
   // shows the lines to design against, not a prescriptive answer.
-  if (site.hvhz || (climate?.ultimateWindMph ?? 0) > 140) {
+  if (site.hvhz || designWind > 140) {
     warnings.push(
-      `Ultimate design wind speed ${site.windRange ?? `${climate?.ultimateWindMph} mph`} exceeds the 140 mph limit of R602.10 prescriptive wall bracing — lateral design per R301.2.1.1 (AWC WFCM / ICC 600 / ASCE 7) by the engineer of record; braced wall lines shown for that design.`,
+      `Ultimate design wind speed ${site.windRange ?? `${designWind} mph`} exceeds the 140 mph limit of R602.10 prescriptive wall bracing — lateral design per R301.2.1.1 (AWC WFCM / ICC 600 / ASCE 7) by the engineer of record; braced wall lines shown for that design.`,
     )
   }
   if (!Object.values(nodes).some((n) => n?.type === 'bones:framing' && n.parentId === id)) {
@@ -404,6 +409,13 @@ export function structuralModel(nodes: NodeMap, levelId?: string): StructuralMod
     raisedFloor,
     hvhz: site.hvhz,
     windLabel,
+    design: {
+      source: site.designSource,
+      cite: site.designCite,
+      snowPsf: site.groundSnowLoadPsf,
+      sdc: site.seismicSdc || null,
+      debris: site.debrisRegion,
+    },
     roofSystem: trussed ? 'truss' : 'stick',
   }
   byNodes.set(id, model)

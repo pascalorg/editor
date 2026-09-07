@@ -1,6 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { createTerrainField, quantize } from '@pascal-app/core'
-import { terrainContours } from './contours'
+import { createTerrainField, quantize, terrainContours } from '@pascal-app/core'
 
 /** A 20 × 20 m field at 1 m spacing rising 2 m from x = −10 to x = +10 (a plane). */
 function ramp() {

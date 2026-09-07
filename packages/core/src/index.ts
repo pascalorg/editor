@@ -230,6 +230,7 @@ export {
   terrainFieldForEdit,
   terrainFieldOf,
 } from './lib/terrain-source'
+export { type Contour, terrainContours } from './lib/terrain-contours'
 export {
   isLevelBaseConsumer,
   isSiteDatum,

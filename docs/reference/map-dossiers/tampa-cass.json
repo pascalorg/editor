@@ -1,0 +1,2854 @@
+{
+  "object": "location",
+  "as_of": "2026-09-07T19:54:12.955Z",
+  "query": {
+    "type": "address",
+    "address": "1200 W Cass St, Tampa, FL"
+  },
+  "point": {
+    "lat": 27.949722,
+    "lng": -82.47111,
+    "source": "geocoded"
+  },
+  "address": {
+    "formatted": "1200 West Cass Street, Tampa, Florida 33606, United States",
+    "precision": "rooftop"
+  },
+  "layers": {
+    "parcel": {
+      "object": "location_section",
+      "layer": "parcel",
+      "name": "Parcel",
+      "category": "property",
+      "status": "available",
+      "summary": "0.52 acre parcel in Hillsborough (2025F tax roll).",
+      "data": {
+        "parcel_key": "iTpGOfl7y9G_6pjVqeqkaQ",
+        "county": {
+          "name": "Hillsborough",
+          "fips": null,
+          "local_code": 39
+        },
+        "situs_address": {
+          "line1": "1200 W CASS ST",
+          "city": "TAMPA",
+          "zip": "33606"
+        },
+        "vintage": "2025F-prototype",
+        "area_m2": 2085,
+        "area_acres": 0.52,
+        "parcel_count_here": 1,
+        "stacked_parcel_keys": [],
+        "adjacent_parcels": [
+          {
+            "parcel_key": "-u68a2SDCiF0_SOCPtO5XA",
+            "area_m2": 1737
+          }
+        ],
+        "frontage": {
+          "total_ft": 659,
+          "total_m": 201,
+          "segment_count": 4,
+          "geometry": {
+            "type": "MultiLineString",
+            "coordinates": [
+              [
+                [
+                  -82.47131086885929,
+                  27.949757222086575
+                ],
+                [
+                  -82.47101314365864,
+                  27.94975366805656
+                ],
+                [
+                  -82.47101716697216,
+                  27.949430843176856
+                ]
+              ],
+              [
+                [
+                  -82.47131489217281,
+                  27.949433804877387
+                ],
+                [
+                  -82.47131086885929,
+                  27.949757222086575
+                ]
+              ],
+              [
+                [
+                  -82.47164614498615,
+                  27.949760776116463
+                ],
+                [
+                  -82.47135378420353,
+                  27.949757814424885
+                ],
+                [
+                  -82.47135780751705,
+                  27.949433804877387
+                ]
+              ],
+              [
+                [
+                  -82.47165083885193,
+                  27.949437951258005
+                ],
+                [
+                  -82.47164614498615,
+                  27.949760776116463
+                ]
+              ]
+            ]
+          }
+        },
+        "geometry": {
+          "type": "Feature",
+          "properties": {
+            "parcel_key": "iTpGOfl7y9G_6pjVqeqkaQ"
+          },
+          "geometry": {
+            "type": "MultiPolygon",
+            "coordinates": [
+              [
+                [
+                  [
+                    -82.47131086885929,
+                    27.949757222086575
+                  ],
+                  [
+                    -82.47101314365864,
+                    27.94975366805656
+                  ],
+                  [
+                    -82.47101716697216,
+                    27.949430843176856
+                  ],
+                  [
+                    -82.47131489217281,
+                    27.949433804877387
+                  ],
+                  [
+                    -82.47131086885929,
+                    27.949757222086575
+                  ]
+                ]
+              ],
+              [
+                [
+                  [
+                    -82.47164614498615,
+                    27.949760776116463
+                  ],
+                  [
+                    -82.47135378420353,
+                    27.949757814424885
+                  ],
+                  [
+                    -82.47135780751705,
+                    27.949433804877387
+                  ],
+                  [
+                    -82.47165083885193,
+                    27.949437951258005
+                  ],
+                  [
+                    -82.47164614498615,
+                    27.949760776116463
+                  ]
+                ]
+              ]
+            ]
+          }
+        }
+      },
+      "source": {
+        "name": "Pascal parcel archives (county cadastral rolls)",
+        "kind": "archive",
+        "vintage": "2025F-prototype",
+        "attribution": "Florida county property appraisers"
+      }
+    },
+    "flood": {
+      "object": "location_section",
+      "layer": "flood",
+      "name": "FEMA flood zones",
+      "category": "classification",
+      "status": "available",
+      "summary": "Minimal risk \u2014 outside the mapped high-risk flood areas (zone X).",
+      "data": {
+        "is_in_flood_zone": false,
+        "mapped": true,
+        "firm_panel": {
+          "panel": "12057C0353J",
+          "effective_date": "2021-10-07"
+        },
+        "zone_at_point": {
+          "zone": "X",
+          "zone_subtype": "AREA OF MINIMAL FLOOD HAZARD",
+          "description": "Minimal risk \u2014 outside the mapped high-risk flood areas",
+          "is_in_flood_zone": false,
+          "base_flood_elevation_ft": null
+        },
+        "evaluated_against": "parcel",
+        "zones_on_parcel": [
+          {
+            "zone": "X",
+            "zone_subtype": "AREA OF MINIMAL FLOOD HAZARD",
+            "description": "Minimal risk \u2014 outside the mapped high-risk flood areas",
+            "is_in_flood_zone": false,
+            "base_flood_elevation_ft": null,
+            "coverage_pct": 100,
+            "area_m2": 2085
+          }
+        ],
+        "highest_risk_zone_on_parcel": "X",
+        "geometry": {
+          "type": "FeatureCollection",
+          "features": [
+            {
+              "type": "Feature",
+              "properties": {
+                "zone": "X",
+                "zone_subtype": "AREA OF MINIMAL FLOOD HAZARD"
+              },
+              "geometry": {
+                "type": "MultiPolygon",
+                "coordinates": [
+                  [
+                    [
+                      [
+                        -82.47165083885193,
+                        27.949437951258005
+                      ],
+                      [
+                        -82.47135780751705,
+                        27.949433804877387
+                      ],
+                      [
+                        -82.47135378420353,
+                        27.949757814424885
+                      ],
+                      [
+                        -82.47164614498615,
+                        27.949760776116463
+                      ],
+                      [
+                        -82.47165083885193,
+                        27.949437951258005
+                      ]
+                    ]
+                  ],
+                  [
+                    [
+                      [
+                        -82.47131489217281,
+                        27.949433804877387
+                      ],
+                      [
+                        -82.47101716697216,
+                        27.949430843176856
+                      ],
+                      [
+                        -82.47101314365864,
+                        27.94975366805656
+                      ],
+                      [
+                        -82.47131086885929,
+                        27.949757222086575
+                      ],
+                      [
+                        -82.47131489217281,
+                        27.949433804877387
+                      ]
+                    ]
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      },
+      "source": {
+        "name": "FEMA National Flood Hazard Layer",
+        "kind": "official",
+        "vintage": "current federal record",
+        "attribution": "FEMA"
+      }
+    },
+    "wetlands": {
+      "object": "location_section",
+      "layer": "wetlands",
+      "name": "Wetlands (NWI)",
+      "category": "classification",
+      "status": "available",
+      "summary": "No mapped wetlands touch this parcel.",
+      "data": {
+        "intersects_parcel": false,
+        "is_on_wetland": false,
+        "evaluated_against": "parcel",
+        "parcel_coverage_pct": 0,
+        "wetlands": [],
+        "geometry": {
+          "type": "FeatureCollection",
+          "features": []
+        }
+      },
+      "source": {
+        "name": "USFWS National Wetlands Inventory",
+        "kind": "official",
+        "vintage": "current federal record",
+        "attribution": "U.S. Fish & Wildlife Service"
+      }
+    },
+    "structures": {
+      "object": "location_section",
+      "layer": "structures",
+      "name": "Buildings",
+      "category": "property",
+      "status": "available",
+      "summary": "2 buildings on the parcel \u2014 about 1510 m\u00b2 of footprint. Built 1930 (county roll), 7,344 sqft living area. 1 story, slab foundation, est. first floor 17.5 ft (NAVD88).",
+      "data": {
+        "building_count": 2,
+        "total_footprint_m2": 1510,
+        "county_record": {
+          "year_built_actual": 1930,
+          "year_built_effective": 1990,
+          "living_area_sqft": 7344,
+          "building_count": 1,
+          "residential_units": null,
+          "construction_class_code": "3",
+          "improvement_quality_code": "4"
+        },
+        "buildings": [
+          {
+            "occupancy": "Commercial",
+            "primary_occupancy": "Retail Trade",
+            "height_m": 4.5,
+            "footprint_m2": 871
+          },
+          {
+            "occupancy": "Commercial",
+            "primary_occupancy": "Professional/Technical Services",
+            "height_m": 4.4,
+            "footprint_m2": 639
+          }
+        ],
+        "structure_attributes": [
+          {
+            "year_built": 2011,
+            "stories": 1,
+            "foundation_type": "slab",
+            "foundation_height_ft": 0.25,
+            "ground_elevation_ft": 17.2,
+            "first_floor_elevation_ft_est": 17.5,
+            "elevation_datum": "NAVD88",
+            "occupancy_type": "COM4"
+          }
+        ],
+        "footprint_source": "USA Structures (ML-derived)",
+        "geometry": {
+          "type": "FeatureCollection",
+          "features": [
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                  [
+                    [
+                      -82.471452,
+                      27.949256
+                    ],
+                    [
+                      -82.471454,
+                      27.949129
+                    ],
+                    [
+                      -82.471502,
+                      27.949129
+                    ],
+                    [
+                      -82.471503,
+                      27.94894
+                    ],
+                    [
+                      -82.471649,
+                      27.948941
+                    ],
+                    [
+                      -82.471645,
+                      27.949446
+                    ],
+                    [
+                      -82.471499,
+                      27.949445
+                    ],
+                    [
+                      -82.471501,
+                      27.949256
+                    ],
+                    [
+                      -82.471452,
+                      27.949256
+                    ]
+                  ]
+                ]
+              },
+              "properties": {
+                "OCC_CLS": "Commercial",
+                "PRIM_OCC": "Retail Trade",
+                "HEIGHT": 4.5,
+                "SQFEET": 9366.234
+              }
+            },
+            {
+              "type": "Feature",
+              "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                  [
+                    [
+                      -82.471023,
+                      27.949501
+                    ],
+                    [
+                      -82.471023,
+                      27.949458
+                    ],
+                    [
+                      -82.471164,
+                      27.949457
+                    ],
+                    [
+                      -82.471168,
+                      27.949503
+                    ],
+                    [
+                      -82.471175,
+                      27.949579
+                    ],
+                    [
+                      -82.471246,
+                      27.94958
+                    ],
+                    [
+                      -82.471246,
+                      27.949755
+                    ],
+                    [
+                      -82.471175,
+                      27.949761
+                    ],
+                    [
+                      -82.471023,
+                      27.949766
+                    ],
+                    [
+                      -82.471023,
+                      27.949501
+                    ]
+                  ]
+                ]
+              },
+              "properties": {
+                "OCC_CLS": "Commercial",
+                "PRIM_OCC": "Professional/Technical Services",
+                "HEIGHT": 4.4,
+                "SQFEET": 6870.72
+              }
+            }
+          ]
+        }
+      },
+      "source": {
+        "name": "USA Structures (FEMA/ORNL) + National Structure Inventory (USACE)",
+        "kind": "official",
+        "vintage": "current federal record",
+        "attribution": "FEMA / Oak Ridge National Laboratory / US Army Corps of Engineers",
+        "note": "Footprint geometry prefers OpenStreetMap surveyed outlines when present (USA Structures ML footprints otherwise \u2014 often visibly off). NSI year-built/foundation/first-floor values are modeled estimates \u2014 not an elevation certificate or permit record."
+      }
+    },
+    "soils": {
+      "object": "location_section",
+      "layer": "soils",
+      "name": "Soils (SSURGO)",
+      "category": "classification",
+      "status": "available",
+      "summary": "Urban land, 0 to 2 percent slopes.",
+      "data": {
+        "soil_units": [
+          {
+            "map_unit": "Urban land, 0 to 2 percent slopes",
+            "symbol": "56",
+            "drainage_class": null,
+            "hydrologic_group": null,
+            "hydric_pct": 2
+          }
+        ],
+        "evaluated_against": "parcel"
+      },
+      "source": {
+        "name": "USDA SSURGO (Soil Data Access)",
+        "kind": "official",
+        "vintage": "current federal record",
+        "attribution": "USDA NRCS",
+        "note": "Map-unit level data (~1:24k survey) \u2014 not a geotechnical report."
+      }
+    },
+    "code_basis": {
+      "object": "location_section",
+      "layer": "code_basis",
+      "name": "Code basis",
+      "category": "classification",
+      "status": "available",
+      "summary": "Climate zone 2A, no frost line, no snow load, seismic category A. Design wind 150 mph (Risk Cat II, Hillsborough County) \u2014 wind-borne debris provisions likely apply near the coast. 100-year 24-hour rainfall 11.3\" (NOAA Atlas 14). At least 25 reported subsidence incidents within 5 miles (not proof of sinkhole risk at this parcel).",
+      "data": {
+        "climate_zone_iecc": "2A",
+        "frost_depth_ft": 0,
+        "ground_snow_load_psf": 0,
+        "seismic_design_category": "A",
+        "wind_speed_mph": 150,
+        "wind_borne_debris_region": true,
+        "wind_exposure": null,
+        "rainfall_100yr_24hr_in": 11.3,
+        "rainfall_source": "NOAA Atlas 14 (PDS mean)",
+        "geologic_hazards": {
+          "liquefaction_zone": null,
+          "earthquake_induced_landslide_zone": null,
+          "tsunami_hazard_area": null,
+          "nearby_subsidence_incidents": {
+            "radius_mi": 5,
+            "count": 25,
+            "truncated": true,
+            "incidents": [
+              {
+                "reference": "10-703",
+                "reported_at": "1980-05-06",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "E",
+                "length_ft": 6,
+                "width_ft": 6,
+                "depth_ft": 4,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-1079",
+                "reported_at": "2012-08-22",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "Karla Henry",
+                "dimensions": "E",
+                "length_ft": 3.5,
+                "width_ft": 2.5,
+                "depth_ft": 2.5,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-754",
+                "reported_at": "1970-01-01",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-062",
+                "reported_at": "2012-06-24",
+                "verified_sinkhole": null,
+                "location_accuracy": "GPSSA",
+                "report_source": "Operator 23, Hillsborough County FR",
+                "dimensions": "E",
+                "length_ft": 5,
+                "width_ft": 5,
+                "depth_ft": null,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-998",
+                "reported_at": "2010-01-20",
+                "verified_sinkhole": null,
+                "location_accuracy": "QTR3",
+                "report_source": "Sinkhole Calls to SWFWMD",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-631",
+                "reported_at": "1985-10-09",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-039",
+                "reported_at": "1991-05-17",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "Florida Sinkhole Research Institute",
+                "dimensions": "E",
+                "length_ft": 6,
+                "width_ft": 6,
+                "depth_ft": 3,
+                "property_damage": "N",
+                "repair_status": "Not Repaired"
+              },
+              {
+                "reference": "10-714",
+                "reported_at": "1975-06-03",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "E",
+                "length_ft": 25,
+                "width_ft": 25,
+                "depth_ft": 25,
+                "property_damage": "N",
+                "repair_status": "Repaired"
+              },
+              {
+                "reference": "10-709",
+                "reported_at": "1979-01-01",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-661",
+                "reported_at": "1967-01-23",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "Y",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-061",
+                "reported_at": "2012-06-26",
+                "verified_sinkhole": null,
+                "location_accuracy": "GPSSA",
+                "report_source": "Wendy, Hillsborough County WP",
+                "dimensions": "E",
+                "length_ft": 5,
+                "width_ft": 5,
+                "depth_ft": null,
+                "property_damage": "Y",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-1108",
+                "reported_at": "2013-07-30",
+                "verified_sinkhole": null,
+                "location_accuracy": "GPSSA",
+                "report_source": "Operator 1115",
+                "dimensions": "E",
+                "length_ft": 4,
+                "width_ft": 1,
+                "depth_ft": 2,
+                "property_damage": "Y",
+                "repair_status": "Repaired"
+              },
+              {
+                "reference": "10-705",
+                "reported_at": "1978-12-30",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "E",
+                "length_ft": 15,
+                "width_ft": 15,
+                "depth_ft": 0.25,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-830",
+                "reported_at": "1973-09-18",
+                "verified_sinkhole": null,
+                "location_accuracy": "QTR3",
+                "report_source": "FSRI",
+                "dimensions": "E",
+                "length_ft": 3,
+                "width_ft": 3,
+                "depth_ft": 4,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-997",
+                "reported_at": "2010-01-22",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "Sinkhole Calls to SWFWMD",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-707",
+                "reported_at": "1978-12-01",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "Y",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-901",
+                "reported_at": "1989-04-01",
+                "verified_sinkhole": null,
+                "location_accuracy": "QTR3",
+                "report_source": "FSRI",
+                "dimensions": "E",
+                "length_ft": 2,
+                "width_ft": 2,
+                "depth_ft": 5,
+                "property_damage": "Y",
+                "repair_status": "Repaired"
+              },
+              {
+                "reference": "10-068",
+                "reported_at": "2023-12-15",
+                "verified_sinkhole": null,
+                "location_accuracy": "GPSSA",
+                "report_source": "SWO Email, Private Citizen",
+                "dimensions": "E",
+                "length_ft": null,
+                "width_ft": 7,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-752",
+                "reported_at": "1981-02-09",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-928",
+                "reported_at": "2010-01-09",
+                "verified_sinkhole": null,
+                "location_accuracy": "QTR1",
+                "report_source": "Hillsborough County Emergency Warning Point",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-655",
+                "reported_at": "1987-01-02",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "E",
+                "length_ft": 2,
+                "width_ft": 2,
+                "depth_ft": 30,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-1098",
+                "reported_at": "2005-07-10",
+                "verified_sinkhole": null,
+                "location_accuracy": "QTR2",
+                "report_source": "Hillsborough County WP",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": 45,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-037",
+                "reported_at": "1991-01-19",
+                "verified_sinkhole": null,
+                "location_accuracy": "QTR2",
+                "report_source": "Florida Sinkhole Research Institute",
+                "dimensions": "E",
+                "length_ft": 5,
+                "width_ft": 5,
+                "depth_ft": 3,
+                "property_damage": "Y",
+                "repair_status": "Repaired"
+              },
+              {
+                "reference": "10-075",
+                "reported_at": "2025-01-19",
+                "verified_sinkhole": false,
+                "location_accuracy": "UNKWN",
+                "report_source": "Private Citizen",
+                "dimensions": "E",
+                "length_ft": 4,
+                "width_ft": 4,
+                "depth_ft": 4,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-1124",
+                "reported_at": "2016-10-11",
+                "verified_sinkhole": null,
+                "location_accuracy": "GPS",
+                "report_source": "Gloria, Private Citizen",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              }
+            ]
+          }
+        }
+      },
+      "source": {
+        "name": "ASCE 7 / FBC county wind maps, IECC, NOAA Atlas 14 + FGS subsidence reports",
+        "kind": "official",
+        "attribution": "ICC / ASCE / NOAA / Florida Geological Survey",
+        "note": "Wind speed is the county-level Risk Category II value \u2014 confirm site-specific values (and exposure) with the ATC hazard maps for permit sets. Florida subsidence records are reported incidents, not verified sinkholes or a site-specific geotechnical assessment."
+      }
+    },
+    "elevation": {
+      "object": "location_section",
+      "layer": "elevation",
+      "name": "Elevation",
+      "category": "geography",
+      "status": "available",
+      "summary": "Roughly 23 ft (7 m) above sea level \u2014 a satellite estimate, not a survey. Parcel terrain runs 15.1\u201318.8 ft NAVD88 (3.7 ft of relief), 8 one-foot contour lines.",
+      "data": {
+        "elevation_m": 7,
+        "elevation_ft": 23,
+        "datum": "EGM2008",
+        "model": "surface (includes buildings and canopy)",
+        "resolution_m": 90,
+        "terrain_status": "ready",
+        "terrain": {
+          "min_ft": 15.1,
+          "max_ft": 18.8,
+          "relief_ft": 3.7,
+          "contour_interval_ft": 1,
+          "contour_count": 8,
+          "datum": "NAVD88",
+          "source_resolution_m": 10,
+          "clipped_to": "parcel_bbox",
+          "geometry": {
+            "type": "FeatureCollection",
+            "features": [
+              {
+                "type": "Feature",
+                "properties": {
+                  "elevation_ft": 16
+                },
+                "geometry": {
+                  "type": "LineString",
+                  "coordinates": [
+                    [
+                      -82.4716455,
+                      27.949746
+                    ],
+                    [
+                      -82.4716349,
+                      27.9497446
+                    ],
+                    [
+                      -82.4716243,
+                      27.9497422
+                    ],
+                    [
+                      -82.4716142,
+                      27.949747
+                    ],
+                    [
+                      -82.4716136,
+                      27.9497474
+                    ],
+                    [
+                      -82.4716064,
+                      27.9497525
+                    ],
+                    [
+                      -82.4716136,
+                      27.949755
+                    ],
+                    [
+                      -82.4716243,
+                      27.9497566
+                    ],
+                    [
+                      -82.4716349,
+                      27.9497576
+                    ],
+                    [
+                      -82.4716381,
+                      27.949758
+                    ],
+                    [
+                      -82.4716455,
+                      27.9497592
+                    ]
+                  ]
+                }
+              },
+              {
+                "type": "Feature",
+                "properties": {
+                  "elevation_ft": 16
+                },
+                "geometry": {
+                  "type": "LineString",
+                  "coordinates": [
+                    [
+                      -82.4714779,
+                      27.949681
+                    ],
+                    [
+                      -82.4714755,
+                      27.9496824
+                    ],
+                    [
+                      -82.4714673,
+                      27.9496865
+                    ],
+                    [
+                      -82.4714755,
+                      27.9496881
+                    ],
+                    [
+                      -82.4714861,
+                      27.949692
+                    ],
+                    [
+                      -82.4714861,
+                      27.949692
+                    ],
+                    [
+                      -82.4714967,
+                      27.9496948
+                    ],
+                    [
+                      -82.4715074,
+                      27.9496967
+                    ],
+                    [
+                      -82.4715135,
+                      27.9496975
+                    ],
+                    [
+                      -82.471518,
+                      27.9496982
+                    ],
+                    [
+                      -82.4715286,
+                      27.9497
+                    ],
+                    [
+                      -82.4715392,
+                      27.9497008
+                    ],
+                    [
+                      -82.4715499,
+                      27.9497016
+                    ],
+                    [
+                      -82.4715573,
+                      27.949703
+                    ],
+                    [
+                      -82.4715605,
+                      27.9497034
+                    ],
+                    [
+                      -82.4715614,
+                      27.949703
+                    ],
+                    [
+                      -82.4715655,
+                      27.9496975
+                    ],
+                    [
+                      -82.4715699,
+                      27.949692
+                    ],
+                    [
+                      -82.4715711,
+                      27.9496869
+                    ],
+                    [
+                      -82.4715712,
+                      27.9496865
+                    ],
+                    [
+                      -82.4715711,
+                      27.9496865
+                    ],
+                    [
+                      -82.4715605,
+                      27.949683
+                    ],
+                    [
+                      -82.4715527,
+                      27.949681
+                    ],
+                    [
+                      -82.4715499,
+                      27.9496804
+                    ],
+                    [
+                      -82.4715392,
+                      27.9496785
+                    ],
+                    [
+                      -82.4715286,
+                      27.9496772
+                    ],
+                    [
+                      -82.471518,
+                      27.9496769
+                    ],
+                    [
+                      -82.4715074,
+                      27.9496764
+                    ],
+                    [
+                      -82.4714967,
+                      27.9496764
+                    ],
+                    [
+                      -82.4714861,
+                      27.9496782
+                    ],
+                    [
+                      -82.4714779,
+                      27.949681
+                    ]
+                  ]
+                }
+              },
+              {
+                "type": "Feature",
+                "properties": {
+                  "elevation_ft": 16
+                },
+                "geometry": {
+                  "type": "LineString",
+                  "coordinates": [
+                    [
+                      -82.471463,
+                      27.9496096
+                    ],
+                    [
+                      -82.4714542,
+                      27.9496123
+                    ],
+                    [
+                      -82.4714485,
+                      27.9496151
+                    ],
+                    [
+                      -82.4714436,
+                      27.9496186
+                    ],
+                    [
+                      -82.4714404,
+                      27.9496206
+                    ],
+                    [
+                      -82.4714418,
+                      27.9496261
+                    ],
+                    [
+                      -82.4714436,
+                      27.9496266
+                    ],
+                    [
+                      -82.4714542,
+                      27.9496298
+                    ],
+                    [
+                      -82.4714648,
+                      27.9496314
+                    ],
+                    [
+                      -82.4714755,
+                      27.9496304
+                    ],
+                    [
+                      -82.4714861,
+                      27.9496269
+                    ],
+                    [
+                      -82.471488,
+                      27.9496261
+                    ],
+                    [
+                      -82.4714907,
+                      27.9496206
+                    ],
+                    [
+                      -82.4714865,
+                      27.9496151
+                    ],
+                    [
+                      -82.4714861,
+                      27.9496147
+                    ],
+                    [
+                      -82.4714755,
+                      27.9496096
+                    ],
+                    [
+                      -82.471475,
+                      27.9496096
+                    ],
+                    [
+                      -82.4714648,
+                      27.9496075
+                    ],
+                    [
+                      -82.471463,
+                      27.9496096
+                    ]
+                  ]
+                }
+              },
+              {
+                "type": "Feature",
+                "properties": {
+                  "elevation_ft": 16
+                },
+                "geometry": {
+                  "type": "LineString",
+                  "coordinates": [
+                    [
+                      -82.4710185,
+                      27.9496857
+                    ],
+                    [
+                      -82.4710291,
+                      27.9496864
+                    ],
+                    [
+                      -82.4710315,
+                      27.9496865
+                    ],
+                    [
+                      -82.4710397,
+                      27.949687
+                    ],
+                    [
+                      -82.4710503,
+                      27.9496875
+                    ],
+                    [
+                      -82.471061,
+                      27.9496879
+                    ],
+                    [
+                      -82.4710716,
+                      27.9496887
+                    ],
+                    [
+                      -82.4710822,
+                      27.9496899
+                    ],
+                    [
+                      -82.4710929,
+                      27.949691
+                    ],
+                    [
+                      -82.4711023,
+                      27.949692
+                    ],
+                    [
+                      -82.4711035,
+                      27.9496922
+                    ],
+                    [
+                      -82.4711141,
+                      27.9496934
+                    ],
+                    [
+                      -82.4711247,
+                      27.9496946
+                    ],
+                    [
+                      -82.4711354,
+                      27.9496954
+                    ],
+                    [
+                      -82.471146,
+                      27.9496959
+                    ],
+                    [
+                      -82.4711566,
+                      27.9496964
+                    ],
+                    [
+                      -82.4711673,
+                      27.9496966
+                    ],
+                    [
+                      -82.4711779,
+                      27.9496966
+                    ],
+                    [
+                      -82.4711885,
+                      27.9496966
+                    ],
+                    [
+                      -82.4711991,
+                      27.9496965
+                    ],
+                    [
+                      -82.4712098,
+                      27.9496963
+                    ],
+                    [
+                      -82.4712204,
+                      27.9496961
+                    ],
+                    [
+                      -82.471231,
+                      27.9496953
+                    ],
+                    [
+                      -82.4712417,
+                      27.9496941
+                    ],
+                    [
+                      -82.4712523,
+                      27.9496929
+                    ],
+                    [
+                      -82.4712603,
+                      27.949692
+                    ],
+                    [
+                      -82.4712629,
+                      27.9496917
+                    ],
+                    [
+                      -82.4712735,
+                      27.9496904
+                    ],
+                    [
+                      -82.4712842,
+                      27.9496889
+                    ],
+                    [
+                      -82.4712948,
+                      27.9496893
+                    ],
+                    [
+                      -82.4713054,
+                      27.9496897
+                    ],
+                    [
+                      -82.471316,
+                      27.9496904
+                    ],
+                    [
+                      -82.4713233,
+                      27.949692
+                    ],
+                    [
+                      -82.4713267,
+                      27.9496926
+                    ],
+                    [
+                      -82.4713373,
+                      27.9496947
+                    ],
+                    [
+                      -82.4713479,
+                      27.9496964
+                    ],
+                    [
+                      -82.4713586,
+                      27.9496952
+                    ],
+                    [
+                      -82.4713692,
+                      27.949694
+                    ],
+                    [
+                      -82.4713798,
+                      27.9496927
+                    ],
+                    [
+                      -82.4713842,
+                      27.949692
+                    ],
+                    [
+                      -82.4713904,
+                      27.9496907
+                    ],
+                    [
+                      -82.4714011,
+                      27.9496882
+                    ],
+                    [
+                      -82.4714108,
+                      27.9496865
+                    ],
+                    [
+                      -82.4714097,
+                      27.949681
+                    ],
+                    [
+                      -82.471408,
+                      27.9496755
+                    ],
+                    [
+                      -82.4714011,
+                      27.9496713
+                    ],
+                    [
+                      -82.4713982,
+                      27.94967
+                    ],
+                    [
+                      -82.4713904,
+                      27.9496687
+                    ],
+                    [
+                      -82.4713798,
+                      27.9496671
+                    ],
+                    [
+                      -82.4713692,
+                      27.9496655
+                    ],
+                    [
+                      -82.4713639,
+                      27.9496645
+                    ],
+                    [
+                      -82.4713586,
+                      27.9496636
+                    ],
+                    [
+                      -82.4713479,
+                      27.9496618
+                    ],
+                    [
+                      -82.4713373,
+                      27.9496604
+                    ],
+                    [
+                      -82.4713286,
+                      27.949659
+                    ],
+                    [
+                      -82.4713267,
+                      27.9496579
+                    ],
+                    [
+                      -82.471316,
+                      27.9496544
+                    ],
+                    [
+                      -82.4713153,
+                      27.9496535
+                    ],
+                    [
+                      -82.4713159,
+                      27.949648
+                    ],
+                    [
+                      -82.471316,
+                      27.949646
+                    ],
+                    [
+                      -82.4713165,
+                      27.949648
+                    ],
+                    [
+                      -82.4713267,
+                      27.9496514
+                    ],
+                    [
+                      -82.4713373,
+                      27.9496517
+                    ],
+                    [
+                      -82.4713479,
+                      27.9496513
+                    ],
+                    [
+                      -82.4713586,
+                      27.9496486
+                    ],
+                    [
+                      -82.4713604,
+                      27.949648
+                    ],
+                    [
+                      -82.4713692,
+                      27.9496444
+                    ],
+                    [
+                      -82.471373,
+                      27.9496426
+                    ],
+                    [
+                      -82.4713798,
+                      27.9496395
+                    ],
+                    [
+                      -82.4713851,
+                      27.9496371
+                    ],
+                    [
+                      -82.4713904,
+                      27.9496344
+                    ],
+                    [
+                      -82.4713946,
+                      27.9496316
+                    ],
+                    [
+                      -82.4713999,
+                      27.9496261
+                    ],
+                    [
+                      -82.4714011,
+                      27.9496235
+                    ],
+                    [
+                      -82.4714033,
+                      27.9496206
+                    ],
+                    [
+                      -82.4714062,
+                      27.9496151
+                    ],
+                    [
+                      -82.4714091,
+                      27.9496096
+                    ],
+                    [
+                      -82.4714117,
+                      27.9496057
+                    ],
+                    [
+                      -82.4714161,
+                      27.9496041
+                    ],
+                    [
+                      -82.4714223,
+                      27.9496024
+                    ],
+                    [
+                      -82.471433,
+                      27.9496004
+                    ],
+                    [
+                      -82.4714436,
+                      27.9495996
+                    ],
+                    [
+                      -82.4714542,
+                      27.9495993
+                    ],
+                    [
+                      -82.471462,
+                      27.9495986
+                    ],
+                    [
+                      -82.4714648,
+                      27.9495977
+                    ],
+                    [
+                      -82.4714667,
+                      27.9495931
+                    ],
+                    [
+                      -82.4714734,
+                      27.9495876
+                    ],
+                    [
+                      -82.4714755,
+                      27.9495863
+                    ],
+                    [
+                      -82.4714827,
+                      27.9495821
+                    ],
+                    [
+                      -82.4714861,
+                      27.9495805
+                    ],
+                    [
+                      -82.4714967,
+                      27.9495768
+                    ],
+                    [
+                      -82.4715074,
+                      27.9495777
+                    ],
+                    [
+                      -82.471518,
+                      27.9495804
+                    ],
+                    [
+                      -82.4715245,
+                      27.9495821
+                    ],
+                    [
+                      -82.4715286,
+                      27.9495831
+                    ],
+                    [
+                      -82.4715355,
+                      27.9495876
+                    ],
+                    [
+                      -82.4715392,
+                      27.9495903
+                    ],
+                    [
+                      -82.4715423,
+                      27.9495931
+                    ],
+                    [
+                      -82.4715476,
+                      27.9495986
+                    ],
+                    [
+                      -82.4715499,
+                      27.9496006
+                    ],
+                    [
+                      -82.4715544,
+                      27.9496041
+                    ],
+                    [
+                      -82.4715605,
+                      27.9496079
+                    ],
+                    [
+                      -82.4715623,
+                      27.9496096
+                    ],
+                    [
+                      -82.4715711,
+                      27.9496151
+                    ],
+                    [
+                      -82.4715711,
+                      27.9496151
+                    ],
+                    [
+                      -82.4715818,
+                      27.9496188
+                    ],
+                    [
+                      -82.4715898,
+                      27.9496206
+                    ],
+                    [
+                      -82.4715924,
+                      27.9496215
+                    ],
+                    [
+                      -82.4715946,
+                      27.9496261
+                    ],
+                    [
+                      -82.4715924,
+                      27.9496316
+                    ],
+                    [
+                      -82.4715924,
+                      27.9496316
+                    ],
+                    [
+                      -82.4715876,
+                      27.9496371
+                    ],
+                    [
+                      -82.4715851,
+                      27.9496426
+                    ],
+                    [
+                      -82.471583,
+                      27.949648
+                    ],
+                    [
+                      -82.4715818,
+                      27.9496513
+                    ],
+                    [
+                      -82.4715809,
+                      27.9496535
+                    ],
+                    [
+                      -82.4715818,
+                      27.949657
+                    ],
+                    [
+                      -82.4715824,
+                      27.949659
+                    ],
+                    [
+                      -82.4715886,
+                      27.9496645
+                    ],
+                    [
+                      -82.4715924,
+                      27.9496668
+                    ],
+                    [
+                      -82.4715942,
+                      27.94967
+                    ],
+                    [
+                      -82.4715958,
+                      27.9496755
+                    ],
+                    [
+                      -82.4715967,
+                      27.949681
+                    ],
+                    [
+                      -82.4715977,
+                      27.9496865
+                    ],
+                    [
+                      -82.4716015,
+                      27.949692
+                    ],
+                    [
+                      -82.471603,
+                      27.9496933
+                    ],
+                    [
+                      -82.4716103,
+                      27.9496975
+                    ],
+                    [
+                      -82.4716136,
+                      27.9496987
+                    ],
+                    [
+                      -82.4716243,
+                      27.9497011
+                    ],
+                    [
+                      -82.4716349,
+                      27.9497025
+                    ],
+                    [
+                      -82.4716411,
+                      27.949703
+                    ],
+                    [
+                      -82.4716455,
+                      27.9497038
+                    ]
+                  ]
+                }
+              },
+              {
+                "type": "Feature",
+                "properties": {
+                  "elevation_ft": 17
+                },
+                "geometry": {
+                  "type": "LineString",
+                  "coordinates": [
+                    [
+                      -82.4710185,
+                      27.9495919
+                    ],
+                    [
+                      -82.4710231,
+                      27.9495931
+                    ],
+                    [
+                      -82.4710185,
+                      27.9495941
+                    ]
+                  ]
+                }
+              },
+              {
+                "type": "Feature",
+                "properties": {
+                  "elevation_ft": 17
+                },
+                "geometry": {
+                  "type": "LineString",
+                  "coordinates": [
+                    [
+                      -82.4710185,
+                      27.9496556
+                    ],
+                    [
+                      -82.4710291,
+                      27.9496569
+                    ],
+                    [
+                      -82.4710397,
+                      27.9496583
+                    ],
+                    [
+                      -82.4710442,
+                      27.949659
+                    ],
+                    [
+                      -82.4710503,
+                      27.9496599
+                    ],
+                    [
+                      -82.471061,
+                      27.9496615
+                    ],
+                    [
+                      -82.4710716,
+                      27.9496631
+                    ],
+                    [
+                      -82.4710822,
+                      27.9496639
+                    ],
+                    [
+                      -82.4710879,
+                      27.9496645
+                    ],
+                    [
+                      -82.4710929,
+                      27.9496653
+                    ],
+                    [
+                      -82.4711035,
+                      27.9496671
+                    ],
+                    [
+                      -82.4711141,
+                      27.9496682
+                    ],
+                    [
+                      -82.4711235,
+                      27.94967
+                    ],
+                    [
+                      -82.4711247,
+                      27.9496701
+                    ],
+                    [
+                      -82.4711319,
+                      27.94967
+                    ],
+                    [
+                      -82.4711354,
+                      27.9496698
+                    ],
+                    [
+                      -82.4711455,
+                      27.9496645
+                    ],
+                    [
+                      -82.471146,
+                      27.9496643
+                    ],
+                    [
+                      -82.4711562,
+                      27.949659
+                    ],
+                    [
+                      -82.4711566,
+                      27.9496589
+                    ],
+                    [
+                      -82.4711673,
+                      27.9496548
+                    ],
+                    [
+                      -82.47117,
+                      27.9496535
+                    ],
+                    [
+                      -82.4711779,
+                      27.9496503
+                    ],
+                    [
+                      -82.4711821,
+                      27.949648
+                    ],
+                    [
+                      -82.4711885,
+                      27.9496436
+                    ],
+                    [
+                      -82.4711896,
+                      27.9496426
+                    ],
+                    [
+                      -82.4711967,
+                      27.9496371
+                    ],
+                    [
+                      -82.4711991,
+                      27.9496359
+                    ],
+                    [
+                      -82.4712098,
+                      27.9496334
+                    ],
+                    [
+                      -82.4712204,
+                      27.9496323
+                    ],
+                    [
+                      -82.4712247,
+                      27.9496316
+                    ],
+                    [
+                      -82.471231,
+                      27.9496306
+                    ],
+                    [
+                      -82.4712417,
+                      27.9496289
+                    ],
+                    [
+                      -82.4712523,
+                      27.9496275
+                    ],
+                    [
+                      -82.471254,
+                      27.9496261
+                    ],
+                    [
+                      -82.4712533,
+                      27.9496206
+                    ],
+                    [
+                      -82.4712523,
+                      27.9496195
+                    ],
+                    [
+                      -82.4712417,
+                      27.949616
+                    ],
+                    [
+                      -82.4712397,
+                      27.9496151
+                    ],
+                    [
+                      -82.4712321,
+                      27.9496096
+                    ],
+                    [
+                      -82.471231,
+                      27.9496091
+                    ],
+                    [
+                      -82.4712204,
+                      27.949605
+                    ],
+                    [
+                      -82.4712172,
+                      27.9496041
+                    ],
+                    [
+                      -82.4712098,
+                      27.9496022
+                    ],
+                    [
+                      -82.4711991,
+                      27.9495989
+                    ],
+                    [
+                      -82.4711982,
+                      27.9495986
+                    ],
+                    [
+                      -82.4711885,
+                      27.9495944
+                    ],
+                    [
+                      -82.471186,
+                      27.9495931
+                    ],
+                    [
+                      -82.4711779,
+                      27.9495881
+                    ],
+                    [
+                      -82.471177,
+                      27.9495876
+                    ],
+                    [
+                      -82.4711693,
+                      27.9495821
+                    ],
+                    [
+                      -82.4711673,
+                      27.9495805
+                    ],
+                    [
+                      -82.4711612,
+                      27.9495766
+                    ],
+                    [
+                      -82.4711591,
+                      27.9495711
+                    ],
+                    [
+                      -82.4711578,
+                      27.9495656
+                    ],
+                    [
+                      -82.4711568,
+                      27.9495601
+                    ],
+                    [
+                      -82.4711639,
+                      27.9495546
+                    ],
+                    [
+                      -82.4711673,
+                      27.9495525
+                    ],
+                    [
+                      -82.4711758,
+                      27.9495491
+                    ],
+                    [
+                      -82.4711779,
+                      27.9495485
+                    ],
+                    [
+                      -82.4711885,
+                      27.949546
+                    ],
+                    [
+                      -82.4711991,
+                      27.9495459
+                    ],
+                    [
+                      -82.4712098,
+                      27.9495465
+                    ],
+                    [
+                      -82.4712204,
+                      27.949547
+                    ],
+                    [
+                      -82.471231,
+                      27.9495474
+                    ],
+                    [
+                      -82.4712417,
+                      27.9495477
+                    ],
+                    [
+                      -82.4712523,
+                      27.9495481
+                    ],
+                    [
+                      -82.4712629,
+                      27.9495473
+                    ],
+                    [
+                      -82.4712735,
+                      27.9495463
+                    ],
+                    [
+                      -82.4712842,
+                      27.9495452
+                    ],
+                    [
+                      -82.4712948,
+                      27.9495454
+                    ],
+                    [
+                      -82.4713054,
+                      27.9495457
+                    ],
+                    [
+                      -82.471316,
+                      27.9495459
+                    ],
+                    [
+                      -82.4713267,
+                      27.9495459
+                    ],
+                    [
+                      -82.4713373,
+                      27.9495459
+                    ],
+                    [
+                      -82.4713479,
+                      27.9495459
+                    ],
+                    [
+                      -82.4713586,
+                      27.9495459
+                    ],
+                    [
+                      -82.4713692,
+                      27.9495458
+                    ],
+                    [
+                      -82.4713798,
+                      27.9495457
+                    ],
+                    [
+                      -82.4713904,
+                      27.9495452
+                    ],
+                    [
+                      -82.4714011,
+                      27.9495446
+                    ],
+                    [
+                      -82.4714117,
+                      27.9495445
+                    ],
+                    [
+                      -82.4714223,
+                      27.9495451
+                    ],
+                    [
+                      -82.471433,
+                      27.9495457
+                    ],
+                    [
+                      -82.4714436,
+                      27.9495467
+                    ],
+                    [
+                      -82.4714542,
+                      27.9495478
+                    ],
+                    [
+                      -82.4714648,
+                      27.9495487
+                    ],
+                    [
+                      -82.4714755,
+                      27.9495487
+                    ],
+                    [
+                      -82.4714861,
+                      27.9495481
+                    ],
+                    [
+                      -82.4714967,
+                      27.9495473
+                    ],
+                    [
+                      -82.4715074,
+                      27.9495474
+                    ],
+                    [
+                      -82.471518,
+                      27.9495479
+                    ],
+                    [
+                      -82.4715286,
+                      27.9495484
+                    ],
+                    [
+                      -82.4715323,
+                      27.9495491
+                    ],
+                    [
+                      -82.4715392,
+                      27.9495504
+                    ],
+                    [
+                      -82.4715499,
+                      27.949553
+                    ],
+                    [
+                      -82.4715565,
+                      27.9495546
+                    ],
+                    [
+                      -82.4715605,
+                      27.9495555
+                    ],
+                    [
+                      -82.4715711,
+                      27.9495581
+                    ],
+                    [
+                      -82.4715781,
+                      27.9495601
+                    ],
+                    [
+                      -82.4715818,
+                      27.9495611
+                    ],
+                    [
+                      -82.4715924,
+                      27.9495642
+                    ],
+                    [
+                      -82.4715959,
+                      27.9495656
+                    ],
+                    [
+                      -82.471603,
+                      27.9495684
+                    ],
+                    [
+                      -82.4716097,
+                      27.9495711
+                    ],
+                    [
+                      -82.4716136,
+                      27.9495728
+                    ],
+                    [
+                      -82.4716223,
+                      27.9495766
+                    ],
+                    [
+                      -82.4716216,
+                      27.9495821
+                    ],
+                    [
+                      -82.4716209,
+                      27.9495876
+                    ],
+                    [
+                      -82.4716209,
+                      27.9495931
+                    ],
+                    [
+                      -82.4716238,
+                      27.9495986
+                    ],
+                    [
+                      -82.4716243,
+                      27.9495995
+                    ],
+                    [
+                      -82.4716264,
+                      27.9496041
+                    ],
+                    [
+                      -82.4716286,
+                      27.9496096
+                    ],
+                    [
+                      -82.4716322,
+                      27.9496151
+                    ],
+                    [
+                      -82.4716349,
+                      27.9496203
+                    ],
+                    [
+                      -82.471635,
+                      27.9496206
+                    ],
+                    [
+                      -82.4716374,
+                      27.9496261
+                    ],
+                    [
+                      -82.4716407,
+                      27.9496316
+                    ],
+                    [
+                      -82.4716455,
+                      27.9496365
+                    ],
+                    [
+                      -82.4716465,
+                      27.9496371
+                    ]
+                  ]
+                }
+              },
+              {
+                "type": "Feature",
+                "properties": {
+                  "elevation_ft": 17
+                },
+                "geometry": {
+                  "type": "LineString",
+                  "coordinates": [
+                    [
+                      -82.4716469,
+                      27.949648
+                    ],
+                    [
+                      -82.4716455,
+                      27.9496496
+                    ],
+                    [
+                      -82.4716433,
+                      27.9496535
+                    ],
+                    [
+                      -82.471641,
+                      27.949659
+                    ],
+                    [
+                      -82.4716396,
+                      27.9496645
+                    ],
+                    [
+                      -82.4716385,
+                      27.94967
+                    ],
+                    [
+                      -82.4716389,
+                      27.9496755
+                    ],
+                    [
+                      -82.4716398,
+                      27.949681
+                    ],
+                    [
+                      -82.4716408,
+                      27.9496865
+                    ],
+                    [
+                      -82.4716455,
+                      27.9496885
+                    ]
+                  ]
+                }
+              },
+              {
+                "type": "Feature",
+                "properties": {
+                  "elevation_ft": 18
+                },
+                "geometry": {
+                  "type": "LineString",
+                  "coordinates": [
+                    [
+                      -82.4711939,
+                      27.9494336
+                    ],
+                    [
+                      -82.471197,
+                      27.9494391
+                    ],
+                    [
+                      -82.4711991,
+                      27.9494418
+                    ],
+                    [
+                      -82.4712016,
+                      27.9494446
+                    ],
+                    [
+                      -82.4712077,
+                      27.9494501
+                    ],
+                    [
+                      -82.4712098,
+                      27.9494527
+                    ],
+                    [
+                      -82.4712124,
+                      27.9494556
+                    ],
+                    [
+                      -82.4712186,
+                      27.9494611
+                    ],
+                    [
+                      -82.4712204,
+                      27.9494623
+                    ],
+                    [
+                      -82.471231,
+                      27.9494617
+                    ],
+                    [
+                      -82.4712335,
+                      27.9494611
+                    ],
+                    [
+                      -82.4712417,
+                      27.9494596
+                    ],
+                    [
+                      -82.4712523,
+                      27.9494581
+                    ],
+                    [
+                      -82.4712629,
+                      27.9494558
+                    ],
+                    [
+                      -82.4712634,
+                      27.9494556
+                    ],
+                    [
+                      -82.4712689,
+                      27.9494501
+                    ],
+                    [
+                      -82.4712735,
+                      27.9494478
+                    ],
+                    [
+                      -82.4712792,
+                      27.9494446
+                    ],
+                    [
+                      -82.4712842,
+                      27.9494427
+                    ],
+                    [
+                      -82.4712881,
+                      27.9494446
+                    ],
+                    [
+                      -82.4712927,
+                      27.9494501
+                    ],
+                    [
+                      -82.47129,
+                      27.9494556
+                    ],
+                    [
+                      -82.4712868,
+                      27.9494611
+                    ],
+                    [
+                      -82.4712842,
+                      27.9494653
+                    ],
+                    [
+                      -82.471281,
+                      27.9494666
+                    ],
+                    [
+                      -82.4712735,
+                      27.9494705
+                    ],
+                    [
+                      -82.4712704,
+                      27.9494721
+                    ],
+                    [
+                      -82.4712629,
+                      27.949476
+                    ],
+                    [
+                      -82.4712599,
+                      27.9494776
+                    ],
+                    [
+                      -82.4712549,
+                      27.9494831
+                    ],
+                    [
+                      -82.4712542,
+                      27.9494886
+                    ],
+                    [
+                      -82.4712537,
+                      27.9494941
+                    ],
+                    [
+                      -82.4712523,
+                      27.9494962
+                    ],
+                    [
+                      -82.471249,
+                      27.9494996
+                    ],
+                    [
+                      -82.4712432,
+                      27.9495051
+                    ],
+                    [
+                      -82.4712417,
+                      27.9495071
+                    ],
+                    [
+                      -82.4712394,
+                      27.9495106
+                    ],
+                    [
+                      -82.4712386,
+                      27.9495161
+                    ],
+                    [
+                      -82.4712386,
+                      27.9495216
+                    ],
+                    [
+                      -82.4712386,
+                      27.9495271
+                    ],
+                    [
+                      -82.4712417,
+                      27.9495274
+                    ],
+                    [
+                      -82.4712523,
+                      27.9495283
+                    ],
+                    [
+                      -82.4712629,
+                      27.9495288
+                    ],
+                    [
+                      -82.4712735,
+                      27.9495291
+                    ],
+                    [
+                      -82.4712842,
+                      27.9495294
+                    ],
+                    [
+                      -82.4712948,
+                      27.9495296
+                    ],
+                    [
+                      -82.4713054,
+                      27.9495299
+                    ],
+                    [
+                      -82.471316,
+                      27.9495301
+                    ],
+                    [
+                      -82.4713267,
+                      27.9495301
+                    ],
+                    [
+                      -82.4713373,
+                      27.9495301
+                    ],
+                    [
+                      -82.4713479,
+                      27.9495302
+                    ],
+                    [
+                      -82.4713586,
+                      27.9495308
+                    ],
+                    [
+                      -82.4713692,
+                      27.9495314
+                    ],
+                    [
+                      -82.4713798,
+                      27.9495317
+                    ],
+                    [
+                      -82.4713904,
+                      27.9495313
+                    ],
+                    [
+                      -82.4714011,
+                      27.949531
+                    ],
+                    [
+                      -82.4714117,
+                      27.949531
+                    ],
+                    [
+                      -82.4714223,
+                      27.9495316
+                    ],
+                    [
+                      -82.471433,
+                      27.9495322
+                    ],
+                    [
+                      -82.4714384,
+                      27.9495326
+                    ],
+                    [
+                      -82.4714436,
+                      27.9495328
+                    ],
+                    [
+                      -82.4714542,
+                      27.9495335
+                    ],
+                    [
+                      -82.4714648,
+                      27.9495342
+                    ],
+                    [
+                      -82.4714755,
+                      27.9495341
+                    ],
+                    [
+                      -82.4714861,
+                      27.9495335
+                    ],
+                    [
+                      -82.4714967,
+                      27.949533
+                    ],
+                    [
+                      -82.4715074,
+                      27.9495327
+                    ],
+                    [
+                      -82.471517,
+                      27.9495326
+                    ],
+                    [
+                      -82.471518,
+                      27.9495326
+                    ],
+                    [
+                      -82.4715286,
+                      27.9495324
+                    ],
+                    [
+                      -82.4715392,
+                      27.9495322
+                    ],
+                    [
+                      -82.4715499,
+                      27.9495318
+                    ],
+                    [
+                      -82.4715605,
+                      27.9495314
+                    ],
+                    [
+                      -82.4715711,
+                      27.9495301
+                    ],
+                    [
+                      -82.4715818,
+                      27.9495277
+                    ],
+                    [
+                      -82.4715839,
+                      27.9495271
+                    ],
+                    [
+                      -82.4715827,
+                      27.9495216
+                    ],
+                    [
+                      -82.4715818,
+                      27.9495182
+                    ],
+                    [
+                      -82.4715811,
+                      27.9495161
+                    ],
+                    [
+                      -82.4715796,
+                      27.9495106
+                    ],
+                    [
+                      -82.4715796,
+                      27.9495051
+                    ],
+                    [
+                      -82.4715796,
+                      27.9494996
+                    ],
+                    [
+                      -82.4715818,
+                      27.9494968
+                    ],
+                    [
+                      -82.4715838,
+                      27.9494941
+                    ],
+                    [
+                      -82.4715924,
+                      27.9494896
+                    ],
+                    [
+                      -82.4715944,
+                      27.9494886
+                    ],
+                    [
+                      -82.471603,
+                      27.9494841
+                    ],
+                    [
+                      -82.471605,
+                      27.9494831
+                    ],
+                    [
+                      -82.4716136,
+                      27.9494782
+                    ],
+                    [
+                      -82.4716148,
+                      27.9494776
+                    ],
+                    [
+                      -82.4716243,
+                      27.9494725
+                    ],
+                    [
+                      -82.4716245,
+                      27.9494721
+                    ],
+                    [
+                      -82.4716275,
+                      27.9494666
+                    ],
+                    [
+                      -82.4716289,
+                      27.9494611
+                    ],
+                    [
+                      -82.471629,
+                      27.9494556
+                    ],
+                    [
+                      -82.4716291,
+                      27.9494501
+                    ],
+                    [
+                      -82.4716316,
+                      27.9494446
+                    ],
+                    [
+                      -82.4716349,
+                      27.9494394
+                    ],
+                    [
+                      -82.4716351,
+                      27.9494391
+                    ],
+                    [
+                      -82.4716386,
+                      27.9494336
+                    ]
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      },
+      "source": {
+        "name": "Copernicus GLO-90 DEM (via Open-Meteo) + USGS 3DEP",
+        "kind": "live",
+        "vintage": "GLO-90 / 3DEP current",
+        "attribution": "open-meteo.com / U.S. Geological Survey",
+        "note": "Point value is a ~90 m satellite SURFACE model (EGM2008) \u2014 do not compare against NAVD88 base flood elevations without a survey. Parcel terrain/contours are USGS 3DEP bare-earth (NAVD88 ft, ~10 m grid) \u2014 design-grade context, not a topographic survey."
+      }
+    },
+    "boundaries": {
+      "object": "location_section",
+      "layer": "boundaries",
+      "name": "County & ZIP",
+      "category": "geography",
+      "status": "available",
+      "summary": "Hillsborough County, Florida \u00b7 ZIP 33606.",
+      "data": {
+        "state": "FL",
+        "county": {
+          "name": "Hillsborough",
+          "fips": "12057",
+          "local_code": 39
+        },
+        "zip": "33606",
+        "precision": "boundary_file"
+      },
+      "source": {
+        "name": "US Census cartographic boundaries",
+        "kind": "archive",
+        "vintage": "2020",
+        "attribution": "US Census Bureau",
+        "note": "Generalized (~50 m) boundaries \u2014 parcel data wins near edges."
+      }
+    },
+    "zoning": {
+      "object": "location_section",
+      "layer": "zoning",
+      "name": "Zoning",
+      "category": "classification",
+      "status": "available",
+      "summary": "Zoned CI (commercial intensive) \u2014 City of Tampa. Setbacks 10/0/0 ft (front/side/rear). Max height 45 ft. Future land use: GMU-24 (GENERAL MIXED USE-24 (1.5 FAR)).",
+      "data": {
+        "district": "CI",
+        "district_description": "Commercial Intensive",
+        "jurisdiction": "City of Tampa",
+        "normalized_class": null,
+        "zoning_data_source": null,
+        "zoning_data_vintage": null,
+        "zoning_data_version": null,
+        "future_land_use": {
+          "code": "GMU-24",
+          "description": "GENERAL MIXED USE-24 (1.5 FAR)"
+        },
+        "land_development_code_url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH27ZOLADE",
+        "governing_documents": [
+          {
+            "kind": "land_development_code",
+            "title": "Chapter 27 - ZONING AND LAND DEVELOPMENT",
+            "section": "Ch. 27",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH27ZOLADE",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "building_code_administration",
+            "title": "Chapter 5 - BUILDING CODE",
+            "section": "Ch. 5",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH5BUCO",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "floodplain_ordinance",
+            "title": "SECTION 5-121. - FLOOD-RESISTANT DEVELOPMENT",
+            "section": "\u00a7 5-121",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH5BUCO_S5-121FLSIDE",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "permit_administration",
+            "title": "SECTION 5-105. - PERMITS",
+            "section": "\u00a7 5-105",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH5BUCO_S5-105PE",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "tree_landscaping",
+            "title": "DIVISION 4. - NATURAL RESOURCES: TREES, LANDSCAPING, WETLANDS, UPLAND HABITAT",
+            "section": "Ch. 27, Art. VI, Div. 4",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH27ZOLADE_ARTVISURE_DIV4NARETRLAWEUPHA",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "impact_fees",
+            "title": "DIVISION 2. - TRANSPORTATION IMPACT ANALYSIS AND MITIGATION",
+            "section": "Ch. 25, Art. III, Div. 2",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH25TR_ARTIIITEPR_DIV2TRIMANMI",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "stormwater",
+            "title": "Chapter 21 - STORMWATER MANAGEMENT",
+            "section": "Ch. 21",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH21STMA",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "historic_preservation",
+            "title": "ARTICLE V. - HISTORIC PRESERVATION",
+            "section": "Ch. 27, Art. V",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH27ZOLADE_ARTVHIPR",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          }
+        ],
+        "setbacks": {
+          "front_ft": 10,
+          "side_ft": 0,
+          "rear_ft": 0
+        },
+        "max_height_ft": 45,
+        "max_far": null,
+        "min_lot_sqft": 10000,
+        "dimensional_note": "Corner yard 10 ft. Height note 6: places of assembly may exceed 45 ft if all required yards increase 1 ft per foot of height above 45 ft. Table 4-2 lists no numeric FAR (\u2014); note 17: 'Refer to the Tampa Comprehensive Plan for maximum density/floor area ratio (FAR) limits.'",
+        "dimensional_source": {
+          "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH27ZOLADE_ARTIIIESZODIDIRE_DIV1GEZODI_S27-156OFSCDIRE",
+          "section": "Sec. 27-156 - Official schedule of district regulations, Table 4-2 (Area, height and yard regulations)",
+          "retrieved_at": "2026-09-02T05:20:37Z"
+        }
+      },
+      "source": {
+        "name": "County / city zoning GIS",
+        "kind": "official",
+        "vintage": "current jurisdiction record",
+        "attribution": "Local planning departments",
+        "note": "District comes from the jurisdiction GIS; dimensional numbers (setbacks, height, FAR) from the land development code \u2014 dimensional_source names the exact section. Verify against the governing text for permit sets."
+      }
+    },
+    "utilities": {
+      "object": "location_section",
+      "layer": "utilities",
+      "name": "Utilities",
+      "category": "geography",
+      "status": "available",
+      "summary": "On sewer. Public drinking water. Electric: TAMPA ELECTRIC CO / DUKE ENERGY FLORIDA, LLC (overlapping territories \u2014 municipal usually serves).",
+      "data": {
+        "wastewater": "sewer",
+        "wastewater_confidence": "known",
+        "wastewater_updated": "2016",
+        "drinking_water": "KnownPublic",
+        "electric_providers": [
+          {
+            "name": "TAMPA ELECTRIC CO",
+            "type": "INVESTOR OWNED"
+          },
+          {
+            "name": "DUKE ENERGY FLORIDA, LLC",
+            "type": "INVESTOR OWNED"
+          }
+        ]
+      },
+      "source": {
+        "name": "FL Water Management Inventory + EIA service territories",
+        "kind": "official",
+        "attribution": "FDOH / EIA",
+        "note": "Sewer/septic classes are inventory-based (\"known\" vs \"likely\") \u2014 confirm with the utility before design."
+      }
+    }
+  },
+  "request_id": "8c650192-00e1-4635-975b-911045ad861e"
+}

@@ -1,0 +1,760 @@
+{
+  "object": "location",
+  "as_of": "2026-09-07T19:54:12.955Z",
+  "query": {
+    "type": "address",
+    "address": "1200 W Cass St, Tampa, FL"
+  },
+  "point": {
+    "lat": 27.949722,
+    "lng": -82.47111,
+    "source": "geocoded"
+  },
+  "address": {
+    "formatted": "1200 West Cass Street, Tampa, Florida 33606, United States",
+    "precision": "rooftop"
+  },
+  "layers": {
+    "parcel": {
+      "object": "location_section",
+      "layer": "parcel",
+      "name": "Parcel",
+      "category": "property",
+      "status": "available",
+      "summary": "0.52 acre parcel in Hillsborough (2025F tax roll).",
+      "data": {
+        "parcel_key": "iTpGOfl7y9G_6pjVqeqkaQ",
+        "county": {
+          "name": "Hillsborough",
+          "fips": null,
+          "local_code": 39
+        },
+        "situs_address": {
+          "line1": "1200 W CASS ST",
+          "city": "TAMPA",
+          "zip": "33606"
+        },
+        "vintage": "2025F-prototype",
+        "area_m2": 2085,
+        "area_acres": 0.52,
+        "parcel_count_here": 1,
+        "stacked_parcel_keys": [],
+        "adjacent_parcels": "<1 adjacent parcels, omitted \u2014 see tampa-cass.json>",
+        "frontage": {
+          "total_ft": 659,
+          "total_m": 201,
+          "segment_count": 4,
+          "geometry": "<MultiLineString: 1 feature(s), omitted \u2014 see tampa-cass.json>"
+        },
+        "geometry": "<Feature: 1 feature(s), omitted \u2014 see tampa-cass.json>"
+      },
+      "source": {
+        "name": "Pascal parcel archives (county cadastral rolls)",
+        "kind": "archive",
+        "vintage": "2025F-prototype",
+        "attribution": "Florida county property appraisers"
+      }
+    },
+    "flood": {
+      "object": "location_section",
+      "layer": "flood",
+      "name": "FEMA flood zones",
+      "category": "classification",
+      "status": "available",
+      "summary": "Minimal risk \u2014 outside the mapped high-risk flood areas (zone X).",
+      "data": {
+        "is_in_flood_zone": false,
+        "mapped": true,
+        "firm_panel": {
+          "panel": "12057C0353J",
+          "effective_date": "2021-10-07"
+        },
+        "zone_at_point": {
+          "zone": "X",
+          "zone_subtype": "AREA OF MINIMAL FLOOD HAZARD",
+          "description": "Minimal risk \u2014 outside the mapped high-risk flood areas",
+          "is_in_flood_zone": false,
+          "base_flood_elevation_ft": null
+        },
+        "evaluated_against": "parcel",
+        "zones_on_parcel": [
+          {
+            "zone": "X",
+            "zone_subtype": "AREA OF MINIMAL FLOOD HAZARD",
+            "description": "Minimal risk \u2014 outside the mapped high-risk flood areas",
+            "is_in_flood_zone": false,
+            "base_flood_elevation_ft": null,
+            "coverage_pct": 100,
+            "area_m2": 2085
+          }
+        ],
+        "highest_risk_zone_on_parcel": "X",
+        "geometry": "<FeatureCollection: 1 feature(s), omitted \u2014 see tampa-cass.json>"
+      },
+      "source": {
+        "name": "FEMA National Flood Hazard Layer",
+        "kind": "official",
+        "vintage": "current federal record",
+        "attribution": "FEMA"
+      }
+    },
+    "wetlands": {
+      "object": "location_section",
+      "layer": "wetlands",
+      "name": "Wetlands (NWI)",
+      "category": "classification",
+      "status": "available",
+      "summary": "No mapped wetlands touch this parcel.",
+      "data": {
+        "intersects_parcel": false,
+        "is_on_wetland": false,
+        "evaluated_against": "parcel",
+        "parcel_coverage_pct": 0,
+        "wetlands": [],
+        "geometry": "<FeatureCollection: 0 feature(s), omitted \u2014 see tampa-cass.json>"
+      },
+      "source": {
+        "name": "USFWS National Wetlands Inventory",
+        "kind": "official",
+        "vintage": "current federal record",
+        "attribution": "U.S. Fish & Wildlife Service"
+      }
+    },
+    "structures": {
+      "object": "location_section",
+      "layer": "structures",
+      "name": "Buildings",
+      "category": "property",
+      "status": "available",
+      "summary": "2 buildings on the parcel \u2014 about 1510 m\u00b2 of footprint. Built 1930 (county roll), 7,344 sqft living area. 1 story, slab foundation, est. first floor 17.5 ft (NAVD88).",
+      "data": {
+        "building_count": 2,
+        "total_footprint_m2": 1510,
+        "county_record": {
+          "year_built_actual": 1930,
+          "year_built_effective": 1990,
+          "living_area_sqft": 7344,
+          "building_count": 1,
+          "residential_units": null,
+          "construction_class_code": "3",
+          "improvement_quality_code": "4"
+        },
+        "buildings": [
+          {
+            "occupancy": "Commercial",
+            "primary_occupancy": "Retail Trade",
+            "height_m": 4.5,
+            "footprint_m2": 871
+          },
+          {
+            "occupancy": "Commercial",
+            "primary_occupancy": "Professional/Technical Services",
+            "height_m": 4.4,
+            "footprint_m2": 639
+          }
+        ],
+        "structure_attributes": [
+          {
+            "year_built": 2011,
+            "stories": 1,
+            "foundation_type": "slab",
+            "foundation_height_ft": 0.25,
+            "ground_elevation_ft": 17.2,
+            "first_floor_elevation_ft_est": 17.5,
+            "elevation_datum": "NAVD88",
+            "occupancy_type": "COM4"
+          }
+        ],
+        "footprint_source": "USA Structures (ML-derived)",
+        "geometry": "<FeatureCollection: 2 feature(s), omitted \u2014 see tampa-cass.json>"
+      },
+      "source": {
+        "name": "USA Structures (FEMA/ORNL) + National Structure Inventory (USACE)",
+        "kind": "official",
+        "vintage": "current federal record",
+        "attribution": "FEMA / Oak Ridge National Laboratory / US Army Corps of Engineers",
+        "note": "Footprint geometry prefers OpenStreetMap surveyed outlines when present (USA Structures ML footprints otherwise \u2014 often visibly off). NSI year-built/foundation/first-floor values are modeled estimates \u2014 not an elevation certificate or permit record."
+      }
+    },
+    "soils": {
+      "object": "location_section",
+      "layer": "soils",
+      "name": "Soils (SSURGO)",
+      "category": "classification",
+      "status": "available",
+      "summary": "Urban land, 0 to 2 percent slopes.",
+      "data": {
+        "soil_units": [
+          {
+            "map_unit": "Urban land, 0 to 2 percent slopes",
+            "symbol": "56",
+            "drainage_class": null,
+            "hydrologic_group": null,
+            "hydric_pct": 2
+          }
+        ],
+        "evaluated_against": "parcel"
+      },
+      "source": {
+        "name": "USDA SSURGO (Soil Data Access)",
+        "kind": "official",
+        "vintage": "current federal record",
+        "attribution": "USDA NRCS",
+        "note": "Map-unit level data (~1:24k survey) \u2014 not a geotechnical report."
+      }
+    },
+    "code_basis": {
+      "object": "location_section",
+      "layer": "code_basis",
+      "name": "Code basis",
+      "category": "classification",
+      "status": "available",
+      "summary": "Climate zone 2A, no frost line, no snow load, seismic category A. Design wind 150 mph (Risk Cat II, Hillsborough County) \u2014 wind-borne debris provisions likely apply near the coast. 100-year 24-hour rainfall 11.3\" (NOAA Atlas 14). At least 25 reported subsidence incidents within 5 miles (not proof of sinkhole risk at this parcel).",
+      "data": {
+        "climate_zone_iecc": "2A",
+        "frost_depth_ft": 0,
+        "ground_snow_load_psf": 0,
+        "seismic_design_category": "A",
+        "wind_speed_mph": 150,
+        "wind_borne_debris_region": true,
+        "wind_exposure": null,
+        "rainfall_100yr_24hr_in": 11.3,
+        "rainfall_source": "NOAA Atlas 14 (PDS mean)",
+        "geologic_hazards": {
+          "liquefaction_zone": null,
+          "earthquake_induced_landslide_zone": null,
+          "tsunami_hazard_area": null,
+          "nearby_subsidence_incidents": {
+            "radius_mi": 5,
+            "count": 25,
+            "truncated": true,
+            "incidents": [
+              {
+                "reference": "10-703",
+                "reported_at": "1980-05-06",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "E",
+                "length_ft": 6,
+                "width_ft": 6,
+                "depth_ft": 4,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-1079",
+                "reported_at": "2012-08-22",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "Karla Henry",
+                "dimensions": "E",
+                "length_ft": 3.5,
+                "width_ft": 2.5,
+                "depth_ft": 2.5,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-754",
+                "reported_at": "1970-01-01",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-062",
+                "reported_at": "2012-06-24",
+                "verified_sinkhole": null,
+                "location_accuracy": "GPSSA",
+                "report_source": "Operator 23, Hillsborough County FR",
+                "dimensions": "E",
+                "length_ft": 5,
+                "width_ft": 5,
+                "depth_ft": null,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-998",
+                "reported_at": "2010-01-20",
+                "verified_sinkhole": null,
+                "location_accuracy": "QTR3",
+                "report_source": "Sinkhole Calls to SWFWMD",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-631",
+                "reported_at": "1985-10-09",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-039",
+                "reported_at": "1991-05-17",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "Florida Sinkhole Research Institute",
+                "dimensions": "E",
+                "length_ft": 6,
+                "width_ft": 6,
+                "depth_ft": 3,
+                "property_damage": "N",
+                "repair_status": "Not Repaired"
+              },
+              {
+                "reference": "10-714",
+                "reported_at": "1975-06-03",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "E",
+                "length_ft": 25,
+                "width_ft": 25,
+                "depth_ft": 25,
+                "property_damage": "N",
+                "repair_status": "Repaired"
+              },
+              {
+                "reference": "10-709",
+                "reported_at": "1979-01-01",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-661",
+                "reported_at": "1967-01-23",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "Y",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-061",
+                "reported_at": "2012-06-26",
+                "verified_sinkhole": null,
+                "location_accuracy": "GPSSA",
+                "report_source": "Wendy, Hillsborough County WP",
+                "dimensions": "E",
+                "length_ft": 5,
+                "width_ft": 5,
+                "depth_ft": null,
+                "property_damage": "Y",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-1108",
+                "reported_at": "2013-07-30",
+                "verified_sinkhole": null,
+                "location_accuracy": "GPSSA",
+                "report_source": "Operator 1115",
+                "dimensions": "E",
+                "length_ft": 4,
+                "width_ft": 1,
+                "depth_ft": 2,
+                "property_damage": "Y",
+                "repair_status": "Repaired"
+              },
+              {
+                "reference": "10-705",
+                "reported_at": "1978-12-30",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "E",
+                "length_ft": 15,
+                "width_ft": 15,
+                "depth_ft": 0.25,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-830",
+                "reported_at": "1973-09-18",
+                "verified_sinkhole": null,
+                "location_accuracy": "QTR3",
+                "report_source": "FSRI",
+                "dimensions": "E",
+                "length_ft": 3,
+                "width_ft": 3,
+                "depth_ft": 4,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-997",
+                "reported_at": "2010-01-22",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "Sinkhole Calls to SWFWMD",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-707",
+                "reported_at": "1978-12-01",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "Y",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-901",
+                "reported_at": "1989-04-01",
+                "verified_sinkhole": null,
+                "location_accuracy": "QTR3",
+                "report_source": "FSRI",
+                "dimensions": "E",
+                "length_ft": 2,
+                "width_ft": 2,
+                "depth_ft": 5,
+                "property_damage": "Y",
+                "repair_status": "Repaired"
+              },
+              {
+                "reference": "10-068",
+                "reported_at": "2023-12-15",
+                "verified_sinkhole": null,
+                "location_accuracy": "GPSSA",
+                "report_source": "SWO Email, Private Citizen",
+                "dimensions": "E",
+                "length_ft": null,
+                "width_ft": 7,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-752",
+                "reported_at": "1981-02-09",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-928",
+                "reported_at": "2010-01-09",
+                "verified_sinkhole": null,
+                "location_accuracy": "QTR1",
+                "report_source": "Hillsborough County Emergency Warning Point",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-655",
+                "reported_at": "1987-01-02",
+                "verified_sinkhole": null,
+                "location_accuracy": "PARCEL",
+                "report_source": "FSRI",
+                "dimensions": "E",
+                "length_ft": 2,
+                "width_ft": 2,
+                "depth_ft": 30,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-1098",
+                "reported_at": "2005-07-10",
+                "verified_sinkhole": null,
+                "location_accuracy": "QTR2",
+                "report_source": "Hillsborough County WP",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": 45,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-037",
+                "reported_at": "1991-01-19",
+                "verified_sinkhole": null,
+                "location_accuracy": "QTR2",
+                "report_source": "Florida Sinkhole Research Institute",
+                "dimensions": "E",
+                "length_ft": 5,
+                "width_ft": 5,
+                "depth_ft": 3,
+                "property_damage": "Y",
+                "repair_status": "Repaired"
+              },
+              {
+                "reference": "10-075",
+                "reported_at": "2025-01-19",
+                "verified_sinkhole": false,
+                "location_accuracy": "UNKWN",
+                "report_source": "Private Citizen",
+                "dimensions": "E",
+                "length_ft": 4,
+                "width_ft": 4,
+                "depth_ft": 4,
+                "property_damage": "N",
+                "repair_status": "Unknown"
+              },
+              {
+                "reference": "10-1124",
+                "reported_at": "2016-10-11",
+                "verified_sinkhole": null,
+                "location_accuracy": "GPS",
+                "report_source": "Gloria, Private Citizen",
+                "dimensions": "U",
+                "length_ft": null,
+                "width_ft": null,
+                "depth_ft": null,
+                "property_damage": "U",
+                "repair_status": "Unknown"
+              }
+            ]
+          }
+        }
+      },
+      "source": {
+        "name": "ASCE 7 / FBC county wind maps, IECC, NOAA Atlas 14 + FGS subsidence reports",
+        "kind": "official",
+        "attribution": "ICC / ASCE / NOAA / Florida Geological Survey",
+        "note": "Wind speed is the county-level Risk Category II value \u2014 confirm site-specific values (and exposure) with the ATC hazard maps for permit sets. Florida subsidence records are reported incidents, not verified sinkholes or a site-specific geotechnical assessment."
+      }
+    },
+    "elevation": {
+      "object": "location_section",
+      "layer": "elevation",
+      "name": "Elevation",
+      "category": "geography",
+      "status": "available",
+      "summary": "Roughly 23 ft (7 m) above sea level \u2014 a satellite estimate, not a survey. Parcel terrain runs 15.1\u201318.8 ft NAVD88 (3.7 ft of relief), 8 one-foot contour lines.",
+      "data": {
+        "elevation_m": 7,
+        "elevation_ft": 23,
+        "datum": "EGM2008",
+        "model": "surface (includes buildings and canopy)",
+        "resolution_m": 90,
+        "terrain_status": "ready",
+        "terrain": {
+          "min_ft": 15.1,
+          "max_ft": 18.8,
+          "relief_ft": 3.7,
+          "contour_interval_ft": 1,
+          "contour_count": 8,
+          "datum": "NAVD88",
+          "source_resolution_m": 10,
+          "clipped_to": "parcel_bbox",
+          "geometry": "<FeatureCollection: 8 feature(s), omitted \u2014 see tampa-cass.json>"
+        }
+      },
+      "source": {
+        "name": "Copernicus GLO-90 DEM (via Open-Meteo) + USGS 3DEP",
+        "kind": "live",
+        "vintage": "GLO-90 / 3DEP current",
+        "attribution": "open-meteo.com / U.S. Geological Survey",
+        "note": "Point value is a ~90 m satellite SURFACE model (EGM2008) \u2014 do not compare against NAVD88 base flood elevations without a survey. Parcel terrain/contours are USGS 3DEP bare-earth (NAVD88 ft, ~10 m grid) \u2014 design-grade context, not a topographic survey."
+      }
+    },
+    "boundaries": {
+      "object": "location_section",
+      "layer": "boundaries",
+      "name": "County & ZIP",
+      "category": "geography",
+      "status": "available",
+      "summary": "Hillsborough County, Florida \u00b7 ZIP 33606.",
+      "data": {
+        "state": "FL",
+        "county": {
+          "name": "Hillsborough",
+          "fips": "12057",
+          "local_code": 39
+        },
+        "zip": "33606",
+        "precision": "boundary_file"
+      },
+      "source": {
+        "name": "US Census cartographic boundaries",
+        "kind": "archive",
+        "vintage": "2020",
+        "attribution": "US Census Bureau",
+        "note": "Generalized (~50 m) boundaries \u2014 parcel data wins near edges."
+      }
+    },
+    "zoning": {
+      "object": "location_section",
+      "layer": "zoning",
+      "name": "Zoning",
+      "category": "classification",
+      "status": "available",
+      "summary": "Zoned CI (commercial intensive) \u2014 City of Tampa. Setbacks 10/0/0 ft (front/side/rear). Max height 45 ft. Future land use: GMU-24 (GENERAL MIXED USE-24 (1.5 FAR)).",
+      "data": {
+        "district": "CI",
+        "district_description": "Commercial Intensive",
+        "jurisdiction": "City of Tampa",
+        "normalized_class": null,
+        "zoning_data_source": null,
+        "zoning_data_vintage": null,
+        "zoning_data_version": null,
+        "future_land_use": {
+          "code": "GMU-24",
+          "description": "GENERAL MIXED USE-24 (1.5 FAR)"
+        },
+        "land_development_code_url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH27ZOLADE",
+        "governing_documents": [
+          {
+            "kind": "land_development_code",
+            "title": "Chapter 27 - ZONING AND LAND DEVELOPMENT",
+            "section": "Ch. 27",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH27ZOLADE",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "building_code_administration",
+            "title": "Chapter 5 - BUILDING CODE",
+            "section": "Ch. 5",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH5BUCO",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "floodplain_ordinance",
+            "title": "SECTION 5-121. - FLOOD-RESISTANT DEVELOPMENT",
+            "section": "\u00a7 5-121",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH5BUCO_S5-121FLSIDE",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "permit_administration",
+            "title": "SECTION 5-105. - PERMITS",
+            "section": "\u00a7 5-105",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH5BUCO_S5-105PE",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "tree_landscaping",
+            "title": "DIVISION 4. - NATURAL RESOURCES: TREES, LANDSCAPING, WETLANDS, UPLAND HABITAT",
+            "section": "Ch. 27, Art. VI, Div. 4",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH27ZOLADE_ARTVISURE_DIV4NARETRLAWEUPHA",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "impact_fees",
+            "title": "DIVISION 2. - TRANSPORTATION IMPACT ANALYSIS AND MITIGATION",
+            "section": "Ch. 25, Art. III, Div. 2",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH25TR_ARTIIITEPR_DIV2TRIMANMI",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "stormwater",
+            "title": "Chapter 21 - STORMWATER MANAGEMENT",
+            "section": "Ch. 21",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH21STMA",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          },
+          {
+            "kind": "historic_preservation",
+            "title": "ARTICLE V. - HISTORIC PRESERVATION",
+            "section": "Ch. 27, Art. V",
+            "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH27ZOLADE_ARTVHIPR",
+            "retrieved_at": "2026-09-03T22:47:58Z"
+          }
+        ],
+        "setbacks": {
+          "front_ft": 10,
+          "side_ft": 0,
+          "rear_ft": 0
+        },
+        "max_height_ft": 45,
+        "max_far": null,
+        "min_lot_sqft": 10000,
+        "dimensional_note": "Corner yard 10 ft. Height note 6: places of assembly may exceed 45 ft if all required yards increase 1 ft per foot of height above 45 ft. Table 4-2 lists no numeric FAR (\u2014); note 17: 'Refer to the Tampa Comprehensive Plan for maximum density/floor area ratio (FAR) limits.'",
+        "dimensional_source": {
+          "url": "https://library.municode.com/fl/tampa/codes/code_of_ordinances?nodeId=COOR_CH27ZOLADE_ARTIIIESZODIDIRE_DIV1GEZODI_S27-156OFSCDIRE",
+          "section": "Sec. 27-156 - Official schedule of district regulations, Table 4-2 (Area, height and yard regulations)",
+          "retrieved_at": "2026-09-02T05:20:37Z"
+        }
+      },
+      "source": {
+        "name": "County / city zoning GIS",
+        "kind": "official",
+        "vintage": "current jurisdiction record",
+        "attribution": "Local planning departments",
+        "note": "District comes from the jurisdiction GIS; dimensional numbers (setbacks, height, FAR) from the land development code \u2014 dimensional_source names the exact section. Verify against the governing text for permit sets."
+      }
+    },
+    "utilities": {
+      "object": "location_section",
+      "layer": "utilities",
+      "name": "Utilities",
+      "category": "geography",
+      "status": "available",
+      "summary": "On sewer. Public drinking water. Electric: TAMPA ELECTRIC CO / DUKE ENERGY FLORIDA, LLC (overlapping territories \u2014 municipal usually serves).",
+      "data": {
+        "wastewater": "sewer",
+        "wastewater_confidence": "known",
+        "wastewater_updated": "2016",
+        "drinking_water": "KnownPublic",
+        "electric_providers": [
+          {
+            "name": "TAMPA ELECTRIC CO",
+            "type": "INVESTOR OWNED"
+          },
+          {
+            "name": "DUKE ENERGY FLORIDA, LLC",
+            "type": "INVESTOR OWNED"
+          }
+        ]
+      },
+      "source": {
+        "name": "FL Water Management Inventory + EIA service territories",
+        "kind": "official",
+        "attribution": "FDOH / EIA",
+        "note": "Sewer/septic classes are inventory-based (\"known\" vs \"likely\") \u2014 confirm with the utility before design."
+      }
+    }
+  },
+  "request_id": "8c650192-00e1-4635-975b-911045ad861e"
+}

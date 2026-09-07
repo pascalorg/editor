@@ -9,8 +9,7 @@ import {
   useLiveNodeOverrides,
   useLiveTerrain,
   useRegistry,
-  useScene,
-} from '@pascal-app/core'
+  useScene, terrainContours } from '@pascal-app/core'
 import {
   backdropGradient,
   deepSkyColor,
@@ -384,6 +383,60 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     })
   }, [node.id, node.terrain])
 
+  // The CONTOUR LINES on the ground (Steve, 2026-09-07: "make sure the
+  // terrain lines can be turned on in 3D … nice transparent barely black
+  // lines"): the site's surveyed lines (the dossier's 3DEP set) at the
+  // site-plan interval, else the heightfield's own contours; each draped
+  // on the ground and merged into one line-segments buffer. Rebuilt on the
+  // terrain COMMIT (the persisted field), not per dab.
+  const contourGeometry = useMemo(() => {
+    if (!node.contours3d) return null
+    const intervalIn = node.contourIntervalIn ?? 12
+    if (!(intervalIn > 0)) return null
+    const field = persistedField
+    const lot = (polygonPoints ?? []) as [number, number][]
+    const stepFt = intervalIn / 12
+    const surveyed = node.terrainContours
+    const multiple = (a: number, b: number) => Math.abs(a / b - Math.round(a / b)) < 1e-9
+    let lines: ReadonlyArray<ReadonlyArray<readonly [number, number]>> = []
+    if (surveyed && surveyed.lines.length > 0 && multiple(stepFt, surveyed.intervalFt)) {
+      lines = surveyed.lines.filter((l) => multiple(l.elevationFt, stepFt)).map((l) => l.points)
+    } else if (field) {
+      lines = terrainContours(field, intervalIn * 0.0254, lot).map((c) => c.points)
+    }
+    const chunks: Float32Array[] = []
+    let total = 0
+    for (const points of lines) {
+      if (points.length < 2) continue
+      const draped = buildDrapedPolyline({ points, field, lift: Y_OFFSET + 0.005, closed: false })
+      const n = draped.positions.length / 3
+      if (n < 2) continue
+      const seg = new Float32Array((n - 1) * 6)
+      for (let i = 0; i < n - 1; i++) {
+        seg[i * 6] = draped.positions[i * 3] ?? 0
+        seg[i * 6 + 1] = draped.positions[i * 3 + 1] ?? 0
+        seg[i * 6 + 2] = draped.positions[i * 3 + 2] ?? 0
+        seg[i * 6 + 3] = draped.positions[i * 3 + 3] ?? 0
+        seg[i * 6 + 4] = draped.positions[i * 3 + 4] ?? 0
+        seg[i * 6 + 5] = draped.positions[i * 3 + 5] ?? 0
+      }
+      chunks.push(seg)
+      total += seg.length
+    }
+    if (total === 0) return null
+    const merged = new Float32Array(total)
+    let at = 0
+    for (const c of chunks) {
+      merged.set(c, at)
+      at += c.length
+    }
+    const geometry = new BufferGeometry()
+    geometry.setAttribute('position', new BufferAttribute(merged, 3))
+    geometry.computeBoundingSphere()
+    return geometry
+  }, [node.contours3d, node.contourIntervalIn, node.terrainContours, persistedField, polygonPoints])
+  useEffect(() => () => contourGeometry?.dispose(), [contourGeometry])
+
   const groundGeometry = useMemo(() => {
     if (!groundShape) return null
     return new ShapeGeometry(groundShape)
@@ -448,6 +501,13 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
         <mesh frustumCulled={false} geometry={ribbons.envelope} raycast={noopRaycast} renderOrder={9}>
           <meshBasicMaterial color="#000000" depthWrite={false} opacity={0.85} side={DoubleSide} toneMapped={false} transparent />
         </mesh>
+      )}
+      {/* The contour lines: thin, translucent, barely black, on the ground */}
+      {contourGeometry && (
+        // @ts-ignore
+        <lineSegments frustumCulled={false} geometry={contourGeometry} raycast={noopRaycast} renderOrder={8}>
+          <lineBasicMaterial color="#000000" depthWrite={false} opacity={0.22} toneMapped={false} transparent />
+        </lineSegments>
       )}
       {/* The thin ring the sculpt tool moves live */}
       {/* @ts-ignore */}

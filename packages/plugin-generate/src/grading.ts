@@ -16,12 +16,24 @@ import { quantize, type TerrainField } from '@pascal-app/core'
 
 export type Pt = readonly [number, number]
 
-export type GradingPlan = {
+export type Pad = {
+  /** What it is under — 'house' / 'garage'. */
+  name: string
   /** The footprint the pad fills, site metres. */
   polygon: readonly Pt[]
-  /** The pad's finished ground level, site metres (the slab top − 8 in). */
+  /** The pad's finished ground level, site metres (the house slab top − 8 in; the garage slab top − 1 in). */
   padY: number
-  /** How far outside the footprint the fill blends back to grade. */
+}
+
+export type GradingPlan = {
+  /**
+   * The pads, each at its own level: the house slab's, and the garage's
+   * beside it (a garage slab sits at the driveway, a step or more below the
+   * house floor — Steve, 2026-09-07: "the garage … should drop down to
+   * about 1 in above front grade of the door side").
+   */
+  pads: readonly Pad[]
+  /** How far outside the footprints the fill blends back to grade. */
   apronM: number
   /** Why — printed on the notes. */
   note: string
@@ -47,23 +59,29 @@ function distanceToPolygon(polygon: readonly Pt[], x: number, z: number): number
 }
 
 /**
- * Fill the pad into the field. Inside the footprint every sample rises to
- * `padY` (a sample already higher stays — fill only); in the apron the
- * target falls linearly from `padY` at the footprint edge to the existing
- * ground at `apronM` out. Returns the SAME field when nothing needed fill.
+ * Fill the pads into the field. Inside a footprint every sample rises to
+ * that pad's `padY` (a sample already higher stays — fill only); outside,
+ * the target falls linearly from each pad's level at its edge to the
+ * existing ground at `apronM` out, the highest apron winning. A sample
+ * inside one pad never takes another pad's apron (the garage floor stays
+ * at the garage's level beside the taller house pad). Returns the SAME
+ * field when nothing needed fill.
  */
 export function fillPad(field: TerrainField, plan: GradingPlan): { field: TerrainField; filledSamples: number; maxFillM: number } {
-  const { polygon, padY, apronM } = plan
-  if (polygon.length < 3) return { field, filledSamples: 0, maxFillM: 0 }
+  const { apronM } = plan
+  const pads = plan.pads.filter((p) => p.polygon.length >= 3)
+  if (pads.length === 0) return { field, filledSamples: 0, maxFillM: 0 }
   let minX = Number.POSITIVE_INFINITY
   let minZ = Number.POSITIVE_INFINITY
   let maxX = Number.NEGATIVE_INFINITY
   let maxZ = Number.NEGATIVE_INFINITY
-  for (const p of polygon) {
-    minX = Math.min(minX, p[0])
-    maxX = Math.max(maxX, p[0])
-    minZ = Math.min(minZ, p[1])
-    maxZ = Math.max(maxZ, p[1])
+  for (const pad of pads) {
+    for (const p of pad.polygon) {
+      minX = Math.min(minX, p[0])
+      maxX = Math.max(maxX, p[0])
+      minZ = Math.min(minZ, p[1])
+      maxZ = Math.max(maxZ, p[1])
+    }
   }
   const col0 = Math.max(0, Math.floor((minX - apronM - field.origin[0]) / field.spacing))
   const col1 = Math.min(field.cols - 1, Math.ceil((maxX + apronM - field.origin[0]) / field.spacing))
@@ -77,13 +95,22 @@ export function fillPad(field: TerrainField, plan: GradingPlan): { field: Terrai
     for (let col = col0; col <= col1; col++) {
       const x = field.origin[0] + col * field.spacing
       const z = field.origin[1] + row * field.spacing
-      const d = distanceToPolygon(polygon, x, z)
-      if (d > apronM) continue
       const i = row * field.cols + col
       const existing = (heights[i] ?? 0) * field.step
-      const blend = d <= 0 ? 1 : 1 - d / apronM
-      const target = existing + (padY - existing) * blend
-      if (target <= existing + 1e-6) continue
+      let target = Number.NEGATIVE_INFINITY
+      let insideOne = false
+      for (const pad of pads) {
+        const d = distanceToPolygon(pad.polygon, x, z)
+        if (d <= 0) {
+          // inside this pad: its own level, and no other pad's apron
+          target = insideOne ? Math.max(target, pad.padY) : pad.padY
+          insideOne = true
+          continue
+        }
+        if (insideOne || d > apronM) continue
+        target = Math.max(target, existing + (pad.padY - existing) * (1 - d / apronM))
+      }
+      if (target === Number.NEGATIVE_INFINITY || target <= existing + 1e-6) continue
       heights[i] = quantize(field, target)
       filled += 1
       maxFill = Math.max(maxFill, target - existing)

@@ -11,8 +11,7 @@ import {
   type SiteNode,
   terrainFieldOf,
   unionPolygons,
-  type WallNode,
-} from '@pascal-app/core'
+  type WallNode, terrainContours } from '@pascal-app/core'
 import {
   type Bounds,
   boundsInsidePolygon,
@@ -31,7 +30,6 @@ import {
   type YardDimension,
 } from './geometry'
 import { sitePlanContributions } from './contributors'
-import { terrainContours } from './contours'
 
 /** Contract shared by every drawing producer (see docs/construction-documents.md). */
 export interface SitePlanDrawing {

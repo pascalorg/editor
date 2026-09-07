@@ -27,7 +27,7 @@ describe('fillPad', () => {
     // the high side of the footprint (z = −5) sits at −0.375 m; the pad is the slab top (8 in over it) less 8 in
     const highSide = heightAt(field, 0, -5)
     const padY = highSide
-    const { field: graded, filledSamples, maxFillM } = fillPad(field, { polygon, padY, apronM: 2, note: '' })
+    const { field: graded, filledSamples, maxFillM } = fillPad(field, { pads: [{ name: 'house', polygon, padY }], apronM: 2, note: '' })
     expect(filledSamples).toBeGreaterThan(0)
     // inside: everything at or above the pad; the high edge untouched
     expect(heightAt(graded, 0, 4)).toBeCloseTo(padY, 2)
@@ -52,8 +52,36 @@ describe('fillPad', () => {
       [5, 5],
       [-5, 5],
     ]
-    const out = fillPad(field, { polygon, padY: -5, apronM: 2, note: '' })
+    const out = fillPad(field, { pads: [{ name: 'house', polygon, padY: -5 }], apronM: 2, note: '' })
     expect(out.filledSamples).toBe(0)
     expect(out.field).toBe(field)
+  })
+
+  test('a garage pad beside the house pad keeps its own lower level — the house apron never fills the garage floor (Steve, 2026-09-07)', () => {
+    const field = sloping()
+    const house: [number, number][] = [
+      [-5, -5],
+      [5, -5],
+      [5, 5],
+      [-5, 5],
+    ]
+    const garage: [number, number][] = [
+      [5, -5],
+      [12, -5],
+      [12, 5],
+      [5, 5],
+    ]
+    const housePad = heightAt(field, 0, -5)
+    const garagePad = housePad - 0.1
+    const { field: graded } = fillPad(field, { pads: [{ name: 'house', polygon: house, padY: housePad }, { name: 'garage', polygon: garage, padY: garagePad }], apronM: 2, note: '' })
+    // the garage floor sits at the garage level, not pulled up by the house apron
+    expect(heightAt(graded, 8, 4)).toBeCloseTo(garagePad, 2)
+    expect(heightAt(graded, 8, 4)).toBeLessThan(housePad - 0.05)
+    // the house floor at its own level
+    expect(heightAt(graded, 0, 4)).toBeCloseTo(housePad, 2)
+    // outside the garage's far edge the ground blends down from the garage level
+    const outside = heightAt(graded, 13, 4)
+    expect(outside).toBeLessThanOrEqual(garagePad + 1e-6)
+    expect(outside).toBeGreaterThanOrEqual(heightAt(field, 13, 4) - 1e-6)
   })
 })

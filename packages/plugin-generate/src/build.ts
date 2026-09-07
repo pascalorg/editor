@@ -28,7 +28,7 @@ import {
 } from './document'
 import { applyFinishes, type Finishes, finishesFor } from './finishes'
 import { type FoundationChoice, foundationFor, type FoundationPrefs, SLAB_FF_ABOVE_GRADE_IN, type TerrainUnderFootprint } from './foundation'
-import type { GradingPlan } from './grading'
+import type { GradingPlan, Pad } from './grading'
 import {
   edgePieces,
   GRID_IN_DEFAULT,
@@ -38,7 +38,7 @@ import {
   type Run,
 } from './geometry'
 import { type CatalogAsset, type FurnishRoom, furnishRooms } from './furnish'
-import { type PorchPolicy, type PorchSummary, porchFor } from './porch'
+import { type PorchPolicy, type PorchSummary, porchFor, riserCount, TREAD_RUN } from './porch'
 import { mulberry32 } from './rng'
 import { FRONT_DOOR_SEGMENTS, type StylePreset, trimOf, styleFor } from './styles'
 
@@ -506,6 +506,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       parentId: wall.id,
     })
   }
+  /** The door from the house into the garage — its steps come after the garage slab. */
+  let garageEntry: { wall: WallRun; at: number; widthIn: number; garageSide: 1 | -1 } | null = null
   const sharedWalls = (ia: number, ib: number): WallRun[] =>
     walls.filter(
       (w) =>
@@ -576,6 +578,15 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         ? { fireRated: 'IRC R302.5.1 — 20-minute rated, solid core, self-closing self-latching' }
         : undefined,
     )
+    if (garageDoor) {
+      const garage = A.kind === 'garage' ? A : B
+      garageEntry = {
+        wall: best.wall,
+        at,
+        widthIn: width,
+        garageSide: sideOf(best.wall, (garage.u0 + garage.u1) / 2, (garage.v0 + garage.v1) / 2),
+      }
+    }
   }
 
   // ── the front door ────────────────────────────────────────────────────
@@ -696,6 +707,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   }
 
   // ── garage doors ──────────────────────────────────────────────────────
+  /** The driveway just outside the overhead door, level-local metres — the garage slab's grade (Steve, 2026-09-07). */
+  let garageApron: Pt | null = null
   for (const room of rooms) {
     if (room.kind !== 'garage') continue
     const faces = exteriorWallsOf(room)
@@ -707,15 +720,21 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const width = bay.span[1] - bay.span[0] >= GARAGE_DOOR_W + 24 ? GARAGE_DOOR_W : 9 * 12
     const at = seat(bay.wall.id, bay.span, width)
     if (at === null) warnings.push(`no room for an overhead door on "${room.name}".`)
-    else
-      doorNode(
-        bay.wall,
-        at,
-        width,
-        'garage',
-        `${room.name} overhead door`,
-        sideOf(bay.wall, (room.u0 + room.u1) / 2, (room.v0 + room.v1) / 2),
-      )
+    else {
+      const garageSide = sideOf(bay.wall, (room.u0 + room.u1) / 2, (room.v0 + room.v1) / 2)
+      doorNode(bay.wall, at, width, 'garage', `${room.name} overhead door`, garageSide)
+      if (!garageApron) {
+        const dx = bay.wall.end[0] - bay.wall.start[0]
+        const dz = bay.wall.end[1] - bay.wall.start[1]
+        const len = Math.hypot(dx, dz) || 1
+        const nx = -dz / len
+        const nz = dx / len
+        const cx = bay.wall.start[0] + (dx / len) * at * IN
+        const cz = bay.wall.start[1] + (dz / len) * at * IN
+        // 1 m out from the door's outer face, on the street side
+        garageApron = [cx - garageSide * nx * (bay.wall.thickness / 2 + 1), cz - garageSide * nz * (bay.wall.thickness / 2 + 1)]
+      }
+    }
   }
 
   // ── windows: bedrooms first (egress), then by kind ────────────────────
@@ -1000,12 +1019,20 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   }
   const garageSlabOps: NodeOp[] = []
   const garageRing = garageRooms.length > 0 ? outlineRing(garageRooms, grid) : null
+  /** The garage slab's top, level-local metres (for the grading plan). */
+  let garageSlabTopLocal: number | null = null
   if (garageRing) {
     const garageSlabId = generateId('slab')
     const gc = garageRing.map(toLocal)
     const gcx = gc.reduce((s, p) => s + p[0], 0) / gc.length
     const gcz = gc.reduce((s, p) => s + p[1], 0) / gc.length
-    const garageDropM = Math.min(48 * IN, Math.max(2 * IN, -localGrade(gcx, gcz)))
+    // The slab's top stands 1 in over the driveway at the overhead door
+    // (Steve, 2026-09-07: "drop down to about 1 in above front grade of the
+    // door side") — the garage's own grade at its centre without a door —
+    // kept between 2 in and 48 in below the finish floor.
+    const garageGrade = garageApron ? localGrade(garageApron[0], garageApron[1]) : localGrade(gcx, gcz)
+    const garageDropM = Math.min(48 * IN, Math.max(2 * IN, SLAB_ELEVATION_M - (garageGrade + 1 * IN)))
+    garageSlabTopLocal = round(SLAB_ELEVATION_M - garageDropM)
     garageSlabOps.push({
       node: {
         id: garageSlabId,
@@ -1014,9 +1041,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         parentId: levelId,
         polygon: garageRing.map(toLocal),
         holes: [],
-        // PlanCrafters garageDefaultDrop: the pad's top at the garage's OWN
-        // natural grade — the stem height less the local rise, kept between
-        // 2 in and 48 in below the finish floor.
+        // the slab's top 1 in over the driveway at the door (see garageGrade)
         elevation: round(SLAB_ELEVATION_M - garageDropM),
         thickness: 0.1016,
         materialPreset: 'concrete-raw',
@@ -1039,6 +1064,80 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       if (beside.length === 0 || !beside.every((i) => garageIndex.has(i))) continue
       const op = ops.find((o) => o.node.id === wall.id)
       if (op) op.node.supportSlabId = garageSlabId
+    }
+    // Steps down from the house door into the garage: concrete, one or two
+    // risers as the drop needs, no handrail under four risers (R311.7.8),
+    // no landing needed on the garage side for two risers or fewer when
+    // the door swings into the house (R311.3.1 exception) — Steve,
+    // 2026-09-07: "steps down from the house … 2 steps from the house is
+    // fine, no rail typically, concrete steps not wood".
+    if (garageEntry && garageDropM > 0.5 * IN) {
+      const risers = riserCount(garageDropM)
+      const run = risers * TREAD_RUN
+      const wall = garageEntry.wall
+      const dx = wall.end[0] - wall.start[0]
+      const dz = wall.end[1] - wall.start[1]
+      const len = Math.hypot(dx, dz) || 1
+      const nx = -dz / len
+      const nz = dx / len
+      const cx = wall.start[0] + (dx / len) * garageEntry.at * IN
+      const cz = wall.start[1] + (dz / len) * garageEntry.at * IN
+      // into the garage from the door's face
+      const gx = garageEntry.garageSide * nx
+      const gz = garageEntry.garageSide * nz
+      const stairWidth = Math.max(36 * IN, garageEntry.widthIn * IN + 12 * IN)
+      const stairId = generateId('stair')
+      const segmentId = generateId('stair-segment')
+      const stepsMeta = { generatedBy: GENERATED_BY, garageSteps: true, risers, dropIn: round(garageDropM / IN, 1) }
+      garageSlabOps.push({
+        node: {
+          id: stairId,
+          type: 'stair',
+          name: 'Garage steps',
+          parentId: levelId,
+          // the flight ascends along its local +Z toward the door: the bottom
+          // riser stands `run` out into the garage, on the garage slab
+          position: [round(cx + gx * (wall.thickness / 2 + run)), round(SLAB_ELEVATION_M - garageDropM), round(cz + gz * (wall.thickness / 2 + run))],
+          rotation: round(Math.atan2(-gx, -gz)),
+          stairType: 'straight',
+          fromLevelId: null,
+          toLevelId: null,
+          deckSlabId: slabId,
+          slabOpeningMode: 'none',
+          width: round(stairWidth),
+          totalRise: round(garageDropM),
+          stepCount: risers,
+          thickness: 4 * IN,
+          fillToFloor: true,
+          materialPreset: 'library:concrete-raw',
+          railingMode: risers >= 4 ? 'both' : 'none',
+          railingHeight: 34 * IN,
+          railingStyle: 'post-and-rail',
+          children: [segmentId],
+          metadata: stepsMeta,
+        },
+        parentId: levelId,
+      })
+      garageSlabOps.push({
+        node: {
+          id: segmentId,
+          type: 'stair-segment',
+          name: 'Flight',
+          parentId: stairId,
+          segmentType: 'stair',
+          width: round(stairWidth),
+          length: round(run),
+          height: round(garageDropM),
+          stepCount: risers,
+          fillToFloor: true,
+          thickness: 4 * IN,
+          metadata: stepsMeta,
+        },
+        parentId: stairId,
+      })
+      warnings.push(
+        `Garage: ${risers} concrete ${risers === 1 ? 'step' : 'steps'} down from the house door (${(garageDropM / IN).toFixed(1)} in), ${risers >= 4 ? 'handrail both sides (R311.7.8)' : 'no handrail under four risers (R311.7.8)'}.`,
+      )
     }
   }
 
@@ -1239,21 +1338,26 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   // under its top all round; the plan is the footprint in site metres and
   // the pad level — run.ts writes it into the site's heightfield. A raised
   // floor is not graded (its stem steps down the hill).
+  const housePadY = round(buildingY - SLAB_FF_ABOVE_GRADE_IN * IN)
+  const pads: Pad[] = []
+  if (terrain && foundation.type === 'slab') pads.push({ name: 'house', polygon: houseRing.map((p) => toSite(p[0] * IN, p[1] * IN)), padY: housePadY })
+  // the garage slab is on grade whatever the house stands on: its pad is
+  // the driveway level at the door, 1 in under the slab's top
+  if (terrain && garageRing && garageSlabTopLocal !== null) pads.push({ name: 'garage', polygon: garageRing.map((p) => toSite(p[0] * IN, p[1] * IN)), padY: round(buildingY + garageSlabTopLocal - 1 * IN) })
   const grading: GradingPlan | null =
-    foundation.type === 'slab' && terrain
+    terrain && pads.length > 0
       ? {
-          polygon: ring.map((p) => toSite(p[0] * IN, p[1] * IN)),
-          padY: round(buildingY - SLAB_FF_ABOVE_GRADE_IN * IN),
+          pads,
           // the fill slopes out at 1:3 (a stable unretained fill; the deeper
           // the low corner, the wider the apron), never under 1.5 m
-          apronM: round(Math.max(1.5, 3 * (buildingY - SLAB_FF_ABOVE_GRADE_IN * IN - terrain.lowestM))),
-          note: `building pad: fill under the slab to ${SLAB_FF_ABOVE_GRADE_IN} in below the top of slab, sloped out 1:3 (${Math.round(terrain.reliefIn)} in of fall under the footprint)`,
+          apronM: round(Math.max(1.5, 3 * (housePadY - terrain.lowestM))),
+          note: `building pad: fill under the slab to ${SLAB_FF_ABOVE_GRADE_IN} in below the top of slab${garageRing ? ', the garage pad 1 in under its own slab' : ''}, sloped out 1:3 (${Math.round(terrain.reliefIn)} in of fall under the footprint)`,
         }
       : null
   if (grading && terrain && terrain.reliefIn >= 6) warnings.push(`Grading: ${grading.note}.`)
   // a fill deeper than 2 ft at the low corner wants a retaining wall or a
   // turned-down stem rather than a loose slope — said, not drawn
-  const lowCornerFillIn = grading && terrain ? (grading.padY - terrain.lowestM) / IN : 0
+  const lowCornerFillIn = grading && terrain && foundation.type === 'slab' ? (housePadY - terrain.lowestM) / IN : 0
   if (grading && lowCornerFillIn > 24) {
     warnings.push(
       `Grading: the low corner takes ${Math.round(lowCornerFillIn)} in of fill — over 2 ft: a retaining wall or a turned-down stem at the low side (R404 / engineered), not an open fill slope; verify.`,

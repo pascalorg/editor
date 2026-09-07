@@ -206,6 +206,14 @@ export default function GeneratePanel() {
                 </option>
               ))}
             </select>
+            <label className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={site.contours3d ?? false}
+                onChange={(e) => writeSite({ contours3d: e.target.checked })}
+              />
+              show the contour lines in 3D
+            </label>
           </div>
         )}
         {SERVICE_CHOICES.map((c) => (

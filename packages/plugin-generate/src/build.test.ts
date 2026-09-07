@@ -225,7 +225,8 @@ describe('Poppy builds into Pascal nodes', () => {
     expect(platform.thickness).toBeCloseTo(0.019, 9)
     const garage = slabs.find((s) => s.name === 'Garage slab')!
     expect(garage).toBeDefined()
-    expect(garage.elevation).toBeCloseTo(0.05 - 18 * 0.0254, 6)
+    // the slab's top 1 in over the grade at the overhead door (Steve, 2026-09-07); flat ground here is 18 in under the floor
+    expect(garage.elevation).toBeCloseTo(-18 * 0.0254 + 1 * 0.0254, 6)
     // the garage footprint is not part of the house platform
     const platformArea = Math.abs(ringArea(platform.polygon as [number, number][]))
     const garageArea = Math.abs(ringArea(garage.polygon as [number, number][]))
@@ -386,9 +387,12 @@ describe('on a hill (the site carries a USGS heightfield → gradeAt)', () => {
     // garage (this slope) drops far less than a downhill one
     const g = garageSlabOf(r)
     expect(g.metadata.dropIn).toBeGreaterThanOrEqual(f.ffAboveGradeIn)
-    expect(g.metadata.dropIn).toBeLessThan(f.ffAboveGradeIn + 6)
+    // (the grade is read 1 m out from the overhead door, the slab top 1 in over it)
+    expect(g.metadata.dropIn).toBeLessThan(f.ffAboveGradeIn + 8)
     const downhill = garageSlabOf(buildHouse(doc, { gradeAt: (x) => -0.04 * x }))
-    expect(downhill.metadata.dropIn).toBeGreaterThan(g.metadata.dropIn + 6)
+    // downhill drops further, to the 48 in ceiling
+    expect(downhill.metadata.dropIn).toBeGreaterThan(g.metadata.dropIn)
+    expect(downhill.metadata.dropIn).toBeLessThanOrEqual(48)
     expect(g.elevation).toBeCloseTo(0.05 - g.metadata.dropIn * IN, 2)
     expect(r.warnings.some((w) => /hillside/.test(w))).toBe(true)
   })

@@ -886,7 +886,81 @@ G65 The terrain around the house reads correctly in 3D (no flat plane the
 G66 Terrain contour lines on the site plan, with an interval setting (6 in,
     12 in, …).
 
+## Mandate additions (Steve, 2026-09-07 — the garage, the 3D contours, the design criteria)
+
+> garage has a raise in it, should drop down to about 1" above front grade
+> of the door side, also need like steps down from the house with rail
+> from inside the garage if there is a door from the house if its on a
+> grade, 2 steps from the house is fine no rail typically concrete steps
+> not wood inside from the garage, stairs are fixed on entries! posts look
+> good too now! nice work man! love it, also lets make sure the terrain
+> lines can be turned on in 3d please, with nice transparent barely black
+> lines please, check the plans code and design criteria are correct, also
+> run the api for this address and save one down for me a json i can read
+> and check whats coming back, just want to see its working correctly and
+> whats its bringing back, thank you!
+
+G67 The garage slab drops to about 1 in above the driveway grade at the
+    overhead door — no raised lip in front of the door.
+G68 Where a door leads from the house into the garage on a grade, concrete
+    steps down from the house door (two is fine; no rail typically — a rail
+    only where the code asks).
+G69 Terrain contour lines can be turned on in 3D: thin, transparent, barely
+    black.
+G70 The plans' code and design criteria are checked and correct — the same
+    values on every sheet.
+G71 The Pascal Map response for a real address saved as a readable JSON
+    under docs/reference.
+
 ## Log (continued)
+
+- 2026-09-07: **Batch T4 — the garage at the driveway, steps from the
+  house, contours in 3D, one set of design criteria (G67–G71).** The
+  garage slab's top now stands 1 in over the grade read 1 m outside the
+  overhead door (build.ts `garageApron`; the old rule used the garage's
+  own centroid, which on a filled pad left a lip in front of the door),
+  clamped 2–48 in under the finish floor as before. The building pad is
+  several pads (`grading.ts` `Pad[]`): the house slab's at 8 in under its
+  top, the garage's at 1 in under ITS top — a sample inside one pad never
+  takes another pad's apron, so the garage floor stays at the driveway
+  beside the taller house pad; a raised house now grades its garage pad
+  too (the garage slab is on grade whatever the house stands on). Where
+  the roll draws a door from the house into the garage, concrete steps
+  descend from it on the garage slab — `riserCount` of the drop, 11 in
+  treads, the door width + 12 in (36 in minimum), `fillToFloor`, no rail
+  under four risers (R311.7.8), rails both sides at four; a note on the
+  warnings. Seen headless (Tampa modern, raised 18 in, 11 in of fall):
+  garage slab at −0.671 m level-local, four 7.1 in risers with rails
+  (28.4 in drop); a slab house gets one or two. Contours in 3D: the site
+  gains `contours3d`; the site renderer drapes the surveyed lines (or the
+  heightfield's, `terrainContours` now lives in core) at the site-plan
+  interval and draws them as one translucent black line-segments buffer
+  (opacity 0.22, no depth write); the Generate panel's contour select
+  grew a "show in 3D" box and the Site panel a Terrain section (interval,
+  3D, the survey's provenance). Design criteria: the cover printed the
+  dossier's 150 mph while SN1 and EN1.0 printed the state-typical 140 —
+  now the sheets' jurisdiction resolver reads `site.dossier.codeBasis`
+  (wind, debris region, SDC, snow, IECC zone) over the state table with
+  a "the site — Pascal Map code basis" label and a caveat, the structural
+  model carries `design` provenance, the state-level caveat and the
+  county-variation note print only without site values; Bones applies
+  the same basis to its profile (`jurisdiction/site-code-basis.ts`:
+  wind → hurricane ties, SDC → hold-downs, snow) with one warning. Seen:
+  SN1 "150 mph (the site — Pascal Map code basis …)", Vasd 116, debris
+  Yes (site), snow 0 psf (site), SDC A (site); EN1.0 the same 150; A0.0
+  unchanged. The Tampa dossier is saved as
+  docs/reference/map-dossiers/tampa-cass.json (full) and
+  tampa-cass-summary.json (geometry and adjacent parcels summarised). Real
+  data note: 1200 W Cass St is zoned CI (Commercial Intensive), flood X,
+  wind 150 mph debris region, SDC A, 2A, sewer, TECO / Duke; 3DEP terrain
+  15.1–18.8 ft. Tests: grading +1 (the garage pad), build re-pinned (the
+  1 in rule, the 48 in ceiling); generate 105, nodes site 66, sheets 258,
+  Bones framing 263 (baseline byte-equal — no dossier in it); core +
+  nodes rebuilt; editor / nodes / sheets typecheck clean. Open: the garage
+  steps have no landing check against the door swing (R311.3.1 — the door
+  swings into the house here, fine for two risers, the four-riser case
+  should get a landing); the 3D contours rebuild on the terrain commit,
+  not per dab.
 
 - 2026-09-07: **Batch T3 — posts and stairs to grade, for real.** Steve,
   with two screenshots (porch posts standing up through the porch roofs,

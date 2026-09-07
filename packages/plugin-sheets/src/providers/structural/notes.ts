@@ -77,9 +77,7 @@ export function designCriteria(
     {
       label: 'Ultimate design wind speed, Vult',
       value: model.windLabel,
-      cite: model.hvhz
-        ? 'FBC-R R301.2.1.1 HVHZ / ASCE 7 Figure 26.5-1B'
-        : 'IRC Table R301.2(1) / Figure R301.2(2) — state typical value',
+      cite: model.hvhz ? 'FBC-R R301.2.1.1 HVHZ / ASCE 7 Figure 26.5-1B' : model.design.cite,
     },
     {
       label: 'Wind exposure category',
@@ -89,12 +87,17 @@ export function designCriteria(
     ...windDesignRows(model),
     {
       label: 'Ground snow load, pg',
-      value: climate ? `${climate.groundSnowLoadPsf ?? 0} psf` : 'not in the data',
-      cite: 'IRC Table R301.2(1)',
+      value:
+        model.design.snowPsf !== null
+          ? `${model.design.snowPsf} psf${model.design.source === 'site' ? ' (the site — Pascal Map code basis)' : ''}`
+          : climate
+            ? `${climate.groundSnowLoadPsf ?? 0} psf`
+            : 'not in the data',
+      cite: model.design.source === 'site' ? 'ASCE 7 ground snow map via Pascal Map; IRC Table R301.2(1)' : 'IRC Table R301.2(1)',
     },
     {
       label: 'Seismic design category',
-      value: climate?.seismicSdc ?? 'not in the data',
+      value: model.design.sdc ? `${model.design.sdc}${model.design.source === 'site' ? ' (the site — Pascal Map code basis)' : ''}` : (climate?.seismicSdc ?? 'not in the data'),
       cite: 'IRC Table R301.2(1) / R301.2.2',
     },
     {
@@ -141,9 +144,13 @@ function windDesignRows(model: StructuralModel): { label: string; value: string;
   const vult = speeds.length > 0 ? Math.max(...speeds) : null
   const debris = model.hvhz
     ? 'Yes — HVHZ; glazed openings impact-rated or protected (R301.2.1.2)'
-    : vult !== null && vult >= 140
-      ? 'Yes — opening protection per R301.2.1.2 (verify: ≥ 140 mph)'
-      : 'Verify — ≥ 130 mph within 1 mi of the coast, or ≥ 140 mph (R202)'
+    : model.design.debris === true
+      ? 'Yes — the site is in a wind-borne debris region (Pascal Map code basis); opening protection per R301.2.1.2'
+      : model.design.debris === false
+        ? 'No — per the site code basis (Pascal Map); verify with the AHJ'
+        : vult !== null && vult >= 140
+          ? 'Yes — opening protection per R301.2.1.2 (verify: ≥ 140 mph)'
+          : 'Verify — ≥ 130 mph within 1 mi of the coast, or ≥ 140 mph (R202)'
   return [
     {
       label: 'Nominal design wind speed, Vasd',
@@ -184,11 +191,18 @@ export function structuralNotes(model: StructuralModel): Note[] {
   notes.push({
     text: 'GENERAL — These structural sheets are generated from the Pascal model through the Bones framing engines. They are a drafting aid: every member shown was derived from the geometry actually in the model, and everything the engines could not derive is marked "verify" with its code section. The engineer of record shall review, complete and seal the set before submission.',
   })
-  notes.push({
-    text: `Site criteria are STATE-LEVEL typical values, not site values. ${CLIMATE_DISCLAIMER}`,
-    cite: 'data/jurisdictions-climate.json',
-  })
-  if (climate?.windNote) {
+  notes.push(
+    model.design.source === 'site'
+      ? {
+          text: `Site criteria (wind, wind-borne debris, seismic, snow) are the SITE's from the Pascal Map code basis — the ASCE 7 / FBC county wind map, the state seismic and snow maps — and stand over the state-typical table; verify with the authority having jurisdiction. ${CLIMATE_DISCLAIMER}`,
+          cite: 'Pascal Map code basis; data/jurisdictions-climate.json',
+        }
+      : {
+          text: `Site criteria are STATE-LEVEL typical values, not site values. ${CLIMATE_DISCLAIMER}`,
+          cite: 'data/jurisdictions-climate.json',
+        },
+  )
+  if (climate?.windNote && model.design.source !== 'site') {
     notes.push({
       text: `WIND — county and coastal variation for this state: ${climate.windNote}. Confirm the site wind speed, the wind-borne-debris region and any special regime with the authority having jurisdiction before using the ${climate.ultimateWindMph ?? '—'} mph figure above.`,
       cite: 'IRC R301.2.1 / Figure R301.2(2)',

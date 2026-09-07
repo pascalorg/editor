@@ -76,6 +76,7 @@ import {
 } from '../engines/wall-framing'
 import { garageSideOf, layoutWallLayers } from '../engines/wall-layers'
 import { resolveJurisdiction, siteStateOf } from '../jurisdiction/guess'
+import { applySiteCodeBasis, siteCodeBasisOf } from '../jurisdiction/site-code-basis'
 import { applyJurisdiction, nonIrcCodeWarning, profileFor } from '../jurisdiction/profiles'
 import { type LumberSize, LUMBER_CROSS_SECTIONS } from '../lumber'
 import {
@@ -576,7 +577,9 @@ function computeLevelUncached(
   }
 
   const { code } = resolveJurisdiction(config.jurisdiction, siteStateOf(nodes))
-  const profile = profileFor(code)
+  // the site's own design values (the Pascal Map code basis) over the
+  // state-typical row — wind, snow, seismic and the flags that follow them
+  const { profile, note: siteDesignNote } = applySiteCodeBasis(profileFor(code), siteCodeBasisOf(nodes))
   let spec: FramingSpec = {
     ...DEFAULT_SPEC,
     detail: config.detail,
@@ -790,6 +793,7 @@ function computeLevelUncached(
       : null
     const street = streetFrameFor({ site, building, walls: activeWalls, rooms: activeRooms })
     if (street) spec = { ...spec, street }
+    if (siteDesignNote) warnings.push(siteDesignNote)
     // The site's own frost line (the Pascal Map code basis) sets the footing
     // depth — R403.1.4.1: footing bottoms below the frost line, never less
     // than 12 in below grade. The state table's number stands without it.

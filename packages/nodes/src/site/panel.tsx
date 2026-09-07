@@ -268,6 +268,37 @@ export function SiteNodePanel() {
         </label>
       </PanelSection>
 
+      <PanelSection title="Terrain">
+        <label className="space-y-1 text-sm">
+          <span className="text-muted-foreground">Contour interval (site plan and 3D)</span>
+          <select
+            className="w-full rounded-md border border-border/70 bg-background px-2 py-1.5 text-foreground"
+            onChange={(event) => update({ contourIntervalIn: Number(event.target.value) })}
+            value={String(node.contourIntervalIn ?? 12)}
+          >
+            <option value="0">none</option>
+            <option value="6">every 6 in</option>
+            <option value="12">every 12 in</option>
+            <option value="24">every 24 in</option>
+          </select>
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            checked={node.contours3d ?? false}
+            onChange={(event) => update({ contours3d: event.target.checked })}
+            type="checkbox"
+          />
+          <span className="text-muted-foreground">Show the contour lines in 3D</span>
+        </label>
+        {node.terrainContours ? (
+          <p className="text-muted-foreground text-xs">
+            {node.terrainContours.lines.length} surveyed lines at {node.terrainContours.intervalFt} ft ({node.terrainContours.datum}) — {node.terrainContours.source ?? 'survey'}
+          </p>
+        ) : (
+          <p className="text-muted-foreground text-xs">No surveyed lines — contours are drawn from the sculpted ground.</p>
+        )}
+      </PanelSection>
+
       <PanelSection title="Orientation">
         <label className="space-y-1 text-sm">
           <span className="text-muted-foreground">Front (street) edge</span>
