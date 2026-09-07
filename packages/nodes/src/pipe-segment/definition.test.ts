@@ -26,7 +26,10 @@ describe('pipe segment defaults', () => {
     const handles =
       geometry?.kind === 'group'
         ? geometry.children.filter(
-            (child) => child.kind === 'midpoint-handle' && child.activation === 'action',
+            (child) =>
+              child.kind === 'midpoint-handle' &&
+              child.activation === 'action' &&
+              child.affordance === 'continue-run',
           )
         : []
 
