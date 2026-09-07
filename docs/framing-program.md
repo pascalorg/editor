@@ -835,7 +835,34 @@ G58 The generation exposes the options: HVAC system and type, service
     entrance, sewer direction, water routing (done: the Bones panel's Services
     block S2–S4, the Generate panel and the headless script S5).
 
+## Mandate additions (Steve, 2026-09-07 — Pascal Map)
+
+> i have a present for you, we need to integrate this into the plan
+> generation system!! aymeric did it! (pascal team) read through the docs
+> and come up with a plan to integrate into plans,
+> https://map.pascal.app/api/docs#description/introduction
+
+G59 Pascal Map (Aymeric's geodata platform — parcels, frontage, zoning
+    setbacks, flood, code basis, 3DEP terrain, utilities, soils, wetlands,
+    structures) feeds the plan set: the plan is docs/map-integration-plan.md
+    (Phase 0 the pipe, Phase 1 site truth, Phase 2 design decisions,
+    Phase 3 septic / existing structures / permits).
+
 ## Log (continued)
+
+- 2026-09-07: **Pascal Map — the integration plan (G59).** Read the
+  OpenAPI 3.1 spec, llms.txt and the quickstart; probed health (69 county
+  parcel archives) and the location endpoint (keyed). The dossier's
+  parcel FRONTAGE replaces the Overpass road match for the front edge,
+  zoning setbacks replace the 20 / 5 / 15 default, 3DEP contours replace
+  the EPQS grid, flood zone + BFE decide the finished floor, the code
+  basis (wind / frost / snow / SDC / IECC zone / debris region) overrides
+  the state-typical Bones profile with site provenance, utilities decide
+  sewer vs septic, wetlands clip the envelope, soils and hazards become
+  notes; the cover and site plan print it all with sources. Written to
+  docs/map-integration-plan.md with the open questions (key handling,
+  Miami-Dade coverage, Overpass fallback, freeboard).
+
 
 - 2026-09-07: **Batch S5 — the MEP choices on generation (G58).** The
   Generate panel offers HVAC system, electric service, meter-main side,
