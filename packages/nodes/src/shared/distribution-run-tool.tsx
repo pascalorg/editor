@@ -531,7 +531,14 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       const hit = surfacePointFromEvent(event)
       const currentStart = startRef.current
       const previous = lastResolvedRef.current
-      const working = previous?.frame ?? (currentStart ? createRunSurfaceFrame(currentStart) : null)
+      // A wall is only an attachment candidate, not a constraint for the
+      // whole run. Once the ray leaves the wall, continue on a horizontal
+      // plane through the start point so the user can route freely at the
+      // same elevation (or use angle lock for a deliberate diagonal).
+      const working =
+        !event.surfaceHit && previous?.surfaceTarget?.kind === 'wall' && currentStart
+          ? createRunSurfaceFrame(currentStart, UP)
+          : (previous?.frame ?? (currentStart ? createRunSurfaceFrame(currentStart) : null))
       const hasSurface = !!event.surfaceHit || !working || !event.localRay
       const target = hasSurface ? hit.target : null
       const resolved = resolveRunCursorPlane({

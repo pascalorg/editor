@@ -1,21 +1,4 @@
-import type { DuctFittingNode, NodeQuickAction, PipeFittingNode, SceneApi } from '@pascal-app/core'
-
-export function ductFittingQuickActions({ node }: { node: DuctFittingNode }): NodeQuickAction[] {
-  const variants = (['sheet-metal', 'spiral', 'flex', 'duct-board'] as const).map(
-    (ductMaterial) => ({
-      id: `duct-fitting:material:${ductMaterial}`,
-      label: ductMaterial === 'duct-board' ? 'Duct board' : ductMaterial.replace('-', ' '),
-      title: `Use ${ductMaterial.replace('-', ' ')} for this fitting`,
-      disabled: node.ductMaterial === ductMaterial,
-      history: 'single' as const,
-      run: ({ sceneApi }: { sceneApi: SceneApi }) => {
-        sceneApi.update(node.id, { ductMaterial })
-        return { selectedIds: [node.id] }
-      },
-    }),
-  )
-  return variants
-}
+import type { NodeQuickAction, PipeFittingNode, SceneApi } from '@pascal-app/core'
 
 export function pipeFittingQuickActions({ node }: { node: PipeFittingNode }): NodeQuickAction[] {
   const variants = (['pvc', 'abs', 'cast-iron'] as const).map((pipeMaterial) => ({
