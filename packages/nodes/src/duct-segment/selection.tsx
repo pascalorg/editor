@@ -48,8 +48,13 @@ import {
 import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
 import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 import { planRunTranslationOffsets } from '../shared/run-translation-offset'
-import { HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
+import { ContinuePlusHandle, HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { planVerticalOffsets, type VerticalOffsetResult } from '../shared/vertical-offset'
+import {
+  activateDuctContinuation,
+  type DuctEndpoint,
+  ductContinuationHandlePlan,
+} from './continuation'
 import { INCHES_TO_METERS } from './geometry'
 
 /** Port-snap radius for dragged run endpoints (meters, XZ). */
@@ -513,7 +518,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       if (isEndpoint && (detached || !drag.fittingEndpoint)) {
         const port = findNearestPortXZ(
           [next[0], next[1], next[2]],
-          collectScenePorts({ excludeNodeId: duct.id, systems: DUCT_PORT_SYSTEMS }),
+          collectScenePorts({
+            excludeNodeId: duct.id,
+            systems: DUCT_PORT_SYSTEMS,
+          }),
           PORT_SNAP_RADIUS_M,
         )
         if (port) next = [port.position[0], port.position[1], port.position[2]]
@@ -558,8 +566,16 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           ? [drag.fittingEndpoint.revert]
           : (drag.connectivity?.connections ?? []).map((conn) =>
               conn.kind === 'rigid-node'
-                ? { id: conn.nodeId, data: { position: conn.startPosition } as Partial<AnyNode> }
-                : { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> },
+                ? {
+                    id: conn.nodeId,
+                    data: {
+                      position: conn.startPosition,
+                    } as Partial<AnyNode>,
+                  }
+                : {
+                    id: conn.nodeId,
+                    data: { path: conn.startPath } as Partial<AnyNode>,
+                  },
             )
       useScene
         .getState()
@@ -848,10 +864,15 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       (connectivity?.connections ?? [])
         .map((conn) => {
           if (conn.kind !== 'rigid-node') {
-            return { id: conn.nodeId, data: { path: conn.startPath } as Partial<AnyNode> }
+            return {
+              id: conn.nodeId,
+              data: { path: conn.startPath } as Partial<AnyNode>,
+            }
           }
           const start = nodesById[conn.nodeId] as Record<string, unknown> | undefined
-          const data: Record<string, unknown> = { position: conn.startPosition }
+          const data: Record<string, unknown> = {
+            position: conn.startPosition,
+          }
           if (start?.rotation !== undefined) data.rotation = start.rotation
           if (start?.angle !== undefined) data.angle = start.angle
           return { id: conn.nodeId, data: data as Partial<AnyNode> }
@@ -863,19 +884,29 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     // start paths / poses. A re-drag carries the existing tag's base forward.
     const freshBase = (): AutoOffsetBasePatch[] => [
       { id: duct.id as AnyNodeId, data: { path: initialPath } },
-      ...partnerReverts().map((u) => ({ id: u.id, data: u.data as Record<string, unknown> })),
+      ...partnerReverts().map((u) => ({
+        id: u.id,
+        data: u.data as Record<string, unknown>,
+      })),
     ]
 
     // Patches restoring partners to their PRE-rewind (original Z) poses — the
     // single-undo baseline. Untagged: same as the L (no rewind happened).
-    const originalPartnerReverts = (): { id: AnyNodeId; data: Partial<AnyNode> }[] => {
+    const originalPartnerReverts = (): {
+      id: AnyNodeId
+      data: Partial<AnyNode>
+    }[] => {
       if (!tag) return partnerReverts()
       return tag.base
         .filter((b) => b.id !== (duct.id as AnyNodeId))
         .map((b) => {
           const orig = preRewindNodes[b.id] as Record<string, unknown> | undefined
           if (!orig) return null
-          if ('path' in orig) return { id: b.id, data: { path: orig.path } as Partial<AnyNode> }
+          if ('path' in orig)
+            return {
+              id: b.id,
+              data: { path: orig.path } as Partial<AnyNode>,
+            }
           const data: Record<string, unknown> = {}
           if (orig.position !== undefined) data.position = orig.position
           if (orig.rotation !== undefined) data.rotation = orig.rotation
@@ -892,7 +923,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       const updates = [
         {
           id: duct.id as AnyNodeId,
-          data: { path: duct.path, metadata: duct.metadata } as Partial<AnyNode>,
+          data: {
+            path: duct.path,
+            metadata: duct.metadata,
+          } as Partial<AnyNode>,
         },
         ...partnerUpdates,
       ]
@@ -1006,7 +1040,11 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           update: updates,
         })
         ensureSceneObjectsVisible(updates.map((update) => update.id))
-        setVerticalGhost({ tint: 'valid', fittings: plan.fittings, risers: plan.risers })
+        setVerticalGhost({
+          tint: 'valid',
+          fittings: plan.fittings,
+          risers: plan.risers,
+        })
       } else if (offsetResult?.status === 'invalid') {
         // No clean offset at this height. Keep the last committed network
         // visible (including any prior auto-offset we rewound at drag-start)
@@ -1014,7 +1052,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         // committed on release, so the run snaps back to its prior state.
         restorePreviewDeleted()
         restoreOriginalOffsetPreview()
-        const lifted = DuctSegmentNode.parse({ ...logicalDuct, path: shiftedPath(next) })
+        const lifted = DuctSegmentNode.parse({
+          ...logicalDuct,
+          path: shiftedPath(next),
+        })
         setVerticalGhost({ tint: 'invalid', fittings: [], risers: [lifted] })
       } else {
         restorePreviewDeleted()
@@ -1049,7 +1090,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       const restoreUpdates = [
         {
           id: duct.id as AnyNodeId,
-          data: { path: duct.path, metadata: duct.metadata } as Partial<AnyNode>,
+          data: {
+            path: duct.path,
+            metadata: duct.metadata,
+          } as Partial<AnyNode>,
         },
         ...originalPartnerReverts(),
       ]
@@ -1157,7 +1201,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         if (translationPlan) {
           const created = [...translationPlan.fittings, ...translationPlan.connectors]
           const updates = [
-            { id: duct.id as AnyNodeId, data: { path: translationPlan.ductPath } },
+            {
+              id: duct.id as AnyNodeId,
+              data: { path: translationPlan.ductPath },
+            },
             ...translationPlan.updates,
           ]
           scene.applyNodeChanges({
@@ -1290,6 +1337,12 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       {verticalGhost?.risers.map((r) => (
         <DuctSegmentGhost duct={r} key={`vghost-riser-${r.id}`} tint={verticalGhost.tint} />
       ))}
+      {draggingIndex === null &&
+        !rolling &&
+        !runMoving &&
+        (['start', 'end'] as const).map((endpoint) => (
+          <DuctContinuationHandle duct={duct} endpoint={endpoint} key={endpoint} />
+        ))}
       {/* Per-vertex affordances — hidden while a drag / roll is live (the window
           pointer handlers own the gesture). Each vertex shows a small cube;
           CLICKING the cube latches its directional cluster open (click again to
@@ -1390,6 +1443,28 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           )
         })()}
     </group>
+  )
+}
+
+function DuctContinuationHandle({
+  duct,
+  endpoint,
+}: {
+  duct: DuctSegmentNode
+  endpoint: DuctEndpoint
+}) {
+  const nodes = useScene((state) => state.nodes)
+  const gap = Math.max(0.28, runRadiusM(duct) + 0.18)
+  const plan = ductContinuationHandlePlan(duct, endpoint, nodes, gap)
+  if (!plan) return null
+  return (
+    <ContinuePlusHandle
+      onActivate={() => {
+        triggerSFX('sfx:item-pick')
+        activateDuctContinuation(duct, endpoint, plan.fittingId)
+      }}
+      position={plan.position}
+    />
   )
 }
 

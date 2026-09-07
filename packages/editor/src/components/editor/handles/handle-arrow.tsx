@@ -67,6 +67,12 @@ const MOVE_CROSS_DEPTH = 0.06
 const MOVE_CROSS_BEVEL_THICKNESS = 0.018
 const MOVE_CROSS_BEVEL_SIZE = 0.012
 const MOVE_CROSS_BEVEL_SEGMENTS = 6
+const PLUS_HALF_LENGTH = 0.18
+const PLUS_HALF_WIDTH = 0.045
+const PLUS_DEPTH = 0.06
+const PLUS_BEVEL_THICKNESS = 0.018
+const PLUS_BEVEL_SIZE = 0.012
+const PLUS_BEVEL_SEGMENTS = 6
 const ROTATE_HANDLE_RADIUS = 0.2
 const ROTATE_HANDLE_HALF_SWEEP = Math.PI / 3
 const ROTATE_RIBBON_HALF_WIDTH = 0.02
@@ -74,7 +80,13 @@ const ROTATE_HEAD_HALF_WIDTH = 0.045
 const TRACKER_CUBE_SIZE = 0.16
 export const CORNER_HEX_RADIUS = 0.11
 
-export type HandleArrowShape = 'chevron' | 'cross' | 'curved-arrow' | 'tracker' | 'corner-picker'
+export type HandleArrowShape =
+  | 'chevron'
+  | 'cross'
+  | 'plus'
+  | 'curved-arrow'
+  | 'tracker'
+  | 'corner-picker'
 export type HandleArrowInputShape = HandleArrowShape | 'arrow' | 'move-cross'
 
 export type HandleArrowPlacement = {
@@ -267,6 +279,54 @@ export function createMoveCrossHandleGeometry() {
   return merged
 }
 
+function createPlusHandleGeometry() {
+  const shape = new Shape()
+  shape.moveTo(-PLUS_HALF_WIDTH, PLUS_HALF_LENGTH)
+  shape.lineTo(PLUS_HALF_WIDTH, PLUS_HALF_LENGTH)
+  shape.lineTo(PLUS_HALF_WIDTH, PLUS_HALF_WIDTH)
+  shape.lineTo(PLUS_HALF_LENGTH, PLUS_HALF_WIDTH)
+  shape.lineTo(PLUS_HALF_LENGTH, -PLUS_HALF_WIDTH)
+  shape.lineTo(PLUS_HALF_WIDTH, -PLUS_HALF_WIDTH)
+  shape.lineTo(PLUS_HALF_WIDTH, -PLUS_HALF_LENGTH)
+  shape.lineTo(-PLUS_HALF_WIDTH, -PLUS_HALF_LENGTH)
+  shape.lineTo(-PLUS_HALF_WIDTH, -PLUS_HALF_WIDTH)
+  shape.lineTo(-PLUS_HALF_LENGTH, -PLUS_HALF_WIDTH)
+  shape.lineTo(-PLUS_HALF_LENGTH, PLUS_HALF_WIDTH)
+  shape.lineTo(-PLUS_HALF_WIDTH, PLUS_HALF_WIDTH)
+  shape.closePath()
+  const geometry = new ExtrudeGeometry(shape, {
+    depth: PLUS_DEPTH,
+    bevelEnabled: true,
+    bevelThickness: PLUS_BEVEL_THICKNESS,
+    bevelSize: PLUS_BEVEL_SIZE,
+    bevelOffset: 0,
+    bevelSegments: PLUS_BEVEL_SEGMENTS,
+    curveSegments: 8,
+    steps: 1,
+  })
+  geometry.translate(0, 0, -PLUS_DEPTH / 2)
+  geometry.computeVertexNormals()
+  geometry.computeBoundingSphere()
+  return geometry
+}
+
+function createPlusHitAreaGeometry() {
+  const length = (PLUS_HALF_LENGTH + HIT_AREA_MARGIN) * 2
+  const width = (PLUS_HALF_WIDTH + HIT_AREA_MARGIN) * 2
+  const horizontal = new BoxGeometry(length, width, HIT_AREA_THICKNESS)
+  const vertical = new BoxGeometry(width, length, HIT_AREA_THICKNESS)
+  const merged = mergeGeometries([horizontal, vertical], false)
+  if (!merged) {
+    vertical.dispose()
+    horizontal.computeBoundingSphere()
+    return horizontal
+  }
+  horizontal.dispose()
+  vertical.dispose()
+  merged.computeBoundingSphere()
+  return merged
+}
+
 export function createArrowHitAreaGeometry() {
   const length = CHEVRON_MAX_X - CHEVRON_MIN_X + HIT_AREA_MARGIN * 2
   const centerX = (CHEVRON_MIN_X + CHEVRON_MAX_X) / 2
@@ -346,6 +406,7 @@ const CORNER_DISC_ROUND_SEGMENTS = 32
 function createHandleArrowGeometry(shape: HandleArrowShape, thin = false, round = false) {
   if (shape === 'chevron') return createArrowHandleGeometry(thin)
   if (shape === 'cross') return createMoveCrossHandleGeometry()
+  if (shape === 'plus') return createPlusHandleGeometry()
   if (shape === 'curved-arrow') return createRotateArrowHandleGeometry()
   if (shape === 'tracker') {
     const geometry = new BoxGeometry(TRACKER_CUBE_SIZE, TRACKER_CUBE_SIZE, TRACKER_CUBE_SIZE)
@@ -363,6 +424,7 @@ function createHandleArrowGeometry(shape: HandleArrowShape, thin = false, round 
 function createHandleArrowHitGeometry(shape: HandleArrowShape, round = false) {
   if (shape === 'chevron') return createArrowHitAreaGeometry()
   if (shape === 'cross') return createMoveCrossHitAreaGeometry()
+  if (shape === 'plus') return createPlusHitAreaGeometry()
   if (shape === 'curved-arrow') return createRotateArrowHitAreaGeometry()
   if (shape === 'tracker') return createTrackerHitAreaGeometry()
   const geometry = new CircleGeometry(

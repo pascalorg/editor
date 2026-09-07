@@ -52,6 +52,7 @@ export function buildFloorplanContext(
     siblings,
     parent,
     levelData,
+    sceneNodes: nodes,
     extensions: createFloorplanContextExtensions({
       automaticDimensions: viewState.automaticDimensions,
       metricNotation: viewState.metricNotation ?? 'meters',

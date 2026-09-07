@@ -63,6 +63,11 @@ export interface GridEvent {
    * Use this for placing/committing anything that lives inside a building (walls, slabs, items, etc.).
    */
   localPosition: [number, number, number]
+  /** Pointer ray in the same building-local frame as `localPosition`. */
+  localRay?: {
+    origin: [number, number, number]
+    direction: [number, number, number]
+  }
   faceIndex?: number
   /**
    * Optional: the hit Three.js object. Present when the grid event was

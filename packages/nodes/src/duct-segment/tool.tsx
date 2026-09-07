@@ -5,27 +5,13 @@ import {
   type CeilingNode,
   type DuctFittingNode,
   DuctSegmentNode,
-  emitter,
-  type GridEvent,
   getCeilingAt,
   getCeilingHeightAt,
   resolveCeilingHeight,
   useScene,
 } from '@pascal-app/core'
-import {
-  CursorSphere,
-  DimensionPill,
-  EDITOR_LAYER,
-  isAngleSnapActive,
-  isGridSnapActive,
-  isMagneticSnapActive,
-  markToolCancelConsumed,
-  triggerSFX,
-  useEditor,
-  usePathDraftPreview,
-} from '@pascal-app/editor'
+import { EDITOR_LAYER, triggerSFX, useEditor, usePathDraftPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
-import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   type BufferGeometry,
@@ -44,7 +30,14 @@ import {
   planElbowRealign,
   planTeeAtRunBody,
 } from '../shared/auto-fitting'
-import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
+import {
+  DistributionRunCursor,
+  runDistanceSquared as dist2,
+  RUN_PREVIEW_OPACITY as PREVIEW_OPACITY,
+  runSectionHalfSizeM,
+  stepNominalRunSize,
+  useDistributionRunTool,
+} from '../shared/distribution-run-tool'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { FittingGhost } from '../shared/mep-ghost'
 import {
@@ -56,8 +49,9 @@ import {
   type RunBodyHit,
   type ScenePort,
 } from '../shared/ports'
+import { currentDuctContinuationSeed, ductEndpointPort } from './continuation'
 import { ductSegmentDefinition } from './definition'
-import { ductPortDiameterIn, rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
+import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
 
 /**
  * Continuous placement tool for duct segments.
@@ -93,7 +87,6 @@ import { ductPortDiameterIn, rectSectionAxes, rollToContinueAcrossElbow } from '
  *     Points not under any ceiling fall back to the floor.
  *   - Esc clears an anchored start point.
  */
-const PREVIEW_OPACITY = 0.55
 /**
  * Nominal US round-duct sizes (inches): 4"–10" in 1" steps, 12"+ in 2"
  * steps — matches what flex and rigid round actually ship in.
@@ -106,29 +99,6 @@ const ENDPOINT_SNAP_RADIUS_M = 0.5
  *  priority near their last stretch. */
 const BODY_SNAP_RADIUS_M = 0.35
 /** Angle step (radians) for the XZ angle lock — 45°. */
-const ANGLE_STEP_RAD = Math.PI / 4
-/** Mouse pixels → meters mapping for Alt-vertical drag. 100 px ≈ 1 m. */
-const ALT_PIXELS_PER_METER = 100
-/** Bounds on Alt-driven Y so a wild fling doesn't fly off. */
-const ALT_Y_MIN_M = -3
-const ALT_Y_MAX_M = 10
-
-/** green-500 — the project's bounding-box / placeable accent. The cursor
- *  ring + vertical line recolour to this while the point is snapped onto an
- *  existing run, so the coincidence reads with the familiar snap green. */
-const SNAP_CURSOR_COLOR = '#22c55e'
-
-function snap(value: number, step: number): number {
-  if (step <= 0) return value
-  return Math.round(value / step) * step
-}
-
-function dist2(a: readonly [number, number, number], b: readonly [number, number, number]): number {
-  const dx = a[0] - b[0]
-  const dy = a[1] - b[1]
-  const dz = a[2] - b[2]
-  return dx * dx + dy * dy + dz * dz
-}
 
 /**
  * Cross-section roll for a new rect run leaving `port` along `newDir`,
@@ -211,10 +181,6 @@ function findNearbyPort(point: [number, number, number]): ScenePort | null {
   )
 }
 
-function portPoint(port: ScenePort): [number, number, number] {
-  return [port.position[0], port.position[1], port.position[2]]
-}
-
 /** Cross-section the tool draws with (and commits onto the node). Oval
  *  never comes from the Q toggle (round ↔ rect) — it enters by joining
  *  an existing oval run / fitting collar and continuing its profile. */
@@ -268,29 +234,6 @@ function inheritProfile(port: ScenePort): DraftProfile | null {
   return null
 }
 
-/**
- * Project `raw` onto the nearest of the eight 45° rays emanating from
- * `from` in the XZ plane. Y is preserved from `from`. The projection
- * keeps the cursor's *distance* along the chosen ray so the user feels
- * the segment grow with their mouse motion rather than snap to a fixed
- * length.
- */
-function projectToAngleLock(
-  from: [number, number, number],
-  raw: [number, number, number],
-): [number, number, number] {
-  const dx = raw[0] - from[0]
-  const dz = raw[2] - from[2]
-  const len = Math.hypot(dx, dz)
-  if (len < 1e-4) return [from[0], from[1], from[2]]
-  const theta = Math.atan2(dz, dx)
-  const snapped = Math.round(theta / ANGLE_STEP_RAD) * ANGLE_STEP_RAD
-  // Distance along the chosen ray = projection of raw onto that direction.
-  const proj = dx * Math.cos(snapped) + dz * Math.sin(snapped)
-  const d = Math.max(0, proj)
-  return [from[0] + Math.cos(snapped) * d, from[1], from[2] + Math.sin(snapped) * d]
-}
-
 /** The full set of nodes a drawn segment produces. The drawn `ducts`
  *  (and any trunk `tails` from a tee / cross split) are previewed by the
  *  duct ghost already; `fittings` are the auto-inserted elbow / tee /
@@ -332,7 +275,10 @@ const elbowPlanFor = (
   )
   if (remaining < 0.08 || remaining >= originalLen) return null
   path[index] = plan.trimmedPortPoint
-  return { ...plan, trim: { id: port.nodeId, data: { path } as Partial<AnyNode> } }
+  return {
+    ...plan,
+    trim: { id: port.nodeId, data: { path } as Partial<AnyNode> },
+  }
 }
 
 const realignPlanFor = (port: ScenePort | null, awayDir: [number, number, number]) => {
@@ -472,106 +418,164 @@ function planDuctDraw(
   return { fittings, ducts, tails, updates }
 }
 
-function ductEndPort(duct: DuctSegmentNode, id: 'start' | 'end'): ScenePort | null {
-  if (duct.path.length < 2) return null
-  const index = id === 'start' ? 0 : duct.path.length - 1
-  const neighborIndex = id === 'start' ? 1 : duct.path.length - 2
-  const position = duct.path[index]!
-  const neighbor = duct.path[neighborIndex]!
-  const dx = position[0] - neighbor[0]
-  const dy = position[1] - neighbor[1]
-  const dz = position[2] - neighbor[2]
-  const len = Math.hypot(dx, dy, dz)
-  const direction: [number, number, number] =
-    len < 1e-9 ? [1, 0, 0] : [dx / len, dy / len, dz / len]
-  return {
-    id,
-    nodeId: duct.id,
-    position,
-    direction,
-    diameter: ductPortDiameterIn(duct),
-    system: duct.system,
-  }
-}
-
 const DuctSegmentTool = () => {
-  const activeLevelId = useViewer((s) => s.selection.levelId)
-  const unit = useViewer((s) => s.unit)
+  const activeLevelId = useViewer((state) => state.selection.levelId)
+  const unit = useViewer((state) => state.unit)
   const cursorRef = useRef<Group>(null)
-  // Cross-section profile for the next committed segment. Q toggles
-  // round/rect, [ / ] steps the round diameter, and snapping the start
-  // onto an existing run / fitting INHERITS that node's profile — so
-  // continuing a 14×8 trunk keeps drawing 14×8, and branching off a
-  // round collar keeps its diameter. Seeded from `toolDefaults`.
+  const continuationSeedRef = useRef(currentDuctContinuationSeed())
+  const continuationSeed = continuationSeedRef.current
+  const pendingPromotionRef = useRef(continuationSeed?.promotedFitting ?? null)
   const [profile, setProfile] = useState<DraftProfile>(() => {
     const defaults = ductSegmentDefinition.defaults() as DraftProfile
     const seeded = useEditor.getState().toolDefaults['duct-segment'] as
       | Partial<DraftProfile>
       | undefined
     return {
-      shape: seeded?.shape ?? defaults.shape,
-      diameter: seeded?.diameter ?? defaults.diameter,
-      width: seeded?.width ?? defaults.width,
-      height: seeded?.height ?? defaults.height,
+      shape: continuationSeed?.duct.shape ?? seeded?.shape ?? defaults.shape,
+      diameter: continuationSeed?.duct.diameter ?? seeded?.diameter ?? defaults.diameter,
+      width: continuationSeed?.duct.width ?? seeded?.width ?? defaults.width,
+      height: continuationSeed?.duct.height ?? seeded?.height ?? defaults.height,
     }
   })
-  const [draftPoints, setDraftPoints] = useState<Array<[number, number, number]>>([])
-  const [cursorPos, setCursorPos] = useState<[number, number, number] | null>(null)
-  // Ceiling mode (toggle with C): the first point lands at the level's
-  // ceiling height (duct top hugging the ceiling) instead of the floor.
   const [ceilingMode, setCeilingMode] = useState(false)
-  // The shared coordinate when the cursor is within snap range of an existing
-  // duct (null = free placement). Drives the green cursor highlight so the
-  // user sees the next click will join an existing run, not freeform-place.
-  const [snapTarget, setSnapTarget] = useState<[number, number, number] | null>(null)
-  // In ceiling mode, the ceiling the cursor is currently under — rendered as
-  // a translucent overlay so the duct reads as hung against a real surface
-  // rather than a dot floating in space. Null when off-ceiling.
   const [hoverCeiling, setHoverCeiling] = useState<CeilingNode | null>(null)
-  // True while Alt is held with a last point on the draft — drives the
-  // vertical-cylinder ghost and the cursor HUD label.
-  const [altActive, setAltActive] = useState(false)
-  // What the in-flight cursor end currently snaps onto (port end, or a
-  // run body for a tee / cross tap). Drives the auto-fitting GHOST so the
-  // user sees the elbow / tee / cross the next click will mint.
-  const [endSnap, setEndSnap] = useState<{ port: ScenePort | null; body: RunBodyHit | null }>({
-    port: null,
-    body: null,
-  })
-  // Mirror into refs so emitter callbacks (closing over the first render's
-  // setState) read the latest values without re-subscribing.
-  const draftRef = useRef(draftPoints)
-  draftRef.current = draftPoints
-  const cursorPosRef = useRef(cursorPos)
-  cursorPosRef.current = cursorPos
   const profileRef = useRef(profile)
   profileRef.current = profile
   const ceilingModeRef = useRef(ceilingMode)
   ceilingModeRef.current = ceilingMode
-  // Port the anchored START point snapped onto (null = free placement).
-  // Read at commit so a turn off an existing run mints an elbow there.
-  const startPortRef = useRef<ScenePort | null>(null)
-  // Centerline hit the anchored START point snapped onto (null = none).
-  // Read at commit so a branch off a trunk's side mints a tee there.
-  const startBodyRef = useRef<RunBodyHit | null>(null)
-  // Anchor captured when Alt is pressed: screen Y at that moment and the
-  // base elevation (= last point's Y). Cleared on Alt release.
-  const altAnchorRef = useRef<{ clientY: number; baseY: number } | null>(null)
-  // Latest mouse clientY from grid:move; used so the Alt anchor knows where
-  // the cursor was at key-press time.
-  const lastClientYRef = useRef<number | null>(null)
+
+  const floorCenterlineY = (): number => {
+    const current = profileRef.current
+    const verticalIn = current.shape === 'round' ? current.diameter : current.height
+    return runSectionHalfSizeM(verticalIn)
+  }
+
+  const resolveCeilingY = (x: number, z: number): number => {
+    const floorY = floorCenterlineY()
+    if (!ceilingModeRef.current || !activeLevelId) return floorY
+    const ceiling = getCeilingHeightAt(activeLevelId, useScene.getState().nodes, x, z)
+    if (ceiling === null) return floorY
+    return Math.max(floorY, ceiling - floorY)
+  }
+
+  const run = useDistributionRunTool({
+    active: !!activeLevelId,
+    initialStart: continuationSeed
+      ? ([...continuationSeed.port.position] as [number, number, number])
+      : null,
+    initialConnection: continuationSeed ? { port: continuationSeed.port, body: null } : null,
+    findPort: findNearbyPort,
+    findBody: (point) => findNearestRunBodyXZ(point, BODY_SNAP_RADIUS_M),
+    resolveFirstY: resolveCeilingY,
+    minimumFreeY: floorCenterlineY,
+    resolveFreeEnd: (_start, end) => [
+      end[0],
+      ceilingModeRef.current ? resolveCeilingY(end[0], end[2]) : end[1],
+      end[2],
+    ],
+    inheritFromConnection: ({ port }) => {
+      if (!port) return
+      const inherited = inheritProfile(port)
+      if (inherited) setProfile(inherited)
+    },
+    commit: ({ start, end, startConnection, endConnection }) => {
+      if (!activeLevelId) return null
+      const promotedFitting = pendingPromotionRef.current
+      const plan = planDuctDraw(
+        start,
+        end,
+        promotedFitting ? null : startConnection.port,
+        startConnection.body,
+        endConnection.port,
+        endConnection.body,
+        profileRef.current,
+      )
+      if (!plan) return null
+      useScene.getState().applyNodeChanges({
+        create: [
+          ...plan.fittings.map((node) => ({ node, parentId: activeLevelId })),
+          ...plan.tails.map((node) => ({ node, parentId: activeLevelId })),
+          ...plan.ducts.map((node) => ({ node, parentId: activeLevelId })),
+        ],
+        update: [
+          ...(promotedFitting
+            ? [
+                {
+                  id: promotedFitting.id,
+                  data: {
+                    name: promotedFitting.name,
+                    fittingType: promotedFitting.fittingType,
+                    rotation: promotedFitting.rotation,
+                    branchAngle: promotedFitting.branchAngle,
+                    shape2: promotedFitting.shape2,
+                    width2: promotedFitting.width2,
+                    height2: promotedFitting.height2,
+                    diameter2: promotedFitting.diameter2,
+                  } as Partial<AnyNode>,
+                },
+              ]
+            : []),
+          ...plan.updates,
+        ],
+      })
+      pendingPromotionRef.current = null
+      const nextDuct = plan.ducts.at(-1)
+      const nextStart = nextDuct ? nextDuct.path[nextDuct.path.length - 1]! : end
+      const nextPort = nextDuct ? ductEndpointPort(nextDuct, 'end') : endConnection.port
+      return {
+        nextStart,
+        nextConnection: {
+          port: nextPort,
+          body: nextPort ? null : endConnection.body,
+        },
+      }
+    },
+    onCursorPoint: (point) => {
+      if (!ceilingModeRef.current || !activeLevelId) {
+        setHoverCeiling(null)
+        return
+      }
+      setHoverCeiling(getCeilingAt(activeLevelId, useScene.getState().nodes, point[0], point[2]))
+    },
+    onClear: () => setHoverCeiling(null),
+    onShortcut: (event, start) => {
+      if (event.key === '[' || event.key === ']') {
+        event.preventDefault()
+        const next = stepNominalRunSize(
+          DUCT_DIAMETERS_IN,
+          profileRef.current.diameter,
+          event.key === ']' ? 1 : -1,
+        )
+        if (next !== profileRef.current.diameter) {
+          setProfile((current) => ({ ...current, diameter: next }))
+          triggerSFX('sfx:grid-snap')
+        }
+      } else if (event.key === 'q' || event.key === 'Q') {
+        event.preventDefault()
+        setProfile((current) => ({
+          ...current,
+          shape: current.shape === 'round' ? 'rect' : 'round',
+        }))
+        triggerSFX('sfx:grid-snap')
+      } else if ((event.key === 'c' || event.key === 'C') && !start) {
+        event.preventDefault()
+        setCeilingMode((value) => !value)
+        setHoverCeiling(null)
+        triggerSFX('sfx:grid-snap')
+      }
+    },
+  })
 
   const ghostFittings = useMemo(() => {
-    const last = draftPoints.at(-1)
-    if (!(activeLevelId && last && cursorPos) || altActive) return []
+    if (!(activeLevelId && run.start && run.cursor) || run.altActive) return []
     const fittings =
       planDuctDraw(
-        last,
-        cursorPos,
-        startPortRef.current,
-        startBodyRef.current,
-        endSnap.port,
-        endSnap.body,
+        run.start,
+        run.cursor,
+        pendingPromotionRef.current ? null : run.startConnection.port,
+        run.startConnection.body,
+        run.endConnection.port,
+        run.endConnection.body,
         profile,
       )?.fittings ?? []
     return fittings.map(
@@ -581,497 +585,69 @@ const DuctSegmentTool = () => {
         parentId: activeLevelId,
       }),
     )
-  }, [activeLevelId, altActive, cursorPos, draftPoints, endSnap, profile])
+  }, [
+    activeLevelId,
+    profile,
+    run.altActive,
+    run.cursor,
+    run.endConnection,
+    run.start,
+    run.startConnection,
+  ])
 
   useEffect(() => {
     usePathDraftPreview
       .getState()
-      .setDraft('duct-segment', draftPoints, cursorPos, profile, ghostFittings)
-  }, [cursorPos, draftPoints, ghostFittings, profile])
+      .setDraft('duct-segment', run.start ? [run.start] : [], run.cursor, profile, ghostFittings)
+  }, [ghostFittings, profile, run.cursor, run.start])
   useEffect(() => () => usePathDraftPreview.getState().clear('duct-segment'), [])
-
-  useEffect(() => {
-    if (!activeLevelId) return
-
-    // Continuous chain: first click anchors the start, each following
-    // click commits one two-point duct and uses that duct's far end as
-    // the next anchor. No selection switch or finish gesture.
-    //
-    // All the auto-fitting decisions (elbow / tee / cross) live in the
-    // shared `planDuctDraw` so the live ghost previews exactly what this
-    // commit applies.
-    const commitSegment = (
-      start: [number, number, number],
-      end: [number, number, number],
-      endPort: ScenePort | null = null,
-      endBody: RunBodyHit | null = null,
-    ) => {
-      const plan = planDuctDraw(
-        start,
-        end,
-        startPortRef.current,
-        startBodyRef.current,
-        endPort,
-        endBody,
-        profileRef.current,
-      )
-      if (!plan) return
-      // One atomic change: trim / split the joined runs, create the
-      // fittings + the new duct. Single undo step.
-      useScene.getState().applyNodeChanges({
-        create: [
-          ...plan.fittings.map((node) => ({ node, parentId: activeLevelId })),
-          ...plan.tails.map((node) => ({ node, parentId: activeLevelId })),
-          ...plan.ducts.map((node) => ({ node, parentId: activeLevelId })),
-        ],
-        update: plan.updates,
-      })
-      const nextDuct = plan.ducts.at(-1)
-      const nextStart = nextDuct ? nextDuct.path[nextDuct.path.length - 1]! : end
-      const nextPort = nextDuct ? ductEndPort(nextDuct, 'end') : endPort
-      triggerSFX('sfx:item-place')
-      setDraftPoints([nextStart])
-      setSnapTarget(null)
-      setEndSnap({ port: null, body: null })
-      startPortRef.current = nextPort
-      startBodyRef.current = nextPort ? null : endBody
-      altAnchorRef.current = null
-      setAltActive(false)
-    }
-
-    // Y for a point at level-local `[x, z]`. Floor (0) when ceiling mode is
-    // off. In ceiling mode, query the ceiling actually covering that point
-    // and hang the duct just below it (centerline = ceiling underside −
-    // half the duct's vertical dimension) so its top hugs the ceiling. Each
-    // point follows its own ceiling, so a run stepping into a room with a
-    // different ceiling height tracks that change. Points not under any
-    // ceiling fall back to the floor.
-    const resolveCeilingY = (x: number, z: number): number => {
-      if (!ceilingModeRef.current) return 0
-      const ceiling = getCeilingHeightAt(activeLevelId, useScene.getState().nodes, x, z)
-      if (ceiling === null) return 0
-      const p = profileRef.current
-      const verticalIn = p.shape === 'round' ? p.diameter : p.height
-      return Math.max(0, ceiling - (verticalIn * 0.0254) / 2)
-    }
-
-    const resolveSnappedPoint = (
-      event: GridEvent,
-    ): {
-      point: [number, number, number]
-      snapped: [number, number, number] | null
-      port: ScenePort | null
-      body: RunBodyHit | null
-    } => {
-      // Port / body mating is the run's primary affordance; it stays on in
-      // every snapping mode except `off` (the raw-cursor bypass).
-      const snapEnabled = isGridSnapActive() || isMagneticSnapActive() || isAngleSnapActive()
-      const last = draftRef.current.at(-1)
-      // First point of the run: grid-snapped placement. Y follows the
-      // ceiling under the cursor in ceiling mode (floor otherwise).
-      // Endpoint snap can still join an existing run.
-      if (!last) {
-        const baseY = resolveCeilingY(event.localPosition[0], event.localPosition[2])
-        const raw: [number, number, number] = [
-          event.localPosition[0],
-          baseY,
-          event.localPosition[2],
-        ]
-        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
-        if (event.nativeEvent?.altKey !== true && snapEnabled) {
-          const target = findNearbyPort(raw)
-          if (target)
-            return {
-              point: portPoint(target),
-              snapped: portPoint(target),
-              port: target,
-              body: null,
-            }
-          // No open end nearby — try the side of a run (tee tap). Probe
-          // with a grid-snapped cursor so the tap steps along the duct
-          // like every other placement; `off` mode (step 0) rides smoothly.
-          const probe: [number, number, number] = [snap(raw[0], step), baseY, snap(raw[2], step)]
-          const body = findNearestRunBodyXZ(probe, BODY_SNAP_RADIUS_M)
-          if (body) return { point: body.point, snapped: body.point, port: null, body }
-        }
-        const sx = snap(raw[0], step)
-        const sz = snap(raw[2], step)
-        return {
-          point: [sx, resolveCeilingY(sx, sz), sz],
-          snapped: null,
-          port: null,
-          body: null,
-        }
-      }
-      // Subsequent points: angle-locked to 45° from `last` in `angles` mode.
-      // Y inherits `last[1]` for the angle/probe math; the free placement below
-      // re-resolves it from the ceiling under the point in ceiling mode, so a run
-      // stepping into a room with a different ceiling height tracks that change.
-      // Depth changes otherwise come from Alt-vertical risers.
-      const rawXZ: [number, number, number] = [
-        event.localPosition[0],
-        last[1],
-        event.localPosition[2],
-      ]
-      // The 45° lock is now the `angles` snapping mode (Shift cycles to it),
-      // not a held key.
-      const angled = isAngleSnapActive() ? projectToAngleLock(last, rawXZ) : rawXZ
-      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
-      // Port snap (Alt bypass) — checked against the RAW cursor, not the
-      // angle-locked projection, so a port slightly off the 45° ray can
-      // still capture the cursor. Joining beats the lock.
-      if (event.nativeEvent?.altKey !== true && snapEnabled) {
-        const target = findNearbyPort(rawXZ)
-        if (target)
-          return { point: portPoint(target), snapped: portPoint(target), port: target, body: null }
-        // No open end nearby — landing on the side of a run taps a tee
-        // there (mirror of the first-point tee tap). Probe with a
-        // grid-snapped cursor so the tap steps along the duct instead of
-        // sliding smoothly (Shift above frees it). Checked against the
-        // cursor, not the 45° projection, so a slightly-off trunk captures.
-        const probe: [number, number, number] = [
-          snap(rawXZ[0], step),
-          rawXZ[1],
-          snap(rawXZ[2], step),
-        ]
-        const body = findNearestRunBodyXZ(probe, BODY_SNAP_RADIUS_M)
-        if (body) return { point: body.point, snapped: body.point, port: null, body }
-      }
-      const fx = snap(angled[0], step)
-      const fz = snap(angled[2], step)
-      const fy = ceilingModeRef.current ? resolveCeilingY(fx, fz) : angled[1]
-      return {
-        point: [fx, fy, fz],
-        snapped: null,
-        port: null,
-        body: null,
-      }
-    }
-
-    /**
-     * Compute the Alt-mode cursor position: XZ locked to the last point,
-     * Y driven by how far the mouse has moved vertically on screen since
-     * Alt was pressed. Returns null if there's no anchor (Alt not active).
-     */
-    const resolveAltVerticalPoint = (clientY: number): [number, number, number] | null => {
-      const anchor = altAnchorRef.current
-      const last = draftRef.current.at(-1)
-      if (!anchor || !last) return null
-      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
-      // Screen +Y points down, so subtract to map "drag up = raise Y".
-      const dy = (anchor.clientY - clientY) / ALT_PIXELS_PER_METER
-      const snappedDy = snap(dy, step)
-      const y = Math.min(ALT_Y_MAX_M, Math.max(ALT_Y_MIN_M, anchor.baseY + snappedDy))
-      return [last[0], y, last[2]]
-    }
-
-    // Resolve the cursor point (port / body / grid / angle snap) and then
-    // layer Figma-style alignment on top so a run lines up with other runs,
-    // fittings, and items as it's drawn. A free point (first vertex, or no
-    // angle lock) snaps; an angle-locked continuation shows the guide passively
-    // without leaving its 45° ray. Alignment follows the `lines` mode; a
-    // port / body snap or Alt-vertical bypasses it.
-    const resolveAlignedPoint = (event: GridEvent) => {
-      const r = resolveSnappedPoint(event)
-      const hasStart = draftRef.current.length > 0
-      const alt = event.nativeEvent?.altKey === true
-      const point = alignDrawPoint(r.point, {
-        applySnap: isMagneticSnapActive() && (!hasStart || !isAngleSnapActive()),
-        bypass: alt || r.snapped !== null,
-      })
-      return { ...r, point }
-    }
-
-    // The ceiling the cursor is under (ceiling mode only) — drives the
-    // translucent surface overlay so the in-flight point reads as hung
-    // against a real ceiling. Cleared when off-ceiling or out of mode.
-    const updateHoverCeiling = (x: number, z: number) => {
-      if (!ceilingModeRef.current) {
-        setHoverCeiling(null)
-        return
-      }
-      setHoverCeiling(getCeilingAt(activeLevelId, useScene.getState().nodes, x, z))
-    }
-
-    const onMove = (event: GridEvent) => {
-      const clientY = (event.nativeEvent as { clientY?: number } | undefined)?.clientY
-      if (typeof clientY === 'number') lastClientYRef.current = clientY
-      // Alt vertical mode wins over the XZ logic.
-      if (altAnchorRef.current && typeof clientY === 'number') {
-        const point = resolveAltVerticalPoint(clientY)
-        if (point) {
-          clearDrawAlignment()
-          setCursorPos(point)
-          setSnapTarget(null)
-          setEndSnap({ port: null, body: null })
-          updateHoverCeiling(point[0], point[2])
-          return
-        }
-      }
-      const { point, snapped, port, body } = resolveAlignedPoint(event)
-      setCursorPos(point)
-      setSnapTarget(snapped)
-      setEndSnap({ port, body: port ? null : body })
-      updateHoverCeiling(point[0], point[2])
-    }
-
-    const onClick = (event: GridEvent) => {
-      const start = draftRef.current.at(-1)
-      // Vertical mode with a start anchored: the click commits the riser
-      // segment right there. Never falls through to the XZ logic — a
-      // no-op Alt click (height unchanged) must not place anything.
-      if (altAnchorRef.current && start) {
-        const clientY =
-          (event.nativeEvent as { clientY?: number } | undefined)?.clientY ?? lastClientYRef.current
-        if (typeof clientY === 'number') {
-          const point = resolveAltVerticalPoint(clientY)
-          if (point && Math.abs(point[1] - start[1]) >= 1e-4) {
-            commitSegment(start, point)
-          }
-        }
-        return
-      }
-      const { point, port, body } = resolveAlignedPoint(event)
-      if (!start) {
-        // First click: anchor the segment start, remembering the port or
-        // run body it snapped to so the commit can mint an elbow / tee.
-        // Joining a port INHERITS the source's cross-section — continuing
-        // a rect trunk keeps drawing rect at its W×H, a round collar its
-        // diameter. Body taps (tee branches) keep the tool's own profile.
-        triggerSFX('sfx:grid-snap')
-        startPortRef.current = port
-        startBodyRef.current = port ? null : body
-        if (port) {
-          const inherited = inheritProfile(port)
-          if (inherited) setProfile(inherited)
-        }
-        setDraftPoints([point])
-        return
-      }
-      // Second click: commit the segment and re-arm. A body hit on the end
-      // (no end port) taps a tee into that run's side.
-      commitSegment(start, point, port, port ? null : body)
-    }
-
-    const enterAltMode = () => {
-      const last = draftRef.current.at(-1)
-      if (!last || lastClientYRef.current === null) return
-      if (altAnchorRef.current) return
-      altAnchorRef.current = { clientY: lastClientYRef.current, baseY: last[1] }
-      setAltActive(true)
-    }
-
-    const exitAltMode = () => {
-      if (!altAnchorRef.current) return
-      altAnchorRef.current = null
-      setAltActive(false)
-    }
-
-    const stepDiameter = (step: 1 | -1) => {
-      const sizes = DUCT_DIAMETERS_IN
-      const current = profileRef.current.diameter
-      // Nearest catalogue index, then step — handles seeded off-catalogue
-      // values (e.g. a preset's 7.5") gracefully.
-      let nearest = 0
-      for (let i = 1; i < sizes.length; i++) {
-        if (Math.abs(sizes[i]! - current) < Math.abs(sizes[nearest]! - current)) nearest = i
-      }
-      const next = sizes[Math.min(sizes.length - 1, Math.max(0, nearest + step))]!
-      if (next === current) return
-      setProfile((p) => ({ ...p, diameter: next }))
-      triggerSFX('sfx:grid-snap')
-    }
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      const tag = (e.target as HTMLElement | null)?.tagName
-      if (tag === 'INPUT' || tag === 'TEXTAREA') return
-      if (e.key === 'Alt') {
-        e.preventDefault()
-        enterAltMode()
-      } else if (e.key === '[') {
-        e.preventDefault()
-        stepDiameter(-1)
-      } else if (e.key === ']') {
-        e.preventDefault()
-        stepDiameter(1)
-      } else if (e.key === 'q' || e.key === 'Q') {
-        e.preventDefault()
-        setProfile((p) => ({ ...p, shape: p.shape === 'round' ? 'rect' : 'round' }))
-        triggerSFX('sfx:grid-snap')
-      } else if (e.key === 'c' || e.key === 'C') {
-        // Toggle ceiling mode: points hang from the ceiling above them
-        // (duct top hugging the ceiling) instead of sitting on the floor.
-        // Only flip while unanchored — already-placed points keep their Y,
-        // so a mid-run toggle would split a run across two height regimes.
-        if (draftRef.current.length > 0) return
-        e.preventDefault()
-        setCeilingMode((m) => !m)
-        setHoverCeiling(null)
-        triggerSFX('sfx:grid-snap')
-      }
-    }
-
-    const onKeyUp = (e: KeyboardEvent) => {
-      if (e.key === 'Alt') {
-        e.preventDefault()
-        exitAltMode()
-      }
-    }
-
-    const onCancel = () => {
-      clearDrawAlignment()
-      if (draftRef.current.length === 0) return
-      markToolCancelConsumed()
-      setDraftPoints([])
-      setCursorPos(null)
-      setSnapTarget(null)
-      setEndSnap({ port: null, body: null })
-      setHoverCeiling(null)
-      startPortRef.current = null
-      startBodyRef.current = null
-    }
-
-    emitter.on('grid:move', onMove)
-    emitter.on('grid:click', onClick)
-    emitter.on('tool:cancel', onCancel)
-    window.addEventListener('keydown', onKeyDown)
-    window.addEventListener('keyup', onKeyUp)
-    return () => {
-      emitter.off('grid:move', onMove)
-      emitter.off('grid:click', onClick)
-      emitter.off('tool:cancel', onCancel)
-      window.removeEventListener('keydown', onKeyDown)
-      window.removeEventListener('keyup', onKeyUp)
-      altAnchorRef.current = null
-      clearDrawAlignment()
-    }
-  }, [activeLevelId])
+  useEffect(() => () => useEditor.getState().setToolDefaults('duct-segment', null), [])
 
   if (!activeLevelId) return null
-
-  const previewSegments: Array<{ a: [number, number, number]; b: [number, number, number] }> = []
-  for (let i = 0; i < draftPoints.length - 1; i++) {
-    previewSegments.push({ a: draftPoints[i]!, b: draftPoints[i + 1]! })
-  }
-  const last = draftPoints.at(-1)
-  if (last && cursorPos) {
-    previewSegments.push({ a: last, b: cursorPos })
-  }
-
-  // Wall-style dimension pill above the cursor: absolute world coords before
-  // the first point, signed per-axis deltas from the last placed point while
-  // a segment is in flight. The actively-driven axis is emphasised — Y in
-  // Alt-vertical mode, otherwise whichever horizontal axis dominates. A
-  // trailing Ø readout shows the diameter the next click commits ([ / ]).
-  const pillParts = cursorPos
-    ? [
-        ...(['x', 'y', 'z'] as const).map((axis, i) => ({
-          key: axis,
-          prefix: axis.toUpperCase(),
-          value: last ? cursorPos[i]! - last[i]! : cursorPos[i]!,
-          signed: !!last,
-        })),
-        ...(profile.shape === 'round'
-          ? [{ key: 'diameter', prefix: 'Ø', value: profile.diameter * 0.0254, signed: false }]
-          : [
-              { key: 'trunk-w', prefix: 'W', value: profile.width * 0.0254, signed: false },
-              { key: 'trunk-h', prefix: 'H', value: profile.height * 0.0254, signed: false },
-            ]),
-      ]
-    : null
-  const pillPrimary =
-    last && cursorPos
-      ? altActive
-        ? 'y'
-        : Math.abs(cursorPos[0] - last[0]) >= Math.abs(cursorPos[2] - last[2])
-          ? 'x'
-          : 'z'
-      : undefined
-
-  // When the in-flight point hangs above the floor (ceiling mode, or an
-  // Alt riser), the cursor marker itself rides AT the point (where the
-  // mouse is aiming and the next click commits), and a plumb line drops
-  // straight down to a faint ground ring on the floor below — so the plan
-  // position stays legible from any angle. A floor-level point keeps the
-  // standard fixed-height cursor look.
-  const cursorElevation = cursorPos ? cursorPos[1] : 0
-  const isElevated = cursorElevation > 0.001
-  const cursorGround: [number, number, number] | null = cursorPos
-    ? [cursorPos[0], 0, cursorPos[2]]
-    : null
+  const extraParts =
+    profile.shape === 'round'
+      ? [{ key: 'diameter', prefix: 'Ø', value: profile.diameter * 0.0254 }]
+      : [
+          { key: 'trunk-w', prefix: 'W', value: profile.width * 0.0254 },
+          { key: 'trunk-h', prefix: 'H', value: profile.height * 0.0254 },
+        ]
 
   return (
     <LevelOffsetGroup>
-      {/* Ceiling-mode surface highlight — the ceiling the cursor is under,
-          tinted at its own elevation so the duct reads as hung against a
-          real surface instead of a point floating in space. */}
       {ceilingMode && hoverCeiling && <CeilingHighlight ceiling={hoverCeiling} />}
-      {/* Cursor marker — the same ground ring + vertical line + tool-icon
-          badge walls and items show while drawing (icon resolved from the
-          active `duct-segment` structure-tools entry). The dimension pill
-          rides just above the cursor. */}
-      {cursorPos && cursorGround && (
-        <>
-          {/* In ceiling mode (or any elevated point) the ground ring sits on
-              the floor below the cursor and the line rises to the placement
-              point, with the bright dot + tool badge at its tip — exactly
-              where the next click commits. At floor level it's the standard
-              fixed-height cursor. */}
-          {isElevated ? (
-            <CursorSphere
-              color={snapTarget ? SNAP_CURSOR_COLOR : undefined}
-              dotAtTip
-              height={cursorElevation}
-              position={cursorGround}
-              ref={cursorRef}
-            />
-          ) : (
-            <CursorSphere
-              color={snapTarget ? SNAP_CURSOR_COLOR : undefined}
-              position={cursorPos}
-              ref={cursorRef}
-            />
-          )}
-          {pillParts && (
-            <group position={cursorPos}>
-              <Html
-                center
-                position={[0, 1.45, 0]}
-                style={{ pointerEvents: 'none', userSelect: 'none' }}
-                zIndexRange={[100, 0]}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  {ceilingMode && !last && (
-                    <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
-                      Ceiling · C to toggle
-                    </div>
-                  )}
-                  <DimensionPill parts={pillParts} primary={pillPrimary} unit={unit} />
-                </div>
-              </Html>
-            </group>
-          )}
-        </>
-      )}
-      {/* Committed point pips */}
-      {draftPoints.map((p, i) => (
-        <mesh key={`pt-${i}`} layers={EDITOR_LAYER} position={p}>
+      <DistributionRunCursor
+        altActive={run.altActive}
+        cursor={run.cursor}
+        cursorRef={cursorRef}
+        directionMode={run.directionMode}
+        extraParts={extraParts}
+        snapTarget={run.snapTarget}
+        start={run.start}
+        startDirection={run.startConnection.port?.direction ?? null}
+        status={
+          ceilingMode && !run.start ? (
+            <div className="whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-0.5 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
+              Ceiling · C to toggle
+            </div>
+          ) : undefined
+        }
+        unit={unit}
+      />
+      {run.start && (
+        <mesh layers={EDITOR_LAYER} position={run.start}>
           <sphereGeometry args={[0.07, 16, 12]} />
           <meshBasicMaterial color="#818cf8" depthTest={false} />
         </mesh>
-      ))}
-      {/* Preview sections */}
-      {previewSegments.map((seg, i) => (
+      )}
+      {run.start && run.cursor && (
         <PreviewSegment
-          a={seg.a}
-          b={seg.b}
-          endPort={endSnap.port}
-          key={`seg-${i}`}
+          a={run.start}
+          b={run.cursor}
+          endPort={run.endConnection.port}
           profile={profile}
-          startPort={startPortRef.current}
+          startPort={run.startConnection.port}
         />
-      ))}
-      {/* Auto-fitting ghosts — the elbow / tee / cross the next click mints. */}
+      )}
       {ghostFittings.map((fitting) => (
         <FittingGhost fitting={fitting} key={fitting.id} />
       ))}

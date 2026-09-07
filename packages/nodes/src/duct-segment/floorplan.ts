@@ -1,4 +1,5 @@
 import type { FloorplanGeometry, FloorplanPoint, GeometryContext } from '@pascal-app/core'
+import { ductContinuationHandlePlan, ductEndpointPort } from './continuation'
 import { INCHES_TO_METERS } from './geometry'
 import type { DuctSegmentNode } from './schema'
 
@@ -98,6 +99,25 @@ export function buildDuctSegmentFloorplan(
         state: 'idle',
         affordance: 'move-path-point',
         payload: { pointIndex: indexMap[k]! },
+      })
+    }
+
+    const continuationGap = Math.max(0.28, diameterM / 2 + 0.18)
+    for (const endpoint of ['start', 'end'] as const) {
+      const port = ductEndpointPort(node, endpoint)
+      const sceneNodes = ctx.sceneNodes ?? { [node.id]: node }
+      const plan = ductContinuationHandlePlan(node, endpoint, sceneNodes, continuationGap)
+      if (!(port && plan)) continue
+      if (
+        Math.hypot(plan.position[0] - port.position[0], plan.position[2] - port.position[2]) < 1e-6
+      )
+        continue
+      children.push({
+        kind: 'midpoint-handle',
+        point: [plan.position[0], plan.position[2]],
+        activation: 'action',
+        affordance: 'continue-run',
+        payload: { action: 'continue-run', endpoint, fittingId: plan.fittingId },
       })
     }
 

@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
+import { pipeContinuationAffordance } from './continuation'
 import { buildPipeSegmentFloorplan } from './floorplan'
 import { buildPipeSegmentGeometry } from './geometry'
 import { pipeSegmentParametrics } from './parametrics'
@@ -32,8 +33,8 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
     visible: true,
     metadata: {},
     path: [
-      [0, 0, 0],
-      [3, -0.0625, 0],
+      [0, 0.0254, 0],
+      [3, 0.0254, 0],
     ],
     diameter: 2,
     pipeMaterial: 'pvc',
@@ -92,6 +93,7 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
   // `endpoint-handle` per path vertex; this drags the matching point.
   floorplanAffordances: {
     'move-path-point': createPathPointMoveAffordance('pipe-segment'),
+    'continue-run': pipeContinuationAffordance,
   },
 
   // Selection-time path-point handles (drag to edit a committed run).
@@ -110,8 +112,9 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Start run' },
-    { key: 'Click again', label: 'Place it (waste falls ¼″/ft)' },
+    { key: 'Click again', label: 'Place and continue' },
     { key: 'Q', label: 'Waste / vent' },
+    { key: 'S', label: 'Slope / level' },
     { key: '[ / ]', label: 'Pipe size down / up' },
     { key: 'Alt + drag', label: 'Vertical stack ↕, click to place' },
     { key: 'Esc', label: 'Cancel start point' },
@@ -119,8 +122,7 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
 
   presentation: {
     label: 'DWV Pipe',
-    description:
-      'Drain / waste / vent pipe run — waste lines fall at ¼″ per foot, vents run level or vertical.',
+    description: 'Drain / waste / vent pipe run — draw level or toggle a ¼″ per foot fall with S.',
     icon: { kind: 'url', src: '/icons/dwv-pipes.webp' },
     paletteSection: 'structure',
     paletteOrder: 95,

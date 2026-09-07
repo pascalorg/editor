@@ -78,11 +78,22 @@ export function useGridEvents(gridY: number) {
       const buildingId = useViewer.getState().selection.buildingId
       const buildingMesh = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
       const localPoint = buildingMesh ? buildingMesh.worldToLocal(point.clone()) : point
+      const { origin, direction } = raycaster.current.ray
+      const localRayOrigin = buildingMesh
+        ? buildingMesh.worldToLocal(origin.clone())
+        : origin.clone()
+      const localRayDirection = buildingMesh
+        ? buildingMesh.worldToLocal(origin.clone().add(direction)).sub(localRayOrigin).normalize()
+        : direction.clone()
 
       const eventKey = `grid:${suffix}` as `grid:${EventSuffix}`
       const payload: GridEvent = {
         position: [point.x, point.y, point.z],
         localPosition: [localPoint.x, localPoint.y, localPoint.z],
+        localRay: {
+          origin: [localRayOrigin.x, localRayOrigin.y, localRayOrigin.z],
+          direction: [localRayDirection.x, localRayDirection.y, localRayDirection.z],
+        },
         nativeEvent: nativeEvent as any, // Type compatibility with ThreeEvent
       }
 

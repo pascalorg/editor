@@ -1,5 +1,6 @@
 import type { FloorplanGeometry, FloorplanPoint, GeometryContext } from '@pascal-app/core'
 import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { pipeContinuationHandlePlan, pipeEndpointPort } from './continuation'
 import type { PipeSegmentNode } from './schema'
 
 const WASTE_COLOR = '#57534e'
@@ -91,6 +92,24 @@ export function buildPipeSegmentFloorplan(
         state: 'idle',
         affordance: 'move-path-point',
         payload: { pointIndex: indexMap[k]! },
+      })
+    }
+    const continuationGap = Math.max(0.28, diameterM / 2 + 0.18)
+    for (const endpoint of ['start', 'end'] as const) {
+      const port = pipeEndpointPort(node, endpoint)
+      const sceneNodes = ctx.sceneNodes ?? { [node.id]: node }
+      const plan = pipeContinuationHandlePlan(node, endpoint, sceneNodes, continuationGap)
+      if (!(port && plan)) continue
+      if (
+        Math.hypot(plan.position[0] - port.position[0], plan.position[2] - port.position[2]) < 1e-6
+      )
+        continue
+      children.push({
+        kind: 'midpoint-handle',
+        point: [plan.position[0], plan.position[2]],
+        activation: 'action',
+        affordance: 'continue-run',
+        payload: { action: 'continue-run', endpoint, fittingId: plan.fittingId },
       })
     }
   }
