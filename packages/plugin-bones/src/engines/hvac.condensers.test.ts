@@ -1461,7 +1461,7 @@ describe('Manual-J-lite engine sizing — hand-derived tonnage, 5-ton split, cli
     expect(6.0 / load.loadTons).toBeGreaterThan(1.15) // installed out of band
     expect(ah.meta?.tons).toBe(6)
     expect(ah.meta?.selectedTons).toBe(5.5)
-    expect(ah.label).toContain('Air handler — 6 ton')
+    expect(ah.label).toMatch(/^Air handler[^—]*— 6 ton/)
     expect(ah.label).toContain(
       'serves 2 condensers (2 × 3 t installed vs 5.5 t selected), single indoor coil assumption',
     )
