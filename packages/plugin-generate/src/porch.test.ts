@@ -455,8 +455,9 @@ describe('landing, rails and pillars by style (PlanCrafters entrance presets)', 
     }
     const flight = byType(deck.ops, 'stair')[0]!
     expect((flight.position as number[])[1]).toBeCloseTo(-18 * IN, 9)
-    // on a terrain site the ground lift IS the grade: the post and the
-    // flight are authored at 0 and keep their heights
+    // on a terrain site too: the house stands above the site datum so core's
+    // ground lift is 0 there — the post and the flight carry their grade
+    // (Steve, 2026-09-07: "posts and stairs still don't go to grade")
     const hill = porchFor(
       input({
         landing: 'wood',
@@ -467,11 +468,12 @@ describe('landing, rails and pillars by style (PlanCrafters entrance presets)', 
       ids(),
     )
     for (const p of byType(hill.ops, 'column')) {
-      expect((p.position as number[])[1]).toBe(0)
+      const foot = (p.position as number[])[0]! > 20 * FT ? -24 * IN : -18 * IN
+      expect((p.position as number[])[1]).toBeCloseTo(foot, 9)
       expect(p.supportSlabId).toBe('ground')
-      expect(p.height).toBeCloseTo(beam - ((p.position as number[])[0]! > 20 * FT ? -24 * IN : -18 * IN), 6)
+      expect(p.height).toBeCloseTo(beam - foot, 6)
     }
-    expect((byType(hill.ops, 'stair')[0]!.position as number[])[1]).toBe(0)
+    expect((byType(hill.ops, 'stair')[0]!.position as number[])[1]).toBeCloseTo(-18 * IN, 9)
     const slab = porchFor(input({ gradeY: -18 * IN }), ids())
     for (const p of byType(slab.ops, 'column')) {
       expect(p.supportSlabId).toBe('slab_porch')

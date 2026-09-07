@@ -142,11 +142,14 @@ export interface PorchInput {
   /** Grade under any plan point, level-local y — a deck's posts run down to it. Default: `gradeY` everywhere. */
   gradeAt?: (x: number, z: number) => number
   /**
-   * The site carries a terrain field. The viewer lifts a ground-hosted
-   * node (`supportSlabId: 'ground'`) by the sculpted ground under it, so on
-   * a terrain site a post or flight to grade is authored at y = 0 and the
-   * ground puts it down; on a flat site the ground lift is 0 and the node
-   * carries its grade itself. Default false.
+   * The site carries a terrain field. Informational only since 2026-09-07:
+   * core's ground lift applies to a storey whose base sits AT the site
+   * datum (terrain-support.ts `levelDatum`), and a generated house always
+   * stands 8 in or more above the high side, so its ground floor is never
+   * that storey and the lift is 0. A post or flight to grade therefore
+   * carries its grade itself (`gradeAt` / `gradeY`, level-local) on every
+   * site — what Steve saw when it did not: posts through the porch roof
+   * and stairs floating at floor height. Default false.
    */
   terrain?: boolean
   /** Eave overhang for the cover, metres along the slope. */
@@ -567,8 +570,8 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         parentId: input.levelId,
         // A deck's post is hosted on the GROUND, never elected onto the deck
         // it passes through (the viewer's floor stacking would lift it onto
-        // the decking); on a terrain site the ground lift puts it down.
-        position: [px, footY === null || input.terrain ? 0 : footY, pz],
+        // the decking); it carries its own grade (see `terrain`).
+        position: [px, footY === null ? 0 : footY, pz],
         rotation: round(Math.atan2(-az, ax)),
         supportSlabId: footY === null ? ids.slab : 'ground',
         height: round(footY === null ? postHeight : beamBottom - footY),
@@ -634,9 +637,8 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         type: 'stair',
         name: `${name} steps`,
         parentId: input.levelId,
-        // the flight rests on the ground: on a terrain site the viewer's
-        // ground lift is its grade, on a flat site it carries the grade itself
-        position: [bx, input.terrain ? 0 : round(input.gradeY), bz],
+        // the flight rests on the ground and carries its own grade (see `terrain`)
+        position: [bx, round(input.gradeY), bz],
         rotation: round(Math.atan2(inward[0], inward[1])),
         stairType: 'straight',
         fromLevelId: null,

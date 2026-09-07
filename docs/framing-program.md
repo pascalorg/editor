@@ -888,6 +888,27 @@ G66 Terrain contour lines on the site plan, with an interval setting (6 in,
 
 ## Log (continued)
 
+- 2026-09-07: **Batch T3 — posts and stairs to grade, for real.** Steve,
+  with two screenshots (porch posts standing up through the porch roofs,
+  the flights floating at floor height): "posts and stairs still dont go
+  to grade". Root cause in core, not in the porch: `terrain-support.ts`
+  `levelDatum` lets the sculpted ground lift only a storey whose base sits
+  AT the site datum (world y = 0 ± 1e-4), and a generated house always
+  stands 8 in or more above the high side, so its ground floor never
+  qualifies and the lift is 0 — the porch's "on a terrain site author at
+  y = 0 and the ground puts it down" branch (T1) left every post and
+  flight at floor level, the post's full grade-to-beam length then poking
+  through the cover by the floor height. Fix: porch.ts authors the grade
+  it already computed (`gradeAt` for each post, `gradeY` for the flight)
+  on every site; the `terrain` flag stays as information. Seen: Tampa
+  (1200 W Cass St, 11 in of fall) regenerated in the editor — deck posts
+  from the ground to the beam, nothing above the roof, the flight on the
+  ground; headless: front steps at −0.503 m level-local (20 in below the
+  floor at the low front), rear at −0.308 m. Open: a hand-sculpt after
+  generation will not move these posts either — the same datum rule; a
+  building-datum-aware lift in core is the real fix and is logged, not
+  done. Tests: porch test re-pinned; generate 104.
+
 - 2026-09-07: **Batch T2 — the T1 gaps filled.** Steve: "okay fill the
   gaps please!" — the four I had listed. (1) The site node carries the
   dossier's USGS 3DEP one-foot contour lines (`site.terrainContours`,
