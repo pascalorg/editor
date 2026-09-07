@@ -1,36 +1,29 @@
 'use client'
 
-import {
-  type AnyNode,
-  type AnyNodeId,
-  emitter,
-  type GridEvent,
-  sceneRegistry,
-  useScene,
-} from '@pascal-app/core'
+import { type AnyNodeId, emitter, type GridEvent, sceneRegistry, useScene } from '@pascal-app/core'
 import {
   CursorSphere,
+  clearPlacementSurface,
   DimensionPill,
   type DimensionPillPart,
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
-  clearPlacementSurface,
   markToolCancelConsumed,
   publishPlacementSurface,
   triggerSFX,
-  useInteractionScope,
   useEditor,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
+import type { RunSurfaceBounds, RunSurfaceTarget } from './distribution-run-contract'
 import { clearDrawAlignment } from './draw-alignment'
-import { type RunSurfaceBounds, type RunSurfaceTarget } from './distribution-run-contract'
-import { resolveRunCursorPlane } from './run-cursor'
 import type { RunBodyHit, ScenePort } from './ports'
+import { resolveRunCursorPlane } from './run-cursor'
 import {
   RunDirectionFeedback,
   type RunDirectionMode,
@@ -354,7 +347,7 @@ export function stepNominalRunSize(
 
 function wallSurfaceBounds(hostId: AnyNodeId): RunSurfaceBounds {
   const wall = useScene.getState().nodes[hostId]
-  if (!wall || wall.type !== 'wall') {
+  if (wall?.type !== 'wall') {
     return { minU: 0, maxU: 0, minV: 0, maxV: 0 }
   }
   return {
@@ -367,7 +360,7 @@ function wallSurfaceBounds(hostId: AnyNodeId): RunSurfaceBounds {
 
 function stableWallFrame(frame: RunSurfaceFrame, hostId: AnyNodeId): RunSurfaceFrame {
   const wall = useScene.getState().nodes[hostId]
-  if (!wall || wall.type !== 'wall') return frame
+  if (wall?.type !== 'wall') return frame
   const origin = new Vector3(wall.start[0], 0, wall.start[1])
   const ownerLevel = wall.parentId ? sceneRegistry.nodes.get(wall.parentId as AnyNodeId) : null
   const activeLevelId = useViewer.getState().selection.levelId

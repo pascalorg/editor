@@ -39,8 +39,8 @@ import {
   planRunTranslationOffsets,
   type RunTranslationOffsetPlan,
 } from '../shared/run-translation-offset'
-import { rectSectionAxes } from './geometry'
 import { translateWallRun } from '../shared/wall-run-move'
+import { rectSectionAxes } from './geometry'
 
 type Vec3 = [number, number, number]
 

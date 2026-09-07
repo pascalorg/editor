@@ -60,13 +60,13 @@ import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPortXZ } from '../shar
 import { planRunTranslationOffsets } from '../shared/run-translation-offset'
 import { ContinuePlusHandle, HandleCube, MoveChevron, RotateArc } from '../shared/selection-handles'
 import { planVerticalOffsets, type VerticalOffsetResult } from '../shared/vertical-offset'
+import { refreshWallRunAttachment } from '../shared/wall-run-move'
 import {
   activateDuctContinuation,
   type DuctEndpoint,
   ductContinuationHandlePlan,
 } from './continuation'
 import { INCHES_TO_METERS } from './geometry'
-import { refreshWallRunAttachment } from '../shared/wall-run-move'
 
 /** Port-snap radius for dragged run endpoints (meters, XZ). */
 const PORT_SNAP_RADIUS_M = 0.4

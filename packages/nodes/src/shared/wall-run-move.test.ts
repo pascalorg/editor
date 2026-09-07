@@ -32,8 +32,8 @@ describe('wall-attached run movement', () => {
       },
     )
     expect(result?.path).toEqual([
-        [1, 1.5, 0.1],
-        [3, 1.5, 0.1],
+      [1, 1.5, 0.1],
+      [3, 1.5, 0.1],
     ])
     expect(result?.attachment.startUV).toEqual([1, 1.5])
     expect(result?.attachment.endUV).toEqual([3, 1.5])
@@ -42,17 +42,26 @@ describe('wall-attached run movement', () => {
   test('rejects a different wall or a non-side hit', () => {
     expect(
       translateWallRun(
-        [[1, 1, 0.1], [3, 1, 0.1]],
+        [
+          [1, 1, 0.1],
+          [3, 1, 0.1],
+        ],
         attachment,
         wall,
-        { surfaceHit: { kind: 'wall', hostId: 'wall_2', face: 'side' }, surfaceLocalPosition: [2, 1, 0] },
+        {
+          surfaceHit: { kind: 'wall', hostId: 'wall_2', face: 'side' },
+          surfaceLocalPosition: [2, 1, 0],
+        },
       ),
     ).toBeNull()
   })
 
   test('refreshes UV coordinates after a point edit', () => {
     const next = refreshWallRunAttachment(
-      [[0.5, 0.8, 0.1], [2.5, 0.8, 0.1]],
+      [
+        [0.5, 0.8, 0.1],
+        [2.5, 0.8, 0.1],
+      ],
       attachment,
       wall,
     )

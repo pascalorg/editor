@@ -30,7 +30,6 @@ import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { type Group, type Object3D, Plane, Quaternion, Raycaster, Vector2, Vector3 } from 'three'
 import { planPipeElbowAtPort } from '../shared/auto-fitting'
-import { refreshWallRunAttachment } from '../shared/wall-run-move'
 import {
   detectFittingEndpoint,
   type FittingEndpoint,
@@ -41,6 +40,7 @@ import { planPipeRunTranslationOffsets } from '../shared/pipe-run-translation-of
 import { planVerticalOffsets, type VerticalOffsetResult } from '../shared/pipe-vertical-offset'
 import { collectScenePorts, DWV_PORT_SYSTEMS, findNearestPortXZ } from '../shared/ports'
 import { ContinuePlusHandle, HandleCube, MoveChevron } from '../shared/selection-handles'
+import { refreshWallRunAttachment } from '../shared/wall-run-move'
 import {
   activatePipeContinuation,
   type PipeEndpoint,

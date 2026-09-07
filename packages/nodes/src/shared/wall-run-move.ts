@@ -39,8 +39,7 @@ export function translateWallRun(
   event: Pick<GridEvent, 'surfaceHit' | 'surfaceLocalPosition'>,
 ): WallRunMoveResult | null {
   if (
-    !event.surfaceHit ||
-    event.surfaceHit.kind !== 'wall' ||
+    event.surfaceHit?.kind !== 'wall' ||
     event.surfaceHit.hostId !== attachment.wallId ||
     event.surfaceHit.face !== 'side' ||
     !event.surfaceLocalPosition ||
@@ -66,7 +65,8 @@ export function translateWallRun(
   const deltaU = (hit[0] - center[0]) * tangent[0] + (hit[2] - center[2]) * tangent[2]
   const deltaV = hit[1] - center[1]
   const movedPath = path.map(
-    (point) => [point[0] + tangent[0] * deltaU, point[1] + deltaV, point[2] + tangent[2] * deltaU] as Point,
+    (point) =>
+      [point[0] + tangent[0] * deltaU, point[1] + deltaV, point[2] + tangent[2] * deltaU] as Point,
   )
   return {
     path: movedPath,

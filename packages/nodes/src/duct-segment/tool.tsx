@@ -4,7 +4,7 @@ import { type AnyNode, type DuctFittingNode, DuctSegmentNode, useScene } from '@
 import { EDITOR_LAYER, triggerSFX, useEditor, usePathDraftPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { type Group, Matrix4, Vector3 } from 'three'
+import { type Group, Vector3 } from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import {
   planCrossAtRunBody,
@@ -12,6 +12,7 @@ import {
   planElbowRealign,
   planTeeAtRunBody,
 } from '../shared/auto-fitting'
+import { createRunWallAttachment, type RunSurfaceTarget } from '../shared/distribution-run-contract'
 import {
   DistributionRunCursor,
   runDistanceSquared as dist2,
@@ -21,7 +22,6 @@ import {
 } from '../shared/distribution-run-tool'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
-import { createRunWallAttachment, type RunSurfaceTarget } from '../shared/distribution-run-contract'
 import {
   collectScenePorts,
   DUCT_PORT_SYSTEMS,

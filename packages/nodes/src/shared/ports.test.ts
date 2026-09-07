@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { findNearestPort3D, findNearestPortXZ, type ScenePort } from './ports'
 import type { RunSurfaceTarget } from './distribution-run-contract'
+import { findNearestPort3D, findNearestPortXZ, type ScenePort } from './ports'
 
 const ports: ScenePort[] = [
   { nodeId: 'duct-segment_a', id: 'floor', position: [0, 0, 0], direction: [1, 0, 0] },
@@ -31,7 +31,12 @@ describe('distribution port distance metrics', () => {
       },
       bounds: { minU: 0, maxU: 10, minV: 0, maxV: 3 },
     }
-    const offPlane: ScenePort = { nodeId: 'duct-segment_c', id: 'off-plane', position: [0, 1.8, 0.25], direction: [1, 0, 0] }
+    const offPlane: ScenePort = {
+      nodeId: 'duct-segment_c',
+      id: 'off-plane',
+      position: [0, 1.8, 0.25],
+      direction: [1, 0, 0],
+    }
     expect(findNearestPort3D([0, 1.8, 0], [offPlane], 0.1, wall)).toBeNull()
     expect(findNearestPort3D([0.4, 2, 0], ports, 0.1, wall)?.id).toBe('wall')
   })

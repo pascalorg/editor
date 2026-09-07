@@ -240,7 +240,10 @@ export const Grid = ({
       const planeOffset = surfacePoint.dot(surfaceNormal)
       const latticeAnchor = published?.anchor ?? surfacePoint
       gridMesh.position.copy(latticeAnchor)
-      gridMesh.position.addScaledVector(surfaceNormal, -latticeAnchor.dot(surfaceNormal) + planeOffset)
+      gridMesh.position.addScaledVector(
+        surfaceNormal,
+        -latticeAnchor.dot(surfaceNormal) + planeOffset,
+      )
       // Cursor → plane-local XY: rotate (ghost − anchor) by the inverse plane
       // orientation. Both lie in the plane, so the resulting local Z is ~0.
       invQuatRef.current.copy(gridMesh.quaternion).invert()
