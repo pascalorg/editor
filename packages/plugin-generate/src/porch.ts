@@ -43,7 +43,8 @@ import { trimOf } from './styles'
 import type { NodeOp } from './build'
 // Bones by relative path (see plugin-roof/run.ts): the cover's slab is the
 // rafter depth plus sheathing Bones frames.
-import { porchBeam, porchPostSize, roofShellThickness } from '../../plugin-bones/src/core/shell-sync'
+import { porchBeam, porchPostSize, ROOF_SHINGLE, roofShellThickness } from '../../plugin-bones/src/core/shell-sync'
+import { fasciaTopology } from './ornament'
 import type { StylePreset } from './styles'
 
 export type Pt = [number, number]
@@ -868,6 +869,7 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
           id: ids.column(),
           type: 'column',
           name: `${name} gable king post`,
+          supportSlabId: 'ground',
           parentId: input.levelId,
           position: [centreAt[0], round(plateY), centreAt[1]],
           rotation: round(Math.atan2(-acrossDir[1], acrossDir[0])),
@@ -914,10 +916,43 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
         overhang: round(input.overhang),
         // the slab is the rafter and its sheathing — what Bones frames
         deckThickness: round(roofShellThickness()),
+        shingleThickness: round(ROOF_SHINGLE),
         metadata: { ...meta, roof: roofMeta },
       },
       parentId: ids.roof,
     })
+    // the fascia and rake boards on the cover (a shed on a ledger has no
+    // board on its high edge — that edge is the house wall)
+    const fascia = fasciaTopology(
+      {
+        roofType: form,
+        width: segWidth,
+        depth: segDepth,
+        pitch: pitchDeg,
+        wallHeight: banded ? PORCH_BAND : 0,
+        wallThickness: banded ? PORCH_BEAM_W : 0,
+        overhang: input.overhang,
+        deckThickness: roofShellThickness(),
+      },
+      { skipHighEdge: roofMeta.attach === 'high' },
+    )
+    if (fascia) {
+      ops.push({
+        node: {
+          id: ids.column(),
+          type: 'block',
+          // hosted on the ground: a floor-placed node over a room's ceiling would be lifted onto it
+          supportSlabId: 'ground',
+          name: `${name} fascia`,
+          parentId: input.levelId,
+          position: [centre[0], round(banded ? plateY - PORCH_BAND : plateY), centre[1]],
+          rotation: round(yaw),
+          topology: fascia,
+          metadata: { ...meta, ornament: 'fascia' },
+        },
+        parentId: input.levelId,
+      })
+    }
     if (!banded && along.length >= 2) {
       const a0 = Math.min(...along) - pillar.size / 2
       const a1 = Math.max(...along) + pillar.size / 2

@@ -39,7 +39,7 @@ import {
 } from './geometry'
 import { type CatalogAsset, type FurnishRoom, furnishRooms } from './furnish'
 import { type PorchPolicy, type PorchSummary, porchFor, riserCount, TREAD_RUN } from './porch'
-import { ceilingFanTopology, fitUnderRake, type GableOrnament, louverVentTopology, sconceTopology, shutterPairTopology } from './ornament'
+import { ceilingFanTopology, fasciaTopology, fitUnderRake, type GableOrnament, louverVentTopology, sconceTopology, shutterPairTopology } from './ornament'
 import { mulberry32 } from './rng'
 import { FRONT_DOOR_SEGMENTS, type StylePreset, trimOf, styleFor } from './styles'
 
@@ -763,6 +763,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         node: {
           id: generateId('block'),
           type: 'block',
+          // hosted on the ground: a floor-placed node over a room's ceiling would be lifted onto it
+          supportSlabId: 'ground',
           name,
           parentId: levelId,
           position: [round(cx + face.nx * (wall.thickness / 2 + 0.005)), round(66 * IN), round(cz + face.nz * (wall.thickness / 2 + 0.005))],
@@ -825,6 +827,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
           node: {
             id: generateId('block'),
             type: 'block',
+            // hosted on the ground: a floor-placed node over a room's ceiling would be lifted onto it
+            supportSlabId: 'ground',
             name: `${name} shutters`,
             parentId: levelId,
             position: [round(cx + face.nx * (wall.thickness / 2 + 0.005)), round(spec.sill * IN), round(cz + face.nz * (wall.thickness / 2 + 0.005))],
@@ -1323,6 +1327,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         node: {
           id: generateId('block'),
           type: 'block',
+          // hosted on the ground: a floor-placed node over a room's ceiling would be lifted onto it
+          supportSlabId: 'ground',
           name: `${room.name} ceiling fan`,
           parentId: levelId,
           position: [round(cx), round(ceilingM - 0.01), round(cz)],
@@ -1707,6 +1713,7 @@ function roofFor(
           id,
           type: 'column',
           name,
+          supportSlabId: 'ground',
           parentId: levelId,
           position: [round(at[0]), round(y), round(at[1])],
           rotation: yaw,
@@ -1770,6 +1777,8 @@ function roofFor(
           node: {
             id: generateId('block'),
             type: 'block',
+            // hosted on the ground: a floor-placed node over a room's ceiling would be lifted onto it
+            supportSlabId: 'ground',
             name: 'Gable vent',
             parentId: levelId,
             position: [round(centre(0.01)[0]), round(ceilingM + best.rise * 0.42 - h / 2), round(centre(0.01)[1])],
@@ -1781,6 +1790,29 @@ function roofFor(
         })
       }
     }
+  }
+  // The fascia and rake boards on every house roof segment (ornament.ts
+  // fasciaTopology): a block in the segment's frame at its position.
+  for (const op of [...roofOps]) {
+    if (op.node.type !== 'roof-segment') continue
+    const seg = op.node as { position: [number, number, number]; rotation: number; roofType: string; width: number; depth: number; pitch: number; wallHeight: number; wallThickness: number; overhang: number; deckThickness: number; id: string }
+    const fascia = fasciaTopology(seg)
+    if (!fascia) continue
+    roofOps.push({
+      node: {
+        id: generateId('block'),
+        type: 'block',
+        // hosted on the ground: a floor-placed node over a room's ceiling would be lifted onto it
+        supportSlabId: 'ground',
+        name: 'Fascia',
+        parentId: levelId,
+        position: [round(seg.position[0]), round(seg.position[1]), round(seg.position[2])],
+        rotation: round(seg.rotation),
+        topology: fascia,
+        metadata: { generatedBy: GENERATED_BY, ornament: 'fascia', segmentId: seg.id },
+      },
+      parentId: levelId,
+    })
   }
   // Dormers on the front slope of the main gable (Steve, 2026-09-07: "add
   // dormer option into the generation, using the pascal dormer tool") — the

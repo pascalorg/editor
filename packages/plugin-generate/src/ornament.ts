@@ -152,3 +152,99 @@ export const GABLE_ORNAMENTS_BY_STYLE: Record<string, readonly GableOrnament[]> 
   modern: ['none'],
   'modern-mono': ['none'],
 }
+
+
+/* ------------------------------------------------------------------ fascia */
+
+/** A 1x8 finish fascia / rake board — actual 3/4 × 7-1/4 in (the board Bones frames over its 2x6 sub-fascia). */
+export const FASCIA_BOARD = { t: 0.019, h: 0.184 } as const
+
+type SegLike = {
+  roofType: string
+  width: number
+  depth: number
+  /** Degrees. */
+  pitch: number
+  wallHeight: number
+  wallThickness: number
+  overhang: number
+  deckThickness: number
+}
+
+/** A board between two top-edge points, `h` tall (plumb) and `thick` across `across` (a unit vector in the x-z plane). */
+function board(t: Topology, key: string, a: [number, number, number], b: [number, number, number], h: number, across: [number, number], thick: number): void {
+  const ax = (across[0] * thick) / 2
+  const az = (across[1] * thick) / 2
+  const pts: [number, number, number][] = [
+    [a[0] - ax, a[1] - h, a[2] - az],
+    [b[0] - ax, b[1] - h, b[2] - az],
+    [b[0] + ax, b[1] - h, b[2] + az],
+    [a[0] + ax, a[1] - h, a[2] + az],
+    [a[0] - ax, a[1], a[2] - az],
+    [b[0] - ax, b[1], b[2] - az],
+    [b[0] + ax, b[1], b[2] + az],
+    [a[0] + ax, a[1], a[2] + az],
+  ]
+  const v = (k: number) => `${key}v${k}`
+  pts.forEach((p, k) => t.vertices.push({ id: v(k), position: [r(p[0]), r(p[1]), r(p[2])] }))
+  const E: [number, number][] = [[0, 1], [1, 2], [2, 3], [3, 0], [4, 5], [5, 6], [6, 7], [7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]
+  E.forEach(([p, q], k) => t.edges.push({ id: `${key}e${k}`, vertexIds: [v(p), v(q)] }))
+  const F: [string, number[]][] = [
+    ['bottom', [0, 1, 2, 3]],
+    ['top', [4, 7, 6, 5]],
+    ['a', [0, 4, 5, 1]],
+    ['b', [1, 5, 6, 2]],
+    ['c', [2, 6, 7, 3]],
+    ['d', [3, 7, 4, 0]],
+  ]
+  for (const [name, ids] of F) t.faces.push({ id: `${key}f-${name}`, vertexIds: ids.map(v), materialSlot: 'body' })
+}
+
+/**
+ * The fascia and rake boards a roof segment wears, in the SEGMENT's local
+ * frame (place the block at the segment's position with its rotation):
+ * a plumb 1x8 along every eave with its top at the deck's top edge, a
+ * 1x8 rake board up every gable / shed rake. The eave line is where the
+ * viewer's shell puts it — the wall's half thickness plus the overhang
+ * out from the plate line, the deck top dropped by that reach on the
+ * slope and raised by the deck's plumb thickness (Steve, 2026-09-07:
+ * "your presentation roofs don't show the true fascia board which should
+ * be 90 degree face"). Null when the segment has no eave to trim.
+ */
+export function fasciaTopology(seg: SegLike, options: { skipHighEdge?: boolean } = {}): Topology | null {
+  const t: Topology = { vertices: [], edges: [], faces: [] }
+  const { t: bt, h: bh } = FASCIA_BOARD
+  const theta = (seg.pitch * Math.PI) / 180
+  const tan = seg.roofType === 'flat' ? 0 : Math.tan(theta)
+  const cos = seg.roofType === 'flat' ? 1 : Math.cos(theta) || 1
+  const deckExt = seg.wallThickness / 2 + seg.overhang * cos
+  const vert = seg.deckThickness / cos
+  const wV = seg.width + 2 * deckExt
+  const dV = seg.depth + 2 * deckExt
+  const eaveY = seg.wallHeight - deckExt * tan + vert
+  const out = bt / 2 + 0.002
+  const zE = dV / 2 + out
+  const xE = wV / 2 + out
+  if (seg.roofType === 'gable') {
+    const ridgeY = eaveY + (dV / 2) * tan
+    board(t, 'e0', [-xE, eaveY, zE], [xE, eaveY, zE], bh, [0, 1], bt)
+    board(t, 'e1', [-xE, eaveY, -zE], [xE, eaveY, -zE], bh, [0, 1], bt)
+    for (const sx of [-1, 1]) {
+      board(t, `r${sx}a`, [sx * xE, eaveY, zE], [sx * xE, ridgeY, 0], bh, [1, 0], bt)
+      board(t, `r${sx}b`, [sx * xE, ridgeY, 0], [sx * xE, eaveY, -zE], bh, [1, 0], bt)
+    }
+  } else if (seg.roofType === 'hip' || seg.roofType === 'flat') {
+    const y = seg.roofType === 'flat' ? seg.wallHeight + seg.deckThickness : eaveY
+    board(t, 'e0', [-xE, y, zE], [xE, y, zE], bh, [0, 1], bt)
+    board(t, 'e1', [-xE, y, -zE], [xE, y, -zE], bh, [0, 1], bt)
+    board(t, 'e2', [xE, y, -zE], [xE, y, zE], bh, [1, 0], bt)
+    board(t, 'e3', [-xE, y, -zE], [-xE, y, zE], bh, [1, 0], bt)
+  } else if (seg.roofType === 'shed') {
+    // the low eave at +z, the slope rising to −z
+    const highY = eaveY + dV * tan
+    board(t, 'e0', [-xE, eaveY, zE], [xE, eaveY, zE], bh, [0, 1], bt)
+    if (!options.skipHighEdge) board(t, 'e1', [-xE, highY, -zE], [xE, highY, -zE], bh, [0, 1], bt)
+    for (const sx of [-1, 1]) board(t, `r${sx}`, [sx * xE, eaveY, zE], [sx * xE, highY, -zE], bh, [1, 0], bt)
+  } else return null
+  return t.faces.length > 0 ? t : null
+}

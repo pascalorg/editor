@@ -984,6 +984,36 @@ G89 More hip roofs on random designs across styles.
 
 ## Log (continued)
 
+- 2026-09-07: **Batch T7 — the roof planes per the framing, the true
+  fascia (G81), the ornament on the ground.** Steve: "ensure the roof
+  planes are correct thickness per framing and whatever else left". The
+  shell's slab was already rafter depth + sheathing (`roofShellThickness`,
+  2x6 + 7/16 in = 0.151 m) but its shingle layer was the schema's 5 cm
+  placeholder — a second slab on the edge; generated segments now carry
+  `ROOF_SHINGLE` (1/2 in, shell-sync.ts). The Bones panel's rafter-stock
+  override re-sizes the level's generated segments' deckThickness to the
+  chosen rafter (`syncGeneratedRoofShell`), so the drawn plane is the
+  framed one. The TRUE FASCIA: every generated segment (house and porch
+  covers) gets a block of 1x8 boards — a plumb fascia along each eave
+  with its top at the deck's top edge, rake boards up each gable / shed
+  rake — built in the segment's frame from the shell's own eave math
+  (`ornament.ts` `fasciaTopology`); a shed on a ledger has no board on
+  its high edge. FOUND on the way: every ornament block (shutters,
+  sconces, fans, vents, fascia) and the gable columns were floor-placed
+  nodes, and the level's CEILING nodes were elected as their floor — each
+  stood a ceiling height too high (the "louvered panels on the roof" were
+  the shutters). All of them are hosted on the ground now
+  (`supportSlabId: 'ground'`, a lift of 0 for a house above the datum).
+  Seen in the editor (craftsman, Tampa): fascia and rake boards on the
+  main roof and the porch cover, shutters beside the front windows, a
+  lantern by the door. NOT verified: the dormers in the editor — the
+  editor's roll of seed 7 differs from the headless one (15 rooms vs 11)
+  and rolled none; headless the two dormer nodes are on the main segment.
+  Open: the fascia's corner ("tapers in") is two boards meeting, not a
+  mitred return; the sub-fascia is not drawn (the shell's plumb face
+  stands for it); the side-porch gable faces unverified. Tests: generate
+  105.
+
 - 2026-09-07: **Batch T6 — the second 3D review, first pass (G77–G89).**
   What landed: (G77) the gable ornament is centred on the ROOF SEGMENT's
   gable end (an L-house's long side wall put it off-centre) and every tip

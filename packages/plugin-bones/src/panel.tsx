@@ -1,6 +1,8 @@
 'use client'
 
 import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
+import { DEFAULT_SPEC } from './core/spec'
+import { roofShellThickness } from './core/shell-sync'
 import { SegmentedControl, SliderControl, useEditor } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useState } from 'react'
@@ -618,6 +620,27 @@ function LumberSection() {
  * meter-main side, sewer direction, water route, HVAC system). Auto REMOVES
  * the key, so an untouched scene persists byte-identically.
  */
+/**
+ * Re-size the generated roof segments on `levelId` to the rafter stock:
+ * deckThickness = rafter depth + sheathing, so the drawn roof plane is the
+ * framed one (Steve, 2026-09-07: "ensure the roof planes are correct
+ * thickness per framing").
+ */
+function syncGeneratedRoofShell(levelId: string | undefined, rafterSize: LumberSize): void {
+  if (!levelId) return
+  const state = useScene.getState()
+  const nodes = state.nodes as Record<string, { id: string; type?: string; parentId?: string; metadata?: { generatedBy?: string } }>
+  const deck = roofShellThickness({ ...DEFAULT_SPEC, rafterSize })
+  for (const n of Object.values(nodes)) {
+    if (n.type !== 'roof-segment') continue
+    const roof = n.parentId ? nodes[n.parentId] : undefined
+    if (!roof || roof.parentId !== levelId) continue
+    const by = n.metadata?.generatedBy
+    if (by !== 'pascal:roof' && by !== 'pascal:generate') continue
+    state.updateNode(n.id as AnyNodeId, { deckThickness: Math.round(deck * 1e6) / 1e6 } as Partial<AnyNode> as never)
+  }
+}
+
 function ServicesRow({ framingNode }: { framingNode: FramingNode & { id: string } }) {
   const write = (patch: Record<string, unknown>) =>
     useScene.getState().updateNode(framingNode.id as AnyNodeId, patch as Partial<AnyNode> as never)
@@ -686,7 +709,12 @@ function RoofRow({ framingNode }: { framingNode: FramingNode & { id: string } })
         <div className="flex flex-col gap-1" key={key}>
           <span className="text-sidebar-foreground/60">{label}</span>
           <SegmentedControl
-            onChange={(v: string) => write(roofStockPatch(key, v as RoofStockValue | 'auto'))}
+            onChange={(v: string) => {
+              write(roofStockPatch(key, v as RoofStockValue | 'auto'))
+              // the generated roof shell follows the rafter stock: its slab is
+              // the rafter's depth plus the sheathing (shell-sync.ts)
+              if (key === 'rafterSize') syncGeneratedRoofShell(framingNode.parentId as string | undefined, v === 'auto' ? DEFAULT_SPEC.rafterSize : (v as LumberSize))
+            }}
             options={[
               { label: 'Auto', value: 'auto' },
               ...ROOF_STOCK_OPTIONS.map((s) => ({ label: s, value: s })),

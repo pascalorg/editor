@@ -18,6 +18,14 @@ import { inches } from './units'
 /** 7/16" WSP roof deck (R803.2) — the same sheet roof-framing.ts lays. */
 export const ROOF_SHEATHING = inches(7 / 16)
 
+/**
+ * The shingle layer the shell draws over the deck: two courses of asphalt
+ * shingle, about 1/2 in (the schema's 5 cm placeholder read as a second
+ * slab — Steve, 2026-09-07: "ensure the roof planes are correct thickness
+ * per framing").
+ */
+export const ROOF_SHINGLE = inches(0.5)
+
 /** The roof slab the shell draws: the rafter's depth plus its sheathing, metres. */
 export function roofShellThickness(spec: FramingSpec = DEFAULT_SPEC): number {
   const [, rafterDepth] = LUMBER_CROSS_SECTIONS[spec.rafterSize]
