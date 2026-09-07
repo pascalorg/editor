@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, spyOn, test } from 'bun:test'
-import { spawnSync } from 'node:child_process'
 import {
   BuildingNode,
   LevelNode,
@@ -13,8 +12,6 @@ import {
   useScene,
   WallNode,
 } from '@pascal-app/core'
-import { act, createRoot, useFrame } from '@react-three/fiber'
-import { createElement } from 'react'
 import {
   BoxGeometry,
   Group,
@@ -28,7 +25,7 @@ import {
 } from 'three'
 import { createStore, type StoreApi } from 'zustand/vanilla'
 import { applyMaterialPresetToMaterials } from '../../lib/materials'
-import { getWallHideState, WallCutout } from './wall-cutout'
+import { getWallHideState, runWallCutoutFrame, WALL_CUTOUT_FRAME_PRIORITY } from './wall-cutout'
 import {
   sameMaterialArray,
   WALL_FACING_HYSTERESIS,
@@ -418,66 +415,49 @@ describe('WallCutoutCache', () => {
     matrix.mockRestore()
   })
 
-  test('actual R3F advance renders camera stamps before rebuilds and passes them to the batch', async () => {
-    // The level tests also leak a useFrame mock; real frame ordering needs a fresh runtime.
-    if (process.env.PASCAL_WALL_CUTOUT_FRAME_TEST !== '1') {
-      const result = spawnSync(
-        process.execPath,
-        ['test', import.meta.filename, '--test-name-pattern', 'actual R3F advance'],
-        {
-          env: { ...process.env, PASCAL_WALL_CUTOUT_FRAME_TEST: '1' },
-          encoding: 'utf8',
-          timeout: 4000,
-        },
-      )
-      const output = result.stdout + result.stderr
-      expect(result.status, output).toBe(0)
-      expect(output).toContain('1 pass')
-      return
-    }
+  test('frame priority order renders camera stamps before rebuilds and passes them to the batch', () => {
     const { node, mesh } = addWall()
-    const canvas = { width: 1, height: 1, style: {} } as HTMLCanvasElement
-    const root = createRoot(canvas)
+    const state = { camera, clock: { elapsedTime: 0 } }
+    const callbacks: { callback: () => void; priority: number }[] = []
+    const registerFrame = (callback: () => void, priority: number) => {
+      callbacks.push({ callback, priority })
+    }
+    const advance = (time: number) => {
+      state.clock.elapsedTime = time
+      for (const { callback } of callbacks.toSorted((a, b) => a.priority - b.priority)) callback()
+    }
     const rendered: boolean[] = []
     const batched: boolean[] = []
+    const batchChanges = new Set<string>()
     let rebuild = false
-    function FrameConsumers() {
-      useFrame(() => rendered.push(mesh.userData.wallHidden), 1)
-      useFrame(() => {
-        if (!rebuild) return
-        mesh.rotation.y = Math.PI
-        notifyWallRebuilt(node.id)
-        rebuild = false
-      }, 4)
-      useFrame(() => batched.push(mesh.userData.wallHidden), 5)
-      return createElement(WallCutout, { viewerStore })
-    }
-    await root.configure({
-      camera,
-      frameloop: 'never',
-      size: { width: 1, height: 1, top: 0, left: 0 },
-      gl: { render() {}, setSize() {}, setPixelRatio() {} } as never,
-    })
-    let store: ReturnType<typeof root.render>
-    await act(async () => {
-      store = root.render(createElement(FrameConsumers))
-    })
-    try {
-      const advance = (time: number) => store!.getState().advance(time)
-      advance(1)
-      camera.rotation.y = Math.PI
-      advance(2)
-      expect(rendered).toEqual([true, false])
-      expect(batched).toEqual(rendered)
-      rebuild = true
-      advance(3)
-      expect(rendered[2]).toBe(false)
-      advance(3.01)
-      expect(rendered[3]).toBe(true)
-      expect(batched).toEqual(rendered)
-    } finally {
-      await act(async () => root.unmount())
-    }
+    registerFrame(() => rendered.push(mesh.userData.wallHidden), 1)
+    registerFrame(() => {
+      if (!rebuild) return
+      mesh.rotation.y = Math.PI
+      notifyWallRebuilt(node.id)
+      rebuild = false
+    }, 4)
+    registerFrame(() => {
+      drainRebuiltWalls(batchChanges)
+      batched.push(mesh.userData.wallHidden)
+    }, 5)
+    registerFrame(() => runWallCutoutFrame(cache, state), WALL_CUTOUT_FRAME_PRIORITY)
+
+    advance(1)
+    camera.rotation.y = Math.PI
+    advance(2)
+    expect(rendered).toEqual([true, false])
+    expect(batched).toEqual(rendered)
+    rebuild = true
+    advance(3)
+    expect(rendered[2]).toBe(false)
+    expect(batched[2]).toBe(false)
+    expect(batchChanges.has(node.id)).toBe(true)
+    expect(cache.rebuilt.has(node.id)).toBe(true)
+    advance(3.01)
+    expect(rendered).toEqual([true, false, false, true])
+    expect(batched).toEqual(rendered)
+    expect(cache.rebuilt.size).toBe(0)
   })
 
   test('mode round trips immediately lift stamps and preserve low/translucent semantics', () => {

@@ -1,7 +1,7 @@
 import { type AnyNodeId, emitter, sceneRegistry, useScene, type WallNode } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
-import type { Material } from 'three'
+import type { Camera, Material } from 'three'
 import { type Mesh, Vector3 } from 'three/webgpu'
 import useViewer, { type WallMode } from '../../store/use-viewer'
 import {
@@ -14,6 +14,15 @@ import { getMaterialsForWall, getSelectionHighlightMaterials } from './wall-mate
 import { subscribeWallRebuilds } from './wall-rebuild-notifications'
 
 const v = new Vector3()
+
+export const WALL_CUTOUT_FRAME_PRIORITY = 0
+
+export function runWallCutoutFrame(
+  cache: WallCutoutCache,
+  { camera, clock }: { camera: Camera; clock: { elapsedTime: number } },
+) {
+  cache.update(camera, clock.elapsedTime)
+}
 
 /**
  * Whether a wall should be hidden or see-through for the current camera and
@@ -48,7 +57,7 @@ export const WallCutout = ({
 
   // Camera changes reach PostProcessing (1) in this frame. WallSystem (4)
   // notifies the next frame; WallBatchSystem (5) reads this frame's stamps.
-  useFrame(({ camera, clock }) => cache.update(camera, clock.elapsedTime), 0)
+  useFrame((state) => runWallCutoutFrame(cache, state), WALL_CUTOUT_FRAME_PRIORITY)
 
   useEffect(() => {
     const snapshot = new Map<Mesh, Material | Material[]>()
