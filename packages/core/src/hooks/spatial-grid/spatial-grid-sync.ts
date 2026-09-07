@@ -201,11 +201,15 @@ export function initSpatialGridSync(): () => void {
           node.start !== prev.start ||
           node.end !== prev.end ||
           node.curveOffset !== prev.curveOffset ||
-          node.thickness !== prev.thickness
+          node.thickness !== prev.thickness ||
+          node.height !== prev.height ||
+          node.endHeightOffset !== prev.endHeightOffset ||
+          node.supportSlabId !== prev.supportSlabId ||
+          node.supportOffset !== prev.supportOffset
         ) {
-          // Rendered slab polygons adopt wall bands, so a wall reshape
-          // must reach the manager to refresh its wall map and drop the
-          // level's rendered-polygon cache.
+          // Rendered slab polygons adopt wall bands, and wall height/slope
+          // queries must see the latest node state — reach the manager to
+          // refresh its wall map and drop the level's rendered-polygon cache.
           spatialGridManager.handleNodeUpdated(node, resolveLevelId(node, state.nodes))
         }
       }

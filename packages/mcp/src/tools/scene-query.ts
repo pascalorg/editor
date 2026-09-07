@@ -139,7 +139,7 @@ export function resolveReportedWallHeight(
     (node): node is Extract<AnyNode, { type: 'wall' }> => node.type === 'wall',
   )
   const support = computeWallSlabSupport(wall, slabs, walls, wall.supportSlabId)
-  return resolveWallEffectiveHeight(wall, planeTop, support.elevation)
+  return resolveWallEffectiveHeight(wall, planeTop, support.elevation, 0)
 }
 
 function metadataRecord(node: AnyNode): Record<string, unknown> | null {

@@ -154,12 +154,27 @@ export function collectElevationSnapTargets(
         anchor: center,
         label: 'Wall base',
       })
-      targets.push({
-        id: `${node.id}:top`,
-        elevation: base + getWallEffectiveHeightForNodes(node, nodes),
-        anchor: center,
-        label: 'Wall top',
-      })
+      if (node.endHeightOffset) {
+        targets.push({
+          id: `${node.id}:top-start`,
+          elevation: base + getWallEffectiveHeightForNodes(node, nodes, 0),
+          anchor: node.start,
+          label: 'Wall top start',
+        })
+        targets.push({
+          id: `${node.id}:top-end`,
+          elevation: base + getWallEffectiveHeightForNodes(node, nodes, 1),
+          anchor: node.end,
+          label: 'Wall top end',
+        })
+      } else {
+        targets.push({
+          id: `${node.id}:top`,
+          elevation: base + getWallEffectiveHeightForNodes(node, nodes, 0.5),
+          anchor: center,
+          label: 'Wall top',
+        })
+      }
       continue
     }
 

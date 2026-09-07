@@ -482,7 +482,7 @@ export function deriveZoneQuantityReport(
   const wallEffectiveHeight = (wall: WallNode) => {
     const support = computeWallSlabSupport(wall, slabs, walls, wall.supportSlabId)
     const planeTop = levelId ? getWallPlaneTop(wall, levelId, sceneNodes) : DEFAULT_LEVEL_HEIGHT
-    return resolveWallEffectiveHeight(wall, planeTop, support.elevation)
+    return resolveWallEffectiveHeight(wall, planeTop, support.elevation, 0.5)
   }
   const edgeLengths = zone.polygon.map((start, index) => {
     const end = zone.polygon[(index + 1) % zone.polygon.length]

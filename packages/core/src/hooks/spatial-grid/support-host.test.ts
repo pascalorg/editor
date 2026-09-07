@@ -620,8 +620,8 @@ describe('persisted support hosts (walls, via the manager)', () => {
     // Wall-top inversion: no stored height → the top stays at the storey
     // plane, so the extruded body is the plane minus the deck base.
     const storeyHeight = 2.7
-    expect(resolveWallTop(wall, storeyHeight, support.elevation)).toBeCloseTo(storeyHeight)
-    expect(resolveWallEffectiveHeight(wall, storeyHeight, support.elevation)).toBeCloseTo(
+    expect(resolveWallTop(wall, storeyHeight, support.elevation, 0)).toBeCloseTo(storeyHeight)
+    expect(resolveWallEffectiveHeight(wall, storeyHeight, support.elevation, 0)).toBeCloseTo(
       storeyHeight - DECK_ELEVATION,
     )
 

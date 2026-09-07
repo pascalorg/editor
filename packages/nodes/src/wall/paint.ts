@@ -105,7 +105,7 @@ export function resolveWallRole(args: {
   }
 
   if (sideFromIndex && localPosition) {
-    const effectiveWallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes)
+    const effectiveWallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes, 0)
     const bands = getWallFaceBandConfig(node, effectiveWallHeight)
     if (!bands.enabled) return sideFromIndex
     return getWallBandSlotId(
@@ -133,7 +133,7 @@ export function resolveWallRole(args: {
   const semantic = hitFace === 'front' ? node.frontSide : node.backSide
 
   if (semantic === 'interior' || semantic === 'exterior') {
-    const effectiveWallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes)
+    const effectiveWallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes, 0)
     const bands = getWallFaceBandConfig(node, effectiveWallHeight)
     if (!bands.enabled) return semantic
     return getWallBandSlotId(
@@ -143,7 +143,7 @@ export function resolveWallRole(args: {
   }
 
   const side = hitFace === 'front' ? 'interior' : 'exterior'
-  const effectiveWallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes)
+  const effectiveWallHeight = resolveWallOpeningCeiling(node, useScene.getState().nodes, 0)
   const bands = getWallFaceBandConfig(node, effectiveWallHeight)
   if (!bands.enabled) return side
   return getWallBandSlotId(

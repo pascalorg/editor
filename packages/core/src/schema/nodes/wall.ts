@@ -158,6 +158,11 @@ export const WallNode = BaseNode.extend({
   slots: z.record(z.string(), z.string()).optional(),
   thickness: z.number().optional(),
   height: z.number().optional(),
+  // Added to the wall's top only at its `end` point (`start` is unaffected),
+  // tilting the top edge along the wall's length so one side is taller than
+  // the other — e.g. a knee wall following a single-pitch roof slope.
+  /** Height offset at the end point (default 0). */
+  endHeightOffset: z.number().optional(),
   curveOffset: z.number().optional(),
   // Persisted slab-support host — see ItemNode.supportSlabId for the rules.
   supportSlabId: z.string().optional(),
@@ -182,6 +187,7 @@ export const WallNode = BaseNode.extend({
   Wall node - used to represent a wall in the building
   - thickness: thickness in meters
   - height: height in meters
+  - endHeightOffset: added to the top only at the wall's end point, tilting the top edge so one side is taller than the other
   - fillToTerrain: extends the wall downward to the terrain without changing its authored height
   - curveOffset: midpoint sagitta offset used to bend the wall into an arc
   - start: start point of the wall in level coordinate system
@@ -216,10 +222,11 @@ export const WALL_SLOT_DEFAULT: Record<WallSurfaceSide, string> = {
 }
 
 export function getWallFaceBandConfig(
-  wall: Pick<WallNode, 'height' | 'faceBands'>,
+  wall: Pick<WallNode, 'height' | 'endHeightOffset' | 'faceBands'>,
   effectiveWallHeight: number,
 ) {
-  const wallHeight = Math.max(0, effectiveWallHeight)
+  const maxWallHeight = effectiveWallHeight + Math.max(0, wall.endHeightOffset ?? 0)
+  const wallHeight = Math.max(0, maxWallHeight)
   const raw = { ...WALL_FACE_BAND_DEFAULT, ...(wall.faceBands ?? {}) }
   const count = raw.enabled ? Math.max(1, Math.min(4, Math.round(raw.count ?? 3))) : 1
   const lowerHeight = count >= 2 ? Math.max(0, Math.min(wallHeight, raw.lowerHeight)) : 0
@@ -241,7 +248,7 @@ export function getWallFaceBandConfig(
 }
 
 export function getWallFaceBandForHeight(
-  wall: Pick<WallNode, 'height' | 'faceBands'>,
+  wall: Pick<WallNode, 'height' | 'endHeightOffset' | 'faceBands'>,
   y: number,
   effectiveWallHeight: number,
 ): WallFaceBand {

@@ -1,4 +1,9 @@
-import type { WallNode } from '@pascal-app/core'
+import type { AnyNode, AnyNodeId, WallNode } from '@pascal-app/core'
+import {
+  readHostWallCeiling,
+  toWallCeilingSceneReader,
+  type WallCeilingSceneReader,
+} from '../shared/wall-opening-ceiling'
 
 /**
  * Keep the door handle at the same relative height when the door is resized:
@@ -46,14 +51,48 @@ export function clampToWall(
   localX: number,
   width: number,
   height: number,
-): { clampedX: number; clampedY: number } {
+  sceneOrNodes: WallCeilingSceneReader | Readonly<Record<AnyNodeId, AnyNode>>,
+): { clampedX: number; clampedY: number; fits: boolean } {
   const dx = wallNode.end[0] - wallNode.start[0]
   const dz = wallNode.end[1] - wallNode.start[1]
-  const wallLength = Math.sqrt(dx * dx + dz * dz)
+  const wallLength = Math.hypot(dx, dz)
 
-  const clampedX = Math.max(width / 2, Math.min(wallLength - width / 2, localX))
+  const minX = width / 2
+  const maxX = wallLength - width / 2
   const clampedY = height / 2 // Doors always sit at floor level
-  return { clampedX, clampedY }
+
+  if (width > wallLength) {
+    return { clampedX: wallLength / 2, clampedY, fits: false }
+  }
+
+  const scene = toWallCeilingSceneReader(sceneOrNodes)
+  const startCeiling = readHostWallCeiling(wallNode.id, scene, 0)
+  const endCeiling = readHostWallCeiling(wallNode.id, scene, wallLength)
+  const slope = (endCeiling - startCeiling) / wallLength
+
+  let fitMinX = minX
+  let fitMaxX = maxX
+
+  if (Math.abs(slope) < 1e-6) {
+    if (startCeiling < height - 1e-4) {
+      return { clampedX: Math.max(minX, Math.min(maxX, localX)), clampedY, fits: false }
+    }
+  } else if (slope > 0) {
+    // Upward slope: lowest point is the left edge (x - width/2)
+    const minCenterForHeight = (height - startCeiling) / slope + width / 2
+    fitMinX = Math.max(minX, minCenterForHeight)
+  } else {
+    // Downward slope: lowest point is the right edge (x + width/2)
+    const maxCenterForHeight = (height - startCeiling) / slope - width / 2
+    fitMaxX = Math.min(maxX, maxCenterForHeight)
+  }
+
+  if (fitMinX > fitMaxX + 1e-4) {
+    return { clampedX: Math.max(minX, Math.min(maxX, localX)), clampedY, fits: false }
+  }
+
+  const clampedX = Math.max(fitMinX, Math.min(fitMaxX, localX))
+  return { clampedX, clampedY, fits: true }
 }
 
 // Wall-child overlap is shared by door + window placement (one source of

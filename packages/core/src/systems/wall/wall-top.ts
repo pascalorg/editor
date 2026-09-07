@@ -8,6 +8,22 @@ import type { WallNode } from '../../schema/nodes/wall'
  * would collapse below this minimum.
  */
 export const MIN_WALL_HEIGHT = 0.5
+export const MIN_WALL_END_HEIGHT = 0.01
+
+/**
+ * Clamps a wall's end-height offset so the lower end of the wall never
+ * collapses below `minEndHeight` (0.01 m by default).
+ */
+export function clampWallEndHeightOffset(
+  endHeightOffset: number | undefined,
+  bodyHeight: number,
+  minEndHeight = MIN_WALL_END_HEIGHT,
+): number {
+  if (!endHeightOffset) return 0
+  const maxNegativeOffset = -(Math.max(minEndHeight, bodyHeight) - minEndHeight)
+  const clamped = Math.max(endHeightOffset, maxNegativeOffset)
+  return clamped === 0 ? 0 : clamped
+}
 
 /**
  * Wall-top inversion (vertical building model): a wall with no stored
@@ -21,16 +37,29 @@ export const MIN_WALL_HEIGHT = 0.5
  * ground-hosted walls are the terrain exception: `height` is always body
  * height, including below datum, so sculpting cannot stretch the wall.
  *
- * Returns the top in level-local Y (same frame as `electedBase`).
+ * Returns the top in level-local Y (same frame as `electedBase`) at normalized position
+ * `t` along the wall ($t = 0$ is start, $t = 1$ is end).
  */
 export function resolveWallTop(
-  wall: Pick<WallNode, 'height' | 'supportSlabId'>,
+  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'endHeightOffset'>,
   storeyHeight: number,
   electedBase: number,
+  t: number,
 ): number {
-  if (wall.height == null) return storeyHeight
-  if (wall.supportSlabId === 'ground') return electedBase + wall.height
-  return electedBase > 0 ? electedBase + wall.height : wall.height
+  let top: number
+  if (wall.height == null) {
+    top = storeyHeight
+  } else if (wall.supportSlabId === 'ground') {
+    top = electedBase + wall.height
+  } else {
+    top = electedBase > 0 ? electedBase + wall.height : wall.height
+  }
+  if (wall.endHeightOffset) {
+    const bodyHeight = top - electedBase
+    const clampedOffset = clampWallEndHeightOffset(wall.endHeightOffset, bodyHeight)
+    top += clampedOffset * t
+  }
+  return top
 }
 
 /**
@@ -48,9 +77,10 @@ export function resolveWallTop(
  * policy.
  */
 export function resolveWallEffectiveHeight(
-  wall: Pick<WallNode, 'height' | 'supportSlabId'>,
+  wall: Pick<WallNode, 'height' | 'supportSlabId' | 'endHeightOffset'>,
   storeyHeight: number,
   electedBase: number,
+  t: number,
 ): number {
-  return resolveWallTop(wall, storeyHeight, electedBase) - electedBase
+  return resolveWallTop(wall, storeyHeight, electedBase, t) - electedBase
 }

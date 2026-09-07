@@ -249,7 +249,7 @@ export function buildBridgeWallPreviews(args: {
       start: [...plan.originalPoint] as WallPlanPoint,
       end: [...nextPoint] as WallPlanPoint,
       color: getWallGhostColor(plan.wall),
-      height: resolveWallOpeningCeiling(plan.wall, useScene.getState().nodes),
+      height: resolveWallOpeningCeiling(plan.wall, useScene.getState().nodes, 0.5),
     }
     previews.push({ ghost, wall })
     wallsForDuplicateCheck.push(wall)

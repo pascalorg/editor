@@ -101,7 +101,11 @@ export function buildOpeningPlacementDimensions(
     siblings,
     wall: {
       length: wallLength,
-      height: resolveWallOpeningCeiling(wall, useScene.getState().nodes),
+      height: resolveWallOpeningCeiling(
+        wall,
+        useScene.getState().nodes,
+        wallLength > 1e-4 ? Math.max(0, Math.min(1, opening.position[0] / wallLength)) : 0.5,
+      ),
     },
     // The 2D plan is top-down: sill/head height and vertical alignment aren't
     // representable here — those belong to the 3D viewport.

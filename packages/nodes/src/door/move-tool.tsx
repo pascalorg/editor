@@ -313,12 +313,11 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
       if (event.node.parentId !== getLevelId()) return
 
       const { side, itemRotation } = getPlacementOrientation(event)
-
       const rawLocalX = event.localPosition[0]
       if (!dragAnchor || dragAnchor.wallId !== event.node.id) {
         // Grab offset survives only on the original wall and only until the
-        // door anchors on any other host — after that every wall (the
-        // original included) centers the door under the cursor.
+        // door anchors on any other host — after that every wall (the original
+        // included) centers the door under the cursor.
         const preserveGrab = event.node.id === grabWallId
         if (!preserveGrab) grabWallId = null
         dragAnchor = {
@@ -338,22 +337,29 @@ const MoveDoorTool: React.FC<{ node: DoorNode }> = ({ node: movingDoorNode }) =>
         // component lives in `snapToHalf` (itself mode-aware).
         applySnap: isMagneticSnapActive(),
       })
-      const { clampedX, clampedY } = clampToWall(
+      const sceneReader = {
+        get: (id: AnyNodeId) => useScene.getState().nodes[id],
+        nodes: () => useScene.getState().nodes,
+      }
+      const { clampedX, clampedY, fits } = clampToWall(
         event.node,
         localX,
         movingDoorNode.width,
         movingDoorNode.height,
+        sceneReader,
       )
 
-      const valid = !hasWallChildOverlap(
-        event.node.id,
-        useScene.getState().nodes,
-        clampedX,
-        clampedY,
-        movingDoorNode.width,
-        movingDoorNode.height,
-        movingDoorNode.id,
-      )
+      const valid =
+        fits &&
+        !hasWallChildOverlap(
+          event.node.id,
+          useScene.getState().nodes,
+          clampedX,
+          clampedY,
+          movingDoorNode.width,
+          movingDoorNode.height,
+          movingDoorNode.id,
+        )
 
       return {
         wallNode: event.node,

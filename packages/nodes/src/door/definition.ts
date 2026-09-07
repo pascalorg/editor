@@ -14,7 +14,7 @@ import {
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
-import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
+import { readHostWallCeiling, readHostWallCeilingMaxWidth } from '../shared/wall-opening-ceiling'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildDoorContextualDimensions } from './contextual-dimensions'
 import { scaleHandleHeight } from './door-math'
@@ -35,9 +35,10 @@ const MIN_DOOR_WIDTH = 0.3
 const MOVE_HANDLE_LIFT = 0.12
 
 function readWallLength(door: DoorNodeType, scene: { get: (id: AnyNodeId) => unknown }): number {
-  if (!door.wallId) return Number.POSITIVE_INFINITY
-  const wall = scene.get(door.wallId as AnyNodeId) as WallNode | undefined
-  if (!wall) return Number.POSITIVE_INFINITY
+  const hostId = door.wallId || door.parentId
+  if (!hostId) return Number.POSITIVE_INFINITY
+  const wall = scene.get(hostId as AnyNodeId) as WallNode | undefined
+  if (wall?.type !== 'wall' || !wall.start || !wall.end) return Number.POSITIVE_INFINITY
   return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
 }
 
@@ -54,11 +55,39 @@ function doorWidthHandle(side: 'left' | 'right'): HandleDescriptor<DoorNodeType>
     anchor: side === 'right' ? 'min' : 'max',
     min: MIN_DOOR_WIDTH,
     max: (n, scene) => {
-      // Roof-hosted doors clamp against the face profile (the wall-based
-      // limits read Infinity when wallId is unset).
+      // Roof-hosted doors clamp against the face profile.
       const roofMax = readRoofFaceWidthMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_DOOR_WIDTH, roofMax)
-      return readWallLength(n, scene)
+
+      const length = readWallLength(n, scene)
+      // armX accounts for door rotation (rotation[1]=π flips the door
+      // so its visual right points toward LOWER wall-local S, not higher).
+      const armX = Math.cos(n.rotation[1])
+      const effectiveDirection = sign * armX
+
+      const anchorLeft = n.position[0] - n.width / 2
+      const anchorRight = n.position[0] + n.width / 2
+
+      let fixedEdgeS: number
+      let growSign: number
+      let maxWallBound: number
+
+      if (effectiveDirection > 0) {
+        fixedEdgeS = anchorLeft
+        growSign = 1
+        maxWallBound = length - anchorLeft
+      } else {
+        fixedEdgeS = anchorRight
+        growSign = -1
+        maxWallBound = anchorRight
+      }
+
+      const topY = n.position[1] + n.height / 2
+      const hostId = n.wallId || n.parentId
+      return Math.max(
+        MIN_DOOR_WIDTH,
+        readHostWallCeilingMaxWidth(hostId, scene as any, fixedEdgeS, growSign, topY, maxWallBound),
+      )
     },
     currentValue: (n) => n.width,
     onDrag: (node) => publishOpeningResizeGuides(node, false),
@@ -101,10 +130,22 @@ function doorHeightHandle(): HandleDescriptor<DoorNodeType> {
       const roofMax = readRoofFaceHeightMax(n, scene, 1)
       if (roofMax !== null) return Math.max(MIN_DOOR_HEIGHT, roofMax)
       const bottom = n.position[1] - n.height / 2
-      return Math.max(MIN_DOOR_HEIGHT, readHostWallCeiling(n.wallId, scene) - bottom)
+      const hostId = n.wallId || n.parentId
+
+      // A sloped wall's ceiling varies across the door's width. To prevent corners
+      // poking out above the slope, the height limit must be the lowest ceiling
+      // point across the entire span of the door.
+      const leftS = n.position[0] - n.width / 2
+      const rightS = n.position[0] + n.width / 2
+      const wallHLeft = readHostWallCeiling(hostId, scene as any, leftS)
+      const wallHRight = readHostWallCeiling(hostId, scene as any, rightS)
+      const wallHCenter = readHostWallCeiling(hostId, scene as any, n.position[0])
+      const wallH = Math.min(wallHLeft, wallHRight, wallHCenter)
+
+      return Math.max(MIN_DOOR_HEIGHT, wallH - bottom)
     },
     currentValue: (n) => n.height,
-    onDrag: (node) => publishOpeningResizeGuides(node, false),
+    onDrag: (node) => publishOpeningResizeGuides(node, true),
     apply: (initial, newHeight) => {
       const bottom = initial.position[1] - initial.height / 2
       // Scale the handle so it tracks the door instead of staying glued to a

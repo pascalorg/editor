@@ -20,7 +20,7 @@ import {
 import { publishOpeningResizeGuides } from '../shared/opening-guides-runtime'
 import { readRoofFaceHeightMax, readRoofFaceWidthMax } from '../shared/roof-opening-host'
 import { buildRoofWallOpeningCut } from '../shared/roof-wall-opening-cut'
-import { readHostWallCeiling } from '../shared/wall-opening-ceiling'
+import { readHostWallCeiling, readHostWallCeilingMaxWidth } from '../shared/wall-opening-ceiling'
 import { wallFloorplanSiblingOverrides } from '../wall/floorplan-overrides'
 import { buildWindowContextualDimensions } from './contextual-dimensions'
 import { buildWindowFloorplan } from './floorplan'
@@ -53,9 +53,10 @@ export function resolveWindowHandlePortalTarget(
 }
 
 function readWallLength(w: WindowNodeType, scene: { get: (id: AnyNodeId) => unknown }): number {
-  if (!w.wallId) return Number.POSITIVE_INFINITY
-  const wall = scene.get(w.wallId as AnyNodeId) as WallNode | undefined
-  if (!wall) return Number.POSITIVE_INFINITY
+  const hostId = w.wallId || w.parentId
+  if (!hostId) return Number.POSITIVE_INFINITY
+  const wall = scene.get(hostId as AnyNodeId) as WallNode | undefined
+  if (wall?.type !== 'wall' || !wall.start || !wall.end) return Number.POSITIVE_INFINITY
   return Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
 }
 
@@ -117,11 +118,44 @@ function windowWidthHandle(side: 'left' | 'right'): HandleDescriptor<WindowNodeT
     max: (n, scene) => {
       const dormerMax = readDormerFaceWidthMax(n, scene, sign)
       if (dormerMax !== null) return Math.max(MIN_WINDOW_WIDTH, dormerMax)
-      // Roof-hosted windows clamp against the face profile (the
-      // wall-based limits read Infinity when wallId is unset).
+      // Roof-hosted windows clamp against the face profile.
       const roofMax = readRoofFaceWidthMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_WINDOW_WIDTH, roofMax)
-      return readWallLength(n, scene)
+
+      const length = readWallLength(n, scene)
+      // armX accounts for window rotation (rotation[1]=π flips the window
+      // so its visual right points toward LOWER wall-local S, not higher).
+      const armX = Math.cos(n.rotation[1])
+      // effectiveDirection: +1 = moving edge goes toward higher S (wall end)
+      //                     -1 = moving edge goes toward lower S (wall start)
+      const effectiveDirection = sign * armX
+
+      const anchorLeft = n.position[0] - n.width / 2
+      const anchorRight = n.position[0] + n.width / 2
+
+      // fixedEdgeS: the wall-local S of the edge that stays put.
+      // growSign: direction the MOVING edge travels in wall-local S.
+      // maxWallBound: max width before the moving edge hits the wall boundary.
+      let fixedEdgeS: number
+      let growSign: number
+      let maxWallBound: number
+
+      if (effectiveDirection > 0) {
+        fixedEdgeS = anchorLeft
+        growSign = 1
+        maxWallBound = length - anchorLeft
+      } else {
+        fixedEdgeS = anchorRight
+        growSign = -1
+        maxWallBound = anchorRight
+      }
+
+      const topY = n.position[1] + n.height / 2
+      const hostId = n.wallId || n.parentId
+      return Math.max(
+        MIN_WINDOW_WIDTH,
+        readHostWallCeilingMaxWidth(hostId, scene as any, fixedEdgeS, growSign, topY, maxWallBound),
+      )
     },
     currentValue: (n) => n.width,
     onDrag: (node) => publishOpeningResizeGuides(node, true),
@@ -166,10 +200,20 @@ function windowHeightHandle(edge: 'top' | 'bottom'): HandleDescriptor<WindowNode
       if (dormerMax !== null) return Math.max(MIN_WINDOW_HEIGHT, dormerMax)
       const roofMax = readRoofFaceHeightMax(n, scene, sign)
       if (roofMax !== null) return Math.max(MIN_WINDOW_HEIGHT, roofMax)
-      // Maximum: distance from the anchored edge to the wall's allowed Y
-      // bounds. Top arrow caps at the wall's resolved ceiling - bottom;
+      // Maximum: distance from the anchored edge to the wall's allowed bounds. Top arrow caps at the wall's resolved ceiling - bottom;
       // bottom arrow caps at top (positive Y room above the floor).
-      const wallH = readHostWallCeiling(n.wallId, scene)
+      const hostId = n.wallId || n.parentId
+
+      // A sloped wall's ceiling varies across the window's width. To prevent corners
+      // poking out above the slope, the height limit must be the lowest ceiling
+      // point across the entire span of the window.
+      const leftS = n.position[0] - n.width / 2
+      const rightS = n.position[0] + n.width / 2
+      const wallHLeft = readHostWallCeiling(hostId, scene as any, leftS)
+      const wallHRight = readHostWallCeiling(hostId, scene as any, rightS)
+      const wallHCenter = readHostWallCeiling(hostId, scene as any, n.position[0])
+      const wallH = Math.min(wallHLeft, wallHRight, wallHCenter)
+
       const anchored = edge === 'top' ? n.position[1] - n.height / 2 : n.position[1] + n.height / 2
       return edge === 'top'
         ? Math.max(MIN_WINDOW_HEIGHT, wallH - anchored)

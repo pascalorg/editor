@@ -144,9 +144,10 @@ type WallTopHighlightSegment = {
   angle: number
   center: [number, number]
   length: number
+  tCenter: number
 }
 
-function getWallTopY(wall: WallNode, nodes: Readonly<Record<string, AnyNode>>) {
+function getWallTopY(wall: WallNode, nodes: Readonly<Record<string, AnyNode>>, t = 0.5): number {
   const levelId = resolveLevelId(wall, nodes as Record<string, AnyNode>)
   const support = spatialGridManager.getSlabSupportForWall(
     levelId,
@@ -157,10 +158,14 @@ function getWallTopY(wall: WallNode, nodes: Readonly<Record<string, AnyNode>>) {
     wall.supportSlabId,
   )
   const planeTop = getWallPlaneTop(wall, levelId, nodes as Record<string, AnyNode>)
-  return resolveWallTop(wall, planeTop, support.elevation) + WALL_TOP_HIGHLIGHT_LIFT
+  return resolveWallTop(wall, planeTop, support.elevation, t) + WALL_TOP_HIGHLIGHT_LIFT
 }
 
-function buildHighlightSegment(start: [number, number], end: [number, number]) {
+function buildHighlightSegment(
+  start: [number, number],
+  end: [number, number],
+  tCenter = 0.5,
+): WallTopHighlightSegment | null {
   const dx = end[0] - start[0]
   const dz = end[1] - start[1]
   const length = Math.hypot(dx, dz)
@@ -170,14 +175,19 @@ function buildHighlightSegment(start: [number, number], end: [number, number]) {
     angle: -Math.atan2(dz, dx),
     center: [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2] as [number, number],
     length,
+    tCenter,
   }
 }
 
 function buildWallTopHighlightSegments(wall: WallNode): WallTopHighlightSegment[] {
   if (!isCurvedWall(wall)) {
-    const segment = buildHighlightSegment(wall.start, wall.end)
+    const segment = buildHighlightSegment(wall.start, wall.end, 0.5)
     return segment ? [segment] : []
   }
+
+  const dx = wall.end[0] - wall.start[0]
+  const dz = wall.end[1] - wall.start[1]
+  const chordLenSq = dx * dx + dz * dz
 
   const sampleCount = Math.max(
     8,
@@ -187,7 +197,16 @@ function buildWallTopHighlightSegments(wall: WallNode): WallTopHighlightSegment[
   let previous = getWallCurveFrameAt(wall, 0).point
   for (let index = 1; index <= sampleCount; index += 1) {
     const current = getWallCurveFrameAt(wall, index / sampleCount).point
-    const segment = buildHighlightSegment([previous.x, previous.y], [current.x, current.y])
+    const midX = (previous.x + current.x) / 2
+    const midY = (previous.y + current.y) / 2
+    const tCenter =
+      chordLenSq > 1e-12
+        ? Math.max(
+            0,
+            Math.min(1, ((midX - wall.start[0]) * dx + (midY - wall.start[1]) * dz) / chordLenSq),
+          )
+        : 0.5
+    const segment = buildHighlightSegment([previous.x, previous.y], [current.x, current.y], tCenter)
     if (segment) segments.push(segment)
     previous = current
   }
@@ -202,38 +221,40 @@ function WallTopHighlight({
   wall: WallNode
 }) {
   const segments = useMemo(() => buildWallTopHighlightSegments(wall), [wall])
-  const y = getWallTopY(wall, nodes)
   const width = Math.max(getWallThickness(wall) + WALL_TOP_HIGHLIGHT_OVERHANG, 0.24)
   const glowWidth = Math.max(getWallThickness(wall) + WALL_TOP_GLOW_OVERHANG, 0.42)
 
   return (
     <>
-      {segments.map((segment, index) => (
-        <group key={`${wall.id}:${index}`}>
-          <mesh
-            frustumCulled={false}
-            geometry={WALL_TOP_HIGHLIGHT_GEOMETRY}
-            layers={EDITOR_LAYER}
-            material={wallTopHighlightGlowMaterial}
-            position={[segment.center[0], y - 0.003, segment.center[1]]}
-            raycast={NO_RAYCAST}
-            renderOrder={1003}
-            rotation={[0, segment.angle, 0]}
-            scale={[segment.length + WALL_TOP_END_OVERHANG, WALL_TOP_GLOW_HEIGHT, glowWidth]}
-          />
-          <mesh
-            frustumCulled={false}
-            geometry={WALL_TOP_HIGHLIGHT_GEOMETRY}
-            layers={EDITOR_LAYER}
-            material={wallTopHighlightMaterial}
-            position={[segment.center[0], y + 0.002, segment.center[1]]}
-            raycast={NO_RAYCAST}
-            renderOrder={1004}
-            rotation={[0, segment.angle, 0]}
-            scale={[segment.length + WALL_TOP_END_OVERHANG, WALL_TOP_HIGHLIGHT_HEIGHT, width]}
-          />
-        </group>
-      ))}
+      {segments.map((segment, index) => {
+        const y = getWallTopY(wall, nodes, segment.tCenter)
+        return (
+          <group key={`${wall.id}:${index}`}>
+            <mesh
+              frustumCulled={false}
+              geometry={WALL_TOP_HIGHLIGHT_GEOMETRY}
+              layers={EDITOR_LAYER}
+              material={wallTopHighlightGlowMaterial}
+              position={[segment.center[0], y - 0.003, segment.center[1]]}
+              raycast={NO_RAYCAST}
+              renderOrder={1003}
+              rotation={[0, segment.angle, 0]}
+              scale={[segment.length + WALL_TOP_END_OVERHANG, WALL_TOP_GLOW_HEIGHT, glowWidth]}
+            />
+            <mesh
+              frustumCulled={false}
+              geometry={WALL_TOP_HIGHLIGHT_GEOMETRY}
+              layers={EDITOR_LAYER}
+              material={wallTopHighlightMaterial}
+              position={[segment.center[0], y + 0.002, segment.center[1]]}
+              raycast={NO_RAYCAST}
+              renderOrder={1004}
+              rotation={[0, segment.angle, 0]}
+              scale={[segment.length + WALL_TOP_END_OVERHANG, WALL_TOP_HIGHLIGHT_HEIGHT, width]}
+            />
+          </group>
+        )
+      })}
     </>
   )
 }
