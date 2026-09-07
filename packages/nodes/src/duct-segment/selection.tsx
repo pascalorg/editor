@@ -19,6 +19,8 @@ import {
 import {
   clearPlacementSurface,
   DimensionPill,
+  isAngleSnapActive,
+  isGridSnapActive,
   publishPlacementSurface,
   swallowNextClick,
   triggerSFX,
@@ -74,7 +76,7 @@ const PORT_SNAP_RADIUS_M = 0.4
 const CORNER_ARROW_GAP = 0.18
 const CORNER_ARROW_MIN_OFFSET = 0.24
 
-/** Roll snap increment — 45°, matching the fitting rotate step. Shift bypasses. */
+/** Roll snap increment — 45°, matching the fitting rotate step. */
 const ROLL_STEP_RAD = Math.PI / 4
 
 const UP = new Vector3(0, 1, 0)
@@ -238,7 +240,7 @@ type CornerArrow = {
  * - **Alt** detaches: the joint breaks for this drag — the elbow does NOT
  *   re-aim and mated fittings / runs do NOT follow; the endpoint moves on its
  *   own (port re-mate still allowed so it can be reattached elsewhere).
- * - **Shift** bypasses grid snapping for a perfectly smooth precision drag.
+ * - Snapping follows the active editor snapping mode.
  *
  * History does the single-undo dance: paused during the drag (the live
  * `updateNode` ticks are untracked), then on release the path is
@@ -605,8 +607,8 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       const onMove = (event: PointerEvent) => {
         const drag = dragRef.current
         if (!drag) return
-        // Shift = precision: bypass grid snapping (snap() is a no-op at step 0).
-        const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+        // Follow the active snapping mode; Shift cycles that mode globally.
+        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
         // Alt = detach: break the joint for this drag (it can still port-snap to
         // re-mate elsewhere). Mirrors the wall corner drag.
         const detached = event.altKey && !drag.jointPartner
@@ -622,8 +624,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
               ? swingVertical(event, pivot, startPoint)
               : swingHorizontal(event, pivot, startPoint)
           if (aim) {
-            // The swung endpoint follows the grid snap points by default; Shift
-            // sets step 0 so it sweeps smoothly. Snapping the landed coords (not
+            // The swung endpoint follows the active grid snap mode. Snapping the landed coords (not
             // the arc angle) keeps the endpoint on the grid like every other
             // arrow, trading a hair of the fixed radius for grid alignment.
             next = [
@@ -638,7 +639,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           if (hit) {
             publishPlacementSurface(hit, UP, 'fixed-plane')
             const local = toLocal(hit)
-            const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+            const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
             next = [snap(local[0], step), startPoint[1], snap(local[2], step)]
           }
         } else if (kind.axis === 'y') {
@@ -864,15 +865,14 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       if (startBearing === null) return
       const b = bearing(event.clientX, event.clientY)
       if (b === null) return
-      // Snap the roll to 45° steps; Shift = smooth (no snap).
+      // Snap the roll to 45° steps only in the active angle mode.
       const raw = b - startBearing
-      const delta = event.shiftKey ? raw : Math.round(raw / ROLL_STEP_RAD) * ROLL_STEP_RAD
+      const delta = isAngleSnapActive() ? Math.round(raw / ROLL_STEP_RAD) * ROLL_STEP_RAD : raw
       const next = startRoll + delta
       if (next === current) return
       current = next
-      // Tick the rotate SFX each time a fresh snap step is crossed (snapped
-      // rolls only — a smooth Shift-drag has no discrete steps to mark).
-      if (!event.shiftKey) {
+      // Tick the rotate SFX each time a fresh snapped step is crossed.
+      if (isAngleSnapActive()) {
         const step = Math.round(raw / ROLL_STEP_RAD)
         if (step !== lastStep) {
           lastStep = step
@@ -1186,7 +1186,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       if (startSample === null) return
       const s = sample(event.clientX, event.clientY)
       if (s === null) return
-      const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const next = snap(s - startSample, step)
       if (next === delta) return
       delta = next

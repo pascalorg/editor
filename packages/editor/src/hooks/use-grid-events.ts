@@ -64,6 +64,8 @@ export function useGridEvents(gridY: number) {
           const runDraft =
             scope.kind === 'drafting' &&
             (scope.tool === 'duct-segment' || scope.tool === 'pipe-segment')
+          if (runDraft && useScene.getState().nodes[id as AnyNodeId]?.visible === false) continue
+          if (runDraft && !root.visible) continue
           const hit = raycaster.current.intersectObject(root, true).find((candidate) => {
             if (!runDraft) return true
             if (useScene.getState().nodes[id as AnyNodeId]?.visible === false) return false

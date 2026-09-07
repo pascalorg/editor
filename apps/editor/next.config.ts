@@ -40,8 +40,6 @@ const nextConfig: NextConfig = {
   ],
   turbopack: {
     resolveAlias: {
-      '@pascal-app/plugin-streetscape':
-        '../../../streetscape-pascal-plugin/t3code-588a73e0/src/index.ts',
       react: './node_modules/react',
       three: './node_modules/three',
       '@react-three/fiber': './node_modules/@react-three/fiber',

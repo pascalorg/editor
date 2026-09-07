@@ -50,7 +50,7 @@ const IN_TO_M = 0.0254
 
 /** Snap a coordinate to the editor's live grid step. */
 function snapToGridStep(value: number): number {
-  const step = useEditor.getState().gridSnapStep
+  const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
   if (step <= 0) return value
   return Math.round(value / step) * step
 }
@@ -306,15 +306,16 @@ export const MoveDuctSegmentTool: React.FC<{ node: AnyNode }> = ({ node }) => {
           // Fold connected-fitting / sibling-run follow-updates into the SAME
           // batch as the moved run so the whole joint is one undo step.
           const followUpdates = connectivity?.commitUpdates({ path: finalPath }) ?? []
-          useScene
-            .getState()
-            .updateNodes([
-              {
-                id: nodeId,
-                data: { path: finalPath, wallAttachment: previewAttachmentRef.current } as Partial<AnyNode>,
-              },
-              ...followUpdates,
-            ])
+          useScene.getState().updateNodes([
+            {
+              id: nodeId,
+              data: {
+                path: finalPath,
+                wallAttachment: previewAttachmentRef.current,
+              } as Partial<AnyNode>,
+            },
+            ...followUpdates,
+          ])
         }
         useScene.getState().markDirty(nodeId)
       }

@@ -18,6 +18,7 @@ import {
 import {
   clearPlacementSurface,
   DimensionPill,
+  isGridSnapActive,
   publishPlacementSurface,
   swallowNextClick,
   triggerSFX,
@@ -169,7 +170,7 @@ function pipeRadiusM(pipe: PipeSegmentNode): number {
  * - **Alt** detaches: the joint breaks for this drag — the elbow does NOT
  *   re-aim and mated fittings / runs do NOT follow; the endpoint moves on its
  *   own (port re-mate still allowed so it can be reattached elsewhere).
- * - **Shift** bypasses grid snapping for a perfectly smooth precision drag.
+ * - Snapping follows the active editor snapping mode.
  *
  * History does the single-undo dance: paused during the drag (the live
  * `updateNode` ticks are untracked), then on release the path is
@@ -476,9 +477,8 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       const onMove = (event: PointerEvent) => {
         const drag = dragRef.current
         if (!drag) return
-        // Shift = precision: bypass grid snapping for a perfectly smooth
-        // drag (snap() is a no-op at step 0).
-        const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+        // Follow the active snapping mode; Shift cycles that mode globally.
+        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
         // Alt = detach: break the joint for this drag — the endpoint moves on
         // its own, no elbow re-aim and no connectivity follow (it can still
         // port-snap to re-mate elsewhere). Mirrors the wall corner drag.
@@ -502,7 +502,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
           if (hit) {
             publishPlacementSurface(hit, UP, 'fixed-plane')
             const local = toLocal(hit)
-            const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+            const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
             next = [snap(local[0], step), startPoint[1], snap(local[2], step)]
           }
         } else if (kind.axis === 'y') {
@@ -774,7 +774,7 @@ const PipePointHandles = ({ pipe, target }: { pipe: PipeSegmentNode; target: Obj
       if (startSample === null) return
       const s = sample(event.clientX, event.clientY)
       if (s === null) return
-      const step = event.shiftKey ? 0 : useEditor.getState().gridSnapStep
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const next = snap(s - startSample, step)
       if (next === delta) return
       delta = next
