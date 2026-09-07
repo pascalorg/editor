@@ -273,12 +273,29 @@ function normalizedRunVector(vector: readonly number[]): RunPoint | null {
   return length < 1e-9 ? null : [vector[0]! / length, vector[1]! / length, vector[2]! / length]
 }
 
+export function projectRunToDirection(
+  from: RunPoint,
+  raw: RunPoint,
+  direction: readonly [number, number, number],
+): RunPoint {
+  const distance = Math.max(
+    0,
+    dotRun([raw[0] - from[0], raw[1] - from[1], raw[2] - from[2]], direction),
+  )
+  return [
+    from[0] + direction[0] * distance,
+    from[1] + direction[1] * distance,
+    from[2] + direction[2] * distance,
+  ]
+}
+
 export function projectRunToCameraDirection(
   from: RunPoint,
   ray: RunCursorRay,
   sourceDirection: readonly [number, number, number],
   minimumDistance: number,
   gridStep: number,
+  candidates = run3DDirectionCandidates(sourceDirection),
 ): CameraDirectionProjection | null {
   const rayDirection = normalizedRunVector(ray.direction)
   if (!rayDirection) return null
@@ -290,7 +307,7 @@ export function projectRunToCameraDirection(
   let winner: CameraDirectionProjection | null = null
   let winningAim = Number.NEGATIVE_INFINITY
 
-  for (const direction of run3DDirectionCandidates(sourceDirection)) {
+  for (const direction of candidates) {
     const parallel = dotRunVector(rayDirection, direction)
     const denominator = 1 - parallel * parallel
     const projectedDistance =
@@ -467,6 +484,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
   const refreshCursorRef = useRef<() => void>(() => {})
   const lastClientYRef = useRef<number | null>(null)
   const lastResolvedRef = useRef<ResolvedRunPoint | null>(null)
+  const forcedDirectionRef = useRef<RunPoint | null>(null)
   const lengthInputRef = useRef('')
 
   useEffect(() => {
@@ -522,7 +540,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
           currentStart[2] + direction[2] * typed,
         ],
         snapped: null,
-        directionMode: 'free',
+        directionMode: resolved.directionMode,
       }
     }
 
@@ -552,14 +570,18 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       const gridStep = !bypass && isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
       const angleLocked = !bypass && isAngleSnapActive()
       let point = snapRunPointToSurface(resolved.point, resolved.frame, gridStep)
-      if (currentStart && angleLocked) {
+      const forcedDirection = forcedDirectionRef.current
+      if (currentStart && forcedDirection) {
+        point = projectRunToDirection(currentStart, point, forcedDirection)
+      }
+      if (currentStart && angleLocked && !forcedDirection) {
         const from = projectRunPointToSurface(currentStart, resolved.frame)
         if (runDistanceSquared(from, currentStart) < 1e-6) {
           point = projectRunToSurfaceAngleLock(currentStart, point, resolved.frame)
         }
       }
       const sample = { frame: resolved.frame, surfaceTarget: target }
-      const acceptsConnection = (candidate: RunPoint): boolean => {
+      const acceptsConnection = (candidate: RunPoint, checkOcclusion = true): boolean => {
         const levelId = useViewer.getState().selection.levelId
         const level = levelId ? sceneRegistry.nodes.get(levelId) : null
         const world = new Vector3(...candidate)
@@ -576,12 +598,41 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
           Math.hypot(x - native.clientX, y - native.clientY) > 12
         )
           return false
-        if (event.surfaceHit) {
+        if (checkOcclusion && event.surfaceHit) {
           const origin = camera.getWorldPosition(new Vector3())
           if (world.distanceTo(origin) > new Vector3(...event.position).distanceTo(origin) + 0.03)
             return false
         }
         return true
+      }
+      // Test the camera ray against the displayed directions before a surface
+      // projection discards its height. Hover capture releases outside 12 px.
+      if (currentStart && event.localRay && !bypass) {
+        const source = startConnectionRef.current.port?.direction ?? null
+        const candidates = forcedDirection
+          ? [forcedDirection]
+          : source
+            ? run3DDirectionCandidates(source)
+            : runHorizontalDirectionCandidates(null)
+        const directionHit = projectRunToCameraDirection(
+          currentStart,
+          event.localRay,
+          source ?? X_AXIS,
+          adapter.minimumSegmentLength ?? 0.05,
+          0,
+          candidates,
+        )
+        if (directionHit && (forcedDirection || acceptsConnection(directionHit.point, false))) {
+          return {
+            point: directionHit.point,
+            frame: createRunSurfaceFrame(currentStart),
+            surfaceTarget: null,
+            snapped: null,
+            directionMode: 'angle',
+            port: null,
+            body: null,
+          }
+        }
       }
       if (!bypass && isMagneticSnapActive()) {
         const port = adapter.findPort(point, target)
@@ -723,6 +774,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       setLengthInput('')
       setValidationMessage(null)
       startConnectionRef.current = result.nextConnection
+      forcedDirectionRef.current = null
       altAnchorRef.current = null
       setAltActive(false)
     }
@@ -855,6 +907,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       setLengthInput('')
       setValidationMessage(null)
       startConnectionRef.current = { port: null, body: null }
+      forcedDirectionRef.current = null
       lastPointerRef.current = null
       clearPlacementSurface()
       lastResolvedRef.current = null
@@ -895,6 +948,11 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
     lengthInput,
     validationMessage,
     onLengthInputChange: updateLengthInput,
+    onDirectionSelect: (direction: RunPoint) => {
+      forcedDirectionRef.current = direction
+      setDirectionMode('angle')
+      refreshCursorRef.current()
+    },
     startConnection: startConnectionRef.current,
     endConnection,
     surfaceTarget: lastResolvedRef.current?.surfaceTarget ?? null,
@@ -916,6 +974,7 @@ export function DistributionRunCursor({
   lengthInput,
   validationMessage,
   onLengthInputChange,
+  onDirectionSelect,
 }: {
   cursor: RunPoint | null
   start: RunPoint | null
@@ -932,6 +991,7 @@ export function DistributionRunCursor({
   validationMessage?: string | null
   minimumSegmentLength?: number
   onLengthInputChange?: (value: string) => void
+  onDirectionSelect?: (direction: RunPoint) => void
 }) {
   const lengthFieldRef = useRef<HTMLInputElement>(null)
   useEffect(() => {
@@ -981,6 +1041,7 @@ export function DistributionRunCursor({
           snapped={!!snapTarget}
           sourceDirection={startDirection ?? null}
           start={start}
+          onDirectionSelect={onDirectionSelect}
         />
       )}
       <CursorSphere

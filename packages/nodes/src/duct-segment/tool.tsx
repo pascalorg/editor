@@ -597,6 +597,7 @@ const DuctSegmentTool = () => {
         extraParts={extraParts}
         lengthInput={run.lengthInput}
         onLengthInputChange={run.onLengthInputChange}
+        onDirectionSelect={run.onDirectionSelect}
         validationMessage={run.validationMessage}
         snapTarget={run.snapTarget}
         start={run.start}

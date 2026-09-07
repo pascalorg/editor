@@ -4,6 +4,7 @@ import {
   projectRunPointToSurface,
   projectRunToAngleLock,
   projectRunToCameraDirection,
+  projectRunToDirection,
   projectRunToSurfaceAngleLock,
   runDistanceSquared,
   runSectionHalfSizeM,
@@ -13,6 +14,26 @@ import {
 } from './distribution-run-tool'
 
 describe('distribution run drafting helpers', () => {
+  test('camera hover resolves downward without a ground-plane height', () => {
+    const projected = projectRunToCameraDirection(
+      [0, 5, 0],
+      { origin: [3, 2, 3], direction: [-Math.SQRT1_2, 0, -Math.SQRT1_2] },
+      [1, 0, 0],
+      0.05,
+      0,
+    )
+    expect(projected?.direction).toEqual([0, -1, 0])
+    expect(projected?.point[1]).toBeCloseTo(2)
+  })
+
+  test('projects the cursor onto the direction selected by an arrow handle', () => {
+    const point = projectRunToDirection([1, 2, 3], [4, 9, 1], [Math.SQRT1_2, 0, Math.SQRT1_2])
+
+    expect(point[1]).toBe(2)
+    expect(point[0] - 1).toBeCloseTo(point[2] - 3)
+    expect(point[0]).toBeGreaterThan(1)
+  })
+
   test('snaps values only when the step is active', () => {
     expect(snapRunValue(1.13, 0.25)).toBe(1.25)
     expect(snapRunValue(1.13, 0)).toBe(1.13)

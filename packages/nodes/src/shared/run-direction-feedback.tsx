@@ -120,12 +120,14 @@ export function RunDirectionFeedback({
   sourceDirection,
   mode,
   snapped,
+  onDirectionSelect,
 }: {
   start: RunPoint
   cursor: RunPoint
   sourceDirection: RunVector | null
   mode: RunDirectionMode
   snapped: boolean
+  onDirectionSelect?: (direction: RunPoint) => void
 }) {
   const candidates = useMemo(
     () => resolveRunDirectionCandidates(start, cursor, sourceDirection, mode),
@@ -145,6 +147,7 @@ export function RunDirectionFeedback({
           key={`${index}:${candidate.direction.join(':')}`}
           length={candidate.active ? Math.max(distance, candidateLength) : candidateLength}
           origin={start}
+          onDirectionSelect={onDirectionSelect}
         />
       ))}
       {distance > 0.01 && mode !== 'angle' && mode !== 'vertical' && (
@@ -158,6 +161,7 @@ export function RunDirectionFeedback({
           ]}
           length={distance}
           origin={start}
+          onDirectionSelect={onDirectionSelect}
         />
       )}
     </group>
@@ -170,12 +174,14 @@ function DirectionRay({
   length,
   active,
   color,
+  onDirectionSelect,
 }: {
   origin: RunPoint
   direction: RunPoint
   length: number
   active: boolean
   color: string
+  onDirectionSelect?: (direction: RunPoint) => void
 }) {
   const { camera } = useThree()
   const zoomScale = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
@@ -201,6 +207,12 @@ function DirectionRay({
         position={placement.midpoint}
         quaternion={placement.rotation}
         renderOrder={active ? 4 : 2}
+        onPointerDown={(event) => {
+          if (!onDirectionSelect) return
+          event.stopPropagation()
+          event.nativeEvent.stopImmediatePropagation()
+          onDirectionSelect([...direction])
+        }}
       >
         <cylinderGeometry args={[radius, radius, length, 8]} />
         <meshBasicMaterial
@@ -216,6 +228,12 @@ function DirectionRay({
         position={placement.tip}
         quaternion={placement.rotation}
         renderOrder={active ? 4 : 2}
+        onPointerDown={(event) => {
+          if (!onDirectionSelect) return
+          event.stopPropagation()
+          event.nativeEvent.stopImmediatePropagation()
+          onDirectionSelect([...direction])
+        }}
       >
         <coneGeometry args={[arrowRadius, arrowLength, 10]} />
         <meshBasicMaterial

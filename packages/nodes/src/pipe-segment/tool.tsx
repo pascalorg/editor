@@ -409,6 +409,7 @@ const PipeSegmentTool = () => {
         extraParts={[{ key: 'diameter', prefix: 'Ø', value: diameter * 0.0254 }]}
         lengthInput={run.lengthInput}
         onLengthInputChange={run.onLengthInputChange}
+        onDirectionSelect={run.onDirectionSelect}
         validationMessage={run.validationMessage}
         snapTarget={run.snapTarget}
         start={displayStart}
