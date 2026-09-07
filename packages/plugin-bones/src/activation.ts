@@ -136,6 +136,7 @@ const SERVICE_CHOICE_KEYS: Record<string, readonly string[]> = {
   sewerSide: ['street', 'rear'],
   waterRoute: ['attic', 'under-slab', 'crawl', 'walls'],
   hvacSystem: ['heat-pump-split', 'ac-gas-furnace', 'packaged', 'mini-split'],
+  waterHeater: ['electric-tank', 'gas-tank', 'heat-pump', 'tankless-gas', 'tankless-electric'],
 }
 
 /**

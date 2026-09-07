@@ -168,7 +168,19 @@ export const SERVICE_CONTROLS = [
       ['packaged', 'Packaged'],
       ['mini-split', 'Mini-split'],
     ],
-    note: 'Auto: a split heat pump in the South, AC over a gas furnace elsewhere.',
+    note: 'Auto: a split heat pump in the South and the West Coast, AC over a gas furnace elsewhere.',
+  },
+  {
+    key: 'waterHeater',
+    label: 'Water heater',
+    options: [
+      ['electric-tank', 'Electric tank'],
+      ['gas-tank', 'Gas tank'],
+      ['heat-pump', 'Heat pump'],
+      ['tankless-gas', 'Tankless gas'],
+      ['tankless-electric', 'Tankless elec.'],
+    ],
+    note: 'Auto: a heat-pump heater where the energy code makes it the baseline (CA, WA, OR), a gas tank beside a gas furnace, an electric tank elsewhere.',
   },
 ] as const
 export type ServiceControlKey = (typeof SERVICE_CONTROLS)[number]['key']

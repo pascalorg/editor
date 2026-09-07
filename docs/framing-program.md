@@ -912,7 +912,78 @@ G70 The plans' code and design criteria are checked and correct — the same
 G71 The Pascal Map response for a real address saved as a readable JSON
     under docs/reference.
 
+## Mandate additions (Steve, 2026-09-07 — the MEP review)
+
+> go through and review the electrical and plumbing settings ensure they are
+> triggering correctly, figure out how bones can work with the system the
+> gis data if that matters at all, review electrical, plumbing, make sure
+> ducts look correct and things are doing it as needed, ensure all the hvac
+> system are correctly being shown
+>
+> water heaters too with good specs and standards, heat pumps in ca for
+> example check insulation and stuff is correct, review plans and ensure
+> the 3d objects are modeled correctly and such
+
+G72 Every electrical / plumbing / HVAC setting on generation triggers the
+    engine change it names.
+G73 Bones reads the site's GIS data where it matters: utilities (sewer vs
+    septic, public water vs well, the electric provider) and the code basis.
+G74 Ducts and every HVAC system type read correctly in 3D and on M1.0.
+G75 Water heaters with real specs and standards (type, size, UEF, circuit,
+    venting, pan / T&P / straps / expansion); heat pumps in CA by Title 24.
+G76 Insulation and the energy sheet correct for the state; the 3D objects
+    modelled correctly.
+
 ## Log (continued)
+
+- 2026-09-07: **Batch T5 — the MEP review (G72–G76).** A probe
+  (scratchpad `mep-probe.ts`: computeLevel over a generated scene per
+  service choice) showed every setting triggering: the four HVAC systems
+  (air handler + heat pump / furnace + B-vent flue / packaged plenum /
+  wall heads and no ducts), underground vs overhead service, attic vs
+  wall wiring (372 attic legs → 0), the sewer side (the property-line
+  cleanout moves), the water route (16 attic / under-slab / crawl legs
+  vs 125 wall legs). Fixed: (1) the PACKAGED unit's supply and return
+  plenums are drawn through the exterior wall from the unit on its pad
+  to the trunk riser just inside (the riser used to start at the
+  equipment room's centroid with a "schematic" label); (2) MINI-SPLIT
+  heads no longer land in baths, laundries, closets and rooms under
+  5 m² (10 → 7 heads on the Tampa modern); (3) CA / WA / OR default to a
+  split heat pump (2022 Title 24 §150.1(c)6 baseline — verify by climate
+  zone; Sacramento was an AC + furnace). WATER HEATERS
+  (`engines/water-heater.ts`): a seventh service choice (`waterHeater`
+  on the roll, the framing node, the Bones Services row and the Generate
+  panel — electric tank / gas tank / heat-pump / tankless gas / tankless
+  electric), else the state's practice: heat-pump in CA / WA / OR
+  (§150.1(c)8), a gas tank beside a gas furnace, an electric tank in the
+  heat-pump South; sized by bedrooms and baths (40 / 50 / 65 / 80 gal,
+  the heat pump a size up, 50 minimum); UEF floors from 10 CFR
+  430.32(d); the branch circuit on the label (240 V 30 A / 3 × 40 A
+  tankless electric / 120 V for a gas unit); venting (a 3 in B-vent up
+  past the roof on a gas tank), a thermal expansion tank on every tank's
+  cold inlet (P2903.4.2), the heat-pump heater's condensate to the pan;
+  the existing stand / pan / T&P / straps machinery kept, straps still
+  spec-driven (SDC D). The P1.0 notes print the heater as modelled and
+  its install notes, the E1.0 notes its circuit (mep/notes.ts
+  `waterHeaterNotes`). GIS: `siteUtilitiesOf` reads the dossier's
+  utilities — 'septic' draws the building sewer to a two-compartment tank
+  sized by the bedrooms (1,000 / 1,250 / 1,500 gal; health-department
+  tables — verify), a distribution box and three 12 m perforated
+  laterals toward the rear (the drainfield's size is the soil's — said
+  on the label) instead of the street lateral; a 'well' draws a well
+  head 3 m out from the entry wall (1 in service, ≥ 75 ft from the
+  drainfield — verify) instead of the utility's meter box; the electric
+  provider's name goes on the pole / transformer ("TAMPA ELECTRIC CO's").
+  Tested on a synthetic septic + well copy of the Tampa scene (no
+  recorded dossier says septic yet). Insulation: EN1.0's prescriptive
+  rows are IECC by zone (2A R-13 wall / R-49 ceiling; 3B R-20 / R-49)
+  with the CA caveat that Title 24 Part 6 governs already printed — left
+  as is. 3D: the X-ray renders the heater, condenser, ducts and plenums
+  as boxes (a tank is a cylinder approximated as a box — unchanged); the
+  Browser pane's screenshot timed out on the X-ray twice, so the 3D was
+  checked by member positions, not by eye this batch. Tests: water-heater
+  +4; Bones 2156, sheets 258, generate typecheck clean; the master
+  baseline byte-equal (no water heater on it).
 
 - 2026-09-07: **Batch T4 — the garage at the driveway, steps from the
   house, contours in 3D, one set of design criteria (G67–G71).** The

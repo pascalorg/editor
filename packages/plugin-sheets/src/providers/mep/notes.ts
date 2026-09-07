@@ -82,7 +82,25 @@ export function necEditionFor(jurisdiction: string): string | null {
  *  19   service drop / point of attachment (NEC 230.24(B), 230.26)
  *  20   EV-ready — flagged, because it is an ENERGY-code item, not the NEC
  */
-export function electricalNotes(options: { serviceAmps: number }): string[] {
+/**
+ * The water heater's own lines (Steve, 2026-09-07: "water heaters too with
+ * good specs and standards"): the plumbing sheet prints the type, size,
+ * efficiency floor and the install notes Bones chose; the electrical sheet
+ * prints the branch circuit it owes it. Read off the Bones fixture's meta
+ * (engines/water-heater.ts) — nothing when no heater was modelled.
+ */
+export function waterHeaterNotes(
+  fixtures: readonly { kind: string; label?: string; meta?: Record<string, string | number | boolean> }[],
+): { plumbing: string[]; electrical: string[] } {
+  const wh = fixtures.find((f) => f.kind === 'water-heater')
+  const meta = wh?.meta
+  if (!wh || !meta || typeof meta.waterHeater !== 'string') return { plumbing: [], electrical: [] }
+  const plumbing = [`Water heater as modelled: ${wh.label ?? ''}${typeof meta.notes === 'string' && meta.notes ? ` — ${meta.notes}` : ''}. The ordered unit's UEF label and listing govern; verify with the adopted code.`]
+  const electrical = typeof meta.circuit === 'string' ? [`Water heater branch circuit: ${meta.circuit}${meta.waterHeater === 'heat-pump' ? ' — a heat-pump water heater also wants a condensate drain and ≥ 700 ft³ of air or ducting (mfr listing)' : ''}.`] : []
+  return { plumbing, electrical }
+}
+
+export function electricalNotes(options: { serviceAmps: number; extra?: readonly string[] }): string[] {
   const r = e.receptacles
   const counter = e.layoutAlgorithmHints.countertopPlacement
   const gfciList = (e.gfci.gfciLocations as readonly string[]).join(', ')
@@ -108,6 +126,7 @@ export function electricalNotes(options: { serviceAmps: number }): string[] {
     'Maintain the working space in front of the panelboard clear and unobstructed for the life of the installation: not less than 30 in wide, 36 in deep, and 6 ft 6 in high. The space above and below the enclosure footprint is dedicated to the electrical installation. (NEC 110.26(A), 110.26(E))',
     'Overhead service conductors: point of attachment not less than 10 ft above finished grade; conductor clearances not less than 10 ft above finished grade and accessible walking surfaces, 12 ft over residential driveways, and 18 ft over public streets and alleys, for conductors 150 V or less to ground. Confirm the drop, attachment and clearance requirements with the serving utility. (NEC 230.24(B), 230.26)',
     'EV-ready: where required by the adopted energy code, provide a raceway from the panelboard to the parking location, terminating in a listed enclosure at the charger location, and reserve panel capacity and a labelled space for the branch circuit. (verify: adopted energy code — e.g. CA Energy Code Title 24 Part 6 §150.0(s); equipment per NEC Article 625)',
+    ...(options.extra ?? []),
   ]
 }
 
@@ -121,7 +140,7 @@ function serviceAmpsNote(minServiceAmps: number): string {
  * file's own note strings (`mep-rules.json`), so each line quotes the source
  * rather than restating it — the citation cannot drift from the number.
  */
-export function plumbingNotes(): string[] {
+export function plumbingNotes(extra: readonly string[] = []): string[] {
   const dwv = p.dwv
   const supply = p.supply
   const rough = p.fixtureRoughIn
@@ -143,6 +162,7 @@ export function plumbingNotes(): string[] {
     'Thermostatic or pressure-balancing mixing valves at showers and tub/shower combinations, with the handle stop set to limit the outlet temperature. (verify: IRC P2708.4 / P2724 and the adopted amendment — e.g. CPC 418 at 120 °F)',
     'Hose bibbs and other outlets to which a hose may be attached shall be protected against backflow by a non-removable backflow preventer. (verify: IRC P2902 / CPC 603.5.7)',
     'Gas piping, where a fuel-gas appliance is installed, per the adopted fuel-gas code; sizing, materials and testing are not shown on this sheet. (verify: IRC Chapter 24 / IFGC)',
+    ...extra,
   ]
 }
 

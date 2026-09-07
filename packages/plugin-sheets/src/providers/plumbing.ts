@@ -43,7 +43,7 @@ import { basePlan } from './mep/base-plan'
 import { type PlacedItem, placedPlumbingItems, serviceLetters } from './mep/items'
 import { columnsOf, type PlateLayout, plateLayout } from './mep/layout'
 import { fixturesOf, mepModel } from './mep/model'
-import { mepBasisLine, PLUMBING_KEY, plumbingNotes, RULES_DISCLAIMER } from './mep/notes'
+import { mepBasisLine, PLUMBING_KEY, plumbingNotes, RULES_DISCLAIMER, waterHeaterNotes } from './mep/notes'
 import {
   type Box,
   capWarnings,
@@ -263,7 +263,7 @@ export function buildPlumbingDrawing(nodes: NodeMap, args: ProviderArgs): Drawin
     return {
       primitives: [],
       bounds: EMPTY_BOUNDS,
-      plate: notesOnly(box, mepModel(nodes, levelId)?.jurisdiction ?? 'AUTO'),
+      plate: notesOnly(box, mepModel(nodes, levelId)?.jurisdiction ?? 'AUTO', waterHeaterNotes(mepModel(nodes, levelId)?.fixtures ?? []).plumbing),
       noLabel: true,
       title: 'Plumbing notes',
     }
@@ -303,7 +303,7 @@ export function buildPlumbingDrawing(nodes: NodeMap, args: ProviderArgs): Drawin
           },
           PLUMBING_EMPTY_NOTE,
         ),
-        ...notesOnly(notesBox, model?.jurisdiction ?? 'AUTO'),
+        ...notesOnly(notesBox, model?.jurisdiction ?? 'AUTO', waterHeaterNotes(model?.fixtures ?? []).plumbing),
       ],
       warnings: capWarnings(warnings),
       noLabel: true,
@@ -434,6 +434,7 @@ export function buildPlumbingDrawing(nodes: NodeMap, args: ProviderArgs): Drawin
     bonesLegend: [...bonesLegend.values()],
     withNotes: args.system !== 'plan',
     jurisdiction: model?.jurisdiction ?? 'AUTO',
+    extraNotes: waterHeaterNotes(model?.fixtures ?? []).plumbing,
   })
 
   if (!plumbing.some((f) => f.kind === 'water-heater')) {
@@ -481,10 +482,11 @@ function plumbingPlates(input: {
   bonesLegend: readonly { key: string; label: string; build: (s: sym.SymbolStyle) => FloorplanGeometry[] }[]
   withNotes: boolean
   jurisdiction: string
+  extraNotes?: readonly string[]
 }): FloorplanGeometry[] {
   const { layout, items, pipeKeys, bonesLegend, withNotes, jurisdiction } = input
   const out: FloorplanGeometry[] = []
-  const notes = plumbingNotes()
+  const notes = plumbingNotes(input.extraNotes ?? [])
 
   const drawKeys = (col: Box): number => {
     let y = col.y
@@ -584,9 +586,9 @@ function usedKeyRows(items: readonly PlacedItem[]): { letter: string; label: str
  * are the plan viewport's plates, printed once beside the plan; a second key
  * here was the same box twice on P1.0.
  */
-function notesOnly(box: Box, jurisdiction: string): FloorplanGeometry[] {
+function notesOnly(box: Box, jurisdiction: string, extra: readonly string[] = []): FloorplanGeometry[] {
   const out: FloorplanGeometry[] = []
-  const notes = plumbingNotes()
+  const notes = plumbingNotes(extra)
   const inner: Box = { x: box.x + PAD, y: box.y + PAD, w: box.w - PAD * 2, h: box.h - PAD * 2 }
   const notesBox: Box = { ...inner, h: Math.max(0.8, inner.h) }
   const columns = columnsOf(notesBox, notesColumnCount(notesBox.w))

@@ -282,6 +282,7 @@ export const FramingNode = BaseNode.extend({
   sewerSide: z.enum(['street', 'rear']).optional(),
   waterRoute: z.enum(['attic', 'under-slab', 'crawl', 'walls']).optional(),
   hvacSystem: z.enum(['heat-pump-split', 'ac-gas-furnace', 'packaged', 'mini-split']).optional(),
+  waterHeater: z.enum(['electric-tank', 'gas-tank', 'heat-pump', 'tankless-gas', 'tankless-electric']).optional(),
 }).describe(
   `Bones framing config (engineering X-ray) — one per level.
   - jurisdiction: US state code ('CA'), 'INTL', or 'AUTO' (guessed from the browser locale/timezone)

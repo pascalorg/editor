@@ -556,7 +556,10 @@ export type CoolingPlan = {
 export type HvacSystem = NonNullable<FramingSpec['hvacSystem']>
 
 /** States whose practice is a split HEAT PUMP (mild winters, electric heat). */
-const HEAT_PUMP_STATES = new Set(['FL', 'GA', 'SC', 'NC', 'AL', 'MS', 'LA', 'TN', 'TX', 'AZ', 'NV', 'OK', 'AR', 'VA'])
+// the South and Southwest by practice; CA / WA / OR by their energy codes
+// (CA 2022 Title 24 Part 6 §150.1(c)6 heat-pump space-heating baseline —
+// Steve, 2026-09-07: "heat pumps in CA"; verify by climate zone)
+const HEAT_PUMP_STATES = new Set(['FL', 'GA', 'SC', 'NC', 'AL', 'MS', 'LA', 'TN', 'TX', 'AZ', 'NV', 'OK', 'AR', 'VA', 'CA', 'WA', 'OR'])
 
 /**
  * The system when the panel set none (Steve: "provide the options to the
@@ -584,7 +587,7 @@ function indoorUnitName(system: HvacSystem | null): string {
     case 'ac-gas-furnace':
       return 'Gas furnace (upflow, 80% AFUE min — M1401) with evaporator coil'
     case 'packaged':
-      return 'Supply / return plenum connection — packaged unit outside (schematic)'
+      return 'Supply / return plenum connection — packaged unit outside, plenums through the exterior wall'
     default:
       return 'Air handler'
   }
@@ -1671,7 +1674,38 @@ export function layoutHvac(
   }
 
   const equipRoom = equipmentRoomOf(rooms)
-  const equipAt = centroid(equipRoom.polygon)
+  let equipAt: Pt = centroid(equipRoom.polygon)
+  // A PACKAGED unit stands outside on its pad and its supply / return
+  // plenums come THROUGH the exterior wall (Steve, 2026-09-07: "ensure all
+  // the HVAC systems are correctly being shown"): the indoor plenum point
+  // moves to just inside the wall nearest the unit's pad, the trunk rises
+  // from there, and two through-wall ducts join the cabinet to it.
+  if (system === 'packaged') {
+    const seed = placeCondenserSeedSpot(walls, zonesAll, context?.coverage ?? [])
+    const exit = seed ? nearestExteriorExit(walls, seed) : null
+    if (seed && exit) {
+      const inward = centroid(equipRoom.polygon)
+      let ix = inward[0] - exit.at[0]
+      let iz = inward[1] - exit.at[1]
+      const n = Math.hypot(ix, iz) || 1
+      ix /= n
+      iz /= n
+      const inside: Pt = [exit.at[0] + ix * (exit.wall.thickness / 2 + 0.45), exit.at[1] + iz * (exit.wall.thickness / 2 + 0.45)]
+      const side: Pt = [-iz, ix]
+      const cabinetFace: Pt = [seed[0] - ix * 0.45, seed[1] - iz * 0.45]
+      const pair: [string, number, number, number][] = [
+        ['Supply plenum', 0.25, TRUNK_W, TRUNK_H],
+        ['Return plenum', -0.25, TRUNK_W + 0.1, TRUNK_H + 0.05],
+      ]
+      for (const [name, off, w, h] of pair) {
+        const a: Pt = [cabinetFace[0] + side[0] * off, cabinetFace[1] + side[1] * off]
+        const b: Pt = [inside[0] + side[0] * off, inside[1] + side[1] * off]
+        const m = duct(a, b, 0.75, w, h, equipRoom.id, `${name} — through the exterior wall from the packaged unit (M1601.4; seal the penetration, R-8 outside the envelope N1103.3)`)
+        if (m) members.push(m)
+      }
+      equipAt = inside
+    }
+  }
   // GARAGE AIR HANDLER (B19a BLOCKER): only reachable when the scene has NO
   // conditioned service space (laundry/utility, closet, hallway) — keep it,
   // but LOUDLY: M1602.2(1) forbids garage return air (the open grille moves
@@ -1741,7 +1775,7 @@ export function layoutHvac(
     warnings.push('gas furnace: the gas line to the furnace is the plumbing contractor\'s (not modeled); combustion air per G2407 — verify')
   }
   if (system === 'packaged') {
-    warnings.push('packaged unit: the ducts meet the unit through the exterior wall; the plenum connection is drawn at the equipment room (schematic) — verify the wall penetration and the pad')
+    warnings.push('packaged unit: the supply and return plenums are drawn through the exterior wall from the unit on its pad to the trunk riser just inside — verify the wall penetration framing, the seal and the pad (M1601.4 / M1403)')
   }
 
   // The supply spine (axis + register drop points + keep-out footprints) —
@@ -2996,9 +3030,15 @@ function miniSplit(
         (f.kind === 'equipment' && f.system === 'hvac' && f.meta?.equipment !== 'condenser' && f.sourceId === equipRoomId)
       ),
   )
-  const total = habitable.reduce((s, r) => s + polygonArea(r.polygon), 0) || 1
+  // heads in the rooms people live in — no head in a bath, a laundry, a
+  // closet under 5 m² (a door undercut / the adjoining head serves them)
+  const served = habitable.filter(
+    (r) => r.category !== 'bathroom' && r.category !== 'laundry' && polygonArea(r.polygon) >= 5 && !/closet|wic|pantry|mud/i.test(r.name),
+  )
+  const skipped = habitable.length - served.length
+  const total = served.reduce((s, r) => s + polygonArea(r.polygon), 0) || 1
   let heads = 0
-  for (const room of habitable) {
+  for (const room of served) {
     const c = centroid(room.polygon)
     const boundary = walls.filter((w) => room.boundaryWallIds.includes(w.id) && !w.curved && w.length >= 1)
     const pool = boundary.length > 0 ? boundary : walls.filter((w) => !w.curved && w.length >= 1)
@@ -3027,7 +3067,7 @@ function miniSplit(
       meta: { equipment: 'mini-split-head', btuH: btu, room: room.id },
     })
   }
-  warnings.push(`mini-split: ${heads} wall heads, no ducts; refrigerant line sets to the outdoor unit(s) not routed — by the installer (M1411)`)
+  warnings.push(`mini-split: ${heads} wall heads${skipped > 0 ? ` (${skipped} bath / laundry / small rooms served by their neighbours)` : ''}, no ducts; refrigerant line sets to the outdoor unit(s) not routed — by the installer (M1411)`)
   return { members: keptMembers, fixtures: keptFixtures, warnings, plan, system: 'mini-split' }
 }
 

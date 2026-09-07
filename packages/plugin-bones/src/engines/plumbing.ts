@@ -41,6 +41,7 @@
  */
 
 import mepRules from '../../data/mep-rules.json'
+import { waterHeaterSpec } from './water-heater'
 import { DEFAULT_SPEC, type FramingSpec } from '../core/spec'
 import type {
   Fixture,
@@ -275,6 +276,12 @@ export type PlumbingContext = {
   atticY?: number
   /** Level-local y of grade at the house. */
   groundY?: number
+  /** The site's wastewater (Pascal Map utilities): 'septic' draws a tank + drainfield instead of the sewer lateral. */
+  wastewater?: 'sewer' | 'septic'
+  /** The site's drinking water: 'well' draws a well head instead of the utility's meter box. */
+  water?: 'public' | 'well'
+  /** The HVAC system (the water heater follows its fuel). */
+  hvacSystem?: string | null
 }
 
 /** The slab states whose practice runs the supply through the ATTIC (PEX). */
@@ -375,6 +382,103 @@ function sewerLateral(
     sourceId: 'dwv-lateral',
     label: `Cleanout @ property line — two-way (P3005.2; ${rear ? 'rear' : 'street'} side)`,
   })
+}
+
+/**
+ * The SEPTIC system where the site has no sewer (the Pascal Map utilities
+ * say 'septic'): the building sewer 10 ft out from the exit cleanout to a
+ * two-compartment tank sized by the bedrooms (1,000 gal to three, 1,250 at
+ * four, 1,500 past that — the common state tables; verify with the health
+ * department, e.g. FL 64E-6 Table I), a distribution box past it, and a
+ * drainfield of three 4 in perforated laterals — the drainfield's real
+ * size is the soil's (percolation / loading rate) and is said so. Toward
+ * the rear unless the sewer side asks for the street.
+ */
+function septicSystem(
+  members: Member[],
+  fixtures: Fixture[],
+  spec: FramingSpec,
+  walls: WallSlice[],
+  rooms: RoomSlice[],
+  exit: Pt,
+  arriveY: number,
+  groundY: number,
+): void {
+  const street = spec.street
+  if (!street) return
+  const toStreet = spec.sewerSide === 'street'
+  const dir: readonly [number, number] = toStreet ? street.dir : [-street.dir[0], -street.dir[1]]
+  const side: readonly [number, number] = [-dir[1], dir[0]]
+  const bedrooms = rooms.filter((r) => r.category === 'bedroom').length
+  const gallons = bedrooms <= 3 ? 1000 : bedrooms === 4 ? 1250 : 1500
+  const tankLen = 2.4
+  const tankW = 1.3
+  const tankH = 1.5
+  // the tank: 10 ft of sewer from the house (5 ft minimum to the foundation, FL 64E-6.005 — verify the local setback)
+  const inlet: Pt = [exit[0] + dir[0] * 3.0, exit[1] + dir[1] * 3.0]
+  const tankC: Pt = [inlet[0] + dir[0] * (tankLen / 2), inlet[1] + dir[1] * (tankLen / 2)]
+  const sewer: PipeSpec = {
+    side: pipeSide(4),
+    material: 'pvc',
+    role: 'pipe-run',
+    sourceId: 'dwv-septic',
+    label: '4" building sewer — to the septic tank, 1/8"/ft (P3005.3)',
+  }
+  const y = leg(members, sewer, exit, inlet, arriveY, true, 0.05, 0.125 / 12)
+  const tankTop = Math.min(groundY - 0.3, y - 0.1)
+  members.push({
+    system: 'plumbing',
+    role: 'equipment',
+    dims: [tankLen, tankH, tankW],
+    length: tankLen,
+    position: [tankC[0], tankTop - tankH / 2, tankC[1]],
+    rotation: [0, Math.atan2(-dir[1], dir[0]), 0],
+    material: 'concrete',
+    sourceId: 'septic-tank',
+    label: `Septic tank — ${gallons.toLocaleString('en-US')} gal two-compartment precast (${bedrooms} bedrooms; state table — verify with the health department), inlet baffle, outlet filter, risers to grade; ≥ 5 ft from the foundation, ≥ 75 ft from any well`,
+  })
+  fixtures.push({
+    system: 'plumbing',
+    kind: 'cleanout',
+    position: [inlet[0], groundY + 0.1, inlet[1]],
+    rotationY: 0,
+    sourceId: 'septic-tank',
+    label: 'Septic tank inlet riser to grade (access — verify)',
+  })
+  // the distribution box and the drainfield header
+  const outlet: Pt = [tankC[0] + dir[0] * (tankLen / 2), tankC[1] + dir[1] * (tankLen / 2)]
+  const dbox: Pt = [outlet[0] + dir[0] * 2.0, outlet[1] + dir[1] * 2.0]
+  const effluent: PipeSpec = { ...sewer, sourceId: 'septic-effluent', label: '4" effluent line — tank outlet to the distribution box (solid pipe)' }
+  const yOut = leg(members, effluent, outlet, dbox, tankTop - 0.35, true, 0.05, 0.125 / 12)
+  members.push({
+    system: 'plumbing',
+    role: 'equipment',
+    dims: [0.5, 0.4, 0.5],
+    length: 0.5,
+    position: [dbox[0], yOut - 0.1, dbox[1]],
+    rotation: [0, 0, 0],
+    material: 'concrete',
+    sourceId: 'septic-dbox',
+    label: 'Distribution box — level outlets to the drainfield laterals (verify)',
+  })
+  const lateralLen = 12
+  const spacing = 1.8
+  const header: PipeSpec = { ...sewer, sourceId: 'septic-header', label: '4" drainfield header (solid)' }
+  const headerA: Pt = [dbox[0] - side[0] * spacing, dbox[1] - side[1] * spacing]
+  const headerB: Pt = [dbox[0] + side[0] * spacing, dbox[1] + side[1] * spacing]
+  leg(members, header, headerA, headerB, yOut - 0.1, false, 0.05)
+  for (const k of [-1, 0, 1]) {
+    const from: Pt = [dbox[0] + side[0] * spacing * k, dbox[1] + side[1] * spacing * k]
+    const to: Pt = [from[0] + dir[0] * lateralLen, from[1] + dir[1] * lateralLen]
+    const lat: PipeSpec = {
+      side: pipeSide(4),
+      material: 'pvc',
+      role: 'pipe-run',
+      sourceId: 'septic-lateral',
+      label: `4" perforated drainfield lateral in a gravel trench — ${lateralLen} m drawn; the drainfield's size is the soil's (percolation / loading rate, FL 64E-6 / local) — verify`,
+    }
+    leg(members, lat, from, to, yOut - 0.1, true, 0.05, 0.02 / 12)
+  }
 }
 
 /**
@@ -1610,8 +1714,12 @@ function placedPlumbing(
       ? 'Cleanout @ sewer exit (P3005.2.1)'
       : 'Cleanout @ drain main terminus (P3005.2)',
   })
-  // the lateral on to the property line (street known, ground storey)
-  if (groundLevel && spec.street) sewerLateral(members, fixtures, spec, walls, exit, mainArriveY, context.groundY ?? 0)
+  // the lateral on to the property line (street known, ground storey) — or
+  // the septic system where the site has no sewer
+  if (groundLevel && spec.street) {
+    if (context.wastewater === 'septic') septicSystem(members, fixtures, spec, walls, rooms, exit, mainArriveY, context.groundY ?? 0)
+    else sewerLateral(members, fixtures, spec, walls, exit, mainArriveY, context.groundY ?? 0)
+  }
 
   // ---- re-vents: one per wet wall, rising to 6" above the flood rim and
   // returning to the stack along the wall graph (P3104.4). The map is
@@ -1685,10 +1793,30 @@ function placedPlumbing(
     rotationY: 0,
     sourceId: meterWall.id,
     label: meterBox
-      ? `Water entry — ¾" min service from the meter at the property line (P2903.7); bond here (NEC 250.104)`
+      ? context.water === 'well'
+        ? `Water entry — 1" service from the well's pressure tank (P2903.7); bond here (NEC 250.104)`
+        : `Water entry — ¾" min service from the meter at the property line (P2903.7); bond here (NEC 250.104)`
       : `Water service meter — ¾" min (P2903.7)${meterInPanelSpace ? ' — in panel dedicated space (NEC 110.26(E))' : ''}`,
   })
-  if (meterBox) {
+  if (meterBox && context.water === 'well') {
+    // a WELL (the site's dossier says no public water): the casing stands
+    // 3 m out from the entry wall, the pressure tank and the disinfection
+    // / treatment are the well contractor's — separations to the septic
+    // system (≥ 75 ft) and the property line per the health department
+    const dir = spec.street!.dir
+    const head: Pt = [meterPlan[0] + dir[0] * 3, meterPlan[1] + dir[1] * 3]
+    members.push({
+      system: 'plumbing',
+      role: 'equipment',
+      dims: [0.16, 0.6, 0.16],
+      length: 0.6,
+      position: [head[0], groundYHere + 0.3, head[1]],
+      rotation: [0, 0, 0],
+      material: 'steel',
+      sourceId: 'water-service',
+      label: 'Well head — 6" casing with a pitless adapter, sanitary cap; submersible pump, 1" service to a pressure tank at the entry (P2903.7); ≥ 75 ft from the septic drainfield — verify with the health department / well permit',
+    })
+  } else if (meterBox) {
     members.push({
       system: 'plumbing',
       role: 'equipment',
@@ -1734,8 +1862,27 @@ function placedPlumbing(
   const nx = -whWall.dir[1] * side
   const nz = whWall.dir[0] * side
   const whPlan: Pt = [whWallPlan[0] + nx * whOff, whWallPlan[1] + nz * whOff]
-  const whDims: readonly [number, number, number] = tank ? [0.6, 1.5, 0.6] : [0.45, 0.6, 0.25]
-  const whBottom = tank ? inches(18) : 1.2 // M1307.3 garage ignition height
+  // The heater's TYPE and SIZE (water-heater.ts): the panel's choice, else
+  // the state's practice and the HVAC fuel; a tank only where the spot is
+  // a tank spot (a garage wall), a wall-hung tankless cabinet elsewhere.
+  const whNotes: string[] = []
+  const bedrooms = rooms.filter((r) => r.category === 'bedroom').length
+  const baths = rooms.filter((r) => r.category === 'bathroom').length
+  const chosen = spec.waterHeater ?? null
+  const wh = waterHeaterSpec({
+    // a tank only on a tank spot (the garage wall); elsewhere the wall-hung
+    // cabinet in the chosen fuel (gas unless electric was asked)
+    choice: tank ? chosen : chosen === 'tankless-electric' ? 'tankless-electric' : 'tankless-gas',
+    stateCode: context.stateCode,
+    hvacSystem: context.hvacSystem ?? null,
+    bedrooms: Math.max(1, bedrooms),
+    baths: Math.max(1, baths),
+    inGarage: tank,
+    seismicStraps: fab && spec.seismicHoldDowns,
+  })
+  const tankBody = wh.gallons !== null
+  const whDims: readonly [number, number, number] = wh.dims
+  const whBottom = tankBody ? inches(18) : 1.2 // M1307.3 garage ignition height
   const whCenterY = overrides?.waterHeater?.heightAff ?? whBottom + whDims[1] / 2
   members.push({
     system: 'plumbing',
@@ -1746,9 +1893,7 @@ function placedPlumbing(
     rotation: [0, Math.atan2(nx, nz), 0],
     material: 'steel',
     sourceId: 'wh',
-    label: tank
-      ? 'Water heater — 50 gal tank (M1305.1 30×30" service space, M1307.3 18" ignition height)'
-      : 'Tankless water heater — wall-mounted 1.2 m AFF (M1305.1 service space)',
+    label: `${wh.label}; ${tankBody ? 'M1305.1 30×30" service space' : 'wall-mounted 1.2 m AFF, M1305.1 service space'}`,
   })
   fixtures.push({
     system: 'plumbing',
@@ -1756,8 +1901,57 @@ function placedPlumbing(
     position: [whPlan[0], whCenterY, whPlan[1]],
     rotationY: Math.atan2(nx, nz),
     sourceId: 'wh',
-    label: tank ? 'Water heater (50 gal tank)' : 'Water heater (tankless)',
+    label: `Water heater (${wh.gallons !== null ? `${wh.gallons} gal ${wh.kind === 'heat-pump' ? 'heat-pump hybrid' : wh.kind === 'gas-tank' ? 'gas' : 'electric'} tank` : wh.kind === 'tankless-electric' ? 'tankless electric' : 'tankless gas'}, UEF ≥ ${wh.uefMin})`,
+    meta: { waterHeater: wh.kind, ...(wh.gallons !== null ? { gallons: wh.gallons } : {}), uefMin: wh.uefMin, circuit: wh.circuit },
   })
+  // an atmospheric gas tank vents through a B-vent up past the roof; the
+  // heat-pump heater drains its condensate to the pan; every tank gets a
+  // thermal expansion tank on its cold inlet (a closed system, P2903.4.2)
+  if (wh.venting === 'b-vent') {
+    const flueBottom = whCenterY + whDims[1] / 2
+    const flueTop = (context.atticY ?? 3.0) + 1.0
+    members.push({
+      system: 'plumbing',
+      role: 'pipe-run',
+      dims: [0.08, flueTop - flueBottom, 0.08],
+      length: flueTop - flueBottom,
+      position: [whPlan[0], (flueTop + flueBottom) / 2, whPlan[1]],
+      rotation: [0, 0, 0],
+      material: 'steel',
+      sourceId: 'wh-flue',
+      label: '3" B-vent — gas water heater to above the roof (G2427; terminate per the listing — verify)',
+    })
+  }
+  if (tankBody) {
+    const expAt: Pt = [whPlan[0] + whWall.dir[0] * (whDims[0] / 2 + 0.12), whPlan[1] + whWall.dir[1] * (whDims[0] / 2 + 0.12)]
+    members.push({
+      system: 'plumbing',
+      role: 'equipment',
+      dims: [0.2, 0.3, 0.2],
+      length: 0.3,
+      position: [expAt[0], whCenterY + whDims[1] / 2 + 0.25, expAt[1]],
+      rotation: [0, 0, 0],
+      material: 'steel',
+      sourceId: 'wh-expansion',
+      label: 'Thermal expansion tank 2 gal — on the cold inlet (P2903.4.2, closed system behind the meter check / PRV)',
+    })
+  }
+  if (wh.kind === 'heat-pump') {
+    const condSpec: PipeSpec = {
+      side: pipeSide(0.75),
+      material: 'pvc',
+      role: 'pipe-run',
+      sourceId: 'wh-condensate',
+      label: '¾" condensate — heat-pump water heater to the pan drain / approved receptor (mfr listing)',
+    }
+    const from: Pt = [whPlan[0] - whWall.dir[0] * (whDims[0] / 2 + 0.03), whPlan[1] - whWall.dir[1] * (whDims[0] / 2 + 0.03)]
+    riser(members, condSpec, from, whCenterY + whDims[1] * 0.3, whBottom + 0.02)
+  }
+  for (const note of wh.notes) whNotes.push(note)
+  if (whNotes.length > 0) {
+    const fx = fixtures[fixtures.length - 1]
+    if (fx && fx.kind === 'water-heater') fx.meta = { ...(fx.meta ?? {}), notes: whNotes.join(' | ') }
+  }
 
   // ---- WH safety hardware (B20 — the tank used to ship BARE and floating
   // 18" in the air): a STAND is what holds the burner at the M1307.3
@@ -1770,7 +1964,7 @@ function placedPlumbing(
   const whBot = whCenterY - whDims[1] / 2
   const whYaw = Math.atan2(nx, nz)
   const PAN_DEPTH = Math.max(inches(whRules?.panMinDepthIn ?? 1.5), 0.05)
-  if (tank) {
+  if (tankBody) {
     const standH = whBot - (fab ? PAN_DEPTH : 0)
     if (standH > 0.02) {
       members.push({
@@ -1841,8 +2035,8 @@ function placedPlumbing(
     // T&P relief valve on the tank side (tankless: cabinet bottom), its
     // discharge dropping OUTSIDE the pan rim to within 6" of the floor.
     const TP_TERM_IN = whRules?.tpDischargeMaxAboveFloorIn ?? 6
-    const bodyHalf = tank ? whDims[0] / 2 : Math.max(whDims[0], whDims[2]) / 2
-    const tpY = tank ? whCenterY + whDims[1] / 2 - 0.15 : whBot + 0.08
+    const bodyHalf = tankBody ? whDims[0] / 2 : Math.max(whDims[0], whDims[2]) / 2
+    const tpY = tankBody ? whCenterY + whDims[1] / 2 - 0.15 : whBot + 0.08
     const alongWall = (p: Pt, s: number): Pt => [
       p[0] + whWall.dir[0] * s,
       p[1] + whWall.dir[1] * s,
@@ -1890,7 +2084,7 @@ function placedPlumbing(
       const burial = groundYHere - Math.max(0.45, spec.footingDepth + 0.15)
       const service: PipeSpec = {
         ...mainSpec,
-        label: `Water service ¾" — buried from the meter box to the house entry, below frost (P2603.5 / P2603.4 sleeve at the slab)`,
+        label: `Water service ${context.water === 'well' ? '1" — buried from the well head' : '¾" — buried from the meter box'} to the house entry, below frost (P2603.5 / P2603.4 sleeve at the slab)`,
       }
       riser(members, service, meterBox, groundYHere + 0.05, burial)
       manhattan(members, service, meterBox, meterPlan, burial, false)

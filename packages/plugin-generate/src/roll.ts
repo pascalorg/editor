@@ -35,6 +35,7 @@ export type ServiceChoices = {
   sewerSide?: 'street' | 'rear'
   waterRoute?: 'attic' | 'under-slab' | 'crawl' | 'walls'
   hvacSystem?: 'heat-pump-split' | 'ac-gas-furnace' | 'packaged' | 'mini-split'
+  waterHeater?: 'electric-tank' | 'gas-tank' | 'heat-pump' | 'tankless-gas' | 'tankless-electric'
 }
 
 /** The choices, their labels and their values — one table for the panel and the script. */
@@ -47,6 +48,17 @@ export const SERVICE_CHOICES: { key: keyof ServiceChoices; label: string; values
       ['ac-gas-furnace', 'AC + gas furnace'],
       ['packaged', 'packaged unit'],
       ['mini-split', 'ductless mini-split'],
+    ],
+  },
+  {
+    key: 'waterHeater',
+    label: 'Water heater',
+    values: [
+      ['electric-tank', 'electric tank'],
+      ['gas-tank', 'gas tank'],
+      ['heat-pump', 'heat-pump (hybrid) tank'],
+      ['tankless-gas', 'tankless gas'],
+      ['tankless-electric', 'tankless electric'],
     ],
   },
   {

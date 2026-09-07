@@ -2966,6 +2966,8 @@ export type ServiceCableContext = {
   groundY?: number
   /** The tallest wall's top — the mast's weatherhead clears it. */
   eaveY?: number
+  /** The electric utility's name (the site's dossier) — printed on the pole / transformer. */
+  provider?: string
 }
 
 /**
@@ -3145,7 +3147,7 @@ export function routeServiceCable(
         rotation: [0, 0, 0],
         material: 'pt-lumber',
         sourceId: 'service-entrance',
-        label: "Utility pole — 35 ft class 5 at the lot line (the utility's; the drop attaches ~24 ft up) — verify with the utility",
+        label: `Utility pole — 35 ft class 5 at the lot line (${context.provider ? `${context.provider}'s` : "the utility's"}; the drop attaches ~24 ft up) — verify with the utility`,
       })
       // the drop: triplex from the pole attachment to the weatherhead
       const ddx = mx - pole[0]
@@ -3178,7 +3180,7 @@ export function routeServiceCable(
         rotation: [0, Math.atan2(-dir[1], dir[0]), 0],
         material: 'steel',
         sourceId: 'service-entrance',
-        label: "Pad-mount transformer at the lot line (the utility's) — service lateral origin",
+        label: `Pad-mount transformer at the lot line (${context.provider ? `${context.provider}'s` : "the utility's"}) — service lateral origin`,
       })
       flagged([pad[0], ground + 0.5, pad[1]], [pad[0], depth, pad[1]], 'service lateral — underground, 24 in cover (NEC 300.5)')
       flagged([pad[0], depth, pad[1]], [mx, depth, pad[1]], 'service lateral — underground, 24 in cover (NEC 300.5)')

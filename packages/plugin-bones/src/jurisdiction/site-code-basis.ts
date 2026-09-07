@@ -41,6 +41,35 @@ export function siteCodeBasisOf(nodes: Record<string, unknown>): SiteCodeBasis |
   return null
 }
 
+export type SiteUtilities = {
+  /** 'sewer' | 'septic' from the FL water-management inventory (or the like); null when unknown. */
+  wastewater: 'sewer' | 'septic' | null
+  /** 'public' | 'well'; null when unknown. */
+  water: 'public' | 'well' | null
+  /** The first electric provider's name. */
+  electricProvider: string | null
+}
+
+/** The utilities section on the scene's site node (`site.dossier.utilities`), or null. */
+export function siteUtilitiesOf(nodes: Record<string, unknown>): SiteUtilities | null {
+  for (const node of Object.values(nodes)) {
+    const n = node as { type?: unknown; dossier?: { utilities?: Record<string, unknown> } }
+    if (n?.type !== 'site') continue
+    const u = n.dossier?.utilities
+    if (!u || typeof u !== 'object') return null
+    const ww = str(u.wastewater)?.toLowerCase() ?? null
+    const dw = str(u.drinking_water)?.toLowerCase() ?? null
+    const providers = Array.isArray(u.electric_providers) ? (u.electric_providers as { name?: unknown }[]) : []
+    const provider = providers.map((p) => str(p?.name)).find((v): v is string => v !== null) ?? null
+    return {
+      wastewater: ww === 'septic' || ww === 'onsite' ? 'septic' : ww === 'sewer' ? 'sewer' : null,
+      water: dw ? (/well/.test(dw) ? 'well' : /public/.test(dw) ? 'public' : null) : null,
+      electricProvider: provider,
+    }
+  }
+  return null
+}
+
 /**
  * The profile with the site's wind / snow / seismic in place of the state's
  * — the derived flags (hurricane ties at 130 mph+, seismic hold-downs in

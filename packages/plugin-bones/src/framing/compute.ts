@@ -53,7 +53,7 @@ import {
 } from '../engines/electrical'
 import { frameFloor } from '../engines/floor-framing'
 import { buildFoundation } from '../engines/foundation'
-import { type CoolingPlan, flagLinesetTradeCrossings, type HvacSystem, layoutHvac } from '../engines/hvac'
+import { type CoolingPlan, defaultHvacSystem, flagLinesetTradeCrossings, type HvacSystem, layoutHvac } from '../engines/hvac'
 import { lgsFrameWalls } from '../engines/lgs-wall-framing'
 import { layoutPlumbing, placeMeterSpot } from '../engines/plumbing'
 import { streetFrameFor } from '../engines/street'
@@ -76,7 +76,7 @@ import {
 } from '../engines/wall-framing'
 import { garageSideOf, layoutWallLayers } from '../engines/wall-layers'
 import { resolveJurisdiction, siteStateOf } from '../jurisdiction/guess'
-import { applySiteCodeBasis, siteCodeBasisOf } from '../jurisdiction/site-code-basis'
+import { applySiteCodeBasis, siteCodeBasisOf, siteUtilitiesOf } from '../jurisdiction/site-code-basis'
 import { applyJurisdiction, nonIrcCodeWarning, profileFor } from '../jurisdiction/profiles'
 import { type LumberSize, LUMBER_CROSS_SECTIONS } from '../lumber'
 import {
@@ -580,6 +580,7 @@ function computeLevelUncached(
   // the site's own design values (the Pascal Map code basis) over the
   // state-typical row — wind, snow, seismic and the flags that follow them
   const { profile, note: siteDesignNote } = applySiteCodeBasis(profileFor(code), siteCodeBasisOf(nodes))
+  const siteUtilities = siteUtilitiesOf(nodes)
   let spec: FramingSpec = {
     ...DEFAULT_SPEC,
     detail: config.detail,
@@ -602,7 +603,7 @@ function computeLevelUncached(
   if (config.ceilingJoistSize !== undefined) spec = { ...spec, ceilingJoistSize: config.ceilingJoistSize }
   // the MEP routing choices — absent keys stay absent (each engine states
   // its practice default on the label)
-  for (const key of ['wiringRoute', 'serviceEntrance', 'panelSide', 'sewerSide', 'waterRoute', 'hvacSystem'] as const) {
+  for (const key of ['wiringRoute', 'serviceEntrance', 'panelSide', 'sewerSide', 'waterRoute', 'hvacSystem', 'waterHeater'] as const) {
     const v = config[key]
     if (v !== undefined) spec = { ...spec, [key]: v }
   }
@@ -1555,6 +1556,8 @@ function computeLevelUncached(
           waterEntry,
           rooms: activeRooms,
           route: wiringRoute,
+          // the utility's name on the pole / transformer (the site's dossier)
+          ...(siteUtilities?.electricProvider ? { provider: siteUtilities.electricProvider } : {}),
           serviceEntrance: spec.serviceEntrance ?? 'overhead',
           street: spec.street,
           groundY: gradeY,
@@ -1591,7 +1594,18 @@ function computeLevelUncached(
       placedFixtures,
       services,
       isGroundLevel,
-      { raisedFloor, stateCode: code, atticY: tallestWall + 0.15, groundY: gradeY },
+      {
+        raisedFloor,
+        stateCode: code,
+        atticY: tallestWall + 0.15,
+        groundY: gradeY,
+        // the site's utilities (Pascal Map): a septic system instead of the
+        // sewer lateral, a well instead of the meter box
+        ...(siteUtilities?.wastewater ? { wastewater: siteUtilities.wastewater } : {}),
+        ...(siteUtilities?.water ? { water: siteUtilities.water } : {}),
+        // the water heater follows the HVAC fuel and the state (water-heater.ts)
+        hvacSystem: spec.hvacSystem ?? defaultHvacSystem(code),
+      },
     )
     members.push(...plumbing.members)
     fixtures.push(...plumbing.fixtures)

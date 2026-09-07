@@ -55,8 +55,7 @@ import {
   ELECTRICAL_BASIS,
   electricalNotes,
   necEditionFor,
-  RULES_DISCLAIMER,
-} from './mep/notes'
+  RULES_DISCLAIMER, waterHeaterNotes } from './mep/notes'
 import {
   type Box,
   capWarnings,
@@ -252,7 +251,7 @@ export function buildElectricalDrawing(nodes: NodeMap, args: ProviderArgs): Draw
     return {
       primitives: [],
       bounds: EMPTY_BOUNDS,
-      plate: notesOnly(box, jurisdiction, args.viewport.h),
+      plate: notesOnly(box, jurisdiction, args.viewport.h, waterHeaterNotes(mepModel(nodes, levelId)?.fixtures ?? []).electrical),
       noLabel: true,
       title: 'Electrical notes',
     }
@@ -280,7 +279,7 @@ export function buildElectricalDrawing(nodes: NodeMap, args: ProviderArgs): Draw
           },
           ELECTRICAL_EMPTY_NOTE,
         ),
-        ...notesOnly(notesBox, model?.jurisdiction ?? 'AUTO', notesBox.h),
+        ...notesOnly(notesBox, model?.jurisdiction ?? 'AUTO', notesBox.h, waterHeaterNotes(model?.fixtures ?? []).electrical),
       ],
       warnings: capWarnings(warnings),
       noLabel: true,
@@ -461,6 +460,7 @@ export function buildElectricalDrawing(nodes: NodeMap, args: ProviderArgs): Draw
     serviceAmps,
     jurisdiction: model.jurisdiction,
     withNotes: args.system !== 'plan',
+    extraNotes: waterHeaterNotes(model.fixtures).electrical,
   })
 
   warnings.push(...serviceWarnings(model.serviceSync, fixtures))
@@ -509,10 +509,11 @@ function electricalPlates(input: {
   serviceAmps: number
   jurisdiction: string
   withNotes: boolean
+  extraNotes?: readonly string[]
 }): FloorplanGeometry[] {
   const { layout, legend, rows, serviceAmps, jurisdiction, withNotes } = input
   const out: FloorplanGeometry[] = []
-  const notes = electricalNotes({ serviceAmps })
+  const notes = electricalNotes({ serviceAmps, extra: input.extraNotes })
 
   if (layout.mode === 'column') {
     const col: Box = {
@@ -583,9 +584,9 @@ function electricalPlates(input: {
  * (`system: 'notes'`) and they flow across as many columns as fit — which is
  * how the reference sheet prints them too.
  */
-function notesOnly(box: Box, jurisdiction: string, height: number): FloorplanGeometry[] {
+function notesOnly(box: Box, jurisdiction: string, height: number, extra: readonly string[] = []): FloorplanGeometry[] {
   const out: FloorplanGeometry[] = []
-  const notes = electricalNotes({ serviceAmps: 100 })
+  const notes = electricalNotes({ serviceAmps: 100, extra })
   const inner: Box = { x: box.x + PAD, y: box.y + PAD, w: box.w - PAD * 2, h: height - PAD * 2 }
   const columns = columnsOf(inner, notesColumnCount(inner.w))
   const count = columns.length
