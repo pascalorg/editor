@@ -24,12 +24,12 @@ import {
   Vector2,
 } from 'three'
 import {
+  builtin,
   color,
   exp,
   Fn,
   float,
-  depth as fragmentDepth,
-  fwidth,
+  floatBitsToUint,
   int,
   Loop,
   min,
@@ -69,6 +69,8 @@ let _rendererState: any // eslint-disable-line @typescript-eslint/no-explicit-an
 // Helper: render targets for one outline group
 // ---------------------------------------------------------------------------
 function makeGroupTargets(downSampleRatio: number) {
+  // Preserve the original pixel-center mask coverage. MSAA-resolved masks mix
+  // visible/background samples into hidden edges before edge detection.
   const maskBuffer = new RenderTarget()
   const maskDownSample = new RenderTarget(1, 1, { depthBuffer: false })
   const edgeBuffer1 = new RenderTarget(1, 1, { depthBuffer: false })
@@ -177,6 +179,7 @@ export class MergedOutlineNode extends TempNode {
   private readonly _cacheB = new Set<Object3D>()
   private readonly _proxiesA = new Map<Object3D, Mesh | Sprite>()
   private readonly _proxiesB = new Map<Object3D, Mesh | Sprite>()
+  private readonly _proxyMaskMaterials = new WeakMap<Mesh | Sprite, NodeMaterial>()
   private readonly _maskSceneA = new Scene()
   private readonly _maskSceneB = new Scene()
 
@@ -425,16 +428,22 @@ export class MergedOutlineNode extends TempNode {
       (obj: any, sc: any, cam: any, geo: any, _mat: any, grp: any, lights: any, clip: any) => {
         if (!hasDrawableGeometry(geo)) return
         if (useProxies || cache.has(obj)) {
-          renderer.renderObject(
-            obj,
-            sc,
-            cam,
-            geo,
-            obj.isSprite ? spriteMaterial : material,
-            grp,
-            lights,
-            clip,
-          )
+          let maskMaterial = obj.isSprite ? spriteMaterial : material
+          if (useProxies) {
+            let ownedMaterial = this._proxyMaskMaterials.get(obj)
+            if (!ownedMaterial) {
+              // Disposing this private material releases the proxy's RenderObjects
+              // without disposing geometry or materials owned by the source scene.
+              ownedMaterial = maskMaterial.clone()
+              this._proxyMaskMaterials.set(obj, ownedMaterial)
+            }
+            if (ownedMaterial.colorNode !== maskMaterial.colorNode) {
+              ownedMaterial.colorNode = maskMaterial.colorNode
+              ownedMaterial.needsUpdate = true
+            }
+            maskMaterial = ownedMaterial
+          }
+          renderer.renderObject(obj, sc, cam, geo, maskMaterial, grp, lights, clip)
         }
       },
     )
@@ -442,33 +451,17 @@ export class MergedOutlineNode extends TempNode {
   }
 
   private _syncProxies(cache: Set<Object3D>, proxies: Map<Object3D, Mesh | Sprite>, scene: Scene) {
-    let supported = true
+    const supported = this._supportsProxies(cache)
+    for (const [source, proxy] of proxies) {
+      if (!supported || !cache.has(source) || !hasDrawableGeometry(source.geometry)) {
+        this._disposeProxyMaterial(proxy)
+        scene.remove(proxy)
+        proxies.delete(source)
+      }
+    }
+    if (!supported) return false
+
     for (const source of cache) {
-      const prototype = Object.getPrototypeOf(source)
-      let visible = true
-      let attached = false
-      let customHierarchy = false
-      for (let ancestor = source; ancestor; ancestor = ancestor.parent) {
-        if (!ancestor.visible) visible = false
-        if (ancestor === this.scene) attached = true
-        if (
-          ancestor.isLOD ||
-          ancestor.isClippingGroup ||
-          (ancestor.isGroup && ancestor.renderOrder !== 0)
-        ) {
-          customHierarchy = true
-        }
-      }
-      // These types own draw-time state that a plain proxy cannot reproduce.
-      if (
-        (prototype !== Mesh.prototype && prototype !== Sprite.prototype) ||
-        source.onBeforeRender !== Object3D.prototype.onBeforeRender ||
-        source.onAfterRender !== Object3D.prototype.onAfterRender ||
-        customHierarchy
-      ) {
-        supported = false
-        continue
-      }
       if (!hasDrawableGeometry(source.geometry)) continue
       let proxy = proxies.get(source)
       if (!proxy) {
@@ -480,6 +473,15 @@ export class MergedOutlineNode extends TempNode {
         proxy.frustumCulled = false
         proxies.set(source, proxy)
         scene.add(proxy)
+      } else if (proxy.geometry !== source.geometry) {
+        // Three's RenderObject.setGeometry does not move its dispose listener.
+        this._disposeProxyMaterial(proxy)
+      }
+      let visible = true
+      let attached = false
+      for (let ancestor = source; ancestor; ancestor = ancestor.parent) {
+        if (!ancestor.visible) visible = false
+        if (ancestor === this.scene) attached = true
       }
       proxy.geometry = source.geometry
       proxy.material = source.material
@@ -489,18 +491,38 @@ export class MergedOutlineNode extends TempNode {
       proxy.renderOrder = source.renderOrder
       proxy.morphTargetInfluences = source.morphTargetInfluences
       proxy.morphTargetDictionary = source.morphTargetDictionary
-      if (source.isSprite) {
-        proxy.center.copy(source.center)
-        proxy.count = source.count
+      proxy.count = source.count
+      if (source.isSprite) proxy.center.copy(source.center)
+    }
+    return true
+  }
+
+  private _supportsProxies(cache: Set<Object3D>) {
+    for (const source of cache) {
+      const prototype = Object.getPrototypeOf(source)
+      if (
+        (prototype !== Mesh.prototype && prototype !== Sprite.prototype) ||
+        source.onBeforeRender !== Object3D.prototype.onBeforeRender ||
+        source.onAfterRender !== Object3D.prototype.onAfterRender
+      ) {
+        return false
+      }
+      for (let ancestor = source; ancestor; ancestor = ancestor.parent) {
+        if (
+          ancestor.isLOD ||
+          ancestor.isClippingGroup ||
+          (ancestor.isGroup && ancestor.renderOrder !== 0)
+        ) {
+          return false
+        }
       }
     }
-    for (const [source, proxy] of proxies) {
-      if (!supported || !cache.has(source) || !hasDrawableGeometry(source.geometry)) {
-        scene.remove(proxy)
-        proxies.delete(source)
-      }
-    }
-    return supported
+    return true
+  }
+
+  private _disposeProxyMaterial(proxy: Mesh | Sprite) {
+    this._proxyMaskMaterials.get(proxy)?.dispose()
+    this._proxyMaskMaterials.delete(proxy)
   }
 
   private _runEdgePipeline(renderer: any, group: 'A' | 'B') {
@@ -553,25 +575,30 @@ export class MergedOutlineNode extends TempNode {
     if (this._sceneDepthNode) {
       builder.getNodeProperties(this).sceneDepthNode = this._sceneDepthNode
     }
+    const reversed = builder.renderer.reversedDepthBuffer
+    const depthTexture = this._sceneDepthNode?.value
+    const floatDepth = reversed || depthTexture?.type === FloatType
     // ── prepareMask ───────────────────────────────────────────────────────────
     const buildPrepareMask = () => {
-      let depth = (this._sceneDepthNode ?? this._depthTexUniform).sample(screenUV)
+      const depth = (this._sceneDepthNode ?? this._depthTexUniform).sample(screenUV).r
       if (this._sceneDepthNode) {
-        // A small depth-space bias prevents self-occlusion. With MSAA, sample 0
-        // is off-center: also cover its subpixel depth slope against our mask.
-        const samples = this._sceneDepthNode.passNode?.options.samples ?? builder.renderer.samples
-        let bias = float(2 ** -22)
-        if (samples > 1) bias = bias.add(fwidth(fragmentDepth).mul(0.5))
-        depth = builder.renderer.reversedDepthBuffer ? depth.sub(bias) : depth.add(bias)
-        depth = depth.clamp(0, 1)
+        // Extract the float exponent for one ULP; a relative epsilon can hide
+        // centimetre-scale occlusion at long distances with conventional depth.
+        const bias = floatDepth
+          ? float(floatBitsToUint(depth.abs()).shiftRight(23).bitAnd(255).max(1)).sub(150).exp2()
+          : float(2 ** -24)
+        // Both Three builders expose fragCoord.xy; read rasterized z directly
+        // so view-Z reconstruction cannot consume the small depth allowance.
+        const fragmentDepth = Fn((_, shaderBuilder) =>
+          builtin(shaderBuilder.getFragCoord().replace(/\.xy$/, '.z')),
+        )()
+        const separation = reversed ? depth.sub(fragmentDepth) : fragmentDepth.sub(depth)
+        return vec3(0.0, separation.greaterThan(bias).select(1, 0), 1.0)
       }
       const viewZ = this.camera.isPerspectiveCamera
         ? perspectiveDepthToViewZ(depth, this._cameraNear, this._cameraFar)
         : orthographicDepthToViewZ(depth, this._cameraNear, this._cameraFar)
-      const depthTest = (
-        this._sceneDepthNode ? positionView.z.lessThan(viewZ) : positionView.z.lessThanEqual(viewZ)
-      ).select(1, 0)
-      return vec3(0.0, depthTest, 1.0)
+      return vec3(0.0, positionView.z.lessThanEqual(viewZ).select(1, 0), 1.0)
     }
 
     const maskColorA = buildPrepareMask()
@@ -711,6 +738,8 @@ export class MergedOutlineNode extends TempNode {
   dispose() {
     this.primaryObjects.length = 0
     this.secondaryObjects.length = 0
+    for (const proxy of this._proxiesA.values()) this._disposeProxyMaterial(proxy)
+    for (const proxy of this._proxiesB.values()) this._disposeProxyMaterial(proxy)
     this._maskSceneA.clear()
     this._maskSceneB.clear()
     this._proxiesA.clear()

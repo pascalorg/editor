@@ -18,6 +18,8 @@ import {
   SpriteMaterial,
   type Vector2,
 } from 'three'
+import RenderObject from 'three/src/renderers/common/RenderObject.js'
+import RenderObjects from 'three/src/renderers/common/RenderObjects.js'
 import { pass } from 'three/tsl'
 import { NodeFrame } from 'three/webgpu'
 import { mergedOutline } from './merged-outline-node'
@@ -246,9 +248,95 @@ describe('merged outline proxy bookkeeping', () => {
     f.tick()
     expect(f.renderer.draws).toHaveLength(1)
     expect(f.renderer.draws[0].group).toBe(f.geometry.groups[0])
-    expect(f.renderer.draws[0].material).toBe(f.internals._prepareMaskMatB)
+    expect(f.renderer.draws[0].material).toBe(
+      f.internals._proxyMaskMaterials.get(f.internals._proxiesB.get(f.mesh)),
+    )
     hidden.dispose()
     f.dispose()
+  })
+
+  test('forwards ordinary mesh count, including zero', () => {
+    const f = makeOutlineFixture()
+    for (const count of [0, 3, 1]) {
+      ;(f.mesh as any).count = count
+      f.tick()
+      const proxy = f.internals._proxiesB.get(f.mesh)
+      expect(proxy.count).toBe(count)
+      const draw = RenderObject.prototype.getDrawParameters.call({
+        object: proxy,
+        geometry: f.geometry,
+        material: f.material,
+        group: null,
+        drawRange: f.geometry.drawRange,
+        drawParams: null,
+        getIndex: () => f.geometry.index,
+      } as any)
+      expect(draw?.instanceCount ?? 0).toBe(count)
+    }
+    f.dispose()
+  })
+
+  test('allocates no proxies for mixed fallback groups across five frames', () => {
+    const f = makeOutlineFixture()
+    f.root.add(new SkinnedMesh(f.geometry, f.material))
+    let added = 0
+    f.internals._maskSceneB.addEventListener('childadded', () => added++)
+    for (let i = 0; i < 5; i++) f.tick()
+    expect(added).toBe(0)
+    expect(f.internals._proxiesB.size).toBe(0)
+    f.dispose()
+  })
+
+  test('releases real RenderObjects and dispose listeners across five hover cycles', () => {
+    const f = makeOutlineFixture()
+    let disposed = 0
+    const renderer = {
+      _currentSourceMaterial: null,
+      contextNode: { id: 0, version: 0 },
+      backend: { isWebGPUBackend: true },
+    }
+    const renderObjects = new RenderObjects(
+      renderer as any,
+      { getCacheKey: () => 0, delete: () => {} } as any,
+      {} as any,
+      { delete: () => disposed++ } as any,
+      { deleteForRender: () => {} } as any,
+      {} as any,
+    )
+    const lights = {} as any
+    const context = {} as any
+    const listeners = (object: any) => object._listeners?.dispose?.length ?? 0
+    const initialGeometryListeners = listeners(f.geometry)
+    const materials: any[] = []
+    const originalRenderObject = f.renderer.renderObject
+    f.renderer.renderObject = (object, scene, camera, geometry, material, group) => {
+      originalRenderObject(object, scene, camera, geometry, material, group)
+      renderObjects.get(object, material, scene, camera, lights, context, null as any)
+      if (!materials.includes(material)) materials.push(material)
+    }
+    for (let i = 0; i < 5; i++) {
+      f.outline.secondaryObjects.push(f.root)
+      f.tick()
+      expect(listeners(f.geometry)).toBe(initialGeometryListeners + 1)
+      f.tick()
+      expect(listeners(f.geometry)).toBe(initialGeometryListeners + 1)
+      f.outline.secondaryObjects.length = 0
+      f.tick()
+      expect(listeners(f.geometry)).toBe(initialGeometryListeners)
+      expect(materials.reduce((sum, material) => sum + listeners(material), 0)).toBe(0)
+      expect(disposed).toBe(i + 1)
+    }
+    f.outline.secondaryObjects.push(f.root)
+    f.tick()
+    const replacement = new BoxGeometry()
+    f.mesh.geometry = replacement
+    f.tick()
+    expect(listeners(f.geometry)).toBe(initialGeometryListeners)
+    expect(listeners(replacement)).toBe(1)
+    f.dispose()
+    expect(listeners(replacement)).toBe(0)
+    replacement.dispose()
+    renderObjects.dispose()
   })
 
   test('falls back for skinned, instanced, batched, and custom meshes, then recovers', () => {

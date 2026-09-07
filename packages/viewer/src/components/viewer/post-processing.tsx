@@ -551,7 +551,8 @@ const PostProcessingPasses = ({
         sceneColor = vec4(gradeRgb(sceneColor.rgb), sceneColor.a)
       }
 
-      // Both outline groups reuse the current scene pass depth.
+      // Reused scene depth lets outlined groups occlude each other; materials
+      // with depthWrite=false (including glazing) no longer occlude outlines.
       const outliner = useViewer.getState().outliner
       let compositeWithOutlines = sceneColor
       let visualAlpha = contentAlpha
