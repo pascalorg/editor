@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import {
@@ -18,9 +18,10 @@ import {
 } from '@react-three/fiber'
 import { createElement } from 'react'
 import * as THREE from 'three'
+import { acceleratedRaycast, computeBoundsTree } from 'three-mesh-bvh'
 import { createWithEqualityFn } from 'zustand/traditional'
 import { BATCHED_LAYER } from './layers'
-import { createPascalPointerEvents } from './pointer-events'
+import { choosePointerEvents, createPascalPointerEvents, markPureRaycast } from './pointer-events'
 
 extend({ Group: THREE.Group })
 
@@ -210,7 +211,7 @@ async function fixture(factory: Factory) {
     object.uuid = name
     objects.set(name, object)
     state.scene.add(object)
-    object.raycast = (raycaster, hits) => {
+    object.raycast = markPureRaycast((raycaster, hits) => {
       calls.set(name, (calls.get(name) ?? 0) + 1)
       if (raycaster.ray.direction.x > 0.5) return
       for (const [index, distance] of distances.entries()) {
@@ -225,7 +226,7 @@ async function fixture(factory: Factory) {
           normal: new THREE.Vector3(0, 0, 1),
         })
       }
-    }
+    })
     return register(object, names, action)
   }
 
@@ -320,6 +321,271 @@ describe('R3F 9.6.1 pointer-event differential', () => {
     expect(cached.calls.get('b')).toBe(2)
   })
 
+  for (const mutation of ['ray origin', 'layer mask'] as const)
+    test(`unsupported parent changing ${mutation} recollects an already cached descendant`, async () => {
+      const { cached } = await differential((f) => {
+        const parent = f.group('parent')
+        const mesh = f.mesh('mesh')
+        mesh.raycast = markPureRaycast((raycaster, hits) => {
+          hits.push({
+            object: mesh,
+            distance: raycaster.ray.origin.z - 1,
+            point: new THREE.Vector3(),
+          })
+        })
+        parent.add(mesh)
+        parent.raycast = (raycaster, _hits) => {
+          if (mutation === 'ray origin') raycaster.ray.origin.z -= 1
+          else raycaster.layers.disable(0)
+        }
+        f.state.internal.interaction = [mesh, parent]
+        f.send('onPointerMove')
+      })
+      const filtered = cached.trace.find(
+        (entry) => Array.isArray(entry) && entry[0] === 'filter',
+      ) as [string, { distance: number }[]]
+      expect(filtered[1].map((hit) => hit.distance)).toEqual([mutation === 'ray origin' ? 8 : 9])
+    })
+
+  test('unsupported reparenting discovers an unregistered mesh inside a cached empty group', async () => {
+    const { cached } = await differential((f) => {
+      const parent = f.group('parent')
+      const group = f.group('empty')
+      const mutator = f.group('mutator')
+      const mesh = f.mesh('unregistered', [1], [])
+      delete (mesh as Partial<Instance<THREE.Mesh>['object']>).__r3f
+      parent.add(group)
+      mutator.raycast = (_raycaster, _hits) => {
+        group.add(mesh)
+      }
+      f.state.internal.interaction = [group, mutator, parent]
+      f.send('onPointerMove')
+    })
+    expect(cached.calls.get('unregistered')).toBe(1)
+  })
+
+  test('unsupported sibling sees the preceding hits in the root accumulator', async () => {
+    const { cached } = await differential((f) => {
+      const { parent, b } = nested(f)
+      const raycast = b.raycast
+      b.raycast = (raycaster, hits) => {
+        if (hits.length === 0) raycast.call(b, raycaster, hits)
+      }
+      f.state.internal.interaction = [parent]
+      f.send('onPointerMove')
+    })
+    expect(cached.calls.has('b')).toBe(false)
+  })
+
+  test('pointerdown defers roots appended by an unsupported raycast until the next event', async () => {
+    const { cached } = await differential((f) => {
+      const a = f.mesh('a')
+      const b = f.mesh('b')
+      f.state.internal.interaction = [a]
+      const raycast = a.raycast
+      a.raycast = (raycaster, hits) => {
+        raycast.call(a, raycaster, hits)
+        if (!f.state.internal.interaction.includes(b)) f.state.internal.interaction.push(b)
+      }
+      f.send('onPointerDown')
+      expect(f.calls.has('b')).toBe(false)
+      f.send('onPointerDown')
+    })
+    expect(cached.calls.get('b')).toBe(1)
+  })
+
+  test('collection skips interaction slots deleted during raycasting', async () => {
+    await differential((f) => {
+      const a = f.mesh('a')
+      f.mesh('b')
+      const raycast = a.raycast
+      a.raycast = (raycaster, hits) => {
+        raycast.call(a, raycaster, hits)
+        delete f.state.internal.interaction[1]
+      }
+      f.send('onPointerDown')
+      expect(f.calls.has('b')).toBe(false)
+    })
+  })
+
+  for (const kind of ['zero-arity', 'tagged'] as const)
+    test(`${kind} custom raycasts retain subtree caching`, async () => {
+      const { stock, cached } = await differential((f) => {
+        const parent = f.group('parent')
+        const mesh = f.mesh('mesh')
+        parent.add(mesh)
+        if (kind === 'zero-arity') {
+          mesh.raycast = () => {
+            f.calls.set('mesh', (f.calls.get('mesh') ?? 0) + 1)
+          }
+        } else {
+          expect(mesh.raycast.length).toBe(2)
+          const symbols = Object.getOwnPropertySymbols(mesh.raycast)
+          expect(symbols).toHaveLength(1)
+          expect(Object.getOwnPropertyDescriptor(mesh.raycast, symbols[0]!)?.enumerable).toBe(false)
+          expect(markPureRaycast(mesh.raycast)).toBe(mesh.raycast)
+        }
+        f.send('onPointerMove')
+      })
+      expect(stock.calls.get('mesh')).toBe(2)
+      expect(cached.calls.get('mesh')).toBe(1)
+    })
+
+  test('acceleratedRaycast identity with a real bounds tree retains subtree caching', async () => {
+    const { stock, cached } = await differential((f) => {
+      const parent = f.group('parent')
+      const mesh = f.mesh('bvh')
+      mesh.geometry = new THREE.BoxGeometry(2, 2, 2)
+      const tree = computeBoundsTree.call(mesh.geometry)
+      const raycast = spyOn(tree, 'raycast')
+      cleanups.push(() => {
+        raycast.mockRestore()
+        mesh.geometry.dispose()
+      })
+      mesh.raycast = acceleratedRaycast
+      parent.add(mesh)
+      f.state.scene.updateMatrixWorld(true)
+      f.send('onPointerMove', 51, 52)
+      f.calls.set('bvh', raycast.mock.calls.length)
+    })
+    expect(stock.calls.get('bvh')).toBe(2)
+    expect(cached.calls.get('bvh')).toBe(1)
+  })
+
+  test('unsupported two-arity raycast restarts every root; the next event caches again', async () => {
+    const { stock, cached } = await differential((f) => {
+      const { parent, a, b } = nested(f)
+      const raycast = b.raycast
+      b.raycast = (raycaster, hits) => raycast.call(b, raycaster, hits)
+      f.state.internal.interaction = [a, parent, b]
+      f.send('onPointerMove')
+      expect(f.calls.get('b')).toBe(2)
+      f.calls.set('first-a', f.calls.get('a')!)
+      b.raycast = raycast
+      f.calls.set('a', 0)
+      f.calls.set('b', 0)
+      f.send('onPointerMove')
+    })
+    expect(stock.calls.get('first-a')).toBe(2)
+    expect(cached.calls.get('first-a')).toBe(3)
+    expect(stock.calls.get('a')).toBe(2)
+    expect(cached.calls.get('a')).toBe(1)
+    expect(cached.calls.get('b')).toBe(1)
+  })
+
+  test('real BatchedMesh tied batchId hits preserve upstream deduplication and ordered metadata', async () => {
+    const { cached } = await differential((f) => {
+      const parent = f.group('parent')
+      const geometry = new THREE.BoxGeometry(2, 2, 2)
+      const material = new THREE.MeshBasicMaterial()
+      const mesh = new THREE.BatchedMesh(2, 24, 36, material)
+      mesh.uuid = 'batch'
+      const geometryId = mesh.addGeometry(geometry)
+      mesh.addInstance(geometryId)
+      mesh.addInstance(geometryId)
+      f.objects.set(mesh.uuid, mesh)
+      f.register(mesh)
+      parent.add(mesh)
+      f.state.scene.updateMatrixWorld(true)
+      f.state.raycaster.setFromCamera(new THREE.Vector2(0.02, -0.04), f.camera)
+      const raw = f.state.raycaster.intersectObject(mesh)
+      expect(raw.map((hit) => hit.batchId)).toEqual([0, 1])
+      expect(raw[0]!.distance).toBe(raw[1]!.distance)
+      f.send('onPointerMove', 51, 52)
+      cleanups.push(() => {
+        mesh.dispose()
+        geometry.dispose()
+        material.dispose()
+      })
+    })
+    const filtered = cached.trace.find(
+      (entry) => Array.isArray(entry) && entry[0] === 'filter',
+    ) as [string, { batchId: number }[]]
+    expect(filtered[1].map((hit) => hit.batchId)).toEqual([0])
+  })
+
+  test('stock fallback survives a portal compute clearing the collector', async () => {
+    const { stock, cached } = await differential((f) => {
+      const { parent, a, b } = nested(f)
+      parent.raycast = (_raycaster, _hits) => {
+        parent.raycast = THREE.Object3D.prototype.raycast
+      }
+      const portal = f.group('portal')
+      const layer = createWithEqualityFn<RootState>(() => ({
+        ...f.state,
+        previousRoot: f.store,
+        raycaster: new THREE.Raycaster(),
+        events: {
+          ...f.state.events,
+          compute(_event, state) {
+            f.trace.push(['portalCompute'])
+            state.raycaster.setFromCamera(state.pointer, state.camera)
+          },
+        },
+      }))
+      ;(portal as Instance<THREE.Group>['object']).__r3f!.root = layer
+      f.state.internal.interaction = [parent, portal, parent, a, b]
+      f.send('onPointerMove')
+    })
+    expect(cached.calls).toEqual(stock.calls)
+    expect(cached.calls.get('a')).toBe(3)
+    expect(cached.calls.get('b')).toBe(3)
+  })
+
+  test('nested pointer event from a handler starts with fresh cache storage', async () => {
+    const { cached } = await differential((f) => {
+      const { a } = nested(f)
+      let dispatched = false
+      ;(a as Instance<THREE.Mesh>['object']).__r3f!.handlers = f.handlers(
+        a,
+        handlerNames,
+        (name) => {
+          if (name === 'onPointerMove' && !dispatched) {
+            dispatched = true
+            f.send('onPointerDown')
+          }
+        },
+      )
+      f.send('onPointerMove')
+      f.send('onPointerMove')
+    })
+    expect(cached.calls.get('a')).toBe(3)
+    expect(cached.calls.get('b')).toBe(3)
+  })
+
+  test('a throwing handler leaves the cache released for the next event', async () => {
+    const { cached } = await differential((f) => {
+      const { a } = nested(f)
+      const instance = (a as Instance<THREE.Mesh>['object']).__r3f!
+      instance.handlers = f.handlers(a, handlerNames, (name) => {
+        if (name === 'onPointerMove') throw new Error('handler failed')
+      })
+      expect(() => f.send('onPointerMove')).toThrow('handler failed')
+      instance.handlers = f.handlers(a)
+      f.send('onPointerMove')
+    })
+    expect(cached.calls.get('a')).toBe(2)
+    expect(cached.calls.get('b')).toBe(2)
+  })
+
+  test('the stockEvents URL override is ignored in production', () => {
+    const original = process.env.NODE_ENV
+    try {
+      for (const environment of ['production', 'development', 'test']) {
+        process.env.NODE_ENV = environment
+        expect(choosePointerEvents('')).toBe(createPascalPointerEvents)
+        for (const search of ['?stockEvents', '?stockEvents=false']) {
+          expect(choosePointerEvents(search)).toBe(
+            environment === 'production' ? createPascalPointerEvents : stockEvents,
+          )
+        }
+      }
+    } finally {
+      if (original === undefined) delete process.env.NODE_ENV
+      else process.env.NODE_ENV = original
+    }
+  })
+
   test('standard mesh and instanced geometry keep plugin handlers on the cached path', async () => {
     const { cached } = await differential((f) => {
       const parent = f.group('parent')
@@ -339,10 +605,10 @@ describe('R3F 9.6.1 pointer-event differential', () => {
         f.objects.set(object.uuid, object)
         f.register(object)
         const raycast = object.raycast
-        object.raycast = (raycaster, hits) => {
+        object.raycast = markPureRaycast((raycaster, hits) => {
           f.calls.set(object.uuid, (f.calls.get(object.uuid) ?? 0) + 1)
           raycast.call(object, raycaster, hits)
-        }
+        })
         parent.add(object)
       }
       f.state.scene.updateMatrixWorld(true)

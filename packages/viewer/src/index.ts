@@ -133,6 +133,7 @@ export { mergedOutline } from './lib/merged-outline-node'
 export * from './lib/perf-actions'
 export { type PerfBatchStats, publishPerfBatchStats } from './lib/perf-panel-store'
 export * from './lib/perf-tracks'
+export { markPureRaycast } from './lib/pointer-events'
 export {
   detectRendererCapability,
   initializeGpuRenderer,

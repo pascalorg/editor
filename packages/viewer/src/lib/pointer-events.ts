@@ -40,6 +40,7 @@ import {
   type ThreeEvent,
 } from '@react-three/fiber'
 import * as THREE from 'three'
+import { acceleratedRaycast } from 'three-mesh-bvh'
 
 type PointerCaptureTarget = {
   intersection: Intersection
@@ -48,6 +49,44 @@ type PointerCaptureTarget = {
 
 const stockIntersectObject = THREE.Raycaster.prototype.intersectObject
 const raycasterKeys = new Set(['ray', 'near', 'far', 'camera', 'layers', 'params', 'firstHitOnly'])
+const pureRaycast = Symbol('pureRaycast')
+const supportedRaycasts = new Set([
+  THREE.Object3D.prototype.raycast,
+  THREE.Mesh.prototype.raycast,
+  THREE.SkinnedMesh.prototype.raycast,
+  THREE.InstancedMesh.prototype.raycast,
+  THREE.BatchedMesh.prototype.raycast,
+  THREE.Line.prototype.raycast,
+  THREE.LineSegments.prototype.raycast,
+  THREE.Points.prototype.raycast,
+  THREE.Sprite.prototype.raycast,
+  THREE.LOD.prototype.raycast,
+  acceleratedRaycast,
+])
+
+/** Opt in only when the raycast appends hits without reading prior hits or mutating scene/query state. */
+export function markPureRaycast<T extends THREE.Object3D['raycast']>(raycast: T): T {
+  Object.defineProperty(raycast, pureRaycast, { value: true })
+  return raycast
+}
+
+function isSupportedRaycast(raycast: THREE.Object3D['raycast']) {
+  // Arity admits the repo's many no-ops. Closure-mutating no-arg raycasts are out of scope:
+  // JavaScript cannot identify their effects without executing them or requiring every no-op to opt in.
+  return (
+    raycast.length < 2 ||
+    supportedRaycasts.has(raycast) ||
+    (raycast as { [pureRaycast]?: boolean })[pureRaycast] === true
+  )
+}
+
+export function choosePointerEvents(
+  search = typeof window !== 'undefined' ? window.location.search : '',
+): typeof createWebEvents {
+  return process.env.NODE_ENV !== 'production' && new URLSearchParams(search).has('stockEvents')
+    ? createWebEvents
+    : createPascalPointerEvents
+}
 
 function querySnapshot(raycaster: THREE.Raycaster): unknown[] | undefined {
   if (
@@ -110,7 +149,6 @@ type CachedQuery = {
   fallback: boolean
   subtrees: WeakMap<THREE.Object3D, { generation: number; start: number; end: number }>
   hits: THREE.Intersection[]
-  objectHits: THREE.Intersection[]
 }
 
 function distanceOrder(a: THREE.Intersection, b: THREE.Intersection) {
@@ -124,27 +162,30 @@ function createCachedRaycast() {
   let generation = 0
   let revision = 0
 
-  function collect(object: THREE.Object3D, raycaster: THREE.Raycaster, query: CachedQuery) {
+  function collect(
+    object: THREE.Object3D,
+    raycaster: THREE.Raycaster,
+    query: CachedQuery,
+  ): boolean {
     // Only R3F-managed objects can also appear as independently queried event roots.
     const managed = (object as Instance<THREE.Object3D>['object']).__r3f !== undefined
     const cached = managed ? query.subtrees.get(object) : undefined
-    const { hits, objectHits } = query
+    const { hits } = query
     if (cached?.generation === generation) {
       for (let i = cached.start; i < cached.end; i++) hits.push(hits[i]!)
-      return
+      return true
     }
     const start = hits.length
     // Three's runtime accepts false as a recursion barrier, although its declaration says void.
     let result: unknown
     if (object.layers.test(raycaster.layers)) {
-      result = object.raycast(raycaster, objectHits)
-      for (let i = 0; i < objectHits.length; i++) hits.push(objectHits[i]!)
-      objectHits.length = 0
+      if (!isSupportedRaycast(object.raycast)) return false
+      result = object.raycast(raycaster, hits)
     }
     if (result !== false) {
       const children = object.children
       for (let i = 0, length = children.length; i < length; i++) {
-        collect(children[i]!, raycaster, query)
+        if (!collect(children[i]!, raycaster, query)) return false
       }
     }
     if (cached) {
@@ -154,6 +195,7 @@ function createCachedRaycast() {
     } else if (managed) {
       query.subtrees.set(object, { generation, start, end: hits.length })
     }
+    return true
   }
 
   return {
@@ -162,7 +204,6 @@ function createCachedRaycast() {
       revision = 0
       for (const query of activeQueries) {
         query.hits.length = 0
-        query.objectHits.length = 0
         query.snapshot = undefined
       }
       activeQueries.length = 0
@@ -179,7 +220,6 @@ function createCachedRaycast() {
           fallback: false,
           subtrees: new WeakMap(),
           hits: [],
-          objectHits: [],
         }
         queries.set(state, query)
       }
@@ -198,15 +238,12 @@ function createCachedRaycast() {
           snapshot.some((value, index) => !Object.is(value, query!.snapshot![index]))
         query.revision = revision
       }
-      if (query.fallback) {
-        revision++
-        return raycaster.intersectObject(object, true)
-      }
+      if (query.fallback) return undefined
 
       let range = query.subtrees.get(object)
       if (range?.generation !== generation) {
         revision++
-        collect(object, raycaster, query)
+        if (!collect(object, raycaster, query)) return undefined
         range = query.subtrees.get(object)!
       }
       // Sorting must not disturb subtree emission order, including equal-distance hits.
@@ -303,8 +340,11 @@ function createEvents(store: RootStore) {
     collectors[collectionDepth] ??= createCachedRaycast()
     const collector = collectors[collectionDepth++]!
     let hits: THREE.Intersection<THREE.Object3D>[] = []
+    let stock = false
+    const length = eventsObjects.length
     try {
-      for (let i = 0; i < eventsObjects.length; i++) {
+      for (let i = 0; i < length; i++) {
+        if (!(i in eventsObjects)) continue
         const obj = eventsObjects[i]!
         const layer = getRootState(obj)
         if (!layer?.events.enabled || layer.raycaster.camera === null) continue
@@ -316,7 +356,18 @@ function createEvents(store: RootStore) {
           if (layer.raycaster.camera === undefined) layer.raycaster.camera = null!
         }
         if (layer.raycaster.camera) {
-          const rootHits = collector.intersectObject(obj, layer)
+          const rootHits = stock
+            ? layer.raycaster.intersectObject(obj, true)
+            : collector.intersectObject(obj, layer)
+          if (!rootHits) {
+            // Restart before invoking unsupported user code so stock sees each root's own accumulator.
+            // Keep this event-wide flag outside the collector: portal compute also clears its cache.
+            stock = true
+            hits.length = 0
+            collector.clear()
+            i = -1
+            continue
+          }
           for (let j = 0; j < rootHits.length; j++) hits.push(rootHits[j]!)
         }
       }
