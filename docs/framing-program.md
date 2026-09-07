@@ -847,7 +847,9 @@ G58 The generation exposes the options: HVAC system and type, service
   schema's enum — anything else dropped, never guessed), so the 3D X-ray
   and every trade sheet answer the choice without a second click. The
   headless script takes `--hvac`, `--service`, `--sewer`, `--water`,
-  `--panel-side`, `--wiring`. Tests: build +1 (the metadata round trip and
+  `--panel-side`, `--wiring`; the sheets' own engine config (no X-ray node,
+  the headless set) seeds from the same metadata, so M1.0 answers the
+  choice there too. Tests: build +1 (the metadata round trip and
   its absence), activation +1; generate and Bones green, editor typecheck
   clean. Honest gap: a house X-rayed BEFORE the choices were made keeps
   its framing node — change the choice in the Bones panel's Services

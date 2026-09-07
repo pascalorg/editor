@@ -30,6 +30,7 @@
  */
 import type { AnyNodeLike, NodeMap } from '../../model'
 import type { Fixture, Member, WallSlice } from '../../../../plugin-bones/src/core/types'
+import { servicesOf } from '../../../../plugin-bones/src/activation'
 import type { CoolingPlan, HvacSystem } from '../../../../plugin-bones/src/engines/hvac'
 import { computeLevel } from '../../../../plugin-bones/src/framing/compute'
 import { FramingNode } from '../../../../plugin-bones/src/framing/schema'
@@ -234,7 +235,9 @@ function configFor(nodes: NodeMap, levelId: string): FramingNode {
     return { ...node, showElectrical: true, showPlumbing: true }
   }
   // No X-ray node: the jurisdiction comes from the site address, exactly as
-  // the structural sheets resolve it, so E1.0 and S1.0 cite the same state.
+  // the structural sheets resolve it, so E1.0 and S1.0 cite the same state —
+  // and the MEP choices the generator stored on the building seed the
+  // config the way activation would (the headless set answers them too).
   return FramingNode.parse({
     id: `bonesframing_sheets_${levelId}`,
     type: 'bones:framing',
@@ -242,6 +245,7 @@ function configFor(nodes: NodeMap, levelId: string): FramingNode {
     showElectrical: true,
     showPlumbing: true,
     jurisdiction: siteState(nodes) ?? 'AUTO',
+    ...servicesOf(nodes as Record<string, unknown>, levelId),
   })
 }
 
