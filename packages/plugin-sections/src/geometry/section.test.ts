@@ -457,6 +457,48 @@ describe('gable roof', () => {
   })
 })
 
+describe('a shed roof in elevation', () => {
+  // the box with a 12° shed sloping down toward +z (rotation 0): the high
+  // wall on the north, the low eave on the south
+  function shedScene(): DrawingScene {
+    const s = scene()
+    const segment = s.nodes['rseg_1' as AnyNodeId] as unknown as Record<string, unknown>
+    segment.roofType = 'shed'
+    segment.pitch = 12
+    return s
+  }
+  const RISE = 4 * Math.tan((12 * Math.PI) / 180)
+
+  test('from the side the wall under the deck is drawn from the plate up to the high edge', () => {
+    const east = buildElevationDrawing(shedScene(), 'east')
+    const bands = polygons(east.primitives).map(extent)
+    expect(
+      bands.some((b) => Math.abs(b.bottom - WALL_HEIGHT) < 1e-6 && b.top > WALL_HEIGHT + RISE * 0.8),
+    ).toBe(true)
+  })
+
+  test('the low side shows the slope in the roof colour; the high side a wall and only the deck edge', () => {
+    const s = shedScene()
+    ;(s.nodes.building_1 as unknown as { metadata: Record<string, unknown> }).metadata = {
+      finishes: { roof: { label: 'shingle', hex: '#6e6256' } },
+    }
+    const south = buildElevationDrawing(s, 'south')
+    const north = buildElevationDrawing(s, 'north')
+    const roofOf = (d: ReturnType<typeof buildElevationDrawing>) =>
+      polygons(d.primitives).filter((p) => p.fill === '#6e6256').map(extent)
+    const tallSouth = roofOf(south).some((r) => r.top - r.bottom > RISE * 0.8)
+    const tallNorth = roofOf(north).some((r) => r.top - r.bottom > RISE * 0.8)
+    // exactly one side looks up the slope
+    expect(tallSouth !== tallNorth).toBe(true)
+    // the other side shows the high wall: a band from the plate to the deck's high edge
+    const highSide = tallSouth ? north : south
+    const bands = polygons(highSide.primitives).map(extent)
+    expect(
+      bands.some((b) => Math.abs(b.bottom - WALL_HEIGHT) < 1e-6 && b.top > WALL_HEIGHT + RISE * 0.8),
+    ).toBe(true)
+  })
+})
+
 describe('buildElevationDrawing', () => {
   test('the finish key names the roofing the building records, else says what it assumes', () => {
     const texts = (d: ReturnType<typeof buildElevationDrawing>) =>
@@ -612,6 +654,10 @@ describe('buildElevationDrawing', () => {
     ;(s.nodes.building_1 as unknown as { metadata: Record<string, unknown> }).metadata = {
       finishes: { roof: { label: 'comp shingle — weathered', hex: '#6e6256' }, trim: { hex: '#f4f1ea' } },
     }
+    // a pitched roof: the slope looks at the south, so it paints in the roofing colour
+    const segment = s.nodes['rseg_1' as AnyNodeId] as unknown as Record<string, unknown>
+    segment.roofType = 'gable'
+    segment.pitch = 30
     const south = buildElevationDrawing(s, 'south')
     const rects = polygons(south.primitives).map((p) => ({ ...extent(p), fill: p.fill }))
     // the post: a 0.14 m box 2.4 m tall

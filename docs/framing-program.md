@@ -740,6 +740,24 @@ G41 Elevations show what the model carries: the grade under the building
 
 ## Log (continued)
 
+- 2026-09-07: **Batch R1 — the shed roof's wall in elevation.** Steve: "the
+  shed roof or mono roofs in elevations don't show the upper wall above the
+  top plate". `projectRoof` drew only the deck (top envelope down to the
+  lowest underside) and painted every slope-aligned view in the roofing
+  colour — so a mono roof's high side was a roofing-coloured rectangle over
+  nothing, and its side view a bare sloped line. Now: the silhouette runs
+  to the deck's NEAR underside per bucket; wherever that rides above the
+  plate the segment's own wall band is drawn under it (the shed's trapezoid
+  from the side, the tall band of its high side, the gable end's triangle)
+  clad like the walls — lap courses, brick, stone, and a stucco stipple
+  clipped to the polygon (`stippleInPolygon`, which the gable end had been
+  leaving blank); the roofing colour paints only a slope that faces the
+  viewer (the far side rises above the near edge), a flat roof's edge is
+  fascia. Tests: sections +2 (the shed's side and its two long sides) —
+  plugin-sections 28, editor typecheck clean. Seen on the modern-mono
+  farmhouse lot run: the north (high) side a 15 × 2.6 m stucco band under
+  the roof edge, the east side the trapezoid up to the 17'-6" ridge.
+
 - 2026-09-07: **Batch Q — the printed set: square plans, whole elevations,
   sections with their framing (G38–G41).** Investigated with a workflow
   (seven readers, adversarial verifiers; three finished before the credit

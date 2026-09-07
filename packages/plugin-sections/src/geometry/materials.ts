@@ -160,6 +160,43 @@ export function finishHatch(
   return out
 }
 
+/** The stucco stipple inside a simple polygon (even-odd) — a gable or a shed's wall band. */
+export function stippleInPolygon(poly: readonly Vec2[]): FloorplanGeometry[] {
+  if (poly.length < 3) return []
+  const xs = poly.map((p) => p[0])
+  const ys = poly.map((p) => p[1])
+  const x0 = Math.min(...xs)
+  const x1 = Math.max(...xs)
+  const y0 = Math.min(...ys)
+  const y1 = Math.max(...ys)
+  const inside = (x: number, y: number): boolean => {
+    let hit = false
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const a = poly[i] as Vec2
+      const b = poly[j] as Vec2
+      if (a[1] > y !== b[1] > y && x < ((b[0] - a[0]) * (y - a[1])) / (b[1] - a[1]) + a[0]) hit = !hit
+    }
+    return hit
+  }
+  const out: FloorplanGeometry[] = []
+  const count = Math.min(4000, Math.round((x1 - x0) * (y1 - y0) * STUCCO_DOTS_PER_M2))
+  for (let k = 0; k < count; k++) {
+    const x = x0 + noise(k, 5) * (x1 - x0)
+    const y = y0 + noise(k, 6) * (y1 - y0)
+    if (!inside(x, y)) continue
+    out.push({
+      kind: 'circle',
+      cx: x,
+      cy: y,
+      r: 0.006 + noise(k, 3) * 0.006,
+      fill: INK,
+      stroke: 'none',
+      opacity: 0.35,
+    } as FloorplanGeometry)
+  }
+  return out
+}
+
 /** Vertical board-and-batten lines — used when a siding wall is flagged vertical. */
 export function battenLines(u: Interval, yTop: number, yBottom: number, holes: readonly FaceHole[]) {
   const out: FloorplanGeometry[] = []

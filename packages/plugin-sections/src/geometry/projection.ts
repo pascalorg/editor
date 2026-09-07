@@ -11,6 +11,7 @@ import {
   LAP_EXPOSURE,
   scanlinesInPolygon,
   SHINGLE_COURSE,
+  stippleInPolygon,
   STONE_COURSE,
 } from './materials'
 import {
@@ -330,6 +331,11 @@ export function projectRoof(
   const [uMin, uMax] = extent
   const top = new Array<number>(ROOF_SAMPLES + 1).fill(Number.NEGATIVE_INFINITY)
   const bottom = new Array<number>(ROOF_SAMPLES + 1).fill(Number.POSITIVE_INFINITY)
+  // the deck's underside at the sample NEAREST the viewer per bucket — the
+  // edge of the roof the viewer actually sees from this side
+  const nearUnder = new Array<number>(ROOF_SAMPLES + 1).fill(Number.NaN)
+  const nearTop = new Array<number>(ROOF_SAMPLES + 1).fill(Number.NaN)
+  const nearDepth = new Array<number>(ROOF_SAMPLES + 1).fill(Number.POSITIVE_INFINITY)
   const stepX = (roof.local.maxX - roof.local.minX) / ROOF_SAMPLES
   const stepZ = (roof.local.maxZ - roof.local.minZ) / ROOF_SAMPLES
   for (let i = 0; i <= ROOF_SAMPLES; i++) {
@@ -346,15 +352,28 @@ export function projectRoof(
       if (surface > top[bucket]!) top[bucket] = surface
       const under = surface - roof.deckDrop
       if (under < bottom[bucket]!) bottom[bucket] = under
+      if (depth < nearDepth[bucket]!) {
+        nearDepth[bucket] = depth
+        nearUnder[bucket] = under
+        nearTop[bucket] = surface
+      }
     }
   }
+  // The silhouette runs from the top envelope down to the deck's NEAR
+  // underside: below the near edge is the segment's own wall, not roof. A
+  // slope faces the viewer where the far side rises above the near edge —
+  // the low side of a shed; from its high side the viewer sees a wall and
+  // the deck's edge, and the roof colour belongs to neither.
   const upper: Vec2[] = []
   const lower: Vec2[] = []
+  let facing = false
   for (let i = 0; i <= ROOF_SAMPLES; i++) {
     if (!Number.isFinite(top[i]!)) continue
     const u = uMin + ((uMax - uMin) * i) / ROOF_SAMPLES
     upper.push([u, drawY(top[i]!)])
-    lower.push([u, drawY(bottom[i]!)])
+    const under = Number.isNaN(nearUnder[i]!) ? bottom[i]! : nearUnder[i]!
+    lower.push([u, drawY(under)])
+    if (top[i]! - (Number.isNaN(nearTop[i]!) ? top[i]! : nearTop[i]!) > 0.05) facing = true
   }
   if (upper.length < 2) return null
   const outline = [...upper, ...lower.reverse()]
@@ -364,7 +383,7 @@ export function projectRoof(
   // down-slope axis runs along the view direction (the same test the fascia
   // line uses); a gable END is seen when the axis runs across it.
   const alignment = Math.abs(roof.axisZ[0] * view.forward[0] + roof.axisZ[1] * view.forward[1])
-  const slopeFace = alignment > 0.7
+  const slopeFace = alignment > 0.7 && facing
   const gableEnd = alignment < 0.3 && rise > 0.05
   const fill = options.courses
     ? slopeFace
@@ -373,9 +392,44 @@ export function projectRoof(
         ? (options.gableColor ?? PAPER)
         : PAPER
     : PAPER
-  const primitives: FloorplanGeometry[] = [
-    polygonPrimitive(outline, { fill, stroke: INK, strokeWidth: WEIGHT.projected }),
-  ]
+  const primitives: FloorplanGeometry[] = []
+  // THE SEGMENT'S OWN WALL: wherever the deck's near edge rides above the
+  // plate line the roof system builds a wall under it — the trapezoid of
+  // a shed seen from the side, the tall band of its high side, the triangle
+  // of a gable end. Clad like the walls, drawn under the deck (Steve,
+  // 2026-09-07: "shed roofs in elevations don't show the upper wall above
+  // the top plate").
+  const plateLine = drawY(roof.plateY)
+  const wallFill = options.courses ? (options.gableColor ?? PAPER) : PAPER
+  let run: Vec2[] = []
+  const flushRun = () => {
+    if (run.length >= 2) {
+      const first = run[0] as Vec2
+      const last = run[run.length - 1] as Vec2
+      const band: Vec2[] = [...run, [last[0], plateLine], [first[0], plateLine]]
+      primitives.push(polygonPrimitive(band, { fill: wallFill, stroke: INK, strokeWidth: WEIGHT.projected }))
+      // the gable-end branch below hatches its own triangle; every other
+      // view's band takes the walls' finish pattern here
+      if (options.courses && options.gableFinish && !gableEnd) {
+        const finish = options.gableFinish
+        if (finish === 'siding' || finish === 'fiber-cement') primitives.push(...scanlinesInPolygon(band, LAP_EXPOSURE))
+        else if (finish === 'brick') primitives.push(...scanlinesInPolygon(band, BRICK_COURSE, { strokeWidth: 0.0025 }))
+        else if (finish === 'stone') primitives.push(...scanlinesInPolygon(band, STONE_COURSE))
+        else if (finish === 'stucco') primitives.push(...stippleInPolygon(band))
+      }
+    }
+    run = []
+  }
+  for (let i = 0; i <= ROOF_SAMPLES; i++) {
+    const under = nearUnder[i]!
+    if (!Number.isFinite(top[i]!) || Number.isNaN(under) || under <= roof.plateY + 0.02) {
+      flushRun()
+      continue
+    }
+    run.push([uMin + ((uMax - uMin) * i) / ROOF_SAMPLES, drawY(under)])
+  }
+  flushRun()
+  primitives.push(polygonPrimitive(outline, { fill, stroke: INK, strokeWidth: WEIGHT.projected }))
   if (options.pitchFlag && gableEnd && halfDepth > 1e-6) {
     // Pitch flag on the left slope: rise in twelfths over a 12-unit run, from
     // the segment's pitch angle — the same number the roof plan prints.
@@ -427,7 +481,7 @@ export function projectRoof(
     const plateY = drawY(roof.plateY)
     // The region between the silhouette's top edge and the plate line.
     const aboveWalls: Vec2[] = [...upper, [upper[upper.length - 1]![0], plateY], [upper[0]![0], plateY]]
-    if (rise > 0.05 && alignment > 0.7) {
+    if (rise > 0.05 && slopeFace) {
       // Shingle exposure foreshortened by the pitch: a course seen in
       // elevation is `exposure · cos(pitch)` tall.
       const cosPitch = halfDepth > 1e-6 ? halfDepth / Math.hypot(halfDepth, rise) : 1
@@ -441,8 +495,9 @@ export function projectRoof(
         primitives.push(...scanlinesInPolygon(aboveWalls, BRICK_COURSE, { strokeWidth: 0.0025 }))
       } else if (finish === 'stone') {
         primitives.push(...scanlinesInPolygon(aboveWalls, STONE_COURSE))
+      } else if (finish === 'stucco') {
+        primitives.push(...stippleInPolygon(aboveWalls))
       }
-      // stucco: the stipple is not clipped to a polygon here — left blank.
     }
   }
   return { depth: maxDepth(view, clipped), primitives }
