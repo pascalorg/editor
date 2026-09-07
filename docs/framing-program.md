@@ -798,7 +798,19 @@ G41 Elevations show what the model carries: the grade under the building
   Steve saw missing on one seed is not reproduced (he found it an edge case);
   elevations still draw guards as generic pickets and stairs as boxes; the
   finish key can overlap the GRADE label at the left; the section notes are
-  a right-hand column, not placed leaders.
+  a right-hand column, not placed leaders. Second pass, same day: the
+  elevation draws a GUARD the way its fence node builds it (`GuardStyle` off
+  guardInfill / postSpacing / postSize / topRailHeight / groundClearance /
+  slatGap / startPost / endPost / color) — posts at even bays under the
+  spacing, the cap over the top rail, the bottom rail at its clearance,
+  balusters at their gap, cables at 3 in or horizontal boards, all in the
+  guard's own colour (the farmhouse's #2d2d2d) — and a FLIGHT seen from the
+  side as its riser-and-tread profile with a 2x12 stringer under the
+  nosings and a rail over them (end posts, the rail at 36 in, the infill
+  the porch guard uses — the stair rail matches the guard it lands on, as
+  batch O built it); seen along its run it stays the box with a riser line
+  a step. Tests: sections +1 (the flight profile and its cable rail), the
+  guard assertions rewritten (four posts, balusters) — plugin-sections 26.
 
 
 - 2026-09-07 small hours: **Batch P, second pass — the rest of the review

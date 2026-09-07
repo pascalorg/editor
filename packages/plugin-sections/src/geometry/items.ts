@@ -20,7 +20,7 @@ import {
   type Projector,
   projectU,
 } from './projection'
-import type { FeatureSolid, ItemSolid } from './scene-model'
+import type { FeatureSolid, GuardStyle, ItemSolid } from './scene-model'
 import { INK, line, PAPER, polygon } from './style'
 import type { Vec2 } from './types'
 
@@ -179,27 +179,212 @@ export function projectFeature(view: Projector, f: FeatureSolid): ProjectedPiece
       primitives.push(outline())
       break
     case 'fence': {
-      primitives.push(outline())
-      // the top rail, then pickets down to the base
-      primitives.push(
-        line([uMin, yTop + RAIL_BAND], [uMax, yTop + RAIL_BAND], { stroke: ITEM_INK, strokeWidth: 0.006 }),
-      )
-      for (let u = uMin + PICKET_PITCH; u < uMax - PICKET_PITCH / 2; u += PICKET_PITCH) {
-        primitives.push(line([u, yTop + RAIL_BAND], [u, yBottom], { stroke: ITEM_INK, strokeWidth: 0.004 }))
+      if (f.guard) primitives.push(...guardPrimitives(f.guard, uMin, uMax, yTop, yBottom))
+      else {
+        primitives.push(outline())
+        primitives.push(
+          line([uMin, yTop + RAIL_BAND], [uMax, yTop + RAIL_BAND], { stroke: ITEM_INK, strokeWidth: 0.006 }),
+        )
+        for (let u = uMin + PICKET_PITCH; u < uMax - PICKET_PITCH / 2; u += PICKET_PITCH) {
+          primitives.push(line([u, yTop + RAIL_BAND], [u, yBottom], { stroke: ITEM_INK, strokeWidth: 0.004 }))
+        }
       }
       break
     }
     case 'stair': {
-      primitives.push(outline())
-      const risers = f.risers ?? 0
-      for (let i = 1; i < risers; i++) {
-        const y = yBottom + ((yTop - yBottom) * i) / risers
-        primitives.push(line([uMin, y], [uMax, y], { stroke: ITEM_INK, strokeWidth: 0.004 }))
+      const flight = f.flight
+      const uB = flight ? projectU(view, flight.bottom[0], flight.bottom[1]) : uMin
+      const uT = flight ? projectU(view, flight.top[0], flight.top[1]) : uMax
+      // seen from the side (the run crosses the view) the flight is its
+      // profile — risers, treads, the stringer under them, the rail over
+      // them; seen along its run it is the box with a riser line each step
+      if (flight && Math.abs(uT - uB) > flight.run * 0.7) {
+        primitives.push(...flightPrimitives(flight, uB, uT, yBottom, yTop))
+      } else {
+        primitives.push(outline())
+        const risers = f.risers ?? 0
+        for (let i = 1; i < risers; i++) {
+          const y = yBottom + ((yTop - yBottom) * i) / risers
+          primitives.push(line([uMin, y], [uMax, y], { stroke: ITEM_INK, strokeWidth: 0.004 }))
+        }
       }
       break
     }
   }
   return { depth, primitives }
+}
+
+const BALUSTER = 0.038
+const RAIL = 0.089
+const CABLE_PITCH = 0.08
+const BOARD = 0.14
+
+/**
+ * A guard drawn the way the fence node builds it: posts at their spacing
+ * (a start post, an end post when the node says so), a cap over a top
+ * rail, a bottom rail at its clearance, and the infill between the rails —
+ * balusters at their gap, cables at 3 in, or horizontal boards. In the
+ * guard's own colour; `yTop` is the top of the cap, `yBottom` the walking
+ * surface (drawing y, down positive).
+ */
+function guardPrimitives(g: GuardStyle, uMin: number, uMax: number, yTop: number, yBottom: number): FloorplanGeometry[] {
+  const out: FloorplanGeometry[] = []
+  const fill = g.color ?? PAPER
+  const stroke = { stroke: ITEM_INK, strokeWidth: 0.004 }
+  const rect = (x0: number, y0: number, x1: number, y1: number) =>
+    polygon(
+      [
+        [x0, y0],
+        [x1, y0],
+        [x1, y1],
+        [x0, y1],
+      ],
+      { fill, ...stroke },
+    )
+  const width = uMax - uMin
+  // posts: every `postSpacing` from the start, the last bay closed by the end post
+  const bays = Math.max(1, Math.ceil((width - 1e-6) / g.postSpacing))
+  const pitch = width / bays
+  const posts: number[] = []
+  if (g.startPost) posts.push(uMin)
+  for (let i = 1; i < bays; i++) posts.push(uMin + i * pitch)
+  if (g.endPost) posts.push(uMax - g.postSize)
+  // rails: the cap on the top rail, the bottom rail at its clearance
+  const capBottom = yTop + g.capThickness
+  const topRailBottom = capBottom + RAIL
+  const bottomRailTop = yBottom - g.bottomClearance - RAIL
+  const bottomRailBottom = yBottom - g.bottomClearance
+  out.push(rect(uMin, yTop, uMax, capBottom))
+  out.push(rect(uMin, capBottom, uMax, topRailBottom))
+  if (g.infill !== 'none') out.push(rect(uMin, bottomRailTop, uMax, bottomRailBottom))
+  // infill between the rails
+  if (g.infill === 'balusters') {
+    const step = BALUSTER + g.slatGap
+    for (let u = uMin + g.postSize + g.slatGap; u < uMax - g.postSize - BALUSTER; u += step) {
+      out.push(rect(u, topRailBottom, u + BALUSTER, bottomRailTop))
+    }
+  } else if (g.infill === 'cable') {
+    for (let y = topRailBottom + CABLE_PITCH; y < bottomRailTop - CABLE_PITCH / 2; y += CABLE_PITCH) {
+      out.push(line([uMin, y], [uMax, y], { stroke: g.color ?? ITEM_INK, strokeWidth: 0.006 }))
+    }
+  } else if (g.infill === 'horizontal') {
+    for (let y = topRailBottom + g.slatGap; y + BOARD < bottomRailTop + 1e-6; y += BOARD + g.slatGap) {
+      out.push(rect(uMin, y, uMax, y + BOARD))
+    }
+  }
+  // the posts stand over everything, from the walking surface to the cap
+  for (const u of posts) out.push(rect(u, yTop, u + g.postSize, yBottom))
+  return out
+}
+
+/** A 2x12 stringer's plumb depth under the nosing line. */
+const STRINGER = 0.29
+/** Handrail height over the nosings (R311.7.8: 34–38 in). */
+const HANDRAIL = 0.9
+
+/**
+ * A flight seen from the side: the sawtooth of its risers and treads, the
+ * stringer under the nosing line, and the rail over it — end posts, a rail
+ * parallel to the nosings and the infill the porch guard uses.
+ */
+function flightPrimitives(
+  flight: { rise: number; run: number; risers: number; thickness: number; rail: GuardStyle | null },
+  uB: number,
+  uT: number,
+  yBottom: number,
+  yTop: number,
+): FloorplanGeometry[] {
+  const out: FloorplanGeometry[] = []
+  const n = Math.max(1, flight.risers)
+  const dir = uT >= uB ? 1 : -1
+  const tread = Math.abs(uT - uB) / n
+  const riser = (yBottom - yTop) / n
+  const profile: Vec2[] = [[uB, yBottom]]
+  for (let i = 0; i < n; i++) {
+    const u = uB + dir * i * tread
+    const y = yBottom - (i + 1) * riser
+    profile.push([u, y], [u + dir * tread, y])
+  }
+  // the stringer's underside runs parallel to the nosings, STRINGER below,
+  // and lands on the ground at the bottom
+  const slope = flight.run > 1e-6 ? flight.rise / flight.run : 0
+  const landing = uB + dir * (slope > 1e-6 ? STRINGER / slope : 0)
+  profile.push([uT, yTop + STRINGER], [landing, yBottom])
+  out.push(polygon(profile, { fill: PAPER, stroke: ITEM_INK, strokeWidth: 0.008 }))
+  // the rail: a post at each end, the rail over the nosings, the infill
+  const rail = flight.rail
+  if (rail && rail.infill !== 'none') {
+    const fill = rail.color ?? PAPER
+    const stroke = { stroke: ITEM_INK, strokeWidth: 0.004 }
+    const railTop = (u: number) => yBottom - HANDRAIL - ((u - uB) / (uT - uB || 1)) * (yBottom - yTop)
+    const nosing = (u: number) => yBottom - ((u - uB) / (uT - uB || 1)) * (yBottom - yTop)
+    const post = rail.postSize
+    for (const u of [uB, uT - dir * post]) {
+      out.push(
+        polygon(
+          [
+            [u, railTop(u + dir * post / 2)],
+            [u + dir * post, railTop(u + dir * post / 2)],
+            [u + dir * post, nosing(u + dir * post / 2)],
+            [u, nosing(u + dir * post / 2)],
+          ],
+          { fill, ...stroke },
+        ),
+      )
+    }
+    out.push(
+      polygon(
+        [
+          [uB, railTop(uB)],
+          [uT, railTop(uT)],
+          [uT, railTop(uT) + RAIL],
+          [uB, railTop(uB) + RAIL],
+        ],
+        { fill, ...stroke },
+      ),
+    )
+    if (rail.infill === 'balusters') {
+      const step = BALUSTER + rail.slatGap
+      for (let u = uB + dir * (post + rail.slatGap); dir * (uT - u) > post + BALUSTER; u += dir * step) {
+        out.push(
+          polygon(
+            [
+              [u, railTop(u) + RAIL],
+              [u + dir * BALUSTER, railTop(u) + RAIL],
+              [u + dir * BALUSTER, nosing(u)],
+              [u, nosing(u)],
+            ],
+            { fill, ...stroke },
+          ),
+        )
+      }
+    } else if (rail.infill === 'cable') {
+      for (let k = 1; k * CABLE_PITCH < HANDRAIL - RAIL; k++) {
+        out.push(
+          line([uB, railTop(uB) + RAIL + k * CABLE_PITCH], [uT, railTop(uT) + RAIL + k * CABLE_PITCH], {
+            stroke: rail.color ?? ITEM_INK,
+            strokeWidth: 0.006,
+          }),
+        )
+      }
+    } else if (rail.infill === 'horizontal') {
+      for (let k = 0; k * (BOARD + rail.slatGap) + RAIL + BOARD < HANDRAIL; k++) {
+        const off = RAIL + rail.slatGap + k * (BOARD + rail.slatGap)
+        out.push(
+          polygon(
+            [
+              [uB, railTop(uB) + off],
+              [uT, railTop(uT) + off],
+              [uT, railTop(uT) + off + BOARD],
+              [uB, railTop(uB) + off + BOARD],
+            ],
+            { fill, ...stroke },
+          ),
+        )
+      }
+    }
+  }
+  return out
 }
 
 export { INK as ITEM_STROKE_INK }

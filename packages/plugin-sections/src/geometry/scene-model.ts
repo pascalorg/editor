@@ -250,6 +250,36 @@ export type RoofFinishRecord = { label: string; hex: string | null }
  * raised between `baseY` and `topY`; a stair carries its riser count for the
  * tread lines, a tree its canopy spread.
  */
+/** How a guard is built, as the fence node records it (the generator's rail system, batch O). */
+export type GuardStyle = {
+  infill: 'balusters' | 'cable' | 'horizontal' | 'none'
+  postSpacing: number
+  postSize: number
+  /** Thickness of the cap over the top rail. */
+  capThickness: number
+  /** The bottom rail's clearance above the walking surface. */
+  bottomClearance: number
+  /** Gap between balusters / boards. */
+  slatGap: number
+  startPost: boolean
+  endPost: boolean
+  color: string | null
+}
+
+/** A straight flight's run, for the side view's sawtooth and its rail. */
+export type FlightRun = {
+  /** Plan midpoints of the bottom and top edges of the flight. */
+  bottom: Vec2
+  top: Vec2
+  rise: number
+  run: number
+  risers: number
+  /** Tread / stringer thickness. */
+  thickness: number
+  /** The guard the flight's rail matches (the porch's), when the level has one. */
+  rail: GuardStyle | null
+}
+
 export type FeatureSolid = {
   kind: 'feature'
   feature: 'column' | 'fence' | 'stair' | 'tree'
@@ -259,7 +289,31 @@ export type FeatureSolid = {
   topY: number
   risers?: number
   spread?: number
+  guard?: GuardStyle
+  flight?: FlightRun
   levelId: string | null
+}
+
+/** The fence node's rail system, or a plain picket guard when it carries none. */
+function guardStyleOf(n: Record<string, unknown>): GuardStyle {
+  const infill = n.guardInfill
+  const num = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback)
+  return {
+    infill:
+      infill === 'cable' || infill === 'horizontal' || infill === 'none' || infill === 'balusters'
+        ? infill
+        : n.showInfill === false
+          ? 'none'
+          : 'balusters',
+    postSpacing: num(n.postSpacing, 1.8288),
+    postSize: num(n.postSize, 0.089),
+    capThickness: num(n.topRailHeight, 0.04),
+    bottomClearance: num(n.groundClearance, 0.089),
+    slatGap: num(n.slatGap, 0.089),
+    startPost: n.startPost !== false,
+    endPost: n.endPost !== false,
+    color: typeof n.color === 'string' && n.color.length > 0 ? n.color : null,
+  }
 }
 
 export type BuildingModel = {
@@ -395,6 +449,7 @@ function collectFeatures(
         polygon: box(((s[0] ?? 0) + (e[0] ?? 0)) / 2, ((s[1] ?? 0) + (e[1] ?? 0)) / 2, len, t, yaw),
         baseY,
         topY: baseY + h,
+        guard: guardStyleOf(n),
         levelId,
       })
     } else if (type === 'stair') {
@@ -425,6 +480,21 @@ function collectFeatures(
         (p[2] ?? 0) - x * Math.sin(yaw) + z * Math.cos(yaw),
       ])
       const baseY = levelBase + (p[1] ?? 0)
+      // the flight's rail matches the guard it lands on (batch O): the
+      // fence of the same porch when the generator says which, else any
+      // guard on the level, else no rail is drawn
+      const porch = (n.metadata as { porch?: { entrance?: unknown } } | undefined)?.porch?.entrance
+      let rail: GuardStyle | null = null
+      for (const other of Object.values(nodes)) {
+        if (!other || other.type !== 'fence' || other.visible === false) continue
+        if (findLevelId(other, nodes) !== levelId) continue
+        const o = other as Record<string, unknown>
+        const sameEntrance = (o.metadata as { porch?: { entrance?: unknown } } | undefined)?.porch?.entrance
+        if (porch !== undefined && sameEntrance !== porch && rail) continue
+        rail = guardStyleOf(o)
+        if (porch === undefined || sameEntrance === porch) break
+      }
+      const risers = typeof n.stepCount === 'number' ? n.stepCount : undefined
       out.push({
         kind: 'feature',
         feature: 'stair',
@@ -432,7 +502,16 @@ function collectFeatures(
         polygon: corners,
         baseY,
         topY: baseY + rise,
-        risers: typeof n.stepCount === 'number' ? n.stepCount : undefined,
+        risers,
+        flight: {
+          bottom: [((corners[0] as Vec2)[0] + (corners[1] as Vec2)[0]) / 2, ((corners[0] as Vec2)[1] + (corners[1] as Vec2)[1]) / 2],
+          top: [((corners[2] as Vec2)[0] + (corners[3] as Vec2)[0]) / 2, ((corners[2] as Vec2)[1] + (corners[3] as Vec2)[1]) / 2],
+          rise,
+          run,
+          risers: risers ?? Math.max(1, Math.round(rise / 0.18)),
+          thickness: typeof n.thickness === 'number' ? n.thickness : 0.1,
+          rail,
+        },
         levelId,
       })
     } else if (type === 'trees:tree') {

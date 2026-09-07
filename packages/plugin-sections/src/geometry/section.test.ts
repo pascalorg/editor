@@ -605,7 +605,7 @@ describe('buildElevationDrawing', () => {
       ;(s.nodes as Record<string, unknown>)[n.id as string] = n
     }
     add({ object: 'node', id: 'column_1', type: 'column', parentId: 'level_1', visible: true, metadata: {}, children: [], position: [1, 0, 5], rotation: 0, height: 2.4, width: 0.14, depth: 0.14 })
-    add({ object: 'node', id: 'fence_1', type: 'fence', parentId: 'level_1', visible: true, metadata: {}, children: [], start: [1.5, 5], end: [4, 5], height: 0.9, thickness: 0.04 })
+    add({ object: 'node', id: 'fence_1', type: 'fence', parentId: 'level_1', visible: true, metadata: {}, children: [], start: [1.5, 5], end: [4, 5], height: 0.9, thickness: 0.04, guardInfill: 'balusters', postSpacing: 1.2, postSize: 0.09, topRailHeight: 0.04, groundClearance: 0.09, slatGap: 0.09, startPost: true, endPost: true, color: '#2d2d2d' })
     add({ object: 'node', id: 'stair_1', type: 'stair', parentId: 'level_1', visible: true, metadata: {}, children: ['sseg_1'], position: [3, 0, 6], rotation: Math.PI, width: 1, totalRise: 0.5, stepCount: 3, stairType: 'straight' })
     add({ object: 'node', id: 'sseg_1', type: 'stair-segment', parentId: 'stair_1', visible: true, metadata: {}, children: [], segmentType: 'stair', length: 0.84, width: 1, height: 0.5, stepCount: 3 })
     add({ object: 'node', id: 'tree_1', type: 'trees:tree', parentId: null, visible: true, metadata: {}, children: [], position: [-3, 0, 6], rotation: [0, 0, 0], preset: 'oak', height: 6 })
@@ -616,8 +616,14 @@ describe('buildElevationDrawing', () => {
     const rects = polygons(south.primitives).map((p) => ({ ...extent(p), fill: p.fill }))
     // the post: a 0.14 m box 2.4 m tall
     expect(rects.some((r) => Math.abs(r.x1 - r.x0 - 0.14) < 1e-6 && Math.abs(r.top - 2.4) < 1e-6)).toBe(true)
-    // the guard: 2.5 m wide, 0.9 m tall
-    expect(rects.some((r) => Math.abs(r.x1 - r.x0 - 2.5) < 1e-6 && Math.abs(r.top - 0.9) < 1e-6)).toBe(true)
+    // the guard as built: its cap 2.5 m wide at 0.9 m, posts 0.09 wide in
+    // its own colour — 2.5 m at 1.2 m max is three even bays, so a start
+    // post, two between and the end post — and balusters between the rails
+    expect(rects.some((r) => Math.abs(r.x1 - r.x0 - 2.5) < 1e-6 && Math.abs(r.top - 0.9) < 1e-6 && r.fill === '#2d2d2d')).toBe(true)
+    const posts = rects.filter((r) => Math.abs(r.x1 - r.x0 - 0.09) < 1e-6 && Math.abs(r.top - 0.9) < 1e-6 && Math.abs(r.bottom) < 1e-6)
+    expect(posts).toHaveLength(4)
+    const balusters = rects.filter((r) => Math.abs(r.x1 - r.x0 - 0.038) < 1e-6 && r.fill === '#2d2d2d')
+    expect(balusters.length).toBeGreaterThan(10)
     // the flight: 1 m wide, 0.5 m of rise
     expect(rects.some((r) => Math.abs(r.x1 - r.x0 - 1) < 1e-6 && Math.abs(r.top - 0.5) < 1e-6)).toBe(true)
     // the tree: a canopy of the trees plugin's stand-in spread (60 % of 6 m)
@@ -626,6 +632,29 @@ describe('buildElevationDrawing', () => {
     // the roof surface fills in the recorded roofing colour, the fascia in the trim colour
     expect(polygons(south.primitives).some((p) => p.fill === '#6e6256')).toBe(true)
     expect(polygons(south.primitives).some((p) => p.fill === '#f4f1ea')).toBe(true)
+  })
+
+  test('a flight seen from the side is its riser-and-tread profile with a rail that matches the porch guard', () => {
+    const s = scene()
+    const add = (n: Record<string, unknown>) => {
+      ;(s.nodes as Record<string, unknown>)[n.id as string] = n
+    }
+    add({ object: 'node', id: 'fence_1', type: 'fence', parentId: 'level_1', visible: true, metadata: { porch: { entrance: 'front' } }, children: [], start: [1.5, 5], end: [4, 5], height: 0.9, thickness: 0.04, guardInfill: 'cable', postSize: 0.09, color: '#2d2d2d' })
+    // a 3-riser flight climbing along +z, in front of the south wall
+    add({ object: 'node', id: 'stair_1', type: 'stair', parentId: 'level_1', visible: true, metadata: { porch: { entrance: 'front' } }, children: ['sseg_1'], position: [3, 0, 5.5], rotation: 0, width: 1, totalRise: 0.54, stepCount: 3, stairType: 'straight', thickness: 0.1 })
+    add({ object: 'node', id: 'sseg_1', type: 'stair-segment', parentId: 'stair_1', visible: true, metadata: {}, children: [], segmentType: 'stair', length: 0.84, width: 1, height: 0.54, stepCount: 3 })
+    // from the east the run crosses the view: the profile has a step per riser
+    const east = buildElevationDrawing(s, 'east')
+    const profile = polygons(east.primitives).find((p) => p.points.length === 1 + 3 * 2 + 2)
+    expect(profile).toBeDefined()
+    const ext = extent(profile!)
+    expect(ext.top).toBeCloseTo(0.54, 6)
+    // the stringer's underside lands on the ground inside the run
+    expect(ext.x1 - ext.x0).toBeCloseTo(0.84, 6)
+    expect(ext.bottom).toBeCloseTo(0, 6)
+    // the rail: cables run parallel to the nosings in the guard's colour
+    const cables = east.primitives.filter((p) => p.kind === 'line' && (p as { stroke?: string }).stroke === '#2d2d2d')
+    expect(cables.length).toBeGreaterThan(3)
   })
 
   test('the grade line sits at 0.00 with no terrain', () => {
