@@ -313,9 +313,12 @@ export function extractSlabs(nodes: NodesRecord, levelId: string): SlabSlice[] {
 
 /**
  * The porch posts on a level: `column` nodes carrying the generator's
- * `metadata.porch` (the entrance they belong to). A post standing on a slab
- * (`supportSlabId`) has its base at that slab's elevation; a deck's post
- * carries its own base (the grade under it) in its position.
+ * `metadata.porch` (the entrance they belong to) — and, for a house drawn by
+ * hand, any column standing on an OUTDOOR slab (a deck or a porch pad,
+ * `metadata.floor`), grouped by that slab so each porch frames apart. A
+ * post standing on a slab (`supportSlabId`) has its base at that slab's
+ * elevation; a deck's post carries its own base (the grade under it) in
+ * its position.
  */
 export function extractPorchPosts(
   nodes: NodesRecord,
@@ -328,10 +331,23 @@ export function extractPorchPosts(
     if (node.type !== 'column' || node.parentId !== levelId) continue
     if (node.visible === false) continue
     const meta = node.metadata as { porch?: { entrance?: unknown } } | undefined
-    const porch = meta?.porch
-    if (!porch || typeof porch !== 'object') continue
-    const pos = Array.isArray(node.position) ? (node.position as number[]) : [0, 0, 0]
+    const tagged = meta?.porch
     const support = typeof node.supportSlabId === 'string' ? nodes[node.supportSlabId] : undefined
+    // untagged: a porch post when it stands on a deck or a porch pad
+    const onOutdoorSlab = support?.type === 'slab' && slabIsOutdoor(support.metadata)
+    const porch: { entrance?: unknown } | null =
+      tagged && typeof tagged === 'object'
+        ? tagged
+        : onOutdoorSlab && support
+          ? {
+              entrance:
+                typeof support.name === 'string' && support.name.trim() !== ''
+                  ? support.name.trim()
+                  : `porch ${String(support.id ?? '')}`,
+            }
+          : null
+    if (!porch) continue
+    const pos = Array.isArray(node.position) ? (node.position as number[]) : [0, 0, 0]
     const slabY =
       support?.type === 'slab' && typeof support.elevation === 'number' ? support.elevation : 0
     // the viewer lifts a ground-hosted node by the ground under it (terrain-support.ts)

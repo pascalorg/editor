@@ -776,12 +776,42 @@ G45 Stucco options: built-up stucco piers on every stucco house, framed the
     deck or the concrete with their hardware; hold-downs where they belong.
 G46 Gingerbread: brackets and trim in porch and house gables; more front
     door styles; enhance the trim around the house.
-G47 Bones from scratch: a hand-drawn house frames as well as a generated one.
+G47 Bones from scratch: a hand-drawn house frames as well as a generated one
+    (untagged columns on an outdoor slab frame as porch posts, R6; inspector switch open).
 G48 A porch the user adjusts re-frames; the auto roof follows wall edits
     live once on (on by default for a generated house, can be turned off).
-G49 Every house type's elevation sheets reviewed.
+G49 Every house type's elevation sheets reviewed (all six read, R6).
 
 ## Log (continued)
+
+- 2026-09-07: **Batch R6 — every house type's elevations looked at (G49);
+  Bones takes a hand-drawn porch (G47); notes on G43 / G48.** Rendered and
+  read A4.0–A4.3 for the cottage and the modern on Miami Shores, seed 777
+  (farmhouse, modern-mono, craftsman and ranch were read in Q–R4): the
+  cottage's gable ends carry the king post, its side porch's rail dies
+  into the corner 6x6 with the flight and its handrail to grade, the
+  front stoop's gable reads; the modern's hip, cable rails on both decks,
+  the flat entry canopy. Nothing broken found; the sheets are plain rather
+  than wrong — no material hatch on the siding, the window tags sit on the
+  eave line. G47, a first step: `extractPorchPosts` now also takes an
+  UNTAGGED column standing on an outdoor slab (`metadata.floor` 'deck' or
+  'porch-slab'), grouped by that slab (its name, else "porch <id>") so each
+  porch frames apart — a hand-drawn deck with columns on it frames its
+  beam, posts and footings like a generated one. Test wall-model +1, Bones
+  2126. The honest rest of G47: the slab inspector has no "outdoor"
+  switch, so a hand drawer cannot set the tag yet (the generator does);
+  walls, roofs, stairs and openings Bones already reads straight off the
+  nodes, so a from-scratch house frames its walls, floors and roof today —
+  the porch and the built-up pier are the tagged parts. G48: Bones
+  recomputes from the scene on every run, so a porch the user moves or
+  resizes re-frames on the next framing pass; the stair carries its two
+  flanking posts (porch-follow.ts); the beam does not yet follow a post
+  the user drags (the generator's post line is read, not re-derived). G43,
+  looked at in 2D: the guard runs on the POST line by construction
+  (`guardLine = depth − inset`, one section per bay, `startPost /
+  endPost` false where a 6x6 stands) and the cottage's A4.0 shows the rail
+  entering the corner post; what Steve saw is likely the 3D fence mesh —
+  not checked in the viewer this batch, still open.
 
 - 2026-09-07: **The house that faced the other way (lot).** Two prints of
   the same seed came out turned 180°. Not the plan snap: the lot drop-in's

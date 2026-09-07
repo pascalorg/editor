@@ -292,4 +292,24 @@ describe('extractPorchPosts', () => {
     expect(hill.find((p) => p.id === 'column_2')?.baseY).toBeCloseTo(-0.4, 9)
     expect(hill.find((p) => p.id === 'column_3')?.baseY).toBeCloseTo(-0.8, 9)
   })
+
+  test('drawn by hand: an untagged column on a deck or porch pad is a porch post grouped by its slab; one on a floor slab or on the ground is not', () => {
+    const nodes = {
+      level_1: { id: 'level_1', type: 'level' },
+      deck: { id: 'deck', type: 'slab', parentId: 'level_1', name: 'Back deck', elevation: 0.3, polygon: [], metadata: { floor: 'deck' } },
+      pad: { id: 'pad', type: 'slab', parentId: 'level_1', elevation: 0.1, polygon: [], metadata: { floor: 'porch-slab' } },
+      floor: { id: 'floor', type: 'slab', parentId: 'level_1', elevation: 0, polygon: [] },
+      column_1: column({ id: 'column_1', supportSlabId: 'deck', metadata: {} }),
+      column_2: column({ id: 'column_2', supportSlabId: 'deck', metadata: undefined, position: [3, 0, -2] }),
+      column_3: column({ id: 'column_3', supportSlabId: 'pad', metadata: {} }),
+      column_4: column({ id: 'column_4', supportSlabId: 'floor', metadata: {} }),
+      column_5: column({ id: 'column_5', supportSlabId: 'ground', metadata: {} }),
+    } as unknown as Parameters<typeof extractPorchPosts>[0]
+    const posts = extractPorchPosts(nodes, 'level_1')
+    expect(posts.map((p) => p.id).sort()).toEqual(['column_1', 'column_2', 'column_3'])
+    expect(posts.find((p) => p.id === 'column_1')?.entrance).toBe('Back deck')
+    expect(posts.find((p) => p.id === 'column_2')?.entrance).toBe('Back deck')
+    expect(posts.find((p) => p.id === 'column_1')?.baseY).toBeCloseTo(0.3, 9)
+    expect(posts.find((p) => p.id === 'column_3')?.entrance).toBe('porch pad')
+  })
 })
