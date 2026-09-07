@@ -31,6 +31,7 @@
     "three": "^0.185"
   },
   "dependencies": {
+    "@react-three/xr": "^6.6.30",
     "three-bvh-csg": "^0.0.18",
     "three-mesh-bvh": "^0.9.8",
     "zustand": "^5"

@@ -165,20 +165,24 @@ function RightColumn({
   children,
   overlays,
   stageOverlay,
+  immersivePresentation = false,
 }: {
   toolbarLeft?: ReactNode
   toolbarRight?: ReactNode
   children: ReactNode
   overlays?: ReactNode
   stageOverlay?: ReactNode
+  immersivePresentation?: boolean
 }) {
   return (
     <div
       className="relative flex min-w-0 flex-1 flex-col overflow-hidden"
       style={{
-        borderTopLeftRadius: 16,
-        clipPath: 'inset(0 0 0 0 round 16px 0 0 0)',
-        boxShadow: '-4px -2px 16px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.04)',
+        borderTopLeftRadius: immersivePresentation ? 0 : 16,
+        clipPath: immersivePresentation ? 'none' : 'inset(0 0 0 0 round 16px 0 0 0)',
+        boxShadow: immersivePresentation
+          ? 'none'
+          : '-4px -2px 16px rgba(0, 0, 0, 0.08), -1px 0 4px rgba(0, 0, 0, 0.04)',
       }}
     >
       {/* Viewer toolbar */}
@@ -228,6 +232,8 @@ export interface EditorLayoutV2Props {
   viewerContent: ReactNode
   overlays?: ReactNode
   stageOverlay?: ReactNode
+  /** Show only the viewer while an immersive session is presenting. */
+  immersivePresentation?: boolean
 }
 
 export function EditorLayoutV2({
@@ -240,6 +246,7 @@ export function EditorLayoutV2({
   viewerContent,
   overlays,
   stageOverlay,
+  immersivePresentation = false,
 }: EditorLayoutV2Props) {
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const isMobile = useIsMobile()
@@ -247,6 +254,7 @@ export function EditorLayoutV2({
   if (isMobile) {
     return (
       <EditorLayoutMobile
+        immersivePresentation={immersivePresentation}
         navbarSlot={navbarSlot}
         overlays={overlays}
         renderTabContent={renderTabContent}
@@ -260,13 +268,16 @@ export function EditorLayoutV2({
   }
 
   return (
-    <div className="dark flex h-full w-full flex-col bg-sidebar text-foreground">
+    <div
+      className="dark flex h-full w-full flex-col bg-sidebar text-foreground"
+      data-immersive-presentation={immersivePresentation || undefined}
+    >
       {/* Top navbar */}
-      {navbarSlot}
+      {!immersivePresentation && navbarSlot}
 
       {/* Main content: left column + right column */}
       <div className="flex min-h-0 flex-1">
-        {!isCaptureMode && sidebarTabs.length > 0 && (
+        {!(isCaptureMode || immersivePresentation) && sidebarTabs.length > 0 && (
           <LeftColumn
             renderTabContent={renderTabContent}
             sidebarOverlay={sidebarOverlay}
@@ -274,10 +285,11 @@ export function EditorLayoutV2({
           />
         )}
         <RightColumn
-          overlays={overlays}
+          immersivePresentation={immersivePresentation}
+          overlays={immersivePresentation ? undefined : overlays}
           stageOverlay={stageOverlay}
-          toolbarLeft={isCaptureMode ? undefined : viewerToolbarLeft}
-          toolbarRight={isCaptureMode ? undefined : viewerToolbarRight}
+          toolbarLeft={isCaptureMode || immersivePresentation ? undefined : viewerToolbarLeft}
+          toolbarRight={isCaptureMode || immersivePresentation ? undefined : viewerToolbarRight}
         >
           {viewerContent}
         </RightColumn>

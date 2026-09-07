@@ -9,6 +9,7 @@ import {
 } from '@pascal-app/core'
 import { Canvas, extend, type ThreeElement, useFrame, useThree } from '@react-three/fiber'
 import {
+  type ComponentType,
   forwardRef,
   useEffect,
   useImperativeHandle,
@@ -29,6 +30,13 @@ import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
+import { shouldMountPostProcessingRenderDriver } from '../../xr/frame-loop'
+import { GOD_ORIGIN_POSITION } from '../../xr/god-mode'
+import { PlayerModeScene } from '../../xr/mode-switching'
+import { immersiveXRBackgroundColor } from '../../xr/presentation-background'
+import { ImmersiveXRPresentationProvider } from '../../xr/presentation-context'
+import { ViewerXRSessionRoot } from '../../xr/session-root'
+import type { ViewerXRStore } from '../../xr/store'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import { BATCH_SPIKE_ENABLED, BatchedMeshSpike } from './batched-mesh-spike'
@@ -167,7 +175,7 @@ type WebGPUDeviceLike = {
   removeEventListener?: (type: string, listener: EventListener) => void
 }
 
-function GPUDeviceWatcher() {
+function GPUDeviceWatcher({ intentionalWebGL = false }: { intentionalWebGL?: boolean }) {
   const gl = useThree((s) => s.gl)
 
   useEffect(() => {
@@ -180,10 +188,12 @@ function GPUDeviceWatcher() {
     const device = backend?.device as WebGPUDeviceLike | undefined
 
     if (!device) {
-      console.warn('[viewer] No WebGPU device on backend — running on a fallback renderer.', {
-        backend: backend?.constructor?.name ?? 'unknown',
-        rendererType: (gl as any).constructor?.name ?? 'unknown',
-      })
+      if (!intentionalWebGL) {
+        console.warn('[viewer] No WebGPU device on backend — running on a fallback renderer.', {
+          backend: backend?.constructor?.name ?? 'unknown',
+          rendererType: (gl as any).constructor?.name ?? 'unknown',
+        })
+      }
       return
     }
 
@@ -209,7 +219,7 @@ function GPUDeviceWatcher() {
     return () => {
       device.removeEventListener?.('uncapturederror', onUncapturedError)
     }
-  }, [gl])
+  }, [gl, intentionalWebGL])
 
   return null
 }
@@ -225,6 +235,11 @@ function ToneMappingExposure() {
   }, [gl, invalidate, sceneTheme])
 
   return null
+}
+
+function ImmersiveXRBackground() {
+  const background = useViewer((state) => immersiveXRBackgroundColor(state.sceneTheme))
+  return <color args={[background]} attach="background" />
 }
 
 function hasPendingSceneBuildWork() {
@@ -321,6 +336,15 @@ function SceneReadyTracker({
   return null
 }
 
+export interface ViewerXRConfig {
+  store: ViewerXRStore
+  playerModes?: boolean
+  multiview?: boolean
+  originPosition?: [number, number, number]
+  session?: XRSession
+  inputSourceOverlay?: ComponentType<{ type: 'controller' | 'hand' }>
+}
+
 interface ViewerProps {
   children?: React.ReactNode
   hoverStyles?: HoverStyles
@@ -381,6 +405,10 @@ interface ViewerProps {
   disablePostFx?: boolean
   /** Keep the mounted renderer/context warm without advancing scene frames. */
   renderPaused?: boolean
+  /** Mount the viewer in immersive WebXR mode using a WebGL renderer. */
+  xr?: ViewerXRConfig
+  /** Force the WebGL backend for non-XR consumers that require it. */
+  forceWebGL?: boolean
 }
 
 /** Imperative handle exposed via `ref` on `<Viewer>`. */
@@ -411,6 +439,8 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     maxFps = 50,
     disablePostFx = false,
     renderPaused = false,
+    xr,
+    forceWebGL = false,
   },
   ref,
 ) {
@@ -514,6 +544,15 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     if (showGpuFallback) onSceneReadyChange?.(true)
   }, [showGpuFallback, onSceneReadyChange])
 
+  useEffect(() => {
+    if (!xr?.session) return
+
+    // An already-active immersive session can suppress the initial observer
+    // notification when the WebGL canvas replaces the desktop WebGPU canvas.
+    const timeout = window.setTimeout(() => window.dispatchEvent(new Event('resize')), 0)
+    return () => window.clearTimeout(timeout)
+  }, [xr?.session])
+
   if (showGpuFallback) {
     return <UnsupportedGpuViewerFallback />
   }
@@ -532,10 +571,12 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
         gl={
           ((props: { canvas?: HTMLCanvasElement; powerPreference?: RendererPowerPreference }) => {
             const canvas = props.canvas
+            const xrMultiview = xr?.multiview ?? false
             const cached = canvas ? WEBGPU_RENDERER_CACHE.get(canvas) : undefined
             if (cached) return cached
             const promise = (async () => {
               const result = await initializeGpuRenderer({
+                forceWebGL: xr != null || forceWebGL,
                 // Supplying `device` makes three skip its own `requestAdapter`,
                 // so R3F's `powerPreference` only reaches the GPU if we forward it.
                 powerPreference: props.powerPreference,
@@ -544,10 +585,10 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                     ...(props as any),
                     ...backendParameters,
                     alpha: true,
+                    multiview: xrMultiview,
                     // Allocates the backend's timestamp query pool so
                     // `resolveTimestampsAsync()` can report real GPU render-pass
-                    // time (post-processing.tsx). The backend self-disables it
-                    // when the device lacks 'timestamp-query'.
+                    // time. The WebGL XR backend ignores this WebGPU-only option.
                     trackTimestamp: PERF_OVERLAY_ENABLED,
                   })
                   renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -558,6 +599,9 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
                 },
               })
               if (result.status === 'ready') {
+                // XR uses the same WebGL-backed WebGPURenderer as the editor's
+                // desktop fallback. Empty transient geometries are unsafe in
+                // both paths because they submit a draw with no position buffer.
                 installEmptyDrawGuard(result.renderer)
                 return result.renderer
               }
@@ -585,60 +629,152 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           enabled: shadowsEnabled,
         }}
       >
-        <FrameLimiter fps={maxFps} paused={renderPaused} />
-        <ViewerCamera />
-        <PointerRaycastLayers />
-        <GPUDeviceWatcher />
-        <ToneMappingExposure />
-        <SceneReadyTracker
-          onSceneReadyChange={onSceneReadyChange}
-          sceneReadyKey={sceneReadyKey}
-          sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
-        />
-
-        <ErrorBoundary fallback={null} scope="viewer-scene">
-          {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
-          /> */}
-          <Lights />
-          {useBvh ? (
-            <SceneBvh>
-              <SceneRenderer />
-            </SceneBvh>
+        <ImmersiveXRPresentationProvider enabled={xr != null}>
+          {xr ? (
+            <ViewerXRSessionRoot
+              fps={maxFps}
+              originPosition={xr.playerModes ? GOD_ORIGIN_POSITION.toArray() : xr.originPosition}
+              paused={renderPaused}
+              session={xr.session}
+              store={xr.store}
+            >
+              <ViewerScene
+                disablePostFx
+                inputSourceOverlay={xr.inputSourceOverlay}
+                playerModes={xr.playerModes}
+                hoverStyles={hoverStyles}
+                immersiveXR
+                onSceneReadyChange={onSceneReadyChange}
+                perf={perf}
+                sceneReadyKey={sceneReadyKey}
+                sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+                selectionManager={selectionManager}
+                useBvh={useBvh}
+                xrStore={xr.store}
+              >
+                {children}
+              </ViewerScene>
+            </ViewerXRSessionRoot>
           ) : (
-            <SceneRenderer />
+            <>
+              <FrameLimiter fps={maxFps} paused={renderPaused} />
+              <ViewerScene
+                disablePostFx={disablePostFx}
+                hoverStyles={hoverStyles}
+                onSceneReadyChange={onSceneReadyChange}
+                perf={perf}
+                sceneReadyKey={sceneReadyKey}
+                sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+                selectionManager={selectionManager}
+                useBvh={useBvh}
+              >
+                {children}
+              </ViewerScene>
+            </>
           )}
-
-          {/* Generic slab-elevation lift for any kind that declares
-            `capabilities.floorPlaced`. Runs at frame priority 1 so it
-            lands its mesh.position.y override before the priority-2
-            systems below clear the dirty mark. */}
-          <FloorElevationSystem />
-          {/* Generic geometry rebuild loop for any registered kind that
-            ships `def.geometry`. Reads dirtyNodes, calls the kind's pure
-            builder, swaps the registered group's children. See
-            wiki/architecture/node-definitions.md. */}
-          <GeometrySystem />
-          {/* Automated stair opening sync — updates slab/ceiling cutouts
-            whenever stairs, slabs, or levels change. */}
-          <StairOpeningSystem />
-          {/* Mounts systems contributed by registry-backed kinds. Each
-            kind's `def.system` is loaded via lazy() and rendered here,
-            ordered by `system.priority`. */}
-          <RegisteredSystems />
-          <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />
-          {selectionManager === 'default' && <SelectionManager />}
-          {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
-          {/* Feeds the action-cost ledger the frame's settle state (dirty
-            queue + deferred wall rebuilds) at a priority after every other
-            system, so a receipt closes when the user can actually see the
-            edit. */}
-          {(perf || PERF_OVERLAY_ENABLED) && <PerfActionSettleSystem />}
-          {BATCH_SPIKE_ENABLED && <BatchedMeshSpike />}
-          {children}
-        </ErrorBoundary>
+        </ImmersiveXRPresentationProvider>
       </Canvas>
     </>
   )
 })
+
+function ViewerScene({
+  children,
+  disablePostFx,
+  inputSourceOverlay,
+  playerModes = false,
+  hoverStyles,
+  immersiveXR = false,
+  onSceneReadyChange,
+  perf,
+  sceneReadyKey,
+  sceneReadyMaxWaitMs,
+  selectionManager,
+  useBvh,
+  xrStore,
+}: {
+  children?: React.ReactNode
+  disablePostFx: boolean
+  inputSourceOverlay?: ComponentType<{ type: 'controller' | 'hand' }>
+  playerModes?: boolean
+  hoverStyles: HoverStyles
+  immersiveXR?: boolean
+  onSceneReadyChange?: (ready: boolean) => void
+  perf: boolean
+  sceneReadyKey?: string | number | null
+  sceneReadyMaxWaitMs?: number
+  selectionManager: 'default' | 'custom'
+  useBvh: boolean
+  xrStore?: ViewerXRStore
+}) {
+  const renderedScene = useBvh ? (
+    <SceneBvh>
+      <SceneRenderer />
+    </SceneBvh>
+  ) : (
+    <SceneRenderer />
+  )
+
+  const spatialScene = (
+    <>
+      {renderedScene}
+
+      {/* Generic slab-elevation lift for any kind that declares
+          `capabilities.floorPlaced`. Runs at frame priority 1 so it
+          lands its mesh.position.y override before the priority-2
+          systems below clear the dirty mark. */}
+      <FloorElevationSystem />
+      {/* Generic geometry rebuild loop for any registered kind that
+          ships `def.geometry`. Reads dirtyNodes, calls the kind's pure
+          builder, swaps the registered group's children. See
+          wiki/architecture/node-definitions.md. */}
+      <GeometrySystem />
+      {/* Automated stair opening sync — updates slab/ceiling cutouts
+          whenever stairs, slabs, or levels change. */}
+      <StairOpeningSystem />
+      {/* Mounts systems contributed by registry-backed kinds. Each
+          kind's `def.system` is loaded via lazy() and rendered here,
+          ordered by `system.priority`. */}
+      <RegisteredSystems />
+      {children}
+    </>
+  )
+
+  return (
+    <>
+      <ViewerCamera immersiveXR={immersiveXR} />
+      {immersiveXR && <ImmersiveXRBackground />}
+      <PointerRaycastLayers />
+      <GPUDeviceWatcher intentionalWebGL={immersiveXR} />
+      <ToneMappingExposure />
+      <SceneReadyTracker
+        onSceneReadyChange={onSceneReadyChange}
+        sceneReadyKey={sceneReadyKey}
+        sceneReadyMaxWaitMs={sceneReadyMaxWaitMs}
+      />
+      <ErrorBoundary fallback={null} scope="viewer-scene">
+        {/* <directionalLight position={[10, 10, 5]} intensity={0.5} castShadow
+          /> */}
+        <Lights />
+        {playerModes && xrStore ? (
+          <PlayerModeScene inputSourceOverlay={inputSourceOverlay} store={xrStore}>
+            {spatialScene}
+          </PlayerModeScene>
+        ) : (
+          spatialScene
+        )}
+        {shouldMountPostProcessingRenderDriver(immersiveXR) && (
+          <PostProcessing disablePostFx={disablePostFx} hoverStyles={hoverStyles} />
+        )}
+        {selectionManager === 'default' && <SelectionManager />}
+        {(perf || PERF_OVERLAY_ENABLED) && <PerfMonitor />}
+        {/* Feeds the action-cost ledger the frame's settle state after all
+            scene systems so a receipt closes when the edit is visible. */}
+        {(perf || PERF_OVERLAY_ENABLED) && <PerfActionSettleSystem />}
+        {BATCH_SPIKE_ENABLED && <BatchedMeshSpike />}
+      </ErrorBoundary>
+    </>
+  )
+}
 
 export default Viewer

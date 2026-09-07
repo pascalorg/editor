@@ -1,16 +1,7 @@
 'use client'
 
+import { RoofType as RoofTypeSchema, useRegistryVersion } from '@pascal-app/core'
 import {
-  nodeRegistry,
-  type RoofType,
-  RoofType as RoofTypeSchema,
-  useRegistryVersion,
-} from '@pascal-app/core'
-import {
-  CATALOG_ITEMS,
-  type FloorplanMode,
-  getFloorplanNodeExtension,
-  isFloorplanToolAvailableInMode,
   MaterialPaintPanel,
   TerrainSculptPanel,
   ToolOptionsPanel,
@@ -19,7 +10,6 @@ import {
   useFloorplanMode,
 } from '@pascal-app/editor'
 import { useLiquidLineToolOptions } from '@pascal-app/nodes'
-import { useViewer } from '@pascal-app/viewer'
 import Image from 'next/image'
 import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import {
@@ -28,223 +18,26 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/toolbar-tooltip'
+import {
+  activateBuildTool,
+  activateModularCabinetTool,
+  activatePaintMode,
+  activateRoofFeatureTool,
+  activateRoofType,
+  activateTerrainSculptMode,
+  BASE_BUILD_TYPES,
+  type BuildType,
+  collectBuildTypes,
+  collectRoofFeatures,
+  MEP_ITEMS,
+  MEP_TOOL_KINDS,
+  type MepItem,
+  MODULAR_CABINET_ICON,
+} from '@/lib/build-palette'
 import { getActiveRoofFeatureId, ROOF_TYPE_OPTIONS } from '@/lib/build-tab-state'
 import { cn } from '@/lib/utils'
 
-/**
- * MEP (mechanical / plumbing) tool kinds surfaced under the Build tab's "MEP"
- * group tile — its own sub-grid, like Roof's "Features".
- */
-type MepToolKind =
-  | 'duct-segment'
-  | 'duct-fitting'
-  | 'duct-terminal'
-  | 'hvac-equipment'
-  | 'lineset'
-  | 'liquid-line'
-  | 'pipe-segment'
-  | 'pipe-fitting'
-  | 'pipe-trap'
-
-type BuildType = {
-  /** Selection id — equals `kind` for tool types, with dedicated ids for modes and groups. */
-  id: string
-  label: string
-  /** Raster asset tile (legacy Build sidebar artwork). */
-  iconSrc: string
-  /** Present for structure-tool types (absent for paint mode and the MEP group). */
-  kind?: string
-  paletteOrder?: number
-  /** Non-placement special mode. */
-  mode?: 'material-paint' | 'terrain-sculpt'
-}
-
-type MepItem = {
-  /** Selection id — equals `kind`. */
-  id: string
-  label: string
-  iconSrc: string
-  kind: MepToolKind
-}
-
-// Same icons + ordering as the community Build sidebar, minus presets.
-const BASE_BUILD_TYPES: BuildType[] = [
-  { id: 'wall', label: 'Wall', iconSrc: '/icons/wall.webp', kind: 'wall' },
-  { id: 'fence', label: 'Fence', iconSrc: '/icons/fence.webp', kind: 'fence' },
-  { id: 'slab', label: 'Slab', iconSrc: '/icons/floor.webp', kind: 'slab' },
-  { id: 'ceiling', label: 'Ceiling', iconSrc: '/icons/ceiling.webp', kind: 'ceiling' },
-  { id: 'roof', label: 'Roof', iconSrc: '/icons/roof.webp', kind: 'roof' },
-  { id: 'stair', label: 'Stairs', iconSrc: '/icons/stairs.webp', kind: 'stair' },
-  { id: 'elevator', label: 'Elevator', iconSrc: '/icons/elevator.webp', kind: 'elevator' },
-  { id: 'door', label: 'Door', iconSrc: '/icons/door.webp', kind: 'door' },
-  { id: 'window', label: 'Window', iconSrc: '/icons/window.webp', kind: 'window' },
-  { id: 'column', label: 'Column', iconSrc: '/icons/column.webp', kind: 'column' },
-  { id: 'shelf', label: 'Shelf', iconSrc: '/icons/shelf.webp', kind: 'shelf' },
-  { id: 'spawn', label: 'Spawn Point', iconSrc: '/icons/spawn-point.webp', kind: 'spawn' },
-  { id: 'kitchen', label: 'Kitchen', iconSrc: '/icons/kitchen.webp' },
-  // Group tile — no tool of its own; opens the MEP sub-grid below (like Roof).
-  { id: 'mep', label: 'MEP', iconSrc: '/icons/HVAC.webp' },
-  { id: 'painting', label: 'Painting', iconSrc: '/icons/paint.webp', mode: 'material-paint' },
-  { id: 'terrain', label: 'Terrain', iconSrc: '/icons/mesh.webp', mode: 'terrain-sculpt' },
-]
-
 const subscribeToClientMount = () => () => {}
-
-function collectBuildTypes(floorplanMode: FloorplanMode): BuildType[] {
-  const baseKinds = new Set(BASE_BUILD_TYPES.flatMap((type) => (type.kind ? [type.kind] : [])))
-  const tools = BASE_BUILD_TYPES.filter((type) => type.kind).map((type, index) => ({
-    ...type,
-    paletteOrder:
-      nodeRegistry.get(type.kind!)?.presentation?.paletteOrder ?? type.paletteOrder ?? index * 10,
-  }))
-  for (const [kind, definition] of nodeRegistry.entries()) {
-    const presentation = definition.presentation
-    const extension = getFloorplanNodeExtension(definition)
-    if (
-      baseKinds.has(kind) ||
-      definition.presentation?.paletteGroup === 'roof-features' ||
-      !extension?.tool ||
-      !isFloorplanToolAvailableInMode(extension.availableModes, floorplanMode) ||
-      !presentation ||
-      presentation.hidden ||
-      presentation.paletteSection !== 'structure'
-    ) {
-      continue
-    }
-    tools.push({
-      id: kind,
-      kind,
-      label: presentation.label,
-      iconSrc: presentation.icon.kind === 'url' ? presentation.icon.src : '/icons/spawn-point.webp',
-      paletteOrder: presentation.paletteOrder ?? Number.MAX_SAFE_INTEGER,
-    })
-  }
-  tools.sort((left, right) => (left.paletteOrder ?? 0) - (right.paletteOrder ?? 0))
-  return [...tools, ...BASE_BUILD_TYPES.filter((type) => !type.kind)]
-}
-
-// MEP sub-grid surfaced under the "MEP" tile — same icons + ordering the MEP
-// tools had in the community Build sidebar.
-const MEP_ITEMS: MepItem[] = [
-  { id: 'duct-segment', label: 'Duct', iconSrc: '/icons/duct.webp', kind: 'duct-segment' },
-  {
-    id: 'duct-terminal',
-    label: 'Register',
-    iconSrc: '/icons/registers.webp',
-    kind: 'duct-terminal',
-  },
-  { id: 'hvac-equipment', label: 'HVAC Unit', iconSrc: '/icons/HVAC.webp', kind: 'hvac-equipment' },
-  { id: 'lineset', label: 'Lineset', iconSrc: '/icons/lineset.webp', kind: 'lineset' },
-  { id: 'liquid-line', label: 'Liquid Line', iconSrc: '/icons/lineset.webp', kind: 'liquid-line' },
-  { id: 'pipe-segment', label: 'DWV Pipe', iconSrc: '/icons/dwv-pipes.webp', kind: 'pipe-segment' },
-]
-
-const MODULAR_CABINET_CATALOG_ITEM = CATALOG_ITEMS.find((item) => item.id === 'cabinet')
-const MODULAR_CABINET_ICON = MODULAR_CABINET_CATALOG_ITEM?.thumbnail ?? '/icons/item.webp'
-
-/**
- * Activate a raw structure draw/cursor tool. Mirrors the editor's own
- * structure-tool activation (`setPhase`/`setStructureLayer`/`setMode`/`setTool`).
- */
-function activateBuildTool(kind: string): void {
-  const ed = useEditor.getState()
-  const definition = nodeRegistry.get(kind)
-  const extension = getFloorplanNodeExtension(definition)
-  if (
-    !isFloorplanToolAvailableInMode(extension?.availableModes, useFloorplanMode.getState().mode)
-  ) {
-    useFloorplanMode.getState().showExpertModeNotice(definition?.presentation?.label ?? kind)
-    return
-  }
-  const preferredView = extension?.preferredView
-  if (preferredView) ed.setViewMode(preferredView)
-  ed.setPhase('structure')
-  ed.setStructureLayer('elements')
-  ed.setCatalogCategory(null)
-  ed.setToolDefaults(kind, null)
-  ed.setMode('build')
-  ed.setTool(kind)
-}
-
-function activateModularCabinetTool(): void {
-  const ed = useEditor.getState()
-  useViewer.getState().setSelection({ selectedIds: [], zoneId: null })
-  if (MODULAR_CABINET_CATALOG_ITEM) ed.setSelectedItem(MODULAR_CABINET_CATALOG_ITEM)
-  ed.setPhase('structure')
-  ed.setStructureLayer('elements')
-  ed.setCatalogCategory(null)
-  ed.setMode('build')
-  ed.setTool('cabinet')
-}
-
-/** Enter material-paint mode — the Build tab's "Painting" category. */
-function activatePaintMode(): void {
-  const ed = useEditor.getState()
-  ed.setPhase('structure')
-  ed.setStructureLayer('elements')
-  ed.setMode('material-paint')
-}
-
-/**
- * Enter terrain-sculpt mode — the Build tab's "Terrain" category. No `setPhase`:
- * `setMode` moves to the site phase itself, since sculpting is a site-phase mode.
- */
-function activateTerrainSculptMode(): void {
-  useEditor.getState().setMode('terrain-sculpt')
-}
-
-type RoofFeature = {
-  id: string
-  label: string
-  iconSrc: string
-  kind?: string
-}
-
-const ROOF_FEATURE_FALLBACK_ICON = '/icons/roof.webp'
-
-function collectRoofFeatures(): RoofFeature[] {
-  const features: RoofFeature[] = []
-  for (const [kind, def] of nodeRegistry.entries()) {
-    if (
-      def.capabilities.roofAccessory === undefined &&
-      def.presentation?.paletteGroup !== 'roof-features'
-    ) {
-      continue
-    }
-    if (def.capabilities.wallOpeningPlacement) continue
-    const icon = def.presentation?.icon
-    features.push({
-      id: kind,
-      kind,
-      label: def.presentation?.label ?? kind,
-      iconSrc: icon?.kind === 'url' ? icon.src : ROOF_FEATURE_FALLBACK_ICON,
-    })
-  }
-  return features
-}
-
-/**
- * Roof accessories and extensions surfaced under the Roof tile. Unlike the
- * community editor these aren't DB presets — each is a registry kind, either
- * carrying `capabilities.roofAccessory` or explicitly classified as a roof
- * extension. They are enumerated at render time because the registry is
- * populated during app bootstrap. Label + icon come from `presentation`;
- * non-url icons fall back to the roof icon.
- */
-function activateRoofFeatureTool(feature: RoofFeature): void {
-  const ed = useEditor.getState()
-  ed.setPhase('structure')
-  ed.setStructureLayer('elements')
-  ed.setCatalogCategory(null)
-  ed.setMode('build')
-  if (feature.kind) ed.setTool(feature.kind)
-}
-
-function activateRoofType(roofType: RoofType): void {
-  const editor = useEditor.getState()
-  if (!(editor.mode === 'build' && editor.tool === 'roof')) activateBuildTool('roof')
-  editor.setToolDefaults('roof', { ...editor.toolDefaults.roof, roofType })
-}
 
 /**
  * Build tab for the open-source standalone editor — a preset-less replica of
@@ -254,13 +47,6 @@ function activateRoofType(roofType: RoofType): void {
  */
 // MEP tool kinds that, when active, mean the MEP group tile (and its sub-grid)
 // is what the user is working in.
-const MEP_TOOL_KINDS = new Set<string>([
-  ...MEP_ITEMS.map((item) => item.kind),
-  'duct-fitting',
-  'pipe-fitting',
-  'pipe-trap',
-])
-
 export function BuildTab() {
   const activeTool = useEditor((s) => s.tool)
   const mode = useEditor((s) => s.mode)

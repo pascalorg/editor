@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "dotenv -e ../../.env.local -e ../../.env.defaults -- next dev",
+    "dev:xr": "dotenv -e ../../.env.local -e ../../.env.defaults -- next dev --hostname 0.0.0.0 --experimental-https",
     "build": "dotenv -e ../../.env.local -- next build",
     "start": "next start",
     "lint": "biome lint",
@@ -26,6 +27,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
+    "@react-three/xr": "^6.6.30",
     "@tailwindcss/postcss": "^4.2.1",
     "clsx": "^2.1.1",
     "geist": "^1.7.0",
@@ -40,12 +42,14 @@
     "zod": ">=4.5.4 <4.6"
   },
   "devDependencies": {
+    "@iwer/devui": "2.3.0",
     "@pascal/typescript-config": "*",
     "@types/howler": "^2.2.12",
     "@types/node": "^22.19.12",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.2",
     "agentation": "^3.0.2",
+    "iwer": "2.3.0",
     "react-grab": "^0.1.50",
     "react-scan": "^0.5.7",
     "tw-animate-css": "^1.4.0",

@@ -6,6 +6,7 @@ const appDirectory = path.dirname(fileURLToPath(import.meta.url))
 const portableBuild = process.env.PASCAL_PORTABLE_BUILD === '1'
 
 const nextConfig: NextConfig = {
+  allowedDevOrigins: ['192.168.0.102'],
   ...(portableBuild
     ? { output: 'standalone' as const, outputFileTracingRoot: path.join(appDirectory, '../..') }
     : {}),
@@ -39,11 +40,20 @@ const nextConfig: NextConfig = {
     '@dgreenheck/ez-tree',
   ],
   turbopack: {
+    // Include the editor and locally linked sibling plugin without watching the whole home folder.
+    root: path.join(appDirectory, '../../..'),
     resolveAlias: {
-      react: './node_modules/react',
-      three: './node_modules/three',
-      '@react-three/fiber': './node_modules/@react-three/fiber',
-      '@react-three/drei': './node_modules/@react-three/drei',
+      '@pascal-app/core': '../../packages/core/src/index.ts',
+      '@pascal-app/editor': '../../packages/editor/src/index.tsx',
+      '@pascal-app/viewer': '../../packages/viewer/src/index.ts',
+      '@pascal-local/plugin-webxr': '../../../webxr-pascal-plugin/src/index.ts',
+      react: '../../node_modules/react',
+      three: '../../node_modules/three',
+      // TSL and the renderer must share one module-level shader stack.
+      'three/webgpu': '../../node_modules/three/build/three.webgpu.js',
+      'three/tsl': '../../node_modules/three/build/three.tsl.js',
+      '@react-three/fiber': '../../node_modules/@react-three/fiber',
+      '@react-three/drei': '../../node_modules/@react-three/drei',
     },
   },
   experimental: {

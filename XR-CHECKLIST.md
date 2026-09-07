@@ -1,0 +1,28 @@
+# XR Implementation Checklist
+
+- [x] 1. Create an authoritative XR tool manifest
+- [x] 2. Build a deterministic emulator harness
+- [x] 3. Verify controller pointer capture and drag lifecycle
+- [x] 4. Verify hand pinch capture and drag lifecycle
+- [x] 5. Verify panel selection and nested pagination
+- [x] 6. Verify Select-tool fallback and cancellation
+- [x] 7. Verify scene selection and deselection
+- [x] 8. Verify movement and resize handles
+- [x] 9. Verify settings-panel generation and updates
+- [x] 10. Verify wall creation and editing
+- [x] 11. Verify door and window wall placement
+- [x] 12. Verify fence creation and editing
+- [x] 13. Verify slab creation and editing
+- [x] 14. Verify ceiling creation and editing
+- [x] 15. Verify column and block workflows
+- [x] 16. Verify elevator and spawn workflows
+- [x] 17. Verify shelf, kitchen, and stair workflows
+- [x] 18. Verify roof creation and editing
+- [x] 19. Verify roof-feature placement and editing
+- [x] 20. Verify MEP tool workflows
+- [x] 21. Verify Paint tool workflows
+- [x] 22. Verify terrain sculpting workflows
+- [x] 23. Verify undo, redo, and interaction cancellation
+- [x] 24. Verify God and Human mode workflows
+- [x] 25. Verify controller/hand parity and XR rendering stability
+- [ ] 26. Run complete emulator and physical-headset regression testing

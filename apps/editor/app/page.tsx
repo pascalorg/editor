@@ -1,6 +1,8 @@
 'use client'
 
 import { Editor, ItemsPanel } from '@pascal-app/editor'
+import { createViewerXRStore } from '@pascal-app/viewer'
+import { useWebXRFeature, WebXRToolbarButton } from '@pascal-local/plugin-webxr'
 import { Hammer, Layers, Package, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -87,9 +89,14 @@ const SIDEBAR_TABS = [
 const PROJECT_ID = 'local-editor'
 
 export default function Home() {
+  const webXR = useWebXRFeature(createViewerXRStore)
+
   return (
-    <div className="relative h-screen w-screen">
-      {PROJECT_ID === 'local-editor' && (
+    <div
+      className="relative h-screen w-screen"
+      data-webxr-input-sources={webXR.inputSources.join(',')}
+    >
+      {PROJECT_ID === 'local-editor' && webXR.status !== 'active' && (
         <div className="pointer-events-none absolute top-14 left-1/2 z-40 -translate-x-1/2">
           <div className="pointer-events-none flex max-w-[min(92vw,42rem)] flex-wrap items-center justify-center gap-x-3 gap-y-1 rounded-full border border-border/60 bg-background/90 px-4 py-1.5 text-xs shadow-sm backdrop-blur">
             <span className="text-muted-foreground">
@@ -105,11 +112,16 @@ export default function Home() {
         </div>
       )}
       <Editor
+        forceWebGL={webXR.enabled}
+        immersivePresentation={webXR.status === 'active'}
         layoutVersion="v2"
         projectId={PROJECT_ID}
         sidebarTabs={SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
-        viewerToolbarRight={<CommunityViewerToolbarRight />}
+        viewerToolbarRight={
+          <CommunityViewerToolbarRight pluginActions={<WebXRToolbarButton feature={webXR} />} />
+        }
+        xr={webXR.xr}
       />
     </div>
   )

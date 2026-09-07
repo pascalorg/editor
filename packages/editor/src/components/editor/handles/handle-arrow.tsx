@@ -1,7 +1,7 @@
 'use client'
 
 import { type Cursor, emitter } from '@pascal-app/core'
-import type { ThreeEvent } from '@react-three/fiber'
+import { type ThreeEvent, useThree } from '@react-three/fiber'
 import { type ReactNode, useEffect, useMemo, useRef } from 'react'
 import {
   BoxGeometry,
@@ -14,14 +14,18 @@ import {
   type Group,
   type Intersection,
   Mesh,
+  type Object3D,
+  type Ray,
   type Raycaster,
   Shape,
   TorusGeometry,
+  Vector3,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY } from '../../../lib/direct-manipulation'
+import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
 import useEditor from '../../../store/use-editor'
 
 // While a press-drag move is in flight (`placementDragMode`), the move tool
@@ -42,6 +46,7 @@ export const NO_RAYCAST = () => null
 export const HIT_AREA_MARGIN = 0.035
 
 const HIT_AREA_RENDER_ORDER = 1011
+const HIT_AREA_POINTER_EVENTS_ORDER = 10
 const HIT_AREA_THICKNESS = 0.08
 const CHEVRON_MIN_X = -0.2
 const CHEVRON_MAX_X = 0.22
@@ -423,15 +428,63 @@ export function InvisibleHandleHitArea({
   onPointerLeave: PointerHandler
   scale: number
 }) {
+  const camera = useThree((state) => state.camera)
+  const canvas = useThree((state) => state.gl.domElement)
+
+  const windowPointerEventForRay = (
+    type: 'pointermove' | 'pointerup' | 'pointercancel',
+    ray: Ray,
+  ) => {
+    const point = ray.at(4, new Vector3()).project(camera)
+    const rect = canvas.getBoundingClientRect()
+    return new PointerEvent(type, {
+      bubbles: true,
+      button: 0,
+      buttons: type === 'pointermove' ? 1 : 0,
+      clientX: rect.left + ((point.x + 1) / 2) * rect.width,
+      clientY: rect.top + ((1 - point.y) / 2) * rect.height,
+      pointerType: 'xr',
+    })
+  }
+
+  const handlePointerDown: PointerHandler = (event) => {
+    const spatialPointerId = getSpatialPointerId(event.nativeEvent)
+    if (spatialPointerId) {
+      const target = event.object as Object3D & {
+        setPointerCapture?: (pointerId: number) => void
+      }
+      target.setPointerCapture?.(event.pointerId)
+      const initialPointer = windowPointerEventForRay('pointermove', event.ray)
+      const nativeEvent = event.nativeEvent as PointerEvent
+      try {
+        Object.defineProperties(nativeEvent, {
+          clientX: { configurable: true, value: initialPointer.clientX },
+          clientY: { configurable: true, value: initialPointer.clientY },
+          pointerId: { configurable: true, value: event.pointerId },
+          pointerType: { configurable: true, value: 'xr' },
+        })
+      } catch {
+        // Direct-ray handle sessions do not need projected DOM coordinates.
+      }
+      spatialPointerInput.capture(spatialPointerId, {
+        onMove: (ray) => window.dispatchEvent(windowPointerEventForRay('pointermove', ray)),
+        onRelease: () => window.dispatchEvent(windowPointerEventForRay('pointerup', event.ray)),
+        onCancel: () => window.dispatchEvent(windowPointerEventForRay('pointercancel', event.ray)),
+      })
+    }
+    onPointerDown(event)
+  }
+
   return (
     <mesh
       frustumCulled={false}
       geometry={geometry}
       layers={EDITOR_LAYER}
       material={material}
-      onPointerDown={onPointerDown}
+      onPointerDown={handlePointerDown}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
+      pointerEventsOrder={HIT_AREA_POINTER_EVENTS_ORDER}
       raycast={hitAreaRaycast}
       renderOrder={HIT_AREA_RENDER_ORDER}
       scale={scale}
