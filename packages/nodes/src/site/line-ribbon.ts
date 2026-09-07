@@ -12,6 +12,7 @@
  * line then two dots dashed like standard property line, and the setbacks
  * … black and dashed".
  */
+import { surfaceHeightAt, type TerrainField } from '@pascal-app/core'
 import { BufferAttribute, BufferGeometry } from 'three'
 
 /** The standard property line: a long dash, two dots (metres). */
@@ -40,6 +41,23 @@ function sample(positions: Float32Array, cum: number[], s: number): { p: V3; d: 
   const dz = b[2] - a[2]
   const len = Math.hypot(dx, dz) || 1
   return { p, d: [dx / len, dz / len] }
+}
+
+/**
+ * Re-drape a ribbon on a changed field: every vertex keeps its XZ and takes
+ * the ground's height there plus `lift` (a sculpt stroke mid-flight).
+ */
+export function updateRibbonHeights(geometry: BufferGeometry, field: TerrainField | null, lift: number): void {
+  const attribute = geometry.getAttribute('position') as BufferAttribute | undefined
+  if (!attribute) return
+  const array = attribute.array as Float32Array
+  for (let i = 0; i < attribute.count; i++) {
+    const x = array[i * 3] ?? 0
+    const z = array[i * 3 + 2] ?? 0
+    array[i * 3 + 1] = field ? surfaceHeightAt(field, x, z) + lift : lift
+  }
+  attribute.needsUpdate = true
+  geometry.computeBoundingSphere()
 }
 
 /**

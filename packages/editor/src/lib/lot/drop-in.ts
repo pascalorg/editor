@@ -45,7 +45,9 @@ import { describeTerrainSample, sampleLotTerrain, type TerrainSampleSummary } fr
 import {
   answered,
   type CodeBasisData,
+  contourLinesFromDossier,
   describeDossier,
+  type ElevationData,
   type Dossier,
   fetchDossier,
   type FloodData,
@@ -142,6 +144,22 @@ export async function dropInLot(
     })
     if (read.ok) dossier = read.dossier
     else dossierFailure = read.reason
+    // The parcel-wide 3DEP terrain warms up on the first look at a parcel
+    // (~30 s, terrain_status 'computing'): one more ask for the elevation
+    // section alone, after a wait, so the contour lines land on the first
+    // drop-in and not the second.
+    const el = dossier ? answered<ElevationData>(dossier, 'elevation') : null
+    if (dossier && el?.terrain_status === 'computing' && options.terrainDeadlineMs !== 0) {
+      await new Promise((r) => setTimeout(r, Math.min(30_000, options.terrainDeadlineMs ?? 20_000)))
+      const again = await fetchDossier(fetchImpl, {
+        address,
+        ...(hasCoords ? { latitude: input.latitude, longitude: input.longitude } : {}),
+        layers: ['elevation'],
+      })
+      if (again.ok && again.dossier.layers?.elevation) {
+        dossier = { ...dossier, layers: { ...dossier.layers, elevation: again.dossier.layers.elevation } }
+      }
+    }
   } else dossierFailure = 'skipped'
   const dossierParcel = dossier ? answered<ParcelData>(dossier, 'parcel') : null
   const dossierOrigin: [number, number] | null =
@@ -256,7 +274,10 @@ export async function dropInLot(
       error: 'parcel geometry was unusable',
       message: 'The parcel geometry was unusable.',
     }
-  useScene.getState().updateNode(site.id as AnyNodeId, computed.patch as Partial<AnyNode>)
+  // the surveyed contour lines ride the site with the patch (the site plan
+  // draws them over the heightfield's own); absent without 3DEP lines
+  const contours = dossier && dossierOrigin ? contourLinesFromDossier(dossier, dossierOrigin) : null
+  useScene.getState().updateNode(site.id as AnyNodeId, { ...computed.patch, terrainContours: contours ?? undefined } as Partial<AnyNode>)
 
   // The ground over the lot — fail-soft. A sloping lot writes the
   // heightfield; a flat one (or a failed read) clears any terrain the

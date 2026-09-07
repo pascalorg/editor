@@ -146,6 +146,25 @@ export const SiteNode = BaseNode.extend({
    * Absent = 12 in; 0 = no contours. The generate panel's terrain setting.
    */
   contourIntervalIn: z.number().nonnegative().optional(),
+  /**
+   * Surveyed contour lines in the site frame (metres, x east, z south) —
+   * the Pascal Map dossier's USGS 3DEP bare-earth 1-ft lines, NAVD88 feet.
+   * The site plan draws these when present (at the chosen interval) instead
+   * of contouring the heightfield.
+   */
+  terrainContours: z
+    .object({
+      datum: z.string(),
+      intervalFt: z.number().positive(),
+      source: z.string().optional(),
+      lines: z.array(
+        z.object({
+          elevationFt: z.number(),
+          points: z.array(z.tuple([z.number(), z.number()])),
+        }),
+      ),
+    })
+    .optional(),
   children: z.array(z.string()).default([]),
 }).describe(
   dedent`

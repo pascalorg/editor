@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
-import { buildPatternedRibbon, PROPERTY_LINE_PATTERN, SETBACK_LINE_PATTERN } from './line-ribbon'
+import { createTerrainField, quantize, surfaceHeightAt } from '@pascal-app/core'
+import { buildPatternedRibbon, PROPERTY_LINE_PATTERN, SETBACK_LINE_PATTERN, updateRibbonHeights } from './line-ribbon'
 import { classifyEdges, resolveFrontEdge, setbackEnvelope } from './setbacks'
 
 // a 20 × 30 m lot; edge 0 runs along z = −15 (north), 1 east, 2 south, 3 west
@@ -58,5 +59,27 @@ describe('the patterned ribbon', () => {
 
   test('degenerate input gives an empty geometry', () => {
     expect(buildPatternedRibbon(new Float32Array([0, 0, 0]), PROPERTY_LINE_PATTERN, 0.2).getAttribute('position')).toBeUndefined()
+  })
+})
+
+describe('updateRibbonHeights (a sculpt stroke mid-flight)', () => {
+  test('every vertex takes the ground under it plus the lift; XZ untouched', () => {
+    const ring = new Float32Array([0, 0, 0, 10, 0, 0, 10, 0, 10, 0, 0, 10, 0, 0, 0])
+    const g = buildPatternedRibbon(ring, PROPERTY_LINE_PATTERN, 0.2)
+    const before = Array.from(g.getAttribute('position').array as Float32Array)
+    const field = createTerrainField({ origin: [-5, -5], spacing: 1, cols: 21, rows: 21 })
+    const heights = new Int16Array(field.heights)
+    for (let row = 0; row < 21; row++) for (let col = 0; col < 21; col++) heights[row * 21 + col] = quantize(field, col * 0.1) // rises 0.1 m per metre east
+    const sloped = { ...field, heights }
+    updateRibbonHeights(g, sloped, 0.05)
+    const pos = g.getAttribute('position')
+    for (let i = 0; i < pos.count; i++) {
+      expect(pos.getX(i)).toBeCloseTo(before[i * 3]!, 6)
+      expect(pos.getZ(i)).toBeCloseTo(before[i * 3 + 2]!, 6)
+      expect(pos.getY(i)).toBeCloseTo(surfaceHeightAt(sloped, pos.getX(i), pos.getZ(i)) + 0.05, 5)
+    }
+    // no field: flat at the lift
+    updateRibbonHeights(g, null, 0.02)
+    for (let i = 0; i < pos.count; i++) expect(pos.getY(i)).toBeCloseTo(0.02, 6)
   })
 })

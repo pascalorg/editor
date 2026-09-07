@@ -3,6 +3,7 @@ import miami from './__fixtures__/map-dossier-miami-shores.json'
 import stpete from './__fixtures__/map-dossier-stpete.json'
 import {
   answered,
+  contourLinesFromDossier,
   describeDossier,
   detectFrontEdgeFromFrontage,
   type Dossier,
@@ -148,5 +149,42 @@ describe('the Miami Shores dossier (no parcel plane)', () => {
     expect((facts.flood as { zone_at_point?: { zone?: string } }).zone_at_point?.zone).toBe('X')
     expect(((facts.utilities as { electric_providers?: { name: string }[] }).electric_providers ?? [])[0]?.name).toContain('FLORIDA POWER')
     expect(describeDossier(MIAMI)).toContain('parcel')
+  })
+})
+
+describe('the 3DEP contour lines', () => {
+  test('St Petersburg: 129 one-foot lines projected into the site frame, thinned, NAVD88', () => {
+    const origin: [number, number] = [STPETE.point.lng, STPETE.point.lat]
+    const lines = contourLinesFromDossier(STPETE, origin)
+    expect(lines).not.toBeNull()
+    expect(lines!.datum).toBe('NAVD88')
+    expect(lines!.intervalFt).toBe(1)
+    expect(lines!.source).toContain('3DEP')
+    expect(lines!.lines.length).toBe(129)
+    const elevations = new Set(lines!.lines.map((l) => l.elevationFt))
+    expect(Math.min(...elevations)).toBe(0)
+    expect(Math.max(...elevations)).toBeCloseTo(20, 0)
+    // every point within the parcel bbox's reach of the origin (a 13-acre block: a few hundred metres)
+    let n = 0
+    for (const l of lines!.lines) {
+      expect(l.points.length).toBeGreaterThanOrEqual(2)
+      for (const p of l.points) {
+        expect(Math.hypot(p[0], p[1])).toBeLessThan(600)
+        n++
+      }
+      for (let i = 1; i < l.points.length; i++) {
+        const a = l.points[i - 1]!
+        const b = l.points[i]!
+        expect(Math.hypot(a[0] - b[0], a[1] - b[1])).toBeGreaterThanOrEqual(0.3 - 1e-9)
+      }
+    }
+    // thinned below the 3501 recorded vertices
+    expect(n).toBeLessThan(3501)
+    expect(n).toBeGreaterThan(1000)
+  })
+
+  test('Miami Shores: the section answers without lines → null', () => {
+    const origin: [number, number] = [MIAMI.point.lng, MIAMI.point.lat]
+    expect(contourLinesFromDossier(MIAMI, origin)).toBeNull()
   })
 })

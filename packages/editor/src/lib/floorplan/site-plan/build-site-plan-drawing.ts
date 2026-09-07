@@ -16,6 +16,7 @@ import {
 import {
   type Bounds,
   boundsInsidePolygon,
+  pointInPolygon,
   castYardDimensionsOriented,
   compassLabel,
   edgeHeadingDeg,
@@ -314,7 +315,25 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
     if (field) {
       const sample = (site?.metadata as { terrainSample?: { datumFt?: unknown } } | undefined)?.terrainSample
       const datumFt = typeof sample?.datumFt === 'number' ? sample.datumFt : null
-      const contours = terrainContours(field, intervalIn * 0.0254, lot)
+      // the SURVEYED lines (the dossier's 3DEP set, NAVD88 feet) when the
+      // site carries them and the interval is a whole number of their
+      // own; the heightfield's contours otherwise
+      const surveyed = site?.terrainContours
+      const stepFt = intervalIn / 12
+      const useSurveyed =
+        surveyed !== undefined &&
+        surveyed.lines.length > 0 &&
+        Math.abs(stepFt / surveyed.intervalFt - Math.round(stepFt / surveyed.intervalFt)) < 1e-9
+      const contours = useSurveyed
+        ? surveyed.lines
+            .filter((l) => Math.abs(l.elevationFt / stepFt - Math.round(l.elevationFt / stepFt)) < 1e-9)
+            .map((l) => ({
+              levelM: (l.elevationFt - (datumFt ?? 0)) * METRES_PER_FOOT,
+              points: l.points.filter((p) => lot.length < 3 || pointInPolygon(lot, p[0], p[1])) as Pt[],
+              index: Math.abs(l.elevationFt / (stepFt * 5) - Math.round(l.elevationFt / (stepFt * 5))) < 1e-9,
+            }))
+            .filter((c) => c.points.length >= 2)
+        : terrainContours(field, intervalIn * 0.0254, lot)
       const lines: FloorplanGeometry[] = []
       for (const c of contours) {
         lines.push({

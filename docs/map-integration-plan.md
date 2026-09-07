@@ -96,8 +96,10 @@ frame from the STATE profile (wind / frost / snow / SDC). The sheets print
 - TERRAIN from `elevation.data.terrain` (3DEP, 1-ft contours): the
   heightfield from the contour set (or a denser sample of it) instead of
   the 81 EPQS points; `metadata.terrainSample.source` says "USGS 3DEP via
-  Pascal Map, vintage …". `terrain_status: computing` → retry once after
-  30 s, else the EPQS grid.
+  Pascal Map, vintage …". DONE 2026-09-07 (T2) for the LINES: the site
+  stores them (`site.terrainContours`) and A1.0 draws them; the
+  `computing` retry is in (20 s, elevation section only). OPEN: the
+  heightfield itself still comes from the EPQS grid.
 - The COVER SHEET (A0.0) project-data block: parcel key + county + APN,
   zoning district, flood zone / FIRM panel / BFE, wind speed, IECC zone,
   SDC, frost, sewer or septic, electric provider, elevation — each with

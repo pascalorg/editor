@@ -244,6 +244,70 @@ export function detectFrontEdgeFromFrontage(ring: readonly Pt[], segments: reado
   return best ? { ...best, frontingEdges: fronting } : null
 }
 
+/* ----------------------------------------------------------- terrain contours */
+
+export type ElevationData = {
+  terrain_status?: string
+  terrain?: {
+    min_ft?: number
+    max_ft?: number
+    contour_interval_ft?: number
+    contour_count?: number
+    datum?: string
+    source_resolution_m?: number
+    geometry?: unknown
+  } | null
+}
+
+export type ContourLines = {
+  datum: string
+  intervalFt: number
+  source?: string
+  lines: { elevationFt: number; points: [number, number][] }[]
+}
+
+/**
+ * The dossier's USGS 3DEP contour lines (elevation.data.terrain.geometry —
+ * a FeatureCollection of LineStrings with `elevation_ft`), projected into
+ * the site frame. Consecutive points closer than 0.3 m are dropped (the
+ * 10 m grid draws smooth curves with more vertices than a plan needs).
+ * Null when the section carries no lines.
+ */
+export function contourLinesFromDossier(dossier: Dossier, origin: LngLat): ContourLines | null {
+  const el = answered<ElevationData>(dossier, 'elevation')
+  const terrain = el?.terrain
+  const fc = terrain?.geometry as { type?: string; features?: unknown[] } | undefined
+  if (!terrain || !fc || !Array.isArray(fc.features) || fc.features.length === 0) return null
+  const lines: ContourLines['lines'] = []
+  for (const f of fc.features as { geometry?: { type?: string; coordinates?: unknown }; properties?: { elevation_ft?: unknown } }[]) {
+    const ft = f?.properties?.elevation_ft
+    if (typeof ft !== 'number' || !Number.isFinite(ft)) continue
+    const geom = f.geometry
+    const parts: unknown[][] = []
+    if (geom?.type === 'LineString' && Array.isArray(geom.coordinates)) parts.push(geom.coordinates as unknown[])
+    else if (geom?.type === 'MultiLineString' && Array.isArray(geom.coordinates)) for (const l of geom.coordinates as unknown[]) if (Array.isArray(l)) parts.push(l as unknown[])
+    for (const part of parts) {
+      const pts: [number, number][] = []
+      for (const ll of part) {
+        if (!isLngLat(ll)) continue
+        const p = planPointFromLngLat(origin, ll)
+        const last = pts[pts.length - 1]
+        if (last && Math.hypot(last[0] - p[0], last[1] - p[1]) < 0.3) continue
+        pts.push([Math.round(p[0] * 1000) / 1000, Math.round(p[1] * 1000) / 1000])
+      }
+      if (pts.length >= 2) lines.push({ elevationFt: ft, points: pts })
+    }
+  }
+  if (lines.length === 0) return null
+  const section = dossier.layers?.elevation
+  return {
+    datum: terrain.datum ?? 'NAVD88',
+    intervalFt: typeof terrain.contour_interval_ft === 'number' ? terrain.contour_interval_ft : 1,
+    source: `USGS 3DEP (~${terrain.source_resolution_m ?? 10} m) via Pascal Map${section?.source?.vintage ? ` (${section.source.vintage})` : ''}`,
+    lines,
+  }
+}
+
 /* ----------------------------------------------------------- zoning */
 
 const FT = 0.3048

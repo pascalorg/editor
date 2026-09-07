@@ -1244,11 +1244,21 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       ? {
           polygon: ring.map((p) => toSite(p[0] * IN, p[1] * IN)),
           padY: round(buildingY - SLAB_FF_ABOVE_GRADE_IN * IN),
-          apronM: 1.5,
-          note: `building pad: fill under the slab to ${SLAB_FF_ABOVE_GRADE_IN} in below the top of slab, blended out 1.5 m (${Math.round(terrain.reliefIn)} in of fall under the footprint)`,
+          // the fill slopes out at 1:3 (a stable unretained fill; the deeper
+          // the low corner, the wider the apron), never under 1.5 m
+          apronM: round(Math.max(1.5, 3 * (buildingY - SLAB_FF_ABOVE_GRADE_IN * IN - terrain.lowestM))),
+          note: `building pad: fill under the slab to ${SLAB_FF_ABOVE_GRADE_IN} in below the top of slab, sloped out 1:3 (${Math.round(terrain.reliefIn)} in of fall under the footprint)`,
         }
       : null
   if (grading && terrain && terrain.reliefIn >= 6) warnings.push(`Grading: ${grading.note}.`)
+  // a fill deeper than 2 ft at the low corner wants a retaining wall or a
+  // turned-down stem rather than a loose slope — said, not drawn
+  const lowCornerFillIn = grading && terrain ? (grading.padY - terrain.lowestM) / IN : 0
+  if (grading && lowCornerFillIn > 24) {
+    warnings.push(
+      `Grading: the low corner takes ${Math.round(lowCornerFillIn)} in of fill — over 2 ft: a retaining wall or a turned-down stem at the low side (R404 / engineered), not an open fill slope; verify.`,
+    )
+  }
 
   const buildingOp: NodeOp = {
     node: {

@@ -888,6 +888,31 @@ G66 Terrain contour lines on the site plan, with an interval setting (6 in,
 
 ## Log (continued)
 
+- 2026-09-07: **Batch T2 — the T1 gaps filled.** Steve: "okay fill the
+  gaps please!" — the four I had listed. (1) The site node carries the
+  dossier's USGS 3DEP one-foot contour lines (`site.terrainContours`,
+  NAVD88 feet, projected into the site frame by `contourLinesFromDossier`
+  and stored by the drop-in; when the dossier reports the terrain still
+  computing the drop-in asks for the elevation section once more after
+  20 s — untested live, the St Pete parcel was already warm) and the site
+  plan draws THOSE at the chosen interval instead of contouring the
+  heightfield, labels absolute NAVD88, every 5 ft an index; a sub-foot
+  interval (6 in) still contours the heightfield since the survey has no
+  such lines. Seen: St Petersburg A1.0 with 81 strokes over the whole
+  block and index labels 0 / 5 / 10 / 15 / 20 ft. (2) The pad's apron
+  slopes out at 1:3 (`apronM = max(1.5, 3 × fill at the low corner)`) and
+  a fill past 2 ft at the low corner prints a "retaining wall or
+  turned-down stem — verify" warning; no cut into the high side (a cut is
+  a different foundation, said not drawn). (3) The property and setback
+  ribbons follow a sculpt stroke mid-flight (`updateRibbonHeights`
+  re-drapes every vertex from the stroke's field in the same subscription
+  that moves the thin boundary line). (4) The raised house stays ungraded
+  ON PURPOSE: a crawl wants the ground left alone under it (R408.3
+  clearance) and the stepped stem takes the fall. Tests: dossier +2 (129
+  lines, thinned, Miami null), nodes ribbon +1; generate 104, site-plan
+  28, dossier 9; core + nodes rebuilt; editor / nodes typecheck clean
+  (generate's 10 test-file type errors are pre-existing).
+
 - 2026-09-07: **Batch T1 — the house meets its ground (G60–G66).** What
   Steve saw on the St Petersburg ranch: the rule raised the house on a
   24 in stem for 12 in of fall under the footprint, the ground under the

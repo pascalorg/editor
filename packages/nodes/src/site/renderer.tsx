@@ -22,7 +22,7 @@ import {
 } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import { BufferAttribute, BufferGeometry, DoubleSide, type Group, Path, Shape, ShapeGeometry } from 'three'
-import { buildPatternedRibbon, PROPERTY_LINE_PATTERN, SETBACK_LINE_PATTERN } from './line-ribbon'
+import { buildPatternedRibbon, PROPERTY_LINE_PATTERN, SETBACK_LINE_PATTERN, updateRibbonHeights } from './line-ribbon'
 import { resolveFrontEdge, setbackEnvelope } from './setbacks'
 import { cameraPosition, color, float, mix, positionWorld, smoothstep, vec2 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
@@ -348,6 +348,14 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // polygon edit without resubscribing.
   const boundaryRef = useRef<{ geometry: BufferGeometry; ring: DrapedPolyline } | null>(null)
   boundaryRef.current = boundary
+  const ribbonsRef = useRef<{ property: BufferGeometry; envelope: BufferGeometry | null } | null>(null)
+  ribbonsRef.current = ribbons
+  const redrapeRibbons = (field: TerrainField | null) => {
+    const r = ribbonsRef.current
+    if (!r) return
+    updateRibbonHeights(r.property, field, Y_OFFSET)
+    if (r.envelope) updateRibbonHeights(r.envelope, field, Y_OFFSET + 0.01)
+  }
   useEffect(() => {
     let lastPatch = useLiveTerrain.getState().strokeOf(node.id)?.lastPatch ?? null
     return useLiveTerrain.subscribe((state) => {
@@ -363,6 +371,7 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           const field = terrainFieldOf({ id: node.id, terrain: node.terrain })
           updateDrapedHeights(current.ring, field, Y_OFFSET)
           markPositionsDirty(current.geometry)
+          redrapeRibbons(field)
         }
         return
       }
@@ -370,6 +379,8 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
       lastPatch = stroke.lastPatch
       updateDrapedHeights(current.ring, stroke.field, Y_OFFSET)
       markPositionsDirty(current.geometry)
+      // the property and setback ribbons follow the same dab
+      redrapeRibbons(stroke.field)
     })
   }, [node.id, node.terrain])
 
