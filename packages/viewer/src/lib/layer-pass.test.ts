@@ -1,8 +1,9 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import {
   DirectionalLight,
   Group,
   Layers,
+  Matrix4,
   Mesh,
   MeshBasicMaterial,
   PerspectiveCamera,
@@ -322,7 +323,7 @@ function renderFixture() {
   zoneLayers.set(ZONE_LAYER)
   zone.setLayers(zoneLayers)
   const frame = new NodeFrame()
-  const renders: { root: Scene; mask: number; positions: number[] }[] = []
+  const renders: { root: Scene; mask: number; positions: number[]; matrices: Matrix4[] }[] = []
   let target: unknown = null
   let mrt: unknown = null
   const renderer = {
@@ -341,6 +342,7 @@ function renderFixture() {
       if (root.matrixWorldAutoUpdate) root.updateMatrixWorld()
       root.onBeforeRender(renderer as never, root, renderCamera, target as never)
       const positions: number[] = []
+      const matrices: Matrix4[] = []
       root.traverseVisible((object) => {
         if (!(object instanceof Mesh && object.layers.test(renderCamera.layers))) return
         object.onBeforeRender(
@@ -352,6 +354,7 @@ function renderFixture() {
           null as never,
         )
         positions.push(object.matrixWorld.elements[12]!)
+        matrices.push(object.matrixWorld.clone())
         object.onAfterRender(
           renderer as never,
           root,
@@ -361,7 +364,7 @@ function renderFixture() {
           null as never,
         )
       })
-      renders.push({ root, mask: renderCamera.layers.mask, positions })
+      renders.push({ root, mask: renderCamera.layers.mask, positions, matrices })
       root.onAfterRender(renderer as never, root, renderCamera)
     },
   }
@@ -441,6 +444,73 @@ test('refreshes private roots, ancestors and descendants after main object callb
   expect(f.renders[1]?.positions).toEqual([12])
   expect(f.renders.filter(({ mask }) => mask === 1).length).toBe(1)
   f.dispose()
+})
+
+for (const layer of [OVERLAY_LAYER, ZONE_LAYER]) {
+  for (const movedObject of ['root', 'ancestor'] as const) {
+    for (const manual of [false, true]) {
+      test(`layer ${layer} refreshes descendant matrices after ${movedObject} moves (manual: ${manual})`, () => {
+        const f = renderFixture()
+        const ancestor = new Group()
+        f.scene.add(ancestor)
+        ancestor.add(f.parent)
+        f.parent.layers.set(layer)
+        f.mesh.layers.set(layer)
+        const chain = [f.scene, ancestor, f.parent, f.mesh]
+        for (const [i, object] of chain.entries()) {
+          object.position.set(i + 1, i + 2, i + 3)
+          object.rotation.set(i * 0.1, i * 0.2, i * 0.3)
+          object.scale.set(1 + i * 0.1, 1, 2)
+          object.updateMatrix()
+          object.matrixAutoUpdate = !manual
+        }
+        const mover = new Mesh()
+        f.scene.add(mover)
+        let expected = new Matrix4()
+        mover.onAfterRender = () => {
+          const moved = movedObject === 'root' ? f.parent : f.scene
+          if (manual) moved.matrix.makeRotationZ(0.8).setPosition(7, 8, 9)
+          else moved.position.set(7, 8, 9)
+          expected = chain.reduce(
+            (product, object) =>
+              product.multiply(
+                object.matrixAutoUpdate
+                  ? new Matrix4().compose(object.position, object.quaternion, object.scale)
+                  : object.matrix,
+              ),
+            new Matrix4(),
+          )
+        }
+        f.tick()
+        const rendered = f.renders.find(({ mask }) => mask === 1 << layer)!
+        expect(rendered.root).not.toBe(f.scene)
+        expect(rendered.root.children).toEqual([f.parent])
+        expect(rendered.matrices).toEqual([expected])
+        f.dispose()
+      })
+    }
+  }
+}
+
+test('refreshes shared ancestors only once per preparation and again on the next frame', () => {
+  const f = renderFixture()
+  const second = new Mesh()
+  f.parent.add(second)
+  f.mesh.layers.set(OVERLAY_LAYER)
+  second.layers.set(OVERLAY_LAYER)
+  const sceneUpdate = spyOn(f.scene, 'updateWorldMatrix')
+  const parentUpdate = spyOn(f.parent, 'updateWorldMatrix')
+  try {
+    for (let frame = 1; frame <= 2; frame++) {
+      f.tick()
+      expect(sceneUpdate).toHaveBeenCalledTimes(frame)
+      expect(parentUpdate).toHaveBeenCalledTimes(frame)
+    }
+  } finally {
+    sceneUpdate.mockRestore()
+    parentUpdate.mockRestore()
+    f.dispose()
+  }
 })
 
 test('matrix refresh honors manual local and world matrices after ancestors move', () => {

@@ -206,10 +206,18 @@ export class LayerPassNode extends PassNode {
       if (shadowLight || hasSceneCallbacks) this.scene = source
       try {
         if (this.scene !== source) {
+          const updatedAncestors = new Set<Object3D>()
+          const updateAncestor = (object: Object3D | null) => {
+            if (!object || updatedAncestors.has(object)) return
+            updateAncestor(object.parent)
+            // Force world refreshes even when a manual local matrix is clean.
+            object.matrixWorldNeedsUpdate = true
+            object.updateWorldMatrix(false, false)
+            updatedAncestors.add(object)
+          }
           for (const root of this.roots) {
-            // r185 needs this even for a manual local matrix when an ancestor moved.
-            root.matrixWorldNeedsUpdate = true
-            root.updateWorldMatrix(true, true)
+            updateAncestor(root.parent)
+            root.updateMatrixWorld(true)
           }
         }
         super.updateBefore(frame)
