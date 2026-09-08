@@ -7,6 +7,7 @@ import {
   DuctFittingNode,
   DuctSegmentNode,
   emitter,
+  nodeRegistry,
   PipeFittingNode,
   PipeSegmentNode,
   useScene,
@@ -154,6 +155,25 @@ describe('history shortcuts during block editing', () => {
 })
 
 describe('history while drawing distribution runs', () => {
+  let restoreRegistry = () => {}
+
+  beforeEach(() => {
+    restoreRegistry = nodeRegistry._snapshot()
+    nodeRegistry._reset()
+    for (const kind of ['duct-segment', 'pipe-segment']) {
+      nodeRegistry._register({
+        kind,
+        schemaVersion: 1,
+        drafting: { cancelOnHistoryJump: true },
+      } as never)
+    }
+  })
+
+  afterEach(() => {
+    restoreRegistry()
+    restoreRegistry = () => {}
+  })
+
   for (const [kind, schema, fittingSchema] of [
     ['duct', DuctSegmentNode, DuctFittingNode],
     ['pipe', PipeSegmentNode, PipeFittingNode],
