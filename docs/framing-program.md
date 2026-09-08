@@ -984,6 +984,20 @@ G89 More hip roofs on random designs across styles.
 
 ## Log (continued)
 
+- 2026-09-07: **Batch T8 — the lights hang, the ceilings say their
+  height.** Steve, with a screenshot: "lights poking through the roof …
+  hanging lights … also I can't see the ceiling when I'm inside". The
+  catalog's ceiling lamp was placed as a level child at the ceiling
+  height with its model rising ABOVE its origin — through the roof. It
+  now hangs the way the editor's ceiling placement does: a child of the
+  room's `ceiling` node, ceiling-local, its full height below the plane
+  (`position [x, −0.86, z]`). Every room ceiling now carries its height
+  explicitly (the plate, or the room's own lower lid) instead of relying
+  on the level-top clamp. The ceiling itself was there: inside a room in
+  the editor's Full height display mode the white lid and the fan show —
+  the Stack / Low / Translucent modes cut the storey and hide it, which
+  is what Steve was seeing. Tests: generate 105.
+
 - 2026-09-07: **Batch T7 — the roof planes per the framing, the true
   fascia (G81), the ornament on the ground.** Steve: "ensure the roof
   planes are correct thickness per framing and whatever else left". The

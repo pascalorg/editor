@@ -923,7 +923,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
           parentId: levelId,
           polygon: space.polygon.map((p) => [round(p[0]), round(p[1])]),
           holes: [],
-          ...(roomCeiling < ceilingM - 1e-6 ? { height: roomCeiling } : {}),
+          // the height stated (a GWB lid at the plate — Steve, 2026-09-07: "should be drywall ceiling")
+          height: roomCeiling,
           metadata: {
             generatedBy: GENERATED_BY,
             rooms: members.map((m) => m.room.name),
@@ -1339,20 +1340,24 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         parentId: levelId,
       })
     }
-    if (lamp) {
+    // the lamp hangs from the room's CEILING node the way the editor places a
+    // ceiling item: a child of the ceiling, ceiling-local, its full height
+    // below the plane (Steve, 2026-09-07: "lights poking through the roof")
+    const ceilingOp = zoneOps.find((o) => o.node.type === 'ceiling' && ((o.node.metadata as { rooms?: string[] } | undefined)?.rooms ?? []).includes(room.name))
+    if (lamp && ceilingOp) {
       furnishOps.push({
         node: {
           id: generateId('item'),
           type: 'item',
           name: wantsFan ? `${room.name} fan light` : `${room.name} ceiling light`,
-          parentId: levelId,
-          position: [round(cx), round(ceilingM), round(cz)],
+          parentId: ceilingOp.node.id as string,
+          position: [round(cx), round(-(lamp.dimensions?.[1] ?? 0.86)), round(cz)],
           rotation: [0, 0, 0],
           scale: [1, 1, 1],
           asset: lamp,
           metadata: { generatedBy: GENERATED_BY, furnish: { room: room.name, kind: room.kind, role: wantsFan ? 'fan-light' : 'ceiling-light', floating: true } },
         },
-        parentId: levelId,
+        parentId: ceilingOp.node.id as string,
       })
     }
   }
