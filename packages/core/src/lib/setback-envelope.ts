@@ -248,16 +248,32 @@ function analyticInset(points: readonly Pt[], ds: readonly number[]): Pt[] | nul
  * remains. The result starts near the lot's first vertex and winds the
  * lot's way.
  */
+/** A half-plane the envelope may not enter: the line a→b, `inside` a point on the forbidden side (a sight triangle's hypotenuse, the corner inside). */
+export type KeepOut = { a: Pt; b: Pt; inside: Pt }
+
 export function insetPolygon(
   points: readonly Pt[],
   distances: readonly number[],
-  options: { resolution?: number; simplifyM?: number } = {},
+  options: { resolution?: number; simplifyM?: number; keepOut?: readonly KeepOut[] } = {},
 ): Pt[] {
   const n = points.length
   if (n < 3 || distances.length !== n) return []
   if (!distances.some((d) => Number.isFinite(d) && d > 0)) return []
   const ds = distances.map((d) => (Number.isFinite(d) && d > 0 ? d : 0))
-  const exact = analyticInset(points, ds)
+  const keepOut = (options.keepOut ?? []).map((k) => {
+    const dx = k.b[0] - k.a[0]
+    const dy = k.b[1] - k.a[1]
+    const len = Math.hypot(dx, dy) || 1
+    let nx = -dy / len
+    let ny = dx / len
+    // the normal points AWAY from the forbidden side
+    if ((k.inside[0] - k.a[0]) * nx + (k.inside[1] - k.a[1]) * ny > 0) {
+      nx = -nx
+      ny = -ny
+    }
+    return { ax: k.a[0], ay: k.a[1], nx, ny }
+  })
+  const exact = keepOut.length === 0 ? analyticInset(points, ds) : null
   if (exact) return exact
   let minX = Number.POSITIVE_INFINITY
   let minY = Number.POSITIVE_INFINITY
@@ -295,6 +311,10 @@ export function insetPolygon(
         f = Number.POSITIVE_INFINITY
         for (let i = 0; i < n; i++) {
           const v = segDist(x, y, points[i] as Pt, points[(i + 1) % n] as Pt) - (ds[i] as number)
+          if (v < f) f = v
+        }
+        for (const k of keepOut) {
+          const v = (x - k.ax) * k.nx + (y - k.ay) * k.ny
           if (v < f) f = v
         }
       }
@@ -393,4 +413,79 @@ export function envelopeFrontEdge(lot: readonly Pt[], frontIndex: number, envelo
     }
   }
   return nearest
+}
+
+/**
+ * The CORNER SIGHT TRIANGLE at a street intersection (the clear-vision /
+ * visibility triangle): from the point where the two street lines meet —
+ * the right-of-way lines extended through the curb return — `legM` along
+ * each, the hypotenuse joining them; nothing over the code's height (30
+ * in typically) stands inside it. The leg is the ordinance's (25 ft is the
+ * common residential figure; FDOT and the Greenbook size it by speed) —
+ * verify locally. `edgeA` and `edgeB` are the two street edges; null when
+ * their lines are parallel or the corner lies far from both.
+ */
+export function sightTriangle(points: readonly Pt[], edgeA: number, edgeB: number, legM: number): { corner: Pt; a: Pt; b: Pt } | null {
+  const n = points.length
+  const line = (i: number) => {
+    const p = points[((i % n) + n) % n] as Pt
+    const q = points[(((i + 1) % n) + n) % n] as Pt
+    const dx = q[0] - p[0]
+    const dy = q[1] - p[1]
+    const len = Math.hypot(dx, dy) || 1
+    return { p, q, dx: dx / len, dy: dy / len, len }
+  }
+  const A = line(edgeA)
+  const B = line(edgeB)
+  const denom = A.dx * B.dy - A.dy * B.dx
+  if (Math.abs(denom) < 1e-6) return null
+  const t = ((B.p[0] - A.p[0]) * B.dy - (B.p[1] - A.p[1]) * B.dx) / denom
+  const corner: Pt = [A.p[0] + A.dx * t, A.p[1] + A.dy * t]
+  // along each line from the corner toward that edge's far end
+  const away = (L: { p: Pt; q: Pt; dx: number; dy: number }): Pt => {
+    const mid: Pt = [(L.p[0] + L.q[0]) / 2, (L.p[1] + L.q[1]) / 2]
+    const s = (mid[0] - corner[0]) * L.dx + (mid[1] - corner[1]) * L.dy >= 0 ? 1 : -1
+    return [corner[0] + s * L.dx * legM, corner[1] + s * L.dy * legM]
+  }
+  const dA = segDist(corner[0], corner[1], A.p, A.q)
+  const dB = segDist(corner[0], corner[1], B.p, B.q)
+  if (dA > 30 || dB > 30) return null
+  return { corner, a: away(A), b: away(B) }
+}
+
+/**
+ * The street corners of a lot: pairs of street edges that meet at a real
+ * turn (40° or more) directly or across a curb-return run of short edges.
+ */
+export function streetCorners(points: readonly Pt[], streetEdges: readonly number[]): [number, number][] {
+  const n = points.length
+  if (n < 3 || streetEdges.length < 2) return []
+  const street = new Set(streetEdges.map((i) => ((i % n) + n) % n))
+  const runs = arcRuns(points)
+  const dir = (i: number) => {
+    const p = points[i] as Pt
+    const q = points[(i + 1) % n] as Pt
+    const l = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1
+    return [(q[0] - p[0]) / l, (q[1] - p[1]) / l]
+  }
+  const out: [number, number][] = []
+  for (const i of street) {
+    // walk forward past a curb-return run of short edges to the next long edge
+    let j = (i + 1) % n
+    let steps = 0
+    while (j !== i && steps < n) {
+      const same = runs[j] === runs[i]
+      const short = Math.hypot((points[(j + 1) % n] as Pt)[0] - (points[j] as Pt)[0], (points[(j + 1) % n] as Pt)[1] - (points[j] as Pt)[1]) < 4
+      if (!same && !short) break
+      j = (j + 1) % n
+      steps += 1
+    }
+    if (j === i || !street.has(j)) continue
+    const a = dir(i)
+    const b = dir(j)
+    const cosTurn = (a[0] as number) * (b[0] as number) + (a[1] as number) * (b[1] as number)
+    if (cosTurn > Math.cos((40 * Math.PI) / 180)) continue
+    out.push([i, j])
+  }
+  return out
 }

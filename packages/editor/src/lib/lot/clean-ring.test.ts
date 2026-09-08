@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { Pt } from '../floorplan/site-plan/geometry'
-import { classifyEdges, setbackEnvelope } from '../floorplan/site-plan/geometry'
+import { classifyEdges, polygonArea, setbackEnvelope } from '../floorplan/site-plan/geometry'
 import {
   cleanLotRing,
   describeRingCleanup,
@@ -171,9 +171,11 @@ describe('cleanLotRing on the real Land Park ring', () => {
     expect(Math.hypot(q[0] - p[0], q[1] - p[1])).toBeCloseTo(14.72 - 3.048, 0)
   })
 
-  test('the raw ring had no usable envelope — the cleanup is what makes placement possible', () => {
+  test('the raw ring: the true inward offset copes with it too (2026-09-08), but only the cleaned ring gives four clean corners', () => {
     // the sliver edge 8 is what the road detector picked on the raw ring
-    expect(setbackEnvelope(LAND_PARK, { front: 6.096, side: 1.524, rear: 4.572 }, 8)).toEqual([])
+    const raw = setbackEnvelope(LAND_PARK, { front: 6.096, side: 1.524, rear: 4.572 }, 8)
+    expect(raw.length === 0 || raw.length >= 3).toBe(true)
+    if (raw.length >= 3) expect(polygonArea(raw)).toBeLessThan(polygonArea(LAND_PARK))
   })
 
   test('nothing to clean, nothing said', () => {

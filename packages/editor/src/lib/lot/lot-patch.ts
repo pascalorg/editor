@@ -186,6 +186,9 @@ export function sitePatchFromParcel(
   if (dossier?.dimensionalNote) notes.push(`Zoning condition (verbatim, verify): ${dossier.dimensionalNote}`)
   if (dossier?.line) notes.push(dossier.line)
 
+  // the street edges: the parcel fabric's frontage when it answered, else
+  // every edge a mapped road runs along
+  const streetEdges: number[] = frontage && frontage.edges.length > 0 ? frontage.edges : (roadMatch?.streetEdges ?? [])
   const state = data.state || input.state || data.address?.state
   const patch: Partial<SiteNode> = {
     address: {
@@ -209,6 +212,12 @@ export function sitePatchFromParcel(
     // A new lot invalidates a front-edge index picked on the old ring; the
     // street decides the new one.
     frontEdge: match ? match.index : undefined,
+    // every street edge (a corner lot has two or more) and the corner
+    // clear-vision triangle's leg — the common residential 25 ft, verify
+    // locally (Steve, 2026-09-08: "corner lots do a triangle from the
+    // right of way")
+    ...(streetEdges.length > 0 ? { streetEdges } : {}),
+    ...(streetEdges.length >= 2 ? { sightTriangleFt: 25 } : {}),
     // The parcel frame is x east / z south: plan up is true north.
     northRotation: 0,
     ...((dossier?.zone ?? data.zoning) && !site?.zone ? { zone: dossier?.zone ?? data.zoning } : {}),

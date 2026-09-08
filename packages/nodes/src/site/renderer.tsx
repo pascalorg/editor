@@ -23,6 +23,7 @@ import { useEffect, useMemo, useRef } from 'react'
 import { BufferAttribute, BufferGeometry, DoubleSide, type Group, Path, Shape, ShapeGeometry } from 'three'
 import { buildPatternedRibbon, PROPERTY_LINE_PATTERN, SETBACK_LINE_PATTERN, updateRibbonHeights } from './line-ribbon'
 import { resolveFrontEdge, setbackEnvelope } from './setbacks'
+import { sightTriangle, streetCorners } from '@pascal-app/core'
 import { cameraPosition, color, float, mix, positionWorld, smoothstep, vec2 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
 import { getRecessedSlabGroundHoles } from './recessed-slab-ground-holes'
@@ -319,21 +320,34 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     const property = buildPatternedRibbon(boundary.ring.positions, PROPERTY_LINE_PATTERN, 0.22)
     const setbacks = node.setbacks
     let envelopeGeometry: BufferGeometry | null = null
+    const triangleGeometries: BufferGeometry[] = []
     if (setbacks) {
       const points = polygonPoints.map(([x, z]) => [x ?? 0, z ?? 0] as [number, number])
       const front = resolveFrontEdge(points, node.frontEdge, node.northRotation ?? 0)
-      const envelope = setbackEnvelope(points, setbacks, front)
+      const streetEdges = node.streetEdges ?? []
+      const sightTriangleM = typeof node.sightTriangleFt === 'number' && node.sightTriangleFt > 0 ? node.sightTriangleFt * 0.3048 : 0
+      const envelope = setbackEnvelope(points, setbacks, front, { streetEdges, sightTriangleM })
       if (envelope.length >= 3) {
         const draped = buildDrapedPolyline({ points: envelope, field, lift: Y_OFFSET + 0.01, closed: true })
         envelopeGeometry = buildPatternedRibbon(draped.positions, SETBACK_LINE_PATTERN, 0.1)
       }
+      // the corner sight triangles, dashed like the setbacks
+      if (sightTriangleM > 0) {
+        for (const [a, b] of streetCorners(points, [front, ...streetEdges])) {
+          const tri = sightTriangle(points, a, b, sightTriangleM)
+          if (!tri) continue
+          const draped = buildDrapedPolyline({ points: [tri.corner, tri.a, tri.b], field, lift: Y_OFFSET + 0.012, closed: true })
+          triangleGeometries.push(buildPatternedRibbon(draped.positions, SETBACK_LINE_PATTERN, 0.08))
+        }
+      }
     }
-    return { property, envelope: envelopeGeometry }
-  }, [boundary, polygonPoints, node.setbacks, node.frontEdge, node.northRotation, terrainKey, node.id])
+    return { property, envelope: envelopeGeometry, triangles: triangleGeometries }
+  }, [boundary, polygonPoints, node.setbacks, node.frontEdge, node.streetEdges, node.sightTriangleFt, node.northRotation, terrainKey, node.id])
   useEffect(
     () => () => {
       ribbons?.property.dispose()
       ribbons?.envelope?.dispose()
+      for (const g of ribbons?.triangles ?? []) g.dispose()
     },
     [ribbons],
   )
@@ -347,13 +361,14 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
   // polygon edit without resubscribing.
   const boundaryRef = useRef<{ geometry: BufferGeometry; ring: DrapedPolyline } | null>(null)
   boundaryRef.current = boundary
-  const ribbonsRef = useRef<{ property: BufferGeometry; envelope: BufferGeometry | null } | null>(null)
+  const ribbonsRef = useRef<{ property: BufferGeometry; envelope: BufferGeometry | null; triangles: BufferGeometry[] } | null>(null)
   ribbonsRef.current = ribbons
   const redrapeRibbons = (field: TerrainField | null) => {
     const r = ribbonsRef.current
     if (!r) return
     updateRibbonHeights(r.property, field, Y_OFFSET)
     if (r.envelope) updateRibbonHeights(r.envelope, field, Y_OFFSET + 0.01)
+    for (const g of r.triangles) updateRibbonHeights(g, field, Y_OFFSET + 0.012)
   }
   useEffect(() => {
     let lastPatch = useLiveTerrain.getState().strokeOf(node.id)?.lastPatch ?? null
@@ -509,6 +524,12 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
           <lineBasicMaterial color="#000000" depthWrite={false} opacity={0.22} toneMapped={false} transparent />
         </lineSegments>
       )}
+      {/* The corner sight triangles */}
+      {ribbons?.triangles.map((g, i) => (
+        <mesh frustumCulled={false} geometry={g} key={i} raycast={noopRaycast} renderOrder={9}>
+          <meshBasicMaterial color="#000000" depthWrite={false} opacity={0.85} side={DoubleSide} toneMapped={false} transparent />
+        </mesh>
+      ))}
       {/* The thin ring the sculpt tool moves live */}
       {/* @ts-ignore */}
       <line frustumCulled={false} geometry={lineGeometry} renderOrder={8}>

@@ -49,6 +49,8 @@ export const SiteSetbacks = z.object({
   rear: z.number(),
   left: z.number().optional(),
   right: z.number().optional(),
+  /** A corner lot's second street side, metres; absent = the front setback. */
+  streetSide: z.number().optional(),
 })
 export type SiteSetbacks = z.infer<typeof SiteSetbacks>
 
@@ -137,6 +139,10 @@ export const SiteNode = BaseNode.extend({
    * point[(frontEdge + 1) % n]. Undefined = derive the most north-facing edge.
    */
   frontEdge: z.number().int().nonnegative().optional(),
+  /** Every edge that fronts a street per the parcel fabric (a corner lot has two or more); the front is one of them. */
+  streetEdges: z.array(z.number().int().nonnegative()).optional(),
+  /** The corner sight (clear-vision) triangle's leg along each right-of-way line, FEET; absent = none drawn. */
+  sightTriangleFt: z.number().nonnegative().optional(),
   /** Rotation of true north relative to plan −z (up), RADIANS, clockwise. */
   northRotation: z.number().optional(),
   /** The Pascal Map dossier the lot was dropped in with — see SiteDossier. */

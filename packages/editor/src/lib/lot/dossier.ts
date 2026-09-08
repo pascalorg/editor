@@ -214,6 +214,8 @@ export type FrontageMatch = {
   lengthM: number
   /** How many lot edges front the street / water — a corner lot has two or more. */
   frontingEdges: number
+  /** Every fronting edge index (a corner lot has two or more). */
+  edges: number[]
 }
 
 /**
@@ -227,6 +229,7 @@ export function detectFrontEdgeFromFrontage(ring: readonly Pt[], segments: reado
   if (ring.length < 3 || segments.length === 0) return null
   let best: FrontageMatch | null = null
   let fronting = 0
+  const edges: number[] = []
   for (let i = 0; i < ring.length; i++) {
     const a = ring[i] as Pt
     const b = ring[(i + 1) % ring.length] as Pt
@@ -239,9 +242,10 @@ export function detectFrontEdgeFromFrontage(ring: readonly Pt[], segments: reado
     }
     if (hits < 3) continue
     fronting += 1
-    if (!best || len > best.lengthM) best = { index: i, lengthM: len, frontingEdges: 0 }
+    edges.push(i)
+    if (!best || len > best.lengthM) best = { index: i, lengthM: len, frontingEdges: 0, edges: [] }
   }
-  return best ? { ...best, frontingEdges: fronting } : null
+  return best ? { ...best, frontingEdges: fronting, edges } : null
 }
 
 /* ----------------------------------------------------------- terrain contours */

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test'
+import { sightTriangle, streetCorners } from '@pascal-app/core'
 import {
   boundsInsidePolygon,
   castYardDimensions,
@@ -93,6 +94,30 @@ describe('classifyEdges', () => {
 })
 
 describe('setbackEnvelope', () => {
+  it('a corner lot: the second street side takes the street setback and the sight triangle clips the corner (Steve, 2026-09-08)', () => {
+    // a 30 × 20 lot; edge 0 (north, y = 0) is the front, edge 1 (east, x = 30) the other street
+    const roles = classifyEdges(LOT, 0, [0, 1])
+    expect(roles[1]).toBe('street')
+    expect(roles[2]).toBe('rear')
+    expect(setbackForRole({ front: 7.5, side: 2, rear: 5 }, 'street')).toBe(7.5)
+    expect(setbackForRole({ front: 7.5, side: 2, rear: 5, streetSide: 4 }, 'street')).toBe(4)
+    const plain = setbackEnvelope(LOT, { front: 7.5, side: 2, rear: 5, streetSide: 4 }, 0, { streetEdges: [0, 1] })
+    const xs = plain.map((p) => p[0])
+    expect(Math.max(...xs)).toBeCloseTo(26, 6) // the east street side in 4, not the 2 ft side yard
+    // the 25 ft (7.62 m) sight triangle at the NE corner: its hypotenuse from (22.38, 0) to (30, 7.62) keeps the envelope out
+    const clipped = setbackEnvelope(LOT, { front: 7.5, side: 2, rear: 5, streetSide: 4 }, 0, { streetEdges: [0, 1], sightTriangleM: 7.62 })
+    expect(clipped.length).toBeGreaterThanOrEqual(4)
+    for (const v of clipped) {
+      // outside the triangle: x + y ≥ 30 − 7.62 ... the hypotenuse is x − y = 22.38 ... points with x − y > 22.38 are inside it
+      expect(v[0] - v[1]).toBeLessThanOrEqual(22.38 + 0.05)
+    }
+    const tri = sightTriangle(LOT, 0, 1, 7.62)
+    expect(tri).not.toBeNull()
+    expect(tri!.corner[0]).toBeCloseTo(30, 6)
+    expect(tri!.corner[1]).toBeCloseTo(0, 6)
+    expect(streetCorners(LOT, [0, 1])).toEqual([[0, 1]])
+  })
+
   it('a cul-de-sac corner (a run of short arc edges) is offset as one chord — no vertex runs away (Steve, 2026-09-08)', () => {
     const cape: [number, number][] = [
       [-2, 0], [-2, 30.1], [-40, 32.7], [-40, -5.6], [-10.1, -7.6], [-8.9, -7.6], [-7.7, -7.3], [-6.5, -6.9],
@@ -107,17 +132,21 @@ describe('setbackEnvelope', () => {
       const t = Math.max(0, Math.min(1, ((p[0]! - a[0]!) * abx + (p[1]! - a[1]!) * aby) / (abx * abx + aby * aby)))
       return Math.hypot(p[0]! - (a[0]! + abx * t), p[1]! - (a[1]! + aby * t))
     }
+    // the curb return (edges 4–13) is street frontage: it takes the FRONT setback, never a side yard
+    const frontLike = new Set([0, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
     for (const v of env) {
       for (let i = 0; i < cape.length; i++) {
-        expect(segDist(v, cape[i]!, cape[(i + 1) % cape.length]!)).toBeGreaterThan(1.524 - 0.06)
+        const want = frontLike.has(i) ? 6.096 : 1.524
+        expect(segDist(v, cape[i]!, cape[(i + 1) % cape.length]!)).toBeGreaterThan(want - 0.06)
       }
     }
     // the front line (x = −2, the east side) offset 6.1 m in: two vertices on x ≈ −8.1
     const onFront = env.filter((v) => Math.abs(v[0] - (-2 - 6.096)) < 0.05)
     expect(onFront.length).toBeGreaterThanOrEqual(2)
-    // the rounded corner stays a curve, concentric with the lot's arc: several vertices along it
-    const arc = env.filter((v) => v[1] < -2 && v[0] > -10)
-    expect(arc.length).toBeGreaterThanOrEqual(3)
+    // the return's offset is a curve of its own (a 6.1 m buffer round the return's points), not a chord: the
+    // envelope turns through more than one vertex between the front offset and the south offset
+    const turning = env.filter((v) => v[0] < -8.2 + 0.05 && v[1] < 2 && v[1] > -6.2)
+    expect(turning.length).toBeGreaterThanOrEqual(2)
   })
 
   it('offsets each edge inward by its own setback', () => {

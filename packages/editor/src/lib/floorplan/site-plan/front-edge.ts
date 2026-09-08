@@ -36,6 +36,8 @@ export interface FrontEdgeMatch {
   name: string
   /** True when the road's name matched the address's street (corner-lot rule). */
   named: boolean
+  /** Every lot edge a street runs along (parallel, outside, within 25 m): a corner lot lists two or more. */
+  streetEdges?: number[]
 }
 
 export const FRONT_EDGE_PARALLEL_DEG = 30
@@ -84,6 +86,7 @@ export function detectFrontEdgeFromRoads(
   const want = streetCore(addressStreet)
   let best: (FrontEdgeMatch & { length: number }) | null = null
   let bestNamed: (FrontEdgeMatch & { length: number }) | null = null
+  const streetEdges: number[] = []
 
   for (let i = 0; i < n; i++) {
     const a = lot[i] as Pt
@@ -128,6 +131,8 @@ export function detectFrontEdgeFromRoads(
     // (2) outside: the road lies on the outward side of the edge
     if ((nearPt[0] - mid[0]) * nx + (nearPt[1] - mid[1]) * ny <= 0) continue
 
+    // a street runs along this edge (a corner lot collects two or more)
+    if (near <= 25 && len >= 3) streetEdges.push(i)
     const match = { index: i, distance: near, name: nearName, named: false, length: len }
     if (better(match, best)) best = match
     if (want && streetCore(nearName) === want && better(match, bestNamed)) {
@@ -136,6 +141,6 @@ export function detectFrontEdgeFromRoads(
   }
   const pick = bestNamed ?? best
   return pick
-    ? { index: pick.index, distance: pick.distance, name: pick.name, named: pick.named }
+    ? { index: pick.index, distance: pick.distance, name: pick.name, named: pick.named, streetEdges: streetEdges.includes(pick.index) ? streetEdges : [pick.index, ...streetEdges] }
     : null
 }

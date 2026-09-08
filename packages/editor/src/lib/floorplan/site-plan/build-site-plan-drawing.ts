@@ -11,7 +11,7 @@ import {
   type SiteNode,
   terrainFieldOf,
   unionPolygons,
-  type WallNode, terrainContours, envelopeFrontEdge } from '@pascal-app/core'
+  type WallNode, terrainContours, envelopeFrontEdge, sightTriangle, streetCorners } from '@pascal-app/core'
 import {
   type Bounds,
   boundsInsidePolygon,
@@ -43,6 +43,8 @@ export interface SitePlanDrawing {
     envelope: Pt[]
     /** The envelope edge behind the lot's front line (the envelope has its own vertex count now). */
     envelopeFrontEdge: number
+    /** The corner sight triangles (corner, leg end A, leg end B), site metres. */
+    sightTriangles: Pt[][]
     /** Per-wall footprint bands of the lowest level, in SITE metres. */
     footprintLoops: Pt[][]
     footprintBounds: Bounds | null
@@ -284,6 +286,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
       lot,
       envelope: [],
       envelopeFrontEdge: 0,
+      sightTriangles: [],
       footprintLoops,
       footprintBounds,
       yards: [],
@@ -368,7 +371,42 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
   }
 
   // ── Setback envelope — dashed, offset inward per edge ────────────────
-  const envelope = site?.setbacks ? setbackEnvelope(lot, site.setbacks, frontEdge) : []
+  const streetEdges = (site?.streetEdges ?? []).filter((i) => Number.isFinite(i))
+  const sightTriangleM = typeof site?.sightTriangleFt === 'number' && site.sightTriangleFt > 0 ? site.sightTriangleFt * METRES_PER_FOOT : 0
+  const envelope = site?.setbacks ? setbackEnvelope(lot, site.setbacks, frontEdge, { streetEdges, sightTriangleM }) : []
+  // the corner sight triangles (clear-vision at a street intersection):
+  // dashed, labelled with the leg — the ordinance's figure, verify locally
+  const sightTriangles: Pt[][] = []
+  if (sightTriangleM > 0) {
+    for (const [a, b] of streetCorners(lot, [frontEdge, ...streetEdges])) {
+      const tri = sightTriangle(lot, a, b, sightTriangleM)
+      if (!tri) continue
+      const ring: Pt[] = [tri.corner, tri.a, tri.b]
+      sightTriangles.push(ring)
+      primitives.push({
+        kind: 'polygon',
+        points: ring,
+        fill: 'none',
+        stroke: INK_SOFT,
+        strokeWidth: ENVELOPE_STROKE_WIDTH,
+        strokeDasharray: '0.3 0.2',
+        opacity: 0.75,
+        metadata: { sitePlan: 'sight-triangle' },
+      })
+      const cx = (tri.corner[0] + tri.a[0] + tri.b[0]) / 3
+      const cz = (tri.corner[1] + tri.a[1] + tri.b[1]) / 3
+      primitives.push({
+        kind: 'text',
+        x: cx,
+        y: cz,
+        text: `SIGHT TRIANGLE ${site?.sightTriangleFt}' (VERIFY)`,
+        fontSize: 0.6,
+        fill: INK_SOFT,
+        textAnchor: 'middle',
+        metadata: { sitePlan: 'sight-triangle-label' },
+      })
+    }
+  }
   if (envelope.length >= 3) {
     primitives.push({
       kind: 'polygon',
@@ -475,6 +513,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
       lot,
       envelope,
       envelopeFrontEdge: envelope.length >= 3 ? envelopeFrontEdge(lot, frontEdge, envelope) : 0,
+      sightTriangles,
       footprintLoops,
       footprintBounds,
       yards,

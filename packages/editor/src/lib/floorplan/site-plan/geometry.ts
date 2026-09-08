@@ -1,4 +1,4 @@
-import { arcRuns, insetPolygon } from '@pascal-app/core'
+import { arcRuns, insetPolygon, type KeepOut, sightTriangle, streetCorners } from '@pascal-app/core'
 /**
  * Site-plan geometry — pure functions, no store, no React.
  *
@@ -25,10 +25,12 @@ export interface SetbackInputs {
   rear: number
   left?: number
   right?: number
+  /** A corner lot's second street side; absent = the front setback. */
+  streetSide?: number
 }
 
 /** Per-edge classification of a lot polygon relative to its front edge. */
-export type EdgeRole = 'front' | 'rear' | 'left' | 'right'
+export type EdgeRole = 'front' | 'rear' | 'left' | 'right' | 'street' | 'street'
 
 const EPS = 1e-9
 
@@ -187,18 +189,23 @@ export function resolveFrontEdge(
  *   projects behind the front-edge midpoint on that axis is `left`, ahead of
  *   it is `right`. Deterministic and independent of winding.
  */
-export function classifyEdges(points: readonly Pt[], frontIndex: number): EdgeRole[] {
+export function classifyEdges(points: readonly Pt[], frontIndex: number, streetEdges: readonly number[] = []): EdgeRole[] {
   const n = points.length
   const roles: EdgeRole[] = new Array(n).fill('left')
   if (n === 0) return roles
 
   const front = ((frontIndex % n) + n) % n
   const fn = outwardNormal(points, front)
+  // a corner lot's other street edges (the parcel fabric's frontage) are
+  // 'street' — they take the street-side setback, never a side yard, and
+  // the rear is never one of them
+  const street = new Set(streetEdges.map((i) => ((i % n) + n) % n))
+  street.delete(front)
 
   let rear = -1
   let rearDot = Number.POSITIVE_INFINITY
   for (let i = 0; i < n; i++) {
-    if (i === front) continue
+    if (i === front || street.has(i)) continue
     const ni = outwardNormal(points, i)
     const dot = fn[0] * ni[0] + fn[1] * ni[1]
     if (dot < rearDot) {
@@ -222,6 +229,10 @@ export function classifyEdges(points: readonly Pt[], frontIndex: number): EdgeRo
       roles[i] = 'front'
       continue
     }
+    if (street.has(i)) {
+      roles[i] = 'street'
+      continue
+    }
     if (i === rear) {
       roles[i] = 'rear'
       continue
@@ -240,6 +251,10 @@ export function setbackForRole(setbacks: SetbackInputs, role: EdgeRole): number 
   switch (role) {
     case 'front':
       return setbacks.front
+    case 'street':
+      return setbacks.streetSide ?? setbacks.front
+    case 'street':
+      return setbacks.streetSide ?? setbacks.front
     case 'rear':
       return setbacks.rear
     case 'left':
@@ -268,20 +283,39 @@ export function setbackEnvelope(
   points: readonly Pt[],
   setbacks: SetbackInputs,
   frontIndex: number,
+  options: { streetEdges?: readonly number[]; sightTriangleM?: number } = {},
 ): Pt[] {
   const n = points.length
   if (n < 3) return []
-  const roles = classifyEdges(points, frontIndex)
-  // a radius drawn as a run of short edges takes ONE role: the front's or
-  // the rear's when it carries that edge, else each sliver keeps its side
+  const streetEdges = options.streetEdges ?? []
+  const roles = classifyEdges(points, frontIndex, streetEdges)
+  // A radius drawn as a run of short edges takes ONE role. A curb return
+  // is street frontage: a run carrying, or touching, a front / street edge
+  // is front / street all along (Steve, 2026-09-08: "radius is wrong way"
+  // — the last sliver of the return had been a side yard, and the envelope
+  // jutted out toward the corner); a run carrying the rear is rear; else
+  // each sliver keeps its own side.
   const runs = arcRuns(points)
   const runRole = new Map<number, EdgeRole>()
+  const streetLike = (r: EdgeRole) => r === 'front' || r === 'street'
   for (let i = 0; i < n; i++) {
     const r = roles[i] as EdgeRole
     const g = runs[i] as number
     const have = runRole.get(g)
-    if (r === 'front' || (r === 'rear' && have !== 'front')) runRole.set(g, r)
+    if (streetLike(r) || (r === 'rear' && !(have && streetLike(have)))) runRole.set(g, r)
     else if (!have) runRole.set(g, r)
+  }
+  for (let i = 0; i < n; i++) {
+    const g = runs[i] as number
+    const have = runRole.get(g) as EdgeRole
+    if (streetLike(have)) continue
+    const before = roles[(i - 1 + n) % n] as EdgeRole
+    const after = roles[(i + 1) % n] as EdgeRole
+    const members = runs.filter((x) => x === g).length
+    if (members > 1) {
+      if (runs[(i - 1 + n) % n] !== g && streetLike(before)) runRole.set(g, before)
+      else if (runs[(i + 1) % n] !== g && streetLike(after)) runRole.set(g, after)
+    }
   }
   const distances: number[] = []
   for (let i = 0; i < n; i++) {
@@ -290,11 +324,20 @@ export function setbackEnvelope(
     if (!Number.isFinite(d) || d < 0) return []
     distances.push(d)
   }
+  // the corner sight triangles keep the envelope out of the clear-vision
+  // zone at each street intersection (the hypotenuse is a half-plane)
+  const keepOut: KeepOut[] = []
+  if (options.sightTriangleM && options.sightTriangleM > 0) {
+    for (const [a, b] of streetCorners(points, [frontIndex, ...streetEdges])) {
+      const tri = sightTriangle(points, a, b, options.sightTriangleM)
+      if (tri) keepOut.push({ a: tri.a, b: tri.b, inside: tri.corner })
+    }
+  }
   // the true inward offset (core setback-envelope.ts): straight where the
   // lot is straight, concentric round a radius, clipped where the offsets
   // cross — Steve, 2026-09-08: "industry standard for setback on pie
   // shape, radius corners, and odd lots"
-  return insetPolygon(points, distances)
+  return insetPolygon(points, distances, { keepOut })
 }
 
 /**

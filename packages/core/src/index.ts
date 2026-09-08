@@ -231,7 +231,7 @@ export {
   terrainFieldOf,
 } from './lib/terrain-source'
 export { type Contour, terrainContours } from './lib/terrain-contours'
-export { arcRuns, envelopeFrontEdge, insetPolygon } from './lib/setback-envelope'
+export { arcRuns, envelopeFrontEdge, insetPolygon, type KeepOut, sightTriangle, streetCorners } from './lib/setback-envelope'
 export {
   isLevelBaseConsumer,
   isSiteDatum,

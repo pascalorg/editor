@@ -984,6 +984,33 @@ G89 More hip roofs on random designs across styles.
 
 ## Log (continued)
 
+- 2026-09-08: **Batch T12 — the curb return is frontage; the corner sight
+  triangle.** Steve, with a screenshot of the Cape Coral corner: "radius
+  is wrong way … corner lots do a triangle from the right of way … show
+  the setback triangle for corner clearance". The V at the corner: the
+  return's last sliver next to the front line was a SIDE yard (5 ft), so
+  the buildable region jutted out toward the corner between the front's
+  20 ft offset and the return's 5 ft one. Now the lot knows its STREET
+  edges (`site.streetEdges` — the parcel fabric's frontage when it
+  answered, else every edge a mapped road runs along; Cape Coral: [0, 3])
+  and a corner lot's second street side takes the `street` role with the
+  street-side setback (`setbacks.streetSide`, absent = the front's); a
+  curb-return run carrying or touching a front / street edge is front /
+  street all along, so the return offsets as a curve at the front
+  setback. The CORNER SIGHT TRIANGLE (clear-vision triangle): from the
+  intersection of the two right-of-way lines extended through the
+  return, the ordinance's leg along each (`site.sightTriangleFt`, 25 ft
+  set on drop-in for a corner lot — the common residential figure; FDOT
+  / Greenbook size it by speed — verify), the hypotenuse a half-plane the
+  envelope keeps out of (`insetPolygon` keep-outs). Drawn on the site
+  plan (dashed, labelled "SIGHT TRIANGLE 25' (VERIFY)") and in 3D as a
+  dashed ribbon; the placement respects it through the envelope. Core:
+  `sightTriangle`, `streetCorners`, `KeepOut`. Tests: site-plan 30 (a
+  corner-lot case: the street side at the street setback, the triangle
+  clipping the NE corner, the Cape Coral return at the front setback),
+  lot 30 (the raw Land Park ring now yields an envelope too), nodes site
+  66, generate 105; core + nodes rebuilt.
+
 - 2026-09-08: **Batch T11 — the setback envelope as the zoning officer
   draws it.** Steve: "your inside setback logic is breaking on radius and
   weird shaped lots … I don't think you would bring the radius in with
