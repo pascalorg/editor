@@ -1297,6 +1297,7 @@ function EditorContent({
 
   // Load scene on mount (or when onLoad identity changes, e.g. project switch)
   useEffect(() => {
+    void sceneLoadAttempt
     let cancelled = false
 
     async function load() {

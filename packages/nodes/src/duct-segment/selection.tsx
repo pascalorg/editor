@@ -5,7 +5,7 @@ import {
   type AnyNodeId,
   analyzePortConnectivity,
   type Cursor,
-  DuctFittingNode,
+  type DuctFittingNode,
   DuctSegmentNode,
   nodeRegistry,
   type PortConnectivity,
@@ -21,7 +21,6 @@ import {
   DimensionPill,
   isAngleSnapActive,
   isGridSnapActive,
-  publishPlacementSurface,
   swallowNextClick,
   triggerSFX,
   useEditor,
@@ -167,9 +166,8 @@ type CornerArrow = {
  *   own (port re-mate still allowed so it can be reattached elsewhere).
  * - Snapping follows the active editor snapping mode.
  *
- * History does the single-undo dance: paused during the drag (the live
- * `updateNode` ticks are untracked), then on release the path is
- * reverted, history resumed, and the final path applied as one tracked
+ * History is paused during the drag while live overrides drive the preview.
+ * On release, history resumes and the final path is applied as one tracked
  * change.
  */
 const DuctSegmentSelectionAffordance = () => {
@@ -215,6 +213,8 @@ const DuctSegmentSelectionAffordance = () => {
 
 const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Object3D }) => {
   const { camera, gl } = useThree()
+  const liveOverride = useLiveNodeOverrides((state) => state.overrides.get(duct.id))
+  const displayDuct = liveOverride ? ({ ...duct, ...liveOverride } as DuctSegmentNode) : duct
   // Outer group mirrors the duct group's local pose so handles placed in
   // node-local path coords land exactly where the duct mesh sits, even though
   // they're mounted in the parent (to stay out of the duct's selection
@@ -460,218 +460,212 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
   // rich behaviour — port-snap, elbow re-aim, connectivity follow, single-undo
   // — is shared with every arrow; only the
   // cursor→point projection differs per `kind`.
-  const onHandleDown =
-    (index: number, kind: DragKind) =>
-    (e: ThreeEvent<PointerEvent>) => {
-      e.stopPropagation()
-      const initialPath = duct.path.map((p) => [...p] as Point)
-      const startPoint = initialPath[index]!
-      const connectivity = analyzePortConnectivity(duct as AnyNode, useScene.getState().nodes)
-      pauseSceneHistory(useScene)
-      const livePreviewIds = new Set<AnyNodeId>()
-      const publishLivePreview = (updates: { id: AnyNodeId; data: Partial<AnyNode> }[]) => {
-        const scene = useScene.getState()
-        const entries = updates
-          .filter((update) => scene.nodes[update.id])
-          .map((update) => [update.id, update.data as Record<string, unknown>] as const)
-        useLiveNodeOverrides.getState().setMany(entries)
-        for (const [id] of entries) {
-          livePreviewIds.add(id)
-          scene.markDirty(id)
-        }
+  const onHandleDown = (index: number, kind: DragKind) => (e: ThreeEvent<PointerEvent>) => {
+    e.stopPropagation()
+    const initialPath = duct.path.map((p) => [...p] as Point)
+    const startPoint = initialPath[index]!
+    const connectivity = analyzePortConnectivity(duct as AnyNode, useScene.getState().nodes)
+    pauseSceneHistory(useScene)
+    const livePreviewIds = new Set<AnyNodeId>()
+    const publishLivePreview = (updates: { id: AnyNodeId; data: Partial<AnyNode> }[]) => {
+      const scene = useScene.getState()
+      const entries = updates
+        .filter((update) => scene.nodes[update.id])
+        .map((update) => [update.id, update.data as Record<string, unknown>] as const)
+      useLiveNodeOverrides.getState().setMany(entries)
+      for (const [id] of entries) {
+        livePreviewIds.add(id)
+        scene.markDirty(id)
       }
-      const clearLivePreview = () => {
-        const scene = useScene.getState()
-        const overrides = useLiveNodeOverrides.getState()
-        for (const id of livePreviewIds) {
-          overrides.clear(id)
-          if (scene.nodes[id]) scene.markDirty(id)
-        }
-      }
-      useViewer.getState().setInputDragging(true)
-      document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
-      setDraggingIndex(index)
-
-      const isEndpoint = index === 0 || index === initialPath.length - 1
-
-      // Swing pivot: the across-run (side) and up / down arrows DON'T stretch the
-      // run — they sweep the grabbed point around its neighbour at a fixed radius
-      // (the segment's current length), so the run pivots like a compass arm
-      // instead of lengthening. The along-run pair keeps the plain lengthen /
-      // shorten. The pivot is the adjacent vertex; null when there's no neighbour
-      // (a lone point) or the grabbed segment has zero length.
-      const swings =
-        kind.axis === 'y' ? kind.along !== true : kind.axis === 'horizontal' && !kind.along
-      // Pivot only at an endpoint (its single neighbour is the unambiguous "other
-      // end"); interior vertices keep the plain per-axis drag.
-      const neighborIndex = index === 0 ? 1 : index === initialPath.length - 1 ? index - 1 : null
-      const pivot = neighborIndex !== null ? initialPath[neighborIndex]! : null
-      const radius = pivot
-        ? Math.hypot(startPoint[0] - pivot[0], startPoint[1] - pivot[1], startPoint[2] - pivot[2])
-        : 0
-      const canSwing = swings && isEndpoint && pivot !== null && radius > 1e-6
-
-      // Fitting re-aim: if this is a straight run whose OTHER end sits on an
-      // elbow collar (junction + far collar fixed, bend angle adapts) or a tee
-      // branch collar (run legs fixed, branch lean adapts), the fitting swings
-      // to follow the drag. Detected once against a drag-start snapshot.
-      const fittingEndpoint: FittingEndpoint | null = isEndpoint
-        ? detectFittingEndpoint('duct-segment', initialPath, index, useScene.getState().nodes)
-        : null
-      const partnerId = fittingEndpoint?.fitting.metadata?.altJoint
-        ? ((fittingEndpoint.fitting.metadata.partnerIds as string[] | undefined)?.find(
-            (id) => id !== duct.id,
-          ) as AnyNodeId | undefined)
-        : undefined
-      const partner = partnerId ? useScene.getState().nodes[partnerId] : undefined
-      const onMove = (event: PointerEvent) => {
-        const drag = dragRef.current
-        if (!drag) return
-        // Follow the active snapping mode; Shift cycles that mode globally.
-        const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
-        // Alt = detach: break the joint for this drag (it can still port-snap to
-        // re-mate elsewhere). Mirrors the wall corner drag.
-        const detached = event.altKey && !drag.jointPartner
-        let next: Point | null = null
-        if (canSwing && pivot) {
-          // Length-preserving swing: aim from the pivot toward the cursor and
-          // re-extend to the fixed radius. The up / down arrow swings in the
-          // vertical plane that contains the run (so it tilts the run up / down
-          // without changing its length); the side arrow swings in the
-          // horizontal plane (a yaw about the pivot).
-          const aim =
-            kind.axis === 'y'
-              ? swingVertical(event, pivot, startPoint)
-              : swingHorizontal(event, pivot, startPoint)
-          if (aim) {
-            // The swung endpoint follows the active grid snap mode. Snapping the landed coords (not
-            // the arc angle) keeps the endpoint on the grid like every other
-            // arrow, trading a hair of the fixed radius for grid alignment.
-            next = [
-              snap(pivot[0] + aim[0] * radius, step),
-              Math.max(0, snap(pivot[1] + aim[1] * radius, step)),
-              snap(pivot[2] + aim[2] * radius, step),
-            ]
-          }
-        } else if (kind.axis === 'y') {
-          // Vertical (riser): keep XZ pinned to the start and drive Y off the
-          // cursor against a vertical plane through the point.
-          const y = intersectVerticalY(event.clientX, event.clientY, toWorld(startPoint))
-          if (y !== null) next = [startPoint[0], Math.max(0, snap(y, step)), startPoint[2]]
-        } else {
-          // Horizontal: project the cursor onto the plane at the point's height,
-          // then lock to the arrow's run-relative line (node-local XZ direction)
-          // through the point — so an angled run drags along / across itself, not
-          // world ±X / ±Z.
-          const plane = new Plane().setFromNormalAndCoplanarPoint(UP, toWorld(startPoint))
-          const hit = intersect(event.clientX, event.clientY, plane)
-          if (hit) {
-            const local = toLocal(hit)
-            const [dx, dz] = kind.dir
-            // Signed displacement of the cursor along the lock direction, snapped.
-            const t = snap((local[0] - startPoint[0]) * dx + (local[2] - startPoint[2]) * dz, step)
-            next = [startPoint[0] + t * dx, startPoint[1], startPoint[2] + t * dz]
-          }
-        }
-        if (!next) return
-        // Port re-mate for any endpoint arrow — the along-/across-run drags AND
-        // the length-preserving swings all snap onto a nearby typed port so a
-        // loose run can be mated onto a fitting after the fact (the swing's fixed
-        // radius yields to the port). Stays available while detaching or
-        // free-dragging; suppressed only while a fitting is actively re-aiming.
-        if (isEndpoint && (detached || !drag.fittingEndpoint)) {
-          const port = findNearestPortXZ(
-            [next[0], next[1], next[2]],
-            collectScenePorts({
-              excludeNodeId: duct.id,
-              systems: DUCT_PORT_SYSTEMS,
-            }),
-            PORT_SNAP_RADIUS_M,
-          )
-          if (port) next = [port.position[0], port.position[1], port.position[2]]
-        }
-        if (
-          next[0] === drag.current[0] &&
-          next[1] === drag.current[1] &&
-          next[2] === drag.current[2]
-        )
-          return
-        const batch = buildDragBatch(drag, next, detached)
-        if (!batch) return
-        drag.current = next
-        drag.detached = detached
-        // Tick on each new snapped position — the same grid-snap SFX the draw
-        // tools fire; the player debounces rapid repeats (minIntervalMs). Only
-        // when the grid is live (step > 0): Shift-precision has nothing to snap.
-        if (step > 0) triggerSFX('sfx:grid-snap')
-        publishLivePreview(batch)
-      }
-
-      const onUp = () => {
-        const drag = dragRef.current
-        if (!drag) return
-        // Swallow the trailing synthetic click so it doesn't reach the
-        // background-click deselect handler — `cleanup()` drops `inputDragging`
-        // synchronously here, so without this the click that fires after
-        // pointerup would land with the drag gate already down and clear the
-        // selection. Mirrors `useHandleDrag`'s onUp.
-        swallowNextClick()
-        drag.cleanup()
-        dragRef.current = null
-        setDraggingIndex(null)
-        clearLivePreview()
-        // Single-undo dance: revert (still paused), resume, re-apply the final
-        // batch as one tracked change. The final batch is built the same way as
-        // each live frame (elbow re-aim, rigid connectivity follow, or — when
-        // detached — just the duct path).
-        const detached = drag.detached
-        const moved = drag.current.some((v, axis) => v !== drag.initialPath[drag.index]![axis])
-        const finalBatch = buildDragBatch(drag, drag.current, detached)
-        resumeSceneHistory(useScene)
-        if (moved && finalBatch) {
-          // A manual corner edit invalidates any stored auto-offset base (the
-          // tag's snapshot no longer matches the geometry), so strip the tag on
-          // commit. The duct becomes plain independent geometry.
-          const finalWithTagStrip = finalBatch.map((u) =>
-            u.id === (duct.id as AnyNodeId) && readAutoOffsetTag(duct)
-              ? {
-                  ...u,
-                  data: {
-                    ...u.data,
-                    metadata: withoutAutoOffsetTag(duct.metadata),
-                  } as Partial<AnyNode>,
-                }
-              : u,
-          )
-          useScene.getState().updateNodes(finalWithTagStrip)
-        }
-      }
-
-      const cleanup = () => {
-        window.removeEventListener('pointermove', onMove)
-        window.removeEventListener('pointerup', onUp)
-        window.removeEventListener('pointercancel', onUp)
-        useViewer.getState().setInputDragging(false)
-        document.body.style.cursor = ''
-      }
-
-      dragRef.current = {
-        index,
-        initialPath,
-        current: startPoint,
-        cleanup,
-        connectivity,
-        fittingEndpoint,
-        jointPartner:
-          partner?.type === 'duct-segment'
-            ? { id: partner.id as AnyNodeId, startPath: partner.path.map((p) => [...p] as Point) }
-            : undefined,
-        detached: false,
-      }
-      window.addEventListener('pointermove', onMove)
-      window.addEventListener('pointerup', onUp)
-      window.addEventListener('pointercancel', onUp)
     }
+    const clearLivePreview = () => {
+      const scene = useScene.getState()
+      const overrides = useLiveNodeOverrides.getState()
+      for (const id of livePreviewIds) {
+        overrides.clear(id)
+        if (scene.nodes[id]) scene.markDirty(id)
+      }
+    }
+    useViewer.getState().setInputDragging(true)
+    document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
+    setDraggingIndex(index)
+
+    const isEndpoint = index === 0 || index === initialPath.length - 1
+
+    // Swing pivot: the across-run (side) and up / down arrows DON'T stretch the
+    // run — they sweep the grabbed point around its neighbour at a fixed radius
+    // (the segment's current length), so the run pivots like a compass arm
+    // instead of lengthening. The along-run pair keeps the plain lengthen /
+    // shorten. The pivot is the adjacent vertex; null when there's no neighbour
+    // (a lone point) or the grabbed segment has zero length.
+    const swings =
+      kind.axis === 'y' ? kind.along !== true : kind.axis === 'horizontal' && !kind.along
+    // Pivot only at an endpoint (its single neighbour is the unambiguous "other
+    // end"); interior vertices keep the plain per-axis drag.
+    const neighborIndex = index === 0 ? 1 : index === initialPath.length - 1 ? index - 1 : null
+    const pivot = neighborIndex !== null ? initialPath[neighborIndex]! : null
+    const radius = pivot
+      ? Math.hypot(startPoint[0] - pivot[0], startPoint[1] - pivot[1], startPoint[2] - pivot[2])
+      : 0
+    const canSwing = swings && isEndpoint && pivot !== null && radius > 1e-6
+
+    // Fitting re-aim: if this is a straight run whose OTHER end sits on an
+    // elbow collar (junction + far collar fixed, bend angle adapts) or a tee
+    // branch collar (run legs fixed, branch lean adapts), the fitting swings
+    // to follow the drag. Detected once against a drag-start snapshot.
+    const fittingEndpoint: FittingEndpoint | null = isEndpoint
+      ? detectFittingEndpoint('duct-segment', initialPath, index, useScene.getState().nodes)
+      : null
+    const partnerId = fittingEndpoint?.fitting.metadata?.altJoint
+      ? ((fittingEndpoint.fitting.metadata.partnerIds as string[] | undefined)?.find(
+          (id) => id !== duct.id,
+        ) as AnyNodeId | undefined)
+      : undefined
+    const partner = partnerId ? useScene.getState().nodes[partnerId] : undefined
+    const onMove = (event: PointerEvent) => {
+      const drag = dragRef.current
+      if (!drag) return
+      // Follow the active snapping mode; Shift cycles that mode globally.
+      const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
+      // Alt = detach: break the joint for this drag (it can still port-snap to
+      // re-mate elsewhere). Mirrors the wall corner drag.
+      const detached = event.altKey && !drag.jointPartner
+      let next: Point | null = null
+      if (canSwing && pivot) {
+        // Length-preserving swing: aim from the pivot toward the cursor and
+        // re-extend to the fixed radius. The up / down arrow swings in the
+        // vertical plane that contains the run (so it tilts the run up / down
+        // without changing its length); the side arrow swings in the
+        // horizontal plane (a yaw about the pivot).
+        const aim =
+          kind.axis === 'y'
+            ? swingVertical(event, pivot, startPoint)
+            : swingHorizontal(event, pivot, startPoint)
+        if (aim) {
+          // The swung endpoint follows the active grid snap mode. Snapping the landed coords (not
+          // the arc angle) keeps the endpoint on the grid like every other
+          // arrow, trading a hair of the fixed radius for grid alignment.
+          next = [
+            snap(pivot[0] + aim[0] * radius, step),
+            Math.max(0, snap(pivot[1] + aim[1] * radius, step)),
+            snap(pivot[2] + aim[2] * radius, step),
+          ]
+        }
+      } else if (kind.axis === 'y') {
+        // Vertical (riser): keep XZ pinned to the start and drive Y off the
+        // cursor against a vertical plane through the point.
+        const y = intersectVerticalY(event.clientX, event.clientY, toWorld(startPoint))
+        if (y !== null) next = [startPoint[0], Math.max(0, snap(y, step)), startPoint[2]]
+      } else {
+        // Horizontal: project the cursor onto the plane at the point's height,
+        // then lock to the arrow's run-relative line (node-local XZ direction)
+        // through the point — so an angled run drags along / across itself, not
+        // world ±X / ±Z.
+        const plane = new Plane().setFromNormalAndCoplanarPoint(UP, toWorld(startPoint))
+        const hit = intersect(event.clientX, event.clientY, plane)
+        if (hit) {
+          const local = toLocal(hit)
+          const [dx, dz] = kind.dir
+          // Signed displacement of the cursor along the lock direction, snapped.
+          const t = snap((local[0] - startPoint[0]) * dx + (local[2] - startPoint[2]) * dz, step)
+          next = [startPoint[0] + t * dx, startPoint[1], startPoint[2] + t * dz]
+        }
+      }
+      if (!next) return
+      // Port re-mate for any endpoint arrow — the along-/across-run drags AND
+      // the length-preserving swings all snap onto a nearby typed port so a
+      // loose run can be mated onto a fitting after the fact (the swing's fixed
+      // radius yields to the port). Stays available while detaching or
+      // free-dragging; suppressed only while a fitting is actively re-aiming.
+      if (isEndpoint && (detached || !drag.fittingEndpoint)) {
+        const port = findNearestPortXZ(
+          [next[0], next[1], next[2]],
+          collectScenePorts({
+            excludeNodeId: duct.id,
+            systems: DUCT_PORT_SYSTEMS,
+          }),
+          PORT_SNAP_RADIUS_M,
+        )
+        if (port) next = [port.position[0], port.position[1], port.position[2]]
+      }
+      if (next[0] === drag.current[0] && next[1] === drag.current[1] && next[2] === drag.current[2])
+        return
+      const batch = buildDragBatch(drag, next, detached)
+      if (!batch) return
+      drag.current = next
+      drag.detached = detached
+      // Tick on each new snapped position — the same grid-snap SFX the draw
+      // tools fire; the player debounces rapid repeats (minIntervalMs). Only
+      // when the grid is live (step > 0): Shift-precision has nothing to snap.
+      if (step > 0) triggerSFX('sfx:grid-snap')
+      publishLivePreview(batch)
+    }
+
+    const onUp = () => {
+      const drag = dragRef.current
+      if (!drag) return
+      // Swallow the trailing synthetic click so it doesn't reach the
+      // background-click deselect handler — `cleanup()` drops `inputDragging`
+      // synchronously here, so without this the click that fires after
+      // pointerup would land with the drag gate already down and clear the
+      // selection. Mirrors `useHandleDrag`'s onUp.
+      swallowNextClick()
+      drag.cleanup()
+      dragRef.current = null
+      setDraggingIndex(null)
+      clearLivePreview()
+      // Resume history and apply the final batch as one tracked change. The
+      // final batch is built the same way as
+      // each live frame (elbow re-aim, rigid connectivity follow, or — when
+      // detached — just the duct path).
+      const detached = drag.detached
+      const moved = drag.current.some((v, axis) => v !== drag.initialPath[drag.index]![axis])
+      const finalBatch = buildDragBatch(drag, drag.current, detached)
+      resumeSceneHistory(useScene)
+      if (moved && finalBatch) {
+        // A manual corner edit invalidates any stored auto-offset base (the
+        // tag's snapshot no longer matches the geometry), so strip the tag on
+        // commit. The duct becomes plain independent geometry.
+        const finalWithTagStrip = finalBatch.map((u) =>
+          u.id === (duct.id as AnyNodeId) && readAutoOffsetTag(duct)
+            ? {
+                ...u,
+                data: {
+                  ...u.data,
+                  metadata: withoutAutoOffsetTag(duct.metadata),
+                } as Partial<AnyNode>,
+              }
+            : u,
+        )
+        useScene.getState().updateNodes(finalWithTagStrip)
+      }
+    }
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+      useViewer.getState().setInputDragging(false)
+      document.body.style.cursor = ''
+    }
+
+    dragRef.current = {
+      index,
+      initialPath,
+      current: startPoint,
+      cleanup,
+      connectivity,
+      fittingEndpoint,
+      jointPartner:
+        partner?.type === 'duct-segment'
+          ? { id: partner.id as AnyNodeId, startPath: partner.path.map((p) => [...p] as Point) }
+          : undefined,
+      detached: false,
+    }
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+  }
 
   // Roll: spin the rect / oval cross-section about the run (length) axis. The
   // cursor's bearing in the plane perpendicular to the run direction (taken in
@@ -731,7 +725,8 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           triggerSFX('sfx:item-rotate')
         }
       }
-      useScene.getState().updateNode(duct.id, { roll: next })
+      useLiveNodeOverrides.getState().set(duct.id, { roll: next })
+      useScene.getState().markDirty(duct.id)
     }
 
     const onUp = () => {
@@ -743,10 +738,8 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       clearPlacementSurface()
       document.body.style.cursor = ''
       setRolling(false)
-      // Single-undo dance: revert to the pre-drag roll while paused, resume,
-      // then re-apply the final roll as one tracked change. A roll edit also
-      // invalidates any stored auto-offset base, so strip the tag on commit.
-      useScene.getState().updateNode(duct.id, { roll: startRoll })
+      useLiveNodeOverrides.getState().clear(duct.id)
+      useScene.getState().markDirty(duct.id)
       resumeSceneHistory(useScene)
       if (current !== startRoll) {
         useScene.getState().updateNode(duct.id, {
@@ -799,12 +792,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     ) ?? initialPath) as Point[]
     const baseDy = tag?.dy ?? 0
     const mintedIds = (tag?.minted ?? []) as AnyNodeId[]
-    // Snapshots of the existing minted nodes, so the pre-commit revert can
-    // restore the original Z (the single-undo baseline) before the final write.
-    const mintedSnapshots = mintedIds
-      .map((id) => preRewindNodes[id])
-      .filter((n): n is AnyNode => Boolean(n))
-    const previewDeletedSnapshots = new Map<AnyNodeId, AnyNode>()
+    const previewHiddenIds = new Set<AnyNodeId>()
 
     pauseSceneHistory(useScene)
 
@@ -835,9 +823,27 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       }
     }
     const clearLivePreview = () => {
+      const scene = useScene.getState()
       const overrides = useLiveNodeOverrides.getState()
-      for (const id of livePreviewIds) overrides.clear(id)
+      for (const id of livePreviewIds) {
+        overrides.clear(id)
+        if (scene.nodes[id]) scene.markDirty(id)
+      }
       livePreviewIds.clear()
+    }
+    const setPreviewHidden = (ids: readonly AnyNodeId[]) => {
+      const next = new Set(ids)
+      for (const id of previewHiddenIds) {
+        if (next.has(id)) continue
+        const object = sceneRegistry.nodes.get(id)
+        if (object) object.visible = true
+        previewHiddenIds.delete(id)
+      }
+      for (const id of next) {
+        const object = sceneRegistry.nodes.get(id)
+        if (object) object.visible = false
+        previewHiddenIds.add(id)
+      }
     }
 
     // Connectivity + ports are read from an IN-MEMORY post-rewind scene (the
@@ -965,7 +971,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     }
 
     const restoreOriginalOffsetPreview = () => {
-      const scene = useScene.getState()
       const partnerUpdates = originalPartnerReverts()
       const updates = [
         {
@@ -978,37 +983,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         ...partnerUpdates,
       ]
       publishLivePreview(updates)
-      scene.applyNodeChanges({
-        create: mintedSnapshots
-          .filter((n) => !scene.nodes[n.id])
-          .map((node) => ({ node, parentId })),
-        update: updates,
-      })
-      ensureSceneObjectsVisible([
-        duct.id as AnyNodeId,
-        ...mintedSnapshots.map((node) => node.id as AnyNodeId),
-        ...partnerUpdates.map((update) => update.id),
-      ])
-    }
-
-    const restorePreviewDeleted = (keepDeleted: readonly AnyNodeId[] = []) => {
-      const keep = new Set<AnyNodeId>(keepDeleted)
-      const scene = useScene.getState()
-      const create: { node: AnyNode; parentId?: AnyNodeId }[] = []
-      for (const [id, node] of previewDeletedSnapshots) {
-        if (keep.has(id)) continue
-        if (!scene.nodes[id]) {
-          create.push({
-            node,
-            parentId: (node.parentId ?? undefined) as AnyNodeId | undefined,
-          })
-        }
-        previewDeletedSnapshots.delete(id)
-      }
-      if (create.length > 0) {
-        scene.applyNodeChanges({ create })
-        ensureSceneObjectsVisible(create.map(({ node }) => node.id as AnyNodeId))
-      }
+      setPreviewHidden([])
     }
 
     const applyLogicalBasePreview = () => {
@@ -1027,11 +1002,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           .map((b) => ({ id: b.id, data: b.data as Partial<AnyNode> })),
       ]
       publishLivePreview(updates)
-      scene.applyNodeChanges({
-        delete: mintedIds.filter((id) => scene.nodes[id]),
-        update: updates,
-      })
-      ensureSceneObjectsVisible(updates.map((update) => update.id))
+      setPreviewHidden(mintedIds)
     }
 
     const onMove = (event: PointerEvent) => {
@@ -1070,11 +1041,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         const plan = offsetResult.plan
         const scene = useScene.getState()
         const deletePreview = (plan.delete ?? []).filter((id) => scene.nodes[id])
-        for (const id of deletePreview) {
-          const node = scene.nodes[id]
-          if (node) previewDeletedSnapshots.set(id, node)
-        }
-        restorePreviewDeleted(plan.delete ?? [])
+        setPreviewHidden([...mintedIds, ...deletePreview])
         const followUpdates = connectivityUpdatesForPath(connectivity, plan.followPath)
         const updates = [
           { id: duct.id as AnyNodeId, data: { path: plan.ductPath } },
@@ -1082,11 +1049,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           ...followUpdates,
         ]
         publishLivePreview(updates)
-        scene.applyNodeChanges({
-          delete: deletePreview,
-          update: updates,
-        })
-        ensureSceneObjectsVisible(updates.map((update) => update.id))
         setVerticalGhost({
           tint: 'valid',
           fittings: plan.fittings,
@@ -1097,7 +1059,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         // visible (including any prior auto-offset we rewound at drag-start)
         // and show a RED ghost of the run where it WOULD lift to. Nothing is
         // committed on release, so the run snaps back to its prior state.
-        restorePreviewDeleted()
         restoreOriginalOffsetPreview()
         const lifted = DuctSegmentNode.parse({
           ...logicalDuct,
@@ -1105,13 +1066,10 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         })
         setVerticalGhost({ tint: 'invalid', fittings: [], risers: [lifted] })
       } else {
-        restorePreviewDeleted()
         applyLogicalBasePreview()
         setVerticalGhost(null)
         const updates = batchFor(shiftedPath(next))
         publishLivePreview(updates)
-        useScene.getState().updateNodes(updates)
-        ensureSceneObjectsVisible(updates.map((update) => update.id))
       }
     }
 
@@ -1125,40 +1083,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       setRunMoving(false)
       setVerticalGhost(null)
       clearLivePreview()
-      // Single-undo dance: while paused, revert to the PRE-drag baseline (the
-      // original Z — recreate the minted nodes the rewind deleted and restore
-      // the run + partners), resume, then write the final state as ONE tracked
-      // change so undo jumps straight back to the original.
-      const restore = useScene.getState()
-      const restoredPreviewNodes = Array.from(previewDeletedSnapshots.values()).filter(
-        (node) => !restore.nodes[node.id],
-      )
-      const restoredMintedNodes = mintedSnapshots.filter((n) => !restore.nodes[n.id])
-      const restoreUpdates = [
-        {
-          id: duct.id as AnyNodeId,
-          data: {
-            path: duct.path,
-            metadata: duct.metadata,
-          } as Partial<AnyNode>,
-        },
-        ...originalPartnerReverts(),
-      ]
-      restore.applyNodeChanges({
-        create: [
-          ...restoredMintedNodes.map((node) => ({ node, parentId })),
-          ...restoredPreviewNodes.map((node) => ({
-            node,
-            parentId: (node.parentId ?? undefined) as AnyNodeId | undefined,
-          })),
-        ],
-        update: restoreUpdates,
-      })
-      ensureSceneObjectsVisible([
-        ...restoredMintedNodes.map((node) => node.id as AnyNodeId),
-        ...restoredPreviewNodes.map((node) => node.id as AnyNodeId),
-        ...restoreUpdates.map((update) => update.id),
-      ])
+      setPreviewHidden([])
       resumeSceneHistory(useScene)
       if (delta === 0) return
       const dyEff = baseDy + delta
@@ -1301,28 +1226,34 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     window.addEventListener('pointercancel', onUp)
   }
 
-  const cornerArrows = useMemo(() => getCornerArrows(duct), [duct])
-  const rollGizmo = useMemo(() => (duct.shape === 'round' ? null : runAxisAndCenter(duct)), [duct])
+  const cornerArrows = useMemo(() => getCornerArrows(displayDuct), [displayDuct])
+  const rollGizmo = useMemo(
+    () => (displayDuct.shape === 'round' ? null : runAxisAndCenter(displayDuct)),
+    [displayDuct],
+  )
   // Run-center cube position (centroid centerline). The six whole-run move
   // arrows + the roll arc are revealed on hover, like the per-vertex clusters.
-  const runCenter = useMemo<Point | null>(() => runAxisAndCenter(duct)?.center ?? null, [duct])
+  const runCenter = useMemo<Point | null>(
+    () => runAxisAndCenter(displayDuct)?.center ?? null,
+    [displayDuct],
+  )
   // Yaw the center cube to the run's horizontal heading so it stays aligned
   // with the run (matching the per-vertex cubes). A pure riser has no heading.
   const runCenterYaw = useMemo<number>(() => {
-    const axis = runAxisAndCenter(duct)
+    const axis = runAxisAndCenter(displayDuct)
     if (!axis || Math.hypot(axis.dir[0], axis.dir[2]) < 1e-6) return 0
     return Math.atan2(-axis.dir[2], axis.dir[0])
-  }, [duct])
+  }, [displayDuct])
   // Six whole-run move arrows offset off the center: four horizontal (along-run
   // ± and across-run ±, aligned to the run's XZ tangent so they track the run
   // instead of world ±X / ±Z) plus the up / down vertical pair. All shift every
   // path point rigidly — no swing (the whole run has no pivot).
   const centerArrows = useMemo(() => {
     if (!runCenter) return []
-    const base = Math.max(runRadiusM(duct) + CORNER_ARROW_GAP, CORNER_ARROW_MIN_OFFSET)
+    const base = Math.max(runRadiusM(displayDuct) + CORNER_ARROW_GAP, CORNER_ARROW_MIN_OFFSET)
     // Run's horizontal heading (node-local XZ). A pure riser has none → fall
     // back to world +X so the arrows stay usable.
-    const axis = runAxisAndCenter(duct)
+    const axis = runAxisAndCenter(displayDuct)
     const t: [number, number] =
       axis && Math.hypot(axis.dir[0], axis.dir[2]) > 1e-6
         ? (() => {
@@ -1370,7 +1301,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       },
     )
     return arrows
-  }, [duct, runCenter])
+  }, [displayDuct, runCenter])
 
   return (
     <group ref={outerRef}>
@@ -1388,7 +1319,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         !rolling &&
         !runMoving &&
         (['start', 'end'] as const).map((endpoint) => (
-          <DuctContinuationHandle duct={duct} endpoint={endpoint} key={endpoint} />
+          <DuctContinuationHandle duct={displayDuct} endpoint={endpoint} key={endpoint} />
         ))}
       {/* Per-vertex affordances — hidden while a drag / roll is live (the window
           pointer handlers own the gesture). Each vertex shows a small cube;
@@ -1398,13 +1329,13 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       {draggingIndex === null &&
         !rolling &&
         !runMoving &&
-        duct.path.map((p, i) => (
+        displayDuct.path.map((p, i) => (
           <group key={`vtx${i}`}>
             <HandleCube
               active={openCluster === i}
               onClick={() => toggleCluster(i)}
               position={p as Point}
-              rotationY={vertexYaw(duct, i)}
+              rotationY={vertexYaw(displayDuct, i)}
             />
             {openCluster === i &&
               cornerArrows
@@ -1450,7 +1381,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
                   center={rollGizmo.center}
                   dir={rollGizmo.dir}
                   onPointerDown={onRollDown}
-                  radius={runRadiusM(duct) + CORNER_ARROW_GAP}
+                  radius={runRadiusM(displayDuct) + CORNER_ARROW_GAP}
                 />
               )}
             </>
@@ -1458,11 +1389,11 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         </group>
       )}
       {draggingIndex !== null &&
-        duct.path[draggingIndex] &&
+        displayDuct.path[draggingIndex] &&
         (() => {
           // Same pill as the draw tool: signed per-axis deltas from the
           // drag-start position, dominant axis emphasised.
-          const point = duct.path[draggingIndex]!
+          const point = displayDuct.path[draggingIndex]!
           const origin = dragRef.current?.initialPath[draggingIndex] ?? point
           const deltas = [point[0] - origin[0], point[1] - origin[1], point[2] - origin[2]]
           const axes = ['x', 'y', 'z'] as const
