@@ -11,7 +11,7 @@ import {
   type SiteNode,
   terrainFieldOf,
   unionPolygons,
-  type WallNode, terrainContours } from '@pascal-app/core'
+  type WallNode, terrainContours, envelopeFrontEdge } from '@pascal-app/core'
 import {
   type Bounds,
   boundsInsidePolygon,
@@ -41,6 +41,8 @@ export interface SitePlanDrawing {
     frontEdge: number
     lot: Pt[]
     envelope: Pt[]
+    /** The envelope edge behind the lot's front line (the envelope has its own vertex count now). */
+    envelopeFrontEdge: number
     /** Per-wall footprint bands of the lowest level, in SITE metres. */
     footprintLoops: Pt[][]
     footprintBounds: Bounds | null
@@ -281,6 +283,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
       frontEdge,
       lot,
       envelope: [],
+      envelopeFrontEdge: 0,
       footprintLoops,
       footprintBounds,
       yards: [],
@@ -471,6 +474,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
       frontEdge,
       lot,
       envelope,
+      envelopeFrontEdge: envelope.length >= 3 ? envelopeFrontEdge(lot, frontEdge, envelope) : 0,
       footprintLoops,
       footprintBounds,
       yards,

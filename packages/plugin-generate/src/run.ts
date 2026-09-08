@@ -41,7 +41,8 @@ export function placementFromScene(): {
   } as never)
   const envelope = drawing.meta.envelope
   if (envelope.length < 3) return { placement: null, frontageFt: null, depthFt: null, edges: [] }
-  const i = drawing.meta.frontEdge
+  // the ENVELOPE's front edge — the envelope no longer shares the lot's vertex count
+  const i = drawing.meta.envelopeFrontEdge
   const edges = envelopeEdges(envelope)
   const street = edges[i]
   return {

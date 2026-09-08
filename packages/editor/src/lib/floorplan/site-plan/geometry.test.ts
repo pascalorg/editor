@@ -99,14 +99,25 @@ describe('setbackEnvelope', () => {
       [-5.4, -6.3], [-4.4, -5.5], [-3.6, -4.6], [-2.9, -3.6], [-2.4, -2.4], [-2.1, -1.2],
     ]
     const env = setbackEnvelope(cape, { front: 6.096, side: 1.524, rear: 4.572 }, 0)
-    expect(env).toHaveLength(cape.length)
-    for (let i = 0; i < cape.length; i++) {
-      const d = Math.hypot(env[i]![0] - cape[i]![0], env[i]![1] - cape[i]![1])
-      expect(d).toBeLessThan(2.5 * 6.096 + 0.5)
+    expect(env.length).toBeGreaterThanOrEqual(6)
+    // every envelope vertex lies inside the lot, at least its setback from every lot line
+    const segDist = (p: readonly number[], a: readonly number[], b: readonly number[]) => {
+      const abx = b[0]! - a[0]!
+      const aby = b[1]! - a[1]!
+      const t = Math.max(0, Math.min(1, ((p[0]! - a[0]!) * abx + (p[1]! - a[1]!) * aby) / (abx * abx + aby * aby)))
+      return Math.hypot(p[0]! - (a[0]! + abx * t), p[1]! - (a[1]! + aby * t))
     }
-    // the front edge (the east side) moved 6.1 m in
-    expect(env[0]![0]).toBeCloseTo(-2 - 6.096, 1)
-    expect(env[1]![0]).toBeCloseTo(-2 - 6.096, 1)
+    for (const v of env) {
+      for (let i = 0; i < cape.length; i++) {
+        expect(segDist(v, cape[i]!, cape[(i + 1) % cape.length]!)).toBeGreaterThan(1.524 - 0.06)
+      }
+    }
+    // the front line (x = −2, the east side) offset 6.1 m in: two vertices on x ≈ −8.1
+    const onFront = env.filter((v) => Math.abs(v[0] - (-2 - 6.096)) < 0.05)
+    expect(onFront.length).toBeGreaterThanOrEqual(2)
+    // the rounded corner stays a curve, concentric with the lot's arc: several vertices along it
+    const arc = env.filter((v) => v[1] < -2 && v[0] > -10)
+    expect(arc.length).toBeGreaterThanOrEqual(3)
   })
 
   it('offsets each edge inward by its own setback', () => {

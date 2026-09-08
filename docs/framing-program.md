@@ -984,6 +984,37 @@ G89 More hip roofs on random designs across styles.
 
 ## Log (continued)
 
+- 2026-09-08: **Batch T11 — the setback envelope as the zoning officer
+  draws it.** Steve: "your inside setback logic is breaking on radius and
+  weird shaped lots … I don't think you would bring the radius in with
+  it, look up industry standard for setback on pie shape, radius corners,
+  and odd lots". The standard: each lot line pushed in by its own yard,
+  measured perpendicular to that line; a curved (radius) lot line offsets
+  to a CONCENTRIC curve; the offsets are clipped against each other where
+  they meet. Yesterday's chord-and-clamp was not that. Now
+  `core/lib/setback-envelope.ts` `insetPolygon`: a convex lot with no
+  radius run is offset EXACTLY (offset lines intersected — a rectangle
+  stays four exact corners); every other lot goes through a distance
+  field — a point is buildable when its distance to every lot line is at
+  least that line's setback — whose zero contour is traced by the site
+  plan's own marching squares, simplified (Douglas–Peucker), and its
+  convex corners sharpened back to the offset lines' intersection. That
+  is the variable-distance inward offset for convex, pie-shaped, L-shaped
+  and radius-cornered lots alike; a reflex notch rounds, a radius stays a
+  radius. `arcRuns` names a radius drawn as short gently turning edges so
+  the run takes one role (the front's or rear's when it carries that
+  edge). Both copies (`site-plan/geometry.ts`, `nodes/site/setbacks.ts`)
+  call core. The envelope no longer shares the lot's vertex count, so the
+  drawing's meta carries `envelopeFrontEdge` (`envelopeFrontEdge` in
+  core: the longest envelope edge parallel to and nearest the lot's front
+  line, else the nearest chord for a curved frontage) and the procedural
+  placement faces THAT edge. Seen headless: Cape Coral (radius corner)
+  and the St Petersburg L-block both place every exterior wall end inside
+  the lot. Tests: site-plan 29 (the Cape Coral ring: every envelope
+  vertex ≥ its setback from every lot line, the front offset exact, the
+  arc kept as a curve; the rectangle pins exact), nodes site 66, generate
+  105; core + nodes rebuilt; editor / nodes / generate typecheck clean.
+
 - 2026-09-08: **Batch T10 — the house in the lot on odd parcels, the
   envelope without spikes, the save that failed.** Steve, with two
   screenshots: "the house doesn't sit in the lot on weird configurations

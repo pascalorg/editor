@@ -1,3 +1,4 @@
+import { arcRuns, insetPolygon } from '@pascal-app/core'
 /**
  * Site-plan geometry — pure functions, no store, no React.
  *
@@ -271,134 +272,29 @@ export function setbackEnvelope(
   const n = points.length
   if (n < 3) return []
   const roles = classifyEdges(points, frontIndex)
-  const ccw = isCounterClockwise(points)
-
-  // The edges' unit directions, lengths and setbacks.
-  const dirs: { dx: number; dy: number; len: number; d: number }[] = []
+  // a radius drawn as a run of short edges takes ONE role: the front's or
+  // the rear's when it carries that edge, else each sliver keeps its side
+  const runs = arcRuns(points)
+  const runRole = new Map<number, EdgeRole>()
   for (let i = 0; i < n; i++) {
-    const p = points[i] as Pt
-    const q = points[(i + 1) % n] as Pt
-    const d = setbackForRole(setbacks, roles[i] as EdgeRole)
+    const r = roles[i] as EdgeRole
+    const g = runs[i] as number
+    const have = runRole.get(g)
+    if (r === 'front' || (r === 'rear' && have !== 'front')) runRole.set(g, r)
+    else if (!have) runRole.set(g, r)
+  }
+  const distances: number[] = []
+  for (let i = 0; i < n; i++) {
+    const role = runRole.get(runs[i] as number) ?? (roles[i] as EdgeRole)
+    const d = setbackForRole(setbacks, role === 'left' || role === 'right' ? (roles[i] as EdgeRole) : role)
     if (!Number.isFinite(d) || d < 0) return []
-    const dx = q[0] - p[0]
-    const dy = q[1] - p[1]
-    const len = Math.hypot(dx, dy)
-    if (len < EPS) return []
-    dirs.push({ dx: dx / len, dy: dy / len, len, d })
+    distances.push(d)
   }
-
-  // ARCS: a run of short edges turning gently (a cul-de-sac's rounded
-  // corner from the county fabric) is offset as ONE chord — offsetting each
-  // sliver on its own and intersecting neighbours whose setbacks differ
-  // flung vertices tens of metres out (the notched envelope Steve saw). A
-  // group's line is its chord's, at the setback of its longest member;
-  // vertices inside the group are pushed straight in on that normal.
-  const SHORT = 4
-  const TURN = Math.cos((35 * Math.PI) / 180)
-  const group: number[] = new Array(n).fill(-1)
-  let groups = 0
-  for (let i = 0; i < n; i++) {
-    if (group[i] !== -1) continue
-    const a = dirs[i] as (typeof dirs)[number]
-    if (a.len >= SHORT) {
-      group[i] = groups++
-      continue
-    }
-    const members = [i]
-    let j = (i + 1) % n
-    let cur = a
-    while (j !== i && group[j] === -1) {
-      const b = dirs[j] as (typeof dirs)[number]
-      if (b.len >= SHORT || cur.dx * b.dx + cur.dy * b.dy < TURN) break
-      members.push(j)
-      cur = b
-      j = (j + 1) % n
-    }
-    for (const m of members) group[m] = groups
-    groups += 1
-  }
-  const groupLine = new Map<number, { nx: number; ny: number; dx: number; dy: number; d: number }>()
-  for (let g = 0; g < groups; g++) {
-    const members: number[] = []
-    for (let i = 0; i < n; i++) if (group[i] === g) members.push(i)
-    if (members.length === 0) continue
-    // the members are consecutive along the ring (possibly wrapping)
-    let first = members[0] as number
-    for (const m of members) if (group[(m - 1 + n) % n] !== g) first = m
-    const last = (first + members.length - 1) % n
-    const p0 = points[first] as Pt
-    const p1 = points[(last + 1) % n] as Pt
-    let dx = p1[0] - p0[0]
-    let dy = p1[1] - p0[1]
-    const len = Math.hypot(dx, dy)
-    if (len < EPS) {
-      const e = dirs[first] as (typeof dirs)[number]
-      dx = e.dx
-      dy = e.dy
-    } else {
-      dx /= len
-      dy /= len
-    }
-    const sign = ccw ? -1 : 1
-    const nx = (sign * -dy)
-    const ny = sign * dx
-    let longest = members[0] as number
-    for (const m of members) if ((dirs[m] as (typeof dirs)[number]).len > (dirs[longest] as (typeof dirs)[number]).len) longest = m
-    groupLine.set(g, { nx, ny, dx, dy, d: (dirs[longest] as (typeof dirs)[number]).d })
-  }
-
-  // Offset line for each edge: point `a` on the line + unit direction `d`.
-  const lines: { ax: number; ay: number; dx: number; dy: number; nx: number; ny: number; d: number }[] = []
-  for (let i = 0; i < n; i++) {
-    const p = points[i] as Pt
-    const gl = groupLine.get(group[i] as number) as { nx: number; ny: number; dx: number; dy: number; d: number }
-    lines.push({ ax: p[0] - gl.nx * gl.d, ay: p[1] - gl.ny * gl.d, dx: gl.dx, dy: gl.dy, nx: gl.nx, ny: gl.ny, d: gl.d })
-  }
-
-  const out: Pt[] = []
-  for (let i = 0; i < n; i++) {
-    const prev = lines[(i - 1 + n) % n] as (typeof lines)[number]
-    const cur = lines[i] as (typeof lines)[number]
-    const p = points[i] as Pt
-    const denom = prev.dx * cur.dy - prev.dy * cur.dx
-    let v: Pt
-    if (Math.abs(denom) < 1e-9) {
-      // Parallel neighbours: no corner to find — the vertex moves inward
-      // along the current edge's offset (exact when both edges share a
-      // setback, the nearest sane point when they do not).
-      v = [cur.ax, cur.ay]
-    } else {
-      const t = ((cur.ax - prev.ax) * cur.dy - (cur.ay - prev.ay) * cur.dx) / denom
-      v = [prev.ax + prev.dx * t, prev.ay + prev.dy * t]
-    }
-    // A corner between lines meeting at a sliver of an angle (a reflex
-    // notch, an arc a sliver too long to merge) runs away: clamp it to the
-    // vertex pushed in along the bisector of its two normals.
-    const reach = 2.5 * Math.max(prev.d, cur.d) + 0.5
-    if (Math.hypot(v[0] - p[0], v[1] - p[1]) > reach) {
-      let bx = prev.nx + cur.nx
-      let by = prev.ny + cur.ny
-      const bl = Math.hypot(bx, by)
-      if (bl < 1e-9) {
-        bx = cur.nx
-        by = cur.ny
-      } else {
-        bx /= bl
-        by /= bl
-      }
-      const d = (prev.d + cur.d) / 2
-      v = [p[0] - bx * d, p[1] - by * d]
-    }
-    out.push(v)
-  }
-
-  // A ring that shrank past itself flips winding or collapses — reject it
-  // rather than draw a bow-tie the user might read as buildable.
-  if (out.length < 3) return []
-  if (polygonArea(out) < 1e-6) return []
-  if (isCounterClockwise(out) !== isCounterClockwise(points)) return []
-  if (polygonArea(out) >= polygonArea(points)) return []
-  return out
+  // the true inward offset (core setback-envelope.ts): straight where the
+  // lot is straight, concentric round a radius, clipped where the offsets
+  // cross — Steve, 2026-09-08: "industry standard for setback on pie
+  // shape, radius corners, and odd lots"
+  return insetPolygon(points, distances)
 }
 
 /**
