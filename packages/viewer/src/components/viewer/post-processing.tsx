@@ -180,15 +180,24 @@ const PostProcessingPasses = ({
     hasPipelineErrorRef.current = false
 
     // WebGPU availability check: SSGI, denoise, and RenderPipeline are all
-    // WebGPU-only APIs. When the browser falls back to WebGL2 (no
-    // `navigator.gpu`, or the device couldn't be created), building the
-    // pipeline either throws silently or produces a broken output where
-    // the scene renders for a few frames and then goes black as the retry
-    // loop fights the direct-render fallback path. Short-circuit here so
-    // `useFrame` uses the direct `renderer.render(scene, camera)` path
-    // exclusively and never attempts the TSL pipeline.
-    const hasWebGPU = typeof navigator !== 'undefined' && 'gpu' in navigator
-    if (!hasWebGPU) {
+    // WebGPU-only APIs. When the browser falls back to WebGL2, building the
+    // pipeline produces un output roto: la escena se queda en negro y la
+    // consola se llena de
+    // «GL_INVALID_OPERATION: glDrawArrays: Feedback loop formed between
+    // Framebuffer and active Texture». Short-circuit here so `useFrame` uses
+    // the direct `renderer.render(scene, camera)` path exclusively and never
+    // attempts the TSL pipeline.
+    //
+    // La comprobación es sobre el backend que quedó, no sobre `navigator.gpu`:
+    // Chromium expone `navigator.gpu` en máquinas donde el dispositivo WebGPU
+    // no se puede crear (sin GPU, con drivers viejos, o bajo swiftshader), y
+    // ahí three cae a WebGL2 por su cuenta —«WebGPURenderer: WebGPU is not
+    // available, running under WebGL2 backend»— mientras esta comprobación
+    // seguía dando por buena la ruta WebGPU. Ese desacuerdo era el lienzo
+    // negro: `renderer.init()` ya terminó cuando corre este efecto, así que
+    // `backend` es el definitivo.
+    const backend = (renderer as unknown as { backend?: { isWebGPUBackend?: boolean } }).backend
+    if (backend?.isWebGPUBackend !== true) {
       console.warn(
         '[viewer] WebGPU unavailable — rendering without post-processing (SSGI, outlines, denoise).',
       )

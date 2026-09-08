@@ -1,7 +1,10 @@
 'use client'
 
-import { useScene } from '@pascal-app/core'
+import { sceneRegistry, useScene } from '@pascal-app/core'
+import { CATALOG_ITEMS } from '@pascal-app/editor'
 import { useEffect } from 'react'
+import { Box3 } from 'three'
+import { HoltmontImportError, normalizeHoltmontScene } from '../lib/holtmont-import'
 
 export function HoltmontBridge() {
   useEffect(() => {
@@ -17,47 +20,91 @@ export function HoltmontBridge() {
       const data = event.data as Record<string, unknown> | null
       if (!data || data.type !== 'HOLTMONT_3D_IMPORT') return
 
+      let scene: ReturnType<typeof normalizeHoltmontScene>
       try {
-        const projectData = data.projectData as Record<string, unknown> | undefined
-        if (!projectData?.nodes) {
-          console.warn('[HoltmontBridge] HOLTMONT_3D_IMPORT: missing projectData.nodes — ignored')
-          return
-        }
+        // Valida contra el esquema real del editor antes de tocar el store: un
+        // nodo mal formado revienta después, dentro del bucle de render, y ahí
+        // ya no hay forma de avisar — solo queda el lienzo en negro.
+        scene = normalizeHoltmontScene(data.projectData, CATALOG_ITEMS)
+      } catch (err) {
+        const reason = err instanceof HoltmontImportError ? err.message : String(err)
+        console.error('[HoltmontBridge] HOLTMONT_3D_IMPORT rechazado:', reason)
+        // La escena que ya estaba montada se queda como está: sustituirla por
+        // una vacía convierte un import fallido en una pantalla negra.
+        postToParent({ type: 'HOLTMONT_3D_IMPORT_ERROR', reason, dropped: [] })
+        return
+      }
 
-        const nodes = projectData.nodes as Record<string, unknown>
-        const rootNodeIds = Array.isArray(projectData.rootNodeIds)
-          ? (projectData.rootNodeIds as string[])
-          : []
-        const collections =
-          projectData.collections && typeof projectData.collections === 'object'
-            ? (projectData.collections as Record<string, unknown>)
-            : {}
-
-        console.log('[HoltmontBridge] Received HOLTMONT_3D_IMPORT:', {
-          nodeCount: Object.keys(nodes).length,
-          rootNodeIds,
+      try {
+        console.log('[HoltmontBridge] HOLTMONT_3D_IMPORT recibido:', {
+          nodeCount: Object.keys(scene.nodes).length,
+          rootNodeIds: scene.rootNodeIds,
+          dropped: scene.dropped,
         })
 
-        // setScene runs migrations, removes orphans, marks all nodes dirty, notifies subscribers
-        useScene.getState().setScene(nodes as any, rootNodeIds)
+        // setScene corre migraciones, quita huérfanos, marca todo sucio y avisa
+        // a los suscriptores.
+        useScene.getState().setScene(scene.nodes, scene.rootNodeIds)
 
-        // setScene always resets collections to {}; restore them if present
-        if (Object.keys(collections).length > 0) {
-          useScene.setState({ collections: collections as any })
+        // setScene siempre deja collections en {}; se restauran si venían.
+        if (Object.keys(scene.collections).length > 0) {
+          useScene.setState({ collections: scene.collections as never })
         }
 
-        console.log('[HoltmontBridge] Scene applied — sending HOLTMONT_3D_IMPORT_ACK')
-        postToParent({ type: 'HOLTMONT_3D_IMPORT_ACK' })
+        postToParent({
+          type: 'HOLTMONT_3D_IMPORT_ACK',
+          nodeCount: Object.keys(scene.nodes).length,
+          dropped: scene.dropped,
+        })
       } catch (err) {
-        console.error('[HoltmontBridge] Failed to apply imported scene:', err)
+        console.error('[HoltmontBridge] No se pudo aplicar la escena importada:', err)
+        postToParent({
+          type: 'HOLTMONT_3D_IMPORT_ERROR',
+          reason: String(err),
+          dropped: scene.dropped,
+        })
       }
     }
 
     window.addEventListener('message', handleMessage)
 
-    // Signal to parent that the editor is ready to receive scenes
+    // Sonda de diagnóstico: dice qué se dibujó de verdad, no qué se guardó.
+    // La usa la prueba de humo (`scripts/holtmont-smoke.mjs`) para distinguir
+    // «la escena está en el store» de «la escena tiene geometría en pantalla»,
+    // que es justo la diferencia entre el bug del lienzo negro y el arreglo.
+    ;(window as unknown as Record<string, unknown>).__holtmontProbe = () => {
+      const nodes = useScene.getState().nodes
+      const resumen: Record<string, { total: number; conGeometria: number }> = {}
+      let mayorLado = 0
+
+      for (const [tipo, ids] of Object.entries(sceneRegistry.byType)) {
+        const entrada = { total: 0, conGeometria: 0 }
+        for (const id of ids) {
+          if (!nodes[id as keyof typeof nodes]) continue
+          entrada.total += 1
+          const objeto = sceneRegistry.nodes.get(id)
+          if (!objeto) continue
+          const caja = new Box3().setFromObject(objeto)
+          if (caja.isEmpty()) continue
+          const lado = Math.max(
+            caja.max.x - caja.min.x,
+            caja.max.y - caja.min.y,
+            caja.max.z - caja.min.z,
+          )
+          if (lado > 0.01) {
+            entrada.conGeometria += 1
+            mayorLado = Math.max(mayorLado, lado)
+          }
+        }
+        if (entrada.total > 0) resumen[tipo] = entrada
+      }
+
+      return { nodos: Object.keys(nodes).length, porTipo: resumen, mayorLado }
+    }
+
+    // Avisa al padre que el editor ya puede recibir escenas.
     postToParent({ type: 'PASCAL_READY' })
-    console.log('[HoltmontBridge] Listener mounted — PASCAL_READY sent')
+    console.log('[HoltmontBridge] Listener montado — PASCAL_READY enviado')
 
     return () => {
       window.removeEventListener('message', handleMessage)

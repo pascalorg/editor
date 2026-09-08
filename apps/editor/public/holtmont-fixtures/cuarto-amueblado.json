@@ -1,0 +1,386 @@
+{
+  "nodes": {
+    "site_5z9zytt6atfot6la": {
+      "object": "node",
+      "id": "site_5z9zytt6atfot6la",
+      "type": "site",
+      "name": "Site",
+      "parentId": null,
+      "visible": true,
+      "metadata": {},
+      "polygon": {
+        "type": "polygon",
+        "points": [
+          [
+            -12.5,
+            -12.0
+          ],
+          [
+            12.5,
+            -12.0
+          ],
+          [
+            12.5,
+            12.0
+          ],
+          [
+            -12.5,
+            12.0
+          ]
+        ]
+      },
+      "children": [
+        {
+          "object": "node",
+          "id": "building_k3l4w0vcr4zqidrh",
+          "type": "building",
+          "name": "Building",
+          "parentId": "site_5z9zytt6atfot6la",
+          "visible": true,
+          "metadata": {},
+          "children": [
+            "level_34uz1g9cges4ppmw"
+          ],
+          "position": [
+            0,
+            0,
+            0
+          ],
+          "rotation": [
+            0,
+            0,
+            0
+          ]
+        }
+      ]
+    },
+    "building_k3l4w0vcr4zqidrh": {
+      "object": "node",
+      "id": "building_k3l4w0vcr4zqidrh",
+      "type": "building",
+      "name": "Building",
+      "parentId": "site_5z9zytt6atfot6la",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "level_34uz1g9cges4ppmw"
+      ],
+      "position": [
+        0,
+        0,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ]
+    },
+    "level_34uz1g9cges4ppmw": {
+      "object": "node",
+      "id": "level_34uz1g9cges4ppmw",
+      "type": "level",
+      "name": "Level 0",
+      "parentId": "building_k3l4w0vcr4zqidrh",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "wall_xtbyginofxjztalq",
+        "wall_amp30lwjox82w8yd",
+        "wall_cnpxsmb7ghe3jwob",
+        "wall_66d7rvi5o5vm9nh0",
+        "slab_clcymucwcux3jvx9",
+        "ceiling_x9e02bm89gegyrcg",
+        "item_riw5vzhwggj78seg",
+        "item_5rqsv35swrhzg8sx",
+        "item_aykebffn6xhvv2pn"
+      ],
+      "level": 0
+    },
+    "slab_clcymucwcux3jvx9": {
+      "object": "node",
+      "id": "slab_clcymucwcux3jvx9",
+      "type": "slab",
+      "name": "Slab L0",
+      "parentId": "level_34uz1g9cges4ppmw",
+      "visible": true,
+      "metadata": {},
+      "polygon": [
+        [
+          -2.5,
+          2.0
+        ],
+        [
+          -2.5,
+          -2.0
+        ],
+        [
+          2.5,
+          -2.0
+        ],
+        [
+          2.5,
+          2.0
+        ]
+      ],
+      "holes": [],
+      "holeMetadata": [],
+      "elevation": 0.05,
+      "autoFromWalls": true
+    },
+    "ceiling_x9e02bm89gegyrcg": {
+      "object": "node",
+      "id": "ceiling_x9e02bm89gegyrcg",
+      "type": "ceiling",
+      "name": "Ceiling L0",
+      "parentId": "level_34uz1g9cges4ppmw",
+      "visible": true,
+      "metadata": {},
+      "children": [],
+      "polygon": [
+        [
+          -2.5,
+          2.0
+        ],
+        [
+          -2.5,
+          -2.0
+        ],
+        [
+          2.5,
+          -2.0
+        ],
+        [
+          2.5,
+          2.0
+        ]
+      ],
+      "holes": [],
+      "holeMetadata": [],
+      "height": 2.5,
+      "autoFromWalls": true
+    },
+    "wall_xtbyginofxjztalq": {
+      "object": "node",
+      "id": "wall_xtbyginofxjztalq",
+      "type": "wall",
+      "name": "Wall 1 L0",
+      "parentId": "level_34uz1g9cges4ppmw",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "door_yws4t6inzfaqci75"
+      ],
+      "start": [
+        -2.5,
+        -2.0
+      ],
+      "end": [
+        2.5,
+        -2.0
+      ],
+      "thickness": 0.2,
+      "height": 2.5,
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_amp30lwjox82w8yd": {
+      "object": "node",
+      "id": "wall_amp30lwjox82w8yd",
+      "type": "wall",
+      "name": "Wall 2 L0",
+      "parentId": "level_34uz1g9cges4ppmw",
+      "visible": true,
+      "metadata": {},
+      "children": [
+        "window_xd92gwo37dgl3roo"
+      ],
+      "start": [
+        2.5,
+        -2.0
+      ],
+      "end": [
+        2.5,
+        2.0
+      ],
+      "thickness": 0.2,
+      "height": 2.5,
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_cnpxsmb7ghe3jwob": {
+      "object": "node",
+      "id": "wall_cnpxsmb7ghe3jwob",
+      "type": "wall",
+      "name": "Wall 3 L0",
+      "parentId": "level_34uz1g9cges4ppmw",
+      "visible": true,
+      "metadata": {},
+      "children": [],
+      "start": [
+        2.5,
+        2.0
+      ],
+      "end": [
+        -2.5,
+        2.0
+      ],
+      "thickness": 0.2,
+      "height": 2.5,
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "wall_66d7rvi5o5vm9nh0": {
+      "object": "node",
+      "id": "wall_66d7rvi5o5vm9nh0",
+      "type": "wall",
+      "name": "Wall 4 L0",
+      "parentId": "level_34uz1g9cges4ppmw",
+      "visible": true,
+      "metadata": {},
+      "children": [],
+      "start": [
+        -2.5,
+        2.0
+      ],
+      "end": [
+        -2.5,
+        -2.0
+      ],
+      "thickness": 0.2,
+      "height": 2.5,
+      "frontSide": "exterior",
+      "backSide": "interior"
+    },
+    "door_yws4t6inzfaqci75": {
+      "object": "node",
+      "id": "door_yws4t6inzfaqci75",
+      "type": "door",
+      "name": "Door 1",
+      "parentId": "wall_xtbyginofxjztalq",
+      "visible": true,
+      "metadata": {},
+      "wallId": "wall_xtbyginofxjztalq",
+      "side": "front",
+      "position": [
+        2.5,
+        1.05,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "width": 0.9,
+      "height": 2.1
+    },
+    "window_xd92gwo37dgl3roo": {
+      "object": "node",
+      "id": "window_xd92gwo37dgl3roo",
+      "type": "window",
+      "name": "Window 1",
+      "parentId": "wall_amp30lwjox82w8yd",
+      "visible": true,
+      "metadata": {},
+      "wallId": "wall_amp30lwjox82w8yd",
+      "side": "front",
+      "position": [
+        2.0,
+        1.4,
+        0
+      ],
+      "rotation": [
+        0,
+        0,
+        0
+      ],
+      "width": 1.2,
+      "height": 1.0
+    },
+    "item_riw5vzhwggj78seg": {
+      "object": "node",
+      "id": "item_riw5vzhwggj78seg",
+      "type": "item",
+      "name": "cama",
+      "parentId": "level_34uz1g9cges4ppmw",
+      "visible": true,
+      "metadata": {
+        "holtmontAsset": "cama"
+      },
+      "children": [],
+      "position": [
+        -1.0,
+        0,
+        1.0
+      ],
+      "rotation": [
+        0,
+        1.5707963267948966,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    "item_5rqsv35swrhzg8sx": {
+      "object": "node",
+      "id": "item_5rqsv35swrhzg8sx",
+      "type": "item",
+      "name": "escritorio",
+      "parentId": "level_34uz1g9cges4ppmw",
+      "visible": true,
+      "metadata": {
+        "holtmontAsset": "escritorio"
+      },
+      "children": [],
+      "position": [
+        1.5,
+        0,
+        -1.0
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    },
+    "item_aykebffn6xhvv2pn": {
+      "object": "node",
+      "id": "item_aykebffn6xhvv2pn",
+      "type": "item",
+      "name": "unicornio",
+      "parentId": "level_34uz1g9cges4ppmw",
+      "visible": true,
+      "metadata": {
+        "holtmontAsset": "unicornio"
+      },
+      "children": [],
+      "position": [
+        0.0,
+        0,
+        0.0
+      ],
+      "rotation": [
+        0,
+        0.0,
+        0
+      ],
+      "scale": [
+        1,
+        1,
+        1
+      ]
+    }
+  },
+  "rootNodeIds": [
+    "site_5z9zytt6atfot6la"
+  ]
+}
