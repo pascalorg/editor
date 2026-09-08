@@ -1,5 +1,6 @@
 import { nodeRegistry } from '../registry'
-import type { AnyNode, AnyNodeId } from '../schema'
+import type { AnyNode, AnyNodeId, BuildingNode } from '../schema'
+import { getLevelElevations } from './storey'
 
 /**
  * The "System" primitive: connected components over the port graph.
@@ -45,16 +46,39 @@ type PortRecord = {
 
 function collectPorts(nodes: Readonly<Record<AnyNodeId, AnyNode>>): PortRecord[] {
   const result: PortRecord[] = []
+  const elevations = getLevelElevations(nodes)
   for (const node of Object.values(nodes)) {
     if (!node) continue
     const ports = nodeRegistry.get(node.type)?.ports?.(node)
     if (!ports) continue
+    let ancestor: AnyNode | undefined = node
+    const visited = new Set<AnyNodeId>()
+    while (ancestor && ancestor.type !== 'level' && !visited.has(ancestor.id)) {
+      visited.add(ancestor.id)
+      ancestor = ancestor.parentId ? nodes[ancestor.parentId as AnyNodeId] : undefined
+    }
+    const elevation = ancestor?.type === 'level' ? elevations.get(ancestor.id) : undefined
+    const building = elevation?.buildingId ? nodes[elevation.buildingId as AnyNodeId] : undefined
     for (const port of ports) {
+      // Port definitions already apply the node transform; only the level/building frame remains.
+      let [x, y, z] = port.position
+      y += elevation?.baseY ?? 0
+      if (building?.type === 'building') {
+        const { position, rotation } = building as BuildingNode
+        const [rx, ry, rz] = rotation
+        const zx = Math.cos(rz) * x - Math.sin(rz) * y
+        const zy = Math.sin(rz) * x + Math.cos(rz) * y
+        const yx = Math.cos(ry) * zx + Math.sin(ry) * z
+        const yz = -Math.sin(ry) * zx + Math.cos(ry) * z
+        x = yx + position[0]
+        y = Math.cos(rx) * zy - Math.sin(rx) * yz + position[1]
+        z = Math.sin(rx) * zy + Math.cos(rx) * yz + position[2]
+      }
       result.push({
         nodeId: node.id,
-        x: port.position[0],
-        y: port.position[1],
-        z: port.position[2],
+        x,
+        y,
+        z,
         system: port.system,
       })
     }
@@ -107,6 +131,7 @@ export function buildPortComponents(nodes: Readonly<Record<AnyNodeId, AnyNode>>)
     for (let j = i + 1; j < ports.length; j++) {
       const b = ports[j]!
       if (a.nodeId === b.nodeId) continue
+      if (a.system && b.system && a.system !== b.system) continue
       const dx = a.x - b.x
       const dy = a.y - b.y
       const dz = a.z - b.z

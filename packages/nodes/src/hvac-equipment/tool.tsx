@@ -11,6 +11,7 @@ import { isGridSnapActive, isMagneticSnapActive, triggerSFX, useEditor } from '@
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { subscribeAccessorySnapping } from '../shared/accessory-snapping'
 import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { hvacEquipmentDefinition } from './definition'
@@ -70,10 +71,14 @@ const HvacEquipmentTool = () => {
     const resolveAligned = (event: GridEvent): [number, number, number] =>
       alignDrawPoint(resolve(event), {
         applySnap: isMagneticSnapActive(),
-        bypass: false,
+        bypass: !isMagneticSnapActive(),
       })
 
-    const onMove = (event: GridEvent) => setCursor(resolveAligned(event))
+    let lastEvent: GridEvent | null = null
+    const onMove = (event: GridEvent) => {
+      lastEvent = event
+      setCursor(resolveAligned(event))
+    }
 
     const onClick = (event: GridEvent) => {
       const position = resolveAligned(event)
@@ -108,10 +113,14 @@ const HvacEquipmentTool = () => {
       triggerSFX('sfx:item-rotate')
     }
 
+    const unsubscribeSnapping = subscribeAccessorySnapping(() => {
+      if (lastEvent) onMove(lastEvent)
+    })
     emitter.on('grid:move', onMove)
     emitter.on('grid:click', onClick)
     window.addEventListener('keydown', onKeyDown, true)
     return () => {
+      unsubscribeSnapping()
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', onClick)
       window.removeEventListener('keydown', onKeyDown, true)

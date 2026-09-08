@@ -5,6 +5,7 @@ import {
   CursorSphere,
   EDITOR_LAYER,
   isGridSnapActive,
+  isMagneticSnapActive,
   triggerSFX,
   useEditor,
 } from '@pascal-app/editor'
@@ -13,30 +14,24 @@ import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Euler, Quaternion, Vector3 } from 'three'
 import {
+  findAccessoryPort,
+  snapAccessoryPoint,
+  subscribeAccessorySnapping,
+} from '../shared/accessory-snapping'
+import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
+import {
   AXIS_VECTORS,
   cycleRotationAxis,
   getRotationAxis,
   ROTATE_STEP_RAD,
 } from '../shared/fitting-rotation'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
-import {
-  collectScenePorts,
-  DUCT_PORT_SYSTEMS,
-  findNearestPortXZ,
-  type ScenePort,
-} from '../shared/ports'
+import { collectScenePorts, DUCT_PORT_SYSTEMS, type ScenePort } from '../shared/ports'
 import { ductFittingDefinition } from './definition'
 import { buildDuctFittingGeometry } from './geometry'
 import { localFittingPorts } from './ports'
 
-/** Snap radius (meters, XZ) for mating onto an existing port. */
-const PORT_SNAP_RADIUS_M = 0.5
 const PREVIEW_OPACITY = 0.55
-
-function snap(value: number, step: number): number {
-  if (step <= 0) return value
-  return Math.round(value / step) * step
-}
 
 type Placement = {
   position: [number, number, number]
@@ -57,13 +52,20 @@ function resolvePlacement(
   previewNode: DuctFittingNode,
   gridStep: number,
   manualQuat: Quaternion,
+  surfaceHit: boolean,
+  surfaceNormal?: [number, number, number],
 ): Placement {
-  const port = findNearestPortXZ(
-    raw,
-    collectScenePorts({ systems: DUCT_PORT_SYSTEMS }),
-    PORT_SNAP_RADIUS_M,
-  )
+  const levelId = useViewer.getState().selection.levelId
+  const port = levelId
+    ? findAccessoryPort(
+        raw,
+        collectScenePorts({ systems: DUCT_PORT_SYSTEMS, levelId }),
+        isGridSnapActive() || isMagneticSnapActive(),
+        surfaceHit,
+      )
+    : null
   if (port) {
+    clearDrawAlignment()
     const direction = new Vector3(...port.direction).normalize()
     // Local +X must map onto the port's outward direction so the inlet
     // (local -X) faces back into the run it's joining. Manual rotation
@@ -82,7 +84,10 @@ function resolvePlacement(
   }
   const euler = new Euler().setFromQuaternion(manualQuat)
   return {
-    position: [snap(raw[0], gridStep), 0, snap(raw[2], gridStep)],
+    position: alignDrawPoint(snapAccessoryPoint(raw, gridStep, surfaceNormal), {
+      applySnap: !surfaceHit && isMagneticSnapActive(),
+      bypass: surfaceHit || !isMagneticSnapActive(),
+    }),
     rotation: [euler.x, euler.y, euler.z],
     snapPort: null,
   }
@@ -113,6 +118,8 @@ const DuctFittingTool = () => {
   const manualQuatRef = useRef(new Quaternion())
   // Last raw cursor position so a key press can recompute the placement
   // without waiting for the next mouse move.
+  const surfaceNormalRef = useRef<[number, number, number] | undefined>(undefined)
+  const surfaceHitRef = useRef(false)
   const lastRawRef = useRef<[number, number, number] | null>(null)
 
   // Ghost matches exactly what a click creates (the kind's defaults).
@@ -147,22 +154,38 @@ const DuctFittingTool = () => {
           previewNode,
           isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
           manualQuatRef.current,
+          surfaceHitRef.current,
+          surfaceNormalRef.current,
         ),
       )
     }
 
     const onMove = (event: GridEvent) => {
-      lastRawRef.current = [event.localPosition[0], 0, event.localPosition[2]]
+      surfaceNormalRef.current = event.surfaceNormal
+      surfaceHitRef.current = !!event.surfaceLocalPosition
+      lastRawRef.current = event.surfaceLocalPosition ?? [
+        event.localPosition[0],
+        0,
+        event.localPosition[2],
+      ]
       recompute()
     }
 
     const onClick = (event: GridEvent) => {
-      lastRawRef.current = [event.localPosition[0], 0, event.localPosition[2]]
+      surfaceNormalRef.current = event.surfaceNormal
+      surfaceHitRef.current = !!event.surfaceLocalPosition
+      lastRawRef.current = event.surfaceLocalPosition ?? [
+        event.localPosition[0],
+        0,
+        event.localPosition[2],
+      ]
       const { position, rotation } = resolvePlacement(
         lastRawRef.current,
         previewNode,
         isGridSnapActive() ? useEditor.getState().gridSnapStep : 0,
         manualQuatRef.current,
+        surfaceHitRef.current,
+        surfaceNormalRef.current,
       )
       const fitting = DuctFittingNode.parse({
         ...ductFittingDefinition.defaults(),
@@ -199,10 +222,13 @@ const DuctFittingTool = () => {
       }
     }
 
+    const unsubscribeSnapping = subscribeAccessorySnapping(recompute)
     emitter.on('grid:move', onMove)
     emitter.on('grid:click', onClick)
     window.addEventListener('keydown', onKeyDown, true)
     return () => {
+      unsubscribeSnapping()
+      clearDrawAlignment()
       emitter.off('grid:move', onMove)
       emitter.off('grid:click', onClick)
       window.removeEventListener('keydown', onKeyDown, true)
