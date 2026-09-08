@@ -9,7 +9,12 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { isIsolationActive, publishPerfBatchStats, useViewer } from '@pascal-app/viewer'
+import {
+  getPendingWallRebuildCount,
+  isIsolationActive,
+  publishPerfBatchStats,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import type { Object3D } from 'three'
@@ -47,6 +52,7 @@ const store = new NodeBatchStore(
  * marking them.
  */
 const changedNodes = new Set<string>()
+const surfaceLevelReadyAt = new Map<string, number>()
 const staleNodes = new Set<string>()
 /**
  * Members whose wave joined only part of their meshes (the rest fell under
@@ -114,6 +120,7 @@ function appearanceChanged(): boolean {
 export function resetNodeBatchState() {
   releaseAll()
   changedNodes.clear()
+  surfaceLevelReadyAt.clear()
   staleNodes.clear()
   partialNodes.clear()
   leftoverNodes.clear()
@@ -138,16 +145,19 @@ function publishBatchStats() {
     items: stats.nodes,
     instances: stats.instances,
     containers: stats.batches,
+    releases: stats.releases,
+    joins: stats.joins,
+    geometryReplacements: stats.geometryReplacements,
+    overflowRebuilds: stats.overflowRebuilds,
+    geometryBytesCopied: stats.geometryBytesCopied,
   })
 }
 
 function releaseNode(nodeId: string) {
   partialNodes.delete(nodeId)
   leftoverNodes.delete(nodeId)
-  if (store.release(nodeId)) {
-    revealBatchedNode(nodeId)
-    publishBatchStats()
-  }
+  store.release(nodeId)
+  revealBatchedNode(nodeId)
 }
 
 function releaseAll() {
@@ -206,7 +216,44 @@ export function runBatchFrame(
   invalidate: () => void,
   wakeRef: { current: ReturnType<typeof setTimeout> | null },
 ) {
+  try {
+    processBatchFrame(invalidate, wakeRef)
+  } finally {
+    store.flushReleases()
+    const emptyPending = store.pruneEmpty(
+      performance.now(),
+      new Set(surfaceLevelReadyAt.keys()),
+      staleNodes.size > 0 ? lastNodeChangeAtMs + NODE_BATCH_SETTLE_MS : 0,
+    )
+    if (emptyPending && !wakeRef.current) {
+      wakeRef.current = setTimeout(() => {
+        wakeRef.current = null
+        invalidate()
+      }, NODE_BATCH_SETTLE_MS + 20)
+    }
+    publishBatchStats()
+  }
+}
+
+function processBatchFrame(
+  invalidate: () => void,
+  wakeRef: { current: ReturnType<typeof setTimeout> | null },
+) {
   const nodeIds = getBatchableNodeIds()
+  const frameNow = performance.now()
+  const sceneNodes = useScene.getState().nodes
+  const draggingLevels = new Set<string>()
+  for (const id of useLiveNodeOverrides.getState().overrides.keys()) {
+    const node = sceneNodes[id as AnyNodeId]
+    if (node?.type === 'wall' && node.parentId) draggingLevels.add(node.parentId)
+  }
+  for (const level of draggingLevels) surfaceLevelReadyAt.set(level, Infinity)
+  const wallsPending = getPendingWallRebuildCount() > 0
+  for (const [level, readyAt] of surfaceLevelReadyAt) {
+    if (draggingLevels.has(level) || wallsPending) surfaceLevelReadyAt.set(level, Infinity)
+    else if (readyAt === Infinity) surfaceLevelReadyAt.set(level, frameNow + NODE_BATCH_SETTLE_MS)
+    else if (frameNow >= readyAt) surfaceLevelReadyAt.delete(level)
+  }
 
   let changed = changedNodes.size > 0
 
@@ -353,6 +400,10 @@ export function runBatchFrame(
     // Overrides defer like tint/dirt — an in-flight gesture ends with a
     // commit whose mark re-offers the node; dropping it here would strand it.
     if (
+      ((sceneNodes[nodeId as AnyNodeId]?.type === 'slab' ||
+        sceneNodes[nodeId as AnyNodeId]?.type === 'ceiling') &&
+        (wallsPending ||
+          surfaceLevelReadyAt.has(sceneNodes[nodeId as AnyNodeId]!.parentId ?? ''))) ||
       tinted.has(nodeId) ||
       dirty.has(nodeId as AnyNodeId) ||
       overrides.get(nodeId) !== undefined ||
@@ -402,7 +453,13 @@ export function runBatchFrame(
   // A new leftover may be the bucket-mate its peers were missing — re-offer
   // the whole set together next wave.
   if (newLeftovers) for (const nodeId of leftoverNodes) staleNodes.add(nodeId)
-  publishBatchStats()
+  if (deferred.size > 0) {
+    if (wakeRef.current) clearTimeout(wakeRef.current)
+    wakeRef.current = setTimeout(() => {
+      wakeRef.current = null
+      invalidate()
+    }, NODE_BATCH_SETTLE_MS + 20)
+  }
 }
 
 // The headless bake/thumbnail worker loads `?disable=draw` pages: one capture,

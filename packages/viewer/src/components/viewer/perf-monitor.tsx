@@ -74,6 +74,7 @@ export const PerfMonitor = () => {
   // synthetic click on the node.
   useEffect(() => {
     const probe = {
+      batchStats: readPerfBatchStats,
       listNodes(type: string): string[] {
         return Object.values(useScene.getState().nodes)
           .filter((n) => n.type === type)

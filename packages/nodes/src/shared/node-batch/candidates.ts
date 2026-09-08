@@ -159,7 +159,7 @@ export function collectBatchCandidate(nodeId: string): BatchCandidate | null {
   rootInverse.copy(levelRoot.matrixWorld).invert()
 
   const entries: BatchEntry[] = []
-  for (const mesh of meshes) {
+  for (const [meshIndex, mesh] of meshes.entries()) {
     const material = mesh.material as Material | Material[]
     // Array materials draw per geometry group — a shape BatchedMesh cannot
     // hold; transparent ones depend on per-object blend ordering (door/window
@@ -174,6 +174,8 @@ export function collectBatchCandidate(nodeId: string): BatchCandidate | null {
     entries.push({
       nodeId,
       levelId,
+      allocationKey:
+        node.type === 'ceiling' || node.type === 'slab' ? `${nodeId}:${meshIndex}` : undefined,
       mesh,
       geometry: mesh.geometry,
       material,

@@ -125,6 +125,7 @@ export {
   MONO_PALETTE,
   PRESET_PALETTES,
   type RenderShading,
+  registerMaterialCacheCleanup,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
   resolveSurfaceColor,

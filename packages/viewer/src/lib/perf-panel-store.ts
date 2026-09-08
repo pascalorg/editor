@@ -66,7 +66,16 @@ export function usePerfStats(): PerfStats | null {
  * looks no cheaper than an unbatched one — the saving is encode cost per
  * call, not call count.
  */
-export type PerfBatchStats = { items: number; instances: number; containers: number }
+export type PerfBatchStats = {
+  items: number
+  instances: number
+  containers: number
+  releases?: number
+  joins?: number
+  geometryReplacements?: number
+  overflowRebuilds?: number
+  geometryBytesCopied?: number
+}
 
 let batchStats: PerfBatchStats = { items: 0, instances: 0, containers: 0 }
 

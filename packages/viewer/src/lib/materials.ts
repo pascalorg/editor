@@ -788,6 +788,15 @@ export function disposeMaterial(material: THREE.Material): void {
   material.dispose()
 }
 
+const materialCacheCleanups = new Set<() => void>()
+
+export function registerMaterialCacheCleanup(cleanup: () => void): () => void {
+  materialCacheCleanups.add(cleanup)
+  return () => {
+    materialCacheCleanups.delete(cleanup)
+  }
+}
+
 export function clearMaterialCache(): void {
   for (const material of materialCache.values()) {
     material.dispose()
@@ -809,4 +818,5 @@ export function clearMaterialCache(): void {
   }
   textureCache.clear()
   textureLoadPromises.clear()
+  for (const cleanup of materialCacheCleanups) cleanup()
 }

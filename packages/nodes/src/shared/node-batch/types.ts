@@ -34,6 +34,8 @@ import type { BufferGeometry, Material, Matrix4, Mesh, Object3D } from 'three'
 export type BatchEntry = {
   nodeId: string
   levelId: string
+  /** Stable node/part identity for mutable surface geometry. */
+  allocationKey?: string
   /** Source mesh in the node's mounted subtree; draw-hidden while batched. */
   mesh: Mesh
   geometry: BufferGeometry
@@ -59,6 +61,11 @@ export type NodeBatchStats = {
   batches: number
   instances: number
   nodes: number
+  releases: number
+  joins: number
+  geometryReplacements: number
+  overflowRebuilds: number
+  geometryBytesCopied: number
 }
 
 /**
@@ -76,8 +83,14 @@ export type NodeBatchStoreApi = {
    * bookkeeping and wins nothing.
    */
   join(candidates: BatchCandidate[], minEntriesForNewBatch: number): BatchEntry[]
-  /** Removes the node's instances and reveals nothing (caller reveals). */
+  /** Hides draws immediately; deletion is coalesced by flushReleases. Caller reveals sources. */
   release(nodeId: string): boolean
+  flushReleases(now?: number): void
+  pruneEmpty(
+    now?: number,
+    retainedLevels?: ReadonlySet<string>,
+    earliestDisposalAt?: number,
+  ): boolean
   /** Drops batches orphaned by a level-subtree remount; returns their nodes. */
   pruneDetached(): Set<string>
   has(nodeId: string): boolean

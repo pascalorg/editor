@@ -8,6 +8,7 @@ import {
   useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
+import * as viewerExports from '@pascal-app/viewer'
 import { SCENE_LAYER, useViewer } from '@pascal-app/viewer'
 import {
   BackSide,
@@ -18,6 +19,11 @@ import {
   Mesh,
   MeshBasicMaterial,
 } from 'three'
+import {
+  combinePaintPreviews,
+  createPaintPreviewOwner,
+} from '../../../../editor/src/lib/paint-preview-owner'
+import { commitPaintScopeFanout } from '../../../../editor/src/lib/paint-scope'
 import { applyShadowOnly, clearShadowOnly } from '../../../../viewer/src/lib/shadow-only'
 import { getCeilingMaterials } from '../../ceiling/materials'
 import { ceilingPaint } from '../../ceiling/paint'
@@ -336,4 +342,274 @@ test.each([
   useLiveNodeOverrides.getState().clearAll()
   useInteractive.setState({ [`${kind}Animations`]: { [`${kind}_0`]: {} } } as never)
   expect(collectBatchCandidate(`${kind}_0`)).toBeNull()
+})
+
+test('paint interaction apply then drop ends every fan-out hold without restoring committed materials', () => {
+  const { meshes } = setup()
+  settle()
+  const targets = ['ceiling_0', 'ceiling_1', 'ceiling_2'].map((nodeId) => ({
+    nodeId,
+    role: 'surface',
+  }))
+  const owner = createPaintPreviewOwner()
+  let interaction = owner.wrap({
+    key: 'all-matching',
+    preview: () =>
+      combinePaintPreviews(
+        targets.map(
+          ({ nodeId, role }) =>
+            ceilingPaint.applyPreview({
+              node: useScene.getState().nodes[nodeId]!,
+              root: sceneRegistry.nodes.get(nodeId)!,
+              role,
+              material: { properties: { color: '#ff0000' } } as never,
+              materialPreset: undefined,
+            })!,
+        ),
+      ),
+    apply: () =>
+      commitPaintScopeFanout(
+        targets as never,
+        { properties: { color: '#ff0000' } } as never,
+        undefined,
+      ),
+  })
+  interaction!.preview!()
+  const previewMaterials = meshes.slice(0, 3).map((mesh) => mesh.material)
+  settle()
+  expect(targets.every(({ nodeId }) => isSlotPaintPreviewActive(nodeId))).toBe(true)
+  interaction!.apply!()
+  interaction = null
+  expect(targets.every(({ nodeId }) => !isSlotPaintPreviewActive(nodeId))).toBe(true)
+  expect(meshes.slice(0, 3).map((mesh) => mesh.material)).toEqual(previewMaterials)
+  captureChangedNodes()
+  useScene.getState().dirtyNodes.clear()
+  settle()
+  expect(meshes.slice(0, 3).every((mesh) => !mesh.layers.isEnabled(SCENE_LAYER))).toBe(true)
+})
+
+test('same-size surface rebuild replaces its reserved slot without growing used or rebuilding', () => {
+  const { root, meshes } = setup('slab')
+  const store = new NodeBatchStore(() => root)
+  stores.push(store)
+  store.join(
+    meshes.map((_, i) => candidate(`slab_${i}`)),
+    1,
+  )
+  const batch = batches(root)[0]!
+  const records = (
+    store as unknown as { batches: Map<string, { used: { vertices: number; indices: number } }> }
+  ).batches
+  const used = { ...records.values().next().value!.used }
+  const range = { ...batch.getGeometryRangeAt(0)! }
+  const replace = spyOn(batch, 'setGeometryAt')
+  const bytes = store.stats().geometryBytesCopied
+  store.release('slab_0')
+  meshes[0]!.geometry = new BoxGeometry(2, 1, 1)
+  store.join([candidate('slab_0')], 1)
+  expect(batches(root)[0]).toBe(batch)
+  expect(replace).toHaveBeenCalledTimes(1)
+  expect(records.values().next().value!.used).toEqual(used)
+  expect(batch.getGeometryRangeAt(0)).toEqual(range)
+  expect(store.stats().overflowRebuilds).toBe(0)
+  expect(store.stats().geometryReplacements).toBe(1)
+  expect(store.stats().geometryBytesCopied).toBeGreaterThan(bytes)
+  replace.mockRestore()
+})
+
+test('surface slot overflow rebuilds once from live reservations, reclaiming released allocations', () => {
+  const { root, meshes } = setup('slab', 12)
+  const store = new NodeBatchStore(() => root)
+  stores.push(store)
+  store.join(
+    meshes.map((_, i) => candidate(`slab_${i}`)),
+    1,
+  )
+  const old = batches(root)[0]!
+  for (let i = 0; i < 11; i++) store.release(`slab_${i}`)
+  meshes[0]!.geometry = new BoxGeometry(2, 1, 1, 12, 12, 12)
+  store.join([candidate('slab_0')], 1)
+  const batch = batches(root)[0]!
+  expect(batch).not.toBe(old)
+  expect(store.stats().overflowRebuilds).toBe(1)
+  const liveVertices =
+    Math.max(36, Math.ceil(meshes[0]!.geometry.attributes.position!.count * 1.25)) + 36
+  expect(batch.geometry.attributes.position!.count).toBe(liveVertices * 2)
+  expect(batch.instanceCount).toBe(2)
+})
+
+test('N releases in a frame delete once per instance and publish stats once', () => {
+  const { root } = setup('slab', 20)
+  settle()
+  const batch = batches(root)[0]!
+  const deletion = spyOn(batch, 'deleteInstance')
+  const publish = spyOn(viewerExports, 'publishPerfBatchStats')
+  const flush = spyOn(NodeBatchStore.prototype, 'flushReleases')
+  useLiveTransforms.getState().set('slab_0', { position: [1, 0, 0], rotation: 0 })
+  for (let i = 0; i < 15; i++) useScene.getState().dirtyNodes.add(`slab_${i}` as never)
+  captureChangedNodes()
+  useScene.getState().dirtyNodes.clear()
+  frame()
+  expect(flush).toHaveBeenCalledTimes(1)
+  expect(deletion).toHaveBeenCalledTimes(15)
+  expect(batch.instanceCount).toBe(5)
+  expect(publish).toHaveBeenCalledTimes(1)
+  expect(publish.mock.calls[0]![0].instances).toBe(5)
+  deletion.mockRestore()
+  publish.mockRestore()
+  flush.mockRestore()
+})
+
+test('empty container survives until quiet, is reused by a rejoin, and expires if unused', () => {
+  const { root } = setup('slab', 1)
+  const store = new NodeBatchStore(() => root)
+  stores.push(store)
+  store.join([candidate('slab_0')], 1)
+  const batch = batches(root)[0]!
+  store.release('slab_0')
+  store.flushReleases()
+  now = 179
+  store.pruneEmpty()
+  expect(batches(root)[0]).toBe(batch)
+  now = 181
+  store.join([candidate('slab_0')], 3)
+  store.pruneEmpty()
+  expect(batches(root)[0]).toBe(batch)
+  expect(store.stats().overflowRebuilds).toBe(0)
+  store.release('slab_0')
+  store.flushReleases()
+  now += 181
+  store.pruneEmpty()
+  expect(batches(root)).toHaveLength(0)
+})
+
+test('level surfaces wait through wall override, wall queue drain and quiet, then join in one wave', () => {
+  const { root, meshes } = setup('slab', 6)
+  const level2 = new Group()
+  sceneRegistry.nodes.set('level_second', level2)
+  sceneRegistry.byType.level.add('level_second')
+  const nodes = {
+    ...useScene.getState().nodes,
+    wall_drag: { id: 'wall_drag', type: 'wall', parentId: 'level_test', children: [] },
+    level_second: { id: 'level_second', type: 'level', children: [] },
+  } as Record<string, any>
+  for (let i = 3; i < 6; i++) {
+    level2.add(meshes[i]!)
+    nodes[`slab_${i}`] = { ...nodes[`slab_${i}`], parentId: 'level_second' }
+  }
+  useScene.setState({ nodes } as never)
+  settle()
+  const join = spyOn(NodeBatchStore.prototype, 'join')
+  let pending = 0
+  const queue = spyOn(viewerExports, 'getPendingWallRebuildCount').mockImplementation(() => pending)
+  useLiveNodeOverrides.getState().set('wall_drag', { visible: true } as Partial<AnyNode>)
+  for (const id of ['slab_0', 'slab_1', 'slab_3']) useScene.getState().dirtyNodes.add(id as never)
+  captureChangedNodes()
+  useScene.getState().dirtyNodes.clear()
+  settle()
+  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+  expect(meshes[1]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+  expect(meshes[2]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+  expect(meshes[3]!.layers.isEnabled(SCENE_LAYER)).toBe(false)
+  expect(batches(root)[0]!.instanceCount).toBe(1)
+  pending = 2
+  useLiveNodeOverrides.getState().clearAll()
+  settle()
+  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+  pending = 0
+  frame()
+  now += 179
+  frame()
+  expect(meshes[0]!.layers.isEnabled(SCENE_LAYER)).toBe(true)
+  join.mockClear()
+  now += 2
+  frame()
+  expect(meshes.slice(0, 3).every((mesh) => !mesh.layers.isEnabled(SCENE_LAYER))).toBe(true)
+  expect(join).toHaveBeenCalledTimes(1)
+  expect(join.mock.calls[0]![0].map(({ nodeId }) => nodeId)).toEqual(['slab_0', 'slab_1'])
+  join.mockRestore()
+  queue.mockRestore()
+})
+
+test('superseded, cancelled and failed paint interactions end holds once without ending a newer owner', () => {
+  setup()
+  let restored = 0
+  const paint = createSlotPaintCapability({
+    resolveRole: () => 'surface',
+    applyPreview: () => () => {
+      restored++
+    },
+  })
+  const owner = createPaintPreviewOwner()
+  const interaction = (key: string, apply = () => {}) =>
+    owner.wrap({
+      key,
+      apply,
+      preview: () =>
+        combinePaintPreviews([
+          paint.applyPreview({
+            node: useScene.getState().nodes.ceiling_0!,
+            root: sceneRegistry.nodes.get('ceiling_0')!,
+            role: 'surface',
+            material: undefined,
+            materialPreset: undefined,
+          })!,
+        ]),
+    })!
+  const first = interaction('first')
+  const cancelFirst = first.preview!()!
+  const second = interaction('second')
+  const cancelSecond = second.preview!()!
+  expect(restored).toBe(1)
+  cancelFirst()
+  expect(isSlotPaintPreviewActive('ceiling_0')).toBe(true)
+  second.apply!()
+  cancelSecond()
+  expect(restored).toBe(1)
+  expect(isSlotPaintPreviewActive('ceiling_0')).toBe(false)
+  const cancel = interaction('cancel').preview!()!
+  cancel()
+  cancel()
+  expect(restored).toBe(2)
+  expect(isSlotPaintPreviewActive('ceiling_0')).toBe(false)
+  const failed = interaction('failed', () => {
+    throw new Error('commit failed')
+  })
+  failed.preview!()
+  expect(() => failed.apply!()).toThrow('commit failed')
+  expect(restored).toBe(3)
+  expect(isSlotPaintPreviewActive('ceiling_0')).toBe(false)
+})
+
+test('deleting the last members schedules empty-container expiry without a rejoin candidate', () => {
+  const { root } = setup('slab', 3)
+  settle()
+  const batch = batches(root)[0]!
+  if (wakeRef.current) clearTimeout(wakeRef.current)
+  wakeRef.current = null
+  for (let i = 0; i < 3; i++) {
+    sceneRegistry.nodes.delete(`slab_${i}`)
+    sceneRegistry.byType.slab.delete(`slab_${i}`)
+  }
+  frame()
+  expect(batch.instanceCount).toBe(0)
+  expect(batches(root)).toHaveLength(1)
+  expect(wakeRef.current).not.toBeNull()
+  now += 181
+  frame()
+  expect(batches(root)).toHaveLength(0)
+})
+
+test('level remount releases orphaned draws and restores sources before collecting replacement batches', () => {
+  const { root, meshes } = setup('slab')
+  settle()
+  const replacement = new Group()
+  replacement.add(...meshes)
+  sceneRegistry.nodes.set('level_test', replacement)
+  frame()
+  expect(batches(root)).toHaveLength(0)
+  expect(meshes.every((mesh) => mesh.layers.isEnabled(SCENE_LAYER))).toBe(true)
+  settle()
+  expect(batches(replacement)).toHaveLength(1)
+  expect(meshes.every((mesh) => !mesh.layers.isEnabled(SCENE_LAYER))).toBe(true)
 })

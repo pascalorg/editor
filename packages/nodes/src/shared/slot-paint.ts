@@ -313,16 +313,17 @@ export function createSlotPaintCapability(config: SlotPaintConfig): PaintCapabil
         end()
         return null
       }
-      let restored = false
-      return () => {
-        if (restored) return
-        restored = true
+      let ended = false
+      const finish = (committed: boolean) => {
+        if (ended) return
+        ended = true
         try {
-          restore()
+          if (!committed) restore()
         } finally {
           end()
         }
       }
+      return Object.assign(() => finish(false), { commit: () => finish(true) })
     },
     getEffectiveMaterial: ({ node, role }) => {
       const ref = (node as SlotsNode).slots?.[role]

@@ -28,7 +28,7 @@ function runSourceTest(body: string) {
 test('real slab top/side/skirt collection, shared defaults, transparent overrides and cache ownership', () => {
   runSourceTest(`
     const sourceMaterials = await import('./packages/viewer/src/lib/materials.ts')
-    mock.module('@pascal-app/viewer', () => ({ ...viewer, resolveSlotDefaultMaterial: sourceMaterials.resolveSlotDefaultMaterial }))
+    mock.module('@pascal-app/viewer', () => ({ ...viewer, registerMaterialCacheCleanup: sourceMaterials.registerMaterialCacheCleanup, resolveSlotDefaultMaterial: sourceMaterials.resolveSlotDefaultMaterial }))
     const { buildSlabGeometry } = await import('./packages/nodes/src/slab/geometry.ts')
     const { collectBatchCandidate } = await import('./packages/nodes/src/shared/node-batch/candidates.ts')
     const { disposeObject3DResources } = await import('./packages/viewer/src/lib/dispose-object3d.ts')
@@ -65,7 +65,10 @@ test('real slab top/side/skirt collection, shared defaults, transparent override
     side.addEventListener('dispose', () => disposed++)
     disposeObject3DResources(first)
     assert.equal(disposed, 0)
-    const legacy = { ...slab, material: { properties: { color: '#123456' } } }
+    const preset = { ...core.MATERIAL_CATALOG[0], id: 'surface-cache-test', preset: { ...core.MATERIAL_CATALOG[0].preset, maps: {} } }
+    core.registerLibraryMaterials([preset])
+    const legacy = { ...slab, materialPreset: 'library:surface-cache-test' }
+    assert(core.getMaterialPresetByRef(legacy.materialPreset))
     const legacyFirst = buildSlabGeometry(legacy, ctx, 'solid')
     const legacySecond = buildSlabGeometry(legacy, ctx, 'solid')
     const top = legacyFirst.children[0].material
@@ -74,26 +77,38 @@ test('real slab top/side/skirt collection, shared defaults, transparent override
     disposeObject3DResources(legacyFirst)
     assert.equal(disposed, 0)
     assert.equal(top.transparent, false)
+    const { BatchedMesh } = await import('three')
+    const batch = new BatchedMesh(4, 1024, 1024, top)
+    root.add(legacySecond, batch)
+    let reboundBeforeDispose = false
+    top.addEventListener('dispose', () => { reboundBeforeDispose = legacySecond.children[0].material !== top })
+    sourceMaterials.clearMaterialCache()
+    assert.equal(reboundBeforeDispose, true)
+    assert.notEqual(legacySecond.children[0].material, top)
+    assert.equal(batch.material, legacySecond.children[0].material)
+    assert.equal(buildSlabGeometry(legacy, ctx, 'solid').children[0].material, legacySecond.children[0].material)
+    assert.equal(disposed, 2)
+    root.remove(legacySecond, batch)
+    sourceMaterials.clearMaterialCache()
+    assert.notEqual(buildSlabGeometry(legacy, ctx, 'solid').children[0].material, legacySecond.children[0].material)
     assert.notEqual(sourceMaterials.resolveSlotDefaultMaterial('#cccccc', 'solid', 0.8), sourceMaterials.resolveSlotDefaultMaterial('#cccccc', 'rendered', 0.8))
     assert.notEqual(sourceMaterials.resolveSlotDefaultMaterial('#cccccc', 'rendered', 0.8), sourceMaterials.resolveSlotDefaultMaterial('#cccccc', 'rendered', 0.4))
   `)
 })
 
 test('priority-1 dirty snapshot sees the priority-2 ceiling rebuild and batches replacement geometry at 5', () => {
-  runSourceTest(String.raw`
+  runSourceTest(`
     const scene = core.useScene
     const selectorHook = Object.assign((selector) => selector(scene.getState()), scene)
     mock.module('@pascal-app/core', () => ({ ...core, useScene: selectorHook }))
     const fiber = await import('@react-three/fiber')
     const callbacks = []
-    mock.module('@react-three/fiber', () => ({ ...fiber, useFrame: (callback, priority = 0) => callbacks.push({ callback, priority }) }))
+    mock.module('@react-three/fiber', () => ({ ...fiber, useThree: (selector) => selector({ invalidate: () => {} }), useFrame: (callback, priority = 0) => callbacks.push({ callback, priority }) }))
+    const react = await import('react')
+    const refs = []
+    mock.module('react', () => ({ ...react, useEffect: () => {}, useRef: (value) => { const ref = { current: value }; refs.push(ref); return ref } }))
     const { CeilingSystem, generateCeilingGeometry } = await import('./packages/viewer/src/systems/ceiling/ceiling-system.tsx')
-    const { captureChangedNodes, runBatchFrame, resetNodeBatchState } = await import('./packages/nodes/src/shared/node-batch/system.tsx')
-    const batchSource = await Bun.file('./packages/nodes/src/shared/node-batch/system.tsx').text()
-    assert.match(batchSource, /useFrame\(captureChangedNodes, 1\)/)
-    assert.match(batchSource, /useFrame\(\(\) => runBatchFrame\(invalidate, wakeRef\), 5\)/)
-    const geometrySource = await Bun.file('./packages/viewer/src/systems/geometry/geometry-system.tsx').text()
-    assert.match(geometrySource, /}, 2\)/)
+    const { NodeBatchSystem, runBatchFrame, resetNodeBatchState } = await import('./packages/nodes/src/shared/node-batch/system.tsx')
     let now = 0
     performance.now = () => now
     const root = new Group()
@@ -123,8 +138,15 @@ test('priority-1 dirty snapshot sees the priority-2 ceiling rebuild and batches 
     CeilingSystem()
     assert.equal(callbacks.length, 1)
     assert.equal(callbacks[0].priority, 2)
-    const pipeline = [{ priority: 1, callback: captureChangedNodes }, callbacks[0], { priority: 5, callback: frame }].sort((a,b) => a.priority - b.priority)
-    assert.deepEqual(pipeline.map((pass) => pass.priority), [1, 2, 5])
+    NodeBatchSystem().type()
+    assert.deepEqual(callbacks.map((pass) => pass.priority), [2, 1, 5])
+    const viewerStore = viewer.useViewer
+    mock.module('./packages/viewer/src/store/use-viewer.ts', () => ({ default: Object.assign((selector) => selector(viewerStore.getState()), viewerStore) }))
+    const { GeometrySystem } = await import('./packages/viewer/src/systems/geometry/geometry-system.tsx')
+    GeometrySystem()
+    assert.equal(callbacks[3].priority, 2)
+    const pipeline = callbacks.sort((a,b) => a.priority - b.priority)
+    assert.deepEqual(pipeline.map((pass) => pass.priority), [1, 2, 2, 5])
     for (const pass of pipeline) pass.callback()
     assert.equal(scene.getState().dirtyNodes.has('ceiling_0'), false)
     assert.notEqual(meshes[0].geometry, oldGeometry)
@@ -135,5 +157,6 @@ test('priority-1 dirty snapshot sees the priority-2 ceiling rebuild and batches 
     assert(packed.some((batch) => Array.from(batch.geometry.attributes.position.array).includes(8)))
     resetNodeBatchState()
     if (wakeRef.current) clearTimeout(wakeRef.current)
+    for (const ref of refs) if (ref.current) clearTimeout(ref.current)
   `)
 })

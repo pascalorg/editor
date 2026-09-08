@@ -9,6 +9,7 @@ import {
   type LevelNode,
   type SiteNode,
   type SlabNode,
+  sceneRegistry,
   slabPolygonContextFromGeometry,
   surfaceHeightAt,
   terrainFieldOf,
@@ -22,6 +23,7 @@ import {
   createSurfaceRoleMaterial,
   generateSlabGeometry,
   type RenderShading,
+  registerMaterialCacheCleanup,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
 } from '@pascal-app/viewer'
@@ -57,6 +59,32 @@ type SlabMaterial = Material & {
 }
 
 const slabMaterialCache = new Map<string, Material>()
+registerMaterialCacheCleanup(() => {
+  const previous = new Map([...slabMaterialCache].map(([key, material]) => [material, key]))
+  slabMaterialCache.clear()
+  // Cache clearing can be requested by an embed while sources and batches are mounted.
+  // Rebind both before disposing; only live signatures populate the fresh cache.
+  const visited = new Set<object>()
+  for (const root of sceneRegistry.nodes.values()) {
+    root.traverse((object) => {
+      if (visited.has(object)) return
+      visited.add(object)
+      const mesh = object as Mesh
+      if (!mesh.isMesh) return
+      const replace = (material: Material) => {
+        const key = previous.get(material)
+        if (!key) return material
+        const { shading, ...node } = JSON.parse(key)
+        return getLegacySlabMaterial(node as SlabNode, shading)
+      }
+      mesh.material = Array.isArray(mesh.material)
+        ? mesh.material.map(replace)
+        : replace(mesh.material)
+    })
+  }
+  for (const material of previous.keys()) material.dispose()
+})
+
 function getSlabSlotMaterial(
   node: SlabNode,
   slotId: SlabSlotId,
