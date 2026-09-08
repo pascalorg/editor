@@ -10,6 +10,7 @@ import {
   type SceneMaterialId,
   type SurfaceRole,
 } from '@pascal-app/core'
+import { addAfterEffect, invalidate } from '@react-three/fiber'
 import * as THREE from 'three'
 import { float, mix, positionViewDirection, transformedNormalView } from 'three/tsl'
 import { MeshLambertNodeMaterial, MeshStandardNodeMaterial } from 'three/webgpu'
@@ -788,9 +789,10 @@ export function disposeMaterial(material: THREE.Material): void {
   material.dispose()
 }
 
-const materialCacheCleanups = new Set<() => void>()
+type MaterialCacheCleanup = (() => void) | (() => () => void)
+const materialCacheCleanups = new Set<MaterialCacheCleanup>()
 
-export function registerMaterialCacheCleanup(cleanup: () => void): () => void {
+export function registerMaterialCacheCleanup(cleanup: MaterialCacheCleanup): () => void {
   materialCacheCleanups.add(cleanup)
   return () => {
     materialCacheCleanups.delete(cleanup)
@@ -798,25 +800,27 @@ export function registerMaterialCacheCleanup(cleanup: () => void): () => void {
 }
 
 export function clearMaterialCache(): void {
-  for (const material of materialCache.values()) {
-    material.dispose()
-  }
+  const previous = [
+    ...materialCache.values(),
+    ...defaultMaterialCache.values(),
+    ...surfaceRoleMaterialCache.values(),
+    ...textureCache.values(),
+  ]
   materialCache.clear()
-
-  for (const material of defaultMaterialCache.values()) {
-    material.dispose()
-  }
   defaultMaterialCache.clear()
-
-  for (const material of surfaceRoleMaterialCache.values()) {
-    material.dispose()
-  }
   surfaceRoleMaterialCache.clear()
-
-  for (const texture of textureCache.values()) {
-    texture.dispose()
-  }
   textureCache.clear()
   textureLoadPromises.clear()
-  for (const cleanup of materialCacheCleanups) cleanup()
+  const disposals: Array<() => void> = []
+  for (const cleanup of materialCacheCleanups) {
+    const dispose = cleanup()
+    if (dispose) disposals.push(dispose)
+  }
+  // Consumers must rebuild sources and release batches before the old caches die.
+  const unsubscribe = addAfterEffect(() => {
+    unsubscribe()
+    for (const resource of previous) resource.dispose()
+    for (const dispose of disposals) dispose()
+  })
+  invalidate()
 }

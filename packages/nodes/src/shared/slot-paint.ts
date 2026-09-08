@@ -14,7 +14,12 @@ import {
   toSceneMaterialRef,
   useScene,
 } from '@pascal-app/core'
-import { createMaterial, createMaterialFromPresetRef, useViewer } from '@pascal-app/viewer'
+import {
+  createMaterial,
+  createMaterialFromPresetRef,
+  registerMaterialCacheCleanup,
+  useViewer,
+} from '@pascal-app/viewer'
 import { type Material, type Mesh, type Object3D, Raycaster } from 'three'
 
 /**
@@ -28,6 +33,11 @@ import { type Material, type Mesh, type Object3D, Raycaster } from 'three'
  * only the slot-resolution from a pointer hit and the mesh preview differ, so
  * those are injected per kind.
  */
+
+let materialCacheGeneration = 0
+registerMaterialCacheCleanup(() => {
+  materialCacheGeneration++
+})
 
 const previewCounts = new Map<string, number>()
 const previewListeners = new Set<(nodeId: string) => void>()
@@ -201,6 +211,7 @@ export function previewGeometrySlot(args: PaintPreviewArgs): (() => void) | null
   const preview = buildSlotPreviewMaterial(material, materialPreset)
   if (!preview) return () => {}
 
+  const generation = materialCacheGeneration
   const restores: Array<() => void> = []
   ;(root as Object3D).traverse((object) => {
     const mesh = object as Mesh
@@ -217,6 +228,10 @@ export function previewGeometrySlot(args: PaintPreviewArgs): (() => void) | null
 
   if (restores.length === 0) return null
   return () => {
+    if (generation !== materialCacheGeneration) {
+      useScene.getState().markDirty(args.node.id as AnyNodeId)
+      return
+    }
     for (let index = restores.length - 1; index >= 0; index -= 1) restores[index]?.()
   }
 }
@@ -231,6 +246,7 @@ export function previewSlotByUserData(args: PaintPreviewArgs): (() => void) | nu
   const preview = buildSlotPreviewMaterial(material, materialPreset)
   if (!preview) return () => {}
 
+  const generation = materialCacheGeneration
   const restores: Array<() => void> = []
   ;(root as Object3D).traverse((object) => {
     const mesh = object as Mesh
@@ -245,6 +261,10 @@ export function previewSlotByUserData(args: PaintPreviewArgs): (() => void) | nu
 
   if (restores.length === 0) return null
   return () => {
+    if (generation !== materialCacheGeneration) {
+      useScene.getState().markDirty(args.node.id as AnyNodeId)
+      return
+    }
     for (let index = restores.length - 1; index >= 0; index -= 1) restores[index]?.()
   }
 }

@@ -13,6 +13,7 @@ import {
   getPendingWallRebuildCount,
   isIsolationActive,
   publishPerfBatchStats,
+  registerMaterialCacheCleanup,
   useViewer,
 } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
@@ -185,9 +186,15 @@ export function subscribeBatchInteractions(invalidate: () => void): () => void {
     }
   })
   const unsubscribePreviews = subscribeSlotPaintPreviews(changed)
+  const unsubscribeMaterials = registerMaterialCacheCleanup(() => {
+    releaseAll()
+    for (const nodeId of getBatchableNodeIds()) changedNodes.add(nodeId)
+    invalidate()
+  })
   return () => {
     unsubscribeTransforms()
     unsubscribePreviews()
+    unsubscribeMaterials()
   }
 }
 

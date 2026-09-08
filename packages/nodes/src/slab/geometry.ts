@@ -9,10 +9,10 @@ import {
   type LevelNode,
   type SiteNode,
   type SlabNode,
-  sceneRegistry,
   slabPolygonContextFromGeometry,
   surfaceHeightAt,
   terrainFieldOf,
+  useScene,
 } from '@pascal-app/core'
 import {
   applyMaterialPresetToMaterials,
@@ -60,29 +60,15 @@ type SlabMaterial = Material & {
 
 const slabMaterialCache = new Map<string, Material>()
 registerMaterialCacheCleanup(() => {
-  const previous = new Map([...slabMaterialCache].map(([key, material]) => [material, key]))
+  const previous = [...slabMaterialCache.values()]
   slabMaterialCache.clear()
-  // Cache clearing can be requested by an embed while sources and batches are mounted.
-  // Rebind both before disposing; only live signatures populate the fresh cache.
-  const visited = new Set<object>()
-  for (const root of sceneRegistry.nodes.values()) {
-    root.traverse((object) => {
-      if (visited.has(object)) return
-      visited.add(object)
-      const mesh = object as Mesh
-      if (!mesh.isMesh) return
-      const replace = (material: Material) => {
-        const key = previous.get(material)
-        if (!key) return material
-        const { shading, ...node } = JSON.parse(key)
-        return getLegacySlabMaterial(node as SlabNode, shading)
-      }
-      mesh.material = Array.isArray(mesh.material)
-        ? mesh.material.map(replace)
-        : replace(mesh.material)
-    })
+  const state = useScene.getState()
+  for (const node of Object.values(state.nodes)) {
+    if (node.type === 'slab') state.markDirty(node.id as AnyNodeId)
   }
-  for (const material of previous.keys()) material.dispose()
+  return () => {
+    for (const material of previous) material.dispose()
+  }
 })
 
 function getSlabSlotMaterial(

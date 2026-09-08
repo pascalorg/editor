@@ -31,6 +31,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   getRoofMaterialArray,
+  registerMaterialCacheCleanup,
   useViewer,
 } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
@@ -2285,7 +2286,7 @@ const SelectionMaterialSync = () => {
   }, [])
 
   useEffect(() => {
-    return () => {
+    const clearHighlights = () => {
       for (const [mesh, entry] of highlightedMaterialsRef.current.entries()) {
         if (mesh.material === entry.highlightedMaterial) {
           mesh.material = entry.originalMaterial
@@ -2294,6 +2295,11 @@ const SelectionMaterialSync = () => {
       }
 
       highlightedMaterialsRef.current.clear()
+    }
+    const unsubscribe = registerMaterialCacheCleanup(clearHighlights)
+    return () => {
+      unsubscribe()
+      clearHighlights()
     }
   }, [])
 

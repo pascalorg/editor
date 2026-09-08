@@ -28,7 +28,7 @@ function runSourceTest(body: string) {
 test('real slab top/side/skirt collection, shared defaults, transparent overrides and cache ownership', () => {
   runSourceTest(`
     const sourceMaterials = await import('./packages/viewer/src/lib/materials.ts')
-    mock.module('@pascal-app/viewer', () => ({ ...viewer, registerMaterialCacheCleanup: sourceMaterials.registerMaterialCacheCleanup, resolveSlotDefaultMaterial: sourceMaterials.resolveSlotDefaultMaterial }))
+    mock.module('@pascal-app/viewer', () => ({ ...viewer, ...sourceMaterials }))
     const { buildSlabGeometry } = await import('./packages/nodes/src/slab/geometry.ts')
     const { collectBatchCandidate } = await import('./packages/nodes/src/shared/node-batch/candidates.ts')
     const { disposeObject3DResources } = await import('./packages/viewer/src/lib/dispose-object3d.ts')
@@ -77,20 +77,16 @@ test('real slab top/side/skirt collection, shared defaults, transparent override
     disposeObject3DResources(legacyFirst)
     assert.equal(disposed, 0)
     assert.equal(top.transparent, false)
-    const { BatchedMesh } = await import('three')
-    const batch = new BatchedMesh(4, 1024, 1024, top)
-    root.add(legacySecond, batch)
-    let reboundBeforeDispose = false
-    top.addEventListener('dispose', () => { reboundBeforeDispose = legacySecond.children[0].material !== top })
+    const { flushGlobalEffects } = await import('@react-three/fiber')
     sourceMaterials.clearMaterialCache()
-    assert.equal(reboundBeforeDispose, true)
-    assert.notEqual(legacySecond.children[0].material, top)
-    assert.equal(batch.material, legacySecond.children[0].material)
-    assert.equal(buildSlabGeometry(legacy, ctx, 'solid').children[0].material, legacySecond.children[0].material)
+    assert.equal(disposed, 0)
+    assert(core.useScene.getState().dirtyNodes.has(slab.id))
+    const replacement = buildSlabGeometry(legacy, ctx, 'solid')
+    assert.notEqual(replacement.children[0].material, top)
+    assert.notEqual(replacement.children[1].material, side)
+    assert.equal(buildSlabGeometry(legacy, ctx, 'solid').children[0].material, replacement.children[0].material)
+    flushGlobalEffects('after', 0)
     assert.equal(disposed, 2)
-    root.remove(legacySecond, batch)
-    sourceMaterials.clearMaterialCache()
-    assert.notEqual(buildSlabGeometry(legacy, ctx, 'solid').children[0].material, legacySecond.children[0].material)
     assert.notEqual(sourceMaterials.resolveSlotDefaultMaterial('#cccccc', 'solid', 0.8), sourceMaterials.resolveSlotDefaultMaterial('#cccccc', 'rendered', 0.8))
     assert.notEqual(sourceMaterials.resolveSlotDefaultMaterial('#cccccc', 'rendered', 0.8), sourceMaterials.resolveSlotDefaultMaterial('#cccccc', 'rendered', 0.4))
   `)
@@ -159,4 +155,176 @@ test('priority-1 dirty snapshot sees the priority-2 ceiling rebuild and batches 
     if (wakeRef.current) clearTimeout(wakeRef.current)
     for (const ref of refs) if (ref.current) clearTimeout(ref.current)
   `)
+})
+
+const slabCacheFixture = `
+  const sourceMaterials = await import('./packages/viewer/src/lib/materials.ts')
+  const scene = core.useScene
+  const viewerStore = viewer.useViewer
+  viewerStore.setState({ bumpGeometryRevision: () => viewerStore.setState({ geometryRevision: viewerStore.getState().geometryRevision + 1 }) })
+  const selectorHook = (store) => Object.assign((selector) => selector(store.getState()), store)
+  mock.module('@pascal-app/core', () => ({ ...core, useScene: selectorHook(scene), useRegistryVersion: () => 0 }))
+  mock.module('@pascal-app/viewer', () => ({ ...viewer, ...sourceMaterials, useViewer: selectorHook(viewerStore) }))
+  mock.module('./packages/viewer/src/store/use-viewer.ts', () => ({ default: selectorHook(viewerStore) }))
+  const fiber = await import('@react-three/fiber')
+  const frames = []
+  mock.module('@react-three/fiber', () => ({ ...fiber, useThree: (selector) => selector({ gl: { domElement: {} }, invalidate: () => {} }), useFrame: (callback, priority) => frames.push({ callback, priority }) }))
+  const react = await import('react')
+  let effects = []
+  let refs = []
+  let refIndex = 0
+  const hooks = { useEffect: (effect) => effects.push(effect), useCallback: (callback) => callback, useRef: (value) => refs[refIndex++] ??= { current: value }, useSyncExternalStore: (_, snapshot) => snapshot(), useDebugValue: () => {} }
+  mock.module('react', () => ({ ...react, ...hooks, default: { ...react.default, ...hooks } }))
+  const { buildSlabGeometry } = await import('./packages/nodes/src/slab/geometry.ts')
+  const { GeometrySystem } = await import('./packages/viewer/src/systems/geometry/geometry-system.tsx')
+  const { captureChangedNodes, runBatchFrame, subscribeBatchInteractions, resetNodeBatchState } = await import('./packages/nodes/src/shared/node-batch/system.tsx')
+  const preset = { ...core.MATERIAL_CATALOG[0], id: 'slab-cache-fixture', preset: { ...core.MATERIAL_CATALOG[0].preset, maps: {} } }
+  core.registerLibraryMaterials([preset])
+  core.registerNode({ kind: 'slab', schemaVersion: 1, schema: core.SlabNode, geometry: buildSlabGeometry, capabilities: {} })
+  const level = core.LevelNode.parse({ id: 'level_test', children: ['slab_0', 'slab_1', 'slab_2'] })
+  const nodes = { [level.id]: level }
+  const root = new Group()
+  core.sceneRegistry.nodes.set(level.id, root)
+  core.sceneRegistry.byType.level.add(level.id)
+  const slabs = Array.from({ length: 3 }, (_, i) => {
+    const node = core.SlabNode.parse({ id: 'slab_' + i, parentId: level.id, materialPreset: 'library:slab-cache-fixture', polygon: [[0,0],[2,0],[2,2],[0,2]] })
+    nodes[node.id] = node
+    const group = new Group()
+    root.add(group)
+    core.sceneRegistry.nodes.set(node.id, group)
+    core.sceneRegistry.byType.slab.add(node.id)
+    return group
+  })
+  scene.setState({ nodes, dirtyNodes: new Set(level.children), materials: {} })
+  viewerStore.setState({ shading: 'solid', textures: true, externalSelectedIds: [], previewSelectedIds: [], hoveredId: null, selection: { ...viewerStore.getState().selection, selectedIds: [], levelId: null } })
+  GeometrySystem()
+  effects = []; refs = []; refIndex = 0
+  const rebuild = frames[0].callback
+  const unsubscribeBatch = subscribeBatchInteractions(() => {})
+  let now = 0
+  performance.now = () => now
+  const wakeRef = { current: null }
+  const frame = () => {
+    captureChangedNodes()
+    rebuild()
+    runBatchFrame(() => {}, wakeRef)
+    fiber.flushGlobalEffects('after', now)
+  }
+  const settle = () => { frame(); now += 181; frame() }
+  const batches = () => root.children.filter((child) => child.name === 'item-batch')
+  const dispose = () => {
+    unsubscribeBatch()
+    resetNodeBatchState()
+    if (wakeRef.current) clearTimeout(wakeRef.current)
+  }
+  frame()
+`
+
+test('cache clear releases real slab batches and a single moved slab rejoins its peers under the fresh material key', () => {
+  runSourceTest(
+    slabCacheFixture +
+      `
+    settle()
+    assert.equal(batches().length, 2)
+    assert(batches().every((batch) => batch.instanceCount === 3))
+    const oldTop = slabs[0].children[0].material
+    const oldSide = slabs[0].children[1].material
+    const disposed = new Set()
+    for (const material of [oldTop, oldSide]) material.addEventListener('dispose', () => {
+      assert.equal(batches().some((batch) => batch.material === material), false)
+      assert(slabs.every((slab) => slab.children.every((mesh) => mesh.material !== material)))
+      disposed.add(material)
+    })
+    sourceMaterials.clearMaterialCache()
+    assert.equal(disposed.size, 0)
+    assert.equal(batches().length, 0)
+    assert(level.children.every((id) => scene.getState().dirtyNodes.has(id)))
+    frame()
+    assert.equal(disposed.size, 2)
+    settle()
+    const top = slabs[0].children[0].material
+    const batch = batches().find((batch) => batch.material === top)
+    assert(batch)
+    assert.equal(batch.instanceCount, 3)
+    core.useLiveTransforms.getState().set('slab_0', { position: [4,0,0], rotation: 0 })
+    slabs[0].position.x = 4
+    frame()
+    assert.equal(batch.instanceCount, 2)
+    core.useLiveTransforms.getState().clear('slab_0')
+    settle()
+    assert.equal(batches().find((container) => container.material === top), batch)
+    assert.equal(batch.instanceCount, 3)
+    assert.equal(batches().length, 2)
+    assert(slabs.every((slab) => slab.children.every((mesh) => !mesh.layers.isEnabled(viewer.SCENE_LAYER))))
+    dispose()
+  `,
+  )
+})
+
+test('selected legacy slab cache clear invalidates saved originals before disposal and deselect keeps current cached materials', () => {
+  runSourceTest(
+    slabCacheFixture +
+      `
+    const { SelectionManager } = await import('./packages/editor/src/components/editor/selection-manager.tsx')
+    const SelectionMaterialSync = SelectionManager().props.children[1].type
+    effects = []; refs = []; refIndex = 0
+    viewerStore.setState({ selection: { ...viewerStore.getState().selection, selectedIds: ['slab_0'] } })
+    const oldMesh = slabs[0].children[0]
+    const original = oldMesh.material
+    let disposed = false
+    original.addEventListener('dispose', () => { disposed = true })
+    let assigned = original
+    Object.defineProperty(oldMesh, 'material', { get: () => assigned, set: (material) => {
+      assert(!(disposed && material === original), 'must never restore a disposed saved original')
+      assigned = material
+    } })
+    SelectionMaterialSync()
+    const cleanups = effects.map((effect) => effect()).filter(Boolean)
+    assert.notEqual(oldMesh.material, original)
+    sourceMaterials.clearMaterialCache()
+    assert.equal(disposed, false)
+    frame()
+    assert.equal(disposed, true)
+    const current = slabs[0].children[0].material
+    assert.notEqual(current, original)
+    let currentDisposed = false
+    current.addEventListener('dispose', () => { currentDisposed = true })
+    viewerStore.setState({ selection: { ...viewerStore.getState().selection, selectedIds: [] } })
+    effects = []; refIndex = 0
+    SelectionMaterialSync()
+    effects[0]()
+    assert.equal(slabs[0].children[0].material, current)
+    assert.equal(currentDisposed, false)
+    assert.equal(buildSlabGeometry(nodes.slab_0, { parent: level, children: [], siblings: [], resolve: (id) => nodes[id] }, 'solid').children[0].material, current)
+    for (const cleanup of cleanups) cleanup()
+    dispose()
+  `,
+  )
+})
+
+test('paint cancellation after cache clear never restores a disposed legacy slab reference', () => {
+  runSourceTest(
+    slabCacheFixture +
+      `
+    const { slabPaint } = await import('./packages/nodes/src/slab/paint.ts')
+    const oldMesh = slabs[0].children[0]
+    const original = oldMesh.material
+    let disposed = false
+    original.addEventListener('dispose', () => { disposed = true })
+    let assigned = original
+    Object.defineProperty(oldMesh, 'material', { get: () => assigned, set: (material) => {
+      assert(!(disposed && material === original), 'must never restore a disposed preview original')
+      assigned = material
+    } })
+    const cancel = slabPaint.applyPreview({ node: nodes.slab_0, root: slabs[0], role: 'surface', material: { properties: { color: '#ff0000' } }, materialPreset: undefined })
+    assert(cancel)
+    sourceMaterials.clearMaterialCache()
+    frame()
+    assert.equal(disposed, true)
+    const current = slabs[0].children[0].material
+    cancel()
+    assert.equal(slabs[0].children[0].material, current)
+    dispose()
+  `,
+  )
 })
