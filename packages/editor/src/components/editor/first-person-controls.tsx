@@ -40,6 +40,7 @@ import {
   STAND_CAPSULE,
   STAND_CLEARANCE,
   STAND_FLOAT_HEIGHT,
+  setSurfaceRaycastLayers,
   useViewer,
   WALKTHROUGH_FOV,
 } from '@pascal-app/viewer'
@@ -156,6 +157,7 @@ const standClearanceRaycaster = new Raycaster()
 const standClearanceUp = new Vector3(0, 1, 0)
 const centerScreenPoint = new Vector2(0, 0)
 const doorInteractionRaycaster = new Raycaster()
+setSurfaceRaycastLayers(doorInteractionRaycaster.layers)
 const doorLeafBox = new Box3()
 const doorLeafInverseMatrix = new Matrix4()
 const doorLeafLocalHit = new Vector3()
@@ -178,6 +180,7 @@ const elevatorColliderMaterial = new MeshBasicMaterial({ visible: false })
 const spawnWorldPosition = new Vector3()
 const spawnWorldEuler = new Euler(0, 0, 0, 'YXZ')
 const windowInteractionRaycaster = new Raycaster()
+setSurfaceRaycastLayers(windowInteractionRaycaster.layers)
 const hudBuildingLocalEyePosition = new Vector3()
 const hudWorldEyePosition = new Vector3()
 const hudLevelBounds = new Box3()

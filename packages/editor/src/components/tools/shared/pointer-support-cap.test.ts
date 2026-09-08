@@ -4,6 +4,7 @@ import {
   type AnyNodeDefinition,
   type AnyNodeId,
   getWallBaseElevationForNodes,
+  ItemNode,
   nodeRegistry,
   registerNode,
   type SlabNode,
@@ -11,7 +12,7 @@ import {
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { hideFromScene, showInScene, useViewer } from '@pascal-app/viewer'
 import {
   BoxGeometry,
   Mesh,
@@ -158,6 +159,85 @@ describe('resolvePointerSupportSurface node tops', () => {
     expect(support?.sourceNodeId).toBe(PLATFORM_ID)
     expect(support?.elevation).toBeCloseTo(2)
     expect(support?.worldPoint).toEqual([0, 2, 0])
+  })
+
+  test('keeps an unhovered item top above a batched slab across batch transitions', () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    const item = ItemNode.parse({
+      id: 'item_support_batch',
+      parentId: LEVEL_ID,
+      asset: {
+        id: 'table',
+        name: 'Table',
+        src: '/table.glb',
+        category: 'furniture',
+        thumbnail: '/table.png',
+        dimensions: [4, 2, 4],
+      },
+    })
+    const slab = {
+      id: 'slab_support_batch',
+      type: 'slab',
+      parentId: LEVEL_ID,
+      polygon: [
+        [-3, -3],
+        [3, -3],
+        [3, 3],
+        [-3, 3],
+      ],
+      elevation: 0.25,
+      thickness: 0.25,
+      holes: [],
+      visible: true,
+    } as unknown as SlabNode
+    const itemMesh = new Mesh(new BoxGeometry(4, 2, 4), new MeshBasicMaterial())
+    itemMesh.position.y = 1.25
+    itemMesh.updateMatrixWorld(true)
+    const slabMesh = new Mesh(new BoxGeometry(6, 0.25, 6), new MeshBasicMaterial())
+    slabMesh.position.y = 0.125
+    slabMesh.updateMatrixWorld(true)
+    try {
+      registerNode({
+        kind: 'item',
+        schema: ItemNode,
+        schemaVersion: 1,
+        category: 'furnish',
+        defaults: () => ({}),
+        capabilities: { surfaces: { top: { height: 2 } } },
+      } as unknown as AnyNodeDefinition)
+      useScene.setState((state) => ({
+        nodes: { ...state.nodes, [item.id]: item, [slab.id]: slab },
+      }))
+      sceneRegistry.nodes.set(item.id, itemMesh)
+      sceneRegistry.byType.item!.add(item.id)
+      sceneRegistry.nodes.set(slab.id, slabMesh)
+      sceneRegistry.byType.slab!.add(slab.id)
+      spatialGridManager.handleNodeCreated(slab as AnyNode, LEVEL_ID)
+      useViewer.setState({ hoveredId: null })
+      const camera = new PerspectiveCamera()
+      camera.position.set(0, 5, 0)
+      camera.updateMatrixWorld(true)
+      for (const batched of [false, true, false]) {
+        for (const mesh of [itemMesh, slabMesh]) {
+          if (batched) hideFromScene(mesh, 'batched')
+          else showInScene(mesh, 'batched')
+        }
+        const top = resolvePointerSupportSurface(camera, [0, 0, 0], {
+          includeNodeTopSurfaces: true,
+        })
+        expect(top?.sourceNodeId).toBe(item.id)
+        expect(top?.worldPoint).toEqual([0, 2.25, 0])
+        const floor = resolvePointerSupportSurface(camera, [0, 0, 0])
+        expect(floor?.supportSlabId).toBe(slab.id)
+        expect(floor?.worldPoint).toEqual([0, 0.25, 0])
+      }
+    } finally {
+      restoreRegistry()
+      for (const mesh of [itemMesh, slabMesh]) {
+        mesh.geometry.dispose()
+        mesh.material.dispose()
+      }
+    }
   })
 
   test('keeps the ground result unless node-top surfaces are asked for', () => {

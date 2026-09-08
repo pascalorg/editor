@@ -18,6 +18,7 @@ import {
   createMaterial,
   createMaterialFromPresetRef,
   registerMaterialCacheCleanup,
+  setSurfaceRaycastLayers,
   useViewer,
 } from '@pascal-app/viewer'
 import { type Material, type Mesh, type Object3D, Raycaster } from 'three'
@@ -271,6 +272,7 @@ export function previewSlotByUserData(args: PaintPreviewArgs): (() => void) | nu
 
 // Reused across calls — set from the pointer ray each time.
 const subtreeRaycaster = new Raycaster()
+setSurfaceRaycastLayers(subtreeRaycaster.layers)
 
 /**
  * Resolve the slot for a kind whose paint hit lands on a proud opening proxy

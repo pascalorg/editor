@@ -17,6 +17,7 @@ import {
   type WallSurfaceSide,
   type WallSurfaceSlotId,
 } from '@pascal-app/core'
+import { setSurfaceRaycastLayers } from '@pascal-app/viewer'
 import { type Material, type Mesh, type Object3D, type Ray, Raycaster } from 'three'
 import {
   buildSlotPreviewMaterial,
@@ -45,6 +46,7 @@ const WALL_INDEX_SLOT = new Map<number, WallSurfaceSlotId>(
   ]),
 )
 const wallSlotRaycaster = new Raycaster()
+setSurfaceRaycastLayers(wallSlotRaycaster.layers)
 
 function resolveSideFromMaterialIndex(materialIndex: number | null): WallSurfaceSide | null {
   const slotId = materialIndex === null ? undefined : WALL_INDEX_SLOT.get(materialIndex)
