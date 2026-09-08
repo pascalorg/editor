@@ -641,10 +641,10 @@ export function resolveSlotDefaultMaterial(
   if (parseMaterialRef(slotDefault)?.kind === 'library') {
     return (
       createMaterialFromPresetRef(slotDefault, shading) ??
-      createDefaultMaterial('#ffffff', roughness, shading)
+      cachedDefaultMaterial(`slot-#ffffff-${roughness}`, '#ffffff', roughness, shading)
     )
   }
-  return createDefaultMaterial(slotDefault, roughness, shading)
+  return cachedDefaultMaterial(`slot-${slotDefault}-${roughness}`, slotDefault, roughness, shading)
 }
 
 export function createDefaultMaterial(

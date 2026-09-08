@@ -25,6 +25,18 @@ Pure logic: no rendering, no Three.js objects. They read nodes from `useScene`, 
 
 Slab geometry has no dedicated system: it renders through the registry `def.geometry` (`packages/nodes/src/slab/geometry.ts`, calling the pure generators in `packages/viewer/src/systems/slab/slab-system.tsx`) with a small `def.system` for dirty tracking.
 
+Ceiling geometry consumes dirty marks at frame priority 2, like `GeometrySystem` (slabs).
+The node batch snapshots marks at priority 1 and processes membership at priority 5,
+so it releases old geometry and collects replacements after rebuilds. A definition's
+`system.priority` orders mounted components; it does not set `useFrame` priority.
+
+Items, columns, ceiling undersides and slab bodies directly under a level, plus
+wall-hosted doors/windows, can join the level's `BatchedMesh` containers. Sources
+stay mounted and draw-hidden. Ceiling grids and hosted child subtrees are excluded;
+containers preserve source shadow flags. Selection (including external selection),
+live transforms and each slot paint preview target release sources until settled.
+Level mode/selected-level changes re-offer sources rejected while shadow-only.
+
 ### Viewer Systems — `packages/viewer/src/systems/`
 
 Access Three.js objects (via `useRegistry`) and manage rendering side-effects.

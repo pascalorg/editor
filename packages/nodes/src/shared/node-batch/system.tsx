@@ -6,12 +6,14 @@ import {
   sceneRegistry,
   useInteractive,
   useLiveNodeOverrides,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import { isIsolationActive, publishPerfBatchStats, useViewer } from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import type { Object3D } from 'three'
+import { isSlotPaintPreviewActive, subscribeSlotPaintPreviews } from '../slot-paint'
 import {
   BATCH_KINDS,
   collectBatchCandidate,
@@ -67,6 +69,8 @@ let knownNodeIds: ReadonlySet<string> | null = null
 const waveDebug = { runs: 0, stale: 0, candidates: 0, joined: 0, nullCandidates: 0 }
 let lastNodeChangeAtMs = 0
 let batchingSuspended = false
+let lastLevelMode: string | undefined
+let lastSelectedLevel: string | null | undefined
 
 type AppearanceInputs = {
   shading: unknown
@@ -107,7 +111,8 @@ function appearanceChanged(): boolean {
   return true
 }
 
-function resetModuleState() {
+export function resetNodeBatchState() {
+  releaseAll()
   changedNodes.clear()
   staleNodes.clear()
   partialNodes.clear()
@@ -115,6 +120,8 @@ function resetModuleState() {
   knownNodeIds = null
   lastNodeChangeAtMs = 0
   batchingSuspended = false
+  lastLevelMode = undefined
+  lastSelectedLevel = undefined
   lastAppearance.shading = undefined
   lastAppearance.textures = undefined
   lastAppearance.colorPreset = undefined
@@ -151,7 +158,30 @@ function releaseAll() {
   revealAllBatchedHolds()
 }
 
-function captureChangedNodes() {
+export function subscribeBatchInteractions(invalidate: () => void): () => void {
+  const changed = (nodeId: string) => {
+    const node = useScene.getState().nodes[nodeId as AnyNodeId]
+    if (!node || !BATCH_KINDS.has(node.type)) return
+    releaseNode(nodeId)
+    changedNodes.add(nodeId)
+    invalidate()
+  }
+  const unsubscribeTransforms = useLiveTransforms.subscribe((state, previous) => {
+    for (const nodeId of state.transforms.keys()) {
+      if (!previous.transforms.has(nodeId)) changed(nodeId)
+    }
+    for (const nodeId of previous.transforms.keys()) {
+      if (!state.transforms.has(nodeId)) changed(nodeId)
+    }
+  })
+  const unsubscribePreviews = subscribeSlotPaintPreviews(changed)
+  return () => {
+    unsubscribeTransforms()
+    unsubscribePreviews()
+  }
+}
+
+export function captureChangedNodes() {
   const dirty = useScene.getState().dirtyNodes
   if (dirty.size === 0) return
   const nodes = useScene.getState().nodes
@@ -172,7 +202,7 @@ function captureChangedNodes() {
   }
 }
 
-function runBatchFrame(
+export function runBatchFrame(
   invalidate: () => void,
   wakeRef: { current: ReturnType<typeof setTimeout> | null },
 ) {
@@ -194,6 +224,15 @@ function runBatchFrame(
     staleNodes.add(nodeId)
   }
   changedNodes.clear()
+
+  const viewer = useViewer.getState()
+  if (lastLevelMode !== viewer.levelMode || lastSelectedLevel !== viewer.selection.levelId) {
+    lastLevelMode = viewer.levelMode
+    lastSelectedLevel = viewer.selection.levelId
+    // Shadow-only sources were rejected and dropped from the previous join wave.
+    for (const nodeId of nodeIds) if (!store.has(nodeId)) staleNodes.add(nodeId)
+    changed = true
+  }
 
   const tinted = collectTintedNodes(nodeIds)
   for (const nodeId of tinted) {
@@ -316,7 +355,9 @@ function runBatchFrame(
     if (
       tinted.has(nodeId) ||
       dirty.has(nodeId as AnyNodeId) ||
-      overrides.get(nodeId) !== undefined
+      overrides.get(nodeId) !== undefined ||
+      useLiveTransforms.getState().get(nodeId) !== undefined ||
+      isSlotPaintPreviewActive(nodeId)
     ) {
       deferred.add(nodeId)
       continue
@@ -383,6 +424,8 @@ export const NodeBatchSystem = () => {
 const NodeBatchSystemActive = () => {
   const invalidate = useThree((state) => state.invalidate)
   const wakeRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => subscribeBatchInteractions(invalidate), [invalidate])
 
   // Before the consuming systems (priority 2+) clear the marks this frame.
   useFrame(captureChangedNodes, 1)
@@ -491,8 +534,7 @@ const NodeBatchSystemActive = () => {
   useEffect(
     () => () => {
       if (wakeRef.current) clearTimeout(wakeRef.current)
-      releaseAll()
-      resetModuleState()
+      resetNodeBatchState()
     },
     [],
   )

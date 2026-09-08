@@ -182,6 +182,7 @@ function getLegacySlabMaterial(node: SlabNode, shading: RenderShading): Material
   slabMaterial.depthWrite = true
   slabMaterial.needsUpdate = true
 
+  material.userData.__pascalCachedMaterial = true
   slabMaterialCache.set(cacheKey, material)
   return material
 }

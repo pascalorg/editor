@@ -9,9 +9,9 @@ import type {
 
 /**
  * BatchedMesh container for node batching — see types.ts for the
- * architecture invariants. One BatchedMesh per `(levelId, material.uuid)`,
- * parented under the level root; membership changes are instance
- * adds/deletes, and only a capacity overflow rebuilds a batch.
+ * architecture invariants. One BatchedMesh per level, material, attribute
+ * layout and shadow flags, parented under the level root; membership changes
+ * are instance adds/deletes, and only a capacity overflow rebuilds a batch.
  */
 
 /** Batch meshes are draw-only; sources keep every raycast (wall-batch rule). */
@@ -67,8 +67,8 @@ function attributeSignature(geometry: BufferGeometry): string {
   return `${Object.keys(geometry.attributes).sort().join(',')}|${geometry.index ? 'i' : 'n'}`
 }
 
-const batchKey = (levelId: string, materialUuid: string, signature: string) =>
-  `${levelId}|${materialUuid}|${signature}`
+const batchKey = (entry: BatchEntry) =>
+  `${entry.levelId}|${entry.material.uuid}|${attributeSignature(entry.geometry)}|${entry.castShadow}|${entry.receiveShadow}`
 
 function vertexCount(geometry: BufferGeometry): number {
   return geometry.attributes.position?.count ?? 0
@@ -98,7 +98,7 @@ export class NodeBatchStore implements NodeBatchStoreApi {
     for (const candidate of candidates) {
       for (const entry of candidate.entries) {
         if (vertexCount(entry.geometry) === 0) continue
-        const key = batchKey(entry.levelId, entry.material.uuid, attributeSignature(entry.geometry))
+        const key = batchKey(entry)
         const bucket = byBatch.get(key)
         if (bucket) bucket.push(entry)
         else byBatch.set(key, [entry])
@@ -128,6 +128,7 @@ export class NodeBatchStore implements NodeBatchStoreApi {
         record = this.createBatch(
           entries[0]!.levelId,
           entries[0]!.material,
+          entries[0]!,
           root,
           entries.length,
           addedVertices,
@@ -254,6 +255,7 @@ export class NodeBatchStore implements NodeBatchStoreApi {
   private createBatch(
     levelId: string,
     material: Material,
+    shadows: Pick<BatchEntry, 'castShadow' | 'receiveShadow'>,
     root: Object3D,
     instanceCount: number,
     vertices: number,
@@ -274,8 +276,8 @@ export class NodeBatchStore implements NodeBatchStoreApi {
     // meshes are back on the scene layer for the export clone — this marker
     // is the backstop for any capture path that skips the emit.
     batched.userData.pascalExport = 'strip'
-    batched.castShadow = true
-    batched.receiveShadow = true
+    batched.castShadow = shadows.castShadow
+    batched.receiveShadow = shadows.receiveShadow
     batched.perObjectFrustumCulled = true
     // Whole-container culling would use a bounding sphere computed at first
     // cull — instances joining farther out later could vanish with the whole
@@ -315,6 +317,7 @@ export class NodeBatchStore implements NodeBatchStoreApi {
     const next = this.createBatch(
       old.levelId,
       old.material,
+      old.batched,
       root,
       survivors.length + extraInstances,
       old.used.vertices + extraVertices,

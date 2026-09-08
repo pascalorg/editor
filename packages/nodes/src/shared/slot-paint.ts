@@ -29,6 +29,34 @@ import { type Material, type Mesh, type Object3D, Raycaster } from 'three'
  * those are injected per kind.
  */
 
+const previewCounts = new Map<string, number>()
+const previewListeners = new Set<(nodeId: string) => void>()
+
+export function isSlotPaintPreviewActive(nodeId: string): boolean {
+  return previewCounts.has(nodeId)
+}
+
+export function subscribeSlotPaintPreviews(listener: (nodeId: string) => void): () => void {
+  previewListeners.add(listener)
+  return () => {
+    previewListeners.delete(listener)
+  }
+}
+
+function beginSlotPaintPreview(nodeId: string): () => void {
+  const count = previewCounts.get(nodeId) ?? 0
+  previewCounts.set(nodeId, count + 1)
+  if (count === 0) for (const listener of previewListeners) listener(nodeId)
+  return () => {
+    const remaining = (previewCounts.get(nodeId) ?? 1) - 1
+    if (remaining > 0) previewCounts.set(nodeId, remaining)
+    else {
+      previewCounts.delete(nodeId)
+      for (const listener of previewListeners) listener(nodeId)
+    }
+  }
+}
+
 type SlotsNode = AnyNode & { slots?: Record<string, string> }
 
 function deepEqual(a: unknown, b: unknown): boolean {
@@ -271,7 +299,31 @@ export function createSlotPaintCapability(config: SlotPaintConfig): PaintCapabil
     },
     commit: ({ node, role, material, materialPreset }) =>
       commitSlotPaint(node as SlotsNode, role, material, materialPreset),
-    applyPreview: config.applyPreview,
+    applyPreview: (args) => {
+      // Release before swapping materials, including each room/all-matching target.
+      const end = beginSlotPaintPreview(args.node.id)
+      let restore: (() => void) | null
+      try {
+        restore = config.applyPreview(args)
+      } catch (error) {
+        end()
+        throw error
+      }
+      if (!restore) {
+        end()
+        return null
+      }
+      let restored = false
+      return () => {
+        if (restored) return
+        restored = true
+        try {
+          restore()
+        } finally {
+          end()
+        }
+      }
+    },
     getEffectiveMaterial: ({ node, role }) => {
       const ref = (node as SlotsNode).slots?.[role]
       const parsed = parseMaterialRef(ref)
