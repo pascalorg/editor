@@ -54,7 +54,12 @@ export function createPaintPreviewOwner() {
               try {
                 interaction.apply!()
               } catch (error) {
-                end()
+                // A subscriber can throw after the scene write has already been published.
+                try {
+                  end(true)
+                } catch {
+                  // Preserve the apply error even if a hold listener also throws.
+                }
                 throw error
               }
               end(true)

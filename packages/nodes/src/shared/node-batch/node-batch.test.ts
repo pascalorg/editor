@@ -27,7 +27,11 @@ import { commitPaintScopeFanout } from '../../../../editor/src/lib/paint-scope'
 import { applyShadowOnly, clearShadowOnly } from '../../../../viewer/src/lib/shadow-only'
 import { getCeilingMaterials } from '../../ceiling/materials'
 import { ceilingPaint } from '../../ceiling/paint'
-import { createSlotPaintCapability, isSlotPaintPreviewActive } from '../slot-paint'
+import {
+  createSlotPaintCapability,
+  isSlotPaintPreviewActive,
+  subscribeSlotPaintPreviews,
+} from '../slot-paint'
 import { collectBatchCandidate, collectTintedNodes } from './candidates'
 import { NodeBatchStore } from './store'
 import {
@@ -577,7 +581,7 @@ test('superseded, cancelled and failed paint interactions end holds once without
   })
   failed.preview!()
   expect(() => failed.apply!()).toThrow('commit failed')
-  expect(restored).toBe(3)
+  expect(restored).toBe(2)
   expect(isSlotPaintPreviewActive('ceiling_0')).toBe(false)
 })
 
@@ -612,4 +616,80 @@ test('level remount releases orphaned draws and restores sources before collecti
   settle()
   expect(batches(replacement)).toHaveLength(1)
   expect(meshes.every((mesh) => !mesh.layers.isEnabled(SCENE_LAYER))).toBe(true)
+})
+
+test('paint apply throwing after publication ends fan-out holds without restoring and dirties every target', () => {
+  const { meshes } = setup()
+  const targets = ['ceiling_0', 'ceiling_1', 'ceiling_2'].map((nodeId) => ({
+    nodeId,
+    role: 'surface',
+  }))
+  const interaction = createPaintPreviewOwner().wrap({
+    key: 'fan-out',
+    preview: () =>
+      combinePaintPreviews(
+        targets.map(
+          ({ nodeId, role }) =>
+            ceilingPaint.applyPreview({
+              node: useScene.getState().nodes[nodeId]!,
+              root: sceneRegistry.nodes.get(nodeId)!,
+              role,
+              material: { properties: { color: '#ff0000' } } as never,
+              materialPreset: undefined,
+            })!,
+        ),
+      ),
+    apply: () => commitPaintScopeFanout(targets as never, undefined, 'library:test/finish'),
+  })!
+  const cancel = interaction.preview!()!
+  const previews = meshes.slice(0, 3).map((mesh) => mesh.material)
+  const failure = new Error('subscriber failed after write')
+  const unsubscribeScene = useScene.subscribe((state, previous) => {
+    if (state.nodes !== previous.nodes) throw failure
+  })
+  try {
+    expect(() => interaction.apply!()).toThrow(failure)
+  } finally {
+    unsubscribeScene()
+  }
+  cancel()
+  for (const { nodeId } of targets) {
+    expect(
+      (useScene.getState().nodes[nodeId] as AnyNode & { slots: Record<string, string> }).slots
+        .surface,
+    ).toBe('library:test/finish')
+    expect(isSlotPaintPreviewActive(nodeId)).toBe(false)
+    expect(useScene.getState().dirtyNodes.has(nodeId as never)).toBe(true)
+  }
+  expect(meshes.slice(0, 3).map((mesh) => mesh.material)).toEqual(previews)
+})
+
+test('a throwing preview listener rolls back its hold before preview creation', () => {
+  setup()
+  const unsubscribePreview = subscribeSlotPaintPreviews(() => {
+    throw new Error('preview listener failed')
+  })
+  let applied = false
+  const paint = createSlotPaintCapability({
+    resolveRole: () => 'surface',
+    applyPreview: () => {
+      applied = true
+      return () => {}
+    },
+  })
+  try {
+    expect(() =>
+      paint.applyPreview({
+        node: useScene.getState().nodes.ceiling_0!,
+        root: sceneRegistry.nodes.get('ceiling_0')!,
+        role: 'surface',
+        material: undefined,
+        materialPreset: undefined,
+      }),
+    ).toThrow('preview listener failed')
+    expect(isSlotPaintPreviewActive('ceiling_0')).toBe(false)
+    expect(applied).toBe(false)
+  } finally {
+    unsubscribePreview()
+  }
 })
