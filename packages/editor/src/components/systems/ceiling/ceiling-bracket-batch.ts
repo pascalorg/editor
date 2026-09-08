@@ -2,14 +2,15 @@ import type { CeilingNode } from '@pascal-app/core'
 import {
   BoxGeometry,
   Color,
-  DynamicDrawUsage,
   Euler,
   InstancedMesh,
+  type Intersection,
   Matrix4,
   MeshBasicMaterial,
   type Object3D,
   Quaternion,
   Sphere,
+  StaticDrawUsage,
   Vector3,
 } from 'three'
 
@@ -95,13 +96,19 @@ function createBatch(highlighted: boolean, capacity: number): BracketBatch {
     depthTest: true,
     depthWrite: false,
   })
-  const mesh = new InstancedMesh(SHARED_HANDLE_BOX_GEOMETRY, material, capacity)
+  // WebGPU releases instance attributes through the geometry's dispose listener.
+  const mesh = new InstancedMesh(SHARED_HANDLE_BOX_GEOMETRY.clone(), material, capacity)
   mesh.name = highlighted ? 'ceiling-brackets-highlighted' : 'ceiling-brackets-normal'
   mesh.renderOrder = highlighted ? 1001 : 1000
   mesh.frustumCulled = false
-  mesh.instanceMatrix.setUsage(DynamicDrawUsage)
+  mesh.instanceMatrix.setUsage(StaticDrawUsage)
   mesh.setColorAt(0, highlighted ? HIGHLIGHT_COLOR : NORMAL_COLOR)
-  mesh.instanceColor!.setUsage(DynamicDrawUsage)
+  mesh.instanceColor!.setUsage(StaticDrawUsage)
+  mesh.onAfterRender = () => {
+    // TSL uploads internal wrappers; clear the source ranges after they have been consumed.
+    mesh.instanceMatrix.clearUpdateRanges()
+    mesh.instanceColor!.clearUpdateRanges()
+  }
   mesh.count = 0
   mesh.boundingSphere = new Sphere()
   return { mesh, instances: [] }
@@ -123,6 +130,21 @@ export class CeilingBracketBatchStore {
   getTarget(object: Object3D, instanceId: number | undefined): BracketTarget | undefined {
     if (instanceId === undefined) return undefined
     return this.batches.find((batch) => batch.mesh === object)?.instances[instanceId]
+  }
+
+  resolveHitTarget(
+    event: Pick<Intersection, 'object' | 'instanceId' | 'distance'>,
+    hits: Array<Pick<Intersection, 'object' | 'instanceId' | 'distance'>>,
+  ) {
+    let target = this.getTarget(event.object, event.instanceId)
+    if (!target) return undefined
+    // Equal-distance ownership must not depend on which opacity batch is raycast first.
+    for (const hit of hits) {
+      if (hit.distance !== event.distance) continue
+      const candidate = this.getTarget(hit.object, hit.instanceId)
+      if (candidate && bracketTargetKey(candidate) < bracketTargetKey(target)) target = candidate
+    }
+    return target
   }
 
   getLocation(target: BracketTarget) {
@@ -201,6 +223,7 @@ export class CeilingBracketBatchStore {
 
   dispose() {
     for (const batch of this.batches) {
+      batch.mesh.geometry.dispose()
       batch.mesh.dispose()
       batch.mesh.material.dispose()
     }
@@ -216,6 +239,7 @@ export class CeilingBracketBatchStore {
     this.batches[index] = replacement
     for (const instance of replacement.instances) this.write(instance)
     replacement.mesh.count = replacement.instances.length
+    batch.mesh.geometry.dispose()
     batch.mesh.dispose()
     batch.mesh.material.dispose()
     this.meshes = this.batches.map((item) => item.mesh)
@@ -249,6 +273,8 @@ export class CeilingBracketBatchStore {
     const mesh = this.batches[Number(instance.highlighted)]!.mesh
     mesh.setMatrixAt(instance.instanceId, instance.matrix)
     mesh.setColorAt(instance.instanceId, instance.highlighted ? HIGHLIGHT_COLOR : NORMAL_COLOR)
+    mesh.instanceMatrix.addUpdateRange(instance.instanceId * 16, 16)
+    mesh.instanceColor!.addUpdateRange(instance.instanceId * 3, 3)
     mesh.instanceMatrix.needsUpdate = true
     mesh.instanceColor!.needsUpdate = true
     // Native InstancedMesh.raycast still tests its sphere even with frustum culling off.
@@ -287,6 +313,12 @@ export class BracketPointerState {
       this.hovered.delete(key)
       this.hovered.set(nextUuid + key.slice(previousUuid.length), target)
     }
+  }
+
+  clearHover() {
+    const targets = [...this.hovered.values()]
+    this.hovered.clear()
+    return targets
   }
 
   pointerDown(targets: BracketTarget[]) {

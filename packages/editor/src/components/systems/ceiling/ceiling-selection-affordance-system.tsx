@@ -11,7 +11,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { createPortal, type ThreeEvent, useThree } from '@react-three/fiber'
+import { createPortal, type ThreeEvent, useFrame, useThree } from '@react-three/fiber'
 import {
   memo,
   useCallback,
@@ -22,7 +22,7 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
-import { type Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
+import { Group, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { useShallow } from 'zustand/react/shallow'
 import {
   clearCeilingSnapFeedback,
@@ -143,7 +143,23 @@ const LevelCeilingBrackets = ({
   const [levelObject, setLevelObject] = useState<Object3D | null>(
     () => sceneRegistry.nodes.get(levelId) ?? null,
   )
-  const bracketsRootRef = useRef<Group>(null)
+  // A stable portal container preserves instance event records when the level object changes.
+  const [bracketsRoot] = useState(() => new Group())
+  const registryRevision = useRef(sceneRegistry.revision)
+
+  useFrame(() => {
+    if (registryRevision.current === sceneRegistry.revision) return
+    registryRevision.current = sceneRegistry.revision
+    setLevelObject(sceneRegistry.nodes.get(levelId) ?? null)
+  })
+
+  useLayoutEffect(() => {
+    if (!levelObject) return
+    levelObject.add(bracketsRoot)
+    return () => {
+      bracketsRoot.removeFromParent()
+    }
+  }, [bracketsRoot, levelObject])
 
   // The brackets render on SCENE_LAYER (scene-depth occlusion), so unlike
   // EDITOR_LAYER affordances the thumbnail camera can't filter them — hide
@@ -151,10 +167,10 @@ const LevelCeilingBrackets = ({
   // capture renders right after the emit), same as `site-boundary-editor.tsx`.
   useEffect(() => {
     const hideForCapture = () => {
-      if (bracketsRootRef.current) bracketsRootRef.current.visible = false
+      bracketsRoot.visible = false
     }
     const restoreAfterCapture = () => {
-      if (bracketsRootRef.current) bracketsRootRef.current.visible = true
+      bracketsRoot.visible = true
     }
     emitter.on('thumbnail:before-capture', hideForCapture)
     emitter.on('thumbnail:after-capture', restoreAfterCapture)
@@ -162,7 +178,7 @@ const LevelCeilingBrackets = ({
       emitter.off('thumbnail:before-capture', hideForCapture)
       emitter.off('thumbnail:after-capture', restoreAfterCapture)
     }
-  }, [])
+  }, [bracketsRoot])
 
   useEffect(() => {
     let frameId = 0
@@ -200,16 +216,13 @@ const LevelCeilingBrackets = ({
           controllers={controllers}
           key={ceiling.id}
           levelId={levelId}
-          levelObject={levelObject}
           store={store}
         />
       ))}
       {levelObject &&
         createPortal(
-          <group ref={bracketsRootRef}>
-            <CeilingBracketMeshes controllers={controllers} store={store} />
-          </group>,
-          levelObject,
+          <CeilingBracketMeshes controllers={controllers} store={store} />,
+          bracketsRoot,
         )}
     </>
   )
@@ -236,6 +249,15 @@ const CeilingBracketMeshes = memo(
       previousMeshes.current = meshes
     }, [meshes, pointer])
 
+    useLayoutEffect(
+      () => () => {
+        for (const target of pointer.clearHover()) {
+          controllers.get(target.ceilingId)?.onHoverChange(target.cornerIndex, false)
+        }
+      },
+      [controllers, pointer],
+    )
+
     const hover = (target: BracketTarget, hovered: boolean) => {
       controllers.get(target.ceilingId)?.onHoverChange(target.cornerIndex, hovered)
     }
@@ -243,7 +265,7 @@ const CeilingBracketMeshes = memo(
       `${event.object.uuid}/${event.index}/${event.instanceId}`
     const handleOver = (event: ThreeEvent<PointerEvent>) => {
       event.stopPropagation()
-      const target = store.getTarget(event.object, event.instanceId)
+      const target = store.resolveHitTarget(event, event.intersections)
       if (!target) return
       const previous = pointer.over(eventKey(event), target)
       if (previous && bracketTargetKey(previous) === bracketTargetKey(target)) return
@@ -256,7 +278,7 @@ const CeilingBracketMeshes = memo(
       if (target) hover(target, false)
     }
     const handlePointerDown = (event: ThreeEvent<PointerEvent>) => {
-      const target = store.getTarget(event.object, event.instanceId)
+      const target = store.resolveHitTarget(event, event.intersections)
       if (!target) return
       pointer.pointerDown(
         event.intersections.flatMap((hit) => {
@@ -275,7 +297,7 @@ const CeilingBracketMeshes = memo(
       controllers.get(target.ceilingId)?.onPointerDown(target.cornerIndex, event)
     }
     const handleClick = (event: ThreeEvent<MouseEvent>) => {
-      const target = store.getTarget(event.object, event.instanceId)
+      const target = store.resolveHitTarget(event, event.intersections)
       if (!target || !pointer.canClick(target)) return
       controllers.get(target.ceilingId)?.onClick(target.cornerIndex, event)
     }
@@ -302,13 +324,11 @@ const CeilingBracketMeshes = memo(
 const CeilingSelectionAffordance = memo(function CeilingSelectionAffordance({
   ceiling,
   levelId,
-  levelObject,
   store,
   controllers,
 }: {
   ceiling: CeilingNode
   levelId: string
-  levelObject: Object3D | null
   store: CeilingBracketBatchStore
   controllers: Map<CeilingNode['id'], CeilingBracketController>
 }) {
@@ -364,6 +384,7 @@ const CeilingSelectionAffordance = memo(function CeilingSelectionAffordance({
 
   const getHandlePlanePoint = useCallback(
     (event: MouseEvent | PointerEvent): [number, number] | null => {
+      const levelObject = sceneRegistry.nodes.get(levelId)
       if (!levelObject) return null
 
       const rect = gl.domElement.getBoundingClientRect()
@@ -390,7 +411,7 @@ const CeilingSelectionAffordance = memo(function CeilingSelectionAffordance({
       levelObject.worldToLocal(localIntersectionRef.current)
       return [localIntersectionRef.current.x, localIntersectionRef.current.z]
     },
-    [camera, resolvedHeight, gl.domElement, levelObject],
+    [camera, resolvedHeight, gl.domElement, levelId],
   )
 
   const handleCornerPointerDown = useCallback(
@@ -592,6 +613,7 @@ const CeilingSelectionAffordance = memo(function CeilingSelectionAffordance({
           node: effectiveCeiling,
           nativeEvent: event.nativeEvent,
           localPosition: [0, 0, 0],
+          // Position is level-local, matching the original ceiling handle payload.
           position: [
             corner.corner[0],
             resolveCeilingHeight(effectiveCeiling, useScene.getState().nodes),

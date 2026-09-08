@@ -1,5 +1,18 @@
 import { describe, expect, test } from 'bun:test'
-import { Color, Group, InstancedMesh, Matrix4, Mesh, Raycaster, Vector3 } from 'three'
+import {
+  type BufferAttribute,
+  Color,
+  Group,
+  InstancedMesh,
+  Matrix4,
+  Mesh,
+  Raycaster,
+  StaticDrawUsage,
+  Vector3,
+} from 'three'
+import Attributes from 'three/src/renderers/common/Attributes.js'
+import { AttributeType } from 'three/src/renderers/common/Constants.js'
+import Info from 'three/src/renderers/common/Info.js'
 import {
   BRACKET_Y_OFFSET,
   BracketPointerState,
@@ -309,4 +322,81 @@ describe('ceiling bracket pointer identities', () => {
     pointer.pointerDown([])
     expect(pointer.canClick(first)).toBe(false)
   })
+})
+
+test('each batch owns and disposes its geometry on capacity growth and teardown', () => {
+  const store = new CeilingBracketBatchStore()
+  const [initialNormal, highlighted] = store.getSnapshot()
+  expect(initialNormal!.geometry).not.toBe(highlighted!.geometry)
+  expect(initialNormal!.geometry.attributes.position!.array).not.toBe(
+    highlighted!.geometry.attributes.position!.array,
+  )
+  let retiredDisposals = 0
+  initialNormal!.geometry.addEventListener('dispose', () => {
+    retiredDisposals++
+  })
+  for (let index = 0; index < 3; index++) {
+    store.setGeometry(`ceiling:${index}` as BracketTarget['ceilingId'], corners, 3)
+  }
+  expect(retiredDisposals).toBe(1)
+  expect(store.getSnapshot()[0]!.geometry).not.toBe(initialNormal!.geometry)
+  let finalDisposals = 0
+  for (const mesh of store.getSnapshot()) {
+    mesh.geometry.addEventListener('dispose', () => {
+      finalDisposals++
+    })
+  }
+  store.dispose()
+  expect(finalDisposals).toBe(2)
+  expect(retiredDisposals).toBe(1)
+})
+
+test('WebGPU attribute updates skip resting frames and upload only written slots after a change', () => {
+  const store = new CeilingBracketBatchStore()
+  store.setGeometry(ceilingId, corners, 3)
+  const uploads: Array<{
+    attribute: BufferAttribute
+    ranges: Array<{ start: number; count: number }>
+  }> = []
+  const attributes = new Attributes(
+    {
+      createAttribute() {},
+      updateAttribute(attribute: BufferAttribute) {
+        uploads.push({ attribute, ranges: attribute.updateRanges.map((range) => ({ ...range })) })
+        attribute.clearUpdateRanges()
+      },
+    } as unknown as ConstructorParameters<typeof Attributes>[0],
+    new Info(),
+  )
+  const render = () => {
+    for (const mesh of store.getSnapshot()) {
+      for (const attribute of [mesh.instanceMatrix, mesh.instanceColor!]) {
+        expect(attribute.usage).toBe(StaticDrawUsage)
+        attributes.update(attribute, AttributeType.VERTEX)
+      }
+      mesh.onAfterRender(...([] as unknown as Parameters<typeof mesh.onAfterRender>))
+    }
+  }
+  render()
+  for (let frame = 0; frame < 20; frame++) render()
+  expect(uploads).toHaveLength(0)
+  store.setHighlight(ceilingId, 0)
+  render()
+  expect(uploads).toHaveLength(4)
+  for (const upload of uploads) {
+    expect(upload.ranges.length).toBeGreaterThan(0)
+    expect(upload.ranges.length).toBeLessThanOrEqual(7)
+    for (const range of upload.ranges) {
+      expect(range.count).toBe(upload.attribute.itemSize)
+      expect(range.start % upload.attribute.itemSize).toBe(0)
+    }
+  }
+  uploads.length = 0
+  for (let frame = 0; frame < 20; frame++) render()
+  expect(uploads).toHaveLength(0)
+  for (const mesh of store.getSnapshot()) {
+    expect(mesh.instanceMatrix.updateRanges).toEqual([])
+    expect(mesh.instanceColor!.updateRanges).toEqual([])
+  }
+  store.dispose()
 })
