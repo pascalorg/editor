@@ -4,6 +4,13 @@ import { buildPipeSegmentFloorplan } from './floorplan'
 import { PipeSegmentNode } from './schema'
 
 describe('pipe segment defaults', () => {
+  test('declares surface-aware, history-cancellable drafting behavior', () => {
+    expect(pipeSegmentDefinition.drafting).toEqual({
+      surfaceQuery: true,
+      cancelOnHistoryJump: true,
+    })
+  })
+
   test('rests a level pipe on top of the support grid', () => {
     const pipe = pipeSegmentDefinition.defaults()
     const radius = (pipe.diameter * 0.0254) / 2

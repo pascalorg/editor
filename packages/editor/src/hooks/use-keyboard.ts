@@ -27,7 +27,7 @@ import { steppedRotation } from '../components/tools/item/placement-math'
 import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
 import { toggleDoorOpenState } from '../lib/door-interaction'
 import { guideEmitter } from '../lib/guide-events'
-import { isHistoryShortcut, isRunDrafting, runRedo, runUndo } from '../lib/history'
+import { isHistoryShortcut, runRedo, runUndo, shouldCancelDraftOnHistoryJump } from '../lib/history'
 import { isActive } from '../lib/interaction/scope'
 import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
@@ -145,7 +145,7 @@ const cancelInteractionForHistoryShortcut = () => {
     return true
   }
   const activeScope = useInteractionScope.getState().scope
-  if (isRunDrafting()) return false
+  if (shouldCancelDraftOnHistoryJump()) return false
   if (activeScope.kind === 'mesh-editing' && activeScope.phase === 'selecting') return false
   _toolCancelConsumed = false
   emitter.emit('tool:cancel')
@@ -261,7 +261,7 @@ export const useKeyboard = ({
       }
 
       if (
-        isRunDrafting() &&
+        shouldCancelDraftOnHistoryJump() &&
         isHistoryShortcut(e) &&
         e.target instanceof HTMLInputElement &&
         e.target.hasAttribute('data-run-length-input')

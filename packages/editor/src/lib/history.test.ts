@@ -4,14 +4,18 @@ import {
   type AnyNodeId,
   BuildingNode,
   clearSceneHistory,
+  emitter,
   LevelNode,
+  nodeRegistry,
   useScene,
 } from '@pascal-app/core'
+import useInteractionScope from '../store/use-interaction-scope'
 import {
   getHistoryCommandState,
   installHistoryCommandDelegate,
   runRedo,
   runUndo,
+  shouldCancelDraftOnHistoryJump,
   subscribeHistoryCommandState,
 } from './history'
 
@@ -26,6 +30,7 @@ type RafFn = (cb: (time: number) => void) => number
 const BUILDING_ID = 'building_history_controller' as AnyNodeId
 const LEVEL_ID = 'level_history_controller' as AnyNodeId
 let disposeController = () => {}
+let restoreRegistry = () => {}
 
 function levelNumber(): number {
   return (useScene.getState().nodes[LEVEL_ID] as { level: number }).level
@@ -35,6 +40,9 @@ describe('editor history controller', () => {
   beforeEach(() => {
     disposeController()
     disposeController = () => {}
+    restoreRegistry()
+    restoreRegistry = nodeRegistry._snapshot()
+    useInteractionScope.getState().end()
     const level = LevelNode.parse({
       id: LEVEL_ID,
       parentId: BUILDING_ID,
@@ -61,6 +69,31 @@ describe('editor history controller', () => {
   afterEach(() => {
     disposeController()
     disposeController = () => {}
+    restoreRegistry()
+    restoreRegistry = () => {}
+    useInteractionScope.getState().end()
+  })
+
+  test('cancels history jumps only when the drafted kind opts in', () => {
+    const onCancel = mock(() => {})
+    emitter.on('tool:cancel', onCancel)
+    try {
+      useInteractionScope.getState().begin({ kind: 'drafting', tool: 'plain-draft' })
+      expect(shouldCancelDraftOnHistoryJump()).toBe(false)
+
+      nodeRegistry._register({
+        kind: 'registered-draft',
+        schemaVersion: 1,
+        drafting: { cancelOnHistoryJump: true },
+      } as never)
+      useInteractionScope.getState().begin({ kind: 'drafting', tool: 'registered-draft' })
+      expect(shouldCancelDraftOnHistoryJump()).toBe(true)
+
+      runUndo()
+      expect(onCancel).toHaveBeenCalledTimes(1)
+    } finally {
+      emitter.off('tool:cancel', onCancel)
+    }
   })
 
   test('delegates undo and redo while a host delegate is installed', () => {

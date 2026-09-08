@@ -3,6 +3,7 @@ import {
   type EventSuffix,
   emitter,
   type GridEvent,
+  nodeRegistry,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -13,6 +14,11 @@ import { Matrix3, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'thre
 import { getPlacementSurface } from '../lib/active-placement-surface'
 import { raycastCeilingUnderside } from '../lib/ceiling-surface-raycast'
 import { resolveTerrainGroundHit } from '../lib/ground-surface'
+import {
+  type DraftingSurfaceExtension,
+  registeredDraftingConfig,
+  registeredDraftingSurface,
+} from '../lib/interaction/registered-drafting'
 import useInteractionScope from '../store/use-interaction-scope'
 
 /**
@@ -26,8 +32,7 @@ export function useGridEvents(gridY: number) {
   semanticSurfaceQueryRef.current =
     interactionScope.kind === 'placing' ||
     interactionScope.kind === 'moving' ||
-    (interactionScope.kind === 'drafting' &&
-      (interactionScope.tool === 'duct-segment' || interactionScope.tool === 'pipe-segment'))
+    registeredDraftingConfig(interactionScope)?.surfaceQuery === true
   const raycaster = useRef(new Raycaster())
   const pointer = useRef(new Vector2())
   const groundPlane = useRef(new Plane(new Vector3(0, 1, 0), 0))
@@ -39,7 +44,7 @@ export function useGridEvents(gridY: number) {
       point: Vector3
       object: Object3D
       hostId: AnyNodeId
-      kind: 'wall' | 'ceiling' | 'slab' | 'roof'
+      descriptor: DraftingSurfaceExtension
       worldNormal?: Vector3
     }
   }
@@ -53,26 +58,26 @@ export function useGridEvents(gridY: number) {
     const canvas = gl.domElement
 
     const getSurfaceIntersection = (): GridIntersection | null => {
-      const surfaceTypes = ['wall', 'ceiling', 'slab', 'roof'] as const
       let closest: GridIntersection | null = null
       let closestDistance = Number.POSITIVE_INFINITY
 
-      for (const type of surfaceTypes) {
+      for (const [type, definition] of nodeRegistry.entries()) {
+        const descriptor = registeredDraftingSurface(definition)
+        if (!descriptor) continue
         for (const id of sceneRegistry.byType[type] ?? []) {
           const root = sceneRegistry.nodes.get(id)
           if (!root) continue
           const scope = useInteractionScope.getState().scope
-          const runDraft =
-            scope.kind === 'drafting' &&
-            (scope.tool === 'duct-segment' || scope.tool === 'pipe-segment')
-          if (runDraft && useScene.getState().nodes[id as AnyNodeId]?.visible === false) continue
-          if (runDraft && !root.visible) continue
+          const surfaceDraft = registeredDraftingConfig(scope)?.surfaceQuery === true
+          if (surfaceDraft && useScene.getState().nodes[id as AnyNodeId]?.visible === false)
+            continue
+          if (surfaceDraft && !root.visible) continue
           const intersections =
-            runDraft && type === 'ceiling'
+            surfaceDraft && descriptor.raycast === 'underside'
               ? raycastCeilingUnderside(raycaster.current, root)
               : raycaster.current.intersectObject(root, true)
           const hit = intersections.find((candidate) => {
-            if (!runDraft) return true
+            if (!surfaceDraft) return true
             if (useScene.getState().nodes[id as AnyNodeId]?.visible === false) return false
             let object: Object3D | null = candidate.object
             while (object) {
@@ -89,7 +94,7 @@ export function useGridEvents(gridY: number) {
                 .applyNormalMatrix(new Matrix3().getNormalMatrix(hit.object.matrixWorld))
                 .normalize()
             : undefined
-          if (runDraft && worldNormal && worldNormal.dot(raycaster.current.ray.direction) > 0)
+          if (surfaceDraft && worldNormal && worldNormal.dot(raycaster.current.ray.direction) > 0)
             worldNormal.negate()
           closest = {
             point: hit.point.clone(),
@@ -97,7 +102,7 @@ export function useGridEvents(gridY: number) {
               point: hit.point.clone(),
               object: hit.object,
               hostId: id as AnyNodeId,
-              kind: type,
+              descriptor,
               worldNormal,
             },
           }
@@ -132,11 +137,9 @@ export function useGridEvents(gridY: number) {
       if (surfaceHit) return surfaceHit
 
       const scope = useInteractionScope.getState().scope
-      const runDraft =
-        scope.kind === 'drafting' &&
-        (scope.tool === 'duct-segment' || scope.tool === 'pipe-segment')
+      const surfaceDraft = registeredDraftingConfig(scope)?.surfaceQuery === true
       const workingSurface = getPlacementSurface()
-      if (runDraft && workingSurface) {
+      if (surfaceDraft && workingSurface) {
         const plane = new Plane().setFromNormalAndCoplanarPoint(
           workingSurface.normal,
           workingSurface.point,
@@ -185,10 +188,8 @@ export function useGridEvents(gridY: number) {
 
       // Convert world-space point to building-local for tools that live inside a building.
       const scope = useInteractionScope.getState().scope
-      const runDraft =
-        scope.kind === 'drafting' &&
-        (scope.tool === 'duct-segment' || scope.tool === 'pipe-segment')
-      const buildingId = runDraft
+      const surfaceDraft = registeredDraftingConfig(scope)?.surfaceQuery === true
+      const buildingId = surfaceDraft
         ? useViewer.getState().selection.levelId
         : useViewer.getState().selection.buildingId
       const buildingMesh = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
@@ -209,32 +210,14 @@ export function useGridEvents(gridY: number) {
       const surfaceNode = point.surface
         ? useScene.getState().nodes[point.surface.hostId]
         : undefined
-      const wallDirection =
-        point.surface?.kind === 'wall' && surfaceNode?.type === 'wall'
-          ? (() => {
-              const dx = surfaceNode.end[0] - surfaceNode.start[0]
-              const dz = surfaceNode.end[1] - surfaceNode.start[1]
-              const length = Math.hypot(dx, dz)
-              return length > 1e-9 ? ([dx / length, 0, dz / length] as const) : null
-            })()
+      const classifiedFace =
+        point.surface && localNormal
+          ? point.surface.descriptor.classifyFace?.(surfaceNode, [
+              localNormal.x,
+              localNormal.y,
+              localNormal.z,
+            ])
           : null
-      const wallSideNormal = wallDirection
-        ? ([-wallDirection[2], 0, wallDirection[0]] as const)
-        : null
-      const wallSideDot =
-        localNormal && wallSideNormal
-          ? localNormal.x * wallSideNormal[0] +
-            localNormal.y * wallSideNormal[1] +
-            localNormal.z * wallSideNormal[2]
-          : 0
-      const surfaceFace =
-        point.surface?.kind !== 'wall'
-          ? 'unknown'
-          : Math.abs(localNormal?.y ?? 1) < 0.25 && Math.abs(wallSideDot) > 0.7
-            ? 'side'
-            : Math.abs(localNormal?.y ?? 1) > 0.7
-              ? 'top'
-              : 'end'
       const { origin, direction } = raycaster.current.ray
       const localRayOrigin = buildingMesh
         ? buildingMesh.worldToLocal(origin.clone())
@@ -260,11 +243,11 @@ export function useGridEvents(gridY: number) {
         surfaceHit:
           semanticSurfaceQueryRef.current && point.surface
             ? {
-                kind: point.surface.kind,
+                kind: point.surface.descriptor.kind,
                 hostId: point.surface.hostId,
-                face: surfaceFace,
+                face: classifiedFace?.face ?? 'unknown',
                 levelId: useViewer.getState().selection.levelId ?? undefined,
-                side: surfaceFace === 'side' ? (wallSideDot >= 0 ? 'front' : 'back') : undefined,
+                side: classifiedFace?.side,
               }
             : undefined,
         nativeEvent: nativeEvent as any, // Type compatibility with ThreeEvent

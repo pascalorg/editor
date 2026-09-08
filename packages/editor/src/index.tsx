@@ -454,6 +454,10 @@ export {
   registerEditorHostTreeChildren,
 } from './lib/host-tree-children'
 export {
+  DRAFTING_SURFACE_EXTENSION_KEY,
+  type DraftingSurfaceExtension,
+} from './lib/interaction/registered-drafting'
+export {
   boundaryReshapeScope,
   curveReshapeScope,
   endpointReshapeScope,

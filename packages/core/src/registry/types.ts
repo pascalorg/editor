@@ -1041,6 +1041,13 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * Kinds outside any distribution system leave this unset.
    */
   distributionRole?: DistributionRole
+  /** Optional behavior while the kind's click-to-click construction tool is active. */
+  drafting?: {
+    /** Raycast architectural hosts and emit their semantic surface data with grid events. */
+    surfaceQuery?: boolean
+    /** Cancel the in-flight draft before applying an undo or redo history jump. */
+    cancelOnHistoryJump?: boolean
+  }
   /**
    * When `distributionRole` is `'fitting'`, controls whether this fitting
    * is dragged as a rigid follower when a connected run endpoint moves.

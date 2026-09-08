@@ -6,12 +6,32 @@ import {
   RoofSegmentNode,
   type SceneApi,
 } from '@pascal-app/core'
-import { getFloorplanNodeExtension } from '@pascal-app/editor'
+import {
+  DRAFTING_SURFACE_EXTENSION_KEY,
+  type DraftingSurfaceExtension,
+  getFloorplanNodeExtension,
+} from '@pascal-app/editor'
 import { createConicalRoofSectorAboveWall } from '../roof/conical-roof'
 import { wallDefinition } from './definition'
 
 test('wallDefinition records the lean-to child schema migration', () => {
   expect(wallDefinition.schemaVersion).toBe(8)
+})
+
+test('wall drafting surface classifies its top, ends, and two sides', () => {
+  const wall = wallDefinition.schema.parse({
+    id: 'wall_surface',
+    start: [0, 0],
+    end: [4, 0],
+  })
+  const surface = wallDefinition.extensions?.[
+    DRAFTING_SURFACE_EXTENSION_KEY
+  ] as DraftingSurfaceExtension
+
+  expect(surface.classifyFace?.(wall, [0, 1, 0])).toEqual({ face: 'top' })
+  expect(surface.classifyFace?.(wall, [0, 0, 1])).toEqual({ face: 'side', side: 'front' })
+  expect(surface.classifyFace?.(wall, [0, 0, -1])).toEqual({ face: 'side', side: 'back' })
+  expect(surface.classifyFace?.(wall, [1, 0, 0])).toEqual({ face: 'end' })
 })
 
 describe('wallDefinition floor-plan extension', () => {
