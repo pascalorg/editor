@@ -101,6 +101,9 @@ function createBatch(highlighted: boolean, capacity: number): BracketBatch {
   mesh.name = highlighted ? 'ceiling-brackets-highlighted' : 'ceiling-brackets-normal'
   mesh.renderOrder = highlighted ? 1001 : 1000
   mesh.frustumCulled = false
+  // Three 0.185.1 re-uploads the whole matrix array every render when it fits the device's
+  // uniform-buffer limit (roughly 1024 matrices), ignoring versions/ranges; accepted for
+  // small batches. Above that limit, the attribute path honors versions and ranges.
   mesh.instanceMatrix.setUsage(StaticDrawUsage)
   mesh.setColorAt(0, highlighted ? HIGHLIGHT_COLOR : NORMAL_COLOR)
   mesh.instanceColor!.setUsage(StaticDrawUsage)
