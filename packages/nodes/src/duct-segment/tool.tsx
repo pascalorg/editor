@@ -12,6 +12,7 @@ import {
   planElbowRealign,
   planTeeAtRunBody,
 } from '../shared/auto-fitting'
+import { ConnectionFeedback } from '../shared/connection-feedback'
 import { createRunWallAttachment, type RunSurfaceTarget } from '../shared/distribution-run-contract'
 import {
   DistributionRunCursor,
@@ -20,6 +21,7 @@ import {
   stepNominalRunSize,
   useDistributionRunTool,
 } from '../shared/distribution-run-tool'
+import { FITTING_CLEARANCE_MESSAGE, hasFittingClearance } from '../shared/fitting-clearance'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
 import {
@@ -212,6 +214,7 @@ function inheritProfile(port: ScenePort): DraftProfile | null {
  *  commit. Shared by `commitSegment` and the live preview so what you see
  *  is exactly what lands. */
 type DuctDrawPlan = {
+  validationMessage: string | null
   fittings: DuctFittingNode[]
   ducts: DuctSegmentNode[]
   tails: DuctSegmentNode[]
@@ -232,22 +235,17 @@ const elbowPlanFor = (
   const path = owner.path.map((p) => [...p] as [number, number, number])
   const index = port.id === 'start' ? 0 : path.length - 1
   const neighbor = path[index === 0 ? 1 : index - 1]!
-  const remaining = Math.hypot(
-    plan.trimmedPortPoint[0] - neighbor[0],
-    plan.trimmedPortPoint[1] - neighbor[1],
-    plan.trimmedPortPoint[2] - neighbor[2],
-  )
-  // The trim must leave a real piece of the existing run AND not flip it.
   const original = path[index]!
-  const originalLen = Math.hypot(
+  const direction: [number, number, number] = [
     original[0] - neighbor[0],
     original[1] - neighbor[1],
     original[2] - neighbor[2],
-  )
-  if (remaining < 0.08 || remaining >= originalLen) return null
+  ]
+  const hasClearance = hasFittingClearance(neighbor, plan.trimmedPortPoint, direction, 0.08)
   path[index] = plan.trimmedPortPoint
   return {
     ...plan,
+    hasClearance,
     trim: { id: port.nodeId, data: { path } as Partial<AnyNode> },
   }
 }
@@ -268,7 +266,7 @@ const realignPlanFor = (port: ScenePort | null, awayDir: [number, number, number
  * graph but mutates nothing, so the live preview can call it each frame
  * to ghost the fittings before the commit applies the identical plan.
  */
-function planDuctDraw(
+export function planDuctDraw(
   start: [number, number, number],
   end: [number, number, number],
   startPort: ScenePort | null,
@@ -291,6 +289,14 @@ function planDuctDraw(
 
   const startPlan = elbowPlanFor(startPort, dir, profile)
   const endPlan = elbowPlanFor(endPort, [-dir[0], -dir[1], -dir[2]], profile)
+  const invalidPlan = (): DuctDrawPlan => ({
+    validationMessage: FITTING_CLEARANCE_MESSAGE,
+    fittings: [],
+    ducts: [],
+    tails: [],
+    updates: [],
+  })
+  if (startPlan?.hasClearance === false || endPlan?.hasClearance === false) return invalidPlan()
   const startRealign = startPlan ? null : realignPlanFor(startPort, dir)
   const endRealign = endPlan ? null : realignPlanFor(endPort, [-dir[0], -dir[1], -dir[2]])
   const trunkBody = startPlan ? null : startBody
@@ -305,19 +311,14 @@ function planDuctDraw(
     endTrunkBody && endTrunkOwner?.type === 'duct-segment'
       ? planTeeAtRunBody(endTrunkOwner, endTrunkBody, [-dir[0], -dir[1], -dir[2]], profile)
       : null
-  let ductStart =
+  const ductStart =
     startPlan?.collarPoint ?? teePlan?.branchCollar ?? startRealign?.collarPoint ?? start
   let ductEnd = endPlan?.collarPoint ?? endTeePlan?.branchCollar ?? endRealign?.collarPoint ?? end
-  const remaining = Math.hypot(
-    ductEnd[0] - ductStart[0],
-    ductEnd[1] - ductStart[1],
-    ductEnd[2] - ductStart[2],
-  )
-  let plans = [startPlan, endPlan].filter((p) => p !== null)
-  let tee = teePlan
+  const plans = [startPlan, endPlan].filter((p) => p !== null)
+  const tee = teePlan
   let endTee = endTeePlan && endTrunkBody?.nodeId === trunkBody?.nodeId ? null : endTeePlan
   if (!endTee && endTeePlan) ductEnd = endRealign?.collarPoint ?? end
-  let realigns = [startRealign, endRealign].filter((p) => p !== null)
+  const realigns = [startRealign, endRealign].filter((p) => p !== null)
 
   const crossHit = surface
     ? findRunBodyCrossingSurface(start, end, BODY_SNAP_RADIUS_M, surface)
@@ -325,20 +326,24 @@ function planDuctDraw(
   const crossOwner = crossHit ? useScene.getState().nodes[crossHit.nodeId] : null
   const crossTappedElsewhere =
     crossHit?.nodeId === trunkBody?.nodeId || crossHit?.nodeId === endTrunkBody?.nodeId
-  let cross =
+  const cross =
     crossHit && !crossTappedElsewhere && crossOwner?.type === 'duct-segment'
       ? planCrossAtRunBody(crossOwner, crossHit, dir, profile)
       : null
 
-  if (remaining <= 0.08) {
-    plans = []
-    tee = null
-    endTee = null
-    realigns = []
-    cross = null
-    ductStart = start
-    ductEnd = end
-  }
+  if (
+    !hasFittingClearance(ductStart, ductEnd, dir, 0.08) ||
+    (trunkBody && !teePlan) ||
+    (endTrunkBody && !endTeePlan) ||
+    (crossHit && !crossTappedElsewhere && !cross)
+  )
+    return invalidPlan()
+  if (
+    cross &&
+    (!hasFittingClearance(ductStart, cross.branchCollarNear, dir, 0.08) ||
+      !hasFittingClearance(cross.branchCollarFar, ductEnd, dir, 0.08))
+  )
+    return invalidPlan()
 
   // Rect / oval continuity: roll the new run's cross-section so its
   // profile stays continuous with whatever either end joined.
@@ -393,7 +398,7 @@ function planDuctDraw(
     ...realigns.map((p) => p.update as { id: AnyNode['id']; data: Partial<AnyNode> }),
   ]
 
-  return { fittings, ducts, tails, updates }
+  return { validationMessage: null, fittings, ducts, tails, updates }
 }
 
 const DuctSegmentTool = () => {
@@ -489,7 +494,7 @@ const DuctSegmentTool = () => {
         undefined,
         hangerStyleRef.current,
       )
-      if (!plan) return null
+      if (!plan || plan.validationMessage) return null
       const attachDuct = (node: DuctSegmentNode): DuctSegmentNode => {
         const wallAttachment =
           surfaceTarget?.kind === 'wall'
@@ -624,6 +629,15 @@ const DuctSegmentTool = () => {
 
   return (
     <LevelOffsetGroup>
+      <ConnectionFeedback
+        point={run.cursor}
+        target={run.endConnection.port}
+        levelId={activeLevelId}
+        profile={{
+          ...profile,
+          system: String(hangerDefaults?.system ?? ductSegmentDefinition.defaults().system),
+        }}
+      />
       <DistributionRunCursor
         surfaceLabel={
           run.surfaceTarget?.kind === 'wall'
@@ -646,7 +660,7 @@ const DuctSegmentTool = () => {
         lengthInput={run.lengthInput}
         onLengthInputChange={run.onLengthInputChange}
         onDirectionSelect={run.onDirectionSelect}
-        validationMessage={run.validationMessage}
+        validationMessage={previewPlan?.validationMessage ?? run.validationMessage}
         snapTarget={run.snapTarget}
         start={run.start}
         startDirection={run.startConnection.port?.direction ?? null}

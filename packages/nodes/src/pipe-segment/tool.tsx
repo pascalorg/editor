@@ -10,6 +10,7 @@ import {
   planPipeCrossAtRunBody,
   planPipeElbowAtPort,
 } from '../shared/auto-fitting'
+import { ConnectionFeedback } from '../shared/connection-feedback'
 import { createRunWallAttachment, type RunSurfaceTarget } from '../shared/distribution-run-contract'
 import {
   DistributionRunCursor,
@@ -21,6 +22,7 @@ import {
   stepNominalRunSize,
   useDistributionRunTool,
 } from '../shared/distribution-run-tool'
+import { FITTING_CLEARANCE_MESSAGE, hasFittingClearance } from '../shared/fitting-clearance'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { PipeFittingGhost } from '../shared/mep-ghost'
 import { PIPE_PRESETS } from '../shared/mep-presets'
@@ -35,9 +37,9 @@ import {
 import { RunHangerPreview, RunHangerToggle } from '../shared/run-hanger-controls'
 import { currentPipeContinuationSeed, pipeEndpointPort } from './continuation'
 import { pipeSegmentDefinition } from './definition'
+import { applyPipeGrade, pipeGrade } from './slope'
 
 const PIPE_DIAMETERS_IN = [1.25, 1.5, 2, 3, 4, 6] as const
-const DRAIN_SLOPE = 1 / 48
 const PORT_SNAP_RADIUS_M = 0.5
 const BODY_SNAP_RADIUS_M = 0.3
 
@@ -92,6 +94,10 @@ const PipeSegmentTool = () => {
     continuationSeed?.pipe.system ?? defaults.system,
   )
   const [sloped, setSloped] = useState(false)
+  const [slopePercent, setSlopePercent] = useState(100 / 48)
+  const [slopeDirection, setSlopeDirection] = useState<1 | -1>(1)
+  const gradeRef = useRef(slopePercent / 100)
+  gradeRef.current = (slopeDirection * slopePercent) / 100
   const [diameter, setDiameter] = useState(continuationSeed?.pipe.diameter ?? defaults.diameter)
   const [pipeMaterial, setPipeMaterial] = useState<PipeSegmentNode['pipeMaterial']>(
     continuationSeed?.pipe.pipeMaterial ?? defaults.pipeMaterial,
@@ -147,21 +153,17 @@ const PipeSegmentTool = () => {
       const path = owner.path.map((point) => [...point] as RunPoint)
       const index = port.id === 'start' ? 0 : path.length - 1
       const neighbor = path[index === 0 ? 1 : index - 1]!
-      const remaining = Math.hypot(
-        plan.trimmedPortPoint[0] - neighbor[0],
-        plan.trimmedPortPoint[1] - neighbor[1],
-        plan.trimmedPortPoint[2] - neighbor[2],
-      )
       const original = path[index]!
-      const originalLength = Math.hypot(
+      const direction: RunPoint = [
         original[0] - neighbor[0],
         original[1] - neighbor[1],
         original[2] - neighbor[2],
-      )
-      if (remaining < 0.05 || remaining >= originalLength) return null
+      ]
+      const hasClearance = hasFittingClearance(neighbor, plan.trimmedPortPoint, direction, 0.05)
       path[index] = plan.trimmedPortPoint
       return {
         ...plan,
+        hasClearance,
         trim: { id: port.nodeId, data: { path } as Partial<AnyNode> },
       }
     }
@@ -177,9 +179,20 @@ const PipeSegmentTool = () => {
 
     const startBend = bendPlanFor(promotedFitting ? null : startConnection.port, direction)
     const endBend = bendPlanFor(endConnection.port, [-direction[0], -direction[1], -direction[2]])
+    const invalidPlan = () =>
+      previewOnly
+        ? {
+            validationMessage: FITTING_CLEARANCE_MESSAGE,
+            nextStart: rawStart,
+            nextConnection: startConnection,
+            previewPipes: [] as PipeSegmentNode[],
+            previewFittings: [] as PipeFittingNode[],
+          }
+        : null
+    if (startBend?.hasClearance === false || endBend?.hasClearance === false) return invalidPlan()
     const startBody = startBend ? null : startConnection.body
     const startOwner = startBody ? useScene.getState().nodes[startBody.nodeId] : null
-    let startTap =
+    const startTap =
       startBody && startOwner?.type === 'pipe-segment'
         ? planPipeBranchTap(startOwner, startBody, direction, diameterRef.current)
         : null
@@ -196,16 +209,16 @@ const PipeSegmentTool = () => {
         : null
     if (endBody?.nodeId === startBody?.nodeId) endTap = null
 
-    let pipeStart = startBend?.collarPoint ?? startTap?.branchCollar ?? start
-    let pipeEnd = endBend?.collarPoint ?? endTap?.branchCollar ?? end
-    let bends = [startBend, endBend].filter((plan) => plan !== null)
+    const pipeStart = startBend?.collarPoint ?? startTap?.branchCollar ?? start
+    const pipeEnd = endBend?.collarPoint ?? endTap?.branchCollar ?? end
+    const bends = [startBend, endBend].filter((plan) => plan !== null)
     const crossHit = surfaceTarget
       ? findRunBodyCrossingSurface(start, end, BODY_SNAP_RADIUS_M, surfaceTarget, {
           kinds: ['pipe-segment'],
         })
       : null
     const crossOwner = crossHit ? useScene.getState().nodes[crossHit.nodeId] : null
-    let cross =
+    const cross =
       crossHit &&
       crossHit.nodeId !== startBody?.nodeId &&
       crossHit.nodeId !== endBody?.nodeId &&
@@ -213,19 +226,22 @@ const PipeSegmentTool = () => {
         ? planPipeCrossAtRunBody(crossOwner, crossHit, direction, diameterRef.current)
         : null
 
-    const remaining = Math.hypot(
-      pipeEnd[0] - pipeStart[0],
-      pipeEnd[1] - pipeStart[1],
-      pipeEnd[2] - pipeStart[2],
+    if (
+      !hasFittingClearance(pipeStart, pipeEnd, direction, 0.05) ||
+      (startBody && !startTap) ||
+      (endBody && endBody.nodeId !== startBody?.nodeId && !endTap) ||
+      (crossHit &&
+        crossHit.nodeId !== startBody?.nodeId &&
+        crossHit.nodeId !== endBody?.nodeId &&
+        !cross)
     )
-    if (remaining <= 0.05) {
-      bends = []
-      startTap = null
-      endTap = null
-      cross = null
-      pipeStart = start
-      pipeEnd = end
-    }
+      return invalidPlan()
+    if (
+      cross &&
+      (!hasFittingClearance(pipeStart, cross.branchCollarNear, direction, 0.05) ||
+        !hasFittingClearance(cross.branchCollarFar, pipeEnd, direction, 0.05))
+    )
+      return invalidPlan()
 
     const makePipe = (from: RunPoint, to: RunPoint) =>
       PipeSegmentNode.parse({
@@ -327,6 +343,7 @@ const PipeSegmentTool = () => {
     const nextStart = nextPipe ? nextPipe.path[nextPipe.path.length - 1]! : end
     const nextPort = nextPipe ? pipeEndpointPort(nextPipe, 'end') : endConnection.port
     return {
+      validationMessage: null,
       nextStart,
       previewPipes: attachedPipes,
       previewFittings: changes.create
@@ -360,8 +377,7 @@ const PipeSegmentTool = () => {
     minimumSegmentLength: 0.05,
     resolveFreeEnd: (start, end, startConnection) => {
       if (!slopedRef.current || systemRef.current !== 'waste') return end
-      const horizontalRun = Math.hypot(end[0] - start[0], end[2] - start[2])
-      return [end[0], start[1] - horizontalRun * DRAIN_SLOPE, end[2]]
+      return applyPipeGrade(start, end, gradeRef.current)
     },
     inheritFromConnection: ({ port, body }) => {
       const ownerId = port?.nodeId ?? body?.nodeId
@@ -394,6 +410,13 @@ const PipeSegmentTool = () => {
     },
   })
 
+  const refreshCursor = run.refreshCursor
+  // Slope settings are read through refs by the cursor resolver; refresh after those refs update.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: settings must refresh a stationary cursor
+  useEffect(() => {
+    if (!run.altActive) refreshCursor()
+  }, [sloped, slopePercent, slopeDirection, system, run.altActive, refreshCursor])
+
   const displayStart = run.start
   const previewPlan =
     run.start && run.cursor
@@ -420,9 +443,23 @@ const PipeSegmentTool = () => {
   useEffect(() => () => usePathDraftPreview.getState().clear('pipe-segment'), [])
   useEffect(() => () => useEditor.getState().setToolDefaults('pipe-segment', null), [])
 
+  const actualGrade = run.start && run.cursor ? pipeGrade(run.start, run.cursor) : null
+  const elevationChange = run.start && run.cursor ? run.cursor[1] - run.start[1] : 0
+  const slopeMismatch =
+    sloped &&
+    system === 'waste' &&
+    actualGrade !== null &&
+    Math.abs(actualGrade - gradeRef.current) > 0.0001
+
   if (!activeLevelId) return null
   return (
     <LevelOffsetGroup>
+      <ConnectionFeedback
+        point={run.cursor}
+        target={run.endConnection.port}
+        levelId={activeLevelId}
+        profile={{ diameter, system }}
+      />
       <DistributionRunCursor
         surfaceLabel={
           run.surfaceTarget?.kind === 'wall'
@@ -444,18 +481,89 @@ const PipeSegmentTool = () => {
         lengthInput={run.lengthInput}
         onLengthInputChange={run.onLengthInputChange}
         onDirectionSelect={run.onDirectionSelect}
-        validationMessage={run.validationMessage}
+        validationMessage={previewPlan?.validationMessage ?? run.validationMessage}
         snapTarget={run.snapTarget}
         start={displayStart}
         startDirection={run.startConnection.port?.direction ?? null}
         status={
-          <div className="flex items-center gap-2 whitespace-nowrap rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[10px] text-muted-foreground shadow-sm backdrop-blur">
-            {system === 'waste'
-              ? sloped
-                ? 'Waste · ¼″/ft fall'
-                : 'Waste · level'
-              : 'Vent · level'}{' '}
-            · Q system{system === 'waste' ? ' · S slope' : ''}
+          <div
+            onPointerDown={(event) => event.stopPropagation()}
+            className="flex flex-wrap items-center justify-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 py-1 text-[10px] text-muted-foreground shadow-sm backdrop-blur"
+          >
+            {system === 'waste' ? 'Waste' : 'Vent'} · Q system
+            {system === 'waste' && (
+              <>
+                <button
+                  type="button"
+                  aria-pressed={sloped}
+                  style={{ pointerEvents: 'auto' }}
+                  onClick={() => setSloped((value) => !value)}
+                >
+                  Slope {sloped ? 'on' : 'off'} · S
+                </button>
+                <select
+                  aria-label="Pipe slope preset"
+                  value={slopePercent}
+                  style={{ pointerEvents: 'auto' }}
+                  className="bg-background"
+                  onChange={(event) => {
+                    setSlopePercent(Number(event.target.value))
+                    setSloped(true)
+                  }}
+                >
+                  <option value={100 / 96}>⅛″/ft · 1.042%</option>
+                  <option value={100 / 48}>¼″/ft · 2.083%</option>
+                  <option value={100 / 24}>½″/ft · 4.167%</option>
+                  {![100 / 96, 100 / 48, 100 / 24].includes(slopePercent) && (
+                    <option value={slopePercent}>Custom</option>
+                  )}
+                </select>
+                <label>
+                  Slope %{' '}
+                  <input
+                    aria-label="Pipe slope percent"
+                    className="w-16 bg-background"
+                    style={{ pointerEvents: 'auto' }}
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    value={Number(slopePercent.toFixed(4))}
+                    onChange={(event) => {
+                      const value = event.target.valueAsNumber
+                      if (Number.isFinite(value) && value >= 0 && value <= 100) {
+                        setSlopePercent(value)
+                        setSloped(true)
+                      }
+                    }}
+                  />
+                </label>
+                <select
+                  aria-label="Pipe slope direction"
+                  value={slopeDirection}
+                  className="bg-background"
+                  style={{ pointerEvents: 'auto' }}
+                  onChange={(event) => setSlopeDirection(event.target.value === '1' ? 1 : -1)}
+                >
+                  <option value={1}>Fall from start</option>
+                  <option value={-1}>Rise from start</option>
+                </select>
+              </>
+            )}
+            {run.start && run.cursor && (
+              <span
+                role="status"
+                className={slopeMismatch ? 'text-amber-600 dark:text-amber-400' : undefined}
+              >
+                {actualGrade === null
+                  ? 'Vertical run'
+                  : `Actual ${Math.abs(actualGrade * 100).toFixed(2)}% ${actualGrade >= 0 ? 'fall' : 'rise'}`}
+                {' · '}
+                {Math.abs(elevationChange * (unit === 'metric' ? 1000 : 1 / 0.0254)).toFixed(1)}
+                {unit === 'metric' ? ' mm' : '″'} {elevationChange > 0 ? 'rise' : 'fall'}
+                {slopeMismatch ? ' · Target slope not met' : ''}
+              </span>
+            )}
             <RunHangerToggle
               enabled={autoHangers}
               onChange={setAutoHangers}

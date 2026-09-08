@@ -18,6 +18,7 @@ import {
   snapAccessoryPoint,
   subscribeAccessorySnapping,
 } from '../shared/accessory-snapping'
+import { ConnectionFeedback } from '../shared/connection-feedback'
 import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import {
   AXIS_VECTORS,
@@ -241,6 +242,12 @@ const PipeFittingTool = () => {
 
   return (
     <LevelOffsetGroup>
+      <ConnectionFeedback
+        point={placement.position}
+        target={placement.snapPort}
+        levelId={activeLevelId}
+        profile={previewNode}
+      />
       {/* Same ground ring + vertical line + tool-icon badge the duct draw
           tool shows in 3D (icon resolved from the active `pipe-fitting`
           structure-tools entry). In 2D the floorplan overlay draws this for

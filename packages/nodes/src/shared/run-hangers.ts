@@ -54,7 +54,19 @@ export function hangerSceneNodes(ctx?: GeometryContext): Record<AnyNodeId, AnyNo
   return nodes
 }
 
-export function planRunHangers(run: SupportedRun, nodes: Record<AnyNodeId, AnyNode>): RunHanger[] {
+export type RunHangerSlot = {
+  id: string
+  segmentIndex: number
+  fraction: number
+  center: Vector3
+  skipped: boolean
+  hanger: RunHanger | null
+}
+
+export function planRunHangerSlots(
+  run: SupportedRun,
+  nodes: Record<AnyNodeId, AnyNode>,
+): RunHangerSlot[] {
   if (!run.autoHangers || !run.parentId) return []
   const spacing = run.hangerSpacing ?? 1.5
   const reach = run.hangerMaxReach ?? 2
@@ -62,7 +74,7 @@ export function planRunHangers(run: SupportedRun, nodes: Record<AnyNodeId, AnyNo
   const hosts = Object.values(nodes).filter(
     (n) => n.parentId === run.parentId && (n.type === 'wall' || n.type === 'ceiling'),
   )
-  const result: RunHanger[] = []
+  const result: RunHangerSlot[] = []
   for (let i = 1; i < run.path.length; i++) {
     const start = new Vector3(...run.path[i - 1]!)
     const delta = new Vector3(...run.path[i]!).sub(start)
@@ -71,10 +83,14 @@ export function planRunHangers(run: SupportedRun, nodes: Record<AnyNodeId, AnyNo
     const direction = delta.clone().normalize()
     const count = Math.max(1, Math.ceil(length / spacing))
     for (let j = 0; j < count; j++) {
-      const center = start.clone().addScaledVector(delta, (j + 0.5) / count)
+      const id = `${i - 1}:${j}`
+      const override = run.hangerOverrides?.[id]
+      const fraction = override?.fraction ?? (j + 0.5) / count
+      const center = start.clone().addScaledVector(delta, fraction)
       let best: RunHanger | null = null
       let distance = reach
       for (const host of hosts) {
+        if (override?.skipped || (override?.hostId && override.hostId !== host.id)) continue
         let anchor: Vector3
         if (host.type === 'ceiling') {
           if (
@@ -115,10 +131,21 @@ export function planRunHangers(run: SupportedRun, nodes: Record<AnyNodeId, AnyNo
           distance = d
         }
       }
-      if (best) result.push(best)
+      result.push({
+        id,
+        segmentIndex: i - 1,
+        fraction,
+        center,
+        skipped: !!override?.skipped,
+        hanger: best,
+      })
     }
   }
   return result
+}
+
+export function planRunHangers(run: SupportedRun, nodes: Record<AnyNodeId, AnyNode>): RunHanger[] {
+  return planRunHangerSlots(run, nodes).flatMap((slot) => (slot.hanger ? [slot.hanger] : []))
 }
 
 const BAND_THICKNESS = 0.006

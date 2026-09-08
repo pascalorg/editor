@@ -1,4 +1,4 @@
-import { type AnyNodeId, type NodePort, nodeRegistry, useScene } from '@pascal-app/core'
+import { findLevelAncestorId, type AnyNodeId, type NodePort, nodeRegistry, useScene } from '@pascal-app/core'
 import type { RunSurfaceTarget } from './distribution-run-contract'
 
 /** A port plus the scene node that owns it. */
@@ -40,7 +40,7 @@ export function collectScenePorts(filter: PortFilter = {}): ScenePort[] {
       !node ||
       node.visible === false ||
       node.id === excludeNodeId ||
-      (levelId && node.parentId !== levelId)
+      (levelId && findLevelAncestorId(node.id, nodes) !== levelId)
     )
       continue
     const ports = nodeRegistry.get(node.type)?.ports?.(node)
@@ -129,7 +129,7 @@ export type RunBodyHit = {
 export function findNearestRunBodyXZ(
   point: readonly [number, number, number],
   radius: number,
-  filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[] } = {},
+  filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[]; levelId?: AnyNodeId } = {},
 ): RunBodyHit | null {
   const kinds = filter.kinds ?? ['duct-segment']
   const { nodes } = useScene.getState()
@@ -137,6 +137,7 @@ export function findNearestRunBodyXZ(
   let bestDistSq = radius * radius
   for (const node of Object.values(nodes)) {
     if (!node || !kinds.includes(node.type) || node.id === filter.excludeNodeId) continue
+    if (filter.levelId && findLevelAncestorId(node.id, nodes) !== filter.levelId) continue
     const path = (node as { path?: Array<readonly [number, number, number]> }).path
     if (!path) continue
     for (let i = 0; i < path.length - 1; i++) {
@@ -181,7 +182,8 @@ export function findNearestRunBody3D(
   let bestDistSq = radius * radius
   for (const node of Object.values(nodes)) {
     if (!node || !kinds.includes(node.type) || node.id === filter.excludeNodeId) continue
-    if (node.visible === false || (filter.levelId && node.parentId !== filter.levelId)) continue
+    if (filter.levelId && findLevelAncestorId(node.id, nodes) !== filter.levelId) continue
+    if (node.visible === false) continue
     const path = (node as { path?: Array<readonly [number, number, number]> }).path
     if (!path) continue
     for (let i = 0; i < path.length - 1; i++) {

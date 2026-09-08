@@ -18,6 +18,7 @@ import {
   buildRunHangers,
   hangerSceneNodes,
   hangerSupportLines,
+  planRunHangerSlots,
   planRunHangers,
   runHangerFloorplan,
 } from './run-hangers'
@@ -304,4 +305,41 @@ test('rectangular band forms a closed solid through every mitered corner', () =>
   }
   expect([...edges.values()].every((count) => count === 2)).toBe(true)
   geometry.dispose()
+})
+
+test('individual hanger overrides move, skip, and select a support in both views', () => {
+  const { pipe, nodes, ceiling, ctx } = fixture()
+  const changed = PipeSegmentNode.parse({
+    ...pipe,
+    hangerOverrides: {
+      '0:0': { fraction: 0.1, hostId: ceiling.id },
+      '0:1': { skipped: true },
+    },
+  })
+  const slots = planRunHangerSlots(changed, nodes)
+  expect(slots).toHaveLength(2)
+  expect(slots[0]!.center.x).toBeCloseTo(0.3)
+  expect(slots[0]!.hanger?.hostId).toBe(ceiling.id)
+  expect(slots[1]!.skipped).toBe(true)
+  expect(planRunHangers(changed, nodes)).toHaveLength(1)
+  expect(buildRunHangers(changed, ctx).children).toHaveLength(3)
+  expect(runHangerFloorplan(changed, ctx)).toHaveLength(2)
+})
+
+test('missing explicit hosts remain unsupported instead of silently changing hosts', () => {
+  const { pipe, nodes, ceiling } = fixture()
+  const changed = { ...pipe, hangerOverrides: { '0:0': { hostId: ceiling.id } } }
+  delete nodes[ceiling.id]
+  const slots = planRunHangerSlots(changed, nodes)
+  expect(slots[0]!.hanger).toBeNull()
+  expect(slots[0]!.skipped).toBe(false)
+  expect(slots[1]!.hanger).not.toBeNull()
+})
+
+test('unsupported slots remain available for editing', () => {
+  const { pipe, nodes } = fixture()
+  expect(planRunHangerSlots({ ...pipe, hangerMaxReach: 0.01 }, nodes)).toHaveLength(2)
+  expect(
+    PipeSegmentNode.safeParse({ ...pipe, hangerOverrides: { '0:0': { fraction: 2 } } }).success,
+  ).toBe(false)
 })

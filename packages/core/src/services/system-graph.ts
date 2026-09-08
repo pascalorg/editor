@@ -1,4 +1,4 @@
-import { nodeRegistry } from '../registry'
+import { type NodePort, nodeRegistry } from '../registry'
 import type { AnyNode, AnyNodeId, BuildingNode } from '../schema'
 import { getLevelElevations } from './storey'
 
@@ -36,7 +36,8 @@ export type SystemSummary = {
   connectedToEquipment: boolean
 }
 
-type PortRecord = {
+export type SystemPort = {
+  port: NodePort
   nodeId: AnyNodeId
   x: number
   y: number
@@ -44,37 +45,16 @@ type PortRecord = {
   system: string | undefined
 }
 
-function collectPorts(nodes: Readonly<Record<AnyNodeId, AnyNode>>): PortRecord[] {
-  const result: PortRecord[] = []
-  const elevations = getLevelElevations(nodes)
+export function collectSystemPorts(nodes: Readonly<Record<AnyNodeId, AnyNode>>): SystemPort[] {
+  const result: SystemPort[] = []
   for (const node of Object.values(nodes)) {
     if (!node) continue
     const ports = nodeRegistry.get(node.type)?.ports?.(node)
     if (!ports) continue
-    let ancestor: AnyNode | undefined = node
-    const visited = new Set<AnyNodeId>()
-    while (ancestor && ancestor.type !== 'level' && !visited.has(ancestor.id)) {
-      visited.add(ancestor.id)
-      ancestor = ancestor.parentId ? nodes[ancestor.parentId as AnyNodeId] : undefined
-    }
-    const elevation = ancestor?.type === 'level' ? elevations.get(ancestor.id) : undefined
-    const building = elevation?.buildingId ? nodes[elevation.buildingId as AnyNodeId] : undefined
     for (const port of ports) {
-      // Port definitions already apply the node transform; only the level/building frame remains.
-      let [x, y, z] = port.position
-      y += elevation?.baseY ?? 0
-      if (building?.type === 'building') {
-        const { position, rotation } = building as BuildingNode
-        const [rx, ry, rz] = rotation
-        const zx = Math.cos(rz) * x - Math.sin(rz) * y
-        const zy = Math.sin(rz) * x + Math.cos(rz) * y
-        const yx = Math.cos(ry) * zx + Math.sin(ry) * z
-        const yz = -Math.sin(ry) * zx + Math.cos(ry) * z
-        x = yx + position[0]
-        y = Math.cos(rx) * zy - Math.sin(rx) * yz + position[1]
-        z = Math.sin(rx) * zy + Math.cos(rx) * yz + position[2]
-      }
+      const [x, y, z] = distributionPointToWorld(node, port.position, nodes)
       result.push({
+        port,
         nodeId: node.id,
         x,
         y,
@@ -84,6 +64,36 @@ function collectPorts(nodes: Readonly<Record<AnyNodeId, AnyNode>>): PortRecord[]
     }
   }
   return result
+}
+
+export function distributionPointToWorld(
+  node: AnyNode,
+  point: readonly [number, number, number],
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>,
+): [number, number, number] {
+  const elevations = getLevelElevations(nodes)
+  let ancestor: AnyNode | undefined = node
+  const visited = new Set<AnyNodeId>()
+  while (ancestor && ancestor.type !== 'level' && !visited.has(ancestor.id)) {
+    visited.add(ancestor.id)
+    ancestor = ancestor.parentId ? nodes[ancestor.parentId as AnyNodeId] : undefined
+  }
+  const elevation = ancestor?.type === 'level' ? elevations.get(ancestor.id) : undefined
+  const building = elevation?.buildingId ? nodes[elevation.buildingId as AnyNodeId] : undefined
+  let [x, y, z] = point
+  y += elevation?.baseY ?? 0
+  if (building?.type === 'building') {
+    const { position, rotation } = building as BuildingNode
+    const [rx, ry, rz] = rotation
+    const zx = Math.cos(rz) * x - Math.sin(rz) * y
+    const zy = Math.sin(rz) * x + Math.cos(rz) * y
+    const yx = Math.cos(ry) * zx + Math.sin(ry) * z
+    const yz = -Math.sin(ry) * zx + Math.cos(ry) * z
+    x = yx + position[0]
+    y = Math.cos(rx) * zy - Math.sin(rx) * yz + position[1]
+    z = Math.sin(rx) * zy + Math.cos(rx) * yz + position[2]
+  }
+  return [x, y, z]
 }
 
 /** Union-find over node ids. */
@@ -122,7 +132,7 @@ function pathLength(path: ReadonlyArray<readonly [number, number, number]>): num
  * without `def.ports` don't participate at all.
  */
 export function buildPortComponents(nodes: Readonly<Record<AnyNodeId, AnyNode>>): AnyNodeId[][] {
-  const ports = collectPorts(nodes)
+  const ports = collectSystemPorts(nodes)
   const components = new Components()
   const epsSq = COINCIDENT_EPS_M * COINCIDENT_EPS_M
 

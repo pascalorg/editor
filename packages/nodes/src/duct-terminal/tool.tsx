@@ -27,12 +27,13 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Euler, Matrix3, Matrix4, Plane, Quaternion, Raycaster, Vector2, Vector3 } from 'three'
 import { subscribeAccessorySnapping } from '../shared/accessory-snapping'
+import { ConnectionFeedback } from '../shared/connection-feedback'
 import { alignDrawPoint, clearDrawAlignment } from '../shared/draw-alignment'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { collectScenePorts, DUCT_PORT_SYSTEMS, findNearestPort3D } from '../shared/ports'
 import { ductTerminalDefinition } from './definition'
 import { buildDuctTerminalGeometry } from './geometry'
-import { COLLAR_LENGTH, mountQuaternion } from './ports'
+import { COLLAR_LENGTH, getDuctTerminalPorts, mountQuaternion } from './ports'
 
 const PREVIEW_OPACITY = 0.55
 /** R/T yaw step — 45°. */
@@ -422,8 +423,15 @@ const DuctTerminalTool = () => {
         })
       : placement.position
 
+  const collar = getDuctTerminalPorts({
+    ...previewNode,
+    position: placement.position,
+    rotation: placement.yaw,
+    mount: effectiveMount,
+  })[0]!
   return (
     <LevelOffsetGroup>
+      <ConnectionFeedback point={[...collar.position]} profile={collar} levelId={activeLevelId} />
       {/* Same ground ring + vertical line + tool-icon badge the duct draw
           tool shows in 3D (icon resolved from the active `duct-terminal`
           structure-tools entry). In 2D the floorplan overlay draws this for

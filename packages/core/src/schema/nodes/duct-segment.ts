@@ -1,6 +1,7 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { HangerOverrides } from './hanger-overrides'
 
 /**
  * Round duct segment — a polyline of 3D points connected by cylindrical
@@ -22,6 +23,7 @@ export const DuctSegmentNode = BaseNode.extend({
   // Polyline path in level-local meters. Minimum two points (start, end).
   path: z.array(z.tuple([z.number(), z.number(), z.number()])).min(2),
   autoHangers: z.boolean().optional(),
+  hangerOverrides: HangerOverrides.optional(),
   hangerStyle: z.enum(['single', 'double']).optional(),
   hangerSpacing: z.number().finite().positive().optional(),
   hangerMaxReach: z.number().finite().positive().optional(),

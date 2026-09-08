@@ -19,6 +19,7 @@ export const pipeSegmentParametrics: ParametricDescriptor<PipeSegmentNode> = {
     fittingDeletionPlansForRun(pipe, nodes, requestedDeleteIds, false).flatMap((plan) =>
       plan.deleteFitting ? [plan.fittingId, ...plan.cascadeDeleteIds] : [],
     ),
+  trailingSection: () => import('../shared/run-hanger-inspector'),
   groups: [
     {
       label: 'Hangers',

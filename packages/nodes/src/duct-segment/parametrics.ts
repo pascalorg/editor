@@ -109,6 +109,7 @@ export const ductSegmentParametrics: ParametricDescriptor<DuctSegmentNode> = {
     fittingDeletionPlansForRun(duct, nodes, requestedDeleteIds, false).flatMap((plan) =>
       plan.deleteFitting ? [plan.fittingId, ...plan.cascadeDeleteIds] : [],
     ),
+  trailingSection: () => import('../shared/run-hanger-inspector'),
   groups: [
     {
       label: 'Hangers',

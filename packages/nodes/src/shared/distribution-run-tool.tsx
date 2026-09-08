@@ -499,6 +499,8 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
     }
   }, [config.active, config.toolName])
 
+  const refreshCursor = useCallback(() => refreshCursorRef.current(), [])
+
   const updateLengthInput = useCallback((value: string) => {
     const normalized = value.replace(',', '.').replace(/[^0-9.]/g, '')
     const firstDot = normalized.indexOf('.')
@@ -625,7 +627,14 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         )
         if (directionHit && (forcedDirection || acceptsConnection(directionHit.point, false))) {
           return {
-            point: directionHit.point,
+            point:
+              Math.abs(directionHit.direction[1]) < 1e-6 && target?.kind !== 'ceiling'
+                ? (adapter.resolveFreeEnd?.(
+                    currentStart,
+                    directionHit.point,
+                    startConnectionRef.current,
+                  ) ?? directionHit.point)
+                : directionHit.point,
             frame:
               event.surfaceHit && !forcedDirection
                 ? resolved.frame
@@ -846,7 +855,11 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       const target = event.target as HTMLElement | null
       const tag = target?.tagName
       const isLengthField = target ? target.closest('[data-run-length-input]') !== null : false
-      if ((tag === 'INPUT' || tag === 'TEXTAREA') && !isLengthField) return
+      if (
+        (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || tag === 'BUTTON') &&
+        !isLengthField
+      )
+        return
       if (event.key === 'Escape' && startRef.current) {
         event.preventDefault()
         event.stopImmediatePropagation()
@@ -951,6 +964,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
   }, [camera, gl, config.active, updateLengthInput])
 
   return {
+    refreshCursor,
     start,
     cursor,
     snapTarget,

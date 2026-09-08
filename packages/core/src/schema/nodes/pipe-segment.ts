@@ -1,6 +1,7 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { HangerOverrides } from './hanger-overrides'
 
 /**
  * DWV pipe segment — drain / waste / vent runs in US residential
@@ -22,6 +23,7 @@ export const PipeSegmentNode = BaseNode.extend({
   // Polyline path in level-local meters. Minimum two points.
   path: z.array(z.tuple([z.number(), z.number(), z.number()])).min(2),
   autoHangers: z.boolean().optional(),
+  hangerOverrides: HangerOverrides.optional(),
   hangerStyle: z.enum(['single', 'double']).optional(),
   hangerSpacing: z.number().finite().positive().optional(),
   hangerMaxReach: z.number().finite().positive().optional(),
