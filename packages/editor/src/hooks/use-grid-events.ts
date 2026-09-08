@@ -11,6 +11,7 @@ import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Matrix3, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { getPlacementSurface } from '../lib/active-placement-surface'
+import { raycastCeilingUnderside } from '../lib/ceiling-surface-raycast'
 import { resolveTerrainGroundHit } from '../lib/ground-surface'
 import useInteractionScope from '../store/use-interaction-scope'
 
@@ -66,7 +67,11 @@ export function useGridEvents(gridY: number) {
             (scope.tool === 'duct-segment' || scope.tool === 'pipe-segment')
           if (runDraft && useScene.getState().nodes[id as AnyNodeId]?.visible === false) continue
           if (runDraft && !root.visible) continue
-          const hit = raycaster.current.intersectObject(root, true).find((candidate) => {
+          const intersections =
+            runDraft && type === 'ceiling'
+              ? raycastCeilingUnderside(raycaster.current, root)
+              : raycaster.current.intersectObject(root, true)
+          const hit = intersections.find((candidate) => {
             if (!runDraft) return true
             if (useScene.getState().nodes[id as AnyNodeId]?.visible === false) return false
             let object: Object3D | null = candidate.object

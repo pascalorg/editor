@@ -31,6 +31,7 @@ import {
   type RunBodyHit,
   type ScenePort,
 } from '../shared/ports'
+import { RunHangerPreview, RunHangerToggle } from '../shared/run-hanger-controls'
 import { currentDuctContinuationSeed, ductEndpointPort } from './continuation'
 import { ductSegmentDefinition } from './definition'
 import { rollToContinueAcrossElbow } from './geometry'
@@ -276,6 +277,9 @@ function planDuctDraw(
   endBody: RunBodyHit | null,
   profile: DraftProfile,
   surface?: RunSurfaceTarget | null,
+  autoHangers = false,
+  toolDefaults = useEditor.getState().toolDefaults['duct-segment'] ?? {},
+  hangerStyle: 'single' | 'double' = 'single',
 ): DuctDrawPlan | null {
   const length = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2])
   if (length < 1e-4) return null
@@ -345,11 +349,12 @@ function planDuctDraw(
   }
 
   const defaults = ductSegmentDefinition.defaults()
-  const toolDefaults = useEditor.getState().toolDefaults['duct-segment'] ?? {}
   const makeDuct = (from: [number, number, number], to: [number, number, number]) =>
     DuctSegmentNode.parse({
       ...defaults,
       ...toolDefaults,
+      autoHangers,
+      hangerStyle,
       name: profile.shape === 'rect' ? 'Trunk' : 'Duct run',
       path: [from, to],
       shape: profile.shape,
@@ -397,6 +402,32 @@ const DuctSegmentTool = () => {
   const cursorRef = useRef<Group>(null)
   const continuationSeedRef = useRef(currentDuctContinuationSeed())
   const continuationSeed = continuationSeedRef.current
+  const hangerDefaults = useEditor((state) => state.toolDefaults['duct-segment'])
+  const autoHangers = Boolean(
+    hangerDefaults?.autoHangers ?? continuationSeed?.duct.autoHangers ?? false,
+  )
+  const setAutoHangers = (enabled: boolean) => {
+    const editor = useEditor.getState()
+    editor.setToolDefaults('duct-segment', {
+      ...editor.toolDefaults['duct-segment'],
+      autoHangers: enabled,
+    })
+  }
+  const hangerStyle =
+    (hangerDefaults?.hangerStyle ?? continuationSeed?.duct.hangerStyle) === 'double'
+      ? 'double'
+      : 'single'
+  const setHangerStyle = (style: 'single' | 'double') => {
+    const editor = useEditor.getState()
+    editor.setToolDefaults('duct-segment', {
+      ...editor.toolDefaults['duct-segment'],
+      hangerStyle: style,
+    })
+  }
+  const hangerStyleRef = useRef<'single' | 'double'>(hangerStyle)
+  hangerStyleRef.current = hangerStyle
+  const autoHangersRef = useRef(autoHangers)
+  autoHangersRef.current = autoHangers
   const pendingPromotionRef = useRef(continuationSeed?.promotedFitting ?? null)
   const [profile, setProfile] = useState<DraftProfile>(() => {
     const defaults = ductSegmentDefinition.defaults() as DraftProfile
@@ -454,6 +485,9 @@ const DuctSegmentTool = () => {
         endConnection.body,
         profileRef.current,
         surfaceTarget,
+        autoHangersRef.current,
+        undefined,
+        hangerStyleRef.current,
       )
       if (!plan) return null
       const attachDuct = (node: DuctSegmentNode): DuctSegmentNode => {
@@ -547,9 +581,15 @@ const DuctSegmentTool = () => {
       run.endConnection.body,
       profile,
       run.surfaceTarget,
+      autoHangers,
+      hangerDefaults,
+      hangerStyle,
     )
   }, [
     activeLevelId,
+    autoHangers,
+    hangerDefaults,
+    hangerStyle,
     profile,
     run.start,
     run.cursor,
@@ -562,8 +602,14 @@ const DuctSegmentTool = () => {
   useEffect(() => {
     usePathDraftPreview
       .getState()
-      .setDraft('duct-segment', run.start ? [run.start] : [], run.cursor, profile, ghostFittings)
-  }, [ghostFittings, profile, run.cursor, run.start])
+      .setDraft(
+        'duct-segment',
+        run.start ? [run.start] : [],
+        run.cursor,
+        { ...profile, autoHangers, hangerStyle },
+        ghostFittings,
+      )
+  }, [autoHangers, hangerStyle, ghostFittings, profile, run.cursor, run.start])
   useEffect(() => () => usePathDraftPreview.getState().clear('duct-segment'), [])
   useEffect(() => () => useEditor.getState().setToolDefaults('duct-segment', null), [])
 
@@ -583,7 +629,9 @@ const DuctSegmentTool = () => {
           run.surfaceTarget?.kind === 'wall'
             ? 'Wall'
             : run.surfaceTarget?.kind === 'ceiling'
-              ? 'Ceiling'
+              ? run.surfaceTarget.frame.normal[1] > 0
+                ? 'Ceiling top'
+                : 'Ceiling underside'
               : run.surfaceTarget?.kind === 'floor'
                 ? 'Floor'
                 : run.surfaceTarget
@@ -602,6 +650,14 @@ const DuctSegmentTool = () => {
         snapTarget={run.snapTarget}
         start={run.start}
         startDirection={run.startConnection.port?.direction ?? null}
+        status={
+          <RunHangerToggle
+            enabled={autoHangers}
+            onChange={setAutoHangers}
+            style={hangerStyle}
+            onStyleChange={setHangerStyle}
+          />
+        }
         unit={unit}
       />
       {run.start && (
@@ -612,6 +668,9 @@ const DuctSegmentTool = () => {
       )}
       {previewPlan?.ducts.map((duct, index) => (
         <DuctSegmentGhost duct={duct} key={index} />
+      ))}
+      {previewPlan?.ducts.map((duct, index) => (
+        <RunHangerPreview key={`hanger-${index}`} run={duct} levelId={activeLevelId} />
       ))}
       {ghostFittings.map((fitting) => (
         <FittingGhost fitting={fitting} key={fitting.id} />

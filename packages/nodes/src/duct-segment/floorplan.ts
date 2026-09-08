@@ -1,4 +1,5 @@
 import type { FloorplanGeometry, FloorplanPoint, GeometryContext } from '@pascal-app/core'
+import { runHangerFloorplan } from '../shared/run-hangers'
 import { ductContinuationHandlePlan, ductEndpointPort } from './continuation'
 import { INCHES_TO_METERS } from './geometry'
 import type { DuctSegmentNode } from './schema'
@@ -52,6 +53,7 @@ export function buildDuctSegmentFloorplan(
     return {
       kind: 'group',
       children: [
+        ...runHangerFloorplan(node, ctx),
         {
           kind: 'circle',
           cx: p[0],
@@ -171,5 +173,6 @@ export function buildDuctSegmentFloorplan(
     }
   }
 
+  children.push(...runHangerFloorplan(node, ctx))
   return { kind: 'group', children }
 }

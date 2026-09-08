@@ -27,7 +27,7 @@ import { steppedRotation } from '../components/tools/item/placement-math'
 import { resolveDirectManipulationNode } from '../lib/direct-manipulation'
 import { toggleDoorOpenState } from '../lib/door-interaction'
 import { guideEmitter } from '../lib/guide-events'
-import { runRedo, runUndo } from '../lib/history'
+import { isHistoryShortcut, isRunDrafting, runRedo, runUndo } from '../lib/history'
 import { isActive } from '../lib/interaction/scope'
 import { copySelectedNodesToEditorClipboard } from '../lib/scene-clipboard'
 import { sfxEmitter } from '../lib/sfx-bus'
@@ -145,6 +145,7 @@ const cancelInteractionForHistoryShortcut = () => {
     return true
   }
   const activeScope = useInteractionScope.getState().scope
+  if (isRunDrafting()) return false
   if (activeScope.kind === 'mesh-editing' && activeScope.phase === 'selecting') return false
   _toolCancelConsumed = false
   emitter.emit('tool:cancel')
@@ -205,6 +206,14 @@ export const canRunGlobalRotationShortcut = () =>
 export const canCycleSnappingModeShortcut = (hasActiveContext = getActiveSnapContext() != null) =>
   hasActiveContext
 
+export function blocksSnappingShortcut(
+  target: Pick<HTMLElement, 'tagName' | 'isContentEditable' | 'hasAttribute'> | null,
+): boolean {
+  if (!target) return false
+  if (target.tagName === 'INPUT' && target.hasAttribute('data-run-length-input')) return false
+  return target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable
+}
+
 export const useKeyboard = ({
   isVersionPreviewMode = false,
   disabled = false,
@@ -249,6 +258,18 @@ export const useKeyboard = ({
         // Any non-modifier key (or a modifier combined with Ctrl/Meta) breaks
         // the clean tap.
         ctrlTapClean = false
+      }
+
+      if (
+        isRunDrafting() &&
+        isHistoryShortcut(e) &&
+        e.target instanceof HTMLInputElement &&
+        e.target.hasAttribute('data-run-length-input')
+      ) {
+        if (isVersionPreviewMode || useDeleteConfirmation.getState().request) return
+        e.preventDefault()
+        runHistoryShortcut(e.shiftKey ? 'redo' : 'undo')
+        return
       }
 
       // Don't handle shortcuts if user is typing in an input
@@ -716,11 +737,7 @@ export const useKeyboard = ({
         const wasClean = shiftTapClean
         shiftTapClean = false
         if (!wasClean) return
-        if (
-          e.target instanceof HTMLInputElement ||
-          e.target instanceof HTMLTextAreaElement ||
-          (e.target instanceof HTMLElement && e.target.isContentEditable)
-        ) {
+        if (blocksSnappingShortcut(e.target instanceof HTMLElement ? e.target : null)) {
           return
         }
         if (!canCycleSnappingModeShortcut()) return
@@ -733,9 +750,7 @@ export const useKeyboard = ({
         const wasClean = ctrlTapClean
         ctrlTapClean = false
         if (!wasClean) return
-        // Same scope as the Shift snapping-mode cycle, and never while typing
-        // in an input.
-        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        if (blocksSnappingShortcut(e.target instanceof HTMLElement ? e.target : null)) {
           return
         }
         if (!canCycleSnappingModeShortcut()) return

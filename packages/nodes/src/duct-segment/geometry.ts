@@ -23,6 +23,7 @@ import {
   Vector3,
 } from 'three'
 import { DUCT_BODY_SLOT_DEFAULT, DUCT_BODY_SLOT_ID } from '../shared/duct-body-paint'
+import { buildRunHangers } from '../shared/run-hangers'
 import type { DuctSegmentNode } from './schema'
 
 export const INCHES_TO_METERS = 0.0254
@@ -505,5 +506,6 @@ export function buildDuctSegmentGeometry(
     )
   }
 
+  if (node.autoHangers) group.add(buildRunHangers(node, ctx))
   return group
 }

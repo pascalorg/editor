@@ -32,6 +32,7 @@ import {
   findRunBodyCrossingSurface,
   type ScenePort,
 } from '../shared/ports'
+import { RunHangerPreview, RunHangerToggle } from '../shared/run-hanger-controls'
 import { currentPipeContinuationSeed, pipeEndpointPort } from './continuation'
 import { pipeSegmentDefinition } from './definition'
 
@@ -53,6 +54,32 @@ const PipeSegmentTool = () => {
   const unit = useViewer((state) => state.unit)
   const continuationSeedRef = useRef(currentPipeContinuationSeed())
   const continuationSeed = continuationSeedRef.current
+  const hangerDefaults = useEditor((state) => state.toolDefaults['pipe-segment'])
+  const autoHangers = Boolean(
+    hangerDefaults?.autoHangers ?? continuationSeed?.pipe.autoHangers ?? false,
+  )
+  const setAutoHangers = (enabled: boolean) => {
+    const editor = useEditor.getState()
+    editor.setToolDefaults('pipe-segment', {
+      ...editor.toolDefaults['pipe-segment'],
+      autoHangers: enabled,
+    })
+  }
+  const hangerStyle =
+    (hangerDefaults?.hangerStyle ?? continuationSeed?.pipe.hangerStyle) === 'double'
+      ? 'double'
+      : 'single'
+  const setHangerStyle = (style: 'single' | 'double') => {
+    const editor = useEditor.getState()
+    editor.setToolDefaults('pipe-segment', {
+      ...editor.toolDefaults['pipe-segment'],
+      hangerStyle: style,
+    })
+  }
+  const hangerStyleRef = useRef<'single' | 'double'>(hangerStyle)
+  hangerStyleRef.current = hangerStyle
+  const autoHangersRef = useRef(autoHangers)
+  autoHangersRef.current = autoHangers
   const pendingPromotionRef = useRef<PipeFittingNode | null>(
     continuationSeed?.promotedFitting ?? null,
   )
@@ -203,6 +230,9 @@ const PipeSegmentTool = () => {
     const makePipe = (from: RunPoint, to: RunPoint) =>
       PipeSegmentNode.parse({
         ...pipeSegmentDefinition.defaults(),
+        ...useEditor.getState().toolDefaults['pipe-segment'],
+        autoHangers: autoHangersRef.current,
+        hangerStyle: hangerStyleRef.current,
         name: systemRef.current === 'vent' ? 'Vent' : 'Drain',
         path: [from, to],
         diameter: diameterRef.current,
@@ -381,10 +411,12 @@ const PipeSegmentTool = () => {
     usePathDraftPreview
       .getState()
       .setDraft('pipe-segment', displayStart ? [displayStart] : [], run.cursor, {
+        autoHangers,
+        hangerStyle,
         diameter,
         system,
       })
-  }, [diameter, displayStart, run.cursor, system])
+  }, [autoHangers, hangerStyle, diameter, displayStart, run.cursor, system])
   useEffect(() => () => usePathDraftPreview.getState().clear('pipe-segment'), [])
   useEffect(() => () => useEditor.getState().setToolDefaults('pipe-segment', null), [])
 
@@ -396,7 +428,9 @@ const PipeSegmentTool = () => {
           run.surfaceTarget?.kind === 'wall'
             ? 'Wall'
             : run.surfaceTarget?.kind === 'ceiling'
-              ? 'Ceiling'
+              ? run.surfaceTarget.frame.normal[1] > 0
+                ? 'Ceiling top'
+                : 'Ceiling underside'
               : run.surfaceTarget?.kind === 'floor'
                 ? 'Floor'
                 : run.surfaceTarget
@@ -422,6 +456,12 @@ const PipeSegmentTool = () => {
                 : 'Waste · level'
               : 'Vent · level'}{' '}
             · Q system{system === 'waste' ? ' · S slope' : ''}
+            <RunHangerToggle
+              enabled={autoHangers}
+              onChange={setAutoHangers}
+              style={hangerStyle}
+              onStyleChange={setHangerStyle}
+            />
             <select
               className="bg-transparent text-foreground outline-none"
               onChange={(event) => applyPreset(event.target.value)}
@@ -453,6 +493,9 @@ const PipeSegmentTool = () => {
       )}
       {previewPlan?.previewPipes.map((pipe, index) => (
         <PreviewPipe key={index} a={pipe.path[0]!} b={pipe.path.at(-1)!} diameterIn={diameter} />
+      ))}
+      {previewPlan?.previewPipes.map((pipe, index) => (
+        <RunHangerPreview key={`hanger-${index}`} run={pipe} levelId={activeLevelId} />
       ))}
       {previewPlan?.previewFittings.map((fitting, index) => (
         <PipeFittingGhost key={index} fitting={fitting} />

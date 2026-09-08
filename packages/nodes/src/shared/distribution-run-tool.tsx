@@ -289,6 +289,7 @@ export function projectRunToCameraDirection(
   minimumDistance: number,
   gridStep: number,
   candidates = run3DDirectionCandidates(sourceDirection),
+  surfaceFrame?: RunSurfaceFrame,
 ): CameraDirectionProjection | null {
   const rayDirection = normalizedRunVector(ray.direction)
   if (!rayDirection) return null
@@ -318,6 +319,12 @@ export function projectRunToCameraDirection(
       from[1] + direction[1] * distance,
       from[2] + direction[2] * distance,
     ]
+    if (
+      surfaceFrame &&
+      runDistanceSquared(point, projectRunPointToSurface(point, surfaceFrame)) > 1e-8
+    ) {
+      continue
+    }
     const aim = normalizedRunVector([
       point[0] - ray.origin[0],
       point[1] - ray.origin[1],
@@ -429,7 +436,7 @@ function surfacePointFromEvent(event: RunPointerEvent): {
       : floorLevelId
         ? {
             kind:
-              frame.normal[1] < -0.98
+              event.surfaceHit?.kind === 'ceiling' || frame.normal[1] < -0.98
                 ? ('ceiling' as const)
                 : Math.abs(frame.normal[1]) > 0.98
                   ? ('floor' as const)
@@ -600,7 +607,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       }
       // Test the camera ray against the displayed directions before a surface
       // projection discards its height. Hover capture releases outside 12 px.
-      if (currentStart && event.localRay && !bypass) {
+      if (currentStart && event.localRay && !bypass && (forcedDirection || angleLocked)) {
         const source = startConnectionRef.current.port?.direction ?? null
         const candidates = forcedDirection
           ? [forcedDirection]
@@ -612,14 +619,18 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
           event.localRay,
           source ?? X_AXIS,
           adapter.minimumSegmentLength ?? 0.05,
-          0,
+          gridStep,
           candidates,
+          event.surfaceHit && !forcedDirection ? resolved.frame : undefined,
         )
         if (directionHit && (forcedDirection || acceptsConnection(directionHit.point, false))) {
           return {
             point: directionHit.point,
-            frame: createRunSurfaceFrame(currentStart),
-            surfaceTarget: null,
+            frame:
+              event.surfaceHit && !forcedDirection
+                ? resolved.frame
+                : createRunSurfaceFrame(currentStart),
+            surfaceTarget: forcedDirection ? null : target,
             snapped: null,
             directionMode: 'angle',
             port: null,
@@ -656,7 +667,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
           }
         }
       }
-      if (currentStart && Math.abs(resolved.frame.normal[1]) > 0.98) {
+      if (currentStart && target?.kind !== 'ceiling' && Math.abs(resolved.frame.normal[1]) > 0.98) {
         point = adapter.resolveFreeEnd?.(currentStart, point, startConnectionRef.current) ?? point
       }
       return {
@@ -913,12 +924,19 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         updateCursor(applyTypedLength(resolvePoint(lastPointerRef.current)))
       else if (lastResolvedRef.current) updateCursor(applyTypedLength(lastResolvedRef.current))
     }
+    const unsubscribeSnapping = useEditor.subscribe((state, previous) => {
+      const modeChanged = state.snappingModeByContext !== previous.snappingModeByContext
+      if (!modeChanged && state.gridSnapStep === previous.gridSnapStep) return
+      if (modeChanged) forcedDirectionRef.current = null
+      refreshCursorRef.current()
+    })
     emitter.on('grid:click', onClick)
     emitter.on('grid:move', onMove)
     emitter.on('tool:cancel', onCancel)
     window.addEventListener('keydown', onKeyDown, true)
     window.addEventListener('keyup', onKeyUp)
     return () => {
+      unsubscribeSnapping()
       emitter.off('grid:click', onClick)
       emitter.off('grid:move', onMove)
       emitter.off('tool:cancel', onCancel)

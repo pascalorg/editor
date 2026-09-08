@@ -21,6 +21,10 @@ export const DuctSegmentNode = BaseNode.extend({
   type: nodeType('duct-segment'),
   // Polyline path in level-local meters. Minimum two points (start, end).
   path: z.array(z.tuple([z.number(), z.number(), z.number()])).min(2),
+  autoHangers: z.boolean().optional(),
+  hangerStyle: z.enum(['single', 'double']).optional(),
+  hangerSpacing: z.number().finite().positive().optional(),
+  hangerMaxReach: z.number().finite().positive().optional(),
   // Logical wall host for runs drafted on a wall. The path remains
   // level-local; UV coordinates let wall edits reproject the run later.
   wallAttachment: z
@@ -73,6 +77,9 @@ export const DuctSegmentNode = BaseNode.extend({
 }).describe(
   dedent`
   Duct segment - polyline of 3D points connected by duct sections.
+  - autoHangers: automatically attach supports to nearby walls or ceilings (off when absent)
+  - hangerSpacing: distance between supports in meters (default 1.5)
+  - hangerMaxReach: maximum centerline-to-host distance in meters (default 2)
   - path: list of [x, y, z] points in level-local meters (min 2)
   - shape: round (branches) | rect (trunks / plenums) | oval (flat-oval, tight joist bays)
   - diameter: nominal inner diameter in inches for round (typ. 4-14 residential)

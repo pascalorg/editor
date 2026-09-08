@@ -3,6 +3,25 @@ import { createRunSurfaceFrame } from './distribution-run-tool'
 import { intersectRunPlane, resolveRunCursorPlane } from './run-cursor'
 
 describe('surface-first run cursor', () => {
+  test('reacquires either ceiling face from free space with duct or pipe clearance', () => {
+    for (const side of [-1, 1]) {
+      for (const clearance of [0.0254, 0.1016]) {
+        const result = resolveRunCursorPlane({
+          hit: {
+            point: [2, 3, 4],
+            frame: createRunSurfaceFrame([0, 3, 0], [0, side, 0]),
+          },
+          working: createRunSurfaceFrame([0, 1, 0]),
+          fallback: [2, 1, 4],
+          clearance,
+        })
+        expect(result.point[1]).toBeCloseTo(3 + side * clearance)
+        expect(result.frame.origin[1]).toBeCloseTo(result.point[1])
+        expect(result.frame.normal).toEqual([0, side, 0])
+      }
+    }
+  })
+
   test('wall hit wins over a ground fallback and applies clearance once', () => {
     const frame = createRunSurfaceFrame([0, 0, 2], [0, 0, 1])
     const result = resolveRunCursorPlane({

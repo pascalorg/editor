@@ -18,7 +18,7 @@ import { PipeSegmentNode } from './schema'
  */
 export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
   kind: 'pipe-segment',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: PipeSegmentNode,
   category: 'utility',
   distributionRole: 'run',
@@ -32,6 +32,10 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
     parentId: null,
     visible: true,
     metadata: {},
+    autoHangers: false,
+    hangerStyle: 'single',
+    hangerSpacing: 1.5,
+    hangerMaxReach: 2,
     path: [
       [0, 0.0254, 0],
       [3, 0.0254, 0],
@@ -49,8 +53,13 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
 
   parametrics: pipeSegmentParametrics,
 
+  system: {
+    module: async () => ({
+      default: (await import('../shared/run-hanger-system')).PipeHangerSystem,
+    }),
+  },
+  floorplanDependsOnSiblings: true,
   geometry: buildPipeSegmentGeometry,
-  geometryKey: (n) => JSON.stringify([n.path, n.diameter, n.pipeMaterial, n.system]),
 
   // Open run ends as typed ports — system 'waste'/'vent' keeps the DWV
   // network invisible to duct / refrigerant tools and vice versa.

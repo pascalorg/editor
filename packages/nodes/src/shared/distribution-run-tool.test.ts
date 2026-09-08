@@ -6,6 +6,8 @@ import {
   projectRunToCameraDirection,
   projectRunToDirection,
   projectRunToSurfaceAngleLock,
+  type RunCursorRay,
+  type RunPoint,
   runDistanceSquared,
   runSectionHalfSizeM,
   snapRunPointToSurface,
@@ -14,6 +16,40 @@ import {
 } from './distribution-run-tool'
 
 describe('distribution run drafting helpers', () => {
+  test('releases an airborne direction guide when the cursor returns to a wall', () => {
+    const start: RunPoint = [0, 1, 1]
+    const ray: RunCursorRay = {
+      origin: [3, 3, 5],
+      direction: [-1, -1, -2],
+    }
+    const directions: RunPoint[] = [[1, 0, 0]]
+    expect(
+      projectRunToCameraDirection(start, ray, [1, 0, 0], 0.05, 0, directions)?.point[0],
+    ).toBeCloseTo(1)
+
+    for (const clearance of [0.0254, 0.1016]) {
+      const wall = createRunSurfaceFrame([0, 0, 2 + clearance], [0, 0, 1])
+      expect(
+        projectRunToCameraDirection(start, ray, [1, 0, 0], 0.05, 0, directions, wall),
+      ).toBeNull()
+    }
+  })
+
+  test('keeps direction guides that lie on the active wall face', () => {
+    const wall = createRunSurfaceFrame([0, 0, 1], [0, 0, 1])
+    const result = projectRunToCameraDirection(
+      [0, 1, 1],
+      { origin: [3, 3, 5], direction: [-1, -1, -2] },
+      [1, 0, 0],
+      0.05,
+      0,
+      [[1, 0, 0]],
+      wall,
+    )
+    expect(result?.point[0]).toBeCloseTo(1)
+    expect(result?.point[2]).toBe(1)
+  })
+
   test('camera hover resolves downward without a ground-plane height', () => {
     const projected = projectRunToCameraDirection(
       [0, 5, 0],

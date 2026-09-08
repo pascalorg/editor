@@ -44,7 +44,7 @@ function rollDuctSegment(node: AnyNode, steps: 1 | -1): void {
 
 export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
   kind: 'duct-segment',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: DuctSegmentNode,
   category: 'utility',
   distributionRole: 'run',
@@ -58,6 +58,10 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
     parentId: null,
     visible: true,
     metadata: {},
+    autoHangers: false,
+    hangerStyle: 'single',
+    hangerSpacing: 1.5,
+    hangerMaxReach: 2,
     path: [
       [0, 0, 0],
       [3, 0, 0],
@@ -98,22 +102,13 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
     },
   },
 
+  system: {
+    module: async () => ({
+      default: (await import('../shared/run-hanger-system')).DuctHangerSystem,
+    }),
+  },
+  floorplanDependsOnSiblings: true,
   geometry: buildDuctSegmentGeometry,
-  geometryKey: (n) =>
-    JSON.stringify([
-      n.path,
-      n.shape,
-      n.diameter,
-      n.width,
-      n.height,
-      n.roll,
-      n.ductMaterial,
-      n.seamDetail,
-      n.insulated,
-      n.insulationR,
-      n.system,
-      n.slots,
-    ]),
 
   // Open run ends as typed ports — directions point outward along the
   // path tangent so fittings mate flush. Path coords are already
