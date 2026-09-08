@@ -2254,25 +2254,73 @@ function frameShed(
 
   // ---- deck over the single plane (B6): high tip → low tip, both
   // overhangs included (slopeLen spans them, plan extension o·cosθ each).
+  // the deck reaches the barge rafters at the rake overhang line (the shell
+  // overhangs the sides the way a gable's does — Steve, 2026-09-07: "your
+  // mono roof fascia and framing was never fixed")
   deckPlane(emit, spec, {
     theta,
     side: 1,
     alongXAxis: true,
-    u0: -roof.width / 2,
-    u1: roof.width / 2,
+    u0: -roof.width / 2 - roof.overhang,
+    u1: roof.width / 2 + roof.overhang,
     zTop: -roof.depth / 2 - highOverhang * cosT + deckGap(theta),
     zBot: roof.depth / 2 + roof.overhang * cosT - deckGap(theta),
     yTop: midY + (roof.depth / 2 + roof.overhang * cosT - deckGap(theta)) * Math.tan(theta),
     rafterDepth: rd,
-    // F4 (round-1 skeptic): the shed's zero-drip state is a STATED gap on
-    // paper, not a commit-message aside — no fascia is modeled on sheds at
-    // LOD 400, so the eave metal has nothing to cap (trim rides the
-    // eventual shed fascia work).
     flag:
       spec.detail === '400'
-        ? 'shed roof: fascia + drip edge not modeled at LOD 400 — eave/rake metal by trim schedule (R905.2.8.5)'
+        ? 'shed roof: rake drip edge not modeled — rake metal by trim schedule (R905.2.8.5); the eave drip rides the fascia'
         : undefined,
   })
+
+  // ---- rake: a barge rafter down each side at the overhang line, plumb cut ----
+  for (const sx of [1, -1] as const) {
+    emit(
+      'rafter',
+      spec.rafterSize,
+      [slopeLen, rd, t],
+      [sx * (roof.width / 2 + roof.overhang), yCentre, zCentre],
+      Math.PI / 2,
+      theta,
+      slopeLen,
+      'lumber',
+      `Barge rafter ${spec.rafterSize} (shed rake, on outlookers)${splicedNote(spec, slopeLen, 'outlooker bearings')}`,
+      undefined,
+      // the barge is carried on the outlookers off the end rafter: its span
+      // check is the end rafter's (the partitions under it, if any)
+      slopeRafterFlag(spec, rafterRun(sx * (roof.width / 2 - t)).run, slopeLen),
+      true,
+    )
+  }
+
+  // ---- fascia (sub + finish) along the low eave, and the high edge of a
+  // free-standing shed (a shed on a ledger has the house wall there) ----
+  if (spec.detail === '400') {
+    const [, fD] = LUMBER_CROSS_SECTIONS[FASCIA_SIZE]
+    const fasciaLen = roof.width + 2 * roof.overhang
+    const lowZ = roof.depth / 2 + roof.overhang * cosT
+    fasciaPair(
+      emit,
+      true,
+      fasciaLen,
+      0,
+      lowZ,
+      midY - lowZ * tan + fD / 2,
+      splicedNote(spec, fasciaLen, 'rafter tails (scarf joints)'),
+    )
+    if (!attached) {
+      const highZ = roof.depth / 2 + highOverhang * cosT
+      fasciaPair(
+        emit,
+        true,
+        fasciaLen,
+        0,
+        -highZ,
+        midY + highZ * tan + fD / 2,
+        splicedNote(spec, fasciaLen, 'rafter tails (scarf joints)'),
+      )
+    }
+  }
 }
 
 function frameHip(

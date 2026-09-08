@@ -984,6 +984,25 @@ G89 More hip roofs on random designs across styles.
 
 ## Log (continued)
 
+- 2026-09-07: **Batch T9 — the mono roof framed like the others.** Steve,
+  with a screenshot of a modern-mono corner: "looks like your mono roof
+  fascia and framing was never fixed, ensure all roof types work
+  correctly". The SHELL side was already in from T7 (the fascia block
+  handles `shed`; the editor's regenerated mono house shows its eave and
+  rake boards) — Steve's house predated it. The FRAMING side was the real
+  gap: `frameShed` stated "fascia + drip edge not modeled" as a deck flag
+  and framed no rake at all (its deck stopped at the wall line while the
+  shell overhangs the sides). Now: the deck reaches the rake overhang
+  line, a plumb-cut barge rafter runs down each rake (its span flag from
+  the end rafter's bearing, so partitions under it clear it), and at
+  LOD 400 the low eave and a free-standing shed's high edge carry the
+  2x6 sub-fascia + 1x8 finish pair with the eave drip (a shed on a ledger
+  keeps its high edge bare — that is the house wall). The deck flag now
+  names only the rake metal. Gates: the four shed hash pins recaptured
+  with the dated INTENDED-CHANGE note; the master baseline unchanged;
+  porch / W18 tests filter the barge rafters. Tests: Bones 2156, generate
+  105, structural sheets 37.
+
 - 2026-09-07: **Batch T8 — the lights hang, the ceilings say their
   height.** Steve, with a screenshot: "lights poking through the roof …
   hanging lights … also I can't see the ceiling when I'm inside". The

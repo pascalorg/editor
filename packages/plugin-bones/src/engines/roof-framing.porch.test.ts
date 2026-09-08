@@ -36,7 +36,8 @@ const byRole = (members: ReturnType<typeof frameRoofs>, role: string) =>
 
 describe('a porch shed on a ledger', () => {
   const members = frameRoofs([porch()], [], DEFAULT_SPEC)
-  const rafters = byRole(members, 'rafter')
+  // the common rafters on the ledger — the barge rafters at the rakes stand past its ends (2026-09-07)
+  const rafters = byRole(members, 'rafter').filter((m) => !(m.label ?? '').includes('Barge'))
   const ledger = byRole(members, 'ledger')
   const hangers = byRole(members, 'hanger')
 

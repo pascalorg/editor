@@ -1004,7 +1004,8 @@ describe('LOD-400 B6a: roof deck panels per slope plane (R803.2)', () => {
     const deck = deckOf(members)
     expect(deck).toHaveLength(1)
     const slopeLen = roof.depth / Math.cos(roof.pitch) + 2 * roof.overhang
-    const ratio = areaOf(members) / (roof.width * slopeLen)
+    // the deck reaches the barge rafters at the rake overhang line (2026-09-07)
+    const ratio = areaOf(members) / ((roof.width + 2 * roof.overhang) * slopeLen)
     expect(ratio).toBeGreaterThan(0.99)
     expect(ratio).toBeLessThanOrEqual(1)
   })
@@ -1325,12 +1326,15 @@ describe('LOD-400 B6c: drip edge members at eaves + rakes (R905.2.8.5)', () => {
 describe('B6 fix round: trim gaps are flagged members, not commit-message asides (F3/F4)', () => {
   const at400 = { ...DEFAULT_SPEC, detail: '400' as const }
 
-  test('shed at 400: ZERO drip edge is pinned AND stated as a deck flag', () => {
+  test('shed at 400: fascia framed on both edges and barge rafters on the rakes; the drip edge is still a stated deck flag (2026-09-07)', () => {
     const members = frameRoofs([seg({ roofType: 'shed' })], [], at400)
-    expect(members.filter((m) => m.role === 'drip-edge')).toHaveLength(0)
+    // the fascia pairs ship their own eave drip (fasciaPair) — the rake metal is the gap
+    const fascia = members.filter((m) => m.role === 'fascia')
+    expect(fascia).toHaveLength(4) // sub + finish on the low eave and the high edge
+    expect(members.filter((m) => m.role === 'rafter' && (m.label ?? '').includes('Barge'))).toHaveLength(2)
     const deck = members.filter((m) => m.role === 'sheathing')
     expect(deck).toHaveLength(1)
-    expect(deck[0]?.flag).toContain('fascia + drip edge not modeled')
+    expect(deck[0]?.flag).toContain('drip edge not modeled')
     expect(deck[0]?.flag).toContain('R905.2.8.5')
   })
 
@@ -1887,6 +1891,13 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
   //  cut by their own bottoms against that stack, the main's eave deck and
   //  tails are cut in strips where the wing rides clear over them — the
   //  valley pair recaptured; the eleven single-roof pins hold.
+  // 2026-09-07 INTENDED-CHANGE (shed rakes + fascia — Steve: "your mono roof
+  // fascia and framing was never fixed"): a shed's deck reaches the rake
+  // overhang line, a barge rafter runs down each rake (plumb cut, span flag
+  // from the end rafter's bearing), and at 400 the low eave and a
+  // free-standing shed's high edge carry the sub + finish fascia pair with
+  // its eave drip; the deck flag now names only the rake metal. shed-200 /
+  // 300 / 400 / big-400 recaptured.
   // 2026-09-07 INTENDED-CHANGE (G52 plumb cuts): common rafters, shed rafters
   //  and truss top chords are SHEARED to their plumb cuts (Member.shear =
   //  tan θ) and run the full face-to-tip centre-line length — no inscribed
@@ -1906,10 +1917,10 @@ describe('B7 blast radius: gable/shed/flat/gambrel/valley byte-equal to master (
     ['gable-200', {}, { detail: '200' }, '5321a97aaeb9fa9c'],
     ['gable-400-windy', {}, { detail: '400', hurricaneTies: true }, '2e7722b13922ef98'],
     ['gable-big-400', { width: 10, depth: 12 }, { detail: '400' }, '5006a9ba8f5a9849'],
-    ['shed-300', { roofType: 'shed' }, {}, 'be07fec1fd555cb2'],
-    ['shed-400', { roofType: 'shed' }, { detail: '400' }, '8b2bc910d3aeadeb'],
-    ['shed-200', { roofType: 'shed' }, { detail: '200' }, '1efb03053e701e7e'],
-    ['shed-big-400', { roofType: 'shed', depth: 8 }, { detail: '400' }, '663c38cb33db9385'],
+    ['shed-300', { roofType: 'shed' }, {}, 'a1fe33d496a63c0e'],
+    ['shed-400', { roofType: 'shed' }, { detail: '400' }, '7bbd7235790a931b'],
+    ['shed-200', { roofType: 'shed' }, { detail: '200' }, 'd0c9c45bac1f4cdf'],
+    ['shed-big-400', { roofType: 'shed', depth: 8 }, { detail: '400' }, '43bf7a600e240c36'],
     ['flat-400', { roofType: 'flat' }, { detail: '400' }, '953c25cdb23c0ffb'],
     ['gambrel-400', { roofType: 'gambrel' }, { detail: '400' }, '0e2586e8b0504a28'],
   ]
@@ -3455,7 +3466,7 @@ describe('W18: shed rafters bear on interior partitions', () => {
   const roof = seg({ roofType: 'shed', width: 10, depth: 8, pitch: (20 * Math.PI) / 180 })
 
   test('no partition: every rafter flags the full projection, as before', () => {
-    const rafters = byRole(frameRoofs([roof], [], DEFAULT_SPEC), 'rafter')
+    const rafters = byRole(frameRoofs([roof], [], DEFAULT_SPEC), 'rafter').filter((m) => !(m.label ?? '').includes('Barge'))
     expect(rafters.length).toBeGreaterThan(0)
     for (const r of rafters) {
       expect(r.flag).toContain('Rafter over prescriptive span — 8.00 m')
@@ -3467,7 +3478,7 @@ describe('W18: shed rafters bear on interior partitions', () => {
   test('two partitions with the eaves split the projection into pieces the table carries — no flag, the label names them', () => {
     const walls = [wallSlice('p_a', [-5, -1.5], [5, -1.5]), wallSlice('p_b', [-5, 1.5], [5, 1.5])]
     const members = frameRoofs([roof], walls, DEFAULT_SPEC)
-    const rafters = byRole(members, 'rafter')
+    const rafters = byRole(members, 'rafter').filter((m) => !(m.label ?? '').includes('Barge'))
     expect(rafters.length).toBeGreaterThan(0)
     for (const r of rafters) {
       expect(r.flag ?? '').not.toContain('over prescriptive span')
@@ -3478,14 +3489,14 @@ describe('W18: shed rafters bear on interior partitions', () => {
     }
     expect(shedBearingWallIds(members).sort()).toEqual(['p_a', 'p_b'])
     // one partition leaves a 5.5 m piece — still over the row, still honest
-    const one = byRole(frameRoofs([roof], [walls[0] as WallSlice], DEFAULT_SPEC), 'rafter')
+    const one = byRole(frameRoofs([roof], [walls[0] as WallSlice], DEFAULT_SPEC), 'rafter').filter((m) => !(m.label ?? '').includes('Barge'))
     for (const r of one) {
       expect(r.flag).toContain('Rafter over prescriptive span — 5.50 m')
       expect(r.label).toContain('bears on interior wall p_a (5.50 m')
     }
     // a partition covering half the width: only the rafters over it bear
     const half = wallSlice('p_half', [-5, 0], [0, 0])
-    const mixed = byRole(frameRoofs([roof], [half], DEFAULT_SPEC), 'rafter')
+    const mixed = byRole(frameRoofs([roof], [half], DEFAULT_SPEC), 'rafter').filter((m) => !(m.label ?? '').includes('Barge'))
     expect(mixed.some((r) => r.label?.includes('bears on'))).toBe(true)
     expect(mixed.some((r) => !r.label?.includes('bears on'))).toBe(true)
     for (const r of mixed) {
