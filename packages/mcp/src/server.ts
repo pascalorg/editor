@@ -5,6 +5,7 @@ import { registerPrompts } from './prompts'
 import { registerResources } from './resources'
 import type { SceneStore } from './storage/types'
 import { registerTools } from './tools'
+import { normalizeToolSchemaDialect } from './tools/normalize-schema-dialect'
 import { registerVisionTools } from './tools/vision'
 import { version } from './version'
 
@@ -28,5 +29,6 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
   registerVisionTools(server, operations)
   registerResources(server, operations)
   registerPrompts(server, operations)
+  normalizeToolSchemaDialect(server)
   return server
 }
