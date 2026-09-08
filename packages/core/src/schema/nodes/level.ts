@@ -4,6 +4,7 @@ import { BaseNode, nodeType, objectId } from '../base'
 import { CeilingNode } from './ceiling'
 import { FenceNode } from './fence'
 import { GuideNode } from './guide'
+import { ItemNode } from './item'
 import { RoofNode } from './roof'
 import { ScanNode } from './scan'
 import { SlabNode } from './slab'
@@ -18,6 +19,11 @@ export const LevelNode = BaseNode.extend({
     .array(
       z.union([
         WallNode.shape.id,
+        // Los muebles se crean con el nivel como padre (`use-draft-node.ts`
+        // usa `selection.levelId`), y la descripción de abajo ya los nombraba;
+        // faltaban en la unión, así que un nivel con muebles no pasaba
+        // `LevelNode.parse()`.
+        ItemNode.shape.id,
         FenceNode.shape.id,
         ZoneNode.shape.id,
         SlabNode.shape.id,

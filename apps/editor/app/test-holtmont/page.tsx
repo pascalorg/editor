@@ -1,145 +1,78 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+/**
+ * Banco de pruebas del puente con Holtmont.
+ *
+ * Carga las escenas que genera el agente (`public/holtmont-fixtures/`, escritas
+ * por `scripts/generar_escenas_pascal.py` del repositorio HOLTMONT-PYTHON) y las
+ * manda al editor por el mismo `postMessage` que usa la Pre Work Order. Sirve a
+ * mano y también para la prueba de humo con navegador
+ * (`scripts/holtmont-smoke.mjs`), que entra con `?scene=<nombre>` y lee el
+ * resultado de `window.__holtmontTest`.
+ */
 
-// Minimal test scene: Site → Building → Level → 4 walls + slab + ceiling
-const TEST_SCENE = {
-  nodes: {
-    'site-test': {
-      object: 'node',
-      id: 'site-test',
-      type: 'site',
-      parentId: null,
-      visible: true,
-      metadata: {},
-      position: [0, 0, 0],
-      rotation: 0,
-      children: ['building-test'],
-    },
-    'building-test': {
-      object: 'node',
-      id: 'building-test',
-      type: 'building',
-      parentId: 'site-test',
-      visible: true,
-      metadata: {},
-      position: [0, 0, 0],
-      rotation: 0,
-      children: ['level-test'],
-    },
-    'level-test': {
-      object: 'node',
-      id: 'level-test',
-      type: 'level',
-      parentId: 'building-test',
-      visible: true,
-      metadata: {},
-      position: [0, 0, 0],
-      rotation: 0,
-      level: 0,
-      children: ['wall-n', 'wall-s', 'wall-e', 'wall-w', 'slab-test', 'ceiling-test'],
-    },
-    'wall-n': {
-      object: 'node',
-      id: 'wall-n',
-      type: 'wall',
-      parentId: 'level-test',
-      visible: true,
-      metadata: {},
-      start: [-4, 0],
-      end: [4, 0],
-      height: 3,
-      thickness: 0.2,
-      children: [],
-    },
-    'wall-s': {
-      object: 'node',
-      id: 'wall-s',
-      type: 'wall',
-      parentId: 'level-test',
-      visible: true,
-      metadata: {},
-      start: [4, -6],
-      end: [-4, -6],
-      height: 3,
-      thickness: 0.2,
-      children: [],
-    },
-    'wall-e': {
-      object: 'node',
-      id: 'wall-e',
-      type: 'wall',
-      parentId: 'level-test',
-      visible: true,
-      metadata: {},
-      start: [4, 0],
-      end: [4, -6],
-      height: 3,
-      thickness: 0.2,
-      children: [],
-    },
-    'wall-w': {
-      object: 'node',
-      id: 'wall-w',
-      type: 'wall',
-      parentId: 'level-test',
-      visible: true,
-      metadata: {},
-      start: [-4, -6],
-      end: [-4, 0],
-      height: 3,
-      thickness: 0.2,
-      children: [],
-    },
-    'slab-test': {
-      object: 'node',
-      id: 'slab-test',
-      type: 'slab',
-      parentId: 'level-test',
-      visible: true,
-      metadata: {},
-      position: [0, 0, 0],
-      rotation: 0,
-      points: [
-        [-4, 0],
-        [4, 0],
-        [4, -6],
-        [-4, -6],
-      ],
-      thickness: 0.2,
-      children: [],
-    },
-    'ceiling-test': {
-      object: 'node',
-      id: 'ceiling-test',
-      type: 'ceiling',
-      parentId: 'level-test',
-      visible: true,
-      metadata: {},
-      position: [0, 0, 0],
-      rotation: 0,
-      points: [
-        [-4, 0],
-        [4, 0],
-        [4, -6],
-        [-4, -6],
-      ],
-      thickness: 0.1,
-      height: 3,
-      children: [],
-    },
-  },
-  rootNodeIds: ['site-test'],
-  collections: {},
+import { useCallback, useEffect, useRef, useState } from 'react'
+
+type Registro = { hora: string; texto: string; entrante: boolean }
+
+type EstadoDePrueba = {
+  ready: boolean
+  ack: Record<string, unknown> | null
+  error: Record<string, unknown> | null
+  enviada: string | null
+}
+
+declare global {
+  interface Window {
+    __holtmontTest?: EstadoDePrueba
+  }
 }
 
 export default function TestHoltmontPage() {
   const iframeRef = useRef<HTMLIFrameElement>(null)
-  const [log, setLog] = useState<string[]>([])
+  const [log, setLog] = useState<Registro[]>([])
   const [ready, setReady] = useState(false)
+  const [escenas, setEscenas] = useState<string[]>([])
+  const [seleccionada, setSeleccionada] = useState<string>('')
+  const estado = useRef<EstadoDePrueba>({ ready: false, ack: null, error: null, enviada: null })
 
-  const appendLog = (msg: string) =>
-    setLog((prev) => [`${new Date().toISOString().slice(11, 23)} ${msg}`, ...prev].slice(0, 50))
+  const anotar = useCallback((texto: string, entrante = false) => {
+    setLog((prev) =>
+      [{ hora: new Date().toISOString().slice(11, 23), texto, entrante }, ...prev].slice(0, 60),
+    )
+  }, [])
+
+  const publicarEstado = useCallback(() => {
+    window.__holtmontTest = { ...estado.current }
+  }, [])
+
+  // Catálogo de escenas disponibles y la que pide la URL (`?scene=`).
+  useEffect(() => {
+    publicarEstado()
+    const pedida = new URLSearchParams(window.location.search).get('scene')
+    fetch('/holtmont-fixtures/index.json')
+      .then((r) => r.json())
+      .then((lista: string[]) => {
+        setEscenas(lista)
+        setSeleccionada(pedida && lista.includes(pedida) ? pedida : (lista[0] ?? ''))
+      })
+      .catch((err) => anotar(`no se pudo leer el índice de escenas: ${err}`))
+  }, [anotar, publicarEstado])
+
+  const enviarEscena = useCallback(
+    async (nombre: string) => {
+      const iframe = iframeRef.current
+      if (!iframe?.contentWindow || !nombre) return
+      estado.current = { ...estado.current, ack: null, error: null, enviada: null }
+      publicarEstado()
+      anotar(`→ HOLTMONT_3D_IMPORT (${nombre})`)
+      const projectData = await fetch(`/holtmont-fixtures/${nombre}.json`).then((r) => r.json())
+      iframe.contentWindow.postMessage({ type: 'HOLTMONT_3D_IMPORT', projectData }, '*')
+      estado.current = { ...estado.current, enviada: nombre }
+      publicarEstado()
+    },
+    [anotar, publicarEstado],
+  )
 
   useEffect(() => {
     const handler = (event: MessageEvent) => {
@@ -147,74 +80,103 @@ export default function TestHoltmontPage() {
       if (!data?.type) return
 
       if (data.type === 'PASCAL_READY') {
-        appendLog('← PASCAL_READY received')
+        anotar('← PASCAL_READY', true)
         setReady(true)
+        estado.current = { ...estado.current, ready: true }
       } else if (data.type === 'HOLTMONT_3D_IMPORT_ACK') {
-        appendLog('← HOLTMONT_3D_IMPORT_ACK received')
+        const descartes = (data.dropped as unknown[]) ?? []
+        anotar(
+          `← HOLTMONT_3D_IMPORT_ACK (${data.nodeCount} nodos, ${descartes.length} descartes)`,
+          true,
+        )
+        estado.current = { ...estado.current, ack: data }
+      } else if (data.type === 'HOLTMONT_3D_IMPORT_ERROR') {
+        anotar(`← HOLTMONT_3D_IMPORT_ERROR: ${data.reason}`, true)
+        estado.current = { ...estado.current, error: data }
       } else if (data.type === 'HOLTMONT_3D_EXPORT') {
         const exportData = data.data as Record<string, unknown>
-        appendLog(
-          `← HOLTMONT_3D_EXPORT received (${Object.keys(exportData?.nodes ?? {}).length} nodes)`,
-        )
+        anotar(`← HOLTMONT_3D_EXPORT (${Object.keys(exportData?.nodes ?? {}).length} nodos)`, true)
+      } else {
+        return
       }
+      publicarEstado()
     }
 
     window.addEventListener('message', handler)
     return () => window.removeEventListener('message', handler)
-  }, [])
+  }, [anotar, publicarEstado])
 
-  const sendScene = () => {
-    const iframe = iframeRef.current
-    if (!iframe?.contentWindow) return
-    appendLog('→ Sending HOLTMONT_3D_IMPORT...')
-    iframe.contentWindow.postMessage({ type: 'HOLTMONT_3D_IMPORT', projectData: TEST_SCENE }, '*')
-  }
-
-  const sendAgain = () => {
-    setReady(false)
-    sendScene()
-  }
+  // Autoenvío en cuanto el editor avisa que está listo: así la prueba de humo
+  // no depende de un temporizador.
+  useEffect(() => {
+    if (ready && seleccionada && !estado.current.enviada) {
+      void enviarEscena(seleccionada)
+    }
+  }, [ready, seleccionada, enviarEscena])
 
   return (
     <div style={{ display: 'flex', height: '100vh', fontFamily: 'monospace' }}>
-      <div style={{ width: 280, padding: 16, borderRight: '1px solid #333', background: '#111', color: '#eee', overflowY: 'auto' }}>
-        <h2 style={{ margin: '0 0 12px', fontSize: 14 }}>Holtmont Bridge Test</h2>
+      <div
+        style={{
+          width: 320,
+          padding: 16,
+          borderRight: '1px solid #333',
+          background: '#111',
+          color: '#eee',
+          overflowY: 'auto',
+        }}
+      >
+        <h2 style={{ margin: '0 0 12px', fontSize: 14 }}>Puente Holtmont — banco de pruebas</h2>
 
-        <div style={{ marginBottom: 12 }}>
-          <div style={{ fontSize: 11, color: ready ? '#4ade80' : '#facc15', marginBottom: 8 }}>
-            Editor status: {ready ? '✓ READY' : 'waiting…'}
-          </div>
-          <button
-            disabled={!ready}
-            onClick={sendScene}
-            style={{ width: '100%', padding: '6px 0', marginBottom: 6, cursor: ready ? 'pointer' : 'not-allowed', background: ready ? '#16a34a' : '#374151', color: '#fff', border: 'none', borderRadius: 4, fontSize: 12 }}
-          >
-            Send test scene (IMPORT)
-          </button>
-          <button
-            onClick={sendAgain}
-            style={{ width: '100%', padding: '6px 0', cursor: 'pointer', background: '#1d4ed8', color: '#fff', border: 'none', borderRadius: 4, fontSize: 12 }}
-          >
-            Force resend (reload test)
-          </button>
+        <div style={{ fontSize: 11, color: ready ? '#4ade80' : '#facc15', marginBottom: 8 }}>
+          Editor: {ready ? '✓ listo' : 'esperando…'}
         </div>
 
-        <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 4 }}>Log (newest first):</div>
+        <select
+          onChange={(e) => setSeleccionada(e.target.value)}
+          style={{ width: '100%', marginBottom: 6, padding: 4, fontSize: 12 }}
+          value={seleccionada}
+        >
+          {escenas.map((nombre) => (
+            <option key={nombre} value={nombre}>
+              {nombre}
+            </option>
+          ))}
+        </select>
+
+        <button
+          data-testid="enviar-escena"
+          disabled={!(ready && seleccionada)}
+          onClick={() => void enviarEscena(seleccionada)}
+          style={{
+            width: '100%',
+            padding: '6px 0',
+            cursor: ready ? 'pointer' : 'not-allowed',
+            background: ready ? '#16a34a' : '#374151',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 4,
+            fontSize: 12,
+            marginBottom: 12,
+          }}
+        >
+          Enviar escena (IMPORT)
+        </button>
+
+        <div style={{ fontSize: 10, color: '#9ca3af', marginBottom: 4 }}>Bitácora:</div>
         <div style={{ fontSize: 10, lineHeight: 1.6 }}>
-          {log.map((entry, i) => (
-            <div key={i} style={{ color: entry.includes('←') ? '#86efac' : '#93c5fd' }}>
-              {entry}
+          {log.map((entrada) => (
+            <div
+              key={`${entrada.hora}-${entrada.texto}`}
+              style={{ color: entrada.entrante ? '#86efac' : '#93c5fd' }}
+            >
+              {entrada.hora} {entrada.texto}
             </div>
           ))}
         </div>
       </div>
 
-      <iframe
-        ref={iframeRef}
-        src="/"
-        style={{ flex: 1, border: 'none' }}
-        title="Pascal Editor"
-      />
+      <iframe ref={iframeRef} src="/" style={{ flex: 1, border: 'none' }} title="Pascal Editor" />
     </div>
   )
 }
