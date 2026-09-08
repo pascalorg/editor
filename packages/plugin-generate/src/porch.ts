@@ -188,6 +188,7 @@ export interface PorchIds {
   stair: string
   stairSegment: string
   column: () => string
+  block: () => string
   fence: () => string
 }
 
@@ -939,7 +940,7 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
     if (fascia) {
       ops.push({
         node: {
-          id: ids.column(),
+          id: ids.block(),
           type: 'block',
           // hosted on the ground: a floor-placed node over a room's ceiling would be lifted onto it
           supportSlabId: 'ground',

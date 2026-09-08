@@ -31,6 +31,7 @@ function ids(): PorchIds {
     stair: 'stair_porch',
     stairSegment: 'stair-segment_porch',
     column: () => `column_${n++}`,
+    block: () => `block_${n++}`,
     beam: 'slab_beam',
     ceiling: 'ceiling_porch',
     fence: () => `fence_${n++}`,

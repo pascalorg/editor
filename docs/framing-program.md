@@ -984,6 +984,35 @@ G89 More hip roofs on random designs across styles.
 
 ## Log (continued)
 
+- 2026-09-08: **Batch T10 — the house in the lot on odd parcels, the
+  envelope without spikes, the save that failed.** Steve, with two
+  screenshots: "the house doesn't sit in the lot on weird configurations
+  and the setback line was weird … Save failed (400)". Three faults.
+  (1) The buildable ENVELOPE offset every lot edge on its own and took
+  neighbours' intersections: a cul-de-sac's rounded corner from the
+  county fabric is ten short edges turning 10° apiece, and where the
+  front's 20 ft offset met the first sliver's 5 ft offset the vertex flew
+  tens of metres — the notch Steve saw, and the front edge's midpoint
+  with it, so the house (placed off that edge) landed outside the lot.
+  Now a run of short (< 4 m) gently turning (< 35°) edges is offset as ONE
+  chord at its longest member's setback, and any corner that still runs
+  past 2.5 × its setback + 0.5 m is clamped to the vertex pushed in
+  along its bisector — both copies (`site-plan/geometry.ts` for the
+  plan, `nodes/site/setbacks.ts` for the 3D ribbon) identically. (2) The
+  placement's "outward normal away from the envelope's centre" is wrong
+  on L-shaped and notched rings; the placement and `fit.ts` now take
+  the normal from the ring's winding. Seen headless: Cape Coral (14
+  points, arc corner) 0 of 14 exterior wall ends outside the lot (was
+  10); the St Petersburg L-block 0 of 14. (3) The 400: the scene API
+  validates id prefixes, and the garage steps' segment carried
+  `stair-segment_…` while the porch fascia block carried `column_…` —
+  every save of a T4/T7 house was refused (the dev log said so). Fixed
+  (`sseg_`, `block_`); the generated graph validates against
+  `apiGraphSchema`. A scene saved with the bad nodes heals on the next
+  Generate (the generated nodes are replaced). Tests: site-plan +1 (the
+  Cape Coral ring), nodes site 66, generate 105 (the ceiling-height pin
+  re-pinned), editor / nodes typecheck clean.
+
 - 2026-09-07: **Batch T9 — the mono roof framed like the others.** Steve,
   with a screenshot of a modern-mono corner: "looks like your mono roof
   fascia and framing was never fixed, ensure all roof types work

@@ -121,8 +121,8 @@ describe('Poppy builds into Pascal nodes', () => {
       expect(zone).toBeDefined()
       expect(c.polygon).toEqual(zone.polygon)
       expect(c.parentId).toBe(result.levelId)
-      // the Poppy's rooms are all at the 9 ft storey: no explicit height
-      expect(c.height).toBeUndefined()
+      // the Poppy's rooms are all at the 9 ft storey: the height stated at the storey (2026-09-07)
+      expect(c.height).toBeCloseTo(9 * 12 * 0.0254, 6)
     }
   })
 

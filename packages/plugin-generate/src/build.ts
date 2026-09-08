@@ -983,20 +983,25 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const i = ((placement.frontEdge % env.length) + env.length) % env.length
     const p = env[i] as Pt
     const q = env[(i + 1) % env.length] as Pt
-    const cx = env.reduce((s, e) => s + e[0], 0) / env.length
-    const cz = env.reduce((s, e) => s + e[1], 0) / env.length
     const ex = q[0] - p[0]
     const ez = q[1] - p[1]
     const el = Math.hypot(ex, ez) || 1
-    let nx = -ez / el
-    let nz = ex / el
+    // The outward normal from the ring's WINDING (an L-shaped or notched
+    // envelope has edges whose centroid side is the wrong side — Steve,
+    // 2026-09-08: "the house doesn't sit in the lot on weird
+    // configurations"): the left normal of a counter-clockwise ring in this
+    // frame points inward, so flip it.
+    let area = 0
+    for (let k = 0; k < env.length; k++) {
+      const a = env[k] as Pt
+      const b = env[(k + 1) % env.length] as Pt
+      area += a[0] * b[1] - b[0] * a[1]
+    }
+    const sign = area > 0 ? -1 : 1
+    const nx = (sign * -ez) / el
+    const nz = (sign * ex) / el
     const mx = (p[0] + q[0]) / 2
     const mz = (p[1] + q[1]) / 2
-    // The outward normal points away from the envelope's centre.
-    if ((mx - cx) * nx + (mz - cz) * nz < 0) {
-      nx = -nx
-      nz = -nz
-    }
     // Level-local −z is the house front; world = R(yaw)·local: (0,−1) → (−sin, −cos).
     yaw = Math.atan2(-nx, -nz)
     const halfD = (D * IN) / 2 + exteriorT / 2
@@ -1166,7 +1171,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       const gz = garageEntry.garageSide * nz
       const stairWidth = Math.max(36 * IN, garageEntry.widthIn * IN + 12 * IN)
       const stairId = generateId('stair')
-      const segmentId = generateId('stair-segment')
+      const segmentId = generateId('sseg')
       const stepsMeta = { generatedBy: GENERATED_BY, garageSteps: true, risers, dropIn: round(garageDropM / IN, 1) }
       garageSlabOps.push({
         node: {
@@ -1429,6 +1434,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         stair: generateId('stair'),
         stairSegment: generateId('sseg'),
         column: () => generateId('column'),
+        block: () => generateId('block'),
         fence: () => generateId('fence'),
       },
     )

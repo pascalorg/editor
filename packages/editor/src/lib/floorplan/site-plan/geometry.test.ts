@@ -93,6 +93,22 @@ describe('classifyEdges', () => {
 })
 
 describe('setbackEnvelope', () => {
+  it('a cul-de-sac corner (a run of short arc edges) is offset as one chord — no vertex runs away (Steve, 2026-09-08)', () => {
+    const cape: [number, number][] = [
+      [-2, 0], [-2, 30.1], [-40, 32.7], [-40, -5.6], [-10.1, -7.6], [-8.9, -7.6], [-7.7, -7.3], [-6.5, -6.9],
+      [-5.4, -6.3], [-4.4, -5.5], [-3.6, -4.6], [-2.9, -3.6], [-2.4, -2.4], [-2.1, -1.2],
+    ]
+    const env = setbackEnvelope(cape, { front: 6.096, side: 1.524, rear: 4.572 }, 0)
+    expect(env).toHaveLength(cape.length)
+    for (let i = 0; i < cape.length; i++) {
+      const d = Math.hypot(env[i]![0] - cape[i]![0], env[i]![1] - cape[i]![1])
+      expect(d).toBeLessThan(2.5 * 6.096 + 0.5)
+    }
+    // the front edge (the east side) moved 6.1 m in
+    expect(env[0]![0]).toBeCloseTo(-2 - 6.096, 1)
+    expect(env[1]![0]).toBeCloseTo(-2 - 6.096, 1)
+  })
+
   it('offsets each edge inward by its own setback', () => {
     const env = setbackEnvelope(LOT, { front: 7.5, side: 2, rear: 5 }, 0)
     expect(env).toHaveLength(4)

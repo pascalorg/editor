@@ -28,8 +28,14 @@ const FT = 0.3048
 export function envelopeEdges(envelope: readonly Pt[]): EdgeFit[] {
   const n = envelope.length
   if (n < 3) return []
-  const cx = envelope.reduce((s, e) => s + e[0], 0) / n
-  const cz = envelope.reduce((s, e) => s + e[1], 0) / n
+  // inward from the ring's winding (a centroid test fails on L-shaped lots)
+  let area = 0
+  for (let k = 0; k < n; k++) {
+    const a = envelope[k] as Pt
+    const b = envelope[(k + 1) % n] as Pt
+    area += a[0] * b[1] - b[0] * a[1]
+  }
+  const ccw = area > 0
   const out: EdgeFit[] = []
   for (let i = 0; i < n; i++) {
     const p = envelope[i] as Pt
@@ -41,13 +47,9 @@ export function envelopeEdges(envelope: readonly Pt[]): EdgeFit[] {
       out.push({ index: i, frontageFt: 0, depthFt: 0 })
       continue
     }
-    // inward normal: the one pointing toward the envelope's centre
-    let nx = -ez / el
-    let nz = ex / el
-    if ((cx - p[0]) * nx + (cz - p[1]) * nz < 0) {
-      nx = -nx
-      nz = -nz
-    }
+    // inward normal: the left normal of a counter-clockwise ring in this frame
+    const nx = ccw ? -ez / el : ez / el
+    const nz = ccw ? ex / el : -ex / el
     let depth = 0
     for (const v of envelope) depth = Math.max(depth, (v[0] - p[0]) * nx + (v[1] - p[1]) * nz)
     out.push({ index: i, frontageFt: el / FT, depthFt: depth / FT })
