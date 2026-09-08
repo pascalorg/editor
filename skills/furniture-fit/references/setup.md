@@ -6,14 +6,36 @@ Source and public-documentation review date: 2026-09-08. Native task results are
 
 Use the local path when the project should remain on the machine:
 
+### Candidate-enabled GitHub preview
+
+The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, an older runtime that may not expose `check_collisions.candidate`. For the candidate-enabled path verified with this skill, install the GitHub prerelease built from public commit `aa653f2f523f81f361ac20cb42b745faf7e46844`:
+
 ```bash
-npm install --global @pascal-app/cli@beta
+PASCAL_PREVIEW_VERSION='1.0.0-beta.1.agent-skills.0'
+PASCAL_PREVIEW_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/pascal-preview"
+PASCAL_PREVIEW_DOWNLOAD="$(mktemp -d)"
+cd "$PASCAL_PREVIEW_DOWNLOAD"
+
+curl --fail --location --remote-name \
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
+curl --fail --location --remote-name \
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/SHA256SUMS.txt"
+
+# macOS
+shasum -a 256 -c SHA256SUMS.txt
+# Linux: use `sha256sum -c SHA256SUMS.txt` instead.
+
+npm install --global --prefix "$PASCAL_PREVIEW_PREFIX" --ignore-scripts \
+  "./pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
+export PATH="$PASCAL_PREVIEW_PREFIX/bin:$PATH"
+pascal --version
 pascal editor --no-open
-pascal mcp setup claude
-pascal mcp setup codex
+pascal mcp setup claude # or: pascal mcp setup codex
 ```
 
-Run the setup command for the active host. The MCP command installed in host configuration is `pascal mcp connect`. Local use needs no hosted account and does not upload projects automatically.
+The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d`. Keep the preview prefix on the agent host's `PATH` so its configured `pascal mcp connect` command resolves. This preview is not published on npm.
+
+Run the setup command for the active host. The MCP command installed in host configuration is `pascal mcp connect`. Local use needs no hosted account and does not upload projects automatically. If the connected MCP schema lacks `check_collisions.candidate`, report the narrower supported result rather than implying the candidate was tested.
 
 Use only one active agent client with each local CLI service. The standalone HTTP service shares active scene state across clients; do not run concurrent agents against that process. Separate processes need separate local data stores for independent work. The hosted endpoint below uses a different session-isolated bridge.
 

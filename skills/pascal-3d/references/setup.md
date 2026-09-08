@@ -8,12 +8,41 @@ Choose one path. Do not switch storage boundaries without the user's instruction
 
 Use local mode when the project should remain on the current machine. It requires Node.js 22.13 or newer and does not require a Pascal account or API key.
 
+The npm beta is suitable for its published tool contract:
+
 ```bash
 npm install --global @pascal-app/cli@beta
 pascal editor --no-open
-pascal mcp setup claude
-pascal mcp setup codex
 ```
+
+### Candidate-enabled GitHub preview
+
+The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, an older runtime that may not expose `check_collisions.candidate`. For the candidate-enabled path verified with this skill, install the GitHub prerelease built from public commit `aa653f2f523f81f361ac20cb42b745faf7e46844`:
+
+```bash
+PASCAL_PREVIEW_VERSION='1.0.0-beta.1.agent-skills.0'
+PASCAL_PREVIEW_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/pascal-preview"
+PASCAL_PREVIEW_DOWNLOAD="$(mktemp -d)"
+cd "$PASCAL_PREVIEW_DOWNLOAD"
+
+curl --fail --location --remote-name \
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
+curl --fail --location --remote-name \
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/SHA256SUMS.txt"
+
+# macOS
+shasum -a 256 -c SHA256SUMS.txt
+# Linux: use `sha256sum -c SHA256SUMS.txt` instead.
+
+npm install --global --prefix "$PASCAL_PREVIEW_PREFIX" --ignore-scripts \
+  "./pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
+export PATH="$PASCAL_PREVIEW_PREFIX/bin:$PATH"
+pascal --version
+pascal editor --no-open
+pascal mcp setup claude # or: pascal mcp setup codex
+```
+
+The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d`. Keep the preview prefix on the agent host's `PATH` so its configured `pascal mcp connect` command resolves. This preview is not published on npm.
 
 Run only the setup command for the active host. For a JSON-based MCP client, use:
 

@@ -24,7 +24,38 @@ The CLI starts the editor and an authenticated MCP service in the background, se
 collision-free loopback ports, and keeps projects in `~/.pascal/data/pascal.db`. Configure
 an agent to launch `pascal mcp connect`. See [Run Pascal locally](https://editor.pascal.app/docs/developers/local-editor)
 for pnpm/Bun commands, project management, MCP setup, updates, storage paths, and
-troubleshooting.
+troubleshooting. The npm release is the older runtime described below; use the verified
+GitHub preview when a task needs the new read-only furniture candidate check.
+
+## Candidate-enabled CLI preview
+
+The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, which predates the read-only furniture candidate input in this repository. To use that capability before the next npm release, install the verified GitHub prerelease built from commit `aa653f2f523f81f361ac20cb42b745faf7e46844`:
+
+```bash
+PASCAL_PREVIEW_VERSION='1.0.0-beta.1.agent-skills.0'
+PASCAL_PREVIEW_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/pascal-preview"
+PASCAL_PREVIEW_DOWNLOAD="$(mktemp -d)"
+cd "$PASCAL_PREVIEW_DOWNLOAD"
+
+curl --fail --location --remote-name \
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
+curl --fail --location --remote-name \
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/SHA256SUMS.txt"
+
+# macOS
+shasum -a 256 -c SHA256SUMS.txt
+# Linux: use `sha256sum -c SHA256SUMS.txt` instead.
+
+npm install --global --prefix "$PASCAL_PREVIEW_PREFIX" --ignore-scripts \
+  "./pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
+export PATH="$PASCAL_PREVIEW_PREFIX/bin:$PATH"
+pascal --version
+pascal editor --no-open
+```
+
+The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d`. Keep the preview prefix on the agent host's `PATH` before running `pascal mcp setup claude`, `pascal mcp setup codex`, or configuring `pascal mcp connect` manually. This GitHub prerelease is not an npm version.
+
+Use one active agent client per local CLI service. The standalone local HTTP runtime shares active scene state between clients; use separate `PASCAL_HOME` directories and service processes when independent concurrent work is required.
 
 ## Agent skills
 

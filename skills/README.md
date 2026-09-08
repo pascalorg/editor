@@ -44,6 +44,8 @@ codex plugin add pascal-agent-skills@pascal
 
 The plugin installs the instructions from the canonical `skills/` directory. Connect Pascal MCP separately by following the setup reference included in either skill. Installation alone never creates an account, uploads a project, or authorizes paid work.
 
+The npm `beta` CLI remains on the older runtime contract. For the read-only `check_collisions.candidate` capability used by the current furniture workflow, follow the checksum-verified [GitHub preview instructions](pascal-3d/references/setup.md#candidate-enabled-github-preview). The preview archive is published on GitHub, not npm.
+
 Use one active agent client per local CLI service. Its standalone HTTP runtime shares active scene state; the hosted endpoint uses a separate session-isolated bridge.
 
 ## Included skills
