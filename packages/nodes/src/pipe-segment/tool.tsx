@@ -37,7 +37,7 @@ import {
 import { RunHangerPreview, RunHangerToggle } from '../shared/run-hanger-controls'
 import { currentPipeContinuationSeed, pipeEndpointPort } from './continuation'
 import { pipeSegmentDefinition } from './definition'
-import { applyPipeGrade, pipeGrade } from './slope'
+import { applyPipeGrade } from './slope'
 
 const PIPE_DIAMETERS_IN = [1.25, 1.5, 2, 3, 4, 6] as const
 const PORT_SNAP_RADIUS_M = 0.5
@@ -94,8 +94,8 @@ const PipeSegmentTool = () => {
     continuationSeed?.pipe.system ?? defaults.system,
   )
   const [sloped, setSloped] = useState(false)
-  const [slopePercent, setSlopePercent] = useState(100 / 48)
-  const [slopeDirection, setSlopeDirection] = useState<1 | -1>(1)
+  const slopePercent = 100 / 48
+  const slopeDirection = 1
   const gradeRef = useRef(slopePercent / 100)
   gradeRef.current = (slopeDirection * slopePercent) / 100
   const [diameter, setDiameter] = useState(continuationSeed?.pipe.diameter ?? defaults.diameter)
@@ -416,7 +416,7 @@ const PipeSegmentTool = () => {
   // biome-ignore lint/correctness/useExhaustiveDependencies: settings must refresh a stationary cursor
   useEffect(() => {
     if (!run.altActive) refreshCursor()
-  }, [sloped, slopePercent, slopeDirection, system, run.altActive, refreshCursor])
+  }, [sloped, system, run.altActive, refreshCursor])
 
   const displayStart = run.start
   const previewPlan =
@@ -443,14 +443,6 @@ const PipeSegmentTool = () => {
   }, [autoHangers, hangerStyle, diameter, displayStart, run.cursor, system])
   useEffect(() => () => usePathDraftPreview.getState().clear('pipe-segment'), [])
   useEffect(() => () => useEditor.getState().setToolDefaults('pipe-segment', null), [])
-
-  const actualGrade = run.start && run.cursor ? pipeGrade(run.start, run.cursor) : null
-  const elevationChange = run.start && run.cursor ? run.cursor[1] - run.start[1] : 0
-  const slopeMismatch =
-    sloped &&
-    system === 'waste' &&
-    actualGrade !== null &&
-    Math.abs(actualGrade - gradeRef.current) > 0.0001
 
   if (!activeLevelId) return null
   return (
@@ -492,79 +484,6 @@ const PipeSegmentTool = () => {
             className="flex flex-wrap items-center justify-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 py-1 text-[10px] text-muted-foreground shadow-sm backdrop-blur"
           >
             {system === 'waste' ? 'Waste' : 'Vent'} · Q system
-            {system === 'waste' && (
-              <>
-                <button
-                  type="button"
-                  aria-pressed={sloped}
-                  style={{ pointerEvents: 'auto' }}
-                  onClick={() => setSloped((value) => !value)}
-                >
-                  Slope {sloped ? 'on' : 'off'} · S
-                </button>
-                <select
-                  aria-label="Pipe slope preset"
-                  value={slopePercent}
-                  style={{ pointerEvents: 'auto' }}
-                  className="bg-background"
-                  onChange={(event) => {
-                    setSlopePercent(Number(event.target.value))
-                    setSloped(true)
-                  }}
-                >
-                  <option value={100 / 96}>⅛″/ft · 1.042%</option>
-                  <option value={100 / 48}>¼″/ft · 2.083%</option>
-                  <option value={100 / 24}>½″/ft · 4.167%</option>
-                  {![100 / 96, 100 / 48, 100 / 24].includes(slopePercent) && (
-                    <option value={slopePercent}>Custom</option>
-                  )}
-                </select>
-                <label>
-                  Slope %{' '}
-                  <input
-                    aria-label="Pipe slope percent"
-                    className="w-16 bg-background"
-                    style={{ pointerEvents: 'auto' }}
-                    type="number"
-                    min="0"
-                    max="100"
-                    step="0.1"
-                    value={Number(slopePercent.toFixed(4))}
-                    onChange={(event) => {
-                      const value = event.target.valueAsNumber
-                      if (Number.isFinite(value) && value >= 0 && value <= 100) {
-                        setSlopePercent(value)
-                        setSloped(true)
-                      }
-                    }}
-                  />
-                </label>
-                <select
-                  aria-label="Pipe slope direction"
-                  value={slopeDirection}
-                  className="bg-background"
-                  style={{ pointerEvents: 'auto' }}
-                  onChange={(event) => setSlopeDirection(event.target.value === '1' ? 1 : -1)}
-                >
-                  <option value={1}>Fall from start</option>
-                  <option value={-1}>Rise from start</option>
-                </select>
-              </>
-            )}
-            {run.start && run.cursor && (
-              <span
-                role="status"
-                className={slopeMismatch ? 'text-amber-600 dark:text-amber-400' : undefined}
-              >
-                {actualGrade === null
-                  ? 'Vertical run'
-                  : `Actual ${Math.abs(actualGrade * 100).toFixed(2)}% ${actualGrade >= 0 ? 'fall' : 'rise'}`}
-                {' · '}
-                {Math.abs(elevationChange * (unit === 'metric' ? 1000 : 1 / 0.0254)).toFixed(1)}
-                {unit === 'metric' ? ' mm' : '″'} {elevationChange > 0 ? 'rise' : 'fall'}
-                {slopeMismatch ? ' · Target slope not met' : ''}
-              </span>
-            )}
             <RunHangerToggle
               enabled={autoHangers}
               onChange={setAutoHangers}
