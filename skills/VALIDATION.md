@@ -10,7 +10,7 @@ The 0.1.2 candidate strengthens height-evidence boundaries after the separately 
 | --- | --- |
 | Base public commit | `5e0f985a3905c519d952218b6b30e95d94562f1e` |
 | `pascal-3d/SKILL.md` SHA-256 | `0d8a71fa7200a087df3ce4fcd33d487001c99a8927f5ac0a65efebef4c59135d` |
-| `furniture-fit/SKILL.md` SHA-256 | `67235eafb8029520f30adbd17144fa59e4764817a795453bb5981bbc2c4f9f59` |
+| `furniture-fit/SKILL.md` SHA-256 | `f4bf1a3b4828f24750ce2e45af9dc7fdd7bfd7d8ad79d06621f2c579f35ba90a` |
 | Package checks | `bun scripts/validate-skills.ts` and `claude plugin validate . --strict` pass |
 
 The failed 0.1.2 cohort is retained as evidence rather than rescored. Its manual whole-response review found no unsupported purchase, delivery, or future-export assurance in the three targeted cases, but that post-run review does not replace the frozen deterministic threshold or the incomplete semantic gate.
