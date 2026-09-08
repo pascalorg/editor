@@ -576,36 +576,6 @@ export function BuildTab() {
             </div>
           </TooltipProvider>
 
-          {pipeContext ? (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-muted-foreground text-xs">DWV Pipe</span>
-              <button
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
-                  activeTool === 'pipe-trap'
-                    ? 'bg-primary/10 ring-1 ring-primary/50'
-                    : 'bg-muted/40 hover:bg-muted',
-                )}
-                onClick={() => {
-                  triggerSFX('sfx:menu-click')
-                  activateBuildTool(activeTool === 'pipe-trap' ? 'pipe-segment' : 'pipe-trap')
-                }}
-                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                type="button"
-              >
-                <Image
-                  alt=""
-                  aria-hidden
-                  className="size-4 object-contain"
-                  height={16}
-                  src="/icons/dwv-pipes.webp"
-                  width={16}
-                />
-                Add Trap
-              </button>
-            </div>
-          ) : null}
-
           {(['duct-fitting', 'pipe-fitting'] as const)
             .filter((kind) => (kind === 'duct-fitting' ? ductContext : pipeContext))
             .map((kind) => (
