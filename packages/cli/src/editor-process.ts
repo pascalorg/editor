@@ -203,7 +203,7 @@ async function startEditorUnlocked(options: StartEditorOptions): Promise<StartEd
     PASCAL_DATA_DIR: options.paths.data,
     PASCAL_INSTANCE_ID: instanceId,
     PASCAL_RUNTIME_VERSION: runtime.version,
-    MINT_PASCAL_HOST_ORIGIN: state.url,
+    MINT_PASCAL_HOST_ORIGIN: process.env.MINT_PASCAL_HOST_ORIGIN || state.url,
   }
   const nodeBinary = process.env.PASCAL_NODE_BINARY || 'node'
   if (!options.foreground) await rotateEditorLog(options.paths.editorLog)

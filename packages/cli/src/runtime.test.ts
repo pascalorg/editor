@@ -49,6 +49,25 @@ describe('managed runtime', () => {
     expect(await Bun.file(paths.database).text()).toBe('persistent')
   })
 
+  test('preserves a configured Mint host origin in the editor process', async () => {
+    const root = await temporaryRoot()
+    const source = await fakeRuntime(root, '1.2.3')
+    const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
+    const previousMintOrigin = process.env.MINT_PASCAL_HOST_ORIGIN
+    process.env.MINT_PASCAL_HOST_ORIGIN = 'https://pascal.example.com'
+
+    try {
+      const started = await startEditor({ paths, sourceDirectory: source })
+      const response = await fetch(`http://127.0.0.1:${started.state.port}/mint-origin`)
+
+      expect(await response.text()).toBe('https://pascal.example.com')
+    } finally {
+      await stopEditor(paths)
+      if (previousMintOrigin === undefined) delete process.env.MINT_PASCAL_HOST_ORIGIN
+      else process.env.MINT_PASCAL_HOST_ORIGIN = previousMintOrigin
+    }
+  })
+
   test('serializes concurrent starts into one managed editor', async () => {
     const root = await temporaryRoot()
     const source = await fakeRuntime(root, '1.2.3')
@@ -337,6 +356,10 @@ const server = http.createServer((request, response) => {
       version: process.env.PASCAL_RUNTIME_VERSION,
       instanceId,
     }))
+    return
+  }
+  if (request.url === '/mint-origin') {
+    response.end(process.env.MINT_PASCAL_HOST_ORIGIN ?? '')
     return
   }
   response.end('{}')
