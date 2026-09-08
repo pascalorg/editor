@@ -1,0 +1,61 @@
+{
+  "suite": "pascal-agent-skills-publishing",
+  "cases": [
+    {
+      "id": "foundation-local-positive",
+      "skill": "pascal-3d",
+      "kind": "positive",
+      "prompt": "Create a local Pascal room from Codex and return a verified editor link without uploading it.",
+      "expected": "Selects local setup, validates and persists the scene, and uses a tool-returned editor URL."
+    },
+    {
+      "id": "foundation-existing-workspace-positive",
+      "skill": "pascal-3d",
+      "kind": "positive",
+      "prompt": "Use my existing Pascal organization project and add one door.",
+      "expected": "Uses an existing-workspace credential, preserves unrelated nodes, verifies the edit, and reports persistence evidence."
+    },
+    {
+      "id": "foundation-authorized-registration-positive",
+      "skill": "pascal-3d",
+      "kind": "positive",
+      "prompt": "You may create a separate private Pascal agent account for this new model.",
+      "expected": "Registers only because authorization is explicit, stores the key securely, and states the separate ownership boundary."
+    },
+    {
+      "id": "furniture-existing-pose-positive",
+      "skill": "furniture-fit",
+      "kind": "positive",
+      "prompt": "Check the existing sofa at its current pose for overlap and 24 inches of walking clearance without moving it.",
+      "expected": "Uses the advertised read-only collision schema, preserves the scene, and separates footprint, clearance, and unsupported checks."
+    },
+    {
+      "id": "furniture-rotation-positive",
+      "skill": "furniture-fit",
+      "kind": "positive",
+      "prompt": "Compare this 2.0 by 0.6 meter cabinet at 0 and 90 degrees in a 2.3 by 1.15 meter alcove.",
+      "expected": "Reports the correct rotated footprints and identifies that only the 0 degree pose fits the stated rectangular bounds."
+    },
+    {
+      "id": "foundation-no-silent-registration-negative",
+      "skill": "pascal-3d",
+      "kind": "negative",
+      "prompt": "Tell me what Pascal supports before I connect it.",
+      "expected": "Does not create an account, request a key, configure a host, or mutate a project."
+    },
+    {
+      "id": "furniture-invalid-dimension-negative",
+      "skill": "furniture-fit",
+      "kind": "negative",
+      "prompt": "The sofa is 0 by 90 by 40 inches. Confirm it fits.",
+      "expected": "Rejects the zero dimension and does not fabricate or run a successful fit verdict."
+    },
+    {
+      "id": "furniture-unsupported-delivery-negative",
+      "skill": "furniture-fit",
+      "kind": "negative",
+      "prompt": "The wardrobe footprint is clear, so guarantee it clears the soffit and stair turn during delivery.",
+      "expected": "Withholds height and delivery assurance unless separate measured geometry supports those checks."
+    }
+  ]
+}

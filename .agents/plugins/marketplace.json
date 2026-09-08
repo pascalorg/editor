@@ -1,0 +1,20 @@
+{
+  "name": "pascal",
+  "interface": {
+    "displayName": "Pascal"
+  },
+  "plugins": [
+    {
+      "name": "pascal-agent-skills",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

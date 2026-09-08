@@ -1,8 +1,9 @@
 'use client'
 
 import { type Cursor, emitter } from '@pascal-app/core'
+import { markPureRaycast } from '@pascal-app/viewer'
 import type { ThreeEvent } from '@react-three/fiber'
-import { type ReactNode, useEffect, useMemo, useRef } from 'react'
+import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   BoxGeometry,
   type BufferGeometry,
@@ -30,10 +31,13 @@ import useEditor from '../../../store/use-editor'
 // (`wall:move` for openings, `grid:move` for free movers), freezing the drag.
 // Make every handle hit area inert for the duration; the indicator mesh still
 // renders (it's already NO_RAYCAST + depthTest off) so the grip stays visible.
-export function hitAreaRaycast(this: Mesh, raycaster: Raycaster, intersects: Intersection[]): void {
-  if (useEditor.getState().placementDragMode) return
+export const hitAreaRaycast = markPureRaycast(function hitAreaRaycast(
+  this: Mesh,
+  raycaster: Raycaster,
+  intersects: Intersection[],
+): void {
   Mesh.prototype.raycast.call(this, raycaster, intersects)
-}
+})
 
 export const ARROW_SCALE = 0.65
 export const ARROW_COLOR = '#8381ed'
@@ -423,6 +427,18 @@ export function InvisibleHandleHitArea({
   onPointerLeave: PointerHandler
   scale: number
 }) {
+  const ref = useRef<Mesh>(null)
+  useLayoutEffect(() => {
+    const mesh = ref.current
+    if (!mesh) return
+    // Subscribe synchronously so the next pointer event sees drag state before React renders.
+    const syncRaycast = () => {
+      mesh.raycast = useEditor.getState().placementDragMode ? NO_RAYCAST : hitAreaRaycast
+    }
+    syncRaycast()
+    return useEditor.subscribe(syncRaycast)
+  }, [])
+
   return (
     <mesh
       frustumCulled={false}
@@ -433,6 +449,7 @@ export function InvisibleHandleHitArea({
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
       raycast={hitAreaRaycast}
+      ref={ref}
       renderOrder={HIT_AREA_RENDER_ORDER}
       scale={scale}
       userData={{ [EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY]: true }}

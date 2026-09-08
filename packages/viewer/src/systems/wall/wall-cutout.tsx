@@ -1,33 +1,28 @@
-import {
-  type AnyNodeId,
-  emitter,
-  getLibraryMaterialsVersion,
-  getWallFaceBandConfig,
-  getWallPlaneTop,
-  resolveLevelId,
-  resolveWallEffectiveHeight,
-  sceneRegistry,
-  spatialGridManager,
-  useScene,
-  type WallNode,
-} from '@pascal-app/core'
+import { type AnyNodeId, emitter, sceneRegistry, useScene, type WallNode } from '@pascal-app/core'
 import { useFrame } from '@react-three/fiber'
-import { useEffect, useRef } from 'react'
-import type { Material } from 'three'
+import { useEffect, useMemo } from 'react'
+import type { Camera, Material } from 'three'
 import { type Mesh, Vector3 } from 'three/webgpu'
 import useViewer, { type WallMode } from '../../store/use-viewer'
-import { resolveWallMaterialVariant, type WallMaterialVariant } from './wall-material-variant'
 import {
-  getHoverHighlightMaterials,
-  getMaterialsForWall,
-  getSelectionHighlightMaterials,
-  getWallMaterialHash,
-  type WallMaterials,
-} from './wall-materials'
+  sameMaterialArray,
+  WallCutoutCache,
+  type WallCutoutViewerStore,
+  wallHiddenFromFacing,
+} from './wall-cutout-cache'
+import { getMaterialsForWall, getSelectionHighlightMaterials } from './wall-materials'
+import { subscribeWallRebuilds } from './wall-rebuild-notifications'
 
-const tmpVec = new Vector3()
-const u = new Vector3()
 const v = new Vector3()
+
+export const WALL_CUTOUT_FRAME_PRIORITY = 0
+
+export function runWallCutoutFrame(
+  cache: WallCutoutCache,
+  { camera, clock }: { camera: Camera; clock: { elapsedTime: number } },
+) {
+  cache.update(camera, clock.elapsedTime)
+}
 
 /**
  * Whether a wall should be hidden or see-through for the current camera and
@@ -43,239 +38,26 @@ export function getWallHideState(
   wallMode: WallMode,
   cameraDir: Vector3,
 ): boolean {
-  let hideWall = wallNode.frontSide === 'interior' && wallNode.backSide === 'interior'
-
-  if (wallMode === 'up') {
-    hideWall = false
-  } else if (wallMode === 'down') {
-    hideWall = true
-  } else {
-    wallMesh.getWorldDirection(v)
-    if (v.dot(cameraDir) < 0) {
-      if (wallNode.frontSide === 'exterior' && wallNode.backSide !== 'exterior') {
-        hideWall = true
-      }
-    } else if (wallNode.backSide === 'exterior' && wallNode.frontSide !== 'exterior') {
-      hideWall = true
-    }
-  }
-
-  return hideWall
+  if (wallMode === 'up') return false
+  if (wallMode === 'down') return true
+  wallMesh.getWorldDirection(v)
+  return wallHiddenFromFacing(wallNode, wallMode, v.dot(cameraDir) < 0)
 }
 
-function sameMaterialArray(a: Material | Material[], b: Material[]): boolean {
-  return Array.isArray(a) && a.length === b.length && a.every((material, i) => material === b[i])
-}
+export const WallCutout = ({
+  viewerStore = useViewer,
+}: {
+  viewerStore?: WallCutoutViewerStore
+}) => {
+  const cache = useMemo(() => new WallCutoutCache(viewerStore), [viewerStore])
 
-/** Materialize a resolved variant from the wall's cached material set. */
-function materialsForVariant(variant: WallMaterialVariant, materials: WallMaterials) {
-  switch (variant) {
-    case 'visible':
-      return materials.visible
-    case 'invisible':
-      return materials.invisible
-    case 'translucent':
-      return materials.translucent
-    case 'delete-visible':
-      return materials.deleteVisible
-    case 'delete-invisible':
-      return materials.deleteInvisible
-    case 'delete-translucent':
-      return materials.deleteTranslucent
-    case 'selection-visible':
-      return getSelectionHighlightMaterials(materials.visible)
-    case 'selection-invisible':
-      return getSelectionHighlightMaterials(materials.invisible)
-    case 'selection-translucent':
-      return getSelectionHighlightMaterials(materials.translucent)
-    case 'hover-invisible':
-      return getHoverHighlightMaterials(materials.invisible)
-    default: {
-      const exhaustive: never = variant
-      return exhaustive
-    }
-  }
-}
+  useEffect(() => subscribeWallRebuilds((id) => cache.rebuilt.add(id)), [cache])
 
-export const WallCutout = () => {
-  const lastCameraPosition = useRef(new Vector3())
-  const lastCameraTarget = useRef(new Vector3())
-  const lastUpdateTime = useRef(0)
-  const lastWallMode = useRef<string>(useViewer.getState().wallMode)
-  const lastShading = useRef(useViewer.getState().shading)
-  const lastNumberOfWalls = useRef(0)
-  const lastHighlightKey = useRef('')
-  const lastWallAppearanceKey = useRef('')
-  const wallAppearanceKeyRef = useRef('')
-  const wallAppearanceInputs = useRef({
-    nodes: null as object | null,
-    materials: null as object | null,
-    shading: null as unknown,
-    wallCount: -1,
-    libraryMaterialsVersion: -1,
-  })
-  const lastTextures = useRef(useViewer.getState().textures)
-  const lastColorPreset = useRef(useViewer.getState().colorPreset)
-  const lastSceneTheme = useRef(useViewer.getState().sceneTheme)
+  useEffect(() => cache.subscribeLiveTransforms(), [cache])
 
-  useFrame(({ camera, clock }) => {
-    const wallMode = useViewer.getState().wallMode
-    const shading = useViewer.getState().shading
-    const textures = useViewer.getState().textures
-    const colorPreset = useViewer.getState().colorPreset
-    const sceneTheme = useViewer.getState().sceneTheme
-    const selectedIds = useViewer.getState().selection.selectedIds
-    const previewSelectedIds = useViewer.getState().previewSelectedIds
-    const hoveredId = useViewer.getState().hoveredId
-    const hoverHighlightMode = useViewer.getState().hoverHighlightMode
-    const sceneState = useScene.getState()
-    const currentTime = clock.elapsedTime
-    const currentCameraPosition = camera.position
-    camera.getWorldDirection(tmpVec)
-    tmpVec.add(currentCameraPosition)
-    const highlightedWallIds = new Set(
-      [...selectedIds, ...previewSelectedIds].filter(
-        (id) => sceneState.nodes[id as AnyNodeId]?.type === 'wall',
-      ),
-    )
-    const deleteHoveredWallId =
-      hoverHighlightMode === 'delete' &&
-      hoveredId &&
-      sceneState.nodes[hoveredId as AnyNodeId]?.type === 'wall'
-        ? hoveredId
-        : null
-    // Select-mode hover on a wall — the affordance for HIDDEN walls, which
-    // are hover/selection ray targets in X-ray (nearest-first) but draw
-    // (almost) nothing: the hovered wall's stipple film glows so the user
-    // sees WHAT the click would select instead of the furniture behind it
-    // lighting up through the wall. Scoped to the default hover mode so the
-    // paint-preview flows (which snapshot + restore mesh.material
-    // themselves) never interleave with this swap.
-    const selectHoveredWallId =
-      hoverHighlightMode === 'default' &&
-      hoveredId &&
-      sceneState.nodes[hoveredId as AnyNodeId]?.type === 'wall'
-        ? hoveredId
-        : null
-    const highlightKey = `${Array.from(highlightedWallIds).sort().join('|')}::${deleteHoveredWallId ?? ''}::${selectHoveredWallId ?? ''}`
-    // Sorting every wall id, hashing each wall's material and JSON-dumping its
-    // face bands is a full-scene scan; its inputs are immutable store slices,
-    // so identity is enough to know the key cannot have changed.
-    const wallCount = sceneRegistry.byType.wall!.size
-    // Dynamic `library:mtl_*` materials register after mount; the version bump
-    // flips the `#unresolved` signature fragments so dangling paint re-resolves.
-    const libraryMaterialsVersion = getLibraryMaterialsVersion()
-    const appearanceInputs = wallAppearanceInputs.current
-    if (
-      appearanceInputs.nodes !== sceneState.nodes ||
-      appearanceInputs.materials !== sceneState.materials ||
-      appearanceInputs.shading !== shading ||
-      appearanceInputs.wallCount !== wallCount ||
-      appearanceInputs.libraryMaterialsVersion !== libraryMaterialsVersion
-    ) {
-      appearanceInputs.nodes = sceneState.nodes
-      appearanceInputs.materials = sceneState.materials
-      appearanceInputs.shading = shading
-      appearanceInputs.wallCount = wallCount
-      appearanceInputs.libraryMaterialsVersion = libraryMaterialsVersion
-      wallAppearanceKeyRef.current = Array.from(sceneRegistry.byType.wall!)
-        .sort()
-        .map((wallId) => {
-          const wallNode = sceneState.nodes[wallId as WallNode['id']]
-          if (wallNode?.type !== 'wall') return `${wallId}:missing`
-          return `${wallId}:${getWallMaterialHash(wallNode, shading, sceneState.materials)}:${JSON.stringify(wallNode.faceBands ?? null)}`
-        })
-        .join('|')
-    }
-    const wallAppearanceKey = wallAppearanceKeyRef.current
-
-    const distanceMoved = currentCameraPosition.distanceTo(lastCameraPosition.current)
-    const directionChanged = tmpVec.distanceTo(lastCameraTarget.current)
-    const timeSinceUpdate = currentTime - lastUpdateTime.current
-
-    if (
-      ((distanceMoved > 0.5 || directionChanged > 0.3) && timeSinceUpdate > 0.1) ||
-      lastWallMode.current !== wallMode ||
-      lastShading.current !== shading ||
-      lastTextures.current !== textures ||
-      lastColorPreset.current !== colorPreset ||
-      lastSceneTheme.current !== sceneTheme ||
-      sceneRegistry.byType.wall!.size !== lastNumberOfWalls.current ||
-      lastHighlightKey.current !== highlightKey ||
-      lastWallAppearanceKey.current !== wallAppearanceKey
-    ) {
-      lastCameraPosition.current.copy(currentCameraPosition)
-      lastCameraTarget.current.copy(tmpVec)
-      lastUpdateTime.current = currentTime
-      camera.getWorldDirection(u)
-
-      const walls = sceneRegistry.byType.wall!
-      walls.forEach((wallId) => {
-        const wallMesh = sceneRegistry.nodes.get(wallId)
-        if (!wallMesh) return
-        const wallNode = sceneState.nodes[wallId as WallNode['id']]
-        if (wallNode?.type !== 'wall') return
-
-        const hideWall = getWallHideState(wallNode, wallMesh as Mesh, wallMode, u)
-        // Pointer transparency for hidden walls: the wall's full-height
-        // collision mesh keeps raycasting even when the wall draws with the
-        // invisible material ('down' mode, cutaway-hidden faces, auto-mode
-        // interior partitions), so it silently swallows clicks aimed at
-        // VISIBLE objects standing behind it — e.g. a plugin's wall-mounted
-        // device/service boxes in X-ray mode (night-5 D4: the arm click on a
-        // south-wall receptacle selected an invisible wall two meters in
-        // front of it instead, and the follow-up click committed a WALL
-        // move). The wall renderer's pointer handlers read this stamp and
-        // pass hidden walls through (delete mode excepted — hidden walls
-        // must stay hover-targetable for deletion). Translucent walls are
-        // visible, so they keep their events.
-        ;(wallMesh as Mesh).userData.wallHidden = wallMode !== 'translucent' && hideWall
-        const isDeleteHighlighted = deleteHoveredWallId === wallId
-        const isSelectionHighlighted = !isDeleteHighlighted && highlightedWallIds.has(wallId)
-        const levelId = resolveLevelId(wallNode, sceneState.nodes)
-        const support = spatialGridManager.getSlabSupportForWall(
-          levelId,
-          wallNode.start,
-          wallNode.end,
-          wallNode.curveOffset ?? 0,
-          wallNode.thickness,
-          wallNode.supportSlabId,
-        )
-        const effectiveWallHeight = resolveWallEffectiveHeight(
-          wallNode,
-          getWallPlaneTop(wallNode, levelId, sceneState.nodes),
-          support.elevation,
-        )
-        const shouldSelectionHighlight =
-          isSelectionHighlighted && !getWallFaceBandConfig(wallNode, effectiveWallHeight).enabled
-        const materials = getMaterialsForWall(
-          wallNode,
-          shading,
-          textures,
-          colorPreset,
-          sceneTheme,
-          sceneState.materials,
-        )
-
-        const variant = resolveWallMaterialVariant({
-          translucentMode: wallMode === 'translucent',
-          hidden: hideWall,
-          deleteHighlighted: isDeleteHighlighted,
-          selectionHighlighted: shouldSelectionHighlight,
-          hoverHighlighted: selectHoveredWallId === wallId,
-        })
-        ;(wallMesh as Mesh).material = materialsForVariant(variant, materials)
-      })
-      lastWallMode.current = wallMode
-      lastShading.current = shading
-      lastTextures.current = textures
-      lastColorPreset.current = colorPreset
-      lastSceneTheme.current = sceneTheme
-      lastNumberOfWalls.current = sceneRegistry.byType.wall!.size
-      lastHighlightKey.current = highlightKey
-      lastWallAppearanceKey.current = wallAppearanceKey
-    }
-  })
+  // Camera changes reach PostProcessing (1) in this frame. WallSystem (4)
+  // notifies the next frame; WallBatchSystem (5) reads this frame's stamps.
+  useFrame((state) => runWallCutoutFrame(cache, state), WALL_CUTOUT_FRAME_PRIORITY)
 
   useEffect(() => {
     const snapshot = new Map<Mesh, Material | Material[]>()
@@ -288,10 +70,10 @@ export const WallCutout = () => {
         if (wallNode?.type !== 'wall') return
         const mats = getMaterialsForWall(
           wallNode,
-          useViewer.getState().shading,
-          useViewer.getState().textures,
-          useViewer.getState().colorPreset,
-          useViewer.getState().sceneTheme,
+          viewerStore.getState().shading,
+          viewerStore.getState().textures,
+          viewerStore.getState().colorPreset,
+          viewerStore.getState().sceneTheme,
           useScene.getState().materials,
         )
         const current = wallMesh.material as Material | Material[]
@@ -322,7 +104,7 @@ export const WallCutout = () => {
       emitter.off('thumbnail:before-capture', restoreForCapture)
       emitter.off('thumbnail:after-capture', reapplyAfterCapture)
     }
-  }, [])
+  }, [viewerStore])
 
   return null
 }

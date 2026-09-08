@@ -22,6 +22,7 @@ import {
   csgEvaluator,
   generateRoofSegmentGeometry,
   INTERSECTION,
+  markPureRaycast,
   prepareBrushForCSG,
   useViewer,
 } from '@pascal-app/viewer'
@@ -707,7 +708,7 @@ function makeExpandedTrimRaycast(
   const halfX = Math.max(0.5, hitScale[0] / Math.max(visualScale[0], 1e-6) / 2)
   const halfY = Math.max(0.5, hitScale[1] / Math.max(visualScale[1], 1e-6) / 2)
   const halfZ = Math.max(0.5, hitScale[2] / Math.max(visualScale[2], 1e-6) / 2)
-  return function expandedTrimRaycast(
+  return markPureRaycast(function expandedTrimRaycast(
     this: THREE.Mesh,
     raycaster: THREE.Raycaster,
     intersects: THREE.Intersection[],
@@ -722,7 +723,7 @@ function makeExpandedTrimRaycast(
     const distance = raycaster.ray.origin.distanceTo(point)
     if (distance < raycaster.near || distance > raycaster.far) return
     intersects.push({ distance, point, object: this })
-  }
+  })
 }
 
 function trimEquals(a: RoofSegmentTrim, b: RoofSegmentTrim): boolean {

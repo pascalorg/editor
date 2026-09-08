@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { ErrorCode, throwMcpError } from './errors'
 import { NodeIdSchema } from './schemas'
 
@@ -21,6 +22,7 @@ export function registerGetNode(server: McpServer, bridge: SceneOperations): voi
       description: 'Return the full node payload for the given ID.',
       inputSchema: getNodeInput,
       outputSchema: getNodeOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ id }) => {
       const node = bridge.getNode(id as AnyNodeId)

@@ -12,6 +12,9 @@ import { Plane, Raycaster, Vector2, Vector3 } from 'three'
 import { getPlacementSurface } from '../lib/active-placement-surface'
 import { resolveTerrainGroundHit } from '../lib/ground-surface'
 
+// Keep tool previews tracking camera navigation at 10 Hz without querying every move.
+const CAMERA_DRAG_MOVE_INTERVAL_MS = 100
+
 /**
  * Custom grid events hook that uses manual raycasting instead of mesh events.
  * This ensures grid events work even when other meshes block pointer events with stopPropagation.
@@ -107,8 +110,16 @@ export function useGridEvents(gridY: number) {
       emit('click', e)
     }
 
+    let lastCameraDragMove = Number.NEGATIVE_INFINITY
     const handlePointerMove = (e: PointerEvent) => {
-      // Emit move even if camera is dragging, so tools like PolygonEditor still work
+      // Moves keep tool cursor snapshots current, including wheel zoom during a tool gesture.
+      if (useViewer.getState().cameraDragging) {
+        const now = performance.now()
+        if (now - lastCameraDragMove < CAMERA_DRAG_MOVE_INTERVAL_MS) return
+        lastCameraDragMove = now
+      } else {
+        lastCameraDragMove = Number.NEGATIVE_INFINITY
+      }
       timeSpan('pointer', () => emit('move', e))
     }
 

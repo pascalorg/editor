@@ -111,6 +111,12 @@ const surfaceRoleMaterialCache = new Map<string, THREE.Material>()
 const textureCache = new Map<string, THREE.Texture>()
 const textureLoadPromises = new Map<string, Promise<THREE.Texture | null>>()
 const textureLoader = new THREE.TextureLoader()
+let materialTextureVersion = 0
+
+// Highlight clones can observe late assignments without polling every material.
+export function getMaterialTextureVersion(): number {
+  return materialTextureVersion
+}
 
 // `.ktx2` finish maps transcode through the shared KTX2 loader (support is
 // detected once at viewer init); everything else loads as a normal image.
@@ -385,6 +391,7 @@ function queueTextureAssignment(
       // and crash in TextureNode.update ("null (reading 'matrix')").
       textureMaterial[slot] = null
       material.needsUpdate = true
+      materialTextureVersion++
     }
     return
   }
@@ -401,6 +408,7 @@ function queueTextureAssignment(
   if (cached) {
     textureMaterial[slot] = createAssignedTexture(cached, props, slot)
     material.needsUpdate = true
+    materialTextureVersion++
     return
   }
 
@@ -411,12 +419,14 @@ function queueTextureAssignment(
   if (textureMaterial[slot] != null) {
     textureMaterial[slot] = null
     material.needsUpdate = true
+    materialTextureVersion++
   }
 
   loadPresetTexture(path, props, slot).then((texture) => {
     if (!texture) return
     textureMaterial[slot] = createAssignedTexture(texture, props, slot)
     material.needsUpdate = true
+    materialTextureVersion++
   })
 }
 

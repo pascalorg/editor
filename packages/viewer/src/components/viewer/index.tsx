@@ -22,6 +22,7 @@ import { PERF_OVERLAY_ENABLED } from '../../lib/gpu-perf'
 import { applyIsolation, clearIsolation } from '../../lib/isolation'
 import { ensureKtx2Support } from '../../lib/ktx2-loader'
 import type { ColorPreset, RenderShading } from '../../lib/materials'
+import { choosePointerEvents } from '../../lib/pointer-events'
 import { initializeGpuRenderer, type RendererPowerPreference } from '../../lib/renderer-capability'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { installTextureNodeNullGuard } from '../../lib/texture-node-guard'
@@ -444,6 +445,8 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
     }
   }, [isolate])
 
+  const [pointerEvents] = useState(() => choosePointerEvents())
+
   const [rendererInitFailed, setRendererInitFailed] = useState(false)
 
   const isDark = useViewer((state) => getSceneTheme(state.sceneTheme).appearance === 'dark')
@@ -528,6 +531,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           transparentBackground ? 'bg-transparent' : isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'
         }`}
         dpr={[1, maxDpr]}
+        events={pointerEvents}
         frameloop="never"
         gl={
           ((props: { canvas?: HTMLCanvasElement; powerPreference?: RendererPowerPreference }) => {
