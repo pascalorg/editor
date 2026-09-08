@@ -8,7 +8,7 @@ import SystemCheckPanel from './system-check-panel'
 export default function RunHangerInspector({ node }: { node: SupportedRun }) {
   const nodes = useScene((state) => state.nodes)
   const slots = useMemo(() => planRunHangerSlots(node, nodes), [node, nodes])
-  if (!node.autoHangers) return <SystemCheckPanel nodeId={node.id} />
+  if (!node.autoHangers) return <SystemCheckPanel nodeId={node.id} nodes={nodes} />
   const hosts = Object.values(nodes).filter(
     (candidate) =>
       candidate.parentId === node.parentId &&
@@ -26,7 +26,7 @@ export default function RunHangerInspector({ node }: { node: SupportedRun }) {
   }
   return (
     <>
-      <SystemCheckPanel nodeId={node.id} />
+      <SystemCheckPanel nodeId={node.id} nodes={nodes} />
       <section className="space-y-2 border-t pt-3">
         <h3 className="text-sm font-medium">Individual hangers</h3>
         <p className="text-xs text-muted-foreground">

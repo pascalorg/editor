@@ -1,18 +1,23 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   emitter,
   getLevelElevations,
   summarizeSystemFor,
-  useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { useMemo, useState } from 'react'
 import { checkDistributionSystems } from './system-checks'
 
-export default function SystemCheckPanel({ nodeId }: { nodeId: AnyNodeId }) {
-  const nodes = useScene((state) => state.nodes)
+export default function SystemCheckPanel({
+  nodeId,
+  nodes,
+}: {
+  nodeId: AnyNodeId
+  nodes: Record<AnyNodeId, AnyNode>
+}) {
   const [open, setOpen] = useState(false)
   const [filter, setFilter] = useState('all')
   const summary = useMemo(

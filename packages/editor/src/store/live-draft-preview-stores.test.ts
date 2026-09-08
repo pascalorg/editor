@@ -85,6 +85,7 @@ describe('live draft preview stores', () => {
       {
         angle: 90,
         branchAngle: 90,
+        damperAngle: 0,
         diameter: 6,
         diameter2: 6,
         ductMaterial: 'sheet-metal' as const,
@@ -94,6 +95,8 @@ describe('live draft preview stores', () => {
         id: 'duct-fitting_live-draft-0' as const,
         metadata: {},
         object: 'node' as const,
+        panelHeight: 0.15,
+        panelWidth: 0.25,
         parentId: 'level_1' as const,
         position: [1, 2, 3] as [number, number, number],
         rotation: [0, 0, 0] as [number, number, number],

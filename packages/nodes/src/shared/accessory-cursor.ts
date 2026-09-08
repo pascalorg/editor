@@ -25,7 +25,14 @@ export function accessoryCursor(
     const nodes = useScene.getState().nodes
     let closest = Infinity
     let result: ReturnType<typeof accessoryCursor> | null = null
-    for (const node of Object.values(nodes)) {
+    const candidateIds = event.surfaceHit
+      ? [event.surfaceHit.hostId]
+      : (['wall', 'ceiling', 'slab', 'roof'] as const).flatMap(
+          (type) => sceneRegistry.byType[type] ?? [],
+        )
+    for (const id of candidateIds) {
+      const node = nodes[id as AnyNodeId]
+      if (!node) continue
       if (['site', 'building', 'level', 'zone', 'group'].includes(node.type)) continue
       if (findLevelAncestorId(node.id, nodes) !== levelId || !node.visible) continue
       const root = sceneRegistry.nodes.get(node.id)

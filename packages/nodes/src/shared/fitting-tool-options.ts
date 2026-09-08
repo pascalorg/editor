@@ -86,17 +86,7 @@ export const ductFittingToolOptions: ToolOption[] = [
     'duct-fitting',
     'fittingType',
     'Duct fittings & accessories',
-    [
-      'elbow',
-      'tee',
-      'cross',
-      'reducer',
-      'transition',
-      'end-cap',
-      'damper',
-      'access-panel',
-      'coupling',
-    ],
+    ['elbow', 'tee', 'cross', 'reducer', 'transition', 'end-cap', 'damper', 'access-panel'],
     'elbow',
   ),
   option('duct-fitting', 'shape', 'Profile', ['round', 'rect', 'oval'], 'rect', false, [
@@ -105,7 +95,6 @@ export const ductFittingToolOptions: ToolOption[] = [
     'cross',
     'end-cap',
     'damper',
-    'coupling',
   ]),
   option('duct-fitting', 'inletShape', 'Inlet profile', ['round', 'rect', 'oval'], 'rect', false, [
     'transition',

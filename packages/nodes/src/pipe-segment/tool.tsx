@@ -358,6 +358,7 @@ const PipeSegmentTool = () => {
 
   const run = useDistributionRunTool({
     active: !!activeLevelId,
+    levelId: activeLevelId,
     toolName: 'pipe-segment',
     initialStart: continuationSeed
       ? ([

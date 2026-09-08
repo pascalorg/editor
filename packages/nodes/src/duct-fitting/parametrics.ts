@@ -238,7 +238,6 @@ export const ductFittingParametrics: ParametricDescriptor<DuctFittingNode> = {
             'end-cap',
             'damper',
             'access-panel',
-            'coupling',
           ],
         },
         {

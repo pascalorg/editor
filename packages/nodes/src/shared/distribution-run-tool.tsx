@@ -15,7 +15,6 @@ import {
   useEditor,
   useInteractionScope,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react'
@@ -188,6 +187,7 @@ export function projectRunToSurfaceAngleLock(
 
 type DistributionRunToolConfig = {
   active: boolean
+  levelId: AnyNodeId | null
   toolName: 'duct-segment' | 'pipe-segment'
   initialStart?: RunPoint | null
   initialConnection?: RunConnection | null
@@ -365,12 +365,15 @@ function wallSurfaceBounds(hostId: AnyNodeId): RunSurfaceBounds {
   }
 }
 
-function stableWallFrame(frame: RunSurfaceFrame, hostId: AnyNodeId): RunSurfaceFrame {
+function stableWallFrame(
+  frame: RunSurfaceFrame,
+  hostId: AnyNodeId,
+  activeLevelId: AnyNodeId | null,
+): RunSurfaceFrame {
   const wall = useScene.getState().nodes[hostId]
   if (wall?.type !== 'wall') return frame
   const origin = new Vector3(wall.start[0], 0, wall.start[1])
   const ownerLevel = wall.parentId ? sceneRegistry.nodes.get(wall.parentId as AnyNodeId) : null
-  const activeLevelId = useViewer.getState().selection.levelId
   const activeLevel = activeLevelId ? sceneRegistry.nodes.get(activeLevelId) : null
   if (ownerLevel) ownerLevel.localToWorld(origin)
   if (activeLevel) activeLevel.worldToLocal(origin)
@@ -380,13 +383,16 @@ function stableWallFrame(frame: RunSurfaceFrame, hostId: AnyNodeId): RunSurfaceF
   }
 }
 
-function publishRunSurface(target: RunSurfaceTarget | null, point: RunPoint): void {
+function publishRunSurface(
+  target: RunSurfaceTarget | null,
+  point: RunPoint,
+  activeLevelId: AnyNodeId | null,
+): void {
   if (!target) {
     clearPlacementSurface()
     return
   }
-  const buildingId = useViewer.getState().selection.levelId
-  const building = buildingId ? sceneRegistry.nodes.get(buildingId as AnyNodeId) : null
+  const building = activeLevelId ? sceneRegistry.nodes.get(activeLevelId) : null
   const worldPoint = new Vector3(...point)
   const worldAnchor = new Vector3(...target.frame.origin)
   const worldNormalPoint = new Vector3(
@@ -403,7 +409,10 @@ function publishRunSurface(target: RunSurfaceTarget | null, point: RunPoint): vo
   publishPlacementSurface(worldPoint, worldNormal, 'fixed-plane', worldAnchor)
 }
 
-function surfacePointFromEvent(event: RunPointerEvent): {
+function surfacePointFromEvent(
+  event: RunPointerEvent,
+  activeLevelId: AnyNodeId | null,
+): {
   point: RunPoint
   frame: RunSurfaceFrame
   isHorizontal: boolean
@@ -414,7 +423,6 @@ function surfacePointFromEvent(event: RunPointerEvent): {
   const frame = createRunSurfaceFrame(point, event.surfaceNormal ?? UP)
   const planeDistance = dotRun(point, frame.normal)
   frame.origin = frame.normal.map((value) => value * planeDistance) as RunPoint
-  const activeLevelId = useViewer.getState().selection.levelId as AnyNodeId | null
   const floorLevelId = event.surfaceHit?.levelId ?? activeLevelId
   const wallNode = event.surfaceHit?.hostId
     ? useScene.getState().nodes[event.surfaceHit.hostId]
@@ -430,7 +438,7 @@ function surfacePointFromEvent(event: RunPointerEvent): {
           levelId: wallLevelId,
           hostId: event.surfaceHit.hostId,
           side: event.surfaceHit.side ?? 'front',
-          frame: stableWallFrame(frame, event.surfaceHit.hostId),
+          frame: stableWallFrame(frame, event.surfaceHit.hostId, activeLevelId),
           bounds: wallSurfaceBounds(event.surfaceHit.hostId),
         }
       : floorLevelId
@@ -548,7 +556,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
 
     const resolvePoint = (event: GridEvent): ResolvedRunPoint => {
       const adapter = configRef.current
-      const hit = surfacePointFromEvent(event)
+      const hit = surfacePointFromEvent(event, adapter.levelId)
       const currentStart = startRef.current
       const previous = lastResolvedRef.current
       // A wall is only an attachment candidate, not a constraint for the
@@ -584,7 +592,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       }
       const sample = { frame: resolved.frame, surfaceTarget: target }
       const acceptsConnection = (candidate: RunPoint, checkOcclusion = true): boolean => {
-        const levelId = useViewer.getState().selection.levelId
+        const levelId = adapter.levelId
         const level = levelId ? sceneRegistry.nodes.get(levelId) : null
         const world = new Vector3(...candidate)
         if (level) level.localToWorld(world)
@@ -737,10 +745,11 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         publishRunSurface(
           {
             kind: 'surface',
-            levelId: useViewer.getState().selection.levelId as AnyNodeId,
+            levelId: configRef.current.levelId as AnyNodeId,
             frame: resolved.frame,
           },
           resolved.point,
+          configRef.current.levelId,
         )
     }
 

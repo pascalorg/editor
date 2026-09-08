@@ -50,7 +50,7 @@ export function RunHangerToggle({
 }
 
 export function RunHangerPreview({ run, levelId }: { run: SupportedRun; levelId: AnyNodeId }) {
-  const nodes = useScene((state) => state.nodes)
+  const nodes = useScene.getState().nodes
   const geometry = useMemo(() => {
     const group = buildRunHangers(
       { ...run, parentId: levelId },

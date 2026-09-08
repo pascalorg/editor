@@ -54,7 +54,6 @@ test('every duct catalog choice creates its advertised model and connection coun
     'end-cap': ['end-cap-closure', 1],
     damper: ['damper-blade', 2],
     'access-panel': ['access-door', 0],
-    coupling: ['coupling-center-seam', 2],
   }
   const catalog = ductFittingToolOptions.find((o) => o.id === 'fittingType')!
   for (const choice of catalog.choices) {
@@ -72,6 +71,17 @@ test('every duct catalog choice creates its advertised model and connection coun
       expect(getDuctFittingPorts(node).map((p) => p.shape)).toEqual(['rect', 'round'])
     }
   }
+})
+
+test('duct coupling stays loadable but is absent from the placement catalog', () => {
+  const catalog = ductFittingToolOptions.find((option) => option.id === 'fittingType')!
+  expect(catalog.choices.some((choice) => choice.value === 'coupling')).toBe(false)
+
+  const savedCoupling = DuctFittingNode.parse({ fittingType: 'coupling' })
+  expect(
+    buildDuctFittingGeometry(savedCoupling).getObjectByName('coupling-center-seam'),
+  ).toBeDefined()
+  expect(getDuctFittingPorts(savedCoupling)).toHaveLength(2)
 })
 
 test('every pipe catalog choice creates its advertised model and connection count', () => {

@@ -41,7 +41,6 @@ import {
   Vector2,
   Vector3,
 } from 'three'
-import { planElbowAtPort } from '../shared/auto-fitting'
 import {
   type AutoOffsetBasePatch,
   newAutoOffsetGroupId,
@@ -112,79 +111,6 @@ function runRadiusM(duct: DuctSegmentNode): number {
 
 type Point = [number, number, number]
 
-function planDraggedJointFitting(
-  duct: DuctSegmentNode,
-  path: Point[],
-  index: number,
-): DuctFittingNode | null {
-  const previous = path[index - 1]
-  const joint = path[index]
-  const next = path[index + 1]
-  if (!previous || !joint || !next) return null
-  const inLength = Math.hypot(
-    joint[0] - previous[0],
-    joint[1] - previous[1],
-    joint[2] - previous[2],
-  )
-  const outLength = Math.hypot(next[0] - joint[0], next[1] - joint[1], next[2] - joint[2])
-  if (inLength < 0.08 || outLength < 0.08) return null
-  const incoming: Point = [
-    (joint[0] - previous[0]) / inLength,
-    (joint[1] - previous[1]) / inLength,
-    (joint[2] - previous[2]) / inLength,
-  ]
-  const outgoing: Point = [
-    (next[0] - joint[0]) / outLength,
-    (next[1] - joint[1]) / outLength,
-    (next[2] - joint[2]) / outLength,
-  ]
-  return (
-    planElbowAtPort(
-      {
-        id: 'alt-joint-inlet',
-        nodeId: duct.id as AnyNodeId,
-        position: joint,
-        direction: incoming,
-        diameter: duct.diameter,
-        system: duct.system,
-      },
-      outgoing,
-      {
-        shape: duct.shape,
-        width: duct.width,
-        height: duct.height,
-        diameter: duct.diameter,
-      },
-    )?.fitting ?? null
-  )
-}
-
-function projectPointToSegment(point: Point, a: Point, b: Point): Point {
-  const dx = b[0] - a[0]
-  const dy = b[1] - a[1]
-  const dz = b[2] - a[2]
-  const lengthSq = dx * dx + dy * dy + dz * dz
-  const t =
-    lengthSq < 1e-10
-      ? 0
-      : Math.min(
-          1,
-          Math.max(
-            0,
-            ((point[0] - a[0]) * dx + (point[1] - a[1]) * dy + (point[2] - a[2]) * dz) / lengthSq,
-          ),
-        )
-  return [a[0] + dx * t, a[1] + dy * t, a[2] + dz * t]
-}
-
-function splitDuctAtPoint(duct: DuctSegmentNode, segmentIndex: number, point: Point) {
-  const head = [...duct.path.slice(0, segmentIndex + 1), point] as Point[]
-  const tail = [point, ...duct.path.slice(segmentIndex + 1)] as Point[]
-  if (head.length < 2 || tail.length < 2) return null
-  const { id: _id, type: _type, ...base } = duct
-  return { head, tail: DuctSegmentNode.parse({ ...base, path: tail }) }
-}
-
 // What a corner arrow constrains its drag to: the vertical world axis, or a
 // horizontal line along a run-relative direction (node-local XZ unit vector) —
 // so a duct drawn at any angle keeps along-run / across-run arrows instead of
@@ -192,7 +118,6 @@ function splitDuctAtPoint(duct: DuctSegmentNode, segmentIndex: number, point: Po
 // shorten) vs the across pair (swing). Most up / down arrows swing too, except
 // pure vertical risers where the outward ±Y arrow IS the run axis.
 type DragKind =
-  | { axis: 'free' }
   | { axis: 'y'; along?: boolean }
   | { axis: 'horizontal'; dir: [number, number]; along: boolean }
 
@@ -345,7 +270,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
     // drag instead of translating rigidly (mutually exclusive with
     // `connectivity`-driven follow for this endpoint).
     fittingEndpoint: FittingEndpoint | null
-    jointFitting: DuctFittingNode | null
     jointPartner?: { id: AnyNodeId; startPath: Point[] }
     // True while Alt is held: the joint is detached for this drag, so the
     // final commit must omit elbow / connectivity updates. Tracked live so
@@ -504,21 +428,8 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       ]
     }
     const path = drag.initialPath.map((p, i) => (i === drag.index ? next : p)) as Point[]
-    const jointFitting = drag.jointFitting ? planDraggedJointFitting(duct, path, drag.index) : null
     return [
       { id: duct.id as AnyNodeId, data: { path, wallAttachment: attachmentFor(path) } },
-      ...(jointFitting
-        ? [
-            {
-              id: drag.jointFitting!.id as AnyNodeId,
-              data: {
-                position: jointFitting.position,
-                rotation: jointFitting.rotation,
-                angle: jointFitting.angle,
-              } as Partial<AnyNode>,
-            },
-          ]
-        : []),
       ...(detached ? [] : connectivityUpdatesForPath(drag.connectivity, path)),
     ]
   }
@@ -550,13 +461,33 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
   // — is shared with every arrow; only the
   // cursor→point projection differs per `kind`.
   const onHandleDown =
-    (index: number, kind: DragKind, initialPathOverride?: Point[]) =>
+    (index: number, kind: DragKind) =>
     (e: ThreeEvent<PointerEvent>) => {
       e.stopPropagation()
-      const initialPath = initialPathOverride ?? duct.path.map((p) => [...p] as Point)
+      const initialPath = duct.path.map((p) => [...p] as Point)
       const startPoint = initialPath[index]!
       const connectivity = analyzePortConnectivity(duct as AnyNode, useScene.getState().nodes)
       pauseSceneHistory(useScene)
+      const livePreviewIds = new Set<AnyNodeId>()
+      const publishLivePreview = (updates: { id: AnyNodeId; data: Partial<AnyNode> }[]) => {
+        const scene = useScene.getState()
+        const entries = updates
+          .filter((update) => scene.nodes[update.id])
+          .map((update) => [update.id, update.data as Record<string, unknown>] as const)
+        useLiveNodeOverrides.getState().setMany(entries)
+        for (const [id] of entries) {
+          livePreviewIds.add(id)
+          scene.markDirty(id)
+        }
+      }
+      const clearLivePreview = () => {
+        const scene = useScene.getState()
+        const overrides = useLiveNodeOverrides.getState()
+        for (const id of livePreviewIds) {
+          overrides.clear(id)
+          if (scene.nodes[id]) scene.markDirty(id)
+        }
+      }
       useViewer.getState().setInputDragging(true)
       document.body.style.cursor = kind.axis === 'y' ? 'ns-resize' : 'grabbing'
       setDraggingIndex(index)
@@ -593,17 +524,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           ) as AnyNodeId | undefined)
         : undefined
       const partner = partnerId ? useScene.getState().nodes[partnerId] : undefined
-      const jointFitting =
-        kind.axis === 'free' ? planDraggedJointFitting(duct, initialPath, index) : null
-      if (jointFitting) {
-        jointFitting.id = `${duct.id}-alt-joint-${index}` as DuctFittingNode['id']
-        useScene.getState().applyNodeChanges({
-          create: [
-            { node: jointFitting, parentId: (duct.parentId ?? undefined) as AnyNodeId | undefined },
-          ],
-        })
-      }
-
       const onMove = (event: PointerEvent) => {
         const drag = dragRef.current
         if (!drag) return
@@ -633,15 +553,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
               snap(pivot[2] + aim[2] * radius, step),
             ]
           }
-        } else if (kind.axis === 'free') {
-          const plane = new Plane().setFromNormalAndCoplanarPoint(UP, toWorld(startPoint))
-          const hit = intersect(event.clientX, event.clientY, plane)
-          if (hit) {
-            publishPlacementSurface(hit, UP, 'fixed-plane')
-            const local = toLocal(hit)
-            const step = isGridSnapActive() ? useEditor.getState().gridSnapStep : 0
-            next = [snap(local[0], step), startPoint[1], snap(local[2], step)]
-          }
         } else if (kind.axis === 'y') {
           // Vertical (riser): keep XZ pinned to the start and drive Y off the
           // cursor against a vertical plane through the point.
@@ -663,26 +574,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           }
         }
         if (!next) return
-        const candidatePath = drag.initialPath.map((p, i) =>
-          i === drag.index ? next : p,
-        ) as Point[]
-        const plannedJointFitting = planDraggedJointFitting(duct, candidatePath, drag.index)
-        if (plannedJointFitting && !drag.jointFitting) {
-          plannedJointFitting.id = `${duct.id}-alt-joint-${drag.index}` as DuctFittingNode['id']
-          drag.jointFitting = plannedJointFitting
-          useScene.getState().applyNodeChanges({
-            create: [
-              {
-                node: plannedJointFitting,
-                parentId: (duct.parentId ?? undefined) as AnyNodeId | undefined,
-              },
-            ],
-          })
-        } else if (!plannedJointFitting && drag.jointFitting) {
-          const fittingId = drag.jointFitting.id as AnyNodeId
-          drag.jointFitting = null
-          useScene.getState().applyNodeChanges({ delete: [fittingId] })
-        }
         // Port re-mate for any endpoint arrow — the along-/across-run drags AND
         // the length-preserving swings all snap onto a nearby typed port so a
         // loose run can be mated onto a fitting after the fact (the swing's fixed
@@ -713,7 +604,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         // tools fire; the player debounces rapid repeats (minIntervalMs). Only
         // when the grid is live (step > 0): Shift-precision has nothing to snap.
         if (step > 0) triggerSFX('sfx:grid-snap')
-        useScene.getState().updateNodes(batch)
+        publishLivePreview(batch)
       }
 
       const onUp = () => {
@@ -728,6 +619,7 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         drag.cleanup()
         dragRef.current = null
         setDraggingIndex(null)
+        clearLivePreview()
         // Single-undo dance: revert (still paused), resume, re-apply the final
         // batch as one tracked change. The final batch is built the same way as
         // each live frame (elbow re-aim, rigid connectivity follow, or — when
@@ -735,40 +627,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
         const detached = drag.detached
         const moved = drag.current.some((v, axis) => v !== drag.initialPath[drag.index]![axis])
         const finalBatch = buildDragBatch(drag, drag.current, detached)
-        // Revert the run AND whatever the drag carried to their pre-drag state
-        // while paused so history captures a clean before→after delta. When
-        // detached nothing else moved, so only the run needs reverting.
-        const revertUpdates: { id: AnyNodeId; data: Partial<AnyNode> }[] = detached
-          ? []
-          : drag.fittingEndpoint
-            ? [drag.fittingEndpoint.revert]
-            : (drag.connectivity?.connections ?? []).map((conn) =>
-                conn.kind === 'rigid-node'
-                  ? {
-                      id: conn.nodeId,
-                      data: {
-                        position: conn.startPosition,
-                      } as Partial<AnyNode>,
-                    }
-                  : {
-                      id: conn.nodeId,
-                      data: { path: conn.startPath } as Partial<AnyNode>,
-                    },
-              )
-        useScene.getState().updateNodes([
-          { id: duct.id as AnyNodeId, data: { path: drag.initialPath } },
-          ...[
-            ...revertUpdates,
-            ...(drag.jointPartner
-              ? [
-                  {
-                    id: drag.jointPartner.id,
-                    data: { path: drag.jointPartner.startPath } as Partial<AnyNode>,
-                  },
-                ]
-              : []),
-          ].filter((u) => useScene.getState().nodes[u.id]),
-        ])
         resumeSceneHistory(useScene)
         if (moved && finalBatch) {
           // A manual corner edit invalidates any stored auto-offset base (the
@@ -786,11 +644,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
               : u,
           )
           useScene.getState().updateNodes(finalWithTagStrip)
-        } else if (drag.jointFitting) {
-          // A cancelled/no-op Alt drag must not leave a transient elbow in the
-          // scene. Fittings created while the cursor first formed a bend are
-          // only committed when the joint actually moved.
-          useScene.getState().applyNodeChanges({ delete: [drag.jointFitting.id as AnyNodeId] })
         }
       }
 
@@ -813,7 +666,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
           partner?.type === 'duct-segment'
             ? { id: partner.id as AnyNodeId, startPath: partner.path.map((p) => [...p] as Point) }
             : undefined,
-        jointFitting,
         detached: false,
       }
       window.addEventListener('pointermove', onMove)
@@ -1532,70 +1384,6 @@ const DuctPointHandles = ({ duct, target }: { duct: DuctSegmentNode; target: Obj
       {verticalGhost?.risers.map((r) => (
         <DuctSegmentGhost duct={r} key={`vghost-riser-${r.id}`} tint={verticalGhost.tint} />
       ))}
-      {draggingIndex === null &&
-        !rolling &&
-        !runMoving &&
-        duct.path.slice(0, -1).map((point, index) => {
-          const next = duct.path[index + 1]!
-          const direction = new Vector3(next[0] - point[0], next[1] - point[1], next[2] - point[2])
-          const length = direction.length()
-          if (length < 0.05) return null
-          const midpoint: Point = [
-            (point[0] + next[0]) / 2,
-            (point[1] + next[1]) / 2,
-            (point[2] + next[2]) / 2,
-          ]
-          return (
-            <mesh
-              key={`alt-joint-hit-${index}`}
-              onPointerDown={(event) => {
-                if (!event.nativeEvent.altKey || event.nativeEvent.altKey) return
-                event.stopPropagation()
-                event.nativeEvent.stopImmediatePropagation()
-                const local = toLocal(event.point)
-                const splitPoint = projectPointToSegment(local, point, next)
-                const split = splitDuctAtPoint(duct, index, splitPoint)
-                if (!split) return
-                const coupling = DuctFittingNode.parse({
-                  name: 'Duct joint',
-                  fittingType: 'elbow',
-                  angle: 0,
-                  position: splitPoint,
-                  shape: duct.shape,
-                  width: duct.width,
-                  height: duct.height,
-                  diameter: duct.diameter,
-                  diameter2: duct.diameter,
-                  ductMaterial: duct.ductMaterial === 'spiral' ? 'sheet-metal' : duct.ductMaterial,
-                  system: duct.system,
-                  metadata: { altJoint: true, partnerIds: [duct.id, split.tail.id] },
-                })
-                useScene.getState().applyNodeChanges({
-                  update: [{ id: duct.id as AnyNodeId, data: { path: split.head } }],
-                  create: [
-                    { node: split.tail, parentId: duct.parentId as AnyNodeId | undefined },
-                    { node: coupling, parentId: duct.parentId as AnyNodeId | undefined },
-                  ],
-                })
-                onHandleDown(split.head.length - 1, { axis: 'free' }, split.head)(event)
-              }}
-              position={midpoint}
-              quaternion={new Quaternion().setFromUnitVectors(
-                new Vector3(1, 0, 0),
-                direction.normalize(),
-              )}
-            >
-              <boxGeometry
-                args={[
-                  length,
-                  Math.max(0.12, runRadiusM(duct) * 1.5),
-                  Math.max(0.12, runRadiusM(duct) * 1.5),
-                ]}
-              />
-              <meshBasicMaterial depthWrite={false} opacity={0} transparent />
-            </mesh>
-          )
-        })}
       {draggingIndex === null &&
         !rolling &&
         !runMoving &&

@@ -8,6 +8,7 @@ import {
   isMagneticSnapActive,
   triggerSFX,
   useEditor,
+  useInteractionScope,
 } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
@@ -185,6 +186,16 @@ const PipeFittingTool = () => {
 
   useEffect(() => {
     if (!activeLevelId) return
+    const draft = PipeFittingNode.parse({ ...previewNode, parentId: activeLevelId })
+    useInteractionScope.getState().begin({
+      kind: 'placing',
+      node: draft,
+      nodeId: draft.id,
+      nodeType: draft.type,
+      view: '3d',
+      pressDrag: false,
+      driver: 'registry-tool',
+    })
 
     const recompute = () => {
       const raw = lastRawRef.current
@@ -275,6 +286,9 @@ const PipeFittingTool = () => {
     emitter.on('grid:click', onClick)
     window.addEventListener('keydown', onKeyDown, true)
     return () => {
+      useInteractionScope
+        .getState()
+        .endIf((scope) => scope.kind === 'placing' && scope.nodeId === draft.id)
       unsubscribeSnapping()
       clearDrawAlignment()
       emitter.off('grid:move', onMove)

@@ -511,6 +511,7 @@ const DuctSegmentTool = () => {
   profileRef.current = profile
   const run = useDistributionRunTool({
     active: !!activeLevelId,
+    levelId: activeLevelId,
     toolName: 'duct-segment',
     initialStart: continuationSeed
       ? ([...(continuationSeed.port?.position ?? continuationSeed.body?.point ?? [0, 0, 0])] as [
