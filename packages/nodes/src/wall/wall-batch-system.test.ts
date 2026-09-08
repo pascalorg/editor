@@ -259,3 +259,8 @@ describe('WallBatchSystem capture holds', () => {
     expect(walls.every((wall) => !wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
   })
 })
+
+test('merged wall batches are stripped from GLB exports', () => {
+  const { batch } = setupBatchedLevel()
+  expect(batch.userData.pascalExport).toBe('strip')
+})

@@ -310,6 +310,7 @@ function mergeLevel(levelId: string, excludedNodeIds: ReadonlySet<string> = EMPT
 
     const mesh = new Mesh(batch.geometry, candidates[0]!.materials)
     mesh.name = 'wall-batch'
+    mesh.userData.pascalExport = 'strip'
     mesh.castShadow = true
     mesh.receiveShadow = true
     mesh.matrixAutoUpdate = false
