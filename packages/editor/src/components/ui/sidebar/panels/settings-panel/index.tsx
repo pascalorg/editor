@@ -193,6 +193,7 @@ export function SettingsPanel({
   const rootNodeIds = useScene((state) => state.rootNodeIds)
   const installedPlugins = useScene((state) => state.installedPlugins)
   const materials = useScene((state) => state.materials)
+  const collections = useScene((state) => state.collections)
   const setScene = useScene((state) => state.setScene)
   const clearScene = useScene((state) => state.clearScene)
   const resetSelection = useViewer((state) => state.resetSelection)
@@ -236,7 +237,7 @@ export function SettingsPanel({
     // Materials ride along: nodes reference them by `scene:<id>` slot
     // refs, so a save without the table produces a file whose custom
     // finishes revert to defaults on the very Load Build path below.
-    const sceneData = { nodes, rootNodeIds, installedPlugins, materials }
+    const sceneData = { nodes, rootNodeIds, installedPlugins, materials, collections }
     const json = JSON.stringify(sceneData, null, 2)
     const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
@@ -302,6 +303,7 @@ export function SettingsPanel({
         // pointed at a material that no longer existed — custom finishes
         // silently reverted to defaults on import.
         materials: parsed.materials,
+        collections: parsed.collections,
         installedPlugins: parsed.installedPlugins ?? currentScene.installedPlugins,
         hasExplicitPluginInstallState:
           parsed.installedPlugins !== undefined || currentScene.hasExplicitPluginInstallState,

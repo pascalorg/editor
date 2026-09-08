@@ -1,4 +1,5 @@
 import { nodeRegistry } from '../registry'
+import type { Collection } from '../schema/collections'
 import { SceneMaterial } from '../schema/scene-material'
 import { AnyNode, type AnyNodeType, nodeKindOf } from '../schema/types'
 import { healSceneNodes } from '../utils/heal-scene-graph'
@@ -27,6 +28,8 @@ export type ParsedBuildJson = {
   installedPlugins?: string[]
   /** Scene materials referenced by node `slots` (`scene:<id>`). */
   materials?: Record<string, SceneMaterial>
+  /** Item collections; member nodes carry the matching `collectionIds`. */
+  collections?: Record<string, Collection>
 }
 
 export type SchemaIssue = {
@@ -50,6 +53,18 @@ const KNOWN_TYPES = new Set<string>(AnyNode.options.map(nodeKindOf))
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+function isCollection(value: unknown): value is Collection {
+  if (!isPlainObject(value)) return false
+  return (
+    typeof value.id === 'string' &&
+    typeof value.name === 'string' &&
+    Array.isArray(value.nodeIds) &&
+    value.nodeIds.every((nodeId) => typeof nodeId === 'string') &&
+    (value.color === undefined || typeof value.color === 'string') &&
+    (value.controlNodeId === undefined || typeof value.controlNodeId === 'string')
+  )
 }
 
 function polygonAreaM2(points: ReadonlyArray<readonly [number, number]>): number {
@@ -113,6 +128,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
   const rootNodeIdsRaw = input.rootNodeIds
   const installedPluginsRaw = input.installedPlugins
   const materialsRaw = input.materials
+  const collectionsRaw = input.collections
 
   if (!isPlainObject(nodesRaw)) {
     errors.push({
@@ -203,6 +219,35 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
       severity: 'warning',
       code: 'invalid_materials',
       message: 'Ignored invalid "materials" — expected an object of id → material.',
+    })
+  }
+
+  let collections: Record<string, Collection> | undefined
+  if (isPlainObject(collectionsRaw)) {
+    const skippedIds: string[] = []
+    const kept: Record<string, Collection> = {}
+    for (const [id, value] of Object.entries(collectionsRaw)) {
+      if (isCollection(value)) {
+        kept[id] = value
+      } else {
+        skippedIds.push(id)
+      }
+    }
+    if (Object.keys(kept).length > 0) collections = kept
+    if (skippedIds.length > 0) {
+      warnings.push({
+        severity: 'warning',
+        code: 'invalid_collections',
+        message: `Ignored ${skippedIds.length} invalid collection${
+          skippedIds.length === 1 ? '' : 's'
+        }: ${skippedIds.join(', ')}.`,
+      })
+    }
+  } else if (collectionsRaw !== undefined) {
+    warnings.push({
+      severity: 'warning',
+      code: 'invalid_collections',
+      message: 'Ignored invalid "collections" — expected an object of id → collection.',
     })
   }
 
@@ -420,6 +465,7 @@ export function validateBuildJson(input: unknown): ValidateBuildJsonResult {
           rootNodeIds,
           ...(installedPlugins ? { installedPlugins } : {}),
           ...(materials ? { materials } : {}),
+          ...(collections ? { collections } : {}),
         }
       : null,
     stats,
