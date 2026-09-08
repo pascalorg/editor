@@ -29,7 +29,7 @@
 | Requested item clearance | passed / failed / not checked / insufficient evidence | `check_collisions` result at the explicit minimum clearance |
 | Default item spacing | passed / failed / not checked / insufficient evidence | Evidence that includes this item; `verify_scene` excludes read-only candidates |
 | Door access keep-out | passed / failed / not checked / insufficient evidence | Modeled door and item IDs; absent doors or an unchecked candidate mean not checked |
-| Height/overhead | not checked / insufficient evidence | Needed vertical measurements or separate evidence |
+| Height/overhead | passed / failed only by a labeled manual comparison using measured evidence; otherwise not checked / insufficient evidence | User-supplied clear height or modeled ceiling/obstacle geometry with recorded measurement provenance and spatial coverage of the exact tested footprint; nominal metadata can only flag a possible mismatch |
 | Door swing | not checked / insufficient evidence | Rectangular keep-out is not a swing arc |
 | Delivery route | not checked / insufficient evidence | Needed route and packaging measurements |
 | Detailed mesh contact | not checked | Current check uses plan AABBs |
@@ -49,3 +49,5 @@
 Use `footprint` in the verdict sentence. Never turn untested rows into an unqualified purchase, delivery, safety, or code-compliance assurance.
 
 An empty issue list with missing geometry is not a pass. State `not checked` or `insufficient evidence` and name the missing geometry. A read-only candidate is absent from `verify_scene`; do not borrow that tool's clean result for the candidate.
+
+Do not turn nominal `level.height`, `zone.ceilingHeight`, wall height, catalog labels, template defaults, or imported metadata into a categorical height pass or failure. A ceiling-shaped node is not sufficient by itself. Without a user-supplied clear-height measurement or modeled geometry whose recorded measurement provenance and spatial coverage establish the exact overhead path, report the possible mismatch and request the smallest decisive measurement. If that evidence exists, identify it and describe the result as a manual height-versus-clear-height comparison rather than a Pascal footprint-tool result.

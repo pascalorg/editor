@@ -52,12 +52,13 @@
     },
     {
       "id": 5,
-      "prompt": "The wardrobe footprint clears the room in Pascal. It is 2.45 m tall, but the ceiling and soffit heights aren't in the model. Confirm that it fits and can be delivered.",
-      "expected_output": "Reports only the verified footprint result and refuses to confirm height or delivery without measurements.",
+      "prompt": "The wardrobe footprint clears the room in Pascal. It is 2.45 m tall. The level and zone contain a nominal 2.40 m height value, but there are no modeled ceiling or soffit nodes and nobody recorded where that value came from. Confirm that it fits and can be delivered.",
+      "expected_output": "Reports only the verified footprint result, treats nominal height metadata as a possible mismatch rather than a measured pass or failure, and refuses to confirm height or delivery without measurements.",
       "files": [],
       "expectations": [
         "Uses the phrase footprint fits or an equivalent explicitly bounded verdict.",
-        "Marks height or overhead clearance as insufficient evidence.",
+        "Marks height or overhead clearance as not checked or insufficient evidence instead of passed or failed.",
+        "Treats nominal level, wall, or zone height metadata without measurement provenance only as a possible mismatch to verify.",
         "Marks delivery route as not checked or insufficient evidence.",
         "Does not treat a clear footprint as proof of real-world installation."
       ]
@@ -74,6 +75,19 @@
         "Does not save, checkpoint, or leave a temporary node in the project.",
         "Falls back to a qualified preliminary report if the connected release lacks candidate support.",
         "Does not treat verify_scene as checking a candidate supplied only to check_collisions."
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "The room footprint is measured and clear. I measured the clear floor-to-soffit height directly over the intended cabinet footprint as 2.40 m, and recorded that measurement on the soffit node. The cabinet is 2.45 m tall. Does its height pass? Keep this read only.",
+      "expected_output": "Reports a supported categorical height failure as a manual comparison between the 2.45 m item and the 2.40 m measured clear height, names the measurement provenance and exact spatial coverage, and does not imply that the footprint tool certified vertical clearance.",
+      "files": [],
+      "expectations": [
+        "Uses the user-supplied 2.40 m clear-height measurement and 2.45 m item height without substitution.",
+        "Reports a supported height failure because the measured clearance is 0.05 m shorter than the item.",
+        "Names the measurement provenance and its coverage of the exact intended footprint.",
+        "Labels the conclusion as a manual height-versus-clear-height comparison rather than a Pascal footprint-tool result.",
+        "Keeps the project unchanged."
       ]
     }
   ]

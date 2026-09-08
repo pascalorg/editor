@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "pascal",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Public Pascal workflows for MCP-capable agents.",
   "owner": {
     "name": "Pascal"
@@ -11,7 +11,7 @@
       "name": "pascal-agent-skills",
       "source": "./",
       "description": "Create and inspect editable Pascal scenes and run bounded furniture footprint assessments.",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "category": "productivity",
       "skills": ["./skills/pascal-3d", "./skills/furniture-fit"]
     }

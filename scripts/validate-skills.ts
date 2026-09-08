@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const skillNames = ['pascal-3d', 'furniture-fit'] as const
-const skillVersion = '0.1.0'
-const pluginVersion = '0.1.1'
+const skillVersions = { 'pascal-3d': '0.1.0', 'furniture-fit': '0.1.1' } as const
+const pluginVersion = '0.1.2'
 const failures: string[] = []
 
 function fail(message: string) {
@@ -76,8 +76,8 @@ for (const skillName of skillNames) {
   const fields = frontmatter(content, skillFile)
   if (fields.name !== skillName) fail(`${skillName}: frontmatter name does not match directory`)
   if (!fields.description) fail(`${skillName}: description is required`)
-  if (!content.includes(`version: "${skillVersion}"`))
-    fail(`${skillName}: metadata version must be ${skillVersion}`)
+  if (!content.includes(`version: "${skillVersions[skillName]}"`))
+    fail(`${skillName}: metadata version must be ${skillVersions[skillName]}`)
   if (!/^ {2}source-reviewed: "\d{4}-\d{2}-\d{2}"$/m.test(content)) {
     fail(`${skillName}: an ISO source review date is required`)
   }
@@ -257,5 +257,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `Validated ${skillNames.length} skills at ${skillVersion} and both plugin manifests at ${pluginVersion}.`,
+  `Validated ${skillNames.length} skills (${skillNames.map((name) => `${name}@${skillVersions[name]}`).join(', ')}) and both plugin manifests at ${pluginVersion}.`,
 )

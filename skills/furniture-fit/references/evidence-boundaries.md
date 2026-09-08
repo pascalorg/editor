@@ -16,6 +16,10 @@ The default door keep-out extends 0.65 m perpendicular to both faces of the wall
 
 No modeled doors means door access is `not checked` or `insufficient evidence`, never `passed`. A clean validator cannot establish a check whose necessary geometry is absent. The same applies to absent ceiling, wall, and obstacle geometry.
 
+A numeric `level.height`, `zone.ceilingHeight`, wall height, catalog label, or imported metadata field is not automatically a measured clearance. Without provenance recording the clear floor-to-obstacle measurement and tying its spatial coverage to the exact ceiling, soffit, sill, railing, or obstacle above the proposed footprint, use it only to flag a possible mismatch that needs measurement. A modeled ceiling-shaped node or template default without that provenance is still nominal. Do not turn nominal metadata into a categorical height `passed` or `failed` result.
+
+When measured vertical evidence is available, name its source, measured value, and coverage of the tested footprint. Compare it manually with the supplied item height and label the method accordingly; current Pascal footprint tools do not independently certify vertical clearance. Conditional reasoning is allowed: for example, “if the nominal 2.70 m value is confirmed as the clear height at this position, the 3.10 m item would be too tall.” Keep the current verdict `not checked` or `insufficient evidence` until the condition is established.
+
 `verify_scene` does not include a read-only candidate supplied to a different tool. Do not use its clean result to pass candidate spacing or candidate door access. Those rows remain `not checked` unless a separate assessment includes that candidate and the necessary geometry. A `check_collisions` call at an explicit gap can establish only that tested gap against inspected items.
 
 Items positioned in a non-level parent frame, such as wall-mounted furniture, are skipped instead of approximated. Carry their skipped reasons and the `hosted_item_world_transform` limitation into the report. Here, “hosted item” means an item attached to another scene node, not a cloud account.
@@ -46,7 +50,7 @@ Current footprint tools do not establish:
 - whether the item can be tilted, disassembled, or removed from packaging;
 - floor loading, anchoring, fire egress, accessibility, structural adequacy, or code compliance.
 
-These checks require additional measured inputs and a tool that models them. Mark them `not checked` or `insufficient evidence`; do not infer them from a clear plan footprint.
+These checks require additional measured inputs and a tool that models them. Mark them `not checked` or `insufficient evidence`; do not infer them from a clear plan footprint or nominal scene metadata. Both unsupported positive and unsupported negative conclusions are misleading.
 
 ## Minimum useful follow-up measurements
 

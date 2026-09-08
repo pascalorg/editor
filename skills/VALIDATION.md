@@ -1,10 +1,19 @@
 # Skill package validation
 
-Plugin bundle version: **0.1.1**. Skill metadata version: **0.1.0**. Recorded September 8, 2026.
+Candidate plugin bundle version: **0.1.2**. `pascal-3d` skill metadata version: **0.1.0**. `furniture-fit` skill metadata version: **0.1.1**. Prepared September 8, 2026.
 
-The `native-host-validation: source-hash-recorded-separately` metadata is a pointer to this record, not a blanket pass. Source and package checks do not establish task success on every host, real-world furniture installation, or market adoption.
+The 0.1.2 candidate strengthens height-evidence boundaries after the separately retained Claude 0.1.1 cohort. Local package and strict Claude marketplace validation pass; a new native task cohort, clean installation, publication, and adoption have not been claimed for 0.1.2. The `native-host-validation: source-hash-recorded-separately` metadata is a pointer to recorded evidence, not a blanket pass.
 
-## Evaluated source
+## Candidate source
+
+| Component | Value |
+| --- | --- |
+| Base public commit | `5e0f985a3905c519d952218b6b30e95d94562f1e` |
+| `pascal-3d/SKILL.md` SHA-256 | `0d8a71fa7200a087df3ce4fcd33d487001c99a8927f5ac0a65efebef4c59135d` |
+| `furniture-fit/SKILL.md` SHA-256 | `117ddf2efcbcbffbca6359877bdeefd2b9e61710e162ca736ac6d770513e0c35` |
+| Package checks | `bun scripts/validate-skills.ts` and `claude plugin validate . --strict` pass |
+
+## Prior validated source and evidence — bundle 0.1.1
 
 | Component | SHA-256 |
 | --- | --- |
@@ -18,7 +27,7 @@ The `native-host-validation: source-hash-recorded-separately` metadata is a poin
 
 Manifest hashes are not Git commits or persisted scene identities. Native furniture fixtures used local SQLite storage and direct stdio MCP. The CLI's `mcp connect` command forwards to its managed HTTP service, a distinct transport path tested separately below. The npm `beta` tags still resolve to CLI `1.0.0-beta.1` and MCP `1.0.0-beta.6`; those older registry releases do not establish the candidate-enabled behavior documented here.
 
-## Completed checks
+## Completed checks for bundle 0.1.1
 
 | Check | Result and scope |
 | --- | --- |
@@ -40,6 +49,7 @@ Claude's three task pairs are a small diagnostic sample. Baseline and treatment 
 
 ## Scope and remaining checks
 
+- Bundle 0.1.2 has static package validation only until its prospectively frozen native cohort passes. The earlier 0.1.1 task receipts remain historical evidence and do not transfer to changed skill bytes.
 - The foundation task proves one hosted-development journey, not all general construction, account claiming, or human handoff workflows.
 - Use one active agent client per local CLI service. The standalone HTTP bridge shares scene state across clients; concurrent independent client isolation is not supported. Hosted Community MCP uses a different session-isolated bridge.
 - Cursor Agent can list the configured MCP tools, but is signed out in the validation environment. A native Cursor task is not counted as passed.

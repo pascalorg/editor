@@ -4,7 +4,7 @@ description: Assess whether furniture fits in a measured Pascal room or layout. 
 license: MIT
 compatibility: Requires a Pascal MCP connection for verified scene checks. Can still produce an input-gap report when the scene or measurements are unavailable.
 metadata:
-  version: "0.1.0"
+  version: "0.1.1"
   source-reviewed: "2026-09-08"
   native-host-validation: "source-hash-recorded-separately"
 ---
@@ -28,6 +28,8 @@ Collect or verify:
 Reject zero, negative, non-finite, or ambiguous dimensions. Treat `"1,234"` as ambiguous until the user clarifies the decimal/thousands convention. If a photo, listing, or scan has no trustworthy scale, return `insufficient evidence` and name the minimum measurement needed. Do not infer product dimensions from appearance.
 
 Before calling tools, record the user's constraints: item width, height, depth, original unit and meter conversion, target level/zone, position, rotations, and required clearance. Re-read the request when filling this record; scene metadata and examples cannot replace supplied values. Preserve known dimensions when asking for a missing one. Never replace a supplied height with a placeholder just because the footprint test ignores height.
+
+Treat numeric `level.height`, `zone.ceilingHeight`, wall height, asset labels, and imported metadata as nominal unless their provenance records a measurement of the clear floor-to-obstacle height over the exact proposed footprint. A categorical height pass or failure requires either that user-supplied measurement or modeled ceiling, soffit, sill, railing, or obstacle geometry whose recorded measurement provenance and spatial extent cover the tested pose. Merely having a ceiling-shaped node, a template default, or a numeric metadata field is not measured evidence. A nominal value can identify a possible mismatch worth measuring, but it cannot by itself support a categorical height pass or failure.
 
 If Pascal is not connected, use [references/setup.md](references/setup.md). This skill is standalone; no other skill must be installed.
 
@@ -55,7 +57,7 @@ Use the most capable `check_collisions` input advertised by the connected server
 
 When returned, treat `check_collisions.status` as part of the verdict. `partial` or `insufficient_evidence` cannot support an unqualified pass. Name every returned skipped item and reason, and carry returned `unsupportedChecks` into the report. If an older release omits those fields, do not invent them: derive a report-level evidence state from the dimensions and nodes you could actually inspect, and mark any uninspectable item or check as insufficient evidence.
 
-Missing geometry is not a successful check. If no doors are modeled, mark door access `not checked` or `insufficient evidence`, even when `verify_scene` reports no issues. Apply the same rule to missing walls, ceilings, and obstacles needed for a claim. Items positioned in a wall or other non-level parent frame are skipped by the current collision tool; disclose them rather than interpreting their local coordinates as world coordinates.
+Missing geometry is not a successful check. If no doors are modeled, mark door access `not checked` or `insufficient evidence`, even when `verify_scene` reports no issues. Apply the same rule to missing walls, ceilings, and obstacles needed for a claim. Do not mark height `passed` or `failed` from nominal level, wall, or zone metadata when measured ceiling or obstacle provenance is absent. If measured vertical evidence is available, identify its source and exact spatial coverage and label the result as a manual item-height-versus-clear-height comparison; current Pascal footprint tools do not independently certify vertical clearance. Items positioned in a wall or other non-level parent frame are skipped by the current collision tool; disclose them rather than interpreting their local coordinates as world coordinates.
 
 For a Y-axis rotation `θ`, Pascal's plan AABB uses:
 
@@ -99,7 +101,7 @@ Use `passed`, `failed`, `not checked`, or `insufficient evidence` for each row:
 | Item collision | Rotation-aware scaled plan AABB overlap from `check_collisions`. |
 | Item spacing | Practical AABB spacing issues from `verify_scene`, currently using an 8 cm default gap. |
 | Door access keep-out | Rectangular keep-out around modeled door openings from `verify_scene`; this is not a leaf-swing simulation. |
-| Height/overhead | Not checked for furniture by current MCP layout tools unless independent measured geometry proves it. |
+| Height/overhead | Not checked by current MCP footprint tools. A separate manual comparison may pass or fail only when a user-supplied clear height, or modeled ceiling/obstacle geometry with recorded measurement provenance, covers the exact tested footprint. Nominal level, wall, or zone metadata may flag a possible mismatch to measure, but cannot establish a pass or failure. |
 | Delivery route | Not checked: doors, halls, corners, stairs, elevators, packaging, tilt, and assembly state need a separate route model and measurements. |
 | Detailed mesh contact | Not checked: plan AABBs can be conservative and do not model concave or irregular furniture geometry. |
 | Safety/code/structure | Not checked; do not present the result as certification. |
@@ -128,3 +130,4 @@ The examples are synthetic and illustrate correct claim boundaries:
 - [examples/clear-footprint.md](examples/clear-footprint.md)
 - [examples/rotated-footprint-fails.md](examples/rotated-footprint-fails.md)
 - [examples/insufficient-evidence.md](examples/insufficient-evidence.md)
+- [examples/unproven-height-metadata.md](examples/unproven-height-metadata.md)

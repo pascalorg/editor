@@ -1,6 +1,6 @@
 {
   "name": "pascal-agent-skills",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Create, inspect, validate, and assess furniture layouts in Pascal through MCP.",
   "author": {
     "name": "Pascal",
