@@ -29,12 +29,17 @@ npm install --global --prefix "$PASCAL_PREVIEW_PREFIX" --ignore-scripts \
   "./pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
 export PATH="$PASCAL_PREVIEW_PREFIX/bin:$PATH"
 pascal --version
+```
+
+Before activating the preview, save or otherwise persist every project with active work, then disconnect all editor and agent clients from this local service. `pascal update` may stop and restart the managed editor and MCP processes. Keeping the same `PASCAL_HOME` preserves persisted project data in that directory, but it does not preserve unsaved or unbound in-memory changes, undo history, or active client sessions.
+
+```bash
 pascal update --version "$PASCAL_PREVIEW_VERSION"
 pascal editor --no-open
 pascal mcp setup claude # or: pascal mcp setup codex
 ```
 
-The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` so its configured `pascal mcp connect` command resolves. This preview is not published on npm.
+The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. `pascal editor` alone reuses any healthy service, including an older one, so run `pascal update` when activating the preview. Keep the preview prefix on the agent host's `PATH` so its configured `pascal mcp connect` command resolves. This preview is not published on npm.
 
 Run the setup command for the active host. The MCP command installed in host configuration is `pascal mcp connect`. Local use needs no hosted account and does not upload projects automatically. If the connected MCP schema lacks `check_collisions.candidate`, report the narrower supported result rather than implying the candidate was tested.
 
