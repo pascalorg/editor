@@ -231,6 +231,8 @@ describe('floor plan export policy', () => {
       openingMarks: true,
       structuralGrids: false,
       roomLabels: false,
+      roomDetails: true,
+      roofPlan: true,
       stairAnnotations: true,
     }
 
@@ -239,7 +241,7 @@ describe('floor plan export policy', () => {
     )
   })
 
-  test('exports only model geometry and room labels in Default', () => {
+  test('exports model geometry, room labels and door/window marks in Default', () => {
     expect(
       resolveFloorplanExportAnnotationVisibility(
         'default',
@@ -250,9 +252,11 @@ describe('floor plan export policy', () => {
       contextualDimensions: false,
       manualDimensions: false,
       measurements: false,
-      openingMarks: false,
+      openingMarks: true,
       structuralGrids: false,
       roomLabels: true,
+      roomDetails: false,
+      roofPlan: false,
       stairAnnotations: false,
     })
   })

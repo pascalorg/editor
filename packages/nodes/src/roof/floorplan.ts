@@ -9,6 +9,7 @@ import {
   subtractPolygonsFromPolygon,
   unionPolygons,
 } from '@pascal-app/core'
+import { floorplanGeometryMetadata } from '@pascal-app/editor'
 import { getRoofSegmentPlanLinework } from '../roof-segment/floorplan'
 
 type Pt = [number, number]
@@ -269,6 +270,14 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
   const hipWidth = showSelectedChrome ? 0.04 : 0.026
   const overhangWidth = showSelectedChrome ? 0.03 : 0.022
 
+  // Two strata: the REFERENCE a floor plan always carries (the dashed
+  // overhang line — the roof flying past the walls) and the ROOF PLAN
+  // proper (outline, ridges, hips, arrows, pitches), which is the
+  // 'roof-plan' annotation — off over a floor plan until the Roof plan
+  // layer is on, the roof is selected, or the sheet IS the roof plan.
+  // Steve, 2026-09-08: "how come the roof plan is on when I generate a
+  // floor plan?"
+  const reference: FloorplanGeometry[] = []
   const children: FloorplanGeometry[] = []
   const pushLine = (a: Pt, b: Pt, width: number) => {
     children.push({
@@ -290,7 +299,7 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
   // structure, dashed where it flies past it.
   for (const ring of eaveRings) {
     if (ring.length < 3) continue
-    children.push({
+    reference.push({
       kind: 'polygon',
       points: ring.map(([x, z]) => [x, z] as FloorplanPoint),
       fill: 'none',
@@ -389,12 +398,22 @@ export function buildRoofFloorplan(node: RoofNode, ctx: GeometryContext): Floorp
         textAnchor: 'middle',
         dominantBaseline: 'central',
         upright: true,
-        metadata: { annotationRole: 'roof-pitch' },
+        metadata: floorplanGeometryMetadata({ annotationRole: 'roof-pitch' }),
       })
     }
   }
 
-  return children.length > 0 ? { kind: 'group', children } : null
+  if (reference.length === 0 && children.length === 0) return null
+  // A selected / highlighted roof shows its plan whatever the layer says —
+  // the user is looking at the roof.
+  const plan: FloorplanGeometry = showSelectedChrome
+    ? { kind: 'group', children }
+    : {
+        kind: 'group',
+        children,
+        metadata: floorplanGeometryMetadata({ annotationRole: 'roof-plan' }),
+      }
+  return { kind: 'group', children: children.length > 0 ? [...reference, plan] : reference }
 }
 
 /** Longest edge of a polygon's bounding box — how the overhang test compares. */

@@ -913,6 +913,8 @@ const LAYER_ROWS: { key: keyof ViewportLayers; label: string }[] = [
   { key: 'openingMarks', label: 'Door & window marks' },
   { key: 'structuralGrids', label: 'Structural grids' },
   { key: 'roomLabels', label: 'Room labels' },
+  { key: 'roomDetails', label: 'Room finishes & ceiling heights' },
+  { key: 'roofPlan', label: 'Roof plan (ridges, hips, pitches)' },
   { key: 'stairAnnotations', label: 'Stair annotations' },
   { key: 'furniture', label: 'Furniture' },
   { key: 'mep', label: 'MEP distribution' },

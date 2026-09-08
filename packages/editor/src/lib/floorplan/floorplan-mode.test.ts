@@ -59,9 +59,11 @@ describe('floor-plan mode', () => {
       contextualDimensions: false,
       manualDimensions: false,
       measurements: false,
-      openingMarks: false,
+      openingMarks: true,
       structuralGrids: false,
       roomLabels: true,
+      roomDetails: false,
+      roofPlan: false,
       stairAnnotations: false,
     })
 
@@ -104,9 +106,11 @@ describe('floor-plan mode', () => {
       contextualDimensions: false,
       manualDimensions: false,
       measurements: false,
-      openingMarks: false,
+      openingMarks: true,
       structuralGrids: false,
       roomLabels: true,
+      roomDetails: false,
+      roofPlan: false,
       stairAnnotations: false,
     })
   })

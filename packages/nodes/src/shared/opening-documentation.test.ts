@@ -238,10 +238,11 @@ describe('opening construction documentation', () => {
   const INCHES_PER_METRE = 39.37007874015748
   const toPaperInches = (metres: number) => (metres * INCHES_PER_METRE) / REFERENCE_SCALE
 
-  test('the tag is 0.28 in tall with a 0.02 in outline at 1/4 inch scale', () => {
-    expect(toPaperInches(OPENING_TAG_HEIGHT)).toBeCloseTo(0.28, 6)
-    expect(toPaperInches(OPENING_TAG_STROKE_WIDTH)).toBeCloseTo(0.02, 6)
-    expect(toPaperInches(OPENING_TAG_FONT_SIZE)).toBeCloseTo(0.11, 6)
+  test('the tag is 0.3 in tall with a 0.028 in outline at 1/4 inch scale', () => {
+    // bolder since 2026-09-08 (Steve: "bolder window labels and door labels")
+    expect(toPaperInches(OPENING_TAG_HEIGHT)).toBeCloseTo(0.3, 6)
+    expect(toPaperInches(OPENING_TAG_STROKE_WIDTH)).toBeCloseTo(0.028, 6)
+    expect(toPaperInches(OPENING_TAG_FONT_SIZE)).toBeCloseTo(0.125, 6)
   })
 
   test('the drawn outline and mark text use those sizes', () => {

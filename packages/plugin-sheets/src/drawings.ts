@@ -118,6 +118,8 @@ export function annotationVisibility(layers: ViewportLayers) {
     openingMarks: layers.openingMarks,
     structuralGrids: layers.structuralGrids,
     roomLabels: layers.roomLabels,
+    roomDetails: layers.roomDetails,
+    roofPlan: layers.roofPlan,
     stairAnnotations: layers.stairAnnotations,
   }
 }

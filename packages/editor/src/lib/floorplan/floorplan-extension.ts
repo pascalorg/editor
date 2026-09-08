@@ -27,6 +27,11 @@ export type FloorplanAnnotationRole =
   | 'structural-grid'
   | 'column-center'
   | 'room-label'
+  /** A room's finish / ceiling-height lines — detail under the name, off in the clean plan. */
+  | 'room-detail'
+  /** The roof plan proper: outline, ridges, hips, slope arrows. Off over a floor plan unless asked. */
+  | 'roof-plan'
+  | 'roof-pitch'
   | 'stair-annotation'
 
 export type FloorplanSchedule = {

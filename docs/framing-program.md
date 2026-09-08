@@ -1006,7 +1006,61 @@ G92 The attic planes measure from the walls' TOPS, never their heights —
 a generated wall stands on a stem below the floor and is taller than its
 plate line.
 
+## Mandate additions (Steve, 2026-09-08 — the 2D plan after a generate)
+
+Steve, with a 2D screenshot of a generated plan (the roof's hips, arrows
+and 4:12 tags over the rooms, the finish lines under every room name
+running into each other): "how come the roof plan is on when i generate
+a floor plan? in 2d view, why are all the labels overlapping and the
+plan doesnt look good, also on our plans, when generated the floor plans
+look terrible presentation wise, i hate the labels they need to be
+cleaner with bolder window labels and doors labels, and make them
+cleaner text, all around presentation to plans to the 2d need improved,
+your roof plans should show correctly too and be good"
+
+G93 A floor plan is not a roof plan. Over a floor plan the roof shows
+only its dashed overhang line; the roof plan proper (outline, ridges,
+hips, slope arrows, pitches) is its own layer — on for the roof plan
+sheet, on when the roof is selected, on when asked for, otherwise off.
+G94 Room labels are set to the room: the name bold and upper-case in
+plan ink, sized down to fit a narrow room, broken at its slash when a
+compound name will not fit; the number under it; the finish and
+ceiling-height lines are a separate detail layer, off on the clean plan
+and never set where they do not fit.
+G95 Door and window marks are on in the clean plan and bold enough to
+read at a glance.
+
 ## Log (continued)
+
+- 2026-09-08: **Batch T14 — the 2D plan after a generate (G93–G95).**
+  Three causes. (1) The roof: the level's `roof` node draws through
+  `buildRoofFloorplan` on the floor plan like any node, and its pitch
+  tags carried a raw `metadata.annotationRole` the filter never read
+  (`readFloorplanGeometryMetadata` reads the keyed helper form), so no
+  layer could hide it. Now the builder emits two strata: the dashed
+  overhang line as reference, and the plan proper as a group with the
+  new `'roof-plan'` role (`'roof-pitch'` on the tags), mapped to a new
+  `roofPlan` annotation category — off in the Default plan, off in the
+  Expert default profile, a toolbar toggle ("Roof plan (ridges, hips,
+  pitches)"), a sheets viewport layer (`roofPlan`, default false; the
+  A3.0 roof plan viewport sets it true). A selected / highlighted roof
+  shows its plan regardless. (2) The room labels: `buildRoomLabels` set
+  four lines at a fixed 0.18 m pitch whatever the room, in the zone's
+  colour. Now the name is upper-case bold in plan ink, sized down to
+  fit 86 % of the room's width (min 0.12 m) and broken at a slash when
+  a compound name will not fit; the number under it; the finish and
+  height lines carry the new `'room-detail'` role (`roomDetails`
+  category — off in Default, on in Expert, a toolbar toggle and a sheets
+  layer defaulting off) and are only set where they fit the room's
+  width and height. Leading is 1.3 × the line's size. (3) The marks:
+  Default mode showed no door/window marks at all (`openingMarks:
+  false`); now on, and the tag is 0.3 in tall with a 0.028 in outline
+  and 0.125 in bold monospace (was 0.28 / 0.02 / 0.11). Nodes 1380
+  tests (3 new zone cases, roof helpers flatten the strata), editor
+  floorplan 106, sheets 258; nodes + editor + app + sheets tsc clean;
+  nodes dist rebuilt. Open: the label placement is still the centroid —
+  an L-shaped great room can put its name in the notch; the wall
+  dimension strings on the sheets were not touched this batch.
 
 - 2026-09-08: **Batch T13 — the exterior-wall control; the MEP under the
   roof (G90–G92).** Steve's questions answered by numbers first. (1) The

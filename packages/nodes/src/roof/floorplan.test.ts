@@ -28,9 +28,15 @@ function buildContext(
  * outside it is the drip edge (footprint + overhang); it is excluded here by
  * its dash pattern so this stays a test about footprint clipping.
  */
+/** Every primitive in the group, nested groups (the 'roof-plan' stratum) flattened. */
+function flat(geometry: FloorplanGeometry | null): FloorplanGeometry[] {
+  if (!geometry) return []
+  if (geometry.kind !== 'group') return [geometry]
+  return geometry.children.flatMap((child) => flat(child))
+}
+
 function outlinePoints(geometry: FloorplanGeometry | null): [number, number][] {
-  if (geometry?.kind !== 'group') return []
-  return geometry.children.flatMap((child) =>
+  return flat(geometry).flatMap((child) =>
     child.kind === 'polygon' && child.fill === 'none' && !child.strokeDasharray
       ? (child.points as [number, number][])
       : [],
@@ -39,8 +45,7 @@ function outlinePoints(geometry: FloorplanGeometry | null): [number, number][] {
 
 /** The DASHED merged outline — the eave / rake edge, overhang included. */
 function eavePoints(geometry: FloorplanGeometry | null): [number, number][] {
-  if (geometry?.kind !== 'group') return []
-  return geometry.children.flatMap((child) =>
+  return flat(geometry).flatMap((child) =>
     child.kind === 'polygon' && child.fill === 'none' && child.strokeDasharray
       ? (child.points as [number, number][])
       : [],
@@ -48,16 +53,14 @@ function eavePoints(geometry: FloorplanGeometry | null): [number, number][] {
 }
 
 function labels(geometry: FloorplanGeometry | null): { text: string; x: number; y: number }[] {
-  if (geometry?.kind !== 'group') return []
-  return geometry.children.flatMap((child) =>
+  return flat(geometry).flatMap((child) =>
     child.kind === 'text' ? [{ text: child.text, x: child.x, y: child.y }] : [],
   )
 }
 
 /** Arrowheads are the only three-point polylines the roof plan emits. */
 function arrowHeads(geometry: FloorplanGeometry | null): [number, number][] {
-  if (geometry?.kind !== 'group') return []
-  return geometry.children.flatMap((child) =>
+  return flat(geometry).flatMap((child) =>
     child.kind === 'polyline' && child.points.length === 3
       ? [child.points[1] as [number, number]]
       : [],

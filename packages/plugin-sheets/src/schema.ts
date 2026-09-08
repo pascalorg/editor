@@ -141,6 +141,10 @@ export const ViewportLayers = z.object({
   openingMarks: z.boolean().default(true),
   structuralGrids: z.boolean().default(true),
   roomLabels: z.boolean().default(true),
+  /** The rooms' finish / ceiling-height lines under the names (the schedules carry them — off by default). */
+  roomDetails: z.boolean().default(false),
+  /** The roof plan proper over the plan: outline, ridges, hips, slope arrows, pitches. */
+  roofPlan: z.boolean().default(false),
   stairAnnotations: z.boolean().default(true),
   furniture: z.boolean().default(false),
   mep: z.boolean().default(false),

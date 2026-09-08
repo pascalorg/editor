@@ -146,6 +146,8 @@ const FLOORPLAN_ANNOTATION_OPTIONS = [
   { id: 'openingMarks', name: 'Door/window marks', icon: Tag },
   { id: 'structuralGrids', name: 'Structural grids & column centers', icon: Grid2X2 },
   { id: 'roomLabels', name: 'Room labels', icon: SquareUserRound },
+  { id: 'roomDetails', name: 'Room finishes & ceiling heights', icon: SquareUserRound },
+  { id: 'roofPlan', name: 'Roof plan (ridges, hips, pitches)', icon: Layers3 },
   { id: 'stairAnnotations', name: 'Stair annotations', icon: Footprints },
 ] as const
 

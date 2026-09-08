@@ -163,9 +163,9 @@ const INCHES_PER_METRE = 39.37007874015748
 /** Paper inches → world metres at the reference scale. */
 const paperInches = (inches: number): number => (inches * TAG_REFERENCE_SCALE) / INCHES_PER_METRE
 
-export const OPENING_TAG_HEIGHT = paperInches(0.28)
-export const OPENING_TAG_STROKE_WIDTH = paperInches(0.02)
-export const OPENING_TAG_FONT_SIZE = paperInches(0.11)
+export const OPENING_TAG_HEIGHT = paperInches(0.3)
+export const OPENING_TAG_STROKE_WIDTH = paperInches(0.028)
+export const OPENING_TAG_FONT_SIZE = paperInches(0.125)
 export const OPENING_TAG_LEADER_WIDTH = paperInches(0.012)
 /** Clear distance from the wall face to the near edge of the tag. */
 export const OPENING_TAG_STANDOFF = paperInches(0.16)

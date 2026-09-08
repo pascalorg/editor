@@ -208,7 +208,12 @@ export function planDefaultSet(nodes: NodeMap): Plan[] {
               levelId: levelNodes[0].id,
               title: 'Roof plan',
               scale: planScale,
-              layers: { ...DEFAULT_VIEWPORT_LAYERS, roomLabels: false, openingMarks: false },
+              layers: {
+                ...DEFAULT_VIEWPORT_LAYERS,
+                roomLabels: false,
+                openingMarks: false,
+                roofPlan: true,
+              },
               x: FRAME.x,
               y: FRAME.y + 0.4,
               // The right third is left for the attic-ventilation calculation
