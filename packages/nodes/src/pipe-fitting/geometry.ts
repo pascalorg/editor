@@ -13,6 +13,7 @@ import {
 } from 'three'
 import { INCHES_TO_METERS } from '../duct-segment/geometry'
 import { createPipeMaterial } from '../pipe-segment/geometry'
+import { addPlug, addProfile } from '../shared/accessory-geometry'
 import { localPipeFittingPorts } from './ports'
 import type { PipeFittingNode } from './schema'
 
@@ -245,7 +246,77 @@ export function buildPipeFittingGeometry(node: PipeFittingNode): Group {
     sockets.set(port.id, addSocket(group, port, material, node.pipeMaterial))
   }
 
-  if (node.fittingType === 'elbow') buildElbow(group, ports, sockets, material)
+  if (
+    node.fittingType === 'end-cap' ||
+    node.fittingType === 'cleanout' ||
+    node.fittingType === 'coupling' ||
+    node.fittingType === 'reducer'
+  ) {
+    const inlet = sockets.get('inlet')!
+    const outlet = sockets.get('outlet')
+    const radius = inlet.bodyRadius
+    if (node.fittingType === 'reducer' && outlet) {
+      const taper = new Mesh(
+        new CylinderGeometry(
+          outlet.bodyRadius,
+          radius,
+          outlet.bodyPoint.x - inlet.bodyPoint.x,
+          RADIAL_SEGMENTS,
+          1,
+          true,
+        ),
+        material,
+      )
+      taper.name = 'pipe-reducer-taper'
+      taper.quaternion.setFromUnitVectors(Y_AXIS, new Vector3(1, 0, 0))
+      taper.position.x = (outlet.bodyPoint.x + inlet.bodyPoint.x) / 2
+      group.add(taper)
+    } else {
+      const end = outlet?.bodyPoint.x ?? 0.025
+      addProfile(
+        group,
+        'pipe-accessory-body',
+        'round',
+        radius * 2,
+        radius * 2,
+        inlet.bodyPoint.x,
+        end,
+        material,
+        radius * 0.16,
+      )
+      if (node.fittingType === 'end-cap')
+        addProfile(
+          group,
+          'pipe-end-cap-closure',
+          'round',
+          radius * 2,
+          radius * 2,
+          end - 0.004,
+          end,
+          material,
+        )
+      if (node.fittingType === 'cleanout') {
+        if (outlet) {
+          const service = new Group()
+          service.name = 'cleanout-service-branch'
+          addProfile(
+            service,
+            'cleanout-neck',
+            'round',
+            radius * 2,
+            radius * 2,
+            0,
+            radius * 2,
+            material,
+            radius * 0.16,
+          )
+          addPlug(service, radius, radius * 2, material)
+          service.rotation.z = Math.PI / 2
+          group.add(service)
+        } else addPlug(group, radius, end, material)
+      }
+    }
+  } else if (node.fittingType === 'elbow') buildElbow(group, ports, sockets, material)
   else buildBranchFitting(group, node, ports, sockets, material)
 
   return group

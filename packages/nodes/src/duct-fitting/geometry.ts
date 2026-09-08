@@ -21,7 +21,8 @@ import {
   INCHES_TO_METERS,
 } from '../duct-segment/geometry'
 import { DUCT_BODY_SLOT_ID } from '../shared/duct-body-paint'
-import { localFittingPorts } from './ports'
+import { buildDuctAccessory } from './accessory-geometry'
+import { adapterShape, localFittingPorts } from './ports'
 import type { DuctFittingNode } from './schema'
 
 const RADIAL_SEGMENTS = 24
@@ -144,24 +145,17 @@ function buildMiteredElbow(
   return mesh
 }
 
-/**
- * Square-to-round loft between a rect ring at `xRect` and a round ring
- * at `xRound`, both centered on the local X axis (the straight-through
- * run). Profiles are sampled at matching polar angles — the rect point
- * is the ray's intersection with the rectangle boundary — so the skin
- * twists nowhere. Non-indexed triangles + computed normals give the
- * faceted gore look of a real shop-made square-to-round.
- */
-function buildRectToRoundLoft(
+function buildProfileLoft(
   xRect: number,
   xRound: number,
   widthM: number,
   heightM: number,
-  radius: number,
   material: Material,
+  inletShape: 'round' | 'rect' | 'oval',
+  outletShape: 'round' | 'rect' | 'oval',
+  outletWidthM: number,
+  outletHeightM: number,
 ): Mesh {
-  const hw = widthM / 2
-  const hh = heightM / 2
   const rectRing: Vector3[] = []
   const roundRing: Vector3[] = []
   for (let i = 0; i < RADIAL_SEGMENTS; i++) {
@@ -171,9 +165,22 @@ function buildRectToRoundLoft(
     // Scale the unit ray until it hits the rectangle boundary. Width
     // spans local Z and height local Y — the same axes buildRectSection
     // gives a +X run.
-    const t = 1 / Math.max(Math.abs(cz) / hw, Math.abs(sy) / hh)
+    const radiusAt = (shape: 'round' | 'rect' | 'oval', w: number, h: number) => {
+      if (shape === 'round') return w / 2
+      if (shape === 'rect') return 1 / Math.max(Math.abs(cz) / (w / 2), Math.abs(sy) / (h / 2))
+      const r = Math.min(w, h) / 2
+      const offset = Math.abs(w - h) / 2
+      const major = Math.abs(w >= h ? cz : sy)
+      const minor = Math.abs(w >= h ? sy : cz)
+      const flat = minor > 1e-9 ? r / minor : Infinity
+      return flat * major <= offset
+        ? flat
+        : offset * major + Math.sqrt(Math.max(0, r * r - offset * offset * minor * minor))
+    }
+    const t = radiusAt(inletShape, widthM, heightM)
+    const u = radiusAt(outletShape, outletWidthM, outletHeightM)
     rectRing.push(new Vector3(xRect, t * sy, t * cz))
-    roundRing.push(new Vector3(xRound, radius * sy, radius * cz))
+    roundRing.push(new Vector3(xRound, u * sy, u * cz))
   }
 
   const positions: number[] = []
@@ -232,6 +239,13 @@ export function buildDuctFittingGeometry(
     colorPreset,
     sceneTheme,
   )
+  const accessory = buildDuctAccessory(node, material)
+  if (accessory) {
+    accessory.traverse((object) => {
+      if (object instanceof Mesh) object.userData.slotId = DUCT_BODY_SLOT_ID
+    })
+    return accessory
+  }
   const radiusMain = (node.diameter * INCHES_TO_METERS) / 2
   const ports = localFittingPorts(node)
   const widthM = node.width * INCHES_TO_METERS
@@ -246,7 +260,11 @@ export function buildDuctFittingGeometry(
   )
   const hingeIsVertical = Math.abs(hingeWorld.y) >= Math.SQRT1_2
 
-  if (node.fittingType === 'reducer') {
+  if (
+    node.fittingType === 'reducer' &&
+    adapterShape(node) === 'round' &&
+    adapterShape(node, true) === 'round'
+  ) {
     const radiusOut = (node.diameter2 * INCHES_TO_METERS) / 2
     const inlet = ports[0]!
     const outlet = ports[1]!
@@ -274,30 +292,46 @@ export function buildDuctFittingGeometry(
       'fitting-stub-outlet',
     )
     if (stubB) group.add(stubB)
-  } else if (node.fittingType === 'transition') {
-    // Square-to-round: rect stub on the inlet, lofted gore body through
-    // the junction, round stub on the outlet. Same inline layout as the
-    // reducer, with the taper replaced by the loft.
-    const radiusOut = (node.diameter2 * INCHES_TO_METERS) / 2
+  } else if (node.fittingType === 'transition' || node.fittingType === 'reducer') {
     const inlet = ports[0]!
     const outlet = ports[1]!
-    const taperHalf = Math.abs(inlet.position.x) / 3
-    const stubA = buildRectSection(
+    const taperHalf = Math.abs(inlet.position.x) * 0.7
+    const inletShape = adapterShape(node)
+    const outletShape = adapterShape(node, true)
+    const w1 = inletShape === 'round' ? node.diameter * INCHES_TO_METERS : widthM
+    const h1 = inletShape === 'round' ? w1 : heightM
+    const w2 = (outletShape === 'round' ? node.diameter2 : node.width2) * INCHES_TO_METERS
+    const h2 = outletShape === 'round' ? w2 : node.height2 * INCHES_TO_METERS
+    const stub = (
+      a: Vector3,
+      b: Vector3,
+      shape: typeof inletShape,
+      w: number,
+      h: number,
+      name: string,
+    ) =>
+      shape === 'round'
+        ? buildSection(a, b, w / 2, material, name)
+        : (shape === 'oval' ? buildOvalSection : buildRectSection)(a, b, w, h, material, name)
+    const stubA = stub(
       inlet.position,
       new Vector3(-taperHalf, 0, 0),
-      widthM,
-      heightM,
-      material,
+      inletShape,
+      w1,
+      h1,
       'fitting-stub-inlet',
     )
-    if (stubA) group.add(stubA)
-    group.add(buildRectToRoundLoft(-taperHalf, taperHalf, widthM, heightM, radiusOut, material))
-    const stubB = buildSection(
+    const stubB = stub(
       new Vector3(taperHalf, 0, 0),
       outlet.position,
-      radiusOut,
-      material,
+      outletShape,
+      w2,
+      h2,
       'fitting-stub-outlet',
+    )
+    if (stubA) group.add(stubA)
+    group.add(
+      buildProfileLoft(-taperHalf, taperHalf, w1, h1, material, inletShape, outletShape, w2, h2),
     )
     if (stubB) group.add(stubB)
   } else if (node.shape !== 'round' && node.fittingType === 'elbow') {
@@ -419,20 +453,10 @@ export function buildDuctFittingGeometry(
     group.add(junction)
   }
 
-  // Joint trim at each opening. Round legs get a crimp-collar torus just
-  // proud of the stub; rect legs get a drive-cleat flange — the thin
-  // raised rim (TDC/S-cleat) real sheet-metal trunk joints wear where a
-  // section meets a fitting. The plate is centered on the collar plane so
-  // the rim reads as the seam between fitting and duct. Run legs
-  // (inlet/outlet) are rect when `shape` is rect; a rect tee's branch is
-  // rect when `shape2` is rect. Reducers ignore shape.
-  // Which profile a leg's opening carries: a transition's inlet is its
-  // rect end regardless of `shape`; reducers are always round; otherwise
-  // the run legs follow `shape` and a tee's branch follows `shape2`
-  // (only meaningful when the run itself is non-round).
   const legShape = (portId: string): 'round' | 'rect' | 'oval' => {
-    if (node.fittingType === 'transition') return portId === 'inlet' ? 'rect' : 'round'
-    if (node.fittingType === 'reducer' || node.shape === 'round') return 'round'
+    if (node.fittingType === 'transition' || node.fittingType === 'reducer')
+      return adapterShape(node, portId === 'outlet')
+    if (node.shape === 'round') return 'round'
     return portId === 'branch' || portId === 'branch2' ? node.shape2 : node.shape
   }
   // The flange's profile must match the leg it caps: the branch carries
@@ -440,6 +464,10 @@ export function buildDuctFittingGeometry(
   // fold hinge lies horizontal (riser elbows) — same choice as the
   // mitered solid above.
   const rectLegProfile = (portId: string): [number, number] => {
+    if (node.fittingType === 'transition' || node.fittingType === 'reducer')
+      return portId === 'outlet'
+        ? [node.width2 * INCHES_TO_METERS, node.height2 * INCHES_TO_METERS]
+        : [widthM, heightM]
     if (portId === 'branch' || portId === 'branch2') {
       const width2M = node.width2 * INCHES_TO_METERS
       const height2M = node.height2 * INCHES_TO_METERS

@@ -355,6 +355,8 @@ export function fittingDeletionPlansForRun(
   for (const node of Object.values(nodes)) {
     if (node.type !== fittingType) continue
     const fitting = node as Fitting
+    if (['end-cap', 'damper', 'access-panel', 'cleanout', 'coupling'].includes(fitting.fittingType))
+      continue
     const connections = fittingConnections(fitting, nodes)
     if (!connections.some((connection) => connection.run.id === run.id)) continue
     if (ownerOnly) {

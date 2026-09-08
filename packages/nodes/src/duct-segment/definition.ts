@@ -177,7 +177,7 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
     { key: 'Click again', label: 'Place and continue' },
     { key: 'Alt + drag', label: 'Go vertical ↕, click to place' },
     { key: '[ / ]', label: 'Duct diameter down / up' },
-    { key: 'Q', label: 'Round / rect trunk' },
+    { key: 'Q', label: 'Round / rectangular / oval' },
     { key: 'Esc', label: 'Cancel start point' },
   ],
 

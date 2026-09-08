@@ -1,6 +1,7 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { useScene } from '@pascal-app/core'
 import { getRotationAxis, rotateEulerWorld } from '../shared/fitting-rotation'
+import { pipeFittingToolOptions } from '../shared/fitting-tool-options'
 import { pipeFittingQuickActions } from '../shared/mep-fitting-actions'
 import { buildPipeFittingFloorplan } from './floorplan'
 import { buildPipeFittingGeometry } from './geometry'
@@ -16,7 +17,7 @@ import { PipeFittingNode } from './schema'
  */
 export const pipeFittingDefinition: NodeDefinition<typeof PipeFittingNode> = {
   kind: 'pipe-fitting',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: PipeFittingNode,
   category: 'utility',
   distributionRole: 'fitting',
@@ -29,6 +30,7 @@ export const pipeFittingDefinition: NodeDefinition<typeof PipeFittingNode> = {
     metadata: {},
     position: [0, 0, 0],
     rotation: [0, 0, 0],
+    cleanoutStyle: 'end',
     fittingType: 'elbow',
     angle: 90,
     diameter: 2,
@@ -48,7 +50,15 @@ export const pipeFittingDefinition: NodeDefinition<typeof PipeFittingNode> = {
 
   geometry: buildPipeFittingGeometry,
   geometryKey: (n) =>
-    JSON.stringify([n.fittingType, n.angle, n.diameter, n.diameter2, n.pipeMaterial, n.system]),
+    JSON.stringify([
+      n.fittingType,
+      n.cleanoutStyle,
+      n.angle,
+      n.diameter,
+      n.diameter2,
+      n.pipeMaterial,
+      n.system,
+    ]),
 
   ports: getPipeFittingPorts,
 
@@ -85,6 +95,7 @@ export const pipeFittingDefinition: NodeDefinition<typeof PipeFittingNode> = {
     move: () => import('./move-tool'),
   },
 
+  toolOptions: pipeFittingToolOptions,
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Place fitting' },

@@ -4,7 +4,7 @@ import { type AnyNode, type DuctFittingNode, DuctSegmentNode, useScene } from '@
 import { EDITOR_LAYER, triggerSFX, useEditor, usePathDraftPreview } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { type Group, Vector3 } from 'three'
+import { Euler, type Group, Vector3 } from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
 import {
   planCrossAtRunBody,
@@ -21,6 +21,7 @@ import {
   stepNominalRunSize,
   useDistributionRunTool,
 } from '../shared/distribution-run-tool'
+import { ductProfilesMatch, planDuctAdapter } from '../shared/duct-adapter'
 import { FITTING_CLEARANCE_MESSAGE, hasFittingClearance } from '../shared/fitting-clearance'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
@@ -36,7 +37,7 @@ import {
 import { RunHangerPreview, RunHangerToggle } from '../shared/run-hanger-controls'
 import { currentDuctContinuationSeed, ductEndpointPort } from './continuation'
 import { ductSegmentDefinition } from './definition'
-import { rollToContinueAcrossElbow } from './geometry'
+import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
 
 /**
  * Continuous placement tool for duct segments.
@@ -95,6 +96,11 @@ function continuityRollFrom(port: ScenePort | null, newDir: Vector3): number | n
   if (!port) return null
   const nodes = useScene.getState().nodes
   const owner = nodes[port.nodeId]
+  if (owner?.type === 'duct-fitting' && ['reducer', 'transition'].includes(owner.fittingType)) {
+    const width = new Vector3(0, 0, 1).applyEuler(new Euler(...owner.rotation))
+    const basis = rectSectionAxes(newDir)
+    return Math.atan2(width.dot(basis.height), width.dot(basis.width))
+  }
   let srcDir: Vector3 | null = null
   let srcRoll = 0
   if (
@@ -134,7 +140,16 @@ function continuityRollFrom(port: ScenePort | null, newDir: Vector3): number | n
   }
   if (!srcDir) return null
   const cross = new Vector3().crossVectors(srcDir, newDir)
-  if (cross.lengthSq() < 1e-8) return srcRoll
+  if (cross.lengthSq() < 1e-8) {
+    if (owner?.type === 'duct-segment') {
+      const i = port.id === 'start' ? 0 : owner.path.length - 2
+      const direction = new Vector3(...owner.path[i + 1]!).sub(new Vector3(...owner.path[i]!))
+      const width = rectSectionAxes(direction, owner.roll).width
+      const basis = rectSectionAxes(newDir)
+      return Math.atan2(width.dot(basis.height), width.dot(basis.width))
+    }
+    return srcRoll
+  }
   return rollToContinueAcrossElbow(srcDir, srcRoll, srcDir, newDir)
 }
 
@@ -154,9 +169,7 @@ function findNearbyPort(point: [number, number, number]): ScenePort | null {
   return findNearestPort3D(point, ports, ENDPOINT_SNAP_RADIUS_M)
 }
 
-/** Cross-section the tool draws with (and commits onto the node). Oval
- *  never comes from the Q toggle (round ↔ rect) — it enters by joining
- *  an existing oval run / fitting collar and continuing its profile. */
+/** Cross-section shared by the drawn run and its fitting preview. */
 type DraftProfile = {
   shape: 'round' | 'rect' | 'oval'
   diameter: number
@@ -175,13 +188,13 @@ function inheritProfile(port: ScenePort): DraftProfile | null {
   if (!owner) return null
   if (owner.type === 'duct-segment' || owner.type === 'duct-fitting') {
     return {
-      shape: owner.shape,
+      shape: port.shape ?? owner.shape,
       diameter: Math.min(
         48,
         Math.max(2, owner.type === 'duct-segment' ? owner.diameter : port.diameter),
       ),
-      width: owner.width,
-      height: owner.height,
+      width: port.width ?? owner.width,
+      height: port.height ?? owner.height,
     }
   }
   if (owner.type === 'hvac-equipment' || owner.type === 'duct-terminal') {
@@ -229,7 +242,8 @@ const elbowPlanFor = (
   if (!port) return null
   const owner = useScene.getState().nodes[port.nodeId]
   if (owner?.type !== 'duct-segment') return null
-  const plan = planElbowAtPort(port, awayDir, profile)
+  const source = inheritProfile(port) ?? profile
+  const plan = planElbowAtPort(port, awayDir, source)
   if (!plan) return null
   // Trim the run's snapped endpoint back to the elbow's inlet collar.
   const path = owner.path.map((p) => [...p] as [number, number, number])
@@ -311,9 +325,55 @@ export function planDuctDraw(
     endTrunkBody && endTrunkOwner?.type === 'duct-segment'
       ? planTeeAtRunBody(endTrunkOwner, endTrunkBody, [-dir[0], -dir[1], -dir[2]], profile)
       : null
+  const adapterFor = (
+    port: ScenePort | null,
+    corner: ReturnType<typeof elbowPlanFor>,
+    away: [number, number, number],
+  ) => {
+    if (!port) return null
+    const source = inheritProfile(port)
+    if (!source) return null
+    const axis = new Vector3(...away)
+    if (!corner && axis.dot(new Vector3(...port.direction).normalize()) < 0.9999) return null
+    const owner = useScene.getState().nodes[port.nodeId]
+    const roll = continuityRollFrom(port, axis) ?? 0
+    const width = rectSectionAxes(axis, roll).width
+    if (owner?.type === 'duct-fitting' && !corner) {
+      width.set(0, 0, 1).applyEuler(new Euler(...owner.rotation))
+    }
+    return planDuctAdapter(
+      { ...port, position: corner?.collarPoint ?? port.position, direction: away },
+      source,
+      profile,
+      width,
+    )
+  }
+  const startAdapter = adapterFor(startPort, startPlan, dir)
+  const endAdapter = adapterFor(endPort, endPlan, [-dir[0], -dir[1], -dir[2]])
+  for (const [port, adapter] of [
+    [startPort, startAdapter],
+    [endPort, endAdapter],
+  ] as const) {
+    const source = port ? inheritProfile(port) : null
+    if (source && !ductProfilesMatch(source, profile) && !adapter) {
+      return {
+        ...invalidPlan(),
+        validationMessage: 'Align the connection or draw a 15–90° bend to fit the profile change.',
+      }
+    }
+  }
   const ductStart =
-    startPlan?.collarPoint ?? teePlan?.branchCollar ?? startRealign?.collarPoint ?? start
-  let ductEnd = endPlan?.collarPoint ?? endTeePlan?.branchCollar ?? endRealign?.collarPoint ?? end
+    startAdapter?.collarPoint ??
+    startPlan?.collarPoint ??
+    teePlan?.branchCollar ??
+    startRealign?.collarPoint ??
+    start
+  let ductEnd =
+    endAdapter?.collarPoint ??
+    endPlan?.collarPoint ??
+    endTeePlan?.branchCollar ??
+    endRealign?.collarPoint ??
+    end
   const plans = [startPlan, endPlan].filter((p) => p !== null)
   const tee = teePlan
   let endTee = endTeePlan && endTrunkBody?.nodeId === trunkBody?.nodeId ? null : endTeePlan
@@ -381,6 +441,7 @@ export function planDuctDraw(
 
   const fittings: DuctFittingNode[] = [
     ...plans.map((p) => p.fitting),
+    ...[startAdapter, endAdapter].flatMap((p) => (p ? [p.fitting] : [])),
     ...(tee ? [tee.fitting] : []),
     ...(endTee ? [endTee.fitting] : []),
     ...(cross ? [cross.fitting] : []),
@@ -568,7 +629,7 @@ const DuctSegmentTool = () => {
         event.preventDefault()
         setProfile((current) => ({
           ...current,
-          shape: current.shape === 'round' ? 'rect' : 'round',
+          shape: current.shape === 'round' ? 'rect' : current.shape === 'rect' ? 'oval' : 'round',
         }))
         triggerSFX('sfx:grid-snap')
       }
