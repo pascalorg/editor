@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "pascal-agent-skills",
   "displayName": "Pascal agent skills",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Create, inspect, validate, and assess furniture layouts in Pascal through MCP.",
   "author": {
     "name": "Pascal"

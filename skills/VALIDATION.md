@@ -1,6 +1,6 @@
 # Skill package validation
 
-Package version: **0.1.0**. Recorded September 8, 2026.
+Plugin bundle version: **0.1.1**. Skill metadata version: **0.1.0**. Recorded September 8, 2026.
 
 The `native-host-validation: source-hash-recorded-separately` metadata is a pointer to this record, not a blanket pass. Source and package checks do not establish task success on every host, real-world furniture installation, or market adoption.
 
@@ -46,4 +46,4 @@ Claude's three task pairs are a small diagnostic sample. Baseline and treatment 
 - Production hosted MCP, newer npm CLI/MCP releases, official marketplace listing, external users, and retention require their own receipts. Public Git installation and a GitHub prerelease are not proof of npm publication, directory approval, or indexing.
 - Headless GLB export, delivery-route analysis, full door-swing geometry, and vertical clearance remain unsupported by the assessed layout tools.
 
-Run the package checks with `bun scripts/validate-skills.ts` and `claude plugin validate . --strict`. Runtime regression cases live in `packages/mcp/scripts/furniture-fit-journey.ts`; native task prompts and expectations are bundled under each skill's `evals/` directory.
+Run the package checks with `bun scripts/validate-skills.ts` and `claude plugin validate . --strict`. Runtime regression cases live in `packages/mcp/scripts/furniture-fit-journey.ts`. Each public `evals/` directory contains representative prompts and expectations; the private 20-case release gate is not distributed there.

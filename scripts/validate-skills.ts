@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const skillNames = ['pascal-3d', 'furniture-fit'] as const
-const version = '0.1.0'
+const skillVersion = '0.1.0'
+const pluginVersion = '0.1.1'
 const failures: string[] = []
 
 function fail(message: string) {
@@ -75,8 +76,8 @@ for (const skillName of skillNames) {
   const fields = frontmatter(content, skillFile)
   if (fields.name !== skillName) fail(`${skillName}: frontmatter name does not match directory`)
   if (!fields.description) fail(`${skillName}: description is required`)
-  if (!content.includes(`version: "${version}"`))
-    fail(`${skillName}: metadata version must be ${version}`)
+  if (!content.includes(`version: "${skillVersion}"`))
+    fail(`${skillName}: metadata version must be ${skillVersion}`)
   if (!/^ {2}source-reviewed: "\d{4}-\d{2}-\d{2}"$/m.test(content)) {
     fail(`${skillName}: an ISO source review date is required`)
   }
@@ -197,7 +198,7 @@ for (const [label, manifest] of [
   ['Codex plugin', codexPlugin],
 ] as const) {
   if (manifest.name !== 'pascal-agent-skills') fail(`${label}: unexpected name`)
-  if (manifest.version !== version) fail(`${label}: version must be ${version}`)
+  if (manifest.version !== pluginVersion) fail(`${label}: version must be ${pluginVersion}`)
 }
 
 if (codexPlugin.skills !== './skills/') fail('Codex plugin must point to canonical ./skills/')
@@ -219,12 +220,18 @@ if (!Array.isArray(codexEntries) || codexEntries.length !== 1) {
   if (entry.category !== 'Productivity') fail('Codex marketplace category must be declared')
 }
 if (claudeMarketplace.name !== 'pascal') fail('Claude marketplace name must be pascal')
+if (claudeMarketplace.version !== pluginVersion) {
+  fail(`Claude marketplace version must be ${pluginVersion}`)
+}
 const marketplacePlugins = claudeMarketplace.plugins
 if (!Array.isArray(marketplacePlugins) || marketplacePlugins.length !== 1) {
   fail('Claude marketplace must contain exactly one plugin')
 } else {
   const plugin = marketplacePlugins[0] as Record<string, unknown>
   if (plugin.source !== './') fail('Claude marketplace plugin must use the repository root')
+  if (plugin.version !== pluginVersion) {
+    fail(`Claude marketplace plugin version must be ${pluginVersion}`)
+  }
   const packagedSkills = plugin.skills
   for (const skillName of skillNames) {
     if (!Array.isArray(packagedSkills) || !packagedSkills.includes(`./skills/${skillName}`)) {
@@ -250,5 +257,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `Validated ${skillNames.length} skills and both plugin manifests at version ${version}.`,
+  `Validated ${skillNames.length} skills at ${skillVersion} and both plugin manifests at ${pluginVersion}.`,
 )

@@ -50,10 +50,11 @@ npm install --global --prefix "$PASCAL_PREVIEW_PREFIX" --ignore-scripts \
   "./pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
 export PATH="$PASCAL_PREVIEW_PREFIX/bin:$PATH"
 pascal --version
+pascal update --version "$PASCAL_PREVIEW_VERSION"
 pascal editor --no-open
 ```
 
-The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d`. Keep the preview prefix on the agent host's `PATH` before running `pascal mcp setup claude`, `pascal mcp setup codex`, or configuring `pascal mcp connect` manually. This GitHub prerelease is not an npm version.
+The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before running `pascal mcp setup claude`, `pascal mcp setup codex`, or configuring `pascal mcp connect` manually. This GitHub prerelease is not an npm version.
 
 Use one active agent client per local CLI service. The standalone local HTTP runtime shares active scene state between clients; use separate `PASCAL_HOME` directories and service processes when independent concurrent work is required.
 
