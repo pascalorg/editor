@@ -49,8 +49,7 @@ import {
   postPadPatch,
   postPadValue,
   shedCeilingPatch,
-  shedCeilingValue,
-} from './panel-framing'
+  shedCeilingValue, type ExteriorWallsValue, exteriorWallsPatch, exteriorWallsValue } from './panel-framing'
 import { groupWarnings, warningCount } from './panel-warnings'
 import { buildPlanSet, finishScheduleFrom, planSetHtml, relativeLevelBaseY } from './plans/plan-set'
 import { useBonesStore } from './store'
@@ -752,12 +751,28 @@ function RoofRow({ framingNode }: { framingNode: FramingNode & { id: string } })
 
 function FramingRow({ framingNode }: { framingNode: FramingNode & { id: string } }) {
   const system = framingSystemValue(framingNode)
+  const exterior = exteriorWallsValue(framingNode)
   const write = (patch: Record<string, unknown>) =>
     useScene.getState().updateNode(framingNode.id as AnyNodeId, patch as Partial<AnyNode> as never)
   const extra = lgsMachineSelectExtra(framingNode.lgsMachine)
   return (
     <div className="flex flex-col gap-1 text-xs">
-      <span className="text-sidebar-foreground/60">Framing</span>
+      <span className="text-sidebar-foreground/60">Exterior walls</span>
+      <SegmentedControl
+        onChange={(v: string) => write(exteriorWallsPatch(v as ExteriorWallsValue))}
+        options={[
+          { label: 'Auto', value: 'auto' },
+          { label: 'Framed', value: 'framed' },
+          { label: 'CMU', value: 'cmu' },
+        ]}
+        value={exterior}
+      />
+      <span className="text-sidebar-foreground/50">
+        Auto follows the jurisdiction's convention: Florida builds exterior walls in CMU (block), everywhere
+        else framed. A convention, not a code rule — pick Framed for a wood-frame house there. Framing
+        below says how framed walls frame.
+      </span>
+      <span className="mt-1 text-sidebar-foreground/60">Framing</span>
       <SegmentedControl
         onChange={(v: string) => write(framingSystemPatch(v as FramingSystemValue))}
         options={[

@@ -982,7 +982,74 @@ G87 Craftsman designs get shutters and the right window lites.
 G88 The side deck's stair goes to the grade under it.
 G89 More hip roofs on random designs across styles.
 
+## Mandate additions (Steve, 2026-09-08 — CMU, and the MEP through the roof)
+
+Steve, with a screenshot of the Cape Coral house in the framing view, the
+block walls and the pipes over the eaves arrowed: "how come bones shows
+cmu walls now and lumber is selected? why is the auto build house using
+block? is that because its in florida in a certain area that requires it?
+why does the mep pop through the roof, all the cold and hot water lines
+and stuff, thing is majorly broken it seems unless im doing something
+wrong here, thanks!"
+
+G90 The Bones panel says, in one control, whether the exterior walls are
+framed or CMU — Auto (the jurisdiction's convention: Florida → CMU,
+elsewhere framed), Framed, CMU — beside Lumber | Steel, which only says how
+FRAMED walls frame. The Auto label must say the convention is a
+convention, not a code rule.
+G91 No MEP member stands out of the roof unless it passes the roof by
+design (the DWV stack, a flue, the service mast and drop, a termination).
+The attic runs lie under the rafters toward the eaves; a riser stops at
+the underside; a run that cannot fit above the plates is flagged, never
+silent.
+G92 The attic planes measure from the walls' TOPS, never their heights —
+a generated wall stands on a stem below the floor and is taller than its
+plate line.
+
 ## Log (continued)
+
+- 2026-09-08: **Batch T13 — the exterior-wall control; the MEP under the
+  roof (G90–G92).** Steve's questions answered by numbers first. (1) The
+  CMU: not the generator — Bones' jurisdiction profile carries
+  `exteriorWallDefault: 'cmu'` for Florida (`CMU_DEFAULT_STATES`), and
+  `resolveWallConstruction` lets that beat the Lumber | Steel framing
+  system by design (the control chooses how framed walls frame). A
+  convention (block is the Central/South Florida norm), not a code
+  mandate — wood frame is legal under the FBC with the wind design. New:
+  `FramingNode.exteriorWalls` ('auto' | 'framed' | 'cmu', absent =
+  auto, byte-parity), `exteriorWallDefaultOf(config, profile)` in
+  compute.ts feeding every `resolveWallConstruction` call (compute,
+  panel-selection), an Exterior walls segmented control in the panel's
+  FramingRow with the honesty line. (2) The MEP through the roof: the
+  roof-clash probe (scratchpad `roof-clash-probe.ts`: every MEP member's
+  top against the roof deck at its plan point via `roofPlaneAt`) counted
+  141 members above the roof on the Cape Coral scene. Root cause: the
+  attic planes read `wall.height` as the wall's top — a generated wall
+  stands on the stem (`baseY` −0.51) so its height is 3.25 while its
+  plate is at 2.74; the plumbing plane sat at 3.40, the wiring at 3.30,
+  the ducts at 3.55, all over a 4:12 hip whose deck is 2.85 at the wall
+  line. Fix: `wallTopY(wall)` (core/types.ts) at every datum — compute's
+  two `atticY`, hvac `wallTop` and the crossing height, electrical
+  `yCross`, plumbing `tallest` and the stack top. Second measure: the
+  new `engines/under-roof.ts` `clampUnderRoof(members, roofs,
+  plateTop)` runs last in computeLevel — level attic runs are sampled
+  every 0.2 m against `roofUndersideAt` (attic-walls.ts), lowered to the
+  underside − 2 cm where the roof dips beneath them and re-emitted as a
+  chain of sloped pieces (yaw + z-rotation from `memberAxis`), risers cut
+  at the underside, everything floored above the plates, and a run that
+  cannot fit even there (the 14×8 return trunk at the eave) keeps its
+  height with `UNDER_ROOF_FLAG` and a level warning. Members that pass
+  the roof by design are skipped by label (through roof, flue, B-vent,
+  weatherhead, service drop/mast, termination, condenser, meter, well,
+  septic, line set). Probe after: 4 members above the roof — the
+  utility's service drop and weatherhead (outside the house by design),
+  the return trunk (+0.23 m, flagged) and the trunk feed (+0.02 m, inside
+  the plane rounding). Bones 2161 tests green (master baseline
+  unchanged — its walls stand at 0), sheets 258, Bones + sheets tsc
+  clean. Open: the 14×8 return trunk still stands into the rafters at the
+  eave (it needs a drop into a soffit or an inboard route — flagged, not
+  moved); the trunk plane itself (plate + 0.3) is still a level plane
+  that the clamp bends, not a designed attic route down the ridge.
 
 - 2026-09-08: **Batch T12 — the curb return is frontage; the corner sight
   triangle.** Steve, with a screenshot of the Cape Coral corner: "radius

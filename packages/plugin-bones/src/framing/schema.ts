@@ -227,6 +227,13 @@ export const FramingNode = BaseNode.extend({
    */
   framingSystem: z.enum(['lumber', 'lgs']).optional(),
   /**
+   * The EXTERIOR walls' construction for the level: 'framed' or 'cmu'
+   * over the jurisdiction's convention (Florida → CMU; elsewhere framed).
+   * Absent / 'auto' keeps the convention (byte-parity: absent round-trips
+   * absent). Per-wall overrides still win.
+   */
+  exteriorWalls: z.enum(['auto', 'framed', 'cmu']).optional(),
+  /**
    * Roll-forming machine key ('vendor/machine', keys of
    * data/lgs-profiles.json) constraining LGS profiles to the machine's
    * rollable set. Meaningful only with framingSystem 'lgs'; optional, no
@@ -294,6 +301,7 @@ export const FramingNode = BaseNode.extend({
   - postPadIn: the pad footing under every post (porch, deck, girder), inches square — absent = the engine's 24 in
   - shedCeiling: 'none' (default when absent — a shed segment's underside stays vaulted) | 'joists' (ceiling joists across the depth on the shed's low plate, lapped over the partitions under them like a gable's)
   - roofSystem: 'stick' (default when absent — site-cut rafters + ceiling joists) | 'truss' (pre-engineered gable trusses at rafter spacing: 2x4 top/bottom chords, representative webbing labeled as manufacturer-designed, bottom chord is the rafter tie so ceiling joists/collar ties/ridge board are omitted; non-gable segments stay stick-framed with an honest flag; spans over 40 ft flag engineering)
+  - exteriorWalls: 'auto' (default when absent — the jurisdiction's convention: Florida → CMU, a convention not a code mandate) | 'framed' | 'cmu' — the exterior walls' construction for the level; per-wall overrides still win
   - framingSystem: 'lumber' (default when absent) | 'lgs' (cold-formed steel, IRC R603 — otherwise-framed walls frame as steel C-stud/track assemblies; explicit per-wall overrides and the FL CMU exterior default still win); lgsMachine: roll-forming machine key from data/lgs-profiles.json (e.g. 'framecad/f325it') — profiles resolve through it with the honest fallback status on labels, and any resolution a verified machine cannot roll raises a per-level can't-roll warning (generic AISI dims substituted). Machine scope: constrains + brands — at detail 300/400 members are byte-identical with or without it (labels/flags/warnings only); at 200 it narrows the generic pick to its thinnest rollable variant, and a verified vendor-own profile draws the vendor's published dims
   All framing members are derived live from the level's walls/openings/slabs/roofs; deleting this node removes the X-ray without touching the model.`,
 )

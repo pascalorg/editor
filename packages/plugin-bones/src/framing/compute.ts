@@ -16,6 +16,7 @@ import type {
   SlabSlice,
   WallSlice,
 } from '../core/types'
+import { wallTopY } from '../core/types'
 import { formatIn, inches } from '../core/units'
 import {
   extractLevels,
@@ -41,6 +42,7 @@ import {
   snapCmuHeight,
 } from '../engines/cmu'
 import { frameAtticSeparations, frameBearingWallsToRoof } from '../engines/attic-walls'
+import { clampUnderRoof } from '../engines/under-roof'
 import { frameDeck } from '../engines/deck-framing'
 import { framePorches } from '../engines/porch-framing'
 import {
@@ -77,7 +79,7 @@ import {
 import { garageSideOf, layoutWallLayers } from '../engines/wall-layers'
 import { resolveJurisdiction, siteStateOf } from '../jurisdiction/guess'
 import { applySiteCodeBasis, siteCodeBasisOf, siteUtilitiesOf } from '../jurisdiction/site-code-basis'
-import { applyJurisdiction, nonIrcCodeWarning, profileFor } from '../jurisdiction/profiles'
+import { applyJurisdiction, type JurisdictionProfile, nonIrcCodeWarning, profileFor } from '../jurisdiction/profiles'
 import { type LumberSize, LUMBER_CROSS_SECTIONS } from '../lumber'
 import {
   type FramingNode,
@@ -137,6 +139,24 @@ export type ResolvedWallConstruction = { construction: WallConstruction } & Omit
   WallEngineeringOverride,
   'construction'
 >
+
+/**
+ * The exterior walls' default construction for a level: the Bones panel's
+ * Exterior walls control when set ('framed' | 'cmu'), else the
+ * jurisdiction's convention (profiles.ts: Florida → CMU — a convention,
+ * not a code mandate; wood frame is legal there under the FBC wind
+ * design). Steve, 2026-09-08: "how come bones shows cmu walls now and
+ * lumber is selected?" — Lumber | Steel says how FRAMED walls frame; this
+ * says whether the exterior walls are framed at all.
+ */
+export function exteriorWallDefaultOf(
+  config: Pick<FramingNode, 'exteriorWalls'>,
+  profile: Pick<JurisdictionProfile, 'exteriorWallDefault'>,
+): 'framed' | 'cmu' {
+  return config.exteriorWalls === 'framed' || config.exteriorWalls === 'cmu'
+    ? config.exteriorWalls
+    : profile.exteriorWallDefault
+}
 
 /** Construction resolution for one wall: override → jurisdiction default →
  * the level's framing system → framed. `framingSystem: 'lgs'` (LGS Phase 1)
@@ -579,7 +599,10 @@ function computeLevelUncached(
   const { code } = resolveJurisdiction(config.jurisdiction, siteStateOf(nodes))
   // the site's own design values (the Pascal Map code basis) over the
   // state-typical row — wind, snow, seismic and the flags that follow them
-  const { profile, note: siteDesignNote } = applySiteCodeBasis(profileFor(code), siteCodeBasisOf(nodes))
+  const { profile: stateProfile, note: siteDesignNote } = applySiteCodeBasis(profileFor(code), siteCodeBasisOf(nodes))
+  // the level's Exterior walls control (Framed | CMU) over the state's
+  // convention (FL → CMU): 'auto'/absent keeps the jurisdiction's default
+  const profile = { ...stateProfile, exteriorWallDefault: exteriorWallDefaultOf(config, stateProfile) }
   const siteUtilities = siteUtilitiesOf(nodes)
   let spec: FramingSpec = {
     ...DEFAULT_SPEC,
@@ -1586,7 +1609,7 @@ function computeLevelUncached(
     // room-category inference is only the fallback (slice hoisted above —
     // shared with the electrical sink-radius/counter/basin machinery).
     let tallestWall = 0
-    for (const w of activeWalls) tallestWall = Math.max(tallestWall, w.height)
+    for (const w of activeWalls) tallestWall = Math.max(tallestWall, wallTopY(w))
     const plumbing = layoutPlumbing(
       activeWalls,
       activeRooms,
@@ -1671,7 +1694,7 @@ function computeLevelUncached(
       hasLevelAbove,
       stateCode: code,
       coverage: probeSlabs,
-      atticY: activeWalls.reduce((m, w) => Math.max(m, w.height), 0) + 0.15,
+      atticY: activeWalls.reduce((m, w) => Math.max(m, wallTopY(w)), 0) + 0.15,
     })
     hvacPlan = hvac.plan
     hvacSystem = hvac.system
@@ -1862,6 +1885,21 @@ function computeLevelUncached(
       const baseY = baseYById.get(f.sourceId)
       if (baseY === undefined) continue
       fixtures[i] = { ...f, position: [f.position[0], f.position[1] + baseY, f.position[2]] }
+    }
+  }
+
+  // ATTIC RUNS UNDER THE ROOF (Steve, 2026-09-08: "why does the MEP pop
+  // through the roof"): the engines' level attic planes have no height
+  // near the eaves of a low-pitch roof — lower each run under the rafters
+  // there, cut the risers that would poke through, flag what cannot fit.
+  if (config.showElectrical || config.showPlumbing || config.showHvac) {
+    const roofsOver = extractRoofs(nodes, levelId)
+    if (roofsOver.length > 0) {
+      const plateTop = activeWalls.reduce((m, w) => Math.max(m, wallTopY(w)), 0)
+      const under = clampUnderRoof(members, roofsOver, plateTop)
+      members.length = 0
+      members.push(...under.members)
+      warnings.push(...under.warnings)
     }
   }
 

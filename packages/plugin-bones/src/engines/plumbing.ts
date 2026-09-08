@@ -50,6 +50,7 @@ import type {
   ServiceOverrides,
   WallSlice,
 } from '../core/types'
+import { wallTopY } from '../core/types'
 import { feet, inches, toFeet } from '../core/units'
 import type { PlacedFixtureSlice } from '../core/wall-model'
 import { outwardNormal } from './street'
@@ -1428,7 +1429,7 @@ function placedPlumbing(
   // ---- stack: floor line up through the roof (P3103.1). It stops AT the
   // floor — a frost stemwall owns the wall line below grade (S1b), so the
   // buried connection is a separate SLEEVED drop at the inboard junction. ----
-  const stackTop = stackAnchor.wall.height + 0.6
+  const stackTop = wallTopY(stackAnchor.wall) + 0.6
   members.push({
     system: 'plumbing',
     role: 'vent-stack',
@@ -2100,7 +2101,7 @@ function placedPlumbing(
     // the supply route: the walls' planes, the attic, or under the floor
     const waterRoute = spec.waterRoute ?? defaultWaterRoute(context)
     let tallest = 0
-    for (const w of straight) tallest = Math.max(tallest, w.height)
+    for (const w of straight) tallest = Math.max(tallest, wallTopY(w))
     const planes = { atticY: context.atticY ?? tallest + 0.15, underY: base + 0.12 }
     const mainEnd = supplyRoute(members, mainSpec, graph, meterAnchor, whAnchor, SUPPLY_COLD_Y, walls, waterRoute, planes)
     // Manifold riser at the WH wall bay: crosses every stepped cold plane,

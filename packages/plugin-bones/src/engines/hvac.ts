@@ -89,6 +89,7 @@ import mepRules from '../../data/mep-rules.json'
 import wallAssemblies from '../../data/wall-assemblies.json'
 import { DEFAULT_SPEC, type FramingSpec } from '../core/spec'
 import type { Fixture, Member, RoomSlice, ServiceOverrides, WallSlice } from '../core/types'
+import { wallTopY } from '../core/types'
 import { inches, toFeet } from '../core/units'
 import {
   buildWallGraph,
@@ -825,12 +826,12 @@ function minWallHeightAlong(
   roomCeiling: number,
   walls: WallSlice[],
 ): number {
-  let minH = Math.min(roomCeiling, exitWall.height)
+  let minH = Math.min(roomCeiling, wallTopY(exitWall))
   const elbow: Pt = [to[0], from[1]]
   for (const w of walls) {
     if (w.curved || w.length < 0.1) continue
     if (segCrossesWall(from, elbow, w) || segCrossesWall(elbow, to, w)) {
-      minH = Math.min(minH, w.height)
+      minH = Math.min(minH, wallTopY(w))
     }
   }
   return minH
@@ -1666,7 +1667,7 @@ export function layoutHvac(
   // the "attic" trunk rose INTO the storey above): there is no attic, so the
   // trunk caps below this storey's ceiling as a dropped-soffit run and the
   // level says so. Top storeys keep the attic routing.
-  const wallTop = walls.reduce((m, w) => Math.max(m, w.height), ceiling)
+  const wallTop = walls.reduce((m, w) => Math.max(m, wallTopY(w)), ceiling)
   const interiorStorey = context?.hasLevelAbove === true
   const trunkY = interiorStorey ? ceiling - SOFFIT_DROP : wallTop + TRUNK_ATTIC_CLEARANCE
   if (interiorStorey) {

@@ -497,3 +497,13 @@ export type RoofSlice = {
   pitch: number
   overhang: Record<string, number>
 }
+
+/**
+ * Level-local y of a wall's TOP — its plate line. `height` is the body from
+ * `baseY` up, so a wall standing on a lowered slab (the generator's stem,
+ * the garage pad) is TALLER than its top: the MEP attic planes once read
+ * `height` as the top and rode every run a stem's depth into the sky.
+ */
+export function wallTopY(wall: Pick<WallSlice, 'height' | 'baseY'>): number {
+  return (wall.baseY ?? 0) + wall.height
+}

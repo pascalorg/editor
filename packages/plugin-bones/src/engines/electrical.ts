@@ -24,6 +24,7 @@ import type {
   ServicePointOverride,
   WallSlice,
 } from '../core/types'
+import { wallTopY } from '../core/types'
 import type { StreetFrame } from '../core/spec'
 import { feet, inches } from '../core/units'
 import type { PlacedFixtureSlice } from '../core/wall-model'
@@ -2633,8 +2634,8 @@ export function routeWiring(
     // Clear EVERY wall in the scene: the legs may pass over rooms taller
     // than either endpoint wall (verify night-4 F1 — a 2.5m→2.5m island
     // hop crossed a 4m great room at bed height of ITS ceiling).
-    let yCross = Math.max(from.wall.height, to.wall.height) + 0.05
-    for (const w of walls) yCross = Math.max(yCross, w.height + 0.05)
+    let yCross = Math.max(wallTopY(from.wall), wallTopY(to.wall)) + 0.05
+    for (const w of walls) yCross = Math.max(yCross, wallTopY(w) + 0.05)
     const note = attic
       ? ' (attic run — up through the plates, across the attic, down the wall to the box)'
       : ' (ceiling crossing — no wall path)'

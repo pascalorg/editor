@@ -17,8 +17,7 @@ import {
   type ComputeResult,
   dedupeColinearWalls,
   probeSlabsFor,
-  resolveWallConstruction,
-} from './framing/compute'
+  resolveWallConstruction, exteriorWallDefaultOf } from './framing/compute'
 import {
   isResolvedProfile,
   lgsLabelHead,
@@ -143,7 +142,7 @@ export type SelectedWallInfo = {
 export function selectedWallInfo(
   nodes: Record<string, Record<string, unknown>>,
   selection: SelectionLike,
-  framingNode: Pick<FramingNode, 'wallOverrides'> | undefined,
+  framingNode: Pick<FramingNode, 'wallOverrides' | 'exteriorWalls'> | undefined,
   result: ComputeResult | null,
 ): SelectedWallInfo | null {
   if (!framingNode || !result) return null
@@ -175,7 +174,7 @@ export function selectedWallInfo(
   const resolved = resolveWallConstruction(
     wall,
     framingNode,
-    profileFor(result.jurisdiction).exteriorWallDefault,
+    exteriorWallDefaultOf(framingNode, profileFor(result.jurisdiction)),
   )
   const construction = resolved.construction
 

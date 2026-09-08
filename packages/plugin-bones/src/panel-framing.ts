@@ -44,6 +44,22 @@ export function framingSystemPatch(next: FramingSystemValue): {
   return { framingSystem: next === 'lgs' ? 'lgs' : undefined }
 }
 
+export type ExteriorWallsValue = 'auto' | 'framed' | 'cmu'
+
+/** The Exterior walls control's resolved value — absent means auto (the jurisdiction's convention). */
+export function exteriorWallsValue(node: Pick<FramingNode, 'exteriorWalls'>): ExteriorWallsValue {
+  return node.exteriorWalls === 'framed' || node.exteriorWalls === 'cmu' ? node.exteriorWalls : 'auto'
+}
+
+/**
+ * Write patch for the Exterior walls control. Framed / CMU store the
+ * value; Auto REMOVES the key (the same byte-parity contract as
+ * framingSystemPatch).
+ */
+export function exteriorWallsPatch(next: ExteriorWallsValue): { exteriorWalls: 'framed' | 'cmu' | undefined } {
+  return { exteriorWalls: next === 'framed' || next === 'cmu' ? next : undefined }
+}
+
 export type RoofSystemValue = 'stick' | 'truss'
 
 /** The Roof control's resolved value — absent means stick. */
