@@ -10,6 +10,7 @@ import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { computeWallSlabSupport } from '@pascal-app/core/spatial-grid'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import {
   distance2D,
   pointInPolygon,
@@ -503,6 +504,7 @@ export function registerListLevels(server: McpServer, bridge: SceneOperations): 
         'List all levels in the current scene with ids, names, floor indices, and child counts.',
       inputSchema: {},
       outputSchema: listLevelsOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async () => {
       const activeScene = bridge.getActiveScene()
@@ -546,6 +548,7 @@ export function registerGetLevelSummary(server: McpServer, bridge: SceneOperatio
         'Get a compact model-friendly summary of one level: counts plus walls, zones, slabs, ceilings, and items. Omit levelId to use the first level.',
       inputSchema: levelScopedInput,
       outputSchema: getLevelSummaryOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ levelId }) => {
       const resolved = getDefaultLevelId(bridge, levelId)
@@ -564,6 +567,7 @@ export function registerGetWalls(server: McpServer, bridge: SceneOperations): vo
         'Get walls on a level with start/end coordinates, length, height, thickness, and child doors/windows. Omit levelId to use the first level.',
       inputSchema: levelScopedInput,
       outputSchema: getWallsOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ levelId }) => {
       const resolved = getDefaultLevelId(bridge, levelId)
@@ -585,6 +589,7 @@ export function registerGetZones(server: McpServer, bridge: SceneOperations): vo
         'Get room/zone polygons on a level with names, colors, bounds, and approximate areas. Omit levelId to use the first level.',
       inputSchema: levelScopedInput,
       outputSchema: getZonesOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ levelId }) => {
       const resolved = getDefaultLevelId(bridge, levelId)
@@ -606,6 +611,7 @@ export function registerVerifyScene(server: McpServer, bridge: SceneOperations):
         'High-level self-check after complex edits. Returns validation status, per-level room/content counts, empty levels, and practical layout issues.',
       inputSchema: {},
       outputSchema: verifySceneOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async () => {
       const validation = bridge.validateScene()

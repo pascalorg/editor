@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 
 export const validateSceneInput = {}
 
@@ -24,6 +25,7 @@ export function registerValidateScene(server: McpServer, bridge: SceneOperations
         'Run Zod validation against every node in the scene. Returns `{ valid, errors }` where each error has `{ nodeId, path, message }`.',
       inputSchema: validateSceneInput,
       outputSchema: validateSceneOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async () => {
       const result = bridge.validateScene()

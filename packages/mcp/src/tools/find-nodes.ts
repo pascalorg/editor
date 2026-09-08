@@ -3,6 +3,7 @@ import type { AnyNode, AnyNodeId, AnyNodeType } from '@pascal-app/core/schema'
 import { pointInPolygon } from '@pascal-app/core/spatial-grid'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { NodeIdSchema } from './schemas'
 
 const ALL_NODE_TYPES = [
@@ -77,6 +78,7 @@ export function registerFindNodes(server: McpServer, bridge: SceneOperations): v
         'Find nodes matching any combination of type, parentId, levelId, or zoneId filters.',
       inputSchema: findNodesInput,
       outputSchema: findNodesOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async (args) => {
       const { type, parentId, levelId, zoneId } = args as {

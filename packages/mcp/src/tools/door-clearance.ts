@@ -7,8 +7,7 @@
  * See docs/layout-clearance-error-log.md for pitfalls (levels, gap sign, scale).
  */
 
-import type { AnyNode } from '@pascal-app/core/schema'
-import { getScaledDimensions } from '@pascal-app/core/schema'
+import { type AnyNode, getScaledDimensions } from '@pascal-app/core/schema'
 import { type Vec2, wallLength } from './geometry'
 
 export type PlanAabb = {
@@ -17,6 +16,27 @@ export type PlanAabb = {
   minZ: number
   maxZ: number
 }
+
+export type ItemFootprintFailureReason =
+  | 'missing_dimensions'
+  | 'non_finite_position'
+  | 'non_finite_rotation'
+  | 'non_finite_dimensions'
+  | 'non_positive_plan_dimensions'
+  | 'non_finite_scale'
+  | 'zero_plan_scale'
+  | 'non_planar_rotation'
+  | 'unsupported_attachment'
+
+export type ItemFootprintInspection =
+  | {
+      ok: true
+      aabb: PlanAabb
+      sourceDimensions: [number, number, number]
+      effectiveDimensions: [number, number, number]
+      rotationY: number
+    }
+  | { ok: false; reason: ItemFootprintFailureReason }
 
 export type DoorKeepout = {
   doorId: string
@@ -73,10 +93,30 @@ export function resolveNodeLevelId(nodeId: string, byId: Map<string, AnyNode>): 
     seen.add(current.id)
     if (current.type === 'level') return current.id
     const parentId = current.parentId
-    if (!parentId) return null
-    current = byId.get(parentId)
+    if (parentId && byId.has(parentId)) {
+      current = byId.get(parentId)
+      continue
+    }
+    current = findParentByChildren(current.id, byId)
   }
   return null
+}
+
+function findParentByChildren(nodeId: string, byId: Map<string, AnyNode>): AnyNode | undefined {
+  for (const candidate of byId.values()) {
+    if (!('children' in candidate) || !Array.isArray(candidate.children)) continue
+    const containsNode = (candidate.children as unknown[]).some((child) => {
+      if (typeof child === 'string') return child === nodeId
+      return (
+        child !== null &&
+        typeof child === 'object' &&
+        'id' in child &&
+        (child as { id?: unknown }).id === nodeId
+      )
+    })
+    if (containsNode) return candidate
+  }
+  return undefined
 }
 
 /**
@@ -103,12 +143,104 @@ export function itemPlanAabb(
   }
 }
 
-/** Footprint for a scene item node (uses getScaledDimensions). */
+/** Scaled plan footprint used by legacy placement and door-clearance callers. */
 export function itemNodePlanAabb(node: AnyNode): PlanAabb | null {
   if (node.type !== 'item') return null
-  const [w, , d] = getScaledDimensions(node)
-  const rotY = Array.isArray(node.rotation) ? (node.rotation[1] ?? 0) : 0
-  return itemPlanAabb(node.position as number[], [w, 0, d], rotY)
+  if (!Array.isArray(node.asset.dimensions)) return null
+  const [width, height, depth] = getScaledDimensions(node)
+  const rotationY = Array.isArray(node.rotation) ? (node.rotation[1] ?? 0) : 0
+  if (
+    ![node.position[0], node.position[2], width, height, depth, rotationY].every(Number.isFinite)
+  ) {
+    return null
+  }
+  return itemPlanAabb(
+    node.position,
+    [Math.abs(width), Math.abs(height), Math.abs(depth)],
+    rotationY,
+  )
+}
+
+export function inspectItemPlanFootprint(
+  node: Extract<AnyNode, { type: 'item' }>,
+  options?: { floorOnly?: boolean },
+): ItemFootprintInspection {
+  if (
+    options?.floorOnly &&
+    (node.asset.attachTo === 'wall' ||
+      node.asset.attachTo === 'wall-side' ||
+      node.asset.attachTo === 'ceiling')
+  ) {
+    return { ok: false, reason: 'unsupported_attachment' }
+  }
+
+  const position = node.position
+  if (!Array.isArray(position)) {
+    return { ok: false, reason: 'non_finite_position' }
+  }
+  const x = position[0]
+  const y = position[1]
+  const z = position[2]
+  if (!(Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z))) {
+    return { ok: false, reason: 'non_finite_position' }
+  }
+
+  const rotation = Array.isArray(node.rotation) ? node.rotation : [0, 0, 0]
+  const rotationX = rotation[0] ?? Number.NaN
+  const rotationY = rotation[1] ?? Number.NaN
+  const rotationZ = rotation[2] ?? Number.NaN
+  if (!(Number.isFinite(rotationX) && Number.isFinite(rotationY) && Number.isFinite(rotationZ))) {
+    return { ok: false, reason: 'non_finite_rotation' }
+  }
+  if (Math.abs(rotationX) > 1e-6 || Math.abs(rotationZ) > 1e-6) {
+    return { ok: false, reason: 'non_planar_rotation' }
+  }
+
+  const dimensions = node.asset.dimensions
+  if (!Array.isArray(dimensions) || dimensions.length !== 3) {
+    return { ok: false, reason: 'missing_dimensions' }
+  }
+  const width = dimensions[0] ?? Number.NaN
+  const height = dimensions[1] ?? Number.NaN
+  const depth = dimensions[2] ?? Number.NaN
+  if (!(Number.isFinite(width) && Number.isFinite(height) && Number.isFinite(depth))) {
+    return { ok: false, reason: 'non_finite_dimensions' }
+  }
+  if (width <= 0 || depth <= 0) {
+    return { ok: false, reason: 'non_positive_plan_dimensions' }
+  }
+
+  const scale = Array.isArray(node.scale) ? node.scale : [1, 1, 1]
+  const scaleX = scale[0] ?? Number.NaN
+  const scaleY = scale[1] ?? Number.NaN
+  const scaleZ = scale[2] ?? Number.NaN
+  if (!(Number.isFinite(scaleX) && Number.isFinite(scaleY) && Number.isFinite(scaleZ))) {
+    return { ok: false, reason: 'non_finite_scale' }
+  }
+  if (scaleX === 0 || scaleZ === 0) {
+    return { ok: false, reason: 'zero_plan_scale' }
+  }
+
+  const [scaledWidth, scaledHeight, scaledDepth] = getScaledDimensions(node)
+  const effectiveDimensions: [number, number, number] = [
+    Math.abs(scaledWidth),
+    Math.abs(scaledHeight),
+    Math.abs(scaledDepth),
+  ]
+  if (!effectiveDimensions.every(Number.isFinite)) {
+    return { ok: false, reason: 'non_finite_dimensions' }
+  }
+  if (effectiveDimensions[0] <= 0 || effectiveDimensions[2] <= 0) {
+    return { ok: false, reason: 'non_positive_plan_dimensions' }
+  }
+
+  return {
+    ok: true,
+    aabb: itemPlanAabb(node.position, effectiveDimensions, rotationY),
+    sourceDimensions: [width, height, depth],
+    effectiveDimensions,
+    rotationY,
+  }
 }
 
 /**

@@ -26,6 +26,34 @@ an agent to launch `pascal mcp connect`. See [Run Pascal locally](https://editor
 for pnpm/Bun commands, project management, MCP setup, updates, storage paths, and
 troubleshooting.
 
+## Agent skills
+
+Install Pascal's public agent workflows from this repository with [skills.sh](https://skills.sh):
+
+```bash
+npx skills add pascalorg/editor \
+  --skill pascal-3d \
+  --skill furniture-fit
+```
+
+Claude Code users can install the same canonical skill source as a plugin:
+
+```text
+/plugin marketplace add pascalorg/editor
+/plugin install pascal-agent-skills@pascal
+```
+
+Codex users can install the same plugin from the repository marketplace:
+
+```bash
+codex plugin marketplace add pascalorg/editor
+codex plugin add pascal-agent-skills@pascal
+```
+
+[`pascal-3d`](skills/pascal-3d/SKILL.md) covers safe local or hosted MCP setup and verified scene work. [`furniture-fit`](skills/furniture-fit/SKILL.md) produces a bounded, evidence-based footprint assessment without claiming unsupported height, swing, or delivery checks. See [skills/README.md](skills/README.md) for package details and validation.
+
+The skills inspect the connected MCP tool schemas before using optional fields. A capability present in this repository may be absent from an older installed or hosted release; the agent should report the narrower supported result instead of assuming source-only inputs are available.
+
 ## Using Published Packages
 
 The viewer runtime and built-in node definitions are separate packages. Install the full built-in

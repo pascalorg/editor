@@ -1,0 +1,80 @@
+{
+  "skill_name": "furniture-fit",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "In my Pascal living-room project, check whether the existing 84 in by 38 in sofa at its current pose overlaps anything or blocks the modeled door. Don't move it. Tell me exactly what was and was not checked.",
+      "expected_output": "Runs a read-only, level-scoped footprint and door keep-out assessment, preserves the scene, and qualifies unsupported checks.",
+      "files": [],
+      "expectations": [
+        "Uses get_scene or get_node to verify item scale and rotation rather than trusting catalog labels alone.",
+        "Calls check_collisions with an explicit minimumClearance and verify_scene without mutating or saving the project.",
+        "Checks the collision result status and reports skipped evidence rather than treating partial output as a pass.",
+        "Separates actual overlap, item spacing, and rectangular door keep-out evidence.",
+        "Marks height, door swing, delivery route, and detailed mesh contact as not checked unless separately evidenced."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "My alcove is 2.30 m wide by 1.15 m deep. A cabinet is 2.00 m wide, 2.20 m tall, and 0.60 m deep. Compare it at 0 degrees and rotated 90 degrees, and tell me if I should order it.",
+      "expected_output": "Correctly reports that the horizontal footprint fits at 0 degrees but not at 90 degrees, while withholding purchase and height/delivery assurance.",
+      "files": [],
+      "expectations": [
+        "Computes 2.00 m by 0.60 m at 0 degrees and 0.60 m by 2.00 m at 90 degrees.",
+        "Reports the 90-degree depth failure against the 1.15 m alcove depth.",
+        "Uses qualified footprint language instead of an unqualified furniture-fit or purchase guarantee.",
+        "Requests vertical and delivery-route evidence before advising that the item can be installed.",
+        "Marks door access not checked or insufficient evidence when no doors are modeled; a clean verify_scene result does not prove candidate spacing or access."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "The couch is 0 by 90 by 40 inches and the room is 12 by 10 feet. Check if it fits.",
+      "expected_output": "Rejects the zero width as invalid and asks for a corrected item dimension without fabricating a verdict.",
+      "files": [],
+      "expectations": [
+        "Does not run or claim a successful fit check with a zero dimension.",
+        "Identifies the invalid width and requests a positive replacement value.",
+        "Does not silently substitute a default or guessed dimension."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "I wrote the table width as 1,234 and only have this unscaled listing photo. Will it fit through the hallway and around the stair turn?",
+      "expected_output": "Returns insufficient evidence because the number and scale are ambiguous and delivery-route checks are unsupported without route measurements.",
+      "files": [],
+      "expectations": [
+        "Treats 1,234 as ambiguous rather than choosing 1.234 or 1234.",
+        "Does not infer dimensions or scale from the photo.",
+        "Marks delivery path as not checked or insufficient evidence.",
+        "Requests the smallest useful item, packaging, doorway, hallway, and turn measurements."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "The wardrobe footprint clears the room in Pascal. It is 2.45 m tall, but the ceiling and soffit heights aren't in the model. Confirm that it fits and can be delivered.",
+      "expected_output": "Reports only the verified footprint result and refuses to confirm height or delivery without measurements.",
+      "files": [],
+      "expectations": [
+        "Uses the phrase footprint fits or an equivalent explicitly bounded verdict.",
+        "Marks height or overhead clearance as insufficient evidence.",
+        "Marks delivery route as not checked or insufficient evidence.",
+        "Does not treat a clear footprint as proof of real-world installation."
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "In my measured Pascal room, test a prospective 7 ft by 3 ft sofa at 90 degrees with 24 inches of clearance. Do not add it to the project.",
+      "expected_output": "Uses the advertised read-only candidate input when available and proves that the scene graph was not mutated.",
+      "files": [],
+      "expectations": [
+        "Inspects the connected check_collisions schema before using candidate fields.",
+        "Passes exact candidate dimensions, target level, position, Y rotation, and minimum clearance without calling place_item.",
+        "Confirms the returned candidateItemId and keeps room containment separate from item collision evidence.",
+        "Does not save, checkpoint, or leave a temporary node in the project.",
+        "Falls back to a qualified preliminary report if the connected release lacks candidate support.",
+        "Does not treat verify_scene as checking a candidate supplied only to check_collisions."
+      ]
+    }
+  ]
+}

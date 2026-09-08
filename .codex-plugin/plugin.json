@@ -1,0 +1,29 @@
+{
+  "name": "pascal-agent-skills",
+  "version": "0.1.0",
+  "description": "Create, inspect, validate, and assess furniture layouts in Pascal through MCP.",
+  "author": {
+    "name": "Pascal",
+    "url": "https://pascal.app"
+  },
+  "homepage": "https://editor.pascal.app/docs/developers/mcp",
+  "repository": "https://github.com/pascalorg/editor",
+  "license": "MIT",
+  "keywords": ["pascal", "3d", "architecture", "mcp", "furniture", "spatial"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Pascal agent skills",
+    "shortDescription": "Build and inspect Pascal scenes and assess furniture footprints.",
+    "longDescription": "Use Pascal's MCP tools to work with editable building scenes, validate and save results, and produce bounded furniture footprint reports with explicit evidence and limitations.",
+    "developerName": "Pascal",
+    "category": "Developer Tools",
+    "capabilities": ["Interactive", "Read", "Write"],
+    "websiteURL": "https://pascal.app",
+    "defaultPrompt": [
+      "Use Pascal to inspect this building project, make the requested bounded edit, validate it, save it, and return the editor URL.",
+      "Check whether this furniture footprint fits in the measured Pascal room, including rotations, collisions, door access, and unsupported checks."
+    ],
+    "brandColor": "#171717",
+    "screenshots": []
+  }
+}

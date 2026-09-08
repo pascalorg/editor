@@ -31,6 +31,9 @@ jobs:
       - name: Lint & format check
         run: bun run check
 
+      - name: Validate agent skills and plugin packages
+        run: bun scripts/validate-skills.ts
+
       - name: Type check
         run: bun run check-types
 
