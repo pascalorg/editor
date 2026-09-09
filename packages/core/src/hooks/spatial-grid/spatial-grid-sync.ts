@@ -382,7 +382,14 @@ export function markSlabChangeDependents(
     next.thickness !== previous.thickness ||
     next.recessed !== previous.recessed
   ) {
-    markCoveringDependentsBelow(resolveLevelId(next, nodes), nodes, markDirty)
+    const nextLevelId = resolveLevelId(next, nodes)
+    markCoveringDependentsBelow(nextLevelId, nodes, markDirty)
+    if (next.parentId !== previous.parentId) {
+      const previousLevelId = resolveLevelId(previous, previousNodes)
+      if (previousLevelId !== nextLevelId) {
+        markCoveringDependentsBelow(previousLevelId, nodes, markDirty)
+      }
+    }
   }
 }
 

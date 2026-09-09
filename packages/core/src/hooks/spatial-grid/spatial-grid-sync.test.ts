@@ -681,6 +681,61 @@ describe('temporal writes update slab support dependencies', () => {
     }
   })
 
+  test('slab reparent and undo mark covering dependents below both parent levels', async () => {
+    const levels = [0, 1, 2, 3].map((ordinal) =>
+      makeLevel(`level_${ordinal}`, ordinal, 2.5, [
+        `wall_covering_${ordinal}`,
+        `ceiling_covering_${ordinal}`,
+        ...(ordinal === 2 ? ['slab_reparent'] : []),
+      ]),
+    )
+    const consumers = levels.flatMap((level, ordinal) => [
+      {
+        ...makeChild(`wall_covering_${ordinal}`, 'wall', level.id),
+        start: [20, 0],
+        end: [24, 0],
+      } as AnyNode,
+      makeChild(`ceiling_covering_${ordinal}`, 'ceiling', level.id),
+    ])
+    const slab = makeSlab('slab_reparent', 'level_2')
+    useScene.setState({
+      nodes: nodesFor(...levels, ...consumers, slab),
+      rootNodeIds: levels.map((level) => level.id),
+      installedPlugins: [],
+      dirtyNodes: new Set(),
+      readOnly: false,
+    })
+    clearSceneHistory()
+    stop = initSpatialGridSync()
+    const coveringDirtyIds = () => dirtyIds().filter((id) => id.includes('_covering_'))
+    const expected = [
+      'ceiling_covering_1',
+      'ceiling_covering_2',
+      'wall_covering_1',
+      'wall_covering_2',
+    ]
+    useScene.getState().dirtyNodes.clear()
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        [slab.id]: { ...slab, parentId: 'level_3' } as AnyNode,
+        level_2: { ...levels[2]!, children: ['wall_covering_2', 'ceiling_covering_2'] } as AnyNode,
+        level_3: {
+          ...levels[3]!,
+          children: ['wall_covering_3', 'ceiling_covering_3', slab.id],
+        } as AnyNode,
+      },
+    })
+    await Promise.resolve()
+    expect(coveringDirtyIds()).toEqual(expected)
+
+    useScene.getState().dirtyNodes.clear()
+    useScene.temporal.getState().undo()
+    await Promise.resolve()
+    expect(useScene.getState().nodes[slab.id]?.parentId).toBe('level_2')
+    expect(coveringDirtyIds()).toEqual(expected)
+  })
+
   test('slab elevation and level height subscribers fire during real temporal restoration', async () => {
     const level = LevelNode.parse({
       id: 'level_vertical_history',
