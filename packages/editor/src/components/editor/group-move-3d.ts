@@ -32,9 +32,12 @@ import {
   collectParticipants,
   computeGroupBox,
   expandToComponent,
+  type GroupPlanBounds,
+  groupPlanBounds,
   levelFrame,
-  participantExtents,
+  planBoundsCenter,
   rotateGroupSnapshots,
+  rotatePlanBounds,
   translateGroupPatches,
   type Vec2,
 } from './group-transform-shared'
@@ -88,6 +91,7 @@ export function armGroupMove3d(args: {
     affectedIds: AnyNodeId[]
     candidates: ReturnType<typeof collectAlignmentAnchors>
     restAnchors: ReturnType<typeof bboxCornerAnchors>
+    restBounds: GroupPlanBounds
     restCenter: Vec2
     plane: Plane
     startLocal: Vector3
@@ -130,14 +134,14 @@ export function armGroupMove3d(args: {
       if (n && !movingIdSet.has(nid)) staticNodes[nid] = n
     }
     const candidates = collectAlignmentAnchors(staticNodes, '', levelId)
-    const boxMin = restBox.min.clone().applyMatrix4(frameInv)
-    const boxMax = restBox.max.clone().applyMatrix4(frameInv)
+    const restBounds = groupPlanBounds(restBox, starts, frameInv)
+    if (!restBounds) return null
     const restAnchors = bboxCornerAnchors(
       'group-move',
-      Math.min(boxMin.x, boxMax.x),
-      Math.min(boxMin.z, boxMax.z),
-      Math.max(boxMin.x, boxMax.x),
-      Math.max(boxMin.z, boxMax.z),
+      restBounds.minX,
+      restBounds.minZ,
+      restBounds.maxX,
+      restBounds.maxZ,
     )
 
     for (const id of affectedIds) {
@@ -154,9 +158,11 @@ export function armGroupMove3d(args: {
       nodeId,
       handle: GROUP_MOVE_DRAG_LABEL,
     })
-    // Rotation pivot for mid-drag R/T — the participant DATA extents' center.
-    const ext = participantExtents(starts)
-    const restCenter: Vec2 = ext ? [(ext.minX + ext.maxX) / 2, (ext.minZ + ext.maxZ) / 2] : [0, 0]
+    // Rotation pivot for mid-drag R/T — the START footprint's center, the same
+    // point the idle keyboard rotate and the rotate gizmos orbit. Fixed for the
+    // whole session: the snapshots are start placements, and `applyDelta` adds
+    // the live drag delta on top of them.
+    const restCenter = planBoundsCenter(restBounds)
 
     return {
       starts,
@@ -164,6 +170,7 @@ export function armGroupMove3d(args: {
       affectedIds,
       candidates,
       restAnchors,
+      restBounds,
       restCenter,
       plane,
       startLocal,
@@ -245,18 +252,19 @@ export function armGroupMove3d(args: {
   // current delta — the carried group turns exactly like the idle keyboard
   // rotate, and the commit stays a single updateNodes.
   const rotateSession = (s: Session, direction: 1 | -1) => {
-    const rotated = rotateGroupSnapshots(
-      s.starts,
-      s.links,
-      { x: s.restCenter[0], z: s.restCenter[1] },
-      -direction * (Math.PI / 4),
-    )
+    const pivot = { x: s.restCenter[0], z: s.restCenter[1] }
+    const delta = -direction * (Math.PI / 4)
+    const rotated = rotateGroupSnapshots(s.starts, s.links, pivot, delta)
     s.starts = rotated.starts
     s.links = rotated.links
-    const ext = participantExtents(rotated.starts)
-    if (ext) {
-      s.restAnchors = bboxCornerAnchors('group-move', ext.minX, ext.minZ, ext.maxX, ext.maxZ)
-    }
+    s.restBounds = rotatePlanBounds(s.restBounds, pivot, delta)
+    s.restAnchors = bboxCornerAnchors(
+      'group-move',
+      s.restBounds.minX,
+      s.restBounds.minZ,
+      s.restBounds.maxX,
+      s.restBounds.maxZ,
+    )
     sfxEmitter.emit('sfx:item-rotate')
     applyDelta(s, s.lastDelta?.[0] ?? 0, s.lastDelta?.[1] ?? 0)
   }
@@ -369,7 +377,18 @@ export function armGroupMove3d(args: {
   const onKeyDown = (e: KeyboardEvent) => {
     const key = e.key.toLowerCase()
     if ((key === 'r' || key === 't') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
-      if (!session) return
+      // Armed but still under the drag threshold: engage first (exactly what
+      // the next pointer-move would do) so the rotation lands inside this
+      // session. Falling through to the global idle arm instead would write
+      // the scene behind snapshots already captured here, and the first
+      // `applyDelta` would republish them — undoing the rotation.
+      if (!session) {
+        session = engage()
+        if (!session) {
+          removeListeners()
+          return
+        }
+      }
       e.preventDefault()
       e.stopPropagation()
       rotateSession(session, key === 'r' ? 1 : -1)
