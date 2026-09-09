@@ -276,13 +276,9 @@ function getRestoredSelectionForScene(
 export function syncEditorSelectionFromCurrentScene() {
   const sceneNodes = useScene.getState().nodes as Record<string, any>
   const sceneRootIds = useScene.getState().rootNodeIds
+  const siteNode = sceneRootIds[0] ? sceneNodes[sceneRootIds[0]] : null
   const resolve = (child: any) => (typeof child === 'string' ? sceneNodes[child] : child)
-  const rootNodes = sceneRootIds.map((id) => sceneNodes[id]).filter(Boolean)
-  const firstBuilding =
-    rootNodes.find((node) => node.type === 'building') ??
-    rootNodes
-      .flatMap((node) => (Array.isArray(node.children) ? node.children.map(resolve) : []))
-      .find((node) => node?.type === 'building')
+  const firstBuilding = siteNode?.children?.map(resolve).find((n: any) => n?.type === 'building')
   const firstLevel = firstBuilding?.children?.map(resolve).find((n: any) => n?.type === 'level')
   const restoredEditorUiState = normalizePersistedEditorUiState(useEditor.getState())
   const shouldRestoreEditorUiState = hasCustomPersistedEditorUiState(restoredEditorUiState)
@@ -400,25 +396,11 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
   )
 }
 
-export function normalizeSceneGraphNodes(
-  nodes: Readonly<Record<string, unknown>>,
-): Record<string, unknown> {
-  return Object.fromEntries(
-    Object.entries(nodes).map(([id, value]) => {
-      if (!value || typeof value !== 'object' || Array.isArray(value)) return [id, value]
-      const type = (value as { type?: unknown }).type
-      if (typeof type !== 'string') return [id, value]
-      const parsed = nodeRegistry.get(type)?.schema.safeParse(value)
-      return [id, parsed?.success ? parsed.data : value]
-    }),
-  )
-}
-
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   const defaultInstalledPlugins = editorHostPanelRegistry.getDefaultInstalledPluginIds()
   if (hasUsableSceneGraph(sceneGraph)) {
     const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph
-    useScene.getState().setScene(normalizeSceneGraphNodes(nodes) as any, rootNodeIds as any, {
+    useScene.getState().setScene(nodes as any, rootNodeIds as any, {
       collections: collections as any,
       materials: materials as any,
       installedPlugins: installedPlugins ?? defaultInstalledPlugins,

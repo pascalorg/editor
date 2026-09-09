@@ -692,10 +692,6 @@ const PostProcessingPasses = ({
   ])
 
   useFrame((_, delta) => {
-    // The session binding renders with Three's stereo XR camera. Rendering
-    // this desktop-camera pass during the same frame clears that framebuffer.
-    if (renderer.xr?.isPresenting) return
-
     if (size.width < 1 || size.height < 1) {
       return
     }

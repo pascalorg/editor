@@ -83,11 +83,6 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, paused = false })
     }
     function tick(t: DOMHighResTimeStamp) {
       raf = requestAnimationFrame(tick)
-      // While an immersive XR session is presenting, the XR session's
-      // requestAnimationFrame loop owns rendering. A window RAF here can
-      // render with no XRFrame and overwrite the XR framebuffer between
-      // headset frames.
-      if (renderer.xr?.isPresenting) return
       syncSize()
       const frameTime = clock.sample(t, interval)
       if (frameTime === null) return
@@ -95,7 +90,6 @@ const FrameLimiter: React.FC<FrameLimiterProps> = ({ fps = 50, paused = false })
       timeSpan('frame-cpu', () => advance(frameTime))
     }
     function kick() {
-      if (renderer.xr?.isPresenting) return
       syncSize()
       const frameTime = clock.step(1 / 1000)
       nextFrameTimeRef.current = frameTime

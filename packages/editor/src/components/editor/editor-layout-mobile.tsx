@@ -40,7 +40,6 @@ export interface EditorLayoutMobileProps {
   viewerToolbarRight?: ReactNode
   viewerContent: ReactNode
   overlays?: ReactNode
-  immersivePresentation?: boolean
 }
 
 export function EditorLayoutMobile({
@@ -52,7 +51,6 @@ export function EditorLayoutMobile({
   viewerToolbarRight,
   viewerContent,
   overlays,
-  immersivePresentation = false,
 }: EditorLayoutMobileProps) {
   const isCaptureMode = useEditor((s) => s.isCaptureMode)
   const activePanel = useEditor((s) => s.activeSidebarPanel)
@@ -191,12 +189,11 @@ export function EditorLayoutMobile({
   // Otherwise, the viewer extends SHEET_OVERLAP_PX behind the sheet's rounded
   // corners so the curve reveals viewer content underneath.
   const baseViewerHeight = Math.max(0, middleH - effectiveSheetH)
-  const viewerHeight =
-    isCaptureMode || immersivePresentation
-      ? middleH
-      : baseViewerHeight === 0
-        ? 0
-        : Math.min(middleH, baseViewerHeight + SHEET_OVERLAP_PX)
+  const viewerHeight = isCaptureMode
+    ? middleH
+    : baseViewerHeight === 0
+      ? 0
+      : Math.min(middleH, baseViewerHeight + SHEET_OVERLAP_PX)
 
   // While the panel sheet is open, collapse the primary sheet to its handle so
   // it doesn't peek above. Remember the previous height and restore it on close.
@@ -215,11 +212,8 @@ export function EditorLayoutMobile({
   }, [panelSheetHeight, committedSheetH])
 
   return (
-    <div
-      className="dark flex h-full w-full flex-col bg-sidebar text-foreground"
-      data-immersive-presentation={immersivePresentation || undefined}
-    >
-      {!immersivePresentation && navbarSlot}
+    <div className="dark flex h-full w-full flex-col bg-sidebar text-foreground">
+      {navbarSlot}
 
       <div
         className="relative flex min-h-0 flex-1"
@@ -229,19 +223,18 @@ export function EditorLayoutMobile({
         {/* Viewer column: sized by committed sheet height */}
         <div className="absolute inset-x-0 top-0 overflow-hidden" style={{ height: viewerHeight }}>
           <div className="relative h-full w-full">
-            {(viewerToolbarLeft || viewerToolbarRight) &&
-              !(isCaptureMode || immersivePresentation) && (
-                <div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex items-center justify-between gap-2">
-                  <div className="pointer-events-auto flex items-center gap-2">
-                    {viewerToolbarLeft}
-                  </div>
-                  <div className="pointer-events-auto flex items-center gap-2">
-                    {viewerToolbarRight}
-                  </div>
+            {(viewerToolbarLeft || viewerToolbarRight) && !isCaptureMode && (
+              <div className="pointer-events-none absolute top-3 right-3 left-3 z-20 flex items-center justify-between gap-2">
+                <div className="pointer-events-auto flex items-center gap-2">
+                  {viewerToolbarLeft}
                 </div>
-              )}
+                <div className="pointer-events-auto flex items-center gap-2">
+                  {viewerToolbarRight}
+                </div>
+              </div>
+            )}
             <div className="relative h-full w-full overflow-hidden">{viewerContent}</div>
-            {overlays && !immersivePresentation && (
+            {overlays && (
               <div
                 className="pointer-events-none absolute inset-0 z-30"
                 style={{ transform: 'translateZ(0)' }}
@@ -253,7 +246,7 @@ export function EditorLayoutMobile({
         </div>
 
         {/* Bottom sheet: overlays the lower part of the middle area */}
-        {!(isCaptureMode || immersivePresentation) && sidebarTabs.length > 0 && (
+        {!isCaptureMode && sidebarTabs.length > 0 && (
           <BottomSheet
             initialHeightPx={SHEET_HANDLE_PX}
             onCommit={setCommittedSheetH}
@@ -268,7 +261,7 @@ export function EditorLayoutMobile({
         )}
       </div>
 
-      {!(isCaptureMode || immersivePresentation) && sidebarTabs.length > 0 && (
+      {!isCaptureMode && sidebarTabs.length > 0 && (
         <MobileTabBar activeTab={activePanel} onTabPress={handleTabPress} tabs={sidebarTabs} />
       )}
     </div>

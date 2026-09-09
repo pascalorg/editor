@@ -1,9 +1,8 @@
 'use client'
 
 import { type Cursor, emitter } from '@pascal-app/core'
-import { markPureRaycast } from '@pascal-app/viewer'
-import { type ThreeEvent, useThree } from '@react-three/fiber'
-import { type ReactNode, useEffect, useLayoutEffect, useMemo, useRef } from 'react'
+import type { ThreeEvent } from '@react-three/fiber'
+import { type ReactNode, useEffect, useMemo, useRef } from 'react'
 import {
   BoxGeometry,
   type BufferGeometry,
@@ -15,18 +14,14 @@ import {
   type Group,
   type Intersection,
   Mesh,
-  type Object3D,
-  type Ray,
   type Raycaster,
   Shape,
   TorusGeometry,
-  Vector3,
 } from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
 import { MeshBasicNodeMaterial } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../../lib/constants'
 import { EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY } from '../../../lib/direct-manipulation'
-import { getSpatialPointerId, spatialPointerInput } from '../../../lib/spatial-pointer-input'
 import useEditor from '../../../store/use-editor'
 
 // While a press-drag move is in flight (`placementDragMode`), the move tool
@@ -35,13 +30,10 @@ import useEditor from '../../../store/use-editor'
 // (`wall:move` for openings, `grid:move` for free movers), freezing the drag.
 // Make every handle hit area inert for the duration; the indicator mesh still
 // renders (it's already NO_RAYCAST + depthTest off) so the grip stays visible.
-export const hitAreaRaycast = markPureRaycast(function hitAreaRaycast(
-  this: Mesh,
-  raycaster: Raycaster,
-  intersects: Intersection[],
-): void {
+export function hitAreaRaycast(this: Mesh, raycaster: Raycaster, intersects: Intersection[]): void {
+  if (useEditor.getState().placementDragMode) return
   Mesh.prototype.raycast.call(this, raycaster, intersects)
-})
+}
 
 export const ARROW_SCALE = 0.65
 export const ARROW_COLOR = '#8381ed'
@@ -50,7 +42,6 @@ export const NO_RAYCAST = () => null
 export const HIT_AREA_MARGIN = 0.035
 
 const HIT_AREA_RENDER_ORDER = 1011
-const HIT_AREA_POINTER_EVENTS_ORDER = 10
 const HIT_AREA_THICKNESS = 0.08
 const CHEVRON_MIN_X = -0.2
 const CHEVRON_MAX_X = 0.22
@@ -288,6 +279,44 @@ export function createMoveCrossHandleGeometry() {
   return merged
 }
 
+export function createArrowHitAreaGeometry() {
+  const length = CHEVRON_MAX_X - CHEVRON_MIN_X + HIT_AREA_MARGIN * 2
+  const centerX = (CHEVRON_MIN_X + CHEVRON_MAX_X) / 2
+  const geometry = new CylinderGeometry(
+    CHEVRON_HALF_WIDTH + HIT_AREA_MARGIN,
+    CHEVRON_HALF_WIDTH + HIT_AREA_MARGIN,
+    length,
+    16,
+  )
+  geometry.rotateZ(-Math.PI / 2)
+  geometry.translate(centerX, 0, 0)
+  geometry.computeBoundingSphere()
+  return geometry
+}
+
+// The move cross is a plus, not a disk. A disk-shaped hit area fills the four
+// corner gaps between the arms, so a neighbouring node sitting next to the
+// selected node (a lamp by a door, a slab beside a wall) gets swallowed by the
+// invisible grip and can't be picked. Wrap the visible arms instead: two flat
+// arm boxes (length/width + margin) merged into a plus, leaving the corners
+// empty so co-located neighbours stay selectable while the grip stays grabbable.
+function createMoveCrossHitAreaGeometry() {
+  const armLength = (MOVE_CROSS_HALF_LENGTH + HIT_AREA_MARGIN) * 2
+  const armWidth = (MOVE_CROSS_HEAD_HALF_WIDTH + HIT_AREA_MARGIN) * 2
+  const armX = new BoxGeometry(armLength, HIT_AREA_THICKNESS, armWidth)
+  const armZ = new BoxGeometry(armWidth, HIT_AREA_THICKNESS, armLength)
+  const merged = mergeGeometries([armX, armZ], false)
+  if (!merged) {
+    armZ.dispose()
+    armX.computeBoundingSphere()
+    return armX
+  }
+  armX.dispose()
+  armZ.dispose()
+  merged.computeBoundingSphere()
+  return merged
+}
+
 function createPlusHandleGeometry() {
   const shape = new Shape()
   shape.moveTo(-PLUS_HALF_WIDTH, PLUS_HALF_LENGTH)
@@ -332,44 +361,6 @@ function createPlusHitAreaGeometry() {
   }
   horizontal.dispose()
   vertical.dispose()
-  merged.computeBoundingSphere()
-  return merged
-}
-
-export function createArrowHitAreaGeometry() {
-  const length = CHEVRON_MAX_X - CHEVRON_MIN_X + HIT_AREA_MARGIN * 2
-  const centerX = (CHEVRON_MIN_X + CHEVRON_MAX_X) / 2
-  const geometry = new CylinderGeometry(
-    CHEVRON_HALF_WIDTH + HIT_AREA_MARGIN,
-    CHEVRON_HALF_WIDTH + HIT_AREA_MARGIN,
-    length,
-    16,
-  )
-  geometry.rotateZ(-Math.PI / 2)
-  geometry.translate(centerX, 0, 0)
-  geometry.computeBoundingSphere()
-  return geometry
-}
-
-// The move cross is a plus, not a disk. A disk-shaped hit area fills the four
-// corner gaps between the arms, so a neighbouring node sitting next to the
-// selected node (a lamp by a door, a slab beside a wall) gets swallowed by the
-// invisible grip and can't be picked. Wrap the visible arms instead: two flat
-// arm boxes (length/width + margin) merged into a plus, leaving the corners
-// empty so co-located neighbours stay selectable while the grip stays grabbable.
-function createMoveCrossHitAreaGeometry() {
-  const armLength = (MOVE_CROSS_HALF_LENGTH + HIT_AREA_MARGIN) * 2
-  const armWidth = (MOVE_CROSS_HEAD_HALF_WIDTH + HIT_AREA_MARGIN) * 2
-  const armX = new BoxGeometry(armLength, HIT_AREA_THICKNESS, armWidth)
-  const armZ = new BoxGeometry(armWidth, HIT_AREA_THICKNESS, armLength)
-  const merged = mergeGeometries([armX, armZ], false)
-  if (!merged) {
-    armZ.dispose()
-    armX.computeBoundingSphere()
-    return armX
-  }
-  armX.dispose()
-  armZ.dispose()
   merged.computeBoundingSphere()
   return merged
 }
@@ -494,76 +485,16 @@ export function InvisibleHandleHitArea({
   onPointerLeave: PointerHandler
   scale: number
 }) {
-  const camera = useThree((state) => state.camera)
-  const canvas = useThree((state) => state.gl.domElement)
-
-  const windowPointerEventForRay = (
-    type: 'pointermove' | 'pointerup' | 'pointercancel',
-    ray: Ray,
-  ) => {
-    const point = ray.at(4, new Vector3()).project(camera)
-    const rect = canvas.getBoundingClientRect()
-    return new PointerEvent(type, {
-      bubbles: true,
-      button: 0,
-      buttons: type === 'pointermove' ? 1 : 0,
-      clientX: rect.left + ((point.x + 1) / 2) * rect.width,
-      clientY: rect.top + ((1 - point.y) / 2) * rect.height,
-      pointerType: 'xr',
-    })
-  }
-
-  const handlePointerDown: PointerHandler = (event) => {
-    const spatialPointerId = getSpatialPointerId(event.nativeEvent)
-    if (spatialPointerId) {
-      const target = event.object as Object3D & {
-        setPointerCapture?: (pointerId: number) => void
-      }
-      target.setPointerCapture?.(event.pointerId)
-      const initialPointer = windowPointerEventForRay('pointermove', event.ray)
-      const nativeEvent = event.nativeEvent as PointerEvent
-      try {
-        Object.defineProperties(nativeEvent, {
-          clientX: { configurable: true, value: initialPointer.clientX },
-          clientY: { configurable: true, value: initialPointer.clientY },
-          pointerId: { configurable: true, value: event.pointerId },
-          pointerType: { configurable: true, value: 'xr' },
-        })
-      } catch {
-        // Direct-ray handle sessions do not need projected DOM coordinates.
-      }
-      spatialPointerInput.capture(spatialPointerId, {
-        onMove: (ray) => window.dispatchEvent(windowPointerEventForRay('pointermove', ray)),
-        onRelease: () => window.dispatchEvent(windowPointerEventForRay('pointerup', event.ray)),
-        onCancel: () => window.dispatchEvent(windowPointerEventForRay('pointercancel', event.ray)),
-      })
-    }
-    onPointerDown(event)
-  }
-  const ref = useRef<Mesh>(null)
-  useLayoutEffect(() => {
-    const mesh = ref.current
-    if (!mesh) return
-    // Subscribe synchronously so the next pointer event sees drag state before React renders.
-    const syncRaycast = () => {
-      mesh.raycast = useEditor.getState().placementDragMode ? NO_RAYCAST : hitAreaRaycast
-    }
-    syncRaycast()
-    return useEditor.subscribe(syncRaycast)
-  }, [])
-
   return (
     <mesh
       frustumCulled={false}
       geometry={geometry}
       layers={EDITOR_LAYER}
       material={material}
-      onPointerDown={handlePointerDown}
+      onPointerDown={onPointerDown}
       onPointerEnter={onPointerEnter}
       onPointerLeave={onPointerLeave}
-      pointerEventsOrder={HIT_AREA_POINTER_EVENTS_ORDER}
       raycast={hitAreaRaycast}
-      ref={ref}
       renderOrder={HIT_AREA_RENDER_ORDER}
       scale={scale}
       userData={{ [EDITOR_HANDLE_HIT_AREA_USER_DATA_KEY]: true }}

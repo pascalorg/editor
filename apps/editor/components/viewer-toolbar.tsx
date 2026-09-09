@@ -695,7 +695,7 @@ export function CommunityViewerToolbarLeft() {
   )
 }
 
-export function CommunityViewerToolbarRight({ pluginActions }: { pluginActions?: ReactNode }) {
+export function CommunityViewerToolbarRight() {
   return (
     <div className={TOOLBAR_CONTAINER}>
       <LevelModeToggle />
@@ -704,7 +704,6 @@ export function CommunityViewerToolbarRight({ pluginActions }: { pluginActions?:
       <DisplayMenu />
       <div className="my-1.5 w-px bg-border/50" />
       <WalkthroughButton />
-      {pluginActions}
       <PreviewButton />
     </div>
   )

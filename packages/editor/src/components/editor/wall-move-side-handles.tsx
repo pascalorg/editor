@@ -49,7 +49,6 @@ import {
 import { isHistoryShortcut } from '../../lib/history'
 import { endpointReshapeScope } from '../../lib/interaction/scope'
 import { sfxEmitter } from '../../lib/sfx-bus'
-import { getSpatialPointerId, spatialPointerInput } from '../../lib/spatial-pointer-input'
 import useEditor, { isGridSnapActive, isMagneticSnapActive } from '../../store/use-editor'
 import useInteractionScope, {
   useEndpointReshape,
@@ -770,9 +769,7 @@ function WallBaseElevationHandle({
       const midpointWorld = new Vector3(midpoint[0], initialBase, midpoint[1]).applyMatrix4(
         levelObject.matrixWorld,
       )
-      const planeNormal = new Vector3()
-        .subVectors(camera.getWorldPosition(new Vector3()), midpointWorld)
-        .setY(0)
+      const planeNormal = new Vector3().subVectors(camera.position, midpointWorld).setY(0)
       if (planeNormal.lengthSq() === 0) return null
       planeNormal.normalize()
       const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, midpointWorld)
@@ -915,17 +912,12 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
     // the camera (projected to horizontal). Raycasting against it converts
     // pointer movement into a world-space Y value.
     const midpointWorld = new Vector3(midX, 0, midZ).applyMatrix4(levelObject.matrixWorld)
-    const planeNormal = new Vector3()
-      .subVectors(camera.getWorldPosition(new Vector3()), midpointWorld)
-      .setY(0)
+    const planeNormal = new Vector3().subVectors(camera.position, midpointWorld).setY(0)
     if (planeNormal.lengthSq() === 0) return
     planeNormal.normalize()
     const plane = new Plane().setFromNormalAndCoplanarPoint(planeNormal, midpointWorld)
 
     const ndc = new Vector2()
-    const spatialPointerId = getSpatialPointerId(event.nativeEvent)
-    const spatialPointerSource = typeof spatialPointerId === 'object' ? spatialPointerId : null
-    const spatialRay = spatialPointerSource ? event.ray.clone() : null
     const setNDC = (clientX: number, clientY: number) => {
       const rect = gl.domElement.getBoundingClientRect()
       ndc.set(
@@ -934,12 +926,10 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
       )
     }
 
-    if (!spatialRay) {
-      setNDC(event.nativeEvent.clientX, event.nativeEvent.clientY)
-      raycaster.setFromCamera(ndc, camera)
-    }
+    setNDC(event.nativeEvent.clientX, event.nativeEvent.clientY)
+    raycaster.setFromCamera(ndc, camera)
     const hit = new Vector3()
-    if (!(spatialRay ?? raycaster.ray).intersectPlane(plane, hit)) return
+    if (!raycaster.ray.intersectPlane(plane, hit)) return
 
     // Dragging the top makes the wall custom-height; seed from the resolved
     // effective height so a plane-bound wall's drag starts at its real top.
@@ -947,7 +937,6 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
     const initialY = hit.y
     const wallId = wall.id as AnyNodeId
     let pendingHeight = initialHeight
-    let releaseSpatialCapture: (() => void) | null = null
 
     document.body.style.cursor = 'ns-resize'
     sfxEmitter.emit('sfx:item-pick')
@@ -965,11 +954,8 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
     const onMove = (e: PointerEvent) => {
       setNDC(e.clientX, e.clientY)
       raycaster.setFromCamera(ndc, camera)
-      applyRay(raycaster.ray)
-    }
-    const applyRay = (ray: Ray) => {
       const intersection = new Vector3()
-      if (!ray.intersectPlane(plane, intersection)) return
+      if (!raycaster.ray.intersectPlane(plane, intersection)) return
       const newHeight = Math.max(MIN_WALL_HEIGHT, initialHeight + (intersection.y - initialY))
       pendingHeight = newHeight
       useLiveNodeOverrides.getState().set(wallId, { height: newHeight })
@@ -981,8 +967,6 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
       window.removeEventListener('pointerup', onUp)
       window.removeEventListener('pointercancel', onCancel)
       window.removeEventListener('keydown', onKeyDown, true)
-      releaseSpatialCapture?.()
-      releaseSpatialCapture = null
       if (document.body.style.cursor === 'ns-resize') {
         document.body.style.cursor = ''
       }
@@ -1023,16 +1007,6 @@ function WallHeightArrowHandle({ wall }: { wall: WallNode }) {
     }
 
     dragCleanupRef.current = cleanup
-    if (spatialPointerSource && spatialRay) {
-      releaseSpatialCapture = spatialPointerInput.capture(spatialPointerSource, {
-        onMove: (ray) => {
-          spatialRay.copy(ray)
-          applyRay(spatialRay)
-        },
-        onRelease: onUp,
-        onCancel,
-      })
-    }
     window.addEventListener('pointermove', onMove)
     window.addEventListener('pointerup', onUp)
     window.addEventListener('pointercancel', onCancel)

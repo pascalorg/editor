@@ -15,7 +15,6 @@ import { Icon } from '@iconify/react'
 import { Move, Trash2 } from 'lucide-react'
 import { type ComponentType, lazy, Suspense, useCallback } from 'react'
 import { resolveMoveActionNode } from '../../../lib/direct-manipulation'
-import { commitParametricNodeFields } from '../../../lib/parametric-node-update'
 import { sfxEmitter } from '../../../lib/sfx-bus'
 import { collectZoneContentIds } from '../../../lib/zone-content'
 import useEditor from '../../../store/use-editor'
@@ -62,9 +61,22 @@ export function ParametricInspector({
   const handleUpdate = useCallback(
     (patch: Partial<AnyNode>) => {
       if (!selectedId) return
-      commitParametricNodeFields(selectedId, patch)
+      const scene = useScene.getState()
+      const node = scene.nodes[selectedId]
+      if (parametrics?.derive && node) {
+        const next = { ...node, ...patch } as AnyNode
+        patch = { ...patch, ...parametrics.derive(next, patch, node as AnyNode) }
+      }
+      // Bundle the edited node + any reconcile follow-ups into ONE
+      // updateNodes call so a single inspector edit is a single undo step.
+      const updates: { id: AnyNodeId; data: Partial<AnyNode> }[] = [{ id: selectedId, data: patch }]
+      if (parametrics?.reconcile && node) {
+        const next = { ...node, ...patch } as AnyNode
+        updates.push(...parametrics.reconcile(node as AnyNode, next))
+      }
+      scene.updateNodes(updates)
     },
-    [selectedId],
+    [selectedId, parametrics],
   )
 
   const clearSelection = useCallback(() => {

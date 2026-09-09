@@ -57,9 +57,6 @@
     "lightningcss-linux-arm64-gnu": "1.32.0",
     "lightningcss-linux-x64-gnu": "1.32.0"
   },
-  "patchedDependencies": {
-    "three@0.185.1": "patches/three@0.185.1.patch",
-  },
   "workspaces": [
     "apps/*",
     "packages/*",

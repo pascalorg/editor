@@ -133,19 +133,6 @@ const exitToSelectAfterUnconsumedCancel = () => {
   useEditor.getState().setSelectedReferenceId(null)
 }
 
-// Cancel the active editor action with the same consume-or-exit semantics as
-// Escape. Spatial inputs use this instead of unconditionally selecting the
-// Select tool, so multi-step tools can keep their tool active after clearing
-// the current draft.
-export const cancelActiveTool = () => {
-  _toolCancelConsumed = false
-  emitter.emit('tool:cancel')
-  if (!_toolCancelConsumed) {
-    exitToSelectAfterUnconsumedCancel()
-  }
-  return _toolCancelConsumed
-}
-
 // ⌘Z pressed mid-interaction (moving a node, drawing a wall, mid-placement…)
 // reads as "abort this action", not history undo — behave exactly like Escape
 // and report whether anything was in flight so the undo/redo arms know to
@@ -393,9 +380,14 @@ export const useKeyboard = ({
           return
         }
 
+        _toolCancelConsumed = false
+        emitter.emit('tool:cancel')
+
         // Only switch to select mode if no tool had an active mid-action to cancel.
         // (e.g. mid-wall draw or mid-slab polygon should only cancel the action, not exit the tool)
-        cancelActiveTool()
+        if (!_toolCancelConsumed) {
+          exitToSelectAfterUnconsumedCancel()
+        }
       } else if (e.key === '1' && !e.metaKey && !e.ctrlKey) {
         e.preventDefault()
         useEditor.getState().setPhase('site')

@@ -12,11 +12,7 @@ export { ErrorBoundary } from './components/error-boundary'
 // `@pascal-app/nodes/<kind>/renderer.tsx` and are loaded by the registry
 // — no per-kind re-exports needed.
 export { NodeRenderer } from './components/renderers/node-renderer'
-export {
-  default as Viewer,
-  type ViewerHandle,
-  type ViewerXRConfig,
-} from './components/viewer'
+export { default as Viewer, type ViewerHandle } from './components/viewer'
 export {
   type BVHEcctrlApi,
   default as BVHEcctrl,
