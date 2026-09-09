@@ -1,13 +1,22 @@
 import { expect, test } from 'bun:test'
-import { resolve } from 'node:path'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+
+function sourcePath(path: string) {
+  return JSON.stringify(resolve(import.meta.dir, '../../../../..', path))
+}
 
 // Isolate module wiring: exercise changed viewer sources without rebuilding live dists
 // or leaking Bun's process-global module mocks into the randomized nodes suite.
 function runSourceTest(body: string) {
-  const result = Bun.spawnSync(
-    [
-      process.execPath,
-      '-e',
+  const cacheDir = join(import.meta.dir, '.turbo')
+  mkdirSync(cacheDir, { recursive: true })
+  // A package-local file resolves hoisted dependencies in private-editor's submodule layout.
+  const probeDir = mkdtempSync(join(cacheDir, 'source-test-'))
+  try {
+    const probePath = join(probeDir, 'probe.ts')
+    writeFileSync(
+      probePath,
       `
     import assert from 'node:assert/strict'
     import { mock } from 'bun:test'
@@ -16,22 +25,27 @@ function runSourceTest(body: string) {
     import { Group, Mesh, MeshBasicMaterial } from 'three'
     ${body}
   `,
-    ],
-    { cwd: resolve(import.meta.dir, '../../../../..'), stdout: 'pipe', stderr: 'pipe' },
-  )
-  expect({ code: result.exitCode, stderr: result.stderr.toString() }).toEqual({
-    code: 0,
-    stderr: '',
-  })
+    )
+    const result = Bun.spawnSync([process.execPath, probePath], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    })
+    expect({ code: result.exitCode, stderr: result.stderr.toString() }).toEqual({
+      code: 0,
+      stderr: '',
+    })
+  } finally {
+    rmSync(probeDir, { recursive: true, force: true })
+  }
 }
 
 test('real slab top/side/skirt collection, shared defaults, transparent overrides and cache ownership', () => {
   runSourceTest(`
-    const sourceMaterials = await import('./packages/viewer/src/lib/materials.ts')
+    const sourceMaterials = await import(${sourcePath('packages/viewer/src/lib/materials.ts')})
     mock.module('@pascal-app/viewer', () => ({ ...viewer, ...sourceMaterials }))
-    const { buildSlabGeometry } = await import('./packages/nodes/src/slab/geometry.ts')
-    const { collectBatchCandidate } = await import('./packages/nodes/src/shared/node-batch/candidates.ts')
-    const { disposeObject3DResources } = await import('./packages/viewer/src/lib/dispose-object3d.ts')
+    const { buildSlabGeometry } = await import(${sourcePath('packages/nodes/src/slab/geometry.ts')})
+    const { collectBatchCandidate } = await import(${sourcePath('packages/nodes/src/shared/node-batch/candidates.ts')})
+    const { disposeObject3DResources } = await import(${sourcePath('packages/viewer/src/lib/dispose-object3d.ts')})
     const site = core.SiteNode.parse({ id: 'site_test', children: ['building_test'] })
     const building = core.BuildingNode.parse({ id: 'building_test', parentId: site.id, children: ['level_test'] })
     const level = core.LevelNode.parse({ id: 'level_test', parentId: building.id, level: 0, height: 2.5 })
@@ -103,8 +117,8 @@ test('priority-1 dirty snapshot sees the priority-2 ceiling rebuild and batches 
     const react = await import('react')
     const refs = []
     mock.module('react', () => ({ ...react, useEffect: () => {}, useRef: (value) => { const ref = { current: value }; refs.push(ref); return ref } }))
-    const { CeilingSystem, generateCeilingGeometry } = await import('./packages/viewer/src/systems/ceiling/ceiling-system.tsx')
-    const { NodeBatchSystem, runBatchFrame, resetNodeBatchState } = await import('./packages/nodes/src/shared/node-batch/system.tsx')
+    const { CeilingSystem, generateCeilingGeometry } = await import(${sourcePath('packages/viewer/src/systems/ceiling/ceiling-system.tsx')})
+    const { NodeBatchSystem, runBatchFrame, resetNodeBatchState } = await import(${sourcePath('packages/nodes/src/shared/node-batch/system.tsx')})
     let now = 0
     performance.now = () => now
     const root = new Group()
@@ -137,8 +151,8 @@ test('priority-1 dirty snapshot sees the priority-2 ceiling rebuild and batches 
     NodeBatchSystem().type()
     assert.deepEqual(callbacks.map((pass) => pass.priority), [2, 1, 5])
     const viewerStore = viewer.useViewer
-    mock.module('./packages/viewer/src/store/use-viewer.ts', () => ({ default: Object.assign((selector) => selector(viewerStore.getState()), viewerStore) }))
-    const { GeometrySystem } = await import('./packages/viewer/src/systems/geometry/geometry-system.tsx')
+    mock.module(${sourcePath('packages/viewer/src/store/use-viewer.ts')}, () => ({ default: Object.assign((selector) => selector(viewerStore.getState()), viewerStore) }))
+    const { GeometrySystem } = await import(${sourcePath('packages/viewer/src/systems/geometry/geometry-system.tsx')})
     GeometrySystem()
     assert.equal(callbacks[3].priority, 2)
     const pipeline = callbacks.sort((a,b) => a.priority - b.priority)
@@ -158,14 +172,14 @@ test('priority-1 dirty snapshot sees the priority-2 ceiling rebuild and batches 
 })
 
 const slabCacheFixture = `
-  const sourceMaterials = await import('./packages/viewer/src/lib/materials.ts')
+  const sourceMaterials = await import(${sourcePath('packages/viewer/src/lib/materials.ts')})
   const scene = core.useScene
   const viewerStore = viewer.useViewer
   viewerStore.setState({ bumpGeometryRevision: () => viewerStore.setState({ geometryRevision: viewerStore.getState().geometryRevision + 1 }) })
   const selectorHook = (store) => Object.assign((selector) => selector(store.getState()), store)
   mock.module('@pascal-app/core', () => ({ ...core, useScene: selectorHook(scene), useRegistryVersion: () => 0 }))
   mock.module('@pascal-app/viewer', () => ({ ...viewer, ...sourceMaterials, useViewer: selectorHook(viewerStore) }))
-  mock.module('./packages/viewer/src/store/use-viewer.ts', () => ({ default: selectorHook(viewerStore) }))
+  mock.module(${sourcePath('packages/viewer/src/store/use-viewer.ts')}, () => ({ default: selectorHook(viewerStore) }))
   const fiber = await import('@react-three/fiber')
   const frames = []
   mock.module('@react-three/fiber', () => ({ ...fiber, useThree: (selector) => selector({ gl: { domElement: {} }, invalidate: () => {} }), useFrame: (callback, priority) => frames.push({ callback, priority }) }))
@@ -175,9 +189,9 @@ const slabCacheFixture = `
   let refIndex = 0
   const hooks = { useEffect: (effect) => effects.push(effect), useCallback: (callback) => callback, useRef: (value) => refs[refIndex++] ??= { current: value }, useSyncExternalStore: (_, snapshot) => snapshot(), useDebugValue: () => {} }
   mock.module('react', () => ({ ...react, ...hooks, default: { ...react.default, ...hooks } }))
-  const { buildSlabGeometry } = await import('./packages/nodes/src/slab/geometry.ts')
-  const { GeometrySystem } = await import('./packages/viewer/src/systems/geometry/geometry-system.tsx')
-  const { captureChangedNodes, runBatchFrame, subscribeBatchInteractions, resetNodeBatchState } = await import('./packages/nodes/src/shared/node-batch/system.tsx')
+  const { buildSlabGeometry } = await import(${sourcePath('packages/nodes/src/slab/geometry.ts')})
+  const { GeometrySystem } = await import(${sourcePath('packages/viewer/src/systems/geometry/geometry-system.tsx')})
+  const { captureChangedNodes, runBatchFrame, subscribeBatchInteractions, resetNodeBatchState } = await import(${sourcePath('packages/nodes/src/shared/node-batch/system.tsx')})
   const preset = { ...core.MATERIAL_CATALOG[0], id: 'slab-cache-fixture', preset: { ...core.MATERIAL_CATALOG[0].preset, maps: {} } }
   core.registerLibraryMaterials([preset])
   core.registerNode({ kind: 'slab', schemaVersion: 1, schema: core.SlabNode, geometry: buildSlabGeometry, capabilities: {} })
@@ -265,7 +279,7 @@ test('selected legacy slab cache clear invalidates saved originals before dispos
   runSourceTest(
     slabCacheFixture +
       `
-    const { SelectionManager } = await import('./packages/editor/src/components/editor/selection-manager.tsx')
+    const { SelectionManager } = await import(${sourcePath('packages/editor/src/components/editor/selection-manager.tsx')})
     const SelectionMaterialSync = SelectionManager().props.children[1].type
     effects = []; refs = []; refIndex = 0
     viewerStore.setState({ selection: { ...viewerStore.getState().selection, selectedIds: ['slab_0'] } })
@@ -306,7 +320,7 @@ test('paint cancellation after cache clear never restores a disposed legacy slab
   runSourceTest(
     slabCacheFixture +
       `
-    const { slabPaint } = await import('./packages/nodes/src/slab/paint.ts')
+    const { slabPaint } = await import(${sourcePath('packages/nodes/src/slab/paint.ts')})
     const oldMesh = slabs[0].children[0]
     const original = oldMesh.material
     let disposed = false
