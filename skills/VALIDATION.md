@@ -1,14 +1,18 @@
 # Skill package validation
 
-Candidate package source: **0.1.7**. Latest released package source: **0.1.6**. `pascal-3d` skill metadata version: **0.1.0**. `furniture-fit` skill metadata version: **0.1.3**. Recorded September 9, 2026.
+Released package source: **0.1.7**. Latest released package source: **0.1.7**. `pascal-3d` skill metadata version: **0.1.0**. `furniture-fit` skill metadata version: **0.1.3**. Recorded September 9, 2026.
 
-## Bundle 0.1.7 Claude local MCP candidate
+## Bundle 0.1.7 Claude local MCP release
 
-This candidate adds one Claude plugin-provided local stdio server whose exact command is `pascal mcp connect`. The package does not contain a remote URL, headers, environment credentials, or another server. It does not install or start the Pascal editor; `pascal` must already be on the `PATH` used to launch Claude Code. Local use requires no Pascal account or API key and does not upload projects automatically.
+This release adds one Claude plugin-provided local stdio server whose exact command is `pascal mcp connect`. The package does not contain a remote URL, headers, environment credentials, or another server. It does not install or start the Pascal editor; `pascal` must already be on the `PATH` used to launch Claude Code. Local use requires no Pascal account or API key and does not upload projects automatically.
 
 The repository validator requires this exact configuration and rejects additional servers, remote transports, credential fields, or command and argument changes. Focused tests cover the canonical config, an added server, a remote URL, headers, environment credentials, and command or argument substitutions. Claude Code 2.1.258 loads both a user-scoped `pascal` server and `plugin:pascal-agent-skills:pascal`; the manual entry must be removed or disabled before reloading or restarting Claude Code so two clients do not violate the one-active-agent-client-per-local-service requirement. A focused documentation regression check locks this warning and the exact `claude mcp remove --scope user pascal` command across the public README, skill README, both setup guides, and this validation record. Hosted users must disable the plugin-provided local server before configuring the hosted endpoint.
 
-This candidate has not been published as a GitHub release or submitted to an Anthropic marketplace. On Claude Code 2.1.258, package validation, strict plugin validation, five fresh isolated installations, and a live connection through the plugin-provided server passed. The live check used a checksum-verified preview CLI and isolated `PASCAL_HOME`; it established connector health, not a new native task cohort or general adoption.
+On Claude Code 2.1.258, package validation, strict plugin validation, five fresh isolated installations, and a live connection through the plugin-provided server passed. The live check used a checksum-verified preview CLI and isolated `PASCAL_HOME`; it established connector health, not a new native task cohort or general adoption.
+
+The exact package source merged to public `main` at `b0aa85c21e8598416f51778f55f441c1820f5ce2` and was published at `2026-09-09T22:22:26Z` as the immutable GitHub prerelease tag `pascal-agent-skills--v0.1.7`. The released `.mcp.json` SHA-256 is `e4042df42028e6f39cd3442d8896587f4f11a999bce828e8bee3a4bf1030d9ba`; the unchanged released `pascal-3d/SKILL.md` SHA-256 is `55d263977898bad4375093435050dc377d512ab1600640e96b8ac106613e6f05`; and the unchanged released `furniture-fit/SKILL.md` SHA-256 is `d6f3b8afe3cedc81f824c12488fc3ddf166134851a2c4d5d0033358fa62ba30a`. A freshly downloaded and extracted tag source archive matched all three hashes and passed strict Claude plugin validation.
+
+These checks establish the immutable GitHub prerelease and the source used by Pascal's Git marketplace. They do not establish submission, review, approval, or listing in Anthropic's community or official marketplace; ClawHub, OpenAI, or npm publication; external installation; a new native task cohort; adoption; or retention. The credential-free local connector does not establish production hosted-MCP reliability or reviewer access.
 
 ## Bundle 0.1.6 OpenAI packaging and ClawHub readiness release
 
