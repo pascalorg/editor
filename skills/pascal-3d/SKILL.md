@@ -1,12 +1,18 @@
 ---
 name: pascal-3d
 description: Connect to Pascal and use its MCP tools to create, inspect, edit, validate, save, or hand off editable 3D building scenes. Use this skill whenever a user asks an agent to work in Pascal, make a room or building model, inspect a Pascal project, perform spatial edits, connect Pascal MCP, or return a verified Pascal editor link. It also governs safe local, existing-account, and explicitly authorized autonomous setup.
-license: MIT
 compatibility: Requires an MCP-capable host and either the local Pascal CLI or access to the hosted Pascal MCP endpoint. Local CLI requires Node.js 22.13 or newer.
 metadata:
   version: "0.1.0"
   source-reviewed: "2026-09-08"
   native-host-validation: "source-hash-recorded-separately"
+  openclaw:
+    homepage: https://editor.pascal.app/docs/developers/mcp
+    primaryEnv: PASCAL_API_KEY
+    envVars:
+      - name: PASCAL_API_KEY
+        required: false
+        description: Optional Pascal API key for the hosted MCP endpoint; local Pascal does not require it.
 ---
 
 # Pascal 3D
