@@ -196,10 +196,11 @@ export interface EditorProps {
   onLoad?: () => Promise<SceneGraph | null>
   onSave?: (scene: SceneGraph, options?: { keepalive?: boolean }) => Promise<void>
   /**
-   * Cmd/Ctrl+S. Defaults to flushing the autosave; hosts with a richer save
-   * (the community version checkpoint) take the chord over.
+   * Cmd/Ctrl+S. Return true when the host handled the save (the community
+   * version checkpoint); anything else falls through to flushing the autosave,
+   * so the chord still saves when the host's control isn't mounted.
    */
-  onSaveShortcut?: () => void
+  onSaveShortcut?: () => boolean | undefined
   onDirty?: () => void
   onSaveStatusChange?: (status: SaveStatus) => void
 
@@ -1263,7 +1264,11 @@ function EditorContent({
     isVersionPreviewMode,
   })
 
-  useSaveShortcut(onSaveShortcut ?? saveNow)
+  const handleSaveShortcut = useCallback(() => {
+    if (onSaveShortcut?.() === true) return
+    saveNow()
+  }, [onSaveShortcut, saveNow])
+  useSaveShortcut(handleSaveShortcut)
 
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)
