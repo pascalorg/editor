@@ -103,7 +103,14 @@ Include exactly one structured `nextAction` in every report. It is an optional t
 - Use `kind: complete_unresolved_check` when the measurements and geometry exist but the available read-only assessment path did not include a requested constraint. For example, a clean `verify_scene` result does not check a prospective candidate supplied only to `check_collisions`; request a candidate-aware door-access check rather than calling access passed or asking for unrelated measurements.
 - Use `kind: check_related_item_or_pose` only when the requested decision has no unresolved blocker and the footprint fits. Offer one specific related item or pose check that uses the same measured context. Do not turn the passing result into a purchase, delivery, or installation recommendation.
 
-Carry the exact available project, revision, graph hash, level, zone, and item context into `nextAction.context`; use `null` rather than guessing missing identifiers. State the minimum `requiredInput`. Keep `authority` read-only unless the user separately requests a change, and state that no save, account creation, publication, rendering/generation job, or paid operation is authorized. If the next task is later accepted, re-read the current project status and advertised tool schemas before acting; a next action never freezes scene state or extends the current authorization.
+Carry the exact available project, revision, graph hash, level, zone, and item context into `nextAction.context`; use `null` rather than guessing missing identifiers. State the minimum `requiredInput`. Use these exact boundary lines in every `nextAction`:
+
+```yaml
+authority: Read-only; no account or workspace changes, publication, save, or project mutation authorized.
+cost: No rendering, generation, paid operation, or additional spending authorized.
+```
+
+If the next task is later accepted, re-read the current project status and advertised tool schemas before acting; a next action never freezes scene state or extends the current authorization.
 
 ## Separate the checks
 

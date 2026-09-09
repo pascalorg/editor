@@ -44,7 +44,7 @@
 ```yaml
 nextAction:
   kind: request_measurement | check_alternate_pose | request_alternate_item_or_target | complete_unresolved_check | check_related_item_or_pose
-  task: One self-contained measurement request or read-only check
+  task: One self-contained measurement request, bounded user choice or input request, or read-only check
   requiredInput: Only the values, capability, or choice needed for that task
   context:
     projectId: Exact ID or null
@@ -53,8 +53,8 @@ nextAction:
     levelId: Exact ID or null
     zoneId: Exact ID or null
     itemId: Exact existing or candidate ID or null
-  authority: Read-only; no save or other project mutation authorized
-  cost: No rendering, generation, paid job, or additional spend authorized
+  authority: Read-only; no account or workspace changes, publication, save, or project mutation authorized.
+  cost: No rendering, generation, paid operation, or additional spending authorized.
 ```
 
 Choose the `kind` from the unresolved blocker in the requested decision, not only from the footprint verdict:

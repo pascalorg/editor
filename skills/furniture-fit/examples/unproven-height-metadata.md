@@ -36,6 +36,6 @@ nextAction:
     levelId: level_ground
     zoneId: zone_bedroom
     itemId: wardrobe_candidate
-  authority: Read-only; no save or project mutation authorized.
-  cost: No rendering, generation, paid job, or additional spend authorized.
+  authority: Read-only; no account or workspace changes, publication, save, or project mutation authorized.
+  cost: No rendering, generation, paid operation, or additional spending authorized.
 ```

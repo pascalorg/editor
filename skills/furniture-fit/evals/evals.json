@@ -9,6 +9,7 @@
       "semantic_case": "no-unresolved-requested-blocker",
       "decision_context": {
         "has_passing_footprint": true,
+        "has_failing_requested_pose": false,
         "has_blocking_failure": false,
         "missing_blocking_measurement": false,
         "supported_unchecked_alternative": false,
@@ -33,6 +34,20 @@
       "prompt": "My alcove is 2.30 m wide by 1.15 m deep. A cabinet is 2.00 m wide, 2.20 m tall, and 0.60 m deep. Compare it at 0 degrees and rotated 90 degrees, and tell me if I should order it.",
       "expected_output": "Correctly reports that the horizontal footprint fits at 0 degrees but not at 90 degrees, withholds purchase and height/delivery assurance, and requests the first decisive missing measurement instead of rechecking the passing footprint.",
       "files": [],
+      "semantic_case": "mixed-passing-and-failing-poses-height-blocker",
+      "decision_context": {
+        "has_passing_footprint": true,
+        "has_failing_requested_pose": true,
+        "has_blocking_failure": false,
+        "missing_blocking_measurement": true,
+        "supported_unchecked_alternative": false,
+        "unresolved_requested_check_due_to_tool_limit": false
+      },
+      "expected_next_action": {
+        "kind": "request_measurement",
+        "target": "measured clear height over the passing 0-degree footprint",
+        "must_not": ["check_alternate_pose", "treat the failed 90-degree pose as the blocker"]
+      },
       "expectations": [
         "Computes 2.00 m by 0.60 m at 0 degrees and 0.60 m by 2.00 m at 90 degrees.",
         "Reports the 90-degree depth failure against the 1.15 m alcove depth.",
@@ -127,6 +142,7 @@
       "semantic_case": "mixed-evidence-height-blocker",
       "decision_context": {
         "has_passing_footprint": true,
+        "has_failing_requested_pose": false,
         "has_blocking_failure": false,
         "missing_blocking_measurement": true,
         "supported_unchecked_alternative": false,
@@ -154,6 +170,7 @@
       "semantic_case": "all-tested-poses-fail",
       "decision_context": {
         "has_passing_footprint": false,
+        "has_failing_requested_pose": true,
         "has_blocking_failure": true,
         "missing_blocking_measurement": false,
         "supported_unchecked_alternative": false,
@@ -178,6 +195,7 @@
       "semantic_case": "prospective-candidate-door-limit",
       "decision_context": {
         "has_passing_footprint": true,
+        "has_failing_requested_pose": false,
         "has_blocking_failure": false,
         "missing_blocking_measurement": false,
         "supported_unchecked_alternative": false,
@@ -205,6 +223,7 @@
       "semantic_case": "supported-untested-alternate",
       "decision_context": {
         "has_passing_footprint": false,
+        "has_failing_requested_pose": true,
         "has_blocking_failure": true,
         "missing_blocking_measurement": false,
         "supported_unchecked_alternative": true,
