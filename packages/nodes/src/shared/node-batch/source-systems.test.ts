@@ -20,9 +20,6 @@ function runSourceTest(body: string) {
       `
     import assert from 'node:assert/strict'
     import { mock } from 'bun:test'
-    import * as core from '@pascal-app/core'
-    import * as viewer from '@pascal-app/viewer'
-    import { Group, Mesh, MeshBasicMaterial } from 'three'
     ${body}
   `,
     )
@@ -41,8 +38,11 @@ function runSourceTest(body: string) {
 
 test('real slab top/side/skirt collection, shared defaults, transparent overrides and cache ownership', () => {
   runSourceTest(`
+    const core = await import('@pascal-app/core')
     const sourceMaterials = await import(${sourcePath('packages/viewer/src/lib/materials.ts')})
+    const viewer = await import('@pascal-app/viewer')
     mock.module('@pascal-app/viewer', () => ({ ...viewer, ...sourceMaterials }))
+    const { Group } = await import('three')
     const { buildSlabGeometry } = await import(${sourcePath('packages/nodes/src/slab/geometry.ts')})
     const { collectBatchCandidate } = await import(${sourcePath('packages/nodes/src/shared/node-batch/candidates.ts')})
     const { disposeObject3DResources } = await import(${sourcePath('packages/viewer/src/lib/dispose-object3d.ts')})
@@ -108,15 +108,21 @@ test('real slab top/side/skirt collection, shared defaults, transparent override
 
 test('priority-1 dirty snapshot sees the priority-2 ceiling rebuild and batches replacement geometry at 5', () => {
   runSourceTest(`
+    // Mock React before Fiber, and Fiber before the package barrels load their systems.
+    const refs = []
+    const react = await import('react')
+    mock.module('react', () => ({ ...react, useEffect: () => {}, useRef: (value) => { const ref = { current: value }; refs.push(ref); return ref } }))
+    const callbacks = []
+    const fiber = await import('@react-three/fiber')
+    mock.module('@react-three/fiber', () => ({ ...fiber, useThree: (selector) => selector({ invalidate: () => {} }), useFrame: (callback, priority = 0) => callbacks.push({ callback, priority }) }))
+    const core = await import('@pascal-app/core')
     const scene = core.useScene
     const selectorHook = Object.assign((selector) => selector(scene.getState()), scene)
     mock.module('@pascal-app/core', () => ({ ...core, useScene: selectorHook }))
-    const fiber = await import('@react-three/fiber')
-    const callbacks = []
-    mock.module('@react-three/fiber', () => ({ ...fiber, useThree: (selector) => selector({ invalidate: () => {} }), useFrame: (callback, priority = 0) => callbacks.push({ callback, priority }) }))
-    const react = await import('react')
-    const refs = []
-    mock.module('react', () => ({ ...react, useEffect: () => {}, useRef: (value) => { const ref = { current: value }; refs.push(ref); return ref } }))
+    const viewer = await import('@pascal-app/viewer')
+    const viewerStore = viewer.useViewer
+    mock.module(${sourcePath('packages/viewer/src/store/use-viewer.ts')}, () => ({ default: Object.assign((selector) => selector(viewerStore.getState()), viewerStore) }))
+    const { Group, Mesh, MeshBasicMaterial } = await import('three')
     const { CeilingSystem, generateCeilingGeometry } = await import(${sourcePath('packages/viewer/src/systems/ceiling/ceiling-system.tsx')})
     const { NodeBatchSystem, runBatchFrame, resetNodeBatchState } = await import(${sourcePath('packages/nodes/src/shared/node-batch/system.tsx')})
     let now = 0
@@ -150,8 +156,6 @@ test('priority-1 dirty snapshot sees the priority-2 ceiling rebuild and batches 
     assert.equal(callbacks[0].priority, 2)
     NodeBatchSystem().type()
     assert.deepEqual(callbacks.map((pass) => pass.priority), [2, 1, 5])
-    const viewerStore = viewer.useViewer
-    mock.module(${sourcePath('packages/viewer/src/store/use-viewer.ts')}, () => ({ default: Object.assign((selector) => selector(viewerStore.getState()), viewerStore) }))
     const { GeometrySystem } = await import(${sourcePath('packages/viewer/src/systems/geometry/geometry-system.tsx')})
     GeometrySystem()
     assert.equal(callbacks[3].priority, 2)
@@ -172,23 +176,26 @@ test('priority-1 dirty snapshot sees the priority-2 ceiling rebuild and batches 
 })
 
 const slabCacheFixture = `
-  const sourceMaterials = await import(${sourcePath('packages/viewer/src/lib/materials.ts')})
-  const scene = core.useScene
-  const viewerStore = viewer.useViewer
-  viewerStore.setState({ bumpGeometryRevision: () => viewerStore.setState({ geometryRevision: viewerStore.getState().geometryRevision + 1 }) })
-  const selectorHook = (store) => Object.assign((selector) => selector(store.getState()), store)
-  mock.module('@pascal-app/core', () => ({ ...core, useScene: selectorHook(scene), useRegistryVersion: () => 0 }))
-  mock.module('@pascal-app/viewer', () => ({ ...viewer, ...sourceMaterials, useViewer: selectorHook(viewerStore) }))
-  mock.module(${sourcePath('packages/viewer/src/store/use-viewer.ts')}, () => ({ default: selectorHook(viewerStore) }))
-  const fiber = await import('@react-three/fiber')
-  const frames = []
-  mock.module('@react-three/fiber', () => ({ ...fiber, useThree: (selector) => selector({ gl: { domElement: {} }, invalidate: () => {} }), useFrame: (callback, priority) => frames.push({ callback, priority }) }))
-  const react = await import('react')
   let effects = []
   let refs = []
   let refIndex = 0
   const hooks = { useEffect: (effect) => effects.push(effect), useCallback: (callback) => callback, useRef: (value) => refs[refIndex++] ??= { current: value }, useSyncExternalStore: (_, snapshot) => snapshot(), useDebugValue: () => {} }
+  const react = await import('react')
   mock.module('react', () => ({ ...react, ...hooks, default: { ...react.default, ...hooks } }))
+  const frames = []
+  const fiber = await import('@react-three/fiber')
+  mock.module('@react-three/fiber', () => ({ ...fiber, useThree: (selector) => selector({ gl: { domElement: {} }, invalidate: () => {} }), useFrame: (callback, priority) => frames.push({ callback, priority }) }))
+  const selectorHook = (store) => Object.assign((selector) => selector(store.getState()), store)
+  const core = await import('@pascal-app/core')
+  const scene = core.useScene
+  mock.module('@pascal-app/core', () => ({ ...core, useScene: selectorHook(scene), useRegistryVersion: () => 0 }))
+  const viewer = await import('@pascal-app/viewer')
+  const viewerStore = viewer.useViewer
+  viewerStore.setState({ bumpGeometryRevision: () => viewerStore.setState({ geometryRevision: viewerStore.getState().geometryRevision + 1 }) })
+  mock.module(${sourcePath('packages/viewer/src/store/use-viewer.ts')}, () => ({ default: selectorHook(viewerStore) }))
+  const sourceMaterials = await import(${sourcePath('packages/viewer/src/lib/materials.ts')})
+  mock.module('@pascal-app/viewer', () => ({ ...viewer, ...sourceMaterials, useViewer: selectorHook(viewerStore) }))
+  const { Group } = await import('three')
   const { buildSlabGeometry } = await import(${sourcePath('packages/nodes/src/slab/geometry.ts')})
   const { GeometrySystem } = await import(${sourcePath('packages/viewer/src/systems/geometry/geometry-system.tsx')})
   const { captureChangedNodes, runBatchFrame, subscribeBatchInteractions, resetNodeBatchState } = await import(${sourcePath('packages/nodes/src/shared/node-batch/system.tsx')})
