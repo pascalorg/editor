@@ -280,6 +280,8 @@ export const StairTool: React.FC = () => {
   const previewRise = useScene((state) =>
     currentLevelId ? getLevelFloorToFloorHeight(currentLevelId, state.nodes) : DEFAULT_LEVEL_HEIGHT,
   )
+  const previewRiseRef = useRef(previewRise)
+  previewRiseRef.current = previewRise
   const previewGeometry = useMemo(() => createStairPreviewGeometry(previewRise), [previewRise])
   useEffect(() => () => previewGeometry.dispose(), [previewGeometry])
 
@@ -294,7 +296,10 @@ export const StairTool: React.FC = () => {
     // Reset rotation when tool activates
     rotationRef.current = 0
     useStairBuildPreview.getState().reset()
-    if (previewRef.current) previewRef.current.rotation.y = 0
+    if (previewRef.current) {
+      previewRef.current.rotation.y = 0
+      previewRef.current.scale.y = 1
+    }
     lastCanonicalPositionRef.current = null
     supportSurfaceRef.current = null
 
@@ -339,7 +344,7 @@ export const StairTool: React.FC = () => {
         [segment.id]: { ...segment, parentId: stair.id },
       } as Record<string, AnyNode>
 
-      return { placementLevelId, previewNodes, stair }
+      return { placementLevelId, previewNodes, stair, rise: segment.height }
     }
 
     // The preview rebuild (full-scene copy + destination-level resolution +
@@ -396,6 +401,9 @@ export const StairTool: React.FC = () => {
       if (previewRef.current) {
         previewRef.current.position.set(...visualPosition)
         previewRef.current.rotation.y = rotation
+        // The ghost geometry is built for the storey height; squash it to the
+        // rise the placed flight will get on this surface.
+        previewRef.current.scale.y = preview ? preview.segment.height / previewRiseRef.current : 1
       }
 
       // Forward-facing triangle (editor-side overlay). The run ascends along
