@@ -1,4 +1,5 @@
-import { describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import { nodeRegistry } from '../registry'
 import {
   type AnyNode,
   CeilingNode,
@@ -10,6 +11,7 @@ import {
   WindowNode,
 } from '../schema'
 import { getHistoryDirtyNodeIds } from './history-invalidation'
+import useScene, { clearSceneHistory } from './use-scene'
 
 const level = LevelNode.parse({ id: 'level_history' })
 const wall = WallNode.parse({ id: 'wall_changed', parentId: level.id, start: [0, 0], end: [4, 0] })
@@ -219,5 +221,66 @@ describe('history dependency closure', () => {
     expect(dirty.has(replacement.id)).toBe(false)
     expect(dirty.has(wall.id)).toBe(true)
     expect(dirty.has(remote.id)).toBe(true)
+  })
+})
+
+describe('consecutive temporal wall moves', () => {
+  let restore = () => {}
+
+  beforeEach(() => {
+    restore = nodeRegistry._snapshot()
+    nodeRegistry._reset()
+    clearSceneHistory()
+  })
+
+  afterEach(() => {
+    clearSceneHistory()
+    restore()
+  })
+
+  test('three undos and redos mark exactly the neighbours in each pre/post-jump layout', async () => {
+    const neighbours = [0, 10, 20, 30].map((x, index) =>
+      WallNode.parse({
+        id: `wall_neighbour_${index}`,
+        parentId: level.id,
+        start: [x + 4, 0],
+        end: [x + 4, 4],
+      }),
+    )
+    const layouts = [0, 10, 20, 30].map(
+      (x) =>
+        ({
+          ...wall,
+          start: [x, 0],
+          end: [x + 4, 0],
+        }) as WallNode,
+    )
+    const unrelated = { ...remote, start: [100, 0], end: [104, 0] } as WallNode
+    useScene.setState({
+      nodes: nodes(level, layouts[0]!, ...neighbours, unrelated),
+      rootNodeIds: [level.id],
+      collections: {},
+      installedPlugins: [],
+      dirtyNodes: new Set(),
+      readOnly: false,
+    })
+    clearSceneHistory()
+    for (const moved of layouts.slice(1)) {
+      useScene.setState({ nodes: { ...useScene.getState().nodes, [wall.id]: moved } })
+    }
+    expect(useScene.temporal.getState().pastStates).toHaveLength(3)
+
+    for (const direction of ['undo', 'redo'] as const) {
+      for (const beforeIndex of direction === 'undo' ? [3, 2, 1] : [0, 1, 2]) {
+        const afterIndex = beforeIndex + (direction === 'undo' ? -1 : 1)
+        useScene.getState().dirtyNodes.clear()
+        useScene.temporal.getState()[direction]()
+        await Promise.resolve()
+        expect(useScene.getState().nodes[wall.id]).toBe(layouts[afterIndex])
+        expect([...useScene.getState().dirtyNodes].sort()).toEqual(
+          [level.id, wall.id, neighbours[beforeIndex]!.id, neighbours[afterIndex]!.id].sort(),
+        )
+      }
+    }
   })
 })
