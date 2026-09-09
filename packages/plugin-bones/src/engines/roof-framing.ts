@@ -251,6 +251,7 @@ export function frameRoofs(
 ): Member[] {
   const members: Member[] = []
   const truss = spec.roofSystem === 'truss'
+  TIE_WALLS = walls
   for (const roof of roofs) {
     const before = members.length
     if (roof.roofType === 'gable') {
@@ -1200,7 +1201,39 @@ function deckPlane(
 export const HURRICANE_TIE_LABEL =
   'hurricane tie — Simpson H2.5A or equal, (5) 8d×1½" to the rafter + (5) 8d×1½" to the plate (R802.11)'
 
+/**
+ * The roof-to-wall connector on a CONCRETE-BLOCK wall: there is no top plate
+ * to nail a clip to — the strap is set in the tie beam pour and wraps the
+ * truss / rafter (the Florida detail: Simpson HETA20 or an equal embedded
+ * truss anchor). Steve, 2026-09-09: "ensure it works on trusses they sit
+ * correctly and with regular conventional framing and that works correctly
+ * on cmu block wall".
+ */
+export const MASONRY_STRAP_LABEL =
+  'hurricane strap — Simpson HETA20 or equal, embedded in the tie beam pour, (n) 10d×1½" to the truss / rafter — bears on the tie beam (PT 2x plate where the truss manufacturer requires); strap schedule per the uplift — verify (FBC R606 / R802.11)'
+
+/** The walls under the roof being framed — set by frameRoofs so the tie at a bearing point can tell block from frame. */
+let TIE_WALLS: readonly WallSlice[] = []
+
+/** True when a block wall's plan band covers the point. */
+function masonryWallAt(x: number, z: number): boolean {
+  for (const w of TIE_WALLS) {
+    if (w.framingKind !== 'cmu' || w.curved) continue
+    const rx = x - w.start[0]
+    const rz = z - w.start[1]
+    const t = rx * w.dir[0] + rz * w.dir[1]
+    if (t < -0.05 || t > w.length + 0.05) continue
+    const d = Math.abs(-w.dir[1] * rx + w.dir[0] * rz)
+    if (d <= w.thickness / 2 + 0.05) return true
+  }
+  return false
+}
+
 function tieAt(emit: Emit, spec: FramingSpec, x: number, z: number, y: number) {
+  if (masonryWallAt(x, z)) {
+    emit('blocking', undefined, [inches(1.5), inches(3), inches(3)], [x, y, z], 0, 0, inches(3), 'steel', MASONRY_STRAP_LABEL)
+    return
+  }
   emit(
     'blocking',
     undefined,

@@ -1308,7 +1308,14 @@ function computeLevelUncached(
         // is the safe default.
         const myOrdinal = levels[levelIndex]?.level ?? Number.POSITIVE_INFINITY
         for (const { level, roofs } of levelRoofs) {
-          const framed = frameRoofs(roofs, activeWalls, spec)
+          // the roof's ties read the RESOLVED construction: a block wall
+          // (assembly or jurisdiction default) takes an embedded strap
+          const roofWalls = activeWalls.map((w) =>
+            !w.curved && resolveWallConstruction(w, config, profile.exteriorWallDefault).construction === 'cmu'
+              ? { ...w, framingKind: 'cmu' as const }
+              : w,
+          )
+          const framed = frameRoofs(roofs, roofWalls, spec)
           // W15: which interior partitions the ceiling joists lap over —
           // they must be framed as bearing walls (the reader's check).
           warnings.push(...ceilingJoistBearingWarnings(framed))

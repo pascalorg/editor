@@ -251,8 +251,8 @@ export function structuralNotes(model: StructuralModel): Note[] {
   })
   if (model.members.some((m) => m.role === 'block')) {
     notes.push({
-      text: 'MASONRY — exterior walls are reinforced concrete masonry with grouted cells at the vertical bars and a bond beam at the top of the wall. Unit strength, mortar type and grout are NOT derived by these engines.',
-      cite: '(verify: IRC R606 / TMS 402)',
+      text: 'MASONRY — exterior walls are reinforced concrete masonry: 8x8x16 hollow units (ASTM C90, f\'m 1,500 psi assumed) in running bond, Type M or S mortar (ASTM C270), 3,000 psi coarse grout (ASTM C476) in every reinforced cell; #5 vertical bars in grouted cells at 48 in o.c., at every corner, wall end and opening jamb, lapped 30 in to the foundation dowels (R606.12); 9 ga. ladder joint reinforcement at 16 in o.c.; precast concrete lintels over openings bearing 8 in each end; a continuous poured tie beam at the top of the wall (8 in on an 8 ft wall, 8x12 on a 9 ft wall) with 2 #5 top and bottom, lapped 30 in at corners; roof trusses / rafters bear on the tie beam with embedded straps (Simpson HETA20 or equal) at every bearing per the uplift schedule. Unit strength, mortar and grout are standard-practice values, not derived by these engines — verify with the engineer of record.',
+      cite: '(verify: FBC-R R606 / TMS 402 / ACI 530)',
     })
   }
   notes.push({

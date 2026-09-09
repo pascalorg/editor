@@ -197,6 +197,35 @@ describe('frameRoofs — gable', () => {
     expect((ties[0] as Member).length).toBeCloseTo((2 * (rise / 3)) / Math.tan(theta), 4)
   })
 
+  test('on a block wall the tie is a strap embedded in the tie beam; the framed eave keeps its clip (2026-09-09)', () => {
+    // the +z eave (z = 3) sits on a CMU wall; the −z eave on nothing (framed by default)
+    const block = {
+      id: 'w_cmu',
+      start: [-4, 3],
+      end: [4, 3],
+      length: 8,
+      dir: [1, 0],
+      thickness: 0.2,
+      height: 2.5,
+      exterior: true,
+      openings: [],
+      curved: false,
+      framingKind: 'cmu',
+    } as unknown as WallSlice
+    const windy = frameRoofs([seg()], [block], { ...DEFAULT_SPEC, hurricaneTies: true, highWindUplift: true })
+    const straps = windy.filter((m) => m.label?.startsWith('hurricane strap'))
+    const clips = windy.filter((m) => m.label?.startsWith('hurricane tie'))
+    expect(straps.length).toBeGreaterThan(0)
+    expect(clips.length).toBeGreaterThan(0)
+    for (const s of straps) expect(s.position[2]).toBeCloseTo(3, 6)
+    for (const c of clips) expect(c.position[2]).toBeCloseTo(-3, 6)
+    expect(straps[0]?.label).toContain('HETA20')
+    expect(straps[0]?.label).toContain('embedded in the tie beam')
+    // no block: byte-identical to the framed run
+    const framed = frameRoofs([seg()], [{ ...block, framingKind: undefined } as unknown as WallSlice], { ...DEFAULT_SPEC, hurricaneTies: true, highWindUplift: true })
+    expect(framed.filter((m) => m.label?.startsWith('hurricane strap'))).toHaveLength(0)
+  })
+
   test('no hurricane ties by default; present under a high-wind spec', () => {
     expect(members.some((m) => m.label?.startsWith('hurricane tie'))).toBe(false)
     // hurricaneTies without highWindUplift = the sub-130 BELT — its ties

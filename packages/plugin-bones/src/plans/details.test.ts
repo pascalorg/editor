@@ -259,21 +259,23 @@ describe('the details sheet', () => {
       'fireblock',
       'windowjamb',
     ])
-    // the callouts, before the column wraps them
-    const notes = DETAILS.map((d) =>
-      d
+    // the callouts, before the column wraps them (the applying details only —
+    // the block details draw nothing for a framed house)
+    const notes: Record<string, string> = {}
+    for (const d of DETAILS.filter((d) => d.applies(v))) {
+      notes[d.id] = d
         .draw(v)
         .notes.map((n) => n.t)
-        .join(' | '),
-    )
-    expect(notes[0]).toContain('2X6 STUDS @ 16" O.C. + R-21 BATT')
-    expect(notes[3]).toContain('HDR 4X8 PER PLAN')
-    expect(notes[2]).toContain('RAFTER 2X8 @')
-    expect(notes[2]).toContain('6:12')
-    expect(notes[2]).toContain('H2.5A')
-    expect(notes[1]).toContain('FTG 16"W × 8"D')
-    expect(notes[4]).toContain('DECK JOIST 2X8 PT')
-    expect(notes[5]).toContain('RAFTER 2X6 ON SIMPSON LUS')
+        .join(' | ')
+    }
+    expect(notes.wallsection).toContain('2X6 STUDS @ 16" O.C. + R-21 BATT')
+    expect(notes.openinghead).toContain('HDR 4X8 PER PLAN')
+    expect(notes.eave).toContain('RAFTER 2X8 @')
+    expect(notes.eave).toContain('6:12')
+    expect(notes.eave).toContain('H2.5A')
+    expect(notes.foundationdetail).toContain('FTG 16"W × 8"D')
+    expect(notes.deckledger).toContain('DECK JOIST 2X8 PT')
+    expect(notes.porchledger).toContain('RAFTER 2X6 ON SIMPSON LUS')
     const sheets = detailsSheetBodies(v, frame)
     expect(sheets).toHaveLength(2)
     const body = sheets[0]!.body
@@ -285,6 +287,32 @@ describe('the details sheet', () => {
     expect(body).toMatch(/SCALE: [\d/-]+&quot; = 1'-0&quot;/)
     expect(sheets[0]!.footer).toContain('studs 2X6 @ 16" o.c.')
     expect(sheets[0]!.footer).not.toContain('footings stepped')
+  })
+
+  test('a block house prints the CMU wall section and the CMU eave instead of the framed pair (2026-09-09)', () => {
+    const block = detailVariables(
+      [
+        m({ role: 'block', size: undefined, material: 'concrete', dims: [0.396, 0.1937, 0.1937], label: 'block' }),
+        m({ role: 'bond-beam', size: undefined, material: 'concrete', dims: [4, 0.3048 - inches(0.375), 0.1937], label: 'tie beam 12" tall' }),
+        m({ system: 'roof-framing', role: 'rafter', size: '2x8', dims: [4, inches(7.25), inches(1.5)], rotation: [0, 0, Math.atan(6 / 12)], label: 'Rafter 2x8' }),
+        m({ system: 'roof-framing', role: 'fascia', size: '2x6', dims: [4, inches(5.5), inches(1.5)], label: 'Sub-fascia 2x6' }),
+      ],
+      DEFAULT_SPEC,
+      { type: 'slab', ffAboveGradeIn: 8 },
+    )
+    expect(block.masonry).toEqual({ blockDepthIn: 7.626, tieBeamIn: 12, vertSpacingIn: 48, lintelBearingIn: 8, furringIn: 0.75, stuccoIn: 0.875 })
+    const ids = DETAILS.filter((d) => d.applies(block)).map((d) => d.id)
+    expect(ids).toContain('cmuwallsection')
+    expect(ids).toContain('cmueave')
+    expect(ids).not.toContain('wallsection')
+    expect(ids).not.toContain('eave')
+    const section = DETAILS.find((d) => d.id === 'cmuwallsection')!.draw(block).notes.map((n) => n.t).join(' | ')
+    expect(section).toContain('#5 VERT. @ 48" O.C.')
+    expect(section).toContain('TIE BEAM 8" x 12" — 3,000 PSI, 2 #5 TOP & BOTTOM')
+    expect(section).toContain('PRECAST LINTELS OVER OPENINGS — 8" BEARING')
+    const eave = DETAILS.find((d) => d.id === 'cmueave')!.draw(block).notes.map((n) => n.t).join(' | ')
+    expect(eave).toContain('HETA20')
+    expect(eave).toContain('BEAR ON TIE BEAM')
   })
 
   test('a slab house without a roof, deck or windows draws only the wall and foundation details, the slab way', () => {

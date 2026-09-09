@@ -17,6 +17,7 @@
  */
 import { DEFAULT_SPEC, type FramingSpec } from '../core/spec'
 import type { Member } from '../core/types'
+import { LINTEL_BEARING, MORTAR_JOINT, VERT_BAR_SPACING } from '../engines/cmu'
 import { HOLD_DOWN, HURRICANE_TIE, hangerFor, postBaseFor } from '../engines/hardware'
 import { LUMBER_CROSS_SECTIONS, type LumberSize } from '../lumber'
 
@@ -75,6 +76,17 @@ export type DetailVariables = {
   guard: boolean
   /** The energy code's prescriptive values for the site (null = not citable: the note says "per energy code"). */
   insulation: { wallR: string; ceilingR: string | null; floorR: string | null }
+  /** Concrete-block exterior walls (the cmu engine ran): what the block section prints. Null on a framed house. */
+  masonry: {
+    /** Unit depth, inches (7-5/8 actual on an 8 in wall). */
+    blockDepthIn: number
+    /** The tie beam's height, inches (8 on an 8 ft wall, 12 on the 9 ft Florida wall). */
+    tieBeamIn: number
+    vertSpacingIn: number
+    lintelBearingIn: number
+    furringIn: number
+    stuccoIn: number
+  } | null
 }
 
 /** What the sheets hand the details from the jurisdiction's prescriptive table. */
@@ -151,6 +163,8 @@ export function detailVariables(
   insulation?: DetailInsulation | null,
 ): DetailVariables {
   const wall = members.filter((m) => m.system === 'wall-framing')
+  const blocks = wall.filter((m) => m.role === 'block')
+  const beams = wall.filter((m) => m.role === 'bond-beam')
   const studSizes = wall
     .filter((m) => m.role === 'stud' && isLumber(m.size))
     .map((m) => m.size as LumberSize)
@@ -295,6 +309,17 @@ export function detailVariables(
       ceilingR: insulation?.ceilingR?.replace(/^R(\d)/, 'R-$1') ?? null,
       floorR: insulation?.floorR?.replace(/^R(\d)/, 'R-$1') ?? null,
     },
+    masonry:
+      blocks.length > 0
+        ? {
+            blockDepthIn: round(toIn(median(blocks.map((m) => m.dims[2])) ?? 7.625 * IN), 3),
+            tieBeamIn: round(toIn((median(beams.map((m) => m.dims[1])) ?? 8 * IN - MORTAR_JOINT) + MORTAR_JOINT), 1),
+            vertSpacingIn: Math.round(VERT_BAR_SPACING / IN),
+            lintelBearingIn: Math.round(LINTEL_BEARING / IN),
+            furringIn: 0.75,
+            stuccoIn: 0.875,
+          }
+        : null,
   }
 }
 
@@ -442,7 +467,7 @@ const nominal = (size: LumberSize) => size.toUpperCase()
 const wallDetail: DetailDef = {
   id: 'wallsection',
   title: 'TYPICAL EXTERIOR WALL',
-  applies: () => true,
+  applies: (v) => v.masonry === null,
   draw(v) {
     const S = sketch()
     const d = v.stud.depthIn
@@ -622,7 +647,7 @@ const foundationDetail: DetailDef = {
 const eaveDetail: DetailDef = {
   id: 'eave',
   title: 'TYPICAL EAVE',
-  applies: (v) => v.roof !== null,
+  applies: (v) => v.roof !== null && v.masonry === null,
   draw(v) {
     const S = sketch()
     const r = v.roof as NonNullable<DetailVariables['roof']>
@@ -1284,10 +1309,142 @@ const windowJambDetail: DetailDef = {
   },
 }
 
+// ---- CMU. TYPICAL BLOCK WALL (the Florida block house) --------------------
+const cmuWallDetail: DetailDef = {
+  id: 'cmuwallsection',
+  title: 'TYPICAL EXTERIOR CMU WALL',
+  applies: (v) => v.masonry !== null,
+  draw(v) {
+    const S = sketch()
+    const m = v.masonry as NonNullable<DetailVariables['masonry']>
+    const st = Math.max(0.6, m.stuccoIn)
+    const bd = m.blockDepthIn
+    const fr = m.furringIn
+    const gy = Math.max(0.4, v.layers.drywallIn)
+    const H = 40
+    const beam = m.tieBeamIn
+    // outside at left: stucco | block | furring + gyp
+    S.rect(-st, 0, st, H - 2, CLAD)
+    S.rect(0, 0, bd, H, CONC)
+    // the courses: 8 in cells below the tie beam
+    for (let y = beam; y < H - 1; y += 8) S.line(0, -y, bd, -y, '#555', 0.8)
+    // the tie beam at the top, grouted solid: bars top and bottom
+    S.rect(0, 0, bd, beam, '#6f757c')
+    for (const bx of [2, bd - 2]) {
+      S.dot(bx, -2, 0.45, NAIL)
+      if (beam >= 12) S.dot(bx, -(beam - 2), 0.45, NAIL)
+    }
+    // the vertical in its grouted cell, hooked into the beam
+    S.line(bd / 2, -(H + 3), bd / 2, -(beam / 2), NAIL, 1.3, '5 3')
+    S.rect(bd, 0, fr, H - 1.5, WOOD2)
+    S.rect(bd + fr, 0, gy, H - 1.5, GYP)
+    // the monolithic slab / stem the block bears on, the dowel lapping the vertical
+    const slab = v.foundation ? v.foundation.type === 'slab' : true
+    if (slab) {
+      const t = v.foundation?.slabIn ?? 4
+      S.rect(-st - 4, -(H - 1.5), st + bd + fr + gy + 10, t + 14, CONC)
+      S.line(bd / 2 - 1.2, -(H + 4), bd / 2 + 1.2, -(H + 4), '#333')
+      S.rect(-st - 14, -(H + 1), 10, 10, EARTH)
+    }
+    S.note(`${fmtIn(st)} 3-COAT STUCCO ON BLOCK (R703.7)`, -st / 2, -6)
+    S.note('8x8x16 CMU, ASTM C90, RUNNING BOND, TYPE M/S MORTAR, f\'m 1,500 PSI (VERIFY)', bd / 2, -12)
+    S.note(`#5 VERT. @ ${m.vertSpacingIn}" O.C. IN GROUTED CELLS + @ CORNERS & JAMBS (R606.12)`, bd / 2, -17)
+    S.note('9 GA. LADDER JOINT REINF. @ 16" O.C. (VERIFY)', bd / 2, -22)
+    S.note(`${fmtIn(fr)} PT FURRING @ 16" O.C. + R-4.1 FOIL INSUL. + ${fmtIn(gy)} GYP BD`, bd + fr + gy / 2, -27)
+    S.note(`TIE BEAM 8" x ${fmtIn(beam)} — 3,000 PSI, 2 #5 ${beam >= 12 ? 'TOP & BOTTOM' : 'CONT.'} — LAP CORNERS`, bd / 2, -beam / 2)
+    S.note(`PRECAST LINTELS OVER OPENINGS — ${m.lintelBearingIn}" BEARING EA. END (R606.10)`, bd / 2, -32)
+    S.note(
+      slab
+        ? '#5 DOWELS @ EA. VERTICAL, LAP 30" — MONOLITHIC SLAB / THICKENED EDGE (VERIFY)'
+        : '#5 DOWELS @ EA. VERTICAL FROM THE STEM — SEE FOUNDATION DETAIL',
+      bd / 2,
+      -(H - 2.2),
+    )
+    return S
+  },
+}
+
+// ---- CMU. EAVE @ TIE BEAM (truss / rafter bearing on block) ---------------
+const cmuEaveDetail: DetailDef = {
+  id: 'cmueave',
+  title: 'EAVE @ CMU TIE BEAM',
+  applies: (v) => v.roof !== null && v.masonry !== null,
+  draw(v) {
+    const S = sketch()
+    const r = v.roof as NonNullable<DetailVariables['roof']>
+    const m = v.masonry as NonNullable<DetailVariables['masonry']>
+    const slope = r.pitchRise / 12
+    const over = 16
+    const memD = r.rafterDepthIn
+    const st = Math.max(0.6, m.stuccoIn)
+    const bd = m.blockDepthIn
+    const fr = m.furringIn
+    const gy = Math.max(0.4, v.layers.drywallIn)
+    const spanX = bd + 16
+    const wallH = 26
+    const beam = m.tieBeamIn
+    const zAt = (wx: number) => wx * slope
+    // wall: stucco | block with the tie beam at the top | furring + gyp; beam top at z = 0
+    S.rect(-st, -3, st, wallH, CLAD)
+    S.rect(0, -beam, bd, wallH - beam, CONC)
+    S.rect(0, 0, bd, beam, '#6f757c')
+    for (const bx of [2, bd - 2]) {
+      S.dot(bx, -2, 0.45, NAIL)
+      if (beam >= 12) S.dot(bx, -(beam - 2), 0.45, NAIL)
+    }
+    S.rect(bd, -3, fr, wallH, WOOD2)
+    S.rect(bd + fr, -3, gy, wallH, GYP)
+    // the truss / rafter on the beam, its tail to the fascia
+    const tailX = -st - over
+    S.poly(
+      [
+        [tailX, zAt(tailX)],
+        [spanX, zAt(spanX)],
+        [spanX, zAt(spanX) + memD],
+        [tailX, zAt(tailX) + memD],
+      ],
+      WOOD,
+    )
+    // the embedded strap: set in the beam, up and over the member
+    S.line(bd * 0.6, -(beam - 1.5), bd * 0.6, zAt(bd * 0.6) + memD + 0.5, NAIL, 1.6)
+    S.line(bd * 0.6, zAt(bd * 0.6) + memD + 0.5, bd * 0.6 + 4, zAt(bd * 0.6 + 4) + memD + 0.5, NAIL, 1.6)
+    // roof assembly
+    S.poly(
+      [
+        [tailX, zAt(tailX) + memD],
+        [spanX, zAt(spanX) + memD],
+        [spanX, zAt(spanX) + memD + 0.5],
+        [tailX, zAt(tailX) + memD + 0.5],
+      ],
+      SHTG,
+    )
+    S.line(tailX, zAt(tailX) + memD + 0.7, spanX, zAt(spanX) + memD + 0.7, '#555', 1, '4 3')
+    S.line(tailX - 0.5, zAt(tailX) + memD + 1.2, spanX, zAt(spanX) + memD + 1.2, INK, 1.8)
+    if (r.fascia) S.rect(tailX - 1.5, zAt(tailX) + memD, 1.5, memD + 1.5, WOOD2)
+    S.rect(tailX, zAt(tailX) + 0.75, -tailX - st, 0.75, '#efece6') // soffit
+    S.note(`TIE BEAM 8" x ${fmtIn(beam)} — SEE CMU WALL SECTION`, bd / 2, -beam / 2)
+    S.note(
+      `SIMPSON HETA20 (OR EQ.) EMBEDDED IN TIE BEAM @ EA. ${r.truss ? 'TRUSS' : 'RAFTER'} — UPLIFT PER SCHEDULE (VERIFY)`,
+      bd * 0.6,
+      zAt(bd * 0.6) + memD + 3,
+    )
+    S.note(
+      `${r.truss ? 'TRUSSES' : `${nominal(r.rafter)} RAFTERS @ ${r.spacingIn}" O.C.`} BEAR ON TIE BEAM — PT 2x PLATE WHERE MFR REQUIRES`,
+      spanX * 0.6,
+      zAt(spanX * 0.6) + memD / 2,
+    )
+    S.note('VENTED SOFFIT — STUCCO STOP + DRIP @ FASCIA', tailX / 2, zAt(tailX) - 1.5)
+    S.note(`${over}" OVERHANG — SEE ROOF PLAN`, tailX / 2, zAt(tailX) + memD + 4)
+    return S
+  },
+}
+
 export const DETAILS: DetailDef[] = [
   wallDetail,
+  cmuWallDetail,
   foundationDetail,
   eaveDetail,
+  cmuEaveDetail,
   openingDetail,
   deckLedgerDetail,
   porchLedgerDetail,

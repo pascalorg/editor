@@ -1114,6 +1114,36 @@ batches).
 
 ## Log (continued)
 
+- 2026-09-09: **Batch T19 — the roof on the tie beam; the block details
+  on the plans (G104, part 2).** Roof: `tieAt` in roof-framing.ts reads
+  the walls under the roof (`TIE_WALLS`, set by `frameRoofs`) and on a
+  block wall emits `MASONRY_STRAP_LABEL` — a Simpson HETA20 or equal
+  embedded in the tie beam pour, the truss / rafter bearing on the beam
+  (a PT plate where the manufacturer requires) — instead of the H2.5A
+  clip to a plate that does not exist on block; compute hands the roof
+  its walls with the RESOLVED construction (assembly or jurisdiction
+  default) as `framingKind: 'cmu'`. Trusses and conventional rafters go
+  through the same tie, so both bear the same way. Plans:
+  `DetailVariables.masonry` (block depth, the tie beam's height read off
+  the bond-beam member, 48 in vertical spacing, 8 in lintel bearing,
+  3/4 in furring, 7/8 in stucco) and two details — TYPICAL EXTERIOR CMU
+  WALL (stucco / block / furring + gyp, the courses, the tie beam with
+  its bars top and bottom, the vertical in its grouted cell, the dowel
+  into the slab, the lintel and joint-reinforcement call-outs) and EAVE
+  @ CMU TIE BEAM (the truss / rafter on the beam, the embedded strap
+  drawn, the soffit and fascia) — the framed wall section and eave step
+  aside on a block house. The S-notes' MASONRY line now states the
+  spec as the trade builds it (C90 units, M/S mortar, 3,000 psi grout,
+  #5 @ 48 in grouted, ladder wire @ 16 in, 8 in lintel bearing, the tie
+  beam with 2 #5 top and bottom, HETA20 straps), marked standard practice
+  to verify. Sources: CMHA TEK 5-9A / 17-2A, the Fellsmere 8 in CMU
+  tie-in detail, the FBC-R R606 / HVHZ R4407 masonry sections. Bones
+  2173 tests (the strap case, the block details case), sheets 258; roof
+  hash pins untouched (no block in those scenes). Open: the porch
+  sleepers (Steve's "land the rafters right on the sleeper"), the jamb
+  eyeball, the leveling course on a pad wall is not in the dowel bar-top
+  arithmetic.
+
 - 2026-09-09: **Batch T18 — block courses on the level datum; the tie
   beam to the plate line (G104, part 1).** Probed on the Cape Coral block
   house (scratchpad `cmu-corner-probe.ts`, `cmu-y-probe.ts`): every wall
