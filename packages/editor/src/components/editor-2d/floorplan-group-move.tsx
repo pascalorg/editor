@@ -376,7 +376,11 @@ export function startFloorplanGroupMove(
       if (!session) {
         session = engage()
         if (!session) {
-          removeListeners()
+          // No plane hit yet: swallow the chord and keep the gesture armed so
+          // the next pointer-move can still engage; the idle arm must not run
+          // behind the snapshots captured here.
+          e.preventDefault()
+          e.stopPropagation()
           return
         }
       }

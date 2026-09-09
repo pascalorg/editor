@@ -5,6 +5,7 @@ import {
   DEFAULT_LEVEL_HEIGHT,
   emitter,
   type GridEvent,
+  getFloorStackedPosition,
   getLevelFloorToFloorHeight,
   type LevelNode,
   movingAlignmentAnchors,
@@ -108,6 +109,23 @@ function createStairPreviewGeometry(rise: number): THREE.BufferGeometry {
  * dropped on, not a constant: the placed stair has no explicit `totalRise`, so
  * this is the height `syncStairRises` immediately converges it to anyway.
  */
+function resolvePlacedStairRise(
+  nodes: Record<string, AnyNode>,
+  levelId: LevelNode['id'],
+  stair: StairNode,
+): number {
+  // Same contract as `resolveStairTotalRise` for a stair that is not in the
+  // scene yet: the storey height minus whatever slab lifts the drop point.
+  const base = getFloorStackedPosition({
+    node: stair,
+    nodes,
+    position: stair.position,
+    rotation: stair.rotation,
+    levelId,
+  })[1]
+  return getLevelFloorToFloorHeight(levelId, nodes) - base
+}
+
 function createDefaultStairSegment(rise: number) {
   return StairSegmentNode.parse({
     segmentType: 'stair',
@@ -181,7 +199,7 @@ function commitStairPlacement(
 
   const stairCount = Object.values(nodes).filter((n) => n.type === 'stair').length
   const name = `Staircase ${stairCount + 1}`
-  const segment = createDefaultStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
+  const seed = createDefaultStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
 
   const destinationPlan = resolveStairDestinationLevel({
     createMissing: true,
@@ -197,10 +215,11 @@ function commitStairPlacement(
       nextLevelId,
       position,
       rotation,
-      segmentId: segment.id,
+      segmentId: seed.id,
     }),
     parentId: placementLevelId,
   })
+  const segment = { ...seed, height: resolvePlacedStairRise(nodes, placementLevelId, stair) }
   const prospectiveNodes = {
     ...nodes,
     [stair.id]: stair,
@@ -287,15 +306,16 @@ export const StairTool: React.FC = () => {
         nodes,
       })
       const nextLevelId = destinationPlan?.toLevel.id ?? placementLevelId
-      const segment = createDefaultStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
+      const seed = createDefaultStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
       const stair = createDefaultStairNode({
         name: 'Staircase Preview',
         levelId: placementLevelId,
         nextLevelId,
         position,
         rotation,
-        segmentId: segment.id,
+        segmentId: seed.id,
       })
+      const segment = { ...seed, height: resolvePlacedStairRise(nodes, placementLevelId, stair) }
       const previewNodes = {
         ...nodes,
         ...(destinationPlan?.createdLevel
