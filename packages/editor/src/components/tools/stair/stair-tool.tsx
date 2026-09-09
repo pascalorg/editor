@@ -403,7 +403,7 @@ export const StairTool: React.FC = () => {
         previewRef.current.rotation.y = rotation
         // The ghost geometry is built for the storey height; squash it to the
         // rise the placed flight will get on this surface.
-        previewRef.current.scale.y = preview ? preview.segment.height / previewRiseRef.current : 1
+        previewRef.current.scale.y = preview ? preview.rise / previewRiseRef.current : 1
       }
 
       // Forward-facing triangle (editor-side overlay). The run ascends along
