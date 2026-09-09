@@ -883,3 +883,31 @@ describe('the heater clears a window with its enclosure (T35, 2026-09-09: "your 
     expect(pipesThroughOpenings(members, walls)).toEqual([])
   })
 })
+
+describe('attic supply drops come down beside a window (T35b, 2026-09-09: "electrical or maybe plumbing going through a window")', () => {
+  test('a toilet under a window: its cold drop from the attic stands in a clear bay, a leg at the stub joins it', () => {
+    const { DEFAULT_SPEC } = require('../core/spec') as typeof import('../core/spec')
+    const window = (u: number): OpeningSlice => ({
+      id: `win_${u}`,
+      kind: 'window',
+      u,
+      width: 0.95,
+      roughWidth: 1.0,
+      height: 1.25,
+      roughHeight: 1.3,
+      sillHeight: 0.9,
+    })
+    const walls = [
+      makeWall({ id: 'w_s', start: [0, 0], end: [10, 0], openings: [window(8)] }),
+      makeWall({ id: 'w_e', start: [10, 0], end: [10, 8] }),
+      makeWall({ id: 'w_n', start: [10, 8], end: [0, 8] }),
+      makeWall({ id: 'w_w', start: [0, 8], end: [0, 0] }),
+    ]
+    const rooms = [room('r_bath', 'bathroom', [[0, 0], [10, 0], [10, 8], [0, 8]])]
+    const placed = [pf('wc', 'toilet', [8, 0.4]), pf('lav', 'lavatory', [4, 0.4])]
+    const { members, fixtures } = layoutPlumbing(walls, rooms, { ...DEFAULT_SPEC, waterRoute: 'attic' }, placed)
+    expect(members.some((m) => m.label?.includes('attic run'))).toBe(true)
+    expect(pipesThroughOpenings(members, walls)).toEqual([])
+    checkSupply(members, fixtures)
+  })
+})

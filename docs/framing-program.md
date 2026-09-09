@@ -1280,7 +1280,73 @@ with its WHOLE width, never by its anchor point alone; the trades know each
 other's stations on the exterior walls, and the condenser stands clear of
 the heater and the meter, on the wall the equipment room projects to.
 
+## Mandate additions (Steve, 2026-09-09 — second look at the stations)
+
+Steve: "condenser is still in front of the wh tried it again, wh fixed from
+window looks good, the electrical line from the box goes into this window
+needs to have logic to not do that, other than that looking good" — and
+"can you get rid of this generation error its been here for a while … THREE.WebGPURenderer:
+Uncaptured WebGPU GPUValidationError: Vertex buffer slot 0 required by
+[RenderPipeline "renderPipeline_MeshBasicMaterial_163"] was not set …
+DrawIndexed(96, 1, 0, 0, 0)".
+
+G122 The condenser's election and its row share ONE keep-out set — the
+openings in the unit's zone and the other trades' stations — so a slide
+past a window never lands on the heater and the grid snap never picks a
+column on it; a station slid along the wall keeps an exact normal.
+G123 A cable that rises to the attic or crosses a ceiling stands in a bay
+clear of every opening between drill height and the plates; a leg at
+drill height joins the box to its riser bay.
+
 ## Log (continued)
+
+- 2026-09-09: **Batch T35b — the row and the election agree (G122, G123); the cursor's geometry lives.**
+  Steve's regenerated Modesto house (scene 84d6d7b79ed9, pulled from the
+  dev server's /api/scenes) reproduced the collision headlessly: the
+  election DID slide the station clear of the heater (u 11.64 → 13.34 on
+  the 18.3 m west wall) but the row's grid snap put unit #1 back at z =
+  2.5 — the slid spot's normal carried 1e-15 of z, every lattice row read
+  a different stand-off and "least stand-off first" kept the FARTHEST
+  point of the least row. hvac.ts: `condenserKeepouts(wall, avoid)` — the
+  openings reaching the unit's zone (the row's rule) PLUS the stations
+  (their half + the pad's + 0.1) — feed both `condenserStation` (the
+  row's exact slide: the nearer keep-out edge on the span, u0 packed when
+  both run off) and `condenserRow(…, avoid)` (its slide, its lattice
+  `inKeepout`, units 2..N); `cleanAxis` wipes sub-1e-9 dust off the
+  outward normal (bits untouched otherwise — a renormalisation alone broke
+  the oblique seed round-trip's byte parity) and the snap compares
+  stand-offs at a nanometre; the row's both-slides-off fallback keeps u0
+  instead of standing the pad past the wall's end. The seed derives the
+  stations once and hands them to the election and the row. electrical.ts
+  `routeHop`: the attic / ceiling-crossing risers stand at
+  `clearOfOpenings(wall, u, runY − 0.05, wallTopY)` with a drill-height
+  leg (RO detours as ever) from the box to the bay — the GEN-1 receptacle
+  under W101 sent its attic leg up through the glass. plumbing.ts
+  `dropBay`: an ATTIC supply drop comes down a bay clear of the openings
+  over the stub (clearOfOpenings over [stubY, atticY]) with a leg at the
+  stub height back to the fixture — Cape Coral's toilet cold fell through
+  the high window in the block furring. cursor-sphere.tsx:
+  one module-level geometry each (dot, ring, a UNIT cylinder scaled to
+  `height`, tip) — the vertical line was a `<cylinderGeometry args={[…,
+  height, 8]}>` rebuilt on every pointer move, and WebGPU drew a frame
+  whose buffers had just been disposed (the 96 indices of an 8-segment
+  cylinder, MeshBasicMaterial) — the fix is by construction, the error is
+  asynchronous and carries no stack, so watch the console. Reseeding
+  Steve's scene now puts the heat pump at z = 4.0 (1.6 m past the
+  enclosure); the sweep of 35 scenes stays at 0 station violations; a
+  precise opening-crossing probe (scratchpad door-cross-probe.ts) finds no
+  window riser left on his two scenes. Pins: the misclassified scene's x
+  4.5 → 4 (4.5 stands 5 cm inside the meter's clearance), the raw spot
+  4.4 → 4.45 (the keep-out's edge), the guard-bail 2.3 → 2 (both slides
+  off the 4 m wall: packed), the exhaustion scene's honest un-snapped
+  2.8154 (the heater and the meter share its 2 m partition), the boundary
+  test pinned to the RULE against the engine's own meter fixture. Tests:
+  Bones 2199 (the merged keep-out past a window, the ULP snap on Steve's
+  numbers, the attic riser beside two windows, the attic drop beside a
+  window with the supply still continuous); editor typecheck clean;
+  master-baseline.json unchanged. (A coarse probe's "GEN-1 through a door
+  RO" was its own half-length approximation — the precise endpoint probe
+  finds nothing.)
 
 - 2026-09-09: **Batch T35 — the stations on the walls (G121).**
   electrical.ts `clearOfOpeningsWide(wall, u, y0, y1, halfW, margin, extra)`:

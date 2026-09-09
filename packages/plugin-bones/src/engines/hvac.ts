@@ -1323,29 +1323,66 @@ export function exteriorStations(
 const CONDENSER_STATION_HALF = COND_PAD_SIDE / 2 + 0.1
 
 /**
+ * The along-wall intervals the condenser's centre keeps out of on `wall`:
+ * every rough opening reaching the unit / disconnect zone [0, pad +
+ * cabinet + disconnect], padded by half a pad and slack (the row's own
+ * rule), plus the other trades' stations padded by their half width, the
+ * pad's and 0.1 m — ONE set, so a slide past a window never lands on the
+ * heater and a slide past the heater never lands under a window
+ * (2026-09-09: the election slid clear of the heater into a window's
+ * keep-out, the row slid it back onto the heater).
+ */
+export function condenserKeepouts(wall: WallSlice, avoid: readonly WallStation[]): { lo: number; hi: number }[] {
+  const halfW = COND_PAD_SIDE / 2
+  const openings = openingSpans(wall, 0, COND_PAD_T + COND_DIMS[1] + DISCONNECT_ABOVE_UNIT).map((s) => ({
+    lo: s.lo - halfW - 0.05,
+    hi: s.hi + halfW + 0.05,
+  }))
+  const stations = avoid
+    .filter((a) => a.wallId === wall.id)
+    .map((a) => ({ lo: a.u - a.halfW - CONDENSER_STATION_HALF - 0.1, hi: a.u + a.halfW + CONDENSER_STATION_HALF + 0.1 }))
+  return [...openings, ...stations]
+}
+
+/** The row's slide: from `u` in direction `d` to the first point outside every keep-out (overlapping ones chain). */
+function slideClearOf(keepouts: readonly { lo: number; hi: number }[], u: number, d: 1 | -1): number {
+  let v = u
+  for (let guard = 0; guard < 24; guard++) {
+    const hit = keepouts.find((k) => v > k.lo && v < k.hi)
+    if (!hit) return v
+    v = d > 0 ? hit.hi : hit.lo
+  }
+  return v
+}
+
+/**
  * Where on `wall` the condenser stands, starting from `u0` (the equipment
- * room's projection): `u0` itself when no other trade's station overlaps
- * it, else the nearest station (0.3 m steps either way, never within the
- * pad of a corner) clear of them all, else `u0` again — packed, and the
- * row's own rough-opening slide and grid snap still run from there. The
- * windows are the row's business: its keepouts already forbid a pad under
- * any opening reaching the unit's zone.
+ * room's projection): `u0` itself when it is inside no keep-out
+ * (condenserKeepouts — the openings the row would slide past anyway and
+ * the other trades' stations), else the nearer keep-out edge on the wall's
+ * span — the row's own slide rule, so an opening alone moves the pad
+ * exactly as the row did before this rule existed — else `u0` again
+ * (packed: the row then does what it always did).
  */
 export function condenserStation(wall: WallSlice, u0: number, avoid: readonly WallStation[]): number {
-  const halfW = CONDENSER_STATION_HALF
-  const blocked = (u: number): boolean =>
-    avoid.some((a) => a.wallId === wall.id && Math.abs(a.u - u) < a.halfW + halfW + 0.1)
-  if (!blocked(u0)) return u0
-  const lo = halfW + 0.15
-  const hi = wall.length - halfW - 0.15
-  if (hi <= lo) return u0
-  const start = Math.max(lo, Math.min(hi, u0))
-  const stations: number[] = [start]
-  for (let d = 0.3; d < wall.length; d += 0.3) {
-    if (start + d <= hi) stations.push(start + d)
-    if (start - d >= lo) stations.push(start - d)
-  }
-  return stations.find((u) => !blocked(u)) ?? u0
+  const keepouts = condenserKeepouts(wall, avoid)
+  if (!keepouts.some((k) => u0 > k.lo && u0 < k.hi)) return u0
+  const halfW = COND_PAD_SIDE / 2
+  const inRange = (u: number): boolean => u >= halfW && u <= wall.length - halfW
+  const cands = [slideClearOf(keepouts, u0, 1), slideClearOf(keepouts, u0, -1)].filter(inRange)
+  if (cands.length === 0) return u0
+  return cands.reduce((best, c) => (Math.abs(c - u0) < Math.abs(best - u0) ? c : best))
+}
+
+/** A unit vector with its ULP dust wiped: a component under 1e-9 is zero, the rest renormalised. */
+function cleanAxis(v: Pt): Pt {
+  const x = Math.abs(v[0]) < 1e-9 ? 0 : v[0]
+  const z = Math.abs(v[1]) < 1e-9 ? 0 : v[1]
+  // untouched bits when nothing was wiped — a renormalisation alone moves
+  // an oblique normal by an ULP and breaks the seed round-trip's byte parity
+  if (x === v[0] && z === v[1]) return v
+  const n = Math.hypot(x, z) || 1
+  return [x / n, z / n]
 }
 
 /**
@@ -1479,14 +1516,15 @@ export function placeCondenserSeedSpot(
   coverage: readonly CoverageSlice[] = [],
   avoid?: readonly WallStation[],
 ): Pt | null {
-  const election = electHeatPumpExit(walls, rooms, coverage, avoid)
+  const stations = avoid ?? exteriorStations(walls, rooms)
+  const election = electHeatPumpExit(walls, rooms, coverage, stations)
   if (!election) return null
   const anchor = election.spot
   const served = hvacServedRooms(rooms)
   // The REAL equipAt (dawn review 1d: passing `anchor` let the degenerate
   // on-wall fallback pick the opposite out-normal and seed inside-out).
   const equipAt = served.length > 0 ? centroid(equipmentRoomOf(served).polygon) : anchor
-  const row = condenserRow(walls, anchor, false, 1, equipAt, election.wall)
+  const row = condenserRow(walls, anchor, false, 1, equipAt, election.wall, stations)
   const slid = row.slots[0]?.at
   if (!slid) return anchor
   // Corner-flip guard (dawn review 1e, re-oracled round 2): the slid spot
@@ -1517,6 +1555,8 @@ function condenserRow(
    * could re-elect a false-exterior partition standing closer to the pad.
    * Verbatim overrides keep the nearest-exit derivation (unchanged). */
   electedWall?: WallSlice,
+  /** The other trades' stations on the wall — keep-outs for the auto anchor's slide and snap and for units 2..N (condenserKeepouts). */
+  avoid: readonly WallStation[] = [],
 ): {
   wall: WallSlice | null
   slots: CondenserSlot[]
@@ -1574,7 +1614,7 @@ function condenserRow(
   const oz = anchor[1] - foot[1]
   const off = Math.hypot(ox, oz)
   let out: Pt
-  if (off > 1e-6) out = [ox / off, oz / off]
+  if (off > 1e-6) out = cleanAxis([ox / off, oz / off])
   else {
     const n: Pt = [-wall.dir[1], wall.dir[0]]
     const sign = (foot[0] - equipAt[0]) * n[0] + (foot[1] - equipAt[1]) * n[1] >= 0 ? 1 : -1
@@ -1587,18 +1627,8 @@ function condenserRow(
   const halfW = COND_PAD_SIDE / 2
   // Keep-outs: rough openings whose vertical span reaches the unit/disconnect
   // zone [0, pad + cabinet + disconnect], padded by half a pad + slack.
-  const keepouts = openingSpans(wall, 0, COND_PAD_T + COND_DIMS[1] + DISCONNECT_ABOVE_UNIT).map(
-    (s) => ({ lo: s.lo - halfW - 0.05, hi: s.hi + halfW + 0.05 }),
-  )
-  const slide = (u: number, d: 1 | -1): number => {
-    let v = u
-    for (let guard = 0; guard < 24; guard++) {
-      const hit = keepouts.find((k) => v > k.lo && v < k.hi)
-      if (!hit) return v
-      v = d > 0 ? hit.hi : hit.lo
-    }
-    return v
-  }
+  const keepouts = condenserKeepouts(wall, avoid)
+  const slide = (u: number, d: 1 | -1): number => slideClearOf(keepouts, u, d)
   const inRange = (u: number): boolean => u >= halfW && u <= wall.length - halfW
   const inKeepout = (u: number): boolean => keepouts.some((k) => u > k.lo && u < k.hi)
   // Unit #1: verbatim override anchors exactly; the auto spot slides to the
@@ -1608,9 +1638,12 @@ function condenserRow(
     const fwd = slide(u0, 1)
     const bwd = slide(u0, -1)
     const cands = [fwd, bwd].filter((c) => inRange(c))
+    // both slides run off the wall: the unit stays at u0, packed (the
+    // election said the same) — the old `fwd` fallback stood the pad past
+    // the wall's end once the stations joined the keep-outs (2026-09-09)
     u1 = cands.length > 0
       ? (cands.reduce((best, c) => (Math.abs(c - u0) < Math.abs(best - u0) ? c : best)) as number)
-      : fwd
+      : u0
   }
   const unit1Presnap: Pt =
     anchorVerbatim || u1 === u0 ? anchor : (() => {
@@ -1675,10 +1708,16 @@ function condenserRow(
         const dx = g[0] - unit1Presnap[0]
         const dz = g[1] - unit1Presnap[1]
         const d2 = dx * dx + dz * dz
+        // the stand-offs compare at a nanometre: a station slid along the
+        // wall gave the anchor's normal 1e-15 of z, every lattice row read
+        // a different stand-off and the FARTHEST point of the least row won
+        // — back onto the heater (2026-09-09)
+        const sQ = Math.round(sG * 1e9) / 1e9
+        const bQ = best ? Math.round(best.s * 1e9) / 1e9 : Number.POSITIVE_INFINITY
         if (
           !best ||
-          sG < best.s ||
-          (sG === best.s && (d2 < best.d2 || (d2 === best.d2 && uG < best.u)))
+          sQ < bQ ||
+          (sQ === bQ && (d2 < best.d2 || (d2 === best.d2 && uG < best.u)))
         ) {
           best = { g, d2, s: sG, u: uG }
         }
@@ -2558,7 +2597,7 @@ export function layoutHvac(
     if (hpPlan && election) {
       const near = (p: Pt, q: Pt): boolean =>
         Math.abs(p[0] - q[0]) < 1e-9 && Math.abs(p[1] - q[1]) < 1e-9
-      const autoRow = condenserRow(walls, election.spot, false, 1, equipAt, election.wall)
+      const autoRow = condenserRow(walls, election.spot, false, 1, equipAt, election.wall, stations)
       const autoUnit1 = autoRow.slots[0]?.at
       // Three machine spellings of the same point: the raw election spot,
       // TODAY's slid+grid-snapped unit-#1 spot, and the PRE-snap slid spot
@@ -2600,7 +2639,7 @@ export function layoutHvac(
     {
       // The hoisted system plan (ONE tonnage — Manual-J-lite or the labeled
       // fallback) drives the row count and every per-unit label.
-      const row = condenserRow(walls, anchor, hpPlan != null, plan.count, equipAt, rowWall)
+      const row = condenserRow(walls, anchor, hpPlan != null, plan.count, equipAt, rowWall, stations)
       warnings.push(...row.warnings)
       if (electionUnvalidated) warnings.push(COND_UNVALIDATED_WARNING)
       // ⚠ flag on every pad + cabinet when the anchor is a guess: the

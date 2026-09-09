@@ -1054,7 +1054,9 @@ describe('condenser election validation — false-exterior walls never place the
     // at u = 5.6 (0.45 half) and the heater's enclosure at 6.8 (0.6 half)
     // on w_south — so the projection u = 5 slides to 4.4, the nearest clear
     // station, and the 0.5 grid snap lands it at x = 4.5 (was 5).
-    expect(plan[0]).toBeCloseTo(4.5, 6)
+    // T35b (2026-09-09): the row's lattice search keeps out of the stations
+    // too — 4.5 stands 5 cm inside the meter's clearance — so x = 4 (was 4.5).
+    expect(plan[0]).toBeCloseTo(4, 6)
     expect(plan[1]).toBeCloseTo(-1.5, 6)
     // clean election: no ⚠ flags, no election warning — this is the healthy path
     for (const m of [...padsOf(out.members), ...cabinetsOf(out.members)]) {
@@ -1088,10 +1090,11 @@ describe('condenser election validation — false-exterior walls never place the
     expect(blind?.[0]).toBeCloseTo(5, 6)
     expect(blind?.[1]).toBeCloseTo(2.5 - 1.1846, 6) // in-plan void — wrong
     const sighted = placeHeatPumpSpot(walls, rooms, coverage)
-    // INTENDED CHANGE 2026-09-09 (T35): u = 5 slides to 4.4, clear of the
-    // meter (5.6) and the heater (6.8) on w_south; the raw election spot
+    // INTENDED CHANGE 2026-09-09 (T35): u = 5 slides clear of the meter
+    // (5.6) and the heater (6.8) on w_south — T35b: to the keep-out's edge
+    // 4.45 (the meter's 0.45 + the pad's 0.6 + 0.1); the raw election spot
     // stands at the wall's normal stand-off, no grid snap here
-    expect(sighted?.[0]).toBeCloseTo(4.4, 6)
+    expect(sighted?.[0]).toBeCloseTo(4.45, 6)
     expect(sighted?.[1]).toBeCloseTo(-1.1846, 6) // truly outdoors
   })
 
@@ -1133,7 +1136,11 @@ describe('condenser election validation — false-exterior walls never place the
     // least-bad = the nearest election (the pre-fix spot class), kept —
     // not dropped (bathLaundry wall x = 4 minus the 1.1846 stand-off,
     // grid-snapped outward to 1.5 → x = 2.5; z = 3.5 already on-grid)
-    expect(units[0]?.position[0]).toBeCloseTo(2.5, 6)
+    // T35b (2026-09-09): the heater's enclosure and the meter both stand on
+    // that same 2 m false-exterior partition, and the row keeps out of
+    // their stations — no lattice column is clear, so unit #1 keeps the
+    // honest UN-snapped stand-off x = 4 − 1.1846 (off-grid, flagged as ever)
+    expect(units[0]?.position[0]).toBeCloseTo(2.8154, 4)
     expect(units[0]?.position[2]).toBeCloseTo(3.5, 6)
     // NEVER silent: every pad + cabinet carries the unvalidated ⚠ class …
     const boxes = [...padsOf(out.members), ...cabinetsOf(out.members)]
@@ -1162,9 +1169,9 @@ describe('condenser election validation — false-exterior walls never place the
     walls.push(wall('w_fence', [2, -1], [8, -1], true))
     const out = layoutHvac(walls, rooms, LOD400, undefined, { coverage })
     const unit = condensersOf(out.fixtures)[0] as Fixture
-    // INTENDED CHANGE 2026-09-09 (T35): x = 4.5 — slid clear of the meter
-    // and the heater on w_south (see the healthy-path pin above)
-    expect(unit.position[0]).toBeCloseTo(4.5, 6)
+    // INTENDED CHANGE 2026-09-09 (T35): slid clear of the meter and the
+    // heater on w_south (see the healthy-path pin above) — T35b: x = 4
+    expect(unit.position[0]).toBeCloseTo(4, 6)
     expect(unit.position[2]).toBeCloseTo(-1.5, 6) // 1.1846 stand-off, snapped out to the grid
     const disc = out.fixtures.find((f) => f.kind === 'disconnect') as Fixture
     expect(disc.sourceId).toBe('w_south')
@@ -1221,8 +1228,8 @@ describe('condenser election validation — false-exterior walls never place the
     walls.push(wall('w_fence', [2, -1], [8, -1], true))
     const auto = layoutHvac(walls, rooms, LOD400, undefined, { coverage })
     const seed = placeCondenserSeedSpot(walls, rooms, coverage)
-    // INTENDED CHANGE 2026-09-09 (T35): x = 4.5, clear of the meter and the heater
-    expect(seed?.[0]).toBeCloseTo(4.5, 6)
+    // INTENDED CHANGE 2026-09-09 (T35 / T35b): x = 4, clear of the meter and the heater
+    expect(seed?.[0]).toBeCloseTo(4, 6)
     expect(seed?.[1]).toBeCloseTo(-1.5, 6)
     const post = layoutHvac(
       walls,
@@ -1266,12 +1273,10 @@ describe('condenser election validation — false-exterior walls never place the
     const rooms = [room('r_laundry', 'Laundry', 'laundry', [[1, 1], [3, 1], [3, 3], [1, 3]])]
     const seed = placeCondenserSeedSpot(walls, rooms)
     // raw election spot, not the off-wall slid spot (4.45, …).
-    // INTENDED CHANGE 2026-09-09 (T35): on this 4 m wall the heater's
-    // enclosure (u = 0.70) and the meter (0.35) pack at the start — neither
-    // clears the 3.8 m window either way — and the projection u = 2 stands
-    // 1.3 m from the enclosure's centre by 1.6 mm: the election's first
-    // clear station is 2.3 (was 2)
-    expect(seed?.[0]).toBeCloseTo(2.3, 6)
+    // T35b (2026-09-09): the window's keep-out covers the whole 4 m wall
+    // and both slides run off it — the election keeps u = 2, packed, and
+    // the row does what it always did (the T35 0.3 m walk had given 2.3)
+    expect(seed?.[0]).toBeCloseTo(2, 6)
     expect(seed?.[1]).toBeCloseTo(-1.1846, 6)
   })
 
@@ -1599,8 +1604,9 @@ describe('the condenser keeps clear of the other trades\' stations (T35, 2026-09
       { wallId: 'w', u: 6.8, halfW: 0.6 },
     ]
     expect(condenserStation(w, 2, avoid)).toBe(2)
-    expect(condenserStation(w, 5, avoid)).toBeCloseTo(4.4, 6)
-    expect(condenserStation(w, 7, avoid)).toBeCloseTo(8.2, 6)
+    // the keep-outs 4.45..6.75 (the meter) and 5.5..8.1 (the heater) merge: the nearer edge
+    expect(condenserStation(w, 5, avoid)).toBeCloseTo(4.45, 6)
+    expect(condenserStation(w, 7, avoid)).toBeCloseTo(8.1, 6)
     // stations on another wall never matter
     expect(condenserStation(w, 5, [{ wallId: 'other', u: 5, halfW: 2 }])).toBe(5)
     // a wall the stations cover end to end: the projection, packed
@@ -1620,5 +1626,56 @@ describe('the condenser keeps clear of the other trades\' stations (T35, 2026-09
     const seed = placeCondenserSeedSpot(walls, rooms, coverage)
     expect(seed?.[0]).toBe(unit.position[0])
     expect(seed?.[1]).toBe(unit.position[2])
+  })
+})
+
+describe('the row and the election share ONE keep-out set (T35b, 2026-09-09: "condenser is still in front of the wh")', () => {
+  test('a slide past the heater that lands in a window keep-out keeps going — never back onto the heater', () => {
+    // the misclassified scene with a window whose keep-out (2.85..4.95)
+    // touches the stations' block (4.45..8.1): from u = 5 the merged block
+    // 2.85..8.1 slides to 2.85 (nearer than 8.1)
+    const { walls, rooms, coverage } = misclassifiedScene()
+    const south = walls[0] as WallSlice
+    south.openings.push(opening('win_a', 3.9, 1.0, 'window'))
+    const out = layoutHvac(walls, rooms, LOD400, undefined, { coverage })
+    const unit = condensersOf(out.fixtures)[0] as Fixture
+    const { placeWhSpot } = require('./plumbing') as typeof import('./plumbing')
+    const wh = placeWhSpot(walls, rooms)!
+    const whX = wh.wall.start[0] + wh.wall.dir[0] * wh.u
+    expect(Math.abs(unit.position[0] - whX)).toBeGreaterThanOrEqual(0.6 + 0.5 - 1e-6)
+    // not under the window either (RO 3.4..4.4, half a pad + slack)
+    expect(Math.abs(unit.position[0] - 3.9)).toBeGreaterThanOrEqual(0.5 + 0.5 - 1e-6)
+    expect(unit.position[2]).toBeLessThan(0)
+    for (const m of [...padsOf(out.members), ...cabinetsOf(out.members)]) expect(m.flag).toBeUndefined()
+    // the seed is the engine's own spot
+    const seed = placeCondenserSeedSpot(walls, rooms, coverage)
+    expect(seed?.[0]).toBe(unit.position[0])
+    expect(seed?.[1]).toBe(unit.position[2])
+  })
+
+  test('a slid station with ULP dust on its normal still snaps to the NEAREST lattice column (Modesto, 2026-09-09)', () => {
+    // Steve's west wall as a south wall: 18.288 m, the laundry projecting
+    // at u = 11.644, the heater's enclosure at 11.54 and the meter at 9.535
+    // — the merged block 8.385..12.84 slides the station to 12.84, whose
+    // spot carries 1e-15 of z; the snap must pick x = 13.0, not the
+    // farthest point of the least-stand-off row (x = 11.5, on the heater)
+    const walls = [
+      wall('w_south', [0, 0], [18.288, 0], true),
+      wall('w_east', [18.288, 0], [18.288, 10], true),
+      wall('w_north', [18.288, 10], [0, 10], true),
+      wall('w_west', [0, 10], [0, 0], true),
+    ]
+    const rooms = [
+      room('r_laundry', 'Laundry', 'laundry', [[10.644, 0], [12.644, 0], [12.644, 2], [10.644, 2]]),
+      room('r_living', 'Living', 'other', [[0, 2], [18.288, 2], [18.288, 10], [0, 10]]),
+    ]
+    const avoid = [
+      { wallId: 'w_south', u: 11.54105, halfW: 0.6 },
+      { wallId: 'w_south', u: 9.53535, halfW: 0.45 },
+    ]
+    const seed = placeCondenserSeedSpot(walls, rooms, [], avoid)!
+    expect(Math.abs(seed[0] - 12.844)).toBeLessThanOrEqual(0.25 + 1e-9)
+    expect(seed[0]).toBe(13)
+    expect(Math.abs(seed[0] - 11.54105)).toBeGreaterThanOrEqual(1.1)
   })
 })

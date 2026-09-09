@@ -1,7 +1,7 @@
 import { Html } from '@react-three/drei'
 import type { ThreeElements } from '@react-three/fiber'
 import { forwardRef } from 'react'
-import type { Group } from 'three'
+import { CircleGeometry, CylinderGeometry, type Group, SphereGeometry } from 'three'
 import { furnishTools } from '../../../components/ui/action-menu/furnish-tools'
 import { tools } from '../../../components/ui/action-menu/structure-tools'
 import { EDITOR_LAYER } from '../../../lib/constants'
@@ -24,6 +24,19 @@ interface CursorSphereProps extends Omit<ThreeElements['group'], 'ref'> {
   /** Custom tooltip content — overrides the auto-detected build tool icon */
   tooltipContent?: React.ReactNode
 }
+
+// One geometry each for the life of the module: the vertical line used to
+// be a `<cylinderGeometry args={[…, height, 8]}>` rebuilt on EVERY height
+// change (the cursor's drop to the floor moves with the pointer), and the
+// ring / dot / tip were built and disposed on every toggle — WebGPU then
+// drew a frame whose vertex buffers had just been destroyed ("Vertex
+// buffer slot 0 required by [RenderPipeline "renderPipeline_MeshBasicMaterial_…"]
+// was not set … DrawIndexed(96 …)" — the 8-segment cylinder's 96 indices).
+// The line is a unit cylinder scaled to `height` instead.
+const DOT_GEOMETRY = new CircleGeometry(0.06, 32)
+const RING_GEOMETRY = new CircleGeometry(0.2, 32)
+const LINE_GEOMETRY = new CylinderGeometry(0.01, 0.01, 1, 8)
+const TIP_GEOMETRY = new SphereGeometry(0.08, 20, 14)
 
 export const CursorSphere = forwardRef<Group, CursorSphereProps>(function CursorSphere(
   {
@@ -67,8 +80,7 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
         <group rotation={[-Math.PI / 2, 0, 0]}>
           {/* Center dot — at the ground unless the placement point is elevated */}
           {!dotAtTip && (
-            <mesh layers={EDITOR_LAYER} renderOrder={2}>
-              <circleGeometry args={[0.06, 32]} />
+            <mesh geometry={DOT_GEOMETRY} layers={EDITOR_LAYER} renderOrder={2}>
               <meshBasicMaterial
                 color={color}
                 depthTest={false}
@@ -80,8 +92,7 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
           )}
 
           {/* Outer ring / glow */}
-          <mesh layers={EDITOR_LAYER} renderOrder={2}>
-            <circleGeometry args={[0.2, 32]} />
+          <mesh geometry={RING_GEOMETRY} layers={EDITOR_LAYER} renderOrder={2}>
             <meshBasicMaterial
               color={color}
               depthTest={false}
@@ -95,8 +106,13 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
 
       {/* Vertical line */}
       {height > 0 && (
-        <mesh layers={EDITOR_LAYER} position={[0, height / 2, 0]} renderOrder={2}>
-          <cylinderGeometry args={[0.01, 0.01, height, 8]} />
+        <mesh
+          geometry={LINE_GEOMETRY}
+          layers={EDITOR_LAYER}
+          position={[0, height / 2, 0]}
+          renderOrder={2}
+          scale={[1, height, 1]}
+        >
           <meshBasicMaterial
             color={color}
             depthTest={false}
@@ -110,8 +126,7 @@ export const CursorSphere = forwardRef<Group, CursorSphereProps>(function Cursor
       {/* Bright marker dot at the tip of the line — the actual placement
           point, riding at the cursor while the line drops to the floor. */}
       {dotAtTip && height > 0 && (
-        <mesh layers={EDITOR_LAYER} position={[0, height, 0]} renderOrder={2}>
-          <sphereGeometry args={[0.08, 20, 14]} />
+        <mesh geometry={TIP_GEOMETRY} layers={EDITOR_LAYER} position={[0, height, 0]} renderOrder={2}>
           <meshBasicMaterial color={color} depthTest={false} depthWrite={false} />
         </mesh>
       )}

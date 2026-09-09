@@ -2692,8 +2692,20 @@ export function routeWiring(
     // crosses through the CEILING/joist space: rise up the source wall
     // through its plates, two Manhattan legs above both walls' top plates,
     // drop back down the target wall to drill height.
-    const a = wallPlan(from)
-    const b = wallPlan(to)
+    // The risers stand in a bay clear of every opening between drill
+    // height and the plates: a box under a window sent its attic leg
+    // straight up through the glass (Steve, 2026-09-09: "the electrical
+    // line from the box goes into this window"); a leg at drill height
+    // along the wall (RO detours as ever) joins the box to its riser bay.
+    const riserOf = (p: WallPoint): WallPoint => ({
+      wall: p.wall,
+      u: clearOfOpenings(p.wall, p.u, runY - 0.05, wallTopY(p.wall)),
+    })
+    const fromR = riserOf(from)
+    const toR = riserOf(to)
+    if (fromR.u !== from.u) emitWallPathWith(emit, graph, from, fromR, runY)
+    const a = wallPlan(fromR)
+    const b = wallPlan(toR)
     // Clear EVERY wall in the scene: the legs may pass over rooms taller
     // than either endpoint wall (verify night-4 F1 — a 2.5m→2.5m island
     // hop crossed a 4m great room at bed height of ITS ceiling).
@@ -2710,6 +2722,7 @@ export function routeWiring(
     seg([a[0], yCross, a[1]], [b[0], yCross, a[1]])
     seg([b[0], yCross, a[1]], [b[0], yCross, b[1]])
     seg([b[0], yCross, b[1]], [b[0], runY, b[1]])
+    if (toR.u !== to.u) emitWallPathWith(emit, graph, toR, to, runY)
   }
 
   const panelPlan: Pt = [panel.position[0], panel.position[2]]

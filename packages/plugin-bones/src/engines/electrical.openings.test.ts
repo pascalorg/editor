@@ -444,3 +444,26 @@ describe('a station clears an opening with its whole width (T35, 2026-09-09: "ma
     clear(placeElectricMeterSpot(walls, rooms, { street: street as never }), 0.25)
   })
 })
+
+describe('attic risers stand clear of the openings (T35b, 2026-09-09: "the electrical line from the box goes into this window")', () => {
+  test('a box under a window sends its attic leg up a bay beside the window, never through the glass', () => {
+    const walls = [
+      makeWall({
+        id: 'w_s',
+        start: [0, 0],
+        end: [8, 0],
+        openings: [opening('window', 2, 1.0, 0.9, 1.3), opening('window', 5.5, 1.0, 0.9, 1.3)],
+      }),
+      makeWall({ id: 'w_e', start: [8, 0], end: [8, 5] }),
+      makeWall({ id: 'w_n', start: [8, 5], end: [0, 5], openings: [opening('window', 4, 1.2, 0.9, 1.3)] }),
+      makeWall({ id: 'w_w', start: [0, 5], end: [0, 0] }),
+    ]
+    const rooms = [room('bedroom', [[0, 0], [8, 0], [8, 5], [0, 5]])]
+    const fixtures = layoutElectrical(walls, rooms)
+    const members = routeWiring(fixtures, walls, { route: 'attic' })
+    const attic = members.filter((m) => m.label?.includes('attic run'))
+    expect(attic.length).toBeGreaterThan(0)
+    expect(wiresThroughOpenings(members, walls)).toEqual([])
+    expect(devicesInOpenings(fixtures, walls)).toEqual([])
+  })
+})

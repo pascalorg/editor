@@ -613,8 +613,9 @@ describe('heat-pump seed election validation (Julien scene, 2026-08-22)', () => 
     // (coverage-blind: 5, 1.3154)
     // INTENDED CHANGE 2026-09-09 (T35): the seed keeps clear of the other
     // trades' stations on the south wall (the meter at u = 5.6, the heater's
-    // enclosure at 6.8) — u = 5 slides to 4.4, grid-snapped to x = 4.5
-    expect(hp?.position?.[0]).toBeCloseTo(4.5, 6)
+    // enclosure at 6.8) — u = 5 slides to the keep-out's edge 4.45; the
+    // lattice keeps out of the stations too, so x = 4 (T35b)
+    expect(hp?.position?.[0]).toBeCloseTo(4, 6)
     expect(hp?.position?.[2]).toBeCloseTo(-1.5, 6)
   })
 })

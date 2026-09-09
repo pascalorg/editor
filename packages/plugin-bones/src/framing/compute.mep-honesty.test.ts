@@ -3,6 +3,7 @@ import { baselineConfig, baselineScene } from './baseline-scene'
 import { buildPlanSet } from '../plans/plan-set'
 import { FramingNode } from './schema'
 import { computeLevel } from './compute'
+import type { Fixture } from '../core/types'
 
 /**
  * CONDENSER HONESTY SET (prod report #2, "I don't see the heat pump"):
@@ -367,9 +368,18 @@ describe('F3: condenser election validated at the computeLevel boundary (coverag
     // the wh"): the election keeps the pad clear of the other trades'
     // stations on its wall — the electric meter (u = 5.6) and the heater's
     // enclosure (6.8) on w_south — so the projection u = 5 slides to 4.4,
-    // the nearest clear station, snapped to x = 4.5 (was 5); see the
-    // hvac.condensers pins of the same scene.
-    expect(unit?.position[0]).toBeCloseTo(4.5, 6)
+    // the keep-out's edge, and the lattice keeps out of the stations too
+    // (was x = 5); the exact column depends on the meter's station, which
+    // the boundary's 0.15 m walls put a few cm from the engine test's, so
+    // the pin is the RULE: on the 0.5 grid, west of the meter's clearance,
+    // still on the south wall's span. See the hvac.condensers pins.
+    const meter = result.fixtures.find((f) => f.kind === 'electric-meter') as Fixture
+    expect(meter).toBeDefined()
+    const x = unit?.position[0] as number
+    expect(Math.abs(x / 0.5 - Math.round(x / 0.5))).toBeLessThan(1e-9)
+    // the meter socket (0.45 half) + the pad's 0.6 + 0.1 — its station is its x on the south wall
+    expect(x).toBeLessThanOrEqual(meter.position[0] - 0.45 - 0.6 - 0.1 + 1e-9)
+    expect(x).toBeGreaterThanOrEqual(3.5)
     expect(unit?.position[2]).toBeCloseTo(-1.5, 6)
     // unflagged + silent (the healthy validated path), disconnect present
     const boxes = result.members.filter(

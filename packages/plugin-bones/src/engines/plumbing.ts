@@ -599,6 +599,19 @@ function septicSystem(
  * (the plane itself for 'walls'), so the caller's riser to the stub starts
  * there and nothing is drawn twice.
  */
+/**
+ * The bay a supply DROP takes down `anchor`'s wall: the anchor's own when
+ * no opening crosses [y0, y1], else the nearest clear one (clearOfOpenings)
+ * — an attic drop fell straight through the window over the fixture
+ * (2026-09-09, the toilet's cold in Cape Coral's block furring: "i saw
+ * electrical or maybe plumbing going through a window"); a leg at the stub
+ * height joins the bay to the stub.
+ */
+function dropBay(anchor: WallPoint, y0: number, y1: number): WallPoint {
+  const u = clearOfOpenings(anchor.wall, anchor.u, Math.min(y0, y1), Math.max(y0, y1))
+  return u === anchor.u ? anchor : { wall: anchor.wall, u }
+}
+
 function supplyRoute(
   members: Member[],
   spec: PipeSpec,
@@ -2345,8 +2358,12 @@ function placedPlumbing(
         sourceId: `cold-${a.f.id}`,
         label: `Cold ½" — ${KIND_LABEL[a.f.kind]}`,
       }
-      const coldEnd = supplyRoute(members, cold, graph, whAnchor, a.anchor, coldY, walls, waterRoute, planes)
-      riser(members, cold, a.plan, coldEnd, a.stubY)
+      // an attic drop comes down a bay clear of the openings over the stub
+      const coldDrop = waterRoute === 'attic' ? dropBay(a.anchor, a.stubY, planes.atticY) : a.anchor
+      const coldPlan: Pt = coldDrop === a.anchor ? a.plan : (wallPlan(coldDrop) as Pt)
+      const coldEnd = supplyRoute(members, cold, graph, whAnchor, coldDrop, coldY, walls, waterRoute, planes)
+      riser(members, cold, coldPlan, coldEnd, a.stubY)
+      if (coldDrop !== a.anchor) leg(members, cold, coldPlan, a.plan, a.stubY, false, 0.015)
       if (a.island) {
         manhattan(
           members,
@@ -2386,9 +2403,17 @@ function placedPlumbing(
           a.plan[0] + a.anchor.wall.dir[0] * 0.025,
           a.plan[1] + a.anchor.wall.dir[1] * 0.025,
         ]
-        const hotEnd = supplyRoute(members, hot, graph, whAnchor, a.anchor, hotY, walls, waterRoute, planes)
-        leg(members, hot, a.plan, hotAt, hotEnd, false, 0.01)
-        riser(members, hot, hotAt, hotEnd, a.stubY)
+        // an attic drop comes down a bay clear of the openings over the stub
+        const hotDrop = waterRoute === 'attic' ? dropBay(a.anchor, a.stubY, planes.atticY) : a.anchor
+        const hotBase: Pt = hotDrop === a.anchor ? a.plan : (wallPlan(hotDrop) as Pt)
+        const hotDropAt: Pt =
+          hotDrop === a.anchor
+            ? hotAt
+            : [hotBase[0] + a.anchor.wall.dir[0] * 0.025, hotBase[1] + a.anchor.wall.dir[1] * 0.025]
+        const hotEnd = supplyRoute(members, hot, graph, whAnchor, hotDrop, hotY, walls, waterRoute, planes)
+        leg(members, hot, hotBase, hotDropAt, hotEnd, false, 0.01)
+        riser(members, hot, hotDropAt, hotEnd, a.stubY)
+        if (hotDrop !== a.anchor) leg(members, hot, hotDropAt, hotAt, a.stubY, false, 0.015)
         if (a.island) {
           manhattan(
             members,
