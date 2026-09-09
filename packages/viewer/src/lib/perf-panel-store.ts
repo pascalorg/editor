@@ -95,6 +95,10 @@ export function publishPerfBatchStats(stats: Partial<PerfBatchStats>): void {
   batchStats = { ...batchStats, ...stats }
 }
 
+export function publishPerfWallDrainStats(stats: NonNullable<PerfBatchStats['wallDrain']>): void {
+  batchStats.wallDrain = stats
+}
+
 export function readPerfBatchStats(): PerfBatchStats {
   return batchStats
 }

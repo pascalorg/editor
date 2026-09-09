@@ -32,7 +32,7 @@ import {
   type WallSurfaceSlotId,
   type WindowNode,
 } from '@pascal-app/core'
-import { useFrame, useThree } from '@react-three/fiber'
+import { useFrame } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -40,17 +40,25 @@ import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
 import { setGroupsSortedByMaterial } from '../../lib/geometry-groups'
-import { type PerfBatchStats, publishPerfBatchStats } from '../../lib/perf-panel-store'
-import { beginSpan, endSpan, type PerfSpanHandle, timeSpan } from '../../lib/perf-tracks'
+import { timeSpan } from '../../lib/perf-tracks'
 import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
 import { clearLevelMiterCache, getCachedLevelMiters } from './level-miter-cache'
 import {
   buildOpeningCutoutGeometry,
   getOpeningCutoutBottomPadding,
 } from './opening-cutout-geometry'
+import {
+  drainStats,
+  endInitialBuild,
+  initiallyBuiltWalls,
+  isWallInitialBuildActive,
+  pendingAdjacentByLevel,
+  publishWallDrainStats,
+} from './wall-build-lifecycle'
 import { sweepUnbuiltWalls, WALL_PLACEHOLDER_SWEEP_INTERVAL } from './wall-placeholder-sweep'
 import { notifyWallRebuilt } from './wall-rebuild-notifications'
 
+export { isWallInitialBuildActive } from './wall-build-lifecycle'
 export { drainRebuiltWalls } from './wall-rebuild-notifications'
 
 // Reusable CSG evaluator for better performance
@@ -608,92 +616,8 @@ const WALL_PROGRESSIVE_DIRTY_THRESHOLD = MAX_WALL_REBUILDS_PER_FRAME
 const WALL_PROGRESSIVE_TIME_BUDGET_MS = 8
 const HEAVY_WALL_OPENINGS = 6
 let lastWallDirtyAtMs = 0
-const pendingAdjacentByLevel = new Map<string, Set<string>>()
-let pendingAdjacentCount = 0
-let hydrationToken: object | null = null
-let initialBuildActive = false
-let initialBuildSpan: PerfSpanHandle | null = null
-const initiallyBuiltWalls = new Set<string>()
-const drainStats: NonNullable<PerfBatchStats['wallDrain']> = {
-  initialBuildActive: false,
-  wallsConsumedThisFrame: 0,
-  budgetExits: 0,
-  heavyExits: 0,
-  drainedExits: 0,
-  capExits: 0,
-  pendingNeighbours: 0,
-  firstBuilds: 0,
-  reinvalidationBuilds: 0,
-  neighbourEnqueues: 0,
-}
-
-function publishWallDrainStats() {
-  drainStats.initialBuildActive = initialBuildActive
-  drainStats.pendingNeighbours = pendingAdjacentCount
-  publishPerfBatchStats({ wallDrain: { ...drainStats } })
-}
-
-function endInitialBuild() {
-  if (!initialBuildActive) return
-  initialBuildActive = false
-  initiallyBuiltWalls.clear()
-  endSpan(initialBuildSpan)
-  initialBuildSpan = null
-  publishWallDrainStats()
-}
-
-export function isWallInitialBuildActive(): boolean {
-  const token = useScene.getState().hydrationToken
-  if (token !== hydrationToken) {
-    endInitialBuild()
-    hydrationToken = token
-    if (token) {
-      pendingAdjacentByLevel.clear()
-      pendingAdjacentCount = 0
-      for (const key of Object.keys(drainStats) as (keyof typeof drainStats)[]) {
-        if (key !== 'initialBuildActive') drainStats[key] = 0
-      }
-      initialBuildActive = true
-      initialBuildSpan = beginSpan('wall-initial-build')
-      publishWallDrainStats()
-    }
-  }
-  if (
-    useLiveNodeOverrides.getState().overrides.size > 0 ||
-    useLiveTransforms.getState().transforms.size > 0
-  )
-    endInitialBuild()
-  return initialBuildActive
-}
-
-export function subscribeWallBuildInteractions(target: EventTarget): () => void {
-  const interrupt = () => {
-    isWallInitialBuildActive()
-    endInitialBuild()
-  }
-  const events = ['pointerdown', 'pointermove', 'wheel']
-  for (const event of events)
-    target.addEventListener(event, interrupt, { capture: true, passive: true })
-  const stopScene = useScene.subscribe(() => isWallInitialBuildActive())
-  const stopOverrides = useLiveNodeOverrides.subscribe(() => isWallInitialBuildActive())
-  const stopTransforms = useLiveTransforms.subscribe(() => isWallInitialBuildActive())
-  isWallInitialBuildActive()
-  return () => {
-    for (const event of events) target.removeEventListener(event, interrupt, true)
-    stopScene()
-    stopOverrides()
-    stopTransforms()
-    if (initialBuildActive) {
-      endInitialBuild()
-      hydrationToken = null
-    }
-    pendingAdjacentByLevel.clear()
-    pendingAdjacentCount = 0
-    publishWallDrainStats()
-    placeholderSweepCountdown = WALL_PLACEHOLDER_SWEEP_INTERVAL
-    clearLevelMiterCache()
-  }
-}
+let unmountedFrames = 0
+let stalledHydrationToken: object | null = null
 
 function wallRebuildExitReason(
   wallId: string,
@@ -736,7 +660,7 @@ export function shouldDeferWallRebuild(
 
 /** Rebuilds this system still owes — neighbours deferred during a drag. */
 export function getPendingWallRebuildCount(): number {
-  return pendingAdjacentCount
+  return drainStats.pendingNeighbours
 }
 
 let placeholderSweepCountdown = WALL_PLACEHOLDER_SWEEP_INTERVAL
@@ -744,14 +668,18 @@ let placeholderSweepCountdown = WALL_PLACEHOLDER_SWEEP_INTERVAL
 export const WallSystem = () => {
   useScene((state) => state.dirtyNodes)
   useLiveNodeOverrides((s) => s.overrides)
-  const canvas = useThree((state) => state.gl.domElement)
-  useEffect(() => subscribeWallBuildInteractions(canvas), [canvas])
+  useEffect(() => () => clearLevelMiterCache(), [])
   useFrame(runWallBuildFrame, 4)
   return null
 }
 
 export function runWallBuildFrame() {
   const initialBuild = isWallInitialBuildActive()
+  const token = useScene.getState().hydrationToken
+  if (token !== stalledHydrationToken) {
+    unmountedFrames = 0
+    stalledHydrationToken = token
+  }
   drainStats.wallsConsumedThisFrame = 0
   try {
     consumeWallBuildFrame(initialBuild)
@@ -794,6 +722,7 @@ function consumeWallBuildFrame(initialBuild: boolean) {
   // Collect dirty walls and their levels
   const dirtyWallsByLevel = new Map<string, Set<string>>()
   let dirtyWallCount = 0
+  let unmountedWallCount = 0
 
   useFrameNb += 1
   if (hasDirty) {
@@ -802,6 +731,7 @@ function consumeWallBuildFrame(initialBuild: boolean) {
       if (node?.type !== 'wall') return
 
       dirtyWallCount += 1
+      if (!sceneRegistry.nodes.has(id)) unmountedWallCount++
       const levelId = node.parentId
       if (!levelId) return
 
@@ -812,7 +742,7 @@ function consumeWallBuildFrame(initialBuild: boolean) {
     })
   }
 
-  const hasDirtyWalls = dirtyWallsByLevel.size > 0
+  const hasDirtyWalls = dirtyWallCount > unmountedWallCount
   if (hasDirtyWalls) {
     lastWallDirtyAtMs = now
   }
@@ -863,14 +793,14 @@ function consumeWallBuildFrame(initialBuild: boolean) {
         })
         clearDirty(wallId as AnyNodeId)
         notifyWallRebuilt(wallId)
-        const firstBuild = initialBuild && !initiallyBuiltWalls.has(wallId)
+        const firstBuild = !initiallyBuiltWalls.has(wallId)
         if (firstBuild) {
           initiallyBuiltWalls.add(wallId)
           drainStats.firstBuilds++
         } else {
-          rebuiltWallIds.add(wallId)
           drainStats.reinvalidationBuilds++
         }
+        if (!initialBuild || !firstBuild) rebuiltWallIds.add(wallId)
         rebuiltWallsThisFrame += 1
         drainStats.wallsConsumedThisFrame++
         if (initialBuild && wallRebuildExitReason(wallId, nodes, 1, 0, true) === 'heavy') {
@@ -900,7 +830,7 @@ function consumeWallBuildFrame(initialBuild: boolean) {
     for (const wallId of adjacentWallIds) {
       if (!dirtyWallIds.has(wallId) && !pending.has(wallId)) {
         pending.add(wallId)
-        pendingAdjacentCount++
+        drainStats.pendingNeighbours++
         drainStats.neighbourEnqueues++
       }
     }
@@ -946,10 +876,14 @@ function consumeWallBuildFrame(initialBuild: boolean) {
           })
           notifyWallRebuilt(wallId)
           drainStats.wallsConsumedThisFrame++
-          drainStats.reinvalidationBuilds++
+          if (initiallyBuiltWalls.has(wallId)) drainStats.reinvalidationBuilds++
+          else {
+            initiallyBuiltWalls.add(wallId)
+            drainStats.firstBuilds++
+          }
         }
         pendingIds.delete(wallId)
-        pendingAdjacentCount--
+        drainStats.pendingNeighbours--
         rebuiltAdjacentThisFrame += 1
         if (initialBuild && wallRebuildExitReason(wallId, nodes, 1, 0, true) === 'heavy') {
           exitReason = 'heavy'
@@ -972,11 +906,18 @@ function consumeWallBuildFrame(initialBuild: boolean) {
       }
     }
   }
+  if (initialBuild && drainStats.wallsConsumedThisFrame === 0 && unmountedWallCount > 0) {
+    unmountedFrames++
+    if (unmountedFrames >= WALL_PLACEHOLDER_SWEEP_INTERVAL) {
+      useScene.getState().invalidateHydration()
+    }
+  } else unmountedFrames = 0
   if (exitReason === 'budget') drainStats.budgetExits++
   else if (exitReason === 'heavy') drainStats.heavyExits++
   else if (exitReason === 'cap') drainStats.capExits++
-  if (dirtyWallCount === rebuiltWallsThisFrame && pendingAdjacentCount === 0) {
-    if (drainStats.wallsConsumedThisFrame > 0 || initialBuildActive) drainStats.drainedExits++
+  if (dirtyWallCount === rebuiltWallsThisFrame && drainStats.pendingNeighbours === 0) {
+    if (drainStats.wallsConsumedThisFrame > 0 || drainStats.initialBuildActive)
+      drainStats.drainedExits++
     endInitialBuild()
   }
 }

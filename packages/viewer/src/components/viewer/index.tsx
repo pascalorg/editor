@@ -30,6 +30,7 @@ import useViewer, { type RenderContext } from '../../store/use-viewer'
 import { FloorElevationSystem } from '../../systems/floor-elevation/floor-elevation-system'
 import { GeometrySystem } from '../../systems/geometry/geometry-system'
 import { PerfActionSettleSystem } from '../../systems/perf-action-settle/perf-action-settle-system'
+import { subscribeWallBuildInteractions } from '../../systems/wall/wall-build-lifecycle'
 import { ErrorBoundary } from '../error-boundary'
 import { SceneRenderer } from '../renderers/scene-renderer'
 import { BATCH_SPIKE_ENABLED, BatchedMeshSpike } from './batched-mesh-spike'
@@ -526,6 +527,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           a camera transform that defeats position:fixed (see perf-panel.tsx). */}
       {(perf || PERF_OVERLAY_ENABLED) && <PerfPanel />}
       <Canvas
+        ref={subscribeWallBuildInteractions}
         camera={{ position: [50, 50, 50], fov: 50 }}
         className={`transition-colors duration-700 ${
           transparentBackground ? 'bg-transparent' : isDark ? 'bg-[#1f2433]' : 'bg-[#fafafa]'
