@@ -523,20 +523,24 @@ describe('cmuWalls — corner interlock (courses alternate through the corner)',
     expect(overlapping).toBe(0)
   })
 
+  /** The neighbour's BLOCK face: its unit is buried CMU_FACE_BURY inside each drawn face (2026-09-09). */
+  const face = 0.1 - CMU_FACE_BURY
   test('even courses: the longer wall lays through, the other stops short', () => {
-    // A (through) claims even courses: its first block reaches x = −0.1
-    // (B's far face); B starts at z = +0.1 (clear of A's face).
+    // A (through) claims even courses: its first block reaches x = −0.095
+    // (B's block face — not B's drawn face at −0.1, which popped it an inch
+    // past the corner on a stuccoed wall); B starts at z = +0.095 (clear of
+    // A's block face, no gap beside its end).
     const a0 = course(members.filter((m) => m.sourceId === 'wall_A'), 0)[0] as Member
-    expect((a0.position[0] ?? 0) - a0.dims[0] / 2).toBeCloseTo(-0.1 + M / 2, 4)
+    expect((a0.position[0] ?? 0) - a0.dims[0] / 2).toBeCloseTo(-face + M / 2, 4)
     const b0 = course(members.filter((m) => m.sourceId === 'wall_B'), 0)[0] as Member
-    expect((b0.position[2] ?? 0) - b0.dims[0] / 2).toBeCloseTo(0.1 + M / 2, 4)
+    expect((b0.position[2] ?? 0) - b0.dims[0] / 2).toBeCloseTo(face + M / 2, 4)
   })
 
   test('odd courses swap: the butting wall lays through', () => {
     const a1 = course(members.filter((m) => m.sourceId === 'wall_A'), 1)[0] as Member
-    expect((a1.position[0] ?? 0) - a1.dims[0] / 2).toBeCloseTo(0.1 + M / 2, 4)
+    expect((a1.position[0] ?? 0) - a1.dims[0] / 2).toBeCloseTo(face + M / 2, 4)
     const b1 = course(members.filter((m) => m.sourceId === 'wall_B'), 1)[0] as Member
-    expect((b1.position[2] ?? 0) - b1.dims[0] / 2).toBeCloseTo(-0.1 + M / 2, 4)
+    expect((b1.position[2] ?? 0) - b1.dims[0] / 2).toBeCloseTo(-face + M / 2, 4)
   })
 
   test('the shared corner core holds exactly ONE vertical bar (the through wall’s)', () => {
@@ -551,9 +555,9 @@ describe('cmuWalls — corner interlock (courses alternate through the corner)',
   test('bond beams interlock too — the yielding beam pulls short', () => {
     const beamA = members.find((m) => m.role === 'bond-beam' && m.sourceId === 'wall_A') as Member
     const beamB = members.find((m) => m.role === 'bond-beam' && m.sourceId === 'wall_B') as Member
-    // beam course index 10 is even → A claims (extends to −0.1), B yields
-    expect((beamA.position[0] ?? 0) - beamA.dims[0] / 2).toBeCloseTo(-0.1, 4)
-    expect((beamB.position[2] ?? 0) - beamB.dims[0] / 2).toBeCloseTo(0.1, 4)
+    // beam course index 10 is even → A claims (extends to −0.095, B's block face), B yields
+    expect((beamA.position[0] ?? 0) - beamA.dims[0] / 2).toBeCloseTo(-face, 4)
+    expect((beamB.position[2] ?? 0) - beamB.dims[0] / 2).toBeCloseTo(face, 4)
   })
 })
 

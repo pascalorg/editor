@@ -110,6 +110,20 @@ beforeEach(() => {
   useBonesStore.getState().setWallModeBeforeXray(null)
 })
 
+describe('activateXray — the mode row as the front door (2026-09-09)', () => {
+  test('a first pick of Framing creates the level in that mode, still one entry with every service point', () => {
+    const { store, applyCalls } = fakeScene(scene())
+    const viewer = fakeViewer('cutaway')
+    const framing = activateXray(store, 'level_1', viewer.store, 'framing')
+    expect(applyCalls).toHaveLength(1)
+    expect(effectiveViewMode(framing)).toBe('framing')
+    expect((applyCalls[0]?.create ?? []).length).toBe(1 + SERVICE_TYPES.length)
+    // the default is unchanged: the inspector's call to action opens in X-ray
+    const plain = activateXray(fakeScene(scene()).store, 'level_1', fakeViewer('cutaway').store)
+    expect(effectiveViewMode(plain)).toBe('xray')
+  })
+})
+
 describe('activateXray — one click, one undo entry, walls Low once', () => {
   test('creates the framing node + all eight service points in ONE applyNodeChanges', () => {
     const { store, applyCalls } = fakeScene(scene())

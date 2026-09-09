@@ -164,12 +164,22 @@ export function activateXray(
   scene: SceneLike,
   levelId: string,
   viewer?: ViewerLike | null,
+  /**
+   * The view the X-ray opens in. The panel's mode row is the front door
+   * now (Steve, 2026-09-09: "why do I have to click this to see what's
+   * going on in Bones? only X-ray, then I have to click Framing"): the
+   * first pick of X-ray / Subfloor / Framing creates the level's framing
+   * node IN that mode, one click, one undo entry. Default 'xray' — the
+   * inspector's call to action and every older caller are unchanged.
+   */
+  mode: Exclude<ViewMode, 'off'> = 'xray',
 ): FramingNode {
   const state = scene.getState()
   const services = buildServicePointNodes(state.nodes, levelId)
   const roofSystem = roofSystemOf(state.nodes, levelId)
   const framing = FramingNode.parse({
     jurisdiction: 'AUTO',
+    viewMode: mode,
     servicesSeeded: services.length > 0,
     ...(roofSystem ? { roofSystem } : {}),
     ...servicesOf(state.nodes, levelId),

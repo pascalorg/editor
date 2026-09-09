@@ -167,26 +167,38 @@ function XraySection({
   }
 
   if (!framingNode) {
+    // The mode row IS the front door (Steve, 2026-09-09): picking X-ray,
+    // Subfloor or Framing derives the level's framing, foundation and
+    // systems and opens that view — one click, one undo entry (the
+    // framing node + every service point, walls to Low once). The controls
+    // that tune the derivation appear with it.
     return (
-      <button
-        className="rounded-md border border-sidebar-ring bg-sidebar-accent px-3 py-2 text-left font-medium text-sm transition-colors hover:bg-sidebar-accent/70"
-        onClick={() =>
-          // One coherent activation (user round 2026-08-20): the framing
-          // node + every service point in ONE undo entry, walls to Low
-          // once, viewMode 'xray' by default — all scoped to this click.
-          activateXray(
-            useScene as unknown as SceneLike,
-            activeLevelId,
-            useViewer as unknown as ViewerLike,
-          )
-        }
-        type="button"
-      >
-        ⚡ X-Ray this level
-        <span className="block font-normal text-sidebar-foreground/50 text-xs">
-          Derive framing, foundation &amp; systems from the model
+      <div className="flex flex-col gap-2">
+        <span className="font-medium text-sm">X-Ray this level</span>
+        <SegmentedControl
+          onChange={(v: string) => {
+            if (v === 'off') return
+            activateXray(
+              useScene as unknown as SceneLike,
+              activeLevelId,
+              useViewer as unknown as ViewerLike,
+              v as Exclude<ViewMode, 'off'>,
+            )
+          }}
+          options={[
+            { label: 'Normal', value: 'off' },
+            { label: 'X-ray', value: 'xray' },
+            { label: 'Subfloor', value: 'basement' },
+            { label: 'Framing', value: 'framing' },
+          ]}
+          value="off"
+        />
+        <span className="text-sidebar-foreground/50 text-xs leading-relaxed">
+          Pick a view to derive the framing, foundation and systems from the model — X-ray shows
+          them inside the walls, Subfloor the floor below, Framing the bare structure. The
+          jurisdiction, wall, roof and service settings appear with it.
         </span>
-      </button>
+      </div>
     )
   }
 

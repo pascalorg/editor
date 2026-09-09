@@ -358,10 +358,7 @@ export function cmuWall(wall: WallSlice, spec: FramingSpec, hints: CmuHints = {}
   // thickness (the bury degrades to thickness/4 per side, still strictly
   // inside) and the bond beam carries an honest flag instead of the blocks
   // vanishing or breaking the bury.
-  const depth = Math.min(
-    Math.max(wall.thickness - 2 * CMU_FACE_BURY, wall.thickness / 2),
-    BLOCK_DEPTH_ACTUAL,
-  )
+  const depth = unitDepthOf(wall)
   const thinBuryFloor = wall.thickness - 2 * CMU_FACE_BURY < wall.thickness / 2 - EPS
 
   // ---- the course grid on the level datum ----
@@ -626,6 +623,20 @@ export function cmuWall(wall: WallSlice, spec: FramingSpec, hints: CmuHints = {}
  * bar. ASSUMPTION: corners between a CMU wall and a FRAMED wall get no
  * interlock — the engines run on disjoint wall groups.
  */
+/**
+ * The unit's depth in a wall: the actual 7-5/8 in block, or the drawn
+ * thickness less the face bury each side (thin architectural walls),
+ * floored at half the thickness. The block sits centred in the wall, so
+ * its faces lie `(thickness − depth) / 2` inside the drawn faces — under
+ * the stucco and the furring on a block house.
+ */
+export function unitDepthOf(wall: Pick<WallSlice, 'thickness'>): number {
+  return Math.min(
+    Math.max(wall.thickness - 2 * CMU_FACE_BURY, wall.thickness / 2),
+    BLOCK_DEPTH_ACTUAL,
+  )
+}
+
 export function cmuWalls(
   walls: WallSlice[],
   spec: FramingSpec,
@@ -649,12 +660,18 @@ export function cmuWalls(
     const k = Math.min(4, (1 + Math.abs(a[0] * b[0] + a[1] * b[1])) / crossD)
     add(corner.through.id, {
       end: corner.throughEnd,
-      otherThickness: k * corner.butting.thickness,
+      // the neighbour's UNIT depth, not its drawn thickness: the through
+      // course reaches the neighbour's block face, the yielding course stops
+      // at it — reaching the drawn (stucco) face popped the through block an
+      // inch past the corner and left the same inch open beside the yielding
+      // block (Steve, 2026-09-09: "the cmu edges at corners pop past ... a
+      // gap on the side of the end ones")
+      otherThickness: k * unitDepthOf(corner.butting),
       claimEven: true,
     })
     add(corner.butting.id, {
       end: corner.buttingEnd,
-      otherThickness: k * corner.through.thickness,
+      otherThickness: k * unitDepthOf(corner.through),
       claimEven: false,
     })
   }

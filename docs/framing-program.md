@@ -1112,7 +1112,42 @@ CMU plans carry the wall section, the reinforcing spacing, the tie beam,
 the lintel schedule and the eave / truss-bearing detail (the follow-on
 batches).
 
+## Mandate additions (Steve, 2026-09-09 — the Bones front door)
+
+Steve, with a screenshot of the Bones panel's "X-Ray this level" button:
+"how come in bones i have to click this to see whats going on in bones?
+only xray makes no sense then i have to click framing? can it all be on
+this menu or something better?"
+
+G105 The Bones panel opens on its view row — Normal | X-ray | Subfloor |
+Framing — and the first pick derives the level in that view; no
+separate activation click, no second click to reach the framing.
+
 ## Log (continued)
+
+- 2026-09-09: **Batch T21 — the mode row is the front door (G105).**
+  `activateXray(scene, levelId, viewer, mode = 'xray')` takes the view to
+  open in and parses it onto the framing node it creates (one
+  `applyNodeChanges`, every service point, walls to Low — unchanged);
+  the panel's no-framing state renders the same Normal | X-ray |
+  Subfloor | Framing row that the active state does, with a line saying
+  what each view is and that the settings appear with it; a pick of an
+  active mode activates in that mode. The inspector card's own call to
+  action keeps the default. Bones tests +1 (the framing-mode
+  activation, the default pinned). Also in this batch, Steve with a
+  close-up of a block corner: "the cmu edges at corners pop past, and
+  there's a gap on the side of the end ones" — the corner interlock
+  reached the neighbour's DRAWN face (`otherThickness / 2`) while the
+  unit sits `CMU_FACE_BURY` inside each drawn face (an inch under the
+  stucco on a block house): the through course popped that inch past the
+  neighbour's block, the yielding course stopped that inch short of it.
+  `unitDepthOf(wall)` (exported) now sets the interlock reach to the
+  neighbour's BLOCK face; three interlock pins re-pinned (0.1 → 0.095 on
+  the 0.2 m fixture). "Is it rendering the blocks one by one?" — yes,
+  every unit is a member (the takeoff counts them, the jamb cuts, half
+  starters, grouted cells and lintel bearings are real per unit) and the
+  renderer draws them instanced (renderer.tsx InstancedMesh buckets), so
+  the count costs one draw call per bucket, not one per block; kept.
 
 - 2026-09-09: **Batch T20 — hip tails to the board; lapped fascia corners;
   the sleepers checked (G104, part 3).** Steve: "your framing on the
