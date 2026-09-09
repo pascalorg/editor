@@ -39,6 +39,7 @@ test('a free run remains drawable', () => {
   const plan = planDuctDraw([0, 0, 0], [2, 0, 0], null, null, null, null, profile)
   expect(plan?.validationMessage).toBeNull()
   expect(plan?.ducts).toHaveLength(1)
+  expect(plan?.fittings.map((fitting) => fitting.fittingType)).toEqual(['end-cap', 'end-cap'])
 })
 
 test('a short branch reports failure instead of omitting its tee', () => {

@@ -17,7 +17,7 @@ import {
 } from '@pascal-app/editor'
 import { Html } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
-import { type ReactNode, type RefObject, useCallback, useEffect, useRef, useState } from 'react'
+import { type RefObject, useCallback, useEffect, useRef, useState } from 'react'
 import { type Group, Vector3 } from 'three'
 import type { RunSurfaceBounds, RunSurfaceTarget } from './distribution-run-contract'
 import { clearDrawAlignment } from './draw-alignment'
@@ -873,6 +873,7 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         event.preventDefault()
         event.stopImmediatePropagation()
         onCancel()
+        useEditor.getState().armToolMode({ mode: 'select' })
         return
       }
       if (event.key === 'Alt') {
@@ -1000,8 +1001,6 @@ export function DistributionRunCursor({
   altActive,
   unit,
   extraParts = [],
-  status,
-  surfaceLabel,
   cursorRef,
   directionMode,
   startDirection,
@@ -1016,8 +1015,6 @@ export function DistributionRunCursor({
   altActive: boolean
   unit: 'metric' | 'imperial'
   extraParts?: DimensionPillPart[]
-  status?: ReactNode
-  surfaceLabel?: string
   cursorRef?: RefObject<Group | null>
   directionMode: RunDirectionMode
   startDirection?: readonly [number, number, number] | null
@@ -1093,11 +1090,6 @@ export function DistributionRunCursor({
           zIndexRange={[100, 0]}
         >
           <div className="flex flex-col items-center gap-1">
-            {surfaceLabel && (
-              <div className="rounded-full bg-background/90 px-3 py-1 text-xs text-foreground">
-                {surfaceLabel}
-              </div>
-            )}
             <DimensionPill parts={parts} primary={primary} unit={unit} />
             {start ? (
               <label className="rounded-full border border-border/60 bg-background/90 px-3 py-1 text-[11px] tabular-nums text-muted-foreground shadow-sm backdrop-blur">
@@ -1132,7 +1124,6 @@ export function DistributionRunCursor({
                 {validationMessage}
               </div>
             ) : null}
-            {status}
           </div>
         </Html>
       </group>
