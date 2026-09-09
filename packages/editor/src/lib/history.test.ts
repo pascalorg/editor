@@ -248,6 +248,155 @@ describe('standalone history source invalidation', () => {
     `)
   })
 
+  test('endpoint undo/redo releases exactly both endpoint neighbours and their hosted children', () => {
+    runSourceHistoryTest(`
+      const { Group, Mesh, MeshBasicMaterial, BoxGeometry } = await importShared('three')
+      const viewer = await importShared('@pascal-app/viewer')
+      const { captureChangedNodes, runBatchFrame, resetNodeBatchState } = await import(${JSON.stringify(resolve(import.meta.dir, '../../../nodes/src/shared/node-batch/system.tsx'))})
+      const root = new Group()
+      core.sceneRegistry.nodes.set(level.id, root)
+      core.sceneRegistry.byType.level.add(level.id)
+      const material = new MeshBasicMaterial()
+      const meshes = []
+      const walls = [wall, { ...wall, id: 'wall_start', start: [0,0], end: [0,4] }, { ...wall, id: 'wall_old', start: [4,0], end: [4,4] }, { ...wall, id: 'wall_new', start: [6,0], end: [6,4] }, { ...wall, id: 'wall_beyond', start: [6,4], end: [8,4] }, remote]
+      const nodes = { [level.id]: level }
+      walls.forEach((host, i) => {
+        const door = core.DoorNode.parse({ id: 'door_batch_' + i, parentId: host.id })
+        nodes[host.id] = { ...host, children: [door.id] }
+        nodes[door.id] = door
+        const mesh = new Mesh(new BoxGeometry(), material)
+        meshes.push(mesh); root.add(mesh)
+        core.sceneRegistry.nodes.set(door.id, mesh)
+        core.sceneRegistry.byType.door.add(door.id)
+      })
+      scene.setState({ nodes }); clearSceneHistory()
+      edit(wall.id, { end: [6,0] }); clean()
+      viewer.useViewer.setState({ externalSelectedIds: [], previewSelectedIds: [], hoveredId: null, selection: { ...viewer.useViewer.getState().selection, selectedIds: [], levelId: null } })
+      let now = 0
+      performance.now = () => now
+      const wake = { current: null }
+      const frame = () => runBatchFrame(() => {}, wake)
+      frame(); now += 181; frame()
+      assert(meshes.every(mesh => !mesh.layers.isEnabled(viewer.SCENE_LAYER)))
+      const batch = root.children.find(child => child.name === 'item-batch')
+      assert.equal(batch.instanceCount, 6)
+      for (const jump of [runUndo, runRedo]) {
+      clean(); jump(); await flush()
+      assert.deepEqual([...scene.getState().dirtyNodes].sort(), [level.id, ...walls.slice(0,4).map(node => node.id)].sort())
+      captureChangedNodes(); clean(); frame()
+      assert.deepEqual(meshes.map(mesh => mesh.layers.isEnabled(viewer.SCENE_LAYER)), [true, true, true, true, false, false])
+      assert.equal(batch.instanceCount, 2)
+      now += 181; frame()
+      assert.equal(batch.instanceCount, 6)
+      assert(meshes.every(mesh => !mesh.layers.isEnabled(viewer.SCENE_LAYER)))
+      }
+      resetNodeBatchState(); if (wake.current) clearTimeout(wake.current)
+    `)
+  })
+
+  test('all four item supports transfer through undo and redo without touching unrelated hosts', () => {
+    runSourceHistoryTest(`
+      const ceiling = core.CeilingNode.parse({ id: 'ceiling_transfer', parentId: level.id, polygon: slab.polygon })
+      const deck = { ...slab, elevation: 1 }
+      const asset = { id: 'transfer', name: 'transfer', category: 'test', thumbnail: '', src: '/test.glb' }
+      const supports = [
+        { parentId: level.id, supportSlabId: core.GROUND_SUPPORT_ID, asset },
+        { parentId: wall.id, supportSlabId: undefined, asset: { ...asset, attachTo: 'wall-side' } },
+        { parentId: ceiling.id, supportSlabId: undefined, asset: { ...asset, attachTo: 'ceiling' } },
+        { parentId: level.id, supportSlabId: deck.id, asset },
+      ]
+      for (let from = 0; from < supports.length; from++) {
+        for (let to = from + 1; to < supports.length; to++) {
+          const item = core.ItemNode.parse({ id: 'item_transfer', ...supports[from] })
+          scene.setState({ nodes: { ...baseline, [ceiling.id]: ceiling, [deck.id]: deck, [item.id]: item } })
+          clearSceneHistory()
+          edit(item.id, { ...supports[to], position: [2,0,2] })
+          const moved = scene.getState().nodes[item.id]
+          for (const [jump, expected] of [[runUndo, item], [runRedo, moved]]) {
+            clean(); jump(); await flush()
+            assert.equal(scene.getState().nodes[item.id], expected)
+            assert.deepEqual([...scene.getState().dirtyNodes].sort(), [...new Set([item.id, level.id, supports[from].parentId, supports[to].parentId])].sort())
+            assert(!dirty(remote.id)); assert(!dirty(deck.id))
+          }
+        }
+      }
+    `)
+  })
+
+  test('undo and redo re-mark hosted opening proxies and wall-side offsets for real frame rebuilds', () => {
+    runSourceHistoryTest(`
+      const react = await importShared('react')
+      mockShared('react', () => ({ ...react, useEffect: () => {}, useRef: current => ({ current }) }))
+      const frames = []
+      const fiber = await importShared('@react-three/fiber')
+      mockShared('@react-three/fiber', () => ({ ...fiber, useFrame: frame => frames.push(frame) }))
+      const selector = store => Object.assign(fn => fn(store.getState()), store)
+      mockShared('@pascal-app/core', () => ({ ...core, useScene: selector(scene), useLiveNodeOverrides: selector(overrides) }))
+      const viewer = await importShared('@pascal-app/viewer')
+      mock.module(${JSON.stringify(resolve(import.meta.dir, '../../../viewer/src/store/use-viewer.ts'))}, () => ({ default: selector(viewer.useViewer) }))
+      const { Mesh } = await importShared('three')
+      const { DoorSystem } = await import(${JSON.stringify(resolve(import.meta.dir, '../../../viewer/src/systems/door/door-system.tsx'))})
+      const { WindowSystem } = await import(${JSON.stringify(resolve(import.meta.dir, '../../../viewer/src/systems/window/window-system.tsx'))})
+      const { ItemSystem } = await import(${JSON.stringify(resolve(import.meta.dir, '../../../viewer/src/systems/item/item-system.tsx'))})
+      const window = core.WindowNode.parse({ id: 'window_thickness', parentId: wall.id })
+      const item = core.ItemNode.parse({ id: 'item_thickness', parentId: wall.id, side: 'front', asset: { id: 'test', name: 'test', category: 'test', thumbnail: '', src: '/test.glb', attachTo: 'wall-side' } })
+      const children = [opening, window, item]
+      scene.setState({ nodes: { ...baseline, [wall.id]: { ...wall, children: children.map(node => node.id) }, [window.id]: window, [item.id]: item } })
+      const meshes = children.map(node => { const mesh = new Mesh(); mesh.userData.itemModelSettled = true; core.sceneRegistry.nodes.set(node.id, mesh); return mesh })
+      clearSceneHistory()
+      DoorSystem(); WindowSystem(); ItemSystem()
+      const frame = () => frames.forEach(frame => frame())
+      const depths = () => meshes.slice(0, 2).map(mesh => mesh.getObjectByName('cutout').geometry.parameters.depth)
+      const check = thickness => {
+        assert.deepEqual(depths(), [thickness + 0.08, thickness + 0.08])
+        assert.equal(meshes[2].position.z, thickness / 2)
+      }
+      children.forEach(node => scene.getState().markDirty(node.id)); frame(); check(core.getWallThickness(wall))
+      edit(wall.id, { thickness: 0.6 })
+      children.forEach(node => scene.getState().markDirty(node.id)); frame(); check(0.6)
+      for (const [jump, thickness] of [[runUndo, core.getWallThickness(wall)], [runRedo, 0.6]]) {
+        clean(); jump(); await flush()
+        children.forEach(node => assert(dirty(node.id), node.id))
+        assert(!dirty(remote.id)); assert(!dirty(slab.id))
+        frame(); check(thickness)
+        children.forEach(node => assert(!dirty(node.id), node.id))
+      }
+    `)
+  })
+
+  test('undo removes a reconciliation-created side-effect wall and its auto surfaces in one step', () => {
+    runSourceHistoryTest(`
+      const upper = core.LevelNode.parse({ id: 'level_unrelated_side_effect', level: 1 })
+      const walls = [wall, { ...wall, id: 'wall_east', start: [4,0], end: [4,4] }, { ...wall, id: 'wall_north', start: [4,4], end: [0,4] }]
+      const closing = core.WallNode.parse({ id: 'wall_closing', parentId: level.id, start: [0,4], end: [0,0] })
+      const sideEffect = core.WallNode.parse({ id: 'wall_derived', parentId: level.id, start: [4,4], end: [6,4] })
+      scene.setState({ nodes: Object.fromEntries([{ ...level, children: walls.map(node => node.id) }, upper, { ...remote, parentId: upper.id }, ...walls].map(node => [node.id, node])) })
+      const editor = { spaces: {}, setSpaces: spaces => { editor.spaces = spaces } }
+      let created = false
+      const stop = core.initSpaceDetectionSync(scene, { getState: () => editor }, {
+        onTopologyReconcile: () => {
+          if (created) return
+          created = true
+          scene.getState().createNode(sideEffect, level.id)
+        },
+      })
+      clearSceneHistory()
+      scene.getState().createNode(closing, level.id)
+      await flush()
+      assert(created); assert(scene.getState().nodes[sideEffect.id])
+      const surfaces = Object.values(scene.getState().nodes).filter(node => node.type === 'slab' || node.type === 'ceiling')
+      assert(surfaces.length > 0)
+      assert.equal(scene.temporal.getState().pastStates.length, 1)
+      clean(); runUndo(); await flush()
+      for (const node of [closing, sideEffect, ...surfaces]) {
+        assert(!scene.getState().nodes[node.id], node.id)
+        assert(!dirty(node.id), node.id)
+      }
+      assert(dirty('wall_north')); assert(!dirty(remote.id))
+      stop()
+    `)
+  })
+
   test('mounted slab and space subscriptions run on temporal writes without swallowing the wall diff', () => {
     runSourceHistoryTest(`
       const react = await importShared('react')
