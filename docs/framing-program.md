@@ -1114,6 +1114,34 @@ batches).
 
 ## Log (continued)
 
+- 2026-09-09: **Batch T18 — block courses on the level datum; the tie
+  beam to the plate line (G104, part 1).** Probed on the Cape Coral block
+  house (scratchpad `cmu-corner-probe.ts`, `cmu-y-probe.ts`): every wall
+  interlocked correctly with its neighbours, but the three garage walls
+  stand on the pad 9 in below the floor and coursed from their OWN base —
+  2.5 cm out of step with the house walls, one course taller, their bond
+  beam at a different height; where the house wall runs on as the garage
+  wall the head joints and the beams stepped against each other — the
+  "not square" ends. Also every wall's blockwork stopped 4 in short of
+  the 9 ft plate line (13 courses = 8'-8"). Now `cmuWall` lays its
+  courses on the LEVEL grid (`CmuHints.baseY`, threaded from compute's
+  `baseYById` through `cmuWalls`): the base's remainder to the next grid
+  line is a leveling course (labelled; a sliver under 2 in is absorbed
+  into the first course), the running-bond and corner-interlock parity
+  use the grid course number, and the top course is a TIE BEAM poured
+  from the last full course up to the wall's top — 8 in on an 8'-0"
+  wall, 12 in on the 9'-0" Florida wall (12 courses + the 8x12 tie beam
+  the trade builds — Coral Isle / Fellsmere details), with 2 #5 top and
+  bottom when it is 12 in or taller. `cmuDowelPositions.barTop` follows
+  the beam's mid-height. Sources: CMHA TEK 5-9A (corners), TEK 17-2A
+  (lintels), the Fellsmere 8 in CMU tie-in detail, Coral Isle Builders
+  on tie beam vs lintel. After: every block wall on the Cape Coral house
+  tops out at 2.738 m (the plate line) and courses in step. Bones 2171
+  tests (two new, five re-pinned for the tie beam). Open: the jamb /
+  lintel look Steve saw (the tests pin cut-tight jambs and 8 in bearing
+  — to be eyeballed), the porch sleepers, the CMU plan details and the
+  truss / rafter bearing on the tie beam.
+
 - 2026-09-09: **Batch T17 — the service entrance at the lot corner
   (G103).** The meter-main was already on a side wall near the front
   when the street is known (G53/G55); the pole then stood at the lot line

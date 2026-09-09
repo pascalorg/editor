@@ -293,7 +293,10 @@ export function cmuDowelPositions(
   }))
   return {
     us: verticalBarPositions(len, ro).map((u) => u + startInset),
-    barTop: courseCount(zoneHeight) * COURSE_HEIGHT - COURSE_HEIGHT / 2,
+    // the verticals hook into the tie beam's mid-height: the beam runs from
+    // the last full course up to the zone's top (cmuWall's rule, base on
+    // the module — a pad wall's leveling course is not folded in here)
+    barTop: ((courseCount(zoneHeight) - 1) * COURSE_HEIGHT + zoneHeight) / 2,
   }
 }
 
@@ -311,7 +314,18 @@ export type CmuCorner = {
   claimEven: boolean
 }
 
-export type CmuHints = { corners?: CmuCorner[] }
+export type CmuHints = {
+  corners?: CmuCorner[]
+  /**
+   * Level-local y of the wall's base (a wall on a lower pad — the garage —
+   * is negative). The course grid rides the LEVEL datum, not the wall's
+   * base, so every block wall on the level courses in step: head joints,
+   * interlock parity and the tie beam line up at the corners (Steve,
+   * 2026-09-09: "your block walls at the ends are like not square").
+   * Absent = 0.
+   */
+  baseY?: number
+}
 
 // ---------------------------------------------------------------------------
 // The engine
@@ -350,12 +364,31 @@ export function cmuWall(wall: WallSlice, spec: FramingSpec, hints: CmuHints = {}
   )
   const thinBuryFloor = wall.thickness - 2 * CMU_FACE_BURY < wall.thickness / 2 - EPS
 
-  // Whole courses that fit under the wall height (EPS guards an exact-fit
-  // height like 8'-0" from float-rounding down to 11 courses).
-  const totalCourses = courseCount(wall.height)
-  if (totalCourses < 1) return [] // shorter than one course — nothing to lay
-  const bodyCourses = totalCourses - 1 // top course is the bond beam
-  const bondBeamBottom = bodyCourses * COURSE_HEIGHT
+  // ---- the course grid on the level datum ----
+  // The base's remainder up to the next grid line is a LEVELING course (a
+  // cut course on the footing — a mason sets the footing on the module;
+  // said on the label); a sliver under MIN_PIECE is absorbed into the first
+  // full course instead. `gridIndex(c)` is the course's number on the
+  // level's grid — the running-bond and corner-interlock parity every wall
+  // on the level shares.
+  const H = COURSE_HEIGHT
+  const baseY = hints.baseY ?? 0
+  let lead = ((-baseY % H) + H) % H
+  if (lead > H - EPS) lead = 0
+  const absorbLead = lead > EPS && lead < MIN_PIECE
+  // Whole grid courses that fit under the wall height above the lead (EPS
+  // guards an exact-fit height like 8'-0" from float-rounding down).
+  const n = courseCount(wall.height - lead)
+  if (n < 1) return [] // shorter than one course — nothing to lay
+  // The top course is the TIE BEAM, poured up to the wall's top: the last
+  // grid course plus the remainder under the plate line — 8 in on an 8'-0"
+  // wall, 12 in on Florida's 9'-0" wall (12 courses + the 8x12 tie beam).
+  const bodyCourses = n - 1
+  const bondBeamBottom = lead + bodyCourses * H
+  const beamHeight = wall.height - bondBeamBottom
+  const gridIndex = (c: number): number => c + Math.round((baseY + lead) / H)
+  /** Wall-local [bottom, top] of body course c (course 0 swallows an absorbed lead). */
+  const cellOf = (c: number): [number, number] => [c === 0 && absorbLead ? 0 : lead + c * H, lead + (c + 1) * H]
 
   // ---- corner interlock: per-course extents along the wall ----
   // At a shared corner the claiming course lays THROUGH to the neighbor's far
@@ -367,10 +400,11 @@ export function cmuWall(wall: WallSlice, spec: FramingSpec, hints: CmuHints = {}
   const courseSpan = (c: number): [number, number] => {
     let lo = 0
     let hi = len
+    const even = gridIndex(c) % 2 === 0
     const cs = cornerAt('start')
-    if (cs) lo = (c % 2 === 0) === cs.claimEven ? -cs.otherThickness / 2 : cs.otherThickness / 2
+    if (cs) lo = even === cs.claimEven ? -cs.otherThickness / 2 : cs.otherThickness / 2
     const ce = cornerAt('end')
-    if (ce) hi = len + ((c % 2 === 0) === ce.claimEven ? ce.otherThickness / 2 : -ce.otherThickness / 2)
+    if (ce) hi = len + (even === ce.claimEven ? ce.otherThickness / 2 : -ce.otherThickness / 2)
     return [lo, hi]
   }
   /** Extend the terminal units through a claimed corner / clip to a yielded one. */
@@ -474,16 +508,15 @@ export function cmuWall(wall: WallSlice, spec: FramingSpec, hints: CmuHints = {}
   }
 
   // ---- body coursing: running bond, interlocked corners, cut at openings ----
-  for (let c = 0; c < bodyCourses; c++) {
-    const y0 = c * COURSE_HEIGHT
-    const y1 = y0 + COURSE_HEIGHT
+  /** One course cell: the running-bond units, interlocked, cut at the openings. */
+  const layCourse = (c: number, y0: number, y1: number, label?: string): void => {
     const [lo, hi] = courseSpan(c)
     // Keep-outs that touch this course cell vertically.
     const cuts: BlockInterval[] = []
     for (const k of keepOuts) {
       if (k.y0 < y1 - EPS && k.y1 > y0 + EPS) cuts.push({ a: k.u0, b: k.u1 })
     }
-    for (const unit of interlock(courseIntervals(len, c % 2 === 1), lo, hi)) {
+    for (const unit of interlock(courseIntervals(len, gridIndex(c) % 2 !== 0), lo, hi)) {
       for (const piece of subtractKeepOuts(unit, cuts)) {
         if (piece.b - piece.a < MIN_PIECE - EPS) continue
         // Cells a vertical bar passes through grout solid (IRC R606.12 wind
@@ -496,12 +529,20 @@ export function cmuWall(wall: WallSlice, spec: FramingSpec, hints: CmuHints = {}
           'block',
           piece,
           y0,
-          COURSE_HEIGHT,
-          grouted ? 'grouted cell + vertical rebar' : undefined,
+          y1 - y0,
+          label ?? (grouted ? 'grouted cell + vertical rebar' : undefined),
           grouted,
         )
       }
     }
+  }
+  // the leveling course on a base off the module (the course below the grid)
+  if (lead >= MIN_PIECE - EPS) {
+    layCourse(-1, 0, lead, `leveling course ${formatIn(lead)} — cut to the footing; set the footing on the 8 in module (verify)`)
+  }
+  for (let c = 0; c < bodyCourses; c++) {
+    const [y0, y1] = cellOf(c)
+    layCourse(c, y0, y1)
   }
 
   // ---- bond beam: the top course, grouted solid with horizontal rebar ----
@@ -513,14 +554,17 @@ export function cmuWall(wall: WallSlice, spec: FramingSpec, hints: CmuHints = {}
   // ASSUMPTION: continuous across the full wall even over a full-height
   // opening — real FBC tie-beam details splice, not interrupt, there.
   const [beamLo, beamHi] = courseSpan(bodyCourses)
+  const tallBeam = beamHeight > H + EPS
   emit(
     'bond-beam',
     // Padded half a joint each side so the emitted box spans the exact
     // course extent after the mortar shrink — a poured beam shows no joints.
     { a: beamLo - MORTAR_JOINT / 2, b: beamHi + MORTAR_JOINT / 2 },
     bondBeamBottom,
-    COURSE_HEIGHT,
-    'bond beam — grouted + rebar',
+    beamHeight,
+    tallBeam
+      ? `tie beam ${formatIn(beamHeight)} tall — poured on the block to the plate line, 2 #5 top and bottom (FBC tie beam; verify)`
+      : 'bond beam — grouted + rebar',
   )
   if (thinBuryFloor) {
     // The bond beam always exists (any wall with ≥1 course), so it carries
@@ -533,25 +577,29 @@ export function cmuWall(wall: WallSlice, spec: FramingSpec, hints: CmuHints = {}
   if (fab) {
     // Two horizontal #5 bars centered in the beam, 2" clear off each face
     // (FBC tie-beam detail). Walls too thin for two bars carry one on center.
-    const beamBarY = bondBeamBottom + COURSE_HEIGHT / 2
+    // a 12 in tie beam carries its bars top AND bottom (the FBC detail); an
+    // 8 in bond beam one row on centre
+    const beamRows = beamHeight >= inches(12) - EPS ? [bondBeamBottom + BAR_CLEAR, bondBeamBottom + beamHeight - BAR_CLEAR] : [bondBeamBottom + beamHeight / 2]
     const offset = depth / 2 - BAR_CLEAR
     const beamBarLen = beamHi - beamLo
-    for (const side of offset > REBAR_SIZE ? [-1, 1] : [0]) {
-      members.push({
-        system: 'wall-framing',
-        role: 'rebar',
-        dims: [beamBarLen, REBAR_SIZE, REBAR_SIZE],
-        length: beamBarLen,
-        position: place((beamLo + beamHi) / 2, beamBarY, side * Math.max(offset, 0)),
-        rotation: [0, yaw, 0],
-        material: 'steel',
-        sourceId: wall.id,
-        label: '#5 horizontal — bond beam, lap corners',
-      })
+    for (const beamBarY of beamRows) {
+      for (const side of offset > REBAR_SIZE ? [-1, 1] : [0]) {
+        members.push({
+          system: 'wall-framing',
+          role: 'rebar',
+          dims: [beamBarLen, REBAR_SIZE, REBAR_SIZE],
+          length: beamBarLen,
+          position: place((beamLo + beamHi) / 2, beamBarY, side * Math.max(offset, 0)),
+          rotation: [0, yaw, 0],
+          material: 'steel',
+          sourceId: wall.id,
+          label: '#5 horizontal — bond beam, lap corners',
+        })
+      }
     }
     // Vertical #5 bars in the grouted cells, hooked into the bond beam: from
     // the slab (foundation dowels lap below) up to the beam's mid-height.
-    const barTop = bondBeamBottom + COURSE_HEIGHT / 2
+    const barTop = bondBeamBottom + beamHeight / 2
     for (const u of barUs) {
       members.push({
         system: 'wall-framing',
@@ -578,7 +626,12 @@ export function cmuWall(wall: WallSlice, spec: FramingSpec, hints: CmuHints = {}
  * bar. ASSUMPTION: corners between a CMU wall and a FRAMED wall get no
  * interlock — the engines run on disjoint wall groups.
  */
-export function cmuWalls(walls: WallSlice[], spec: FramingSpec): Member[] {
+export function cmuWalls(
+  walls: WallSlice[],
+  spec: FramingSpec,
+  /** Level-local base of each wall standing on a lower pad (compute's baseYById) — the course grid rides the level datum. */
+  baseYById?: ReadonlyMap<string, number>,
+): Member[] {
   const hints = new Map<string, CmuHints>()
   const add = (id: string, corner: CmuCorner): void => {
     const h = hints.get(id) ?? {}
@@ -607,7 +660,8 @@ export function cmuWalls(walls: WallSlice[], spec: FramingSpec): Member[] {
   }
   const members: Member[] = []
   for (const wall of walls) {
-    members.push(...cmuWall(wall, spec, hints.get(wall.id)))
+    const base = baseYById?.get(wall.id)
+    members.push(...cmuWall(wall, spec, { ...(hints.get(wall.id) ?? {}), ...(base !== undefined ? { baseY: base } : {}) }))
   }
   return members
 }

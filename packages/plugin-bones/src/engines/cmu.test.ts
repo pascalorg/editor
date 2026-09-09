@@ -185,13 +185,16 @@ describe('cmuWall — solid 4m × 2.4m wall', () => {
     expect(byRole(deep, 'block')[0]?.dims[2]).toBeCloseTo(BLOCK_DEPTH_ACTUAL, 6)
   })
 
-  test('bond beam caps the wall: top course, full length, grouted label', () => {
+  test('the tie beam caps the wall to its top: full length, poured, 2 #5 top and bottom', () => {
     const beam = byRole(members, 'bond-beam')[0] as Member
-    expect(beam.label).toBe('bond beam — grouted + rebar')
+    // 2026-09-09: the top course is poured up to the plate line — on this
+    // 2.4 m wall the 11th course plus the 16.5 cm remainder, a 14½ in beam
+    expect(beam.label).toMatch(/^tie beam/)
     expect(beam.dims[0]).toBeCloseTo(4, 6) // continuous — no head joints
     expect(beam.position[0]).toBeCloseTo(2, 6)
-    // occupies the 11th course cell: [2.032, 2.2352], center 2.1336
-    expect(beam.position[1]).toBeCloseTo(10 * H + H / 2, 6)
+    // occupies [2.032, 2.4] (less the visual joint), centre 2.216
+    expect(beam.position[1]).toBeCloseTo((10 * H + wall.height) / 2, 6)
+    expect(beam.dims[1]).toBeCloseTo(wall.height - 10 * H - MORTAR_JOINT, 6)
     // nothing pokes above the architectural wall height
     expect((beam.position[1] ?? 0) + (beam.dims[1] ?? 0) / 2).toBeLessThanOrEqual(wall.height)
     // no plain block sits above the bond beam bottom
@@ -414,9 +417,9 @@ describe('cmuWall — vertical rebar in grouted cells (LOD 350+)', () => {
     for (const bar of bars) {
       expect(bar.material).toBe('steel')
       expect(bar.dims[0]).toBeCloseTo(REBAR_SIZE, 6)
-      // runs from the slab to mid-bond-beam: top = 10·H + H/2 = 2.1336
+      // runs from the slab to the tie beam's mid-height: (10·H + 2.4) / 2 = 2.216
       const top = (bar.position[1] ?? 0) + bar.dims[1] / 2
-      expect(top).toBeCloseTo(10 * H + H / 2, 6)
+      expect(top).toBeCloseTo((10 * H + 2.4) / 2, 6)
       expect(bar.position[1] ?? 0).toBeCloseTo(top / 2, 6) // bottom at 0
       expect(bar.label).toContain('R606.12')
     }
@@ -453,9 +456,9 @@ describe('cmuWall — bond-beam horizontal bars (LOD 350+)', () => {
   const members = cmuWall(makeWall(), DEFAULT_SPEC)
   const beamBars = byRole(members, 'rebar').filter((m) => m.dims[0] > 1) // horizontals
 
-  test('two #5 bars run the full beam, 2" clear off each face', () => {
-    expect(beamBars).toHaveLength(2)
-    const offs = beamBars.map((b) => b.position[2] ?? 0).sort((a, b) => a - b)
+  test('two #5 bars top and bottom run the full beam (a 12 in+ tie beam), 2" clear off each face', () => {
+    expect(beamBars).toHaveLength(4)
+    const offs = [...new Set(beamBars.map((b) => +(b.position[2] ?? 0).toFixed(6)))].sort((a, b) => a - b)
     // Depth on the 0.2m wall is buried (0.19), so the 2" clear cover
     // measures off the BURIED faces — bars ride the real block, never the
     // drawn wall face.
@@ -465,7 +468,8 @@ describe('cmuWall — bond-beam horizontal bars (LOD 350+)', () => {
     for (const bar of beamBars) {
       expect(bar.material).toBe('steel')
       expect(bar.dims[0]).toBeCloseTo(4, 6) // continuous, wall length
-      expect(bar.position[1]).toBeCloseTo(10 * H + H / 2, 6) // beam mid-height
+      // a row 2 in off the beam's bottom and one 2 in under its top
+      expect([10 * H + inches(2), 2.4 - inches(2)].some((y) => Math.abs((bar.position[1] ?? 0) - y) < 1e-6)).toBe(true)
       expect(bar.position[0]).toBeCloseTo(2, 6)
       expect(bar.label).toContain('bond beam')
     }
@@ -474,7 +478,8 @@ describe('cmuWall — bond-beam horizontal bars (LOD 350+)', () => {
   test('a wall too thin for two bars carries one on center', () => {
     const thin = cmuWall(makeWall({ thickness: 0.1 }), DEFAULT_SPEC)
     const bars = byRole(thin, 'rebar').filter((m) => m.dims[0] > 1)
-    expect(bars).toHaveLength(1)
+    // one bar per row on centre — two rows on this 14½ in tie beam
+    expect(bars).toHaveLength(2)
     expect(bars[0]?.position[2]).toBeCloseTo(0, 6)
   })
 })
@@ -557,6 +562,54 @@ describe('cmuWalls — corner interlock (courses alternate through the corner)',
  * course-math truth the engines and the UI height slider share. Whole 8"
  * courses only, clamped to [1 course, every course that fits].
  */
+describe('cmuWall — the course grid rides the level datum (2026-09-09)', () => {
+  const H = COURSE_HEIGHT
+  const pad = (baseY: number): WallSlice =>
+    ({
+      id: 'w_pad',
+      start: [0, 0],
+      end: [4, 0],
+      length: 4,
+      dir: [1, 0],
+      thickness: 0.2,
+      height: 2.4 - baseY, // the same top as a base-0 wall
+      exterior: true,
+      openings: [],
+      curved: false,
+    }) as unknown as WallSlice
+
+  test('a wall on a pad 9 in below the floor courses in step with the floor walls and pours its beam to the same top', () => {
+    // 11 in below: a 3 in leveling course up to the −8 in grid line, then full courses on the grid
+    const baseY = -inches(11)
+    const members = cmuWalls([pad(baseY)], DEFAULT_SPEC, new Map([['w_pad', baseY]]))
+    // in LEVEL terms (the engine lays from the wall base; compute shifts by baseY): every full
+    // course bottom lands on a multiple of H once shifted
+    const blocks = members.filter((m) => m.role === 'block')
+    const bottoms = [...new Set(blocks.map((m) => +(m.position[1] - m.dims[1] / 2 - MORTAR_JOINT / 2 + baseY).toFixed(4)))].sort((a, b) => a - b)
+    // the leveling course sits on the base (−11 in), the first grid course at −8 in (= −H)
+    expect(bottoms[0]).toBeCloseTo(baseY, 3)
+    expect(bottoms[1]).toBeCloseTo(-H, 3)
+    for (const y of bottoms.slice(1)) expect(Math.abs(y / H - Math.round(y / H))).toBeLessThan(1e-3)
+    expect(blocks.some((m) => /leveling course/.test(m.label ?? ''))).toBe(true)
+    // the beam tops out at the wall top, like the floor walls' beams
+    const beam = members.find((m) => m.role === 'bond-beam') as Member
+    expect(beam.position[1] + beam.dims[1] / 2 + MORTAR_JOINT / 2 + baseY).toBeCloseTo(2.4, 4)
+  })
+
+  test('a sliver below one piece is absorbed into the first course; a base on the module changes nothing', () => {
+    const baseY = -0.02
+    const members = cmuWalls([pad(baseY)], DEFAULT_SPEC, new Map([['w_pad', baseY]]))
+    expect(members.some((m) => /leveling course/.test(m.label ?? ''))).toBe(false)
+    const first = members.filter((m) => m.role === 'block' && m.position[1] - m.dims[1] / 2 < 0.01)
+    expect(first.length).toBeGreaterThan(0)
+    for (const m of first) expect(m.dims[1]).toBeCloseTo(H + 0.02 - MORTAR_JOINT, 6)
+    // two full courses down: the same grid parity, so the lay-up is the wall's own (byte-equal)
+    const onModule = cmuWalls([pad(-2 * H)], DEFAULT_SPEC, new Map([['w_pad', -2 * H]]))
+    const plain = cmuWalls([pad(-2 * H)], DEFAULT_SPEC)
+    expect(onModule).toEqual(plain)
+  })
+})
+
 describe('snapCmuHeight', () => {
   test('snaps to the nearest whole course', () => {
     expect(snapCmuHeight(1.22, 2.44)).toBeCloseTo(6 * H, 9) // 50% of 2.44m → 6 courses

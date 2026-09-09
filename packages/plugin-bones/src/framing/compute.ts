@@ -1095,7 +1095,7 @@ function computeLevelUncached(
         `${separationWalls.length} dwelling–garage separation wall${separationWalls.length === 1 ? '' : 's'} — 1/2 in gypsum on the garage side (Table R302.6); the door through it 20-minute rated, solid core, self-closing and self-latching (R302.5.1); no habitable room above the garage on this level, so no Type X ceiling is called for here`,
       )
     }
-    members.push(...cmuWalls(masonry, spec))
+    members.push(...cmuWalls(masonry, spec, baseYById))
     for (const { wall, seam } of mixed) {
       const neighbors = activeWalls.filter((w) => w.id !== wall.id && !w.curved)
       const result = mixedCmuWall(wall, spec, seam, neighbors)
