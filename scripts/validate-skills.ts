@@ -110,6 +110,20 @@ for (const skillName of skillNames) {
   if (!/^ {2}native-host-validation: "[a-z0-9-]+"$/m.test(content)) {
     fail(`${skillName}: native host validation state must be explicit`)
   }
+  if (/^license:/m.test(content)) {
+    fail(`${skillName}: per-skill license metadata conflicts with ClawHub's MIT-0 release contract`)
+  }
+  for (const requiredOpenClawMetadata of [
+    '  openclaw:',
+    '    homepage: https://editor.pascal.app/docs/developers/mcp',
+    '    primaryEnv: PASCAL_API_KEY',
+    '      - name: PASCAL_API_KEY',
+    '        required: false',
+  ]) {
+    if (!content.includes(requiredOpenClawMetadata)) {
+      fail(`${skillName}: missing OpenClaw metadata: ${requiredOpenClawMetadata.trim()}`)
+    }
+  }
   if (content.includes('last-verified:'))
     fail(`${skillName}: last-verified overstates the current validation state`)
   if (content.split('\n').length > 500) fail(`${skillName}: SKILL.md exceeds 500 lines`)
@@ -615,6 +629,7 @@ for (const expected of [
   '/plugin marketplace add pascalorg/editor',
   'codex plugin marketplace add pascalorg/editor',
   'codex plugin add pascal-agent-skills@pascal',
+  'OpenClaw installation becomes available after the skills are published',
 ]) {
   if (!readme.includes(expected)) fail(`README is missing install instruction: ${expected}`)
 }

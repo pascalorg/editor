@@ -43,6 +43,16 @@ The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b
 
 Run the setup command for the active host. The MCP command installed in host configuration is `pascal mcp connect`. Local use needs no hosted account and does not upload projects automatically. If the connected MCP schema lacks `check_collisions.candidate`, report the narrower supported result rather than implying the candidate was tested.
 
+For OpenClaw, register and probe the same local connector:
+
+```bash
+openclaw mcp add pascal \
+  --command pascal \
+  --arg mcp \
+  --arg connect
+openclaw mcp doctor pascal --probe
+```
+
 Use only one active agent client with each local CLI service. The standalone HTTP service shares active scene state across clients; do not run concurrent agents against that process. Separate processes need separate local data stores for independent work. The hosted endpoint below uses a different session-isolated bridge.
 
 ## Existing hosted project
@@ -75,6 +85,19 @@ claude mcp add --scope user --transport http pascal https://editor.pascal.app/ap
 ```
 
 The guard exits before changing Claude Code configuration when the variable is unset or empty. Claude Code expands the variable during registration and stores the static Authorization header, including the key, in its private user configuration. The connection is then available in all Claude Code projects for that user. Keep the configuration private; use `--scope local` instead when the connection should remain local to the current project. Never paste the key into a project file, report, prompt, screenshot, or URL.
+
+OpenClaw:
+
+```bash
+: "${PASCAL_API_KEY:?Set PASCAL_API_KEY to a key from Pascal Settings}" && \
+openclaw mcp add pascal \
+  --url https://editor.pascal.app/api/mcp \
+  --transport streamable-http \
+  --header "Authorization=Bearer $PASCAL_API_KEY"
+openclaw mcp doctor pascal --probe
+```
+
+The current OpenClaw static-header path stores the expanded key in its private MCP configuration and may warn about the literal credential during `doctor`. Do not commit or share that configuration. Remove the server with `openclaw mcp unset pascal` and rotate the Pascal key if the configuration is exposed. Installing this skill does not authorize a save, placement, account, upload, publication, or paid operation.
 
 ## Separate autonomous workspace
 

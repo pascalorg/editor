@@ -1,12 +1,18 @@
 ---
 name: furniture-fit
 description: Assess whether furniture fits in a measured Pascal room or layout. Use this skill for sofa, table, bed, cabinet, appliance, staging, placement, collision, clearance, or rotated-footprint questions. Produce a tool-backed spatial report that distinguishes footprint fit from unsupported height, door-swing, assembly, and delivery-route claims, and return insufficient evidence when dimensions or scale are missing.
-license: MIT
 compatibility: Requires a Pascal MCP connection for verified scene checks. Can still produce an input-gap report when the scene or measurements are unavailable.
 metadata:
   version: "0.1.3"
   source-reviewed: "2026-09-09"
   native-host-validation: "package-checks-only"
+  openclaw:
+    homepage: https://editor.pascal.app/docs/developers/mcp
+    primaryEnv: PASCAL_API_KEY
+    envVars:
+      - name: PASCAL_API_KEY
+        required: false
+        description: Optional Pascal API key for hosted scene checks; input-gap reports and local Pascal do not require it.
 ---
 
 # Furniture fit

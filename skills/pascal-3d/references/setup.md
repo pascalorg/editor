@@ -63,6 +63,16 @@ Run only the setup command for the active host. For a JSON-based MCP client, use
 }
 ```
 
+OpenClaw:
+
+```bash
+openclaw mcp add pascal \
+  --command pascal \
+  --arg mcp \
+  --arg connect
+openclaw mcp doctor pascal --probe
+```
+
 The stable connector discovers the managed loopback service and its private local token. Diagnose without exposing secrets:
 
 ```bash
@@ -106,6 +116,19 @@ claude mcp add --scope user --transport http pascal https://editor.pascal.app/ap
 ```
 
 The guard exits before changing Claude Code configuration when the variable is unset or empty. Claude Code expands the variable during registration and stores the static Authorization header, including the key, in its private user configuration. The connection is then available in all Claude Code projects for that user. Keep the configuration private; use `--scope local` instead when the connection should remain local to the current project.
+
+OpenClaw:
+
+```bash
+: "${PASCAL_API_KEY:?Set PASCAL_API_KEY to a key from Pascal Settings}" && \
+openclaw mcp add pascal \
+  --url https://editor.pascal.app/api/mcp \
+  --transport streamable-http \
+  --header "Authorization=Bearer $PASCAL_API_KEY"
+openclaw mcp doctor pascal --probe
+```
+
+The current OpenClaw static-header path stores the expanded key in its private MCP configuration and may warn about the literal credential during `doctor`. Do not commit or share that configuration. Remove the server with `openclaw mcp unset pascal` and rotate the Pascal key if the configuration is exposed. Skill installation alone does not configure this connection or authorize an account, upload, save, publication, or paid operation.
 
 For other JSON-based clients, prefer their supported environment-variable or secret interpolation rather than a literal key:
 

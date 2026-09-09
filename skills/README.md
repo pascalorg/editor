@@ -26,6 +26,19 @@ npx skills add https://github.com/pascalorg/editor/tree/main/skills/furniture-fi
 
 Use `-g` for a user-wide installation or `-a claude-code -a codex` to choose hosts explicitly.
 
+## Install with OpenClaw
+
+After publication under Pascal's ClawHub publisher, use the owner-qualified registry references and verify their trust envelopes:
+
+```bash
+openclaw skills install @pascalorg/pascal-3d
+openclaw skills install @pascalorg/furniture-fit
+openclaw skills verify @pascalorg/pascal-3d
+openclaw skills verify @pascalorg/furniture-fit
+```
+
+The references above remain unavailable until an authorized Pascal publisher accepts ClawHub's MIT-0 publication terms and creates the releases. OpenClaw's `skills-sh:` resolver also requires the skill to be indexed by ClawHub, so the existing skills.sh listing is not a pre-publication workaround. Installing either skill provides instructions only; follow its setup reference to connect Pascal MCP.
+
 ## Install as a Claude Code or Codex plugin
 
 This repository is also a shared plugin marketplace containing one plugin backed by the same `skills/` folders. For Claude Code:

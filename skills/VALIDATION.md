@@ -2,11 +2,15 @@
 
 Candidate package source: **0.1.5**. Latest released package source: **0.1.4**. `pascal-3d` skill metadata version: **0.1.0**. `furniture-fit` skill metadata version: **0.1.3**. Recorded September 9, 2026.
 
-## Bundle 0.1.5 OpenAI submission readiness candidate
+## Bundle 0.1.5 OpenAI and ClawHub submission readiness candidate
 
 This candidate adds the portable root Agent Plugins manifest while retaining the Codex compatibility manifest and Claude marketplace package. Its OpenAI listing metadata fits the final public-directory limits: display and short-description copy are at most 30 characters, starter prompts are at most 128 characters, and the package supplies a square bundled logo asset plus public website, support, privacy, and terms URLs. The repository validator keeps the portable and compatibility OpenAI interfaces identical and rejects screenshots for this skills-only package. Shared publishing fixtures moved out of `skills/`, leaving only valid immediate skill directories for OpenAI archive ingestion.
 
 These source checks do not submit or publish the plugin. OpenAI Platform access, a verified matching developer or business identity, portal review, country selection, policy attestations, and the developer's separate publish action remain external requirements. The publishing suite provides more than the required five positive and three negative reviewer cases, including reproducible positive fixtures, expected result shapes, and explicit negative-case reasons; the release-note draft is stored beside it. The submitter must enter those materials in the portal and resolve any automated skill-scan findings.
+
+For ClawHub, both canonical skill folders pass `clawhub` 0.23.3 `skill publish --dry-run --json` with their intended owner, slug, version, categories, topics, and public source metadata. OpenClaw 2026.9.3 installs both folders into an isolated workspace, parses the optional `PASCAL_API_KEY` and homepage metadata, and reports both skills eligible without a hosted credential. The documented local and hosted `openclaw mcp add` command shapes were saved successfully in isolated state without contacting Pascal. The OpenClaw `skills-sh:` resolver did not install the existing skills.sh source before ClawHub indexing, so public instructions do not claim that path as a pre-publication workaround.
+
+These checks do not create a ClawHub publisher or release, accept the mandatory MIT-0 publication terms, run ClawHub's post-upload security scanners, prove a live Pascal MCP connection from OpenClaw, or establish installs, useful tasks, or retention. Those remain separate release and adoption evidence.
 
 ## Bundle 0.1.4 release source
 
