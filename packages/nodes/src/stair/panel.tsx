@@ -331,41 +331,39 @@ export default function StairPanel() {
             </select>
           </div>
 
-          {attachedDeck ? (
-            <div className="space-y-1.5">
-              <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
-                Rise
-              </div>
-              <SegmentedControl
-                onChange={(value) =>
-                  handleUpdate(
-                    value === 'custom' ? { totalRise: resolvedRise } : { totalRise: undefined },
-                  )
-                }
-                options={[
-                  { label: 'Follows deck', value: 'follows' },
-                  { label: 'Custom rise', value: 'custom' },
-                ]}
-                value={node.totalRise == null ? 'follows' : 'custom'}
-              />
-              {node.totalRise == null ? (
-                <div className="px-1 text-[11px] text-muted-foreground">
-                  Currently {resolvedRise} m
-                </div>
-              ) : (
-                <MetricControl
-                  label="Rise"
-                  max={10}
-                  min={0.2}
-                  onChange={(value) => handleUpdate({ totalRise: value })}
-                  precision={2}
-                  step={0.05}
-                  unit="m"
-                  value={resolvedRise}
-                />
-              )}
+          <div className="space-y-1.5">
+            <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
+              Rise
             </div>
-          ) : null}
+            <SegmentedControl
+              onChange={(value) =>
+                handleUpdate(
+                  value === 'custom' ? { totalRise: resolvedRise } : { totalRise: undefined },
+                )
+              }
+              options={[
+                { label: attachedDeck ? 'Follows deck' : 'Follows storey', value: 'follows' },
+                { label: 'Custom rise', value: 'custom' },
+              ]}
+              value={node.totalRise == null ? 'follows' : 'custom'}
+            />
+            {node.totalRise == null ? (
+              <div className="px-1 text-[11px] text-muted-foreground">
+                Currently {resolvedRise} m
+              </div>
+            ) : (
+              <MetricControl
+                label="Rise"
+                max={1000}
+                min={0.2}
+                onChange={(value) => handleUpdate({ totalRise: value })}
+                precision={2}
+                step={0.05}
+                unit="m"
+                value={resolvedRise}
+              />
+            )}
+          </div>
 
           {attachedDeck ? null : (
             <>
@@ -463,13 +461,13 @@ export default function StairPanel() {
           />
           <MetricControl
             label="Rise"
-            max={10}
+            max={1000}
             min={0.2}
             onChange={(value) => handleUpdate({ totalRise: value })}
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round(resolveStairTotalRise(node, nodes) * 100) / 100}
+            value={resolvedRise}
           />
           <MetricControl
             label="Steps"

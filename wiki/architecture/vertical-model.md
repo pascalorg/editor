@@ -31,7 +31,7 @@ The invariant, in one sentence:
 | `fence.supportOffset` | Optional level-local delta from the fence's slab host or level plane. It translates the complete fence while preserving height. | Zero offset: the fence sits directly on its host or level plane. |
 | `wall.fillToTerrain` | Extends the wall downward from its authored base to the terrain with independently sampled left/right faces. The wall body height and top stay unchanged. | Fixed base with no terrain infill. |
 | `stair.deckSlabId` | Destination deck: rise follows `deck.elevation − the stair's own elected base` live; cutout sync disabled while attached. | Destination is a level. |
-| `stair.totalRise` | Explicit custom rise (wins over everything). | Follows: derived from the deck or the containing level; `syncStairRises` converges straight-stair segments to the resolved rise. |
+| `stair.totalRise` | Explicit custom rise (wins over everything). | Follows: the deck's `elevation`, else the containing level's floor-to-floor height — each **minus the stair's own elected base**, so a slab under the stair shortens the rise the way it shortens a plane-bound wall; `syncStairRises` converges straight-stair segments to the resolved rise. |
 
 Two schema rules protect these semantics:
 

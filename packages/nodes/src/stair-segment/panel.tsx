@@ -4,6 +4,8 @@ import {
   type AnyNode,
   type AnyNodeId,
   type AttachmentSide,
+  DEFAULT_LEVEL_HEIGHT,
+  resolveStairTotalRise,
   type StairSegmentNode,
   StairSegmentNode as StairSegmentNodeSchema,
   type StairSegmentType,
@@ -66,6 +68,17 @@ export default function StairSegmentPanel() {
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
+
+  // Turning a landing back into a flight seeds the rise the parent stair
+  // resolves — a fixed 2.5 m stops halfway up a tall storey, and for a
+  // follows-mode stair it is what `syncStairRises` would converge to anyway.
+  const resolveParentStairRise = useCallback(() => {
+    const sceneNodes = useScene.getState().nodes
+    const parent = node?.parentId ? sceneNodes[node.parentId as AnyNodeId] : undefined
+    return parent?.type === 'stair'
+      ? resolveStairTotalRise(parent, sceneNodes)
+      : DEFAULT_LEVEL_HEIGHT
+  }, [node])
 
   const handleBack = useCallback(() => {
     if (node?.parentId) {
@@ -136,7 +149,7 @@ export default function StairSegmentPanel() {
               updates.stepCount = 0
               updates.length = 1.0
             } else {
-              updates.height = 2.5
+              updates.height = resolveParentStairRise()
               updates.stepCount = 10
               updates.length = 3.0
             }

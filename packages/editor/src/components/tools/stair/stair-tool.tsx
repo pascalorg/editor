@@ -2,8 +2,10 @@ import {
   type AnyNode,
   collectAlignmentAnchors,
   createSurfaceOpeningPreviewController,
+  DEFAULT_LEVEL_HEIGHT,
   emitter,
   type GridEvent,
+  getLevelFloorToFloorHeight,
   type LevelNode,
   movingAlignmentAnchors,
   type NodeEvent,
@@ -50,7 +52,6 @@ import {
   DEFAULT_SPIRAL_TOP_LANDING_MODE,
   DEFAULT_STAIR_ATTACHMENT_SIDE,
   DEFAULT_STAIR_FILL_TO_FLOOR,
-  DEFAULT_STAIR_HEIGHT,
   DEFAULT_STAIR_LENGTH,
   DEFAULT_STAIR_OPENING_OFFSET,
   DEFAULT_STAIR_RAILING_HEIGHT,
@@ -71,8 +72,8 @@ type MoveTriggerEvent = GridEvent | NodeEvent<AnyNode>
  * Generates the step-profile geometry for the ghost preview.
  * Same algorithm as StairSystem's generateStairSegmentGeometry.
  */
-function createStairPreviewGeometry(): THREE.BufferGeometry {
-  const riserHeight = DEFAULT_STAIR_HEIGHT / DEFAULT_STAIR_STEP_COUNT
+function createStairPreviewGeometry(rise: number): THREE.BufferGeometry {
+  const riserHeight = rise / DEFAULT_STAIR_STEP_COUNT
   const treadDepth = DEFAULT_STAIR_LENGTH / DEFAULT_STAIR_STEP_COUNT
 
   const shape = new THREE.Shape()
@@ -103,14 +104,16 @@ function createStairPreviewGeometry(): THREE.BufferGeometry {
 }
 
 /**
- * Creates a default straight stair segment.
+ * Creates a default straight stair segment climbing `rise` — the storey it is
+ * dropped on, not a constant: the placed stair has no explicit `totalRise`, so
+ * this is the height `syncStairRises` immediately converges it to anyway.
  */
-function createDefaultStairSegment() {
+function createDefaultStairSegment(rise: number) {
   return StairSegmentNode.parse({
     segmentType: 'stair',
     width: DEFAULT_STAIR_WIDTH,
     length: DEFAULT_STAIR_LENGTH,
-    height: DEFAULT_STAIR_HEIGHT,
+    height: rise,
     stepCount: DEFAULT_STAIR_STEP_COUNT,
     attachmentSide: DEFAULT_STAIR_ATTACHMENT_SIDE,
     fillToFloor: DEFAULT_STAIR_FILL_TO_FLOOR,
@@ -178,7 +181,7 @@ function commitStairPlacement(
 
   const stairCount = Object.values(nodes).filter((n) => n.type === 'stair').length
   const name = `Staircase ${stairCount + 1}`
-  const segment = createDefaultStairSegment()
+  const segment = createDefaultStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
 
   const destinationPlan = resolveStairDestinationLevel({
     createMissing: true,
@@ -248,7 +251,11 @@ export const StairTool: React.FC = () => {
   const lastCanonicalPositionRef = useRef<[number, number, number] | null>(null)
   const currentLevelId = useViewer((state) => state.selection.levelId)
 
-  const previewGeometry = useMemo(() => createStairPreviewGeometry(), [])
+  const previewRise = useScene((state) =>
+    currentLevelId ? getLevelFloorToFloorHeight(currentLevelId, state.nodes) : DEFAULT_LEVEL_HEIGHT,
+  )
+  const previewGeometry = useMemo(() => createStairPreviewGeometry(previewRise), [previewRise])
+  useEffect(() => () => previewGeometry.dispose(), [previewGeometry])
 
   useEffect(() => {
     if (!currentLevelId) return
@@ -280,7 +287,7 @@ export const StairTool: React.FC = () => {
         nodes,
       })
       const nextLevelId = destinationPlan?.toLevel.id ?? placementLevelId
-      const segment = createDefaultStairSegment()
+      const segment = createDefaultStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
       const stair = createDefaultStairNode({
         name: 'Staircase Preview',
         levelId: placementLevelId,
