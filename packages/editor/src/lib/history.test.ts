@@ -206,10 +206,35 @@ function runSourceHistoryTest(body: string) {
       `
       import assert from 'node:assert/strict'
       import { mock } from 'bun:test'
+      import { fileURLToPath, pathToFileURL } from 'node:url'
+      const consumers = [
+        ${JSON.stringify(resolve(import.meta.dir, 'history.ts'))},
+        ${JSON.stringify(resolve(import.meta.dir, '../../../core/src/index.ts'))},
+        ${JSON.stringify(resolve(import.meta.dir, '../../../viewer/src/systems/wall/wall-system.tsx'))},
+        ${JSON.stringify(resolve(import.meta.dir, '../../../nodes/src/shared/node-batch/system.tsx'))},
+      ]
+      const sharedPaths = new Map(
+        ['@pascal-app/core', '@pascal-app/viewer', 'react', 'three', '@react-three/fiber'].map(specifier => [
+          specifier,
+          [...new Set(consumers.map(consumer => fileURLToPath(import.meta.resolve(specifier, pathToFileURL(consumer).href))))],
+        ]),
+      )
+      function mockShared(specifier, factory) {
+        for (const path of sharedPaths.get(specifier)) mock.module(path, factory)
+      }
+      async function importShared(specifier) {
+        const module = await import(sharedPaths.get(specifier)[0])
+        mockShared(specifier, () => module)
+        return module
+      }
+      await importShared('react')
+      await importShared('three')
+      await importShared('@react-three/fiber')
       globalThis.requestAnimationFrame = callback => { callback(0); return 0 }
       globalThis.cancelAnimationFrame = () => {}
       const core = await import(${JSON.stringify(resolve(import.meta.dir, '../../..', 'core/src/index.ts'))})
-      mock.module('@pascal-app/core', () => core)
+      mockShared('@pascal-app/core', () => core)
+      await importShared('@pascal-app/viewer')
       const { useScene: scene, clearSceneHistory, useLiveTransforms: transforms, useLiveNodeOverrides: overrides } = core
       const { runUndo, runRedo, installHistoryCommandDelegate } = await import(${JSON.stringify(resolve(import.meta.dir, 'history.ts'))})
       const level = core.LevelNode.parse({ id: 'level_history_source' })
@@ -329,8 +354,8 @@ describe('standalone history source invalidation', () => {
   })
   test('one-wall undo releases only its openings and neighbour openings from the real batch store', () => {
     runSourceHistoryTest(`
-      const { Group, Mesh, MeshBasicMaterial, BoxGeometry } = await import('three')
-      const viewer = await import('@pascal-app/viewer')
+      const { Group, Mesh, MeshBasicMaterial, BoxGeometry } = await importShared('three')
+      const viewer = await importShared('@pascal-app/viewer')
       const { captureChangedNodes, runBatchFrame, resetNodeBatchState } = await import(${JSON.stringify(resolve(import.meta.dir, '../../../nodes/src/shared/node-batch/system.tsx'))})
       const root = new Group()
       core.sceneRegistry.nodes.set(level.id, root)
@@ -372,9 +397,9 @@ describe('standalone history source invalidation', () => {
 
   test('mounted slab and space subscriptions run on temporal writes without swallowing the wall diff', () => {
     runSourceHistoryTest(`
-      const react = await import('react')
+      const react = await importShared('react')
       const effects = []
-      mock.module('react', () => ({ ...react, useEffect: effect => effects.push(effect) }))
+      mockShared('react', () => ({ ...react, useEffect: effect => effects.push(effect) }))
       const { default: SlabSystems } = await import(${JSON.stringify(resolve(import.meta.dir, '../../../nodes/src/slab/system.tsx'))})
       SlabSystems()
       const stopSlabs = effects[0]()
@@ -411,7 +436,7 @@ describe('standalone history source invalidation', () => {
   })
   test('the wall geometry harness restores positions, normals, UVs and opening cutouts after undo', () => {
     runSourceHistoryTest(`
-      const { Mesh } = await import('three')
+      const { Mesh } = await importShared('three')
       const { generateExtrudedWall } = await import(${JSON.stringify(resolve(import.meta.dir, '../../../viewer/src/systems/wall/wall-system.tsx'))})
       core.sceneRegistry.nodes.set(wall.id, new Mesh())
       const geometry = () => {
@@ -438,9 +463,9 @@ describe('standalone history source invalidation', () => {
 
   test('the mounted stair subscription restores derived flight heights after a temporal level write', () => {
     runSourceHistoryTest(`
-      const react = await import('react')
+      const react = await importShared('react')
       const effects = []
-      mock.module('react', () => ({ ...react, useEffect: effect => effects.push(effect), useRef: current => ({ current }) }))
+      mockShared('react', () => ({ ...react, useEffect: effect => effects.push(effect), useRef: current => ({ current }) }))
       const segment = core.StairSegmentNode.parse({ id: 'sseg_history', parentId: 'stair_history', height: 2.5 })
       const stair = core.StairNode.parse({ id: 'stair_history', parentId: level.id, children: [segment.id] })
       scene.setState({ nodes: { ...baseline, [level.id]: { ...level, height: 2.5, children: [stair.id] }, [stair.id]: stair, [segment.id]: segment } })
