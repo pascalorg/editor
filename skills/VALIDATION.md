@@ -2,6 +2,12 @@
 
 Released package source: **0.1.7**. Latest released package source: **0.1.7**. `pascal-3d` skill metadata version: **0.1.0**. `furniture-fit` skill metadata version: **0.1.3**. Recorded September 9, 2026.
 
+## OpenAI MCP tool-annotation candidate
+
+The unreleased candidate based on public `main` at `ed562c3a09570a2fe02a6c8c0d56142b224a3b7a` explicitly classifies every registered MCP tool with `readOnlyHint`, `destructiveHint`, and `openWorldHint`. The live `tools/list` regression test enumerated all 46 tools, required an exact classified inventory, and passed. The classifications distinguish 17 closed-world reads, two open-world image-analysis reads, 14 additive closed-world mutations, 12 destructive closed-world operations, and one destructive open-world photo-to-scene operation.
+
+`bun test packages/mcp/src/tools/read-tool-annotations.test.ts packages/mcp/src/tools/check-collisions.test.ts` passed 14 tests with 88 assertions. The complete `packages/mcp` suite passed 361 tests with 1,407 assertions, `bun run build` passed, and changed-file Ultracite checks passed. These local checks establish annotation completeness for the tested package source. They do not establish behavior of the production hosted endpoint, an OpenAI Scan Tools result, reviewer access, submission, approval, listing, or release; the publishing suite remains blocked on those prerequisites.
+
 ## Bundle 0.1.7 Claude local MCP release
 
 This release adds one Claude plugin-provided local stdio server whose exact command is `pascal mcp connect`. The package does not contain a remote URL, headers, environment credentials, or another server. It does not install or start the Pascal editor; `pascal` must already be on the `PATH` used to launch Claude Code. Local use requires no Pascal account or API key and does not upload projects automatically.

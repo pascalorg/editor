@@ -7,6 +7,17 @@
     "OAuth-compatible reviewer access and reusable demo credentials without MFA, SMS, email confirmation, or private-network access are not prepared.",
     "Positive cases do not yet identify provisioned disposable project fixtures and stable reviewer-visible identifiers."
   ],
+  "tool_annotation_validation": {
+    "status": "local_pass",
+    "checked_at": "2026-09-09",
+    "registered_tools": 46,
+    "required_hints": ["readOnlyHint", "destructiveHint", "openWorldHint"],
+    "evidence": [
+      "The live MCP tools/list enumeration test classified all 46 registered tools and failed on any unlisted or unannotated tool.",
+      "The complete @pascal-app/mcp suite passed 361 tests with 1407 assertions, and the package TypeScript build passed."
+    ],
+    "limitations": "Local enumeration and package checks do not establish production hosted-MCP behavior, OpenAI Scan Tools approval, reviewer access, submission, or listing."
+  },
   "cases": [
     {
       "id": "foundation-hosted-create-room-positive",
