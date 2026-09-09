@@ -88,6 +88,8 @@ OpenClaw installation becomes available after the skills are published under Pas
 
 The skills inspect the connected MCP tool schemas before using optional fields. A capability present in this repository may be absent from an older installed or hosted release; the agent should report the narrower supported result instead of assuming source-only inputs are available.
 
+These workflows require a connected Pascal MCP server for their tool-backed actions. An OpenAI directory submission must therefore use **With MCP** and submit the production hosted MCP endpoint together with the skills. The repository package does not prove that the endpoint, OAuth flow, reviewer credentials, domain verification, or portal scan is ready for review.
+
 ## Using Published Packages
 
 The viewer runtime and built-in node definitions are separate packages. Install the full built-in

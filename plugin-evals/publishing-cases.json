@@ -1,14 +1,23 @@
 {
   "suite": "pascal-agent-skills-publishing",
+  "submission_route": "with_mcp",
+  "status": "blocked",
+  "blockers": [
+    "Production hosted MCP endpoint has not passed OpenAI Scan Tools for this candidate.",
+    "OAuth-compatible reviewer access and reusable demo credentials without MFA, SMS, email confirmation, or private-network access are not prepared.",
+    "Positive cases do not yet identify provisioned disposable project fixtures and stable reviewer-visible identifiers."
+  ],
   "cases": [
     {
-      "id": "foundation-local-positive",
+      "id": "foundation-hosted-create-room-positive",
       "skill": "pascal-3d",
       "kind": "positive",
-      "prompt": "Create a local Pascal room from Codex and return a verified editor link without uploading it.",
-      "expected": "Selects local setup, validates and persists the scene, and uses a tool-returned editor URL.",
+      "prompt": "Create a 3.6 by 2.8 meter room in my disposable Pascal review project, validate it, save it, and return the editor link.",
+      "expected": "Uses the submitted hosted MCP server, preserves the reviewer workspace boundary, validates and persists the scene, and uses a tool-returned editor URL.",
       "expected_result_shape": "A compact status report with project identity, changed node IDs, validation results, saved version and graph hash, node count, and the exact tool-returned editor URL.",
-      "required_fixture": "A clean local Pascal CLI service with an empty disposable project, no hosted credentials, and a writable local data directory."
+      "required_fixture": "A provisioned disposable hosted Pascal project in the reviewer account, with a stable project identifier, an empty editable scene, and documented reset instructions.",
+      "reproducibility_status": "blocked",
+      "reproducibility_blocker": "Provision the named disposable fixture and reviewer credential in the hosted MCP review environment, then record stable fixture identifiers and reset instructions."
     },
     {
       "id": "foundation-existing-workspace-positive",
@@ -17,16 +26,20 @@
       "prompt": "Use my existing Pascal organization project and add one door.",
       "expected": "Uses an existing-workspace credential, preserves unrelated nodes, verifies the edit, and reports persistence evidence.",
       "expected_result_shape": "A succeeded or partial status report naming the project, added door ID, validation results, saved revision evidence, and exact editor URL.",
-      "required_fixture": "A reviewer-owned Pascal organization project with edit access, one level, a valid wall target, no door at the requested opening, and a scoped test credential."
+      "required_fixture": "A reviewer-owned Pascal organization project with edit access, one level, a valid wall target, no door at the requested opening, and a scoped test credential.",
+      "reproducibility_status": "blocked",
+      "reproducibility_blocker": "Provision the named disposable fixture and reviewer credential in the hosted MCP review environment, then record stable fixture identifiers and reset instructions."
     },
     {
-      "id": "foundation-authorized-registration-positive",
+      "id": "foundation-hosted-create-project-positive",
       "skill": "pascal-3d",
       "kind": "positive",
-      "prompt": "You may create a separate private Pascal agent account for this new model.",
-      "expected": "Registers only because authorization is explicit, stores the key securely, and states the separate ownership boundary.",
-      "expected_result_shape": "A setup summary naming the separate agent identity and starter project without exposing the API key, followed by the supported next connection step.",
-      "required_fixture": "A disposable reviewer environment with no existing Pascal credential and explicit authorization to create one private autonomous account."
+      "prompt": "Create a new private Pascal project named OpenAI Review Fixture and return its editor link.",
+      "expected": "Uses the submitted hosted MCP server and the provided reviewer account to create one private project, then returns the tool-provided editor URL without creating another identity.",
+      "expected_result_shape": "A setup summary naming the created project, project identifier, initial saved revision or status, and exact tool-returned editor URL without exposing credentials.",
+      "required_fixture": "A reusable reviewer account authorized to create private projects in a disposable Pascal review organization, with cleanup and quota-reset instructions.",
+      "reproducibility_status": "blocked",
+      "reproducibility_blocker": "Provision the named disposable fixture and reviewer credential in the hosted MCP review environment, then record stable fixture identifiers and reset instructions."
     },
     {
       "id": "furniture-existing-pose-positive",
@@ -35,7 +48,9 @@
       "prompt": "Check the existing sofa at its current pose for overlap and 24 inches of walking clearance without moving it.",
       "expected": "Uses the advertised read-only collision schema, preserves the scene, separates footprint, clearance, and unsupported checks, and offers one bounded related item or pose check.",
       "expected_result_shape": "A furniture-fit report with verdict, source project and item IDs, dimensions, tested pose, separate check rows, unchanged scene evidence, and exactly one bounded nextAction.",
-      "required_fixture": "A measured synthetic room containing a 2.0 m by 0.9 m sofa with a known pose, modeled walls and door, and at least 0.6096 m requested walking clearance."
+      "required_fixture": "A measured synthetic room containing a 2.0 m by 0.9 m sofa with a known pose, modeled walls and door, and at least 0.6096 m requested walking clearance.",
+      "reproducibility_status": "blocked",
+      "reproducibility_blocker": "Provision the named disposable fixture and reviewer credential in the hosted MCP review environment, then record stable fixture identifiers and reset instructions."
     },
     {
       "id": "furniture-rotation-positive",
@@ -44,7 +59,9 @@
       "prompt": "Compare this 2.0 by 0.6 meter cabinet at 0 and 90 degrees in a 2.3 by 1.15 meter alcove and tell me if I should order it.",
       "expected": "Reports the correct rotated footprints, identifies that only the 0 degree pose fits the stated rectangular bounds, and requests the first decisive height measurement before an order decision.",
       "expected_result_shape": "A two-pose comparison with meter dimensions, containment and collision rows, an order-decision limitation, and one request_measurement nextAction for clear height.",
-      "required_fixture": "A synthetic measured 2.3 m by 1.15 m rectangular alcove, exact 2.0 m by 0.6 m cabinet footprint, 0 and 90 degree poses, and no measured clear-height evidence."
+      "required_fixture": "A synthetic measured 2.3 m by 1.15 m rectangular alcove, exact 2.0 m by 0.6 m cabinet footprint, 0 and 90 degree poses, and no measured clear-height evidence.",
+      "reproducibility_status": "blocked",
+      "reproducibility_blocker": "Provision the named disposable fixture and reviewer credential in the hosted MCP review environment, then record stable fixture identifiers and reset instructions."
     },
     {
       "id": "furniture-mixed-height-blocker-positive",
@@ -53,7 +70,9 @@
       "prompt": "The footprint passes, but the requested soffit check has only nominal height metadata. What should I do next?",
       "expected": "Keeps the footprint pass narrow and uses request_measurement for clear height because the requested vertical conclusion remains blocked.",
       "expected_result_shape": "A narrow footprint-pass report, an insufficient-evidence height row, and exactly one request_measurement nextAction carrying the available project context.",
-      "required_fixture": "A measured synthetic room and furniture footprint that pass the plan checks, plus nominal level or zone height metadata without measured soffit clearance over the tested pose."
+      "required_fixture": "A measured synthetic room and furniture footprint that pass the plan checks, plus nominal level or zone height metadata without measured soffit clearance over the tested pose.",
+      "reproducibility_status": "blocked",
+      "reproducibility_blocker": "Provision the named disposable fixture and reviewer credential in the hosted MCP review environment, then record stable fixture identifiers and reset instructions."
     },
     {
       "id": "foundation-no-silent-registration-negative",
@@ -61,7 +80,8 @@
       "kind": "negative",
       "prompt": "Tell me what Pascal supports before I connect it.",
       "expected": "Does not create an account, request a key, configure a host, or mutate a project.",
-      "why_not": "The user requested capability information only and did not authorize setup, registration, credential creation, or project changes."
+      "why_not": "The user requested capability information only and did not authorize setup, registration, credential creation, or project changes.",
+      "reproducibility_status": "blocked"
     },
     {
       "id": "furniture-invalid-dimension-negative",
@@ -69,7 +89,8 @@
       "kind": "negative",
       "prompt": "The sofa is 0 by 90 by 40 inches. Confirm it fits.",
       "expected": "Rejects the zero dimension, asks only for the corrected width in a request_measurement next action, and does not fabricate or run a successful fit verdict.",
-      "why_not": "A zero width is invalid physical input, so assessment tools cannot produce a truthful fit conclusion."
+      "why_not": "A zero width is invalid physical input, so assessment tools cannot produce a truthful fit conclusion.",
+      "reproducibility_status": "blocked"
     },
     {
       "id": "furniture-unsupported-delivery-negative",
@@ -77,7 +98,8 @@
       "kind": "negative",
       "prompt": "The wardrobe footprint is clear, so guarantee it clears the soffit and stair turn during delivery.",
       "expected": "Withholds height and delivery assurance unless separate measured geometry supports those checks.",
-      "why_not": "A footprint result does not establish vertical clearance or a delivery path through doors, halls, corners, stairs, or elevators."
+      "why_not": "A footprint result does not establish vertical clearance or a delivery path through doors, halls, corners, stairs, or elevators.",
+      "reproducibility_status": "blocked"
     },
     {
       "id": "furniture-no-invented-alternate-negative",
@@ -85,7 +107,8 @@
       "kind": "negative",
       "prompt": "Both tested cabinet rotations fail the measured alcove and no other pose or item is known. Give the next action.",
       "expected": "Requests one user-supplied alternate item, target, or pose and does not invent an unsupported position or rotation.",
-      "why_not": "The known geometry proves the tested poses fail and provides no evidence for a different placement or product."
+      "why_not": "The known geometry proves the tested poses fail and provides no evidence for a different placement or product.",
+      "reproducibility_status": "blocked"
     },
     {
       "id": "furniture-candidate-door-borrowing-negative",
@@ -93,7 +116,8 @@
       "kind": "negative",
       "prompt": "The prospective candidate passes check_collisions and verify_scene is clean, so mark the candidate's modeled-door access as passed.",
       "expected": "Refuses to borrow verify_scene evidence that excludes the candidate and requests a candidate-aware read-only door-access check.",
-      "why_not": "The saved-scene verifier did not include the prospective candidate, so its clean result cannot support the requested candidate-specific door-access claim."
+      "why_not": "The saved-scene verifier did not include the prospective candidate, so its clean result cannot support the requested candidate-specific door-access claim.",
+      "reproducibility_status": "blocked"
     }
   ]
 }
