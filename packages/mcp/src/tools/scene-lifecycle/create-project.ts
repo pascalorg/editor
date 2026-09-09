@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
+import { ADDITIVE_TOOL_ANNOTATIONS } from '../annotations'
 import { ErrorCode, throwMcpError } from '../errors'
 import { currentLevelContext, projectStatusPayload } from './metadata'
 
@@ -43,6 +44,7 @@ export function registerCreateProject(server: McpServer, operations: SceneOperat
         'Create a browser-visible Pascal project for the authenticated user. Use this before save_scene when the user asks for a new project.',
       inputSchema: createProjectInput,
       outputSchema: createProjectOutput,
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({ name, id, isPrivate }) => {
       if (!operations.canCreateProject) {

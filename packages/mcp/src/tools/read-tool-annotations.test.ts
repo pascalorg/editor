@@ -8,25 +8,101 @@ import { SceneBridge } from '../bridge/scene-bridge'
 import { createPascalMcpServer } from '../server'
 import { SqliteSceneStore } from '../storage/sqlite-scene-store'
 
-const FURNITURE_FIT_READ_TOOLS = [
-  'check_collisions',
-  'export_glb',
-  'export_json',
-  'find_nodes',
-  'get_level_summary',
-  'get_node',
-  'get_scene',
-  'get_walls',
-  'get_zones',
-  'list_levels',
-  'list_scenes',
-  'measure',
-  'validate_scene',
-  'verify_scene',
+const TOOL_POLICIES = [
+  {
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+    tools: [
+      'check_collisions',
+      'describe_node',
+      'export_glb',
+      'export_json',
+      'find_nodes',
+      'get_level_summary',
+      'get_node',
+      'get_scene',
+      'get_walls',
+      'get_zones',
+      'list_levels',
+      'list_scenes',
+      'list_templates',
+      'measure',
+      'search_assets',
+      'validate_scene',
+      'verify_scene',
+    ],
+  },
+  {
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+    tools: ['analyze_floorplan_image', 'analyze_room_photo'],
+  },
+  {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+    tools: [
+      'add_door',
+      'add_window',
+      'create_level',
+      'create_project',
+      'create_roof',
+      'create_room',
+      'create_story_shell',
+      'create_wall',
+      'cut_opening',
+      'duplicate_level',
+      'furnish_room',
+      'generate_variants',
+      'place_item',
+      'set_zone',
+    ],
+  },
+  {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      openWorldHint: false,
+    },
+    tools: [
+      'apply_patch',
+      'create_from_template',
+      'create_house_from_brief',
+      'create_stair_between_levels',
+      'delete_node',
+      'delete_scene',
+      'get_project_status',
+      'load_scene',
+      'redo',
+      'rename_scene',
+      'save_scene',
+      'undo',
+    ],
+  },
+  {
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: true,
+      openWorldHint: true,
+    },
+    tools: ['photo_to_scene'],
+  },
 ] as const
 
-describe('read-only MCP tool annotations', () => {
-  test('marks the furniture-fit inspection path safe for approval-aware clients', async () => {
+const EXPECTED_TOOL_NAMES = TOOL_POLICIES.flatMap(({ tools }) => tools).toSorted()
+
+describe('MCP tool annotations', () => {
+  test('classifies every registered tool for approval-aware clients', async () => {
     const bridge = new SceneBridge()
     bridge.setScene({}, [])
     bridge.loadDefault()
@@ -40,15 +116,13 @@ describe('read-only MCP tool annotations', () => {
     try {
       const listed = await client.listTools()
       const byName = new Map(listed.tools.map((tool) => [tool.name, tool]))
-      for (const name of FURNITURE_FIT_READ_TOOLS) {
-        expect(byName.get(name)?.annotations).toEqual({
-          readOnlyHint: true,
-          destructiveHint: false,
-          idempotentHint: true,
-          openWorldHint: false,
-        })
+      expect([...byName.keys()].toSorted()).toEqual(EXPECTED_TOOL_NAMES)
+
+      for (const policy of TOOL_POLICIES) {
+        for (const name of policy.tools) {
+          expect(byName.get(name)?.annotations).toEqual(policy.annotations)
+        }
       }
-      expect(byName.get('get_project_status')?.annotations?.readOnlyHint).not.toBe(true)
     } finally {
       await client.close()
       await server.close()

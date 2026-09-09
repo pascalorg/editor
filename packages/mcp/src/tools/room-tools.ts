@@ -11,6 +11,7 @@ import {
 } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { ADDITIVE_TOOL_ANNOTATIONS, READ_ONLY_TOOL_ANNOTATIONS } from './annotations'
 import { findCatalogItem, searchCatalogItems } from './asset-catalog'
 import { keepoutCoversPlanned, keepoutForPolygonEdge } from './door-clearance'
 import { ErrorCode, throwMcpError } from './errors'
@@ -412,6 +413,7 @@ export function registerSearchAssets(server: McpServer): void {
         'Search the built-in MCP item catalog by keyword. Call before place_item when you need a valid catalogItemId.',
       inputSchema: searchAssetsInput,
       outputSchema: searchAssetsOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async ({ query, category }) => {
       const results = searchCatalogItems({ query, category }).map((item) => ({
@@ -436,6 +438,7 @@ export function registerCreateRoom(server: McpServer, bridge: SceneOperations): 
         'Create a room on a level: zone, slab, ceiling, and one wall per polygon edge. Returns wallIds in polygon edge order.',
       inputSchema: createRoomInput,
       outputSchema: createRoomOutput,
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({ levelId, name, polygon, color, wallHeight, wallThickness }) => {
       assertLevel(bridge, levelId)
@@ -492,6 +495,7 @@ export function registerAddDoor(server: McpServer, bridge: SceneOperations): voi
         'Add a door to an existing wall. t/position is 0..1 along the wall: 0 = start, 0.5 = center, 1 = end.',
       inputSchema: addDoorInput,
       outputSchema: addDoorOutput,
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({ wallId, t, position, width = 0.9, height = 2.1, hingesSide, swingDirection }) => {
       const wall = assertWall(bridge, wallId)
@@ -538,6 +542,7 @@ export function registerAddWindow(server: McpServer, bridge: SceneOperations): v
         'Add a window to an existing wall. t/position is 0..1 along the wall; sillHeight is the height from floor to window bottom.',
       inputSchema: addWindowInput,
       outputSchema: addWindowOutput,
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({ wallId, t, position, width = 1.5, height = 1.5, sillHeight = 0.9 }) => {
       const wall = assertWall(bridge, wallId)
@@ -583,6 +588,7 @@ export function registerFurnishRoom(server: McpServer, bridge: SceneOperations):
         'Place furniture for a room type (levelId+polygon or zoneId). Skips or nudges poses that block door clear zones or overlap existing items (rotation-aware). Parent floor items to the level.',
       inputSchema: furnishRoomInput,
       outputSchema: furnishRoomOutput,
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({ levelId, zoneId, roomType, polygon, doorWallIndex }) => {
       const room = inferRoomGeometry(bridge, levelId, polygon as Vec2[] | undefined, zoneId)
