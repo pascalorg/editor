@@ -1205,7 +1205,54 @@ line straight out from the meter, and the weatherhead clears the roof.
 G114 Everything Bones derives that stands outside the house is on the
 elevations; Bones' equipment is on the fixture schedule.
 
+## Mandate additions (Steve, 2026-09-09 — Bones meets the scene)
+
+Steve: "when i click things in bones it doesnt show up in the scene ...
+bones isnt live when i click the item for some reason, and if someone
+changes something it changes it to manual maybe idk, however you want
+that to work ... everything in bones should update on the 3d and plan and
+everywhere if they change it". Then: "keep going. please handle the rest
+of the items. make sure to test everything".
+
+G115 Bones and the scene meet from the panel's side: a takeoff section
+or row, a placed service point and the selected wall / point / device
+name a member set the renderer paints and the camera goes to; the
+selection reads live in the panel; every placed point is listed with its
+Show and its Reset, so the manual state is visible and undoable.
+
 ## Log (continued)
+
+- 2026-09-09: **Batch T30 — show it in the scene, the selection live, the
+  placed points (G115).** The X-ray meshes never take the host's raycast
+  (renderer.tsx: the wall selection gate needs it that way), so "click a
+  member in 3D" is not the meeting point; the panel's side is. New
+  `framing/highlight.ts`: `HighlightSpec` (systems / sizes / roles /
+  source ids / id prefixes), `matchesHighlight`, `membersBounds`,
+  `framePose` (the box's centre from a raised diagonal, in the world via
+  `levelToWorld` — building position + yaw + the level's base) and
+  `serviceHighlight` (a service point's member set by the engines'
+  sourceId conventions: `wh*`, `service-entrance`, `water-service`,
+  `dwv-lateral` / `septic*`, hvac equipment). store.ts carries the
+  highlight; `collectBuckets` paints a matching member `#ff7a1a` — its own
+  bucket, so the in-place patch path steps aside; `buildGroups` /
+  `patchGroups` / `buildGroup` / `patchGroup` thread it and the
+  FramingRenderer reads it from the store. panel.tsx: every takeoff
+  section has a Show button (its systems, `SECTION_SYSTEMS` exported from
+  takeoff.ts), every lumber row shows its size within the section, any
+  other row its section; a "Showing … · Clear" chip; `showInScene` emits
+  `camera-controls:apply-pose` + `camera:go-to-position` at the framed
+  pose. SelectionSection: the viewer's `selection.selectedIds` — a wall /
+  roof segment / slab (its sourceId members), a placed service point (its
+  set, the fixture's label and notes) or a device (its fixture) — the
+  census by role, the equipment labels, Show in 3D; PlacedPointsSection:
+  every `bones:service` on the level with where it stands, Show, and
+  Reset (deletes the point — the engine places the service itself again).
+  Verified in the editor: the first Show painted the service entrance
+  orange (pole, drop, mast, meter) and the camera framed it. Bones 2179
+  tests (highlight: match / bounds / pose / world; renderer: the orange
+  bucket; panel gates). Not done: the highlight is by system / size /
+  source, not by the exact row (65 takeoff push sites — a per-row member
+  index is a later change); no 3D → panel pick of a bare member.
 
 - 2026-09-09: **Batch T26–T29 — the hand-drawn house on paper, the water
   heater, the drop, Bones on the elevations and the schedule (G111–G114).**

@@ -64,6 +64,12 @@ test('the Bones panel builds no plan set and opens no print tab — paper is the
   expect(src).not.toContain('Blueprints')
   expect(src).not.toContain('buildPlanSet')
   expect(src).not.toContain('planSetHtml')
+  // the panel meets the scene: a takeoff row / section, a placed point and the selection show in 3D (2026-09-09)
+  expect(src).toContain('function showInScene(')
+  expect(src).toContain("emitter.emit('camera-controls:apply-pose'")
+  expect(src).toContain('function SelectionSection(')
+  expect(src).toContain('function PlacedPointsSection(')
+  expect(src).toContain('Reset')
   // the panel scrolls (the Generate panel's root) so the code options below the fold are reachable
   expect(src).toContain('flex h-full min-h-0 flex-col gap-4 overflow-y-auto')
   // the section title names the view that is on, not "X-Ray" whatever the pick

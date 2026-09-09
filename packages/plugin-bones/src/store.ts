@@ -1,4 +1,5 @@
 import { create } from 'zustand'
+import type { HighlightSpec } from './framing/highlight'
 import { DEFAULT_LENGTH, type LumberOrientation, type LumberSize } from './lumber'
 
 /**
@@ -23,6 +24,9 @@ type BonesStore = {
    */
   wallModeBeforeXray: string | null
   setWallModeBeforeXray: (mode: string | null) => void
+  /** The member set the renderer paints orange (framing/highlight.ts) — null = none. */
+  highlight: HighlightSpec | null
+  setHighlight: (spec: HighlightSpec | null) => void
 }
 
 export const useBonesStore = create<BonesStore>((set) => ({
@@ -34,4 +38,6 @@ export const useBonesStore = create<BonesStore>((set) => ({
   setOrientation: (orientation) => set({ orientation }),
   wallModeBeforeXray: null,
   setWallModeBeforeXray: (mode) => set({ wallModeBeforeXray: mode }),
+  highlight: null,
+  setHighlight: (spec) => set({ highlight: spec }),
 }))

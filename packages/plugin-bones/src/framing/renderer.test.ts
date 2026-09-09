@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import type { Group } from 'three'
 import { Matrix4, Vector3 } from 'three'
 import { composeEntryMatrix } from './renderer'
 
@@ -539,6 +540,11 @@ describe('buildGroups — cross-level members split into foreign level groups', 
     }
     const rafter = { ...stud, system: 'roof-framing' as const, role: 'rafter' as const, levelId: 'lvlroof' }
     const { group, foreign } = buildGroups([stud, rafter], [], 'xray')
+    // the panel's highlight: the named set gets its own orange bucket (2026-09-09)
+    const lit = buildGroups([stud, rafter], [], 'xray', null, { label: 'studs', roles: ['stud'] })
+    const colours = (g: Group) => g.children.map((c: unknown) => ((c as { material?: { color?: { getHexString?: () => string } } }).material?.color?.getHexString?.() ?? ''))
+    expect(colours(lit.group)).toContain('ff7a1a')
+    expect(colours(group)).not.toContain('ff7a1a')
     expect(foreign.size).toBe(1)
     expect(foreign.get('lvlroof')?.name).toBe('bones-foreign-lvlroof')
     // main group holds only the stud's instanced mesh, foreign only the rafter's

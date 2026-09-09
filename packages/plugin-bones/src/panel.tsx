@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, type AnyNodeId, useScene } from '@pascal-app/core'
+import { type AnyNode, type AnyNodeId, emitter, useScene } from '@pascal-app/core'
 import { DEFAULT_SPEC } from './core/spec'
 import { roofShellThickness } from './core/shell-sync'
 import { SegmentedControl, SliderControl, useEditor } from '@pascal-app/editor'
@@ -14,7 +14,9 @@ import {
   type ViewerLike,
 } from './activation'
 import { characteristicsCsv, characteristicsRows } from './engines/characteristics'
-import { computeTakeoff, cutList, cutListCsv, takeoffCsv } from './engines/takeoff'
+import { computeTakeoff, cutList, cutListCsv, SECTION_SYSTEMS, takeoffCsv } from './engines/takeoff'
+import { framePose, type HighlightSpec, levelToWorld, matchesHighlight, membersBounds, serviceHighlight } from './framing/highlight'
+import { SERVICE_LABEL } from './service/schema'
 import { computeLevel } from './framing/compute'
 import { effectiveViewMode, type FramingNode, type ViewMode } from './framing/schema'
 import { guessJurisdiction, siteStateOf } from './jurisdiction/guess'
@@ -110,7 +112,9 @@ export default function BonesPanel() {
         result={result}
       />
 
-      {framingNode && result && <TakeoffSection result={result} />}
+      {framingNode && result && <SelectionSection result={result} levelId={activeLevelId ?? null} />}
+      {framingNode && result && <PlacedPointsSection result={result} levelId={activeLevelId ?? null} />}
+      {framingNode && result && <TakeoffSection result={result} levelId={activeLevelId ?? null} />}
       {framingNode && result && <CharacteristicsSection result={result} />}
 
       <LumberSection />
@@ -376,7 +380,237 @@ function XraySection({
   )
 }
 
-function TakeoffSection({ result }: { result: NonNullable<ReturnType<typeof computeLevel>> }) {
+/** The service types whose members a placed point owns — for the selection and the placed-points rows. */
+function serviceSpec(serviceType: string, label: string): HighlightSpec {
+  return { label, ...serviceHighlight(serviceType) }
+}
+
+/**
+ * THE SELECTION, LIVE. Whatever the user picked in the scene — a wall, a
+ * placed service point, a device — the engineering Bones derived for it:
+ * the member census by role, the equipment labels and their notes, and a
+ * Show button that paints the set and goes to it (Steve, 2026-09-09: "bones
+ * isnt live when i click the item").
+ */
+function SelectionSection({
+  result,
+  levelId,
+}: {
+  result: NonNullable<ReturnType<typeof computeLevel>>
+  levelId: string | null
+}) {
+  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const nodes = useScene((s) => s.nodes) as Record<string, Record<string, unknown> | undefined>
+  const picks = useMemo(() => {
+    const out: { id: string; name: string; spec: HighlightSpec; equipment: string[]; notes: string[]; census: [string, number][] }[] = []
+    for (const id of selectedIds ?? []) {
+      const node = nodes[id as string]
+      if (!node) continue
+      const type = String(node.type ?? '')
+      let spec: HighlightSpec | null = null
+      let name = String(node.name ?? type)
+      if (type === 'wall' || type === 'roof-segment' || type === 'slab') {
+        spec = { label: name, sourceIds: [String(id)] }
+      } else if (type === 'bones:service') {
+        const serviceType = String(node.serviceType ?? '')
+        name = SERVICE_LABEL[serviceType as keyof typeof SERVICE_LABEL] ?? serviceType
+        spec = serviceSpec(serviceType, name)
+      } else if (type === 'bones:device') {
+        const fx = result.fixtures.find((f) => f.meta?.deviceId === id)
+        if (!fx) continue
+        name = fx.label ?? String(node.name ?? 'Device')
+        spec = { label: name, sourceIds: [fx.sourceId] }
+      }
+      if (!spec) continue
+      const members = result.members.filter((m) => matchesHighlight(m, spec as HighlightSpec))
+      const byRole = new Map<string, number>()
+      for (const m of members) byRole.set(m.role, (byRole.get(m.role) ?? 0) + 1)
+      const census = [...byRole.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
+      const equipment = members
+        .filter((m) => m.role === 'water-heater' || m.role === 'equipment' || m.role === 'post')
+        .map((m) => (m.label ?? m.sourceId).split(/ — /)[0] as string)
+      const notes: string[] = []
+      for (const f of result.fixtures) {
+        if (type === 'bones:service' && f.kind === (String(node.serviceType) === 'power-entry' ? 'electric-meter' : String(node.serviceType))) {
+          const n = f.meta?.notes
+          if (typeof n === 'string') notes.push(...n.split(' | '))
+          if (f.label) notes.unshift(f.label)
+        }
+      }
+      out.push({ id: String(id), name, spec, equipment: [...new Set(equipment)].slice(0, 6), notes: notes.slice(0, 6), census })
+    }
+    return out
+  }, [selectedIds, nodes, result])
+  if (picks.length === 0) {
+    return (
+      <div className="flex flex-col gap-1 text-xs">
+        <span className="font-medium text-sm">Selection</span>
+        <span className="text-sidebar-foreground/50">
+          Select a wall, a service point or a device in the scene to see what Bones derived for it.
+        </span>
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-2 text-xs">
+      <span className="font-medium text-sm">Selection</span>
+      {picks.map((p) => (
+        <div className="flex flex-col gap-1 rounded-md border border-sidebar-border/60 p-2" key={p.id}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate font-medium">{p.name}</span>
+            <button
+              className="shrink-0 rounded border border-sidebar-border/60 px-1.5 py-px text-[10px] text-sidebar-foreground/70 hover:bg-sidebar-accent"
+              onClick={() => showInScene(p.spec, result, levelId)}
+              type="button"
+            >
+              Show in 3D
+            </button>
+          </div>
+          {p.census.length > 0 ? (
+            <span className="text-[11px] text-sidebar-foreground/60">
+              {p.census.map(([role, n]) => `${n} ${role}`).join(' · ')}
+            </span>
+          ) : (
+            <span className="text-[11px] text-sidebar-foreground/50">No members derived for it on this level.</span>
+          )}
+          {p.equipment.map((e) => (
+            <span className="text-[11px] text-sidebar-foreground/70" key={e}>
+              {e}
+            </span>
+          ))}
+          {p.notes.map((n) => (
+            <span className="text-[10px] text-sidebar-foreground/50 leading-snug" key={n}>
+              {n}
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * THE PLACED POINTS — the "manual" state. Every service point on the level is
+ * a node the user can drag; the engines take it verbatim and route to it.
+ * Here they are listed with Show (paint + go) and Reset (delete the point:
+ * the engine places that service itself again) — so what was moved is
+ * visible and undoable, not a hidden override (Steve, 2026-09-09: "if
+ * someone changes something it changes it to manual maybe").
+ */
+function PlacedPointsSection({
+  result,
+  levelId,
+}: {
+  result: NonNullable<ReturnType<typeof computeLevel>>
+  levelId: string | null
+}) {
+  const nodes = useScene((s) => s.nodes) as Record<string, Record<string, unknown> | undefined>
+  const points = useMemo(() => {
+    const out: { id: string; serviceType: string; label: string; where: string }[] = []
+    for (const node of Object.values(nodes)) {
+      if (!node || node.type !== 'bones:service') continue
+      if (levelId && node.parentId !== levelId && node.levelId !== levelId) continue
+      const serviceType = String(node.serviceType ?? '')
+      const label = SERVICE_LABEL[serviceType as keyof typeof SERVICE_LABEL] ?? serviceType
+      const wallId = typeof node.wallId === 'string' ? node.wallId : null
+      const wall = wallId ? nodes[wallId] : undefined
+      const t = typeof node.wallT === 'number' ? node.wallT : null
+      const where = wall
+        ? `on ${String(wall.name ?? 'a wall')}${t !== null ? ` at ${Math.round(t * 100)} %` : ''}`
+        : Array.isArray(node.position)
+          ? `at ${(node.position as number[]).map((v) => v.toFixed(1)).join(', ')}`
+          : ''
+      out.push({ id: String(node.id), serviceType, label, where })
+    }
+    return out.sort((a, b) => a.label.localeCompare(b.label))
+  }, [nodes, levelId])
+  if (points.length === 0) return null
+  return (
+    <details className="group text-xs">
+      <summary className="flex cursor-pointer items-center justify-between font-medium text-xs">
+        Placed points
+        <span className="text-[10px] text-sidebar-foreground/40">{points.length}</span>
+      </summary>
+      <span className="text-[10px] text-sidebar-foreground/50 leading-snug">
+        Drag a point in the scene to move its service; the engines route to it. Reset deletes the point and the engine places it again.
+      </span>
+      <div className="mt-1 flex flex-col gap-0.5">
+        {points.map((p) => (
+          <div className="flex items-center justify-between gap-2 text-[11px]" key={p.id}>
+            <span className="min-w-0 truncate text-sidebar-foreground/80" title={p.where}>
+              {p.label} <span className="text-sidebar-foreground/40">{p.where}</span>
+            </span>
+            <span className="flex shrink-0 items-center gap-1">
+              <button
+                className="rounded border border-sidebar-border/60 px-1.5 py-px text-[10px] text-sidebar-foreground/70 hover:bg-sidebar-accent"
+                onClick={() => showInScene(serviceSpec(p.serviceType, p.label), result, levelId)}
+                type="button"
+              >
+                Show
+              </button>
+              <button
+                className="rounded border border-sidebar-border/60 px-1.5 py-px text-[10px] text-sidebar-foreground/70 hover:bg-sidebar-accent"
+                onClick={() =>
+                  (useScene.getState() as unknown as { applyNodeChanges: (c: { delete: string[] }) => void }).applyNodeChanges({ delete: [p.id] })
+                }
+                title="Delete the placed point — the engine places this service itself again"
+                type="button"
+              >
+                Reset
+              </button>
+            </span>
+          </div>
+        ))}
+      </div>
+    </details>
+  )
+}
+
+/**
+ * SHOW IT IN THE SCENE. The X-ray meshes never take the host's raycast, so
+ * Bones and the scene meet from the panel's side: a takeoff section, a
+ * lumber row, a placed service point or the selected wall names a member
+ * set; the renderer paints it orange (framing/highlight.ts) and the camera
+ * goes to it (Steve, 2026-09-09: "when i click things in bones it doesnt
+ * show up in the scene").
+ */
+function showInScene(
+  spec: HighlightSpec,
+  result: NonNullable<ReturnType<typeof computeLevel>>,
+  levelId: string | null,
+): void {
+  useBonesStore.getState().setHighlight(spec)
+  const members = result.members.filter((m) => matchesHighlight(m, spec))
+  const bounds = membersBounds(members)
+  if (!bounds || !levelId) return
+  const toWorld = levelToWorld(useScene.getState().nodes as Record<string, Record<string, unknown>>, levelId)
+  const pose = framePose(bounds, toWorld)
+  emitter.emit('camera-controls:apply-pose', { position: pose.position, target: pose.target, projection: 'perspective', fov: 60 } as never)
+  emitter.emit('camera:go-to-position', { position: pose.position, target: pose.target })
+}
+
+/** The "Showing … · Clear" chip the sections share. */
+function HighlightChip() {
+  const highlight = useBonesStore((s) => s.highlight)
+  const setHighlight = useBonesStore((s) => s.setHighlight)
+  if (!highlight) return null
+  return (
+    <div className="flex items-center justify-between rounded-md border border-orange-500/50 bg-orange-500/10 px-2 py-1 text-[11px]">
+      <span className="min-w-0 truncate">
+        Showing <span className="font-medium">{highlight.label}</span> in the scene
+      </span>
+      <button
+        className="shrink-0 rounded px-1.5 py-0.5 text-sidebar-foreground/70 hover:bg-sidebar-accent"
+        onClick={() => setHighlight(null)}
+        type="button"
+      >
+        Clear
+      </button>
+    </div>
+  )
+}
+
+function TakeoffSection({ result, levelId }: { result: NonNullable<ReturnType<typeof computeLevel>>; levelId: string | null }) {
   const rows = useMemo(
     () => computeTakeoff(result.members, result.fixtures, result.areas),
     [result],
@@ -420,6 +654,7 @@ function TakeoffSection({ result }: { result: NonNullable<ReturnType<typeof comp
           </button>
         </div>
       </div>
+      <HighlightChip />
       <div className="flex max-h-80 flex-col gap-1 overflow-y-auto pr-1">
         {/* Flags sort first but start COLLAPSED (day-9 declutter) — the
             count badge keeps them visible; paper still prints them all. */}
@@ -431,14 +666,43 @@ function TakeoffSection({ result }: { result: NonNullable<ReturnType<typeof comp
               >
                 {section}
               </span>
-              <span className="text-[10px] text-sidebar-foreground/40">{sectionRows.length}</span>
+              <span className="flex items-center gap-1.5">
+                {SECTION_SYSTEMS[section] && (
+                  <button
+                    className="rounded border border-sidebar-border/60 px-1.5 py-px text-[10px] text-sidebar-foreground/60 hover:bg-sidebar-accent"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      showInScene({ label: section, systems: SECTION_SYSTEMS[section] }, result, levelId)
+                    }}
+                    title={`Paint the ${section.toLowerCase()} members in the scene and go to them`}
+                    type="button"
+                  >
+                    Show
+                  </button>
+                )}
+                <span className="text-[10px] text-sidebar-foreground/40">{sectionRows.length}</span>
+              </span>
             </summary>
             <div className="mt-0.5 flex flex-col gap-0.5 pl-1">
               {sectionRows.map((row) => (
                 <div
-                  className="flex items-baseline justify-between gap-2 text-[11px]"
+                  className={`flex items-baseline justify-between gap-2 text-[11px] ${
+                    SECTION_SYSTEMS[section] ? 'cursor-pointer rounded px-0.5 hover:bg-sidebar-accent/50' : ''
+                  }`}
                   key={`${row.item}-${row.detail}`}
-                  title={`${row.item} — ${row.detail}`}
+                  onClick={() => {
+                    const systems = SECTION_SYSTEMS[section]
+                    if (!systems) return
+                    // a lumber row names its size ("2x6", "2x6 PT"): the members of that size; any other row, its section
+                    const size = /^(\d+x\d+)/.exec(row.item)?.[1]
+                    showInScene(
+                      size ? { label: `${row.item} (${section})`, systems, sizes: [size] } : { label: `${row.item} (${section})`, systems },
+                      result,
+                      levelId,
+                    )
+                  }}
+                  title={`${row.item} — ${row.detail}${SECTION_SYSTEMS[section] ? ' (click to show in the scene)' : ''}`}
                 >
                   <span
                     className={`min-w-0 flex-1 text-sidebar-foreground/70 ${

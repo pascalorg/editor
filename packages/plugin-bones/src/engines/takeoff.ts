@@ -94,6 +94,15 @@ const SECTION_OF: Record<Member['system'], string> = {
   hvac: 'HVAC',
 }
 
+/** The systems each takeoff section books — the panel's "show in 3D" per section. */
+export const SECTION_SYSTEMS: Record<string, Member['system'][]> = (() => {
+  const out: Record<string, Member['system'][]> = {}
+  for (const [system, section] of Object.entries(SECTION_OF) as [Member['system'], string][]) {
+    ;(out[section] ??= []).push(system)
+  }
+  return out
+})()
+
 const SECTION_ORDER = [
   'Wall framing',
   'Floor',

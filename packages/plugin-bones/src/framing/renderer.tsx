@@ -35,6 +35,8 @@ import {
   loadCondenserAsset,
   prepareCondenserClone,
 } from './condenser-asset'
+import { useBonesStore } from '../store'
+import { HIGHLIGHT_COLOR, type HighlightSpec, matchesHighlight } from './highlight'
 import { effectiveNodesFor, throttleTrailing } from './live'
 import { effectiveViewMode, type FramingNode, type ViewMode } from './schema'
 import { isFrameMember, shellNodeIds } from './shell'
@@ -462,6 +464,7 @@ export function buildGroups(
   fixtures: Fixture[],
   mode: ViewMode,
   condenserAsset?: Object3D | null,
+  highlight?: HighlightSpec | null,
 ): BuiltGroups {
   const foreign = new Map<string, Group>()
   const own: Member[] = []
@@ -476,9 +479,9 @@ export function buildGroups(
       byLevel.set(mount, list)
     } else own.push(m)
   }
-  const group = buildGroup(own, fixtures, mode, condenserAsset)
+  const group = buildGroup(own, fixtures, mode, condenserAsset, highlight)
   for (const [levelId, list] of byLevel) {
-    const g = buildGroup(list, [], mode, condenserAsset)
+    const g = buildGroup(list, [], mode, condenserAsset, highlight)
     g.name = `bones-foreign-${levelId}`
     // Source level strictly ABOVE the owner (compute tags the members) —
     // only these groups take the exploded roof stratum drop below.
@@ -521,9 +524,10 @@ export function buildGroup(
   fixtures: Fixture[],
   mode: ViewMode,
   condenserAsset?: Object3D | null,
+  highlight?: HighlightSpec | null,
 ): Group {
   const { boxed, condensers } = splitAssetMembers(members, mode, condenserAsset)
-  const group = groupFromBuckets(collectBuckets(boxed, fixtures, mode))
+  const group = groupFromBuckets(collectBuckets(boxed, fixtures, mode, highlight))
   if (condenserAsset) attachCondenserAssets(group, condensers, condenserAsset)
   return group
 }
@@ -534,6 +538,7 @@ function collectBuckets(
   members: Member[],
   fixtures: Fixture[],
   mode: ViewMode,
+  highlight?: HighlightSpec | null,
 ): Map<string, Bucket> {
   const buckets = new Map<string, Bucket>()
   const push = (
@@ -558,7 +563,9 @@ function collectBuckets(
 
   if (mode !== 'off') {
     for (const member of members) {
-      const color = colorOf(member)
+      // the panel's highlight paints its member set orange: its own bucket
+      // (the key carries the colour), the same treatment as the rest
+      const color = matchesHighlight(member, highlight) ? HIGHLIGHT_COLOR : colorOf(member)
       if (mode === 'basement') {
         // Stratum split: below-floor is the star (solid + overlay ghost),
         // the house above fades to the faint orientation shell. Within the
@@ -730,6 +737,7 @@ export function patchGroup(
   fixtures: Fixture[],
   mode: ViewMode,
   condenserAsset?: Object3D | null,
+  highlight?: HighlightSpec | null,
 ): boolean {
   const index = bucketIndex.get(group)
   if (!index) return false
@@ -740,7 +748,7 @@ export function patchGroup(
   const { boxed, condensers } = splitAssetMembers(members, mode, condenserAsset)
   const wrappers = assetWrapperIndex.get(group) ?? []
   if (wrappers.length !== condensers.length) return false
-  const buckets = collectBuckets(boxed, fixtures, mode)
+  const buckets = collectBuckets(boxed, fixtures, mode, highlight)
   if (buckets.size !== index.size) return false
   for (const [key, bucket] of buckets) {
     const meshes = index.get(key)
@@ -772,6 +780,7 @@ export function patchGroups(
   fixtures: Fixture[],
   mode: ViewMode,
   condenserAsset?: Object3D | null,
+  highlight?: HighlightSpec | null,
 ): boolean {
   const own: Member[] = []
   const byLevel = new Map<string, Member[]>()
@@ -785,12 +794,12 @@ export function patchGroups(
   }
   if (byLevel.size !== built.foreign.size) return false
   for (const levelId of byLevel.keys()) if (!built.foreign.has(levelId)) return false
-  if (!patchGroup(built.group, own, fixtures, mode, condenserAsset)) return false
+  if (!patchGroup(built.group, own, fixtures, mode, condenserAsset, highlight)) return false
   for (const [levelId, list] of byLevel) {
     const g = built.foreign.get(levelId)
     if (!g) return false
     if (g.userData.strataAbove !== list.some((m) => m.strataAbove === true)) return false
-    if (!patchGroup(g, list, [], mode, condenserAsset)) return false
+    if (!patchGroup(g, list, [], mode, condenserAsset, highlight)) return false
   }
   return true
 }
@@ -1146,18 +1155,21 @@ export const FramingRenderer = ({ node }: { node: FramingNode }) => {
   // construction, no dispose, no React commit on the <primitive>. Structure
   // changed → full rebuild; the [built] effect below disposes the old one.
   const builtRef = useRef<BuiltGroups | null>(null)
+  // the panel's highlight (framing/highlight.ts): a change re-buckets — the
+  // orange set is its own bucket, so the in-place patch path steps aside
+  const highlight = useBonesStore((s) => s.highlight)
   const built = useMemo(() => {
     const prev = builtRef.current
-    if (prev && patchGroups(prev, active.members, active.fixtures, mode, condenserAsset)) {
+    if (prev && patchGroups(prev, active.members, active.fixtures, mode, condenserAsset, highlight)) {
       return prev
     }
-    const next = buildGroups(active.members, active.fixtures, mode, condenserAsset)
+    const next = buildGroups(active.members, active.fixtures, mode, condenserAsset, highlight)
     builtRef.current = next
     return next
     // `active` (NOT `result`): during a drag only the override store moves,
     // so a committed-only dep froze the scene graph — the whole feature was
     // visually inert (verify night-6 blocker).
-  }, [active, mode, condenserAsset])
+  }, [active, mode, condenserAsset, highlight])
   const group = built.group
   useEffect(() => {
     return () => {
