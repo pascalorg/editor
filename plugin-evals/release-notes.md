@@ -1,6 +1,6 @@
 # OpenAI submission release notes
 
-Draft release notes for a future Pascal agent skills 0.1.6 **With MCP** submission.
+Draft release notes for a future Pascal agent skills 0.1.7 **With MCP** submission.
 
 The plugin teaches ChatGPT and Codex to create, inspect, edit, validate, save, and hand off editable Pascal 3D scenes through a separately connected Pascal MCP server. It also includes a focused furniture-fit workflow that reports measured footprint evidence, unsupported checks, and one bounded next action without authorizing project changes or spending.
 

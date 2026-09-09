@@ -2,12 +2,13 @@ import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node
 import { dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
+import { validateClaudeMcpPolicy } from './claude-mcp-config-policy'
 import { validateClawHubIgnorePolicy } from './clawhub-ignore-policy'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const skillNames = ['pascal-3d', 'furniture-fit'] as const
 const skillVersions = { 'pascal-3d': '0.1.0', 'furniture-fit': '0.1.3' } as const
-const pluginVersion = '0.1.6'
+const pluginVersion = '0.1.7'
 const portablePluginSchema = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'
 const semverPattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
@@ -645,6 +646,7 @@ if (negativePublishingCases < 3) fail('Publishing suite needs at least 3 negativ
 
 const claudePlugin = parseJson(join(root, '.claude-plugin', 'plugin.json'))
 const claudeMarketplace = parseJson(join(root, '.claude-plugin', 'marketplace.json'))
+const claudeMcpConfig = parseJson(join(root, '.mcp.json'))
 const portablePlugin = parseJson(join(root, 'plugin.json'))
 const codexPlugin = parseJson(join(root, '.codex-plugin', 'plugin.json'))
 const codexMarketplace = parseJson(join(root, '.agents', 'plugins', 'marketplace.json'))
@@ -819,6 +821,9 @@ if (!Array.isArray(marketplacePlugins) || marketplacePlugins.length !== 1) {
   fail('Claude marketplace must contain exactly one plugin')
 } else {
   const plugin = marketplacePlugins[0] as Record<string, unknown>
+  for (const configFailure of validateClaudeMcpPolicy(claudeMcpConfig, claudePlugin, plugin)) {
+    fail(configFailure)
+  }
   if (plugin.source !== './') fail('Claude marketplace plugin must use the repository root')
   if (plugin.version !== pluginVersion) {
     fail(`Claude marketplace plugin version must be ${pluginVersion}`)
