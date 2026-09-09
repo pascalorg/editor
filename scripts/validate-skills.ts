@@ -222,6 +222,10 @@ const furnitureDecisionContextKeys = [
   'supported_unchecked_alternative',
   'unresolved_requested_check_due_to_tool_limit',
 ] as const
+type RequiredFurnitureDecisionContext = Record<
+  (typeof furnitureDecisionContextKeys)[number],
+  boolean
+>
 
 function deriveFurnitureNextAction(context: FurnitureDecisionContext): FurnitureNextActionKind {
   if (context.missing_blocking_measurement === true) return 'request_measurement'
@@ -258,13 +262,104 @@ for (const item of furnitureEvalData.evals ?? []) {
   }
   semanticDecisionCases.set(item.semantic_case, item)
 }
-const requiredSemanticCases = new Map<string, { evalId: number; kind: FurnitureNextActionKind }>([
-  ['no-unresolved-requested-blocker', { evalId: 1, kind: 'check_related_item_or_pose' }],
-  ['mixed-passing-and-failing-poses-height-blocker', { evalId: 2, kind: 'request_measurement' }],
-  ['mixed-evidence-height-blocker', { evalId: 9, kind: 'request_measurement' }],
-  ['all-tested-poses-fail', { evalId: 10, kind: 'request_alternate_item_or_target' }],
-  ['prospective-candidate-door-limit', { evalId: 11, kind: 'complete_unresolved_check' }],
-  ['supported-untested-alternate', { evalId: 12, kind: 'check_alternate_pose' }],
+const requiredSemanticCases = new Map<
+  string,
+  {
+    evalId: number
+    kind: FurnitureNextActionKind
+    context: RequiredFurnitureDecisionContext
+  }
+>([
+  [
+    'no-unresolved-requested-blocker',
+    {
+      evalId: 1,
+      kind: 'check_related_item_or_pose',
+      context: {
+        has_passing_footprint: true,
+        has_failing_requested_pose: false,
+        has_blocking_failure: false,
+        missing_blocking_measurement: false,
+        supported_unchecked_alternative: false,
+        unresolved_requested_check_due_to_tool_limit: false,
+      },
+    },
+  ],
+  [
+    'mixed-passing-and-failing-poses-height-blocker',
+    {
+      evalId: 2,
+      kind: 'request_measurement',
+      context: {
+        has_passing_footprint: true,
+        has_failing_requested_pose: true,
+        has_blocking_failure: false,
+        missing_blocking_measurement: true,
+        supported_unchecked_alternative: false,
+        unresolved_requested_check_due_to_tool_limit: false,
+      },
+    },
+  ],
+  [
+    'mixed-evidence-height-blocker',
+    {
+      evalId: 9,
+      kind: 'request_measurement',
+      context: {
+        has_passing_footprint: true,
+        has_failing_requested_pose: false,
+        has_blocking_failure: false,
+        missing_blocking_measurement: true,
+        supported_unchecked_alternative: false,
+        unresolved_requested_check_due_to_tool_limit: false,
+      },
+    },
+  ],
+  [
+    'all-tested-poses-fail',
+    {
+      evalId: 10,
+      kind: 'request_alternate_item_or_target',
+      context: {
+        has_passing_footprint: false,
+        has_failing_requested_pose: true,
+        has_blocking_failure: true,
+        missing_blocking_measurement: false,
+        supported_unchecked_alternative: false,
+        unresolved_requested_check_due_to_tool_limit: false,
+      },
+    },
+  ],
+  [
+    'prospective-candidate-door-limit',
+    {
+      evalId: 11,
+      kind: 'complete_unresolved_check',
+      context: {
+        has_passing_footprint: true,
+        has_failing_requested_pose: false,
+        has_blocking_failure: false,
+        missing_blocking_measurement: false,
+        supported_unchecked_alternative: false,
+        unresolved_requested_check_due_to_tool_limit: true,
+      },
+    },
+  ],
+  [
+    'supported-untested-alternate',
+    {
+      evalId: 12,
+      kind: 'check_alternate_pose',
+      context: {
+        has_passing_footprint: false,
+        has_failing_requested_pose: true,
+        has_blocking_failure: true,
+        missing_blocking_measurement: false,
+        supported_unchecked_alternative: true,
+        unresolved_requested_check_due_to_tool_limit: false,
+      },
+    },
+  ],
 ])
 for (const [semanticCase, requirement] of requiredSemanticCases) {
   const item = semanticDecisionCases.get(semanticCase)
@@ -283,6 +378,13 @@ for (const [semanticCase, requirement] of requiredSemanticCases) {
     furnitureDecisionContextKeys.some((key) => typeof item.decision_context?.[key] !== 'boolean')
   ) {
     fail(`furniture-fit: semantic case ${semanticCase} needs the complete boolean decision context`)
+  }
+  for (const key of furnitureDecisionContextKeys) {
+    if (item.decision_context[key] !== requirement.context[key]) {
+      fail(
+        `furniture-fit: semantic case ${semanticCase} has ${key}=${String(item.decision_context[key])}, expected ${String(requirement.context[key])}`,
+      )
+    }
   }
   if (
     item.decision_context.supported_unchecked_alternative === true &&
