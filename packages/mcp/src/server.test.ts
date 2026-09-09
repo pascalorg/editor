@@ -113,4 +113,98 @@ describe('Pascal MCP tool execution', () => {
       await server.close()
     }
   })
+
+  test('wraps registerTool callback updates and fails closed on renames', async () => {
+    const bridge = new SceneBridge()
+    bridge.loadDefault()
+    const executed: string[] = []
+    const server = createPascalMcpServer({
+      bridge,
+      executeTool: async ({ name, execute }) => {
+        executed.push(name)
+        return execute()
+      },
+    })
+    const registration = server.registerTool('update_probe', { inputSchema: {} }, async () => ({
+      content: [{ type: 'text', text: 'initial' }],
+    }))
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: 'registered-tool-update-test', version: '0.0.0' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+    try {
+      expect(await toolText(client, 'update_probe')).toBe('initial')
+      registration.update({
+        callback: async () => ({ content: [{ type: 'text', text: 'replacement' }] }),
+      })
+      expect(await toolText(client, 'update_probe')).toBe('replacement')
+      expect(() => registration.update({ name: 'renamed_probe' })).toThrow(
+        'MCP tool renaming is unsupported',
+      )
+      expect(() => registration.update({ name: 'renamed_again_probe' })).toThrow(
+        'MCP tool renaming is unsupported',
+      )
+      expect(await toolText(client, 'update_probe')).toBe('replacement')
+      registration.remove()
+      expect((await client.listTools()).tools.map((tool) => tool.name)).not.toContain(
+        'update_probe',
+      )
+      expect(executed).toEqual(['update_probe', 'update_probe', 'update_probe'])
+    } finally {
+      await client.close()
+      await server.close()
+    }
+  })
+
+  test('wraps deprecated tool callback updates and fails closed on renames', async () => {
+    const bridge = new SceneBridge()
+    bridge.loadDefault()
+    const executed: string[] = []
+    const server = createPascalMcpServer({
+      bridge,
+      executeTool: async ({ name, execute }) => {
+        executed.push(name)
+        return execute()
+      },
+    })
+    const registration = server.tool('legacy_update_probe', async () => ({
+      content: [{ type: 'text', text: 'initial' }],
+    }))
+    const [serverTransport, clientTransport] = InMemoryTransport.createLinkedPair()
+    const client = new Client({ name: 'legacy-tool-update-test', version: '0.0.0' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+    try {
+      expect(await toolText(client, 'legacy_update_probe')).toBe('initial')
+      registration.update({
+        callback: async () => ({ content: [{ type: 'text', text: 'replacement' }] }),
+      })
+      expect(await toolText(client, 'legacy_update_probe')).toBe('replacement')
+      expect(() => registration.update({ name: 'legacy_renamed_probe' })).toThrow(
+        'MCP tool renaming is unsupported',
+      )
+      expect(() => registration.update({ name: 'legacy_renamed_again_probe' })).toThrow(
+        'MCP tool renaming is unsupported',
+      )
+      expect(await toolText(client, 'legacy_update_probe')).toBe('replacement')
+      registration.remove()
+      expect((await client.listTools()).tools.map((tool) => tool.name)).not.toContain(
+        'legacy_update_probe',
+      )
+      expect(executed).toEqual([
+        'legacy_update_probe',
+        'legacy_update_probe',
+        'legacy_update_probe',
+      ])
+    } finally {
+      await client.close()
+      await server.close()
+    }
+  })
 })
+
+async function toolText(client: Client, name: string): Promise<string | undefined> {
+  const result = await client.callTool({ name, arguments: {} })
+  const content = result.content[0]
+  return content?.type === 'text' ? content.text : undefined
+}

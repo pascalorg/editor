@@ -1,4 +1,4 @@
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { McpServer, type RegisteredTool } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { SceneBridge } from './bridge/scene-bridge'
 import { createSceneOperations, type SceneOperations } from './operations'
 import { registerPrompts } from './prompts'
@@ -21,7 +21,11 @@ export type CreatePascalMcpServerOptions = {
   store?: SceneStore
   name?: string
   version?: string
-  /** Wrap every tool handler, for example to serialize access to a stateful bridge. */
+  /**
+   * Wrap every regular tool handler, including callback updates.
+   * Tool renames fail closed because the SDK registration lifecycle cannot safely rename twice.
+   * Experimental task-based tool registrations are outside this hook.
+   */
   executeTool?: PascalMcpToolExecutor
 }
 
@@ -42,13 +46,15 @@ export function createPascalMcpServer(opts: CreatePascalMcpServerOptions): McpSe
 
 function installToolExecutor(server: McpServer, executeTool: PascalMcpToolExecutor): void {
   const registerTool = server.registerTool.bind(server)
-  const wrappedRegisterTool: McpServer['registerTool'] = (name, config, callback) =>
-    registerTool(name, config, ((...args: Parameters<typeof callback>) =>
-      executeTool({
-        name,
-        signal: toolRequestSignal(args),
-        execute: () => Promise.resolve(Reflect.apply(callback, undefined, args)),
-      })) as typeof callback)
+  const wrappedRegisterTool: McpServer['registerTool'] = (name, config, callback) => {
+    const runtimeCallback = callback as unknown as RuntimeToolCallback
+    const registration = registerTool(
+      name,
+      config,
+      wrapToolCallback(name, runtimeCallback, executeTool) as typeof callback,
+    )
+    return wrapRegisteredTool(registration, name, runtimeCallback, executeTool)
+  }
   server.registerTool = wrappedRegisterTool
 
   const tool = server.tool.bind(server)
@@ -57,14 +63,54 @@ function installToolExecutor(server: McpServer, executeTool: PascalMcpToolExecut
     if (typeof callback !== 'function') {
       return Reflect.apply(tool, undefined, [name, ...args])
     }
-    args[args.length - 1] = (...callbackArgs: unknown[]) =>
-      executeTool({
-        name,
-        signal: toolRequestSignal(callbackArgs),
-        execute: () => Promise.resolve(Reflect.apply(callback, undefined, callbackArgs)),
-      })
-    return Reflect.apply(tool, undefined, [name, ...args])
+    const runtimeCallback = callback as RuntimeToolCallback
+    args[args.length - 1] = wrapToolCallback(name, runtimeCallback, executeTool)
+    const registration = Reflect.apply(tool, undefined, [name, ...args]) as RegisteredTool
+    return wrapRegisteredTool(registration, name, runtimeCallback, executeTool)
   }) as McpServer['tool']
+}
+
+type RuntimeToolCallback = (...args: unknown[]) => unknown
+
+function wrapToolCallback(
+  name: string,
+  callback: RuntimeToolCallback,
+  executeTool: PascalMcpToolExecutor,
+): RuntimeToolCallback {
+  return (...args) =>
+    executeTool({
+      name,
+      signal: toolRequestSignal(args),
+      execute: () => Promise.resolve(Reflect.apply(callback, undefined, args)),
+    })
+}
+
+function wrapRegisteredTool(
+  registration: RegisteredTool,
+  initialName: string,
+  initialCallback: RuntimeToolCallback,
+  executeTool: PascalMcpToolExecutor,
+): RegisteredTool {
+  let currentCallback = initialCallback
+  const update = registration.update.bind(registration) as (
+    updates: Record<string, unknown>,
+  ) => void
+  registration.update = ((updates: Record<string, unknown>) => {
+    if (typeof updates.name === 'string') {
+      throw new Error('MCP tool renaming is unsupported when executeTool is configured')
+    }
+    const callbackUpdate = updates.callback
+    if (typeof callbackUpdate === 'function') {
+      currentCallback = callbackUpdate as RuntimeToolCallback
+    }
+    update({
+      ...updates,
+      ...(typeof callbackUpdate === 'function'
+        ? { callback: wrapToolCallback(initialName, currentCallback, executeTool) }
+        : {}),
+    })
+  }) as RegisteredTool['update']
+  return registration
 }
 
 function toolRequestSignal(args: readonly unknown[]): AbortSignal {
