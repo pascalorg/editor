@@ -17,6 +17,7 @@ import {
 } from '../../../lib/floorplan/floorplan-extension'
 import {
   cancelFloorplanAffordanceDrag,
+  collectDirectFloorplanScopeNodes,
   collectFloorplanDependencyNodes,
   collectFloorplanLinkedLevelNodes,
   computeAffectedSiblingIds,
@@ -25,9 +26,73 @@ import {
   InteractiveGeometry,
   isFloorplanOpeningPlacementState,
   resolveFloorplanHandleUnitsPerPixel,
+  siteToFloorplanTransform,
   splitFloorplanOverlay,
   subscribeFloorplanAffordanceToolCancel,
 } from './floorplan-registry-layer'
+
+describe('site-scoped floorplan discovery', () => {
+  let restoreRegistry: () => void
+
+  beforeEach(() => {
+    restoreRegistry = nodeRegistry._snapshot()
+    nodeRegistry._reset()
+    registerNode({
+      kind: 'test:site-overlay',
+      schemaVersion: 1,
+      schema: z.object({ type: z.literal('test:site-overlay') }) as never,
+      category: 'utility',
+      defaults: () => ({}) as never,
+      capabilities: {},
+      floorplanScope: 'site',
+      floorplan: () => null,
+    } as AnyNodeDefinition)
+  })
+
+  afterEach(() => restoreRegistry())
+
+  test('collects only direct children of the active Site', () => {
+    const activeSite = {
+      id: 'site_active',
+      type: 'site',
+      parentId: null,
+      children: ['overlay_declared'],
+    } as unknown as AnyNode
+    const nodes = {
+      [activeSite.id]: activeSite,
+      overlay_declared: {
+        id: 'overlay_declared',
+        type: 'test:site-overlay',
+        parentId: null,
+      } as unknown as AnyNode,
+      overlay_parented: {
+        id: 'overlay_parented',
+        type: 'test:site-overlay',
+        parentId: activeSite.id,
+      } as unknown as AnyNode,
+      overlay_other_site: {
+        id: 'overlay_other_site',
+        type: 'test:site-overlay',
+        parentId: 'site_other',
+      } as unknown as AnyNode,
+    }
+
+    expect(
+      collectDirectFloorplanScopeNodes(nodes, activeSite, 'site').map((node) => String(node.id)),
+    ).toEqual(['overlay_declared', 'overlay_parented'])
+  })
+
+  test('projects site-local coordinates into active building-local coordinates', () => {
+    const transform = siteToFloorplanTransform([10, 0, 5], Math.PI / 2)
+    const [tx, ty] = transform.translate
+    const sitePoint = [10, 3] as const
+    const cos = Math.cos(transform.rotate)
+    const sin = Math.sin(transform.rotate)
+
+    expect(tx + sitePoint[0] * cos - sitePoint[1] * sin).toBeCloseTo(-2)
+    expect(ty + sitePoint[0] * sin + sitePoint[1] * cos).toBeCloseTo(0)
+  })
+})
 
 describe('floorplan selection handle sizing', () => {
   test('caps visual handle growth at extreme zoom-out', () => {

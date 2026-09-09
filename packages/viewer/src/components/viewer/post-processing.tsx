@@ -6,10 +6,11 @@ import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import {
   add,
   diffuseColor,
-  float,
+  float as tslFloat,
   mix,
   mrt,
   normalView,
+  normalWorldGeometry,
   oscSine,
   output,
   pass,
@@ -37,6 +38,7 @@ import { PostProcessingResources } from '../../lib/post-processing-resources'
 import { getSceneTheme } from '../../lib/scene-themes'
 import { packNormalToRGB, unpackRGBToNormal } from '../../lib/tsl-compat'
 import useViewer from '../../store/use-viewer'
+import { useSceneAtmosphere } from './scene-atmosphere'
 
 // Scene-referred grade applied before the output tone mapping (AgX). AgX rolls
 // highlights off gently but reads flat on its own; a mild mid-gray-pivot
@@ -62,7 +64,8 @@ export const SSGI_PARAMS = {
   useTemporalFiltering: false,
 }
 
-// Diagnostic toggles for thermal A/B testing. Add `?disable=ao,denoise,outline,postFx`
+// Diagnostic toggles for thermal A/B testing. Add
+// `?disable=ao,denoise,outline,postFx`
 // to the URL (any subset) and reload to skip those passes. Each flag prevents
 // allocation + per-frame work for that stage, so device temperature deltas
 // across combos isolate which pass is the actual culprit. Picked up once at
@@ -79,7 +82,12 @@ export const SSGI_PARAMS = {
 //              per-frame vertex/draw cost dominates the whole capture.
 function readPerfDisableFlags() {
   if (typeof window === 'undefined') {
-    return { ao: false, denoise: false, outline: false, postFx: false }
+    return {
+      ao: false,
+      denoise: false,
+      outline: false,
+      postFx: false,
+    }
   }
   const raw = new URLSearchParams(window.location.search).get('disable') ?? ''
   const set = new Set(
@@ -195,6 +203,11 @@ const PostProcessingPasses = ({
 }) => {
   const { gl: renderer, invalidate, scene, camera, size } = useThree()
   const resourcesRef = useRef<PostProcessingResources | null>(null)
+  const atmosphere = useSceneAtmosphere()
+  const directSkyNode = useMemo(
+    () => (atmosphere ? atmosphere.skyRadiance(normalWorldGeometry) : null),
+    [atmosphere],
+  )
   const hasPipelineErrorRef = useRef(false)
   const retryCountRef = useRef(0)
   const rebuildTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -284,6 +297,11 @@ const PostProcessingPasses = ({
     setPipelineVersion((v) => v + 1)
   }, [])
 
+  const disposePipeline = useCallback(() => {
+    resourcesRef.current?.dispose()
+    resourcesRef.current = null
+  }, [])
+
   // Reset retry state when project changes
   useEffect(() => {
     if (lastProjectIdRef.current === projectId) return
@@ -338,8 +356,7 @@ const PostProcessingPasses = ({
     if (width < 1 || height < 1) {
       skippedZeroSizeRef.current = true
       hasPipelineErrorRef.current = false
-      resourcesRef.current?.dispose()
-      resourcesRef.current = null
+      disposePipeline()
       return
     }
 
@@ -355,21 +372,17 @@ const PostProcessingPasses = ({
     // allocated every pass.
     if (disablePostFx || perfDisable.postFx) {
       hasPipelineErrorRef.current = false
-      resourcesRef.current?.dispose()
-      resourcesRef.current = null
+      disposePipeline()
       return
     }
     const ssgiEnabled = shading === 'rendered' && SSGI_PARAMS.enabled && !perfDisable.ao
     const denoiseEnabled = ssgiEnabled && !perfDisable.denoise
     const outlineEnabled = !perfDisable.outline
     const inkEnabled = edges !== 'off'
-    // The depth+normal MRT feeds both SSGI and the screen-space ink pass.
     const needsNormalMRT = ssgiEnabled || inkEnabled
     // Soft = thin (1px sample radius) + faint (50% opacity); strong = thick
     // (2px, ~2× wider detected band) + solid (100%). The edge masks saturate,
-    // so radius+opacity are what actually separate the two modes — gain wouldn't.
-    // Same 1px line thickness for both (soft's thickness is the nice one);
-    // strong reads heavier purely by being fully solid vs soft's lighter 50%.
+    // so radius+opacity are what actually separate the two modes.
     const inkRadius = 1
     const inkOpacity = inkOpacityOverride ?? (edges === 'strong' ? 1 : 0.5)
 
@@ -448,11 +461,10 @@ const PostProcessingPasses = ({
         contentAlpha,
       ) as unknown as ReturnType<typeof vec4>
 
-      // Depth + normal MRT — shared by SSGI (diffuse/normal) and the ink pass
-      // (depth/normal). Built whenever either is active.
+      // Scene depth is shared by SSGI, ink, and outlines.
+      // The normal MRT is only built when SSGI or ink needs it.
       const scenePassDepth = scenePass.getTextureNode('depth')
       let scenePassNormal: any = null
-      let sceneNormal: any = null
       if (needsNormalMRT) {
         scenePass.setMRT(
           mrt({
@@ -462,13 +474,18 @@ const PostProcessingPasses = ({
           }),
         )
         scenePassNormal = scenePass.getTextureNode('normal')
+      }
+      if (scenePassNormal) {
         const normalTexture = scenePass.getTexture('normal')
         normalTexture.type = UnsignedByteType
-        // Extract normal from color-encoded texture (SSGI consumes the node form)
-        sceneNormal = sample((uv) => unpackRGBToNormal(scenePassNormal.sample(uv)))
       }
+      // Extract normal from color-encoded texture (SSGI consumes the node form).
+      const normalNode = scenePassNormal
+      const sceneNormal = normalNode
+        ? sample((uv) => unpackRGBToNormal(normalNode.sample(uv)))
+        : null
 
-      if (ssgiEnabled) {
+      if (ssgiEnabled && scenePassDepth && sceneNormal) {
         const scenePassDiffuse = scenePass.getTextureNode('diffuseColor')
         const diffuseTexture = scenePass.getTexture('diffuseColor')
         diffuseTexture.type = UnsignedByteType
@@ -495,7 +512,7 @@ const PostProcessingPasses = ({
         if (denoiseEnabled) {
           // DenoiseNode only denoises RGB — alpha is passed through unchanged.
           // SSGI's AO is a single red channel, so we remap it into RGB before denoising.
-          const aoAsRgb = vec4(aoTexture.r, aoTexture.r, aoTexture.r, float(1))
+          const aoAsRgb = vec4(aoTexture.r, aoTexture.r, aoTexture.r, tslFloat(1))
           const denoisePass = denoise(aoAsRgb, scenePassDepth, sceneNormal, camera)
           denoisePass.index.value = 0
           denoisePass.radius.value = 4
@@ -511,11 +528,11 @@ const PostProcessingPasses = ({
         // disc and the geometry↔sky depth cliff never grow an AO band — that
         // band read as a visible line along the horizon.
         const aoFarFade = smoothstep(
-          float(0.9994),
-          float(0.9998),
+          tslFloat(0.9994),
+          tslFloat(0.9998),
           scenePassDepth.sample(screenUV).r,
         )
-        ao = mix(ao, float(1), aoFarFade)
+        ao = mix(ao, tslFloat(1), aoFarFade)
 
         // Composite: scene * AO + diffuse * GI
         sceneColor = vec4(
@@ -527,7 +544,7 @@ const PostProcessingPasses = ({
       // Screen-space ink outline (SketchUp look) — depth/normal edge detection
       // over the composited scene. Topology-agnostic, so it handles CSG-cut
       // walls cleanly. Applied before the selection outline + background mix.
-      if (inkEnabled) {
+      if (inkEnabled && scenePassDepth && scenePassNormal) {
         sceneColor = vec4(
           inkedEdges({
             sceneRgb: sceneColor.rgb,
@@ -535,7 +552,7 @@ const PostProcessingPasses = ({
             normalTex: scenePassNormal,
             inkColor: inkColorUniform.current,
             radius: inkRadius,
-            opacity: float(inkOpacity).mul(inkOpacityScaleUniform.current),
+            opacity: tslFloat(inkOpacity).mul(inkOpacityScaleUniform.current),
           }),
           sceneColor.a,
         )
@@ -583,7 +600,7 @@ const PostProcessingPasses = ({
         // Hovered: blue visible, yellow hidden, pulsing
         const pulsePeriod = uniform(3)
         const oscillating = oscSine(time.div(pulsePeriod).mul(2)).mul(0.5).add(0.5)
-        const osc = mix(oscillating, float(1), hoverPulseMix)
+        const osc = mix(oscillating, tslFloat(1), hoverPulseMix)
         const hoverOutline = outlineNode.secondaryVisibleEdge
           .mul(hoverVisibleColor)
           .add(outlineNode.secondaryHiddenEdge.mul(hoverHiddenColor))
@@ -607,37 +624,40 @@ const PostProcessingPasses = ({
       // seamlessly exactly where the disc vanishes.
       const ndc = vec4(
         screenUV.x.mul(2).sub(1),
-        float(1).sub(screenUV.y).mul(2).sub(1),
+        tslFloat(1).sub(screenUV.y).mul(2).sub(1),
         1,
         1,
       ) as any
       const viewRay = (camProjInvUniform.current as any).mul(ndc)
       const worldDir = (camWorldUniform.current as any).mul(vec4(viewRay.xyz, 0)).xyz.normalize()
-      let bgGradient = backdropGradient({
-        dirY: worldDir.y,
-        background: bgUniform.current,
-        haze: bgHazeUniform.current,
-        sky: bgSkyUniform.current,
-        skyDeep: bgSkyDeepUniform.current,
-      })
+      let bgGradient = atmosphere
+        ? atmosphere.skyRadiance(worldDir)
+        : backdropGradient({
+            dirY: worldDir.y,
+            background: bgUniform.current,
+            haze: bgHazeUniform.current,
+            sky: bgSkyUniform.current,
+            skyDeep: bgSkyDeepUniform.current,
+          })
       if (shading === 'rendered') {
         bgGradient = gradeRgb(bgGradient)
       }
-      const composited = mix(bgGradient, compositeWithOutlines.rgb, contentAlpha)
+      const sceneComposite = compositeWithOutlines.rgb
+      const composited = mix(bgGradient, sceneComposite, contentAlpha)
       // Editor overlays painted on top by their own alpha — they never get inked,
       // AO'd, or outlined, and always read crisp regardless of scene depth.
       const withOverlay = mix(composited, overlayColor.rgb, overlayColor.a)
       let finalOutput: ReturnType<typeof premultiplyAlpha> | ReturnType<typeof vec4> = vec4(
         withOverlay,
-        float(1),
+        tslFloat(1),
       )
       if (transparentBackground) {
         const overlayAlpha = overlayColor.a
         const alpha = overlayAlpha.add(visualAlpha.mul(overlayAlpha.oneMinus()))
         const straightRgb = overlayColor.rgb
           .mul(overlayAlpha)
-          .add(compositeWithOutlines.rgb.mul(visualAlpha).mul(overlayAlpha.oneMinus()))
-          .div(alpha.max(float(0.00001)))
+          .add(sceneComposite.mul(visualAlpha).mul(overlayAlpha.oneMinus()))
+          .div(alpha.max(tslFloat(0.00001)))
         finalOutput = premultiplyAlpha(renderOutput(vec4(straightRgb, alpha)))
       }
 
@@ -647,7 +667,6 @@ const PostProcessingPasses = ({
       renderPipeline.outputNode = finalOutput
       retryCountRef.current = 0
     } catch (error) {
-      resources.dispose()
       hasPipelineErrorRef.current = true
       console.error(
         '[viewer/post-processing] Failed to set up post-processing pipeline. Rendering without post FX.',
@@ -658,20 +677,19 @@ const PostProcessingPasses = ({
         },
         error,
       )
-      resourcesRef.current = null
+      disposePipeline()
     }
 
-    return () => {
-      resources.dispose()
-      if (resourcesRef.current === resources) resourcesRef.current = null
-    }
+    return disposePipeline
   }, [
     // NOTE: hoverHighlightMode intentionally excluded — the hover style is
     // pushed to uniforms in a separate effect, so a hover must NOT rebuild the
     // whole pipeline. The uniform refs below are stable (useMemo), so they
     // never trigger a rebuild either.
+    atmosphere,
     camera,
     disablePostFx,
+    disposePipeline,
     hoverHiddenColor,
     hoverPulseMix,
     hoverStrength,
@@ -746,6 +764,8 @@ const PostProcessingPasses = ({
       hasPipelineErrorRef.current ||
       !resourcesRef.current?.pipeline
     ) {
+      const previousBackgroundNode = scene.backgroundNode
+      if (directSkyNode && !transparentBackground) scene.backgroundNode = directSkyNode
       try {
         const clearAlpha = transparentBackground ? 0 : 1
         if ((renderer as any).setClearColor) {
@@ -760,6 +780,8 @@ const PostProcessingPasses = ({
         if (PERF_OVERLAY_ENABLED) recordFrameGpuTiming(renderer, submittedAt)
       } catch (fallbackError) {
         console.error('[viewer/post-processing] Fallback render failed.', fallbackError)
+      } finally {
+        scene.backgroundNode = previousBackgroundNode
       }
       return
     }
@@ -783,8 +805,7 @@ const PostProcessingPasses = ({
         rendererCtor: (renderer as any).constructor?.name,
         error,
       })
-      resourcesRef.current?.dispose()
-      resourcesRef.current = null
+      disposePipeline()
 
       if (retryCountRef.current < MAX_PIPELINE_RETRIES) {
         // Auto-retry: schedule a pipeline rebuild if we haven't exceeded the retry limit

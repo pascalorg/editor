@@ -191,6 +191,7 @@ function paintStyledGeometry(
   const opacity = geometry.opacity ?? 1
   const fillOpacity = (geometry.fillOpacity ?? 1) * opacity
   const strokeOpacity = (geometry.strokeOpacity ?? 1) * opacity
+  const fillRule = geometry.fillRule === 'evenodd' ? 'even-odd' : 'non-zero'
 
   if (fill) raw.fillColor(fill).fillOpacity(fillOpacity)
   if (stroke) {
@@ -206,8 +207,8 @@ function paintStyledGeometry(
     )
   }
 
-  if (fill && stroke) raw.fillAndStroke(fill, stroke)
-  else if (fill) raw.fill(fill)
+  if (fill && stroke) raw.fillAndStroke(fill, stroke, fillRule)
+  else if (fill) raw.fill(fill, fillRule)
   else if (stroke) raw.stroke(stroke)
 }
 
@@ -621,11 +622,16 @@ async function drawImage(
   geometry: Extract<FloorplanGeometry, { kind: 'image' }>,
 ): Promise<void> {
   try {
-    const url = await loadAssetUrl(geometry.url)
-    if (!url) return
-    const response = await fetch(url)
-    if (!response.ok) return
-    const dataUrl = await blobToDataUrl(await response.blob())
+    const source = geometry.url.startsWith('data:')
+      ? geometry.url
+      : await loadAssetUrl(geometry.url)
+    if (!source) return
+    const dataUrl = source.startsWith('data:')
+      ? source
+      : await fetch(source)
+          .then((response) => (response.ok ? response.blob() : null))
+          .then((blob) => (blob ? blobToDataUrl(blob) : null))
+    if (!dataUrl) return
     const raw = doc.raw
     raw.save().translate(geometry.center[0], geometry.center[1])
     if (geometry.rotation) raw.rotate((geometry.rotation * 180) / Math.PI)

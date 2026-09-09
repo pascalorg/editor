@@ -1,11 +1,28 @@
 import { afterEach, describe, expect, test } from 'bun:test'
-import { type AnyNode, DoorNode, registerNode, sceneRegistry } from '@pascal-app/core'
-import { buildDoorPreviewMesh } from '@pascal-app/viewer'
+import {
+  type AnyNode,
+  type AnyNodeDefinition,
+  DoorNode,
+  nodeRegistry,
+  registerNode,
+  sceneRegistry,
+} from '@pascal-app/core'
+import {
+  buildDoorPreviewMesh,
+  markViewerPresentationTextureBorrowed,
+  type ViewerPresentationContribution,
+  viewerPresentationRegistry,
+} from '@pascal-app/viewer'
 import * as THREE from 'three'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
 import type { GLTFWriter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
-import { prepareSceneForExport, writeTextureReferenceExtras } from './glb-export'
+import {
+  prepareSceneForExport,
+  prepareSceneForExportAsync,
+  writeTextureReferenceExtras,
+} from './glb-export'
 
 // The reference module reads the storage origin lazily on first use, so
 // setting the env here (before any validation call) pins it for the file.
@@ -16,25 +33,15 @@ afterEach(() => {
   sceneRegistry.clear()
 })
 
-function nodeMaterial(overrides: Record<string, unknown> = {}) {
-  // Duck-typed stand-in for the viewer's MeshStandard/LambertNodeMaterial:
-  // the exporter keys off `isNodeMaterial` and reads plain PBR props.
-  return {
-    isNodeMaterial: true,
-    name: 'painted',
-    color: new THREE.Color('#cc3300'),
+function nodeMaterial(overrides: Record<string, unknown> = {}): THREE.Material {
+  const material = new MeshStandardNodeMaterial({
+    color: '#cc3300',
     roughness: 0.3,
     metalness: 0.7,
-    transparent: false,
-    opacity: 1,
-    side: THREE.FrontSide,
-    alphaTest: 0,
-    depthWrite: true,
-    depthTest: true,
-    vertexColors: false,
-    toneMapped: true,
-    ...overrides,
-  } as unknown as THREE.Material
+  })
+  material.name = 'painted'
+  Object.assign(material, overrides)
+  return material
 }
 
 function meshWithNodeMaterial(material: THREE.Material): THREE.Mesh {
@@ -86,6 +93,188 @@ describe('prepareSceneForExport', () => {
     expect(material.roughness).toBeCloseTo(0.3)
     expect(material.metalness).toBeCloseTo(0.7)
     expect(material.color.getHexString()).toBe('cc3300')
+  })
+
+  test('replaces only the cloned registered subtree with bake-only geometry', () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    try {
+      let receivedParentId: string | null | undefined
+      registerNode({
+        kind: 'test:bake-geometry',
+        schemaVersion: 1,
+        schema: DoorNode,
+        category: 'utility',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        bake: 'replace',
+        bakeGeometry: (_node, context) => {
+          receivedParentId = context.parent?.id
+          const group = new THREE.Group()
+          const instances = new THREE.InstancedMesh(
+            new THREE.BoxGeometry(0.1, 1, 0.1),
+            new THREE.MeshStandardMaterial({ color: '#228833' }),
+            1,
+          )
+          instances.name = 'baked-instance'
+          instances.setMatrixAt(0, new THREE.Matrix4().makeTranslation(4, 0, 2))
+          group.add(instances)
+          return group
+        },
+      } as AnyNodeDefinition)
+
+      const root = new THREE.Group()
+      const liveGroup = new THREE.Group()
+      liveGroup.position.set(2, 0, 3)
+      const liveMesh = meshWithNodeMaterial(nodeMaterial())
+      liveMesh.name = 'live-procedural-candidate'
+      liveGroup.add(liveMesh)
+      const before = meshWithNodeMaterial(nodeMaterial())
+      before.name = 'before-bake-replacement'
+      const after = meshWithNodeMaterial(nodeMaterial())
+      after.name = 'after-bake-replacement'
+      root.add(before, liveGroup, after)
+
+      const siteId = 'site_bake'
+      const grassId = 'grass_bake'
+      sceneRegistry.nodes.set(grassId, liveGroup)
+      const nodes = {
+        [siteId]: {
+          object: 'node',
+          id: siteId,
+          type: 'site',
+          parentId: null,
+          children: [grassId],
+        } as unknown as AnyNode,
+        [grassId]: {
+          object: 'node',
+          id: grassId,
+          type: 'test:bake-geometry',
+          parentId: siteId,
+          visible: true,
+        } as unknown as AnyNode,
+      }
+
+      const { scene } = prepareSceneForExport(root, nodes)
+      const exported = scene.getObjectByName(grassId)
+      const baked = exported?.getObjectByName('baked-instance')
+
+      expect(receivedParentId).toBe(siteId)
+      expect(liveGroup.getObjectByName('live-procedural-candidate')).toBe(liveMesh)
+      expect(scene.getObjectByName('live-procedural-candidate')).toBeUndefined()
+      expect(exported?.position.toArray()).toEqual([2, 0, 3])
+      expect(scene.children.map((child) => child.name)).toEqual([
+        'before-bake-replacement',
+        grassId,
+        'after-bake-replacement',
+      ])
+      expect((baked as THREE.InstancedMesh | undefined)?.isInstancedMesh).toBe(true)
+      expect((baked as THREE.InstancedMesh | undefined)?.count).toBe(1)
+      expect(((baked as THREE.InstancedMesh).material as THREE.Material).isMaterial).toBe(true)
+    } finally {
+      restoreRegistry()
+    }
+  })
+
+  test('selective exports omit a procedural kind without changing the live scene or later exports', () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    try {
+      const kind = 'test:optional-ground-cover'
+      registerNode({
+        kind,
+        schemaVersion: 1,
+        schema: DoorNode,
+        category: 'furnish',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        bake: 'replace',
+        bakeGeometry: () =>
+          new THREE.Mesh(
+            new THREE.BoxGeometry(1, 1, 1),
+            new THREE.MeshStandardMaterial({ color: '#228833' }),
+          ),
+      } as AnyNodeDefinition)
+      const root = new THREE.Group()
+      const building = meshWithNodeMaterial(nodeMaterial())
+      const grass = new THREE.Group()
+      const water = meshWithNodeMaterial(nodeMaterial())
+      root.add(building, grass, water)
+      const nodes: Record<string, AnyNode> = {}
+      for (const [id, type, object] of [
+        ['building_export', 'building', building],
+        ['grass_export', kind, grass],
+        ['water_export', 'test:water', water],
+      ] as const) {
+        sceneRegistry.nodes.set(id, object)
+        nodes[id] = { id, type, visible: true } as unknown as AnyNode
+      }
+
+      const complete = prepareSceneForExport(root, nodes)
+      const selected = prepareSceneForExport(root, nodes, {
+        excludedNodeTypes: [kind],
+        onlyVisible: false,
+      })
+      const stl = new STLExporter()
+      expect(stl.parse(complete.scene, { binary: true }).getUint32(80, true)).toBe(36)
+      expect(stl.parse(selected.scene, { binary: true }).getUint32(80, true)).toBe(24)
+      const obj = new OBJExporter().parse(selected.scene)
+      expect(obj).not.toContain('grass_export')
+      expect(obj).toContain('building_export')
+      expect(obj).toContain('water_export')
+      expect(selected.scene.getObjectByName('grass_export')).toBeUndefined()
+      expect(root.children).toEqual([building, grass, water])
+      expect(grass.visible).toBe(true)
+      expect(nodes.grass_export?.visible).toBe(true)
+      const later = prepareSceneForExport(root, nodes)
+      expect(stl.parse(later.scene, { binary: true }).getUint32(80, true)).toBe(36)
+    } finally {
+      restoreRegistry()
+    }
+  })
+
+  test('excluding a parent skips descendant bake failures and animation tracks', () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    try {
+      registerNode({
+        kind: 'test:unavailable-bake',
+        schemaVersion: 1,
+        schema: DoorNode,
+        category: 'furnish',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        bakeGeometry: () => {
+          throw new Error('Procedural content unavailable')
+        },
+      } as AnyNodeDefinition)
+      const root = new THREE.Group()
+      const excluded = new THREE.Group()
+      const procedural = new THREE.Group()
+      const door = new THREE.Group()
+      const leaf = meshWithNodeMaterial(nodeMaterial())
+      leaf.userData.pascalSwingLeaf = { axis: 'y', openRotationY: Math.PI / 2 }
+      door.add(leaf)
+      excluded.add(procedural, door)
+      root.add(excluded, meshWithNodeMaterial(nodeMaterial()))
+      const nodes: Record<string, AnyNode> = {}
+      for (const [id, type, object, parentId] of [
+        ['procedural_child', 'test:unavailable-bake', procedural, 'excluded_parent'],
+        ['door_child', 'door', door, 'excluded_parent'],
+        ['excluded_parent', 'test:optional-parent', excluded, null],
+      ] as const) {
+        sceneRegistry.nodes.set(id, object)
+        nodes[id] = { id, type, parentId, visible: true } as unknown as AnyNode
+      }
+
+      expect(() => prepareSceneForExport(root, nodes)).toThrow('Procedural content unavailable')
+      const selected = prepareSceneForExport(root, nodes, {
+        excludedNodeTypes: ['test:optional-parent'],
+      })
+      expect(new STLExporter().parse(selected.scene, { binary: true }).getUint32(80, true)).toBe(12)
+      expect(selected.animations).toEqual([])
+      expect(selected.scene.getObjectByName('door_child')).toBeUndefined()
+      expect(excluded.children).toEqual([procedural, door])
+    } finally {
+      restoreRegistry()
+    }
   })
 
   test('shared NodeMaterial instances convert to a single shared material', () => {
@@ -145,7 +334,11 @@ describe('prepareSceneForExport', () => {
     expect(placeholder.flipY).toBe(stamped.flipY)
     expect(placeholder.colorSpace).toBe(stamped.colorSpace)
     expect(placeholder.userData.pascalTextureRef).toEqual(stamped.userData.pascalTextureRef)
-    expect(material.normalMap).toBe(unstamped)
+    expect(material.normalMap).toBeInstanceOf(THREE.DataTexture)
+    expect(Array.from((material.normalMap as THREE.DataTexture).image.data as Uint8Array)).toEqual([
+      128, 128, 255, 255,
+    ])
+    expect(material.normalMap?.userData.pascalTextureRef).toBeUndefined()
     const sharedMaterial = (scene.children[1] as THREE.Mesh).material as THREE.MeshStandardMaterial
     expect(sharedMaterial.map).toBe(placeholder)
   })
@@ -671,4 +864,440 @@ describe('prepareSceneForExport', () => {
       expect(panel!.quaternion.angleTo(new THREE.Quaternion())).toBeLessThan(1e-4)
     }
   })
+
+  test('awaits async bake geometry with full semantic context after selection', async () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    try {
+      const retainedKind = 'test:async-context-bake'
+      let asyncCalls = 0
+      let syncCalls = 0
+      registerNode({
+        kind: retainedKind,
+        schemaVersion: 1,
+        schema: DoorNode,
+        category: 'furnish',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        bake: 'replace',
+        bakeGeometry: () => {
+          syncCalls += 1
+          throw new Error('sync builder must not run when async geometry is available')
+        },
+        bakeGeometryAsync: async (_node, context) => {
+          asyncCalls += 1
+          await Promise.resolve()
+          const obstacle = context.resolve<{ metadata?: { acceptanceWidth?: number } }>(
+            'door_obstacle_async_context',
+          )
+          return new THREE.Mesh(
+            new THREE.BoxGeometry(obstacle?.metadata?.acceptanceWidth ?? 0, 1, 1),
+            new THREE.MeshStandardMaterial(),
+          )
+        },
+      } as AnyNodeDefinition)
+      const root = new THREE.Group()
+      const source = new THREE.Group()
+      const obstacle = new THREE.Group()
+      root.add(source, obstacle)
+      sceneRegistry.nodes.set('async_context_node', source)
+      sceneRegistry.nodes.set('door_obstacle_async_context', obstacle)
+      const nodes = {
+        async_context_node: {
+          id: 'async_context_node',
+          type: retainedKind,
+          visible: true,
+        },
+        door_obstacle_async_context: {
+          id: 'door_obstacle_async_context',
+          type: 'test:excluded-obstacle',
+          visible: true,
+          metadata: { acceptanceWidth: 2 },
+        },
+      } as unknown as Record<string, AnyNode>
+
+      const prepared = await prepareSceneForExportAsync(root, nodes, {
+        excludedNodeTypes: ['test:excluded-obstacle'],
+      })
+      const baked = prepared.scene.children.find((child) => child instanceof THREE.Mesh)
+      expect(asyncCalls).toBe(1)
+      expect(syncCalls).toBe(0)
+      expect(baked).toBeInstanceOf(THREE.Mesh)
+      if (baked instanceof THREE.Mesh) {
+        baked.geometry.computeBoundingBox()
+        expect(baked.geometry.boundingBox?.getSize(new THREE.Vector3()).x).toBeCloseTo(2)
+      }
+      expect(prepared.animations).toEqual([])
+      expect(root.children).toEqual([source, obstacle])
+      prepared.dispose()
+    } finally {
+      restoreRegistry()
+    }
+  })
+
+  test('does not invoke async builders for excluded or invisible nodes', async () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    try {
+      let calls = 0
+      for (const kind of ['test:excluded-async-bake', 'test:hidden-async-bake']) {
+        registerNode({
+          kind,
+          schemaVersion: 1,
+          schema: DoorNode,
+          category: 'furnish',
+          defaults: () => ({}) as never,
+          capabilities: {},
+          bake: 'replace',
+          bakeGeometryAsync: async () => {
+            calls += 1
+            throw new Error('unselected async builder ran')
+          },
+        } as AnyNodeDefinition)
+      }
+      const root = new THREE.Group()
+      const excluded = new THREE.Group()
+      const hidden = new THREE.Group()
+      const retained = meshWithNodeMaterial(nodeMaterial())
+      root.add(excluded, hidden, retained)
+      sceneRegistry.nodes.set('excluded_async_node', excluded)
+      sceneRegistry.nodes.set('hidden_async_node', hidden)
+      const nodes = {
+        excluded_async_node: {
+          id: 'excluded_async_node',
+          type: 'test:excluded-async-bake',
+          visible: true,
+        },
+        hidden_async_node: {
+          id: 'hidden_async_node',
+          type: 'test:hidden-async-bake',
+          visible: false,
+        },
+      } as unknown as Record<string, AnyNode>
+
+      const prepared = await prepareSceneForExportAsync(root, nodes, {
+        excludedNodeTypes: ['test:excluded-async-bake'],
+        onlyVisible: true,
+      })
+      expect(calls).toBe(0)
+      expect(prepared.scene.children).toHaveLength(1)
+      prepared.dispose()
+    } finally {
+      restoreRegistry()
+    }
+  })
+
+  test('disposes only export-owned resources when a later async builder fails', async () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    try {
+      const ownedGeometry = new THREE.BoxGeometry()
+      const ownedMaterial = new THREE.MeshStandardMaterial()
+      const sourceGeometry = new THREE.BoxGeometry()
+      const sourceMaterial = new THREE.MeshStandardMaterial()
+      let ownedGeometryDisposals = 0
+      let ownedMaterialDisposals = 0
+      let sourceGeometryDisposals = 0
+      let sourceMaterialDisposals = 0
+      ownedGeometry.addEventListener('dispose', () => {
+        ownedGeometryDisposals += 1
+      })
+      ownedMaterial.addEventListener('dispose', () => {
+        ownedMaterialDisposals += 1
+      })
+      sourceGeometry.addEventListener('dispose', () => {
+        sourceGeometryDisposals += 1
+      })
+      sourceMaterial.addEventListener('dispose', () => {
+        sourceMaterialDisposals += 1
+      })
+      registerNode({
+        kind: 'test:first-owned-async-bake',
+        schemaVersion: 1,
+        schema: DoorNode,
+        category: 'furnish',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        bake: 'replace',
+        bakeGeometryAsync: async () => new THREE.Mesh(ownedGeometry, ownedMaterial),
+      } as AnyNodeDefinition)
+      registerNode({
+        kind: 'test:later-failing-async-bake',
+        schemaVersion: 1,
+        schema: DoorNode,
+        category: 'furnish',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        bake: 'replace',
+        bakeGeometryAsync: async () => {
+          throw new Error('acceptance injected async failure')
+        },
+      } as AnyNodeDefinition)
+      const root = new THREE.Group()
+      const first = new THREE.Group()
+      const failing = new THREE.Group()
+      const source = new THREE.Mesh(sourceGeometry, sourceMaterial)
+      root.add(first, failing, source)
+      sceneRegistry.nodes.set('first_owned_async_node', first)
+      sceneRegistry.nodes.set('later_failing_async_node', failing)
+      const nodes = {
+        first_owned_async_node: {
+          id: 'first_owned_async_node',
+          type: 'test:first-owned-async-bake',
+          visible: true,
+        },
+        later_failing_async_node: {
+          id: 'later_failing_async_node',
+          type: 'test:later-failing-async-bake',
+          visible: true,
+        },
+      } as unknown as Record<string, AnyNode>
+
+      await expect(prepareSceneForExportAsync(root, nodes)).rejects.toThrow(
+        'acceptance injected async failure',
+      )
+      expect(ownedGeometryDisposals).toBe(1)
+      expect(ownedMaterialDisposals).toBe(1)
+      expect(sourceGeometryDisposals).toBe(0)
+      expect(sourceMaterialDisposals).toBe(0)
+      expect(root.children).toEqual([first, failing, source])
+    } finally {
+      restoreRegistry()
+    }
+  })
+
+  test('includes a registered static presentation only when explicitly selected', async () => {
+    const priorPresentations = viewerPresentationRegistry.getSnapshot()
+    viewerPresentationRegistry.reset()
+    try {
+      const contribution: ViewerPresentationContribution = {
+        id: 'test:static-export-presentation',
+        component: async () => ({ default: () => null }),
+        staticExport: {
+          label: 'Acceptance surroundings',
+          build: async ({ nodes, onlyVisible, excludedNodeTypes }) => {
+            const semantic = nodes.semantic_context_node as
+              | { metadata?: { acceptanceDimensions?: [number, number, number] } }
+              | undefined
+            const dimensions = semantic?.metadata?.acceptanceDimensions ?? [0, 0, 0]
+            return new THREE.Mesh(
+              new THREE.BoxGeometry(
+                dimensions[0],
+                onlyVisible ? 0 : dimensions[1],
+                excludedNodeTypes.includes('test:excluded-context') ? dimensions[2] : 0,
+              ),
+              new THREE.MeshStandardMaterial({ color: '#4a6b3d' }),
+            )
+          },
+        },
+      }
+      viewerPresentationRegistry.register(contribution)
+      const root = new THREE.Group()
+      root.add(meshWithNodeMaterial(nodeMaterial()))
+      const nodes = {
+        semantic_context_node: {
+          id: 'semantic_context_node',
+          type: 'test:semantic-context',
+          visible: true,
+          metadata: { acceptanceDimensions: [3, 1, 2] },
+        },
+      } as unknown as Record<string, AnyNode>
+
+      const defaultArtifact = await prepareSceneForExportAsync(root, nodes, {
+        onlyVisible: false,
+      })
+      expect(
+        defaultArtifact.scene.getObjectByProperty('name', 'test:static-export-presentation'),
+      ).toBeUndefined()
+      defaultArtifact.dispose()
+
+      const selectedArtifact = await prepareSceneForExportAsync(root, nodes, {
+        excludedNodeTypes: ['test:excluded-context'],
+        includedPresentationIds: [contribution.id],
+        onlyVisible: false,
+      })
+      const presentation = selectedArtifact.scene.getObjectByProperty('name', contribution.id)
+      expect(presentation?.userData).toMatchObject({
+        label: 'Acceptance surroundings',
+        pascalPresentationId: contribution.id,
+      })
+      const bounds = new THREE.Box3().setFromObject(presentation!)
+      expect(bounds.getSize(new THREE.Vector3()).toArray()).toEqual([3, 1, 2])
+      selectedArtifact.dispose()
+    } finally {
+      viewerPresentationRegistry.reset()
+      for (const contribution of priorPresentations) {
+        viewerPresentationRegistry.register(contribution)
+      }
+    }
+  })
+
+  test('preserves marked borrowed presentation textures and disposes owned maps', async () => {
+    await withCanvasCapture(async (canvasPixels) => {
+    const priorPresentations = viewerPresentationRegistry.getSnapshot()
+    viewerPresentationRegistry.reset()
+    const borrowed = new THREE.DataTexture(new Uint8Array([20, 40, 60, 255]), 1, 1)
+    const owned = new THREE.DataTexture(new Uint8Array([80, 100, 120, 255]), 1, 1)
+    const borrowedOnFailure = new THREE.DataTexture(new Uint8Array([140, 160, 180, 255]), 1, 1)
+    const ownedOnFailure = new THREE.DataTexture(new Uint8Array([200, 220, 240, 255]), 1, 1)
+    markViewerPresentationTextureBorrowed(borrowed)
+    markViewerPresentationTextureBorrowed(borrowedOnFailure)
+    const disposals = {
+      borrowed: 0,
+      owned: 0,
+      borrowedOnFailure: 0,
+      ownedOnFailure: 0,
+    }
+    for (const [texture, key] of [
+      [borrowed, 'borrowed'],
+      [owned, 'owned'],
+      [borrowedOnFailure, 'borrowedOnFailure'],
+      [ownedOnFailure, 'ownedOnFailure'],
+    ] as const) {
+      texture.addEventListener('dispose', () => {
+        disposals[key] += 1
+      })
+    }
+    const textureContribution = (
+      id: string,
+      texture: THREE.Texture,
+    ): ViewerPresentationContribution => ({
+      id,
+      component: async () => ({ default: () => null }),
+      staticExport: {
+        label: id,
+        build: () =>
+          new THREE.Mesh(
+            new THREE.PlaneGeometry(1, 1),
+            new THREE.MeshStandardMaterial({ map: texture }),
+          ),
+      },
+    })
+    try {
+      viewerPresentationRegistry.register(
+        textureContribution('test:borrowed-presentation-texture', borrowed),
+      )
+      viewerPresentationRegistry.register(
+        textureContribution('test:owned-presentation-texture', owned),
+      )
+      const success = await prepareSceneForExportAsync(
+        new THREE.Group(),
+        {},
+        {
+          includedPresentationIds: [
+            'test:borrowed-presentation-texture',
+            'test:owned-presentation-texture',
+          ],
+        },
+      )
+      const generatedTextures: THREE.Texture[] = []
+      success.scene.traverse((object) => {
+        if (!(object as THREE.Mesh).isMesh) return
+        const mesh = object as THREE.Mesh
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+        for (const material of materials) {
+          const map = (material as THREE.MeshStandardMaterial).map
+          if (map) generatedTextures.push(map)
+        }
+      })
+      expect(generatedTextures).toHaveLength(2)
+      expect(generatedTextures.every(
+        (texture) => (texture as THREE.CanvasTexture).isCanvasTexture,
+      )).toBe(true)
+      expect(generatedTextures.map(canvasPixels).sort()).toEqual([
+        [20, 40, 60, 255],
+        [80, 100, 120, 255],
+      ].sort())
+      let generatedTextureDisposals = 0
+      for (const texture of generatedTextures) {
+        texture.addEventListener('dispose', () => {
+          generatedTextureDisposals += 1
+        })
+      }
+      success.dispose()
+      expect(generatedTextureDisposals).toBe(2)
+      expect(disposals).toMatchObject({ borrowed: 0, owned: 1 })
+      expect(Array.from(borrowed.image.data as Uint8Array)).toEqual([20, 40, 60, 255])
+
+      viewerPresentationRegistry.register(
+        textureContribution('test:borrowed-presentation-texture-failure', borrowedOnFailure),
+      )
+      viewerPresentationRegistry.register(
+        textureContribution('test:owned-presentation-texture-failure', ownedOnFailure),
+      )
+      viewerPresentationRegistry.register({
+        id: 'test:failing-presentation-after-textures',
+        component: async () => ({ default: () => null }),
+        staticExport: {
+          label: 'Injected failure after texture ownership',
+          build: () => {
+            throw new Error('acceptance presentation texture failure')
+          },
+        },
+      })
+      await expect(
+        prepareSceneForExportAsync(
+          new THREE.Group(),
+          {},
+          {
+            includedPresentationIds: [
+              'test:borrowed-presentation-texture-failure',
+              'test:owned-presentation-texture-failure',
+              'test:failing-presentation-after-textures',
+            ],
+          },
+        ),
+      ).rejects.toThrow('acceptance presentation texture failure')
+      expect(disposals).toEqual({
+        borrowed: 0,
+        owned: 1,
+        borrowedOnFailure: 0,
+        ownedOnFailure: 1,
+      })
+      expect(Array.from(borrowedOnFailure.image.data as Uint8Array)).toEqual([140, 160, 180, 255])
+    } finally {
+      viewerPresentationRegistry.reset()
+      for (const contribution of priorPresentations) {
+        viewerPresentationRegistry.register(contribution)
+      }
+    }
+    })
+  })
 })
+
+async function withCanvasCapture(
+  run: (pixels: (texture: THREE.Texture) => number[]) => Promise<void>,
+): Promise<void> {
+  const globals = globalThis as unknown as { document?: Document }
+  const previousDocument = globals.document
+  const pixelsByCanvas = new WeakMap<HTMLCanvasElement, Uint8ClampedArray>()
+  globals.document = {
+    createElement: (tagName: string) => {
+      if (tagName !== 'canvas') throw new Error(`Unexpected element request: ${tagName}`)
+      const canvas = {
+        width: 0,
+        height: 0,
+        getContext: () => ({
+          createImageData: (width: number, height: number) => ({
+            colorSpace: 'srgb',
+            data: new Uint8ClampedArray(width * height * 4),
+            height,
+            width,
+          }) as ImageData,
+          putImageData: (image: ImageData) => {
+            pixelsByCanvas.set(canvas, new Uint8ClampedArray(image.data))
+          },
+        }),
+      } as unknown as HTMLCanvasElement
+      return canvas
+    },
+  } as unknown as Document
+
+  try {
+    await run((texture) => {
+      const pixels = pixelsByCanvas.get(texture.image as HTMLCanvasElement)
+      if (!pixels) throw new Error('Generated canvas texture has no captured pixels')
+      return Array.from(pixels)
+    })
+  } finally {
+    if (previousDocument) globals.document = previousDocument
+    else delete globals.document
+  }
+}

@@ -2,6 +2,7 @@ import type { ZodObject } from 'zod'
 import type {
   AnyNodeDefinition,
   BakePolicy,
+  FloorplanScope,
   InspectorExtension,
   NodeRegistry,
   Plugin,
@@ -225,13 +226,22 @@ export function isRegistrySelectable(kind: string): boolean {
 }
 
 /**
- * Kinds whose `def.floorplanScope` matches the requested scope. Used by
- * `FloorplanRegistryLayer` to discover building-scoped kinds (e.g.
- * elevator) without hardcoding kind names in the editor layer. `'level'`
- * is the default, so `kindsWithFloorplanScope('level')` includes kinds
- * that didn't set the field at all.
+ * Whether the editor should apply its material-based selection highlight to a
+ * kind. Selection highlighting is enabled by default, including for legacy or
+ * unregistered kinds; definitions may explicitly opt out.
  */
-export function kindsWithFloorplanScope(scope: 'level' | 'building'): string[] {
+export function isSelectionHighlightEnabled(kind: string): boolean {
+  return nodeRegistry.get(kind)?.capabilities.selectionHighlight !== false
+}
+
+/**
+ * Kinds whose `def.floorplanScope` matches the requested scope. Used by
+ * `FloorplanRegistryLayer` to discover building- and site-scoped kinds
+ * without hardcoding kind names in the editor layer. `'level'` is the
+ * default, so `kindsWithFloorplanScope('level')` includes kinds that
+ * didn't set the field at all.
+ */
+export function kindsWithFloorplanScope(scope: FloorplanScope): string[] {
   const result: string[] = []
   for (const [kind, def] of nodeRegistry.entries()) {
     const declared = def.floorplanScope ?? 'level'

@@ -11,6 +11,7 @@ import * as THREE from 'three/webgpu'
 import { SHADOW_ONLY_LAYER } from '../../lib/layers'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
+import { useSceneAtmosphere } from './scene-atmosphere'
 
 // Diagnostic toggle: `?disable=shadows` skips the shadow-map render pass
 // (which doubles draw calls for every shadow-casting mesh) so you can
@@ -78,6 +79,11 @@ export function Lights() {
   const sceneTheme = useViewer((state) => state.sceneTheme)
   const theme = getSceneTheme(sceneTheme)
   const shadows = useViewer((state) => state.shadows)
+  const atmosphere = useSceneAtmosphere()
+  const lightSlots = useMemo(
+    () => Array.from({ length: atmosphere ? 2 : theme.lights.length }, (_, index) => index),
+    [atmosphere, theme.lights.length],
+  )
 
   const lightRefs = useRef<Array<DirectionalLight | null>>([])
   const shadowCamera = useRef<OrthographicCamera>(null)
@@ -87,7 +93,7 @@ export function Lights() {
   // Building bounds the shadow frustum is fit to, recomputed on an interval.
   const shadowFocus = useRef(new THREE.Vector3()) // sphere centre
   const shadowRadius = useRef(SHADOW_FALLBACK_RADIUS) // sphere radius
-  const shadowDir = useRef(new THREE.Vector3()) // scratch: per-light direction
+  const shadowDir = useRef(new THREE.Vector3()) // scratch: key-light direction
   const boundsBox = useRef(new THREE.Box3()) // scratch: union AABB
   const boundsSphere = useRef(new THREE.Sphere()) // scratch: fitted sphere
   const lastBoundsTime = useRef(-1) // last refresh timestamp (-1 = never)
@@ -109,32 +115,38 @@ export function Lights() {
   )
 
   useFrame((state, delta) => {
-    // clamp delta to avoid huge jumps on tab switch
+    // Clamp delta to avoid huge jumps on tab switch.
     const dt = Math.min(delta, 0.1) * 4
 
-    // Fit each shadow-casting light's frustum to the BUILDING geometry rather
-    // than the camera. We refresh the union bounds on an interval (cheap enough,
-    // and bounds only change while editing), fit a sphere, and size + place the
-    // ortho shadow camera so the building (plus a margin) is fully covered from
-    // the light's direction. The light DIRECTION stays exactly as the theme
-    // specifies; only its position/distance and the frustum extents change.
+    // Atmosphere directions are stable mutable vectors. Keep both light
+    // resources mounted and move them imperatively so time/angle changes never
+    // rebuild materials or shadow resources.
+    if (atmosphere) {
+      for (let index = 0; index < 2; index++) {
+        const light = lightRefs.current[index]
+        if (!light) continue
+        const direction = index === 0 ? atmosphere.sunDirection : atmosphere.moonDirection
+        light.position.copy(direction).multiplyScalar(100)
+        light.target.position.set(0, 0, 0)
+        light.target.updateMatrixWorld()
+      }
+    }
+
+    // Fit the single key-light shadow frustum to the BUILDING geometry rather
+    // than the camera. The source controls its direction; only its distance and
+    // frustum extents are derived here.
     if (shadows) {
       const now = state.clock.elapsedTime
       if (now - lastBoundsTime.current >= BOUNDS_REFRESH_INTERVAL) {
         lastBoundsTime.current = now
         const box = boundsBox.current.makeEmpty()
         for (const [id, obj] of sceneRegistry.nodes) {
-          if (SHADOW_EXCLUDED_TYPES.some((t) => sceneRegistry.byType[t]!.has(id))) continue
+          if (SHADOW_EXCLUDED_TYPES.some((type) => sceneRegistry.byType[type]!.has(id))) continue
           box.expandByObject(obj)
         }
         box.getBoundingSphere(boundsSphere.current)
         const center = boundsSphere.current.center
         const radius = boundsSphere.current.radius
-        // Empty scene OR a node with a NaN position/geometry poisoning the union
-        // box: fall back to the origin with a default radius. The directional
-        // light's position is derived from `focus`, so a single non-finite mesh
-        // must NOT be allowed to make `focus`/`radius` NaN — that breaks every
-        // shadow-casting light's position and renders the whole scene black.
         const finiteBounds =
           !box.isEmpty() &&
           Number.isFinite(center.x) &&
@@ -150,33 +162,30 @@ export function Lights() {
         }
       }
 
-      const focus = shadowFocus.current
-      // Ortho half-extent: the building sphere plus a proportional margin.
-      const size = shadowRadius.current * SHADOW_MARGIN_SCALE + SHADOW_MARGIN
-      // Park the light just outside the sphere so the near plane stays positive
-      // and the whole building fits between near and far along the light axis.
-      const distance = size + SHADOW_BACKOFF
-      const near = SHADOW_BACKOFF
-      const far = distance + size
-
-      for (let index = 0; index < theme.lights.length; index++) {
-        const config = theme.lights[index]
-        const light = lightRefs.current[index]
-        if (!(config?.castShadow && light)) continue
-        const [ox, oy, oz] = config.position
-        const dir = shadowDir.current.set(ox, oy, oz)
-        if (dir.lengthSq() === 0) dir.set(0, 1, 0)
-        dir.normalize().multiplyScalar(distance)
-        light.position.set(focus.x + dir.x, focus.y + dir.y, focus.z + dir.z)
+      const light = lightRefs.current[0]
+      const themeKey = theme.lights[0]
+      const castsShadow = atmosphere ? true : Boolean(themeKey?.castShadow)
+      if (light && castsShadow) {
+        const focus = shadowFocus.current
+        const size = shadowRadius.current * SHADOW_MARGIN_SCALE + SHADOW_MARGIN
+        const distance = size + SHADOW_BACKOFF
+        const near = SHADOW_BACKOFF
+        const far = distance + size
+        if (atmosphere) {
+          shadowDir.current.copy(atmosphere.sunDirection)
+        } else if (themeKey) {
+          shadowDir.current.set(...themeKey.position)
+        } else {
+          shadowDir.current.set(0, 1, 0)
+        }
+        if (shadowDir.current.lengthSq() === 0) shadowDir.current.set(0, 1, 0)
+        shadowDir.current.normalize().multiplyScalar(distance)
+        light.position.copy(focus).add(shadowDir.current)
         light.target.position.copy(focus)
         light.target.updateMatrixWorld()
 
-        // Resize the ortho frustum to the fitted bounds. The shadow camera is
-        // the <orthographicCamera attach="shadow-camera"> below.
         const cam = light.shadow?.camera as THREE.OrthographicCamera | undefined
         if (cam) {
-          // Shadow-caster-only geometry (hidden roofs/levels in cutaway views)
-          // is visible to the shadow pass alone — see lib/shadow-only.ts.
           cam.layers.enable(SHADOW_ONLY_LAYER)
           cam.left = -size
           cam.right = size
@@ -186,10 +195,10 @@ export function Lights() {
           cam.far = far
           cam.updateProjectionMatrix()
           if (SHADOW_CAMERA_DEBUG) {
-            let helper = shadowHelpers.current[index]
+            let helper = shadowHelpers.current[0]
             if (!helper) {
               helper = new THREE.CameraHelper(cam)
-              shadowHelpers.current[index] = helper
+              shadowHelpers.current[0] = helper
               state.scene.add(helper)
             }
             helper.update()
@@ -198,119 +207,132 @@ export function Lights() {
       }
     }
 
-    if (!initialized.current) {
-      for (let index = 0; index < theme.lights.length; index++) {
-        const config = theme.lights[index]
-        const light = lightRefs.current[index]
-        if (!(config && light)) continue
-        light.intensity = config.intensity
-        light.color.set(config.color)
-
-        if (config.castShadow && light.shadow) {
-          light.shadow.intensity = config.intensity <= 1 ? config.intensity : MAX_SHADOW_INTENSITY
-        }
-      }
-      if (hemiRef.current && theme.hemi) {
-        hemiRef.current.intensity = theme.hemi.intensity
-        hemiRef.current.color.set(theme.hemi.sky)
-        hemiRef.current.groundColor.set(theme.hemi.ground)
-      }
-      if (ambientRef.current) {
-        ambientRef.current.intensity = theme.ambient.intensity
-        ambientRef.current.color.set(theme.ambient.color)
-      }
-      initialized.current = true
-      return
-    }
-
-    for (let index = 0; index < theme.lights.length; index++) {
-      const config = theme.lights[index]
+    for (const index of lightSlots) {
       const light = lightRefs.current[index]
-      if (!(config && light)) continue
+      if (!light) continue
+      const config = theme.lights[index]
+      const intensity = atmosphere
+        ? index === 0
+          ? atmosphere.sunIntensity
+          : atmosphere.moonIntensity
+        : (config?.intensity ?? 0)
+      const color = atmosphere
+        ? index === 0
+          ? atmosphere.sunColor
+          : atmosphere.moonColor
+        : config?.color
 
-      light.intensity = THREE.MathUtils.lerp(light.intensity, config.intensity, dt)
-      let target = lightTargets.current[index]
-      if (!target) {
-        target = new THREE.Color()
-        lightTargets.current[index] = target
-      }
-      target.set(config.color)
-      light.color.lerp(target, dt)
-
-      if (config.castShadow && light.shadow) {
-        if (light.shadow.intensity !== undefined) {
-          light.shadow.intensity = THREE.MathUtils.lerp(
-            light.shadow.intensity,
-            config.intensity <= 1 ? config.intensity : MAX_SHADOW_INTENSITY,
-            dt,
-          )
+      if (atmosphere || !initialized.current) {
+        light.intensity = intensity
+        if (color) light.color.set(color)
+      } else {
+        light.intensity = THREE.MathUtils.lerp(light.intensity, intensity, dt)
+        let target = lightTargets.current[index]
+        if (!target) {
+          target = new THREE.Color()
+          lightTargets.current[index] = target
         }
+        if (color) target.set(color)
+        light.color.lerp(target, dt)
+      }
+
+      if (index === 0 && light.shadow?.intensity !== undefined) {
+        const shadowIntensity = intensity <= 1 ? intensity : MAX_SHADOW_INTENSITY
+        light.shadow.intensity =
+          atmosphere || !initialized.current
+            ? shadowIntensity
+            : THREE.MathUtils.lerp(light.shadow.intensity, shadowIntensity, dt)
       }
     }
 
-    if (hemiRef.current && theme.hemi) {
-      hemiRef.current.intensity = THREE.MathUtils.lerp(
-        hemiRef.current.intensity,
-        theme.hemi.intensity,
-        dt,
-      )
-      targets.hemiSky.set(theme.hemi.sky)
-      hemiRef.current.color.lerp(targets.hemiSky, dt)
-      targets.hemiGround.set(theme.hemi.ground)
-      hemiRef.current.groundColor.lerp(targets.hemiGround, dt)
+    const hemiIntensity = atmosphere ? atmosphere.hemisphereIntensity : theme.hemi?.intensity
+    const hemiSky = atmosphere ? atmosphere.skyColor : theme.hemi?.sky
+    const hemiGround = atmosphere ? atmosphere.groundColor : theme.hemi?.ground
+    if (hemiRef.current && hemiIntensity !== undefined && hemiSky && hemiGround) {
+      if (atmosphere || !initialized.current) {
+        hemiRef.current.intensity = hemiIntensity
+        hemiRef.current.color.set(hemiSky)
+        hemiRef.current.groundColor.set(hemiGround)
+      } else {
+        hemiRef.current.intensity = THREE.MathUtils.lerp(
+          hemiRef.current.intensity,
+          hemiIntensity,
+          dt,
+        )
+        targets.hemiSky.set(hemiSky)
+        hemiRef.current.color.lerp(targets.hemiSky, dt)
+        targets.hemiGround.set(hemiGround)
+        hemiRef.current.groundColor.lerp(targets.hemiGround, dt)
+      }
     }
 
     if (ambientRef.current) {
-      ambientRef.current.intensity = THREE.MathUtils.lerp(
-        ambientRef.current.intensity,
-        theme.ambient.intensity,
-        dt,
-      )
-      targets.ambColor.set(theme.ambient.color)
-      ambientRef.current.color.lerp(targets.ambColor, dt)
+      const ambientIntensity = atmosphere ? atmosphere.ambientIntensity : theme.ambient.intensity
+      const ambientColor = atmosphere ? '#ffffff' : theme.ambient.color
+      if (atmosphere || !initialized.current) {
+        ambientRef.current.intensity = ambientIntensity
+        ambientRef.current.color.set(ambientColor)
+      } else {
+        ambientRef.current.intensity = THREE.MathUtils.lerp(
+          ambientRef.current.intensity,
+          ambientIntensity,
+          dt,
+        )
+        targets.ambColor.set(ambientColor)
+        ambientRef.current.color.lerp(targets.ambColor, dt)
+      }
     }
-  })
+
+    initialized.current = true
+  }, -1)
+
+  const keyCastsShadow =
+    !SHADOWS_DISABLED && (atmosphere ? true : Boolean(theme.lights[0]?.castShadow))
 
   return (
     <>
-      {theme.lights.map((light, index) => (
-        // The user-facing shadows toggle must NOT flip `castShadow` at runtime:
-        // three r184's WebGPU node cache keys builder state by castShadow, but
-        // evicts with the post-toggle key, so flipping off disposes the shadow
-        // map's GPU texture while the shadows-on cache entry (still referencing
-        // it) survives. Re-enabling then reuses that stale state and every
-        // submit fails ("Invalid CommandBuffer ... renderContext_N"). The
-        // toggle is applied via `renderer.shadowMap.enabled` (Canvas `shadows`
-        // prop in viewer/index.tsx), which round-trips without disposing.
-        <directionalLight
-          castShadow={Boolean(light.castShadow) && !SHADOWS_DISABLED}
-          key={`${index}-${light.position.join(',')}`}
-          position={light.position}
-          ref={(ref) => {
-            lightRefs.current[index] = ref
-          }}
-          shadow-bias={SHADOW_DEPTH_BIAS}
-          shadow-mapSize={[1024, 1024]}
-          shadow-normalBias={SHADOW_NORMAL_BIAS}
-          shadow-radius={2}
-        >
-          {light.castShadow && !SHADOWS_DISABLED ? (
-            <orthographicCamera
-              attach="shadow-camera"
-              bottom={-shadowCameraSize}
-              far={400}
-              left={-shadowCameraSize}
-              near={1}
-              ref={shadowCamera}
-              right={shadowCameraSize}
-              top={shadowCameraSize}
-            />
-          ) : null}
-        </directionalLight>
-      ))}
+      {lightSlots.map((index) => {
+        const themeLight = theme.lights[index]
+        const direction =
+          atmosphere && index === 0
+            ? atmosphere.sunDirection
+            : atmosphere && index === 1
+              ? atmosphere.moonDirection
+              : null
+        return (
+          <directionalLight
+            castShadow={index === 0 && keyCastsShadow}
+            key={index}
+            position={
+              direction
+                ? [direction.x * 100, direction.y * 100, direction.z * 100]
+                : (themeLight?.position ?? [0, 1, 0])
+            }
+            ref={(light) => {
+              lightRefs.current[index] = light
+            }}
+            shadow-bias={SHADOW_DEPTH_BIAS}
+            shadow-mapSize={[1024, 1024]}
+            shadow-normalBias={SHADOW_NORMAL_BIAS}
+            shadow-radius={2}
+          >
+            {index === 0 && keyCastsShadow ? (
+              <orthographicCamera
+                attach="shadow-camera"
+                bottom={-shadowCameraSize}
+                far={400}
+                left={-shadowCameraSize}
+                near={1}
+                ref={shadowCamera}
+                right={shadowCameraSize}
+                top={shadowCameraSize}
+              />
+            ) : null}
+          </directionalLight>
+        )
+      })}
 
-      {theme.hemi ? <hemisphereLight ref={hemiRef} /> : null}
-
+      {atmosphere || theme.hemi ? <hemisphereLight ref={hemiRef} /> : null}
       <ambientLight ref={ambientRef} />
     </>
   )

@@ -436,7 +436,14 @@ export {
   commitFreshPlacementSubtree,
   createFreshPlacementSubtree,
 } from './lib/fresh-planar-placement'
-export { exportSceneToGlb } from './lib/glb-export'
+export { exportSceneToGlb, type GlbExportOptions } from './lib/glb-export'
+export type {
+  ModelExport,
+  ModelExportArtifact,
+  ModelExportFormat,
+  ModelExportOptions,
+} from './lib/model-export'
+export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'
 export {
   getHistoryCommandState,
   type HistoryCommandDelegate,
