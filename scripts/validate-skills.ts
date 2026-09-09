@@ -4,6 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
 import { validateClaudeMcpPolicy } from './claude-mcp-config-policy'
 import { validateClawHubIgnorePolicy } from './clawhub-ignore-policy'
+import {
+  collectSkillDiscoveryEntries,
+  validatePublicSkillDiscoverySurface,
+} from './public-skill-discovery-policy'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const skillNames = ['pascal-3d', 'furniture-fit'] as const
@@ -195,6 +199,12 @@ function walk(path: string): string[] {
     }
   }
   return files
+}
+
+for (const discoveryFailure of validatePublicSkillDiscoverySurface(
+  collectSkillDiscoveryEntries(root),
+)) {
+  fail(discoveryFailure)
 }
 
 for (const entry of readdirSync(join(root, 'skills'), { withFileTypes: true })) {
