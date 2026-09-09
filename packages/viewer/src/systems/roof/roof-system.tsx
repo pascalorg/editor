@@ -1380,15 +1380,14 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     const dV = Math.max(0.01, depth + 2 * wExt)
 
     const autoDrop = wExt * tanTheta
-    const whV = Math.max(0.01, wallHeight - autoDrop + vOffset)
+    // Raise the top for CSG safety; sinking the base overlaps the supporting wall.
+    const whV = Math.max(baseY + 0.05, wallHeight - autoDrop + vOffset)
 
     let rhV = activeRh
     if (activeRh > 0) {
       rhV = activeRh + autoDrop
       if (roofType === 'shed') rhV = activeRh + 2 * autoDrop
     }
-
-    const safeBaseY = Math.min(baseY, whV - 0.05)
 
     let structuralI = baseI
     if (isVoid) {
@@ -1401,7 +1400,7 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
       d: dV,
       wh: whV,
       rh: rhV,
-      baseY: safeBaseY,
+      baseY,
       insets: { dutchI: structuralI },
       baseW: width,
       baseD: depth,
@@ -3589,7 +3588,7 @@ function createShedInsetEndPanelGeometry(node: RoofSegmentNode): THREE.BufferGeo
   })
   const wallOuterOffset = node.wallThickness / 2
   const autoDrop = wallOuterOffset * tanTheta
-  const wh = Math.max(0.01, node.wallHeight - autoDrop)
+  const wh = Math.max(0.05, node.wallHeight - autoDrop)
   const rh = activeRh > 0 ? activeRh + 2 * autoDrop : activeRh
 
   const faces = getRoofModuleFaces({
