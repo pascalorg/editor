@@ -5,7 +5,7 @@
  * this and instances the result.
  */
 
-import { decodeTerrainField, heightAt, type TerrainField } from '@pascal-app/core'
+import { type ConventionSite, decodeTerrainField, exteriorWallConvention, heightAt, type TerrainField } from '@pascal-app/core'
 import { DEFAULT_SPEC, type FramingSpec } from '../core/spec'
 import { stableFixtures, stableMembers } from '../core/stable'
 import type {
@@ -152,10 +152,42 @@ export type ResolvedWallConstruction = { construction: WallConstruction } & Omit
 export function exteriorWallDefaultOf(
   config: Pick<FramingNode, 'exteriorWalls'>,
   profile: Pick<JurisdictionProfile, 'exteriorWallDefault'>,
+  context: { site?: ConventionSite | null; isGroundLevel?: boolean } = {},
 ): 'framed' | 'cmu' {
-  return config.exteriorWalls === 'framed' || config.exteriorWalls === 'cmu'
-    ? config.exteriorWalls
-    : profile.exteriorWallDefault
+  if (config.exteriorWalls === 'framed' || config.exteriorWalls === 'cmu') return config.exteriorWalls
+  // an upper storey frames in wood even over a block ground storey (the
+  // Florida two-storey: block below, frame above)
+  if (context.isGroundLevel === false) return 'framed'
+  // the REGIONAL convention when the site says where it is (block through
+  // peninsular Florida, wood frame in the north and the Panhandle — not the
+  // whole state); the state row when it does not
+  const site = context.site
+  if (site && (site.county || typeof site.lat === 'number')) return exteriorWallConvention(site).system
+  return profile.exteriorWallDefault
+}
+
+/** The site's state / county / latitude for the regional convention, or null without a site. */
+export function siteConventionOf(nodes: Record<string, unknown>): ConventionSite | null {
+  for (const node of Object.values(nodes)) {
+    const n = node as {
+      type?: unknown
+      address?: { state?: unknown }
+      parcel?: { state?: unknown; county?: unknown; originLngLat?: unknown }
+      dossier?: { point?: { lat?: unknown } }
+    }
+    if (n?.type !== 'site') continue
+    const state = typeof n.address?.state === 'string' ? n.address.state : typeof n.parcel?.state === 'string' ? n.parcel.state : null
+    const county = typeof n.parcel?.county === 'string' ? n.parcel.county : null
+    const origin = n.parcel?.originLngLat
+    const lat =
+      Array.isArray(origin) && typeof origin[1] === 'number'
+        ? origin[1]
+        : typeof n.dossier?.point?.lat === 'number'
+          ? n.dossier.point.lat
+          : null
+    return { state, county, lat }
+  }
+  return null
 }
 
 /** Construction resolution for one wall: override → jurisdiction default →
@@ -183,6 +215,14 @@ export function resolveWallConstruction(
       ...(override.cladding !== undefined ? { cladding: override.cladding } : {}),
     }
   }
+  // The wall's OWN assembly (core WS5 — the node's single source of truth,
+  // the generator writes it from the site's regional convention) says what
+  // it is: block frames as block, a declared wood stack frames as wood even
+  // where the state's convention is block (Steve, 2026-09-09: "the 2d and
+  // 3d presentation need to be correctly shown ... consistent").
+  if (wall.framingKind === 'cmu') return { construction: 'cmu' }
+  if (wall.framingKind === 'lgs') return { construction: 'lgs' }
+  if (wall.framingKind === 'wood') return { construction: 'framed' }
   if (wall.exterior && exteriorDefault === 'cmu') return { construction: 'cmu' }
   if (config.framingSystem === 'lgs') return { construction: 'lgs' }
   return { construction: 'framed' }
@@ -602,7 +642,26 @@ function computeLevelUncached(
   const { profile: stateProfile, note: siteDesignNote } = applySiteCodeBasis(profileFor(code), siteCodeBasisOf(nodes))
   // the level's Exterior walls control (Framed | CMU) over the state's
   // convention (FL → CMU): 'auto'/absent keeps the jurisdiction's default
-  const profile = { ...stateProfile, exteriorWallDefault: exteriorWallDefaultOf(config, stateProfile) }
+  const siteConvention = siteConventionOf(nodes)
+  const storeys = extractLevels(nodes)
+  const myBuildingId = storeys.find((l) => l.id === levelId)?.buildingId ?? null
+  const groundStorey = storeys.filter((l) => l.buildingId === myBuildingId).findIndex((l) => l.id === levelId) <= 0
+  const profile = {
+    ...stateProfile,
+    exteriorWallDefault: exteriorWallDefaultOf(config, stateProfile, { site: siteConvention, isGroundLevel: groundStorey }),
+  }
+  // say where the block (or the frame) came from — the convention is a
+  // convention, and the panel's control or the walls' own assemblies beat it
+  if (code === 'FL' && config.exteriorWalls !== 'framed' && config.exteriorWalls !== 'cmu') {
+    const convention = siteConvention && (siteConvention.county || typeof siteConvention.lat === 'number') ? exteriorWallConvention(siteConvention) : null
+    warnings.push(
+      !groundStorey
+        ? 'Exterior walls default: wood frame — an upper storey frames in wood over the block ground storey (Florida practice; walls with their own assembly frame as declared)'
+        : convention
+          ? `Exterior walls default: ${convention.system === 'cmu' ? 'concrete block' : 'wood frame'} — ${convention.basis} (walls with their own assembly frame as declared; the Exterior walls control overrides)`
+          : 'Exterior walls default: concrete block — the Florida state row; no county / location on the site to read the regional norm (walls with their own assembly frame as declared; the Exterior walls control overrides)',
+    )
+  }
   const siteUtilities = siteUtilitiesOf(nodes)
   let spec: FramingSpec = {
     ...DEFAULT_SPEC,

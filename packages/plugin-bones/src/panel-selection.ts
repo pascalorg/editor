@@ -17,7 +17,7 @@ import {
   type ComputeResult,
   dedupeColinearWalls,
   probeSlabsFor,
-  resolveWallConstruction, exteriorWallDefaultOf } from './framing/compute'
+  resolveWallConstruction, exteriorWallDefaultOf, siteConventionOf } from './framing/compute'
 import {
   isResolvedProfile,
   lgsLabelHead,
@@ -174,7 +174,10 @@ export function selectedWallInfo(
   const resolved = resolveWallConstruction(
     wall,
     framingNode,
-    exteriorWallDefaultOf(framingNode, profileFor(result.jurisdiction)),
+    exteriorWallDefaultOf(framingNode, profileFor(result.jurisdiction), {
+      site: siteConventionOf(nodes),
+      isGroundLevel: groundStoreyOf(nodes, levelId),
+    }),
   )
   const construction = resolved.construction
 
@@ -473,4 +476,15 @@ export function cmuHeightWrite(
     // nothing else is stored); partial: the course-snapped value.
     cmuHeightM: typeof write === 'string' ? undefined : write.cmuHeightM,
   })
+}
+
+/** True for the building's lowest storey (the level order the scene keeps). */
+function groundStoreyOf(nodes: Record<string, unknown>, levelId: string): boolean {
+  const level = nodes[levelId] as { parentId?: unknown } | undefined
+  const building = typeof level?.parentId === 'string' ? level.parentId : null
+  const siblings = Object.values(nodes)
+    .filter((n) => (n as { type?: unknown; parentId?: unknown }).type === 'level' && (n as { parentId?: unknown }).parentId === building)
+    .map((n) => (n as { id: string; position?: number[] }))
+    .sort((a, b) => (a.position?.[1] ?? 0) - (b.position?.[1] ?? 0))
+  return siblings.length === 0 || siblings[0]?.id === levelId
 }

@@ -1,3 +1,4 @@
+import { type ConventionSite, exteriorWallConvention } from '@pascal-app/core'
 /**
  * The roller — a seeded L1/L2 document from options, in the spirit of
  * PlanCrafters' `design1story` (gen.js): a bedroom cluster on the left with
@@ -20,6 +21,7 @@
 import type { PlanDocument, PlanEdge } from './document'
 import { GABLE_ORNAMENTS_BY_STYLE } from './ornament'
 import { mulberry32, pick, type Rng } from './rng'
+import { stuccoSidingFor } from './finishes'
 import { STYLE_KEYS, styleFor } from './styles'
 
 /**
@@ -108,6 +110,13 @@ export const SERVICE_CHOICES: { key: keyof ServiceChoices; label: string; values
 
 export type RollOptions = {
   style?: string
+  /**
+   * Where the house is (state / county / latitude) — the exterior wall
+   * system follows the regional convention (Steve, 2026-09-09: "the florida
+   * houses to show block in mandated areas not the whole state"). Absent =
+   * wood frame.
+   */
+  site?: ConventionSite
   beds?: 2 | 3 | 4
   baths?: 1 | 2 | 3
   garage?: boolean
@@ -428,7 +437,11 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
     style.roofForm === 'gable' && rng() < (hipChance[style.key] ?? 0) ? 'hip' : style.roofForm
   const gables: PlanEdge[] = roofForm === 'gable' ? (D > W ? ['front', 'back'] : ['left', 'right']) : []
   const ornaments = GABLE_ORNAMENTS_BY_STYLE[style.key] ?? ['none']
-  const stucco = style.exteriorAssembly === 'exterior-2x6-stucco'
+  // the exterior wall system: the site's regional convention (block through
+  // peninsular Florida, wood frame elsewhere); a block house is stucco
+  const convention = exteriorWallConvention(options.site ?? {})
+  const wallSystem = convention.system
+  const stucco = wallSystem === 'cmu' || style.exteriorAssembly === 'exterior-2x6-stucco'
   const gableOrnament = roofForm === 'gable' ? (stucco ? 'vent' : pick(rng, ornaments)) : 'none'
   const shutterStyles = new Set(['craftsman', 'farmhouse', 'cottage'])
   const shutters = shutterStyles.has(style.key) && rng() < (style.key === 'craftsman' ? 0.7 : 0.4)
@@ -449,7 +462,13 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
     rooms,
     attach,
     frontDoor: 'FOYER',
-    finishes: { siding: style.siding, roofMat: style.roofMat, palette: Math.floor(rng() * 8) },
+    finishes: {
+      siding: wallSystem === 'cmu' ? stuccoSidingFor(style.siding) : style.siding,
+      roofMat: style.roofMat,
+      palette: Math.floor(rng() * 8),
+    },
+    wallSystem,
+    wallSystemBasis: convention.basis,
   }
   return {
     seed,

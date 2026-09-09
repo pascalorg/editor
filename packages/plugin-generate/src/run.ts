@@ -4,7 +4,7 @@
  * the parcel, select its level. The heavy lifting is pure (`roll.ts`,
  * `build.ts`); this file is the only one that touches the stores.
  */
-import { commitTerrainField, heightAt, type SiteNode, terrainFieldOf, useScene } from '@pascal-app/core'
+import { commitTerrainField, heightAt, type SiteNode, terrainFieldOf, useScene, type ConventionSite } from '@pascal-app/core'
 import { fillPad } from './grading'
 import { buildSitePlanDrawing, CATALOG_ITEMS } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
@@ -216,6 +216,27 @@ function applyDocument(
   return summary
 }
 
+/**
+ * Where the scene's site is — state, county, latitude — for the roll's
+ * regional wall-system convention. Null without a site.
+ */
+export function siteConventionOptions(): ConventionSite | null {
+  const s = useScene.getState()
+  const site = Object.values(s.nodes).find((n) => (n as { type?: string }).type === 'site') as
+    | {
+        address?: { state?: string }
+        parcel?: { state?: string; county?: string; originLngLat?: [number, number] }
+        dossier?: { point?: { lat?: number } }
+      }
+    | undefined
+  if (!site) return null
+  const state = site.address?.state ?? site.parcel?.state ?? null
+  const county = site.parcel?.county ?? null
+  const lat = site.parcel?.originLngLat?.[1] ?? site.dossier?.point?.lat ?? null
+  if (!state && !county && lat === null) return null
+  return { state, county, lat }
+}
+
 /** Roll a house from the panel's seed and options and put it in the scene. */
 export function generateHouse(overrides: RollOptions = {}): RunSummary {
   const S = useGenerate.getState()
@@ -235,7 +256,9 @@ export function generateHouse(overrides: RollOptions = {}): RunSummary {
   S.setRunning(true)
   try {
     const { placement, edges } = placementFromScene()
+    const siteOptions = siteConventionOptions()
     const optionsFor = (edge: EdgeFit | undefined): RollOptions => ({
+      ...(siteOptions ? { site: siteOptions } : {}),
       ...S.options,
       ...overrides,
       ...(edge && edge.frontageFt > 0 ? { maxWidthFt: Math.floor(edge.frontageFt) } : {}),
@@ -263,7 +286,10 @@ export function generateHouse(overrides: RollOptions = {}): RunSummary {
       { seed: rolled.seed, template: null, options: rolled.options },
       placed,
     )
-    summary.warnings = [...rolled.warnings, ...summary.warnings]
+    // the wall system the roll chose, and why — the first line of the summary
+    // (Steve, 2026-09-09: "can you confirm we are speccing the right house")
+    const wallLine = `Exterior walls: ${rolled.document.wallSystem === 'cmu' ? '8 in concrete block, stucco outside, furring + drywall inside' : '2x6 wood frame'} (${rolled.document.wallSystemBasis ?? 'wood frame assumed'}).`
+    summary.warnings = [wallLine, ...rolled.warnings, ...summary.warnings]
     useGenerate.getState().setLast(summary)
     return summary
   } finally {

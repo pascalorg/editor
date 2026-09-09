@@ -1030,7 +1030,69 @@ and never set where they do not fit.
 G95 Door and window marks are on in the clean plan and bold enough to
 read at a glance.
 
+## Mandate additions (Steve, 2026-09-09 — the right house: block where block is the norm)
+
+Steve: "can you confirm we are speccing the right house, also the
+exterior material is correct, because i see like siding and normal stuff
+is that normal for cmu? i want the florida houses to show brick in
+mandated areas not the whole state ya know, and work correctly any way we
+can fix bones to work correctly?" — with the sourced note that South
+Florida (Miami-Dade, Broward, Palm Beach) favours or mandates block,
+Central and North Florida and the Panhandle build wood frame, and second
+storeys frame in wood. Then, mid-batch: "if its using block walls then
+the 2d and 3d presentation need to be correctly shown not like a fake 3d
+view, its almost like our generator needs to go into bones or something
+... im concerned we are splitting things, but im fine if its fixable and
+consistent".
+
+G96 The wall's assembly on the node is the one truth of what the wall is.
+The generator writes it from the site's regional convention; the 2D, the
+3D skin, the elevations and Bones all read it; Bones never re-decides a
+wall that declares itself.
+G97 Florida's block is regional, not statewide: block in the HVHZ and the
+peninsular block belt (by county, else south of the Ocala–Daytona line),
+wood frame in North Florida and the Panhandle, wood frame above a block
+ground storey — and every default says it is a convention, not a code
+mandate, and where it came from.
+G98 A block house is stucco, not siding.
+
 ## Log (continued)
+
+- 2026-09-09: **Batch T15 — the wall system from the site; the assembly is
+  the truth (G96–G98).** Steve was right on both counts: the generator
+  wrote a 2x6 siding assembly on every exterior wall while Bones drew the
+  same walls as block from the state row, and siding over CMU is not a
+  thing. New in core: `lib/regional-construction.ts`
+  `exteriorWallConvention({state, county, lat})` — the FBC HVHZ
+  (Miami-Dade, Broward), the peninsular block-belt counties, the 29.6°N
+  line for counties it does not list, wood frame in the north, the
+  Panhandle and outside Florida, wood frame with a "place unknown" basis
+  when the site has no county or location; every answer carries its
+  one-line basis and says convention, not mandate. New core preset
+  `exterior-cmu-stucco` (3-coat stucco on 8 in CMU, furring + drywall
+  inside). Generator: `RollOptions.site` (run.ts `siteConventionOptions`
+  reads the site's state, parcel county and origin latitude), the roll
+  decides `document.wallSystem` + `wallSystemBasis`, `finishesFor(style,
+  palette, wallSystem)` and `stuccoSidingFor` map the palette's lap /
+  batten to the nearest stucco tone, build.ts writes the block preset on
+  the exterior walls (the gable takes the vent), the run summary's first
+  line is "Exterior walls: … (basis)". Bones: `resolveWallConstruction`
+  honours the wall's own `framingKind` (cmu / lgs / wood) before the
+  jurisdiction default; `exteriorWallDefaultOf(config, profile, {site,
+  isGroundLevel})` uses the regional convention when the site knows its
+  county or latitude, wood frame on an upper storey, the state row only
+  when the place is unknown; a level warning states the default and its
+  basis; panel-selection resolves the same way (`groundStoreyOf`).
+  Tests: core 6 (the convention), generate 107 (Lee → block + stucco,
+  Leon → frame, no site → frame; the block build writes the preset on
+  every exterior wall), Bones 2163 (assembly beats the row; the regional
+  default; master baseline unchanged), sheets 258; core / generate /
+  Bones / editor / sheets tsc clean (generate's furnish/porch test errors
+  pre-exist). Open: the block-belt county list and the 29.6°N line are
+  conventions I chose from the trade sources, not a published map —
+  verify per county; two-storey generation is not rolled yet, so the
+  block-below / frame-above rule is exercised only through Bones'
+  per-level default; the 2D wall hatch does not yet distinguish masonry.
 
 - 2026-09-08: **Batch T14 — the 2D plan after a generate (G93–G95).**
   Three causes. (1) The roof: the level's `roof` node draws through

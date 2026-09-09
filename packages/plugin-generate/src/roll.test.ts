@@ -1,8 +1,22 @@
 import { describe, expect, test } from 'bun:test'
+
 import { buildHouse } from './build'
 import { validateDocument } from './document'
 import { rollDocument } from './roll'
 import { STYLE_KEYS } from './styles'
+
+describe('the exterior wall system follows the site (2026-09-09)', () => {
+  test('a Lee County, FL site rolls a block + stucco house; a Leon County one a wood-frame house; no site, wood frame', () => {
+    const lee = rollDocument(7, { style: 'craftsman', site: { state: 'FL', county: 'Lee', lat: 26.6 } })
+    expect(lee.document.wallSystem).toBe('cmu')
+    expect(lee.document.finishes?.siding).toMatch(/^stucco_/)
+    expect(lee.document.wallSystemBasis).toMatch(/Lee County/)
+    const leon = rollDocument(7, { style: 'craftsman', site: { state: 'FL', county: 'Leon', lat: 30.44 } })
+    expect(leon.document.wallSystem).toBe('framed')
+    expect(leon.document.finishes?.siding).not.toMatch(/^stucco_/)
+    expect(rollDocument(7, { style: 'craftsman' }).document.wallSystem).toBe('framed')
+  })
+})
 
 describe('the roller on a narrow frontage', () => {
   test('a rolled garage gives way before the plan crosses a side setback; a requested one stays and warns', () => {

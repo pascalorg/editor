@@ -84,6 +84,10 @@ export type PlanDocument = {
     dormers?: number
   }
   finishes?: { siding?: string; roofMat?: string; palette?: number }
+  /** The exterior wall system (core exteriorWallConvention): 'cmu' = block + stucco, absent / 'framed' = the style's 2x6 stack. */
+  wallSystem?: 'cmu' | 'framed'
+  /** Why — the convention's one line. */
+  wallSystemBasis?: string
 }
 
 /** Inches, integers on the 6" grid, canonical names and kinds. */
@@ -112,6 +116,15 @@ export type NormalizedDocument = {
   edges: { a: string; b: string; kind: AttachKind }[]
   frontDoorRoom: string | null
   finishes: { siding: string | null; roofMat: string | null; palette: number | null }
+  /**
+   * The exterior wall system the roll chose from the site's regional
+   * convention (core exteriorWallConvention): 'cmu' writes the block +
+   * stucco assembly on every exterior wall, 'framed' the style's 2x6 stack.
+   * Absent = framed (a document rolled before 2026-09-09).
+   */
+  wallSystem?: 'cmu' | 'framed'
+  /** Why — the convention's one line, for the summary and the sheets. */
+  wallSystemBasis?: string
   trim: {
     gable: 'none' | 'king-post' | 'fan' | 'vent' | null
     shutters: boolean
@@ -183,6 +196,8 @@ export function normalizeDocument(input: PlanDocument): NormalizedDocument {
     rooms,
     edges,
     frontDoorRoom: input.frontDoor ? String(input.frontDoor).trim().toUpperCase() : null,
+    wallSystem: input.wallSystem === 'cmu' ? 'cmu' : 'framed',
+    ...(input.wallSystemBasis ? { wallSystemBasis: input.wallSystemBasis } : {}),
     trim: {
       gable: input.trim?.gable ?? null,
       shutters: input.trim?.shutters === true,

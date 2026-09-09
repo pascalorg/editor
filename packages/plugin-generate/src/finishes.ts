@@ -525,6 +525,22 @@ export function nearestColourPreset(hex: string): string {
 
 const ref = (id: string) => `library:${id}`
 
+/**
+ * The stucco colour a block house takes in place of a palette's siding: a
+ * stucco id stays; lap / board-and-batten maps to the nearest stucco tone
+ * (the Florida block house is stucco — Steve, 2026-09-09: "i see like siding
+ * and normal stuff, is that normal for cmu?").
+ */
+export function stuccoSidingFor(sidingId: string | null | undefined): string {
+  const id = sidingId ?? ''
+  if (SIDINGS[id]?.kind === 'stucco') return id
+  if (/white|cream/.test(id)) return 'stucco_white'
+  if (/sage|olive|forest/.test(id)) return 'stucco_sage'
+  if (/gray|grey|charcoal|black|navy/.test(id)) return 'stucco_gray'
+  if (/clay|adobe/.test(id)) return 'stucco_adobe'
+  return 'stucco_sand'
+}
+
 /** Pick the palette for a style: an index (wraps) or 0. */
 export function pickPalette(
   style: string,
@@ -537,10 +553,16 @@ export function pickPalette(
 }
 
 /** The finishes for a style and a palette index — one coordinated unit. */
-export function finishesFor(style: StylePreset, paletteIndex: number | null | undefined): Finishes {
+export function finishesFor(
+  style: StylePreset,
+  paletteIndex: number | null | undefined,
+  wallSystem: 'cmu' | 'framed' = 'framed',
+): Finishes {
   const { palette, index } = pickPalette(style.key, paletteIndex)
+  // a block house is stucco whatever the palette's siding says
+  const sidingId = wallSystem === 'cmu' ? stuccoSidingFor(palette.siding) : palette.siding
   const siding =
-    SIDINGS[palette.siding] ??
+    SIDINGS[sidingId] ??
     SIDINGS[style.siding] ??
     (SIDINGS.lap_white as (typeof SIDINGS)[string])
   const roof = ROOFINGS[style.roofMat] ?? (ROOFINGS.shingle_charcoal as RoofFinish)

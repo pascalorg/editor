@@ -414,6 +414,22 @@ export const WALL_ASSEMBLY_PRESETS: readonly WallAssemblyPreset[] = [
     },
   },
   {
+    id: 'exterior-cmu-stucco',
+    label: 'Exterior CMU 8" — stucco',
+    category: 'masonry',
+    assembly: {
+      preset: 'exterior-cmu-stucco',
+      // The Florida block wall: 3-coat stucco direct on the block outside,
+      // 1x furring + 1/2 in gypsum inside; the block is the structure.
+      framing: { kind: 'cmu', depth: CMU_8_ACTUAL },
+      sheathing: { material: 'none', thickness: 0 },
+      exterior: { finish: 'stucco', thickness: STUCCO_3_COAT },
+      interior: { finish: 'drywall', thickness: FURRING_1X + GYPSUM_HALF },
+    },
+    unverified:
+      '1x3 furring at 3/4 in is nominal-lumber practice, not a bones-cited assembly layer; the furring and the 1/2 in board are drawn as one 1-1/4 in interior finish.',
+  },
+  {
     id: 'cmu-8-furred-drywall',
     label: 'CMU 8" — furring + drywall',
     category: 'masonry',

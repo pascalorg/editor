@@ -3,7 +3,7 @@ import type { WallSlice } from '../core/types'
 import { extractServiceOverrides } from '../core/wall-model'
 import { computeTakeoff } from '../engines/takeoff'
 import { FramingNode } from './schema'
-import { computeLevel, dedupeColinearWalls, resolveWallConstruction, wallConstruction } from './compute'
+import { computeLevel, dedupeColinearWalls, resolveWallConstruction, wallConstruction, exteriorWallDefaultOf } from './compute'
 
 /** A minimal one-level scene: two exterior walls, one interior, one curved. */
 function makeScene(): Record<string, Record<string, unknown>> {
@@ -383,6 +383,25 @@ describe('resolveWallConstruction — mixed CMU/framed overrides', () => {
         'framed',
       ),
     ).toEqual({ construction: 'cmu', cmuHeightM: 1.2 })
+  })
+
+  test("the wall's own assembly framing kind beats the jurisdiction default (2026-09-09)", () => {
+    const block = { ...wall(true), framingKind: 'cmu' as const }
+    const wood = { ...wall(true), framingKind: 'wood' as const }
+    expect(resolveWallConstruction(block, { wallOverrides: {} }, 'framed').construction).toBe('cmu')
+    expect(resolveWallConstruction(wood, { wallOverrides: {} }, 'cmu').construction).toBe('framed')
+    // an explicit override still wins over the assembly
+    expect(resolveWallConstruction(wood, { wallOverrides: { w: 'cmu' } }, 'framed').construction).toBe('cmu')
+  })
+
+  test('the Florida default is regional: block in the peninsula, wood frame in the north, wood above the ground storey', () => {
+    const fl = { exteriorWallDefault: 'cmu' as const }
+    expect(exteriorWallDefaultOf({}, fl, { site: { state: 'FL', county: 'Lee' }, isGroundLevel: true })).toBe('cmu')
+    expect(exteriorWallDefaultOf({}, fl, { site: { state: 'FL', county: 'Leon', lat: 30.4 }, isGroundLevel: true })).toBe('framed')
+    expect(exteriorWallDefaultOf({}, fl, { site: { state: 'FL', county: 'Lee' }, isGroundLevel: false })).toBe('framed')
+    // no place on the site: the state row; the panel's control beats everything
+    expect(exteriorWallDefaultOf({}, fl, { site: { state: 'FL' } })).toBe('cmu')
+    expect(exteriorWallDefaultOf({ exteriorWalls: 'framed' }, fl, { site: { state: 'FL', county: 'Lee' } })).toBe('framed')
   })
 
   test('schema: FramingNode parses both override forms and rejects junk', () => {

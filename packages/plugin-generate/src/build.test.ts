@@ -13,6 +13,20 @@ const ofType = (ops: NodeOp[], type: string): N[] =>
 
 describe('Poppy builds into Pascal nodes', () => {
   const result = buildHouse(POPPY)
+
+  test('a block document builds block + stucco exterior walls and a 2x4 interior (2026-09-09)', () => {
+    const ops = buildHouse({ ...POPPY, wallSystem: 'cmu' }).ops
+    const walls = ofType(ops, 'wall') as { assembly?: { preset?: string; framing?: { kind?: string }; exterior?: { finish?: string } }; slots?: Record<string, string> }[]
+    const exterior = walls.filter((w) => w.assembly?.framing?.kind === 'cmu')
+    expect(exterior.length).toBeGreaterThan(3)
+    for (const w of exterior) {
+      expect(w.assembly?.preset).toBe('exterior-cmu-stucco')
+      expect(w.assembly?.exterior?.finish).toBe('stucco')
+    }
+    // the framed document keeps its siding stack
+    const framed = ofType(buildHouse(POPPY).ops, 'wall') as { assembly?: { framing?: { kind?: string } } }[]
+    expect(framed.some((w) => w.assembly?.framing?.kind === 'cmu')).toBe(false)
+  })
   const ops = result.ops
   const walls = ofType(ops, 'wall')
   const doors = ofType(ops, 'door')

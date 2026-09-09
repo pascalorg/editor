@@ -249,7 +249,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
   const doc = normalizeDocument(input)
   const style = styleFor(doc.style)
   // The finish palette — PlanCrafters' curated theme, one unit per roll (finishes.ts).
-  const finishes = finishesFor(style, doc.finishes.palette)
+  const finishes = finishesFor(style, doc.finishes.palette, doc.wallSystem ?? 'framed')
   const rooms = doc.rooms
   const grid = GRID_IN_DEFAULT
 
@@ -297,7 +297,15 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
       return inside.length > 0 && inside.every((i) => garageRoomIndex.has(i)) ? 'garage' : 'house'
     },
   )
-  const exteriorPreset = getWallAssemblyPreset(style.exteriorAssembly)
+  // the exterior wall system the roll chose from the site (document.ts
+  // wallSystem): the block + stucco assembly in the Florida block belt, the
+  // style's 2x6 stack elsewhere — ONE assembly on the node that the 2D, the
+  // 3D skin, the elevations and Bones all read (Steve, 2026-09-09: "if its
+  // using block walls then the 2d and 3d presentation need to be correctly
+  // shown ... im concerned we are splitting things")
+  const exteriorPreset = getWallAssemblyPreset(
+    doc.wallSystem === 'cmu' ? 'exterior-cmu-stucco' : style.exteriorAssembly,
+  )
   const interiorPreset = getWallAssemblyPreset('interior-2x4-drywall')
   const plumbingPreset = getWallAssemblyPreset('interior-2x6-plumbing')
   if (!exteriorPreset || !interiorPreset || !plumbingPreset)
@@ -1673,7 +1681,7 @@ function roofFor(
   const ornament: GableOrnament =
     form !== 'gable'
       ? 'none'
-      : style.exteriorAssembly === 'exterior-2x6-stucco'
+      : doc.wallSystem === 'cmu' || style.exteriorAssembly === 'exterior-2x6-stucco'
         ? 'vent'
         : (doc.trim.gable ?? (trimOf(style).gableOrnament === 'king-post' ? 'king-post' : 'none'))
   if (ornament !== 'none') {
