@@ -2,6 +2,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node
 import { dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
+import { validateClawHubIgnorePolicy } from './clawhub-ignore-policy'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const skillNames = ['pascal-3d', 'furniture-fit'] as const
@@ -21,21 +22,6 @@ const openAiCapabilityLimit = 20
 const openAiCapabilityLengthLimit = 120
 const openAiListingUrlLimit = 1024
 const openAiImageByteLimit = 5 * 1024 * 1024
-const clawHubRequiredIgnorePatterns = [
-  '.env*',
-  '.next/',
-  'dist/',
-  'node_modules/',
-  'coverage/',
-  'test-results/',
-  'playwright-report/',
-  'screenshots/',
-  '*.lock',
-  '*.lockb',
-  'package-lock.json',
-  'pnpm-lock.yaml',
-  'yarn.lock',
-] as const
 const openAiCategories = new Set([
   'Productivity',
   'Creativity',
@@ -220,16 +206,12 @@ for (const skillName of skillNames) {
   const skillRoot = join(root, 'skills', skillName)
   const skillFile = join(skillRoot, 'SKILL.md')
   const clawHubIgnoreFile = join(skillRoot, '.clawhubignore')
-  const clawHubIgnorePatterns = new Set(
-    read(clawHubIgnoreFile)
-      .split('\n')
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith('#')),
-  )
-  for (const pattern of clawHubRequiredIgnorePatterns) {
-    if (!clawHubIgnorePatterns.has(pattern)) {
-      fail(`${skillName}: .clawhubignore is missing ${pattern}`)
-    }
+  const clawHubIgnoreContent = read(clawHubIgnoreFile)
+  for (const policyFailure of validateClawHubIgnorePolicy(
+    clawHubIgnoreContent,
+    existsSync(join(skillRoot, '.clawdhubignore')),
+  )) {
+    fail(`${skillName}: ${policyFailure}`)
   }
   const content = read(skillFile)
   const fields = frontmatter(content, skillFile)
