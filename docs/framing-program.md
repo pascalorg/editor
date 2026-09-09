@@ -1123,7 +1123,36 @@ G105 The Bones panel opens on its view row — Normal | X-ray | Subfloor |
 Framing — and the first pick derives the level in that view; no
 separate activation click, no second click to reach the framing.
 
+## Mandate additions (Steve, 2026-09-09 — the floor plan under the trim)
+
+Steve, with the A2.0 floor plan buried under grey rectangles: "floor plan
+isn't legible in the plans because the roof hatch and planes cover it
+all, fix this next and i can provide more feedback".
+
+G106 Nothing above the plan cut washes the plan: overhead trim (the
+fascia and rake boards, gable ornaments, dormers, fans) is off the
+printed floor plan and a faint dashed outline in the editor; a block on
+the floor prints as an outline in plan ink.
+
 ## Log (continued)
+
+- 2026-09-09: **Batch T22 — the fascia blocks off the floor plan (G106).**
+  The grey "roof planes" over the plan were not the roof (the sheets
+  already exclude the roof kinds from a floor plan): they were the
+  generated FASCIA blocks — one `block` node per roof segment whose
+  topology spans the segment's footprint plus its overhang — drawn by
+  `buildBlockFloorplan` as a filled convex hull (`#cbd5e1` at 0.72) with
+  no notion of paper or height; the gable ornaments, dormers and fans
+  did the same in miniature. Found by scanning the printed A2.0's fills
+  (17 slab-grey polygons). Now `PLAN_CUT_HEIGHT` (1.2 m — the 4 ft plan
+  cut) and `isOverheadBlock`: a block whose lowest vertex stands above
+  the cut draws nothing on paper and a faint dashed, fill-less but still
+  clickable outline in the editor; a floor-standing block keeps its wash
+  in the editor and prints as an outline in plan ink. Nodes 1383 tests
+  (3 new), nodes dist rebuilt; the printed A2.0 now carries only the wall
+  poché and the light hatch as fills. Open: sconces and shutters hug the
+  wall faces below the cut and still print as thin outlines — harmless,
+  but a plan symbol convention for wall-mounted trim would be cleaner.
 
 - 2026-09-09: **Batch T21 — the mode row is the front door (G105).**
   `activateXray(scene, levelId, viewer, mode = 'xray')` takes the view to
