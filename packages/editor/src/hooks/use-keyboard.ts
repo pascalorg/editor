@@ -190,7 +190,11 @@ export const isToolOwnedRotation = () => {
     (editor.tool === 'door' ||
       editor.tool === 'window' ||
       editor.tool === 'roof' ||
-      editor.tool === 'item' ||
+      // The item tool is mounted for the build mode, but it only owns R/T
+      // when a catalog item is actually selected and a placement draft can
+      // exist. Without this check, selecting an existing item in the 2D plan
+      // while the item tool is armed silently drops the global rotate key.
+      (editor.tool === 'item' && editor.selectedItem !== null) ||
       editor.tool === 'lean-to-extension')
   )
 }

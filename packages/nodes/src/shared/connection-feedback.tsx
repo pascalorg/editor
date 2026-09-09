@@ -1,7 +1,13 @@
 'use client'
 
 import type { AnyNodeId } from '@pascal-app/core'
-import { EDITOR_LAYER, isGridSnapActive, isMagneticSnapActive, useEditor } from '@pascal-app/editor'
+import {
+  EDITOR_LAYER,
+  isAngleSnapActive,
+  isGridSnapActive,
+  isMagneticSnapActive,
+  useEditor,
+} from '@pascal-app/editor'
 import { Html } from '@react-three/drei'
 import { type ConnectionProfile, connectionCompatibility } from './connection-compatibility'
 import { collectScenePorts, findNearestPort3D, type ScenePort } from './ports'
@@ -20,8 +26,9 @@ export function ConnectionFeedback({
   target?: ScenePort | null
 }) {
   useEditor((state) => state.snappingModeByContext)
-  if (!point || !(isGridSnapActive() || isMagneticSnapActive())) return null
-  const port = target ?? findNearestPort3D(point, collectScenePorts({ levelId }), 0.5)
+  if (!point || !(isGridSnapActive() || isMagneticSnapActive() || isAngleSnapActive())) return null
+  const port =
+    target === undefined ? findNearestPort3D(point, collectScenePorts({ levelId }), 0.5) : target
   if (!port) return null
   const feedback = connectionCompatibility(profile, port)
   const color = COLORS[feedback.status]

@@ -38,6 +38,7 @@ import {
   updateScreenRectangleSelectionElement,
 } from './screen-rectangle-selection'
 import { collectSelectableCandidateIds } from './select-candidates'
+import { marqueePolygon } from './marquee-footprint'
 
 const tempBox = new Box3()
 const tempChildBox = new Box3()
@@ -223,7 +224,8 @@ function collectNodeIdsInScreenRect(
         | { start?: unknown; end?: unknown; polygon?: unknown }
         | undefined
       if (node) {
-        const { start, end, polygon } = node
+        const { start, end } = node
+        const polygon = marqueePolygon(node)
         if (isVec2(start) && isVec2(end)) {
           if (segmentIntersectsPolygon(start, end, quad)) result.push(id)
           continue

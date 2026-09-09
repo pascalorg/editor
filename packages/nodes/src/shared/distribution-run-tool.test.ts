@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { OrthographicCamera, PerspectiveCamera, Raycaster, Vector2, Vector3 } from 'three'
 import {
   createRunSurfaceFrame,
   projectRunPointToSurface,
@@ -10,12 +11,89 @@ import {
   type RunPoint,
   runDistanceSquared,
   runSectionHalfSizeM,
+  snapRunLength,
   snapRunPointToSurface,
   snapRunValue,
   stepNominalRunSize,
 } from './distribution-run-tool'
 
 describe('distribution run drafting helpers', () => {
+  test('grid length preserves a diagonal from an off-grid socket', () => {
+    const start: RunPoint = [0.13, 0.27, 0.19]
+    const angled = projectRunToAngleLock(start, [1.4, 0.27, 1.3])
+    const point = snapRunLength(start, angled, 0.25)
+    expect(point[0] - start[0]).toBeCloseTo(point[2] - start[2])
+    expect(Math.sqrt(runDistanceSquared(start, point))).toBeCloseTo(1.75)
+    expect(point[1]).toBe(start[1])
+    expect(snapRunLength(start, angled, 0)).toEqual(angled)
+    expect(snapRunLength(start, start, 0.25)).toEqual(start)
+  })
+
+  test('grid length preserves wall-plane diagonals', () => {
+    const start: RunPoint = [0.13, 1.17, 4]
+    const wall = createRunSurfaceFrame(start, [0, 0, 1])
+    const angled = projectRunToSurfaceAngleLock(start, [1.4, 2.3, 4], wall)
+    const point = snapRunLength(start, angled, 0.25)
+    expect(point[0] - start[0]).toBeCloseTo(point[1] - start[1])
+    expect(point[2]).toBe(4)
+    expect(Math.sqrt(runDistanceSquared(start, point))).toBeCloseTo(1.75)
+  })
+
+  test('camera grid snapping steps along a vertical guide from an off-grid origin', () => {
+    const result = projectRunToCameraDirection(
+      [0.13, 0.17, 0.19],
+      { origin: [3.13, 2.3, 3.19], direction: [-Math.SQRT1_2, 0, -Math.SQRT1_2] },
+      [1, 0, 0],
+      0.05,
+      0.25,
+      [[0, 1, 0]],
+    )
+    expect(result?.point[0]).toBe(0.13)
+    expect(result?.point[1]).toBeCloseTo(2.42)
+    expect(result?.point[2]).toBe(0.19)
+  })
+  for (const camera of [
+    new OrthographicCamera(-8, 8, 6, -6, 0.1, 100),
+    new PerspectiveCamera(50, 4 / 3, 0.1, 100),
+  ]) {
+    test(`screen-space diagonal picking follows the ${camera.type} view`, () => {
+      camera.position.set(5, 8, 10)
+      camera.lookAt(0, 0, 0)
+      camera.updateMatrixWorld(true)
+      const target = new Vector3(2, 0, 2)
+      const ndc = target.clone().project(camera)
+      const ray = new Raycaster()
+      ray.setFromCamera(new Vector2(ndc.x, ndc.y), camera)
+      const project = (point: RunPoint): [number, number] => {
+        const p = new Vector3(...point).project(camera)
+        return [(p.x + 1) * 400, (1 - p.y) * 300]
+      }
+      const result = projectRunToCameraDirection(
+        [0, 0, 0],
+        {
+          origin: ray.ray.origin.toArray(),
+          direction: ray.ray.direction.toArray(),
+        },
+        [1, 0, 0],
+        0.05,
+        0,
+        [
+          [1, 0, 0],
+          [0, 0, 1],
+          [Math.SQRT1_2, 0, Math.SQRT1_2],
+        ],
+        undefined,
+        {
+          project,
+          pointer: project(target.toArray()),
+          previous: [1, 0, 0],
+        },
+      )
+      expect(result?.direction).toEqual([Math.SQRT1_2, 0, Math.SQRT1_2])
+      expect(result?.point[0]).toBeCloseTo(2)
+      expect(result?.point[2]).toBeCloseTo(2)
+    })
+  }
   test('releases an airborne direction guide when the cursor returns to a wall', () => {
     const start: RunPoint = [0, 1, 1]
     const ray: RunCursorRay = {

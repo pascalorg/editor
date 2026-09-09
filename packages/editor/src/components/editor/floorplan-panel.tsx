@@ -167,6 +167,7 @@ import {
   updateScreenRectangleSelectionElement,
 } from '../tools/select/screen-rectangle-selection'
 import { collectSelectableCandidateIds } from '../tools/select/select-candidates'
+import { marqueePolygon } from '../tools/select/marquee-footprint'
 import {
   formatAngleRadians,
   getAngleArcToSegmentReference,
@@ -865,7 +866,8 @@ function collectFloorplanScreenSelectionIds(rect: ScreenRect, svg: SVGSVGElement
         | { start?: unknown; end?: unknown; polygon?: unknown }
         | undefined
       if (!node) continue
-      const { start, end, polygon } = node
+      const { start, end } = node
+      const polygon = marqueePolygon(node)
       if (isMarqueeVec2(start) && isMarqueeVec2(end)) {
         dataTested.add(id)
         if (marqueeSegmentIntersectsPolygon(start, end, planQuad)) hitIdsFromData.add(id)

@@ -33,7 +33,6 @@ import { DuctSegmentGhost, FittingGhost } from '../shared/mep-ghost'
 import {
   collectScenePorts,
   DUCT_PORT_SYSTEMS,
-  findNearestPort3D,
   findNearestRunBody3D,
   findRunBodyCrossingSurface,
   type RunBodyHit,
@@ -80,11 +79,6 @@ import { rectSectionAxes, rollToContinueAcrossElbow } from './geometry'
  * steps — matches what flex and rigid round actually ship in.
  */
 const DUCT_DIAMETERS_IN = [4, 5, 6, 7, 8, 9, 10, 12, 14, 16, 18, 20] as const
-/** Snap radius (meters) for joining onto an existing duct's start/end. */
-const ENDPOINT_SNAP_RADIUS_M = 0.5
-/** Snap radius (meters) for tapping the SIDE of an existing run — a tee
- *  is minted there. Tighter than the port radius so run ends keep
- *  priority near their last stretch. */
 const BODY_SNAP_RADIUS_M = 0.35
 /** Angle step (radians) for the XZ angle lock — 45°. */
 
@@ -167,13 +161,12 @@ function continuityRollForRun(
   return continuityRollFrom(startPort, dir) ?? continuityRollFrom(endPort, dir) ?? 0
 }
 
-function findNearbyPort(point: [number, number, number]): ScenePort | null {
+function getConnectionPorts(): ScenePort[] {
   const nodes = useScene.getState().nodes
-  const ports = collectScenePorts({
+  return collectScenePorts({
     systems: DUCT_PORT_SYSTEMS,
     levelId: useViewer.getState().selection.levelId ?? undefined,
   }).filter((port) => !isRunEndCapPort(port, nodes))
-  return findNearestPort3D(point, ports, ENDPOINT_SNAP_RADIUS_M)
 }
 
 /** Cross-section shared by the drawn run and its fitting preview. */
@@ -538,7 +531,7 @@ const DuctSegmentTool = () => {
     initialConnection: continuationSeed
       ? { port: continuationSeed.port, body: continuationSeed.body }
       : null,
-    findPort: findNearbyPort,
+    getPorts: getConnectionPorts,
     findBody: (point) =>
       findNearestRunBody3D(point, BODY_SNAP_RADIUS_M, { levelId: activeLevelId ?? undefined }),
     surfaceClearance: (surface) =>
@@ -731,6 +724,7 @@ const DuctSegmentTool = () => {
         onDirectionSelect={run.onDirectionSelect}
         validationMessage={previewPlan?.validationMessage ?? run.validationMessage}
         snapTarget={run.snapTarget}
+        snapScreen={run.snapScreen}
         start={run.start}
         startDirection={run.startConnection.port?.direction ?? null}
         unit={unit}

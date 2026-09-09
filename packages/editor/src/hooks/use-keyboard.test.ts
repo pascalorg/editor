@@ -80,11 +80,21 @@ beforeEach(() => {
 afterEach(() => {
   useInteractionScope.getState().end()
   useEditor.getState().armToolMode({ mode: 'select' })
+  useEditor.setState({ selectedItem: null })
   clearSceneHistory()
 })
 
 describe('rotation shortcut ownership', () => {
+  test('does not reserve R and T for an armed item tool without a placement item', () => {
+    useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
+
+    expect(isToolOwnedRotation()).toBe(false)
+  })
+
   test('leaves R and T to the active item placement tool', () => {
+    useEditor.getState().setSelectedItem({
+      asset: { id: 'asset:test' },
+    } as never)
     useEditor.getState().armToolMode({ mode: 'build', tool: 'item' })
 
     expect(isToolOwnedRotation()).toBe(true)

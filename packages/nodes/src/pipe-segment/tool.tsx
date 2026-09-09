@@ -33,7 +33,6 @@ import { PipeFittingGhost } from '../shared/mep-ghost'
 import {
   collectScenePorts,
   DWV_PORT_SYSTEMS,
-  findNearestPort3D,
   findNearestRunBody3D,
   findRunBodyCrossingSurface,
   type ScenePort,
@@ -45,16 +44,14 @@ import { pipeSegmentDefinition } from './definition'
 import { applyPipeGrade } from './slope'
 
 const PIPE_DIAMETERS_IN = [1.25, 1.5, 2, 3, 4, 6] as const
-const PORT_SNAP_RADIUS_M = 0.5
 const BODY_SNAP_RADIUS_M = 0.3
 
-function findNearbyPort(point: RunPoint): ScenePort | null {
+function getConnectionPorts(): ScenePort[] {
   const nodes = useScene.getState().nodes
-  const ports = collectScenePorts({
+  return collectScenePorts({
     systems: DWV_PORT_SYSTEMS,
     levelId: useViewer.getState().selection.levelId ?? undefined,
   }).filter((port) => !isRunEndCapPort(port, nodes))
-  return findNearestPort3D(point, ports, PORT_SNAP_RADIUS_M)
 }
 
 const PipeSegmentTool = () => {
@@ -373,7 +370,7 @@ const PipeSegmentTool = () => {
     initialConnection: continuationSeed
       ? { port: continuationSeed.port, body: continuationSeed.body }
       : null,
-    findPort: findNearbyPort,
+    getPorts: getConnectionPorts,
     findBody: (point) =>
       findNearestRunBody3D(point, BODY_SNAP_RADIUS_M, {
         kinds: ['pipe-segment'],
@@ -472,6 +469,7 @@ const PipeSegmentTool = () => {
         onDirectionSelect={run.onDirectionSelect}
         validationMessage={previewPlan?.validationMessage ?? run.validationMessage}
         snapTarget={run.snapTarget}
+        snapScreen={run.snapScreen}
         start={displayStart}
         startDirection={run.startConnection.port?.direction ?? null}
         unit={unit}
