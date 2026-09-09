@@ -38,7 +38,32 @@
 
 - Blocking issues:
 - Verified alternatives:
-- Smallest missing measurement or next supported action:
+
+## nextAction
+
+```yaml
+nextAction:
+  kind: request_measurement | check_alternate_pose | check_related_item_or_pose
+  task: One self-contained measurement request or read-only check
+  requiredInput: Only the values or choices needed for that task
+  context:
+    projectId: Exact ID or null
+    revision: Exact persisted revision or null
+    graphHash: Exact assessed graph hash or null
+    levelId: Exact ID or null
+    zoneId: Exact ID or null
+    itemId: Exact existing or candidate ID or null
+  authority: Read-only; no save or other project mutation authorized
+  cost: No rendering, generation, paid job, or additional spend authorized
+```
+
+Choose the `kind` from the verdict:
+
+- `insufficient evidence` → request only the blocking measurement or smallest blocking set;
+- `footprint does not fit` → offer one explicit alternate position/rotation, label it proposed and unverified, and require a fresh check before calling it a pass;
+- `footprint fits` → offer one specific related item/pose check in the same measured context.
+
+The next action is optional. Do not execute it, create or switch accounts/workspaces, broaden project scope, save, publish, render, generate, or spend without the user's separate authorization. Re-read project status before an accepted follow-up because the recorded revision and graph hash may no longer be current.
 
 ## Handoff
 

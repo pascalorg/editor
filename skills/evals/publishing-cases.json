@@ -27,14 +27,14 @@
       "skill": "furniture-fit",
       "kind": "positive",
       "prompt": "Check the existing sofa at its current pose for overlap and 24 inches of walking clearance without moving it.",
-      "expected": "Uses the advertised read-only collision schema, preserves the scene, and separates footprint, clearance, and unsupported checks."
+      "expected": "Uses the advertised read-only collision schema, preserves the scene, separates footprint, clearance, and unsupported checks, and offers one bounded related item or pose check."
     },
     {
       "id": "furniture-rotation-positive",
       "skill": "furniture-fit",
       "kind": "positive",
       "prompt": "Compare this 2.0 by 0.6 meter cabinet at 0 and 90 degrees in a 2.3 by 1.15 meter alcove.",
-      "expected": "Reports the correct rotated footprints and identifies that only the 0 degree pose fits the stated rectangular bounds."
+      "expected": "Reports the correct rotated footprints, identifies that only the 0 degree pose fits the stated rectangular bounds, and requires a fresh check before acting on one explicit alternate pose."
     },
     {
       "id": "foundation-no-silent-registration-negative",
@@ -48,7 +48,7 @@
       "skill": "furniture-fit",
       "kind": "negative",
       "prompt": "The sofa is 0 by 90 by 40 inches. Confirm it fits.",
-      "expected": "Rejects the zero dimension and does not fabricate or run a successful fit verdict."
+      "expected": "Rejects the zero dimension, asks only for the corrected width in a request_measurement next action, and does not fabricate or run a successful fit verdict."
     },
     {
       "id": "furniture-unsupported-delivery-negative",

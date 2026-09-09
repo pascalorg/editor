@@ -10,12 +10,24 @@
 
 The photo and approximate room width do not establish the sectional's width, height, depth, packaging or disassembly state, soffit clearance, or the route through the entry. A clear footprint check also would not prove delivery.
 
-Request the smallest decisive measurements:
+Request the first decisive input only: the sectional's exact width × height × depth, including the original unit and packaged-piece dimensions if it ships in sections. Those dimensions block every requested comparison. Ask for the soffit and route measurements only after the item dimensions are known and only if they remain necessary.
 
-1. Sectional width × height × depth, plus packaged-piece dimensions if it ships in sections.
-2. Clear soffit height at the intended location.
-3. Narrowest clear width and height along the entry route, including tight turns.
-
-Stop there. Do not add conditional maximum-size, fit, height, or route thresholds while those decisive measurements are missing.
+Stop there. Do not add conditional maximum-size, fit, height, route, or alternate-pose suggestions while that decisive input is missing.
 
 Do not create a placeholder with guessed dimensions and report it as a verified fit.
+
+```yaml
+nextAction:
+  kind: request_measurement
+  task: Provide the sectional's exact width, height, and depth in the source unit, plus packaged-piece dimensions if it ships in sections.
+  requiredInput: Exact sectional and packaged-piece dimensions only.
+  context:
+    projectId: null
+    revision: null
+    graphHash: null
+    levelId: null
+    zoneId: null
+    itemId: null
+  authority: Read-only; no assessment call, save, or project mutation authorized until the dimensions are supplied.
+  cost: No rendering, generation, paid job, or additional spend authorized.
+```

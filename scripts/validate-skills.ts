@@ -4,8 +4,8 @@ import { fileURLToPath } from 'node:url'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const skillNames = ['pascal-3d', 'furniture-fit'] as const
-const skillVersions = { 'pascal-3d': '0.1.0', 'furniture-fit': '0.1.2' } as const
-const pluginVersion = '0.1.3'
+const skillVersions = { 'pascal-3d': '0.1.0', 'furniture-fit': '0.1.3' } as const
+const pluginVersion = '0.1.4'
 const failures: string[] = []
 
 function fail(message: string) {
@@ -150,6 +150,28 @@ for (const skillName of skillNames) {
     if (/sk_(?:live|test)_[A-Za-z0-9]{8,}/.test(data)) {
       fail(`${relative(root, path)} contains a credential-shaped value`)
     }
+  }
+}
+
+const furnitureSkill = read(join(root, 'skills', 'furniture-fit', 'SKILL.md'))
+const furnitureReport = read(
+  join(root, 'skills', 'furniture-fit', 'references', 'report-template.md'),
+)
+const furnitureEvals = read(join(root, 'skills', 'furniture-fit', 'evals', 'evals.json'))
+for (const kind of ['request_measurement', 'check_alternate_pose', 'check_related_item_or_pose']) {
+  if (
+    !(
+      furnitureSkill.includes(kind) &&
+      furnitureReport.includes(kind) &&
+      furnitureEvals.includes(kind)
+    )
+  ) {
+    fail(`furniture-fit: missing verdict-aware nextAction kind ${kind}`)
+  }
+}
+for (const field of ['requiredInput:', 'context:', 'authority:', 'cost:']) {
+  if (!furnitureReport.includes(field)) {
+    fail(`furniture-fit report template is missing nextAction field ${field}`)
   }
 }
 

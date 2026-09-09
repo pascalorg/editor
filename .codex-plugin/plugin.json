@@ -1,7 +1,7 @@
 {
   "name": "pascal-agent-skills",
-  "version": "0.1.3",
-  "description": "Create, inspect, validate, and assess furniture layouts in Pascal through MCP.",
+  "version": "0.1.4",
+  "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
   "author": {
     "name": "Pascal",
     "url": "https://pascal.app"
@@ -14,7 +14,7 @@
   "interface": {
     "displayName": "Pascal agent skills",
     "shortDescription": "Build and inspect Pascal scenes and assess furniture footprints.",
-    "longDescription": "Use Pascal's MCP tools to work with editable building scenes, validate and save results, and produce bounded furniture footprint reports with explicit evidence and limitations.",
+    "longDescription": "Use Pascal's MCP tools to work with editable building scenes, validate and save results, and produce bounded furniture footprint reports with explicit evidence, limitations, and verdict-aware next actions.",
     "developerName": "Pascal",
     "category": "Developer Tools",
     "capabilities": ["Interactive", "Read", "Write"],

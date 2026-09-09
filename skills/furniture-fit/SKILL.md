@@ -4,9 +4,9 @@ description: Assess whether furniture fits in a measured Pascal room or layout. 
 license: MIT
 compatibility: Requires a Pascal MCP connection for verified scene checks. Can still produce an input-gap report when the scene or measurements are unavailable.
 metadata:
-  version: "0.1.2"
+  version: "0.1.3"
   source-reviewed: "2026-09-09"
-  native-host-validation: "source-hash-recorded-separately"
+  native-host-validation: "package-checks-only"
 ---
 
 # Furniture fit
@@ -93,6 +93,16 @@ Test every orientation the user requested. Do not assume a 90-degree rotation he
 
 When the requested pose fails, propose only alternatives supported by the same evidence, such as a 90-degree rotation, a stated offset, a smaller maximum footprint, or a different room. Re-run the checks for any alternative described as passing.
 
+## Return one bounded next action
+
+Include exactly one structured `nextAction` in every report. It is an optional task the user can approve, not permission to execute it.
+
+- For `insufficient evidence`, use `kind: request_measurement`. Ask only for the blocking measurement or smallest blocking set. Do not add an alternate pose, conditional fit threshold, or unrelated setup task.
+- For `footprint does not fit`, use `kind: check_alternate_pose`. Name one explicit position and Y rotation supported by the known room geometry. Label it proposed and unverified, and require the same containment, collision, clearance, and applicable door checks to run again before calling it a pass.
+- For `footprint fits`, use `kind: check_related_item_or_pose`. Offer one specific related item or pose check that uses the same measured context. Do not turn the passing result into a purchase, delivery, or installation recommendation.
+
+Carry the exact available project, revision, graph hash, level, zone, and item context into `nextAction.context`; use `null` rather than guessing missing identifiers. State the minimum `requiredInput`. Keep `authority` read-only unless the user separately requests a change, and state that no save, account creation, publication, rendering/generation job, or paid operation is authorized. If the next task is later accepted, re-read the current project status and advertised tool schemas before acting; a next action never freezes scene state or extends the current authorization.
+
 ## Separate the checks
 
 Use `passed`, `failed`, `not checked`, or `insufficient evidence` for each row:
@@ -123,6 +133,7 @@ Use the exact report shape in [references/report-template.md](references/report-
 - a row for every supported and unsupported check;
 - collision or door issue IDs;
 - verified alternatives;
+- one verdict-aware `nextAction` with its required input, exact available context, authority, and cost boundary;
 - the exact `editorUrl` returned by Pascal when a persistent project is involved.
 
 Before sending the report, compare its numeric inputs and source IDs against both the user's constraint record and the actual tool output. Copy level, zone, item, candidate, and project IDs exactly; do not recreate them from memory. A missing requested check must be identified as incomplete, even when a narrower calculation passes.

@@ -53,7 +53,7 @@ Use one active agent client per local CLI service. Its standalone HTTP runtime s
 | Skill | Use it for |
 | --- | --- |
 | [`pascal-3d`](pascal-3d/SKILL.md) | Connect Pascal safely, inspect or edit a scene, validate it, save it, and return a verified handoff. |
-| [`furniture-fit`](furniture-fit/SKILL.md) | Assess a furniture footprint at stated poses and report collisions, door keep-outs, evidence gaps, and alternatives. |
+| [`furniture-fit`](furniture-fit/SKILL.md) | Assess a furniture footprint at stated poses and report collisions, door keep-outs, evidence gaps, and one bounded verdict-aware next action. |
 
 Each skill is standalone. Its `references/`, `examples/`, and `evals/` folders travel with that skill when installed individually.
 

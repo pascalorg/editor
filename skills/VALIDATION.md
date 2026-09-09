@@ -1,8 +1,14 @@
 # Skill package validation
 
-Bundle version: **0.1.3**. `pascal-3d` skill metadata version: **0.1.0**. `furniture-fit` skill metadata version: **0.1.2**. Prepared September 9, 2026.
+Bundle version: **0.1.4**. `pascal-3d` skill metadata version: **0.1.0**. `furniture-fit` skill metadata version: **0.1.3**. Prepared September 9, 2026.
 
-## Bundle 0.1.3 validation
+## Bundle 0.1.4 candidate validation
+
+This unreleased candidate adds exactly one structured, verdict-aware `nextAction` to each furniture-fit report. Insufficient-evidence reports ask only for the blocking measurement or smallest blocking set. Failed-footprint reports offer one explicit alternate position or rotation and require a fresh assessment before calling it a pass. Passing-footprint reports offer one related item or pose check. Every next action carries available project/revision context and states that it does not authorize project mutation, account or workspace changes, publication, rendering or generation work, or additional spending.
+
+The candidate `furniture-fit/SKILL.md` SHA-256 is `873a4c73edd5a1d490a0535ee88b18ca762a3a9f051e89b519e39a5640667e9c`. Package validation and strict plugin-manifest validation cover the source shape, bundled references, evaluation fixtures, version agreement, and marketplace manifests. No native agent-host task cohort, clean installation, publication, marketplace review, external adoption, or retention result is claimed for bundle 0.1.4; the skill metadata therefore records `package-checks-only`.
+
+## Prior bundle 0.1.3 validation
 
 This release adds a fail-closed input gate for furniture assessments. When the request itself establishes that a decisive dimension, room scale, target, pose, or clearance is missing, the skill preserves the supplied facts and asks only for the blocking input instead of producing conditional fit thresholds. A minimal read-only scene lookup remains allowed when it can resolve that value from existing measured evidence; assessment and mutation calls remain blocked until the input is resolved.
 

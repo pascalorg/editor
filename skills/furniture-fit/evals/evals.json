@@ -4,27 +4,29 @@
     {
       "id": 1,
       "prompt": "In my Pascal living-room project, check whether the existing 84 in by 38 in sofa at its current pose overlaps anything or blocks the modeled door. Don't move it. Tell me exactly what was and was not checked.",
-      "expected_output": "Runs a read-only, level-scoped footprint and door keep-out assessment, preserves the scene, and qualifies unsupported checks.",
+      "expected_output": "Runs a read-only, level-scoped footprint and door keep-out assessment, preserves the scene, qualifies unsupported checks, and offers one bounded related check.",
       "files": [],
       "expectations": [
         "Uses get_scene or get_node to verify item scale and rotation rather than trusting catalog labels alone.",
         "Calls check_collisions with an explicit minimumClearance and verify_scene without mutating or saving the project.",
         "Checks the collision result status and reports skipped evidence rather than treating partial output as a pass.",
         "Separates actual overlap, item spacing, and rectangular door keep-out evidence.",
-        "Marks height, door swing, delivery route, and detailed mesh contact as not checked unless separately evidenced."
+        "Marks height, door swing, delivery route, and detailed mesh contact as not checked unless separately evidenced.",
+        "Returns exactly one check_related_item_or_pose nextAction with exact available context and no mutation or spending authority."
       ]
     },
     {
       "id": 2,
       "prompt": "My alcove is 2.30 m wide by 1.15 m deep. A cabinet is 2.00 m wide, 2.20 m tall, and 0.60 m deep. Compare it at 0 degrees and rotated 90 degrees, and tell me if I should order it.",
-      "expected_output": "Correctly reports that the horizontal footprint fits at 0 degrees but not at 90 degrees, while withholding purchase and height/delivery assurance.",
+      "expected_output": "Correctly reports that the horizontal footprint fits at 0 degrees but not at 90 degrees, withholds purchase and height/delivery assurance, and requires a fresh check before acting on one explicit alternate pose.",
       "files": [],
       "expectations": [
         "Computes 2.00 m by 0.60 m at 0 degrees and 0.60 m by 2.00 m at 90 degrees.",
         "Reports the 90-degree depth failure against the 1.15 m alcove depth.",
         "Uses qualified footprint language instead of an unqualified furniture-fit or purchase guarantee.",
         "Requests vertical and delivery-route evidence before advising that the item can be installed.",
-        "Marks door access not checked or insufficient evidence when no doors are modeled; a clean verify_scene result does not prove candidate spacing or access."
+        "Marks door access not checked or insufficient evidence when no doors are modeled; a clean verify_scene result does not prove candidate spacing or access.",
+        "Returns exactly one check_alternate_pose nextAction naming an explicit position or rotation and requiring fresh checks before calling it a pass."
       ]
     },
     {
@@ -93,14 +95,15 @@
     {
       "id": 8,
       "prompt": "My measured Pascal room is 4.00 m wide by 3.00 m deep. The wardrobe is 1.80 m wide and 2.20 m tall, but its depth is missing. Check whether it fits centered in the room. This is read only. Do not infer a depth; request only the decisive missing measurement.",
-      "expected_output": "Stops with insufficient evidence, preserves the supplied dimensions and target, asks only for wardrobe depth, and does not calculate conditional fit thresholds or call assessment tools.",
+      "expected_output": "Stops with insufficient evidence, preserves the supplied dimensions and target, asks only for wardrobe depth through the structured next action, and does not calculate conditional fit thresholds or call assessment tools.",
       "files": [],
       "expectations": [
         "Returns insufficient evidence because wardrobe depth is decisive for the requested footprint conclusion.",
         "Preserves the supplied 1.80 m width, 2.20 m height, 4.00 m by 3.00 m room, centered pose, and read-only scope without substituting values.",
         "Asks only for the wardrobe depth in a clear unit.",
         "Does not state a maximum fitting depth, a conditional 'would fit' threshold, a height result, or an alternative pose while depth is missing.",
-        "Does not call candidate, collision, placement, validation, or save tools and does not mutate the project."
+        "Does not call candidate, collision, placement, validation, or save tools and does not mutate the project.",
+        "Returns exactly one request_measurement nextAction for wardrobe depth, carries exact available context, and authorizes no mutation or paid operation."
       ]
     }
   ]
