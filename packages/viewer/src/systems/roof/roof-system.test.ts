@@ -36,6 +36,36 @@ describe('roof system gable geometry', () => {
       brushes.rakeBoards?.dispose()
     }
   })
+
+  test('lifts the inner cutter with the shell so a flat zero-height roof stays hollow', () => {
+    const segment = RoofSegmentNode.parse({
+      roofType: 'flat',
+      width: 8,
+      depth: 6,
+      wallHeight: 0,
+      wallThickness: 0.1,
+      pitch: 0,
+    })
+    const brushes = getRoofSegmentBrushes(segment)
+    expect(brushes).not.toBeNull()
+    if (!brushes) return
+    try {
+      brushes.wallBrush.geometry.computeBoundingBox()
+      brushes.innerBrush.geometry.computeBoundingBox()
+      expect(brushes.wallBrush.geometry.boundingBox!.min.y).toBe(0)
+      expect(brushes.wallBrush.geometry.boundingBox!.max.y).toBeCloseTo(0.05, 6)
+      expect(brushes.innerBrush.geometry.boundingBox!.max.y).toBeCloseTo(
+        brushes.wallBrush.geometry.boundingBox!.max.y,
+        6,
+      )
+    } finally {
+      brushes.wallBrush.geometry.dispose()
+      brushes.innerBrush.geometry.dispose()
+      brushes.deckSlab.geometry.dispose()
+      brushes.shinSlab.geometry.dispose()
+      brushes.rakeBoards?.dispose()
+    }
+  })
 })
 
 describe('roof system shed geometry', () => {
