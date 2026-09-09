@@ -1153,7 +1153,53 @@ takes the back wall.
 G108 Narrow lots (40–50 ft) get their own plans: longer and skinnier,
 with a grand entrance, in every style.
 
+## Mandate additions (Steve, 2026-09-09 — the Bones panel and the plans)
+
+Steve: "i need to remove the blue prints button from bones too, the
+plans should have in the plans extension only, also bones doesnt have a
+scroll when i click on it, and when i select framing it says xray up top
+still and clear, doesnt even show the right one that was selected, bones
+should be all code options and selection options, and it should sync if
+they have an address entered in another tab either in lot drop in or in
+the plans tab, please help fix these up so they play nicely together".
+And, on the A2.0 floor plan sheet: "i still see the roof on the floor
+plan sheet in plans".
+
+G109 Paper is the Sheets plugin's alone: Bones exports no plans; its
+panel is the code options and the selection options, it scrolls, and
+its header names the view that is on.
+G110 One address: whatever was entered — the lot drop-in or the Plans
+tab — every plugin reads it.
+
 ## Log (continued)
+
+- 2026-09-09: **Batch T25 — the Bones panel, one address (G109, G110),
+  and the "roof" on A2.0.** panel.tsx: the Blueprints plan-set export
+  and its helper are gone (paper is the Sheets plugin's); the root
+  scrolls (`h-full min-h-0 overflow-y-auto`, the Generate panel's root)
+  with the drafting-aid note at the end of the scroll instead of a sticky
+  footer over the Roof row; the derived section's header names the view
+  that is on ("Framing view" / "X-ray view" / "Subfloor view" /
+  "Derived — view off") with the Remove button labelled for what it does.
+  guess.ts `siteStateOf` reads the lot drop-in first (the site node's
+  address, then its parcel) and then the Plans tab's project record
+  (`sheets:project-record` identity.address.state) — the sheets' title
+  block already falls back to the site the other way. Bones 2174 tests
+  (the C5 export gate retired with the button; the panel gate now asserts
+  no plan set, the scroller and the view title; a project-record address
+  test). The A2.0 "roof": the blue wash over the whole plan out to the
+  eaves is the FASCIA BLOCK's editor tint (#cbd5e1 at 0.72 — the block
+  floorplan's non-paper opacity), which T22 already stops on paper — the
+  running dev server had been up since 2026-09-07, two days before the
+  nodes dist rebuild, and Turbopack kept serving the old `@pascal-app/
+  nodes` dist; the headless SVG (fresh dist) was clean all along. After
+  a restart the on-screen A2.0 carries no tinted polygon (verified in the
+  DOM: the only fills are the wall pochés). RULE: after `bun run build`
+  in core / nodes / viewer, restart the editor dev server — the editor
+  will not see the new dist until then. Not done: writing the Plans tab's
+  typed address back onto the site node (the sync is read-side in both
+  directions); the rail buttons have no accessible names (the Bones
+  button is found by position only).
 
 - 2026-09-09: **Batch T24 — the narrow-lot parti (G108) and the band's
   depth (G107).** New `narrow.ts` `narrowParti({maxWidthFt, maxDepthFt,

@@ -13,7 +13,6 @@ import {
   setXrayViewMode,
   type ViewerLike,
 } from './activation'
-import { extractLevels } from './core/wall-model'
 import { characteristicsCsv, characteristicsRows } from './engines/characteristics'
 import { computeTakeoff, cutList, cutListCsv, takeoffCsv } from './engines/takeoff'
 import { computeLevel } from './framing/compute'
@@ -51,7 +50,6 @@ import {
   shedCeilingPatch,
   shedCeilingValue, type ExteriorWallsValue, exteriorWallsPatch, exteriorWallsValue } from './panel-framing'
 import { groupWarnings, warningCount } from './panel-warnings'
-import { buildPlanSet, finishScheduleFrom, planSetHtml, relativeLevelBaseY } from './plans/plan-set'
 import { useBonesStore } from './store'
 
 const LUMBER_KIND: string = 'bones:lumber'
@@ -88,7 +86,7 @@ export default function BonesPanel() {
   }, [nodes, framingNode])
 
   return (
-    <div className="flex flex-col gap-4 p-4 text-sidebar-foreground">
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-4 text-sidebar-foreground">
       <header className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <h2 className="font-semibold text-base">Bones</h2>
@@ -117,16 +115,8 @@ export default function BonesPanel() {
 
       <LumberSection />
 
-      <footer className="-mx-4 -mb-4 sticky bottom-0 mt-1 flex flex-col gap-2 border-sidebar-border/50 border-t bg-sidebar px-4 py-3 text-[11px] text-sidebar-foreground/50 leading-relaxed">
+      <footer className="-mx-4 -mb-4 mt-1 flex flex-col gap-2 border-sidebar-border/50 border-t bg-sidebar px-4 py-3 text-[11px] text-sidebar-foreground/50 leading-relaxed">
         <span>Drafting aid, not engineering — verify with your local building department.</span>
-        {framingNode && result && result.members.length > 0 && (
-          <ExportPlansButton
-            result={result}
-            framingNode={framingNode}
-            activeLevelId={activeLevelId ?? null}
-            codeName={result.spec ? profileFor(result.jurisdiction).residentialCode : undefined}
-          />
-        )}
       </footer>
     </div>
   )
@@ -204,12 +194,23 @@ function XraySection({
 
   const effectiveCode = result?.jurisdiction ?? 'INTL'
   const profile = profileFor(effectiveCode)
+  const viewMode = effectiveViewMode(framingNode)
+  const viewLabel =
+    viewMode === 'framing'
+      ? 'Framing view'
+      : viewMode === 'basement'
+        ? 'Subfloor view'
+        : viewMode === 'xray'
+          ? 'X-ray view'
+          : 'Derived — view off'
 
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between">
-        <span className="font-medium text-sm">X-Ray</span>
+        <span className="font-medium text-sm">{viewLabel}</span>
         <button
+          title="Delete the derived framing, foundation and services for this level"
+          aria-label="Remove the derivation"
           className="rounded-md border border-sidebar-border/60 px-2 py-1 text-sidebar-foreground/70 text-xs transition-colors hover:bg-sidebar-accent"
           onClick={() =>
             // Deactivation mirror of the create click: framing node + the
@@ -249,7 +250,7 @@ function XraySection({
           { label: 'Subfloor', value: 'basement' },
           { label: 'Framing', value: 'framing' },
         ]}
-        value={effectiveViewMode(framingNode)}
+        value={viewMode}
       />
 
       <JurisdictionPicker
@@ -930,96 +931,3 @@ function JurisdictionPicker({
   )
 }
 
-/**
- * "Save full plans" — the LOD 400 plan set as a printable document: one
- * SVG sheet per system (foundation / floor / wall / roof framing plans,
- * electrical rough-in, MEP) plus schedules + takeoff, paginated for the
- * browser's Print → Save as PDF. Pure client-side, nothing persisted.
- */
-/** The `metadata.finishes` record on the building that owns `levelId`, or null. */
-function buildingFinishesOf(levelId: string | null): unknown {
-  if (!levelId) return null
-  const nodes = useScene.getState().nodes as Record<string, Record<string, unknown> | undefined>
-  const level = nodes[levelId]
-  const buildingId = typeof level?.parentId === 'string' ? level.parentId : null
-  const building = buildingId ? nodes[buildingId] : undefined
-  const meta = building?.metadata
-  return typeof meta === 'object' && meta !== null
-    ? ((meta as Record<string, unknown>).finishes ?? null)
-    : null
-}
-
-function ExportPlansButton({
-  result,
-  framingNode,
-  activeLevelId,
-  codeName,
-}: {
-  result: NonNullable<ReturnType<typeof computeLevel>>
-  framingNode: FramingNode
-  activeLevelId: AnyNodeId | null
-  codeName?: string
-}) {
-  const levelName = useScene((s) =>
-    activeLevelId
-      ? ((s.nodes[activeLevelId] as { name?: string } | undefined)?.name ?? 'Level')
-      : 'Level',
-  )
-  return (
-    <button
-      type="button"
-      className="flex w-full flex-col items-center gap-0.5 rounded-lg bg-primary px-3 py-2.5 font-semibold text-primary-foreground text-sm shadow-sm transition-transform hover:scale-[1.02] active:scale-[0.99]"
-      onClick={() => {
-        const sheets = buildPlanSet(result.members, result.fixtures, {
-          projectName: document.title.split('—')[0]?.trim() || 'Pascal project',
-          levelName,
-          // resolved state code — raw 'AUTO' printed on sheets (quality C1)
-          jurisdiction: result.jurisdiction,
-          codeName,
-          // heavy-snow header band (B11): the Table R602.7(1) width
-          // assumption prints as a cover DESIGN CRITERIA line — unset in
-          // low-snow jurisdictions (paper stays byte-equal)
-          headerAssumption: result.spec.headerAssumption,
-          date: new Date().toLocaleDateString(),
-          // engine warnings print verbatim in the schedules flag block
-          // (blueprint C5 / checklist P4) — paper never hides a caveat
-          warnings: result.warnings,
-          // whole-building metrics block on the schedules sheet
-          characteristics: result.characteristics ?? undefined,
-          studSpacingIn: framingNode.studSpacingIn,
-          // the stamp must say what was actually composed (wave-2 audit:
-          // a Generic export shipped paper claiming LOD 400)
-          detail: framingNode.detail,
-          // openings feed the door/window schedule sheet (B21d) — live
-          // memo references, never mutated
-          walls: result.walls,
-          // the typical-details sheet draws from the resolved spec and the
-          // foundation as framed (W12)
-          spec: result.spec,
-          foundation: result.foundation,
-          // the exterior finish schedule (W13b): the generator's palette
-          // record on the level's building, when there is one
-          finishes: finishScheduleFrom(buildingFinishesOf(activeLevelId)),
-          // gross-fallback areas so LOD-200 paper books the SAME takeoff
-          // rows as the panel (C5 — one source of truth)
-          areas: result.areas,
-          // storey lifts RELATIVE to the owner level — owner members draw
-          // level-local, so absolute elevations put an upper-storey owner's
-          // roof a full storey too high on elevations/section (round-6)
-          levelBaseY: relativeLevelBaseY(
-            extractLevels(useScene.getState().nodes as Record<string, Record<string, unknown>>),
-            activeLevelId,
-          ),
-        })
-        if (sheets.length === 0) return
-        const html = planSetHtml(sheets, { projectName: levelName, detail: framingNode.detail })
-        const url = URL.createObjectURL(new Blob([html], { type: 'text/html' }))
-        window.open(url, '_blank', 'noopener')
-        // The tab owns the blob from here; revoke after it had time to load.
-        setTimeout(() => URL.revokeObjectURL(url), 60_000)
-      }}
-    >
-      <span>📐 Blueprints</span>
-    </button>
-  )
-}

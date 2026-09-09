@@ -12,6 +12,13 @@ describe('AUTO jurisdiction prefers the site address over the browser', () => {
     expect(siteStateOf({ s: { type: 'site', address: { state: 'Florida' } } })).toBeNull()
     expect(siteStateOf({})).toBeNull()
   })
+  test("the Plans tab's project-record address counts too — the lot drop-in first when both (2026-09-09)", () => {
+    const record = { type: 'sheets:project-record', identity: { address: { state: 'ca' } } }
+    expect(siteStateOf({ rec: record })).toBe('CA')
+    expect(siteStateOf({ rec: record, site: { type: 'site', address: { state: 'FL' } } })).toBe('FL')
+    expect(siteStateOf({ rec: record, site: { type: 'site', address: {} } })).toBe('CA')
+    expect(siteStateOf({ rec: { type: 'sheets:project-record', identity: { address: { state: '' } } } })).toBeNull()
+  })
   test('a Chicago-timezone browser still gets FL when the site says FL', () => {
     expect(guessJurisdiction({ tz: 'America/Chicago' }, 'FL')).toEqual({
       code: 'FL',

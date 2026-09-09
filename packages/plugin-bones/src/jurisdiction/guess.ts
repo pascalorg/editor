@@ -100,13 +100,27 @@ export type JurisdictionGuess = {
  * the DESIGNER sits.
  */
 export function siteStateOf(nodes: Record<string, unknown>): string | null {
+  const stateCode = (raw: unknown): string | null => {
+    if (typeof raw !== 'string') return null
+    const code = raw.trim().toUpperCase()
+    return /^[A-Z]{2}$/.test(code) ? code : null
+  }
+  // the lot drop-in (the site node's address / parcel record) first
   for (const node of Object.values(nodes)) {
     const n = node as { type?: unknown; address?: { state?: unknown }; parcel?: { state?: unknown } }
     if (n?.type !== 'site') continue
-    const raw = n.address?.state ?? n.parcel?.state
-    if (typeof raw !== 'string') continue
-    const code = raw.trim().toUpperCase()
-    if (/^[A-Z]{2}$/.test(code)) return code
+    const code = stateCode(n.address?.state) ?? stateCode(n.parcel?.state)
+    if (code) return code
+  }
+  // then the address typed on the Plans tab (the sheets' project record) —
+  // one address, wherever it was entered (Steve, 2026-09-09: "it should
+  // sync if they have an address entered in another tab either in lot
+  // drop in or in the plans tab")
+  for (const node of Object.values(nodes)) {
+    const n = node as { type?: unknown; identity?: { address?: { state?: unknown } } }
+    if (n?.type !== 'sheets:project-record') continue
+    const code = stateCode(n.identity?.address?.state)
+    if (code) return code
   }
   return null
 }

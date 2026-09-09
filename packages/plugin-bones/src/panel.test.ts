@@ -55,9 +55,20 @@ describe('sidebar panel composition (source gates)', () => {
   })
 })
 
-test('C5: the plan-set export passes the gross-fallback areas (one source of truth)', () => {
+// INTENDED-CHANGE 2026-09-09 (Steve: "remove the blueprints button from bones
+// too, the plans should have in the plans extension only"): the Blueprints
+// plan-set export left the Bones panel — paper is the Sheets plugin's; the
+// C5 gate (the export passes `areas: result.areas`) went with it.
+test('the Bones panel builds no plan set and opens no print tab — paper is the Sheets plugin', () => {
   const src = readFileSync(new URL('./panel.tsx', import.meta.url), 'utf8')
-  expect(src).toContain('areas: result.areas')
+  expect(src).not.toContain('Blueprints')
+  expect(src).not.toContain('buildPlanSet')
+  expect(src).not.toContain('planSetHtml')
+  // the panel scrolls (the Generate panel's root) so the code options below the fold are reachable
+  expect(src).toContain('flex h-full min-h-0 flex-col gap-4 overflow-y-auto')
+  // the section title names the view that is on, not "X-Ray" whatever the pick
+  expect(src).toContain("viewMode === 'framing'")
+  expect(src).toContain("'Framing view'")
 })
 
 describe('jurisdiction notes reach the PANEL (the CA territories\u2019 PERMAFROST channel)', () => {
