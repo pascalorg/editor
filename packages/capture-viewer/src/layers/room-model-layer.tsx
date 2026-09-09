@@ -3,17 +3,19 @@
 import { useGLTFKTX2 } from '@pascal-app/viewer'
 import { useLoader } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
-import type { Material, Mesh, Object3D } from 'three'
+import { DoubleSide, FrontSide, type Material, type Mesh, type Object3D } from 'three'
 import { USDLoader } from 'three/addons/loaders/USDLoader.js'
 import { rewriteLoopbackAssetUrl } from '../asset-url'
 import type { CaptureModelFormat } from '../stream-rendering'
 
 export function CaptureRoomModel({
+  dollhouse,
   format,
   mediaType,
   opacity = 100,
   url,
 }: {
+  dollhouse?: boolean
   format?: CaptureModelFormat
   mediaType: string
   opacity?: number
@@ -24,24 +26,40 @@ export function CaptureRoomModel({
     mediaType === 'model/vnd.usdz+zip' ||
     url.toLowerCase().endsWith('.usdz')
   ) {
-    return <UsdzRoomModel opacity={opacity} url={url} />
+    return <UsdzRoomModel dollhouse={dollhouse} opacity={opacity} url={url} />
   }
-  return <GlbRoomModel opacity={opacity} url={url} />
+  return <GlbRoomModel dollhouse={dollhouse} opacity={opacity} url={url} />
 }
 
-function UsdzRoomModel({ opacity, url }: { opacity: number; url: string }) {
+function UsdzRoomModel({
+  dollhouse,
+  opacity,
+  url,
+}: {
+  dollhouse?: boolean
+  opacity: number
+  url: string
+}) {
   const source = useLoader(USDLoader, rewriteLoopbackAssetUrl(url))
-  const model = useClonedModel(source, opacity)
+  const model = useClonedModel(source, opacity, dollhouse)
   return <primitive object={model} />
 }
 
-function GlbRoomModel({ opacity, url }: { opacity: number; url: string }) {
+function GlbRoomModel({
+  dollhouse,
+  opacity,
+  url,
+}: {
+  dollhouse?: boolean
+  opacity: number
+  url: string
+}) {
   const gltf = useGLTFKTX2(rewriteLoopbackAssetUrl(url)) as { scene: Object3D }
-  const model = useClonedModel(gltf.scene, opacity)
+  const model = useClonedModel(gltf.scene, opacity, dollhouse)
   return <primitive object={model} />
 }
 
-function useClonedModel(source: Object3D, opacity: number): Object3D {
+function useClonedModel(source: Object3D, opacity: number, dollhouse?: boolean): Object3D {
   const model = useMemo(() => {
     const clone = source.clone(true)
     clone.traverse((child) => {
@@ -50,9 +68,12 @@ function useClonedModel(source: Object3D, opacity: number): Object3D {
       mesh.material = Array.isArray(mesh.material)
         ? mesh.material.map((material) => material.clone())
         : mesh.material.clone()
+      for (const material of Array.isArray(mesh.material) ? mesh.material : [mesh.material]) {
+        if (dollhouse !== undefined) material.side = dollhouse ? FrontSide : DoubleSide
+      }
     })
     return clone
-  }, [source])
+  }, [source, dollhouse])
 
   useEffect(() => {
     const normalizedOpacity = opacity / 100

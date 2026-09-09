@@ -11,7 +11,7 @@ import {
 } from '@pascal-app/editor'
 import { useLiquidLineToolOptions } from '@pascal-app/nodes'
 import Image from 'next/image'
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import {
   Tooltip,
   TooltipContent,
@@ -48,6 +48,7 @@ const subscribeToClientMount = () => () => {}
 // MEP tool kinds that, when active, mean the MEP group tile (and its sub-grid)
 // is what the user is working in.
 export function BuildTab() {
+  const [mepOpen, setMepOpen] = useState(false)
   const activeTool = useEditor((s) => s.tool)
   const mode = useEditor((s) => s.mode)
   const roofDefaults = useEditor((s) => s.toolDefaults.roof)
@@ -62,9 +63,6 @@ export function BuildTab() {
   )
   const buildTypes = registryReady ? collectBuildTypes(floorplanMode) : BASE_BUILD_TYPES
 
-  // The fitting / follow tools are armed from a segment's panel, not a grid
-  // tile — keep the segment tile lit so the panel (and the way back) stays
-  // visible.
   const ductContext =
     mode === 'build' && (activeTool === 'duct-segment' || activeTool === 'duct-fitting')
   const pipeContext =
@@ -72,14 +70,7 @@ export function BuildTab() {
     (activeTool === 'pipe-segment' || activeTool === 'pipe-fitting' || activeTool === 'pipe-trap')
   const liquidLineContext = mode === 'build' && activeTool === 'liquid-line'
 
-  const isMepItemActive = (item: MepItem) =>
-    item.kind === 'duct-segment'
-      ? ductContext
-      : item.kind === 'pipe-segment'
-        ? pipeContext
-        : item.kind === 'liquid-line'
-          ? liquidLineContext
-          : mode === 'build' && activeTool === item.kind
+  const isMepItemActive = (item: MepItem) => mode === 'build' && activeTool === item.kind
 
   // Read at render time (not module scope): the registry is populated by the
   // app bootstrap, so enumerating earlier would race it and see no kinds.
@@ -93,7 +84,9 @@ export function BuildTab() {
   // active tool, the same way MEP stays lit for its sub-grid tools.
   const activeRoofFeatureId = getActiveRoofFeatureId(roofFeatures, activeTool)
   const isRoofFeatureActive = mode === 'build' && activeRoofFeatureId !== null
-  const isMepActive = mode === 'build' && !!activeTool && MEP_TOOL_KINDS.has(activeTool)
+  const isMepActive =
+    (mode === 'build' && !!activeTool && MEP_TOOL_KINDS.has(activeTool)) ||
+    (mode === 'select' && mepOpen)
   const isKitchenActive = mode === 'build' && activeTool === 'cabinet'
   const parsedRoofType = RoofTypeSchema.safeParse(roofDefaults?.roofType)
   const activeRoofType = parsedRoofType.success ? parsedRoofType.data : 'gable'
@@ -108,14 +101,18 @@ export function BuildTab() {
   }
 
   const handleTypeClick = useCallback((type: BuildType) => {
+    setMepOpen(type.id === 'mep')
     if (type.mode === 'material-paint') {
       activatePaintMode()
     } else if (type.mode === 'terrain-sculpt') {
       activateTerrainSculptMode()
     } else if (type.id === 'mep') {
-      // MEP is a group tile: arm its first tool so a usable tool is active
-      // (and we leave any prior paint mode), then reveal the MEP sub-grid.
-      activateBuildTool('duct-segment')
+      const ed = useEditor.getState()
+      ed.setPhase('structure')
+      ed.setStructureLayer('elements')
+      ed.setCatalogCategory(null)
+      ed.setMode('build')
+      ed.setTool(null)
     } else if (type.id === 'kitchen') {
       activateModularCabinetTool()
     } else if (type.kind) {
@@ -333,6 +330,7 @@ export function BuildTab() {
                   <Tooltip key={item.id}>
                     <TooltipTrigger asChild>
                       <button
+                        aria-pressed={active}
                         className={cn(
                           'group relative flex aspect-square items-center justify-center rounded-xl transition-all duration-200',
                           active
@@ -364,89 +362,29 @@ export function BuildTab() {
             </div>
           </TooltipProvider>
 
-          {ductContext ? (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-muted-foreground text-xs">Duct</span>
-              <button
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
-                  activeTool === 'duct-fitting'
-                    ? 'bg-primary/10 ring-1 ring-primary/50'
-                    : 'bg-muted/40 hover:bg-muted',
-                )}
-                onClick={() => {
-                  triggerSFX('sfx:menu-click')
-                  activateBuildTool(activeTool === 'duct-fitting' ? 'duct-segment' : 'duct-fitting')
+          {(['duct-fitting', 'pipe-fitting'] as const)
+            .filter((kind) => (kind === 'duct-fitting' ? ductContext : pipeContext))
+            .map((kind) => (
+              <ToolOptionsPanel
+                active={activeTool === kind}
+                key={kind}
+                getChoiceThumbnail={(option, value) => {
+                  if (option.id !== 'fittingType') return undefined
+                  if (kind === 'duct-fitting' && value === 'elbow')
+                    return '/icons/duct-fitting.webp'
+                  return `/icons/fittings/${kind === 'duct-fitting' ? 'duct' : 'pipe'}-${value}.png`
                 }}
-                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                type="button"
-              >
-                <Image
-                  alt=""
-                  aria-hidden
-                  className="size-4 object-contain"
-                  height={16}
-                  src="/icons/duct-fitting.webp"
-                  width={16}
-                />
-                Add Fitting
-              </button>
-            </div>
-          ) : null}
-
-          {pipeContext ? (
-            <div className="flex flex-col gap-1.5">
-              <span className="text-muted-foreground text-xs">DWV Pipe</span>
-              <button
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
-                  activeTool === 'pipe-fitting'
-                    ? 'bg-primary/10 ring-1 ring-primary/50'
-                    : 'bg-muted/40 hover:bg-muted',
-                )}
-                onClick={() => {
-                  triggerSFX('sfx:menu-click')
-                  activateBuildTool(activeTool === 'pipe-fitting' ? 'pipe-segment' : 'pipe-fitting')
+                kind={kind}
+                onSelect={(option, value) => {
+                  if (activeTool !== kind) {
+                    const defaults = useEditor.getState().toolDefaults[kind]
+                    activateBuildTool(kind)
+                    if (defaults) useEditor.getState().setToolDefaults(kind, defaults)
+                  }
+                  option.set(value)
                 }}
-                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                type="button"
-              >
-                <Image
-                  alt=""
-                  aria-hidden
-                  className="size-4 object-contain"
-                  height={16}
-                  src="/icons/duct-fitting.webp"
-                  width={16}
-                />
-                Add Fitting
-              </button>
-              <button
-                className={cn(
-                  'flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-all duration-200',
-                  activeTool === 'pipe-trap'
-                    ? 'bg-primary/10 ring-1 ring-primary/50'
-                    : 'bg-muted/40 hover:bg-muted',
-                )}
-                onClick={() => {
-                  triggerSFX('sfx:menu-click')
-                  activateBuildTool(activeTool === 'pipe-trap' ? 'pipe-segment' : 'pipe-trap')
-                }}
-                onMouseEnter={() => triggerSFX('sfx:menu-hover')}
-                type="button"
-              >
-                <Image
-                  alt=""
-                  aria-hidden
-                  className="size-4 object-contain"
-                  height={16}
-                  src="/icons/dwv-pipes.webp"
-                  width={16}
-                />
-                Add Trap
-              </button>
-            </div>
-          ) : null}
+              />
+            ))}
 
           {liquidLineContext ? (
             <div className="flex flex-col gap-1.5">

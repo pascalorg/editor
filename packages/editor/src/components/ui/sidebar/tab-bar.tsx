@@ -86,6 +86,8 @@ export function IconRail({ tabs, activeTab, collapsed, onIconClick }: IconRailPr
       <Tooltip key={tab.id}>
         <TooltipTrigger asChild>
           <button
+            aria-label={tab.label}
+            aria-pressed={showActive}
             className={cn(
               'group flex h-11 w-11 items-center justify-center rounded-xl transition-all duration-200 [&_img]:transition-[opacity,filter] [&_img]:duration-200',
               showActive

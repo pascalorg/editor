@@ -1,5 +1,6 @@
 import type { NodeDefinition } from '@pascal-app/core'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
+import { pipeBranchAffordance, pipeContinuationAffordance } from './continuation'
 import { buildPipeSegmentFloorplan } from './floorplan'
 import { buildPipeSegmentGeometry } from './geometry'
 import { pipeSegmentParametrics } from './parametrics'
@@ -17,10 +18,11 @@ import { PipeSegmentNode } from './schema'
  */
 export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
   kind: 'pipe-segment',
-  schemaVersion: 1,
+  schemaVersion: 2,
   schema: PipeSegmentNode,
   category: 'utility',
   distributionRole: 'run',
+  drafting: { surfaceQuery: true, cancelOnHistoryJump: true },
   // Directional run: like a wall, drafting sets a direction, so it takes the
   // structural snapping context (grid / lines / angles / off) with a 45° angle
   // lock available as a cyclable mode.
@@ -31,9 +33,13 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
     parentId: null,
     visible: true,
     metadata: {},
+    autoHangers: false,
+    hangerStyle: 'single',
+    hangerSpacing: 1.5,
+    hangerMaxReach: 2,
     path: [
-      [0, 0, 0],
-      [3, -0.0625, 0],
+      [0, 0.0254, 0],
+      [3, 0.0254, 0],
     ],
     diameter: 2,
     pipeMaterial: 'pvc',
@@ -48,8 +54,13 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
 
   parametrics: pipeSegmentParametrics,
 
+  system: {
+    module: async () => ({
+      default: (await import('../shared/run-hanger-system')).PipeHangerSystem,
+    }),
+  },
+  floorplanDependsOnSiblings: true,
   geometry: buildPipeSegmentGeometry,
-  geometryKey: (n) => JSON.stringify([n.path, n.diameter, n.pipeMaterial, n.system]),
 
   // Open run ends as typed ports — system 'waste'/'vent' keeps the DWV
   // network invisible to duct / refrigerant tools and vice versa.
@@ -92,6 +103,8 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
   // `endpoint-handle` per path vertex; this drags the matching point.
   floorplanAffordances: {
     'move-path-point': createPathPointMoveAffordance('pipe-segment'),
+    'continue-run': pipeContinuationAffordance,
+    'branch-run': pipeBranchAffordance,
   },
 
   // Selection-time path-point handles (drag to edit a committed run).
@@ -110,8 +123,9 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
   tool: () => import('./tool'),
   toolHints: [
     { key: 'Click', label: 'Start run' },
-    { key: 'Click again', label: 'Place it (waste falls ¼″/ft)' },
+    { key: 'Click again', label: 'Place and continue' },
     { key: 'Q', label: 'Waste / vent' },
+    { key: 'S', label: 'Slope / level' },
     { key: '[ / ]', label: 'Pipe size down / up' },
     { key: 'Alt + drag', label: 'Vertical stack ↕, click to place' },
     { key: 'Esc', label: 'Cancel start point' },
@@ -119,8 +133,7 @@ export const pipeSegmentDefinition: NodeDefinition<typeof PipeSegmentNode> = {
 
   presentation: {
     label: 'DWV Pipe',
-    description:
-      'Drain / waste / vent pipe run — waste lines fall at ¼″ per foot, vents run level or vertical.',
+    description: 'Drain / waste / vent pipe run — draw level or toggle a ¼″ per foot fall with S.',
     icon: { kind: 'url', src: '/icons/dwv-pipes.webp' },
     paletteSection: 'structure',
     paletteOrder: 95,

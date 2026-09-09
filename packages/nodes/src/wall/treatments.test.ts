@@ -1,7 +1,17 @@
 import { describe, expect, test } from 'bun:test'
-import type { WallNode, WallTrimConfig } from '@pascal-app/core'
-import { buildWallTreatmentLevelData } from './treatment-level-data'
-import { buildTrimGeometry, wallTreatmentProudOffsets } from './treatments'
+import {
+  calculateLevelMiters,
+  getWallThickness,
+  type WallNode,
+  type WallTrimConfig,
+} from '@pascal-app/core'
+import {
+  buildWallTreatmentLevelData,
+  createWallTreatmentSelector,
+  useWallTreatmentLevelData,
+  type WallTreatmentLevelData,
+} from './treatment-level-data'
+import { buildTrimGeometry, hasWallTreatments, wallTreatmentProudOffsets } from './treatments'
 
 function wall(id: string, start: [number, number], end: [number, number]): WallNode {
   return {
@@ -36,7 +46,11 @@ function treatmentLevelData(walls: WallNode[]) {
     crown: trim,
     chairRail: trim,
   }))
-  return buildWallTreatmentLevelData(treatedWalls, treatedWalls.flatMap(wallTreatmentProudOffsets))
+  return buildWallTreatmentLevelData(
+    'level_test',
+    treatedWalls,
+    treatedWalls.flatMap(wallTreatmentProudOffsets),
+  )
 }
 
 function cornerXs(
@@ -69,6 +83,80 @@ function allPositions(geometry: NonNullable<ReturnType<typeof buildTrimGeometry>
 }
 
 describe('wall treatment miters', () => {
+  test('mount eligibility follows disabled defaults and each enabled trim kind', () => {
+    const node = wall('A', [0, 0], [3, 0])
+    expect(hasWallTreatments(node)).toBe(false)
+    expect(wallTreatmentProudOffsets(node)).toEqual([])
+    for (const kind of ['skirting', 'crown', 'chairRail'] as const) {
+      expect(hasWallTreatments({ ...node, [kind]: trim })).toBe(true)
+      expect(hasWallTreatments({ ...node, [kind]: { ...trim, enabled: false } })).toBe(false)
+    }
+  })
+
+  test.each([
+    'skirting',
+    'crown',
+    'chairRail',
+  ] as const)('preserves %s position bytes with cached per-wall endpoint data', (kind) => {
+    const cases = [
+      [wall('A', [0, 0], [3, 0])],
+      [wall('A', [0, 0], [3, 0]), wall('B', [3, 0], [3, 3])],
+      [wall('A', [0, 0], [3, 0]), wall('B', [0, 0], [1, 3])],
+      [wall('A', [0, 0], [0, 3]), wall('B', [-3, 0], [3, 0])],
+      [{ ...wall('A', [0, 0], [3, 0]), curveOffset: 0.4 }],
+    ]
+    for (const walls of cases) {
+      const node = { ...walls[0]!, [kind]: trim }
+      const proudOffsets = wallTreatmentProudOffsets(node)
+      const prouds = new Set([0, ...proudOffsets.map((proud) => Math.round(proud * 1e6) / 1e6)])
+      const reference: WallTreatmentLevelData = {
+        walls,
+        miterDataByProud: new Map(
+          [...prouds].map((proud) => [
+            proud,
+            calculateLevelMiters(
+              proud === 0
+                ? [...walls]
+                : walls.map((entry) => ({
+                    ...entry,
+                    thickness: getWallThickness(entry) + proud * 2,
+                  })),
+            ),
+          ]),
+        ),
+      }
+      const data = buildWallTreatmentLevelData('level_test', walls, proudOffsets)
+      const select = createWallTreatmentSelector(node, proudOffsets)
+      const slice = select({
+        ...useWallTreatmentLevelData.getState(),
+        byLevelId: new Map([['level_test', data]]),
+      })!
+      for (const side of ['interior', 'exterior'] as const) {
+        const openings = [
+          {
+            type: 'door',
+            width: 0.8,
+            height: 2,
+            position: [1.5, 1, 0] as [number, number, number],
+          },
+        ]
+        const before = buildTrimGeometry(node, side, trim, kind, openings, reference)!
+        const after = buildTrimGeometry(node, side, trim, kind, openings, slice)!
+        expect(before).not.toBeNull()
+        expect(after).not.toBeNull()
+        const beforeArray = before.getAttribute('position').array
+        const afterArray = after.getAttribute('position').array
+        expect(
+          new Uint8Array(afterArray.buffer, afterArray.byteOffset, afterArray.byteLength),
+        ).toEqual(
+          new Uint8Array(beforeArray.buffer, beforeArray.byteOffset, beforeArray.byteLength),
+        )
+        before.dispose()
+        after.dispose()
+      }
+    }
+  })
+
   test.each([
     ['skirting', 0.0624],
     ['crown', 0.0604],

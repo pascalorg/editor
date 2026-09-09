@@ -52,7 +52,7 @@ export const ArkitPointCloudPayloadSchema = PointCloudPayloadSchema.safeExtend({
 })
 
 const MAX_SURFACE_MESH_VERTICES = 65_535
-const MAX_SURFACE_MESH_FACES = 6_000
+const MAX_SURFACE_MESH_FACES = 20_000
 
 export const SurfaceMeshPayloadSchema = z
   .object({
@@ -69,7 +69,10 @@ export const SurfaceMeshPayloadSchema = z
     indexEncoding: z.literal('uint16x3-base64-little-endian'),
     positions: z.string().min(1).max(524_280),
     colors: z.string().min(1).max(262_140),
-    indices: z.string().min(1).max(48_000),
+    indices: z
+      .string()
+      .min(1)
+      .max(MAX_SURFACE_MESH_FACES * 8),
   })
   .superRefine((payload, context) => {
     if (payload.vertexCount > payload.faceCount * 3) {

@@ -10,10 +10,18 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./preview": {
+      "types": "./src/preview.ts",
+      "react-native": "./src/preview.ts",
+      "browser": "./src/preview.ts",
+      "import": "./dist/preview.js",
+      "default": "./dist/preview.js"
     }
   },
   "files": [
     "dist",
+    "src",
     "README.md"
   ],
   "scripts": {

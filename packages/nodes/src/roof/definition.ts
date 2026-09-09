@@ -7,6 +7,7 @@ import {
   type RoofSegmentNode,
   type SceneApi,
 } from '@pascal-app/core'
+import { DRAFTING_SURFACE_EXTENSION_KEY, type DraftingSurfaceExtension } from '@pascal-app/editor'
 import { buildRoofFloorplan } from './floorplan'
 import { roofParametrics } from './parametrics'
 import useRoofFootprintSource from './roof-footprint-source'
@@ -110,6 +111,11 @@ export const roofDefinition: NodeDefinition<typeof RoofNode> = {
   schema: RoofNode,
   category: 'structure',
   surfaceRole: 'roof',
+  extensions: {
+    [DRAFTING_SURFACE_EXTENSION_KEY]: {
+      kind: 'roof',
+    } satisfies DraftingSurfaceExtension,
+  },
 
   defaults: () => {
     const stub = RoofNodeSchema.parse({ id: 'roof_default' as never, type: 'roof' })

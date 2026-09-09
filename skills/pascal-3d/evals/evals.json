@@ -1,0 +1,53 @@
+{
+  "skill_name": "pascal-3d",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Set up Pascal locally for Codex on this Mac, create a small room, validate it, and return the editor link. Keep all project data local.",
+      "expected_output": "Uses the local CLI and stable MCP connector, creates no hosted account, validates and saves the scene, and returns only a tool-provided editorUrl.",
+      "files": [],
+      "expectations": [
+        "Chooses the local CLI path and does not request or create a hosted credential.",
+        "Uses pascal mcp setup codex or the pascal mcp connect configuration.",
+        "Runs validate_scene, verify_scene, save_scene, and get_project_status before claiming success.",
+        "Does not claim GLB export or cloud synchronization."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "I have a Pascal project in my company workspace. Connect Claude Code and add exactly one window without changing anything else.",
+      "expected_output": "Uses a Settings-created workspace key, preserves scope, verifies the one-node edit, and returns the reported hosted editor URL.",
+      "files": [],
+      "expectations": [
+        "Explains that the key must belong to the target user or organization workspace.",
+        "Does not self-register a separate account.",
+        "Reads the target and records a version or graph hash before the edit.",
+        "Reports the changed node ID and post-save verification evidence."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "I don't have a Pascal account. You are authorized to create a private agent-owned workspace for this modeling task; keep the API key safe and don't show it to me.",
+      "expected_output": "Uses the autonomous registration path once, stores the returned key securely without echoing it, and accurately describes separate account ownership.",
+      "files": [],
+      "expectations": [
+        "Treats the prompt as explicit authorization for autonomous registration.",
+        "Does not claim an email address or browser login for the agent account.",
+        "Does not print the API key or place it in source control.",
+        "States that the project will not automatically appear in another Pascal account."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Tell me what Pascal can do before I decide whether to connect anything.",
+      "expected_output": "Describes public capabilities and limitations without creating an account, configuring a client, or mutating a project.",
+      "files": [],
+      "expectations": [
+        "Does not register an account or request a credential.",
+        "Separates local, hosted, and custom MCP storage paths.",
+        "States that headless GLB export is currently not implemented.",
+        "Does not claim that every MCP host supports sampling or the same release version."
+      ]
+    }
+  ]
+}

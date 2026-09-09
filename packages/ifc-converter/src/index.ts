@@ -699,7 +699,7 @@ export async function convertIfcToPascal(
 
   // Maps to track relationships
   const parentMap = new Map<number, number>()
-  const childrenMap = new Map<number, number[]>()
+  const childrenMap = new Map<number, Set<number>>()
   const expressIdToNodeId = new Map<number, string>()
 
   progress('Analyzing spatial relationships...', 20)
@@ -754,9 +754,9 @@ export async function convertIfcToPascal(
       })
 
       if (!childrenMap.has(parentExpressID)) {
-        childrenMap.set(parentExpressID, [])
+        childrenMap.set(parentExpressID, new Set())
       }
-      childrenMap.get(parentExpressID)?.push(...children)
+      for (const childID of children) childrenMap.get(parentExpressID)!.add(childID)
     }
   }
 
@@ -776,9 +776,9 @@ export async function convertIfcToPascal(
       })
 
       if (!childrenMap.has(parentExpressID)) {
-        childrenMap.set(parentExpressID, [])
+        childrenMap.set(parentExpressID, new Set())
       }
-      childrenMap.get(parentExpressID)?.push(...children)
+      for (const childID of children) childrenMap.get(parentExpressID)!.add(childID)
     }
   }
 
@@ -1131,6 +1131,9 @@ export async function convertIfcToPascal(
     for (const openingId of openingIds) {
       const fillId = openingToFill.get(openingId)
       if (!fillId) continue
+      // IFC fills belong to at most one opening, which voids one host element.
+      // Repeated or conflicting relationships must not emit another node.
+      if (expressIdToNodeId.has(fillId)) continue
 
       const isDoor = doorExpressIds.has(fillId)
       const isWindow = windowExpressIds.has(fillId)
@@ -1200,7 +1203,6 @@ export async function convertIfcToPascal(
 
         if (isDoor) {
           const nodeId = generateId('door')
-          expressIdToNodeId.set(fillId, nodeId)
 
           // Vertical centering is now handled: door center Y = height/2 so the
           // opening sits at the correct position. Remaining caveat: door bottom
@@ -1226,10 +1228,10 @@ export async function convertIfcToPascal(
           })
 
           nodes[nodeId] = doorNode
+          expressIdToNodeId.set(fillId, nodeId)
           wallNode.children.push(nodeId)
         } else {
           const nodeId = generateId('window')
-          expressIdToNodeId.set(fillId, nodeId)
 
           // TODO(ifc-fix): same scalar-vs-tuple position issue as door above.
           // sillHeight stays read-only metadata until we resolve the window
@@ -1260,6 +1262,7 @@ export async function convertIfcToPascal(
           })
 
           nodes[nodeId] = windowNode
+          expressIdToNodeId.set(fillId, nodeId)
           wallNode.children.push(nodeId)
         }
       } catch {
@@ -1383,7 +1386,6 @@ export async function convertIfcToPascal(
       if (isDoor) {
         const h = height ?? 2.1
         const nodeId = generateId('door')
-        expressIdToNodeId.set(fillId, nodeId)
         const doorNode = tryParse(DoorNode, 'door', {
           object: 'node',
           id: nodeId,
@@ -1404,6 +1406,7 @@ export async function convertIfcToPascal(
           }),
         })
         nodes[nodeId] = doorNode
+        expressIdToNodeId.set(fillId, nodeId)
         if (parentNodeId && nodes[parentNodeId]) {
           ;(nodes[parentNodeId] as { children?: string[] }).children?.push(nodeId)
         }
@@ -1411,7 +1414,6 @@ export async function convertIfcToPascal(
         const h = height ?? 1.2
         const sill = hosted && scene ? Math.max(0, scene[2] - hosted.info.baseY) : 0
         const nodeId = generateId('window')
-        expressIdToNodeId.set(fillId, nodeId)
         const windowNode = tryParse(WindowNode, 'window', {
           object: 'node',
           id: nodeId,
@@ -1431,6 +1433,7 @@ export async function convertIfcToPascal(
           }),
         })
         nodes[nodeId] = windowNode
+        expressIdToNodeId.set(fillId, nodeId)
         if (parentNodeId && nodes[parentNodeId]) {
           ;(nodes[parentNodeId] as { children?: string[] }).children?.push(nodeId)
         }

@@ -51,18 +51,25 @@ import type {
   WindowNode,
   ZoneNode,
 } from '../schema'
-import type { AnyNode } from '../schema/types'
+import type { AnyNode, AnyNodeId } from '../schema/types'
 
 // Base event interfaces
 export interface GridEvent {
-  /** World-space intersection point on the grid plane. */
+  /** World-space intersection point on the floor grid or a scene surface. */
   position: [number, number, number]
   /**
-   * Building-local intersection point — relative to the currently selected building.
-   * Equals `position` when no building is selected.
+   * Intersection in localFrameId when specified, otherwise the selected building.
+   * Equals `position` when neither frame is available.
    * Use this for placing/committing anything that lives inside a building (walls, slabs, items, etc.).
    */
   localPosition: [number, number, number]
+  /** Explicit scene-node coordinate frame for local fields, when provided. */
+  localFrameId?: AnyNodeId
+  /** Pointer ray in the same coordinate frame as `localPosition`. */
+  localRay?: {
+    origin: [number, number, number]
+    direction: [number, number, number]
+  }
   faceIndex?: number
   /**
    * Optional: the hit Three.js object. Present when the grid event was
@@ -72,6 +79,20 @@ export interface GridEvent {
    * the intersection to.
    */
   object?: Object3D
+  /** Architectural hit in the same coordinate frame as localPosition. */
+  surfaceLocalPosition?: [number, number, number]
+  /** Outward normal in the same coordinate frame as localPosition. */
+  surfaceNormal?: [number, number, number]
+  /** The architectural surface object hit by the cursor, when available. */
+  surfaceObject?: Object3D
+  /** Semantic architectural hit for scoped placement/drafting tools. */
+  surfaceHit?: {
+    kind: 'wall' | 'ceiling' | 'slab' | 'roof'
+    hostId: AnyNodeId
+    levelId?: AnyNodeId
+    face: 'side' | 'top' | 'end' | 'unknown'
+    side?: 'front' | 'back'
+  }
   nativeEvent: ThreeEvent<PointerEvent>
 }
 
@@ -170,8 +191,32 @@ export interface CameraControlEvent {
   nodeId: AnyNode['id']
 }
 
+export interface SnapshotCapturePose {
+  position: [number, number, number]
+  quaternion: [number, number, number, number]
+  /** Vertical field of view in degrees in the final standard-size output. */
+  fov: number
+}
+
+export interface SnapshotSavedEvent {
+  requestId?: string
+  projectId?: string
+  id: string
+  url: string
+  width: number
+  height: number
+}
+
+export interface SnapshotCaptureFailedEvent {
+  requestId: string
+  error: string
+}
+
 export interface ThumbnailGenerateEvent {
   projectId: string
+  requestId?: string
+  /** World-space pose for a standard capture without moving the viewport camera. */
+  cameraPose?: SnapshotCapturePose
   captureMode?: 'standard' | 'viewport' | 'area'
   cropRegion?: { x: number; y: number; width: number; height: number }
   /**
@@ -263,7 +308,8 @@ type ThumbnailEvents = {
 }
 
 type SnapshotEvents = {
-  'snapshot:saved': undefined
+  'snapshot:saved': undefined | SnapshotSavedEvent
+  'snapshot:capture-failed': SnapshotCaptureFailedEvent
   'camera:go-to-position': { position: [number, number, number]; target: [number, number, number] }
 }
 

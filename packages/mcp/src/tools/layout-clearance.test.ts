@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import type { AnyNode } from '@pascal-app/core/schema'
+import { inspectItemPlanFootprint, itemNodePlanAabb, resolveNodeLevelId } from './door-clearance'
 import {
   classifyPlacement,
   findItemItemCollisions,
@@ -168,6 +169,110 @@ describe('layout-clearance', () => {
     const b = item('b', [1.5, 0, 0], [1, 1, 1], 'B')
     const hits = findItemItemCollisions({ nodes: [a, b] as unknown as AnyNode[] })
     expect(hits.length).toBe(1)
+  })
+
+  test('mirrored scale uses a positive physical footprint', () => {
+    const a = item('a', [0, 0, 0], [1, 1, 1], 'A', 0, 'level_1', [-2, 1, 1])
+    const b = item('b', [1.2, 0, 0], [1, 1, 1], 'B')
+    const hits = findItemItemCollisions({ nodes: [a, b] as unknown as AnyNode[], gap: 0 })
+    expect(hits).toHaveLength(1)
+  })
+
+  test('rejects zero-area and non-planar item footprints', () => {
+    const zero = item('zero', [0, 0, 0], [0, 1, 1], 'Zero') as unknown as Extract<
+      AnyNode,
+      { type: 'item' }
+    >
+    const tilted = item('tilted', [0, 0, 0], [1, 1, 1], 'Tilted') as unknown as Extract<
+      AnyNode,
+      { type: 'item' }
+    >
+    tilted.rotation = [0.1, 0, 0]
+
+    expect(inspectItemPlanFootprint(zero)).toEqual({
+      ok: false,
+      reason: 'non_positive_plan_dimensions',
+    })
+    expect(inspectItemPlanFootprint(tilted)).toEqual({
+      ok: false,
+      reason: 'non_planar_rotation',
+    })
+    expect(itemNodePlanAabb(tilted)).not.toBeNull()
+  })
+
+  test('rejects missing, non-finite, and wall-attached floor-fit evidence', () => {
+    const missing = item('missing', [0, 0, 0], [1, 1, 1], 'Missing') as unknown as Extract<
+      AnyNode,
+      { type: 'item' }
+    >
+    delete (missing.asset as { dimensions?: [number, number, number] }).dimensions
+    const nonFinite = item(
+      'non-finite',
+      [0, 0, 0],
+      [Number.POSITIVE_INFINITY, 1, 1],
+      'Non-finite',
+    ) as unknown as Extract<AnyNode, { type: 'item' }>
+    const nonFiniteY = item(
+      'non-finite-y',
+      [0, Number.NaN, 0],
+      [1, 1, 1],
+      'Non-finite Y',
+    ) as unknown as Extract<AnyNode, { type: 'item' }>
+    const attached = item('attached', [0, 0, 0], [1, 1, 1], 'Attached') as unknown as Extract<
+      AnyNode,
+      { type: 'item' }
+    >
+    attached.asset.attachTo = 'wall'
+
+    expect(inspectItemPlanFootprint(missing)).toEqual({ ok: false, reason: 'missing_dimensions' })
+    expect(inspectItemPlanFootprint(nonFinite)).toEqual({
+      ok: false,
+      reason: 'non_finite_dimensions',
+    })
+    expect(inspectItemPlanFootprint(nonFiniteY)).toEqual({
+      ok: false,
+      reason: 'non_finite_position',
+    })
+    expect(inspectItemPlanFootprint(attached, { floorOnly: true })).toEqual({
+      ok: false,
+      reason: 'unsupported_attachment',
+    })
+  })
+
+  test('rejects a positive scale and dimension whose effective extent underflows to zero', () => {
+    const underflow = item(
+      'underflow',
+      [0, 0, 0],
+      [Number.MIN_VALUE, 1, 1],
+      'Underflow',
+      0,
+      'level_1',
+      [Number.MIN_VALUE, 1, 1],
+    ) as unknown as Extract<AnyNode, { type: 'item' }>
+    expect(inspectItemPlanFootprint(underflow)).toEqual({
+      ok: false,
+      reason: 'non_positive_plan_dimensions',
+    })
+  })
+
+  test('resolves a level through children when parentId is dangling', () => {
+    const child = item('child', [0, 0, 0], [1, 1, 1], 'Child', 0, 'missing_parent')
+    const level = {
+      object: 'node' as const,
+      id: 'level_1',
+      type: 'level' as const,
+      parentId: null,
+      visible: true,
+      metadata: {},
+      level: 0,
+      baseElevation: 0,
+      height: 2.7,
+      children: ['child'],
+    }
+    const nodes = [level, child] as unknown as AnyNode[]
+    expect(resolveNodeLevelId('child', new Map(nodes.map((node) => [node.id, node])))).toBe(
+      'level_1',
+    )
   })
 
   test('findValidPlacement reports primary door failure not last OOB (L7)', () => {

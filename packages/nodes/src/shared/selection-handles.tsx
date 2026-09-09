@@ -146,3 +146,30 @@ export function RotateArc({
     />
   )
 }
+
+export function ContinuePlusHandle({
+  position,
+  onActivate,
+}: {
+  position: Point
+  onActivate: () => void
+}) {
+  const [hovered, setHovered] = useState(false)
+  const { camera } = useThree()
+  const zoom = camera instanceof OrthographicCamera ? 1 / camera.zoom : 1
+  const baseScale = zoom * ARROW_SCALE
+  return (
+    <HandleArrow
+      cursor="grab"
+      hover={hovered}
+      hoverScale={1.15}
+      onHoverChange={setHovered}
+      onPointerDown={(event) => {
+        consumeHandlePress(event)
+        onActivate()
+      }}
+      placement={{ position, rotation: [-Math.PI / 2, 0, 0], baseScale }}
+      shape="plus"
+    />
+  )
+}

@@ -8,7 +8,7 @@ import { BATCHED_LAYER, SCENE_LAYER, SHADOW_ONLY_LAYER } from './layers'
  * - `shadow-only` — solo mode: out of the color passes, still casting shadows.
  * - `batched` — a level's merged wall mesh draws this wall now.
  */
-export type HiddenReason = 'isolated' | 'shadow-only' | 'batched'
+export type HiddenReason = 'isolated' | 'shadow-only' | 'batched' | 'wall-batched'
 
 /**
  * Single owner of `Object3D.layers` for every feature that hides an object.
@@ -52,6 +52,24 @@ export function showInScene(obj: Object3D, reason: HiddenReason): void {
   delete holder[HOLD]
 }
 
+export function temporarilyShowShadowOnly(root: Object3D): () => void {
+  const masks = new Map<Object3D, number>()
+  root.traverse((obj) => {
+    const hold = (obj as Holder)[HOLD]
+    if (!hold?.reasons.has('shadow-only')) return
+    masks.set(obj, obj.layers.mask)
+    const reasons = new Set(hold.reasons)
+    reasons.delete('shadow-only')
+    // A capture needs the original scene geometry, while editor overlays and
+    // objects hidden by isolation or batching must retain their own masks.
+    if (reasons.size === 0) obj.layers.mask = hold.original
+    else applyHold(obj, { original: hold.original, reasons })
+  })
+  return () => {
+    for (const [obj, mask] of masks) obj.layers.mask = mask
+  }
+}
+
 function applyHold(obj: Object3D, hold: Hold): void {
   obj.layers.mask = hold.original
   obj.layers.disable(SCENE_LAYER)
@@ -59,7 +77,7 @@ function applyHold(obj: Object3D, hold: Hold): void {
   // A batched wall is both drawn and shadowed by the merged mesh, so it stays
   // out of the shadow pass too — enabling the shadow-only bit would submit its
   // triangles a second time, on top of the copy the batch already casts.
-  if (hold.reasons.has('batched')) {
+  if (hold.reasons.has('batched') || hold.reasons.has('wall-batched')) {
     obj.layers.enable(BATCHED_LAYER)
     return
   }

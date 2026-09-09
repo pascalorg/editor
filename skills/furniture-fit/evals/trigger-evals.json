@@ -1,0 +1,45 @@
+{
+  "skill_name": "furniture-fit",
+  "evals": [
+    {
+      "query": "Will this 84 by 38 inch sofa overlap anything in my measured Pascal living room at its current rotation?",
+      "should_trigger": true
+    },
+    {
+      "query": "Compare a 2 meter cabinet at 0 and 90 degrees in a 2.3 by 1.15 meter alcove.",
+      "should_trigger": true
+    },
+    {
+      "query": "Check whether the bed footprint clears the modeled door and leaves 24 inches of walking space.",
+      "should_trigger": true
+    },
+    {
+      "query": "The listing photo has no scale and one dimension says 1,234. Can you prove this wardrobe fits through my hall?",
+      "should_trigger": true
+    },
+    {
+      "query": "Find a collision-free pose for this existing table in the Pascal dining room, but don't save it.",
+      "should_trigger": true
+    },
+    {
+      "query": "Recommend three sofa colors that match walnut floors.",
+      "should_trigger": false
+    },
+    {
+      "query": "Track the shipping status of my furniture order.",
+      "should_trigger": false
+    },
+    {
+      "query": "Write product copy for a modular sectional.",
+      "should_trigger": false
+    },
+    {
+      "query": "Estimate how much lumber I need to build a bookshelf.",
+      "should_trigger": false
+    },
+    {
+      "query": "Fix the CSS grid on my furniture catalog page.",
+      "should_trigger": false
+    }
+  ]
+}

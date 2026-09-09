@@ -25,7 +25,7 @@
 export const WALL_PLACEHOLDER_SWEEP_INTERVAL = 30
 
 type GeometryLike = {
-  userData?: { placeholder?: unknown }
+  userData?: { placeholder?: unknown; built?: unknown }
   getAttribute?: (name: string) => { count: number } | undefined
 } | null
 
@@ -33,6 +33,7 @@ type GeometryLike = {
 export const isPlaceholderWallGeometry = (geometry: GeometryLike): boolean => {
   if (!geometry) return false
   if (geometry.userData?.placeholder === true) return true
+  if (geometry.userData?.built === true) return false
   const position = geometry.getAttribute?.('position')
   return position !== undefined && position.count === 3
 }

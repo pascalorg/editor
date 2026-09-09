@@ -1,4 +1,11 @@
-import { type AnyNodeId, type NodePort, nodeRegistry, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  findLevelAncestorId,
+  type NodePort,
+  nodeRegistry,
+  useScene,
+} from '@pascal-app/core'
+import type { RunSurfaceTarget } from './distribution-run-contract'
 
 /** A port plus the scene node that owns it. */
 export type ScenePort = NodePort & { nodeId: AnyNodeId }
@@ -20,6 +27,7 @@ export const REFRIGERANT_PORT_SYSTEMS = ['refrigerant'] as const
  *     A port with no `system` matches any filter.
  */
 export type PortFilter = {
+  levelId?: AnyNodeId
   excludeNodeId?: AnyNodeId
   systems?: readonly string[]
 }
@@ -30,11 +38,17 @@ export type PortFilter = {
  * transform inside `def.ports`).
  */
 export function collectScenePorts(filter: PortFilter = {}): ScenePort[] {
-  const { excludeNodeId, systems } = filter
+  const { excludeNodeId, systems, levelId } = filter
   const { nodes } = useScene.getState()
   const result: ScenePort[] = []
   for (const node of Object.values(nodes)) {
-    if (!node || node.id === excludeNodeId) continue
+    if (
+      !node ||
+      node.visible === false ||
+      node.id === excludeNodeId ||
+      (levelId && findLevelAncestorId(node.id, nodes) !== levelId)
+    )
+      continue
     const ports = nodeRegistry.get(node.type)?.ports?.(node)
     if (!ports) continue
     for (const port of ports) {
@@ -70,6 +84,35 @@ export function findNearestPortXZ(
   return best
 }
 
+/** Nearest port using true 3D distance. Use this while drafting on a wall. */
+export function findNearestPort3D(
+  point: readonly [number, number, number],
+  ports: ScenePort[],
+  radius: number,
+  surface?: RunSurfaceTarget | null,
+): ScenePort | null {
+  let best: ScenePort | null = null
+  let bestDistSq = radius * radius
+  for (const port of ports) {
+    if (surface?.kind === 'wall') {
+      const planeDistance =
+        (port.position[0] - surface.frame.origin[0]) * surface.frame.normal[0] +
+        (port.position[1] - surface.frame.origin[1]) * surface.frame.normal[1] +
+        (port.position[2] - surface.frame.origin[2]) * surface.frame.normal[2]
+      if (Math.abs(planeDistance) > radius) continue
+    }
+    const dx = port.position[0] - point[0]
+    const dy = port.position[1] - point[1]
+    const dz = port.position[2] - point[2]
+    const distSq = dx * dx + dy * dy + dz * dz
+    if (distSq <= bestDistSq) {
+      bestDistSq = distSq
+      best = port
+    }
+  }
+  return best
+}
+
 // ─── Run-body hits ───────────────────────────────────────────────────
 
 /** Closest-point hit on a duct run's centerline (not its end ports). */
@@ -92,7 +135,7 @@ export type RunBodyHit = {
 export function findNearestRunBodyXZ(
   point: readonly [number, number, number],
   radius: number,
-  filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[] } = {},
+  filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[]; levelId?: AnyNodeId } = {},
 ): RunBodyHit | null {
   const kinds = filter.kinds ?? ['duct-segment']
   const { nodes } = useScene.getState()
@@ -100,6 +143,7 @@ export function findNearestRunBodyXZ(
   let bestDistSq = radius * radius
   for (const node of Object.values(nodes)) {
     if (!node || !kinds.includes(node.type) || node.id === filter.excludeNodeId) continue
+    if (filter.levelId && findLevelAncestorId(node.id, nodes) !== filter.levelId) continue
     const path = (node as { path?: Array<readonly [number, number, number]> }).path
     if (!path) continue
     for (let i = 0; i < path.length - 1; i++) {
@@ -125,6 +169,63 @@ export function findNearestRunBodyXZ(
           segmentIndex: i,
           point: [cx, a[1] + (b[1] - a[1]) * t, cz],
         }
+      }
+    }
+  }
+  return best
+}
+
+/** Nearest run centerline point using true 3D distance, including risers. */
+export function findNearestRunBody3D(
+  point: readonly [number, number, number],
+  radius: number,
+  filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[]; levelId?: AnyNodeId } = {},
+  surface?: RunSurfaceTarget | null,
+): RunBodyHit | null {
+  const kinds = filter.kinds ?? ['duct-segment']
+  const { nodes } = useScene.getState()
+  let best: RunBodyHit | null = null
+  let bestDistSq = radius * radius
+  for (const node of Object.values(nodes)) {
+    if (!node || !kinds.includes(node.type) || node.id === filter.excludeNodeId) continue
+    if (filter.levelId && findLevelAncestorId(node.id, nodes) !== filter.levelId) continue
+    if (node.visible === false) continue
+    const path = (node as { path?: Array<readonly [number, number, number]> }).path
+    if (!path) continue
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = path[i]!
+      const b = path[i + 1]!
+      if (surface?.kind === 'wall') {
+        const aPlane =
+          (a[0] - surface.frame.origin[0]) * surface.frame.normal[0] +
+          (a[1] - surface.frame.origin[1]) * surface.frame.normal[1] +
+          (a[2] - surface.frame.origin[2]) * surface.frame.normal[2]
+        const bPlane =
+          (b[0] - surface.frame.origin[0]) * surface.frame.normal[0] +
+          (b[1] - surface.frame.origin[1]) * surface.frame.normal[1] +
+          (b[2] - surface.frame.origin[2]) * surface.frame.normal[2]
+        if (Math.abs(aPlane) > radius && Math.abs(bPlane) > radius) continue
+      }
+      const abx = b[0] - a[0]
+      const aby = b[1] - a[1]
+      const abz = b[2] - a[2]
+      const lenSq = abx * abx + aby * aby + abz * abz
+      if (lenSq < 1e-8) continue
+      const t = Math.min(
+        1,
+        Math.max(
+          0,
+          ((point[0] - a[0]) * abx + (point[1] - a[1]) * aby + (point[2] - a[2]) * abz) / lenSq,
+        ),
+      )
+      const hit: [number, number, number] = [a[0] + abx * t, a[1] + aby * t, a[2] + abz * t]
+      const dx = point[0] - hit[0]
+      const dy = point[1] - hit[1]
+      const dz = point[2] - hit[2]
+      const distSq = dx * dx + dy * dy + dz * dz
+      if (distSq <= bestDistSq) {
+        bestDistSq = distSq
+        best = { nodeId: node.id, segmentIndex: i, point: hit }
       }
     }
   }
@@ -193,6 +294,84 @@ export function findRunBodyCrossingXZ(
           segmentIndex: i,
           point: [a[0] + ex * t, a[1] + (b[1] - a[1]) * t, a[2] + ez * t],
         }
+      }
+    }
+  }
+  return best
+}
+
+/** Surface-local crossing for wall drafting. Intersects projected U/V lines
+ * and ignores runs that are not coplanar with the selected wall. */
+export function findRunBodyCrossingSurface(
+  start: readonly [number, number, number],
+  end: readonly [number, number, number],
+  endMargin: number,
+  surface: RunSurfaceTarget,
+  filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[] } = {},
+): RunBodyHit | null {
+  const project = (p: readonly [number, number, number]): [number, number, number] => {
+    const d: [number, number, number] = [
+      p[0] - surface.frame.origin[0],
+      p[1] - surface.frame.origin[1],
+      p[2] - surface.frame.origin[2],
+    ]
+    return [
+      d[0] * surface.frame.tangent[0] +
+        d[1] * surface.frame.tangent[1] +
+        d[2] * surface.frame.tangent[2],
+      d[0] * surface.frame.bitangent[0] +
+        d[1] * surface.frame.bitangent[1] +
+        d[2] * surface.frame.bitangent[2],
+      d[0] * surface.frame.normal[0] +
+        d[1] * surface.frame.normal[1] +
+        d[2] * surface.frame.normal[2],
+    ]
+  }
+  const s0 = project(start),
+    s1 = project(end)
+  const dx = s1[0] - s0[0],
+    dy = s1[1] - s0[1]
+  const drawnLen = Math.hypot(dx, dy)
+  if (drawnLen < 1e-8) return null
+  const drawnPad = Math.min(0.45, endMargin / drawnLen)
+  const kinds = filter.kinds ?? ['duct-segment']
+  const { nodes } = useScene.getState()
+  let best: RunBodyHit | null = null
+  let bestScore = Number.POSITIVE_INFINITY
+  for (const node of Object.values(nodes)) {
+    if (
+      !node ||
+      node.visible === false ||
+      node.parentId !== surface.levelId ||
+      !kinds.includes(node.type) ||
+      node.id === filter.excludeNodeId
+    )
+      continue
+    const path = (node as { path?: Array<readonly [number, number, number]> }).path
+    if (!path) continue
+    for (let i = 0; i < path.length - 1; i++) {
+      const a = path[i]!,
+        b = path[i + 1]!,
+        pa = project(a),
+        pb = project(b)
+      const ex = pb[0] - pa[0],
+        ey = pb[1] - pa[1],
+        runLen = Math.hypot(ex, ey)
+      const denom = dx * ey - dy * ex
+      if (runLen < 1e-8 || Math.abs(denom) < 1e-9) continue
+      const wx = pa[0] - s0[0],
+        wy = pa[1] - s0[1]
+      const s = (wx * ey - wy * ex) / denom,
+        t = (wx * dy - wy * dx) / denom
+      if (Math.abs(pa[2] + t * (pb[2] - pa[2]) - (s0[2] + s * (s1[2] - s0[2]))) > 0.01) continue
+      const runPad = Math.min(0.45, endMargin / runLen)
+      if (s <= drawnPad || s >= 1 - drawnPad || t <= runPad || t >= 1 - runPad || s >= bestScore)
+        continue
+      bestScore = s
+      best = {
+        nodeId: node.id,
+        segmentIndex: i,
+        point: [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t],
       }
     }
   }

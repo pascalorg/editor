@@ -33,11 +33,15 @@ export type {
   SiteEvent,
   SkylightEvent,
   SlabEvent,
+  SnapshotCaptureFailedEvent,
+  SnapshotCapturePose,
+  SnapshotSavedEvent,
   SolarPanelEvent,
   SpawnEvent,
   StairEvent,
   StairSegmentEvent,
   StructuralGridEvent,
+  ThumbnailGenerateEvent,
   WallEvent,
   WindowEvent,
   ZoneEvent,
@@ -295,6 +299,7 @@ export * from './services'
 export { isMovable, movePlanToward, moveToward, resolveMovable } from './services/movement'
 export {
   acquireSceneHistoryPause,
+  activeSceneCommitNodeIds,
   getSceneHistoryPauseDepth,
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,

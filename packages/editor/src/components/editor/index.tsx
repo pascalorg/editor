@@ -778,6 +778,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isFirstPersonMode,
   isXRMode,
   isStudioMode,
+  renderPaused,
   onThumbnailCapture,
   viewerSceneSlot,
 }: {
@@ -786,6 +787,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isFirstPersonMode: boolean
   isXRMode: boolean
   isStudioMode: boolean
+  renderPaused: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
   viewerSceneSlot?: ReactNode
 }) {
@@ -824,7 +826,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       {isCaptureMode && !isXRMode && <CaptureCameraRig />}
-      {!isXRMode && <CustomCameraControls />}
+      {!isXRMode && <CustomCameraControls paused={renderPaused} />}
       {!isXRMode && <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />}
       {!(isFirstPersonMode || isXRMode) && <SiteEdgeLabels />}
       <InteractiveSystem />
@@ -1166,6 +1168,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
             <ViewerSceneContent
               isFirstPersonMode={isFirstPersonMode}
               isLoading={showLoader}
+              renderPaused={!show3d && !showLoader}
               isStudioMode={isStudioMode}
               isVersionPreviewMode={isVersionPreviewMode}
               isXRMode={xr != null}
@@ -1324,6 +1327,7 @@ function EditorContent({
 
   // Load scene on mount (or when onLoad identity changes, e.g. project switch)
   useEffect(() => {
+    void sceneLoadAttempt
     let cancelled = false
 
     async function load() {

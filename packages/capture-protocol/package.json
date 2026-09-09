@@ -9,6 +9,7 @@
     ".": {
       "types": "./src/index.ts",
       "react-native": "./src/index.ts",
+      "browser": "./src/index.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     }

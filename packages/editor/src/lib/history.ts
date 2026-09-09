@@ -1,5 +1,7 @@
-import { useLiveNodeOverrides, useLiveTransforms, useScene } from '@pascal-app/core'
+import { emitter, useLiveNodeOverrides, useLiveTransforms, useScene } from '@pascal-app/core'
 import { markPerfAction } from '@pascal-app/viewer'
+import useInteractionScope from '../store/use-interaction-scope'
+import { registeredDraftingConfig } from './interaction/registered-drafting'
 
 export type HistoryCommandState = {
   canRedo: boolean
@@ -72,7 +74,13 @@ function refreshSceneAfterHistoryJump() {
   }
 }
 
+export function shouldCancelDraftOnHistoryJump(): boolean {
+  const scope = useInteractionScope.getState().scope
+  return registeredDraftingConfig(scope)?.cancelOnHistoryJump === true
+}
+
 export function runUndo(): HistoryCommandResult {
+  if (shouldCancelDraftOnHistoryJump()) emitter.emit('tool:cancel')
   if (historyCommandDelegate) {
     const result = historyCommandDelegate.undo()
     // Mark only real jumps: a no-op undo must not open a receipt (or
@@ -88,6 +96,7 @@ export function runUndo(): HistoryCommandResult {
 }
 
 export function runRedo(): HistoryCommandResult {
+  if (shouldCancelDraftOnHistoryJump()) emitter.emit('tool:cancel')
   if (historyCommandDelegate) {
     const result = historyCommandDelegate.redo()
     if (result.kind !== 'empty') markPerfAction('redo')

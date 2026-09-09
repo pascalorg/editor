@@ -31,3 +31,20 @@ enables them. Persisted values in the scan node's `layers` map always override t
 without host defaults, every available layer remains visible for backwards compatibility.
 Hidden sessions and layers are unmounted rather than only made visually transparent, so they stop
 raycasting, artifact work, animation, and live packet subscriptions while disabled.
+
+## Local surface previews
+
+`@pascal-app/capture-viewer/preview` exports `createSurfaceMeshGeometry` and `createClayMatcap`
+without importing the React viewer runtime. A host can render a locally saved surface immediately,
+before its archive is uploaded. Browser and React Native exports resolve source, so an embedded
+DOM bundle does not depend on generated workspace `dist` files.
+
+The geometry decoder uses the shared capture-protocol validator, including the native
+20,000-face budget, byte lengths, and index bounds. It returns `null` for invalid input.
+The host owns the returned geometry and matcap texture and must dispose them on teardown.
+
+Direct `CaptureStreamLayer` consumers can pass
+`meshPresentation={{ previewMaterial: 'clay', dollhouse: true }}`. Clay replaces preliminary
+vertex colors; dollhouse enables front-face rendering for surface previews and room models,
+revealing inward-facing room surfaces from outside. It changes per-instance materials, not
+geometry or loader-cached materials. Omitting these options preserves the existing presentation.

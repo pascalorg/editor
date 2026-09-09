@@ -1,6 +1,6 @@
 'use client'
 
-import { emitter } from '@pascal-app/core'
+import { emitter, type SnapshotSavedEvent } from '@pascal-app/core'
 import { SNAPSHOT_MAX_EDGE } from '@pascal-app/viewer'
 import {
   Check,
@@ -29,6 +29,7 @@ import useEditor, {
 import { useFirstPersonHud } from '../../store/use-first-person-hud'
 import { Slider } from '../ui/slider'
 import { WalkthroughCrosshair } from '../walkthrough-hud'
+import { isOverlaySnapshotSave } from './snapshot-capture'
 
 // Local alias — distinct from `useEditor.captureMode` (which describes *why*
 // a capture is happening, e.g. `preset`). This one says HOW the captured
@@ -263,24 +264,31 @@ export function SnapshotCaptureOverlay({ projectId }: { projectId: string }) {
 
   // Listen for snapshot saved to show feedback then exit
   useEffect(() => {
-    const handler = () => {
+    if (!isCaptureMode) return
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const handler = (event: SnapshotSavedEvent | undefined) => {
+      if (!isOverlaySnapshotSave(event, projectId)) return
       setCaptureState('saved')
-      setTimeout(() => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
         setCaptureMode(false)
         setCaptureState('idle')
       }, 1500)
     }
     emitter.on('snapshot:saved', handler)
-    return () => emitter.off('snapshot:saved', handler)
-  }, [setCaptureMode])
+    return () => {
+      emitter.off('snapshot:saved', handler)
+      clearTimeout(timer)
+    }
+  }, [isCaptureMode, projectId, setCaptureMode])
 
   // From the shutter firing until the saved toast clears, walk / drone hold
   // still: a late WASD tap or mouse twitch must not shift the frame out from
   // under the shot the user just took.
   useEffect(() => {
-    useEditor.getState().setCaptureShutterHold(captureState !== 'idle')
+    useEditor.getState().setCaptureShutterHold(isCaptureMode && captureState !== 'idle')
     return () => useEditor.getState().setCaptureShutterHold(false)
-  }, [captureState])
+  }, [captureState, isCaptureMode])
 
   const dismiss = useCallback(() => setCaptureMode(false), [setCaptureMode])
 

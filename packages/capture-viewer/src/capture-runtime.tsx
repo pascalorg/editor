@@ -44,9 +44,15 @@ import {
 } from './stream-rendering'
 import { parseDeviceTrajectoryPackets, parseDeviceTrajectoryPayload } from './trajectory'
 
+export type CaptureMeshPresentation = {
+  dollhouse?: boolean
+  previewMaterial?: 'clay' | 'recorded'
+}
+
 export type CaptureStreamRendererProps = {
   artifactUrl: string | null
   descriptor: CaptureSessionDescriptor
+  meshPresentation?: CaptureMeshPresentation
   packets: readonly CaptureStreamPacket[]
   scan: ScanNode
   source: CaptureSource
@@ -238,6 +244,7 @@ function captureStreamRenderKey(stream: CaptureStreamDescriptor): string {
 
 export function CaptureStreamLayer({
   descriptor,
+  meshPresentation,
   packets,
   renderers,
   scan,
@@ -295,6 +302,7 @@ export function CaptureStreamLayer({
       <Renderer
         artifactUrl={artifactUrl}
         descriptor={descriptor}
+        meshPresentation={meshPresentation}
         packets={packets}
         scan={scan}
         source={source}
@@ -310,6 +318,7 @@ export function CaptureStreamLayer({
   ) {
     content = (
       <CaptureRoomModel
+        dollhouse={meshPresentation?.dollhouse}
         format={captureModelFormat(stream.artifact) ?? undefined}
         mediaType={stream.artifact.mediaType}
         opacity={scan.opacity}
@@ -331,7 +340,13 @@ export function CaptureStreamLayer({
       />
     )
   } else if (layerKey === 'surfaceMesh') {
-    content = <CaptureSurfaceMeshLayer inline={payload} />
+    content = (
+      <CaptureSurfaceMeshLayer
+        appearance={meshPresentation?.previewMaterial}
+        dollhouse={meshPresentation?.dollhouse}
+        inline={payload}
+      />
+    )
   }
   if (!(content && frameMatrix)) return content
   return (

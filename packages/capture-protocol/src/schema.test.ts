@@ -114,7 +114,7 @@ describe('capture manifests', () => {
     ).toThrow()
   })
 
-  test('rejects oversized or structurally inconsistent surface meshes', () => {
+  test('accepts the native 20,000-face preview budget and rejects malformed or oversized meshes', () => {
     const surfaceMesh = {
       version: 1,
       coordinateSystem: 'arkit-world',
@@ -138,9 +138,19 @@ describe('capture manifests', () => {
       streams: { surfaceMesh: { kind: 'surface-mesh', mesh } },
     })
 
+    const atBudget = normalizeCaptureSessionManifest(
+      manifest({ ...surfaceMesh, faceCount: 20_000, indices: surfaceMesh.indices.repeat(20_000) }),
+    )
+    expect(atBudget.streams[0]?.inline).toMatchObject({ faceCount: 20_000 })
     expect(() =>
-      normalizeCaptureSessionManifest(manifest({ ...surfaceMesh, faceCount: 6_001 })),
-    ).toThrow()
+      normalizeCaptureSessionManifest(
+        manifest({
+          ...surfaceMesh,
+          faceCount: 20_001,
+          indices: surfaceMesh.indices.repeat(20_001),
+        }),
+      ),
+    ).toThrow('<=20000')
     expect(() =>
       normalizeCaptureSessionManifest(manifest({ ...surfaceMesh, positions: 'AAAA' })),
     ).toThrow('decoded bytes')

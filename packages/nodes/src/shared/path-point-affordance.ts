@@ -116,7 +116,10 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
             const plan = planFittingEndpointReaim(fittingEndpoint, pointIndex, dragged)
             if (!plan) return
             useScene.getState().updateNodes([
-              { id: node.id, data: { path: plan.path } as Partial<unknown> as never },
+              {
+                id: node.id,
+                data: { path: plan.path, wallAttachment: undefined } as Partial<unknown> as never,
+              },
               {
                 id: plan.fittingUpdate.id,
                 data: plan.fittingUpdate.data as Partial<unknown> as never,
@@ -126,7 +129,10 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
           }
           const nextPath = initialPath.map((p, i) => (i === pointIndex ? dragged : p))
           useScene.getState().updateNodes([
-            { id: node.id, data: { path: nextPath } as Partial<unknown> as never },
+            {
+              id: node.id,
+              data: { path: nextPath, wallAttachment: undefined } as Partial<unknown> as never,
+            },
             ...(detached ? [] : followUpdates(nextPath)).map((u) => ({
               id: u.id,
               data: u.data as Partial<unknown> as never,
