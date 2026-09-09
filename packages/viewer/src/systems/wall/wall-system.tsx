@@ -32,7 +32,7 @@ import {
   type WallSurfaceSlotId,
   type WindowNode,
 } from '@pascal-app/core'
-import { useFrame } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect } from 'react'
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
@@ -40,7 +40,8 @@ import { ADDITION, Brush, Evaluator, SUBTRACTION } from 'three-bvh-csg'
 import { computeBoundsTree } from 'three-mesh-bvh'
 import { ensureRenderableGeometryAttributes, prepareBrushForCSG } from '../../lib/csg-utils'
 import { setGroupsSortedByMaterial } from '../../lib/geometry-groups'
-import { timeSpan } from '../../lib/perf-tracks'
+import { type PerfBatchStats, publishPerfBatchStats } from '../../lib/perf-panel-store'
+import { beginSpan, endSpan, type PerfSpanHandle, timeSpan } from '../../lib/perf-tracks'
 import { buildTerrainPerimeterFillGeometry } from '../../lib/terrain-perimeter-fill'
 import { clearLevelMiterCache, getCachedLevelMiters } from './level-miter-cache'
 import {
@@ -608,18 +609,104 @@ const WALL_PROGRESSIVE_TIME_BUDGET_MS = 8
 const HEAVY_WALL_OPENINGS = 6
 let lastWallDirtyAtMs = 0
 const pendingAdjacentByLevel = new Map<string, Set<string>>()
+let pendingAdjacentCount = 0
+let hydrationToken: object | null = null
+let initialBuildActive = false
+let initialBuildSpan: PerfSpanHandle | null = null
+const initiallyBuiltWalls = new Set<string>()
+const drainStats: NonNullable<PerfBatchStats['wallDrain']> = {
+  initialBuildActive: false,
+  wallsConsumedThisFrame: 0,
+  budgetExits: 0,
+  heavyExits: 0,
+  drainedExits: 0,
+  capExits: 0,
+  pendingNeighbours: 0,
+  firstBuilds: 0,
+  reinvalidationBuilds: 0,
+  neighbourEnqueues: 0,
+}
 
-export function shouldDeferWallRebuild(
+function publishWallDrainStats() {
+  drainStats.initialBuildActive = initialBuildActive
+  drainStats.pendingNeighbours = pendingAdjacentCount
+  publishPerfBatchStats({ wallDrain: { ...drainStats } })
+}
+
+function endInitialBuild() {
+  if (!initialBuildActive) return
+  initialBuildActive = false
+  initiallyBuiltWalls.clear()
+  endSpan(initialBuildSpan)
+  initialBuildSpan = null
+  publishWallDrainStats()
+}
+
+export function isWallInitialBuildActive(): boolean {
+  const token = useScene.getState().hydrationToken
+  if (token !== hydrationToken) {
+    endInitialBuild()
+    hydrationToken = token
+    if (token) {
+      pendingAdjacentByLevel.clear()
+      pendingAdjacentCount = 0
+      for (const key of Object.keys(drainStats) as (keyof typeof drainStats)[]) {
+        if (key !== 'initialBuildActive') drainStats[key] = 0
+      }
+      initialBuildActive = true
+      initialBuildSpan = beginSpan('wall-initial-build')
+      publishWallDrainStats()
+    }
+  }
+  if (
+    useLiveNodeOverrides.getState().overrides.size > 0 ||
+    useLiveTransforms.getState().transforms.size > 0
+  )
+    endInitialBuild()
+  return initialBuildActive
+}
+
+export function subscribeWallBuildInteractions(target: EventTarget): () => void {
+  const interrupt = () => {
+    isWallInitialBuildActive()
+    endInitialBuild()
+  }
+  const events = ['pointerdown', 'pointermove', 'wheel']
+  for (const event of events)
+    target.addEventListener(event, interrupt, { capture: true, passive: true })
+  const stopScene = useScene.subscribe(() => isWallInitialBuildActive())
+  const stopOverrides = useLiveNodeOverrides.subscribe(() => isWallInitialBuildActive())
+  const stopTransforms = useLiveTransforms.subscribe(() => isWallInitialBuildActive())
+  isWallInitialBuildActive()
+  return () => {
+    for (const event of events) target.removeEventListener(event, interrupt, true)
+    stopScene()
+    stopOverrides()
+    stopTransforms()
+    if (initialBuildActive) {
+      endInitialBuild()
+      hydrationToken = null
+    }
+    pendingAdjacentByLevel.clear()
+    pendingAdjacentCount = 0
+    publishWallDrainStats()
+    placeholderSweepCountdown = WALL_PLACEHOLDER_SWEEP_INTERVAL
+    clearLevelMiterCache()
+  }
+}
+
+function wallRebuildExitReason(
   wallId: string,
   nodes: Record<AnyNodeId, AnyNode>,
   rebuiltThisFrame: number,
   elapsedMs: number,
-): boolean {
-  if (rebuiltThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) return true
-  if (rebuiltThisFrame === 0) return false
-  if (elapsedMs >= WALL_PROGRESSIVE_TIME_BUDGET_MS) return true
+  initialBuild = false,
+): 'cap' | 'budget' | 'heavy' | null {
+  if (!initialBuild && rebuiltThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) return 'cap'
+  if (rebuiltThisFrame === 0) return null
+  if (elapsedMs >= WALL_PROGRESSIVE_TIME_BUDGET_MS) return 'budget'
   const wall = nodes[wallId as AnyNodeId]
-  if (wall?.type !== 'wall') return false
+  if (wall?.type !== 'wall') return null
   let cutouts = 0
   for (const childId of getEffectiveWall(wall).children ?? []) {
     const child = nodes[childId]
@@ -632,121 +719,223 @@ export function shouldDeferWallRebuild(
         )?.geometry?.getAttribute('position')?.count)
     ) {
       cutouts++
-      if (cutouts >= HEAVY_WALL_OPENINGS) return true
+      if (cutouts >= HEAVY_WALL_OPENINGS) return 'heavy'
     }
   }
-  return false
+  return null
+}
+
+export function shouldDeferWallRebuild(
+  wallId: string,
+  nodes: Record<AnyNodeId, AnyNode>,
+  rebuiltThisFrame: number,
+  elapsedMs: number,
+): boolean {
+  return wallRebuildExitReason(wallId, nodes, rebuiltThisFrame, elapsedMs) !== null
 }
 
 /** Rebuilds this system still owes — neighbours deferred during a drag. */
 export function getPendingWallRebuildCount(): number {
-  let count = 0
-  for (const ids of pendingAdjacentByLevel.values()) {
-    count += ids.size
-  }
-  return count
+  return pendingAdjacentCount
 }
 
 let placeholderSweepCountdown = WALL_PLACEHOLDER_SWEEP_INTERVAL
 
 export const WallSystem = () => {
-  // Subscribe so scene writes and override-only changes (no scene write)
-  // still re-run this component. The frame body reads the LIVE set via
-  // `useScene.getState()` — a closure over the subscribed value goes stale
-  // whenever the store REPLACES the set (scene load, plugin install) in the
-  // window before React commits the re-render, and marks added to the new
-  // set in that window would be invisible to the frame.
   useScene((state) => state.dirtyNodes)
-  const clearDirty = useScene((state) => state.clearDirty)
   useLiveNodeOverrides((s) => s.overrides)
+  const canvas = useThree((state) => state.gl.domElement)
+  useEffect(() => subscribeWallBuildInteractions(canvas), [canvas])
+  useFrame(runWallBuildFrame, 4)
+  return null
+}
 
-  // The miter cache is module-level, so it outlives this mount. Editor
-  // teardown resets the other shared singletons; without the same reset here a
-  // remount in the same tab keeps every previous level's walls reachable.
-  useEffect(() => () => clearLevelMiterCache(), [])
+export function runWallBuildFrame() {
+  const initialBuild = isWallInitialBuildActive()
+  drainStats.wallsConsumedThisFrame = 0
+  try {
+    consumeWallBuildFrame(initialBuild)
+  } finally {
+    publishWallDrainStats()
+  }
+}
 
-  useFrame(() => {
-    // Self-heal: any registered wall still on its mount-time placeholder
-    // geometry with NO dirty mark gets re-marked, so a lost mark (system
-    // mounted late, suspense remount, mark consumed elsewhere) can never
-    // strand a wall as a degenerate point forever (QA f2 probe5/probe6 —
-    // scene loaded with the X-ray active never built any of its 24 walls).
-    placeholderSweepCountdown -= 1
-    if (placeholderSweepCountdown <= 0) {
-      placeholderSweepCountdown = WALL_PLACEHOLDER_SWEEP_INTERVAL
-      const sceneState = useScene.getState()
-      sweepUnbuiltWalls({
-        wallIds: sceneRegistry.byType.wall ?? [],
-        geometryOf: (wallId) =>
-          (sceneRegistry.nodes.get(wallId) as THREE.Mesh | undefined)?.geometry ?? null,
-        isDirty: (wallId) => sceneState.dirtyNodes.has(wallId as AnyNodeId),
-        markDirty: (wallId) => sceneState.markDirty(wallId as AnyNodeId),
-      })
-    }
+function consumeWallBuildFrame(initialBuild: boolean) {
+  const clearDirty = useScene.getState().clearDirty
+  // Self-heal: any registered wall still on its mount-time placeholder
+  // geometry with NO dirty mark gets re-marked, so a lost mark (system
+  // mounted late, suspense remount, mark consumed elsewhere) can never
+  // strand a wall as a degenerate point forever (QA f2 probe5/probe6 —
+  // scene loaded with the X-ray active never built any of its 24 walls).
+  placeholderSweepCountdown -= 1
+  if (placeholderSweepCountdown <= 0) {
+    placeholderSweepCountdown = WALL_PLACEHOLDER_SWEEP_INTERVAL
+    const sceneState = useScene.getState()
+    sweepUnbuiltWalls({
+      wallIds: sceneRegistry.byType.wall ?? [],
+      geometryOf: (wallId) =>
+        (sceneRegistry.nodes.get(wallId) as THREE.Mesh | undefined)?.geometry ?? null,
+      isDirty: (wallId) => sceneState.dirtyNodes.has(wallId as AnyNodeId),
+      markDirty: (wallId) => sceneState.markDirty(wallId as AnyNodeId),
+    })
+  }
 
-    const dirtyNodes = useScene.getState().dirtyNodes
-    const hasDirty = dirtyNodes.size > 0
-    const hasPending = pendingAdjacentByLevel.size > 0
-    if (!hasDirty && !hasPending) return
+  const dirtyNodes = useScene.getState().dirtyNodes
+  const hasDirty = dirtyNodes.size > 0
+  const hasPending = pendingAdjacentByLevel.size > 0
+  if (!hasDirty && !hasPending) {
+    endInitialBuild()
+    return
+  }
 
-    const nodes = useScene.getState().nodes
-    const now = performance.now()
+  const nodes = useScene.getState().nodes
+  const now = performance.now()
 
-    // Collect dirty walls and their levels
-    const dirtyWallsByLevel = new Map<string, Set<string>>()
-    let dirtyWallCount = 0
+  // Collect dirty walls and their levels
+  const dirtyWallsByLevel = new Map<string, Set<string>>()
+  let dirtyWallCount = 0
 
-    useFrameNb += 1
-    if (hasDirty) {
-      dirtyNodes.forEach((id) => {
-        const node = nodes[id]
-        if (node?.type !== 'wall') return
+  useFrameNb += 1
+  if (hasDirty) {
+    dirtyNodes.forEach((id) => {
+      const node = nodes[id]
+      if (node?.type !== 'wall') return
 
-        const levelId = node.parentId
-        if (!levelId) return
+      dirtyWallCount += 1
+      const levelId = node.parentId
+      if (!levelId) return
 
-        if (!dirtyWallsByLevel.has(levelId)) {
-          dirtyWallsByLevel.set(levelId, new Set())
-        }
-        dirtyWallsByLevel.get(levelId)?.add(id)
-        dirtyWallCount += 1
-      })
-    }
-
-    const hasDirtyWalls = dirtyWallsByLevel.size > 0
-    if (hasDirtyWalls) {
-      lastWallDirtyAtMs = now
-    }
-
-    const useProgressiveWallRebuilds = dirtyWallCount > WALL_PROGRESSIVE_DIRTY_THRESHOLD
-    let rebuiltWallsThisFrame = 0
-    const rebuildFrameStartedAt = now
-    let deferWallRebuilds = false
-
-    // Process each level that has dirty walls
-    for (const [levelId, dirtyWallIds] of dirtyWallsByLevel) {
-      if (useProgressiveWallRebuilds && rebuiltWallsThisFrame >= MAX_WALL_REBUILDS_PER_FRAME) {
-        break
+      if (!dirtyWallsByLevel.has(levelId)) {
+        dirtyWallsByLevel.set(levelId, new Set())
       }
+      dirtyWallsByLevel.get(levelId)?.add(id)
+    })
+  }
 
-      const levelWalls = getLevelWalls(levelId)
-      const miterData = timeSpan('wall-miter', () => getCachedLevelMiters(levelId, levelWalls))
-      const rebuiltWallIds = new Set<string>()
+  const hasDirtyWalls = dirtyWallsByLevel.size > 0
+  if (hasDirtyWalls) {
+    lastWallDirtyAtMs = now
+  }
 
-      // Update dirty walls — always, no throttling. The dragged wall must
-      // follow the cursor with full fidelity (cutouts and all). Large imports
-      // enter the progressive path so initial load can't lock the tab.
-      for (const wallId of dirtyWallIds) {
-        if (
-          useProgressiveWallRebuilds &&
-          shouldDeferWallRebuild(
+  const useProgressiveWallRebuilds =
+    initialBuild || dirtyWallCount > WALL_PROGRESSIVE_DIRTY_THRESHOLD
+  let rebuiltWallsThisFrame = 0
+  const rebuildFrameStartedAt = now
+  let deferWallRebuilds = false
+  let exitReason: 'cap' | 'budget' | 'heavy' | null = null
+
+  // Process each level that has dirty walls
+  for (const [levelId, dirtyWallIds] of dirtyWallsByLevel) {
+    if (
+      !initialBuild &&
+      useProgressiveWallRebuilds &&
+      rebuiltWallsThisFrame >= MAX_WALL_REBUILDS_PER_FRAME
+    ) {
+      exitReason = 'cap'
+      break
+    }
+    const levelWalls = getLevelWalls(levelId)
+    const miterData = timeSpan('wall-miter', () => getCachedLevelMiters(levelId, levelWalls))
+    const rebuiltWallIds = new Set<string>()
+
+    // Update dirty walls — always, no throttling. The dragged wall must
+    // follow the cursor with full fidelity (cutouts and all). Large imports
+    // enter the progressive path so initial load can't lock the tab.
+    for (const wallId of dirtyWallIds) {
+      exitReason = useProgressiveWallRebuilds
+        ? wallRebuildExitReason(
             wallId,
             nodes,
             rebuiltWallsThisFrame,
             performance.now() - rebuildFrameStartedAt,
+            initialBuild,
           )
-        ) {
+        : null
+      if (exitReason) {
+        deferWallRebuilds = true
+        break
+      }
+
+      const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
+      if (mesh) {
+        timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData), {
+          properties: [['node', wallId]],
+        })
+        clearDirty(wallId as AnyNodeId)
+        notifyWallRebuilt(wallId)
+        const firstBuild = initialBuild && !initiallyBuiltWalls.has(wallId)
+        if (firstBuild) {
+          initiallyBuiltWalls.add(wallId)
+          drainStats.firstBuilds++
+        } else {
+          rebuiltWallIds.add(wallId)
+          drainStats.reinvalidationBuilds++
+        }
+        rebuiltWallsThisFrame += 1
+        drainStats.wallsConsumedThisFrame++
+        if (initialBuild && wallRebuildExitReason(wallId, nodes, 1, 0, true) === 'heavy') {
+          exitReason = 'heavy'
           deferWallRebuilds = true
+          break
+        }
+      }
+      // If mesh not found, keep it dirty for next frame
+    }
+
+    if (rebuiltWallIds.size === 0) {
+      if (deferWallRebuilds) break
+      continue
+    }
+
+    // First builds use the same hydrated inputs as every queued neighbour.
+    // Only subsequent invalidations need the adjacency scan and trailing flush.
+    // Adjacent walls sharing junctions — *defer* during active drag
+    // (dirty arrived this frame), flush on the trailing edge.
+    const adjacentWallIds = getAdjacentWallIds(levelWalls, rebuiltWallIds)
+    let pending = pendingAdjacentByLevel.get(levelId)
+    if (!pending) {
+      pending = new Set()
+      pendingAdjacentByLevel.set(levelId, pending)
+    }
+    for (const wallId of adjacentWallIds) {
+      if (!dirtyWallIds.has(wallId) && !pending.has(wallId)) {
+        pending.add(wallId)
+        pendingAdjacentCount++
+        drainStats.neighbourEnqueues++
+      }
+    }
+    if (pending.size === 0) pendingAdjacentByLevel.delete(levelId)
+    if (deferWallRebuilds) break
+  }
+
+  // Trailing-edge flush: if no new dirty marks for DRAG_FLUSH_MS, the
+  // drag has ended — rebuild the queued neighbors so corners snap into
+  // their correct miter joins.
+  const quiet = !hasDirtyWalls && now - lastWallDirtyAtMs >= DRAG_FLUSH_MS
+  if (quiet && pendingAdjacentByLevel.size > 0) {
+    const pendingCount = getPendingWallRebuildCount()
+    const useProgressiveAdjacentRebuilds =
+      initialBuild || pendingCount > WALL_PROGRESSIVE_DIRTY_THRESHOLD
+    let rebuiltAdjacentThisFrame = 0
+    const adjacentFrameStartedAt = performance.now()
+    let deferAdjacentRebuilds = false
+
+    for (const [levelId, pendingIds] of pendingAdjacentByLevel) {
+      if (pendingIds.size === 0) continue
+      const levelWalls = getLevelWalls(levelId)
+      const miterData = timeSpan('wall-miter', () => getCachedLevelMiters(levelId, levelWalls))
+      for (const wallId of Array.from(pendingIds)) {
+        exitReason = useProgressiveAdjacentRebuilds
+          ? wallRebuildExitReason(
+              wallId,
+              nodes,
+              rebuiltAdjacentThisFrame,
+              performance.now() - adjacentFrameStartedAt,
+              initialBuild,
+            )
+          : null
+        if (exitReason) {
+          deferAdjacentRebuilds = true
           break
         }
 
@@ -755,91 +944,41 @@ export const WallSystem = () => {
           timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData), {
             properties: [['node', wallId]],
           })
-          clearDirty(wallId as AnyNodeId)
           notifyWallRebuilt(wallId)
-          rebuiltWallIds.add(wallId)
-          rebuiltWallsThisFrame += 1
+          drainStats.wallsConsumedThisFrame++
+          drainStats.reinvalidationBuilds++
         }
-        // If mesh not found, keep it dirty for next frame
-      }
-
-      if (rebuiltWallIds.size === 0) {
-        if (deferWallRebuilds) break
-        continue
-      }
-
-      // Adjacent walls sharing junctions — *defer* during active drag
-      // (dirty arrived this frame), flush on the trailing edge.
-      const adjacentWallIds = getAdjacentWallIds(levelWalls, rebuiltWallIds)
-      let pending = pendingAdjacentByLevel.get(levelId)
-      if (!pending) {
-        pending = new Set()
-        pendingAdjacentByLevel.set(levelId, pending)
-      }
-      for (const wallId of adjacentWallIds) {
-        if (!dirtyWallIds.has(wallId)) {
-          pending.add(wallId)
-        }
-      }
-      if (deferWallRebuilds) break
-    }
-
-    // Trailing-edge flush: if no new dirty marks for DRAG_FLUSH_MS, the
-    // drag has ended — rebuild the queued neighbors so corners snap into
-    // their correct miter joins.
-    const quiet = !hasDirtyWalls && now - lastWallDirtyAtMs >= DRAG_FLUSH_MS
-    if (quiet && pendingAdjacentByLevel.size > 0) {
-      const pendingCount = getPendingWallRebuildCount()
-      const useProgressiveAdjacentRebuilds = pendingCount > WALL_PROGRESSIVE_DIRTY_THRESHOLD
-      let rebuiltAdjacentThisFrame = 0
-      const adjacentFrameStartedAt = performance.now()
-      let deferAdjacentRebuilds = false
-
-      for (const [levelId, pendingIds] of pendingAdjacentByLevel) {
-        if (pendingIds.size === 0) continue
-        const levelWalls = getLevelWalls(levelId)
-        const miterData = timeSpan('wall-miter', () => getCachedLevelMiters(levelId, levelWalls))
-        for (const wallId of Array.from(pendingIds)) {
-          if (
-            useProgressiveAdjacentRebuilds &&
-            shouldDeferWallRebuild(
-              wallId,
-              nodes,
-              rebuiltAdjacentThisFrame,
-              performance.now() - adjacentFrameStartedAt,
-            )
-          ) {
-            deferAdjacentRebuilds = true
-            break
-          }
-
-          const mesh = sceneRegistry.nodes.get(wallId) as THREE.Mesh
-          if (mesh) {
-            timeSpan('wall-rebuild', () => updateWallGeometry(wallId, miterData), {
-              properties: [['node', wallId]],
-            })
-            notifyWallRebuilt(wallId)
-          }
-          pendingIds.delete(wallId)
-          rebuiltAdjacentThisFrame += 1
-        }
-
-        if (pendingIds.size === 0) {
-          pendingAdjacentByLevel.delete(levelId)
-        }
-
-        if (
-          deferAdjacentRebuilds ||
-          (useProgressiveAdjacentRebuilds &&
-            rebuiltAdjacentThisFrame >= MAX_WALL_REBUILDS_PER_FRAME)
-        ) {
+        pendingIds.delete(wallId)
+        pendingAdjacentCount--
+        rebuiltAdjacentThisFrame += 1
+        if (initialBuild && wallRebuildExitReason(wallId, nodes, 1, 0, true) === 'heavy') {
+          exitReason = 'heavy'
+          deferAdjacentRebuilds = true
           break
         }
       }
-    }
-  }, 4)
 
-  return null
+      if (pendingIds.size === 0) {
+        pendingAdjacentByLevel.delete(levelId)
+      }
+
+      if (
+        deferAdjacentRebuilds ||
+        (!initialBuild &&
+          useProgressiveAdjacentRebuilds &&
+          rebuiltAdjacentThisFrame >= MAX_WALL_REBUILDS_PER_FRAME)
+      ) {
+        break
+      }
+    }
+  }
+  if (exitReason === 'budget') drainStats.budgetExits++
+  else if (exitReason === 'heavy') drainStats.heavyExits++
+  else if (exitReason === 'cap') drainStats.capExits++
+  if (dirtyWallCount === rebuiltWallsThisFrame && pendingAdjacentCount === 0) {
+    if (drainStats.wallsConsumedThisFrame > 0 || initialBuildActive) drainStats.drainedExits++
+    endInitialBuild()
+  }
 }
 
 /**

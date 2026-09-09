@@ -74,13 +74,25 @@ export type PerfBatchStats = {
   joins?: number
   geometryReplacements?: number
   overflowRebuilds?: number
+  wallDrain?: {
+    initialBuildActive: boolean
+    wallsConsumedThisFrame: number
+    budgetExits: number
+    heavyExits: number
+    drainedExits: number
+    capExits: number
+    pendingNeighbours: number
+    firstBuilds: number
+    reinvalidationBuilds: number
+    neighbourEnqueues: number
+  }
   geometryBytesCopied?: number
 }
 
 let batchStats: PerfBatchStats = { items: 0, instances: 0, containers: 0 }
 
-export function publishPerfBatchStats(stats: PerfBatchStats): void {
-  batchStats = stats
+export function publishPerfBatchStats(stats: Partial<PerfBatchStats>): void {
+  batchStats = { ...batchStats, ...stats }
 }
 
 export function readPerfBatchStats(): PerfBatchStats {

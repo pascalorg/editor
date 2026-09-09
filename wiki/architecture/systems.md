@@ -37,6 +37,39 @@ containers preserve source shadow flags. Selection (including external selection
 live transforms and each slot paint preview target release sources until settled.
 Level mode/selected-level changes re-offer sources rejected while shadow-only.
 
+### Initial wall build
+
+`setScene` publishes a fresh, non-persisted `hydrationToken` alongside the hydrated
+scene and marks its eligible nodes dirty. Subsequent document writes invalidate
+that token, including paused, remote and undo/redo writes. Dirty marks alone do
+not invalidate it, so opening completion can still re-dirty its parent wall.
+
+`WallSystem` enters initial build for that token, including when mounted after
+hydration. It ends on the first frame with no dirty walls and no pending neighbours,
+or on a document write, live override/transform, or canvas pointerdown, pointermove
+or wheel event. A pointer interruption cannot re-enter for the same token.
+`isWallInitialBuildActive()` exposes this state read-only to other systems.
+
+Initial build consumes walls under the existing **8 ms budget**, checked between
+walls, without the interactive **8 walls/frame** cap. A wall with at least six
+opening cutouts occupies its own frame. Each wall's first build skips adjacency
+scanning and neighbour re-invalidation because the hydrated inputs are stable and
+its neighbours are queued for their own first builds. Subsequent builds retain
+neighbour invalidation and the **80 ms** trailing quiet window. Once initial build
+ends, the existing interactive scheduling applies (progressive limits for queues
+larger than eight; small interactive edits rebuild immediately).
+
+`__pascalPerf.batchStats().wallDrain` publishes the active state, this frame's
+consumption, cumulative budget/heavy/drained/cap exits, pending-neighbour count,
+first builds, re-invalidation builds and unique neighbour enqueues. Counters reset
+on each hydration; the `wall-initial-build` span measures the drain until completion
+or interruption. Counter publication and pending-count reads are constant-time.
+
+The wall batch still waits for its pending-neighbour queue. Node batching retains
+its global 180 ms quiet clock for now. Initial-drain batching is a follow-up: bounded
+joins must preserve whole-wave `MIN_BATCH_ENTRIES` decisions and partial/leftover
+membership, including candidates larger than one frame's allowance.
+
 ### Viewer Systems — `packages/viewer/src/systems/`
 
 Access Three.js objects (via `useRegistry`) and manage rendering side-effects.

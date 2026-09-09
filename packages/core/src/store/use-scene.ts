@@ -1194,6 +1194,9 @@ export type SceneState = {
   // 3. The "Dirty" Set: For the Wall/Physics systems
   dirtyNodes: Set<AnyNodeId>
 
+  // Identifies a setScene hydration; later document writes invalidate it.
+  hydrationToken: object | null
+
   // 4. Relational metadata — not nodes
   collections: Record<CollectionId, Collection>
   materials: Record<SceneMaterialId, SceneMaterial>
@@ -1396,6 +1399,8 @@ const useScene: UseSceneStore = create<SceneState>()(
       // 3. Dirty set
       dirtyNodes: new GuardedDirtySet(get),
 
+      hydrationToken: null,
+
       // 4. Collections
       collections: {} as Record<CollectionId, Collection>,
       materials: {} as Record<SceneMaterialId, SceneMaterial>,
@@ -1408,6 +1413,7 @@ const useScene: UseSceneStore = create<SceneState>()(
 
       unloadScene: () => {
         set({
+          hydrationToken: null,
           nodes: {},
           rootNodeIds: [],
           dirtyNodes: new GuardedDirtySet(get),
@@ -1464,6 +1470,7 @@ const useScene: UseSceneStore = create<SceneState>()(
         // (as this used to) exposed a half-normalized intermediate state —
         // and the pre-load (possibly empty) state — as undo targets.
         set({
+          hydrationToken: {},
           nodes: cleanedNodes,
           rootNodeIds: normalizedRootNodeIds,
           dirtyNodes: new GuardedDirtySet(get),
@@ -1699,6 +1706,21 @@ const useScene: UseSceneStore = create<SceneState>()(
     },
   ),
 )
+
+// Keep the hydration signal outside history and invalidate even paused/host writes.
+useScene.subscribe((state, previous) => {
+  if (
+    state.hydrationToken &&
+    state.hydrationToken === previous.hydrationToken &&
+    (state.nodes !== previous.nodes ||
+      state.rootNodeIds !== previous.rootNodeIds ||
+      state.materials !== previous.materials ||
+      state.collections !== previous.collections ||
+      state.installedPlugins !== previous.installedPlugins)
+  ) {
+    useScene.setState({ hydrationToken: null })
+  }
+})
 
 export default useScene
 
