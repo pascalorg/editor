@@ -1368,11 +1368,6 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
   // same ratio). A hardcoded 0.25 desyncs the gablet from the parameter.
   const baseI = Math.min(width, depth) * node.dutchHipWidthRatio
 
-  // Keep the outer shell's CSG prism at least 5 cm tall by lifting its eave,
-  // never by sinking the base (the base is the wall top). Every volume gets
-  // the same lift so the inner cutter and the deck keep their offsets to it.
-  const eaveLift = Math.max(0, 0.05 - (wallHeight - (wallThickness / 2) * tanTheta))
-
   const getVol = (
     wExt: number,
     vOffset: number,
@@ -1385,7 +1380,10 @@ export function getRoofSegmentBrushes(node: RoofSegmentNode): RoofSegmentBrushSe
     const dV = Math.max(0.01, depth + 2 * wExt)
 
     const autoDrop = wExt * tanTheta
-    const whV = wallHeight - autoDrop + vOffset + eaveLift
+    // Floor every prism at 5 cm so CSG never sees a degenerate volume — by
+    // raising the top, never by sinking the base (the base is the wall top).
+    // One floor for all volumes keeps each cutter level with the shell it carves.
+    const whV = Math.max(0.05, wallHeight - autoDrop + vOffset)
 
     let rhV = activeRh
     if (activeRh > 0) {
