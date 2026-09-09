@@ -193,10 +193,12 @@ export const SERVICE_CONTROLS = [
       ['electric-tank', 'Electric tank'],
       ['gas-tank', 'Gas tank'],
       ['heat-pump', 'Heat pump'],
-      ['tankless-gas', 'Tankless gas'],
-      ['tankless-electric', 'Tankless elec.'],
+      ['tankless-gas', 'Tankless gas (in)'],
+      ['tankless-gas-outdoor', 'Tankless gas (out)'],
+      ['tankless-electric', 'Tankless elec. (in)'],
+      ['tankless-electric-outdoor', 'Tankless elec. (out)'],
     ],
-    note: 'Auto: a heat-pump heater where the energy code makes it the baseline (CA, WA, OR), a gas tank beside a gas furnace, an electric tank elsewhere.',
+    note: 'Auto: a heat-pump heater where the energy code makes it the baseline (CA, WA, OR — never tankless there), a gas tank beside a gas furnace, an electric tank elsewhere. A tank stands in the garage on its 18 in platform, or outside in an enclosure on a pad; tankless hangs indoors or, the outdoor kinds, on the exterior face.',
   },
 ] as const
 export type ServiceControlKey = (typeof SERVICE_CONTROLS)[number]['key']

@@ -183,18 +183,44 @@ describe('P6 — WH safety census (T&P + discharge + pan + stand + strap matrix)
     expect(lowerY).toBeLessThan(bot + h / 3) // lower third
   })
 
-  test('tankless (no garage): T&P + discharge still ship; pan/stand/straps never do', () => {
+  // INTENDED-CHANGE 2026-09-09 (Steve: "no garage then it should be in a
+  // container outside the wall ... sits on a slab"): the no-garage plan now
+  // stands its tank OUTSIDE on a pad — the pan and the straps ship with the
+  // tank, the garage STAND never does, and T&P + discharge still ship.
+  test('outside (no garage): T&P + discharge, pan and straps ship with the tank; the garage stand never does', () => {
     const { walls: tw, rooms: tr, placed: tp } = tanklessPlan()
     const { members } = layoutPlumbing(tw, tr, CA_SPEC, tp)
     const wh = members.find((m) => m.role === 'water-heater') as Member
-    expect(wh.label).toContain('Tankless')
+    expect(wh.label).toContain('outside')
+    expect(wh.shape).toBe('cylinder')
     expect(bySource(members, 'wh-tp-valve')).toHaveLength(1)
     const discharge = bySource(members, 'wh-tp-discharge')
     const bottom = Math.min(...discharge.map((m) => m.position[1] - m.dims[1] / 2))
     expect(bottom).toBeLessThanOrEqual(inches(6) + 1e-6)
+    // the pan and the straps are fabrication detail (LOD 350+) — none at this LOD, as before
     expect(bySource(members, 'wh-pan')).toHaveLength(0)
+    expect(bySource(members, 'wh-pad')).toHaveLength(1)
     expect(bySource(members, 'wh-stand')).toHaveLength(0)
     expect(strapsOf(members)).toHaveLength(0)
+  })
+
+  test('the panel\u2019s kind is honoured wherever the heater stands: a tankless unit hangs outside at 1.2 m; a heat-pump tank carries its head', () => {
+    const { walls: tw, rooms: tr, placed: tp } = tanklessPlan()
+    const tankless = layoutPlumbing(tw, tr, { ...CA_SPEC, waterHeater: 'tankless-gas' }, tp).members
+    const cab = tankless.find((m) => m.role === 'water-heater') as Member
+    expect(cab.label).toContain('Tankless')
+    expect(cab.shape).toBeUndefined()
+    expect(cab.position[1] - cab.dims[1] / 2).toBeCloseTo(1.2, 6)
+    expect(bySource(tankless, 'wh-enclosure-side')).toHaveLength(0)
+    const hp = layoutPlumbing(tw, tr, { ...CA_SPEC, waterHeater: 'heat-pump' }, tp).members
+    const body = hp.filter((m) => m.role === 'water-heater')
+    expect(body).toHaveLength(2)
+    expect(body.every((m) => m.shape === 'cylinder')).toBe(true)
+    expect(bySource(hp, 'wh-head')).toHaveLength(1)
+    const tank = bySource(hp, 'wh')[0] as Member
+    const head = bySource(hp, 'wh-head')[0] as Member
+    // the head sits on the tank
+    expect(head.position[1] - head.dims[1] / 2).toBeCloseTo(tank.position[1] + tank.dims[1] / 2, 6)
   })
 
   test('takeoff books the hardware as pieces from the members (never assumed)', () => {

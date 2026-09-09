@@ -165,6 +165,13 @@ export type Member = {
    * a square-ended box.
    */
   shear?: number
+  /**
+   * The renderer's instanced geometry: a unit box scaled by `dims` (absent =
+   * 'box'), or a unit CYLINDER (its axis local Y, `dims[0]`/`dims[2]` the
+   * diameters) — a storage water heater is a tank, not a crate (Steve,
+   * 2026-09-09: "why is it a massive box and not the real wh types").
+   */
+  shape?: 'box' | 'cylinder'
   /** Set when the prescriptive tables run out (engineered beam required). */
   flag?: string
   /** Level whose transform this member follows when it belongs to ANOTHER

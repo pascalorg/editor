@@ -23,13 +23,14 @@ import * as nodeDefs from '@pascal-app/nodes'
 import { bonesPlugin } from '@pascal-app/plugin-bones'
 import { generateHouse, useGenerate } from '@pascal-app/plugin-generate'
 import { PRESET_LOTS, presetDropInInput } from '@pascal-app/plugin-lot'
-import { buildElevationDrawing, buildSectionDrawing, sectionsPlugin } from '@pascal-app/plugin-sections'
+import { buildBuildingModel, buildElevationDrawing, buildSectionDrawing, sectionsPlugin } from '@pascal-app/plugin-sections'
 import {
   composeAll,
   generateDefaultSet,
   registerBuiltinSheetProviders,
   registerSheetDrawingProvider,
   sheetsPlugin,
+  bonesExteriorItems,
 } from '@pascal-app/plugin-sheets'
 import { buildUtilitiesDrawing, utilitiesPlugin } from '@pascal-app/plugin-utilities'
 
@@ -85,12 +86,15 @@ for (const plugin of [sheetsPlugin, sectionsPlugin, utilitiesPlugin, bonesPlugin
 registerSheetDrawingProvider('section', (nodes, args) =>
   buildSectionDrawing({ nodes: nodes as never }, args as never),
 )
-registerSheetDrawingProvider('elevation', (nodes, args) =>
-  buildElevationDrawing(
+registerSheetDrawingProvider('elevation', (nodes, args) => {
+  const model = buildBuildingModel(nodes as never)
+  model.items.push(...(bonesExteriorItems(nodes as never, model.levels) as never[]))
+  return buildElevationDrawing(
     { nodes: nodes as never },
     ((args as { direction?: string }).direction ?? 'south') as never,
-  ),
-)
+    model,
+  )
+})
 registerSitePlanContributor('utilities', (scene) => buildUtilitiesDrawing(scene as never))
 registerBuiltinSheetProviders()
 

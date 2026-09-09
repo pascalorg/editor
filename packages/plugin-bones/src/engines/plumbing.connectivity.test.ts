@@ -324,10 +324,23 @@ describe('P5 gate — island fixture (air-run fallback + trap-arm flag)', () => 
     checkSupply(members, fixtures)
   })
 
-  test('no garage → tankless WH on an exterior wall', () => {
+  // INTENDED-CHANGE 2026-09-09 (Steve: "no garage then it should be in a
+  // container outside the wall, not in the wall and raised up, sits on a
+  // slab"): without a garage the chosen / default kind stands OUTSIDE the
+  // meter wall on a 4 in pad in an enclosure — no more silent tankless.
+  test('no garage → the tank stands outside the meter wall on its pad, in an enclosure', () => {
     const wh = members.find((m) => m.role === 'water-heater') as Member
-    expect(wh.label).toContain('Tankless')
-    expect(wh.position[1] - wh.dims[1] / 2).toBeCloseTo(1.2, 6)
+    expect(wh.label).toContain('storage water heater')
+    expect(wh.label).toContain('outside')
+    expect(wh.shape).toBe('cylinder')
+    expect(wh.position[1] - wh.dims[1] / 2).toBeCloseTo(0.1, 6)
+    // outside the walls' box (the plan is 12 × 8 from the origin)
+    const [x, , z] = wh.position
+    expect(x > 0 && x < 12 && z > 0 && z < 8).toBe(false)
+    expect(members.filter((m) => m.sourceId === 'wh-enclosure-side')).toHaveLength(2)
+    expect(members.filter((m) => m.sourceId === 'wh-enclosure-door')).toHaveLength(1)
+    expect(members.filter((m) => m.sourceId === 'wh-pad')).toHaveLength(1)
+    expect(members.filter((m) => m.sourceId === 'wh-stand')).toHaveLength(0)
   })
 
   test('island drains still reach the exit downhill (buried run)', () => {
@@ -508,7 +521,10 @@ describe('P5 gate — re-verify round 2 (riser colinearity, short garage wall)',
     }
   })
 
-  test('D1b: a 1.5m garage wall falls back to tankless — never a tank on the panel', () => {
+  // INTENDED-CHANGE 2026-09-09: a garage wall too short to host the tank
+  // beside the panel sends the tank OUTSIDE (the meter wall's enclosure),
+  // not to a tankless cabinet — and still never onto the panel.
+  test('D1b: a 1.5m garage wall cannot host the tank beside the panel — it stands outside, never on the panel', () => {
     const walls = [
       makeWall({ id: 'w_s', start: [0, 0], end: [10, 0] }),
       makeWall({ id: 'w_e', start: [10, 0], end: [10, 8] }),
@@ -524,7 +540,9 @@ describe('P5 gate — re-verify round 2 (riser colinearity, short garage wall)',
     const { members, fixtures } = layoutPlumbing(walls, rooms, undefined, placed)
     const wh = members.find((m) => m.role === 'water-heater')
     const whFix = fixtures.find((f) => f.kind === 'water-heater')
-    expect((whFix?.label ?? '').toLowerCase()).toContain('tankless')
+    expect((whFix?.label ?? '').toLowerCase()).toContain('tank')
+    expect(wh?.label).toContain('outside')
+    expect(members.filter((m) => m.sourceId === 'wh-stand')).toHaveLength(0)
     // and never overlapping the panel enclosure box
     const { layoutElectrical } = require('./electrical') as typeof import('./electrical')
     const panel = layoutElectrical(walls, rooms).find((f) => f.kind === 'panel')

@@ -12,6 +12,7 @@ import { useFrame } from '@react-three/fiber'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   BoxGeometry,
+  CylinderGeometry,
   Euler,
   Group,
   InstancedMesh,
@@ -228,6 +229,8 @@ type BucketTreatment = 'solid' | 'ghosted' | 'ghosted-field' | 'ghosted-through'
 
 type Bucket = {
   color: string
+  /** Instanced geometry — a cylinder bucket draws UNIT_CYLINDER (tanks). */
+  shape?: 'cylinder'
   /** Source wall id for face-carrying buckets — the per-wall cut key
    * (each wall classifies near/far against its OWN plane). */
   sourceId?: string
@@ -326,6 +329,8 @@ export function materialCensus(): number {
  * instance transforms carry all shape) and its dispose/recreate churn was
  * one more per-rebuild GPU re-upload. */
 const UNIT_BOX = new BoxGeometry(1, 1, 1)
+/** Unit cylinder on local Y (diameter 1, height 1) — tanks (`Member.shape`). */
+const UNIT_CYLINDER = new CylinderGeometry(0.5, 0.5, 1, 24)
 
 /** Main group (the node's own level) + one group per FOREIGN source level
  * (cross-level roofs). Foreign groups hold level-LOCAL geometry and get
@@ -379,6 +384,10 @@ export function composeEntryMatrix(
 
 /** Write a bucket's instance matrices into its mesh set (solid + ghost copy
  * share indices) and flag the GPU upload. */
+/** The bucket-key suffix and the bucket shape of a member (tanks are cylinders). */
+const shapeKey = (member: Member): string => (member.shape === 'cylinder' ? '|cyl' : '')
+const shapeOf = (member: Member): 'cylinder' | undefined => (member.shape === 'cylinder' ? 'cylinder' : undefined)
+
 function writeMatrices(bucket: Bucket, meshes: InstancedMesh[]) {
   bucket.entries.forEach((entry, i) => {
     composeEntryMatrix(entry.dims, entry.position, entry.rotation, scratchMatrix, entry.shear)
@@ -537,10 +546,11 @@ function collectBuckets(
     treatment: BucketTreatment,
     sourceId?: string,
     shear?: number,
+    shape?: 'cylinder',
   ) => {
     let bucket = buckets.get(key)
     if (!bucket) {
-      bucket = { color, entries: [], face, treatment, sourceId }
+      bucket = { color, entries: [], face, treatment, sourceId, ...(shape ? { shape } : {}) }
       buckets.set(key, bucket)
     }
     bucket.entries.push({ dims, position, rotation, ...(shear ? { shear } : {}) })
@@ -565,9 +575,9 @@ function collectBuckets(
             : run
               ? 'ghosted-through'
               : 'ghosted'
-          push(`${color}|${treatment}`, color, member.dims, member.position, member.rotation, undefined, treatment, undefined, member.shear)
+          push(`${color}|${treatment}${shapeKey(member)}`, color, member.dims, member.position, member.rotation, undefined, treatment, undefined, member.shear, shapeOf(member))
         } else {
-          push(`${color}|faint`, color, member.dims, member.position, member.rotation, undefined, 'faint', undefined, member.shear)
+          push(`${color}|faint${shapeKey(member)}`, color, member.dims, member.position, member.rotation, undefined, 'faint', undefined, member.shear, shapeOf(member))
         }
         continue
       }
@@ -590,7 +600,7 @@ function collectBuckets(
       // MEP members read through the OPENED near faces of the dollhouse cut
       // (ghosting them made every wall look transparent, round-13), and the
       // under-floor stratum stays hidden behind real geometry by design.
-      push(`${color}|solid`, color, member.dims, member.position, member.rotation, undefined, 'solid', undefined, member.shear)
+      push(`${color}|solid${shapeKey(member)}`, color, member.dims, member.position, member.rotation, undefined, 'solid', undefined, member.shear, shapeOf(member))
     }
   }
   for (const fixture of fixtures) {
@@ -651,8 +661,9 @@ function groupFromBuckets(buckets: Map<string, Bucket>): Group {
     // below-floor content behind it. Materials come from the module cache
     // (F1) — same (color, variant) → the SAME object every rebuild.
     const faint = bucket.treatment === 'faint'
+    const unit = bucket.shape === 'cylinder' ? UNIT_CYLINDER : UNIT_BOX
     const solid = new InstancedMesh(
-      UNIT_BOX,
+      unit,
       acquireBucketMaterial(bucket.color, faint ? 'faint' : 'solid'),
       bucket.entries.length,
     )
@@ -673,7 +684,7 @@ function groupFromBuckets(buckets: Map<string, Bucket>): Group {
       // the overlay pass needs the depth write transparent materials skip).
       const field = bucket.treatment === 'ghosted-field'
       const ghost = new InstancedMesh(
-        UNIT_BOX,
+        unit,
         acquireBucketMaterial(bucket.color, field ? 'ghost-field' : 'ghost'),
         bucket.entries.length,
       )

@@ -17,13 +17,14 @@ import { nodeRegistry, registerNode, useScene } from '@pascal-app/core'
 import { FloorplanGeometryRenderer, registerSitePlanContributor } from '@pascal-app/editor'
 import * as nodeDefs from '@pascal-app/nodes'
 import { bonesPlugin } from '@pascal-app/plugin-bones'
-import { buildElevationDrawing, buildSectionDrawing, sectionsPlugin } from '@pascal-app/plugin-sections'
+import { buildBuildingModel, buildElevationDrawing, buildSectionDrawing, sectionsPlugin } from '@pascal-app/plugin-sections'
 import {
   type ComposedSheet,
   composeAll,
   registerBuiltinSheetProviders,
   registerSheetDrawingProvider,
   sheetsPlugin,
+  bonesExteriorItems,
 } from '@pascal-app/plugin-sheets'
 import { buildUtilitiesDrawing, utilitiesPlugin } from '@pascal-app/plugin-utilities'
 import { renderToStaticMarkup } from 'react-dom/server'
@@ -46,12 +47,15 @@ for (const plugin of [sheetsPlugin, sectionsPlugin, utilitiesPlugin, bonesPlugin
 registerSheetDrawingProvider('section', (nodes, args) =>
   buildSectionDrawing({ nodes: nodes as never }, args as never),
 )
-registerSheetDrawingProvider('elevation', (nodes, args) =>
-  buildElevationDrawing(
+registerSheetDrawingProvider('elevation', (nodes, args) => {
+  const model = buildBuildingModel(nodes as never)
+  model.items.push(...(bonesExteriorItems(nodes as never, model.levels) as never[]))
+  return buildElevationDrawing(
     { nodes: nodes as never },
     ((args as { direction?: string }).direction ?? 'south') as never,
-  ),
-)
+    model,
+  )
+})
 registerSitePlanContributor('utilities', (scene) => buildUtilitiesDrawing(scene as never))
 registerBuiltinSheetProviders()
 

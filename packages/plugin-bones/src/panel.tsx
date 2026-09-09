@@ -659,17 +659,42 @@ function ServicesRow({ framingNode }: { framingNode: FramingNode & { id: string 
   return (
     <div className="flex flex-col gap-1 text-xs">
       <span className="text-sidebar-foreground/60">Services</span>
-      {SERVICE_CONTROLS.map((c) => (
-        <div className="flex flex-col gap-1" key={c.key}>
-          <span className="text-sidebar-foreground/60">{c.label}</span>
-          <SegmentedControl
-            onChange={(v: string) => write(serviceControlPatch(c.key, v))}
-            options={[{ label: 'Auto', value: 'auto' }, ...c.options.map(([value, label]) => ({ label, value }))]}
-            value={serviceControlValue(framingNode, c.key)}
-          />
-          <span className="text-sidebar-foreground/50">{c.note}</span>
-        </div>
-      ))}
+      {SERVICE_CONTROLS.map((c) => {
+        const options = [{ label: 'Auto', value: 'auto' }, ...c.options.map(([value, label]) => ({ label, value }))]
+        const value = serviceControlValue(framingNode, c.key)
+        return (
+          <div className="flex flex-col gap-1" key={c.key}>
+            <span className="text-sidebar-foreground/60">{c.label}</span>
+            {options.length > 5 ? (
+              // a long list (the water heater's seven kinds) wraps into a grid
+              // — one segmented row squeezed eight labels into the rail's width
+              <div className="grid grid-cols-4 gap-1">
+                {options.map((o) => (
+                  <button
+                    className={`rounded-md border px-1 py-1 text-[11px] leading-tight transition-colors ${
+                      value === o.value
+                        ? 'border-sidebar-ring bg-sidebar-accent text-sidebar-foreground'
+                        : 'border-sidebar-border/60 bg-sidebar-accent/40 text-sidebar-foreground/80 hover:bg-sidebar-accent'
+                    }`}
+                    key={o.value}
+                    onClick={() => write(serviceControlPatch(c.key, o.value))}
+                    type="button"
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <SegmentedControl
+                onChange={(v: string) => write(serviceControlPatch(c.key, v))}
+                options={options}
+                value={value}
+              />
+            )}
+            <span className="text-sidebar-foreground/50">{c.note}</span>
+          </div>
+        )
+      })}
     </div>
   )
 }

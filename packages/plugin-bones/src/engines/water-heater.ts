@@ -14,7 +14,42 @@
  * nothing is engineering.
  */
 
-export type WaterHeaterKind = 'electric-tank' | 'gas-tank' | 'heat-pump' | 'tankless-gas' | 'tankless-electric'
+export type WaterHeaterKind =
+  | 'electric-tank'
+  | 'gas-tank'
+  | 'heat-pump'
+  | 'tankless-gas'
+  | 'tankless-gas-outdoor'
+  | 'tankless-electric'
+  | 'tankless-electric-outdoor'
+
+/** A wall-hung tankless unit, indoor or outdoor (Steve, 2026-09-09: "there are tankless interior and tankless exterior, gas and electric"). */
+export function isTanklessKind(kind: WaterHeaterKind): boolean {
+  return kind.startsWith('tankless')
+}
+/** An OUTDOOR-rated tankless unit — hung on the exterior face of the wall. */
+export function isOutdoorKind(kind: WaterHeaterKind): boolean {
+  return kind.endsWith('-outdoor')
+}
+/** The short name a schedule / fixture label prints. */
+export function waterHeaterName(kind: WaterHeaterKind, gallons: number | null): string {
+  switch (kind) {
+    case 'heat-pump':
+      return `${gallons} gal heat-pump hybrid tank`
+    case 'gas-tank':
+      return `${gallons} gal gas tank`
+    case 'electric-tank':
+      return `${gallons} gal electric tank`
+    case 'tankless-gas':
+      return 'tankless gas (indoor)'
+    case 'tankless-gas-outdoor':
+      return 'tankless gas (outdoor)'
+    case 'tankless-electric':
+      return 'tankless electric (indoor)'
+    case 'tankless-electric-outdoor':
+      return 'tankless electric (outdoor)'
+  }
+}
 
 export type WaterHeaterSpec = {
   kind: WaterHeaterKind
@@ -63,7 +98,7 @@ export function defaultWaterHeater(stateCode: string | undefined, hvacSystem: st
  * that; a heat pump heater a size up (slower recovery, 50 gal minimum).
  */
 export function tankGallons(kind: WaterHeaterKind, bedrooms: number, baths: number): number | null {
-  if (kind === 'tankless-gas' || kind === 'tankless-electric') return null
+  if (isTanklessKind(kind)) return null
   let gal = bedrooms <= 2 && baths <= 1.5 ? 40 : bedrooms <= 3 && baths <= 2.5 ? 50 : bedrooms <= 4 ? 65 : 80
   if (kind === 'heat-pump') gal = Math.max(50, gal === 50 ? 65 : gal)
   return gal
@@ -83,8 +118,10 @@ export function uefMinimum(kind: WaterHeaterKind, gallons: number | null): numbe
     case 'heat-pump':
       return 2.0
     case 'tankless-gas':
+    case 'tankless-gas-outdoor':
       return 0.81
     case 'tankless-electric':
+    case 'tankless-electric-outdoor':
       return 0.91
   }
 }
@@ -134,16 +171,37 @@ export function waterHeaterSpec(input: {
       dims = [0.45, 0.6, 0.25]
       circuit = '120 V 15 A (controls / fan)'
       venting = 'direct'
-      head = 'Tankless gas water heater — 180–199 kBtu/h condensing'
+      head = 'Tankless gas water heater (indoor) — 180–199 kBtu/h condensing'
       notes.push('¾" gas line sized for 199 kBtu/h at the appliance (G2413 — often 1" from the meter); 3" concentric PVC direct vent through the wall per the listing — verify')
+      break
+    case 'tankless-gas-outdoor':
+      dims = [0.45, 0.6, 0.25]
+      circuit = '120 V 15 A (controls / fan / freeze-protection heaters)'
+      venting = 'none'
+      head = 'Tankless gas water heater (outdoor) — 180–199 kBtu/h condensing, outdoor-rated, vents to the open air'
+      notes.push('¾" gas line sized for 199 kBtu/h at the appliance (G2413 — often 1" from the meter); outdoor unit: the listing\u2019s clearances to openings and the freeze-protection circuit — verify the climate')
       break
     case 'tankless-electric':
       dims = [0.4, 0.45, 0.12]
       circuit = '3 × 240 V 40 A (27 kW whole-house) — a 200 A service and a load calculation (NEC 220) — verify'
       venting = 'none'
-      head = 'Tankless electric water heater — 27 kW whole-house'
+      head = 'Tankless electric water heater (indoor) — 27 kW whole-house'
       notes.push('an electric tankless heater draws 110 A+ at full fire: confirm the service size and the utility\'s demand rules before ordering')
       break
+    case 'tankless-electric-outdoor':
+      dims = [0.4, 0.45, 0.12]
+      circuit = '3 × 240 V 40 A (27 kW whole-house) — a 200 A service and a load calculation (NEC 220) — verify'
+      venting = 'none'
+      head = 'Tankless electric water heater (outdoor) — 27 kW whole-house in a weatherproof (NEMA 3R) housing'
+      notes.push('an electric tankless heater draws 110 A+ at full fire: confirm the service size and the utility\'s demand rules before ordering; an outdoor-rated housing and freeze protection — verify the climate')
+      break
+  }
+  if (kind === 'heat-pump') {
+    notes.push(
+      input.inGarage
+        ? 'heat-pump heater in the garage: on an 18 in platform (M1307.3), strapped upper and lower thirds to the wall framing where the spec asks (P2801.8) — see the strap detail; drain pan with ¾" drain (P2801.6)'
+        : 'heat-pump heater outside: in a weatherproof enclosure on a 4 in pad against the exterior wall, strapped to the wall framing where the spec asks (P2801.8); drain pan and condensate to an approved receptor (P2801.6)',
+    )
   }
   const standards = [
     `UEF ≥ ${uefMin} (10 CFR 430.32(d) federal minimum — the label governs)`,

@@ -36,6 +36,8 @@
  * belong to the plumbing and electrical engines, which key off the same marks
  * through `fixtureMarks`.
  */
+import type { Fixture } from '../../plugin-bones/src/core/types'
+import { type MepModel, mepModel } from './providers/mep/model'
 import type { AnyNodeLike, NodeMap } from './model'
 import type { ScheduleColumn, ScheduleRow, ScheduleTable } from './schedule'
 
@@ -234,6 +236,52 @@ function groupsFor(nodes: NodeMap, levelId: string): { groups: Group[]; unmapped
   return { groups, unmapped }
 }
 
+/** The rough-in key of a Bones equipment fixture (the schedule's INFO convention). */
+function bonesInfo(f: Fixture): string {
+  switch (f.kind) {
+    case 'water-heater': {
+      const kind = String(f.meta?.waterHeater ?? '')
+      const gas = kind.startsWith('gas') || kind.startsWith('tankless-gas')
+      return `H, C, W${gas ? ', GAS' : ', ELECTRIC'}`
+    }
+    case 'panel':
+    case 'electric-meter':
+    case 'equipment':
+    case 'exhaust-fan':
+      return 'ELECTRIC'
+    case 'water-meter':
+      return 'C'
+    default:
+      return '—'
+  }
+}
+
+const BONES_SCHEDULED = new Set<Fixture['kind']>(['water-heater', 'panel', 'electric-meter', 'water-meter', 'equipment'])
+
+/**
+ * One row per distinct Bones equipment label on the level (a schedule lists
+ * kinds, not instances), marks continuing from `startIndex`.
+ */
+export function bonesEquipmentRows(model: MepModel | null, startIndex: number): ScheduleRow[] {
+  if (!model) return []
+  const groups = new Map<string, { description: string; info: string; qty: number }>()
+  for (const f of model.fixtures) {
+    if (!BONES_SCHEDULED.has(f.kind)) continue
+    const description = (f.label ?? f.kind).split(/ — /)[0]?.trim() || f.kind
+    const key = `${f.kind}|${description}`
+    const hit = groups.get(key)
+    if (hit) hit.qty += 1
+    else groups.set(key, { description: `${description} (Bones)`, info: bonesInfo(f), qty: 1 })
+  }
+  return [...groups.values()].map((g, i) => ({
+    mark: fixtureMark(startIndex + i),
+    description: g.description,
+    qty: String(g.qty),
+    info: g.info,
+    status: 'NEW',
+  }))
+}
+
 /**
  * itemId → the label its row carries, so the plumbing and electrical plans
  * can tag the same fixtures with the same marks the schedule prints.
@@ -257,6 +305,12 @@ export function buildFixtureSchedule(nodes: NodeMap, levelId: string): ScheduleT
     info: group.info,
     status: 'NEW',
   }))
+  // Bones' equipment after the placed items, its marks continuing the run
+  // (the items' marks — `fixtureMarks` — never move): the water heater the
+  // plumbing engine sized, the service panel and the meter, the HVAC
+  // equipment (Steve, 2026-09-09: "your fixture schedule should have the
+  // fixtures from bones").
+  rows.push(...bonesEquipmentRows(mepModel(nodes, levelId), rows.length))
   const issues: string[] = []
   if (unmapped > 0) {
     issues.push(

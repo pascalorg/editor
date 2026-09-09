@@ -391,7 +391,14 @@ export type FramingSpec = {
   /** The HVAC system the plan is built around. */
   hvacSystem?: 'heat-pump-split' | 'ac-gas-furnace' | 'packaged' | 'mini-split'
   /** The water heater type (engines/water-heater.ts); absent = the state's practice. */
-  waterHeater?: 'electric-tank' | 'gas-tank' | 'heat-pump' | 'tankless-gas' | 'tankless-electric'
+  waterHeater?:
+    | 'electric-tank'
+    | 'gas-tank'
+    | 'heat-pump'
+    | 'tankless-gas'
+    | 'tankless-gas-outdoor'
+    | 'tankless-electric'
+    | 'tankless-electric-outdoor'
 }
 
 /**

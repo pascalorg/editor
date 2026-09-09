@@ -4,7 +4,7 @@ import {
   extractWalls,
 } from '../core/wall-model'
 import { probeSlabsFor } from '../framing/compute'
-import { placeElectricMeterSpot, placePanelSpot, utilityPoleSpot } from '../engines/electrical'
+import { exteriorFaceOf, placeElectricMeterSpot, placePanelSpot, utilityPoleSpot } from '../engines/electrical'
 import { streetFrameFor } from '../engines/street'
 import { placeCondenserSeedSpot, placeThermostatSpot } from '../engines/hvac'
 import { placeMeterSpot, placeSewerExit, placeWhSpot } from '../engines/plumbing'
@@ -127,7 +127,12 @@ export function buildServicePointNodes(
         meterSpot.wall.start[0] + meterSpot.wall.dir[0] * meterSpot.u,
         meterSpot.wall.start[1] + meterSpot.wall.dir[1] * meterSpot.u,
       ]
-      const pole = utilityPoleSpot(walls, at, street)
+      // the meter wall's outward normal — the pole stands straight out from the meter, on its side
+      const face = exteriorFaceOf(meterSpot.wall, rooms)
+      const [fx, fz] = face.plan(meterSpot.u)
+      const ol = Math.hypot(fx - at[0], fz - at[1])
+      const meterOut: readonly [number, number] | undefined = ol > 1e-6 ? [(fx - at[0]) / ol, (fz - at[1]) / ol] : undefined
+      const pole = utilityPoleSpot(walls, at, street, meterOut)
       out.push(ServiceNode.parse({ serviceType: 'utility-pole', position: [pole[0], 0, pole[1]] }))
     }
   }

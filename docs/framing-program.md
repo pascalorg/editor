@@ -1171,7 +1171,100 @@ its header names the view that is on.
 G110 One address: whatever was entered — the lot drop-in or the Plans
 tab — every plugin reads it.
 
+## Mandate additions (Steve, 2026-09-09 — the hand-drawn house, the water heater, the drop, Bones on the paper)
+
+Steve, with a gable-end elevation whose rake stopped at the wall corner
+over a white band, and a Bones view whose service drop ran through the
+trusses: "i used the auto roof tool and built the house by manual
+drawing, and the plans dont show the correct elevation views on the
+sheets its like broken ... cut off on the eave and not the true section,
+why does the water heater always tuck in the wall no matter what people
+pick, why is it a massive box and not the real wh types, the heat pump
+ones should be round right and on a stand in the garage if there is one,
+no garage then it should be in a container outside the wall, not in the
+wall and raised up, sits on a slab ... the electrical line should never
+run through the roof, should be on a power pole on the side the box is
+located on ... the structural and plumbing and electrical and everything
+for the plans should be from the bones models where things are, and if
+people move them it should adjust correctly ... your fixture schedule
+should have the fixtures from bones and be shown in the elevations
+correctly like if the wh is on the wall outside". Then: "there are
+tankless interior and tankless exterior, gas and electric, tankless
+typically never default for ca, heat pump in outside container or built
+into the garage standing on an 18" platform with strap details and
+notes".
+
+G111 A wall without its own height is the storey's height everywhere
+paper is drawn, and a derived roof sits on the walls as they stand.
+G112 The water heater is the kind the panel picked, wherever it stands:
+a tank in the garage on its 18 in platform, else outside in an enclosure
+on a pad; tankless indoors, or the outdoor kinds on the exterior face;
+never inside a stud bay, never raised for no reason; tanks are round.
+G113 The service drop never crosses the roof: the pole stands on the lot
+line straight out from the meter, and the weatherhead clears the roof.
+G114 Everything Bones derives that stands outside the house is on the
+elevations; Bones' equipment is on the fixture schedule.
+
 ## Log (continued)
+
+- 2026-09-09: **Batch T26–T29 — the hand-drawn house on paper, the water
+  heater, the drop, Bones on the elevations and the schedule (G111–G114).**
+  T26 (sections + roof): a wall with no `height` was drawn 2.5 m tall
+  (`DEFAULT_WALL_HEIGHT`) under a roof derived at the level's 2.74 m —
+  the white band at the plate and the rake stopping short of the eave on
+  Steve's gable end; `scene-model.ts` now takes the storey's height for
+  such a wall (as the 3D builds it), and plugin-roof `plateOfLevel`
+  takes the walls' own height when they carry one. Reproduced headlessly
+  with `manual-house.ts` (four walls on the Modesto level + deriveRoof)
+  — the gable end now reads wall → plate → gable → rake to the eave.
+  T27 (Bones plumbing): `placeWhSpot` puts the heater in the GARAGE (its
+  18 in stand, M1307.3) or, without one, OUTSIDE the meter wall beside
+  the water entry; the panel's kind is honoured wherever it stands (the
+  old code forced tankless off the garage wall and hung it at 1.2 m —
+  "no matter what people pick"); a tank outside gets a 4 in pad and a
+  weatherproof enclosure (two sides, a top, the door drawn open); a
+  heat-pump heater is its tank plus the compressor head; tank bodies are
+  CYLINDERS — `Member.shape: 'cylinder'` and a `UNIT_CYLINDER` bucket in
+  the renderer; the kinds grow `tankless-gas-outdoor` and
+  `tankless-electric-outdoor` (the outdoor kinds hang on the exterior
+  face, the indoor ones inside); CA's default stays the heat pump (Title
+  24 baseline — never tankless); the heat-pump notes name the platform,
+  the straps (P2801.8) and the pan; the panel's seven kinds wrap into a
+  grid. A service point still at its seeded height reads the kind's own
+  height; one the user moved is verbatim.
+  T28 (Bones electrical): `utilityPoleSpot` takes the meter wall's
+  outward normal and stands the pole on the lot line straight out from
+  the meter (`rayRingHit`), the seeded utility-pole service point too;
+  the weatherhead clears the roof over the mast and the drop is sampled
+  against `roofTopAt` (compute passes the rafter underside + 0.25 m) and
+  the head lifted until the line stands 0.6 m over every roof it crosses
+  (NEC 230.24(A)); the mast label says when it was lifted.
+  T29 (sheets): `bonesExteriorItems(nodes, levels)` turns Bones' outside
+  equipment — the heater family when its label says outside, the mast /
+  weatherhead / pole / pad transformer, the condenser cabinets, the meter
+  socket — into the sections' item solids, and the elevation provider
+  (bootstrap + both demo scripts) pushes them onto the model it draws
+  (`buildElevationDrawing`'s prebuilt-model seam); `buildFixtureSchedule`
+  appends Bones' equipment rows after the placed items (marks continue;
+  `fixtureMarks` unmoved) with the rough-in key per kind. Verified:
+  Modesto A4.0 shows the enclosure, the mast, the meter and the pole;
+  the headless probe (`wh-drop-probe.ts`) — Cape Coral (garage, FL):
+  electric tank cylinder on the stand at 18 in, heat pump = tank + head,
+  tankless indoor at 1.2 m; Modesto (no garage, CA): heat-pump tank
+  outside on the pad in its enclosure, the outdoor tankless on the
+  exterior face, the pole on the lot line at the meter's z. Tests: Bones
+  2176 (three pins moved to the new rule with INTENDED-CHANGE notes, two
+  new), sheets 258, sections 28, roof 23; whole repo 6620 pass (the 3
+  CLI failures environmental); editor typecheck clean. Not done: the
+  Bones panel's rows do not select members in the 3D (no member
+  selection exists — Steve's "when i click things in bones it doesnt
+  show up in the scene" needs a member-pick feature, a batch of its
+  own); a moved service point already re-routes the engines and the
+  sheets read the same model — the "manual" state Steve described is
+  the existing override, not a new flag; the enclosure hides the tank
+  from the closed sides (the door is drawn open so it reads); the strap
+  DETAIL drawing for the water heater is a note, not a typical-details
+  sheet entry yet.
 
 - 2026-09-09: **Batch T25 — the Bones panel, one address (G109, G110),
   and the "roof" on A2.0.** panel.tsx: the Blueprints plan-set export

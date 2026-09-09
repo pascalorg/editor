@@ -1152,21 +1152,30 @@ describe('services with the street known (G53/G55): the meter-main on a side wal
     expect(members.find((m) => m.label?.startsWith('Utility pole'))).toBeUndefined()
   })
 
-  test("with the lot ring, the pole stands at the lot's street corner on the meter's side; a placed service point wins", () => {
+  // INTENDED-CHANGE 2026-09-09 (Steve: "the electrical line should never run
+  // through the roof, should be on a power pole on the side the box is
+  // located on"): with the lot ring the pole stands on the lot line STRAIGHT
+  // OUT from the meter along its wall's outward normal — the drop leaves the
+  // weatherhead square to the wall — no longer at the street corner.
+  test("with the lot ring, the pole stands on the lot line straight out from the meter, on its side; a placed service point wins", () => {
     // the lot: x −5..15, z −4..16, the street along z = 16 (edge 2)
     const lotStreet = { ...street, lot: [[-5, -4], [15, -4], [15, 16], [-5, 16]] as const, frontEdge: 2 }
     const fixtures = layoutElectrical(walls, rooms, undefined, undefined, [], { street: lotStreet })
+    const meter = fixtures.find((f) => f.kind === 'electric-meter')!
     const members = routeWiring(fixtures, walls, { route: 'attic', street: lotStreet, serviceEntrance: 'overhead', groundY: -0.3, eaveY: 2.7 })
     const pole = members.find((m) => m.label?.startsWith('Utility pole'))!
-    // the meter is on the right wall (x > 10): the right street corner (15, 16), inset 0.6 m both ways
+    // the meter is on the right wall (x > 10): the lot's right line x = 15, inset 0.6 m, at the meter's z
     expect(pole.position[0]).toBeCloseTo(14.4, 6)
-    expect(pole.position[2]).toBeCloseTo(15.4, 6)
-    expect(pole.label).toMatch(/street corner/)
-    // underground: the pad at the same corner
+    expect(pole.position[2]).toBeCloseTo(meter.position[2], 6)
+    expect(pole.label).toMatch(/straight out from the meter/)
+    // the drop runs square to the wall: no roof between the weatherhead and the pole
+    const drop = members.find((m) => m.label?.startsWith('Service drop'))!
+    expect(Math.abs(drop.position[2] - meter.position[2])).toBeLessThan(0.05)
+    // underground: the pad at the same spot
     const under = routeWiring(fixtures, walls, { route: 'walls', street: lotStreet, serviceEntrance: 'underground', groundY: -0.3 })
     const pad = under.find((m) => m.label?.startsWith('Pad-mount transformer'))!
     expect(pad.position[0]).toBeCloseTo(14.4, 6)
-    expect(pad.position[2]).toBeCloseTo(15.4, 6)
+    expect(pad.position[2]).toBeCloseTo(meter.position[2], 6)
     // a dragged utility-pole service point outranks the rule
     const placed = routeWiring(fixtures, walls, { route: 'attic', street: lotStreet, serviceEntrance: 'overhead', groundY: -0.3, eaveY: 2.7, utilityPole: [3, 15] })
     const movedPole = placed.find((m) => m.label?.startsWith('Utility pole'))!

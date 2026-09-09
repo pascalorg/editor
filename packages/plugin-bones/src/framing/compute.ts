@@ -41,7 +41,7 @@ import {
   mixedCmuWall,
   snapCmuHeight,
 } from '../engines/cmu'
-import { frameAtticSeparations, frameBearingWallsToRoof } from '../engines/attic-walls'
+import { frameAtticSeparations, frameBearingWallsToRoof, roofUndersideAt } from '../engines/attic-walls'
 import { type BlockWall, furOutOfBlock } from '../engines/block-furring'
 import { clampUnderRoof } from '../engines/under-roof'
 import { frameDeck } from '../engines/deck-framing'
@@ -328,6 +328,9 @@ export function foundationOf(building: Record<string, unknown> | undefined): Fou
       : 0
   return { type, ffAboveGradeM: Math.max(0, inchesUp) * 0.0254 }
 }
+
+/** The roof's top over its rafter-underside plane: a 2x10 rafter and the deck, near enough for a service clearance. */
+const ROOF_OVER_UNDERSIDE = 0.25
 
 export function computeLevel(
   nodes: Record<string, Record<string, unknown>>,
@@ -1652,6 +1655,13 @@ function computeLevelUncached(
       const wiringRoute = spec.wiringRoute ?? (levels[levelIndex + 1] ? 'walls' : 'attic')
       let eaveY = 0
       for (const w of activeWalls) eaveY = Math.max(eaveY, w.height)
+      // the roof over the service mast and under the drop (NEC 230.24): the
+      // rafter underside plane plus the rafter depth and the deck
+      const cableRoofs = extractRoofs(nodes, levelId)
+      const roofTopAt = (x: number, z: number): number | null => {
+        const under = roofUndersideAt(cableRoofs, x, z)
+        return under === null ? null : under + ROOF_OVER_UNDERSIDE
+      }
       members.push(
         ...routeWiring(electrical, activeWalls, {
           waterEntry,
@@ -1663,6 +1673,7 @@ function computeLevelUncached(
           street: spec.street,
           groundY: gradeY,
           eaveY,
+          roofTopAt,
           // the dragged utility pole / transformer point outranks the lot-corner rule
           ...(services.utilityPole?.position
             ? { utilityPole: [services.utilityPole.position[0], services.utilityPole.position[2]] as const }

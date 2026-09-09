@@ -38,9 +38,21 @@ export function wallsOfLevel(nodes: Nodes, levelId: string): WallInput[] {
     }))
 }
 
-/** Top of the level's plate: its storey height. */
+/**
+ * Top of the level's plate: the walls' own height where they carry one (a
+ * hand-drawn house whose walls were set taller or shorter than the storey —
+ * the roof sits on the walls, not on the level's number), else the storey
+ * height (2026-09-09: a roof derived at the level's 9 ft over 8'-2" walls
+ * floated a course above them on the elevations).
+ */
 export function plateOfLevel(nodes: Nodes, levelId: string): number {
   const level = nodes[levelId]
+  let tallest = 0
+  for (const id of level?.children ?? []) {
+    const w = nodes[id]
+    if (w?.type === 'wall' && typeof w.height === 'number' && w.height > tallest) tallest = w.height
+  }
+  if (tallest > 0) return tallest
   return typeof level?.height === 'number' ? level.height : DEFAULT_LEVEL_HEIGHT
 }
 

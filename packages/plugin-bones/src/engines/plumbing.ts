@@ -41,7 +41,7 @@
  */
 
 import mepRules from '../../data/mep-rules.json'
-import { waterHeaterSpec } from './water-heater'
+import { isOutdoorKind, waterHeaterName, waterHeaterSpec } from './water-heater'
 import { DEFAULT_SPEC, type FramingSpec } from '../core/spec'
 import type {
   Fixture,
@@ -269,7 +269,7 @@ export function placeMeterSpot(
 export function placeWhSpot(
   walls: WallSlice[],
   rooms: RoomSlice[],
-): { wall: WallSlice; u: number; tank: boolean; heightAff: number } | null {
+): { wall: WallSlice; u: number; tank: boolean; inGarage: boolean; outside: boolean; heightAff: number } | null {
   const straight = walls.filter((w) => !w.curved && w.length >= 0.1)
   const meter = placeMeterSpot(walls)
   if (!meter) return null
@@ -283,7 +283,15 @@ export function placeWhSpot(
     (w) => Math.abs(panelMountU(w) - Math.max(0.4, panelMountU(w) - 1.2)) >= 0.999 ||
            panelMountU(w) + 1.2 <= w.length - 0.4,
   )
-  const tank = garageWall !== undefined
+  // The heater stands in the GARAGE on its 18 in stand when the house has
+  // one; without a garage it stands OUTSIDE — against the exterior face of
+  // the meter wall beside the water entry, on a 4 in pad in a weatherproof
+  // enclosure (a tank) or wall-hung there (a tankless unit) — never inside a
+  // stud bay, never raised (Steve, 2026-09-09: "the heat pump ones should be
+  // round and on a stand in the garage if there is one, no garage then it
+  // should be in a container outside the wall, not in the wall and raised
+  // up, sits on a slab").
+  const inGarage = garageWall !== undefined
   const whWall = garageWall ?? meter.wall
   const whURaw = (() => {
     if (whWall === meter.wall) return Math.min(whWall.length - 0.4, meter.u + 1.2)
@@ -296,10 +304,18 @@ export function placeWhSpot(
     return panelU + off <= whWall.length - 0.4 ? panelU + off : Math.max(0.4, panelU - off)
   })()
   const whU = clearOfOpenings(whWall, whURaw, 0, 2.1)
-  const height = tank ? 1.5 : 0.6
-  const bottom = tank ? inches(18) : 1.2 // M1307.3 garage ignition height
-  return { wall: whWall, u: whU, tank, heightAff: bottom + height / 2 }
+  // the seeded service point's height: a 1.5 m tank's centre on its stand
+  // (garage) or its pad (outside) — compute reads the KIND's own height
+  // while the point stands where it was seeded (`whSeedHeight`)
+  return { wall: whWall, u: whU, tank: inGarage, inGarage, outside: !inGarage, heightAff: whSeedHeight(inGarage) }
 }
+
+/** The water-heater service point's seeded centre height, metres AFF. */
+export function whSeedHeight(inGarage: boolean): number {
+  return (inGarage ? inches(18) : WH_PAD_H) + 1.5 / 2
+}
+/** The 4 in housekeeping pad a tank stands on outside the garage. */
+const WH_PAD_H = 0.1
 
 /**
  * What the plumbing engine reads beyond the walls, rooms and spec (compute
@@ -1873,74 +1889,169 @@ function placedPlumbing(
   // 18" ignition height) — else tankless on an exterior wall at 1.2 m AFF —
   // or the water-heater service node, verbatim ----
   const whForced = overrideWallPoint(walls, overrides?.waterHeater)
+  const whSeed = placeWhSpot(walls, rooms)
   const whSpot = whForced
     ? {
         wall: whForced.wall,
         u: whForced.u,
-        tank: garageBoundingWall(whForced.wall, rooms) !== undefined,
+        inGarage: garageBoundingWall(whForced.wall, rooms) !== undefined,
+        // dragged onto an exterior wall outside the garage: the unit stands OUTSIDE it
+        outside: garageBoundingWall(whForced.wall, rooms) === undefined && whForced.wall.exterior,
       }
-    : placeWhSpot(walls, rooms)
+    : whSeed
   if (!whSpot) return { members, fixtures }
   const whWall = whSpot.wall
   const whU = whSpot.u
-  const tank = whSpot.tank
+  const inGarage = whSpot.inGarage
+  const whOutsideSpot = whSpot.outside
   const whAnchor: WallPoint = { wall: whWall, u: whU }
   const whWallPlan = wallPlan(whAnchor) as Pt
-  // Which face is INSIDE: test both (a block wall's thicker section, a
-  // garage polygon drawn to the face, put the old one-sided test on the
-  // line and the tank outside the house — Steve, 2026-09-09: "why does the
-  // water heater and other generation go through the wall"); when neither
-  // face resolves a room, the side facing the nearest room's centre.
-  const whGarage = tank ? garageBoundingWall(whWall, rooms) : undefined
-  const side = insideSideOf(whWall, whU, whGarage ? [whGarage] : rooms.filter((r) => r.category !== 'outdoor'))
-  // Tank anchor measures from the FINISHED FACE, not the centerline — the
-  // old 0.35-from-centerline put the pan edge AT the centerline (6 cm into
-  // the studs) and the stand through the plate band (examiner, closing
-  // round): face + pan overhang (5 cm) + 2 cm gap + tank half-depth (0.3).
-  const whOff = tank ? whWall.thickness / 2 + 0.05 + 0.02 + 0.3 : whWall.thickness / 2 + 0.13
-  const nx = -whWall.dir[1] * side
-  const nz = whWall.dir[0] * side
-  const whPlan: Pt = [whWallPlan[0] + nx * whOff, whWallPlan[1] + nz * whOff]
-  // The heater's TYPE and SIZE (water-heater.ts): the panel's choice, else
-  // the state's practice and the HVAC fuel; a tank only where the spot is
-  // a tank spot (a garage wall), a wall-hung tankless cabinet elsewhere.
+  // The heater's TYPE and SIZE (water-heater.ts): the panel's choice — a
+  // tank is a tank wherever it stands (Steve, 2026-09-09: "why does the
+  // water heater always tuck in the wall no matter what people pick") —
+  // else the state's practice and the HVAC fuel.
   const whNotes: string[] = []
   const bedrooms = rooms.filter((r) => r.category === 'bedroom').length
   const baths = rooms.filter((r) => r.category === 'bathroom').length
   const chosen = spec.waterHeater ?? null
   const wh = waterHeaterSpec({
-    // a tank only on a tank spot (the garage wall); elsewhere the wall-hung
-    // cabinet in the chosen fuel (gas unless electric was asked)
-    choice: tank ? chosen : chosen === 'tankless-electric' ? 'tankless-electric' : 'tankless-gas',
+    choice: chosen,
     stateCode: context.stateCode,
     hvacSystem: context.hvacSystem ?? null,
     bedrooms: Math.max(1, bedrooms),
     baths: Math.max(1, baths),
-    inGarage: tank,
-    seismicStraps: fab && spec.seismicHoldDowns,
+    inGarage,
+    // the standards line names the straps wherever the spec asks for them;
+    // the strap MEMBERS ship at the fabrication LOD (below)
+    seismicStraps: spec.seismicHoldDowns,
   })
   const tankBody = wh.gallons !== null
   const whDims: readonly [number, number, number] = wh.dims
-  const whBottom = tankBody ? inches(18) : 1.2 // M1307.3 garage ignition height
-  const whCenterY = overrides?.waterHeater?.heightAff ?? whBottom + whDims[1] / 2
+  // OUTSIDE: a tank without a garage (its enclosure) or an outdoor-rated
+  // tankless unit; an indoor tankless unit hangs on the inside face
+  const whOutside = whOutsideSpot && (tankBody || isOutdoorKind(wh.kind))
+  // Which face: the garage's inside (a tank on the garage wall), the
+  // OUTSIDE face of an exterior wall (the enclosure / outdoor cabinet), else
+  // the room's inside. Both faces are tested (a block wall's thicker
+  // section, a garage polygon drawn to the face, put the old one-sided test
+  // on the line and the tank outside the house — Steve, 2026-09-09: "why
+  // does the water heater and other generation go through the wall").
+  const whGarage = inGarage ? garageBoundingWall(whWall, rooms) : undefined
+  const insideSide = insideSideOf(whWall, whU, whGarage ? [whGarage] : rooms.filter((r) => r.category !== 'outdoor'))
+  const side = whOutside ? -insideSide : insideSide
+  // From the FINISHED FACE, never the centreline: a tank's pan overhang
+  // (5 cm) + 2 cm + half its depth; a wall-hung cabinet 2 cm off the face.
+  const whOff = tankBody ? whWall.thickness / 2 + 0.05 + 0.02 + whDims[2] / 2 : whWall.thickness / 2 + 0.02 + whDims[2] / 2
+  const nx = -whWall.dir[1] * side
+  const nz = whWall.dir[0] * side
+  const whPlan: Pt = [whWallPlan[0] + nx * whOff, whWallPlan[1] + nz * whOff]
+  // Where it stands: a tank on its 18 in stand in the garage (M1307.3), on
+  // a 4 in pad anywhere else (the outdoor enclosure's slab, a mechanical
+  // room's floor); a tankless cabinet at 1.2 m AFF. A service point still at
+  // its seeded height reads the kind's own height; one the user raised or
+  // lowered is taken verbatim.
+  const whBottom = tankBody ? (inGarage ? inches(18) : WH_PAD_H) : 1.2
+  const seededH = whSeed?.heightAff ?? null
+  const forcedH = overrides?.waterHeater?.heightAff
+  const whCenterY =
+    typeof forcedH === 'number' && !(seededH !== null && Math.abs(forcedH - seededH) < 0.002)
+      ? forcedH
+      : whBottom + whDims[1] / 2
+  // the body the renderer draws: a tank is a cylinder; a heat-pump heater is
+  // its tank with the compressor head on top (0.4 m of its height)
+  const whHead = wh.kind === 'heat-pump' ? 0.4 : 0
+  const whBodyDims: readonly [number, number, number] = [whDims[0], whDims[1] - whHead, whDims[2]]
+  const whBodyCenterY = whCenterY - whDims[1] / 2 + whBodyDims[1] / 2
   members.push({
     system: 'plumbing',
     role: 'water-heater',
-    dims: whDims,
-    length: whDims[1],
-    position: [whPlan[0], whCenterY, whPlan[1]],
+    ...(tankBody ? { shape: 'cylinder' as const } : {}),
+    dims: whBodyDims,
+    length: whBodyDims[1],
+    position: [whPlan[0], whBodyCenterY, whPlan[1]],
     rotation: [0, Math.atan2(nx, nz), 0],
     material: 'steel',
     sourceId: 'wh',
-    label: `${wh.label}; ${tankBody ? 'M1305.1 30×30" service space' : 'wall-mounted 1.2 m AFF, M1305.1 service space'}`,
+    label: `${wh.label}; ${
+      tankBody
+        ? inGarage
+          ? 'on its stand in the garage; M1305.1 30×30" service space'
+          : whOutside
+            ? 'outside, in a weatherproof enclosure on a 4 in pad beside the water entry (the listing\u2019s outdoor rating / enclosure — verify); M1305.1 30×30" service space'
+            : 'on a 4 in pad; M1305.1 30×30" service space'
+        : whOutside
+          ? 'outdoor unit wall-hung on the exterior face at 1.2 m AFF (an outdoor-rated / vented model — verify); M1305.1 service space'
+          : 'wall-mounted 1.2 m AFF, M1305.1 service space'
+    }`,
   })
+  if (whHead > 0) {
+    members.push({
+      system: 'plumbing',
+      role: 'water-heater',
+      shape: 'cylinder',
+      dims: [whDims[0] * 0.88, whHead, whDims[2] * 0.88],
+      length: whHead,
+      position: [whPlan[0], whCenterY + whDims[1] / 2 - whHead / 2, whPlan[1]],
+      rotation: [0, Math.atan2(nx, nz), 0],
+      material: 'steel',
+      sourceId: 'wh-head',
+      label: 'Heat-pump water heater — compressor / evaporator head on the tank (ducted intake / exhaust where the room is under 700 ft³ — verify)',
+    })
+  }
+  if (tankBody && !inGarage) {
+    // the pad: 4 in housekeeping slab under the tank (outside: the enclosure's slab)
+    members.push({
+      system: 'plumbing',
+      role: 'equipment',
+      dims: [whDims[0] + 0.5, WH_PAD_H, whDims[2] + 0.3],
+      length: whDims[0] + 0.5,
+      position: [whPlan[0], WH_PAD_H / 2, whPlan[1]],
+      rotation: [0, Math.atan2(nx, nz), 0],
+      material: 'concrete',
+      sourceId: 'wh-pad',
+      label: whOutside ? 'Water-heater pad — 4 in concrete housekeeping slab outside the wall (level, above grade — verify)' : 'Water-heater pad — 4 in housekeeping slab',
+    })
+  }
+  if (tankBody && whOutside) {
+    // THE ENCLOSURE: a weatherproof cabinet against the wall — two sides, a
+    // top and a door drawn open so the tank reads; 0.15 m clear round the
+    // tank, the door full height (Steve, 2026-09-09: "in a container
+    // outside the wall").
+    const encW = whDims[0] + 0.3
+    const encD = whOff - whWall.thickness / 2 + whDims[2] / 2 + 0.15
+    const encH = whBottom + whDims[1] + 0.2
+    const encYaw = Math.atan2(nx, nz)
+    const faceOff = whWall.thickness / 2
+    const encCenter: Pt = [whWallPlan[0] + nx * (faceOff + encD / 2), whWallPlan[1] + nz * (faceOff + encD / 2)]
+    const along = (p: Pt, d: number): Pt => [p[0] + whWall.dir[0] * d, p[1] + whWall.dir[1] * d]
+    const panel = (dims: readonly [number, number, number], at: Pt, y: number, id: string, label: string) =>
+      members.push({
+        system: 'plumbing',
+        role: 'equipment',
+        dims,
+        length: Math.max(dims[0], dims[2]),
+        position: [at[0], y, at[1]],
+        rotation: [0, encYaw, 0],
+        material: 'steel',
+        sourceId: id,
+        label,
+      })
+    const sideLabel = 'Water-heater enclosure — weatherproof cabinet against the exterior wall, louvred for the listing\u2019s combustion / heat-pump air (verify)'
+    panel([0.02, encH, encD], along(encCenter, -encW / 2), encH / 2, 'wh-enclosure-side', sideLabel)
+    panel([0.02, encH, encD], along(encCenter, encW / 2), encH / 2, 'wh-enclosure-side', sideLabel)
+    panel([encW + 0.04, 0.02, encD + 0.02], encCenter, encH + 0.01, 'wh-enclosure-top', 'Water-heater enclosure — top, sloped to shed (verify)')
+    // the door: hinged at the front corner on the wall's +dir side, standing open square to the front
+    const frontOff = faceOff + encD
+    const hinge: Pt = along([whWallPlan[0] + nx * frontOff, whWallPlan[1] + nz * frontOff], encW / 2)
+    panel([0.02, encH - 0.1, encW], [hinge[0] + nx * (encW / 2), hinge[1] + nz * (encW / 2)], (encH - 0.1) / 2 + 0.05, 'wh-enclosure-door', 'Water-heater enclosure — door (drawn open)')
+  }
   fixtures.push({
     system: 'plumbing',
     kind: 'water-heater',
     position: [whPlan[0], whCenterY, whPlan[1]],
     rotationY: Math.atan2(nx, nz),
     sourceId: 'wh',
-    label: `Water heater (${wh.gallons !== null ? `${wh.gallons} gal ${wh.kind === 'heat-pump' ? 'heat-pump hybrid' : wh.kind === 'gas-tank' ? 'gas' : 'electric'} tank` : wh.kind === 'tankless-electric' ? 'tankless electric' : 'tankless gas'}, UEF ≥ ${wh.uefMin})`,
+    label: `Water heater (${waterHeaterName(wh.kind, wh.gallons)}, UEF ≥ ${wh.uefMin})`,
     meta: { waterHeater: wh.kind, ...(wh.gallons !== null ? { gallons: wh.gallons } : {}), uefMin: wh.uefMin, circuit: wh.circuit },
   })
   // an atmospheric gas tank vents through a B-vent up past the roof; the
@@ -2003,7 +2114,7 @@ function placedPlumbing(
   const whBot = whCenterY - whDims[1] / 2
   const whYaw = Math.atan2(nx, nz)
   const PAN_DEPTH = Math.max(inches(whRules?.panMinDepthIn ?? 1.5), 0.05)
-  if (tankBody) {
+  if (tankBody && inGarage) {
     const standH = whBot - (fab ? PAN_DEPTH : 0)
     if (standH > 0.02) {
       members.push({

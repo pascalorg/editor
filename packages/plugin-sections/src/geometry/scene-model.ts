@@ -1013,7 +1013,14 @@ export function buildBuildingModel(nodes: Nodes): BuildingModel {
         exteriorFinish: exteriorFinishOf(wall),
         claddingColor: claddingColorOf(wall),
         baseY: baseY + (wall.supportOffset ?? 0),
-        topY: baseY + (wall.supportOffset ?? 0) + (wall.height ?? DEFAULT_WALL_HEIGHT),
+        // a wall without its own height is the storey's height, as the 3D
+        // builds it — the old 2.5 m default drew a 9 ft level's walls 8'-2"
+        // tall under a roof derived at 9 ft (2026-09-09: a white band at the
+        // plate and the rake ending short of the eave on a hand-drawn house)
+        topY:
+          baseY +
+          (wall.supportOffset ?? 0) +
+          (wall.height ?? elevations.get(levelId)?.height ?? DEFAULT_WALL_HEIGHT),
         underpinning: wall.underpinning
           ? {
               rimBottomY: baseY + (wall.supportOffset ?? 0) - wall.underpinning.rim,

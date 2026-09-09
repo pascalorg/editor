@@ -64,17 +64,19 @@ describe('the fixture schedule on a synthetic level', () => {
 
   test('schedules fixtures, skips decor and skips hidden items', () => {
     const table = buildFixtureSchedule(nodes, levelId)
-    expect(table.rows.map((r) => r.description)).toEqual(['BATHROOM SINK', 'DISHWASHER', 'TOILET'])
-    expect(table.rows.map((r) => r.mark)).toEqual(['A01', 'A02', 'A03'])
+    // the placed items first; Bones' derived equipment follows them (below)
+    const items = table.rows.filter((r) => !r.description.endsWith('(Bones)'))
+    expect(items.map((r) => r.description)).toEqual(['BATHROOM SINK', 'DISHWASHER', 'TOILET'])
+    expect(items.map((r) => r.mark)).toEqual(['A01', 'A02', 'A03'])
     // Two identical lavatories collapse into one row with QTY 2; the hidden
     // toilet leaves the water closet at 1.
-    expect(table.rows.map((r) => r.qty)).toEqual(['2', '1', '1'])
-    expect(table.rows.map((r) => r.status)).toEqual(['NEW', 'NEW', 'NEW'])
+    expect(items.map((r) => r.qty)).toEqual(['2', '1', '1'])
+    expect(table.rows.every((r) => r.status === 'NEW')).toBe(true)
   })
 
   test('the INFO column carries the rough-in key per fixture type', () => {
     const table = buildFixtureSchedule(nodes, levelId)
-    expect(table.rows.map((r) => r.info)).toEqual([
+    expect(table.rows.filter((r) => !r.description.endsWith('(Bones)')).map((r) => r.info)).toEqual([
       'PLUMBING: H,C,W',
       'PLUMBING: H,W · ELECTRIC',
       'PLUMBING: C,W',
@@ -158,7 +160,15 @@ describe('the fixture schedule on the cottage', () => {
     expect(descriptions).not.toContain('TELEVISION')
     // The QTY column accounts for every scheduled item exactly once.
     const scheduled = items.filter((n) => isScheduledFixture(n))
-    expect(table.rows.reduce((n, r) => n + Number(r.qty), 0)).toBe(scheduled.length)
+    const placedRows = table.rows.filter((r) => !r.description.endsWith('(Bones)'))
+    expect(placedRows.reduce((n, r) => n + Number(r.qty), 0)).toBe(scheduled.length)
+    // Bones' equipment follows the placed items, its marks continuing the run
+    // (2026-09-09: "your fixture schedule should have the fixtures from bones")
+    const bones = table.rows.filter((r) => r.description.endsWith('(Bones)'))
+    expect(bones.length).toBeGreaterThan(0)
+    expect(bones[0]?.mark).toBe(fixtureMark(placedRows.length))
+    expect(bones.some((r) => /^Water heater/.test(r.description) || /panel/i.test(r.description))).toBe(true)
+    for (const r of bones) expect(r.info).not.toBe('—')
     // Marks are unique and in label order.
     expect(new Set(table.rows.map((r) => r.mark)).size).toBe(table.rows.length)
     expect(table.rows.map((r) => r.mark)).toEqual(table.rows.map((_, i) => fixtureMark(i)))

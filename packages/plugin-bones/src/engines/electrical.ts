@@ -1135,7 +1135,7 @@ const OUTDOOR_MAX_AFF = feet(rules.receptacles.outdoorMaxAboveGradeFt)
  * (M4 open air) IS the outside — a garden behind the house used to read as
  * the interior side and flipped the meter/WR mounting INDOORS. With no zone
  * data at all: interior guess is +normal → use − (legacy). */
-function exteriorFaceOf(wall: WallSlice, rooms: RoomSlice[]): WallFace {
+export function exteriorFaceOf(wall: WallSlice, rooms: RoomSlice[]): WallFace {
   const inFace = interiorFaces(wall, rooms)[0]
   if (inFace) return faceOf(wall, inFace.side === 1 ? -1 : 1)
   const mid = wall.length / 2
@@ -2971,10 +2971,40 @@ export type ServiceCableContext = {
   provider?: string
   /** A placed utility-pole service point (level-local plan): the pole / pad stands exactly there. */
   utilityPole?: readonly [number, number]
+  /**
+   * The roof's TOP surface over a level-local plan point (null off the
+   * roof) — the weatherhead stands clear of the roof over the mast and the
+   * drop clears every roof it crosses (NEC 230.24(A)); without it the
+   * tallest plate + 0.6 m is the only datum (2026-09-09: the drop ran
+   * through the trusses).
+   */
+  roofTopAt?: (x: number, z: number) => number | null
 }
 
 /** The pole / pad stands this far inside the lot lines at the corner. */
 const POLE_CORNER_INSET = 0.6
+
+/** Where the ray from `origin` along `dir` first leaves `ring` (the nearest edge hit past 0.1 m), or null. */
+function rayRingHit(
+  ring: readonly (readonly [number, number])[],
+  origin: readonly [number, number],
+  dir: readonly [number, number],
+): readonly [number, number] | null {
+  let best: number | null = null
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i] as readonly [number, number]
+    const b = ring[(i + 1) % ring.length] as readonly [number, number]
+    const ex = b[0] - a[0]
+    const ez = b[1] - a[1]
+    const den = dir[0] * ez - dir[1] * ex
+    if (Math.abs(den) < 1e-9) continue
+    const t = ((a[0] - origin[0]) * ez - (a[1] - origin[1]) * ex) / den
+    const u = ((a[0] - origin[0]) * dir[1] - (a[1] - origin[1]) * dir[0]) / den
+    if (t <= 0.1 || u < -1e-9 || u > 1 + 1e-9) continue
+    if (best === null || t < best) best = t
+  }
+  return best === null ? null : [origin[0] + dir[0] * best, origin[1] + dir[1] * best]
+}
 
 /**
  * Where the utility pole (overhead) or pad transformer (underground) stands:
@@ -2988,9 +3018,21 @@ export function utilityPoleSpot(
   walls: readonly WallSlice[],
   meterPlan: readonly [number, number],
   street: StreetFrame,
+  /** The meter wall's outward normal (unit): with it the pole stands on the lot line straight out from the meter. */
+  meterOut?: readonly [number, number],
 ): readonly [number, number] {
   const dir = street.dir
   const lot = street.lot
+  // The pole on the SIDE THE METER IS ON: the lot line straight out from
+  // the meter along its wall's outward normal, so the drop leaves the
+  // weatherhead square to the wall and rises away from the roof instead of
+  // crossing it to a corner (Steve, 2026-09-09: "the electrical line should
+  // never run through the roof, should be on a power pole on the side the
+  // box is located on").
+  if (lot && lot.length >= 3 && meterOut) {
+    const hit = rayRingHit(lot, meterPlan, meterOut)
+    if (hit) return [hit[0] - meterOut[0] * POLE_CORNER_INSET, hit[1] - meterOut[1] * POLE_CORNER_INSET]
+  }
   if (lot && lot.length >= 3 && typeof street.frontEdge === 'number') {
     const a = lot[street.frontEdge] as readonly [number, number]
     const b = lot[(street.frontEdge + 1) % lot.length] as readonly [number, number]
@@ -3149,17 +3191,58 @@ export function routeServiceCable(
     const ground = context.groundY ?? 0
     // the pole / pad: the placed service point, else the lot's street corner
     // on the meter's side, else the lot line straight out from the meter
-    const spot = context.utilityPole ?? utilityPoleSpot(walls, [mx, mz], context.street)
+    // the meter wall's outward normal: from the wall's centreline to the socket on its face
+    const meterWall = walls.find((w) => w.id === meter.sourceId)
+    const meterOut = ((): readonly [number, number] | undefined => {
+      if (!meterWall) return undefined
+      const t = (mx - meterWall.start[0]) * meterWall.dir[0] + (mz - meterWall.start[1]) * meterWall.dir[1]
+      const fx = meterWall.start[0] + meterWall.dir[0] * t
+      const fz = meterWall.start[1] + meterWall.dir[1] * t
+      const ox = mx - fx
+      const oz = mz - fz
+      const ol = Math.hypot(ox, oz)
+      return ol < 1e-6 ? undefined : [ox / ol, oz / ol]
+    })()
+    const spot = context.utilityPole ?? utilityPoleSpot(walls, [mx, mz], context.street, meterOut)
     const at = (): readonly [number, number] => spot
     const where = context.utilityPole
       ? 'at the placed service point'
-      : context.street.lot
-        ? "at the lot's street corner (drag the Utility pole service point to where the utility's pole stands)"
-        : 'at the lot line'
+      : context.street.lot && meterOut
+        ? "at the lot line straight out from the meter, on the meter's side (drag the Utility pole service point to where the utility's pole stands)"
+        : context.street.lot
+          ? "at the lot's street corner (drag the Utility pole service point to where the utility's pole stands)"
+          : 'at the lot line'
     if ((context.serviceEntrance ?? 'overhead') === 'overhead') {
       const pole = at()
       street = [pole[0], pole[1]]
-      const weatherheadY = Math.max((context.eaveY ?? 3) + 0.6, ground + 3.66)
+      // the pole: 35 ft class 5, 6 ft in the ground; the drop attaches ~24 ft up
+      const poleH = 10.7
+      const poleBuried = 1.8
+      const attachY = ground + 7.3
+      // The weatherhead over the eave AND over the roof at the mast (a gable
+      // end's rake runs high over the wall), and the drop clear of every roof
+      // it crosses — sampled along the pole → weatherhead line, the head
+      // lifted until the line stands 0.6 m over the roof (NEC 230.24(A);
+      // 2026-09-09: the drop ran through the trusses).
+      const roofOverMast = context.roofTopAt && meterOut ? context.roofTopAt(mx - meterOut[0] * 0.35, mz - meterOut[1] * 0.35) : null
+      let weatherheadY = Math.max((context.eaveY ?? 3) + 0.6, ground + 3.66, roofOverMast !== null ? roofOverMast + 0.6 : 0)
+      let lifted = 0
+      if (context.roofTopAt) {
+        for (let pass = 0; pass < 6; pass++) {
+          let lift = 0
+          for (let i = 1; i < 12; i++) {
+            const t = i / 12
+            const sx = pole[0] + (mx - pole[0]) * t
+            const sz = pole[1] + (mz - pole[1]) * t
+            const sy = attachY + (weatherheadY - attachY) * t
+            const top = context.roofTopAt(sx, sz)
+            if (top !== null && sy < top + 0.6) lift = Math.max(lift, (top + 0.6 - sy) / Math.max(t, 0.2))
+          }
+          if (lift < 1e-6) break
+          weatherheadY += lift
+          lifted += lift
+        }
+      }
       // the mast: 2 in rigid conduit from the meter base up the wall face
       const mastLen = weatherheadY - my
       members.push({
@@ -3171,7 +3254,7 @@ export function routeServiceCable(
         rotation: [0, 0, 0],
         material: 'steel',
         sourceId: 'service-entrance',
-        label: `Service mast — 2" RMC from the meter base, weatherhead ${(weatherheadY - ground).toFixed(1)} m over grade (NEC 230.24(B) drop clearance, 230.28 mast; guy above the roof line if over 30 in — verify)`,
+        label: `Service mast — 2" RMC from the meter base, weatherhead ${(weatherheadY - ground).toFixed(1)} m over grade (NEC 230.24(B) drop clearance, 230.28 mast; guy above the roof line if over 30 in — verify)${lifted > 0.01 ? ` — lifted ${lifted.toFixed(1)} m so the drop clears the roof (230.24(A))` : ''}`,
       })
       members.push({
         system: 'electrical',
@@ -3184,10 +3267,6 @@ export function routeServiceCable(
         sourceId: 'service-entrance',
         label: 'Weatherhead + drip loop — service point (NEC 230.54)',
       })
-      // the pole: 35 ft class 5, 6 ft in the ground; the drop attaches ~24 ft up
-      const poleH = 10.7
-      const poleBuried = 1.8
-      const attachY = ground + 7.3
       members.push({
         system: 'electrical',
         role: 'post',
