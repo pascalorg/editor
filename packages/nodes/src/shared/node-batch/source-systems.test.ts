@@ -25,6 +25,7 @@ function runSourceTest(body: string) {
     // Share the viewer's instance across every resolved path before loading consumers.
     const consumers = [
       ${sourcePath('packages/viewer/src/lib/materials.ts')},
+      ${sourcePath('packages/core/src/index.ts')},
       ${sourcePath('packages/nodes/src/shared/node-batch/system.tsx')},
       ${sourcePath('packages/editor/src/components/editor/selection-manager.tsx')},
     ]
@@ -38,7 +39,7 @@ function runSourceTest(body: string) {
       for (const path of sharedPaths.get(specifier)) mock.module(path, factory)
     }
     async function importShared(specifier) {
-      const module = await import(sharedPaths.get(specifier)[0])
+      const module = await import(specifier === '@pascal-app/core' ? ${sourcePath('packages/core/src/index.ts')} : sharedPaths.get(specifier)[0])
       mockShared(specifier, () => module)
       return module
     }
