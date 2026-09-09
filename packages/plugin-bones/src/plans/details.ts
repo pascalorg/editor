@@ -87,6 +87,22 @@ export type DetailVariables = {
     furringIn: number
     stuccoIn: number
   } | null
+  /**
+   * The storage water heater the plumbing engine placed (null: none, or a
+   * tankless unit — nothing to strap): its size, where it stands and whether
+   * the spec straps it (Steve, 2026-09-09: "heat pump in outside container or
+   * built into the garage standing on an 18\" platform with strap details and
+   * notes").
+   */
+  waterHeater: {
+    kind: 'heat-pump' | 'gas-tank' | 'electric-tank'
+    gallons: number | null
+    diaIn: number
+    heightIn: number
+    inGarage: boolean
+    outside: boolean
+    seismic: boolean
+  } | null
 }
 
 /** What the sheets hand the details from the jurisdiction's prescriptive table. */
@@ -231,6 +247,23 @@ export function detailVariables(
   const porchPosts = members.some((m) => m.role === 'post' && /porch post/i.test(m.label ?? ''))
   const wallR =
     insulation?.wallR?.replace(/^R(\d)/, 'R-$1') ?? (studDepth >= 5 ? 'R-21' : 'R-15')
+  // the storage water heater, as the plumbing engine placed it
+  const whBody = members.find((m) => m.role === 'water-heater' && m.sourceId === 'wh')
+  const whHead = members.find((m) => m.role === 'water-heater' && m.sourceId === 'wh-head')
+  const whLabel = whBody?.label ?? ''
+  const whGal = /(\d+) gal/.exec(whLabel)
+  const waterHeater: DetailVariables['waterHeater'] =
+    whBody && whGal
+      ? {
+          kind: /heat-pump/i.test(whLabel) ? 'heat-pump' : /gas/i.test(whLabel) ? 'gas-tank' : 'electric-tank',
+          gallons: Number(whGal[1]),
+          diaIn: round(toIn(whBody.dims[0]), 2),
+          heightIn: round(toIn(whBody.dims[1] + (whHead?.dims[1] ?? 0)), 2),
+          inGarage: members.some((m) => m.sourceId === 'wh-stand') || /in the garage/i.test(whLabel),
+          outside: /outside|outdoor/i.test(whLabel),
+          seismic: spec.seismicHoldDowns === true,
+        }
+      : null
   return {
     stud: {
       size: studSize,
@@ -303,6 +336,7 @@ export function detailVariables(
           }
         : null,
     porchPosts,
+    waterHeater,
     guard: (deckLedger && deckJoists.length > 0) || porchPosts,
     insulation: {
       wallR,
@@ -1439,6 +1473,78 @@ const cmuEaveDetail: DetailDef = {
   },
 }
 
+// ---- 14. WATER HEATER — PLATFORM, PAN & STRAPS ------------------------------
+const waterHeaterDetail: DetailDef = {
+  id: 'waterheater',
+  title: 'WATER HEATER — PLATFORM, PAN & STRAPS',
+  applies: (v) => v.waterHeater !== null,
+  draw(v) {
+    const S = sketch()
+    const wh = v.waterHeater as NonNullable<DetailVariables['waterHeater']>
+    const dia = wh.diaIn
+    const h = wh.heightIn
+    // the floor and the wall (the tank stands 2 in off the finished face)
+    const wallX = dia / 2 + 6
+    const wallDepth = v.masonry ? v.masonry.blockDepthIn : v.stud.depthIn
+    S.line(-dia, 0, wallX + wallDepth + 4, 0, INK, 1.4)
+    if (v.masonry) S.rect(wallX, h + 24, wallDepth, h + 24, CONC)
+    else {
+      S.rect(wallX, h + 24, v.layers.drywallIn, h + 24, GYP)
+      S.xRect(wallX + v.layers.drywallIn, h + 24, v.stud.depthIn, h + 24)
+    }
+    // the platform (garage) or the pad, then the pan, then the tank
+    const standH = wh.inGarage ? 18 : 4
+    const standW = dia + 6
+    S.rect(-standW / 2, standH, standW, standH, wh.inGarage ? WOOD2 : CONC)
+    const panH = 1.5
+    S.rect(-dia / 2 - 2, standH + panH, dia + 4, panH, '#b7bcc4')
+    const base = standH + panH
+    const headH = wh.kind === 'heat-pump' ? 16 : 0
+    S.rect(-dia / 2, base + h - headH, dia, h - headH, '#d9dde2')
+    if (headH > 0) S.rect(-dia * 0.44, base + h, dia * 0.88, headH, '#c3c8cf')
+    // T&P valve near the top, its discharge down to 6 in of the floor
+    S.rect(dia / 2, base + h - 6, 3, 2.5, BAR)
+    S.line(dia / 2 + 3, base + h - 7.2, dia / 2 + 5, base + h - 7.2, BAR, 1.2)
+    S.line(dia / 2 + 5, base + h - 7.2, dia / 2 + 5, 6, BAR, 1.2)
+    // the straps: upper and lower thirds, lagged to the wall framing
+    for (const z of [base + (h * 5) / 6, Math.max(base + h / 3, base + 6 + 4)]) {
+      S.line(-dia / 2, z, dia / 2, z, NAIL, 1.6)
+      S.line(dia / 2, z, wallX, z, NAIL, 1.6)
+      S.dot(wallX + 0.6, z, 1, NAIL)
+      S.line(-dia / 2, z, -dia / 2 - 3, z - 1.5, NAIL, 1.2)
+    }
+    // the cold inlet with its expansion tank
+    S.line(-dia / 4, base + h, -dia / 4, base + h + 10, FLASH, 1.2)
+    S.rect(-dia / 4 - 2.5, base + h + 12, 5, 6, '#9aa0a6')
+    // callouts
+    const size = `${wh.gallons} GAL ${wh.kind === 'heat-pump' ? 'HEAT-PUMP' : wh.kind === 'gas-tank' ? 'GAS' : 'ELECTRIC'} WATER HEATER — ${fmtIn(dia)}Ø x ${fmtFtIn(h)}`
+    S.note(size, -dia / 2, base + h + 22)
+    S.note(
+      wh.inGarage
+        ? 'PLATFORM 18" — IGNITION SOURCE ABOVE THE GARAGE FLOOR (M1307.3); BUILT OF 2X FRAMING + 3/4" PLYWOOD OR A LISTED STAND'
+        : wh.outside
+          ? 'PAD 4" CONCRETE, LEVEL, ABOVE GRADE — IN A WEATHERPROOF, LOUVRED ENCLOSURE (MFR OUTDOOR LISTING — VERIFY)'
+          : 'PAD 4" HOUSEKEEPING SLAB',
+      -standW / 2,
+      standH + 0.5,
+    )
+    S.note('DRAIN PAN 1-1/2" DEEP MIN. W/ 3/4" DRAIN TO AN APPROVED LOCATION (P2801.6)', -dia / 2 - 2, standH + panH + 2.4)
+    S.note(
+      wh.seismic
+        ? 'SEISMIC STRAPS — UPPER & LOWER 1/3 OF THE TANK, 3/4" x 24 GA. STRAP OR MFR KIT, 1/4" x 3" LAGS INTO FRAMING; LOWER STRAP ≥ 4" ABOVE THE CONTROLS (P2801.8)'
+        : 'STRAPS SHOWN WHERE THE JURISDICTION ASKS (SDC D0–D2, P2801.8) — 3/4" x 24 GA. STRAP OR MFR KIT INTO FRAMING; VERIFY',
+      dia / 2 + 6,
+      base + (h * 5) / 6 + 3,
+    )
+    S.note('T&P RELIEF VALVE — 3/4" DISCHARGE, FULL SIZE, TO 6" ABOVE THE FLOOR, NO THREADS AT THE END (P2803.6.1)', dia / 2 + 6, base + h - 4)
+    S.note('THERMAL EXPANSION TANK ON THE COLD INLET — CLOSED SYSTEM (P2903.4.2)', -dia / 4 + 3, base + h + 15)
+    if (wh.kind === 'heat-pump')
+      S.note('HEAT-PUMP HEAD: ≥ 700 CU FT OF AIR OR DUCTED INTAKE / EXHAUST; CONDENSATE 3/4" TO THE PAN DRAIN (MFR LISTING)', -dia / 2, base + h + 8)
+    S.note('M1305.1 SERVICE SPACE 30" x 30" IN FRONT; DISCONNECT / GAS SHUT-OFF WITHIN SIGHT (VERIFY)', -dia, -3)
+    return S
+  },
+}
+
 export const DETAILS: DetailDef[] = [
   wallDetail,
   cmuWallDetail,
@@ -1453,6 +1559,7 @@ export const DETAILS: DetailDef[] = [
   gableEndDetail,
   fireblockDetail,
   windowJambDetail,
+  waterHeaterDetail,
 ]
 
 // ---------------------------------------------------------------------------

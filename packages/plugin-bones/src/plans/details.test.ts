@@ -289,6 +289,48 @@ describe('the details sheet', () => {
     expect(sheets[0]!.footer).not.toContain('footings stepped')
   })
 
+  test('a house with a storage water heater prints the platform, pan and strap detail (2026-09-09)', () => {
+    const tank = detailVariables(
+      [
+        m({}),
+        m({ system: 'plumbing', role: 'water-heater', size: undefined, material: 'steel', dims: [0.63, 1.35, 0.63], sourceId: 'wh', label: 'Heat-pump water heater — 65 gal hybrid — UEF ≥ 2 (10 CFR 430.32(d)); on its stand in the garage; M1305.1 30×30" service space' }),
+        m({ system: 'plumbing', role: 'water-heater', size: undefined, material: 'steel', dims: [0.55, 0.4, 0.55], sourceId: 'wh-head', label: 'Heat-pump water heater — compressor head' }),
+        m({ system: 'plumbing', role: 'equipment', size: undefined, material: 'steel', dims: [0.69, 0.457, 0.69], sourceId: 'wh-stand', label: 'Water-heater stand — ignition source 18" above the garage floor (M1307.3)' }),
+      ],
+      { ...DEFAULT_SPEC, seismicHoldDowns: true },
+      { type: 'slab', ffAboveGradeIn: 8 },
+    )
+    expect(tank.waterHeater).toEqual({ kind: 'heat-pump', gallons: 65, diaIn: 24.8, heightIn: 68.9, inGarage: true, outside: false, seismic: true })
+    const ids = DETAILS.filter((d) => d.applies(tank)).map((d) => d.id)
+    expect(ids).toContain('waterheater')
+    const notes = DETAILS.find((d) => d.id === 'waterheater')!.draw(tank).notes.map((n) => n.t).join(' | ')
+    expect(notes).toContain('65 GAL HEAT-PUMP WATER HEATER')
+    expect(notes).toContain('PLATFORM 18"')
+    expect(notes).toContain('M1307.3')
+    expect(notes).toContain('SEISMIC STRAPS — UPPER & LOWER 1/3')
+    expect(notes).toContain('P2801.8')
+    expect(notes).toContain('DRAIN PAN')
+    expect(notes).toContain('T&P RELIEF VALVE')
+    expect(notes).toContain('HEAT-PUMP HEAD')
+    // outside, no straps asked: the pad and the enclosure, the strap note conditional; a tankless house draws no detail
+    const outside = detailVariables(
+      [m({ system: 'plumbing', role: 'water-heater', size: undefined, material: 'steel', dims: [0.56, 1.5, 0.56], sourceId: 'wh', label: 'Electric storage water heater — 50 gal — UEF ≥ 0.92; outside, in a weatherproof enclosure on a 4 in pad' })],
+      DEFAULT_SPEC,
+      { type: 'slab', ffAboveGradeIn: 8 },
+    )
+    expect(outside.waterHeater?.outside).toBe(true)
+    expect(outside.waterHeater?.inGarage).toBe(false)
+    const outNotes = DETAILS.find((d) => d.id === 'waterheater')!.draw(outside).notes.map((n) => n.t).join(' | ')
+    expect(outNotes).toContain('PAD 4" CONCRETE')
+    expect(outNotes).toContain('WEATHERPROOF')
+    expect(outNotes).toContain('WHERE THE JURISDICTION ASKS')
+    const tankless = detailVariables(
+      [m({ system: 'plumbing', role: 'water-heater', size: undefined, material: 'steel', dims: [0.45, 0.6, 0.25], sourceId: 'wh', label: 'Tankless gas water heater (indoor) — 180–199 kBtu/h; wall-mounted 1.2 m AFF' })],
+      DEFAULT_SPEC,
+    )
+    expect(tankless.waterHeater).toBeNull()
+    expect(DETAILS.filter((d) => d.applies(tankless)).map((d) => d.id)).not.toContain('waterheater')
+  })
   test('a block house prints the CMU wall section and the CMU eave instead of the framed pair (2026-09-09)', () => {
     const block = detailVariables(
       [

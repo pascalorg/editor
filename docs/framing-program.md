@@ -1222,6 +1222,22 @@ Show and its Reset, so the manual state is visible and undoable.
 
 ## Log (continued)
 
+- 2026-09-09: **Batch T31 — the water heater on the typical details
+  sheet.** `plans/details.ts`: `DetailVariables.waterHeater` (kind,
+  gallons, diameter, height, in the garage / outside, the spec's
+  seismic straps) read from the plumbing engine's `wh` / `wh-head` /
+  `wh-stand` members and the tank's label (null for a tankless unit —
+  nothing to strap); a fourteenth detail, WATER HEATER — PLATFORM, PAN &
+  STRAPS: the 18 in garage platform (M1307.3) or the 4 in pad (outside:
+  the weatherproof, louvred enclosure), the drain pan (P2801.6), the tank
+  with the heat-pump head, the T&P valve and its discharge to 6 in of the
+  floor (P2803.6.1), the expansion tank on the cold inlet (P2903.4.2), and
+  the two straps lagged to the wall — upper and lower thirds, the lower
+  4 in above the controls (P2801.8), worded as required where the spec
+  straps and as "where the jurisdiction asks" elsewhere. Cape Coral's
+  S5.1 carries it. Bones 2181, sheets 258; whole repo 6624 pass (the 3
+  CLI failures environmental); editor typecheck clean.
+
 - 2026-09-09: **Batch T30 — show it in the scene, the selection live, the
   placed points (G115).** The X-ray meshes never take the host's raycast
   (renderer.tsx: the wall selection gate needs it that way), so "click a
