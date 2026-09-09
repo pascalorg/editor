@@ -1,12 +1,15 @@
-import { existsSync, lstatSync, readdirSync, readFileSync } from 'node:fs'
-import { dirname, join, relative, resolve } from 'node:path'
+import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { XMLParser, XMLValidator } from 'fast-xml-parser'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const skillNames = ['pascal-3d', 'furniture-fit'] as const
 const skillVersions = { 'pascal-3d': '0.1.0', 'furniture-fit': '0.1.3' } as const
-const pluginVersion = '0.1.5'
+const pluginVersion = '0.1.6'
 const portablePluginSchema = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'
+const semverPattern =
+  /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 const openAiListingLimits = {
   displayName: 30,
   shortDescription: 30,
@@ -14,6 +17,25 @@ const openAiListingLimits = {
   developerName: 80,
 } as const
 const openAiDefaultPromptLimit = 128
+const openAiCapabilityLimit = 20
+const openAiCapabilityLengthLimit = 120
+const openAiListingUrlLimit = 1024
+const openAiImageByteLimit = 5 * 1024 * 1024
+const openAiCategories = new Set([
+  'Productivity',
+  'Creativity',
+  'Developer Tools',
+  'Business & Operations',
+  'Data & Analytics',
+  'Communication',
+  'Education & Research',
+  'Security',
+  'Finance',
+  'Healthcare',
+  'Travel',
+  'Entertainment',
+  'Other',
+])
 const furnitureNextActionKinds = [
   'request_measurement',
   'check_alternate_pose',
@@ -38,6 +60,90 @@ function read(path: string): string {
     return ''
   }
   return readFileSync(path, 'utf8')
+}
+
+function hasSupportedText(value: string, allowNewlines = false): boolean {
+  for (const character of value) {
+    const codePoint = character.codePointAt(0)!
+    if (allowNewlines && (codePoint === 10 || codePoint === 13)) continue
+    if (
+      codePoint <= 31 ||
+      (codePoint >= 127 && codePoint <= 159) ||
+      (codePoint >= 0x200b && codePoint <= 0x200f) ||
+      codePoint === 0x2028 ||
+      codePoint === 0x2029 ||
+      (codePoint >= 0x202a && codePoint <= 0x202e) ||
+      (codePoint >= 0x2060 && codePoint <= 0x206f) ||
+      codePoint === 0xfeff
+    ) {
+      return false
+    }
+  }
+  return true
+}
+
+function validateHttpsUrl(value: unknown, label: string, maxLength: number) {
+  if (typeof value !== 'string' || !value || value.length > maxLength || !hasSupportedText(value)) {
+    fail(`${label} must be supported single-line text no longer than ${maxLength} characters`)
+    return
+  }
+  try {
+    const parsed = new URL(value)
+    if (parsed.protocol !== 'https:' || !parsed.hostname || parsed.username || parsed.password) {
+      fail(`${label} must be an HTTPS URL with a host and no embedded credentials`)
+    }
+  } catch {
+    fail(`${label} must be a valid HTTPS URL`)
+  }
+}
+
+function validateOpenAiSvg(path: string, label: string) {
+  const size = statSync(path).size
+  if (size > openAiImageByteLimit) fail(`${label} must not exceed 5 MiB`)
+  if (extname(path).toLowerCase() !== '.svg') {
+    fail(`${label} must be an SVG so this validator can verify its XML and dimensions`)
+    return
+  }
+  const content = read(path)
+  const xmlResult = XMLValidator.validate(content)
+  if (xmlResult !== true) {
+    fail(`${label} must contain well-formed UTF-8 XML`)
+    return
+  }
+  const parsed = new XMLParser({ ignoreAttributes: false, attributeNamePrefix: '@_' }).parse(
+    content,
+  ) as { svg?: Record<string, unknown> }
+  if (!parsed.svg) {
+    fail(`${label} XML root element must be <svg>`)
+    return
+  }
+  const svg = parsed.svg
+  let width: number | undefined
+  let height: number | undefined
+  if (typeof svg['@_viewBox'] === 'string') {
+    const values = svg['@_viewBox'].trim().split(/[ ,]+/u).map(Number)
+    if (values.length === 4 && values.every(Number.isFinite)) {
+      width = values[2]
+      height = values[3]
+    }
+  }
+  if (width === undefined || height === undefined) {
+    if (typeof svg['@_width'] === 'number' && typeof svg['@_height'] === 'number') {
+      width = svg['@_width']
+      height = svg['@_height']
+    }
+  }
+  if (
+    width === undefined ||
+    height === undefined ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width < 48 ||
+    height < 48 ||
+    width !== height
+  ) {
+    fail(`${label} must declare square numeric SVG dimensions of at least 48 by 48`)
+  }
 }
 
 function parseJson(path: string): Record<string, unknown> {
@@ -451,6 +557,9 @@ for (const [semanticCase, requirement] of requiredSemanticCases) {
 
 const publishingFile = join(root, 'plugin-evals', 'publishing-cases.json')
 const publishing = parseJson(publishingFile) as {
+  submission_route?: unknown
+  status?: unknown
+  blockers?: unknown
   cases?: Array<{
     id?: unknown
     skill?: unknown
@@ -460,7 +569,22 @@ const publishing = parseJson(publishingFile) as {
     expected_result_shape?: unknown
     required_fixture?: unknown
     why_not?: unknown
+    reproducibility_status?: unknown
+    reproducibility_blocker?: unknown
   }>
+}
+if (publishing.submission_route !== 'with_mcp') {
+  fail('Publishing suite must use the OpenAI With MCP submission route')
+}
+if (publishing.status !== 'blocked') {
+  fail('Publishing suite must remain blocked until hosted MCP review prerequisites pass')
+}
+if (
+  !Array.isArray(publishing.blockers) ||
+  publishing.blockers.length === 0 ||
+  publishing.blockers.some((value) => typeof value !== 'string' || !value)
+) {
+  fail('Publishing suite must name its current hosted MCP review blockers')
 }
 const publishingCases = publishing.cases ?? []
 let positivePublishingCases = 0
@@ -483,12 +607,24 @@ for (const item of publishingCases) {
     if (typeof item.required_fixture !== 'string' || !item.required_fixture) {
       fail(`Positive publishing case ${String(item.id)} needs a reproducible fixture`)
     }
+    if (
+      item.reproducibility_status !== 'blocked' ||
+      typeof item.reproducibility_blocker !== 'string' ||
+      !item.reproducibility_blocker
+    ) {
+      fail(
+        `Positive publishing case ${String(item.id)} must remain explicitly blocked until its hosted reviewer fixture exists`,
+      )
+    }
   } else if (item.kind === 'negative') {
     negativePublishingCases++
     if (typeof item.why_not !== 'string' || !item.why_not) {
       fail(`Negative publishing case ${String(item.id)} needs a reason not to complete the action`)
     }
   } else fail(`Publishing case ${String(item.id)} needs kind positive or negative`)
+  if (item.reproducibility_status !== 'blocked') {
+    fail(`Publishing case ${String(item.id)} must declare reproducibility_status blocked`)
+  }
   if (typeof item.prompt !== 'string' || !item.prompt)
     fail(`Publishing case ${String(item.id)} needs a prompt`)
   if (typeof item.expected !== 'string' || !item.expected) {
@@ -510,6 +646,9 @@ for (const [label, manifest] of [
 ] as const) {
   if (manifest.name !== 'pascal-agent-skills') fail(`${label}: unexpected name`)
   if (manifest.version !== pluginVersion) fail(`${label}: version must be ${pluginVersion}`)
+  if (typeof manifest.version !== 'string' || !semverPattern.test(manifest.version)) {
+    fail(`${label}: version must use semantic versioning`)
+  }
 }
 
 if (portablePlugin.$schema !== portablePluginSchema) {
@@ -519,6 +658,35 @@ if (portablePlugin.name !== codexPlugin.name) fail('Portable and Codex plugin na
 if (portablePlugin.version !== pluginVersion) {
   fail(`Portable plugin version must be ${pluginVersion}`)
 }
+if (typeof portablePlugin.version !== 'string' || !semverPattern.test(portablePlugin.version)) {
+  fail('Portable plugin version must use semantic versioning')
+}
+if (
+  typeof portablePlugin.name !== 'string' ||
+  portablePlugin.name.length > 64 ||
+  !/^[A-Za-z0-9][A-Za-z0-9_-]*$/u.test(portablePlugin.name)
+) {
+  fail('Portable plugin name must meet OpenAI final-directory name requirements')
+}
+if (
+  typeof portablePlugin.description !== 'string' ||
+  !portablePlugin.description ||
+  portablePlugin.description.length > 1024 ||
+  !hasSupportedText(portablePlugin.description, true)
+) {
+  fail('Portable plugin description must use supported text and be at most 1024 characters')
+}
+const portableAuthor = portablePlugin.author as Record<string, unknown> | undefined
+if (
+  typeof portableAuthor?.name !== 'string' ||
+  !portableAuthor.name ||
+  portableAuthor.name.length > 120 ||
+  !hasSupportedText(portableAuthor.name)
+) {
+  fail('Portable plugin author name must use supported single-line text of at most 120 characters')
+}
+validateHttpsUrl(portableAuthor?.url, 'Portable plugin author URL', 2048)
+validateHttpsUrl(portablePlugin.homepage, 'Portable plugin homepage', 2048)
 if (portablePlugin.description !== codexPlugin.description) {
   fail('Portable and Codex plugin descriptions must match')
 }
@@ -538,7 +706,8 @@ for (const [field, limit] of Object.entries(openAiListingLimits)) {
     typeof value !== 'string' ||
     !value ||
     (mustBeSingleLine && value.includes('\n')) ||
-    value.length > limit
+    value.length > limit ||
+    !hasSupportedText(value, !mustBeSingleLine)
   ) {
     fail(
       `OpenAI ${field} must be non-empty${mustBeSingleLine ? ', single-line,' : ''} and at most ${limit} characters`,
@@ -549,11 +718,12 @@ const defaultPrompts = portableInterface?.defaultPrompt
 if (!Array.isArray(defaultPrompts) || defaultPrompts.length === 0 || defaultPrompts.length > 3) {
   fail('OpenAI defaultPrompt must contain between 1 and 3 prompts')
 } else {
+  const normalizedPrompts = new Set<string>()
   for (const prompt of defaultPrompts) {
     if (
       typeof prompt !== 'string' ||
       !prompt ||
-      prompt.includes('\n') ||
+      !hasSupportedText(prompt) ||
       prompt.length > openAiDefaultPromptLimit ||
       prompt.includes('@')
     ) {
@@ -561,13 +731,40 @@ if (!Array.isArray(defaultPrompts) || defaultPrompts.length === 0 || defaultProm
         `OpenAI default prompts must be non-empty single lines of at most ${openAiDefaultPromptLimit} characters without @mentions`,
       )
     }
+    if (typeof prompt === 'string') {
+      const normalized = prompt.normalize('NFKC').trim().replace(/\s+/gu, ' ')
+      if (normalizedPrompts.has(normalized)) {
+        fail('OpenAI default prompts must be unique after Unicode and whitespace normalization')
+      }
+      normalizedPrompts.add(normalized)
+    }
   }
 }
-for (const field of ['websiteURL', 'supportURL', 'privacyPolicyURL', 'termsOfServiceURL']) {
-  const value = portableInterface?.[field]
-  if (typeof value !== 'string' || !value.startsWith('https://')) {
-    fail(`OpenAI ${field} must be an HTTPS URL`)
+const capabilities = portableInterface?.capabilities
+if (!Array.isArray(capabilities) || capabilities.length > openAiCapabilityLimit) {
+  fail(`OpenAI capabilities must be a list with at most ${openAiCapabilityLimit} entries`)
+} else {
+  for (const capability of capabilities) {
+    if (
+      typeof capability !== 'string' ||
+      !capability ||
+      capability.length > openAiCapabilityLengthLimit ||
+      !hasSupportedText(capability)
+    ) {
+      fail(
+        `OpenAI capabilities must be non-empty supported single-line text of at most ${openAiCapabilityLengthLimit} characters`,
+      )
+    }
   }
+}
+if (
+  typeof portableInterface?.category !== 'string' ||
+  !openAiCategories.has(portableInterface.category)
+) {
+  fail('OpenAI category must use a supported final-directory value')
+}
+for (const field of ['websiteURL', 'supportURL', 'privacyPolicyURL', 'termsOfServiceURL']) {
+  validateHttpsUrl(portableInterface?.[field], `OpenAI ${field}`, openAiListingUrlLimit)
 }
 for (const field of ['composerIcon', 'logo']) {
   const value = portableInterface?.[field]
@@ -576,12 +773,14 @@ for (const field of ['composerIcon', 'logo']) {
     continue
   }
   const asset = resolve(root, value)
-  if (!asset.startsWith(`${root}/`) || !existsSync(asset)) {
+  if (!asset.startsWith(`${root}/`) || !existsSync(asset) || !lstatSync(asset).isFile()) {
     fail(`OpenAI ${field} must reference an existing file inside the plugin`)
+    continue
   }
+  validateOpenAiSvg(asset, `OpenAI ${field}`)
 }
 if ('screenshots' in (portableInterface ?? {})) {
-  fail('Skills-only OpenAI plugin must not declare screenshots')
+  fail('OpenAI package must not declare screenshots without a reviewed MCP custom UI')
 }
 
 if (codexPlugin.skills !== './skills/') fail('Codex plugin must point to canonical ./skills/')
