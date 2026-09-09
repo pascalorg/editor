@@ -60,3 +60,46 @@ jobs:
             --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"registry-check","version":"1"}}}' \
             https://editor.pascal.app/api/mcp)
           test "$status" = "401"
+
+      - name: Verify live API catalog matches manifest
+        run: |
+          endpoint=$(jq --raw-output '.remotes[0].url' server.json)
+          version=$(jq --raw-output '.version' server.json)
+          transport=$(jq --raw-output '.remotes[0].type' server.json)
+          registry_name=$(jq --raw-output '.name' server.json)
+
+          curl --fail \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --retry 3 \
+            --retry-connrefused \
+            --retry-delay 2 \
+            --header 'accept: application/linkset+json' \
+            --dump-header "$RUNNER_TEMP/api-catalog.headers" \
+            --output "$RUNNER_TEMP/api-catalog.json" \
+            https://editor.pascal.app/.well-known/api-catalog
+          grep --ignore-case --extended-regexp \
+            '^content-type: application/linkset\+json([;[:space:]]|$)' \
+            "$RUNNER_TEMP/api-catalog.headers"
+          jq --exit-status \
+            --arg endpoint "$endpoint" \
+            --arg version "$version" \
+            --arg transport "$transport" \
+            --arg registry_name "$registry_name" '
+              [.linkset[] | .item[]? | select(.href == $endpoint)] as $matches
+              | ($matches | length) == 1
+                and $matches[0].version == [$version]
+                and $matches[0].transport == [$transport]
+                and $matches[0]["registry-name"] == [$registry_name]
+            ' "$RUNNER_TEMP/api-catalog.json"
+
+          curl --fail --head \
+            --connect-timeout 10 \
+            --max-time 30 \
+            --retry 3 \
+            --retry-connrefused \
+            --retry-delay 2 \
+            https://editor.pascal.app/.well-known/api-catalog \
+            | tr -d '\r' \
+            | grep --fixed-strings --ignore-case \
+              'link: <https://editor.pascal.app/.well-known/api-catalog>; rel="api-catalog"'
