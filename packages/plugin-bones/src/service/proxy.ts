@@ -112,3 +112,73 @@ export function resolveHeatPumpAssemblyYaw(
   }
   return 0
 }
+
+/**
+ * The pick proxy of any engine-drawn service point: the box the ENGINE's
+ * equipment occupies (its member or fixture), so a click on the tank, the
+ * socket, the pole, the panel door, the water entry or the thermostat
+ * selects and drags the POINT — never the wall behind it (Steve,
+ * 2026-09-09: "if i try to click the water heater ... it clicks the wall
+ * and moves it"). `at` is the equipment's level-local plan centre; the
+ * renderer stands the proxy there, offset from the point's own anchor.
+ */
+export type ServiceProxySpec = HeatPumpProxySpec & { at?: readonly [number, number] }
+
+export function resolveServiceProxy(
+  nodes: LooseNodes,
+  node: Pick<ServicePlacementNode, 'serviceType' | 'parentId'>,
+): ServiceProxySpec | null {
+  if (node.serviceType === 'heat-pump') return resolveHeatPumpProxy(nodes, node)
+  const config = levelFramingNode(nodes, node.parentId)
+  if (!config) return null
+  const result = computeLevel(nodes, config as unknown as FramingNode)
+  const grow = 0.08
+  const fromFixture = (kind: string, dims: readonly [number, number, number]): ServiceProxySpec | null => {
+    const f = result.fixtures.find((x) => x.kind === kind)
+    if (!f) return null
+    return { dims: [dims[0] + grow, dims[1] + grow, dims[2] + grow], centerY: f.position[1], rotationY: f.rotationY, at: [f.position[0], f.position[2]] }
+  }
+  switch (node.serviceType) {
+    case 'water-heater': {
+      const tank = result.members.find((m) => m.role === 'water-heater' && m.sourceId === 'wh')
+      if (!tank) return null
+      const head = result.members.find((m) => m.sourceId === 'wh-head')
+      const h = tank.dims[1] + (head?.dims[1] ?? 0)
+      return {
+        dims: [tank.dims[0] + grow, h + grow, tank.dims[2] + grow],
+        centerY: tank.position[1] - tank.dims[1] / 2 + h / 2,
+        rotationY: tank.rotation[1],
+        at: [tank.position[0], tank.position[2]],
+      }
+    }
+    case 'utility-pole': {
+      const pole = result.members.find((m) => m.sourceId === 'service-entrance' && m.role === 'post')
+      if (!pole) return null
+      return { dims: [pole.dims[0] + 0.2, pole.dims[1], pole.dims[2] + 0.2], centerY: pole.position[1], rotationY: 0, at: [pole.position[0], pole.position[2]] }
+    }
+    case 'electric-meter':
+      return fromFixture('electric-meter', [0.3, 0.4, 0.2])
+    case 'panel':
+      return fromFixture('panel', [0.3556, 0.762, 0.1])
+    case 'water-entry':
+      return fromFixture('water-meter', [0.2, 0.2, 0.14])
+    case 'thermostat':
+      return fromFixture('thermostat', [0.09, 0.12, 0.03])
+    default:
+      return null
+  }
+}
+
+/** The proxy's position in the point's own (yawed) frame: the equipment's plan centre less the anchor, turned back by the yaw (world = R(yaw)·local). */
+export function proxyLocalOffset(
+  at: readonly [number, number] | undefined,
+  anchor: readonly [number, number],
+  rotationY: number,
+): [number, number] {
+  if (!at) return [0, 0]
+  const dx = at[0] - anchor[0]
+  const dz = at[1] - anchor[1]
+  const c = Math.cos(rotationY)
+  const s = Math.sin(rotationY)
+  return [dx * c - dz * s, dx * s + dz * c]
+}

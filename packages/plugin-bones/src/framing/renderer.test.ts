@@ -518,9 +518,11 @@ describe('view modes — per-stratum treatment (round 2026-08-20 tri-state)', ()
       expect(m.material.transparent).toBe(false)
     }
     const surfaceCount = fixtures.filter((f) => !ROUGH_IN_KINDS.has(f.kind)).length
-    expect(instanceCount(group)).toBe(surfaceCount)
+    // INTENDED-CHANGE 2026-09-09: the finished house paints the meter socket
+    // WITH its glass dome — one instance more than the surface fixtures
+    expect(instanceCount(group)).toBe(surfaceCount + 1)
     expect(surfaceCount).toBe(FIXTURE_KINDS.length - 3)
-    // members alone → empty group
+    // members alone → empty group (framing, foundation and skins are not physical equipment)
     expect(buildGroup([footing, stud, drywall], [], 'off').children).toHaveLength(0)
   })
 })

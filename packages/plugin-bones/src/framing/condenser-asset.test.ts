@@ -274,9 +274,12 @@ describe('renderer census — substitution and fallback (the both-ways gate)', (
     expect(assetWrappers(basement)).toHaveLength(0)
     // above-grade equipment = faint shell boxes, exactly as without the asset
     expect(totalInstances(basement)).toBe(totalInstances(buildGroup([CABINET, PAD], [], 'basement')))
+    // INTENDED-CHANGE 2026-09-09: the finished house shows the physical
+    // equipment Bones derived (framing/physical.ts) — the condenser and
+    // its pad draw as finish-painted boxes; the asset swap stays X-ray only
     const off = buildGroup([CABINET, PAD], [], 'off', asset)
     expect(assetWrappers(off)).toHaveLength(0)
-    expect(totalInstances(off)).toBe(0)
+    expect(totalInstances(off)).toBe(2)
   })
 
   test('multiple cabinets → one wrapper each, in member order', () => {

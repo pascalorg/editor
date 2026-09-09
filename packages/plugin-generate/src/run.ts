@@ -350,6 +350,7 @@ export function generateHouse(overrides: RollOptions = {}): RunSummary {
     // (Steve, 2026-09-09: "can you confirm we are speccing the right house")
     const wallLine = `Exterior walls: ${rolled.document.wallSystem === 'cmu' ? '8 in concrete block, stucco outside, furring + drywall inside' : '2x6 wood frame'} (${rolled.document.wallSystemBasis ?? 'wood frame assumed'}).`
     summary.warnings = [wallLine, ...rolled.warnings, ...summary.warnings]
+    summary.levelId = generatedBuilding()?.levelId ?? null
     useGenerate.getState().setLast(summary)
     return summary
   } finally {

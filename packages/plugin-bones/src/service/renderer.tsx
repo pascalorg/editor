@@ -5,7 +5,7 @@ import { useNodeEvents } from '@pascal-app/viewer'
 import { useEffect, useMemo, useRef } from 'react'
 import { CanvasTexture, DoubleSide, type Group } from 'three'
 import { resolveServicePlacement, SERVICE_BODY, servicePresentation } from './placement'
-import { resolveHeatPumpProxy } from './proxy'
+import { proxyLocalOffset, resolveServiceProxy } from './proxy'
 import type { ServiceNode } from './schema'
 
 /**
@@ -100,7 +100,7 @@ export const ServiceRenderer = ({ node: rawNode }: { node: ServiceNode }) => {
   const proxy = useMemo(
     () =>
       presentation.pickProxy
-        ? resolveHeatPumpProxy(nodes as Record<string, Record<string, unknown>>, node)
+        ? resolveServiceProxy(nodes as Record<string, Record<string, unknown>>, node)
         : null,
     [presentation.pickProxy, nodes, node],
   )
@@ -185,7 +185,10 @@ export const ServiceRenderer = ({ node: rawNode }: { node: ServiceNode }) => {
       )}
       {proxy && (
         <mesh
-          position={[0, proxy.centerY, 0]}
+          position={(() => {
+            const [ox, oz] = proxyLocalOffset(proxy.at, [position[0], position[2]], placement.rotationY)
+            return [ox, proxy.centerY, oz]
+          })()}
           rotation={[0, proxy.rotationY - placement.rotationY, 0]}
         >
           <boxGeometry args={[proxy.dims[0], proxy.dims[1], proxy.dims[2]]} />

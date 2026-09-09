@@ -1,3 +1,4 @@
+import { useScene } from '@pascal-app/core'
 import { mintHostPanel, mintPlugin } from '@mint/pascal-plugin'
 import {
   type AnyNodeDefinition,
@@ -9,8 +10,8 @@ import {
 } from '@pascal-app/core'
 import { registerEditorHostPanel, registerSitePlanContributor } from '@pascal-app/editor'
 import { builtinPlugin } from '@pascal-app/nodes'
-import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
-import { generateHostPanel, generatePlugin, registerGenerateCommands } from '@pascal-app/plugin-generate'
+import { activateBones, bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
+import { generateHostPanel, generatePlugin, registerGenerateCommands, useGenerate } from '@pascal-app/plugin-generate'
 import { lotHostPanel, lotPlugin } from '@pascal-app/plugin-lot'
 import { registerRoofCommands, roofHostPanel, roofPlugin } from '@pascal-app/plugin-roof'
 import {
@@ -123,6 +124,18 @@ registerEditorHostPanel(lotHostPanel)
 extendPluginDiscovery(async () => [generatePlugin])
 registerEditorHostPanel(generateHostPanel)
 registerGenerateCommands()
+// A generated house carries Bones in the finished view: the tank in its
+// enclosure, the condenser, the meter, the mast and pole, the cover plates
+// (plugin-bones framing/physical.ts) — derived on the level the run wrote,
+// once, in the 'off' view (the walls untouched). Steve, 2026-09-09: "bring
+// bones into the auto generation to control it better".
+useGenerate.subscribe((state, prev) => {
+  const last = state.last
+  if (!last || last === prev.last || !last.ok || !last.levelId) return
+  const nodes = useScene.getState().nodes as Record<string, { type?: string; parentId?: string | null } | undefined>
+  if (Object.values(nodes).some((n) => n?.type === 'bones:framing' && n.parentId === last.levelId)) return
+  activateBones(useScene as never, last.levelId, null, 'off')
+})
 // Plans (PlanCrafters remote engine) is parked — see docs/construction-documents.md.
 // Sheets: paper space, drawn by Pascal's own renderer (Ctrl+K → Open sheets).
 extendPluginDiscovery(async () => [sheetsPlugin])

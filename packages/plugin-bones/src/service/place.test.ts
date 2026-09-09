@@ -398,7 +398,10 @@ describe('servicePresentation — signs respect the view mode', () => {
   /** The three kinds whose physical counterpart the ENGINES render at the
    * same anchor (heat-pump A/B 2026-08-22) — X-ray drops the placeholder
    * body, the sign stays. */
-  const ENGINE_KINDS = ['heat-pump', 'water-heater', 'electric-meter', 'utility-pole'] as const
+  // 2026-09-09: the panel, the water entry and the thermostat joined (the
+  // finished house draws the engines' fixtures) and EVERY engine-drawn
+  // kind gets the invisible pick proxy at its equipment
+  const ENGINE_KINDS = ['heat-pump', 'water-heater', 'electric-meter', 'utility-pole', 'panel', 'water-entry', 'thermostat'] as const
 
   test('xray: engine-rendered kinds drop the body, KEEP the sign; all others box + sign', () => {
     const nodes = withFraming({ viewMode: 'xray' })
@@ -406,7 +409,7 @@ describe('servicePresentation — signs respect the view mode', () => {
       // pickProxy: the HEAT PUMP alone — its suppressed body is replaced by
       // the engine's free-standing unit; WH/meter signs hug their equipment.
       const expected = ENGINE_KINDS.includes(t as (typeof ENGINE_KINDS)[number])
-        ? { body: false, sign: true, pickProxy: t === 'heat-pump' }
+        ? { body: false, sign: true, pickProxy: true }
         : { body: true, sign: true, pickProxy: false }
       expect(servicePresentation(nodes, svc(t))).toEqual(expected)
     }
@@ -420,7 +423,7 @@ describe('servicePresentation — signs respect the view mode', () => {
     const nodes = withFraming({ viewMode: 'framing' })
     for (const t of ALL_TYPES) {
       const expected = ENGINE_KINDS.includes(t as (typeof ENGINE_KINDS)[number])
-        ? { body: false, sign: true, pickProxy: t === 'heat-pump' }
+        ? { body: false, sign: true, pickProxy: true }
         : { body: true, sign: true, pickProxy: false }
       expect(servicePresentation(nodes, svc(t))).toEqual(expected)
     }
@@ -459,7 +462,7 @@ describe('servicePresentation — signs respect the view mode', () => {
         expect(servicePresentation(nodes, svc(other))).toEqual({
           body: false,
           sign: true,
-          pickProxy: other === 'heat-pump',
+          pickProxy: true,
         })
       }
     }
@@ -473,29 +476,32 @@ describe('servicePresentation — signs respect the view mode', () => {
     })
   })
 
-  test("'off': all signs hide; only PHYSICAL equipment keeps its body", () => {
+  test("'off': all signs hide; the engine draws the physical equipment and its proxy picks; a body only where no engine draws", () => {
     const nodes = withFraming({ viewMode: 'off' })
     for (const t of ALL_TYPES) {
       const p = servicePresentation(nodes, svc(t))
       expect(p.sign).toBe(false)
-      expect(p.body).toBe(PHYSICAL_SERVICE_TYPES.has(t))
-      expect(p.pickProxy).toBe(false) // finished house: the real body picks
+      const engineDraws = ENGINE_RENDERED_SERVICE_TYPES[t] !== undefined
+      // 2026-09-09: the finished house shows the engine's tank / socket /
+      // pole / door — the placeholder body yields to it, the proxy picks
+      expect(p.body).toBe(PHYSICAL_SERVICE_TYPES.has(t) && !engineDraws)
+      expect(p.pickProxy).toBe(engineDraws)
     }
+    // the engine turned off: the physical body is back as the visual and the pick
+    const noPlumbing = withFraming({ viewMode: 'off', showPlumbing: false })
+    expect(servicePresentation(noPlumbing, svc('water-heater'))).toEqual({ body: true, sign: false, pickProxy: false })
     // the conceptual markers step aside entirely
     expect(servicePresentation(nodes, svc('sewer-exit')).body).toBe(false)
     expect(servicePresentation(nodes, svc('power-entry')).body).toBe(false)
-    // the physically-visible equipment stays
-    expect(servicePresentation(nodes, svc('panel')).body).toBe(true)
-    expect(servicePresentation(nodes, svc('heat-pump')).body).toBe(true)
+    // the physically-visible equipment is the ENGINE's now; the point keeps its pick proxy there
+    expect(servicePresentation(nodes, svc('panel'))).toEqual({ body: false, sign: false, pickProxy: true })
+    expect(servicePresentation(nodes, svc('heat-pump'))).toEqual({ body: false, sign: false, pickProxy: true })
   })
 
   test('legacy framing node (seeThrough false, no viewMode) reads as off', () => {
     const nodes = withFraming({ seeThrough: false })
-    expect(servicePresentation(nodes, svc('panel'))).toEqual({
-      body: true,
-      sign: false,
-      pickProxy: false,
-    })
+    // INTENDED-CHANGE 2026-09-09: the engine draws the panel door in the finished house — the point's body yields, its proxy picks
+    expect(servicePresentation(nodes, svc('panel'))).toEqual({ body: false, sign: false, pickProxy: true })
     expect(servicePresentation(nodes, svc('sewer-exit'))).toEqual({
       body: false,
       sign: false,

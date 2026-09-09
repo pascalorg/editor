@@ -20,7 +20,8 @@
  * electric-meter socket on the wall face. Everything else Bones derives is
  * inside the walls and is the walls' business.
  */
-import type { Fixture, Member } from '../../../../plugin-bones/src/core/types'
+import type { Fixture } from '../../../../plugin-bones/src/core/types'
+import { isPhysicalMember } from '../../../../plugin-bones/src/framing/physical'
 import type { NodeMap } from '../../model'
 import { mepModel } from './model'
 
@@ -36,16 +37,6 @@ export type ExteriorItemSolid = {
   topY: number
   levelId: string | null
 }
-
-const WH_OUTSIDE = new Set([
-  'wh',
-  'wh-head',
-  'wh-enclosure-side',
-  'wh-enclosure-top',
-  'wh-enclosure-door',
-  'wh-pad',
-  'wh-pan',
-])
 
 /** A member's plan rectangle turned by its yaw (three.js Y rotation: x' = x cos + z sin, z' = −x sin + z cos). */
 function footprint(
@@ -72,12 +63,8 @@ function shortName(label: string | undefined, fallback: string): string {
   return head && head.length > 0 ? head : fallback
 }
 
-function isExteriorMember(m: Member, whOutside: boolean): boolean {
-  if (WH_OUTSIDE.has(m.sourceId)) return whOutside
-  if (m.sourceId === 'service-entrance') return m.role !== 'wire-run'
-  // the condenser cabinets (framing/condenser-asset.ts isCondenserCabinet)
-  return m.system === 'hvac' && m.role === 'equipment' && m.material === 'steel'
-}
+/** The finished house's physical set (plugin-bones framing/physical.ts) — one definition for the 3D and the paper. */
+const isExteriorMember = isPhysicalMember
 
 /**
  * Bones' exterior equipment on `levels` (each with its base elevation in the
@@ -92,11 +79,9 @@ export function bonesExteriorItems(
   for (const level of levels) {
     const model = mepModel(nodes, level.id)
     if (!model) continue
-    const wh = model.members.find((m) => m.role === 'water-heater' && m.sourceId === 'wh')
-    const whOutside = wh !== undefined && /outside|outdoor/i.test(wh.label ?? '')
     let n = 0
     for (const m of model.members) {
-      if (!isExteriorMember(m, whOutside)) continue
+      if (!isExteriorMember(m)) continue
       out.push({
         kind: 'item',
         id: `bones-ext-${level.id}-${n++}`,

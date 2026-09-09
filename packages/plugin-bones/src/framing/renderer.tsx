@@ -37,6 +37,7 @@ import {
 } from './condenser-asset'
 import { useBonesStore } from '../store'
 import { HIGHLIGHT_COLOR, type HighlightSpec, matchesHighlight } from './highlight'
+import { finishColorOf, finishFixtureBox, isPhysicalMember, METER_DOME } from './physical'
 import { effectiveNodesFor, throttleTrailing } from './live'
 import { effectiveViewMode, type FramingNode, type ViewMode } from './schema'
 import { isFrameMember, shellNodeIds } from './shell'
@@ -561,61 +562,83 @@ function collectBuckets(
     bucket.entries.push({ dims, position, rotation, ...(shear ? { shear } : {}) })
   }
 
-  if (mode !== 'off') {
-    for (const member of members) {
-      // the panel's highlight paints its member set orange: its own bucket
-      // (the key carries the colour), the same treatment as the rest
-      const color = matchesHighlight(member, highlight) ? HIGHLIGHT_COLOR : colorOf(member)
-      if (mode === 'basement') {
-        // Stratum split: below-floor is the star (solid + overlay ghost),
-        // the house above fades to the faint orientation shell. Within the
-        // stratum the slab/vapor FIELDS turn into a translucent veil and
-        // the buried MEP network draws through them (QA round 3).
-        if (isBelowFloor(member)) {
-          const field = member.role === 'slab' || member.role === 'vapor-retarder'
-          const run =
-            member.system === 'plumbing' ||
-            member.system === 'hvac' ||
-            member.system === 'electrical'
-          const treatment: BucketTreatment = field
-            ? 'ghosted-field'
-            : run
-              ? 'ghosted-through'
-              : 'ghosted'
-          push(`${color}|${treatment}${shapeKey(member)}`, color, member.dims, member.position, member.rotation, undefined, treatment, undefined, member.shear, shapeOf(member))
-        } else {
-          push(`${color}|faint${shapeKey(member)}`, color, member.dims, member.position, member.rotation, undefined, 'faint', undefined, member.shear, shapeOf(member))
-        }
-        continue
+  for (const member of members) {
+    // THE FINISHED HOUSE (viewMode 'off') shows the physical equipment Bones
+    // derived — the tank in its enclosure, the condenser, the mast, pole
+    // and drop — in finish paint; the framing, wiring and piping stay in
+    // the walls (framing/physical.ts). The X-ray modes show all of it.
+    if (mode === 'off' && !isPhysicalMember(member)) continue
+    // the panel's highlight paints its member set orange: its own bucket
+    // (the key carries the colour), the same treatment as the rest
+    const color = matchesHighlight(member, highlight)
+      ? HIGHLIGHT_COLOR
+      : mode === 'off'
+        ? finishColorOf(member)
+        : colorOf(member)
+    if (mode === 'basement') {
+      // Stratum split: below-floor is the star (solid + overlay ghost),
+      // the house above fades to the faint orientation shell. Within the
+      // stratum the slab/vapor FIELDS turn into a translucent veil and
+      // the buried MEP network draws through them (QA round 3).
+      if (isBelowFloor(member)) {
+        const field = member.role === 'slab' || member.role === 'vapor-retarder'
+        const run =
+          member.system === 'plumbing' ||
+          member.system === 'hvac' ||
+          member.system === 'electrical'
+        const treatment: BucketTreatment = field
+          ? 'ghosted-field'
+          : run
+            ? 'ghosted-through'
+            : 'ghosted'
+        push(`${color}|${treatment}${shapeKey(member)}`, color, member.dims, member.position, member.rotation, undefined, treatment, undefined, member.shear, shapeOf(member))
+      } else {
+        push(`${color}|faint${shapeKey(member)}`, color, member.dims, member.position, member.rotation, undefined, 'faint', undefined, member.shear, shapeOf(member))
       }
-      // 'framing': the frame alone — sheet layers (gypsum, sheathing, WRB,
-      // cladding, insulation, deck, subfloor) are skipped, and with them
-      // every face-carrying bucket, so nothing is left for the dollhouse
-      // cut to open; the members draw exactly as in 'xray'.
-      if (mode === 'framing' && !isFrameMember(member)) continue
-      // mode === 'xray' | 'framing'
-      if (member.face) {
-        // Assembly layers: bucket PER FACE NORMAL (quantized) AND per source
-        // wall, so the dollhouse cut can classify each wall's near/far face
-        // against its OWN plane and toggle whole meshes (night-4 split,
-        // now load-bearing for the camera-position cut itself).
-        const key = `${color}|${member.face[0].toFixed(2)},${member.face[1].toFixed(2)}|${member.sourceId}`
-        push(key, color, member.dims, member.position, member.rotation, member.face, 'solid', member.sourceId)
-        continue
-      }
-      // Everything — below-floor included — is depth-tested only: wall/roof/
-      // MEP members read through the OPENED near faces of the dollhouse cut
-      // (ghosting them made every wall look transparent, round-13), and the
-      // under-floor stratum stays hidden behind real geometry by design.
-      push(`${color}|solid${shapeKey(member)}`, color, member.dims, member.position, member.rotation, undefined, 'solid', undefined, member.shear, shapeOf(member))
+      continue
     }
+    // 'framing': the frame alone — sheet layers (gypsum, sheathing, WRB,
+    // cladding, insulation, deck, subfloor) are skipped, and with them
+    // every face-carrying bucket, so nothing is left for the dollhouse
+    // cut to open; the members draw exactly as in 'xray'.
+    if (mode === 'framing' && !isFrameMember(member)) continue
+    // mode === 'xray' | 'framing'
+    if (member.face) {
+      // Assembly layers: bucket PER FACE NORMAL (quantized) AND per source
+      // wall, so the dollhouse cut can classify each wall's near/far face
+      // against its OWN plane and toggle whole meshes (night-4 split,
+      // now load-bearing for the camera-position cut itself).
+      const key = `${color}|${member.face[0].toFixed(2)},${member.face[1].toFixed(2)}|${member.sourceId}`
+      push(key, color, member.dims, member.position, member.rotation, member.face, 'solid', member.sourceId)
+      continue
+    }
+    // Everything — below-floor included — is depth-tested only: wall/roof/
+    // MEP members read through the OPENED near faces of the dollhouse cut
+    // (ghosting them made every wall look transparent, round-13), and the
+    // under-floor stratum stays hidden behind real geometry by design.
+    push(`${color}|solid${shapeKey(member)}`, color, member.dims, member.position, member.rotation, undefined, 'solid', undefined, member.shear, shapeOf(member))
   }
   for (const fixture of fixtures) {
     // Finished house: only the surface devices; basement: stratum-split
     // like members (advisory 2026-08-21 — a buried cleanout riser joins the
     // ghosted star content instead of fading into the shell); X-ray: solid.
     if (mode === 'off' && !SURFACE_FIXTURE_KINDS.has(fixture.kind)) continue
-    const { dims, color } = fixtureBox(fixture)
+    // the finished house: cover plates, pucks, the panel door, the meter
+    // socket with its glass dome — the real faces, not the circuit colours
+    const { dims, color } = mode === 'off' ? finishFixtureBox(fixture) : fixtureBox(fixture)
+    if (mode === 'off' && fixture.kind === 'electric-meter') {
+      const nx = Math.sin(fixture.rotationY)
+      const nz = Math.cos(fixture.rotationY)
+      push(
+        `${METER_DOME.color}|fixture|solid`,
+        METER_DOME.color,
+        METER_DOME.dims,
+        [fixture.position[0] + nx * METER_DOME.standoff, fixture.position[1] + 0.06, fixture.position[2] + nz * METER_DOME.standoff],
+        [0, fixture.rotationY, 0],
+        undefined,
+        'solid',
+      )
+    }
     const below = fixture.position[1] + dims[1] / 2 < BURIED_TOP_Y
     // A buried fixture rides the RUN treatment (a cleanout riser belongs to
     // the drainage network it serves — it must read through the slab too).

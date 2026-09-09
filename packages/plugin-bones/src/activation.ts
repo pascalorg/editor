@@ -174,6 +174,23 @@ export function activateXray(
    */
   mode: Exclude<ViewMode, 'off'> = 'xray',
 ): FramingNode {
+  return activateBones(scene, levelId, viewer, mode)
+}
+
+/**
+ * Derive Bones on a level in ANY view — 'off' included: the finished house
+ * with its physical equipment (framing/physical.ts) and its service points,
+ * the walls left as they are. The generator's hook (apps/editor bootstrap)
+ * calls it for a fresh house so the tank, the meter, the pole and the
+ * condenser stand in the Normal view without a trip to the Bones panel
+ * (Steve, 2026-09-09: "bring bones into the auto generation to control it").
+ */
+export function activateBones(
+  scene: SceneLike,
+  levelId: string,
+  viewer: ViewerLike | null | undefined,
+  mode: ViewMode,
+): FramingNode {
   const state = scene.getState()
   const services = buildServicePointNodes(state.nodes, levelId)
   const roofSystem = roofSystemOf(state.nodes, levelId)
@@ -190,7 +207,7 @@ export function activateXray(
       ...services.map((node) => ({ node, parentId: levelId })),
     ],
   })
-  if (viewer) imposeLowWalls(viewer)
+  if (viewer && mode !== 'off') imposeLowWalls(viewer)
   return framing
 }
 

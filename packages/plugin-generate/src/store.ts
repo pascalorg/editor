@@ -26,6 +26,8 @@ export type RunSummary = {
   errors: string[]
   warnings: string[]
   placed: boolean
+  /** The level the house was written to — the editor derives Bones on it (2026-09-09). */
+  levelId?: string | null
   /** The entrance that was built (porch.ts), when the run succeeded. */
   porch?: PorchSummary | null
   rear?: PorchSummary | null

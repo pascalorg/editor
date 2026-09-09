@@ -1220,7 +1220,71 @@ name a member set the renderer paints and the camera goes to; the
 selection reads live in the panel; every placed point is listed with its
 Show and its Reset, so the manual state is visible and undoable.
 
+## Mandate additions (Steve, 2026-09-09 — the house as built)
+
+Steve: "when i select bones it generates the things, but then when i go
+back to normal view the water heater is in the wall and things are
+missing ... if i try to click the water heater when im in bones with
+framing on ... it clicks the wall and moves it ... im very disturbed how
+the hvac looks different in the regular view, the water heater loses its
+detail and the container and location, the electric outlets are not
+outside of the wall and colored on normal ... idk if you need to bring
+bones into the auto generation to control it better". After the review:
+"yes the framing doesnt need to be shown, but like wh and hvac and the
+power pole and the line, and those items what else electrical panel from
+bones ... and the meter too, and make the meter look real and on the
+outside of the wall ... the normal view is what goes to sheets, for
+elevations so the actual hvac and wh and meters and things are shown".
+
+G116 The finished (Normal) view is the house as built: the physical
+equipment Bones derives — the water heater with its enclosure and pad,
+the condenser, the meter socket, the mast, weatherhead, pole and drop,
+the water entry, the panel door, the cover plates, lights, alarms,
+registers, the thermostat — drawn once by the engines, in finish paint;
+framing, wiring and piping stay in the walls. One definition of that set
+drives the 3D and the elevations.
+G117 A service point's placeholder never stands beside the engine's
+equipment; the point picks through an invisible proxy at the equipment,
+so a click on the tank selects the point, never the wall behind it.
+G118 A generated house carries Bones in the finished view from the
+start.
+
 ## Log (continued)
+
+- 2026-09-09: **Batch T33 — the house as built (G116–G118).** New
+  `framing/physical.ts`: `isPhysicalMember` (the water-heater family, the
+  service entrance above grade less the in-wall feed, the HVAC
+  equipment, the water-service box), `finishColorOf` (enamel, painted
+  steel, concrete, the pole's timber, the drop's black) and
+  `finishFixtureBox` (duplex / decora cover plates 2¾ × 4½ in, the
+  in-use bubble cover, light pucks, alarms, the thermostat, the panel
+  door, the meter socket, the water entry). renderer.tsx: the member loop
+  runs in 'off' too, physical members only, in finish paint; the fixture
+  loop paints the real faces there and adds the meter's glass dome proud
+  of the socket. placement.ts: the panel, the water entry and the
+  thermostat join the engine-rendered types; `servicePresentation` hides
+  the placeholder body in EVERY view where the engine draws (the finished
+  house included) and arms the pick proxy for all of them; proxy.ts
+  `resolveServiceProxy` stands the invisible proxy at the engine's tank
+  (with its head), socket, pole, panel door, water entry or thermostat,
+  `proxyLocalOffset` turning the equipment's plan centre into the point's
+  own frame; the service renderer uses it. activation.ts `activateBones`
+  (any view, 'off' leaves the walls alone); the generate run's summary
+  names its level and the editor's bootstrap derives Bones on a fresh
+  house in the 'off' view. plugin-sheets `bonesExteriorItems` takes the
+  same `isPhysicalMember`, so the elevations draw what the screen draws.
+  Verified: the finished view shows the meter socket with its dome and
+  the mast on the block wall, no placeholder; Modesto A4.0 unchanged
+  (enclosure, meter, mast, pole). Tests: Bones 2182 (physical: the set,
+  the paint, the finished-view render; presentation pins moved with
+  INTENDED-CHANGE notes; the material census 8 → 14 in 'off'; the
+  condenser draws in 'off'), sheets 258, generate 116; whole repo 6626
+  pass; editor typecheck clean. On the wall drag: the host moves a wall
+  only with Cmd/Ctrl + a sole selection or the group move of a
+  multi-selection (selection-manager.tsx) — Steve's click landed on the
+  wall because the tank had no pick proxy; it has one now, so the point
+  takes the click. Next: the ducts — true to life in the building
+  sections, radius elbows and transitions (Steve, same day).
 
 - 2026-09-09: **Batch T32 — the heater clear of the electric meter.**
   Steve: "found the issue your meter is on top of the wh, thats why it

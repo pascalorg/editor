@@ -325,6 +325,12 @@ export const ENGINE_RENDERED_SERVICE_TYPES: Partial<
   'water-heater': 'showPlumbing',
   'electric-meter': 'showElectrical',
   'utility-pole': 'showElectrical',
+  // 2026-09-09: the finished house draws the engines' physical equipment
+  // (framing/physical.ts) — the panel door, the water entry box and the
+  // thermostat are engine-drawn fixtures too
+  panel: 'showElectrical',
+  'water-entry': 'showPlumbing',
+  thermostat: 'showHvac',
 }
 
 /** The level's bones:framing node (lowest id wins on duplicates —
@@ -356,30 +362,22 @@ export function servicePresentation(
   node: Pick<ServicePlacementNode, 'serviceType' | 'parentId'>,
 ): ServicePresentation {
   const framing = levelFramingNode(nodes, node.parentId)
-  // No framing node → no engines render on this level → pre-automation
-  // presentation (box + sign), unchanged.
   const mode = framing
     ? effectiveViewMode(framing as { viewMode?: unknown; seeThrough?: unknown })
     : null
+  // Whether the ENGINE draws this point's physical counterpart: its toggle
+  // (absent = the schema default true — legacy nodes never re-parse). When
+  // it does, the placeholder body yields in EVERY mode — the finished house
+  // included (2026-09-09: the finished view draws the physical equipment,
+  // framing/physical.ts) — and the INVISIBLE pick proxy at the equipment
+  // keeps the point clickable and draggable (proxy.ts).
+  const toggle = framing ? ENGINE_RENDERED_SERVICE_TYPES[node.serviceType] : undefined
+  const engineDraws = Boolean(toggle && framing && framing[toggle] !== false)
   if (mode === 'off') {
-    return { body: PHYSICAL_SERVICE_TYPES.has(node.serviceType), sign: false, pickProxy: false }
+    return { body: PHYSICAL_SERVICE_TYPES.has(node.serviceType) && !engineDraws, sign: false, pickProxy: engineDraws }
   }
-  // X-ray AND Framing: both views draw the engines' equipment (the Framing
-  // view keeps every non-surface member — framing/shell.ts isFrameMember),
-  // so the placeholder body would stand beside the real tank / meter / pole
-  // as a second, wrong-shaped one (Steve, 2026-09-09: "why is it a massive
-  // box and not the real wh types" — the box on his wall was this
-  // placeholder in the Framing view, the tank stood inside the garage).
-  if ((mode === 'xray' || mode === 'framing') && framing) {
-    const toggle = ENGINE_RENDERED_SERVICE_TYPES[node.serviceType]
-    // Absent toggle field = schema default true (legacy nodes never re-parse).
-    if (toggle && framing[toggle] !== false) {
-      // Body yields to the engine's render; the heat pump ADDITIONALLY gets
-      // the invisible pick proxy at the unit footprint (see the type doc).
-      return { body: false, sign: true, pickProxy: node.serviceType === 'heat-pump' }
-    }
+  if ((mode === 'xray' || mode === 'framing') && engineDraws) {
+    return { body: false, sign: true, pickProxy: true }
   }
-  // 'basement', 'xray' non-engine kinds, and no-framing levels: box + sign —
-  // the visible body is the pick handle, no proxy needed.
   return { body: true, sign: true, pickProxy: false }
 }
