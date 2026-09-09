@@ -213,7 +213,7 @@ export function buildElevationDrawing(
   for (const prism of built.prisms) {
     // A slab's edge is only worth showing where it is exposed; drawing every
     // interior slab as a full-width band would black out the elevation.
-    if (prism.kind === 'ceiling') continue
+    if (prism.kind !== 'slab') continue
     const piece = projectPrism(view, prism)
     if (piece) projected.push(piece)
   }

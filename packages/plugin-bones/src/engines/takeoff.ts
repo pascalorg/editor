@@ -329,6 +329,31 @@ const FIXTURE_ROWS: Record<FixtureKind, { item: string; detail: string }> = {
   disconnect: { item: 'AC disconnects', detail: 'NEC 440.14 — within sight of the unit' },
 }
 
+/**
+ * A duct member's TRUE section in whole inches (w ≥ h): a vertical box run
+ * carries its length in dims[1]; a horizontal one in dims[0]; a round run or
+ * collar ('pipe') and an elbow carry the section in dims[1] × dims[2]
+ * whatever their length; a plenum transition books as the section it feeds.
+ */
+function ductSection(m: Member): { w: number; h: number } {
+  let a: number
+  let b: number
+  if (m.shape === 'transition' && m.endDims) {
+    a = m.endDims[0]
+    b = m.endDims[1]
+  } else if (m.shape === 'pipe' || m.shape === 'elbow') {
+    a = m.dims[1]
+    b = m.dims[2]
+  } else {
+    const vertical = m.shape === 'cylinder' || m.dims[1] > m.dims[0]
+    a = vertical ? m.dims[0] : m.dims[2]
+    b = vertical ? m.dims[2] : m.dims[1]
+  }
+  const sA = Math.round(a / 0.0254)
+  const sB = Math.round(b / 0.0254)
+  return { w: Math.max(sA, sB), h: Math.min(sA, sB) }
+}
+
 /** Stable panel ordering for fixture rows (matches FixtureKind declaration). */
 const FIXTURE_ORDER: readonly FixtureKind[] = [
   'receptacle',
@@ -1124,11 +1149,10 @@ export function computeTakeoff(
       // as a side booked FICTITIOUS tin ('Duct 8×71"', 'Return duct 14×79"'
       // — round-2 finding 4 / examiner C5; the supply analog is fixed here
       // as a rider). Horizontals keep their W×H (max×min) exactly as before.
-      const vertical = m.dims[1] > m.dims[0]
-      const sA = Math.round((vertical ? m.dims[0] : m.dims[2]) / 0.0254)
-      const sB = Math.round((vertical ? m.dims[2] : m.dims[1]) / 0.0254)
-      const w = Math.max(sA, sB)
-      const h = Math.min(sA, sB)
+      // 2026-09-09 fittings: a round run / collar ('pipe') and an elbow carry
+      // their section in dims[1] × dims[2] whatever their length; a plenum
+      // transition books as the trunk section it feeds (its endDims)
+      const { w, h } = ductSection(m)
       // Trunks are rectangular sheet metal by the hvac naming contract
       // ('Trunk…' label prefix) — a trunk stepped down to the square 8×8
       // minimum is still square duct, not 8" round (round-10 finding).
@@ -1315,11 +1339,7 @@ export function computeTakeoff(
       // length in dims[1]); riser/boot chains merge with their horizontal
       // runs now — the riser-to-feed and branch-to-boot elbows are real
       // fittings the old fictitious-section keys kept apart.
-      const vertical = m.dims[1] > m.dims[0]
-      const sA = Math.round((vertical ? m.dims[0] : m.dims[2]) / 0.0254)
-      const sB = Math.round((vertical ? m.dims[2] : m.dims[1]) / 0.0254)
-      const w = Math.max(sA, sB)
-      const h = Math.min(sA, sB)
+      const { w, h } = ductSection(m)
       // Return-side bends book under their own item (same mirror as the lf
       // rows above).
       const isReturn = m.label?.startsWith('Return') === true

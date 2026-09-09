@@ -171,7 +171,16 @@ export type Member = {
    * diameters) — a storage water heater is a tank, not a crate (Steve,
    * 2026-09-09: "why is it a massive box and not the real wh types").
    */
-  shape?: 'box' | 'cylinder'
+  shape?: 'box' | 'cylinder' | 'pipe' | 'elbow' | 'transition'
+  /**
+   * An elbow's turn: +1 toward the member's local +z (the incoming direction
+   * turned +90° in plan), −1 the other way. dims = [bend radius, section
+   * height (along local y), section width (in the turn plane)]; the arc
+   * length is `length` (duct-geometry.ts).
+   */
+  turn?: 1 | -1
+  /** A transition's far end section [w, h]; dims = [w0, length along local y, h0] at the near end. */
+  endDims?: readonly [number, number]
   /** Set when the prescriptive tables run out (engineered beam required). */
   flag?: string
   /** Level whose transform this member follows when it belongs to ANOTHER

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import fixture from './__fixtures__/plancrafters-cottage.json'
-import type { AnyNodeLike, NodeMap } from './model'
+import { type AnyNodeLike, levels, type NodeMap } from './model'
 import {
   buildFixtureSchedule,
   DECOR,
@@ -141,6 +141,21 @@ describe('the rough-in mapping', () => {
     expect(fixtureMark(8)).toBe('A09')
     expect(fixtureMark(98)).toBe('A99')
     expect(fixtureMark(99)).toBe('A100')
+  })
+})
+
+describe("Bones' equipment as section prisms (2026-09-09)", () => {
+  test('every HVAC member and the physical set become equipment prisms with a plan box between two heights', () => {
+    const { bonesSectionPrisms } = require('./providers/mep/exterior-items') as typeof import('./providers/mep/exterior-items')
+    const nodes = fixture.graph.nodes as unknown as NodeMap
+    const levelId = levels(nodes)[0]?.id as string
+    const prisms = bonesSectionPrisms(nodes, [{ id: levelId, baseY: 0 }])
+    expect(prisms.length).toBeGreaterThan(0)
+    for (const p of prisms) {
+      expect(p.kind).toBe('equipment')
+      expect(p.polygon).toHaveLength(4)
+      expect(p.topY).toBeGreaterThan(p.bottomY)
+    }
   })
 })
 

@@ -17,6 +17,8 @@ export const POCHE = '#c9c9cf'
 export const POCHE_SHEATHING = '#a9a9b2'
 export const POCHE_FINISH = '#e4e4e8'
 export const POCHE_SLAB = '#b7b7be'
+/** Equipment cut by the section — tin, tanks, cabinets — lighter than a slab. */
+export const POCHE_EQUIPMENT = '#d3d6db'
 export const POCHE_ROOF = '#bfbfc6'
 export const GRADE_FILL = '#dededf'
 

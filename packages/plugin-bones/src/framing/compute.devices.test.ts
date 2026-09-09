@@ -15,8 +15,10 @@ import { FramingNode } from './schema'
  * byte-equality regression:
  *  - a scene with ZERO device nodes/overrides computes members STRICTLY
  *    byte-equal to MASTER (pinned in master-baseline.json, captured at
- *    724d9ad before this feature) and fixtures identical except the added
- *    `meta.deviceId` key;
+ *    724d9ad before this feature; INTENDED-CHANGE recaptures: 2026-09-09
+ *    real duct fittings — radius elbows, round branches off takeoff
+ *    collars, round boots, the plenum transition) and fixtures identical
+ *    except the added `meta.deviceId` key;
  *  - a scene of SEEDED-BUT-UNMOVED device nodes stays byte-equal too (the
  *    reconciler's creations change nothing);
  *  - a MOVED node re-routes the wiring to the moved box (wire endpoint ON

@@ -21,6 +21,7 @@ import {
   sheetsHostPanel,
   sheetsPlugin,
   bonesExteriorItems,
+  bonesSectionPrisms,
 } from '@pascal-app/plugin-sheets'
 import {
   buildBuildingModel,
@@ -146,9 +147,13 @@ extendPluginDiscovery(async () => [sectionsPlugin])
 registerEditorHostPanel(sectionsHostPanel)
 // Sheet viewports of kind 'section' / 'elevation' draw through the sections builders.
 // They take `{ nodes }` and draw with y = -elevation (plugin-sections/src/geometry/types.ts).
-registerSheetDrawingProvider('section', (nodes, args) =>
-  buildSectionDrawing({ nodes: nodes as never }, args as never),
-)
+registerSheetDrawingProvider('section', (nodes, args) => {
+  // the model the section cuts, with Bones' ducts, boots, plenum, air
+  // handler and the physical equipment as prisms — cut and shown beyond
+  const model = buildBuildingModel(nodes as never)
+  model.prisms.push(...(bonesSectionPrisms(nodes as never, model.levels) as never[]))
+  return buildSectionDrawing({ nodes: nodes as never }, args as never, model)
+})
 registerSheetDrawingProvider('elevation', (nodes, args) => {
   // the model the elevation draws, with Bones' exterior equipment (the water
   // heater's enclosure, the meter, the mast and pole, the condenser) as items

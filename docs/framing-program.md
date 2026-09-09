@@ -1249,7 +1249,60 @@ so a click on the tank selects the point, never the wall behind it.
 G118 A generated house carries Bones in the finished view from the
 start.
 
+## Mandate additions (Steve, 2026-09-09 — the ducts)
+
+Steve: "i need the ducts and things shown in the building sections, true
+to life as they are drawn, and your ducts dont have smooth transitions
+and things they look raw and ugly man, if those can get real hvac ducts
+and transitions that are radius and turn and have correct inlet and
+outlets would be great too".
+
+G119 The building sections cut and show Bones' equipment — the ducts
+and their fittings, the boots, the plenum, the air handler, the tank,
+the condenser — as drawn.
+G120 Ducts are real: a corner turns through a radius elbow, a branch is
+a round run off a takeoff collar on the trunk's side turning down
+through an elbow into a round boot, the plenum rises out of a transition
+off the air handler; every fitting books its true section.
+
 ## Log (continued)
+
+- 2026-09-09: **Batch T34 — ducts true to life (G119, G120).**
+  T34a (sections): `PrismSolid.kind` gains 'equipment'; `cutPrism` hatches
+  it `POCHE_EQUIPMENT`, the elevations skip it (they take the physical set
+  as items); plugin-sheets `bonesSectionPrisms(nodes, levels)` turns every
+  HVAC member and the physical set into equipment prisms (a run on its
+  side reads its length from dims[1]); the section provider (bootstrap +
+  both demo scripts) pushes them onto the model it cuts. Cape Coral's A5.0
+  cuts the trunk in the attic and shows the boots at the ceiling.
+  T34b (fittings): `Member.shape` grows 'pipe' | 'elbow' | 'transition',
+  with `turn` (±1) and `endDims`; new `framing/duct-geometry.ts` sweeps a
+  rectangle or a circle along a quarter circle (`elbowGeometry`) and the
+  frustum between two rectangles (`transitionGeometry`); the renderer
+  buckets round runs on `UNIT_PIPE` (a unit cylinder on local X) and
+  mounts each fitting as its own Mesh (never scaled; the in-place patch
+  path keeps them in step by key, a changed shape rebuilds). hvac.ts:
+  `manhattanDuct` turns its corner through a radius elbow (centreline
+  radius one duct width, never under 6 in) when both legs can give up the
+  radius, else the old square corner; branches are ROUND runs off a 6 in
+  takeoff collar on the trunk's side, turning down through a vertical
+  elbow (rotation [π/2, 0, c]) into a round boot that stops a bend radius
+  under the trunk plane; a 24 × 24 → 14 × 8 plenum transition rises off
+  the air handler under the trunk riser; `elbowEnds` gives a walker the
+  elbow's inlet and outlet. takeoff.ts `ductSection`: a pipe or an elbow
+  books dims[1] × dims[2] whatever its length, a transition books the
+  section it feeds — no fictitious tin. Tests: Bones 2186 (duct-geometry:
+  the elbow fills the square between its legs, a round elbow, the
+  transition; hvac.fittings: the elbow member and the shortened legs, the
+  renderer mounting one Mesh and none in the finished view; the junction
+  pins and the branch-end / reachability walkers moved to the new
+  topology with INTENDED-CHANGE notes; the material census 51 → 52
+  basement; master-baseline.json RECAPTURED — INTL/TX 577 → 582 members,
+  fixtures and warnings unchanged — the recapture script kept in the
+  scratchpad), sections 28, sheets 259; whole repo 6631 pass; editor
+  typecheck clean. Not done: the riser-to-feed corner (up → horizontal)
+  is still a square junction; the MEP plan sheet draws an elbow as a box
+  at its corner, not an arc; return-side runs keep their boxes.
 
 - 2026-09-09: **Batch T33 — the house as built (G116–G118).** New
   `framing/physical.ts`: `isPhysicalMember` (the water-heater family, the

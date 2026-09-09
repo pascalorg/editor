@@ -31,6 +31,7 @@ import {
   registerSheetDrawingProvider,
   sheetsPlugin,
   bonesExteriorItems,
+  bonesSectionPrisms,
 } from '@pascal-app/plugin-sheets'
 import { buildUtilitiesDrawing, utilitiesPlugin } from '@pascal-app/plugin-utilities'
 
@@ -83,9 +84,13 @@ for (const plugin of [sheetsPlugin, sectionsPlugin, utilitiesPlugin, bonesPlugin
 }
 
 // ── providers, as bootstrap wires them ─────────────────────────────────
-registerSheetDrawingProvider('section', (nodes, args) =>
-  buildSectionDrawing({ nodes: nodes as never }, args as never),
-)
+registerSheetDrawingProvider('section', (nodes, args) => {
+  // the model the section cuts, with Bones' ducts, boots, plenum, air
+  // handler and the physical equipment as prisms — cut and shown beyond
+  const model = buildBuildingModel(nodes as never)
+  model.prisms.push(...(bonesSectionPrisms(nodes as never, model.levels) as never[]))
+  return buildSectionDrawing({ nodes: nodes as never }, args as never, model)
+})
 registerSheetDrawingProvider('elevation', (nodes, args) => {
   const model = buildBuildingModel(nodes as never)
   model.items.push(...(bonesExteriorItems(nodes as never, model.levels) as never[]))

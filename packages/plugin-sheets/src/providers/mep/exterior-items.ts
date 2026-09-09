@@ -20,7 +20,7 @@
  * electric-meter socket on the wall face. Everything else Bones derives is
  * inside the walls and is the walls' business.
  */
-import type { Fixture } from '../../../../plugin-bones/src/core/types'
+import type { Fixture, Member } from '../../../../plugin-bones/src/core/types'
 import { isPhysicalMember } from '../../../../plugin-bones/src/framing/physical'
 import type { NodeMap } from '../../model'
 import { mepModel } from './model'
@@ -106,6 +106,60 @@ export function bonesExteriorItems(
         polygon: footprint(meter.position, dims, meter.rotationY),
         baseY: level.baseY + meter.position[1] - dims[1] / 2,
         topY: level.baseY + meter.position[1] + dims[1] / 2,
+        levelId: level.id,
+      })
+    }
+  }
+  return out
+}
+
+/** Structurally the sections' `PrismSolid` of kind 'equipment'. */
+export type EquipmentPrism = {
+  kind: 'equipment'
+  id: string
+  polygon: [number, number][]
+  bottomY: number
+  topY: number
+  levelId: string | null
+}
+
+/** A member's plan box: a run lying on its side (a round run, `rotation[2]` ≈ ±90°) carries its length in dims[1]. */
+function memberFootprint(m: Member): { polygon: [number, number][]; bottomY: number; topY: number } {
+  const onSide = Math.abs(m.rotation[2]) > 1
+  const dims: readonly [number, number, number] = onSide ? [m.dims[1], m.dims[0], m.dims[2]] : m.dims
+  return {
+    polygon: footprint(m.position, dims, m.rotation[1]),
+    bottomY: m.position[1] - dims[1] / 2,
+    topY: m.position[1] + dims[1] / 2,
+  }
+}
+
+/**
+ * Bones' equipment on `levels` as prisms for the BUILDING SECTIONS: every
+ * HVAC member (the ducts and their elbows, the boots, the plenum riser, the
+ * air handler, the condenser) and the finished house's physical set, in the
+ * building's frame — cut where the plane passes, shown beyond it (Steve,
+ * 2026-09-09: "i need the ducts and things shown in the building sections,
+ * true to life as they are drawn").
+ */
+export function bonesSectionPrisms(
+  nodes: NodeMap,
+  levels: readonly { id: string; baseY: number }[],
+): EquipmentPrism[] {
+  const out: EquipmentPrism[] = []
+  for (const level of levels) {
+    const model = mepModel(nodes, level.id)
+    if (!model) continue
+    let n = 0
+    for (const m of model.members) {
+      if (!(m.system === 'hvac' || isPhysicalMember(m))) continue
+      const fp = memberFootprint(m)
+      out.push({
+        kind: 'equipment',
+        id: `bones-sec-${level.id}-${n++}`,
+        polygon: fp.polygon,
+        bottomY: level.baseY + fp.bottomY,
+        topY: level.baseY + fp.topY,
         levelId: level.id,
       })
     }

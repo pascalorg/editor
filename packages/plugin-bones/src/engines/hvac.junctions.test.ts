@@ -421,8 +421,14 @@ describe('day-9 z-fight — junction burial pins (hand-computed)', () => {
     expect((riser as Member).dims[2]).toBeCloseTo(TRUNK_H + 2 * BURY, 9)
     const boots = vertical(members, 'Supply boot')
     expect(boots.length).toBeGreaterThan(0)
+    // INTENDED-CHANGE 2026-09-09 (real fittings): a boot fed through a
+    // radius elbow stops one bend radius (6 in) under the trunk plane — the
+    // elbow's outlet meets it there; a boot too close to the trunk for the
+    // bend keeps the 2×BURY burial into its branch
+    const ELBOW_R = Math.max(BRANCH, 0.1524)
     for (const boot of boots) {
-      expect(top(boot)).toBeCloseTo(ATTIC_Y - 2 * BURY, 9)
+      const t = top(boot)
+      expect(Math.min(Math.abs(t - (ATTIC_Y - 2 * BURY)), Math.abs(t - (ATTIC_Y - ELBOW_R)))).toBeLessThan(1e-9)
       expect(boot.dims[0]).toBeCloseTo(BRANCH + 2 * BURY, 9)
       expect(boot.dims[2]).toBeCloseTo(BRANCH + 2 * BURY, 9)
     }
@@ -527,11 +533,24 @@ function revert(
 describe('day-9 z-fight — mutation probes: reverting one junction fails the gate', () => {
   const ATTIC_Y = 2.8
 
-  test('reverted boots share side planes with their 6" branches again', () => {
+  test('a boot raised back to the trunk plane runs into the elbow that feeds it (or shares its branch planes again)', () => {
     const { walls, rooms } = plan('utility')
     const { members } = layoutHvac(walls, rooms)
     const mutated = revert(members, (m) => m.label?.startsWith('Supply boot') === true, ATTIC_Y, 'hi')
-    expect(zFightPairs(mutated).length).toBeGreaterThan(0)
+    // INTENDED-CHANGE 2026-09-09 (real fittings): where an elbow feeds the
+    // boot the raised boot pierces the elbow by a bend radius — a plain
+    // overlap the sweep's coplanar test does not see, so it is measured
+    // here; a boot without an elbow shares its branch's planes as before
+    const elbows = members.filter((m) => m.shape === 'elbow')
+    let pierced = 0
+    for (const boot of mutated.filter((m) => m.label?.startsWith('Supply boot') === true)) {
+      const elbow = elbows.find((e) => Math.hypot(e.position[0] - boot.position[0], e.position[2] - boot.position[2]) < 1e-6)
+      if (!elbow) continue
+      const bootTop = boot.position[1] + boot.dims[1] / 2
+      const elbowBottom = elbow.position[1] - elbow.dims[0]
+      if (bootTop - elbowBottom > elbow.dims[0] - 1e-9) pierced += 1
+    }
+    expect(pierced + zFightPairs(mutated).length).toBeGreaterThan(0)
   })
 
   test('a reverted plenum riser shares side planes with the full-width trunk again', () => {

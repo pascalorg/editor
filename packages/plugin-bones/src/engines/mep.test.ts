@@ -140,7 +140,14 @@ describe('layoutHvac', () => {
           [cx + dx * half, cz + dz * half],
           [cx - dx * half, cz - dz * half],
         ]
-        return ends.some(([ex, ez]) => Math.hypot((ex as number) - rx, (ez as number) - rz) < 0.02)
+        // 2026-09-09 (real fittings): a branch that turns down through a
+        // radius elbow ends one bend radius short of the register — the
+        // elbow at the register carries the last 6 in
+        const elbowAtRegister = ducts.some(
+          (d) => d.shape === 'elbow' && Math.hypot(d.position[0] - rx, d.position[2] - rz) < 0.02,
+        )
+        const reach = elbowAtRegister ? 0.16 : 0.02
+        return ends.some(([ex, ez]) => Math.hypot((ex as number) - rx, (ez as number) - rz) < reach)
       })
       // A register sitting ON the trunk line needs no branch — the trunk
       // serves it directly (engine drops sub-15cm branches).

@@ -196,7 +196,13 @@ export type WallSolid = {
 }
 
 export type PrismSolid = {
-  kind: 'slab' | 'ceiling'
+  /**
+   * 'equipment': a box a plugin pushes onto the model — Bones' ducts, boots,
+   * plenum, air handler, the water heater, the condenser — cut where the
+   * section plane passes, shown beyond it (Steve, 2026-09-09: "i need the
+   * ducts and things shown in the building sections, true to life").
+   */
+  kind: 'slab' | 'ceiling' | 'equipment'
   id: string
   polygon: Vec2[]
   bottomY: number

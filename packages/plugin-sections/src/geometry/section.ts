@@ -29,7 +29,7 @@ import {
   line,
   PAPER,
   POCHE,
-  POCHE_FINISH,
+  POCHE_EQUIPMENT, POCHE_FINISH,
   POCHE_ROOF,
   POCHE_SHEATHING,
   POCHE_SLAB,
@@ -185,7 +185,7 @@ function cutWall(spec: SectionSpec, view: Projector, wall: WallSolid): Floorplan
 function cutPrism(spec: SectionSpec, view: Projector, prism: PrismSolid): FloorplanGeometry[] {
   return cutSpans(spec, view, prism.polygon).map((span) =>
     polygonPrimitive(rectPolygon(span.u0, drawY(prism.topY), span.u1, drawY(prism.bottomY)), {
-      fill: prism.kind === 'slab' ? POCHE_SLAB : POCHE_FINISH,
+      fill: prism.kind === 'slab' ? POCHE_SLAB : prism.kind === 'equipment' ? POCHE_EQUIPMENT : POCHE_FINISH,
       stroke: INK,
       strokeWidth: WEIGHT.cut,
       strokeLinejoin: 'miter',

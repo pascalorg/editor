@@ -699,6 +699,8 @@ function duct(
   material: Member['material'] = 'duct',
   role: Member['role'] = 'duct-run',
   minLen = 0.15,
+  /** A round run (flex / snap-lock pipe): drawn as a pipe of diameter w. */
+  round = false,
 ): Member | null {
   const dx = to[0] - from[0]
   const dz = to[1] - from[1]
@@ -707,6 +709,7 @@ function duct(
   return {
     system: 'hvac',
     role,
+    ...(round ? { shape: 'pipe' as const } : {}),
     dims: [length, h, w],
     length,
     position: [(from[0] + to[0]) / 2, y, (from[1] + to[1]) / 2],
@@ -715,6 +718,72 @@ function duct(
     sourceId,
     label,
   }
+}
+
+/**
+ * A radius elbow at the plan corner where a run along `dirIn` turns to
+ * `dirOut` (unit vectors): centreline radius `radius`, section h × w (round
+ * when `round`). The member's position is the corner point; the legs it
+ * joins are shortened by `radius` at that corner (duct-geometry.ts).
+ */
+function ductElbow(
+  corner: Pt,
+  dirIn: Pt,
+  dirOut: Pt,
+  y: number,
+  w: number,
+  h: number,
+  radius: number,
+  sourceId: string,
+  label: string,
+  round = false,
+  material: Member['material'] = 'duct',
+): Member {
+  // local +z = the incoming direction turned +90° in plan ((dx, dz) → (−dz, dx))
+  const turn: 1 | -1 = dirOut[0] * -dirIn[1] + dirOut[1] * dirIn[0] >= 0 ? 1 : -1
+  return {
+    system: 'hvac',
+    role: 'duct-run',
+    shape: 'elbow',
+    turn,
+    dims: [radius, round ? w : h, w],
+    length: (Math.PI / 2) * radius,
+    position: [corner[0], y, corner[1]],
+    rotation: [0, Math.atan2(-dirIn[1], dirIn[0]), 0],
+    material,
+    sourceId,
+    label,
+  }
+}
+
+/**
+ * Where an elbow's two legs meet it, level-local: [the inlet, the outlet].
+ * A plan elbow (rotation [0, yaw, 0]) enters along (cos yaw, −sin yaw) and
+ * leaves along turn·(sin yaw, cos yaw); a down elbow (rotation [π/2, 0, c])
+ * enters along (cos c, sin c) and leaves straight down. Connectivity walkers
+ * and the paper read an elbow by its ends, never by its box.
+ */
+export function elbowEnds(m: Member): [readonly [number, number, number], readonly [number, number, number]] {
+  const radius = m.dims[0]
+  const [x, y, z] = m.position
+  if (Math.abs(m.rotation[0]) > 1) {
+    const c = m.rotation[2]
+    return [
+      [x - Math.cos(c) * radius, y, z - Math.sin(c) * radius],
+      [x, y - radius, z],
+    ]
+  }
+  const yaw = m.rotation[1]
+  const turn = m.turn ?? 1
+  return [
+    [x - Math.cos(yaw) * radius, y, z + Math.sin(yaw) * radius],
+    [x + turn * Math.sin(yaw) * radius, y, z + turn * Math.cos(yaw) * radius],
+  ]
+}
+
+/** The bend radius a duct of width `w` turns with (centreline): a full duct width, never under 6 in. */
+function bendRadius(w: number): number {
+  return Math.max(w, inches(6))
 }
 
 /** Vertical duct/pipe/conduit (riser/boot/drop) between two heights at one plan point. */
@@ -728,6 +797,8 @@ function ductDrop(
   label: string,
   material: Member['material'] = 'duct',
   role: Member['role'] = 'duct-run',
+  /** A round drop (a 6 in boot / flex riser): drawn as a cylinder of diameter w. */
+  round = false,
 ): Member | null {
   const lo = Math.min(y0, y1)
   const hi = Math.max(y0, y1)
@@ -736,6 +807,7 @@ function ductDrop(
   return {
     system: 'hvac',
     role,
+    ...(round ? { shape: 'cylinder' as const } : {}),
     dims: [w, length, h],
     length,
     position: [at[0], (lo + hi) / 2, at[1]],
@@ -747,7 +819,7 @@ function ductDrop(
 }
 
 /** Manhattan (X then Z) pair of runs. */
-function manhattanDuct(
+export function manhattanDuct(
   members: Member[],
   from: Pt,
   to: Pt,
@@ -758,11 +830,32 @@ function manhattanDuct(
   label: string,
   material: Member['material'] = 'duct',
   role: Member['role'] = 'duct-run',
+  round = false,
 ): void {
-  const elbow: Pt = [to[0], from[1]]
-  const a = duct(from, elbow, y, w, h, sourceId, label, material, role)
+  const corner: Pt = [to[0], from[1]]
+  const la = Math.hypot(corner[0] - from[0], corner[1] - from[1])
+  const lb = Math.hypot(to[0] - corner[0], to[1] - corner[1])
+  const radius = bendRadius(w)
+  // Both legs long enough: the corner turns with a radius elbow and each
+  // leg gives up the radius at the corner (Steve, 2026-09-09: "real hvac
+  // ducts and transitions that are radius and turn"). A short leg keeps the
+  // old square corner — the two boxes overlapping — rather than an elbow
+  // that would not fit.
+  if (la >= radius + 0.15 && lb >= radius + 0.15) {
+    const dirA: Pt = [(corner[0] - from[0]) / la, (corner[1] - from[1]) / la]
+    const dirB: Pt = [(to[0] - corner[0]) / lb, (to[1] - corner[1]) / lb]
+    const aEnd: Pt = [corner[0] - dirA[0] * radius, corner[1] - dirA[1] * radius]
+    const bStart: Pt = [corner[0] + dirB[0] * radius, corner[1] + dirB[1] * radius]
+    const a = duct(from, aEnd, y, w, h, sourceId, label, material, role, 0.05, round)
+    if (a) members.push(a)
+    members.push(ductElbow(corner, dirA, dirB, y, w, h, radius, sourceId, `${label} — radius elbow`, round, material))
+    const b = duct(bStart, to, y, w, h, sourceId, label, material, role, 0.05, round)
+    if (b) members.push(b)
+    return
+  }
+  const a = duct(from, corner, y, w, h, sourceId, label, material, role, 0.15, round)
   if (a) members.push(a)
-  const b = duct(elbow, to, y, w, h, sourceId, label, material, role)
+  const b = duct(corner, to, y, w, h, sourceId, label, material, role, 0.15, round)
   if (b) members.push(b)
 }
 
@@ -1891,6 +1984,22 @@ export function layoutHvac(
   // trunk (day-9 z-fight): its section swallows the 14×8 runs with BURY of
   // side clearance, and its cap extends BURY past the trunk's center plane
   // (off every boot cap and off the run's own faces — 5 mm inside tin).
+  // the supply plenum transition: from the air handler's cabinet top (a
+  // 24 × 24 in box) up to the 14 × 8 riser over 12 in — the smooth change
+  // of section a real plenum makes
+  members.push({
+    system: 'hvac',
+    role: 'duct-run',
+    shape: 'transition',
+    dims: [inches(24), inches(12), inches(24)],
+    endDims: [TRUNK_W, TRUNK_H],
+    length: inches(12),
+    position: [equipAt[0], 1.0 - inches(6), equipAt[1]],
+    rotation: [0, 0, 0],
+    material: 'duct',
+    sourceId: equipRoom.id,
+    label: 'Supply plenum transition — air handler to trunk riser (M1601)',
+  })
   const riser = ductDrop(
     equipAt,
     1.0,
@@ -1951,42 +2060,75 @@ export function layoutHvac(
   // Branches leave the trunk at right angles to each register (still in the
   // attic), then a drop boot carries the air through the CEILING plane.
   for (const { room, at, cfm, transferAssumed } of registers) {
+    // The branch is a ROUND run (6 in flex / snap-lock) off a takeoff collar
+    // on the trunk's side, turning down into its boot through a radius
+    // elbow — the inlet and the outlet a real branch has (Steve,
+    // 2026-09-09: "correct inlet and outlets"). The elbow at the boot needs
+    // the run to be long enough to give up a bend radius; a short one keeps
+    // the square drop.
+    const start = onAxis(u(at))
+    const bdx = at[0] - start[0]
+    const bdz = at[1] - start[1]
+    const bl = Math.hypot(bdx, bdz)
+    const dir: Pt = bl > 1e-9 ? [bdx / bl, bdz / bl] : [1, 0]
+    const radius = bendRadius(BRANCH_SIDE)
+    const collarAt: Pt = [start[0] + dir[0] * (TRUNK_W / 2 + 0.05), start[1] + dir[1] * (TRUNK_W / 2 + 0.05)]
+    const elbowFits = bl >= TRUNK_W / 2 + 0.1 + radius + 0.15
+    const runEnd: Pt = elbowFits ? [at[0] - dir[0] * radius, at[1] - dir[1] * radius] : at
     const branch = doorwayCheck(
-      duct(
-        onAxis(u(at)),
-        at,
-        trunkY,
-        BRANCH_SIDE,
-        BRANCH_SIDE,
-        room.id,
-        `6" branch — ${cfm} cfm`,
-      ),
-      onAxis(u(at)),
+      duct(start, runEnd, trunkY, BRANCH_SIDE, BRANCH_SIDE, room.id, `6" branch — ${cfm} cfm`, 'duct', 'duct-run', 0.15, true),
+      start,
       at,
       'supply',
     )
-    if (branch) members.push(branch)
-    // The boot is the register COLLAR the branch buries into (day-9
-    // z-fight): 2×BURY fatter than the 6" branch (its sides clear the
-    // branch's by BURY), capped 2×BURY short of the branch's center plane —
-    // still deep inside the branch, and never on the plenum riser's cap
-    // plane even when the equipment room's own register drops at the same
-    // plan point (attic: riser +BURY vs boot −2×BURY; soffit the boot
-    // enters from above, so the retreat flips sign).
+    if (branch) {
+      members.push(branch)
+      if (bl > TRUNK_W / 2 + 0.2) {
+        members.push({
+          system: 'hvac',
+          role: 'duct-run',
+          shape: 'pipe',
+          dims: [0.1, BRANCH_SIDE * 1.18, BRANCH_SIDE * 1.18],
+          length: 0.1,
+          position: [collarAt[0], trunkY, collarAt[1]],
+          rotation: [0, Math.atan2(-dir[1], dir[0]), 0],
+          material: 'duct',
+          sourceId: room.id,
+          label: '6" takeoff collar off the trunk side (M1601)',
+        })
+      }
+    }
+    const bootTop = interiorStorey ? trunkY + 2 * DUCT_JUNCTION_BURY : trunkY - 2 * DUCT_JUNCTION_BURY
+    if (branch && elbowFits) {
+      // the run turns DOWN into the boot: an elbow in the vertical plane —
+      // local +x along the run, local +z straight down (rotation [π/2, 0, c])
+      members.push({
+        system: 'hvac',
+        role: 'duct-run',
+        shape: 'elbow',
+        turn: 1,
+        dims: [radius, BRANCH_SIDE, BRANCH_SIDE],
+        length: (Math.PI / 2) * radius,
+        position: [at[0], trunkY, at[1]],
+        rotation: [Math.PI / 2, 0, Math.atan2(dir[1], dir[0])],
+        material: 'duct',
+        sourceId: room.id,
+        label: '6" radius elbow — the run turns down to the register (M1601)',
+      })
+    }
     const boot = ductDrop(
       at,
       room.ceilingHeight - BOOT_BELOW_CEILING,
-      interiorStorey ? trunkY + 2 * DUCT_JUNCTION_BURY : trunkY - 2 * DUCT_JUNCTION_BURY,
+      branch && elbowFits && !interiorStorey ? trunkY - radius : bootTop,
       BRANCH_SIDE + 2 * DUCT_JUNCTION_BURY,
       BRANCH_SIDE + 2 * DUCT_JUNCTION_BURY,
       room.id,
       'Supply boot 6" — ceiling drop (M1601)',
+      'duct',
+      'duct-run',
+      true,
     )
     if (boot) {
-      // The transfer-path assumption must reach PAPER (examiner round 2:
-      // register labels never typeset) — the boot carries it as a member
-      // flag, which the takeoff aggregates into ONE Flags row ('N ea') and
-      // the schedules flag block prints (P4).
       if (transferAssumed) boot.flag = 'door undercut / jumper duct assumed — M1602.2'
       members.push(boot)
     }

@@ -16,6 +16,7 @@ import {
   Euler,
   Group,
   InstancedMesh,
+  Mesh,
   Matrix4,
   MeshStandardMaterial,
   type Object3D,
@@ -36,6 +37,7 @@ import {
   prepareCondenserClone,
 } from './condenser-asset'
 import { useBonesStore } from '../store'
+import { elbowGeometry, transitionGeometry } from './duct-geometry'
 import { HIGHLIGHT_COLOR, type HighlightSpec, matchesHighlight } from './highlight'
 import { finishColorOf, finishFixtureBox, isPhysicalMember, METER_DOME } from './physical'
 import { effectiveNodesFor, throttleTrailing } from './live'
@@ -232,8 +234,8 @@ type BucketTreatment = 'solid' | 'ghosted' | 'ghosted-field' | 'ghosted-through'
 
 type Bucket = {
   color: string
-  /** Instanced geometry — a cylinder bucket draws UNIT_CYLINDER (tanks). */
-  shape?: 'cylinder'
+  /** Instanced geometry — a cylinder bucket draws UNIT_CYLINDER (tanks), a pipe bucket UNIT_PIPE (round runs). */
+  shape?: 'cylinder' | 'pipe'
   /** Source wall id for face-carrying buckets — the per-wall cut key
    * (each wall classifies near/far against its OWN plane). */
   sourceId?: string
@@ -334,6 +336,8 @@ export function materialCensus(): number {
 const UNIT_BOX = new BoxGeometry(1, 1, 1)
 /** Unit cylinder on local Y (diameter 1, height 1) — tanks (`Member.shape`). */
 const UNIT_CYLINDER = new CylinderGeometry(0.5, 0.5, 1, 24)
+/** Unit pipe on local X (diameter 1, length 1) — round duct runs and collars. */
+const UNIT_PIPE = new CylinderGeometry(0.5, 0.5, 1, 20).rotateZ(-Math.PI / 2)
 
 /** Main group (the node's own level) + one group per FOREIGN source level
  * (cross-level roofs). Foreign groups hold level-LOCAL geometry and get
@@ -388,8 +392,11 @@ export function composeEntryMatrix(
 /** Write a bucket's instance matrices into its mesh set (solid + ghost copy
  * share indices) and flag the GPU upload. */
 /** The bucket-key suffix and the bucket shape of a member (tanks are cylinders). */
-const shapeKey = (member: Member): string => (member.shape === 'cylinder' ? '|cyl' : '')
-const shapeOf = (member: Member): 'cylinder' | undefined => (member.shape === 'cylinder' ? 'cylinder' : undefined)
+const shapeKey = (member: Member): string => (member.shape === 'cylinder' ? '|cyl' : member.shape === 'pipe' ? '|pipe' : '')
+const shapeOf = (member: Member): 'cylinder' | 'pipe' | undefined =>
+  member.shape === 'cylinder' ? 'cylinder' : member.shape === 'pipe' ? 'pipe' : undefined
+/** A duct fitting drawn as its own Mesh (duct-geometry.ts) — never an instanced box. */
+const isFitting = (member: Member): boolean => member.shape === 'elbow' || member.shape === 'transition'
 
 function writeMatrices(bucket: Bucket, meshes: InstancedMesh[]) {
   bucket.entries.forEach((entry, i) => {
@@ -397,6 +404,44 @@ function writeMatrices(bucket: Bucket, meshes: InstancedMesh[]) {
     for (const mesh of meshes) mesh.setMatrixAt(i, scratchMatrix)
   })
   for (const mesh of meshes) mesh.instanceMatrix.needsUpdate = true
+}
+
+/** The duct fittings the mode draws (never the finished house — a duct is not physical). */
+function fittingsOf(members: Member[], mode: ViewMode): Member[] {
+  if (mode === 'off') return []
+  return members.filter(isFitting)
+}
+const fittingIndex = new WeakMap<Group, { mesh: Mesh; key: string }[]>()
+const fittingKey = (m: Member): string =>
+  `${m.shape}|${m.dims.map((v) => v.toFixed(4)).join(',')}|${m.turn ?? 1}|${(m.endDims ?? []).map((v) => v.toFixed(4)).join(',')}`
+function fittingGeometry(m: Member) {
+  if (m.shape === 'elbow') {
+    const round = Math.abs(m.dims[1] - m.dims[2]) < 1e-6 && m.material === 'duct' && (m.label ?? '').includes('6"')
+    return elbowGeometry(m.dims[0], m.dims[1], m.dims[2], m.turn ?? 1, round)
+  }
+  const end = m.endDims ?? [m.dims[0], m.dims[2]]
+  return transitionGeometry(m.dims[0], m.dims[2], end[0], end[1], m.dims[1])
+}
+/**
+ * REAL FITTINGS: a radius elbow or a transition is one Mesh with its own
+ * swept geometry (duct-geometry.ts), placed by the member's position and
+ * rotation, never scaled — the instanced buckets cannot scale an arc. The
+ * material is the bucket material of the member's colour, so the fitting
+ * matches its runs; raycast off like every X-ray mesh.
+ */
+function attachFittings(group: Group, fittings: Member[], highlight?: HighlightSpec | null): void {
+  const entries = fittings.map((member) => {
+    const color = matchesHighlight(member, highlight) ? HIGHLIGHT_COLOR : colorOf(member)
+    const mesh = new Mesh(fittingGeometry(member), acquireBucketMaterial(color, 'solid'))
+    mesh.matrixAutoUpdate = false
+    composeEntryMatrix([1, 1, 1], member.position, member.rotation, mesh.matrix)
+    mesh.matrixWorldNeedsUpdate = true
+    mesh.raycast = () => {}
+    mesh.frustumCulled = false
+    group.add(mesh)
+    return { mesh, key: fittingKey(member) }
+  })
+  fittingIndex.set(group, entries)
 }
 
 /**
@@ -530,6 +575,7 @@ export function buildGroup(
   const { boxed, condensers } = splitAssetMembers(members, mode, condenserAsset)
   const group = groupFromBuckets(collectBuckets(boxed, fixtures, mode, highlight))
   if (condenserAsset) attachCondenserAssets(group, condensers, condenserAsset)
+  attachFittings(group, fittingsOf(boxed, mode), highlight)
   return group
 }
 
@@ -552,7 +598,7 @@ function collectBuckets(
     treatment: BucketTreatment,
     sourceId?: string,
     shear?: number,
-    shape?: 'cylinder',
+    shape?: 'cylinder' | 'pipe',
   ) => {
     let bucket = buckets.get(key)
     if (!bucket) {
@@ -563,6 +609,7 @@ function collectBuckets(
   }
 
   for (const member of members) {
+    if (isFitting(member)) continue
     // THE FINISHED HOUSE (viewMode 'off') shows the physical equipment Bones
     // derived — the tank in its enclosure, the condenser, the mast, pole
     // and drop — in finish paint; the framing, wiring and piping stay in
@@ -691,7 +738,7 @@ function groupFromBuckets(buckets: Map<string, Bucket>): Group {
     // below-floor content behind it. Materials come from the module cache
     // (F1) — same (color, variant) → the SAME object every rebuild.
     const faint = bucket.treatment === 'faint'
-    const unit = bucket.shape === 'cylinder' ? UNIT_CYLINDER : UNIT_BOX
+    const unit = bucket.shape === 'cylinder' ? UNIT_CYLINDER : bucket.shape === 'pipe' ? UNIT_PIPE : UNIT_BOX
     const solid = new InstancedMesh(
       unit,
       acquireBucketMaterial(bucket.color, faint ? 'faint' : 'solid'),
@@ -771,6 +818,21 @@ export function patchGroup(
   const { boxed, condensers } = splitAssetMembers(members, mode, condenserAsset)
   const wrappers = assetWrapperIndex.get(group) ?? []
   if (wrappers.length !== condensers.length) return false
+  // the fittings: the same count, in order, each still the same shape — a
+  // moved fitting keeps its geometry and takes the new matrix; a changed
+  // one (a new radius, a new section) rebuilds the group
+  const fittings = fittingsOf(boxed, mode)
+  const fittingEntries = fittingIndex.get(group) ?? []
+  if (fittingEntries.length !== fittings.length) return false
+  for (let i = 0; i < fittings.length; i++) {
+    const member = fittings[i] as Member
+    const entry = fittingEntries[i] as { mesh: Mesh; key: string }
+    if (entry.key !== fittingKey(member)) return false
+    const color = matchesHighlight(member, highlight) ? HIGHLIGHT_COLOR : colorOf(member)
+    if (entry.mesh.material !== acquireBucketMaterial(color, 'solid')) return false
+    composeEntryMatrix([1, 1, 1], member.position, member.rotation, entry.mesh.matrix)
+    entry.mesh.matrixWorldNeedsUpdate = true
+  }
   const buckets = collectBuckets(boxed, fixtures, mode, highlight)
   if (buckets.size !== index.size) return false
   for (const [key, bucket] of buckets) {
@@ -1000,6 +1062,7 @@ export function explodedRoofOffset(
 }
 
 export function disposeGroup(group: Group) {
+  for (const { mesh } of fittingIndex.get(group) ?? []) mesh.geometry.dispose()
   // mesh.dispose() releases the per-mesh GPU state (instance-matrix
   // buffers) via the renderer's dispose listener — that is ALL a teardown
   // may free. Materials are module-cache SHARED across live groups (F1)

@@ -99,7 +99,7 @@ describe('F1 — stable material identity across rebuilds', () => {
     disposeGroup(b.group)
   })
 
-  test('census pin — baseline compose: 38 unique materials in X-ray (was ~347 fresh mints), 51 basement, 14 off; rebuilds add ZERO', () => {
+  test('census pin — baseline compose: 38 unique materials in X-ray (was ~347 fresh mints), 52 basement, 14 off; rebuilds add ZERO', () => {
     const result = computeLevel(baselineScene(), baselineConfig('INTL'))
     expect(result.members.length).toBeGreaterThan(500) // the compose is real
     const counts: Record<string, number> = {}
@@ -110,7 +110,8 @@ describe('F1 — stable material identity across rebuilds', () => {
     // O(palette), never O(buckets × rebuilds). Recalibrate ONLY when the
     // palette or the compose content legitimately changes.
     expect(counts.xray).toBe(38)
-    expect(counts.basement).toBe(51)
+    // INTENDED-CHANGE 2026-09-09: the round-duct (pipe) bucket adds one basement material
+    expect(counts.basement).toBe(52)
     // INTENDED-CHANGE 2026-09-09: the finished house paints its physical equipment (framing/physical.ts) — 6 finish materials more
     expect(counts.off).toBe(14)
     // Identity, not equality: rebuilding every mode adds nothing to the cache.

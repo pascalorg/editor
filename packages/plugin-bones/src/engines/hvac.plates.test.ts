@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import mepRules from '../../data/mep-rules.json'
 import { DEFAULT_SPEC } from '../core/spec'
 import type { Fixture, Member, RoomSlice, WallSlice } from '../core/types'
-import { layoutHvac } from './hvac'
+import { layoutHvac, elbowEnds } from './hvac'
 
 /**
  * GATE (prod report 2026-08-16): ducts must NOT cross wall top plates.
@@ -181,8 +181,14 @@ function unreachableRegisters(members: Member[], fixtures: Fixture[]): string[] 
   const ducts = members.filter(
     (m) =>
       m.role === 'duct-run' &&
-      (m.label?.startsWith('Trunk') || m.label?.includes('branch') || m.label?.includes('boot')),
+      (m.label?.startsWith('Trunk') || m.label?.includes('branch') || m.label?.includes('boot') || m.shape === 'elbow'),
   )
+  // 2026-09-09 (real fittings): an elbow joins the network by its two ends
+  const endpointsOf = (m: Member) => (m.shape === 'elbow' ? elbowEnds(m) : ductEndpoints(m))
+  const dist3 = (a: readonly [number, number, number], b: readonly [number, number, number]) =>
+    Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2])
+  const nearDuct = (pt: readonly [number, number, number], m: Member): number =>
+    m.shape === 'elbow' ? Math.min(...elbowEnds(m).map((e) => dist3(pt, e))) : segDist(pt, m)
   const equipment = fixtures.find((f) => f.kind === 'equipment' && f.label?.includes('Air handler'))
   const registers = fixtures.filter((f) => f.kind === 'register')
   if (!equipment) return registers.map((r) => r.sourceId)
@@ -201,18 +207,18 @@ function unreachableRegisters(members: Member[], fixtures: Fixture[]): string[] 
   const tol = 0.2
   for (let i = 0; i < ducts.length; i++) {
     for (let j = i + 1; j < ducts.length; j++) {
-      const [a1, a2] = ductEndpoints(ducts[i] as Member)
+      const [a1, a2] = endpointsOf(ducts[i] as Member)
       const touch =
-        segDist(a1, ducts[j] as Member) < tol ||
-        segDist(a2, ducts[j] as Member) < tol ||
-        ductEndpoints(ducts[j] as Member).some((e) => segDist(e, ducts[i] as Member) < tol)
+        nearDuct(a1, ducts[j] as Member) < tol ||
+        nearDuct(a2, ducts[j] as Member) < tol ||
+        endpointsOf(ducts[j] as Member).some((e) => nearDuct(e, ducts[i] as Member) < tol)
       if (touch) union(i, j)
     }
   }
   const compsNear = (p: readonly [number, number, number], t: number): Set<number> => {
     const comps = new Set<number>()
     for (let i = 0; i < ducts.length; i++) {
-      if (segDist(p, ducts[i] as Member) < t) comps.add(find(i))
+      if (nearDuct(p, ducts[i] as Member) < t) comps.add(find(i))
     }
     return comps
   }
