@@ -82,6 +82,10 @@ describe('the panel highlight — the member set a row / point / selection names
     const pose = framePose(bounds, toWorld)
     const centreW = toWorld([2, 1, 1.5])
     expect(pose.target).toEqual(centreW)
+    // toward the house: the eye stands on the side of the members the house centre is on
+    const inward = framePose(bounds, (p) => [p[0], p[1], p[2]], [-10, 1.5])
+    expect(inward.position[0]).toBeLessThan(2)
+    expect(Math.abs(inward.position[2] - 1.5)).toBeLessThan(0.01)
     // the eye stands off the target and above it
     expect(
       Math.hypot(pose.position[0] - pose.target[0], pose.position[2] - pose.target[2]),

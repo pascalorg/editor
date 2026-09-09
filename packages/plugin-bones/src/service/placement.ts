@@ -364,7 +364,13 @@ export function servicePresentation(
   if (mode === 'off') {
     return { body: PHYSICAL_SERVICE_TYPES.has(node.serviceType), sign: false, pickProxy: false }
   }
-  if (mode === 'xray' && framing) {
+  // X-ray AND Framing: both views draw the engines' equipment (the Framing
+  // view keeps every non-surface member — framing/shell.ts isFrameMember),
+  // so the placeholder body would stand beside the real tank / meter / pole
+  // as a second, wrong-shaped one (Steve, 2026-09-09: "why is it a massive
+  // box and not the real wh types" — the box on his wall was this
+  // placeholder in the Framing view, the tank stood inside the garage).
+  if ((mode === 'xray' || mode === 'framing') && framing) {
     const toggle = ENGINE_RENDERED_SERVICE_TYPES[node.serviceType]
     // Absent toggle field = schema default true (legacy nodes never re-parse).
     if (toggle && framing[toggle] !== false) {

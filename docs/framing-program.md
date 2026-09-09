@@ -1248,7 +1248,16 @@ Show and its Reset, so the manual state is visible and undoable.
   every `bones:service` on the level with where it stands, Show, and
   Reset (deletes the point — the engine places the service itself again).
   Verified in the editor: the first Show painted the service entrance
-  orange (pole, drop, mast, meter) and the camera framed it. Bones 2179
+  orange (pole, drop, mast, meter) and the camera framed it. Follow-up
+  the same day: the "massive box" on Steve's wall was the water-heater
+  SERVICE POINT's placeholder body (`SERVICE_BODY` 0.6 × 1.5 × 0.6),
+  which the Framing view still drew beside the engine's tank —
+  `servicePresentation` now hides the engine-rendered bodies in Framing
+  as in X-ray (the toggle arm brings them back), and the point's own body
+  (the finished house) is a cylinder; `framePose` takes the house's
+  centre so the eye stands on the house's side of the members (inside
+  the garage for a tank on its wall, in the yard for the pole). Bones
+  2180 tests. Bones 2179
   tests (highlight: match / bounds / pose / world; renderer: the orange
   bucket; panel gates). Not done: the highlight is by system / size /
   source, not by the exact row (65 takeoff push sites — a per-row member

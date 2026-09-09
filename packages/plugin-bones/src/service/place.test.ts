@@ -414,6 +414,19 @@ describe('servicePresentation — signs respect the view mode', () => {
     expect(Object.keys(ENGINE_RENDERED_SERVICE_TYPES).sort()).toEqual([...ENGINE_KINDS].sort())
   })
 
+  // 2026-09-09: the Framing view draws the engines' equipment too, so the
+  // placeholder yields there as in X-ray (the "massive box" on the wall)
+  test('framing: engine-rendered kinds drop the body like X-ray; the toggle arm brings it back', () => {
+    const nodes = withFraming({ viewMode: 'framing' })
+    for (const t of ALL_TYPES) {
+      const expected = ENGINE_KINDS.includes(t as (typeof ENGINE_KINDS)[number])
+        ? { body: false, sign: true, pickProxy: t === 'heat-pump' }
+        : { body: true, sign: true, pickProxy: false }
+      expect(servicePresentation(nodes, svc(t))).toEqual(expected)
+    }
+    const off = withFraming({ viewMode: 'framing', showPlumbing: false })
+    expect(servicePresentation(off, svc('water-heater'))).toEqual({ body: true, sign: true, pickProxy: false })
+  })
   test('basement: box + sign for every type (unchanged — documented design)', () => {
     const nodes = withFraming({ viewMode: 'basement' })
     for (const t of ALL_TYPES) {

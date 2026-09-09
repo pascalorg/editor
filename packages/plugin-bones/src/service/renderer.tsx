@@ -174,7 +174,12 @@ export const ServiceRenderer = ({ node: rawNode }: { node: ServiceNode }) => {
     >
       {presentation.body && (
         <mesh castShadow position={[0, position[1], 0]} receiveShadow>
-          <boxGeometry args={[body.dims[0], body.dims[1], body.dims[2]]} />
+          {node.serviceType === 'water-heater' ? (
+            // a storage heater is round (its dims are the tank's diameter and height)
+            <cylinderGeometry args={[body.dims[0] / 2, body.dims[0] / 2, body.dims[1], 24]} />
+          ) : (
+            <boxGeometry args={[body.dims[0], body.dims[1], body.dims[2]]} />
+          )}
           <meshStandardMaterial color={body.color} roughness={0.7} />
         </mesh>
       )}

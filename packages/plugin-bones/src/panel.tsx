@@ -584,7 +584,17 @@ function showInScene(
   const bounds = membersBounds(members)
   if (!bounds || !levelId) return
   const toWorld = levelToWorld(useScene.getState().nodes as Record<string, Record<string, unknown>>, levelId)
-  const pose = framePose(bounds, toWorld)
+  // the eye stands toward the house's centre (the walls' box), so a tank on a
+  // garage wall is seen from inside the garage and the pole from the yard
+  let sx = 0
+  let sz = 0
+  let n = 0
+  for (const w of result.walls) {
+    sx += w.start[0] + w.end[0]
+    sz += w.start[1] + w.end[1]
+    n += 2
+  }
+  const pose = framePose(bounds, toWorld, n > 0 ? [sx / n, sz / n] : undefined)
   emitter.emit('camera-controls:apply-pose', { position: pose.position, target: pose.target, projection: 'perspective', fov: 60 } as never)
   emitter.emit('camera:go-to-position', { position: pose.position, target: pose.target })
 }

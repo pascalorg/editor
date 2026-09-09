@@ -81,6 +81,8 @@ export type Pose = { position: [number, number, number]; target: [number, number
 export function framePose(
   bounds: Bounds,
   toWorld: (p: readonly [number, number, number]) => [number, number, number],
+  /** A level-local plan point the eye stands toward — the house's centre, so a tank on a garage wall is seen from inside the garage and a pole from the yard. */
+  towards?: readonly [number, number],
 ): Pose {
   const centre: [number, number, number] = [
     (bounds.min[0] + bounds.max[0]) / 2,
@@ -94,11 +96,23 @@ export function framePose(
   )
   const dist = Math.max(2.5, size * 1.3 + 1.5)
   const target = toWorld(centre)
-  // the eye: out along the level's +x/+z diagonal, raised half the distance
+  // the eye: toward `towards` when it is clear of the box, else out along
+  // the level's +x/+z diagonal; raised half the distance
+  let dx = 0.7071
+  let dz = 0.7071
+  if (towards) {
+    const tx = towards[0] - centre[0]
+    const tz = towards[1] - centre[2]
+    const tl = Math.hypot(tx, tz)
+    if (tl > 0.5) {
+      dx = tx / tl
+      dz = tz / tl
+    }
+  }
   const eyeLocal: [number, number, number] = [
-    centre[0] + dist * 0.62,
+    centre[0] + dist * dx * 0.88,
     centre[1] + dist * 0.5,
-    centre[2] + dist * 0.62,
+    centre[2] + dist * dz * 0.88,
   ]
   return { position: toWorld(eyeLocal), target }
 }
