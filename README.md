@@ -1,6 +1,7 @@
 # Pascal Editor
 
-A 3D building editor built with React Three Fiber and WebGPU.
+An open-source, local-first 3D building editor built with React Three Fiber and
+WebGPU. Run it in the browser or from the CLI, and connect AI agents through MCP.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![npm @pascal-app/core](https://img.shields.io/npm/v/@pascal-app/core?label=%40pascal-app%2Fcore)](https://www.npmjs.com/package/@pascal-app/core)
@@ -89,6 +90,13 @@ OpenClaw installation becomes available after the skills are published under Pas
 The skills inspect the connected MCP tool schemas before using optional fields. A capability present in this repository may be absent from an older installed or hosted release; the agent should report the narrower supported result instead of assuming source-only inputs are available.
 
 These workflows require a connected Pascal MCP server for their tool-backed actions. An OpenAI directory submission must therefore use **With MCP** and submit the production hosted MCP endpoint together with the skills. The repository package does not prove that the endpoint, OAuth flow, reviewer credentials, domain verification, or portal scan is ready for review.
+
+### MCP Registry
+
+[`server.json`](server.json) is Pascal's manifest for the official MCP Registry. Its
+version tracks the hosted MCP implementation independently of the npm package version.
+Pull requests validate the manifest and production endpoint. A Pascal organization
+owner publishes an approved version from `main` with the official registry publisher.
 
 ## Using Published Packages
 

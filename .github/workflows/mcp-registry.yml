@@ -1,0 +1,62 @@
+name: MCP Registry
+
+on:
+  pull_request:
+    paths:
+      - server.json
+      - .github/workflows/mcp-registry.yml
+  push:
+    branches: [main]
+    paths:
+      - server.json
+      - .github/workflows/mcp-registry.yml
+
+env:
+  MCP_PUBLISHER_VERSION: 1.8.1
+  MCP_PUBLISHER_LINUX_AMD64_SHA256: a06c9096dcb9727c13555b6be26c7effa707b01f06a4c561ba7a3635443cf2cc
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+
+      - name: Install MCP Registry publisher
+        run: |
+          curl --fail --location \
+            "https://github.com/modelcontextprotocol/registry/releases/download/v${MCP_PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz" \
+            --output "$RUNNER_TEMP/mcp-publisher.tar.gz"
+          echo "${MCP_PUBLISHER_LINUX_AMD64_SHA256}  $RUNNER_TEMP/mcp-publisher.tar.gz" | sha256sum --check
+          tar -xzf "$RUNNER_TEMP/mcp-publisher.tar.gz" -C "$RUNNER_TEMP" mcp-publisher
+
+      - name: Validate MCP Registry manifest
+        run: "$RUNNER_TEMP/mcp-publisher validate"
+
+      - name: Verify hosted endpoint contract
+        run: |
+          jq --exit-status '
+            .version == "0.6.1"
+            and .remotes == [{
+              "type": "streamable-http",
+              "url": "https://editor.pascal.app/api/mcp",
+              "headers": [{
+                "name": "Authorization",
+                "description": "Bearer API key created in Pascal Settings, formatted as Bearer sk_live_...",
+                "isRequired": true,
+                "isSecret": true
+              }]
+            }]
+          ' server.json
+          curl --fail --location --output /dev/null \
+            https://editor.pascal.app/docs/developers/mcp
+          status=$(curl --silent --show-error --output "$RUNNER_TEMP/mcp-response.json" \
+            --write-out '%{http_code}' \
+            --request POST \
+            --header 'content-type: application/json' \
+            --data '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"registry-check","version":"1"}}}' \
+            https://editor.pascal.app/api/mcp)
+          test "$status" = "401"
