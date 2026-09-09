@@ -1295,8 +1295,9 @@ function EditorContent({
     }
   }, [projectId])
 
-  // Load scene on mount (or when onLoad identity changes, e.g. project switch)
+  // Load on mount, project switches, and explicit retry attempts.
   useEffect(() => {
+    void sceneLoadAttempt
     let cancelled = false
 
     async function load() {

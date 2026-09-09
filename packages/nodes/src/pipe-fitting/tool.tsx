@@ -1,12 +1,12 @@
 'use client'
 
 import {
+  type AnyNode,
   type AnyNodeId,
   emitter,
   type GridEvent,
   PipeFittingNode,
   PipeSegmentNode,
-  useScene,
 } from '@pascal-app/core'
 import {
   CursorSphere,
@@ -16,8 +16,8 @@ import {
   triggerSFX,
   useEditor,
   useInteractionScope,
+  useRegistryToolContext,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Euler, type Material, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from 'three'
@@ -65,6 +65,11 @@ type Placement = {
   valid: boolean
 }
 
+type PlacementContext = {
+  levelId: AnyNodeId | null
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>
+}
+
 /**
  * Resolve where the fitting would land for a cursor at `raw`:
  *   - Near an existing DWV port → mate: orientation aligns the inlet
@@ -82,19 +87,20 @@ export function resolvePlacement(
   surfaceHit: boolean,
   surfaceNormal?: [number, number, number],
   support = createFittingSurfaceSupport(),
+  context: PlacementContext = { levelId: null, nodes: {} },
 ): Placement {
-  const levelId = useViewer.getState().selection.levelId
+  const { levelId, nodes } = context
   const port = levelId
     ? findAccessoryPort(
         raw,
-        collectScenePorts({ systems: DWV_PORT_SYSTEMS, levelId }),
+        collectScenePorts({ systems: DWV_PORT_SYSTEMS, levelId }, nodes),
         isGridSnapActive() || isMagneticSnapActive(),
         surfaceHit,
       )
     : null
   if (port) {
     clearDrawAlignment()
-    const fittedNode = inheritFittingProfile(previewNode, port, useScene.getState().nodes)
+    const fittedNode = inheritFittingProfile(previewNode, port, nodes)
     const direction = new Vector3(...port.direction).normalize()
     // Local +X must map onto the port's outward direction so the inlet
     // (local -X) faces back into the run it's joining. Manual rotation
@@ -116,11 +122,14 @@ export function resolvePlacement(
   }
   const snappingEnabled = isGridSnapActive() || isMagneticSnapActive()
   if (levelId && snappingEnabled && isInlinePipeFitting(previewNode)) {
-    const hit = (surfaceHit ? findNearestRunBody3D : findNearestRunBodyXZ)(raw, 0.5, {
+    const filter = {
       kinds: ['pipe-segment'],
       levelId,
-    })
-    const run = hit ? useScene.getState().nodes[hit.nodeId] : null
+    } as const
+    const hit = surfaceHit
+      ? findNearestRunBody3D(raw, 0.5, filter, undefined, nodes)
+      : findNearestRunBodyXZ(raw, 0.5, filter, nodes)
+    const run = hit ? nodes[hit.nodeId] : null
     if (hit && run?.type === 'pipe-segment') {
       const insertion = planPipeInlineInsertion(run, hit, previewNode)
       const axis = new Vector3(...run.path[hit.segmentIndex + 1]!)
@@ -196,7 +205,7 @@ export function resolvePlacement(
  * node happens to be selected.
  */
 const PipeFittingTool = () => {
-  const activeLevelId = useViewer((s) => s.selection.levelId)
+  const { activeLevelId, sceneApi, selectNode } = useRegistryToolContext()
   const [placement, setPlacement] = useState<Placement | null>(null)
   const toolDefaults = useEditor((s) => s.toolDefaults['pipe-fitting'])
   const axis = useEditor((s) => s.rotationAxis)
@@ -281,6 +290,7 @@ const PipeFittingTool = () => {
         surfaceHitRef.current,
         surfaceNormalRef.current,
         support,
+        { levelId: activeLevelId, nodes: sceneApi.nodes() },
       )
       setPlacement((previous) => ({
         ...next,
@@ -315,6 +325,7 @@ const PipeFittingTool = () => {
         surfaceHitRef.current,
         surfaceNormalRef.current,
         support,
+        { levelId: activeLevelId, nodes: sceneApi.nodes() },
       )
       if (!resolved.valid) return
       const fitting = PipeFittingNode.parse({
@@ -330,7 +341,8 @@ const PipeFittingTool = () => {
           ...resolved.insertion.runTail,
           id: undefined,
         })
-        useScene.getState().applyNodeChanges({
+        if (!sceneApi.applyChanges) throw new Error('Registry SceneApi must support atomic changes')
+        sceneApi.applyChanges({
           update: [resolved.insertion.runUpdate],
           create: [
             { node: fitting, parentId },
@@ -338,9 +350,9 @@ const PipeFittingTool = () => {
           ],
         })
       } else {
-        useScene.getState().createNode(fitting, activeLevelId)
+        sceneApi.upsert(fitting, activeLevelId)
       }
-      useViewer.getState().setSelection({ selectedIds: [fitting.id] })
+      selectNode(fitting.id)
       triggerSFX('sfx:item-place')
     }
 
@@ -383,7 +395,7 @@ const PipeFittingTool = () => {
       emitter.off('grid:click', onClick)
       window.removeEventListener('keydown', onKeyDown, true)
     }
-  }, [activeLevelId, previewNode, support])
+  }, [activeLevelId, previewNode, sceneApi, selectNode, support])
 
   if (!activeLevelId || !placement) return null
 

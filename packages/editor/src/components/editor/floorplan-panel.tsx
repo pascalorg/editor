@@ -150,6 +150,7 @@ import {
   isBoxSelectPointerSuppressed,
   markBoxSelectHandled,
 } from '../tools/select/box-select-state'
+import { marqueePolygon } from '../tools/select/marquee-footprint'
 import {
   type Point2 as MarqueePoint2,
   polygonsIntersect as marqueePolygonsIntersect,
@@ -167,7 +168,6 @@ import {
   updateScreenRectangleSelectionElement,
 } from '../tools/select/screen-rectangle-selection'
 import { collectSelectableCandidateIds } from '../tools/select/select-candidates'
-import { marqueePolygon } from '../tools/select/marquee-footprint'
 import {
   formatAngleRadians,
   getAngleArcToSegmentReference,
@@ -8966,11 +8966,27 @@ export function FloorplanPanel({
       const groundY = groundHeightAt(worldX, worldZ, floorplanGridWorldY)
       const worldY = groundY ?? floorplanGridWorldY
       const localY = groundY === null ? floorplanGridLocalY : groundY - buildingPosition[1]
+      const planScene =
+        nativeEvent.currentTarget.querySelector<SVGGraphicsElement>('[data-floorplan-scene]')
+      const screenMatrix = planScene?.getScreenCTM()
 
       emitter.emit(`grid:${eventType}` as any, {
         nativeEvent: nativeEvent.nativeEvent as any,
         position: [worldX, worldY, worldZ],
         localPosition: [planPoint[0], localY, planPoint[1]],
+        screenProjection: screenMatrix
+          ? {
+              pointer: [nativeEvent.clientX, nativeEvent.clientY],
+              localToScreen: [
+                screenMatrix.a,
+                screenMatrix.b,
+                screenMatrix.c,
+                screenMatrix.d,
+                screenMatrix.e,
+                screenMatrix.f,
+              ],
+            }
+          : undefined,
       })
     },
     [buildingPosition, buildingRotationY, floorplanGridLocalY, floorplanGridWorldY],

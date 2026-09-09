@@ -1,8 +1,13 @@
 'use client'
 
-import { type AnyNode, type PipeFittingNode, PipeSegmentNode, useScene } from '@pascal-app/core'
-import { EDITOR_LAYER, triggerSFX, useEditor, usePathDraftPreview } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import { type AnyNode, type PipeFittingNode, PipeSegmentNode } from '@pascal-app/core'
+import {
+  EDITOR_LAYER,
+  triggerSFX,
+  useEditor,
+  usePathDraftPreview,
+  useRegistryToolContext,
+} from '@pascal-app/editor'
 import { useEffect, useRef, useState } from 'react'
 import { Vector3 } from 'three'
 import {
@@ -46,17 +51,18 @@ import { applyPipeGrade } from './slope'
 const PIPE_DIAMETERS_IN = [1.25, 1.5, 2, 3, 4, 6] as const
 const BODY_SNAP_RADIUS_M = 0.3
 
-function getConnectionPorts(): ScenePort[] {
-  const nodes = useScene.getState().nodes
+function getConnectionPorts(
+  levelId: AnyNode['id'] | null,
+  nodes: Readonly<Record<string, AnyNode>>,
+): ScenePort[] {
   return collectScenePorts({
     systems: DWV_PORT_SYSTEMS,
-    levelId: useViewer.getState().selection.levelId ?? undefined,
+    levelId: levelId ?? undefined,
   }).filter((port) => !isRunEndCapPort(port, nodes))
 }
 
 const PipeSegmentTool = () => {
-  const activeLevelId = useViewer((state) => state.selection.levelId)
-  const unit = useViewer((state) => state.unit)
+  const { activeLevelId, sceneApi, unit } = useRegistryToolContext()
   const continuationSeedRef = useRef(currentPipeContinuationSeed())
   const continuationSeed = continuationSeedRef.current
   const hangerDefaults = useEditor((state) => state.toolDefaults['pipe-segment'])
@@ -126,7 +132,7 @@ const PipeSegmentTool = () => {
     const promotedFitting = pendingPromotionRef.current
     const bendPlanFor = (port: ScenePort | null, awayDirection: RunPoint) => {
       if (!port) return null
-      const owner = useScene.getState().nodes[port.nodeId]
+      const owner = sceneApi.get(port.nodeId)
       if (owner?.type !== 'pipe-segment') return null
       const plan = planPipeElbowAtPort(
         port,
@@ -176,13 +182,13 @@ const PipeSegmentTool = () => {
         : null
     if (startBend?.hasClearance === false || endBend?.hasClearance === false) return invalidPlan()
     const startBody = startBend ? null : startConnection.body
-    const startOwner = startBody ? useScene.getState().nodes[startBody.nodeId] : null
+    const startOwner = startBody ? sceneApi.get(startBody.nodeId) : null
     const startTap =
       startBody && startOwner?.type === 'pipe-segment'
         ? planPipeBranchTap(startOwner, startBody, direction, diameterRef.current)
         : null
     const endBody = endBend ? null : endConnection.body
-    const endOwner = endBody ? useScene.getState().nodes[endBody.nodeId] : null
+    const endOwner = endBody ? sceneApi.get(endBody.nodeId) : null
     let endTap =
       endBody && endOwner?.type === 'pipe-segment'
         ? planPipeBranchTap(
@@ -202,7 +208,7 @@ const PipeSegmentTool = () => {
           kinds: ['pipe-segment'],
         })
       : null
-    const crossOwner = crossHit ? useScene.getState().nodes[crossHit.nodeId] : null
+    const crossOwner = crossHit ? sceneApi.get(crossHit.nodeId) : null
     const cross =
       crossHit &&
       crossHit.nodeId !== startBody?.nodeId &&
@@ -266,7 +272,7 @@ const PipeSegmentTool = () => {
       return { ...pipe, wallAttachment }
     }
     const attachedPipes = pipes.map(attachPipe)
-    const sceneNodes = useScene.getState().nodes
+    const sceneNodes = sceneApi.nodes()
     const consumedEndCapIds = Array.from(
       new Set([
         ...findMatedRunEndCapIds(startConnection.port, sceneNodes, 'pipe-fitting'),
@@ -339,7 +345,8 @@ const PipeSegmentTool = () => {
       delete: consumedEndCapIds,
     }
     if (!previewOnly) {
-      useScene.getState().applyNodeChanges(changes)
+      if (!sceneApi.applyChanges) throw new Error('Registry SceneApi must support atomic changes')
+      sceneApi.applyChanges(changes)
       pendingPromotionRef.current = null
     }
     const nextStart = nextPipe ? nextPipe.path[nextPipe.path.length - 1]! : end
@@ -370,7 +377,7 @@ const PipeSegmentTool = () => {
     initialConnection: continuationSeed
       ? { port: continuationSeed.port, body: continuationSeed.body }
       : null,
-    getPorts: getConnectionPorts,
+    getPorts: () => getConnectionPorts(activeLevelId, sceneApi.nodes()),
     findBody: (point) =>
       findNearestRunBody3D(point, BODY_SNAP_RADIUS_M, {
         kinds: ['pipe-segment'],
@@ -384,7 +391,7 @@ const PipeSegmentTool = () => {
     },
     inheritFromConnection: ({ port, body }) => {
       const ownerId = port?.nodeId ?? body?.nodeId
-      const owner = ownerId ? useScene.getState().nodes[ownerId] : null
+      const owner = ownerId ? sceneApi.get(ownerId) : null
       if (owner?.type !== 'pipe-segment') return
       setDiameter(owner.diameter)
       setPipeMaterial(owner.pipeMaterial)

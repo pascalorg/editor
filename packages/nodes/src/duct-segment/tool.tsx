@@ -1,8 +1,13 @@
 'use client'
 
 import { type AnyNode, type DuctFittingNode, DuctSegmentNode, useScene } from '@pascal-app/core'
-import { EDITOR_LAYER, triggerSFX, useEditor, usePathDraftPreview } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import {
+  EDITOR_LAYER,
+  triggerSFX,
+  useEditor,
+  usePathDraftPreview,
+  useRegistryToolContext,
+} from '@pascal-app/editor'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Euler, type Group, Vector3 } from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
@@ -161,11 +166,13 @@ function continuityRollForRun(
   return continuityRollFrom(startPort, dir) ?? continuityRollFrom(endPort, dir) ?? 0
 }
 
-function getConnectionPorts(): ScenePort[] {
-  const nodes = useScene.getState().nodes
+function getConnectionPorts(
+  levelId: AnyNode['id'] | null,
+  nodes: Readonly<Record<string, AnyNode>>,
+): ScenePort[] {
   return collectScenePorts({
     systems: DUCT_PORT_SYSTEMS,
-    levelId: useViewer.getState().selection.levelId ?? undefined,
+    levelId: levelId ?? undefined,
   }).filter((port) => !isRunEndCapPort(port, nodes))
 }
 
@@ -479,8 +486,7 @@ export function planDuctDraw(
 }
 
 const DuctSegmentTool = () => {
-  const activeLevelId = useViewer((state) => state.selection.levelId)
-  const unit = useViewer((state) => state.unit)
+  const { activeLevelId, sceneApi, unit } = useRegistryToolContext()
   const cursorRef = useRef<Group>(null)
   const continuationSeedRef = useRef(currentDuctContinuationSeed())
   const continuationSeed = continuationSeedRef.current
@@ -531,7 +537,7 @@ const DuctSegmentTool = () => {
     initialConnection: continuationSeed
       ? { port: continuationSeed.port, body: continuationSeed.body }
       : null,
-    getPorts: getConnectionPorts,
+    getPorts: () => getConnectionPorts(activeLevelId, sceneApi.nodes()),
     findBody: (point) =>
       findNearestRunBody3D(point, BODY_SNAP_RADIUS_M, { levelId: activeLevelId ?? undefined }),
     surfaceClearance: (surface) =>
@@ -583,7 +589,8 @@ const DuctSegmentTool = () => {
       }
       const ducts = plan.ducts.map(attachDuct)
       const tails = plan.tails
-      useScene.getState().applyNodeChanges({
+      if (!sceneApi.applyChanges) throw new Error('Registry SceneApi must support atomic changes')
+      sceneApi.applyChanges({
         create: [
           ...plan.fittings.map((node) => ({ node, parentId: activeLevelId })),
           ...tails.map((node) => ({ node, parentId: activeLevelId })),

@@ -70,6 +70,16 @@ export interface GridEvent {
     origin: [number, number, number]
     direction: [number, number, number]
   }
+  /**
+   * Optional screen-space projection supplied by non-3D hosts. The affine
+   * matrix maps level-local X/Z coordinates to viewport pixels, allowing
+   * registry tools to perform pixel-radius snapping without knowing which
+   * host view emitted the event.
+   */
+  screenProjection?: {
+    pointer: [number, number]
+    localToScreen: [number, number, number, number, number, number]
+  }
   faceIndex?: number
   /**
    * Optional: the hit Three.js object. Present when the grid event was

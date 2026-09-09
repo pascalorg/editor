@@ -632,23 +632,22 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
       const native = (event.nativeEvent ?? {}) as {
         clientX?: number
         clientY?: number
-        target?: EventTarget | null
       }
-      const pointer = [native.clientX ?? NaN, native.clientY ?? NaN] as const
-      const element = native.target instanceof Element ? native.target : null
-      const svg = element?.closest('svg')
-      const planScene = svg?.querySelector<SVGGraphicsElement>('[data-floorplan-scene]')
-      const planMatrix = planScene?.getScreenCTM()
+      const pointer = event.screenProjection?.pointer ?? [
+        native.clientX ?? NaN,
+        native.clientY ?? NaN,
+      ]
       const rect = gl.domElement.getBoundingClientRect()
       const level = adapter.levelId ? sceneRegistry.nodes.get(adapter.levelId) : null
       const origin = camera.getWorldPosition(new Vector3())
       const projectConnection = (
         candidate: readonly [number, number, number],
       ): PortScreenPoint | null => {
-        if (planMatrix) {
+        if (event.screenProjection) {
+          const [a, b, c, d, e, f] = event.screenProjection.localToScreen
           return {
-            x: planMatrix.a * candidate[0] + planMatrix.c * candidate[2] + planMatrix.e,
-            y: planMatrix.b * candidate[0] + planMatrix.d * candidate[2] + planMatrix.f,
+            x: a * candidate[0] + c * candidate[2] + e,
+            y: b * candidate[0] + d * candidate[2] + f,
             depth: 0,
           }
         }

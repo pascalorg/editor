@@ -19,6 +19,7 @@ import {
   isBoxSelectPointerSuppressed,
   markBoxSelectHandled,
 } from './box-select-state'
+import { marqueePolygon } from './marquee-footprint'
 import {
   convexHull2D,
   type Point2,
@@ -38,7 +39,6 @@ import {
   updateScreenRectangleSelectionElement,
 } from './screen-rectangle-selection'
 import { collectSelectableCandidateIds } from './select-candidates'
-import { marqueePolygon } from './marquee-footprint'
 
 const tempBox = new Box3()
 const tempChildBox = new Box3()
