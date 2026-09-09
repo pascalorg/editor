@@ -41,7 +41,9 @@ Level mode/selected-level changes re-offer sources rejected while shadow-only.
 
 `setScene` publishes a fresh, non-persisted `hydrationToken` alongside the hydrated
 scene and marks its eligible nodes dirty. Subsequent document writes invalidate
-that token, including paused, remote and undo/redo writes. Dirty marks alone do
+that token atomically before subscribers run, including paused, remote and undo/redo
+writes. A separate invalidation notification would replay reconciliation for the
+same edit and can expand a local wall edit into a whole-level rebuild. Dirty marks alone do
 not invalidate it, so opening completion can still re-dirty its parent wall.
 
 `WallSystem` enters initial build for that token, including when mounted after

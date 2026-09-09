@@ -2,7 +2,7 @@
 
 import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
-import { create, type StoreApi, type UseBoundStore } from 'zustand'
+import { create, type StateCreator, type StoreApi, type UseBoundStore } from 'zustand'
 import { parseMaterialRef, toSceneMaterialRef } from '../material-library'
 import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/registry'
 import { BuildingNode } from '../schema'
@@ -1387,7 +1387,34 @@ class GuardedDirtySet extends Set<AnyNodeId> {
   }
 }
 
-const useScene: UseSceneStore = create<SceneState>()(
+type TemporalSceneCreator = StateCreator<SceneState, [], [['temporal', UseSceneStore['temporal']]]>
+
+function createSceneStore(config: TemporalSceneCreator): UseSceneStore {
+  const hydratedConfig: TemporalSceneCreator = (set, get, store) => {
+    const setWithHydration: typeof set = (partial, replace) => {
+      const state = get()
+      let next = typeof partial === 'function' ? partial(state) : partial
+      if (
+        state.hydrationToken &&
+        (!('hydrationToken' in next) || next.hydrationToken === state.hydrationToken) &&
+        (['nodes', 'rootNodeIds', 'materials', 'collections', 'installedPlugins'] as const).some(
+          (key) => (replace || key in next) && next[key] !== state[key],
+        )
+      ) {
+        // A nested subscriber write delivers the edit twice to reconciliation;
+        // its second pass can invalidate every wall and surface on the level.
+        next = { ...next, hydrationToken: null }
+      }
+      if (replace) set(next as SceneState, true)
+      else set(next)
+    }
+    store.setState = setWithHydration
+    return config(setWithHydration, get, store)
+  }
+  return create<SceneState>()(hydratedConfig)
+}
+
+const useScene: UseSceneStore = createSceneStore(
   temporal(
     (set, get) => ({
       // 1. Flat dictionary of all nodes
@@ -1706,21 +1733,6 @@ const useScene: UseSceneStore = create<SceneState>()(
     },
   ),
 )
-
-// Keep the hydration signal outside history and invalidate even paused/host writes.
-useScene.subscribe((state, previous) => {
-  if (
-    state.hydrationToken &&
-    state.hydrationToken === previous.hydrationToken &&
-    (state.nodes !== previous.nodes ||
-      state.rootNodeIds !== previous.rootNodeIds ||
-      state.materials !== previous.materials ||
-      state.collections !== previous.collections ||
-      state.installedPlugins !== previous.installedPlugins)
-  ) {
-    useScene.setState({ hydrationToken: null })
-  }
-})
 
 export default useScene
 

@@ -95,6 +95,9 @@ test('initial wall drain lifecycle and scheduling against source packages', () =
 import { afterEach, beforeEach, expect, spyOn, test } from 'bun:test'
 import {
   type AnyNode,
+  initSpaceDetectionSync,
+  SlabNode,
+  CeilingNode,
   DoorNode,
   LevelNode,
   sceneRegistry,
@@ -119,12 +122,18 @@ let restoreRaf: () => void
 let unsubscribe: () => void
 let canvas: EventTarget
 const meshes: Mesh[] = []
+const rafs = new Map<number, FrameRequestCallback>()
+let nextRaf = 0
 
 beforeEach(() => {
   const request = globalThis.requestAnimationFrame
   const cancel = globalThis.cancelAnimationFrame
-  globalThis.requestAnimationFrame = () => 1
-  globalThis.cancelAnimationFrame = () => {}
+  rafs.clear()
+  globalThis.requestAnimationFrame = (callback) => {
+    rafs.set(++nextRaf, callback)
+    return nextRaf
+  }
+  globalThis.cancelAnimationFrame = (id) => { rafs.delete(id) }
   restoreRaf = () => {
     globalThis.requestAnimationFrame = request
     globalThis.cancelAnimationFrame = cancel
@@ -303,6 +312,98 @@ test('a late mount sees hydration, but cannot revive it after an edit', () => {
   expect(isWallInitialBuildActive()).toBe(false)
   runWallBuildFrame()
   expect(stats().wallsConsumedThisFrame).toBe(8)
+})
+
+test('first builds across frames use the complete junction solution', () => {
+  const level = LevelNode.parse({ height: 3 })
+  const walls = [
+    WallNode.parse({ parentId: level.id, start: [0, 0], end: [12, 0], height: 3 }),
+    WallNode.parse({ parentId: level.id, start: [12, 0], end: [12, 8], height: 3 }),
+    WallNode.parse({ parentId: level.id, start: [12, 0], end: [20, -6], height: 3 }),
+  ]
+  level.children = walls.map((wall) => wall.id)
+  useScene.getState().setScene(
+    Object.fromEntries([level, ...walls].map((node) => [node.id, node])), [level.id],
+  )
+  const built = walls.map(register)
+  rebuildCost = 8
+  for (let index = 0; index < walls.length; index++) runWallBuildFrame()
+  expect(stats().firstBuilds).toBe(3)
+  expect(stats().reinvalidationBuilds).toBe(0)
+  expect(isWallInitialBuildActive()).toBe(false)
+  const geometrySnapshot = () => built.map(({ geometry }) => ({
+    positions: Array.from(geometry.getAttribute('position').array),
+    normals: Array.from(geometry.getAttribute('normal').array),
+    uvs: Array.from(geometry.getAttribute('uv').array),
+    groups: geometry.groups,
+  }))
+  const initialGeometry = geometrySnapshot()
+  for (const wall of walls) useScene.getState().markDirty(wall.id)
+  runWallBuildFrame()
+  expect(stats().wallsConsumedThisFrame).toBe(3)
+  expect(geometrySnapshot()).toEqual(initialGeometry)
+  expect(getPendingWallRebuildCount()).toBe(0)
+})
+
+test.each(['action', 'host', 'paused'])('first %s document write invalidates hydration in one notification', (write) => {
+  const walls = hydrate(3)
+  runWallBuildFrame()
+  const notifications: Array<object | null> = []
+  const stop = useScene.subscribe((state) => notifications.push(state.hydrationToken))
+  try {
+    if (write === 'paused') useScene.temporal.getState().pause()
+    if (write === 'host') {
+      useScene.setState((state) => ({
+        nodes: { ...state.nodes, [walls[0]!.id]: { ...state.nodes[walls[0]!.id], height: 4 } as AnyNode },
+      }))
+    } else useScene.getState().updateNode(walls[0]!.id, { height: 4 })
+    expect(notifications).toEqual([null])
+  } finally {
+    stop()
+    useScene.temporal.getState().resume()
+  }
+})
+
+test.each([false, true])('a drained scene keeps its first endpoint edit local (token already invalid: %s)', (invalidated) => {
+  const level = LevelNode.parse({ height: 3 })
+  const walls = Array.from({ length: 12 }, (_, room) => {
+    const x = room * 20
+    const points = [[x, 0], [x + 12, 0], [x + 12, 8], [x, 8]]
+    return points.map((start, index) => WallNode.parse({
+      parentId: level.id, start, end: points[(index + 1) % 4], height: 3,
+    }))
+  }).flat()
+  const surfaces = Array.from({ length: 12 }, (_, room) => {
+    const polygon = walls.slice(room * 4, room * 4 + 4).map((wall) => wall.start)
+    return [SlabNode.parse({ parentId: level.id, polygon, autoFromWalls: true }), CeilingNode.parse({ parentId: level.id, polygon, autoFromWalls: true })]
+  }).flat()
+  level.children = [...walls, ...surfaces].map((node) => node.id)
+  useScene.getState().setScene(Object.fromEntries([level, ...walls, ...surfaces].map((node) => [node.id, node])), [level.id])
+  for (const wall of walls) register(wall)
+  const editorState = { spaces: {}, setSpaces(spaces: object) { this.spaces = spaces } }
+  const stopDetection = initSpaceDetectionSync(useScene, { getState: () => editorState })
+  try {
+    runWallBuildFrame()
+    expect(isWallInitialBuildActive()).toBe(false)
+    expect(getPendingWallRebuildCount()).toBe(0)
+    if (invalidated) useScene.setState({ hydrationToken: null })
+    useScene.getState().dirtyNodes.clear()
+    useScene.getState().updateNodes([
+      { id: walls[0]!.id, data: { end: [12, 1] } },
+      { id: walls[1]!.id, data: { start: [12, 1] } },
+    ])
+    for (const [id, callback] of rafs) { rafs.delete(id); callback(now) }
+    const dirtyWalls = [...useScene.getState().dirtyNodes].filter((id) => useScene.getState().nodes[id]?.type === 'wall')
+    expect(dirtyWalls.length).toBe(4)
+    const before = stats().reinvalidationBuilds
+    runWallBuildFrame()
+    now += 80
+    runWallBuildFrame()
+    expect(stats().reinvalidationBuilds - before).toBe(4)
+    expect(getPendingWallRebuildCount()).toBe(0)
+  } finally {
+    stopDetection()
+  }
 })
 
 test('a new hydration resets counters and pending neighbours; node stats preserve wall counters', () => {
