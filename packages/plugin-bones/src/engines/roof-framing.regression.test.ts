@@ -166,7 +166,6 @@ describe('verify: hip with width < depth (alongX=false branch)', () => {
     expect(commons.length).toBeGreaterThan(0)
     const rd = 5.5 * 0.0254
     const rt = 1.5 * 0.0254
-    const inset = (rd / 2) * Math.tan(theta)
     const seat = rd / (2 * Math.cos(theta)) // bottom-on-plate seating
     const faceX = rt / 2
     const faceY = ridgeY + seat - faceX * Math.tan(theta)
@@ -174,12 +173,15 @@ describe('verify: hip with width < depth (alongX=false branch)', () => {
       const [e1, e2] = endpoints(r)
       const top = e1.y > e2.y ? e1 : e2
       const bot = e1.y > e2.y ? e2 : e1
-      // high end inscribed against the ridge face
-      expect(top.y).toBeCloseTo(faceY - inset * Math.sin(theta), 6)
-      expect(Math.abs(top.x)).toBeCloseTo(faceX + inset * Math.cos(theta), 6)
-      // low end at the inscribed tail cut on ±X
-      expect(bot.y).toBeCloseTo(tipY + seat + inset * Math.sin(theta), 6)
-      expect(Math.abs(bot.x)).toBeCloseTo(tipX - inset * Math.cos(theta), 6)
+      // 2026-09-09: SHEARED plumb cuts (like the gable commons) — the
+      // centre-line ends sit on the ridge face and at the eave tip; the
+      // inscribed square-ended box used to stop (rd/2)·sinθ short of both
+      expect(r.shear).toBeCloseTo(Math.tan(theta), 6)
+      expect(top.y).toBeCloseTo(faceY, 6)
+      expect(Math.abs(top.x)).toBeCloseTo(faceX, 6)
+      // low end at the tail plumb cut on ±X — flat behind the sub-fascia
+      expect(bot.y).toBeCloseTo(tipY + seat, 6)
+      expect(Math.abs(bot.x)).toBeCloseTo(tipX, 6)
     }
   })
 })

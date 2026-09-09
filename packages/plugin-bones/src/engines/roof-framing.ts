@@ -383,8 +383,19 @@ function fasciaPair(
   cross: number,
   y: number,
   note = '',
+  /**
+   * Lap the corners: this board runs THROUGH both corners past the
+   * perpendicular boards' outer faces (sub + finish thickness each end),
+   * the perpendicular boards butting its back — the boards used to stop
+   * at the tip lines and leave a square hole at every corner (Steve,
+   * 2026-09-09: "needs to mitre"; a lapped return, the mitre itself is
+   * the finish carpenter's cut).
+   */
+  lapThrough = false,
 ) {
   const [fT, fD] = LUMBER_CROSS_SECTIONS[FASCIA_SIZE]
+  const [nT0] = LUMBER_CROSS_SECTIONS[FINISH_FASCIA_SIZE]
+  if (lapThrough) length += 2 * (fT + nT0)
   const yaw = alongXAxis ? 0 : -Math.PI / 2
   const at = (c: number): [number, number, number] => (alongXAxis ? [along, y, c] : [c, y, along])
   // `cross` is the tail plumb-cut plane — the sub-fascia face-nails to it,
@@ -2687,13 +2698,13 @@ function frameHip(
 
   // ---- common rafters on the two long planes, between the hips ----
   const commonCuts = rafterCutData(spec, theta, rd)
-  // Same ridge-face bearing + inscribed plumb cuts as the gable commons.
-  // (G52 note: the hip commons are still square-ended, inscribed boxes —
-  // the hip's seat / span / byte-equal gates read square corners; shearing
-  // them is the next step, with those gates recaptured together.)
+  // Same ridge-face bearing + PLUMB cuts as the gable commons: the box is
+  // sheared so its tail face stands flat behind the sub-fascia and its top
+  // flat on the ridge face (2026-09-09, Steve: "go down to the board
+  // correctly" — the inscribed square-ended boxes stopped (rd/2)·sinθ short
+  // of the fascia; the G52 gates are recaptured with this).
   const cRidgeFace = hipRidgeT / 2
-  const cPlumbInset = (rd / 2) * tan
-  const commonSlopeLen = run / cosT + roof.overhang - cRidgeFace / cosT - 2 * cPlumbInset
+  const commonSlopeLen = run / cosT + roof.overhang - cRidgeFace / cosT
   const commonFaceY = ridgeY - cRidgeFace * tan
   // ---- span discipline (R802.4.1): the mid-run purlin fix, or the honest flag ----
   // Hip commons / kings / long jacks project `run` horizontally. W16b: the
@@ -2793,6 +2804,7 @@ function frameHip(
         `Rafter ${spec.rafterSize} (hip common)${commonCuts}${purlinNoteFor(run, longPurlinAt, commonSlopeLen)}`,
         undefined,
         commonFlag,
+        true,
       )
       if (spec.hurricaneTies) {
         tieAt(emit, spec, alongX ? u : side * run, alongX ? side * run : u, plateY)
@@ -2831,14 +2843,13 @@ function frameHip(
       // hip bearing (cross extent = run − jackRun + setback).
       const bearingRun = jackRun - jackSetback
       if (bearingRun / cosT + roof.overhang < 0.2) return
-      // Tail plumb cut: inscribe the square-ended box like the gable commons.
-      const tailPlan = (rd / 2) * Math.sin(theta)
-      const tipCross = run + roof.overhang * cosT - tailPlan
+      // Tail plumb cut: the box is sheared, its tail face flat behind the sub-fascia.
+      const tipCross = run + roof.overhang * cosT
       const topCross = run - bearingRun
       const midCross = ((tipCross + topCross) / 2) * Math.sign(cross)
-      const tipY = eaveY - roof.overhang * Math.sin(theta) + tailPlan * tan
+      const tipY = eaveY - roof.overhang * Math.sin(theta)
       const topY = eaveY + bearingRun * tan
-      const len = bearingRun / cosT + roof.overhang - (rd / 2) * tan
+      const len = bearingRun / cosT + roof.overhang
       emit(
         role,
         spec.rafterSize,
@@ -2854,6 +2865,7 @@ function frameHip(
         // checked on its OWN bearing run (short corner jacks stay quiet);
         // with the purlin fix a jack crossing the purlin line is halved
         slopeFlagFixed(bearingRun, len, purlinAt, 'Jack rafter'),
+        true,
       )
     }
     for (const se of [1, -1] as const) {
@@ -2891,8 +2903,8 @@ function frameHip(
         // buried its top corner in both hips (round-14).
         const kingSetback = (Math.SQRT2 * t) / 2 + (rd / 2) * Math.sin(theta)
         const midLong = se * (ridgeHalf + kingSetback + (tipCross - kingSetback) / 2)
-        // Inscribed: both ends are plumb cuts (hip junction + tail).
-        const len = (run - kingSetback) / cosT + roof.overhang - 2 * cPlumbInset
+        // Sheared: both ends are plumb cuts (hip junction + tail), the tail flat behind the sub-fascia.
+        const len = (run - kingSetback) / cosT + roof.overhang
         // Center height at the box's own top cut (ridgeY − setback·tanθ),
         // NOT the apex — averaging tipY with the full apex floated the box
         // ~t·sinθ·√2/2 proud of the slope plane along its normal while the
@@ -2911,6 +2923,7 @@ function frameHip(
           `King common ${spec.rafterSize} (hip end)${cuts}${purlinNoteFor(run, endPurlinOf(se)?.runFromEave ?? null, len)}`,
           undefined,
           slopeFlagFixed(run, len, endPurlinOf(se)?.runFromEave ?? null),
+          true,
         )
         if (spec.hurricaneTies) {
           tieAt(
@@ -2931,13 +2944,12 @@ function frameHip(
           const psi = alongX ? (se === 1 ? Math.PI : 0) : (se * Math.PI) / 2
           const bearingRun = jackRun - jackSetback
           if (bearingRun / cosT + roof.overhang < 0.2) continue
-          const tailPlan = (rd / 2) * Math.sin(theta)
-          const tipCross = ridgeHalf + run + roof.overhang * cosT - tailPlan
+          const tipCross = ridgeHalf + run + roof.overhang * cosT
           const topCross = ridgeHalf + v + jackSetback
           const midLong = (se * (tipCross + topCross)) / 2
-          const tipY = eaveY - roof.overhang * Math.sin(theta) + tailPlan * tan
+          const tipY = eaveY - roof.overhang * Math.sin(theta)
           const topY = eaveY + bearingRun * tan
-          const len = bearingRun / cosT + roof.overhang - (rd / 2) * tan
+          const len = bearingRun / cosT + roof.overhang
           emit(
             'jack-rafter',
             spec.rafterSize,
@@ -2950,6 +2962,7 @@ function frameHip(
             `${jackLabel(jackRun)}${purlinNoteFor(bearingRun, endPurlinOf(se)?.runFromEave ?? null, len)}`,
             undefined,
             slopeFlagFixed(bearingRun, len, endPurlinOf(se)?.runFromEave ?? null, 'Jack rafter'),
+            true,
           )
           if (spec.hurricaneTies) {
             tieAt(
@@ -3156,6 +3169,7 @@ function frameHip(
         side * halfD,
         fasciaY,
         splicedNote(spec, 2 * halfW, 'rafter tails (scarf joints)'),
+        true,
       )
       fasciaPair(
         emit,
@@ -4214,6 +4228,7 @@ function frameMansard(
         side * halfD,
         fasciaY,
         splicedNote(spec, 2 * halfW, 'rafter tails (scarf joints)'),
+        true,
       )
       fasciaPair(
         emit,
@@ -4306,6 +4321,7 @@ function frameDutch(
         side * halfD,
         fasciaY,
         splicedNote(spec, 2 * halfW, 'rafter tails (scarf joints)'),
+        true,
       )
       fasciaPair(
         emit,

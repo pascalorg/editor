@@ -1114,6 +1114,41 @@ batches).
 
 ## Log (continued)
 
+- 2026-09-09: **Batch T20 — hip tails to the board; lapped fascia corners;
+  the sleepers checked (G104, part 3).** Steve: "your framing on the
+  porches looks off too, needs to mitre and go down to the board
+  correctly" and "your sleeper framing on the over roof framing on gable
+  entrances needs to land the rafters right on the sleeper". Probed on
+  the Cape Coral block house (scratchpad `porch-tail-probe.ts`,
+  `sleeper-gap-probe.ts`): (1) every HIP common, jack and king was still
+  an inscribed square-ended box (the G52 note deferred it) — its tail
+  centre-line stopped (rd/2)·sinθ = 31 mm short of the sub-fascia while
+  the gable's sheared rafters reach it. Now the hip commons, both jack
+  families and the kings are sheared like the gable's (plumb tail flat
+  behind the sub-fascia, plumb top on the ridge / hip face); the
+  regression, jack and king pins re-pinned (the G52 gates recaptured as
+  the note promised). After: every tail on the Cape Coral house is
+  0.019 m off the sub-fascia's axis — flat on its inner face. (2) The
+  fascia pairs around a hip / mansard / dutch stopped at the tip lines
+  and left a square notch at every corner: `fasciaPair(..., lapThrough)`
+  runs the along-X boards through both corners by the sub + finish
+  thickness so the perpendicular boards butt their backs (a lapped
+  return; the mitre itself is the finish carpenter's cut). The generated
+  trim (ornament.ts `fasciaTopology`) does the same: eave boards through
+  to the side / rake boards' outer faces, side boards butting them. (3)
+  The sleepers: the porch gable's valley jacks DO land on their sleepers
+  — the sheared corner sits 2–3 mm over the sleeper's top face on all 14
+  jacks of the two overframes (my first probe measured the corner under
+  the centre-line end, not the sheared corner, and a shift I tried on
+  that reading drove the corner 16 mm into the sleeper: the SAT gates
+  caught it and it is reverted). What reads as "not landing" in the
+  Framing view is the deck the sleeper lies on, which that view hides —
+  the sleeper floats 15 mm over the rafters there. Bones 2173 tests
+  (three pins moved), generate 107, tsc clean; the valley hash pin and
+  the interpenetration gates hold. Open: a true mitre needs a plan-shear
+  on the member box; the porch's dropped gable-end rafters stop 6 cm
+  short of the sub-fascia by the outlooker detail (intended).
+
 - 2026-09-09: **Batch T19 — the roof on the tie beam; the block details
   on the plans (G104, part 2).** Roof: `tieAt` in roof-framing.ts reads
   the walls under the roof (`TIE_WALLS`, set by `frameRoofs`) and on a

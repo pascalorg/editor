@@ -225,25 +225,29 @@ export function fasciaTopology(seg: SegLike, options: { skipHighEdge?: boolean }
   const out = bt / 2 + 0.002
   const zE = dV / 2 + out
   const xE = wV / 2 + out
+  // the eave boards run THROUGH the corners to the rake / side boards' outer
+  // faces (a lapped return — the corners used to leave a square notch)
+  const xL = xE + bt / 2
   if (seg.roofType === 'gable') {
     const ridgeY = eaveY + (dV / 2) * tan
-    board(t, 'e0', [-xE, eaveY, zE], [xE, eaveY, zE], bh, [0, 1], bt)
-    board(t, 'e1', [-xE, eaveY, -zE], [xE, eaveY, -zE], bh, [0, 1], bt)
+    board(t, 'e0', [-xL, eaveY, zE], [xL, eaveY, zE], bh, [0, 1], bt)
+    board(t, 'e1', [-xL, eaveY, -zE], [xL, eaveY, -zE], bh, [0, 1], bt)
     for (const sx of [-1, 1]) {
       board(t, `r${sx}a`, [sx * xE, eaveY, zE], [sx * xE, ridgeY, 0], bh, [1, 0], bt)
       board(t, `r${sx}b`, [sx * xE, ridgeY, 0], [sx * xE, eaveY, -zE], bh, [1, 0], bt)
     }
   } else if (seg.roofType === 'hip' || seg.roofType === 'flat') {
     const y = seg.roofType === 'flat' ? seg.wallHeight + seg.deckThickness : eaveY
-    board(t, 'e0', [-xE, y, zE], [xE, y, zE], bh, [0, 1], bt)
-    board(t, 'e1', [-xE, y, -zE], [xE, y, -zE], bh, [0, 1], bt)
-    board(t, 'e2', [xE, y, -zE], [xE, y, zE], bh, [1, 0], bt)
-    board(t, 'e3', [-xE, y, -zE], [-xE, y, zE], bh, [1, 0], bt)
+    board(t, 'e0', [-xL, y, zE], [xL, y, zE], bh, [0, 1], bt)
+    board(t, 'e1', [-xL, y, -zE], [xL, y, -zE], bh, [0, 1], bt)
+    // the side boards butt the eave boards' backs
+    board(t, 'e2', [xE, y, -zE + bt / 2], [xE, y, zE - bt / 2], bh, [1, 0], bt)
+    board(t, 'e3', [-xE, y, -zE + bt / 2], [-xE, y, zE - bt / 2], bh, [1, 0], bt)
   } else if (seg.roofType === 'shed') {
     // the low eave at +z, the slope rising to −z
     const highY = eaveY + dV * tan
-    board(t, 'e0', [-xE, eaveY, zE], [xE, eaveY, zE], bh, [0, 1], bt)
-    if (!options.skipHighEdge) board(t, 'e1', [-xE, highY, -zE], [xE, highY, -zE], bh, [0, 1], bt)
+    board(t, 'e0', [-xL, eaveY, zE], [xL, eaveY, zE], bh, [0, 1], bt)
+    if (!options.skipHighEdge) board(t, 'e1', [-xL, highY, -zE], [xL, highY, -zE], bh, [0, 1], bt)
     for (const sx of [-1, 1]) board(t, `r${sx}`, [sx * xE, eaveY, zE], [sx * xE, highY, -zE], bh, [1, 0], bt)
   } else return null
   return t.faces.length > 0 ? t : null

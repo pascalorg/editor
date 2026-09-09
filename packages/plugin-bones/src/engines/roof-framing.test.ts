@@ -424,18 +424,17 @@ describe('frameRoofs — hip jack rafters (LOD 350)', () => {
     expect(endPlane.length).toBeGreaterThan(0)
   })
 
-  test('numeric: first side-plane jack bears on the hip face, tail inscribed', () => {
+  test('numeric: first side-plane jack bears on the hip face, tail plumb-cut flat behind the sub-fascia', () => {
     // Station d = spacing past the +X ridge end, +Z slope. The cheek bears
-    // on the hip SIDE FACE: run shortens by √2·t/2 + t/2 + (rd/2)·sinθ, and
-    // the tail plumb cut inscribes the box by (rd/2)·sinθ in plan
-    // (round-10 gate).
+    // on the hip SIDE FACE: run shortens by √2·t/2 + t/2 + (rd/2)·sinθ; the
+    // tail is a SHEARED plumb cut at the eave tip (2026-09-09 — the
+    // inscribed box used to stop (rd/2)·sinθ short of the fascia).
     const d = spacing
     const t = 1.5 * 0.0254
     const rd = 5.5 * 0.0254
     const setback = (Math.SQRT2 * t) / 2 + t / 2 + (rd / 2) * Math.sin(theta)
     const bearingRun = 3 - d - setback
-    const tailPlan = (rd / 2) * Math.sin(theta)
-    const expectedLen = bearingRun / Math.cos(theta) + roof.overhang - (rd / 2) * Math.tan(theta)
+    const expectedLen = bearingRun / Math.cos(theta) + roof.overhang
     const j = jacks.find(
       (m) =>
         Math.abs((m.position[0] as number) - (1 + d)) < 1e-4 &&
@@ -453,15 +452,10 @@ describe('frameRoofs — hip jack rafters (LOD 350)', () => {
       baseY + rd / (2 * Math.cos(theta)) + bearingRun * Math.tan(theta),
       5,
     )
-    // lower end at the inscribed tail cut
-    expect(lower.z).toBeCloseTo(3 + roof.overhang * Math.cos(theta) - tailPlan, 5)
-    expect(lower.y).toBeCloseTo(
-      baseY +
-        rd / (2 * Math.cos(theta)) -
-        roof.overhang * Math.sin(theta) +
-        tailPlan * Math.tan(theta),
-      5,
-    )
+    // lower end at the eave tip — the sheared plumb tail, flat behind the sub-fascia
+    expect(lower.z).toBeCloseTo(3 + roof.overhang * Math.cos(theta), 5)
+    expect(lower.y).toBeCloseTo(baseY + rd / (2 * Math.cos(theta)) - roof.overhang * Math.sin(theta), 5)
+    expect(j.shear).toBeCloseTo(Math.tan(theta), 6)
   })
 
   test('jacks shorten as they approach the corner', () => {
@@ -479,16 +473,17 @@ describe('frameRoofs — hip jack rafters (LOD 350)', () => {
     }
   })
 
-  test('king common rafter spans ridge end to tail, inscribed plumb cuts', () => {
+  test('king common rafter spans ridge end to tail, sheared plumb cuts to the fascia', () => {
     const kings = byRole(members, 'rafter').filter((r) => r.label?.includes('King common'))
     expect(kings).toHaveLength(2)
     const rd = 5.5 * 0.0254
     const t = 1.5 * 0.0254
-    const inset = (rd / 2) * Math.tan(theta)
-    // top pulled back from the hip junction like a jack cheek (round-14)
+    // top pulled back from the hip junction like a jack cheek (round-14);
+    // the tail reaches the eave tip since 2026-09-09 (sheared, not inscribed)
     const setback = (Math.SQRT2 * t) / 2 + (rd / 2) * Math.sin(theta)
     for (const k of kings) {
-      expect(k.length).toBeCloseTo((3 - setback) / Math.cos(theta) + roof.overhang - 2 * inset, 5)
+      expect(k.length).toBeCloseTo((3 - setback) / Math.cos(theta) + roof.overhang, 5)
+      expect(k.shear).toBeCloseTo(Math.tan(theta), 6)
       expect(Math.abs(k.position[2] as number)).toBeLessThan(1e-6) // centerline
     }
   })
