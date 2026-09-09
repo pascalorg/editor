@@ -5,7 +5,7 @@
  * this and instances the result.
  */
 
-import { type ConventionSite, decodeTerrainField, exteriorWallConvention, heightAt, type TerrainField } from '@pascal-app/core'
+import { type ConventionSite, decodeTerrainField, exteriorWallConvention, heightAt, isSiteDatum, type TerrainField } from '@pascal-app/core'
 import { DEFAULT_SPEC, type FramingSpec } from '../core/spec'
 import { stableFixtures, stableMembers } from '../core/stable'
 import type {
@@ -42,6 +42,7 @@ import {
   snapCmuHeight,
 } from '../engines/cmu'
 import { frameAtticSeparations, frameBearingWallsToRoof } from '../engines/attic-walls'
+import { type BlockWall, furOutOfBlock } from '../engines/block-furring'
 import { clampUnderRoof } from '../engines/under-roof'
 import { frameDeck } from '../engines/deck-framing'
 import { framePorches } from '../engines/porch-framing'
@@ -726,6 +727,16 @@ function computeLevelUncached(
     : null
   const hilly = ground !== null
   const gradeAt: (x: number, z: number) => number = ground ?? (() => gradeY)
+  // A ground-hosted post is lifted by the viewer ONLY when its storey sits at
+  // the site datum (core terrain-support isSiteDatum); a generated house
+  // stands above the datum and its posts carry their own grade in their y
+  // — adding the ground again put the porch beam a grade-depth under the
+  // plate (Steve, 2026-09-09: "your porch headers drop down because the
+  // terrain now").
+  const levelWorldY =
+    (Number((nodes[myBuilding ?? ''] as { position?: number[] } | undefined)?.position?.[1]) || 0) +
+    (Number((nodes[levelId] as { position?: number[] } | undefined)?.position?.[1]) || 0)
+  const postGround = ground && isSiteDatum(levelWorldY) ? ground : null
 
   // Slabs feed the exterior fallback: hosts often mark BOTH wall faces
   // 'interior' (quality round-1 A1) — flooring says which side is in.
@@ -1213,7 +1224,7 @@ function computeLevelUncached(
     }
     if (deckSlabs.length > 0) {
       // the porch cover's posts, so a covered deck's beam bears on them
-      const coverPosts = extractPorchPosts(nodes, levelId, ground)
+      const coverPosts = extractPorchPosts(nodes, levelId, postGround)
       const below = levels[levelIndex - 1]
       const deckGrade = isGroundLevel
         ? gradeY
@@ -1240,7 +1251,7 @@ function computeLevelUncached(
   }
 
   // ── the porch bearing: 6x8 beam + plate on the 6x6 posts (PlanCrafters porchWall) ──
-  const porchPosts = extractPorchPosts(nodes, levelId, ground)
+  const porchPosts = extractPorchPosts(nodes, levelId, postGround)
   if (porchPosts.length > 0 && config.showRoof) {
     const porchRoofs = extractRoofs(nodes, levelId)
     const porch = framePorches(porchPosts, activeWalls, porchRoofs, spec)
@@ -1944,6 +1955,34 @@ function computeLevelUncached(
       const baseY = baseYById.get(f.sourceId)
       if (baseY === undefined) continue
       fixtures[i] = { ...f, position: [f.position[0], f.position[1] + baseY, f.position[2]] }
+    }
+  }
+
+  // MEP OUT OF THE BLOCK (Steve, 2026-09-09: "electrical cant go into cmu
+  // block walls either"): the runs the engines laid through a block wall's
+  // core move to the furring space on its inside face; crossings are
+  // sleeved; what does not fit is flagged.
+  if (config.showElectrical || config.showPlumbing || config.showHvac) {
+    const blocks: BlockWall[] = []
+    for (const wall of activeWalls) {
+      if (wall.curved) continue
+      const resolved = resolveWallConstruction(wall, config, profile.exteriorWallDefault)
+      if (resolved.construction !== 'cmu') continue
+      blocks.push({
+        wall,
+        ...(resolved.cmuHeightM !== undefined ? { cmuTopY: (wall.baseY ?? 0) + resolved.cmuHeightM } : {}),
+      })
+    }
+    if (blocks.length > 0) {
+      const furred = furOutOfBlock(members, blocks, activeRooms, probeSlabs)
+      members.length = 0
+      members.push(...furred.members)
+      warnings.push(...furred.warnings)
+      if (raisedFloor) {
+        warnings.push(
+          'Block walls over a raised wood floor — the platform is framed on a mudsill on the stem the way a framed house is; a block house is normally a slab on grade (the block bears on a monolithic slab / stem), or its joists hang on a ledger bolted to the block — verify',
+        )
+      }
     }
   }
 

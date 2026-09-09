@@ -23,6 +23,10 @@ describe('Poppy builds into Pascal nodes', () => {
       expect(w.assembly?.preset).toBe('exterior-cmu-stucco')
       expect(w.assembly?.exterior?.finish).toBe('stucco')
     }
+    // a block house stands on a slab on grade; the record says why
+    const building = ops.find((op) => op.node.type === 'building')?.node as { metadata?: { foundation?: { type?: string; source?: string } } } | undefined
+    expect(building?.metadata?.foundation?.type).toBe('slab')
+    expect(building?.metadata?.foundation?.source).toMatch(/concrete-block/)
     // the framed document keeps its siding stack
     const framed = ofType(buildHouse(POPPY).ops, 'wall') as { assembly?: { framing?: { kind?: string } } }[]
     expect(framed.some((w) => w.assembly?.framing?.kind === 'cmu')).toBe(false)

@@ -194,6 +194,44 @@ function facePoint(wall: WallSlice, side: 1 | -1, u: number): Pt {
   ]
 }
 
+/**
+ * The side of `wall` at station `u` that faces the inside of one of
+ * `rooms`: the face inside a room; else the face nearer the nearest room's
+ * centre; +1 when there are no rooms at all.
+ */
+export function insideSideOf(wall: WallSlice, u: number, rooms: RoomSlice[]): 1 | -1 {
+  const inPlus = rooms.some((r) => pointInPolygon(facePoint(wall, 1, u), r.polygon))
+  const inMinus = rooms.some((r) => pointInPolygon(facePoint(wall, -1, u), r.polygon))
+  if (inPlus !== inMinus) return inPlus ? 1 : -1
+  if (rooms.length === 0) return 1
+  const at: Pt = [wall.start[0] + wall.dir[0] * u, wall.start[1] + wall.dir[1] * u]
+  let best: RoomSlice | null = null
+  let bestD = Number.POSITIVE_INFINITY
+  for (const r of rooms) {
+    const c = roomCentre(r)
+    const d = Math.hypot(c[0] - at[0], c[1] - at[1])
+    if (d < bestD) {
+      bestD = d
+      best = r
+    }
+  }
+  if (!best) return 1
+  const c = roomCentre(best)
+  const dot = (c[0] - at[0]) * -wall.dir[1] + (c[1] - at[1]) * wall.dir[0]
+  return dot >= 0 ? 1 : -1
+}
+
+function roomCentre(r: RoomSlice): Pt {
+  let x = 0
+  let z = 0
+  for (const p of r.polygon) {
+    x += p[0]
+    z += p[1]
+  }
+  const n = Math.max(1, r.polygon.length)
+  return [x / n, z / n]
+}
+
 /** The garage bounding a wall — boundary list or face-midpoint containment. */
 function garageBoundingWall(wall: WallSlice, rooms: RoomSlice[]): RoomSlice | undefined {
   const garages = rooms.filter((r) => r.category === 'garage')
@@ -1848,13 +1886,13 @@ function placedPlumbing(
   const tank = whSpot.tank
   const whAnchor: WallPoint = { wall: whWall, u: whU }
   const whWallPlan = wallPlan(whAnchor) as Pt
-  let side: 1 | -1 = 1
+  // Which face is INSIDE: test both (a block wall's thicker section, a
+  // garage polygon drawn to the face, put the old one-sided test on the
+  // line and the tank outside the house — Steve, 2026-09-09: "why does the
+  // water heater and other generation go through the wall"); when neither
+  // face resolves a room, the side facing the nearest room's centre.
   const whGarage = tank ? garageBoundingWall(whWall, rooms) : undefined
-  if (whGarage) {
-    if (pointInPolygon(facePoint(whWall, -1, whU), whGarage.polygon)) side = -1
-  } else if (rooms.some((r) => pointInPolygon(facePoint(whWall, -1, whU), r.polygon))) {
-    side = -1
-  }
+  const side = insideSideOf(whWall, whU, whGarage ? [whGarage] : rooms.filter((r) => r.category !== 'outdoor'))
   // Tank anchor measures from the FINISHED FACE, not the centerline — the
   // old 0.35-from-centerline put the pan edge AT the centerline (6 cm into
   // the studs) and the stand through the plate band (examiner, closing

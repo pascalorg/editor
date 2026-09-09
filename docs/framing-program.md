@@ -1056,7 +1056,72 @@ ground storey — and every default says it is a convention, not a code
 mandate, and where it came from.
 G98 A block house is stucco, not siding.
 
+## Mandate additions (Steve, 2026-09-09 — the block house all the way through)
+
+Steve, with a screenshot of a water heater standing outside a garage
+wall: "why does the water heater and other generation go through the
+wall on bones? also your foundation needs to change for block, should be
+slab floor probably for block walls, and if raised then the floor joists
+would hang or ledger probably, also on raised floor you run the plumbing
+under the house, probably the same for slab right? plumbing and hot water
+run under? or in florida it doesnt? i think in ca it does, electrical
+cant go into cmu block walls either, need to think through this some
+more and research what you need to pull this off, then test ... review
+locally". Then, with a screenshot of a porch beam a step below its
+gable: "also your porch headers drop down because the terrain now", and
+"your framing on the porches looks off too, needs to mitre and go down
+to the board correctly".
+
+G99 Equipment stands on the inside face of its wall, whichever face that
+is: both faces are tested against the rooms, and the nearest room's
+centre decides when neither resolves.
+G100 A block house stands on a slab on grade unless the user asks for a
+raised floor, and then the joists' bearing on the block is said, not
+assumed.
+G101 No wire or pipe runs inside a block wall's core. What fits lives in
+the furring space on the inside face and says so; what crosses the block
+is sleeved; what does not fit is flagged for a chase.
+G102 A ground-hosted porch post carries its own grade once: Bones adds
+the ground under it only where the viewer does (a storey at the site
+datum), so the beam stays under the plate on sloping ground.
+
 ## Log (continued)
+
+- 2026-09-09: **Batch T16 — the block house all the way through (G99–G102).**
+  Probed on a regenerated Cape Coral block house (scratchpad
+  `cmu-probe.ts`): the water heater was inside on this seed, the
+  foundation was a raised craftsman floor under block walls, and 309 MEP
+  members lay inside the block walls' cores (233 NM runs, the PEX drops,
+  the re-vents). (1) `insideSideOf(wall, u, rooms)` in plumbing.ts tests
+  BOTH faces and falls back to the nearest room's centre — the old test
+  probed one face and defaulted outward when a garage polygon drawn to
+  the face put the probe on the line. (2) build.ts: `wallSystem: 'cmu'`
+  forces the slab unless the roll asked for a raised floor; the
+  foundation record's source says "concrete-block walls — slab on grade,
+  the block bearing on the monolithic slab / stem"; a raised floor under
+  block warns about the ledger / pockets. Bones adds the same note when
+  it frames block over a raised platform. (3) New `engines/block-furring.ts`
+  `furOutOfBlock(members, blocks, rooms, slabs)` after the MEP engines:
+  a wire / pipe / duct run whose plan line lies inside a block wall's
+  core moves to the furring plane (3/4 in furring under 1/2 in gypsum) on
+  the interior face — the face inside a room, else the wall-layers'
+  exteriorSide rule — with "(furring space on the block)" on its label;
+  a run crossing the block is labelled sleeved; a run wider than the
+  furring (a 1½ in re-vent, a drain) keeps its place with
+  `BLOCK_CHASE_FLAG`; a mixed knee wall only furs below its block. Level
+  warnings count each. (4) The porch beam: `extractPorchPosts` adds the
+  ground under a ground-hosted post, and the generator's posts already
+  carry their grade in their y, so on a site with terrain Bones stood the
+  post on grade + grade and the beam a grade-depth under the plate.
+  compute now passes the ground only when the storey sits at the site
+  datum (`isSiteDatum(building.y + level.y)`), mirroring the viewer's
+  lift rule. Bones 2167 tests (4 new block-furring cases), generate 107
+  (the block build is a slab), tsc clean on both. Open: the porch
+  fascia mitre and the rafter tails to the board (Steve's third note) are
+  the next batch — the porch cover's fascia is the generator's block
+  (ornament.ts fasciaTopology: butt-joined boards) and Bones' sub-fascia
+  pair; the supply / DWV routing answer for Steve's question is in the
+  report (attic PEX in Florida, drains under the slab).
 
 - 2026-09-09: **Batch T15 — the wall system from the site; the assembly is
   the truth (G96–G98).** Steve was right on both counts: the generator

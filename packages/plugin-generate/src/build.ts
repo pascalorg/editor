@@ -1071,7 +1071,22 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     ...(rollOptions?.foundation === 'slab' || rollOptions?.foundation === 'raised' ? { type: rollOptions.foundation } : {}),
     ...(typeof rollOptions?.floorAboveGradeIn === 'number' ? { ffAboveGradeIn: rollOptions.floorAboveGradeIn } : {}),
   }
-  const foundation = foundationFor(style, input.mode === 'adu' ? 'adu' : '1story', W / 12, terrain, foundationPrefs)
+  // A block house stands on a slab on grade (the block bears on the
+  // monolithic slab / stem — the Florida norm); a raised floor only when the
+  // user asked for it, and then said so (Steve, 2026-09-09: "your foundation
+  // needs to change for block, should be slab floor probably").
+  const blockHouse = input.wallSystem === 'cmu'
+  if (blockHouse && !foundationPrefs.type) foundationPrefs.type = 'slab'
+  const ruled = foundationFor(style, input.mode === 'adu' ? 'adu' : '1story', W / 12, terrain, foundationPrefs)
+  const foundation =
+    blockHouse && ruled.type === 'slab'
+      ? { ...ruled, source: `concrete-block walls — slab on grade, the block bearing on the monolithic slab / stem (top of slab ${ruled.ffAboveGradeIn} in over the high side's grade)` }
+      : ruled
+  if (blockHouse && ruled.type === 'raised') {
+    warnings.push(
+      'Block walls on a raised floor as asked — the joists hang on a ledger bolted to the block or bear in pockets on the stem; Bones frames the platform as a framed house would — verify with the engineer.',
+    )
+  }
   const ffAboveGradeM = round(foundation.ffAboveGradeIn * IN)
   const raisedFloor = foundation.type === 'raised'
   /** The building's datum: the finish floor stands `ffAboveGrade` above the HIGHEST grade under the footprint. */
