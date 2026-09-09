@@ -1,6 +1,14 @@
 # Skill package validation
 
-Released package source: **0.1.6**. Latest released package source: **0.1.6**. `pascal-3d` skill metadata version: **0.1.0**. `furniture-fit` skill metadata version: **0.1.3**. Recorded September 9, 2026.
+Candidate package source: **0.1.7**. Latest released package source: **0.1.6**. `pascal-3d` skill metadata version: **0.1.0**. `furniture-fit` skill metadata version: **0.1.3**. Recorded September 9, 2026.
+
+## Bundle 0.1.7 Claude local MCP candidate
+
+This candidate adds one Claude plugin-provided local stdio server whose exact command is `pascal mcp connect`. The package does not contain a remote URL, headers, environment credentials, or another server. It does not install or start the Pascal editor; `pascal` must already be on the `PATH` used to launch Claude Code. Local use requires no Pascal account or API key and does not upload projects automatically.
+
+The repository validator requires this exact configuration and rejects additional servers, remote transports, credential fields, or command and argument changes. Focused tests cover the canonical config, an added server, a remote URL, headers, environment credentials, and command or argument substitutions. In an isolated upgrade check, an existing user-scoped server named `pascal` shadowed the plugin server; removing it with `claude mcp remove --scope user pascal` exposed the plugin server, which connected successfully. Other manual Pascal connections should also be removed or disabled so a differently named connector does not create another client against the same local service. Hosted users must disable the plugin-provided local server before configuring the hosted endpoint.
+
+This candidate has not been published as a GitHub release or submitted to an Anthropic marketplace. On Claude Code 2.1.258, package validation, strict plugin validation, five fresh isolated installations, and a live connection through the plugin-provided server passed. The live check used a checksum-verified preview CLI and isolated `PASCAL_HOME`; it established connector health, not a new native task cohort or general adoption.
 
 ## Bundle 0.1.6 OpenAI packaging and ClawHub readiness release
 

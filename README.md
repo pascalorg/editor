@@ -55,7 +55,7 @@ pascal update --version "$PASCAL_PREVIEW_VERSION"
 pascal editor --no-open
 ```
 
-The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before running `pascal mcp setup claude`, `pascal mcp setup codex`, or configuring `pascal mcp connect` manually. This GitHub prerelease is not an npm version.
+The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before using the Claude plugin-provided connector, running `pascal mcp setup claude` or `pascal mcp setup codex` for another installation path, or configuring `pascal mcp connect` manually. This GitHub prerelease is not an npm version.
 
 Use one active agent client per local CLI service. The standalone local HTTP runtime shares active scene state between clients; use separate `PASCAL_HOME` directories and service processes when independent concurrent work is required.
 
@@ -75,6 +75,16 @@ Claude Code users can install the same canonical skill source as a plugin:
 /plugin marketplace add pascalorg/editor
 /plugin install pascal-agent-skills@pascal
 ```
+
+The Claude plugin also supplies the local `pascal mcp connect` server. Install and start the Pascal CLI first, and keep `pascal` on the `PATH` used to launch Claude Code. This local connector needs no Pascal account or API key and does not upload projects automatically.
+
+If `pascal mcp setup claude` previously created a user-scoped `pascal` server, it shadows the plugin-provided server. Remove the manual entry so the plugin owns the connection lifecycle:
+
+```bash
+claude mcp remove --scope user pascal
+```
+
+Use `/mcp` to remove or disable any project- or local-scoped Pascal connection too; a differently named manual connector can otherwise create a second client against the same local service. When the intended project is hosted in a Pascal account or organization, disable the plugin-provided local server in `/mcp` and configure the hosted endpoint from the skill setup guide instead.
 
 Codex users can install the same plugin from the repository marketplace:
 
