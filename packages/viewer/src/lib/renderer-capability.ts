@@ -152,7 +152,8 @@ export async function initializeGpuRenderer<Renderer extends InitializableRender
     return { backend: capability.backend, renderer, status: 'ready' }
   } catch (error) {
     try {
-      renderer?.dispose?.()
+      // r186 made dispose() async; swallow the rejection like the sync throw.
+      Promise.resolve(renderer?.dispose?.()).catch(() => {})
     } catch {}
     if (capability.backend !== 'webgpu') return { error, status: 'unsupported' }
 
@@ -165,7 +166,7 @@ export async function initializeGpuRenderer<Renderer extends InitializableRender
       return { backend: 'webgl', renderer, status: 'ready' }
     } catch (fallbackError) {
       try {
-        renderer?.dispose?.()
+        Promise.resolve(renderer?.dispose?.()).catch(() => {})
       } catch {}
       return { error: fallbackError, status: 'unsupported' }
     }

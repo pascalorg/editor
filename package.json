@@ -46,7 +46,7 @@
     "@types/three": "0.184.1",
     "next": "16.3.0",
     "react-grab": "0.1.50",
-    "three": "0.185.1"
+    "three": "0.186.0"
   },
   "optionalDependencies": {
     "@tailwindcss/oxide-darwin-arm64": "4.3.0",

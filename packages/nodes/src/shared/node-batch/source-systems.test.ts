@@ -2,6 +2,28 @@ import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 
+// The probe runs as `bun <file>`, where Bun skips plugin resolution for static
+// imports, so fiber's CJS main still `require("three")`s and three r186's shim
+// warns once. That is the one stderr line the probe tolerates.
+function stripThreeCjsDeprecation(stderr: string) {
+  const start = stderr.indexOf('DeprecationWarning: `require("three")`')
+  if (start === -1) return stderr
+  const lines = stderr.slice(start).split('\n')
+  let end = 1
+  while (end < lines.length) {
+    const line = lines[end].trim()
+    if (
+      line !== '' &&
+      !line.startsWith('at ') &&
+      !line.startsWith('Replace ') &&
+      !line.startsWith('code:')
+    )
+      break
+    end++
+  }
+  return (stderr.slice(0, start) + lines.slice(end).join('\n')).trim()
+}
+
 function sourcePath(path: string) {
   return JSON.stringify(resolve(import.meta.dir, '../../../../..', path))
 }
@@ -51,7 +73,10 @@ function runSourceTest(body: string) {
       stdout: 'pipe',
       stderr: 'pipe',
     })
-    expect({ code: result.exitCode, stderr: result.stderr.toString() }).toEqual({
+    expect({
+      code: result.exitCode,
+      stderr: stripThreeCjsDeprecation(result.stderr.toString()),
+    }).toEqual({
       code: 0,
       stderr: '',
     })

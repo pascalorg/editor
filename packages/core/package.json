@@ -73,7 +73,7 @@
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "react": "^18 || ^19",
-    "three": "^0.185"
+    "three": "^0.186"
   },
   "dependencies": {
     "@pascal-app/capture-protocol": "^1.0.0-beta.4",

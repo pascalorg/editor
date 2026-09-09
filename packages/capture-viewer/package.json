@@ -37,7 +37,7 @@
     "@react-three/drei": "^10",
     "@react-three/fiber": "^9",
     "react": "^18 || ^19",
-    "three": "^0.185"
+    "three": "^0.186"
   },
   "devDependencies": {
     "@pascal-app/capture-protocol": "^1.0.0-beta.4",
@@ -50,7 +50,7 @@
     "@types/react": "^19.2.2",
     "@types/three": "^0.184.0",
     "react": "^19.2.4",
-    "three": "^0.185.0",
+    "three": "^0.186.0",
     "typescript": "6.0.3"
   },
   "keywords": [

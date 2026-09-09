@@ -1,0 +1,4 @@
+preload = ["../../scripts/bun-esm-resolve.ts"]
+
+[test]
+preload = ["../../scripts/bun-esm-resolve.ts"]

@@ -52,7 +52,7 @@
         "react-dom": "^19.2.4",
         "tailwind-merge": "^3.5.0",
         "tailwindcss": "^4.2.1",
-        "three": "^0.185.0",
+        "three": "^0.186.0",
         "zod": ">=4.5.4 <4.6",
       },
       "devDependencies": {
@@ -87,7 +87,7 @@
         "react-dom": "^19.2.4",
         "tailwind-merge": "^3.5.0",
         "tailwindcss": "^4.2.1",
-        "three": "^0.185.0",
+        "three": "^0.186.0",
         "web-ifc": "^0.0.77",
       },
       "devDependencies": {
@@ -125,7 +125,7 @@
         "@types/react": "^19.2.2",
         "@types/three": "^0.184.0",
         "react": "^19.2.4",
-        "three": "^0.185.0",
+        "three": "^0.186.0",
         "typescript": "6.0.3",
       },
       "peerDependencies": {
@@ -135,7 +135,7 @@
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",
-        "three": "^0.185",
+        "three": "^0.186",
       },
     },
     "packages/cli": {
@@ -178,7 +178,7 @@
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",
-        "three": "^0.185",
+        "three": "^0.186",
       },
     },
     "packages/editor": {
@@ -244,7 +244,7 @@
         "next": ">=15",
         "react": "^18 || ^19",
         "react-dom": "^18 || ^19",
-        "three": "^0.185",
+        "three": "^0.186",
       },
     },
     "packages/eslint-config": {
@@ -321,7 +321,7 @@
         "@react-three/fiber": "^9",
         "lucide-react": "^1",
         "react": "^18 || ^19",
-        "three": "^0.185",
+        "three": "^0.186",
         "zustand": "^5",
       },
     },
@@ -369,7 +369,7 @@
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",
         "react-dom": "^18 || ^19",
-        "three": "^0.185",
+        "three": "^0.186",
       },
     },
     "tooling/typescript": {
@@ -383,7 +383,7 @@
     "@types/three": "0.184.1",
     "next": "16.3.0",
     "react-grab": "0.1.50",
-    "three": "0.185.1",
+    "three": "0.186.0",
   },
   "packages": {
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
@@ -1942,7 +1942,7 @@
 
     "tapable": ["tapable@2.3.3", "", {}, "sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A=="],
 
-    "three": ["three@0.185.1", "", {}, "sha512-5aojFCXKwnjBRZvUnt3WFfEcvUJgkN5LlijRFN95hMy8WVkG4I0QNcJE+OuWvuJ0bOdStrbfXn0pkd6/QyiAlg=="],
+    "three": ["three@0.186.0", "", {}, "sha512-cr/fIM2ddMSVbYVgkfD4jLJv7Fh/8ZTjvo+7gQeSVGUZHxpx9FDwoL5iC7hUz/LiRA8wMbqfnb90xKfm1/HHkQ=="],
 
     "three-bvh-csg": ["three-bvh-csg@0.0.18", "", { "peerDependencies": { "three": ">=0.179.0", "three-mesh-bvh": ">=0.9.7" } }, "sha512-M3GCZMmGFgASGuDf+YMamM83nVlD/vdwzVHcYbFxgW+g1S7/nKPiuY00YVHOMbjmJPh8mLevGZL65ItHUuGt2w=="],
 
