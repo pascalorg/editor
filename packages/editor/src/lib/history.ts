@@ -1,4 +1,10 @@
-import { emitter, useLiveNodeOverrides, useLiveTransforms, useScene } from '@pascal-app/core'
+import {
+  type AnyNodeId,
+  emitter,
+  useLiveNodeOverrides,
+  useLiveTransforms,
+  useScene,
+} from '@pascal-app/core'
 import { markPerfAction } from '@pascal-app/viewer'
 import useInteractionScope from '../store/use-interaction-scope'
 import { registeredDraftingConfig } from './interaction/registered-drafting'
@@ -65,12 +71,28 @@ function notifyHistoryCommandListeners() {
 }
 
 function refreshSceneAfterHistoryJump() {
+  const previewIds = new Set([
+    ...useLiveTransforms.getState().transforms.keys(),
+    ...useLiveNodeOverrides.getState().overrides.keys(),
+  ])
   useLiveNodeOverrides.getState().clearAll()
   useLiveTransforms.getState().clearAll()
+  // Clearing overrides can republish stair holes while a live transform still
+  // exists. Capture that final publication before clearing it too.
+  const remainingOverrides = useLiveNodeOverrides.getState().overrides
+  if (remainingOverrides.size > 0) {
+    for (const id of remainingOverrides.keys()) previewIds.add(id)
+    useLiveNodeOverrides.getState().clearAll()
+  }
 
   const state = useScene.getState()
-  for (const node of Object.values(state.nodes)) {
+  for (const id of previewIds) {
+    const node = state.nodes[id as AnyNodeId]
+    if (!node) continue
     state.markDirty(node.id)
+    if (node.parentId && state.nodes[node.parentId as AnyNodeId]) {
+      state.markDirty(node.parentId as AnyNodeId)
+    }
   }
 }
 

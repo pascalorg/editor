@@ -105,6 +105,29 @@ Any optimization that scopes reconciliation to a subset of nodes or rooms must b
 equivalence with a full level scan. Representative create, update, delete, cascade, split, merge,
 and corridor-enclosure edits must produce the same spaces and surfaces as full reconciliation.
 
+## Undo and redo invalidation
+
+Standalone history jumps clear live transforms and node overrides, including surface-hole
+previews. Only surviving preview targets and their parents receive restoration marks from the
+editor. Empty commands preserve previews, and collaborative delegates own their own refresh.
+
+Core diffs the before/after node snapshots in a microtask before paint. It marks changed nodes,
+old and new parents, wall neighbours in both layouts (scoped to the wall's level), and hosted
+doors/windows/items when wall thickness, height or curvature changes. Deletion retains its
+conservative surviving-sibling refresh and removes marks for missing IDs. Both layouts are
+captured per jump; reconciliation's history pause/resume notifications cannot replace them.
+The cold-start fallback without a previous snapshot remains conservative.
+
+Temporal restoration writes to the scene store, so existing subscriptions still own spatial
+index updates, slab context tracking, space detection, stair rise/openings, elevator openings,
+and level-height dependents. Spatial sync also checks before/after rendered slab boundaries:
+wall bands and sibling seams can change support even when the slab's stored polygon is unchanged.
+Support invalidation uses both layouts so objects on a former boundary re-elevate.
+
+There is no routine whole-scene history refresh or batch reset. The existing priority-1 batch
+snapshot releases affected sources (including dirty walls' openings); untouched members stay
+batched, and affected members rejoin through the normal settle window.
+
 ## Adding a New System
 
 1. Decide the scope:

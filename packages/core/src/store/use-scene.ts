@@ -52,6 +52,7 @@ import {
   type SceneCommitOrigin,
   type SceneSnapshot,
 } from './history-control'
+import { getHistoryDirtyNodeIds } from './history-invalidation'
 import useLiveNodeOverrides from './use-live-node-overrides'
 import useLiveTransforms from './use-live-transforms'
 
@@ -2138,10 +2139,9 @@ export function applySceneSnapshot(
   return true
 }
 
-// Track previous temporal state lengths and node snapshot for diffing
+// Track previous temporal state lengths for identifying history jumps
 let prevPastLength = 0
 let prevFutureLength = 0
-let prevNodesSnapshot: Record<AnyNodeId, AnyNode> | null = null
 
 export function clearSceneHistory() {
   resetSceneHistoryPauseDepth()
@@ -2154,11 +2154,17 @@ export function clearSceneHistory() {
   useScene.temporal.getState().clear()
   prevPastLength = 0
   prevFutureLength = 0
-  prevNodesSnapshot = null
 }
 
 // Subscribe to the temporal store (Undo/Redo events)
-useScene.temporal.subscribe((state) => {
+useScene.temporal.subscribe((state, previousState) => {
+  // Zundo mutates its source stack before writing the scene. Reconciliation's
+  // pause/resume notifications must not advance our pre-jump stack lengths.
+  if (
+    state.pastStates === previousState.pastStates &&
+    state.futureStates === previousState.futureStates
+  )
+    return
   const currentPastLength = state.pastStates.length
   const currentFutureLength = state.futureStates.length
 
@@ -2168,8 +2174,13 @@ useScene.temporal.subscribe((state) => {
   const didRedo = currentPastLength > prevPastLength && currentFutureLength < prevFutureLength
 
   if (didUndo || didRedo) {
-    // Capture the previous snapshot before RAF fires
-    const snapshotBefore = prevNodesSnapshot
+    // Capture both layouts before another synchronous jump can replace them.
+    // The state pushed onto the opposite stack includes history-paused derived
+    // writes (such as stair rise), unlike a snapshot saved at the last edit.
+    const snapshotBefore = didUndo
+      ? state.futureStates[prevFutureLength]?.nodes
+      : state.pastStates[prevPastLength]?.nodes
+    const snapshotAfter = useScene.getState().nodes
 
     // Defer to a microtask so the scene store has settled before we diff,
     // but still mark walls/items dirty before the next paint.
@@ -2178,31 +2189,7 @@ useScene.temporal.subscribe((state) => {
       const { markDirty } = useScene.getState()
 
       if (snapshotBefore) {
-        // Diff: only mark nodes that actually changed
-        for (const [id, node] of Object.entries(currentNodes) as [AnyNodeId, AnyNode][]) {
-          if (snapshotBefore[id] !== node) {
-            markDirty(id)
-            // Also mark parent so merged geometries update
-            if (node.parentId) markDirty(node.parentId as AnyNodeId)
-          }
-        }
-        // Nodes that were deleted (exist in prev but not current)
-        for (const [id, node] of Object.entries(snapshotBefore) as [AnyNodeId, AnyNode][]) {
-          if (!currentNodes[id]) {
-            const parentId = node.parentId as AnyNodeId | undefined
-            if (parentId) {
-              markDirty(parentId)
-              // Mark sibling nodes dirty so they can update their geometry
-              // (e.g. adjacent walls need to recalculate miter/junction geometry)
-              const parent = currentNodes[parentId]
-              if (parent && 'children' in parent && Array.isArray(parent.children)) {
-                for (const childId of parent.children) {
-                  markDirty(childId as AnyNodeId)
-                }
-              }
-            }
-          }
-        }
+        for (const id of getHistoryDirtyNodeIds(snapshotBefore, snapshotAfter)) markDirty(id)
       } else {
         // No snapshot to diff against — fall back to marking all
         for (const node of Object.values(currentNodes)) {
@@ -2220,8 +2207,7 @@ useScene.temporal.subscribe((state) => {
     })
   }
 
-  // Update tracked lengths and snapshot
+  // Update tracked lengths
   prevPastLength = currentPastLength
   prevFutureLength = currentFutureLength
-  prevNodesSnapshot = useScene.getState().nodes
 })
