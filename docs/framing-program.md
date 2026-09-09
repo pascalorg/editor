@@ -1155,6 +1155,66 @@ with a grand entrance, in every style.
 
 ## Log (continued)
 
+- 2026-09-09: **Batch T24 — the narrow-lot parti (G108) and the band's
+  depth (G107).** New `narrow.ts` `narrowParti({maxWidthFt, maxDepthFt,
+  beds, baths, rng})`: one column, front to back — two front rooms
+  flanking a centred 8–9 ft FOYER (the grand entrance; the porch spans
+  the front), a cross HALL behind it, the GREAT ROOM across the full
+  width, DINING | KITCHEN (the kitchen on the right, its run on the side
+  wall under the window and its back wall door-free so the fridge and
+  the range turn the corner), the service band 8'-6" deep (LAUNDRY |
+  HALL 2 | BATH 2 (9 ft: shower across the end, toilet and vanity along
+  the wet wall) | WIC; a POWDER at the far left off the dining for a
+  third bath when the band has it; four beds: BEDROOM 4 on the side wall
+  for its egress | HALL 2 | BATH 2 | WIC | LAUNDRY off the kitchen's
+  far corner) and the suite across the back (PRIMARY BATH | PRIMARY
+  BEDROOM). 24–32 ft wide, a foot inside the band; the depth ladders
+  down toward the buildable depth less a 7 ft patio, then toward the
+  depth itself when the floors bind. No attached garage (a detached one
+  at the back is the narrow lot's norm — not rolled). roll.ts takes it
+  for any band under `NARROW_LOT_FT` (44 ft) and drops the two-column
+  setback warnings with the plan they were about; the document's name
+  carries "narrow-lot plan". Every style dresses it; with the depth past
+  the width the gables land front and back.
+  **The band's depth** (fit.ts): `bandFit` now walks every station to the
+  back of the envelope and reports `depthFt` — where the chord
+  intersection first narrows under the narrowest house the roll builds
+  (`NARROW_W_MIN`, 24 ft); a depth asked past it answers with the band
+  AT its depth. Before, a depth past the envelope (the plan plus the 8 ft
+  porch allowance on the 65 ft Modesto lot, whose rear line runs 4 cm out
+  of square) collapsed the band onto a 6 ft sliver at one rear corner
+  and its centre carried the house 3.9 m sideways OUT OF THE LOT. run.ts
+  measures the band with the porch allowance only where the lot has the
+  depth for it, re-rolls on the band's width AND depth, and the reface
+  path does the same. build.ts: on a tight lot the rear door takes the
+  primary bedroom's back wall (a patio door) before a side slider — the
+  narrow plan's back wall is the suite's — and where the lot leaves too
+  little behind the house for the 6 ft landing a 4 ft, then a 3 ft
+  landing is tried (`PorchInput.depthM`) before the door goes without.
+  Bedrooms take one window per exterior face, up to two (the egress on
+  the side, a second on the street: a front corner bedroom's blank wall
+  beside the entry read wrong). furnish.ts: a POWDER room bathes nobody
+  (toilet and vanity only), and an island needs 36 in clear past each end
+  (NKBA) — a 98 in island in an 11 ft kitchen left the range no wall.
+  Headless on the Modesto lot (seed 7, craftsman, no garage): a 32' × 60'
+  narrow plan, 0 of 44 wall ends outside the envelope, the slab and the
+  4 ft rear landing inside, the front porch encroaching the front yard
+  and saying so; a 864-run sweep (4 styles × 4 seeds × beds × baths ×
+  4 bands) rolls, validates, builds and furnishes every narrow plan with
+  no kitchen, bath or powder warning. Generate 116 tests (fit: the
+  Modesto envelope's band at 64 and 72 ft; roll: every style × 3 seeds
+  validates, builds and stays in 30 × 65 ft, the fourth-bedroom / office
+  / garage folds, a wide band keeps the two-column plan; two old frontage
+  tests moved onto the new rule; build: a corner bedroom's two windows).
+  Whole repo 6618 pass, the 3 CLI failures environmental. Open: a second
+  storey is the real answer for 4 beds on a narrow lot (not rolled); the
+  front porch on the narrow plan is the style's entry porch, not yet a
+  wider "grand" porch across both front rooms; the two-column plan's
+  5 ft-deep powder room still loses its vanity to the door's swing box (a
+  door swinging out is the fix); a pie lot's band is a rectangle inside a
+  trapezoid, so a long house on a strongly tapered lot gives up width it
+  could keep by angling.
+
 - 2026-09-09: **Batch T23 — the band fit and the porch rule (G107).**
   fit.ts `bandFit(envelope, frontEdge, depthM)`: the envelope's chord
   across the front direction at every half-metre station from the front

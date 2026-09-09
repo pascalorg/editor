@@ -104,16 +104,21 @@ describe('Poppy builds into Pascal nodes', () => {
     }
   })
 
-  test('every bedroom gets a 4 × 5 egress window on an exterior wall; the bath a small slider', () => {
+  test('every bedroom gets a 4 × 5 egress window on an exterior wall, a corner bedroom one on each face; the bath a small slider', () => {
     const byName = (n: string) => windows.filter((w) => w.name === n)
     for (const bed of ['BEDROOM 1 window', 'BEDROOM 2 window']) {
       const w = byName(bed)
-      expect(w.length).toBe(1)
-      expect(w[0]?.width).toBeCloseTo(1.2192, 4)
-      expect(w[0]?.height).toBeCloseTo(1.524, 4)
-      expect(w[0]?.windowType).toBe('sliding') // the Poppy is a modern: sliders (finishes.ts WINDOW_STYLES)
-      const wall = walls.find((x) => x.id === w[0]?.parentId) as N
-      expect(wall.metadata.wallType).toBe('ext2x6')
+      // 2026-09-09: one window per exterior face, up to two — the Poppy's bedrooms are corner rooms
+      expect(w.length).toBe(2)
+      const faces = new Set(w.map((x) => x.parentId))
+      expect(faces.size).toBe(2)
+      for (const win of w) {
+        expect(win.width).toBeCloseTo(1.2192, 4)
+        expect(win.height).toBeCloseTo(1.524, 4)
+        expect(win.windowType).toBe('sliding') // the Poppy is a modern: sliders (finishes.ts WINDOW_STYLES)
+        const wall = walls.find((x) => x.id === win.parentId) as N
+        expect(wall.metadata.wallType).toBe('ext2x6')
+      }
     }
     expect(byName('BATH window')[0]?.windowType).toBe('sliding')
     expect(byName('LIVING window').length).toBe(2)

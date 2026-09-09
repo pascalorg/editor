@@ -559,16 +559,19 @@ function furnishBath(box: RoomBox, get: Get, warnings: string[], trace: Trace, _
   )
   // Across the far end: the tub when the end wall takes its 92 in, else the
   // shower in the corner; with a door on both end walls the shower stands
-  // on the wet wall itself, at its low end, and the toilet follows it.
+  // on the wet wall itself, at its low end, and the toilet follows it. A
+  // POWDER room (a half bath) bathes nobody: the toilet and the vanity
+  // along the wet wall, nothing across the end.
+  const powder = /powder|half bath/i.test(box.room.name)
   let bathed: Placed | null = null
-  if (!end) {
+  if (!end && !powder) {
     const shower = get('shower-square')
     if (shower) {
       const half = extents(shower, edgeYaw(wet))[wet === 'front' || wet === 'back' ? 'u' : 'v'] / 2
       bathed = box.slideAgainst(wet, shower, box.spanOf(wet)[0] + half, 'shower')
     }
   }
-  if (end) {
+  if (end && !powder) {
     const tub = get('bathtub')
     const tubLen = tub ? tub.dimensions[0] * M_TO_IN : Number.POSITIVE_INFINITY
     if (tub && box.lengthOf(end) >= tubLen + 2) {
@@ -656,6 +659,8 @@ function furnishBath(box: RoomBox, get: Get, warnings: string[], trace: Trace, _
 
 /** Clear aisle either side of an island (NKBA: 42 in). */
 const AISLE = 42
+/** Clear floor past each end of an island (NKBA: 36 in on a non-work side). */
+const ISLAND_END_CLEAR = 36
 
 /**
  * THE KITCHEN. The run goes on a real wall — under a window with the sink
@@ -792,7 +797,9 @@ function furnishKitchen(box: RoomBox, get: Get, warnings: string[], trace: Trace
     const counterDepth = counter.dimensions[2] * M_TO_IN
     const islandDepth = extents(island, edgeYaw(run))[axis === 'u' ? 'v' : 'u']
     const needed = counterDepth + AISLE + islandDepth + AISLE
-    if (box.depthFrom(run) >= needed && span[1] - span[0] >= width(island) + 24) {
+    // and 36 in clear past each end of the island — the corner walls' pieces
+    // (the fridge, the range) and the way round it (NKBA 36 in, non-work side)
+    if (box.depthFrom(run) >= needed && span[1] - span[0] >= width(island) + 2 * ISLAND_END_CLEAR) {
       const dist = counterDepth + AISLE + islandDepth / 2
       const mid = (span[0] + span[1]) / 2
       const centre: Pt =

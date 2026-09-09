@@ -79,6 +79,7 @@ export function bandFit(
   frontEdge: number,
   depthM: number,
   stepM = 0.5,
+  minWidthM = 0,
 ): { widthFt: number; offsetM: number; depthFt: number } {
   const n = envelope.length
   if (n < 3) return { widthFt: 0, offsetM: 0, depthFt: 0 }
@@ -139,20 +140,40 @@ export function bandFit(
     }
     return best
   }
+  // Walk the stations from the front line to the back of the envelope. The
+  // band at the asked depth is the intersection of the chords up to it; the
+  // band's DEPTH is where that intersection first narrows under `minWidthM`
+  // — the narrowest house the caller would build (a tilted rear line or a
+  // pie lot squeezes the last stations to a sliver no house reaches). A depth past the band's
+  // depth is answered with the band AT its depth, so the caller sees the
+  // plan is too deep from depthFt rather than from a collapsed band
+  // (2026-09-09: the Modesto lot's rear line runs 4 cm out of square; the
+  // band asked 8 ft past it collapsed to a 6 ft sliver at one corner and
+  // its centre put the house outside the lot).
+  const depth = Math.max(0, depthM)
+  const stations: number[] = []
+  for (let d = 0.01; d < maxDepth; d += stepM) stations.push(d)
+  stations.push(Math.max(0.01, maxDepth - 0.01))
+  if (depth > 0.01 && depth < maxDepth - 0.01) stations.push(depth - 0.01)
+  stations.sort((a, b) => a - b)
   let lo = Number.NEGATIVE_INFINITY
   let hi = Number.POSITIVE_INFINITY
-  const depth = Math.max(0, Math.min(depthM, maxDepth))
-  const stations: number[] = []
-  for (let d = 0.01; d < depth; d += stepM) stations.push(d)
-  stations.push(Math.max(0.01, depth - 0.01))
+  let atDepth: [number, number] | null = null
+  let reached = 0
   for (const d of stations) {
     const c = chordAt(d)
     if (!c) continue
-    lo = Math.max(lo, c[0])
-    hi = Math.min(hi, c[1])
+    const nlo = Math.max(lo, c[0])
+    const nhi = Math.min(hi, c[1])
+    if (nhi - nlo < Math.max(minWidthM, 1e-6)) break
+    lo = nlo
+    hi = nhi
+    reached = d
+    if (d <= depth) atDepth = [lo, hi]
   }
-  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return { widthFt: 0, offsetM: 0, depthFt: maxDepth / FT }
-  return { widthFt: (hi - lo) / FT, offsetM: (lo + hi) / 2, depthFt: maxDepth / FT }
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return { widthFt: 0, offsetM: 0, depthFt: 0 }
+  const band = atDepth ?? [lo, hi]
+  return { widthFt: (band[1] - band[0]) / FT, offsetM: (band[0] + band[1]) / 2, depthFt: (reached + 0.01) / FT }
 }
 
 export function refaceCandidates(edges: readonly EdgeFit[], frontEdge: number): EdgeFit[] {

@@ -19,6 +19,7 @@ import { type ConventionSite, exteriorWallConvention } from '@pascal-app/core'
  * segment and every later pass sees a closed loop.
  */
 import type { PlanDocument, PlanEdge } from './document'
+import { NARROW_LOT_FT, narrowParti } from './narrow'
 import { GABLE_ORNAMENTS_BY_STYLE } from './ornament'
 import { mulberry32, pick, type Rng } from './rng'
 import { stuccoSidingFor } from './finishes'
@@ -431,7 +432,32 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
   // (Steve, 2026-09-07: "some more hip designs generated on random in
   // different styles"), and the trim the house wears is rolled here so the
   // same seed dresses the same house twice.
-  const W = CW + RW
+  let W = CW + RW
+  // ── the narrow lot (narrow.ts): one column, front to back ─────────────
+  // A band under NARROW_LOT_FT takes the narrow parti instead (a wider band
+  // keeps the two-column plan and its own shrink ladder) — the grand
+  // entrance across the
+  // front, the great room the full width, the suite at the back — and the
+  // two-column warnings about crossing a side setback go with the plan
+  // they were about (Steve, 2026-09-09: "more designs for like 50 foot and
+  // 40 foot wide lots that go longer and skinnier with grand entrances").
+  let narrowNote: string | null = null
+  if (Number.isFinite(maxW) && maxW < NARROW_LOT_FT) {
+    const np = narrowParti({ maxWidthFt: maxW, maxDepthFt: maxD, beds, baths, rng })
+    rooms.length = 0
+    attach.length = 0
+    rooms.push(...np.rooms)
+    attach.push(...np.attach)
+    W = np.W
+    D = np.D
+    for (let i = warnings.length - 1; i >= 0; i--) {
+      if (/cross a side setback|cross the rear setback|cannot take an attached garage/.test(warnings[i] as string)) warnings.splice(i, 1)
+    }
+    warnings.push(...np.warnings)
+    if (garage) warnings.push(`no attached garage on a ${maxW.toFixed(0)}' band — a narrow lot takes a detached garage at the back (not rolled).`)
+    garage = false
+    narrowNote = `${np.W}' × ${np.D}' narrow-lot plan`
+  }
   const hipChance: Record<string, number> = { farmhouse: 0.15, craftsman: 0.3, cottage: 0.3 }
   const roofForm: (typeof style)['roofForm'] =
     style.roofForm === 'gable' && rng() < (hipChance[style.key] ?? 0) ? 'hip' : style.roofForm
@@ -452,7 +478,7 @@ export function rollDocument(seed: number, options: RollOptions = {}): RolledPla
   const dormers = frontIsEave && mode !== 'adu' && dormerStyles.has(style.key) && rng() < 0.35 ? pick(rng, [1, 2, 2] as const) : 0
   const document: PlanDocument = {
     roomcode: 1,
-    name: `${style.label} ${beds} bd / ${baths} ba (seed ${seed})`,
+    name: `${style.label} ${beds} bd / ${baths} ba (seed ${seed})${narrowNote ? ` — ${narrowNote}` : ''}`,
     units: 'ft',
     mode,
     style: style.key,

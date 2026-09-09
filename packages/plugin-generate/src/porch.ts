@@ -129,6 +129,12 @@ export type RailStyle = 'baluster' | 'cable'
 export type PorchAttach = 'valley' | 'ledger'
 
 export interface PorchInput {
+  /**
+   * A depth to build at instead of the policy's, metres — the room left
+   * behind the house on a tight lot (build.ts tries a shallower landing
+   * before giving the door none). Never deeper than the policy's own.
+   */
+  depthM?: number
   policy: PorchPolicy
   style: StylePreset
   levelId: string
@@ -435,6 +441,7 @@ export function porchFor(input: PorchInput, ids: PorchIds): PorchResult {
     width = snap6(clamp(Math.min(maxCentered, 6 * FT), 4 * FT, 7 * FT))
     depth = 5 * FT
   }
+  if (typeof input.depthM === 'number' && input.depthM > 0) depth = snap6(clamp(input.depthM, 3 * FT, depth))
   if (maxCentered < width - 1e-6) {
     warnings.push(
       `the ${entrance} ${policy === 'deck' ? 'deck' : 'porch'} is ${(width / FT).toFixed(0)}' wide but its door sits ${(maxCentered / 2 / FT).toFixed(1)}' from a corner — it will pass the corner.`,

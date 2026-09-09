@@ -196,7 +196,10 @@ const KIND_FLOOR: Record<RoomKind, string> = {
 const WINDOWS: Partial<
   Record<RoomKind, { w: number; h: number; sill: number; count: number; type: string }>
 > = {
-  bed: { w: 48, h: 60, sill: 36, count: 1, type: 'double-hung' },
+  // a bedroom: its egress window on a side or back face, and a second on
+  // the street face when it has one (the façade — a front corner bedroom's
+  // blank wall beside the entry read wrong; 2026-09-09) — one per face
+  bed: { w: 48, h: 60, sill: 36, count: 2, type: 'double-hung' },
   living: { w: 36, h: 60, sill: 36, count: 2, type: 'double-hung' },
   dining: { w: 36, h: 60, sill: 36, count: 1, type: 'double-hung' },
   kitchen: { w: 48, h: 42, sill: 42, count: 1, type: 'double-hung' },
@@ -697,14 +700,17 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     )
     // On a tight lot the sides have no room for a porch (Steve, 2026-09-09:
     // "it can't have a porch on the side on a tight lot, would be in the
-    // back"): the back wall wins even through the laundry, the side slider
-    // is the last resort. With room beside the house the social side slider
-    // keeps its old place ahead of the laundry door.
+    // back"): the back wall wins even through the laundry or the primary
+    // bedroom (the suite's patio door — the narrow-lot plan puts the suite
+    // across the back), the side slider is the last resort. With room
+    // beside the house the social side slider keeps its old place ahead of
+    // the laundry door, and the suite's door comes last.
     const sideRoom = options.placement?.sideRoomM
     const tightSides = typeof sideRoom === 'number' && sideRoom < TIGHT_SIDE_M
     const backSocial: Face[] = []
     const sideSocial: Face[] = []
     const backService: Face[] = []
+    const backPrimary: Face[] = []
     for (const room of social) {
       for (const face of exteriorWallsOf(room)) {
         if (face.edge === 'back')
@@ -723,7 +729,16 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
           backService.push({ room, face, width: EXTERIOR_DOOR_W, name: 'Rear door', doorType: 'hinged' })
       }
     }
-    faces.push(...backSocial, ...(tightSides ? [...backService, ...sideSocial] : [...sideSocial, ...backService]))
+    for (const room of rooms.filter((r) => r.kind === 'bed' && r.primary === true)) {
+      for (const face of exteriorWallsOf(room)) {
+        if (face.edge === 'back')
+          backPrimary.push({ room, face, width: REAR_DOOR_W, name: 'Patio door', doorType: 'sliding' })
+      }
+    }
+    faces.push(
+      ...backSocial,
+      ...(tightSides ? [...backService, ...backPrimary, ...sideSocial] : [...sideSocial, ...backService, ...backPrimary]),
+    )
     for (const c of faces) {
       if (c.face.span[1] - c.face.span[0] < c.width + 12) continue
       const at = seat(c.face.wall.id, c.face.span, c.width, 0.5)
@@ -908,7 +923,8 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     for (const face of faces) {
       const want = spec.count - placed
       if (want <= 0) break
-      const fractions = want >= 2 ? [1 / 3, 2 / 3] : [0.5]
+      // a bedroom takes one window per face (the egress, then the street)
+      const fractions = want >= 2 && room.kind !== 'bed' ? [1 / 3, 2 / 3] : [0.5]
       for (const f of fractions) {
         if (placed >= spec.count) break
         const at = seat(face.wall.id, [face.span[0] + 18, face.span[1] - 18], spec.w, f)
@@ -1450,6 +1466,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     entrance: 'front' | 'rear',
     bayWidth: number,
     doorWidth: number,
+    depthM?: number,
   ): PorchSummary | null => {
     const w = door.wall
     const dxw = w.end[0] - w.start[0]
@@ -1484,6 +1501,7 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         gradeAt: localGrade,
         terrain: terrain !== null,
         overhang: (style.overhangIn * IN) / Math.cos(Math.atan(porchPitch / 12)),
+        ...(depthM ? { depthM } : {}),
         // the cover is sized against the house roof it dies into (W19b)
         housePlateY: ceilingM,
         housePitch: doc.roof.pitch ?? style.pitch,
@@ -1526,9 +1544,9 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     // envelope; one that crosses is rebuilt as a landing, and a landing that
     // still crosses is left off — the door stays, the steps are the site's.
     const bayWidth = (rearDoor.room.u1 - rearDoor.room.u0) * IN
-    const attempt = (p: PorchPolicy): PorchSummary | null => {
+    const attempt = (p: PorchPolicy, depthM?: number): PorchSummary | null => {
       const before = porchOps.length
-      const summary = entranceFor(rearDoor as NonNullable<typeof rearDoor>, p, 'rear', bayWidth, (rearDoor as NonNullable<typeof rearDoor>).width)
+      const summary = entranceFor(rearDoor as NonNullable<typeof rearDoor>, p, 'rear', bayWidth, (rearDoor as NonNullable<typeof rearDoor>).width, depthM)
       if (insideEnvelope(porchOps.slice(before))) return summary
       porchOps.length = before
       return null
@@ -1540,6 +1558,19 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
         warnings.push(
           `The rear ${policy} would cross a setback on this lot — built a landing at the ${rearDoor.wall.horizontal ? 'back' : 'side'} door instead (a tight lot takes its porch on the back).`,
         )
+      }
+    }
+    // a shallower landing where the house stands close to the rear line (a
+    // 60 ft house on a 65 ft envelope): 4 ft, then a 3 ft stoop
+    if (!rearSummary) {
+      for (const ft of [4, 3]) {
+        rearSummary = attempt('landing', ft * 0.3048)
+        if (rearSummary) {
+          warnings.push(
+            `The rear ${policy} would cross a setback on this lot — built a ${ft} ft landing at the ${rearDoor.wall.horizontal ? 'back' : 'side'} door in the room left behind the house.`,
+          )
+          break
+        }
       }
     }
     if (!rearSummary) {

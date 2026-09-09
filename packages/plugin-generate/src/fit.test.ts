@@ -107,5 +107,32 @@ describe('bandFit — the band a plan of a given depth can stand in (2026-09-09)
   test('fewer than three points is no band', () => {
     expect(bandFit([[0, 0], [1, 0]], 0, 5).widthFt).toBe(0)
   })
+  test('a rear line out of square: a band asked past the depth answers at the depth, never a corner sliver (Modesto, 2026-09-09)', () => {
+    // the Modesto envelope: 50 ft front, 65 ft deep, the left side tapering in 3.75 m, the rear line 4 cm out of square
+    const modesto: [number, number][] = [
+      [-7.61, 0],
+      [7.61, 0],
+      [8.24, 19.79],
+      [-3.86, 19.75],
+    ]
+    const house = bandFit(modesto, 0, 64 * FT, 0.5, 24 * FT)
+    expect(house.widthFt).toBeGreaterThan(36)
+    expect(house.offsetM).toBeGreaterThan(1.5)
+    expect(house.offsetM).toBeLessThan(2.5)
+    // 8 ft past the rear line: the same band, and the depth says the porch does not fit
+    const deep = bandFit(modesto, 0, 72 * FT, 0.5, 24 * FT)
+    expect(deep.widthFt).toBeCloseTo(house.widthFt, 0)
+    expect(deep.offsetM).toBeCloseTo(house.offsetM, 1)
+    expect(deep.depthFt).toBeLessThan(66)
+    expect(deep.depthFt).toBeGreaterThan(63)
+    // the two-column plan's band, 53 ft deep: the lot has the depth; the left line's taper takes the band to
+    // about 40 ft (the right line flares out going back, so the band's right side is the front corner's)
+    const wide = bandFit(modesto, 0, 53 * FT, 0.5, 24 * FT)
+    expect(wide.depthFt).toBeGreaterThan(63)
+    expect(wide.widthFt).toBeGreaterThan(39)
+    expect(wide.widthFt).toBeLessThan(41)
+    // the house's centre plus half its width stays inside the right side line
+    expect(deep.offsetM + (32 * FT) / 2).toBeLessThan(8.24)
+  })
 })
 

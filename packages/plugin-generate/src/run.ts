@@ -28,6 +28,7 @@ function planDepthFt(doc: { rooms: { y: number; d: number }[] }): number {
   for (const r of doc.rooms) d = Math.max(d, r.y + r.d)
   return d
 }
+import { NARROW_W_MIN } from './narrow'
 import { type RollOptions, rollDocument } from './roll'
 import { type RunSummary, useGenerate } from './store'
 import { TEMPLATES } from './templates/poppy'
@@ -291,14 +292,23 @@ export function generateHouse(overrides: RollOptions = {}): RunSummary {
     // then stand the house on the band's centre (Steve, 2026-09-09: "the
     // procedural designs go into the setbacks").
     if (placement && street) {
-      const fitBand = (): { widthFt: number; offsetM: number } => {
-        const depthFt = planDepthFt(rolled.document) + REAR_PORCH_ALLOWANCE_FT
-        const band = bandFit(placement.envelope, placement.frontEdge, depthFt * FT_M)
-        return { widthFt: band.widthFt, offsetM: band.offsetM }
+      // the band the house needs, plus the rear porch's when the lot is deep
+      // enough to hold one behind the house (else the porch is build.ts's
+      // problem: a landing, or none) — never a band the plan cannot reach,
+      // whose centre would carry the house sideways out of the lot
+      const fitBand = (): { widthFt: number; offsetM: number; depthFt: number } => {
+        const depthFt = planDepthFt(rolled.document)
+        // the band's depth is where it narrows under the narrowest house the roll builds
+        const widthM = NARROW_W_MIN * FT_M
+        const withPorch = bandFit(placement.envelope, placement.frontEdge, (depthFt + REAR_PORCH_ALLOWANCE_FT) * FT_M, 0.5, widthM)
+        if (withPorch.depthFt >= depthFt + REAR_PORCH_ALLOWANCE_FT - 0.5 && withPorch.widthFt > 8) return withPorch
+        return bandFit(placement.envelope, placement.frontEdge, depthFt * FT_M, 0.5, widthM)
       }
+      const tooWide = (b: { widthFt: number; depthFt: number }): boolean =>
+        b.widthFt > 8 && (planWidthFt(rolled.document) > b.widthFt + 0.25 || planDepthFt(rolled.document) > b.depthFt + 0.25)
       let band = fitBand()
-      for (let pass = 0; pass < 3 && band.widthFt > 8 && planWidthFt(rolled.document) > band.widthFt + 0.25; pass++) {
-        rolled = rollDocument(S.seed, { ...optionsFor(street), maxWidthFt: Math.floor(band.widthFt) })
+      for (let pass = 0; pass < 3 && tooWide(band); pass++) {
+        rolled = rollDocument(S.seed, { ...optionsFor(street), maxWidthFt: Math.floor(band.widthFt), maxDepthFt: Math.floor(band.depthFt) })
         band = fitBand()
       }
       const sideRoomM = Math.max(0, (band.widthFt - planWidthFt(rolled.document)) / 2) * FT_M
@@ -325,7 +335,10 @@ export function generateHouse(overrides: RollOptions = {}): RunSummary {
     }
     // a reface changes the front edge: the band is measured again for it
     if (placed && placement && placed.frontEdge !== placement.frontEdge) {
-      const band = bandFit(placement.envelope, placed.frontEdge, (planDepthFt(rolled.document) + REAR_PORCH_ALLOWANCE_FT) * FT_M)
+      const depthFt = planDepthFt(rolled.document)
+      const widthM = NARROW_W_MIN * FT_M
+      let band = bandFit(placement.envelope, placed.frontEdge, (depthFt + REAR_PORCH_ALLOWANCE_FT) * FT_M, 0.5, widthM)
+      if (band.depthFt < depthFt + REAR_PORCH_ALLOWANCE_FT - 0.5 || band.widthFt <= 8) band = bandFit(placement.envelope, placed.frontEdge, depthFt * FT_M, 0.5, widthM)
       placed = { ...placed, lateralOffsetM: band.offsetM, sideRoomM: Math.max(0, (band.widthFt - planWidthFt(rolled.document)) / 2) * FT_M }
     }
     const summary = applyDocument(
