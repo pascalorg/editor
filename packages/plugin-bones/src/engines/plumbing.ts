@@ -57,6 +57,7 @@ import { outwardNormal } from './street'
 import {
   buildWallGraph,
   clearOfOpenings,
+  clearOfOpeningsWide,
   nearestWallPoint,
   openingSpans,
   overridePlanPoint,
@@ -65,6 +66,7 @@ import {
   placeElectricMeterSpot,
   placePanelSpot,
   pointInPolygon,
+  stationClears,
   type ServicePlacementOptions,
   wallPath,
   wallPlan,
@@ -283,10 +285,43 @@ export function placeWhSpot(
   // Tank (0.6) + panel enclosure (0.4) + NEC 110.26 working space (0.76)
   // need ~1.0m of separation; a short garage wall can't host both trades
   // (re-verify: the 1.2m offset clamped back onto the panel below 3.2m).
-  const garageWall = garageCandidates.find(
-    (w) => Math.abs(panelMountU(w) - Math.max(0.4, panelMountU(w) - 1.2)) >= 0.999 ||
-           panelMountU(w) + 1.2 <= w.length - 0.4,
-  )
+  const hostsBothTrades = (w: WallSlice): boolean =>
+    Math.abs(panelMountU(w) - Math.max(0.4, panelMountU(w) - 1.2)) >= 0.999 ||
+    panelMountU(w) + 1.2 <= w.length - 0.4
+  const eMeter = placeElectricMeterSpot(walls, rooms, placement)
+  // The heater's station on `whWall`: beside the water entry (the meter
+  // wall) or a panel-width + the NEC 110.26 working space from the panel's
+  // bay (a garage wall — both trades elect the longest one; verify round
+  // D1: the 50-gal tank ENGULFED the panel); then clear of the openings
+  // with its ENCLOSURE's width plus the room its pipes and T&P need beside
+  // it (Steve, 2026-09-09: "your water heater is in front of a window" —
+  // the anchor point alone slid four inches past the jamb and left the
+  // cabinet across the glass); then CLEAR OF THE ELECTRIC METER: without a
+  // garage every trade elects the longest exterior wall at the panel bay —
+  // the enclosure stood on the meter and its mast (Steve, 2026-09-09: "your
+  // meter is on top of the wh, thats why it looks like the electrical goes
+  // into it") — WH_METER_CLEAR from the meter on a shared wall, past it
+  // else before it, the windows and the meter's clearance resolved
+  // TOGETHER (a second window pass alone slid the enclosure straight back
+  // onto the meter).
+  const stationOn = (whWall: WallSlice): number => {
+    const whURaw = (() => {
+      if (whWall === meter.wall) return Math.min(whWall.length - 0.4, meter.u + 1.2)
+      const panelU = panelMountU(whWall)
+      const off = 1.2
+      return panelU + off <= whWall.length - 0.4 ? panelU + off : Math.max(0.4, panelU - off)
+    })()
+    let whU = clearOfOpeningsWide(whWall, whURaw, 0, 2.2, WH_STATION_HALF)
+    if (eMeter && eMeter.wall.id === whWall.id) {
+      const shifted = clearOfMeter(whU, eMeter.u, whWall.length)
+      if (shifted !== whU) {
+        whU = clearOfOpeningsWide(whWall, shifted, 0, 2.2, WH_STATION_HALF, undefined, [
+          { lo: eMeter.u - WH_METER_CLEAR, hi: eMeter.u + WH_METER_CLEAR },
+        ])
+      }
+    }
+    return whU
+  }
   // The heater stands in the GARAGE on its 18 in stand when the house has
   // one; without a garage it stands OUTSIDE — against the exterior face of
   // the meter wall beside the water entry, on a 4 in pad in a weatherproof
@@ -294,33 +329,17 @@ export function placeWhSpot(
   // stud bay, never raised (Steve, 2026-09-09: "the heat pump ones should be
   // round and on a stand in the garage if there is one, no garage then it
   // should be in a container outside the wall, not in the wall and raised
-  // up, sits on a slab").
+  // up, sits on a slab"). Of the garage walls that host both trades, the
+  // longest whose station CLEARS its openings wins — the longest garage
+  // wall is often the door wall, and its 16 ft door left no room beside the
+  // panel (2026-09-09 sweep: the tank stood in the door's span on six
+  // generated houses) — else the longest, best effort.
+  const hosts = garageCandidates.filter(hostsBothTrades)
+  const garageWall =
+    hosts.find((w) => stationClears(w, stationOn(w), 0, 2.2, WH_STATION_HALF)) ?? hosts[0]
   const inGarage = garageWall !== undefined
   const whWall = garageWall ?? meter.wall
-  const whURaw = (() => {
-    if (whWall === meter.wall) return Math.min(whWall.length - 0.4, meter.u + 1.2)
-    // The electrical panel claims panelMountU on this SAME wall (both
-    // trades elect the longest garage wall) — keep the tank a panel-width
-    // + NEC 110.26 working space away (verify round D1: the 50-gal tank
-    // ENGULFED the panel).
-    const panelU = panelMountU(whWall)
-    const off = 1.2
-    return panelU + off <= whWall.length - 0.4 ? panelU + off : Math.max(0.4, panelU - off)
-  })()
-  let whU = clearOfOpenings(whWall, whURaw, 0, 2.1)
-  // CLEAR OF THE ELECTRIC METER. Without a garage every trade elects the
-  // longest exterior wall at the panel bay: the water entry there, the
-  // heater 1.2 m along, the electric meter at the bay or 0.6 m along it —
-  // the enclosure stood on the meter and its mast (Steve, 2026-09-09:
-  // "your meter is on top of the wh, thats why it looks like the
-  // electrical goes into it"). Keep the heater WH_METER_CLEAR from the
-  // meter on a shared wall — past it, else before it — then clear of
-  // openings again.
-  const eMeter = placeElectricMeterSpot(walls, rooms, placement)
-  if (eMeter && eMeter.wall.id === whWall.id) {
-    const shifted = clearOfMeter(whU, eMeter.u, whWall.length)
-    if (shifted !== whU) whU = clearOfOpenings(whWall, shifted, 0, 2.1)
-  }
+  const whU = stationOn(whWall)
   // the seeded service point's height: a 1.5 m tank's centre on its stand
   // (garage) or its pad (outside) — compute reads the KIND's own height
   // while the point stands where it was seeded (`whSeedHeight`)
@@ -350,6 +369,8 @@ export function whSeedHeight(inGarage: boolean): number {
 }
 /** The 4 in housekeeping pad a tank stands on outside the garage. */
 const WH_PAD_H = 0.1
+/** Half the width the heater's station takes on its wall: the enclosure (0.9 m) plus the pipe / T&P room beside it. */
+export const WH_STATION_HALF = 0.6
 
 /**
  * What the plumbing engine reads beyond the walls, rooms and spec (compute

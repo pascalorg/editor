@@ -611,7 +611,10 @@ describe('heat-pump seed election validation (Julien scene, 2026-08-22)', () => 
     // outward to the 0.5 host step (HP polish) — outside the Bathroom
     // (pre-fix class: inside it) and outside the covered void
     // (coverage-blind: 5, 1.3154)
-    expect(hp?.position?.[0]).toBeCloseTo(5, 6)
+    // INTENDED CHANGE 2026-09-09 (T35): the seed keeps clear of the other
+    // trades' stations on the south wall (the meter at u = 5.6, the heater's
+    // enclosure at 6.8) — u = 5 slides to 4.4, grid-snapped to x = 4.5
+    expect(hp?.position?.[0]).toBeCloseTo(4.5, 6)
     expect(hp?.position?.[2]).toBeCloseTo(-1.5, 6)
   })
 })

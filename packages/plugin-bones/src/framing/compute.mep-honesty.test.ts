@@ -363,7 +363,13 @@ describe('F3: condenser election validated at the computeLevel boundary (coverag
     // the covered mid-plan void. The honest spot is condenserStandoff
     // (0.075 + 0.6096 + 0.475 = 1.1596, walls t = 0.15) SOUTH of the
     // south wall, grid-snapped outward to the 0.5 host step (HP polish).
-    expect(unit?.position[0]).toBeCloseTo(5, 6)
+    // INTENDED CHANGE 2026-09-09 (T35, Steve: "the condenser is in front of
+    // the wh"): the election keeps the pad clear of the other trades'
+    // stations on its wall — the electric meter (u = 5.6) and the heater's
+    // enclosure (6.8) on w_south — so the projection u = 5 slides to 4.4,
+    // the nearest clear station, snapped to x = 4.5 (was 5); see the
+    // hvac.condensers pins of the same scene.
+    expect(unit?.position[0]).toBeCloseTo(4.5, 6)
     expect(unit?.position[2]).toBeCloseTo(-1.5, 6)
     // unflagged + silent (the healthy validated path), disconnect present
     const boxes = result.members.filter(

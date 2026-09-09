@@ -7,8 +7,7 @@ import {
   condenserPlan,
   condenserSqftPerTon,
   layoutHvac,
-  placeHeatPumpSpot,
-} from './hvac'
+  placeHeatPumpSpot, condenserStation, exteriorStations} from './hvac'
 import { circuitSchedule } from './electrical'
 import { manualJLite, manualSTons } from './manual-j'
 import { computeTakeoff } from './takeoff'
@@ -1049,7 +1048,13 @@ describe('condenser election validation — false-exterior walls never place the
     // the nearest wall that validates is the true SOUTH wall — pad at the
     // 24" face-clearance stand-off (1.1846 from the centerline, t = 0.2),
     // grid-snapped outward to the 0.5 host step → z = −1.5 (HP polish)
-    expect(plan[0]).toBeCloseTo(5, 6)
+    // INTENDED CHANGE 2026-09-09 (T35, Steve: "the condenser is in front of
+    // the wh ... needs some better logic"): the election keeps the pad clear
+    // of the other trades' stations on its wall — here the electric meter
+    // at u = 5.6 (0.45 half) and the heater's enclosure at 6.8 (0.6 half)
+    // on w_south — so the projection u = 5 slides to 4.4, the nearest clear
+    // station, and the 0.5 grid snap lands it at x = 4.5 (was 5).
+    expect(plan[0]).toBeCloseTo(4.5, 6)
     expect(plan[1]).toBeCloseTo(-1.5, 6)
     // clean election: no ⚠ flags, no election warning — this is the healthy path
     for (const m of [...padsOf(out.members), ...cabinetsOf(out.members)]) {
@@ -1083,7 +1088,10 @@ describe('condenser election validation — false-exterior walls never place the
     expect(blind?.[0]).toBeCloseTo(5, 6)
     expect(blind?.[1]).toBeCloseTo(2.5 - 1.1846, 6) // in-plan void — wrong
     const sighted = placeHeatPumpSpot(walls, rooms, coverage)
-    expect(sighted?.[0]).toBeCloseTo(5, 6)
+    // INTENDED CHANGE 2026-09-09 (T35): u = 5 slides to 4.4, clear of the
+    // meter (5.6) and the heater (6.8) on w_south; the raw election spot
+    // stands at the wall's normal stand-off, no grid snap here
+    expect(sighted?.[0]).toBeCloseTo(4.4, 6)
     expect(sighted?.[1]).toBeCloseTo(-1.1846, 6) // truly outdoors
   })
 
@@ -1154,7 +1162,9 @@ describe('condenser election validation — false-exterior walls never place the
     walls.push(wall('w_fence', [2, -1], [8, -1], true))
     const out = layoutHvac(walls, rooms, LOD400, undefined, { coverage })
     const unit = condensersOf(out.fixtures)[0] as Fixture
-    expect(unit.position[0]).toBeCloseTo(5, 6)
+    // INTENDED CHANGE 2026-09-09 (T35): x = 4.5 — slid clear of the meter
+    // and the heater on w_south (see the healthy-path pin above)
+    expect(unit.position[0]).toBeCloseTo(4.5, 6)
     expect(unit.position[2]).toBeCloseTo(-1.5, 6) // 1.1846 stand-off, snapped out to the grid
     const disc = out.fixtures.find((f) => f.kind === 'disconnect') as Fixture
     expect(disc.sourceId).toBe('w_south')
@@ -1211,7 +1221,8 @@ describe('condenser election validation — false-exterior walls never place the
     walls.push(wall('w_fence', [2, -1], [8, -1], true))
     const auto = layoutHvac(walls, rooms, LOD400, undefined, { coverage })
     const seed = placeCondenserSeedSpot(walls, rooms, coverage)
-    expect(seed?.[0]).toBeCloseTo(5, 6)
+    // INTENDED CHANGE 2026-09-09 (T35): x = 4.5, clear of the meter and the heater
+    expect(seed?.[0]).toBeCloseTo(4.5, 6)
     expect(seed?.[1]).toBeCloseTo(-1.5, 6)
     const post = layoutHvac(
       walls,
@@ -1254,8 +1265,13 @@ describe('condenser election validation — false-exterior walls never place the
     ]
     const rooms = [room('r_laundry', 'Laundry', 'laundry', [[1, 1], [3, 1], [3, 3], [1, 3]])]
     const seed = placeCondenserSeedSpot(walls, rooms)
-    // raw election spot (2, -1.1846), not the off-wall slid spot (4.45, …)
-    expect(seed?.[0]).toBeCloseTo(2, 6)
+    // raw election spot, not the off-wall slid spot (4.45, …).
+    // INTENDED CHANGE 2026-09-09 (T35): on this 4 m wall the heater's
+    // enclosure (u = 0.70) and the meter (0.35) pack at the start — neither
+    // clears the 3.8 m window either way — and the projection u = 2 stands
+    // 1.3 m from the enclosure's centre by 1.6 mm: the election's first
+    // clear station is 2.3 (was 2)
+    expect(seed?.[0]).toBeCloseTo(2.3, 6)
     expect(seed?.[1]).toBeCloseTo(-1.1846, 6)
   })
 
@@ -1563,5 +1579,46 @@ describe('Manual-J-lite engine sizing — hand-derived tonnage, 5-ton split, cli
     // already states which rule sized it)
     const intl = layoutHvac(walls, rooms, LOD400)
     expect(intl.warnings.some((w) => w.includes('Manual S'))).toBe(false)
+  })
+})
+
+describe('the condenser keeps clear of the other trades\' stations (T35, 2026-09-09: "the condenser is in front of the wh")', () => {
+  test('exteriorStations: the heater\'s enclosure and the meter on the misclassified scene\'s south wall', () => {
+    const { walls, rooms } = misclassifiedScene()
+    const stations = exteriorStations(walls, rooms)
+    expect(stations.map((s) => s.wallId)).toEqual(['w_south', 'w_south'])
+    expect(stations[0]?.u).toBeCloseTo(6.8, 6) // the heater, 1.2 past the meter
+    expect(stations[0]?.halfW).toBeCloseTo(0.6, 6)
+    expect(stations[1]?.u).toBeCloseTo(5.6, 6) // the meter socket
+  })
+
+  test('condenserStation: free stays, blocked slides to the nearest clear station, packed gives up honestly', () => {
+    const w = wall('w', [0, 0], [10, 0], true)
+    const avoid = [
+      { wallId: 'w', u: 5.6, halfW: 0.45 },
+      { wallId: 'w', u: 6.8, halfW: 0.6 },
+    ]
+    expect(condenserStation(w, 2, avoid)).toBe(2)
+    expect(condenserStation(w, 5, avoid)).toBeCloseTo(4.4, 6)
+    expect(condenserStation(w, 7, avoid)).toBeCloseTo(8.2, 6)
+    // stations on another wall never matter
+    expect(condenserStation(w, 5, [{ wallId: 'other', u: 5, halfW: 2 }])).toBe(5)
+    // a wall the stations cover end to end: the projection, packed
+    const short = wall('s', [0, 0], [2, 0], true)
+    expect(condenserStation(short, 1, [{ wallId: 's', u: 1, halfW: 1 }])).toBe(1)
+  })
+
+  test('the engine\'s condenser and the heater\'s enclosure never overlap in plan', () => {
+    const { walls, rooms, coverage } = misclassifiedScene()
+    const out = layoutHvac(walls, rooms, LOD400, undefined, { coverage })
+    const unit = condensersOf(out.fixtures)[0] as Fixture
+    const { placeWhSpot } = require('./plumbing') as typeof import('./plumbing')
+    const wh = placeWhSpot(walls, rooms)!
+    const whX = wh.wall.start[0] + wh.wall.dir[0] * wh.u
+    expect(Math.abs(unit.position[0] - whX)).toBeGreaterThanOrEqual(0.6 + 0.5 - 1e-6)
+    // the seed the panel writes is the engine's own spot (A4 parity survives the slide)
+    const seed = placeCondenserSeedSpot(walls, rooms, coverage)
+    expect(seed?.[0]).toBe(unit.position[0])
+    expect(seed?.[1]).toBe(unit.position[2])
   })
 })

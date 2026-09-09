@@ -1265,7 +1265,69 @@ a round run off a takeoff collar on the trunk's side turning down
 through an elbow into a round boot, the plenum rises out of a transition
 off the air handler; every fitting books its true section.
 
+## Mandate additions (Steve, 2026-09-09 — the stations on the walls)
+
+Steve: "your water heater is in front of a window, make sure your
+electrical panels miss them too, also i saw electrical or maybe plumbing
+going through a window and the condensor is in front of the wh, should be
+under a window but preferred to be not under a window, doesnt have to be
+packed in like this, needs some better logic, the normal items stayed!!
+looked great!!"
+
+G121 A piece of equipment standing on a wall — the heater's enclosure, the
+meter socket and its mast, the panel, the condenser — clears every opening
+with its WHOLE width, never by its anchor point alone; the trades know each
+other's stations on the exterior walls, and the condenser stands clear of
+the heater and the meter, on the wall the equipment room projects to.
+
 ## Log (continued)
+
+- 2026-09-09: **Batch T35 — the stations on the walls (G121).**
+  electrical.ts `clearOfOpeningsWide(wall, u, y0, y1, halfW, margin, extra)`:
+  the openings in the band widened by the half width and the 4 in margin
+  plus any extra centre intervals, MERGED (two windows too close together
+  for the station between them read as one), the centre snapped to the
+  nearer free end, clamped to the wall, the other end when the nearer runs
+  off the wall, the nearer end clamped when neither fits; `stationClears`
+  is the predicate. The electric meter clears with 0.25 half over
+  [METER_AFF − 0.3, + 1.2] (the socket and its mast), the panel with 0.3
+  half over PANEL_AFF ± 0.6 — both placements, the side wall with a street
+  and the garage / longest wall without (the panel had NO opening clearance
+  at all). plumbing.ts `placeWhSpot`: `stationOn(wall)` — the raw station,
+  clear of the openings with `WH_STATION_HALF` 0.6 (the enclosure plus the
+  pipe / T&P room), then clear of the electric meter with the windows and
+  the meter's `WH_METER_CLEAR` interval resolved TOGETHER (a second window
+  pass alone slid the enclosure straight back onto the meter); of the garage
+  walls that host both trades the longest whose station clears wins (the
+  longest garage wall is the DOOR wall on six generated houses and the tank
+  stood in the door's span). hvac.ts: `WallStation`, `exteriorStations(walls,
+  rooms, placement)` (the heater's enclosure when it stands outside, the
+  meter with 0.45 half), `condenserStation(wall, u0, avoid)` (u0 when free,
+  else the nearest 0.3 m station clear of the stations, never within the
+  pad of a corner, else u0 packed); `electHeatPumpExit` slides each
+  candidate's station but keeps the wall order by the equipment room's
+  PROJECTION distance and the stand-off along the wall's normal (the
+  direction to the slid point pulled the pad sideways); `avoid` omitted, the
+  election derives the stations itself so a direct caller (the seed, the
+  tests) agrees with the engine, which passes its street-aware set from
+  layoutHvac; the windows stay the row's business (its keepouts already
+  forbid a pad under any opening reaching the unit's zone). service/place.ts
+  seeds the heat pump with the same stations. Sweep (scratchpad
+  stations-sweep.ts, 35 generated scenes): 49 violations → 0 — the heater
+  in a window on 21 outside houses and in the garage door's span on 6, the
+  meter and the panel across the front door's jamb on 14, the condenser
+  1.3–2.8 m from the heater where it stood on it. Tests: Bones 2196
+  (electrical.openings: the wide rule, the second window, the wall ends,
+  the meter and the panel clear of six windows with and without a street;
+  plumbing.connectivity: the enclosure past a window centred on its bay and
+  still 1.2 from the meter, the engine's pipes through no glass;
+  hvac.condensers: exteriorStations, condenserStation, the condenser never
+  overlapping the enclosure with the seed still the engine's own spot; the
+  misclassified-scene pins in hvac.condensers, place.test and
+  compute.mep-honesty moved x 5 → 4.5 and the guard-bail pin 2 → 2.3 with
+  INTENDED-CHANGE notes — the meter at u 5.6 and the enclosure at 6.8 block
+  the projection at 5; master-baseline.json UNCHANGED, the baseline house's
+  stations never collided). Typecheck clean but the three known files.
 
 - 2026-09-09: **Batch T34 — ducts true to life (G119, G120).**
   T34a (sections): `PrismSolid.kind` gains 'equipment'; `cutPrism` hatches

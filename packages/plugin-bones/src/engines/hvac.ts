@@ -103,9 +103,11 @@ import {
   segmentCrossesRo,
   wallPath,
   wallPlan,
+  placeElectricMeterSpot,
+  type ServicePlacementOptions,
 } from './electrical'
 import { MANUAL_S_MAX, MANUAL_S_MIN, manualJLite, manualSTons, type ManualJLiteLoad } from './manual-j'
-import { routePipe, type PipeSpec } from './plumbing'
+import { placeWhSpot, routePipe, type PipeSpec, WH_STATION_HALF } from './plumbing'
 
 type Pt = readonly [number, number]
 
@@ -1294,6 +1296,58 @@ function spotIsOutdoors(
   return true
 }
 
+/** A piece of equipment standing on a wall: its centre station along the wall and half its width. */
+export type WallStation = { wallId: string; u: number; halfW: number }
+
+/**
+ * The stations the other trades took on the exterior walls — the water
+ * heater's enclosure (plumbing) and the electric meter with its mast
+ * (electrical) — so the condenser keeps clear of them (Steve, 2026-09-09:
+ * "the condenser is in front of the wh ... doesnt have to be packed in like
+ * this, needs some better logic").
+ */
+export function exteriorStations(
+  walls: WallSlice[],
+  rooms: RoomSlice[],
+  placement: ServicePlacementOptions = {},
+): WallStation[] {
+  const out: WallStation[] = []
+  const wh = placeWhSpot(walls, rooms, placement)
+  if (wh && !wh.inGarage) out.push({ wallId: wh.wall.id, u: wh.u, halfW: WH_STATION_HALF })
+  const meter = placeElectricMeterSpot(walls, rooms, placement)
+  if (meter) out.push({ wallId: meter.wall.id, u: meter.u, halfW: 0.45 })
+  return out
+}
+
+/** Half the condenser's station on its wall: the pad's side plus its service room. */
+const CONDENSER_STATION_HALF = COND_PAD_SIDE / 2 + 0.1
+
+/**
+ * Where on `wall` the condenser stands, starting from `u0` (the equipment
+ * room's projection): `u0` itself when no other trade's station overlaps
+ * it, else the nearest station (0.3 m steps either way, never within the
+ * pad of a corner) clear of them all, else `u0` again — packed, and the
+ * row's own rough-opening slide and grid snap still run from there. The
+ * windows are the row's business: its keepouts already forbid a pad under
+ * any opening reaching the unit's zone.
+ */
+export function condenserStation(wall: WallSlice, u0: number, avoid: readonly WallStation[]): number {
+  const halfW = CONDENSER_STATION_HALF
+  const blocked = (u: number): boolean =>
+    avoid.some((a) => a.wallId === wall.id && Math.abs(a.u - u) < a.halfW + halfW + 0.1)
+  if (!blocked(u0)) return u0
+  const lo = halfW + 0.15
+  const hi = wall.length - halfW - 0.15
+  if (hi <= lo) return u0
+  const start = Math.max(lo, Math.min(hi, u0))
+  const stations: number[] = [start]
+  for (let d = 0.3; d < wall.length; d += 0.3) {
+    if (start + d <= hi) stations.push(start + d)
+    if (start - d >= lo) stations.push(start - d)
+  }
+  return stations.find((u) => !blocked(u)) ?? u0
+}
+
 /**
  * CONDENSER ELECTION (Julien-scene root cause, 2026-08-22): wall.exterior
  * is INPUT, not truth — host floor-coverage gaps classify interior
@@ -1312,15 +1366,27 @@ export function electHeatPumpExit(
   walls: WallSlice[],
   rooms: RoomSlice[],
   coverage: readonly CoverageSlice[] = [],
+  /**
+   * The other trades' stations on the exterior walls the pad keeps clear
+   * of; omitted, the election derives them itself (exteriorStations with
+   * no street) so a direct caller and the engine agree — the engine passes
+   * its street-aware set.
+   */
+  avoid?: readonly WallStation[],
 ): { wall: WallSlice; at: Pt; spot: Pt; validated: boolean } | null {
   const served = hvacServedRooms(rooms)
   if (served.length === 0) return null
   const equipAt = centroid(equipmentRoomOf(served).polygon)
-  const candidates: { wall: WallSlice; at: Pt; d: number }[] = []
+  const stations = avoid ?? exteriorStations(walls, rooms)
+  const candidates: { wall: WallSlice; at: Pt; raw: Pt; d: number }[] = []
   for (const wall of walls) {
     if (!wall.exterior || wall.curved) continue
-    const at = projectOnto([wall.start[0], wall.start[1]], [wall.end[0], wall.end[1]], equipAt)
-    candidates.push({ wall, at, d: Math.hypot(at[0] - equipAt[0], at[1] - equipAt[1]) })
+    // the wall order stays the equipment room's projection distance — the
+    // slide along the elected wall (condenserStation) never flips the wall
+    const raw = projectOnto([wall.start[0], wall.start[1]], [wall.end[0], wall.end[1]], equipAt)
+    const u0 = (raw[0] - wall.start[0]) * wall.dir[0] + (raw[1] - wall.start[1]) * wall.dir[1]
+    const at = wallPointAt(wall, condenserStation(wall, u0, stations))
+    candidates.push({ wall, at, raw, d: Math.hypot(raw[0] - equipAt[0], raw[1] - equipAt[1]) })
   }
   if (candidates.length === 0) return null
   // Stable sort keeps wall order on ties — the same wall nearestExteriorExit
@@ -1334,24 +1400,26 @@ export function electHeatPumpExit(
   // Per-candidate stand-off: t/2 + 24" face clearance + cabinet depth/2
   // (condenserStandoff) — the spot is the CABINET CENTER, so the face
   // clearance is honest for THIS wall's thickness, not a flat guess.
-  const spotOf = (at: Pt, wall: WallSlice): Pt => {
-    const ox = at[0] - equipAt[0]
-    const oz = at[1] - equipAt[1]
+  // the outward direction is the equipment room's PROJECTION onto the
+  // wall (its normal); a station slid along the wall keeps that direction
+  const spotOf = (at: Pt, raw: Pt, wall: WallSlice): Pt => {
+    const ox = raw[0] - equipAt[0]
+    const oz = raw[1] - equipAt[1]
     const n = Math.max(1e-6, Math.hypot(ox, oz))
     const off = condenserStandoff(wall.thickness)
     return [at[0] + (ox / n) * off, at[1] + (oz / n) * off]
   }
   for (const cand of candidates) {
-    const spot = spotOf(cand.at, cand.wall)
+    const spot = spotOf(cand.at, cand.raw, cand.wall)
     if (spotIsOutdoors(spot, walls, rooms, coverage)) {
       return { wall: cand.wall, at: cand.at, spot, validated: true }
     }
   }
-  const nearest = candidates[0] as { wall: WallSlice; at: Pt; d: number }
+  const nearest = candidates[0] as { wall: WallSlice; at: Pt; raw: Pt; d: number }
   return {
     wall: nearest.wall,
     at: nearest.at,
-    spot: spotOf(nearest.at, nearest.wall),
+    spot: spotOf(nearest.at, nearest.raw, nearest.wall),
     validated: false,
   }
 }
@@ -1367,8 +1435,9 @@ export function placeHeatPumpSpot(
   walls: WallSlice[],
   rooms: RoomSlice[],
   coverage: readonly CoverageSlice[] = [],
+  avoid?: readonly WallStation[],
 ): Pt | null {
-  return electHeatPumpExit(walls, rooms, coverage)?.spot ?? null
+  return electHeatPumpExit(walls, rooms, coverage, avoid)?.spot ?? null
 }
 
 /** Plan point on a wall centerline at distance `u` from its start. */
@@ -1408,8 +1477,9 @@ export function placeCondenserSeedSpot(
   walls: WallSlice[],
   rooms: RoomSlice[],
   coverage: readonly CoverageSlice[] = [],
+  avoid?: readonly WallStation[],
 ): Pt | null {
-  const election = electHeatPumpExit(walls, rooms, coverage)
+  const election = electHeatPumpExit(walls, rooms, coverage, avoid)
   if (!election) return null
   const anchor = election.spot
   const served = hvacServedRooms(rooms)
@@ -1692,6 +1762,11 @@ export function layoutHvac(
   // an OUTDOOR zone (courtyard garden) legitimizes a pad spot there, and
   // the election must see it (hvacServedRooms drops it).
   const zonesAll = rooms
+  // the other trades' exterior stations the condenser keeps clear of (the heater's enclosure, the meter)
+  const stations = exteriorStations(walls, zonesAll, {
+    ...(spec.street ? { street: spec.street } : {}),
+    ...(spec.panelSide ? { panelSide: spec.panelSide } : {}),
+  })
   rooms = hvacServedRooms(rooms)
   if (rooms.length === 0) return { members, fixtures, warnings, plan: null, system: null }
   const fab = spec.detail !== '200'
@@ -1775,7 +1850,7 @@ export function layoutHvac(
   // moves to just inside the wall nearest the unit's pad, the trunk rises
   // from there, and two through-wall ducts join the cabinet to it.
   if (system === 'packaged') {
-    const seed = placeCondenserSeedSpot(walls, zonesAll, context?.coverage ?? [])
+    const seed = placeCondenserSeedSpot(walls, zonesAll, context?.coverage ?? [], stations)
     const exit = seed ? nearestExteriorExit(walls, seed) : null
     if (seed && exit) {
       const inward = centroid(equipRoom.polygon)
@@ -2449,7 +2524,7 @@ export function layoutHvac(
     // exhausted walk keeps the least-bad spot and says so (flag + warning
     // below). A verbatim override still wins its POSITION outright (A4) —
     // the election runs anyway to recognize the machine's own seed (below).
-    const election = electHeatPumpExit(walls, zonesAll, context?.coverage ?? [])
+    const election = electHeatPumpExit(walls, zonesAll, context?.coverage ?? [], stations)
     let anchor = hpPlan ?? election?.spot ?? null
     const electionUnvalidated = hpPlan == null && election !== null && !election.validated
     // MACHINE-SEEDED OVERRIDE COHERENCE (round-2 finding — the fence+RO

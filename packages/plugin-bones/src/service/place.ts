@@ -6,7 +6,7 @@ import {
 import { probeSlabsFor } from '../framing/compute'
 import { exteriorFaceOf, placeElectricMeterSpot, placePanelSpot, utilityPoleSpot } from '../engines/electrical'
 import { streetFrameFor } from '../engines/street'
-import { placeCondenserSeedSpot, placeThermostatSpot } from '../engines/hvac'
+import { placeCondenserSeedSpot, placeThermostatSpot, exteriorStations } from '../engines/hvac'
 import { placeMeterSpot, placeSewerExit, placeWhSpot } from '../engines/plumbing'
 import { SERVICE_TYPES, ServiceNode, type ServiceType } from './schema'
 
@@ -144,7 +144,7 @@ export function buildServicePointNodes(
   if (!existing.has('heat-pump')) {
     // Coverage rides along (A4 parity with the engine's own election): a
     // seed elected without it could validate a spot the engine rejects.
-    const pad = placeCondenserSeedSpot(walls, rooms, probeSlabs)
+    const pad = placeCondenserSeedSpot(walls, rooms, probeSlabs, exteriorStations(walls, rooms))
     if (pad) {
       out.push(ServiceNode.parse({ serviceType: 'heat-pump', position: [pad[0], 0, pad[1]] }))
     }

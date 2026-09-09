@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import type { Fixture, Member, OpeningSlice, RoomSlice, WallSlice } from '../core/types'
-import { layoutElectrical, panelMountU, routeWiring } from './electrical'
+import {
+  clearOfOpeningsWide,
+  layoutElectrical,
+  panelMountU,
+  placeElectricMeterSpot,
+  placePanelSpot,
+  routeWiring,
+} from './electrical'
 import { cableConnects, endpointsOf, unreachableDevices } from './electrical.test-helpers'
 
 /**
@@ -368,5 +375,72 @@ describe('panel edge clearance (prod 2026-08-16)', () => {
     // enclosure edge (u ± 8in) plus 6in clearance stays out of the RO
     expect(u + halfW < lo || u - halfW > hi).toBe(true)
     expect(Math.min(Math.abs(u - lo), Math.abs(u - hi))).toBeGreaterThan(halfW + 0.1)
+  })
+})
+
+describe('a station clears an opening with its whole width (T35, 2026-09-09: "make sure your electrical panels miss them too")', () => {
+  // window RO 3.5..4.5 at sill 0.9 on an 8 m wall
+  const wall = makeWall({ id: 'w_s', start: [0, 0], end: [8, 0], openings: [opening('window', 4, 1.0, 0.9, 1.3)] })
+  const halfW = 0.6
+
+  test('a centre just past the jamb still moves: the whole width plus the 4 in margin clears the RO', () => {
+    // the POINT rule (clearOfOpenings) would have left u = 4.6 where it is —
+    // its enclosure 4.0..5.2 still crossed the glass
+    const u = clearOfOpeningsWide(wall, 4.6, 0, 2.2, halfW)
+    expect(u - halfW).toBeGreaterThanOrEqual(4.5 + 0.1016 - 1e-9)
+    // the nearer side wins: 4.6 is past the RO's centre, so it goes right
+    expect(u).toBeGreaterThan(4.5)
+    // and from the left of centre it goes left
+    const left = clearOfOpeningsWide(wall, 3.6, 0, 2.2, halfW)
+    expect(left + halfW).toBeLessThanOrEqual(3.5 - 0.1016 + 1e-9)
+  })
+
+  test('a station clear of every opening is left where it is; a band under the sill ignores the window', () => {
+    expect(clearOfOpeningsWide(wall, 1.5, 0, 2.2, halfW)).toBe(1.5)
+    expect(clearOfOpeningsWide(wall, 4, 0, 0.5, halfW)).toBe(4)
+  })
+
+  test('the wall ends clamp the station so its width stays on the wall', () => {
+    expect(clearOfOpeningsWide(wall, 0.1, 0, 2.2, halfW)).toBeCloseTo(halfW + 0.1016, 6)
+    expect(clearOfOpeningsWide(wall, 7.95, 0, 2.2, halfW)).toBeCloseTo(8 - halfW - 0.1016, 6)
+  })
+
+  test('a second window in the way moves it again', () => {
+    const two = makeWall({
+      id: 'w_s2',
+      start: [0, 0],
+      end: [10, 0],
+      openings: [opening('window', 4, 1.0, 0.9, 1.3), opening('window', 5.6, 1.0, 0.9, 1.3)],
+    })
+    const u = clearOfOpeningsWide(two, 4.6, 0, 2.2, halfW)
+    for (const o of two.openings) {
+      expect(Math.abs(u - o.u)).toBeGreaterThanOrEqual(o.roughWidth / 2 + halfW + 0.1016 - 1e-9)
+    }
+  })
+
+  test('the meter socket and the panel miss the windows on their walls with their width', () => {
+    // windows every 1.5 m along the long walls, sills at 0.9 — wherever the
+    // trades elect their bay, the socket (0.25 half) and the enclosure
+    // (0.3 half) stand clear of every RO reaching their band
+    const sills = [1.5, 3, 4.5, 6, 7.5, 9].map((u) => opening('window', u, 1.0, 0.9, 1.3))
+    const walls = [
+      makeWall({ id: 'w_s', start: [0, 0], end: [10, 0], openings: sills }),
+      makeWall({ id: 'w_e', start: [10, 0], end: [10, 6], openings: [opening('window', 3, 1.0, 0.9, 1.3)] }),
+      makeWall({ id: 'w_n', start: [10, 6], end: [0, 6], openings: sills }),
+      makeWall({ id: 'w_w', start: [0, 6], end: [0, 0], openings: [opening('window', 3, 1.0, 0.9, 1.3)] }),
+    ]
+    const rooms = [room('other', [[0, 0], [10, 0], [10, 6], [0, 6]])]
+    const clear = (spot: { wall: WallSlice; u: number } | null, halfW: number) => {
+      expect(spot).not.toBeNull()
+      for (const o of spot!.wall.openings) {
+        expect(Math.abs(spot!.u - o.u)).toBeGreaterThanOrEqual(o.roughWidth / 2 + halfW - 1e-9)
+      }
+    }
+    clear(placeElectricMeterSpot(walls, rooms), 0.25)
+    clear(placePanelSpot(walls, rooms), 0.3)
+    // and with a street, the side-wall panel too
+    const street = { dir: [0, -1] as [number, number], setbackM: 6 }
+    clear(placePanelSpot(walls, rooms, { street: street as never }), 0.3)
+    clear(placeElectricMeterSpot(walls, rooms, { street: street as never }), 0.25)
   })
 })

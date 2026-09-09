@@ -882,7 +882,8 @@ export function placePanelSpot(
   // 2026-09-07: "the main panel is to the outside usually on left or
   // right side, favoring the garage"); the panel sits back-to-back inside.
   const sideSpot = placement.street ? sideWallPanelSpot(straight, rooms, placement) : null
-  if (sideSpot) return sideSpot
+  // the panel's enclosure and its working space clear a window with their width (2026-09-09)
+  if (sideSpot) return { ...sideSpot, u: clearOfOpeningsWide(sideSpot.wall, sideSpot.u, PANEL_AFF - 0.6, PANEL_AFF + 0.6, 0.3) }
 
   const longest = (candidates: WallSlice[]): WallSlice | undefined =>
     candidates.reduce<WallSlice | undefined>(
@@ -896,7 +897,7 @@ export function placePanelSpot(
   // Round-12 B1: a door spanning the wall midpoint used to swallow the
   // panel — every homerun then started from inside the RO and never
   // reached its anchor. Mount in the widest door-free segment instead.
-  return { wall, u: panelMountU(wall), heightAff: PANEL_AFF }
+  return { wall, u: clearOfOpeningsWide(wall, panelMountU(wall), PANEL_AFF - 0.6, PANEL_AFF + 0.6, 0.3), heightAff: PANEL_AFF }
 }
 
 /** How far back from the front corner the meter-main stands on its side wall. */
@@ -1092,7 +1093,8 @@ export function placeElectricMeterSpot(
     wall = near.wall
     u = near.u
   }
-  u = clearOfOpenings(wall, u, METER_AFF - 0.25, METER_AFF + 0.25)
+  // the socket and its mast clear a window with their width (2026-09-09)
+  u = clearOfOpeningsWide(wall, u, METER_AFF - 0.3, METER_AFF + 1.2, 0.25)
   return { wall, u, heightAff: METER_AFF }
 }
 
@@ -2324,6 +2326,67 @@ const RUN_ZONE_TOP = WIRE_RUN_Y + 8 * 0.012 + inches(2)
 /** Snap a wall coordinate out of any rough opening crossing [y0, y1] —
  * cable can't drop through a doorway OR a window; it lands in the first
  * stud bay past the king studs. */
+/**
+ * A STATION clears an opening with its whole width: `u` is the centre of a
+ * piece of equipment `halfW` wide (an enclosure, a panel, a meter socket
+ * with its mast) — where [u − halfW, u + halfW] overlaps a rough opening
+ * in the [y0, y1] band the centre snaps to the nearer side, the margin
+ * and the half width past the opening, clamped to the wall; a second
+ * opening in the way moves it again (three passes). Steve, 2026-09-09:
+ * "your water heater is in front of a window, make sure your electrical
+ * panels miss them too" — clearOfOpenings moved only the anchor POINT.
+ */
+export function clearOfOpeningsWide(
+  wall: WallSlice,
+  u: number,
+  y0: number,
+  y1: number,
+  halfW: number,
+  margin = inches(4),
+  /** Further along-wall intervals the station's CENTRE keeps out of (another trade's clearance). */
+  extra: readonly { lo: number; hi: number }[] = [],
+): number {
+  const lo = Math.min(halfW + margin, wall.length / 2)
+  const hi = Math.max(wall.length - halfW - margin, wall.length / 2)
+  const at = Math.max(lo, Math.min(hi, u))
+  // the intervals the centre may not stand in: every opening widened by
+  // the half width and the margin, plus the extras — merged, so two
+  // windows too close together for the station between them read as one
+  const raw = [
+    ...openingSpans(wall, y0, y1).map((s) => ({ lo: s.lo - margin - halfW, hi: s.hi + margin + halfW })),
+    ...extra.map((e) => ({ lo: e.lo, hi: e.hi })),
+  ].sort((a, b) => a.lo - b.lo)
+  const merged: { lo: number; hi: number }[] = []
+  for (const r of raw) {
+    const last = merged[merged.length - 1]
+    if (last && r.lo <= last.hi + 1e-9) last.hi = Math.max(last.hi, r.hi)
+    else merged.push({ ...r })
+  }
+  const inside = merged.find((m) => at > m.lo && at < m.hi)
+  if (!inside) return at
+  const leftOk = inside.lo >= lo
+  const rightOk = inside.hi <= hi
+  if (leftOk && rightOk) return at - inside.lo < inside.hi - at ? inside.lo : inside.hi
+  if (leftOk) return inside.lo
+  if (rightOk) return inside.hi
+  // neither side fits on this wall: the nearer end, clamped — as clear as
+  // the wall allows (the caller may prefer another wall: stationClears)
+  const nearer = at - inside.lo < inside.hi - at ? inside.lo : inside.hi
+  return Math.max(lo, Math.min(hi, nearer))
+}
+
+/** Whether a station `halfW` wide at `u` stands clear of every opening of `wall` reaching the [y0, y1] band (plus the margin). */
+export function stationClears(
+  wall: WallSlice,
+  u: number,
+  y0: number,
+  y1: number,
+  halfW: number,
+  margin = inches(4),
+): boolean {
+  return !openingSpans(wall, y0, y1).some((s) => u + halfW > s.lo - margin && u - halfW < s.hi + margin)
+}
+
 export function clearOfOpenings(wall: WallSlice, u: number, y0 = 0, y1 = RUN_ZONE_TOP): number {
   // Box edge + casing clearance, not just the point: 4in keeps a device
   // visibly off the RO trim (prod report: box kissing the door edge).

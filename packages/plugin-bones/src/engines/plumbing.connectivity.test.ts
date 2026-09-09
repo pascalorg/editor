@@ -4,7 +4,7 @@ import type { Fixture, Member, OpeningSlice, RoomSlice, WallSlice } from '../cor
 import { inches } from '../core/units'
 import type { PlacedFixtureSlice } from '../core/wall-model'
 import { endpointsOf } from './electrical.test-helpers'
-import { clearOfMeter, placeWhSpot, layoutPlumbing } from './plumbing'
+import { clearOfMeter, placeWhSpot, layoutPlumbing, WH_STATION_HALF } from './plumbing'
 import {
   ATTACH_TOL,
   byPrefix,
@@ -828,6 +828,58 @@ describe('P5 gate — re-verify round 5 (jumper through a tee-spanning window)',
     ]
     const placed = [pf('wc', 'toilet', [6.5, 0.6]), pf('ks', 'kitchen-sink', [1.5, 7.6])]
     const { members } = layoutPlumbing(walls, rooms, undefined, placed)
+    expect(pipesThroughOpenings(members, walls)).toEqual([])
+  })
+})
+
+describe('the heater clears a window with its enclosure (T35, 2026-09-09: "your water heater is in front of a window")', () => {
+  const shell = (openings: OpeningSlice[] = []) => {
+    const walls = [
+      makeWall({ id: 'w_s', start: [0, 0], end: [12, 0], openings }),
+      makeWall({ id: 'w_e', start: [12, 0], end: [12, 8] }),
+      makeWall({ id: 'w_n', start: [12, 8], end: [0, 8] }),
+      makeWall({ id: 'w_w', start: [0, 8], end: [0, 0] }),
+    ]
+    const rooms: RoomSlice[] = [
+      { id: 'r', name: 'Living', category: 'other', polygon: [[0, 0], [12, 0], [12, 8], [0, 8]], boundaryWallIds: [], ceilingHeight: 2.5 },
+    ]
+    return { walls, rooms }
+  }
+  const window = (u: number): OpeningSlice => ({
+    id: `win_${u}`,
+    kind: 'window',
+    u,
+    width: 0.95,
+    roughWidth: 1.0,
+    height: 1.25,
+    roughHeight: 1.3,
+    sillHeight: 0.9,
+  })
+
+  test('a window centred on the heater\'s bay moves the whole enclosure past its jamb', () => {
+    const bare = placeWhSpot(...(() => { const { walls, rooms } = shell(); return [walls, rooms] as const })())!
+    expect(bare.wall.id).toBe('w_s')
+    // the same shell with a window right where the heater stood
+    const { walls, rooms } = shell([window(bare.u)])
+    const spot = placeWhSpot(walls, rooms)!
+    expect(spot.wall.id).toBe('w_s')
+    expect(Math.abs(spot.u - bare.u)).toBeGreaterThanOrEqual(0.5 + WH_STATION_HALF + 0.1016 - 1e-9)
+    // and still clear of the electric meter on the shared wall
+    const { placeElectricMeterSpot } = require('./electrical') as typeof import('./electrical')
+    const eMeter = placeElectricMeterSpot(walls, rooms)!
+    if (eMeter.wall.id === spot.wall.id) expect(Math.abs(spot.u - eMeter.u)).toBeGreaterThanOrEqual(1.2 - 1e-6)
+  })
+
+  test('the engine\'s supply pipes no longer enter the wall through the glass', () => {
+    const bare = placeWhSpot(...(() => { const { walls, rooms } = shell(); return [walls, rooms] as const })())!
+    const { walls, rooms } = shell([window(bare.u)])
+    const placed = [pf('sink', 'kitchen-sink', [6, 7.4]), pf('wc', 'toilet', [8, 0.6])]
+    const { members } = layoutPlumbing(walls, rooms, undefined, placed)
+    const wh = members.find((m) => m.role === 'water-heater') as Member
+    expect(wh).toBeDefined()
+    const dz = Math.abs(wh.position[2] - 0)
+    expect(dz).toBeGreaterThan(0.1) // outside the south wall
+    expect(Math.abs(wh.position[0] - bare.u)).toBeGreaterThanOrEqual(0.5 + WH_STATION_HALF - 0.2)
     expect(pipesThroughOpenings(members, walls)).toEqual([])
   })
 })
