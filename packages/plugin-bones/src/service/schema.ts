@@ -28,6 +28,7 @@ export const SERVICE_TYPES = [
   'thermostat',
   'heat-pump',
   'electric-meter',
+  'utility-pole',
 ] as const
 
 export const ServiceType = z.enum(SERVICE_TYPES)
@@ -57,7 +58,7 @@ export const ServiceNode = BaseNode.extend({
   yawOverride: z.number().nullable().optional(),
 }).describe(
   `Bones service point — a building/utility interface the systems route to.
-  - serviceType: panel (electric service panel) | water-heater | water-entry (meter + shut-off) | sewer-exit | power-entry | thermostat | heat-pump (outdoor unit pad) | electric-meter
+  - serviceType: panel (electric service panel) | water-heater | water-entry (meter + shut-off) | sewer-exit | power-entry | thermostat | heat-pump (outdoor unit pad) | electric-meter | utility-pole (the utility's pole — overhead — or pad transformer — underground — at the lot; floor-placed, drag it to where the utility's pole actually stands)
   - wallId + wallT (0..1 along the wall) + heightAff: wall-mounted anchor; drags slide along the wall and commit wallT (position resets to [0,0,0]); wires/pipes/ducts re-route
   - position: level-local spot for floor-placed types (sewer exit, heat pump); manually written off [0,0,0] it outranks the wall anchor (nearest-wall snap)
   - yawOverride (heat-pump only): assembly yaw in radians (cabinet + pad turn together); null/absent = the engine's wall-square auto orientation
@@ -76,4 +77,5 @@ export const SERVICE_LABEL: Record<ServiceType, string> = {
   thermostat: 'Thermostat',
   'heat-pump': 'Heat pump',
   'electric-meter': 'Electric meter',
+  'utility-pole': 'Utility pole / transformer',
 }

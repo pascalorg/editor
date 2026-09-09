@@ -1140,7 +1140,8 @@ describe('services with the street known (G53/G55): the meter-main on a side wal
     const members = routeWiring(fixtures, walls, { route: 'walls', street, serviceEntrance: 'underground', groundY: -0.3 })
     const pad = members.find((m) => m.label?.startsWith('Pad-mount transformer'))!
     expect(pad).toBeDefined()
-    expect(pad.position[2]).toBeCloseTo(16.3, 6)
+    // the pad shares the pole's spot rule since 2026-09-09: 0.6 m past the lot line
+    expect(pad.position[2]).toBeCloseTo(16.6, 6)
     const laterals = members.filter((m) => m.label?.includes('underground, 24 in cover'))
     // the pad stands straight out from the meter, so one Manhattan leg is zero-length
     expect(laterals.length).toBeGreaterThanOrEqual(2)
@@ -1149,6 +1150,29 @@ describe('services with the street known (G53/G55): the meter-main on a side wal
       if (horizontal) expect(m.position[1]).toBeCloseTo(-0.3 - 0.6, 6)
     }
     expect(members.find((m) => m.label?.startsWith('Utility pole'))).toBeUndefined()
+  })
+
+  test("with the lot ring, the pole stands at the lot's street corner on the meter's side; a placed service point wins", () => {
+    // the lot: x −5..15, z −4..16, the street along z = 16 (edge 2)
+    const lotStreet = { ...street, lot: [[-5, -4], [15, -4], [15, 16], [-5, 16]] as const, frontEdge: 2 }
+    const fixtures = layoutElectrical(walls, rooms, undefined, undefined, [], { street: lotStreet })
+    const members = routeWiring(fixtures, walls, { route: 'attic', street: lotStreet, serviceEntrance: 'overhead', groundY: -0.3, eaveY: 2.7 })
+    const pole = members.find((m) => m.label?.startsWith('Utility pole'))!
+    // the meter is on the right wall (x > 10): the right street corner (15, 16), inset 0.6 m both ways
+    expect(pole.position[0]).toBeCloseTo(14.4, 6)
+    expect(pole.position[2]).toBeCloseTo(15.4, 6)
+    expect(pole.label).toMatch(/street corner/)
+    // underground: the pad at the same corner
+    const under = routeWiring(fixtures, walls, { route: 'walls', street: lotStreet, serviceEntrance: 'underground', groundY: -0.3 })
+    const pad = under.find((m) => m.label?.startsWith('Pad-mount transformer'))!
+    expect(pad.position[0]).toBeCloseTo(14.4, 6)
+    expect(pad.position[2]).toBeCloseTo(15.4, 6)
+    // a dragged utility-pole service point outranks the rule
+    const placed = routeWiring(fixtures, walls, { route: 'attic', street: lotStreet, serviceEntrance: 'overhead', groundY: -0.3, eaveY: 2.7, utilityPole: [3, 15] })
+    const movedPole = placed.find((m) => m.label?.startsWith('Utility pole'))!
+    expect(movedPole.position[0]).toBeCloseTo(3, 6)
+    expect(movedPole.position[2]).toBeCloseTo(15, 6)
+    expect(movedPole.label).toMatch(/placed service point/)
   })
 
   test('no street: the legacy longest-wall panel and bbox lateral stand (byte parity)', () => {

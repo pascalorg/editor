@@ -196,6 +196,6 @@ export const serviceDefinition: ServiceDefinition = {
 
   mcp: {
     description:
-      'Bones service point node. serviceType: panel | water-heater | water-entry | sewer-exit | power-entry | thermostat | heat-pump | electric-meter. Wall-mounted via wallId + wallT (0..1 along the wall) + heightAff, or floor-placed via position; editor drags slide wall types along their wall and commit wallT (position resets to [0,0,0]); a position written off the default [0,0,0] outranks the wall anchor. heat-pump only: yawOverride (radians, world Y) turns the whole outdoor assembly (cabinet + pad); null/absent = the engine’s wall-square auto orientation. The engines treat an existing node as the authoritative location and re-route wiring/piping to it; deleting it restores auto-placement.',
+      'Bones service point node. serviceType: panel | water-heater | water-entry | sewer-exit | power-entry | thermostat | heat-pump | electric-meter | utility-pole (the utility pole / pad transformer at the lot, floor-placed). Wall-mounted via wallId + wallT (0..1 along the wall) + heightAff, or floor-placed via position; editor drags slide wall types along their wall and commit wallT (position resets to [0,0,0]); a position written off the default [0,0,0] outranks the wall anchor. heat-pump only: yawOverride (radians, world Y) turns the whole outdoor assembly (cabinet + pad); null/absent = the engine’s wall-square auto orientation. The engines treat an existing node as the authoritative location and re-route wiring/piping to it; deleting it restores auto-placement.',
   },
 }

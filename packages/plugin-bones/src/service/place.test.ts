@@ -54,7 +54,7 @@ function scene(): Record<string, Record<string, unknown>> {
 }
 
 describe('buildServicePointNodes', () => {
-  test('creates all eight service types at the engines’ auto spots', () => {
+  test('creates all nine service types at the engines’ auto spots', () => {
     const nodes = scene()
     const created = buildServicePointNodes(nodes, 'level_1')
     expect(created.map((n) => n.serviceType).sort()).toEqual([
@@ -64,6 +64,7 @@ describe('buildServicePointNodes', () => {
       'power-entry',
       'sewer-exit',
       'thermostat',
+      'utility-pole',
       'water-entry',
       'water-heater',
     ])
@@ -136,7 +137,7 @@ describe('buildServicePointNodes', () => {
   test('idempotent: existing types are skipped, missing ones fill in', () => {
     const nodes = scene()
     const first = buildServicePointNodes(nodes, 'level_1')
-    expect(first).toHaveLength(8)
+    expect(first).toHaveLength(9)
     // simulate the panel + sewer-exit already created on this level
     const panel = first.find((n) => n.serviceType === 'panel') as ServiceNode
     const sewer = first.find((n) => n.serviceType === 'sewer-exit') as ServiceNode
@@ -149,6 +150,7 @@ describe('buildServicePointNodes', () => {
       'heat-pump',
       'power-entry',
       'thermostat',
+      'utility-pole',
       'water-entry',
       'water-heater',
     ])
@@ -256,7 +258,7 @@ describe('placedServiceTypes', () => {
     const types = placedServiceTypes(nodes, 'level_1')
     expect(types.size).toBe(2)
     expect([...types].sort()).toEqual(['panel', 'water-heater'])
-    // …so the action still has six types to create
+    // …so the action still has seven types to create
     const created = buildServicePointNodes({ ...scene(), ...nodes }, 'level_1')
     expect(created.map((n) => n.serviceType).sort()).toEqual([
       'electric-meter',
@@ -264,6 +266,7 @@ describe('placedServiceTypes', () => {
       'power-entry',
       'sewer-exit',
       'thermostat',
+      'utility-pole',
       'water-entry',
     ])
   })
@@ -301,6 +304,7 @@ describe('planServiceSeeding', () => {
       'power-entry',
       'sewer-exit',
       'thermostat',
+      'utility-pole',
       'water-entry',
       'water-heater',
     ])
@@ -394,7 +398,7 @@ describe('servicePresentation — signs respect the view mode', () => {
   /** The three kinds whose physical counterpart the ENGINES render at the
    * same anchor (heat-pump A/B 2026-08-22) — X-ray drops the placeholder
    * body, the sign stays. */
-  const ENGINE_KINDS = ['heat-pump', 'water-heater', 'electric-meter'] as const
+  const ENGINE_KINDS = ['heat-pump', 'water-heater', 'electric-meter', 'utility-pole'] as const
 
   test('xray: engine-rendered kinds drop the body, KEEP the sign; all others box + sign', () => {
     const nodes = withFraming({ viewMode: 'xray' })

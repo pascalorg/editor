@@ -2969,6 +2969,52 @@ export type ServiceCableContext = {
   eaveY?: number
   /** The electric utility's name (the site's dossier) — printed on the pole / transformer. */
   provider?: string
+  /** A placed utility-pole service point (level-local plan): the pole / pad stands exactly there. */
+  utilityPole?: readonly [number, number]
+}
+
+/** The pole / pad stands this far inside the lot lines at the corner. */
+const POLE_CORNER_INSET = 0.6
+
+/**
+ * Where the utility pole (overhead) or pad transformer (underground) stands:
+ * the lot's STREET CORNER on the meter's side, inset from both lot lines —
+ * a utility serves a lot from its corner, not from in front of the door
+ * (Steve, 2026-09-09: "why does the power pole go right into the
+ * entrance?"). Without the lot ring: the old rule, at the lot line straight
+ * out from the meter. Exported for the service-point seeding.
+ */
+export function utilityPoleSpot(
+  walls: readonly WallSlice[],
+  meterPlan: readonly [number, number],
+  street: StreetFrame,
+): readonly [number, number] {
+  const dir = street.dir
+  const lot = street.lot
+  if (lot && lot.length >= 3 && typeof street.frontEdge === 'number') {
+    const a = lot[street.frontEdge] as readonly [number, number]
+    const b = lot[(street.frontEdge + 1) % lot.length] as readonly [number, number]
+    // the lateral axis across the street direction; the corner on the meter's side
+    const lat: readonly [number, number] = [-dir[1], dir[0]]
+    const meterLat = meterPlan[0] * lat[0] + meterPlan[1] * lat[1]
+    const aLat = a[0] * lat[0] + a[1] * lat[1]
+    const bLat = b[0] * lat[0] + b[1] * lat[1]
+    const corner = Math.abs(aLat - meterLat) <= Math.abs(bLat - meterLat) ? a : b
+    const other = corner === a ? b : a
+    // inset along the front edge toward the other corner, and back into the lot
+    const ex = other[0] - corner[0]
+    const ez = other[1] - corner[1]
+    const el = Math.hypot(ex, ez) || 1
+    return [
+      corner[0] + (ex / el) * POLE_CORNER_INSET - dir[0] * POLE_CORNER_INSET,
+      corner[1] + (ez / el) * POLE_CORNER_INSET - dir[1] * POLE_CORNER_INSET,
+    ]
+  }
+  let maxWall = Number.NEGATIVE_INFINITY
+  for (const w of walls) for (const p of [w.start, w.end]) maxWall = Math.max(maxWall, p[0] * dir[0] + p[1] * dir[1])
+  const meterProj = meterPlan[0] * dir[0] + meterPlan[1] * dir[1]
+  const lotLine = maxWall + street.setbackM
+  return [meterPlan[0] + dir[0] * (lotLine + POLE_CORNER_INSET - meterProj), meterPlan[1] + dir[1] * (lotLine + POLE_CORNER_INSET - meterProj)]
 }
 
 /**
@@ -3100,15 +3146,18 @@ export function routeServiceCable(
     // at the lot line (NEC 230.24 clearances, 230.28 mast). Underground: a
     // lateral from a pad transformer at the lot line, 24 in of cover
     // (NEC 300.5), rising into the meter base.
-    const dir = context.street.dir
-    let maxWall = Number.NEGATIVE_INFINITY
-    for (const w of walls) for (const p of [w.start, w.end]) maxWall = Math.max(maxWall, p[0] * dir[0] + p[1] * dir[1])
-    const meterProj = mx * dir[0] + mz * dir[1]
-    const lotLine = maxWall + context.street.setbackM
     const ground = context.groundY ?? 0
-    const at = (proj: number): readonly [number, number] => [mx + dir[0] * (proj - meterProj), mz + dir[1] * (proj - meterProj)]
+    // the pole / pad: the placed service point, else the lot's street corner
+    // on the meter's side, else the lot line straight out from the meter
+    const spot = context.utilityPole ?? utilityPoleSpot(walls, [mx, mz], context.street)
+    const at = (): readonly [number, number] => spot
+    const where = context.utilityPole
+      ? 'at the placed service point'
+      : context.street.lot
+        ? "at the lot's street corner (drag the Utility pole service point to where the utility's pole stands)"
+        : 'at the lot line'
     if ((context.serviceEntrance ?? 'overhead') === 'overhead') {
-      const pole = at(lotLine + 0.6)
+      const pole = at()
       street = [pole[0], pole[1]]
       const weatherheadY = Math.max((context.eaveY ?? 3) + 0.6, ground + 3.66)
       // the mast: 2 in rigid conduit from the meter base up the wall face
@@ -3148,7 +3197,7 @@ export function routeServiceCable(
         rotation: [0, 0, 0],
         material: 'pt-lumber',
         sourceId: 'service-entrance',
-        label: `Utility pole — 35 ft class 5 at the lot line (${context.provider ? `${context.provider}'s` : "the utility's"}; the drop attaches ~24 ft up) — verify with the utility`,
+        label: `Utility pole — 35 ft class 5 ${where} (${context.provider ? `${context.provider}'s` : "the utility's"}; the drop attaches ~24 ft up) — verify with the utility`,
       })
       // the drop: triplex from the pole attachment to the weatherhead
       const ddx = mx - pole[0]
@@ -3169,7 +3218,8 @@ export function routeServiceCable(
       })
       // meter base → the mast is the riser: nothing more to draw between them
     } else {
-      const pad = at(lotLine + 0.3)
+      const dir = context.street.dir
+      const pad = at()
       street = [pad[0], pad[1]]
       const depth = ground - 0.6
       members.push({
@@ -3181,7 +3231,7 @@ export function routeServiceCable(
         rotation: [0, Math.atan2(-dir[1], dir[0]), 0],
         material: 'steel',
         sourceId: 'service-entrance',
-        label: `Pad-mount transformer at the lot line (${context.provider ? `${context.provider}'s` : "the utility's"}) — service lateral origin`,
+        label: `Pad-mount transformer ${where} (${context.provider ? `${context.provider}'s` : "the utility's"}) — service lateral origin`,
       })
       flagged([pad[0], ground + 0.5, pad[1]], [pad[0], depth, pad[1]], 'service lateral — underground, 24 in cover (NEC 300.5)')
       flagged([pad[0], depth, pad[1]], [mx, depth, pad[1]], 'service lateral — underground, 24 in cover (NEC 300.5)')

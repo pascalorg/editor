@@ -144,7 +144,14 @@ export function streetFrameFor(input: {
     for (const w of straight) {
       for (const p of [w.start, w.end]) maxWall = Math.max(maxWall, p[0] * dir[0] + p[1] * dir[1])
     }
-    return { dir, setbackM: Math.max(0.5, edgeProj - maxWall), source: 'site' }
+    // the whole ring in the level frame — the service engines put the
+    // utility pole / pad transformer at its street corner
+    const lot = site.points.map((p): Pt => {
+      const wx = p[0] - (pos[0] ?? 0)
+      const wz = p[1] - (pos[2] ?? 0)
+      return [wx * cos - wz * sin, wx * sin + wz * cos]
+    })
+    return { dir, setbackM: Math.max(0.5, edgeProj - maxWall), source: 'site', lot, frontEdge: i }
   }
   // the entry: the exterior wall with the widest exterior door
   let entry: { wall: WallSlice; width: number } | null = null

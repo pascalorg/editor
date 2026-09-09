@@ -403,6 +403,10 @@ export type StreetFrame = {
   dir: readonly [number, number]
   setbackM: number
   source: 'site' | 'entry-door' | 'plan-up'
+  /** The lot ring in the level's frame (site source only) — the utility pole / pad stands at its street corner. */
+  lot?: readonly (readonly [number, number])[]
+  /** The lot edge (index into `lot`) that fronts the street. */
+  frontEdge?: number
 }
 
 export const DEFAULT_SPEC: FramingSpec = {

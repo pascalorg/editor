@@ -1085,7 +1085,55 @@ G102 A ground-hosted porch post carries its own grade once: Bones adds
 the ground under it only where the viewer does (a storey at the site
 datum), so the beam stays under the plate on sloping ground.
 
+## Mandate additions (Steve, 2026-09-09 — the service entrance, the block details)
+
+Steve: "why does the power pole go right into the entrance? should the
+electrical panel be off to the side same with power pole, also does
+underground electricity work? what about pole location do we cover that
+so they can set it back? hows all this work? also your block walls at
+the ends are like not square ... should be 90 perfect corners not have
+protrusions, also check your cmu headers are correct on windows and
+doors ... the edges of cmu on windows looked jagged ... your sleeper
+framing on the over roof framing on gable entrances needs to land the
+rafters right on the sleeper ... researching anything online i might be
+missing that is required, we need the cmu wall details and spacing for
+into the plans on cmu generated plans, check the cmu plans too ensure
+all the details like the eave detail is correct, ensure it works on
+trusses they sit correctly and with regular conventional framing and
+that works correctly on cmu block wall".
+
+G103 The utility pole (overhead) or the pad transformer (underground)
+stands at the lot's street corner on the meter's side, never in line
+with the door; a Utility pole service point seeds there and, dragged,
+is where the utility's pole actually stands.
+G104 Block corners are square and flush; block jambs are straight;
+lintels bear 8 in; a porch gable's rafters land on their sleepers; the
+CMU plans carry the wall section, the reinforcing spacing, the tie beam,
+the lintel schedule and the eave / truss-bearing detail (the follow-on
+batches).
+
 ## Log (continued)
+
+- 2026-09-09: **Batch T17 — the service entrance at the lot corner
+  (G103).** The meter-main was already on a side wall near the front
+  when the street is known (G53/G55); the pole then stood at the lot line
+  straight out from the meter — beside the house, sometimes in front of a
+  porch. Now `StreetFrame` carries the lot ring (level-local) and its
+  front edge (engines/street.ts), `utilityPoleSpot(walls, meterPlan,
+  street)` in electrical.ts puts the pole / pad transformer at the front
+  edge's corner on the meter's side, 0.6 m inside both lot lines (the
+  old rule without a lot), and both labels say where and why. New
+  `utility-pole` service type (floor-placed; schema, placement body,
+  engine-rendered under showElectrical, seeded by place.ts at the
+  engine's spot); its position reaches the engine as
+  `ServiceOverrides.utilityPole` → `ServiceCableContext.utilityPole` and
+  wins over the rule ("drag it to where the utility's pole stands").
+  Underground service already existed (`serviceEntrance:
+  'underground'` — pad transformer + 24 in lateral); the pad shares the
+  corner spot. Bones 2169 tests (one new: the corner, the pad, the
+  placed point), service seeding pins moved 8 → 9. Open, queued as the
+  next batches: the block corners / jambs, the porch sleepers, the CMU
+  plan details and the truss / rafter bearing on the tie beam.
 
 - 2026-09-09: **Batch T16 — the block house all the way through (G99–G102).**
   Probed on a regenerated Cape Coral block house (scratchpad

@@ -325,6 +325,8 @@ export type ServiceOverrides = {
   thermostat?: ServicePointOverride
   heatPump?: ServicePointOverride
   electricMeter?: ServicePointOverride
+  /** The utility pole (overhead) / pad transformer (underground) at the lot — floor-placed. */
+  utilityPole?: ServicePointOverride
 }
 
 /** A door/window opening extracted from a wall's children, wall-local. */

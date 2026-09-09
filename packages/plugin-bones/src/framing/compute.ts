@@ -414,21 +414,22 @@ export function splitBattsAroundBlocking(members: Member[], blocking: Member[]):
  * NaN-guard contract as `extractServiceOverrides`, but kept out of that file
  * so the parallel exterior-fallback rework there never collides with it.
  */
-const EXTRA_SERVICE_KEY: Record<string, 'thermostat' | 'heatPump' | 'electricMeter'> = {
+const EXTRA_SERVICE_KEY: Record<string, 'thermostat' | 'heatPump' | 'electricMeter' | 'utilityPole'> = {
   thermostat: 'thermostat',
   'heat-pump': 'heatPump',
   'electric-meter': 'electricMeter',
+  'utility-pole': 'utilityPole',
 }
 
 function extractExtraServiceOverrides(
   nodes: Record<string, Record<string, unknown>>,
   levelId: string,
 ): {
-  overrides: Pick<ServiceOverrides, 'thermostat' | 'heatPump' | 'electricMeter'>
+  overrides: Pick<ServiceOverrides, 'thermostat' | 'heatPump' | 'electricMeter' | 'utilityPole'>
   duplicates: string[]
 } {
   const winners = new Map<
-    'thermostat' | 'heatPump' | 'electricMeter',
+    'thermostat' | 'heatPump' | 'electricMeter' | 'utilityPole',
     { id: string; node: Record<string, unknown> }
   >()
   const duplicates = new Set<string>()
@@ -449,7 +450,7 @@ function extractExtraServiceOverrides(
   }
   const num = (v: unknown, fallback: number): number =>
     typeof v === 'number' && Number.isFinite(v) ? v : fallback
-  const overrides: Pick<ServiceOverrides, 'thermostat' | 'heatPump' | 'electricMeter'> = {}
+  const overrides: Pick<ServiceOverrides, 'thermostat' | 'heatPump' | 'electricMeter' | 'utilityPole'> = {}
   for (const [key, { node }] of winners) {
     const override: ServicePointOverride = {}
     if (typeof node.wallId === 'string' && node.wallId.length > 0) override.wallId = node.wallId
@@ -1655,6 +1656,10 @@ function computeLevelUncached(
           street: spec.street,
           groundY: gradeY,
           eaveY,
+          // the dragged utility pole / transformer point outranks the lot-corner rule
+          ...(services.utilityPole?.position
+            ? { utilityPole: [services.utilityPole.position[0], services.utilityPole.position[2]] as const }
+            : {}),
         }),
       )
       // B12 round-3 F4 (the E6 honesty class): compute routes one LEVEL,

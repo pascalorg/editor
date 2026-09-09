@@ -35,6 +35,8 @@ export const SERVICE_BODY: Record<ServiceType, BodySpec> = {
   // defaultAff = pad top (0.1016) + half the cabinet height.
   'heat-pump': { dims: [0.95, 0.85, 0.95], color: '#b9bec4', defaultAff: 0.5266, sign: 'HP' },
   'electric-meter': { dims: [0.2, 0.3, 0.15], color: '#9aa1a9', defaultAff: inches(55), sign: 'METER' },
+  // the pole's butt (the engine draws the 35 ft pole / the pad transformer itself)
+  'utility-pole': { dims: [0.3, 1.2, 0.3], color: '#6b5b3e', defaultAff: 0.6, sign: 'POLE' },
 }
 
 /** Types that live on a wall face — a gizmo-moved `position` snaps back to
@@ -322,6 +324,7 @@ export const ENGINE_RENDERED_SERVICE_TYPES: Partial<
   'heat-pump': 'showHvac',
   'water-heater': 'showPlumbing',
   'electric-meter': 'showElectrical',
+  'utility-pole': 'showElectrical',
 }
 
 /** The level's bones:framing node (lowest id wins on duplicates —

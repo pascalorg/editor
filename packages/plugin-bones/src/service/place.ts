@@ -4,7 +4,8 @@ import {
   extractWalls,
 } from '../core/wall-model'
 import { probeSlabsFor } from '../framing/compute'
-import { placeElectricMeterSpot, placePanelSpot } from '../engines/electrical'
+import { placeElectricMeterSpot, placePanelSpot, utilityPoleSpot } from '../engines/electrical'
+import { streetFrameFor } from '../engines/street'
 import { placeCondenserSeedSpot, placeThermostatSpot } from '../engines/hvac'
 import { placeMeterSpot, placeSewerExit, placeWhSpot } from '../engines/plumbing'
 import { SERVICE_TYPES, ServiceNode, type ServiceType } from './schema'
@@ -91,6 +92,43 @@ export function buildServicePointNodes(
     const exit = placeSewerExit(walls, rooms, placed)
     if (exit) {
       out.push(ServiceNode.parse({ serviceType: 'sewer-exit', position: [exit[0], 0, exit[1]] }))
+    }
+  }
+
+  // Utility pole / pad transformer: the lot's street corner on the meter's
+  // side (the engine's own rule) — a floor point the user drags to where
+  // the utility's pole actually stands (Steve, 2026-09-09: "what about pole
+  // location do we cover that so they can set it back?")
+  if (!existing.has('utility-pole')) {
+    const level = nodes[levelId]
+    const buildingNode = level && typeof level.parentId === 'string' ? nodes[level.parentId] : undefined
+    const siteNode = buildingNode && typeof buildingNode.parentId === 'string' ? nodes[buildingNode.parentId] : undefined
+    const ring = siteNode?.type === 'site' ? (siteNode.polygon as { points?: unknown } | undefined)?.points : undefined
+    const street = streetFrameFor({
+      site:
+        Array.isArray(ring) && ring.length >= 3
+          ? {
+              points: ring as readonly (readonly [number, number])[],
+              frontEdge: typeof siteNode?.frontEdge === 'number' ? (siteNode.frontEdge as number) : undefined,
+            }
+          : null,
+      building: buildingNode
+        ? {
+            position: Array.isArray(buildingNode.position) ? (buildingNode.position as number[]) : [0, 0, 0],
+            rotation: Array.isArray(buildingNode.rotation) ? (buildingNode.rotation as number[]) : [0, 0, 0],
+          }
+        : null,
+      walls,
+      rooms,
+    })
+    const meterSpot = placeElectricMeterSpot(walls, rooms, street ? { street } : {})
+    if (street && meterSpot) {
+      const at: readonly [number, number] = [
+        meterSpot.wall.start[0] + meterSpot.wall.dir[0] * meterSpot.u,
+        meterSpot.wall.start[1] + meterSpot.wall.dir[1] * meterSpot.u,
+      ]
+      const pole = utilityPoleSpot(walls, at, street)
+      out.push(ServiceNode.parse({ serviceType: 'utility-pole', position: [pole[0], 0, pole[1]] }))
     }
   }
 
