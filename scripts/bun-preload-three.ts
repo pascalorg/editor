@@ -1,3 +1,5 @@
+import { resolveSync } from 'bun'
+
 // three r186's CommonJS entry is `require('./three.module.js')`. Bun cannot
 // require() an ES module that is still loading, and the R3F ecosystem (fiber,
 // drei, maath, meshline, troika) ships CJS mains that require("three") while
@@ -7,4 +9,4 @@
 // test, not from this file: with the isolated linker each package has its own
 // link and this directory would walk up to a different copy.
 process.noDeprecation = true
-await import(Bun.resolveSync('three', process.cwd()))
+await import(resolveSync('three', process.cwd()))
