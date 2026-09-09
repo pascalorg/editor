@@ -91,7 +91,9 @@ export function armGroupMove3d(args: {
     affectedIds: AnyNodeId[]
     candidates: ReturnType<typeof collectAlignmentAnchors>
     restAnchors: ReturnType<typeof bboxCornerAnchors>
+    startBounds: GroupPlanBounds
     restBounds: GroupPlanBounds
+    rotation: number
     restCenter: Vec2
     plane: Plane
     startLocal: Vector3
@@ -170,7 +172,9 @@ export function armGroupMove3d(args: {
       affectedIds,
       candidates,
       restAnchors,
+      startBounds: restBounds,
       restBounds,
+      rotation: 0,
       restCenter,
       plane,
       startLocal,
@@ -257,7 +261,10 @@ export function armGroupMove3d(args: {
     const rotated = rotateGroupSnapshots(s.starts, s.links, pivot, delta)
     s.starts = rotated.starts
     s.links = rotated.links
-    s.restBounds = rotatePlanBounds(s.restBounds, pivot, delta)
+    // Re-fit from the start footprint at the accumulated angle: rotating the
+    // previous axis-aligned fit would inflate the box every step.
+    s.rotation += delta
+    s.restBounds = rotatePlanBounds(s.startBounds, pivot, s.rotation)
     s.restAnchors = bboxCornerAnchors(
       'group-move',
       s.restBounds.minX,

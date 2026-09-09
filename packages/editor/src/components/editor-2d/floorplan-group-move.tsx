@@ -115,7 +115,9 @@ export function startFloorplanGroupMove(
     affectedIds: AnyNodeId[]
     candidates: ReturnType<typeof collectAlignmentAnchors>
     restAnchors: ReturnType<typeof bboxCornerAnchors>
+    startBounds: GroupPlanBounds
     restBounds: GroupPlanBounds
+    rotation: number
     restCenter: Vec2
     lastDelta: Vec2 | null
   }
@@ -180,7 +182,9 @@ export function startFloorplanGroupMove(
       affectedIds,
       candidates,
       restAnchors,
+      startBounds: restBounds,
       restBounds,
+      rotation: 0,
       restCenter,
       lastDelta: null,
     }
@@ -255,7 +259,8 @@ export function startFloorplanGroupMove(
     const rotated = rotateGroupSnapshots(s.starts, s.links, pivot, delta)
     s.starts = rotated.starts
     s.links = rotated.links
-    s.restBounds = rotatePlanBounds(s.restBounds, pivot, delta)
+    s.rotation += delta
+    s.restBounds = rotatePlanBounds(s.startBounds, pivot, s.rotation)
     s.restAnchors = bboxCornerAnchors(
       'group-move',
       s.restBounds.minX,

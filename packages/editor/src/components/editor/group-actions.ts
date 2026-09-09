@@ -112,6 +112,7 @@ export function startGroupPickUp(
   if (!startBounds) return false
   // Mutable: mid-carry R/T re-seeds the footprint around the same pivot.
   let restBounds = startBounds
+  let carriedRotation = 0
   // Rotation pivot for mid-carry R/T; stable across the whole pick-up.
   const restCenter = planBoundsCenter(restBounds)
   // Ground plane for the 3D surface: the meshes' base when available, floor
@@ -255,7 +256,8 @@ export function startGroupPickUp(
     const rotated = rotateGroupSnapshots(starts, links, pivot, delta)
     starts = rotated.starts
     links = rotated.links
-    restBounds = rotatePlanBounds(restBounds, pivot, delta)
+    carriedRotation += delta
+    restBounds = rotatePlanBounds(startBounds, pivot, carriedRotation)
     restAnchors = bboxCornerAnchors(
       'group-move',
       restBounds.minX,
