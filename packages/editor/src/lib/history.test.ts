@@ -258,8 +258,8 @@ describe('standalone history source invalidation', () => {
       core.sceneRegistry.byType.level.add(level.id)
       const material = new MeshBasicMaterial()
       const meshes = []
-      const walls = [wall, { ...wall, id: 'wall_start', start: [0,0], end: [0,4] }, { ...wall, id: 'wall_old', start: [4,0], end: [4,4] }, { ...wall, id: 'wall_new', start: [6,0], end: [6,4] }, { ...wall, id: 'wall_beyond', start: [6,4], end: [8,4] }, remote]
-      const nodes = { [level.id]: level }
+      const walls = [wall, { ...wall, id: 'wall_start', start: [0,0], end: [0,4] }, { ...wall, id: 'wall_old', start: [4,0], end: [4,4] }, { ...wall, id: 'wall_new', start: [6,1], end: [6,4] }, { ...wall, id: 'wall_beyond', start: [6,4], end: [8,4] }, remote, { ...wall, id: 'wall_interior', start: [1,1], end: [2,1] }]
+      const nodes = { [level.id]: level, [slab.id]: slab }
       walls.forEach((host, i) => {
         const door = core.DoorNode.parse({ id: 'door_batch_' + i, parentId: host.id })
         nodes[host.id] = { ...host, children: [door.id] }
@@ -270,7 +270,8 @@ describe('standalone history source invalidation', () => {
         core.sceneRegistry.byType.door.add(door.id)
       })
       scene.setState({ nodes }); clearSceneHistory()
-      edit(wall.id, { end: [6,0] }); clean()
+      const stopSpatial = core.initSpatialGridSync()
+      edit(wall.id, { end: [6,1] }); clean()
       viewer.useViewer.setState({ externalSelectedIds: [], previewSelectedIds: [], hoveredId: null, selection: { ...viewer.useViewer.getState().selection, selectedIds: [], levelId: null } })
       let now = 0
       performance.now = () => now
@@ -279,18 +280,18 @@ describe('standalone history source invalidation', () => {
       frame(); now += 181; frame()
       assert(meshes.every(mesh => !mesh.layers.isEnabled(viewer.SCENE_LAYER)))
       const batch = root.children.find(child => child.name === 'item-batch')
-      assert.equal(batch.instanceCount, 6)
+      assert.equal(batch.instanceCount, 7)
       for (const jump of [runUndo, runRedo]) {
       clean(); jump(); await flush()
       assert.deepEqual([...scene.getState().dirtyNodes].sort(), [level.id, ...walls.slice(0,4).map(node => node.id)].sort())
       captureChangedNodes(); clean(); frame()
-      assert.deepEqual(meshes.map(mesh => mesh.layers.isEnabled(viewer.SCENE_LAYER)), [true, true, true, true, false, false])
-      assert.equal(batch.instanceCount, 2)
+      assert.deepEqual(meshes.map(mesh => mesh.layers.isEnabled(viewer.SCENE_LAYER)), [true, true, true, true, false, false, false])
+      assert.equal(batch.instanceCount, 3)
       now += 181; frame()
-      assert.equal(batch.instanceCount, 6)
+      assert.equal(batch.instanceCount, 7)
       assert(meshes.every(mesh => !mesh.layers.isEnabled(viewer.SCENE_LAYER)))
       }
-      resetNodeBatchState(); if (wake.current) clearTimeout(wake.current)
+      stopSpatial(); core.spatialGridManager.clear(); resetNodeBatchState(); if (wake.current) clearTimeout(wake.current)
     `)
   })
 
