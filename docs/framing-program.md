@@ -1222,6 +1222,28 @@ Show and its Reset, so the manual state is visible and undoable.
 
 ## Log (continued)
 
+- 2026-09-09: **Batch T32 — the heater clear of the electric meter.**
+  Steve: "found the issue your meter is on top of the wh, thats why it
+  looks like the electrical goes into it ... needs fixed on that
+  procedural on all styles however that works or in bones correctly, wh
+  was on outside looked decent as a container". Without a garage every
+  trade elected the longest exterior wall at the panel bay: the water
+  entry there, the heater 1.2 m along it, the electric meter at the bay
+  (with the street) or 0.6 m along it — the enclosure stood on the
+  socket and its mast. `placeWhSpot(walls, rooms, placement)` now asks
+  `placeElectricMeterSpot` where the meter goes and, on a shared wall,
+  keeps the heater `WH_METER_CLEAR` (1.2 m: half the enclosure, half the
+  socket, the NEC 110.26 working space) from it — past the meter first,
+  before it when the wall ends (`clearOfMeter`, pure) — then clears the
+  openings again; the engine passes its street / panel-side context, the
+  seeding keeps the no-street pair (its electric-meter seed is placed the
+  same way, so the two seeds agree); a heater DRAGGED into the meter's
+  bay is flagged (⚠ … NEC 110.26) rather than moved. Sweep
+  (`wh-meter-sweep.ts`): 33 generated scenes × auto / heat pump / outdoor
+  tankless — the nearest heater to a meter 1.36 m, none under 1 m. Bones
+  2182 (a connectivity test for the shared-wall clearance and the pure
+  rule), sheets 258.
+
 - 2026-09-09: **Batch T31 — the water heater on the typical details
   sheet.** `plans/details.ts`: `DetailVariables.waterHeater` (kind,
   gallons, diameter, height, in the garage / outside, the spec's

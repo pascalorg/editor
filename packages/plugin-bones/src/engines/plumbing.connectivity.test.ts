@@ -4,7 +4,7 @@ import type { Fixture, Member, OpeningSlice, RoomSlice, WallSlice } from '../cor
 import { inches } from '../core/units'
 import type { PlacedFixtureSlice } from '../core/wall-model'
 import { endpointsOf } from './electrical.test-helpers'
-import { layoutPlumbing } from './plumbing'
+import { clearOfMeter, placeWhSpot, layoutPlumbing } from './plumbing'
 import {
   ATTACH_TOL,
   byPrefix,
@@ -328,6 +328,24 @@ describe('P5 gate — island fixture (air-run fallback + trap-arm flag)', () => 
   // container outside the wall, not in the wall and raised up, sits on a
   // slab"): without a garage the chosen / default kind stands OUTSIDE the
   // meter wall on a 4 in pad in an enclosure — no more silent tankless.
+  test('no garage → the heater keeps 1.2 m from the electric meter on the shared wall (2026-09-09: "your meter is on top of the wh")', () => {
+    const { placeElectricMeterSpot } = require('./electrical') as typeof import('./electrical')
+    const eMeter = placeElectricMeterSpot(walls, rooms, {})!
+    const whSpot = placeWhSpot(walls, rooms, {})!
+    expect(whSpot.wall.id).toBe(eMeter.wall.id)
+    expect(Math.abs(whSpot.u - eMeter.u)).toBeGreaterThanOrEqual(1.2 - 1e-6)
+    // the engine's heater stands at the spot — 1.2 m from the meter's socket in plan
+    const wh = members.find((m) => m.role === 'water-heater') as Member
+    const mx = eMeter.wall.start[0] + eMeter.wall.dir[0] * eMeter.u
+    const mz = eMeter.wall.start[1] + eMeter.wall.dir[1] * eMeter.u
+    expect(Math.hypot(wh.position[0] - mx, wh.position[2] - mz)).toBeGreaterThan(1.0)
+    // the pure rule: past the meter first, before it when the wall ends, itself when neither fits
+    expect(clearOfMeter(3.0, 3.4, 10)).toBeCloseTo(4.6, 6)
+    expect(clearOfMeter(9.0, 9.2, 10)).toBeCloseTo(8.0, 6)
+    expect(clearOfMeter(1.0, 1.1, 2.0)).toBe(1.0)
+    expect(clearOfMeter(5.0, 2.0, 10)).toBe(5.0)
+  })
+
   test('no garage → the tank stands outside the meter wall on its pad, in an enclosure', () => {
     const wh = members.find((m) => m.role === 'water-heater') as Member
     expect(wh.label).toContain('storage water heater')

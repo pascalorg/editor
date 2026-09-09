@@ -62,8 +62,10 @@ import {
   overridePlanPoint,
   overrideWallPoint,
   panelMountU,
+  placeElectricMeterSpot,
   placePanelSpot,
   pointInPolygon,
+  type ServicePlacementOptions,
   wallPath,
   wallPlan,
   type WallPoint,
@@ -269,6 +271,8 @@ export function placeMeterSpot(
 export function placeWhSpot(
   walls: WallSlice[],
   rooms: RoomSlice[],
+  /** The street / panel-side context the ELECTRIC meter is placed with — the heater keeps clear of its bay. */
+  placement: ServicePlacementOptions = {},
 ): { wall: WallSlice; u: number; tank: boolean; inGarage: boolean; outside: boolean; heightAff: number } | null {
   const straight = walls.filter((w) => !w.curved && w.length >= 0.1)
   const meter = placeMeterSpot(walls)
@@ -303,11 +307,41 @@ export function placeWhSpot(
     const off = 1.2
     return panelU + off <= whWall.length - 0.4 ? panelU + off : Math.max(0.4, panelU - off)
   })()
-  const whU = clearOfOpenings(whWall, whURaw, 0, 2.1)
+  let whU = clearOfOpenings(whWall, whURaw, 0, 2.1)
+  // CLEAR OF THE ELECTRIC METER. Without a garage every trade elects the
+  // longest exterior wall at the panel bay: the water entry there, the
+  // heater 1.2 m along, the electric meter at the bay or 0.6 m along it —
+  // the enclosure stood on the meter and its mast (Steve, 2026-09-09:
+  // "your meter is on top of the wh, thats why it looks like the
+  // electrical goes into it"). Keep the heater WH_METER_CLEAR from the
+  // meter on a shared wall — past it, else before it — then clear of
+  // openings again.
+  const eMeter = placeElectricMeterSpot(walls, rooms, placement)
+  if (eMeter && eMeter.wall.id === whWall.id) {
+    const shifted = clearOfMeter(whU, eMeter.u, whWall.length)
+    if (shifted !== whU) whU = clearOfOpenings(whWall, shifted, 0, 2.1)
+  }
   // the seeded service point's height: a 1.5 m tank's centre on its stand
   // (garage) or its pad (outside) — compute reads the KIND's own height
   // while the point stands where it was seeded (`whSeedHeight`)
   return { wall: whWall, u: whU, tank: inGarage, inGarage, outside: !inGarage, heightAff: whSeedHeight(inGarage) }
+}
+
+/**
+ * The heater's clearance from the electric meter along a shared wall: half
+ * the enclosure (0.45) + half the socket (0.15) + the NEC 110.26 working
+ * space beside the socket (0.6).
+ */
+export const WH_METER_CLEAR = 1.2
+
+/** `u` at least WH_METER_CLEAR from `meterU` on a wall `length` long — past the meter first, before it second, `u` itself when neither fits. */
+export function clearOfMeter(u: number, meterU: number, length: number): number {
+  if (Math.abs(u - meterU) >= WH_METER_CLEAR - 1e-6) return u
+  const past = meterU + WH_METER_CLEAR
+  if (past <= length - 0.6) return past
+  const before = meterU - WH_METER_CLEAR
+  if (before >= 0.6) return before
+  return u
 }
 
 /** The water-heater service point's seeded centre height, metres AFF. */
@@ -1889,7 +1923,11 @@ function placedPlumbing(
   // 18" ignition height) — else tankless on an exterior wall at 1.2 m AFF —
   // or the water-heater service node, verbatim ----
   const whForced = overrideWallPoint(walls, overrides?.waterHeater)
-  const whSeed = placeWhSpot(walls, rooms)
+  const whPlacement: ServicePlacementOptions = {
+    ...(spec.street ? { street: spec.street } : {}),
+    ...(spec.panelSide ? { panelSide: spec.panelSide } : {}),
+  }
+  const whSeed = placeWhSpot(walls, rooms, whPlacement)
   const whSpot = whForced
     ? {
         wall: whForced.wall,
@@ -2098,6 +2136,13 @@ function placedPlumbing(
     riser(members, condSpec, from, whCenterY + whDims[1] * 0.3, whBottom + 0.02)
   }
   for (const note of wh.notes) whNotes.push(note)
+  if (whForced) {
+    // a heater dragged onto the electric meter's bay: say so rather than move it
+    const eMeter = placeElectricMeterSpot(walls, rooms, whPlacement)
+    if (eMeter && eMeter.wall.id === whWall.id && Math.abs(eMeter.u - whU) < WH_METER_CLEAR - 0.3) {
+      whNotes.push(`⚠ the water heater stands in the electric meter's bay (${Math.abs(eMeter.u - whU).toFixed(1)} m from the socket) — move one; NEC 110.26 working space — verify`)
+    }
+  }
   if (whNotes.length > 0) {
     const fx = fixtures[fixtures.length - 1]
     if (fx && fx.kind === 'water-heater') fx.meta = { ...(fx.meta ?? {}), notes: whNotes.join(' | ') }
