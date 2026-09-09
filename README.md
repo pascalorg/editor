@@ -78,13 +78,13 @@ Claude Code users can install the same canonical skill source as a plugin:
 
 The Claude plugin also supplies the local `pascal mcp connect` server. Install and start the Pascal CLI first, and keep `pascal` on the `PATH` used to launch Claude Code. This local connector needs no Pascal account or API key and does not upload projects automatically.
 
-If `pascal mcp setup claude` previously created a user-scoped `pascal` server, it shadows the plugin-provided server. Remove the manual entry so the plugin owns the connection lifecycle:
+Claude Code 2.1.258 loads both the user-scoped `pascal` server created by `pascal mcp setup claude` and the plugin-provided server. Remove the manual entry before reloading or restarting Claude Code so only the plugin owns the connection lifecycle:
 
 ```bash
 claude mcp remove --scope user pascal
 ```
 
-Use `/mcp` to remove or disable any project- or local-scoped Pascal connection too; a differently named manual connector can otherwise create a second client against the same local service. When the intended project is hosted in a Pascal account or organization, disable the plugin-provided local server in `/mcp` and configure the hosted endpoint from the skill setup guide instead.
+Use `/mcp` to remove or disable any project- or local-scoped Pascal connection too. Leaving both connections active violates the one-active-agent-client-per-local-service requirement. When the intended project is hosted in a Pascal account or organization, disable the plugin-provided local server in `/mcp` and configure the hosted endpoint from the skill setup guide instead.
 
 Codex users can install the same plugin from the repository marketplace:
 

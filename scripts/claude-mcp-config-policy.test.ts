@@ -14,6 +14,13 @@ const marketplace = JSON.parse(
   readFileSync(join(repositoryRoot, '.claude-plugin', 'marketplace.json'), 'utf8'),
 ) as { plugins: Array<Record<string, unknown>> }
 const canonicalMarketplaceEntry = marketplace.plugins[0]!
+const upgradeGuidancePaths = [
+  'README.md',
+  'skills/README.md',
+  'skills/VALIDATION.md',
+  'skills/pascal-3d/references/setup.md',
+  'skills/furniture-fit/references/setup.md',
+] as const
 
 describe('Claude plugin MCP configuration', () => {
   test('uses the protected local connector configuration', () => {
@@ -99,5 +106,15 @@ describe('Claude plugin MCP configuration', () => {
     expect(
       validateClaudeMcpPolicy(canonicalConfig, canonicalPlugin, marketplaceEntry).length,
     ).toBeGreaterThan(0)
+  })
+})
+
+describe('Claude plugin MCP upgrade guidance', () => {
+  test.each(upgradeGuidancePaths)('%s warns about the duplicate local connection', (path) => {
+    const content = readFileSync(join(repositoryRoot, path), 'utf8')
+    expect(content).toContain('Claude Code 2.1.258 loads both')
+    expect(content).toContain('claude mcp remove --scope user pascal')
+    expect(content).toContain('before reloading or restarting Claude Code')
+    expect(content).toContain('one-active-agent-client-per-local-service requirement')
   })
 })
