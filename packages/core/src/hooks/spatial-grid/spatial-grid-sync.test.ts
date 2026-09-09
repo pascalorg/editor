@@ -616,8 +616,31 @@ describe('temporal writes update slab support dependencies', () => {
       },
     })
     const remote = { ...item, id: 'item_remote_band', position: [20, 0, 20] } as AnyNode
+    const interior = { ...item, id: 'item_interior_band', position: [2, 0, 2] } as AnyNode
+    const interiorWall = WallNode.parse({
+      id: 'wall_interior_band',
+      parentId: level.id,
+      start: [1, 1],
+      end: [2, 1],
+    })
+    const upper = LevelNode.parse({ id: 'level_other_band', level: 1 })
+    const upperItem = { ...item, id: 'item_upper_band', parentId: upper.id } as AnyNode
+    const upperWall = { ...wall, id: 'wall_upper_band', parentId: upper.id } as AnyNode
+    const upperSlab = { ...slab, id: 'slab_upper_band', parentId: upper.id } as AnyNode
     useScene.setState({
-      nodes: nodesFor(level, wall, slab, item, remote),
+      nodes: nodesFor(
+        level,
+        wall,
+        slab,
+        item,
+        remote,
+        interior,
+        interiorWall,
+        upper,
+        upperItem,
+        upperWall,
+        upperSlab,
+      ),
       dirtyNodes: new Set(),
       readOnly: false,
     })
@@ -644,7 +667,17 @@ describe('temporal writes update slab support dependencies', () => {
       await Promise.resolve()
       expect(useScene.getState().nodes[item.id]).toBe(item)
       expect(useScene.getState().nodes[slab.id]).toBe(slab)
-      expect(useScene.getState().dirtyNodes.has(remote.id)).toBe(false)
+      for (const unaffected of [
+        remote,
+        interior,
+        interiorWall,
+        upper,
+        upperItem,
+        upperWall,
+        upperSlab,
+      ]) {
+        expect(useScene.getState().dirtyNodes.has(unaffected.id)).toBe(false)
+      }
     }
   })
 

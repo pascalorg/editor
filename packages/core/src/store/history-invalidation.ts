@@ -12,10 +12,10 @@ export function getHistoryDirtyNodeIds(
     if (id && after[id]) dirty.add(id as AnyNodeId)
   }
 
-  for (const id of new Set([...Object.keys(before), ...Object.keys(after)])) {
+  const visitChange = (id: string) => {
     const previous = before[id]
     const next = after[id]
-    if (previous === next) continue
+    if (previous === next) return
     add(id)
     add(previous?.parentId)
     add(next?.parentId)
@@ -42,15 +42,25 @@ export function getHistoryDirtyNodeIds(
     }
   }
 
+  for (const id in before) visitChange(id)
+  for (const id in after) {
+    if (!before[id]) visitChange(id)
+  }
+
   if (changedWalls.size === 0) return dirty
 
   for (const nodes of [before, after]) {
     const wallsByLevel = new Map<string | null, WallNode[]>()
-    for (const node of Object.values(nodes)) {
+    for (const id of changedWalls) {
+      const wall = nodes[id]
+      if (wall?.type === 'wall' && !wallsByLevel.has(wall.parentId)) {
+        wallsByLevel.set(wall.parentId, [])
+      }
+    }
+    for (const id in nodes) {
+      const node = nodes[id]!
       if (node.type === 'wall') {
-        const walls = wallsByLevel.get(node.parentId) ?? []
-        walls.push(node)
-        wallsByLevel.set(node.parentId, walls)
+        wallsByLevel.get(node.parentId)?.push(node)
       }
       if (
         node.parentId &&

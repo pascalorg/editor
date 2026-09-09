@@ -128,7 +128,11 @@ Temporal restoration writes to the scene store, so existing subscriptions still 
 index updates, slab context tracking, space detection, stair rise/openings, elevator openings,
 and level-height dependents. Spatial sync also checks before/after rendered slab boundaries:
 wall bands and sibling seams can change support even when the slab's stored polygon is unchanged.
-Support invalidation uses both layouts so objects on a former boundary re-elevate.
+Support invalidation tests the gained/lost rendered bands in both layouts, so objects on a
+former boundary re-elevate while consumers in the unchanged interior stay clean. Each pass
+groups affected-level walls, slabs and consumers once and caches each slab's rendered polygon
+once per layout. Discovering changes still scans the snapshots; it does not scan the scene
+again for each candidate slab.
 
 There is no routine whole-scene history refresh or batch reset. The existing priority-1 batch
 snapshot releases affected sources (including dirty walls' openings); untouched members stay
