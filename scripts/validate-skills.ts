@@ -21,6 +21,21 @@ const openAiCapabilityLimit = 20
 const openAiCapabilityLengthLimit = 120
 const openAiListingUrlLimit = 1024
 const openAiImageByteLimit = 5 * 1024 * 1024
+const clawHubRequiredIgnorePatterns = [
+  '.env*',
+  '.next/',
+  'dist/',
+  'node_modules/',
+  'coverage/',
+  'test-results/',
+  'playwright-report/',
+  'screenshots/',
+  '*.lock',
+  '*.lockb',
+  'package-lock.json',
+  'pnpm-lock.yaml',
+  'yarn.lock',
+] as const
 const openAiCategories = new Set([
   'Productivity',
   'Creativity',
@@ -204,6 +219,18 @@ for (const entry of readdirSync(join(root, 'skills'), { withFileTypes: true })) 
 for (const skillName of skillNames) {
   const skillRoot = join(root, 'skills', skillName)
   const skillFile = join(skillRoot, 'SKILL.md')
+  const clawHubIgnoreFile = join(skillRoot, '.clawhubignore')
+  const clawHubIgnorePatterns = new Set(
+    read(clawHubIgnoreFile)
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line && !line.startsWith('#')),
+  )
+  for (const pattern of clawHubRequiredIgnorePatterns) {
+    if (!clawHubIgnorePatterns.has(pattern)) {
+      fail(`${skillName}: .clawhubignore is missing ${pattern}`)
+    }
+  }
   const content = read(skillFile)
   const fields = frontmatter(content, skillFile)
   if (fields.name !== skillName) fail(`${skillName}: frontmatter name does not match directory`)

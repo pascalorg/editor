@@ -81,4 +81,4 @@ bun scripts/validate-skills.ts
 claude plugin validate . --strict
 ```
 
-The repository validator checks frontmatter, bundled links, task and trigger fixtures, semantic furniture next-action decision cases, the publishing suite, portable and compatibility manifest consistency, OpenAI public-directory metadata limits, bundled branding assets, and accidental private-path or credential leakage.
+The repository validator checks frontmatter, bundled links, task and trigger fixtures, semantic furniture next-action decision cases, scoped ClawHub ignore policies, the publishing suite, portable and compatibility manifest consistency, OpenAI public-directory metadata limits, bundled branding assets, and accidental private-path or credential leakage.
