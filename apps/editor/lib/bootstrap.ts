@@ -12,7 +12,6 @@ import { builtinPlugin } from '@pascal-app/nodes'
 import { bonesHostPanel, bonesPlugin } from '@pascal-app/plugin-bones'
 import { streetscapeHostPanel, streetscapePlugin } from '@pascal-app/plugin-streetscape'
 import { treesHostPanel, treesPlugin } from '@pascal-app/plugin-trees'
-import { webXRHostPanel, webXRPlugin } from '@pascal-local/plugin-webxr'
 
 // Each module evaluation loads builtins once; development reloads replace stale definitions.
 let builtinsLoaded = false
@@ -96,8 +95,5 @@ registerEditorHostPanel({
   ...streetscapeHostPanel,
   creator: { name: 'Sudhir Yadav', url: 'https://github.com/sudhir9297' },
 })
-extendPluginDiscovery(async () => [webXRPlugin])
-registerEditorHostPanel(webXRHostPanel)
-
 loadBuiltinsSync()
 void loadExternalPlugins()

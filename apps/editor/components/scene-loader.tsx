@@ -9,8 +9,6 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
-import { createViewerXRStore } from '@pascal-app/viewer'
-import { useWebXRFeature, WebXRToolbarButton } from '@pascal-local/plugin-webxr'
 import { Hammer, Layers, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
@@ -125,7 +123,6 @@ function sceneUrl(
 }
 
 export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
-  const webXR = useWebXRFeature(createViewerXRStore)
   const router = useRouter()
   const searchParams = useSearchParams()
   const versionRef = useRef(meta.version)
@@ -258,12 +255,8 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   )
 
   return (
-    <div
-      className="relative h-screen w-screen"
-      data-webxr-input-sources={webXR.inputSources.join(',')}
-    >
-      {webXR.status !== 'active' && (
-        <>
+    <div className="relative h-screen w-screen">
+      <>
           {conflict && (
             <div className="pointer-events-auto absolute top-4 left-1/2 z-50 w-full max-w-md -translate-x-1/2 rounded-lg border border-border bg-background p-4 shadow-xl">
               <h2 className="font-semibold text-sm">Another session saved first — refresh?</h2>
@@ -319,12 +312,9 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
               All scenes
             </Link>
           </div>
-        </>
-      )}
+      </>
       <Editor
         disablePostFx={lightPreview}
-        forceWebGL={webXR.enabled}
-        immersivePresentation={webXR.status === 'active'}
         layoutVersion="v2"
         onLoad={handleLoad}
         onSave={handleSave}
@@ -332,10 +322,7 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
         projectId={meta.projectId ?? 'default'}
         sidebarTabs={SIDEBAR_TABS}
         viewerToolbarLeft={<CommunityViewerToolbarLeft />}
-        viewerToolbarRight={
-          <CommunityViewerToolbarRight pluginActions={<WebXRToolbarButton feature={webXR} />} />
-        }
-        xr={webXR.xr}
+        viewerToolbarRight={<CommunityViewerToolbarRight />}
       />
     </div>
   )

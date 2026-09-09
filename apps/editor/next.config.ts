@@ -46,7 +46,6 @@ const nextConfig: NextConfig = {
       '@pascal-app/core': '../../packages/core/src/index.ts',
       '@pascal-app/editor': '../../packages/editor/src/index.tsx',
       '@pascal-app/viewer': '../../packages/viewer/src/index.ts',
-      '@pascal-local/plugin-webxr': '../../../webxr-pascal-plugin/src/index.ts',
       react: '../../node_modules/react',
       three: '../../node_modules/three',
       // TSL and the renderer must share one module-level shader stack.

@@ -282,13 +282,3 @@ export {
 } from './systems/window/window-animation-system'
 export { buildWindowPreviewMesh, WindowSystem } from './systems/window/window-system'
 export { ZoneSystem } from './systems/zone/zone-system'
-export { requestGodScaleReset, useGodScaleView } from './xr/god-mode'
-export {
-  toggleXRPlayerMode,
-  useXRPlayerMode,
-  XR_PLAYER_MODES,
-  type XRPlayerMode,
-} from './xr/mode-switching'
-export { useImmersiveXRPresentation } from './xr/presentation-context'
-export { createViewerXRStore, type ViewerXRStore } from './xr/store'
-export { getImmersiveVRSupport, type ImmersiveVRSupport } from './xr/support'

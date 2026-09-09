@@ -4,7 +4,6 @@
   "scripts": {
     "build": "turbo run build",
     "dev": "dotenv -e ./.env -e ./.env.defaults -- turbo run dev --env-mode=loose",
-    "dev:xr": "bun run --cwd apps/editor dev:xr",
     "lint": "biome lint",
     "lint:fix": "biome lint --write",
     "format": "biome format --write",
@@ -60,7 +59,6 @@
   },
   "patchedDependencies": {
     "three@0.185.1": "patches/three@0.185.1.patch",
-    "iwer@2.3.0": "patches/iwer@2.3.0.patch"
   },
   "workspaces": [
     "apps/*",
