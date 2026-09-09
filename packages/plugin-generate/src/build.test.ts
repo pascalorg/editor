@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { buildHouse, type NodeOp, PLATFORM_RIM_M } from './build'
 import { FIXTURE_CATALOG } from './furnish.fixture'
 import { normalizeDocument } from './document'
-import { outlineRing, ringArea } from './geometry'
+import { outlineRing, ringArea, pointInRing } from './geometry'
 import { rollDocument } from './roll'
 import { styleFor } from './styles'
 import { POPPY } from './templates/poppy'
@@ -365,6 +365,51 @@ describe('Poppy builds into Pascal nodes', () => {
     expect(Math.abs(building.rotation[1])).toBeLessThan(1e-6)
     expect(building.position[2]).toBeCloseTo(7.62 + (33 * 0.3048) / 2 + 0.0913, 1)
     expect(building.position[0]).toBeCloseTo(18.288 / 2, 3)
+  })
+})
+
+describe('a tight lot (2026-09-09): the porches stay inside the setbacks', () => {
+  // the 46 × 73 ft rectangle again, but the caller measured no room beside the house
+  const envelope: [number, number][] = [
+    [2.1336, 7.62],
+    [18.288 - 2.1336, 7.62],
+    [18.288 - 2.1336, 30.48 - 6.096],
+    [2.1336, 30.48 - 6.096],
+  ]
+  test('with no side room the rear door takes the back wall, never a side slider; every porch slab is inside', () => {
+    const tight = buildHouse(POPPY, { placement: { siteId: 'site_x', envelope, frontEdge: 0, lateralOffsetM: 0, sideRoomM: 0.3 } })
+    expect(tight.ok).toBe(true)
+    // a rolled plan carries a laundry on the back wall: with no side room the
+    // hinged rear door there beats the social rooms' side slider
+    const rolled = rollDocument(1499472249, { style: 'farmhouse', beds: 3, baths: 2, garage: false }).document
+    const roomy = buildHouse(rolled, { placement: { siteId: 'site_x', envelope, frontEdge: 0, sideRoomM: 5 } })
+    const tightRolled = buildHouse(rolled, { placement: { siteId: 'site_x', envelope, frontEdge: 0, sideRoomM: 0.3 } })
+    const namesOf = (r: ReturnType<typeof buildHouse>) => (ofType(r.ops, 'door') as N[]).map((d) => String(d.name))
+    expect(namesOf(roomy).some((n) => /Side slider/.test(n))).toBe(true)
+    expect(namesOf(tightRolled).some((n) => /Side slider/.test(n))).toBe(false)
+    expect(namesOf(tightRolled).some((n) => /Rear door/.test(n))).toBe(true)
+    const building = ofType(tight.ops, 'building')[0] as N
+    const yaw = building.rotation[1] as number
+    const toSite = (x: number, z: number): [number, number] => [
+      (building.position[0] as number) + x * Math.cos(yaw) + z * Math.sin(yaw),
+      (building.position[2] as number) - x * Math.sin(yaw) + z * Math.cos(yaw),
+    ]
+    for (const slab of ofType(tight.ops, 'slab') as N[]) {
+      if (!/porch|patio|landing|deck/i.test(String(slab.name))) continue
+      if (/^Porch$/i.test(String(slab.name))) continue // the front porch may encroach the front yard
+      for (const [x, z] of slab.polygon as [number, number][]) {
+        const [sx, sz] = toSite(x, z)
+        expect(pointInRing(envelope, sx, sz)).toBe(true)
+      }
+    }
+  })
+  test('the band centre moves the house along the street edge', () => {
+    const left = buildHouse(POPPY, { placement: { siteId: 'site_x', envelope, frontEdge: 0, lateralOffsetM: -1.5 } })
+    const mid = buildHouse(POPPY, { placement: { siteId: 'site_x', envelope, frontEdge: 0 } })
+    const bl = ofType(left.ops, 'building')[0] as N
+    const bm = ofType(mid.ops, 'building')[0] as N
+    expect((bl.position[0] as number) - (bm.position[0] as number)).toBeCloseTo(-1.5, 6)
+    expect(bl.position[2]).toBeCloseTo(bm.position[2] as number, 6)
   })
 })
 

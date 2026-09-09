@@ -62,6 +62,99 @@ export function envelopeEdges(envelope: readonly Pt[]): EdgeFit[] {
  * those wider than the street frontage, since the failure is a too-narrow
  * frontage.
  */
+/**
+ * The BAND a house standing square to the front edge can occupy: at every
+ * depth station from the front setback line back to `depthM`, the envelope's
+ * chord across the front direction (the run containing the front edge's
+ * midpoint); the band is the intersection of those chords. On a rectangle it
+ * is the frontage; on a pie / tapered lot (Steve, 2026-09-09, 2544 Beatrice
+ * Ln, Modesto: "the procedural designs go into the setbacks") it is the
+ * narrowest chord the house reaches, and its centre is where the house
+ * should stand — not the front edge's midpoint. `offsetM` is that centre
+ * along the front edge's direction from the edge's midpoint (+ toward the
+ * edge's end vertex).
+ */
+export function bandFit(
+  envelope: readonly Pt[],
+  frontEdge: number,
+  depthM: number,
+  stepM = 0.5,
+): { widthFt: number; offsetM: number; depthFt: number } {
+  const n = envelope.length
+  if (n < 3) return { widthFt: 0, offsetM: 0, depthFt: 0 }
+  const i = ((frontEdge % n) + n) % n
+  const p = envelope[i] as Pt
+  const q = envelope[(i + 1) % n] as Pt
+  const ex = q[0] - p[0]
+  const ez = q[1] - p[1]
+  const el = Math.hypot(ex, ez)
+  if (el < 1e-9) return { widthFt: 0, offsetM: 0, depthFt: 0 }
+  const ux = ex / el
+  const uz = ez / el
+  let area = 0
+  for (let k = 0; k < n; k++) {
+    const a = envelope[k] as Pt
+    const b = envelope[(k + 1) % n] as Pt
+    area += a[0] * b[1] - b[0] * a[1]
+  }
+  const ccw = area > 0
+  // inward normal (the left normal of a counter-clockwise ring in this frame)
+  const nx = ccw ? -uz : uz
+  const nz = ccw ? ux : -ux
+  const mx = (p[0] + q[0]) / 2
+  const mz = (p[1] + q[1]) / 2
+  // every vertex in the (lateral t, depth d) frame of the front edge
+  const local = envelope.map((v): Pt => [
+    (v[0] - mx) * ux + (v[1] - mz) * uz,
+    (v[0] - mx) * nx + (v[1] - mz) * nz,
+  ])
+  let maxDepth = 0
+  for (const v of local) maxDepth = Math.max(maxDepth, v[1])
+  const chordAt = (d: number): [number, number] | null => {
+    const ts: number[] = []
+    for (let k = 0; k < n; k++) {
+      const a = local[k] as Pt
+      const b = local[(k + 1) % n] as Pt
+      const da = a[1] - d
+      const db = b[1] - d
+      if (Math.abs(da) < 1e-9 && Math.abs(db) < 1e-9) {
+        ts.push(a[0], b[0])
+        continue
+      }
+      if ((da < 0 && db < 0) || (da > 0 && db > 0)) continue
+      if (Math.abs(da - db) < 1e-12) continue
+      const f = da / (da - db)
+      if (f < -1e-9 || f > 1 + 1e-9) continue
+      ts.push(a[0] + (b[0] - a[0]) * f)
+    }
+    if (ts.length < 2) return null
+    ts.sort((a, b) => a - b)
+    // the run holding t = 0 (the front edge's midpoint), else the widest
+    let best: [number, number] | null = null
+    for (let k = 0; k + 1 < ts.length; k += 2) {
+      const lo = ts[k] as number
+      const hi = ts[k + 1] as number
+      if (lo <= 1e-6 && hi >= -1e-6) return [lo, hi]
+      if (!best || hi - lo > best[1] - best[0]) best = [lo, hi]
+    }
+    return best
+  }
+  let lo = Number.NEGATIVE_INFINITY
+  let hi = Number.POSITIVE_INFINITY
+  const depth = Math.max(0, Math.min(depthM, maxDepth))
+  const stations: number[] = []
+  for (let d = 0.01; d < depth; d += stepM) stations.push(d)
+  stations.push(Math.max(0.01, depth - 0.01))
+  for (const d of stations) {
+    const c = chordAt(d)
+    if (!c) continue
+    lo = Math.max(lo, c[0])
+    hi = Math.min(hi, c[1])
+  }
+  if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi <= lo) return { widthFt: 0, offsetM: 0, depthFt: maxDepth / FT }
+  return { widthFt: (hi - lo) / FT, offsetM: (lo + hi) / 2, depthFt: maxDepth / FT }
+}
+
 export function refaceCandidates(edges: readonly EdgeFit[], frontEdge: number): EdgeFit[] {
   const street = edges[frontEdge]
   if (!street) return []

@@ -77,6 +77,19 @@ export type Placement = {
   envelope: readonly Pt[]
   /** Index of the envelope's street-side edge. */
   frontEdge: number
+  /**
+   * Where the buildable band centres along the front edge, metres from the
+   * edge's midpoint (+ toward the edge's end vertex) — fit.ts `bandFit`; a
+   * tapered lot's band is off-centre. Absent = the edge's midpoint.
+   */
+  lateralOffsetM?: number
+  /**
+   * Room left beside the house inside the band, metres each side (the band
+   * width less the plan width, halved). Under a porch's depth the side walls
+   * get no porch: the rear door goes to the back wall and a side porch that
+   * would cross the setback is built as a landing or not at all.
+   */
+  sideRoomM?: number
 }
 
 export type BuildOptions = {
@@ -159,6 +172,9 @@ type WallRun = Run & {
 }
 
 const round = (v: number, d = 4): number => Math.round(v * 10 ** d) / 10 ** d
+
+/** Side room under this (metres each side of the house) and the sides take no porch. */
+const TIGHT_SIDE_M = 2.5
 
 const KIND_FLOOR: Record<RoomKind, string> = {
   living: 'LVP',
@@ -679,24 +695,35 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const social = rooms.filter(
       (r) => r.kind === 'living' || r.kind === 'dining' || r.kind === 'kitchen',
     )
+    // On a tight lot the sides have no room for a porch (Steve, 2026-09-09:
+    // "it can't have a porch on the side on a tight lot, would be in the
+    // back"): the back wall wins even through the laundry, the side slider
+    // is the last resort. With room beside the house the social side slider
+    // keeps its old place ahead of the laundry door.
+    const sideRoom = options.placement?.sideRoomM
+    const tightSides = typeof sideRoom === 'number' && sideRoom < TIGHT_SIDE_M
+    const backSocial: Face[] = []
+    const sideSocial: Face[] = []
+    const backService: Face[] = []
     for (const room of social) {
       for (const face of exteriorWallsOf(room)) {
         if (face.edge === 'back')
-          faces.push({ room, face, width: REAR_DOOR_W, name: 'Rear slider', doorType: 'sliding' })
+          backSocial.push({ room, face, width: REAR_DOOR_W, name: 'Rear slider', doorType: 'sliding' })
       }
     }
     for (const room of social) {
       for (const face of exteriorWallsOf(room)) {
         if (face.edge === 'left' || face.edge === 'right')
-          faces.push({ room, face, width: REAR_DOOR_W, name: 'Side slider', doorType: 'sliding' })
+          sideSocial.push({ room, face, width: REAR_DOOR_W, name: 'Side slider', doorType: 'sliding' })
       }
     }
     for (const room of rooms.filter((r) => r.kind === 'laundry' || r.kind === 'hall')) {
       for (const face of exteriorWallsOf(room)) {
         if (face.edge === 'back')
-          faces.push({ room, face, width: EXTERIOR_DOOR_W, name: 'Rear door', doorType: 'hinged' })
+          backService.push({ room, face, width: EXTERIOR_DOOR_W, name: 'Rear door', doorType: 'hinged' })
       }
     }
+    faces.push(...backSocial, ...(tightSides ? [...backService, ...sideSocial] : [...sideSocial, ...backService]))
     for (const c of faces) {
       if (c.face.span[1] - c.face.span[0] < c.width + 12) continue
       const at = seat(c.face.wall.id, c.face.span, c.width, 0.5)
@@ -1008,8 +1035,11 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const sign = area > 0 ? -1 : 1
     const nx = (sign * -ez) / el
     const nz = (sign * ex) / el
-    const mx = (p[0] + q[0]) / 2
-    const mz = (p[1] + q[1]) / 2
+    // the band's centre, not the edge's midpoint (a tapered lot's band sits
+    // off-centre — fit.ts bandFit; the caller measured it for this plan)
+    const lateral = placement.lateralOffsetM ?? 0
+    const mx = (p[0] + q[0]) / 2 + (ex / el) * lateral
+    const mz = (p[1] + q[1]) / 2 + (ez / el) * lateral
     // Level-local −z is the house front; world = R(yaw)·local: (0,−1) → (−sin, −cos).
     yaw = Math.atan2(-nx, -nz)
     const halfD = (D * IN) / 2 + exteriorT / 2
@@ -1025,6 +1055,21 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     planX + x * Math.cos(yaw) + z * Math.sin(yaw),
     planZ - x * Math.sin(yaw) + z * Math.cos(yaw),
   ]
+  /** True when every slab polygon among `nodeOps` lies inside the envelope (no placement: always). */
+  const insideEnvelope = (nodeOps: readonly NodeOp[]): boolean => {
+    if (!placement || placement.envelope.length < 3) return true
+    const env = placement.envelope as [number, number][]
+    for (const op of nodeOps) {
+      if (op.node.type !== 'slab') continue
+      const poly = op.node.polygon as [number, number][] | undefined
+      if (!Array.isArray(poly)) continue
+      for (const [x, z] of poly) {
+        const [sx, sz] = toSite(x, z)
+        if (!pointInRing(env, sx, sz)) return false
+      }
+    }
+    return true
+  }
   const gradeAt = options.gradeAt ?? null
   /** Site grade under a level-local plan point (0 on flat ground). */
   const siteGrade = (x: number, z: number): number => {
@@ -1476,13 +1521,30 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     // PlanCrafters applyPorch, rear: a raised house → a deck; a slab house →
     // a covered patio for the porch styles, a plain landing otherwise.
     const policy: PorchPolicy = raisedFloor ? 'deck' : style.porch !== 'none' ? 'patio' : 'landing'
-    rearSummary = entranceFor(
-      rearDoor,
-      policy,
-      'rear',
-      (rearDoor.room.u1 - rearDoor.room.u0) * IN,
-      rearDoor.width,
-    )
+    // Inside the setbacks or not at all (Steve, 2026-09-09: "the porches go
+    // into the setbacks on the side"): the porch's slab is tested against the
+    // envelope; one that crosses is rebuilt as a landing, and a landing that
+    // still crosses is left off — the door stays, the steps are the site's.
+    const bayWidth = (rearDoor.room.u1 - rearDoor.room.u0) * IN
+    const attempt = (p: PorchPolicy): PorchSummary | null => {
+      const before = porchOps.length
+      const summary = entranceFor(rearDoor as NonNullable<typeof rearDoor>, p, 'rear', bayWidth, (rearDoor as NonNullable<typeof rearDoor>).width)
+      if (insideEnvelope(porchOps.slice(before))) return summary
+      porchOps.length = before
+      return null
+    }
+    rearSummary = attempt(policy)
+    if (!rearSummary && policy !== 'landing') {
+      rearSummary = attempt('landing')
+      if (rearSummary) {
+        warnings.push(
+          `The rear ${policy} would cross a setback on this lot — built a landing at the ${rearDoor.wall.horizontal ? 'back' : 'side'} door instead (a tight lot takes its porch on the back).`,
+        )
+      }
+    }
+    if (!rearSummary) {
+      warnings.push('The rear entrance has no room for a porch or a landing inside the setbacks — the door is built without one; verify the lot.')
+    }
   }
 
   const serviceChoices = (() => {
@@ -1490,6 +1552,9 @@ export function buildHouse(input: PlanDocument, options: BuildOptions = {}): Bui
     const s = gen?.options?.services
     return s && typeof s === 'object' && Object.keys(s as object).length > 0 ? (s as Record<string, string>) : null
   })()
+  if (placement && placement.envelope.length >= 3 && !insideEnvelope(porchOps.filter((op) => op.node.type === 'slab' && /porch|deck|patio|landing/i.test(String(op.node.name ?? ''))))) {
+    warnings.push('The front porch crosses the front setback line — porches are usually allowed to encroach the front yard a few feet; verify with the zoning district.')
+  }
   const spanFt = Math.min(W, D) / 12
   const structure: { roofSystem: 'stick' | 'truss'; reason: string } =
     spanFt > TRUSS_SPAN_FT

@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { crossesSetback, envelopeEdges, refaceCandidates, refaceNote } from './fit'
+import { crossesSetback, envelopeEdges, refaceCandidates, refaceNote, bandFit } from './fit'
 
 type Pt = readonly [number, number]
 
@@ -68,3 +68,44 @@ describe('crossesSetback / refaceNote', () => {
     expect(refaceNote(edges[0]!, edges[1]!)).toContain("lot edge 2 (72')")
   })
 })
+
+describe('bandFit — the band a plan of a given depth can stand in (2026-09-09)', () => {
+  const FT = 0.3048
+  // a 60 × 100 ft lot inset 7/20 front-rear and 7 ft each side: the envelope is a 46 × 73 ft rectangle
+  const rect: [number, number][] = [
+    [2.1336, 7.62],
+    [18.288 - 2.1336, 7.62],
+    [18.288 - 2.1336, 30.48 - 6.096],
+    [2.1336, 30.48 - 6.096],
+  ]
+  test('a rectangle: the band is the frontage, centred, at any depth', () => {
+    const b = bandFit(rect, 0, 10)
+    expect(b.widthFt).toBeCloseTo(46, 1)
+    expect(b.offsetM).toBeCloseTo(0, 6)
+    expect(b.depthFt).toBeCloseTo((30.48 - 6.096 - 7.62) / FT, 1) // 55 ft between the front and rear setback lines
+  })
+  test('a tapered lot: the band is the narrowest chord the plan reaches, and its centre is off the front midpoint', () => {
+    // the same front, the rear pulled in to x 6..12 (a pie lot narrowing to the back)
+    const pie: [number, number][] = [
+      [2.1336, 7.62],
+      [18.288 - 2.1336, 7.62],
+      [12, 30.48 - 6.096],
+      [6, 30.48 - 6.096],
+    ]
+    const shallow = bandFit(pie, 0, 2)
+    const deep = bandFit(pie, 0, 12)
+    expect(shallow.widthFt).toBeGreaterThan(deep.widthFt)
+    // at 12 m the left line has moved from x 2.13 toward 6 and the right from 16.15 toward 12
+    const f = 12 / (30.48 - 6.096 - 7.62)
+    const lo = 2.1336 + (6 - 2.1336) * f
+    const hi = 18.288 - 2.1336 + (12 - (18.288 - 2.1336)) * f
+    expect(deep.widthFt).toBeCloseTo((hi - lo) / FT, 0)
+    expect(deep.offsetM).toBeCloseTo((lo + hi) / 2 - 18.288 / 2, 1)
+    // the whole depth: the rear chord (6 ft ≈ 19.7 ft wide)
+    expect(bandFit(pie, 0, 100).widthFt).toBeCloseTo(6 / FT, 0)
+  })
+  test('fewer than three points is no band', () => {
+    expect(bandFit([[0, 0], [1, 0]], 0, 5).widthFt).toBe(0)
+  })
+})
+

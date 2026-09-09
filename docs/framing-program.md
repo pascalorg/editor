@@ -1134,7 +1134,51 @@ fascia and rake boards, gable ornaments, dormers, fans) is off the
 printed floor plan and a faint dashed outline in the editor; a block on
 the floor prints as an outline in plan ink.
 
+## Mandate additions (Steve, 2026-09-09 — the procedural house on a tight lot)
+
+Steve, with 2544 Beatrice Ln, Modesto CA (a 5,543 sq ft tapered lot) and
+the roof plan crossing the envelope on one side and a side porch on the
+other: "the procedural designs go into the setbacks ... the porches go
+into the setbacks on the side, it can't have a porch on the side on a
+tight lot, would be in the back, you need more designs for like 50 foot
+and 40 foot wide lots that go longer and skinnier with grand entrances
+in many styles, please fix so the rules work on procedural on lots".
+
+G107 The procedural house fits the BAND it stands in, not the frontage:
+the envelope's narrowest chord over the plan's depth sizes the plan and
+its centre places the house; nothing the generator builds — walls,
+porches, decks, landings — crosses a side or rear setback line; a porch
+that would is a landing or nothing, and on a tight lot the rear door
+takes the back wall.
+G108 Narrow lots (40–50 ft) get their own plans: longer and skinnier,
+with a grand entrance, in every style.
+
 ## Log (continued)
+
+- 2026-09-09: **Batch T23 — the band fit and the porch rule (G107).**
+  fit.ts `bandFit(envelope, frontEdge, depthM)`: the envelope's chord
+  across the front direction at every half-metre station from the front
+  line back to the plan's depth (the run holding the front edge's
+  midpoint), intersected — its width is what a house of that depth can
+  be, its centre is where the house stands (a tapered lot's band is
+  off-centre). run.ts rolls on the frontage, measures the band the
+  rolled depth reaches (plus 8 ft for a rear porch), re-rolls narrower
+  while the plan is wider than the band (three passes), and hands build
+  the band's centre (`Placement.lateralOffsetM`) and the room left
+  beside the house (`sideRoomM`); a reface re-measures. build.ts stands
+  the house on the band's centre; with under 2.5 m beside the house the
+  rear door takes the back wall (the laundry's hinged door beats the
+  social rooms' side slider); every rear porch / deck / patio is tested
+  against the envelope (its slab's corners, level → site) and rebuilt as
+  a landing when it crosses, or left off with a warning; the front porch
+  is tested too and only WARNS (it encroaches the front yard, which
+  zoning usually allows a few feet — verify). Headless on the Modesto
+  lot: 0 of 54 wall ends and every rear slab inside the envelope; Cape
+  Coral unchanged. Generate 112 tests (5 new: the band on a rectangle
+  and a pie, the tight-side door, the lateral shift). Open: the narrow
+  plans (G108) are the next batch; a pie lot's band is a rectangle
+  inside a trapezoid, so a long house on a strongly tapered lot gives up
+  width it could keep by angling — not done.
 
 - 2026-09-09: **Batch T22 — the fascia blocks off the floor plan (G106).**
   The grey "roof planes" over the plan were not the roof (the sheets

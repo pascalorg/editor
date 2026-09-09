@@ -10,7 +10,24 @@ import { buildSitePlanDrawing, CATALOG_ITEMS } from '@pascal-app/editor'
 import { useViewer } from '@pascal-app/viewer'
 import { buildHouse, GENERATED_BY, type Placement } from './build'
 import type { PlanDocument } from './document'
-import { crossesSetback, type EdgeFit, envelopeEdges, refaceCandidates, refaceNote } from './fit'
+import { bandFit, crossesSetback, type EdgeFit, envelopeEdges, refaceCandidates, refaceNote } from './fit'
+
+const FT_M = 0.3048
+/** A rear porch / deck the band must also hold, feet (porch.ts: 7 ft patio, up to 12 ft deck). */
+const REAR_PORCH_ALLOWANCE_FT = 8
+
+/** The rolled plan's width along the front, feet (the rooms' extent in x). */
+function planWidthFt(doc: { rooms: { x: number; w: number }[] }): number {
+  let w = 0
+  for (const r of doc.rooms) w = Math.max(w, r.x + r.w)
+  return w
+}
+/** The rolled plan's depth into the lot, feet (the rooms' extent in y). */
+function planDepthFt(doc: { rooms: { y: number; d: number }[] }): number {
+  let d = 0
+  for (const r of doc.rooms) d = Math.max(d, r.y + r.d)
+  return d
+}
 import { type RollOptions, rollDocument } from './roll'
 import { type RunSummary, useGenerate } from './store'
 import { TEMPLATES } from './templates/poppy'
@@ -267,6 +284,31 @@ export function generateHouse(overrides: RollOptions = {}): RunSummary {
     const street = placement ? edges[placement.frontEdge] : undefined
     let rolled = rollDocument(S.seed, optionsFor(street))
     let placed = placement
+    // The BAND the plan actually occupies (fit.ts bandFit): on a tapered or
+    // odd lot the frontage is not the width the house has at its depth. Roll
+    // once on the frontage, measure the band the rolled depth reaches (plus
+    // a rear porch), and re-roll narrower while the plan is wider than it —
+    // then stand the house on the band's centre (Steve, 2026-09-09: "the
+    // procedural designs go into the setbacks").
+    if (placement && street) {
+      const fitBand = (): { widthFt: number; offsetM: number } => {
+        const depthFt = planDepthFt(rolled.document) + REAR_PORCH_ALLOWANCE_FT
+        const band = bandFit(placement.envelope, placement.frontEdge, depthFt * FT_M)
+        return { widthFt: band.widthFt, offsetM: band.offsetM }
+      }
+      let band = fitBand()
+      for (let pass = 0; pass < 3 && band.widthFt > 8 && planWidthFt(rolled.document) > band.widthFt + 0.25; pass++) {
+        rolled = rollDocument(S.seed, { ...optionsFor(street), maxWidthFt: Math.floor(band.widthFt) })
+        band = fitBand()
+      }
+      const sideRoomM = Math.max(0, (band.widthFt - planWidthFt(rolled.document)) / 2) * FT_M
+      placed = { ...placement, lateralOffsetM: band.offsetM, sideRoomM }
+      if (band.widthFt > 8 && planWidthFt(rolled.document) > band.widthFt + 0.25) {
+        rolled.warnings.push(
+          `The lot narrows to ${band.widthFt.toFixed(0)}' where this plan stands ${planWidthFt(rolled.document).toFixed(0)}' wide — the plan cannot shrink further; it will cross a side setback (a narrower plan or another frontage).`,
+        )
+      }
+    }
     // PlanCrafters' generateFit: the roll could not narrow the plan to the
     // street frontage — face the widest lot edge that takes it, and say so.
     // A reface that still crosses a setback is not taken; the street-facing
@@ -280,6 +322,11 @@ export function generateHouse(overrides: RollOptions = {}): RunSummary {
         placed = { ...placement, frontEdge: alt.index }
         break
       }
+    }
+    // a reface changes the front edge: the band is measured again for it
+    if (placed && placement && placed.frontEdge !== placement.frontEdge) {
+      const band = bandFit(placement.envelope, placed.frontEdge, (planDepthFt(rolled.document) + REAR_PORCH_ALLOWANCE_FT) * FT_M)
+      placed = { ...placed, lateralOffsetM: band.offsetM, sideRoomM: Math.max(0, (band.widthFt - planWidthFt(rolled.document)) / 2) * FT_M }
     }
     const summary = applyDocument(
       rolled.document,
