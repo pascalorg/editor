@@ -39,33 +39,55 @@ Level mode/selected-level changes re-offer sources rejected while shadow-only.
 
 ### Initial wall build
 
-`setScene` publishes a fresh, non-persisted `hydrationToken` alongside the hydrated
-scene and marks its eligible nodes dirty. Subsequent document writes invalidate
-that token atomically before subscribers run, including paused, remote and undo/redo
-writes. A separate invalidation notification would replay reconciliation for the
-same edit and can expand a local wall edit into a whole-level rebuild. Dirty marks alone do
-not invalidate it, so opening completion can still re-dirty its parent wall.
+`setScene` assigns a non-persisted hydration identity, then publishes its eligible
+`hydrationToken` after synchronous reconciliation and hydration-owned deferred
+normalization finish. Elevator openings and reconciliation of replaced levels run
+inside the synchronous boundary; queued stair rise/opening normalization extends
+that boundary through its microtask. The store owns these opening passes even if
+their reactive systems mount after hydration, and honors the scene mutation lock.
+Ordinary document writes cancel pending publication or invalidate an issued token atomically before subscribers run,
+including paused, remote and undo/redo writes. History pausing alone grants no
+exemption. Dirty marks alone do not invalidate it, so opening completion can still
+re-dirty its parent wall.
 
-`WallSystem` enters initial build for that token, including when mounted after
-hydration. It ends on the first frame with no dirty walls and no pending neighbours,
-or on a document write, live override/transform, or canvas pointerdown, pointermove
-or wheel event. A pointer interruption cannot re-enter for the same token.
-`isWallInitialBuildActive()` exposes this state read-only to other systems.
+The canvas ref installs pointerdown, pointermove and wheel capture before lazy
+systems mount. Live override/transform interruption belongs to the scene store;
+nonempty maps cancel hydration even if cleared before the wall consumer mounts.
+`applySceneSnapshot` clears stale live maps before starting the replacement.
+The eager wall lifecycle owner observes tokens independently of `WallSystem`, so a
+consumer remount retains the same span, counters, built-wall identities and pending
+neighbours. A fresh hydration resets that state; an interruption cannot re-enter
+for the same token. These hydration-scoped records are an exception to the usual
+system-unmount cache cleanup rule; the consumer still clears its miter cache.
+
+Initial build ends on the first frame with no dirty walls and no pending
+neighbours, or on interruption. If no walls rebuild for 30 consecutive frames
+while dirty walls lack registered meshes (one placeholder-sweep interval), the
+privilege is revoked. This bounded renderer grace period leaves their dirty marks
+intact and does not report geometry completion; a later mount still rebuilds them.
+Unavailable walls do not continually postpone the pending-neighbour quiet clock.
+`isWallInitialBuildActive()` and `getPendingWallRebuildCount()` remain readable
+without `?perf`.
 
 Initial build consumes walls under the existing **8 ms budget**, checked between
 walls, without the interactive **8 walls/frame** cap. A wall with at least six
-opening cutouts occupies its own frame. Each wall's first build skips adjacency
-scanning and neighbour re-invalidation because the hydrated inputs are stable and
-its neighbours are queued for their own first builds. Subsequent builds retain
-neighbour invalidation and the **80 ms** trailing quiet window. Once initial build
-ends, the existing interactive scheduling applies (progressive limits for queues
-larger than eight; small interactive edits rebuild immediately).
+opening cutouts occupies its own frame. Each wall's first build during active
+initial build skips adjacency scanning and neighbour re-invalidation because the
+hydrated inputs are stable and its neighbours are queued for their own first
+builds. Subsequent builds retain neighbour invalidation and the **80 ms** trailing
+quiet window. Once initial build ends, the existing interactive scheduling applies
+(progressive limits for queues larger than eight; small edits rebuild immediately).
 
-`__pascalPerf.batchStats().wallDrain` publishes the active state, this frame's
-consumption, cumulative budget/heavy/drained/cap exits, pending-neighbour count,
-first builds, re-invalidation builds and unique neighbour enqueues. Counters reset
-on each hydration; the `wall-initial-build` span measures the drain until completion
-or interruption. Counter publication and pending-count reads are constant-time.
+Only with `?perf`, `__pascalPerf.batchStats().wallDrain` publishes the active state,
+this frame's consumption, cumulative budget/heavy/drained/cap exits, pending-neighbour
+count, first builds, re-invalidation builds and unique neighbour enqueues. Publication
+reuses one mutable stats object without allocating frame snapshots. Counters reset
+on each hydration identity, including one interrupted before token publication.
+`firstBuilds` counts the first-ever geometry build of each wall in that hydration,
+even after interruption; `reinvalidationBuilds` counts later builds of those walls.
+The `wall-initial-build` span starts at eligible token publication and ends at drain
+completion or interruption, spanning consumer unmounts. Counters do not imply that
+opening-system completion has drained: late opening builds can still re-dirty walls.
 
 The wall batch still waits for its pending-neighbour queue. Node batching retains
 its global 180 ms quiet clock for now. Initial-drain batching is a follow-up: bounded
