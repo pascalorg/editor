@@ -1,199 +1,6 @@
-import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test'
+import { describe, expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import {
-  type AnyNode,
-  type AnyNodeId,
-  BuildingNode,
-  clearSceneHistory,
-  emitter,
-  LevelNode,
-  nodeRegistry,
-  useScene,
-} from '@pascal-app/core'
-import useInteractionScope from '../store/use-interaction-scope'
-import {
-  getHistoryCommandState,
-  installHistoryCommandDelegate,
-  runRedo,
-  runUndo,
-  shouldCancelDraftOnHistoryJump,
-  subscribeHistoryCommandState,
-} from './history'
-
-type RafFn = (cb: (time: number) => void) => number
-;(globalThis as unknown as { requestAnimationFrame?: RafFn }).requestAnimationFrame ??= (cb) => {
-  cb(0)
-  return 0
-}
-;(globalThis as unknown as { cancelAnimationFrame?: (id: number) => void }).cancelAnimationFrame ??=
-  () => {}
-
-const BUILDING_ID = 'building_history_controller' as AnyNodeId
-const LEVEL_ID = 'level_history_controller' as AnyNodeId
-let disposeController = () => {}
-let restoreRegistry = () => {}
-
-function levelNumber(): number {
-  return (useScene.getState().nodes[LEVEL_ID] as { level: number }).level
-}
-
-describe('editor history controller', () => {
-  beforeEach(() => {
-    disposeController()
-    disposeController = () => {}
-    restoreRegistry()
-    restoreRegistry = nodeRegistry._snapshot()
-    useInteractionScope.getState().end()
-    const level = LevelNode.parse({
-      id: LEVEL_ID,
-      parentId: BUILDING_ID,
-      children: [],
-      level: 0,
-    })
-    const building = BuildingNode.parse({
-      id: BUILDING_ID,
-      parentId: null,
-      children: [LEVEL_ID],
-    })
-    useScene.setState({
-      nodes: { [BUILDING_ID]: building, [LEVEL_ID]: level },
-      rootNodeIds: [BUILDING_ID],
-      dirtyNodes: new Set<AnyNodeId>(),
-      collections: {},
-      materials: {},
-      readOnly: false,
-    } as never)
-    clearSceneHistory()
-    useScene.getState().updateNode(LEVEL_ID, { level: 1 } as Partial<AnyNode>)
-  })
-
-  afterEach(() => {
-    disposeController()
-    disposeController = () => {}
-    restoreRegistry()
-    restoreRegistry = () => {}
-    useInteractionScope.getState().end()
-  })
-
-  test('cancels history jumps only when the drafted kind opts in', () => {
-    const onCancel = mock(() => {})
-    emitter.on('tool:cancel', onCancel)
-    try {
-      useInteractionScope.getState().begin({ kind: 'drafting', tool: 'plain-draft' })
-      expect(shouldCancelDraftOnHistoryJump()).toBe(false)
-
-      nodeRegistry._register({
-        kind: 'registered-draft',
-        schemaVersion: 1,
-        drafting: { cancelOnHistoryJump: true },
-      } as never)
-      useInteractionScope.getState().begin({ kind: 'drafting', tool: 'registered-draft' })
-      expect(shouldCancelDraftOnHistoryJump()).toBe(true)
-
-      runUndo()
-      expect(onCancel).toHaveBeenCalledTimes(1)
-    } finally {
-      emitter.off('tool:cancel', onCancel)
-    }
-  })
-
-  test('delegates undo and redo while a host delegate is installed', () => {
-    const undo = mock(() => ({ kind: 'applied', persistence: 'queued' }) as const)
-    const redo = mock(() => ({ kind: 'empty' }) as const)
-    disposeController = installHistoryCommandDelegate({
-      getState: () => ({
-        canRedo: false,
-        canUndo: true,
-        mode: 'collaborative',
-        status: 'syncing',
-      }),
-      redo,
-      subscribe: () => () => {},
-      undo,
-    })
-
-    expect(runUndo()).toEqual({ kind: 'applied', persistence: 'queued' })
-    expect(runRedo()).toEqual({ kind: 'empty' })
-    expect(getHistoryCommandState()).toEqual({
-      canRedo: false,
-      canUndo: true,
-      mode: 'collaborative',
-      status: 'syncing',
-    })
-
-    expect(undo).toHaveBeenCalledTimes(1)
-    expect(redo).toHaveBeenCalledTimes(1)
-    expect(levelNumber()).toBe(1)
-    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-  })
-
-  test('falls back to standalone Zundo undo and redo when no controller is installed', () => {
-    expect(runUndo()).toEqual({ kind: 'applied', persistence: 'local' })
-    expect(levelNumber()).toBe(0)
-    expect(useScene.temporal.getState().futureStates).toHaveLength(1)
-
-    expect(runRedo()).toEqual({ kind: 'applied', persistence: 'local' })
-    expect(levelNumber()).toBe(1)
-    expect(useScene.temporal.getState().pastStates).toHaveLength(1)
-  })
-
-  test('an older cleanup cannot uninstall a newer controller', () => {
-    const firstUndo = mock(() => {})
-    const delegate = (undo: () => void) => ({
-      getState: () => ({
-        canRedo: false,
-        canUndo: true,
-        mode: 'collaborative' as const,
-        status: 'ready' as const,
-      }),
-      redo: () => ({ kind: 'empty' as const }),
-      subscribe: () => () => {},
-      undo: () => {
-        undo()
-        return { kind: 'applied' as const, persistence: 'queued' as const }
-      },
-    })
-    const stopFirst = installHistoryCommandDelegate(delegate(firstUndo))
-    const secondUndo = mock(() => {})
-    disposeController = installHistoryCommandDelegate(delegate(secondUndo))
-
-    stopFirst()
-    runUndo()
-
-    expect(firstUndo).toHaveBeenCalledTimes(0)
-    expect(secondUndo).toHaveBeenCalledTimes(1)
-  })
-
-  test('publishes delegate state changes and restores standalone availability on teardown', () => {
-    const listeners = new Set<() => void>()
-    const observed: string[] = []
-    const unsubscribe = subscribeHistoryCommandState(() => {
-      observed.push(getHistoryCommandState().mode)
-    })
-    disposeController = installHistoryCommandDelegate({
-      getState: () => ({
-        canRedo: false,
-        canUndo: true,
-        mode: 'collaborative',
-        status: 'offline',
-      }),
-      redo: () => ({ kind: 'empty' }),
-      subscribe: (listener) => {
-        listeners.add(listener)
-        return () => listeners.delete(listener)
-      },
-      undo: () => ({ kind: 'applied', persistence: 'queued' }),
-    })
-
-    for (const listener of listeners) listener()
-    disposeController()
-    disposeController = () => {}
-    unsubscribe()
-
-    expect(observed).toEqual(['collaborative', 'collaborative', 'standalone'])
-  })
-})
 
 function runSourceHistoryTest(body: string) {
   const cache = join(import.meta.dir, '.turbo')
@@ -236,7 +43,8 @@ function runSourceHistoryTest(body: string) {
       mockShared('@pascal-app/core', () => core)
       await importShared('@pascal-app/viewer')
       const { useScene: scene, clearSceneHistory, useLiveTransforms: transforms, useLiveNodeOverrides: overrides } = core
-      const { runUndo, runRedo, installHistoryCommandDelegate } = await import(${JSON.stringify(resolve(import.meta.dir, 'history.ts'))})
+      const { runUndo, runRedo, installHistoryCommandDelegate, getHistoryCommandState, shouldCancelDraftOnHistoryJump, subscribeHistoryCommandState } = await import(${JSON.stringify(resolve(import.meta.dir, 'history.ts'))})
+      const { default: useInteractionScope } = await import(${JSON.stringify(resolve(import.meta.dir, '../store/use-interaction-scope.ts'))})
       const level = core.LevelNode.parse({ id: 'level_history_source' })
       const wall = core.WallNode.parse({ id: 'wall_history_source', parentId: level.id, start: [0,0], end: [4,0] })
       const remote = core.WallNode.parse({ id: 'wall_remote_source', parentId: level.id, start: [20,0], end: [24,0] })
@@ -291,6 +99,51 @@ describe('standalone history source invalidation', () => {
       assert.equal(transforms.getState().transforms.size, 0)
       assert.equal(overrides.getState().overrides.size, 0)
       controller.clear()
+    `)
+  })
+
+  test.each([
+    true,
+    false,
+  ])('discarded preview neighbours rebuild after undo/redo (joined: %s)', (joined) => {
+    runSourceHistoryTest(`
+      const react = await importShared('react')
+      mockShared('react', () => ({ ...react, useEffect: () => {} }))
+      const frames = []
+      const fiber = await importShared('@react-three/fiber')
+      mockShared('@react-three/fiber', () => ({ ...fiber, useFrame: frame => frames.push(frame) }))
+      const selector = store => Object.assign(fn => fn(store.getState()), store)
+      mockShared('@pascal-app/core', () => ({ ...core, useScene: selector(scene), useLiveNodeOverrides: selector(overrides) }))
+      const { Mesh } = await importShared('three')
+      const { WallSystem, getPendingWallRebuildCount } = await import(${JSON.stringify(resolve(import.meta.dir, '../../../viewer/src/systems/wall/wall-system.tsx'))})
+      const neighbor = { ...remote, start: [8,0], end: [8,4] }
+      scene.setState({ nodes: { ...baseline, [level.id]: { ...level, children: [wall.id, neighbor.id] }, [neighbor.id]: neighbor } })
+      clearSceneHistory()
+      const a = new Mesh(), b = new Mesh()
+      core.sceneRegistry.nodes.set(wall.id, a)
+      core.sceneRegistry.nodes.set(neighbor.id, b)
+      let now = 0
+      performance.now = () => now
+      WallSystem()
+      const frame = () => { now += 100; frames[0]() }
+      scene.getState().markDirty(wall.id); scene.getState().markDirty(neighbor.id)
+      frame(); frame(); clean()
+      const canonical = Array.from(b.geometry.getAttribute('position').array)
+      edit(level.id, { name: 'Unrelated edit' })
+      for (const jump of [runUndo, runRedo]) {
+        overrides.getState().set(wall.id, { start: [4,0], end: [${joined ? 8 : 6},0] })
+        scene.getState().markDirty(wall.id)
+        frame(); frame()
+        assert.equal(getPendingWallRebuildCount(), 0)
+        const preview = Array.from(b.geometry.getAttribute('position').array)
+        ${joined ? 'assert.notDeepEqual(preview, canonical)' : 'assert.deepEqual(preview, canonical)'}
+        clean(); jump(); await flush()
+        assert(dirty(wall.id))
+        assert.equal(dirty(neighbor.id), ${joined})
+        assert.equal(overrides.getState().overrides.size, 0)
+        frame(); frame()
+        assert.deepEqual(Array.from(b.geometry.getAttribute('position').array), canonical)
+      }
     `)
   })
 
@@ -479,6 +332,54 @@ describe('standalone history source invalidation', () => {
       assert.equal(scene.getState().nodes[segment.id].height, 2.5)
       assert(dirty(segment.id)); assert(!dirty(remote.id))
       stop()
+    `)
+  })
+})
+
+describe('editor history controller', () => {
+  test('draft cancellation follows the registered kind', () => {
+    runSourceHistoryTest(`
+      let cancelled = 0
+      core.emitter.on('tool:cancel', () => cancelled++)
+      useInteractionScope.getState().begin({ kind: 'drafting', tool: 'plain-draft' })
+      assert.equal(shouldCancelDraftOnHistoryJump(), false)
+      core.nodeRegistry._register({ kind: 'registered-draft', schemaVersion: 1, drafting: { cancelOnHistoryJump: true } })
+      useInteractionScope.getState().begin({ kind: 'drafting', tool: 'registered-draft' })
+      assert.equal(shouldCancelDraftOnHistoryJump(), true)
+      edit(level.id, { level: 1 }); runUndo()
+      assert.equal(cancelled, 1)
+    `)
+  })
+
+  test('delegates publish availability and an older cleanup cannot uninstall the current delegate', () => {
+    runSourceHistoryTest(`
+      edit(level.id, { level: 1 })
+      const observed = []
+      const unsubscribe = subscribeHistoryCommandState(() => observed.push(getHistoryCommandState().mode))
+      const listeners = new Set()
+      let firstCalls = 0, secondCalls = 0
+      const delegate = undo => ({
+        getState: () => ({ canRedo: false, canUndo: true, mode: 'collaborative', status: 'syncing' }),
+        redo: () => ({ kind: 'empty' }),
+        subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener) },
+        undo,
+      })
+      const stopFirst = installHistoryCommandDelegate(delegate(() => { firstCalls++; return { kind: 'empty' } }))
+      const stopSecond = installHistoryCommandDelegate(delegate(() => { secondCalls++; return { kind: 'applied', persistence: 'queued' } }))
+      stopFirst()
+      assert.deepEqual(runUndo(), { kind: 'applied', persistence: 'queued' })
+      assert.deepEqual(runRedo(), { kind: 'empty' })
+      assert.equal(firstCalls, 0); assert.equal(secondCalls, 1)
+      assert.equal(scene.getState().nodes[level.id].level, 1)
+      assert.equal(scene.temporal.getState().pastStates.length, 1)
+      assert.deepEqual(getHistoryCommandState(), { canRedo: false, canUndo: true, mode: 'collaborative', status: 'syncing' })
+      for (const listener of listeners) listener()
+      stopSecond(); unsubscribe()
+      assert.deepEqual(observed, ['collaborative', 'collaborative', 'collaborative', 'standalone'])
+      assert.deepEqual(runUndo(), { kind: 'applied', persistence: 'local' })
+      assert.equal(scene.getState().nodes[level.id].level, 0)
+      assert.deepEqual(runRedo(), { kind: 'applied', persistence: 'local' })
+      assert.equal(scene.getState().nodes[level.id].level, 1)
     `)
   })
 })

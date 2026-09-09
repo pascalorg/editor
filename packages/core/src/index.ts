@@ -311,6 +311,7 @@ export {
   type SceneSnapshot,
   subscribeSceneCommits,
 } from './store/history-control'
+export { getHistoryDirtyNodeIds } from './store/history-invalidation'
 export {
   type ControlValue,
   type DoorAnimationState,

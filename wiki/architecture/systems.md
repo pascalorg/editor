@@ -108,8 +108,14 @@ and corridor-enclosure edits must produce the same spaces and surfaces as full r
 ## Undo and redo invalidation
 
 Standalone history jumps clear live transforms and node overrides, including surface-hole
-previews. Only surviving preview targets and their parents receive restoration marks from the
-editor. Empty commands preserve previews, and collaborative delegates own their own refresh.
+previews. Before a jump, the editor captures the effective layout by merging live overrides
+onto committed nodes. Before clearing previews it runs the same pure dependency closure used
+for committed history snapshots, with that effective layout as `before` and the committed
+target as `after`: wall neighbours in either layout and hosted children on host dimension
+changes must rebuild even when only the discarded preview connected them. Overrides published
+during restoration/cleanup also contribute their closure before being cleared. Surviving live
+transform targets and their parents receive restoration marks too. Empty commands preserve
+previews, and collaborative delegates own their own refresh.
 
 Core diffs the before/after node snapshots in a microtask before paint. It marks changed nodes,
 old and new parents, wall neighbours in both layouts (scoped to the wall's level), and hosted
