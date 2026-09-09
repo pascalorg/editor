@@ -10,6 +10,7 @@ import { version } from './version'
 
 export type PascalMcpToolExecutor = <Result>(input: {
   name: string
+  signal: AbortSignal
   execute: () => Promise<Result>
 }) => Promise<Result>
 
@@ -45,7 +46,27 @@ function installToolExecutor(server: McpServer, executeTool: PascalMcpToolExecut
     registerTool(name, config, ((...args: Parameters<typeof callback>) =>
       executeTool({
         name,
+        signal: toolRequestSignal(args),
         execute: () => Promise.resolve(Reflect.apply(callback, undefined, args)),
       })) as typeof callback)
   server.registerTool = wrappedRegisterTool
+
+  const tool = server.tool.bind(server)
+  server.tool = ((name: string, ...args: unknown[]) => {
+    const callback = args.at(-1)
+    if (typeof callback !== 'function') {
+      return Reflect.apply(tool, undefined, [name, ...args])
+    }
+    args[args.length - 1] = (...callbackArgs: unknown[]) =>
+      executeTool({
+        name,
+        signal: toolRequestSignal(callbackArgs),
+        execute: () => Promise.resolve(Reflect.apply(callback, undefined, callbackArgs)),
+      })
+    return Reflect.apply(tool, undefined, [name, ...args])
+  }) as McpServer['tool']
+}
+
+function toolRequestSignal(args: readonly unknown[]): AbortSignal {
+  return (args.at(-1) as { signal: AbortSignal }).signal
 }
