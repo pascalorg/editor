@@ -2,6 +2,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node
 import { dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
+import { validateClawHubIgnorePolicy } from './clawhub-ignore-policy'
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const skillNames = ['pascal-3d', 'furniture-fit'] as const
@@ -204,6 +205,14 @@ for (const entry of readdirSync(join(root, 'skills'), { withFileTypes: true })) 
 for (const skillName of skillNames) {
   const skillRoot = join(root, 'skills', skillName)
   const skillFile = join(skillRoot, 'SKILL.md')
+  const clawHubIgnoreFile = join(skillRoot, '.clawhubignore')
+  const clawHubIgnoreContent = read(clawHubIgnoreFile)
+  for (const policyFailure of validateClawHubIgnorePolicy(
+    clawHubIgnoreContent,
+    existsSync(join(skillRoot, '.clawdhubignore')),
+  )) {
+    fail(`${skillName}: ${policyFailure}`)
+  }
   const content = read(skillFile)
   const fields = frontmatter(content, skillFile)
   if (fields.name !== skillName) fail(`${skillName}: frontmatter name does not match directory`)
