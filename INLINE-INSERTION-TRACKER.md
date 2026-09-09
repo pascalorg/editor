@@ -1,12 +1,13 @@
 # Inline equipment insertion tracker
 
-Created: 2026-09-09. Current completed step: **0**. Next step: **1**.
+Created: 2026-09-09. Current completed step: **1**. Next step: **2**.
 
 This is the working record for the plan agreed in chat. Numbering preserves steps
 0–14: preparation plus fourteen implementation steps. Execute one step at a time.
 For each step, record the files changed, commits, checks actually run, remaining
-limitations, and whether its completion gate passed. Proposed decisions below
-remain subject to the domain review in step 1.
+limitations, and whether its completion gate passed. Step 1 decisions are recorded
+in the pool plugin's `docs/inline-insertion-contract.md` and
+`docs/adr/0001-pressure-pipe-ownership.md`.
 
 ## Step 0: checkpoint and workspace preparation — complete
 
@@ -60,15 +61,15 @@ artifact hashes. No application tests or builds were run for this preparation.
 
 ## Implementation checklist
 
-### 1. Domain contract — pending
+### 1. Domain contract — complete
 
-- [ ] Define pressure pipe, inline insertion, target section, route candidate,
+- [x] Define pressure pipe, inline insertion, target section, route candidate,
   hard clearance, service clearance, and generated joint in the pool glossary.
-- [ ] Record initial scope and pressure-pipe representation decision.
-- [ ] Resolve circuit versus flow-role semantics, nominal size versus physical
+- [x] Record initial scope and pressure-pipe representation decision.
+- [x] Resolve circuit versus flow-role semantics, nominal size versus physical
   diameter, fitting/socket dimensions, and equipment-specific clearance inputs.
-- [ ] Decide how existing pool routes using DWV nodes are recognized and handled.
-- [ ] Gate: agreed domain contract, ownership, and legacy-scene behavior.
+- [x] Decide how existing pool routes using DWV nodes are recognized and handled.
+- [x] Gate: domain contract, ownership, and legacy-scene behavior recorded for implementation.
 
 ### 2. Pressure-pipe support — pending
 
@@ -206,7 +207,41 @@ artifact hashes. No application tests or builds were run for this preparation.
 Created the two working branches and checkpoint commits listed above. Captured
 all 20 editor and 9 plugin changed/untracked files in their respective snapshots.
 Verified both worktrees were clean after checkpointing. Added this tracker.
-Next authorized implementation unit is step 1 when requested by the user.
+Next implementation unit at that point was step 1.
+
+### 2026-09-09 — step 1
+
+Completed the domain contract in the pool plugin:
+
+- `CONTEXT.md`: plumbing glossary.
+- `docs/inline-insertion-contract.md`: scope, circuits, flow, dimensions,
+  connectivity, clearance, transaction behavior, legacy handling, and acceptance cases.
+- `docs/adr/0001-pressure-pipe-ownership.md`: accepted ownership decision.
+- `docs/README.md` and `docs/pool-pipe-routing.md`: discovery links and distinction
+  between current runtime behavior and the implementation contract.
+
+Decisions: separate generic host pressure-pipe kinds; pool-specific circuits and
+equipment rules in the plugin; explicit distinction between socket direction and
+flow; declared size profiles rather than guessed metric/imperial matches; strict
+generated-joint checks; both connections planned together; hidden physical objects
+still block routes; explicit legacy conversion without load-time reinterpretation.
+Original run ID remains on the path-start side, independent of flow direction.
+
+Verification: `git diff --check` passed. Plugin `bun run check-docs` reported only
+the existing missing `circle` entry in `docs/node-reference.md`, associated with
+the pool-shape work. It reported no missing local links or headings. No application
+tests/builds or browser checks were run because this step changes documentation.
+Numerical manufacturer constraints remain for catalog implementation and source
+verification; this contract introduces no claimed manufacturer requirements.
+
+Workspace drift: the plugin checkout is now on `main` at `32d1431`, with existing
+pool-shape changes, rather than the step 0 feature branch. Step 1 plugin documents
+are deliberately left uncommitted there. Before step 2 edits the plugin, inspect
+its state again and isolate feature work without overwriting those changes. The
+editor remains on `work/inline-insertion-foundation`; this tracker is committed there.
+
+Completion gate: passed for the documented contract. Runtime support is pending.
+Next step: 2, generic pressure-pipe support in the host.
 
 ### Future step record template
 
