@@ -113,15 +113,19 @@ function resolvePlacedStairRise(
   nodes: Record<string, AnyNode>,
   levelId: LevelNode['id'],
   stair: StairNode,
+  supportSurface: PointerSupportSurface | null,
 ): number {
   // Same contract as `resolveStairTotalRise` for a stair that is not in the
-  // scene yet: the storey height minus whatever slab lifts the drop point.
+  // scene yet: the storey height minus whatever slab lifts the drop point,
+  // capped by the surface the pointer actually aims at (a floor under an
+  // overlapping deck must not elect the deck).
   const base = getFloorStackedPosition({
     node: stair,
     nodes,
     position: stair.position,
     rotation: stair.rotation,
     levelId,
+    maxElevation: supportSurface?.elevation ?? null,
   })[1]
   return getLevelFloorToFloorHeight(levelId, nodes) - base
 }
@@ -219,7 +223,10 @@ function commitStairPlacement(
     }),
     parentId: placementLevelId,
   })
-  const segment = { ...seed, height: resolvePlacedStairRise(nodes, placementLevelId, stair) }
+  const segment = {
+    ...seed,
+    height: resolvePlacedStairRise(nodes, placementLevelId, stair, supportSurface),
+  }
   const prospectiveNodes = {
     ...nodes,
     [stair.id]: stair,
@@ -291,7 +298,11 @@ export const StairTool: React.FC = () => {
     lastCanonicalPositionRef.current = null
     supportSurfaceRef.current = null
 
-    const buildPreviewScene = (position: [number, number, number], rotation: number) => {
+    const buildPreviewScene = (
+      position: [number, number, number],
+      rotation: number,
+      supportSurface: PointerSupportSurface | null,
+    ) => {
       const nodes = useScene.getState().nodes
       const placementLevelId = resolveStairPlacementLevelId(
         nodes,
@@ -315,7 +326,10 @@ export const StairTool: React.FC = () => {
         rotation,
         segmentId: seed.id,
       })
-      const segment = { ...seed, height: resolvePlacedStairRise(nodes, placementLevelId, stair) }
+      const segment = {
+        ...seed,
+        height: resolvePlacedStairRise(nodes, placementLevelId, stair, supportSurface),
+      }
       const previewNodes = {
         ...nodes,
         ...(destinationPlan?.createdLevel
@@ -346,7 +360,7 @@ export const StairTool: React.FC = () => {
       if (key === lastPreviewKey) return
       lastPreviewKey = key
       useStairBuildPreview.getState().setPreview([position[0], position[2]], rotation)
-      const preview = buildPreviewScene(position, rotation)
+      const preview = buildPreviewScene(position, rotation, supportSurface)
       const frozenPatch =
         preview && supportSurface?.sourceNodeId
           ? resolveFrozenFloorPlacementPatch(preview.stair, preview.previewNodes, {
@@ -415,7 +429,7 @@ export const StairTool: React.FC = () => {
       z: number,
       rotation: number,
     ): ReturnType<typeof resolveAlignment> | null => {
-      const preview = buildPreviewScene([x, 0, z], rotation)
+      const preview = buildPreviewScene([x, 0, z], rotation, supportSurfaceRef.current)
       const moving = preview
         ? movingAlignmentAnchors(preview.stair, preview.previewNodes, x, z, rotation)
         : []
