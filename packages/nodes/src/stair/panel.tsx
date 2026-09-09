@@ -460,16 +460,6 @@ export default function StairPanel() {
             value={Math.round((node.width ?? 1) * 100) / 100}
           />
           <MetricControl
-            label="Rise"
-            max={1000}
-            min={0.2}
-            onChange={(value) => handleUpdate({ totalRise: value })}
-            precision={2}
-            step={0.05}
-            unit="m"
-            value={resolvedRise}
-          />
-          <MetricControl
             label="Steps"
             max={32}
             min={2}
