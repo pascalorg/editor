@@ -20,9 +20,9 @@ Height remains `not checked` until the alcove's clear vertical height is measure
 
 ```yaml
 nextAction:
-  kind: check_alternate_pose
-  task: Re-check the cabinet centered in the same alcove at 0° Y rotation with the user's required clearance applied.
-  requiredInput: The required clearance, if it has not already been supplied.
+  kind: request_measurement
+  task: Measure the clear floor-to-obstacle height over the cabinet's 0° footprint before making an order decision.
+  requiredInput: One measured clear height with its provenance and spatial coverage.
   context:
     projectId: project_example
     revision: 4
@@ -30,8 +30,8 @@ nextAction:
     levelId: level_ground
     zoneId: zone_alcove
     itemId: cabinet_candidate
-  authority: Read-only; the 0° pose is proposed for a fresh check and is not authorization to place or save it.
+  authority: Read-only; no save or project mutation authorized.
   cost: No rendering, generation, paid job, or additional spend authorized.
 ```
 
-Do not call the alternate a pass until the fresh containment, collision, requested-clearance, and applicable door checks succeed against the then-current graph.
+The failed 90° pose is not the next blocker because the tested 0° footprint already fits. The missing clear-height evidence blocks the requested order decision.

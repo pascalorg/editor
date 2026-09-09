@@ -43,9 +43,9 @@
 
 ```yaml
 nextAction:
-  kind: request_measurement | check_alternate_pose | check_related_item_or_pose
+  kind: request_measurement | check_alternate_pose | request_alternate_item_or_target | complete_unresolved_check | check_related_item_or_pose
   task: One self-contained measurement request or read-only check
-  requiredInput: Only the values or choices needed for that task
+  requiredInput: Only the values, capability, or choice needed for that task
   context:
     projectId: Exact ID or null
     revision: Exact persisted revision or null
@@ -57,11 +57,13 @@ nextAction:
   cost: No rendering, generation, paid job, or additional spend authorized
 ```
 
-Choose the `kind` from the verdict:
+Choose the `kind` from the unresolved blocker in the requested decision, not only from the footprint verdict:
 
-- `insufficient evidence` → request only the blocking measurement or smallest blocking set;
-- `footprint does not fit` → offer one explicit alternate position/rotation, label it proposed and unverified, and require a fresh check before calling it a pass;
-- `footprint fits` → offer one specific related item/pose check in the same measured context.
+- a missing or unproven decisive measurement → `request_measurement`, even when the footprint passes;
+- a failed requested footprint with one geometry-supported untested pose → `check_alternate_pose`, labeled proposed and unverified and requiring a fresh check;
+- all tested footprint poses, or another requested physical constraint, conclusively fail with no evidence-backed alternative → `request_alternate_item_or_target`, asking the user for one exact alternate rather than inventing it;
+- a requested constraint has the needed inputs but the available read-only path did not include it → `complete_unresolved_check`, naming the missing capability and retaining the current limitation;
+- no unresolved requested blocker and the footprint fits → `check_related_item_or_pose` for one optional related check in the same measured context.
 
 The next action is optional. Do not execute it, create or switch accounts/workspaces, broaden project scope, save, publish, render, generate, or spend without the user's separate authorization. Re-read project status before an accepted follow-up because the recorded revision and graph hash may no longer be current.
 

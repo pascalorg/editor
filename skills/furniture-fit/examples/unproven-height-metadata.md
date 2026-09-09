@@ -26,8 +26,8 @@ The 3.10 m wardrobe may conflict with the nominal 2.70 m values, so measure the 
 
 ```yaml
 nextAction:
-  kind: check_related_item_or_pose
-  task: Re-check this wardrobe at the same pose after recording a measured clear floor-to-obstacle height over its exact footprint.
+  kind: request_measurement
+  task: Measure the clear floor-to-obstacle height over the wardrobe's exact footprint.
   requiredInput: One measured clear height with its provenance and spatial coverage.
   context:
     projectId: project_example

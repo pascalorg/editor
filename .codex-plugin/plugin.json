@@ -14,7 +14,7 @@
   "interface": {
     "displayName": "Pascal agent skills",
     "shortDescription": "Build and inspect Pascal scenes and assess furniture footprints.",
-    "longDescription": "Use Pascal's MCP tools to work with editable building scenes, validate and save results, and produce bounded furniture footprint reports with explicit evidence, limitations, and verdict-aware next actions.",
+    "longDescription": "Use Pascal's MCP tools to work with editable building scenes, validate and save results, and produce bounded furniture footprint reports with explicit evidence, limitations, and blocker-aware next actions.",
     "developerName": "Pascal",
     "category": "Developer Tools",
     "capabilities": ["Interactive", "Read", "Write"],

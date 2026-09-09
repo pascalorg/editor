@@ -6,6 +6,14 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const skillNames = ['pascal-3d', 'furniture-fit'] as const
 const skillVersions = { 'pascal-3d': '0.1.0', 'furniture-fit': '0.1.3' } as const
 const pluginVersion = '0.1.4'
+const furnitureNextActionKinds = [
+  'request_measurement',
+  'check_alternate_pose',
+  'request_alternate_item_or_target',
+  'complete_unresolved_check',
+  'check_related_item_or_pose',
+] as const
+type FurnitureNextActionKind = (typeof furnitureNextActionKinds)[number]
 const failures: string[] = []
 
 function fail(message: string) {
@@ -157,21 +165,122 @@ const furnitureSkill = read(join(root, 'skills', 'furniture-fit', 'SKILL.md'))
 const furnitureReport = read(
   join(root, 'skills', 'furniture-fit', 'references', 'report-template.md'),
 )
-const furnitureEvals = read(join(root, 'skills', 'furniture-fit', 'evals', 'evals.json'))
-for (const kind of ['request_measurement', 'check_alternate_pose', 'check_related_item_or_pose']) {
-  if (
-    !(
-      furnitureSkill.includes(kind) &&
-      furnitureReport.includes(kind) &&
-      furnitureEvals.includes(kind)
-    )
-  ) {
-    fail(`furniture-fit: missing verdict-aware nextAction kind ${kind}`)
+for (const kind of furnitureNextActionKinds) {
+  if (!(furnitureSkill.includes(kind) && furnitureReport.includes(kind))) {
+    fail(`furniture-fit: missing nextAction kind ${kind}`)
   }
 }
 for (const field of ['requiredInput:', 'context:', 'authority:', 'cost:']) {
   if (!furnitureReport.includes(field)) {
     fail(`furniture-fit report template is missing nextAction field ${field}`)
+  }
+}
+
+type FurnitureDecisionContext = {
+  has_passing_footprint?: unknown
+  has_blocking_failure?: unknown
+  missing_blocking_measurement?: unknown
+  supported_unchecked_alternative?: unknown
+  unresolved_requested_check_due_to_tool_limit?: unknown
+}
+
+const furnitureDecisionContextKeys = [
+  'has_passing_footprint',
+  'has_blocking_failure',
+  'missing_blocking_measurement',
+  'supported_unchecked_alternative',
+  'unresolved_requested_check_due_to_tool_limit',
+] as const
+
+function deriveFurnitureNextAction(context: FurnitureDecisionContext): FurnitureNextActionKind {
+  if (context.missing_blocking_measurement === true) return 'request_measurement'
+  if (context.has_blocking_failure === true) {
+    return context.supported_unchecked_alternative === true
+      ? 'check_alternate_pose'
+      : 'request_alternate_item_or_target'
+  }
+  if (context.unresolved_requested_check_due_to_tool_limit === true) {
+    return 'complete_unresolved_check'
+  }
+  return 'check_related_item_or_pose'
+}
+
+const furnitureEvalData = parseJson(
+  join(root, 'skills', 'furniture-fit', 'evals', 'evals.json'),
+) as {
+  evals?: Array<{
+    id?: unknown
+    semantic_case?: unknown
+    decision_context?: FurnitureDecisionContext
+    expected_next_action?: {
+      kind?: unknown
+      target?: unknown
+      must_not?: unknown
+    }
+  }>
+}
+const semanticDecisionCases = new Map<string, NonNullable<typeof furnitureEvalData.evals>[number]>()
+for (const item of furnitureEvalData.evals ?? []) {
+  if (typeof item.semantic_case !== 'string') continue
+  if (semanticDecisionCases.has(item.semantic_case)) {
+    fail(`furniture-fit: duplicate semantic nextAction case ${item.semantic_case}`)
+  }
+  semanticDecisionCases.set(item.semantic_case, item)
+}
+const requiredSemanticCases = new Map<string, FurnitureNextActionKind>([
+  ['no-unresolved-requested-blocker', 'check_related_item_or_pose'],
+  ['mixed-evidence-height-blocker', 'request_measurement'],
+  ['all-tested-poses-fail', 'request_alternate_item_or_target'],
+  ['prospective-candidate-door-limit', 'complete_unresolved_check'],
+  ['supported-untested-alternate', 'check_alternate_pose'],
+])
+for (const [semanticCase, requiredKind] of requiredSemanticCases) {
+  const item = semanticDecisionCases.get(semanticCase)
+  if (!item?.decision_context) {
+    fail(`furniture-fit: missing semantic nextAction case ${semanticCase}`)
+    continue
+  }
+  const contextKeys = Object.keys(item.decision_context).sort()
+  const expectedKeys = [...furnitureDecisionContextKeys].sort()
+  if (
+    contextKeys.length !== expectedKeys.length ||
+    contextKeys.some((key, index) => key !== expectedKeys[index]) ||
+    furnitureDecisionContextKeys.some((key) => typeof item.decision_context?.[key] !== 'boolean')
+  ) {
+    fail(`furniture-fit: semantic case ${semanticCase} needs the complete boolean decision context`)
+  }
+  if (
+    item.decision_context.supported_unchecked_alternative === true &&
+    item.decision_context.has_blocking_failure !== true
+  ) {
+    fail(`furniture-fit: semantic case ${semanticCase} cannot offer an alternate without a failure`)
+  }
+  if (
+    item.decision_context.has_passing_footprint !== true &&
+    item.decision_context.has_blocking_failure !== true &&
+    item.decision_context.missing_blocking_measurement !== true &&
+    item.decision_context.unresolved_requested_check_due_to_tool_limit !== true
+  ) {
+    fail(`furniture-fit: semantic case ${semanticCase} has no result or blocker`)
+  }
+  const expected = item.expected_next_action
+  if (
+    !expected ||
+    !furnitureNextActionKinds.includes(expected.kind as FurnitureNextActionKind) ||
+    typeof expected.target !== 'string' ||
+    !expected.target ||
+    !Array.isArray(expected.must_not) ||
+    expected.must_not.length === 0 ||
+    expected.must_not.some((value) => typeof value !== 'string' || !value)
+  ) {
+    fail(`furniture-fit: semantic case ${semanticCase} has an invalid expected_next_action`)
+    continue
+  }
+  const derived = deriveFurnitureNextAction(item.decision_context)
+  if (derived !== expected.kind || expected.kind !== requiredKind) {
+    fail(
+      `furniture-fit: semantic case ${semanticCase} derives ${derived}, expected ${requiredKind}`,
+    )
   }
 }
 

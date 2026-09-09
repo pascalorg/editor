@@ -53,7 +53,7 @@ Use one active agent client per local CLI service. Its standalone HTTP runtime s
 | Skill | Use it for |
 | --- | --- |
 | [`pascal-3d`](pascal-3d/SKILL.md) | Connect Pascal safely, inspect or edit a scene, validate it, save it, and return a verified handoff. |
-| [`furniture-fit`](furniture-fit/SKILL.md) | Assess a furniture footprint at stated poses and report collisions, door keep-outs, evidence gaps, and one bounded verdict-aware next action. |
+| [`furniture-fit`](furniture-fit/SKILL.md) | Assess a furniture footprint at stated poses and report collisions, door keep-outs, evidence gaps, and one bounded blocker-aware next action. |
 
 Each skill is standalone. Its `references/`, `examples/`, and `evals/` folders travel with that skill when installed individually.
 
@@ -66,4 +66,4 @@ bun scripts/validate-skills.ts
 claude plugin validate . --strict
 ```
 
-The repository validator checks frontmatter, bundled links, task and trigger fixtures, the five-positive/three-negative publishing suite, manifest consistency, and accidental private-path or credential leakage.
+The repository validator checks frontmatter, bundled links, task and trigger fixtures, semantic furniture next-action decision cases, the publishing suite, manifest consistency, and accidental private-path or credential leakage.
