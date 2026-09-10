@@ -5,6 +5,7 @@
 ### Features
 
 - Add plugin-contributed editor panels and viewer presentations with project-local configuration persistence.
+- Include Environment in the standalone app's Plugins catalogue, with a pinned GitHub dependency and registered editor panel and viewer presentation.
 - Expose generic atmosphere and ground-replacement adapters, Site-scoped floorplan output, bake-only GLB geometry, and plugin-owned selection materials.
 - Add portable GLB/USDZ downloads with asynchronous material baking, procedural-content filters, and opt-in static viewer-presentation exports.
 

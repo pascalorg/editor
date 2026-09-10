@@ -13,6 +13,11 @@ bun dev
 
 The editor will be running at **http://localhost:3002**.
 
+Environment is included as a pinned GitHub dependency, like the other bundled
+plugins. Open **+ → Plugins → Environment** to manage its installation for the
+current project, then open **Environment** in the sidebar. No separate plugin
+checkout, local tarball, or synchronization script is needed.
+
 ## Environment Variables (optional)
 
 Copy `.env.example` to `.env` if you need:
