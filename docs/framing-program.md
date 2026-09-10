@@ -1320,7 +1320,71 @@ FINISHED presentation — Bones' physical set, no X-ray — whatever view the
 user was in; a captured picture is recaptured when the model it depends on
 changes.
 
+## Mandate additions (Steve, 2026-09-10 night — perfect the sheets)
+
+Steve: "just fix the elevation markers, if you can overlay the vector lines
+perfectly without colors and lined those up perfectly would be amazing,
+also your heights elevation lines for the patios go across the entire
+house, maybe just on their respective side … think like an architect, get
+this perfect … focus elevations, also ensure the light is bright on the
+elevation face … the outline vector lines on present faces if there is any
+technology for that … your sections still have overlaps too … no
+overlapping leaders and the leader nicely around the entire side, not off
+page … check your foundation plans and bracewall plans, they are a bit
+basic, ensure all foundation types work, but focus on elevations and
+sections first".
+
+G126 A datum mark runs over what it marks — a porch roof's plate and ridge
+over the porch — and its label stands in one column at the drawing's edge,
+stacked so nothing overlaps, with a leader back to its line.
+G127 Everything a viewport draws sits inside its box on the paper: a
+drawing that outgrows its scale steps down through the standard scales and
+the strip prints the scale drawn.
+G128 A sheet's section is a view of the model too: the viewer clipped at
+the section plane, captured square along the marker's direction, with the
+cut's poché, the datums, the grade, the notes and Bones' cut members drawn
+over it.
+G129 A captured face is lit for the drawing — the sun aimed at it from the
+viewer's side — and carries the viewer's ink edges as its outlines.
+
 ## Log (continued)
+
+- 2026-09-10 (night): **Batches T37 + T38 — datums, light, ink, fit, captured sections (G126–G129).**
+  projection.ts `datumMarks` / `datumPrimitives`: every mark's dashed line
+  over ITS span (`roofMarks` projects each roof's plan polygon through the
+  elevation's projector; a section keeps full spans), one label column at
+  `uMax + 0.45 + 0.38`, labels stacked `DATUM_STEP` 0.24 m apart top-down,
+  a two-segment leader (never a polyline — the grade line is the drawing's
+  polyline, the tests find it first) from the line's end to a moved label;
+  `levelDatums` / `roofDatums` stay as thin wrappers. section-framing.ts:
+  the notes column stands `NOTE_COLUMN_W` 3 m PAST the datum-label margin
+  and hands the widened bounds back (drawings.ts applies them). drawings.ts
+  `fittedScale`: a provided drawing that would not fit its box at the
+  viewport's scale steps down through `SCALE_PRESETS` until it does; the
+  window and the strip use the scale drawn (A4.0's GRADE label was cut at
+  the left at 1/2"). thumbnail-generator.tsx: `lightFace` re-aims every
+  directional light at the captured face (35° up, a quarter to the
+  camera's left, ×1.15) and restores it after the render; on a WebGPU
+  device an orthographic capture goes through its own post-processed
+  pipeline (AO + `edges: 'soft'` ink) — with the node frame advanced by
+  hand before each pipeline capture: the scene pass is FRAME-updated and
+  only the animation loop advances it, so two captures behind the idle
+  Sheets overlay shared one frame and the north elevation came back as the
+  east; the WebGL fallback keeps the canvas path (`window.__pascalCaptureCanvasPath`
+  forces it in dev). T38: `captureSectionImage` — the marker's plane as
+  two WORLD clipping planes (beyond the cut, within its depth) on a
+  `ClippingGroup` the scene's children stand in for the render (the WebGPU
+  renderer clips only through such groups); the camera along the marker's
+  look direction from the drawing's centre (`ElevationFrame.planOrigin`
+  = the cut line's start, `depth`), the picture under
+  `buildSectionDrawing(…, { beyondFromImage })` — the cut poché, datums,
+  grade and the sheets' framing notes over it; sections auto-capture and
+  recapture like elevations (`captureViewportPicture` dispatches all
+  three kinds). Verified in Steve's Chrome: A4.0/A4.1 lit and inked, the
+  porch plate/ridge over the porch only, labels stacked with leaders; A5.0
+  Sections A and B captured beyond the cut with the poché over them. Open:
+  capture resolution is the canvas'; the roof finish colour; a true vector
+  outline overlay; foundation / brace-wall / site plan review.
 
 - 2026-09-10: **Batch T36 — captured elevations (G124, G125); the plain capture pipeline.**
   The assessment first: plugin-sections re-derives walls / openings / roofs
