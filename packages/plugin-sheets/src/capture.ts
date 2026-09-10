@@ -132,6 +132,9 @@ async function withSiteSurfaceHidden<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** The capture recipe's version — part of every picture's hash; a change recaptures every sheet once. */
+const PICTURE_RECIPE = 'r2'
+
 /** A sheet's picture is rendered at this multiple of the canvas' size and kept at up to PICTURE_MAX_WIDTH px. */
 const PICTURE_SUPERSAMPLE = 2
 const PICTURE_MAX_WIDTH = 3600
@@ -200,11 +203,13 @@ export function elevationCaptureHash(nodes: NodeMap): string {
     for (const key of PICTURE_FIELDS) if (key in n) fields.push(n[key])
     parts.push(JSON.stringify(fields))
   }
-  // djb2 over the joined record — a short stable string
+  // djb2 over the joined record — a short stable string, prefixed with the
+  // picture recipe's version: bump PICTURE_RECIPE when the capture itself
+  // changes (its size, its light, its outlines) so every sheet recaptures once
   let h = 5381
   const text = parts.join('|')
   for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0
-  return `${parts.length}:${(h >>> 0).toString(36)}`
+  return `${PICTURE_RECIPE}:${parts.length}:${(h >>> 0).toString(36)}`
 }
 
 /** True when the viewport's picture is missing or was taken of another model — an elevation, a section or the cover view. */
