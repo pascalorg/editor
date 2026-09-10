@@ -218,8 +218,18 @@ export const ViewportNode = BaseNode.extend({
   coverBlock: z.enum(['title', 'index', 'data', 'notes']).optional(),
   /** notes only. */
   text: z.string().default(''),
-  /** image / captured view3d only. */
+  /** image / captured view3d / captured elevation. */
   dataUrl: z.string().default(''),
+  /**
+   * elevation only, captured from the live viewer: the rectangle the image
+   * covers in the drawing's own metres (x along the view's right axis, y
+   * the NEGATED elevation — plugin-sections' DRAWING SPACE) and the model
+   * hash it was taken at; a changed model recaptures (2026-09-10).
+   */
+  imageFrame: z
+    .object({ x0: z.number(), y0: z.number(), x1: z.number(), y1: z.number() })
+    .optional(),
+  imageHash: z.string().optional(),
 }).describe('A live window onto the model, placed on a sheet.')
 export type ViewportNode = z.infer<typeof ViewportNode>
 

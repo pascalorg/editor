@@ -31,11 +31,29 @@ export type DrawingBounds = {
  * `elevationRange` restates the vertical extent in true world metres for
  * callers that need real heights (schedules, height dimensions, sheet notes).
  */
+/**
+ * The view frame an elevation was drawn in — enough for a host to aim a
+ * camera at the same picture (plugin-sheets captures the live viewer and
+ * lays the drawing's datums and tags over it, 2026-09-10).
+ */
+export type ElevationFrame = {
+  /** The direction the viewer LOOKS, in the model's (first building's) plan frame. */
+  forward: Vec2
+  /** The drawing's +x axis in the same frame. */
+  right: Vec2
+  /** The first building's yaw (three.js Y rotation, radians): local → world turn. */
+  yaw: number
+  /** The first building's world position; the drawing's elevation 0 is its y. */
+  origin: [number, number, number]
+}
+
 export type DrawingResult = {
   primitives: FloorplanGeometry[]
   bounds: DrawingBounds
   /** Vertical extent in TRUE world elevation metres (not negated). */
   elevationRange: { min: number; max: number }
+  /** Elevations only: the frame the picture was projected in. */
+  frame?: ElevationFrame
   /**
    * Honest record of everything the builder could not compute exactly for
    * this scene — unsupported roof shapes, missing levels, curved walls

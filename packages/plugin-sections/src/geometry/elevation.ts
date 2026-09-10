@@ -22,7 +22,9 @@ import {
 } from './projection'
 import { type BuildingModel, buildBuildingModel, type WallSolid } from './scene-model'
 import { INK, label, line, PAPER, polygon as polygonPrimitive, rectPolygon, WEIGHT } from './style'
-import { type DrawingResult, type DrawingScene, EMPTY_BOUNDS, type Vec2 } from './types'
+import { type DrawingResult, type DrawingScene, EMPTY_BOUNDS, type Vec2,
+  type ElevationFrame,
+} from './types'
 
 /** A 1x8 finish fascia (7¼ in) hanging from the eave line. */
 const FASCIA_BOARD = 0.184
@@ -52,6 +54,16 @@ export function elevationAngle(direction: 'north' | 'east' | 'south' | 'west'): 
     default:
       return 0
   }
+}
+
+/** The first building's world position — the model's frame origin; the drawing's elevation 0 is its y. */
+export function buildingOrigin(scene: DrawingScene): [number, number, number] {
+  for (const node of Object.values(scene.nodes)) {
+    if (node?.type !== 'building') continue
+    const p = (node as { position?: number[] }).position
+    return Array.isArray(p) ? [p[0] ?? 0, p[1] ?? 0, p[2] ?? 0] : [0, 0, 0]
+  }
+  return [0, 0, 0]
 }
 
 /** The first building's yaw (radians, three.js Y rotation) — the turn the whole model is drawn in. */
@@ -116,6 +128,16 @@ export function buildElevationDrawing(
   scene: DrawingScene,
   direction: ElevationDirectionArg,
   model?: BuildingModel,
+  options: {
+    /**
+     * Leave the body out — the walls, openings, roof, items — and return only
+     * what goes OVER a picture of it: the datums, the grade line, the tags,
+     * the finish key. The bounds still come from the whole drawing, so the
+     * viewport frames the same window either way. plugin-sheets lays these
+     * over a capture of the live viewer (2026-09-10).
+     */
+    overlaysOnly?: boolean
+  } = {},
 ): DrawingResult {
   const angle = resolveAngle(scene, direction)
   if (angle === null) {
@@ -347,15 +369,21 @@ export function buildElevationDrawing(
     )
   }
 
-  const primitives = [
+  const datums = [
     ...levelDatums(built, bodyBounds.minX, bodyBounds.maxX),
     ...roofDatums(built, bodyBounds.minX, bodyBounds.maxX),
-    ...body,
-    ...grade.primitives,
-    ...tags,
-    ...finishKey,
   ]
-  const raw = boundsFromPrimitives(primitives) ?? EMPTY_BOUNDS
+  const full = [...datums, ...body, ...grade.primitives, ...tags, ...finishKey]
+  const primitives = options.overlaysOnly
+    ? [...datums, ...grade.primitives, ...tags, ...finishKey]
+    : full
+  const raw = boundsFromPrimitives(full) ?? EMPTY_BOUNDS
+  const frame: ElevationFrame = {
+    forward: [view.forward[0], view.forward[1]],
+    right: [view.right[0], view.right[1]],
+    yaw: buildingYaw(scene),
+    origin: buildingOrigin(scene),
+  }
   // Text has no geometric extent here: leave room for the datum labels
   // (right), the GRADE label (left) and the finish key (below).
   const bounds = {
@@ -369,5 +397,6 @@ export function buildElevationDrawing(
     bounds: padBounds(bounds, 0.25),
     elevationRange: { min: -bounds.maxY, max: -bounds.minY },
     warnings,
+    frame,
   }
 }

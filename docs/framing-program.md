@@ -1298,7 +1298,86 @@ G123 A cable that rises to the attic or crosses a ceiling stands in a bay
 clear of every opening between drill height and the plates; a leg at
 drill height joins the box to its riser bay.
 
+## Mandate additions (Steve, 2026-09-10 — the elevations are views, not drawings)
+
+Steve: "the elevations on the sheets are broken, they are not the real
+elevation you can see the rafters / fascia board goes behind the wall and
+its not true elevation, side elevation your roof is broken, trim colors and
+doors and windows show siding behind it and not right color, building
+sections are broken not the real thing shown, can we get this live or no?
+why does it suck so much? are we remaking the wheel or something everytime?
+… shouldn't the 3D view show the normal view not the current view? …
+needs to work for all pascal work, not something you keep patching, you
+have the viewer live, what can we do here?"
+
+G124 A sheet's elevation is a VIEW of the one model the viewer builds — an
+orthographic capture of the finished house from its direction, with the
+datums, the grade line, the tags and the finish key drawn over it — never a
+second geometry engine's re-derivation; every plugin's 3D is in it by
+construction.
+G125 Every capture a sheet takes (the cover view, the elevations) shows the
+FINISHED presentation — Bones' physical set, no X-ray — whatever view the
+user was in; a captured picture is recaptured when the model it depends on
+changes.
+
 ## Log (continued)
+
+- 2026-09-10: **Batch T36 — captured elevations (G124, G125); the plain capture pipeline.**
+  The assessment first: plugin-sections re-derives walls / openings / roofs
+  from the nodes and paints them back to front with polygon-level
+  hidden-line removal — no depth test — so the fascia behind the wall, the
+  side roof over the mast, the trim over siding and the section cut are
+  all the same divergence from the viewer, and the cover view captured
+  whatever Bones view was on. Now: plugin-sheets `capture.ts`
+  `captureElevationImage(vp)` — the vector engine's own result gives the
+  window (`bounds`) and the new `DrawingResult.frame` (forward / right in
+  the model's frame, the building's yaw and origin — plugin-sections
+  types.ts + `buildingOrigin`) aims an ORTHOGRAPHIC capture camera from
+  80 m out; the window is widened to the 3D canvas' aspect so the picture
+  covers it exactly; `withFinishedPresentation` flips every Bones framing
+  node to 'off' (history paused) for the capture — the cover capture uses
+  it too; the picture (JPEG on white, 2400 px) and its drawing-metre
+  rectangle (`ViewportNode.imageFrame`) and the model hash it was taken at
+  (`imageHash`, `elevationCaptureHash` over the picture's node types) go
+  onto the viewport. `drawings.ts resolveProvided`: an image-backed
+  elevation asks the provider for `overlaysOnly` (bootstrap passes
+  `args.imageBacked`; `buildElevationDrawing(…, { overlaysOnly })` keeps
+  the datums, the grade line, the tags and the finish key, the bounds from
+  the whole drawing) and lays the picture under them as an 'image'
+  primitive in drawing space. overlay.tsx auto-captures every stale
+  elevation of the sheet shown (missing picture or another hash — keyed by
+  viewport AND hash, one attempt each, captures chained one at a time);
+  rail.tsx has "Capture from the viewer" / "Recapture from the viewer" on
+  an elevation. The editor's thumbnail-generator takes an `ortho`
+  {position, target, viewWidth} of the caller's own and an `edges`
+  override — the user's camera never moves (switching the main camera's
+  projection recreated the controls at the default pose and the first
+  capture showed the aerial view); the orthographic pass renders straight
+  to the canvas and copies it (the generator's own fallback path, on a
+  white transparent clear) — an offscreen-target readback never returned
+  on the WebGL fallback backend, post-processed or plain; the viewer keeps
+  a `createPlainSnapshotPipeline` (no SSGI, `renderAsync` into an offscreen
+  target, the readback + encode shared with the SSGI pipeline as
+  `encodeCapture`, a 12 s readback timeout) for a WebGPU device to use
+  later, and the generator's guard has a 30 s watchdog. The capture
+  handshake traces onto `window.__pascalCaptureTrace` in development.
+  `withSiteSurfaceHidden` hides the site object's own children that are
+  no registered node (the terrain, a solid ground band edge-on) and keeps
+  the buildings hanging off it — hiding the site NODE took the house
+  with it. Verified in Steve's Chrome (WebGPU): A4.0 shows the captured
+  north elevation under the datums and tags; the cover recaptures with
+  the finished house. Two clients on one scene overwrite each other's
+  autosave (the Browser pane's tab wiped the picture Chrome had just
+  captured) — keep one tab on a scene while testing. Open: the porch
+  roof renders in the default orange, not the recorded roof finish. The viewer's
+  empty-draw guard now also wraps the backend's `draw` (a zero-vertex draw
+  or an empty draw range is dropped before the encoder — Steve's "Vertex
+  buffer slot 1 … MeshLambertNodeMaterial … Draw(0, 1, 0, 0)"; it could
+  not be reproduced: the Browser pane runs the WebGL fallback). The
+  headless demo scripts keep the vector elevation (no viewer to capture).
+  NOT DONE: the sections (a clipping-plane capture with the vector cut
+  band over it), true line-work from the depth buffer, supersampled
+  captures beyond the canvas size.
 
 - 2026-09-09: **Batch T35b — the row and the election agree (G122, G123); the cursor's geometry lives.**
   Steve's regenerated Modesto house (scene 84d6d7b79ed9, pulled from the

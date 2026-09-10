@@ -12,7 +12,7 @@ import { X } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useEditor } from '@pascal-app/editor'
-import { captureViewportImage } from './capture'
+import { captureElevationImage, captureViewportImage, elevationCaptureHash, elevationCaptureStale } from './capture'
 import { composeSheet } from './page'
 import { Paper } from './paper'
 import { ProjectEditor, Rail, useSceneNodes } from './rail'
@@ -28,6 +28,9 @@ import { useSheets } from './store'
  * must all get to close themselves first — pressing Escape once should never
  * dismiss the whole workspace out from under an open thing.
  */
+/** Captures in flight, one after another — each moves the camera and flips the presentation. */
+let captureChain: Promise<void> = Promise.resolve()
+
 const ESCAPE_BLOCKING_SELECTOR = [
   '[role="dialog"]',
   '[role="alertdialog"]',
@@ -100,30 +103,44 @@ export function SheetsWorkspace() {
    * is not there would spin forever. "Recapture" in the Layers tab is the
    * manual retry.
    */
+  //
+  // The ELEVATIONS are captured the same way (2026-09-10): a viewport whose
+  // picture is missing or was taken of another model (`elevationCaptureStale`
+  // — the hash of the nodes the picture depends on) is recaptured when its
+  // sheet shows; the attempt is keyed by viewport AND hash, so a model that
+  // keeps changing keeps its pictures current without ever looping on one.
+  // Captures run one at a time — each moves the camera and flips Bones to
+  // the finished view — so a second effect run waits for the first.
   useEffect(() => {
     if (!open || !sheet) return
+    const hash = elevationCaptureHash(nodes)
+    const tried = useSheets.getState().captureTried
+    const keyOf = (vp: ViewportNode): string => `${vp.id}:${hash}`
     const pending = viewports(nodes, sheet.id).filter(
       (vp: ViewportNode) =>
-        vp.kind === 'view3d' && !vp.dataUrl && !useSheets.getState().captureTried[vp.id],
+        (vp.kind === 'view3d' || vp.kind === 'elevation') && elevationCaptureStale(vp, nodes) && !tried[keyOf(vp)],
     )
     if (pending.length === 0) return
     let cancelled = false
-    void (async () => {
+    const previous = captureChain
+    captureChain = (async () => {
+      await previous.catch(() => undefined)
       for (const vp of pending) {
-        useSheets.getState().markCaptureTried(vp.id)
-        useSheets.getState().setBusy({ label: 'Capturing the cover view' })
+        if (cancelled) return
+        useSheets.getState().markCaptureTried(keyOf(vp))
+        const what = vp.kind === 'elevation' ? `the ${vp.title || `${vp.direction ?? ''} elevation`}` : 'the cover view'
+        useSheets.getState().setBusy({ label: `Capturing ${what}` })
         try {
-          const result = await captureViewportImage(vp)
-          if (cancelled) return
+          const result =
+            vp.kind === 'elevation' ? await captureElevationImage(vp) : await captureViewportImage(vp)
           useSheets.getState().setCaptureNote(vp.id, result.ok ? null : result.reason)
           useSheets
             .getState()
-            .setMessage(result.ok ? 'Cover view captured' : `Cover view: ${result.reason}`)
+            .setMessage(result.ok ? `Captured ${what} from the viewer` : `${what}: ${result.reason}`)
         } catch (error) {
-          if (cancelled) return
           useSheets.getState().setCaptureNote(vp.id, (error as Error).message)
         } finally {
-          if (!cancelled) useSheets.getState().setBusy(null)
+          useSheets.getState().setBusy(null)
         }
       }
     })()

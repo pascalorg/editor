@@ -3,6 +3,7 @@
 import { emitter } from '@pascal-app/core'
 import {
   computeHeroFraming,
+  createPlainSnapshotPipeline,
   createSnapshotPipeline,
   GRID_LAYER,
   heroCameraPose,
@@ -54,6 +55,12 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
 
   const thumbnailCameraRef = useRef<THREE.PerspectiveCamera | null>(null)
   const pipelineRef = useRef<SnapshotPipeline | null>(null)
+  // An ORTHOGRAPHIC capture (a sheet's elevation, 2026-09-10) needs its own
+  // camera and its own pass — the pipeline binds the camera it was built
+  // with — built on first use, kept for the session.
+  const orthoCameraRef = useRef<THREE.OrthographicCamera | null>(null)
+  const orthoPipelineRef = useRef<SnapshotPipeline | null>(null)
+  const orthoPipelineBuild = useRef<Promise<SnapshotPipeline | null> | null>(null)
 
   useEffect(() => {
     onThumbnailCaptureRef.current = onThumbnailCapture
@@ -87,7 +94,34 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       mounted = false
       pipelineRef.current?.dispose()
       pipelineRef.current = null
+      orthoPipelineRef.current?.dispose()
+      orthoPipelineRef.current = null
+      orthoPipelineBuild.current = null
     }
+  }, [gl, scene])
+
+  /** The orthographic capture camera and its pipeline, built once. */
+  const orthoPipeline = useCallback(async (): Promise<{ camera: THREE.OrthographicCamera; pipeline: SnapshotPipeline | null }> => {
+    if (!orthoCameraRef.current) {
+      const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000)
+      cam.layers.disable(EDITOR_LAYER)
+      cam.layers.disable(GRID_LAYER)
+      orthoCameraRef.current = cam
+    }
+    const camera = orthoCameraRef.current
+    if (!orthoPipelineRef.current) {
+      if (!orthoPipelineBuild.current) {
+        // plain, not post-processed: the SSGI stack built for a second camera
+        // never delivered a frame (2026-09-10)
+        orthoPipelineBuild.current = createPlainSnapshotPipeline({
+          renderer: gl as unknown as WebGPURenderer,
+          scene,
+          camera,
+        })
+      }
+      orthoPipelineRef.current = await orthoPipelineBuild.current
+    }
+    return { camera, pipeline: orthoPipelineRef.current }
   }, [gl, scene])
 
   const generate = useCallback(
@@ -97,42 +131,119 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       cropRegion?: { x: number; y: number; width: number; height: number },
       standardSize?: { w: number; h: number },
       transparent = false,
+      // the ink edges the caller wants, else the canvas' (preset / item
+      // captures with alpha stay clean) — a sheet's elevation asks for them
+      edgesOverride?: 'off' | 'soft' | 'strong',
+      // an ORTHOGRAPHIC view of the caller's own: the capture camera stands
+      // at `position` looking at `target` with `viewWidth` metres across the
+      // frame — the user's camera never moves and nothing is animated (a
+      // sheet's elevation; 2026-09-10: switching the main camera's projection
+      // recreated the controls at the default pose and the capture showed it)
+      ortho?: { position: [number, number, number]; target: [number, number, number]; viewWidth: number },
+      // node types hidden for this capture besides the helpers (a sheet's
+      // elevation hides the site's terrain: a solid ground band edge-on)
+      hideTypes: readonly string[] = [],
     ) => {
       const standardW = standardSize?.w ?? THUMBNAIL_WIDTH
       const standardH = standardSize?.h ?? THUMBNAIL_HEIGHT
-      if (isGenerating.current) return
+      // dev: the capture handshake on `window.__pascalCaptureTrace`, for a probe
+      const trace = (step: string, data?: unknown) => {
+        if (process.env.NODE_ENV === 'production') return
+        const w = window as unknown as { __pascalCaptureTrace?: unknown[] }
+        ;(w.__pascalCaptureTrace ??= []).push({ t: Math.round(performance.now()), step, data })
+      }
+      trace('generate', { captureMode, ortho: !!ortho, busy: isGenerating.current, callback: !!onThumbnailCaptureRef.current })
+      if (isGenerating.current) {
+        console.warn('[thumbnail] a capture is still in flight — this request is dropped')
+        return
+      }
       if (!onThumbnailCaptureRef.current) return
 
       isGenerating.current = true
+      // a capture that never settles (a GPU readback that never returns)
+      // must not hold the guard for the session
+      const watchdog = setTimeout(() => {
+        if (isGenerating.current) {
+          console.warn('[thumbnail] capture watchdog released the guard after 30 s')
+          isGenerating.current = false
+        }
+      }, 30000)
 
       try {
-        const thumbnailCamera = thumbnailCameraRef.current
-        if (!thumbnailCamera) return
-
-        // Copy the main camera's transform and projection so the thumbnail
-        // matches exactly what the user sees in the viewport.
-        thumbnailCamera.position.copy(mainCamera.position)
-        thumbnailCamera.quaternion.copy(mainCamera.quaternion)
-        if (mainCamera instanceof THREE.PerspectiveCamera) {
-          thumbnailCamera.fov = mainCamera.fov
-          thumbnailCamera.near = mainCamera.near
-          thumbnailCamera.far = mainCamera.far
-        }
+        const perspectiveCamera = thumbnailCameraRef.current
+        if (!perspectiveCamera) return
         const { width, height } = gl.domElement
-        thumbnailCamera.aspect = width / height
-        thumbnailCamera.updateProjectionMatrix()
-        // The capture camera never joins the scene graph, so its matrixWorld
-        // is only refreshed by the render itself — too late for the backdrop
-        // uniforms below.
-        thumbnailCamera.updateMatrixWorld()
+        const edges = edgesOverride ?? (transparent ? 'off' : useViewer.getState().edges)
 
-        const pipeline = pipelineRef.current
+        // A caller's own orthographic view, or an orthographic main camera,
+        // captures orthographically; the auto-save hero shot stays perspective.
+        const wantOrtho = !snapLevels && (ortho !== undefined || mainCamera instanceof THREE.OrthographicCamera)
+        let thumbnailCamera: THREE.PerspectiveCamera | THREE.OrthographicCamera = perspectiveCamera
+        let pipeline: SnapshotPipeline | null = pipelineRef.current
+        if (wantOrtho) {
+          // The orthographic capture renders straight to the canvas and copies
+          // it (the fallback path below) — the offscreen-target readback never
+          // returned on the WebGL fallback backend, post-processed or plain
+          // (2026-09-10); the sheets overlay covers the viewer while it runs.
+          if (!orthoCameraRef.current) {
+            const created = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000)
+            created.layers.disable(EDITOR_LAYER)
+            created.layers.disable(GRID_LAYER)
+            orthoCameraRef.current = created
+          }
+          const cam = orthoCameraRef.current
+          if (ortho) {
+            const halfW = ortho.viewWidth / 2
+            const halfH = halfW / (width / height)
+            cam.position.set(ortho.position[0], ortho.position[1], ortho.position[2])
+            cam.up.set(0, 1, 0)
+            cam.lookAt(ortho.target[0], ortho.target[1], ortho.target[2])
+            cam.left = -halfW
+            cam.right = halfW
+            cam.top = halfH
+            cam.bottom = -halfH
+            cam.zoom = 1
+            cam.near = 0.1
+            cam.far = 2000
+          } else {
+            const main = mainCamera as THREE.OrthographicCamera
+            cam.position.copy(main.position)
+            cam.quaternion.copy(main.quaternion)
+            cam.left = main.left
+            cam.right = main.right
+            cam.top = main.top
+            cam.bottom = main.bottom
+            cam.zoom = main.zoom
+            cam.near = main.near
+            cam.far = main.far
+          }
+          cam.updateProjectionMatrix()
+          cam.updateMatrixWorld()
+          thumbnailCamera = cam
+          pipeline = null
+        } else {
+          // Copy the main camera's transform and projection so the thumbnail
+          // matches exactly what the user sees in the viewport.
+          perspectiveCamera.position.copy(mainCamera.position)
+          perspectiveCamera.quaternion.copy(mainCamera.quaternion)
+          if (mainCamera instanceof THREE.PerspectiveCamera) {
+            perspectiveCamera.fov = mainCamera.fov
+            perspectiveCamera.near = mainCamera.near
+            perspectiveCamera.far = mainCamera.far
+          }
+          perspectiveCamera.aspect = width / height
+          perspectiveCamera.updateProjectionMatrix()
+          // The capture camera never joins the scene graph, so its matrixWorld
+          // is only refreshed by the render itself — too late for the backdrop
+          // uniforms below.
+          perspectiveCamera.updateMatrixWorld()
+        }
+
         pipeline?.applyEnvironment({
           theme: useViewer.getState().sceneTheme,
           transparent,
           grade: useViewer.getState().shading === 'rendered',
-          // Preset/item captures stay clean; scene captures mirror the canvas.
-          edges: transparent ? 'off' : useViewer.getState().edges,
+          edges,
           camera: thumbnailCamera,
         })
 
@@ -169,7 +280,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         // are registered. Spawn renders on SCENE_LAYER for occlusion, so the
         // thumbnail camera's layer mask can't filter it either. Returns a
         // function that restores the original visibility.
-        const restoreNodeVisibility = temporarilyHideNodeTypes(['scan', 'guide', 'spawn'])
+        const restoreNodeVisibility = temporarilyHideNodeTypes(['scan', 'guide', 'spawn', ...hideTypes])
 
         // Auto-save shots don't copy the user's mid-edit camera — they re-pose
         // onto the same computed hero angle the published thumbnail uses, so a
@@ -192,7 +303,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               theme: useViewer.getState().sceneTheme,
               transparent,
               grade: useViewer.getState().shading === 'rendered',
-              edges: transparent ? 'off' : useViewer.getState().edges,
+              edges,
               camera: thumbnailCamera,
             })
             cameraData.position = pose.position
@@ -209,6 +320,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           // their overrides before capture and re-apply them after.
           try {
             emitter.emit('thumbnail:before-capture', undefined)
+            trace('capture:start', { ortho: wantOrtho, pipeline: !!pipeline })
             capturePromise = pipeline.capture({
               captureMode,
               cropRegion,
@@ -225,16 +337,30 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           }
 
           const result = await capturePromise
+          trace('capture:done', { w: result.outW, h: result.outH, bytes: result.blob.size })
           blob = result.blob
 
           if (captureMode !== undefined) cameraData.captureMode = captureMode
           cameraData.resolution = { w: result.outW, h: result.outH }
         } else {
-          // Fallback: plain render directly to the canvas
+          // Fallback: plain render directly to the canvas — on a white,
+          // transparent clear for the sheets' pictures
+          const clearColor = (gl as unknown as { getClearColor: (t: THREE.Color) => THREE.Color }).getClearColor(new THREE.Color())
+          const clearAlpha = gl.getClearAlpha()
+          const sceneBackground = scene.background
           try {
             emitter.emit('thumbnail:before-capture', undefined)
+            if (transparent) {
+              scene.background = null
+              gl.setClearColor(new THREE.Color('#ffffff'), 0)
+            }
+            trace('canvas:render', { ortho: wantOrtho })
             gl.render(scene, thumbnailCamera)
           } finally {
+            if (transparent) {
+              scene.background = sceneBackground
+              gl.setClearColor(clearColor, clearAlpha)
+            }
             emitter.emit('thumbnail:after-capture', undefined)
             restoreLevels()
             restoreLevelMode?.()
@@ -313,14 +439,17 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           cameraData.resolution = { w: outW, h: outH }
         }
 
+        trace('callback', { bytes: blob.size })
         onThumbnailCaptureRef.current?.(blob, cameraData)
       } catch (error) {
+        trace('error', String(error))
         console.error('❌ Failed to generate thumbnail:', error)
       } finally {
+        clearTimeout(watchdog)
         isGenerating.current = false
       }
     },
-    [gl, scene, mainCamera, controls],
+    [gl, scene, mainCamera, controls, orthoPipeline],
   )
 
   // Thumbnail request via emitter. Two call shapes:
@@ -341,6 +470,12 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       // onto arbitrary palette backgrounds); scene snapshots — studio renders
       // and project thumbnails — composite the theme backdrop + sky.
       transparent?: boolean
+      /** The ink edges wanted, else the canvas' setting (off with alpha). */
+      edges?: 'off' | 'soft' | 'strong'
+      /** An orthographic view of the caller's own — see `generate`. */
+      ortho?: { position: [number, number, number]; target: [number, number, number]; viewWidth: number }
+      /** Node types hidden for this capture besides the helpers. */
+      hideTypes?: readonly string[]
     }) => {
       await generate(
         event.snapLevels === true,
@@ -348,6 +483,9 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         event.cropRegion,
         event.standardSize,
         event.transparent === true,
+        event.edges,
+        event.ortho,
+        event.hideTypes ?? [],
       )
     }
 

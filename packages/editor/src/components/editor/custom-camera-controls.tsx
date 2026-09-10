@@ -378,6 +378,7 @@ export const CustomCameraControls = () => {
     !isPreviewMode && allowUndergroundCamera ? DEBUG_MAX_POLAR_ANGLE : DEFAULT_MAX_POLAR_ANGLE
 
   const camera = useThree((state) => state.camera)
+  const scene = useThree((state) => state.scene)
   const gl = useThree((state) => state.gl)
   const raycaster = useThree((state) => state.raycaster)
   const viewportSize = useThree((state) => state.size)
@@ -519,12 +520,17 @@ export const CustomCameraControls = () => {
     if (process.env.NODE_ENV !== 'development') return
     const w = window as typeof window & {
       __pascalCameraControls?: (() => CameraControlsImpl | null) | null
+      __pascalScene?: (() => unknown) | null
     }
     w.__pascalCameraControls = () => controls.current
+    // the live three.js scene, for the same tooling (a probe can walk the
+    // meshes for an empty geometry the WebGPU validator complains about)
+    w.__pascalScene = () => scene
     return () => {
       w.__pascalCameraControls = null
+      w.__pascalScene = null
     }
-  }, [])
+  }, [scene])
 
   useEffect(() => {
     if (isPreviewMode || isFirstPersonMode || isRestoringFirstPersonPose()) return

@@ -145,6 +145,7 @@ export {
 } from './lib/scene-themes'
 export { type HiddenReason, hideFromScene, showInScene } from './lib/scene-visibility'
 export {
+  createPlainSnapshotPipeline,
   createSnapshotPipeline,
   SNAPSHOT_MAX_EDGE,
   SNAPSHOT_MIME,

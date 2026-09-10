@@ -159,7 +159,11 @@ registerSheetDrawingProvider('elevation', (nodes, args) => {
   // heater's enclosure, the meter, the mast and pole, the condenser) as items
   const model = buildBuildingModel(nodes as never)
   model.items.push(...(bonesExteriorItems(nodes as never, model.levels) as never[]))
-  return buildElevationDrawing({ nodes: nodes as never }, ((args as { direction?: string }).direction ?? 'south') as never, model)
+  // a viewport that carries a capture of the live viewer asks for the
+  // overlays only — the picture IS the body (plugin-sheets capture.ts)
+  return buildElevationDrawing({ nodes: nodes as never }, ((args as { direction?: string }).direction ?? 'south') as never, model, {
+    overlaysOnly: (args as { imageBacked?: boolean }).imageBacked === true,
+  })
 })
 // Site utilities (WS4): overhead / underground runs, poles, service points.
 extendPluginDiscovery(async () => [utilitiesPlugin])

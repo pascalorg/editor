@@ -51,6 +51,16 @@ export type DrawingResult = {
   plate?: FloorplanGeometry[]
   /** Everything the provider could not compute exactly — printed, never silent. */
   warnings?: string[]
+  /**
+   * Elevations: the frame the picture was projected in (plugin-sections
+   * `ElevationFrame`) — the capture aims the viewer's camera with it.
+   */
+  frame?: {
+    forward: readonly [number, number]
+    right: readonly [number, number]
+    yaw: number
+    origin: [number, number, number]
+  }
   /** The plate carries its own heading; suppress the numbered label strip. */
   noLabel?: boolean
   /** Override the caption in the label strip. */
@@ -69,6 +79,8 @@ export type ProviderArgs = {
   notesKey?: string
   /** The viewport box in absolute sheet inches, and its drawing scale (world:paper). */
   viewport: { x: number; y: number; w: number; h: number; scale: number }
+  /** elevation: the viewport carries a capture of the live viewer — draw only what goes over it. */
+  imageBacked?: boolean
 }
 export type DrawingProvider = (
   nodes: NodeMap,
@@ -626,6 +638,34 @@ const PROVIDED_TITLES: Record<string, string> = {
   'general-notes': 'General notes',
 }
 
+/** The provider arguments a viewport stands for (its level, marker, direction, layers, box). */
+export function providerArgsFor(vp: ViewportNode, nodes: NodeMap): ProviderArgs {
+  return {
+    levelId: vp.levelId ?? firstLevelId(nodes),
+    markerId: vp.markerId,
+    direction: vp.direction,
+    layers: vp.layers,
+    system: vp.system,
+    notesKey: vp.notesKey,
+    viewport: { x: vp.x, y: vp.y, w: vp.w, h: vp.h, scale: vp.scale },
+  }
+}
+
+/**
+ * The elevation as the VECTOR engine draws it — the whole body — for the
+ * capture that replaces that body with a picture: its bounds size the
+ * camera's window and its `frame` aims the camera. Null without a provider.
+ */
+export function elevationVectorDrawing(vp: ViewportNode, nodes: NodeMap): DrawingResult | null {
+  const build = provider('elevation')
+  if (!build) return null
+  try {
+    return build(nodes, providerArgsFor(vp, nodes) as unknown as Record<string, unknown>)
+  } catch {
+    return null
+  }
+}
+
 function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
   const build = provider(vp.kind)
   const title =
@@ -645,15 +685,26 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
   let result: DrawingResult | null = null
   try {
     const args: ProviderArgs = {
-      levelId: vp.levelId ?? firstLevelId(nodes),
-      markerId: vp.markerId,
-      direction: vp.direction,
-      layers: vp.layers,
-      system: vp.system,
-      notesKey: vp.notesKey,
-      viewport: { x: vp.x, y: vp.y, w: vp.w, h: vp.h, scale: vp.scale },
+      ...providerArgsFor(vp, nodes),
+      imageBacked: vp.kind === 'elevation' && Boolean(vp.dataUrl && vp.imageFrame),
     }
     result = build(nodes, args as unknown as Record<string, unknown>)
+    // THE PICTURE IS THE BODY: an elevation captured from the live viewer
+    // (capture.ts) goes under the provider's datums, tags and key — the
+    // walls, openings, roof and equipment exactly as the 3D shows them
+    // (Steve, 2026-09-10: "you have the viewer live, what can we do here?")
+    if (result && args.imageBacked && vp.imageFrame) {
+      const f = vp.imageFrame
+      const picture: FloorplanGeometry = {
+        kind: 'image',
+        url: vp.dataUrl,
+        center: [(f.x0 + f.x1) / 2, (f.y0 + f.y1) / 2],
+        width: f.x1 - f.x0,
+        height: f.y1 - f.y0,
+        preserveAspectRatio: 'none',
+      }
+      result = { ...result, primitives: [picture, ...result.primitives] }
+    }
   } catch (error) {
     return {
       plate: note(vp, `${vp.kind} failed: ${(error as Error).message ?? 'error'}`),

@@ -24,7 +24,7 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
-import { captureViewportImage } from './capture'
+import { captureElevationImage, captureViewportImage } from './capture'
 import { sectionMarkers } from './drawings'
 import { generateDefaultSet, regenerateCover } from './generate'
 import {
@@ -683,7 +683,10 @@ export function Rail({ nodes }: { nodes: NodeMap }) {
             onCapture={() =>
               selected &&
               void run('Capturing the view', async () => {
-                const result = await captureViewportImage(selected)
+                const result =
+                  selected.kind === 'elevation'
+                    ? await captureElevationImage(selected)
+                    : await captureViewportImage(selected)
                 S.setCaptureNote(selected.id, result.ok ? null : result.reason)
                 return result.ok ? 'captured' : result.reason
               })
@@ -1037,7 +1040,16 @@ function LayersPanel({
             title="Drive the camera to the standard cover-front pose, capture it, and put your own view back"
           />
         )}
-        {viewport.kind === 'view3d' && captureNote && (
+        {viewport.kind === 'elevation' && (
+          <RailButton
+            tone={viewport.dataUrl ? 'secondary' : 'primary'}
+            icon={<Camera className="h-3.5 w-3.5" />}
+            label={viewport.dataUrl ? 'Recapture from the viewer' : 'Capture from the viewer'}
+            onClick={onCapture}
+            title="Aim the viewer square at this face, capture the finished house orthographically, and lay the datums and tags over it; the vector drawing stands in until then"
+          />
+        )}
+        {(viewport.kind === 'view3d' || viewport.kind === 'elevation') && captureNote && (
           <p className="rounded-md border border-border border-dashed p-2 text-[11px] text-muted-foreground leading-relaxed">
             {captureNote}
           </p>
