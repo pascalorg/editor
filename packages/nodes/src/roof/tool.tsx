@@ -10,11 +10,13 @@ import {
   getWallEffectiveHeightForNodes,
   isCurvedWall,
   type LevelNode,
+  type RoofFootprintTarget,
   RoofNode,
   RoofSegmentNode,
   type RoofType,
   RoofType as RoofTypeSchema,
   resolveBuildingForLevel,
+  resolveRoomRoofFootprint,
   type SceneApi,
   sceneRegistry,
   type WallEvent,
@@ -52,11 +54,9 @@ import { resolveConicalRoofPlacement } from './conical-roof-placement'
 import {
   isStandardRoofWallEligible,
   parseRoofFootprintSource,
-  type RoofFootprintTarget,
   resolveRoofFootprintElevation,
   resolveRoofFootprintWorldElevation,
   resolveRoofWallTopWorldElevation,
-  resolveRoomRoofFootprint,
   subscribeToConicalRoofWallClicks,
 } from './roof-footprint'
 import useRoofFootprintSource from './roof-footprint-source'
@@ -183,7 +183,7 @@ function collectRoofAlignmentAnchors(
 /**
  * Creates a roof group with one default gable segment
  */
-const commitRoofPlacement = (
+export const commitRoofPlacement = (
   sceneApi: SceneApi,
   levelId: LevelNode['id'],
   corner1: [number, number, number],
@@ -337,6 +337,7 @@ const commitRoofPlacement = (
     ...defaults,
     name,
     position: [centerX, 0, centerZ],
+    support: { kind: 'level' },
     children: [segment.id],
   })
 
@@ -350,7 +351,7 @@ const commitRoofPlacement = (
   return roof.id
 }
 
-const commitRoofFootprint = (
+export const commitRoofFootprint = (
   sceneApi: SceneApi,
   levelId: LevelNode['id'],
   target: RoofFootprintTarget,
@@ -382,7 +383,7 @@ const commitRoofFootprint = (
       target.center[1],
     ],
     rotation: target.rotation,
-    sourceWallIds: target.wallIds,
+    support: { kind: 'walls' },
     children: [segment.id],
   })
   createRoofNodes(sceneApi, [

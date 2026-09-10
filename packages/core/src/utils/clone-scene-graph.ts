@@ -108,13 +108,6 @@ export function cloneSceneGraph(sceneGraph: SceneGraph): SceneGraph {
         clonedNode.support.roofSegmentId) as typeof clonedNode.support.roofSegmentId
     }
 
-    if (clonedNode.type === 'roof' && clonedNode.sourceWallIds) {
-      clonedNode.sourceWallIds = clonedNode.sourceWallIds.flatMap((id) => {
-        const mapped = idMap.get(id)
-        return mapped ? [mapped as `wall_${string}`] : []
-      })
-    }
-
     // Remap supportSlabId (persisted slab-support hosts). The 'ground'
     // sentinel is not a node id — keep it as-is.
     if (
@@ -309,12 +302,6 @@ export function cloneLevelSubtree(
     if (cloned.type === 'roof' && cloned.support?.kind === 'roof') {
       cloned.support.roofSegmentId = (idMap.get(cloned.support.roofSegmentId) ??
         cloned.support.roofSegmentId) as typeof cloned.support.roofSegmentId
-    }
-
-    if (cloned.type === 'roof' && cloned.sourceWallIds) {
-      cloned.sourceWallIds = cloned.sourceWallIds.map(
-        (id) => (idMap.get(id) ?? id) as `wall_${string}`,
-      )
     }
 
     // Remap supportSlabId when the host slab is inside the cloned subtree;

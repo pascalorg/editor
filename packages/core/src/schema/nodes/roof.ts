@@ -14,6 +14,7 @@ export type RoofSurfaceMaterialSpec = {
 export const RoofSupport = z
   .discriminatedUnion('kind', [
     z.object({ kind: z.literal('level') }),
+    z.object({ kind: z.literal('walls') }),
     z.object({
       kind: z.literal('roof'),
       roofSegmentId: RoofSegmentNode.shape.id,
@@ -40,7 +41,6 @@ export const RoofNode = BaseNode.extend({
   // Rotation around Y axis in radians
   rotation: z.number().default(0),
   support: RoofSupport,
-  sourceWallIds: z.array(z.templateLiteral(['wall_', z.string()])).optional(),
   // Child roof segment IDs
   children: z.array(RoofSegmentNode.shape.id).default([]),
 }).describe(
@@ -50,8 +50,7 @@ export const RoofNode = BaseNode.extend({
   When not being edited, segments are visually combined into a single solid.
   - position: center position of the roof group
   - rotation: rotation around Y axis
-  - support: level placement or an explicit roof-surface attachment
-  - sourceWallIds: follows the highest source wall top when present
+  - support: custom level placement, spatial wall-top following, or a roof-surface attachment
   - children: array of RoofSegmentNode IDs
   `,
 )

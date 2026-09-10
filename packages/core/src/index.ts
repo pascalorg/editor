@@ -397,6 +397,12 @@ export {
 } from './systems/fence/fence-spline'
 export { resolveRoofElevation, resolveRoofWallTopElevation } from './systems/roof/roof-elevation'
 export { RoofElevationSystem } from './systems/roof/roof-elevation-system'
+export {
+  fitRoofFootprint,
+  type RoofFootprintTarget,
+  resolveRoomRoofFootprint,
+  resolveRoomRoofFootprintOnLevel,
+} from './systems/roof/roof-footprint'
 export { resolveSlabPlacementElevation } from './systems/slab/slab-placement'
 export {
   clampSlabElevationForWalls,

@@ -46,7 +46,7 @@ export function initializeRoofElevationSync(): () => void {
       if (readOnly) return
       const updates: Array<{ id: AnyNodeId; data: Partial<AnyNode> }> = []
       for (const node of Object.values(nodes)) {
-        if (node.type !== 'roof') continue
+        if (node.type !== 'roof' || node.support?.kind !== 'walls') continue
         const elevation = resolveRoofElevation(node, nodes)
         if (Math.abs(node.position[1] - elevation) <= ROOF_ELEVATION_EPSILON) continue
         updates.push({

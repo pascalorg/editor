@@ -139,7 +139,7 @@ test('curved wall roof builder creates a matching conical sector above it', () =
   const segment = created.find((entry) => entry.node.type === 'roof-segment')?.node
 
   expect(wallDefinition.quickActions).toBeUndefined()
-  expect(roof).toMatchObject({ position: [0, 3, 0] })
+  expect(roof).toMatchObject({ position: [0, 3, 0], support: { kind: 'walls' } })
   expect(segment).toMatchObject({
     roofType: 'conical',
     width: 4,
@@ -190,7 +190,7 @@ test('curved wall roof builder parents the roof to the active level', () => {
 
   const createdRoof = created.find((entry) => entry.node.type === 'roof')
   expect(createdRoof?.parentId).toBe(activeLevel.id)
-  expect(createdRoof?.node).toMatchObject({ position: [0, 0, 0] })
+  expect(createdRoof?.node).toMatchObject({ position: [0, 0, 0], support: { kind: 'walls' } })
 })
 
 test('curved wall roof builder reuses its existing hosted roof', () => {
