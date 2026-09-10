@@ -529,7 +529,21 @@ const DATUM_STEP = 0.24
  * leaders, nothing off the page). Duplicates (two roofs sharing a plate)
  * collapse to one mark.
  */
-export function datumPrimitives(marks: readonly DatumMark[], uMax: number): FloorplanGeometry[] {
+export function datumPrimitives(
+  marks: readonly DatumMark[],
+  uMax: number,
+  options: {
+    /** The drawing's left edge — where a 'left' column stands. */
+    uMin?: number
+    /**
+     * Which side the label column stands on. An elevation labels on the
+     * right; a section labels on the LEFT so the framing notes' leaders on
+     * the right never cross a label (Steve, 2026-09-10: "no overlapping
+     * leaders and the leader nicely around the entire side").
+     */
+    side?: 'left' | 'right'
+  } = {},
+): FloorplanGeometry[] {
   const seen = new Set<string>()
   const list: DatumMark[] = []
   for (const mark of marks) {
@@ -546,12 +560,15 @@ export function datumPrimitives(marks: readonly DatumMark[], uMax: number): Floo
     labelY.push(i === 0 ? y : Math.max(y, (labelY[i - 1] as number) + DATUM_STEP))
   }
   const out: FloorplanGeometry[] = []
-  const column = uMax + DATUM_OVERSHOOT
+  const side = options.side ?? 'right'
+  const uMin = options.uMin ?? Math.min(uMax, ...list.map((mark) => mark.u0))
+  const column = side === 'right' ? uMax + DATUM_OVERSHOOT : uMin - DATUM_OVERSHOOT
   list.forEach((mark, i) => {
     const y = drawY(mark.elevation)
+    const startX = mark.u0 - DATUM_OVERSHOOT
     const endX = Math.min(mark.u1, uMax) + DATUM_OVERSHOOT
     out.push(
-      line([mark.u0 - DATUM_OVERSHOOT, y], [endX, y], {
+      line([startX, y], [endX, y], {
         stroke: INK,
         strokeWidth: WEIGHT.datum,
         strokeDasharray: DASH.datum,
@@ -559,19 +576,23 @@ export function datumPrimitives(marks: readonly DatumMark[], uMax: number): Floo
       }),
     )
     const ly = labelY[i] as number
-    if (endX < column - 1e-6 || Math.abs(ly - y) > 1e-6) {
-      // two segments, not a polyline: the grade line is the drawing's polyline
-      const style = { stroke: INK, strokeWidth: WEIGHT.datum, opacity: 0.7 }
-      out.push(line([endX, y], [column + 0.16, ly], style), line([column + 0.16, ly], [column + 0.3, ly], style))
+    // two segments, not a polyline: the grade line is the drawing's polyline
+    const style = { stroke: INK, strokeWidth: WEIGHT.datum, opacity: 0.7 }
+    if (side === 'right') {
+      if (endX < column - 1e-6 || Math.abs(ly - y) > 1e-6) {
+        out.push(line([endX, y], [column + 0.16, ly], style), line([column + 0.16, ly], [column + 0.3, ly], style))
+      }
+    } else if (startX > column + 1e-6 || Math.abs(ly - y) > 1e-6) {
+      out.push(line([startX, y], [column - 0.16, ly], style), line([column - 0.16, ly], [column - 0.3, ly], style))
     }
     out.push({
       kind: 'text',
-      x: column + 0.38,
+      x: side === 'right' ? column + 0.38 : column - 0.38,
       y: ly + 0.05,
       text: mark.text,
       fontSize: 0.15,
       fill: INK,
-      textAnchor: 'start',
+      textAnchor: side === 'right' ? 'start' : 'end',
       dominantBaseline: 'alphabetic',
     } as FloorplanGeometry)
   })
@@ -614,8 +635,17 @@ export function roofMarks(model: BuildingModel, uMin: number, uMax: number, view
 }
 
 /** Every datum mark of the drawing, laid out together (levels and roofs share the one label column). */
-export function datumMarks(model: BuildingModel, uMin: number, uMax: number, view?: Projector): FloorplanGeometry[] {
-  return datumPrimitives([...levelMarks(model, uMin, uMax), ...roofMarks(model, uMin, uMax, view)], uMax)
+export function datumMarks(
+  model: BuildingModel,
+  uMin: number,
+  uMax: number,
+  view?: Projector,
+  side: 'left' | 'right' = 'right',
+): FloorplanGeometry[] {
+  return datumPrimitives([...levelMarks(model, uMin, uMax), ...roofMarks(model, uMin, uMax, view)], uMax, {
+    uMin,
+    side,
+  })
 }
 
 /** @deprecated the levels alone — `datumMarks` lays levels and roofs out together. */

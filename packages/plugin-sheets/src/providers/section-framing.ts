@@ -256,16 +256,24 @@ function calloutsFor(
 ): Callout[] {
   const out: Callout[] = []
   const seen = new Set<string>()
-  /** The widest cut of a role — the one a leader can point at without landing on a sliver. */
+  /**
+   * The cut of a role a leader points at: among the wide ones (at least
+   * half the widest — never a sliver), the one NEAREST the note column on
+   * the right, so the leaders stay short and do not cross the drawing.
+   */
   const pick = (test: (m: Member) => boolean) => {
-    let best: { member: Member; poly: Vec2[]; area: number } | null = null
+    const found: { member: Member; poly: Vec2[]; area: number; x: number }[] = []
     for (const cut of cuts) {
       if (!test(cut.member)) continue
       const xs = cut.poly.map((p) => p[0])
       const ys = cut.poly.map((p) => p[1])
       const area = (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys))
-      if (!best || area > best.area) best = { ...cut, area }
+      found.push({ ...cut, area, x: (Math.min(...xs) + Math.max(...xs)) / 2 })
     }
+    if (found.length === 0) return null
+    const widest = Math.max(...found.map((f) => f.area))
+    let best = found[0] as (typeof found)[number]
+    for (const f of found) if (f.area >= widest * 0.5 && (best.area < widest * 0.5 || f.x > best.x)) best = f
     return best
   }
   const add = (key: string, test: (m: Member) => boolean, text: (m: Member) => string, order: number) => {
@@ -347,7 +355,9 @@ function calloutsFor(
     10,
   )
   add('slab', (m) => m.role === 'slab', () => `CONC. SLAB ON GRADE O/ VAPOR RETARDER (R506)`, 11)
-  return out.sort((a, b) => a.order - b.order)
+  // top-down in the order of what they point at (drawing y grows downward),
+  // so no two leaders from the column cross; the reading order breaks ties
+  return out.sort((a, b) => a.at[1] - b.at[1] || a.order - b.order)
 }
 
 /* -------------------------------------------------------------- the pass */

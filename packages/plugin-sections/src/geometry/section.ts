@@ -331,7 +331,11 @@ export function buildSectionDrawing(
   const uMax = bodyBounds?.maxX ?? length
 
   const grade = gradeLine(built, view, uMin, uMax, Math.max(0.01, spec.depth) / 2)
-  const datums = datumMarks(built, uMin, uMax)
+  // the datum labels on the LEFT: the sheets' framing notes take the right
+  // with their leaders, and a leader never crosses a label; each roof's
+  // plate and ridge over the roof's own projected span (the porch's over
+  // the porch, not across the cut of the house)
+  const datums = datumMarks(built, uMin, uMax, view, 'left')
   const primitives = [...datums, ...body, ...grade.primitives]
   const frame: ElevationFrame = {
     forward: [view.forward[0], view.forward[1]],
