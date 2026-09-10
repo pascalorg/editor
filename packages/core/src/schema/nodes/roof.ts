@@ -40,6 +40,7 @@ export const RoofNode = BaseNode.extend({
   // Rotation around Y axis in radians
   rotation: z.number().default(0),
   support: RoofSupport,
+  sourceWallIds: z.array(z.templateLiteral(['wall_', z.string()])).optional(),
   // Child roof segment IDs
   children: z.array(RoofSegmentNode.shape.id).default([]),
 }).describe(
@@ -50,6 +51,7 @@ export const RoofNode = BaseNode.extend({
   - position: center position of the roof group
   - rotation: rotation around Y axis
   - support: level placement or an explicit roof-surface attachment
+  - sourceWallIds: follows the highest source wall top when present
   - children: array of RoofSegmentNode IDs
   `,
 )

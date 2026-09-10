@@ -4,13 +4,12 @@ import {
   emitter,
   getLevelBelow,
   getLevelElevations,
-  getWallBaseElevationForNodes,
-  getWallEffectiveHeightForNodes,
   isCurvedWall,
   type LevelNode,
   pointInPolygon2D,
   type RoofType,
   resolveLevelId,
+  resolveRoofWallTopElevation,
   type WallEvent,
   type WallNode,
 } from '@pascal-app/core'
@@ -198,15 +197,13 @@ export function resolveRoofFootprintElevation(
 ): number {
   const completeNodes = nodes as Record<string, AnyNode>
   const elevations = getLevelElevations(completeNodes)
-  return Math.max(
-    0,
-    ...target.wallIds.map((id) => {
-      const wall = nodes[id]
-      return wall?.type === 'wall'
-        ? resolveRoofWallTopElevation(targetLevelId, wall, completeNodes, elevations)
-        : 0
-    }),
-  )
+  const tops = target.wallIds.flatMap((id) => {
+    const wall = nodes[id]
+    return wall?.type === 'wall'
+      ? [resolveRoofWallTopElevation(targetLevelId, wall, completeNodes, elevations)]
+      : []
+  })
+  return tops.length ? Math.max(0, ...tops) : 0
 }
 
 export function resolveRoofFootprintWorldElevation(
@@ -219,24 +216,6 @@ export function resolveRoofFootprintWorldElevation(
   return (
     (elevations.get(targetLevelId)?.baseY ?? 0) +
     resolveRoofFootprintElevation(targetLevelId, target, nodes)
-  )
-}
-
-export function resolveRoofWallTopElevation(
-  targetLevelId: LevelNode['id'],
-  wall: WallNode,
-  nodes: Readonly<Record<string, AnyNode>>,
-  elevations = getLevelElevations(nodes as Record<string, AnyNode>),
-): number {
-  const completeNodes = nodes as Record<string, AnyNode>
-  const sourceLevelY = elevations.get(resolveLevelId(wall, completeNodes))?.baseY ?? 0
-  const targetLevelY = elevations.get(targetLevelId)?.baseY ?? 0
-  return Math.max(
-    0,
-    sourceLevelY +
-      getWallBaseElevationForNodes(wall, completeNodes) +
-      getWallEffectiveHeightForNodes(wall, completeNodes) -
-      targetLevelY,
   )
 }
 

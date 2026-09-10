@@ -288,7 +288,7 @@ export default function RoofPanel() {
           onChange={(v) => {
             const pos = [...node.position] as [number, number, number]
             pos[1] = v
-            handleUpdate({ position: pos })
+            handleUpdate({ position: pos, sourceWallIds: undefined })
           }}
           precision={2}
           step={0.05}

@@ -382,6 +382,7 @@ const commitRoofFootprint = (
       target.center[1],
     ],
     rotation: target.rotation,
+    sourceWallIds: target.wallIds,
     children: [segment.id],
   })
   createRoofNodes(sceneApi, [

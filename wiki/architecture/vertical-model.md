@@ -2,7 +2,7 @@
 
 *How buildings stack: stored level heights, plane-bound wall/ceiling tops, slab placement + thickness, support hosts, and the clamp rules that keep it all coherent.*
 
-Applies to: anything that reads or writes vertical geometry — levels, walls, slabs, ceilings, stairs, fences, floor-placed items.
+Applies to: anything that reads or writes vertical geometry — levels, walls, slabs, ceilings, roofs, stairs, fences, floor-placed items.
 
 The invariant, in one sentence:
 
@@ -21,6 +21,7 @@ The invariant, in one sentence:
 | `level.baseElevation` | Additive offset from the computed stack position. It shifts this level and cumulatively shifts every higher level in the same building; negative offsets are valid. | Zero (the schema default). |
 | `wall.height` | Explicit body height (half wall, parapet, or a raised-support draft whose ghost height must remain invariant). Ground-hosted walls always resolve top = elected base + height, including below datum; other legacy sunken supports retain their absolute-top constraint. | **Plane-bound** (the default for ordinary datum placement): the top follows `getWallPlaneTop` — `min(level height, lowest covering-slab underside over the span)`. |
 | `ceiling.height` | Explicit custom height, write-clamped to the bound. | **Follows the level**: resolves live to `getCeilingClampBound` = `min(level height, covering underside) − 0.01`. |
+| `roof.sourceWallIds` | Wall footprint whose highest resolved top drives `roof.position[1]` in the roof's level frame. Room and curved-wall creation persist these IDs. | Manual Y; existing roofs without recorded source walls remain unchanged. Editing Y in the roof panel removes this binding. Roof-surface attachments use `support` instead. |
 | `slab.elevation` | The walking surface (top), level-local. | Default 0.05. |
 | `slab.thickness` | Grows **downward**: the solid occupies `[elevation − thickness, elevation]`. | Default 0.05. |
 | `slab.recessed` | Recess intent: open shell whose floor is `elevation` and whose rim is `recessedRimElevation`. Excluded from "covering" queries and wall-face adoption. | Solid slab. |
@@ -35,7 +36,7 @@ The invariant, in one sentence:
 
 Two schema rules protect these semantics:
 
-- **No Zod defaults on meaning-bearing fields.** `level.height`, `wall.height`, `ceiling.height`, `stair.totalRise` are `.optional()` with no `.default()` — absence is data. Creation sites write values explicitly; `migrateNodes` output is cast, not parsed, so a schema default would never materialize on legacy load anyway.
+- **No Zod defaults on meaning-bearing fields.** `level.height`, `wall.height`, `ceiling.height`, `roof.sourceWallIds`, `stair.totalRise` are `.optional()` with no `.default()` — absence is data. Creation sites write values explicitly; `migrateNodes` output is cast, not parsed, so a schema default would never materialize on legacy load anyway.
 - **The store deletes explicit-`undefined` keys.** `updateNode(id, { height: undefined })` removes the key (see `mergeNodeUpdate` in `node-actions.ts`). Legacy plane-bound walls may still omit `height`; the wall panel resolves and materializes their current body height before enabling terrain infill. Ceiling and stair follow modes continue to derive from field presence — no persisted mode enums.
 
 ## Resolution helpers (use these, never `?? 2.5`)
@@ -49,6 +50,7 @@ Two schema rules protect these semantics:
 | `getCeilingClampBound`, `getCoveringSlabUndersideAt` | `services/storey.ts` | Ceiling bound; the cross-level covering query (level above, non-recessed slabs) |
 | `resolveCeilingHeight` | `services/level-height.ts` | A ceiling's effective height (explicit or follows) |
 | `resolveStairTotalRise`, `syncStairRises` | `systems/stair/stair-rise.ts` | Stair rise precedence + straight-flight convergence |
+| `resolveRoofElevation`, `resolveRoofWallTopElevation` | `systems/roof/roof-elevation.ts` | Highest source-wall top, including explicit heights and elected bases, converted to the roof's level frame |
 | `computeWallSlabSupport`, `getSlabSupportForItem`, `getSupportCandidatesForFootprint` | `systems/slab/slab-support.ts` + spatial-grid manager | Support election (rendered polygons, host-preferring, optional `maxElevation` cap) |
 | `resolveSlabPlacementElevation` | `systems/slab/slab-placement.ts` | Translates a solid slab's authored top/thickness interval onto a captured base plane; recessed slabs stay level-relative |
 | `getSlabBaseElevation`, `applySlabBaseElevationChange`, `applySlabThicknessChange` | `nodes/slab/elevation-limit.ts` | Separates whole-body underside placement from fixed-base thickness editing |
@@ -134,6 +136,7 @@ Because community autosave only persists after the first post-load edit, the mig
 
 ## Gotchas
 
+- **Wall-footprint roofs track their source walls.** `RoofElevationSystem` re-derives Y on wall, slab, level, building, site, and roof edits, history-paused and one microtask after store updates so the spatial grid has settled. Because the originating commit has already been captured, settled updates publish a separate scene commit without adding an undo step; an outer gesture's history pause retains commit ownership. The system preserves XZ and rotation; missing source walls are ignored, and losing every source preserves the last Y. Negative level-local Y is valid when the wall tops lie below the roof's containing level. Clone paths must remap `sourceWallIds` with the walls; preset storage strips them through `hostRefFields`.
 - **Ordinals are semantic.** `level < 0` renders "Basement N"; `level === 0` is the ground-floor lookup. Never renumber without the zero anchor.
 - **Boundary geometry.** Auto slabs derive polygons from wall centerlines, so wall/ceiling clamp samples sit exactly on polygon edges — always use the boundary-inclusive band-overlap helpers (`wallOverlapsSlabFootprint`, `slabCoversPoint`), never raw ray-cast point-in-polygon on those paths.
 - **Straight stairs build from stored segment heights**, not the resolved rise — any rise change must go through `syncStairRises` (applied by `StairOpeningSystem`, history-paused, one microtask after store updates so the spatial grid has settled).
