@@ -3,6 +3,7 @@
 import {
   type AnyNodeId,
   nodeRegistry,
+  RoofElevationSystem,
   StairOpeningSystem,
   sceneRegistry,
   useScene,
@@ -627,6 +628,7 @@ const Viewer = forwardRef<ViewerHandle, ViewerProps>(function Viewer(
           {/* Automated stair opening sync — updates slab/ceiling cutouts
             whenever stairs, slabs, or levels change. */}
           <StairOpeningSystem />
+          <RoofElevationSystem />
           {/* Mounts systems contributed by registry-backed kinds. Each
             kind's `def.system` is loaded via lazy() and rendered here,
             ordered by `system.priority`. */}

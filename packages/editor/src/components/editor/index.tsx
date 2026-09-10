@@ -34,6 +34,7 @@ import { ViewerOverlay } from '../../components/viewer-overlay'
 import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
+import { useSaveShortcut } from '../../hooks/use-save-shortcut'
 import { type ActivePaintMaterial, hasActivePaintMaterial } from '../../lib/material-paint'
 import {
   applySceneGraphToEditor,
@@ -194,6 +195,12 @@ export interface EditorProps {
   // Persistence — defaults to localStorage when omitted
   onLoad?: () => Promise<SceneGraph | null>
   onSave?: (scene: SceneGraph, options?: { keepalive?: boolean }) => Promise<void>
+  /**
+   * Cmd/Ctrl+S. Return true when the host handled the save (the community
+   * version checkpoint); anything else falls through to flushing the autosave,
+   * so the chord still saves when the host's control isn't mounted.
+   */
+  onSaveShortcut?: () => boolean | undefined
   onDirty?: () => void
   onSaveStatusChange?: (status: SaveStatus) => void
 
@@ -1229,6 +1236,7 @@ function EditorContent({
   projectId,
   onLoad,
   onSave,
+  onSaveShortcut,
   onDirty,
   onSaveStatusChange,
   previewScene,
@@ -1249,12 +1257,18 @@ function EditorContent({
 
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
 
-  const { isLoadingSceneRef } = useAutoSave({
+  const { isLoadingSceneRef, saveNow } = useAutoSave({
     onSave,
     onDirty,
     onSaveStatusChange,
     isVersionPreviewMode,
   })
+
+  const handleSaveShortcut = useCallback(() => {
+    if (onSaveShortcut?.() === true) return
+    saveNow()
+  }, [onSaveShortcut, saveNow])
+  useSaveShortcut(handleSaveShortcut)
 
   const [isSceneLoading, setIsSceneLoading] = useState(false)
   const [hasLoadedInitialScene, setHasLoadedInitialScene] = useState(false)

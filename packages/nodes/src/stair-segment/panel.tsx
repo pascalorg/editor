@@ -4,6 +4,9 @@ import {
   type AnyNode,
   type AnyNodeId,
   type AttachmentSide,
+  DEFAULT_LEVEL_HEIGHT,
+  resolveStairTotalRise,
+  runAsSingleSceneHistoryStep,
   type StairSegmentNode,
   StairSegmentNode as StairSegmentNodeSchema,
   type StairSegmentType,
@@ -66,6 +69,48 @@ export default function StairSegmentPanel() {
   const handleClose = useCallback(() => {
     setSelection({ selectedIds: [] })
   }, [setSelection])
+
+  // A follows-level stair would hand the edited height straight back to
+  // `syncStairRises`, so a flight edit also pins the parent to the new total:
+  // the stair becomes Custom rise, exactly as editing Rise on its own panel.
+  const parentFollowsLevel = useScene((s) => {
+    const parent = node?.parentId ? s.nodes[node.parentId as AnyNodeId] : undefined
+    return parent?.type === 'stair' && parent.totalRise == null
+  })
+  const handleFlightHeightChange = useCallback(
+    (height: number) => {
+      if (!node) return
+      const sceneNodes = useScene.getState().nodes
+      const parent = node.parentId ? sceneNodes[node.parentId as AnyNodeId] : undefined
+      if (parent?.type !== 'stair') {
+        handleUpdate({ height })
+        return
+      }
+      const totalRise = parent.children.reduce((sum, childId) => {
+        const child = sceneNodes[childId as AnyNodeId]
+        if (child?.type !== 'stair-segment') return sum
+        return sum + (child.id === node.id ? height : child.height)
+      }, 0)
+      runAsSingleSceneHistoryStep(useScene, () => {
+        useScene.getState().updateNodes([
+          { id: node.id as AnyNodeId, data: { height } },
+          { id: parent.id as AnyNodeId, data: { totalRise } },
+        ])
+      })
+    },
+    [node, handleUpdate],
+  )
+
+  // Turning a landing back into a flight seeds the rise the parent stair
+  // resolves — a fixed 2.5 m stops halfway up a tall storey, and for a
+  // follows-mode stair it is what `syncStairRises` would converge to anyway.
+  const resolveParentStairRise = useCallback(() => {
+    const sceneNodes = useScene.getState().nodes
+    const parent = node?.parentId ? sceneNodes[node.parentId as AnyNodeId] : undefined
+    return parent?.type === 'stair'
+      ? resolveStairTotalRise(parent, sceneNodes)
+      : DEFAULT_LEVEL_HEIGHT
+  }, [node])
 
   const handleBack = useCallback(() => {
     if (node?.parentId) {
@@ -136,7 +181,7 @@ export default function StairSegmentPanel() {
               updates.stepCount = 0
               updates.length = 1.0
             } else {
-              updates.height = 2.5
+              updates.height = resolveParentStairRise()
               updates.stepCount = 10
               updates.length = 3.0
             }
@@ -184,12 +229,17 @@ export default function StairSegmentPanel() {
               label="Height"
               max={1000}
               min={0.5}
-              onChange={(v) => handleUpdate({ height: v })}
+              onChange={handleFlightHeightChange}
               precision={2}
               step={0.1}
               unit="m"
               value={Math.round(node.height * 100) / 100}
             />
+            {parentFollowsLevel && (
+              <div className="px-1 text-[11px] text-muted-foreground">
+                Editing switches the stair to Custom rise
+              </div>
+            )}
             <SliderControl
               label="Steps"
               max={30}

@@ -10,32 +10,30 @@ export function resolveStairTotalRise(stair: StairNode, nodes: Record<string, An
     (node) => node.type === 'level' && node.children.includes(stair.id),
   )
 
+  // Both destinations are absolute level-local heights, while the stair's own
+  // base may be lifted onto a floor slab by the floor-stack
+  // (`FloorElevationSystem` / `syncStairGroupElevation` put the group at
+  // `position[1] + elected slab elevation`). The rise is measured from that
+  // base, so subtract it — electing the base exactly the way the visual
+  // systems do (persisted `supportSlabId` honored, uncapped election
+  // otherwise) keeps base + rise landing precisely on the destination surface.
+  const baseElevation = getFloorStackedPosition({
+    node: stair,
+    nodes,
+    position: stair.position,
+    rotation: stair.rotation,
+    levelId: level?.id ?? null,
+  })[1]
+
   if (stair.deckSlabId) {
+    // The deck's `elevation` IS its walking surface (level-local). A stale
+    // reference (deck gone) falls through to the level-derived rise.
     const deck = nodes[stair.deckSlabId]
-    // The deck's `elevation` IS its walking surface (level-local), but the
-    // stair's own base may be lifted onto a floor slab by the floor-stack
-    // (`FloorElevationSystem` / `syncStairGroupElevation` put the group at
-    // `position[1] + elected slab elevation`). The rise is measured from
-    // that base, so subtract it — electing the base exactly the way the
-    // visual systems do (persisted `supportSlabId` honored, uncapped
-    // election otherwise) keeps base + rise landing precisely on the deck's
-    // walking surface. A stale reference (deck gone) falls through to the
-    // level-derived rise.
-    if (deck?.type === 'slab') {
-      const baseElevation = getFloorStackedPosition({
-        node: stair,
-        nodes,
-        position: stair.position,
-        rotation: stair.rotation,
-        levelId: level?.id ?? null,
-      })[1]
-      return (deck.elevation ?? 0.05) - baseElevation
-    }
+    if (deck?.type === 'slab') return (deck.elevation ?? 0.05) - baseElevation
   }
 
-  return level?.type === 'level'
-    ? getLevelFloorToFloorHeight(level.id, nodes as Record<AnyNodeId, AnyNode>)
-    : DEFAULT_LEVEL_HEIGHT
+  if (level?.type !== 'level') return DEFAULT_LEVEL_HEIGHT
+  return getLevelFloorToFloorHeight(level.id, nodes as Record<AnyNodeId, AnyNode>) - baseElevation
 }
 
 const RISE_SYNC_EPSILON = 1e-4
