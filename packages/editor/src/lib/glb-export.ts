@@ -542,15 +542,35 @@ function buildBakeGeometryContext(
   const children = childIds
     .map((id) => nodes[id])
     .filter((child): child is AnyNode => child !== undefined)
-  const parent = node.parentId ? (nodes[node.parentId] ?? null) : null
+  const allNodes = node.parentId ? undefined : Object.values(nodes)
+  const parent = node.parentId
+    ? (nodes[node.parentId] ?? null)
+    : (allNodes?.find(
+        (candidate) =>
+          candidate.type === 'site' &&
+          'children' in candidate &&
+          Array.isArray(candidate.children) &&
+          candidate.children.includes(node.id),
+      ) ?? null)
   const siblingIds =
     parent && Array.isArray((parent as { children?: AnyNodeId[] }).children)
       ? (parent as { children: AnyNodeId[] }).children
       : []
-  const siblings = siblingIds
-    .filter((id) => id !== node.id)
-    .map((id) => nodes[id])
-    .filter((sibling): sibling is AnyNode => sibling?.type === node.type)
+  let siblings: AnyNode[]
+  if (parent?.type === 'site') {
+    const declaredChildren = new Set(siblingIds)
+    siblings = (allNodes ?? Object.values(nodes)).filter(
+      (candidate) =>
+        candidate.id !== node.id &&
+        candidate.type === node.type &&
+        (candidate.parentId === parent.id || declaredChildren.has(candidate.id)),
+    )
+  } else {
+    siblings = siblingIds
+      .filter((id) => id !== node.id)
+      .map((id) => nodes[id])
+      .filter((sibling): sibling is AnyNode => sibling?.type === node.type)
+  }
   const levelId = findLevelAncestorId(node.id, nodes)
   const levelBaseAt = (x: number, z: number) =>
     levelId ? levelBaseElevationAt(nodes, levelId, x, z) : 0

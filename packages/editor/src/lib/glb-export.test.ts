@@ -3,9 +3,11 @@ import {
   type AnyNode,
   type AnyNodeDefinition,
   DoorNode,
+  type GeometryContext,
   loadPlugin,
   nodeRegistry,
   registerNode,
+  SiteNode,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
@@ -172,6 +174,135 @@ describe('prepareSceneForExport', () => {
       expect((baked as THREE.InstancedMesh | undefined)?.isInstancedMesh).toBe(true)
       expect((baked as THREE.InstancedMesh | undefined)?.count).toBe(1)
       expect(((baked as THREE.InstancedMesh).material as THREE.Material).isMaterial).toBe(true)
+    } finally {
+      restoreRegistry()
+    }
+  })
+
+  test.each([
+    'sync',
+    'portable-sync',
+    'portable-async',
+  ] as const)('bakes Site bounds and same-kind sibling reservations through %s hooks', async (mode) => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    try {
+      const kind = 'test:site-context-bake'
+      const nodeId = 'site_context_bake'
+      const site = SiteNode.parse({
+        polygon: {
+          type: 'polygon',
+          points: [
+            [0, 0],
+            [12, 0],
+            [12, 8],
+            [0, 8],
+          ],
+        },
+        children: [nodeId, 'declared_sibling', 'linked_sibling', 'other_kind'],
+      })
+      const otherSite = SiteNode.parse({
+        polygon: {
+          type: 'polygon',
+          points: [
+            [0, 0],
+            [30, 0],
+            [30, 4],
+            [0, 4],
+          ],
+        },
+        children: ['other_site_sibling'],
+      })
+      const buildGeometry = (context: GeometryContext) => {
+        const points = (context.parent as SiteNode | null)?.polygon?.points ?? [[0, 0]]
+        const xs = points.map(([x]) => x)
+        const zs = points.map(([, z]) => z)
+        const reservedWidth = context.siblings.reduce(
+          (width, sibling) => width + Number(sibling.metadata?.reservedWidth ?? 0),
+          0,
+        )
+        return new THREE.Mesh(
+          new THREE.BoxGeometry(
+            Math.max(...xs) - Math.min(...xs) - reservedWidth,
+            1,
+            Math.max(...zs) - Math.min(...zs),
+          ),
+          new THREE.MeshStandardMaterial(),
+        )
+      }
+      registerNode({
+        kind,
+        schemaVersion: 1,
+        schema: DoorNode,
+        category: 'furnish',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        bake: 'replace',
+        ...(mode === 'portable-async'
+          ? { bakeGeometryAsync: async (_node, context) => buildGeometry(context) }
+          : { bakeGeometry: (_node, context) => buildGeometry(context) }),
+      } as AnyNodeDefinition)
+      const nodes = {
+        [site.id]: site,
+        [otherSite.id]: otherSite,
+        [nodeId]: {
+          id: nodeId,
+          type: kind,
+          parentId: null,
+          visible: true,
+          metadata: { reservedWidth: 100 },
+        },
+        declared_sibling: {
+          id: 'declared_sibling',
+          type: kind,
+          parentId: null,
+          metadata: { reservedWidth: 2 },
+        },
+        pointer_sibling: {
+          id: 'pointer_sibling',
+          type: kind,
+          parentId: site.id,
+          metadata: { reservedWidth: 3 },
+        },
+        linked_sibling: {
+          id: 'linked_sibling',
+          type: kind,
+          parentId: site.id,
+          metadata: { reservedWidth: 1 },
+        },
+        other_kind: {
+          id: 'other_kind',
+          type: 'test:other-kind',
+          parentId: site.id,
+          metadata: { reservedWidth: 100 },
+        },
+        other_site_sibling: {
+          id: 'other_site_sibling',
+          type: kind,
+          parentId: otherSite.id,
+          metadata: { reservedWidth: 4 },
+        },
+      } as unknown as Record<string, AnyNode>
+      const root = new THREE.Group()
+      const source = new THREE.Group()
+      root.add(source)
+      sceneRegistry.nodes.set(nodeId, source)
+      const prepare = mode === 'sync' ? prepareSceneForExport : prepareSceneForExportAsync
+      const exportedSize = async () => {
+        const prepared = await prepare(root, nodes)
+        try {
+          const exported = prepared.scene.getObjectByName(nodeId)!
+          return new THREE.Box3().setFromObject(exported).getSize(new THREE.Vector3()).toArray()
+        } finally {
+          prepared.dispose()
+        }
+      }
+
+      expect(await exportedSize()).toEqual([6, 1, 8])
+      nodes[nodeId]!.parentId = otherSite.id
+      expect(await exportedSize()).toEqual([26, 1, 4])
+      nodes[nodeId]!.parentId = null
+      site.children = site.children.filter((id) => id !== nodeId)
+      expect(await exportedSize()).toEqual([0, 1, 0])
     } finally {
       restoreRegistry()
     }
