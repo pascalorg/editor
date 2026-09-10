@@ -51,6 +51,24 @@ function scene(heights: Array<number | undefined>) {
 }
 
 describe('resolveRoofElevation', () => {
+  test('follows the walls under the segment footprint when the room is not closed', () => {
+    const { roof, walls, nodes, level } = scene([4.5])
+    // Drop the east wall: point-in-room finds no enclosure, the footprint still does.
+    const east = walls[1]!
+    delete nodes[east.id]
+    level.children = level.children.filter((id) => id !== east.id)
+    const segment = RoofSegmentNode.parse({
+      parentId: roof.id,
+      roofType: 'gable',
+      width: 4,
+      depth: 3,
+      position: [0, 0, 0],
+    })
+    roof.children = [segment.id]
+    nodes[segment.id] = segment
+    expect(resolveRoofElevation(roof, nodes)).toBe(1.5)
+  })
+
   test('honors an explicit height above the storey in the roof level frame', () => {
     const { roof, nodes } = scene([4.5])
     expect(resolveRoofElevation(roof, nodes)).toBe(1.5)
