@@ -53,6 +53,15 @@ describe('progressive wall budget', () => {
     expect(shouldDeferWallRebuild(heavy.id, nodes, 0, 100)).toBe(false)
   })
 
+  test('initial build drains under a 48 ms budget without the count cap; interactive tiers unchanged', () => {
+    expect(shouldDeferWallRebuild(cheap.id, nodes, 40, 30, true)).toBe(false)
+    expect(shouldDeferWallRebuild(cheap.id, nodes, 40, 48, true)).toBe(true)
+    expect(shouldDeferWallRebuild(cheap.id, nodes, 8, 0, true)).toBe(false)
+    expect(shouldDeferWallRebuild(heavy.id, nodes, 1, 0, true)).toBe(true)
+    expect(shouldDeferWallRebuild(cheap.id, nodes, 8, 0)).toBe(true)
+    expect(shouldDeferWallRebuild(cheap.id, nodes, 1, 8)).toBe(true)
+  })
+
   test('counts item cutout proxies but skips ordinary items', () => {
     const item = { id: 'item_budget-test', type: 'item' } as AnyNode
     const wall = { ...heavy, children: [...heavy.children.slice(0, 5), item.id] }
@@ -366,7 +375,7 @@ test('reattaching mid-drain preserves the hydration counters and one continuous 
   try {
     hydrate(12)
     const token = useScene.getState().hydrationToken
-    rebuildCost = 4
+    rebuildCost = 24
     runWallBuildFrame()
     expect(stats().firstBuilds).toBe(2)
     unsubscribe()
@@ -379,7 +388,7 @@ test('reattaching mid-drain preserves the hydration counters and one continuous 
     rebuildCost = 0
     runWallBuildFrame()
     expect(stats().firstBuilds).toBe(12)
-    expect(spans).toEqual([28])
+    expect(spans).toEqual([68])
   } finally { stop() }
 })
 
@@ -447,9 +456,9 @@ test('setScene starts initial build; more than eight cheap walls drain in one fr
   expect(stats().drainedExits).toBe(1)
 })
 
-test('checks the eight millisecond budget between walls and skips first-build neighbour invalidation across frames', () => {
+test('checks the initial-build time budget between walls and skips first-build neighbour invalidation across frames', () => {
   hydrate(12)
-  rebuildCost = 4
+  rebuildCost = 24
   runWallBuildFrame()
   expect(stats().wallsConsumedThisFrame).toBe(2)
   expect(stats().budgetExits).toBe(1)
@@ -695,7 +704,7 @@ test('canvas and live-state owner precede the lazy wall consumer; remount retain
   const nodes = Object.fromEntries([level, ...walls].map(node => [node.id, node]))
   const meshes = walls.map(wall => {
     const mesh = new Mesh(new BoxGeometry())
-    mesh.geometry.addEventListener('dispose', () => { now += 4 })
+    mesh.geometry.addEventListener('dispose', () => { now += 24 })
     sceneRegistry.nodes.set(wall.id, mesh)
     sceneRegistry.byType.wall.add(wall.id)
     return mesh
