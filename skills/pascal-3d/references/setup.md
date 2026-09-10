@@ -1,6 +1,6 @@
 # Pascal connection and credential setup
 
-Source and public-documentation review date: 2026-09-09. Native task results are recorded separately with the evaluated source hash; source review alone does not prove every host or published runtime works.
+Source and public-documentation review date: 2026-09-10. Native task results are recorded separately with the evaluated source hash; source review alone does not prove every host or published runtime works.
 
 Choose one path. Do not switch storage boundaries without the user's instruction.
 
@@ -15,20 +15,20 @@ npm install --global @pascal-app/cli@beta
 pascal editor --no-open
 ```
 
-### Candidate-enabled GitHub preview
+### Verified GitHub preview
 
-The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, an older runtime that may not expose `check_collisions.candidate`. For the candidate-enabled path verified with this skill, install the GitHub prerelease built from public commit `aa653f2f523f81f361ac20cb42b745faf7e46844`:
+The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, an older runtime that may not expose `check_collisions.candidate` or `pascal agent claim`. For the candidate and hosted-claim paths verified with this skill, install the GitHub prerelease built from public commit `8ca0b79c0b415a04d28a28cae3a1958f2f403c39`:
 
 ```bash
-PASCAL_PREVIEW_VERSION='1.0.0-beta.1.agent-skills.0'
+PASCAL_PREVIEW_VERSION='1.0.0-beta.2.claim.0'
 PASCAL_PREVIEW_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/pascal-preview"
 PASCAL_PREVIEW_DOWNLOAD="$(mktemp -d)"
 cd "$PASCAL_PREVIEW_DOWNLOAD"
 
 curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-claim.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
 curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/SHA256SUMS.txt"
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-claim.0/SHA256SUMS.txt"
 
 # macOS
 shasum -a 256 -c SHA256SUMS.txt
@@ -47,7 +47,7 @@ pascal update --version "$PASCAL_PREVIEW_VERSION"
 pascal editor --no-open
 ```
 
-The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. `pascal editor` alone reuses any healthy service, including an older one, so run `pascal update` when activating the preview. Keep the preview prefix on the agent host's `PATH` so its configured `pascal mcp connect` command resolves. This preview is not published on npm.
+The expected archive SHA-256 is `8c8204109c619898a34e76cbb33a92cb1a0c9b9ac63bcd7a3b654a2dba9c3c6b`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. `pascal editor` alone reuses any healthy service, including an older one, so run `pascal update` when activating the preview. Keep the preview prefix on the agent host's `PATH` so its configured `pascal mcp connect` command resolves. The preview also includes `pascal agent claim`, which opens a prefilled 15-minute accountability handoff for an existing hosted autonomous-agent key. This preview is not published on npm.
 
 The Claude Code plugin supplies this local connector automatically. Keep `pascal` on the `PATH` used to launch Claude Code; the plugin does not install or start the Pascal editor. Claude Code 2.1.258 loads both the user-scoped `pascal` server created by `pascal mcp setup claude` and the plugin-provided server. Remove the manual entry with `claude mcp remove --scope user pascal` before reloading or restarting Claude Code. Use `/mcp` to remove or disable other manual Pascal connections. Leaving both connections active violates the one-active-agent-client-per-local-service requirement. If the intended project is hosted, disable the plugin-provided local server in `/mcp` before configuring the hosted connection below.
 
