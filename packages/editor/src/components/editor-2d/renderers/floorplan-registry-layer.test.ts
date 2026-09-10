@@ -81,15 +81,15 @@ describe('site-scoped floorplan discovery', () => {
       collectDirectFloorplanScopeNodes(nodes, activeSite, 'site').map((node) => String(node.id)),
     ).toEqual(['overlay_declared', 'overlay_parented'])
   })
-
-  test('projects site-local coordinates into active building-local coordinates', () => {
+  test('projects site-local coordinates through the inverse Three.js building transform', () => {
     const transform = siteToFloorplanTransform([10, 0, 5], Math.PI / 2)
     const [tx, ty] = transform.translate
     const sitePoint = [10, 3] as const
     const cos = Math.cos(transform.rotate)
     const sin = Math.sin(transform.rotate)
 
-    expect(tx + sitePoint[0] * cos - sitePoint[1] * sin).toBeCloseTo(-2)
+    expect(tx + sitePoint[0] * cos - sitePoint[1] * sin).toBeCloseTo(2)
+
     expect(ty + sitePoint[0] * sin + sitePoint[1] * cos).toBeCloseTo(0)
   })
 })

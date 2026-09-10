@@ -637,12 +637,12 @@ describe('collectFloorplanGeometry', () => {
         ]),
       )
       expect(projectedGeometryPoint(siteModel, 'image')).toEqual([
-        expect.closeTo(-2),
+        expect.closeTo(2),
         expect.closeTo(0),
       ])
       expect(projectedGeometryPoint(siteModel, 'circle')).toEqual([
         expect.closeTo(0),
-        expect.closeTo(-2),
+        expect.closeTo(2),
       ])
 
       const rawPdf = new PDFDocument({ autoFirstPage: false, compress: false })

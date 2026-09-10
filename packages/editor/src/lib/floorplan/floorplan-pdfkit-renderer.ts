@@ -621,34 +621,36 @@ async function drawImage(
   doc: FloorplanPdfDocument,
   geometry: Extract<FloorplanGeometry, { kind: 'image' }>,
 ): Promise<void> {
-  try {
-    const source = geometry.url.startsWith('data:')
-      ? geometry.url
-      : await loadAssetUrl(geometry.url)
-    if (!source) return
-    const dataUrl = source.startsWith('data:')
-      ? source
-      : await fetch(source)
-          .then((response) => (response.ok ? response.blob() : null))
-          .then((blob) => (blob ? blobToDataUrl(blob) : null))
-    if (!dataUrl) return
-    const raw = doc.raw
-    raw.save().translate(geometry.center[0], geometry.center[1])
-    if (geometry.rotation) raw.rotate((geometry.rotation * 180) / Math.PI)
-    raw.opacity(geometry.opacity ?? 1)
-    const options =
-      geometry.preserveAspectRatio === 'none'
-        ? { width: geometry.width, height: geometry.height }
-        : {
-            fit: [geometry.width, geometry.height] as [number, number],
-            align: 'center' as const,
-            valign: 'center' as const,
-          }
-    raw.image(dataUrl, -geometry.width / 2, -geometry.height / 2, options)
-    raw.restore()
-  } catch {
-    return
+  const source = geometry.url.startsWith('data:') ? geometry.url : await loadAssetUrl(geometry.url)
+  if (!source) {
+    throw new Error('[floorplan-export] Could not resolve a floorplan image')
   }
+
+  let dataUrl = source
+  if (!source.startsWith('data:')) {
+    const response = await fetch(source)
+    if (!response.ok) {
+      throw new Error(
+        `[floorplan-export] Could not load a floorplan image (HTTP ${response.status})`,
+      )
+    }
+    dataUrl = await blobToDataUrl(await response.blob())
+  }
+
+  const raw = doc.raw
+  raw.save().translate(geometry.center[0], geometry.center[1])
+  if (geometry.rotation) raw.rotate((geometry.rotation * 180) / Math.PI)
+  raw.opacity(geometry.opacity ?? 1)
+  const options =
+    geometry.preserveAspectRatio === 'none'
+      ? { width: geometry.width, height: geometry.height }
+      : {
+          fit: [geometry.width, geometry.height] as [number, number],
+          align: 'center' as const,
+          valign: 'center' as const,
+        }
+  raw.image(dataUrl, -geometry.width / 2, -geometry.height / 2, options)
+  raw.restore()
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {

@@ -517,6 +517,7 @@ export function SettingsPanel({
               </div>
             </div>
             <Switch
+              aria-label="Make project public"
               checked={!(projectVisibility?.isPrivate ?? false)}
               onCheckedChange={(checked) => handleVisibilityChange('isPrivate', !checked)}
             />
@@ -527,6 +528,7 @@ export function SettingsPanel({
               <div className="text-muted-foreground text-xs">Visible to public viewers</div>
             </div>
             <Switch
+              aria-label="Show 3D scans to public viewers"
               checked={projectVisibility?.showScansPublic ?? true}
               onCheckedChange={(checked) => handleVisibilityChange('showScansPublic', checked)}
             />
@@ -537,6 +539,7 @@ export function SettingsPanel({
               <div className="text-muted-foreground text-xs">Visible to public viewers</div>
             </div>
             <Switch
+              aria-label="Show floorplans to public viewers"
               checked={projectVisibility?.showGuidesPublic ?? true}
               onCheckedChange={(checked) => handleVisibilityChange('showGuidesPublic', checked)}
             />
@@ -547,6 +550,7 @@ export function SettingsPanel({
               <div className="text-muted-foreground text-xs">Cast shadows from lights</div>
             </div>
             <Switch
+              aria-label="Enable shadows"
               checked={shadows}
               onCheckedChange={(checked) => useViewer.getState().setShadows(checked)}
             />

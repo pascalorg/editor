@@ -410,10 +410,10 @@ export function siteToFloorplanTransform(
   const sin = Math.sin(buildingRotationY)
   return {
     translate: [
-      -buildingPosition[0] * cos - buildingPosition[2] * sin,
-      buildingPosition[0] * sin - buildingPosition[2] * cos,
+      -buildingPosition[0] * cos + buildingPosition[2] * sin,
+      -buildingPosition[0] * sin - buildingPosition[2] * cos,
     ],
-    rotate: -buildingRotationY,
+    rotate: buildingRotationY,
   }
 }
 
