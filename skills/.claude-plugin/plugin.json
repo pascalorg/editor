@@ -12,5 +12,6 @@
   "homepage": "https://editor.pascal.app/docs/developers/mcp",
   "repository": "https://github.com/pascalorg/editor",
   "license": "MIT",
-  "keywords": ["pascal", "3d", "architecture", "mcp", "furniture", "spatial"]
+  "keywords": ["pascal", "3d", "architecture", "mcp", "furniture", "spatial"],
+  "skills": ["./pascal-3d", "./furniture-fit"]
 }
