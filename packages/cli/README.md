@@ -127,6 +127,7 @@ npx @pascal-app/cli editor --foreground --no-open
 | `pascal info [--json]` | Print platform, paths, runtime, and plugin context. |
 | `pascal project list [--json]` | Explicit form of `pascal projects`. |
 | `pascal project open <id-or-name>` | Explicit form of `pascal open <project>`. |
+| `pascal agent claim [--no-open] [--json]` | Link an autonomous hosted agent to the person accountable for it. |
 | `pascal mcp connect` | Stable local connector for MCP clients; discovers the dynamic managed service. |
 | `pascal mcp status [--json]` | Show managed MCP health. |
 | `pascal mcp config [--json]` | Print generic MCP client configuration. |
@@ -171,6 +172,26 @@ pascal mcp setup claude
 Or use `pascal mcp config` for JSON-based clients. The connector also starts Pascal
 when an agent connects while it is stopped. Ask the agent to read
 `pascal://agent-guide`, list or load a scene, edit it, and return the `editorUrl`.
+
+## Hosted autonomous agents
+
+An autonomous agent registered with hosted Pascal receives its own API key and identity. The
+agent can create a short-lived claim code so the person working with it can establish the
+accountability link:
+
+```bash
+PASCAL_API_KEY='sk_live_...' pascal agent claim
+```
+
+The CLI sends that key once to Pascal's claim endpoint, does not store or print it, and opens
+the claim page. Use `--no-open` on a headless host. `--json` returns structured output without
+opening a browser. A new claim request supersedes the agent's previous code; each code expires
+after 15 minutes.
+
+Claiming lifts claim-gated capabilities for the autonomous agent. It does not transfer project
+ownership, grant the agent access to the person's private projects, or grant the person access
+to the agent's private projects. The local editor and its projects remain local unless a
+separate hosted project action explicitly moves data.
 
 ## Plugins
 
