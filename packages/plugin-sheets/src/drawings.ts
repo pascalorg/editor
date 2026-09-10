@@ -31,7 +31,7 @@ import { levelLabel, sheets } from './model'
 import { fireSeparationMarks } from './notes/fire-separation'
 import { sectionFraming } from './providers/section-framing'
 import { codeTagOf, resolveState, retagCode } from './notes/jurisdiction'
-import { scaleLabel, sheetInchesToWorld, worldToSheetInches } from './scale'
+import { scaleLabel, sheetInchesToWorld, worldToSheetInches, SCALE_PRESETS } from './scale'
 import { adaptSchedule, buildSchedule, type ScheduleTable } from './schedule'
 import { enrichOpeningSchedule } from './schedule-openings'
 import type { ViewportLayers, ViewportNode } from './schema'
@@ -398,6 +398,26 @@ function textBlock(vp: ViewportNode, body: string): FloorplanGeometry[] {
  * honoured; the window is centred on the drawing (or on the viewport's crop
  * when one is set).
  */
+/**
+ * The scale the viewport draws at: its own when the drawing fits the box at
+ * it, else the first standard scale down the list at which it does (the
+ * last one when none does). Never finer than the viewport's own.
+ */
+export function fittedScale(vp: ViewportNode, drawingBounds: Bounds, rotationDeg: number): number {
+  if (isEmpty(drawingBounds)) return vp.scale
+  const rotated = rotateBounds(drawingBounds, rotationDeg)
+  const needW = rotated.maxX - rotated.minX
+  const needH = rotated.maxY - rotated.minY
+  const fits = (scale: number): boolean =>
+    sheetInchesToWorld(vp.w, scale) >= needW - 1e-9 && sheetInchesToWorld(vp.h, scale) >= needH - 1e-9
+  if (fits(vp.scale)) return vp.scale
+  const coarser = SCALE_PRESETS.map((p) => p.scale)
+    .filter((scale) => scale > vp.scale)
+    .sort((a, b) => a - b)
+  for (const scale of coarser) if (fits(scale)) return scale
+  return coarser[coarser.length - 1] ?? vp.scale
+}
+
 export function windowFor(
   vp: ViewportNode,
   drawingBounds: Bounds,
@@ -769,6 +789,13 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
       : vp.kind === 'site-plan'
         ? siteCornerBlocks(vp, {}, northNeedle)
         : []
+  // The drawing fits its window: a viewport whose scale would run the
+  // drawing off the paper — the grade label cut at the left, a label column
+  // past the right edge — steps down through the standard scales until the
+  // whole drawing, margins and labels included, sits inside the box; the
+  // strip prints the scale actually drawn (Steve, 2026-09-10: "not off page").
+  const drawn = padBounds(result.bounds, 0.4)
+  const fitted = vp.crop ? vp.scale : fittedScale(vp, drawn, rotationDeg)
   return {
     plate: [...cornerPlate, ...plate, ...warningPlate],
     live: {
@@ -776,11 +803,11 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
       annotations: combine(
         split.annotations.length > 0 ? [{ kind: 'group', children: split.annotations }] : [],
       ),
-      view: windowFor(vp, padBounds(result.bounds, 0.4), rotationDeg),
+      view: windowFor({ ...vp, scale: fitted }, drawn, rotationDeg),
       rotationDeg,
     },
     title: resolvedTitle,
-    scale: vp.scale,
+    scale: fitted,
     noLabel: result.noLabel,
     northDeg:
       vp.kind === 'site-plan'
