@@ -13,6 +13,12 @@ export interface AgentClaim {
   expiresAt: string
 }
 
+export function agentClaimHandoffUrl(claim: AgentClaim): string {
+  const url = new URL(claim.claimUrl)
+  url.searchParams.set('code', claim.claimCode)
+  return url.toString()
+}
+
 interface StartAgentClaimOptions {
   fetch?: typeof fetch
   timeoutMs?: number

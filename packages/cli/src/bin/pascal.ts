@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 import { parseArgs } from 'node:util'
-import { startAgentClaim } from '../agent-account.js'
+import { agentClaimHandoffUrl, startAgentClaim } from '../agent-account.js'
 import { openBrowser } from '../browser.js'
 import { installGlobalPascalCommand, isNpxInvocation } from '../command-install.js'
 import { collectInfo, runDoctor } from '../diagnostics.js'
@@ -612,13 +612,14 @@ async function runAgent(args: string[], apiKey: string | undefined): Promise<voi
     },
   })
   const claim = await startAgentClaim(apiKey ?? '')
-  if (!values['no-open'] && !values.json) openBrowser(claim.claimUrl)
+  const claimHandoffUrl = agentClaimHandoffUrl(claim)
+  if (!values['no-open'] && !values.json) openBrowser(claimHandoffUrl)
   output(
     values.json,
     claim,
     [
       `Claim code: ${claim.claimCode}`,
-      `Claim page: ${claim.claimUrl}`,
+      `Claim page: ${claimHandoffUrl}`,
       `Expires: ${claim.expiresAt}`,
       '',
       'Claiming links accountability. It does not transfer project ownership or grant access to private projects.',
