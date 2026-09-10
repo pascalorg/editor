@@ -33,7 +33,7 @@ jobs:
 
       - name: Validate agent skills and plugin packages
         run: |
-          bun test scripts/clawhub-ignore-policy.test.ts scripts/claude-mcp-config-policy.test.ts scripts/public-skill-discovery-policy.test.ts
+          bun test scripts/clawhub-ignore-policy.test.ts scripts/claude-mcp-config-policy.test.ts scripts/openai-tool-annotation-policy.test.ts scripts/public-skill-discovery-policy.test.ts
           bun scripts/validate-skills.ts
 
       - name: Type check

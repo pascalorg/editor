@@ -81,9 +81,9 @@ The `source-reviewed` date records a code and public-documentation review. The `
 ## Validate the source package
 
 ```bash
-bun test scripts/clawhub-ignore-policy.test.ts scripts/claude-mcp-config-policy.test.ts scripts/public-skill-discovery-policy.test.ts
+bun test scripts/clawhub-ignore-policy.test.ts scripts/claude-mcp-config-policy.test.ts scripts/openai-tool-annotation-policy.test.ts scripts/public-skill-discovery-policy.test.ts
 bun scripts/validate-skills.ts
 claude plugin validate . --strict
 ```
 
-The repository validator checks the exact two-skill public discovery surface, keeps contributor-only workflows internal, and checks frontmatter, bundled links, task and trigger fixtures, semantic furniture next-action decision cases, scoped ClawHub ignore policies without re-inclusion overrides, the exact credential-free Claude local MCP configuration, the publishing suite, portable and compatibility manifest consistency, OpenAI public-directory metadata limits, bundled branding assets, and accidental private-path or credential leakage.
+The repository validator checks the exact two-skill public discovery surface, keeps contributor-only workflows internal, and checks frontmatter, bundled links, task and trigger fixtures, semantic furniture next-action decision cases, scoped ClawHub ignore policies without re-inclusion overrides, the exact credential-free Claude local MCP configuration, the publishing suite, the exact 46-tool OpenAI annotation and justification packet, portable and compatibility manifest consistency, OpenAI public-directory metadata limits, bundled branding assets, and accidental private-path or credential leakage.
