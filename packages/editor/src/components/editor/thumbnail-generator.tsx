@@ -102,11 +102,33 @@ function aimLightsAtFace(
  */
 async function pumpFrames(
   advance: (timestamp: number, runGlobalEffects?: boolean) => void,
+  clock: { getDelta: () => number },
   n: number,
 ): Promise<void> {
   for (let i = 0; i < n; i++) {
+    // the loop reads the clock's delta for every useFrame — after minutes
+    // without a frame (the hidden tab) it would hand them the whole gap
+    clock.getDelta()
     advance(performance.now(), true)
     await macrotask()
+  }
+}
+
+/**
+ * Bones' finished-house utility plant (the pole, the overhead drop, the pad
+ * transformer — buckets tagged `userData.sourceId = 'utility-plant'`,
+ * plugin-bones framing/renderer.tsx) hidden for a capture; the returned
+ * function shows it again.
+ */
+function hideUtilityPlant(scene: THREE.Scene): () => void {
+  const hidden: THREE.Object3D[] = []
+  scene.traverse((object) => {
+    if ((object.userData as { sourceId?: unknown }).sourceId !== 'utility-plant' || !object.visible) return
+    object.visible = false
+    hidden.push(object)
+  })
+  return () => {
+    for (const object of hidden) object.visible = true
   }
 }
 
@@ -149,6 +171,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
   const advance = useThree((state) => state.advance)
+  const clock = useThree((state) => state.clock)
   const mainCamera = useThree((state) => state.camera)
   const controls = useThree((state) => state.controls) as CameraControls | null
   const isGenerating = useRef(false)
@@ -435,8 +458,11 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           // (Chrome behind another window, the screen locked overnight) gets
           // no animation frames at all, and a capture that waited on one
           // hung the sheet's whole capture chain (2026-09-10)
-          await pumpFrames(advance, 2)
+          await pumpFrames(advance, clock, 2)
         }
+        // a sheet's picture is of the house: the utility's pole, drop and
+        // pad transformer (Bones' finished-house plant) stay out of it
+        const restorePlant = pose ? hideUtilityPlant(scene) : () => {}
         const restoreLights = lightFace && pose ? aimLightsAtFace(scene, pose.position, pose.target) : () => {}
         const restoreClip = clip.length > 0 ? clipSceneFor(scene, clip) : () => {}
 
@@ -499,6 +525,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             restoreLevels()
             restoreLevelMode?.()
             restoreNodeVisibility()
+            restorePlant()
             restoreLights()
             restoreClip()
             restoreBuffer()
@@ -529,6 +556,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               scene.background = sceneBackground
               gl.setClearColor(clearColor, clearAlpha)
             }
+            restorePlant()
             restoreLights()
             restoreClip()
             restoreBuffer()
@@ -621,7 +649,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         isGenerating.current = false
       }
     },
-    [gl, scene, mainCamera, controls, orthoPipeline, advance],
+    [gl, scene, mainCamera, controls, orthoPipeline, advance, clock],
   )
 
   // Thumbnail request via emitter. Two call shapes:

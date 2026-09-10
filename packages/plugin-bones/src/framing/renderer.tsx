@@ -39,7 +39,7 @@ import {
 import { useBonesStore } from '../store'
 import { elbowGeometry, transitionGeometry } from './duct-geometry'
 import { HIGHLIGHT_COLOR, type HighlightSpec, matchesHighlight } from './highlight'
-import { finishColorOf, finishFixtureBox, isPhysicalMember, METER_DOME } from './physical'
+import { finishColorOf, finishFixtureBox, isPhysicalMember, isUtilityPlant, METER_DOME } from './physical'
 import { effectiveNodesFor, throttleTrailing } from './live'
 import { effectiveViewMode, type FramingNode, type ViewMode } from './schema'
 import { isFrameMember, shellNodeIds } from './shell'
@@ -657,6 +657,14 @@ function collectBuckets(
       // now load-bearing for the camera-position cut itself).
       const key = `${color}|${member.face[0].toFixed(2)},${member.face[1].toFixed(2)}|${member.sourceId}`
       push(key, color, member.dims, member.position, member.rotation, member.face, 'solid', member.sourceId)
+      continue
+    }
+    // The finished house's utility plant — the pole, the drop, the pad
+    // transformer — in a bucket of its own tagged `userData.sourceId =
+    // 'utility-plant'`, so a sheet's capture can hide it (physical.ts):
+    // the drawings show the house, not the utility's pole and wire.
+    if (mode === 'off' && isUtilityPlant(member)) {
+      push(`${color}|solid|utility-plant${shapeKey(member)}`, color, member.dims, member.position, member.rotation, undefined, 'solid', 'utility-plant', member.shear, shapeOf(member))
       continue
     }
     // Everything — below-floor included — is depth-tested only: wall/roof/

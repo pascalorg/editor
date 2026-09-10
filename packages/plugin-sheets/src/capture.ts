@@ -139,7 +139,7 @@ async function withSiteSurfaceHidden<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /** The capture recipe's version — part of every picture's hash; a change recaptures every sheet once. */
-const PICTURE_RECIPE = 'r3'
+const PICTURE_RECIPE = 'r4'
 
 /** A sheet's picture is rendered at this multiple of the canvas' size and kept at up to PICTURE_MAX_WIDTH px. */
 const PICTURE_SUPERSAMPLE = 2
@@ -582,34 +582,54 @@ function toJpeg(dataUrl: string, maxWidth: number): Promise<string | undefined> 
       canvas.height = Math.max(1, Math.round((img.naturalHeight || 1) * scale))
       const ctx = canvas.getContext('2d')
       if (!ctx) return resolve(undefined)
+      if (isBlank(img)) return resolve(undefined)
       ctx.fillStyle = '#ffffff'
       ctx.fillRect(0, 0, canvas.width, canvas.height)
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      resolve(isBlank(ctx, canvas.width, canvas.height) ? undefined : canvas.toDataURL('image/jpeg', 0.92))
+      resolve(canvas.toDataURL('image/jpeg', 0.92))
     }
     img.onerror = () => resolve(undefined)
     img.src = dataUrl
   })
 }
 
-function isBlank(ctx: CanvasRenderingContext2D, w: number, h: number): boolean {
+/**
+ * A frame with nothing in it: fewer than one pixel in two thousand carries
+ * any alpha (the captures are transparent), or — an opaque frame — every
+ * sampled pixel is the same colour. Read once from a small copy; the old
+ * test sampled a white-filled copy at 24 columns and called a brightly lit
+ * face blank (the south elevation, 2026-09-10).
+ */
+function isBlank(img: HTMLImageElement): boolean {
   try {
-    const step = Math.max(1, Math.floor(w / 24))
-    const first = ctx.getImageData(0, 0, 1, 1).data
-    let same = 0
-    let n = 0
-    for (let y = 0; y < h; y += step) {
-      for (let x = 0; x < w; x += step) {
-        const d = ctx.getImageData(x, y, 1, 1).data
-        n++
-        const delta =
-          Math.abs((d[0] ?? 0) - (first[0] ?? 0)) +
-          Math.abs((d[1] ?? 0) - (first[1] ?? 0)) +
-          Math.abs((d[2] ?? 0) - (first[2] ?? 0))
-        if (delta < 12) same++
-      }
+    const w = Math.max(1, Math.min(256, img.naturalWidth || 1))
+    const h = Math.max(1, Math.round(w * ((img.naturalHeight || 1) / (img.naturalWidth || 1))))
+    const scratch = document.createElement('canvas')
+    scratch.width = w
+    scratch.height = h
+    const ctx = scratch.getContext('2d', { willReadFrequently: true })
+    if (!ctx) return false
+    ctx.drawImage(img, 0, 0, w, h)
+    const data = ctx.getImageData(0, 0, w, h).data
+    let painted = 0
+    let opaque = 0
+    for (let i = 3; i < data.length; i += 4) {
+      const a = data[i] ?? 0
+      if (a > 8) painted++
+      if (a > 250) opaque++
     }
-    return n > 0 && same / n > 0.985
+    const n = w * h
+    if (painted < n / 2000) return true
+    if (opaque < n) return false
+    const r0 = data[0] ?? 0
+    const g0 = data[1] ?? 0
+    const b0 = data[2] ?? 0
+    let same = 0
+    for (let i = 0; i < data.length; i += 4) {
+      const delta = Math.abs((data[i] ?? 0) - r0) + Math.abs((data[i + 1] ?? 0) - g0) + Math.abs((data[i + 2] ?? 0) - b0)
+      if (delta < 12) same++
+    }
+    return same / n > 0.995
   } catch {
     return false
   }

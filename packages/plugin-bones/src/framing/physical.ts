@@ -42,6 +42,21 @@ export function isPhysicalMember(m: Member): boolean {
   return false
 }
 
+/**
+ * The utility's plant at the lot line — the pole with its overhead drop, or
+ * the pad-mount transformer. It stands in the 3D house (the drop clears the
+ * roof, the pole is where the utility puts it) but never on a drawing: an
+ * elevation draws the house, and its service point is the weatherhead on
+ * the mast (the drop across the roof read as a stray line on every
+ * elevation, 2026-09-10).
+ */
+export function isUtilityPlant(m: Member): boolean {
+  if (m.sourceId !== 'service-entrance') return false
+  if (m.role === 'post') return true
+  if (m.role === 'wire-run') return /^Service drop/.test(m.label ?? '')
+  return /^Pad-mount transformer/.test(m.label ?? '')
+}
+
 /** The finished-house paint of a physical member (the X-ray paints by material). */
 export function finishColorOf(m: Member): string {
   if (m.sourceId === 'wh' || m.sourceId === 'wh-head') return '#e9ebed' // white enamel

@@ -21,7 +21,7 @@
  * inside the walls and is the walls' business.
  */
 import type { Fixture, Member } from '../../../../plugin-bones/src/core/types'
-import { isPhysicalMember } from '../../../../plugin-bones/src/framing/physical'
+import { isPhysicalMember, isUtilityPlant } from '../../../../plugin-bones/src/framing/physical'
 import type { NodeMap } from '../../model'
 import { mepModel } from './model'
 
@@ -63,8 +63,14 @@ function shortName(label: string | undefined, fallback: string): string {
   return head && head.length > 0 ? head : fallback
 }
 
-/** The finished house's physical set (plugin-bones framing/physical.ts) — one definition for the 3D and the paper. */
-const isExteriorMember = isPhysicalMember
+/**
+ * The finished house's physical set (plugin-bones framing/physical.ts) — one
+ * definition for the 3D and the paper — less the utility's plant at the lot
+ * line (the pole, its drop, the pad transformer): the 3D house shows them,
+ * a drawing of the house does not.
+ */
+const isExteriorMember = (m: Parameters<typeof isPhysicalMember>[0]): boolean =>
+  isPhysicalMember(m) && !isUtilityPlant(m)
 
 /**
  * Bones' exterior equipment on `levels` (each with its base elevation in the
@@ -152,7 +158,7 @@ export function bonesSectionPrisms(
     if (!model) continue
     let n = 0
     for (const m of model.members) {
-      if (!(m.system === 'hvac' || isPhysicalMember(m))) continue
+      if (!(m.system === 'hvac' || isExteriorMember(m))) continue
       const fp = memberFootprint(m)
       out.push({
         kind: 'equipment',
