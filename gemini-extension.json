@@ -1,0 +1,12 @@
+{
+  "name": "pascal",
+  "version": "0.1.8",
+  "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
+  "contextFileName": "skills/README.md",
+  "mcpServers": {
+    "pascal": {
+      "command": "pascal",
+      "args": ["mcp", "connect"]
+    }
+  }
+}

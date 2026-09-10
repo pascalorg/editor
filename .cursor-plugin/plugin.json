@@ -1,5 +1,4 @@
 {
-  "$schema": "https://json.schemastore.org/claude-code-plugin.json",
   "name": "pascal-agent-skills",
   "displayName": "Pascal agent skills",
   "version": "0.1.8",
@@ -12,5 +11,10 @@
   "homepage": "https://editor.pascal.app/docs/developers/mcp",
   "repository": "https://github.com/pascalorg/editor",
   "license": "MIT",
-  "keywords": ["pascal", "3d", "architecture", "mcp", "furniture", "spatial"]
+  "logo": "assets/pascal-mark-plate.svg",
+  "keywords": ["pascal", "3d", "architecture", "mcp", "furniture", "spatial"],
+  "category": "developer-tools",
+  "tags": ["3d", "architecture", "floor-plan", "furniture", "mcp"],
+  "skills": "./skills/",
+  "mcpServers": "./mcp.json"
 }
