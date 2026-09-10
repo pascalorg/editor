@@ -166,7 +166,7 @@ export default function StairSegmentPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         <SliderControl
           label="Length"
@@ -176,7 +176,7 @@ export default function StairSegmentPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.length * 100) / 100}
+          value={node.length}
         />
         {node.segmentType === 'stair' && (
           <>
@@ -188,7 +188,7 @@ export default function StairSegmentPanel() {
               precision={2}
               step={0.1}
               unit="m"
-              value={Math.round(node.height * 100) / 100}
+              value={node.height}
             />
             <SliderControl
               label="Steps"
@@ -220,7 +220,7 @@ export default function StairSegmentPanel() {
               precision={2}
               step={0.05}
               unit="m"
-              value={Math.round((node.thickness ?? 0.25) * 100) / 100}
+              value={node.thickness ?? 0.25}
             />
           )}
         </div>
@@ -237,7 +237,7 @@ export default function StairSegmentPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         <SliderControl
           label="Y"
@@ -249,7 +249,7 @@ export default function StairSegmentPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
+          value={node.position[1]}
         />
         <SliderControl
           label="Z"
@@ -261,7 +261,7 @@ export default function StairSegmentPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[2] * 100) / 100}
+          value={node.position[2]}
         />
         <SliderControl
           label="Rotation"

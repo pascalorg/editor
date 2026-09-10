@@ -244,7 +244,7 @@ function LevelRow({
                 precision={3}
                 step={0.1}
                 unit="m"
-                value={Math.round(storeyHeight * 1000) / 1000}
+                value={storeyHeight}
               />
               <div className="mt-1.5 grid grid-cols-3 gap-1.5">
                 {heightPresets.map((preset) => (

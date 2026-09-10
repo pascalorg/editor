@@ -2,11 +2,7 @@
 
 import { useScene } from '@pascal-app/core'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import {
-  lingoUnitSpec,
-  measurementHint,
-  parseMeasurement,
-} from '../../../lib/measurement-parser'
+import { lingoUnitSpec, measurementHint, parseMeasurement } from '../../../lib/measurement-parser'
 import { useLinearDisplay } from '../../../lib/use-linear-display'
 import { cn } from '../../../lib/utils'
 
@@ -60,19 +56,16 @@ export function SliderControl({
   onCommit,
   min = Number.NEGATIVE_INFINITY,
   max = Number.POSITIVE_INFINITY,
-  precision = 0,
-  step = 1,
+  precision: storedPrecision = 0,
+  step: storedStep = 1,
   className,
   unit = '',
   restoreOnCommit = true,
   mixed = false,
 }: SliderControlProps) {
-  // Display/storage conversion so the value honors the metric/imperial toggle.
-  // `value`, `onChange`, `onCommit`, `min`/`max`/`clamp` are always in the
-  // stored unit (meters for `unit === 'm'`); the step, drag deltas, text field
-  // and rendered number are in the DISPLAY unit (feet when imperial). For
-  // metric and non-length units these conversions are the identity.
-  const { isImperial, displayUnit, toDisplay, toStored } = useLinearDisplay(unit, precision)
+  // Values and bounds stay in meters; gestures and input use the displayed unit.
+  const { isImperial, displayUnit, parseUnit, precision, step, toDisplay, toStored } =
+    useLinearDisplay(unit, storedPrecision, storedStep)
 
   const [isEditing, setIsEditing] = useState(false)
   const [isDragging, setIsDragging] = useState(false)
@@ -106,7 +99,9 @@ export function SliderControl({
     (storedValue: number, displayDelta: number, displayStep: number) =>
       clamp(
         toStored(
-          Number.parseFloat((toDisplay(storedValue) + displayDelta).toFixed(stepPrecision(displayStep))),
+          Number.parseFloat(
+            (toDisplay(storedValue) + displayDelta).toFixed(stepPrecision(displayStep)),
+          ),
         ),
       ),
     [clamp, toDisplay, toStored],
@@ -231,7 +226,7 @@ export function SliderControl({
     const spec = lingoUnitSpec(unit)
     let stored = spec
       ? parseMeasurement(inputValue, spec, {
-          bareUnit: isImperial ? 'ft' : spec.unitId,
+          bareUnit: parseUnit ?? spec.unitId,
           system: isImperial ? 'us' : 'metric',
         })
       : null
@@ -248,15 +243,27 @@ export function SliderControl({
       onCommit?.(nextValue)
     }
     setIsEditing(false)
-  }, [inputValue, unit, isImperial, onChange, onCommit, clamp, precision, value, toDisplay, toStored])
+  }, [
+    inputValue,
+    unit,
+    isImperial,
+    parseUnit,
+    onChange,
+    onCommit,
+    clamp,
+    precision,
+    value,
+    toDisplay,
+    toStored,
+  ])
 
   const spec = lingoUnitSpec(unit)
   const hint =
     isEditing && spec
       ? measurementHint(inputValue, spec, {
-          bareUnit: isImperial ? 'ft' : spec.unitId,
+          bareUnit: parseUnit ?? spec.unitId,
           system: isImperial ? 'us' : 'metric',
-          displayUnit: isImperial ? 'ft' : spec.unitId,
+          displayUnit: parseUnit ?? spec.unitId,
           precision,
           clamp,
         })

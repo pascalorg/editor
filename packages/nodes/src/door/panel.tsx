@@ -612,7 +612,7 @@ export default function DoorPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         {showFlipSide && (
           <div className="px-1 pt-2 pb-1">
@@ -726,7 +726,7 @@ export default function DoorPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         <SliderControl
           label="Height"
@@ -745,7 +745,7 @@ export default function DoorPanel() {
           restoreOnCommit={false}
           step={0.05}
           unit="m"
-          value={Math.round(node.height * 100) / 100}
+          value={node.height}
         />
       </PanelSection>
 
@@ -799,7 +799,7 @@ export default function DoorPanel() {
                   precision={2}
                   step={0.05}
                   unit="m"
-                  value={Math.round(cornerRadius * 100) / 100}
+                  value={cornerRadius}
                 />
               ) : (
                 <>
@@ -817,7 +817,7 @@ export default function DoorPanel() {
                       precision={2}
                       step={0.05}
                       unit="m"
-                      value={Math.round((openingTopRadii[index as number] ?? 0) * 100) / 100}
+                      value={openingTopRadii[index as number] ?? 0}
                     />
                   ))}
                 </>
@@ -831,7 +831,7 @@ export default function DoorPanel() {
                 precision={3}
                 step={0.005}
                 unit="m"
-                value={Math.round(openingRevealRadius * 1000) / 1000}
+                value={openingRevealRadius}
               />
             </>
           )}
@@ -845,7 +845,7 @@ export default function DoorPanel() {
               restoreOnCommit={false}
               step={0.05}
               unit="m"
-              value={Math.round(archHeight * 100) / 100}
+              value={archHeight}
             />
           )}
         </PanelSection>
@@ -896,7 +896,7 @@ export default function DoorPanel() {
                   precision={2}
                   step={0.05}
                   unit="m"
-                  value={Math.round(cornerRadius * 100) / 100}
+                  value={cornerRadius}
                 />
               ) : (
                 <>
@@ -914,7 +914,7 @@ export default function DoorPanel() {
                       precision={2}
                       step={0.05}
                       unit="m"
-                      value={Math.round((openingTopRadii[index as number] ?? 0) * 100) / 100}
+                      value={openingTopRadii[index as number] ?? 0}
                     />
                   ))}
                 </>
@@ -928,7 +928,7 @@ export default function DoorPanel() {
                 precision={3}
                 step={0.005}
                 unit="m"
-                value={Math.round(openingRevealRadius * 1000) / 1000}
+                value={openingRevealRadius}
               />
             </>
           )}
@@ -942,7 +942,7 @@ export default function DoorPanel() {
               restoreOnCommit={false}
               step={0.05}
               unit="m"
-              value={Math.round(archHeight * 100) / 100}
+              value={archHeight}
             />
           )}
         </PanelSection>
@@ -960,7 +960,7 @@ export default function DoorPanel() {
                 precision={3}
                 step={0.01}
                 unit="m"
-                value={Math.round(node.frameThickness * 1000) / 1000}
+                value={node.frameThickness}
               />
               <SliderControl
                 label="Depth"
@@ -970,7 +970,7 @@ export default function DoorPanel() {
                 precision={3}
                 step={0.01}
                 unit="m"
-                value={Math.round(node.frameDepth * 1000) / 1000}
+                value={node.frameDepth}
               />
             </PanelSection>
           )}
@@ -985,7 +985,7 @@ export default function DoorPanel() {
                 precision={3}
                 step={0.005}
                 unit="m"
-                value={Math.round(node.contentPadding[0] * 1000) / 1000}
+                value={node.contentPadding[0]}
               />
               <SliderControl
                 label="Vertical"
@@ -995,7 +995,7 @@ export default function DoorPanel() {
                 precision={3}
                 step={0.005}
                 unit="m"
-                value={Math.round(node.contentPadding[1] * 1000) / 1000}
+                value={node.contentPadding[1]}
               />
             </PanelSection>
           )}
@@ -1052,7 +1052,7 @@ export default function DoorPanel() {
                     precision={3}
                     step={0.005}
                     unit="m"
-                    value={Math.round(node.thresholdHeight * 1000) / 1000}
+                    value={node.thresholdHeight}
                   />
                 </div>
               )}
@@ -1078,7 +1078,7 @@ export default function DoorPanel() {
                     precision={2}
                     step={0.05}
                     unit="m"
-                    value={Math.round(node.handleHeight * 100) / 100}
+                    value={node.handleHeight}
                   />
                   {supportsHandleSide && (
                     <div className="space-y-1">
@@ -1122,7 +1122,7 @@ export default function DoorPanel() {
                     precision={2}
                     step={0.05}
                     unit="m"
-                    value={Math.round(node.panicBarHeight * 100) / 100}
+                    value={node.panicBarHeight}
                   />
                 </div>
               )}
@@ -1211,7 +1211,7 @@ export default function DoorPanel() {
                           precision={3}
                           step={0.005}
                           unit="m"
-                          value={Math.round(seg.dividerThickness * 1000) / 1000}
+                          value={seg.dividerThickness}
                         />
                       </div>
                     )}
@@ -1231,7 +1231,7 @@ export default function DoorPanel() {
                           precision={3}
                           step={0.005}
                           unit="m"
-                          value={Math.round(seg.panelInset * 1000) / 1000}
+                          value={seg.panelInset}
                         />
                         <SliderControl
                           label="Depth"
@@ -1246,7 +1246,7 @@ export default function DoorPanel() {
                           precision={3}
                           step={0.005}
                           unit="m"
-                          value={Math.round(seg.panelDepth * 1000) / 1000}
+                          value={seg.panelDepth}
                         />
                       </div>
                     )}

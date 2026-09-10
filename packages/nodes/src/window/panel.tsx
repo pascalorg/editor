@@ -535,7 +535,7 @@ export default function WindowPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         <SliderControl
           label={
@@ -547,7 +547,7 @@ export default function WindowPanel() {
           precision={2}
           step={0.1}
           unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
+          value={node.position[1]}
         />
         {showFlipSide && (
           <div className="px-1 pt-2 pb-1">
@@ -570,7 +570,7 @@ export default function WindowPanel() {
           restoreOnCommit={false}
           step={0.1}
           unit="m"
-          value={Math.round(node.width * 100) / 100}
+          value={node.width}
         />
         <SliderControl
           label="Height"
@@ -580,7 +580,7 @@ export default function WindowPanel() {
           restoreOnCommit={false}
           step={0.1}
           unit="m"
-          value={Math.round(node.height * 100) / 100}
+          value={node.height}
         />
       </PanelSection>
 
@@ -631,7 +631,7 @@ export default function WindowPanel() {
                   precision={2}
                   step={0.05}
                   unit="m"
-                  value={Math.round(cornerRadius * 100) / 100}
+                  value={cornerRadius}
                 />
               ) : (
                 <>
@@ -651,7 +651,7 @@ export default function WindowPanel() {
                       precision={2}
                       step={0.05}
                       unit="m"
-                      value={Math.round((openingCornerRadii[index as number] ?? 0) * 100) / 100}
+                      value={openingCornerRadii[index as number] ?? 0}
                     />
                   ))}
                 </>
@@ -665,7 +665,7 @@ export default function WindowPanel() {
                 precision={3}
                 step={0.005}
                 unit="m"
-                value={Math.round(openingRevealRadius * 1000) / 1000}
+                value={openingRevealRadius}
               />
             </div>
           )}
@@ -680,7 +680,7 @@ export default function WindowPanel() {
                 restoreOnCommit={false}
                 step={0.05}
                 unit="m"
-                value={Math.round(archHeight * 100) / 100}
+                value={archHeight}
               />
             </div>
           )}
@@ -722,7 +722,7 @@ export default function WindowPanel() {
                   precision={2}
                   step={0.05}
                   unit="m"
-                  value={Math.round(cornerRadius * 100) / 100}
+                  value={cornerRadius}
                 />
               ) : (
                 <>
@@ -742,7 +742,7 @@ export default function WindowPanel() {
                       precision={2}
                       step={0.05}
                       unit="m"
-                      value={Math.round((openingCornerRadii[index as number] ?? 0) * 100) / 100}
+                      value={openingCornerRadii[index as number] ?? 0}
                     />
                   ))}
                 </>
@@ -756,7 +756,7 @@ export default function WindowPanel() {
                 precision={3}
                 step={0.005}
                 unit="m"
-                value={Math.round(openingRevealRadius * 1000) / 1000}
+                value={openingRevealRadius}
               />
             </div>
           )}
@@ -771,7 +771,7 @@ export default function WindowPanel() {
                 restoreOnCommit={false}
                 step={0.05}
                 unit="m"
-                value={Math.round(archHeight * 100) / 100}
+                value={archHeight}
               />
             </div>
           )}
@@ -789,7 +789,7 @@ export default function WindowPanel() {
                 precision={3}
                 step={0.01}
                 unit="m"
-                value={Math.round(node.frameThickness * 1000) / 1000}
+                value={node.frameThickness}
               />
               <SliderControl
                 label="Depth"
@@ -798,7 +798,7 @@ export default function WindowPanel() {
                 precision={3}
                 step={0.01}
                 unit="m"
-                value={Math.round(node.frameDepth * 1000) / 1000}
+                value={node.frameDepth}
               />
             </PanelSection>
           )}
@@ -857,7 +857,7 @@ export default function WindowPanel() {
                       precision={3}
                       step={0.01}
                       unit="m"
-                      value={Math.round((node.columnDividerThickness ?? 0.03) * 1000) / 1000}
+                      value={node.columnDividerThickness ?? 0.03}
                     />
                   </div>
                 </div>
@@ -890,7 +890,7 @@ export default function WindowPanel() {
                       precision={3}
                       step={0.01}
                       unit="m"
-                      value={Math.round((node.rowDividerThickness ?? 0.03) * 1000) / 1000}
+                      value={node.rowDividerThickness ?? 0.03}
                     />
                   </div>
                 </div>
@@ -914,7 +914,7 @@ export default function WindowPanel() {
                     precision={3}
                     step={0.01}
                     unit="m"
-                    value={Math.round(node.sillDepth * 1000) / 1000}
+                    value={node.sillDepth}
                   />
                   <SliderControl
                     label="Thickness"
@@ -923,7 +923,7 @@ export default function WindowPanel() {
                     precision={3}
                     step={0.01}
                     unit="m"
-                    value={Math.round(node.sillThickness * 1000) / 1000}
+                    value={node.sillThickness}
                   />
                 </div>
               )}

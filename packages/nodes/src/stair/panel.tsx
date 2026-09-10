@@ -384,7 +384,7 @@ export default function StairPanel() {
                   precision={2}
                   step={0.01}
                   unit="m"
-                  value={Math.round((node.openingOffset ?? 0) * 100) / 100}
+                  value={node.openingOffset ?? 0}
                 />
               ) : null}
             </>
@@ -411,7 +411,7 @@ export default function StairPanel() {
                   precision={2}
                   step={0.05}
                   unit="m"
-                  value={Math.round((node.topLandingDepth ?? 0.9) * 100) / 100}
+                  value={node.topLandingDepth ?? 0.9}
                 />
               )}
             </>
@@ -459,7 +459,7 @@ export default function StairPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round((node.width ?? 1) * 100) / 100}
+            value={node.width ?? 1}
           />
           <MetricControl
             label="Rise"
@@ -469,7 +469,7 @@ export default function StairPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round(resolveStairTotalRise(node, nodes) * 100) / 100}
+            value={resolveStairTotalRise(node, nodes)}
           />
           <MetricControl
             label="Steps"
@@ -497,7 +497,7 @@ export default function StairPanel() {
               precision={2}
               step={0.01}
               unit="m"
-              value={Math.round((node.thickness ?? 0.25) * 100) / 100}
+              value={node.thickness ?? 0.25}
             />
           )}
           <MetricControl
@@ -508,7 +508,7 @@ export default function StairPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round((node.innerRadius ?? 0.9) * 100) / 100}
+            value={node.innerRadius ?? 0.9}
           />
           <SliderControl
             label="Sweep"
@@ -548,7 +548,7 @@ export default function StairPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         <SliderControl
           label="Y"
@@ -560,7 +560,7 @@ export default function StairPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
+          value={node.position[1]}
         />
         <SliderControl
           label="Z"
@@ -572,7 +572,7 @@ export default function StairPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[2] * 100) / 100}
+          value={node.position[2]}
         />
         <SliderControl
           label="Rotation"
@@ -619,7 +619,7 @@ export default function StairPanel() {
             precision={2}
             step={0.02}
             unit="m"
-            value={Math.round((node.railingHeight ?? 0.92) * 100) / 100}
+            value={node.railingHeight ?? 0.92}
           />
         )}
       </PanelSection>
