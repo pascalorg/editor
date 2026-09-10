@@ -130,6 +130,7 @@ npx @pascal-app/cli editor --foreground --no-open
 | `pascal project list [--json]` | Explicit form of `pascal projects`. |
 | `pascal project open <id-or-name>` | Explicit form of `pascal open <project>`. |
 | `pascal agent claim [--no-open] [--json]` | Link an autonomous hosted agent to the person accountable for it. |
+| `pascal agent status [--json]` | Verify the hosted agent credential and inspect its claim and organization scope. |
 | `pascal mcp connect` | Stable local connector for MCP clients; discovers the dynamic managed service. |
 | `pascal mcp status [--json]` | Show managed MCP health. |
 | `pascal mcp config [--json]` | Print generic MCP client configuration. |
@@ -183,12 +184,17 @@ accountability link:
 
 ```bash
 PASCAL_API_KEY='sk_live_...' pascal agent claim
+PASCAL_API_KEY='sk_live_...' pascal agent status
 ```
 
 The CLI sends that key once to Pascal's claim endpoint, does not store or print it, and opens
 the claim page. Use `--no-open` on a headless host. `--json` returns structured output without
 opening a browser. A new claim request supersedes the agent's previous code; each code expires
 after 15 minutes.
+
+`pascal agent status` confirms that the credential remains active and reports the agent ID,
+autonomous or delegated mode, claim state, and whether the key is scoped to an organization.
+It does not expose the accountable person's identity or inspect local editor projects.
 
 Claiming lifts claim-gated capabilities for the autonomous agent. It does not transfer project
 ownership, grant the agent access to the person's private projects, or grant the person access

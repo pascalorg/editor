@@ -11,20 +11,21 @@ const claimFetchPreload = path.join(testRoot, 'claim-fetch-preload.mjs')
 await writeFile(
   claimFetchPreload,
   `globalThis.fetch = async (input, init) => {
-    if (String(input) !== 'https://editor.pascal.app/api/auth/agent/claim/start') {
-      throw new Error('Unexpected claim endpoint')
+    if (String(input) !== process.env.PASCAL_AGENT_TEST_ENDPOINT) {
+      throw new Error('Unexpected agent endpoint')
     }
+    if (init?.method !== process.env.PASCAL_AGENT_TEST_METHOD) throw new Error('Unexpected method')
     if (init?.redirect !== 'error') throw new Error('Redirects must be disabled')
     if (process.env.PASCAL_API_KEY !== undefined) {
       throw new Error('PASCAL_API_KEY remained in the process environment')
     }
     const authorization = new Headers(init?.headers).get('authorization')
-    if (authorization !== process.env.PASCAL_CLAIM_TEST_AUTHORIZATION) {
-      throw new Error('Unexpected claim authorization')
+    if (authorization !== process.env.PASCAL_AGENT_TEST_AUTHORIZATION) {
+      throw new Error('Unexpected agent authorization')
     }
-    return new Response(process.env.PASCAL_CLAIM_TEST_BODY, {
+    return new Response(process.env.PASCAL_AGENT_TEST_BODY, {
       headers: { 'content-type': 'application/json' },
-      status: Number(process.env.PASCAL_CLAIM_TEST_STATUS),
+      status: Number(process.env.PASCAL_AGENT_TEST_STATUS),
     })
   }
 `,
@@ -127,6 +128,53 @@ describe('command parsing', () => {
     expect(result.stdout).toBe('')
   })
 
+  test('prints the exact successful JSON agent status contract', async () => {
+    const status = {
+      schemaVersion: 1,
+      agentId: 'agent_cli_test',
+      mode: 'autonomous',
+      claimed: false,
+      organizationScoped: true,
+    }
+
+    const result = await runStatusCli(200, { ...status, credentialName: '\u001b[2J' }, '--json')
+
+    expect(result.exitCode).toBe(0)
+    expect(JSON.parse(result.stdout)).toEqual(status)
+    expect(result.stderr).toBe('')
+  })
+
+  test('prints terminal-safe human status and an unclaimed next action', async () => {
+    const result = await runStatusCli(200, {
+      schemaVersion: 1,
+      agentId: '\u001b[2Jmalicious',
+      mode: 'autonomous',
+      claimed: false,
+      organizationScoped: false,
+    })
+
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toContain('Mode: autonomous')
+    expect(result.stdout).toContain('Claimed: no')
+    expect(result.stdout).toContain('pascal agent claim')
+    expect(result.stdout).not.toContain('\u001b')
+    expect(result.stderr).toBe('')
+  })
+
+  test.each([
+    [401, 'agent_status_unauthorized'],
+    [403, 'agent_status_forbidden'],
+  ])('preserves the hosted status HTTP %i error contract', async (status, errorCode) => {
+    const result = await runStatusCli(status, '<html>untrusted error</html>', '--json')
+
+    expect(result.exitCode).toBe(1)
+    expect(JSON.parse(result.stderr)).toMatchObject({
+      details: { status },
+      error: errorCode,
+    })
+    expect(result.stdout).toBe('')
+  })
+
   test('rejects unknown agent account commands', async () => {
     const result = await runCli('agent', 'login', '--json')
 
@@ -216,9 +264,39 @@ async function runClaimCli(status: number, body: unknown, ...args: string[]) {
       env: {
         ...process.env,
         PASCAL_API_KEY: apiKey,
-        PASCAL_CLAIM_TEST_AUTHORIZATION: `Bearer ${apiKey}`,
-        PASCAL_CLAIM_TEST_BODY: typeof body === 'string' ? body : JSON.stringify(body),
-        PASCAL_CLAIM_TEST_STATUS: String(status),
+        PASCAL_AGENT_TEST_AUTHORIZATION: `Bearer ${apiKey}`,
+        PASCAL_AGENT_TEST_BODY: typeof body === 'string' ? body : JSON.stringify(body),
+        PASCAL_AGENT_TEST_ENDPOINT: 'https://editor.pascal.app/api/auth/agent/claim/start',
+        PASCAL_AGENT_TEST_METHOD: 'POST',
+        PASCAL_AGENT_TEST_STATUS: String(status),
+        PASCAL_HOME: testHome,
+        PASCAL_NO_OPEN: '1',
+      },
+      stdout: 'pipe',
+      stderr: 'pipe',
+    },
+  )
+  const [exitCode, stdout, stderr] = await Promise.all([
+    child.exited,
+    new Response(child.stdout).text(),
+    new Response(child.stderr).text(),
+  ])
+  return { exitCode, stdout, stderr }
+}
+
+async function runStatusCli(status: number, body: unknown, ...args: string[]) {
+  const apiKey = 'sk_live_cli-status-test-key'
+  const child = Bun.spawn(
+    [process.execPath, '--preload', claimFetchPreload, executable, 'agent', 'status', ...args],
+    {
+      env: {
+        ...process.env,
+        PASCAL_API_KEY: apiKey,
+        PASCAL_AGENT_TEST_AUTHORIZATION: `Bearer ${apiKey}`,
+        PASCAL_AGENT_TEST_BODY: typeof body === 'string' ? body : JSON.stringify(body),
+        PASCAL_AGENT_TEST_ENDPOINT: 'https://editor.pascal.app/api/auth/agent/status',
+        PASCAL_AGENT_TEST_METHOD: 'GET',
+        PASCAL_AGENT_TEST_STATUS: String(status),
         PASCAL_HOME: testHome,
         PASCAL_NO_OPEN: '1',
       },
