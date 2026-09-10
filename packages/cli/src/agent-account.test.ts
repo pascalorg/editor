@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { agentClaimHandoffUrl, startAgentClaim } from './agent-account.js'
+import { agentClaimHandoffUrl, getAgentStatus, startAgentClaim } from './agent-account.js'
 import { CliError } from './errors.js'
 
 const API_KEY = 'sk_live_private-agent-key'
@@ -7,6 +7,13 @@ const VALID_CLAIM = {
   claimCode: 'BCDF-GHJK-LMNP',
   claimUrl: 'https://editor.pascal.app/settings/agents/claim',
   expiresAt: '2026-09-10T18:30:00.000Z',
+}
+const VALID_STATUS = {
+  schemaVersion: 1 as const,
+  agentId: 'agent_test',
+  mode: 'autonomous' as const,
+  claimed: false,
+  organizationScoped: true,
 }
 
 describe('agent account claims', () => {
@@ -122,6 +129,78 @@ describe('agent account claims', () => {
     )
 
     expect(error.code).toBe('agent_claim_timeout')
+  })
+
+  test('checks status with the agent credential and returns the bounded public result', async () => {
+    let endpoint = ''
+    let method = ''
+    let authorization: string | null = null
+    let redirect: RequestRedirect | undefined
+    const fetchMock: typeof fetch = async (input, init) => {
+      endpoint = String(input)
+      method = init?.method ?? ''
+      authorization = new Headers(init?.headers).get('authorization')
+      redirect = init?.redirect
+      return Response.json({
+        ...VALID_STATUS,
+        agentName: '\u001b[2Jmalicious',
+        credentialName: API_KEY,
+      })
+    }
+
+    const result = await getAgentStatus(API_KEY, { fetch: fetchMock })
+
+    expect(endpoint).toBe('https://editor.pascal.app/api/auth/agent/status')
+    expect(method).toBe('GET')
+    expect(authorization).toBe(`Bearer ${API_KEY}`)
+    expect(redirect).toBe('error')
+    expect(result).toEqual(VALID_STATUS)
+    expect(JSON.stringify(result)).not.toContain(API_KEY)
+  })
+
+  test.each([
+    [401, 'agent_status_unauthorized'],
+    [403, 'agent_status_forbidden'],
+    [503, 'agent_status_failed'],
+  ])('maps status HTTP %i without exposing the API key or response body', async (status, code) => {
+    const fetchMock: typeof fetch = async () =>
+      new Response(`<html>credential ${API_KEY} rejected</html>`, { status })
+
+    const error = await captureError(() => getAgentStatus(API_KEY, { fetch: fetchMock }))
+
+    expect(error.code).toBe(code)
+    expect(JSON.stringify(error)).not.toContain(API_KEY)
+    expect(error.message).not.toContain(API_KEY)
+  })
+
+  test('rejects malformed and oversized status responses', async () => {
+    const malformed: typeof fetch = async () => Response.json({ ...VALID_STATUS, claimed: 'false' })
+    const oversized: typeof fetch = async () =>
+      new Response(JSON.stringify({ ...VALID_STATUS, padding: 'x'.repeat(33 * 1024) }))
+
+    expect((await captureError(() => getAgentStatus(API_KEY, { fetch: malformed }))).code).toBe(
+      'agent_status_invalid_response',
+    )
+    expect((await captureError(() => getAgentStatus(API_KEY, { fetch: oversized }))).code).toBe(
+      'agent_status_invalid_response',
+    )
+  })
+
+  test('reports status network failures and bounded timeouts', async () => {
+    const unavailable: typeof fetch = async () => {
+      throw new Error(`failed with ${API_KEY}`)
+    }
+    const pending: typeof fetch = async (_input, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+      })
+
+    expect((await captureError(() => getAgentStatus(API_KEY, { fetch: unavailable }))).code).toBe(
+      'agent_status_unavailable',
+    )
+    expect(
+      (await captureError(() => getAgentStatus(API_KEY, { fetch: pending, timeoutMs: 1 }))).code,
+    ).toBe('agent_status_timeout')
   })
 })
 

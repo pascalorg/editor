@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 import { parseArgs } from 'node:util'
-import { agentClaimHandoffUrl, startAgentClaim } from '../agent-account.js'
+import { agentClaimHandoffUrl, getAgentStatus, startAgentClaim } from '../agent-account.js'
 import { openBrowser } from '../browser.js'
 import { installGlobalPascalCommand, isNpxInvocation } from '../command-install.js'
 import { collectInfo, runDoctor } from '../diagnostics.js'
@@ -52,6 +52,7 @@ USAGE:
   pascal project open <id-or-name>
   pascal project resume [id-or-name]
   pascal agent claim [--no-open] [--json]
+  pascal agent status [--json]
   pascal mcp connect | status | config | setup <client>
   pascal plugin list [--json]
 
@@ -79,10 +80,14 @@ const AGENT_HELP = `Pascal agent — connect an autonomous agent to a person
 
 USAGE:
   pascal agent claim [--no-open] [--json]
+  pascal agent status [--json]
 
 Set PASCAL_API_KEY to the autonomous agent's hosted Pascal API key. The CLI
 uses it once to request a 15-minute claim code and never stores it. It opens
 the claim page unless --no-open or --json is set.
+
+Use "pascal agent status" to verify whether that credential is active and
+whether its autonomous agent has been claimed.
 
 Claiming records who is accountable for the agent and lifts claim-gated
 capabilities. It does not transfer project ownership or grant access to either
@@ -600,8 +605,31 @@ async function runMcp(args: string[]): Promise<void> {
 
 async function runAgent(args: string[], apiKey: string | undefined): Promise<void> {
   const [subcommand, ...rest] = args
+  if (subcommand === 'status') {
+    const json = booleanOption(rest, 'json')
+    const status = await getAgentStatus(apiKey ?? '')
+    output(
+      json,
+      status,
+      [
+        `Agent ID: ${JSON.stringify(status.agentId)}`,
+        `Mode: ${status.mode}`,
+        `Claimed: ${status.claimed ? 'yes' : 'no'}`,
+        `Organization scoped: ${status.organizationScoped ? 'yes' : 'no'}`,
+        ...(!status.claimed && status.mode === 'autonomous'
+          ? ['', 'Next: run "pascal agent claim" to link a person accountable for this agent.']
+          : []),
+      ].join('\n'),
+    )
+    return
+  }
   if (subcommand !== 'claim') {
-    throw new CliError('unknown_command', 'Use "pascal agent claim".', undefined, 2)
+    throw new CliError(
+      'unknown_command',
+      'Use "pascal agent claim" or "pascal agent status".',
+      undefined,
+      2,
+    )
   }
   const { values } = parseArgs({
     args: rest,
