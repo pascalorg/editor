@@ -73,6 +73,8 @@ export type GlbExportOptions = {
   purpose?: 'portable' | 'viewer'
   /** Called for actual lossy portable conversions discovered during preparation. */
   onWarning?: (warning: string) => void
+  /** Reject retained node kinds whose export geometry can only be baked asynchronously. */
+  requireSynchronousBake?: boolean
 }
 
 /** Resolve after the next couple of animation frames, giving React/R3F time to
@@ -394,15 +396,24 @@ function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbE
 function replaceBakeGeometrySync(preparation: SceneExportPreparation): void {
   for (const [id, original] of preparation.registryEntries) {
     const node = preparation.nodes[id]
-    const builder = preparation.builders.get(id)?.sync
-    if (!node || !builder) continue
+    const builders = preparation.builders.get(id)
+    if (!node || !builders) continue
     const cloned = preparation.cloneByOriginal.get(original)
     if (!cloned || !isDescendantOf(cloned, preparation.scene)) continue
+    if (preparation.options.requireSynchronousBake && builders.async && !builders.sync) {
+      throw new Error(
+        `Node kind "${node.type}" can only bake geometry asynchronously. Choose GLB/USDZ or exclude it from the export.`,
+      )
+    }
+    if (!builders.sync) continue
     replaceBakedNode(
       preparation,
       id,
       original,
-      builder(node, buildBakeGeometryContext(node, preparation.nodes, preparation.geometryContext)),
+      builders.sync(
+        node,
+        buildBakeGeometryContext(node, preparation.nodes, preparation.geometryContext),
+      ),
       'bakeGeometry',
     )
   }

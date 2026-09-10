@@ -833,7 +833,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!isFirstPersonMode && <SiteEdgeLabels />}
       <InteractiveSystem />
       {presentationsReady ? <ViewerPresentations /> : null}
-      {viewerSceneSlot}
+      {!noEditing && viewerSceneSlot}
     </>
   )
 })
@@ -1506,7 +1506,6 @@ function EditorContent({
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <InteractiveSystem />
       {presentationsReady ? <ViewerPresentations /> : null}
-      {viewerSceneSlot}
     </Viewer>
   )
 

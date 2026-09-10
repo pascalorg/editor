@@ -98,7 +98,10 @@ export function ExportManager() {
         const nodes = useScene.getState().nodes
         let prepared: ReturnType<typeof prepareSceneForExport>
         try {
-          prepared = prepareSceneForExport(sceneGroup, nodes, options)
+          prepared = prepareSceneForExport(sceneGroup, nodes, {
+            ...options,
+            requireSynchronousBake: format === 'stl' || format === 'obj',
+          })
         } finally {
           restoreLevels()
           emitter.emit('thumbnail:after-capture', undefined)

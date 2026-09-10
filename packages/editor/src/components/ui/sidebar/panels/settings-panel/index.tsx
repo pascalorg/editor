@@ -22,7 +22,10 @@ import {
   useState,
   useSyncExternalStore,
 } from 'react'
-import { exportFloorplanPdf } from '../../../../../lib/floorplan/floorplan-export'
+import {
+  exportFloorplanPdf,
+  type FloorplanExportScope,
+} from '../../../../../lib/floorplan/floorplan-export'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
   Dialog,
@@ -74,6 +77,7 @@ type ModelExportFormat = (typeof MODEL_EXPORT_FORMATS)[number]['format']
 type ExportableNodeType = {
   type: string
   label: string
+  supportsGeometryOnly: boolean
 }
 
 const isSceneNode = (value: unknown): value is SceneNode => {
@@ -230,6 +234,10 @@ export function SettingsPanel({
   const [activeModelExport, setActiveModelExport] = useState<ModelExportFormat | null>(null)
   const [modelExportError, setModelExportError] = useState<string | null>(null)
   const [modelExportWarning, setModelExportWarning] = useState<string | null>(null)
+  const [activeFloorplanExport, setActiveFloorplanExport] = useState<FloorplanExportScope | null>(
+    null,
+  )
+  const [floorplanExportError, setFloorplanExportError] = useState<string | null>(null)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
   const [projectIdCopyState, setProjectIdCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
   const exportableNodeTypes = useMemo(() => {
@@ -252,6 +260,7 @@ export function SettingsPanel({
       options.push({
         type,
         label: definition.presentation?.label ?? type,
+        supportsGeometryOnly: !definition.bakeGeometryAsync || Boolean(definition.bakeGeometry),
       })
     }
 
@@ -469,6 +478,22 @@ export function SettingsPanel({
     }
   }
 
+  const handleFloorplanExport = async (scope: FloorplanExportScope) => {
+    if (activeFloorplanExport) return
+
+    setActiveFloorplanExport(scope)
+    setFloorplanExportError(null)
+    try {
+      await exportFloorplanPdf(scope)
+    } catch (error) {
+      setFloorplanExportError(
+        `Couldn’t export the floor plan. ${error instanceof Error ? error.message : 'Try again.'}`,
+      )
+    } finally {
+      setActiveFloorplanExport(null)
+    }
+  }
+
   return (
     <div className="flex flex-col gap-6 p-3">
       {projectId && (
@@ -595,12 +620,15 @@ export function SettingsPanel({
             </p>
             {exportableNodeTypes.length > 0 ? (
               <div className="space-y-2 pt-1">
-                {exportableNodeTypes.map(({ type, label }, index) => {
+                {exportableNodeTypes.map(({ type, label, supportsGeometryOnly }, index) => {
                   const switchId = `${includeNodeTypeIdPrefix}-${index}`
                   return (
                     <div className="flex items-center justify-between gap-4" key={type}>
                       <label className="min-w-0 font-medium text-sm" htmlFor={switchId}>
                         {label}
+                        {!supportsGeometryOnly && (
+                          <span className="text-muted-foreground text-xs"> (GLB/USDZ only)</span>
+                        )}
                       </label>
                       <Switch
                         aria-label={`Include ${label} in model files`}
@@ -698,21 +726,35 @@ export function SettingsPanel({
             <span>{floorplanMode === 'default' ? 'Default mode' : 'Expert mode'}</span>
           </div>
           <Button
+            aria-busy={activeFloorplanExport === 'full'}
             className="w-full justify-start gap-2"
-            onClick={() => exportFloorplanPdf('full')}
+            disabled={activeFloorplanExport !== null}
+            onClick={() => void handleFloorplanExport('full')}
             variant="outline"
           >
             <MapIcon className="size-4" />
             Full floor plan
           </Button>
           <Button
+            aria-busy={activeFloorplanExport === 'structure'}
             className="w-full justify-start gap-2"
-            onClick={() => exportFloorplanPdf('structure')}
+            disabled={activeFloorplanExport !== null}
+            onClick={() => void handleFloorplanExport('structure')}
             variant="outline"
           >
             <MapIcon className="size-4" />
             Structure only
           </Button>
+          {activeFloorplanExport ? (
+            <p className="text-muted-foreground text-xs" role="status">
+              Preparing floor-plan PDF…
+            </p>
+          ) : null}
+          {floorplanExportError ? (
+            <p className="break-words text-destructive text-xs" role="alert">
+              {floorplanExportError}
+            </p>
+          ) : null}
         </div>
       </div>
 

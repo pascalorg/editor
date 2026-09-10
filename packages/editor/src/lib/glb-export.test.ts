@@ -3,9 +3,11 @@ import {
   type AnyNode,
   type AnyNodeDefinition,
   DoorNode,
+  loadPlugin,
   nodeRegistry,
   registerNode,
   sceneRegistry,
+  useScene,
 } from '@pascal-app/core'
 import {
   buildDoorPreviewMesh,
@@ -863,6 +865,213 @@ describe('prepareSceneForExport', () => {
       // Rest quaternion must be identity — no residual π on any axis.
       expect(panel!.quaternion.angleTo(new THREE.Quaternion())).toBeLessThan(1e-4)
     }
+  })
+
+  describe('requireSynchronousBake', () => {
+    test('rejects a retained async-only kind instead of returning its proxy', () => {
+      const restoreRegistry = nodeRegistry._snapshot()
+      try {
+        const kind = 'test:async-only-synchronous-export'
+        const nodeId = 'async_only_synchronous_export'
+        registerNode({
+          kind,
+          schemaVersion: 1,
+          schema: DoorNode,
+          category: 'furnish',
+          defaults: () => ({}) as never,
+          capabilities: {},
+          bake: 'replace',
+          bakeGeometryAsync: async () =>
+            new THREE.Mesh(new THREE.BoxGeometry(4, 5, 6), new THREE.MeshStandardMaterial()),
+        } as AnyNodeDefinition)
+
+        const proxyGeometry = new THREE.BoxGeometry(0.25, 0.5, 0.75)
+        const proxyMaterial = new THREE.MeshStandardMaterial()
+        let sourceGeometryDisposals = 0
+        let sourceMaterialDisposals = 0
+        proxyGeometry.addEventListener('dispose', () => {
+          sourceGeometryDisposals += 1
+        })
+        proxyMaterial.addEventListener('dispose', () => {
+          sourceMaterialDisposals += 1
+        })
+        const proxy = new THREE.Mesh(proxyGeometry, proxyMaterial)
+        proxy.name = 'async-only-proxy'
+        const source = new THREE.Group()
+        source.add(proxy)
+        const root = new THREE.Group()
+        root.add(source)
+        sceneRegistry.nodes.set(nodeId, source)
+        const nodes = {
+          [nodeId]: { id: nodeId, type: kind, visible: true },
+        } as unknown as Record<string, AnyNode>
+
+        const compatible = prepareSceneForExport(root, nodes)
+        expect(compatible.scene.getObjectByName('async-only-proxy')).toBeDefined()
+        compatible.dispose()
+
+        let rejection: unknown
+        try {
+          prepareSceneForExport(root, nodes, { requireSynchronousBake: true })
+        } catch (error) {
+          rejection = error
+        }
+
+        expect(rejection).toBeInstanceOf(Error)
+        const message = rejection instanceof Error ? rejection.message : ''
+        expect(message).toContain(kind)
+        expect(message).toMatch(/\bGLB\b/)
+        expect(message).toMatch(/\bUSDZ\b/)
+        expect(message).toMatch(/exclud/i)
+        expect(sourceGeometryDisposals).toBe(0)
+        expect(sourceMaterialDisposals).toBe(0)
+        expect(root.children).toEqual([source])
+        expect(source.children).toEqual([proxy])
+      } finally {
+        restoreRegistry()
+      }
+    })
+
+    test('allows a valid model when every async-only kind is pruned', async () => {
+      const restoreRegistry = nodeRegistry._snapshot()
+      const { installedPlugins, hasExplicitPluginInstallState } = useScene.getState()
+      try {
+        const excludedKind = 'test:excluded-synchronous-export'
+        const hiddenKind = 'test:hidden-synchronous-export'
+        const descendantKind = 'test:descendant-synchronous-export'
+        const disabledKind = 'test:disabled-synchronous-export'
+        const disabledPluginId = 'test:disabled-synchronous-export-plugin'
+        const asyncOnlyDefinition = (kind: string): AnyNodeDefinition =>
+          ({
+            kind,
+            schemaVersion: 1,
+            schema: DoorNode,
+            category: 'furnish',
+            defaults: () => ({}) as never,
+            capabilities: {},
+            bake: 'replace',
+            bakeGeometryAsync: async () => {
+              throw new Error(`Pruned async-only builder ran for ${kind}`)
+            },
+          }) as AnyNodeDefinition
+
+        for (const kind of [excludedKind, hiddenKind, descendantKind]) {
+          registerNode(asyncOnlyDefinition(kind))
+        }
+        await loadPlugin({
+          id: disabledPluginId,
+          apiVersion: 1,
+          nodes: [asyncOnlyDefinition(disabledKind)],
+        })
+        useScene.getState().setInstalledPlugins([], { explicit: true })
+
+        const valid = new THREE.Mesh(
+          new THREE.BoxGeometry(2, 3, 4),
+          new THREE.MeshStandardMaterial(),
+        )
+        valid.name = 'valid-model'
+        const excluded = new THREE.Group()
+        const hidden = new THREE.Group()
+        const disabled = new THREE.Group()
+        const excludedParent = new THREE.Group()
+        const descendant = new THREE.Group()
+        excludedParent.add(descendant)
+        const root = new THREE.Group()
+        root.add(valid, excluded, hidden, disabled, excludedParent)
+
+        const excludedId = 'excluded_async_only'
+        const hiddenId = 'hidden_async_only'
+        const disabledId = 'disabled_async_only'
+        const excludedParentId = 'excluded_async_only_parent'
+        const descendantId = 'descendant_async_only'
+        sceneRegistry.nodes.set(excludedId, excluded)
+        sceneRegistry.nodes.set(hiddenId, hidden)
+        sceneRegistry.nodes.set(disabledId, disabled)
+        sceneRegistry.nodes.set(excludedParentId, excludedParent)
+        sceneRegistry.nodes.set(descendantId, descendant)
+        const nodes = {
+          [excludedId]: { id: excludedId, type: excludedKind, visible: true },
+          [hiddenId]: { id: hiddenId, type: hiddenKind, visible: false },
+          [disabledId]: { id: disabledId, type: disabledKind, visible: true },
+          [excludedParentId]: {
+            id: excludedParentId,
+            type: 'test:excluded-synchronous-export-parent',
+            visible: true,
+            children: [descendantId],
+          },
+          [descendantId]: {
+            id: descendantId,
+            type: descendantKind,
+            parentId: excludedParentId,
+            visible: true,
+          },
+        } as unknown as Record<string, AnyNode>
+
+        const prepared = prepareSceneForExport(root, nodes, {
+          excludedNodeTypes: [excludedKind, 'test:excluded-synchronous-export-parent'],
+          requireSynchronousBake: true,
+        })
+
+        const validModel = prepared.scene.getObjectByName('valid-model')
+        expect(validModel).toBeDefined()
+        const size = new THREE.Box3().setFromObject(validModel!).getSize(new THREE.Vector3())
+        expect(size.toArray()).toEqual([2, 3, 4])
+        for (const id of [excludedId, hiddenId, disabledId, excludedParentId, descendantId]) {
+          expect(prepared.scene.getObjectByName(id)).toBeUndefined()
+        }
+        prepared.dispose()
+      } finally {
+        useScene
+          .getState()
+          .setInstalledPlugins(installedPlugins, { explicit: hasExplicitPluginInstallState })
+        restoreRegistry()
+      }
+    })
+
+    test('uses synchronous geometry when a retained kind provides both hooks', () => {
+      const restoreRegistry = nodeRegistry._snapshot()
+      try {
+        const kind = 'test:dual-hook-synchronous-export'
+        const nodeId = 'dual_hook_synchronous_export'
+        registerNode({
+          kind,
+          schemaVersion: 1,
+          schema: DoorNode,
+          category: 'furnish',
+          defaults: () => ({}) as never,
+          capabilities: {},
+          bake: 'replace',
+          bakeGeometry: () =>
+            new THREE.Mesh(new THREE.BoxGeometry(2, 3, 4), new THREE.MeshStandardMaterial()),
+          bakeGeometryAsync: async () =>
+            new THREE.Mesh(new THREE.BoxGeometry(8, 8, 8), new THREE.MeshStandardMaterial()),
+        } as AnyNodeDefinition)
+
+        const source = new THREE.Group()
+        source.add(
+          new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.5, 0.75), new THREE.MeshStandardMaterial()),
+        )
+        const root = new THREE.Group()
+        root.add(source)
+        sceneRegistry.nodes.set(nodeId, source)
+        const nodes = {
+          [nodeId]: { id: nodeId, type: kind, visible: true },
+        } as unknown as Record<string, AnyNode>
+
+        const prepared = prepareSceneForExport(root, nodes, {
+          requireSynchronousBake: true,
+        })
+
+        const exported = prepared.scene.getObjectByName(nodeId)
+        expect(exported).toBeDefined()
+        const size = new THREE.Box3().setFromObject(exported!).getSize(new THREE.Vector3())
+        expect(size.toArray()).toEqual([2, 3, 4])
+        expect(root.children).toEqual([source])
+        prepared.dispose()
+      } finally {
+        restoreRegistry()
+      }
+    })
   })
 
   test('awaits async bake geometry with full semantic context after selection', async () => {
