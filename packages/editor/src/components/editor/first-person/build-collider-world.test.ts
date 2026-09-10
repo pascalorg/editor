@@ -15,9 +15,11 @@ import {
   registerNode,
   ShelfNode,
   SiteNode,
+  SlabNode,
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
+import { hideFromScene, STAND_CLEARANCE, showInScene } from '@pascal-app/viewer'
 import { BoxGeometry, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 import { buildFirstPersonColliderWorldFromRegistry } from './build-collider-world'
 
@@ -89,6 +91,34 @@ describe('buildFirstPersonColliderWorldFromRegistry', () => {
     expect(world?.bounds?.min.x).toBeCloseTo(-0.5)
     expect(world?.bounds?.max.x).toBeCloseTo(4)
     world?.dispose()
+  })
+
+  test('standing clearance and floor hits survive a slab source joining and leaving a batch', () => {
+    registerColliderDefinition('slab', SlabNode, 'structure', 'floor')
+    const slab = SlabNode.parse({ id: 'slab_clearance_batch', polygon: [] })
+    setSceneNodes([slab])
+    mountNode(slab, [4, 0.2, 4], [0, 2, 0])
+    const source = sceneRegistry.nodes.get(slab.id)!.children[0] as Mesh
+    const raycaster = new Raycaster()
+    for (const batched of [false, true, false]) {
+      if (batched) hideFromScene(source, 'batched')
+      else showInScene(source, 'batched')
+      const world = buildFirstPersonColliderWorldFromRegistry()!
+      expect(world).not.toBeNull()
+      try {
+        raycaster.set(new Vector3(0, 3, 0), new Vector3(0, -1, 0))
+        raycaster.far = STAND_CLEARANCE
+        expect(raycaster.intersectObject(world.mesh, false)[0]!.point.y).toBeCloseTo(2.1)
+        raycaster.set(new Vector3(0, 1, 0), new Vector3(0, 1, 0))
+        expect(raycaster.intersectObjects([world.mesh], false)[0]!.point.y).toBeCloseTo(1.9)
+        raycaster.set(new Vector3(0, 2.5, 0), new Vector3(0, 1, 0))
+        expect(raycaster.intersectObjects([world.mesh], false)).toHaveLength(0)
+      } finally {
+        world.dispose()
+      }
+    }
+    source.geometry.dispose()
+    ;(source.material as MeshBasicMaterial).dispose()
   })
 
   test('excludes ceiling surfaces so the walkthrough player passes through them', () => {

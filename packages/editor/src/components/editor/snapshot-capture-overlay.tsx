@@ -159,6 +159,7 @@ const CAMERA_NAV_HINTS: Record<CaptureCameraNav, readonly CameraNavHint[] | null
     { keys: ['Space', 'E'], action: 'up' },
     { keys: ['Q'], action: 'down' },
     { keys: ['Shift'], action: 'boost' },
+    { keys: ['Alt'], action: 'slow' },
     { keys: ['Wheel'], action: 'lens' },
     { keys: ['P', 'Esc'], action: 'free cursor' },
     { keys: ['Click', 'Enter'], action: 'shoot' },

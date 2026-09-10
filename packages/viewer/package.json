@@ -28,7 +28,7 @@
     "@react-three/fiber": "^9",
     "react": "^18 || ^19",
     "react-dom": "^18 || ^19",
-    "three": "^0.185"
+    "three": "^0.186"
   },
   "dependencies": {
     "three-bvh-csg": "^0.0.18",

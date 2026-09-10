@@ -1,3 +1,4 @@
+import { subtractPolygonsFromPolygon } from '../../lib/polygon-union'
 import { getRenderableSlabPolygon } from '../../lib/slab-polygon'
 import { isLevelAtSiteDatum, isLevelBaseConsumer } from '../../lib/terrain-support'
 import { nodeRegistry } from '../../registry'
@@ -111,6 +112,38 @@ export function initSpatialGridSync(): () => void {
 
   // Subscribe to all changes
   const unsubscribeScene = store.subscribe((state, prevState) => {
+    if (state.nodes === prevState.nodes) return
+    const changedSlabContextLevels = new Set<string>()
+    const checkSlabContext = (id: string) => {
+      const previous = prevState.nodes[id as AnyNodeId]
+      const next = state.nodes[id as AnyNodeId]
+      if (previous === next) return
+      const wallChanged =
+        (previous?.type === 'wall' || next?.type === 'wall') &&
+        (previous?.type !== 'wall' ||
+          next?.type !== 'wall' ||
+          previous.parentId !== next.parentId ||
+          previous.start !== next.start ||
+          previous.end !== next.end ||
+          previous.thickness !== next.thickness ||
+          previous.curveOffset !== next.curveOffset)
+      const slabChanged =
+        (previous?.type === 'slab' || next?.type === 'slab') &&
+        (previous?.type !== 'slab' ||
+          next?.type !== 'slab' ||
+          previous.parentId !== next.parentId ||
+          previous.polygon !== next.polygon ||
+          previous.elevation !== next.elevation)
+      if (!(wallChanged || slabChanged)) return
+      if (previous) changedSlabContextLevels.add(resolveLevelId(previous, prevState.nodes))
+      if (next) changedSlabContextLevels.add(resolveLevelId(next, state.nodes))
+    }
+
+    for (const id in prevState.nodes) checkSlabContext(id)
+    for (const id in state.nodes) {
+      if (!prevState.nodes[id as AnyNodeId]) checkSlabContext(id)
+    }
+
     // Detect added nodes
     for (const [id, node] of Object.entries(state.nodes)) {
       if (!prevState.nodes[id as AnyNode['id']]) {
@@ -140,7 +173,7 @@ export function initSpatialGridSync(): () => void {
 
         // When a slab is removed, mark items/walls that were on it dirty (using current state)
         if (node.type === 'slab') {
-          markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
+          markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty, prevState.nodes)
           markCoveringDependentsBelow(levelId, state.nodes, markDirty)
         }
 
@@ -183,7 +216,13 @@ export function initSpatialGridSync(): () => void {
           const levelId = resolveLevelId(node, state.nodes)
           spatialGridManager.handleNodeUpdated(node, levelId)
         }
-        markSlabChangeDependents(prev as SlabNode, node as SlabNode, state.nodes, markDirty)
+        markSlabChangeDependents(
+          prev as SlabNode,
+          node as SlabNode,
+          state.nodes,
+          markDirty,
+          prevState.nodes,
+        )
       } else if (node.type === 'level' && prev.type === 'level') {
         if (node.height !== prev.height) {
           markLevelHeightDependents(node as LevelNode, state.nodes, markDirty)
@@ -207,6 +246,47 @@ export function initSpatialGridSync(): () => void {
           // must reach the manager to refresh its wall map and drop the
           // level's rendered-polygon cache.
           spatialGridManager.handleNodeUpdated(node, resolveLevelId(node, state.nodes))
+        }
+      }
+    }
+
+    // Unchanged slabs can lose an adopted wall band or a sibling seam. Their
+    // stored polygons cannot identify objects standing on the former boundary.
+    if (changedSlabContextLevels.size === 0) return
+    const beforeContext = slabBoundaryContext(prevState.nodes, changedSlabContextLevels)
+    const afterContext = slabBoundaryContext(state.nodes, changedSlabContextLevels)
+    for (const context of afterContext.values()) {
+      for (const slab of context.slabs) {
+        const previous = prevState.nodes[slab.id]
+        if (previous?.type !== 'slab') continue
+        if (
+          slab.parentId !== previous.parentId ||
+          slab.polygon !== previous.polygon ||
+          slab.elevation !== previous.elevation ||
+          slab.holes !== previous.holes
+        )
+          continue
+        const previousContext = beforeContext.get(resolveLevelId(previous, prevState.nodes))!
+        const beforePolygon = cachedSlabPolygon(previous, previousContext)
+        const afterPolygon = cachedSlabPolygon(slab, context)
+        if (
+          beforePolygon.length === afterPolygon.length &&
+          beforePolygon.every((point, i) => arraysEqual(point, afterPolygon[i]!))
+        )
+          continue
+        // Support only changed in the gained/lost bands, not across the slab interior.
+        const changedBands = [
+          ...subtractPolygonsFromPolygon(beforePolygon, [afterPolygon]),
+          ...subtractPolygonsFromPolygon(afterPolygon, [beforePolygon]),
+        ]
+        for (const polygon of changedBands) {
+          markNodesOverlappingPolygon(
+            resolveLevelId(slab, state.nodes),
+            polygon,
+            state.nodes,
+            markDirty,
+            context.consumers,
+          )
         }
       }
     }
@@ -282,14 +362,16 @@ export function markSlabChangeDependents(
   next: SlabNode,
   nodes: Record<string, AnyNode>,
   markDirty: (id: AnyNodeId) => void,
+  previousNodes = nodes,
 ) {
   const supportChanged =
+    next.parentId !== previous.parentId ||
     next.polygon !== previous.polygon ||
     next.elevation !== previous.elevation ||
     next.holes !== previous.holes
 
   if (supportChanged) {
-    markNodesOverlappingSlab(previous, nodes, markDirty)
+    markNodesOverlappingSlab(previous, nodes, markDirty, previousNodes)
     markNodesOverlappingSlab(next, nodes, markDirty)
   }
   if (next.elevation !== previous.elevation) {
@@ -300,7 +382,14 @@ export function markSlabChangeDependents(
     next.thickness !== previous.thickness ||
     next.recessed !== previous.recessed
   ) {
-    markCoveringDependentsBelow(resolveLevelId(next, nodes), nodes, markDirty)
+    const nextLevelId = resolveLevelId(next, nodes)
+    markCoveringDependentsBelow(nextLevelId, nodes, markDirty)
+    if (next.parentId !== previous.parentId) {
+      const previousLevelId = resolveLevelId(previous, previousNodes)
+      if (previousLevelId !== nextLevelId) {
+        markCoveringDependentsBelow(previousLevelId, nodes, markDirty)
+      }
+    }
   }
 }
 
@@ -396,22 +485,8 @@ export function markCoveringDependentsBelow(
   }
 }
 
-/**
- * Mark all floor items and walls that may be affected by a slab change as dirty.
- */
-function markNodesOverlappingSlab(
-  slab: SlabNode,
-  nodes: Record<string, AnyNode>,
-  markDirty: (id: AnyNodeId) => void,
-) {
-  if (slab.polygon.length < 3) return
+function renderableSlabPolygon(slab: SlabNode, nodes: Record<string, AnyNode>) {
   const slabLevelId = resolveLevelId(slab, nodes)
-
-  // Walls AND floor-placed nodes follow the slab's RENDERED footprint
-  // (band-adopted edges reach the wall's outer face), so the dirty gate
-  // must test the same polygon the support queries re-evaluate — a stored
-  // polygon that stops short of the wall body would otherwise never
-  // re-elevate nodes sitting over the adopted band.
   const levelWalls: WallNode[] = []
   const siblingSlabs: SlabNode[] = []
   for (const node of Object.values(nodes)) {
@@ -425,9 +500,33 @@ function markNodesOverlappingSlab(
       siblingSlabs.push(node as SlabNode)
     }
   }
-  const renderedPolygon = getRenderableSlabPolygon(slab, { walls: levelWalls, siblingSlabs })
+  return getRenderableSlabPolygon(slab, { walls: levelWalls, siblingSlabs })
+}
 
-  for (const node of Object.values(nodes)) {
+/**
+ * Mark all floor items and walls that may be affected by a slab change as dirty.
+ */
+function markNodesOverlappingSlab(
+  slab: SlabNode,
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+  contextNodes = nodes,
+) {
+  if (slab.polygon.length < 3) return
+  const slabLevelId = resolveLevelId(slab, contextNodes)
+  const renderedPolygon = renderableSlabPolygon(slab, contextNodes)
+
+  markNodesOverlappingPolygon(slabLevelId, renderedPolygon, nodes, markDirty)
+}
+
+function markNodesOverlappingPolygon(
+  slabLevelId: string,
+  renderedPolygon: [number, number][],
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+  candidates: Iterable<AnyNode> = Object.values(nodes),
+) {
+  for (const node of candidates) {
     if (node.type === 'wall') {
       const wall = node as WallNode
       if (resolveLevelId(node, nodes) !== slabLevelId) continue
@@ -476,4 +575,43 @@ function markNodesOverlappingSlab(
       }
     }
   }
+}
+
+type SlabBoundaryContext = {
+  walls: WallNode[]
+  slabs: SlabNode[]
+  consumers: AnyNode[]
+  polygons: Map<string, [number, number][]>
+}
+
+function slabBoundaryContext(nodes: Record<string, AnyNode>, levels: Set<string>) {
+  const contexts = new Map<string, SlabBoundaryContext>()
+  for (const id in nodes) {
+    const node = nodes[id]!
+    const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
+    if (node.type !== 'wall' && node.type !== 'slab' && !floorPlaced) continue
+    const levelId = resolveLevelId(node, nodes)
+    if (!levels.has(levelId)) continue
+    let context = contexts.get(levelId)
+    if (!context) {
+      context = { walls: [], slabs: [], consumers: [], polygons: new Map() }
+      contexts.set(levelId, context)
+    }
+    if (node.type === 'wall') context.walls.push(node)
+    if (node.type === 'slab') context.slabs.push(node)
+    if (node.type === 'wall' || floorPlaced) context.consumers.push(node)
+  }
+  return contexts
+}
+
+function cachedSlabPolygon(slab: SlabNode, context: SlabBoundaryContext) {
+  let polygon = context.polygons.get(slab.id)
+  if (!polygon) {
+    polygon = getRenderableSlabPolygon(slab, {
+      walls: context.walls,
+      siblingSlabs: context.slabs.filter((sibling) => sibling.id !== slab.id),
+    })
+    context.polygons.set(slab.id, polygon)
+  }
+  return polygon
 }

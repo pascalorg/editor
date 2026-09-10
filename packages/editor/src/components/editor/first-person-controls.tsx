@@ -40,6 +40,7 @@ import {
   STAND_CAPSULE,
   STAND_CLEARANCE,
   STAND_FLOAT_HEIGHT,
+  setSurfaceRaycastLayers,
   useViewer,
   WALKTHROUGH_FOV,
 } from '@pascal-app/viewer'
@@ -93,6 +94,7 @@ const LOOK_SENSITIVITY = 0.002
 // constant is an exponential approach rate, not a linear acceleration.
 const DRONE_SPEED = 7
 const DRONE_RUN_MULTIPLIER = 3
+const DRONE_SLOW_MULTIPLIER = 0.2
 const DRONE_SMOOTHING = 12
 const CONTROLLER_CENTER_FROM_EYE = 0.85
 const DOOR_INTERACTION_DISTANCE = 2.5
@@ -156,6 +158,7 @@ const standClearanceRaycaster = new Raycaster()
 const standClearanceUp = new Vector3(0, 1, 0)
 const centerScreenPoint = new Vector2(0, 0)
 const doorInteractionRaycaster = new Raycaster()
+setSurfaceRaycastLayers(doorInteractionRaycaster.layers)
 const doorLeafBox = new Box3()
 const doorLeafInverseMatrix = new Matrix4()
 const doorLeafLocalHit = new Vector3()
@@ -178,6 +181,7 @@ const elevatorColliderMaterial = new MeshBasicMaterial({ visible: false })
 const spawnWorldPosition = new Vector3()
 const spawnWorldEuler = new Euler(0, 0, 0, 'YXZ')
 const windowInteractionRaycaster = new Raycaster()
+setSurfaceRaycastLayers(windowInteractionRaycaster.layers)
 const hudBuildingLocalEyePosition = new Vector3()
 const hudWorldEyePosition = new Vector3()
 const hudLevelBounds = new Box3()
@@ -672,6 +676,7 @@ export const FirstPersonControls = () => {
   const hudLabelFrameRef = useRef(HUD_LABEL_SAMPLE_FRAMES - 1)
   const crouchKeyRef = useRef(false)
   const droneAscendKeyRef = useRef(false)
+  const droneSlowKeyRef = useRef(false)
   const droneDescendKeyRef = useRef(false)
   const droneVelocityRef = useRef(new Vector3())
   const suspendRef = useRef(false)
@@ -1161,10 +1166,15 @@ export const FirstPersonControls = () => {
       // Shutter hold: the shot is rendering — a mouse twitch must not pan it.
       if (useEditor.getState().captureShutterHold) return
 
-      yawRef.current -= e.movementX * LOOK_SENSITIVITY
+      const lookSensitivity =
+        LOOK_SENSITIVITY *
+        (useEditor.getState().firstPersonMovementMode === 'drone' && droneSlowKeyRef.current
+          ? DRONE_SLOW_MULTIPLIER
+          : 1)
+      yawRef.current -= e.movementX * lookSensitivity
       pitchRef.current = Math.max(
         -(Math.PI / 2 - 0.05),
-        Math.min(Math.PI / 2 - 0.05, pitchRef.current - e.movementY * LOOK_SENSITIVITY),
+        Math.min(Math.PI / 2 - 0.05, pitchRef.current - e.movementY * lookSensitivity),
       )
     }
 
@@ -1277,6 +1287,10 @@ export const FirstPersonControls = () => {
         event.preventDefault()
         event.stopPropagation()
         if (!suspendRef.current) droneAscendKeyRef.current = true
+      } else if ((event.code === 'AltLeft' || event.code === 'AltRight') && isDroneMode) {
+        event.preventDefault()
+        event.stopPropagation()
+        if (!suspendRef.current) droneSlowKeyRef.current = true
       } else if (event.code === 'Escape') {
         event.preventDefault()
         event.stopPropagation()
@@ -1333,6 +1347,9 @@ export const FirstPersonControls = () => {
       if (event.code === 'KeyE' && !suspendRef.current) {
         droneAscendKeyRef.current = false
       }
+      if ((event.code === 'AltLeft' || event.code === 'AltRight') && !suspendRef.current) {
+        droneSlowKeyRef.current = false
+      }
       applyMovementKey(event, false)
     }
 
@@ -1341,6 +1358,7 @@ export const FirstPersonControls = () => {
         crouchKeyRef.current = false
         droneAscendKeyRef.current = false
         droneDescendKeyRef.current = false
+        droneSlowKeyRef.current = false
       }
     }
 
@@ -1614,7 +1632,14 @@ export const FirstPersonControls = () => {
     if (droneDesiredVelocity.lengthSq() > 0) {
       droneDesiredVelocity
         .normalize()
-        .multiplyScalar(DRONE_SPEED * (movement.run ? DRONE_RUN_MULTIPLIER : 1))
+        .multiplyScalar(
+          DRONE_SPEED *
+            (droneSlowKeyRef.current
+              ? DRONE_SLOW_MULTIPLIER
+              : movement.run
+                ? DRONE_RUN_MULTIPLIER
+                : 1),
+        )
     }
 
     droneVelocityRef.current.lerp(droneDesiredVelocity, 1 - Math.exp(-step * DRONE_SMOOTHING))

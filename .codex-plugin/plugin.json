@@ -1,9 +1,10 @@
 {
   "name": "pascal-agent-skills",
-  "version": "0.1.2",
-  "description": "Create, inspect, validate, and assess furniture layouts in Pascal through MCP.",
+  "version": "0.1.8",
+  "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
   "author": {
     "name": "Pascal",
+    "email": "support@pascal.app",
     "url": "https://pascal.app"
   },
   "homepage": "https://editor.pascal.app/docs/developers/mcp",
@@ -13,17 +14,25 @@
   "skills": "./skills/",
   "interface": {
     "displayName": "Pascal agent skills",
-    "shortDescription": "Build and inspect Pascal scenes and assess furniture footprints.",
-    "longDescription": "Use Pascal's MCP tools to work with editable building scenes, validate and save results, and produce bounded furniture footprint reports with explicit evidence and limitations.",
+    "shortDescription": "Build 3D scenes and check fit",
+    "longDescription": "Use Pascal's MCP tools to work with editable building scenes, validate and save results, and produce bounded furniture footprint reports with explicit evidence, limitations, and blocker-aware next actions.",
     "developerName": "Pascal",
     "category": "Developer Tools",
-    "capabilities": ["Interactive", "Read", "Write"],
-    "websiteURL": "https://pascal.app",
+    "capabilities": [
+      "Build and edit 3D scenes",
+      "Validate spatial layouts",
+      "Assess furniture footprints"
+    ],
+    "websiteURL": "https://editor.pascal.app/docs/developers/mcp",
+    "supportURL": "https://github.com/pascalorg/editor/issues",
+    "privacyPolicyURL": "https://editor.pascal.app/privacy",
+    "termsOfServiceURL": "https://editor.pascal.app/terms",
     "defaultPrompt": [
       "Use Pascal to inspect this building project, make the requested bounded edit, validate it, save it, and return the editor URL.",
-      "Check whether this furniture footprint fits in the measured Pascal room, including rotations, collisions, door access, and unsupported checks."
+      "Check whether this furniture footprint fits in a measured Pascal room, including rotations, collisions, and door access."
     ],
     "brandColor": "#171717",
-    "screenshots": []
+    "composerIcon": "./assets/pascal-mark.svg",
+    "logo": "./assets/pascal-mark.svg"
   }
 }

@@ -7,7 +7,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
-import { timeSpan, useViewer } from '@pascal-app/viewer'
+import { setSurfaceRaycastLayers, timeSpan, useViewer } from '@pascal-app/viewer'
 import { useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import { Matrix3, type Object3D, Plane, Raycaster, Vector2, Vector3 } from 'three'
@@ -59,6 +59,7 @@ export function useGridEvents(gridY: number) {
 
   useEffect(() => {
     const canvas = gl.domElement
+    setSurfaceRaycastLayers(raycaster.current.layers)
 
     const getSurfaceIntersection = (): GridIntersection | null => {
       let closest: GridIntersection | null = null

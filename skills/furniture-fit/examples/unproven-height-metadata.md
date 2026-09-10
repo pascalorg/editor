@@ -7,6 +7,7 @@
 - Scene metadata: `level.height` and `zone.ceilingHeight` are both 2.70 m
 - Modeled vertical evidence: no ceiling, soffit, sill, railing, or overhead obstacle nodes
 - Provenance for the 2.70 m values: unknown
+- Context: project `project_example`, revision `3`, graph hash `sha256:example-unproven-height`, level `level_ground`, zone `zone_bedroom`, candidate `wardrobe_candidate`
 
 ## Report excerpt
 
@@ -22,3 +23,19 @@ Height remains `insufficient evidence`.
 | Delivery route | not checked | Route, opening, packaging, and turning measurements were not supplied. |
 
 The 3.10 m wardrobe may conflict with the nominal 2.70 m values, so measure the clear floor-to-obstacle height at the intended position. Do not report height as passed or failed until that user-supplied measurement, or modeled geometry with recorded measurement provenance covering the exact overhead path, is available.
+
+```yaml
+nextAction:
+  kind: request_measurement
+  task: Measure the clear floor-to-obstacle height over the wardrobe's exact footprint.
+  requiredInput: One measured clear height with its provenance and spatial coverage.
+  context:
+    projectId: project_example
+    revision: 3
+    graphHash: sha256:example-unproven-height
+    levelId: level_ground
+    zoneId: zone_bedroom
+    itemId: wardrobe_candidate
+  authority: Read-only; no account or workspace changes, publication, save, or project mutation authorized.
+  cost: No rendering, generation, paid operation, or additional spending authorized.
+```

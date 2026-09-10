@@ -5,6 +5,7 @@ import {
   sceneRegistry,
   useScene,
 } from '@pascal-app/core'
+import { setSurfaceRaycastLayers } from '@pascal-app/viewer'
 import { Matrix3, Raycaster, Vector3 } from 'three'
 
 export function accessoryCursor(
@@ -22,6 +23,7 @@ export function accessoryCursor(
       direction.transformDirection(frame.matrixWorld)
     }
     const raycaster = new Raycaster(origin, direction)
+    setSurfaceRaycastLayers(raycaster.layers)
     const nodes = useScene.getState().nodes
     let closest = Infinity
     let result: ReturnType<typeof accessoryCursor> | null = null

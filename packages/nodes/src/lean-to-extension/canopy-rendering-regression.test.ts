@@ -183,19 +183,18 @@ describe('freestanding canopy rendered-joint regressions', () => {
     for (const geometry of result.geometries) geometry.dispose()
   })
 
-  test('all canopy forms keep finite, non-overlapping roofs across turns and orientations', () => {
-    const failures: string[] = []
-    for (const form of ['mono', 'gable', 'butterfly'] as const) {
-      for (const angle of [1, 2, 5, 15, 30, 45, 60, 75, 89, 90]) {
-        for (const turn of [-1, 1]) {
-          const radians = (turn * angle * Math.PI) / 180
-          const forward: Point[] = [
-            [0, 0],
-            [8, 0],
-            [8 + 8 * Math.cos(radians), 8 * Math.sin(radians)],
-          ]
-          for (const reverse of [false, true]) {
-            for (const flipProjection of [false, true]) {
+  for (const form of ['mono', 'gable', 'butterfly'] as const) {
+    for (const angle of [1, 2, 5, 15, 30, 45, 60, 75, 89, 90]) {
+      for (const turn of [-1, 1]) {
+        for (const reverse of [false, true]) {
+          for (const flipProjection of [false, true]) {
+            test(`${form} angle=${angle} turn=${turn} reverse=${reverse} flip=${flipProjection} has no separated roof overlap`, () => {
+              const radians = (turn * angle * Math.PI) / 180
+              const forward: Point[] = [
+                [0, 0],
+                [8, 0],
+                [8 + 8 * Math.cos(radians), 8 * Math.sin(radians)],
+              ]
               const points = reverse ? [...forward].reverse() : forward
               const result = buildRuns(
                 `${form}_${angle}_${turn}_${reverse}_${flipProjection}`,
@@ -205,19 +204,14 @@ describe('freestanding canopy rendered-joint regressions', () => {
                 flipProjection,
               )
               const overlaps = separatedTopOverlapCount(result.geometries)
-              if (overlaps > 0) {
-                failures.push(
-                  `${form} angle=${angle} turn=${turn} reverse=${reverse} flip=${flipProjection} has ${overlaps} separated overlaps`,
-                )
-              }
               for (const geometry of result.geometries) geometry.dispose()
-            }
+              expect(overlaps).toBe(0)
+            })
           }
         }
       }
     }
-    expect(failures).toEqual([])
-  }, 15000)
+  }
 
   test('maximum canopy overhangs keep connected, non-overlapping corner roofs', () => {
     const patch = {

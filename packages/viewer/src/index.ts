@@ -125,6 +125,7 @@ export {
   MONO_PALETTE,
   PRESET_PALETTES,
   type RenderShading,
+  registerMaterialCacheCleanup,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
   resolveSurfaceColor,
@@ -270,6 +271,7 @@ export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 export {
   drainRebuiltWalls,
   getPendingWallRebuildCount,
+  isWallInitialBuildActive,
   WallSystem,
 } from './systems/wall/wall-system'
 export {

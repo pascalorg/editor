@@ -3,7 +3,70 @@
 import { describe, expect, test } from 'bun:test'
 import { type AnyNode, RoofNode, RoofSegmentNode } from '@pascal-app/core'
 import * as THREE from 'three'
-import { generateRoofSegmentGeometry } from './roof-system'
+import { Evaluator, SUBTRACTION } from 'three-bvh-csg'
+import { generateRoofSegmentGeometry, getRoofSegmentBrushes } from './roof-system'
+
+describe('roof system gable geometry', () => {
+  test('keeps a zero-height gable wall shell exactly on its base', () => {
+    const segment = RoofSegmentNode.parse({
+      roofType: 'gable',
+      width: 8,
+      depth: 6,
+      wallHeight: 0,
+      wallThickness: 0.1,
+      pitch: 40,
+    })
+    const brushes = getRoofSegmentBrushes(segment)
+    expect(brushes).not.toBeNull()
+    if (!brushes) return
+
+    const shell = new Evaluator().evaluate(brushes.wallBrush, brushes.innerBrush, SUBTRACTION)
+    try {
+      brushes.wallBrush.geometry.computeBoundingBox()
+      expect(brushes.wallBrush.geometry.boundingBox!.min.y).toBe(0)
+      expect(shell.geometry.getAttribute('position').count).toBeGreaterThan(0)
+      shell.geometry.computeBoundingBox()
+      expect(shell.geometry.boundingBox!.min.y).toBeCloseTo(0, 12)
+    } finally {
+      shell.geometry.dispose()
+      brushes.wallBrush.geometry.dispose()
+      brushes.innerBrush.geometry.dispose()
+      brushes.deckSlab.geometry.dispose()
+      brushes.shinSlab.geometry.dispose()
+      brushes.rakeBoards?.dispose()
+    }
+  })
+
+  test('lifts the inner cutter with the shell so a flat zero-height roof stays hollow', () => {
+    const segment = RoofSegmentNode.parse({
+      roofType: 'flat',
+      width: 8,
+      depth: 6,
+      wallHeight: 0,
+      wallThickness: 0.1,
+      pitch: 0,
+    })
+    const brushes = getRoofSegmentBrushes(segment)
+    expect(brushes).not.toBeNull()
+    if (!brushes) return
+    try {
+      brushes.wallBrush.geometry.computeBoundingBox()
+      brushes.innerBrush.geometry.computeBoundingBox()
+      expect(brushes.wallBrush.geometry.boundingBox!.min.y).toBe(0)
+      expect(brushes.wallBrush.geometry.boundingBox!.max.y).toBeCloseTo(0.05, 6)
+      expect(brushes.innerBrush.geometry.boundingBox!.max.y).toBeCloseTo(
+        brushes.wallBrush.geometry.boundingBox!.max.y,
+        6,
+      )
+    } finally {
+      brushes.wallBrush.geometry.dispose()
+      brushes.innerBrush.geometry.dispose()
+      brushes.deckSlab.geometry.dispose()
+      brushes.shinSlab.geometry.dispose()
+      brushes.rakeBoards?.dispose()
+    }
+  })
+})
 
 describe('roof system shed geometry', () => {
   function inspectShedGeometry(segment: RoofSegmentNode) {
@@ -179,9 +242,11 @@ describe('roof system shed geometry', () => {
       shedInsetEndPanels: true,
       wallShell: 'omit',
     })
-    const { geometry, roofSideX, sideInfillNormals, sideInfillX } = inspectShedGeometry(segment)
+    const { geometry, roofSideX, sideInfillNormals, sideInfillX, wallVertexYs } =
+      inspectShedGeometry(segment)
 
     expect(sideInfillNormals).toHaveLength(2)
+    expect(Math.min(...wallVertexYs)).toBeCloseTo(0.05, 5)
     expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeCloseTo(infillHalfWidth, 5)
     expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeGreaterThan(span / 2)
     expect(Math.max(...sideInfillX.map((x) => Math.abs(x)))).toBeLessThan(span / 2 + leftOverhang)

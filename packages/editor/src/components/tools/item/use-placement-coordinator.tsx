@@ -6,6 +6,7 @@ import {
   type CeilingEvent,
   collectAlignmentAnchors,
   emitter,
+  findLevelAncestorId,
   type GridEvent,
   getScaledDimensions,
   type ItemEvent,
@@ -191,6 +192,27 @@ function getGridAlignedPreviewNode(item: ItemNode): ItemNode {
     ...item,
     scale: [scaleAxis(0), scaleAxis(1), scaleAxis(2)] as [number, number, number],
   }
+}
+
+/**
+ * Building-local Y of the storey the floor-path ghost belongs to.
+ *
+ * The cursor group is mounted inside ToolManager's building-local group, which
+ * carries no per-floor elevation, while every floor-path position (grid
+ * position, `getFloorVisualPosition`) is LEVEL-local — so on an upper storey the
+ * wireframe and its dimension labels render a floor too low. The wall / ceiling
+ * / item-surface paths don't need this: they convert a world hit through
+ * `worldToBuildingLocal`, which already carries the storey.
+ *
+ * Read off the level mesh (same source as `LevelOffsetGroup`) rather than the
+ * stored elevation so the ghost also follows the exploded-view lerp.
+ */
+function getPlacementLevelY(draft: ItemNode | null | undefined): number {
+  const levelId =
+    (draft ? findLevelAncestorId(draft.id, useScene.getState().nodes) : null) ??
+    useViewer.getState().selection.levelId
+  const levelMesh = levelId ? sceneRegistry.nodes.get(levelId as AnyNodeId) : null
+  return levelMesh ? levelMesh.position.y : 0
 }
 
 // Shared materials for placement cursor - we just change colors, not swap materials
@@ -521,7 +543,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
     if (!asset.attachTo && placementState.current.surface === 'floor') {
       gridPosition.current.y = 0
       if (cursorGroupRef.current) {
-        cursorGroupRef.current.position.y = 0
+        cursorGroupRef.current.position.y = getPlacementLevelY(draftNode.current)
       }
     }
 
@@ -731,7 +753,6 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
 
     // ---- Init draft ----
     configRef.current.initDraft(gridPosition.current)
-    const floorAuthoredY = draftNode.current?.position[1] ?? 0
     const preserveDragOffset = configRef.current.preserveDragOffset === true
     // The host the item was grabbed from + its pre-drag host-local position.
     // Each surface's grab anchor preserves the grab offset only on THAT host,
@@ -890,7 +911,10 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           }
         }
       } else if (cursorGroupRef.current) {
+        // No registered mesh yet (a just-created draft renders next tick), so
+        // fall back to the level-local grid position lifted onto its storey.
         cursorGroupRef.current.position.copy(gridPosition.current)
+        cursorGroupRef.current.position.y += getPlacementLevelY(draftNode.current)
         cursorGroupRef.current.rotation.y = draftNode.current.rotation[1] ?? 0
       }
     }
@@ -1064,9 +1088,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         useAlignmentGuides.getState().clear()
       }
 
+      // `result.gridPosition[1]` is the LIVE `gridPosition.current.y` — seeded
+      // from the draft's authored Y by `initDraft` (so a block-face / raised
+      // construction-plane item keeps its height) and zeroed by
+      // `detachItemSurfaceToFloor` / `faceHostStrategy.leave` when the item
+      // comes back down. Freezing it at drag start instead left an item taken
+      // off a shelf floating at the shelf's height.
       let gridPos: [number, number, number] = [
         result.gridPosition[0] + alignX,
-        floorAuthoredY,
+        result.gridPosition[1],
         result.gridPosition[2] + alignZ,
       ]
       frozenSupportSlabIdRef.current = undefined
@@ -1104,7 +1134,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       if (!draft && asset.attachTo) {
         cursorPosition[1] += getDetachedAttachmentPreviewLift(asset.attachTo)
       }
-      cursorGroupRef.current.position.set(cursorPosition[0], cursorPosition[1], cursorPosition[2])
+      cursorGroupRef.current.position.set(
+        cursorPosition[0],
+        cursorPosition[1] + getPlacementLevelY(draft),
+        cursorPosition[2],
+      )
       // Floor items only rotate on Y; keep the preview box (and the live
       // transform the 2D floorplan mirrors) aligned with the draft's
       // rotation. Without this the box stays at its seed rotation until a
@@ -1684,7 +1718,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
         levelId ? { parentId: levelId } : undefined,
       )
       if (cursorGroupRef.current) {
-        cursorGroupRef.current.position.set(...floorVisualPosition)
+        cursorGroupRef.current.position.set(
+          floorVisualPosition[0],
+          floorVisualPosition[1] + getPlacementLevelY(draftNode.current),
+          floorVisualPosition[2],
+        )
       }
 
       const draft = draftNode.current
@@ -2271,8 +2309,11 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           draft.position = [x, gridPosition.current.y, z]
           if (cursorGroupRef.current) {
             if (surface === 'floor') {
+              const visual = getFloorVisualPosition([x, gridPosition.current.y, z])
               cursorGroupRef.current.position.set(
-                ...getFloorVisualPosition([x, gridPosition.current.y, z]),
+                visual[0],
+                visual[1] + getPlacementLevelY(draft),
+                visual[2],
               )
             } else {
               cursorGroupRef.current.position.x = x
@@ -2601,6 +2642,7 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
   // moving existing node has no draft here, so the grid reads that case straight
   // off the node's mesh. Cleared when idle.
   const surfaceNormalRef = useRef(new Vector3(0, 1, 0))
+  const surfaceWorldPointRef = useRef(new Vector3())
   const facingForwardRef = useRef(new Vector3(0, 0, 1))
   const facingQuatRef = useRef(new Quaternion())
   const ghostSurfaceQuatRef = useRef(new Quaternion())
@@ -2642,13 +2684,15 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
       const fwd = facingForwardRef.current.copy(n)
       if (fwd.lengthSq() > 1e-6) facingYaw = Math.atan2(fwd.x, fwd.z)
       // The forward triangle is a floor aid; drop it to the building-local floor
-      // under the hosted plane.
-      facingY = 0
+      // under the hosted plane — the storey's floor, not world ground.
+      facingY = getPlacementLevelY(draftNode.current)
     } else {
       ghost.getWorldQuaternion(ghostSurfaceQuatRef.current)
       resolveItemPlacementSurfaceNormal(surf, ghostSurfaceQuatRef.current, null, n)
     }
-    publishPlacementSurface(ghost.position, n)
+    // `publishPlacementSurface` is a WORLD-space contract (the grid reads it in
+    // world space), but the ghost lives in the building-local tool group.
+    publishPlacementSurface(ghost.getWorldPosition(surfaceWorldPointRef.current), n)
 
     if (shape.depth > 0) {
       useFacingPose.getState().set({
@@ -2716,7 +2760,8 @@ export function usePlacementCoordinator(config: PlacementCoordinatorConfig): Rea
           gridPosition.current.z,
         ])
         mesh.position.y = visualPosition[1]
-        cursorGroupRef.current.position.y = visualPosition[1]
+        cursorGroupRef.current.position.y =
+          visualPosition[1] + getPlacementLevelY(draftNode.current)
       }
     } else if (placementState.current.surface === 'block-face') {
       const rotation = draftNode.current.rotation

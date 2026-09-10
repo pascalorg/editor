@@ -1,12 +1,18 @@
 ---
 name: furniture-fit
 description: Assess whether furniture fits in a measured Pascal room or layout. Use this skill for sofa, table, bed, cabinet, appliance, staging, placement, collision, clearance, or rotated-footprint questions. Produce a tool-backed spatial report that distinguishes footprint fit from unsupported height, door-swing, assembly, and delivery-route claims, and return insufficient evidence when dimensions or scale are missing.
-license: MIT
 compatibility: Requires a Pascal MCP connection for verified scene checks. Can still produce an input-gap report when the scene or measurements are unavailable.
 metadata:
-  version: "0.1.1"
-  source-reviewed: "2026-09-08"
-  native-host-validation: "source-hash-recorded-separately"
+  version: "0.1.4"
+  source-reviewed: "2026-09-10"
+  native-host-validation: "package-checks-only"
+  openclaw:
+    homepage: https://editor.pascal.app/docs/developers/mcp
+    primaryEnv: PASCAL_API_KEY
+    envVars:
+      - name: PASCAL_API_KEY
+        required: false
+        description: Optional Pascal API key for hosted scene checks; input-gap reports and local Pascal do not require it.
 ---
 
 # Furniture fit
@@ -26,6 +32,8 @@ Collect or verify:
 - whether the user wants a read-only report or a saved placement.
 
 Reject zero, negative, non-finite, or ambiguous dimensions. Treat `"1,234"` as ambiguous until the user clarifies the decimal/thousands convention. If a photo, listing, or scan has no trustworthy scale, return `insufficient evidence` and name the minimum measurement needed. Do not infer product dimensions from appearance.
+
+Validate the inputs needed for the requested conclusion before assessing fit. When the request itself already establishes that a decisive input—such as a dimension, room scale, target, pose, or explicit clearance—is missing, invalid, or ambiguous, stop with `insufficient evidence` before assessment or mutation calls. Preserve the valid values already supplied, identify only the blocking input or smallest blocking set, and ask only for the measurements or choices needed to continue. Do not calculate conditional fit thresholds, maximum allowable sizes, hypothetical clearances, height comparisons, or alternative poses while that decisive input is unresolved. If an existing Pascal scene might contain a measured value needed to resolve the input, use only the minimum read-only project or geometry lookup needed to find and verify that value and its provenance; if it remains unresolved, stop. Do not call candidate, collision, placement, validation, or save tools, and do not mutate the project. A preliminary calculation is appropriate only when all inputs decisive for that calculation are exact and the connected release lacks the read-only candidate capability; it is not a substitute for missing measurements.
 
 Before calling tools, record the user's constraints: item width, height, depth, original unit and meter conversion, target level/zone, position, rotations, and required clearance. Re-read the request when filling this record; scene metadata and examples cannot replace supplied values. Preserve known dimensions when asking for a missing one. Never replace a supplied height with a placeholder just because the footprint test ignores height.
 
@@ -72,7 +80,7 @@ Use this as a transparent cross-check of the tool-backed pose, with radians in s
 
 Prefer a server tool that accepts the supplied candidate dimensions if the connected release advertises one. Inspect its schema before calling it. In the current repository source, `check_collisions.candidate` accepts an ID, name, level ID, `[width, height, depth]`, position, Y rotation, and optional source identifiers. It creates an in-memory prospective item for that call and never adds it to the scene. Confirm `candidateItemId` in the result, use its returned footprint and collision evidence, and assess room containment separately against the measured zone boundary.
 
-Compare every candidate call against the recorded user constraints before executing it. Pass all supplied dimensions exactly after unit conversion, and pass the requested clearance rather than silently substituting zero. If a required candidate dimension is missing, ask only for that value or give a clearly preliminary planar calculation; do not invent a value to satisfy the schema. Check the returned source dimensions, pose, and clearance against the request before treating the result as evidence.
+Compare every candidate call against the recorded user constraints before executing it. Pass all supplied dimensions exactly after unit conversion, and pass the requested clearance rather than silently substituting zero. If a required candidate dimension or scale is missing, follow the input gate above: use a minimal read-only scene lookup only when it can resolve the value from existing measured evidence; otherwise stop before assessment or mutation calls and ask only for the blocking value. Do not invent a value to satisfy the schema. Check the returned source dimensions, pose, and clearance against the request before treating the result as evidence.
 
 `verify_scene` checks saved or active scene items, not this prospective candidate. Its clean result cannot pass the candidate's default spacing or door access. Mark those candidate rows `not checked` unless a separate check includes the candidate and the required geometry; identify that evidence explicitly. A candidate collision check at the requested gap supports that gap only.
 
@@ -89,7 +97,26 @@ Never leave a temporary test object in the project unless the user asked to keep
 
 Test every orientation the user requested. Do not assume a 90-degree rotation helps: a long, shallow item can become too deep for a narrow room. Report the effective footprint for each pose and preserve the rotation convention.
 
-When the requested pose fails, propose only alternatives supported by the same evidence, such as a 90-degree rotation, a stated offset, a smaller maximum footprint, or a different room. Re-run the checks for any alternative described as passing.
+When the requested pose fails, propose only alternatives supported by the same evidence, such as a 90-degree rotation or stated offset that the known room geometry makes plausible. Re-run the checks for any alternative described as passing. If every tested pose fails and the evidence does not support a specific untested pose, do not invent one; ask the user for an exact alternate item, target room or zone, or pose instead.
+
+## Return one bounded next action
+
+Include exactly one structured `nextAction` in every report. It is an optional task the user can approve, not permission to execute it. Choose its kind from the unresolved blocker in the user's requested decision, rather than from the footprint headline alone. A passing footprint does not make a missing height measurement or an unchecked requested door constraint optional.
+
+- Use `kind: request_measurement` when a missing or unproven measurement blocks the requested conclusion, including when the footprint passes. Ask only for the first decisive measurement or smallest blocking set. Do not add an alternate pose, conditional fit threshold, or unrelated setup task.
+- Use `kind: check_alternate_pose` when the requested footprint fails and known room geometry supports one specific, untested position and Y rotation. Label it proposed and unverified, and require the same containment, collision, clearance, and applicable door checks to run again before calling it a pass.
+- Use `kind: request_alternate_item_or_target` when every tested footprint pose fails, or another requested physical constraint conclusively fails, and no evidence-backed alternative exists. Ask the user to supply one exact alternate item and dimensions, target room or zone, or pose; do not invent any of them.
+- Use `kind: complete_unresolved_check` when the measurements and geometry exist but the available read-only assessment path did not include a requested constraint. For example, a clean `verify_scene` result does not check a prospective candidate supplied only to `check_collisions`; request a candidate-aware door-access check rather than calling access passed or asking for unrelated measurements.
+- Use `kind: check_related_item_or_pose` only when the requested decision has no unresolved blocker and the footprint fits. Offer one specific related item or pose check that uses the same measured context. Do not turn the passing result into a purchase, delivery, or installation recommendation.
+
+Carry the exact available project, revision, graph hash, level, zone, and item context into `nextAction.context`; use `null` rather than guessing missing identifiers. State the minimum `requiredInput`. Use these exact boundary lines in every `nextAction`:
+
+```yaml
+authority: Read-only; no account or workspace changes, publication, save, or project mutation authorized.
+cost: No rendering, generation, paid operation, or additional spending authorized.
+```
+
+If the next task is later accepted, re-read the current project status and advertised tool schemas before acting; a next action never freezes scene state or extends the current authorization.
 
 ## Separate the checks
 
@@ -121,7 +148,16 @@ Use the exact report shape in [references/report-template.md](references/report-
 - a row for every supported and unsupported check;
 - collision or door issue IDs;
 - verified alternatives;
+- one blocker-aware `nextAction` with its required input, exact available context, authority, and cost boundary;
 - the exact `editorUrl` returned by Pascal when a persistent project is involved.
+
+When the user asks for a hosted link, or explicitly confirms that these measurements may be sent to Pascal, an eligible report can include an **Open dimension-only footprint pre-check** link. Eligibility requires exact positive dimensions no greater than `1,000,000` for one rectangular room footprint and one rectangular item footprint. Use the user's original `cm` or `in` values when they are exact; otherwise convert measured meter values to centimeters without rounding away meaningful precision. Use the user's explicit uniform room-boundary clearance when one was supplied. Item-to-item spacing from `check_collisions.minimumClearance` is a different constraint and must not be copied into this link. Use `clearance=0` only for a bare dimensional fit or when the user explicitly requested no added room-boundary clearance. Build only this fixed URL shape, with standard URL encoding:
+
+```text
+https://editor.pascal.app/tools/furniture-fit?entry=agent_report&roomWidth=<number>&roomDepth=<number>&itemWidth=<number>&itemDepth=<number>&clearance=<number>&unit=<cm-or-in>&shared=1
+```
+
+The link recomputes only an empty axis-aligned rectangular footprint at 0° and 90° with uniform per-side room-boundary clearance. Label it as a separate dimension-only pre-check, not as the scene-backed verdict. Omit it when the room is irregular; dimensions are missing, ambiguous, inferred, or over the calculator limit; any directional or asymmetric clearance was requested; the user has not authorized sending private or local measurements to Pascal; or the requested conclusion depends on a tested position, existing objects, doors, height, delivery, or another scene-specific constraint. Opening the link sends the visible measurement query to `editor.pascal.app` and can leave it in browser history and service request logs. Never put a project, revision, graph hash, node ID, address, person, account, workspace, credential, signed URL, `flow_id`, or arbitrary scene text in the URL. Use `unavailable` plus the first reason when the link cannot represent the inputs safely.
 
 Before sending the report, compare its numeric inputs and source IDs against both the user's constraint record and the actual tool output. Copy level, zone, item, candidate, and project IDs exactly; do not recreate them from memory. A missing requested check must be identified as incomplete, even when a narrower calculation passes.
 
@@ -129,5 +165,7 @@ The examples are synthetic and illustrate correct claim boundaries:
 
 - [examples/clear-footprint.md](examples/clear-footprint.md)
 - [examples/rotated-footprint-fails.md](examples/rotated-footprint-fails.md)
+- [examples/all-tested-poses-fail.md](examples/all-tested-poses-fail.md)
 - [examples/insufficient-evidence.md](examples/insufficient-evidence.md)
 - [examples/unproven-height-metadata.md](examples/unproven-height-metadata.md)
+- [examples/no-sign-in-dimension-precheck.md](examples/no-sign-in-dimension-precheck.md)

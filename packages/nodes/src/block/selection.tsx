@@ -3453,7 +3453,7 @@ function BlockEditor({
         } else if (actions.hasSelection) {
           actions.beginKeyboardTransformModal('rotate')
         }
-      } else if (key === 's') {
+      } else if (key === 's' && !(event.ctrlKey || event.metaKey)) {
         if (actions.hasSelection) {
           if (!actions.beginUniformScaleModal()) {
             playBlockSfx('tool-select')

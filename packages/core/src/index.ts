@@ -311,6 +311,7 @@ export {
   type SceneSnapshot,
   subscribeSceneCommits,
 } from './store/history-control'
+export { getHistoryDirtyNodeIds } from './store/history-invalidation'
 export {
   type ControlValue,
   type DoorAnimationState,
@@ -395,12 +396,25 @@ export {
   isSplineFence,
   sampleFenceSpline,
 } from './systems/fence/fence-spline'
+export { resolveRoofElevation, resolveRoofWallTopElevation } from './systems/roof/roof-elevation'
+export { RoofElevationSystem } from './systems/roof/roof-elevation-system'
+export {
+  fitRoofFootprint,
+  type RoofFootprintTarget,
+  resolveRoomRoofFootprint,
+  resolveRoomRoofFootprintOnLevel,
+} from './systems/roof/roof-footprint'
 export { resolveSlabPlacementElevation } from './systems/slab/slab-placement'
 export {
   clampSlabElevationForWalls,
   getSlabElevationUpperBound,
   type SlabElevationClamp,
 } from './systems/slab/slab-support'
+export {
+  createDefaultStairSegment,
+  createStairFlightFromStair,
+  type StairFlightOverrides,
+} from './systems/stair/stair-flight'
 export { type StairFootprintAABB, stairFootprintAABB } from './systems/stair/stair-footprint'
 export { createSurfaceOpeningPreviewController } from './systems/stair/stair-opening-preview'
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'

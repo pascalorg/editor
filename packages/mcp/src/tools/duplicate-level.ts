@@ -4,6 +4,7 @@ import type { AnyNode, AnyNodeId } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { Patch as BridgePatch } from '../bridge/scene-bridge'
 import type { SceneOperations } from '../operations'
+import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { ErrorCode, throwMcpError } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { NodeIdSchema } from './schemas'
@@ -27,6 +28,7 @@ export function registerDuplicateLevel(server: McpServer, bridge: SceneOperation
         'Clone a level and all its descendants into a new subtree attached to the same building.',
       inputSchema: duplicateLevelInput,
       outputSchema: duplicateLevelOutput,
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({ levelId }) => {
       const node = bridge.getNode(levelId as AnyNodeId)
