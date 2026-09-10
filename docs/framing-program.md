@@ -1349,6 +1349,49 @@ viewer's side — and carries the viewer's ink edges as its outlines.
 
 ## Log (continued)
 
+- 2026-09-10 (night): **Batches T43–T46 — sections labelled left; the site plan named; braced wall panels; foundation dimensions and detail keys.**
+  T43 projection.ts `datumPrimitives(marks, uMax, { uMin, side })`: an
+  elevation keeps its right-hand label column, a SECTION labels on the
+  LEFT (labels anchored at their end, the leader back to the line's start)
+  so the sheets' framing notes on the right never cross a label; a
+  section's roof datums span each roof's projected extent like an
+  elevation's (section.ts passes its projector). section-framing.ts: a
+  note's leader points at the wide cut NEAREST the note column and the
+  notes stack in the order of what they point at — no two leaders cross
+  (Steve: "no overlapping leaders"). T44 build-site-plan-drawing.ts: every
+  lot edge carries its survey bearing and length ("S 80°03' E 63.19'") in a
+  group turned along the edge (`alongLabel`, `bearingOf`); each yard its
+  setback along the edge ("20'-0\" FRONT SETBACK", `classifyEdges` +
+  `setbackForRole`); the street named beyond every street edge
+  (`streetNameOf` strips the house number); the roof's outline dashed —
+  every roof segment's rectangle plus its overhang through the segment's,
+  the roof's and the building's turns, unioned (`roofOutlineRings`); the
+  porches and landings with their steps (`porchRings`, `stairTreads`);
+  the house on a light body named "1-STORY RESIDENCE / 1,975 SF FOOTPRINT";
+  LOT COVERAGE in the lot line; `warnings` printed on the sheet (no
+  driveway or walk in the model; setbacks that are a planning default).
+  T45 bracing.ts `bracedWallPanels`: the full-height sheathed segments
+  between each braced wall's rough openings, hatched between the wall's
+  faces with their lengths outside — 48 in and longer (Table R602.10.5,
+  CS-WSP) summed as PROVIDED, 24–48 in starred and not counted; the
+  schedule gains PANELS / PROVIDED / REQUIRED (the governing table named
+  with the site's SDC, "verify"); parallel lines dimensioned "BWL SPACING"
+  beyond the house and a spacing over R602.10.1.3's limit printed (25 ft
+  in SDC D — this 60 ft house needs an interior line). T46 foundation.ts:
+  the slab's overall dimensions off its bottom and left, a porch or
+  landing on its two far edges; the typical foundation detail keyed on the
+  slab's right edge as a detail bubble (number over S5.x, numbered as the
+  detail sheets draw them — structural.ts `detailRefs`); the structural
+  plans switch automatic dimensions off, so these and the spacing dims are
+  `annotationRole: 'construction-dimension'` on the manual layer. Verified
+  in Steve's Chrome (hidden tab): A5.0 Section B with datums left and seven
+  notes fanning right without a crossing; A1.0 with bearings, setbacks,
+  BEATRICE LN, the roof line, PORCH / LANDING, the coverage; S4.0 with the
+  hatched panels and the schedule; S1.0 with 60'-0" × 32'-0", the porch
+  and landing dims and the 1/S5.0 bubble. Open: Bones' utility plant (pole,
+  drop, meters, laterals) on the site plan; "all foundation types" only as
+  far as the sheets tests' fixtures (slab, CMU, raised floor) go.
+
 - 2026-09-10 (night): **Batches T41 + T42 — captures in a hidden tab; the utility's plant off the drawings.**
   Overnight Steve's Chrome tab is HIDDEN (`document.hidden`, the screen
   locked or the window covered): no animation frame ever fires, R3F's loop
