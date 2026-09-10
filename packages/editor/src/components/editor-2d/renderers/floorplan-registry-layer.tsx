@@ -2947,6 +2947,7 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
       case 'midpoint-handle': {
         if (!palette) return <></>
         const handleId = makeHandleId(nodeId, g.payload)
+        const isAction = g.activation === 'action'
         const isHovered = hoveredHandleId === handleId
         const isActive = activeDragId === handleId
         const stroke = palette.endpointHandleStroke
@@ -2959,7 +2960,12 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
         return (
           <g
             key={keyHint}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (!isAction) return
+              event.preventDefault()
+              onHandleDoubleClick(g.affordance, g.payload, event)
+            }}
             onPointerEnter={() => onHandleHoverChange(handleId)}
             onPointerLeave={() => onHandleHoverChange(null)}
           >
@@ -3016,9 +3022,17 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
               cx={g.point[0]}
               cy={g.point[1]}
               fill="transparent"
-              onPointerDown={(e) =>
-                onHandlePointerDown(g.affordance, g.payload, e as ReactPointerEvent<SVGGElement>)
-              }
+              onPointerDown={(event) => {
+                if (isAction) {
+                  event.stopPropagation()
+                  return
+                }
+                onHandlePointerDown(
+                  g.affordance,
+                  g.payload,
+                  event as ReactPointerEvent<SVGGElement>,
+                )
+              }}
               pointerEvents="all"
               r={radius + unitsPerPixel * 2}
               stroke="transparent"
