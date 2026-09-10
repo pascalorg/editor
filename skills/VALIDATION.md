@@ -1,6 +1,14 @@
 # Skill package validation
 
-Released package source: **0.1.7**. Latest released package source: **0.1.7**. `pascal-3d` skill metadata version: **0.1.0**. `furniture-fit` skill metadata version: **0.1.3**. Recorded September 9, 2026.
+Released package source: **0.1.8**. Latest released package source: **0.1.8**. `pascal-3d` skill metadata version: **0.1.0**. `furniture-fit` skill metadata version: **0.1.4**. Recorded September 10, 2026.
+
+## Bundle 0.1.8 agent-report footprint pre-check release
+
+This release lets the `furniture-fit` skill include an optional no-sign-in Pascal calculator link when the user asks for it or explicitly authorizes sending the visible rectangular measurements to Pascal. The link carries only exact room, item, uniform room-boundary clearance, unit, `shared=1`, and `entry=agent_report` values. It is omitted for missing, inferred, ambiguous, irregular, directional, or over-limit inputs and whenever the requested conclusion depends on project evidence such as pose, existing objects, doors, height, delivery access, or other scene constraints. The report must disclose that opening the link sends its visible measurement query to Pascal and may retain it in browser history or service logs.
+
+The exact package source merged to public `main` at `cbaed2c0af51e8fe51e8217de410dae8a69c289f` and was published at `2026-09-10T06:14:36Z` as the immutable GitHub prerelease tag `pascal-agent-skills--v0.1.8`. The released `.mcp.json` SHA-256 is `e4042df42028e6f39cd3442d8896587f4f11a999bce828e8bee3a4bf1030d9ba`; the unchanged released `pascal-3d/SKILL.md` SHA-256 is `55d263977898bad4375093435050dc377d512ab1600640e96b8ac106613e6f05`; and the released `furniture-fit/SKILL.md` SHA-256 is `ca812bc0e196d0890183af559affd11665cd3678c22d58a274983e6f02b4090e`. A freshly downloaded and extracted tag source archive matched all three hashes and passed package validation and strict Claude plugin validation using the repository dependency tree.
+
+Public `quality` and `cli-smoke` CI passed before merge. The new positive and negative package evals cover consent, URL privacy, exact values, irregular rooms, directional clearance, scene-dependent conclusions, and numeric bounds. An independent Claude Fable 5.1 source review found no remaining P0, P1, or P2 implementation issues after corrections. A native Claude host cohort did not run because the local Claude OAuth session could not refresh, so the skill metadata remains `package-checks-only` and this release makes no native-agent behavior claim. It also does not establish hosted app deployment, marketplace listing, external installation, adoption, or retention.
 
 ## OpenAI MCP tool-annotation candidate
 
