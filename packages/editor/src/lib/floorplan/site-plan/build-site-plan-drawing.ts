@@ -17,16 +17,19 @@ import {
   boundsInsidePolygon,
   pointInPolygon,
   castYardDimensionsOriented,
+  classifyEdges,
   compassLabel,
   edgeHeadingDeg,
   edgeLength,
   formatFeetInches,
   METRES_PER_FOOT,
+  outwardNormal,
   polygonArea,
   polygonBounds,
   type Pt,
   resolveFrontEdge,
   setbackEnvelope,
+  setbackForRole,
   type YardDimension,
 } from './geometry'
 import { sitePlanContributions } from './contributors'
@@ -35,6 +38,8 @@ import { sitePlanContributions } from './contributors'
 export interface SitePlanDrawing {
   primitives: FloorplanGeometry[]
   bounds: Bounds
+  /** What the drawing could not take from the model — printed on the sheet, never silent. */
+  warnings?: string[]
   /** Live values the panel / sheets reuse without re-deriving them. */
   meta: {
     site: SiteNode | null
@@ -65,8 +70,9 @@ const INK = '#111827'
 const INK_SOFT = '#4b5563'
 /** Contour lines: the survey's brown. */
 const CONTOUR_INK = '#8b5a2b'
-const FOOTPRINT_FILL = '#374151'
-const FOOTPRINT_STROKE = '#1f2937'
+/** The house on the lot: a light body under a heavy edge, so its label and the roof line read. */
+const FOOTPRINT_FILL = '#d1d5db'
+const FOOTPRINT_STROKE = '#111827'
 const DIMENSION_STROKE = '#334155'
 
 export interface SitePlanEdge {
@@ -260,6 +266,214 @@ function northArrow(at: Pt, northRotation: number, size: number): FloorplanGeome
   }
 }
 
+/** A survey bearing for the run (dx, dy): quadrant, degrees and minutes — "N 81°42' E". */
+function bearingOf(dx: number, dy: number, northRotation: number): string {
+  // plan up (−y) is north and +x is east; `northRotation` turns true north
+  // clockwise from plan up (the north arrow's own convention)
+  let az = ((Math.atan2(dx, -dy) - northRotation) * 180) / Math.PI
+  az = ((az % 360) + 360) % 360
+  const ns = az <= 90 || az >= 270 ? 'N' : 'S'
+  const ew = az <= 180 ? 'E' : 'W'
+  const off = az <= 90 ? az : az <= 180 ? 180 - az : az <= 270 ? az - 180 : 360 - az
+  let deg = Math.floor(off)
+  let min = Math.round((off - deg) * 60)
+  if (min === 60) {
+    deg += 1
+    min = 0
+  }
+  return `${ns} ${deg}°${String(min).padStart(2, '0')}' ${ew}`
+}
+
+/** An angle a label reads at: within a quarter turn of the paper's horizontal. */
+function readableAngle(a: number): number {
+  let r = a
+  while (r > Math.PI / 2) r -= Math.PI
+  while (r <= -Math.PI / 2) r += Math.PI
+  return r
+}
+
+/** "2544 Beatrice Ln" → "BEATRICE LN"; null when the address carries no street. */
+function streetNameOf(street: string | undefined): string | null {
+  if (!street) return null
+  const name = street.replace(/^\s*\d+[A-Za-z]?(?:[-–]\d+)?\s+/, '').trim()
+  return name.length > 0 ? name.toUpperCase() : null
+}
+
+/** A label laid ALONG a run — a group turned to the run's readable angle, the text centred on `at`. */
+function alongLabel(
+  at: Pt,
+  angle: number,
+  text: string,
+  fontSize: number,
+  style: { fill: string; fontWeight?: number },
+  metadata: Record<string, unknown>,
+): FloorplanGeometry {
+  return {
+    kind: 'group',
+    transform: { translate: at, rotate: readableAngle(angle) },
+    children: [
+      {
+        kind: 'text',
+        x: 0,
+        y: 0,
+        text,
+        fontSize,
+        fill: style.fill,
+        fontWeight: style.fontWeight ?? 500,
+        textAnchor: 'middle',
+        dominantBaseline: 'middle',
+      },
+    ],
+    metadata,
+  }
+}
+
+/** A three.js Y rotation of a plan point: local (x, z) turned by `yaw`. */
+function turn(x: number, z: number, yaw: number): Pt {
+  const c = Math.cos(yaw)
+  const s = Math.sin(yaw)
+  return [c * x + s * z, -s * x + c * z]
+}
+
+function yawOf(rotation: unknown): number {
+  if (typeof rotation === 'number') return rotation
+  if (Array.isArray(rotation)) return Number(rotation[1] ?? 0) || 0
+  return 0
+}
+
+/** Level-local plan (x, z) → site metres, through the building's placement (see `levelFootprintLoops`). */
+function siteFrame(building: BuildingNode | null): (x: number, z: number) => Pt {
+  const yaw = building?.rotation?.[1] ?? 0
+  const ox = building?.position?.[0] ?? 0
+  const oz = building?.position?.[2] ?? 0
+  return (x, z) => {
+    const [tx, tz] = turn(x, z, yaw)
+    return [ox + tx, oz + tz]
+  }
+}
+
+/**
+ * The roof's outline on the lot — every roof segment's plan rectangle plus
+ * its overhang, through the segment's, the roof's and the building's turns,
+ * unioned into the outer ring(s). Dashed on the site plan: what the eye sees
+ * from above is the roof, and the setback is measured to the wall under it.
+ */
+export function roofOutlineRings(
+  scene: SceneSnapshot,
+  level: LevelNode | null,
+  building: BuildingNode | null,
+): Pt[][] {
+  if (!level) return []
+  const toSite = siteFrame(building)
+  const roofs = new Map<string, { position?: number[]; rotation?: unknown }>()
+  for (const childId of level.children) {
+    const child = scene.nodes[childId as AnyNodeId] as AnyNode | undefined
+    if (child?.type === 'roof') roofs.set(String(child.id), child as { position?: number[]; rotation?: unknown })
+  }
+  if (roofs.size === 0) return []
+  const rects: Pt[][] = []
+  for (const node of Object.values(scene.nodes)) {
+    if (node.type !== 'roof-segment') continue
+    const roof = roofs.get(String((node as { parentId?: unknown }).parentId))
+    if (!roof) continue
+    const seg = node as unknown as {
+      position?: number[]
+      rotation?: unknown
+      width?: number
+      depth?: number
+      overhang?: number
+    }
+    const w = (seg.width ?? 0) / 2 + (seg.overhang ?? 0)
+    const d = (seg.depth ?? 0) / 2 + (seg.overhang ?? 0)
+    if (w <= 0 || d <= 0) continue
+    const segYaw = yawOf(seg.rotation)
+    const roofYaw = yawOf(roof.rotation)
+    const sx = seg.position?.[0] ?? 0
+    const sz = seg.position?.[2] ?? 0
+    const rx = roof.position?.[0] ?? 0
+    const rz = roof.position?.[2] ?? 0
+    const local: Pt[] = [
+      [-w, -d],
+      [w, -d],
+      [w, d],
+      [-w, d],
+    ]
+    rects.push(
+      local.map(([lx, lz]) => {
+        const [ax, az] = turn(lx, lz, segYaw)
+        const [bx, bz] = turn(ax + sx, az + sz, roofYaw)
+        return toSite(bx + rx, bz + rz)
+      }),
+    )
+  }
+  if (rects.length === 0) return []
+  const rings = unionPolygons(rects.map((r) => r.map((p) => [p[0], p[1]]))) as Pt[][]
+  return rings.length > 0 ? rings : rects
+}
+
+/** The porches and landings on the lot (the level's slabs other than the house's own), site metres. */
+function porchRings(
+  scene: SceneSnapshot,
+  level: LevelNode | null,
+  building: BuildingNode | null,
+): { ring: Pt[]; label: string; area: number }[] {
+  if (!level) return []
+  const toSite = siteFrame(building)
+  const out: { ring: Pt[]; label: string; area: number }[] = []
+  for (const childId of level.children) {
+    const child = scene.nodes[childId as AnyNodeId] as AnyNode | undefined
+    if (child?.type !== 'slab') continue
+    const slab = child as unknown as { polygon?: number[][]; metadata?: Record<string, unknown>; name?: string }
+    const floor = String(slab.metadata?.floor ?? '')
+    // the house's own slab is the footprint; a porch beam is not a floor
+    if (floor === 'slab-on-grade' || /beam/i.test(floor) || /beam/i.test(slab.name ?? '')) continue
+    const poly = slab.polygon ?? []
+    if (poly.length < 3) continue
+    const porch = slab.metadata?.porch as { policy?: string } | undefined
+    const label =
+      porch?.policy === 'entry' ? 'PORCH' : porch?.policy === 'landing' ? 'LANDING' : (slab.name ?? 'SLAB').toUpperCase()
+    const ring = poly.map((p) => toSite(p[0] ?? 0, p[1] ?? 0))
+    out.push({ ring, label, area: Math.abs(polygonArea(ring)) })
+  }
+  return out
+}
+
+/** The exterior steps as tread lines (three, a tread apart), site metres. */
+function stairTreads(scene: SceneSnapshot, level: LevelNode | null, building: BuildingNode | null): FloorplanGeometry[] {
+  if (!level) return []
+  const toSite = siteFrame(building)
+  const out: FloorplanGeometry[] = []
+  for (const childId of level.children) {
+    const child = scene.nodes[childId as AnyNodeId] as AnyNode | undefined
+    if (child?.type !== 'stair') continue
+    const stair = child as unknown as { position?: number[]; rotation?: unknown; width?: number }
+    const x = stair.position?.[0] ?? 0
+    const z = stair.position?.[2] ?? 0
+    const r = yawOf(stair.rotation)
+    const half = (stair.width ?? 1) / 2
+    // the run climbs toward the floor it serves: +local z turned by the yaw
+    const dir: Pt = [Math.sin(r), Math.cos(r)]
+    const across: Pt = [Math.cos(r), -Math.sin(r)]
+    for (let k = 0; k < 3; k++) {
+      const cx = x + dir[0] * k * 0.28
+      const cz = z + dir[1] * k * 0.28
+      const a = toSite(cx - across[0] * half, cz - across[1] * half)
+      const b = toSite(cx + across[0] * half, cz + across[1] * half)
+      out.push({
+        kind: 'line',
+        x1: a[0],
+        y1: a[1],
+        x2: b[0],
+        y2: b[1],
+        stroke: INK,
+        strokeWidth: 0.02,
+        metadata: { sitePlan: 'steps' },
+      })
+    }
+  }
+  return out
+}
+
 /**
  * Build the site-plan drawing from the scene.
  *
@@ -279,6 +493,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
 
   const empty: SitePlanDrawing = {
     primitives: [],
+    warnings: [],
     bounds: footprintBounds ?? { minX: -15, minY: -15, maxX: 15, maxY: 15 },
     meta: {
       site,
@@ -424,14 +639,17 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
   // A site plan shows the building's edge on the lot; the partitions inside
   // it are the floor plan's business, so the wall bands are unioned and only
   // the outer rings are kept.
-  for (const loop of footprintOutline(footprintLoops)) {
+  const outerRings = footprintOutline(footprintLoops)
+  let footprintArea = 0
+  for (const loop of outerRings) {
+    footprintArea += Math.abs(polygonArea(loop))
     primitives.push({
       kind: 'polygon',
       points: loop,
       fill: FOOTPRINT_FILL,
-      fillOpacity: 0.9,
+      fillOpacity: 0.7,
       stroke: FOOTPRINT_STROKE,
-      strokeWidth: 0.03,
+      strokeWidth: 0.06,
       metadata: { sitePlan: 'building-footprint', buildingId: building?.id ?? null },
     })
   }
@@ -461,6 +679,162 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
   }
 
   const lotBounds = polygonBounds(lot)
+  const warnings: string[] = []
+
+  // ── Property lines: bearing and length along each edge, outside the lot ──
+  for (let i = 0; i < lot.length; i++) {
+    const p = lot[i] as Pt
+    const q = lot[(i + 1) % lot.length] as Pt
+    const dx = q[0] - p[0]
+    const dy = q[1] - p[1]
+    const len = Math.hypot(dx, dy)
+    if (len < 0.5) continue
+    const out = outwardNormal(lot, i)
+    primitives.push(
+      alongLabel(
+        [(p[0] + q[0]) / 2 + out[0] * 0.55, (p[1] + q[1]) / 2 + out[1] * 0.55],
+        Math.atan2(dy, dx),
+        `${bearingOf(dx, dy, northRotation)}   ${(len / METRES_PER_FOOT).toFixed(2)}'`,
+        LABEL_SIZE * 0.48,
+        { fill: INK, fontWeight: 600 },
+        { sitePlan: 'lot-edge-label', edge: i },
+      ),
+    )
+  }
+
+  // ── Setback labels, in each yard along its lot edge ───────────────────
+  if (site?.setbacks && envelope.length >= 3) {
+    const roles = classifyEdges(lot, frontEdge, streetEdges)
+    const NAME = { front: 'FRONT', rear: 'REAR', street: 'STREET SIDE', left: 'SIDE', right: 'SIDE' } as const
+    for (let i = 0; i < lot.length; i++) {
+      const role = roles[i]
+      if (!role) continue
+      const s = setbackForRole(site.setbacks, role)
+      if (!(s > 0)) continue
+      const p = lot[i] as Pt
+      const q = lot[(i + 1) % lot.length] as Pt
+      const dx = q[0] - p[0]
+      const dy = q[1] - p[1]
+      if (Math.hypot(dx, dy) < 1) continue
+      const out = outwardNormal(lot, i)
+      // a third of the way along the edge, halfway into the yard — clear of
+      // the yard dimension that stands square off the house
+      primitives.push(
+        alongLabel(
+          [p[0] + dx * 0.32 - out[0] * (s / 2), p[1] + dy * 0.32 - out[1] * (s / 2)],
+          Math.atan2(dy, dx),
+          `${formatFeetInches(s)} ${NAME[role]} SETBACK`,
+          Math.min(LABEL_SIZE * 0.4, s * 0.45),
+          { fill: INK_SOFT },
+          { sitePlan: 'setback-label', edge: i, role },
+        ),
+      )
+    }
+  }
+
+  // ── The street, named beyond every street edge ───────────────────────
+  const streetName = streetNameOf(site?.address?.street)
+  if (streetName) {
+    for (const i of new Set([frontEdge, ...streetEdges])) {
+      const p = lot[i]
+      const q = lot[(i + 1) % lot.length]
+      if (!p || !q) continue
+      const out = outwardNormal(lot, i)
+      primitives.push(
+        alongLabel(
+          [(p[0] + q[0]) / 2 + out[0] * 2.2, (p[1] + q[1]) / 2 + out[1] * 2.2],
+          Math.atan2(q[1] - p[1], q[0] - p[0]),
+          streetName,
+          LABEL_SIZE * 0.85,
+          { fill: INK, fontWeight: 700 },
+          { sitePlan: 'street-name', edge: i },
+        ),
+      )
+    }
+  }
+
+  // ── The roof line, dashed over the footprint ─────────────────────────
+  for (const ring of roofOutlineRings(scene, level, building)) {
+    primitives.push({
+      kind: 'polygon',
+      points: ring,
+      fill: 'none',
+      stroke: INK_SOFT,
+      strokeWidth: 0.035,
+      strokeDasharray: '0.5 0.25',
+      opacity: 0.9,
+      metadata: { sitePlan: 'roof-outline' },
+    })
+  }
+
+  // ── Porches, landings and their steps ────────────────────────────────
+  let porchArea = 0
+  for (const porch of porchRings(scene, level, building)) {
+    porchArea += porch.area
+    primitives.push({
+      kind: 'polygon',
+      points: porch.ring,
+      fill: '#f3f4f6',
+      fillOpacity: 0.95,
+      stroke: FOOTPRINT_STROKE,
+      strokeWidth: 0.03,
+      metadata: { sitePlan: 'porch' },
+    })
+    const b = polygonBounds(porch.ring)
+    primitives.push({
+      kind: 'text',
+      x: (b.minX + b.maxX) / 2,
+      y: (b.minY + b.maxY) / 2,
+      text: porch.label,
+      fontSize: Math.min(LABEL_SIZE * 0.4, Math.max(0.2, (b.maxY - b.minY) * 0.35)),
+      fill: INK,
+      fontWeight: 600,
+      textAnchor: 'middle',
+      dominantBaseline: 'middle',
+      upright: true,
+      metadata: { sitePlan: 'porch-label' },
+    })
+  }
+  primitives.push(...stairTreads(scene, level, building))
+
+  // ── The house, named on its footprint ────────────────────────────────
+  if (footprintBounds && footprintArea > 0) {
+    let storeys = 0
+    for (const childId of building?.children ?? []) {
+      const child = scene.nodes[childId as AnyNodeId] as AnyNode | undefined
+      if (child?.type === 'level' && (child as LevelNode).level >= 0) storeys++
+    }
+    const cx = (footprintBounds.minX + footprintBounds.maxX) / 2
+    const cy = (footprintBounds.minY + footprintBounds.maxY) / 2
+    const lines = [
+      `${Math.max(1, storeys)}-STORY RESIDENCE`,
+      `${Math.round(footprintArea / (METRES_PER_FOOT * METRES_PER_FOOT)).toLocaleString('en-US')} SF FOOTPRINT`,
+    ]
+    lines.forEach((text, i) => {
+      primitives.push({
+        kind: 'text',
+        x: cx,
+        y: cy + (i - (lines.length - 1) / 2) * LABEL_SIZE * 0.9,
+        text,
+        fontSize: LABEL_SIZE * 0.6,
+        fill: INK,
+        fontWeight: 700,
+        textAnchor: 'middle',
+        dominantBaseline: 'middle',
+        upright: true,
+        metadata: { sitePlan: 'building-label' },
+      })
+    })
+  }
+
+  if (site?.setbacksSource && /draft|verify|default/i.test(site.setbacksSource)) {
+    warnings.push(`Setbacks: ${site.setbacksSource}`)
+  }
+  const paved = (level?.children ?? []).some((childId) => {
+    const child = scene.nodes[childId as AnyNodeId] as (AnyNode & { name?: string }) | undefined
+    return /driveway|walk|path/i.test(child?.name ?? '')
+  })
+  if (!paved) warnings.push('No driveway or walk in the model — the site plan draws none.')
 
   // ── North arrow, top-right of the lot ────────────────────────────────
   const arrowSize = Math.max(1.2, Math.min(2.2, (lotBounds.maxY - lotBounds.minY) * 0.07))
@@ -476,6 +850,13 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
   const areaSqFt =
     site?.parcel?.lotAreaSqFt ?? polygonArea(lot) / (METRES_PER_FOOT * METRES_PER_FOOT)
   const bits = [`LOT AREA ${Math.round(areaSqFt).toLocaleString('en-US')} SF`]
+  const lotAreaM2 = Math.abs(polygonArea(lot))
+  if (footprintArea > 0 && lotAreaM2 > 0) {
+    const covered = footprintArea + porchArea
+    bits.push(
+      `LOT COVERAGE ${Math.round(covered / (METRES_PER_FOOT * METRES_PER_FOOT)).toLocaleString('en-US')} SF (${((covered / lotAreaM2) * 100).toFixed(1)}%)`,
+    )
+  }
   if (site?.parcel?.apn) bits.push(`APN ${site.parcel.apn}`)
   if (site?.zone) bits.push(`ZONE ${site.zone}`)
   primitives.push({
@@ -506,6 +887,7 @@ export function buildSitePlanDrawing(scene: SceneSnapshot): SitePlanDrawing {
 
   return {
     primitives,
+    warnings,
     bounds: padBounds(combined, Math.max(2, arrowSize * 1.8)),
     meta: {
       site,
