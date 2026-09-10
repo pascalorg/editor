@@ -3,10 +3,11 @@ import {
   applyHeightPatch,
   createTerrainField,
   flattenPatch,
+  type HeightPatch,
   type TerrainField,
 } from '@pascal-app/core'
-import type { BufferAttribute } from 'three'
-import { buildTerrainMesh } from './terrain-geometry'
+import type { BufferAttribute, BufferGeometry } from 'three'
+import { buildTerrainMesh, buildTerrainSkirt } from './terrain-geometry'
 import {
   applyTerrainPatch,
   createTerrainGeometry,
@@ -159,6 +160,219 @@ describe('applyTerrainPatch', () => {
     expect(attr(target.geometry, 'position').version).toBe(version)
     expect(attr(target.geometry, 'position').updateRanges).toHaveLength(0)
     disposeTerrainGeometry(target)
+  })
+})
+
+describe('applyTerrainPatch — conservative bounds and locality', () => {
+  function expectEnclosed(geometry: BufferGeometry, positions: Float32Array): void {
+    const sphere = geometry.boundingSphere
+    expect(sphere).not.toBeNull()
+    expect(Number.isFinite(sphere!.radius)).toBe(true)
+    for (let i = 0; i < positions.length; i += 3) {
+      const distance = Math.hypot(
+        positions[i]! - sphere!.center.x,
+        positions[i + 1]! - sphere!.center.y,
+        positions[i + 2]! - sphere!.center.z,
+      )
+      // All fixtures stay below 400 m: 0.1 mm covers Float32 vertex rounding,
+      // not a stale bound. Tightness is deliberately not an acceptance criterion.
+      expect(distance).toBeLessThanOrEqual(sphere!.radius + 0.0001)
+    }
+  }
+
+  test.each([
+    -1200, 900,
+  ])('surface and skirt stay enclosed through new and removed extremes (initial height %i)', (initialHeight) => {
+    let field: TerrainField = {
+      ...createTerrainField({ cols: 9, rows: 7, origin: [-3.17, 2.29], spacing: 0.3 }),
+      heights: new Int16Array(9 * 7).fill(initialHeight),
+    }
+    const target = createTerrainGeometry(field)
+    const surfaceReferences = { ...target.buffers }
+    const skirtReferences = { ...target.skirt.buffers }
+    const positionAttribute = attr(target.geometry, 'position')
+    const normalAttribute = attr(target.geometry, 'normal')
+    try {
+      expectEnclosed(target.geometry, target.buffers.positions)
+      expectEnclosed(target.skirt.geometry, target.skirt.buffers.positions)
+      for (const [col0, row0, height] of [
+        [4, 3, 32767],
+        [8, 6, -32768],
+        [4, 3, 0],
+        [8, 6, 0],
+        [0, 0, 31000],
+        [0, 0, 0],
+        [8, 0, -32000],
+        [8, 0, 0],
+      ] as const) {
+        const patch: HeightPatch = {
+          col0,
+          row0,
+          cols: 1,
+          rows: 1,
+          heights: new Int16Array([height]),
+        }
+        const previous = field
+        const previousHeights = field.heights.slice()
+        field = applyHeightPatch(field, patch)
+        const expectedHeights = field.heights.slice()
+        applyTerrainPatch(target, field, patch)
+
+        const surface = buildTerrainMesh(field)
+        const skirt = buildTerrainSkirt(field)
+        expect(target.buffers.positions).toEqual(surface.positions)
+        for (let i = 0; i < surface.normals.length; i++) {
+          expect(target.buffers.normals[i]).toBeCloseTo(surface.normals[i]!, 6)
+        }
+        expect(target.skirt.buffers.positions).toEqual(skirt.positions)
+        expectEnclosed(target.geometry, surface.positions)
+        expectEnclosed(target.skirt.geometry, skirt.positions)
+        expect(previous.heights).toEqual(previousHeights)
+        expect(field.heights).toEqual(expectedHeights)
+        expect(field.heights).not.toBe(previous.heights)
+        for (const name of ['positions', 'normals', 'uvs', 'indices'] as const) {
+          expect(target.buffers[name]).toBe(surfaceReferences[name])
+        }
+        for (const name of ['positions', 'normals', 'indices'] as const) {
+          expect(target.skirt.buffers[name]).toBe(skirtReferences[name])
+        }
+        expect(attr(target.geometry, 'position')).toBe(positionAttribute)
+        expect(attr(target.geometry, 'normal')).toBe(normalAttribute)
+      }
+    } finally {
+      disposeTerrainGeometry(target)
+    }
+  })
+
+  test.each([
+    ['top-left', -1, -1],
+    ['bottom-right', 7, 5],
+  ] as const)('clipped %s patches preserve the surface, skirt, and safe bounds', (_name, col0, row0) => {
+    const before = createTerrainField({ cols: 9, rows: 7, origin: [-3.17, 2.29], spacing: 0.3 })
+    const patch: HeightPatch = {
+      col0,
+      row0,
+      cols: 3,
+      rows: 3,
+      heights: Int16Array.from({ length: 9 }, (_, i) => (i % 2 ? -32768 : 32767)),
+    }
+    const after = applyHeightPatch(before, patch)
+    const target = createTerrainGeometry(before)
+    try {
+      applyTerrainPatch(target, after, patch)
+      const surface = buildTerrainMesh(after)
+      const skirt = buildTerrainSkirt(after)
+      expect(target.buffers.positions).toEqual(surface.positions)
+      for (let i = 0; i < surface.normals.length; i++) {
+        expect(target.buffers.normals[i]).toBeCloseTo(surface.normals[i]!, 6)
+      }
+      expect(target.skirt.buffers.positions).toEqual(skirt.positions)
+      expectEnclosed(target.geometry, surface.positions)
+      expectEnclosed(target.skirt.geometry, skirt.positions)
+    } finally {
+      disposeTerrainGeometry(target)
+    }
+  })
+
+  test.each([65, 257])('a tiny interior patch does not scan a %i-square heightfield', (size) => {
+    const before = createTerrainField({ cols: size, rows: size, spacing: 0.5 })
+    const center = Math.floor(size / 2)
+    const patch: HeightPatch = {
+      col0: center,
+      row0: center,
+      cols: 1,
+      rows: 1,
+      heights: new Int16Array([-3000]),
+    }
+    const after = applyHeightPatch(before, patch)
+    const target = createTerrainGeometry(before)
+    const visited = new Set<number>()
+    // Observe accesses, not elapsed time. Native bulk reads count the entire view;
+    // subarray narrows that view. Geometry creation and immutable copying are excluded.
+    function observe(samples: Int16Array, offset = 0): Int16Array {
+      return new Proxy(samples, {
+        get(array, key) {
+          if (typeof key === 'string' && /^\d+$/.test(key)) visited.add(offset + Number(key))
+          if (key === 'subarray') {
+            return (begin?: number, end?: number) => {
+              const view = array.subarray(begin, end)
+              return observe(
+                view,
+                offset + (view.byteOffset - array.byteOffset) / array.BYTES_PER_ELEMENT,
+              )
+            }
+          }
+          const value = Reflect.get(array, key, array)
+          if (typeof value !== 'function') return value
+          return (...args: unknown[]) => {
+            for (let i = 0; i < array.length; i++) visited.add(offset + i)
+            return Reflect.apply(value, array, args)
+          }
+        },
+      })
+    }
+    try {
+      applyTerrainPatch(target, { ...after, heights: observe(after.heights) }, patch)
+      // A generous 9x9 neighborhood allows different local normal stencils and
+      // repeated passes, but rejects full rows and full-field extrema scans.
+      expect(visited.size).toBeLessThanOrEqual(81)
+      for (const i of visited) {
+        expect(Math.abs((i % size) - center)).toBeLessThanOrEqual(4)
+        expect(Math.abs(Math.floor(i / size) - center)).toBeLessThanOrEqual(4)
+      }
+      expect(target.buffers.positions).toEqual(buildTerrainMesh(after).positions)
+      expectEnclosed(target.geometry, target.buffers.positions)
+      expectEnclosed(target.skirt.geometry, target.skirt.buffers.positions)
+    } finally {
+      disposeTerrainGeometry(target)
+    }
+  })
+
+  test.each([
+    ['left', -2, 3],
+    ['right', 9, 3],
+    ['above', 3, -2],
+    ['below', 3, 9],
+    ['diagonally outside', 9, 9],
+  ] as const)('a patch wholly %s preserves pending uploads and bounds', (_name, col0, row0) => {
+    const before = createTerrainField({ cols: 9, rows: 9 })
+    const pending: HeightPatch = {
+      col0: 3,
+      row0: 3,
+      cols: 1,
+      rows: 1,
+      heights: new Int16Array([1200]),
+    }
+    const field = applyHeightPatch(before, pending)
+    const target = createTerrainGeometry(before)
+    try {
+      applyTerrainPatch(target, field, pending)
+      const geometries = [target.geometry, target.skirt.geometry]
+      const snapshot = () =>
+        geometries.map((geometry) => ({
+          sphere: geometry.boundingSphere!.clone(),
+          attributes: Object.entries(geometry.attributes).map(([name]) => {
+            const attribute = attr(geometry, name)
+            return {
+              name,
+              version: attribute.version,
+              ranges: attribute.updateRanges.map((range) => ({ ...range })),
+              values: attribute.array.slice(),
+            }
+          }),
+        }))
+      const expected = snapshot()
+      applyTerrainPatch(target, field, {
+        col0,
+        row0,
+        cols: 2,
+        rows: 2,
+        heights: new Int16Array(4).fill(-32000),
+      })
+      expect(snapshot()).toEqual(expected)
+    } finally {
+      disposeTerrainGeometry(target)
+    }
   })
 })
 
