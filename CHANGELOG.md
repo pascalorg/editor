@@ -14,6 +14,7 @@
 - Keep Site-scoped floorplan overlays aligned with live move and rotation previews.
 - Preserve unsaved presentation settings when a project receives its first ID, without overwriting an existing project's stored configuration.
 - Avoid native TypeScript compiler inference overflow in atmosphere fog references without changing rendering.
+- Omit stale viewer-surroundings selections from GLB/USDZ downloads after a presentation is unregistered or its plugin is uninstalled.
 - Keep export settings scrollable and group advanced model options in a keyboard-accessible disclosure.
 - Preserve child geometry when exporting empty mesh containers to USDZ.
 - Export the viewer's shadow-only layer for plugin consumers.

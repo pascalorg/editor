@@ -473,7 +473,11 @@ export function SettingsPanel({
         onlyVisible: exportOnlyVisible,
         excludedNodeTypes,
         includedPresentationIds:
-          format === 'glb' || format === 'usdz' ? includedPresentationIds : [],
+          format === 'glb' || format === 'usdz'
+            ? includedPresentationIds.filter((id) =>
+                exportablePresentations.some((contribution) => contribution.id === id),
+              )
+            : [],
       })
       if (!artifact) {
         throw new Error('Model export did not produce a file')
