@@ -1,6 +1,6 @@
 'use client'
 
-import { type AnyNode, type DuctFittingNode, DuctSegmentNode, useScene } from '@pascal-app/core'
+import { type AnyNode, type DuctFittingNode, DuctSegmentNode } from '@pascal-app/core'
 import {
   EDITOR_LAYER,
   triggerSFX,
@@ -97,9 +97,12 @@ const BODY_SNAP_RADIUS_M = 0.35
  * there). Null when the port doesn't carry a rect orientation. Shared
  * by the ghost preview and the commit so what you see is what lands.
  */
-function continuityRollFrom(port: ScenePort | null, newDir: Vector3): number | null {
+function continuityRollFrom(
+  port: ScenePort | null,
+  newDir: Vector3,
+  nodes: Readonly<Record<string, AnyNode>>,
+): number | null {
   if (!port) return null
-  const nodes = useScene.getState().nodes
   const owner = nodes[port.nodeId]
   if (owner?.type === 'duct-fitting' && ['reducer', 'transition'].includes(owner.fittingType)) {
     const width = new Vector3(0, 0, 1).applyEuler(new Euler(...owner.rotation))
@@ -162,8 +165,9 @@ function continuityRollForRun(
   startPort: ScenePort | null,
   endPort: ScenePort | null,
   dir: Vector3,
+  nodes: Readonly<Record<string, AnyNode>>,
 ): number {
-  return continuityRollFrom(startPort, dir) ?? continuityRollFrom(endPort, dir) ?? 0
+  return continuityRollFrom(startPort, dir, nodes) ?? continuityRollFrom(endPort, dir, nodes) ?? 0
 }
 
 function getConnectionPorts(
@@ -190,8 +194,11 @@ type DraftProfile = {
  * run / fitting collar keeps its diameter. Equipment and terminal
  * collars are round at the port's advertised size.
  */
-function inheritProfile(port: ScenePort): DraftProfile | null {
-  const owner = useScene.getState().nodes[port.nodeId]
+function inheritProfile(
+  port: ScenePort,
+  nodes: Readonly<Record<string, AnyNode>>,
+): DraftProfile | null {
+  const owner = nodes[port.nodeId]
   if (!owner) return null
   if (owner.type === 'duct-segment' || owner.type === 'duct-fitting') {
     return {
@@ -246,11 +253,12 @@ const elbowPlanFor = (
   port: ScenePort | null,
   awayDir: [number, number, number],
   profile: DraftProfile,
+  nodes: Readonly<Record<string, AnyNode>>,
 ) => {
   if (!port) return null
-  const owner = useScene.getState().nodes[port.nodeId]
+  const owner = nodes[port.nodeId]
   if (owner?.type !== 'duct-segment') return null
-  const source = inheritProfile(port) ?? profile
+  const source = inheritProfile(port, nodes) ?? profile
   const plan = planElbowAtPort(port, awayDir, source)
   if (!plan) return null
   // Trim the run's snapped endpoint back to the elbow's inlet collar.
@@ -272,9 +280,13 @@ const elbowPlanFor = (
   }
 }
 
-const realignPlanFor = (port: ScenePort | null, awayDir: [number, number, number]) => {
+const realignPlanFor = (
+  port: ScenePort | null,
+  awayDir: [number, number, number],
+  nodes: Readonly<Record<string, AnyNode>>,
+) => {
   if (!port) return null
-  const owner = useScene.getState().nodes[port.nodeId]
+  const owner = nodes[port.nodeId]
   if (owner?.type !== 'duct-fitting') return null
   return planElbowRealign(owner, port.id, awayDir)
 }
@@ -285,8 +297,8 @@ const realignPlanFor = (port: ScenePort | null, awayDir: [number, number, number
  * tap), decide every node the commit creates / updates — auto-inserted
  * elbows / tees / crosses, the drawn run (split in two when it crosses a
  * trunk), trunk tails, and trim / realign updates. Reads the live scene
- * graph but mutates nothing, so the live preview can call it each frame
- * to ghost the fittings before the commit applies the identical plan.
+ * graph snapshot but mutates nothing, so the live preview can call it each
+ * frame to ghost the fittings before the commit applies the identical plan.
  */
 export function planDuctDraw(
   start: [number, number, number],
@@ -296,9 +308,10 @@ export function planDuctDraw(
   endPort: ScenePort | null,
   endBody: RunBodyHit | null,
   profile: DraftProfile,
+  nodes: Readonly<Record<string, AnyNode>>,
   surface?: RunSurfaceTarget | null,
   autoHangers = false,
-  toolDefaults = useEditor.getState().toolDefaults['duct-segment'] ?? {},
+  toolDefaults: Partial<DuctSegmentNode> = {},
   hangerStyle: 'single' | 'double' = 'single',
 ): DuctDrawPlan | null {
   const length = Math.hypot(end[0] - start[0], end[1] - start[1], end[2] - start[2])
@@ -309,8 +322,8 @@ export function planDuctDraw(
     (end[2] - start[2]) / length,
   ]
 
-  const startPlan = elbowPlanFor(startPort, dir, profile)
-  const endPlan = elbowPlanFor(endPort, [-dir[0], -dir[1], -dir[2]], profile)
+  const startPlan = elbowPlanFor(startPort, dir, profile, nodes)
+  const endPlan = elbowPlanFor(endPort, [-dir[0], -dir[1], -dir[2]], profile, nodes)
   const invalidPlan = (): DuctDrawPlan => ({
     validationMessage: FITTING_CLEARANCE_MESSAGE,
     fittings: [],
@@ -320,16 +333,16 @@ export function planDuctDraw(
     delete: [],
   })
   if (startPlan?.hasClearance === false || endPlan?.hasClearance === false) return invalidPlan()
-  const startRealign = startPlan ? null : realignPlanFor(startPort, dir)
-  const endRealign = endPlan ? null : realignPlanFor(endPort, [-dir[0], -dir[1], -dir[2]])
+  const startRealign = startPlan ? null : realignPlanFor(startPort, dir, nodes)
+  const endRealign = endPlan ? null : realignPlanFor(endPort, [-dir[0], -dir[1], -dir[2]], nodes)
   const trunkBody = startPlan ? null : startBody
-  const trunkOwner = trunkBody ? useScene.getState().nodes[trunkBody.nodeId] : null
+  const trunkOwner = trunkBody ? nodes[trunkBody.nodeId] : null
   const teePlan =
     trunkBody && trunkOwner?.type === 'duct-segment'
       ? planTeeAtRunBody(trunkOwner, trunkBody, dir, profile)
       : null
   const endTrunkBody = endPlan || endRealign ? null : endBody
-  const endTrunkOwner = endTrunkBody ? useScene.getState().nodes[endTrunkBody.nodeId] : null
+  const endTrunkOwner = endTrunkBody ? nodes[endTrunkBody.nodeId] : null
   const endTeePlan =
     endTrunkBody && endTrunkOwner?.type === 'duct-segment'
       ? planTeeAtRunBody(endTrunkOwner, endTrunkBody, [-dir[0], -dir[1], -dir[2]], profile)
@@ -340,12 +353,12 @@ export function planDuctDraw(
     away: [number, number, number],
   ) => {
     if (!port) return null
-    const source = inheritProfile(port)
+    const source = inheritProfile(port, nodes)
     if (!source) return null
     const axis = new Vector3(...away)
     if (!corner && axis.dot(new Vector3(...port.direction).normalize()) < 0.9999) return null
-    const owner = useScene.getState().nodes[port.nodeId]
-    const roll = continuityRollFrom(port, axis) ?? 0
+    const owner = nodes[port.nodeId]
+    const roll = continuityRollFrom(port, axis, nodes) ?? 0
     const width = rectSectionAxes(axis, roll).width
     if (owner?.type === 'duct-fitting' && !corner) {
       width.set(0, 0, 1).applyEuler(new Euler(...owner.rotation))
@@ -363,7 +376,7 @@ export function planDuctDraw(
     [startPort, startAdapter],
     [endPort, endAdapter],
   ] as const) {
-    const source = port ? inheritProfile(port) : null
+    const source = port ? inheritProfile(port, nodes) : null
     if (source && !ductProfilesMatch(source, profile) && !adapter) {
       return {
         ...invalidPlan(),
@@ -392,7 +405,7 @@ export function planDuctDraw(
   const crossHit = surface
     ? findRunBodyCrossingSurface(start, end, BODY_SNAP_RADIUS_M, surface)
     : null
-  const crossOwner = crossHit ? useScene.getState().nodes[crossHit.nodeId] : null
+  const crossOwner = crossHit ? nodes[crossHit.nodeId] : null
   const crossTappedElsewhere =
     crossHit?.nodeId === trunkBody?.nodeId || crossHit?.nodeId === endTrunkBody?.nodeId
   const cross =
@@ -419,7 +432,7 @@ export function planDuctDraw(
   let roll = 0
   if (profile.shape !== 'round') {
     const newDir = new Vector3(...dir)
-    roll = continuityRollForRun(startPort, endPort, newDir)
+    roll = continuityRollForRun(startPort, endPort, newDir, nodes)
   }
 
   const defaults = ductSegmentDefinition.defaults()
@@ -467,11 +480,10 @@ export function planDuctDraw(
     ...(cross ? [cross.trunkUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
     ...realigns.map((p) => p.update as { id: AnyNode['id']; data: Partial<AnyNode> }),
   ]
-  const sceneNodes = useScene.getState().nodes
   const deleteIds = Array.from(
     new Set([
-      ...findMatedRunEndCapIds(startPort, sceneNodes, 'duct-fitting'),
-      ...findMatedRunEndCapIds(endPort, sceneNodes, 'duct-fitting'),
+      ...findMatedRunEndCapIds(startPort, nodes, 'duct-fitting'),
+      ...findMatedRunEndCapIds(endPort, nodes, 'duct-fitting'),
     ]),
   )
   const firstDuct = ducts[0]
@@ -551,7 +563,7 @@ const DuctSegmentTool = () => {
     minimumSegmentLength: 0.08,
     inheritFromConnection: ({ port }) => {
       if (!port) return
-      const inherited = inheritProfile(port)
+      const inherited = inheritProfile(port, sceneApi.nodes())
       if (inherited) setProfile(inherited)
     },
     commit: ({ start, end, startConnection, endConnection, surfaceTarget }) => {
@@ -565,9 +577,10 @@ const DuctSegmentTool = () => {
         endConnection.port,
         endConnection.body,
         profileRef.current,
+        sceneApi.nodes(),
         surfaceTarget,
         autoHangersRef.current,
-        undefined,
+        hangerDefaults,
         hangerStyleRef.current,
       )
       if (!plan || plan.validationMessage) return null
@@ -667,6 +680,7 @@ const DuctSegmentTool = () => {
       run.endConnection.port,
       run.endConnection.body,
       profile,
+      sceneApi.nodes(),
       run.surfaceTarget,
       autoHangers,
       hangerDefaults,
@@ -683,6 +697,7 @@ const DuctSegmentTool = () => {
     run.startConnection,
     run.endConnection,
     run.surfaceTarget,
+    sceneApi,
   ])
   const ghostFittings = useMemo(() => previewPlan?.fittings ?? [], [previewPlan])
 

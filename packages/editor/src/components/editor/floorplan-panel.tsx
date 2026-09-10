@@ -90,6 +90,7 @@ import {
   worldToFloorplanLocalPoint,
 } from '../../lib/floorplan'
 import { resolveGenericFloorplanGridEventPoint } from '../../lib/floorplan-grid-event-point'
+import type { EditorGridEvent } from '../../lib/grid-event-presentation'
 import { groundHeightAt } from '../../lib/ground-surface'
 import { guideEmitter } from '../../lib/guide-events'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
@@ -8970,7 +8971,7 @@ export function FloorplanPanel({
         nativeEvent.currentTarget.querySelector<SVGGraphicsElement>('[data-floorplan-scene]')
       const screenMatrix = planScene?.getScreenCTM()
 
-      emitter.emit(`grid:${eventType}` as any, {
+      const gridEvent: EditorGridEvent = {
         nativeEvent: nativeEvent.nativeEvent as any,
         position: [worldX, worldY, worldZ],
         localPosition: [planPoint[0], localY, planPoint[1]],
@@ -8987,7 +8988,8 @@ export function FloorplanPanel({
               ],
             }
           : undefined,
-      })
+      }
+      emitter.emit(`grid:${eventType}` as any, gridEvent)
     },
     [buildingPosition, buildingRotationY, floorplanGridLocalY, floorplanGridWorldY],
   )

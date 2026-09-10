@@ -48,11 +48,10 @@ tips, to exclude pre-existing changes from review.
   `1.0.0-beta.5`.
 - Editor package manager pin: Bun `1.3.14`; plugin pin and currently installed
   executable: Bun `1.3.12`. Use each repository's pin when validating it.
-- Editor consumes `file:../../../pool-pascal-plugin/release-artifact/pascal-app-plugin-pool-0.1.0.tgz`
-  relative to `apps/editor`. This resolves through a sibling symlink to the plugin
-  repository above. Source changes there do not automatically update the tarball.
-- Tarball SHA-256: `8020a06ebe4c24ad6279424cc6ac2212613d4d2a59fe71af96caf8849c5e0a56`.
-- Editor lock SHA-256: `ee52ef84f0fdded062461e517682aaef1e484dc37d67b3e2463bd7c1f05e1431`.
+- Editor consumes the repository-local release artifact at
+  `apps/editor/vendor/pascal-app-plugin-pool-0.1.0-connection-status.tgz`.
+- Tarball SHA-256: `28e2495fd5bd889a3048a0d38194f0786d942a778ce8deb8f573f5847d228272`.
+- Editor lock SHA-256: `3ead6c1205b510a5be9ca0ce42cd36565781bce71e1e9ea621002212c9e2125b`.
 - Plugin lock SHA-256: `4662110051af811303ddbe4ae56e3a39e4606062d78206f2a5990b5c1ff0515d`.
 
 These are recorded versions, not a claim that runtime compatibility has been

@@ -8,7 +8,7 @@ import {
   resolveConnectivityUpdates,
   useScene,
 } from '@pascal-app/core'
-import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
+import { isGridSnapActive, snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
 import { planRunEndCapFollowUpdates } from './automatic-run-end-cap'
 import {
   detectFittingEndpoint,
@@ -20,8 +20,8 @@ import {
  * Shared "drag a path point" floor-plan affordance for polyline
  * distribution kinds (duct-segment / pipe-segment / lineset). It is the
  * 2D counterpart of their 3D `affordanceTools.selection` handles: one
- * draggable handle per path vertex, moved freely on the plan (XZ) with
- * grid snap (Shift bypasses). The vertex's Y (elevation / slope) is held
+ * draggable handle per path vertex, moved freely on the plan (XZ) using
+ * the active snapping mode. The vertex's Y (elevation / slope) is held
  * fixed — plan editing never changes height.
  *
  * Like the 3D handles, dragging a vertex that sits on a fitting carries the
@@ -121,7 +121,7 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
         apply({ planPoint, modifiers }) {
           // Plan coords map x→world X, y→world Z.
           const raw: WallPlanPoint = [planPoint[0], planPoint[1]]
-          const [sx, sz] = modifiers.shiftKey ? raw : snapPointToGrid(raw)
+          const [sx, sz] = isGridSnapActive() ? snapPointToGrid(raw) : raw
           const dragged: [number, number, number] = [sx, y, sz]
           // Alt = detach: break the joint for this drag — the elbow does NOT
           // re-aim and mated fittings / runs do NOT follow; the vertex moves

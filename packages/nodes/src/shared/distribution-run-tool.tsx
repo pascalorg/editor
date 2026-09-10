@@ -6,6 +6,7 @@ import {
   clearPlacementSurface,
   DimensionPill,
   type DimensionPillPart,
+  getGridEventScreenProjection,
   isAngleSnapActive,
   isGridSnapActive,
   isMagneticSnapActive,
@@ -633,18 +634,16 @@ export function useDistributionRunTool(config: DistributionRunToolConfig) {
         clientX?: number
         clientY?: number
       }
-      const pointer = event.screenProjection?.pointer ?? [
-        native.clientX ?? NaN,
-        native.clientY ?? NaN,
-      ]
+      const screenProjection = getGridEventScreenProjection(event)
+      const pointer = screenProjection?.pointer ?? [native.clientX ?? NaN, native.clientY ?? NaN]
       const rect = gl.domElement.getBoundingClientRect()
       const level = adapter.levelId ? sceneRegistry.nodes.get(adapter.levelId) : null
       const origin = camera.getWorldPosition(new Vector3())
       const projectConnection = (
         candidate: readonly [number, number, number],
       ): PortScreenPoint | null => {
-        if (event.screenProjection) {
-          const [a, b, c, d, e, f] = event.screenProjection.localToScreen
+        if (screenProjection) {
+          const [a, b, c, d, e, f] = screenProjection.localToScreen
           return {
             x: a * candidate[0] + c * candidate[2] + e,
             y: b * candidate[0] + d * candidate[2] + f,
