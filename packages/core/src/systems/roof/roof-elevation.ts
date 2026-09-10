@@ -33,9 +33,13 @@ export function resolveRoofElevation(
   const levelId = resolveLevelId(roof, nodes)
   if (nodes[levelId]?.type !== 'level') return roof.position[1]
   const elevations = getLevelElevations(nodes)
+  // A roof usually sits on the storey above its walls, but the top floor (or a
+  // roof armed from the walls' own level) keeps roof and walls on one level.
   const belowId = findLevelBelowId(levelId, elevations)
-  const below = belowId ? nodes[belowId] : undefined
-  if (below?.type !== 'level') return roof.position[1]
+  const candidateWallIds = [levelId, belowId]
+    .map((id) => (id ? nodes[id] : undefined))
+    .filter((node): node is LevelNode => node?.type === 'level')
+    .flatMap((level) => level.children)
 
   const conicalSegments = roof.children
     .map((id) => nodes[id])
@@ -72,7 +76,7 @@ export function resolveRoofElevation(
       )
     })
   const wallIds = conicalSegments.length
-    ? below.children.filter((id) => {
+    ? candidateWallIds.filter((id) => {
         const wall = nodes[id]
         if (wall?.type !== 'wall') return false
         const arc = getWallArcData(wall)
@@ -86,15 +90,23 @@ export function resolveRoofElevation(
         })
       })
     : footprints.length
-      ? below.children.filter((id) => {
+      ? candidateWallIds.filter((id) => {
           const wall = nodes[id]
           return (
             wall?.type === 'wall' &&
             footprints.some((polygon) => wallOverlapsSlabFootprint(wall, polygon))
           )
         })
-      : (resolveRoomRoofFootprintOnLevel(below.id, nodes, [roof.position[0], roof.position[2]])
-          ?.wallIds ?? [])
+      : ([levelId, belowId]
+          .map((id) =>
+            id
+              ? resolveRoomRoofFootprintOnLevel(id as LevelNode['id'], nodes, [
+                  roof.position[0],
+                  roof.position[2],
+                ])
+              : null,
+          )
+          .find((target) => target !== null)?.wallIds ?? [])
 
   let highest: number | undefined
   for (const id of wallIds) {

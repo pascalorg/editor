@@ -56,3 +56,24 @@ test('free-drawn rectangles stay custom at Y zero even with following preset def
   const roof = created.find(({ node }) => node.type === 'roof')?.node as RoofNode
   expect(roof).toMatchObject({ support: { kind: 'level' }, position: [2, 0, 1.5] })
 })
+
+test("room creation from the walls' own level still parents the roof to the level above", () => {
+  const { upper, nodes, created, sceneApi } = setup()
+  const level = Object.values(nodes).find((node) => node.type === 'level' && node.id !== upper.id)!
+  const target = resolveRoomRoofFootprint(level.id as LevelNode['id'], nodes, [2, 1])!
+  commitRoofFootprint(sceneApi, level.id as LevelNode['id'], target, false)
+  const roof = created.find(({ node }) => node.type === 'roof')!
+  expect(roof.parentId).toBe(upper.id)
+  expect(roof.node).toMatchObject({ support: { kind: 'walls' }, position: [2, -0.5, 1.5] })
+})
+
+test("room creation on the top floor keeps the roof on the walls' level at their top", () => {
+  const { upper, nodes, created, sceneApi } = setup()
+  delete nodes[upper.id]
+  const level = Object.values(nodes).find((node) => node.type === 'level')!
+  const target = resolveRoomRoofFootprint(level.id as LevelNode['id'], nodes, [2, 1])!
+  commitRoofFootprint(sceneApi, level.id as LevelNode['id'], target, false)
+  const roof = created.find(({ node }) => node.type === 'roof')!
+  expect(roof.parentId).toBe(level.id)
+  expect(roof.node).toMatchObject({ support: { kind: 'walls' }, position: [2, 2.5, 1.5] })
+})

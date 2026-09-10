@@ -4,7 +4,9 @@ import {
   type AnyNodeId,
   collectAlignmentAnchors,
   emitter,
+  findLevelAboveId,
   type GridEvent,
+  getLevelElevations,
   getWallArcData,
   getWallBaseElevationForNodes,
   getWallEffectiveHeightForNodes,
@@ -16,6 +18,7 @@ import {
   type RoofType,
   RoofType as RoofTypeSchema,
   resolveBuildingForLevel,
+  resolveLevelId,
   resolveRoomRoofFootprint,
   type SceneApi,
   sceneRegistry,
@@ -374,12 +377,18 @@ export const commitRoofFootprint = (
     position: [0, 0, 0],
     rotation: quarterTurn ? Math.PI / 2 : 0,
   })
+  // A roof belongs to the storey above the walls it covers, whichever level the
+  // tool was armed on; the top floor keeps it on the walls' own level.
+  const firstWall = target.wallIds.map((id) => nodes[id]).find((node) => node?.type === 'wall')
+  const wallsLevelId = firstWall ? resolveLevelId(firstWall, nodes) : levelId
+  const parentLevelId = (findLevelAboveId(wallsLevelId, getLevelElevations(nodes)) ??
+    wallsLevelId) as LevelNode['id']
   const roof = RoofNode.parse({
     ...defaults,
     name: `Roof ${roofCount + 1}`,
     position: [
       target.center[0],
-      resolveRoofFootprintElevation(levelId, target, nodes),
+      resolveRoofFootprintElevation(parentLevelId, target, nodes),
       target.center[1],
     ],
     rotation: target.rotation,
@@ -387,7 +396,7 @@ export const commitRoofFootprint = (
     children: [segment.id],
   })
   createRoofNodes(sceneApi, [
-    { node: roof, parentId: levelId },
+    { node: roof, parentId: parentLevelId },
     { node: segment, parentId: roof.id },
   ])
   triggerSFX('sfx:structure-build')

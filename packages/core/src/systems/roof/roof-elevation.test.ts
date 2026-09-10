@@ -51,6 +51,16 @@ function scene(heights: Array<number | undefined>) {
 }
 
 describe('resolveRoofElevation', () => {
+  test("follows walls on the roof's own level when it sits on the top floor", () => {
+    const { roof, level, upper, nodes } = scene([2.5])
+    // Move the roof onto the walls' level: no storey above, roof and walls share it.
+    delete nodes[upper.id]
+    roof.parentId = level.id
+    level.children = [...level.children, roof.id]
+    roof.position = [2, 2.5, 1]
+    expect(resolveRoofElevation(roof, nodes)).toBe(2.5)
+  })
+
   test('follows the walls under the segment footprint when the room is not closed', () => {
     const { roof, walls, nodes, level } = scene([4.5])
     // Drop the east wall: point-in-room finds no enclosure, the footprint still does.
@@ -204,18 +214,21 @@ describe('resolveRoofElevation', () => {
     expect(resolveRoofElevation(roof, next)).toBe(1)
   })
 
-  test('never substitutes walls on the roof parent level or a more distant floor', () => {
+  test('looks at its own level and the one below, never two floors down', () => {
     const { level, upper, roof, nodes } = scene([4])
     const middle = LevelNode.parse({ level: 0.5, height: 2 })
+    // A wall-less storey slipped between roof and walls: the walls are now two
+    // floors down and the roof freezes where it is.
+    expect(resolveRoofElevation(roof, { ...nodes, [middle.id]: middle })).toBe(0)
+    // Walls on the roof's own level count (top floor without a storey above).
     const onParent = room(upper, [20])
     const next = {
       ...nodes,
-      [middle.id]: middle,
       [upper.id]: { ...upper, children: [...upper.children, ...onParent.map((wall) => wall.id)] },
       ...Object.fromEntries(onParent.map((wall) => [wall.id, wall])),
     }
-    expect(resolveRoofElevation(roof, next)).toBe(0)
-    expect(resolveRoofElevation({ ...roof, parentId: level.id }, nodes)).toBe(0)
+    expect(resolveRoofElevation(roof, next)).toBe(20)
+    expect(resolveRoofElevation({ ...roof, parentId: level.id }, nodes)).toBe(4)
   })
 
   test('matches a conical arc by centre and radius after replacement, without an enclosure', () => {
