@@ -1347,7 +1347,65 @@ over it.
 G129 A captured face is lit for the drawing — the sun aimed at it from the
 viewer's side — and carries the viewer's ink edges as its outlines.
 
+## Mandate additions (Steve, 2026-09-10 morning — one model for the lines)
+
+Steve, on the first captured elevations: "your vector roof sits too low,
+you have something off with it, in both locations … what if there is a 0,0
+point always on each view, same point for the 3d scene and same point for
+vector that way it always aligns … ensure the lights, rails, all that come
+over too … even the little items … i can even see the door vector doesn't
+match … how do Chief Architect and Revit do it correctly?"
+
+G130 An elevation's lines are derived from the model the picture is
+rendered from — never from a second model of it. What the viewer shows,
+the drawing traces: the roofing's top, the door's leaf, every sconce,
+rail, shutter and post.
+G131 A line is drawn only where the render changes across it (a depth
+step or a crease); hidden lines are removed against the view's own depth.
+
 ## Log (continued)
+
+- 2026-09-10 (morning): **Batch T47 — the elevation's lines come from the viewer (G130, G131).**
+  The registration was never the fault: the picture and the overlay
+  already shared the frame (the building's origin and yaw, the view's
+  right axis). The overlay was a SECOND MODEL — plugin-sections' solids —
+  and two models of one house differ in their conventions: the vector roof
+  sat on the plate plane while the 3D roof stacks its deck and shingles on
+  it (7 in low on the 6:12 main roof, a foot on the porch's thick deck),
+  the vector door was the opening while the render shows the leaf and jamb,
+  the fascia a strip on the framing eave. Windows landed because both
+  models place them the same way in plan. Chief Architect and Revit never
+  keep a second model: their elevations are hidden-line views of the one
+  BIM model. Now so are ours. editor lib/vector-edges.ts
+  `extractVisibleEdges`: every visible mesh's feature edges (three's
+  EdgesGeometry at 20°, cached per geometry; instance by instance for
+  Bones' InstancedMeshes), projected through the capture's orthographic
+  camera and sampled along their length against two passes of the same
+  scene read back as floats — depth (a sample deeper than the buffer is
+  behind something) and view normals (a sample is a line only where the
+  render CHANGES across it: a depth step, or an unsigned crease over 15° —
+  the CSG walls come with T-junctions and flipped windings, so their
+  triangulation diagonals showed until the normal test). Ortho-only: depth
+  is linear across a face. ~2 s for 27,900 candidate edges → 2,800
+  segments on the north elevation, 60 KB on the viewport (`imageEdges`,
+  "x0,y0,x1,y1;…" to the millimetre). VectorEdgeExtractor (beside the
+  ThumbnailGenerator) answers `camera-controls:extract-edges`; capture.ts
+  `requestEdges` asks with the picture, `edgesToDrawing` turns world
+  segments into drawing space through the same frame; drawings.ts inks
+  them over the picture and the provider leaves its own outlines out
+  (`outlines: false`, threaded through bootstrap and the demo scripts).
+  Also: scene-model.ts lifts the vector roof surface by the roofing
+  thickness along the slope (the fallback and the sections agree with the
+  picture; section.test.ts expects the lift); captures run one at a time
+  through `captureQueue` and `withFinishedPresentation` is reentrant — the
+  last caller out restores the X-ray (a Recapture beside an auto-capture
+  had captured the framing). Picture recipe r5. Verified in Steve's
+  Chrome, all four elevations: the roof rakes, fascia and porch beam, the
+  door leaf and lites, sconces, posts, steps, shutters, the mast and
+  weatherhead, the equipment beyond — every line on the picture. Open:
+  sections keep the vector cut over the picture (their edges would need
+  the clip applied in the depth pass); smooth silhouettes (cylinders) are
+  not feature edges; the pane's WebGL fallback cannot read floats back.
 
 - 2026-09-10 (night): **Batches T43–T46 — sections labelled left; the site plan named; braced wall panels; foundation dimensions and detail keys.**
   T43 projection.ts `datumPrimitives(marks, uMax, { uMin, side })`: an
