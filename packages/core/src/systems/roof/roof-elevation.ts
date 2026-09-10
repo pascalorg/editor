@@ -37,7 +37,5 @@ export function resolveRoofElevation(
     const top = resolveRoofWallTopElevation(levelId as LevelNode['id'], wall, nodes, elevations)
     highest = highest === undefined ? top : Math.max(highest, top)
   }
-  // A roof never sinks below its own level's floor plane; a lower-floor wall
-  // top is clamped there, as the creation paths always did.
-  return highest === undefined ? roof.position[1] : Math.max(0, highest)
+  return highest ?? roof.position[1]
 }

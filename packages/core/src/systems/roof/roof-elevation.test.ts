@@ -62,9 +62,9 @@ describe('resolveRoofElevation', () => {
     expect(resolveRoofElevation(roof, { ...nodes, [wall.id]: wall })).toBe(0)
   })
 
-  test('clamps tops below the roof level plane to the floor', () => {
+  test('follows tops below the roof level plane so short walls leave no gap', () => {
     const { roof, nodes } = scene([2])
-    expect(resolveRoofElevation(roof, nodes)).toBe(0)
+    expect(resolveRoofElevation(roof, nodes)).toBe(-0.5)
   })
 
   test('preserves manual Y without a footprint or after all sources disappear', () => {

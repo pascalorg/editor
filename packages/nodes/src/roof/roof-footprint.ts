@@ -203,7 +203,7 @@ export function resolveRoofFootprintElevation(
       ? [resolveRoofWallTopElevation(targetLevelId, wall, completeNodes, elevations)]
       : []
   })
-  return tops.length ? Math.max(0, ...tops) : 0
+  return tops.length ? Math.max(...tops) : 0
 }
 
 export function resolveRoofFootprintWorldElevation(
