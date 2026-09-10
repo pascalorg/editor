@@ -30,18 +30,18 @@ GitHub preview when a task needs the new read-only furniture candidate check.
 
 ## Verified CLI preview
 
-The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, which predates the read-only furniture candidate input and hosted `pascal agent claim` command in this repository. To use those capabilities before the next npm release, install the verified GitHub prerelease built from commit `8ca0b79c0b415a04d28a28cae3a1958f2f403c39`:
+The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, which predates the read-only furniture candidate input and hosted agent claim/status commands in this repository. To use those capabilities before the next npm release, install the verified GitHub prerelease built from commit `5dabbc3b56109c9f79dc8a378443a4c520d9ee0a`:
 
 ```bash
-PASCAL_PREVIEW_VERSION='1.0.0-beta.2.claim.0'
+PASCAL_PREVIEW_VERSION='1.0.0-beta.2.status.0'
 PASCAL_PREVIEW_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/pascal-preview"
 PASCAL_PREVIEW_DOWNLOAD="$(mktemp -d)"
 cd "$PASCAL_PREVIEW_DOWNLOAD"
 
 curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-claim.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
 curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-claim.0/SHA256SUMS.txt"
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/SHA256SUMS.txt"
 
 # macOS
 shasum -a 256 -c SHA256SUMS.txt
@@ -55,9 +55,10 @@ pascal update --version "$PASCAL_PREVIEW_VERSION"
 pascal editor --no-open
 # For an existing hosted autonomous-agent key:
 PASCAL_API_KEY='sk_live_...' pascal agent claim
+PASCAL_API_KEY='sk_live_...' pascal agent status --json
 ```
 
-The expected archive SHA-256 is `8c8204109c619898a34e76cbb33a92cb1a0c9b9ac63bcd7a3b654a2dba9c3c6b`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before using the Claude plugin-provided connector, running `pascal mcp setup claude` or `pascal mcp setup codex` for another installation path, or configuring `pascal mcp connect` manually. `pascal agent claim` opens a prefilled 15-minute human handoff and does not store or print the hosted key. This GitHub prerelease is not an npm version.
+The expected archive SHA-256 is `15628baeeb174fb7786a1643db08f0554bf6d18afaaa3979f01922c5cd40019a`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before using the Claude plugin-provided connector, running `pascal mcp setup claude` or `pascal mcp setup codex` for another installation path, or configuring `pascal mcp connect` manually. `pascal agent claim` opens a prefilled 15-minute human handoff; `pascal agent status` verifies the key and reports the bounded claim state. Neither command stores or prints the hosted key. This GitHub prerelease is not an npm version.
 
 Use one active agent client per local CLI service. The standalone local HTTP runtime shares active scene state between clients; use separate `PASCAL_HOME` directories and service processes when independent concurrent work is required.
 
