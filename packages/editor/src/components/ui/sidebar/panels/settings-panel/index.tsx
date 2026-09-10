@@ -10,7 +10,17 @@ import {
 } from '@pascal-app/core'
 import { useViewer, viewerPresentationRegistry } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
-import { Camera, Check, Copy, Download, Map as MapIcon, Save, Trash2, Upload } from 'lucide-react'
+import {
+  Camera,
+  Check,
+  ChevronDown,
+  Copy,
+  Download,
+  Map as MapIcon,
+  Save,
+  Trash2,
+  Upload,
+} from 'lucide-react'
 import {
   type KeyboardEvent,
   type SyntheticEvent,
@@ -495,7 +505,7 @@ export function SettingsPanel({
   }
 
   return (
-    <div className="flex flex-col gap-6 p-3">
+    <div className="subtle-scrollbar min-h-0 flex-1 space-y-6 overflow-x-hidden overflow-y-auto overscroll-contain p-3">
       {projectId && (
         <div className="space-y-2">
           <label className="font-medium text-muted-foreground text-xs uppercase">Project</label>
@@ -589,100 +599,106 @@ export function SettingsPanel({
 
         <div className="space-y-2">
           <div className="font-medium text-muted-foreground text-xs">3D model</div>
-          <div className="flex items-center justify-between gap-4 rounded-md border p-3">
-            <div className="min-w-0">
-              <label className="font-medium text-sm" htmlFor={visibleOnlySwitchId}>
-                Visible nodes only
-              </label>
-              <div className="text-muted-foreground text-xs">
-                Exclude hidden furniture and other hidden scene nodes
-              </div>
-            </div>
-            <Switch
-              aria-label="Export visible nodes only"
-              checked={exportOnlyVisible}
-              id={visibleOnlySwitchId}
-              onCheckedChange={setExportOnlyVisible}
-            />
-          </div>
-
-          <fieldset
-            className="space-y-2 rounded-md border p-3"
+          <details
+            className="group"
             onKeyDownCapture={(event) => {
-              // Keep Space available to switches instead of the canvas pan shortcut.
+              // Keep Space available to the disclosure and switches, not canvas panning.
               if (event.code === 'Space') event.stopPropagation()
             }}
           >
-            <legend className="px-1 font-medium text-sm">Include in file</legend>
-            <p className="text-muted-foreground text-xs">
-              Choose which procedural content is baked into model files. GLB and USDZ use the
-              textured portable path; STL and OBJ remain geometry-only.
-            </p>
-            {exportableNodeTypes.length > 0 ? (
-              <div className="space-y-2 pt-1">
-                {exportableNodeTypes.map(({ type, label, supportsGeometryOnly }, index) => {
-                  const switchId = `${includeNodeTypeIdPrefix}-${index}`
-                  return (
-                    <div className="flex items-center justify-between gap-4" key={type}>
-                      <label className="min-w-0 font-medium text-sm" htmlFor={switchId}>
-                        {label}
-                        {!supportsGeometryOnly && (
-                          <span className="text-muted-foreground text-xs"> (GLB/USDZ only)</span>
-                        )}
-                      </label>
-                      <Switch
-                        aria-label={`Include ${label} in model files`}
-                        checked={!excludedNodeTypes.includes(type)}
-                        id={switchId}
-                        onCheckedChange={(included) => handleNodeTypeInclusion(type, included)}
-                      />
-                    </div>
-                  )
-                })}
+            <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between rounded-md border px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
+              Export options
+              <ChevronDown aria-hidden="true" className="size-4 group-open:rotate-180" />
+            </summary>
+            <div className="space-y-3 pt-3">
+              <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+                <div className="min-w-0">
+                  <label className="font-medium text-sm" htmlFor={visibleOnlySwitchId}>
+                    Visible nodes only
+                  </label>
+                  <div className="text-muted-foreground text-xs">
+                    Exclude hidden furniture and other hidden scene nodes
+                  </div>
+                </div>
+                <Switch
+                  aria-label="Export visible nodes only"
+                  checked={exportOnlyVisible}
+                  id={visibleOnlySwitchId}
+                  onCheckedChange={setExportOnlyVisible}
+                />
               </div>
-            ) : (
-              <p className="text-muted-foreground text-xs">
-                No optional procedural content is present.
-              </p>
-            )}
-            <p className="text-muted-foreground text-xs">
-              Viewer surroundings are excluded unless selected separately below.
-            </p>
-          </fieldset>
-          {exportablePresentations.length > 0 ? (
-            <fieldset
-              className="space-y-2 rounded-md border p-3"
-              onKeyDownCapture={(event) => {
-                if (event.code === 'Space') event.stopPropagation()
-              }}
-            >
-              <legend className="px-1 font-medium text-sm">Viewer surroundings</legend>
-              <p className="text-muted-foreground text-xs">
-                Optional static surroundings are included only in GLB and USDZ.
-              </p>
-              <div className="space-y-2 pt-1">
-                {exportablePresentations.map((contribution, index) => {
-                  const switchId = `${includePresentationIdPrefix}-${index}`
-                  const label = contribution.staticExport!.label
-                  return (
-                    <div className="flex items-center justify-between gap-4" key={contribution.id}>
-                      <label className="min-w-0 font-medium text-sm" htmlFor={switchId}>
-                        {label}
-                      </label>
-                      <Switch
-                        aria-label={`Include ${label} in GLB and USDZ`}
-                        checked={includedPresentationIds.includes(contribution.id)}
-                        id={switchId}
-                        onCheckedChange={(included) =>
-                          handlePresentationInclusion(contribution.id, included)
-                        }
-                      />
-                    </div>
-                  )
-                })}
-              </div>
-            </fieldset>
-          ) : null}
+
+              <fieldset className="space-y-2 rounded-md border p-3">
+                <legend className="px-1 font-medium text-sm">Include in file</legend>
+                <p className="text-muted-foreground text-xs">
+                  Choose which procedural content is baked into model files. GLB and USDZ use the
+                  textured portable path; STL and OBJ remain geometry-only.
+                </p>
+                {exportableNodeTypes.length > 0 ? (
+                  <div className="space-y-2 pt-1">
+                    {exportableNodeTypes.map(({ type, label, supportsGeometryOnly }, index) => {
+                      const switchId = `${includeNodeTypeIdPrefix}-${index}`
+                      return (
+                        <div className="flex items-center justify-between gap-4" key={type}>
+                          <label className="min-w-0 font-medium text-sm" htmlFor={switchId}>
+                            {label}
+                            {!supportsGeometryOnly && (
+                              <span className="text-muted-foreground text-xs"> (GLB/USDZ only)</span>
+                            )}
+                          </label>
+                          <Switch
+                            aria-label={`Include ${label} in model files`}
+                            checked={!excludedNodeTypes.includes(type)}
+                            id={switchId}
+                            onCheckedChange={(included) => handleNodeTypeInclusion(type, included)}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-xs">
+                    No optional procedural content is present.
+                  </p>
+                )}
+                <p className="text-muted-foreground text-xs">
+                  Viewer surroundings are excluded unless selected separately below.
+                </p>
+              </fieldset>
+              {exportablePresentations.length > 0 ? (
+                <fieldset className="space-y-2 rounded-md border p-3">
+                  <legend className="px-1 font-medium text-sm">Viewer surroundings</legend>
+                  <p className="text-muted-foreground text-xs">
+                    Optional static surroundings are included only in GLB and USDZ.
+                  </p>
+                  <div className="space-y-2 pt-1">
+                    {exportablePresentations.map((contribution, index) => {
+                      const switchId = `${includePresentationIdPrefix}-${index}`
+                      const label = contribution.staticExport!.label
+                      return (
+                        <div
+                          className="flex items-center justify-between gap-4"
+                          key={contribution.id}
+                        >
+                          <label className="min-w-0 font-medium text-sm" htmlFor={switchId}>
+                            {label}
+                          </label>
+                          <Switch
+                            aria-label={`Include ${label} in GLB and USDZ`}
+                            checked={includedPresentationIds.includes(contribution.id)}
+                            id={switchId}
+                            onCheckedChange={(included) =>
+                              handlePresentationInclusion(contribution.id, included)
+                            }
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </fieldset>
+              ) : null}
+            </div>
+          </details>
 
           {MODEL_EXPORT_FORMATS.map(({ format, label }) => {
             const isActive = activeModelExport === format

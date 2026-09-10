@@ -898,7 +898,8 @@ export function fixReflectedMeshWinding(root: THREE.Object3D): void {
 /**
  * Build a USDZ-only clone with world transforms baked into geometry. This
  * removes unsupported negative-scale transforms without changing the shared
- * prepared artifact or its identity hierarchy.
+ * prepared artifact or its identity hierarchy. Empty mesh containers become
+ * groups because USDZ requires vertex positions for every mesh primitive.
  */
 export function createUsdzScene(source: THREE.Object3D): THREE.Object3D {
   source.updateMatrixWorld(true)
@@ -906,7 +907,7 @@ export function createUsdzScene(source: THREE.Object3D): THREE.Object3D {
   const cloneObject = (object: THREE.Object3D): THREE.Object3D => {
     let clone: THREE.Object3D
     const mesh = object as THREE.Mesh
-    if (mesh.isMesh) {
+    if (mesh.isMesh && (mesh.geometry.getAttribute('position')?.count ?? 0) > 0) {
       const geometry = mesh.geometry.clone()
       geometry.applyMatrix4(mesh.matrixWorld)
       if (mesh.matrixWorld.determinant() < 0) reverseWindingPreservingNormals(geometry)
