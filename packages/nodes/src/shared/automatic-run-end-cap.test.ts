@@ -1,15 +1,32 @@
-import { describe, expect, test } from 'bun:test'
-import { type AnyNode, DuctSegmentNode, PipeSegmentNode } from '@pascal-app/core'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
+import {
+  type AnyNode,
+  DuctSegmentNode,
+  loadPlugin,
+  nodeRegistry,
+  PipeSegmentNode,
+} from '@pascal-app/core'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
+import { builtinPlugin } from '../index'
 import { getPipeFittingPorts } from '../pipe-fitting/ports'
 import {
   createDuctRunEndCap,
   createPipeRunEndCap,
   findMatedRunEndCapIds,
   isRunEndCapPort,
+  planRunEndCapFollowUpdates,
 } from './automatic-run-end-cap'
 
 describe('automatic run end caps', () => {
+  beforeEach(async () => {
+    nodeRegistry._reset()
+    await loadPlugin(builtinPlugin)
+  })
+
+  afterEach(() => {
+    nodeRegistry._reset()
+  })
+
   test('closes a rectangular return duct with a matching profile and orientation', () => {
     const duct = DuctSegmentNode.parse({
       path: [
@@ -105,5 +122,50 @@ describe('automatic run end caps', () => {
     expect(inlet.direction[0]).toBeCloseTo(1)
     expect(inlet.direction[1]).toBeCloseTo(0)
     expect(inlet.direction[2]).toBeCloseTo(0)
+  })
+
+  test.each([
+    [
+      'duct',
+      DuctSegmentNode.parse({
+        path: [
+          [0, 1, 0],
+          [3, 1, 0],
+        ],
+      }),
+    ],
+    [
+      'pipe',
+      PipeSegmentNode.parse({
+        path: [
+          [0, 1, 0],
+          [3, 1, 0],
+        ],
+      }),
+    ],
+  ] as const)('moves and reorients a %s end cap with its resized endpoint', (_kind, run) => {
+    const cap = run.type === 'duct-segment' ? createDuctRunEndCap(run)! : createPipeRunEndCap(run)!
+    const nextRun = {
+      ...run,
+      path: [
+        [0, 1, 0],
+        [0, 1, 4],
+      ],
+    } as typeof run
+    const nodes = { [run.id]: run, [cap.id]: cap } as Record<string, AnyNode>
+
+    const [update] = planRunEndCapFollowUpdates(run, nextRun, 'end', nodes)
+
+    expect(update?.id).toBe(cap.id)
+    const moved = { ...cap, ...update!.data } as typeof cap
+    const inlet =
+      moved.type === 'duct-fitting'
+        ? getDuctFittingPorts(moved)[0]!
+        : getPipeFittingPorts(moved)[0]!
+    expect(inlet.position[0]).toBeCloseTo(0)
+    expect(inlet.position[1]).toBeCloseTo(1)
+    expect(inlet.position[2]).toBeCloseTo(4)
+    expect(inlet.direction[0]).toBeCloseTo(0)
+    expect(inlet.direction[2]).toBeCloseTo(-1)
   })
 })

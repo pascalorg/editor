@@ -436,7 +436,29 @@ function createHandleArrowHitGeometry(shape: HandleArrowShape, round = false) {
 }
 
 let sharedHitAreaMaterial: MeshBasicNodeMaterial | null = null
-let sharedHitAreaMaterialRefs = 0
+const sharedHandleGeometries = new Map<string, BufferGeometry>()
+const sharedHandleHitGeometries = new Map<string, BufferGeometry>()
+const sharedHandleMaterials = new Map<string, MeshBasicNodeMaterial>()
+
+function sharedHandleGeometry(shape: HandleArrowShape, thin: boolean, round: boolean) {
+  const key = `${shape}:${thin}:${round}`
+  let geometry = sharedHandleGeometries.get(key)
+  if (!geometry) {
+    geometry = createHandleArrowGeometry(shape, thin, round)
+    sharedHandleGeometries.set(key, geometry)
+  }
+  return geometry
+}
+
+function sharedHandleHitGeometry(shape: HandleArrowShape, round: boolean) {
+  const key = `${shape}:${round}`
+  let geometry = sharedHandleHitGeometries.get(key)
+  if (!geometry) {
+    geometry = createHandleArrowHitGeometry(shape, round)
+    sharedHandleHitGeometries.set(key, geometry)
+  }
+  return geometry
+}
 
 function createInvisibleHitAreaMaterial() {
   return new MeshBasicNodeMaterial({
@@ -451,23 +473,8 @@ function createInvisibleHitAreaMaterial() {
 }
 
 export function useInvisibleHitAreaMaterial(): MeshBasicNodeMaterial {
-  const materialRef = useRef<MeshBasicNodeMaterial | null>(null)
-  if (!materialRef.current) {
-    sharedHitAreaMaterial ??= createInvisibleHitAreaMaterial()
-    materialRef.current = sharedHitAreaMaterial
-  }
-  useEffect(() => {
-    sharedHitAreaMaterialRefs += 1
-    return () => {
-      sharedHitAreaMaterialRefs -= 1
-      if (sharedHitAreaMaterialRefs <= 0 && sharedHitAreaMaterial) {
-        sharedHitAreaMaterial.dispose()
-        sharedHitAreaMaterial = null
-        sharedHitAreaMaterialRefs = 0
-      }
-    }
-  }, [])
-  return materialRef.current
+  sharedHitAreaMaterial ??= createInvisibleHitAreaMaterial()
+  return sharedHitAreaMaterial
 }
 
 export function InvisibleHandleHitArea({
@@ -525,19 +532,21 @@ export function useArrowMaterial(): MeshBasicNodeMaterial {
   )
 }
 
-function useHandleArrowMaterial(shape: HandleArrowShape): MeshBasicNodeMaterial {
-  return useMemo(
-    () =>
-      new MeshBasicNodeMaterial({
-        color: new Color(ARROW_COLOR),
-        side: DoubleSide,
-        transparent: true,
-        opacity: shape === 'corner-picker' ? 0.95 : 1,
-        depthTest: false,
-        depthWrite: shape !== 'corner-picker',
-      }),
-    [shape],
-  )
+function useHandleArrowMaterial(shape: HandleArrowShape, hover: boolean): MeshBasicNodeMaterial {
+  const key = `${shape}:${hover}`
+  let material = sharedHandleMaterials.get(key)
+  if (!material) {
+    material = new MeshBasicNodeMaterial({
+      color: new Color(hover ? ARROW_HOVER_COLOR : ARROW_COLOR),
+      side: DoubleSide,
+      transparent: true,
+      opacity: shape === 'corner-picker' ? 0.95 : 1,
+      depthTest: false,
+      depthWrite: shape !== 'corner-picker',
+    })
+    sharedHandleMaterials.set(key, material)
+  }
+  return material
 }
 
 function indicatorRenderOrder(shape: HandleArrowShape) {
@@ -561,15 +570,9 @@ export function HandleArrow({
   round = false,
 }: HandleArrowProps) {
   const visualShape = normalizeHandleArrowShape(shape, cursor)
-  const geometry = useMemo(
-    () => createHandleArrowGeometry(visualShape, thin, round),
-    [visualShape, thin, round],
-  )
-  const hitGeometry = useMemo(
-    () => createHandleArrowHitGeometry(visualShape, round),
-    [visualShape, round],
-  )
-  const indicatorMaterial = useHandleArrowMaterial(visualShape)
+  const geometry = sharedHandleGeometry(visualShape, thin, round)
+  const hitGeometry = sharedHandleHitGeometry(visualShape, round)
+  const indicatorMaterial = useHandleArrowMaterial(visualShape, hover)
   const hitMaterial = useInvisibleHitAreaMaterial()
   const rootRef = useRef<Group>(null)
   const rotation: [number, number, number] = placement.rotation
@@ -581,9 +584,6 @@ export function HandleArrow({
   const scale = (hover ? hoverScale : 1) * placement.baseScale
   const hitScale = visualShape === 'corner-picker' ? scale : placement.baseScale
 
-  useEffect(() => {
-    indicatorMaterial.color.set(hover ? ARROW_HOVER_COLOR : ARROW_COLOR)
-  }, [indicatorMaterial, hover])
   useEffect(() => {
     const hideForCapture = () => {
       if (rootRef.current) rootRef.current.visible = false
@@ -598,9 +598,6 @@ export function HandleArrow({
       emitter.off('thumbnail:after-capture', restoreAfterCapture)
     }
   }, [])
-  useEffect(() => () => geometry.dispose(), [geometry])
-  useEffect(() => () => hitGeometry.dispose(), [hitGeometry])
-  useEffect(() => () => indicatorMaterial.dispose(), [indicatorMaterial])
 
   const handleEnter: PointerHandler = (event) => {
     event.stopPropagation()

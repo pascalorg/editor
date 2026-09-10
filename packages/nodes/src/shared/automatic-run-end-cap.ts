@@ -163,3 +163,34 @@ export function findMatedRunEndCapIds(
   }
   return ids
 }
+
+export function planRunEndCapFollowUpdates(
+  originalRun: DuctSegmentNode | PipeSegmentNode,
+  nextRun: DuctSegmentNode | PipeSegmentNode,
+  endpoint: 'start' | 'end',
+  nodes: Readonly<Record<string, AnyNode>>,
+): { id: AnyNodeId; data: Partial<AnyNode> }[] {
+  if (originalRun.type !== nextRun.type) return []
+  const originalEnd = runEndpoint(originalRun.path, endpoint)
+  if (!originalEnd) return []
+  const fittingKind = originalRun.type === 'duct-segment' ? 'duct-fitting' : 'pipe-fitting'
+  const source: ScenePort = {
+    ...originalEnd,
+    id: endpoint,
+    nodeId: originalRun.id,
+    diameter:
+      originalRun.type === 'duct-segment' ? ductPortDiameterIn(originalRun) : originalRun.diameter,
+    system: originalRun.system,
+  }
+  const capIds = findMatedRunEndCapIds(source, nodes, fittingKind)
+  if (capIds.length === 0) return []
+  const placed =
+    nextRun.type === 'duct-segment'
+      ? createDuctRunEndCap(nextRun, endpoint)
+      : createPipeRunEndCap(nextRun, endpoint)
+  if (!placed) return []
+  return capIds.map((id) => ({
+    id,
+    data: { position: placed.position, rotation: placed.rotation } as Partial<AnyNode>,
+  }))
+}

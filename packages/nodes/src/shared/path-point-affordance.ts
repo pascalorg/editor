@@ -9,6 +9,7 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { snapPointToGrid, type WallPlanPoint } from '@pascal-app/editor'
+import { planRunEndCapFollowUpdates } from './automatic-run-end-cap'
 import {
   detectFittingEndpoint,
   type FittingEndpoint,
@@ -74,10 +75,9 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
         ? detectFittingEndpoint(kind, initialPath, pointIndex, nodes)
         : null
 
-      const connectivity: PortConnectivity | null =
-        isEndpoint && !fittingEndpoint
-          ? analyzePortConnectivity(node as unknown as AnyNode, nodes)
-          : null
+      const connectivity: PortConnectivity | null = isEndpoint
+        ? analyzePortConnectivity(node as unknown as AnyNode, nodes)
+        : null
 
       // Report every node the drag may write so the dispatcher snapshots them
       // for the single-undo dance.
@@ -87,15 +87,33 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
         ...(connectivity?.connections.map((c) => c.nodeId) ?? []),
       ]
 
+      const endCapUpdates = (nextPath: [number, number, number][]) => {
+        if ((kind !== 'duct-segment' && kind !== 'pipe-segment') || !isEndpoint) return []
+        const preview = {
+          ...(node as unknown as Record<string, unknown>),
+          path: nextPath,
+        } as AnyNode
+        const endpoint = pointIndex === 0 ? 'start' : 'end'
+        return planRunEndCapFollowUpdates(
+          node as unknown as Parameters<typeof planRunEndCapFollowUpdates>[0],
+          preview as Parameters<typeof planRunEndCapFollowUpdates>[1],
+          endpoint,
+          nodes,
+        )
+      }
+
       const followUpdates = (nextPath: [number, number, number][]) => {
         if (!connectivity) return []
         const preview = {
           ...(node as unknown as Record<string, unknown>),
           path: nextPath,
         } as AnyNode
-        return resolveConnectivityUpdates(connectivity, preview).filter(
+        const updates = resolveConnectivityUpdates(connectivity, preview).filter(
           (u) => useScene.getState().nodes[u.id],
         )
+        const capUpdates = endCapUpdates(nextPath)
+        const capIds = new Set(capUpdates.map((update) => update.id))
+        return [...updates.filter((update) => !capIds.has(update.id)), ...capUpdates]
       }
 
       return {
@@ -124,6 +142,10 @@ export function createPathPointMoveAffordance<N extends PathShape & { id: AnyNod
                 id: plan.fittingUpdate.id,
                 data: plan.fittingUpdate.data as Partial<unknown> as never,
               },
+              ...endCapUpdates(plan.path).map((update) => ({
+                id: update.id,
+                data: update.data as Partial<unknown> as never,
+              })),
             ])
             return
           }

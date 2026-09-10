@@ -1196,12 +1196,6 @@ export function DistributionRunCursor({
               }}
             >
               <div className="absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-emerald-500 bg-emerald-500/20 ring-2 ring-background" />
-              <div
-                role="status"
-                className="absolute left-4 top-3 whitespace-nowrap rounded-full border border-emerald-500 bg-background/95 px-2 py-1 text-xs text-emerald-600 shadow-sm"
-              >
-                Snapped
-              </div>
             </div>,
             document.body,
           )}
