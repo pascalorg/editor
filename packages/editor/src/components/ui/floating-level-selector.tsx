@@ -145,11 +145,14 @@ function LevelRow({
   const [duplicateDialogOpen, setDuplicateDialogOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const updateNode = useScene((s) => s.updateNode)
-  const { isImperial, toDisplay, displayUnit } = useLinearDisplay('m', 2)
+  const { isImperial, toDisplay, displayUnit, precision: displayPrecision } = useLinearDisplay('m', 2)
 
   const storeyHeight = getStoredLevelHeight(level)
-  // toFixed(2) + strip one trailing zero: "2.50" → "2.5", "2.75" stays.
-  const storeyHeightLabel = `${toDisplay(storeyHeight).toFixed(2).replace(/0$/, '')} ${displayUnit}`
+  // Decimal units keep the compact readout; integer millimeters must retain trailing zeroes.
+  const formattedStoreyHeight = toDisplay(storeyHeight).toFixed(displayPrecision)
+  const storeyHeightLabel = `${
+    displayPrecision > 0 ? formattedStoreyHeight.replace(/0$/, '') : formattedStoreyHeight
+  } ${displayUnit}`
   // Same rule as the site panel and command palette: the ordinal-0 ground
   // floor is the vertical model's zero anchor and must never be deletable.
   const canDeleteLevel = level.level !== 0
