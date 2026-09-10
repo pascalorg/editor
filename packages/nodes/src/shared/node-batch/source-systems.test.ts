@@ -23,13 +23,19 @@ function runSourceTest(body: string) {
 
     // Isolated installs can give each tested package its own peer module instance.
     // Share the viewer's instance across every resolved path before loading consumers.
-    const consumers = [
-      ${sourcePath('packages/viewer/src/lib/materials.ts')},
-      ${sourcePath('packages/nodes/src/shared/node-batch/system.tsx')},
-      ${sourcePath('packages/editor/src/components/editor/selection-manager.tsx')},
+    const viewerConsumer = ${sourcePath('packages/viewer/src/lib/materials.ts')}
+    const nodesConsumer = ${sourcePath('packages/nodes/src/shared/node-batch/system.tsx')}
+    const editorConsumer = ${sourcePath('packages/editor/src/components/editor/selection-manager.tsx')}
+    const consumers = [viewerConsumer, nodesConsumer, editorConsumer]
+    const sharedConsumers = [
+      ['react', consumers],
+      ['three', consumers],
+      ['@react-three/fiber', consumers],
+      ['@pascal-app/core', consumers],
+      ['@pascal-app/viewer', [nodesConsumer, editorConsumer]],
     ]
     const sharedPaths = new Map(
-      ['react', 'three', '@react-three/fiber', '@pascal-app/core', '@pascal-app/viewer'].map((specifier) => [
+      sharedConsumers.map(([specifier, consumers]) => [
         specifier,
         [...new Set(consumers.map((consumer) => fileURLToPath(import.meta.resolve(specifier, pathToFileURL(consumer).href))))],
       ]),

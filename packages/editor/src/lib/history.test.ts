@@ -14,14 +14,21 @@ function runSourceHistoryTest(body: string) {
       import assert from 'node:assert/strict'
       import { mock } from 'bun:test'
       import { fileURLToPath, pathToFileURL } from 'node:url'
-      const consumers = [
-        ${JSON.stringify(resolve(import.meta.dir, 'history.ts'))},
-        ${JSON.stringify(resolve(import.meta.dir, '../../../core/src/index.ts'))},
-        ${JSON.stringify(resolve(import.meta.dir, '../../../viewer/src/systems/wall/wall-system.tsx'))},
-        ${JSON.stringify(resolve(import.meta.dir, '../../../nodes/src/shared/node-batch/system.tsx'))},
+      const editorConsumer = ${JSON.stringify(resolve(import.meta.dir, 'history.ts'))}
+      const coreConsumer = ${JSON.stringify(resolve(import.meta.dir, '../../../core/src/index.ts'))}
+      const viewerConsumer = ${JSON.stringify(resolve(import.meta.dir, '../../../viewer/src/systems/wall/wall-system.tsx'))}
+      const nodesConsumer = ${JSON.stringify(resolve(import.meta.dir, '../../../nodes/src/shared/node-batch/system.tsx'))}
+      const peerConsumers = [editorConsumer, coreConsumer, viewerConsumer, nodesConsumer]
+      // Resolve only from declared consumers; isolated installs cannot see sibling dependencies.
+      const sharedConsumers = [
+        ['@pascal-app/core', [editorConsumer, viewerConsumer, nodesConsumer]],
+        ['@pascal-app/viewer', [editorConsumer, nodesConsumer]],
+        ['react', peerConsumers],
+        ['three', peerConsumers],
+        ['@react-three/fiber', peerConsumers],
       ]
       const sharedPaths = new Map(
-        ['@pascal-app/core', '@pascal-app/viewer', 'react', 'three', '@react-three/fiber'].map(specifier => [
+        sharedConsumers.map(([specifier, consumers]) => [
           specifier,
           [...new Set(consumers.map(consumer => fileURLToPath(import.meta.resolve(specifier, pathToFileURL(consumer).href))))],
         ]),
