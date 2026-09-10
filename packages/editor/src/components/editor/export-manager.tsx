@@ -8,19 +8,19 @@ import * as THREE from 'three'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
 import { exportSceneToGlb, nextFrames, prepareSceneForExport } from '../../lib/glb-export'
+import { exportSceneLevelsForPrint } from '../../lib/level-print-export'
+import type { ModelExport, ModelExportArtifact } from '../../lib/model-export'
 import {
   expandInstancedMeshes,
   fixReflectedMeshWinding,
   freezeDeformedMeshes,
 } from '../../lib/portable-export'
-import { exportSceneToUsdz } from '../../lib/usdz-export'
-import { exportSceneLevelsForPrint } from '../../lib/level-print-export'
-import type { ModelExport, ModelExportArtifact } from '../../lib/model-export'
 import { exportSceneToPrint3mf } from '../../lib/print-3mf'
 import { filterPreparedSceneForPrintContent } from '../../lib/print-content-scope'
 import { exportSceneToPrintStl, mergePrintExportDiagnostics } from '../../lib/print-export'
 import { applySemanticPrintFeatureThickness } from '../../lib/print-feature-thickness'
 import { compileSemanticPrintShellWithManifold } from '../../lib/print-shell-compiler-manifold-worker'
+import { exportSceneToUsdz } from '../../lib/usdz-export'
 import useEditor from '../../store/use-editor'
 
 // prepareSceneForExport neutralises container meshes (door/window hitbox roots,

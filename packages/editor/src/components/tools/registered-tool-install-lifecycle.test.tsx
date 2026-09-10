@@ -1,20 +1,19 @@
+import { expect, test } from 'bun:test'
 import {
   type AnyNode,
   type AnyNodeDefinition,
-  type GridEvent,
-  type SceneApi,
   emitter,
+  type GridEvent,
   loadPlugin,
   nodeRegistry,
   registerNode,
+  type SceneApi,
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { act, create } from '@react-three/test-renderer'
-import { expect, test } from 'bun:test'
 import { type ComponentType, useEffect } from 'react'
 import { z } from 'zod'
-import { FloorplanRegisteredToolLayer } from '../editor-2d/floorplan-registered-tool-layer'
 import {
   FLOORPLAN_NODE_EXTENSION_KEY,
   type FloorplanToolContext,
@@ -22,6 +21,7 @@ import {
 import useEditor from '../../store/use-editor'
 import useFloorplanMode from '../../store/use-floorplan-mode'
 import useInteractionScope from '../../store/use-interaction-scope'
+import { FloorplanRegisteredToolLayer } from '../editor-2d/floorplan-registered-tool-layer'
 import { useRegistryToolContext } from './registry-tool-context'
 import { ToolManager } from './tool-manager'
 
@@ -63,18 +63,18 @@ function usePlacementGesture(sceneApi: SceneApi, kind: string, view: View, lifec
       const scope = useInteractionScope.getState().scope
       if (scope.kind !== 'placing' || scope.nodeId !== draft.id) return
       sceneApi.upsert(draft)
-      useInteractionScope.getState().endIf(
-        (active) => active.kind === 'placing' && active.nodeId === draft.id,
-      )
+      useInteractionScope
+        .getState()
+        .endIf((active) => active.kind === 'placing' && active.nodeId === draft.id)
     }
     emitter.on('grid:pointerdown', begin)
     emitter.on('grid:click', commit)
     return () => {
       emitter.off('grid:pointerdown', begin)
       emitter.off('grid:click', commit)
-      useInteractionScope.getState().endIf(
-        (active) => active.kind === 'placing' && active.nodeId === draft.id,
-      )
+      useInteractionScope
+        .getState()
+        .endIf((active) => active.kind === 'placing' && active.nodeId === draft.id)
       lifecycle.unmounts[view] += 1
     }
   }, [kind, lifecycle, sceneApi, view])

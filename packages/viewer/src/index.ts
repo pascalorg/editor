@@ -292,6 +292,7 @@ export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 export {
   drainRebuiltWalls,
   getPendingWallRebuildCount,
+  isWallInitialBuildActive,
   WallSystem,
 } from './systems/wall/wall-system'
 export {

@@ -1,4 +1,12 @@
-import { emitter, useLiveNodeOverrides, useLiveTransforms, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  emitter,
+  getHistoryDirtyNodeIds,
+  useLiveNodeOverrides,
+  useLiveTransforms,
+  useScene,
+} from '@pascal-app/core'
 import { markPerfAction } from '@pascal-app/viewer'
 import useInteractionScope from '../store/use-interaction-scope'
 import { registeredDraftingConfig } from './interaction/registered-drafting'
@@ -64,13 +72,55 @@ function notifyHistoryCommandListeners() {
   for (const listener of [...historyCommandListeners]) listener()
 }
 
-function refreshSceneAfterHistoryJump() {
+function capturePreviewLayout() {
+  const overrides = useLiveNodeOverrides.getState().overrides
+  if (overrides.size === 0) return null
+  const nodes = { ...useScene.getState().nodes }
+  for (const [id, values] of overrides) {
+    const node = nodes[id as AnyNodeId]
+    if (node) nodes[node.id] = { ...node, ...values } as AnyNode
+  }
+  return nodes
+}
+
+function refreshSceneAfterHistoryJump(previewLayout: Record<string, AnyNode> | null) {
+  const target = useScene.getState().nodes
+  const previewDirty = previewLayout
+    ? getHistoryDirtyNodeIds(previewLayout, target)
+    : new Set<AnyNodeId>()
+  const previewIds = new Set([
+    ...useLiveTransforms.getState().transforms.keys(),
+    ...useLiveNodeOverrides.getState().overrides.keys(),
+  ])
+  const currentPreviewLayout = capturePreviewLayout()
+  if (currentPreviewLayout) {
+    for (const id of getHistoryDirtyNodeIds(currentPreviewLayout, target)) previewDirty.add(id)
+  }
   useLiveNodeOverrides.getState().clearAll()
   useLiveTransforms.getState().clearAll()
+  // Clearing overrides can republish stair holes while a live transform still
+  // exists. Capture that final publication before clearing it too.
+  const remainingOverrides = useLiveNodeOverrides.getState().overrides
+  if (remainingOverrides.size > 0) {
+    for (const id of remainingOverrides.keys()) previewIds.add(id)
+    const remainingLayout = capturePreviewLayout()
+    if (remainingLayout) {
+      for (const id of getHistoryDirtyNodeIds(remainingLayout, target)) previewDirty.add(id)
+    }
+    useLiveNodeOverrides.getState().clearAll()
+  }
 
   const state = useScene.getState()
-  for (const node of Object.values(state.nodes)) {
+  for (const id of previewDirty) {
+    if (state.nodes[id]) state.markDirty(id)
+  }
+  for (const id of previewIds) {
+    const node = state.nodes[id as AnyNodeId]
+    if (!node) continue
     state.markDirty(node.id)
+    if (node.parentId && state.nodes[node.parentId as AnyNodeId]) {
+      state.markDirty(node.parentId as AnyNodeId)
+    }
   }
 }
 
@@ -90,8 +140,9 @@ export function runUndo(): HistoryCommandResult {
   }
   if (useScene.temporal.getState().pastStates.length === 0) return { kind: 'empty' }
   markPerfAction('undo')
+  const previewLayout = capturePreviewLayout()
   useScene.temporal.getState().undo()
-  refreshSceneAfterHistoryJump()
+  refreshSceneAfterHistoryJump(previewLayout)
   return { kind: 'applied', persistence: 'local' }
 }
 
@@ -104,8 +155,9 @@ export function runRedo(): HistoryCommandResult {
   }
   if (useScene.temporal.getState().futureStates.length === 0) return { kind: 'empty' }
   markPerfAction('redo')
+  const previewLayout = capturePreviewLayout()
   useScene.temporal.getState().redo()
-  refreshSceneAfterHistoryJump()
+  refreshSceneAfterHistoryJump(previewLayout)
   return { kind: 'applied', persistence: 'local' }
 }
 

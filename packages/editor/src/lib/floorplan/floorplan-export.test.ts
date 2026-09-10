@@ -4,8 +4,8 @@ import {
   type AnyNodeDefinition,
   type FloorplanGeometry,
   type GeometryContext,
-  type NodeCategory,
   loadPlugin,
+  type NodeCategory,
   nodeRegistry,
   registerNode,
 } from '@pascal-app/core'

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import useEditor, { normalizePersistedEditorUiState } from './use-editor'
 
 function resetToolMode() {
@@ -8,6 +8,7 @@ function resetToolMode() {
   useEditor.getState().setActivePaintMaterial(null)
 }
 
+beforeEach(resetToolMode)
 afterEach(resetToolMode)
 
 describe('ToolMode transition', () => {

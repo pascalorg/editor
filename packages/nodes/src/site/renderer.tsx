@@ -27,10 +27,10 @@ import { BufferAttribute, BufferGeometry, type Group, Path, Shape, ShapeGeometry
 import {
   cameraPosition,
   color,
-  float as tslFloat,
   mix,
   positionWorld,
   smoothstep,
+  float as tslFloat,
   vec2,
 } from 'three/tsl'
 import { MeshLambertNodeMaterial } from 'three/webgpu'
@@ -254,7 +254,16 @@ export const SiteRenderer = ({ node }: { node: SiteNode }) => {
     material.polygonOffsetFactor = 2
     material.polygonOffsetUnits = 2
     return material
-  }, [atmosphere, bgColor, backgroundColor, skyColor, appearance, maxLightIntensity, fadeBounds, groundReplaced])
+  }, [
+    atmosphere,
+    bgColor,
+    backgroundColor,
+    skyColor,
+    appearance,
+    maxLightIntensity,
+    fadeBounds,
+    groundReplaced,
+  ])
 
   // Cache computed polygons to keep the selector stable across unrelated store updates.
   const slabPolygonsCache = useRef<[number, number][][]>([])

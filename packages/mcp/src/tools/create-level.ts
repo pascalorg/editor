@@ -4,6 +4,7 @@ import type { AnyNodeId } from '@pascal-app/core/schema'
 import { LevelNode } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../operations'
+import { ADDITIVE_TOOL_ANNOTATIONS } from './annotations'
 import { ErrorCode, throwMcpError } from './errors'
 import { liveSyncOutput, persistencePayload, publishLiveSceneSnapshot } from './live-sync'
 import { measurement } from './measurement'
@@ -36,6 +37,7 @@ export function registerCreateLevel(server: McpServer, bridge: SceneOperations):
         "Append a new level above the given building's current top level. height is stored as the level's floor-to-floor storey height.",
       inputSchema: createLevelInput,
       outputSchema: createLevelOutput,
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({ buildingId, height, label }) => {
       const parent = bridge.getNode(buildingId as AnyNodeId)

@@ -3,10 +3,26 @@
   "submission_route": "with_mcp",
   "status": "blocked",
   "blockers": [
+    "A verified OpenAI publisher or developer identity authorized to submit for Pascal has not been confirmed.",
+    "Pascal's submission domain has not been verified with the portal-generated /.well-known/openai-apps-challenge token.",
     "Production hosted MCP endpoint has not passed OpenAI Scan Tools for this candidate.",
     "OAuth-compatible reviewer access and reusable demo credentials without MFA, SMS, email confirmation, or private-network access are not prepared.",
     "Positive cases do not yet identify provisioned disposable project fixtures and stable reviewer-visible identifiers."
   ],
+  "tool_annotation_validation": {
+    "status": "local_pass",
+    "checked_at": "2026-09-10",
+    "registered_tools": 46,
+    "required_hints": ["readOnlyHint", "destructiveHint", "openWorldHint"],
+    "justification_packet": "plugin-evals/tool-annotation-justifications.json",
+    "evidence": [
+      "The machine-readable packet records exact values and non-empty per-hint justifications for all 46 expected tools.",
+      "The repository policy validator rejects missing, unexpected, duplicate, reordered, or wrongly classified tools and missing, blank, or extra hint justifications.",
+      "The live MCP tools/list regression test requires the packet's exact inventory and annotation values to match the registered server tools.",
+      "The complete @pascal-app/mcp suite passed 361 tests with 1684 assertions, and the MCP dependency build passed."
+    ],
+    "limitations": "This is local submission preparation only. It does not establish production hosted-MCP behavior, a portal Scan Tools run or approval, domain verification, verified publisher identity, reviewer access, submission, review, publication, or listing."
+  },
   "cases": [
     {
       "id": "foundation-hosted-create-room-positive",

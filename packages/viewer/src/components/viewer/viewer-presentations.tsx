@@ -1,8 +1,8 @@
 'use client'
 
-import { type AnyNode, useScene, type LazyComponent } from '@pascal-app/core'
+import { type AnyNode, type LazyComponent, useScene } from '@pascal-app/core'
+import { type ComponentType, lazy, Suspense, useSyncExternalStore } from 'react'
 import type { Object3D, Texture } from 'three'
-import { lazy, type ComponentType, Suspense, useSyncExternalStore } from 'react'
 import { ErrorBoundary } from '../error-boundary'
 
 export type ViewerPresentationConfiguration = {

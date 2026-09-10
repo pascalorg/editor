@@ -1,6 +1,7 @@
 # Pascal Editor
 
-A 3D building editor built with React Three Fiber and WebGPU.
+An open-source, local-first 3D building editor built with React Three Fiber and
+WebGPU. Run it in the browser or from the CLI, and connect AI agents through MCP.
 
 [![MIT License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![npm @pascal-app/core](https://img.shields.io/npm/v/@pascal-app/core?label=%40pascal-app%2Fcore)](https://www.npmjs.com/package/@pascal-app/core)
@@ -27,20 +28,20 @@ for pnpm/Bun commands, project management, MCP setup, updates, storage paths, an
 troubleshooting. The npm release is the older runtime described below; use the verified
 GitHub preview when a task needs the new read-only furniture candidate check.
 
-## Candidate-enabled CLI preview
+## Verified CLI preview
 
-The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, which predates the read-only furniture candidate input in this repository. To use that capability before the next npm release, install the verified GitHub prerelease built from commit `aa653f2f523f81f361ac20cb42b745faf7e46844`:
+The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, which predates the read-only furniture candidate input and hosted agent claim/status commands in this repository. To use those capabilities before the next npm release, install the verified GitHub prerelease built from commit `5dabbc3b56109c9f79dc8a378443a4c520d9ee0a`:
 
 ```bash
-PASCAL_PREVIEW_VERSION='1.0.0-beta.1.agent-skills.0'
+PASCAL_PREVIEW_VERSION='1.0.0-beta.2.status.0'
 PASCAL_PREVIEW_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/pascal-preview"
 PASCAL_PREVIEW_DOWNLOAD="$(mktemp -d)"
 cd "$PASCAL_PREVIEW_DOWNLOAD"
 
 curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
 curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/SHA256SUMS.txt"
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/SHA256SUMS.txt"
 
 # macOS
 shasum -a 256 -c SHA256SUMS.txt
@@ -52,9 +53,12 @@ export PATH="$PASCAL_PREVIEW_PREFIX/bin:$PATH"
 pascal --version
 pascal update --version "$PASCAL_PREVIEW_VERSION"
 pascal editor --no-open
+# For an existing hosted autonomous-agent key:
+PASCAL_API_KEY='sk_live_...' pascal agent claim
+PASCAL_API_KEY='sk_live_...' pascal agent status --json
 ```
 
-The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before running `pascal mcp setup claude`, `pascal mcp setup codex`, or configuring `pascal mcp connect` manually. This GitHub prerelease is not an npm version.
+The expected archive SHA-256 is `15628baeeb174fb7786a1643db08f0554bf6d18afaaa3979f01922c5cd40019a`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before using the Claude plugin-provided connector, running `pascal mcp setup claude` or `pascal mcp setup codex` for another installation path, or configuring `pascal mcp connect` manually. `pascal agent claim` opens a prefilled 15-minute human handoff; `pascal agent status` verifies the key and reports the bounded claim state. Neither command stores or prints the hosted key. This GitHub prerelease is not an npm version.
 
 Use one active agent client per local CLI service. The standalone local HTTP runtime shares active scene state between clients; use separate `PASCAL_HOME` directories and service processes when independent concurrent work is required.
 
@@ -75,6 +79,16 @@ Claude Code users can install the same canonical skill source as a plugin:
 /plugin install pascal-agent-skills@pascal
 ```
 
+The Claude plugin also supplies the local `pascal mcp connect` server. Install and start the Pascal CLI first, and keep `pascal` on the `PATH` used to launch Claude Code. This local connector needs no Pascal account or API key and does not upload projects automatically.
+
+Claude Code 2.1.258 loads both the user-scoped `pascal` server created by `pascal mcp setup claude` and the plugin-provided server. Remove the manual entry before reloading or restarting Claude Code so only the plugin owns the connection lifecycle:
+
+```bash
+claude mcp remove --scope user pascal
+```
+
+Use `/mcp` to remove or disable any project- or local-scoped Pascal connection too. Leaving both connections active violates the one-active-agent-client-per-local-service requirement. When the intended project is hosted in a Pascal account or organization, disable the plugin-provided local server in `/mcp` and configure the hosted endpoint from the skill setup guide instead.
+
 Codex users can install the same plugin from the repository marketplace:
 
 ```bash
@@ -89,6 +103,13 @@ OpenClaw installation becomes available after the skills are published under Pas
 The skills inspect the connected MCP tool schemas before using optional fields. A capability present in this repository may be absent from an older installed or hosted release; the agent should report the narrower supported result instead of assuming source-only inputs are available.
 
 These workflows require a connected Pascal MCP server for their tool-backed actions. An OpenAI directory submission must therefore use **With MCP** and submit the production hosted MCP endpoint together with the skills. The repository package does not prove that the endpoint, OAuth flow, reviewer credentials, domain verification, or portal scan is ready for review.
+
+### MCP Registry
+
+[`server.json`](server.json) is Pascal's manifest for the official MCP Registry. Its
+version tracks the hosted MCP implementation independently of the npm package version.
+Pull requests validate the manifest and production endpoint. A Pascal organization
+owner publishes an approved version from `main` with the official registry publisher.
 
 ## Using Published Packages
 

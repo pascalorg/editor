@@ -115,13 +115,9 @@ function geometryForInstance(
     const valueIndex = Math.floor(instanceIndex / attribute.meshPerAttribute)
     if (valueIndex >= attribute.count) {
       geometry.dispose()
-      throw new Error(
-        `Instanced attribute "${name}" has no value for instance ${instanceIndex}`,
-      )
+      throw new Error(`Instanced attribute "${name}" has no value for instance ${instanceIndex}`)
     }
-    const ArrayType = attribute.array.constructor as new (
-      length: number,
-    ) => typeof attribute.array
+    const ArrayType = attribute.array.constructor as new (length: number) => typeof attribute.array
     const values = new ArrayType(vertexCount * attribute.itemSize)
     const sourceOffset = valueIndex * attribute.itemSize
     for (let vertex = 0; vertex < vertexCount; vertex++) {
@@ -138,7 +134,6 @@ function geometryForInstance(
   }
   return geometry
 }
-
 
 /** Replace every InstancedMesh with ordinary meshes in the same local hierarchy. */
 export function expandInstancedMeshes(root: THREE.Object3D): void {
@@ -518,14 +513,14 @@ function sourcePixels(texture: THREE.Texture): {
   } | null
   const width = image?.width
   const height = image?.height
-  if (!(width && height)) throw new Error(`Texture \"${texture.name}\" has no readable dimensions`)
+  if (!(width && height)) throw new Error(`Texture "${texture.name}" has no readable dimensions`)
 
   if (image?.data) {
     if (
       !(image.data instanceof Uint8Array || image.data instanceof Uint8ClampedArray) ||
       image.data.length !== width * height * 4
     ) {
-      throw new Error(`Texture \"${texture.name}\" is not an 8-bit RGBA texture`)
+      throw new Error(`Texture "${texture.name}" is not an 8-bit RGBA texture`)
     }
     return { width, height, data: Uint8ClampedArray.from(image.data) }
   }
@@ -534,7 +529,7 @@ function sourcePixels(texture: THREE.Texture): {
   try {
     context.drawImage(texture.image as CanvasImageSource, 0, 0, width, height)
   } catch {
-    throw new Error(`Texture \"${texture.name}\" cannot be read for portable export`)
+    throw new Error(`Texture "${texture.name}" cannot be read for portable export`)
   }
   return { width, height, data: context.getImageData(0, 0, width, height).data }
 }
@@ -570,7 +565,8 @@ function materializeDataTextures(root: THREE.Object3D): void {
       const textured = material as TexturedMaterial
       for (const slot of MATERIAL_TEXTURE_SLOTS) {
         const source = textured[slot]
-        if (!(source instanceof THREE.Texture) || !(source as THREE.DataTexture).isDataTexture) continue
+        if (!(source instanceof THREE.Texture) || !(source as THREE.DataTexture).isDataTexture)
+          continue
         let texture = converted.get(source)
         if (!texture) {
           if (source.format !== THREE.RGBAFormat || source.type !== THREE.UnsignedByteType) {
@@ -614,14 +610,14 @@ function canonicalizeAlphaMaps(root: THREE.Object3D): void {
         !map.matrix.equals(alphaMap.matrix))
     ) {
       throw new Error(
-        `Material \"${material.name}\" uses incompatible diffuse and alpha texture coordinates`,
+        `Material "${material.name}" uses incompatible diffuse and alpha texture coordinates`,
       )
     }
 
     const alpha = sourcePixels(alphaMap)
     const color = map ? sourcePixels(map) : null
     if (color && (color.width !== alpha.width || color.height !== alpha.height)) {
-      throw new Error(`Material \"${material.name}\" uses mismatched diffuse and alpha map sizes`)
+      throw new Error(`Material "${material.name}" uses mismatched diffuse and alpha map sizes`)
     }
     const { canvas, context } = canvas2d(alpha.width, alpha.height)
     const output = context.createImageData(alpha.width, alpha.height)
@@ -649,7 +645,7 @@ function canonicalizeAlphaMaps(root: THREE.Object3D): void {
 function canonicalNormalTexture(source: THREE.Texture, scale: THREE.Vector2): THREE.CanvasTexture {
   const compressed = source as THREE.CompressedTexture
   if (compressed.isCompressedTexture) {
-    throw new Error(`Compressed normal map \"${source.name}\" must be baked before portable export`)
+    throw new Error(`Compressed normal map "${source.name}" must be baked before portable export`)
   }
   const pixels = sourcePixels(source)
   const { canvas, context } = canvas2d(pixels.width, pixels.height)

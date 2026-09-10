@@ -7,13 +7,13 @@ These public skills teach MCP-capable agents to use Pascal for editable building
 List the available skills:
 
 ```bash
-npx skills add pascalorg/editor --list
+npx skills add https://github.com/pascalorg/editor/tree/main/skills --list
 ```
 
 Install both skills:
 
 ```bash
-npx skills add pascalorg/editor \
+npx skills add https://github.com/pascalorg/editor/tree/main/skills \
   --skill pascal-3d \
   --skill furniture-fit
 ```
@@ -55,7 +55,11 @@ codex plugin marketplace add pascalorg/editor
 codex plugin add pascal-agent-skills@pascal
 ```
 
-The plugin installs the instructions from the canonical `skills/` directory. Connect Pascal MCP separately by following the setup reference included in either skill. Installation alone never creates an account, uploads a project, or authorizes paid work.
+The Claude plugin installs the instructions from the canonical `skills/` directory and supplies one local stdio server that runs `pascal mcp connect`. Install and start the Pascal CLI first, and keep `pascal` on Claude Code's `PATH`. The bundled local connector needs no Pascal account or API key and does not upload projects automatically. Codex and individually installed skills still use the setup reference included in either skill.
+
+Claude Code 2.1.258 loads both the user-scoped `pascal` server created by `pascal mcp setup claude` and the plugin-provided server. Run `claude mcp remove --scope user pascal` before reloading or restarting Claude Code so only the plugin owns the connection lifecycle. Use `/mcp` to remove or disable any project- or local-scoped Pascal connection too. Leaving both connections active violates the one-active-agent-client-per-local-service requirement. For a hosted Pascal project, disable the plugin-provided local server in `/mcp`, then configure the hosted endpoint from the setup reference.
+
+Plugin installation alone never creates an account, uploads a project, or authorizes paid work.
 
 The root [`plugin.json`](../plugin.json) is the portable Agent Plugins manifest used for OpenAI submission. The repository keeps `.codex-plugin/plugin.json` as a compatibility fallback and validates that both expose the same OpenAI listing metadata. Public-directory submission, review, and publication are separate external steps; a Git marketplace install does not make the plugin publicly listed in ChatGPT or Codex.
 
@@ -77,8 +81,9 @@ The `source-reviewed` date records a code and public-documentation review. The `
 ## Validate the source package
 
 ```bash
+bun test scripts/clawhub-ignore-policy.test.ts scripts/claude-mcp-config-policy.test.ts scripts/openai-tool-annotation-policy.test.ts scripts/public-skill-discovery-policy.test.ts
 bun scripts/validate-skills.ts
 claude plugin validate . --strict
 ```
 
-The repository validator checks frontmatter, bundled links, task and trigger fixtures, semantic furniture next-action decision cases, the publishing suite, portable and compatibility manifest consistency, OpenAI public-directory metadata limits, bundled branding assets, and accidental private-path or credential leakage.
+The repository validator checks the exact two-skill public discovery surface, keeps contributor-only workflows internal, and checks frontmatter, bundled links, task and trigger fixtures, semantic furniture next-action decision cases, scoped ClawHub ignore policies without re-inclusion overrides, the exact credential-free Claude local MCP configuration, the publishing suite, the exact 46-tool OpenAI annotation and justification packet, portable and compatibility manifest consistency, OpenAI public-directory metadata limits, bundled branding assets, and accidental private-path or credential leakage.

@@ -1,10 +1,10 @@
+import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test'
 import { useScene } from '@pascal-app/core'
 import { act, create } from '@react-three/test-renderer'
-import { afterEach, beforeEach, expect, mock, spyOn, test } from 'bun:test'
 import {
   registerViewerPresentation,
-  viewerPresentationRegistry,
   ViewerPresentations,
+  viewerPresentationRegistry,
 } from './viewer-presentations'
 
 beforeEach(() => {

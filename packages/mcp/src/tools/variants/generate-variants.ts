@@ -3,6 +3,7 @@ import { forkSceneGraph, type SceneGraph } from '@pascal-app/core/clone-scene-gr
 import { AnyNode as AnyNodeSchema } from '@pascal-app/core/schema'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
+import { ADDITIVE_TOOL_ANNOTATIONS } from '../annotations'
 import { ErrorCode, throwMcpError } from '../errors'
 import { applyMutation, describeVariant, type MutationKind, mulberry32 } from './mutations'
 
@@ -64,6 +65,7 @@ export function registerGenerateVariants(server: McpServer, bridge: SceneOperati
         'Generate N variations of a base scene by forking and applying seeded mutations. Example: "give me 5 variations of this kitchen". If `save=true`, each variant is persisted via scene operations and returned with an id + URL; otherwise the graph is returned inline.',
       inputSchema: generateVariantsInput,
       outputSchema: generateVariantsOutput,
+      annotations: ADDITIVE_TOOL_ANNOTATIONS,
     },
     async ({ baseSceneId, count, vary, seed, save }) => {
       // 1. Obtain the base SceneGraph.

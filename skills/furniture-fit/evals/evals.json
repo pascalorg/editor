@@ -239,6 +239,68 @@
         "Returns exactly one check_alternate_pose nextAction naming position [1.20, 0, 0.80] and 90 degrees.",
         "Labels the alternate proposed and unverified and requires fresh containment, collision, requested-clearance, and applicable door checks before a pass."
       ]
+    },
+    {
+      "id": 13,
+      "prompt": "A user supplied an exact empty rectangular room 144 in wide by 120 in deep, a sofa footprint 84 in wide by 36 in deep, and 8 in of room-boundary clearance on every side. They explicitly ask for a Pascal link using these measurements. Return the bounded furniture-fit report and a human-openable pre-check.",
+      "expected_output": "Keeps the scene-backed report separate and includes the exact no-sign-in Pascal dimension-only pre-check URL using only the supplied inch values and fixed attribution keys.",
+      "files": [],
+      "semantic_case": "no-sign-in-dimension-precheck-link",
+      "expectations": [
+        "Labels the link Open dimension-only footprint pre-check.",
+        "Uses exactly https://editor.pascal.app/tools/furniture-fit with roomWidth=144, roomDepth=120, itemWidth=84, itemDepth=36, clearance=8, unit=in, shared=1, and entry=agent_report.",
+        "States that the public calculator does not carry the scene-backed verdict or project-specific collision, door, height, delivery, or mesh evidence.",
+        "Discloses that opening the link sends the visible measurement query to Pascal and can retain it in browser history and service request logs.",
+        "Does not place project, revision, graph hash, node, identity, credential, address, signed URL, flow, prompt, or arbitrary scene data in the URL."
+      ]
+    },
+    {
+      "id": 14,
+      "prompt": "The user authorizes sending the measurements to Pascal. The measured room is L-shaped inside a 400 cm by 350 cm bounding box, the exact sofa footprint is 210 cm by 95 cm, and the requested room-boundary clearance is 20 cm on every side. Include any safe human-openable pre-check in the report.",
+      "expected_output": "Omits the dimension-only calculator URL because the rectangular uniform-clearance calculator cannot represent the evidence, while retaining the scene-backed report.",
+      "files": [],
+      "semantic_case": "no-sign-in-dimension-precheck-unrepresentable",
+      "expectations": [
+        "Marks Open dimension-only footprint pre-check unavailable and gives the first unrepresentable-input reason.",
+        "Does not flatten the irregular room, pose-specific obstacle, or unequal clearances into a misleading rectangular link.",
+        "Does not expose project, revision, graph hash, node, identity, credential, address, signed URL, flow, prompt, or arbitrary scene data."
+      ]
+    },
+    {
+      "id": 15,
+      "prompt": "The user authorizes sending the measurements to Pascal. The exact rectangular room is 400 cm by 350 cm, the exact sofa footprint is 210 cm by 95 cm, and the user requests zero added room-boundary clearance. The requested scene pose overlaps a fixed kitchen island. The user asks whether that placement works and asks for a Pascal link.",
+      "expected_output": "Keeps the scene-backed collision failure and omits the empty-room calculator link because it would contradict the requested conclusion.",
+      "files": [],
+      "semantic_case": "dimension-precheck-scene-conflict",
+      "expectations": [
+        "Marks Open dimension-only footprint pre-check unavailable because the requested conclusion depends on the fixed-island collision.",
+        "Does not produce a link whose empty-room verdict could contradict the scene-backed result.",
+        "Names the scene-dependent collision as the reason the narrower calculator is unavailable."
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "The user authorizes sending the measurements to Pascal. The exact rectangular room is 400 cm by 350 cm and the exact sofa footprint is 210 cm by 95 cm, but the user requires 60 cm only in front of the sofa and 10 cm at the sides. They ask for a report and a Pascal link.",
+      "expected_output": "Omits the dimension-only link because the calculator cannot represent directional clearance without changing the request.",
+      "files": [],
+      "semantic_case": "dimension-precheck-asymmetric-clearance",
+      "expectations": [
+        "Marks Open dimension-only footprint pre-check unavailable because the requested clearances are directional.",
+        "Does not replace the directional values with zero or with item-to-item minimum clearance.",
+        "Retains the exact directional constraint in the scene-backed report."
+      ]
+    },
+    {
+      "id": 17,
+      "prompt": "A generated coordinate import reports a rectangular room width of 1000001 cm and otherwise exact dimensions. The user asks for a Pascal pre-check link.",
+      "expected_output": "Omits the link because the room width exceeds the calculator's accepted maximum instead of emitting a link that silently falls back to defaults.",
+      "files": [],
+      "semantic_case": "dimension-precheck-over-limit",
+      "expectations": [
+        "Marks Open dimension-only footprint pre-check unavailable because one value exceeds 1000000.",
+        "Does not clamp, round, or replace the value with a default.",
+        "Does not emit a calculator URL."
+      ]
     }
   ]
 }

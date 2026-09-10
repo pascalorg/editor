@@ -14,10 +14,10 @@ import {
   viewerPresentationRegistry,
 } from '@pascal-app/viewer'
 import * as THREE from 'three'
-import { MeshStandardNodeMaterial } from 'three/webgpu'
 import type { GLTFWriter } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import { OBJExporter } from 'three/examples/jsm/exporters/OBJExporter.js'
 import { STLExporter } from 'three/examples/jsm/exporters/STLExporter.js'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
 import {
   prepareSceneForExport,
   prepareSceneForExportAsync,
@@ -1131,133 +1131,135 @@ describe('prepareSceneForExport', () => {
 
   test('preserves marked borrowed presentation textures and disposes owned maps', async () => {
     await withCanvasCapture(async (canvasPixels) => {
-    const priorPresentations = viewerPresentationRegistry.getSnapshot()
-    viewerPresentationRegistry.reset()
-    const borrowed = new THREE.DataTexture(new Uint8Array([20, 40, 60, 255]), 1, 1)
-    const owned = new THREE.DataTexture(new Uint8Array([80, 100, 120, 255]), 1, 1)
-    const borrowedOnFailure = new THREE.DataTexture(new Uint8Array([140, 160, 180, 255]), 1, 1)
-    const ownedOnFailure = new THREE.DataTexture(new Uint8Array([200, 220, 240, 255]), 1, 1)
-    markViewerPresentationTextureBorrowed(borrowed)
-    markViewerPresentationTextureBorrowed(borrowedOnFailure)
-    const disposals = {
-      borrowed: 0,
-      owned: 0,
-      borrowedOnFailure: 0,
-      ownedOnFailure: 0,
-    }
-    for (const [texture, key] of [
-      [borrowed, 'borrowed'],
-      [owned, 'owned'],
-      [borrowedOnFailure, 'borrowedOnFailure'],
-      [ownedOnFailure, 'ownedOnFailure'],
-    ] as const) {
-      texture.addEventListener('dispose', () => {
-        disposals[key] += 1
-      })
-    }
-    const textureContribution = (
-      id: string,
-      texture: THREE.Texture,
-    ): ViewerPresentationContribution => ({
-      id,
-      component: async () => ({ default: () => null }),
-      staticExport: {
-        label: id,
-        build: () =>
-          new THREE.Mesh(
-            new THREE.PlaneGeometry(1, 1),
-            new THREE.MeshStandardMaterial({ map: texture }),
-          ),
-      },
-    })
-    try {
-      viewerPresentationRegistry.register(
-        textureContribution('test:borrowed-presentation-texture', borrowed),
-      )
-      viewerPresentationRegistry.register(
-        textureContribution('test:owned-presentation-texture', owned),
-      )
-      const success = await prepareSceneForExportAsync(
-        new THREE.Group(),
-        {},
-        {
-          includedPresentationIds: [
-            'test:borrowed-presentation-texture',
-            'test:owned-presentation-texture',
-          ],
-        },
-      )
-      const generatedTextures: THREE.Texture[] = []
-      success.scene.traverse((object) => {
-        if (!(object as THREE.Mesh).isMesh) return
-        const mesh = object as THREE.Mesh
-        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
-        for (const material of materials) {
-          const map = (material as THREE.MeshStandardMaterial).map
-          if (map) generatedTextures.push(map)
-        }
-      })
-      expect(generatedTextures).toHaveLength(2)
-      expect(generatedTextures.every(
-        (texture) => (texture as THREE.CanvasTexture).isCanvasTexture,
-      )).toBe(true)
-      expect(generatedTextures.map(canvasPixels).sort()).toEqual([
-        [20, 40, 60, 255],
-        [80, 100, 120, 255],
-      ].sort())
-      let generatedTextureDisposals = 0
-      for (const texture of generatedTextures) {
+      const priorPresentations = viewerPresentationRegistry.getSnapshot()
+      viewerPresentationRegistry.reset()
+      const borrowed = new THREE.DataTexture(new Uint8Array([20, 40, 60, 255]), 1, 1)
+      const owned = new THREE.DataTexture(new Uint8Array([80, 100, 120, 255]), 1, 1)
+      const borrowedOnFailure = new THREE.DataTexture(new Uint8Array([140, 160, 180, 255]), 1, 1)
+      const ownedOnFailure = new THREE.DataTexture(new Uint8Array([200, 220, 240, 255]), 1, 1)
+      markViewerPresentationTextureBorrowed(borrowed)
+      markViewerPresentationTextureBorrowed(borrowedOnFailure)
+      const disposals = {
+        borrowed: 0,
+        owned: 0,
+        borrowedOnFailure: 0,
+        ownedOnFailure: 0,
+      }
+      for (const [texture, key] of [
+        [borrowed, 'borrowed'],
+        [owned, 'owned'],
+        [borrowedOnFailure, 'borrowedOnFailure'],
+        [ownedOnFailure, 'ownedOnFailure'],
+      ] as const) {
         texture.addEventListener('dispose', () => {
-          generatedTextureDisposals += 1
+          disposals[key] += 1
         })
       }
-      success.dispose()
-      expect(generatedTextureDisposals).toBe(2)
-      expect(disposals).toMatchObject({ borrowed: 0, owned: 1 })
-      expect(Array.from(borrowed.image.data as Uint8Array)).toEqual([20, 40, 60, 255])
-
-      viewerPresentationRegistry.register(
-        textureContribution('test:borrowed-presentation-texture-failure', borrowedOnFailure),
-      )
-      viewerPresentationRegistry.register(
-        textureContribution('test:owned-presentation-texture-failure', ownedOnFailure),
-      )
-      viewerPresentationRegistry.register({
-        id: 'test:failing-presentation-after-textures',
+      const textureContribution = (
+        id: string,
+        texture: THREE.Texture,
+      ): ViewerPresentationContribution => ({
+        id,
         component: async () => ({ default: () => null }),
         staticExport: {
-          label: 'Injected failure after texture ownership',
-          build: () => {
-            throw new Error('acceptance presentation texture failure')
-          },
+          label: id,
+          build: () =>
+            new THREE.Mesh(
+              new THREE.PlaneGeometry(1, 1),
+              new THREE.MeshStandardMaterial({ map: texture }),
+            ),
         },
       })
-      await expect(
-        prepareSceneForExportAsync(
+      try {
+        viewerPresentationRegistry.register(
+          textureContribution('test:borrowed-presentation-texture', borrowed),
+        )
+        viewerPresentationRegistry.register(
+          textureContribution('test:owned-presentation-texture', owned),
+        )
+        const success = await prepareSceneForExportAsync(
           new THREE.Group(),
           {},
           {
             includedPresentationIds: [
-              'test:borrowed-presentation-texture-failure',
-              'test:owned-presentation-texture-failure',
-              'test:failing-presentation-after-textures',
+              'test:borrowed-presentation-texture',
+              'test:owned-presentation-texture',
             ],
           },
-        ),
-      ).rejects.toThrow('acceptance presentation texture failure')
-      expect(disposals).toEqual({
-        borrowed: 0,
-        owned: 1,
-        borrowedOnFailure: 0,
-        ownedOnFailure: 1,
-      })
-      expect(Array.from(borrowedOnFailure.image.data as Uint8Array)).toEqual([140, 160, 180, 255])
-    } finally {
-      viewerPresentationRegistry.reset()
-      for (const contribution of priorPresentations) {
-        viewerPresentationRegistry.register(contribution)
+        )
+        const generatedTextures: THREE.Texture[] = []
+        success.scene.traverse((object) => {
+          if (!(object as THREE.Mesh).isMesh) return
+          const mesh = object as THREE.Mesh
+          const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material]
+          for (const material of materials) {
+            const map = (material as THREE.MeshStandardMaterial).map
+            if (map) generatedTextures.push(map)
+          }
+        })
+        expect(generatedTextures).toHaveLength(2)
+        expect(
+          generatedTextures.every((texture) => (texture as THREE.CanvasTexture).isCanvasTexture),
+        ).toBe(true)
+        expect(generatedTextures.map(canvasPixels).sort()).toEqual(
+          [
+            [20, 40, 60, 255],
+            [80, 100, 120, 255],
+          ].sort(),
+        )
+        let generatedTextureDisposals = 0
+        for (const texture of generatedTextures) {
+          texture.addEventListener('dispose', () => {
+            generatedTextureDisposals += 1
+          })
+        }
+        success.dispose()
+        expect(generatedTextureDisposals).toBe(2)
+        expect(disposals).toMatchObject({ borrowed: 0, owned: 1 })
+        expect(Array.from(borrowed.image.data as Uint8Array)).toEqual([20, 40, 60, 255])
+
+        viewerPresentationRegistry.register(
+          textureContribution('test:borrowed-presentation-texture-failure', borrowedOnFailure),
+        )
+        viewerPresentationRegistry.register(
+          textureContribution('test:owned-presentation-texture-failure', ownedOnFailure),
+        )
+        viewerPresentationRegistry.register({
+          id: 'test:failing-presentation-after-textures',
+          component: async () => ({ default: () => null }),
+          staticExport: {
+            label: 'Injected failure after texture ownership',
+            build: () => {
+              throw new Error('acceptance presentation texture failure')
+            },
+          },
+        })
+        await expect(
+          prepareSceneForExportAsync(
+            new THREE.Group(),
+            {},
+            {
+              includedPresentationIds: [
+                'test:borrowed-presentation-texture-failure',
+                'test:owned-presentation-texture-failure',
+                'test:failing-presentation-after-textures',
+              ],
+            },
+          ),
+        ).rejects.toThrow('acceptance presentation texture failure')
+        expect(disposals).toEqual({
+          borrowed: 0,
+          owned: 1,
+          borrowedOnFailure: 0,
+          ownedOnFailure: 1,
+        })
+        expect(Array.from(borrowedOnFailure.image.data as Uint8Array)).toEqual([140, 160, 180, 255])
+      } finally {
+        viewerPresentationRegistry.reset()
+        for (const contribution of priorPresentations) {
+          viewerPresentationRegistry.register(contribution)
+        }
       }
-    }
     })
   })
 })
@@ -1275,12 +1277,13 @@ async function withCanvasCapture(
         width: 0,
         height: 0,
         getContext: () => ({
-          createImageData: (width: number, height: number) => ({
-            colorSpace: 'srgb',
-            data: new Uint8ClampedArray(width * height * 4),
-            height,
-            width,
-          }) as ImageData,
+          createImageData: (width: number, height: number) =>
+            ({
+              colorSpace: 'srgb',
+              data: new Uint8ClampedArray(width * height * 4),
+              height,
+              width,
+            }) as ImageData,
           putImageData: (image: ImageData) => {
             pixelsByCanvas.set(canvas, new Uint8ClampedArray(image.data))
           },

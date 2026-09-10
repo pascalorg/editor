@@ -4,7 +4,7 @@ import { encodeTerrainField } from '../../lib/terrain-codec'
 import { applyHeightPatch, createTerrainField, flattenPatch } from '../../lib/terrain-field'
 import { nodeRegistry, registerNode } from '../../registry'
 import type { AnyNodeDefinition } from '../../registry/types'
-import type { AnyNode, AnyNodeId } from '../../schema'
+import { type AnyNode, type AnyNodeId, ItemNode, LevelNode, SlabNode, WallNode } from '../../schema'
 import useLiveTerrain from '../../store/use-live-terrain'
 import useScene, { clearSceneHistory } from '../../store/use-scene'
 import { spatialGridManager } from './spatial-grid-manager'
@@ -563,5 +563,223 @@ describe('spatial-grid sync dirty rules (terrain support)', () => {
     markTerrainSupportDependents(nodes, (id) => marked.push(id))
 
     expect(marked).toEqual(['wall_ground', 'wall_fill', 'slab_fill', 'column_a'])
+  })
+})
+
+describe('temporal writes update slab support dependencies', () => {
+  let stop = () => {}
+  let restore = () => {}
+  beforeEach(() => {
+    restore = nodeRegistry._snapshot()
+    nodeRegistry._register({
+      kind: 'item',
+      schemaVersion: 1,
+      schema: ItemNode,
+      capabilities: {
+        floorPlaced: { footprint: () => ({ dimensions: [0.2, 1, 0.2], rotation: [0, 0, 0] }) },
+      },
+    } as never)
+    spatialGridManager.clear()
+  })
+  afterEach(() => {
+    stop()
+    restore()
+    spatialGridManager.clear()
+    clearSceneHistory()
+  })
+
+  test('undo/redo of wall thickness re-elevates an unchanged item on the former rendered slab band', async () => {
+    const level = LevelNode.parse({ id: 'level_band_history' })
+    const wall = WallNode.parse({
+      id: 'wall_band_history',
+      parentId: level.id,
+      start: [4, 0],
+      end: [4, 4],
+      thickness: 0.8,
+    })
+    const slab = SlabNode.parse({
+      parentId: level.id,
+      polygon: SQUARE,
+      elevation: 0.4,
+      thickness: 0.4,
+    })
+    const item = ItemNode.parse({
+      parentId: level.id,
+      position: [4.45, 0, 2],
+      asset: {
+        id: 'test',
+        name: 'test',
+        category: 'test',
+        thumbnail: '',
+        src: '/test.glb',
+        dimensions: [0.2, 1, 0.2],
+      },
+    })
+    const remote = { ...item, id: 'item_remote_band', position: [20, 0, 20] } as AnyNode
+    const interior = { ...item, id: 'item_interior_band', position: [2, 0, 2] } as AnyNode
+    const interiorWall = WallNode.parse({
+      id: 'wall_interior_band',
+      parentId: level.id,
+      start: [1, 1],
+      end: [2, 1],
+    })
+    const upper = LevelNode.parse({ id: 'level_other_band', level: 1 })
+    const upperItem = { ...item, id: 'item_upper_band', parentId: upper.id } as AnyNode
+    const upperWall = { ...wall, id: 'wall_upper_band', parentId: upper.id } as AnyNode
+    const upperSlab = { ...slab, id: 'slab_upper_band', parentId: upper.id } as AnyNode
+    useScene.setState({
+      nodes: nodesFor(
+        level,
+        wall,
+        slab,
+        item,
+        remote,
+        interior,
+        interiorWall,
+        upper,
+        upperItem,
+        upperWall,
+        upperSlab,
+      ),
+      dirtyNodes: new Set(),
+      readOnly: false,
+    })
+    clearSceneHistory()
+    stop = initSpatialGridSync()
+    const elevation = () =>
+      spatialGridManager.getSlabSupportForItem(level.id, item.position, [0.2, 1, 0.2], [0, 0, 0])
+        .elevation
+    expect(elevation()).toBeCloseTo(0.4)
+    useScene.setState({
+      nodes: { ...useScene.getState().nodes, [wall.id]: { ...wall, thickness: 0.1 } },
+    })
+    expect(elevation()).toBe(0)
+    expect(useScene.getState().dirtyNodes.has(item.id)).toBe(true)
+    for (const [jump, expected] of [
+      [useScene.temporal.getState().undo, 0.4],
+      [useScene.temporal.getState().redo, 0],
+    ] as const) {
+      useScene.getState().dirtyNodes.clear()
+      jump()
+      // The support subscription runs on the write, before the temporal microtask.
+      expect(useScene.getState().dirtyNodes.has(item.id)).toBe(true)
+      expect(elevation()).toBeCloseTo(expected)
+      await Promise.resolve()
+      expect(useScene.getState().nodes[item.id]).toBe(item)
+      expect(useScene.getState().nodes[slab.id]).toBe(slab)
+      for (const unaffected of [
+        remote,
+        interior,
+        interiorWall,
+        upper,
+        upperItem,
+        upperWall,
+        upperSlab,
+      ]) {
+        expect(useScene.getState().dirtyNodes.has(unaffected.id)).toBe(false)
+      }
+    }
+  })
+
+  test('slab reparent and undo mark covering dependents below both parent levels', async () => {
+    const levels = [0, 1, 2, 3].map((ordinal) =>
+      makeLevel(`level_${ordinal}`, ordinal, 2.5, [
+        `wall_covering_${ordinal}`,
+        `ceiling_covering_${ordinal}`,
+        ...(ordinal === 2 ? ['slab_reparent'] : []),
+      ]),
+    )
+    const consumers = levels.flatMap((level, ordinal) => [
+      {
+        ...makeChild(`wall_covering_${ordinal}`, 'wall', level.id),
+        start: [20, 0],
+        end: [24, 0],
+      } as AnyNode,
+      makeChild(`ceiling_covering_${ordinal}`, 'ceiling', level.id),
+    ])
+    const slab = makeSlab('slab_reparent', 'level_2')
+    useScene.setState({
+      nodes: nodesFor(...levels, ...consumers, slab),
+      rootNodeIds: levels.map((level) => level.id),
+      installedPlugins: [],
+      dirtyNodes: new Set(),
+      readOnly: false,
+    })
+    clearSceneHistory()
+    stop = initSpatialGridSync()
+    const coveringDirtyIds = () => dirtyIds().filter((id) => id.includes('_covering_'))
+    const expected = [
+      'ceiling_covering_1',
+      'ceiling_covering_2',
+      'wall_covering_1',
+      'wall_covering_2',
+    ]
+    useScene.getState().dirtyNodes.clear()
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        [slab.id]: { ...slab, parentId: 'level_3' } as AnyNode,
+        level_2: { ...levels[2]!, children: ['wall_covering_2', 'ceiling_covering_2'] } as AnyNode,
+        level_3: {
+          ...levels[3]!,
+          children: ['wall_covering_3', 'ceiling_covering_3', slab.id],
+        } as AnyNode,
+      },
+    })
+    await Promise.resolve()
+    expect(coveringDirtyIds()).toEqual(expected)
+
+    useScene.getState().dirtyNodes.clear()
+    useScene.temporal.getState().undo()
+    await Promise.resolve()
+    expect(useScene.getState().nodes[slab.id]?.parentId).toBe('level_2')
+    expect(coveringDirtyIds()).toEqual(expected)
+  })
+
+  test('slab elevation and level height subscribers fire during real temporal restoration', async () => {
+    const level = LevelNode.parse({
+      id: 'level_vertical_history',
+      children: ['wall_vertical_history'],
+    })
+    const wall = WallNode.parse({
+      id: 'wall_vertical_history',
+      parentId: level.id,
+      start: [0, 0],
+      end: [4, 0],
+    })
+    const slab = SlabNode.parse({
+      parentId: level.id,
+      polygon: SQUARE,
+      elevation: 1,
+      thickness: 0.1,
+    })
+    const item = ItemNode.parse({
+      parentId: level.id,
+      position: [2, 0, 2],
+      asset: { id: 'test', name: 'test', category: 'test', thumbnail: '', src: '/test.glb' },
+    })
+    useScene.setState({
+      nodes: nodesFor(level, wall, slab, item),
+      dirtyNodes: new Set(),
+      readOnly: false,
+    })
+    clearSceneHistory()
+    stop = initSpatialGridSync()
+    useScene.setState({
+      nodes: {
+        ...useScene.getState().nodes,
+        [slab.id]: { ...slab, elevation: 2 },
+        [level.id]: { ...level, height: 4 },
+      },
+    })
+    useScene.getState().dirtyNodes.clear()
+    useScene.temporal.getState().undo()
+    expect(useScene.getState().dirtyNodes.has(item.id)).toBe(true)
+    expect(useScene.getState().dirtyNodes.has(wall.id)).toBe(true)
+    expect(
+      spatialGridManager.getSlabSupportForItem(level.id, item.position, [0.2, 1, 0.2], [0, 0, 0])
+        .elevation,
+    ).toBe(1)
+    await Promise.resolve()
   })
 })

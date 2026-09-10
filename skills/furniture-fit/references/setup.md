@@ -1,25 +1,25 @@
 # Connect Pascal for a furniture-fit assessment
 
-Source and public-documentation review date: 2026-09-09. Native task results are recorded separately with the evaluated source hash; source review alone does not prove every host or published runtime works.
+Source and public-documentation review date: 2026-09-10. Native task results are recorded separately with the evaluated source hash; source review alone does not prove every host or published runtime works.
 
 ## Local project
 
 Use the local path when the project should remain on the machine:
 
-### Candidate-enabled GitHub preview
+### Verified GitHub preview
 
-The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, an older runtime that may not expose `check_collisions.candidate`. For the candidate-enabled path verified with this skill, install the GitHub prerelease built from public commit `aa653f2f523f81f361ac20cb42b745faf7e46844`:
+The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, an older runtime that may not expose `check_collisions.candidate` or the hosted agent claim/status commands. For the candidate and hosted-agent paths verified with this skill, install the GitHub prerelease built from public commit `5dabbc3b56109c9f79dc8a378443a4c520d9ee0a`:
 
 ```bash
-PASCAL_PREVIEW_VERSION='1.0.0-beta.1.agent-skills.0'
+PASCAL_PREVIEW_VERSION='1.0.0-beta.2.status.0'
 PASCAL_PREVIEW_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/pascal-preview"
 PASCAL_PREVIEW_DOWNLOAD="$(mktemp -d)"
 cd "$PASCAL_PREVIEW_DOWNLOAD"
 
 curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
 curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/SHA256SUMS.txt"
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/SHA256SUMS.txt"
 
 # macOS
 shasum -a 256 -c SHA256SUMS.txt
@@ -36,12 +36,13 @@ Before activating the preview, save or otherwise persist every project with acti
 ```bash
 pascal update --version "$PASCAL_PREVIEW_VERSION"
 pascal editor --no-open
-pascal mcp setup claude # or: pascal mcp setup codex
 ```
 
-The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. `pascal editor` alone reuses any healthy service, including an older one, so run `pascal update` when activating the preview. Keep the preview prefix on the agent host's `PATH` so its configured `pascal mcp connect` command resolves. This preview is not published on npm.
+The expected archive SHA-256 is `15628baeeb174fb7786a1643db08f0554bf6d18afaaa3979f01922c5cd40019a`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. `pascal editor` alone reuses any healthy service, including an older one, so run `pascal update` when activating the preview. Keep the preview prefix on the agent host's `PATH` so its configured `pascal mcp connect` command resolves. The preview includes `pascal agent claim` for a prefilled 15-minute accountability handoff and `pascal agent status --json` for bounded credential and claim-state verification. This preview is not published on npm.
 
-Run the setup command for the active host. The MCP command installed in host configuration is `pascal mcp connect`. Local use needs no hosted account and does not upload projects automatically. If the connected MCP schema lacks `check_collisions.candidate`, report the narrower supported result rather than implying the candidate was tested.
+The Claude Code plugin supplies `pascal mcp connect` automatically. Keep `pascal` on the `PATH` used to launch Claude Code; the plugin does not install or start the Pascal editor. Claude Code 2.1.258 loads both the user-scoped `pascal` server created by `pascal mcp setup claude` and the plugin-provided server. Remove the manual entry with `claude mcp remove --scope user pascal` before reloading or restarting Claude Code. Use `/mcp` to remove or disable other manual Pascal connections. Leaving both connections active violates the one-active-agent-client-per-local-service requirement. If the intended project is hosted, disable the plugin-provided local server in `/mcp` before configuring the hosted connection below.
+
+Claude Code users who installed the skill without the plugin can run `pascal mcp setup claude`. Codex users can run `pascal mcp setup codex`. Run only the setup command for the active host. Local use needs no hosted account and does not upload projects automatically. If the connected MCP schema lacks `check_collisions.candidate`, report the narrower supported result rather than implying the candidate was tested.
 
 For OpenClaw, register and probe the same local connector:
 

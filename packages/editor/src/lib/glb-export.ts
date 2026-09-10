@@ -19,8 +19,8 @@ import {
   type ZoneNode,
 } from '@pascal-app/core'
 import {
-  isViewerPresentationTextureBorrowed,
   getPascalTextureRef,
+  isViewerPresentationTextureBorrowed,
   poseDoorMovingParts,
   poseWindowMovingParts,
   SCENE_LAYER,
@@ -307,10 +307,10 @@ function startSceneExportPreparation(
   for (const id of selectedIds) {
     const contribution = registeredPresentations.find((entry) => entry.id === id)
     if (!contribution?.staticExport) {
-      throw new Error(`Static viewer presentation \"${id}\" is not registered`)
+      throw new Error(`Static viewer presentation "${id}" is not registered`)
     }
     if (contribution.pluginId && !sceneState.installedPlugins.includes(contribution.pluginId)) {
-      throw new Error(`Static viewer presentation \"${id}\" belongs to an uninstalled plugin`)
+      throw new Error(`Static viewer presentation "${id}" belongs to an uninstalled plugin`)
     }
     presentations.push({
       contribution,
@@ -505,7 +505,7 @@ async function appendSelectedPresentations(preparation: SceneExportPreparation):
     })
     if (!built) continue
     if (built.parent) {
-      throw new Error(`Static viewer presentation \"${contribution.id}\" returned an attached root`)
+      throw new Error(`Static viewer presentation "${contribution.id}" returned an attached root`)
     }
     ownBorrowedPresentationTextures(built)
     const wrapper = new THREE.Group()
@@ -688,7 +688,7 @@ function cloneSkinnedSkeletons(cloneByOriginal: Map<THREE.Object3D, THREE.Object
       const clonedBone = cloneByOriginal.get(bone)
       if (!(clonedBone as THREE.Bone | undefined)?.isBone) {
         throw new Error(
-          `Skinned mesh \"${source.name}\" references a bone outside its export subtree`,
+          `Skinned mesh "${source.name}" references a bone outside its export subtree`,
         )
       }
       return clonedBone as THREE.Bone

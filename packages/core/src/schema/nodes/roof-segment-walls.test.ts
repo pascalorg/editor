@@ -23,6 +23,15 @@ function segment(overrides: Partial<RoofSegmentNode> = {}): RoofSegmentNode {
 }
 
 describe('roof wall face frames', () => {
+  test('zero-height gable profiles keep their base at zero and raise the eave to five centimeters', () => {
+    const face = getRoofSegmentWallFace(segment({ wallHeight: 0 }), 'right')
+
+    expect(Math.min(...face.profile.map(([, v]) => v))).toBe(0)
+    expect(face.profile[2]?.[1]).toBe(0.05)
+    expect(face.profile[4]?.[1]).toBe(0.05)
+    expect(face.profile[3]?.[1]).toBeCloseTo(0.05 + 3.05 * Math.tan((40 * Math.PI) / 180))
+  })
+
   test('frame z = 0 lands on the nominal footprint (wall mid-plane)', () => {
     const seg = segment()
     // front face, u at the face middle, v = 1, mid-plane.

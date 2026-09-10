@@ -2,7 +2,7 @@
 
 import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
-import { create, type StoreApi, type UseBoundStore } from 'zustand'
+import { create, type StateCreator, type StoreApi, type UseBoundStore } from 'zustand'
 import { parseMaterialRef, toSceneMaterialRef } from '../material-library'
 import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/registry'
 import { BuildingNode } from '../schema'
@@ -38,6 +38,9 @@ import {
   type SceneMaterialId,
 } from '../schema/scene-material'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema/types'
+import { syncAutoElevatorOpenings } from '../systems/elevator/elevator-opening-sync'
+import { syncAutoStairOpenings } from '../systems/stair/stair-opening-sync'
+import { syncStairRises } from '../systems/stair/stair-rise'
 import { healSceneNodes } from '../utils/heal-scene-graph'
 import { removeRetiredDrawingSheetNodes } from '../utils/retired-scene-nodes'
 import { migrateVerticalSceneNodes } from '../utils/vertical-scene-migration'
@@ -52,6 +55,13 @@ import {
   type SceneCommitOrigin,
   type SceneSnapshot,
 } from './history-control'
+import { getHistoryDirtyNodeIds } from './history-invalidation'
+import {
+  invalidatePendingHydration,
+  isHydrationNormalization,
+  queueSceneNormalization,
+  runSceneHydration,
+} from './scene-hydration'
 import useLiveNodeOverrides from './use-live-node-overrides'
 import useLiveTransforms from './use-live-transforms'
 
@@ -1193,6 +1203,11 @@ export type SceneState = {
   // 3. The "Dirty" Set: For the Wall/Physics systems
   dirtyNodes: Set<AnyNodeId>
 
+  // Identifies a setScene hydration; later document writes invalidate it.
+  hydrationToken: object | null
+  hydrationId: object | null
+  invalidateHydration: () => void
+
   // 4. Relational metadata — not nodes
   collections: Record<CollectionId, Collection>
   materials: Record<SceneMaterialId, SceneMaterial>
@@ -1383,7 +1398,30 @@ class GuardedDirtySet extends Set<AnyNodeId> {
   }
 }
 
-const useScene: UseSceneStore = create<SceneState>()(
+type TemporalSceneCreator = StateCreator<SceneState, [], [['temporal', UseSceneStore['temporal']]]>
+
+function createSceneStore(config: TemporalSceneCreator): UseSceneStore {
+  const hydratedConfig: TemporalSceneCreator = (set, get, store) => {
+    const setWithHydration: typeof set = (partial, replace) => {
+      const state = get()
+      let next = typeof partial === 'function' ? partial(state) : partial
+      const documentChanged = (
+        ['nodes', 'rootNodeIds', 'materials', 'collections', 'installedPlugins'] as const
+      ).some((key) => (replace || key in next) && next[key] !== state[key])
+      if (documentChanged && !isHydrationNormalization()) {
+        invalidatePendingHydration()
+        if (state.hydrationToken) next = { ...next, hydrationToken: null }
+      }
+      if (replace) set(next as SceneState, true)
+      else set(next)
+    }
+    store.setState = setWithHydration
+    return config(setWithHydration, get, store)
+  }
+  return create<SceneState>()(hydratedConfig)
+}
+
+const useScene: UseSceneStore = createSceneStore(
   temporal(
     (set, get) => ({
       // 1. Flat dictionary of all nodes
@@ -1394,6 +1432,13 @@ const useScene: UseSceneStore = create<SceneState>()(
 
       // 3. Dirty set
       dirtyNodes: new GuardedDirtySet(get),
+
+      hydrationToken: null,
+      hydrationId: null,
+      invalidateHydration: () => {
+        invalidatePendingHydration()
+        if (get().hydrationToken) set({ hydrationToken: null })
+      },
 
       // 4. Collections
       collections: {} as Record<CollectionId, Collection>,
@@ -1406,7 +1451,10 @@ const useScene: UseSceneStore = create<SceneState>()(
       setReadOnly: (readOnly: boolean) => set({ readOnly }),
 
       unloadScene: () => {
+        invalidatePendingHydration()
         set({
+          hydrationToken: null,
+          hydrationId: null,
           nodes: {},
           rootNodeIds: [],
           dirtyNodes: new GuardedDirtySet(get),
@@ -1462,19 +1510,55 @@ const useScene: UseSceneStore = create<SceneState>()(
         // pre-write state onto `pastStates`. Writing the scene in two steps
         // (as this used to) exposed a half-normalized intermediate state —
         // and the pre-load (possibly empty) state — as undo targets.
-        set({
-          nodes: cleanedNodes,
-          rootNodeIds: normalizedRootNodeIds,
-          dirtyNodes: new GuardedDirtySet(get),
-          collections: extra?.collections ?? {},
-          materials,
-          installedPlugins: Array.from(new Set(extra?.installedPlugins ?? [])),
-          hasExplicitPluginInstallState: extra?.hasExplicitPluginInstallState ?? false,
-        })
-        // Mark all nodes as dirty to trigger re-validation
-        Object.values(cleanedNodes).forEach((node) => {
-          get().markDirty(node.id)
-        })
+        const hydrationId = {}
+        runSceneHydration(
+          () => {
+            set({
+              hydrationToken: null,
+              hydrationId,
+              nodes: cleanedNodes,
+              rootNodeIds: normalizedRootNodeIds,
+              dirtyNodes: new GuardedDirtySet(get),
+              collections: extra?.collections ?? {},
+              materials,
+              installedPlugins: Array.from(new Set(extra?.installedPlugins ?? [])),
+              hasExplicitPluginInstallState: extra?.hasExplicitPluginInstallState ?? false,
+            })
+            const applyNormalization = (updates: { id: AnyNodeId; data: Partial<AnyNode> }[]) => {
+              if (updates.length > 0) get().updateNodes(updates)
+            }
+            const hydratedNodes = Object.values(get().nodes)
+            if (!get().readOnly) {
+              pauseSceneHistory(useScene)
+              try {
+                if (hydratedNodes.some((node) => node.type === 'elevator')) {
+                  applyNormalization(syncAutoElevatorOpenings(get().nodes))
+                }
+              } finally {
+                resumeSceneHistory(useScene)
+              }
+              if (hydratedNodes.some((node) => node.type === 'stair')) {
+                // Spatial-grid subscribers must settle first. Owning this pass
+                // here also covers opening systems that mount after the load.
+                queueSceneNormalization(() => {
+                  if (get().hydrationId !== hydrationId) return
+                  pauseSceneHistory(useScene)
+                  try {
+                    applyNormalization(syncStairRises(get().nodes))
+                    applyNormalization(syncAutoStairOpenings(get().nodes))
+                  } finally {
+                    resumeSceneHistory(useScene)
+                  }
+                })
+              }
+            }
+            // Mark all nodes as dirty to trigger re-validation
+            Object.values(get().nodes).forEach((node) => {
+              get().markDirty(node.id)
+            })
+          },
+          () => set({ hydrationToken: hydrationId }),
+        )
       },
 
       setInstalledPlugins: (pluginIds, options) => {
@@ -1698,6 +1782,20 @@ const useScene: UseSceneStore = create<SceneState>()(
     },
   ),
 )
+
+// Live state belongs to the hydration owner so even a lazy consumer cannot
+// miss an override that was set and cleared before its first frame.
+const invalidateForLiveState = () => {
+  if (
+    useLiveNodeOverrides.getState().overrides.size ||
+    useLiveTransforms.getState().transforms.size
+  ) {
+    useScene.getState().invalidateHydration()
+  }
+}
+useLiveNodeOverrides.subscribe(invalidateForLiveState)
+useLiveTransforms.subscribe(invalidateForLiveState)
+useScene.subscribe(invalidateForLiveState)
 
 export default useScene
 
@@ -2117,6 +2215,9 @@ export function applySceneSnapshot(
   if (!temporalState.isTracking || getSceneHistoryPauseDepth() > 0) {
     throw new Error('Cannot replace the scene snapshot during an active interaction')
   }
+  useLiveNodeOverrides.getState().clearAll()
+  useLiveTransforms.getState().clearAll()
+
   pauseSceneHistory(useScene)
   try {
     useScene.getState().setScene(snapshot.nodes, snapshot.rootNodeIds, {
@@ -2129,19 +2230,15 @@ export function applySceneSnapshot(
     resumeSceneHistory(useScene)
   }
 
-  useLiveNodeOverrides.getState().clearAll()
-  useLiveTransforms.getState().clearAll()
-
   const current = sceneHistorySnapshotFromState(useScene.getState())
   if (areSceneSnapshotsEqual(before, current)) return false
   notifySceneCommit({ origin: options.origin, before, current })
   return true
 }
 
-// Track previous temporal state lengths and node snapshot for diffing
+// Track previous temporal state lengths for identifying history jumps
 let prevPastLength = 0
 let prevFutureLength = 0
-let prevNodesSnapshot: Record<AnyNodeId, AnyNode> | null = null
 
 export function clearSceneHistory() {
   resetSceneHistoryPauseDepth()
@@ -2154,11 +2251,17 @@ export function clearSceneHistory() {
   useScene.temporal.getState().clear()
   prevPastLength = 0
   prevFutureLength = 0
-  prevNodesSnapshot = null
 }
 
 // Subscribe to the temporal store (Undo/Redo events)
-useScene.temporal.subscribe((state) => {
+useScene.temporal.subscribe((state, previousState) => {
+  // Zundo mutates its source stack before writing the scene. Reconciliation's
+  // pause/resume notifications must not advance our pre-jump stack lengths.
+  if (
+    state.pastStates === previousState.pastStates &&
+    state.futureStates === previousState.futureStates
+  )
+    return
   const currentPastLength = state.pastStates.length
   const currentFutureLength = state.futureStates.length
 
@@ -2168,8 +2271,13 @@ useScene.temporal.subscribe((state) => {
   const didRedo = currentPastLength > prevPastLength && currentFutureLength < prevFutureLength
 
   if (didUndo || didRedo) {
-    // Capture the previous snapshot before RAF fires
-    const snapshotBefore = prevNodesSnapshot
+    // Capture both layouts before another synchronous jump can replace them.
+    // The state pushed onto the opposite stack includes history-paused derived
+    // writes (such as stair rise), unlike a snapshot saved at the last edit.
+    const snapshotBefore = didUndo
+      ? state.futureStates[prevFutureLength]?.nodes
+      : state.pastStates[prevPastLength]?.nodes
+    const snapshotAfter = useScene.getState().nodes
 
     // Defer to a microtask so the scene store has settled before we diff,
     // but still mark walls/items dirty before the next paint.
@@ -2178,31 +2286,7 @@ useScene.temporal.subscribe((state) => {
       const { markDirty } = useScene.getState()
 
       if (snapshotBefore) {
-        // Diff: only mark nodes that actually changed
-        for (const [id, node] of Object.entries(currentNodes) as [AnyNodeId, AnyNode][]) {
-          if (snapshotBefore[id] !== node) {
-            markDirty(id)
-            // Also mark parent so merged geometries update
-            if (node.parentId) markDirty(node.parentId as AnyNodeId)
-          }
-        }
-        // Nodes that were deleted (exist in prev but not current)
-        for (const [id, node] of Object.entries(snapshotBefore) as [AnyNodeId, AnyNode][]) {
-          if (!currentNodes[id]) {
-            const parentId = node.parentId as AnyNodeId | undefined
-            if (parentId) {
-              markDirty(parentId)
-              // Mark sibling nodes dirty so they can update their geometry
-              // (e.g. adjacent walls need to recalculate miter/junction geometry)
-              const parent = currentNodes[parentId]
-              if (parent && 'children' in parent && Array.isArray(parent.children)) {
-                for (const childId of parent.children) {
-                  markDirty(childId as AnyNodeId)
-                }
-              }
-            }
-          }
-        }
+        for (const id of getHistoryDirtyNodeIds(snapshotBefore, snapshotAfter)) markDirty(id)
       } else {
         // No snapshot to diff against — fall back to marking all
         for (const node of Object.values(currentNodes)) {
@@ -2220,8 +2304,7 @@ useScene.temporal.subscribe((state) => {
     })
   }
 
-  // Update tracked lengths and snapshot
+  // Update tracked lengths
   prevPastLength = currentPastLength
   prevFutureLength = currentFutureLength
-  prevNodesSnapshot = useScene.getState().nodes
 })

@@ -1,6 +1,6 @@
 'use client'
 
-import { viewerPresentationRegistry, type ViewerPresentationContribution } from '@pascal-app/viewer'
+import { type ViewerPresentationContribution, viewerPresentationRegistry } from '@pascal-app/viewer'
 import { z } from 'zod'
 
 export const LOCAL_PROJECT_PRESENTATION_STORAGE_KEY_PREFIX = 'pascal:project-presentation:v1:'
@@ -241,7 +241,7 @@ class LocalProjectPresentationPersistenceImpl implements LocalProjectPresentatio
     let valid = true
     this.suppressWrites = true
     try {
-      if (Object.prototype.hasOwnProperty.call(this.contributions, id)) {
+      if (Object.hasOwn(this.contributions, id)) {
         try {
           configuration.restore(this.contributions[id])
         } catch {

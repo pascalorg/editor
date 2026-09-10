@@ -2,6 +2,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
+import { READ_ONLY_OPEN_WORLD_TOOL_ANNOTATIONS } from '../annotations'
 
 /**
  * Input shape for `analyze_floorplan_image`.
@@ -127,6 +128,7 @@ export function registerAnalyzeFloorplanImage(server: McpServer, _bridge: SceneO
         'Defer to the MCP host (via sampling) to extract walls, rooms, and approximate dimensions from a floor-plan image. Requires host support for sampling.',
       inputSchema: analyzeFloorplanImageInput,
       outputSchema: analyzeFloorplanImageOutput,
+      annotations: READ_ONLY_OPEN_WORLD_TOOL_ANNOTATIONS,
     },
     async ({ image, scaleHint }) => {
       const caps = server.server.getClientCapabilities()

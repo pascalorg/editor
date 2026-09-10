@@ -37,24 +37,24 @@ the runtime, so updating the CLI does not replace your work.
 - npm, including when the CLI itself is launched with pnpm or Bun
 - A browser, unless you pass `--no-open`
 
-The initial supported release is macOS. The GitHub preview below also passed an
-installed managed-service smoke in a Linux arm64 container. This is not an x86_64 or
-Windows result.
+The initial supported release is macOS. The GitHub preview below also passed a clean
+claim-command installation in a Linux arm64 container. This is not an x86_64 or Windows
+result.
 
-## Candidate-enabled CLI preview
+## Verified CLI preview
 
-The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, which predates the read-only furniture candidate input in this repository. To use that capability before the next npm release, install the verified GitHub prerelease built from commit `aa653f2f523f81f361ac20cb42b745faf7e46844`:
+The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, which predates the read-only furniture candidate input and hosted agent claim/status commands in this repository. To use those capabilities before the next npm release, install the verified GitHub prerelease built from commit `5dabbc3b56109c9f79dc8a378443a4c520d9ee0a`:
 
 ```bash
-PASCAL_PREVIEW_VERSION='1.0.0-beta.1.agent-skills.0'
+PASCAL_PREVIEW_VERSION='1.0.0-beta.2.status.0'
 PASCAL_PREVIEW_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/pascal-preview"
 PASCAL_PREVIEW_DOWNLOAD="$(mktemp -d)"
 cd "$PASCAL_PREVIEW_DOWNLOAD"
 
 curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
 curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.1-agent-skills.0/SHA256SUMS.txt"
+  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/SHA256SUMS.txt"
 
 # macOS
 shasum -a 256 -c SHA256SUMS.txt
@@ -66,9 +66,12 @@ export PATH="$PASCAL_PREVIEW_PREFIX/bin:$PATH"
 pascal --version
 pascal update --version "$PASCAL_PREVIEW_VERSION"
 pascal editor --no-open
+# For an existing hosted autonomous-agent key:
+PASCAL_API_KEY='sk_live_...' pascal agent claim
+PASCAL_API_KEY='sk_live_...' pascal agent status --json
 ```
 
-The expected archive SHA-256 is `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before running `pascal mcp setup claude`, `pascal mcp setup codex`, or configuring `pascal mcp connect` manually. This GitHub prerelease is not an npm version.
+The expected archive SHA-256 is `15628baeeb174fb7786a1643db08f0554bf6d18afaaa3979f01922c5cd40019a`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before running `pascal mcp setup claude`, `pascal mcp setup codex`, or configuring `pascal mcp connect` manually. `pascal agent claim` opens a prefilled 15-minute human handoff; `pascal agent status` verifies the key and reports the bounded claim state. Neither command stores or prints the hosted key. This GitHub prerelease is not an npm version.
 
 Use one active agent client per local CLI service. The standalone local HTTP runtime shares active scene state between clients; use separate `PASCAL_HOME` directories and service processes when independent concurrent work is required.
 
@@ -127,6 +130,8 @@ npx @pascal-app/cli editor --foreground --no-open
 | `pascal info [--json]` | Print platform, paths, runtime, and plugin context. |
 | `pascal project list [--json]` | Explicit form of `pascal projects`. |
 | `pascal project open <id-or-name>` | Explicit form of `pascal open <project>`. |
+| `pascal agent claim [--no-open] [--json]` | Link an autonomous hosted agent to the person accountable for it. |
+| `pascal agent status [--json]` | Verify the hosted agent credential and inspect its claim and organization scope. |
 | `pascal mcp connect` | Stable local connector for MCP clients; discovers the dynamic managed service. |
 | `pascal mcp status [--json]` | Show managed MCP health. |
 | `pascal mcp config [--json]` | Print generic MCP client configuration. |
@@ -171,6 +176,31 @@ pascal mcp setup claude
 Or use `pascal mcp config` for JSON-based clients. The connector also starts Pascal
 when an agent connects while it is stopped. Ask the agent to read
 `pascal://agent-guide`, list or load a scene, edit it, and return the `editorUrl`.
+
+## Hosted autonomous agents
+
+An autonomous agent registered with hosted Pascal receives its own API key and identity. The
+agent can create a short-lived claim code so the person working with it can establish the
+accountability link:
+
+```bash
+PASCAL_API_KEY='sk_live_...' pascal agent claim
+PASCAL_API_KEY='sk_live_...' pascal agent status
+```
+
+The CLI sends that key once to Pascal's claim endpoint, does not store or print it, and opens
+the claim page. Use `--no-open` on a headless host. `--json` returns structured output without
+opening a browser. A new claim request supersedes the agent's previous code; each code expires
+after 15 minutes.
+
+`pascal agent status` confirms that the credential remains active and reports the agent ID,
+autonomous or delegated mode, claim state, and whether the key is scoped to an organization.
+It does not expose the accountable person's identity or inspect local editor projects.
+
+Claiming lifts claim-gated capabilities for the autonomous agent. It does not transfer project
+ownership, grant the agent access to the person's private projects, or grant the person access
+to the agent's private projects. The local editor and its projects remain local unless a
+separate hosted project action explicitly moves data.
 
 ## Plugins
 

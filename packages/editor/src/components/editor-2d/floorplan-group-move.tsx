@@ -39,10 +39,13 @@ import {
   collectParticipants,
   computeGroupBox,
   expandToComponent,
+  type GroupPlanBounds,
+  groupPlanBounds,
   levelFrame,
-  participantExtents,
+  planBoundsCenter,
   rotateGroupPatches,
   rotateGroupSnapshots,
+  rotatePlanBounds,
   translateGroupPatches,
   type Vec2,
 } from '../editor/group-transform-shared'
@@ -112,6 +115,9 @@ export function startFloorplanGroupMove(
     affectedIds: AnyNodeId[]
     candidates: ReturnType<typeof collectAlignmentAnchors>
     restAnchors: ReturnType<typeof bboxCornerAnchors>
+    startBounds: GroupPlanBounds
+    restBounds: GroupPlanBounds
+    rotation: number
     restCenter: Vec2
     lastDelta: Vec2 | null
   }
@@ -140,20 +146,16 @@ export function startFloorplanGroupMove(
     // The group aligns as one rigid footprint: its bbox corners + center are
     // the moving anchors. `computeGroupBox` is world-space (the 3D scene stays
     // mounted under every view mode); plan coords are level-frame, so convert.
-    const restBox = computeGroupBox(fullIds)
     const { inverse: frameInv } = levelFrame(levelId)
-    const boxMin = restBox ? restBox.min.clone().applyMatrix4(frameInv) : null
-    const boxMax = restBox ? restBox.max.clone().applyMatrix4(frameInv) : null
-    const restAnchors =
-      boxMin && boxMax
-        ? bboxCornerAnchors(
-            'group-move',
-            Math.min(boxMin.x, boxMax.x),
-            Math.min(boxMin.z, boxMax.z),
-            Math.max(boxMin.x, boxMax.x),
-            Math.max(boxMin.z, boxMax.z),
-          )
-        : []
+    const restBounds = groupPlanBounds(computeGroupBox(fullIds), starts, frameInv)
+    if (!restBounds) return null
+    const restAnchors = bboxCornerAnchors(
+      'group-move',
+      restBounds.minX,
+      restBounds.minZ,
+      restBounds.maxX,
+      restBounds.maxZ,
+    )
 
     for (const id of affectedIds) {
       useLiveTransforms.getState().clear(id)
@@ -169,12 +171,23 @@ export function startFloorplanGroupMove(
       nodeId,
       handle: GROUP_MOVE_DRAG_LABEL,
     })
-    // Rotation pivot for mid-drag R/T — the participant DATA extents' center
-    // (stable across the drag; rotations re-seed around the same point).
-    const ext = participantExtents(starts)
-    const restCenter: Vec2 = ext ? [(ext.minX + ext.maxX) / 2, (ext.minZ + ext.maxZ) / 2] : [0, 0]
+    // Rotation pivot for mid-drag R/T — the START footprint's center, the same
+    // point the 3D body drag, the idle keyboard rotate and the rotate gizmos
+    // orbit. Stable across the drag; rotations re-seed around the same point.
+    const restCenter = planBoundsCenter(restBounds)
 
-    return { starts, links, affectedIds, candidates, restAnchors, restCenter, lastDelta: null }
+    return {
+      starts,
+      links,
+      affectedIds,
+      candidates,
+      restAnchors,
+      startBounds: restBounds,
+      restBounds,
+      rotation: 0,
+      restCenter,
+      lastDelta: null,
+    }
   }
 
   const applyMove = (e: PointerEvent, s: Session) => {
@@ -241,18 +254,20 @@ export function startFloorplanGroupMove(
   // current delta — the carried group turns exactly like the idle keyboard
   // rotate, and the commit stays a single updateNodes.
   const rotateSession = (s: Session, direction: 1 | -1) => {
-    const rotated = rotateGroupSnapshots(
-      s.starts,
-      s.links,
-      { x: s.restCenter[0], z: s.restCenter[1] },
-      -direction * (Math.PI / 4),
-    )
+    const pivot = { x: s.restCenter[0], z: s.restCenter[1] }
+    const delta = -direction * (Math.PI / 4)
+    const rotated = rotateGroupSnapshots(s.starts, s.links, pivot, delta)
     s.starts = rotated.starts
     s.links = rotated.links
-    const ext = participantExtents(rotated.starts)
-    if (ext) {
-      s.restAnchors = bboxCornerAnchors('group-move', ext.minX, ext.minZ, ext.maxX, ext.maxZ)
-    }
+    s.rotation += delta
+    s.restBounds = rotatePlanBounds(s.startBounds, pivot, s.rotation)
+    s.restAnchors = bboxCornerAnchors(
+      'group-move',
+      s.restBounds.minX,
+      s.restBounds.minZ,
+      s.restBounds.maxX,
+      s.restBounds.maxZ,
+    )
     sfxEmitter.emit('sfx:item-rotate')
     applyDelta(s, s.lastDelta?.[0] ?? 0, s.lastDelta?.[1] ?? 0)
   }
@@ -358,7 +373,22 @@ export function startFloorplanGroupMove(
   const onKeyDown = (e: KeyboardEvent) => {
     const key = e.key.toLowerCase()
     if ((key === 'r' || key === 't') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
-      if (!session) return
+      // Armed but still under the drag threshold: engage first (exactly what
+      // the next pointer-move would do) so the rotation lands inside this
+      // session. Falling through to the global idle arm instead would write
+      // the scene behind snapshots already captured here, and the first
+      // `applyDelta` would republish them — undoing the rotation.
+      if (!session) {
+        session = engage()
+        if (!session) {
+          // No plane hit yet: swallow the chord and keep the gesture armed so
+          // the next pointer-move can still engage; the idle arm must not run
+          // behind the snapshots captured here.
+          e.preventDefault()
+          e.stopPropagation()
+          return
+        }
+      }
       e.preventDefault()
       e.stopPropagation()
       rotateSession(session, key === 'r' ? 1 : -1)
@@ -415,9 +445,13 @@ export function startFloorplanGroupRotate(event: {
   const { starts, links } = collectParticipants(fullIds, nodes, levelId)
   if (starts.length === 0) return false
   const affectedIds: AnyNodeId[] = [...starts.map((s) => s.id), ...links.map((l) => l.id)]
-  const ext = participantExtents(starts)
-  if (!ext) return false
-  const pivot = { x: (ext.minX + ext.maxX) / 2, z: (ext.minZ + ext.maxZ) / 2 }
+  const { inverse: frameInv } = levelFrame(levelId)
+  const bounds = groupPlanBounds(computeGroupBox(fullIds), starts, frameInv)
+  if (!bounds) return false
+  // Same pivot as the dashed box the handles hang off (and as the 3D rotate
+  // gizmo): its centre, not the anchor points' centre.
+  const [pivotX, pivotZ] = planBoundsCenter(bounds)
+  const pivot = { x: pivotX, z: pivotZ }
   const startPlan = clientToPlan(event.clientX, event.clientY)
   if (!startPlan) return false
   // Bearing around the pivot in the plan frame — the same atan2 x→z sense

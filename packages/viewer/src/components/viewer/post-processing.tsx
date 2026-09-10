@@ -6,7 +6,6 @@ import { denoise } from 'three/examples/jsm/tsl/display/DenoiseNode.js'
 import {
   add,
   diffuseColor,
-  float as tslFloat,
   mix,
   mrt,
   normalView,
@@ -21,6 +20,7 @@ import {
   screenUV,
   smoothstep,
   time,
+  float as tslFloat,
   uniform,
   vec3,
   vec4,
