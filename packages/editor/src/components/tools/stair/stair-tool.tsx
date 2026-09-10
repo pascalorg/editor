@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   collectAlignmentAnchors,
+  createDefaultStairSegment,
   createSurfaceOpeningPreviewController,
   DEFAULT_LEVEL_HEIGHT,
   emitter,
@@ -14,7 +15,7 @@ import {
   resolveFrozenFloorPlacementPatch,
   resolveSupportSlabPatch,
   StairNode,
-  StairSegmentNode,
+  type StairSegmentNode,
   syncAutoStairOpenings,
   useScene,
 } from '@pascal-app/core'
@@ -130,9 +131,8 @@ function resolvePlacedStairRise(
   return getLevelFloorToFloorHeight(levelId, nodes) - base
 }
 
-function createDefaultStairSegment(rise: number) {
-  return StairSegmentNode.parse({
-    segmentType: 'stair',
+function createSeedStairSegment(rise: number) {
+  return createDefaultStairSegment({
     width: DEFAULT_STAIR_WIDTH,
     length: DEFAULT_STAIR_LENGTH,
     height: rise,
@@ -140,7 +140,6 @@ function createDefaultStairSegment(rise: number) {
     attachmentSide: DEFAULT_STAIR_ATTACHMENT_SIDE,
     fillToFloor: DEFAULT_STAIR_FILL_TO_FLOOR,
     thickness: DEFAULT_STAIR_THICKNESS,
-    position: [0, 0, 0],
   })
 }
 
@@ -203,7 +202,7 @@ function commitStairPlacement(
 
   const stairCount = Object.values(nodes).filter((n) => n.type === 'stair').length
   const name = `Staircase ${stairCount + 1}`
-  const seed = createDefaultStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
+  const seed = createSeedStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
 
   const destinationPlan = resolveStairDestinationLevel({
     createMissing: true,
@@ -322,7 +321,7 @@ export const StairTool: React.FC = () => {
         nodes,
       })
       const nextLevelId = destinationPlan?.toLevel.id ?? placementLevelId
-      const seed = createDefaultStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
+      const seed = createSeedStairSegment(getLevelFloorToFloorHeight(placementLevelId, nodes))
       const stair = createDefaultStairNode({
         name: 'Staircase Preview',
         levelId: placementLevelId,

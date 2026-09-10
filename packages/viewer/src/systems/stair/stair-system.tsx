@@ -1,6 +1,7 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  createStairFlightFromStair,
   getEffectiveNode,
   getFloorStackedPosition,
   type StairNode,
@@ -319,18 +320,20 @@ function updateMergedStairGeometry(
     .filter((n): n is StairSegmentNode => n?.type === 'stair-segment')
     .map((n) => getEffectiveNode(n))
 
-  if (segments.length === 0) {
-    replaceMeshGeometry(mergedMesh, createEmptyGeometry())
-    return
-  }
+  // A straight stair with no segments has nothing to merge and would render as
+  // nothing at all — the state a stair authored as curved lands in the moment
+  // it is switched to straight. Draw the flight its own fields describe
+  // instead of vanishing; it is the same flight the panel materializes.
+  const bodySegments =
+    segments.length > 0 ? segments : [createStairFlightFromStair(stairNode, nodes)]
 
   // Compute chained transforms for segments
-  const transforms = computeSegmentTransforms(segments)
+  const transforms = computeSegmentTransforms(bodySegments)
 
   const geometries: THREE.BufferGeometry[] = []
 
-  for (let i = 0; i < segments.length; i++) {
-    const segment = segments[i]!
+  for (let i = 0; i < bodySegments.length; i++) {
+    const segment = bodySegments[i]!
     const transform = transforms[i]!
 
     const absoluteHeight = transform.position[1]
