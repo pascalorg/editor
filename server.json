@@ -13,7 +13,16 @@
     {
       "src": "https://editor.pascal.app/icons/icon-512.png",
       "mimeType": "image/png",
-      "sizes": ["512x512"]
+      "sizes": [
+        "512x512"
+      ]
+    },
+    {
+      "src": "https://editor.pascal.app/icons/icon-1024.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "1024x1024"
+      ]
     }
   ],
   "remotes": [

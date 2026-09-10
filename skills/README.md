@@ -10,7 +10,7 @@ Status on 2026-09-10. Installable and publicly listed are separate results.
 | --- | --- |
 | [skills.sh](https://skills.sh/pascalorg/editor) | Indexed automatically from this repository; installable, with install counts on that listing. |
 | Claude Code plugin | Installable from this Git marketplace; not submitted to the Anthropic plugin directory. |
-| Codex and Cursor Agent Plugin | Installable from this repository, including the root [`mcp.json`](../mcp.json) server; not submitted to the OpenAI or Cursor marketplaces. |
+| Codex and Cursor Agent Plugin | Installable from this repository, including the root [`mcp.json`](../mcp.json) server; a Cursor-native [`.cursor-plugin/plugin.json`](../.cursor-plugin/plugin.json) carries the marketplace logo and category; not submitted to the OpenAI or Cursor marketplaces. |
 | Gemini CLI extension | Root [`gemini-extension.json`](../gemini-extension.json) is present; installable from a release tag that carries it, and gallery listing waits on the `gemini-cli-extension` repository topic. |
 | Official MCP Registry | `io.github.pascalorg/editor` 0.6.1 is published. |
 | ClawHub and OpenClaw | Not published; waiting on an authorized publisher accepting the MIT-0 terms. |
