@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
 import { validateClaudeMcpPolicy } from './claude-mcp-config-policy'
 import { validateClawHubIgnorePolicy } from './clawhub-ignore-policy'
+import { validateOpenAiToolAnnotationPacket } from './openai-tool-annotation-policy'
 import {
   collectSkillDiscoveryEntries,
   validatePublicSkillDiscoverySurface,
@@ -576,10 +577,21 @@ for (const [semanticCase, requirement] of requiredSemanticCases) {
 }
 
 const publishingFile = join(root, 'plugin-evals', 'publishing-cases.json')
+const annotationPacketFile = join(root, 'plugin-evals', 'tool-annotation-justifications.json')
+const annotationPacket = parseJson(annotationPacketFile)
+for (const annotationFailure of validateOpenAiToolAnnotationPacket(annotationPacket)) {
+  fail(annotationFailure)
+}
 const publishing = parseJson(publishingFile) as {
   submission_route?: unknown
   status?: unknown
   blockers?: unknown
+  tool_annotation_validation?: {
+    status?: unknown
+    registered_tools?: unknown
+    required_hints?: unknown
+    justification_packet?: unknown
+  }
   cases?: Array<{
     id?: unknown
     skill?: unknown
@@ -605,6 +617,16 @@ if (
   publishing.blockers.some((value) => typeof value !== 'string' || !value)
 ) {
   fail('Publishing suite must name its current hosted MCP review blockers')
+}
+const annotationValidation = publishing.tool_annotation_validation
+if (
+  annotationValidation?.status !== 'local_pass' ||
+  annotationValidation.registered_tools !== 46 ||
+  JSON.stringify(annotationValidation.required_hints) !==
+    JSON.stringify(['readOnlyHint', 'destructiveHint', 'openWorldHint']) ||
+  annotationValidation.justification_packet !== 'plugin-evals/tool-annotation-justifications.json'
+) {
+  fail('Publishing suite must reference the locally validated exact 46-tool justification packet')
 }
 const publishingCases = publishing.cases ?? []
 let positivePublishingCases = 0
