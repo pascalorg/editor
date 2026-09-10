@@ -1368,8 +1368,14 @@ changes.
   north elevation under the datums and tags; the cover recaptures with
   the finished house. Two clients on one scene overwrite each other's
   autosave (the Browser pane's tab wiped the picture Chrome had just
-  captured) — keep one tab on a scene while testing. Open: the porch
-  roof renders in the default orange, not the recorded roof finish. The viewer's
+  captured) — keep one tab on a scene while testing. The cover capture
+  poses the capture camera itself too (`perspective` in the generator's
+  event): animating the user's camera caught the frame mid-flight and
+  the cover looked down at a roof. A4.1 (east) captured on its first
+  show. Open: the 3D roof renders in the default orange while the finish
+  key says COMP SHINGLE — WEATHERED (#6e6256) — the generator's roof
+  segments should carry the recorded finish; captures are canvas-sized
+  (no supersampling); the sections still come from the vector engine. The viewer's
   empty-draw guard now also wraps the backend's `draw` (a zero-vertex draw
   or an empty draw range is dropped before the encoder — Steve's "Vertex
   buffer slot 1 … MeshLambertNodeMaterial … Draw(0, 1, 0, 0)"; it could

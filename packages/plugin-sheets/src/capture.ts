@@ -322,30 +322,15 @@ export async function captureViewportImage(
     }
   }
 
-  const restore = currentPose()
-  // `camera:go-to-position` drives CameraControls.setLookAt directly
-  // (thumbnail-generator.tsx) — the shortest path to "put the camera exactly
-  // here". `camera-controls:apply-pose` is sent as well so the pose store and
-  // any projection switch stay in step. The finished house is what a sheet
-  // shows, whatever view the user was in.
-  const raw = await withFinishedPresentation(async () => {
-    emit('camera-controls:apply-pose', {
-      position: pose.position,
-      target: pose.target,
-      projection: 'perspective',
-      fov: 60,
-    })
-    emit('camera:go-to-position', { position: pose.position, target: pose.target })
-    // The move is animated; let it settle before the render.
-    await wait(1400)
-    // The snapshot pipeline builds an SSGI pass on first use, which can take
-    // several seconds on a cold WebGPU device — hence the generous window.
-    return capturePipeline(20000)
-  })
-  if (restore) {
-    emit('camera-controls:apply-pose', restore)
-    emit('camera:go-to-position', { position: restore.position, target: restore.target })
-  }
+  // The capture camera takes the computed pose itself (thumbnail-generator
+  // `perspective`): the user's camera never moves and the frame is never
+  // caught mid-animation. The finished house is what a sheet shows,
+  // whatever view the user was in. The snapshot pipeline builds an SSGI
+  // pass on first use, which can take several seconds on a cold WebGPU
+  // device — hence the generous window.
+  const raw = await withFinishedPresentation(() =>
+    capturePipeline(20000, { perspective: { position: pose.position, target: pose.target, fov: 60 } }),
+  )
   if (!raw) {
     return {
       ok: false,
@@ -389,6 +374,7 @@ function capturePipeline(
     transparent?: boolean
     edges?: 'off' | 'soft' | 'strong'
     ortho?: { position: [number, number, number]; target: [number, number, number]; viewWidth: number }
+    perspective?: { position: [number, number, number]; target: [number, number, number]; fov?: number }
     hideTypes?: readonly string[]
   } = {},
 ): Promise<string | undefined> {

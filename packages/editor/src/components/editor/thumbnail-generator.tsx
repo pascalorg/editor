@@ -143,6 +143,11 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       // node types hidden for this capture besides the helpers (a sheet's
       // elevation hides the site's terrain: a solid ground band edge-on)
       hideTypes: readonly string[] = [],
+      // a PERSPECTIVE view of the caller's own (a sheet's cover view): the
+      // capture camera stands at `position` looking at `target` — no
+      // animation of the user's camera, so the frame is never caught
+      // mid-flight (2026-09-10: the cover came out looking down at a roof)
+      perspective?: { position: [number, number, number]; target: [number, number, number]; fov?: number },
     ) => {
       const standardW = standardSize?.w ?? THUMBNAIL_WIDTH
       const standardH = standardSize?.h ?? THUMBNAIL_HEIGHT
@@ -222,14 +227,23 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           thumbnailCamera = cam
           pipeline = null
         } else {
-          // Copy the main camera's transform and projection so the thumbnail
-          // matches exactly what the user sees in the viewport.
-          perspectiveCamera.position.copy(mainCamera.position)
-          perspectiveCamera.quaternion.copy(mainCamera.quaternion)
-          if (mainCamera instanceof THREE.PerspectiveCamera) {
-            perspectiveCamera.fov = mainCamera.fov
-            perspectiveCamera.near = mainCamera.near
-            perspectiveCamera.far = mainCamera.far
+          if (perspective && !snapLevels) {
+            perspectiveCamera.position.set(perspective.position[0], perspective.position[1], perspective.position[2])
+            perspectiveCamera.up.set(0, 1, 0)
+            perspectiveCamera.lookAt(perspective.target[0], perspective.target[1], perspective.target[2])
+            perspectiveCamera.fov = perspective.fov ?? 60
+            perspectiveCamera.near = 0.1
+            perspectiveCamera.far = 2000
+          } else {
+            // Copy the main camera's transform and projection so the thumbnail
+            // matches exactly what the user sees in the viewport.
+            perspectiveCamera.position.copy(mainCamera.position)
+            perspectiveCamera.quaternion.copy(mainCamera.quaternion)
+            if (mainCamera instanceof THREE.PerspectiveCamera) {
+              perspectiveCamera.fov = mainCamera.fov
+              perspectiveCamera.near = mainCamera.near
+              perspectiveCamera.far = mainCamera.far
+            }
           }
           perspectiveCamera.aspect = width / height
           perspectiveCamera.updateProjectionMatrix()
@@ -476,6 +490,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       ortho?: { position: [number, number, number]; target: [number, number, number]; viewWidth: number }
       /** Node types hidden for this capture besides the helpers. */
       hideTypes?: readonly string[]
+      /** A perspective view of the caller's own — see `generate`. */
+      perspective?: { position: [number, number, number]; target: [number, number, number]; fov?: number }
     }) => {
       await generate(
         event.snapLevels === true,
@@ -486,6 +502,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         event.edges,
         event.ortho,
         event.hideTypes ?? [],
+        event.perspective,
       )
     }
 
