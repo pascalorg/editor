@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 import { parseArgs } from 'node:util'
+import { startAgentClaim } from '../agent-account.js'
 import { openBrowser } from '../browser.js'
 import { installGlobalPascalCommand, isNpxInvocation } from '../command-install.js'
 import { collectInfo, runDoctor } from '../diagnostics.js'
@@ -50,6 +51,7 @@ USAGE:
   pascal project list [--json]
   pascal project open <id-or-name>
   pascal project resume [id-or-name]
+  pascal agent claim [--no-open] [--json]
   pascal mcp connect | status | config | setup <client>
   pascal plugin list [--json]
 
@@ -73,14 +75,32 @@ dynamic loopback port without exposing Pascal's private local token.
 Documentation: https://editor.pascal.app/docs/developers/mcp
 `
 
+const AGENT_HELP = `Pascal agent — connect an autonomous agent to a person
+
+USAGE:
+  pascal agent claim [--no-open] [--json]
+
+Set PASCAL_API_KEY to the autonomous agent's hosted Pascal API key. The CLI
+uses it once to request a 15-minute claim code and never stores it. It opens
+the claim page unless --no-open or --json is set.
+
+Claiming records who is accountable for the agent and lifts claim-gated
+capabilities. It does not transfer project ownership or grant access to either
+account's private projects.
+
+Documentation: https://editor.pascal.app/docs/developers/mcp
+`
+
 const paths = resolvePascalPaths()
+const agentApiKey = process.env.PASCAL_API_KEY
+Reflect.deleteProperty(process.env, 'PASCAL_API_KEY')
 
 async function main(): Promise<void> {
   const [command = 'help', ...args] = process.argv.slice(2)
   if (command === '--version' || command === '-v') return print(version)
   if (command === '--help' || command === '-h' || command === 'help') return print(HELP)
   if (args.includes('--help') || args.includes('-h')) {
-    return print(command === 'mcp' ? MCP_HELP : HELP)
+    return print(command === 'mcp' ? MCP_HELP : command === 'agent' ? AGENT_HELP : HELP)
   }
 
   switch (command) {
@@ -110,6 +130,8 @@ async function main(): Promise<void> {
       return runUpdate(args)
     case 'project':
       return runProject(args)
+    case 'agent':
+      return runAgent(args, agentApiKey)
     case 'plugin':
       return runPlugin(args)
     case 'mcp':
@@ -573,6 +595,34 @@ async function runMcp(args: string[]): Promise<void> {
     'Use "pascal mcp connect", "pascal mcp status", "pascal mcp config", or "pascal mcp setup <client>".',
     undefined,
     2,
+  )
+}
+
+async function runAgent(args: string[], apiKey: string | undefined): Promise<void> {
+  const [subcommand, ...rest] = args
+  if (subcommand !== 'claim') {
+    throw new CliError('unknown_command', 'Use "pascal agent claim".', undefined, 2)
+  }
+  const { values } = parseArgs({
+    args: rest,
+    strict: true,
+    options: {
+      json: { type: 'boolean', default: false },
+      'no-open': { type: 'boolean', default: false },
+    },
+  })
+  const claim = await startAgentClaim(apiKey ?? '')
+  if (!values['no-open'] && !values.json) openBrowser(claim.claimUrl)
+  output(
+    values.json,
+    claim,
+    [
+      `Claim code: ${claim.claimCode}`,
+      `Claim page: ${claim.claimUrl}`,
+      `Expires: ${claim.expiresAt}`,
+      '',
+      'Claiming links accountability. It does not transfer project ownership or grant access to private projects.',
+    ].join('\n'),
   )
 }
 
