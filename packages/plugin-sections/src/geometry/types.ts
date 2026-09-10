@@ -45,6 +45,10 @@ export type ElevationFrame = {
   yaw: number
   /** The first building's world position; the drawing's elevation 0 is its y. */
   origin: [number, number, number]
+  /** The projector's plan origin in the model frame — drawing x = 0 there (a section's cut line starts here; an elevation's is [0, 0]). */
+  planOrigin: Vec2
+  /** A section: how far beyond the cut the drawing shows, metres. */
+  depth?: number
 }
 
 export type DrawingResult = {

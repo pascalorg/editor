@@ -203,12 +203,19 @@ export function elevationCaptureHash(nodes: NodeMap): string {
   return `${parts.length}:${(h >>> 0).toString(36)}`
 }
 
-/** True when the viewport's picture is missing or was taken of another model — an elevation or the cover view. */
+/** True when the viewport's picture is missing or was taken of another model — an elevation, a section or the cover view. */
 export function elevationCaptureStale(viewport: ViewportNode, nodes: NodeMap): boolean {
   if (viewport.kind === 'view3d') return !viewport.dataUrl || viewport.imageHash !== elevationCaptureHash(nodes)
-  if (viewport.kind !== 'elevation') return false
+  if (viewport.kind !== 'elevation' && viewport.kind !== 'section') return false
   if (!viewport.dataUrl || !viewport.imageFrame) return true
   return viewport.imageHash !== elevationCaptureHash(nodes)
+}
+
+/** The capture a viewport takes: an elevation or a section from the viewer, else the cover view. */
+export function captureViewportPicture(viewport: ViewportNode): Promise<CaptureResult> {
+  if (viewport.kind === 'elevation') return captureElevationImage(viewport)
+  if (viewport.kind === 'section') return captureSectionImage(viewport)
+  return captureViewportImage(viewport)
 }
 
 /**
@@ -257,7 +264,7 @@ export async function captureElevationImage(
     frame.origin[0] + lx * cos + lz * sin,
     frame.origin[2] - lx * sin + lz * cos,
   ]
-  const [tx, tz] = toWorld(frame.right[0] * cx, frame.right[1] * cx)
+  const [tx, tz] = toWorld(frame.planOrigin[0] + frame.right[0] * cx, frame.planOrigin[1] + frame.right[1] * cx)
   const ty = frame.origin[1] - cy
   const [fx, fz] = [frame.forward[0] * cos + frame.forward[1] * sin, -frame.forward[0] * sin + frame.forward[1] * cos]
   const distance = 80
@@ -300,6 +307,107 @@ export async function captureElevationImage(
   const dataUrl = await toJpeg(raw, options.maxWidth ?? 2400)
   if (!dataUrl) {
     return { ok: false, reason: 'The captured frame came back blank — the viewer rendered nothing from the elevation pose.' }
+  }
+  updateViewport(viewport.id, {
+    dataUrl,
+    imageFrame: { x0: cx - width / 2, y0: cy - height / 2, x1: cx + width / 2, y1: cy + height / 2 },
+    imageHash: hash,
+  })
+  return { ok: true, dataUrl }
+}
+
+/**
+ * The building section as the viewer shows it: the finished house CLIPPED
+ * at the section's plane — everything on the viewer's side of the cut
+ * gone, everything beyond it to the section's depth kept — captured
+ * orthographically along the marker's look direction and sized to the
+ * vector drawing's window; the vector engine then draws the cut itself
+ * (the walls, slabs and roof the plane passes through, with their poché),
+ * the datums, the grade and Bones' cut members over it (`beyondFromImage`).
+ */
+export async function captureSectionImage(
+  viewport: ViewportNode,
+  options: { maxWidth?: number } = {},
+): Promise<CaptureResult> {
+  if (typeof window === 'undefined') return { ok: false, reason: 'no browser' }
+  const nodes = sceneNodes()
+  const vector = elevationVectorDrawing(viewport, nodes)
+  if (!vector || !vector.frame || vector.primitives.length === 0) {
+    return { ok: false, reason: 'There is nothing to cut in this section yet — draw some walls and place a section marker first.' }
+  }
+  const canvas = viewerCanvas()
+  if (!canvas) {
+    return {
+      ok: false,
+      reason: 'The 3D viewer is not mounted — open the model once in this tab, then press Recapture.',
+    }
+  }
+  const aspect = canvas.width / Math.max(1, canvas.height)
+  const b = vector.bounds
+  const width = Math.max(b.maxX - b.minX, (b.maxY - b.minY) * aspect) * 1.02
+  const height = width / aspect
+  const cx = (b.minX + b.maxX) / 2
+  const cy = (b.minY + b.maxY) / 2
+  const { frame } = vector
+  const cos = Math.cos(frame.yaw)
+  const sin = Math.sin(frame.yaw)
+  const toWorld = (lx: number, lz: number): [number, number] => [
+    frame.origin[0] + lx * cos + lz * sin,
+    frame.origin[2] - lx * sin + lz * cos,
+  ]
+  // the cut line's point under the drawing's centre, at depth 0
+  const [px, pz] = toWorld(frame.planOrigin[0] + frame.right[0] * cx, frame.planOrigin[1] + frame.right[1] * cx)
+  const ty = frame.origin[1] - cy
+  const [fx, fz] = [frame.forward[0] * cos + frame.forward[1] * sin, -frame.forward[0] * sin + frame.forward[1] * cos]
+  const distance = 80
+  const target: [number, number, number] = [px, ty, pz]
+  const position: [number, number, number] = [px - fx * distance, ty, pz - fz * distance]
+  // WORLD clipping planes: three keeps a fragment where normal · p + constant ≥ 0
+  // — the first keeps what lies beyond the cut, the second what lies within
+  // the section's depth
+  const depth = frame.depth ?? 12
+  const clip = [
+    { normal: [fx, 0, fz] as [number, number, number], constant: -(fx * px + fz * pz) },
+    {
+      normal: [-fx, 0, -fz] as [number, number, number],
+      constant: fx * (px + fx * depth) + fz * (pz + fz * depth),
+    },
+  ]
+  const hash = elevationCaptureHash(nodes)
+  const raw = await withFinishedPresentation(() =>
+    withSiteSurfaceHidden(() =>
+      capturePipeline(20000, {
+        transparent: true,
+        edges: 'soft',
+        ortho: { position, target, viewWidth: width },
+        lightFace: true,
+        clip,
+      }),
+    ),
+  )
+  if (process.env.NODE_ENV !== 'production') {
+    ;(window as unknown as { __pascalLastCapture?: unknown }).__pascalLastCapture = {
+      raw,
+      position,
+      target,
+      width,
+      height,
+      bounds: b,
+      frame,
+      clip,
+      canvas: [canvas.width, canvas.height],
+    }
+  }
+  if (!raw) {
+    return {
+      ok: false,
+      reason:
+        'No frame came back from the 3D viewer within 20 seconds — open the model once in this tab, then press Recapture.',
+    }
+  }
+  const dataUrl = await toJpeg(raw, options.maxWidth ?? 2400)
+  if (!dataUrl) {
+    return { ok: false, reason: 'The captured frame came back blank — the viewer rendered nothing beyond the section plane.' }
   }
   updateViewport(viewport.id, {
     dataUrl,
@@ -382,6 +490,8 @@ function capturePipeline(
     perspective?: { position: [number, number, number]; target: [number, number, number]; fov?: number }
     hideTypes?: readonly string[]
     lightFace?: boolean
+    /** World clipping planes for the frame (a section's cut). */
+    clip?: readonly { normal: [number, number, number]; constant: number }[]
   } = {},
 ): Promise<string | undefined> {
   return new Promise((resolve) => {

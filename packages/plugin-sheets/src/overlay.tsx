@@ -12,7 +12,7 @@ import { X } from 'lucide-react'
 import { useEffect, useMemo } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { useEditor } from '@pascal-app/editor'
-import { captureElevationImage, captureViewportImage, elevationCaptureHash, elevationCaptureStale } from './capture'
+import { captureViewportPicture, elevationCaptureHash, elevationCaptureStale } from './capture'
 import { composeSheet } from './page'
 import { Paper } from './paper'
 import { ProjectEditor, Rail, useSceneNodes } from './rail'
@@ -118,7 +118,9 @@ export function SheetsWorkspace() {
     const keyOf = (vp: ViewportNode): string => `${vp.id}:${hash}`
     const pending = viewports(nodes, sheet.id).filter(
       (vp: ViewportNode) =>
-        (vp.kind === 'view3d' || vp.kind === 'elevation') && elevationCaptureStale(vp, nodes) && !tried[keyOf(vp)],
+        (vp.kind === 'view3d' || vp.kind === 'elevation' || vp.kind === 'section') &&
+        elevationCaptureStale(vp, nodes) &&
+        !tried[keyOf(vp)],
     )
     if (pending.length === 0) return
     let cancelled = false
@@ -128,11 +130,15 @@ export function SheetsWorkspace() {
       for (const vp of pending) {
         if (cancelled) return
         useSheets.getState().markCaptureTried(keyOf(vp))
-        const what = vp.kind === 'elevation' ? `the ${vp.title || `${vp.direction ?? ''} elevation`}` : 'the cover view'
+        const what =
+          vp.kind === 'elevation'
+            ? `the ${vp.title || `${vp.direction ?? ''} elevation`}`
+            : vp.kind === 'section'
+              ? `the ${vp.title || 'section'}`
+              : 'the cover view'
         useSheets.getState().setBusy({ label: `Capturing ${what}` })
         try {
-          const result =
-            vp.kind === 'elevation' ? await captureElevationImage(vp) : await captureViewportImage(vp)
+          const result = await captureViewportPicture(vp)
           useSheets.getState().setCaptureNote(vp.id, result.ok ? null : result.reason)
           useSheets
             .getState()

@@ -60,6 +60,8 @@ export type DrawingResult = {
     right: readonly [number, number]
     yaw: number
     origin: [number, number, number]
+    planOrigin: readonly [number, number]
+    depth?: number
   }
   /** The plate carries its own heading; suppress the numbered label strip. */
   noLabel?: boolean
@@ -677,7 +679,7 @@ export function providerArgsFor(vp: ViewportNode, nodes: NodeMap): ProviderArgs 
  * camera's window and its `frame` aims the camera. Null without a provider.
  */
 export function elevationVectorDrawing(vp: ViewportNode, nodes: NodeMap): DrawingResult | null {
-  const build = provider('elevation')
+  const build = provider(vp.kind === 'section' ? 'section' : 'elevation')
   if (!build) return null
   try {
     return build(nodes, providerArgsFor(vp, nodes) as unknown as Record<string, unknown>)
@@ -706,7 +708,7 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
   try {
     const args: ProviderArgs = {
       ...providerArgsFor(vp, nodes),
-      imageBacked: vp.kind === 'elevation' && Boolean(vp.dataUrl && vp.imageFrame),
+      imageBacked: (vp.kind === 'elevation' || vp.kind === 'section') && Boolean(vp.dataUrl && vp.imageFrame),
     }
     result = build(nodes, args as unknown as Record<string, unknown>)
     // THE PICTURE IS THE BODY: an elevation captured from the live viewer

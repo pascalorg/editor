@@ -21,7 +21,7 @@ import type { CameraControls } from '@react-three/drei'
 import { useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useRef } from 'react'
 import * as THREE from 'three'
-import type { WebGPURenderer } from 'three/webgpu'
+import { ClippingGroup, type WebGPURenderer } from 'three/webgpu'
 import { EDITOR_LAYER } from '../../lib/constants'
 
 export interface SnapshotCameraData {
@@ -93,6 +93,29 @@ function aimLightsAtFace(
   })
   return () => {
     for (const restore of restores) restore()
+  }
+}
+
+/**
+ * The scene's children gathered under one ClippingGroup carrying `planes`
+ * (world space) for the length of a render; the returned function puts
+ * them back on the scene. The WebGPU renderer clips only through such
+ * groups (there is no renderer-level plane list), and a group added and
+ * removed inside one synchronous render never reaches the React tree.
+ */
+function clipSceneFor(
+  scene: THREE.Scene,
+  planes: readonly { normal: [number, number, number]; constant: number }[],
+): () => void {
+  const group = new ClippingGroup()
+  group.clippingPlanes = planes.map((p) => new THREE.Plane(new THREE.Vector3(p.normal[0], p.normal[1], p.normal[2]).normalize(), p.constant))
+  group.enabled = true
+  const children = [...scene.children]
+  for (const child of children) group.add(child)
+  scene.add(group)
+  return () => {
+    for (const child of children) scene.add(child)
+    scene.remove(group)
   }
 }
 
@@ -205,6 +228,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       // (Steve, 2026-09-10: "ensure the light is bright on the elevation
       // face") — restored right after the render
       lightFace = false,
+      // WORLD clipping planes for this frame (a sheet's section: the cut) —
+      // the WebGPU renderer clips through ClippingGroup objects, so the
+      // scene's children stand in one for the render and come back after
+      clip: readonly { normal: [number, number, number]; constant: number }[] = [],
     ) => {
       const standardW = standardSize?.w ?? THUMBNAIL_WIDTH
       const standardH = standardSize?.h ?? THUMBNAIL_HEIGHT
@@ -361,6 +388,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         const restoreNodeVisibility = temporarilyHideNodeTypes(['scan', 'guide', 'spawn', ...hideTypes])
         const pose = ortho ?? perspective
         const restoreLights = lightFace && pose ? aimLightsAtFace(scene, pose.position, pose.target) : () => {}
+        const restoreClip = clip.length > 0 ? clipSceneFor(scene, clip) : () => {}
 
         // Auto-save shots don't copy the user's mid-edit camera — they re-pose
         // onto the same computed hero angle the published thumbnail uses, so a
@@ -422,6 +450,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             restoreLevelMode?.()
             restoreNodeVisibility()
             restoreLights()
+            restoreClip()
           }
 
           const result = await capturePromise
@@ -450,6 +479,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               gl.setClearColor(clearColor, clearAlpha)
             }
             restoreLights()
+            restoreClip()
             emitter.emit('thumbnail:after-capture', undefined)
             restoreLevels()
             restoreLevelMode?.()
@@ -569,6 +599,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       perspective?: { position: [number, number, number]; target: [number, number, number]; fov?: number }
       /** Re-aim the sun at the face the pose looks at, for this frame. */
       lightFace?: boolean
+      /** World clipping planes for this frame — see `generate`. */
+      clip?: readonly { normal: [number, number, number]; constant: number }[]
     }) => {
       await generate(
         event.snapLevels === true,
@@ -581,6 +613,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         event.hideTypes ?? [],
         event.perspective,
         event.lightFace === true,
+        event.clip ?? [],
       )
     }
 

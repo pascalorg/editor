@@ -152,7 +152,11 @@ registerSheetDrawingProvider('section', (nodes, args) => {
   // handler and the physical equipment as prisms — cut and shown beyond
   const model = buildBuildingModel(nodes as never)
   model.prisms.push(...(bonesSectionPrisms(nodes as never, model.levels) as never[]))
-  return buildSectionDrawing({ nodes: nodes as never }, args as never, model)
+  // a viewport that carries a capture of the live viewer clipped at the
+  // plane asks for the cut alone — the picture IS the beyond (plugin-sheets capture.ts)
+  return buildSectionDrawing({ nodes: nodes as never }, args as never, model, {
+    beyondFromImage: (args as { imageBacked?: boolean }).imageBacked === true,
+  })
 })
 registerSheetDrawingProvider('elevation', (nodes, args) => {
   // the model the elevation draws, with Bones' exterior equipment (the water

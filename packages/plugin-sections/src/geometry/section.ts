@@ -1,6 +1,8 @@
 import type { FloorplanGeometry } from '@pascal-app/core'
 import { projectItem } from './items'
 import { padBounds, segmentInsidePolygon } from './math'
+import { buildingOrigin, buildingYaw } from './elevation'
+import type { ElevationFrame } from './types'
 import {
   boundsFromPrimitives,
   drawY,
@@ -252,6 +254,16 @@ export function buildSectionDrawing(
   scene: DrawingScene,
   args: SectionSpec | { markerId: string },
   model?: BuildingModel,
+  options: {
+    /**
+     * Leave everything BEYOND the cut out — a picture of it goes under the
+     * drawing (plugin-sheets captures the live viewer clipped at the plane,
+     * 2026-09-10) — and keep the cut itself: the walls, slabs and roof the
+     * plane passes through with their poché, the datums, the grade. The
+     * bounds still come from the whole drawing.
+     */
+    beyondFromImage?: boolean
+  } = {},
 ): DrawingResult {
   const spec = 'markerId' in args ? specFromMarker(scene, args.markerId) : args
   if (!spec) {
@@ -311,19 +323,26 @@ export function buildSectionDrawing(
   for (const prism of built.prisms) cut.push(...cutPrism(spec, view, prism))
   for (const roof of built.roofs) cut.push(...cutRoof(spec, view, roof))
 
-  const body = [...paintProjected(projected), ...cut]
-  const bodyBounds = boundsFromPrimitives(body)
+  const beyond = paintProjected(projected)
+  const fullBody = [...beyond, ...cut]
+  const body = options.beyondFromImage ? cut : fullBody
+  const bodyBounds = boundsFromPrimitives(fullBody)
   const uMin = bodyBounds?.minX ?? 0
   const uMax = bodyBounds?.maxX ?? length
 
   const grade = gradeLine(built, view, uMin, uMax, Math.max(0.01, spec.depth) / 2)
-  const primitives = [
-    ...datumMarks(built, uMin, uMax),
-    ...body,
-    ...grade.primitives,
-  ]
+  const datums = datumMarks(built, uMin, uMax)
+  const primitives = [...datums, ...body, ...grade.primitives]
+  const frame: ElevationFrame = {
+    forward: [view.forward[0], view.forward[1]],
+    right: [view.right[0], view.right[1]],
+    yaw: buildingYaw(scene),
+    origin: buildingOrigin(scene),
+    planOrigin: [spec.start[0], spec.start[1]],
+    depth: Math.max(0.01, spec.depth),
+  }
 
-  const bounds = boundsFromPrimitives(primitives)
+  const bounds = boundsFromPrimitives([...datums, ...fullBody, ...grade.primitives])
   if (!bounds) {
     return {
       primitives,
@@ -341,6 +360,7 @@ export function buildSectionDrawing(
     // bounds.y is negated elevation, so min/max swap back here.
     elevationRange: { min: -bounds.maxY, max: -bounds.minY },
     warnings,
+    frame,
   }
 }
 

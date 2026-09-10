@@ -379,6 +379,7 @@ export function buildElevationDrawing(
     right: [view.right[0], view.right[1]],
     yaw: buildingYaw(scene),
     origin: buildingOrigin(scene),
+    planOrigin: [0, 0],
   }
   // Text has no geometric extent here: leave room for the datum labels
   // (right), the GRADE label (left) and the finish key (below).
