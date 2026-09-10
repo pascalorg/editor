@@ -19,7 +19,7 @@ on:
           - cli
           - all
       bump:
-        description: "Version bump (beta publishes a prerelease on the beta dist-tag)"
+        description: "Version bump (beta publishes a prerelease on the beta dist-tag; patch/minor/major on a prerelease graduates it to its base version on latest)"
         required: true
         type: choice
         options:
@@ -120,11 +120,16 @@ jobs:
               fi
               return
             fi
+            if [ "$BUMP" = "none" ]; then echo "$v"; return; fi
+            # A prerelease graduates to its base version on any stable bump
+            # (1.0.0-beta.5 + major|minor|patch -> 1.0.0), matching npm semver.
+            # Splitting "1.0.0-beta.5" on dots would otherwise yield 2.0.0 or
+            # break the patch arithmetic.
+            if [[ "$v" == *-* ]]; then echo "${v%%-*}"; return; fi
             IFS='.' read -r MAJ MIN PAT <<< "$v"
             if [ "$BUMP" = "major" ]; then MAJ=$((MAJ+1)); MIN=0; PAT=0; fi
             if [ "$BUMP" = "minor" ]; then MIN=$((MIN+1)); PAT=0; fi
             if [ "$BUMP" = "patch" ]; then PAT=$((PAT+1)); fi
-            if [ "$BUMP" = "none" ]; then echo "$v"; return; fi
             echo "$MAJ.$MIN.$PAT"
           }
 
