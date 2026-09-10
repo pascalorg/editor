@@ -104,6 +104,9 @@ describe('command parsing', () => {
 
     expect(result.exitCode).toBe(0)
     expect(result.stdout).toContain('Claim code: BCDF-GHJK-LMNP')
+    expect(result.stdout).toContain(
+      'Claim page: https://editor.pascal.app/settings/agents/claim?code=BCDF-GHJK-LMNP',
+    )
     expect(result.stdout).toContain('Claiming links accountability.')
     expect(result.stdout).not.toContain('malicious')
     expect(result.stdout).not.toContain('\u001b')

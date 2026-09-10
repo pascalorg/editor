@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { startAgentClaim } from './agent-account.js'
+import { agentClaimHandoffUrl, startAgentClaim } from './agent-account.js'
 import { CliError } from './errors.js'
 
 const API_KEY = 'sk_live_private-agent-key'
@@ -10,6 +10,13 @@ const VALID_CLAIM = {
 }
 
 describe('agent account claims', () => {
+  test('builds a prefilled handoff URL without changing the API result', () => {
+    expect(agentClaimHandoffUrl(VALID_CLAIM)).toBe(
+      'https://editor.pascal.app/settings/agents/claim?code=BCDF-GHJK-LMNP',
+    )
+    expect(VALID_CLAIM.claimUrl).toBe('https://editor.pascal.app/settings/agents/claim')
+  })
+
   test('starts a claim with the agent credential and returns the bounded public result', async () => {
     let authorization: string | null = null
     let redirect: RequestRedirect | undefined
