@@ -18,31 +18,32 @@ export function validateClaudeMcpPolicy(
 ): string[] {
   const failures: string[] = []
   if (!isRecord(config) || !hasExactKeys(config, ['mcpServers'])) {
-    return ['.mcp.json must contain only the mcpServers object']
+    return ['skills/.mcp.json must contain only the mcpServers object']
   }
 
   const servers = config.mcpServers
   if (!isRecord(servers) || !hasExactKeys(servers, ['pascal'])) {
-    return ['.mcp.json must contain exactly one server named pascal']
+    return ['skills/.mcp.json must contain exactly one server named pascal']
   }
 
   const pascal = servers.pascal
   if (!isRecord(pascal) || !hasExactKeys(pascal, ['type', 'command', 'args'])) {
     failures.push(
-      '.mcp.json pascal server must contain only type, command, and args; remote or credential fields are not allowed',
+      'skills/.mcp.json pascal server must contain only type, command, and args; remote or credential fields are not allowed',
     )
     return failures
   }
 
-  if (pascal.type !== 'stdio') failures.push('.mcp.json pascal server type must be stdio')
-  if (pascal.command !== 'pascal') failures.push('.mcp.json pascal server command must be pascal')
+  if (pascal.type !== 'stdio') failures.push('skills/.mcp.json pascal server type must be stdio')
+  if (pascal.command !== 'pascal')
+    failures.push('skills/.mcp.json pascal server command must be pascal')
   if (
     !Array.isArray(pascal.args) ||
     pascal.args.length !== 2 ||
     pascal.args[0] !== 'mcp' ||
     pascal.args[1] !== 'connect'
   ) {
-    failures.push('.mcp.json pascal server args must be exactly ["mcp", "connect"]')
+    failures.push('skills/.mcp.json pascal server args must be exactly ["mcp", "connect"]')
   }
 
   if (!isRecord(pluginManifest)) {

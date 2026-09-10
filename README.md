@@ -81,7 +81,7 @@ Claude Code users can install the same canonical skill source as a plugin:
 /plugin install pascal-agent-skills@pascal
 ```
 
-The Claude plugin also supplies the local `pascal mcp connect` server. Install and start the Pascal CLI first, and keep `pascal` on the `PATH` used to launch Claude Code. This local connector needs no Pascal account or API key and does not upload projects automatically.
+The Claude plugin also supplies the local `pascal mcp connect` server. Install and start the Pascal CLI first, and keep `pascal` on the `PATH` used to launch Claude Code. This local connector needs no Pascal account or API key and does not upload projects automatically. Its plugin root is this repository's `skills/` directory, so an install copies only the skill bundles and their plugin metadata rather than the repository.
 
 Claude Code 2.1.258 loads both the user-scoped `pascal` server created by `pascal mcp setup claude` and the plugin-provided server. Remove the manual entry before reloading or restarting Claude Code so only the plugin owns the connection lifecycle:
 

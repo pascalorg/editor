@@ -5,10 +5,10 @@ import { validateClaudeMcpPolicy } from './claude-mcp-config-policy'
 
 const repositoryRoot = resolve(import.meta.dir, '..')
 const canonicalConfig = JSON.parse(
-  readFileSync(join(repositoryRoot, '.mcp.json'), 'utf8'),
+  readFileSync(join(repositoryRoot, 'skills', '.mcp.json'), 'utf8'),
 ) as unknown
 const canonicalPlugin = JSON.parse(
-  readFileSync(join(repositoryRoot, '.claude-plugin', 'plugin.json'), 'utf8'),
+  readFileSync(join(repositoryRoot, 'skills', '.claude-plugin', 'plugin.json'), 'utf8'),
 ) as Record<string, unknown>
 const marketplace = JSON.parse(
   readFileSync(join(repositoryRoot, '.claude-plugin', 'marketplace.json'), 'utf8'),
@@ -79,8 +79,8 @@ describe('Claude plugin MCP configuration', () => {
         canonicalMarketplaceEntry,
       ),
     ).toEqual([
-      '.mcp.json pascal server command must be pascal',
-      '.mcp.json pascal server args must be exactly ["mcp", "connect"]',
+      'skills/.mcp.json pascal server command must be pascal',
+      'skills/.mcp.json pascal server args must be exactly ["mcp", "connect"]',
     ])
   })
 

@@ -285,6 +285,8 @@ for (const discoveryFailure of validatePublicSkillDiscoverySurface(
 }
 
 for (const entry of readdirSync(join(root, 'skills'), { withFileTypes: true })) {
+  // skills/ is also the Claude plugin root, so its dot-entries carry plugin metadata, not bundles.
+  if (entry.name.startsWith('.')) continue
   if (entry.isDirectory() && !skillNames.includes(entry.name as (typeof skillNames)[number])) {
     fail(`OpenAI skills directory contains an unexpected non-skill directory: ${entry.name}`)
   }
@@ -820,9 +822,10 @@ for (const item of publishingCases) {
 if (positivePublishingCases < 5) fail('Publishing suite needs at least 5 positive cases')
 if (negativePublishingCases < 3) fail('Publishing suite needs at least 3 negative cases')
 
-const claudePlugin = parseJson(join(root, '.claude-plugin', 'plugin.json'))
+const claudePluginRoot = join(root, 'skills')
+const claudePlugin = parseJson(join(claudePluginRoot, '.claude-plugin', 'plugin.json'))
 const claudeMarketplace = parseJson(join(root, '.claude-plugin', 'marketplace.json'))
-const claudeMcpConfig = parseJson(join(root, '.mcp.json'))
+const claudeMcpConfig = parseJson(join(claudePluginRoot, '.mcp.json'))
 const portableMcpConfig = parseJson(join(root, 'mcp.json'))
 const portablePlugin = parseJson(join(root, 'plugin.json'))
 const codexPlugin = parseJson(join(root, '.codex-plugin', 'plugin.json'))
@@ -907,7 +910,7 @@ if (Object.keys(portableMcpConfig).sort().join(',') !== '$schema,mcpServers') {
   fail('Portable mcp.json must contain only $schema and mcpServers')
 }
 if (canonicalJson(portableMcpConfig.mcpServers) !== canonicalJson(claudeMcpConfig.mcpServers)) {
-  fail('Portable mcp.json and .mcp.json must declare the same mcpServers block')
+  fail('Portable mcp.json and skills/.mcp.json must declare the same mcpServers block')
 }
 
 const portablePascalServer = (portableMcpConfig.mcpServers as Record<string, unknown> | undefined)
@@ -1097,23 +1100,30 @@ if (!Array.isArray(marketplacePlugins) || marketplacePlugins.length !== 1) {
   for (const configFailure of validateClaudeMcpPolicy(claudeMcpConfig, claudePlugin, plugin)) {
     fail(configFailure)
   }
-  if (plugin.source !== './') fail('Claude marketplace plugin must use the repository root')
+  // The plugin root must stay skills/: a repository-root source makes Claude Code cache the whole
+  // monorepo and run bun install against the root lockfile on every install.
+  if (plugin.source !== './skills') {
+    fail('Claude marketplace plugin must use the skills directory as its plugin root')
+  }
   // A listed skills array is the complete set Claude Code loads for the entry, so it must equal
   // every packaged bundle; a new skills/<name>/SKILL.md is otherwise installed but never loaded.
-  const bundledSkillPaths = readdirSync(join(root, 'skills'), { withFileTypes: true })
+  const bundledSkillPaths = readdirSync(claudePluginRoot, { withFileTypes: true })
     .filter(
-      (entry) => entry.isDirectory() && existsSync(join(root, 'skills', entry.name, 'SKILL.md')),
+      (entry) => entry.isDirectory() && existsSync(join(claudePluginRoot, entry.name, 'SKILL.md')),
     )
-    .map((entry) => `./skills/${entry.name}`)
+    .map((entry) => `./${entry.name}`)
     .sort()
-  const packagedSkills = plugin.skills
-  const listedSkillPaths = Array.isArray(packagedSkills)
-    ? [...packagedSkills].map(String).sort()
-    : []
-  if (listedSkillPaths.join(',') !== bundledSkillPaths.join(',')) {
-    fail(
-      `Claude marketplace skills must list exactly the packaged bundles ${bundledSkillPaths.join(', ')}; found ${listedSkillPaths.join(', ') || 'none'}`,
-    )
+  for (const [label, descriptor] of [
+    ['Claude marketplace', plugin],
+    ['Claude plugin manifest', claudePlugin],
+  ] as const) {
+    const declared = descriptor.skills
+    const declaredPaths = Array.isArray(declared) ? [...declared].map(String).sort() : []
+    if (declaredPaths.join(',') !== bundledSkillPaths.join(',')) {
+      fail(
+        `${label} skills must list exactly the packaged bundles ${bundledSkillPaths.join(', ')}; found ${declaredPaths.join(', ') || 'none'}`,
+      )
+    }
   }
 }
 
