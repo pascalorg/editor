@@ -45,6 +45,57 @@ function clampSnapshotSize(width: number, height: number): { w: number; h: numbe
   return { w: Math.round(width * scale), h: Math.round(height * scale) }
 }
 
+/**
+ * Every directional light re-aimed at the face a capture looks at — from the
+ * camera's side of it, 35° above the horizon, a quarter to the camera's
+ * left so returns still read — and brightened a little; the returned
+ * function puts them back. The lights' own drift toward their theme config
+ * (lights.tsx lerps per frame) resumes afterwards.
+ */
+function aimLightsAtFace(
+  scene: THREE.Scene,
+  position: readonly [number, number, number],
+  target: readonly [number, number, number],
+): () => void {
+  const aim = new THREE.Vector3(target[0], target[1], target[2])
+  const toCamera = new THREE.Vector3(position[0], position[1], position[2]).sub(aim)
+  toCamera.y = 0
+  if (toCamera.lengthSq() < 1e-9) return () => {}
+  toCamera.normalize()
+  const left = new THREE.Vector3(0, 1, 0).cross(toCamera).normalize()
+  const up = Math.sin((35 * Math.PI) / 180)
+  const along = Math.cos((35 * Math.PI) / 180)
+  const direction = toCamera
+    .clone()
+    .multiplyScalar(along)
+    .add(new THREE.Vector3(0, up, 0))
+    .add(left.multiplyScalar(0.25))
+    .normalize()
+  const restores: (() => void)[] = []
+  scene.traverse((object) => {
+    const light = object as THREE.DirectionalLight
+    if (!light.isDirectionalLight) return
+    const savedPosition = light.position.clone()
+    const savedTarget = light.target.position.clone()
+    const savedIntensity = light.intensity
+    light.position.copy(aim.clone().add(direction.clone().multiplyScalar(150)))
+    light.target.position.copy(aim)
+    light.target.updateMatrixWorld()
+    light.updateMatrixWorld()
+    light.intensity = savedIntensity * 1.15
+    restores.push(() => {
+      light.position.copy(savedPosition)
+      light.target.position.copy(savedTarget)
+      light.target.updateMatrixWorld()
+      light.updateMatrixWorld()
+      light.intensity = savedIntensity
+    })
+  })
+  return () => {
+    for (const restore of restores) restore()
+  }
+}
+
 export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorProps) => {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
@@ -111,9 +162,10 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
     const camera = orthoCameraRef.current
     if (!orthoPipelineRef.current) {
       if (!orthoPipelineBuild.current) {
-        // plain, not post-processed: the SSGI stack built for a second camera
-        // never delivered a frame (2026-09-10)
-        orthoPipelineBuild.current = createPlainSnapshotPipeline({
+        // the post-processed stack (AO + ink edges) for the orthographic
+        // camera — a WebGPU device delivers it; the WebGL fallback never
+        // returned a frame from it, so that backend takes the canvas path
+        orthoPipelineBuild.current = createSnapshotPipeline({
           renderer: gl as unknown as WebGPURenderer,
           scene,
           camera,
@@ -148,6 +200,11 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       // animation of the user's camera, so the frame is never caught
       // mid-flight (2026-09-10: the cover came out looking down at a roof)
       perspective?: { position: [number, number, number]; target: [number, number, number]; fov?: number },
+      // the sun re-aimed for this frame: from the camera's side, 35° up and
+      // a touch to the left, so the face the sheet shows is lit evenly
+      // (Steve, 2026-09-10: "ensure the light is bright on the elevation
+      // face") — restored right after the render
+      lightFace = false,
     ) => {
       const standardW = standardSize?.w ?? THUMBNAIL_WIDTH
       const standardH = standardSize?.h ?? THUMBNAIL_HEIGHT
@@ -186,10 +243,17 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         let thumbnailCamera: THREE.PerspectiveCamera | THREE.OrthographicCamera = perspectiveCamera
         let pipeline: SnapshotPipeline | null = pipelineRef.current
         if (wantOrtho) {
-          // The orthographic capture renders straight to the canvas and copies
-          // it (the fallback path below) — the offscreen-target readback never
-          // returned on the WebGL fallback backend, post-processed or plain
-          // (2026-09-10); the sheets overlay covers the viewer while it runs.
+          // On a WebGPU device the orthographic capture goes through its own
+          // post-processed pipeline (AO, ink edges); on the WebGL fallback the
+          // offscreen readback never returned, so it renders straight to the
+          // canvas and copies it (the fallback path below) — the sheets
+          // overlay covers the viewer while it runs.
+          const hasDevice = Boolean((gl as unknown as { backend?: { device?: unknown } }).backend?.device)
+          // dev: `window.__pascalCaptureCanvasPath = true` forces the canvas path for an A/B
+          const forceCanvas =
+            process.env.NODE_ENV !== 'production' &&
+            (window as unknown as { __pascalCaptureCanvasPath?: boolean }).__pascalCaptureCanvasPath === true
+          const built = hasDevice && !forceCanvas ? await orthoPipeline() : null
           if (!orthoCameraRef.current) {
             const created = new THREE.OrthographicCamera(-1, 1, 1, -1, 0.1, 1000)
             created.layers.disable(EDITOR_LAYER)
@@ -225,7 +289,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           cam.updateProjectionMatrix()
           cam.updateMatrixWorld()
           thumbnailCamera = cam
-          pipeline = null
+          pipeline = built?.pipeline ?? null
         } else {
           if (perspective && !snapLevels) {
             perspectiveCamera.position.set(perspective.position[0], perspective.position[1], perspective.position[2])
@@ -295,6 +359,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         // thumbnail camera's layer mask can't filter it either. Returns a
         // function that restores the original visibility.
         const restoreNodeVisibility = temporarilyHideNodeTypes(['scan', 'guide', 'spawn', ...hideTypes])
+        const pose = ortho ?? perspective
+        const restoreLights = lightFace && pose ? aimLightsAtFace(scene, pose.position, pose.target) : () => {}
 
         // Auto-save shots don't copy the user's mid-edit camera — they re-pose
         // onto the same computed hero angle the published thumbnail uses, so a
@@ -335,6 +401,13 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
           try {
             emitter.emit('thumbnail:before-capture', undefined)
             trace('capture:start', { ortho: wantOrtho, pipeline: !!pipeline })
+            // The scene pass is a FRAME-updated node: it renders once per node
+            // frame, and only the animation loop advances that frame. With the
+            // viewer idle behind the Sheets overlay two captures share one
+            // frame and the second returns the first's picture (2026-09-10:
+            // the north elevation came back as the east). Advance it by hand.
+            const nodeFrame = (gl as unknown as { _nodes?: { nodeFrame?: { update?: () => void } } })._nodes?.nodeFrame
+            nodeFrame?.update?.()
             capturePromise = pipeline.capture({
               captureMode,
               cropRegion,
@@ -348,6 +421,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             restoreLevels()
             restoreLevelMode?.()
             restoreNodeVisibility()
+            restoreLights()
           }
 
           const result = await capturePromise
@@ -375,6 +449,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
               scene.background = sceneBackground
               gl.setClearColor(clearColor, clearAlpha)
             }
+            restoreLights()
             emitter.emit('thumbnail:after-capture', undefined)
             restoreLevels()
             restoreLevelMode?.()
@@ -492,6 +567,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       hideTypes?: readonly string[]
       /** A perspective view of the caller's own — see `generate`. */
       perspective?: { position: [number, number, number]; target: [number, number, number]; fov?: number }
+      /** Re-aim the sun at the face the pose looks at, for this frame. */
+      lightFace?: boolean
     }) => {
       await generate(
         event.snapLevels === true,
@@ -503,6 +580,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         event.ortho,
         event.hideTypes ?? [],
         event.perspective,
+        event.lightFace === true,
       )
     }
 

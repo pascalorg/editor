@@ -511,67 +511,121 @@ export function paintProjected(pieces: ProjectedPiece[]): FloorplanGeometry[] {
 // Datums, grade
 // ---------------------------------------------------------------------------
 
-export function levelDatums(model: BuildingModel, uMin: number, uMax: number): FloorplanGeometry[] {
+/** A datum mark: the elevation it marks, its label, and the along-view span its line covers. */
+export type DatumMark = { elevation: number; text: string; u0: number; u1: number }
+
+/** The datum lines run this far past their span; the label column stands this far past the drawing's right edge. */
+const DATUM_OVERSHOOT = 0.45
+/** Labels never sit closer than this (drawing metres) — a stacked label gets a leader back to its line. */
+const DATUM_STEP = 0.24
+
+/**
+ * The datum marks drawn: every mark's dashed line over ITS OWN span (a
+ * porch roof's plate and ridge over the porch, not across the whole house —
+ * Steve, 2026-09-10: "your heights elevation lines for the patios go across
+ * the entire house, maybe just on their respective side"), the labels in
+ * one column past the drawing's right edge, stacked so none overlaps, each
+ * moved label with a thin leader back to its line's end (no overlapping
+ * leaders, nothing off the page). Duplicates (two roofs sharing a plate)
+ * collapse to one mark.
+ */
+export function datumPrimitives(marks: readonly DatumMark[], uMax: number): FloorplanGeometry[] {
+  const seen = new Set<string>()
+  const list: DatumMark[] = []
+  for (const mark of marks) {
+    const key = `${mark.text}:${mark.elevation.toFixed(3)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    list.push(mark)
+  }
+  // top first: drawing y grows downward
+  list.sort((a, b) => drawY(a.elevation) - drawY(b.elevation))
+  const labelY: number[] = []
+  for (let i = 0; i < list.length; i++) {
+    const y = drawY((list[i] as DatumMark).elevation)
+    labelY.push(i === 0 ? y : Math.max(y, (labelY[i - 1] as number) + DATUM_STEP))
+  }
   const out: FloorplanGeometry[] = []
-  const overshoot = 0.45
-  for (const level of model.levels) {
-    const y = drawY(level.baseY)
+  const column = uMax + DATUM_OVERSHOOT
+  list.forEach((mark, i) => {
+    const y = drawY(mark.elevation)
+    const endX = Math.min(mark.u1, uMax) + DATUM_OVERSHOOT
     out.push(
-      line([uMin - overshoot, y], [uMax + overshoot, y], {
+      line([mark.u0 - DATUM_OVERSHOOT, y], [endX, y], {
         stroke: INK,
         strokeWidth: WEIGHT.datum,
         strokeDasharray: DASH.datum,
         opacity: 0.7,
       }),
     )
+    const ly = labelY[i] as number
+    if (endX < column - 1e-6 || Math.abs(ly - y) > 1e-6) {
+      // two segments, not a polyline: the grade line is the drawing's polyline
+      const style = { stroke: INK, strokeWidth: WEIGHT.datum, opacity: 0.7 }
+      out.push(line([endX, y], [column + 0.16, ly], style), line([column + 0.16, ly], [column + 0.3, ly], style))
+    }
     out.push({
       kind: 'text',
-      x: uMax + overshoot + 0.08,
-      y: y + 0.05,
-      text: `${level.ordinal === 0 ? 'FINISH FLOOR' : level.name.toUpperCase()}   ${formatFeetInches(level.baseY)}`,
+      x: column + 0.38,
+      y: ly + 0.05,
+      text: mark.text,
       fontSize: 0.15,
       fill: INK,
       textAnchor: 'start',
       dominantBaseline: 'alphabetic',
     } as FloorplanGeometry)
+  })
+  return out
+}
+
+/** The level datums as marks: every level's finish floor, across the whole drawing. */
+export function levelMarks(model: BuildingModel, uMin: number, uMax: number): DatumMark[] {
+  return model.levels.map((level) => ({
+    elevation: level.baseY,
+    text: `${level.ordinal === 0 ? 'FINISH FLOOR' : level.name.toUpperCase()}   ${formatFeetInches(level.baseY)}`,
+    u0: uMin,
+    u1: uMax,
+  }))
+}
+
+/**
+ * The roof datums as marks: each roof's plate and ridge over the roof's own
+ * projected span when the view is known (an elevation), across the whole
+ * drawing otherwise (a section, cut where it is).
+ */
+export function roofMarks(model: BuildingModel, uMin: number, uMax: number, view?: Projector): DatumMark[] {
+  const out: DatumMark[] = []
+  for (const roof of model.roofs) {
+    let u0 = uMin
+    let u1 = uMax
+    if (view && roof.polygon.length > 0) {
+      const us = roof.polygon.map((p) => projectU(view, p[0], p[1]))
+      u0 = Math.max(uMin, Math.min(...us))
+      u1 = Math.min(uMax, Math.max(...us))
+      if (u1 - u0 < 0.3) {
+        u0 = uMin
+        u1 = uMax
+      }
+    }
+    out.push({ elevation: roof.plateY, text: `T.O. PLATE   ${formatFeetInches(roof.plateY)}`, u0, u1 })
+    out.push({ elevation: roof.ridgeY, text: `RIDGE   ${formatFeetInches(roof.ridgeY)}`, u0, u1 })
   }
   return out
 }
 
+/** Every datum mark of the drawing, laid out together (levels and roofs share the one label column). */
+export function datumMarks(model: BuildingModel, uMin: number, uMax: number, view?: Projector): FloorplanGeometry[] {
+  return datumPrimitives([...levelMarks(model, uMin, uMax), ...roofMarks(model, uMin, uMax, view)], uMax)
+}
+
+/** @deprecated the levels alone — `datumMarks` lays levels and roofs out together. */
+export function levelDatums(model: BuildingModel, uMin: number, uMax: number): FloorplanGeometry[] {
+  return datumPrimitives(levelMarks(model, uMin, uMax), uMax)
+}
+
+/** @deprecated the roofs alone — `datumMarks` lays levels and roofs out together. */
 export function roofDatums(model: BuildingModel, uMin: number, uMax: number): FloorplanGeometry[] {
-  const out: FloorplanGeometry[] = []
-  const seen = new Set<string>()
-  const overshoot = 0.45
-  for (const roof of model.roofs) {
-    for (const [name, elevation] of [
-      ['T.O. PLATE', roof.plateY],
-      ['RIDGE', roof.ridgeY],
-    ] as const) {
-      const key = `${name}:${elevation.toFixed(3)}`
-      if (seen.has(key)) continue
-      seen.add(key)
-      const y = drawY(elevation)
-      out.push(
-        line([uMin - overshoot, y], [uMax + overshoot, y], {
-          stroke: INK,
-          strokeWidth: WEIGHT.datum,
-          strokeDasharray: DASH.datum,
-          opacity: 0.7,
-        }),
-      )
-      out.push({
-        kind: 'text',
-        x: uMax + overshoot + 0.08,
-        y: y + 0.05,
-        text: `${name}   ${formatFeetInches(elevation)}`,
-        fontSize: 0.15,
-        fill: INK,
-        textAnchor: 'start',
-        dominantBaseline: 'alphabetic',
-      } as FloorplanGeometry)
-    }
-  }
-  return out
+  return datumPrimitives(roofMarks(model, uMin, uMax), uMax)
 }
 
 /**

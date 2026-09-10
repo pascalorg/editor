@@ -5,7 +5,7 @@ import {
   boundsFromPrimitives,
   drawY,
   gradeLine,
-  levelDatums,
+  datumMarks,
   makeProjector,
   type ProjectedPiece,
   type Projector,
@@ -14,7 +14,6 @@ import {
   projectRoof,
   projectU,
   projectWall,
-  roofDatums,
 } from './projection'
 import {
   type BuildingModel,
@@ -319,8 +318,7 @@ export function buildSectionDrawing(
 
   const grade = gradeLine(built, view, uMin, uMax, Math.max(0.01, spec.depth) / 2)
   const primitives = [
-    ...levelDatums(built, uMin, uMax),
-    ...roofDatums(built, uMin, uMax),
+    ...datumMarks(built, uMin, uMax),
     ...body,
     ...grade.primitives,
   ]

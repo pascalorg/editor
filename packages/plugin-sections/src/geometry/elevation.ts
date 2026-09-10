@@ -7,7 +7,7 @@ import {
   boundsFromPrimitives,
   drawY,
   gradeLine,
-  levelDatums,
+  datumMarks,
   makeProjector,
   openingCentreU,
   type ProjectedPiece,
@@ -17,7 +17,6 @@ import {
   projectRoof,
   projectU,
   projectWall,
-  roofDatums,
   wallSpan,
 } from './projection'
 import { type BuildingModel, buildBuildingModel, type WallSolid } from './scene-model'
@@ -369,10 +368,7 @@ export function buildElevationDrawing(
     )
   }
 
-  const datums = [
-    ...levelDatums(built, bodyBounds.minX, bodyBounds.maxX),
-    ...roofDatums(built, bodyBounds.minX, bodyBounds.maxX),
-  ]
+  const datums = datumMarks(built, bodyBounds.minX, bodyBounds.maxX, view)
   const full = [...datums, ...body, ...grade.primitives, ...tags, ...finishKey]
   const primitives = options.overlaysOnly
     ? [...datums, ...grade.primitives, ...tags, ...finishKey]

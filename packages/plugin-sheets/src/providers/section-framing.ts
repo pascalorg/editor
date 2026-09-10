@@ -355,7 +355,12 @@ function calloutsFor(
 export type SectionFraming = {
   primitives: FloorplanGeometry[]
   warnings: string[]
+  /** The drawing bounds widened for the note column, when notes were laid out. */
+  bounds?: { minX: number; minY: number; maxX: number; maxY: number }
 }
+
+/** The note column's width past the datum labels' margin, drawing metres. */
+const NOTE_COLUMN_W = 3.0
 
 /** The section-marker node's cut line, level-local. */
 export function planeFromMarker(nodes: NodeMap, markerId: string | undefined): CutPlane | null {
@@ -442,10 +447,12 @@ export function sectionFraming(
     },
     model.roofSystem,
   )
-  // The notes stack down the right margin the section already reserves for
-  // its datum labels, wrapped to that column's width so nothing runs off the
-  // paper; each carries a leader back to the member it describes.
-  const textX = bounds.maxX - 2.5
+  // The notes stack down a column of their own PAST the margin the section
+  // reserves for its datum labels (they shared it and overlapped — Steve,
+  // 2026-09-10: "no overlapping leaders"), wrapped to the column's width so
+  // nothing runs off the paper; each carries a leader back to the member it
+  // describes. The widened bounds go back with the primitives.
+  const textX = bounds.maxX + 0.2
   let textY = bounds.minY + 0.6
   for (const callout of callouts) {
     const lines = wrapNote(callout.text, NOTE_CHARS)
@@ -490,5 +497,6 @@ export function sectionFraming(
     warnings: [
       `Framing shown is the Bones model cut by this section — ${cuts.length} members. Sizes and spacings are the framing plan's; the engineer of record verifies them.`,
     ],
+    bounds: callouts.length > 0 ? { ...bounds, maxX: bounds.maxX + NOTE_COLUMN_W } : undefined,
   }
 }

@@ -723,6 +723,7 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
         ...result,
         primitives: [...result.primitives, ...framing.primitives],
         warnings: [...(result.warnings ?? []), ...framing.warnings],
+        bounds: framing.bounds ?? result.bounds,
       }
     }
   }

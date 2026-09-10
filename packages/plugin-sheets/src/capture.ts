@@ -269,7 +269,12 @@ export async function captureElevationImage(
   // orthographic capture camera of this pose (thumbnail-generator.tsx)
   const raw = await withFinishedPresentation(() =>
     withSiteSurfaceHidden(() =>
-      capturePipeline(20000, { transparent: true, edges: 'soft', ortho: { position, target, viewWidth: width } }),
+      capturePipeline(20000, {
+        transparent: true,
+        edges: 'soft',
+        ortho: { position, target, viewWidth: width },
+        lightFace: true,
+      }),
     ),
   )
   if (process.env.NODE_ENV !== 'production') {
@@ -376,6 +381,7 @@ function capturePipeline(
     ortho?: { position: [number, number, number]; target: [number, number, number]; viewWidth: number }
     perspective?: { position: [number, number, number]; target: [number, number, number]; fov?: number }
     hideTypes?: readonly string[]
+    lightFace?: boolean
   } = {},
 ): Promise<string | undefined> {
   return new Promise((resolve) => {
