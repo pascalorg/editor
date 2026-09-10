@@ -1,5 +1,15 @@
 import { spawn } from 'node:child_process'
-import { chmod, cp, mkdir, readdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import {
+  chmod,
+  cp,
+  mkdir,
+  readdir,
+  readFile,
+  realpath,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -9,6 +19,32 @@ const appDirectory = path.join(repositoryRoot, 'apps/editor')
 const standaloneDirectory = path.join(appDirectory, '.next/standalone')
 const standaloneAppDirectory = path.join(standaloneDirectory, 'apps/editor')
 const outputDirectory = path.join(packageDirectory, 'dist/runtime')
+
+/**
+ * `next build` copies its tracing root into `.next/standalone`, so the portable runtime
+ * inherits app sources, repository documentation and build-time-only assets that
+ * `server.js` never reads. Every entry below was checked against the staged tree: nothing
+ * in `.next`, `node_modules` or the bundled MCP server resolves it.
+ */
+const buildOnlyRuntimePaths = [
+  'apps/editor/app',
+  'apps/editor/components',
+  'apps/editor/lib',
+  'apps/editor/AGENTS.md',
+  'apps/editor/CLAUDE.md',
+  'apps/editor/README.md',
+  'apps/editor/bunfig.toml',
+  'apps/editor/next.config.ts',
+  'apps/editor/postcss.config.mjs',
+  'apps/editor/tsconfig.json',
+  'apps/editor/vercel.json',
+  // The radio catalogue is played by the hosted community app, which serves its own copy.
+  'apps/editor/public/audios/radios',
+  // `next/dist/server/font-utils.js` is the sole reader of these font metrics and is
+  // itself unreachable from the standalone server.
+  'node_modules/next/dist/server/capsize-font-metrics.json',
+  'node_modules/next/dist/server/font-utils.js',
+]
 
 const packageJson = JSON.parse(
   await readFile(path.join(packageDirectory, 'package.json'), 'utf8'),
@@ -38,6 +74,7 @@ await removeUnusedSharp(outputDirectory)
 await flattenBunNodeModules(outputDirectory)
 await materializeSymlinks(outputDirectory)
 await rm(path.join(outputDirectory, 'node_modules/.bun'), { recursive: true, force: true })
+await pruneBuildOnlyFiles(outputDirectory)
 const nativeFiles = await findNativeModules(outputDirectory)
 if (nativeFiles.length > 0) {
   throw new Error(`portable runtime contains native modules:\n${nativeFiles.join('\n')}`)
@@ -99,6 +136,70 @@ async function assertFile(filePath: string): Promise<void> {
       `standalone editor build not found at ${filePath}; run PASCAL_PORTABLE_BUILD=1 bun run build from apps/editor first`,
     )
   }
+}
+
+async function pruneBuildOnlyFiles(root: string): Promise<void> {
+  await Promise.all(
+    buildOnlyRuntimePaths.map((relative) =>
+      rm(path.join(root, relative), { recursive: true, force: true }),
+    ),
+  )
+  await removeStrayItemAssets(path.join(root, 'apps/editor/public/items'))
+  await removeTraceArtifacts(path.join(root, 'apps/editor/.next'))
+}
+
+/**
+ * Item directories are addressed by convention (`model.glb`, `thumbnail.*`, `floor-plan.*`).
+ * Anything else is an authoring leftover, so it is dropped and named on stdout: a future
+ * asset that does not follow the convention has to be reported rather than silently lost.
+ */
+async function removeStrayItemAssets(itemsDirectory: string): Promise<void> {
+  let entries
+  try {
+    entries = await readdir(itemsDirectory, { withFileTypes: true })
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+    return
+  }
+  const isConventional = (name: string): boolean =>
+    name === 'model.glb' || name.startsWith('thumbnail.') || name.startsWith('floor-plan.')
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue
+    const itemDirectory = path.join(itemsDirectory, entry.name)
+    for (const asset of await readdir(itemDirectory, { withFileTypes: true })) {
+      if (!asset.isFile() || isConventional(asset.name)) continue
+      const assetPath = path.join(itemDirectory, asset.name)
+      const { size } = await stat(assetPath)
+      await rm(assetPath, { force: true })
+      console.log(
+        `Dropped unreferenced item asset ${entry.name}/${asset.name} (${formatMegabytes(size)} MB)`,
+      )
+    }
+  }
+}
+
+function formatMegabytes(bytes: number): string {
+  return (bytes / 1024 / 1024).toFixed(2)
+}
+
+async function removeTraceArtifacts(nextDirectory: string): Promise<void> {
+  const walk = async (directory: string): Promise<void> => {
+    let entries
+    try {
+      entries = await readdir(directory, { withFileTypes: true })
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      return
+    }
+    for (const entry of entries) {
+      const absolute = path.join(directory, entry.name)
+      if (entry.isDirectory()) await walk(absolute)
+      else if (entry.name.endsWith('.nft.json') || entry.name.endsWith('.map')) {
+        await rm(absolute, { force: true })
+      }
+    }
+  }
+  await walk(nextDirectory)
 }
 
 async function removeUnusedSharp(root: string): Promise<void> {
