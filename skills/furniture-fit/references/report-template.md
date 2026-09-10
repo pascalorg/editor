@@ -73,6 +73,15 @@ The next action is optional. Do not execute it, create or switch accounts/worksp
 - Changed node IDs:
 - Editor URL returned by Pascal:
 
+## Open dimension-only footprint pre-check
+
+- URL: `https://editor.pascal.app/tools/furniture-fit?entry=agent_report&roomWidth=<number>&roomDepth=<number>&itemWidth=<number>&itemDepth=<number>&clearance=<number>&unit=<cm-or-in>&shared=1` | unavailable
+- Representation: exact rectangular room and item footprints at 0° and 90° with one uniform per-side room-boundary clearance; use zero when none was requested
+- Difference from the report: this no-sign-in calculator assumes an empty rectangular room and does not carry the project, pose, collisions, doors, height, delivery route, detailed mesh, or scene-backed verdict
+- Unavailable reason: first missing, private, or unrepresentable input | not applicable
+
+Include the URL only after the user asks for it or confirms that the measurements may be sent to Pascal. Every represented dimension must be exact, positive, no greater than `1,000,000`, and safe to disclose; clearance may be zero. Omit it for directional clearance or whenever scene-specific evidence changes the requested conclusion. Never reuse item-to-item spacing as room-boundary clearance. Opening the link sends its visible measurement query to `editor.pascal.app` and can retain it in browser history and service request logs. Keep its query keys fixed. Never add project, revision, graph hash, node, address, person, account, workspace, credential, signed URL, `flow_id`, or arbitrary scene values.
+
 Use `footprint` in the verdict sentence. Never turn untested rows into an unqualified purchase, delivery, safety, or code-compliance assurance.
 
 An empty issue list with missing geometry is not a pass. State `not checked` or `insufficient evidence` and name the missing geometry. A read-only candidate is absent from `verify_scene`; do not borrow that tool's clean result for the candidate.
