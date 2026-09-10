@@ -12,9 +12,9 @@ import {
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const skillNames = ['pascal-3d', 'furniture-fit'] as const
-const skillVersions = { 'pascal-3d': '0.1.0', 'furniture-fit': '0.1.4' } as const
-const pluginVersion = '0.1.8'
+const skillVersions = new Map<string, string>()
 const portablePluginSchema = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'
+const portableMcpSchema = 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json'
 const semverPattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 const openAiListingLimits = {
@@ -28,6 +28,22 @@ const openAiCapabilityLimit = 20
 const openAiCapabilityLengthLimit = 120
 const openAiListingUrlLimit = 1024
 const openAiImageByteLimit = 5 * 1024 * 1024
+const openAiInterfaceFields = new Set([
+  'displayName',
+  'shortDescription',
+  'longDescription',
+  'developerName',
+  'category',
+  'capabilities',
+  'websiteURL',
+  'privacyPolicyURL',
+  'termsOfServiceURL',
+  'defaultPrompt',
+  'brandColor',
+  'composerIcon',
+  'logo',
+  'screenshots',
+])
 const openAiCategories = new Set([
   'Productivity',
   'Creativity',
@@ -164,6 +180,17 @@ function parseJson(path: string): Record<string, unknown> {
   }
 }
 
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`
+  if (typeof value === 'object' && value !== null) {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'null'
+}
+
 function frontmatter(content: string, path: string): Record<string, string> {
   const match = content.match(/^---\n([\s\S]*?)\n---/)
   if (!match) {
@@ -178,12 +205,61 @@ function frontmatter(content: string, path: string): Record<string, string> {
   return fields
 }
 
+function headingSlug(heading: string): string {
+  return heading
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/[`*]/g, '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N} _-]+/gu, '')
+    .replace(/ /g, '-')
+}
+
+const headingSlugCache = new Map<string, Set<string>>()
+
+function markdownHeadingSlugs(path: string): Set<string> {
+  const cached = headingSlugCache.get(path)
+  if (cached) return cached
+  const slugs = new Set<string>()
+  const occurrences = new Map<string, number>()
+  let insideFence = false
+  for (const line of readFileSync(path, 'utf8').split('\n')) {
+    if (/^\s*(?:```|~~~)/.test(line)) {
+      insideFence = !insideFence
+      continue
+    }
+    if (insideFence) continue
+    const heading = line.match(/^#{1,6}\s+(.+?)\s*$/)
+    if (!heading) continue
+    const slug = headingSlug(heading[1]!)
+    const seen = occurrences.get(slug) ?? 0
+    occurrences.set(slug, seen + 1)
+    slugs.add(seen === 0 ? slug : `${slug}-${seen}`)
+  }
+  headingSlugCache.set(path, slugs)
+  return slugs
+}
+
 function validateLinks(content: string, path: string) {
   for (const match of content.matchAll(/\[[^\]]+\]\(([^)]+)\)/g)) {
     const target = match[1]!
-    if (/^(?:https?:|mailto:|#)/.test(target)) continue
-    const file = resolve(dirname(path), target.split('#')[0]!)
-    if (!existsSync(file)) fail(`Broken link in ${relative(root, path)}: ${target}`)
+    if (/^(?:https?:|mailto:)/.test(target)) continue
+    const hash = target.indexOf('#')
+    const targetPath = hash === -1 ? target : target.slice(0, hash)
+    const fragment = hash === -1 ? '' : target.slice(hash + 1)
+    const file = targetPath ? resolve(dirname(path), targetPath) : path
+    if (!existsSync(file)) {
+      fail(`Broken link in ${relative(root, path)}: ${target}`)
+      continue
+    }
+    if (!fragment) continue
+    if (!file.endsWith('.md')) {
+      fail(`Link in ${relative(root, path)} anchors into a non-markdown file: ${target}`)
+      continue
+    }
+    if (!markdownHeadingSlugs(file).has(fragment)) {
+      fail(`Broken link fragment in ${relative(root, path)}: ${target}`)
+    }
   }
 }
 
@@ -229,8 +305,9 @@ for (const skillName of skillNames) {
   const fields = frontmatter(content, skillFile)
   if (fields.name !== skillName) fail(`${skillName}: frontmatter name does not match directory`)
   if (!fields.description) fail(`${skillName}: description is required`)
-  if (!content.includes(`version: "${skillVersions[skillName]}"`))
-    fail(`${skillName}: metadata version must be ${skillVersions[skillName]}`)
+  const skillVersion = content.match(/^ {2}version: "([^"]+)"$/m)?.[1]
+  if (skillVersion && semverPattern.test(skillVersion)) skillVersions.set(skillName, skillVersion)
+  else fail(`${skillName}: metadata version must be a quoted semantic version`)
   if (!/^ {2}source-reviewed: "\d{4}-\d{2}-\d{2}"$/m.test(content)) {
     fail(`${skillName}: an ISO source review date is required`)
   }
@@ -318,6 +395,11 @@ for (const skillName of skillNames) {
       fail(`${relative(root, path)} contains a credential-shaped value`)
     }
   }
+}
+
+for (const publicDoc of ['README.md', 'VALIDATION.md']) {
+  const docPath = join(root, 'skills', publicDoc)
+  validateLinks(read(docPath), docPath)
 }
 
 const furnitureSkill = read(join(root, 'skills', 'furniture-fit', 'SKILL.md'))
@@ -741,30 +823,126 @@ if (negativePublishingCases < 3) fail('Publishing suite needs at least 3 negativ
 const claudePlugin = parseJson(join(root, '.claude-plugin', 'plugin.json'))
 const claudeMarketplace = parseJson(join(root, '.claude-plugin', 'marketplace.json'))
 const claudeMcpConfig = parseJson(join(root, '.mcp.json'))
+const portableMcpConfig = parseJson(join(root, 'mcp.json'))
 const portablePlugin = parseJson(join(root, 'plugin.json'))
 const codexPlugin = parseJson(join(root, '.codex-plugin', 'plugin.json'))
 const codexMarketplace = parseJson(join(root, '.agents', 'plugins', 'marketplace.json'))
+const geminiExtension = parseJson(join(root, 'gemini-extension.json'))
+const cursorPlugin = parseJson(join(root, '.cursor-plugin', 'plugin.json'))
 
-for (const [label, manifest] of [
-  ['Claude plugin', claudePlugin],
-  ['Codex plugin', codexPlugin],
-] as const) {
-  if (manifest.name !== 'pascal-agent-skills') fail(`${label}: unexpected name`)
-  if (manifest.version !== pluginVersion) fail(`${label}: version must be ${pluginVersion}`)
-  if (typeof manifest.version !== 'string' || !semverPattern.test(manifest.version)) {
-    fail(`${label}: version must use semantic versioning`)
+function firstMarketplaceEntry(marketplace: Record<string, unknown>): Record<string, unknown> {
+  const entry = Array.isArray(marketplace.plugins) ? marketplace.plugins[0] : undefined
+  return typeof entry === 'object' && entry !== null ? (entry as Record<string, unknown>) : {}
+}
+
+function normalizedAuthor(value: unknown): string {
+  if (typeof value !== 'object' || value === null) return 'missing'
+  return JSON.stringify(Object.entries(value as Record<string, unknown>).sort())
+}
+
+const pluginVersion = typeof portablePlugin.version === 'string' ? portablePlugin.version : ''
+if (!semverPattern.test(pluginVersion)) {
+  fail('Root plugin.json version is the single source of truth and must use semantic versioning')
+}
+
+const claudeMarketplaceEntry = firstMarketplaceEntry(claudeMarketplace)
+const codexMarketplaceEntry = firstMarketplaceEntry(codexMarketplace)
+const pluginDescriptors = [
+  ['Root plugin manifest', portablePlugin],
+  ['Claude plugin manifest', claudePlugin],
+  ['Claude marketplace entry', claudeMarketplaceEntry],
+  ['Codex plugin manifest', codexPlugin],
+  ['Codex marketplace entry', codexMarketplaceEntry],
+  ['Cursor plugin manifest', cursorPlugin],
+] as const
+
+for (const [label, descriptor] of pluginDescriptors) {
+  if (descriptor.name !== 'pascal-agent-skills') fail(`${label}: unexpected plugin name`)
+  if (descriptor.version !== pluginVersion) {
+    fail(`${label}: version must match the root plugin.json version ${pluginVersion}`)
   }
+  if (descriptor.description !== portablePlugin.description) {
+    fail(`${label}: description must match the root plugin.json description`)
+  }
+  if (normalizedAuthor(descriptor.author) !== normalizedAuthor(portablePlugin.author)) {
+    fail(`${label}: author must match the root plugin.json author`)
+  }
+}
+
+if (cursorPlugin.displayName !== claudePlugin.displayName) {
+  fail('Cursor plugin displayName must match the Claude plugin displayName')
+}
+if (
+  typeof cursorPlugin.category !== 'string' ||
+  !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(cursorPlugin.category)
+) {
+  fail('Cursor plugin category must be a kebab-case marketplace category such as developer-tools')
+}
+for (const field of ['logo', 'skills', 'mcpServers']) {
+  const value = cursorPlugin[field]
+  if (typeof value !== 'string' || value.startsWith('/') || value.includes('..')) {
+    fail(`Cursor plugin ${field} must be a plugin-relative path`)
+    continue
+  }
+  const target = join(root, value)
+  if (!existsSync(target)) fail(`Cursor plugin ${field} must reference an existing path: ${value}`)
+  if (field === 'skills' && !lstatSync(target).isDirectory()) {
+    fail('Cursor plugin skills must point at the public skills directory')
+  }
+  if (field !== 'skills' && existsSync(target) && !lstatSync(target).isFile()) {
+    fail(`Cursor plugin ${field} must reference a file: ${value}`)
+  }
+}
+if (typeof cursorPlugin.logo === 'string' && existsSync(join(root, cursorPlugin.logo))) {
+  validateOpenAiSvg(join(root, cursorPlugin.logo), 'Cursor plugin logo')
 }
 
 if (portablePlugin.$schema !== portablePluginSchema) {
   fail(`Portable plugin must declare ${portablePluginSchema}`)
 }
-if (portablePlugin.name !== codexPlugin.name) fail('Portable and Codex plugin names must match')
-if (portablePlugin.version !== pluginVersion) {
-  fail(`Portable plugin version must be ${pluginVersion}`)
+if (portableMcpConfig.$schema !== portableMcpSchema) {
+  fail(`Portable mcp.json must declare ${portableMcpSchema}`)
 }
-if (typeof portablePlugin.version !== 'string' || !semverPattern.test(portablePlugin.version)) {
-  fail('Portable plugin version must use semantic versioning')
+if (Object.keys(portableMcpConfig).sort().join(',') !== '$schema,mcpServers') {
+  fail('Portable mcp.json must contain only $schema and mcpServers')
+}
+if (canonicalJson(portableMcpConfig.mcpServers) !== canonicalJson(claudeMcpConfig.mcpServers)) {
+  fail('Portable mcp.json and .mcp.json must declare the same mcpServers block')
+}
+
+const portablePascalServer = (portableMcpConfig.mcpServers as Record<string, unknown> | undefined)
+  ?.pascal as Record<string, unknown> | undefined
+if (geminiExtension.name !== 'pascal') fail('Gemini CLI extension name must be pascal')
+if (geminiExtension.version !== pluginVersion) {
+  fail(`Gemini CLI extension version must match the root plugin.json version ${pluginVersion}`)
+}
+if (geminiExtension.description !== portablePlugin.description) {
+  fail('Gemini CLI extension description must match the root plugin.json description')
+}
+const geminiContextFile = geminiExtension.contextFileName
+if (
+  typeof geminiContextFile !== 'string' ||
+  !geminiContextFile ||
+  geminiContextFile.startsWith('/') ||
+  geminiContextFile.includes('..')
+) {
+  fail('Gemini CLI extension contextFileName must be an extension-relative path')
+} else if (!existsSync(join(root, geminiContextFile))) {
+  fail(`Gemini CLI extension contextFileName must point at an existing file: ${geminiContextFile}`)
+}
+const geminiServers = geminiExtension.mcpServers as Record<string, unknown> | undefined
+const geminiPascalServer = geminiServers?.pascal as Record<string, unknown> | undefined
+if (!geminiServers || Object.keys(geminiServers).join(',') !== 'pascal') {
+  fail('Gemini CLI extension must declare exactly one server named pascal')
+} else if (
+  // Gemini CLI's MCP server type field accepts only sse or http; stdio is inferred from command.
+  'type' in (geminiPascalServer ?? {}) ||
+  geminiPascalServer?.command !== portablePascalServer?.command ||
+  canonicalJson(geminiPascalServer?.args) !== canonicalJson(portablePascalServer?.args)
+) {
+  fail(
+    'Gemini CLI extension pascal server must run the mcp.json command and args without a transport type',
+  )
 }
 if (
   typeof portablePlugin.name !== 'string' ||
@@ -792,9 +970,6 @@ if (
 }
 validateHttpsUrl(portableAuthor?.url, 'Portable plugin author URL', 2048)
 validateHttpsUrl(portablePlugin.homepage, 'Portable plugin homepage', 2048)
-if (portablePlugin.description !== codexPlugin.description) {
-  fail('Portable and Codex plugin descriptions must match')
-}
 const extensions = portablePlugin.extensions as Record<string, unknown> | undefined
 const openAiExtension = extensions?.['com.openai'] as Record<string, unknown> | undefined
 const portableInterface = openAiExtension?.interface as Record<string, unknown> | undefined
@@ -868,8 +1043,13 @@ if (
 ) {
   fail('OpenAI category must use a supported final-directory value')
 }
-for (const field of ['websiteURL', 'supportURL', 'privacyPolicyURL', 'termsOfServiceURL']) {
+for (const field of ['websiteURL', 'privacyPolicyURL', 'termsOfServiceURL']) {
   validateHttpsUrl(portableInterface?.[field], `OpenAI ${field}`, openAiListingUrlLimit)
+}
+for (const field of Object.keys(portableInterface ?? {})) {
+  if (!openAiInterfaceFields.has(field)) {
+    fail(`OpenAI interface declares a field OpenAI does not document: ${field}`)
+  }
 }
 for (const field of ['composerIcon', 'logo']) {
   const value = portableInterface?.[field]
@@ -897,7 +1077,6 @@ if (!Array.isArray(codexEntries) || codexEntries.length !== 1) {
   const entry = codexEntries[0] as Record<string, unknown>
   const source = entry.source as Record<string, unknown> | undefined
   const policy = entry.policy as Record<string, unknown> | undefined
-  if (entry.name !== codexPlugin.name) fail('Codex marketplace plugin name must match its manifest')
   if (source?.source !== 'local' || source.path !== './') {
     fail('Codex marketplace must resolve the plugin from the repository root')
   }
@@ -919,19 +1098,33 @@ if (!Array.isArray(marketplacePlugins) || marketplacePlugins.length !== 1) {
     fail(configFailure)
   }
   if (plugin.source !== './') fail('Claude marketplace plugin must use the repository root')
-  if (plugin.version !== pluginVersion) {
-    fail(`Claude marketplace plugin version must be ${pluginVersion}`)
-  }
+  // A listed skills array is the complete set Claude Code loads for the entry, so it must equal
+  // every packaged bundle; a new skills/<name>/SKILL.md is otherwise installed but never loaded.
+  const bundledSkillPaths = readdirSync(join(root, 'skills'), { withFileTypes: true })
+    .filter(
+      (entry) => entry.isDirectory() && existsSync(join(root, 'skills', entry.name, 'SKILL.md')),
+    )
+    .map((entry) => `./skills/${entry.name}`)
+    .sort()
   const packagedSkills = plugin.skills
-  for (const skillName of skillNames) {
-    if (!Array.isArray(packagedSkills) || !packagedSkills.includes(`./skills/${skillName}`)) {
-      fail(`Claude marketplace is missing ${skillName}`)
-    }
+  const listedSkillPaths = Array.isArray(packagedSkills)
+    ? [...packagedSkills].map(String).sort()
+    : []
+  if (listedSkillPaths.join(',') !== bundledSkillPaths.join(',')) {
+    fail(
+      `Claude marketplace skills must list exactly the packaged bundles ${bundledSkillPaths.join(', ')}; found ${listedSkillPaths.join(', ') || 'none'}`,
+    )
   }
+}
+
+const releaseNotes = read(join(root, 'plugin-evals', 'release-notes.md'))
+if (!releaseNotes.includes(`Pascal agent skills ${pluginVersion} **With MCP** submission`)) {
+  fail(`OpenAI release notes must describe the ${pluginVersion} submission candidate`)
 }
 
 const readme = read(join(root, 'README.md'))
 for (const expected of [
+  '[![Install with skills](https://skills.sh/b/pascalorg/editor)](https://skills.sh/pascalorg/editor)',
   'npx skills add pascalorg/editor',
   '/plugin marketplace add pascalorg/editor',
   'codex plugin marketplace add pascalorg/editor',
@@ -948,5 +1141,5 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `Validated ${skillNames.length} skills (${skillNames.map((name) => `${name}@${skillVersions[name]}`).join(', ')}) and portable, Codex, and Claude plugin manifests at ${pluginVersion}.`,
+  `Validated ${skillNames.length} skills (${skillNames.map((name) => `${name}@${skillVersions.get(name)}`).join(', ')}) and portable, Codex, Claude, Cursor, and Gemini CLI plugin manifests at ${pluginVersion}.`,
 )
