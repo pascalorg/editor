@@ -12,8 +12,8 @@ import {
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const skillNames = ['pascal-3d', 'furniture-fit'] as const
-const skillVersions = { 'pascal-3d': '0.1.0', 'furniture-fit': '0.1.3' } as const
-const pluginVersion = '0.1.7'
+const skillVersions = { 'pascal-3d': '0.1.0', 'furniture-fit': '0.1.4' } as const
+const pluginVersion = '0.1.8'
 const portablePluginSchema = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'
 const semverPattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
@@ -357,6 +357,68 @@ for (const entry of readdirSync(furnitureExamplesRoot, { withFileTypes: true }))
   }
   if (!example.includes(`  ${furnitureNextActionCost}`)) {
     fail(`furniture-fit example ${entry.name} is missing the canonical cost boundary`)
+  }
+}
+
+const furniturePrecheckExample = read(
+  join(furnitureExamplesRoot, 'no-sign-in-dimension-precheck.md'),
+)
+const furniturePrecheckUrlMatches = furniturePrecheckExample.match(
+  /https:\/\/editor\.pascal\.app\/tools\/furniture-fit\?[^\s]+/gu,
+)
+if (furniturePrecheckUrlMatches?.length !== 1) {
+  fail('furniture-fit no-sign-in pre-check example must contain exactly one canonical URL')
+} else {
+  const precheckUrl = new URL(furniturePrecheckUrlMatches[0]!)
+  const allowedPrecheckKeys = [
+    'clearance',
+    'entry',
+    'itemDepth',
+    'itemWidth',
+    'roomDepth',
+    'roomWidth',
+    'shared',
+    'unit',
+  ]
+  if (
+    precheckUrl.origin !== 'https://editor.pascal.app' ||
+    precheckUrl.pathname !== '/tools/furniture-fit'
+  ) {
+    fail('furniture-fit no-sign-in pre-check must use the canonical HTTPS calculator URL')
+  }
+  if (
+    JSON.stringify([...precheckUrl.searchParams.keys()].sort()) !==
+    JSON.stringify(allowedPrecheckKeys)
+  ) {
+    fail('furniture-fit no-sign-in pre-check must use only the fixed query keys')
+  }
+  if (
+    precheckUrl.searchParams.get('entry') !== 'agent_report' ||
+    precheckUrl.searchParams.get('shared') !== '1' ||
+    !['cm', 'in'].includes(precheckUrl.searchParams.get('unit') ?? '')
+  ) {
+    fail('furniture-fit no-sign-in pre-check must carry fixed attribution and a supported unit')
+  }
+  for (const key of ['roomWidth', 'roomDepth', 'itemWidth', 'itemDepth']) {
+    const value = Number(precheckUrl.searchParams.get(key))
+    if (!(Number.isFinite(value) && value > 0 && value <= 1_000_000)) {
+      fail(`furniture-fit no-sign-in pre-check ${key} must be within the runtime bounds`)
+    }
+  }
+  const clearance = Number(precheckUrl.searchParams.get('clearance'))
+  if (!(Number.isFinite(clearance) && clearance >= 0 && clearance <= 1_000_000)) {
+    fail('furniture-fit no-sign-in pre-check clearance must be within the runtime bounds')
+  }
+}
+
+for (const requiredBoundary of [
+  'Open dimension-only footprint pre-check',
+  'entry=agent_report',
+  'Opening the link sends the visible measurement query to `editor.pascal.app`',
+  'Never put a project, revision, graph hash, node ID, address, person, account, workspace, credential, signed URL, `flow_id`, or arbitrary scene text in the URL.',
+]) {
+  if (!furnitureSkill.includes(requiredBoundary)) {
+    fail(`furniture-fit skill is missing no-sign-in pre-check boundary: ${requiredBoundary}`)
   }
 }
 

@@ -3,8 +3,8 @@ name: furniture-fit
 description: Assess whether furniture fits in a measured Pascal room or layout. Use this skill for sofa, table, bed, cabinet, appliance, staging, placement, collision, clearance, or rotated-footprint questions. Produce a tool-backed spatial report that distinguishes footprint fit from unsupported height, door-swing, assembly, and delivery-route claims, and return insufficient evidence when dimensions or scale are missing.
 compatibility: Requires a Pascal MCP connection for verified scene checks. Can still produce an input-gap report when the scene or measurements are unavailable.
 metadata:
-  version: "0.1.3"
-  source-reviewed: "2026-09-09"
+  version: "0.1.4"
+  source-reviewed: "2026-09-10"
   native-host-validation: "package-checks-only"
   openclaw:
     homepage: https://editor.pascal.app/docs/developers/mcp
@@ -151,6 +151,14 @@ Use the exact report shape in [references/report-template.md](references/report-
 - one blocker-aware `nextAction` with its required input, exact available context, authority, and cost boundary;
 - the exact `editorUrl` returned by Pascal when a persistent project is involved.
 
+When the user asks for a hosted link, or explicitly confirms that these measurements may be sent to Pascal, an eligible report can include an **Open dimension-only footprint pre-check** link. Eligibility requires exact positive dimensions no greater than `1,000,000` for one rectangular room footprint and one rectangular item footprint. Use the user's original `cm` or `in` values when they are exact; otherwise convert measured meter values to centimeters without rounding away meaningful precision. Use the user's explicit uniform room-boundary clearance when one was supplied. Item-to-item spacing from `check_collisions.minimumClearance` is a different constraint and must not be copied into this link. Use `clearance=0` only for a bare dimensional fit or when the user explicitly requested no added room-boundary clearance. Build only this fixed URL shape, with standard URL encoding:
+
+```text
+https://editor.pascal.app/tools/furniture-fit?entry=agent_report&roomWidth=<number>&roomDepth=<number>&itemWidth=<number>&itemDepth=<number>&clearance=<number>&unit=<cm-or-in>&shared=1
+```
+
+The link recomputes only an empty axis-aligned rectangular footprint at 0° and 90° with uniform per-side room-boundary clearance. Label it as a separate dimension-only pre-check, not as the scene-backed verdict. Omit it when the room is irregular; dimensions are missing, ambiguous, inferred, or over the calculator limit; any directional or asymmetric clearance was requested; the user has not authorized sending private or local measurements to Pascal; or the requested conclusion depends on a tested position, existing objects, doors, height, delivery, or another scene-specific constraint. Opening the link sends the visible measurement query to `editor.pascal.app` and can leave it in browser history and service request logs. Never put a project, revision, graph hash, node ID, address, person, account, workspace, credential, signed URL, `flow_id`, or arbitrary scene text in the URL. Use `unavailable` plus the first reason when the link cannot represent the inputs safely.
+
 Before sending the report, compare its numeric inputs and source IDs against both the user's constraint record and the actual tool output. Copy level, zone, item, candidate, and project IDs exactly; do not recreate them from memory. A missing requested check must be identified as incomplete, even when a narrower calculation passes.
 
 The examples are synthetic and illustrate correct claim boundaries:
@@ -160,3 +168,4 @@ The examples are synthetic and illustrate correct claim boundaries:
 - [examples/all-tested-poses-fail.md](examples/all-tested-poses-fail.md)
 - [examples/insufficient-evidence.md](examples/insufficient-evidence.md)
 - [examples/unproven-height-metadata.md](examples/unproven-height-metadata.md)
+- [examples/no-sign-in-dimension-precheck.md](examples/no-sign-in-dimension-precheck.md)
