@@ -109,7 +109,9 @@ async function readJsonResponse(response: Response, signal: AbortSignal): Promis
 function isAgentClaim(value: unknown): value is AgentClaim {
   if (!isRecord(value)) return false
   if (typeof value.claimCode !== 'string' || !CLAIM_CODE_PATTERN.test(value.claimCode)) return false
-  if (typeof value.expiresAt !== 'string' || Number.isNaN(Date.parse(value.expiresAt))) return false
+  if (typeof value.expiresAt !== 'string') return false
+  const expiresAt = Date.parse(value.expiresAt)
+  if (Number.isNaN(expiresAt) || new Date(expiresAt).toISOString() !== value.expiresAt) return false
   return value.claimUrl === CLAIM_PAGE
 }
 

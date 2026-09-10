@@ -53,6 +53,8 @@ describe('agent account claims', () => {
 
   test('rejects malformed or chunked oversized responses', async () => {
     const malformed: typeof fetch = async () => Response.json({ ...VALID_CLAIM, claimCode: '123' })
+    const unsafeDate: typeof fetch = async () =>
+      Response.json({ ...VALID_CLAIM, expiresAt: 'Wed, 10 Sep 2026 18:30:00 GMT (\u001b[2J)' })
     const oversized: typeof fetch = async () => {
       const encoder = new TextEncoder()
       return new Response(
@@ -67,6 +69,9 @@ describe('agent account claims', () => {
     }
 
     expect((await captureError(() => startAgentClaim(API_KEY, { fetch: malformed }))).code).toBe(
+      'agent_claim_invalid_response',
+    )
+    expect((await captureError(() => startAgentClaim(API_KEY, { fetch: unsafeDate }))).code).toBe(
       'agent_claim_invalid_response',
     )
     expect((await captureError(() => startAgentClaim(API_KEY, { fetch: oversized }))).code).toBe(
