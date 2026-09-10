@@ -183,6 +183,12 @@ export function buildElevationDrawing(
      * over a capture of the live viewer (2026-09-10).
      */
     overlaysOnly?: boolean
+    /**
+     * With `overlaysOnly`, whether the model's own ink outlines go over the
+     * picture (default). False when the sheet carries the viewer's own
+     * lines — the scene's visible edges, which match the picture exactly.
+     */
+    outlines?: boolean
   } = {},
 ): DrawingResult {
   const angle = resolveAngle(scene, direction)
@@ -453,7 +459,7 @@ export function buildElevationDrawing(
   const datums = datumMarks(built, bodyBounds.minX, bodyBounds.maxX, view)
   const full = [...datums, ...body, ...grade.primitives, ...tags, ...finishKey]
   const primitives = options.overlaysOnly
-    ? [...datums, ...outlines, ...grade.primitives, ...tags, ...finishKey]
+    ? [...datums, ...(options.outlines === false ? [] : outlines), ...grade.primitives, ...tags, ...finishKey]
     : full
   const raw = boundsFromPrimitives(full) ?? EMPTY_BOUNDS
   const frame: ElevationFrame = {

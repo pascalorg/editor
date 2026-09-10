@@ -73,6 +73,16 @@ export type CaptureResult =
  * History is paused: the flip is not an edit.
  */
 export async function withFinishedPresentation<T>(fn: () => Promise<T>): Promise<T> {
+  // reentrant: a second caller while the house is already presented shares
+  // the flip — the LAST one out restores the X-ray, never the first
+  if (presentationDepth > 0) {
+    presentationDepth++
+    try {
+      return await fn()
+    } finally {
+      presentationDepth--
+    }
+  }
   const nodes = sceneNodes()
   const flipped: { id: string; viewMode: string }[] = []
   for (const n of Object.values(nodes)) {
@@ -91,6 +101,7 @@ export async function withFinishedPresentation<T>(fn: () => Promise<T>): Promise
   const temporal = (useScene as unknown as { temporal?: { getState: () => { pause: () => void; resume: () => void } } })
     .temporal
   temporal?.getState().pause()
+  presentationDepth++
   try {
     for (const f of flipped) scene().updateNode(f.id, { viewMode: 'off' })
     // the renderer rebuilds its batches and the wall system swaps the X-ray
@@ -103,10 +114,18 @@ export async function withFinishedPresentation<T>(fn: () => Promise<T>): Promise
     await wait(900)
     return await fn()
   } finally {
-    for (const f of flipped) scene().updateNode(f.id, { viewMode: f.viewMode })
-    temporal?.getState().resume()
+    presentationDepth--
+    // a caller that joined the flip (depth > 0) still runs — leave the house
+    // presented for it; the last one out restores
+    if (presentationDepth === 0) {
+      for (const f of flipped) scene().updateNode(f.id, { viewMode: f.viewMode })
+      temporal?.getState().resume()
+    }
   }
 }
+
+/** Callers presently inside `withFinishedPresentation`. */
+let presentationDepth = 0
 
 /**
  * The site's own surface — the terrain, the lot's ground — hidden for the
@@ -139,7 +158,7 @@ async function withSiteSurfaceHidden<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /** The capture recipe's version — part of every picture's hash; a change recaptures every sheet once. */
-const PICTURE_RECIPE = 'r4'
+const PICTURE_RECIPE = 'r5'
 
 /** A sheet's picture is rendered at this multiple of the canvas' size and kept at up to PICTURE_MAX_WIDTH px. */
 const PICTURE_SUPERSAMPLE = 2
@@ -231,10 +250,26 @@ export function elevationCaptureStale(viewport: ViewportNode, nodes: NodeMap): b
 
 /** The capture a viewport takes: an elevation or a section from the viewer, else the cover view. */
 export function captureViewportPicture(viewport: ViewportNode): Promise<CaptureResult> {
-  if (viewport.kind === 'elevation') return captureElevationImage(viewport)
-  if (viewport.kind === 'section') return captureSectionImage(viewport)
-  return captureViewportImage(viewport)
+  // ONE capture at a time, whoever asks — the overlay's auto-capture and the
+  // rail's Recapture button once ran together, and the first's restore of
+  // the Bones X-ray landed while the second still rendered: it captured the
+  // framing (2026-09-10). The queue never rejects: a failed capture answers
+  // with its reason and the next one runs.
+  const run = async (): Promise<CaptureResult> => {
+    if (viewport.kind === 'elevation') return captureElevationImage(viewport)
+    if (viewport.kind === 'section') return captureSectionImage(viewport)
+    return captureViewportImage(viewport)
+  }
+  const next = captureQueue.then(run, run)
+  captureQueue = next.then(
+    () => undefined,
+    () => undefined,
+  )
+  return next
 }
+
+/** The captures in flight, one after another (see `captureViewportPicture`). */
+let captureQueue: Promise<unknown> = Promise.resolve()
 
 /**
  * The elevation as the viewer shows it: an ORTHOGRAPHIC capture of the
@@ -291,17 +326,22 @@ export async function captureElevationImage(
   const hash = elevationCaptureHash(nodes)
 
   // the viewer's own camera never moves: the generator renders through an
-  // orthographic capture camera of this pose (thumbnail-generator.tsx)
-  const raw = await withFinishedPresentation(() =>
-    withSiteSurfaceHidden(() =>
-      capturePipeline(20000, {
+  // orthographic capture camera of this pose (thumbnail-generator.tsx) —
+  // and the same pose gives the VECTOR lines: the scene's visible feature
+  // edges, hidden lines removed (editor lib/vector-edges.ts), so the
+  // drawing's lines and its picture come from the one model
+  const { raw, edges } = await withFinishedPresentation(() =>
+    withSiteSurfaceHidden(async () => {
+      const raw = await capturePipeline(20000, {
         transparent: true,
         edges: 'soft',
         ortho: { position, target, viewWidth: width },
         lightFace: true,
         supersample: PICTURE_SUPERSAMPLE,
-      }),
-    ),
+      })
+      const edges = raw ? await requestEdges({ ortho: { position, target, viewWidth: width }, aspect }) : null
+      return { raw, edges }
+    }),
   )
   if (process.env.NODE_ENV !== 'production') {
     // dev: the last frame and its pose, for a probe to look at
@@ -327,12 +367,115 @@ export async function captureElevationImage(
   if (!dataUrl) {
     return { ok: false, reason: 'The captured frame came back blank — the viewer rendered nothing from the elevation pose.' }
   }
+  const imageEdges = edges ? encodeEdges(edgesToDrawing(edges, frame)) : undefined
+  traceCapture('sheets:edges', { segments: edges ? edges.length / 6 : 0, chars: imageEdges?.length ?? 0 })
   updateViewport(viewport.id, {
     dataUrl,
     imageFrame: { x0: cx - width / 2, y0: cy - height / 2, x1: cx + width / 2, y1: cy + height / 2 },
     imageHash: hash,
+    imageEdges,
   })
   return { ok: true, dataUrl }
+}
+
+/**
+ * The viewer's visible edges through an orthographic pose, as world
+ * segments (six floats each) — the editor's VectorEdgeExtractor answers on
+ * `pascal:edges`; null when nothing answers within the timeout or the
+ * extraction fails (the drawing then keeps its own outlines).
+ */
+function requestEdges(options: {
+  ortho: { position: [number, number, number]; target: [number, number, number]; viewWidth: number }
+  aspect: number
+}): Promise<Float32Array | null> {
+  return new Promise((resolve) => {
+    const requestId = `edges-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`
+    let done = false
+    const finish = (value: Float32Array | null) => {
+      if (done) return
+      done = true
+      window.removeEventListener('pascal:edges', onEdges as EventListener)
+      clearTimeout(timer)
+      resolve(value)
+    }
+    const onEdges = (event: CustomEvent<{ requestId?: string; ok?: boolean; segments?: Float32Array; count?: number; ms?: number }>) => {
+      if (event.detail?.requestId !== requestId) return
+      traceCapture('edges:done', { count: event.detail.count, ms: event.detail.ms, ok: event.detail.ok })
+      finish(event.detail.ok && event.detail.segments ? event.detail.segments : null)
+    }
+    const timer = setTimeout(() => finish(null), 30000)
+    window.addEventListener('pascal:edges', onEdges as EventListener)
+    try {
+      traceCapture('edges:emit', { requestId })
+      emit('camera-controls:extract-edges', { requestId, ...options })
+    } catch {
+      finish(null)
+    }
+  })
+}
+
+/**
+ * World segments → the elevation's drawing space: a point turned into the
+ * building's frame, its run along the view's right axis from the plan
+ * origin as x, its height over the building's origin NEGATED as y — the
+ * inverse of the frame `captureElevationImage` aims the camera with.
+ */
+function edgesToDrawing(
+  segments: Float32Array,
+  frame: {
+    yaw: number
+    origin: readonly [number, number, number]
+    right: readonly [number, number]
+    planOrigin: readonly [number, number]
+  },
+): number[] {
+  const cos = Math.cos(frame.yaw)
+  const sin = Math.sin(frame.yaw)
+  const out: number[] = []
+  const to = (x: number, y: number, z: number): [number, number] => {
+    const dx = x - frame.origin[0]
+    const dz = z - frame.origin[2]
+    const lx = dx * cos - dz * sin
+    const lz = dx * sin + dz * cos
+    const u = (lx - frame.planOrigin[0]) * frame.right[0] + (lz - frame.planOrigin[1]) * frame.right[1]
+    return [u, -(y - frame.origin[1])]
+  }
+  for (let i = 0; i + 5 < segments.length; i += 6) {
+    const a = to(segments[i] as number, segments[i + 1] as number, segments[i + 2] as number)
+    const b = to(segments[i + 3] as number, segments[i + 4] as number, segments[i + 5] as number)
+    // a run shorter than 3 mm on paper is rasterisation grit, not a line
+    if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.003) continue
+    out.push(a[0], a[1], b[0], b[1])
+  }
+  return out
+}
+
+/** Keep at most this many segments on a viewport (the longest win). */
+const EDGES_MAX = 60000
+
+/** "x0,y0,x1,y1;…" to the millimetre. */
+function encodeEdges(flat: number[]): string {
+  let quads: number[][] = []
+  for (let i = 0; i + 3 < flat.length; i += 4) quads.push([flat[i] as number, flat[i + 1] as number, flat[i + 2] as number, flat[i + 3] as number])
+  if (quads.length > EDGES_MAX) {
+    quads.sort((p, q) => Math.hypot(q[2]! - q[0]!, q[3]! - q[1]!) - Math.hypot(p[2]! - p[0]!, p[3]! - p[1]!))
+    quads = quads.slice(0, EDGES_MAX)
+  }
+  return quads.map((q) => q.map((v) => (Math.round(v * 1000) / 1000).toString()).join(',')).join(';')
+}
+
+/** The inverse of `encodeEdges`: drawing-space segments, four numbers each. */
+export function decodeEdges(text: string | undefined): number[] {
+  if (!text) return []
+  const out: number[] = []
+  for (const part of text.split(';')) {
+    const v = part.split(',')
+    if (v.length !== 4) continue
+    const n = v.map((s) => Number(s))
+    if (n.some((x) => !Number.isFinite(x))) continue
+    out.push(n[0] as number, n[1] as number, n[2] as number, n[3] as number)
+  }
+  return out
 }
 
 /**

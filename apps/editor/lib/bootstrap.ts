@@ -167,6 +167,8 @@ registerSheetDrawingProvider('elevation', (nodes, args) => {
   // overlays only — the picture IS the body (plugin-sheets capture.ts)
   return buildElevationDrawing({ nodes: nodes as never }, ((args as { direction?: string }).direction ?? 'south') as never, model, {
     overlaysOnly: (args as { imageBacked?: boolean }).imageBacked === true,
+    // the viewer's own lines on the viewport replace the model's outlines
+    outlines: (args as { edgesBacked?: boolean }).edgesBacked !== true,
   })
 })
 // Site utilities (WS4): overhead / underground runs, poles, service points.

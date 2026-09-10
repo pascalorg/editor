@@ -435,9 +435,12 @@ describe('gable roof', () => {
       lookDirection: 'right',
       depth: 8,
     })
-    // Sampled at 240 steps over 8 m, so the peak lands within one step.
+    // Sampled at 240 steps over 8 m, so the peak lands within one step —
+    // over the framing ridge by the roofing (deck 0.2 + shingles 0.05 along
+    // the slope), the top the 3D roof builds and the drawing now follows.
+    const roofing = 0.25 / Math.cos((PITCH * Math.PI) / 180)
     expect(drawing.elevationRange.max).toBeGreaterThan(RIDGE - 0.05)
-    expect(drawing.elevationRange.max).toBeLessThan(RIDGE + 0.26)
+    expect(drawing.elevationRange.max).toBeLessThan(RIDGE + roofing + 0.26)
   })
 
   test('the east elevation reaches the ridge; the south elevation reaches it too', () => {

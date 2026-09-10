@@ -230,6 +230,13 @@ export const ViewportNode = BaseNode.extend({
     .object({ x0: z.number(), y0: z.number(), x1: z.number(), y1: z.number() })
     .optional(),
   imageHash: z.string().optional(),
+  /**
+   * elevation only: the viewer's own lines over the picture — the visible
+   * feature edges of the scene through the capture's camera, hidden lines
+   * removed (editor lib/vector-edges.ts), as drawing-space segments
+   * "x0,y0,x1,y1;…" in metres to the millimetre (2026-09-10).
+   */
+  imageEdges: z.string().optional(),
 }).describe('A live window onto the model, placed on a sheet.')
 export type ViewportNode = z.infer<typeof ViewportNode>
 

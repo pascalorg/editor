@@ -820,7 +820,15 @@ function segmentSurfaceY(segment: RoofSegmentNode, warnings: string[]) {
   const frame = getSegmentSlopeFrame(segment)
   const hw = segment.width / 2
   const hd = segment.depth / 2
-  const wallHeight = segment.wallHeight
+  // The TOP of the roofing, as the 3D roof builds it (nodes/shared/
+  // roof-surface.ts `shinTopWh`): the deck and the shingles sit ON the
+  // plane through the plate, lifting the surface by their thickness measured
+  // along the slope — 7 in on a 6:12 main roof, a foot on a thick porch
+  // deck. Drawn on the plate plane, the vector roof sat that far below the
+  // captured picture on every elevation (Steve, 2026-09-10: "your vector
+  // roof sits too low ... in both locations").
+  const lift = (segment.deckThickness + (segment.shingleThickness ?? 0)) / (frame.cosTheta || 1)
+  const wallHeight = segment.wallHeight + lift
   const tan = frame.tanTheta
 
   const hip = (lx: number, lz: number) =>

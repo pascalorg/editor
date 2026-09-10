@@ -24,6 +24,7 @@ import {
   rotateBounds,
   unionBounds,
 } from './bounds'
+import { decodeEdges } from './capture'
 import { buildCoverBlock, type CoverBlock } from './cover'
 import { drawTable, SCHEDULE_LEGEND } from './draw-table'
 import type { AnyNodeLike, NodeMap } from './model'
@@ -83,6 +84,8 @@ export type ProviderArgs = {
   viewport: { x: number; y: number; w: number; h: number; scale: number }
   /** elevation: the viewport carries a capture of the live viewer — draw only what goes over it. */
   imageBacked?: boolean
+  /** elevation: the viewport carries the viewer's own lines too — the provider leaves its outlines out. */
+  edgesBacked?: boolean
 }
 export type DrawingProvider = (
   nodes: NodeMap,
@@ -709,6 +712,7 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
     const args: ProviderArgs = {
       ...providerArgsFor(vp, nodes),
       imageBacked: (vp.kind === 'elevation' || vp.kind === 'section') && Boolean(vp.dataUrl && vp.imageFrame),
+      edgesBacked: vp.kind === 'elevation' && Boolean(vp.dataUrl && vp.imageFrame && vp.imageEdges),
     }
     result = build(nodes, args as unknown as Record<string, unknown>)
     // THE PICTURE IS THE BODY: an elevation captured from the live viewer
@@ -725,7 +729,24 @@ function resolveProvided(vp: ViewportNode, nodes: NodeMap): DrawnViewport {
         height: f.y1 - f.y0,
         preserveAspectRatio: 'none',
       }
-      result = { ...result, primitives: [picture, ...result.primitives] }
+      // THE LINES ARE THE VIEWER'S TOO: the visible feature edges of the same
+      // scene through the same camera, hidden lines removed — in register
+      // with the picture by construction (capture.ts `requestEdges`)
+      const edges = args.edgesBacked ? decodeEdges(vp.imageEdges) : []
+      const ink: FloorplanGeometry[] = []
+      for (let i = 0; i + 3 < edges.length; i += 4) {
+        ink.push({
+          kind: 'line',
+          x1: edges[i] as number,
+          y1: edges[i + 1] as number,
+          x2: edges[i + 2] as number,
+          y2: edges[i + 3] as number,
+          stroke: INK,
+          strokeWidth: 0.008,
+          opacity: 0.9,
+        })
+      }
+      result = { ...result, primitives: [picture, ...ink, ...result.primitives] }
     }
   } catch (error) {
     return {

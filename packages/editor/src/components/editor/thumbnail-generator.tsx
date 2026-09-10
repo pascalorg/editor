@@ -120,7 +120,7 @@ async function pumpFrames(
  * plugin-bones framing/renderer.tsx) hidden for a capture; the returned
  * function shows it again.
  */
-function hideUtilityPlant(scene: THREE.Scene): () => void {
+export function hideUtilityPlant(scene: THREE.Scene): () => void {
   const hidden: THREE.Object3D[] = []
   scene.traverse((object) => {
     if ((object.userData as { sourceId?: unknown }).sourceId !== 'utility-plant' || !object.visible) return

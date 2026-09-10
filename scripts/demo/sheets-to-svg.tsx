@@ -61,7 +61,10 @@ registerSheetDrawingProvider('elevation', (nodes, args) => {
     { nodes: nodes as never },
     ((args as { direction?: string }).direction ?? 'south') as never,
     model,
-    { overlaysOnly: (args as { imageBacked?: boolean }).imageBacked === true },
+    {
+      overlaysOnly: (args as { imageBacked?: boolean }).imageBacked === true,
+      outlines: (args as { edgesBacked?: boolean }).edgesBacked !== true,
+    },
   )
 })
 registerSitePlanContributor('utilities', (scene) => buildUtilitiesDrawing(scene as never))
