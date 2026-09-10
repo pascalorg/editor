@@ -39,10 +39,11 @@ describe('dirty tracking', () => {
   beforeEach(() => {
     if (!nodeRegistry.has(untrackedDef.kind)) nodeRegistry._register(untrackedDef)
     if (!nodeRegistry.has(trackedDef.kind)) nodeRegistry._register(trackedDef)
-    // Clear rather than replace the dirty set: the store's own instance is the
-    // guarded one, and the raw-add tests below exercise that guard.
-    useScene.getState().dirtyNodes.clear()
+    // Other source tests can replace the set; raw-add tests need the store's guard.
+    const dirtyNodes = useScene.getInitialState().dirtyNodes
+    dirtyNodes.clear()
     useScene.setState({
+      dirtyNodes,
       nodes: {
         [UNTRACKED]: makeNode(UNTRACKED, 'test-untracked'),
         [TRACKED]: makeNode(TRACKED, 'test-tracked'),
