@@ -1349,6 +1349,34 @@ viewer's side — and carries the viewer's ink edges as its outlines.
 
 ## Log (continued)
 
+- 2026-09-10 (night): **Batches T39 + T40 — the vector outlines over the picture; print-scale pictures.**
+  elevation.ts `inkOutlines`: the faces the viewer sees (the exterior walls
+  that face the view and are not hidden behind a nearer one), the roofs and
+  their fascia, and the items and features that stand in the open (a piece
+  whose centre a nearer wall's face covers stays out — furniture behind
+  the front wall printed as boxes at first) as INK ALONE — every filled
+  shape with no fill and the projected stroke, the cladding courses and
+  stipple (hairlines under WEIGHT.detail) dropped, a shape wholly below
+  the ground line dashed (the stem wall, the footings) — laid over the
+  captured picture with `overlaysOnly` (Steve: "overlay the vector lines
+  perfectly without colors and lined those up perfectly"): the window
+  frames, the door, the porch posts and beam, the roof edges and the
+  equipment boxes sit in register with the picture in Chrome, both being
+  the same nodes. The headless demo scripts pass `overlaysOnly` /
+  `beyondFromImage` like bootstrap (their SVGs otherwise painted the
+  vector beyond over a picture). T40: a sheet's picture renders at
+  `PICTURE_SUPERSAMPLE` 2× the canvas' drawing buffer (the generator
+  enlarges the buffer with `setSize(…, false)` for the frame and puts it
+  back in the same tick; the 'standard' capture mode at the enlarged size,
+  the 'viewport' mode clamping to 2048) and is kept at up to 3600 px wide —
+  8274 × 4692 rendered on Steve's screen, 210 KB as JPEG. Environmental:
+  core's material library points the lap-siding albedo at
+  localhost:3002, so on the 3004 dev server the textures 404 and the
+  siding and roof render in their fallback colours (the orange roof) —
+  not the generator. Open: the autosave stopped advancing the scene's
+  version after the section captures (version 77, no PUT in the logs) —
+  under investigation; the foundation / brace-wall / site plans.
+
 - 2026-09-10 (night): **Batches T37 + T38 — datums, light, ink, fit, captured sections (G126–G129).**
   projection.ts `datumMarks` / `datumPrimitives`: every mark's dashed line
   over ITS span (`roofMarks` projects each roof's plan polygon through the
