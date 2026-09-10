@@ -33,6 +33,7 @@ await cp(
 )
 await bundleMcpServer(outputDirectory, packageJson.version)
 
+await rm(path.join(outputDirectory, 'apps/editor/vendor'), { recursive: true, force: true })
 await removeUnusedSharp(outputDirectory)
 await flattenBunNodeModules(outputDirectory)
 await materializeSymlinks(outputDirectory)
