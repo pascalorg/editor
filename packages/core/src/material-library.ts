@@ -4174,7 +4174,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/lap_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+        albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
         color: '#e9e9e9',
@@ -4212,7 +4212,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/lap_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+        albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
         color: '#c8c1b8',
@@ -4250,7 +4250,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/lap_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+        albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
         color: '#8b8a86',
@@ -4288,7 +4288,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/lap_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+        albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
         color: '#bcc5b2',
@@ -4326,7 +4326,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/lap_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+        albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
         color: '#b5825a',
@@ -4364,7 +4364,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/lap_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+        albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
         color: '#4f6b57',
@@ -4402,7 +4402,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/lap_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+        albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
         color: '#2f4865',
@@ -4440,7 +4440,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/lap_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+        albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
         color: '#f2e3b3',
@@ -4478,7 +4478,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/lap_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+        albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
         color: '#5c5c59',
@@ -4516,7 +4516,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/lap_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/lap_albedo_512.webp',
+        albedoMap: '/material/siding/lap_albedo_512.webp',
       },
       mapProperties: {
         color: '#8f4a2e',
@@ -4554,7 +4554,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/batten_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/batten_albedo_512.webp',
+        albedoMap: '/material/siding/batten_albedo_512.webp',
       },
       mapProperties: {
         color: '#efe3cc',
@@ -4592,7 +4592,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/batten_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/batten_albedo_512.webp',
+        albedoMap: '/material/siding/batten_albedo_512.webp',
       },
       mapProperties: {
         color: '#ddccae',
@@ -4630,7 +4630,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/batten_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/batten_albedo_512.webp',
+        albedoMap: '/material/siding/batten_albedo_512.webp',
       },
       mapProperties: {
         color: '#4e5257',
@@ -4668,7 +4668,7 @@ export const MATERIAL_CATALOG: MaterialCatalogItem[] = [
         // PROTOTYPE PATH — served by the editor itself (apps/editor/public).
         // Donation form: '/material/siding/batten_albedo_512.webp' once the
         // texture is hosted alongside the rest of the material CDN.
-        albedoMap: 'http://localhost:3002/material/siding/batten_albedo_512.webp',
+        albedoMap: '/material/siding/batten_albedo_512.webp',
       },
       mapProperties: {
         color: '#8d9368',
