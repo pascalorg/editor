@@ -15,7 +15,7 @@
   "extensions": {
     "com.openai": {
       "interface": {
-        "displayName": "Pascal agent skills",
+        "displayName": "Pascal",
         "shortDescription": "Build 3D scenes and check fit",
         "longDescription": "Use Pascal's MCP tools to work with editable building scenes, validate and save results, and produce bounded furniture footprint reports with explicit evidence, limitations, and blocker-aware next actions.",
         "developerName": "Pascal",
