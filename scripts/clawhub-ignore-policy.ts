@@ -14,6 +14,8 @@ export const clawHubRequiredIgnorePatterns = [
   'yarn.lock',
 ] as const
 
+export const clawHubCanonicalIgnorePolicy = `${clawHubRequiredIgnorePatterns.join('\n')}\n`
+
 export function validateClawHubIgnorePolicy(
   content: string,
   hasLegacyIgnoreFile = false,
@@ -24,6 +26,10 @@ export function validateClawHubIgnorePolicy(
     .filter((line) => line && !line.startsWith('#'))
   const patternSet = new Set(patterns)
   const failures: string[] = []
+
+  if (content !== clawHubCanonicalIgnorePolicy) {
+    failures.push('.clawhubignore must be byte-identical to the canonical ignore policy')
+  }
 
   for (const pattern of clawHubRequiredIgnorePatterns) {
     if (!patternSet.has(pattern)) failures.push(`.clawhubignore is missing ${pattern}`)

@@ -131,7 +131,7 @@ openclaw mcp doctor pascal --probe
 
 The current OpenClaw static-header path stores the expanded key in its private MCP configuration and may warn about the literal credential during `doctor`. Do not commit or share that configuration. Remove the server with `openclaw mcp unset pascal` and rotate the Pascal key if the configuration is exposed. Skill installation alone does not configure this connection or authorize an account, upload, save, publication, or paid operation.
 
-For other JSON-based clients, prefer their supported environment-variable or secret interpolation rather than a literal key:
+For Cursor and other JSON-based clients, prefer their supported environment-variable or secret interpolation rather than a literal key. In `.cursor/mcp.json`:
 
 ```json
 {
@@ -140,14 +140,14 @@ For other JSON-based clients, prefer their supported environment-variable or sec
       "type": "http",
       "url": "https://editor.pascal.app/api/mcp",
       "headers": {
-        "Authorization": "Bearer ${PASCAL_API_KEY}"
+        "Authorization": "Bearer ${env:PASCAL_API_KEY}"
       }
     }
   }
 }
 ```
 
-Client interpolation syntax varies. Confirm that the chosen host supports this form before relying on it.
+Cursor resolves `${env:PASCAL_API_KEY}` from the environment it starts in, so the file holds no key and `PASCAL_API_KEY` must be exported where Cursor is launched. Client interpolation syntax varies. Confirm that the chosen host supports this form before relying on it.
 
 ## Autonomous private work
 

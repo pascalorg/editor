@@ -88,7 +88,7 @@ A separate tool-free Claude Fable 5.1 source review first returned changes requi
 | Public skill release commit | `aa653f2f523f81f361ac20cb42b745faf7e46844` |
 | Candidate-enabled GitHub CLI archive | `814ffa8c6f6a5fced73bf909c616d9a78feff18fd61fd0b4b7d65e74fad5a33d` |
 
-Manifest hashes are not Git commits or persisted scene identities. Native furniture fixtures used local SQLite storage and direct stdio MCP. The CLI's `mcp connect` command forwards to its managed HTTP service, a distinct transport path tested separately below. The npm `beta` tags still resolve to CLI `1.0.0-beta.1` and MCP `1.0.0-beta.6`; those older registry releases do not establish the candidate-enabled behavior documented here.
+Manifest hashes are not Git commits or persisted scene identities. Native furniture fixtures used local SQLite storage and direct stdio MCP. The CLI's `mcp connect` command forwards to its managed HTTP service, a distinct transport path tested separately below. The npm `beta` tags still resolve to CLI `1.0.0-beta.1` and MCP `1.0.0-beta.6`; those older registry releases do not establish the `check_collisions.candidate` behavior documented in the verified GitHub preview sections.
 
 ## Completed checks for bundle 0.1.1
 

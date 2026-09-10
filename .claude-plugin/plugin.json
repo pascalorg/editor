@@ -5,7 +5,9 @@
   "version": "0.1.8",
   "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
   "author": {
-    "name": "Pascal"
+    "name": "Pascal",
+    "email": "support@pascal.app",
+    "url": "https://pascal.app"
   },
   "homepage": "https://editor.pascal.app/docs/developers/mcp",
   "repository": "https://github.com/pascalorg/editor",

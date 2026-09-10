@@ -5,6 +5,17 @@
   "description": "Create, inspect, validate, and save editable 3D building scenes with Pascal's hosted MCP server.",
   "version": "0.6.1",
   "websiteUrl": "https://editor.pascal.app/docs/developers/mcp",
+  "repository": {
+    "url": "https://github.com/pascalorg/editor",
+    "source": "github"
+  },
+  "icons": [
+    {
+      "src": "https://editor.pascal.app/icons/icon-512.png",
+      "mimeType": "image/png",
+      "sizes": ["512x512"]
+    }
+  ],
   "remotes": [
     {
       "type": "streamable-http",
