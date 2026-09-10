@@ -134,9 +134,91 @@ function planWidthOf(m: Member): number {
 
 /* --------------------------------------------------------- the drawing */
 
+/** A typical detail the plan keys: its number and the S5.x sheet it is drawn on. */
+export type DetailRef = { id: string; mark: string; sheet: string; title?: string }
+
+function polygonAreaOf(points: readonly Pt[]): number {
+  let a = 0
+  for (let i = 0, j = points.length - 1; i < points.length; j = i++) {
+    const p = points[i] as Pt
+    const q = points[j] as Pt
+    a += q[0] * p[1] - p[0] * q[1]
+  }
+  return Math.abs(a) / 2
+}
+
+function boundsOfPolygon(points: readonly Pt[]): { minX: number; minY: number; maxX: number; maxY: number } {
+  let minX = Number.POSITIVE_INFINITY
+  let minY = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let maxY = Number.NEGATIVE_INFINITY
+  for (const [x, y] of points) {
+    minX = Math.min(minX, x)
+    minY = Math.min(minY, y)
+    maxX = Math.max(maxX, x)
+    maxY = Math.max(maxY, y)
+  }
+  return { minX, minY, maxX, maxY }
+}
+
+/** A construction dimension of the sheet's own (the manual-dimension layer). */
+function dimension(start: Pt, end: Pt, normal: Pt, distance: number, label: string, p: Pen): FloorplanGeometry {
+  return {
+    kind: 'dimension',
+    start,
+    end,
+    offsetNormal: normal,
+    offsetDistance: distance,
+    extensionOvershoot: p.w(0.08),
+    stroke: INK_MID,
+    terminator: 'architectural-tick',
+    text: label,
+    metadata: { annotationRole: 'construction-dimension' },
+  } as FloorplanGeometry
+}
+
+/** A detail bubble — the number over the sheet in a circle — with a leader from `at`. */
+function detailBubble(at: Pt, bubble: Pt, ref: DetailRef, p: Pen): FloorplanGeometry[] {
+  const r = p.w(0.17)
+  const dx = bubble[0] - at[0]
+  const dy = bubble[1] - at[1]
+  const len = Math.hypot(dx, dy) || 1
+  const edge: Pt = [bubble[0] - (dx / len) * r, bubble[1] - (dy / len) * r]
+  return [
+    line(at, edge, { stroke: INK, strokeWidth: p.w(PEN.thin) }),
+    dot(at, p.w(0.02)),
+    { kind: 'circle', cx: bubble[0], cy: bubble[1], r, fill: '#ffffff', stroke: INK, strokeWidth: p.w(PEN.light) },
+    line([bubble[0] - r, bubble[1]], [bubble[0] + r, bubble[1]], { stroke: INK, strokeWidth: p.w(PEN.thin) }),
+    {
+      kind: 'text',
+      x: bubble[0],
+      y: bubble[1] - p.w(0.035),
+      text: ref.mark,
+      fontSize: p.w(TYPE.small),
+      fill: INK,
+      fontWeight: 700,
+      textAnchor: 'middle',
+      dominantBaseline: 'alphabetic',
+    },
+    {
+      kind: 'text',
+      x: bubble[0],
+      y: bubble[1] + p.w(0.09),
+      text: ref.sheet,
+      fontSize: p.w(TYPE.micro),
+      fill: INK,
+      fontWeight: 600,
+      textAnchor: 'middle',
+      dominantBaseline: 'alphabetic',
+    },
+  ]
+}
+
 export function foundationPrimitives(
   model: StructuralModel,
   p: Pen,
+  /** The typical details that apply to this level (structural.ts keys the foundation ones on the plan). */
+  refs: readonly DetailRef[] = [],
 ): { primitives: FloorplanGeometry[]; legend: LegendEntry[]; warnings: string[] } {
   const out: FloorplanGeometry[] = []
   const legend: LegendEntry[] = []
@@ -291,6 +373,58 @@ export function foundationPrimitives(
       label: 'FOOTING TYPE — SEE FOOTING SCHEDULE',
       symbol: { kind: 'hex', text: 'FT' },
     })
+  }
+
+  // ── dimensions: the slab's overall extents off its bottom and left, a
+  //    porch or landing sized on the edges away from the house ──────────
+  const main = model.slabs.reduce<(typeof model.slabs)[number] | null>(
+    (best, s) => (!best || polygonAreaOf(s.polygon) > polygonAreaOf(best.polygon) ? s : best),
+    null,
+  )
+  if (main) {
+    const mb = boundsOfPolygon(main.polygon)
+    const mc: Pt = [(mb.minX + mb.maxX) / 2, (mb.minY + mb.maxY) / 2]
+    for (const slab of model.slabs) {
+      if (slab.polygon.length < 3) continue
+      const b = boundsOfPolygon(slab.polygon)
+      const w = b.maxX - b.minX
+      const d = b.maxY - b.minY
+      if (slab === main) {
+        out.push(dimension([b.minX, b.maxY], [b.maxX, b.maxY], [0, 1], p.w(0.5), formatFtIn(w), p))
+        out.push(dimension([b.minX, b.minY], [b.minX, b.maxY], [-1, 0], p.w(0.5), formatFtIn(d), p))
+        continue
+      }
+      if (w < 0.3 || d < 0.3) continue
+      const cx = (b.minX + b.maxX) / 2
+      const cy = (b.minY + b.maxY) / 2
+      const below = cy >= mc[1]
+      const right = cx >= mc[0]
+      // the width on the edge facing away from the house, the depth on the
+      // side facing away — the two edges nothing else is drawn against
+      const farY = below ? b.maxY : b.minY
+      const farX = right ? b.maxX : b.minX
+      out.push(dimension([b.minX, farY], [b.maxX, farY], [0, below ? 1 : -1], p.w(0.28), formatFtIn(w), p))
+      out.push(dimension([farX, b.minY], [farX, b.maxY], [right ? 1 : -1, 0], p.w(0.28), formatFtIn(d), p))
+    }
+  }
+
+  // ── detail references: the typical foundation detail, keyed on the plan ──
+  if (main) {
+    const mb = boundsOfPolygon(main.polygon)
+    const keyed = refs.filter((r) => r.id === 'foundationdetail' || r.id === 'cmuwallsection')
+    keyed.forEach((ref, i) => {
+      // on the slab's right edge, a third of the way up — clear of the callouts hung at 42% and 78%
+      const at: Pt = [mb.maxX, mb.minY + (mb.maxY - mb.minY) * (0.3 + i * 0.12)]
+      const bubble: Pt = [mb.maxX + p.w(0.62), at[1] - p.w(0.28)]
+      out.push(...detailBubble(at, bubble, ref, p))
+    })
+    if (keyed.length > 0) {
+      legend.push({
+        label: 'DETAIL REFERENCE — DETAIL NUMBER OVER ITS SHEET',
+        symbol: { kind: 'circle', text: keyed[0]?.mark ?? '1' },
+        note: keyed.map((r) => `${r.mark}/${r.sheet} ${r.title ?? ''}`.trim()).join('; '),
+      })
+    }
   }
 
   // ── pad footings get concrete hatch (they read as pours, not runs) ──

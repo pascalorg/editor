@@ -243,6 +243,8 @@ export function bracingPrimitives(
         stroke: INK_MID,
         terminator: 'architectural-tick',
         text: `${formatFtIn(gap)} BWL SPACING`,
+        // the sheet's own dimension: it rides the manual-dimension layer, never the model's automatic set
+        metadata: { annotationRole: 'construction-dimension' },
       } as FloorplanGeometry)
       if (gap > limit + 1e-6) {
         warnings.push(

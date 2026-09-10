@@ -45,10 +45,11 @@ import {
   bracingScheduleTable,
   hasBracedWallLines,
 } from './structural/bracing'
-import { detailsPageCount, detailsPlate } from './structural/details'
+import { DETAILS_PER_SHEET, detailsFor, detailsPageCount, detailsPlate } from './structural/details'
 import { pen } from './structural/draw'
 import {
   anchorageScheduleTable,
+  type DetailRef,
   footingScheduleTable,
   foundationNotes,
   foundationPrimitives,
@@ -136,7 +137,7 @@ export function buildStructuralDrawing(nodes: NodeMap, args: ProviderArgs): Draw
 
   switch (system) {
     case 'foundation':
-      return foundationPlan(model, args)
+      return foundationPlan(model, args, detailRefs(model, nodes))
     case 'foundation-schedules':
       return foundationSchedules(model, box)
     case 'foundation-legend':
@@ -183,9 +184,19 @@ export function registerStructuralProvider(
 
 /* ------------------------------------------------------------- plans */
 
-function foundationPlan(model: StructuralModel, args: ProviderArgs): DrawingResult {
+/** The typical details that apply, numbered as the S5.x sheets draw them (six a sheet, in order). */
+function detailRefs(model: StructuralModel, nodes: NodeMap): DetailRef[] {
+  return detailsFor(model, nodes).defs.map((d, i) => ({
+    id: d.id,
+    title: d.title,
+    mark: String((i % DETAILS_PER_SHEET) + 1),
+    sheet: `S5.${Math.floor(i / DETAILS_PER_SHEET)}`,
+  }))
+}
+
+function foundationPlan(model: StructuralModel, args: ProviderArgs, refs: readonly DetailRef[] = []): DrawingResult {
   const p = pen(args.viewport.scale || 48)
-  const drawn = foundationPrimitives(model, p)
+  const drawn = foundationPrimitives(model, p, refs)
   if (membersOf(model, 'foundation', 'footing').length === 0 && model.slabs.length === 0) {
     return plateOnly(
       viewportNote(args.viewport, NO_FOUNDATION_NOTE),
