@@ -354,6 +354,8 @@ jobs:
 
       - name: Publish CLI
         if: inputs.package == 'cli' || inputs.package == 'all'
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           cd packages/cli
           if [ "${{ inputs.dry-run }}" = "true" ]; then
