@@ -97,6 +97,32 @@ function aimLightsAtFace(
 }
 
 /**
+ * Run the frame loop `n` times by hand — the useFrame subscribers and the
+ * render — a macrotask apart so React's commits land between the frames.
+ */
+async function pumpFrames(
+  advance: (timestamp: number, runGlobalEffects?: boolean) => void,
+  n: number,
+): Promise<void> {
+  for (let i = 0; i < n; i++) {
+    advance(performance.now(), true)
+    await macrotask()
+  }
+}
+
+/** A yield to the next macrotask through a MessageChannel — unlike a timer, never throttled in a hidden tab. */
+function macrotask(): Promise<void> {
+  return new Promise((resolve) => {
+    const channel = new MessageChannel()
+    channel.port1.onmessage = () => {
+      channel.port1.close()
+      resolve()
+    }
+    channel.port2.postMessage(null)
+  })
+}
+
+/**
  * The scene's children gathered under one ClippingGroup carrying `planes`
  * (world space) for the length of a render; the returned function puts
  * them back on the scene. The WebGPU renderer clips only through such
@@ -122,6 +148,7 @@ function clipSceneFor(
 export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorProps) => {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
+  const advance = useThree((state) => state.advance)
   const mainCamera = useThree((state) => state.camera)
   const controls = useThree((state) => state.controls) as CameraControls | null
   const isGenerating = useRef(false)
@@ -401,6 +428,15 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         // function that restores the original visibility.
         const restoreNodeVisibility = temporarilyHideNodeTypes(['scan', 'guide', 'spawn', ...hideTypes])
         const pose = ortho ?? perspective
+        if (pose) {
+          // a sheet's capture: let the viewer's own systems (the wall
+          // materials, the Bones batches) take two real frames first — run
+          // by hand, never awaited from the animation loop: a hidden tab
+          // (Chrome behind another window, the screen locked overnight) gets
+          // no animation frames at all, and a capture that waited on one
+          // hung the sheet's whole capture chain (2026-09-10)
+          await pumpFrames(advance, 2)
+        }
         const restoreLights = lightFace && pose ? aimLightsAtFace(scene, pose.position, pose.target) : () => {}
         const restoreClip = clip.length > 0 ? clipSceneFor(scene, clip) : () => {}
 
@@ -585,7 +621,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         isGenerating.current = false
       }
     },
-    [gl, scene, mainCamera, controls, orthoPipeline],
+    [gl, scene, mainCamera, controls, orthoPipeline, advance],
   )
 
   // Thumbnail request via emitter. Two call shapes:

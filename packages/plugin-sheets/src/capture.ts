@@ -93,8 +93,14 @@ export async function withFinishedPresentation<T>(fn: () => Promise<T>): Promise
   temporal?.getState().pause()
   try {
     for (const f of flipped) scene().updateNode(f.id, { viewMode: 'off' })
-    // the renderer rebuilds its batches on the next frames
-    await wait(700)
+    // the renderer rebuilds its batches and the wall system swaps the X-ray
+    // materials back in the React commits that follow — two turns of the
+    // event loop, then a settle (the west elevation once captured
+    // see-through walls when its capture followed another's restore within
+    // one frame, 2026-09-10). Never an animation frame: a hidden tab gets
+    // none, and the editor's generator runs the frames it needs by hand.
+    await settledTurns(2)
+    await wait(900)
     return await fn()
   } finally {
     for (const f of flipped) scene().updateNode(f.id, { viewMode: f.viewMode })
@@ -133,7 +139,7 @@ async function withSiteSurfaceHidden<T>(fn: () => Promise<T>): Promise<T> {
 }
 
 /** The capture recipe's version — part of every picture's hash; a change recaptures every sheet once. */
-const PICTURE_RECIPE = 'r2'
+const PICTURE_RECIPE = 'r3'
 
 /** A sheet's picture is rendered at this multiple of the canvas' size and kept at up to PICTURE_MAX_WIDTH px. */
 const PICTURE_SUPERSAMPLE = 2
@@ -486,6 +492,22 @@ export async function captureViewportImage(
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+/** `n` turns of the event loop from now (MessageChannel macrotasks — not throttled in a hidden tab). */
+function settledTurns(n: number): Promise<void> {
+  return new Promise((resolve) => {
+    const step = (left: number) => {
+      if (left <= 0) return resolve()
+      const channel = new MessageChannel()
+      channel.port1.onmessage = () => {
+        channel.port1.close()
+        step(left - 1)
+      }
+      channel.port2.postMessage(null)
+    }
+    step(n)
+  })
 }
 
 /** dev: the capture handshake on `window.__pascalCaptureTrace`, shared with the editor's generator. */
