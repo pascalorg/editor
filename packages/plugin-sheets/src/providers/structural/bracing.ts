@@ -21,8 +21,9 @@ import {
   identifyBracedWallLines,
 } from '../../../../plugin-bones/src/engines/wall-bracing'
 import type { ScheduleTable } from '../../schedule'
-import { INK, INK_FAINT, INK_MID, line, PEN, type Pen, polygon, square, TYPE, text } from './draw'
+import { diagonalHatch, INK, INK_FAINT, INK_MID, line, PEN, type Pen, polygon, square, TYPE, text } from './draw'
 import {
+  formatFtIn,
   type Member,
   memberPlanCentre,
   membersOf,
@@ -52,6 +53,83 @@ export function bracedWallLines(model: StructuralModel): BracedWallLine[] {
 
 export function hasBracedWallLines(model: StructuralModel): boolean {
   return bracedWallLines(model).length > 0
+}
+
+/** IRC Table R602.10.5: a continuous-sheathing (CS-WSP) braced wall panel on an 8 ft wall is at least this long. */
+const FULL_PANEL_M = 48 * 0.0254
+/** The shortest segment the method credits at all — beside a low opening, per the table's adjacent-opening rule (verify). */
+const MIN_PANEL_M = 24 * 0.0254
+
+export type BracedPanel = {
+  wallId: string
+  /** Plan ends of the sheathed segment, level-local metres. */
+  a: Pt
+  b: Pt
+  /** Wall thickness (the panel is drawn between the wall's faces). */
+  thickness: number
+  /** Unit direction a→b. */
+  dir: Pt
+  length: number
+  /** At least the table's full length (48 in on an 8 ft wall). */
+  full: boolean
+}
+
+/**
+ * The braced wall panels along each line: every FULL-HEIGHT sheathed
+ * segment between the wall's openings — a door or a window breaks the
+ * sheathing — at least 24 in long, marked full at 48 in and more (Table
+ * R602.10.5, CS-WSP, 8 ft walls). The wall's openings are the model's rough
+ * openings, centred at `u` along the wall.
+ */
+export function bracedWallPanels(model: StructuralModel, lines: readonly BracedWallLine[]): Map<string, BracedPanel[]> {
+  const out = new Map<string, BracedPanel[]>()
+  for (const bwl of lines) {
+    const panels: BracedPanel[] = []
+    for (const id of bwl.wallIds) {
+      const wall = model.walls.find((w) => w.id === id)
+      if (!wall || wall.length <= 0) continue
+      const gaps = wall.openings
+        .map((o) => [Math.max(0, o.u - o.roughWidth / 2), Math.min(wall.length, o.u + o.roughWidth / 2)] as [number, number])
+        .sort((p, q) => p[0] - q[0])
+      const segments: [number, number][] = []
+      let u = 0
+      for (const [g0, g1] of gaps) {
+        if (g0 > u) segments.push([u, g0])
+        u = Math.max(u, g1)
+      }
+      if (u < wall.length) segments.push([u, wall.length])
+      const at = (t: number): Pt => [wall.start[0] + wall.dir[0] * t, wall.start[1] + wall.dir[1] * t]
+      for (const [s0, s1] of segments) {
+        const length = s1 - s0
+        if (length < MIN_PANEL_M) continue
+        panels.push({
+          wallId: id,
+          a: at(s0),
+          b: at(s1),
+          thickness: wall.thickness,
+          dir: [wall.dir[0], wall.dir[1]],
+          length,
+          full: length >= FULL_PANEL_M - 1e-6,
+        })
+      }
+    }
+    out.set(bwl.label, panels)
+  }
+  return out
+}
+
+/** The full-credit panel length on a line, metres. */
+export function providedBracing(panels: readonly BracedPanel[]): number {
+  return panels.filter((p) => p.full).reduce((sum, p) => sum + p.length, 0)
+}
+
+/**
+ * IRC R602.10.1.3: braced wall lines run no more than 60 ft apart — 25 ft
+ * in Seismic Design Category D0, D1 and D2 (35 ft with the section's
+ * exception, which this drawing does not take).
+ */
+function maxLineSpacingM(sdc: string | null): number {
+  return /^D/i.test(sdc ?? '') ? 25 * 0.3048 : 60 * 0.3048
 }
 
 export function bracingPrimitives(
@@ -95,6 +173,84 @@ export function bracingPrimitives(
   }
 
   const margin = Math.max(0.6, (b.maxX - b.minX) * 0.05)
+  const panelsByLine = bracedWallPanels(model, lines)
+  const centre: Pt = [(b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2]
+  // the panels themselves: hatched between the wall's faces, each with its
+  // length outside the wall; a short one (24–48 in) reads lighter and says so
+  let fullCount = 0
+  let shortCount = 0
+  for (const panels of panelsByLine.values()) {
+    for (const panel of panels) {
+      const n: Pt = [-panel.dir[1], panel.dir[0]]
+      const h = panel.thickness / 2
+      const rect: Pt[] = [
+        [panel.a[0] + n[0] * h, panel.a[1] + n[1] * h],
+        [panel.b[0] + n[0] * h, panel.b[1] + n[1] * h],
+        [panel.b[0] - n[0] * h, panel.b[1] - n[1] * h],
+        [panel.a[0] - n[0] * h, panel.a[1] - n[1] * h],
+      ]
+      out.push(polygon(rect, { fill: panel.full ? '#cbd5e1' : '#e5e7eb', stroke: INK, strokeWidth: p.w(PEN.light) }))
+      out.push(...diagonalHatch(rect, p.w(0.05), { stroke: panel.full ? INK : INK_MID, strokeWidth: p.w(PEN.hair) }))
+      // the length, outside the house: the side of the wall away from the plan's centre
+      const mid: Pt = [(panel.a[0] + panel.b[0]) / 2, (panel.a[1] + panel.b[1]) / 2]
+      const outward = (mid[0] - centre[0]) * n[0] + (mid[1] - centre[1]) * n[1] >= 0 ? 1 : -1
+      const off = h + p.w(0.12)
+      out.push(
+        text([mid[0] + n[0] * outward * off, mid[1] + n[1] * outward * off], `${formatFtIn(panel.length)}${panel.full ? '' : '*'}`, p.w(TYPE.micro), {
+          weight: 600,
+          anchor: 'middle',
+          fill: panel.full ? INK : INK_MID,
+        }),
+      )
+      if (panel.full) fullCount++
+      else shortCount++
+    }
+  }
+  if (fullCount > 0) {
+    legend.push({
+      label: 'BRACED WALL PANEL — CS-WSP, FULL HEIGHT, ≥ 48"',
+      symbol: { kind: 'hatch' },
+      note: `${fullCount} shown; lengths tallied in the schedule.`,
+    })
+  }
+  if (shortCount > 0) {
+    legend.push({
+      label: 'SHORT PANEL* (24"–48") — CREDIT PER TABLE R602.10.5 ONLY BESIDE A LOW OPENING',
+      symbol: { kind: 'hatch' },
+      note: `${shortCount} shown, not counted as provided — verify.`,
+    })
+  }
+  // the spacing between parallel lines, dimensioned beyond the house, and
+  // the code's limit on it (SDC D: 25 ft — a long house needs an interior line)
+  const limit = maxLineSpacingM(model.design.sdc)
+  for (const axis of ['x', 'z'] as const) {
+    const sorted = lines.filter((l) => l.axis === axis).sort((l, m) => l.offset - m.offset)
+    for (let i = 1; i < sorted.length; i++) {
+      const lo = sorted[i - 1] as BracedWallLine
+      const hi = sorted[i] as BracedWallLine
+      const gap = hi.offset - lo.offset
+      if (gap < 0.3) continue
+      const stand = margin * 1.6
+      const start: Pt = axis === 'x' ? [b.maxX + stand, lo.offset] : [lo.offset, b.maxY + stand]
+      const end: Pt = axis === 'x' ? [b.maxX + stand, hi.offset] : [hi.offset, b.maxY + stand]
+      out.push({
+        kind: 'dimension',
+        start,
+        end,
+        offsetNormal: axis === 'x' ? [1, 0] : [0, 1],
+        offsetDistance: 0,
+        extensionOvershoot: p.w(0.08),
+        stroke: INK_MID,
+        terminator: 'architectural-tick',
+        text: `${formatFtIn(gap)} BWL SPACING`,
+      } as FloorplanGeometry)
+      if (gap > limit + 1e-6) {
+        warnings.push(
+          `Braced wall lines ${lo.label} and ${hi.label} are ${toFeet(gap).toFixed(1)} ft apart — R602.10.1.3 limits the spacing to ${Math.round(toFeet(limit))} ft${/^D/i.test(model.design.sdc ?? '') ? ` in SDC ${model.design.sdc}` : ''}; an interior braced wall line is needed between them (the engine derives exterior lines only).`,
+        )
+      }
+    }
+  }
   for (const bwl of lines) {
     const a: Pt = bwl.axis === 'x' ? [b.minX - margin, bwl.offset] : [bwl.offset, b.minY - margin]
     const z: Pt = bwl.axis === 'x' ? [b.maxX + margin, bwl.offset] : [bwl.offset, b.maxY + margin]
@@ -140,7 +296,7 @@ export function bracingPrimitives(
   }
 
   warnings.push(
-    `${model.spec.wallBracingMethod} continuous sheathing assumed on every braced wall line — R602.10.3 required bracing amount and Table R602.10.5 panel lengths are NOT verified from geometry.`,
+    `${model.spec.wallBracingMethod} continuous sheathing assumed on every braced wall line — the panels shown are the full-height segments between openings; the REQUIRED length per line (Table R602.10.3(1) wind / (3) seismic${model.design.sdc ? `, SDC ${model.design.sdc}` : ''}) is not computed — verify against the PROVIDED column.`,
   )
   for (const flag of new Set(
     holdDowns.map((m: Member) => m.flag).filter((f): f is string => Boolean(f)),
@@ -152,32 +308,46 @@ export function bracingPrimitives(
 
 export function bracingScheduleTable(model: StructuralModel): ScheduleTable {
   const lines = bracedWallLines(model)
+  const panelsByLine = bracedWallPanels(model, lines)
   // Terse: `drawTable` prints an issue on one unwrapped line. The full
   // sentences are notes 4 and 5 of the braced wall notes below.
+  const required = model.design.sdc
+    ? `Table R602.10.3(3), SDC ${model.design.sdc}`
+    : 'Table R602.10.3(1) (wind)'
   const issues = [
-    'Panel LENGTHS not derived — verify R602.10.3 / Table R602.10.5.',
+    `REQUIRED per ${required} is not computed — verify it against PROVIDED.`,
     'Interior lines and the CS-WSP opening-height reduction are outside the engine.',
   ]
   return {
     title: 'Braced wall line schedule',
     columns: [
-      { key: 'mark', label: 'LINE', weight: 0.7 },
-      { key: 'axis', label: 'AXIS', weight: 0.6 },
-      { key: 'method', label: 'METHOD', weight: 1.0 },
-      { key: 'walls', label: 'WALLS', weight: 0.6 },
-      { key: 'length', label: 'LENGTH', weight: 0.9 },
-      { key: 'offset', label: 'OFFSET', weight: 0.9 },
-      { key: 'notes', label: 'REMARKS', weight: 2.6 },
+      { key: 'mark', label: 'LINE', weight: 0.6 },
+      { key: 'axis', label: 'AXIS', weight: 0.5 },
+      { key: 'method', label: 'METHOD', weight: 0.9 },
+      { key: 'length', label: 'LINE LENGTH', weight: 0.9 },
+      { key: 'panels', label: 'PANELS', weight: 0.7 },
+      { key: 'provided', label: 'PROVIDED', weight: 0.9 },
+      { key: 'required', label: 'REQUIRED', weight: 1.4 },
+      { key: 'notes', label: 'REMARKS', weight: 2.0 },
     ],
-    rows: lines.map((l) => ({
-      mark: l.label,
-      axis: l.axis.toUpperCase(),
-      method: model.spec.wallBracingMethod,
-      walls: String(l.wallIds.length),
-      length: `${toFeet(l.totalLength).toFixed(1)} ft`,
-      offset: `${toFeet(l.offset).toFixed(1)} ft`,
-      notes: 'Continuous sheathing per R602.10.4; panel length not verified',
-    })),
+    rows: lines.map((l) => {
+      const panels = panelsByLine.get(l.label) ?? []
+      const full = panels.filter((p) => p.full)
+      const short = panels.length - full.length
+      return {
+        mark: l.label,
+        axis: l.axis.toUpperCase(),
+        method: model.spec.wallBracingMethod,
+        length: `${toFeet(l.totalLength).toFixed(1)} ft`,
+        panels: `${full.length}${short > 0 ? ` (+${short}*)` : ''}`,
+        provided: `${toFeet(providedBracing(panels)).toFixed(1)} ft`,
+        required: `${required} — verify`,
+        notes:
+          full.length === 0
+            ? 'NO full-height panel ≥ 48" on this line — openings leave none; a portal frame or a longer pier is needed'
+            : 'Continuous sheathing per R602.10.4; panels are the full-height segments between openings',
+      }
+    }),
     issues,
   }
 }
@@ -198,7 +368,7 @@ export function bracingNotes(model: StructuralModel): Note[] {
       cite: 'IRC R602.10.4 / Table R602.3(1)',
     },
     {
-      text: 'The REQUIRED amount of bracing per line, the minimum braced panel lengths and the panel-length reduction for adjacent clear opening height are NOT computed by this drawing set. The engineer of record shall verify them and mark the panels on this plan before submission.',
+      text: 'The braced wall panels drawn are the full-height sheathed segments between openings on each line, 48 in and longer counted as PROVIDED; a 24–48 in segment (marked *) takes credit only beside a low opening per the table and is not counted. The REQUIRED amount of bracing per line is NOT computed by this drawing set; the engineer of record shall verify it before submission.',
       cite: '(verify: IRC R602.10.3 / Table R602.10.5)',
     },
     {

@@ -563,7 +563,9 @@ describe('wall bracing (S4.0)', () => {
     const schedule = textOf(schedulePlate)
     expect(schedule).toContain('BRACED WALL LINE SCHEDULE')
     expect(schedule).toContain('CS-WSP')
-    expect(schedule).toContain('not verified')
+    // the panels between openings are tallied; the required amount is the engineer's to verify
+    expect(schedule).toContain('PROVIDED')
+    expect(schedule).toMatch(/verify/i)
     writeSvg('s4-bracing-ca', result.primitives, 1.5)
   })
 })
