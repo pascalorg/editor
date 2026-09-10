@@ -354,8 +354,7 @@ jobs:
 
       - name: Publish CLI
         if: inputs.package == 'cli' || inputs.package == 'all'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        # Keep token auth unset so npm can exchange the GitHub OIDC identity.
         run: |
           cd packages/cli
           if [ "${{ inputs.dry-run }}" = "true" ]; then
