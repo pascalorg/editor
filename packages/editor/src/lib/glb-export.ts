@@ -601,6 +601,16 @@ function pruneHiddenSceneNodes(
   registryEntries: readonly RegistryEntry[],
 ) {
   const visibility = new Map<string, boolean>()
+  const declaredSiteParents = new Map<string, string>()
+  for (const node of Object.values(nodes)) {
+    if (node.type !== 'site' || !('children' in node) || !Array.isArray(node.children)) continue
+    for (const childId of node.children) {
+      const child = nodes[childId]
+      if (child && !child.parentId && !declaredSiteParents.has(childId)) {
+        declaredSiteParents.set(childId, node.id)
+      }
+    }
+  }
 
   const isVisible = (id: string, path: Set<string>): boolean => {
     const cached = visibility.get(id)
@@ -612,13 +622,14 @@ function pruneHiddenSceneNodes(
       visibility.set(id, false)
       return false
     }
-    if (!node.parentId || path.has(id)) {
+    const parentId = node.parentId || declaredSiteParents.get(id)
+    if (!parentId || path.has(id)) {
       visibility.set(id, true)
       return true
     }
 
     path.add(id)
-    const visible = isVisible(node.parentId, path)
+    const visible = isVisible(parentId, path)
     path.delete(id)
     visibility.set(id, visible)
     return visible

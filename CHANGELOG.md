@@ -22,6 +22,7 @@
 
 - Keep Site-scoped floorplan overlays aligned with live move and rotation previews.
 - Preserve Site ownership and same-kind sibling context in synchronous and asynchronous export geometry, including Site children without a parent ID.
+- Exclude detached Site children and their descendants from visible-only exports when their owning Site is hidden, including children without a parent ID.
 - Preserve unsaved presentation settings when a project receives its first ID, without overwriting an existing project's stored configuration.
 - Avoid native TypeScript compiler inference overflow in atmosphere fog references without changing rendering.
 - Omit stale viewer-surroundings selections from GLB/USDZ downloads after a presentation is unregistered or its plugin is uninstalled.

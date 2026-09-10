@@ -566,6 +566,64 @@ describe('prepareSceneForExport', () => {
     expect(animations).toHaveLength(0)
   })
 
+  test('inherits hidden Site visibility for detached declared children and their descendants', async () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    try {
+      const kind = 'test:detached-site-visibility'
+      const childId = 'detached_site_child'
+      const descendantId = 'detached_site_descendant'
+      const explicitId = 'explicit_site_child'
+      const unownedId = 'unowned_site_child'
+      const hiddenSite = SiteNode.parse({
+        visible: false,
+        children: [childId, explicitId],
+      })
+      const visibleSite = SiteNode.parse({ visible: true })
+      registerNode({
+        kind,
+        schemaVersion: 1,
+        schema: DoorNode,
+        category: 'furnish',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        bakeGeometryAsync: async () =>
+          new THREE.Mesh(new THREE.BoxGeometry(2, 1, 3), new THREE.MeshStandardMaterial()),
+      } as AnyNodeDefinition)
+      const nodes = {
+        [hiddenSite.id]: hiddenSite,
+        [visibleSite.id]: visibleSite,
+        [childId]: { id: childId, type: kind, parentId: null, visible: true },
+        [descendantId]: { id: descendantId, type: kind, parentId: childId, visible: true },
+        [explicitId]: { id: explicitId, type: kind, parentId: visibleSite.id, visible: true },
+        [unownedId]: { id: unownedId, type: kind, parentId: null, visible: true },
+      } as unknown as Record<string, AnyNode>
+      const allIds = [childId, descendantId, explicitId, unownedId]
+      const root = new THREE.Group()
+      for (const id of [hiddenSite.id, visibleSite.id, ...allIds]) {
+        const object = new THREE.Group()
+        root.add(object)
+        sceneRegistry.nodes.set(id, object)
+      }
+      const exportedIds = async (onlyVisible?: boolean) => {
+        const prepared = await prepareSceneForExportAsync(root, nodes, { onlyVisible })
+        try {
+          return allIds.filter((id) => prepared.scene.getObjectByName(id) !== undefined)
+        } finally {
+          prepared.dispose()
+        }
+      }
+
+      expect(await exportedIds()).toEqual([explicitId, unownedId])
+      expect(await exportedIds(false)).toEqual(allIds)
+      nodes[hiddenSite.id] = { ...hiddenSite, visible: true }
+      expect(await exportedIds()).toEqual(allIds)
+      nodes[hiddenSite.id] = hiddenSite
+      expect(await exportedIds()).toEqual([explicitId, unownedId])
+    } finally {
+      restoreRegistry()
+    }
+  })
+
   test('can include hidden scene nodes when visible-only export is disabled', () => {
     const root = new THREE.Group()
     const itemGroup = new THREE.Group()
