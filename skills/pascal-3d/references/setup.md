@@ -93,7 +93,7 @@ Use the hosted endpoint when the user wants the agent to work in a Pascal accoun
 https://editor.pascal.app/api/mcp
 ```
 
-The user creates an API key in Pascal Settings and chooses the intended personal or organization workspace. Set `PASCAL_API_KEY` to that key without printing it. If you assign it in a shell command, avoid or remove that command from shell history.
+The user creates an API key in Pascal Settings (`https://editor.pascal.app/settings`) and chooses the intended personal or organization workspace. Set `PASCAL_API_KEY` to that key without printing it. If you assign it in a shell command, avoid or remove that command from shell history.
 
 Codex CLI:
 
@@ -109,6 +109,10 @@ codex mcp add pascal \
 Codex stores the environment-variable name, not its value. Set `PASCAL_API_KEY` again in each new terminal before starting Codex, or supply it through the user's existing shell or secret-manager configuration.
 
 Claude Code:
+
+Plugin users set the key once in the configuration prompt shown when `pascal-agent-skills@pascal` is enabled. To add or change it later, reinstall with `claude plugin install pascal-agent-skills@pascal --config pascal_api_key=<key>`, or open `/plugin` in a session and use its configure flow; there is no `claude plugin config` command. The hosted tools then load under the plugin's `pascal-hosted` server beside the local `pascal` server, and Claude Code keeps the key in the OS keychain, falling back to `~/.claude/.credentials.json`, rather than writing it into `settings.json` or any project file.
+
+Without the plugin, register the hosted endpoint manually:
 
 ```bash
 : "${PASCAL_API_KEY:?Set PASCAL_API_KEY to the apiKey returned by Pascal}" && \
