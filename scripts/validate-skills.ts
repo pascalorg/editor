@@ -909,12 +909,30 @@ if (portableMcpConfig.$schema !== portableMcpSchema) {
 if (Object.keys(portableMcpConfig).sort().join(',') !== '$schema,mcpServers') {
   fail('Portable mcp.json must contain only $schema and mcpServers')
 }
-if (canonicalJson(portableMcpConfig.mcpServers) !== canonicalJson(claudeMcpConfig.mcpServers)) {
-  fail('Portable mcp.json and skills/.mcp.json must declare the same mcpServers block')
+const claudeMcpServers = (claudeMcpConfig.mcpServers ?? {}) as Record<string, unknown>
+const portableMcpServers = (portableMcpConfig.mcpServers ?? {}) as Record<string, unknown>
+if (Object.keys(portableMcpServers).sort().join(',') !== 'pascal') {
+  fail('Portable mcp.json must declare only the local pascal server')
+}
+if (canonicalJson(portableMcpServers.pascal) !== canonicalJson(claudeMcpServers.pascal)) {
+  fail('Portable mcp.json and skills/.mcp.json must declare an identical pascal server')
+}
+// The hosted server reads its key through ${user_config.*}, which only Claude Code substitutes, so
+// it stays in the Claude plugin root instead of the portable Agent Plugins manifest.
+if (Object.keys(claudeMcpServers).sort().join(',') !== 'pascal,pascal-hosted') {
+  fail('skills/.mcp.json must add only the Claude-specific pascal-hosted server')
 }
 
-const portablePascalServer = (portableMcpConfig.mcpServers as Record<string, unknown> | undefined)
-  ?.pascal as Record<string, unknown> | undefined
+const claudeUserConfig = (claudePlugin.userConfig ?? {}) as Record<string, unknown>
+const claudeHostedKeyOption = claudeUserConfig.pascal_api_key as Record<string, unknown> | undefined
+if (claudeHostedKeyOption?.sensitive !== true) {
+  fail('Claude plugin userConfig.pascal_api_key must set sensitive so the key never reaches a file')
+}
+if (claudeHostedKeyOption?.required !== false) {
+  fail('Claude plugin userConfig.pascal_api_key must set required to false for local-only installs')
+}
+
+const portablePascalServer = portableMcpServers.pascal as Record<string, unknown> | undefined
 if (geminiExtension.name !== 'pascal') fail('Gemini CLI extension name must be pascal')
 if (geminiExtension.version !== pluginVersion) {
   fail(`Gemini CLI extension version must match the root plugin.json version ${pluginVersion}`)
