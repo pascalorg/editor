@@ -1349,6 +1349,45 @@ viewer's side — and carries the viewer's ink edges as its outlines.
 
 ## Log (continued)
 
+- 2026-09-10 (night): **Batches T41 + T42 — captures in a hidden tab; the utility's plant off the drawings.**
+  Overnight Steve's Chrome tab is HIDDEN (`document.hidden`, the screen
+  locked or the window covered): no animation frame ever fires, R3F's loop
+  stops, ResizeObserver never delivers (a fresh page load never mounts the
+  Canvas until a CDP screenshot forces one rendering opportunity), and
+  timers run once a second. The sheets' settle (`settledFrames`, rAF) and
+  the generator's one-frame wait hung the capture chain for good
+  ("Capturing the WEST elevation…"). thumbnail-generator.tsx `pumpFrames`:
+  the two frames a posed capture needs are run BY HAND through R3F's
+  `advance()`, a MessageChannel macrotask apart, after `clock.getDelta()`
+  (the first pumped frame after minutes without one handed every useFrame
+  a 600-second delta — the fill, hemisphere and ambient lights climbed to
+  10^14 and the south face captured pure white); capture.ts `settledTurns`
+  yields event-loop turns, never frames. T42: the overhead service drop
+  from the weatherhead to the pole read as a stray diagonal across the roof
+  on EVERY elevation — in the picture (Bones' finished house draws its
+  physical set) and in the vector fallback (the sheets' exterior items are
+  that set). physical.ts `isUtilityPlant` names the pole, the drop, the
+  pad-mount transformer and the water meter box; framing/renderer.tsx
+  buckets them on their own with `userData.sourceId = 'utility-plant'`,
+  the generator hides that bucket for a posed capture (`hideUtilityPlant`),
+  and mep/exterior-items.ts leaves them out of the paper's items and
+  section prisms — the mast and weatherhead stay, the 3D house keeps all
+  of it. `isBlank` reads a small copy of the transparent frame once and
+  looks for painted pixels (it sampled a white-filled copy at 24 columns
+  and called the lit south face blank). Picture recipe r4. core
+  material-library.ts: the fourteen lap/batten siding albedo maps pointed
+  at localhost:3002 (the walls rendered flat on 3004) — relative like the
+  other 226 (dist rebuild + restart pending). Verified in Steve's Chrome,
+  tab hidden throughout: A4.0–A4.3 recaptured under r4 in 2–5 s each,
+  walls opaque, no drop line, the lights at their theme values (4 / 0.6 /
+  0.45 / 0.15) after every capture, the autosave carrying the pictures
+  (version 83+); A5.0 Sections A and B recaptured. The roof's orange is the
+  material: 'roof-weatheredshingles' is a terracotta scallop texture
+  (served from editor.pascal.app as ktx2), so the finish key's "COMP
+  SHINGLE — WEATHERED" is the library's label, not a rendering fault. Open:
+  the sections' notes and leaders at zoom; the site, foundation and
+  brace-wall plans.
+
 - 2026-09-10 (night): **Batches T39 + T40 — the vector outlines over the picture; print-scale pictures.**
   elevation.ts `inkOutlines`: the faces the viewer sees (the exterior walls
   that face the view and are not hidden behind a nearer one), the roofs and

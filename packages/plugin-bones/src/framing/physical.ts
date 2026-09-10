@@ -43,14 +43,16 @@ export function isPhysicalMember(m: Member): boolean {
 }
 
 /**
- * The utility's plant at the lot line — the pole with its overhead drop, or
- * the pad-mount transformer. It stands in the 3D house (the drop clears the
+ * The utility's plant at the lot line — the pole with its overhead drop, the
+ * pad-mount transformer, the water meter box. It stands in the 3D house (the drop clears the
  * roof, the pole is where the utility puts it) but never on a drawing: an
  * elevation draws the house, and its service point is the weatherhead on
  * the mast (the drop across the roof read as a stray line on every
  * elevation, 2026-09-10).
  */
 export function isUtilityPlant(m: Member): boolean {
+  // the water meter box at the property line is the water utility's
+  if (m.sourceId === 'water-service') return true
   if (m.sourceId !== 'service-entrance') return false
   if (m.role === 'post') return true
   if (m.role === 'wire-run') return /^Service drop/.test(m.label ?? '')
