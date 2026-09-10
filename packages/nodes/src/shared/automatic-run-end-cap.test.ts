@@ -59,6 +59,7 @@ describe('automatic run end caps', () => {
       findMatedRunEndCapIds(
         {
           ...inlet,
+          id: 'end',
           nodeId: duct.id,
           direction: [1, 0, 0],
         },
@@ -96,6 +97,7 @@ describe('automatic run end caps', () => {
       findMatedRunEndCapIds(
         {
           ...inlet,
+          id: 'end',
           nodeId: pipe.id,
           direction: [0, 1, 0],
         },
@@ -122,6 +124,34 @@ describe('automatic run end caps', () => {
     expect(inlet.direction[0]).toBeCloseTo(1)
     expect(inlet.direction[1]).toBeCloseTo(0)
     expect(inlet.direction[2]).toBeCloseTo(0)
+  })
+
+  test('only matches the end cap owned by a coincident run endpoint', () => {
+    const first = PipeSegmentNode.parse({
+      path: [
+        [0, 1, 0],
+        [3, 1, 0],
+      ],
+    })
+    const second = PipeSegmentNode.parse({
+      path: [
+        [6, 1, 0],
+        [3, 1, 0],
+      ],
+    })
+    const firstCap = createPipeRunEndCap(first)!
+    const secondCap = createPipeRunEndCap(second)!
+    const firstPort = getPipeFittingPorts(firstCap)[0]!
+    const nodes = {
+      [first.id]: first,
+      [second.id]: second,
+      [firstCap.id]: firstCap,
+      [secondCap.id]: secondCap,
+    } as Record<string, AnyNode>
+
+    expect(
+      findMatedRunEndCapIds({ ...firstPort, nodeId: first.id, id: 'end' }, nodes, 'pipe-fitting'),
+    ).toEqual([firstCap.id])
   })
 
   test.each([

@@ -7,13 +7,14 @@ import {
   type PipeSegmentNode,
 } from '@pascal-app/core'
 import { Euler, Quaternion, Vector3 } from 'three'
-import { getDuctFittingPorts, localFittingPorts } from '../duct-fitting/ports'
+import { localFittingPorts } from '../duct-fitting/ports'
 import { ductPortDiameterIn } from '../duct-segment/geometry'
-import { getPipeFittingPorts, localPipeFittingPorts } from '../pipe-fitting/ports'
+import { localPipeFittingPorts } from '../pipe-fitting/ports'
 import { accessoryMateQuaternion } from './accessory-placement'
 import type { ScenePort } from './ports'
 
-const END_CAP_MATE_TOLERANCE_M = 0.01
+const END_CAP_OWNER_ID_KEY = 'automaticRunEndCapOwnerId'
+const END_CAP_ENDPOINT_KEY = 'automaticRunEndCapEndpoint'
 
 function runEndpoint(
   path: Array<readonly [number, number, number]>,
@@ -69,6 +70,10 @@ export function createDuctRunEndCap(
   }
   const cap = DuctFittingNode.parse({
     name: 'End Cap',
+    metadata: {
+      [END_CAP_OWNER_ID_KEY]: duct.id,
+      [END_CAP_ENDPOINT_KEY]: endpoint,
+    },
     fittingType: 'end-cap',
     shape: duct.shape,
     shape2: duct.shape,
@@ -107,6 +112,10 @@ export function createPipeRunEndCap(
   }
   const cap = PipeFittingNode.parse({
     name: 'End Cap',
+    metadata: {
+      [END_CAP_OWNER_ID_KEY]: pipe.id,
+      [END_CAP_ENDPOINT_KEY]: endpoint,
+    },
     fittingType: 'end-cap',
     diameter: pipe.diameter,
     diameter2: pipe.diameter,
@@ -142,7 +151,6 @@ export function findMatedRunEndCapIds(
   fittingKind: 'duct-fitting' | 'pipe-fitting',
 ): AnyNodeId[] {
   if (!source) return []
-  const toleranceSq = END_CAP_MATE_TOLERANCE_M * END_CAP_MATE_TOLERANCE_M
   const ids: AnyNodeId[] = []
   for (const node of Object.values(nodes)) {
     if (!node || node.type !== fittingKind || node.fittingType !== 'end-cap') continue
@@ -150,16 +158,11 @@ export function findMatedRunEndCapIds(
       ids.push(node.id)
       continue
     }
-    const ports =
-      node.type === 'duct-fitting' ? getDuctFittingPorts(node) : getPipeFittingPorts(node)
-    const mated = ports.some((port) => {
-      if (source.system && port.system && source.system !== port.system) return false
-      const dx = source.position[0] - port.position[0]
-      const dy = source.position[1] - port.position[1]
-      const dz = source.position[2] - port.position[2]
-      return dx * dx + dy * dy + dz * dz <= toleranceSq
-    })
-    if (mated) ids.push(node.id)
+    if (
+      node.metadata[END_CAP_OWNER_ID_KEY] === source.nodeId &&
+      node.metadata[END_CAP_ENDPOINT_KEY] === source.id
+    )
+      ids.push(node.id)
   }
   return ids
 }
