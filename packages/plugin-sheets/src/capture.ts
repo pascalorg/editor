@@ -209,7 +209,10 @@ export function elevationCaptureHash(nodes: NodeMap): string {
   let h = 5381
   const text = parts.join('|')
   for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0
-  return `${PICTURE_RECIPE}:${parts.length}:${(h >>> 0).toString(36)}`
+  // dashes, never colons: the scene API's save validator reads a string with
+  // a leading `word:` as a URL and rejects the scheme (2026-09-10 — every
+  // autosave after the first recipe-tagged capture came back 400)
+  return `${PICTURE_RECIPE}-${parts.length}-${(h >>> 0).toString(36)}`
 }
 
 /** True when the viewport's picture is missing or was taken of another model — an elevation, a section or the cover view. */
