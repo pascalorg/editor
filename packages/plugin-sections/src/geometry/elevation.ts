@@ -62,15 +62,28 @@ export function elevationAngle(direction: 'north' | 'east' | 'south' | 'west'): 
  * Over a picture of the same geometry these are the vector outlines — the
  * edges, the openings, the trim — in register with it.
  */
-export function inkOutlines(primitives: readonly FloorplanGeometry[]): FloorplanGeometry[] {
+export function inkOutlines(primitives: readonly FloorplanGeometry[], groundY = 0): FloorplanGeometry[] {
   const out: FloorplanGeometry[] = []
+  // a shape wholly below the ground line — a stem wall, a footing — is
+  // hidden work and reads dashed, the way an elevation shows its foundation
+  const belowGround = (p: FloorplanGeometry): boolean => {
+    const box = boundsFromPrimitives([p])
+    return box !== null && box.minY >= drawY(groundY) - 1e-6
+  }
   for (const p of primitives) {
     switch (p.kind) {
       case 'polygon':
       case 'rect':
       case 'circle':
       case 'path':
-        out.push({ ...p, fill: 'none', stroke: INK, strokeWidth: WEIGHT.projected, opacity: 1 } as FloorplanGeometry)
+        out.push({
+          ...p,
+          fill: 'none',
+          stroke: INK,
+          strokeWidth: WEIGHT.projected,
+          opacity: 1,
+          ...(belowGround(p) ? { strokeDasharray: '0.12 0.08' } : {}),
+        } as FloorplanGeometry)
         break
       case 'line':
       case 'polyline': {
@@ -80,7 +93,7 @@ export function inkOutlines(primitives: readonly FloorplanGeometry[]): Floorplan
         break
       }
       case 'group':
-        out.push({ ...p, children: inkOutlines(p.children) } as FloorplanGeometry)
+        out.push({ ...p, children: inkOutlines(p.children, groundY) } as FloorplanGeometry)
         break
       default:
         out.push(p)
@@ -360,7 +373,7 @@ export function buildElevationDrawing(
   const body = [...paintProjected(projected), ...roofDetail]
   // the outline set drawn nearest-last like the body, ink only, the
   // cladding courses and stipple left out
-  const outlines = inkOutlines([...paintProjected(outlinePieces), ...roofDetail])
+  const outlines = inkOutlines([...paintProjected(outlinePieces), ...roofDetail], built.levels[0]?.baseY ?? 0)
   const bodyBounds = boundsFromPrimitives(body)
   if (!bodyBounds) {
     return {

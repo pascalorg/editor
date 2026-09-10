@@ -232,6 +232,9 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       // the WebGPU renderer clips through ClippingGroup objects, so the
       // scene's children stand in one for the render and come back after
       clip: readonly { normal: [number, number, number]; constant: number }[] = [],
+      // the canvas rendered at this multiple of its size for the frame — a
+      // sheet's picture at print scale, the drawing buffer put back after
+      supersample = 1,
     ) => {
       const standardW = standardSize?.w ?? THUMBNAIL_WIDTH
       const standardH = standardSize?.h ?? THUMBNAIL_HEIGHT
@@ -249,6 +252,17 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       if (!onThumbnailCaptureRef.current) return
 
       isGenerating.current = true
+      // the drawing buffer enlarged for a supersampled frame; the CSS size
+      // stays, the main camera's aspect is unchanged, and it goes back in
+      // the same tick as the render
+      const bufferBefore: [number, number] = [gl.domElement.width, gl.domElement.height]
+      const scale = Math.max(1, Math.min(supersample, 4096 / Math.max(bufferBefore[0], bufferBefore[1])))
+      const restoreBuffer = () => {
+        if (scale > 1 && (gl.domElement.width !== bufferBefore[0] || gl.domElement.height !== bufferBefore[1])) {
+          gl.setSize(bufferBefore[0], bufferBefore[1], false)
+        }
+      }
+      if (scale > 1) gl.setSize(Math.round(bufferBefore[0] * scale), Math.round(bufferBefore[1] * scale), false)
       // a capture that never settles (a GPU readback that never returns)
       // must not hold the guard for the session
       const watchdog = setTimeout(() => {
@@ -451,6 +465,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             restoreNodeVisibility()
             restoreLights()
             restoreClip()
+            restoreBuffer()
           }
 
           const result = await capturePromise
@@ -480,6 +495,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
             }
             restoreLights()
             restoreClip()
+            restoreBuffer()
             emitter.emit('thumbnail:after-capture', undefined)
             restoreLevels()
             restoreLevelMode?.()
@@ -564,6 +580,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         trace('error', String(error))
         console.error('❌ Failed to generate thumbnail:', error)
       } finally {
+        restoreBuffer()
         clearTimeout(watchdog)
         isGenerating.current = false
       }
@@ -601,6 +618,8 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
       lightFace?: boolean
       /** World clipping planes for this frame — see `generate`. */
       clip?: readonly { normal: [number, number, number]; constant: number }[]
+      /** Render the canvas at this multiple of its size for the frame (print-scale pictures). */
+      supersample?: number
     }) => {
       await generate(
         event.snapLevels === true,
@@ -614,6 +633,7 @@ export const ThumbnailGenerator = ({ onThumbnailCapture }: ThumbnailGeneratorPro
         event.perspective,
         event.lightFace === true,
         event.clip ?? [],
+        event.supersample ?? 1,
       )
     }
 

@@ -132,6 +132,10 @@ async function withSiteSurfaceHidden<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
+/** A sheet's picture is rendered at this multiple of the canvas' size and kept at up to PICTURE_MAX_WIDTH px. */
+const PICTURE_SUPERSAMPLE = 2
+const PICTURE_MAX_WIDTH = 3600
+
 /** The 3D canvas — the largest on the page; its aspect is the capture's. */
 function viewerCanvas(): HTMLCanvasElement | null {
   let best: HTMLCanvasElement | null = null
@@ -281,6 +285,7 @@ export async function captureElevationImage(
         edges: 'soft',
         ortho: { position, target, viewWidth: width },
         lightFace: true,
+        supersample: PICTURE_SUPERSAMPLE,
       }),
     ),
   )
@@ -304,7 +309,7 @@ export async function captureElevationImage(
         'No frame came back from the 3D viewer within 20 seconds — open the model once in this tab, then press Recapture.',
     }
   }
-  const dataUrl = await toJpeg(raw, options.maxWidth ?? 2400)
+  const dataUrl = await toJpeg(raw, options.maxWidth ?? PICTURE_MAX_WIDTH)
   if (!dataUrl) {
     return { ok: false, reason: 'The captured frame came back blank — the viewer rendered nothing from the elevation pose.' }
   }
@@ -382,6 +387,7 @@ export async function captureSectionImage(
         ortho: { position, target, viewWidth: width },
         lightFace: true,
         clip,
+        supersample: PICTURE_SUPERSAMPLE,
       }),
     ),
   )
@@ -405,7 +411,7 @@ export async function captureSectionImage(
         'No frame came back from the 3D viewer within 20 seconds — open the model once in this tab, then press Recapture.',
     }
   }
-  const dataUrl = await toJpeg(raw, options.maxWidth ?? 2400)
+  const dataUrl = await toJpeg(raw, options.maxWidth ?? PICTURE_MAX_WIDTH)
   if (!dataUrl) {
     return { ok: false, reason: 'The captured frame came back blank — the viewer rendered nothing beyond the section plane.' }
   }
@@ -492,6 +498,8 @@ function capturePipeline(
     lightFace?: boolean
     /** World clipping planes for the frame (a section's cut). */
     clip?: readonly { normal: [number, number, number]; constant: number }[]
+    /** Render at this multiple of the canvas' size (print-scale pictures). */
+    supersample?: number
   } = {},
 ): Promise<string | undefined> {
   return new Promise((resolve) => {
@@ -514,7 +522,18 @@ function capturePipeline(
     window.addEventListener('pascal:thumbnail', onThumb as EventListener)
     try {
       traceCapture('sheets:emit', options)
-      emit('camera-controls:generate-thumbnail', { captureMode: 'viewport', ...options })
+      // a supersampled frame goes through the 'standard' mode at the enlarged
+      // size — the 'viewport' mode clamps its copy to 2048 px on the long edge
+      const canvas = viewerCanvas()
+      const supersample = options.supersample ?? 1
+      const sized =
+        supersample > 1 && canvas
+          ? {
+              captureMode: 'standard' as const,
+              standardSize: { w: Math.round(canvas.width * supersample), h: Math.round(canvas.height * supersample) },
+            }
+          : { captureMode: 'viewport' as const }
+      emit('camera-controls:generate-thumbnail', { ...sized, ...options })
     } catch {
       finish(undefined)
     }
