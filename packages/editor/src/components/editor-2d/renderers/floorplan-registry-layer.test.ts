@@ -16,6 +16,7 @@ import {
   floorplanGeometryMetadata,
 } from '../../../lib/floorplan/floorplan-extension'
 import {
+  buildFloorplanEntryGeometry,
   cancelFloorplanAffordanceDrag,
   collectDirectFloorplanScopeNodes,
   collectFloorplanDependencyNodes,
@@ -45,7 +46,21 @@ describe('site-scoped floorplan discovery', () => {
       defaults: () => ({}) as never,
       capabilities: {},
       floorplanScope: 'site',
-      floorplan: () => null,
+      floorplan: (node) => {
+        const positioned = node as unknown as {
+          position?: [number, number, number]
+          rotation?: [number, number, number]
+        }
+        if (!(positioned.position && positioned.rotation)) return null
+        return {
+          kind: 'group',
+          children: [{ kind: 'circle', cx: 0, cy: 0, r: 1 }],
+          transform: {
+            translate: [positioned.position[0], positioned.position[2]],
+            rotate: positioned.rotation[1],
+          },
+        }
+      },
     } as AnyNodeDefinition)
   })
 
@@ -91,6 +106,103 @@ describe('site-scoped floorplan discovery', () => {
     expect(tx + sitePoint[0] * cos - sitePoint[1] * sin).toBeCloseTo(2)
 
     expect(ty + sitePoint[0] * sin + sitePoint[1] * cos).toBeCloseTo(0)
+  })
+
+  test('rebuilds site geometry from a live pose and restores the committed pose when cleared', () => {
+    const site = {
+      id: 'site_active',
+      type: 'site',
+      parentId: null,
+      children: ['overlay_pond'],
+      visible: true,
+    } as unknown as AnyNode
+    const overlay = {
+      id: 'overlay_pond',
+      type: 'test:site-overlay',
+      parentId: site.id,
+      children: [],
+      visible: true,
+      position: [1, 0, 2],
+      rotation: [0, 0.25, 0],
+    } as unknown as AnyNode
+    const nodes = {
+      [site.id]: site,
+      [overlay.id]: overlay,
+    }
+    const geometryCache = new Map()
+    const liveOverrides = new Map<string, LiveNodeOverrides>()
+    const siteProjection = siteToFloorplanTransform([10, 0, 5], Math.PI / 2)
+    const common = {
+      automaticDimensions: false,
+      ctxOverrides: {
+        children: [],
+        siblings: [],
+        parent: site,
+        outputTransform: siteProjection,
+        trackAllNodes: true,
+      },
+      geometryCache,
+      highlighted: false,
+      hovered: false,
+      interactiveElevators: {},
+      levelDataCache: new Map(),
+      levelNodeIdsByType: new Map(),
+      liveOverride: undefined,
+      liveOverrides,
+      moving: true,
+      node: overlay,
+      nodeId: overlay.id,
+      nodes,
+      palette: undefined,
+      selected: false,
+      siblingEpoch: 0,
+      unit: 'metric' as const,
+      metricNotation: 'meters' as const,
+      wallDimensionReference: 'finished-faces' as const,
+      visibilityRootId: site.id,
+    }
+    const committedSnapshot = structuredClone(overlay)
+    const livePose = {
+      position: [4, 0, 5] as [number, number, number],
+      rotation: Math.PI / 3,
+    }
+
+    const liveEntry = buildFloorplanEntryGeometry({ ...common, live: livePose })
+
+    expect(liveEntry?.node).toMatchObject({
+      position: livePose.position,
+      rotation: [0, livePose.rotation, 0],
+      parentId: null,
+    })
+    expect(liveEntry?.base).toEqual({
+      kind: 'group',
+      children: [
+        {
+          kind: 'group',
+          children: [{ kind: 'circle', cx: 0, cy: 0, r: 1 }],
+          transform: { translate: [4, 5], rotate: livePose.rotation },
+        },
+      ],
+      transform: siteProjection,
+    })
+    expect(overlay).toEqual(committedSnapshot)
+
+    const committedEntry = buildFloorplanEntryGeometry({ ...common, live: undefined })
+
+    expect(committedEntry).not.toBe(liveEntry)
+    expect(committedEntry?.node).toBe(overlay)
+    expect(committedEntry?.base).toEqual({
+      kind: 'group',
+      children: [
+        {
+          kind: 'group',
+          children: [{ kind: 'circle', cx: 0, cy: 0, r: 1 }],
+          transform: { translate: [1, 2], rotate: 0.25 },
+        },
+      ],
+      transform: siteProjection,
+    })
+    expect(overlay).toEqual(committedSnapshot)
   })
 })
 

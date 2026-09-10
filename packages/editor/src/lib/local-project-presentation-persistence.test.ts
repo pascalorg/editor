@@ -102,6 +102,76 @@ function readStoredValue(storage: MemoryStorage, projectId: string): string {
 }
 
 describe('local project presentation persistence', () => {
+  test('persists anonymous settings when assigning a new first project id', () => {
+    const storage = new MemoryStorage()
+    const registry = new TestRegistry()
+    const configuration = new TestConfiguration()
+    registry.register(configuration)
+    const persistence = createLocalProjectPresentationPersistence({
+      registry,
+      storage,
+      pageHideTarget: null,
+      flushDelayMs: 60_000,
+    })
+
+    persistence.switchProject(null)
+    configuration.setValue('anonymous atmosphere')
+    persistence.switchProject('first-project')
+
+    expect(configuration.value).toBe('anonymous atmosphere')
+    persistence.flush()
+    expect(readStoredValue(storage, 'first-project')).toBe('anonymous atmosphere')
+    persistence.dispose()
+
+    const reloadedRegistry = new TestRegistry()
+    const reloadedConfiguration = new TestConfiguration()
+    reloadedRegistry.register(reloadedConfiguration)
+    const reloadedPersistence = createLocalProjectPresentationPersistence({
+      registry: reloadedRegistry,
+      storage,
+      pageHideTarget: null,
+    })
+    reloadedPersistence.switchProject('first-project')
+
+    expect(reloadedConfiguration.value).toBe('anonymous atmosphere')
+    reloadedPersistence.dispose()
+  })
+
+  test('restores a stored project instead of overwriting it with anonymous settings', () => {
+    const storage = new MemoryStorage()
+    const storedRegistry = new TestRegistry()
+    const storedConfiguration = new TestConfiguration()
+    storedRegistry.register(storedConfiguration)
+    const storedPersistence = createLocalProjectPresentationPersistence({
+      registry: storedRegistry,
+      storage,
+      pageHideTarget: null,
+      flushDelayMs: 60_000,
+    })
+    storedPersistence.switchProject('existing-project')
+    storedConfiguration.setValue('stored atmosphere')
+    storedPersistence.flush()
+    storedPersistence.dispose()
+
+    const registry = new TestRegistry()
+    const configuration = new TestConfiguration()
+    registry.register(configuration)
+    const persistence = createLocalProjectPresentationPersistence({
+      registry,
+      storage,
+      pageHideTarget: null,
+      flushDelayMs: 60_000,
+    })
+    persistence.switchProject(null)
+    configuration.setValue('anonymous atmosphere')
+    persistence.switchProject('existing-project')
+
+    expect(configuration.value).toBe('stored atmosphere')
+    persistence.flush()
+    expect(readStoredValue(storage, 'existing-project')).toBe('stored atmosphere')
+    persistence.dispose()
+  })
+
   test('flushes the old project before restoring defaults or the next project', () => {
     const storage = new MemoryStorage()
     const registry = new TestRegistry()

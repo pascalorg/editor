@@ -2194,7 +2194,7 @@ function floorplanEntryReferencedAnnotationRole(
   return dependencyIds.some((id) => selectedIds.has(id)) ? role : undefined
 }
 
-function buildFloorplanEntryGeometry({
+export function buildFloorplanEntryGeometry({
   automaticDimensions,
   ctxOverrides,
   geometryCache,
@@ -2278,7 +2278,12 @@ function buildFloorplanEntryGeometry({
           : r,
       } as AnyNode
     }
-    if ((def.capabilities?.floorPlaced || def.floorplanScope === 'building') && hasPosition) {
+    if (
+      (def.capabilities?.floorPlaced ||
+        def.floorplanScope === 'building' ||
+        def.floorplanScope === 'site') &&
+      hasPosition
+    ) {
       return applyPositionLiveTransform(sourceNode, live)
     }
     if (sourceNode.type === 'slab' || sourceNode.type === 'ceiling' || sourceNode.type === 'zone') {

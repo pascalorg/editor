@@ -206,6 +206,7 @@ function DirectionRay({
         layers={EDITOR_LAYER}
         position={placement.midpoint}
         quaternion={placement.rotation}
+        scale={[radius, length, radius]}
         renderOrder={active ? 4 : 2}
         onPointerDown={(event) => {
           if (!onDirectionSelect) return
@@ -214,7 +215,7 @@ function DirectionRay({
           onDirectionSelect([...direction])
         }}
       >
-        <cylinderGeometry args={[radius, radius, length, 8]} />
+        <cylinderGeometry args={[1, 1, 1, 8]} />
         <meshBasicMaterial
           color={color}
           depthTest={false}
@@ -227,6 +228,7 @@ function DirectionRay({
         layers={EDITOR_LAYER}
         position={placement.tip}
         quaternion={placement.rotation}
+        scale={[arrowRadius, arrowLength, arrowRadius]}
         renderOrder={active ? 4 : 2}
         onPointerDown={(event) => {
           if (!onDirectionSelect) return
@@ -235,7 +237,7 @@ function DirectionRay({
           onDirectionSelect([...direction])
         }}
       >
-        <coneGeometry args={[arrowRadius, arrowLength, 10]} />
+        <coneGeometry args={[1, 1, 10]} />
         <meshBasicMaterial
           color={color}
           depthTest={false}

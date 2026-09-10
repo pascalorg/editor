@@ -33,6 +33,7 @@ type LocalProjectPresentationSidecar = z.infer<typeof LocalProjectPresentationSi
 type StoredSidecar = {
   contributions: Record<string, unknown>
   malformed: boolean
+  source: 'missing' | 'stored' | 'unavailable'
 }
 
 export type LocalProjectPresentationPersistence = {
@@ -66,27 +67,52 @@ function getBrowserStorage(): PresentationStorage | null {
 }
 
 function readSidecar(storage: PresentationStorage | null, projectId: string): StoredSidecar {
-  if (!storage) return { contributions: emptyContributions(), malformed: false }
+  if (!storage) {
+    return {
+      contributions: emptyContributions(),
+      malformed: false,
+      source: 'unavailable',
+    }
+  }
 
   let raw: string | null
   try {
     raw = storage.getItem(getLocalProjectPresentationStorageKey(projectId))
   } catch {
-    return { contributions: emptyContributions(), malformed: false }
+    return {
+      contributions: emptyContributions(),
+      malformed: false,
+      source: 'unavailable',
+    }
   }
-  if (raw === null) return { contributions: emptyContributions(), malformed: false }
+  if (raw === null) {
+    return {
+      contributions: emptyContributions(),
+      malformed: false,
+      source: 'missing',
+    }
+  }
 
   try {
     const parsed = LocalProjectPresentationSidecarSchema.safeParse(JSON.parse(raw))
     if (!parsed.success || parsed.data.projectId !== projectId) {
-      return { contributions: emptyContributions(), malformed: true }
+      return {
+        contributions: emptyContributions(),
+        malformed: true,
+        source: 'stored',
+      }
     }
     return {
       contributions: Object.assign(emptyContributions(), parsed.data.contributions),
       malformed: false,
+      source: 'stored',
     }
   } catch {
-    return { contributions: emptyContributions(), malformed: true }
+    return {
+      contributions: emptyContributions(),
+      malformed: true,
+      source: 'stored',
+    }
   }
 }
 
@@ -128,6 +154,9 @@ class LocalProjectPresentationPersistenceImpl implements LocalProjectPresentatio
     const nextProjectId = projectId && projectId.length > 0 ? projectId : null
     if (this.projectInitialized && nextProjectId === this.projectId) return
 
+    const assigningAnonymousPresentation =
+      this.projectInitialized && this.projectId === null && nextProjectId !== null
+
     this.flush()
     this.projectId = nextProjectId
     this.projectInitialized = true
@@ -135,8 +164,27 @@ class LocalProjectPresentationPersistenceImpl implements LocalProjectPresentatio
 
     const stored = nextProjectId
       ? readSidecar(this.storage, nextProjectId)
-      : { contributions: emptyContributions(), malformed: false }
+      : {
+          contributions: emptyContributions(),
+          malformed: false,
+          source: 'missing' as const,
+        }
     this.contributions = stored.contributions
+
+    if (assigningAnonymousPresentation && stored.source === 'missing') {
+      let capturedConfiguration = false
+      for (const [id, entry] of this.configurations) {
+        this.initializedConfigurationIds.add(id)
+        try {
+          this.contributions[id] = entry.configuration.getSnapshot()
+          capturedConfiguration = true
+        } catch {
+          // Leave the live configuration intact when an optional adapter cannot export.
+        }
+      }
+      if (capturedConfiguration) this.markDirty()
+      return
+    }
 
     let recoveredInvalidConfiguration = stored.malformed
     for (const [id, entry] of this.configurations) {

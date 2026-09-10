@@ -11,6 +11,9 @@
 
 ### Fixes
 
+- Keep Site-scoped floorplan overlays aligned with live move and rotation previews.
+- Preserve unsaved presentation settings when a project receives its first ID, without overwriting an existing project's stored configuration.
+- Avoid native TypeScript compiler inference overflow in atmosphere fog references without changing rendering.
 - Export the viewer's shadow-only layer for plugin consumers.
 - Remove the nonworking god-ray post-process and its dedicated viewer API; preserve sky, fog, lighting, and ordinary shadows.
 - Preserve grass and procedural material colors in portable exports; freeze instancing and deformation without changing the live scene or saved-viewer animation clips.

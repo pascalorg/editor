@@ -106,8 +106,12 @@ export function SceneAtmosphere({ source }: { source: SceneAtmosphereSource }) {
     const offset = positionWorld.sub(cameraPosition)
     const direction = offset.normalize()
     const fogRange: Pick<SceneAtmosphereSource, 'fogStart' | 'fogEnd'> = source
-    const fogStart: Node<'float'> = reference('fogStart', 'float', fogRange)
-    const fogEnd: Node<'float'> = reference('fogEnd', 'float', fogRange)
+    const fogStart: Node<'float'> = reference<'float', typeof fogRange>(
+      'fogStart',
+      'float',
+      fogRange,
+    )
+    const fogEnd: Node<'float'> = reference<'float', typeof fogRange>('fogEnd', 'float', fogRange)
     const factor = smoothstep(fogStart, fogEnd, offset.length())
     return fog(source.fogRadiance(direction), factor)
   }, [source])

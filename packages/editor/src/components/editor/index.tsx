@@ -37,7 +37,10 @@ import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
-import { createLocalProjectPresentationPersistence } from '../../lib/local-project-presentation-persistence'
+import {
+  createLocalProjectPresentationPersistence,
+  type LocalProjectPresentationPersistence,
+} from '../../lib/local-project-presentation-persistence'
 import { type ActivePaintMaterial, hasActivePaintMaterial } from '../../lib/material-paint'
 import {
   applySceneGraphToEditor,
@@ -780,7 +783,6 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isLoading,
   isFirstPersonMode,
   isStudioMode,
-  renderPaused,
   onThumbnailCapture,
   viewerSceneSlot,
   presentationsReady,
@@ -789,7 +791,6 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isLoading: boolean
   isFirstPersonMode: boolean
   isStudioMode: boolean
-  renderPaused: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
   viewerSceneSlot?: ReactNode
   presentationsReady: boolean
@@ -828,7 +829,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       {isCaptureMode && <CaptureCameraRig />}
-      <CustomCameraControls paused={renderPaused} />
+      <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       {!isFirstPersonMode && <SiteEdgeLabels />}
       <InteractiveSystem />
@@ -1162,7 +1163,6 @@ const ViewerCanvas = memo(function ViewerCanvas({
             <ViewerSceneContent
               isFirstPersonMode={isFirstPersonMode}
               isLoading={showLoader}
-              renderPaused={!show3d && !showLoader}
               isStudioMode={isStudioMode}
               isVersionPreviewMode={isVersionPreviewMode}
               onThumbnailCapture={onThumbnailCapture}
@@ -1266,6 +1266,7 @@ function EditorContent({
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
   const presentationProjectId = projectId ?? null
+  const presentationPersistenceRef = useRef<LocalProjectPresentationPersistence | null>(null)
   const [restoredPresentationProjectId, setRestoredPresentationProjectId] = useState<
     string | null | typeof PRESENTATION_PROJECT_NOT_RESTORED
   >(PRESENTATION_PROJECT_NOT_RESTORED)
@@ -1273,9 +1274,18 @@ function EditorContent({
 
   useClientLayoutEffect(() => {
     const persistence = createLocalProjectPresentationPersistence()
+    presentationPersistenceRef.current = persistence
+    return () => {
+      presentationPersistenceRef.current = null
+      persistence.dispose()
+    }
+  }, [])
+
+  useClientLayoutEffect(() => {
+    const persistence = presentationPersistenceRef.current
+    if (!persistence) return
     persistence.switchProject(presentationProjectId)
     setRestoredPresentationProjectId(presentationProjectId)
-    return () => persistence.dispose()
   }, [presentationProjectId])
 
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
@@ -1335,7 +1345,7 @@ function EditorContent({
     }
   }, [projectId])
 
-  // Load scene on mount (or when onLoad identity changes, e.g. project switch)
+  // Load on mount, project switches, and explicit retry attempts.
   useEffect(() => {
     void sceneLoadAttempt
     let cancelled = false

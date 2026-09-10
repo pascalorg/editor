@@ -1,8 +1,13 @@
 'use client'
 
-import { type AnyNode, type PipeFittingNode, PipeSegmentNode, useScene } from '@pascal-app/core'
-import { EDITOR_LAYER, triggerSFX, useEditor, usePathDraftPreview } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
+import { type AnyNode, type PipeFittingNode, PipeSegmentNode } from '@pascal-app/core'
+import {
+  EDITOR_LAYER,
+  triggerSFX,
+  useEditor,
+  usePathDraftPreview,
+  useRegistryToolContext,
+} from '@pascal-app/editor'
 import { useEffect, useRef, useState } from 'react'
 import { Vector3 } from 'three'
 import {
@@ -10,6 +15,11 @@ import {
   planPipeCrossAtRunBody,
   planPipeElbowAtPort,
 } from '../shared/auto-fitting'
+import {
+  createPipeRunEndCap,
+  findMatedRunEndCapIds,
+  isRunEndCapPort,
+} from '../shared/automatic-run-end-cap'
 import { ConnectionFeedback } from '../shared/connection-feedback'
 import { createRunWallAttachment, type RunSurfaceTarget } from '../shared/distribution-run-contract'
 import {
@@ -25,59 +35,45 @@ import {
 import { FITTING_CLEARANCE_MESSAGE, hasFittingClearance } from '../shared/fitting-clearance'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
 import { PipeFittingGhost } from '../shared/mep-ghost'
-import { PIPE_PRESETS } from '../shared/mep-presets'
 import {
   collectScenePorts,
   DWV_PORT_SYSTEMS,
-  findNearestPort3D,
   findNearestRunBody3D,
   findRunBodyCrossingSurface,
   type ScenePort,
 } from '../shared/ports'
-import { RunHangerPreview, RunHangerToggle } from '../shared/run-hanger-controls'
+import { RunHangerPreview } from '../shared/run-hanger-controls'
+import { useRunHangerMode } from '../shared/run-hanger-mode'
 import { currentPipeContinuationSeed, pipeEndpointPort } from './continuation'
 import { pipeSegmentDefinition } from './definition'
 import { applyPipeGrade } from './slope'
 
 const PIPE_DIAMETERS_IN = [1.25, 1.5, 2, 3, 4, 6] as const
-const PORT_SNAP_RADIUS_M = 0.5
 const BODY_SNAP_RADIUS_M = 0.3
 
-function findNearbyPort(point: RunPoint): ScenePort | null {
-  const ports = collectScenePorts({
+function getConnectionPorts(
+  levelId: AnyNode['id'] | null,
+  nodes: Readonly<Record<string, AnyNode>>,
+): ScenePort[] {
+  return collectScenePorts({
     systems: DWV_PORT_SYSTEMS,
-    levelId: useViewer.getState().selection.levelId ?? undefined,
-  })
-  return findNearestPort3D(point, ports, PORT_SNAP_RADIUS_M)
+    levelId: levelId ?? undefined,
+  }).filter((port) => !isRunEndCapPort(port, nodes))
 }
 
 const PipeSegmentTool = () => {
-  const activeLevelId = useViewer((state) => state.selection.levelId)
-  const unit = useViewer((state) => state.unit)
+  const { activeLevelId, sceneApi, unit } = useRegistryToolContext()
   const continuationSeedRef = useRef(currentPipeContinuationSeed())
   const continuationSeed = continuationSeedRef.current
   const hangerDefaults = useEditor((state) => state.toolDefaults['pipe-segment'])
-  const autoHangers = Boolean(
-    hangerDefaults?.autoHangers ?? continuationSeed?.pipe.autoHangers ?? false,
+  const initialAutoHangersRef = useRef(
+    Boolean(hangerDefaults?.autoHangers ?? continuationSeed?.pipe.autoHangers ?? false),
   )
-  const setAutoHangers = (enabled: boolean) => {
-    const editor = useEditor.getState()
-    editor.setToolDefaults('pipe-segment', {
-      ...editor.toolDefaults['pipe-segment'],
-      autoHangers: enabled,
-    })
-  }
+  const autoHangers = useRunHangerMode((state) => state.enabled['pipe-segment'])
   const hangerStyle =
     (hangerDefaults?.hangerStyle ?? continuationSeed?.pipe.hangerStyle) === 'double'
       ? 'double'
       : 'single'
-  const setHangerStyle = (style: 'single' | 'double') => {
-    const editor = useEditor.getState()
-    editor.setToolDefaults('pipe-segment', {
-      ...editor.toolDefaults['pipe-segment'],
-      hangerStyle: style,
-    })
-  }
   const hangerStyleRef = useRef<'single' | 'double'>(hangerStyle)
   hangerStyleRef.current = hangerStyle
   const autoHangersRef = useRef(autoHangers)
@@ -102,7 +98,6 @@ const PipeSegmentTool = () => {
   const [pipeMaterial, setPipeMaterial] = useState<PipeSegmentNode['pipeMaterial']>(
     continuationSeed?.pipe.pipeMaterial ?? defaults.pipeMaterial,
   )
-  const [presetId, setPresetId] = useState('pvc-waste')
   const systemRef = useRef(system)
   systemRef.current = system
   const slopedRef = useRef(sloped)
@@ -112,15 +107,11 @@ const PipeSegmentTool = () => {
   const pipeMaterialRef = useRef(pipeMaterial)
   pipeMaterialRef.current = pipeMaterial
 
-  const applyPreset = (id: string) => {
-    const preset = PIPE_PRESETS.find((candidate) => candidate.id === id)
-    if (!preset) return
-    setPresetId(preset.id)
-    setSystem(preset.system)
-    setPipeMaterial(preset.pipeMaterial)
-    setDiameter(preset.diameter)
-    setSloped(preset.sloped)
-  }
+  useEffect(() => {
+    const mode = useRunHangerMode.getState()
+    mode.setEnabled('pipe-segment', initialAutoHangersRef.current)
+    return () => mode.setEnabled('pipe-segment', false)
+  }, [])
 
   const commitSegment = ({
     start: rawStart,
@@ -141,7 +132,7 @@ const PipeSegmentTool = () => {
     const promotedFitting = pendingPromotionRef.current
     const bendPlanFor = (port: ScenePort | null, awayDirection: RunPoint) => {
       if (!port) return null
-      const owner = useScene.getState().nodes[port.nodeId]
+      const owner = sceneApi.get(port.nodeId)
       if (owner?.type !== 'pipe-segment') return null
       const plan = planPipeElbowAtPort(
         port,
@@ -191,13 +182,13 @@ const PipeSegmentTool = () => {
         : null
     if (startBend?.hasClearance === false || endBend?.hasClearance === false) return invalidPlan()
     const startBody = startBend ? null : startConnection.body
-    const startOwner = startBody ? useScene.getState().nodes[startBody.nodeId] : null
+    const startOwner = startBody ? sceneApi.get(startBody.nodeId) : null
     const startTap =
       startBody && startOwner?.type === 'pipe-segment'
         ? planPipeBranchTap(startOwner, startBody, direction, diameterRef.current)
         : null
     const endBody = endBend ? null : endConnection.body
-    const endOwner = endBody ? useScene.getState().nodes[endBody.nodeId] : null
+    const endOwner = endBody ? sceneApi.get(endBody.nodeId) : null
     let endTap =
       endBody && endOwner?.type === 'pipe-segment'
         ? planPipeBranchTap(
@@ -217,7 +208,7 @@ const PipeSegmentTool = () => {
           kinds: ['pipe-segment'],
         })
       : null
-    const crossOwner = crossHit ? useScene.getState().nodes[crossHit.nodeId] : null
+    const crossOwner = crossHit ? sceneApi.get(crossHit.nodeId) : null
     const cross =
       crossHit &&
       crossHit.nodeId !== startBody?.nodeId &&
@@ -281,6 +272,21 @@ const PipeSegmentTool = () => {
       return { ...pipe, wallAttachment }
     }
     const attachedPipes = pipes.map(attachPipe)
+    const sceneNodes = sceneApi.nodes()
+    const consumedEndCapIds = Array.from(
+      new Set([
+        ...findMatedRunEndCapIds(startConnection.port, sceneNodes, 'pipe-fitting'),
+        ...findMatedRunEndCapIds(endConnection.port, sceneNodes, 'pipe-fitting'),
+      ]),
+    )
+    const firstPipe = attachedPipes[0]
+    const nextPipe = attachedPipes.at(-1)
+    const startEndCap =
+      firstPipe && !startConnection.port && !startConnection.body
+        ? createPipeRunEndCap(firstPipe, 'start')
+        : null
+    const nextEndCap =
+      nextPipe && !endConnection.port && !endConnection.body ? createPipeRunEndCap(nextPipe) : null
 
     const changes = {
       create: [
@@ -307,6 +313,8 @@ const PipeSegmentTool = () => {
             ]
           : []),
         ...attachedPipes.map((node) => ({ node, parentId: activeLevelId })),
+        ...(startEndCap ? [{ node: startEndCap, parentId: activeLevelId }] : []),
+        ...(nextEndCap ? [{ node: nextEndCap, parentId: activeLevelId }] : []),
       ],
       update: [
         ...(promotedFitting
@@ -334,12 +342,13 @@ const PipeSegmentTool = () => {
         ...(endTap ? [endTap.runUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
         ...(cross ? [cross.runUpdate as { id: AnyNode['id']; data: Partial<AnyNode> }] : []),
       ],
+      delete: consumedEndCapIds,
     }
     if (!previewOnly) {
-      useScene.getState().applyNodeChanges(changes)
+      if (!sceneApi.applyChanges) throw new Error('Registry SceneApi must support atomic changes')
+      sceneApi.applyChanges(changes)
       pendingPromotionRef.current = null
     }
-    const nextPipe = attachedPipes.at(-1)
     const nextStart = nextPipe ? nextPipe.path[nextPipe.path.length - 1]! : end
     const nextPort = nextPipe ? pipeEndpointPort(nextPipe, 'end') : endConnection.port
     return {
@@ -368,7 +377,7 @@ const PipeSegmentTool = () => {
     initialConnection: continuationSeed
       ? { port: continuationSeed.port, body: continuationSeed.body }
       : null,
-    findPort: findNearbyPort,
+    getPorts: () => getConnectionPorts(activeLevelId, sceneApi.nodes()),
     findBody: (point) =>
       findNearestRunBody3D(point, BODY_SNAP_RADIUS_M, {
         kinds: ['pipe-segment'],
@@ -382,7 +391,7 @@ const PipeSegmentTool = () => {
     },
     inheritFromConnection: ({ port, body }) => {
       const ownerId = port?.nodeId ?? body?.nodeId
-      const owner = ownerId ? useScene.getState().nodes[ownerId] : null
+      const owner = ownerId ? sceneApi.get(ownerId) : null
       if (owner?.type !== 'pipe-segment') return
       setDiameter(owner.diameter)
       setPipeMaterial(owner.pipeMaterial)
@@ -406,6 +415,10 @@ const PipeSegmentTool = () => {
       } else if (event.key === 's' || event.key === 'S') {
         event.preventDefault()
         setSloped((value) => !value)
+        triggerSFX('sfx:grid-snap')
+      } else if (event.key === 'h' || event.key === 'H') {
+        event.preventDefault()
+        useRunHangerMode.getState().toggle('pipe-segment')
         triggerSFX('sfx:grid-snap')
       }
     },
@@ -454,19 +467,6 @@ const PipeSegmentTool = () => {
         profile={{ diameter, system }}
       />
       <DistributionRunCursor
-        surfaceLabel={
-          run.surfaceTarget?.kind === 'wall'
-            ? 'Wall'
-            : run.surfaceTarget?.kind === 'ceiling'
-              ? run.surfaceTarget.frame.normal[1] > 0
-                ? 'Ceiling top'
-                : 'Ceiling underside'
-              : run.surfaceTarget?.kind === 'floor'
-                ? 'Floor'
-                : run.surfaceTarget
-                  ? 'Surface'
-                  : 'Free space'
-        }
         altActive={run.altActive}
         cursor={run.cursor}
         directionMode={run.directionMode}
@@ -476,35 +476,9 @@ const PipeSegmentTool = () => {
         onDirectionSelect={run.onDirectionSelect}
         validationMessage={previewPlan?.validationMessage ?? run.validationMessage}
         snapTarget={run.snapTarget}
+        snapScreen={run.snapScreen}
         start={displayStart}
         startDirection={run.startConnection.port?.direction ?? null}
-        status={
-          <div
-            onPointerDown={(event) => event.stopPropagation()}
-            className="flex flex-wrap items-center justify-center gap-2 rounded-xl border border-border/60 bg-background/90 px-3 py-1 text-[10px] text-muted-foreground shadow-sm backdrop-blur"
-          >
-            {system === 'waste' ? 'Waste' : 'Vent'} · Q system
-            <RunHangerToggle
-              enabled={autoHangers}
-              onChange={setAutoHangers}
-              style={hangerStyle}
-              onStyleChange={setHangerStyle}
-            />
-            <select
-              className="bg-transparent text-foreground outline-none"
-              onChange={(event) => applyPreset(event.target.value)}
-              onPointerDown={(event) => event.stopPropagation()}
-              style={{ pointerEvents: 'auto' }}
-              value={presetId}
-            >
-              {PIPE_PRESETS.map((preset) => (
-                <option key={preset.id} value={preset.id}>
-                  {preset.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        }
         unit={unit}
       />
       {run.snapTarget && (

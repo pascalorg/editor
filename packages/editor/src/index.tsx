@@ -438,6 +438,11 @@ export {
 } from './lib/fresh-planar-placement'
 export { exportSceneToGlb, type GlbExportOptions } from './lib/glb-export'
 export {
+  type EditorGridEvent,
+  type GridEventScreenProjection,
+  getGridEventScreenProjection,
+} from './lib/grid-event-presentation'
+export {
   getHistoryCommandState,
   type HistoryCommandDelegate,
   type HistoryCommandResult,
