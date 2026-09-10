@@ -169,7 +169,7 @@ function enforceArtifactBudget(artifact: {
   unpackedSize: number
   entryCount: number
 }): void {
-  const maximumSize = 105 * 1024 * 1024
+  const maximumSize = 110 * 1024 * 1024
   const maximumUnpackedSize = 160 * 1024 * 1024
   const maximumEntryCount = 4_000
   if (

@@ -28,6 +28,7 @@ test('a short existing run cannot silently lose its required elbow', () => {
       null,
       null,
       profile,
+      useScene.getState().nodes,
     )
     expect(plan?.validationMessage).toBeTruthy()
   } finally {
@@ -36,9 +37,10 @@ test('a short existing run cannot silently lose its required elbow', () => {
 })
 
 test('a free run remains drawable', () => {
-  const plan = planDuctDraw([0, 0, 0], [2, 0, 0], null, null, null, null, profile)
+  const plan = planDuctDraw([0, 0, 0], [2, 0, 0], null, null, null, null, profile, {})
   expect(plan?.validationMessage).toBeNull()
   expect(plan?.ducts).toHaveLength(1)
+  expect(plan?.fittings.map((fitting) => fitting.fittingType)).toEqual(['end-cap', 'end-cap'])
 })
 
 test('a short branch reports failure instead of omitting its tee', () => {
@@ -59,6 +61,7 @@ test('a short branch reports failure instead of omitting its tee', () => {
       null,
       null,
       profile,
+      useScene.getState().nodes,
     )
     expect(plan?.validationMessage).toBeTruthy()
     expect(plan?.ducts).toHaveLength(0)

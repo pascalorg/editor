@@ -775,7 +775,6 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isLoading,
   isFirstPersonMode,
   isStudioMode,
-  renderPaused,
   onThumbnailCapture,
   viewerSceneSlot,
 }: {
@@ -783,7 +782,6 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isLoading: boolean
   isFirstPersonMode: boolean
   isStudioMode: boolean
-  renderPaused: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
   viewerSceneSlot?: ReactNode
 }) {
@@ -821,7 +819,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {!(isLoading || noEditing) && <ToolManager />}
       {isFirstPersonMode && <FirstPersonControls />}
       {isCaptureMode && <CaptureCameraRig />}
-      <CustomCameraControls paused={renderPaused} />
+      <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       {!isFirstPersonMode && <SiteEdgeLabels />}
       <InteractiveSystem />
@@ -1152,7 +1150,6 @@ const ViewerCanvas = memo(function ViewerCanvas({
             <ViewerSceneContent
               isFirstPersonMode={isFirstPersonMode}
               isLoading={showLoader}
-              renderPaused={!show3d && !showLoader}
               isStudioMode={isStudioMode}
               isVersionPreviewMode={isVersionPreviewMode}
               onThumbnailCapture={onThumbnailCapture}
@@ -1312,7 +1309,7 @@ function EditorContent({
     }
   }, [projectId])
 
-  // Load scene on mount (or when onLoad identity changes, e.g. project switch)
+  // Load on mount, project switches, and explicit retry attempts.
   useEffect(() => {
     void sceneLoadAttempt
     let cancelled = false

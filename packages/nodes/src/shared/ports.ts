@@ -1,4 +1,5 @@
 import {
+  type AnyNode,
   type AnyNodeId,
   findLevelAncestorId,
   type NodePort,
@@ -37,9 +38,12 @@ export type PortFilter = {
  * `def.ports`. Positions are level-local meters (the kind applies its own
  * transform inside `def.ports`).
  */
-export function collectScenePorts(filter: PortFilter = {}): ScenePort[] {
+export function collectScenePorts(
+  filter: PortFilter = {},
+  sceneNodes?: Readonly<Record<AnyNodeId, AnyNode>>,
+): ScenePort[] {
   const { excludeNodeId, systems, levelId } = filter
-  const { nodes } = useScene.getState()
+  const nodes = sceneNodes ?? useScene.getState().nodes
   const result: ScenePort[] = []
   for (const node of Object.values(nodes)) {
     if (
@@ -136,9 +140,10 @@ export function findNearestRunBodyXZ(
   point: readonly [number, number, number],
   radius: number,
   filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[]; levelId?: AnyNodeId } = {},
+  sceneNodes?: Readonly<Record<AnyNodeId, AnyNode>>,
 ): RunBodyHit | null {
   const kinds = filter.kinds ?? ['duct-segment']
-  const { nodes } = useScene.getState()
+  const nodes = sceneNodes ?? useScene.getState().nodes
   let best: RunBodyHit | null = null
   let bestDistSq = radius * radius
   for (const node of Object.values(nodes)) {
@@ -181,9 +186,10 @@ export function findNearestRunBody3D(
   radius: number,
   filter: { excludeNodeId?: AnyNodeId; kinds?: readonly string[]; levelId?: AnyNodeId } = {},
   surface?: RunSurfaceTarget | null,
+  sceneNodes?: Readonly<Record<AnyNodeId, AnyNode>>,
 ): RunBodyHit | null {
   const kinds = filter.kinds ?? ['duct-segment']
-  const { nodes } = useScene.getState()
+  const nodes = sceneNodes ?? useScene.getState().nodes
   let best: RunBodyHit | null = null
   let bestDistSq = radius * radius
   for (const node of Object.values(nodes)) {

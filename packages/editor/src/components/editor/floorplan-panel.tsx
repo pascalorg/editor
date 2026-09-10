@@ -90,6 +90,7 @@ import {
   worldToFloorplanLocalPoint,
 } from '../../lib/floorplan'
 import { resolveGenericFloorplanGridEventPoint } from '../../lib/floorplan-grid-event-point'
+import type { EditorGridEvent } from '../../lib/grid-event-presentation'
 import { groundHeightAt } from '../../lib/ground-surface'
 import { guideEmitter } from '../../lib/guide-events'
 import { measurementHint, parseMeasurement } from '../../lib/measurement-parser'
@@ -150,6 +151,7 @@ import {
   isBoxSelectPointerSuppressed,
   markBoxSelectHandled,
 } from '../tools/select/box-select-state'
+import { marqueePolygon } from '../tools/select/marquee-footprint'
 import {
   type Point2 as MarqueePoint2,
   polygonsIntersect as marqueePolygonsIntersect,
@@ -865,7 +867,8 @@ function collectFloorplanScreenSelectionIds(rect: ScreenRect, svg: SVGSVGElement
         | { start?: unknown; end?: unknown; polygon?: unknown }
         | undefined
       if (!node) continue
-      const { start, end, polygon } = node
+      const { start, end } = node
+      const polygon = marqueePolygon(node)
       if (isMarqueeVec2(start) && isMarqueeVec2(end)) {
         dataTested.add(id)
         if (marqueeSegmentIntersectsPolygon(start, end, planQuad)) hitIdsFromData.add(id)
@@ -8964,12 +8967,29 @@ export function FloorplanPanel({
       const groundY = groundHeightAt(worldX, worldZ, floorplanGridWorldY)
       const worldY = groundY ?? floorplanGridWorldY
       const localY = groundY === null ? floorplanGridLocalY : groundY - buildingPosition[1]
+      const planScene =
+        nativeEvent.currentTarget.querySelector<SVGGraphicsElement>('[data-floorplan-scene]')
+      const screenMatrix = planScene?.getScreenCTM()
 
-      emitter.emit(`grid:${eventType}` as any, {
+      const gridEvent: EditorGridEvent = {
         nativeEvent: nativeEvent.nativeEvent as any,
         position: [worldX, worldY, worldZ],
         localPosition: [planPoint[0], localY, planPoint[1]],
-      })
+        screenProjection: screenMatrix
+          ? {
+              pointer: [nativeEvent.clientX, nativeEvent.clientY],
+              localToScreen: [
+                screenMatrix.a,
+                screenMatrix.b,
+                screenMatrix.c,
+                screenMatrix.d,
+                screenMatrix.e,
+                screenMatrix.f,
+              ],
+            }
+          : undefined,
+      }
+      emitter.emit(`grid:${eventType}` as any, gridEvent)
     },
     [buildingPosition, buildingRotationY, floorplanGridLocalY, floorplanGridWorldY],
   )

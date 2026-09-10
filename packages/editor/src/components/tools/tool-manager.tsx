@@ -142,6 +142,7 @@ export const ToolManager: React.FC = () => {
   const selectedIds = useViewer((state) => state.selection.selectedIds)
   const buildingId = useViewer((state) => state.selection.buildingId)
   const activeLevelId = useViewer((state) => state.selection.levelId)
+  const unit = useViewer((state) => state.unit)
   const setSelection = useViewer((state) => state.setSelection)
   const nodes = useScene((state) => state.nodes)
   const registrySceneApi = useMemo(() => createSceneApi(useScene), [])
@@ -151,8 +152,9 @@ export const ToolManager: React.FC = () => {
       isCameraDragging: () => useViewer.getState().cameraDragging,
       sceneApi: registrySceneApi,
       selectNode: (nodeId: AnyNodeId) => setSelection({ selectedIds: [nodeId] }),
+      unit,
     }),
-    [activeLevelId, registrySceneApi, setSelection],
+    [activeLevelId, registrySceneApi, setSelection, unit],
   )
 
   // Building transform for the local group — all building-relative tools live inside this group

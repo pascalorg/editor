@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { type AnyNode, nodeRegistry, PipeFittingNode, registerNode } from '@pascal-app/core'
 import { pipeFittingDefinition } from '../pipe-fitting/definition'
 import { getPipeFittingPorts } from '../pipe-fitting/ports'
+import { createPipeRunEndCap } from '../shared/automatic-run-end-cap'
 import {
   pipeContinuationHandlePlan,
   pipeContinuationHandlePoint,
@@ -63,6 +64,28 @@ describe('pipe continuation', () => {
         {},
       ),
     ).toBeNull()
+  })
+
+  test('continues through an end cap so the draw commit can replace it', () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    try {
+      registerNode(pipeSegmentDefinition)
+      registerNode(pipeFittingDefinition)
+      const pipe = makePipe()
+      const cap = createPipeRunEndCap(pipe)!
+      const nodes = { [pipe.id]: pipe, [cap.id]: cap } as Record<string, AnyNode>
+
+      const handle = pipeContinuationHandlePlan(pipe, 'end', nodes)
+      expect(handle?.fittingId).toBe(cap.id)
+      const seed = resolvePipeContinuationSeed(
+        { continuation: { nodeId: pipe.id, endpoint: 'end', fittingId: cap.id } },
+        nodes,
+      )
+      expect(seed?.port.position).toEqual(pipe.path.at(-1))
+      expect(seed?.promotedFitting).toBeUndefined()
+    } finally {
+      restoreRegistry()
+    }
   })
 
   test('moves the action from a square bend to the future sanitary-tee outlet', () => {

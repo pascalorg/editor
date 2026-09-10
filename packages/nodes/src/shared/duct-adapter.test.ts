@@ -37,11 +37,13 @@ for (const source of profiles)
           null,
           null,
           target,
+          useScene.getState().nodes,
         )!
         expect(plan.validationMessage).toBeNull()
-        expect(plan.fittings).toHaveLength(source.shape === target.shape ? 0 : 1)
+        const adapters = plan.fittings.filter((fitting) => fitting.fittingType !== 'end-cap')
+        expect(adapters).toHaveLength(source.shape === target.shape ? 0 : 1)
         if (source.shape === target.shape) return
-        const fitting = plan.fittings[0]!
+        const fitting = adapters[0]!
         expect(fitting.fittingType).toBe('transition')
         const ports = getDuctFittingPorts(fitting)
         expect(ports.map((p) => p.shape)).toEqual([source.shape, target.shape])
@@ -76,11 +78,13 @@ for (const source of profiles)
       ductEndpointPort(run, 'start'),
       null,
       target,
+      useScene.getState().nodes,
     )!
     expect(plan.validationMessage).toBeNull()
-    expect(plan.fittings).toHaveLength(1)
-    expect(plan.fittings[0]!.fittingType).toBe('reducer')
-    const ports = getDuctFittingPorts(plan.fittings[0]!)
+    const adapters = plan.fittings.filter((fitting) => fitting.fittingType !== 'end-cap')
+    expect(adapters).toHaveLength(1)
+    expect(adapters[0]!.fittingType).toBe('reducer')
+    const ports = getDuctFittingPorts(adapters[0]!)
     expect(
       new Vector3(...ports[1]!.position).distanceTo(new Vector3(...plan.ducts[0]!.path[1]!)),
     ).toBeLessThan(1e-6)
@@ -102,6 +106,7 @@ test('insufficient length blocks the whole adapter placement', () => {
     null,
     null,
     profiles[0]!,
+    useScene.getState().nodes,
   )!
   expect(plan.validationMessage).toBeTruthy()
   expect(plan.fittings).toHaveLength(0)
@@ -124,11 +129,13 @@ test('a bend with a profile change keeps the elbow and adds a transition', () =>
     null,
     null,
     profiles[0]!,
+    useScene.getState().nodes,
   )!
   expect(plan.validationMessage).toBeNull()
-  expect(plan.fittings.map((f) => f.fittingType)).toEqual(['elbow', 'transition'])
-  const elbowEnd = getDuctFittingPorts(plan.fittings[0]!)[1]!
-  const inlet = getDuctFittingPorts(plan.fittings[1]!)[0]!
+  const adapters = plan.fittings.filter((fitting) => fitting.fittingType !== 'end-cap')
+  expect(adapters.map((f) => f.fittingType)).toEqual(['elbow', 'transition'])
+  const elbowEnd = getDuctFittingPorts(adapters[0]!)[1]!
+  const inlet = getDuctFittingPorts(adapters[1]!)[0]!
   expect(new Vector3(...elbowEnd.position).distanceTo(new Vector3(...inlet.position))).toBeLessThan(
     1e-6,
   )
@@ -154,15 +161,16 @@ test('adapter and duct are committed, undone, and redone together', () => {
     null,
     null,
     profiles[0]!,
+    useScene.getState().nodes,
   )!
   useScene.getState().applyNodeChanges({
     create: [...plan.fittings, ...plan.ducts].map((node) => ({ node, parentId: null })),
     update: plan.updates,
   })
-  expect(Object.values(useScene.getState().nodes)).toHaveLength(3)
+  expect(Object.values(useScene.getState().nodes)).toHaveLength(4)
   history.undo()
   expect(Object.values(useScene.getState().nodes)).toEqual([run])
   history.redo()
-  expect(Object.values(useScene.getState().nodes)).toHaveLength(3)
+  expect(Object.values(useScene.getState().nodes)).toHaveLength(4)
   history.clear()
 })

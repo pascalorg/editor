@@ -1,6 +1,13 @@
 'use client'
 
-import { emitter, type GridEvent, PipeFittingNode, useScene } from '@pascal-app/core'
+import {
+  type AnyNode,
+  type AnyNodeId,
+  emitter,
+  type GridEvent,
+  PipeFittingNode,
+  PipeSegmentNode,
+} from '@pascal-app/core'
 import {
   CursorSphere,
   EDITOR_LAYER,
@@ -9,11 +16,11 @@ import {
   triggerSFX,
   useEditor,
   useInteractionScope,
+  useRegistryToolContext,
 } from '@pascal-app/editor'
-import { useViewer } from '@pascal-app/viewer'
 import { Html } from '@react-three/drei'
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Euler, type Material, Mesh, Quaternion, Vector3 } from 'three'
+import { Euler, type Material, Mesh, MeshStandardMaterial, Quaternion, Vector3 } from 'three'
 import { accessoryCursor } from '../shared/accessory-cursor'
 import { inheritFittingProfile } from '../shared/accessory-placement'
 import {
@@ -31,9 +38,20 @@ import {
 } from '../shared/fitting-rotation'
 import { createFittingSurfaceSupport } from '../shared/fitting-surface-support'
 import { LevelOffsetGroup } from '../shared/level-offset-group'
-import { collectScenePorts, DWV_PORT_SYSTEMS, type ScenePort } from '../shared/ports'
+import {
+  collectScenePorts,
+  DWV_PORT_SYSTEMS,
+  findNearestRunBody3D,
+  findNearestRunBodyXZ,
+  type ScenePort,
+} from '../shared/ports'
 import { pipeFittingDefinition } from './definition'
 import { buildPipeFittingGeometry } from './geometry'
+import {
+  isInlinePipeFitting,
+  type PipeInlineInsertionPlan,
+  planPipeInlineInsertion,
+} from './inline-insertion'
 import { localPipeFittingPorts } from './ports'
 
 const PREVIEW_OPACITY = 0.55
@@ -42,8 +60,14 @@ type Placement = {
   position: [number, number, number]
   rotation: [number, number, number]
   snapPort: ScenePort | null
+  insertion: PipeInlineInsertionPlan | null
   node: PipeFittingNode
   valid: boolean
+}
+
+type PlacementContext = {
+  levelId: AnyNodeId | null
+  nodes: Readonly<Record<AnyNodeId, AnyNode>>
 }
 
 /**
@@ -63,19 +87,20 @@ export function resolvePlacement(
   surfaceHit: boolean,
   surfaceNormal?: [number, number, number],
   support = createFittingSurfaceSupport(),
+  context: PlacementContext = { levelId: null, nodes: {} },
 ): Placement {
-  const levelId = useViewer.getState().selection.levelId
+  const { levelId, nodes } = context
   const port = levelId
     ? findAccessoryPort(
         raw,
-        collectScenePorts({ systems: DWV_PORT_SYSTEMS, levelId }),
+        collectScenePorts({ systems: DWV_PORT_SYSTEMS, levelId }, nodes),
         isGridSnapActive() || isMagneticSnapActive(),
         surfaceHit,
       )
     : null
   if (port) {
     clearDrawAlignment()
-    const fittedNode = inheritFittingProfile(previewNode, port, useScene.getState().nodes)
+    const fittedNode = inheritFittingProfile(previewNode, port, nodes)
     const direction = new Vector3(...port.direction).normalize()
     // Local +X must map onto the port's outward direction so the inlet
     // (local -X) faces back into the run it's joining. Manual rotation
@@ -90,8 +115,61 @@ export function resolvePlacement(
       position: [position.x, position.y, position.z],
       rotation: [euler.x, euler.y, euler.z],
       snapPort: port,
+      insertion: null,
       node: fittedNode,
       valid: true,
+    }
+  }
+  const snappingEnabled = isGridSnapActive() || isMagneticSnapActive()
+  if (levelId && snappingEnabled && isInlinePipeFitting(previewNode)) {
+    const filter = {
+      kinds: ['pipe-segment'],
+      levelId,
+    } as const
+    const hit = surfaceHit
+      ? findNearestRunBody3D(raw, 0.5, filter, undefined, nodes)
+      : findNearestRunBodyXZ(raw, 0.5, filter, nodes)
+    const run = hit ? nodes[hit.nodeId] : null
+    if (hit && run?.type === 'pipe-segment') {
+      const insertion = planPipeInlineInsertion(run, hit, previewNode)
+      const axis = new Vector3(...run.path[hit.segmentIndex + 1]!)
+        .sub(new Vector3(...run.path[hit.segmentIndex]!))
+        .normalize()
+      const target: ScenePort = {
+        id: 'body',
+        nodeId: run.id,
+        position: hit.point,
+        direction: [axis.x, axis.y, axis.z],
+        diameter: run.diameter,
+        system: run.system,
+      }
+      if (insertion) {
+        clearDrawAlignment()
+        return {
+          position: insertion.fitting.position,
+          rotation: insertion.fitting.rotation,
+          snapPort: target,
+          insertion,
+          node: insertion.fitting,
+          valid: true,
+        }
+      }
+      const orientation = new Euler().setFromQuaternion(
+        new Quaternion().setFromUnitVectors(new Vector3(1, 0, 0), axis),
+      )
+      return {
+        position: hit.point,
+        rotation: [orientation.x, orientation.y, orientation.z],
+        snapPort: target,
+        insertion: null,
+        node: PipeFittingNode.parse({
+          ...previewNode,
+          diameter: run.diameter,
+          pipeMaterial: run.pipeMaterial,
+          system: run.system,
+        }),
+        valid: false,
+      }
     }
   }
   const euler = new Euler().setFromQuaternion(manualQuat)
@@ -104,6 +182,7 @@ export function resolvePlacement(
     position: support(previewNode, rotation, snapped, raw, surfaceNormal),
     rotation,
     snapPort: null,
+    insertion: null,
     node: previewNode,
     valid: true,
   }
@@ -126,7 +205,7 @@ export function resolvePlacement(
  * node happens to be selected.
  */
 const PipeFittingTool = () => {
-  const activeLevelId = useViewer((s) => s.selection.levelId)
+  const { activeLevelId, sceneApi, selectNode } = useRegistryToolContext()
   const [placement, setPlacement] = useState<Placement | null>(null)
   const toolDefaults = useEditor((s) => s.toolDefaults['pipe-fitting'])
   const axis = useEditor((s) => s.rotationAxis)
@@ -160,6 +239,9 @@ const PipeFittingTool = () => {
       if (child instanceof Mesh) {
         const clone = (material: Material) => {
           const copy = material.clone()
+          if (placement?.valid === false && copy instanceof MeshStandardMaterial) {
+            copy.color.set('#dc2626')
+          }
           copy.transparent = true
           copy.opacity = PREVIEW_OPACITY
           return copy
@@ -170,7 +252,7 @@ const PipeFittingTool = () => {
       }
     })
     return group
-  }, [displayNode, placement?.rotation])
+  }, [displayNode, placement?.rotation, placement?.valid])
 
   useEffect(
     () => () => {
@@ -208,6 +290,7 @@ const PipeFittingTool = () => {
         surfaceHitRef.current,
         surfaceNormalRef.current,
         support,
+        { levelId: activeLevelId, nodes: sceneApi.nodes() },
       )
       setPlacement((previous) => ({
         ...next,
@@ -242,6 +325,7 @@ const PipeFittingTool = () => {
         surfaceHitRef.current,
         surfaceNormalRef.current,
         support,
+        { levelId: activeLevelId, nodes: sceneApi.nodes() },
       )
       if (!resolved.valid) return
       const fitting = PipeFittingNode.parse({
@@ -251,8 +335,24 @@ const PipeFittingTool = () => {
         position: resolved.position,
         rotation: resolved.rotation,
       })
-      useScene.getState().createNode(fitting, activeLevelId)
-      useViewer.getState().setSelection({ selectedIds: [fitting.id] })
+      if (resolved.insertion) {
+        const parentId = (resolved.insertion.runTail.parentId as AnyNodeId | null) ?? activeLevelId
+        const runTail = PipeSegmentNode.parse({
+          ...resolved.insertion.runTail,
+          id: undefined,
+        })
+        if (!sceneApi.applyChanges) throw new Error('Registry SceneApi must support atomic changes')
+        sceneApi.applyChanges({
+          update: [resolved.insertion.runUpdate],
+          create: [
+            { node: fitting, parentId },
+            { node: runTail, parentId },
+          ],
+        })
+      } else {
+        sceneApi.upsert(fitting, activeLevelId)
+      }
+      selectNode(fitting.id)
       triggerSFX('sfx:item-place')
     }
 
@@ -295,7 +395,7 @@ const PipeFittingTool = () => {
       emitter.off('grid:click', onClick)
       window.removeEventListener('keydown', onKeyDown, true)
     }
-  }, [activeLevelId, previewNode, support])
+  }, [activeLevelId, previewNode, sceneApi, selectNode, support])
 
   if (!activeLevelId || !placement) return null
 
