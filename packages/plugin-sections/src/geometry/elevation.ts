@@ -55,6 +55,40 @@ export function elevationAngle(direction: 'north' | 'east' | 'south' | 'west'): 
   }
 }
 
+/**
+ * The body's primitives as INK ALONE: every filled shape with no fill and a
+ * projected-weight stroke, every drawn line kept but the cladding courses
+ * and stipple (the hairlines under WEIGHT.detail) dropped, text untouched.
+ * Over a picture of the same geometry these are the vector outlines — the
+ * edges, the openings, the trim — in register with it.
+ */
+export function inkOutlines(primitives: readonly FloorplanGeometry[]): FloorplanGeometry[] {
+  const out: FloorplanGeometry[] = []
+  for (const p of primitives) {
+    switch (p.kind) {
+      case 'polygon':
+      case 'rect':
+      case 'circle':
+      case 'path':
+        out.push({ ...p, fill: 'none', stroke: INK, strokeWidth: WEIGHT.projected, opacity: 1 } as FloorplanGeometry)
+        break
+      case 'line':
+      case 'polyline': {
+        const width = (p as { strokeWidth?: number }).strokeWidth ?? WEIGHT.projected
+        if (width < WEIGHT.detail - 1e-9) break
+        out.push({ ...p, stroke: INK, opacity: 1 } as FloorplanGeometry)
+        break
+      }
+      case 'group':
+        out.push({ ...p, children: inkOutlines(p.children) } as FloorplanGeometry)
+        break
+      default:
+        out.push(p)
+    }
+  }
+  return out
+}
+
 /** The first building's world position — the model's frame origin; the drawing's elevation 0 is its y. */
 export function buildingOrigin(scene: DrawingScene): [number, number, number] {
   for (const node of Object.values(scene.nodes)) {
@@ -195,6 +229,12 @@ export function buildElevationDrawing(
         y > wall.baseY + 1e-6 &&
         y < wall.topY - 1e-6,
     )
+  // the pieces whose faces the viewer sees — the exterior walls that face
+  // the view and are not hidden behind a nearer one — become the OUTLINE
+  // set: their edges, openings and trim as ink alone, laid over a picture
+  // of the same geometry (Steve, 2026-09-10: "overlay the vector lines
+  // perfectly without colors and lined those up perfectly")
+  const outlinePieces: ProjectedPiece[] = []
   for (const { wall, span } of spans) {
     const piece = projectWall(view, wall, { finish: true })
     if (!piece || !span) continue
@@ -206,6 +246,7 @@ export function buildElevationDrawing(
       (t) => !covered(wall, span.u[0] + (span.u[1] - span.u[0]) * t, yMid, span.depth),
     )
     if (!faceShows) continue
+    outlinePieces.push(piece)
     const key = wall.exteriorFinish ?? 'unspecified'
     finishesUsed.set(key, (finishesUsed.get(key) ?? 0) + 1)
     if (wall.exteriorFinish && wall.claddingColor) {
@@ -222,14 +263,38 @@ export function buildElevationDrawing(
   }
   // Whatever is placed in the scene, where it stands: trees, the condenser,
   // furniture behind glass — boxes at their real size, hidden by nearer walls.
+  // an item or a feature joins the outline set only where it stands in
+  // the open — furniture behind the front wall is hidden by that wall's
+  // face, so its box must not print as lines over the picture
+  const inTheOpen = (piece: ProjectedPiece): boolean => {
+    const box = boundsFromPrimitives(piece.primitives)
+    if (!box) return false
+    const uMid = (box.minX + box.maxX) / 2
+    const yMid = -(box.minY + box.maxY) / 2
+    return !spans.some(
+      ({ wall, span }) =>
+        span !== null &&
+        span.depth < piece.depth - 1e-6 &&
+        uMid > span.u[0] + 1e-6 &&
+        uMid < span.u[1] - 1e-6 &&
+        yMid > wall.baseY + 1e-6 &&
+        yMid < wall.topY - 1e-6,
+    )
+  }
   for (const item of built.items) {
     const piece = projectItem(view, item)
-    if (piece) projected.push(piece)
+    if (piece) {
+      projected.push(piece)
+      if (inTheOpen(piece)) outlinePieces.push(piece)
+    }
   }
   // The porch posts, the guards, the flights and the trees, where they stand.
   for (const feature of built.features) {
     const piece = projectFeature(view, feature)
-    if (piece) projected.push(piece)
+    if (piece) {
+      projected.push(piece)
+      if (inTheOpen(piece)) outlinePieces.push(piece)
+    }
   }
   for (const prism of built.prisms) {
     // A slab's edge is only worth showing where it is exposed; drawing every
@@ -267,6 +332,7 @@ export function buildElevationDrawing(
     })
     if (!piece) continue
     projected.push(piece)
+    outlinePieces.push(piece)
     // The fascia board along the eave — where the eave edge runs across the
     // view (the segment's down-slope axis pointing at or away from us): a
     // 1x8 in the trim colour hanging from the eave line, drawn with the
@@ -292,6 +358,9 @@ export function buildElevationDrawing(
   }
 
   const body = [...paintProjected(projected), ...roofDetail]
+  // the outline set drawn nearest-last like the body, ink only, the
+  // cladding courses and stipple left out
+  const outlines = inkOutlines([...paintProjected(outlinePieces), ...roofDetail])
   const bodyBounds = boundsFromPrimitives(body)
   if (!bodyBounds) {
     return {
@@ -371,7 +440,7 @@ export function buildElevationDrawing(
   const datums = datumMarks(built, bodyBounds.minX, bodyBounds.maxX, view)
   const full = [...datums, ...body, ...grade.primitives, ...tags, ...finishKey]
   const primitives = options.overlaysOnly
-    ? [...datums, ...grade.primitives, ...tags, ...finishKey]
+    ? [...datums, ...outlines, ...grade.primitives, ...tags, ...finishKey]
     : full
   const raw = boundsFromPrimitives(full) ?? EMPTY_BOUNDS
   const frame: ElevationFrame = {

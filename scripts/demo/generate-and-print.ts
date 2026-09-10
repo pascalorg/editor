@@ -89,7 +89,9 @@ registerSheetDrawingProvider('section', (nodes, args) => {
   // handler and the physical equipment as prisms — cut and shown beyond
   const model = buildBuildingModel(nodes as never)
   model.prisms.push(...(bonesSectionPrisms(nodes as never, model.levels) as never[]))
-  return buildSectionDrawing({ nodes: nodes as never }, args as never, model)
+  return buildSectionDrawing({ nodes: nodes as never }, args as never, model, {
+    beyondFromImage: (args as { imageBacked?: boolean }).imageBacked === true,
+  })
 })
 registerSheetDrawingProvider('elevation', (nodes, args) => {
   const model = buildBuildingModel(nodes as never)
@@ -98,6 +100,7 @@ registerSheetDrawingProvider('elevation', (nodes, args) => {
     { nodes: nodes as never },
     ((args as { direction?: string }).direction ?? 'south') as never,
     model,
+    { overlaysOnly: (args as { imageBacked?: boolean }).imageBacked === true },
   )
 })
 registerSitePlanContributor('utilities', (scene) => buildUtilitiesDrawing(scene as never))
