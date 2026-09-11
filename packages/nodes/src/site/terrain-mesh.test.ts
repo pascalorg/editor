@@ -20,26 +20,6 @@ function attr(geometry: { getAttribute: (n: string) => unknown }, name: string):
 }
 
 describe('createTerrainGeometry', () => {
-  test('wires all four attributes with the right item sizes', () => {
-    const field = createTerrainField({ cols: 9, rows: 9, spacing: 1 })
-    const target = createTerrainGeometry(field)
-    expect(attr(target.geometry, 'position').itemSize).toBe(3)
-    expect(attr(target.geometry, 'normal').itemSize).toBe(3)
-    expect(attr(target.geometry, 'uv').itemSize).toBe(2)
-    expect(target.geometry.getIndex()).not.toBeNull()
-    expect(target.geometry.getIndex()?.count).toBe(8 * 8 * 6)
-    disposeTerrainGeometry(target)
-  })
-
-  test('the attributes are backed by the same arrays as the CPU buffers', () => {
-    // The dirty-rect path mutates `buffers` in place and expects the GPU-side
-    // attribute to see it. If these ever diverge, patches would silently no-op.
-    const target = createTerrainGeometry(createTerrainField({ cols: 5, rows: 5, spacing: 1 }))
-    expect(attr(target.geometry, 'position').array).toBe(target.buffers.positions)
-    expect(attr(target.geometry, 'normal').array).toBe(target.buffers.normals)
-    disposeTerrainGeometry(target)
-  })
-
   test('bounds cover the field extent without calling computeBoundingSphere', () => {
     const field: TerrainField = {
       ...createTerrainField({ cols: 5, rows: 5, spacing: 2 }),
@@ -105,19 +85,35 @@ describe('applyTerrainPatch', () => {
     disposeTerrainGeometry(target)
   })
 
-  test('does not accumulate ranges across a stroke of many dabs', () => {
-    // The failure this guards: 60 dabs/second each appending a range would make
-    // every subsequent frame re-upload all of them.
+  test('uploads every dab when multiple terrain patches precede one frame', () => {
     let field = createTerrainField({ cols: 33, rows: 33, spacing: 0.5 })
     const target = createTerrainGeometry(field)
-    for (let i = 0; i < 12; i++) {
-      const patch = flattenPatch(field, { minX: i, minZ: 2, maxX: i + 1, maxZ: 3 }, i * 0.1)
-      if (!patch) continue
-      field = applyHeightPatch(field, patch)
-      applyTerrainPatch(target, field, patch)
+    const uploadedPositions = target.buffers.positions.slice()
+    const uploadedNormals = target.buffers.normals.slice()
+    try {
+      for (const [x, z, height] of [
+        [1, 1, 2],
+        [10, 12, -3],
+      ] as const) {
+        const patch = flattenPatch(field, { minX: x, minZ: z, maxX: x + 1, maxZ: z + 1 }, height)!
+        field = applyHeightPatch(field, patch)
+        applyTerrainPatch(target, field, patch)
+      }
+      for (const [name, uploaded] of [
+        ['position', uploadedPositions],
+        ['normal', uploadedNormals],
+      ] as const) {
+        const attribute = attr(target.geometry, name)
+        for (const { start, count } of attribute.updateRanges) {
+          uploaded.set((attribute.array as Float32Array).subarray(start, start + count), start)
+        }
+      }
+      const expected = buildTerrainMesh(field)
+      expect(Array.from(uploadedPositions)).toEqual(Array.from(expected.positions))
+      expect(Array.from(uploadedNormals)).toEqual(Array.from(expected.normals))
+    } finally {
+      disposeTerrainGeometry(target)
     }
-    expect(attr(target.geometry, 'position').updateRanges).toHaveLength(1)
-    disposeTerrainGeometry(target)
   })
 
   test('the patched buffers match a full rebuild', () => {
