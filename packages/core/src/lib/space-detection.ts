@@ -281,10 +281,14 @@ function bboxOverlapArea(a: ReturnType<typeof bboxOf>, b: ReturnType<typeof bbox
 // sampling a grid of cell centers over the subject's bbox. Cheap and robust
 // enough for the merge-vs-demote decision; exact polygon clipping would be a
 // heavy dependency for a 60% threshold.
-function polygonCoverageRatio(subject: Point2D[], covers: Point2D[][]) {
+function polygonCoverageRatio(
+  subject: Point2D[],
+  covers: Point2D[][],
+  subjectBounds?: ReturnType<typeof bboxOf>,
+) {
   if (subject.length < 3 || covers.length === 0) return 0
 
-  const bbox = bboxOf(subject)
+  const bbox = subjectBounds ?? bboxOf(subject)
   const width = bbox.maxX - bbox.minX
   const height = bbox.maxY - bbox.minY
 
@@ -898,6 +902,18 @@ function sameTuplePolygon(current: Array<[number, number]>, next: Array<[number,
   )
 }
 
+function sameTuplePolygonRotation(current: Array<[number, number]>, next: Array<[number, number]>) {
+  if (sameTuplePolygon(current, next)) return true
+  if (current.length !== next.length) return false
+  // Preserve the stored ring when extraction only changes its starting vertex.
+  return next.some((_, offset) =>
+    current.every((point, index) => {
+      const candidate = next[(index + offset) % next.length]!
+      return point[0] === candidate[0] && point[1] === candidate[1]
+    }),
+  )
+}
+
 function sameTuplePolygons(
   current: Array<Array<[number, number]>>,
   next: Array<Array<[number, number]>>,
@@ -1334,13 +1350,27 @@ function buildSpace(levelId: string, room: ExtractedRoom): Space {
 
 type RoomSurface = SlabNodeType | CeilingNodeType
 
-function surfaceTouchesRooms(surface: RoomSurface, rooms: ExtractedRoom[]) {
-  const polygon = surface.polygon.map(pointFromTuple)
-  return rooms.some(
-    (room) =>
-      polygonCoverageRatio(polygon, [room.polygon]) > 0 ||
-      polygonCoverageRatio(room.polygon, [polygon]) > 0,
-  )
+type BoundedPolygon = {
+  polygon: Point2D[]
+  bbox: ReturnType<typeof bboxOf>
+}
+
+export function surfaceTouchesRooms(surface: BoundedPolygon, rooms: BoundedPolygon[]) {
+  const { polygon, bbox } = surface
+  return rooms.some((room) => {
+    if (
+      bbox.maxX < room.bbox.minX ||
+      room.bbox.maxX < bbox.minX ||
+      bbox.maxY < room.bbox.minY ||
+      room.bbox.maxY < bbox.minY
+    ) {
+      return false
+    }
+    return (
+      polygonCoverageRatio(polygon, [room.polygon], bbox) > 0 ||
+      polygonCoverageRatio(room.polygon, [polygon], room.bbox) > 0
+    )
+  })
 }
 
 function roomsAreRelated(beforeRoom: ExtractedRoom, currentRoom: ExtractedRoom) {
@@ -1772,7 +1802,7 @@ export function planAutoSlabsForLevel(
                   holeMetadata: [],
                 })
         const data: Partial<SlabNodeType> = {}
-        if (!sameTuplePolygon(slab.polygon, update.polygon)) data.polygon = update.polygon
+        if (!sameTuplePolygonRotation(slab.polygon, update.polygon)) data.polygon = update.polygon
         if (!sameTuplePolygons(slab.holes, openings.holes)) data.holes = openings.holes
         if (!sameHoleMetadata(slab.holeMetadata, openings.holeMetadata)) {
           data.holeMetadata = openings.holeMetadata
@@ -1950,7 +1980,8 @@ export function planAutoCeilingsForLevel(
                   holeMetadata: [],
                 })
         const data: Partial<CeilingNodeType> = {}
-        if (!sameTuplePolygon(ceiling.polygon, update.polygon)) data.polygon = update.polygon
+        if (!sameTuplePolygonRotation(ceiling.polygon, update.polygon))
+          data.polygon = update.polygon
         if (!sameTuplePolygons(ceiling.holes, openings.holes)) data.holes = openings.holes
         if (!sameHoleMetadata(ceiling.holeMetadata, openings.holeMetadata)) {
           data.holeMetadata = openings.holeMetadata
@@ -2247,11 +2278,14 @@ function runIndexedSpaceDetection(
     )
   }
 
-  const scopedRooms = [...topologyDelta.beforeRooms, ...topologyDelta.currentRooms]
+  const scopedRooms = [...topologyDelta.beforeRooms, ...topologyDelta.currentRooms].map((room) => ({
+    polygon: room.polygon,
+    bbox: bboxOf(room.polygon),
+  }))
   if (scopedRooms.length > 0) {
-    const unaffectedRooms = topologyDelta.allCurrentRooms.filter(
-      (room) => !topologyDelta.currentRooms.includes(room),
-    )
+    const unaffectedRooms = topologyDelta.allCurrentRooms
+      .filter((room) => !topologyDelta.currentRooms.includes(room))
+      .map((room) => ({ polygon: room.polygon, bbox: bboxOf(room.polygon) }))
     const currentChildren = levelChildren(nodes, levelId)
     const allSlabs: SlabNodeType[] = currentChildren
       .filter((node: any): node is SlabNodeType => node.type === 'slab')
@@ -2259,16 +2293,16 @@ function runIndexedSpaceDetection(
     const allCeilings: CeilingNodeType[] = currentChildren
       .filter((node: any): node is CeilingNodeType => node.type === 'ceiling')
       .map((ceiling: CeilingNodeType) => CeilingNode.parse(ceiling))
-    const slabs = allSlabs.filter(
-      (slab) =>
-        surfaceTouchesRooms(slab, scopedRooms) &&
-        (!slab.autoFromWalls || !surfaceTouchesRooms(slab, unaffectedRooms)),
-    )
-    const ceilings = allCeilings.filter(
-      (ceiling) =>
-        surfaceTouchesRooms(ceiling, scopedRooms) &&
-        (!ceiling.autoFromWalls || !surfaceTouchesRooms(ceiling, unaffectedRooms)),
-    )
+    const touchesScopedRooms = (surface: RoomSurface) => {
+      const polygon = surface.polygon.map(pointFromTuple)
+      const bounded = { polygon, bbox: bboxOf(polygon) }
+      return (
+        surfaceTouchesRooms(bounded, scopedRooms) &&
+        (!surface.autoFromWalls || !surfaceTouchesRooms(bounded, unaffectedRooms))
+      )
+    }
+    const slabs = allSlabs.filter(touchesScopedRooms)
+    const ceilings = allCeilings.filter(touchesScopedRooms)
     const slabRooms = roomsEligibleForAutoSurface(
       topologyDelta.beforeRooms,
       topologyDelta.currentRooms,
