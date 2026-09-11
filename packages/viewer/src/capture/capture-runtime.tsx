@@ -29,7 +29,6 @@ import type { Object3D } from 'three'
 import { ErrorBoundary } from '../components/error-boundary'
 import { useNodeEvents } from '../hooks/use-node-events'
 import useViewer from '../store/use-viewer'
-import { rewriteLoopbackAssetUrl } from './asset-url'
 import { resolveCaptureFrameMatrix } from './frame'
 import { isCaptureSessionVisible, isCaptureStreamVisible } from './layer-visibility'
 import { CaptureDeviceMotionLayer } from './layers/device-motion-layer'
@@ -45,6 +44,7 @@ import {
   streamHydratesJsonPayload,
 } from './stream-rendering'
 import { parseDeviceTrajectoryPackets, parseDeviceTrajectoryPayload } from './trajectory'
+import { useJsonArtifactPayload } from './use-json-artifact'
 
 export type CaptureMeshPresentation = {
   dollhouse?: boolean
@@ -356,34 +356,6 @@ export function CaptureStreamLayer({
       {content}
     </group>
   )
-}
-
-function useJsonArtifactPayload(url: string | null): unknown {
-  const [error, setError] = useState<Error | null>(null)
-  const [payload, setPayload] = useState<unknown>(null)
-
-  useEffect(() => {
-    setError(null)
-    setPayload(null)
-    if (!url) return
-    const abort = new AbortController()
-    void fetch(rewriteLoopbackAssetUrl(url), { signal: abort.signal })
-      .then(async (response) => {
-        if (!response.ok) throw new Error(`Could not load ${url}: ${response.status}`)
-        return (await response.json()) as unknown
-      })
-      .then((data) => {
-        if (!abort.signal.aborted) setPayload(data)
-      })
-      .catch((cause: unknown) => {
-        if (abort.signal.aborted) return
-        setError(cause instanceof Error ? cause : new Error(`Could not load ${url}.`))
-      })
-    return () => abort.abort()
-  }, [url])
-
-  if (error) throw error
-  return payload
 }
 
 function useResolvedArtifact(
