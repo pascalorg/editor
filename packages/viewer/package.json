@@ -10,6 +10,16 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
+    },
+    "./capture": {
+      "types": "./dist/capture/index.d.ts",
+      "import": "./dist/capture/index.js",
+      "default": "./dist/capture/index.js"
+    },
+    "./capture/preview": {
+      "types": "./dist/capture/preview.d.ts",
+      "import": "./dist/capture/preview.js",
+      "default": "./dist/capture/preview.js"
     }
   },
   "files": [

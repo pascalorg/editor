@@ -5,7 +5,7 @@ import {
   DeviceMotionTrajectorySchema,
   PointCloudPayloadSchema,
   SurfaceMeshPayloadSchema,
-} from '@pascal-app/capture-protocol'
+} from '@pascal-app/core/capture'
 
 const GLB_MEDIA_TYPES = new Set(['model/gltf-binary', 'model/gltf+json'])
 const USDZ_MEDIA_TYPES = new Set(['model/vnd.usdz+zip'])

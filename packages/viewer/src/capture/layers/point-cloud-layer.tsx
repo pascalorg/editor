@@ -1,6 +1,6 @@
 'use client'
 
-import type { CaptureStreamPacket } from '@pascal-app/capture-protocol'
+import type { CaptureStreamPacket } from '@pascal-app/core/capture'
 import { useLoader } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { BufferGeometry, Float32BufferAttribute } from 'three'

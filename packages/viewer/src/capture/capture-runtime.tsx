@@ -1,5 +1,6 @@
 'use client'
 
+import { type ScanNode, sceneRegistry, useScene } from '@pascal-app/core'
 import {
   type CaptureArtifactReference,
   CaptureArtifactReferenceSchema,
@@ -12,9 +13,7 @@ import {
   type CaptureStreamPacket,
   captureLayerKey,
   DeviceMotionTrajectorySchema,
-} from '@pascal-app/capture-protocol'
-import { type ScanNode, sceneRegistry, useScene } from '@pascal-app/core'
-import { ErrorBoundary, useNodeEvents, useViewer } from '@pascal-app/viewer'
+} from '@pascal-app/core/capture'
 import { createPortal, useFrame } from '@react-three/fiber'
 import {
   type ComponentType,
@@ -27,6 +26,9 @@ import {
   useState,
 } from 'react'
 import type { Object3D } from 'three'
+import { ErrorBoundary } from '../components/error-boundary'
+import { useNodeEvents } from '../hooks/use-node-events'
+import useViewer from '../store/use-viewer'
 import { rewriteLoopbackAssetUrl } from './asset-url'
 import { resolveCaptureFrameMatrix } from './frame'
 import { isCaptureSessionVisible, isCaptureStreamVisible } from './layer-visibility'

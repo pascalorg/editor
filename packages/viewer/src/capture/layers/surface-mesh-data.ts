@@ -1,4 +1,4 @@
-import { SurfaceMeshPayloadSchema } from '@pascal-app/capture-protocol'
+import { SurfaceMeshPayloadSchema } from '@pascal-app/core/capture'
 import { BufferGeometry, Float32BufferAttribute, Uint16BufferAttribute } from 'three'
 
 export type SurfaceMeshData = {

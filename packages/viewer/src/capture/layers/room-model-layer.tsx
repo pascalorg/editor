@@ -1,10 +1,10 @@
 'use client'
 
-import { useGLTFKTX2 } from '@pascal-app/viewer'
 import { useLoader } from '@react-three/fiber'
 import { useEffect, useMemo } from 'react'
 import { DoubleSide, FrontSide, type Material, type Mesh, type Object3D } from 'three'
 import { USDLoader } from 'three/addons/loaders/USDLoader.js'
+import { useGLTFKTX2 } from '../../hooks/use-gltf-ktx2'
 import { rewriteLoopbackAssetUrl } from '../asset-url'
 import type { CaptureModelFormat } from '../stream-rendering'
 

@@ -21,6 +21,11 @@
       "import": "./dist/utils/scene-migrations.js",
       "default": "./dist/utils/scene-migrations.js"
     },
+    "./capture": {
+      "types": "./dist/capture/index.d.ts",
+      "import": "./dist/capture/index.js",
+      "default": "./dist/capture/index.js"
+    },
     "./registry": {
       "types": "./dist/registry/index.d.ts",
       "import": "./dist/registry/index.js",
@@ -76,7 +81,6 @@
     "three": "^0.186"
   },
   "dependencies": {
-    "@pascal-app/capture-protocol": "^1.0.0-beta.4",
     "dedent": "^1.7.1",
     "idb-keyval": "^6.2.2",
     "mitt": "^3.0.1",

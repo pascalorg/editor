@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { CaptureSessionDescriptor } from '@pascal-app/capture-protocol'
+import type { CaptureSessionDescriptor } from '@pascal-app/core/capture'
 import { Vector3 } from 'three'
 import { resolveCaptureFrameMatrix } from './frame'
 
