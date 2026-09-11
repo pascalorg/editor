@@ -1,11 +1,13 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  BlockNode,
   BuildingNode,
   ColumnNode,
   DEFAULT_WALL_HEIGHT,
   DEFAULT_WALL_THICKNESS,
   DoorNode,
+  GROUND_SUPPORT_ID,
   LevelNode,
   RoofNode,
   SiteNode,
@@ -16,6 +18,7 @@ import {
 } from '@pascal-app/core'
 import { customAlphabet } from 'nanoid'
 import * as WebIFC from 'web-ifc'
+import { extractBeamGeometry } from './beam-geometry'
 import { type IfcConversionSimplificationOptions, simplifyConvertedSceneGraph } from './cleanup'
 
 export type {
@@ -1845,31 +1848,55 @@ export async function convertIfcToPascal(
     }
   }
 
-  // Beams: skipped for now — Pascal has no `beam` node type yet. When it
-  // lands in @pascal-app/core, restore the IFCBEAM → BeamNode mapping
-  // (axis polyline → start/end [x,y,z], profile XDim/YDim → width/depth,
-  // extrusion depth → axis length). Reference implementation lives in
-  // git history of this file. We still walk the entities to log how
-  // many beams the IFC contained so the conversion summary is accurate.
+  progress('Processing beams...', 85)
+  let convertedBeamCount = 0
   let skippedBeamCount = 0
-  const beamTypes = [WebIFC.IFCBEAM]
-  try {
-    beamTypes.push(WebIFC.IFCBEAMSTANDARDCASE)
-  } catch {
-    /* not in all versions */
-  }
-  for (const beamType of beamTypes) {
-    try {
-      const beams = ifcApi.GetLineIDsWithType(modelID, beamType)
-      skippedBeamCount += beams.size()
-    } catch {
-      /* type not present in this file */
+  for (const beamType of [WebIFC.IFCBEAM, WebIFC.IFCBEAMSTANDARDCASE]) {
+    const beams = ifcApi.GetLineIDsWithType(modelID, beamType)
+    for (let i = 0; i < beams.size(); i++) {
+      const beamExpressID = beams.get(i)
+      if (expressIdToNodeId.has(beamExpressID)) continue
+      try {
+        const beam = ifcApi.GetLine(modelID, beamExpressID)
+        const storeyExpressID = findStoreyForElement(beamExpressID)
+        const parentExpressID = storeyExpressID ?? parentMap.get(beamExpressID)
+        const parentNodeId = parentExpressID ? expressIdToNodeId.get(parentExpressID) : undefined
+        const parent = parentNodeId ? nodes[parentNodeId] : undefined
+        const levelElevation = parent?.type === 'level' ? Number(meta(parent).elevation ?? 0) : 0
+        const geometry = extractBeamGeometry(ifcApi, modelID, beamExpressID, {
+          origin: originOffset,
+          unitFactor,
+          swapYZ: opts.swapYZ,
+          levelElevation,
+        })
+        if (!geometry) throw new Error('No renderable beam geometry')
+
+        const beamNode = tryParse(BlockNode, 'beam', {
+          name: beam.Name?.value || `Beam ${i + 1}`,
+          parentId: parentNodeId ?? null,
+          ...geometry,
+          // IFC already places the beam vertically; overlapping slabs must not lift it again.
+          supportSlabId: GROUND_SUPPORT_ID,
+          metadata: buildMetadata({
+            ifcType: beamType === WebIFC.IFCBEAM ? 'IFCBEAM' : 'IFCBEAMSTANDARDCASE',
+            expressID: beamExpressID,
+            globalId: beam.GlobalId?.value,
+            predefinedType: beam.PredefinedType?.value,
+          }),
+        })
+        nodes[beamNode.id] = beamNode
+        expressIdToNodeId.set(beamExpressID, beamNode.id)
+        if (parent && 'children' in parent) {
+          ;(parent.children as string[]).push(beamNode.id)
+        } else {
+          rootNodeIds.push(beamNode.id)
+        }
+        convertedBeamCount++
+      } catch (error) {
+        skippedBeamCount++
+        console.warn(`[IFC→Pascal] Could not convert beam #${beamExpressID}:`, error)
+      }
     }
-  }
-  if (skippedBeamCount > 0) {
-    console.warn(
-      `[IFC→Pascal] Skipped ${skippedBeamCount} beam${skippedBeamCount === 1 ? '' : 's'} — Pascal has no beam node yet.`,
-    )
   }
 
   // Items: skipped for now — Pascal's ItemNode requires a full `asset`
@@ -2092,6 +2119,7 @@ export async function convertIfcToPascal(
     stairs: Object.values(nodes).filter((n) => n.type === 'stair').length,
     roofs: Object.values(nodes).filter((n) => n.type === 'roof').length,
     columns: Object.values(nodes).filter((n) => n.type === 'column').length,
+    beams: convertedBeamCount,
     skippedBeams: skippedBeamCount,
     skippedItems: skippedItemCount,
   })
