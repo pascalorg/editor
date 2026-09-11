@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { type AnyNode, DuctFittingNode, nodeRegistry, registerNode } from '@pascal-app/core'
 import { ductFittingDefinition } from '../duct-fitting/definition'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
+import { createDuctRunEndCap } from '../shared/automatic-run-end-cap'
 import {
   ductContinuationHandlePlan,
   ductContinuationHandlePoint,
@@ -67,6 +68,28 @@ describe('duct continuation', () => {
         {},
       ),
     ).toBeNull()
+  })
+
+  test('continues through an end cap so the draw commit can replace it', () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    try {
+      registerNode(ductSegmentDefinition)
+      registerNode(ductFittingDefinition)
+      const duct = makeDuct()
+      const cap = createDuctRunEndCap(duct)!
+      const nodes = { [duct.id]: duct, [cap.id]: cap } as Record<string, AnyNode>
+
+      const handle = ductContinuationHandlePlan(duct, 'end', nodes)
+      expect(handle?.fittingId).toBe(cap.id)
+      const seed = resolveDuctContinuationSeed(
+        { continuation: { nodeId: duct.id, endpoint: 'end', fittingId: cap.id } },
+        nodes,
+      )
+      expect(seed?.port.position).toEqual(duct.path.at(-1))
+      expect(seed?.promotedFitting).toBeUndefined()
+    } finally {
+      restoreRegistry()
+    }
   })
 
   test('moves the action from an occupied run end to an elbow branch and seeds a tee', () => {

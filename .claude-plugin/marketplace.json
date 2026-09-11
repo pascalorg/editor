@@ -9,11 +9,16 @@
   "plugins": [
     {
       "name": "pascal-agent-skills",
-      "source": "./",
-      "description": "Create and inspect editable Pascal scenes and run bounded furniture footprint assessments with blocker-aware next actions.",
+      "source": "./skills",
+      "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
+      "author": {
+        "name": "Pascal",
+        "email": "support@pascal.app",
+        "url": "https://pascal.app"
+      },
       "version": "0.1.8",
       "category": "productivity",
-      "skills": ["./skills/pascal-3d", "./skills/furniture-fit"]
+      "skills": ["./pascal-3d", "./furniture-fit"]
     }
   ]
 }

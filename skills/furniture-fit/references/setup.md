@@ -6,6 +6,8 @@ Source and public-documentation review date: 2026-09-10. Native task results are
 
 Use the local path when the project should remain on the machine:
 
+CLI builds from this repository keep the MCP service inside the npm package and download the roughly 64 MB web editor runtime only when a command starts the editor, so `pascal mcp connect` needs no runtime download: an agent-only host can list, load, and save local scenes without one. `@pascal-app/cli@1.0.0-beta.1` bundles that runtime in the npm package instead, and its connector also starts the local editor. Run `pascal editor` when a person needs the visual editor, and add `--runtime <archive>` when the host has no network access.
+
 ### Verified GitHub preview
 
 The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, an older runtime that may not expose `check_collisions.candidate` or the hosted agent claim/status commands. For the candidate and hosted-agent paths verified with this skill, install the GitHub prerelease built from public commit `5dabbc3b56109c9f79dc8a378443a4c520d9ee0a`:
@@ -58,7 +60,7 @@ Use only one active agent client with each local CLI service. The standalone HTT
 
 ## Existing hosted project
 
-Create an API key in Pascal Settings for the same user or organization that owns the target project. Set `PASCAL_API_KEY` to that key without printing it. If you assign it in a shell command, avoid or remove that command from shell history. The hosted Streamable HTTP endpoint is:
+Create an API key in Pascal Settings (`https://editor.pascal.app/settings`) for the same user or organization that owns the target project. Set `PASCAL_API_KEY` to that key without printing it. If you assign it in a shell command, avoid or remove that command from shell history. The hosted Streamable HTTP endpoint is:
 
 ```text
 https://editor.pascal.app/api/mcp
@@ -77,7 +79,13 @@ codex mcp add pascal \
 
 Codex stores the environment-variable name, not its value. Set `PASCAL_API_KEY` again in each new terminal before starting Codex, or supply it through the user's existing shell or secret-manager configuration.
 
+Run this command even when the Codex plugin is installed. The plugin's portable `mcp.json` follows Agent Plugins 1.0.0, which forbids credentials and placeholder expansion in `headers` and reserves `Authorization` for the client, so a plugin cannot carry a hosted key. The plugin therefore supplies only the local `pascal` server, and `codex mcp add` owns the hosted connection.
+
 Claude Code:
+
+Plugin users set the key once in the configuration prompt shown when `pascal-agent-skills@pascal` is enabled. To add or change it later, reinstall with `claude plugin install pascal-agent-skills@pascal --config pascal_api_key=<key>`, or open `/plugin` in a session and use its configure flow; there is no `claude plugin config` command. The hosted tools then load under the plugin's `pascal-hosted` server beside the local `pascal` server, and Claude Code keeps the key in the OS keychain, falling back to `~/.claude/.credentials.json`, rather than writing it into `settings.json` or any project file.
+
+Without the plugin, register the hosted endpoint manually:
 
 ```bash
 : "${PASCAL_API_KEY:?Set PASCAL_API_KEY to the apiKey returned by Pascal}" && \
@@ -99,6 +107,27 @@ openclaw mcp doctor pascal --probe
 ```
 
 The current OpenClaw static-header path stores the expanded key in its private MCP configuration and may warn about the literal credential during `doctor`. Do not commit or share that configuration. Remove the server with `openclaw mcp unset pascal` and rotate the Pascal key if the configuration is exposed. Installing this skill does not authorize a save, placement, account, upload, publication, or paid operation.
+
+Cursor:
+
+Installing this repository as a Cursor plugin declares an optional `PASCAL_API_KEY` variable. A team admin sets its value in the Cursor dashboard under **Plugins** → **Configure**, at install time or later; the repository holds only the `${PASCAL_API_KEY}` placeholder. With a value set, the plugin's `pascal-hosted` server reaches the hosted endpoint alongside the local `pascal` server. Leaving it unset keeps the install local-only: the local server still works and `pascal-hosted` fails with `401 Unauthorized` because the placeholder resolves to nothing. Disable `pascal-hosted` in Cursor's MCP settings to remove that failing entry.
+
+Cursor without the plugin, in `.cursor/mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "pascal": {
+      "url": "https://editor.pascal.app/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${env:PASCAL_API_KEY}"
+      }
+    }
+  }
+}
+```
+
+Cursor resolves `${env:PASCAL_API_KEY}` from the environment it starts in, so the file holds no key and `PASCAL_API_KEY` must be exported where Cursor is launched. The two Cursor syntaxes are not interchangeable: `${env:NAME}` reads the environment in a user or project `.cursor/mcp.json`, while a plugin's `mcp.json` uses the bare `${NAME}` plugin-variable form resolved from the dashboard. Interpolation syntax varies between clients; confirm that the chosen host supports this form before relying on it.
 
 ## Separate autonomous workspace
 

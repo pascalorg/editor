@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test'
 import { SlabNode, WallNode } from '../schema'
 import { pointInPolygon } from './polygon-relations'
-import { getRenderableSlabPolygon, snapSlabEdgeToWallBand } from './slab-polygon'
+import {
+  getRenderableSlabPolygon,
+  prepareSlabPolygonContext,
+  scopeSlabPolygonContext,
+  snapSlabEdgeToWallBand,
+} from './slab-polygon'
 
 function wallOf(start: [number, number], end: [number, number], thickness = 0.1) {
   return WallNode.parse({ start, end, thickness })
@@ -907,4 +912,37 @@ describe('snapSlabEdgeToWallBand', () => {
     expect(snap!.wallId).toBe(near.id)
     expect(snap!.edge[0][1]).toBeCloseTo(0)
   })
+})
+
+test('prepared bounds preserve unfiltered polygons across curves, long bands and floating seams', () => {
+  for (const angle of [0, 0.3, 1.2]) {
+    const rotate = ([x, z]: [number, number]): [number, number] => [
+      x * Math.cos(angle) - z * Math.sin(angle),
+      x * Math.sin(angle) + z * Math.cos(angle),
+    ]
+    for (const thickness of [0.1, 0.4, 2]) {
+      for (const curveOffset of [0, 0.2, -0.3]) {
+        const walls = [
+          WallNode.parse({ start: rotate([-10, 0]), end: rotate([10, 0]), thickness, curveOffset }),
+          WallNode.parse({ start: rotate([4, 0]), end: rotate([4, 6]), thickness }),
+          WallNode.parse({ start: [100, 100], end: [110, 100], thickness: 4 }),
+        ]
+        const slabs = [
+          slabOf(roomA.map(rotate)),
+          slabOf(roomB.map(rotate), false, 0.4, 0.4),
+          slabOf(roomB.map(rotate), false, 2),
+        ]
+        const prepared = prepareSlabPolygonContext({ walls, siblingSlabs: slabs })
+        for (const slab of slabs) {
+          const full = getRenderableSlabPolygon(slab, {
+            walls,
+            siblingSlabs: slabs.filter((other) => other.id !== slab.id),
+          })
+          expect(getRenderableSlabPolygon(slab, scopeSlabPolygonContext(slab, prepared))).toEqual(
+            full,
+          )
+        }
+      }
+    }
+  }
 })

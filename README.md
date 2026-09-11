@@ -22,8 +22,11 @@ npx @pascal-app/cli editor
 ```
 
 The CLI starts the editor and an authenticated MCP service in the background, selects
-collision-free loopback ports, and keeps projects in `~/.pascal/data/pascal.db`. Configure
-an agent to launch `pascal mcp connect`. See [Run Pascal locally](https://editor.pascal.app/docs/developers/local-editor)
+collision-free loopback ports, and keeps projects in `~/.pascal/data/pascal.db`. The npm
+package holds the CLI and that MCP service; the web editor runtime is downloaded once per
+version on the first command that starts the editor and verified against a digest published
+inside the package. Configure an agent to launch `pascal mcp connect`, which needs neither
+the editor process nor that download. See [Run Pascal locally](https://editor.pascal.app/docs/developers/local-editor)
 for pnpm/Bun commands, project management, MCP setup, updates, storage paths, and
 troubleshooting. The npm release is the older runtime described below; use the verified
 GitHub preview when a task needs the new read-only furniture candidate check.
@@ -58,11 +61,13 @@ PASCAL_API_KEY='sk_live_...' pascal agent claim
 PASCAL_API_KEY='sk_live_...' pascal agent status --json
 ```
 
-The expected archive SHA-256 is `15628baeeb174fb7786a1643db08f0554bf6d18afaaa3979f01922c5cd40019a`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before using the Claude plugin-provided connector, running `pascal mcp setup claude` or `pascal mcp setup codex` for another installation path, or configuring `pascal mcp connect` manually. `pascal agent claim` opens a prefilled 15-minute human handoff; `pascal agent status` verifies the key and reports the bounded claim state. Neither command stores or prints the hosted key. This GitHub prerelease is not an npm version.
+The expected archive SHA-256 is `15628baeeb174fb7786a1643db08f0554bf6d18afaaa3979f01922c5cd40019a`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before using the Claude plugin-provided connector, running `pascal mcp setup claude` or `pascal mcp setup codex` for another installation path, or configuring `pascal mcp connect` manually. `pascal agent claim` opens a prefilled 15-minute human handoff; `pascal agent status` verifies the key and reports the bounded claim state. Neither command stores or prints the hosted key. If you assign `PASCAL_API_KEY` in a shell command, avoid or remove that command from shell history. This GitHub prerelease is not an npm version.
 
 Use one active agent client per local CLI service. The standalone local HTTP runtime shares active scene state between clients; use separate `PASCAL_HOME` directories and service processes when independent concurrent work is required.
 
 ## Agent skills
+
+[![Install with skills](https://skills.sh/b/pascalorg/editor)](https://skills.sh/pascalorg/editor)
 
 Install Pascal's public agent workflows from this repository with [skills.sh](https://skills.sh):
 
@@ -79,7 +84,9 @@ Claude Code users can install the same canonical skill source as a plugin:
 /plugin install pascal-agent-skills@pascal
 ```
 
-The Claude plugin also supplies the local `pascal mcp connect` server. Install and start the Pascal CLI first, and keep `pascal` on the `PATH` used to launch Claude Code. This local connector needs no Pascal account or API key and does not upload projects automatically.
+The Claude plugin also supplies the local `pascal mcp connect` server. Install and start the Pascal CLI first, and keep `pascal` on the `PATH` used to launch Claude Code. This local connector needs no Pascal account or API key and does not upload projects automatically. Its plugin root is this repository's `skills/` directory, so an install copies only the skill bundles and their plugin metadata rather than the repository.
+
+The plugin bundles two servers: the local `pascal` connector above and a hosted `pascal-hosted` server for `https://editor.pascal.app/api/mcp`, which prompts for an optional Pascal API key at enable time and stores it in the OS keychain. Leave the key empty to run local-only.
 
 Claude Code 2.1.258 loads both the user-scoped `pascal` server created by `pascal mcp setup claude` and the plugin-provided server. Remove the manual entry before reloading or restarting Claude Code so only the plugin owns the connection lifecycle:
 
@@ -115,11 +122,11 @@ owner publishes an approved version from `main` with the official registry publi
 
 The viewer runtime and built-in node definitions are separate packages. Install the full built-in
 viewer set, then load the built-in plugin once before mounting `<Viewer>`. Capture sessions are an
-optional transport-neutral extension:
+optional extension shipped inside those packages as the `@pascal-app/core/capture` and
+`@pascal-app/viewer/capture` subpaths:
 
 ```bash
 npm install @pascal-app/core @pascal-app/viewer @pascal-app/editor @pascal-app/nodes
-npm install @pascal-app/capture-protocol @pascal-app/capture-viewer
 ```
 
 ```typescript
@@ -142,10 +149,8 @@ editor/
 ├── apps/
 │   └── editor/          # Next.js application
 ├── packages/
-│   ├── core/            # Schemas, scene state, and registry contracts
-│   ├── viewer/          # 3D rendering runtime and shared systems
-│   ├── capture-protocol/ # Static/live capture-session contracts
-│   ├── capture-viewer/  # Capture source runtime and reference renderers
+│   ├── core/            # Schemas, scene state, registry contracts, capture contracts
+│   ├── viewer/          # 3D rendering runtime, shared systems, capture runtime
 │   ├── editor/          # Editing tools and UI components
 │   ├── nodes/           # Built-in node definitions, renderers, and systems
 │   ├── cli/             # Persistent local editor installer and process manager
@@ -157,10 +162,8 @@ editor/
 
 | Package | Responsibility |
 |---------|---------------|
-| **@pascal-app/core** | Node schemas, scene state (Zustand), registry contracts, spatial queries, and event bus |
-| **@pascal-app/viewer** | 3D rendering via React Three Fiber, shared render systems, default camera/controls, and post-processing |
-| **@pascal-app/capture-protocol** | Versioned capture manifests, normalized streams, and transport-neutral static/live sources |
-| **@pascal-app/capture-viewer** | Viewer child runtime and reference model, device-motion, and point-cloud layers |
+| **@pascal-app/core** | Node schemas, scene state (Zustand), registry contracts, spatial queries, and event bus. `core/capture` adds versioned capture manifests, normalized streams, and transport-neutral static/live sources |
+| **@pascal-app/viewer** | 3D rendering via React Three Fiber, shared render systems, default camera/controls, and post-processing. `viewer/capture` adds the capture runtime and reference model, device-motion, point-cloud, and surface-mesh layers |
 | **@pascal-app/editor** | Editing tools, panels, selection, and direct-manipulation UI |
 | **@pascal-app/nodes** | Built-in registry plugin with node definitions, renderers, geometry, and systems |
 | **@pascal-app/cli** | Installs and manages a versioned standalone editor runtime and persistent local data |

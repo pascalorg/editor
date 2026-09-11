@@ -1,9 +1,0 @@
-{
-  "mcpServers": {
-    "pascal": {
-      "type": "stdio",
-      "command": "pascal",
-      "args": ["mcp", "connect"]
-    }
-  }
-}

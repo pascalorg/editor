@@ -2,6 +2,7 @@ import { type AnyNode, type NodeDefinition, useScene } from '@pascal-app/core'
 import { ductBodyPaint, ductBodySlots } from '../shared/duct-body-paint'
 import { createPathPointMoveAffordance } from '../shared/path-point-affordance'
 import { createSegmentMoveAffordance } from '../shared/path-segment-affordance'
+import { createRunHangerToolHint } from '../shared/run-hanger-mode'
 import { ductBranchAffordance, ductContinuationAffordance } from './continuation'
 import { buildDuctSegmentFloorplan } from './floorplan'
 import { buildDuctSegmentGeometry, ductPortDiameterIn } from './geometry'
@@ -179,7 +180,8 @@ export const ductSegmentDefinition: NodeDefinition<typeof DuctSegmentNode> = {
     { key: 'Alt + drag', label: 'Go vertical ↕, click to place' },
     { key: '[ / ]', label: 'Duct diameter down / up' },
     { key: 'Q', label: 'Round / rectangular / oval' },
-    { key: 'Esc', label: 'Cancel start point' },
+    createRunHangerToolHint('duct-segment'),
+    { key: 'Esc', label: 'Exit drawing' },
   ],
 
   presentation: {

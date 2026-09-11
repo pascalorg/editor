@@ -2,14 +2,12 @@ import {
   type AnyNode,
   type AnyNodeId,
   getLevelBelow,
-  getLevelElevations,
   getWallArcData,
-  getWallBaseElevationForNodes,
-  getWallEffectiveHeightForNodes,
   type LevelNode,
   RoofNode,
   RoofSegmentNode,
   resolveLevelId,
+  resolveRoofWallTopElevation,
   type SceneApi,
   type WallNode,
 } from '@pascal-app/core'
@@ -45,10 +43,6 @@ export function createConicalRoofSectorAboveWall(
     if (existingSegment) return existingSegment.id
   }
 
-  const elevations = getLevelElevations(completeNodes)
-  const sourceLevelY = elevations.get(resolveLevelId(wall, completeNodes))?.baseY ?? 0
-  const targetLevelY = elevations.get(targetLevelId)?.baseY ?? 0
-
   const roofCount = Object.values(nodes).filter((node) => node?.type === 'roof').length
   const segment = RoofSegmentNode.parse({
     roofType: 'conical',
@@ -63,17 +57,8 @@ export function createConicalRoofSectorAboveWall(
   const roof = RoofNode.parse({
     name: `Roof ${roofCount + 1}`,
     metadata: { conicalSourceWallId: wall.id },
-    position: [
-      arc.center.x,
-      Math.max(
-        0,
-        sourceLevelY +
-          getWallBaseElevationForNodes(wall, completeNodes) +
-          getWallEffectiveHeightForNodes(wall, completeNodes) -
-          targetLevelY,
-      ),
-      arc.center.y,
-    ],
+    support: { kind: 'walls' },
+    position: [arc.center.x, resolveRoofWallTopElevation(targetLevelId, wall, nodes), arc.center.y],
     children: [segment.id],
   })
 

@@ -32,10 +32,12 @@ const nextConfig: NextConfig = {
     '@pascal-app/core',
     '@pascal-app/editor',
     '@pascal-app/mcp',
+    '@pascal-app/plugin-pool',
     '@pascal-app/plugin-streetscape',
     '@pascal-app/plugin-trees',
     '@mint/pascal-plugin',
     '@pascal-app/plugin-bones',
+    '@pascal-app/plugin-environment',
     '@dgreenheck/ez-tree',
   ],
   turbopack: {

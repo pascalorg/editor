@@ -36,6 +36,8 @@
         "@pascal-app/mcp": "*",
         "@pascal-app/nodes": "*",
         "@pascal-app/plugin-bones": "github:pascalorg/plugin-bones#5679260261ee1c733656ff6dfb99e30bb24b58a7",
+        "@pascal-app/plugin-environment": "github:AxiomeCG/environment#40baf63ddd06a657aaa0f60e1559fd9ad561f295",
+        "@pascal-app/plugin-pool": "file:./vendor/pascal-app-plugin-pool-0.1.0-connection-status.tgz",
         "@pascal-app/plugin-streetscape": "github:sudhir9297/streetscape-pascal-plugin#1c04ec9ccb3fa8124ec56dfc1026567cbbc51aef",
         "@pascal-app/plugin-trees": "github:pascalorg/plugin-trees#56d978cd9b409b716207b3f3d269455d3cd6f067",
         "@pascal-app/viewer": "*",
@@ -49,10 +51,11 @@
         "next": "16.3.0",
         "postcss": "^8.5.6",
         "react": "^19.2.4",
+        "react-colorful": "^5.6.1",
         "react-dom": "^19.2.4",
         "tailwind-merge": "^3.5.0",
         "tailwindcss": "^4.2.1",
-        "three": "^0.185.0",
+        "three": "^0.186.0",
         "zod": ">=4.5.4 <4.6",
       },
       "devDependencies": {
@@ -87,7 +90,7 @@
         "react-dom": "^19.2.4",
         "tailwind-merge": "^3.5.0",
         "tailwindcss": "^4.2.1",
-        "three": "^0.185.0",
+        "three": "^0.186.0",
         "web-ifc": "^0.0.77",
       },
       "devDependencies": {
@@ -97,45 +100,6 @@
         "@types/react-dom": "^19.2.3",
         "@types/three": "^0.184.0",
         "typescript": "7.0.2",
-      },
-    },
-    "packages/capture-protocol": {
-      "name": "@pascal-app/capture-protocol",
-      "version": "1.0.0-beta.4",
-      "dependencies": {
-        "zod": ">=4.5.4 <4.6",
-      },
-      "devDependencies": {
-        "@pascal/typescript-config": "*",
-        "@types/bun": "^1.3.0",
-        "typescript": "6.0.3",
-      },
-    },
-    "packages/capture-viewer": {
-      "name": "@pascal-app/capture-viewer",
-      "version": "1.0.0-beta.4",
-      "devDependencies": {
-        "@pascal-app/capture-protocol": "^1.0.0-beta.4",
-        "@pascal-app/core": "^1.0.0-beta.4",
-        "@pascal-app/viewer": "^1.0.0-beta.4",
-        "@pascal/typescript-config": "*",
-        "@react-three/drei": "^10.7.7",
-        "@react-three/fiber": "^9.5.0",
-        "@types/bun": "^1.3.0",
-        "@types/react": "^19.2.2",
-        "@types/three": "^0.184.0",
-        "react": "^19.2.4",
-        "three": "^0.185.0",
-        "typescript": "6.0.3",
-      },
-      "peerDependencies": {
-        "@pascal-app/capture-protocol": "^1.0.0-beta.4",
-        "@pascal-app/core": "^1.0.0-beta.4",
-        "@pascal-app/viewer": "^1.0.0-beta.4",
-        "@react-three/drei": "^10",
-        "@react-three/fiber": "^9",
-        "react": "^18 || ^19",
-        "three": "^0.185",
       },
     },
     "packages/cli": {
@@ -157,7 +121,6 @@
       "name": "@pascal-app/core",
       "version": "1.0.0-beta.5",
       "dependencies": {
-        "@pascal-app/capture-protocol": "^1.0.0-beta.4",
         "dedent": "^1.7.1",
         "idb-keyval": "^6.2.2",
         "mitt": "^3.0.1",
@@ -178,7 +141,7 @@
         "@react-three/drei": "^10",
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",
-        "three": "^0.185",
+        "three": "^0.186",
       },
     },
     "packages/editor": {
@@ -226,6 +189,7 @@
         "@pascal-app/core": "^1.0.0-beta.5",
         "@pascal-app/viewer": "^1.0.0-beta.5",
         "@pascal/typescript-config": "*",
+        "@react-three/test-renderer": "^9.1.0",
         "@types/blob-stream": "^0.1.33",
         "@types/bun": "^1.3.0",
         "@types/howler": "^2.2.12",
@@ -244,7 +208,7 @@
         "next": ">=15",
         "react": "^18 || ^19",
         "react-dom": "^18 || ^19",
-        "three": "^0.185",
+        "three": "^0.186",
       },
     },
     "packages/eslint-config": {
@@ -310,6 +274,7 @@
         "@types/bun": "^1.3.0",
         "@types/node": "^22.19.12",
         "@types/react": "^19.2.2",
+        "@types/react-dom": "^19.2.3",
         "@types/three": "^0.184.0",
         "typescript": "6.0.3",
       },
@@ -321,7 +286,8 @@
         "@react-three/fiber": "^9",
         "lucide-react": "^1",
         "react": "^18 || ^19",
-        "three": "^0.185",
+        "react-dom": "^18 || ^19",
+        "three": "^0.186",
         "zustand": "^5",
       },
     },
@@ -357,6 +323,7 @@
       "devDependencies": {
         "@pascal-app/core": "^1.0.0-beta.5",
         "@pascal/typescript-config": "*",
+        "@react-three/test-renderer": "^9.1.0",
         "@types/node": "^22",
         "@types/react": "^19.2.2",
         "@types/react-dom": "19.2.2",
@@ -369,7 +336,7 @@
         "@react-three/fiber": "^9",
         "react": "^18 || ^19",
         "react-dom": "^18 || ^19",
-        "three": "^0.185",
+        "three": "^0.186",
       },
     },
     "tooling/typescript": {
@@ -383,7 +350,7 @@
     "@types/three": "0.184.1",
     "next": "16.3.0",
     "react-grab": "0.1.50",
-    "three": "0.185.1",
+    "three": "0.186.0",
   },
   "packages": {
     "@alloc/quick-lru": ["@alloc/quick-lru@5.2.0", "", {}, "sha512-UrcABB+4bUrFABwbluTIBErXwvbsU/V7TZWfmbgJfbkwiBuziS9gxdODUyuiecfdGQ85jglMW6juS3+z5TsKLw=="],
@@ -768,10 +735,6 @@
 
     "@oxlint/binding-win32-x64-msvc": ["@oxlint/binding-win32-x64-msvc@1.69.0", "", { "os": "win32", "cpu": "x64" }, "sha512-w8SOXv3mT9Fi6jY8OXdXCfnvX/3KNLXGNr4HEz2TA7S4Mv/PYAOmpB8y/ge40mxvBMgGNaSaaDwZpAsQn7HtWA=="],
 
-    "@pascal-app/capture-protocol": ["@pascal-app/capture-protocol@workspace:packages/capture-protocol"],
-
-    "@pascal-app/capture-viewer": ["@pascal-app/capture-viewer@workspace:packages/capture-viewer"],
-
     "@pascal-app/cli": ["@pascal-app/cli@workspace:packages/cli"],
 
     "@pascal-app/core": ["@pascal-app/core@workspace:packages/core"],
@@ -787,6 +750,10 @@
     "@pascal-app/nodes": ["@pascal-app/nodes@workspace:packages/nodes"],
 
     "@pascal-app/plugin-bones": ["@pascal-app/plugin-bones@github:pascalorg/plugin-bones#5679260", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "pascalorg-plugin-bones-5679260", "sha512-uQkyHHOl/VuYx2+d/MmcJui/KEAQZ2UUnO4ywp1XaopmD2YfN+Yx/fR/lS/VL2joEoyyZeBLC3KaXK1Sx5qEvg=="],
+
+    "@pascal-app/plugin-environment": ["@pascal-app/plugin-environment@github:AxiomeCG/environment#40baf63", { "peerDependencies": { "@dgreenheck/ez-tree": "^1.1.0", "@pascal-app/core": ">=1.0.0-beta.6 <2", "@pascal-app/editor": ">=1.0.0-beta.6 <2", "@pascal-app/viewer": ">=1.0.0-beta.6 <2", "@radix-ui/react-tooltip": "^1.2.8", "@react-three/fiber": "^9", "lucide-react": "^1.7.0", "react": "^18 || ^19", "react-colorful": "^5.8.1", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "AxiomeCG-environment-40baf63", "sha512-mb9i4IFq1c62BcAhtGJAKgJHBVQtFYySFW/LzkmnNfnWSOlGdUavoiR4f8cq5Y4xg6MTvGFX0ytO1Urk8wOPPQ=="],
+
+    "@pascal-app/plugin-pool": ["@pascal-app/plugin-pool@./vendor/pascal-app-plugin-pool-0.1.0-connection-status.tgz", { "dependencies": { "three-bvh-csg": "^0.0.18", "three-mesh-bvh": "^0.9.8" }, "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@pascal-app/editor": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@pascal-app/viewer": ">=0.9.1 <1 || >=1.0.0-beta.0 <2", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "sha512-nu/7x5xF1k0IYnduNu1rh9YJ9hZrmjaRUiXADcDqF82Kc+GLjZFrPRRHCci37QplREY2lqePIXBYfTOXCQczgg=="],
 
     "@pascal-app/plugin-streetscape": ["@pascal-app/plugin-streetscape@github:sudhir9297/streetscape-pascal-plugin#1c04ec9", { "peerDependencies": { "@pascal-app/core": ">=0.9.1 <1", "@pascal-app/editor": ">=0.9.1 <1", "@pascal-app/viewer": ">=0.9.1 <1", "@react-three/fiber": "^9", "react": "^18 || ^19", "three": "^0.185", "zod": "^4", "zustand": "^5" } }, "sudhir9297-streetscape-pascal-plugin-1c04ec9", "sha512-X7Zg7wi0ghZRcTtbH5LF6xye493uSZ2ft3AmAQBtguBCU6VCwCexA7pdKDr5AnVxX/JRj2s6JSd/OX4aIZ9Y6Q=="],
 
@@ -883,6 +850,8 @@
     "@react-three/drei": ["@react-three/drei@10.7.7", "", { "dependencies": { "@babel/runtime": "^7.26.0", "@mediapipe/tasks-vision": "0.10.17", "@monogrid/gainmap-js": "^3.0.6", "@use-gesture/react": "^10.3.1", "camera-controls": "^3.1.0", "cross-env": "^7.0.3", "detect-gpu": "^5.0.56", "glsl-noise": "^0.0.0", "hls.js": "^1.5.17", "maath": "^0.10.8", "meshline": "^3.3.1", "stats-gl": "^2.2.8", "stats.js": "^0.17.0", "suspend-react": "^0.1.3", "three-mesh-bvh": "^0.8.3", "three-stdlib": "^2.35.6", "troika-three-text": "^0.52.4", "tunnel-rat": "^0.1.2", "use-sync-external-store": "^1.4.0", "utility-types": "^3.11.0", "zustand": "^5.0.1" }, "peerDependencies": { "@react-three/fiber": "^9.0.0", "react": "^19", "react-dom": "^19", "three": ">=0.159" }, "optionalPeers": ["react-dom"] }, "sha512-ff+J5iloR0k4tC++QtD/j9u3w5fzfgFAWDtAGQah9pF2B1YgOq/5JxqY0/aVoQG5r3xSZz0cv5tk2YuBob4xEQ=="],
 
     "@react-three/fiber": ["@react-three/fiber@9.6.1", "", { "dependencies": { "@babel/runtime": "^7.17.8", "@types/webxr": "*", "base64-js": "^1.5.1", "buffer": "^6.0.3", "its-fine": "^2.0.0", "react-use-measure": "^2.1.7", "scheduler": "^0.27.0", "suspend-react": "^0.1.3", "use-sync-external-store": "^1.4.0", "zustand": "^5.0.3" }, "peerDependencies": { "expo": ">=43.0", "expo-asset": ">=8.4", "expo-file-system": ">=11.0", "expo-gl": ">=11.0", "react": ">=19 <19.3", "react-dom": ">=19 <19.3", "react-native": ">=0.78", "three": ">=0.156" }, "optionalPeers": ["expo", "expo-asset", "expo-file-system", "expo-gl", "react-dom", "react-native"] }, "sha512-zF0rsKcVYpcJwbFEnv2HkHX9cvOEgsfQo/X8lwmR2dn13S4qEQJXir9fxf5js2LQFoXqxOY7MDkOkYx2uZ4gSg=="],
+
+    "@react-three/test-renderer": ["@react-three/test-renderer@9.1.1", "", { "peerDependencies": { "@react-three/fiber": ">=9.0.0", "react": "^19.0.0", "three": ">=0.156" } }, "sha512-4DmLn0tg+AP8aU0Mb5vekjHqFrwRJ3z11HfQGOJIDj6DxZ/5BjRHRsDxY0Y+g4l8+WHysQ6PeuSdzTDDYoGuXg=="],
 
     "@repo/eslint-config": ["@repo/eslint-config@workspace:packages/eslint-config"],
 
@@ -1520,7 +1489,7 @@
 
     "is-number-object": ["is-number-object@1.1.1", "", { "dependencies": { "call-bound": "^1.0.3", "has-tostringtag": "^1.0.2" } }, "sha512-lZhclumE1G6VYD8VHe35wFaIif+CTy5SJIi5+3y4psDgWu4wPDoBhF8NxUOinEc7pHgiTsT6MaBb92rKhhD+Xw=="],
 
-    "is-promise": ["is-promise@2.2.2", "", {}, "sha512-+lP4/6lKUBfQjZ2pdxThZvLUAafmZb8OAxFb8XXtiQmS35INgr85hdOGoEs124ez1FCnZJt6jau/T+alh58QFQ=="],
+    "is-promise": ["is-promise@4.0.0", "", {}, "sha512-hvpoI6korhJMnej285dSg6nu1+e6uxs7zG3BYAm5byqDsgJNWwxzM6z6iZiAgQR4TJ30JmBTOwqZUw3WlyH3AQ=="],
 
     "is-regex": ["is-regex@1.2.1", "", { "dependencies": { "call-bound": "^1.0.2", "gopd": "^1.2.0", "has-tostringtag": "^1.0.2", "hasown": "^2.0.2" } }, "sha512-MjYsKHO5O7mCsmRGxWcLWheFqN9DJ/2TmngvjKXihe6efViPqc274+Fx/4fYj/r03+ESvBdTXK0V6tA3rgez1g=="],
 
@@ -1810,6 +1779,8 @@
 
     "react": ["react@19.2.7", "", {}, "sha512-HNe9WslTbXmFK8o8cmwgAeJFSBvt1bPdHCVKtaaV+WlAN36mpT4hcRpwbf3fY56ar2oIXzsBpOAiIRHAdY0OlQ=="],
 
+    "react-colorful": ["react-colorful@5.8.1", "", { "peerDependencies": { "react": ">=16.8.0", "react-dom": ">=16.8.0" } }, "sha512-oz68bhsnFWnpDf1ZR8daiQbYpXUnM2h2J6hl9Zg2rTpM/DU6vCqe1E+CpqmqLnJucMZetHZeifSAfJ+geN9lcA=="],
+
     "react-doctor": ["react-doctor@0.5.0", "", { "dependencies": { "@babel/code-frame": "^7.29.0", "@effect/platform-node-shared": "4.0.0-beta.70", "@sentry/node": "^10.54.0", "agent-install": "0.0.5", "conf": "^15.1.0", "confbox": "^0.2.4", "deslop-js": "^0.0.21", "effect": "4.0.0-beta.70", "eslint-plugin-react-hooks": "^7.1.1", "jiti": "^2.7.0", "magicast": "^0.5.3", "oxlint": "^1.66.0", "oxlint-plugin-react-doctor": "0.5.0", "prompts": "^2.4.2", "typescript": ">=5.0.4 <7", "vscode-languageserver": "^9.0.1", "vscode-languageserver-textdocument": "^1.0.12", "vscode-uri": "^3.1.0" }, "bin": { "react-doctor": "bin/react-doctor.js" } }, "sha512-MEx7RgRv2kXp6HoPMzc7fFz5Mm3vCqS3Z7clkjmDbsPamjCz7TrDDWQarfaPr7woWA6FOAaWHt1bGhQ88cfEEw=="],
 
     "react-dom": ["react-dom@19.2.7", "", { "dependencies": { "scheduler": "^0.27.0" }, "peerDependencies": { "react": "^19.2.7" } }, "sha512-t0BRVXvbiE/o20Hfw669rLbMCDWtYZLvmJigy2f0MxsXF+71pxhR3xOkspmsO8h3ZlNzyibAmtCa3l4lYKk6gQ=="],
@@ -1942,7 +1913,7 @@
 
     "tapable": ["tapable@2.3.3", "", {}, "sha512-uxc/zpqFg6x7C8vOE7lh6Lbda8eEL9zmVm/PLeTPBRhh1xCgdWaQ+J1CUieGpIfm2HdtsUpRv+HshiasBMcc6A=="],
 
-    "three": ["three@0.185.1", "", {}, "sha512-5aojFCXKwnjBRZvUnt3WFfEcvUJgkN5LlijRFN95hMy8WVkG4I0QNcJE+OuWvuJ0bOdStrbfXn0pkd6/QyiAlg=="],
+    "three": ["three@0.186.0", "", {}, "sha512-cr/fIM2ddMSVbYVgkfD4jLJv7Fh/8ZTjvo+7gQeSVGUZHxpx9FDwoL5iC7hUz/LiRA8wMbqfnb90xKfm1/HHkQ=="],
 
     "three-bvh-csg": ["three-bvh-csg@0.0.18", "", { "peerDependencies": { "three": ">=0.179.0", "three-mesh-bvh": ">=0.9.7" } }, "sha512-M3GCZMmGFgASGuDf+YMamM83nVlD/vdwzVHcYbFxgW+g1S7/nKPiuY00YVHOMbjmJPh8mLevGZL65ItHUuGt2w=="],
 
@@ -2166,6 +2137,8 @@
 
     "postcss/nanoid": ["nanoid@3.3.17", "", { "bin": { "nanoid": "bin/nanoid.cjs" } }, "sha512-xQLf0A3HOMlgHq0n247/LRuAOYmB7dXJ/DvAxGvsSBij45XtBSmQycu+F8ODbHwns/XyFZagyL1+J0Offw1E0g=="],
 
+    "promise-worker-transferable/is-promise": ["is-promise@2.2.2", "", {}, "sha512-+lP4/6lKUBfQjZ2pdxThZvLUAafmZb8OAxFb8XXtiQmS35INgr85hdOGoEs124ez1FCnZJt6jau/T+alh58QFQ=="],
+
     "react-doctor/agent-install": ["agent-install@0.0.5", "", { "dependencies": { "@iarna/toml": "^2.2.5", "commander": "^14.0.0", "jsonc-parser": "^3.3.1", "picocolors": "^1.1.1", "prompts": "^2.4.2", "yaml": "^2.8.3" }, "bin": { "agent-install": "bin/agent-install.mjs" } }, "sha512-nHlms9BkP8ZiY79HrwCGiA2DcNaXrAaJrCM/BEqQ7MEsSKyCk+2A76xPGylIfASZSZE0SaU3T0bNSg4rBPIJAQ=="],
 
     "react-doctor/eslint-plugin-react-hooks": ["eslint-plugin-react-hooks@7.1.1", "", { "dependencies": { "@babel/core": "^7.24.4", "@babel/parser": "^7.24.4", "hermes-parser": "^0.25.1", "zod": "^3.25.0 || ^4.0.0", "zod-validation-error": "^3.5.0 || ^4.0.0" }, "peerDependencies": { "eslint": "^3.0.0 || ^4.0.0 || ^5.0.0 || ^6.0.0 || ^7.0.0 || ^8.0.0-0 || ^9.0.0 || ^10.0.0" } }, "sha512-f2I7Gw6JbvCexzIInuSbZpfdQ44D7iqdWX01FKLvrPgqxoE7oMj8clOfto8U6vYiz4yd5oKu39rRSVOe1zRu0g=="],
@@ -2173,8 +2146,6 @@
     "react-scan/bippy": ["bippy@0.5.41", "", { "peerDependencies": { "react": ">=17.0.1" } }, "sha512-jCP2pXXLhXqPrAN+iSEFZmLI4uUM4fjSqajh0K+TmM062VehfDT3ZJNkrTGyN701Z5XMejs9qAudSqkMGhSMKg=="],
 
     "react-scan/commander": ["commander@14.0.3", "", {}, "sha512-H+y0Jo/T1RZ9qPP4Eh1pkcQcLRglraJaSLoyOtHxu6AapkjWVCy2Sit1QQ4x3Dng8qDlSsZEet7g5Pq06MvTgw=="],
-
-    "router/is-promise": ["is-promise@4.0.0", "", {}, "sha512-hvpoI6korhJMnej285dSg6nu1+e6uxs7zG3BYAm5byqDsgJNWwxzM6z6iZiAgQR4TJ30JmBTOwqZUw3WlyH3AQ=="],
 
     "sharp/semver": ["semver@7.8.5", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA=="],
 

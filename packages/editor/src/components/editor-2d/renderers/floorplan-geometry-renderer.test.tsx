@@ -366,4 +366,20 @@ describe('FloorplanGeometryRenderer static labels', () => {
     expect(markup).toContain('data-floorplan-annotation-obstacle="bounds"')
     expect(markup).toContain('data-floorplan-annotation-obstacle="outline"')
   })
+  test('forwards even-odd fill rules for compound plugin paths', () => {
+    const geometry = {
+      kind: 'path',
+      d: 'M0,0H4V4H0ZM1,1H3V3H1Z',
+      fill: '#3f6b2f',
+      fillRule: 'evenodd',
+    } satisfies FloorplanGeometry
+
+    const markup = renderToStaticMarkup(
+      <svg>
+        <FloorplanGeometryRenderer geometry={geometry} />
+      </svg>,
+    )
+
+    expect(markup).toContain('fill-rule="evenodd"')
+  })
 })

@@ -18,7 +18,7 @@
     "evidence": [
       "The machine-readable packet records exact values and non-empty per-hint justifications for all 46 expected tools.",
       "The repository policy validator rejects missing, unexpected, duplicate, reordered, or wrongly classified tools and missing, blank, or extra hint justifications.",
-      "The live MCP tools/list regression test requires the packet's exact inventory and annotation values to match the registered server tools.",
+      "The live MCP tools/list regression test requires the packet's exact inventory and annotation values to match the registered @pascal-app/mcp package tools; the live hosted tools/list exposes those 46 reviewed package tools plus three hosted-only capture tools, list_captures, get_capture, and open_capture_as_project, which are outside this packet by design.",
       "The complete @pascal-app/mcp suite passed 361 tests with 1684 assertions, and the MCP dependency build passed."
     ],
     "limitations": "This is local submission preparation only. It does not establish production hosted-MCP behavior, a portal Scan Tools run or approval, domain verification, verified publisher identity, reviewer access, submission, review, publication, or listing."

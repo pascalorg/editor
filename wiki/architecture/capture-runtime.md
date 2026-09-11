@@ -3,15 +3,18 @@
 Capture data is an optional viewer extension, not a private Community renderer and not a second
 scene graph.
 
-## Package boundaries
+## Ownership boundaries
 
-- `@pascal-app/capture-protocol` owns versioned manifests, normalized stream descriptors, stable
-  session locators, incremental packet headers, and the `CaptureSource` interface. It has no React,
-  Three.js, authentication, database, or prescribed transport.
-- `@pascal-app/capture-viewer` mounts inside `Viewer` through its existing children slot. It resolves
-  `scan.captureSession`, portals layers into that scan node's registered group, honors per-layer
-  visibility, composes declared local-to-parent coordinate frames into session space, and supplies
-  reference model, device-motion, point-cloud, and compact color-surface renderers.
+- `@pascal-app/core/capture` (`packages/core/src/capture/`) owns versioned manifests, normalized
+  stream descriptors, stable session locators, incremental packet headers, and the `CaptureSource`
+  interface. It has no React, Three.js, authentication, database, or prescribed transport, so it
+  stays inside core's pure-logic layer rule.
+- `@pascal-app/viewer/capture` (`packages/viewer/src/capture/`) mounts inside `Viewer` through its
+  existing children slot. It resolves `scan.captureSession`, portals layers into that scan node's
+  registered group, honors per-layer visibility, composes declared local-to-parent coordinate frames
+  into session space, and supplies reference model, device-motion, point-cloud, and compact
+  color-surface renderers. `@pascal-app/viewer/capture/preview` exposes the matcap and surface-mesh
+  geometry builders on their own for capture clients that render a local preview without the runtime.
 - `@pascal-app/core` stores only the scene anchor: session locator, optional current mesh URL,
   placement, opacity, and an extensible visibility map. Raw samples and artifact inventories never
   enter scene JSON.

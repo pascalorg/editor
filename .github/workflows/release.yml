@@ -8,8 +8,6 @@ on:
         required: true
         type: choice
         options:
-          - capture-protocol
-          - capture-viewer
           - core
           - viewer
           - editor
@@ -19,7 +17,7 @@ on:
           - cli
           - all
       bump:
-        description: "Version bump (beta publishes a prerelease on the beta dist-tag)"
+        description: "Version bump (beta publishes a prerelease on the beta dist-tag; patch/minor/major on a prerelease graduates it to its base version on latest)"
         required: true
         type: choice
         options:
@@ -70,6 +68,11 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    env:
+      # Verbose npm logs show the OIDC token exchange and the registry's
+      # rejection reason when trusted publishing is misconfigured; tokens are
+      # redacted by npm.
+      NPM_CONFIG_LOGLEVEL: verbose
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,11 +82,21 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      # No registry-url here: with it, actions/setup-node writes an .npmrc whose
+      # auth token falls back to the placeholder XXXXX-XXXXX-XXXXX-XXXXX, npm
+      # sends that fake token, the registry answers 404, and the OIDC trusted
+      # publishing exchange never runs. npm publishes to registry.npmjs.org by
+      # default and each publish step passes --access public explicitly.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: "https://registry.npmjs.org"
 
+      # npm refuses direct publishing with 2FA-bypass tokens (EOTP, see
+      # https://gh.io/npm-gat-bypass2fa-deprecation), so no NODE_AUTH_TOKEN is set
+      # and npm >= 11.5 exchanges the GitHub Actions OIDC token itself. Every
+      # @pascal-app package must list this repository, this workflow file and
+      # the `npm` environment as a trusted publisher on npmjs.com; a package that
+      # does not exist on npm yet needs one manual first publish before that.
       - name: Enable npm trusted publishing
         run: |
           npm install --global npm@11.19.1
@@ -120,11 +133,16 @@ jobs:
               fi
               return
             fi
+            if [ "$BUMP" = "none" ]; then echo "$v"; return; fi
+            # A prerelease graduates to its base version on any stable bump
+            # (1.0.0-beta.5 + major|minor|patch -> 1.0.0), matching npm semver.
+            # Splitting "1.0.0-beta.5" on dots would otherwise yield 2.0.0 or
+            # break the patch arithmetic.
+            if [[ "$v" == *-* ]]; then echo "${v%%-*}"; return; fi
             IFS='.' read -r MAJ MIN PAT <<< "$v"
             if [ "$BUMP" = "major" ]; then MAJ=$((MAJ+1)); MIN=0; PAT=0; fi
             if [ "$BUMP" = "minor" ]; then MIN=$((MIN+1)); PAT=0; fi
             if [ "$BUMP" = "patch" ]; then PAT=$((PAT+1)); fi
-            if [ "$BUMP" = "none" ]; then echo "$v"; return; fi
             echo "$MAJ.$MIN.$PAT"
           }
 
@@ -139,7 +157,7 @@ jobs:
           # peerDeps sync below must use shell vars, not env indirection.
           declare -A NEW_VERSIONS
 
-          for pkg in capture-protocol core viewer capture-viewer editor nodes mcp ifc-converter cli; do
+          for pkg in core viewer editor nodes mcp ifc-converter cli; do
             if [ "$TARGET" = "$pkg" ] || [ "$TARGET" = "all" ]; then
               CUR=$(jq -r '.version' packages/$pkg/package.json)
               NEW=$(bump_version "$CUR")
@@ -154,9 +172,9 @@ jobs:
 
           # Sync inter-package references in dependencies, peerDependencies, and devDependencies.
           # Anything that references a bumped @pascal-app/* package is updated to ^NEW.
-          for pkg in capture-protocol core viewer capture-viewer editor nodes mcp ifc-converter cli; do
+          for pkg in core viewer editor nodes mcp ifc-converter cli; do
             FILE=packages/$pkg/package.json
-            for dep in capture-protocol core viewer capture-viewer editor nodes mcp ifc-converter cli; do
+            for dep in core viewer editor nodes mcp ifc-converter cli; do
               VAL="${NEW_VERSIONS[$dep]}"
               [ -z "$VAL" ] && continue
               jq --arg name "@pascal-app/$dep" --arg v "^$VAL" '
@@ -168,7 +186,7 @@ jobs:
           done
 
           echo "=== @pascal-app/* refs after sync ==="
-          for pkg in capture-protocol core viewer capture-viewer editor nodes mcp ifc-converter cli; do
+          for pkg in core viewer editor nodes mcp ifc-converter cli; do
             echo "--- packages/$pkg/package.json ---"
             jq '{ dependencies: (.dependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))), peerDependencies: (.peerDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))), devDependencies: (.devDependencies // {} | with_entries(select(.key | startswith("@pascal-app/")))) }' packages/$pkg/package.json
           done
@@ -180,7 +198,7 @@ jobs:
           # A single-package release may depend on another package introduced
           # by this monorepo. Refuse to publish an uninstallable package when
           # that dependency is not part of this run and is absent from npm.
-          RELEASE_PACKAGES="capture-protocol core viewer capture-viewer editor nodes mcp ifc-converter cli"
+          RELEASE_PACKAGES="core viewer editor nodes mcp ifc-converter cli"
           if [ "$TARGET" != "all" ]; then
             FILE="packages/$TARGET/package.json"
             while IFS=$'\t' read -r DEP RANGE; do
@@ -206,23 +224,6 @@ jobs:
             )
           fi
 
-      - name: Build & publish capture protocol
-        if: inputs.package == 'capture-protocol' || inputs.package == 'all'
-        working-directory: packages/capture-protocol
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          bun run build
-          if [ "${{ inputs.dry-run }}" = "true" ]; then
-            echo "🏜️ Dry run — would publish @pascal-app/capture-protocol@$CAPTURE_PROTOCOL_VERSION"
-            npm publish --dry-run --access public --tag "$NPM_TAG"
-          elif npm view "@pascal-app/capture-protocol@$CAPTURE_PROTOCOL_VERSION" version >/dev/null 2>&1; then
-            echo "📦 @pascal-app/capture-protocol@$CAPTURE_PROTOCOL_VERSION is already published; continuing release recovery"
-          else
-            npm publish --access public --tag "$NPM_TAG"
-            echo "📦 Published @pascal-app/capture-protocol@$CAPTURE_PROTOCOL_VERSION"
-          fi
-
       - name: Validate portable editor runtime
         if: inputs.package == 'cli' || inputs.package == 'all'
         env:
@@ -237,8 +238,6 @@ jobs:
       - name: Build & publish core
         if: inputs.package == 'core' || inputs.package == 'all'
         working-directory: packages/core
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
@@ -254,8 +253,6 @@ jobs:
       - name: Build & publish viewer
         if: inputs.package == 'viewer' || inputs.package == 'all'
         working-directory: packages/viewer
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
@@ -268,28 +265,9 @@ jobs:
             echo "📦 Published @pascal-app/viewer@$VIEWER_VERSION"
           fi
 
-      - name: Build & publish capture viewer
-        if: inputs.package == 'capture-viewer' || inputs.package == 'all'
-        working-directory: packages/capture-viewer
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          bun run build
-          if [ "${{ inputs.dry-run }}" = "true" ]; then
-            echo "🏜️ Dry run — would publish @pascal-app/capture-viewer@$CAPTURE_VIEWER_VERSION"
-            npm publish --dry-run --access public --tag "$NPM_TAG"
-          elif npm view "@pascal-app/capture-viewer@$CAPTURE_VIEWER_VERSION" version >/dev/null 2>&1; then
-            echo "📦 @pascal-app/capture-viewer@$CAPTURE_VIEWER_VERSION is already published; continuing release recovery"
-          else
-            npm publish --access public --tag "$NPM_TAG"
-            echo "📦 Published @pascal-app/capture-viewer@$CAPTURE_VIEWER_VERSION"
-          fi
-
       - name: Publish editor
         if: inputs.package == 'editor' || inputs.package == 'all'
         working-directory: packages/editor
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/editor@$EDITOR_VERSION"
@@ -304,8 +282,6 @@ jobs:
       - name: Build & publish nodes
         if: inputs.package == 'nodes' || inputs.package == 'all'
         working-directory: packages/nodes
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
@@ -335,8 +311,6 @@ jobs:
 
       - name: Build & publish ifc-converter
         if: inputs.package == 'ifc-converter' || inputs.package == 'all'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           # ifc-converter depends on @pascal-app/core (workspace) — build it first
           bun run build --filter @pascal-app/core 2>/dev/null || (cd packages/core && bun run build)
@@ -357,6 +331,13 @@ jobs:
         # Keep token auth unset so npm can exchange the GitHub OIDC identity.
         run: |
           cd packages/cli
+          # The tarball embeds the URL and digest of the web runtime archive, so the archive
+          # must be staged (by "Validate portable editor runtime") before anything is published.
+          ARCHIVE="build/pascal-web-runtime-$CLI_VERSION.tar.gz"
+          test -f "$ARCHIVE"
+          test -f "$ARCHIVE.sha256"
+          test -f dist/services/pascal-mcp.mjs
+          jq -e --arg v "$CLI_VERSION" '.version == $v' dist/runtime-source.json
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/cli@$CLI_VERSION"
             npm publish --ignore-scripts --dry-run --access public --tag "$NPM_TAG"
@@ -374,10 +355,6 @@ jobs:
           PKGS=""
           TAGS=""
 
-          if [ -n "$CAPTURE_PROTOCOL_VERSION" ]; then
-            PKGS="$PKGS @pascal-app/capture-protocol@$CAPTURE_PROTOCOL_VERSION"
-            TAGS="$TAGS @pascal-app/capture-protocol@$CAPTURE_PROTOCOL_VERSION"
-          fi
           if [ -n "$CORE_VERSION" ]; then
             PKGS="$PKGS @pascal-app/core@$CORE_VERSION"
             TAGS="$TAGS @pascal-app/core@$CORE_VERSION"
@@ -385,10 +362,6 @@ jobs:
           if [ -n "$VIEWER_VERSION" ]; then
             PKGS="$PKGS @pascal-app/viewer@$VIEWER_VERSION"
             TAGS="$TAGS @pascal-app/viewer@$VIEWER_VERSION"
-          fi
-          if [ -n "$CAPTURE_VIEWER_VERSION" ]; then
-            PKGS="$PKGS @pascal-app/capture-viewer@$CAPTURE_VIEWER_VERSION"
-            TAGS="$TAGS @pascal-app/capture-viewer@$CAPTURE_VIEWER_VERSION"
           fi
           if [ -n "$EDITOR_VERSION" ]; then
             PKGS="$PKGS @pascal-app/editor@$EDITOR_VERSION"
@@ -422,3 +395,20 @@ jobs:
           done
 
           git push --atomic origin HEAD:main $TAGS
+
+      # The npm package points at this asset, so it is uploaded in the same job, immediately
+      # after the tag it hangs off exists on the remote.
+      - name: Upload the CLI web runtime release asset
+        if: ${{ inputs.dry-run == false && (inputs.package == 'cli' || inputs.package == 'all') }}
+        working-directory: packages/cli
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="@pascal-app/cli@$CLI_VERSION"
+          ARCHIVE="build/pascal-web-runtime-$CLI_VERSION.tar.gz"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            [ "$NPM_TAG" = "beta" ] && PRERELEASE=--prerelease || PRERELEASE=
+            gh release create "$TAG" $PRERELEASE --title "$TAG" --notes "The Pascal web editor runtime for \`@pascal-app/cli@$CLI_VERSION\`. The CLI downloads \`$(basename "$ARCHIVE")\` the first time a command starts the editor and verifies it against the digest published inside the npm package. Offline installs can pass the archive directly: \`pascal editor --runtime $(basename "$ARCHIVE")\`."
+          fi
+          gh release upload "$TAG" "$ARCHIVE" "$ARCHIVE.sha256" --clobber
+          echo "🌐 Uploaded $(basename "$ARCHIVE") to $TAG"

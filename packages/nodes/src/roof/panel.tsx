@@ -283,18 +283,44 @@ export default function RoofPanel() {
           unit="m"
           value={Math.round(node.position[0] * 100) / 100}
         />
-        <SliderControl
-          label="Y"
-          onChange={(v) => {
-            const pos = [...node.position] as [number, number, number]
-            pos[1] = v
-            handleUpdate({ position: pos })
-          }}
-          precision={2}
-          step={0.05}
-          unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
-        />
+        {node.support?.kind !== 'roof' && (
+          <SegmentedControl
+            onChange={(mode) =>
+              handleUpdate({ support: { kind: mode === 'walls' ? 'walls' : 'level' } })
+            }
+            options={[
+              { label: 'Follows walls', value: 'walls' },
+              { label: 'Custom', value: 'custom' },
+            ]}
+            value={node.support?.kind === 'walls' ? 'walls' : 'custom'}
+          />
+        )}
+        {node.support?.kind === 'walls' ? (
+          <div className="px-1 text-[11px] text-muted-foreground">
+            Currently {Math.round(node.position[1] * 100) / 100} m
+          </div>
+        ) : (
+          <SliderControl
+            label="Y"
+            onChange={(v) => {
+              const pos = [...node.position] as [number, number, number]
+              pos[1] = v
+              const current = useScene.getState().nodes[node.id]
+              handleUpdate({
+                position: pos,
+                ...(current?.type === 'roof' &&
+                current.support?.kind === 'walls' &&
+                Math.abs(v - current.position[1]) > 1e-4
+                  ? { support: { kind: 'level' as const } }
+                  : {}),
+              })
+            }}
+            precision={2}
+            step={0.05}
+            unit="m"
+            value={Math.round(node.position[1] * 100) / 100}
+          />
+        )}
         <SliderControl
           label="Z"
           onChange={(v) => {
