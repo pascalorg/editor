@@ -69,8 +69,9 @@ Unavailable walls do not continually postpone the pending-neighbour quiet clock.
 `isWallInitialBuildActive()` and `getPendingWallRebuildCount()` remain readable
 without `?perf`.
 
-Initial build consumes walls under the existing **8 ms budget**, checked between
-walls, without the interactive **8 walls/frame** cap. A wall with at least six
+Initial build consumes walls under a **48 ms budget** (about three display frames; the
+interactive tier keeps **8 ms**), checked between walls, without the interactive
+**8 walls/frame** cap. A wall with at least six
 opening cutouts occupies its own frame. Each wall's first build during active
 initial build skips adjacency scanning and neighbour re-invalidation because the
 hydrated inputs are stable and its neighbours are queued for their own first
