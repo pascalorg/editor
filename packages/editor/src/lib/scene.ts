@@ -13,6 +13,7 @@ import useEditor, {
   normalizePersistedEditorUiState,
   type PersistedEditorUiState,
 } from '../store/use-editor'
+import { sweepUnreferencedSceneAssets } from './local-asset-lifecycle'
 import { editorHostPanelRegistry } from './plugin-panels'
 
 export type SceneGraph = {
@@ -418,6 +419,10 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   clearSceneHistory()
 
   syncEditorSelectionFromCurrentScene()
+
+  // Drop IndexedDB assets that no live node references (issue #733). Safe on
+  // load: undo restores nodes without re-running this sweep.
+  void sweepUnreferencedSceneAssets()
 }
 
 const LOCAL_STORAGE_KEY = 'pascal-editor-scene'

@@ -11,6 +11,7 @@ import {
   useScene,
   type ZoneNode,
 } from '@pascal-app/core'
+import { scheduleLocalAssetDelete } from '../../../../../lib/local-asset-lifecycle'
 import { markPerfAction, useViewer } from '@pascal-app/viewer'
 import {
   Camera,
@@ -589,6 +590,11 @@ const LevelReferences = memo(function LevelReferences({
       (refNode.url.startsWith('http://') || refNode.url.startsWith('https://'))
     ) {
       onDeleteAsset?.(projectId, refNode.url)
+    }
+    // Local asset:// scans/guides never hit onDeleteAsset; without this the
+    // File stays in IndexedDB forever (issue #733).
+    if (refNode?.url?.startsWith('asset://')) {
+      scheduleLocalAssetDelete(refNode.url)
     }
     deleteNode(nodeId as AnyNodeId)
   }

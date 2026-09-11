@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { guideEmitter } from '../../../lib/guide-events'
+import { scheduleLocalAssetDelete } from '../../../lib/local-asset-lifecycle'
 import { getGuideImageName } from '../../../lib/local-guide-image'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
@@ -120,11 +121,14 @@ export function ReferencePanel() {
       return
     }
 
+    if (node.url?.startsWith('asset://')) {
+      scheduleLocalAssetDelete(node.url)
+    }
     deleteNode(selectedReferenceId as AnyNode['id'])
     guideEmitter.emit('guide:deleted', { guideId: selectedReferenceId as GuideNode['id'] })
     clearGuideUi(selectedReferenceId)
     setSelectedReferenceId(null)
-  }, [clearGuideUi, deleteNode, node?.type, selectedReferenceId, setSelectedReferenceId])
+  }, [clearGuideUi, deleteNode, node?.type, node?.url, selectedReferenceId, setSelectedReferenceId])
 
   const handleStartScale = useCallback(() => {
     if (node?.type !== 'guide') {

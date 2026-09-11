@@ -1,6 +1,6 @@
 import 'fake-indexeddb/auto'
 import { afterEach, describe, expect, test } from 'bun:test'
-import { loadAssetUrl, saveAsset } from './asset-storage'
+import { deleteAsset, loadAssetUrl, saveAsset, sweepOrphanAssets } from './asset-storage'
 
 function file(contents: string, name = 'test.txt'): File {
   return new File([contents], name, { type: 'text/plain' })
@@ -59,5 +59,32 @@ describe('loadAssetUrl', () => {
 
   test('returns null for an empty URL', async () => {
     expect(await loadAssetUrl('')).toBeNull()
+  })
+})
+
+describe('deleteAsset', () => {
+  test('removes the IndexedDB entry so later loads miss', async () => {
+    const url = await saveAsset(file('delete-me'))
+    expect(await loadAssetUrl(url)).not.toBeNull()
+
+    expect(await deleteAsset(url)).toBe(true)
+    expect(await loadAssetUrl(url)).toBeNull()
+  })
+
+  test('ignores non-asset URLs', async () => {
+    expect(await deleteAsset('https://cdn.example.com/a.glb')).toBe(false)
+    expect(await deleteAsset('')).toBe(false)
+  })
+})
+
+describe('sweepOrphanAssets', () => {
+  test('drops unreferenced assets and keeps referenced ones', async () => {
+    const keepUrl = await saveAsset(file('keep'))
+    const orphanUrl = await saveAsset(file('orphan'))
+
+    const removed = await sweepOrphanAssets([keepUrl])
+    expect(removed).toBeGreaterThanOrEqual(1)
+    expect(await loadAssetUrl(keepUrl)).not.toBeNull()
+    expect(await loadAssetUrl(orphanUrl)).toBeNull()
   })
 })
