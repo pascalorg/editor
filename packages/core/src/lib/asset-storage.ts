@@ -1,4 +1,4 @@
-import { del, get, keys, set } from 'idb-keyval'
+import { del, get, set } from 'idb-keyval'
 import { customAlphabet } from 'nanoid'
 
 export const ASSET_PREFIX = 'asset_data:'
@@ -86,35 +86,4 @@ export async function deleteAsset(url: string): Promise<boolean> {
     console.error('Failed to delete asset:', error)
     return false
   }
-}
-
-/**
- * Drop every IndexedDB asset whose id is not in `keepUrls`.
- *
- * Issue #733: deleting a node never removed its `asset://` File, so scans
- * (up to 200 MB) lingered forever. Safe to call on scene load — undo restores
- * nodes in-session without re-running the sweep.
- */
-export async function sweepOrphanAssets(keepUrls: Iterable<string>): Promise<number> {
-  const keep = new Set<string>()
-  for (const url of keepUrls) {
-    const id = assetIdFromUrl(url)
-    if (id) keep.add(id)
-  }
-
-  let removed = 0
-  try {
-    const allKeys = await keys()
-    for (const key of allKeys) {
-      if (typeof key !== 'string' || !key.startsWith(ASSET_PREFIX)) continue
-      const id = key.slice(ASSET_PREFIX.length)
-      if (keep.has(id)) continue
-      revokeCachedObjectUrl(id)
-      await del(key)
-      removed += 1
-    }
-  } catch (error) {
-    console.error('Failed to sweep orphan assets:', error)
-  }
-  return removed
 }

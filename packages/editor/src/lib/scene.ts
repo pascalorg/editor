@@ -13,7 +13,6 @@ import useEditor, {
   normalizePersistedEditorUiState,
   type PersistedEditorUiState,
 } from '../store/use-editor'
-import { sweepUnreferencedSceneAssets } from './local-asset-lifecycle'
 import { editorHostPanelRegistry } from './plugin-panels'
 
 export type SceneGraph = {
@@ -419,10 +418,6 @@ export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
   clearSceneHistory()
 
   syncEditorSelectionFromCurrentScene()
-
-  // Drop IndexedDB files no longer referenced by the loaded graph (#733).
-  // Fire-and-forget: cleanup must not block hydration or undo of the load.
-  void sweepUnreferencedSceneAssets()
 }
 
 const LOCAL_STORAGE_KEY = 'pascal-editor-scene'

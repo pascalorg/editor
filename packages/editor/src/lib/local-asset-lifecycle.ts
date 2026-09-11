@@ -1,4 +1,4 @@
-import { type AnyNode, deleteAsset, sweepOrphanAssets, useScene } from '@pascal-app/core'
+import { type AnyNode, deleteAsset, useScene } from '@pascal-app/core'
 
 /** Collect every `asset://` URL still referenced by a live scene node. */
 export function collectSceneAssetUrls(
@@ -18,15 +18,6 @@ export function collectSceneAssetUrls(
   return urls
 }
 
-/**
- * Drop IndexedDB assets no longer referenced by the scene (issue #733).
- * Intended for scene-load: undo restores nodes in-session without re-running
- * this sweep, so a mid-session undo still finds its File.
- */
-export async function sweepUnreferencedSceneAssets(): Promise<number> {
-  return sweepOrphanAssets(collectSceneAssetUrls())
-}
-
 const pendingDeletes = new Map<string, ReturnType<typeof setTimeout>>()
 const DELETE_GRACE_MS = 120_000
 
@@ -38,6 +29,11 @@ function isAssetStillReferenced(url: string): boolean {
  * Schedule deletion of a local `asset://` File after a grace period so undo
  * (which restores the node, not a new upload) can still load the blob.
  * Cancels any prior pending delete for the same URL.
+ *
+ * Only call this when the last live node that pointed at the URL is gone.
+ * IndexedDB is origin-global and not scoped by scene — never sweep “all
+ * unreferenced assets” from a single loaded graph (that would wipe other
+ * scenes).
  */
 export function scheduleLocalAssetDelete(url: string, graceMs: number = DELETE_GRACE_MS): void {
   if (!url.startsWith('asset://')) return

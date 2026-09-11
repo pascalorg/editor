@@ -6,7 +6,6 @@ import {
   clearPendingLocalAssetDeletes,
   collectSceneAssetUrls,
   scheduleLocalAssetDelete,
-  sweepUnreferencedSceneAssets,
 } from './local-asset-lifecycle'
 
 function file(contents: string, name = 'test.txt'): File {
@@ -30,25 +29,6 @@ describe('collectSceneAssetUrls', () => {
       c: { id: 'c', type: 'item', src: 'https://cdn.example.com/x.glb' } as never,
     })
     expect(urls.sort()).toEqual(['asset://guide-1', 'asset://model-1'])
-  })
-})
-
-describe('sweepUnreferencedSceneAssets', () => {
-  test('keeps assets still referenced by the live scene', async () => {
-    const keepUrl = await saveAsset(file('keep'))
-    const orphanUrl = await saveAsset(file('orphan'))
-
-    useScene.getState().setScene(
-      {
-        guide_keep: { id: 'guide_keep', type: 'guide', url: keepUrl },
-      } as never,
-      ['guide_keep'] as never,
-    )
-
-    const removed = await sweepUnreferencedSceneAssets()
-    expect(removed).toBeGreaterThanOrEqual(1)
-    expect(await loadAssetUrl(keepUrl)).not.toBeNull()
-    expect(await loadAssetUrl(orphanUrl)).toBeNull()
   })
 })
 
