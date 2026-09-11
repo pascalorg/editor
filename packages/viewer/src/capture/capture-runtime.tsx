@@ -14,7 +14,7 @@ import {
   captureLayerKey,
   DeviceMotionTrajectorySchema,
 } from '@pascal-app/core/capture'
-import { createPortal, useFrame, useLoader } from '@react-three/fiber'
+import { createPortal, useFrame } from '@react-three/fiber'
 import {
   type ComponentType,
   type ReactNode,
@@ -25,11 +25,10 @@ import {
   useRef,
   useState,
 } from 'react'
-import { FileLoader, type Object3D } from 'three'
+import type { Object3D } from 'three'
 import { ErrorBoundary } from '../components/error-boundary'
 import { useNodeEvents } from '../hooks/use-node-events'
 import useViewer from '../store/use-viewer'
-import { rewriteLoopbackAssetUrl } from './asset-url'
 import { resolveCaptureFrameMatrix } from './frame'
 import { isCaptureSessionVisible, isCaptureStreamVisible } from './layer-visibility'
 import { CaptureDeviceMotionLayer } from './layers/device-motion-layer'
@@ -45,6 +44,7 @@ import {
   streamHydratesJsonPayload,
 } from './stream-rendering'
 import { parseDeviceTrajectoryPackets, parseDeviceTrajectoryPayload } from './trajectory'
+import { useJsonArtifactPayload } from './use-json-artifact'
 
 export type CaptureMeshPresentation = {
   dollhouse?: boolean
@@ -356,14 +356,6 @@ export function CaptureStreamLayer({
       {content}
     </group>
   )
-}
-
-function useJsonArtifactPayload(url: string | null): unknown {
-  // Match GLB/PLY caching: revisiting a layer must not fetch and parse its JSON again.
-  const [payload] = useLoader(FileLoader, url ? [rewriteLoopbackAssetUrl(url)] : [], (loader) => {
-    loader.setResponseType('json')
-  })
-  return payload ?? null
 }
 
 function useResolvedArtifact(
