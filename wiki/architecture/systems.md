@@ -191,6 +191,17 @@ groups affected-level walls, slabs and consumers once and caches each slab's ren
 once per layout. Discovering changes still scans the snapshots; it does not scan the scene
 again for each candidate slab.
 
+Standalone undo/redo scopes reconciliation candidates to every identity-changed node in the
+current and target snapshots, including additions/removals and every step of a multi-step jump.
+Changed site, building or level identities retain full-level reconciliation. The slab tracker
+mirrors the renderer's context through `slabPolygonContextForLevel`, preserving `level.children`
+membership and order for wall adoption and sibling seams. It signs each derived polygon,
+elevation, thickness and recessed state, plus building transforms for terrain-filled slabs.
+Unchanged input references skip serialization; changed levels share prepared wall bands and
+sibling segments, and conservative bounds in both layouts limit polygon derivation. Direct
+slab writes retain their existing invalidation. This is not a complete terrain-fill eligibility
+signature: level base elevations, stack heights and building-to-site ancestry remain outside it.
+
 There is no routine whole-scene history refresh or batch reset. The existing priority-1 batch
 snapshot releases affected sources (including dirty walls' openings); untouched members stay
 batched, and affected members rejoin through the normal settle window.
