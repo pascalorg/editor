@@ -122,11 +122,11 @@ owner publishes an approved version from `main` with the official registry publi
 
 The viewer runtime and built-in node definitions are separate packages. Install the full built-in
 viewer set, then load the built-in plugin once before mounting `<Viewer>`. Capture sessions are an
-optional transport-neutral extension:
+optional extension shipped inside those packages as the `@pascal-app/core/capture` and
+`@pascal-app/viewer/capture` subpaths:
 
 ```bash
 npm install @pascal-app/core @pascal-app/viewer @pascal-app/editor @pascal-app/nodes
-npm install @pascal-app/capture-protocol @pascal-app/capture-viewer
 ```
 
 ```typescript
@@ -149,10 +149,8 @@ editor/
 ├── apps/
 │   └── editor/          # Next.js application
 ├── packages/
-│   ├── core/            # Schemas, scene state, and registry contracts
-│   ├── viewer/          # 3D rendering runtime and shared systems
-│   ├── capture-protocol/ # Static/live capture-session contracts
-│   ├── capture-viewer/  # Capture source runtime and reference renderers
+│   ├── core/            # Schemas, scene state, registry contracts, capture contracts
+│   ├── viewer/          # 3D rendering runtime, shared systems, capture runtime
 │   ├── editor/          # Editing tools and UI components
 │   ├── nodes/           # Built-in node definitions, renderers, and systems
 │   ├── cli/             # Persistent local editor installer and process manager
@@ -164,10 +162,8 @@ editor/
 
 | Package | Responsibility |
 |---------|---------------|
-| **@pascal-app/core** | Node schemas, scene state (Zustand), registry contracts, spatial queries, and event bus |
-| **@pascal-app/viewer** | 3D rendering via React Three Fiber, shared render systems, default camera/controls, and post-processing |
-| **@pascal-app/capture-protocol** | Versioned capture manifests, normalized streams, and transport-neutral static/live sources |
-| **@pascal-app/capture-viewer** | Viewer child runtime and reference model, device-motion, and point-cloud layers |
+| **@pascal-app/core** | Node schemas, scene state (Zustand), registry contracts, spatial queries, and event bus. `core/capture` adds versioned capture manifests, normalized streams, and transport-neutral static/live sources |
+| **@pascal-app/viewer** | 3D rendering via React Three Fiber, shared render systems, default camera/controls, and post-processing. `viewer/capture` adds the capture runtime and reference model, device-motion, point-cloud, and surface-mesh layers |
 | **@pascal-app/editor** | Editing tools, panels, selection, and direct-manipulation UI |
 | **@pascal-app/nodes** | Built-in registry plugin with node definitions, renderers, geometry, and systems |
 | **@pascal-app/cli** | Installs and manages a versioned standalone editor runtime and persistent local data |

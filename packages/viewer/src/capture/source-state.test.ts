@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { CaptureStreamPacket } from '@pascal-app/capture-protocol'
+import type { CaptureStreamPacket } from '@pascal-app/core/capture'
 import {
   appendCapturePacket,
   captureSubscriptionStreamIds,

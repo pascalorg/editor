@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import type { CaptureStreamPacket } from '@pascal-app/capture-protocol'
+import type { CaptureStreamPacket } from '@pascal-app/core/capture'
 import { buildPointCloudData, buildPointCloudPayloadData } from './layers/point-cloud-layer'
 
 function packet(sequence: number, positions: number[], colors?: number[]): CaptureStreamPacket {
