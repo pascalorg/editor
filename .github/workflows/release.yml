@@ -68,6 +68,11 @@ jobs:
     permissions:
       contents: write
       id-token: write
+    env:
+      # Verbose npm logs show the OIDC token exchange and the registry's
+      # rejection reason when trusted publishing is misconfigured; tokens are
+      # redacted by npm.
+      NPM_CONFIG_LOGLEVEL: verbose
     steps:
       - uses: actions/checkout@v4
         with:
