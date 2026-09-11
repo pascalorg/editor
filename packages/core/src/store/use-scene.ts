@@ -52,6 +52,7 @@ import {
   pauseSceneHistory,
   resetSceneHistoryPauseDepth,
   resumeSceneHistory,
+  runWithSceneCommitNodeIds,
   type SceneCommitOrigin,
   type SceneSnapshot,
 } from './history-control'
@@ -1421,6 +1422,30 @@ function createSceneStore(config: TemporalSceneCreator): UseSceneStore {
   return create<SceneState>()(hydratedConfig)
 }
 
+function runTemporalJump(target: Partial<SceneSnapshot> | undefined, jump: () => void): void {
+  if (!target?.nodes) {
+    jump()
+    return
+  }
+  const before = useScene.getState().nodes
+  const changed = new Set<AnyNodeId>()
+  for (const id of new Set([...Object.keys(before), ...Object.keys(target.nodes)])) {
+    const nodeId = id as AnyNodeId
+    const previous = before[nodeId]
+    const next = target.nodes[nodeId]
+    if (previous === next) continue
+    // Structural hierarchy changes keep the full-level reconciliation fallback.
+    if (
+      [previous, next].some((node) => node && ['site', 'building', 'level'].includes(node.type))
+    ) {
+      jump()
+      return
+    }
+    changed.add(nodeId)
+  }
+  runWithSceneCommitNodeIds(changed, jump)
+}
+
 const useScene: UseSceneStore = createSceneStore(
   temporal(
     (set, get) => ({
@@ -1777,6 +1802,20 @@ const useScene: UseSceneStore = createSceneStore(
           before: sceneHistorySnapshotFromState(pastState),
           current: sceneHistorySnapshotFromState(currentState),
         })
+      },
+      wrapTemporal: (config) => (set, get, store) => {
+        const state = config(set, get, store)
+        return {
+          ...state,
+          undo: (steps = 1) =>
+            runTemporalJump(get().pastStates.slice().splice(-steps, steps)[0], () =>
+              state.undo(steps),
+            ),
+          redo: (steps = 1) =>
+            runTemporalJump(get().futureStates.slice().splice(-steps, steps)[0], () =>
+              state.redo(steps),
+            ),
+        }
       },
       limit: 50, // Limit to last 50 actions
     },
