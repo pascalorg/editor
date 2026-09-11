@@ -110,6 +110,8 @@ codex mcp add pascal \
 
 Codex stores the environment-variable name, not its value. Set `PASCAL_API_KEY` again in each new terminal before starting Codex, or supply it through the user's existing shell or secret-manager configuration.
 
+Run this command even when the Codex plugin is installed. The plugin's portable `mcp.json` follows Agent Plugins 1.0.0, which forbids credentials and placeholder expansion in `headers` and reserves `Authorization` for the client, so a plugin cannot carry a hosted key. The plugin therefore supplies only the local `pascal` server, and `codex mcp add` owns the hosted connection.
+
 Claude Code:
 
 Plugin users set the key once in the configuration prompt shown when `pascal-agent-skills@pascal` is enabled. To add or change it later, reinstall with `claude plugin install pascal-agent-skills@pascal --config pascal_api_key=<key>`, or open `/plugin` in a session and use its configure flow; there is no `claude plugin config` command. The hosted tools then load under the plugin's `pascal-hosted` server beside the local `pascal` server, and Claude Code keeps the key in the OS keychain, falling back to `~/.claude/.credentials.json`, rather than writing it into `settings.json` or any project file.
@@ -137,7 +139,11 @@ openclaw mcp doctor pascal --probe
 
 The current OpenClaw static-header path stores the expanded key in its private MCP configuration and may warn about the literal credential during `doctor`. Do not commit or share that configuration. Remove the server with `openclaw mcp unset pascal` and rotate the Pascal key if the configuration is exposed. Skill installation alone does not configure this connection or authorize an account, upload, save, publication, or paid operation.
 
-For Cursor and other JSON-based clients, prefer their supported environment-variable or secret interpolation rather than a literal key. In `.cursor/mcp.json`:
+Cursor:
+
+Installing this repository as a Cursor plugin declares an optional `PASCAL_API_KEY` variable. A team admin sets its value in the Cursor dashboard under **Plugins** → **Configure**, at install time or later; the repository holds only the `${PASCAL_API_KEY}` placeholder. With a value set, the plugin's `pascal-hosted` server reaches the hosted endpoint alongside the local `pascal` server. Leaving it unset keeps the install local-only: the local server still works and `pascal-hosted` fails with `401 Unauthorized` because the placeholder resolves to nothing. Disable `pascal-hosted` in Cursor's MCP settings to remove that failing entry.
+
+For Cursor without the plugin, and for other JSON-based clients, prefer their supported environment-variable or secret interpolation rather than a literal key. In `.cursor/mcp.json`:
 
 ```json
 {
@@ -153,7 +159,7 @@ For Cursor and other JSON-based clients, prefer their supported environment-vari
 }
 ```
 
-Cursor resolves `${env:PASCAL_API_KEY}` from the environment it starts in, so the file holds no key and `PASCAL_API_KEY` must be exported where Cursor is launched. Client interpolation syntax varies. Confirm that the chosen host supports this form before relying on it.
+Cursor resolves `${env:PASCAL_API_KEY}` from the environment it starts in, so the file holds no key and `PASCAL_API_KEY` must be exported where Cursor is launched. The two Cursor syntaxes are not interchangeable: `${env:NAME}` reads the environment in a user or project `.cursor/mcp.json`, while a plugin's `mcp.json` uses the bare `${NAME}` plugin-variable form resolved from the dashboard. Client interpolation syntax varies. Confirm that the chosen host supports this form before relying on it.
 
 ## Autonomous private work
 
