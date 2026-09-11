@@ -354,6 +354,13 @@ jobs:
         # Keep token auth unset so npm can exchange the GitHub OIDC identity.
         run: |
           cd packages/cli
+          # The tarball embeds the URL and digest of the web runtime archive, so the archive
+          # must be staged (by "Validate portable editor runtime") before anything is published.
+          ARCHIVE="build/pascal-web-runtime-$CLI_VERSION.tar.gz"
+          test -f "$ARCHIVE"
+          test -f "$ARCHIVE.sha256"
+          test -f dist/services/pascal-mcp.mjs
+          jq -e --arg v "$CLI_VERSION" '.version == $v' dist/runtime-source.json
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/cli@$CLI_VERSION"
             npm publish --ignore-scripts --dry-run --access public --tag "$NPM_TAG"
@@ -419,3 +426,20 @@ jobs:
           done
 
           git push --atomic origin HEAD:main $TAGS
+
+      # The npm package points at this asset, so it is uploaded in the same job, immediately
+      # after the tag it hangs off exists on the remote.
+      - name: Upload the CLI web runtime release asset
+        if: ${{ inputs.dry-run == false && (inputs.package == 'cli' || inputs.package == 'all') }}
+        working-directory: packages/cli
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="@pascal-app/cli@$CLI_VERSION"
+          ARCHIVE="build/pascal-web-runtime-$CLI_VERSION.tar.gz"
+          if ! gh release view "$TAG" >/dev/null 2>&1; then
+            [ "$NPM_TAG" = "beta" ] && PRERELEASE=--prerelease || PRERELEASE=
+            gh release create "$TAG" $PRERELEASE --title "$TAG" --notes "The Pascal web editor runtime for \`@pascal-app/cli@$CLI_VERSION\`. The CLI downloads \`$(basename "$ARCHIVE")\` the first time a command starts the editor and verifies it against the digest published inside the npm package. Offline installs can pass the archive directly: \`pascal editor --runtime $(basename "$ARCHIVE")\`."
+          fi
+          gh release upload "$TAG" "$ARCHIVE" "$ARCHIVE.sha256" --clobber
+          echo "🌐 Uploaded $(basename "$ARCHIVE") to $TAG"

@@ -2,24 +2,19 @@ import { readFile } from 'node:fs/promises'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import type { JSONRPCMessage } from '@modelcontextprotocol/sdk/types.js'
-import { getEditorStatus, startEditor } from './editor-process.js'
 import { CliError } from './errors.js'
+import { ensureMcpService } from './mcp-service.js'
 import type { PascalPaths } from './paths.js'
 
+/**
+ * Bridges stdio to the managed MCP service. The service ships with the CLI, so this never
+ * starts the web editor and never needs the downloaded web runtime.
+ */
 export async function connectManagedMcp(paths: PascalPaths): Promise<void> {
-  let status = await getEditorStatus(paths)
-  if (!status.healthy) {
-    await startEditor({ paths })
-    status = await getEditorStatus(paths)
-  }
-  if (!(status.healthy && status.state?.mcp)) {
-    throw new CliError('mcp_unavailable', 'Pascal MCP is not healthy. Run "pascal doctor".')
-  }
+  const { state } = await ensureMcpService({ paths })
+  const token = await readMcpToken(paths)
 
-  const token = (await readFile(paths.mcpToken, 'utf8')).trim()
-  if (!token) throw new CliError('mcp_unavailable', 'Pascal MCP credentials are missing.')
-
-  const remote = new StreamableHTTPClientTransport(new URL(status.state.mcp.url), {
+  const remote = new StreamableHTTPClientTransport(new URL(state.url), {
     requestInit: { headers: { authorization: `Bearer ${token}` } },
   })
   const stdio = new StdioServerTransport()
@@ -40,6 +35,15 @@ export async function connectManagedMcp(paths: PascalPaths): Promise<void> {
 
   await remote.start()
   await stdio.start()
+}
+
+async function readMcpToken(paths: PascalPaths): Promise<string> {
+  let token = ''
+  try {
+    token = (await readFile(paths.mcpToken, 'utf8')).trim()
+  } catch {}
+  if (!token) throw new CliError('mcp_unavailable', 'Pascal MCP credentials are missing.')
+  return token
 }
 
 function applyProtocolVersion(

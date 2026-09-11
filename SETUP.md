@@ -58,13 +58,16 @@ background, and open it in the browser without a repository checkout:
 npx @pascal-app/cli editor
 ```
 
-The command starts the editor and its authenticated local MCP service together. Configure
-an agent to launch `pascal mcp connect`; for example, run `pascal mcp setup codex`.
+The command starts the editor and its authenticated local MCP service together, downloading
+the web editor runtime for that CLI version on the first run and verifying it against a
+digest published in the npm package. Configure an agent to launch `pascal mcp connect`; for
+example, run `pascal mcp setup codex`. That connector needs neither the editor process nor
+the runtime download, and `--runtime <directory-or-archive>` covers an offline host.
 
 Use `npx @pascal-app/cli doctor` to check the runtime, storage, editor, and MCP state. Saved
 scenes live in `~/.pascal/data/pascal.db` independently from installed runtime versions.
 The CLI retains old runtime versions for rollback and warns after more than three have
-accumulated. It also replaces a damaged copy of its bundled runtime on the next start;
+accumulated. It also replaces a damaged copy of the installed runtime on the next start;
 neither operation modifies the data directory.
 The complete command and storage reference is in [Run Pascal
 locally](https://editor.pascal.app/docs/developers/local-editor).
