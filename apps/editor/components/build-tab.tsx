@@ -586,7 +586,7 @@ export function BuildTab() {
                   if (option.id !== 'fittingType') return undefined
                   if (kind === 'duct-fitting' && value === 'elbow')
                     return '/icons/duct-fitting.webp'
-                  return `/icons/fittings/${kind === 'duct-fitting' ? 'duct' : 'pipe'}-${value}.png`
+                  return `/icons/fittings/${kind === 'duct-fitting' ? 'duct' : 'pipe'}-${value}.webp`
                 }}
                 kind={kind}
                 onSelect={(option, value) => {
