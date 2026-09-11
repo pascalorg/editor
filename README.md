@@ -22,8 +22,11 @@ npx @pascal-app/cli editor
 ```
 
 The CLI starts the editor and an authenticated MCP service in the background, selects
-collision-free loopback ports, and keeps projects in `~/.pascal/data/pascal.db`. Configure
-an agent to launch `pascal mcp connect`. See [Run Pascal locally](https://editor.pascal.app/docs/developers/local-editor)
+collision-free loopback ports, and keeps projects in `~/.pascal/data/pascal.db`. The npm
+package holds the CLI and that MCP service; the web editor runtime is downloaded once per
+version on the first command that starts the editor and verified against a digest published
+inside the package. Configure an agent to launch `pascal mcp connect`, which needs neither
+the editor process nor that download. See [Run Pascal locally](https://editor.pascal.app/docs/developers/local-editor)
 for pnpm/Bun commands, project management, MCP setup, updates, storage paths, and
 troubleshooting. The npm release is the older runtime described below; use the verified
 GitHub preview when a task needs the new read-only furniture candidate check.

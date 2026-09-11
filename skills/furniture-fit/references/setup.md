@@ -6,6 +6,8 @@ Source and public-documentation review date: 2026-09-10. Native task results are
 
 Use the local path when the project should remain on the machine:
 
+CLI builds from this repository keep the MCP service inside the npm package and download the roughly 64 MB web editor runtime only when a command starts the editor, so `pascal mcp connect` needs no runtime download: an agent-only host can list, load, and save local scenes without one. `@pascal-app/cli@1.0.0-beta.1` bundles that runtime in the npm package instead, and its connector also starts the local editor. Run `pascal editor` when a person needs the visual editor, and add `--runtime <archive>` when the host has no network access.
+
 ### Verified GitHub preview
 
 The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, an older runtime that may not expose `check_collisions.candidate` or the hosted agent claim/status commands. For the candidate and hosted-agent paths verified with this skill, install the GitHub prerelease built from public commit `5dabbc3b56109c9f79dc8a378443a4c520d9ee0a`:
