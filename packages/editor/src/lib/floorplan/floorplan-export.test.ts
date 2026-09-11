@@ -15,6 +15,7 @@ import { splitFloorplanOverlay } from '../../components/editor-2d/renderers/floo
 import { DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY } from './annotation-visibility'
 import {
   collectFloorplanGeometry,
+  collectFloorplanSchedules,
   filterFloorplanExportOverlay,
   fitPlanToBox,
   isFloorplanExportAnnotationGeometry,
@@ -421,6 +422,81 @@ describe('isFloorplanNodeInExportScope', () => {
   test('handles an undefined definition like a no-category node', () => {
     expect(isFloorplanNodeInExportScope(undefined, 'full')).toBe(true)
     expect(isFloorplanNodeInExportScope(undefined, 'structure')).toBe(false)
+  })
+})
+
+describe('collectFloorplanSchedules', () => {
+  test('omits non-structure schedule contributors under structure scope', () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    const structureKind = 'test:structure-schedule'
+    const siteKind = 'test:site-schedule'
+    const levelId = 'level_schedules' as AnyNode['id']
+    const structureNodeId = 'structure_scheduled' as AnyNode['id']
+    const siteNodeId = 'site_scheduled' as AnyNode['id']
+
+    const scheduleFor = (title: string) => ({
+      id: title.toLowerCase(),
+      title,
+      columns: [{ key: 'id', label: 'ID' }],
+      rows: [{ id: 'row', cells: { id: '1' } }],
+    })
+
+    try {
+      nodeRegistry._reset()
+      registerNode({
+        kind: structureKind,
+        schemaVersion: 1,
+        schema: z.object({ type: z.literal(structureKind) }) as never,
+        category: 'structure',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        extensions: {
+          'pascal:editor/floorplan': {
+            schedule: () => scheduleFor('Doors'),
+          },
+        },
+      } as AnyNodeDefinition)
+      registerNode({
+        kind: siteKind,
+        schemaVersion: 1,
+        schema: z.object({ type: z.literal(siteKind) }) as never,
+        category: 'site',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        extensions: {
+          'pascal:editor/floorplan': {
+            schedule: () => scheduleFor('Rooms'),
+          },
+        },
+      } as AnyNodeDefinition)
+
+      const nodes = {
+        [levelId]: {
+          id: levelId,
+          type: 'level',
+          visible: true,
+          children: [structureNodeId, siteNodeId],
+        },
+        [structureNodeId]: {
+          id: structureNodeId,
+          type: structureKind,
+          visible: true,
+        },
+        [siteNodeId]: {
+          id: siteNodeId,
+          type: siteKind,
+          visible: true,
+        },
+      } as unknown as Record<string, AnyNode>
+
+      const full = collectFloorplanSchedules(nodes, levelId, 'metric', 'full')
+      expect(full.map((schedule) => schedule.title).sort()).toEqual(['Doors', 'Rooms'])
+
+      const structure = collectFloorplanSchedules(nodes, levelId, 'metric', 'structure')
+      expect(structure.map((schedule) => schedule.title)).toEqual(['Doors'])
+    } finally {
+      restoreRegistry()
+    }
   })
 })
 

@@ -219,7 +219,7 @@ export async function exportFloorplanPdf(scope: FloorplanExportScope): Promise<v
         wallDimensionReference,
         installedPlugins,
       )
-      const schedules = collectFloorplanSchedules(nodes, level.id, unit)
+      const schedules = collectFloorplanSchedules(nodes, level.id, unit, scope)
       if (geometries.length === 0 && schedules.length === 0) continue
       const layout = resolveFloorplanPageLayout(A4_LANDSCAPE_WIDTH_PT, A4_LANDSCAPE_HEIGHT_PT)
 
@@ -305,6 +305,7 @@ export function collectFloorplanSchedules(
   nodes: Record<string, AnyNode>,
   levelId: AnyNodeId,
   unit: 'metric' | 'imperial',
+  scope: FloorplanExportScope = 'full',
 ): FloorplanSchedule[] {
   const siblingsByType = new Map<string, AnyNode[]>()
   const visit = (id: AnyNodeId) => {
@@ -324,6 +325,9 @@ export function collectFloorplanSchedules(
   for (const [kind, definition] of nodeRegistry.entries()) {
     const scheduleContribution = getFloorplanNodeExtension(definition)?.schedule
     if (!scheduleContribution) continue
+    // Same scope gate as geometry: a structure-only PDF must not list rooms
+    // or other site-category contributors whose plan geometry was excluded.
+    if (!isFloorplanNodeInExportScope(definition, scope)) continue
     const siblings = siblingsByType.get(kind) ?? []
     const schedule = scheduleContribution({ siblings, nodes, levelId, unit })
     if (schedule && schedule.rows.length > 0) schedules.push(schedule)
