@@ -2,6 +2,7 @@ import 'fake-indexeddb/auto'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { loadAssetUrl, saveAsset, useScene } from '@pascal-app/core'
 import {
+  bumpLocalAssetSceneEpoch,
   cancelLocalAssetDelete,
   clearPendingLocalAssetDeletes,
   collectSceneAssetUrls,
@@ -61,6 +62,17 @@ describe('scheduleLocalAssetDelete', () => {
     const url = await saveAsset(file('cancelled'))
     scheduleLocalAssetDelete(url, 20)
     cancelLocalAssetDelete(url)
+
+    await new Promise((resolve) => setTimeout(resolve, 40))
+    expect(await loadAssetUrl(url)).not.toBeNull()
+  })
+
+  test('does not delete after a scene switch (another graph may still use the File)', async () => {
+    const url = await saveAsset(file('other-scene'))
+    scheduleLocalAssetDelete(url, 20)
+    // Simulate applySceneGraphToEditor loading a different project.
+    bumpLocalAssetSceneEpoch()
+    useScene.getState().clearScene()
 
     await new Promise((resolve) => setTimeout(resolve, 40))
     expect(await loadAssetUrl(url)).not.toBeNull()

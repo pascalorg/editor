@@ -21,6 +21,19 @@ export function collectSceneAssetUrls(
 const pendingDeletes = new Map<string, ReturnType<typeof setTimeout>>()
 const DELETE_GRACE_MS = 120_000
 
+/**
+ * Bumped whenever a scene graph is applied (open, switch, remote apply).
+ * IndexedDB is origin-global; a File scheduled for delete under one graph
+ * may still be referenced by another saved scene, so a timer that fires
+ * after a scene switch must not delete.
+ */
+let sceneEpoch = 0
+
+export function bumpLocalAssetSceneEpoch(): number {
+  sceneEpoch += 1
+  return sceneEpoch
+}
+
 function isAssetStillReferenced(url: string): boolean {
   return collectSceneAssetUrls().includes(url)
 }
@@ -30,18 +43,19 @@ function isAssetStillReferenced(url: string): boolean {
  * (which restores the node, not a new upload) can still load the blob.
  * Cancels any prior pending delete for the same URL.
  *
- * Only call this when the last live node that pointed at the URL is gone.
- * IndexedDB is origin-global and not scoped by scene — never sweep “all
- * unreferenced assets” from a single loaded graph (that would wipe other
- * scenes).
+ * Only call this when the last live node in the *current* graph that pointed
+ * at the URL is gone. The timer re-checks live references and refuses to
+ * delete if the scene epoch changed (another graph may still use the File).
  */
 export function scheduleLocalAssetDelete(url: string, graceMs: number = DELETE_GRACE_MS): void {
   if (!url.startsWith('asset://')) return
   const existing = pendingDeletes.get(url)
   if (existing) clearTimeout(existing)
 
+  const scheduledEpoch = sceneEpoch
   const timer = setTimeout(() => {
     pendingDeletes.delete(url)
+    if (scheduledEpoch !== sceneEpoch) return
     if (isAssetStillReferenced(url)) return
     void deleteAsset(url)
   }, graceMs)
