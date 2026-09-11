@@ -11,6 +11,7 @@ import {
   getSelectableKinds,
   type ItemNode,
   isRegistrySelectable,
+  isSelectionHighlightEnabled,
   type NodeEvent,
   nodeRegistry,
   type RoofEvent,
@@ -2154,6 +2155,7 @@ const SelectionMaterialSync = () => {
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
   const hoverHighlightMode = useViewer((s) => s.hoverHighlightMode)
+  const registryVersion = useRegistryVersion()
   const geometryRevision = useViewer((s) => s.geometryRevision)
   const activeHighlightKindsRef = useRef(new Map<string, HighlightKind>())
   const highlightedMaterialsRef = useRef(
@@ -2173,6 +2175,10 @@ const SelectionMaterialSync = () => {
     for (const [id, kind] of activeHighlightKindsRef.current.entries()) {
       const node = useScene.getState().nodes[id as AnyNodeId]
       if (node?.type === 'wall') {
+        continue
+      }
+
+      if (node && !isSelectionHighlightEnabled(node.type)) {
         continue
       }
 
@@ -2231,6 +2237,7 @@ const SelectionMaterialSync = () => {
   }, [])
 
   useEffect(() => {
+    void registryVersion
     void geometryRevision
     const nextHighlightKinds = new Map<string, HighlightKind>()
 
@@ -2246,6 +2253,7 @@ const SelectionMaterialSync = () => {
     syncSelectionMaterials()
   }, [
     geometryRevision,
+    registryVersion,
     hoverHighlightMode,
     hoveredId,
     previewSelectedIds,
@@ -2312,11 +2320,13 @@ const EditorOutlinerSync = () => {
   const previewSelectedIds = useViewer((s) => s.previewSelectedIds)
   const hoveredId = useViewer((s) => s.hoveredId)
   const geometryRevision = useViewer((s) => s.geometryRevision)
+  const registryVersion = useRegistryVersion()
   const outliner = useViewer((s) => s.outliner)
   const nodes = useScene((s) => s.nodes)
 
   useEffect(() => {
     void geometryRevision
+    void registryVersion
     let idsToHighlight: string[] = []
 
     // 1. Determine what should be highlighted based on Phase
@@ -2351,7 +2361,8 @@ const EditorOutlinerSync = () => {
     // 2. Sync with the imperative outliner arrays (mutate in place to keep references)
     outliner.selectedObjects.length = 0
     for (const id of idsToHighlight) {
-      if (!nodes[id as AnyNodeId]) continue
+      const node = nodes[id as AnyNodeId]
+      if (!(node && isSelectionHighlightEnabled(node.type))) continue
       const obj = sceneRegistry.nodes.get(id)
       if (obj?.parent) outliner.selectedObjects.push(obj)
     }
@@ -2362,14 +2373,25 @@ const EditorOutlinerSync = () => {
         useViewer.setState({ hoveredId: null })
       } else {
         const hoveredNode = nodes[hoveredId as AnyNodeId]
-        const obj =
-          hoveredNode?.type === 'roof-segment'
-            ? (getHoveredRoofSegmentOutlineProxy(hoveredId) ?? sceneRegistry.nodes.get(hoveredId))
-            : sceneRegistry.nodes.get(hoveredId)
-        if (obj?.parent) outliner.hoveredObjects.push(obj)
+        if (hoveredNode && isSelectionHighlightEnabled(hoveredNode.type)) {
+          const obj =
+            hoveredNode.type === 'roof-segment'
+              ? (getHoveredRoofSegmentOutlineProxy(hoveredId) ?? sceneRegistry.nodes.get(hoveredId))
+              : sceneRegistry.nodes.get(hoveredId)
+          if (obj?.parent) outliner.hoveredObjects.push(obj)
+        }
       }
     }
-  }, [geometryRevision, phase, previewSelectedIds, selection, hoveredId, outliner, nodes])
+  }, [
+    geometryRevision,
+    registryVersion,
+    phase,
+    previewSelectedIds,
+    selection,
+    hoveredId,
+    outliner,
+    nodes,
+  ])
 
   return null
 }

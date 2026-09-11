@@ -39,10 +39,15 @@ function writeGridHeights(
     }
   }
 
+  let first = (row0 * field.cols + col0) * 3
+  let end = ((row1 - 1) * field.cols + col1) * 3
+  // Several dabs can precede a render; none may discard an earlier pending upload.
+  for (const pending of attribute.updateRanges) {
+    first = Math.min(first, pending.start)
+    end = Math.max(end, pending.start + pending.count)
+  }
   attribute.clearUpdateRanges()
-  const first = (row0 * field.cols + col0) * 3
-  const last = ((row1 - 1) * field.cols + (col1 - 1)) * 3 + 2
-  attribute.addUpdateRange(first, last - first + 1)
+  attribute.addUpdateRange(first, end - first)
   attribute.needsUpdate = true
 }
 
@@ -162,7 +167,7 @@ export function TerrainSculptGrid({
       if (stroke?.lastPatch && stroke.lastPatch !== lastPatch) {
         lastPatch = stroke.lastPatch
         writeGridHeights(attribute, stroke.field, stroke.lastPatch)
-        target.geometry.computeBoundingSphere()
+        // This grid is neither frustum-culled nor raycast, so no per-dab bounds scan.
         return
       }
 
@@ -173,7 +178,6 @@ export function TerrainSculptGrid({
         const restored = terrainFieldOf(current) ?? sculptFieldForSite(current)
         if (restored.cols !== field.cols || restored.rows !== field.rows) return
         writeGridHeights(attribute, restored, null)
-        target.geometry.computeBoundingSphere()
       }
     })
   }, [field.cols, field.rows, site.id])

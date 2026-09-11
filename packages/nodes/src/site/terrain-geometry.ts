@@ -19,7 +19,7 @@ import { type HeightPatch, heightAtSample, normalAt, type TerrainField } from '@
  *   (~1.5 ms at 257²), `computeVertexNormals()` rewrites the *whole* normal
  *   attribute, which silently defeats the dirty-rect partial upload that makes
  *   sculpting cheap. `normalAt` central-differences the field instead, so a
- *   patch touches only the rows it changed.
+ *   patch touches only its footprint and the neighbouring normals.
  * - **Vertices are one-per-sample and shared between triangles**, so a partial
  *   upload is a contiguous row range. Duplicating verts per-triangle for flat
  *   shading would triple memory and scatter the dirty range.
@@ -303,9 +303,18 @@ export function patchUpdateRange(
   patch: HeightPatch,
   itemSize: number,
 ): { start: number; count: number } | null {
+  if (
+    patch.cols <= 0 ||
+    patch.rows <= 0 ||
+    patch.col0 >= field.cols ||
+    patch.row0 >= field.rows ||
+    patch.col0 + patch.cols <= 0 ||
+    patch.row0 + patch.rows <= 0
+  ) {
+    return null
+  }
   const firstRow = Math.max(0, patch.row0 - 1)
   const lastRow = Math.min(field.rows - 1, patch.row0 + patch.rows)
-  if (lastRow < firstRow) return null
 
   const startVertex = firstRow * field.cols
   const endVertex = lastRow * field.cols + (field.cols - 1)
@@ -328,12 +337,33 @@ export function updateTerrainMesh(
   buffers: TerrainMeshBuffers,
   patch: HeightPatch,
 ): void {
-  const firstRow = Math.max(0, patch.row0 - 1)
-  const lastRow = Math.min(field.rows - 1, patch.row0 + patch.rows)
-  for (let r = firstRow; r <= lastRow; r++) {
-    for (let c = 0; c < field.cols; c++) {
-      const i = r * field.cols + c
-      writeVertex(field, buffers.positions, buffers.normals, buffers.uvs, c, r, i)
+  const col0 = Math.max(0, patch.col0)
+  const row0 = Math.max(0, patch.row0)
+  const col1 = Math.min(field.cols, patch.col0 + patch.cols)
+  const row1 = Math.min(field.rows, patch.row0 + patch.rows)
+  if (col0 >= col1 || row0 >= row1) return
+
+  for (let r = row0; r < row1; r++) {
+    for (let c = col0; c < col1; c++) {
+      buffers.positions[(r * field.cols + c) * 3 + 1] = heightAtSample(field, c, r)
+    }
+  }
+
+  // Uploads may span whole rows, but CPU work only needs the changed samples
+  // and the one-cell halo used by central-difference normals.
+  const firstCol = Math.max(0, col0 - 1)
+  const firstRow = Math.max(0, row0 - 1)
+  const lastCol = Math.min(field.cols, col1 + 1)
+  const lastRow = Math.min(field.rows, row1 + 1)
+  for (let r = firstRow; r < lastRow; r++) {
+    const z = field.origin[1] + r * field.spacing
+    for (let c = firstCol; c < lastCol; c++) {
+      const x = field.origin[0] + c * field.spacing
+      const [nx, ny, nz] = normalAt(field, x, z)
+      const i = (r * field.cols + c) * 3
+      buffers.normals[i] = nx
+      buffers.normals[i + 1] = ny
+      buffers.normals[i + 2] = nz
     }
   }
 }

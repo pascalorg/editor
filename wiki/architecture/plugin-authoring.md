@@ -36,7 +36,7 @@ The same shape powers the built-in `pascal:core` plugin in `@pascal-app/nodes` �
 
 ## What a `NodeDefinition` can contribute
 
-A plugin's `nodes` array is the only meaningful contribution point in v1. Each entry is a `NodeDefinition<S extends ZodObject>` that the registry stamps with `kind`, `schemaVersion`, `schema`, and any combination of:
+The core `Plugin` manifest owns semantic node definitions (and registry-backed inspector extensions); host UI and viewer-wide presentation remain separate exports. Each `nodes` entry is a `NodeDefinition<S extends ZodObject>` that the registry stamps with `kind`, `schemaVersion`, `schema`, and any combination of:
 
 - `defaults` — initial field values for new instances.
 - `capabilities` — `selectable` / `duplicable` / `deletable` / `surfaces` / `relations` flags consumed by the framework.
@@ -197,6 +197,49 @@ Install/uninstall is a project-level visibility operation. Plugin code and node 
 `creator` and `pluginUrl` are optional manager metadata. Selecting a plugin in the Plugins sidebar opens its detail page, where the host shows this metadata and the project install/uninstall control.
 
 Host panels mount lazily inside an error boundary. Use host CSS variables, keep CSS scoped to the plugin, and do not write global styles.
+
+## Viewer presentation contributions
+
+A plugin can also export a presentation-only R3F subtree separately from its
+core manifest. Use this for scene-wide derived visuals such as atmosphere,
+weather, or surroundings that are not authored nodes:
+
+```tsx
+import type { ViewerPresentationContribution } from '@pascal-app/viewer'
+
+export const myPresentation: ViewerPresentationContribution = {
+  id: 'acme:landscape:presentation',
+  pluginId: 'acme:landscape',
+  component: () => import('./presentation'),
+}
+```
+
+The application registers it during the same bootstrap pass as the plugin and
+host panel:
+
+```ts
+import { registerViewerPresentation } from '@pascal-app/viewer'
+
+registerViewerPresentation(myPresentation)
+```
+
+`@pascal-app/editor` mounts the public `<ViewerPresentations />` contribution
+host once in both its edit and preview viewers. A host composing raw
+`<Viewer>` mounts `<ViewerPresentations />` explicitly. Do not also put the
+same contribution in `viewerSceneSlot`; that double-mounts it.
+
+When `pluginId` is present, the contribution is mounted only while that id is
+in the project's `installedPlugins`. Registration remains session-add-only;
+project uninstall releases the mounted subtree and reinstall creates a fresh
+one. Lazy load and render failures are isolated per contribution. Contributions
+must clean up Three.js resources on unmount and keep all scene-scoped ownership
+per R3F `Scene`, so two Viewer instances cannot affect each other.
+
+Presentation is outside `scene-renderer` and therefore outside semantic model
+export. It must not create authored nodes, `pascalId` values, selection/query
+targets, or history entries. Registration also provides no persistence:
+versioned plugin configuration belongs in a host-owned project sidecar, and
+the host must call the plugin's public import/export functions explicitly.
 
 ## Versioning
 

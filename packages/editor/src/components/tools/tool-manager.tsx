@@ -12,6 +12,7 @@ import {
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
 import { type ComponentType, lazy, Suspense, useMemo } from 'react'
+import { useRegisteredToolEnabled } from '../../hooks/use-registered-tool-enabled'
 import { siteBoundaryHandlesEnabled } from '../../lib/site-boundary'
 import useEditor, { type Phase, type Tool } from '../../store/use-editor'
 import useInteractionScope, {
@@ -102,6 +103,7 @@ export const ToolManager: React.FC = () => {
   const phase = useEditor((state) => state.phase)
   const mode = useEditor((state) => state.mode)
   const tool = useEditor((state) => state.tool)
+  const registeredToolEnabled = useRegisteredToolEnabled(tool)
   const movingNode = useMovingNode()
   const registryToolOwnsPlacement = useInteractionScope(
     (state) => state.scope.kind === 'placing' && state.scope.driver === 'registry-tool',
@@ -238,7 +240,7 @@ export const ToolManager: React.FC = () => {
     !showCeilingBoundaryEditor
 
   // Show build tools when in build mode
-  const showBuildTool = mode === 'build' && tool !== null
+  const showBuildTool = mode === 'build' && tool !== null && registeredToolEnabled
 
   // A move initiated from the 2D floor-plan (orange move-dot) is owned end-to-
   // end by `FloorplanRegistryMoveOverlay`, which marks the origin `'2d'` at

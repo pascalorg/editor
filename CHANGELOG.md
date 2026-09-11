@@ -4,6 +4,11 @@
 
 ### Features
 
+- Add plugin-contributed editor panels and viewer presentations with project-local configuration persistence.
+- Include Environment in the standalone app's Plugins catalogue, with a pinned GitHub dependency and registered editor panel and viewer presentation.
+- Refresh Environment's authoring controls and include its interactive color picker.
+- Expose generic atmosphere and ground-replacement adapters, Site-scoped floorplan output, bake-only GLB geometry, and plugin-owned selection materials.
+- Add portable GLB/USDZ downloads with asynchronous material baking, procedural-content filters, and opt-in static viewer-presentation exports.
 - **Public agent skills** — `pascal-3d` and `furniture-fit` teach MCP-capable agents to build, inspect, validate, and hand off scenes, and to report measured furniture footprints with evidence-scoped conclusions, fail-closed input gates, blocker-aware next actions, and an optional no-sign-in footprint pre-check link ([#777](https://github.com/pascalorg/editor/pull/777), [#781](https://github.com/pascalorg/editor/pull/781), [#791](https://github.com/pascalorg/editor/pull/791), [#794](https://github.com/pascalorg/editor/pull/794), [#824](https://github.com/pascalorg/editor/pull/824))
 - **Plugin bundles 0.1.3 → 0.1.8** — the same canonical `skills/` source ships as one versioned plugin with a recorded validation ledger per bundle ([#782](https://github.com/pascalorg/editor/pull/782), [#795](https://github.com/pascalorg/editor/pull/795), [#802](https://github.com/pascalorg/editor/pull/802), [#811](https://github.com/pascalorg/editor/pull/811), [#825](https://github.com/pascalorg/editor/pull/825))
 - **Claude Code and Codex plugin marketplaces** — this repository is installable as `pascal-agent-skills@pascal`, with a credential-free local `pascal mcp connect` server bundled for Claude Code ([#777](https://github.com/pascalorg/editor/pull/777), [#810](https://github.com/pascalorg/editor/pull/810))
@@ -18,6 +23,20 @@
 
 ### Fixes
 
+- Localize terrain and ground-cover brush updates, preserve pending dab uploads, and keep Environment's day/night light graph stable.
+- Keep Site-scoped floorplan overlays aligned with live move and rotation previews.
+- Preserve Site ownership and same-kind sibling context in synchronous and asynchronous export geometry, including Site children without a parent ID.
+- Exclude detached Site children and their descendants from visible-only exports when their owning Site is hidden, including children without a parent ID.
+- Preserve unsaved presentation settings when a project receives its first ID, without overwriting an existing project's stored configuration.
+- Avoid native TypeScript compiler inference overflow in atmosphere fog references without changing rendering.
+- Omit stale viewer-surroundings selections from GLB/USDZ downloads after a presentation is unregistered or its plugin is uninstalled.
+- Keep export settings scrollable and group advanced model options in a keyboard-accessible disclosure.
+- Preserve child geometry when exporting empty mesh containers to USDZ.
+- Export the viewer's shadow-only layer for plugin consumers.
+- Remove the nonworking god-ray post-process and its dedicated viewer API; preserve sky, fog, lighting, and ordinary shadows.
+- Preserve grass and procedural material colors in portable exports; freeze instancing and deformation without changing the live scene or saved-viewer animation clips.
+- Stop registered placement tools when their plugin is uninstalled in either view, preserving authored nodes and requiring explicit reactivation after reinstall.
+- Include enabled, visible Site contributions below architecture in floorplan PDFs, preserving building transforms, inline images, and even-odd holes. Hidden Sites also hide children associated through their declared child list.
 - The Claude Code plugin root is now `skills/` instead of the repository root, so installing `pascal-agent-skills@pascal` copies the two skill bundles and their MCP configuration instead of caching the whole monorepo and running `bun install` against the root lockfile ([#832](https://github.com/pascalorg/editor/pull/832))
 - Preserve custom scene materials across save, load, clone, fork, and live sync. Materials were dropped at every persistence boundary, so a scene reopened with default surfaces. Collections were dropped on MCP import for the same reason ([#597](https://github.com/pascalorg/editor/pull/597)) by [@ShiroKSH](https://github.com/ShiroKSH)
 - Wall junction mitering is now deterministic for exactly-collinear walls, so identical scenes produce identical geometry regardless of node iteration order ([#596](https://github.com/pascalorg/editor/pull/596)) by [@tomatotomata](https://github.com/tomatotomata)

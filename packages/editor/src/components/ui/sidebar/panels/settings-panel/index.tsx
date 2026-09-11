@@ -1,23 +1,41 @@
 import {
   clearSceneHistory,
   emitter,
+  isNodeKindEnabled,
+  nodeRegistry,
+  useRegistryVersion,
   useScene,
   type ParsedBuildJson,
   validateBuildJson,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { useViewer, viewerPresentationRegistry } from '@pascal-app/viewer'
 import { TreeView, VisualJson } from '@visual-json/react'
-import { Camera, Check, Copy, Download, Map as MapIcon, Save, Trash2, Upload } from 'lucide-react'
+import {
+  Camera,
+  Check,
+  ChevronDown,
+  Copy,
+  Download,
+  Map as MapIcon,
+  Save,
+  Trash2,
+  Upload,
+} from 'lucide-react'
 import {
   type KeyboardEvent,
   type SyntheticEvent,
   useCallback,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from 'react'
-import { exportFloorplanPdf } from '../../../../../lib/floorplan/floorplan-export'
+import {
+  exportFloorplanPdf,
+  type FloorplanExportScope,
+} from '../../../../../lib/floorplan/floorplan-export'
 import { Button } from './../../../../../components/ui/primitives/button'
 import {
   Dialog,
@@ -55,6 +73,21 @@ type SceneGraphNode = {
 type SceneGraphValue = {
   roots: SceneGraphNode[]
   detachedNodes?: SceneGraphNode[]
+}
+
+const MODEL_EXPORT_FORMATS = [
+  { format: 'glb', label: 'GLB' },
+  { format: 'usdz', label: 'USDZ' },
+  { format: 'stl', label: 'STL' },
+  { format: 'obj', label: 'OBJ' },
+] as const
+
+type ModelExportFormat = (typeof MODEL_EXPORT_FORMATS)[number]['format']
+
+type ExportableNodeType = {
+  type: string
+  label: string
+  supportsGeometryOnly: boolean
 }
 
 const isSceneNode = (value: unknown): value is SceneNode => {
@@ -200,11 +233,65 @@ export function SettingsPanel({
   const shadows = useViewer((state) => state.shadows)
   const setPhase = useEditor((state) => state.setPhase)
   const floorplanMode = useFloorplanMode((state) => state.mode)
+  const registryVersion = useRegistryVersion()
+  const visibleOnlySwitchId = useId()
+  const includeNodeTypeIdPrefix = useId()
+  const includePresentationIdPrefix = useId()
   const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
   const [exportOnlyVisible, setExportOnlyVisible] = useState(true)
+  const [excludedNodeTypes, setExcludedNodeTypes] = useState<string[]>([])
+  const [includedPresentationIds, setIncludedPresentationIds] = useState<string[]>([])
+  const [activeModelExport, setActiveModelExport] = useState<ModelExportFormat | null>(null)
+  const [modelExportError, setModelExportError] = useState<string | null>(null)
+  const [modelExportWarning, setModelExportWarning] = useState<string | null>(null)
+  const [activeFloorplanExport, setActiveFloorplanExport] = useState<FloorplanExportScope | null>(
+    null,
+  )
+  const [floorplanExportError, setFloorplanExportError] = useState<string | null>(null)
   const [pendingImport, setPendingImport] = useState<PendingImport | null>(null)
-  const [projectIdCopyState, setProjectIdCopyState] = useState<'idle' | 'copied' | 'error'>(
-    'idle',
+  const [projectIdCopyState, setProjectIdCopyState] = useState<'idle' | 'copied' | 'error'>('idle')
+  const exportableNodeTypes = useMemo(() => {
+    void registryVersion
+    const uniqueTypes = new Set(Object.values(nodes).map((node) => node.type))
+    const options: ExportableNodeType[] = []
+
+    for (const type of uniqueTypes) {
+      const definition = nodeRegistry.get(type)
+      if (
+        !(
+          definition?.bakeGeometry ||
+          definition?.bakeGeometryAsync ||
+          definition?.bake === 'replace'
+        ) ||
+        !isNodeKindEnabled(type, installedPlugins)
+      ) {
+        continue
+      }
+      options.push({
+        type,
+        label: definition.presentation?.label ?? type,
+        supportsGeometryOnly: !definition.bakeGeometryAsync || Boolean(definition.bakeGeometry),
+      })
+    }
+
+    return options.sort((a, b) => {
+      const labelOrder = a.label.localeCompare(b.label)
+      return labelOrder === 0 ? a.type.localeCompare(b.type) : labelOrder
+    })
+  }, [installedPlugins, nodes, registryVersion])
+  const registeredPresentations = useSyncExternalStore(
+    viewerPresentationRegistry.subscribe,
+    viewerPresentationRegistry.getSnapshot,
+    viewerPresentationRegistry.getSnapshot,
+  )
+  const exportablePresentations = useMemo(
+    () =>
+      registeredPresentations.filter(
+        (contribution) =>
+          contribution.staticExport &&
+          (!contribution.pluginId || installedPlugins.includes(contribution.pluginId)),
+      ),
+    [installedPlugins, registeredPresentations],
   )
   const sceneGraphValue = useMemo(
     () => buildSceneGraphValue(nodes as Record<string, SceneNode>, rootNodeIds),
@@ -358,8 +445,71 @@ export function SettingsPanel({
     await onVisibilityChange?.(field, value)
   }
 
+  const handleNodeTypeInclusion = useCallback((type: string, included: boolean) => {
+    setExcludedNodeTypes((current) => {
+      const isExcluded = current.includes(type)
+      if (included) {
+        return isExcluded ? current.filter((excludedType) => excludedType !== type) : current
+      }
+      return isExcluded ? current : [...current, type]
+    })
+  }, [])
+  const handlePresentationInclusion = useCallback((id: string, included: boolean) => {
+    setIncludedPresentationIds((current) => {
+      const isIncluded = current.includes(id)
+      if (included) return isIncluded ? current : [...current, id]
+      return isIncluded ? current.filter((includedId) => includedId !== id) : current
+    })
+  }, [])
+
+  const handleModelExport = async (format: ModelExportFormat, label: string) => {
+    if (!modelExport || activeModelExport) return
+
+    setActiveModelExport(format)
+    setModelExportError(null)
+    setModelExportWarning(null)
+    try {
+      const artifact = await modelExport(format, {
+        onlyVisible: exportOnlyVisible,
+        excludedNodeTypes,
+        includedPresentationIds:
+          format === 'glb' || format === 'usdz'
+            ? includedPresentationIds.filter((id) =>
+                exportablePresentations.some((contribution) => contribution.id === id),
+              )
+            : [],
+      })
+      if (!artifact) {
+        throw new Error('Model export did not produce a file')
+      }
+      if (artifact.warnings?.length) setModelExportWarning(artifact.warnings.join(' '))
+    } catch (error) {
+      setModelExportError(
+        error instanceof Error ? error.message : `Couldn’t export ${label}. Try again.`,
+      )
+    } finally {
+      setActiveModelExport(null)
+    }
+  }
+
+  const handleFloorplanExport = async (scope: FloorplanExportScope) => {
+    if (activeFloorplanExport) return
+
+    setActiveFloorplanExport(scope)
+    setFloorplanExportError(null)
+    try {
+      await exportFloorplanPdf(scope)
+    } catch (error) {
+      setFloorplanExportError(
+        `Couldn’t export the floor plan. ${error instanceof Error ? error.message : 'Try again.'}`,
+      )
+    } finally {
+      setActiveFloorplanExport(null)
+    }
+  }
+
   return (
-    <div className="flex flex-col gap-6 p-3">
+    <div className="subtle-scrollbar min-h-0 flex-1 space-y-6 overflow-x-hidden overflow-y-auto overscroll-contain p-3">
       {projectId && (
         <div className="space-y-2">
           <label className="font-medium text-muted-foreground text-xs uppercase">Project</label>
@@ -406,6 +556,7 @@ export function SettingsPanel({
               </div>
             </div>
             <Switch
+              aria-label="Make project public"
               checked={!(projectVisibility?.isPrivate ?? false)}
               onCheckedChange={(checked) => handleVisibilityChange('isPrivate', !checked)}
             />
@@ -416,6 +567,7 @@ export function SettingsPanel({
               <div className="text-muted-foreground text-xs">Visible to public viewers</div>
             </div>
             <Switch
+              aria-label="Show 3D scans to public viewers"
               checked={projectVisibility?.showScansPublic ?? true}
               onCheckedChange={(checked) => handleVisibilityChange('showScansPublic', checked)}
             />
@@ -426,6 +578,7 @@ export function SettingsPanel({
               <div className="text-muted-foreground text-xs">Visible to public viewers</div>
             </div>
             <Switch
+              aria-label="Show floorplans to public viewers"
               checked={projectVisibility?.showGuidesPublic ?? true}
               onCheckedChange={(checked) => handleVisibilityChange('showGuidesPublic', checked)}
             />
@@ -436,6 +589,7 @@ export function SettingsPanel({
               <div className="text-muted-foreground text-xs">Cast shadows from lights</div>
             </div>
             <Switch
+              aria-label="Enable shadows"
               checked={shadows}
               onCheckedChange={(checked) => useViewer.getState().setShadows(checked)}
             />
@@ -449,39 +603,139 @@ export function SettingsPanel({
 
         <div className="space-y-2">
           <div className="font-medium text-muted-foreground text-xs">3D model</div>
-          <div className="flex items-center justify-between gap-4 rounded-md border p-3">
-            <div>
-              <div className="font-medium text-sm">Visible nodes only</div>
-              <div className="text-muted-foreground text-xs">
-                Exclude hidden furniture and other hidden scene nodes
+          <details
+            className="group"
+            onKeyDownCapture={(event) => {
+              // Keep Space available to the disclosure and switches, not canvas panning.
+              if (event.code === 'Space') event.stopPropagation()
+            }}
+          >
+            <summary className="flex min-h-10 cursor-pointer list-none items-center justify-between rounded-md border px-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring">
+              Export options
+              <ChevronDown aria-hidden="true" className="size-4 group-open:rotate-180" />
+            </summary>
+            <div className="space-y-3 pt-3">
+              <div className="flex items-center justify-between gap-4 rounded-md border p-3">
+                <div className="min-w-0">
+                  <label className="font-medium text-sm" htmlFor={visibleOnlySwitchId}>
+                    Visible nodes only
+                  </label>
+                  <div className="text-muted-foreground text-xs">
+                    Exclude hidden furniture and other hidden scene nodes
+                  </div>
+                </div>
+                <Switch
+                  aria-label="Export visible nodes only"
+                  checked={exportOnlyVisible}
+                  id={visibleOnlySwitchId}
+                  onCheckedChange={setExportOnlyVisible}
+                />
               </div>
+
+              <fieldset className="space-y-2 rounded-md border p-3">
+                <legend className="px-1 font-medium text-sm">Include in file</legend>
+                <p className="text-muted-foreground text-xs">
+                  Choose which procedural content is baked into model files. GLB and USDZ use the
+                  textured portable path; STL and OBJ remain geometry-only.
+                </p>
+                {exportableNodeTypes.length > 0 ? (
+                  <div className="space-y-2 pt-1">
+                    {exportableNodeTypes.map(({ type, label, supportsGeometryOnly }, index) => {
+                      const switchId = `${includeNodeTypeIdPrefix}-${index}`
+                      return (
+                        <div className="flex items-center justify-between gap-4" key={type}>
+                          <label className="min-w-0 font-medium text-sm" htmlFor={switchId}>
+                            {label}
+                            {!supportsGeometryOnly && (
+                              <span className="text-muted-foreground text-xs"> (GLB/USDZ only)</span>
+                            )}
+                          </label>
+                          <Switch
+                            aria-label={`Include ${label} in model files`}
+                            checked={!excludedNodeTypes.includes(type)}
+                            id={switchId}
+                            onCheckedChange={(included) => handleNodeTypeInclusion(type, included)}
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground text-xs">
+                    No optional procedural content is present.
+                  </p>
+                )}
+                <p className="text-muted-foreground text-xs">
+                  Viewer surroundings are excluded unless selected separately below.
+                </p>
+              </fieldset>
+              {exportablePresentations.length > 0 ? (
+                <fieldset className="space-y-2 rounded-md border p-3">
+                  <legend className="px-1 font-medium text-sm">Viewer surroundings</legend>
+                  <p className="text-muted-foreground text-xs">
+                    Optional static surroundings are included only in GLB and USDZ.
+                  </p>
+                  <div className="space-y-2 pt-1">
+                    {exportablePresentations.map((contribution, index) => {
+                      const switchId = `${includePresentationIdPrefix}-${index}`
+                      const label = contribution.staticExport!.label
+                      return (
+                        <div
+                          className="flex items-center justify-between gap-4"
+                          key={contribution.id}
+                        >
+                          <label className="min-w-0 font-medium text-sm" htmlFor={switchId}>
+                            {label}
+                          </label>
+                          <Switch
+                            aria-label={`Include ${label} in GLB and USDZ`}
+                            checked={includedPresentationIds.includes(contribution.id)}
+                            id={switchId}
+                            onCheckedChange={(included) =>
+                              handlePresentationInclusion(contribution.id, included)
+                            }
+                          />
+                        </div>
+                      )
+                    })}
+                  </div>
+                </fieldset>
+              ) : null}
             </div>
-            <Switch checked={exportOnlyVisible} onCheckedChange={setExportOnlyVisible} />
-          </div>
-          <Button
-            className="w-full justify-start gap-2"
-            onClick={() => modelExport?.('glb', { onlyVisible: exportOnlyVisible })}
-            variant="outline"
-          >
-            <Download className="size-4" />
-            Export GLB
-          </Button>
-          <Button
-            className="w-full justify-start gap-2"
-            onClick={() => modelExport?.('stl', { onlyVisible: exportOnlyVisible })}
-            variant="outline"
-          >
-            <Download className="size-4" />
-            Export STL
-          </Button>
-          <Button
-            className="w-full justify-start gap-2"
-            onClick={() => modelExport?.('obj', { onlyVisible: exportOnlyVisible })}
-            variant="outline"
-          >
-            <Download className="size-4" />
-            Export OBJ
-          </Button>
+          </details>
+
+          {MODEL_EXPORT_FORMATS.map(({ format, label }) => {
+            const isActive = activeModelExport === format
+            return (
+              <Button
+                aria-busy={isActive}
+                className="w-full justify-start gap-2"
+                disabled={activeModelExport !== null || !modelExport}
+                key={format}
+                onClick={() => void handleModelExport(format, label)}
+                variant="outline"
+              >
+                <Download aria-hidden="true" className="size-4" />
+                {isActive ? `Exporting ${label}…` : `Export ${label}`}
+              </Button>
+            )
+          })}
+
+          {activeModelExport ? (
+            <p className="text-muted-foreground text-xs" role="status">
+              Preparing {activeModelExport.toUpperCase()} file…
+            </p>
+          ) : null}
+          {modelExportError ? (
+            <p className="text-destructive text-xs" role="alert">
+              {modelExportError}
+            </p>
+          ) : null}
+          {modelExportWarning ? (
+            <p className="text-foreground text-xs" role="status">
+              Warning: {modelExportWarning}
+            </p>
+          ) : null}
 
           <PrintExportButton onlyVisible={exportOnlyVisible} />
         </div>
@@ -492,21 +746,35 @@ export function SettingsPanel({
             <span>{floorplanMode === 'default' ? 'Default mode' : 'Expert mode'}</span>
           </div>
           <Button
+            aria-busy={activeFloorplanExport === 'full'}
             className="w-full justify-start gap-2"
-            onClick={() => exportFloorplanPdf('full')}
+            disabled={activeFloorplanExport !== null}
+            onClick={() => void handleFloorplanExport('full')}
             variant="outline"
           >
             <MapIcon className="size-4" />
             Full floor plan
           </Button>
           <Button
+            aria-busy={activeFloorplanExport === 'structure'}
             className="w-full justify-start gap-2"
-            onClick={() => exportFloorplanPdf('structure')}
+            disabled={activeFloorplanExport !== null}
+            onClick={() => void handleFloorplanExport('structure')}
             variant="outline"
           >
             <MapIcon className="size-4" />
             Structure only
           </Button>
+          {activeFloorplanExport ? (
+            <p className="text-muted-foreground text-xs" role="status">
+              Preparing floor-plan PDF…
+            </p>
+          ) : null}
+          {floorplanExportError ? (
+            <p className="break-words text-destructive text-xs" role="alert">
+              {floorplanExportError}
+            </p>
+          ) : null}
         </div>
       </div>
 
