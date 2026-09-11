@@ -257,6 +257,7 @@ const getStrategy = (): SelectionStrategy | null => {
       'roof-segment',
       'window',
       'door',
+      ...getSelectableKinds(),
     ],
     handleClick: (node, nativeEvent) => {
       let nodeToSelect = node
@@ -297,6 +298,7 @@ const getStrategy = (): SelectionStrategy | null => {
         'roof-segment',
         'window',
         'door',
+        ...getSelectableKinds(),
       ]
       if (!validTypes.includes(node.type)) return false
       return isNodeInZone(node, levelId, zoneId)
