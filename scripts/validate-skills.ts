@@ -844,6 +844,12 @@ function firstMarketplaceEntry(marketplace: Record<string, unknown>): Record<str
   return typeof entry === 'object' && entry !== null ? (entry as Record<string, unknown>) : {}
 }
 
+function cursorAuthorSubset(value: unknown): string {
+  if (typeof value !== 'object' || value === null) return 'missing'
+  const { name, email } = value as Record<string, unknown>
+  return normalizedAuthor({ name, email })
+}
+
 function normalizedAuthor(value: unknown): string {
   if (typeof value !== 'object' || value === null) return 'missing'
   return JSON.stringify(Object.entries(value as Record<string, unknown>).sort())
@@ -873,7 +879,13 @@ for (const [label, descriptor] of pluginDescriptors) {
   if (descriptor.description !== portablePlugin.description) {
     fail(`${label}: description must match the root plugin.json description`)
   }
-  if (normalizedAuthor(descriptor.author) !== normalizedAuthor(portablePlugin.author)) {
+  // Cursor's plugin schema allows only `name` and `email` under `author`
+  // (additionalProperties: false), so its manifest is compared on those two.
+  const expectedAuthor =
+    label === 'Cursor plugin manifest'
+      ? cursorAuthorSubset(portablePlugin.author)
+      : normalizedAuthor(portablePlugin.author)
+  if (normalizedAuthor(descriptor.author) !== expectedAuthor) {
     fail(`${label}: author must match the root plugin.json author`)
   }
 }

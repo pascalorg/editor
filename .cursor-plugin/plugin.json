@@ -5,16 +5,28 @@
   "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
   "author": {
     "name": "Pascal",
-    "email": "support@pascal.app",
-    "url": "https://pascal.app"
+    "email": "support@pascal.app"
   },
   "homepage": "https://editor.pascal.app/docs/developers/mcp",
   "repository": "https://github.com/pascalorg/editor",
   "license": "MIT",
   "logo": "assets/pascal-mark-plate.svg",
-  "keywords": ["pascal", "3d", "architecture", "mcp", "furniture", "spatial"],
+  "keywords": [
+    "pascal",
+    "3d",
+    "architecture",
+    "mcp",
+    "furniture",
+    "spatial"
+  ],
   "category": "developer-tools",
-  "tags": ["3d", "architecture", "floor-plan", "furniture", "mcp"],
+  "tags": [
+    "3d",
+    "architecture",
+    "floor-plan",
+    "furniture",
+    "mcp"
+  ],
   "skills": "./skills/",
   "variables": {
     "type": "object",
