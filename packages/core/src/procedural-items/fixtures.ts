@@ -179,6 +179,159 @@ export const bedRecipe = parseRecipe({
   ],
   constraints: [],
 })
+export const radiatorRecipe = parseRecipe({
+  version: 1,
+  name: 'Wall radiator',
+  description:
+    'A wall-mounted panel radiator with adjustable width, height and fins. The valve stays outside the nominal width.',
+  classification: {
+    category: 'radiator',
+    functionTags: ['heating'],
+    tags: ['radiator', 'wall-mounted'],
+  },
+  mounting: { attachTo: 'wall-side', reference: 'back' },
+  parameters: [
+    p('width', 'Panel width', 1.2, 0.6, 2, 0.05, { axis: 'x' }),
+    p('height', 'Panel height', 0.6, 0.3, 0.9, 0.05, { axis: 'y' }),
+    p('depth', 'Panel depth', 0.1, 0.06, 0.18, 0.01, { axis: 'z' }),
+    p('fins', 'Fins', 12, 4, 24, 1, { unit: 'count', part: 'panel' }),
+  ],
+  slots: [
+    { id: 'body', label: 'Painted metal', color: '#eeeae2' },
+    { id: 'valve', label: 'Valve', color: '#a5adb5' },
+  ],
+  surfaces: [
+    {
+      id: 'back',
+      label: 'Wall mounting face',
+      position: [0, div('height', 2), div('depth', -2)],
+      rotation: [-Math.PI / 2, 0, 0],
+      size: ['width', 'height'],
+    },
+  ],
+  parts: [
+    {
+      id: 'panel',
+      label: 'Radiator fins',
+      count: 'fins',
+      shapes: [
+        {
+          id: 'fin',
+          primitive: 'roundedBox',
+          slot: 'body',
+          size: [sub(div('width', 'fins'), 0.008), 'height', 'depth'],
+          position: [
+            sub(mul(add('index', 0.5), div('width', 'fins')), div('width', 2)),
+            div('height', 2),
+            0,
+          ],
+          radius: 0.006,
+        },
+      ],
+    },
+    {
+      id: 'pipes',
+      label: 'Manifolds',
+      count: 2,
+      shapes: [
+        {
+          id: 'pipe',
+          primitive: 'cylinder',
+          slot: 'body',
+          size: [0.035, 'width', 0.035],
+          position: [0, add(0.055, mul('index', sub('height', 0.11))), 0],
+          rotation: [0, 0, Math.PI / 2],
+        },
+      ],
+    },
+    {
+      id: 'valve',
+      label: 'Valve',
+      count: 1,
+      shapes: [
+        {
+          id: 'knob',
+          primitive: 'cylinder',
+          slot: 'valve',
+          size: [0.06, 0.08, 0.06],
+          position: [add(div('width', 2), 0.04), 0.08, 0],
+          rotation: [0, 0, Math.PI / 2],
+        },
+      ],
+    },
+  ],
+  constraints: [],
+})
+export const counterRecipe = parseRecipe({
+  version: 1,
+  name: 'Kitchen counter',
+  description:
+    'A floor-supported counter with a splashback and a named worktop for real items. Nearby walls do not host it.',
+  classification: { category: 'counter', functionTags: ['kitchen'], tags: ['counter', 'worktop'] },
+  parameters: [
+    p('width', 'Width', 1.6, 0.6, 2.8, 0.05, { axis: 'x' }),
+    p('height', 'Worktop height', 0.9, 0.7, 1.1, 0.025, { axis: 'y' }),
+    p('depth', 'Depth', 0.65, 0.35, 0.9, 0.025, { axis: 'z' }),
+    p('splashback', 'Splashback height', 0.2, 0.05, 0.4, 0.025, { part: 'splashback' }),
+  ],
+  slots: [
+    { id: 'cabinet', label: 'Cabinet', color: '#668579' },
+    { id: 'stone', label: 'Worktop and splashback', color: '#ded8cb' },
+  ],
+  surfaces: [
+    {
+      id: 'worktop',
+      label: 'Worktop',
+      position: [0, 'height', 0.025],
+      size: [sub('width', 0.04), sub('depth', 0.09)],
+    },
+  ],
+  parts: [
+    {
+      id: 'cabinet',
+      label: 'Cabinet',
+      count: 1,
+      shapes: [
+        {
+          id: 'body',
+          primitive: 'box',
+          slot: 'cabinet',
+          size: [sub('width', 0.04), sub('height', 0.04), sub('depth', 0.04)],
+          position: [0, div(sub('height', 0.04), 2), 0],
+        },
+      ],
+    },
+    {
+      id: 'worktop',
+      label: 'Worktop',
+      count: 1,
+      shapes: [
+        {
+          id: 'top',
+          primitive: 'box',
+          slot: 'stone',
+          size: ['width', 0.04, 'depth'],
+          position: [0, sub('height', 0.02), 0],
+        },
+      ],
+    },
+    {
+      id: 'splashback',
+      label: 'Splashback',
+      count: 1,
+      shapes: [
+        {
+          id: 'back',
+          primitive: 'box',
+          slot: 'stone',
+          size: ['width', 'splashback', 0.025],
+          position: [0, add('height', div('splashback', 2)), add(div('depth', -2), 0.0125)],
+        },
+      ],
+    },
+  ],
+  constraints: [],
+})
 export const experimentBriefs = [
   {
     id: 'shelf_open',

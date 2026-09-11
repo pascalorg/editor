@@ -1,5 +1,6 @@
 import { beforeAll, expect, test } from 'bun:test'
 import { registerNode } from '../registry/registry'
+import { ItemNode } from '../schema/nodes/item'
 import useScene from '../store/use-scene'
 import { shelfRecipe } from './fixtures'
 import { ProceduralItemNode } from './node'
@@ -51,7 +52,19 @@ test('occupied surfaces are protected through direct store updates', () => {
     children: ['item_book'],
     attachments: { item_book: surface },
   })
-  useScene.setState({ nodes: { [node.id]: node } as never, readOnly: false })
+  const book = ItemNode.parse({
+    id: 'item_book',
+    parentId: node.id,
+    asset: {
+      id: 'book',
+      name: 'Book',
+      category: 'decor',
+      thumbnail: '',
+      src: '/book.glb',
+      dimensions: [0.16, 0.12, 0.12],
+    },
+  })
+  useScene.setState({ nodes: { [node.id]: node, [book.id]: book } as never, readOnly: false })
   expect(() =>
     useScene.getState().updateNode(node.id as never, { parameters: { rows: 2 } } as never),
   ).toThrow('hosted item')

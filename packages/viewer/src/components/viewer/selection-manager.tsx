@@ -93,30 +93,15 @@ interface SelectionStrategy {
   isValid: (node: AnyNode) => boolean
 }
 
-// Check if a node belongs to the selected level (directly or via wall parent)
 const isNodeOnLevel = (node: AnyNode, levelId: string): boolean => {
   const nodes = useScene.getState().nodes
-
-  // Direct child of level
-  if (node.parentId === levelId) return true
-
-  // Wall-attached nodes (window/door/item): check if parent wall is on the level
-  if ((node.type === 'item' || node.type === 'window' || node.type === 'door') && node.parentId) {
-    const parentNode = nodes[node.parentId as keyof typeof nodes]
-    if (parentNode?.type === 'wall' && parentNode.parentId === levelId) {
-      return true
-    }
-    // Ceiling/slab/roof-attached items: check if parent structure is on the level
-    if (
-      (parentNode?.type === 'ceiling' ||
-        parentNode?.type === 'slab' ||
-        parentNode?.type === 'roof') &&
-      parentNode.parentId === levelId
-    ) {
-      return true
-    }
+  const seen = new Set<string>()
+  let parentId = node.parentId
+  while (parentId && !seen.has(parentId)) {
+    if (parentId === levelId) return true
+    seen.add(parentId)
+    parentId = nodes[parentId as AnyNodeId]?.parentId ?? null
   }
-
   return false
 }
 

@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { rotateVector } from './spatial'
 
 export type Expr =
   | number
@@ -22,6 +23,27 @@ export const RecipeSchema = z.strictObject({
   version: z.literal(1),
   name: z.string().min(1).max(100),
   description: z.string().max(600),
+  classification: z
+    .strictObject({
+      category: id,
+      functionTags: z.array(z.string().min(1).max(80)).max(16),
+      tags: z.array(z.string().min(1).max(80)).max(16),
+    })
+    .optional(),
+  mounting: z.strictObject({ attachTo: z.literal('wall-side'), reference: id }).optional(),
+  surfaces: z
+    .array(
+      z.strictObject({
+        id,
+        label: z.string().min(1).max(60),
+        part: id.optional(),
+        position: vector,
+        rotation: vector.optional(),
+        size: z.tuple([expression, expression]),
+      }),
+    )
+    .max(24)
+    .optional(),
   parameters: z
     .array(
       z.strictObject({
@@ -95,7 +117,14 @@ export type EvaluatedShape = {
   rotation: Vec3
   radius: number
 }
-export type Surface = { id: string; position: Vec3; size: [number, number] }
+export type Surface = {
+  id: string
+  label: string
+  position: Vec3
+  rotation: Vec3
+  normal: Vec3
+  size: [number, number]
+}
 export type Evaluation = {
   shapes: EvaluatedShape[]
   surfaces: Surface[]
@@ -147,6 +176,16 @@ export function parseRecipe(input: unknown): Recipe {
       if (!recipe.slots.some((s) => s.id === shape.slot))
         throw new Error(`Unknown slot ${shape.slot}`)
   }
+  const surfaceIds = (recipe.surfaces ?? []).map((s) => s.id)
+  if (new Set(surfaceIds).size !== surfaceIds.length) throw new Error('Duplicate surface ID')
+  for (const surface of recipe.surfaces ?? [])
+    if (surface.part && !recipe.parts.some((p) => p.id === surface.part))
+      throw new Error('Unknown surface part')
+  if (
+    recipe.mounting &&
+    !(recipe.surfaces ?? []).some((s) => s.id === recipe.mounting!.reference && !s.part)
+  )
+    throw new Error('Mounting requires one named, non-repeated reference surface')
   const axes = recipe.parameters.flatMap((p) => (p.axis ? [p.axis] : []))
   if (new Set(axes).size !== axes.length) throw new Error('Only one handle binding per axis')
   evaluateRecipe(recipe)
@@ -269,11 +308,39 @@ export function evaluateRecipe(recipe: Recipe, values: Record<string, number> = 
             throw new Error('Support surfaces must be horizontal and unrotated in v1')
           surfaces.push({
             id: `${shapeId}:top`,
+            label: part.label,
+            rotation: [0, 0, 0],
+            normal: [0, 1, 0],
             position: [position[0], position[1] + size[1] / 2, position[2]],
             size: [size[0], size[2]],
           })
         }
       }
+  }
+  for (const surface of recipe.surfaces ?? []) {
+    const part = recipe.parts.find((p) => p.id === surface.part)
+    const count = part ? expr(part.count) : 1
+    for (let i = 0; i < count; i++) {
+      if (surfaces.length >= 256) throw new Error('Surface budget exceeded')
+      const rotation = (surface.rotation ?? [0, 0, 0]).map((e) => expr(e, i)) as Vec3
+      const size = surface.size.map((e) => expr(e, i)) as [number, number]
+      const position = surface.position.map((e) => expr(e, i)) as Vec3
+      if (size.some((v) => v < 0.001 || v > 30) || position.some((v) => Math.abs(v) > 30))
+        throw new Error('Invalid surface region')
+      surfaces.push({
+        id: part ? `${surface.id}:${i}` : surface.id,
+        label: part ? `${surface.label} ${i + 1}` : surface.label,
+        position,
+        rotation,
+        normal: rotateVector([0, 1, 0], rotation),
+        size,
+      })
+    }
+  }
+  if (recipe.mounting) {
+    const reference = surfaces.find((s) => s.id === recipe.mounting!.reference)!
+    if (Math.abs(reference.normal[2] + 1) > 1e-6)
+      throw new Error('Wall-side mounting reference must face local -Z')
   }
   if (!shapes.length) throw new Error('The item must contain geometry')
   const dimensions = max.map((x, i) => x - min[i]!) as Vec3

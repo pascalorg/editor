@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../schema/base'
+import { validateProceduralRelations } from './query'
 import { evaluateRecipe, parseRecipe, type Recipe } from './recipe'
 
 const recipe = z.custom<Recipe>().transform((value, ctx) => {
@@ -18,13 +19,18 @@ export const ProceduralItemNode = BaseNode.extend({
   type: nodeType('procedural-item'),
   recipe,
   parameters: z.record(z.string(), z.number().finite()).default({}),
-  slots: z.record(z.string(), z.string().regex(/^#[0-9a-fA-F]{6}$/)).default({}),
+  slots: z
+    .record(z.string(), z.string().regex(/^(#[0-9a-fA-F]{6}|(?:scene|library):[^\s]+)$/))
+    .default({}),
   position: z
     .tuple([z.number().finite(), z.number().finite(), z.number().finite()])
     .default([0, 0, 0]),
   rotation: z
     .tuple([z.number().finite(), z.number().finite(), z.number().finite()])
     .default([0, 0, 0]),
+  wallId: z.string().optional(),
+  side: z.enum(['front', 'back']).optional(),
+  supportSlabId: z.string().optional(),
   children: z.array(z.string()).default([]),
   attachments: z.record(z.string(), z.string()).default({}),
 })
@@ -44,10 +50,21 @@ export const ProceduralItemNode = BaseNode.extend({
       })
     }
   })
-  .meta({ strictMutations: true })
+  .meta({ strictMutations: true, validateRelations: validateProceduralRelations })
 export type ProceduralItemNode = z.infer<typeof ProceduralItemNode>
 export function parameterPatch(node: ProceduralItemNode, id: string, value: number) {
   const parameters = { ...node.parameters, [id]: value }
   const parsed = ProceduralItemNode.safeParse({ ...node, parameters })
   return parsed.success ? { parameters } : null
+}
+
+export function snapParameters(recipe: Recipe, values: Record<string, number>) {
+  const result = { ...values }
+  for (const p of recipe.parameters) {
+    const value = values[p.id]
+    if (value === undefined) continue
+    const snapped = p.min + Math.round((value - p.min) / p.step) * p.step
+    result[p.id] = Number(Math.max(p.min, Math.min(p.max, snapped)).toFixed(10))
+  }
+  return result
 }

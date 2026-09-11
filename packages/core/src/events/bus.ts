@@ -1,6 +1,7 @@
 import type { ThreeEvent } from '@react-three/fiber'
 import mitt from 'mitt'
 import type { Object3D } from 'three'
+import type { ProceduralItemNode } from '../procedural-items/node'
 import type {
   BlockNode,
   BoxVentNode,
@@ -344,6 +345,7 @@ type SelectionEvents = {
 
 type EditorEvents = GridEvents &
   GenericNodeEvents &
+  NodeEvents<'procedural-item', NodeEvent<ProceduralItemNode>> &
   NodeEvents<'wall', WallEvent> &
   NodeEvents<'fence', FenceEvent> &
   NodeEvents<'cabinet', CabinetEvent> &

@@ -1,6 +1,12 @@
 'use client'
-import { type AnyNodeId, useLiveNodeOverrides, useScene } from '@pascal-app/core'
-import { ProceduralItemNode } from '@pascal-app/core/procedural-items'
+import { type AnyNodeId, MaterialSchema, useLiveNodeOverrides, useScene } from '@pascal-app/core'
+import {
+  ProceduralItemNode,
+  proceduralSlotColor,
+  setProceduralMaterial,
+  snapParameters,
+  validateProceduralRelations,
+} from '@pascal-app/core/procedural-items'
 import { useEffect, useState } from 'react'
 import { SliderControl } from '../ui/controls/slider-control'
 export function ProceduralInspector({
@@ -17,14 +23,23 @@ export function ProceduralInspector({
     | undefined
   const override = useLiveNodeOverrides((s) => s.overrides.get(nodeId))
   const node = committed ? ({ ...committed, ...override } as ProceduralItemNode) : null
+  const materials = useScene((s) => s.materials)
   const [error, setError] = useState('')
   useEffect(() => () => useLiveNodeOverrides.getState().clear(nodeId as AnyNodeId), [nodeId])
   if (!node || !committed) return null
   const change = (id: string, value: number, commit: boolean) => {
-    const parameters = { ...node.parameters, [id]: value }
+    const values = { ...node.parameters, [id]: value }
+    const parameters = commit ? snapParameters(node.recipe, values) : values
     const parsed = ProceduralItemNode.safeParse({ ...node, parameters })
     if (!parsed.success) {
       setError(parsed.error.issues[0]?.message ?? 'Invalid edit')
+      if (commit) useLiveNodeOverrides.getState().clear(nodeId as AnyNodeId)
+      return
+    }
+    try {
+      validateProceduralRelations({ ...node, parameters }, useScene.getState().nodes)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Invalid attachment')
       if (commit) useLiveNodeOverrides.getState().clear(nodeId as AnyNodeId)
       return
     }
@@ -124,17 +139,42 @@ export function ProceduralInspector({
           .map((slot) => (
             <label key={slot.id} className="mb-2 flex items-center justify-between text-sm">
               {slot.label}
+              <select
+                aria-label={`${slot.label} material`}
+                className="max-w-28 rounded border text-xs"
+                value={
+                  node.slots[slot.id]?.startsWith('scene:') ||
+                  node.slots[slot.id]?.startsWith('library:')
+                    ? node.slots[slot.id]
+                    : ''
+                }
+                onChange={(e) =>
+                  setProceduralMaterial(nodeId, slot.id, e.target.value || undefined)
+                }
+              >
+                <option value="">Design default</option>
+                {node.slots[slot.id]?.startsWith('library:') && (
+                  <option value={node.slots[slot.id]}>Library material</option>
+                )}
+                {Object.values(materials).map((m) => (
+                  <option key={m.id} value={`scene:${m.id}`}>
+                    {m.name}
+                  </option>
+                ))}
+              </select>
               <input
                 aria-label={`${slot.label} color`}
                 type="color"
-                value={node.slots[slot.id] ?? slot.color}
+                value={proceduralSlotColor(node.slots[slot.id], slot.color, materials)}
                 onChange={(e) =>
-                  useScene
-                    .getState()
-                    .updateNode(
-                      nodeId as AnyNodeId,
-                      { slots: { ...node.slots, [slot.id]: e.target.value } } as never,
-                    )
+                  setProceduralMaterial(
+                    nodeId,
+                    slot.id,
+                    undefined,
+                    MaterialSchema.parse({
+                      properties: { color: e.target.value, roughness: 0.75 },
+                    }),
+                  )
                 }
               />
             </label>

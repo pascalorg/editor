@@ -1,3 +1,6 @@
 export * from './fixtures'
+export * from './materials'
 export * from './node'
+export * from './query'
 export * from './recipe'
+export * from './spatial'

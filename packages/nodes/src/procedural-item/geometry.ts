@@ -48,6 +48,18 @@ export function buildProceduralGeometry(node: ProceduralItemNode): BuiltItem {
     const geometry = source.index ? source.toNonIndexed() : source
     if (geometry !== source) source.dispose()
     geometry.clearGroups()
+    const vertices = geometry.getAttribute('position'),
+      normals = geometry.getAttribute('normal'),
+      uv = geometry.getAttribute('uv')
+    for (let i = 0; i < vertices.count; i++) {
+      const x = vertices.getX(i),
+        y = vertices.getY(i),
+        z = vertices.getZ(i)
+      const nx = Math.abs(normals.getX(i)),
+        ny = Math.abs(normals.getY(i)),
+        nz = Math.abs(normals.getZ(i))
+      uv.setXY(i, nx > ny && nx > nz ? z : x, ny > nx && ny > nz ? z : y)
+    }
     geometry.applyMatrix4(
       new Matrix4().compose(
         new Vector3(...shape.position),

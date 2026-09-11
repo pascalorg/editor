@@ -5,17 +5,40 @@ import {
   useLiveNodeOverrides,
   useLiveTransforms,
   useRegistry,
+  useScene,
 } from '@pascal-app/core'
-import type { ProceduralItemNode } from '@pascal-app/core/procedural-items'
-import { NodeRenderer, useNodeEvents } from '@pascal-app/viewer'
+import { type ProceduralItemNode, proceduralLocalPose } from '@pascal-app/core/procedural-items'
+import {
+  createDefaultMaterial,
+  createSurfaceRoleMaterial,
+  NodeRenderer,
+  resolveMaterialRef,
+  useLibraryMaterialsVersion,
+  useNodeEvents,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { type Group, Mesh, MeshStandardMaterial } from 'three'
+import { type Group, Mesh } from 'three'
 import { acquireProceduralGeometry, type BuiltItem, geometrySignature } from './geometry'
 export default function ProceduralRenderer({ node }: { node: ProceduralItemNode }) {
   const ref = useRef<Group>(null!)
   const overrides = useLiveNodeOverrides((s) => s.overrides.get(node.id))
   const live = useLiveTransforms((s) => s.get(node.id as AnyNodeId))
   const effective = { ...node, ...overrides } as ProceduralItemNode
+  const host = useScene((s) => (node.wallId ? s.nodes[node.wallId as AnyNodeId] : undefined))
+  const hostOverride = useLiveNodeOverrides((s) =>
+    node.wallId ? s.overrides.get(node.wallId) : undefined,
+  )
+  const pose = proceduralLocalPose(
+    effective,
+    host ? { [host.id]: { ...host, ...hostOverride } as AnyNode } : {},
+  )
+  const sceneMaterials = useScene((s) => s.materials)
+  const shading = useViewer((s) => s.shading),
+    textures = useViewer((s) => s.textures),
+    colorPreset = useViewer((s) => s.colorPreset),
+    sceneTheme = useViewer((s) => s.sceneTheme)
+  const libraryVersion = useLibraryMaterialsVersion()
   const key = geometrySignature(effective)
   const [built, setBuilt] = useState<BuiltItem | null>(null)
   const handlers = useNodeEvents(node as unknown as AnyNode, 'procedural-item' as AnyNode['type'])
@@ -26,26 +49,26 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
     setBuilt(lease.value)
     return lease.release
   }, [key])
-  const materialKey = JSON.stringify(
-    effective.recipe.slots.map((s) => ({ ...s, color: effective.slots[s.id] ?? s.color })),
-  )
-  const materials = useMemo(
-    () =>
-      new Map(
-        (JSON.parse(materialKey) as { id: string; color: string }[]).map((s) => [
-          s.id,
-          new MeshStandardMaterial({
-            name: `slot_${s.id}`,
-            color: s.color,
-            roughness: 0.75,
-          }),
-        ]),
-      ),
-    [materialKey],
-  )
+  const materialKey = JSON.stringify([effective.recipe.slots, effective.slots, libraryVersion])
+  const materials = useMemo(() => {
+    const [slots, overrides] = JSON.parse(materialKey) as [
+      ProceduralItemNode['recipe']['slots'],
+      ProceduralItemNode['slots'],
+    ]
+    return new Map(
+      slots.map((s) => {
+        const ref = overrides[s.id]
+        const material = textures
+          ? (resolveMaterialRef(ref, sceneMaterials, shading)?.clone() ??
+            createDefaultMaterial(ref?.startsWith('#') ? ref : s.color, 0.75, shading))
+          : createSurfaceRoleMaterial('furnishing', colorPreset, undefined, sceneTheme).clone()
+        return [s.id, material] as const
+      }),
+    )
+  }, [materialKey, sceneMaterials, shading, textures, colorPreset, sceneTheme])
   useLayoutEffect(
     () => () => {
-      for (const m of materials.values()) m.dispose()
+      for (const material of materials.values()) material.dispose()
     },
     [materials],
   )
@@ -63,12 +86,12 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   )
   const rotation =
     live?.rotation === undefined
-      ? effective.rotation
-      : ([effective.rotation[0], live.rotation, effective.rotation[2]] as [number, number, number])
+      ? pose.rotation
+      : ([pose.rotation[0], live.rotation, pose.rotation[2]] as [number, number, number])
   return (
     <group
       ref={ref}
-      position={live?.position ?? effective.position}
+      position={live?.position ?? pose.position}
       rotation={rotation}
       visible={node.visible}
       {...handlers}
@@ -79,7 +102,7 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
       {effective.children.map((id) => {
         const surface = built?.evaluation.surfaces.find((s) => s.id === effective.attachments[id])
         return (
-          <group key={id} position={surface?.position ?? [0, 0, 0]}>
+          <group key={id} position={surface?.position ?? [0, 0, 0]} rotation={surface?.rotation}>
             <NodeRenderer nodeId={id as AnyNodeId} />
           </group>
         )

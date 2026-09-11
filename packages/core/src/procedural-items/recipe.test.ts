@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { bedRecipe, shelfRecipe } from './fixtures'
+import { bedRecipe, radiatorRecipe, shelfRecipe } from './fixtures'
 import { ProceduralItemNode } from './node'
 import { evaluateRecipe, parseRecipe, sweepRecipe } from './recipe'
 
@@ -77,4 +77,26 @@ describe('procedural recipe contract', () => {
     expect(() => parseRecipe(r)).toThrow('budget')
     expect(() => parseRecipe(JSON.parse('{"__proto__":{}}'))).toThrow('Reserved')
   })
+})
+
+test('named surfaces repeat with stable IDs and reject invalid mounting references', () => {
+  const recipe = structuredClone(shelfRecipe)
+  recipe.surfaces = [
+    {
+      id: 'named_shelf',
+      label: 'Shelf region',
+      part: 'shelves',
+      position: [0, 'index', 0],
+      size: ['width', 'depth'],
+    },
+  ]
+  const a = evaluateRecipe(parseRecipe(recipe))
+  const b = evaluateRecipe(recipe, { width: 2 })
+  expect(a.surfaces.map((s) => s.id)).toEqual(b.surfaces.map((s) => s.id))
+  expect(a.surfaces.some((s) => s.id === 'named_shelf:0')).toBe(true)
+  const radiator = structuredClone(radiatorRecipe)
+  radiator.surfaces![0]!.rotation = [0, 0, 0]
+  expect(() => parseRecipe(radiator)).toThrow('face local -Z')
+  radiator.mounting!.reference = 'missing'
+  expect(() => parseRecipe(radiator)).toThrow('reference surface')
 })
