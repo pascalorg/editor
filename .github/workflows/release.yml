@@ -77,10 +77,14 @@ jobs:
         with:
           bun-version: 1.3.14
 
+      # No registry-url here: with it, actions/setup-node writes an .npmrc whose
+      # auth token falls back to the placeholder XXXXX-XXXXX-XXXXX-XXXXX, npm
+      # sends that fake token, the registry answers 404, and the OIDC trusted
+      # publishing exchange never runs. npm publishes to registry.npmjs.org by
+      # default and each publish step passes --access public explicitly.
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          registry-url: "https://registry.npmjs.org"
 
       # npm refuses direct publishing with 2FA-bypass tokens (EOTP, see
       # https://gh.io/npm-gat-bypass2fa-deprecation), so no NODE_AUTH_TOKEN is set
