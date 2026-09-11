@@ -938,9 +938,10 @@ function combineGeometryList(
  * Levels to export, ordered bottom-to-top. The active building (the building
  * owning the selected level, or the first one found) contributes all of its
  * level children; if there is no building wrapper we fall back to the single
- * resolved level.
+ * resolved level. Roof support levels are excluded: they are not occupied
+ * stories, so they do not get a floor-plan page.
  */
-function resolveExportLevels(nodes: Record<string, AnyNode>): ExportLevel[] {
+export function resolveExportLevels(nodes: Record<string, AnyNode>): ExportLevel[] {
   const selected = useViewer.getState().selection.levelId as AnyNodeId | null | undefined
   const activeLevelId = selected && nodes[selected] ? selected : firstLevelId(nodes)
   if (!activeLevelId) return []
@@ -955,6 +956,7 @@ function resolveExportLevels(nodes: Record<string, AnyNode>): ExportLevel[] {
     levelNodes = node ? [node] : []
   }
 
+  levelNodes = levelNodes.filter((n) => n.metadata.role !== 'roof')
   levelNodes.sort((a, b) => levelIndexOf(a) - levelIndexOf(b))
   return levelNodes.map((n) => ({ id: n.id as AnyNodeId, label: levelLabelOf(n) }))
 }

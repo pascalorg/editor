@@ -1,5 +1,12 @@
-import { describe, expect, test } from 'bun:test'
-import type { FloorplanGeometry, NodeCategory } from '@pascal-app/core'
+import { afterEach, describe, expect, test } from 'bun:test'
+import {
+  type AnyNode,
+  BuildingNode,
+  type FloorplanGeometry,
+  LevelNode,
+  type NodeCategory,
+} from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
 import { splitFloorplanOverlay } from '../../components/editor-2d/renderers/floorplan-registry-layer'
 import { DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY } from './annotation-visibility'
 import {
@@ -8,6 +15,7 @@ import {
   isFloorplanExportAnnotationGeometry,
   isFloorplanNodeInExportScope,
   partitionFloorplanExportOverlay,
+  resolveExportLevels,
   resolveFloorplanExportAnnotationVisibility,
   resolveFloorplanExportNodeGeometry,
   resolveFloorplanExportPlacement,
@@ -352,5 +360,63 @@ describe('isFloorplanNodeInExportScope', () => {
   test('handles an undefined definition like a no-category node', () => {
     expect(isFloorplanNodeInExportScope(undefined, 'full')).toBe(true)
     expect(isFloorplanNodeInExportScope(undefined, 'structure')).toBe(false)
+  })
+})
+
+describe('resolveExportLevels', () => {
+  const ground = LevelNode.parse({ id: 'level_ground', parentId: 'building_a', level: 0 })
+  const upper = LevelNode.parse({ id: 'level_upper', parentId: 'building_a', level: 1 })
+  const roof = LevelNode.parse({
+    id: 'level_roof',
+    parentId: 'building_a',
+    level: 2,
+    metadata: { role: 'roof', referenceLevelId: upper.id },
+  })
+  const attic = LevelNode.parse({
+    id: 'level_attic',
+    parentId: 'building_a',
+    level: 3,
+    metadata: { role: 'attic' },
+  })
+  const building = BuildingNode.parse({
+    id: 'building_a',
+    children: [ground.id, upper.id, roof.id, attic.id],
+  })
+  const nodes: Record<string, AnyNode> = Object.fromEntries(
+    [building, ground, upper, roof, attic].map((node) => [node.id, node]),
+  )
+
+  // The viewer store is a process-wide singleton, so an earlier test file can
+  // leak a selection into these tests; restore it instead of leaving ours.
+  const previousSelection = useViewer.getState().selection
+
+  const selectLevel = (levelId: string | null) => {
+    useViewer.setState({
+      selection: { ...previousSelection, buildingId: building.id, levelId },
+    } as never)
+  }
+
+  afterEach(() => {
+    useViewer.setState({ selection: previousSelection } as never)
+  })
+
+  test('skips a dedicated roof support level', () => {
+    selectLevel(ground.id)
+
+    expect(resolveExportLevels(nodes)).toEqual([
+      { id: ground.id, label: 'Level 0' },
+      { id: upper.id, label: 'Level 1' },
+      { id: attic.id, label: 'Level 3' },
+    ])
+  })
+
+  test('skips the roof level when it is the selected level', () => {
+    selectLevel(roof.id)
+
+    expect(resolveExportLevels(nodes)).toEqual([
+      { id: ground.id, label: 'Level 0' },
+      { id: upper.id, label: 'Level 1' },
+      { id: attic.id, label: 'Level 3' },
+    ])
   })
 })
