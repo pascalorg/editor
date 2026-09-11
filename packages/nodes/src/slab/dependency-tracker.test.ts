@@ -1,11 +1,13 @@
-import { describe, expect, test } from 'bun:test'
+import { describe, expect, spyOn, test } from 'bun:test'
 import {
   AnyNode,
   BuildingNode,
   type GeometryContext,
   getRenderableSlabPolygon,
   LevelNode,
+  prepareSlabPolygonContext,
   SlabNode,
+  scopeSlabPolygonContext,
   slabPolygonContextForLevel,
   slabPolygonContextFromGeometry,
   WallNode,
@@ -174,6 +176,7 @@ test('Maxi tracker context matches the renderer membership, order and polygons',
   const context = slabPolygonContextForLevel(level, (id) => nodes[id])
   expect(context.walls).toHaveLength(312)
   expect(context.siblingSlabs).toHaveLength(72)
+  const prepared = prepareSlabPolygonContext(context)
   for (const slab of context.siblingSlabs) {
     const renderer = slabPolygonContextFromGeometry({
       parent: level,
@@ -186,9 +189,80 @@ test('Maxi tracker context matches the renderer membership, order and polygons',
       walls: context.walls,
       siblingSlabs: context.siblingSlabs.filter((node) => node.id !== slab.id),
     }
+    expect(getRenderableSlabPolygon(slab, scopeSlabPolygonContext(slab, prepared))).toEqual(
+      getRenderableSlabPolygon(slab, renderer),
+    )
     expect(tracker).toEqual(renderer)
     expect(getRenderableSlabPolygon(slab, tracker)).toEqual(
       getRenderableSlabPolygon(slab, renderer),
     )
   }
+})
+
+test('unchanged input references skip serialization and equal-value replacements stay clean', () => {
+  const { nodes, wall, slab } = fixture()
+  const changed = createSlabDependencyTracker(nodes)
+  const stringify = spyOn(JSON, 'stringify')
+  try {
+    const dirty = changed({
+      ...nodes,
+      unrelated: { ...nodes[slab.id], id: 'ceiling_unrelated', type: 'ceiling' } as AnyNode,
+    })
+    expect(stringify).not.toHaveBeenCalled()
+    expect(dirty).toEqual([])
+  } finally {
+    stringify.mockRestore()
+  }
+  const replaced = Object.fromEntries(
+    Object.entries(nodes).map(([id, node]) => [id, structuredClone(node)]),
+  )
+  expect(changed(replaced)).toEqual([])
+  expect(changed({ ...replaced, [wall.id]: { ...wall, thickness: 0.4 } })).toEqual([slab.id])
+})
+
+test('new adoption, deletion and reparenting match the unfiltered renderer', () => {
+  const { nodes, level, slab, wall } = fixture()
+  const otherLevel = LevelNode.parse({ id: 'level_other', children: [] })
+  let previous = { ...nodes, [otherLevel.id]: otherLevel }
+  const changed = createSlabDependencyTracker(previous)
+  const rendered = (snapshot: Record<string, AnyNode>, slab: SlabNode) => {
+    const siblings = Object.values(snapshot).filter(
+      (node): node is SlabNode => node.type === 'slab' && node.parentId === slab.parentId,
+    )
+    const context = slabPolygonContextForLevel(
+      snapshot[slab.parentId!] ?? null,
+      (id) => snapshot[id],
+      siblings,
+    )
+    return getRenderableSlabPolygon(slab, {
+      ...context,
+      siblingSlabs: context.siblingSlabs.filter((node) => node.id !== slab.id),
+    })
+  }
+  const verify = (next: Record<string, AnyNode>) => {
+    const expected = Object.values(next)
+      .filter((node): node is SlabNode => node.type === 'slab')
+      .filter((node) => {
+        const before = previous[node.id]
+        return (
+          before?.type !== 'slab' ||
+          JSON.stringify(rendered(previous, before)) !== JSON.stringify(rendered(next, node))
+        )
+      })
+      .map((node) => node.id)
+      .sort()
+    expect(changed(next).sort()).toEqual(expected)
+    previous = next
+  }
+  verify({ ...previous, [wall.id]: { ...wall, start: [0, 20], end: [4, 20] } })
+  verify({ ...previous, [wall.id]: { ...wall, thickness: 0.7, curveOffset: 0.2 } })
+  const { [wall.id]: _deleted, ...withoutWall } = previous
+  verify(withoutWall)
+  verify({ ...previous, [wall.id]: wall })
+  verify({
+    ...previous,
+    [slab.id]: { ...slab, parentId: otherLevel.id },
+    [level.id]: { ...level, children: level.children.filter((id) => id !== slab.id) },
+    [otherLevel.id]: { ...otherLevel, children: [slab.id] },
+  })
 })

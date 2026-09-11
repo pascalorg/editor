@@ -153,8 +153,11 @@ export {
 export { resolveSelectionProxyId, selectionProxyIdFromMetadata } from './lib/selection-proxy'
 export {
   getRenderableSlabPolygon,
+  prepareSlabPolygonContext,
   type SlabEdgeWallBandSnap,
   type SlabPolygonContext,
+  scopeSlabPolygonContext,
+  slabPolygonContextChanges,
   slabPolygonContextForLevel,
   slabPolygonContextFromGeometry,
   snapSlabEdgeToWallBand,
