@@ -2,7 +2,7 @@ import { existsSync, lstatSync, readdirSync, readFileSync, statSync } from 'node
 import { dirname, extname, join, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
-import { validateClaudeMcpPolicy } from './claude-mcp-config-policy'
+import { hostedMcpUrl, validateClaudeMcpPolicy } from './claude-mcp-config-policy'
 import { validateClawHubIgnorePolicy } from './clawhub-ignore-policy'
 import { validateOpenAiToolAnnotationPacket } from './openai-tool-annotation-policy'
 import {
@@ -15,6 +15,12 @@ const skillNames = ['pascal-3d', 'furniture-fit'] as const
 const skillVersions = new Map<string, string>()
 const portablePluginSchema = 'https://agent-plugins.org/schemas/1.0.0/plugin.schema.json'
 const portableMcpSchema = 'https://agent-plugins.org/schemas/1.0.0/mcp.schema.json'
+const cursorMcpConfigPath = './.cursor-plugin/mcp.json'
+const cursorHostedApiKeyVariable = 'PASCAL_API_KEY'
+// Cursor substitutes bare `${VAR}` plugin variables, explicitly not the shell `${env:...}` form:
+// https://cursor.com/docs/reference/plugins#variables
+const cursorHostedAuthorizationHeader = `Bearer \${${cursorHostedApiKeyVariable}}`
+const cursorVariableKeywords = new Set(['type', 'title', 'description'])
 const semverPattern =
   /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/
 const openAiListingLimits = {
@@ -921,6 +927,81 @@ if (canonicalJson(portableMcpServers.pascal) !== canonicalJson(claudeMcpServers.
 // it stays in the Claude plugin root instead of the portable Agent Plugins manifest.
 if (Object.keys(claudeMcpServers).sort().join(',') !== 'pascal,pascal-hosted') {
   fail('skills/.mcp.json must add only the Claude-specific pascal-hosted server')
+}
+
+// Cursor needs its own copy for two reasons the portable file cannot satisfy: Agent Plugins 1.0.0
+// forbids credentials in `headers` and any expansion there (spec 7.2.3/9.2), and its only remote
+// transport keyword is `streamable-http` while Cursor writes `http`. Cursor documents the custom
+// `mcpServers` path for exactly this case.
+if (cursorPlugin.mcpServers !== cursorMcpConfigPath) {
+  fail(`Cursor plugin mcpServers must point at ${cursorMcpConfigPath}`)
+}
+const cursorMcpConfig = parseJson(join(root, '.cursor-plugin', 'mcp.json'))
+if (Object.keys(cursorMcpConfig).sort().join(',') !== 'mcpServers') {
+  fail('Cursor mcp.json must contain only the mcpServers object')
+}
+const cursorMcpServers = (cursorMcpConfig.mcpServers ?? {}) as Record<string, unknown>
+if (Object.keys(cursorMcpServers).sort().join(',') !== 'pascal,pascal-hosted') {
+  fail('Cursor mcp.json must declare exactly the pascal and pascal-hosted servers')
+}
+if (canonicalJson(cursorMcpServers.pascal) !== canonicalJson(portableMcpServers.pascal)) {
+  fail('Cursor mcp.json and the portable mcp.json must declare an identical pascal server')
+}
+const cursorHostedServer = cursorMcpServers['pascal-hosted'] as Record<string, unknown> | undefined
+if (
+  canonicalJson(cursorHostedServer) !==
+  canonicalJson({
+    type: 'http',
+    url: hostedMcpUrl,
+    headers: { Authorization: cursorHostedAuthorizationHeader },
+  })
+) {
+  fail(
+    `Cursor mcp.json pascal-hosted must be exactly the http server at ${hostedMcpUrl} sending only "Authorization: ${cursorHostedAuthorizationHeader}"`,
+  )
+}
+
+const cursorVariables = (cursorPlugin.variables ?? {}) as Record<string, unknown>
+if (cursorVariables.type !== 'object') {
+  fail('Cursor plugin variables must be a JSON Schema object')
+}
+if ('required' in cursorVariables) {
+  // A required variable blocks the local no-account path: Cursor cannot enable the plugin until an
+  // admin supplies a value, so the bundled stdio server would be unreachable without a hosted key.
+  fail(
+    `Cursor plugin variables must not mark ${cursorHostedApiKeyVariable} required so a local-only install still loads`,
+  )
+}
+const cursorVariableProperties = (cursorVariables.properties ?? {}) as Record<string, unknown>
+if (Object.keys(cursorVariableProperties).sort().join(',') !== cursorHostedApiKeyVariable) {
+  fail(`Cursor plugin variables must declare exactly ${cursorHostedApiKeyVariable}`)
+}
+const cursorApiKeyVariable = cursorVariableProperties[cursorHostedApiKeyVariable] as
+  | Record<string, unknown>
+  | undefined
+if (cursorApiKeyVariable) {
+  if (cursorApiKeyVariable.type !== 'string') {
+    fail(`Cursor plugin ${cursorHostedApiKeyVariable} type must be string`)
+  }
+  for (const field of ['title', 'description'] as const) {
+    if (typeof cursorApiKeyVariable[field] !== 'string' || !cursorApiKeyVariable[field]) {
+      fail(`Cursor plugin ${cursorHostedApiKeyVariable} must declare a ${field}`)
+    }
+  }
+  for (const keyword of Object.keys(cursorApiKeyVariable)) {
+    // Cursor accepts a fixed keyword set, and `default` would ship a placeholder credential.
+    if (!cursorVariableKeywords.has(keyword)) {
+      fail(
+        `Cursor plugin ${cursorHostedApiKeyVariable} declares an unsupported schema keyword: ${keyword}`,
+      )
+    }
+  }
+}
+// Cursor requires every `${VAR}` used in plugin config to be declared in the manifest schema.
+for (const placeholder of JSON.stringify(cursorMcpConfig).matchAll(/\$\{([^}]+)\}/g)) {
+  if (!(placeholder[1] in cursorVariableProperties)) {
+    fail(`Cursor mcp.json uses undeclared plugin variable \${${placeholder[1]}}`)
+  }
 }
 
 const claudeUserConfig = (claudePlugin.userConfig ?? {}) as Record<string, unknown>
