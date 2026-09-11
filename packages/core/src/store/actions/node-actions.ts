@@ -530,6 +530,9 @@ function warnSanitizedNodeMutation(
 
 function parseCreatedNode(node: AnyNode, parentId: AnyNodeId | null): AnyNode {
   const candidate = { ...node, parentId }
+  const registered = nodeRegistry.get(candidate.type)?.schema
+  // Generated definitions must reject invalid geometry instead of retaining a failed parse.
+  if (registered?.meta()?.strictMutations === true) return registered.parse(candidate) as AnyNode
   const parsed = parseNode(candidate)
   if (parsed.success) return parsed.data
 
@@ -560,6 +563,9 @@ function mergeNodeUpdate(currentNode: AnyNode, patch: Partial<AnyNode>): AnyNode
 
 function parseUpdatedNode(currentNode: AnyNode, data: Partial<AnyNode>): AnyNode {
   const candidate = mergeNodeUpdate(currentNode, data)
+  const registered = nodeRegistry.get(currentNode.type)?.schema
+  // Generated definitions must reject invalid geometry instead of retaining a failed parse.
+  if (registered?.meta()?.strictMutations === true) return registered.parse(candidate) as AnyNode
   const parsed = parseNode(candidate)
   if (parsed.success) return parsed.data
 
