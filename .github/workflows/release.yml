@@ -84,6 +84,12 @@ jobs:
           node-version: 22
           registry-url: "https://registry.npmjs.org"
 
+      # npm refuses direct publishing with 2FA-bypass tokens (EOTP, see
+      # https://gh.io/npm-gat-bypass2fa-deprecation), so no NODE_AUTH_TOKEN is set
+      # and npm >= 11.5 exchanges the GitHub Actions OIDC token itself. Every
+      # @pascal-app package must list this repository, this workflow file and
+      # the `npm` environment as a trusted publisher on npmjs.com; a package that
+      # does not exist on npm yet needs one manual first publish before that.
       - name: Enable npm trusted publishing
         run: |
           npm install --global npm@11.19.1
@@ -214,8 +220,6 @@ jobs:
       - name: Build & publish capture protocol
         if: inputs.package == 'capture-protocol' || inputs.package == 'all'
         working-directory: packages/capture-protocol
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
@@ -242,8 +246,6 @@ jobs:
       - name: Build & publish core
         if: inputs.package == 'core' || inputs.package == 'all'
         working-directory: packages/core
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
@@ -259,8 +261,6 @@ jobs:
       - name: Build & publish viewer
         if: inputs.package == 'viewer' || inputs.package == 'all'
         working-directory: packages/viewer
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
@@ -276,8 +276,6 @@ jobs:
       - name: Build & publish capture viewer
         if: inputs.package == 'capture-viewer' || inputs.package == 'all'
         working-directory: packages/capture-viewer
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
@@ -293,8 +291,6 @@ jobs:
       - name: Publish editor
         if: inputs.package == 'editor' || inputs.package == 'all'
         working-directory: packages/editor
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           if [ "${{ inputs.dry-run }}" = "true" ]; then
             echo "🏜️ Dry run — would publish @pascal-app/editor@$EDITOR_VERSION"
@@ -309,8 +305,6 @@ jobs:
       - name: Build & publish nodes
         if: inputs.package == 'nodes' || inputs.package == 'all'
         working-directory: packages/nodes
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           bun run build
           if [ "${{ inputs.dry-run }}" = "true" ]; then
@@ -340,8 +334,6 @@ jobs:
 
       - name: Build & publish ifc-converter
         if: inputs.package == 'ifc-converter' || inputs.package == 'all'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           # ifc-converter depends on @pascal-app/core (workspace) — build it first
           bun run build --filter @pascal-app/core 2>/dev/null || (cd packages/core && bun run build)
