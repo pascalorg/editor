@@ -1,5 +1,16 @@
 import { describe, expect, test } from 'bun:test'
-import { type AnyNode, BuildingNode, LevelNode, SlabNode, WallNode } from '@pascal-app/core'
+import {
+  AnyNode,
+  BuildingNode,
+  type GeometryContext,
+  getRenderableSlabPolygon,
+  LevelNode,
+  SlabNode,
+  slabPolygonContextForLevel,
+  slabPolygonContextFromGeometry,
+  WallNode,
+} from '@pascal-app/core'
+import maxi from '../../../core/src/store/fixtures/maxi-8x-endpoint.json'
 import { createSlabDependencyTracker } from './dependency-tracker'
 
 const polygon: [number, number][] = [
@@ -10,7 +21,11 @@ const polygon: [number, number][] = [
 ]
 function fixture() {
   const building = BuildingNode.parse({ id: 'building_tracker', children: ['level_tracker'] })
-  const level = LevelNode.parse({ id: 'level_tracker', parentId: building.id })
+  const level = LevelNode.parse({
+    id: 'level_tracker',
+    parentId: building.id,
+    children: ['slab_near', 'slab_remote', 'wall_tracker'],
+  })
   const slab = SlabNode.parse({ id: 'slab_near', parentId: level.id, polygon })
   const remote = SlabNode.parse({
     id: 'slab_remote',
@@ -54,7 +69,7 @@ describe('slab dependency tracker', () => {
   })
 
   test('tracks sibling creation, floating classification, elevation and deletion', () => {
-    const { nodes, slab, wall } = fixture()
+    const { nodes, level, slab, wall } = fixture()
     const sibling = SlabNode.parse({
       id: 'slab_sibling',
       parentId: slab.parentId,
@@ -68,9 +83,13 @@ describe('slab dependency tracker', () => {
       thickness: 0.05,
     })
     const changed = createSlabDependencyTracker(nodes)
-    expect(changed({ ...nodes, [sibling.id]: sibling })).toEqual([sibling.id])
+    const withSibling = {
+      ...nodes,
+      [level.id]: { ...level, children: [...level.children, sibling.id] },
+    }
+    expect(changed({ ...withSibling, [sibling.id]: sibling })).toEqual([sibling.id])
     const grounded = { ...sibling, thickness: 0.2 }
-    const joined = { ...nodes, [sibling.id]: grounded }
+    const joined = { ...withSibling, [sibling.id]: grounded }
     expect(changed(joined).sort()).toEqual([slab.id, sibling.id].sort())
     expect(changed({ ...joined, [sibling.id]: { ...grounded, elevation: 0.05 } }).sort()).toEqual(
       [slab.id, sibling.id].sort(),
@@ -80,7 +99,7 @@ describe('slab dependency tracker', () => {
   })
 
   test('recessed floating siblings become seam partners', () => {
-    const { nodes, slab } = fixture()
+    const { nodes, level, slab } = fixture()
     const sibling = SlabNode.parse({
       id: 'slab_pool',
       parentId: slab.parentId,
@@ -92,7 +111,11 @@ describe('slab dependency tracker', () => {
       ],
       elevation: 0.2,
     })
-    const next = { ...nodes, [sibling.id]: sibling }
+    const next = {
+      ...nodes,
+      [sibling.id]: sibling,
+      [level.id]: { ...level, children: [...level.children, sibling.id] },
+    }
     const changed = createSlabDependencyTracker(next)
     expect(changed({ ...next, [sibling.id]: { ...sibling, recessed: true } }).sort()).toEqual(
       [slab.id, sibling.id].sort(),
@@ -116,4 +139,56 @@ describe('slab dependency tracker', () => {
       }),
     ).toEqual([slab.id])
   })
+})
+
+test('adopts the first tied wall in level.children order and invalidates reordered membership', () => {
+  const { nodes, level, wall, slab } = fixture()
+  const second = WallNode.parse({ ...wall, id: 'wall_second', thickness: 0.4 })
+  const initial = {
+    ...nodes,
+    [second.id]: second,
+    [level.id]: { ...level, children: [second.id, ...level.children] },
+  }
+  const changed = createSlabDependencyTracker(initial)
+  const next = { ...initial, [second.id]: { ...second, thickness: 0.6 } }
+  expect(changed(next)).toEqual([slab.id])
+  expect(
+    changed({ ...next, [level.id]: { ...level, children: [...level.children, second.id] } }),
+  ).toEqual([slab.id])
+  expect(
+    changed({
+      ...next,
+      [level.id]: { ...level, children: level.children.filter((id) => id !== wall.id) },
+    }),
+  ).toEqual([slab.id])
+})
+
+test('Maxi tracker context matches the renderer membership, order and polygons', () => {
+  const nodes: Record<string, AnyNode> = Object.fromEntries(
+    maxi.nodes.map((raw) => {
+      const node = AnyNode.parse(raw)
+      return [node.id, node]
+    }),
+  )
+  const level = nodes[maxi.levelId] as LevelNode
+  const context = slabPolygonContextForLevel(level, (id) => nodes[id])
+  expect(context.walls).toHaveLength(312)
+  expect(context.siblingSlabs).toHaveLength(72)
+  for (const slab of context.siblingSlabs) {
+    const renderer = slabPolygonContextFromGeometry({
+      parent: level,
+      resolve: (id) => nodes[id],
+      siblings: level.children
+        .map((id) => nodes[id])
+        .filter((node) => node?.type === 'slab' && node.id !== slab.id),
+    } as GeometryContext)
+    const tracker = {
+      walls: context.walls,
+      siblingSlabs: context.siblingSlabs.filter((node) => node.id !== slab.id),
+    }
+    expect(tracker).toEqual(renderer)
+    expect(getRenderableSlabPolygon(slab, tracker)).toEqual(
+      getRenderableSlabPolygon(slab, renderer),
+    )
+  }
 })

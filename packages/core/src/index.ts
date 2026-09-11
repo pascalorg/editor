@@ -155,6 +155,7 @@ export {
   getRenderableSlabPolygon,
   type SlabEdgeWallBandSnap,
   type SlabPolygonContext,
+  slabPolygonContextForLevel,
   slabPolygonContextFromGeometry,
   snapSlabEdgeToWallBand,
 } from './lib/slab-polygon'

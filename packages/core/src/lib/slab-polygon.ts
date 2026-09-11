@@ -1,5 +1,5 @@
 import type { GeometryContext } from '../registry/types'
-import type { AnyNodeId, SlabNode, WallNode } from '../schema'
+import type { AnyNode, AnyNodeId, SlabNode, WallNode } from '../schema'
 import { isCurvedWall, sampleWallCenterline } from '../systems/wall/wall-curve'
 import { getWallThickness } from '../systems/wall/wall-footprint'
 
@@ -141,21 +141,28 @@ export function slabPolygonContextFromGeometry(
 ): SlabPolygonContext {
   if (!ctx) return { walls: [], siblingSlabs: [] }
 
-  const siblingSlabs = ctx.siblings.filter(
-    (node): node is SlabNode => node.type === 'slab',
-  ) as SlabNode[]
-
-  const walls: WallNode[] = []
-  const parentChildIds = (ctx.parent as { children?: AnyNodeId[] } | null)?.children
-  if (Array.isArray(parentChildIds)) {
-    for (const childId of parentChildIds) {
-      const child = ctx.resolve(childId)
-      if ((child as { type?: string } | undefined)?.type === 'wall') {
-        walls.push(child as WallNode)
-      }
-    }
+  return {
+    ...slabPolygonContextForLevel(ctx.parent, ctx.resolve),
+    siblingSlabs: ctx.siblings.filter((node): node is SlabNode => node.type === 'slab'),
   }
+}
 
+export function slabPolygonContextForLevel(
+  parent: AnyNode | null,
+  resolve: (id: AnyNodeId) => AnyNode | undefined,
+  fallbackSlabs: SlabNode[] = [],
+): SlabPolygonContext {
+  const walls: WallNode[] = []
+  const siblingSlabs: SlabNode[] = []
+  const childIds = (parent as { children?: AnyNodeId[] } | null)?.children
+  if (!Array.isArray(childIds)) {
+    return { walls, siblingSlabs: parent ? fallbackSlabs : [] }
+  }
+  for (const id of childIds) {
+    const child = resolve(id)
+    if (child?.type === 'wall') walls.push(child)
+    else if (child?.type === 'slab') siblingSlabs.push(child)
+  }
   return { walls, siblingSlabs }
 }
 
