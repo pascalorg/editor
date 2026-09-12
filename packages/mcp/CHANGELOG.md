@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- The published ESM output now resolves relative JavaScript imports under Node,
+  so `pascal-mcp` and package subpath exports no longer require Bun's
+  extensionless import fallback.
 - Tool schemas in `tools/list` now declare the JSON Schema 2020-12 dialect
   instead of the SDK default `draft-07`, so clients that enforce 2020-12 no
   longer reject every tool call.
