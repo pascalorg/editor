@@ -1,5 +1,6 @@
 'use client'
 
+import { useScene } from '@pascal-app/core'
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
@@ -9,7 +10,6 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
-import { useScene } from '@pascal-app/core'
 import { Hammer, Layers, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
