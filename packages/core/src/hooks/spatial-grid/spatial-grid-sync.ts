@@ -113,6 +113,13 @@ export function initSpatialGridSync(): () => void {
   // Subscribe to all changes
   const unsubscribeScene = store.subscribe((state, prevState) => {
     if (state.nodes === prevState.nodes) return
+    // A bulk slab change (scene load/reload, paste, import) used to run
+    // markNodesOverlappingSlab per slab — two full node scans each, O(slabs ×
+    // nodes). Above the threshold, dirty every possible slab dependent once (a
+    // superset of the per-slab result) and skip the per-slab scans below.
+    const bulkSlabs =
+      countBulkSlabChanges(state.nodes, prevState.nodes) >= BULK_SLAB_CHANGE_THRESHOLD
+    if (bulkSlabs) markAllSlabDependents(state.nodes, markDirty)
     const changedSlabContextLevels = new Set<string>()
     const checkSlabContext = (id: string) => {
       const previous = prevState.nodes[id as AnyNodeId]
@@ -151,7 +158,7 @@ export function initSpatialGridSync(): () => void {
         spatialGridManager.handleNodeCreated(node, levelId)
 
         // When a slab is added, mark overlapping items/walls dirty
-        if (node.type === 'slab') {
+        if (node.type === 'slab' && !bulkSlabs) {
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty)
           markCoveringDependentsBelow(levelId, state.nodes, markDirty)
         }
@@ -172,7 +179,7 @@ export function initSpatialGridSync(): () => void {
         spatialGridManager.handleNodeDeleted(id, node.type, levelId)
 
         // When a slab is removed, mark items/walls that were on it dirty (using current state)
-        if (node.type === 'slab') {
+        if (node.type === 'slab' && !bulkSlabs) {
           markNodesOverlappingSlab(node as SlabNode, state.nodes, markDirty, prevState.nodes)
           markCoveringDependentsBelow(levelId, state.nodes, markDirty)
         }
@@ -216,13 +223,15 @@ export function initSpatialGridSync(): () => void {
           const levelId = resolveLevelId(node, state.nodes)
           spatialGridManager.handleNodeUpdated(node, levelId)
         }
-        markSlabChangeDependents(
-          prev as SlabNode,
-          node as SlabNode,
-          state.nodes,
-          markDirty,
-          prevState.nodes,
-        )
+        if (!bulkSlabs) {
+          markSlabChangeDependents(
+            prev as SlabNode,
+            node as SlabNode,
+            state.nodes,
+            markDirty,
+            prevState.nodes,
+          )
+        }
       } else if (node.type === 'level' && prev.type === 'level') {
         if (node.height !== prev.height) {
           markLevelHeightDependents(node as LevelNode, state.nodes, markDirty)
@@ -304,6 +313,67 @@ export function initSpatialGridSync(): () => void {
   return () => {
     unsubscribeScene()
     unsubscribeLiveTerrain()
+  }
+}
+
+/**
+ * Bulk slab-change guard. A scene load, reload, paste or import changes tens to
+ * thousands of slabs in one store write, and scanning every node twice per slab
+ * is O(slabs × nodes): a 4,600-slab scene blocked the main thread for ~5 s on
+ * every load. When at least this many slabs are added, removed or reshaped in
+ * one write, `markAllSlabDependents` dirties every node any slab could affect,
+ * once, and the per-slab scans are skipped. The marks are a superset of the
+ * per-slab result — and `setScene` marks every node dirty right after `set()`
+ * regardless — so load-time behaviour is unchanged; the saving is the scans.
+ */
+export const BULK_SLAB_CHANGE_THRESHOLD = 32
+
+export function countBulkSlabChanges(
+  nodes: Record<string, AnyNode>,
+  prevNodes: Record<string, AnyNode>,
+): number {
+  let count = 0
+  for (const id in nodes) {
+    const node = nodes[id]!
+    if (node.type !== 'slab') continue
+    const prev = prevNodes[id]
+    if (
+      prev?.type !== 'slab' ||
+      (prev as SlabNode).polygon !== (node as SlabNode).polygon ||
+      (prev as SlabNode).elevation !== (node as SlabNode).elevation ||
+      (prev as SlabNode).holes !== (node as SlabNode).holes
+    ) {
+      count++
+    }
+  }
+  for (const id in prevNodes) {
+    if (prevNodes[id]!.type === 'slab' && !nodes[id]) count++
+  }
+  return count
+}
+
+/**
+ * Every node a slab change can dirty, without looking at any slab: walls and
+ * ceilings (overlap and covering-below rules), stairs (deck attachment) and
+ * level-hosted floor-placed kinds (the generic re-elevation sweep).
+ */
+export function markAllSlabDependents(
+  nodes: Record<string, AnyNode>,
+  markDirty: (id: AnyNodeId) => void,
+) {
+  for (const id in nodes) {
+    const node = nodes[id]!
+    if (node.type === 'wall' || node.type === 'ceiling' || node.type === 'stair') {
+      markDirty(node.id)
+      continue
+    }
+    const floorPlaced = nodeRegistry.get(node.type)?.capabilities?.floorPlaced
+    if (!floorPlaced) continue
+    if (floorPlaced.applies && !floorPlaced.applies(node)) continue
+    const parentId = node.parentId as AnyNodeId | null
+    const parent = parentId ? nodes[parentId] : null
+    if (parent && parent.type !== 'level') continue
+    markDirty(node.id)
   }
 }
 
