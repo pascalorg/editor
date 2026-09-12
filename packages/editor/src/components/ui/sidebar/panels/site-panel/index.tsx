@@ -608,6 +608,7 @@ const LevelReferences = memo(function LevelReferences({
     ) {
       onDeleteAsset?.(projectId, refNode.url)
     }
+    // Local asset:// cleanup runs in core deleteNodes (#733).
     deleteNode(nodeId as AnyNodeId)
   }
 

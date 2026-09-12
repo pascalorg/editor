@@ -1,5 +1,6 @@
 'use client'
 
+import { useScene } from '@pascal-app/core'
 // Node registry bootstrap is loaded once at the root via
 // `<ClientBootstrap>` in `app/layout.tsx` — no per-page side-effect
 // import here.
@@ -15,6 +16,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
+import { collectNodeAssetUrlList, runLocalAssetGc } from '@/lib/local-asset-gc'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
 import { BuildTab } from './build-tab'
@@ -124,6 +126,21 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const lightPreview = isLightPreviewQuery(searchParams)
 
   const handleLoad = useCallback(async () => initialScene, [initialScene])
+
+  // Explicit multi-scene GC after this scene is hydrated. Only deletes Files
+  // that no persisted graph still references; skips when the inventory is
+  // incomplete. Live nodes are re-read immediately before sweep (#733).
+  const gcRanRef = useRef(false)
+  useEffect(() => {
+    if (gcRanRef.current) return
+    gcRanRef.current = true
+    void runLocalAssetGc(
+      () => useScene.getState().nodes,
+      collectNodeAssetUrlList(initialScene.nodes as Record<string, unknown>),
+    ).catch(() => {
+      /* enumeration failed — skip GC rather than partial-sweep */
+    })
+  }, [initialScene])
 
   const handleSave = useCallback(
     async (graph: SceneGraph, options?: { keepalive?: boolean }) => {
