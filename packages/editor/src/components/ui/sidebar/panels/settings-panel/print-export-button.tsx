@@ -5,7 +5,11 @@ import {
   isPrintLevelBundleReport,
   type PrintLevelBundleReport,
 } from '../../../../../lib/level-print-export'
-import type { ModelExport, ModelExportArtifact } from '../../../../../lib/model-export'
+import type {
+  ModelExport,
+  ModelExportArtifact,
+  ModelExportFormat,
+} from '../../../../../lib/model-export'
 import {
   isPrintExportReport,
   type PrintExportReport,
@@ -16,6 +20,8 @@ type PreparedPrintExport = {
   artifact: ModelExportArtifact
   report: PrintExportReport | PrintLevelBundleReport
 }
+
+type PrintModelExportFormat = Extract<ModelExportFormat, 'print-3mf' | 'print-stl'>
 
 function downloadArtifact(artifact: ModelExportArtifact) {
   const url = URL.createObjectURL(artifact.blob)
@@ -39,8 +45,9 @@ function firstBlockingMessage(report: PrintExportReport | PrintLevelBundleReport
 export async function preparePrintExport(
   modelExport: ModelExport,
   onlyVisible: boolean,
+  format: PrintModelExportFormat,
 ): Promise<PreparedPrintExport> {
-  const artifact = await modelExport('print-3mf', {
+  const artifact = await modelExport(format, {
     onlyVisible,
     download: false,
     printScale: 100,
@@ -68,35 +75,47 @@ export async function preparePrintExport(
 
 export function PrintExportButton({ onlyVisible }: { onlyVisible: boolean }) {
   const modelExport = useEditor((state) => state.modelExport)
-  const [isExporting, setIsExporting] = useState(false)
+  const [exportingFormat, setExportingFormat] = useState<PrintModelExportFormat | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const handleExport = async () => {
+  const handleExport = async (format: PrintModelExportFormat) => {
     if (!modelExport) return
 
-    setIsExporting(true)
+    setExportingFormat(format)
     setError(null)
     try {
-      const prepared = await preparePrintExport(modelExport, onlyVisible)
+      const prepared = await preparePrintExport(modelExport, onlyVisible, format)
       downloadArtifact(prepared.artifact)
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : '3D print export failed.')
     } finally {
-      setIsExporting(false)
+      setExportingFormat(null)
     }
   }
+
+  const isExporting = exportingFormat !== null
 
   return (
     <>
       <Button
-        aria-busy={isExporting}
+        aria-busy={exportingFormat === 'print-3mf'}
         className="w-full justify-start gap-2"
         disabled={isExporting || !modelExport}
-        onClick={handleExport}
+        onClick={() => void handleExport('print-3mf')}
         variant="outline"
       >
         <Printer className="size-4" />
-        Export 3D print files
+        Export 3D print 3MF
+      </Button>
+      <Button
+        aria-busy={exportingFormat === 'print-stl'}
+        className="w-full justify-start gap-2"
+        disabled={isExporting || !modelExport}
+        onClick={() => void handleExport('print-stl')}
+        variant="outline"
+      >
+        <Printer className="size-4" />
+        Export 3D print STL
       </Button>
       {error && (
         <div className="flex gap-2 text-destructive text-xs">
