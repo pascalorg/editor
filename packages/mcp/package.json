@@ -1,6 +1,6 @@
 {
   "name": "@pascal-app/mcp",
-  "version": "1.0.0-beta.6",
+  "version": "1.0.0",
   "description": "Model Context Protocol server for Pascal 3D editor",
   "type": "module",
   "main": "./dist/index.js",
@@ -55,7 +55,7 @@
     "prepublishOnly": "bun run build && bun test"
   },
   "peerDependencies": {
-    "@pascal-app/core": "^1.0.0-beta.5"
+    "@pascal-app/core": "^1.0.0"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
@@ -63,7 +63,7 @@
     "zod": ">=4.5.4 <4.6"
   },
   "devDependencies": {
-    "@pascal-app/core": "^1.0.0-beta.5",
+    "@pascal-app/core": "^1.0.0",
     "@pascal/typescript-config": "*",
     "@types/node": "^22.19.20",
     "typescript": "6.0.3"
