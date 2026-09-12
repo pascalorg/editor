@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
 import { parseArgs } from 'node:util'
+import { agentClaimHandoffUrl, getAgentStatus, startAgentClaim } from '../agent-account.js'
 import { openBrowser } from '../browser.js'
 import { installGlobalPascalCommand, isNpxInvocation } from '../command-install.js'
 import { collectInfo, runDoctor } from '../diagnostics.js'
@@ -17,9 +18,10 @@ import {
 import { CliError, toCliError } from '../errors.js'
 import { readJsonFile } from '../json-files.js'
 import { connectManagedMcp } from '../mcp-connector.js'
+import { getMcpServiceStatus } from '../mcp-service.js'
 import { resolvePascalPaths } from '../paths.js'
 import { listLocalProjects, projectUrl, resolveLocalProject } from '../projects.js'
-import { installBundledRuntime } from '../runtime.js'
+import { ensureWebRuntime } from '../runtime-download.js'
 import { TerminalProgress } from '../terminal-progress.js'
 import { version } from '../version.js'
 
@@ -37,8 +39,8 @@ ENABLE THE SHORT GLOBAL COMMAND:
   pascal <command>
 
 USAGE:
-  pascal editor [--foreground] [--no-open] [--port <n>]
-  pascal start [--foreground] [--port <n>]
+  pascal editor [--foreground] [--no-open] [--port <n>] [--runtime <path>]
+  pascal start [--foreground] [--port <n>] [--runtime <path>]
   pascal stop | restart | status
   pascal open [project]
   pascal resume [project]
@@ -50,15 +52,26 @@ USAGE:
   pascal project list [--json]
   pascal project open <id-or-name>
   pascal project resume [id-or-name]
+  pascal agent claim [--no-open] [--json]
+  pascal agent status [--json]
   pascal mcp connect | status | config | setup <client>
   pascal plugin list [--json]
+
+THE WEB EDITOR RUNTIME:
+  The npm package holds the CLI and the MCP service. The web editor runtime is
+  downloaded once per version into ~/.pascal/runtime the first time a command
+  starts the editor, and verified against a digest published with this CLI.
+  Offline: pass --runtime <directory-or-archive>. "pascal mcp connect" needs no
+  download at all.
 
 Documentation: https://editor.pascal.app/docs/developers/local-editor
 `
 
 const MCP_HELP = `Pascal MCP — connect AI agents to local projects
 
-The authenticated MCP service starts and stops with the Pascal editor.
+The authenticated MCP service ships inside this package. It starts on demand and
+needs neither the web editor nor its downloaded runtime, so agents can read and
+write local projects on a machine that never runs the editor.
 
 USAGE:
   pascal mcp status [--json]       Check the managed MCP service
@@ -73,14 +86,36 @@ dynamic loopback port without exposing Pascal's private local token.
 Documentation: https://editor.pascal.app/docs/developers/mcp
 `
 
+const AGENT_HELP = `Pascal agent — connect an autonomous agent to a person
+
+USAGE:
+  pascal agent claim [--no-open] [--json]
+  pascal agent status [--json]
+
+Set PASCAL_API_KEY to the autonomous agent's hosted Pascal API key. The CLI
+uses it once to request a 15-minute claim code and never stores it. It opens
+the claim page unless --no-open or --json is set.
+
+Use "pascal agent status" to verify whether that credential is active and
+whether its autonomous agent has been claimed.
+
+Claiming records who is accountable for the agent and lifts claim-gated
+capabilities. It does not transfer project ownership or grant access to either
+account's private projects.
+
+Documentation: https://editor.pascal.app/docs/developers/mcp
+`
+
 const paths = resolvePascalPaths()
+const agentApiKey = process.env.PASCAL_API_KEY
+Reflect.deleteProperty(process.env, 'PASCAL_API_KEY')
 
 async function main(): Promise<void> {
   const [command = 'help', ...args] = process.argv.slice(2)
   if (command === '--version' || command === '-v') return print(version)
   if (command === '--help' || command === '-h' || command === 'help') return print(HELP)
   if (args.includes('--help') || args.includes('-h')) {
-    return print(command === 'mcp' ? MCP_HELP : HELP)
+    return print(command === 'mcp' ? MCP_HELP : command === 'agent' ? AGENT_HELP : HELP)
   }
 
   switch (command) {
@@ -110,12 +145,14 @@ async function main(): Promise<void> {
       return runUpdate(args)
     case 'project':
       return runProject(args)
+    case 'agent':
+      return runAgent(args, agentApiKey)
     case 'plugin':
       return runPlugin(args)
     case 'mcp':
       return runMcp(args)
     case '_install-runtime':
-      return output(true, await installBundledRuntime(paths, undefined, { activate: false }), '')
+      return output(true, (await ensureWebRuntime({ paths, activate: false })).runtime, '')
     default:
       throw new CliError('unknown_command', `Unknown command: ${command}`, { command }, 2)
   }
@@ -130,6 +167,7 @@ async function runStart(args: string[], shouldOpen: boolean): Promise<void> {
       open: { type: 'boolean', default: shouldOpen },
       'no-open': { type: 'boolean', default: false },
       port: { type: 'string' },
+      runtime: { type: 'string' },
       json: { type: 'boolean', default: false },
       help: { type: 'boolean', short: 'h', default: false },
     },
@@ -144,7 +182,8 @@ async function runStart(args: string[], shouldOpen: boolean): Promise<void> {
       paths,
       port,
       foreground: values.foreground,
-      onProgress: progress ? (event) => reportStartProgress(progress, event) : undefined,
+      runtimeSource: values.runtime,
+      onProgress: progress ? createStartProgressReporter(progress) : undefined,
     })
   } catch (error) {
     progress?.stop()
@@ -170,12 +209,12 @@ async function runStart(args: string[], shouldOpen: boolean): Promise<void> {
   const commandPrefix = useShortCommand ? 'pascal' : 'npx @pascal-app/cli'
   output(
     values.json,
-    { ...result.state, alreadyRunning: result.alreadyRunning },
+    { ...result.state, mcp: result.mcp, alreadyRunning: result.alreadyRunning },
     [
       result.alreadyRunning
         ? `Pascal is already running at ${result.state.url}`
         : `Pascal is ready at ${result.state.url}`,
-      `MCP is ready on port ${result.state.mcp?.port}`,
+      `MCP is ready on port ${result.mcp.port}`,
       `Projects stay in ${paths.data}`,
       '',
       `Manage it with ${useShortCommand ? 'pascal' : 'npx'}:`,
@@ -205,10 +244,53 @@ async function runStart(args: string[], shouldOpen: boolean): Promise<void> {
   }
 }
 
+/**
+ * Download progress arrives far more often than a non-TTY log should print, so percentages
+ * are reported per whole percent on a terminal and per tenth otherwise.
+ */
+function createStartProgressReporter(
+  progress: TerminalProgress,
+): (event: EditorStartProgress) => void {
+  const perPercent = Boolean(process.stderr.isTTY)
+  let lastReportedStep = -1
+  return (event) => {
+    if (event.step !== 'runtime-downloading') return reportStartProgress(progress, event)
+    if (event.received === 0) {
+      lastReportedStep = -1
+      progress.start(`Downloading the editor runtime from ${event.url}`)
+      return
+    }
+    const percent = event.total
+      ? Math.min(100, Math.floor((event.received / event.total) * 100))
+      : 0
+    const step = perPercent ? percent : Math.floor(percent / 10)
+    if (step === lastReportedStep) return
+    lastReportedStep = step
+    progress.update(
+      event.total
+        ? `Downloading the editor runtime ${percent}% (${formatMegabytes(event.received)} of ${formatMegabytes(event.total)})`
+        : `Downloading the editor runtime (${formatMegabytes(event.received)})`,
+    )
+  }
+}
+
+function formatMegabytes(bytes: number): string {
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
 function reportStartProgress(progress: TerminalProgress, event: EditorStartProgress): void {
   switch (event.step) {
     case 'storage-ready':
       progress.succeed(`Local data directory ready at ${event.dataDirectory}`)
+      return
+    case 'runtime-downloading':
+      progress.update('Downloading the editor runtime')
+      return
+    case 'runtime-verifying':
+      progress.update('Verifying the editor runtime digest')
+      return
+    case 'runtime-extracting':
+      progress.update('Extracting the editor runtime')
       return
     case 'runtime-installing':
       progress.start('Installing the editor runtime')
@@ -244,6 +326,12 @@ function reportStartProgress(progress: TerminalProgress, event: EditorStartProgr
     case 'mcp-health-checking':
       progress.update('Checking that MCP is ready')
       return
+    case 'mcp-ready':
+      progress.succeed(`MCP is ready on port ${event.port}`)
+      return
+    case 'mcp-already-running':
+      progress.succeed(`MCP is already running on port ${event.port}`)
+      return
     case 'ready':
       progress.succeed('Pascal Editor and MCP are ready')
       return
@@ -273,20 +361,20 @@ async function runRestart(args: string[]): Promise<void> {
 
 async function runStatus(args: string[]): Promise<void> {
   const json = booleanOption(args, 'json')
-  const status = await getEditorStatus(paths)
+  const [status, mcp] = await Promise.all([getEditorStatus(paths), getMcpServiceStatus(paths)])
   output(
     json,
-    status,
+    { ...status, mcp },
     status.healthy
       ? [
           `Pascal ${status.state?.version} is running at ${status.state?.url}`,
-          `MCP is ready on port ${status.state?.mcp?.port}`,
+          mcp.healthy ? `MCP is ready on port ${mcp.state?.port}` : 'MCP is stopped.',
         ].join('\n')
       : status.running
         ? 'Pascal has a running but unhealthy process.'
         : status.installed
           ? `Pascal ${status.runtime?.version} is installed and stopped.`
-          : 'Pascal is not installed.',
+          : 'The Pascal web runtime is not installed yet.',
   )
   if (status.running && !status.healthy) process.exitCode = 1
 }
@@ -296,13 +384,13 @@ async function runOpen(args: string[]): Promise<void> {
     args,
     strict: true,
     allowPositionals: true,
-    options: { json: { type: 'boolean', default: false } },
+    options: { json: { type: 'boolean', default: false }, runtime: { type: 'string' } },
   })
   if (positionals.length > 1) {
     throw new CliError('invalid_option', 'Use "pascal open [project]".', undefined, 2)
   }
   if (positionals[0]) return runProjectOpen(args, false)
-  const status = await ensureRunningEditor()
+  const status = await ensureRunningEditor(values.runtime)
   openBrowser(status.state.url)
   output(values.json, { url: status.state.url }, status.state.url)
 }
@@ -350,9 +438,9 @@ async function runInfo(args: string[]): Promise<void> {
       `CLI: ${version}`,
       `Node: ${info.cli.node}`,
       `Home: ${paths.root}`,
-      `Runtime: ${info.editor.runtime?.version ?? 'not installed'}`,
+      `Web runtime: ${info.editor.runtime?.version ?? 'not installed'}`,
       `Editor: ${info.editor.healthy ? info.editor.state?.url : 'stopped'}`,
-      `MCP: ${info.editor.components.mcp.healthy ? `ready on port ${info.editor.state?.mcp?.port}` : 'stopped'}`,
+      `MCP: ${info.mcp.healthy ? `ready on port ${info.mcp.state?.port}` : 'stopped'}`,
       `Plugins: ${info.plugins.length}`,
     ].join('\n'),
   )
@@ -362,7 +450,11 @@ async function runUpdate(args: string[]): Promise<void> {
   const { values } = parseArgs({
     args,
     strict: true,
-    options: { version: { type: 'string' }, json: { type: 'boolean', default: false } },
+    options: {
+      version: { type: 'string' },
+      runtime: { type: 'string' },
+      json: { type: 'boolean', default: false },
+    },
   })
   const target = values.version ?? 'latest'
   if (!isAllowedUpdateVersion(target)) {
@@ -375,7 +467,8 @@ async function runUpdate(args: string[]): Promise<void> {
   }
   let candidate
   if (target === version) {
-    candidate = await installBundledRuntime(paths, undefined, { activate: false })
+    candidate = (await ensureWebRuntime({ paths, runtimeSource: values.runtime, activate: false }))
+      .runtime
   } else {
     const spec = `@pascal-app/cli@${target}`
     const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm'
@@ -430,11 +523,15 @@ async function runUpdate(args: string[]): Promise<void> {
 async function runProject(args: string[]): Promise<void> {
   const [subcommand, ...rest] = args
   if (subcommand === 'list') {
-    const json = booleanOption(rest, 'json')
-    const status = await ensureRunningEditor()
+    const { values } = parseArgs({
+      args: rest,
+      strict: true,
+      options: { json: { type: 'boolean', default: false }, runtime: { type: 'string' } },
+    })
+    const status = await ensureRunningEditor(values.runtime)
     const projects = await listLocalProjects(status.state)
     output(
-      json,
+      values.json,
       { projects },
       projects.length
         ? projects
@@ -466,7 +563,7 @@ async function runProjectOpen(args: string[], latestWhenMissing: boolean): Promi
     args,
     strict: true,
     allowPositionals: true,
-    options: { json: { type: 'boolean', default: false } },
+    options: { json: { type: 'boolean', default: false }, runtime: { type: 'string' } },
   })
   if (positionals.length > 1 || (!latestWhenMissing && positionals.length !== 1)) {
     throw new CliError(
@@ -476,7 +573,7 @@ async function runProjectOpen(args: string[], latestWhenMissing: boolean): Promi
       2,
     )
   }
-  const status = await ensureRunningEditor()
+  const status = await ensureRunningEditor(values.runtime)
   const projects = await listLocalProjects(status.state)
   const project = resolveLocalProject(projects, positionals[0])
   const url = projectUrl(status.state, project)
@@ -495,11 +592,11 @@ async function runMcp(args: string[]): Promise<void> {
   }
   if (subcommand === 'status') {
     const json = booleanOption(rest, 'json')
-    const status = await getEditorStatus(paths)
+    const status = await getMcpServiceStatus(paths)
     const result = {
-      running: status.components.mcp.running,
-      healthy: status.components.mcp.healthy,
-      port: status.state?.mcp?.port ?? null,
+      running: status.running,
+      healthy: status.healthy,
+      port: status.state?.port ?? null,
     }
     output(
       json,
@@ -508,7 +605,7 @@ async function runMcp(args: string[]): Promise<void> {
         ? `Pascal MCP is ready on port ${result.port}.`
         : result.running
           ? 'Pascal MCP is running but unhealthy.'
-          : 'Pascal MCP is stopped.',
+          : 'Pascal MCP is stopped. It starts when an MCP client runs "pascal mcp connect".',
     )
     if (result.running && !result.healthy) process.exitCode = 1
     return
@@ -576,6 +673,58 @@ async function runMcp(args: string[]): Promise<void> {
   )
 }
 
+async function runAgent(args: string[], apiKey: string | undefined): Promise<void> {
+  const [subcommand, ...rest] = args
+  if (subcommand === 'status') {
+    const json = booleanOption(rest, 'json')
+    const status = await getAgentStatus(apiKey ?? '')
+    output(
+      json,
+      status,
+      [
+        `Agent ID: ${JSON.stringify(status.agentId)}`,
+        `Mode: ${status.mode}`,
+        `Claimed: ${status.claimed ? 'yes' : 'no'}`,
+        `Organization scoped: ${status.organizationScoped ? 'yes' : 'no'}`,
+        ...(!status.claimed && status.mode === 'autonomous'
+          ? ['', 'Next: run "pascal agent claim" to link a person accountable for this agent.']
+          : []),
+      ].join('\n'),
+    )
+    return
+  }
+  if (subcommand !== 'claim') {
+    throw new CliError(
+      'unknown_command',
+      'Use "pascal agent claim" or "pascal agent status".',
+      undefined,
+      2,
+    )
+  }
+  const { values } = parseArgs({
+    args: rest,
+    strict: true,
+    options: {
+      json: { type: 'boolean', default: false },
+      'no-open': { type: 'boolean', default: false },
+    },
+  })
+  const claim = await startAgentClaim(apiKey ?? '')
+  const claimHandoffUrl = agentClaimHandoffUrl(claim)
+  if (!values['no-open'] && !values.json) openBrowser(claimHandoffUrl)
+  output(
+    values.json,
+    claim,
+    [
+      `Claim code: ${claim.claimCode}`,
+      `Claim page: ${claimHandoffUrl}`,
+      `Expires: ${claim.expiresAt}`,
+      '',
+      'Claiming links accountability. It does not transfer project ownership or grant access to private projects.',
+    ].join('\n'),
+  )
+}
+
 async function runPlugin(args: string[]): Promise<void> {
   const [subcommand, ...rest] = args
   if (subcommand === 'list') {
@@ -605,10 +754,20 @@ async function runPlugin(args: string[]): Promise<void> {
   )
 }
 
-async function ensureRunningEditor() {
+async function ensureRunningEditor(runtimeSource?: string) {
   const status = await getEditorStatus(paths)
   if (status.healthy && status.state) return { ...status, state: status.state }
-  const started = await startEditor({ paths })
+  const progress = process.stderr.isTTY ? new TerminalProgress() : undefined
+  let started: Awaited<ReturnType<typeof startEditor>>
+  try {
+    started = await startEditor({
+      paths,
+      runtimeSource,
+      onProgress: progress ? createStartProgressReporter(progress) : undefined,
+    })
+  } finally {
+    progress?.stop()
+  }
   return {
     ...(await getEditorStatus(paths)),
     state: started.state,

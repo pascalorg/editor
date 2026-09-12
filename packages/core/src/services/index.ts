@@ -118,6 +118,8 @@ export {
 } from './storey'
 export {
   buildPortComponents,
+  collectSystemPorts,
+  distributionPointToWorld,
   type SystemSummary,
   summarizeSystemFor,
 } from './system-graph'

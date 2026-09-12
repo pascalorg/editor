@@ -1,6 +1,7 @@
 import { type DuctFittingNode, type ParametricDescriptor, useScene } from '@pascal-app/core'
 import { Vector3 } from 'three'
 import { getDuctFittingPorts } from '../duct-fitting/ports'
+import { fittingDeletionPlansForRun } from '../shared/fitting-deletion-cleanup'
 import { rollToContinueAcrossElbow } from './geometry'
 import type { DuctSegmentNode } from './schema'
 
@@ -84,7 +85,13 @@ export const ductSegmentParametrics: ParametricDescriptor<DuctSegmentNode> = {
   // non-round run can never hold it: leaving round (or picking spiral on
   // a rect / oval run) falls back to plain sheet metal.
   derive: (next, patch) => {
-    const out: Partial<DuctSegmentNode> = {}
+    const out: Partial<DuctSegmentNode> = next.autoHangers
+      ? {
+          hangerStyle: next.hangerStyle ?? 'single',
+          hangerSpacing: next.hangerSpacing ?? 1.5,
+          hangerMaxReach: next.hangerMaxReach ?? 2,
+        }
+      : {}
     if (next.ductMaterial === 'spiral' && next.shape !== 'round') {
       out.ductMaterial = 'sheet-metal'
     }
@@ -94,7 +101,50 @@ export const ductSegmentParametrics: ParametricDescriptor<DuctSegmentNode> = {
     }
     return out
   },
+  onDelete: (duct, nodes, _pendingDeleteIds, requestedDeleteIds) =>
+    fittingDeletionPlansForRun(duct, nodes, requestedDeleteIds, true).flatMap(
+      (plan) => plan.updates,
+    ),
+  onDeleteCascade: (duct, nodes, _pendingDeleteIds, requestedDeleteIds) =>
+    fittingDeletionPlansForRun(duct, nodes, requestedDeleteIds, false).flatMap((plan) =>
+      plan.deleteFitting ? [plan.fittingId, ...plan.cascadeDeleteIds] : [],
+    ),
+  trailingSection: () => import('../shared/run-hanger-inspector'),
   groups: [
+    {
+      label: 'Hangers',
+      fields: [
+        { key: 'autoHangers', label: 'Auto hangers', kind: 'boolean' },
+        {
+          key: 'hangerStyle',
+          label: 'Hanger lines',
+          kind: 'enum',
+          options: ['single', 'double'],
+          display: 'segmented',
+          visibleIf: (n) => !!n.autoHangers,
+        },
+        {
+          key: 'hangerSpacing',
+          label: 'Spacing',
+          kind: 'number',
+          unit: 'm',
+          min: 0.05,
+          max: 1000,
+          step: 0.1,
+          visibleIf: (n) => !!n.autoHangers,
+        },
+        {
+          key: 'hangerMaxReach',
+          label: 'Maximum reach',
+          kind: 'number',
+          unit: 'm',
+          min: 0.01,
+          max: 1000,
+          step: 0.1,
+          visibleIf: (n) => !!n.autoHangers,
+        },
+      ],
+    },
     {
       label: 'Air',
       fields: [

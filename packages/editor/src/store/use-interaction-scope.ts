@@ -67,7 +67,7 @@ function beginScopePerfAction(scope: ActiveInteractionScope): void {
   if (hasUncommittedPerfAction()) return
   switch (scope.kind) {
     case 'moving':
-      scopePerfActionId = beginPerfAction('drag:move', scope.nodeType)
+      scopePerfActionId = beginPerfAction('drag:move', scope.nodeId)
       break
     case 'placing':
       scopePerfActionId = beginPerfAction(

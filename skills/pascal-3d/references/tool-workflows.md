@@ -16,6 +16,17 @@ Inspect the server's advertised tools because hosted and local releases may diff
 
 `get_scene` returns the full graph and is useful when a compact summary omits a field needed for a calculation, such as an item's scale.
 
+## Open a room scan (hosted only)
+
+These three tools exist only on the hosted Pascal server. A local CLI connection does not advertise them, so inspect the advertised tools before assuming this path is available.
+
+1. `list_captures`, optionally narrowed by `projectId`, `status`, or `limit`.
+2. `get_capture` with the `captureId`, adding `includeScanMetrics` when the answer needs scan quality numbers.
+3. `open_capture_as_project` once the capture reports `processed`, to bind the owning project's persisted draft into the session.
+4. Continue with the project workflows above.
+
+All three require edit access on the scan's own project; view access, including a public project owned by someone else, is refused as not found. The first two are read-only. `open_capture_as_project` creates nothing and is idempotent, but it carries the same non-read-only annotation as `get_project_status` because it changes the project the session is bound to.
+
 ## Create an editable project
 
 1. `create_project`
@@ -50,5 +61,6 @@ Do not mutate just to make a report unless the user authorizes a temporary or sa
 - `place_item` uses catalog dimensions. If a catalog item is unavailable, its placeholder dimensions are not evidence for a real product.
 - `check_collisions` checks rotation-aware scaled item footprints using plan AABBs. Pass `minimumClearance` explicitly: zero reports overlap; a positive measurement also reports pairs closer than that gap. Inspect `status`, `checkedItems`, `skippedItems`, and `unsupportedChecks` before drawing a conclusion.
 - `verify_scene` adds practical issues, including item separation and rectangular door-access keep-outs. It does not model a door-leaf swing arc or a delivery route.
+- No tool starts a room scan or clones a scan into a new project. Scans are created only by the Pascal iOS app, and `open_capture_as_project` opens the scan's existing owning project.
 
 When a requested deliverable is unsupported, return `partial` or `failed` with the tool status and the next supported action. Do not substitute an invented file, URL, or capability.

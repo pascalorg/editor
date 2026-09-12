@@ -1,5 +1,7 @@
+import type { GeometryContext } from '@pascal-app/core'
 import { Group, Mesh, MeshStandardMaterial, SphereGeometry, Vector3 } from 'three'
 import { buildSection, INCHES_TO_METERS } from '../duct-segment/geometry'
+import { buildRunHangers } from '../shared/run-hangers'
 import type { PipeSegmentNode } from './schema'
 
 const PVC_COLOR = '#f5f5f5'
@@ -38,7 +40,7 @@ export function createPipeMaterial(node: PipeAppearance): MeshStandardMaterial {
  * (proper wyes / sanitary tees come in the next slice). Slope lives in
  * the path's Y coordinates — nothing here is slope-aware.
  */
-export function buildPipeSegmentGeometry(node: PipeSegmentNode): Group {
+export function buildPipeSegmentGeometry(node: PipeSegmentNode, ctx?: GeometryContext): Group {
   const group = new Group()
   if (node.path.length < 2) return group
 
@@ -60,5 +62,6 @@ export function buildPipeSegmentGeometry(node: PipeSegmentNode): Group {
     group.add(hub)
   }
 
+  if (node.autoHangers) group.add(buildRunHangers(node, ctx))
   return group
 }

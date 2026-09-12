@@ -1,4 +1,5 @@
 import {
+  type AnyNode,
   type AnyNodeId,
   canHostOnTop,
   GROUND_SUPPORT_ID,
@@ -9,7 +10,7 @@ import {
   spatialGridManager,
   useScene,
 } from '@pascal-app/core'
-import { useViewer } from '@pascal-app/viewer'
+import { setSurfaceRaycastLayers, useViewer } from '@pascal-app/viewer'
 import { type Camera, Matrix3, type Object3D, Raycaster, Vector3 } from 'three'
 import { resolveTerrainGroundHit } from '../../../lib/ground-surface'
 import { scopeNodeId } from '../../../lib/interaction/scope'
@@ -22,6 +23,7 @@ const pointScratch = new Vector3()
 const worldRayOrigin = new Vector3()
 const worldRayDirection = new Vector3()
 const nodeTopRaycaster = new Raycaster()
+setSurfaceRaycastLayers(nodeTopRaycaster.layers)
 const nodeTopNormal = new Vector3()
 const nodeTopNormalMatrix = new Matrix3()
 
@@ -193,7 +195,7 @@ export function resolvePointerSupportSurface(
     // convention — the election owns the invariant.
     const interactingNodeId = scopeNodeId(useInteractionScope.getState().scope)
     const isEligibleCandidate = (nodeId: AnyNodeId) => {
-      let current = nodes[nodeId]
+      let current: AnyNode | undefined = nodes[nodeId]
       const visited = new Set<AnyNodeId>()
       while (current && !visited.has(current.id)) {
         if (current.id === interactingNodeId) return false

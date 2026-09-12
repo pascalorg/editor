@@ -42,6 +42,9 @@ jobs:
       - name: Build mcp
         run: bun run --cwd packages/mcp build
 
+      - name: Smoke-test the published Node entrypoint
+        run: bun run --cwd packages/mcp smoke:node
+
       - name: Test mcp
         run: bun test --cwd packages/mcp
 

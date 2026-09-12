@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
 import {
   BlockNode,
+  type GridEvent,
   ItemNode,
   type LevelNode,
   type NodeEvent,
@@ -9,7 +10,7 @@ import {
   type WallNode,
 } from '@pascal-app/core'
 import { BufferGeometry, Mesh, MeshBasicMaterial, type Object3D, Vector3 } from 'three'
-import { faceHostStrategy, wallStrategy } from './placement-strategies'
+import { faceHostStrategy, floorStrategy, wallStrategy } from './placement-strategies'
 import type { PlacementContext, SpatialValidators } from './placement-types'
 import { registerTestBlockFaceHost } from './test-face-host'
 
@@ -453,5 +454,41 @@ describe('wallStrategy.move', () => {
 
     expect(result.gridPosition[1]).toBeCloseTo(0.05, 6)
     expect(result.cursorPosition[1]).toBeCloseTo(0.4 + 0.05, 6)
+  })
+})
+
+describe('floorStrategy.move', () => {
+  function makeGridEvent(x: number, y: number, z: number): GridEvent {
+    return {
+      position: [x, y, z],
+      localPosition: [x, y, z],
+      nativeEvent: {} as GridEvent['nativeEvent'],
+    }
+  }
+
+  test('follows the live grid Y so a raised placement keeps its height', () => {
+    const context = floorItemContext()
+    context.gridPosition.set(0, 0.9, 0)
+
+    const result = floorStrategy.move(context, makeGridEvent(1.25, 0.9, 2.25))
+    if (!result) throw new Error('expected a placement result')
+
+    expect(result.gridPosition[1]).toBe(0.9)
+    expect(result.cursorPosition[1]).toBe(0.9)
+  })
+
+  // `detachItemSurfaceToFloor` zeroes the grid Y when an item is taken off a
+  // host; the floor path must honour that instead of a Y frozen at drag start,
+  // or the item commits floating at the shelf's height.
+  test('drops to the level plane once un-hosting zeroes the grid Y', () => {
+    const context = floorItemContext()
+    context.gridPosition.set(0, 0, 0)
+
+    const result = floorStrategy.move(context, makeGridEvent(1.25, 0.9, 2.25))
+    if (!result) throw new Error('expected a placement result')
+
+    expect(result.gridPosition[1]).toBe(0)
+    expect(result.cursorPosition[1]).toBe(0)
+    expect(result.nodeUpdate?.position?.[1]).toBe(0)
   })
 })

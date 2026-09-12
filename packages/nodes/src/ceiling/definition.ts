@@ -10,6 +10,8 @@ import {
 } from '@pascal-app/core'
 import {
   clearStructuralElevationGuide,
+  DRAFTING_SURFACE_EXTENSION_KEY,
+  type DraftingSurfaceExtension,
   publishStructuralElevationGuide,
   resolveStructuralElevationSnap,
 } from '@pascal-app/editor'
@@ -130,6 +132,12 @@ export const ceilingDefinition: NodeDefinition<typeof CeilingNode> = {
   schema: CeilingNode,
   category: 'structure',
   surfaceRole: 'ceiling',
+  extensions: {
+    [DRAFTING_SURFACE_EXTENSION_KEY]: {
+      kind: 'ceiling',
+      raycast: 'underside',
+    } satisfies DraftingSurfaceExtension,
+  },
 
   // Height-less on purpose: a new ceiling follows the level top until the
   // user gives it an explicit custom height.

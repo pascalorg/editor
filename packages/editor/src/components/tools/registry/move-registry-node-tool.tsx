@@ -11,6 +11,7 @@ import {
   collectAlignmentAnchors,
   createSceneApi,
   emitter,
+  findLevelAncestorId,
   footprintAABBFrom,
   type GridEvent,
   type GroupMoveSnapResult,
@@ -33,12 +34,16 @@ import {
   useScene,
 } from '@pascal-app/core'
 import { useViewer } from '@pascal-app/viewer'
-import { useThree } from '@react-three/fiber'
+import { useFrame, useThree } from '@react-three/fiber'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { Group } from 'three'
 import { markToolCancelConsumed } from '../../../hooks/use-keyboard'
 import { commitFreshPlacementSubtree } from '../../../lib/fresh-planar-placement'
 import { stripPlacementMetadataFlags } from '../../../lib/placement-metadata'
-import { resolvePrioritizedPlanarCursorPosition } from '../../../lib/planar-cursor-placement'
+import {
+  offsetPlanPositionByLocalCenter,
+  resolvePrioritizedPlanarCursorPosition,
+} from '../../../lib/planar-cursor-placement'
 import { resolveAttachmentPreviewRotation } from '../../../lib/rigid-plan-svg-transform'
 import { movementSfxStepKey } from '../../../lib/sfx/movement-tick'
 import { sfxEmitter } from '../../../lib/sfx-bus'
@@ -93,20 +98,6 @@ type DragBoundsOverride = {
   size: [number, number, number]
   center?: [number, number, number]
   centerY?: number
-}
-
-function offsetPlanPositionByLocalCenter(
-  position: [number, number, number],
-  center: [number, number, number],
-  rotationY: number,
-): [number, number, number] {
-  const cos = Math.cos(rotationY)
-  const sin = Math.sin(rotationY)
-  return [
-    position[0] + center[0] * cos + center[2] * sin,
-    position[1] + center[1],
-    position[2] - center[0] * sin + center[2] * cos,
-  ]
 }
 
 /**
@@ -233,6 +224,20 @@ const ALIGNMENT_THRESHOLD_M = 0.08
 type ClickTriggerEvent = GridEvent | NodeEvent<AnyNode>
 
 export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
+  const previewGroupRef = useRef<Group>(null)
+  useFrame(() => {
+    if (!previewGroupRef.current) return
+    const nodes = useScene.getState().nodes
+    const parentId = nodes[node.id]?.parentId ?? node.parentId
+    const parent = parentId ? nodes[parentId as AnyNodeId] : undefined
+    // Building-parented kinds already preview in the tool group's frame.
+    const levelId =
+      (parentId ? findLevelAncestorId(parentId as AnyNodeId, nodes) : null) ??
+      (parent?.type === 'building' ? null : useViewer.getState().selection.levelId)
+    previewGroupRef.current.position.y = levelId
+      ? (sceneRegistry.nodes.get(levelId)?.position.y ?? 0)
+      : 0
+  })
   // Live camera ref — the pointer-surface cap reconstructs the cursor world
   // ray (camera → grid hit) to find which walking surface is aimed at.
   const camera = useThree((s) => s.camera)
@@ -702,12 +707,23 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
       const magnetic = isMagneticSnapActive()
       const attachmentEnabled = magnetic || isGridSnapActive()
+      const absolute = useAbsoluteCursorPlacement || cursorAttached
+      const centerOffset: [number, number, number] =
+        absolute && dragBounds?.center
+          ? offsetPlanPositionByLocalCenter(
+              [0, 0, 0],
+              dragBounds.center,
+              previewRotationY(freeRotationRef.current),
+            )
+          : [0, 0, 0]
       let attachmentRotationY: number | null = null
       const resolved = resolvePrioritizedPlanarCursorPosition({
         cursor: [rawX, rawZ],
         original: [originalPlanPosition[0], originalPlanPosition[2]],
         anchor: dragAnchorRef.current,
-        mode: useAbsoluteCursorPlacement || cursorAttached ? 'absolute' : 'relative',
+        mode: absolute ? 'absolute' : 'relative',
+        localCenter: dragBounds?.center,
+        rotationY: previewRotationY(freeRotationRef.current),
         // Snap follows the mode (raw in Off via snapToGridStep); Alt = force only.
         snap: gridSnapPositionConfig ? undefined : snapToGridStep,
         snapPoint:
@@ -715,7 +731,12 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
             ? ([planX, planZ]) => {
                 const snappedPosition = gridSnapPositionConfig({
                   node,
-                  candidatePosition: canonicalPositionFromPlan(planX, originalPosition[1], planZ),
+                  // Kind-owned grid hooks exchange origins and apply their own footprint offsets.
+                  candidatePosition: canonicalPositionFromPlan(
+                    planX - centerOffset[0],
+                    originalPosition[1],
+                    planZ - centerOffset[2],
+                  ),
                   candidateRotation: freeRotationRef.current,
                   movingIds: [node.id as AnyNodeId],
                   nodes: useScene.getState().nodes as Record<string, AnyNode>,
@@ -729,7 +750,10 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
                   snappedPosition,
                   freeRotationRef.current,
                 )
-                return [snappedPlanPosition[0], snappedPlanPosition[2]]
+                return [
+                  snappedPlanPosition[0] + centerOffset[0],
+                  snappedPlanPosition[2] + centerOffset[2],
+                ]
               }
             : undefined,
         resolveAttachment:
@@ -738,7 +762,8 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
                 const snapArgs: Parameters<NonNullable<typeof groupMoveSnapPoseConfig>>[0] = {
                   node,
                   candidatePosition: canonicalPositionFromPlan(planX, originalPosition[1], planZ),
-                  candidateRotation: rotationRef.current,
+                  candidateRotation:
+                    absolute && dragBounds?.center ? freeRotationRef.current : rotationRef.current,
                   movingIds: [node.id as AnyNodeId],
                   nodes: useScene.getState().nodes as Record<string, AnyNode>,
                   levelId:
@@ -1119,10 +1144,28 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       )
       if (nextFreeRotation === null) return
       sfxEmitter.emit('sfx:item-rotate')
+      let position = lastCursorRef.current
+      if (
+        hasMovedRef.current &&
+        (useAbsoluteCursorPlacement || cursorAttached) &&
+        dragBounds?.center
+      ) {
+        const planCenter = offsetPlanPositionByLocalCenter(
+          getVisualPosition(position),
+          dragBounds.center,
+          previewRotationY(rotationRef.current),
+        )
+        const planOrigin = offsetPlanPositionByLocalCenter(
+          planCenter,
+          [-dragBounds.center[0], 0, -dragBounds.center[2]],
+          previewRotationY(nextFreeRotation),
+        )
+        position = canonicalPositionFromPlan(planOrigin[0], position[1], planOrigin[2])
+        lastCursorRef.current = position
+      }
       freeRotationRef.current = nextFreeRotation
       rotationRef.current = freeRotationRef.current
       setCursorRotationY(previewRotationY(rotationRef.current))
-      const position = lastCursorRef.current
       const visualPosition = getVisualPosition(position)
       setCursorPosition(visualPosition)
       applyMeshPose(position)
@@ -1255,12 +1298,14 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
 
   if (boxDimensions && !dragBounds?.center) {
     return (
-      <PlacementBox
-        dimensions={boxDimensions}
-        position={cursorPosition}
-        rotationY={cursorRotationY}
-        valid={valid}
-      />
+      <group ref={previewGroupRef}>
+        <PlacementBox
+          dimensions={boxDimensions}
+          position={cursorPosition}
+          rotationY={cursorRotationY}
+          valid={valid}
+        />
+      </group>
     )
   }
 
@@ -1270,7 +1315,7 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
       : cursorPosition
 
   return (
-    <>
+    <group ref={previewGroupRef}>
       <CursorSphere color="#a78bfa" height={2.5} position={dragCenterPosition} />
       <DragBoundingBox
         center={dragBounds?.center}
@@ -1281,6 +1326,6 @@ export function MoveRegistryNodeTool({ node }: { node: AnyNode }) {
         rotationY={cursorRotationY}
         size={dragBounds?.size}
       />
-    </>
+    </group>
   )
 }

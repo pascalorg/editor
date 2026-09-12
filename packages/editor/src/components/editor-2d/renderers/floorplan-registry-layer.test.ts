@@ -16,7 +16,9 @@ import {
   floorplanGeometryMetadata,
 } from '../../../lib/floorplan/floorplan-extension'
 import {
+  buildFloorplanEntryGeometry,
   cancelFloorplanAffordanceDrag,
+  collectDirectFloorplanScopeNodes,
   collectFloorplanDependencyNodes,
   collectFloorplanLinkedLevelNodes,
   computeAffectedSiblingIds,
@@ -25,9 +27,184 @@ import {
   InteractiveGeometry,
   isFloorplanOpeningPlacementState,
   resolveFloorplanHandleUnitsPerPixel,
+  siteToFloorplanTransform,
   splitFloorplanOverlay,
   subscribeFloorplanAffordanceToolCancel,
 } from './floorplan-registry-layer'
+
+describe('site-scoped floorplan discovery', () => {
+  let restoreRegistry: () => void
+
+  beforeEach(() => {
+    restoreRegistry = nodeRegistry._snapshot()
+    nodeRegistry._reset()
+    registerNode({
+      kind: 'test:site-overlay',
+      schemaVersion: 1,
+      schema: z.object({ type: z.literal('test:site-overlay') }) as never,
+      category: 'utility',
+      defaults: () => ({}) as never,
+      capabilities: {},
+      floorplanScope: 'site',
+      floorplan: (node) => {
+        const positioned = node as unknown as {
+          position?: [number, number, number]
+          rotation?: [number, number, number]
+        }
+        if (!(positioned.position && positioned.rotation)) return null
+        return {
+          kind: 'group',
+          children: [{ kind: 'circle', cx: 0, cy: 0, r: 1 }],
+          transform: {
+            translate: [positioned.position[0], positioned.position[2]],
+            rotate: positioned.rotation[1],
+          },
+        }
+      },
+    } as AnyNodeDefinition)
+  })
+
+  afterEach(() => restoreRegistry())
+
+  test('collects only direct children of the active Site', () => {
+    const activeSite = {
+      id: 'site_active',
+      type: 'site',
+      parentId: null,
+      children: ['overlay_declared'],
+    } as unknown as AnyNode
+    const nodes = {
+      [activeSite.id]: activeSite,
+      overlay_declared: {
+        id: 'overlay_declared',
+        type: 'test:site-overlay',
+        parentId: null,
+      } as unknown as AnyNode,
+      overlay_parented: {
+        id: 'overlay_parented',
+        type: 'test:site-overlay',
+        parentId: activeSite.id,
+      } as unknown as AnyNode,
+      overlay_other_site: {
+        id: 'overlay_other_site',
+        type: 'test:site-overlay',
+        parentId: 'site_other',
+      } as unknown as AnyNode,
+    }
+
+    expect(
+      collectDirectFloorplanScopeNodes(nodes, activeSite, 'site').map((node) => String(node.id)),
+    ).toEqual(['overlay_declared', 'overlay_parented'])
+  })
+  test('projects site-local coordinates through the inverse Three.js building transform', () => {
+    const transform = siteToFloorplanTransform([10, 0, 5], Math.PI / 2)
+    const [tx, ty] = transform.translate
+    const sitePoint = [10, 3] as const
+    const cos = Math.cos(transform.rotate)
+    const sin = Math.sin(transform.rotate)
+
+    expect(tx + sitePoint[0] * cos - sitePoint[1] * sin).toBeCloseTo(2)
+
+    expect(ty + sitePoint[0] * sin + sitePoint[1] * cos).toBeCloseTo(0)
+  })
+
+  test('rebuilds site geometry from a live pose and restores the committed pose when cleared', () => {
+    const site = {
+      id: 'site_active',
+      type: 'site',
+      parentId: null,
+      children: ['overlay_pond'],
+      visible: true,
+    } as unknown as AnyNode
+    const overlay = {
+      id: 'overlay_pond',
+      type: 'test:site-overlay',
+      parentId: site.id,
+      children: [],
+      visible: true,
+      position: [1, 0, 2],
+      rotation: [0, 0.25, 0],
+    } as unknown as AnyNode
+    const nodes = {
+      [site.id]: site,
+      [overlay.id]: overlay,
+    }
+    const geometryCache = new Map()
+    const liveOverrides = new Map<string, LiveNodeOverrides>()
+    const siteProjection = siteToFloorplanTransform([10, 0, 5], Math.PI / 2)
+    const common = {
+      automaticDimensions: false,
+      ctxOverrides: {
+        children: [],
+        siblings: [],
+        parent: site,
+        outputTransform: siteProjection,
+        trackAllNodes: true,
+      },
+      geometryCache,
+      highlighted: false,
+      hovered: false,
+      interactiveElevators: {},
+      levelDataCache: new Map(),
+      levelNodeIdsByType: new Map(),
+      liveOverride: undefined,
+      liveOverrides,
+      moving: true,
+      node: overlay,
+      nodeId: overlay.id,
+      nodes,
+      palette: undefined,
+      selected: false,
+      siblingEpoch: 0,
+      unit: 'metric' as const,
+      metricNotation: 'meters' as const,
+      wallDimensionReference: 'finished-faces' as const,
+      visibilityRootId: site.id,
+    }
+    const committedSnapshot = structuredClone(overlay)
+    const livePose = {
+      position: [4, 0, 5] as [number, number, number],
+      rotation: Math.PI / 3,
+    }
+
+    const liveEntry = buildFloorplanEntryGeometry({ ...common, live: livePose })
+
+    expect(liveEntry?.node).toMatchObject({
+      position: livePose.position,
+      rotation: [0, livePose.rotation, 0],
+      parentId: null,
+    })
+    expect(liveEntry?.base).toEqual({
+      kind: 'group',
+      children: [
+        {
+          kind: 'group',
+          children: [{ kind: 'circle', cx: 0, cy: 0, r: 1 }],
+          transform: { translate: [4, 5], rotate: livePose.rotation },
+        },
+      ],
+      transform: siteProjection,
+    })
+    expect(overlay).toEqual(committedSnapshot)
+
+    const committedEntry = buildFloorplanEntryGeometry({ ...common, live: undefined })
+
+    expect(committedEntry).not.toBe(liveEntry)
+    expect(committedEntry?.node).toBe(overlay)
+    expect(committedEntry?.base).toEqual({
+      kind: 'group',
+      children: [
+        {
+          kind: 'group',
+          children: [{ kind: 'circle', cx: 0, cy: 0, r: 1 }],
+          transform: { translate: [1, 2], rotate: 0.25 },
+        },
+      ],
+      transform: siteProjection,
+    })
+    expect(overlay).toEqual(committedSnapshot)
+  })
+})
 
 describe('floorplan selection handle sizing', () => {
   test('caps visual handle growth at extreme zoom-out', () => {

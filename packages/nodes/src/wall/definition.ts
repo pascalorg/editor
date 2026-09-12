@@ -5,7 +5,11 @@ import {
   type NodeDefinition,
   type WallNode as WallNodeType,
 } from '@pascal-app/core'
-import type { FloorplanNodeExtension } from '@pascal-app/editor'
+import {
+  DRAFTING_SURFACE_EXTENSION_KEY,
+  type DraftingSurfaceExtension,
+  type FloorplanNodeExtension,
+} from '@pascal-app/editor'
 import { buildWallContextualDimensions } from './contextual-dimensions'
 import { hasWallCurveBlockingChildren } from './curve-eligibility'
 import { buildWallFloorplan, computeWallFloorplanLevelData } from './floorplan'
@@ -50,6 +54,22 @@ export const wallDefinition: NodeDefinition<typeof WallNode> = {
   category: 'structure',
   surfaceRole: 'wall',
   extensions: {
+    [DRAFTING_SURFACE_EXTENSION_KEY]: {
+      kind: 'wall',
+      classifyFace: (node, localNormal) => {
+        if (node?.type !== 'wall') return null
+        const dx = node.end[0] - node.start[0]
+        const dz = node.end[1] - node.start[1]
+        const length = Math.hypot(dx, dz)
+        if (length <= 1e-9) return { face: 'unknown' }
+        const sideDot = localNormal[0] * (-dz / length) + localNormal[2] * (dx / length)
+        if (Math.abs(localNormal[1]) > 0.7) return { face: 'top' }
+        if (Math.abs(localNormal[1]) < 0.25 && Math.abs(sideDot) > 0.7) {
+          return { face: 'side', side: sideDot >= 0 ? 'front' : 'back' }
+        }
+        return { face: 'end' }
+      },
+    } satisfies DraftingSurfaceExtension,
     'pascal:editor/floorplan': {
       contextualDimensions: buildWallContextualDimensions,
       actionMenu: {

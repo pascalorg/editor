@@ -1,6 +1,7 @@
 'use client'
 
 import { nodeRegistry, type ToolOption } from '@pascal-app/core'
+import Image from 'next/image'
 import { useSyncExternalStore } from 'react'
 import { cn } from '../../../lib/utils'
 import { triggerSFX } from '../../../lib/sfx-bus'
@@ -13,16 +14,23 @@ const ALWAYS_VISIBLE = {
 function ToolOptionRow({
   option,
   onSelect,
+  getChoiceThumbnail,
+  active = true,
 }: {
   option: ToolOption
   onSelect?: (option: ToolOption, value: string) => void
+  getChoiceThumbnail?: (option: ToolOption, value: string) => string | undefined
+  active?: boolean
 }) {
   const visibility = option.visible ?? ALWAYS_VISIBLE
   const visible = useSyncExternalStore(visibility.subscribe, visibility.value, visibility.value)
   const value = useSyncExternalStore(option.subscribe, option.value, option.value)
-  if (!visible) return null
+  if (
+    !visible ||
+    (!active && !option.choices.some((choice) => getChoiceThumbnail?.(option, choice.value)))
+  ) return null
 
-  const activeChoice = option.choices.find((choice) => choice.value === value)
+  const activeChoice = active && option.choices.find((choice) => choice.value === value)
   return (
     <div className="flex flex-col gap-2">
       <div className="px-0.5 font-medium text-muted-foreground text-xs">{option.label}</div>
@@ -33,13 +41,14 @@ function ToolOptionRow({
         }}
       >
         {option.choices.map((choice) => {
-          const active = choice.value === value
+          const selected = active && choice.value === value
+          const thumbnail = getChoiceThumbnail?.(option, choice.value)
           return (
             <button
-              aria-pressed={active}
+              aria-pressed={selected}
               className={cn(
                 'rounded-lg px-2 py-2 text-center font-medium text-xs transition-colors',
-                active
+                selected
                   ? 'bg-primary/10 text-primary ring-1 ring-primary/50'
                   : 'bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground',
               )}
@@ -52,12 +61,24 @@ function ToolOptionRow({
               onMouseEnter={() => triggerSFX('sfx:menu-hover')}
               type="button"
             >
+              {thumbnail && (
+                <Image
+                  alt=""
+                  className={cn(
+                    'mx-auto mb-1 size-14 object-contain',
+                    !selected && 'opacity-70 grayscale',
+                  )}
+                  height={56}
+                  src={thumbnail}
+                  width={56}
+                />
+              )}
               {choice.label}
             </button>
           )
         })}
       </div>
-      {activeChoice?.description ? (
+      {activeChoice && activeChoice.description ? (
         <p className="px-0.5 text-[11px] text-muted-foreground leading-relaxed">
           {activeChoice.description}
         </p>
@@ -78,17 +99,27 @@ export function ToolOptionsPanel({
   kind,
   className,
   onSelect,
+  getChoiceThumbnail,
+  active = true,
 }: {
   kind: string | null | undefined
   className?: string
   onSelect?: (option: ToolOption, value: string) => void
+  getChoiceThumbnail?: (option: ToolOption, value: string) => string | undefined
+  active?: boolean
 }) {
   const options = (kind ? nodeRegistry.get(kind)?.toolOptions : undefined) ?? []
   if (options.length === 0) return null
   return (
     <div className={cn('flex flex-col gap-3', className)}>
       {options.map((option) => (
-        <ToolOptionRow key={option.id} onSelect={onSelect} option={option} />
+        <ToolOptionRow
+          active={active}
+          getChoiceThumbnail={getChoiceThumbnail}
+          key={option.id}
+          onSelect={onSelect}
+          option={option}
+        />
       ))}
     </div>
   )

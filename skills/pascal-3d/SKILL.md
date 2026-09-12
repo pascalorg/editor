@@ -1,12 +1,18 @@
 ---
 name: pascal-3d
 description: Connect to Pascal and use its MCP tools to create, inspect, edit, validate, save, or hand off editable 3D building scenes. Use this skill whenever a user asks an agent to work in Pascal, make a room or building model, inspect a Pascal project, perform spatial edits, connect Pascal MCP, or return a verified Pascal editor link. It also governs safe local, existing-account, and explicitly authorized autonomous setup.
-license: MIT
 compatibility: Requires an MCP-capable host and either the local Pascal CLI or access to the hosted Pascal MCP endpoint. Local CLI requires Node.js 22.13 or newer.
 metadata:
   version: "0.1.0"
   source-reviewed: "2026-09-08"
   native-host-validation: "source-hash-recorded-separately"
+  openclaw:
+    homepage: https://editor.pascal.app/docs/developers/mcp
+    primaryEnv: PASCAL_API_KEY
+    envVars:
+      - name: PASCAL_API_KEY
+        required: false
+        description: Optional Pascal API key for the hosted MCP endpoint; local Pascal does not require it.
 ---
 
 # Pascal 3D
@@ -15,7 +21,7 @@ Use Pascal as the scene authority. Prefer its semantic tools and validation resu
 
 ## Start here
 
-1. Check whether a Pascal MCP server is already connected. If it is, read `pascal://agent-guide` and inspect the available tools and their input schemas before changing anything. Installed and hosted releases can differ from this skill's source-review snapshot.
+1. Check whether a Pascal MCP server is already connected. If it is, read `pascal://agent-guide` and inspect the available tools and their input schemas before changing anything. Installed and hosted releases can differ from this skill's source-review snapshot. When both the `pascal` and `pascal-hosted` servers are connected, use `pascal-hosted` for projects that live in the person's Pascal account, including Capture scans, and `pascal` for local work; never call both for the same task.
 2. If Pascal is not connected, select the data boundary that matches the request:
    - **Local:** use the Pascal CLI for projects that should remain on this machine.
    - **Hosted existing account:** use an API key created by the same Pascal user or organization that owns the target project.
@@ -40,6 +46,7 @@ If the task is a furniture or clearance assessment and the `furniture-fit` skill
 ### Read or create the right scene
 
 - Existing project: call `list_scenes` when available, select by exact ID or unambiguous name, then call `load_scene`.
+- Room scan on the hosted server only: reach it with `list_captures`, then `get_capture`, then `open_capture_as_project` for a `processed` scan you have edit access to on the scan's own project; these tools do not exist on the local CLI, so never call them there.
 - New persistent project: call `create_project` before modeling.
 - Already active scene: call `get_project_status` and `get_scene` before editing.
 - If persistence tools are absent, explain that the connected server is an in-memory/custom runtime and do not promise a durable handoff.

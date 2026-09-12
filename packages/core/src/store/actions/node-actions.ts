@@ -1592,6 +1592,7 @@ const deleteNodesActionImpl = (
   const nodesToMarkDirty = new Set<AnyNodeId>()
   const deletedIds = new Set<AnyNodeId>()
   const mergePlans = buildWallMergePlans(get().nodes, ids)
+  const requestedDeleteIds = new Set(ids)
 
   set((state) => {
     const nextNodes = { ...state.nodes }
@@ -1606,7 +1607,9 @@ const deleteNodesActionImpl = (
       allIds.add(id)
       const node = nextNodes[id]
       const cascadeDeletes = node
-        ? nodeRegistry.get(node.type)?.parametrics?.onDeleteCascade?.(node, nextNodes, allIds)
+        ? nodeRegistry
+            .get(node.type)
+            ?.parametrics?.onDeleteCascade?.(node, nextNodes, allIds, requestedDeleteIds)
         : null
       if (cascadeDeletes) {
         for (const companionId of cascadeDeletes) collect(companionId)
@@ -1638,7 +1641,7 @@ const deleteNodesActionImpl = (
       if (!node) continue
       const onDelete = nodeRegistry.get(node.type)?.parametrics?.onDelete
       if (!onDelete) continue
-      for (const { id: targetId, data } of onDelete(node, nextNodes)) {
+      for (const { id: targetId, data } of onDelete(node, nextNodes, allIds, requestedDeleteIds)) {
         if (allIds.has(targetId)) continue
         const target = nextNodes[targetId]
         if (!target) continue

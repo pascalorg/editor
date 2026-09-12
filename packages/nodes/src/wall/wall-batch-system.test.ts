@@ -1,5 +1,6 @@
 import { afterAll, afterEach, describe, expect, spyOn, test } from 'bun:test'
 import { sceneRegistry, useScene } from '@pascal-app/core'
+import * as viewerExports from '@pascal-app/viewer'
 import { SCENE_LAYER, useViewer } from '@pascal-app/viewer'
 import {
   BufferGeometry,
@@ -258,4 +259,33 @@ describe('WallBatchSystem capture holds', () => {
     holdBatchedWallsAfterCapture()
     expect(walls.every((wall) => !wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
   })
+})
+
+test('merged wall batches are stripped from GLB exports', () => {
+  const { batch } = setupBatchedLevel()
+  expect(batch.userData.pascalExport).toBe('strip')
+})
+
+test('wall batches keep waiting for pending neighbours even after the dirty census is clean', () => {
+  const { root, walls } = setupBatchedLevel()
+  let pending = 1
+  const queue = spyOn(viewerExports, 'getPendingWallRebuildCount').mockImplementation(() => pending)
+  try {
+    useViewer.setState({ wallMode: 'down' })
+    runFrame()
+    useViewer.setState({ wallMode: 'up' })
+    nowMs = 200
+    runFrame()
+    nowMs = 500
+    runFrame()
+    expect(useScene.getState().dirtyNodes.size).toBe(0)
+    expect(walls.every((wall) => wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
+    pending = 0
+    nowMs += 181
+    runFrame()
+    expect(root.children.some((child) => child.name === 'wall-batch')).toBe(true)
+    expect(walls.every((wall) => !wall.layers.isEnabled(SCENE_LAYER))).toBe(true)
+  } finally {
+    queue.mockRestore()
+  }
 })

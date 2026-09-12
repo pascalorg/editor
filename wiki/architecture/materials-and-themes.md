@@ -41,7 +41,7 @@ resolveSurfaceColor(role, colorPreset, sceneThemeId?)
 
 ## The rule: untextured surfaces are theme-coloured in both modes
 
-This is the important invariant. A surface is "textured" only if its node has an explicit `materialPreset` or `material`.
+For kinds without declared slot defaults, a surface is "textured" only if its node has an explicit `materialPreset` or `material`. Kinds with slot defaults use the slot contract described below.
 
 - **`textures` off** → every surface uses `resolveSurfaceColor(role, …)`.
 - **`textures` on** → textured surfaces show their texture; **untextured surfaces still use `resolveSurfaceColor`** (not a hardcoded white/grey default).
@@ -54,13 +54,20 @@ So picking the Mediterranean theme gives a blue roof + warm walls without touchi
 |---|---|
 | wall | `systems/wall/wall-materials.ts` (`getMaterialsForWall`), re-applied each frame by `wall-cutout.tsx` |
 | roof / roof-segment | `systems/roof/roof-materials.ts` (`getRoofMaterialArray`) |
-| slab | `nodes/slab/geometry.ts` (`getSlabMaterial`) |
+| slab | `nodes/slab/geometry.ts` (`getSlabSlotMaterial`) |
 | ceiling | `nodes/ceiling/renderer.tsx` |
 | generic registry kinds | `systems/geometry/geometry-system.tsx` → `applyDefaultSurfaceRole` (textures-off) |
 | door / window | `systems/{door,window}/*-system.tsx` |
 | stair / column / item / elevator | `nodes/<kind>/renderer.tsx` |
 
 Each of these reads `shading`/`textures`/`colorPreset`/`sceneTheme` from `useViewer` (or receives them threaded from `GeometrySystem`) and **must include `sceneTheme` in its material cache key and its rebuild dependency array**, or theme switches won't re-colour. `GeometrySystem` marks every geometry node dirty on any of those changing.
+
+Ceilings and slabs use declared slot defaults in colored (`textures` on) mode.
+Ceiling undersides use an opaque `BackSide` material in both appearances; only
+`ceiling-grid` blends. Slab top, side/underside and optional terrain skirt meshes
+can batch separately. Flat slot defaults share the viewer cache by color, roughness
+and shading; slab legacy cached materials carry `__pascalCachedMaterial` so geometry
+rebuilds leave shared materials alive. Transparent slot overrides draw themselves.
 
 ## Custom-mesh face materials
 

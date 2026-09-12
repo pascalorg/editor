@@ -32,7 +32,7 @@ jobs:
         run: bun run check
 
       - name: Validate agent skills and plugin packages
-        run: bun scripts/validate-skills.ts
+        run: bun run skills:validate
 
       - name: Type check
         run: bun run check-types

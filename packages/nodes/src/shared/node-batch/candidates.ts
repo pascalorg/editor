@@ -5,10 +5,12 @@ import {
   sceneRegistry,
   useInteractive,
   useLiveNodeOverrides,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
 import { hideFromScene, SCENE_LAYER, showInScene, useViewer } from '@pascal-app/viewer'
 import { type Material, Matrix4, type Mesh, type Object3D } from 'three'
+import { isSlotPaintPreviewActive } from '../slot-paint'
 import type { BatchCandidate, BatchEntry } from './types'
 
 /**
@@ -18,7 +20,14 @@ import type { BatchCandidate, BatchEntry } from './types'
  */
 
 /** Kinds the batch system manages. Walls keep their merged-geometry batch. */
-export const BATCH_KINDS: ReadonlySet<string> = new Set(['item', 'column', 'door', 'window'])
+export const BATCH_KINDS: ReadonlySet<string> = new Set([
+  'item',
+  'column',
+  'door',
+  'window',
+  'ceiling',
+  'slab',
+])
 
 const rootInverse = new Matrix4()
 
@@ -36,7 +45,12 @@ const hiddenMeshesByNode = new Map<string, Mesh[]>()
 function collectMeshes(object: Object3D, out: Mesh[], hostedRoots: ReadonlySet<Object3D>): void {
   if (object.visible === false || hostedRoots.has(object)) return
   const mesh = object as Mesh
-  if (mesh.isMesh && mesh.name !== 'cutout' && mesh.layers.isEnabled(SCENE_LAYER)) {
+  if (
+    mesh.isMesh &&
+    mesh.name !== 'cutout' &&
+    mesh.name !== 'ceiling-grid' &&
+    mesh.layers.isEnabled(SCENE_LAYER)
+  ) {
     out.push(mesh)
   }
   for (const child of object.children) collectMeshes(child, out, hostedRoots)
@@ -44,7 +58,7 @@ function collectMeshes(object: Object3D, out: Mesh[], hostedRoots: ReadonlySet<O
 
 /**
  * The level this node's batches live under, or null when the node is not in
- * batchable scope. Items and columns qualify parented directly to a level;
+ * batchable scope. Items, columns, ceilings and slabs qualify directly under a level;
  * doors and windows through a wall that is itself parented to a level. Other
  * hosting shapes (roof faces, blocks, wall-hosted items) move when their host
  * changes without any signal the batch would see — they draw themselves.
@@ -52,7 +66,12 @@ function collectMeshes(object: Object3D, out: Mesh[], hostedRoots: ReadonlySet<O
 function resolveLevelId(node: AnyNode, nodes: Record<string, AnyNode | undefined>): string | null {
   const parent = node.parentId ? nodes[node.parentId] : undefined
   if (!parent) return null
-  if (node.type === 'item' || node.type === 'column') {
+  if (
+    node.type === 'item' ||
+    node.type === 'column' ||
+    node.type === 'ceiling' ||
+    node.type === 'slab'
+  ) {
     return parent.type === 'level' ? (parent.id as string) : null
   }
   // door / window: host wall → its level. A hidden wall hides its openings
@@ -90,7 +109,7 @@ export function collectBatchCandidate(nodeId: string): BatchCandidate | null {
 
   const levelId = resolveLevelId(node, nodes)
   if (!levelId) return null
-  if (isExcluded(node)) return null
+  if (isExcluded(node) || isSlotPaintPreviewActive(nodeId)) return null
 
   const group = sceneRegistry.nodes.get(nodeId)
   if (!group) return null
@@ -111,7 +130,7 @@ export function collectBatchCandidate(nodeId: string): BatchCandidate | null {
   // means an in-flight gesture: transforms are moving under our feet and the
   // commit's dirty mark has not landed yet.
   const overrides = useLiveNodeOverrides.getState()
-  if (overrides.get(nodeId as AnyNodeId)) return null
+  if (overrides.get(nodeId as AnyNodeId) || useLiveTransforms.getState().get(nodeId)) return null
   if (
     (node.type === 'door' || node.type === 'window') &&
     node.parentId &&
@@ -140,7 +159,7 @@ export function collectBatchCandidate(nodeId: string): BatchCandidate | null {
   rootInverse.copy(levelRoot.matrixWorld).invert()
 
   const entries: BatchEntry[] = []
-  for (const mesh of meshes) {
+  for (const [meshIndex, mesh] of meshes.entries()) {
     const material = mesh.material as Material | Material[]
     // Array materials draw per geometry group — a shape BatchedMesh cannot
     // hold; transparent ones depend on per-object blend ordering (door/window
@@ -155,9 +174,13 @@ export function collectBatchCandidate(nodeId: string): BatchCandidate | null {
     entries.push({
       nodeId,
       levelId,
+      allocationKey:
+        node.type === 'ceiling' || node.type === 'slab' ? `${nodeId}:${meshIndex}` : undefined,
       mesh,
       geometry: mesh.geometry,
       material,
+      castShadow: mesh.castShadow,
+      receiveShadow: mesh.receiveShadow,
       matrixInLevel: new Matrix4().multiplyMatrices(rootInverse, mesh.matrixWorld),
     })
   }
@@ -208,6 +231,7 @@ export function collectTintedNodes(nodeIds: ReadonlySet<string>): Set<string> {
   const tinted = new Set<string>()
   for (const id of viewer.selection.selectedIds) if (nodeIds.has(id)) tinted.add(id)
   for (const id of viewer.previewSelectedIds) if (nodeIds.has(id)) tinted.add(id)
+  for (const id of viewer.externalSelectedIds) if (nodeIds.has(id)) tinted.add(id)
   const hovered = viewer.hoveredId
   if (hovered && nodeIds.has(hovered)) tinted.add(hovered)
 
@@ -216,6 +240,7 @@ export function collectTintedNodes(nodeIds: ReadonlySet<string>): Set<string> {
   const wallLit = new Set<string>()
   for (const id of viewer.selection.selectedIds) wallLit.add(id)
   for (const id of viewer.previewSelectedIds) wallLit.add(id)
+  for (const id of viewer.externalSelectedIds) wallLit.add(id)
   if (hovered) wallLit.add(hovered)
   for (const id of nodeIds) {
     if (tinted.has(id)) continue

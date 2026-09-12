@@ -6,6 +6,7 @@
 - Sofa: 2.10 m wide × 0.82 m high × 0.95 m deep
 - Pose: centered on a long wall, 0° Y rotation
 - Requested walking clearance: 0.60 m in front
+- Context: project `project_example`, revision `7`, graph hash `sha256:example-clear-footprint`, level `level_ground`, zone `zone_living_room`, item `sofa_example`
 - Pascal results: `check_collisions` with `minimumClearance: 0.60` returned `status: "checked"` and no overlap/clearance violations; `verify_scene` returned no item-spacing or door-access issue for the sofa
 
 ## Report excerpt
@@ -26,3 +27,19 @@
 | Detailed mesh contact | not checked | Current collision evidence uses plan AABBs. |
 
 This supports the layout footprint at the tested pose. It does not establish that the sofa can be delivered or assembled in the room.
+
+```yaml
+nextAction:
+  kind: check_related_item_or_pose
+  task: Check this sofa at a 90° Y rotation around the same center point with the same 0.60 m clearance.
+  requiredInput: None beyond the recorded pose and dimensions.
+  context:
+    projectId: project_example
+    revision: 7
+    graphHash: sha256:example-clear-footprint
+    levelId: level_ground
+    zoneId: zone_living_room
+    itemId: sofa_example
+  authority: Read-only; no account or workspace changes, publication, save, or project mutation authorized.
+  cost: No rendering, generation, paid operation, or additional spending authorized.
+```

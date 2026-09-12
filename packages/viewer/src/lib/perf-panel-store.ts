@@ -66,12 +66,37 @@ export function usePerfStats(): PerfStats | null {
  * looks no cheaper than an unbatched one — the saving is encode cost per
  * call, not call count.
  */
-export type PerfBatchStats = { items: number; instances: number; containers: number }
+export type PerfBatchStats = {
+  items: number
+  instances: number
+  containers: number
+  releases?: number
+  joins?: number
+  geometryReplacements?: number
+  overflowRebuilds?: number
+  wallDrain?: {
+    initialBuildActive: boolean
+    wallsConsumedThisFrame: number
+    budgetExits: number
+    heavyExits: number
+    drainedExits: number
+    capExits: number
+    pendingNeighbours: number
+    firstBuilds: number
+    reinvalidationBuilds: number
+    neighbourEnqueues: number
+  }
+  geometryBytesCopied?: number
+}
 
 let batchStats: PerfBatchStats = { items: 0, instances: 0, containers: 0 }
 
-export function publishPerfBatchStats(stats: PerfBatchStats): void {
-  batchStats = stats
+export function publishPerfBatchStats(stats: Partial<PerfBatchStats>): void {
+  batchStats = { ...batchStats, ...stats }
+}
+
+export function publishPerfWallDrainStats(stats: NonNullable<PerfBatchStats['wallDrain']>): void {
+  batchStats.wallDrain = stats
 }
 
 export function readPerfBatchStats(): PerfBatchStats {

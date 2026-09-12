@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test } from 'bun:test'
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { nodeRegistry } from '../registry/registry'
 import type { AnyNodeDefinition } from '../registry/types'
 import type { AnyNode, AnyNodeId } from '../schema/types'
@@ -39,9 +39,8 @@ describe('dirty tracking', () => {
   beforeEach(() => {
     if (!nodeRegistry.has(untrackedDef.kind)) nodeRegistry._register(untrackedDef)
     if (!nodeRegistry.has(trackedDef.kind)) nodeRegistry._register(trackedDef)
-    // Clear rather than replace the dirty set: the store's own instance is the
-    // guarded one, and the raw-add tests below exercise that guard.
-    useScene.getState().dirtyNodes.clear()
+    useScene.getState().unloadScene()
+    useScene.setState({ readOnly: false })
     useScene.setState({
       nodes: {
         [UNTRACKED]: makeNode(UNTRACKED, 'test-untracked'),
@@ -51,6 +50,11 @@ describe('dirty tracking', () => {
       rootNodeIds: [UNTRACKED, TRACKED, UNREGISTERED],
       collections: {},
     } as never)
+    useScene.temporal.getState().clear()
+  })
+
+  afterEach(() => {
+    useScene.getState().unloadScene()
     useScene.temporal.getState().clear()
   })
 

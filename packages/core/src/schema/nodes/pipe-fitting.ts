@@ -22,7 +22,9 @@ export const PipeFittingNode = BaseNode.extend({
   position: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
   // XYZ euler radians.
   rotation: z.tuple([z.number(), z.number(), z.number()]).default([0, 0, 0]),
-  fittingType: z.enum(['elbow', 'wye', 'sanitary-tee', 'cross']).default('elbow'),
+  fittingType: z
+    .enum(['elbow', 'wye', 'sanitary-tee', 'cross', 'end-cap', 'cleanout', 'reducer', 'coupling'])
+    .default('elbow'),
   // Elbow turn in degrees — DWV bends ship as 22.5 / 45 / 90 ("long
   // sweep" for drains); adjustable range matches the duct elbow. 0° is a
   // straight coupling — what an elbow flattens to when its run is dragged
@@ -32,6 +34,7 @@ export const PipeFittingNode = BaseNode.extend({
   diameter: z.number().min(1.25).max(8).default(2),
   // Branch collar size (wye / sanitary-tee).
   diameter2: z.number().min(1.25).max(8).default(2),
+  cleanoutStyle: z.enum(['end', 'inline']).default('end'),
   pipeMaterial: z.enum(['pvc', 'abs', 'cast-iron']).default('pvc'),
   system: z.enum(['waste', 'vent']).default('waste'),
 }).describe(
@@ -39,7 +42,8 @@ export const PipeFittingNode = BaseNode.extend({
   DWV pipe fitting - elbow (bend), wye (45° branch), sanitary tee (square branch), or cross (two opposed branches).
   - position: [x, y, z] level-local meters
   - rotation: [x, y, z] euler radians
-  - fittingType: elbow | wye | sanitary-tee | cross
+  - fittingType: elbow | wye | sanitary-tee | cross | end-cap | cleanout | reducer | coupling
+  - cleanoutStyle: end (one flow port) or inline (two flow ports with a capped service branch)
   - angle: elbow turn in degrees (22.5 / 45 / 90 typical)
   - diameter: run size in inches; diameter2: branch collar size (both branches for a cross)
   - pipeMaterial: pvc | abs | cast-iron

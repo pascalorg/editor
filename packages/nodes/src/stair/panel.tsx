@@ -3,8 +3,10 @@
 import {
   type AnyNode,
   type AnyNodeId,
+  getLevelDisplayName,
   type LevelNode,
   resolveStairTotalRise,
+  runAsSingleSceneHistoryStep,
   type SlabNode,
   type StairNode,
   type StairRailingMode,
@@ -18,8 +20,8 @@ import {
 import {
   ActionButton,
   ActionGroup,
-  DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE,
   duplicateStairSubtree,
+  formatLinearMeasurement,
   getStairLevelOptions,
   MetricControl,
   PanelSection,
@@ -38,6 +40,7 @@ import { Copy, Move, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { getStairDestinationUpdates } from './destination'
+import { getStairTypeChange } from './stair-type'
 
 const RAILING_MODE_OPTIONS: { label: string; value: StairRailingMode }[] = [
   { label: 'None', value: 'none' },
@@ -69,6 +72,8 @@ const DECK_DESTINATION_MIN_ELEVATION = 0.5
 export default function StairPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
+  const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
@@ -152,6 +157,18 @@ export default function StairPanel() {
       })
     },
     [handleUpdate],
+  )
+
+  const handleStairTypeChange = useCallback(
+    (value: StairType) => {
+      if (!node) return
+      const change = getStairTypeChange(node, value, useScene.getState().nodes)
+      runAsSingleSceneHistoryStep(useScene, () => {
+        updateNode(node.id as AnyNode['id'], change.updates)
+        if (change.segment) createNode(change.segment, node.id as AnyNodeId)
+      })
+    },
+    [node, updateNode, createNode],
   )
 
   const handleDestinationChange = useCallback(
@@ -255,7 +272,7 @@ export default function StairPanel() {
   const resolvedToLevelId = resolveStairToLevelId(nodes, node, resolvedFromLevelId, levels)
   const deckNode = node.deckSlabId ? nodes[node.deckSlabId as AnyNodeId] : undefined
   const attachedDeck = deckNode?.type === 'slab' ? deckNode : undefined
-  const resolvedRise = Math.round(resolveStairTotalRise(node, nodes) * 100) / 100
+  const resolvedRise = resolveStairTotalRise(node, nodes)
 
   return (
     <PanelWrapper
@@ -266,17 +283,7 @@ export default function StairPanel() {
     >
       <PanelSection title="Type">
         <SegmentedControl
-          onChange={(value) =>
-            handleUpdate(
-              value === 'spiral' && node.stairType !== 'spiral'
-                ? {
-                    stairType: value,
-                    sweepAngle: DEFAULT_SPIRAL_STAIR_SWEEP_ANGLE,
-                    position: [node.position[0], 0, node.position[2]],
-                  }
-                : { stairType: value },
-            )
-          }
+          onChange={handleStairTypeChange}
           options={STAIR_TYPE_OPTIONS}
           value={node.stairType ?? 'straight'}
         />
@@ -303,7 +310,7 @@ export default function StairPanel() {
             >
               {levels.map((level) => (
                 <option key={level.id} value={level.id}>
-                  {level.name || `Level ${level.level + 1}`}
+                  {getLevelDisplayName(level)}
                 </option>
               ))}
             </select>
@@ -320,7 +327,7 @@ export default function StairPanel() {
             >
               {levels.map((level) => (
                 <option key={level.id} value={level.id}>
-                  {level.name || `Level ${level.level + 1}`}
+                  {getLevelDisplayName(level)}
                 </option>
               ))}
               {candidateDecks.map((deck) => (
@@ -331,41 +338,39 @@ export default function StairPanel() {
             </select>
           </div>
 
-          {attachedDeck ? (
-            <div className="space-y-1.5">
-              <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
-                Rise
-              </div>
-              <SegmentedControl
-                onChange={(value) =>
-                  handleUpdate(
-                    value === 'custom' ? { totalRise: resolvedRise } : { totalRise: undefined },
-                  )
-                }
-                options={[
-                  { label: 'Follows deck', value: 'follows' },
-                  { label: 'Custom rise', value: 'custom' },
-                ]}
-                value={node.totalRise == null ? 'follows' : 'custom'}
-              />
-              {node.totalRise == null ? (
-                <div className="px-1 text-[11px] text-muted-foreground">
-                  Currently {resolvedRise} m
-                </div>
-              ) : (
-                <MetricControl
-                  label="Rise"
-                  max={10}
-                  min={0.2}
-                  onChange={(value) => handleUpdate({ totalRise: value })}
-                  precision={2}
-                  step={0.05}
-                  unit="m"
-                  value={resolvedRise}
-                />
-              )}
+          <div className="space-y-1.5">
+            <div className="px-1 text-[11px] text-muted-foreground uppercase tracking-[0.14em]">
+              Rise
             </div>
-          ) : null}
+            <SegmentedControl
+              onChange={(value) =>
+                handleUpdate(
+                  value === 'custom' ? { totalRise: resolvedRise } : { totalRise: undefined },
+                )
+              }
+              options={[
+                { label: attachedDeck ? 'Follows deck' : 'Follows level', value: 'follows' },
+                { label: 'Custom rise', value: 'custom' },
+              ]}
+              value={node.totalRise == null ? 'follows' : 'custom'}
+            />
+            {node.totalRise == null ? (
+              <div className="px-1 text-[11px] text-muted-foreground">
+                Currently {formatLinearMeasurement(resolvedRise, unit, metricNotation)}
+              </div>
+            ) : (
+              <MetricControl
+                label="Rise"
+                max={1000}
+                min={0.2}
+                onChange={(value) => handleUpdate({ totalRise: value })}
+                precision={2}
+                step={0.05}
+                unit="m"
+                value={resolvedRise}
+              />
+            )}
+          </div>
 
           {attachedDeck ? null : (
             <>
@@ -384,7 +389,7 @@ export default function StairPanel() {
                   precision={2}
                   step={0.01}
                   unit="m"
-                  value={Math.round((node.openingOffset ?? 0) * 100) / 100}
+                  value={node.openingOffset ?? 0}
                 />
               ) : null}
             </>
@@ -411,7 +416,7 @@ export default function StairPanel() {
                   precision={2}
                   step={0.05}
                   unit="m"
-                  value={Math.round((node.topLandingDepth ?? 0.9) * 100) / 100}
+                  value={node.topLandingDepth ?? 0.9}
                 />
               )}
             </>
@@ -459,17 +464,7 @@ export default function StairPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round((node.width ?? 1) * 100) / 100}
-          />
-          <MetricControl
-            label="Rise"
-            max={10}
-            min={0.2}
-            onChange={(value) => handleUpdate({ totalRise: value })}
-            precision={2}
-            step={0.05}
-            unit="m"
-            value={Math.round(resolveStairTotalRise(node, nodes) * 100) / 100}
+            value={node.width ?? 1}
           />
           <MetricControl
             label="Steps"
@@ -497,7 +492,7 @@ export default function StairPanel() {
               precision={2}
               step={0.01}
               unit="m"
-              value={Math.round((node.thickness ?? 0.25) * 100) / 100}
+              value={node.thickness ?? 0.25}
             />
           )}
           <MetricControl
@@ -508,7 +503,7 @@ export default function StairPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round((node.innerRadius ?? 0.9) * 100) / 100}
+            value={node.innerRadius ?? 0.9}
           />
           <SliderControl
             label="Sweep"
@@ -548,7 +543,7 @@ export default function StairPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         <SliderControl
           label="Y"
@@ -560,7 +555,7 @@ export default function StairPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
+          value={node.position[1]}
         />
         <SliderControl
           label="Z"
@@ -572,7 +567,7 @@ export default function StairPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[2] * 100) / 100}
+          value={node.position[2]}
         />
         <SliderControl
           label="Rotation"
@@ -619,7 +614,7 @@ export default function StairPanel() {
             precision={2}
             step={0.02}
             unit="m"
-            value={Math.round((node.railingHeight ?? 0.92) * 100) / 100}
+            value={node.railingHeight ?? 0.92}
           />
         )}
       </PanelSection>

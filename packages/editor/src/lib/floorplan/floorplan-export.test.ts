@@ -1,13 +1,30 @@
-import { describe, expect, test } from 'bun:test'
-import type { FloorplanGeometry, NodeCategory } from '@pascal-app/core'
+import { afterEach, describe, expect, test } from 'bun:test'
+import {
+  type AnyNode,
+  type AnyNodeDefinition,
+  BuildingNode,
+  type FloorplanGeometry,
+  type GeometryContext,
+  LevelNode,
+  loadPlugin,
+  type NodeCategory,
+  nodeRegistry,
+  registerNode,
+} from '@pascal-app/core'
+import { useViewer } from '@pascal-app/viewer'
+import PDFDocument from 'pdfkit'
+import { z } from 'zod'
 import { splitFloorplanOverlay } from '../../components/editor-2d/renderers/floorplan-registry-layer'
 import { DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY } from './annotation-visibility'
 import {
+  collectFloorplanGeometry,
+  collectFloorplanSchedules,
   filterFloorplanExportOverlay,
   fitPlanToBox,
   isFloorplanExportAnnotationGeometry,
   isFloorplanNodeInExportScope,
   partitionFloorplanExportOverlay,
+  resolveExportLevels,
   resolveFloorplanExportAnnotationVisibility,
   resolveFloorplanExportNodeGeometry,
   resolveFloorplanExportPlacement,
@@ -20,6 +37,63 @@ import {
   rotateFloorplanExportBounds,
 } from './floorplan-export'
 import { floorplanGeometryMetadata } from './floorplan-extension'
+import { FloorplanPdfDocument } from './floorplan-pdfkit-document'
+import { renderFloorplanGeometryToPdfKit } from './floorplan-pdfkit-renderer'
+
+type GroupGeometry = Extract<FloorplanGeometry, { kind: 'group' }>
+type GroupTransform = NonNullable<GroupGeometry['transform']>
+
+function flattenGeometry(geometry: FloorplanGeometry | null): FloorplanGeometry[] {
+  if (!geometry) return []
+  if (geometry.kind !== 'group') return [geometry]
+  return [geometry, ...geometry.children.flatMap(flattenGeometry)]
+}
+
+function applyGeometryTransforms(
+  point: readonly [number, number],
+  transforms: readonly GroupTransform[],
+): [number, number] {
+  let x = point[0]
+  let y = point[1]
+  for (let index = transforms.length - 1; index >= 0; index -= 1) {
+    const transform = transforms[index]!
+    if (transform.rotate !== undefined) {
+      const cos = Math.cos(transform.rotate)
+      const sin = Math.sin(transform.rotate)
+      const rotatedX = x * cos - y * sin
+      y = x * sin + y * cos
+      x = rotatedX
+    }
+    if (transform.translate) {
+      x += transform.translate[0]
+      y += transform.translate[1]
+    }
+  }
+  return [x, y]
+}
+
+function projectedGeometryPoint(
+  geometry: FloorplanGeometry,
+  target: 'circle' | 'image',
+  transforms: readonly GroupTransform[] = [],
+): [number, number] | null {
+  if (geometry.kind === target) {
+    const point =
+      geometry.kind === 'circle'
+        ? ([geometry.cx, geometry.cy] as const)
+        : geometry.kind === 'image'
+          ? geometry.center
+          : null
+    return point ? applyGeometryTransforms(point, transforms) : null
+  }
+  if (geometry.kind !== 'group') return null
+  const nestedTransforms = geometry.transform ? [...transforms, geometry.transform] : transforms
+  for (const child of geometry.children) {
+    const point = projectedGeometryPoint(child, target, nestedTransforms)
+    if (point) return point
+  }
+  return null
+}
 
 describe('filterFloorplanExportOverlay', () => {
   test('preserves annotation metadata while splitting geometry passes', () => {
@@ -352,5 +426,428 @@ describe('isFloorplanNodeInExportScope', () => {
   test('handles an undefined definition like a no-category node', () => {
     expect(isFloorplanNodeInExportScope(undefined, 'full')).toBe(true)
     expect(isFloorplanNodeInExportScope(undefined, 'structure')).toBe(false)
+  })
+})
+
+describe('collectFloorplanSchedules', () => {
+  test('omits non-structure schedule contributors under structure scope', () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    const structureKind = 'test:structure-schedule'
+    const siteKind = 'test:site-schedule'
+    const levelId = 'level_schedules' as AnyNode['id']
+    const structureNodeId = 'structure_scheduled' as AnyNode['id']
+    const siteNodeId = 'site_scheduled' as AnyNode['id']
+
+    const scheduleFor = (title: string) => ({
+      id: title.toLowerCase(),
+      title,
+      columns: [{ key: 'id', label: 'ID' }],
+      rows: [{ id: 'row', cells: { id: '1' } }],
+    })
+
+    try {
+      nodeRegistry._reset()
+      registerNode({
+        kind: structureKind,
+        schemaVersion: 1,
+        schema: z.object({ type: z.literal(structureKind) }) as never,
+        category: 'structure',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        extensions: {
+          'pascal:editor/floorplan': {
+            schedule: () => scheduleFor('Doors'),
+          },
+        },
+      } as AnyNodeDefinition)
+      registerNode({
+        kind: siteKind,
+        schemaVersion: 1,
+        schema: z.object({ type: z.literal(siteKind) }) as never,
+        category: 'site',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        extensions: {
+          'pascal:editor/floorplan': {
+            schedule: () => scheduleFor('Rooms'),
+          },
+        },
+      } as AnyNodeDefinition)
+
+      const nodes = {
+        [levelId]: {
+          id: levelId,
+          type: 'level',
+          visible: true,
+          children: [structureNodeId, siteNodeId],
+        },
+        [structureNodeId]: {
+          id: structureNodeId,
+          type: structureKind,
+          visible: true,
+        },
+        [siteNodeId]: {
+          id: siteNodeId,
+          type: siteKind,
+          visible: true,
+        },
+      } as unknown as Record<string, AnyNode>
+
+      const full = collectFloorplanSchedules(nodes, levelId, 'metric', 'full')
+      expect(full.map((schedule) => schedule.title).sort()).toEqual(['Doors', 'Rooms'])
+
+      const structure = collectFloorplanSchedules(nodes, levelId, 'metric', 'structure')
+      expect(structure.map((schedule) => schedule.title)).toEqual(['Doors'])
+    } finally {
+      restoreRegistry()
+    }
+  })
+})
+
+describe('collectFloorplanGeometry', () => {
+  test('collects the active Site once below architecture with semantic context and projection', async () => {
+    const restoreRegistry = nodeRegistry._snapshot()
+    const activeSiteId = 'site_active'
+    const otherSiteId = 'site_other'
+    const enabledPluginId = 'test:site-pdf-enabled'
+    const disabledPluginId = 'test:site-pdf-disabled'
+    const enabledKind = 'test:site-pdf-overlay'
+    const disabledKind = 'test:site-pdf-disabled-overlay'
+    const architectureKind = 'test:level-architecture'
+    const semanticChildId = 'site_overlay_detail'
+    const referencedNodeId = 'site_reference'
+    const inlinePng =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+
+    const siteDefinition = (
+      kind: string,
+      floorplan: (node: Record<string, unknown>, context: GeometryContext) => FloorplanGeometry,
+    ): AnyNodeDefinition =>
+      ({
+        kind,
+        schemaVersion: 1,
+        schema: z.object({ type: z.literal(kind) }) as never,
+        category: 'utility',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        floorplanScope: 'site',
+        floorplan,
+      }) as AnyNodeDefinition
+
+    const enabledDefinition = siteDefinition(enabledKind, (siteOverlay, context) => ({
+      kind: 'group',
+      children: [
+        {
+          kind: 'rect',
+          x: 10,
+          y: 3,
+          width: context.children[0]?.id === semanticChildId ? 3 : -3,
+          height: context.siblings.some(({ id }) => id === 'site_overlay_hidden') ? 4 : -4,
+          fill:
+            siteOverlay.id === 'site_overlay' &&
+            context.parent?.id === activeSiteId &&
+            context.resolve(referencedNodeId)?.id === referencedNodeId
+              ? '#102030'
+              : '#ff0000',
+        },
+        {
+          kind: 'path',
+          d: 'M0,0H4V4H0ZM1,1H3V3H1Z',
+          fill: '#3f6b2f',
+          fillRule: 'evenodd',
+        },
+        {
+          kind: 'image',
+          url: inlinePng,
+          center: [10, 3],
+          width: 1,
+          height: 1,
+        },
+        { kind: 'circle', cx: 12, cy: 5, r: 0.5 },
+      ],
+    }))
+
+    try {
+      nodeRegistry._reset()
+      registerNode({
+        kind: architectureKind,
+        schemaVersion: 1,
+        schema: z.object({ type: z.literal(architectureKind) }) as never,
+        category: 'structure',
+        defaults: () => ({}) as never,
+        capabilities: {},
+        floorplan: () => ({
+          kind: 'polygon',
+          points: [
+            [0, 0],
+            [4, 0],
+            [4, 4],
+          ],
+        }),
+      } as AnyNodeDefinition)
+      await loadPlugin({
+        id: enabledPluginId,
+        apiVersion: 1,
+        nodes: [enabledDefinition],
+      })
+      await loadPlugin({
+        id: disabledPluginId,
+        apiVersion: 1,
+        nodes: [siteDefinition(disabledKind, () => ({ kind: 'circle', cx: 0, cy: 0, r: 1 }))],
+      })
+
+      const activeSite = {
+        id: activeSiteId,
+        type: 'site',
+        parentId: null,
+        visible: true,
+        children: [
+          'building_active',
+          'site_overlay',
+          'site_overlay_hidden',
+          'site_overlay_disabled',
+        ],
+      } as unknown as AnyNode
+      const activeBuilding = {
+        id: 'building_active',
+        type: 'building',
+        parentId: activeSiteId,
+        children: ['level_active', 'level_upper'],
+        position: [10, 0, 5],
+        rotation: [0, Math.PI / 2, 0],
+      } as unknown as AnyNode
+      const activeLevel = {
+        id: 'level_active',
+        type: 'level',
+        parentId: activeBuilding.id,
+        children: ['level_architecture'],
+      } as unknown as AnyNode
+      const upperLevel = {
+        id: 'level_upper',
+        type: 'level',
+        parentId: activeBuilding.id,
+        children: ['level_upper_architecture'],
+      } as unknown as AnyNode
+      const nodes = {
+        [activeSite.id]: activeSite,
+        [activeBuilding.id]: activeBuilding,
+        [activeLevel.id]: activeLevel,
+        [upperLevel.id]: upperLevel,
+        level_upper_architecture: {
+          id: 'level_upper_architecture',
+          type: architectureKind,
+          parentId: upperLevel.id,
+          visible: true,
+        } as unknown as AnyNode,
+        level_architecture: {
+          id: 'level_architecture',
+          type: architectureKind,
+          parentId: activeLevel.id,
+          visible: true,
+        } as unknown as AnyNode,
+        site_overlay: {
+          id: 'site_overlay',
+          type: enabledKind,
+          parentId: null,
+          children: [semanticChildId],
+          visible: true,
+        } as unknown as AnyNode,
+        [semanticChildId]: {
+          id: semanticChildId,
+          type: 'test:site-detail',
+          parentId: 'site_overlay',
+        } as unknown as AnyNode,
+        [referencedNodeId]: {
+          id: referencedNodeId,
+          type: 'test:site-reference',
+          parentId: activeSiteId,
+        } as unknown as AnyNode,
+        site_overlay_hidden: {
+          id: 'site_overlay_hidden',
+          type: enabledKind,
+          parentId: activeSiteId,
+          visible: false,
+        } as unknown as AnyNode,
+        site_overlay_disabled: {
+          id: 'site_overlay_disabled',
+          type: disabledKind,
+          parentId: activeSiteId,
+          visible: true,
+        } as unknown as AnyNode,
+        [otherSiteId]: {
+          id: otherSiteId,
+          type: 'site',
+          parentId: null,
+          children: ['site_overlay_other'],
+        } as unknown as AnyNode,
+        site_overlay_other: {
+          id: 'site_overlay_other',
+          type: enabledKind,
+          parentId: otherSiteId,
+          visible: true,
+        } as unknown as AnyNode,
+      }
+
+      const full = collectFloorplanGeometry(
+        nodes,
+        activeLevel.id,
+        'full',
+        'metric',
+        'meters',
+        DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+        'floor-plan',
+        'finished-faces',
+        [enabledPluginId],
+      )
+
+      expect(full.map(({ id }) => id)).toEqual(['site_overlay', 'level_architecture'])
+      const siteModel = full[0]?.model
+      if (!siteModel) throw new Error('Expected Site geometry')
+      const siteParts = flattenGeometry(siteModel)
+      expect(siteParts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'rect',
+            width: 3,
+            height: 4,
+            fill: '#102030',
+          }),
+          expect.objectContaining({ kind: 'path', fillRule: 'evenodd' }),
+          expect.objectContaining({ kind: 'image', url: inlinePng }),
+        ]),
+      )
+      expect(projectedGeometryPoint(siteModel, 'image')).toEqual([
+        expect.closeTo(2),
+        expect.closeTo(0),
+      ])
+      expect(projectedGeometryPoint(siteModel, 'circle')).toEqual([
+        expect.closeTo(0),
+        expect.closeTo(2),
+      ])
+
+      const rawPdf = new PDFDocument({ autoFirstPage: false, compress: false })
+      const chunks: Buffer[] = []
+      rawPdf.on('data', (chunk: Buffer) => chunks.push(chunk))
+      const completedPdf = Promise.withResolvers<string>()
+      rawPdf.on('end', () => completedPdf.resolve(Buffer.concat(chunks).toString('latin1')))
+      const pdf = new FloorplanPdfDocument(rawPdf, [200, 200])
+      pdf.addPage()
+      for (const { model } of full) {
+        if (!model) continue
+        await renderFloorplanGeometryToPdfKit(pdf, model, {
+          annotationLayer: false,
+          placement: { x: 20, y: 20, width: 100, height: 100 },
+          rotationDeg: 0,
+          viewport: { x: -4, y: -4, width: 20, height: 20 },
+        })
+      }
+      rawPdf.end()
+      const renderedPdf = await completedPdf.promise
+      expect(renderedPdf).toMatch(/f\*/)
+      expect(renderedPdf).toContain('/Subtype /Image')
+
+      const upper = collectFloorplanGeometry(
+        nodes,
+        upperLevel.id,
+        'full',
+        'metric',
+        'meters',
+        DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+        'floor-plan',
+        'finished-faces',
+        [enabledPluginId],
+      )
+      expect(upper.map(({ id }) => id)).toEqual(['site_overlay', 'level_upper_architecture'])
+
+      const hiddenSiteNodes = {
+        ...nodes,
+        [activeSite.id]: { ...activeSite, visible: false } as AnyNode,
+      }
+      const hiddenSite = collectFloorplanGeometry(
+        hiddenSiteNodes,
+        activeLevel.id,
+        'full',
+        'metric',
+        'meters',
+        DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+        'floor-plan',
+        'finished-faces',
+        [enabledPluginId],
+      )
+      expect(hiddenSite.map(({ id }) => id)).toEqual(['level_architecture'])
+
+      const structure = collectFloorplanGeometry(
+        nodes,
+        activeLevel.id,
+        'structure',
+        'metric',
+        'meters',
+        DEFAULT_FLOORPLAN_ANNOTATION_VISIBILITY,
+        'floor-plan',
+        'finished-faces',
+        [enabledPluginId],
+      )
+      expect(structure.map(({ id }) => id)).toEqual(['level_architecture'])
+    } finally {
+      restoreRegistry()
+    }
+  })
+})
+
+describe('resolveExportLevels', () => {
+  const ground = LevelNode.parse({ id: 'level_ground', parentId: 'building_a', level: 0 })
+  const upper = LevelNode.parse({ id: 'level_upper', parentId: 'building_a', level: 1 })
+  const roof = LevelNode.parse({
+    id: 'level_roof',
+    parentId: 'building_a',
+    level: 2,
+    metadata: { role: 'roof', referenceLevelId: upper.id },
+  })
+  const attic = LevelNode.parse({
+    id: 'level_attic',
+    parentId: 'building_a',
+    level: 3,
+    metadata: { role: 'attic' },
+  })
+  const building = BuildingNode.parse({
+    id: 'building_a',
+    children: [ground.id, upper.id, roof.id, attic.id],
+  })
+  const nodes: Record<string, AnyNode> = Object.fromEntries(
+    [building, ground, upper, roof, attic].map((node) => [node.id, node]),
+  )
+
+  // The viewer store is a process-wide singleton, so an earlier test file can
+  // leak a selection into these tests; restore it instead of leaving ours.
+  const previousSelection = useViewer.getState().selection
+
+  const selectLevel = (levelId: string | null) => {
+    useViewer.setState({
+      selection: { ...previousSelection, buildingId: building.id, levelId },
+    } as never)
+  }
+
+  afterEach(() => {
+    useViewer.setState({ selection: previousSelection } as never)
+  })
+
+  test('skips a dedicated roof support level', () => {
+    selectLevel(ground.id)
+
+    expect(resolveExportLevels(nodes)).toEqual([
+      { id: ground.id, label: 'Level 0' },
+      { id: upper.id, label: 'Level 1' },
+      { id: attic.id, label: 'Level 3' },
+    ])
+  })
+
+  test('skips the roof level when it is the selected level', () => {
+    selectLevel(roof.id)
+
+    expect(resolveExportLevels(nodes)).toEqual([
+      { id: ground.id, label: 'Level 0' },
+      { id: upper.id, label: 'Level 1' },
+      { id: attic.id, label: 'Level 3' },
+    ])
   })
 })

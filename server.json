@@ -1,0 +1,42 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.pascalorg/editor",
+  "title": "Pascal 3D Editor",
+  "description": "Create, inspect, validate, and save editable 3D building scenes with Pascal's hosted MCP server.",
+  "version": "0.6.1",
+  "websiteUrl": "https://editor.pascal.app/docs/developers/mcp",
+  "repository": {
+    "url": "https://github.com/pascalorg/editor",
+    "source": "github"
+  },
+  "icons": [
+    {
+      "src": "https://editor.pascal.app/icons/icon-512.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "512x512"
+      ]
+    },
+    {
+      "src": "https://editor.pascal.app/icons/icon-1024.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "1024x1024"
+      ]
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://editor.pascal.app/api/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer API key created in Pascal Settings, formatted as Bearer sk_live_...",
+          "isRequired": true,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}

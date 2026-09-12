@@ -1,10 +1,11 @@
 'use client'
 
 import { useThree } from '@react-three/fiber'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import * as THREE from 'three/webgpu'
 import { getSceneTheme } from '../../lib/scene-themes'
 import useViewer from '../../store/use-viewer'
+import { useSceneAtmosphere } from './scene-atmosphere'
 
 /**
  * Scene IBL — a small procedural gradient sky (cool zenith → warm horizon →
@@ -69,18 +70,30 @@ export function SceneEnvironment() {
   const scene = useThree((state) => state.scene)
   const texture = useMemo(buildGradientSky, [])
   const appearance = useViewer((state) => getSceneTheme(state.sceneTheme).appearance)
+  const atmosphere = useSceneAtmosphere()
+  const atmosphereRef = useRef(atmosphere)
+  atmosphereRef.current = atmosphere
 
   useEffect(() => {
     const prevEnvironment = scene.environment
     const prevIntensity = scene.environmentIntensity
     scene.environment = texture
-    scene.environmentIntensity = appearance === 'dark' ? ENV_INTENSITY_DARK : ENV_INTENSITY
     return () => {
-      scene.environment = prevEnvironment
-      scene.environmentIntensity = prevIntensity
+      if (scene.environment === texture) {
+        scene.environment = prevEnvironment
+        if (!atmosphereRef.current) scene.environmentIntensity = prevIntensity
+      }
       texture.dispose()
     }
-  }, [scene, texture, appearance])
+  }, [scene, texture])
+
+  useEffect(() => {
+    // An atmosphere owns environmentIntensity while its environmentNode is
+    // active. The gradient remains installed as the fallback texture and takes
+    // over immediately when the atmosphere restores scene ownership.
+    if (atmosphere) return
+    scene.environmentIntensity = appearance === 'dark' ? ENV_INTENSITY_DARK : ENV_INTENSITY
+  }, [appearance, atmosphere, scene])
 
   return null
 }

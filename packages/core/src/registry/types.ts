@@ -73,6 +73,9 @@ export type GeometryContext = {
   materials?: Record<SceneMaterialId, SceneMaterial>
   /** Opaque host/plugin context. Core never interprets extension values. */
   extensions?: Readonly<Record<string, unknown>>
+  /** Read-only scene snapshot for pure floor-plan builders that need to
+   *  inspect cross-kind spatial relationships such as connected ports. */
+  sceneNodes?: Readonly<Record<AnyNodeId, AnyNode>>
   /**
    * Optional view state — only populated for `def.floorplan` builders. The
    * 2D floor-plan layer surfaces selection / hover here so kinds can vary
@@ -241,6 +244,8 @@ export type DimensionTextPosition = 'above' | 'centered'
 export type FloorplanStyle = {
   stroke?: string
   fill?: string
+  /** Winding rule for compound paths. `evenodd` keeps nested contour rings hollow. */
+  fillRule?: 'nonzero' | 'evenodd'
   strokeWidth?: number
   strokeDasharray?: string
   opacity?: number
@@ -370,6 +375,7 @@ export type ToolHintChip = {
   tooltip?: string
 }
 
+export type FloorplanScope = 'level' | 'building' | 'site'
 // ─── ToolOption ──────────────────────────────────────────────────────
 //
 // A declarative pick-one option row for a kind's build tool, chosen in a
@@ -564,6 +570,7 @@ export type FloorplanGeometry =
   | {
       kind: 'midpoint-handle'
       point: FloorplanPoint
+      activation?: 'drag' | 'action'
       affordance: string
       payload: unknown
     }
@@ -1037,6 +1044,13 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * Kinds outside any distribution system leave this unset.
    */
   distributionRole?: DistributionRole
+  /** Optional behavior while the kind's click-to-click construction tool is active. */
+  drafting?: {
+    /** Raycast architectural hosts and emit their semantic surface data with grid events. */
+    surfaceQuery?: boolean
+    /** Cancel the in-flight draft before applying an undo or redo history jump. */
+    cancelOnHistoryJump?: boolean
+  }
   /**
    * When `distributionRole` is `'fitting'`, controls whether this fitting
    * is dragged as a rigid follower when a connected run endpoint moves.
@@ -1072,6 +1086,27 @@ export type NodeDefinition<S extends ZodObject<any>> = {
 
   /** GLB bake treatment for this kind (default `'static'`). See {@link BakePolicy}. */
   bake?: BakePolicy
+  /**
+   * Optional export-only geometry builder. The GLB exporter calls this against
+   * persisted scene data and replaces the registered node's cloned subtree
+   * with the returned local-space Object3D. The live editor object is never
+   * passed to the hook or mutated.
+   *
+   * Use this when the live geometry is unsuitable for a portable GLB (for
+   * example, a procedural NodeMaterial that masks a maximum candidate
+   * population on the GPU). The returned tree must be a complete static
+   * snapshot for this node and use exporter-supported Three.js materials.
+   */
+  bakeGeometry?: BakeGeometryBuilder<z.infer<S>>
+  /**
+   * Optional asynchronous export-only geometry builder for textured static artifacts.
+   * Export preparation awaits this exactly once in place of {@link bakeGeometry}.
+   * Synchronous geometry-only callers continue to use `bakeGeometry`.
+   *
+   * The returned tree follows the same ownership contract: it is detached,
+   * local-space, complete for the node, and owned by the export artifact.
+   */
+  bakeGeometryAsync?: BakeGeometryAsyncBuilder<z.infer<S>>
 
   /**
    * Renderer for this kind. Optional under the three-checkbox composition
@@ -1168,8 +1203,9 @@ export type NodeDefinition<S extends ZodObject<any>> = {
   /**
    * Pure 2D builder for floor-plan rendering. Mirrors `geometry` but emits
    * plain `FloorplanGeometry` data (SVG-renderable) rather than three.js
-   * Object3D. Coordinates are level-local meters — the floor-plan panel
-   * applies the world→SVG transform.
+   * Object3D. Level- and building-scoped builders emit building-local metres.
+   * Site-scoped builders emit site-local metres; the floor-plan layer projects
+   * their output into the active building's plan coordinates.
    *
    * Returns `null` when the kind shouldn't appear in floor plan (e.g. an
    * invisible utility node, or a kind that's 3D-only). Kinds that need
@@ -1194,8 +1230,11 @@ export type NodeDefinition<S extends ZodObject<any>> = {
    * building). For `'building'`-scoped kinds the layer iterates every
    * instance whose parent matches the active level's building, and
    * synthesises a `GeometryContext` whose `parent` is the active level.
+   * `'site'` discovers direct children of the active building's Site,
+   * supplies the real Site as `ctx.parent`, and projects site-local output
+   * into the active building's plan coordinates below level architecture.
    */
-  floorplanScope?: 'level' | 'building'
+  floorplanScope?: FloorplanScope
   /**
    * 2D drag affordances keyed by the string identifier emitted on
    * `endpoint-handle` (and similar interactive floor-plan primitives) via
@@ -1538,6 +1577,9 @@ export type BakeReplaceRenderer<N> = {
   module: () => Promise<{ default: ComponentType<{ nodes: N[] }> }>
 }
 
+export type BakeGeometryBuilder<N> = (node: N, ctx: GeometryContext) => Object3D
+export type BakeGeometryAsyncBuilder<N> = (node: N, ctx: GeometryContext) => Promise<Object3D>
+
 export type AssetRef = {
   id: string
   src: string
@@ -1587,6 +1629,13 @@ export type Capabilities = {
   deletable?: boolean
   groupable?: boolean
   selectable?: SelectableConfig
+  /**
+   * Whether selecting this kind should replace its rendered mesh materials
+   * with the editor's selection tint. Defaults to `true`. Set to `false` for
+   * hidden interaction nodes whose rendered geometry must retain its authored
+   * materials while the node remains selected (for example, paint layers).
+   */
+  selectionHighlight?: boolean
   interactive?: boolean
   floorPlaced?: FloorPlacedConfig
   /**
@@ -2345,8 +2394,10 @@ export type ParametricDescriptor<N> = {
    * auto-inserted elbow re-extends the duct runs it trimmed back onto the
    * corner it replaced. Called with the node and the live scene `nodes`
    * map BEFORE the deletion lands; patches targeting nodes also being
-   * deleted are ignored. Applied in the same `set` as the delete so it's
-   * one undo step. Fires only on `deleteNodes` (user-intent deletes) —
+   * deleted are ignored. `pendingDeleteIds` includes cascaded companion
+   * deletes, while `requestedDeleteIds` is the user's original selection.
+   * Applied in the same `set` as the delete so it's one undo step. Fires
+   * only on `deleteNodes` (user-intent deletes) —
    * NOT on `applyNodeChanges`, whose deletes are internal re-routes that
    * rewrite neighbours explicitly in the same batch and would fight a
    * restore.
@@ -2354,6 +2405,8 @@ export type ParametricDescriptor<N> = {
   onDelete?: (
     node: N,
     nodes: Record<AnyNodeId, AnyNode>,
+    pendingDeleteIds: ReadonlySet<AnyNodeId>,
+    requestedDeleteIds: ReadonlySet<AnyNodeId>,
   ) => Array<{ id: AnyNodeId; data: Partial<AnyNode> }>
   /**
    * Companion deletes that should be folded into the same user-intent delete
@@ -2362,12 +2415,14 @@ export type ParametricDescriptor<N> = {
    * deletion; returned ids are recursively expanded through the normal
    * descendant cascade. `pendingDeleteIds` holds every id already part of
    * the gesture so "would my parent become empty?" checks see sibling
-   * deletes from the same multi-select.
+   * deletes from the same multi-select. `requestedDeleteIds` remains the
+   * original selection while the pending set expands.
    */
   onDeleteCascade?: (
     node: N,
     nodes: Record<AnyNodeId, AnyNode>,
     pendingDeleteIds: ReadonlySet<AnyNodeId>,
+    requestedDeleteIds: ReadonlySet<AnyNodeId>,
   ) => AnyNodeId[]
   customPanel?: () => Promise<{ default: ComponentType<{ node: N }> }>
   /**

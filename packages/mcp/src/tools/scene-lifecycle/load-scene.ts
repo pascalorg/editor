@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { SceneOperations } from '../../operations'
+import { DESTRUCTIVE_TOOL_ANNOTATIONS } from '../annotations'
 import { ErrorCode, throwMcpError } from '../errors'
 import { currentLevelContext, sceneMetaPayload } from './metadata'
 
@@ -38,6 +39,7 @@ export function registerLoadScene(server: McpServer, bridge: SceneOperations): v
         'Load a scene from the SceneStore into the bridge. Returns the scene metadata. Throws `scene_not_found` if the id does not exist.',
       inputSchema: loadSceneInput,
       outputSchema: loadSceneOutput,
+      annotations: DESTRUCTIVE_TOOL_ANNOTATIONS,
     },
     async ({ id }) => {
       const result = await bridge.loadStoredScene(id)

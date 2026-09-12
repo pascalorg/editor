@@ -52,7 +52,27 @@ export {
   DEFAULT_HOVER_STYLES,
   SSGI_PARAMS,
 } from './components/viewer/post-processing'
+export {
+  SceneAtmosphere,
+  type SceneAtmosphereSource,
+  useSceneAtmosphere,
+} from './components/viewer/scene-atmosphere'
 export { SceneEnvironment } from './components/viewer/scene-environment'
+export {
+  SceneGroundReplacement,
+  useSceneGroundReplacement,
+} from './components/viewer/scene-ground-replacement'
+export {
+  isViewerPresentationTextureBorrowed,
+  markViewerPresentationTextureBorrowed,
+  registerViewerPresentation,
+  type ViewerPresentationConfiguration,
+  type ViewerPresentationContribution,
+  type ViewerPresentationExportContext,
+  type ViewerPresentationStaticExport,
+  ViewerPresentations,
+  viewerPresentationRegistry,
+} from './components/viewer/viewer-presentations'
 export { useAssetUrl } from './hooks/use-asset-url'
 export { useGLTFKTX2 } from './hooks/use-gltf-ktx2'
 export { useLibraryMaterialsVersion } from './hooks/use-library-materials-version'
@@ -98,6 +118,7 @@ export {
   GRID_LAYER,
   OVERLAY_LAYER,
   SCENE_LAYER,
+  SHADOW_ONLY_LAYER,
   setSurfaceRaycastLayers,
   ZONE_LAYER,
 } from './lib/layers'
@@ -125,6 +146,7 @@ export {
   MONO_PALETTE,
   PRESET_PALETTES,
   type RenderShading,
+  registerMaterialCacheCleanup,
   resolveMaterialRef,
   resolveSlotDefaultMaterial,
   resolveSurfaceColor,
@@ -270,6 +292,7 @@ export { getVisibleWallMaterials } from './systems/wall/wall-materials'
 export {
   drainRebuiltWalls,
   getPendingWallRebuildCount,
+  isWallInitialBuildActive,
   WallSystem,
 } from './systems/wall/wall-system'
 export {

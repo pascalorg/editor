@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { TEMPLATES } from '../../templates'
+import { READ_ONLY_TOOL_ANNOTATIONS } from '../annotations'
 
 export const listTemplatesInput = {} as const
 
@@ -29,6 +30,7 @@ export function registerListTemplates(server: McpServer): void {
         'List the seed Pascal scene templates available to `create_from_template`. Returns the id, display name, one-line description and node count for each.',
       inputSchema: listTemplatesInput,
       outputSchema: listTemplatesOutput,
+      annotations: READ_ONLY_TOOL_ANNOTATIONS,
     },
     async () => {
       const templates = Object.values(TEMPLATES).map((entry) => ({

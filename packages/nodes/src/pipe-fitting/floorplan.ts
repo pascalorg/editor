@@ -1,5 +1,7 @@
 import type { FloorplanGeometry, GeometryContext } from '@pascal-app/core'
 import { INCHES_TO_METERS } from '../duct-segment/geometry'
+import { accessoryFloorplan } from '../shared/accessory-floorplan'
+import { buildPipeFittingGeometry } from './geometry'
 import { getPipeFittingPorts } from './ports'
 import type { PipeFittingNode } from './schema'
 
@@ -16,6 +18,8 @@ export function buildPipeFittingFloorplan(
   node: PipeFittingNode,
   ctx: GeometryContext,
 ): FloorplanGeometry | null {
+  if (['end-cap', 'cleanout', 'reducer', 'coupling'].includes(node.fittingType))
+    return accessoryFloorplan(buildPipeFittingGeometry(node), node, ctx)
   const [cx, , cz] = node.position
   const view = ctx.viewState
   const palette = view?.palette

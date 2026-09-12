@@ -22,9 +22,17 @@ export type ManifoldCompileOutput =
       durationMs: number
     }
 
+export type ManifoldRuntimeOptions = {
+  /** URL of the manifold-3d emscripten glue module. Defaults to the pinned CDN copy. */
+  moduleUrl?: string
+  /** URL of manifold.wasm. Defaults to resolving relative to the glue module. */
+  wasmUrl?: string
+}
+
 export type ManifoldWorkerRequest = {
   id: number
   meshes: ManifoldMeshData[]
+  runtime?: ManifoldRuntimeOptions
 }
 
 export type ManifoldWorkerResponse = ManifoldCompileOutput & { id: number }

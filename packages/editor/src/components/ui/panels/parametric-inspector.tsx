@@ -131,7 +131,7 @@ export function ParametricInspector({
     return (
       <InspectorFooterContext.Provider value={footer}>
         <Suspense fallback={null}>
-          <CustomPanel />
+          <CustomPanelSlot Component={CustomPanel} nodeId={selectedId} />
         </Suspense>
       </InspectorFooterContext.Provider>
     )
@@ -170,7 +170,7 @@ export function ParametricInspector({
       ))}
       {TrailingSection && (
         <Suspense fallback={null}>
-          <TrailingSection />
+          <CustomPanelSlot Component={TrailingSection} nodeId={selectedId} />
         </Suspense>
       )}
       {(canMove || canDelete || (parametrics.actions && parametrics.actions.length > 0)) && (
@@ -270,14 +270,31 @@ function renderIcon(ref: IconRef | undefined): React.ReactNode | undefined {
 
 // Cache lazy custom panel components by their loader so React.lazy isn't
 // re-invoked across renders.
-const customPanelCache = new WeakMap<() => Promise<unknown>, ComponentType>()
+const customPanelCache = new WeakMap<() => Promise<unknown>, ComponentType<{ node: AnyNode }>>()
 
-function resolveCustomPanel(loader: () => Promise<{ default: ComponentType<any> }>): ComponentType {
+function resolveCustomPanel(
+  loader: () => Promise<{ default: ComponentType<any> }>,
+): ComponentType<{ node: AnyNode }> {
   const cached = customPanelCache.get(loader)
   if (cached) return cached
   const Comp = lazy(loader)
-  customPanelCache.set(loader, Comp as ComponentType)
-  return Comp as ComponentType
+  customPanelCache.set(loader, Comp as ComponentType<{ node: AnyNode }>)
+  return Comp as ComponentType<{ node: AnyNode }>
+}
+
+// Subscribe to the full node only where the custom panel contract needs it.
+// Keeping this below ParametricInspector preserves the inspector's narrow
+// per-field subscriptions while ensuring lazy panels receive their live node.
+function CustomPanelSlot({
+  Component,
+  nodeId,
+}: {
+  Component: ComponentType<{ node: AnyNode }>
+  nodeId: AnyNodeId
+}) {
+  const node = useScene((s) => s.nodes[nodeId])
+  if (!node) return null
+  return <Component node={node as AnyNode} />
 }
 
 // ─── Per-field renderers ─────────────────────────────────────────────

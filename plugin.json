@@ -1,0 +1,41 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "pascal-agent-skills",
+  "version": "0.1.8",
+  "description": "Create, inspect, validate, and assess furniture layouts with bounded next actions in Pascal through MCP.",
+  "author": {
+    "name": "Pascal",
+    "email": "support@pascal.app",
+    "url": "https://pascal.app"
+  },
+  "homepage": "https://editor.pascal.app/docs/developers/mcp",
+  "repository": "https://github.com/pascalorg/editor",
+  "license": "MIT",
+  "keywords": ["pascal", "3d", "architecture", "mcp", "furniture", "spatial"],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Pascal",
+        "shortDescription": "Build 3D scenes and check fit",
+        "longDescription": "Use Pascal's MCP tools to work with editable building scenes, validate and save results, and produce bounded furniture footprint reports with explicit evidence, limitations, and blocker-aware next actions.",
+        "developerName": "Pascal",
+        "category": "Developer Tools",
+        "capabilities": [
+          "Build and edit 3D scenes",
+          "Validate spatial layouts",
+          "Assess furniture footprints"
+        ],
+        "websiteURL": "https://editor.pascal.app/docs/developers/mcp",
+        "privacyPolicyURL": "https://editor.pascal.app/privacy",
+        "termsOfServiceURL": "https://editor.pascal.app/terms",
+        "defaultPrompt": [
+          "Use Pascal to inspect this building project, make the requested bounded edit, validate it, save it, and return the editor URL.",
+          "Check whether this furniture footprint fits in a measured Pascal room, including rotations, collisions, and door access."
+        ],
+        "brandColor": "#171717",
+        "composerIcon": "./assets/pascal-mark.svg",
+        "logo": "./assets/pascal-mark-plate.svg"
+      }
+    }
+  }
+}

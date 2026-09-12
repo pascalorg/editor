@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { z } from 'zod'
 import { authoredNodeSchemas, NODE_KINDS, nodeFixtures } from './__fixtures__/node-fixtures'
 import {
@@ -287,16 +289,25 @@ describe('compiled node parsers — jitless (CSP) profile', () => {
       }))
     `
 
-    const proc = Bun.spawnSync(['bun', '-e', source], { cwd: dir })
-    const stdout = proc.stdout.toString().trim()
-    expect(proc.exitCode, proc.stderr.toString()).toBe(0)
+    const cacheDir = join(dir, '.turbo')
+    mkdirSync(cacheDir, { recursive: true })
+    const probeDir = mkdtempSync(join(cacheDir, 'source-test-'))
+    try {
+      const probePath = join(probeDir, 'probe.ts')
+      writeFileSync(probePath, source)
+      const proc = Bun.spawnSync([process.execPath, probePath], { cwd: dir })
+      const stdout = proc.stdout.toString().trim()
+      expect(proc.exitCode, proc.stderr.toString()).toBe(0)
 
-    const result = JSON.parse(stdout.slice(stdout.lastIndexOf('{')))
-    expect(result.allowsEval).toBe(false)
-    expect(result.enabled).toBe(true)
-    expect(result.kinds).toBe(NODE_KINDS.length)
-    expect(result.compiledAnyway).toEqual([])
-    expect(result.parseFailures).toEqual([])
+      const result = JSON.parse(stdout.slice(stdout.lastIndexOf('{')))
+      expect(result.allowsEval).toBe(false)
+      expect(result.enabled).toBe(true)
+      expect(result.kinds).toBe(NODE_KINDS.length)
+      expect(result.compiledAnyway).toEqual([])
+      expect(result.parseFailures).toEqual([])
+    } finally {
+      rmSync(probeDir, { recursive: true, force: true })
+    }
   }, 60_000)
 })
 

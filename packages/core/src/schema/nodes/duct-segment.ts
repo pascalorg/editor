@@ -1,6 +1,7 @@
 import dedent from 'dedent'
 import { z } from 'zod'
 import { BaseNode, nodeType, objectId } from '../base'
+import { HangerOverrides } from './hanger-overrides'
 
 /**
  * Round duct segment — a polyline of 3D points connected by cylindrical
@@ -21,6 +22,22 @@ export const DuctSegmentNode = BaseNode.extend({
   type: nodeType('duct-segment'),
   // Polyline path in level-local meters. Minimum two points (start, end).
   path: z.array(z.tuple([z.number(), z.number(), z.number()])).min(2),
+  autoHangers: z.boolean().optional(),
+  hangerOverrides: HangerOverrides.optional(),
+  hangerStyle: z.enum(['single', 'double']).optional(),
+  hangerSpacing: z.number().finite().positive().optional(),
+  hangerMaxReach: z.number().finite().positive().optional(),
+  // Logical wall host for runs drafted on a wall. The path remains
+  // level-local; UV coordinates let wall edits reproject the run later.
+  wallAttachment: z
+    .object({
+      wallId: objectId('wall'),
+      side: z.enum(['front', 'back']),
+      startUV: z.tuple([z.number(), z.number()]),
+      endUV: z.tuple([z.number(), z.number()]),
+      offset: z.number().finite().nonnegative(),
+    })
+    .optional(),
   // Cross-section. Round is the branch default; rect is the trunk /
   // plenum profile (real US systems: rect trunk, round branches); oval
   // is the flat-oval profile (two semicircles of the duct height joined
@@ -62,6 +79,9 @@ export const DuctSegmentNode = BaseNode.extend({
 }).describe(
   dedent`
   Duct segment - polyline of 3D points connected by duct sections.
+  - autoHangers: automatically attach supports to nearby walls or ceilings (off when absent)
+  - hangerSpacing: distance between supports in meters (default 1.5)
+  - hangerMaxReach: maximum centerline-to-host distance in meters (default 2)
   - path: list of [x, y, z] points in level-local meters (min 2)
   - shape: round (branches) | rect (trunks / plenums) | oval (flat-oval, tight joist bays)
   - diameter: nominal inner diameter in inches for round (typ. 4-14 residential)

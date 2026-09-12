@@ -10,6 +10,7 @@ import {
   type FloorplanGeometry,
   type FloorplanPalette,
   type FloorplanPoint,
+  type FloorplanScope,
   type GeometryContext,
   isNodeKindEnabled,
   isRegistryMovable,
@@ -338,6 +339,8 @@ type FloorplanEntryDescriptor = {
   node: AnyNode
   dependsOnSiblingInputs: boolean
   ctxOverrides?: FloorplanContextOverrides
+  scopeRank?: number
+  visibilityRootId?: AnyNodeId
 }
 
 type NodeDeps = {
@@ -357,6 +360,7 @@ type NodeDeps = {
   committedNodes: Record<string, AnyNode> | null
   dependencyNodes: AnyNode[]
   interactiveElevators: unknown
+  ctxOverrides: FloorplanContextOverrides | undefined
 }
 
 type CacheEntry = {
@@ -377,6 +381,40 @@ type FloorplanContextOverrides = {
   children: AnyNode[]
   siblings: AnyNode[]
   parent: AnyNode | null
+  outputTransform?: { translate?: FloorplanPoint; rotate?: number }
+  trackAllNodes?: boolean
+}
+
+export function collectDirectFloorplanScopeNodes(
+  nodes: Record<string, AnyNode>,
+  parent: AnyNode,
+  scope: FloorplanScope,
+): AnyNode[] {
+  const scopedKinds = new Set(kindsWithFloorplanScope(scope))
+  const declaredChildren = new Set(
+    Array.isArray((parent as { children?: AnyNodeId[] }).children)
+      ? (parent as { children: AnyNodeId[] }).children
+      : [],
+  )
+  return Object.values(nodes).filter(
+    (node) =>
+      scopedKinds.has(node.type) && (node.parentId === parent.id || declaredChildren.has(node.id)),
+  )
+}
+
+export function siteToFloorplanTransform(
+  buildingPosition: readonly [number, number, number],
+  buildingRotationY: number,
+): { translate: FloorplanPoint; rotate: number } {
+  const cos = Math.cos(buildingRotationY)
+  const sin = Math.sin(buildingRotationY)
+  return {
+    translate: [
+      -buildingPosition[0] * cos + buildingPosition[2] * sin,
+      -buildingPosition[0] * sin - buildingPosition[2] * cos,
+    ],
+    rotate: buildingRotationY,
+  }
 }
 
 type FloorplanLevelDataHook = (args: {
@@ -487,6 +525,13 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
   const levelId = selectedLevelId ?? ambientLevelId
   const isAmbient = !selectedLevelId && !!ambientLevelId
+  const activeBuildingId = useMemo(
+    () => (levelId ? resolveBuildingForLevel(levelId as AnyNodeId, nodes) : null),
+    [levelId, nodes],
+  )
+  const activeBuildingLiveTransform = useLiveTransforms((state) =>
+    activeBuildingId ? state.transforms.get(activeBuildingId) : undefined,
+  )
   const renderCtx = useFloorplanStaticRender()
   const sceneRotationDeg = renderCtx?.getSceneRotationDeg() ?? 0
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -946,7 +991,12 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
 
     collectLevelDataKind(levelId as AnyNodeId)
 
-    const pushEntry = (id: AnyNodeId, node: AnyNode, ctxOverrides?: FloorplanContextOverrides) => {
+    const pushEntry = (
+      id: AnyNodeId,
+      node: AnyNode,
+      ctxOverrides?: FloorplanContextOverrides,
+      options?: { scopeRank?: number; visibilityRootId?: AnyNodeId },
+    ) => {
       if (!isNodeKindEnabled(node.type, installedPlugins)) return
       const drawingNode = resolveNodeForDrawingType(node, nodes, drawingType)
       if (!drawingNode) return
@@ -959,6 +1009,8 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       )
       const descriptor: FloorplanEntryDescriptor = { id, node: drawingNode, dependsOnSiblingInputs }
       if (ctxOverrides) descriptor.ctxOverrides = ctxOverrides
+      if (options?.scopeRank !== undefined) descriptor.scopeRank = options.scopeRank
+      if (options?.visibilityRootId) descriptor.visibilityRootId = options.visibilityRootId
       out.push(descriptor)
     }
 
@@ -994,13 +1046,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     // as siblings of the level, not under it — the `visit(levelId)` DFS
     // above doesn't reach them. Walk every node of those kinds whose
     // parent matches the active level's building, and synthesise a
-    // `GeometryContext` whose `parent` is the active level (so kind
-    // builders that gate on the current floor — e.g. elevator service
-    // range — keep working). Pure registry-driven dispatch: no kind
-    // name appears in this file.
-    const activeBuildingId = activeLevelNode
-      ? resolveBuildingForLevel(levelId as AnyNodeId, nodes)
-      : null
+    // `GeometryContext` whose `parent` is the active level.
     if (activeLevelNode && activeBuildingId) {
       const buildingScopedKinds = kindsWithFloorplanScope('building')
       const buildingScopedKindSet = new Set(buildingScopedKinds)
@@ -1017,6 +1063,45 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       }
     }
 
+    // Site-scoped kinds are semantic children of the Site and therefore
+    // outside both the active-level DFS and the building sibling scan.
+    // Their builders stay site-local; wrap their output in the inverse active
+    // building transform so it aligns with this building-local plan.
+    const activeBuildingNode = activeBuildingId ? nodes[activeBuildingId] : undefined
+    const activeSiteNode =
+      activeBuildingNode?.type === 'building' && activeBuildingNode.parentId
+        ? nodes[activeBuildingNode.parentId as AnyNodeId]
+        : undefined
+    if (activeSiteNode?.type === 'site' && activeBuildingNode?.type === 'building') {
+      const siteScopedNodes = collectDirectFloorplanScopeNodes(nodes, activeSiteNode, 'site')
+      const siteProjection = siteToFloorplanTransform(
+        activeBuildingLiveTransform?.position ?? activeBuildingNode.position,
+        activeBuildingLiveTransform?.rotation ?? activeBuildingNode.rotation[1],
+      )
+      for (const node of siteScopedNodes) {
+        const children = Array.isArray((node as { children?: AnyNodeId[] }).children)
+          ? (node as { children: AnyNodeId[] }).children
+              .map((id) => nodes[id])
+              .filter((child): child is AnyNode => child !== undefined)
+          : []
+        const siblings = siteScopedNodes.filter(
+          (candidate) => candidate.id !== node.id && candidate.type === node.type,
+        )
+        pushEntry(
+          node.id,
+          node,
+          {
+            children,
+            siblings,
+            parent: activeSiteNode,
+            outputTransform: siteProjection,
+            trackAllNodes: true,
+          },
+          { scopeRank: -1, visibilityRootId: activeSiteNode.id },
+        )
+      }
+    }
+
     // Stable z-order sort. SVG renders in document order — later siblings
     // paint on top of earlier ones — so anything that should sit *under*
     // other floor-plan geometry has to come first in the entries array.
@@ -1024,7 +1109,11 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
     // all belong on top of them. Within a layer bucket we preserve the
     // DFS visit order (stable sort) so siblings keep their relative
     // priority.
-    out.sort((a, b) => floorplanLayerRank(a.node.type) - floorplanLayerRank(b.node.type))
+    out.sort(
+      (a, b) =>
+        (a.scopeRank ?? 0) - (b.scopeRank ?? 0) ||
+        floorplanLayerRank(a.node.type) - floorplanLayerRank(b.node.type),
+    )
     const entryIds = new Set(out.map((entry) => entry.id))
     for (const id of geometryCacheRef.current.keys()) {
       if (!entryIds.has(id as AnyNodeId)) geometryCacheRef.current.delete(id)
@@ -1033,7 +1122,7 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
       if (!levelNodeIdsByType.has(type)) levelDataCacheRef.current.delete(type)
     }
     return { entries: out, levelNodeIdsByType }
-  }, [drawingType, installedPlugins, levelId, nodes])
+  }, [activeBuildingId, activeBuildingLiveTransform, drawingType, installedPlugins, levelId, nodes])
 
   // ── Generic 2D affordance dispatch ─────────────────────────────────
   //
@@ -1448,7 +1537,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             unit={unit}
             metricNotation={metricNotation}
             wallDimensionReference={effectiveWallDimensionReference}
-            visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
+            visibilityRootId={
+              entry.visibilityRootId ?? (entry.ctxOverrides ? undefined : (levelId as AnyNodeId))
+            }
             ctxOverrides={entry.ctxOverrides}
           />
         ))}
@@ -1494,7 +1585,9 @@ export const FloorplanRegistryLayer = memo(function FloorplanRegistryLayer() {
             unit={unit}
             metricNotation={metricNotation}
             wallDimensionReference={effectiveWallDimensionReference}
-            visibilityRootId={entry.ctxOverrides ? undefined : (levelId as AnyNodeId)}
+            visibilityRootId={
+              entry.visibilityRootId ?? (entry.ctxOverrides ? undefined : (levelId as AnyNodeId))
+            }
             ctxOverrides={entry.ctxOverrides}
           />
         ))}
@@ -2101,7 +2194,7 @@ function floorplanEntryReferencedAnnotationRole(
   return dependencyIds.some((id) => selectedIds.has(id)) ? role : undefined
 }
 
-function buildFloorplanEntryGeometry({
+export function buildFloorplanEntryGeometry({
   automaticDimensions,
   ctxOverrides,
   geometryCache,
@@ -2146,6 +2239,7 @@ function buildFloorplanEntryGeometry({
   const deps: NodeDeps = {
     automaticDimensions,
     node,
+    ctxOverrides,
     live,
     unit,
     metricNotation,
@@ -2159,7 +2253,7 @@ function buildFloorplanEntryGeometry({
     siblingEpoch: dependsOnSiblingInputs ? siblingEpoch : 0,
     // Sibling-dependent kinds (wall miters, opening cuts) read other nodes'
     // committed state via `ctx`, so committed sibling edits still invalidate.
-    committedNodes: dependsOnSiblingInputs ? nodes : null,
+    committedNodes: dependsOnSiblingInputs || ctxOverrides?.trackAllNodes ? nodes : null,
     dependencyNodes,
     interactiveElevators,
   }
@@ -2184,7 +2278,12 @@ function buildFloorplanEntryGeometry({
           : r,
       } as AnyNode
     }
-    if ((def.capabilities?.floorPlaced || def.floorplanScope === 'building') && hasPosition) {
+    if (
+      (def.capabilities?.floorPlaced ||
+        def.floorplanScope === 'building' ||
+        def.floorplanScope === 'site') &&
+      hasPosition
+    ) {
       return applyPositionLiveTransform(sourceNode, live)
     }
     if (sourceNode.type === 'slab' || sourceNode.type === 'ceiling' || sourceNode.type === 'zone') {
@@ -2279,10 +2378,18 @@ function buildFloorplanEntryGeometry({
   const taggedContextualGeometry = withFloorplanGeometryMetadata(contextualGeometry, {
     annotationRole: 'contextual-dimension',
   })
-  const geometry =
+  const unprojectedGeometry =
     modelGeometry && taggedContextualGeometry
       ? { kind: 'group' as const, children: [modelGeometry, taggedContextualGeometry] }
       : (modelGeometry ?? taggedContextualGeometry)
+  const geometry =
+    unprojectedGeometry && ctxOverrides?.outputTransform
+      ? {
+          kind: 'group' as const,
+          children: [unprojectedGeometry],
+          transform: ctxOverrides.outputTransform,
+        }
+      : unprojectedGeometry
   const { base, overlay } = geometry
     ? splitFloorplanOverlay(geometry)
     : { base: null, overlay: null }
@@ -2845,6 +2952,7 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
       case 'midpoint-handle': {
         if (!palette) return <></>
         const handleId = makeHandleId(nodeId, g.payload)
+        const isAction = g.activation === 'action'
         const isHovered = hoveredHandleId === handleId
         const isActive = activeDragId === handleId
         const stroke = palette.endpointHandleStroke
@@ -2857,7 +2965,12 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
         return (
           <g
             key={keyHint}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(event) => {
+              event.stopPropagation()
+              if (!isAction) return
+              event.preventDefault()
+              onHandleDoubleClick(g.affordance, g.payload, event)
+            }}
             onPointerEnter={() => onHandleHoverChange(handleId)}
             onPointerLeave={() => onHandleHoverChange(null)}
           >
@@ -2914,9 +3027,17 @@ export const InteractiveGeometry = memo(function InteractiveGeometry({
               cx={g.point[0]}
               cy={g.point[1]}
               fill="transparent"
-              onPointerDown={(e) =>
-                onHandlePointerDown(g.affordance, g.payload, e as ReactPointerEvent<SVGGElement>)
-              }
+              onPointerDown={(event) => {
+                if (isAction) {
+                  event.stopPropagation()
+                  return
+                }
+                onHandlePointerDown(
+                  g.affordance,
+                  g.payload,
+                  event as ReactPointerEvent<SVGGElement>,
+                )
+              }}
               pointerEvents="all"
               r={radius + unitsPerPixel * 2}
               stroke="transparent"
@@ -3165,12 +3286,15 @@ export function isFloorplanNodeVisible(node: AnyNode, liveOverride?: LiveNodeOve
   return (node as { visible?: boolean }).visible !== false
 }
 
-function isFloorplanHierarchyVisible(
+export function isFloorplanHierarchyVisible(
   node: AnyNode,
   nodes: Record<string, AnyNode>,
   liveOverrides: Map<string, LiveNodeOverrides>,
   rootId: AnyNodeId,
 ): boolean {
+  const root = nodes[rootId]
+  if (root && !isFloorplanNodeVisible(root, liveOverrides.get(root.id))) return false
+
   let current: AnyNode | undefined = node
   const seen = new Set<AnyNodeId>()
   while (current) {
@@ -3450,6 +3574,7 @@ function nodeDepsEqual(a: NodeDeps, b: NodeDeps): boolean {
     'liveOverride',
     'palette',
     'siblingEpoch',
+    'ctxOverrides',
     'committedNodes',
     'dependencyNodes',
     'interactiveElevators',

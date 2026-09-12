@@ -24,6 +24,7 @@ import type {
   GuideNode,
   GutterNode,
   HvacEquipmentNode,
+  ImportedMeshNode,
   ItemNode,
   LeanToExtensionNode,
   LevelNode,
@@ -51,18 +52,25 @@ import type {
   WindowNode,
   ZoneNode,
 } from '../schema'
-import type { AnyNode } from '../schema/types'
+import type { AnyNode, AnyNodeId } from '../schema/types'
 
 // Base event interfaces
 export interface GridEvent {
-  /** World-space intersection point on the grid plane. */
+  /** World-space intersection point on the floor grid or a scene surface. */
   position: [number, number, number]
   /**
-   * Building-local intersection point — relative to the currently selected building.
-   * Equals `position` when no building is selected.
+   * Intersection in localFrameId when specified, otherwise the selected building.
+   * Equals `position` when neither frame is available.
    * Use this for placing/committing anything that lives inside a building (walls, slabs, items, etc.).
    */
   localPosition: [number, number, number]
+  /** Explicit scene-node coordinate frame for local fields, when provided. */
+  localFrameId?: AnyNodeId
+  /** Pointer ray in the same coordinate frame as `localPosition`. */
+  localRay?: {
+    origin: [number, number, number]
+    direction: [number, number, number]
+  }
   faceIndex?: number
   /**
    * Optional: the hit Three.js object. Present when the grid event was
@@ -72,6 +80,20 @@ export interface GridEvent {
    * the intersection to.
    */
   object?: Object3D
+  /** Architectural hit in the same coordinate frame as localPosition. */
+  surfaceLocalPosition?: [number, number, number]
+  /** Outward normal in the same coordinate frame as localPosition. */
+  surfaceNormal?: [number, number, number]
+  /** The architectural surface object hit by the cursor, when available. */
+  surfaceObject?: Object3D
+  /** Semantic architectural hit for scoped placement/drafting tools. */
+  surfaceHit?: {
+    kind: 'wall' | 'ceiling' | 'slab' | 'roof'
+    hostId: AnyNodeId
+    levelId?: AnyNodeId
+    face: 'side' | 'top' | 'end' | 'unknown'
+    side?: 'front' | 'back'
+  }
   nativeEvent: ThreeEvent<PointerEvent>
 }
 
@@ -94,6 +116,7 @@ export interface NodeEvent<T extends AnyNode = AnyNode> {
 export type WallEvent = NodeEvent<WallNode>
 export type FenceEvent = NodeEvent<FenceNode>
 export type ItemEvent = NodeEvent<ItemNode>
+export type ImportedMeshEvent = NodeEvent<ImportedMeshNode>
 export type SiteEvent = NodeEvent<SiteNode>
 export type BuildingEvent = NodeEvent<BuildingNode>
 export type CabinetEvent = NodeEvent<CabinetNode>
@@ -328,6 +351,7 @@ type EditorEvents = GridEvents &
   NodeEvents<'cabinet', CabinetEvent> &
   NodeEvents<'cabinet-module', CabinetModuleEvent> &
   NodeEvents<'item', ItemEvent> &
+  NodeEvents<'imported-mesh', ImportedMeshEvent> &
   NodeEvents<'site', SiteEvent> &
   NodeEvents<'building', BuildingEvent> &
   NodeEvents<'elevator', ElevatorEvent> &

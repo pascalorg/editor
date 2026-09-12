@@ -6,12 +6,20 @@ import {
   sceneRegistry,
   useInteractive,
   useLiveNodeOverrides,
+  useLiveTransforms,
   useScene,
 } from '@pascal-app/core'
-import { isIsolationActive, publishPerfBatchStats, useViewer } from '@pascal-app/viewer'
+import {
+  getPendingWallRebuildCount,
+  isIsolationActive,
+  publishPerfBatchStats,
+  registerMaterialCacheCleanup,
+  useViewer,
+} from '@pascal-app/viewer'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useRef } from 'react'
 import type { Object3D } from 'three'
+import { isSlotPaintPreviewActive, subscribeSlotPaintPreviews } from '../slot-paint'
 import {
   BATCH_KINDS,
   collectBatchCandidate,
@@ -45,6 +53,7 @@ const store = new NodeBatchStore(
  * marking them.
  */
 const changedNodes = new Set<string>()
+const surfaceLevelReadyAt = new Map<string, number>()
 const staleNodes = new Set<string>()
 /**
  * Members whose wave joined only part of their meshes (the rest fell under
@@ -67,6 +76,8 @@ let knownNodeIds: ReadonlySet<string> | null = null
 const waveDebug = { runs: 0, stale: 0, candidates: 0, joined: 0, nullCandidates: 0 }
 let lastNodeChangeAtMs = 0
 let batchingSuspended = false
+let lastLevelMode: string | undefined
+let lastSelectedLevel: string | null | undefined
 
 type AppearanceInputs = {
   shading: unknown
@@ -107,14 +118,18 @@ function appearanceChanged(): boolean {
   return true
 }
 
-function resetModuleState() {
+export function resetNodeBatchState() {
+  releaseAll()
   changedNodes.clear()
+  surfaceLevelReadyAt.clear()
   staleNodes.clear()
   partialNodes.clear()
   leftoverNodes.clear()
   knownNodeIds = null
   lastNodeChangeAtMs = 0
   batchingSuspended = false
+  lastLevelMode = undefined
+  lastSelectedLevel = undefined
   lastAppearance.shading = undefined
   lastAppearance.textures = undefined
   lastAppearance.colorPreset = undefined
@@ -131,16 +146,19 @@ function publishBatchStats() {
     items: stats.nodes,
     instances: stats.instances,
     containers: stats.batches,
+    releases: stats.releases,
+    joins: stats.joins,
+    geometryReplacements: stats.geometryReplacements,
+    overflowRebuilds: stats.overflowRebuilds,
+    geometryBytesCopied: stats.geometryBytesCopied,
   })
 }
 
 function releaseNode(nodeId: string) {
   partialNodes.delete(nodeId)
   leftoverNodes.delete(nodeId)
-  if (store.release(nodeId)) {
-    revealBatchedNode(nodeId)
-    publishBatchStats()
-  }
+  store.release(nodeId)
+  revealBatchedNode(nodeId)
 }
 
 function releaseAll() {
@@ -151,7 +169,36 @@ function releaseAll() {
   revealAllBatchedHolds()
 }
 
-function captureChangedNodes() {
+export function subscribeBatchInteractions(invalidate: () => void): () => void {
+  const changed = (nodeId: string) => {
+    const node = useScene.getState().nodes[nodeId as AnyNodeId]
+    if (!node || !BATCH_KINDS.has(node.type)) return
+    releaseNode(nodeId)
+    changedNodes.add(nodeId)
+    invalidate()
+  }
+  const unsubscribeTransforms = useLiveTransforms.subscribe((state, previous) => {
+    for (const nodeId of state.transforms.keys()) {
+      if (!previous.transforms.has(nodeId)) changed(nodeId)
+    }
+    for (const nodeId of previous.transforms.keys()) {
+      if (!state.transforms.has(nodeId)) changed(nodeId)
+    }
+  })
+  const unsubscribePreviews = subscribeSlotPaintPreviews(changed)
+  const unsubscribeMaterials = registerMaterialCacheCleanup(() => {
+    releaseAll()
+    for (const nodeId of getBatchableNodeIds()) changedNodes.add(nodeId)
+    invalidate()
+  })
+  return () => {
+    unsubscribeTransforms()
+    unsubscribePreviews()
+    unsubscribeMaterials()
+  }
+}
+
+export function captureChangedNodes() {
   const dirty = useScene.getState().dirtyNodes
   if (dirty.size === 0) return
   const nodes = useScene.getState().nodes
@@ -172,11 +219,48 @@ function captureChangedNodes() {
   }
 }
 
-function runBatchFrame(
+export function runBatchFrame(
+  invalidate: () => void,
+  wakeRef: { current: ReturnType<typeof setTimeout> | null },
+) {
+  try {
+    processBatchFrame(invalidate, wakeRef)
+  } finally {
+    store.flushReleases()
+    const emptyPending = store.pruneEmpty(
+      performance.now(),
+      new Set(surfaceLevelReadyAt.keys()),
+      staleNodes.size > 0 ? lastNodeChangeAtMs + NODE_BATCH_SETTLE_MS : 0,
+    )
+    if (emptyPending && !wakeRef.current) {
+      wakeRef.current = setTimeout(() => {
+        wakeRef.current = null
+        invalidate()
+      }, NODE_BATCH_SETTLE_MS + 20)
+    }
+    publishBatchStats()
+  }
+}
+
+function processBatchFrame(
   invalidate: () => void,
   wakeRef: { current: ReturnType<typeof setTimeout> | null },
 ) {
   const nodeIds = getBatchableNodeIds()
+  const frameNow = performance.now()
+  const sceneNodes = useScene.getState().nodes
+  const draggingLevels = new Set<string>()
+  for (const id of useLiveNodeOverrides.getState().overrides.keys()) {
+    const node = sceneNodes[id as AnyNodeId]
+    if (node?.type === 'wall' && node.parentId) draggingLevels.add(node.parentId)
+  }
+  for (const level of draggingLevels) surfaceLevelReadyAt.set(level, Infinity)
+  const wallsPending = getPendingWallRebuildCount() > 0
+  for (const [level, readyAt] of surfaceLevelReadyAt) {
+    if (draggingLevels.has(level) || wallsPending) surfaceLevelReadyAt.set(level, Infinity)
+    else if (readyAt === Infinity) surfaceLevelReadyAt.set(level, frameNow + NODE_BATCH_SETTLE_MS)
+    else if (frameNow >= readyAt) surfaceLevelReadyAt.delete(level)
+  }
 
   let changed = changedNodes.size > 0
 
@@ -194,6 +278,15 @@ function runBatchFrame(
     staleNodes.add(nodeId)
   }
   changedNodes.clear()
+
+  const viewer = useViewer.getState()
+  if (lastLevelMode !== viewer.levelMode || lastSelectedLevel !== viewer.selection.levelId) {
+    lastLevelMode = viewer.levelMode
+    lastSelectedLevel = viewer.selection.levelId
+    // Shadow-only sources were rejected and dropped from the previous join wave.
+    for (const nodeId of nodeIds) if (!store.has(nodeId)) staleNodes.add(nodeId)
+    changed = true
+  }
 
   const tinted = collectTintedNodes(nodeIds)
   for (const nodeId of tinted) {
@@ -314,9 +407,15 @@ function runBatchFrame(
     // Overrides defer like tint/dirt — an in-flight gesture ends with a
     // commit whose mark re-offers the node; dropping it here would strand it.
     if (
+      ((sceneNodes[nodeId as AnyNodeId]?.type === 'slab' ||
+        sceneNodes[nodeId as AnyNodeId]?.type === 'ceiling') &&
+        (wallsPending ||
+          surfaceLevelReadyAt.has(sceneNodes[nodeId as AnyNodeId]!.parentId ?? ''))) ||
       tinted.has(nodeId) ||
       dirty.has(nodeId as AnyNodeId) ||
-      overrides.get(nodeId) !== undefined
+      overrides.get(nodeId) !== undefined ||
+      useLiveTransforms.getState().get(nodeId) !== undefined ||
+      isSlotPaintPreviewActive(nodeId)
     ) {
       deferred.add(nodeId)
       continue
@@ -361,7 +460,13 @@ function runBatchFrame(
   // A new leftover may be the bucket-mate its peers were missing — re-offer
   // the whole set together next wave.
   if (newLeftovers) for (const nodeId of leftoverNodes) staleNodes.add(nodeId)
-  publishBatchStats()
+  if (deferred.size > 0) {
+    if (wakeRef.current) clearTimeout(wakeRef.current)
+    wakeRef.current = setTimeout(() => {
+      wakeRef.current = null
+      invalidate()
+    }, NODE_BATCH_SETTLE_MS + 20)
+  }
 }
 
 // The headless bake/thumbnail worker loads `?disable=draw` pages: one capture,
@@ -383,6 +488,8 @@ export const NodeBatchSystem = () => {
 const NodeBatchSystemActive = () => {
   const invalidate = useThree((state) => state.invalidate)
   const wakeRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => subscribeBatchInteractions(invalidate), [invalidate])
 
   // Before the consuming systems (priority 2+) clear the marks this frame.
   useFrame(captureChangedNodes, 1)
@@ -491,8 +598,7 @@ const NodeBatchSystemActive = () => {
   useEffect(
     () => () => {
       if (wakeRef.current) clearTimeout(wakeRef.current)
-      releaseAll()
-      resetModuleState()
+      resetNodeBatchState()
     },
     [],
   )
