@@ -40,6 +40,11 @@ import {
   useMovingNode,
 } from '../../store/use-interaction-scope'
 import { createCameraDraggingLifecycle } from './camera-dragging-lifecycle'
+import {
+  type PendingFitScene,
+  planFitSceneOnEvent,
+  planFitSceneOnOrbitResume,
+} from './fit-scene-framing'
 
 const currentTarget = new Vector3()
 const tempBox = new Box3()
@@ -376,6 +381,9 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   )
   const currentLevelId = selection.levelId
   const firstLoad = useRef(true)
+  // Survives first-person (orbit unmounted) so scene-ready fit still applies
+  // once CameraControls remount.
+  const pendingFitSceneRef = useRef<PendingFitScene | null>(null)
   const maxPolarAngle =
     !isPreviewMode && allowUndergroundCamera ? DEBUG_MAX_POLAR_ANGLE : DEFAULT_MAX_POLAR_ANGLE
 
@@ -515,10 +523,9 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
   useEffect(() => cancelPoseApplication, [cancelPoseApplication])
 
   useEffect(() => {
-    // Dev-only: deterministic camera poses for screenshot/automation tooling.
-    // A getter, not a snapshot — drei recreates the impl when the default
-    // camera changes, so a captured instance goes stale.
-    if (process.env.NODE_ENV !== 'development') return
+    // Deterministic camera poses for screenshot/automation tooling.
+    // No NODE_ENV gate: process is undefined client-side (Turbopack
+    // does not replace it in source-aliased packages), so gating throws.
     const w = window as typeof window & {
       __pascalCameraControls?: (() => CameraControlsImpl | null) | null
     }
@@ -528,11 +535,17 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     }
   }, [])
 
+  const previousLevelIdRef = useRef<AnyNodeId | null>(null)
+  const previousLevelModeRef = useRef(levelMode)
   useEffect(() => {
     if (isPreviewMode || isFirstPersonMode || isRestoringFirstPersonPose()) return
+    const previousLevelId = previousLevelIdRef.current
+    const previousLevelMode = previousLevelModeRef.current
+    previousLevelIdRef.current = currentLevelId
+    previousLevelModeRef.current = levelMode
     // Analytic destination, not `sceneRegistry` mesh position: a level created
     // this frame still sits at y=0 (LevelSystem lerps it later), and a mode
-    // switch leaves every level mid-lerp — the camera must pan to where the
+    // switch leaves every level mid-lerp - the camera must pan to where the
     // level will settle, in the CURRENT presentation mode.
     const targetY = currentLevelId
       ? getLevelPresentationY(currentLevelId, useScene.getState().nodes, levelMode)
@@ -540,8 +553,19 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
     if (!controls.current) return
     if (firstLoad.current) {
       firstLoad.current = false
-      controls.current.setLookAt(20, 20, 20, 0, 0, 0, true)
+      // A freshly applied scene is framed by the auto-frame emit; only a
+      // scene-less editor gets the default pose. Do not skip later
+      // null → level here: a site-phase load starts with no level, and the
+      // first pick (or a delayed auto-select) still has to pan.
+      if (Object.keys(useScene.getState().nodes).length === 0) {
+        controls.current.setLookAt(20, 20, 20, 0, 0, 0, true)
+      }
+      return
     }
+    const levelChanged = previousLevelId !== currentLevelId
+    const modeChanged = previousLevelMode !== levelMode
+    if (!levelChanged && !modeChanged) return
+    if (!currentLevelId) return
     controls.current.getTarget(currentTarget)
     // Idempotence guard: skip when already there — also swallows the thumbnail
     // generator's synchronous stacked→restore levelMode round-trip.
@@ -1235,21 +1259,57 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       focusNode(nodeId)
     }
 
+    const applyFitLookAt = (lookAt: {
+      eyeX: number
+      eyeY: number
+      eyeZ: number
+      targetX: number
+      targetY: number
+      targetZ: number
+    }) => {
+      if (!controls.current) return false
+      controls.current.setLookAt(
+        lookAt.eyeX,
+        lookAt.eyeY,
+        lookAt.eyeZ,
+        lookAt.targetX,
+        lookAt.targetY,
+        lookAt.targetZ,
+        true,
+      )
+      return true
+    }
+
+    const flushPendingFitScene = () => {
+      const plan = planFitSceneOnOrbitResume({
+        isPreviewMode,
+        isFirstPersonMode: useEditor.getState().isFirstPersonMode,
+        hasControls: !!controls.current,
+        pending: pendingFitSceneRef.current,
+      })
+      if (plan.action !== 'apply') return
+      if (!applyFitLookAt(plan.lookAt)) return
+      pendingFitSceneRef.current = null
+    }
+
     const handleFitScene = ({ bounds }: CameraControlFitSceneEvent) => {
-      if (isFirstPersonMode || !controls.current || isPreviewMode) return
-      if (!bounds) {
-        // Restore default framing pose when no bounds were computed.
-        controls.current.setLookAt(20, 20, 20, 0, 0, 0, true)
+      const plan = planFitSceneOnEvent({
+        isPreviewMode,
+        isFirstPersonMode,
+        hasControls: !!controls.current,
+        bounds: bounds ?? null,
+      })
+      if (plan.action === 'ignore') return
+      if (plan.action === 'queue') {
+        pendingFitSceneRef.current = plan.pending
+        // Orbit path with a not-yet-attached ref: retry next frame.
+        if (!isFirstPersonMode && !isPreviewMode) {
+          requestAnimationFrame(flushPendingFitScene)
+        }
         return
       }
-      const [cx, cz] = bounds.center
-      const [w, d] = bounds.size
-      // Use the longer horizontal extent to size the orbit radius so the whole
-      // footprint sits in view regardless of aspect ratio.
-      const maxExtent = Math.max(w, d)
-      const distance = Math.max(maxExtent * 1.4, 15)
-      const height = Math.max(maxExtent * 0.8, 10)
-      controls.current.setLookAt(cx + distance * 0.7, height, cz + distance * 0.7, cx, 0, cz, true)
+      pendingFitSceneRef.current = null
+      applyFitLookAt(plan.lookAt)
     }
 
     emitter.on('camera-controls:capture', handleNodeCapture)
@@ -1270,6 +1330,35 @@ export const CustomCameraControls = ({ paused = false }: { paused?: boolean }) =
       emitter.off('camera-controls:fit-scene', handleFitScene)
     }
   }, [focusNode, isPreviewMode, isFirstPersonMode])
+
+  // Apply a fit that arrived while first-person (orbit unmounted). Wait one
+  // frame so CameraControls can remount and attach its ref.
+  useEffect(() => {
+    if (isFirstPersonMode || isPreviewMode || !pendingFitSceneRef.current) return
+
+    const frame = requestAnimationFrame(() => {
+      const plan = planFitSceneOnOrbitResume({
+        isPreviewMode,
+        isFirstPersonMode: useEditor.getState().isFirstPersonMode,
+        hasControls: !!controls.current,
+        pending: pendingFitSceneRef.current,
+      })
+      if (plan.action !== 'apply' || !controls.current) return
+      pendingFitSceneRef.current = null
+      const { lookAt } = plan
+      controls.current.setLookAt(
+        lookAt.eyeX,
+        lookAt.eyeY,
+        lookAt.eyeZ,
+        lookAt.targetX,
+        lookAt.targetY,
+        lookAt.targetZ,
+        true,
+      )
+    })
+
+    return () => cancelAnimationFrame(frame)
+  }, [isFirstPersonMode, isPreviewMode])
 
   const onTransitionStart = useCallback(() => {
     cameraDraggingLifecycle.begin()
