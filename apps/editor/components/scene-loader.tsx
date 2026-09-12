@@ -16,7 +16,7 @@ import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
-import { runLocalAssetGc } from '@/lib/local-asset-gc'
+import { collectNodeAssetUrlList, runLocalAssetGc } from '@/lib/local-asset-gc'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
 import { BuildTab } from './build-tab'
@@ -128,16 +128,19 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const handleLoad = useCallback(async () => initialScene, [initialScene])
 
   // Explicit multi-scene GC after this scene is hydrated. Only deletes Files
-  // that no persisted graph (current + localStorage + every server scene)
-  // still references — never based on the active graph alone (#733).
+  // that no persisted graph still references; skips when the inventory is
+  // incomplete. Live nodes are re-read immediately before sweep (#733).
   const gcRanRef = useRef(false)
   useEffect(() => {
     if (gcRanRef.current) return
     gcRanRef.current = true
-    void runLocalAssetGc(useScene.getState().nodes).catch(() => {
+    void runLocalAssetGc(
+      () => useScene.getState().nodes,
+      collectNodeAssetUrlList(initialScene.nodes as Record<string, unknown>),
+    ).catch(() => {
       /* enumeration failed — skip GC rather than partial-sweep */
     })
-  }, [])
+  }, [initialScene])
 
   const handleSave = useCallback(
     async (graph: SceneGraph, options?: { keepalive?: boolean }) => {
