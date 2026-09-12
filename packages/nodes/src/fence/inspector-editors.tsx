@@ -80,7 +80,7 @@ export function FenceCurveEditor({
       precision={2}
       step={0.1}
       unit="m"
-      value={Math.round(curveOffset * 100) / 100}
+      value={curveOffset}
     />
   )
 }
