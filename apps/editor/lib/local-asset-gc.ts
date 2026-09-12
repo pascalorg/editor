@@ -46,7 +46,10 @@ export async function collectAllPersistedAssetUrls(
   try {
     const res = await fetch(`/api/scenes?limit=${SCENES_LIST_MAX}`)
     if (!res.ok) return null
-    scenesJson = (await res.json()) as typeof scenesJson
+    scenesJson = (await res.json()) as {
+      data?: { scenes?: unknown[] }
+      scenes?: unknown[]
+    }
   } catch {
     return null
   }
