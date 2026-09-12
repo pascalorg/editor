@@ -72,12 +72,13 @@
     "README.md"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist",
     "dev": "tsgo --build --watch",
     "test": "bun test src",
     "bench:registry": "bun run src/registry/__bench__/relations-resolver.bench.ts",
     "bench:schema": "bun run src/schema/__bench__/node-parsers.bench.ts",
-    "prepublishOnly": "npm run build"
+    "smoke:node": "node --input-type=module -e \"await import('./dist/index.js')\"",
+    "prepublishOnly": "npm run build && npm run smoke:node"
   },
   "peerDependencies": {
     "@react-three/drei": "^10",

@@ -47,12 +47,13 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc --build",
+    "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist",
     "dev": "tsgo --build --watch",
     "start": "bun dist/bin/pascal-mcp.js",
     "test": "bun test",
     "smoke": "bun run scripts/smoke.ts",
-    "prepublishOnly": "bun run build && bun test"
+    "smoke:node": "node dist/bin/pascal-mcp.js --help",
+    "prepublishOnly": "bun run build && bun test && bun run smoke:node"
   },
   "peerDependencies": {
     "@pascal-app/core": "^1.0.0"
