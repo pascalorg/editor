@@ -1,6 +1,7 @@
 'use client'
 
 import {
+  bumpLocalAssetSceneEpoch,
   clearSceneHistory,
   nodeRegistry,
   resolveLevelId,
@@ -13,7 +14,6 @@ import useEditor, {
   normalizePersistedEditorUiState,
   type PersistedEditorUiState,
 } from '../store/use-editor'
-import { bumpLocalAssetSceneEpoch } from './local-asset-lifecycle'
 import { editorHostPanelRegistry } from './plugin-panels'
 
 export type SceneGraph = {

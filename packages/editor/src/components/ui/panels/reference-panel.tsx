@@ -6,6 +6,7 @@ import {
   loadAssetUrl,
   type ScanNode,
   saveAsset,
+  scheduleLocalAssetDelete,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -22,7 +23,6 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { guideEmitter } from '../../../lib/guide-events'
-import { scheduleLocalAssetDelete } from '../../../lib/local-asset-lifecycle'
 import { getGuideImageName } from '../../../lib/local-guide-image'
 import { cn } from '../../../lib/utils'
 import useEditor from '../../../store/use-editor'
@@ -96,6 +96,7 @@ export function ReferencePanel() {
       try {
         const assetUrl = await saveAsset(file)
         // Replacing drops the previous local File once nothing else needs it.
+        // (Deletion itself is covered by core deleteNodes; this is update.)
         if (node.url?.startsWith('asset://') && node.url !== assetUrl) {
           scheduleLocalAssetDelete(node.url)
         }
@@ -125,9 +126,7 @@ export function ReferencePanel() {
       return
     }
 
-    if (node.url?.startsWith('asset://')) {
-      scheduleLocalAssetDelete(node.url)
-    }
+    // Local asset:// cleanup runs in core deleteNodes (#733).
     deleteNode(selectedReferenceId as AnyNode['id'])
     guideEmitter.emit('guide:deleted', { guideId: selectedReferenceId as GuideNode['id'] })
     clearGuideUi(selectedReferenceId)

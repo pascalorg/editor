@@ -27,6 +27,11 @@ import {
   type WallNode,
 } from '../../schema'
 import type { CollectionId } from '../../schema/collections'
+import {
+  collectNodeAssetUrls,
+  scheduleLocalAssetCleanupForRemovedNodes,
+  scheduleLocalAssetDelete,
+} from '../../lib/local-asset-lifecycle'
 import { constrainWallCurveOffsetToAvoidIntersections } from '../../systems/wall/wall-curve'
 import { addActiveSceneCommitNodeIds, runWithSceneCommitNodeIds } from '../history-control'
 import type { SceneState } from '../use-scene'
@@ -1287,6 +1292,7 @@ const applyNodeChangesActionImpl = (
   const nodesToMarkDirty = new Set<AnyNodeId>()
   const nodesToClearDirty = new Set<AnyNodeId>()
   const parentsToMarkDirty = new Set<AnyNodeId>()
+  const removedNodesForAssets: AnyNode[] = []
 
   set((state) => {
     const nextNodes = { ...state.nodes }
@@ -1388,6 +1394,7 @@ const applyNodeChangesActionImpl = (
 
     for (const id of allIdsToDelete) {
       const node = nextNodes[id]
+      if (node) removedNodesForAssets.push(node)
       if (!node) continue
 
       const parentId = node.parentId as AnyNodeId | null
@@ -1431,6 +1438,8 @@ const applyNodeChangesActionImpl = (
     return { nodes: nextNodes, rootNodeIds: resolvedRootIds, collections: nextCollections }
   })
 
+  scheduleLocalAssetCleanupForRemovedNodes(removedNodesForAssets, () => get().nodes)
+
   for (const id of nodesToMarkDirty) {
     get().markDirty(id)
   }
@@ -1458,6 +1467,7 @@ const updateNodesActionImpl = (
   const extraNodesToUpdate = new Set<AnyNodeId>()
   const extraNodesToDelete = new Set<AnyNodeId>()
   const roofsToRefresh = new Set<AnyNodeId>()
+  const orphanedLocalAssets: string[] = []
 
   set((state) => {
     const nextNodes = { ...state.nodes }
@@ -1484,6 +1494,17 @@ const updateNodesActionImpl = (
           : data
       const updatedNode = parseUpdatedNode(currentNode, constrainedData)
       addLeanToHostRoofId(updatedNode, nextNodes, roofsToRefresh)
+
+      // Replacing a local asset:// url/src (e.g. guide image swap) orphans
+      // the previous File; schedule cleanup after the update is applied (#733).
+      const previousAssets = collectNodeAssetUrls(currentNode)
+      const nextAssets = new Set(collectNodeAssetUrls(updatedNode))
+      for (const url of previousAssets) {
+        if (!nextAssets.has(url)) {
+          // Deferred until after set() so isAssetStillReferenced sees the new graph.
+          orphanedLocalAssets.push(url)
+        }
+      }
 
       // Handle Reparenting Logic
       if (data.parentId !== undefined && data.parentId !== currentNode.parentId) {
@@ -1551,6 +1572,10 @@ const updateNodesActionImpl = (
     return { nodes: nextNodes }
   })
 
+  for (const url of orphanedLocalAssets) {
+    scheduleLocalAssetDelete(url)
+  }
+
   // Batch dirty-marking into a single RAF to avoid redundant callbacks during rapid updates
   for (const u of updates) {
     // Visibility is applied by React before the deferred dirty callback. Mark
@@ -1593,6 +1618,9 @@ const deleteNodesActionImpl = (
   const deletedIds = new Set<AnyNodeId>()
   const mergePlans = buildWallMergePlans(get().nodes, ids)
   const requestedDeleteIds = new Set(ids)
+  // Snapshot nodes about to leave the graph so local asset:// cleanup can
+  // run against the deletion lifecycle (keyboard, MCP, panels, groups) (#733).
+  const removedNodesForAssets: AnyNode[] = []
 
   set((state) => {
     const nextNodes = { ...state.nodes }
@@ -1631,6 +1659,10 @@ const deleteNodesActionImpl = (
       }
     }
     for (const id of allIds) deletedIds.add(id)
+    for (const id of allIds) {
+      const node = nextNodes[id]
+      if (node) removedNodesForAssets.push(node)
+    }
 
     // Let each deleted kind undo what it imposed on its neighbours (e.g. an
     // auto-inserted elbow re-extends the duct runs it trimmed back onto the
@@ -1738,6 +1770,10 @@ const deleteNodesActionImpl = (
 
     return { nodes: nextNodes, rootNodeIds: nextRootIds, collections: nextCollections }
   })
+
+  // Single path for local asset cleanup: covers keyboard Delete, selection
+  // delete, MCP, and every panel that calls deleteNode/deleteNodes (#733).
+  scheduleLocalAssetCleanupForRemovedNodes(removedNodesForAssets, () => get().nodes)
 
   // Deleted ids must leave the dirty set: every consumer skips missing
   // nodes without clearing them, so a mark on a deleted node would sit in

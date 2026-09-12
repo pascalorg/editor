@@ -99,6 +99,15 @@ export {
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
 export { deleteAsset, loadAssetUrl, saveAsset } from './lib/asset-storage'
 export {
+  bumpLocalAssetSceneEpoch,
+  cancelLocalAssetDelete,
+  clearPendingLocalAssetDeletes,
+  collectNodeAssetUrls,
+  collectSceneAssetUrls,
+  scheduleLocalAssetCleanupForRemovedNodes,
+  scheduleLocalAssetDelete,
+} from './lib/local-asset-lifecycle'
+export {
   clampDoorOperationState,
   getDoorRenderOpenAmount,
   getGarageVisibleOpeningRatio,
