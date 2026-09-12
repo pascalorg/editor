@@ -1,4 +1,4 @@
-import { del, get, set } from 'idb-keyval'
+import { del, get, keys, set } from 'idb-keyval'
 import { customAlphabet } from 'nanoid'
 
 export const ASSET_PREFIX = 'asset_data:'
@@ -72,8 +72,10 @@ export async function loadAssetUrl(url: string): Promise<string | null> {
 
 /**
  * Delete a locally stored `asset://` file from IndexedDB and drop any cached
- * object URL. No-op for non-asset URLs. Callers that need undo-safety should
- * only invoke this once no live node still references the URL.
+ * object URL. No-op for non-asset URLs.
+ *
+ * Callers must only invoke this when no *persisted* scene still references
+ * the URL — IndexedDB is origin-global and not scoped by project (#733).
  */
 export async function deleteAsset(url: string): Promise<boolean> {
   const id = assetIdFromUrl(url)
@@ -86,4 +88,48 @@ export async function deleteAsset(url: string): Promise<boolean> {
     console.error('Failed to delete asset:', error)
     return false
   }
+}
+
+/** Every `asset://` id currently stored in IndexedDB. */
+export async function listLocalAssetUrls(): Promise<string[]> {
+  try {
+    const allKeys = await keys()
+    const urls: string[] = []
+    for (const key of allKeys) {
+      if (typeof key === 'string' && key.startsWith(ASSET_PREFIX)) {
+        urls.push(`asset://${key.slice(ASSET_PREFIX.length)}`)
+      }
+    }
+    return urls
+  } catch (error) {
+    console.error('Failed to list local assets:', error)
+    return []
+  }
+}
+
+/**
+ * Explicit garbage collection: delete every local asset URL not in
+ * `keepUrls`.
+ *
+ * `keepUrls` MUST be the union of asset references across **every persisted
+ * graph** the origin can still open (current scene, localStorage scene,
+ * server scenes). A keep-set built from only the active graph will corrupt
+ * other projects that share an `asset://` handle after duplication (#733).
+ */
+export async function sweepLocalAssetsExcept(keepUrls: Iterable<string>): Promise<number> {
+  const keep = new Set<string>()
+  for (const url of keepUrls) {
+    if (typeof url === 'string' && url.startsWith('asset://')) keep.add(url)
+  }
+
+  let removed = 0
+  try {
+    for (const url of await listLocalAssetUrls()) {
+      if (keep.has(url)) continue
+      if (await deleteAsset(url)) removed += 1
+    }
+  } catch (error) {
+    console.error('Failed to sweep local assets:', error)
+  }
+  return removed
 }

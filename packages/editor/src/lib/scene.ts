@@ -1,7 +1,6 @@
 'use client'
 
 import {
-  bumpLocalAssetSceneEpoch,
   clearSceneHistory,
   nodeRegistry,
   resolveLevelId,
@@ -398,10 +397,6 @@ function hasUsableSceneGraph(sceneGraph?: SceneGraph | null): sceneGraph is Scen
 }
 
 export function applySceneGraphToEditor(sceneGraph?: SceneGraph | null) {
-  // Pending local-asset deletes from the previous graph must not fire after a
-  // scene switch — IndexedDB is origin-global (#733 review).
-  bumpLocalAssetSceneEpoch()
-
   const defaultInstalledPlugins = editorHostPanelRegistry.getDefaultInstalledPluginIds()
   if (hasUsableSceneGraph(sceneGraph)) {
     const { nodes, rootNodeIds, collections, materials, installedPlugins } = sceneGraph

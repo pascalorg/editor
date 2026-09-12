@@ -1,14 +1,6 @@
 /**
- * Re-export local asset lifecycle helpers.
- * Implementation lives in `@pascal-app/core` so every delete path
- * (keyboard, MCP, panels, groups) shares one cleanup hook (#733).
+ * Re-export local asset helpers.
+ * Physical deletion lives in an explicit multi-scene GC
+ * (`sweepLocalAssetsExcept`) — never from a single active graph (#733).
  */
-export {
-  bumpLocalAssetSceneEpoch,
-  cancelLocalAssetDelete,
-  clearPendingLocalAssetDeletes,
-  collectNodeAssetUrls,
-  collectSceneAssetUrls,
-  scheduleLocalAssetCleanupForRemovedNodes,
-  scheduleLocalAssetDelete,
-} from '@pascal-app/core'
+export { collectNodeAssetUrls, collectSceneAssetUrls } from '@pascal-app/core'

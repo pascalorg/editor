@@ -9,12 +9,14 @@ import {
   type SceneGraph,
   type SidebarTab,
 } from '@pascal-app/editor'
+import { useScene } from '@pascal-app/core'
 import { Hammer, Layers, Settings } from 'lucide-react'
 import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { countGraphNodes, isEmptyGraphOverwrite } from '@/lib/empty-graph-guard'
+import { runLocalAssetGc } from '@/lib/local-asset-gc'
 import { type PersistedSceneGraph, sceneGraphSignature } from '@/lib/scene-signature'
 import { cn } from '@/lib/utils'
 import { BuildTab } from './build-tab'
@@ -124,6 +126,18 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   const lightPreview = isLightPreviewQuery(searchParams)
 
   const handleLoad = useCallback(async () => initialScene, [initialScene])
+
+  // Explicit multi-scene GC after this scene is hydrated. Only deletes Files
+  // that no persisted graph (current + localStorage + every server scene)
+  // still references — never based on the active graph alone (#733).
+  const gcRanRef = useRef(false)
+  useEffect(() => {
+    if (gcRanRef.current) return
+    gcRanRef.current = true
+    void runLocalAssetGc(useScene.getState().nodes).catch(() => {
+      /* enumeration failed — skip GC rather than partial-sweep */
+    })
+  }, [])
 
   const handleSave = useCallback(
     async (graph: SceneGraph, options?: { keepalive?: boolean }) => {

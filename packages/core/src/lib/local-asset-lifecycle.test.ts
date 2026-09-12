@@ -1,27 +1,16 @@
 import 'fake-indexeddb/auto'
-import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
-import { deleteAsset, loadAssetUrl, saveAsset } from './asset-storage'
+import { describe, expect, test } from 'bun:test'
 import {
-  bumpLocalAssetSceneEpoch,
-  cancelLocalAssetDelete,
-  clearPendingLocalAssetDeletes,
-  collectNodeAssetUrls,
-  collectSceneAssetUrls,
-  scheduleLocalAssetCleanupForRemovedNodes,
-  scheduleLocalAssetDelete,
-} from './local-asset-lifecycle'
+  listLocalAssetUrls,
+  loadAssetUrl,
+  saveAsset,
+  sweepLocalAssetsExcept,
+} from './asset-storage'
+import { collectNodeAssetUrls, collectSceneAssetUrls } from './local-asset-lifecycle'
 
 function file(contents: string, name = 'test.txt'): File {
   return new File([contents], name, { type: 'text/plain' })
 }
-
-beforeEach(() => {
-  clearPendingLocalAssetDeletes()
-})
-
-afterEach(() => {
-  clearPendingLocalAssetDeletes()
-})
 
 describe('collectNodeAssetUrls', () => {
   test('collects url and src asset:// references', () => {
@@ -38,56 +27,8 @@ describe('collectNodeAssetUrls', () => {
   })
 })
 
-describe('scheduleLocalAssetDelete', () => {
-  test('deletes after the grace period when nothing re-references the URL', async () => {
-    const url = await saveAsset(file('delete-later'))
-    scheduleLocalAssetDelete(url, 20)
-    expect(await loadAssetUrl(url)).not.toBeNull()
-
-    await new Promise((resolve) => setTimeout(resolve, 80))
-    expect(await loadAssetUrl(url)).toBeNull()
-  })
-
-  test('cancelLocalAssetDelete cancels a pending delete', async () => {
-    const url = await saveAsset(file('cancelled'))
-    scheduleLocalAssetDelete(url, 20)
-    cancelLocalAssetDelete(url)
-
-    await new Promise((resolve) => setTimeout(resolve, 80))
-    expect(await loadAssetUrl(url)).not.toBeNull()
-  })
-
-  test('does not delete after a scene epoch bump', async () => {
-    const url = await saveAsset(file('other-scene'))
-    scheduleLocalAssetDelete(url, 20)
-    bumpLocalAssetSceneEpoch()
-
-    await new Promise((resolve) => setTimeout(resolve, 80))
-    expect(await loadAssetUrl(url)).not.toBeNull()
-  })
-})
-
-describe('scheduleLocalAssetCleanupForRemovedNodes', () => {
-  test('schedules only URLs no remaining node still references', async () => {
-    const shared = await saveAsset(file('shared'))
-    const orphan = await saveAsset(file('orphan'))
-
-    const removed = [
-      { id: 'g1', type: 'guide', url: orphan },
-      { id: 'g2', type: 'guide', url: shared },
-    ] as never[]
-    const remaining = {
-      keep: { id: 'keep', type: 'guide', url: shared },
-    } as never
-
-    scheduleLocalAssetCleanupForRemovedNodes(removed, () => remaining, 20)
-    await new Promise((resolve) => setTimeout(resolve, 80))
-
-    expect(await loadAssetUrl(shared)).not.toBeNull()
-    expect(await loadAssetUrl(orphan)).toBeNull()
-  })
-
-  test('collectSceneAssetUrls walks url and src', () => {
+describe('collectSceneAssetUrls', () => {
+  test('walks url and src across nodes', () => {
     const urls = collectSceneAssetUrls({
       a: { id: 'a', type: 'guide', url: 'asset://g' } as never,
       b: { id: 'b', type: 'item', src: 'asset://s' } as never,
@@ -96,10 +37,29 @@ describe('scheduleLocalAssetCleanupForRemovedNodes', () => {
   })
 })
 
-describe('deleteAsset', () => {
-  test('removes the IndexedDB entry', async () => {
-    const url = await saveAsset(file('gone'))
-    expect(await deleteAsset(url)).toBe(true)
+describe('sweepLocalAssetsExcept', () => {
+  test('keeps assets referenced by any persisted scene in the keep-set', async () => {
+    const shared = await saveAsset(file('shared-by-two-scenes'))
+    const orphan = await saveAsset(file('orphan'))
+
+    // Simulate two persisted scenes sharing `shared`.
+    const sceneA = collectSceneAssetUrls({
+      guide: { id: 'guide', type: 'guide', url: shared } as never,
+    })
+    const sceneB = collectSceneAssetUrls({
+      scan: { id: 'scan', type: 'scan', url: shared } as never,
+    })
+    const removed = await sweepLocalAssetsExcept([...sceneA, ...sceneB])
+
+    expect(removed).toBeGreaterThanOrEqual(1)
+    expect(await loadAssetUrl(shared)).not.toBeNull()
+    expect(await loadAssetUrl(orphan)).toBeNull()
+    expect((await listLocalAssetUrls()).includes(orphan)).toBe(false)
+  })
+
+  test('deletes Files referenced only by nothing', async () => {
+    const url = await saveAsset(file('unreferenced'))
+    await sweepLocalAssetsExcept([])
     expect(await loadAssetUrl(url)).toBeNull()
   })
 })

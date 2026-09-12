@@ -3,7 +3,6 @@
 import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
 import { create, type StateCreator, type StoreApi, type UseBoundStore } from 'zustand'
-import { bumpLocalAssetSceneEpoch } from '../lib/local-asset-lifecycle'
 import { parseMaterialRef, toSceneMaterialRef } from '../material-library'
 import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/registry'
 import { BuildingNode } from '../schema'
@@ -1477,9 +1476,6 @@ const useScene: UseSceneStore = createSceneStore(
       setReadOnly: (readOnly: boolean) => set({ readOnly }),
 
       unloadScene: () => {
-        // Graph replacement boundary: pending local-asset deletes from the
-        // previous graph must not fire against the new one (#733).
-        bumpLocalAssetSceneEpoch()
         invalidatePendingHydration()
         set({
           hydrationToken: null,
@@ -1503,9 +1499,6 @@ const useScene: UseSceneStore = createSceneStore(
       },
 
       setScene: (nodes, rootNodeIds, extra) => {
-        // Same graph-replacement boundary as unloadScene — import/reset
-        // call setScene without going through applySceneGraphToEditor.
-        bumpLocalAssetSceneEpoch()
         // Apply backward compatibility migrations
         const { nodes: patchedNodes, mintedMaterials } = migrateNodes(nodes)
         // Scene materials minted by the wall legacy→slots migration join the

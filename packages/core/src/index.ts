@@ -97,7 +97,13 @@ export {
   type WallConstructionResolution,
 } from './hooks/spatial-grid/support-host-patch'
 export { useSpatialQuery } from './hooks/spatial-grid/use-spatial-query'
-export { deleteAsset, loadAssetUrl, saveAsset } from './lib/asset-storage'
+export {
+  deleteAsset,
+  listLocalAssetUrls,
+  loadAssetUrl,
+  saveAsset,
+  sweepLocalAssetsExcept,
+} from './lib/asset-storage'
 export {
   clampDoorOperationState,
   getDoorRenderOpenAmount,
@@ -106,15 +112,7 @@ export {
   SECTIONAL_GARAGE_RENDER_OPEN_SCALE,
 } from './lib/door-operation'
 export { getDefaultLevelName, getLevelDisplayName } from './lib/level-name'
-export {
-  bumpLocalAssetSceneEpoch,
-  cancelLocalAssetDelete,
-  clearPendingLocalAssetDeletes,
-  collectNodeAssetUrls,
-  collectSceneAssetUrls,
-  scheduleLocalAssetCleanupForRemovedNodes,
-  scheduleLocalAssetDelete,
-} from './lib/local-asset-lifecycle'
+export { collectNodeAssetUrls, collectSceneAssetUrls } from './lib/local-asset-lifecycle'
 export {
   areMeasurementPointsCoplanar,
   closestMeasurementFeatureBinding,
