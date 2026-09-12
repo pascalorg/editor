@@ -47,7 +47,7 @@
     "CHANGELOG.md"
   ],
   "scripts": {
-    "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts dist",
+    "build": "tsc --build && bun ../../scripts/fix-node-esm-imports.ts ../core/dist && bun ../../scripts/fix-node-esm-imports.ts dist",
     "dev": "tsgo --build --watch",
     "start": "bun dist/bin/pascal-mcp.js",
     "test": "bun test",
