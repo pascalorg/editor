@@ -6,7 +6,6 @@ import {
   loadAssetUrl,
   type ScanNode,
   saveAsset,
-  scheduleLocalAssetDelete,
   useScene,
 } from '@pascal-app/core'
 import {
@@ -95,11 +94,8 @@ export function ReferencePanel() {
 
       try {
         const assetUrl = await saveAsset(file)
-        // Replacing drops the previous local File once nothing else needs it.
-        // (Deletion itself is covered by core deleteNodes; this is update.)
-        if (node.url?.startsWith('asset://') && node.url !== assetUrl) {
-          scheduleLocalAssetDelete(node.url)
-        }
+        // Previous local File cleanup is scheduled by core updateNodes after
+        // the url change commits — never before updateNode (#733 review).
         updateNode(
           selectedReferenceId as AnyNode['id'],
           {

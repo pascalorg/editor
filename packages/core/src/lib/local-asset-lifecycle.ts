@@ -69,22 +69,30 @@ export function bumpLocalAssetSceneEpoch(): number {
  * restored the node). Callers that already checked the live graph can omit
  * it; the scene-epoch guard still applies.
  */
+/**
+ * Schedule a local `asset://` File for delayed delete.
+ *
+ * Prefer the overloads that take `getRemainingNodes` (post-delete / post-
+ * update graph). `isStillReferenced` is consulted at fire time so undo,
+ * duplicates, or another live node can keep the File.
+ */
 export function scheduleLocalAssetDelete(
   url: string,
-  graceMs: number = deleteGraceMs,
+  graceMs?: number,
   isStillReferenced?: () => boolean,
 ): void {
   if (!url.startsWith(ASSET_URL_PREFIX)) return
   const existing = pendingDeletes.get(url)
   if (existing) clearTimeout(existing)
 
+  const effectiveGrace = graceMs ?? deleteGraceMs
   const scheduledEpoch = sceneEpoch
   const timer = setTimeout(() => {
     pendingDeletes.delete(url)
     if (scheduledEpoch !== sceneEpoch) return
     if (isStillReferenced?.()) return
     void deleteAsset(url)
-  }, graceMs)
+  }, effectiveGrace)
   pendingDeletes.set(url, timer)
 }
 

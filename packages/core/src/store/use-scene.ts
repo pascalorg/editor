@@ -38,6 +38,7 @@ import {
   type SceneMaterialId,
 } from '../schema/scene-material'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema/types'
+import { bumpLocalAssetSceneEpoch } from '../lib/local-asset-lifecycle'
 import { syncAutoElevatorOpenings } from '../systems/elevator/elevator-opening-sync'
 import { syncAutoStairOpenings } from '../systems/stair/stair-opening-sync'
 import { syncStairRises } from '../systems/stair/stair-rise'
@@ -1476,6 +1477,9 @@ const useScene: UseSceneStore = createSceneStore(
       setReadOnly: (readOnly: boolean) => set({ readOnly }),
 
       unloadScene: () => {
+        // Graph replacement boundary: pending local-asset deletes from the
+        // previous graph must not fire against the new one (#733).
+        bumpLocalAssetSceneEpoch()
         invalidatePendingHydration()
         set({
           hydrationToken: null,
@@ -1499,6 +1503,9 @@ const useScene: UseSceneStore = createSceneStore(
       },
 
       setScene: (nodes, rootNodeIds, extra) => {
+        // Same graph-replacement boundary as unloadScene — import/reset
+        // call setScene without going through applySceneGraphToEditor.
+        bumpLocalAssetSceneEpoch()
         // Apply backward compatibility migrations
         const { nodes: patchedNodes, mintedMaterials } = migrateNodes(nodes)
         // Scene materials minted by the wall legacy→slots migration join the
