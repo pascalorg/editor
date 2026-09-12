@@ -289,7 +289,7 @@ export function SlabPanel() {
           precision={3}
           step={0.01}
           unit="m"
-          value={Math.round(node.elevation * 1000) / 1000}
+          value={node.elevation}
         />
 
         <SliderControl
@@ -300,7 +300,7 @@ export function SlabPanel() {
           precision={3}
           step={0.01}
           unit="m"
-          value={Math.round(getSlabAnchorElevation(node) * 1000) / 1000}
+          value={getSlabAnchorElevation(node)}
         />
 
         {node.recessed ? (
@@ -312,7 +312,7 @@ export function SlabPanel() {
             precision={2}
             step={0.01}
             unit="m"
-            value={Math.round(getSlabRecessDepth(node) * 100) / 100}
+            value={getSlabRecessDepth(node)}
           />
         ) : (
           <SliderControl
@@ -323,7 +323,7 @@ export function SlabPanel() {
             precision={2}
             step={0.01}
             unit="m"
-            value={Math.round((node.thickness ?? 0.05) * 100) / 100}
+            value={node.thickness ?? 0.05}
           />
         )}
 
