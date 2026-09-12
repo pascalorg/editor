@@ -11,6 +11,7 @@ import type { DuctTerminalNode } from './duct-terminal'
 import type { FenceNode } from './fence'
 import type { GuideNode } from './guide'
 import type { HvacEquipmentNode } from './hvac-equipment'
+import type { ImportedMeshNode } from './imported-mesh'
 import type { ItemNode } from './item'
 import type { LinesetNode } from './lineset'
 import type { LiquidLineNode } from './liquid-line'
@@ -36,6 +37,7 @@ type CoreLevelChildId =
   | BlockNode['id']
   | StructuralGridNode['id']
   | ItemNode['id']
+  | ImportedMeshNode['id']
   | ZoneNode['id']
   | SlabNode['id']
   | CeilingNode['id']

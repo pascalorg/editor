@@ -19,6 +19,7 @@ export type {
   GridEvent,
   GuideEvent,
   GutterEvent,
+  ImportedMeshEvent,
   ItemEvent,
   LeanToExtensionEvent,
   LevelEvent,
