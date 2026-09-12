@@ -3,6 +3,7 @@
 import type { TemporalState } from 'zundo'
 import { temporal } from 'zundo'
 import { create, type StateCreator, type StoreApi, type UseBoundStore } from 'zustand'
+import { bumpLocalAssetSceneEpoch } from '../lib/local-asset-lifecycle'
 import { parseMaterialRef, toSceneMaterialRef } from '../material-library'
 import { getNodePluginId, isNodeKindEnabled, nodeRegistry } from '../registry/registry'
 import { BuildingNode } from '../schema'
@@ -38,7 +39,6 @@ import {
   type SceneMaterialId,
 } from '../schema/scene-material'
 import { type AnyNode, type AnyNodeId, AnyNode as AnyNodeSchema } from '../schema/types'
-import { bumpLocalAssetSceneEpoch } from '../lib/local-asset-lifecycle'
 import { syncAutoElevatorOpenings } from '../systems/elevator/elevator-opening-sync'
 import { syncAutoStairOpenings } from '../systems/stair/stair-opening-sync'
 import { syncStairRises } from '../systems/stair/stair-rise'
