@@ -32,11 +32,21 @@ describe('camera auto-frame wiring (shipped sources)', () => {
     expect(controls).toContain('Object.keys(useScene.getState().nodes).length === 0')
     expect(controls).toContain('if (!levelChanged && !modeChanged) return')
     expect(controls).toContain('if (!currentLevelId) return')
-    expect(controls).toContain('controls.current.moveTo(currentTarget.x, targetY, currentTarget.z, true)')
+    expect(controls).toContain(
+      'controls.current.moveTo(currentTarget.x, targetY, currentTarget.z, true)',
+    )
     expect(controls).not.toContain(
       'if (!previousLevelId || previousLevelId === currentLevelId) return',
     )
     expect(controls).not.toContain('skippedInitialLevelSelectRef')
+  })
+
+  test('fit-scene queues while first-person and flushes on orbit resume', () => {
+    const controls = readShipped('components/editor/custom-camera-controls.tsx')
+    expect(controls).toContain('pendingFitSceneRef')
+    expect(controls).toContain('planFitSceneOnEvent')
+    expect(controls).toContain('planFitSceneOnOrbitResume')
+    expect(controls).toContain("from './fit-scene-framing'")
   })
 
   test('useAutoFrame hook still emits fit-scene on empty->non-empty edge', () => {
