@@ -39,8 +39,9 @@ Local development and the official hosted editor work without any environment va
 docker compose up -d
 ```
 
-The editor will be running at **http://localhost:3000**. Saved scenes live in
-the `pascal-data` volume, so they survive `docker compose down`.
+The editor will be running at **http://localhost:3000**. Compose builds from source;
+it does not depend on a GHCR package being available. Saved scenes live in the
+`pascal-data` volume, so they survive `docker compose down`.
 
 Docker defaults `MINT_PASCAL_HOST_ORIGIN` to `http://localhost:3000`. Override
 it when hosting Pascal at another origin:
@@ -53,6 +54,39 @@ Keep the container port at 3000: the `/scenes` page fetches its own API through
 a base URL that only `NEXT_PUBLIC_APP_URL` can override, and Next inlines that
 value at build time, so remapping the port to something else makes the page
 return 500.
+
+### GHCR bootstrap (maintainers)
+
+Docker publication is separate from the npm release workflow. After a successful
+editor release, run the **Docker** workflow with the existing version (for example,
+`1.0.0-beta.5`). It checks out `@pascal-app/editor@<version>` and builds amd64 and
+arm64 images. Leave `publish` disabled for a build-only check, then enable it to
+publish `ghcr.io/<owner>/<repository>:<version>`. It never updates `latest`.
+
+Before switching the default Compose configuration in a follow-up PR:
+
+1. Publish a version from a completed editor release.
+2. In the organization's Packages settings, connect the package to `pascalorg/editor`
+   and set its visibility to **Public** (a one-time maintainer action).
+3. Using a Docker configuration without registry credentials, inspect the manifest
+   and pull both platforms. Replace `<version>` with the published version:
+
+   ```bash
+   docker buildx imagetools inspect ghcr.io/pascalorg/editor:<version>
+   docker pull --platform linux/amd64 ghcr.io/pascalorg/editor:<version>
+   docker pull --platform linux/arm64 ghcr.io/pascalorg/editor:<version>
+   ```
+
+4. Smoke-test startup and scene persistence on both architectures and record the
+   version, digest, and results in the follow-up PR. The maintainer must approve
+   promotion to `latest` and the default-Compose transition separately.
+
+If a Docker build or push fails, npm releases and source-based Compose remain
+unchanged. Inspect GHCR for a partially uploaded version before retrying the same
+release tag; do not rerun npm publishing or move the Git tag. For a bad image, keep
+users on the source build or a previously verified image digest, and publish a
+corrected release version rather than silently replacing an image users may have
+pinned. Registry cleanup and any future `latest` rollback require maintainer approval.
 
 ## CLI-managed editor
 
