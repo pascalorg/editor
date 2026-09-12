@@ -11,7 +11,8 @@ import {
 if (typeof globalThis.requestAnimationFrame !== 'function') {
   globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) =>
     setTimeout(() => cb(Date.now()), 0) as unknown as number) as typeof requestAnimationFrame
-  globalThis.cancelAnimationFrame = ((id: number) => clearTimeout(id)) as typeof cancelAnimationFrame
+  globalThis.cancelAnimationFrame = ((id: number) =>
+    clearTimeout(id)) as typeof cancelAnimationFrame
 }
 
 function file(contents: string, name = 'test.txt'): File {

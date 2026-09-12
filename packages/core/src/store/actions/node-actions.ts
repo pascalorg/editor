@@ -1576,9 +1576,7 @@ const updateNodesActionImpl = (
   for (const url of orphanedLocalAssets) {
     // Fire-time scan of the live graph: undo or a duplicate node may still
     // share the same asset:// handle.
-    scheduleLocalAssetDelete(url, undefined, () =>
-      collectSceneAssetUrls(get().nodes).includes(url),
-    )
+    scheduleLocalAssetDelete(url, undefined, () => collectSceneAssetUrls(get().nodes).includes(url))
   }
 
   // Batch dirty-marking into a single RAF to avoid redundant callbacks during rapid updates
