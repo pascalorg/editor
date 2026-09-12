@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.0 (2026-09-12)
 
 ### Features
 
@@ -17,7 +17,7 @@
 - **ClawHub publication readiness** — scoped `.clawhubignore` policies with regression tests that reject re-inclusion and legacy-override rules ([#798](https://github.com/pascalorg/editor/pull/798), [#806](https://github.com/pascalorg/editor/pull/806))
 - **Official MCP Registry entry** — `io.github.pascalorg/editor` 0.6.1 publishes the hosted Streamable HTTP endpoint, with CI validating the manifest against the live API catalog ([#808](https://github.com/pascalorg/editor/pull/808), [#809](https://github.com/pascalorg/editor/pull/809))
 - **Portable `mcp.json`, Cursor manifest, Gemini extension, plate logo** — Codex and Cursor now register the bundled MCP server (the spec reads root `mcp.json`, not `.mcp.json`); `.cursor-plugin/plugin.json` and `gemini-extension.json` add those marketplaces; the MCP Registry entry gains `repository` and `icons`; marketplace logos use the brand mark on its `#171717` plate; `bun run skills:validate` asserts parity across every descriptor ([#829](https://github.com/pascalorg/editor/pull/829))
-- **`pascal agent claim` and `pascal agent status`** — an agent can open a prefilled 15-minute human handoff and verify its hosted key without storing or printing it, available in the verified GitHub CLI preview ([#815](https://github.com/pascalorg/editor/pull/815), [#818](https://github.com/pascalorg/editor/pull/818), [#819](https://github.com/pascalorg/editor/pull/819), [#821](https://github.com/pascalorg/editor/pull/821), [#822](https://github.com/pascalorg/editor/pull/822))
+- **`pascal agent claim` and `pascal agent status`** — an agent can open a prefilled 15-minute human handoff and verify its hosted key without storing or printing it, shipped in the npm-published CLI ([#815](https://github.com/pascalorg/editor/pull/815), [#818](https://github.com/pascalorg/editor/pull/818), [#819](https://github.com/pascalorg/editor/pull/819), [#821](https://github.com/pascalorg/editor/pull/821), [#822](https://github.com/pascalorg/editor/pull/822))
 - **Small CLI, downloaded web runtime** — `@pascal-app/cli` now installs from a 0.5 MB npm package instead of 65 MB: the MCP service ships inside it, so `pascal mcp connect` works with no editor process and no download, while the web editor runtime is fetched once per version from its release asset, verified against a SHA-256 digest published in the package, and installed atomically; `--runtime <directory-or-archive>` covers offline hosts, `HTTPS_PROXY`/`NO_PROXY` are honoured, and an editor started by a pre-split CLI keeps its own MCP child, which must be stopped once by hand after upgrading (#845)
 - **Optional hosted key in the Cursor plugin** — `.cursor-plugin/plugin.json` declares an optional `PASCAL_API_KEY` variable and points at a Cursor-dialect `.cursor-plugin/mcp.json` that adds a `pascal-hosted` server for `https://editor.pascal.app/api/mcp`, so a Cursor install can reach hosted projects, Capture scans, and shared workspaces while the credential-free local server keeps working; the portable `mcp.json` stays credential-free because Agent Plugins 1.0.0 forbids secrets and placeholder expansion in `headers`, so Codex configures the hosted endpoint with `codex mcp add --bearer-token-env-var PASCAL_API_KEY` instead ([#849](https://github.com/pascalorg/editor/pull/849))
 - **Capture packages folded into core and viewer** — `@pascal-app/capture-protocol` is now `@pascal-app/core/capture` and `@pascal-app/capture-viewer` is now `@pascal-app/viewer/capture` (plus `@pascal-app/viewer/capture/preview`), so 1.0.0 ships seven packages instead of nine. Neither package was ever published to npm, so there is no npm migration; in-repo and workspace consumers change their import paths only.
@@ -41,6 +41,40 @@
 - The Claude Code plugin root is now `skills/` instead of the repository root, so installing `pascal-agent-skills@pascal` copies the two skill bundles and their MCP configuration instead of caching the whole monorepo and running `bun install` against the root lockfile ([#832](https://github.com/pascalorg/editor/pull/832))
 - Preserve custom scene materials across save, load, clone, fork, and live sync. Materials were dropped at every persistence boundary, so a scene reopened with default surfaces. Collections were dropped on MCP import for the same reason ([#597](https://github.com/pascalorg/editor/pull/597)) by [@ShiroKSH](https://github.com/ShiroKSH)
 - Wall junction mitering is now deterministic for exactly-collinear walls, so identical scenes produce identical geometry regardless of node iteration order ([#596](https://github.com/pascalorg/editor/pull/596)) by [@tomatotomata](https://github.com/tomatotomata)
+
+### Packages
+
+All seven public packages are published as `1.0.0` under the npm `latest`
+dist-tag: `core`, `viewer`, `editor`, `nodes`, `mcp`, `ifc-converter`, and
+`cli`. `@pascal-app/capture-protocol` and `@pascal-app/capture-viewer` were
+folded into `@pascal-app/core/capture` and `@pascal-app/viewer/capture` before
+the release and were never published.
+
+### Contributors
+
+Thank you to [@wass08](https://github.com/wass08),
+[@Snoopy147](https://github.com/Snoopy147),
+[@sudhir9297](https://github.com/sudhir9297),
+[@ActArtech](https://github.com/ActArtech),
+[@anton-pascal](https://github.com/anton-pascal),
+[@toycenterboss-bot](https://github.com/toycenterboss-bot),
+[@JimmyZheng-ZJU](https://github.com/JimmyZheng-ZJU),
+[@ShiroKSH](https://github.com/ShiroKSH),
+[@tomatotomata](https://github.com/tomatotomata),
+[@alxbouchard](https://github.com/alxbouchard),
+[@SomSamantray](https://github.com/SomSamantray),
+[@konevenkatesh](https://github.com/konevenkatesh),
+[@maherm](https://github.com/maherm),
+[@rootsbymenda](https://github.com/rootsbymenda),
+[@tamg](https://github.com/tamg),
+[@tylergibbs1](https://github.com/tylergibbs1),
+[@vjureta](https://github.com/vjureta),
+[@yorhodes](https://github.com/yorhodes), and
+[@ztffn](https://github.com/ztffn) for their work across the editor, viewer,
+node library, MCP integration, plugins, documentation, and stability fixes.
+
+**Full changelog**:
+https://github.com/pascalorg/editor/compare/v1.0.0-beta.1...v1.0.0
 
 ## 1.0.0-beta.1 (2026-07-30)
 

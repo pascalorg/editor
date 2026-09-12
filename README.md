@@ -26,42 +26,10 @@ collision-free loopback ports, and keeps projects in `~/.pascal/data/pascal.db`.
 package holds the CLI and that MCP service; the web editor runtime is downloaded once per
 version on the first command that starts the editor and verified against a digest published
 inside the package. Configure an agent to launch `pascal mcp connect`, which needs neither
-the editor process nor that download. See [Run Pascal locally](https://editor.pascal.app/docs/developers/local-editor)
+the editor process nor that download. Install the `pascal` command with
+`npm install --global @pascal-app/cli`. See [Run Pascal locally](https://editor.pascal.app/docs/developers/local-editor)
 for pnpm/Bun commands, project management, MCP setup, updates, storage paths, and
-troubleshooting. The npm release is the older runtime described below; use the verified
-GitHub preview when a task needs the new read-only furniture candidate check.
-
-## Verified CLI preview
-
-The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, which predates the read-only furniture candidate input and hosted agent claim/status commands in this repository. To use those capabilities before the next npm release, install the verified GitHub prerelease built from commit `5dabbc3b56109c9f79dc8a378443a4c520d9ee0a`:
-
-```bash
-PASCAL_PREVIEW_VERSION='1.0.0-beta.2.status.0'
-PASCAL_PREVIEW_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/pascal-preview"
-PASCAL_PREVIEW_DOWNLOAD="$(mktemp -d)"
-cd "$PASCAL_PREVIEW_DOWNLOAD"
-
-curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
-curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/SHA256SUMS.txt"
-
-# macOS
-shasum -a 256 -c SHA256SUMS.txt
-# Linux: use `sha256sum -c SHA256SUMS.txt` instead.
-
-npm install --global --prefix "$PASCAL_PREVIEW_PREFIX" --ignore-scripts \
-  "./pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
-export PATH="$PASCAL_PREVIEW_PREFIX/bin:$PATH"
-pascal --version
-pascal update --version "$PASCAL_PREVIEW_VERSION"
-pascal editor --no-open
-# For an existing hosted autonomous-agent key:
-PASCAL_API_KEY='sk_live_...' pascal agent claim
-PASCAL_API_KEY='sk_live_...' pascal agent status --json
-```
-
-The expected archive SHA-256 is `15628baeeb174fb7786a1643db08f0554bf6d18afaaa3979f01922c5cd40019a`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before using the Claude plugin-provided connector, running `pascal mcp setup claude` or `pascal mcp setup codex` for another installation path, or configuring `pascal mcp connect` manually. `pascal agent claim` opens a prefilled 15-minute human handoff; `pascal agent status` verifies the key and reports the bounded claim state. Neither command stores or prints the hosted key. If you assign `PASCAL_API_KEY` in a shell command, avoid or remove that command from shell history. This GitHub prerelease is not an npm version.
+troubleshooting.
 
 Use one active agent client per local CLI service. The standalone local HTTP runtime shares active scene state between clients; use separate `PASCAL_HOME` directories and service processes when independent concurrent work is required.
 
