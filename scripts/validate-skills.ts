@@ -5,6 +5,7 @@ import { XMLParser, XMLValidator } from 'fast-xml-parser'
 import { hostedMcpUrl, validateClaudeMcpPolicy } from './claude-mcp-config-policy'
 import { validateClawHubIgnorePolicy } from './clawhub-ignore-policy'
 import { validateOpenAiToolAnnotationPacket } from './openai-tool-annotation-policy'
+import { isPathInside } from './path-containment'
 import {
   collectSkillDiscoveryEntries,
   validatePublicSkillDiscoverySurface,
@@ -390,7 +391,7 @@ for (const skillName of skillNames) {
         const target = match[1]!
         if (/^(?:https?:|mailto:|#)/.test(target)) continue
         const resolvedTarget = resolve(dirname(path), target.split('#')[0]!)
-        if (!resolvedTarget.startsWith(`${skillRoot}/`)) {
+        if (!isPathInside(skillRoot, resolvedTarget)) {
           fail(`${relative(root, path)} links outside its standalone skill bundle: ${target}`)
         }
       }
@@ -1172,7 +1173,7 @@ for (const field of ['composerIcon', 'logo']) {
     continue
   }
   const asset = resolve(root, value)
-  if (!asset.startsWith(`${root}/`) || !existsSync(asset) || !lstatSync(asset).isFile()) {
+  if (!isPathInside(root, asset) || !existsSync(asset) || !lstatSync(asset).isFile()) {
     fail(`OpenAI ${field} must reference an existing file inside the plugin`)
     continue
   }
