@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url'
 import { XMLParser, XMLValidator } from 'fast-xml-parser'
 import { hostedMcpUrl, validateClaudeMcpPolicy } from './claude-mcp-config-policy'
 import { validateClawHubIgnorePolicy } from './clawhub-ignore-policy'
+import { validateCursorPluginPackage } from './cursor-plugin-policy'
 import { validateOpenAiToolAnnotationPacket } from './openai-tool-annotation-policy'
 import { isPathInside } from './path-containment'
 import {
@@ -957,9 +958,7 @@ const cursorMcpServers = (cursorMcpConfig.mcpServers ?? {}) as Record<string, un
 if (Object.keys(cursorMcpServers).sort().join(',') !== 'pascal,pascal-hosted') {
   fail('Cursor mcp.json must declare exactly the pascal and pascal-hosted servers')
 }
-if (canonicalJson(cursorMcpServers.pascal) !== canonicalJson(portableMcpServers.pascal)) {
-  fail('Cursor mcp.json and the portable mcp.json must declare an identical pascal server')
-}
+for (const failure of validateCursorPluginPackage(root)) fail(failure)
 const cursorHostedServer = cursorMcpServers['pascal-hosted'] as Record<string, unknown> | undefined
 if (
   canonicalJson(cursorHostedServer) !==

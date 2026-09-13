@@ -1,6 +1,12 @@
 # Skill package validation
 
-Released package source: **0.1.8**. Latest released package source: **0.1.8**. `pascal-3d` skill metadata version: **0.1.0**. `furniture-fit` skill metadata version: **0.1.4**. Recorded September 10, 2026.
+Candidate package source: **0.1.9**. Latest released package source: **0.1.8**. `pascal-3d` skill metadata version: **0.1.0**. `furniture-fit` skill metadata version: **0.1.4**. Recorded September 10, 2026.
+
+## Bundle 0.1.9 Cursor startup repair candidate
+
+The September 13 marketplace listing serves commit `5275f3e657c21dcd363e3b08e01c97789fc55079` with `gitPath: skills` and no Cursor variables. That directory previously contained only a Claude manifest, so Cursor loaded its global `pascal` command and unsupported `${user_config.pascal_api_key}` header. This candidate adds a self-contained Cursor manifest, MCP configuration, and logo inside that exact install root. Both Cursor entry points use the pinned npm CLI `1.0.0` rather than an absent or outdated global executable; Claude, Codex, and Gemini command contracts stay unchanged.
+
+On the affected desktop, upgrading the global CLI from `0.1.5` to `1.0.0` and reloading the existing server produced Cursor Connected status and the tool inventory. That repairs the existing installation, independently of this source candidate. The candidate passed `skills:validate` (68 tests, 94 assertions), changed-file Biome checks, and strict Claude marketplace validation. A real Node MCP client launched the candidate command from a fresh directory with isolated npm cache and `PASCAL_HOME`, only Node/npm on PATH, and no global Pascal executable: it initialized 46 tools, returned an empty `list_scenes`, ran CLI `1.0.0` from that npm cache, and downloaded no web runtime. Its owned service was stopped after the check. A native Cursor desktop chat separately called the repaired installed server's `list_templates` and returned Empty studio, Two-bedroom apartment, and Garden house without retrying. These are bounded local checks, not a full furniture task cohort, hosted-key success, or marketplace release of this candidate.
 
 ## Bundle 0.1.8 agent-report footprint pre-check release
 
