@@ -10,24 +10,11 @@
   "homepage": "https://editor.pascal.app/docs/developers/mcp",
   "repository": "https://github.com/pascalorg/editor",
   "license": "MIT",
-  "logo": "assets/pascal-mark-plate.svg",
-  "keywords": [
-    "pascal",
-    "3d",
-    "architecture",
-    "mcp",
-    "furniture",
-    "spatial"
-  ],
+  "logo": ".cursor-plugin/pascal-mark-plate.svg",
+  "keywords": ["pascal", "3d", "architecture", "mcp", "furniture", "spatial"],
   "category": "developer-tools",
-  "tags": [
-    "3d",
-    "architecture",
-    "floor-plan",
-    "furniture",
-    "mcp"
-  ],
-  "skills": "./skills/",
+  "tags": ["3d", "architecture", "floor-plan", "furniture", "mcp"],
+  "skills": ["./pascal-3d", "./furniture-fit"],
   "variables": {
     "type": "object",
     "properties": {

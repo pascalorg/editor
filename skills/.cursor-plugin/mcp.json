@@ -3,13 +3,7 @@
     "pascal": {
       "type": "stdio",
       "command": "npx",
-      "args": [
-        "--yes",
-        "--package=@pascal-app/cli@1.0.0",
-        "pascal",
-        "mcp",
-        "connect"
-      ]
+      "args": ["--yes", "--package=@pascal-app/cli@1.0.0", "pascal", "mcp", "connect"]
     },
     "pascal-hosted": {
       "type": "http",
