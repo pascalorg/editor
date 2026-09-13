@@ -16,11 +16,24 @@ import {
 import type {
   ManifoldCompileOutput,
   ManifoldMeshData,
+  ManifoldRuntimeOptions,
   ManifoldWorkerRequest,
   ManifoldWorkerResponse,
 } from './print-shell-compiler-protocol'
 
 const WORKER_TIMEOUT_MS = 60_000
+
+let manifoldRuntime: ManifoldRuntimeOptions | undefined
+
+/**
+ * Overrides where the print-export worker loads the manifold-3d module and
+ * wasm from. See the loader in print-shell-compiler-manifold-core.ts for the
+ * default resolution order; hosts with restrictive networks should call this
+ * with self-hosted asset URLs before the first print export.
+ */
+export function configureManifoldRuntime(options: ManifoldRuntimeOptions | undefined): void {
+  manifoldRuntime = options
+}
 
 export type ManifoldCompileRunner = (meshes: ManifoldMeshData[]) => Promise<ManifoldCompileOutput>
 
@@ -76,7 +89,7 @@ export const runManifoldWorker: ManifoldCompileRunner = (meshes) => {
   const activeWorker = getWorker()
   const id = nextRequestId
   nextRequestId += 1
-  const request: ManifoldWorkerRequest = { id, meshes }
+  const request: ManifoldWorkerRequest = { id, meshes, runtime: manifoldRuntime }
   const transfer = meshes.flatMap((mesh) => [
     mesh.positions.buffer as ArrayBuffer,
     mesh.indices.buffer as ArrayBuffer,

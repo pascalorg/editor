@@ -46,6 +46,7 @@ If the task is a furniture or clearance assessment and the `furniture-fit` skill
 ### Read or create the right scene
 
 - Existing project: call `list_scenes` when available, select by exact ID or unambiguous name, then call `load_scene`.
+- Room scan on the hosted server only: reach it with `list_captures`, then `get_capture`, then `open_capture_as_project` for a `processed` scan you have edit access to on the scan's own project; these tools do not exist on the local CLI, so never call them there.
 - New persistent project: call `create_project` before modeling.
 - Already active scene: call `get_project_status` and `get_scene` before editing.
 - If persistence tools are absent, explain that the connected server is an in-memory/custom runtime and do not promise a durable handoff.

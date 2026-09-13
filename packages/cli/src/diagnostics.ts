@@ -2,6 +2,7 @@ import { constants } from 'node:fs'
 import { access, readdir, stat } from 'node:fs/promises'
 import { ensurePascalDirectories, getEditorStatus } from './editor-process.js'
 import { readJsonFile } from './json-files.js'
+import { getMcpServiceStatus } from './mcp-service.js'
 import type { PascalPaths } from './paths.js'
 
 export interface DiagnosticCheck {
@@ -46,39 +47,31 @@ export async function runDoctor(paths: PascalPaths): Promise<DiagnosticCheck[]> 
     })
   }
   try {
-    const status = await getEditorStatus(paths)
+    const [status, mcp] = await Promise.all([getEditorStatus(paths), getMcpServiceStatus(paths)])
     checks.push({
       id: 'runtime',
       status: status.installed ? 'pass' : 'warn',
       message: status.runtime
-        ? `Installed runtime ${status.runtime.version}`
-        : 'No runtime installed yet.',
+        ? `Installed web runtime ${status.runtime.version}`
+        : 'No web runtime installed yet. It downloads when the editor first starts.',
     })
     checks.push({
       id: 'editor',
-      status: status.components.editor.healthy
-        ? 'pass'
-        : status.components.editor.running
-          ? 'fail'
-          : 'warn',
-      message: status.components.editor.healthy
+      status: status.healthy ? 'pass' : status.running ? 'fail' : 'warn',
+      message: status.healthy
         ? `Healthy at ${status.state?.url}`
-        : status.components.editor.running
+        : status.running
           ? 'A recorded editor process is running but unhealthy.'
           : 'The editor is stopped.',
     })
     checks.push({
       id: 'mcp',
-      status: status.components.mcp.healthy
-        ? 'pass'
-        : status.components.mcp.running
-          ? 'fail'
-          : 'warn',
-      message: status.components.mcp.healthy
-        ? `MCP is healthy on loopback port ${status.state?.mcp?.port}.`
-        : status.components.mcp.running
+      status: mcp.healthy ? 'pass' : mcp.running ? 'fail' : 'warn',
+      message: mcp.healthy
+        ? `MCP is healthy on loopback port ${mcp.state?.port}.`
+        : mcp.running
           ? 'The managed MCP process is running but unhealthy.'
-          : 'MCP is stopped with the editor.',
+          : 'MCP is stopped. "pascal mcp connect" starts it on demand.',
     })
     const runtimeVersions = (await readdir(paths.runtime, { withFileTypes: true }))
       .filter((entry) => entry.isDirectory() && !entry.name.startsWith('.'))
@@ -123,14 +116,16 @@ function errorMessage(error: unknown): string {
 
 export async function collectInfo(paths: PascalPaths) {
   await ensurePascalDirectories(paths)
-  const [status, runtimeVersions, pluginLock] = await Promise.all([
+  const [status, mcp, runtimeVersions, pluginLock] = await Promise.all([
     getEditorStatus(paths),
+    getMcpServiceStatus(paths),
     readdir(paths.runtime).catch(() => [] as string[]),
     readJsonFile<{ schemaVersion?: number; plugins?: unknown[] }>(paths.pluginLock),
   ])
   return {
     cli: { node: process.versions.node, platform: process.platform, arch: process.arch },
     editor: status,
+    mcp,
     paths,
     runtimes: runtimeVersions.filter((entry) => !entry.startsWith('.')).sort(),
     plugins: pluginLock?.plugins ?? [],

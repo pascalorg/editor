@@ -38,8 +38,8 @@ type ViewerState = {
   outliner: Outliner
   geometryRevision: number
   bumpGeometryRevision: () => void
-  exportScene: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null
-  setExportScene: (fn: ((format?: 'glb' | 'stl' | 'obj') => Promise<void>) | null) => void
+  exportScene: ((format?: 'glb' | 'usdz' | 'stl' | 'obj') => Promise<void>) | null
+  setExportScene: (fn: ((format?: 'glb' | 'usdz' | 'stl' | 'obj') => Promise<void>) | null) => void
 }
 declare const useViewer: import('zustand').UseBoundStore<import('zustand').StoreApi<ViewerState>>
 export default useViewer

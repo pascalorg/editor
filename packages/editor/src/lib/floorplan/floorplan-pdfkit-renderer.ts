@@ -191,6 +191,7 @@ function paintStyledGeometry(
   const opacity = geometry.opacity ?? 1
   const fillOpacity = (geometry.fillOpacity ?? 1) * opacity
   const strokeOpacity = (geometry.strokeOpacity ?? 1) * opacity
+  const fillRule = geometry.fillRule === 'evenodd' ? 'even-odd' : 'non-zero'
 
   if (fill) raw.fillColor(fill).fillOpacity(fillOpacity)
   if (stroke) {
@@ -206,8 +207,8 @@ function paintStyledGeometry(
     )
   }
 
-  if (fill && stroke) raw.fillAndStroke(fill, stroke)
-  else if (fill) raw.fill(fill)
+  if (fill && stroke) raw.fillAndStroke(fill, stroke, fillRule)
+  else if (fill) raw.fill(fill, fillRule)
   else if (stroke) raw.stroke(stroke)
 }
 
@@ -620,29 +621,36 @@ async function drawImage(
   doc: FloorplanPdfDocument,
   geometry: Extract<FloorplanGeometry, { kind: 'image' }>,
 ): Promise<void> {
-  try {
-    const url = await loadAssetUrl(geometry.url)
-    if (!url) return
-    const response = await fetch(url)
-    if (!response.ok) return
-    const dataUrl = await blobToDataUrl(await response.blob())
-    const raw = doc.raw
-    raw.save().translate(geometry.center[0], geometry.center[1])
-    if (geometry.rotation) raw.rotate((geometry.rotation * 180) / Math.PI)
-    raw.opacity(geometry.opacity ?? 1)
-    const options =
-      geometry.preserveAspectRatio === 'none'
-        ? { width: geometry.width, height: geometry.height }
-        : {
-            fit: [geometry.width, geometry.height] as [number, number],
-            align: 'center' as const,
-            valign: 'center' as const,
-          }
-    raw.image(dataUrl, -geometry.width / 2, -geometry.height / 2, options)
-    raw.restore()
-  } catch {
-    return
+  const source = geometry.url.startsWith('data:') ? geometry.url : await loadAssetUrl(geometry.url)
+  if (!source) {
+    throw new Error('[floorplan-export] Could not resolve a floorplan image')
   }
+
+  let dataUrl = source
+  if (!source.startsWith('data:')) {
+    const response = await fetch(source)
+    if (!response.ok) {
+      throw new Error(
+        `[floorplan-export] Could not load a floorplan image (HTTP ${response.status})`,
+      )
+    }
+    dataUrl = await blobToDataUrl(await response.blob())
+  }
+
+  const raw = doc.raw
+  raw.save().translate(geometry.center[0], geometry.center[1])
+  if (geometry.rotation) raw.rotate((geometry.rotation * 180) / Math.PI)
+  raw.opacity(geometry.opacity ?? 1)
+  const options =
+    geometry.preserveAspectRatio === 'none'
+      ? { width: geometry.width, height: geometry.height }
+      : {
+          fit: [geometry.width, geometry.height] as [number, number],
+          align: 'center' as const,
+          valign: 'center' as const,
+        }
+  raw.image(dataUrl, -geometry.width / 2, -geometry.height / 2, options)
+  raw.restore()
 }
 
 function blobToDataUrl(blob: Blob): Promise<string> {

@@ -336,13 +336,14 @@ export function BuildTab() {
 
   // On open, land on the first build tool — parity with the community Build
   // sidebar, so switching to Build immediately arms a usable tool. Skip when a
-  // build tool is already active (e.g. the B shortcut armed one before this
-  // panel mounted): the active tool is the source of truth, not this default.
+  // Build-tab tool or special mode is already active: the current editor state
+  // is the source of truth, including entry from another panel.
   const didInitRef = useRef(false)
   useEffect(() => {
     if (didInitRef.current) return
     didInitRef.current = true
     const ed = useEditor.getState()
+    if (ed.mode === 'material-paint' || ed.mode === 'terrain-sculpt') return
     if (ed.mode === 'build' && ed.tool) return
     const firstType = buildTypes.find((t) => t.kind)
     if (firstType) handleTypeClick(firstType)

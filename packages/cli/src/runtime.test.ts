@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterAll, afterEach, describe, expect, test } from 'bun:test'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import http from 'node:http'
 import os from 'node:os'
@@ -10,14 +10,21 @@ import {
   stopEditor,
   waitForHealth,
 } from './editor-process.js'
+import { getMcpServiceStatus } from './mcp-service.js'
 import { resolvePascalPaths } from './paths.js'
 import { installBundledRuntime, readActiveRuntime } from './runtime.js'
+import { writeFakeMcpService } from './test-support/fake-mcp-service.js'
 
 const roots: string[] = []
+/** The MCP service ships with the CLI, so it is injected instead of staged in the runtime. */
+const serviceRoot = await mkdtemp(path.join(os.tmpdir(), 'pascal-cli-test-service-'))
+process.env.PASCAL_MCP_SERVICE_PATH = await writeFakeMcpService(serviceRoot)
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map((root) => rm(root, { recursive: true, force: true })))
 })
+
+afterAll(() => rm(serviceRoot, { recursive: true, force: true }))
 
 describe('managed runtime', () => {
   test('installs a bundled runtime outside the package-runner cache', async () => {
@@ -39,14 +46,33 @@ describe('managed runtime', () => {
     await mkdir(paths.data, { recursive: true })
     await writeFile(paths.database, 'persistent')
 
-    const started = await startEditor({ paths, sourceDirectory: source })
+    const started = await startEditor({ paths, runtimeSource: source })
     expect(started.alreadyRunning).toBe(false)
     expect((await getEditorStatus(paths)).healthy).toBe(true)
-    expect((await startEditor({ paths, sourceDirectory: source })).alreadyRunning).toBe(true)
+    expect((await startEditor({ paths, runtimeSource: source })).alreadyRunning).toBe(true)
 
     expect(await stopEditor(paths)).toBe(true)
     expect((await getEditorStatus(paths)).running).toBe(false)
     expect(await Bun.file(paths.database).text()).toBe('persistent')
+  })
+
+  test('preserves a configured Mint host origin in the editor process', async () => {
+    const root = await temporaryRoot()
+    const source = await fakeRuntime(root, '1.2.3')
+    const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
+    const previousMintOrigin = process.env.MINT_PASCAL_HOST_ORIGIN
+    process.env.MINT_PASCAL_HOST_ORIGIN = 'https://pascal.example.com'
+
+    try {
+      const started = await startEditor({ paths, runtimeSource: source })
+      const response = await fetch(`http://127.0.0.1:${started.state.port}/mint-origin`)
+
+      expect(await response.text()).toBe('https://pascal.example.com')
+    } finally {
+      await stopEditor(paths)
+      if (previousMintOrigin === undefined) delete process.env.MINT_PASCAL_HOST_ORIGIN
+      else process.env.MINT_PASCAL_HOST_ORIGIN = previousMintOrigin
+    }
   })
 
   test('serializes concurrent starts into one managed editor', async () => {
@@ -55,8 +81,8 @@ describe('managed runtime', () => {
     const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
 
     const [first, second] = await Promise.all([
-      startEditor({ paths, port: 0, sourceDirectory: source }),
-      startEditor({ paths, port: 0, sourceDirectory: source }),
+      startEditor({ paths, port: 0, runtimeSource: source }),
+      startEditor({ paths, port: 0, runtimeSource: source }),
     ])
 
     expect(first.state.pid).toBe(second.state.pid)
@@ -80,7 +106,7 @@ describe('managed runtime', () => {
       const started = await startEditor({
         paths,
         port: address.port,
-        sourceDirectory: source,
+        runtimeSource: source,
       })
 
       expect(started.state.port).not.toBe(address.port)
@@ -153,7 +179,7 @@ describe('managed runtime', () => {
     const active = await installBundledRuntime(paths, source)
     await rm(path.join(active.directory, 'apps/editor/server.js'))
 
-    const started = await startEditor({ paths, port: 0, sourceDirectory: source })
+    const started = await startEditor({ paths, port: 0, runtimeSource: source })
 
     expect(started.state.version).toBe('1.2.3')
     expect((await getEditorStatus(paths)).healthy).toBe(true)
@@ -168,7 +194,7 @@ describe('managed runtime', () => {
     const active = await installBundledRuntime(paths, source)
     await writeFile(path.join(active.directory, 'runtime-manifest.json'), '{not-json')
 
-    const started = await startEditor({ paths, port: 0, sourceDirectory: source })
+    const started = await startEditor({ paths, port: 0, runtimeSource: source })
 
     expect(started.state.version).toBe('1.2.3')
     expect((await getEditorStatus(paths)).healthy).toBe(true)
@@ -182,7 +208,7 @@ describe('managed runtime', () => {
     await mkdir(paths.run, { recursive: true })
     await writeFile(paths.currentRuntime, '{not-json')
 
-    const started = await startEditor({ paths, port: 0, sourceDirectory: source })
+    const started = await startEditor({ paths, port: 0, runtimeSource: source })
 
     expect(started.state.version).toBe('1.2.3')
     expect((await getEditorStatus(paths)).healthy).toBe(true)
@@ -206,7 +232,7 @@ describe('managed runtime', () => {
     const root = await temporaryRoot()
     const source = await fakeRuntime(root, '1.2.3')
     const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
-    const started = await startEditor({ paths, port: 0, sourceDirectory: source })
+    const started = await startEditor({ paths, port: 0, runtimeSource: source })
     await writeFile(
       paths.state,
       `${JSON.stringify({ ...started.state, instanceId: 'no-longer-healthy' }, null, 2)}\n`,
@@ -220,7 +246,7 @@ describe('managed runtime', () => {
     const root = await temporaryRoot()
     const source = await fakeRuntime(root, '1.2.3')
     const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
-    const started = await startEditor({ paths, port: 0, sourceDirectory: source })
+    const started = await startEditor({ paths, port: 0, runtimeSource: source })
     await writeFile(path.join(started.state.runtimeDirectory, 'runtime-manifest.json'), '{not-json')
     await writeFile(
       paths.state,
@@ -235,7 +261,7 @@ describe('managed runtime', () => {
     const firstSource = await fakeRuntime(root, '1.2.3')
     const brokenSource = await fakeRuntime(root, '2.0.0', false)
     const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
-    await startEditor({ paths, port: 0, sourceDirectory: firstSource })
+    await startEditor({ paths, port: 0, runtimeSource: firstSource })
     const candidate = await installBundledRuntime(paths, brokenSource, { activate: false })
 
     await expect(activateEditorRuntime(paths, candidate)).rejects.toMatchObject({
@@ -246,25 +272,24 @@ describe('managed runtime', () => {
     await stopEditor(paths)
   })
 
-  test('upgrades a running editor state that predates managed MCP', async () => {
+  test('restarts the editor and repoints MCP when a new runtime is activated', async () => {
     const root = await temporaryRoot()
     const firstSource = await fakeRuntime(root, '1.2.3')
     const secondSource = await fakeRuntime(root, '2.0.0')
     const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
-    const started = await startEditor({ paths, sourceDirectory: firstSource })
-    const oldMcpPid = started.state.mcp?.pid
-    if (!oldMcpPid) throw new Error('test MCP did not start')
-    process.kill(oldMcpPid, 'SIGTERM')
-    await waitUntilStopped(oldMcpPid)
-    const legacyState = { ...started.state, mcp: undefined }
-    await writeFile(paths.state, `${JSON.stringify(legacyState, null, 2)}\n`)
-    await rm(paths.mcpToken, { force: true })
+    const started = await startEditor({ paths, runtimeSource: firstSource })
     const candidate = await installBundledRuntime(paths, secondSource, { activate: false })
 
     const result = await activateEditorRuntime(paths, candidate)
 
     expect(result.restarted).toBe(true)
-    expect((await getEditorStatus(paths)).healthy).toBe(true)
+    const status = await getEditorStatus(paths)
+    expect(status.healthy).toBe(true)
+    expect(status.state?.version).toBe('2.0.0')
+    expect(status.state?.pid).not.toBe(started.state.pid)
+    const mcp = await getMcpServiceStatus(paths)
+    expect(mcp.healthy).toBe(true)
+    expect(mcp.state?.editorOrigin).toBe(status.state?.url ?? '')
     await stopEditor(paths)
   })
 
@@ -274,7 +299,7 @@ describe('managed runtime', () => {
     const secondSource = await fakeRuntime(root, '2.0.0')
     const paths = resolvePascalPaths({ PASCAL_HOME: path.join(root, 'home') })
     await installBundledRuntime(paths, firstSource)
-    const seeded = await startEditor({ paths, port: 0, sourceDirectory: firstSource })
+    const seeded = await startEditor({ paths, port: 0, runtimeSource: firstSource })
     await stopEditor(paths)
     await writeFile(paths.state, `${JSON.stringify(seeded.state, null, 2)}\n`)
     const candidate = await installBundledRuntime(paths, secondSource, { activate: false })
@@ -293,35 +318,13 @@ async function temporaryRoot(): Promise<string> {
   return root
 }
 
-async function waitUntilStopped(pid: number): Promise<void> {
-  const deadline = Date.now() + 2_000
-  while (Date.now() < deadline) {
-    try {
-      process.kill(pid, 0)
-    } catch {
-      return
-    }
-    await Bun.sleep(20)
-  }
-  throw new Error(`process ${pid} did not stop`)
-}
-
 async function fakeRuntime(root: string, version: string, healthy = true): Promise<string> {
   const runtime = path.join(root, `source-${version}`)
   const app = path.join(runtime, 'apps/editor')
-  const services = path.join(runtime, 'services')
   await mkdir(app, { recursive: true })
-  await mkdir(services, { recursive: true })
   await writeFile(
     path.join(runtime, 'runtime-manifest.json'),
-    JSON.stringify({
-      schemaVersion: 1,
-      version,
-      entrypoint: 'apps/editor/server.js',
-      mcpEntrypoint: 'services/pascal-mcp.mjs',
-      healthPath: '/api/health',
-      mcpHealthPath: '/health',
-    }),
+    JSON.stringify({ schemaVersion: 2, version, entrypoint: 'apps/editor/server.js' }),
   )
   await writeFile(
     path.join(app, 'server.js'),
@@ -339,38 +342,16 @@ const server = http.createServer((request, response) => {
     }))
     return
   }
+  if (request.url === '/mint-origin') {
+    response.end(process.env.MINT_PASCAL_HOST_ORIGIN ?? '')
+    return
+  }
   response.end('{}')
 })
 server.listen(Number(process.env.PORT), process.env.HOSTNAME)
 process.on('SIGTERM', () => server.close(() => process.exit(0)))
 `
       : 'process.exit(1)\n',
-  )
-  await writeFile(
-    path.join(services, 'pascal-mcp.mjs'),
-    `import http from 'node:http'
-const token = process.env.PASCAL_MCP_HTTP_TOKEN
-const server = http.createServer((request, response) => {
-  if (request.headers.authorization !== \`Bearer \${token}\`) {
-    response.writeHead(401).end()
-    return
-  }
-  response.setHeader('content-type', 'application/json')
-  if (request.url === '/health') {
-    response.end(JSON.stringify({
-      status: 'ok',
-      app: 'mcp',
-      version: process.env.PASCAL_RUNTIME_VERSION,
-      instanceId: process.env.PASCAL_INSTANCE_ID,
-    }))
-    return
-  }
-  response.writeHead(404).end('{}')
-})
-const portIndex = process.argv.indexOf('--port')
-server.listen(Number(process.argv[portIndex + 1]), '127.0.0.1')
-process.on('SIGTERM', () => server.close(() => process.exit(0)))
-`,
   )
   return runtime
 }

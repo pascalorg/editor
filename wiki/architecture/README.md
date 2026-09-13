@@ -25,6 +25,7 @@ Canonical rules for code that touches `packages/core`, `packages/viewer`, `packa
 | [node-schemas](node-schemas.md) | Zod schema pattern for node types, `createNode`, `updateNode` |
 | [inspector-field-limits](inspector-field-limits.md) | When a numeric inspector field may and may not have `min`/`max` — no arbitrary caps on dimensions |
 | [vertical-model](vertical-model.md) | Stored level heights, plane-bound wall/ceiling tops, slab placement + thickness, support hosts, clamp rules, and the load migration |
+| [space-detection](space-detection.md) | Commit and replication contract for wall-driven room reconciliation |
 | [events](events.md) | Typed event bus — emitting and listening to node and grid events |
 | [creating-rules](creating-rules.md) | How to add or update a page in this folder |
 

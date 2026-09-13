@@ -34,6 +34,7 @@ export const AGENT_GUIDE = [
   '',
   '- Prefer semantic tools over raw graph patches.',
   '- Do not hand-write node graphs unless no semantic tool exists.',
+  '- When you do use `apply_patch` for bulk graph edits, batch-first is the default: one call containing all create/update/delete ops for the phase, in stable order so later ops can reference ids created earlier. A single call is atomic (all or nothing); do not loop one-op `apply_patch` calls.',
   '- For rooms, use `create_room` -> `add_door` -> `add_window` -> `furnish_room`.',
   '- `furnish_room` skips or nudges poses that block door clear zones or overlap other items; `verify_scene` and `check_collisions` report remaining issues.',
   '- Between adjacent rooms, prefer one shared wall (or only cut openings that line up). Leave ~0.65 m clear on both sides of each door; do not stack furniture footprints.',

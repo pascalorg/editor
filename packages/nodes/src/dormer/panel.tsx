@@ -302,7 +302,7 @@ export default function DormerPanel() {
               restoreOnCommit={false}
               step={0.05}
               unit="m"
-              value={Math.round(node.width * 100) / 100}
+              value={node.width}
             />
             <SliderControl
               label="Depth"
@@ -314,7 +314,7 @@ export default function DormerPanel() {
               restoreOnCommit={false}
               step={0.05}
               unit="m"
-              value={Math.round(node.depth * 100) / 100}
+              value={node.depth}
             />
             <SliderControl
               label="Wall Height"
@@ -326,7 +326,7 @@ export default function DormerPanel() {
               restoreOnCommit={false}
               step={0.05}
               unit="m"
-              value={Math.round(node.height * 100) / 100}
+              value={node.height}
             />
             <SliderControl
               label={node.roofType === 'shed' ? 'Pitch Rise' : 'Roof Height'}
@@ -338,7 +338,7 @@ export default function DormerPanel() {
               restoreOnCommit={false}
               step={0.05}
               unit="m"
-              value={Math.round(node.roofHeight * 100) / 100}
+              value={node.roofHeight}
             />
           </PanelSection>
 

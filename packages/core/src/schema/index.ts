@@ -164,6 +164,11 @@ export {
   isDefaultGutterNode,
 } from './nodes/gutter'
 export { HvacEquipmentNode } from './nodes/hvac-equipment'
+export {
+  ImportedMeshNode,
+  ImportedMeshPrimitive,
+  type ImportedMeshPrimitive as ImportedMeshPrimitiveValue,
+} from './nodes/imported-mesh'
 export type {
   AnimationEffect,
   Asset,
