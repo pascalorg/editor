@@ -1,0 +1,104 @@
+{
+  "round": 3,
+  "pin": "cae7943",
+  "verdict": "NO-SHIP — 2 FAIL, 6 FLAG, 10 PASS. Big wins: the dollhouse cut is real from above (no film, near faces open into the cavity, X-ray OFF restores 'Full height'), the ICC link now returns 1,613 relevant FL titles, the homerun spine reads as parallel colored runs, the effective date prints, the legend gutter no longer erases framing, and schedules collapse to ONE sheet. Two blockers remain: (A1) at eye level from outside every wall still carries the host dot-stipple film and cladding is never visible, because host mode 'down' routes all walls to materials.invisible (a see-through ghost, not hidden); (C5) the schedules sheet now overprints its 41st takeoff row with the red flag list. Coordinator item 8 (per-room 'no floor slab' warning) does not fire at all.",
+  "items": {
+    "A1": {
+      "status": "FAIL",
+      "evidence": "/tmp/r3c-low-dots.png",
+      "note": "HALF FIXED. From a dollhouse pitch the cut is genuinely right: /tmp/r3-a-top.png, /tmp/r3-a-0/2/4.png and the 20x crop /tmp/r3-a-close.png show NO film, camera-side stacks removed, studs + wiring + floors + furniture crisp, and the FAR wall's drywall reading as an opaque light backdrop band. Toggle restore verified: X-ray ON -> host chip 'Low', X-ray OFF -> 'Full height', re-ON -> back (/tmp/r3-a-xrayoff.png vs /tmp/r3-a-xrayon2.png) — the previous wall mode IS restored. STILL BROKEN at eye level: /tmp/r3-low-b.png, /tmp/r3-low-c.png and crops /tmp/r3c-low-dots.png, /tmp/r3c-lowc-facade.png, /tmp/r3c-lowd.png show every wall as a light dot-stipple film with the horizon visible straight through the building, and NO cladding anywhere from outside (the camera-facing exterior stack is culled by design, so from outdoors you see studs plus that wall's own interior drywall). Root cause proven in host source, not in Bones: private-editor editor/packages/viewer/src/systems/wall/wall-cutout.tsx sets hideWall = true for every wall when wallMode === 'down', and 'hidden' walls get materials.invisible, which wall-materials.ts:480 builds via createInvisibleWallMaterial as a dotted see-through ghost. The host has no mode that truly removes the shell, so forcing 'down' trades 'film over studs' for 'film over everything'. Repro: fresh clone, open panel, X-ray on, orbit to pitch < 15 deg (right-drag down 90 px), no zoom."
+    },
+    "A2": {
+      "status": "PASS",
+      "evidence": "/tmp/r3-a-2.png",
+      "note": "Now that faces actually open, the swap is correct: over 4 quarter turns (/tmp/r3-a-0..4.png) the open cavity follows the camera and the previously open side closes back to a drywall backdrop; motion is smooth, no popping lag, no one-frame flash of the old cut."
+    },
+    "A3": {
+      "status": "PASS",
+      "evidence": "/tmp/a3-cand0.png",
+      "note": "Unchanged from rounds 1-2: injected tree between camera and house occludes the skeleton (wire terminates at the canopy at 20x); below-grade ghost stays restricted to foundation/floor-framing."
+    },
+    "A4": {
+      "status": "FLAG",
+      "evidence": "/tmp/r3-p-panel-fl.png",
+      "note": "Coordinator item 8 FAILED to land. Floors render in every room that has a slab, and the 'Ground floor is slab-on-grade — see Foundation for the slab and footings' note is present, but the new per-room check never fires: the panel shows only the 3 RO flags and the dedupe warning, no 'Room \"...\" has no floor slab under it'. Root cause in cae7943 src/framing/compute.ts: the room centroid for 'Living / Kitchen' (bbox -4..4 x -2.5..2.5) is exactly (0.00, 0.00), which is the CORNER vertex of slab 0..5.5 x 0..7.5, and the inPoly ray-cast counts a boundary point as inside, so slabCovered is true for all 6 rooms — including the phantom 8x5 room that has no slab under it. Fix: sample 4-5 interior points (centroid plus 0.25/0.75 bbox lerps) and/or treat on-edge hits as outside."
+    },
+    "A5": {
+      "status": "FLAG",
+      "evidence": "/tmp/r3-probe.log",
+      "note": "Wire coincidence largely fixed by the 12 mm drill planes: exactly-coincident wire slots 61 -> 27, extra coincident segments 108 -> 42, coincident share of drawn wire 31.2% -> 7.9%. Residual: 4 circuit PAIRS still share an identical plane (SA-1/GEN-2, GEN-1/GEN-3, SA-2/BA-1, LTG-2/LTG-3) plus an SA-1 self-duplicate, and all 11 circuits still stack on one riser stub at (0.06, 1.52, 3.75). Framing duplicates untouched since round 2: 11 same-wall exact duplicates (4 studs, 6 backings, 1 cripple) plus 3 exactly coincident pipe runs."
+    },
+    "A6": {
+      "status": "FLAG",
+      "evidence": "/tmp/r3-a-close.png",
+      "note": "Circuits are now traceable in 3D — the spine shows parallel, distinctly colored runs (11 circuits, min RGB distance 45) instead of one color. Framing vs assembly layers vs MEP read cleanly at dollhouse pitch. Remaining legibility hole is inherited from A1: at eye level the stipple film desaturates every layer color and the cladding blue-grey never appears."
+    },
+    "B1": {
+      "status": "PASS",
+      "evidence": "/tmp/r3-p-panel-fl.png",
+      "note": "CTA full-width at the panel footer, 'Blueprints / 6 print-ready sheets · LOD 400', and the popup renders exactly 6 sheets (/tmp/r3-sheet-0..5.png) — count matches after the schedules pages collapsed from 2 to 1."
+    },
+    "B2": {
+      "status": "PASS",
+      "evidence": "/tmp/r3-icc-fl.png",
+      "note": "Fixed. Link is now https://codes.iccsafe.org/search/titles?searchTermAny=<short code name>; clicking it in-app with Florida selected lands on '1,613 title results for \"Florida Building Code, Residential\"' with the correct top hit '2023 Florida Building Code, Residential, Eighth Edition — 2021 IRC Amended — Effective Date: Dec 31, 2023', plus the 7th (2020) and 9th (2026) editions. Picker itself still good: search 'flor' filters to Florida, Auto row shows the guess ('Auto — NY'), and selecting FL changes the model (1165 -> 1878 members)."
+    },
+    "B3": {
+      "status": "FLAG",
+      "evidence": "/tmp/r3-p-panel.png",
+      "note": "Toggles are live and counts plausible (AUTO/NY 1165m/87d, FL 1878m/87d); flags wrap to two lines with a row tooltip, no truncation soup; takeoff sections readable. Unchanged wart: a recompute still costs ~14 s with no spinner or pending state — the panel sits on stale numbers with no feedback."
+    },
+    "B4": {
+      "status": "PASS",
+      "evidence": "/tmp/r3-p-panel-fl.png",
+      "note": "Default 288 px sidebar: no clipped controls, spacing pills readable, disclaimer 'Drafting aid, not engineering — verify with your local building department.' intact above the CTA; truncated takeoff spans still carry title=\"item — detail\" tooltips (verified in round 2 at 320 px)."
+    },
+    "C1": {
+      "status": "FLAG",
+      "evidence": "/tmp/r3c-title.png",
+      "note": "Coordinator item 4 PASSES — the effective date now prints, on all 6 sheets: 'Jurisdiction: FL — Florida Building Code, Residential — 8th Editi' / 'on (2023), 2021 IRC base, effective 2023-12-31'. Border, project/level line, LOD + date line and scale bars all present and plausible (3 m bar = 190 px on the foundation sheet, 4 m on wall/electrical, 3 m on MEP, correctly absent on schedules). Three cosmetic defects: (1) the wrap splits mid-word ('8th Editi|on') because line 1 is hard-cut at 46 chars instead of at a space; (2) the added line pushes the disclaimer line onto the title-block bottom rule — 'Drafting aid, not engineering — verify with your local building department' is sliced through its x-height on EVERY sheet and may drop entirely in print; (3) level name is still empty ('Pascal project — Level')."
+    },
+    "C2": {
+      "status": "PASS",
+      "evidence": "/tmp/r3-sheet-0.png",
+      "note": "Foundation corners read as single mitered runs; T-junctions butt cleanly, no crossed boxes or Y artifacts, anchor-bolt ticks evenly spaced inside the plates."
+    },
+    "C3": {
+      "status": "FLAG",
+      "evidence": "/tmp/r3c-mep-legend.png",
+      "note": "Both coordinator items land partially. Item 3: the electrical sheet spine now draws as parallel distinct-colored runs (/tmp/r3-sheet-3.png) — 11 legend rows with breaker/gauge/zone, colors matching the 3D palette, device tags on-plan, homeruns converging at the single 'P' symbol; residual is the 4 circuit pairs still sharing a plane (A5), visible as double-width strokes on the north spine. Item 6: the Plumbing + HVAC sheet now HAS a role legend ('vent stack', 'supply / DWV pipe', 'duct') and a wall-footprint context underlay (/tmp/r3-sheet-4.png). But the context underlay ignores the legend gutter: the west wing's footprint runs UNDER the opaque legend box and its top and left edges are erased there (20x crop /tmp/r3c-mep-legend.png) — the round-2 r2c-legend-overlap repro, still reproducing on this one sheet. Also the legend explains fill colors but not the SR/SC/AH/T/RA/EF tag letters."
+    },
+    "C4": {
+      "status": "PASS",
+      "evidence": "/tmp/r3-sheet-1.png",
+      "note": "Legend gutter fixed for the framing sheets: legends sit in a reserved 258 px left strip (x 42..294) and the plan starts at x ~305, so the west wing's top plate and left stemwall are intact on the wall sheet and the first two rafters are back on the roof sheet (/tmp/r3-sheet-2.png). Members stay inside the border, legend sizes match the takeoff roles, wall junctions readable at 1:1."
+    },
+    "C5": {
+      "status": "FAIL",
+      "evidence": "/tmp/r3c-sched-collide.png",
+      "note": "Coordinator item 7 half-lands and introduces a worse defect. Good: 80-ish rows now fit ONE 'Schedules + takeoff' sheet (6 sheets total, no 97%-blank page 2). Bad: the red flag list OVERPRINTS the last takeoff row — 'Electrical · Circuit GEN-4 — 4 devices (15A / 14 AWG / 720 VA' and '⚑ RO shifted 54.5cm to fit the framed run' are drawn on top of each other and both are unreadable (20x crop /tmp/r3c-sched-collide.png). Deterministic arithmetic, not luck: rows step from y = MARGIN+24 = 72 by 15 px, so row 41 (maxLines = floor((816-96-76-24)/15) = 41) sits at y = 672, while the flag list is bottom-anchored at y = H-TITLE_H-40 = 700 minus 13 px per earlier flag, i.e. 674 for the first of 3 — 2 px from the row baseline. Any house with a full left column plus >= 1 flag collides. Fix: subtract ceil(flags/…)*13 from the usable height (or move flags to their own column/sheet). Still clipping mid-word at 62 chars too: '2x4 — 12 pcs (20 ft stock (field splice — run …', 'Mortar (Type S) — 51 bags (~20 blocks per 80-l…', 'GFCI receptacles — 25 pcs (NEC 210.8 wet locatio…', 'Nails 16d common — 25.9 lbs (3.5\" — R602.3(1) sch…', and capacity is razor-thin (perSheet 82 vs ~80 rows) so one new row type re-splits the sheet."
+    },
+    "C6": {
+      "status": "PASS",
+      "evidence": "/tmp/r3-sheet-5.png",
+      "note": "6 sheets, each 1056x816 landscape letter @96dpi; pagination CSS unchanged from the round-2 measurement ('@page { size: letter landscape; margin: 0 }' plus '.sheet { page-break-after: always; break-after: page }', plan-set.ts:430/433) where the 7 print boxes measured exactly 816 px apart. One sheet per page."
+    },
+    "D1": {
+      "status": "PASS",
+      "evidence": "/tmp/r3-sheet-5.png",
+      "note": "Spot-checked sections on the schedules sheet all resolve against docs/research/: R602.3(1) nailing schedule, R403.1 anchor bolts, IRC R314 smoke alarms, NEC 210.8 wet-location GFCI / 210.52 receptacle spacing, IRC P3005.2 cleanouts, M1505 bath/dryer ventilation, R606.12 reinforced CMU cells."
+    },
+    "D2": {
+      "status": "PASS",
+      "evidence": "/tmp/r3-p-panel.png",
+      "note": "Code names still resolve for all three, and the link target is now correct for each: FL 'Florida Building Code, Residential — 8th Edition (2023), 2021 IRC base, effective 2023-12-31' (matches the live ICC listing), NY '2025 Residential Code of New York State (2024 IRC base), effective 2025-12-31' shown under 'Auto — NY', CA '2025 California Residential Code (CRC), Title 24 Part 2.5 (2024 IRC base), effective 2026-01-01'."
+    }
+  },
+  "topFixes": [
+    "A1 — stop relying on the host to hide walls. Host mode 'down' assigns materials.invisible to every wall and that material is a dotted see-through ghost (wall-cutout.tsx hideWall/wallMode === 'down' + wall-materials.ts:480 createInvisibleWallMaterial), which is why the building reads as a translucent stipple box from eye level and cladding never appears from outside. Either add a host mode that truly skips the shell mesh (visible=false) and use it, or set the wall meshes invisible from the plugin, and keep the camera-facing cull to the INTERIOR stack only so exterior cladding survives on the far/outside faces.",
+    "C5 — reserve vertical space for the flag list on the schedules sheet: maxLines must be floor((H - 2*MARGIN - TITLE_H - 24 - flagBlockHeight)/lineH). Today row 41 (y 672) and flag 1 (y 674) overprint on every house with a full column plus a flag. While there, wrap rows to a second line instead of clipping at 62 chars, and leave headroom (perSheet 82 vs ~80 rows today).",
+    "A4 — make the per-room slab check actually fire: the centroid of 'Living / Kitchen' is exactly the slab corner (0,0) and the ray-cast counts boundary as inside, so all 6 rooms report covered and the phantom 8x5 room still gets no call-out. Sample several interior points and treat on-edge as uncovered.",
+    "C1 — wrap the code name at a space (not char 46) and give the title block a 4th line of room: the disclaimer is currently sliced by the block's bottom rule on all 6 sheets. Also populate the level name ('Pascal project — Level' has an empty right half).",
+    "C3/A5 — apply the 12 mm plane offset per CIRCUIT INDEX, not per hash: 4 pairs (SA-1/GEN-2, GEN-1/GEN-3, SA-2/BA-1, LTG-2/LTG-3) still share a plane and all 11 stack on the riser stub at (0.06,1.52,3.75). And shift the MEP context underlay by the legend gutter — the west wing footprint is erased under the legend box on the Plumbing + HVAC sheet."
+  ]
+}

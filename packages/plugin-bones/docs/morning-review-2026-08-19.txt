@@ -1,0 +1,52 @@
+BONES — MORNING REVIEW (night of 2026-08-18 → 19, "be even more ambitious")
+(Usually lands in ~/Downloads/bones-morning-review.txt — macOS blocked
+Downloads writes this session, so it lives here tonight.)
+Reply inline; hand the file back as a prompt.
+
+============================================================
+SHIPPED TO PRODUCTION (~04:45) — prod main b6bf8acb
+============================================================
+
+1. MOVABLE OUTLETS ARE LIVE (your Q7, finished for real)
+   Every outlet and switch in the X-ray is now grabbable — hover
+   outlines it, drag slides it along the wall like a door, wires
+   re-route on release, and ONE Cmd+Z reverts the whole gesture
+   exactly. Code-aware: never lands in a window/door opening (snaps
+   beside it + warning), mounts against a stud or books a blocking
+   piece, height clamps, NEC spacing advisory.
+   The night-4 scene corruption is root-caused and dead: the drag's
+   commit hook was waking the host's room-detection mid-commit,
+   splitting every drag into three undo entries. Commits are now one
+   clean write. The "dead" walls that ate clicks were invisible
+   raycast meshes of hidden walls — fixed in the host.
+   TEST: X-ray + electrical on → grab any outlet. Try the undo.
+
+2. THE SCENE-WIPE BUG IS FIXED (host, the data-loss one)
+   Merely OPENING a scene could wipe it: an autosave fired during the
+   load window while the store was still empty (deterministic in dev,
+   any unmount race in prod). Three defense layers shipped: autosave
+   arms only after hydration, the client refuses to save an empty
+   graph over a populated scene, and the API 409s it server-side.
+   Verified live: read-only sessions now fire ZERO saves.
+
+3. STRUCTURAL + PAPER CLEANUP
+   - Partition walls no longer poke their drywall through the wall
+     they tee into (and slanted tees use the correct wider retreat);
+     two near-parallel walls drawn on top of each other no longer
+     silently eat 0.57m of framing (new warning instead).
+   - Blueprints: the circuit legend never truncates (second column),
+     condensers print 'CU' instead of the air handler's 'AH', and the
+     GEN circuit colors no longer collide with lighting greens.
+
+KNOWN TRADE-OFF (want your call — Q13):
+With hidden walls now click-transparent in X-ray, clicking a WALL in
+X-ray no longer opens its Engineering card (that click was the same
+defect class that armed accidental wall-moves). The card still works
+with X-ray off, and the sidebar shows wall engineering when selected.
+Q13: good enough, or should walls be a lowest-priority click target
+in X-ray (host change), or an always-visible sidebar wall list?
+
+NIGHT-5 TOTALS: one prod ship, 3 host PRs merged (#682 wipe, #683
+pointer transparency, #684 pin), 866→878 tests, 2 pilot agents +
+3 verify rounds + 1 blueprint examiner round.
+Q9-Q12 from earlier files still open if you have opinions.

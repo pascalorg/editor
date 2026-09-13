@@ -1,0 +1,18 @@
+{
+  "round": 5,
+  "summary": {
+    "verdict": "9/10 at 400 \u2014 round-4 fixes held under fresh attack; floor at 350: the girder ran through a stairwell straddling its line (same class as round 4), validator ignored non-joist roles.",
+    "lod": {
+      "wall-framing": 400,
+      "cmu": 400,
+      "floor": 350,
+      "roof": 400,
+      "foundation": 400,
+      "electrical": 400,
+      "plumbing": 400,
+      "hvac": 400,
+      "takeoff": 400,
+      "ui-ux-perf": 400
+    }
+  }
+}

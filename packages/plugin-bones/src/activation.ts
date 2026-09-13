@@ -1,0 +1,268 @@
+import { effectiveViewMode, FramingNode, type ViewMode } from './framing/schema'
+import { buildServicePointNodes } from './service/place'
+import { useBonesStore } from './store'
+
+/**
+ * X-ray activation & view-mode contract — the CLICK-SCOPED replacement for
+ * the renderer's old mount-time wall-mode magic (user round 2026-08-20).
+ *
+ * Why click-scoped: the old one-shot lived in a FramingRenderer mount effect
+ * behind two async hops (lazy renderer chunk + dynamic viewer import) with a
+ * per-instance restore-on-unmount. That design both missed (imposition rode
+ * the RENDERER lifecycle, not the user's action) and misfired (with two
+ * X-rayed levels, removing one restored the pre-X-ray wall mode while the
+ * other X-ray was still on — its own instance had recorded nothing because
+ * walls were already 'down' at its mount; any host remount could likewise
+ * re-impose 'down' over a manual choice). Here every wall-mode write happens
+ * exactly at a user action, once:
+ *
+ *  - activateXray  (the "X-Ray this level" buttons) → walls 'down' one-shot
+ *  - setXrayViewMode off→(xray|basement)            → walls 'down' one-shot
+ *  - setXrayViewMode (xray|basement)→off            → restore pre-X-ray mode
+ *  - removeXray    (the panel Remove button)        → restore pre-X-ray mode
+ *  - xray↔basement                                  → wall mode untouched
+ *
+ * Nothing re-imposes on re-render/recompute/remount: after activation the
+ * host wall-mode control is entirely the user's. Restore only fires while
+ * walls are still 'down' — a manual change since activation is respected.
+ * The pre-X-ray mode lives in the Bones session store (useBonesStore), not
+ * on the scene.
+ *
+ * UNDO CONTRACT (deliberate — kept through browser QA round 3): undo
+ * restores CONTENT, never viewer state. Undoing the activation entry
+ * removes the framing node + service points but leaves the wall chip on
+ * Low — wall mode is a host viewer preference outside scene history, and
+ * replaying viewer writes on undo/redo would fight the user's own chip
+ * clicks (the exact re-imposition class this module was built to kill).
+ * The restore belongs ONLY to the explicit deactivation actions above
+ * (viewMode → 'off', panel Remove); after an undo the pre-X-ray mode is
+ * one click away on the host control. Same rule for renderer unmounts and
+ * MCP deletions of the framing node: content paths never touch wall mode.
+ * Checklist row A5 carries this contract.
+ *
+ * Store handles are passed in (never imported): '@pascal-app/viewer' drags
+ * browser-only deps that must not evaluate under bun test, and injected
+ * fakes keep the whole contract headlessly testable.
+ */
+
+/** The slice of the host scene store this module drives (duck-typed — the
+ * published core typings lag the runtime API, same cast the renderer uses). */
+export type SceneStateLike = {
+  nodes: Record<string, Record<string, unknown>>
+  applyNodeChanges: (changes: {
+    create?: { node: unknown; parentId?: unknown }[]
+    update?: { id: unknown; data: Record<string, unknown> }[]
+    delete?: unknown[]
+  }) => void
+  updateNode: (id: never, data: never) => void
+}
+export type SceneLike = { getState: () => SceneStateLike }
+
+/** The slice of the host viewer store this module drives. */
+export type ViewerStateLike = {
+  wallMode?: string
+  setWallMode?: (mode: string) => void
+}
+export type ViewerLike = { getState: () => ViewerStateLike }
+
+/** One-shot: remember the user's wall mode and switch the host to 'down'
+ * (Low) — the mode whose hidden shells let the X-ray read as a dollhouse. */
+export function imposeLowWalls(viewer: ViewerLike): void {
+  const v = viewer.getState()
+  if (!v.setWallMode || v.wallMode === 'down') return
+  useBonesStore.getState().setWallModeBeforeXray(v.wallMode ?? 'up')
+  v.setWallMode('down')
+}
+
+/** Counterpart: back to the remembered pre-X-ray mode ('up' when unknown) —
+ * but ONLY if walls are still 'down'; a manual change since is respected. */
+export function releaseLowWalls(viewer: ViewerLike): void {
+  const v = viewer.getState()
+  if (!v.setWallMode || v.wallMode !== 'down') return
+  v.setWallMode(useBonesStore.getState().wallModeBeforeXray ?? 'up')
+}
+
+/**
+ * INVARIANT W1 (skeptic blocker, round 2026-08-21): the wall-mode restore
+ * NEVER fires while any OTHER X-ray is live. Wall mode is one global host
+ * pref but X-rays are per-level — with levels A and B both active, removing
+ * A (or switching A to Normal) must leave walls 'down' for B; the restore
+ * belongs to whichever off/remove action deactivates the LAST live X-ray.
+ * "Live" = a bones:framing node whose effective view mode isn't 'off' — an
+ * X-ray parked in Normal imposes nothing, so it doesn't hold the walls.
+ */
+function otherXrayLive(
+  nodes: Record<string, Record<string, unknown>>,
+  excludeId: string,
+): boolean {
+  return Object.values(nodes).some(
+    (n) =>
+      n.type === 'bones:framing' &&
+      String(n.id) !== excludeId &&
+      effectiveViewMode(n as { viewMode?: unknown; seeThrough?: unknown }) !== 'off',
+  )
+}
+
+/**
+ * "X-Ray this level": create the framing node AND every service point at the
+ * engines' auto spots in ONE applyNodeChanges — one store transaction, one
+ * undo entry (undo removes the X-ray and its service points together).
+ * `servicesSeeded` latches in the same parse when anything was placeable, so
+ * the renderer's auto-heal never re-seeds (and never resurrects a service
+ * point the user later deletes). Walls go Low as part of the same click.
+ */
+/**
+ * The roof system the building asks for (`building.metadata.structure.roofSystem`,
+ * written by the generator: trusses past its span limit) — the node created
+ * for the level starts from it, so the 3D framing and the sheets agree.
+ */
+export function roofSystemOf(
+  nodes: Record<string, unknown>,
+  levelId: string,
+): 'stick' | 'truss' | null {
+  const level = nodes[levelId] as { parentId?: string } | undefined
+  const building = level?.parentId
+    ? (nodes[level.parentId] as { metadata?: { structure?: { roofSystem?: unknown } } } | undefined)
+    : undefined
+  const system = building?.metadata?.structure?.roofSystem
+  return system === 'truss' || system === 'stick' ? system : null
+}
+
+/** The MEP choice keys the generator writes and the framing node reads (framing/schema.ts). */
+const SERVICE_CHOICE_KEYS: Record<string, readonly string[]> = {
+  wiringRoute: ['attic', 'walls'],
+  serviceEntrance: ['overhead', 'underground'],
+  panelSide: ['auto', 'left', 'right'],
+  sewerSide: ['street', 'rear'],
+  waterRoute: ['attic', 'under-slab', 'crawl', 'walls'],
+  hvacSystem: ['heat-pump-split', 'ac-gas-furnace', 'packaged', 'mini-split'],
+  waterHeater: ['electric-tank', 'gas-tank', 'heat-pump', 'tankless-gas', 'tankless-electric'],
+}
+
+/**
+ * The MEP choices the building asks for (`building.metadata.services`,
+ * written by the generator from the Generate panel / the headless script)
+ * — the node created for the level starts from them, validated key by key
+ * against the schema's enums; anything else is dropped, never guessed.
+ */
+export function servicesOf(nodes: Record<string, unknown>, levelId: string): Record<string, string> {
+  const level = nodes[levelId] as { parentId?: string } | undefined
+  const building = level?.parentId
+    ? (nodes[level.parentId] as { metadata?: { services?: unknown } } | undefined)
+    : undefined
+  const raw = building?.metadata?.services
+  const out: Record<string, string> = {}
+  if (!raw || typeof raw !== 'object') return out
+  for (const [key, values] of Object.entries(SERVICE_CHOICE_KEYS)) {
+    const v = (raw as Record<string, unknown>)[key]
+    if (typeof v === 'string' && values.includes(v)) out[key] = v
+  }
+  return out
+}
+
+export function activateXray(
+  scene: SceneLike,
+  levelId: string,
+  viewer?: ViewerLike | null,
+  /**
+   * The view the X-ray opens in. The panel's mode row is the front door
+   * now (Steve, 2026-09-09: "why do I have to click this to see what's
+   * going on in Bones? only X-ray, then I have to click Framing"): the
+   * first pick of X-ray / Subfloor / Framing creates the level's framing
+   * node IN that mode, one click, one undo entry. Default 'xray' — the
+   * inspector's call to action and every older caller are unchanged.
+   */
+  mode: Exclude<ViewMode, 'off'> = 'xray',
+): FramingNode {
+  return activateBones(scene, levelId, viewer, mode)
+}
+
+/**
+ * Derive Bones on a level in ANY view — 'off' included: the finished house
+ * with its physical equipment (framing/physical.ts) and its service points,
+ * the walls left as they are. The generator's hook (apps/editor bootstrap)
+ * calls it for a fresh house so the tank, the meter, the pole and the
+ * condenser stand in the Normal view without a trip to the Bones panel
+ * (Steve, 2026-09-09: "bring bones into the auto generation to control it").
+ */
+export function activateBones(
+  scene: SceneLike,
+  levelId: string,
+  viewer: ViewerLike | null | undefined,
+  mode: ViewMode,
+): FramingNode {
+  const state = scene.getState()
+  const services = buildServicePointNodes(state.nodes, levelId)
+  const roofSystem = roofSystemOf(state.nodes, levelId)
+  const framing = FramingNode.parse({
+    jurisdiction: 'AUTO',
+    viewMode: mode,
+    servicesSeeded: services.length > 0,
+    ...(roofSystem ? { roofSystem } : {}),
+    ...servicesOf(state.nodes, levelId),
+  })
+  state.applyNodeChanges({
+    create: [
+      { node: framing, parentId: levelId },
+      ...services.map((node) => ({ node, parentId: levelId })),
+    ],
+  })
+  if (viewer && mode !== 'off') imposeLowWalls(viewer)
+  return framing
+}
+
+/**
+ * The panel's view-mode control: write `viewMode` and apply the wall-mode
+ * side of the contract for the off-boundary transitions. The control IS the
+ * switch (unlike config knobs it drives wall mode on every off↔on flip);
+ * between the active modes (xray / basement / framing) wall mode never
+ * moves — 'framing' hides the shell in the renderer, so the walls being
+ * low underneath is harmless and the restore on 'off' stays one rule.
+ */
+export function setXrayViewMode(
+  scene: SceneLike,
+  framingNode: { id: string; viewMode?: unknown; seeThrough?: unknown },
+  next: ViewMode,
+  viewer?: ViewerLike | null,
+): void {
+  const prev = effectiveViewMode(framingNode)
+  if (prev === next) return
+  const state = scene.getState()
+  state.updateNode(framingNode.id as never, { viewMode: next } as never)
+  if (!viewer) return
+  if (prev === 'off') imposeLowWalls(viewer)
+  // Invariant W1: another live X-ray still needs the walls down — the
+  // restore rides the action that turns off the LAST one. (Self excluded by
+  // id: this node just went 'off' either way.)
+  else if (next === 'off' && !otherXrayLive(state.nodes, framingNode.id)) {
+    releaseLowWalls(viewer)
+  }
+}
+
+/**
+ * The panel's Remove button: delete the framing node AND the level's
+ * auto-managed bones nodes (service points + device proxies) in ONE entry —
+ * Remove means "deactivate the X-ray on this level", and leaving eight
+ * auto-placed service signs standing on a normal house would be litter.
+ * A single undo brings the whole arrangement back. Walls restore like
+ * viewMode 'off'.
+ */
+export function removeXray(
+  scene: SceneLike,
+  framingNodeId: string,
+  levelId: string,
+  viewer?: ViewerLike | null,
+): void {
+  const state = scene.getState()
+  const companions = Object.values(state.nodes)
+    .filter(
+      (n) =>
+        (n.type === 'bones:service' || n.type === 'bones:device') && n.parentId === levelId,
+    )
+    .map((n) => n.id)
+  state.applyNodeChanges({ delete: [framingNodeId, ...companions] })
+  // Invariant W1: only the removal of the LAST live X-ray releases the
+  // walls (the deleted node is excluded by id whether or not the store has
+  // already dropped it).
+  if (viewer && !otherXrayLive(state.nodes, framingNodeId)) releaseLowWalls(viewer)
+}

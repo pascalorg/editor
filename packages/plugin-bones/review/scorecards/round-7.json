@@ -1,0 +1,18 @@
+{
+  "round": 7,
+  "summary": {
+    "verdict": "9/10 re-earned; floor 350 \u2014 girder presence was winding-dependent (even-odd scan collinear with a notch edge); plus one-sided-cut hangerless ends w/ orphan header hangers, twin-hole 6m trimmers, cross-hole trimmer crossings; old 6x6 L test pinned the bug.",
+    "lod": {
+      "wall-framing": 400,
+      "cmu": 400,
+      "floor": 350,
+      "roof": 400,
+      "foundation": 400,
+      "electrical": 400,
+      "plumbing": 400,
+      "hvac": 400,
+      "takeoff": 400,
+      "ui-ux-perf": 400
+    }
+  }
+}

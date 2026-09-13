@@ -1,0 +1,69 @@
+{
+ "round": "B12-lod400-r2",
+ "pin": "4005dca",
+ "branch": "feat/lod400-b12",
+ "base": "3fd0a1a",
+ "prevRound": "blueprint-b12-lod400.json (APPROVE @ de74cbc)",
+ "date": "2026-08-21",
+ "protocol": "Round-2 paper spot-check on the B12 pilot response (4005dca — skeptic F1-F4: lateral×rod clearance, bond-in-cable strap-outs + raised bond plane, scene-aware rod spots with slide+flag, per-storey GES honesty; + examiner GES keys: GR bubble per rod, IB bubble at the meter, named legend rows) per review/BLUEPRINTS.md. Pure buildPlanSet via a scratch bun harness run in DETACHED worktrees only (/private/tmp/review-b12-r2 @ 4005dca vs /private/tmp/review-b12-de74cbc @ de74cbc; harness deleted after). Same three sets as round 1 — demo-house-FL (fc866f2f271b re-fetched over HTTP, graph byte-equal to the round-1 cache), gabled-TX (gate composite + Living/Kitchen/Bedroom/Bathroom zones, NO fixtures), gabled-TX-waterov (+ bones:service water-entry on the west wall) — FIXED date 08/21/2026. ANCHOR: my de74cbc demo output byte-matches round-1's stored sheets file-for-file (16/16 SVGs identical to /tmp/b12-exam/out/demo-house-FL), so every diff below is exactly pilot-round-vs-examiner-round. (Gabled sets are reconstructions — round-1's gabled graph carried a slab mine doesn't — so gabled comparisons are self-consistent de74cbc-vs-4005dca under ONE harness, disclosed.) All 42+42 sheets rasterized with Playwright page.setContent @2x (never the editor); every DIFF sheet pixel-diffed with per-pixel region masks and eyeballed with meter-zone/grade-band/legend crops; bubble centers and bond/feed planes re-derived numerically from the SVG and member census. Evidence: /tmp/b12r2/{out-r1,out-pin,crop-*,look-*}.",
+ "verdict": "APPROVE — merge stamp. Both round-1 keys are implemented exactly as asked and the skeptic fixes are honest on paper. The demo electrical sheet now prints a keyed GR bubble centered on EACH rod and an IB bubble at the meter, spiral-de-collided into the EM/G/P cluster (all seven bubble centers in the meter zone pairwise ≥ 15 px — re-derived from the SVG: GR↔EM 17.3, IB↔EM 16.0, GR↔G 26.1), with named legend rows in the tag key ('ground rod — driven electrode (NEC 250.52)', 'intersystem bonding termination (NEC 250.94)'). The pixel diff vs round 1 on that sheet is CONFINED to the legend block (rows shifted 28 px down by the two new key rows, backing rect 336→364 tall, plus the pre-existing fixed-width-rect text overhang) + the meter/GES zone — zero changed pixels anywhere else: SD-1's chain, label and legend row, every other circuit run, every device bubble are pixel-identical. Regressions byte-equal: door+window schedule, Plumbing+HVAC plan (WH assembly), foundation plan, wall+roof framing plans, Section A-A, takeoff pages 1/3/4 — the only takeoff delta is the bond jumper cell 4.4→5.3 lf, which equals the drawn geometry exactly (5.27 drawn — the F2 strap-outs are real conductor and S4 books them). Elevations stay sane: rods still print as dashed ochre verticals below grade on all four views (south/north pixel-identical; east/west change only in the rod zone — the 0.08 m F1 shift = 3.0 px at 1:100), and the raised bond plane (y=0.5995 = feed 0.565 + summed half-sections 0.0245 + 10 mm skin, re-derived from members) clears the feed instead of embedding 12.5 mm inside it. Round-1 recommendation 5 landed beyond the ask: the gabled GIGO scene's inside-the-footprint rods now carry 'ground rods obstructed at the meter — verify electrode placement on site (NEC 250.53)' and the flag prints VERBATIM in the schedules Flags block (P4) — bad data is loud now. Suite 1276/0 at the pin, tsc clean, E7 row + gates grown in the same commit.",
+ "items": {
+  "FOCUS-1-gr-ib-bubbles": {
+   "status": "PASS",
+   "checklist": ["E7", "P2", "C2", "P4"],
+   "evidence": "demo-house-FL electrical (LOOKED, zoom crop): GR bubbles print centered ON both rod plan spots (476.8,414.1)/(476.8,345.0) — the bubble grammar matches the device tags (r=7 white fill, #a05c10 ring, 8px tag); IB prints beside the EM bubble at (509.8,417.1), spiraled one 16-px slot off its base to clear the meter cluster. Bubble centers in the zone re-derived from the SVG: G(502.8,441.2) G(502.8,346.7) P(518.8,439.8) EM(493.8,417.1) GR×2 IB — ALL pairwise ≥ 15 px (min: GR↔EM 17.3), no ring overlap, GES-1/SA-1 labels clear. Ordering verified in source: the GES mark block runs AFTER the device-tag loop and pushes into the same placed[] registry, so device bubbles, circuit labels and opening marks all de-collide against the new symbols.",
+   "note": "The bubble spiral keeps a FIXED 16-px radius over 6 distinct angles (attempts 6-7 repeat 0°/60°) — enough here; a denser cluster could park a bubble overlapping. The label spiral's growing-radius pattern is the upgrade if it ever bites (advisory)."
+  },
+  "FOCUS-2-rod-vs-se-distinguishable": {
+   "status": "PASS",
+   "checklist": ["P2", "E3"],
+   "evidence": "The round-1 flag ('rod dots print the exact SE-cable hex #b0723d, unkeyed') is answered by KEYING, not recoloring: each rod's true-footprint dot is now covered by its white-filled GR bubble (centered on the rod spot), and the legend carries the named GR row — the driven electrodes read as marked symbols, not SE-cable ink. The SE cable keeps its own swatch row ('SE cable 2 AWG Cu — street → meter → panel (NEC 230)'); the GEC/bond family swatches (#196b50/#94e6de) are unchanged from round 1 (>61 RGB from every circuit family, gated).",
+   "note": "The underlying rod-dot hex is still #b0723d beneath the bubble — invisible on paper (bubble covers it), so no drafting lie; noted only for completeness."
+  },
+  "FOCUS-3-elevations-buried-convention": {
+   "status": "PASS",
+   "checklist": ["E7", "P3", "P1"],
+   "evidence": "All four demo + gabled elevations walked (grade-band crops of demo west + gabled east both rounds): the rod pair still prints as dashed ochre verticals, tops at/below the grade line, ~8 ft down, 6 ft apart, passing cleanly below the B17 slab comb — the buried convention held. South/north (end-on) are PIXEL-IDENTICAL to round 1; east/west change ONLY in the rod zone (bbox ~146×185 px @2x), the visible 3.0-px shift = the F1 +0.08 m along-wall move at 1:100 exactly. The raised bond plane is invisible on elevations (the run lives inside dense wall ink) — no new artifacts, no bow-ties, elevation fit/scale unchanged (same family ratio, no re-centering this round).",
+   "note": "Round-1 recommendation 3 (let the rod-to-rod GEC leg read on side views — it hides inside the slab-comb band) is NOT taken this round — carried, advisory."
+  },
+  "FOCUS-4-diff-confinement": {
+   "status": "PASS",
+   "checklist": ["P2", "P1", "C6"],
+   "evidence": "Per-pixel region masks on the demo electrical sheet: 66,568 changed px inside the legend block, 2,520 in the meter/GES zone, and the 3,550 'outside' px are all at x 298-359 svg — the legend TEXT overhang past its fixed-width backing rect (pre-existing, carried advisory since round 1; the rows shifted down 28 px so the overhang moved with them). ZERO changed pixels anywhere else on the plan. Sheet-level diff surface across all three sets is exactly the feature: cover (axon GES ink + reflow, ≤944 px), electrical (keys + legend), east/west elevations (rod zone), last takeoff page (gabled: the new Flags row reflow; demo p2/waterov p1: the bond-lf cell). Everything else byte-equal.",
+   "note": ""
+  },
+  "FOCUS-5-regression-byte-equal": {
+   "status": "PASS",
+   "checklist": ["E6", "P6", "M2", "M3", "S4"],
+   "evidence": "SD-1: chain, label and legend row pixel-identical on the demo electrical sheet (proven by the confinement masks — no changed pixel outside legend+meter zone). BYTE-EQUAL sheets at the pin vs round 1: door+window schedule (B21d), Plumbing+HVAC plan (WH assembly + glyph seam), foundation plan, wall framing, roof framing, Section A-A, schedules/takeoff pages 1,3,4 (demo) and 1,2 (gabled). The ONLY takeoff delta is the bonding-jumper row 4.4→5.3 lf (demo) / 62.8→63.5 lf (waterov) — S4 parity re-derived from the member census: drawn GES-2 5.27 lf / 63.54 lf, booked 5.3 / 63.5; GEC 12.49 drawn == 12.5 booked; rods 2==2, clamps 3, IBT 1. The +0.9 lf is the F2 strap-out conductor actually drawn — never phantom.",
+   "note": "Demo warnings 5==5 (no per-storey GES warning — the roof level carries no rooms, correct); rod flags absent on the demo (F1's strap-keyed rod line clears the buried lateral by 0.08 m > the 0.0455 m clearance floor)."
+  },
+  "SKEPTIC-FIXES-ON-PAPER": {
+   "status": "PASS",
+   "checklist": ["E7", "E4", "P4", "S4"],
+   "evidence": "F1: demo GEC grade run now prints axis-clean (rotate 180.00 vs round-1's 169.92 kink) — the rod line keys off the strap point, and rod 1 stands 0.08 m off the lateral's approach line (> half-sections + skin 0.0455 m re-derived). F2: bond plane y=0.5995 == SERVICE_FEED_Y 0.565 + (0.035+0.014)/2 + 0.01 exactly (member census); strap-out legs at BOTH bays print as the small cyan steps beside the P/G bubbles; the panel-end drop no longer shares the feed rise's plan point. F3: the gabled composite (spine-wall GIGO — round-1's advisory exhibit) now FLAGS both rods and the flag prints VERBATIM as a Flags row: '⚑ ground rods obstructed at the meter — verify electrode placement on site (NEC 250.53)' (wrapped whole, P4); the honest inverse holds — demo rods carry no flag. F4: rod/GEC member labels carry '— per-storey model: verify single GES per service (250.53/250.58)' (census), and the multi-storey level warning is gated (compute.ts warning + F4 describe); not exercisable on these single-storey-with-roof scenes — no false warning printed, correct.",
+   "note": "The F3 flag rods still DRAW inside the footprint on the GIGO scene (kept default, ±3 m slide exhausted) — the drawing is honest-with-flag rather than invented-clear, the right drafting call."
+  },
+  "SWEEP": {
+   "status": "PASS",
+   "evidence": "Full suite at the pin (worktree /private/tmp/review-b12-r2 @ 4005dca): bun test → 1276 pass / 1 todo / 0 fail (1277 tests, 39,778 expect() calls, 52 files, 1372 ms); bunx tsc --noEmit clean. Round-over-round +7 tests: electrical.ges.test.ts round-3 describes (F1 lateral×rod, F2 parallel-embedment scan, F3 L-plan slide + unplaceable flag, F4 per-storey matrix + label pins) + the GR/IB key pins in plan-set.test.ts (bubble counts 2+legend / 1+legend, TAG_NAMES rows). CHECKLIST E7 row updated in the same commit naming all of it. No checklist row regressed: E1-E7, S1-S12, M1-M3, P1-P6, A1-A5 walked — rows untouched by this diff have their gates green in the suite; the byte-equal sheet matrix above covers the paper rows."
+  }
+ },
+ "recommendations": [
+  "Carried (round-1 rec 3): let the buried rod-to-rod GEC leg read on elevations — it still hides inside the B17 slab-comb band on side views.",
+  "Carried (round-1 rec 4): the demo's short water bond is still label-less in plan (every leg under the 40 px label floor, stub masked behind the P/G bubbles) — a clamp tick or 'BOND' tag at the water entry would also mark the booked clamp.",
+  "Carried (pre-existing): fixed-width legend backing rect vs longest row — the GR/IB rows made the legend taller, and the long circuit rows still overhang the rect onto the plan; size the rect to the longest line.",
+  "GES/device bubble spiral: adopt the label spiral's growing radius (the fixed 16-px, 6-angle pattern has no escape in a denser cluster; all clear today).",
+  "The takeoff's bonding-jumper detail still reads 'panel → metal water service' — with the strap-outs booked it stays truthful; no action, noted while re-deriving parity."
+ ],
+ "suite": {
+  "pass": 1276,
+  "todo": 1,
+  "fail": 0,
+  "tests": 1277,
+  "assertions": 39778,
+  "files": 52,
+  "runtime_ms": 1372,
+  "tsc": "clean"
+ }
+}

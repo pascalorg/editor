@@ -1,0 +1,85 @@
+{
+  "round": "seam-close (post round-8)",
+  "pin": "88831fc19a10cd210254dcb43a1c6ed16b23129d",
+  "branch": "feat/mep-glyph-decollision (1 commit on master 9c1490a)",
+  "protocol": "SEAM-closing paper round per review/BLUEPRINTS.md — fix-check of blueprint-round-8's three FOCUS findings on the SAME composes, pure buildPlanSet bun harness at the repo root (editor never opened), sheets rasterized with Playwright page.setContent @2x + 8 zoom crops (4x/5x/8x/10x). THREE sets: (A) demo-house-FL over HTTP (fc866f2f271b, 14 sheets, 2108 members / 94 fixtures — graph moved since round-8: B17 slab members + scene edits; pair now 13 legs), (B) frost-mep-NY compose (round-8 recipe verbatim: 12x8 multibath, NY frost 1.219 m, heat-pump node at (9,0,-0.75) forcing the pair onto the sleeved exit wall; 12 sheets, 684/60), (C) courtyard-NY (round-8 recipe verbatim: F3 east-exit scene + auto condenser pair; 12 sheets, 456/37). Forensics independent of the drawing code: transform replica (planBounds+setTransform) for TRUE-crossing px + tick displacement, oriented-rect extraction + point/SAT clearances for every glyph vs rails/pipes/bubbles, arrow-candidate replica (dwv non-vent, sloped, planFrac>0.5, w>18) for the census, hit-rect identification by member back-projection, F3/F1/B17 regression counts, legend box arithmetic. Evidence in /tmp/bp-seamx/ (svg + members/fixtures/forensics json + png).",
+  "verdict": "REVISE",
+  "suite": {
+    "pass": 1015,
+    "todo": 1,
+    "fail": 0,
+    "tests": 1016,
+    "assertions": 31723,
+    "files": 43,
+    "tsc": "clean (bunx tsc --noEmit at the exact pin)"
+  },
+  "items": {
+    "SWEEP-invariants": {
+      "status": "PASS",
+      "checklist": ["E1-E5", "S1-S11", "M1", "M2", "P1-P5", "A1-A4"],
+      "evidence": "bun test at 88831fc: 1015 pass / 1 todo / 0 fail — 1016 tests across 43 files, 31,723 expect() calls; tsc clean. The branch's 3 new gates (tick vs rails/bubbles on the forced-condenser frost compose, arrow census + bubble-clean, courtyard marker text vs pipes/bubbles/viewBox) run green alongside every carried gate. No gated CHECKLIST row regressed; the FAILs below live in glyph-layer paper classes the new gates' composes do not reach.",
+      "note": "Paper-only diff confirmed: src/plans/plan-set.ts + its test file; engines and master-baseline.json untouched."
+    },
+    "FOCUS-1-tick-vs-rails-frost": {
+      "status": "PASS",
+      "checklist": ["P4", "P3"],
+      "evidence": "The round-8 frost exhibit is dead, verified on pixels + SVG math. Tick 1 (sleeved building drain x south stemwall) now at (657, 282.5): bar-TIP clearance to the rails 10.4 px (suction) / 15.4 px (liquid) — was -4.6 overlap at (657, 266.5); nearest bubble 16.0 (was 5.4, FOCUS-1c); the tick slid 16 px (0.32 m) ALONG ITS OWN LEG, bars still cross the pipe, and at 8x it reads clearly AT the crossing (CO bubble sits on the wall line, tick directly below on the pipe, rails run along the wall clear of the bars). Tick 2 (stack x wet-wall footing) at (657, 339.2): slid the full 28 px budget (0.56 m) but stays ON the pipe, bubbles 22.3, rails 67+; at 6x it reads as marking the stack's wall crossing (bars on the pipe one bubble-diameter above the SO/CO row that hugs the wall). Tick census pinned: 2 ticks == 2 crossings (independent walls-x-legs recount); no tick dropped.",
+      "note": "The P1 intent (reader associates tick with crossing) holds on frost because both escapes stayed on-pipe/along-leg. It does NOT hold on the courtyard exit — scored separately (FOCUS-1-courtyard)."
+    },
+    "FOCUS-1-courtyard-exit-tick": {
+      "status": "FAIL",
+      "checklist": ["P4", "P3"],
+      "evidence": "Same defect class, new coordinates, on the round-8 courtyard compose the branch's gates never run: the exit tick (dwv main x east stemwall) escaped to (927.4, 478) via the least-crowded fallback (nothing in the ±28 x 0/±5/±10 budget fully clears the CO+SO+DS+CU+WH cluster) and now prints its bar tip 0.9 px from the LIQUID rail (rect boundary math; viewed at 10x the bar visually TOUCHES the orange line) with min bubble 12.8 (< the 13 the search itself demands). Worse for association: the n=10 perpendicular escape leaves the bars crossing NO pipe at all — 7.4 px off its own dwv main (bars span y 472..484, main band ends 470.8) — so the double-bar floats in white space under the corridor and reads as ticking the LINE-SET, not the concrete crossing 13 px east. The other two courtyard ticks (574.6, 458) and (707.4, 478) also land off-pipe (8.7 px; tips ~2.7 px shy of their own pipe) — clear of everything and passably associated at 8x, but the sleeve glyph's bars-ACROSS-the-pipe semantics are lost on all three.",
+      "note": "The frost gate pins bar-tip>=4 px from rails on the gated compose only; the search scores CENTER distance (pipeGap >= 10.5) which guarantees only 10.5-6.5 = 4 px at the tips WHEN it clears — and guarantees nothing on the fallback path that fired here. Score bar-tip extents, prefer spots where pipeDist(own run) == 0 (bars keep crossing what they sleeve), and pin this exit cluster."
+    },
+    "FOCUS-1b-marker-text-courtyard": {
+      "status": "FAIL",
+      "checklist": ["P4"],
+      "evidence": "The round-8 corridor overprint is dead (the old last resort laid the cite ALONG the z=4 corridor for ~132 px erasing main + rails + a CO bubble) — but the tiered replacement trades it for TEXT-OVER-TEXT on the same scene: the marker text lands at center (939, 454) ('above the glyph' candidate clamped inboard), 11.6 px from the exit SLEEVE cite center (927.4, 452) which IS in placed[] — tier 1 correctly rejected the spot (|dy| = 2 < 12), but tier 2 (onSheet && pipeClear) carries NO bubble/text test and accepted it. On pixels at 5x/10x: 'SLEEVE (P2603.4)' survives only as ghost strokes under 'SEWER/SEPTIC (P3005.4)' — the exit crossing's cite is destroyed, and the smudge is visible at print size. The text ALSO crosses the water-heater equipment box (slate rects 47.9x47.9 + 45.4x17.6 at (969.6, 468), role 'equipment' — never registered as an obstacle; identified by member back-projection): the right half of the cite prints over the box fill and its inner edge. Pipes 0 hits (verified pad-0 SAT vs all 5 pipe fills), bubbles 0, on-sheet, halo — the letter of the new gate holds; the paper does not.",
+      "note": "NEW at this branch: the pre-fix text lay at (885.6, 471) along the corridor, nowhere near the cite. The branch's own courtyard gate compose (different rooms/heat-pump spot) has no cite at the exit, so its 'clears pipes AND bubbles AND viewBox' assert passes while the round-8 compose collides. The frost marker is clean: (667, 227.5), 0/0 hits, 26 px above the cite, viewed."
+    },
+    "FOCUS-3-arrows": {
+      "status": "FAIL",
+      "checklist": ["P4", "P3"],
+      "evidence": "Census 1:1 and bubble-clean everywhere — but the round-8 demo exhibit is UNCHANGED: the dwv-main flow arrow still prints at exactly (752.3, 491.1) with the suction elbow 0.6 px from the glyph center (second suction rect 1.3 px) — the 4.5 px half-extent triangle overlaps the foreign pair by ~3.9 px, same number round-8 measured. Viewed at 10x: the glyph interrupts both pair hairlines where the line-set drops to the CU pad. Mechanism verified: the run is short (w = 28 px, half = 14 -> slide budget t in {0, ±10}) and the pair riser is coaxial with the WHOLE run, so the pipes-aware pass (radius 8.5) rejects every t and the bubbles-only fallback reproduces the pre-fix spot; arrows got no perpendicular escape (ticks did). Census: demo 3/3, frost 8/8, courtyard 1/1 vs round-8 pre-fix — stable, nothing regressed; candidate replica finds the deltas are pre-existing classes (coincident z_k/z_l candidates dedupe at <12 px; courtyard's exit dwv-main candidate was already dropped pre-fix in the bubble-crowded cluster). Bubble clearance: min 14.0 (demo) / 14.5 (frost) / 176 (courtyard), all >= 12.",
+      "note": "The task's bar — 'none overlapping foreign pipes' — fails on the demo scene at the exact round-8 coordinate. Fix: give arrows the ticks' perpendicular escape (0/±5/±10) when the along-run search is exhausted, or scale the clearance radius down before falling back to bubbles-only; pin a short-sloped-leg + coaxial-pair compose."
+    },
+    "REG-cite-census": {
+      "status": "FLAG",
+      "checklist": ["P4", "P2-spirit"],
+      "evidence": "Frost sleeve cites regressed 2 -> 1 (round-8 REG-F3 PASS evidence: 'frost 2 crossings = 2 ticks = 2 cites', both viewed legible). The stack-crossing tick (657, 339.2) lost its cite to the branch's own machinery: every perpendicular candidate fails the placed[] test against the tick ITSELF (|dx| = 14 < sleeveW/2+9 = 57 with |dy| = 0), and every along-leg candidate now fails the NEW textClearOfPipes because the text rect crosses the tick's OWN vertical pipe — the cite check has no own-run exemption (the marker text and arrows both got one). Combined with FOCUS-1b's destroyed courtyard exit cite, 2 of the 5 crossing cites round-8 verified are effectively gone. The tick glyph has no legend row — an uncited double-bar is an unexplained symbol on the sheet.",
+      "note": "FLAG not FAIL: the round-3 design allows 'a crowded crossing keeps only its glyph', the tick census itself is intact, and 3 cites print clean (courtyard interior pair viewed at 8x, frost exit viewed at 5x/8x). But this is a paper regression the branch introduced; exempt the cite's own run in textClearOfPipes and its own tick in the placed test, then pin cite census == tick census on the frost compose."
+    },
+    "REG-F3-paper-state": {
+      "status": "PASS",
+      "checklist": ["P4", "P2", "P5", "C1"],
+      "evidence": "Walked on all three sets at the pin: (1) legend two-row bold note ('DWV SLOPE 1/4 IN/FT (1/8 AT 3 IN+)' + 'ARROWS POINT TO SEWER (P3005.3)') inside the box on every MEP sheet; box arithmetic exact — frost/courtyard 18 rows = 266 = 18*14+14, demo 21 rows = 308, zero clipping (viewed); (2) BURIED == DASHED exact on every elevation of every set (demo 7/7 x4, frost 14/14 x4, courtyard 4/4 x4; frost east elevation viewed: dashed main falling through the dashed frost stemwalls below the GRADE datum, T.O. PLATE/RIDGE/GRADE datums present); (3) SEWER marker halo'd bold on all three sheets; (4) schedules flag blocks verbatim — frost 'compressed to 4.91in/2.94in' rows, demo 'Living / Kitchen has no floor slab' prints (&quot;-escaped — an earlier harness miss, not a paper defect), missing-on-paper 0/0/0.",
+      "note": "Tick census 1:1 with the independent crossing recount on every scene (demo 0, frost 2, courtyard 3 marks after the shared-crossing dedupe of 4 geometric hits)."
+    },
+    "REG-F1-pair": {
+      "status": "PASS",
+      "checklist": ["M2", "S4", "C5", "E3-spirit"],
+      "evidence": "Twin separation EXACTLY 5.00 px on every full leg (frost 6/6, courtyard 2/2; demo 13/13 with min 3.50 on the four 0.8 px rolled-riser ticks — the F1-round-2-approved convention); both colors read along the whole route at print size (frost viewed: two-color hairline hugging three perimeter sides; demo loop + detours viewed). Takeoff conserved to the digit on all three: suction lf == insulation lf == liquid lf == drawn (55.7 / 96.8 / 10.2). The >15 m oil-return advisory prints VERBATIM on frost (29.5 m) and demo (17.0 m) flag blocks and is correctly ABSENT on courtyard (3.1 m). AC-1 — 30A/10AWG dedicated 2-pole row + SE cable row on the frost electrical legend; NM-B 10/2 16.4 lf booked.",
+      "note": "Carried advisory unchanged: the frost heat-pump node still buys a 3-side 96.8 lf loop for a ~23 lf hop — the both-directions route probe keeps its board line (it would also shrink every collision surface this round scored)."
+    },
+    "REG-B17-foundation": {
+      "status": "PASS",
+      "checklist": ["S4", "S3", "P2"],
+      "evidence": "Foundation sheets on the merged tree: slab-field strips print as the translucent layer-ZERO underlay before all hardware (27/34/19 rects on demo/frost/courtyard; first slab rect precedes first circle in every SVG), legend carries 'slab — 3-1/2in slab-on-grade, drawn translucent — on 4in base course (R506.1/R506.2.2)' + 'vapor-retarder — 6-mil (R506.2.3) — not drawn' + derived '5/8in anchor bolts @ 5ft-4.06in o.c. max — 28 pcs' + open-circle dowel row (frost viewed at full + 3x: mitered stemwall corners, bolt dots vs dowel circles distinct, the buried-main carve band reads); takeoff books slab field 9.8 yd3 (R506.1) + vapor retarder 993.9 sqft (+10% laps, R506.2.3) beside the footing/stemwall pours.",
+      "note": "The frost compose exercises B17 at 1.219 m footings on the same sheet set as the seam glyphs — no interaction found."
+    },
+    "ADVISORIES": {
+      "status": "FLAG",
+      "evidence": "(1) Equipment boxes (WH/AH), wall bands and text rects are all still invisible to the glyph layer's obstacle set — this round's two FAILs are both instances (marker over cite text; marker over WH box); courtyard interior cites also sit on the u_c1/u_c2 wall bands (cosmetic — context underlay, viewed legible). (2) Frost tick 2 sits at the FULL 28 px budget (0.56 m from its crossing) — acceptable on view here, but the budget has no association guard; a longer leg would let it drift further. (3) Carried: frost line-set perimeter loop (route-cost probe), courtyard single-axis corridor band, demo cover axon pair collapse, pair-behind-bubbles convention.",
+      "note": "None block beyond the scored items."
+    }
+  },
+  "recommendations": [
+    "Marker text (FOCUS-1b): tiers 2/3 must keep SOME text/bubble separation — register placed[] cite/text rects (not just centers) and equipment-box rects as obstacles for the marker's candidates, and never accept a spot overlapping an already-placed TEXT at any tier ('an overprinted cite still beats a clipped one' died in round-8; text-over-text is no better). Gate on the round-8 12x8 courtyard-NY recipe (this scorecard / round-3 describe) pinning sewer-text-rect vs cite-rect separation.",
+    "Arrows (FOCUS-3): add the ticks' perpendicular escape (0/±5/±10) to the arrow search before the bubbles-only fallback (short runs coaxial with the pair have NO clear along-run spot — demo half=14); pin a short-sloped-main + coaxial-pair-riser compose at the exit corner.",
+    "Tick fallback (FOCUS-1-courtyard): score BAR-TIP clearance (±2.5/±6 extents), require/prefer pipeDist(own run) == 0 so the bars keep crossing the pipe they sleeve, and only then widen; pin the courtyard exit cluster (bar tips off BOTH rails >= 4 and on-own-pipe).",
+    "Cites (REG-cite-census): exempt the cite's OWN run in textClearOfPipes and its own tick in the placed test; pin cite census == tick census on the frost compose (round-8 5/5 evidence). Consider a legend row for the sleeve tick so an uncited tick is still explained.",
+    "Board: keep the both-directions line-set route probe queued — it shrinks every collision surface this file scores."
+  ],
+  "shipStamp": "REVISE — no merge stamp. The frost seam exhibit is genuinely closed (tick bar-tips 10.4/15.4 px off the rails, bubbles 16+, on-pipe, viewed at 8x; marker text clean at (667,227.5); 1015/1/0 suite + tsc clean; F3/F1/B17 paper states all hold on the branch with exact counts), but three concrete on-paper exhibits block: (1) the SEWER marker's tier-2 spot overprints the courtyard exit SLEEVE cite — text center 11.6 px from a placed cite (|dy|=2), 'SLEEVE (P2603.4)' reduced to ghost strokes under the marker at (939,454), plus the text crosses the unregistered water-heater box; (2) the demo flow arrow still prints ON the suction elbow at the round-8 coordinate (752.3, 491.1), clearance -3.9 px — the pipes-aware pass cannot clear a short run coaxial with the pair and falls back to the pre-fix spot; (3) the courtyard exit tick's least-crowded fallback lands its bar tip 0.9 px from the liquid rail and 7.4 px OFF its own pipe — the bars no longer cross what they sleeve and read as ticking the line-set. Plus a FLAG regression: frost sleeve cites 2 -> 1 (the new pipe test lacks an own-run exemption and the cite self-collides with its tick in placed[]). All fixes are plan-set-only; the mechanism (pipe rects as obstacles) is right — the consumers need text/equipment obstacles, a perpendicular escape for arrows, tip-aware tick scoring, and an own-run cite exemption."
+}

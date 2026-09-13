@@ -1,0 +1,118 @@
+{
+  "round": 2,
+  "verdict": "REVISE — a big step past round 1 and the plan sheets would now clear most of round 1's rejections (one shared 1:100 transform both sets, mitered oblique corners incl. the closed p_link ring, device+circuit legends with run labels, flags verbatim, SHEET n/N + ratio + north arrows, bolt callout = takeoff, all 459 automated gates green at 9835149). The three NEW sheet families land structurally — the cover reads as a house skeleton, elevations draw studs vertical / plates horizontal / rafters at true pitch on a grade line, cross-level roof members verifiably lift by levelBaseY (demo roof band measures 5.62 m over 2.68 m walls = the host-drawn floating shell, checklist A3 honored), and the gabled section reads as a genuine cut — but the set cannot ship as-is: the EAST and WEST elevations are horizontally MIRRORED versus drafting convention (proven by projection math and by the east-wall window landing on the wrong side), the demo section is a near-empty sheet of floating fragments (roof bar in mid-air, a disembodied HVAC dot, a CMU bead column) because band membership tests member CENTERS instead of plane crossings, no plan sheet carries the A-A cut mark, and below-grade foundation prints as a solid round-capped gray sausage on every elevation/section. New-sheet colors appear in no legend, elevations of one building print at two scales (S/N 1:100 vs E/W 1:75 on the demo), and the cover has no sheet number. Round-1 residuals still open: takeoff rows ellipsized mid-word; 45 vertical rebar dowels print as dots identical to the 31 anchor-bolt marks (an examiner counts 76 vs the '31 pcs' callout); the demo west wing is still silently unroofed. Invariant sweep: E1/E2/E3, S1/S2/S3, P1–P4 gates all pass, no on-paper regressions found; E4 remains the known open row.",
+  "items": {
+    "N1-cover": {
+      "status": "FLAG",
+      "evidence": "demo-house-FL/01-cover.png; gabled-composite-NY/01-cover.png (/tmp/bp-round-2/)",
+      "note": "The iso hero unmistakably reads as a house skeleton on both sets (with the pitched gable roof the gabled hero is exemplary); title, jurisdiction/code/date line, disclaimer and the numbered sheet index are all legible with zero overlaps, and index numbering (2..N) matches the printed sheet count exactly. Flags: the cover itself carries no title block and no 'SHEET 1/N' (C6 asks for numbering on every sheet); the demo hero shows the roof plane floating 2.9 m above the walls — honest to the host-drawn shell (checklist A3) but on a COVER it reads as an error to a lay reviewer with no note saying so; plumbing/HVAC strokes (blue/teal) thread through the hero unexplained.",
+      "recommendation": "Add a slim title strip or 'SHEET 1/N' to the cover; when a roof's bearing gap exceeds ~0.5 m print a one-line note ('roof drawn at model elevation'); either drop MEP strokes from the hero or add a 4-row color key."
+    },
+    "N2-elevations": {
+      "status": "FAIL",
+      "evidence": "demo-house-FL/07..10-*-elevation-framing.png; gabled-composite-NY/06..09-*-elevation-framing.png",
+      "note": "The good: studs vertical, plates horizontal, rafters at true pitch with collar ties/ceiling joists (gabled E/W show a clean gable triangle bearing on the walls), openings framed (gabled door/window read with headers), grade line with GRADE tag at the wall bases on all 8 sheets, nothing floats below grade except real foundation work, and the demo roof band sits at 5.62 m over 2.68 m walls — levelBaseY applied exactly (matches the host's floating shell, A3). The failures a drafting professional would reject: (1) EAST and WEST are horizontally mirrored — for a viewer standing east looking west, screen-right must be -z (north); the code projects +z right on the east sheet ([p[2],-p[1]]) and -z right on west, i.e. each is the reflection of the true view (confirmed on paper: the gabled east-wall window at z=7 of span 3..11 prints center-RIGHT, true view is center-LEFT). (2) Below-grade foundation draws as a solid dark-gray round-capped blob (round-1 P3's 'weird concrete' reincarnated in elevation) — footing vs stemwall indistinguishable, frost-depth NY blob dominates the sheet. (3) The demo's four elevations print at two scales (S/N 1:100, E/W 1:75) — one building, one elevation family, one scale. (4) CMU walls render as a solid tan smudge with bulging round stroke ends ('log cabin' read); near and far walls overprint in one color with no depth cue. (5) No color legend, no level datums (T.O. plate / ridge / grade elevation tags).",
+      "recommendation": "Swap the E/W projections (east: [-p[2],-p[1]] keep depth p[0]; west: [p[2],-p[1]] keep depth -p[0]) and pin it with a window-position test; draw below-grade members as light dashed outlines with butt caps; force one ratio across the four elevations; fade far-side members (opacity by depth rank) or draw only members within ~1 m of the viewed face; add a system-color key and T.O.-plate/ridge/grade elevation tags."
+    },
+    "N3-section": {
+      "status": "FAIL",
+      "evidence": "demo-house-FL/11-section-a-a-longitudinal.png; gabled-composite-NY/10-section-a-a-longitudinal.png",
+      "note": "The gabled section proves the concept: cut at plan midpoint through the spine wall and the gable frame, it reads as a real section (stud wall, roof triangle with collar tie, foundation below grade). The demo section does not read as a drawing: one stud wall, a roof bar floating in air, a single disembodied HVAC dot, and a column of CMU beads, on a ~80% empty sheet. Root causes verified in code/data: band membership is |member.center.x − cutX| < 0.9, so 6 demo wall members that physically CROSS the cut plane are omitted while a 12 m plate whose center happens to fall in-band draws full length; nothing distinguishes CUT members (should be poché/heavy) from members seen BEYOND the cut; there is no A-A cut line with arrows on ANY plan sheet, so the section cannot be located; and both sets label the sheet 'longitudinal' when the cut plane is perpendicular to the building's LONG axis — that is a transverse/cross section, mislabeled.",
+      "recommendation": "Test segment-vs-plane crossing (project both member endpoints, keep members whose axis crosses the band OR whose center is in it); draw crossing members with a heavy cut weight and beyond-members light; stamp the A-A cut line + arrowheads on the floor/foundation plan at cutX; rename to 'Section A-A (transverse)' or cut along the long axis to earn 'longitudinal'."
+    },
+    "P1": {
+      "status": "FLAG",
+      "evidence": "both elevations/section families; demo-house-FL/11 worst (~80% empty)",
+      "note": "Plan sheets are balanced and the schedules pagination fix holds (2 evenly-filled demo sheets, flags on the last — round-1's blank sheet 7 is gone). But every elevation/section sheet is >50% empty: a long low house at a snapped ratio occupies one horizontal band and the bottom half of the frame is dead white; the demo section is ~80% empty.",
+      "recommendation": "For elevation/section sheets, center the drawing vertically in the free field (currently biased high) and consider stacking two elevations per sheet (S over N, E over W) at drafting-standard pairing to kill the dead band and halve sheet count."
+    },
+    "P2": {
+      "status": "PASS",
+      "evidence": "demo sheets 2–6 all print 'scale 1:100'; gabled sheets 2–5 all 1:100; foundation footprint registers exactly under framing under electrical/MEP in both sets",
+      "note": "Round-1's five-scales-per-set FAIL is fixed: one shared transform per plan set, verified geometrically (16.72 m member span = 632 px at 37.795 px/m on every demo plan sheet) and visually (light-table overlay would register). Roof plan ghosts the wall outline. Elevations/section/cover fit independently by design and state their ratio — acceptable, except the within-family mismatch flagged under N2.",
+      "recommendation": "Keep the pinned shared transform; extend the same 'one ratio' rule to the elevation family."
+    },
+    "P3": {
+      "status": "FLAG",
+      "evidence": "gabled-composite-NY/02-foundation-plan.png (apex + oblique corners close, p_link footed); demo-house-FL/02 (X-junctions clean); all elevation sheets (blobs)",
+      "note": "On plan: fixed — foundation runs draw as mitered stroked paths, oblique corners close at the bisector with no bow-ties, gaps or rebar tails (S3 holds on paper; gate green), only a ~1-px start-cap nib at the gabled west corner chain seam. On the NEW sheets line discipline fails: every member uses stroke-linecap='round', so CMU courses bulge into sausages, end-on members print as bead stacks, and the foundation mass is a single solid blob with no footing/stemwall distinction and no hidden-work (dashed) convention below grade.",
+      "recommendation": "linecap='butt' for all member line art; dashed light outline for below-grade work; two grays (footing vs stemwall) in elevation/section as on the plan."
+    },
+    "P4": {
+      "status": "FLAG",
+      "evidence": "all 8 elevation + 2 section + 2 cover sheets (no legends); gabled-composite-NY/05-electrical (GEN-2 label clipped at right sheet edge, GEN-3/LTG-1 labels overprint device bubbles); demo foundation (76 indistinguishable dots vs '31 pcs')",
+      "note": "Plan-sheet legends are now complete (device tags, circuit rows with breaker/gauge/zone, MEP line types, bolt callout, stud-spacing note — round-1's P4 FAIL largely cured) and circuit IDs print on runs. But the new sheet families introduce five stroke colors (wall tan, roof brown, foundation gray, plumbing blue, HVAC teal) that appear in NO legend anywhere (checklist P2); on the gabled electrical sheet the GEN-2 run label half-clips off the sheet edge and two labels overprint device bubbles; and on foundation plans the 45 vertical rebar dowels print as dots visually identical to the 31 anchor-bolt marks — the drawn 'bolt' count (76) contradicts the callout, round-1's C3 complaint in new clothes.",
+      "recommendation": "System-color key on every non-plan sheet; clamp run-label x into the drawing field and nudge off bubbles; render dowels differently from bolts (open circle vs filled square) with a legend row each, or drop dowel dots from the plan."
+    },
+    "C1": {
+      "status": "FLAG",
+      "evidence": "demo-house-FL/04-roof-framing-plan.png (west wing outlined but bare); full sheet censuses of both sets",
+      "note": "Every system with members gets its sheet, and the standard-set additions (cover, 4 elevations, section) print whenever members exist — the gabled set correctly grew a roof plan when the pitched roof was added. Round-1 residual stands: the demo west wing has no roof structure on any sheet and no note says so; the ghost outline now at least shows the uncovered footprint, but silence is still what an examiner rejects.",
+      "recommendation": "Emit a visible flag ('wing (-4,-2.5)–(4,2.5): no roof members in model') on the roof plan and in the schedules flags block."
+    },
+    "C2": {
+      "status": "PASS",
+      "evidence": "demo-house-FL/05-electrical-rough-in-plan.png; gabled-composite-NY/05-electrical-rough-in-plan.png",
+      "note": "Every legend circuit has a drawn colored run with an on-plan circuit-ID label (GEN-1/2/3, LTG-1..4, SA-1, BA-1 all located on the demo), homeruns reach the panel, legend rows carry breaker/gauge/zone, device symbols are all legended, and round-1's floating orphan devices are gone (dedupe + spiral nudge working — no unwired symbols found on either set). The four GEN magentas remain near-identical at 1-px weight but the run labels now carry the traceability.",
+      "recommendation": "Keep; consider rotating one GEN hue toward violet for colorblind-safe separation (E3 uniqueness gate already pins uniqueness, this is perceptual)."
+    },
+    "C3": {
+      "status": "PASS",
+      "evidence": "gabled-composite-NY/02-foundation-plan.png (p_link footed, rings closed, 36-pc callout); demo-house-FL/02 (31-pc callout, bolts on all exterior runs)",
+      "note": "Round-1's automatic-rejection item is fixed: the 1 m p_link connector wall now carries footing/stemwall and both perimeter loops close as continuous mitered rings; anchor-bolt MEMBERS number exactly the takeoff count (31 demo / 36 gabled, one series, y=-0.051 mudsill plane) with the '1/2\" AB @ 6'-0\" o.c. max — N pcs' callout matching. Remaining visual ambiguity (dowel dots masquerading as bolts) is scored under P4.",
+      "recommendation": "Add the dowel/bolt symbol split from P4 so the drawn count an examiner makes equals the schedule."
+    },
+    "C4": {
+      "status": "PASS",
+      "evidence": "both wall-framing plans (legend + 'STUDS @ 16\" O.C. U.N.O.'); gabled roof plan legend (rafter/ridge/outlooker/fascia/collar-tie sizes)",
+      "note": "Headers visible at openings with king/trimmer ticks, per-role sizes legended (4x8 FL / 4x10 NY headers), stud-spacing callout present on both sets — round-1's missing 'o.c.' string is fixed. Minor: the roof plans still carry no rafter-spacing note and girders/beams are unlabeled at the member (legend-only).",
+      "recommendation": "Add 'RAFTERS @ 24\" O.C.' (or actual) to the roof-plan legend and a '4x10 HDR' tag at each opening."
+    },
+    "C5": {
+      "status": "FLAG",
+      "evidence": "demo-house-FL/12+13-schedules-takeoff.png; gabled-composite-NY/11-schedules-takeoff.png",
+      "note": "Flags list is now INTACT — all six demo warnings print verbatim (3 RO shifts + duplicate walls + no-slab room + slab-on-grade) and the gabled warning prints; takeoff totals reconcile with drawn content (devices 69+panel demo-set equivalents re-verified this round: 31 bolts, 20 gabled device boxes = 19 R + 1 S); pagination is balanced with no ghost sheet. Still open from round 1: ~15 rows per set ellipsize mid-word ('R403.1…', 'branch chai…', '(~…') with a full blank half-sheet below — the audit basis notes remain unreadable.",
+      "recommendation": "Wrap takeoff rows to a second line (there is room for 3x the content); keep the flag block."
+    },
+    "C6": {
+      "status": "FLAG",
+      "evidence": "all 24 sheets both sets; covers lack any block",
+      "note": "Title blocks carry project, level, jurisdiction + full code name with effective date, LOD, date, disclaimer, scale ratio AND 'SHEET n/N' on every chromed sheet; the code citation now wraps at word boundaries ('…Residential — 8th | Edition (2023)…' splits cleanly, no mid-word breaks found). Two gaps: the cover sheet has no block/number at all (index starts at 2), and elevations/section correctly omit the north arrow but the ratio-in-two-places (bar + line2) is the only datum — fine. The sheet index on the cover satisfies round-1's index recommendation.",
+      "recommendation": "Minimal 'SHEET 1/N' on the cover closes this out."
+    },
+    "A1": {
+      "status": "PASS",
+      "evidence": "SVG measurements: demo plan member-center span 632 px / 37.795 px-per-m = 16.72 m = graph bounds (-4.07..12.65); south-elevation wall band 101.3 px / 37.795 = 2.68 m (walls 2.5 + plates ≈ 2.7); roof band (456.9−244.5) px = 5.62 m = host shell 5.2 + structure",
+      "note": "Scale bars and geometry share one transform by construction and measure true: plan scale exact at 1:100, elevation heights land within 1% of model values, and the levelBaseY lift is numerically confirmed (roof members 3.05..3.19 local + 2.5 storey = 5.55..5.69 drawn). No scale bar on schedules (correct).",
+      "recommendation": "Keep the snapped-ratio transform pins."
+    },
+    "A2": {
+      "status": "PASS",
+      "evidence": "compute output vs takeoff: 31 anchor-bolt members = '31 pcs' callout = takeoff row; gabled 36 = 36; gabled device boxes 20 = 19 R + 1 S drawn; demo CMU 1015-pc takeoff row present with block courses drawn",
+      "note": "Member counts reconcile at the data level this round (round-1's double-plot is dedupe-fixed: 31 distinct XZ bolt positions, one y-plane). The remaining visual over-count (dowel dots) is a symbology problem (P4), not a data problem.",
+      "recommendation": "Close the loop with a drawn-marks-vs-takeoff assertion once dowels get their own symbol."
+    },
+    "A3": {
+      "status": "FAIL",
+      "evidence": "src/plans/plan-set.ts ELEVATIONS table (east proj [p[2],-p[1]] / west [-p[2],-p[1]]); gabled-composite-NY/08-east-elevation (window at z=7 prints center-right; a true east view from +x has -z/north to screen-right, window center-left)",
+      "note": "Plan orientation is consistent (north arrow beside every plan's frame corner, y-down/north-up verified across both sets) and S/N elevations are handed correctly (viewer at +z: right=+x — demo wing prints left on south, right on north ✓, gabled door at x=3.5 prints left-of-center on south ✓). But the EAST and WEST elevation sheets are each the mirror image of the true view: for east (viewer at +x, d=(-1,0,0), up +y) screen-right = d×up = -z, the code draws +z right; west is the complementary mirror. Painter depth is correct for the titled viewer on both, so these are true mirrorings, not title swaps.",
+      "recommendation": "Negate the horizontal projection on east and west (keep depths), then pin with an asymmetric-fixture test (window near one end of an east wall must print on the matching screen side)."
+    },
+    "SWEEP": {
+      "status": "PASS",
+      "evidence": "bun test at 9835149: 459 pass / 0 fail (electrical.openings, electrical.connectivity, circuit-colors, interpenetration matrix, roof-framing, foundation + plan-set miter/transform/title pins, compute.multistorey 10 scenarios)",
+      "note": "Checklist rows E1/E2/E3, S1/S2/S3, P1/P3 gates all green; P2 (colors-in-legend) regresses only on the NEW sheet families (scored P4/N2); P4-warnings verbatim confirmed on paper both sets; A3-multistorey honored on paper (floating host shell tracked exactly). E4 (air jumpers) remains the known open row — not re-adjudicated here; no bed-height diagonals visible at plan zoom on either set.",
+      "recommendation": "When the E/W mirror fix lands, add the elevation-handedness pin to plan-set.test.ts alongside the existing transform pins."
+    }
+  },
+  "recommendations": [
+    "Fix the E/W elevation mirror (A3/N2): east proj [-p[2],-p[1]] with depth p[0], west proj [p[2],-p[1]] with depth -p[0] — one-line swaps in the ELEVATIONS table — and pin handedness with an off-center-window test.",
+    "Make the section a section (N3): keep members whose AXIS crosses the cut band (segment-plane test), not just center-in-band (6 demo walls omitted today); draw cut members heavy/poché and beyond-members light; stamp the A-A cut line with arrows on the floor/foundation plan at cutX; retitle 'transverse' (or cut along the long axis).",
+    "Kill the below-grade blob (N2/P3): butt linecaps for all member line art (round caps make CMU courses read as logs and end-on members as bead stacks); below-grade foundation as light dashed outlines with the plan's two-gray footing/stemwall split.",
+    "Legend the new sheets (P4/P2-row): a 5-row system-color key (wall/roof/foundation/plumbing/HVAC) on cover, elevations and section; clamp electrical run labels inside the frame and off device bubbles.",
+    "One scale per elevation family (N2/P1): fit all four elevations with the same snapped ratio (min that fits both axes); center the band vertically or pair S/N and E/W two-per-sheet to fix the half-empty frames.",
+    "Cover polish (N1/C6): add 'SHEET 1/N' (or a slim block) to the cover; note when a roof draws at a floating model elevation; drop or legend MEP strokes in the hero.",
+    "Round-1 residuals now two rounds old: wrap takeoff rows instead of mid-word ellipsis (C5); give vertical rebar dowels a distinct open symbol so drawn bolt marks equal the '31 pcs' callout (P4/C3); print a visible 'wing has no roof members' flag on the demo roof plan (C1).",
+    "Add elevation datums (N2): T.O. plate / ridge / grade elevation tags on elevations and section — the first thing a plans examiner reads on a side view."
+  ]
+}

@@ -1,0 +1,115 @@
+{
+  "round": "F1-lineset",
+  "pin": "7c9f567c6604bb650548a72c57047049971f9a5e",
+  "branch": "feat/ac-lineset-routing",
+  "base": "85238a8 (master, one commit behind)",
+  "fixCheckVerdict": "PASS",
+  "round2": {
+    "pin": "70638b2e2ef8c13c2cabbfb2c9716ef6ccfd7c8a",
+    "base": "7c9f567 (round-1 pin, direct parent)",
+    "date": "2026-08-20",
+    "protocol": "F1 round-2 fix check ON PIXELS. Worktrees /tmp/bpf1r2/pin (70638b2) + /tmp/bpf1r2/base (7c9f567), both clean at the exact shas; pure buildPlanSet bun harness (computeLevel + injected bones:framing detail 400 all systems, relativeLevelBaseY) on the demo graph fc866f2f271b — fresh HTTP fetch byte-equal to the cached copy (74 nodes). TWO jurisdictions per side (demo-house-FL + demo-house-TX brick-veneer baseline), 14 sheets each, PLUS a lineset-neutralized set per side. Rasterized with Playwright page.setContent (editor never opened) at 1x print size / 2x / 6x route crop / 12x riser+stub crops; strict pixel census (tol 40) AND hue-class per-leg coverage walked on every lineset leg; legend geometry read from the SVG; every differing sheet byte-diffed and eyeballed.",
+    "verdict": "PASS",
+    "items": {
+      "SWEEP-invariants": {
+        "status": "PASS",
+        "evidence": "FULL suite at the pin: 961 pass / 1 todo / 0 fail — 962 tests across 43 files, 31,051 expect() calls; bunx tsc --noEmit clean. The round-1 vacuous-gate complaint is answered: plan-set.test.ts now pins 'line-set pair prints BOTH colors at DISTINCT plan positions' (transform-bearing rects >= 4px apart, legend swatches excluded) — a real occlusion gate, not a string grep; hvac.lineset.test.ts adds the door-detour twin bijection + pairHits==0 SAT gates over a genuinely detouring scene.",
+        "note": "Checklist rows cited: M2 (rewritten this commit — shared-envelope route + roll + schematic nudge now IS the row text), E1-applied-to-pipe, E2-for-refrigerant, P2, P4, S4. No gated row regressed."
+      },
+      "FOCUS-1-both-colors-on-pixels": {
+        "status": "PASS",
+        "evidence": "Round-1 BLOCKER dead. Strict census (tol 40, legend excluded) on the MEP sheet @2x: FL cyan 547 / orange 1139 (base: cyan 0 / orange 1122); TX cyan 547 / orange 1130 (base cyan 0). Cyan bbox x[1407..1581] y[707..994] spans the FULL route envelope (west+north+east legs + stub), not a fragment. Per-leg walk at 2x: all 9 long legs per pipe >70% coverage in their own color. At 1x PRINT SIZE the pair prints as a ~5px-separated two-color hairline loop: per-leg hue-class coverage 16/23..34/34 on every leg both colors (suction renders AA-muted teal (70,141,150)-class, liquid warm (159,111,69)-class — opposite R-B signs, distinguishable side by side; strict-tol census at 1x reads 0 cyan because the 1.2px fill + 0.6px #444 stroke desaturates — hue survives, saturation doesn't). 6x route crop: clean parallel cyan/orange pair around the whole loop, LOOKED.",
+        "note": "The ±2.5px schematic nudge is in the SVG (13 drawing rects per color, every suction rect a 5.0px-translated liquid twin). Geometry stays truthful — engine members still share the plan rail with the 4cm vertical offset."
+      },
+      "FOCUS-2-detours-and-rolled-risers": {
+        "status": "PASS",
+        "evidence": "Two genuine detours on the demo (west-wall door + north-wall opening; 4 riser pairs). 12x LOOK over both: the two colored lines run CONTINUOUS and separated across the header region (the elevated crossing legs project onto the same nudged rails, so the pair never gaps over a door); rolled risers print as small dark-framed 0.8x1.2px ticks with the pipe's color core — the 90° roll lands each pipe's riser beside its TWIN's rail (suction tick on the liquid line and vice versa), which is the truthful projection of field-bent soft copper and reads as a jog marker. Engine-side: riser plan separation at the pin is exactly 0.0400 m on all 4 pairs (base: 0.0000 — coaxial). The x=786 riser pair near the air handler prints too (12x verified; it defeats naive 2x sampling because the tick is mostly its own stroke).",
+        "note": "At 1x the riser ticks read as small dark marks on the lines — acceptable drafting for a schematic pair. Section A-A shows the elevated crossing as a dark cut rect above the plate (truthful poché)."
+      },
+      "FOCUS-3-legend": {
+        "status": "PASS",
+        "evidence": "Both rows print on FL and TX MEP: 'line-set — suction ¾\" (insulated)' y=104 (cyan #35b8c9 swatch at 50,96), 'line-set — liquid ⅜\"' y=118 (orange #d98134 at 50,110) — swatch hues identical to the drawing rects. Backing rect (44,42) 250x294 unchanged from round 1: 19 text rows y 62..328 all inside, 8px bottom margin, no drawing overlap. 4x legend crop LOOKED — nothing clipped. Cover legend carries system colors only, so the axon's pair-collapse breaks no P2 row.",
+        "note": "Zero legend work was needed, as round 1 predicted."
+      },
+      "FOCUS-4-takeoff-truth": {
+        "status": "PASS",
+        "evidence": "Schedules 3/3 (LOOKED): 'Line-set suction ¾\" — 55.7 lf', 'Line-set insulation — 55.7 lf', 'Line-set liquid ⅜\" — 55.7 lf' — both pipes sum 16.97 m = 55.68 lf drawn, quantities == drawn to the printed digit; suction==liquid now COHERENT (one shared reference route; base booked 55.4 vs 55.9 from independently-routed pipes); insulation == suction exactly; '1 run' correct. The >15 m oil-return advisory prints VERBATIM in the flag block ('line-set over ~15 m — verify manufacturer max line-set length / oil return (mfr specs govern)') — P4 holds. Takeoff diff vs base is EXACTLY the three lineset quantity strings; zero leakage anywhere else.",
+        "note": "No RO-crossing flag on the demo — right, the route detours instead of crossing."
+      },
+      "REG-byte-equality": {
+        "status": "PASS",
+        "evidence": "Neutralized proof (lineset-* members filtered BOTH sides): ALL 14 sheets byte-EQUAL pin-vs-base on FL AND TX — the line-set class is provably the only paper delta at 70638b2. Raw diffs touch exactly the lineset-bearing sheets: cover (axon members), MEP, 4 elevations, FL section (TX section byte-equal — its cut misses the moved risers), schedules 3/3 (the three quantity strings). Foundation / wall-framing / roof / electrical / schedules 1-2 byte-equal to 7c9f567. Member/fixture counts unchanged (2050/94 FL, 1337/94 TX; 26 lineset members per side).",
+        "note": "Baseline recapture claim in the commit ('byte-IDENTICAL') is consistent with what paper shows: the straight-run baseline derivation reproduces the old members exactly."
+      },
+      "INTERACTION-dwv-branch": {
+        "status": "FLAG",
+        "evidence": "a94be32 (F3 under-floor DWV + MEP flow arrows) is NOT an ancestor of 70638b2 — verified. Interaction risk only: both branches touch plumbing.ts (F1 widens pipeWallLeg/routePipe with the default bandHalf param) and both add MEP-sheet drawing classes (flow arrows vs the schematic nudge). Board merge order F3 → F1 stands; after the F1 rebase, re-rasterize ONE MEP sheet to confirm arrows and the nudged pair coexist (arrows anchor on DWV members, nudge keys on lineset-* sourceIds — no shared code path expected, but the sheet is shared real estate).",
+        "note": "Not scored against this round."
+      },
+      "ADVISORIES": {
+        "status": "FLAG",
+        "evidence": "(1) NEW, small: the suction cabinet stub (22.7px leg at the south penetration) prints ~50% at 1x — occluded by the DWV corridor (#8fb0c4 members drawn later) and CO cleanout bubbles crowding that corner; its liquid twin reads 11/12 and both are identifiable at 12x. Pre-existing label/corridor-crowding class (the nudge moved the suction stub 2.5px toward the bubbles), not twin-on-twin occlusion — queue with the condenser-corner composition item. (2) At 1x the pair is hue-distinguishable but AA-muted; if a future round wants punchier print contrast, widen the suction hairline (it is the ¾\" pipe) rather than saturating colors. (3) Carried, unchanged: route cost 55.7 lf vs ~8.5 crow-flies (try both wall directions); flag aggregation counts legs not runs; cover axon collapses the pair to one line (accepted per direction); cross-unit coincident runs on multi-condenser scenes; condenser cabinet outline rotated vs axis-aligned pad.",
+        "note": "None block."
+      }
+    },
+    "suite": "961 pass / 1 todo / 0 fail — 962 tests across 43 files, 31,051 expect() calls; tsc clean.",
+    "recommendations": [
+      "Merge-order rider: after rebasing F1 onto F3 (both touch plumbing.ts + the MEP sheet), re-rasterize one MEP sheet — flow arrows + nudged pair share the sheet.",
+      "Queue the condenser-corner composition pass: DWV members + CO bubbles + the suction stub crowd the south penetration zone at 1x (pre-existing class, now slightly more visible because the suction line finally prints).",
+      "Optional print-contrast tweak: draw the suction hairline a touch wider than liquid (it IS the bigger pipe) so the 1x teal survives anti-aliasing with more saturation.",
+      "Carried from round 1: route-cost both-directions probe; legs-vs-runs flag count; cover-axon pair nudge for memberSegs."
+    ],
+    "shipStamp": "PASS — the round-1 blocker is dead ON PIXELS: both line-set colors print along the whole route (straight legs, detour crossings, stubs) on FL and TX, distinguishable at print size and clean at 6x; rolled risers print truthfully and legibly; legend geometry and takeoff truth hold; the neutralized 28-sheet byte-equality proves the lineset class is the only paper delta vs 7c9f567; the paper gate is no longer vacuous. F1's paper side is ship-ready — pair with the code-skeptic verdict and mind the F3 merge-order rider."
+  },
+  "protocol": "Feedback-F1 paper round. Scratch worktree /tmp/bpf1 at the exact pin; pure buildPlanSet (bun harness at repo root: computeLevel + injected bones:framing, relativeLevelBaseY), sheets rasterized with Playwright page.setContent — editor never opened. FOUR sets at pin AND base (fresh HTTP fetch of demo graph fc866f2f271b, 74 nodes): (A) demo-house-FL 14 sheets 2050/94 (base 2030/94, byte-consistent with rounds 5-7), (B) stairtower-NY upper 13 sheets 610/27, (C) >40-flag stress 16 sheets, (D) stairtower ground 12 sheets 436/14. 55 sheets per side; every sheet byte-diffed pin-vs-base + a NEUTRALIZED compare (lineset-* members filtered on both sides → all 55 sheets byte-EQUAL, so the line-set class is provably the ONLY paper delta). 27 PNGs rasterized at 2-6x; every differing sheet walked by eye; pixel-census color forensics on the MEP/cover sheets; member-level union-find connectivity; takeoff row reconciliation to the digit.",
+  "verdict": "REVISE",
+  "items": {
+    "SWEEP-invariants": {
+      "status": "PASS",
+      "evidence": "bun test at the pin: 958 pass / 1 todo / 0 fail — 959 tests across 43 files, 31,002 expect() calls (master 948); bunx tsc --noEmit clean. All gated rows green incl. the branch's new hvac.lineset.test.ts. master-baseline.json regeneration audited: INTL+TX members delta is EXACTLY 6× lineset-1 → 3+3 lineset-suction-1/lineset-liquid-1; fixtures + warnings byte-same — the E5 pin reset carries zero smuggled drift.",
+      "note": "No gated row regressed. But see FOCUS-1: the round's headline claim fails ON PAPER while the suite stays green — the paper gate is string-presence only (vacuous for visibility)."
+    },
+    "FOCUS-1-pair-two-colors": {
+      "status": "FAIL",
+      "evidence": "M2 (branch text: 'suction cold-blue / liquid warm-red in 3D AND on the MEP sheet') / P4 / E3-spirit. The suction line NEVER PRINTS A VISIBLE PIXEL. Pixel census (tol ±30-40 RGB): demo MEP sheet 2112×1632 @2x — #35b8c9-class pixels outside the legend swatch: 0 (orange #d98134: 598); 6x zoom crop of the whole run: cyan 0 / orange 6276; stairtower MEP: cyan outside legend 0; demo cover axon: cyan 0 / orange 3389. Root cause on-paper: the pair is modeled as the SAME plan path with a height-only ±2 cm offset (suction y 0.42, liquid y 0.38), every plan projection collapses them onto identical coordinates, both widths floor to the 1.2 px hairline, and runMembers appends all 13 suction legs BEFORE all 13 liquid legs — the liquid rects paint LAST and cover the suction 100% on every sheet (MEP plan, cover axon; elevations draw system colors, not pipe colors). The legend keys 'line-set — suction ¾\" (insulated)' in a color that appears nowhere in any drawing — a plans examiner sees ONE refrigerant pipe where the legend and takeoff promise two.",
+      "note": "The engine geometry is RIGHT (two pipes, correct dias, correct offset — 3D X-ray will show both since height separates them there); this is a plan-projection draw defect. Concrete remedies (any one): (a) sheet-side graphic offset — draw hvac pipe-run pairs nudged ±~1.5 px normal to the leg when two pipes share a plan centerline; (b) draw the WIDER suction first without the shared min-width floor collapsing them (suction 2.0 px vs liquid 1.2 px leaves a visible cyan halo); (c) model the pair side-by-side in PLAN (2-4 cm apart, which is physically how line-sets strap) — then every projection shows both for free. Add a VISIBILITY gate: rasterize or geometrically assert that both colors survive occlusion on the MEP sheet (the current plan-set gate only greps strings)."
+    },
+    "FOCUS-1-routing-continuity": {
+      "status": "PASS",
+      "evidence": "M2/E2-for-refrigerant/E1-applied-to-pipe. Union-find over rotation-aware member endpoints: both pipes are single connected chains with degree-1 terminals EXACTLY at the cabinet (6.706, 8.1) and the air handler (7.75, 5.75) — demo AND stairtower. The run follows wall centerlines (visible on the MEP sheet riding the light wall lines) with four full-height RO detours (rise 0.42→2.32 over headers, drop back); penetration snapped clear of ROs; no 'AIR RUN' or RO-crossing flags fired on the demo; zero flagged crossings silent.",
+      "note": "The wall-following ask of the F1 feedback is genuinely served — the old base drew a 3.4 m straight Manhattan diagonal; the pin routes 16.9 m of honest wall-rail pipe."
+    },
+    "FOCUS-2-legend-rows-geometry": {
+      "status": "PASS",
+      "evidence": "P2/P4. Both rows print on every MEP sheet ('line-set — suction ¾\" (insulated)' y=104, 'line-set — liquid ⅜\"' y=118 on demo; also on the stairtower MEP whose legend correctly carries no plumbing rows). Legend backing rect grew EXACTLY two rows (h 266→294 = +2×14); all 15 demo rows sit inside (last row y=328 vs rect bottom 336, 8 px margin); zero legend-zone text outside the rect; no drawing overlap (single-column demo legend, round-7 stress advisory unchanged). Swatch hues judged at 4x: suction cyan #35b8c9 clearly separates from supply cold #4a7dbf, DWV #8fb0c4 and vent-stack slate; liquid #d98134 clearly separates from hot #c0504d. The hue CHOICE is right — the failure above is occlusion, not hue.",
+      "note": "Once the pair actually prints, no legend work is needed."
+    },
+    "FOCUS-3-takeoff-rows": {
+      "status": "PASS",
+      "evidence": "S4/M2/C5. Demo: 'Line-set suction ¾\" — 55.4 lf', 'Line-set insulation — 55.4 lf', 'Line-set liquid ⅜\" — 55.9 lf' — drawn member sums are 16.890 m = 55.41 lf and 17.050 m = 55.94 lf: quantities == drawn lengths to the printed digit, insulation == suction lf exactly, '1 run' correct (suction+liquid keyed to one physical pair). Stairtower books 8.9/8.9/8.9 lf (straight run, suction==liquid — sane). Takeoff row diff vs base is EXACTLY {+3 line-set rows, +1 aggregated flag row (26 ea), −1 old pair-row}; zero leakage into plumbing Copper lf or elbow fittings; whips/pads/disconnects unchanged. Wrapped row tails print verbatim on Schedules 3/3 (viewed). The >15 m oil-return advisory prints VERBATIM in the flag block with its wrapped tail 'govern)' (viewed) — honest for a 16.9 m routed run (2.6 m crow-flies + four ~3.8 m RO detours).",
+      "note": "Booking by size + separate insulation sleeve row is purchasable truth — better than the base's single 11.1 lf pair row."
+    },
+    "REG-byte-similarity": {
+      "status": "PASS",
+      "evidence": "Neutralized regression proof: filtering members with sourceId lineset-* on BOTH trees makes all 55 sheets of all four sets byte-EQUAL (diff -r exit 0, 0 lines) — the line-set class is the only paper delta at the pin, in every set. Raw diffs touch exactly the sheets that draw hvac pipe-runs or takeoff/flags (cover, 4 elevations, section, MEP, 2-3 schedules pages, stress flags-continued); stairtower-ground has ZERO differing sheets. Demo base counts 2030/94 byte-consistent with rounds 5-7.",
+      "note": "Cleanest expected-diff of any pilot round to date."
+    },
+    "REG-round-5-6-fixes": {
+      "status": "PASS",
+      "evidence": "Deck under-layer: stairtower floor sheet deck rects at SVG indices 9-49 (fill-opacity 0.35, #cfc4a6 hairline), first framing rect at 50 — same structure round-7 approved; viewed: joists/blocking/girder/stair headers read through the translucent deck; legend prints the size-less subfloor + hanger rows. Flag pagination (B21a): stress set 56 engine flags+warnings → 58 printed groups = 56 exactly-once + pointer '+ 40 more flags — see \"Flags (continued)\"' + the sheet-derived roof-coverage flag; 0 missing, 0 duped, 0 ellipsis; numbering contiguous 1..16 (viewed 4/4 + continuation). Engineered SKU (round-5/B4): ground stairtower books 'Engineered header (LVL/PSL — by supplier) 1 pcs + 11.8 lf', zero 4x12 rows; PT sole plates on their own '2x6 PT' SKU rows (2+4 pcs, 120 bd-ft) beside untreated; anchor row 'sole plate anchorage (R403.1.6)' (viewed 1/2 + 2/2 — set is byte-equal to base anyway).",
+      "note": "All three carried fix classes hold at the pin."
+    },
+    "ADVISORIES": {
+      "status": "FLAG",
+      "evidence": "(1) Routed length honesty: the demo run books 55.4 lf where the crow-flies is ~8.5 lf — four full-height RO detours at ~12.5 lf each dominate; honest per the wall-rails contract and the >15 m advisory fires, but a drafter would try the alternate wall direction before accepting a 6.6× route (cost-optimizing the graph path is future work, same class as supply pipes). (2) The advisory flag stamps all 26 legs → 'FLAG 26 ea' on the takeoff flag row; correct aggregation, slightly noisy count semantics (26 legs, 1 condition). (3) Demo condenser cabinet outline draws rotated (diagonal) inside its axis-aligned pad on the MEP sheet — pre-existing (fixtures byte-equal to base; oblique out-normal), not this round's. (4) Elevations/section draw the line-set in system colors (sage), not pipe colors — consistent with plumbing convention (checklist only claims the MEP sheet); fine as-is. (5) Round-7 carried advisories (P1 right-bias, upper-owner GRADE datum, legend-stress composition, wall-sheet role legend) unchanged and untouched by this branch.",
+      "note": "None block; (1) is worth a board line."
+    }
+  },
+  "recommendations": [
+    "BLOCKER FIX (FOCUS-1): make both line-set colors survive the plan projection — either a sheet-side perpendicular nudge for coincident pipe pairs, a width-differentiated draw (suction wider under liquid, no shared 1.2 px floor), or model the pair with a small PLAN offset (2-4 cm side-by-side, physically true). Then add a visibility gate (geometric occlusion assert or pixel test on the MEP SVG) — the current gate greps strings and stayed green while the suction line was 100% hidden.",
+    "Consider trying both wall directions in the line-set graph route and taking the cheaper path — the demo pays 4 full-height RO detours (~47 lf of the 55.4) that the opposite direction may avoid; keep the >15 m advisory either way.",
+    "Optional: collapse the long-run advisory's takeoff flag row count to runs (1 ea) instead of member legs (26 ea).",
+    "Queue (pre-existing, not this branch): condenser cabinet rotated vs axis-aligned pad on the MEP plan at oblique out-normals."
+  ],
+  "shipStamp": "REVISE — routing, continuity, legend geometry, takeoff truth and every regression check are exemplary (the neutralized 55-sheet byte-equality is the cleanest expected-diff yet), but the round's headline promise fails on paper: the suction ¾\" line never prints a visible pixel on any sheet (0 cyan outside the legend swatch on MEP, zoom, stairtower, cover) because the liquid line paints over the identical plan path. One draw-side fix + a visibility gate and this stamps."
+}

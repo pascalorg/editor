@@ -1,0 +1,57 @@
+{
+  "round": "day-9 starter-condenser paper round",
+  "branch": "fix/starter-template-condenser",
+  "sha": "41d7d51",
+  "baseSha": "9d75fb6",
+  "verdict": "REVISE",
+  "suite": { "pass": 1562, "todo": 1, "fail": 0, "tests": 1563, "files": 58, "expectCalls": 47159, "tsc": "clean" },
+  "method": "Pure buildPlanSet harness (computeLevel + panel-parity opts incl. walls/characteristics/headerAssumption, fixed date) in detached worktrees at 41d7d51 and base 9d75fb6; scenes: real garden-house seed graph (private-editor editor/packages/mcp/src/templates/garden-house.ts, dumped verbatim), demo fc866f2f271b (FL + INTL), demo+outdoor 'Patio' zone; sheets rasterized with Playwright page.setContent (never opened the editor); every affected sheet eyeballed. Evidence: /tmp/bpexam-d9/out/*/png.",
+  "items": {
+    "R1-starter-mep": {
+      "status": "PASS",
+      "evidence": "branch-garden sheet 5 (Plumbing + HVAC): condenser CU + pad + DS disconnect print OUTSIDE the north wall; line-set suction/liquid pair (both colors, schematic nudge, legend rows ¾\"/⅜\") runs cabinet → ONE wall_n penetration → air handler; no ⚠ on cabinet/pad (COND_VERIFY_FLAG absent — anchorFallback branch not taken). Base sheet 5 for contrast: supply duct bores THROUGH the condenser cabinet to a supply register floating in the garden, no DS, no disconnect legend row.",
+      "note": "ADVISORY (pre-existing class, newly visible on one-room scenes): the unconditional 'coil stub' (hvac.ts ~1929) prints 4.0 m of unflagged refrigerant pair at 0.4 m AFF across the open living room to the room-centroid AH — plumbing's >0.6 m 'connector too long' honesty has no line-set analog, and the M2 air-run flag only covers the no-wall-anchor branch. Visible on Section A-A + MEP. Queue a length-flag."
+    },
+    "R2-tonnage-honesty": {
+      "status": "FAIL",
+      "evidence": "The unit heals: cabinet label 'AC condenser #1 — 2 tons outdoor unit', fixture 'AC Condenser #1 — 2 tons (assumed 1 ton/550 sqft)', takeoff row 'AC condensers — 1 pcs (2 tons total — assumed sizing, Manual S governs (M1401.3))' (was 3.5 from the yard-inflated 168 m²). BUT the BUILDING CHARACTERISTICS block ON THE SAME schedules sheet (branch-garden 3/3) still prints 'Floor area 168.0 m²' (96 house + 72 open-air garden), 'Volume 453.6 m³' (= 168 × 2.7 — the yard booked with a 2.7 m ceiling it does not have) and 'Cooling ~2.4 ton (RULE OF THUMB)' — computeCharacteristics (src/engines/characteristics.ts:114-117) sums ALL rooms with no category filter while its own note claims '1 ton per 55 m² of conditioned floor'. Two tonnage claims, one page, two bases (2.0 t vs 2.4 t). Identical at base (not a regression) — but it is exactly the yard-inflation family this branch exists to kill, the 'outdoor' category is now in RoomSlice, and the surface is printed paper.",
+      "note": "One-line class fix: filter category==='outdoor' from the characteristics floor-area/volume/cooling basis (or print an 'outdoor zones excluded/included' confession). C5-adjacent; checklist wants a row+gate with the fix."
+    },
+    "R3-outdoor-zone-delta": {
+      "status": "PASS",
+      "evidence": "demo+Patio, base → branch, sheet-delta classes enumerated: (1) MEP/duct plan — the 646 cfm register in the Patio strip + its branch run GONE (fixtures 103→102); supply trunk re-sized 11×8\" → 10×8\", 6\" round 69.9 → 55.8 lf, 8×8\" 24.8 → 20.7 lf, fittings 3+5 → 2+4, boots 6→5, collars 5→4; central return 800 → 600 in² and the 'UNDERSIZED vs 1800 cfm supply' label dies; remaining registers re-balance (404→420 cfm etc.). (2) Electrical plan — AC-1 legend row 40A/8AWG → 30A/10AWG (tonnage 4→3 t resizes the breaker). (3) Takeoff — NM-B 8/2 → 10/2 row, Circuit AC-1 4800 → 3600 VA, condensers 4 → 3 tons, supply registers 6→5. (4) Cover axon + all four elevations + Section A-A (duct/register geometry). Warnings sets identical. Members 1521→1518.",
+      "note": "Characteristics block unchanged on this scene too (Patio still in floor area) — same R2 class."
+    },
+    "R4-regression": {
+      "status": "PASS",
+      "evidence": "demo-house-FL at 41d7d51 vs 9d75fb6: ALL 16 sheets byte-equal (diff -rq clean, summary incl. 2240 members / 101 fixtures / warnings identical). demo-house-INTL: all 18 sheets byte-equal (1511 members). Full suite 1562 pass / 0 fail / 1 todo (1563 tests, 58 files, 47159 expects) carries every byte-equality pin (E5 baseline, S10/S15-S17 shas, B10/B11 expected-diff sweeps); tsc clean. The pilot's inert claim holds on paper.",
+      "note": "Demo zones are all indoor-named, so the new outdoor regex ('garden|yard|patio|terra(c|ss|z)|deck|porch|balcon|lanai|pergola|jardin|outdoor|outside|exterior') never fires there — watch prod scenes with 'Deck'/'Porch'-named INDOOR rooms: the pattern runs FIRST and wins over 'bedroom' only when those words appear, but e.g. 'Porch bedroom' would now classify outdoor and lose its register/alarm basis. Not exhibited — flag for the skeptic."
+    },
+    "R5-outdoor-on-paper": {
+      "status": "FLAG",
+      "evidence": "No sheet prints room categories or a zone legend; the only room-derived printed surface is the BUILDING CHARACTERISTICS block — which still counts outdoor zones (see R2). The pilot-confessed residual is CONFIRMED printing: 'Light — Back garden' hangs at y=2.7 in open air on the branch electrical sheet (L bubble in the garden, LTG-2 leg through wall_n; takeoff 'Lights — 2 pcs') — same family, electrical engine, already queued in the 41d7d51 commit message.",
+      "note": "Residual agreed as queued; it is as user-visible on paper as the yard register was."
+    },
+    "P1": { "status": "PASS", "evidence": "branch-garden: plans fill the frame (house ~604 px at 1:75), legends clear of drawings; schedules 3 pages, none pathological. Empty-template interiors read sparse but honest." },
+    "P2": { "status": "PASS", "evidence": "Every bubble/color on the affected sheets keyed: WR/GR/IB/EM/CU/DS/AH/SR/RA/T rows present; EXT-1 has its own color family distinct from SE copper (E3/E8 pin). Advisory: the GES run prints tag 'GES-1' while the legend row says 'GEC bare Cu' — the queued plan-set legend-grammar class (night-8 residual), not new." },
+    "P3": { "status": "PASS", "evidence": "Foundation corners mitered, no bow-ties/slivers; anchor-bolt filled dots vs open dowel circles keyed (S12 paper round conventions hold on the newly-exterior shell)." },
+    "P4": { "status": "PASS", "evidence": "Flags block (branch-garden 3/3) prints verbatim: 4 braced-wall-line warnings (X1 12.0m, X2 12.0m, Z1 8.0m, Z2 8.0m — B9 firing on the 4 newly-exterior walls, count == engine warnings), 'No floor slabs on this level', water-pipe bond honesty (E7), ground-rods-obstructed, 4× RO-shifted, compression. The base's three 'no exterior wall' warnings (outdoor receptacles / condenser row / disconnect) are GONE." },
+    "P6": { "status": "PASS", "evidence": "D1/D2/W1-W4 scheduled with verbatim RO cells, header read-back (4x10/4x8), sill AFF, wall-scoped compression flags prefixed 'wall wall_s:'; marks bubble on the framing plan with legend key. RO-shift flags ('RO shifted 89.5cm to fit the framed run') are honest — the seed graph parks every opening at u=0 (wall start), template data not plugin defect." },
+    "C1": { "status": "PASS", "evidence": "Every system with members gets its sheet on the healed compose: foundation/wall-framing/electrical/MEP/4 elevations/section/schedules (13 sheets, was 12 — takeoff grew a page from the new rows)." },
+    "C2": { "status": "PASS", "evidence": "All circuits legend'd + traceable: GEN-1/2, LTG-1/2, SD-1, AC-1 (30A/10AWG 2-pole), EXT-1 (20A/12AWG WR GFCI), SE + GES with GR/IB bubbles. Both WR boxes print with WR marks (wall_n front / wall_s back)." },
+    "C3": { "status": "PASS", "evidence": "Continuous perimeter runs, '5/8\" anchor bolts @ 5'-11.31\" o.c. max — 26 pcs' derived callout (per-section max), dowel row keyed." },
+    "C4": { "status": "PASS", "evidence": "STUDS @ 16\" O.C. U.N.O. callout, headers/kings/trimmers distinguishable at the openings, member legend on the framing sheet." },
+    "C5": { "status": "FAIL", "evidence": "Takeoff complete + flags intact — but the characteristics block contradicts the takeoff on the same page (R2). The 168 m²/453.6 m³/~2.4 t lines are the defect exhibit." },
+    "C6": { "status": "PASS", "evidence": "Title blocks: jurisdiction INTL, LOD 400 stamp, date, disclaimer, SHEET n/13 patched everywhere." },
+    "A1": { "status": "PASS", "evidence": "12 m north wall measures ~610 px against the 4 m (1:75) bar ≈ 604 px expected — <2% error." },
+    "A2": { "status": "PASS", "evidence": "Takeoff 155+16 pcs 2x6 consistent with the drawn stud rhythm on the 40 m perimeter incl. kings/cripples; suite parity gates green." },
+    "A3": { "status": "PASS", "evidence": "North arrow + orientation consistent across all plan sheets; garden consistently north (top)." }
+  },
+  "invariantSweep": "E8 PASS (front+back WR GFCI on the healed shell, EXT-1 rows/marks/takeoff); M2 PASS w/ coil-stub advisory (2-ton label, pad/disconnect/whip, one penetration, S4 rows by size incl. sleeve lf); M3 PASS (return trunk + 600 in² grille; outdoor register class dead); E7 honesty prints (water-pipe bond + obstructed rods); P4/P6 PASS; S1-S17 byte-equality carried by the 1563-test suite + demo-FL/INTL paper byte-diff; E5 baseline pin green in-suite; A4 seeding parity pinned by the new starter-template gates (13 tests on the actual template shape). No checklist row regresses.",
+  "recommendations": [
+    "REVISE item (the merge blocker): exclude category==='outdoor' rooms from computeCharacteristics' floor-area/volume/cooling basis (its own note claims 'conditioned floor') OR confess the inclusion on the printed line — today branch-garden sheet 3/3 prints 'Floor area 168.0 m²' + 'Cooling ~2.4 ton' two rows under 'AC condensers — 2 tons total'. Add the gate beside the starter-template describe (same scene, characteristics assertion).",
+    "Queue: line-set coil-stub length honesty — flag stubs past the plumbing connector convention (0.6 m) or route the last leg like the return-trunk drop; the one-room starter prints 4.0 m of mid-room pair at 0.4 m AFF unflagged (Section A-A exhibit).",
+    "Queue (skeptic bait): outdoor regex over-match on indoor room names containing deck/porch/terrace ('Porch bedroom' loses register+alarm basis silently); consider requiring the outdoor word to win only without a stronger indoor match, or warn when an outdoor zone carries boundary walls on all sides.",
+    "Already-queued residuals confirmed printing: 'Light — Back garden' in open air (electrical sheet, pilot-confessed); GES-1 tag vs 'GEC bare Cu' legend grammar (night-8 legend-grammar class)."
+  ]
+}

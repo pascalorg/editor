@@ -28,7 +28,18 @@ import {
   X,
 } from 'lucide-react'
 import { AnimatePresence, LayoutGroup, motion } from 'motion/react'
-import { memo, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { type ComponentType, lazy, memo, Suspense, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { nodeRegistry } from '@pascal-app/core'
+
+/** The site kind's inspector (`parametrics.customPanel`), mounted under the Site header. */
+const SiteKindPanel = lazy(async () => {
+  const def = nodeRegistry.get('site') as
+    | { parametrics?: { customPanel?: () => Promise<{ default: ComponentType }> } }
+    | undefined
+  const loader = def?.parametrics?.customPanel
+  if (!loader) return { default: () => null }
+  return loader()
+})
 import { useShallow } from 'zustand/react/shallow'
 import { ColorDot } from './../../../../../components/ui/primitives/color-dot'
 import {
@@ -1685,7 +1696,14 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                 : 'text-muted-foreground hover:bg-accent/30 hover:text-foreground',
             )}
             layout="position"
-            onClick={() => setPhase('site')}
+            onClick={() => {
+              setPhase('site')
+              // Also SELECT the site node so the registry inspector mounts the
+              // site kind's panel (address / parcel / setbacks / front edge).
+              // The site kind opts out of 3D click selection, so this header is
+              // its only selection entry point. (WS1)
+              setSelection({ selectedIds: [siteNode.id as AnyNodeId], zoneId: null })
+            }}
           >
             <div className="flex items-center gap-2">
               <img
@@ -1727,6 +1745,12 @@ export function SitePanel({ projectId, onUploadAsset, onDeleteAsset }: SitePanel
                 transition={{ type: 'spring', bounce: 0, duration: 0.4 }}
               >
                 <PropertyLineSection />
+                {/* Address → parcel, setbacks, front edge: the site kind's own
+                    panel (packages/nodes/src/site/panel.tsx), loaded through
+                    the registry so the editor does not import the nodes package. */}
+                <Suspense fallback={null}>
+                  <SiteKindPanel />
+                </Suspense>
               </motion.div>
             )}
           </AnimatePresence>

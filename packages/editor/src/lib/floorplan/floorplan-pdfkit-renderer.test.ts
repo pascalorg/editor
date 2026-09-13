@@ -83,7 +83,7 @@ describe('renderFloorplanGeometryToPdfKit', () => {
     )
 
     expect([...new Set(baseFonts)]).toEqual(['Courier'])
-    expect([...new Set(fontSizes)]).toEqual(['1.6'])
+    expect([...new Set(fontSizes)]).toEqual(['2'])
   })
   test('uses even-odd fill for compound plugin paths', async () => {
     const geometry = {

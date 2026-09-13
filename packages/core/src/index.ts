@@ -240,6 +240,17 @@ export {
   terrainFieldForEdit,
   terrainFieldOf,
 } from './lib/terrain-source'
+export { type Contour, terrainContours } from './lib/terrain-contours'
+export { arcRuns, envelopeFrontEdge, insetPolygon, type KeepOut, sightTriangle, streetCorners } from './lib/setback-envelope'
+export {
+  type ConventionSite,
+  type ExteriorWallConvention,
+  type ExteriorWallSystem,
+  exteriorWallConvention,
+  FL_BLOCK_BELT_COUNTIES,
+  FL_BLOCK_BELT_NORTH_LAT,
+  FL_HVHZ_COUNTIES,
+} from './lib/regional-construction'
 export {
   isLevelBaseConsumer,
   isSiteDatum,
@@ -425,6 +436,40 @@ export { createSurfaceOpeningPreviewController } from './systems/stair/stair-ope
 export { syncAutoStairOpenings } from './systems/stair/stair-opening-sync'
 export { StairOpeningSystem } from './systems/stair/stair-opening-system'
 export { resolveStairTotalRise, syncStairRises } from './systems/stair/stair-rise'
+export {
+  assemblyThickness,
+  BRICK_AIR_SPACE,
+  BRICK_VENEER,
+  CMU_8_ACTUAL,
+  calculateLevelLayerMiters,
+  FIBER_CEMENT,
+  FURRING_1X,
+  GYPSUM_FIVE_EIGHTHS,
+  GYPSUM_HALF,
+  GYPSUM_SHEATHING,
+  getWallAssemblyPreset,
+  getWallLayerPolylines,
+  type ResolvedWallAssembly,
+  resolveWallAssembly,
+  resolveWallExteriorSide,
+  SIDING_LAP,
+  WALL_FINISH_LIBRARY_REF,
+  wallAssemblyFinishRef,
+  STONE_VENEER_UNVERIFIED,
+  STUCCO_3_COAT,
+  STUD_2X4,
+  STUD_2X6,
+  WALL_ASSEMBLY_PRESETS,
+  type WallAssemblyLayer,
+  type WallAssemblyLayerRole,
+  type WallAssemblyPreset,
+  type WallLayerMiterData,
+  type WallLayerPolyline,
+  WSP_SHEATHING,
+  wallAssemblyPatch,
+  wallAssemblyUnverifiedNote,
+  wallLayerBoundaryOffsets,
+} from './systems/wall/wall-assembly'
 export {
   constrainWallCurveOffsetToAvoidIntersections,
   getClampedWallCurveOffset,

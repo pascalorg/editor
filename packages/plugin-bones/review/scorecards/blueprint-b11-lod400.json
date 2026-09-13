@@ -1,0 +1,62 @@
+{
+  "round": "B11-lod400",
+  "pin": "ff10aa4",
+  "branch": "feat/lod400-b11",
+  "base": "779d70e",
+  "date": "2026-08-22",
+  "protocol": "Paper round on the B11 snow-header batch (B11a Table R602.7(1) 50/70-psf columns wired into applyJurisdiction; B11b assumption label + engine gates; B11c schedule-cell + takeoff gates; B11d expected-diff manifest + checklist row S14) per review/BLUEPRINTS.md. Pure buildPlanSet in detached worktrees (/tmp/bp-b11/pin @ ff10aa4, /tmp/bp-b11/base @ 779d70e), FIXED date 8/22/2026 so sheets byte-compare. Scene: fc866f2f271b over HTTP + injected bones:framing (detail 400, all systems on). Variants per side: demo (as-is — its 9 windows/6 doors already straddle every cap: ROs 56.6\" x2 / 60.6\" / 64.5\" / 72.4\" x2) and straddle (manifest's two added windows on the 8 m north wall at RO 56\" and 80\"). Codes per variant: VT (70-band), MN (50-band), TX + INTL (low snow) = 16 composes, 18 sheets each. All low-snow sets byte-compared file-by-file; deepened sets diffed element-by-element (SVG text + geometry separated); takeoff diffed row-by-row from computeTakeoff dumps; affected sheets rasterized with Playwright page.setContent @2x and LOOKED at (schedule VT/MN/INTL, wall framing plan, cover, S/N/W elevations + 6x zoom crops of the straddle-wall header band pin-vs-base, section, takeoff pages 1+5); header/cripple censuses cross-checked against docs/plans/B11-EXPECTED-DIFF.md. Evidence: /tmp/bp-b11/{out-pin,out-base,png-pin,png-base,crop-north-*.png,b11-harness.ts}. Full suite at the pin: 1415 pass / 1 todo / 0 fail (1416 tests, 54 files, 42128 expect() calls), bunx tsc --noEmit clean.",
+  "verdict": "REVISE — the sizing truth is exact on every surface it touches (schedule cells print the deepened size verbatim with zero label leak; takeoff SKUs shift by exactly the member delta; low-snow paper is byte-equal to master file-for-file; MN deepens ONLY past 71\"; foundation/electrical/roof/MEP sheets byte-equal even in deepened states — the shared transform held, no B6-class drift), but the batch's own honesty device never reaches paper: the assumption 'sized per Table R602.7(1) @ 70 psf ground snow — ≤ 24 ft building width, roof-and-ceiling loading assumed' rides all 17 VT header member LABELS (dump grep: 17/17) and prints NOWHERE on the 18-sheet set, the takeoff CSV, or the cut list (grep 'R602.7|snow|24 ft' across every sheet: zero). That is the B6-shed class (statement only in code), and here it is load-bearing: the demo footprint measures ~10 m ≈ 33 ft on the printed plan — PAST the assumed 24 ft — and the batch's own encoded 70-psf/36-ft cell caps 2-2x10 at 4'-5\" (53\"), i.e. at true width the code's table would demand 4x12 where the VT schedule prints an unconditional 4x10 beside a 4'-8.63\" RO (W1/W10/W11, png-pin/straddle-VT/12). A VT plans examiner cannot see from the submitted set that the header sizes hinge on an unverified width bound — while the SAME sheet 17/18 prints B9's equivalent assumption ('CS-WSP continuous sheathing assumed — R602.10 panel length/spacing not verified') as flags, so the set is internally inconsistent about which structural assumptions it confesses. One narrow, byte-safe fix closes the round: when spec.headerAssumption is set, surface it ONCE on paper — a compute-level warning (B9 grammar → P4 flag block prints it verbatim) and/or a general-note line beside the framing sheet's STUDS callout; low-snow output stays byte-equal by construction since the assumption is unset there. Geometry, marks, takeoff and jurisdiction byte-story all PASS and need no further rounds.",
+  "items": {
+    "FOCUS-1-VT-deepened-sizes-on-paper": {
+      "status": "PASS",
+      "checklist": ["S14", "P6"],
+      "evidence": "VT straddle schedule (png-pin/straddle-VT/12): W1 (RO 4'-8\") prints 4x10, W2 (6'-8\") 4x12, W3 (5'-4.5\") 4x12, W5/W6 (6'-0.38\") 4x12, W10/W11 (4'-8.63\") 4x10 — text diff vs base is EXACTLY 7 size tokens (3× 4x8→4x10, 4× 4x10→4x12), zero label leak, marks/order identical across VT/MN/INTL. Wall framing plan diff = removed cripple rects only (M2; headers project unchanged in plan). Elevations print the honest full-depth stick: N-elevation stroke-width 7.0→8.9 px (= 9.25/7.25 dressed ratio) on the 56\" header, 8.9→10.8 (= 11.25/9.25) on the 80\" header, cripples shortened above — visible in the 6x crops (crop-north-{base,pin}.png)."
+    },
+    "FOCUS-2-assumption-label-on-paper": {
+      "status": "FAIL",
+      "checklist": ["P4", "S14"],
+      "evidence": "grep 'R602.7|ground snow|24 ft' across all 18 VT sheets, takeoff CSV rows and cutList: ZERO hits; dump.json header labels: 17/17 carry the assumption. Schedule suppresses the label by design (S14 'never leaks into the cell'); framing legend prints role—size only; flags block prints warnings+member flags and the assumption is neither; characteristics block carries climate zone but no snow/header basis; title block carries jurisdiction+code name only. Exhibit of materiality: printed plan scale-bars the footprint at ~10 m ≈ 33 ft > the assumed 24 ft, and data/framing-tables.json 70-psf/36-ft cell for 2-2x10 = 4'-5\" < the 4'-8.63\" RO printed beside an unconditional 4x10 (straddle-VT W1/W10/W11).",
+      "note": "B6-shed class (statement only in code) — REVISE per the B6 r1 precedent (flag-not-label honesty) and the B9 convention on the very same sheet 17/18. Fix path: compute-level warning when spec.headerAssumption is set (prints once in the P4 flag block) and/or a framing-sheet general-note line; low-snow byte-equality is preserved by construction."
+    },
+    "FOCUS-3-takeoff-SKU-shifts": {
+      "status": "PASS",
+      "checklist": ["S4", "S14"],
+      "evidence": "VT straddle pin-vs-base Wall-framing lumber rows: 4x8 8→5 pcs (170.7→106.7 bd-ft), 4x10 5→4 (133.3→106.7), 4x12 0→4 (+128 bd-ft) = exactly the 7 deepened headers; 2x6 130→117 pcs / 3162→3058 bd-ft = the 13 eaten cripples (M2). MN: 4x10 5→2, 4x12 0→3, 4x8 rows IDENTICAL (56\" spans hold at 4x8 in the 50 band). All other Wall-framing rows byte-equal (123-127 identical rows of 134-136). Takeoff pages 2-5 diffs are pure row-flow cascade from the +2 new 4x12 lines.",
+      "note": "ADVISORY (manifest wording, not a defect): the Fasteners 'Nails 16d common' row also moves in deepened states (61.3→60.1 lbs, 2696→2644 nails = 4 nails × 13 removed cripples — member-derived, honest), but B11-EXPECTED-DIFF.md's T1 enumerates only 'Wall-framing lumber rows'. Amend the manifest to name the fastener mirror of M2; doc-only."
+    },
+    "FOCUS-4-low-snow-byte-equality": {
+      "status": "PASS",
+      "checklist": ["E5", "S14", "P1"],
+      "evidence": "diff -rq pin-vs-base for demo-TX, demo-INTL, straddle-TX, straddle-INTL: ALL 18 sheets + dump.json (members census, takeoff rows, warnings) byte-equal in all four composes. TX schedule svg == INTL schedule svg at the pin (the committed plan-set gate's TX≡INTL pin reproduced on the full HTTP scene)."
+    },
+    "FOCUS-5-regression-sweep-unaffected-sheets": {
+      "status": "PASS",
+      "checklist": ["P1", "S13", "E1", "C3"],
+      "evidence": "In DEEPENED states (VT + MN, both variants) pin-vs-base: 02-foundation, 04-roof-framing, 05-electrical-rough-in, 06-plumbing-hvac and 18-flags-continued byte-EQUAL — headers moved only wall-framing ink, the shared transform did not drift (the B6 planBounds regression class did not recur), bracing flag census unchanged (S13: B9 keys on RO spans, not header size), no new warnings. Changed sheets are exactly cover/wall-plan/4 elevations/section/schedule/takeoff, all with geometry-or-size-token diffs only (elevations/section: zero non-geometry diff lines)."
+    },
+    "FOCUS-6-MN-50-band-encoding": {
+      "status": "PASS",
+      "checklist": ["S14"],
+      "evidence": "MN straddle schedule text diff vs base: EXACTLY 3 cells 4x10→4x12 (the 72.4\" pair + the injected 80\" — all past the 71\" cap); the 64.5\" span stays 4x10, both 56.6\" spans and the injected 56\" stay 4x8 (60\" cap unchanged in the 50 band, min(60,60)); zero 4x8→4x10 shifts anywhere in MN. Member census agrees: MN deepens 3 headers, VT 7."
+    },
+    "P1": { "status": "PASS", "evidence": "Shared transform stable — foundation/electrical byte-equal under deepened wall framing; drawings fill frames as in the approved B21d/B9 rounds (low-snow sheets byte-identical to those rounds' lineage)." },
+    "P2": { "status": "PASS", "evidence": "Framing legend prints role—size rows incl. 'header — 4x8' (most-common-per-role convention; per-opening sizes live in the schedule, cross-referenced by the 'opening mark — see door + window schedule' legend row). No new symbols/colors introduced by the batch." },
+    "P3": { "status": "PASS", "evidence": "Title blocks: jurisdiction + code name + LOD 400 + date + disclaimer + SHEET n/18 on every sheet; MN's '2020 Minnesota Residential Code (2018 IRC base), effective 2020-03-31' prints whole.", "note": "Carried pre-existing minor (byte-equal at base, not B11): VT's long code name truncates with an ellipsis mid-word in the 48-char title-block slot ('Residential Building Energy S…'); the cover prints it whole. Queue with the plan-set legend-grammar residual." },
+    "P4": { "status": "FAIL", "evidence": "See FOCUS-2 — the one caveat the batch itself deemed label-worthy never reaches the flag block or any printed surface, while B9-class assumptions on the same set do." },
+    "C1": { "status": "PASS", "evidence": "18 sheets, census identical pin-vs-base in every compose; no system sheet vanished or appeared." },
+    "C4": { "status": "PASS", "evidence": "Openings visible with kings/trimmers/deepened headers distinguishable; STUDS @ 16\" O.C. U.N.O. callout; schedule cross-ref row present." },
+    "C5": { "status": "PASS", "evidence": "Flag block prints all classes verbatim + '+7 more flags — see Flags (continued)' with the continuation sheet byte-equal pin-vs-base; characteristics block intact; takeoff wraps whole (no ellipsis)." },
+    "C6": { "status": "PASS", "evidence": "Cover: sheet index 2-18, full VT code line, LOD 400, date, disclaimer, SHEET 1/18." },
+    "A1": { "status": "PASS", "evidence": "Scale bars 1:100/1:75 as in the approved lineage; the 8 m straddle wall spans the expected paper length on the framing plan (cripple field translate 529.7→667.9 px region + symmetric opening bays); low-snow sheets byte-equal to previously examiner-approved output." },
+    "A2": { "status": "PASS", "evidence": "Takeoff piece counts re-derive member-exact in every diff (headers 7/3 deepened = SKU deltas; cripples −13/−9 = 2x6 pcs deltas; nails −52 = 4×13)." },
+    "A3": { "status": "PASS", "evidence": "North arrow + orientation unchanged across sheets (byte-equal chrome)." }
+  },
+  "recommendations": [
+    "Print the band assumption ONCE on paper when spec.headerAssumption is set: push it as a compute-level warning ('headers sized per IRC Table R602.7(1) @ 70 psf ground snow — ≤ 24 ft building width, roof-and-ceiling loading assumed; verify building width') so the P4 flag block carries it verbatim (B9 grammar), and/or print it as a general-note line under the framing sheet's STUDS callout. Low-snow paper stays byte-equal by construction (assumption unset). Gate: VT sheet grep contains 'R602.7(1)'; TX/INTL sheets contain none.",
+    "Consider a DESIGN CRITERIA line in the cover/characteristics block (ground snow psf, and later wind/seismic) — the set currently states climate zone for insulation but no structural loading basis anywhere; this is the standing home for future B7/B10 assumption classes too.",
+    "Doc-only: amend B11-EXPECTED-DIFF.md T1 to enumerate the Fasteners nails-lbs mirror of M2 (member-derived; observed 61.3→60.1 lbs on the VT straddle compose).",
+    "Queued residual already in the manifest: prescriptive 2-ply range ends at 83\"/74\" in the 50/70 bands, below the 10-ft engineered threshold — engineeredHeaderSpan machinery owns it; keep on the backlog.",
+    "Carried minor: VT title-block code-name ellipsis (pre-existing, byte-equal at base)."
+  ],
+  "suite": { "pass": 1415, "todo": 1, "fail": 0, "tests": 1416, "files": 54, "expects": 42128, "tsc": "clean" }
+}

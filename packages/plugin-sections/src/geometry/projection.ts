@@ -1,0 +1,735 @@
+import type { FloorplanGeometry } from '@pascal-app/core'
+import { boundsOf, segmentInsidePolygon } from './math'
+import { CASING, doorGlyph, windowGlyph } from './openings'
+import type { BuildingModel, Opening, PrismSolid, RoofSolid, WallSolid } from './scene-model'
+import {
+  BRICK_COURSE,
+  type FaceHole,
+  finishHatch,
+  formatFeetInches,
+  gradeTicks,
+  LAP_EXPOSURE,
+  scanlinesInPolygon,
+  SHINGLE_COURSE,
+  stippleInPolygon,
+  STONE_COURSE,
+} from './materials'
+import {
+  DASH,
+  INK,
+  line,
+  PAPER,
+  POCHE_ROOF,
+  POCHE_SLAB,
+  polygon as polygonPrimitive,
+  polyline,
+  rectPolygon,
+  WEIGHT,
+} from './style'
+import type { Vec2 } from './types'
+
+/**
+ * An orthographic view of the building: a horizontal RIGHT axis `r` and a
+ * horizontal FORWARD axis `f` (the direction the viewer looks), both unit
+ * vectors in world plan coords. `origin` is the plan point that maps to
+ * drawing x = 0.
+ *
+ * `f` and `r` obey the camera convention `right = forward × up` with
+ * `up = +Y`, i.e. `r = (-f.z, f.x)`. That is what makes a south elevation
+ * read with east on the right.
+ */
+export type Projector = {
+  origin: Vec2
+  right: Vec2
+  forward: Vec2
+  /** Only geometry with `depth` in [depthMin, depthMax] is drawn. */
+  depthMin: number
+  depthMax: number
+}
+
+export function makeProjector(
+  origin: Vec2,
+  forward: Vec2,
+  depthMin: number,
+  depthMax: number,
+): Projector {
+  const length = Math.hypot(forward[0], forward[1]) || 1
+  const f: Vec2 = [forward[0] / length, forward[1] / length]
+  return { origin, forward: f, right: [-f[1], f[0]], depthMin, depthMax }
+}
+
+export function projectU(view: Projector, x: number, z: number): number {
+  return (x - view.origin[0]) * view.right[0] + (z - view.origin[1]) * view.right[1]
+}
+
+export function projectDepth(view: Projector, x: number, z: number): number {
+  return (x - view.origin[0]) * view.forward[0] + (z - view.origin[1]) * view.forward[1]
+}
+
+/** Drawing y for a world elevation. See the DRAWING SPACE note in `types.ts`. */
+export const drawY = (elevation: number): number => -elevation
+
+// ---------------------------------------------------------------------------
+// Polygon clipping against the view's depth slab (Sutherland–Hodgman).
+// ---------------------------------------------------------------------------
+
+function clipHalfPlane(
+  poly: readonly Vec2[],
+  inside: (p: Vec2) => boolean,
+  intersect: (a: Vec2, b: Vec2) => Vec2,
+): Vec2[] {
+  const out: Vec2[] = []
+  for (let i = 0; i < poly.length; i++) {
+    const current = poly[i]!
+    const previous = poly[(i + poly.length - 1) % poly.length]!
+    const currentIn = inside(current)
+    const previousIn = inside(previous)
+    if (currentIn) {
+      if (!previousIn) out.push(intersect(previous, current))
+      out.push(current)
+    } else if (previousIn) {
+      out.push(intersect(previous, current))
+    }
+  }
+  return out
+}
+
+export function clipToDepthSlab(view: Projector, poly: readonly Vec2[]): Vec2[] {
+  const depth = (p: Vec2) => projectDepth(view, p[0], p[1])
+  const cut =
+    (limit: number, keepAbove: boolean) =>
+    (a: Vec2, b: Vec2): Vec2 => {
+      const da = depth(a)
+      const db = depth(b)
+      const t = Math.abs(db - da) < 1e-12 ? 0 : (limit - da) / (db - da)
+      void keepAbove
+      return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
+    }
+  let result = clipHalfPlane(
+    poly,
+    (p) => depth(p) >= view.depthMin - 1e-9,
+    cut(view.depthMin, true),
+  )
+  if (result.length < 3) return []
+  result = clipHalfPlane(result, (p) => depth(p) <= view.depthMax + 1e-9, cut(view.depthMax, false))
+  return result.length >= 3 ? result : []
+}
+
+// ---------------------------------------------------------------------------
+// Projected (background) solids — painter's-order hidden-line removal.
+//
+// LIMIT, stated plainly: this is polygon-level HLR only. Each solid is drawn
+// as an OPAQUE white silhouette with a stroked outline, back to front by its
+// nearest depth. A nearer solid therefore hides a farther one, which is right
+// for the overwhelmingly common case (a wall in front of a wall). What it does
+// NOT do: split a farther solid's edges where a nearer one only partly covers
+// it in depth (interpenetrating solids), and it cannot express a dashed hidden
+// line. Two solids whose silhouettes overlap but whose depth order flips across
+// that overlap are drawn in the wrong order. Real per-edge HLR (BSP or
+// segment-vs-silhouette clipping) is the upgrade path.
+// ---------------------------------------------------------------------------
+
+export type ProjectedPiece = {
+  /** Sort key — larger is farther and is drawn first. */
+  depth: number
+  primitives: FloorplanGeometry[]
+}
+
+function uExtent(view: Projector, poly: readonly Vec2[]): [number, number] | null {
+  let min = Number.POSITIVE_INFINITY
+  let max = Number.NEGATIVE_INFINITY
+  for (const p of poly) {
+    const u = projectU(view, p[0], p[1])
+    if (u < min) min = u
+    if (u > max) max = u
+  }
+  return Number.isFinite(min) && max - min > 1e-6 ? [min, max] : null
+}
+
+function maxDepth(view: Projector, poly: readonly Vec2[]): number {
+  let max = Number.NEGATIVE_INFINITY
+  for (const p of poly) max = Math.max(max, projectDepth(view, p[0], p[1]))
+  return max
+}
+
+/**
+ * A wall's projected span: its u-extent on the drawing and its far depth —
+ * the same key `paintProjected` sorts on, so "strictly smaller depth" means
+ * "painted later, i.e. in front". Null when the wall is outside the depth
+ * slab or edge-on to the view.
+ */
+export function wallSpan(
+  view: Projector,
+  wall: WallSolid,
+): { u: [number, number]; depth: number } | null {
+  const clipped = clipToDepthSlab(view, wall.polygon)
+  const extent = uExtent(view, clipped)
+  if (!extent) return null
+  return { u: extent, depth: maxDepth(view, clipped) }
+}
+
+/** Openings drawn on a wall face that actually faces the viewer. */
+function openingPrimitives(
+  view: Projector,
+  wall: WallSolid,
+  opening: Opening,
+  faceVisible: boolean,
+): FloorplanGeometry[] {
+  if (!faceVisible) return []
+  const centre: Vec2 = [
+    wall.start[0] + wall.axis[0] * opening.along,
+    wall.start[1] + wall.axis[1] * opening.along,
+  ]
+  const half = opening.width / 2
+  const u0 = projectU(view, centre[0] - wall.axis[0] * half, centre[1] - wall.axis[1] * half)
+  const u1 = projectU(view, centre[0] + wall.axis[0] * half, centre[1] + wall.axis[1] * half)
+  const [uMin, uMax] = u0 <= u1 ? [u0, u1] : [u1, u0]
+  if (uMax - uMin < 1e-4) return []
+  // The opening as the node describes it — sashes, leaves, panels, grids,
+  // casing, sill, threshold (openings.ts). Cased openings draw no leaf.
+  const box = { x0: uMin, x1: uMax, yTop: drawY(opening.headY), yBottom: drawY(opening.sillY) }
+  return opening.nodeType === 'window' ? windowGlyph(opening, box) : doorGlyph(opening, box)
+}
+
+/** Drawing x of an opening's centre on `wall`, for tags. */
+export function openingCentreU(view: Projector, wall: WallSolid, opening: Opening): number {
+  return projectU(
+    view,
+    wall.start[0] + wall.axis[0] * opening.along,
+    wall.start[1] + wall.axis[1] * opening.along,
+  )
+}
+
+export { CASING }
+
+export type ProjectWallOptions = {
+  /**
+   * Draw the assembly's cladding pattern on faces whose EXTERIOR side looks
+   * at the viewer (elevations). Off for sections' background walls.
+   */
+  finish?: boolean
+}
+
+export function projectWall(
+  view: Projector,
+  wall: WallSolid,
+  options: ProjectWallOptions = {},
+): ProjectedPiece | null {
+  const clipped = clipToDepthSlab(view, wall.polygon)
+  const extent = uExtent(view, clipped)
+  if (!extent) return null
+  const facing = wall.normal[0] * view.forward[0] + wall.normal[1] * view.forward[1]
+  const faceVisible = Math.abs(facing) > 0.3
+  // The exterior face points AT the viewer when its outward normal runs
+  // against the view direction.
+  const exteriorFacesViewer = facing * wall.exteriorSign < -0.3
+  // The face is painted in the cladding's own colour when the exterior looks
+  // at the viewer and the material rendition is on; otherwise paper white.
+  const clad = options.finish && exteriorFacesViewer
+  // The finish runs down over the floor platform's rim; the stemwall shows
+  // below it in concrete (WallSolid.underpinning).
+  const faceBottom = wall.underpinning ? wall.underpinning.rimBottomY : wall.baseY
+  const primitives: FloorplanGeometry[] = [
+    polygonPrimitive(rectPolygon(extent[0], drawY(wall.topY), extent[1], drawY(faceBottom)), {
+      fill: clad ? (wall.claddingColor ?? PAPER) : PAPER,
+      stroke: INK,
+      strokeWidth: WEIGHT.projected,
+    }),
+  ]
+  if (wall.underpinning && wall.underpinning.stemBottomY < faceBottom - 1e-6) {
+    primitives.push(
+      polygonPrimitive(
+        rectPolygon(
+          extent[0],
+          drawY(faceBottom),
+          extent[1],
+          drawY(wall.underpinning.stemBottomY),
+        ),
+        { fill: POCHE_SLAB, stroke: INK, strokeWidth: WEIGHT.projected },
+      ),
+    )
+  }
+  if (options.finish && exteriorFacesViewer && wall.exteriorFinish && wall.exteriorFinish !== 'none') {
+    const holes: FaceHole[] = wall.openings.map((opening) => {
+      const centre: Vec2 = [
+        wall.start[0] + wall.axis[0] * opening.along,
+        wall.start[1] + wall.axis[1] * opening.along,
+      ]
+      const half = opening.width / 2
+      const u0 = projectU(view, centre[0] - wall.axis[0] * half, centre[1] - wall.axis[1] * half)
+      const u1 = projectU(view, centre[0] + wall.axis[0] * half, centre[1] + wall.axis[1] * half)
+      return { u: [u0, u1], y: [drawY(opening.headY), drawY(opening.sillY)] }
+    })
+    primitives.push(
+      ...finishHatch(wall.exteriorFinish, extent, drawY(wall.topY), drawY(faceBottom), holes),
+    )
+  }
+  for (const opening of wall.openings) {
+    primitives.push(...openingPrimitives(view, wall, opening, faceVisible))
+  }
+  return { depth: maxDepth(view, clipped), primitives }
+}
+
+export function projectPrism(view: Projector, prism: PrismSolid): ProjectedPiece | null {
+  const clipped = clipToDepthSlab(view, prism.polygon)
+  const extent = uExtent(view, clipped)
+  if (!extent) return null
+  return {
+    depth: maxDepth(view, clipped),
+    primitives: [
+      polygonPrimitive(rectPolygon(extent[0], drawY(prism.topY), extent[1], drawY(prism.bottomY)), {
+        fill: PAPER,
+        stroke: INK,
+        strokeWidth: prism.kind === 'slab' ? WEIGHT.projected : WEIGHT.detail,
+      }),
+    ],
+  }
+}
+
+const ROOF_SAMPLES = 72
+/** Roof covering colour when the roof carries no material: an assumed asphalt-shingle grey. */
+export const ROOF_ASSUMED = '#9ca3af'
+
+/**
+ * Silhouette of a roof segment as seen by `view`: the upper envelope of its
+ * top surface plus the lower envelope of its deck underside, sampled over the
+ * segment's own local footprint and bucketed by drawing x.
+ */
+export type ProjectRoofOptions = {
+  /** Draw shingle courses inside the roof silhouette (elevations). */
+  courses?: boolean
+  /** Colour of the walls' cladding, for a gable end seen head-on. */
+  gableColor?: string | null
+  /** Print the pitch flag (rise:12) on a slope seen from the gable end. */
+  pitchFlag?: boolean
+  /**
+   * Cladding for a GABLE END seen head-on: the triangle under the rake is the
+   * gable wall, not roof surface, so it takes the walls' finish pattern.
+   * Absent → the gable is left blank.
+   */
+  gableFinish?: 'siding' | 'stucco' | 'brick' | 'stone' | 'fiber-cement' | 'none' | null
+  /**
+   * The trim colour for the rake boards drawn along a gable end's slopes
+   * (a 1x8 under the roof edge). Absent → paper white; the boards are drawn
+   * only with `courses` (elevations).
+   */
+  fasciaColor?: string | null
+}
+
+/** A 1x8 rake / fascia board (7¼ in), measured down the slope's edge. */
+const RAKE_BOARD = 0.184
+
+export function projectRoof(
+  view: Projector,
+  roof: RoofSolid,
+  options: ProjectRoofOptions = {},
+): ProjectedPiece | null {
+  const clipped = clipToDepthSlab(view, roof.polygon)
+  if (clipped.length < 3) return null
+  const extent = uExtent(view, clipped)
+  if (!extent) return null
+  const [uMin, uMax] = extent
+  const top = new Array<number>(ROOF_SAMPLES + 1).fill(Number.NEGATIVE_INFINITY)
+  const bottom = new Array<number>(ROOF_SAMPLES + 1).fill(Number.POSITIVE_INFINITY)
+  // the deck's underside at the sample NEAREST the viewer per bucket — the
+  // edge of the roof the viewer actually sees from this side
+  const nearUnder = new Array<number>(ROOF_SAMPLES + 1).fill(Number.NaN)
+  const nearTop = new Array<number>(ROOF_SAMPLES + 1).fill(Number.NaN)
+  const nearDepth = new Array<number>(ROOF_SAMPLES + 1).fill(Number.POSITIVE_INFINITY)
+  const stepX = (roof.local.maxX - roof.local.minX) / ROOF_SAMPLES
+  const stepZ = (roof.local.maxZ - roof.local.minZ) / ROOF_SAMPLES
+  for (let i = 0; i <= ROOF_SAMPLES; i++) {
+    const lx = roof.local.minX + stepX * i
+    for (let j = 0; j <= ROOF_SAMPLES; j++) {
+      const lz = roof.local.minZ + stepZ * j
+      const world = roof.toWorld(lx, lz)
+      const depth = projectDepth(view, world[0], world[1])
+      if (depth < view.depthMin - 1e-9 || depth > view.depthMax + 1e-9) continue
+      const u = projectU(view, world[0], world[1])
+      const bucket = Math.round(((u - uMin) / (uMax - uMin || 1)) * ROOF_SAMPLES)
+      if (bucket < 0 || bucket > ROOF_SAMPLES) continue
+      const surface = roof.originY + roof.surfaceY(lx, lz)
+      if (surface > top[bucket]!) top[bucket] = surface
+      const under = surface - roof.deckDrop
+      if (under < bottom[bucket]!) bottom[bucket] = under
+      if (depth < nearDepth[bucket]!) {
+        nearDepth[bucket] = depth
+        nearUnder[bucket] = under
+        nearTop[bucket] = surface
+      }
+    }
+  }
+  // The silhouette runs from the top envelope down to the deck's NEAR
+  // underside: below the near edge is the segment's own wall, not roof. A
+  // slope faces the viewer where the far side rises above the near edge —
+  // the low side of a shed; from its high side the viewer sees a wall and
+  // the deck's edge, and the roof colour belongs to neither.
+  const upper: Vec2[] = []
+  const lower: Vec2[] = []
+  let facing = false
+  for (let i = 0; i <= ROOF_SAMPLES; i++) {
+    if (!Number.isFinite(top[i]!)) continue
+    const u = uMin + ((uMax - uMin) * i) / ROOF_SAMPLES
+    upper.push([u, drawY(top[i]!)])
+    const under = Number.isNaN(nearUnder[i]!) ? bottom[i]! : nearUnder[i]!
+    lower.push([u, drawY(under)])
+    if (top[i]! - (Number.isNaN(nearTop[i]!) ? top[i]! : nearTop[i]!) > 0.05) facing = true
+  }
+  if (upper.length < 2) return null
+  const outline = [...upper, ...lower.reverse()]
+  const halfDepth = (roof.local.maxZ - roof.local.minZ) / 2
+  const rise = roof.ridgeY - roof.plateY
+  // Which face is this? A slope face looks at the viewer when the segment's
+  // down-slope axis runs along the view direction (the same test the fascia
+  // line uses); a gable END is seen when the axis runs across it.
+  const alignment = Math.abs(roof.axisZ[0] * view.forward[0] + roof.axisZ[1] * view.forward[1])
+  const slopeFace = alignment > 0.7 && facing
+  const gableEnd = alignment < 0.3 && rise > 0.05
+  const fill = options.courses
+    ? slopeFace
+      ? (roof.color ?? ROOF_ASSUMED)
+      : gableEnd
+        ? (options.gableColor ?? PAPER)
+        : PAPER
+    : PAPER
+  const primitives: FloorplanGeometry[] = []
+  // THE SEGMENT'S OWN WALL: wherever the deck's near edge rides above the
+  // plate line the roof system builds a wall under it — the trapezoid of
+  // a shed seen from the side, the tall band of its high side, the triangle
+  // of a gable end. Clad like the walls, drawn under the deck (Steve,
+  // 2026-09-07: "shed roofs in elevations don't show the upper wall above
+  // the top plate").
+  const plateLine = drawY(roof.plateY)
+  const wallFill = options.courses ? (options.gableColor ?? PAPER) : PAPER
+  let run: Vec2[] = []
+  const flushRun = () => {
+    if (run.length >= 2) {
+      const first = run[0] as Vec2
+      const last = run[run.length - 1] as Vec2
+      const band: Vec2[] = [...run, [last[0], plateLine], [first[0], plateLine]]
+      primitives.push(polygonPrimitive(band, { fill: wallFill, stroke: INK, strokeWidth: WEIGHT.projected }))
+      // the gable-end branch below hatches its own triangle; every other
+      // view's band takes the walls' finish pattern here
+      if (options.courses && options.gableFinish && !gableEnd) {
+        const finish = options.gableFinish
+        if (finish === 'siding' || finish === 'fiber-cement') primitives.push(...scanlinesInPolygon(band, LAP_EXPOSURE))
+        else if (finish === 'brick') primitives.push(...scanlinesInPolygon(band, BRICK_COURSE, { strokeWidth: 0.0025 }))
+        else if (finish === 'stone') primitives.push(...scanlinesInPolygon(band, STONE_COURSE))
+        else if (finish === 'stucco') primitives.push(...stippleInPolygon(band))
+      }
+    }
+    run = []
+  }
+  for (let i = 0; i <= ROOF_SAMPLES; i++) {
+    const under = nearUnder[i]!
+    if (!Number.isFinite(top[i]!) || Number.isNaN(under) || under <= roof.plateY + 0.02) {
+      flushRun()
+      continue
+    }
+    run.push([uMin + ((uMax - uMin) * i) / ROOF_SAMPLES, drawY(under)])
+  }
+  flushRun()
+  primitives.push(polygonPrimitive(outline, { fill, stroke: INK, strokeWidth: WEIGHT.projected }))
+  if (options.pitchFlag && gableEnd && halfDepth > 1e-6) {
+    // Pitch flag on the left slope: rise in twelfths over a 12-unit run, from
+    // the segment's pitch angle — the same number the roof plan prints.
+    const riseIn12 = Math.round(Math.tan((roof.pitchDeg * Math.PI) / 180) * 12 * 2) / 2
+    const a = upper[0]!
+    const b = upper[Math.max(1, Math.floor(upper.length * 0.25))]!
+    const mx = (a[0] + b[0]) / 2
+    const my = (a[1] + b[1]) / 2 - 0.35
+    const run = 0.45
+    const riseM = (run * riseIn12) / 12
+    primitives.push(
+      line([mx - run, my], [mx, my], { strokeWidth: WEIGHT.detail }),
+      line([mx, my], [mx, my - riseM], { strokeWidth: WEIGHT.detail }),
+      line([mx - run, my], [mx, my - riseM], { strokeWidth: WEIGHT.detail }),
+      {
+        kind: 'text',
+        x: mx - run / 2,
+        y: my + 0.14,
+        text: '12',
+        fontSize: 0.12,
+        fill: INK,
+        textAnchor: 'middle',
+        dominantBaseline: 'alphabetic',
+      } as FloorplanGeometry,
+      {
+        kind: 'text',
+        x: mx + 0.06,
+        y: my - riseM / 2 + 0.04,
+        text: `${riseIn12}`,
+        fontSize: 0.12,
+        fill: INK,
+        textAnchor: 'start',
+        dominantBaseline: 'alphabetic',
+      } as FloorplanGeometry,
+    )
+  }
+  if (options.courses && gableEnd) {
+    // the rake boards: a band under the two slopes of the gable end
+    const upperBand = [...upper, ...[...upper].reverse().map(([u, y]) => [u, y + RAKE_BOARD] as Vec2)]
+    primitives.push(
+      polygonPrimitive(upperBand, {
+        fill: options.fasciaColor ?? PAPER,
+        stroke: INK,
+        strokeWidth: WEIGHT.detail,
+      }),
+    )
+  }
+  if (options.courses) {
+    const plateY = drawY(roof.plateY)
+    // The region between the silhouette's top edge and the plate line.
+    const aboveWalls: Vec2[] = [...upper, [upper[upper.length - 1]![0], plateY], [upper[0]![0], plateY]]
+    if (rise > 0.05 && slopeFace) {
+      // Shingle exposure foreshortened by the pitch: a course seen in
+      // elevation is `exposure · cos(pitch)` tall.
+      const cosPitch = halfDepth > 1e-6 ? halfDepth / Math.hypot(halfDepth, rise) : 1
+      primitives.push(...scanlinesInPolygon(aboveWalls, SHINGLE_COURSE * cosPitch))
+    } else if (rise > 0.05 && alignment < 0.3 && options.gableFinish) {
+      // Gable end: the triangle is wall, clad like the walls below it.
+      const finish = options.gableFinish
+      if (finish === 'siding' || finish === 'fiber-cement') {
+        primitives.push(...scanlinesInPolygon(aboveWalls, LAP_EXPOSURE))
+      } else if (finish === 'brick') {
+        primitives.push(...scanlinesInPolygon(aboveWalls, BRICK_COURSE, { strokeWidth: 0.0025 }))
+      } else if (finish === 'stone') {
+        primitives.push(...scanlinesInPolygon(aboveWalls, STONE_COURSE))
+      } else if (finish === 'stucco') {
+        primitives.push(...stippleInPolygon(aboveWalls))
+      }
+    }
+  }
+  return { depth: maxDepth(view, clipped), primitives }
+}
+
+export function paintProjected(pieces: ProjectedPiece[]): FloorplanGeometry[] {
+  return pieces.sort((a, b) => b.depth - a.depth).flatMap((piece) => piece.primitives)
+}
+
+// ---------------------------------------------------------------------------
+// Datums, grade
+// ---------------------------------------------------------------------------
+
+/** A datum mark: the elevation it marks, its label, and the along-view span its line covers. */
+export type DatumMark = { elevation: number; text: string; u0: number; u1: number }
+
+/** The datum lines run this far past their span; the label column stands this far past the drawing's right edge. */
+const DATUM_OVERSHOOT = 0.45
+/** Labels never sit closer than this (drawing metres) — a stacked label gets a leader back to its line. */
+const DATUM_STEP = 0.24
+
+/**
+ * The datum marks drawn: every mark's dashed line over ITS OWN span (a
+ * porch roof's plate and ridge over the porch, not across the whole house —
+ * Steve, 2026-09-10: "your heights elevation lines for the patios go across
+ * the entire house, maybe just on their respective side"), the labels in
+ * one column past the drawing's right edge, stacked so none overlaps, each
+ * moved label with a thin leader back to its line's end (no overlapping
+ * leaders, nothing off the page). Duplicates (two roofs sharing a plate)
+ * collapse to one mark.
+ */
+export function datumPrimitives(
+  marks: readonly DatumMark[],
+  uMax: number,
+  options: {
+    /** The drawing's left edge — where a 'left' column stands. */
+    uMin?: number
+    /**
+     * Which side the label column stands on. An elevation labels on the
+     * right; a section labels on the LEFT so the framing notes' leaders on
+     * the right never cross a label (Steve, 2026-09-10: "no overlapping
+     * leaders and the leader nicely around the entire side").
+     */
+    side?: 'left' | 'right'
+  } = {},
+): FloorplanGeometry[] {
+  const seen = new Set<string>()
+  const list: DatumMark[] = []
+  for (const mark of marks) {
+    const key = `${mark.text}:${mark.elevation.toFixed(3)}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    list.push(mark)
+  }
+  // top first: drawing y grows downward
+  list.sort((a, b) => drawY(a.elevation) - drawY(b.elevation))
+  const labelY: number[] = []
+  for (let i = 0; i < list.length; i++) {
+    const y = drawY((list[i] as DatumMark).elevation)
+    labelY.push(i === 0 ? y : Math.max(y, (labelY[i - 1] as number) + DATUM_STEP))
+  }
+  const out: FloorplanGeometry[] = []
+  const side = options.side ?? 'right'
+  const uMin = options.uMin ?? Math.min(uMax, ...list.map((mark) => mark.u0))
+  const column = side === 'right' ? uMax + DATUM_OVERSHOOT : uMin - DATUM_OVERSHOOT
+  list.forEach((mark, i) => {
+    const y = drawY(mark.elevation)
+    const startX = mark.u0 - DATUM_OVERSHOOT
+    const endX = Math.min(mark.u1, uMax) + DATUM_OVERSHOOT
+    out.push(
+      line([startX, y], [endX, y], {
+        stroke: INK,
+        strokeWidth: WEIGHT.datum,
+        strokeDasharray: DASH.datum,
+        opacity: 0.7,
+      }),
+    )
+    const ly = labelY[i] as number
+    // two segments, not a polyline: the grade line is the drawing's polyline
+    const style = { stroke: INK, strokeWidth: WEIGHT.datum, opacity: 0.7 }
+    if (side === 'right') {
+      if (endX < column - 1e-6 || Math.abs(ly - y) > 1e-6) {
+        out.push(line([endX, y], [column + 0.16, ly], style), line([column + 0.16, ly], [column + 0.3, ly], style))
+      }
+    } else if (startX > column + 1e-6 || Math.abs(ly - y) > 1e-6) {
+      out.push(line([startX, y], [column - 0.16, ly], style), line([column - 0.16, ly], [column - 0.3, ly], style))
+    }
+    out.push({
+      kind: 'text',
+      x: side === 'right' ? column + 0.38 : column - 0.38,
+      y: ly + 0.05,
+      text: mark.text,
+      fontSize: 0.15,
+      fill: INK,
+      textAnchor: side === 'right' ? 'start' : 'end',
+      dominantBaseline: 'alphabetic',
+    } as FloorplanGeometry)
+  })
+  return out
+}
+
+/** The level datums as marks: every level's finish floor, across the whole drawing. */
+export function levelMarks(model: BuildingModel, uMin: number, uMax: number): DatumMark[] {
+  return model.levels.map((level) => ({
+    elevation: level.baseY,
+    text: `${level.ordinal === 0 ? 'FINISH FLOOR' : level.name.toUpperCase()}   ${formatFeetInches(level.baseY)}`,
+    u0: uMin,
+    u1: uMax,
+  }))
+}
+
+/**
+ * The roof datums as marks: each roof's plate and ridge over the roof's own
+ * projected span when the view is known (an elevation), across the whole
+ * drawing otherwise (a section, cut where it is).
+ */
+export function roofMarks(model: BuildingModel, uMin: number, uMax: number, view?: Projector): DatumMark[] {
+  const out: DatumMark[] = []
+  for (const roof of model.roofs) {
+    let u0 = uMin
+    let u1 = uMax
+    if (view && roof.polygon.length > 0) {
+      const us = roof.polygon.map((p) => projectU(view, p[0], p[1]))
+      u0 = Math.max(uMin, Math.min(...us))
+      u1 = Math.min(uMax, Math.max(...us))
+      if (u1 - u0 < 0.3) {
+        u0 = uMin
+        u1 = uMax
+      }
+    }
+    out.push({ elevation: roof.plateY, text: `T.O. PLATE   ${formatFeetInches(roof.plateY)}`, u0, u1 })
+    out.push({ elevation: roof.ridgeY, text: `RIDGE   ${formatFeetInches(roof.ridgeY)}`, u0, u1 })
+  }
+  return out
+}
+
+/** Every datum mark of the drawing, laid out together (levels and roofs share the one label column). */
+export function datumMarks(
+  model: BuildingModel,
+  uMin: number,
+  uMax: number,
+  view?: Projector,
+  side: 'left' | 'right' = 'right',
+): FloorplanGeometry[] {
+  return datumPrimitives([...levelMarks(model, uMin, uMax), ...roofMarks(model, uMin, uMax, view)], uMax, {
+    uMin,
+    side,
+  })
+}
+
+/** @deprecated the levels alone — `datumMarks` lays levels and roofs out together. */
+export function levelDatums(model: BuildingModel, uMin: number, uMax: number): FloorplanGeometry[] {
+  return datumPrimitives(levelMarks(model, uMin, uMax), uMax)
+}
+
+/** @deprecated the roofs alone — `datumMarks` lays levels and roofs out together. */
+export function roofDatums(model: BuildingModel, uMin: number, uMax: number): FloorplanGeometry[] {
+  return datumPrimitives(roofMarks(model, uMin, uMax), uMax)
+}
+
+/**
+ * Grade line sampled off the site terrain along the view's right axis, taken
+ * at the depth of the building's own centre. Flat at level-0 elevation when
+ * the scene has no terrain.
+ */
+export function gradeLine(
+  model: BuildingModel,
+  view: Projector,
+  uMin: number,
+  uMax: number,
+  depthAt: number,
+): { primitives: FloorplanGeometry[]; minElevation: number } {
+  const samples = 96
+  const points: Vec2[] = []
+  let min = Number.POSITIVE_INFINITY
+  for (let i = 0; i <= samples; i++) {
+    const u = uMin + ((uMax - uMin) * i) / samples
+    const x = view.origin[0] + view.right[0] * u + view.forward[0] * depthAt
+    const z = view.origin[1] + view.right[1] * u + view.forward[1] * depthAt
+    const elevation = model.gradeAt(x, z)
+    min = Math.min(min, elevation)
+    points.push([u, drawY(elevation)])
+  }
+  const first = points[0] as Vec2
+  return {
+    primitives: [
+      polyline(points, { stroke: INK, strokeWidth: WEIGHT.cut }),
+      ...gradeTicks(points),
+      {
+        kind: 'text',
+        x: first[0] - 0.1,
+        y: first[1] + 0.05,
+        text: `GRADE   ${formatFeetInches(Number.isFinite(min) ? min : 0)}`,
+        fontSize: 0.15,
+        fill: INK,
+        textAnchor: 'end',
+        dominantBaseline: 'alphabetic',
+      } as FloorplanGeometry,
+    ],
+    minElevation: Number.isFinite(min) ? min : 0,
+  }
+}
+
+export function boundsFromPrimitives(primitives: readonly FloorplanGeometry[]) {
+  const points: Vec2[] = []
+  const walk = (g: FloorplanGeometry) => {
+    switch (g.kind) {
+      case 'polygon':
+      case 'polyline':
+        for (const p of g.points) points.push([p[0], p[1]])
+        break
+      case 'line':
+        points.push([g.x1, g.y1], [g.x2, g.y2])
+        break
+      case 'rect':
+        points.push([g.x, g.y], [g.x + g.width, g.y + g.height])
+        break
+      case 'circle':
+        points.push([g.cx - g.r, g.cy - g.r], [g.cx + g.r, g.cy + g.r])
+        break
+      case 'text':
+        points.push([g.x, g.y])
+        break
+      case 'group':
+        for (const child of g.children) walk(child)
+        break
+      default:
+        break
+    }
+  }
+  for (const g of primitives) walk(g)
+  return boundsOf(points)
+}
+
+export { POCHE_ROOF, segmentInsidePolygon }

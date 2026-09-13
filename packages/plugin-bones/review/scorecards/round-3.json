@@ -1,0 +1,40 @@
+{
+  "round": 3,
+  "summary": {
+    "verdict": "6/10 at 400 (wall-framing, cmu, foundation, electrical, plumbing, takeoff); floor/roof/hvac/ui-ux-perf at 350, one small named blocker each.",
+    "lod": {
+      "wall-framing": 400,
+      "cmu": 400,
+      "floor": 350,
+      "roof": 350,
+      "foundation": 400,
+      "electrical": 400,
+      "plumbing": 400,
+      "hvac": 350,
+      "takeoff": 400,
+      "ui-ux-perf": 350
+    },
+    "blockers": {
+      "floor": "hole bearing coordinates ignore the hole's cross band \u2014 sisters can clip to mid-air at a distant stair hole and the validator shares the blind spot",
+      "roof": "hip/valley/ridge cut-angle labels have zero test coverage \u2014 deleting them passes all 357 tests",
+      "hvac": "return-undersized flag arithmetically unreachable: grille sized exactly to tonnage, capacity always equals supply",
+      "ui-ux-perf": "perf gate times cache hits since the compute memo landed (p95 0.0005 ms) \u2014 an O(n^2) regression would pass; true recompute measured 3.45 ms @ 20 walls"
+    },
+    "advisories": [
+      "hallway-switch placement untested (works, verified by reviewer)",
+      "trunk reducers/tees never counted (fitting chains key per size)",
+      "plumbing supplies run Manhattan through rooms, weaker than electrical's wall-following",
+      "hot+cold copper merge into one fitting chain per room",
+      "panel UI (incl. Copy cut list button) has no automated test",
+      "fab content activates at Code/300 (carried)",
+      "receptacle over-placement (carried)",
+      "next probes: multi-slab floors, skewed valley joins, wiring through door ROs"
+    ]
+  },
+  "suite": {
+    "tests": 357,
+    "fail": 0,
+    "spotChecksHeld": "wall RO/trimmers exact; CMU 0 corner overlaps (brute force); foundation through/butt exact; electrical worst wall-distance 0.0000 m on an unseen scene; plumbing slope atan(1/48) exact; grout/mortar hand-recomputed exact",
+    "spotChecksFailed": "floor sister at distant hole (mid-air end, 0 flags); hvac return flag dead branch; perf test vacuous"
+  }
+}

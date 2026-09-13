@@ -1,0 +1,340 @@
+{
+  "version": "2026-08-14",
+  "codeEdition": "2021 IRC (citations keyed to 2021 numbering; 2015/2018 aliases in editionNotes)",
+  "disclaimer": "Drafting aid, not engineering. Typical/approximate values — verify with the local authority having jurisdiction (AHJ). thicknessIn values are render/BOM thicknesses; films (WRB, vapor retarder) are symbolic.",
+  "research": "docs/research/wall-assemblies.md",
+  "interior": {
+    "description": "Interior partition: gypsum both faces, no WRB/sheathing/cladding. Total 4.5 in on 2x4.",
+    "totalThicknessIn": 4.5,
+    "layers": [
+      { "role": "drywall", "thicknessIn": 0.5, "material": "gypsum board", "citation": "2021 IRC R702.3.5 + Table R702.3.5 (1/2 in walls, either direction, studs <= 24 in o.c.)" },
+      { "role": "framing", "thicknessIn": 3.5, "material": "2x4 studs @ 16 in o.c. (24 in max)", "citation": "2021 IRC R602.3 / Table R602.3(5)" },
+      { "role": "drywall", "thicknessIn": 0.5, "material": "gypsum board", "citation": "2021 IRC R702.3.5 + Table R702.3.5" }
+    ],
+    "gypsumThicknessOptionsIn": [0.5, 0.625],
+    "gypsum375Rule": { "thicknessIn": 0.375, "maxStudSpacingIn": 16, "prohibited": "under water-based texture; may not support insulation (ceilings)", "citation": "2021 IRC Table R702.3.5 + footnote d" },
+    "fasteners": { "nailsOcIn": 8, "screwsOcIn": 12, "screwsOcMaxIn": 16, "note": "takeoff metadata (LOD 500), not geometry", "citation": "2021 IRC Table R702.3.5" },
+    "ceilingBoard": {
+      "halfInchAnyOrientationMaxSpacingIn": 16,
+      "halfInchPerpendicularOnlyAtSpacingIn": 24,
+      "texturedAt24oc": "5/8 in or sag-resistant 1/2 in",
+      "citation": "2021 IRC Table R702.3.5 ceiling rows + footnote d"
+    }
+  },
+  "garageSeparation": {
+    "description": "Dwelling-garage separation. A separation, NOT a rated assembly — no fire-resistance rating is prescribed. Min 1/2 in gypsum applied to the GARAGE SIDE; Type X only on ceilings below habitable rooms.",
+    "totalThicknessIn": 4.5,
+    "layers": [
+      { "role": "drywall", "thicknessIn": 0.5, "material": "gypsum board (house side, normal interior finish)", "citation": "2021 IRC R702.3.5" },
+      { "role": "framing", "thicknessIn": 3.5, "material": "2x4 studs @ 16 in o.c.", "citation": "2021 IRC R602.3" },
+      { "role": "drywall", "thicknessIn": 0.5, "material": "gypsum board, regular (garage side), fireSeparation tag", "citation": "2021 IRC Table R302.6 row 'From the residence and attics' — 'Not less than 1/2-inch gypsum board or equivalent applied to the garage side'" }
+    ],
+    "typeXOnWallIsAmendmentOnly": { "value": true, "note": "5/8 Type X on the wall is a local amendment / builder upgrade; code-checker must accept 12.7 mm regular as compliant", "citation": "2021 IRC Table R302.6" },
+    "ceilingBelowHabitable": {
+      "layers": [
+        { "role": "ceilingDrywall", "thicknessIn": 0.625, "material": "Type X gypsum, perpendicular to framing (max 24 in o.c.)", "citation": "2021 IRC Table R302.6 row 'From habitable rooms above the garage' + Table R702.3.5 Type X row" }
+      ],
+      "fasteners": { "spacingOcIn": 6, "type": "1-7/8 in 6d coated nails or equivalent drywall screws", "citation": "2021 IRC Table R702.3.5" },
+      "penetrationSealTag": { "value": "R302.11 item 4", "citation": "2021 IRC R302.11(4)" }
+    },
+    "supportingStructure": {
+      "layers": [
+        { "role": "drywall", "thicknessIn": 0.5, "material": "gypsum board on walls/beams/columns supporting the separation floor-ceiling", "citation": "2021 IRC Table R302.6 row 'Structure(s) supporting floor/ceiling assemblies used for separation'" }
+      ]
+    },
+    "detachedGarageWithin3Ft": {
+      "maxGapFt": 3,
+      "layers": [
+        { "role": "drywall", "thicknessIn": 0.5, "material": "gypsum board, interior side of exterior walls facing the gap", "citation": "2021 IRC Table R302.6 row 'Garages located less than 3 feet from a dwelling unit on the same lot'" }
+      ]
+    },
+    "openings": {
+      "noDoorToSleepingRoom": true,
+      "doorOptions": ["1-3/8 in solid wood", "1-3/8 in solid or honeycomb-core steel", "20-minute fire-rated"],
+      "doorThicknessIn": 1.375,
+      "selfClosing": true,
+      "citation": "2021 IRC R302.5.1 (self-closing device reinstated 2018)"
+    },
+    "ducts": { "material": "No. 26 gage sheet steel min, no openings into the garage", "citation": "2021 IRC R302.5.2" }
+  },
+  "exterior": {
+    "stackOrderInsideOut": ["drywall", "vaporRetarder (note, zero thickness)", "framing+insulation", "sheathing", "foamCi (optional)", "wrb", "cladding"],
+    "stackOrderCitation": "2021 IRC R703.1 / R703.2 / R703.3 (WRB 'applied over studs or sheathing', always immediately behind the cladding)",
+    "baseLayers": [
+      { "role": "drywall", "thicknessIn": 0.5, "material": "gypsum board, interior face", "citation": "2021 IRC R702.3.5 + Table R702.3.5" },
+      { "role": "vaporRetarder", "thicknessIn": 0, "material": "class by climate zone (see vaporRetarderClassByZone); kraft facing on batt = Class II, no extra geometry", "citation": "2021 IRC R702.7 / Tables R702.7(1)-(2) (= 2018 R702.7 / Table R702.7.1)" },
+      { "role": "insulation", "thicknessIn": 3.5, "material": "batt filling stud bays (3.5 in 2x4 / 5.5 in 2x6); R by climate zone", "citation": "2021 IRC N1102.1.3 / 2021 IECC Table R402.1.3" }
+    ],
+    "sheathing": {
+      "layers": [
+        { "role": "sheathing", "thicknessIn": 0.4375, "material": "wood structural panel (OSB/plywood), span rating 24/16 — 7/16 field default", "citation": "2021 IRC Table R602.3(3)" }
+      ],
+      "minThicknessIn": { "studs16oc": 0.375, "studs24oc": 0.4375 },
+      "bracedWallMinIn": 0.375,
+      "fastening": { "nail": "8d common or equivalent", "edgeOcIn": 6, "fieldOcIn": 12, "citation": "2021 IRC Table R602.3(1) items 30-32; bracing R602.10.4 Method WSP" },
+      "gypsumSheathingOption": {
+        "layers": [
+          { "role": "sheathing", "thicknessIn": 0.5, "material": "glass-mat gypsum sheathing (ASTM C1396/C1177), 1/2 or 5/8 in", "citation": "2021 IRC R702.3.5 ('attached ... in accordance with Table R602.3(1)') + Table R703.3(1) gypsum-sheathing fastener column" }
+        ],
+        "notWsp": true,
+        "bracingRequiredElsewhere": "WSP corner panels, let-in braces, or Method GB interior gypsum",
+        "typicalUse": "under stucco and brick veneer"
+      },
+      "foamCi": {
+        "layers": [
+          { "role": "foam", "thicknessIn": 1.0, "material": "XPS/polyiso/EPS continuous insulation (typ. 0.5-2.0 in; thicknessIn = ciR/5 for XPS)", "citation": "2021 IRC R703.15 + Tables R703.15.1/.2; R703.16/R703.17" }
+        ],
+        "thicknessRangeIn": [0.5, 2.0],
+        "nonStructural": true,
+        "position": "between structural sheathing and WRB (or serves as WRB when faced/taped as approved system)",
+        "maxUnderBrickVeneerIn": 2.0,
+        "veneerTieBackingMinWspIn": 0.4375,
+        "claddingAttachment": "R703.15 fastener/furring tables (longer fasteners or 3/4 in vertical furring for heavy claddings)",
+        "citation": "2021 IRC R703.15 + Table R703.8.4(2) (ties through <= 2 in foam into >= 7/16 WSP)"
+      }
+    },
+    "wrb": {
+      "layers": [
+        { "role": "wrb", "thicknessIn": 0.01, "material": "No. 15 asphalt felt (ASTM D226 Type 1) or approved housewrap (ASTM E2556); render 1/16 in symbolic", "citation": "2021 IRC R703.2 ('One layer of No. 15 asphalt felt ... applied over studs or sheathing of all exterior walls')" }
+      ],
+      "renderThicknessIn": 0.0625,
+      "layerCountDefault": 1,
+      "laps": { "horizontalMinIn": 2, "verticalJointMinIn": 6, "installation": "horizontal, shingle-fashion, continuous to top of walls, terminated at penetrations, integrated with flashing", "citation": "2021 IRC R703.2 + R703.4" },
+      "takeoffLapFactor": 1.1,
+      "stuccoOverWoodSheathing": { "layerCount": 2, "material": "two independent Grade D paper planes (or 60-min Grade D + non-absorbing layer / drainage space)", "citation": "2021 IRC R703.7.3 (split R703.7.3.1/.2 in 2021; = 2018 R703.6.3)", "amendmentNote": "dry-southwest jurisdictions commonly amend — override point" },
+      "omittedWhen": [
+        { "condition": "detached accessory building", "caveat": "some states (e.g. Ohio) delete this exception", "citation": "2021 IRC R703.2 Exception" },
+        { "condition": "concrete/masonry walls designed per ch. 6 and flashed per R703.4/R703.8", "citation": "2021 IRC R703.1.1 Exception 1" },
+        { "condition": "assembly passed ASTM E331 (6.24 psf, 2 h)", "citation": "2021 IRC R703.1.1 Exception 2" }
+      ],
+      "neverSuppressByCladdingType": true,
+      "openingFlashing": { "edges": 4, "note": "flashing edge annotation on all RO edges; layers terminate onto each other shingle-fashion", "citation": "2021 IRC R703.4 + R703.2" }
+    },
+    "claddingAttachmentGeneral": {
+      "fastenerTableAssumesMaxStudSpacingIn": 16,
+      "maxSupportSpacingIn": 24,
+      "substrateColumns": ["WSP+stud", "fiberboard+stud", "gypsumSheathing+stud", "overFoam (defer R703.15)", "directToStud (several sidings not allowed)"],
+      "citation": "2021 IRC R703.3 + Table R703.3(1) ('Nominal material thicknesses ... based on a maximum stud spacing of 16 inches on center')"
+    },
+    "claddings": {
+      "vinyl": {
+        "layers": [
+          { "role": "cladding", "thicknessIn": 0.75, "material": "vinyl siding, lap-profile bounding depth (panel skin 0.035 in min nominal / ~0.040-0.048 in actual)", "citation": "2021 IRC R703.11 + Table R703.3(1) vinyl row (ASTM D3679)" }
+        ],
+        "materialMinThicknessIn": 0.035,
+        "vented": true,
+        "weightPsf": 1.5,
+        "fasteners": { "shankIn": 0.12, "headIn": 0.313, "penetrationIn": 1.25, "note": "nail-slot centered, not driven tight (thermal float); 16-ga staples permitted; over foam use R703.11.2 wind-adjusted attachment", "citation": "2021 IRC R703.11 + Table R703.3(1)" },
+        "highWindNote": "Vult >= 140 mph requires high-wind certification (VSI / ASTM D7793)",
+        "class3VaporCredit": true
+      },
+      "fiberCement": {
+        "layers": [
+          { "role": "cladding", "thicknessIn": 0.3125, "material": "fiber cement lap board (ASTM C1186); effective offset 0.625 in at 1-1/4 in laps", "citation": "2021 IRC R703.10.2 + Table R703.3(1) fiber cement rows" }
+        ],
+        "assemblyOffsetIn": 0.625,
+        "lapMinIn": 1.25,
+        "boardMaxWidthIn": 12,
+        "typicalBoardIn": 8.25,
+        "typicalExposureIn": 7,
+        "vented": false,
+        "weightPsf": 2.3,
+        "fasteners": { "type": "6d common/corrosion-resistant siding nails into studs through WSP/fiberboard/gypsum sheathing", "maxSupportOcIn": 24, "citation": "2021 IRC R703.10 + Table R703.3(1)" },
+        "panelVariant": { "layers": [{ "role": "cladding", "thicknessIn": 0.25, "material": "fiber cement vertical panel, joints over framing", "citation": "2021 IRC R703.10.1" }], "battens": { "thicknessIn": 0.75, "widthIn": 2.5, "citation": "2021 IRC R703.10.1" } },
+        "rainscreenBestPractice": { "furringIn": 0.375, "states": ["WA", "OR"], "note": "not code-mandatory" },
+        "class3VaporCredit": false
+      },
+      "stucco": {
+        "layers": [
+          { "role": "cladding", "thicknessIn": 0.875, "material": "3-coat cement plaster over metal/wire lath: 3/8 scratch + 3/8 brown + 1/8 finish (ASTM C926)", "citation": "2021 IRC R703.7 (= 2018 R703.6) + Table R702.1(1)" }
+        ],
+        "assemblyOffsetIn": 1.0,
+        "assemblyOffsetNote": "7/8 plaster + ~1/8 self-furring lath and paper layers",
+        "wrbLayerCount": 2,
+        "wrbCitation": "2021 IRC R703.7.3 (two Grade D planes over wood-based sheathing; = 2018 R703.6.3)",
+        "lath": { "fastenerOcIn": 6, "fastener": "1-1/2 in 11-ga nails (7/16 head) or 7/8 in 16-ga staples into framing (ASTM C1063)", "citation": "2021 IRC R703.7.1", "takeoffOnly": true },
+        "weepScreed": { "minGa": 26, "minThicknessIn": 0.019, "flangeMinIn": 3.5, "aboveEarthMinIn": 4, "abovePavingMinIn": 2, "location": "at or below foundation plate line; WRB layers and lath lap the flange; stucco never runs to grade", "citation": "2021 IRC R703.7.2.1 (= 2018 R703.6.1)" },
+        "vented": false,
+        "weightPsf": 10,
+        "flCmuVariant": { "layers": [{ "role": "cladding", "thicknessIn": 0.625, "material": "two-coat plaster direct-applied to CMU; no WRB/lath/screed (masonry substrate)", "citation": "2021 IRC R703.1.1 Exc. 1 + R703.7 two-coat-over-masonry row; FBC practice" }] },
+        "class3VaporCredit": false
+      },
+      "brickVeneer": {
+        "layers": [
+          { "role": "airGap", "thicknessIn": 1.0, "material": "nominal 1 in airspace (transparent, occupies interpenetration matrix); up to 4.5 in backing-to-veneer with strand-wire/adjustable ties; grout fill alternative", "citation": "2021 IRC Table R703.8.4(1) + R703.8.4.2" },
+          { "role": "veneer", "thicknessIn": 3.625, "material": "anchored brick wythe, nominal 4 in = 3-5/8 actual; veneer <= 5 in", "citation": "2021 IRC R703.8 + Table R703.3(1)" }
+        ],
+        "assemblyOffsetIn": 4.625,
+        "vented": true,
+        "weightPsf": 40,
+        "ties": { "minSpec": "22-ga x 7/8 in corrugated or wire", "maxAreaPerTieSqft": 2.67, "maxHorizontalOcIn": 32, "maxVerticalOcIn": 24, "extraWithinOfOpeningsIn": 12, "highSeismicWindAreaPerTieSqft": 2.0, "throughFoamMaxIn": 2.0, "backingMinWspIn": 0.4375, "citation": "2021 IRC R703.8.4 / R703.8.4.1 + Table R703.8.4(2)" },
+        "support": { "bearsOn": "concrete/masonry foundation brick ledge — never wood framing", "brickLedgeWidenIn": 5.0, "ledgeTopBelowFinishFloorIn": [4, 8], "lintel": "steel loose angle, typ. 3-1/2 x 3-1/2 x 1/4 in at openings", "maxHeightFt": 30, "gableExtraFt": 8, "citation": "2021 IRC R703.8.2 / R703.8.2.1 + Table R703.8(1)" },
+        "flashingWeeps": { "flashing": "base of cavity on ledge (turned up behind WRB) + above all openings/shelf angles", "weepMinDiaIn": 0.1875, "weepMaxOcIn": 33, "location": "first course immediately above every flashing line", "citation": "2021 IRC R703.8.5 / R703.8.6" },
+        "brickGradeByWeathering": { "severe": "SW", "moderate": "MW-allowed", "citation": "2021 IRC R703.8.2 / ASTM C216 & C62 + Figure R301.2(3)" },
+        "jambReturnAddIn": 4.625,
+        "class3VaporCredit": true
+      },
+      "wood": {
+        "layers": [
+          { "role": "cladding", "thicknessIn": 0.75, "material": "wood bevel lap default (bounding depth); profile minimums in minThicknessByProfileIn", "citation": "2021 IRC R703.5 + Table R703.3(1) wood siding rows" }
+        ],
+        "minThicknessByProfileIn": { "rusticDrop": 0.375, "shiplapAverage": 0.59375, "bevel": 0.4375, "bevelButtTip": 0.1875, "hardboardPanel": 0.4375, "hardboardLap": 0.4375 },
+        "hardboardRenderIn": 0.4375,
+        "lapMinIn": 1.0,
+        "lapMinRabbetedIn": 0.5,
+        "fasteners": { "note": "face-nail to each bearing, penetrating framing 1-1/2 in; 1 nail per bearing to 6 in widths, 2 over 8 in; butt joints over framing", "citation": "2021 IRC R703.5 + Table R703.3(1)" },
+        "vented": false
+      },
+      "eifs": {
+        "layers": [
+          { "role": "drainage", "thicknessIn": 0.25, "material": "drainage plane / vertical adhesive ribbons (>= 90% efficiency per ASTM E2273)", "citation": "2021 IRC R703.9" },
+          { "role": "foam", "thicknessIn": 1.5, "material": "EPS insulation board (range 0.75-4 in)", "citation": "2021 IRC R703.9 / ASTM E2568" },
+          { "role": "lamina", "thicknessIn": 0.125, "material": "reinforced base coat + finish", "citation": "2021 IRC R703.9" }
+        ],
+        "assemblyOffsetIn": 2.0,
+        "drainageRequiredOverWoodFrame": true,
+        "terminationAboveGradeMinIn": 6,
+        "vented": false,
+        "weightPsf": 1.5,
+        "note": "barrier EIFS over wood frame is a code violation; WRB per R703.2 behind it, starter track (not weep screed)"
+      }
+    },
+    "defaultCladdingByState": {
+      "AK": "vinyl", "AL": "brickVeneer", "AR": "brickVeneer", "AZ": "stucco", "CA": "stucco",
+      "CO": "fiberCement", "CT": "vinyl", "DC": "vinyl", "DE": "vinyl", "FL": "stucco",
+      "GA": "fiberCement", "HI": "fiberCement", "IA": "vinyl", "ID": "fiberCement", "IL": "vinyl",
+      "IN": "vinyl", "KS": "vinyl", "KY": "vinyl", "LA": "brickVeneer", "MA": "vinyl",
+      "MD": "vinyl", "ME": "vinyl", "MI": "vinyl", "MN": "vinyl", "MO": "vinyl",
+      "MS": "brickVeneer", "MT": "fiberCement", "NC": "fiberCement", "ND": "vinyl", "NE": "vinyl",
+      "NH": "vinyl", "NJ": "vinyl", "NM": "stucco", "NV": "stucco", "NY": "vinyl",
+      "OH": "vinyl", "OK": "brickVeneer", "OR": "fiberCement", "PA": "vinyl", "RI": "vinyl",
+      "SC": "fiberCement", "SD": "vinyl", "TN": "brickVeneer", "TX": "brickVeneer", "UT": "stucco",
+      "VA": "fiberCement", "VT": "vinyl", "WA": "fiberCement", "WI": "vinyl", "WV": "vinyl",
+      "WY": "vinyl",
+      "CA-ON-S": "brickVeneer", "CA-ON-E": "brickVeneer", "CA-ON-N": "vinyl", "CA-BC": "fiberCement",
+      "CA-AB": "vinyl", "CA-SK": "vinyl", "CA-MB": "vinyl", "CA-QC": "brickVeneer", "CA-NB": "vinyl",
+      "CA-NS": "vinyl", "CA-PE": "vinyl", "CA-NL": "vinyl", "CA-YT": "vinyl", "CA-NT": "vinyl",
+      "CA-NU": "vinyl", "CA-GEN": "vinyl"
+    },
+    "defaultCladdingCitation": "Regional defaults keyed to 2021 IRC R703.6/.8/.10/.11 + data/jurisdictions-climate.json (termiteRisk, weatheringPotential, flags) and jurisdictions-adoption.json; FL default is stucco-on-CMU variant. Canadian entries (CA-*) reflect dominant provincial single-family practice — brick veneer is common on Ontario and Quebec street elevations, vinyl elsewhere.",
+    "insulationByClimateZone": {
+      "1": { "value": "R13", "compliance2021": ["R-13 cavity", "R-0 + R-10ci"], "compliance2018": ["R-13 cavity"], "studDepthIn": 3.5, "battThicknessIn": 3.5, "citation": "2021 IECC Table R402.1.3 / IRC N1102.1.3 (2018: Table R402.1.2)" },
+      "2": { "value": "R13", "compliance2021": ["R-13 cavity", "R-0 + R-10ci"], "compliance2018": ["R-13 cavity"], "studDepthIn": 3.5, "battThicknessIn": 3.5, "citation": "2021 IECC Table R402.1.3 / IRC N1102.1.3" },
+      "3": { "value": "R20", "compliance2021": ["R-20 cavity", "R-13 + R-5ci", "R-0 + R-15ci"], "compliance2018": ["R-20 cavity", "R-13 + R-5ci"], "studDepthIn": 5.5, "battThicknessIn": 5.5, "citation": "2021 IECC Table R402.1.3 / IRC N1102.1.3" },
+      "4": { "value": "R30", "compliance2021": ["R-30 cavity", "R-20 + R-5ci", "R-13 + R-10ci", "R-0 + R-20ci"], "compliance2018": ["R-20 cavity", "R-13 + R-5ci"], "studDepthIn": 5.5, "battThicknessIn": 5.5, "citation": "2021 IECC Table R402.1.3 (zones 4-8 unified 2021); 2018 Table R402.1.2" },
+      "4M": { "value": "R30", "compliance2021": ["R-30 cavity", "R-20 + R-5ci", "R-13 + R-10ci", "R-0 + R-20ci"], "compliance2018": ["R-20 cavity", "R-13 + R-5ci"], "studDepthIn": 5.5, "battThicknessIn": 5.5, "citation": "2021 IECC Table R402.1.3; Marine 4" },
+      "5": { "value": "R30", "compliance2021": ["R-30 cavity", "R-20 + R-5ci", "R-13 + R-10ci", "R-0 + R-20ci"], "compliance2018": ["R-20 cavity", "R-13 + R-5ci"], "studDepthIn": 5.5, "battThicknessIn": 5.5, "citation": "2021 IECC Table R402.1.3; 2018 Table R402.1.2" },
+      "6": { "value": "R30", "compliance2021": ["R-30 cavity", "R-20 + R-5ci", "R-13 + R-10ci", "R-0 + R-20ci"], "compliance2018": ["R-20 + R-5ci", "R-13 + R-10ci"], "studDepthIn": 5.5, "battThicknessIn": 5.5, "citation": "2021 IECC Table R402.1.3; 2018 Table R402.1.2" },
+      "7": { "value": "R30", "compliance2021": ["R-30 cavity", "R-20 + R-5ci", "R-13 + R-10ci", "R-0 + R-20ci"], "compliance2018": ["R-20 + R-5ci", "R-13 + R-10ci"], "compliance2009": ["R-21 cavity"], "studDepthIn": 5.5, "battThicknessIn": 5.5, "citation": "2021 IECC Table R402.1.3; 2018 Table R402.1.2" },
+      "8": { "value": "R30", "compliance2021": ["R-30 cavity", "R-20 + R-5ci", "R-13 + R-10ci", "R-0 + R-20ci"], "compliance2018": ["R-20 + R-5ci", "R-13 + R-10ci"], "compliance2009": ["R-21 cavity"], "studDepthIn": 5.5, "battThicknessIn": 5.5, "citation": "2021 IECC Table R402.1.3; 2018 Table R402.1.2" },
+      "_notes": {
+        "editionSelection": "pick compliance row by jurisdictions-adoption.json ircBase (>= 2021 -> compliance2021)",
+        "battFills": "R-13/R-15 = 3.5 in 2x4 bay; R-19/R-21/R-23 = 5.5 in 2x6 bay; 'ci' is the exterior foam layer, never cavity fill",
+        "ciAutoAdd": "when zone demands > R-21 cavity, add foamCi layer instead of thickening the wall",
+        "airTightnessACH50": { "zones0to2": 5.0, "zones3to8": 3.0, "gate": "ircBase >= 2012", "citation": "2021 IECC R402.4.1.2/.3" },
+        "verified": "knowledge-base (ICC/PNNL sources paywalled during session 2026-08-14)"
+      }
+    },
+    "vaporRetarderClassByZone": {
+      "1": { "required": "none", "interiorClassIProhibited": true, "interiorClassIIProhibited": true, "class3Permitted": "always", "citation": "2021 IRC Table R702.7(1) (= IBC 1404.3(1))" },
+      "2": { "required": "none", "interiorClassIProhibited": true, "interiorClassIIProhibited": true, "class3Permitted": "always", "citation": "2021 IRC Table R702.7(1)" },
+      "3": { "required": "none", "interiorClassIProhibited": true, "interiorClassIIProhibited": false, "class3Permitted": "always", "citation": "2021 IRC Table R702.7(1)" },
+      "4": { "required": "none (Class III suffices)", "interiorClassIProhibited": false, "interiorClassIIProhibited": false, "class3Permitted": "always", "citation": "2021 IRC R702.7 (non-marine zone 4)" },
+      "4M": { "required": "Class I or II", "class3PermittedIf": { "ventedCladdingOver": ["WSP", "fiberboard", "gypsum sheathing"], "ciMinR2x4": 2.5, "ciMinR2x6": 3.75 }, "citation": "2021 IRC R702.7 + Table R702.7(2) (= 2018 Table R702.7.1); verified via UpCodes IBC 1404.3 mirror" },
+      "5": { "required": "Class I or II", "class3PermittedIf": { "ventedCladdingOver": ["WSP", "fiberboard", "gypsum sheathing"], "ciMinR2x4": 5, "ciMinR2x6": 7.5 }, "citation": "2021 IRC R702.7 + Table R702.7(2)" },
+      "6": { "required": "Class I or II", "class3PermittedIf": { "ventedCladdingOver": ["fiberboard", "gypsum sheathing"], "ciMinR2x4": 7.5, "ciMinR2x6": 11.25 }, "citation": "2021 IRC R702.7 + Table R702.7(2)" },
+      "7": { "required": "Class I or II", "class3PermittedIf": { "ciMinR2x4": 10, "ciMinR2x6": 15 }, "citation": "2021 IRC R702.7 + Table R702.7(2)" },
+      "8": { "required": "Class I or II", "class3PermittedIf": { "ciMinR2x4": 12.5, "ciMinR2x6": 20 }, "citation": "2021 IRC R702.7 + Table R702.7(2)" },
+      "_notes": {
+        "classes": { "I": "poly sheet / foil, <= 0.1 perm", "II": "kraft-faced batts / smart membranes", "III": "latex or enamel paint" },
+        "ventedCladding": "vinyl, brick veneer with airspace, furred siding",
+        "resolver": "ciR >= tableMin(zone, studDepth) OR claddingVented -> Class III OK; else Class II",
+        "doubleVaporBarrierError": "never interior Class I when wall has low-perm exterior ci (foil/XPS >= 1 in) — any zone",
+        "basementExempt": "basement / below-grade walls exempt from Class I/II requirement [R702.7 exceptions]",
+        "verified": true
+      }
+    },
+    "stateClimateZone": {
+      "AL": "3A (2A coast)", "AK": "7 (8 interior)", "AZ": "2B (5B Flagstaff)", "AR": "3A",
+      "CA": "3B/3C (5B-6B mtn)", "CO": "5B (6B-7 mtn)", "CT": "5A", "DE": "4A", "DC": "4A",
+      "FL": "2A (1A Miami/Keys)", "GA": "3A (2A coast)", "HI": "1A", "ID": "5B (6B mtn)",
+      "IL": "5A (4A south)", "IN": "5A (4A south)", "IA": "5A", "KS": "4A (4B west)", "KY": "4A",
+      "LA": "2A (3A north)", "ME": "6A (7 north)", "MD": "4A (5A Garrett)", "MA": "5A",
+      "MI": "5A (6A-7 north)", "MN": "6A (7 north)", "MS": "3A (2A coast)", "MO": "4A",
+      "MT": "6B", "NE": "5A", "NV": "3B south (5B Reno)", "NH": "5A-6A", "NJ": "4A (5A NW)",
+      "NM": "4B (3B south, 5B north)", "NY": "5A (4A NYC/LI, 6A Adk)", "NC": "3A-4A (5A mtn)",
+      "ND": "6A-7", "OH": "5A (4A south)", "OK": "3A (4B panhandle)", "OR": "4C west (5B east)",
+      "PA": "5A (4A SE)", "RI": "5A", "SC": "3A (2A coast)", "SD": "5A-6A", "TN": "4A (3A west)",
+      "TX": "2A-3A (3B/4B west)", "UT": "5B (3B St. George)", "VT": "6A", "VA": "4A",
+      "WA": "4C west (5B east)", "WV": "4A-5A", "WI": "6A (5A south)", "WY": "6B (7 mtn)",
+      "CA-ON-S": "5A", "CA-ON-E": "6A", "CA-ON-N": "7 (6A Sudbury)", "CA-BC": "4C (5B-6B interior)",
+      "CA-AB": "7 (6B south)", "CA-SK": "7", "CA-MB": "7 (6A south)", "CA-QC": "6A (7 north)",
+      "CA-NB": "6A", "CA-NS": "6A", "CA-PE": "6A", "CA-NL": "6A (7 Labrador)",
+      "CA-YT": "7 (8 north)", "CA-NT": "8", "CA-NU": "8", "CA-GEN": "6A"
+    },
+    "stateClimateZoneCitation": "2021 IECC Figure R301.1 / county tables — dominant residential zone per state; split states (parenthesized) need a 'zone varies by county — confirm with AHJ' warning. jurisdictions-climate.json lacks an ieccZone field; overlay generator writes ieccZone + ieccZoneRange from this map. Canadian entries (CA-*) map each province to its closest ASHRAE/IECC-equivalent zone: Canada uses NBC/NECB heating-degree-day data rather than IECC zones, so these are approximate and exist so the shared insulation/vapour-retarder tables resolve. Note NBC 9.25 requires a vapour barrier on the warm side throughout Canada, which is stricter than the IECC vapor-retarder class implied by these zones.",
+    "overlays": {
+      "hvhz": {
+        "trigger": "flags.hvhz === true (jurisdictions-climate.json)",
+        "hvhzCounties": ["Miami-Dade", "Broward"],
+        "sheathing": { "minWspIn": 0.46875, "minWspNominal": "15/32", "nail": "8d ring-shank", "edgeSpacingIn": 6, "fieldSpacingIn": 6 },
+        "noaRequired": true,
+        "foamSheathingAsNailBase": false,
+        "openingProtection": "impact-rated, tested to TAS 201/202/203",
+        "blocksCiOnlyInsulationPath": true,
+        "citation": "Florida Building Code, Residential (8th Ed. 2023), HVHZ §R4402-R4412 (wood §R4409); Miami-Dade TAS 201/202/203",
+        "verified": "knowledge-base"
+      },
+      "wui": {
+        "states": { "CA": "mandatory, zone-mapped (all SRA + LRA Very High FHSZ)", "OR": "mapped-2023 (ORSC R327)", "NV": "local ordinances only", "CO": "local ordinances only", "UT": "local ordinances only" },
+        "standard": "CRC R337 / SFM Standard 12-7A-1 (mirrors CBC ch. 7A); §R337.7 exterior covering",
+        "allowedCladding": ["fiberCement", "stucco", "ignition-resistant-treated-wood", "masonry", "metal"],
+        "prohibitedInZone": ["vinyl", "untreated wood"],
+        "extent": "top of foundation to roof; vents ember-resistant",
+        "citation": "California Residential Code R337; Oregon ORSC R327 (2023)",
+        "verified": "knowledge-base"
+      },
+      "highWind": {
+        "trigger": "ultimateWindMph >= 130 && flags.hurricaneTies (jurisdictions-climate.json); prescriptive IRC ends at Vult >= 140",
+        "sheathingNailZone": { "nail": "8d ring-shank/common", "edgeSpacingIn": [4, 6], "cornerEndZoneSpacingIn": 4, "cornerEndZoneWidthFt": 4, "fullySheathed": true },
+        "openingProtection": "wind-borne-debris (Vult >= 130 within 1 mile of coastal MHW, or >= 140 in hurricane-prone regions)",
+        "claddingValidation": { "windMphThreshold": 140, "warnOn": ["vinyl", "eifs"], "prefer": ["stucco-on-CMU", "fiberCement"], "note": "no thickness change; fastener schedule + product-approval flags switch; vinyl needs VSI/ASTM D7793 rating" },
+        "countyLevelStates": ["AL", "GA", "LA", "MS", "NC", "SC", "TX", "VA"],
+        "citation": "2021 IRC R301.2.1.1/.2 + R703.1.1 + Table R301.2(1); AWC WFCM-2018; ICC 600-2020",
+        "verified": "knowledge-base"
+      },
+      "termite": {
+        "veryHeavyStates": ["FL", "LA", "HI"],
+        "veryHeavyRules": { "exteriorBelowGradeFoamProhibited": true, "inspectionGapIn": 6, "ciTerminatesAboveGradeIn": 6, "preferCavityPathAtGrade": true },
+        "heavyStates": ["AL", "AR", "CA", "GA", "MS", "NC", "OK", "SC", "TN", "TX", "VA"],
+        "heavyRules": { "protectionMethod": "IRC R318.1 (treated sill / soil treatment / barrier)", "sidingToGradeClearanceWarnIn": 6, "foamProhibited": false },
+        "citation": "2021 IRC R318.4 + Figure R301.2(6)",
+        "verified": "knowledge-base"
+      },
+      "weathering": {
+        "brickGrade": { "severe": "SW", "moderate": "MW-allowed", "negligible": "MW-allowed" },
+        "key": "weatheringPotential (jurisdictions-climate.json)",
+        "citation": "2021 IRC R703.8.2 / ASTM C216 & C62 + Figure R301.2(3)"
+      }
+    }
+  },
+  "fireblocking": {
+    "verticalAtCeilingAndFloor": "top/bottom plates ARE the vertical fireblocks in platform framing (tag fireblock:true)",
+    "horizontalMaxIntervalFt": 10,
+    "horizontalApplies": ["doubleStud", "staggeredStud", "furredSpaces", "balloonFramed/tallWalls crossing a floor line"],
+    "interfaces": "wall cavity <-> soffits/dropped/cove ceilings blocked (item 2); vents/pipes/ducts/cables sealed at ceiling+floor (item 4)",
+    "materials": ["2 in nominal lumber", "two 1 in thicknesses, broken laps", "23/32 in WSP backed joints", "1/2 in gypsum board", "1/4 in cement millboard", "retained mineral/glass-fiber batts"],
+    "capMemberOptions": [
+      { "role": "fireblock", "thicknessIn": 0.5, "material": "gypsum board", "citation": "2021 IRC R302.11.1" },
+      { "role": "fireblock", "thicknessIn": 1.5, "material": "2x nominal lumber", "citation": "2021 IRC R302.11.1" }
+    ],
+    "citation": "2021 IRC R302.11 items 1, 2, 4 + R302.11.1"
+  },
+  "editionNotes": {
+    "stable2015to2021": ["R302.6", "R302.11", "R702.3.5", "R703.2", "Table R703.3(1)", "stucco", "anchored veneer"],
+    "renumbering2018": { "Table R703.4 (2015)": "Table R703.3(1)", "R703.6 plaster (2015)": "R703.7", "R703.7 veneer (2015)": "R703.8", "R703.6.3 / R703.6.1 (2018 stucco WRB/screed)": "R703.7.3 / R703.7.2.1 (2021)" },
+    "deltas2021": ["R702.7 rewritten as Tables R702.7(1)-(4) + hot-zone Class I restrictions", "IECC wall R-value bump (zones 4-5 gain ci/R-30 tier)"],
+    "flag2024": "2024 IRC rewrites R703.2 (WRB performance classes) — future round",
+    "provenance": "Verbatim values from IRC-based Ohio RC ch. 7 PDF (2018 IRC text, codes.ohio.gov 4101:8-7-01) + 2015/2018 ICC ch. 3 text; vapor tables verified via UpCodes IBC 1404.3 mirror (2026-08-14); IECC rows / HVHZ / WUI / termite from knowledge base (sources paywalled)"
+  }
+}

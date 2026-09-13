@@ -1,0 +1,27 @@
+{
+  "round": 8,
+  "summary": {
+    "verdict": "9/10 re-earned; FLOOR dropped to 250 \u2014 round-8 composed members through the REAL renderer for the first time and found the runAxis='x' girder + stair headers double-encoded (world dims AND crossYaw): a 6x9 rect rendered a 9m girder ACROSS the joists overhanging 1.5m/side. Data-space math was correct and all round-7 fixes held (winding, diagonal edges, plus/T slabs, sampling-gap holes, 12x12 over-span flags).",
+    "lod": {
+      "wall-framing": 400,
+      "cmu": 400,
+      "floor": 250,
+      "roof": 400,
+      "foundation": 400,
+      "electrical": 400,
+      "plumbing": 400,
+      "hvac": 400,
+      "takeoff": 400,
+      "ui-ux-perf": 400
+    },
+    "keyAdvisories": [
+      "double-encoding is a CLASS \u2014 add world-composition gates",
+      "zero-area holes framed phantoms",
+      "tail joists overlap header plies 76mm",
+      "touching-hole headers embed in girder body",
+      "sister-vs-trimmer interpenetration",
+      "girder END bearing unvalidated",
+      "12x12 wants a second girder"
+    ]
+  }
+}

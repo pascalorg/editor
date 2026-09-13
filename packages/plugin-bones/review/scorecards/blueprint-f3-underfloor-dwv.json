@@ -1,0 +1,281 @@
+{
+  "round": "F3-underfloor-dwv",
+  "pin": "a94be3231a9bdbb143d2e94331b61b8b3caa6c51",
+  "branch": "feat/underfloor-dwv",
+  "base": "85238a8",
+  "protocol": "Feedback-F3 paper round per review/BLUEPRINTS.md. Pure buildPlanSet in a detached scratch worktree at the pin, pre/post against a second worktree at base 85238a8, FIXED date 08/20/2026 so sheets byte-compare. Three sets each side: demo-house-FL (fc866f2f271b over HTTP, 74 nodes — PLACED-fixture DWV path, 14 sheets), composed multibath-NY (12×8, Bath 1 + Bath 2 back-to-back on a shared wet wall + kitchen + laundry + living, zones classified via classifyRoom — FALLBACK DWV path, 12 sheets), demo-FL at detail 200 (13 sheets). 39 pin sheets + 2 base MEP sheets rasterized with Playwright page.setContent @2x (editor never opened); MEP/section/elevation/schedules/legend sheets walked by eye incl. zoom crops; SVG forensics on arrows/legend/bubbles; member+takeoff JSON diffed field-by-field. Evidence in /tmp/bp-f3/.",
+  "verdict": "REVISE",
+  "suite": {
+    "pass": 960,
+    "todo": 1,
+    "fail": 0,
+    "tests": 961,
+    "assertions": 31042,
+    "files": 42,
+    "tsc": "clean"
+  },
+  "items": {
+    "SWEEP-invariants": {
+      "status": "PASS",
+      "checklist": [
+        "E1-E5",
+        "S1-S11",
+        "M1",
+        "M2",
+        "P1-P5",
+        "A1-A4"
+      ],
+      "evidence": "bun test at a94be32: 960 pass / 1 todo / 0 fail (961 tests, 42 files, 31,042 expect() calls); bunx tsc --noEmit clean. New gates present: plan-set.test.ts 'under-floor drains print a downstream flow arrow; level supply does not' (line 209) + slope-note pin (line 175), mep.test.ts 'fallback DWV — under-floor evacuation (crawl-space feedback)' (line 375), interpenetration.test.ts 'under-floor DWV vs footings + floor platform (drainage gate)' (line 1003). No gated row regressed.",
+      "note": "S1 covers the buried tree vs footings/joists by composed OBB SAT; P5's downhill invariant re-proven on the fallback path."
+    },
+    "FOCUS-1-buried-tree-and-arrows": {
+      "status": "PASS",
+      "checklist": [
+        "P5",
+        "P2",
+        "C1"
+      ],
+      "evidence": "Both scenes' MEP sheets print the buried DWV tree in slate (#8fb0c4) with darker-slate (#41637a) arrows on sloped runs ONLY. Forensic 1:1: demo 4 arrows == 4 gate-eligible members (2 branch drains @166/143px + 2 trap arms @21px), multibath 5 == 5 (kitchen ×2, laundry ×2, building drain), every SVG rotate() equal to the recomputed downhill angle of its member (+X-uphill leg convention, −X projected). Direction truth: demo branch arrows converge on the stack cleanout (kitchen at x4.94 points east to stack x7.13, toilet at x9.01 points west); multibath main at (6,1.75) points −z straight at the exit cleanout at (6,0); LOD-200 skeleton keeps exactly 2 arrows converging on the CO pair. Level runs arrow-free by construction AND by count (supply is copper/room-sourced; dwv-vent prefix excluded; zero arrows beyond the eligible sets). Level supply pins gated.",
+      "note": "The demo's own exit leg (0.41+0.44 m) is under the 18 px glyph floor at 1:100, so the sheet's arrows point to the STACK cleanout and the buried main to the exit carries no glyph — acceptable (short run), but see FOCUS-3: nothing else marks the exit either. F1 (feat/ac-lineset-routing, 7c9f567) is NOT in this tree — at the pin the arrows sit clear of the current straight line-set pair on both scenes (demo: arrows at SVG x685/x839 vs line-set verticals x~750-790, no contact). MERGE RISK: F1 reroutes the pair wall-following to the air handler on this same sheet with no knowledge of arrow glyph positions — re-LOOK at the MEP sheet after the merge (arrows have no de-collision pass, see FOCUS-2b)."
+    },
+    "FOCUS-2-legend-slope-note": {
+      "status": "FAIL",
+      "checklist": [
+        "P4",
+        "P1",
+        "P2"
+      ],
+      "evidence": "The note 'DWV SLOPE 1/4 IN/FT (1/8 IN/FT 3 IN+) — ARROWS POINT TO SEWER (P3005.3)' prints VERBATIM on all three sets' MEP sheets and the rate split matches data/mep-rules.json (multibath 3\" bathroom branch labeled '@ 1/8\"/ft', 2\"/1.5\" '@ 1/4\"/ft' — member labels verified). BUT it no longer fits the legend box: the backing rect is 250 px wide (x=44..294) while the 71-char bold note runs x=52..~492 — ~200 px of bold text on bare paper past the box edge, and on demo-house-FL it overprints the drawing's duct/roof context outline (viewed at 2x: the note crosses the context rect's left edge at x≈316). Base note (29 chars) fit inside; the pin widened the text without widening the box — the exact class the legend backing rect exists for (round-5: 'column 2 printed on bare linework').",
+      "note": "Fix: include the note's measured width in the legend rect sizing (it already handles multi-column circuit rows), or wrap the note to two rows inside the box; add a plan-set gate pinning note-width ≤ box-width. Content is right; composition fails."
+    },
+    "FOCUS-2b-arrow-bubble-collision": {
+      "status": "FAIL",
+      "checklist": [
+        "P4"
+      ],
+      "evidence": "Arrows are placed at member centers with NO de-collision, and device bubbles draw AFTER them: on multibath-NY the building drain's arrow — the one glyph actually pointing at the sewer exit — prints at translate(657.0, 340.5) and the Bath-1 supply-register bubble prints at exactly (657.0, 340.5), r=7 white fill: distance 0.0 px, arrow FULLY covered, invisible on the rasterized sheet (viewed). A second arrow sits 9.5 px under the stack CO bubble (head clipped). Deterministic, not a rigged case: any wet room whose register centroid lands on the buried main's centerline reproduces it (the main bisects the room it exits through). Demo trap-arm arrows graze SO bubbles at 10.4 px (tip touch, still legible — viewed).",
+      "note": "The legend now PROMISES 'ARROWS POINT TO SEWER' while the sewer-pointing arrow is hidden — a paper lie by omission. Fix: register arrow glyph rects in the same `placed` de-collision list the bubbles use (draw arrows after bubbles and nudge along the run axis, like circuit labels), + a gate pinning arrow-bubble separation. Cheap: arrows can slide along their run; the run is 3.5 m long here."
+    },
+    "FOCUS-3-sewer-exit-label": {
+      "status": "FAIL",
+      "checklist": [
+        "P4",
+        "C1"
+      ],
+      "evidence": "'→ sewer/septic' prints NOWHERE on paper: grep across all 39 pin sheets (3 sets) = 0 hits. The text lives only in the dwv-main MEMBER label ('3\" building drain — … → sewer/septic (P3005.4)' fallback / 'P3005.4.1' placed — 3D inspector surface), and plan-set never typesets member labels. On the sheets the exit is an undifferentiated 'CO' bubble — identical tag and legend row ('cleanout') as the stack-base cleanout — so a plans examiner cannot tell WHICH footprint-edge point is the sewer/septic departure, on the demo not even by arrow (its exit leg is below the glyph floor, FOCUS-1 note).",
+      "note": "The round's expected exhibit (exit label legible at the footprint edge) is not on paper. Fix candidates: print '→ SEWER/SEPTIC (P3005.4)' text beside the exit cleanout bubble on the MEP sheet (fixture label already says 'Cleanout @ sewer exit (P3005.2.1)' — key off it), or give the exit a distinct tag (e.g. 'SE') + legend row. Add the missing plan-set pin."
+    },
+    "FOCUS-4-takeoff-truth": {
+      "status": "PASS",
+      "checklist": [
+        "S4",
+        "C5"
+      ],
+      "evidence": "Drawn-vs-booked EXACT to 0.1 lf on both scenes: demo PVC 3\" 31.3 lf / 1.5\" 73.1 lf == summed member lengths by size; multibath PVC 3\" 31.7 / 2\" 34.2 / 1.5\" 49.2 == drawn (vents + drops + arms + branches + main, per-size). Fittings rows per size (3\"/2\"/1.5\") print with the honest '(elbows at bends (est.))' qualifier; 'Cleanouts — 2 pcs (IRC P3005.2)' == exactly the 2 drawn cleanout fixtures (stack base + sewer exit) on each scene; 'Plumbing stub-outs — 8 pcs' == 3+3+1+1 for the four wet rooms (the new bathroom shower stub included, matching the group's DFU). Schedules sheet 2/2 viewed: rows wrap at word boundaries, no clipping, flags block intact (compressed-framing ×2 + slab-on-grade pointer verbatim).",
+      "note": "Multibath supply legend prints the generic 'supply / DWV pipe' row (room-sourced fallback supply keeps its legacy single tint, no cold/hot split) — pre-existing fallback behavior, byte-equal class at base, not this branch's."
+    },
+    "FOCUS-5-section-3d-sanity": {
+      "status": "FLAG",
+      "checklist": [
+        "P3",
+        "S1"
+      ],
+      "evidence": "Multibath section A-A (viewed): the buried tree reads physically right — through-floor drops at the stack, horizontal runs BELOW the slab clearing the thickened-footing poché, and the long branch visibly FALLING toward the exit side (deepest at the footprint edge); demo section carries the deepened placed tree (its only diffs are the 0.33 m deeper bury). BUT buried pipes print as SOLID slate strokes below the grade line while the foundation beside them keeps the dashed 'hidden work' convention (memberSegs: dashed = system 'foundation' only) — on the south-elevation sheets the same solid slate lines thread through the dashed stemwall hatch below grade (viewed at 1:75).",
+      "note": "New read at the pin on fallback scenes (base drew these drains ABOVE the slab). Not a physical-impossibility class and the per-sheet stroke legend keys 'plumbing', so FLAG not FAIL: extend the dash convention to below-grade plumbing (member y-extent < 0) on section/elevation sheets so buried == dashed everywhere, + gate."
+    },
+    "REG-blast-radius": {
+      "status": "PASS",
+      "checklist": [
+        "P1",
+        "P2",
+        "P3",
+        "A3",
+        "S4",
+        "E3"
+      ],
+      "evidence": "Byte-compare pin vs base (fixed date), demo-house-FL: 6 of 14 sheets byte-EQUAL incl. foundation/floor/wall/roof plans, electrical plan and schedules 1+3 — supply coloring, circuit legend, plumbing legend rows and every non-plumbing system untouched; the 8 diffs are exactly the blast radius (cover axon, MEP, 4 elevations, section, schedules-2). Demo members: 2030/2030, exactly 11 field-diffs, ALL dwv-*: the deeper bury (UNDER_FLOOR_CLEAR 0.12→0.45: stack +0.33 m, trap drops/re-vents lengthened, buried runs −0.33 m in y) + the dwv-main label gaining '→ sewer/septic'; fixtures 94/94 identical; warnings identical; takeoff deltas only PVC lf (29.1→31.3 + 69.9→73.1, == the longer drops). Multibath members 641→658: +26 dwv-* (trap drops/arms, branches, vents, stack-base, main) replacing 9 above-floor schematic drains, fixtures 63→65 (+1 shower stub per bathroom), non-plumbing members byte-identical. LOD-200 keeps the buried skeleton (6 plumbing members, 2 arrows, correct 'LOD 200' stamps).",
+      "note": "Matches the branch's own expected-diff enumeration; nothing outside plumbing moved on either path."
+    },
+    "ADVISORIES": {
+      "status": "FLAG",
+      "evidence": "(1) The arrow glyph has no legend SWATCH — only the bold note names it (P2-adjacent; a tiny '▶ flow' row would close it, or fold into the FOCUS-2 box fix). (2) Converging fallback branches share the corridor to the stack (kitchen + laundry Z-legs overdraw each other and the main along x=6 on multibath) — pre-existing Manhattan-elbow convention, unreadable pipe count on that corridor at 1:100. (3) Demo trap-arm arrows at 21 px are at the legibility floor (tips touch SO bubbles); consider excluding arms (arrows on branch/main only). (4) The exit leg below the glyph floor leaves demo's MEP sheet with no exit-pointing arrow at all — FOCUS-3's label fix covers it. (5) Carried round-7 advisories unchanged (MEP line-set legend row, P1 right-bias, upper-owner GRADE datum).",
+      "note": "None blocks; (1)-(4) fold naturally into the three FAIL fixes."
+    }
+  },
+  "recommendations": [
+    "Size the MEP legend backing rect to its widest line (the slope note), or wrap the note to two rows inside the box; gate: note right edge ≤ box right edge (FOCUS-2).",
+    "De-collide flow arrows against device bubbles: draw arrows after the bubble pass using the shared `placed` list, sliding along the run axis (circuit-label pattern); gate pins arrow-bubble separation ≥ bubble radius + glyph half-length (FOCUS-2b — the multibath main's arrow is at distance 0.0 px under the SR bubble today).",
+    "Print the sewer departure on paper: '→ SEWER/SEPTIC (P3005.4)' text at the exit cleanout (or a distinct 'SE' tag + legend row); gate greps the MEP sheet for it (FOCUS-3).",
+    "Extend the below-grade dash convention to buried plumbing on section/elevation sheets (memberSegs dashed when the member's y-extent is fully below grade, not only system === 'foundation') (FOCUS-5).",
+    "Add a legend swatch row for the flow-arrow glyph ('▶ flow — to sewer') so P2 holds without reading the note.",
+    "After merging F1 (line-set rerouting), re-LOOK at the MEP sheet: arrows have no knowledge of the rerouted pair's path (same sheet, no de-collision)."
+  ],
+  "shipStamp": "REVISE — the engine story is solid (buried tree honest on both paths, arrows 1:1 with sloped runs and geometrically correct to the sewer, takeoff conserved to the digit, blast radius exactly plumbing, 960/0 suite), but three paper defects block the stamp: the lengthened slope note overflows its legend box onto the drawing, the sewer-pointing arrow can print fully hidden under a device bubble (exhibit at 0.0 px), and the promised '→ sewer/septic (P3005.4)' exit label reaches no sheet at all.",
+  "round2": {
+    "round": "F3-underfloor-dwv-r2 (fix check on the three round-1 FAILs + the FLAG)",
+    "pin": "21168c0dbba323a94b8356f00e76523b7c3f7e00",
+    "branch": "feat/underfloor-dwv",
+    "base": "290282b (the skeptic-round parent — pin vs base isolates the examiner fix commit)",
+    "protocol": "Round-2 paper check per review/BLUEPRINTS.md. Pure buildPlanSet in the pilot worktree at the pin + a detached scratch worktree at 290282b, FIXED date 08/20/2026. FOUR sets each side: demo-house-FL (fc866f2f271b re-fetched over HTTP, byte-equal to the round-1 cache, 74 nodes, 14 sheets), composed multibath-NY (the round-1 E2 deterministic collision scene — register centroid on the buried main, 12 sheets), demo-FL at detail 200 (13 sheets), NEW upper-bath-NJ (two-storey compose, level 1 with a Bathroom zone — the S2 riser-wording scene, 11 sheets). 50 pin sheets rasterized with Playwright page.setContent @2x (editor never opened); every pin-vs-base DIFF sheet walked by eye incl. zoom crops of both legends, all three exit markers, below-grade bands on 4+4+4+4 elevations and 4 sections, both flag blocks; SVG forensics recomputed arrow eligibility/angles/bubble distances from members.json independently of the drawing code. Evidence in /tmp/bp-f3-r2/.",
+    "verdict": "PASS",
+    "suite": {
+      "pass": 967,
+      "todo": 1,
+      "fail": 0,
+      "tests": 968,
+      "assertions": 31074,
+      "files": 42,
+      "tsc": "clean"
+    },
+    "items": {
+      "SWEEP-invariants": {
+        "status": "PASS",
+        "checklist": [
+          "E1-E5",
+          "S1-S11",
+          "M1",
+          "M2",
+          "P1-P5",
+          "A1-A4"
+        ],
+        "evidence": "bun test at 21168c0: 967 pass / 1 todo / 0 fail (968 tests, 42 files, 31,074 expect() calls); bunx tsc --noEmit clean. The fix commit's own gates present and green: two-row note pins + E2 bubble-on-run scenario (arrow >= 12 px) + E3 marker positive AND upper-storey negative + buried-run-dashed elevation pin (plan-set.test.ts). No gated row regressed.",
+        "note": "961 -> 968 tests across 290282b + 21168c0."
+      },
+      "FIX-E1-legend-two-rows": {
+        "status": "PASS",
+        "checklist": [
+          "P4",
+          "P1",
+          "P2"
+        ],
+        "evidence": "The note prints as TWO bold rows ('DWV SLOPE 1/4 IN/FT (1/8 AT 3 IN+)' 34 chars / 'ARROWS POINT TO SEWER (P3005.3)' 31 chars) at x=52 inside the 250 px backing rect (x=44..294) on all FOUR sets' MEP sheets — viewed at 2x on demo (19-row box), multibath, upper-bath, LOD-200: both rows end ~30+ px clear of the box edge, zero contact with the drawing's context outline, and the tag rows (CO/SO/WH/...) follow BELOW with correct row accounting (the rect height covers every row; nothing prints on bare linework).",
+        "note": "The round-1 exhibit (71-char one-liner running ~200 px past the box onto the duct/roof context) is dead; the rect-height accounting the commit promised checks out on pixels."
+      },
+      "FIX-E2-arrow-decollision": {
+        "status": "PASS",
+        "checklist": [
+          "P4",
+          "P5"
+        ],
+        "evidence": "Arrows now draw AFTER the device bubbles and slide along their run (t in 0,±10,±16,±22,±28, capped at half-run−6 px so the glyph stays ON the pipe). THE ROUND-1 EXHIBIT RESOLVES: on multibath-NY the buried main's arrow — 0.0 px under the Bath-1 SR bubble at round 1 — prints slid −10.4 px along the run at 15.7 px clear of every bubble, visibly ON the main just south of the register (viewed at 2x). Forensic minimum across all drawn arrows on all four sets: 13.9 px (demo main, clear of the exit CO), every other arrow >= 15 px. Independent recount: drawn == eligible 3/3 (demo), 3/3 (LOD-200), 3/3 (upper-bath); multibath draws 4 of 5 — the dropped glyph is bath-1's 23 px branch whose ONLY legal spot (slide budget ±5.5 px) has the stack-CO cluster bubble at 0.2 px and two more at 15/16 px: genuinely crowded, dropped rather than overprinted, exactly the designed behavior and NOT the sewer-pointing arrow.",
+        "note": "Angle truth re-proven independently: every drawn arrow's rotate() equals the recomputed downhill direction of its member from the full XYZ euler (deviation 0.00° on all 13 arrows across the sets); demo branch arrows converge on the stack CO, demo/multibath mains point at the exit."
+      },
+      "FIX-E3-sewer-marker": {
+        "status": "PASS",
+        "checklist": [
+          "P4",
+          "C1",
+          "P2"
+        ],
+        "evidence": "A larger glyph (M-5..L6) anchors 13 px off the sewer-exit cleanout pointed out along the terminal building-drain leg, with halo'd bold 'SEWER/SEPTIC (P3005.4)' beyond it — prints on demo-400, demo-200 AND multibath (grep + viewed at 2x): multibath's sits on bare paper past the north wall, fully legible; demo's crosses the condenser-pad linework but the 2 px white halo keeps every character readable; LOD-200's is textbook-clean. The exit is no longer an undifferentiated CO bubble on any ground-storey sheet. UPPER-STOREY TRUTH: upper-bath-NJ has no sewer-labeled cleanout (S2 wording 'Cleanout @ drain main terminus (P3005.2)') and prints NO marker and NO SEWER/SEPTIC text (grep 0 across its 11 sheets); the riser wording reaches paper as the verbatim P4 flag 'Upper-storey drains need a riser to the storey below — not modeled; runs shown end at the drain main' on schedules 2/2 (viewed, red flag block).",
+        "note": "Demo's round-1 gap (exit leg under the glyph floor -> no exit-pointing ink at all) is doubly closed: the main now carries a regular arrow AND the marker."
+      },
+      "FIX-FLAG-buried-dash": {
+        "status": "PASS",
+        "checklist": [
+          "P3",
+          "P2"
+        ],
+        "evidence": "memberSegs + the section cut-poché now dash any plumbing member whose TOP sits below the floor line. Counted per sheet: dashed plumbing lines == buried members exactly on EVERY elevation of every set (demo 8/8 ×4, multibath 15/15 ×4, LOD-200 5/5 ×4, upper-bath 7/7 ×4) and above-floor supply stays SOLID (zero dashed lines above the grade line; foundation lines 100% dashed — convention consistent). Viewed at 2x: multibath south elevation threads dashed slate through the dashed stemwall hatch; the sections keep dark dashed poché on buried plumbing cuts (12 rects multibath); the cover axons pick up the dashes too (hidden-work read at a glance).",
+        "note": "A through-floor drop whose extent SPANS the floor line prints solid over its whole length including the below-grade tail — exactly the member-granularity predicate round 1 recommended ('y-extent fully below grade'); advisory only."
+      },
+      "REG-blast-radius-takeoff": {
+        "status": "PASS",
+        "checklist": [
+          "S4",
+          "C5",
+          "P4",
+          "E3",
+          "A3"
+        ],
+        "evidence": "Pin vs base (fixed date): members.json / fixtures.json / stats.json byte-EQUAL on all four sets — the commit is paper-only as claimed. Sheet diffs are exactly the enumerated blast radius: cover + MEP + 4 elevations + section (+ nothing else); foundation/wall/roof/electrical plans and ALL schedules byte-equal, so circuit colors, legend machinery, deck under-layer, flag pagination and engineered-SKU classes are untouched by construction — and re-checked live: drawn-vs-booked pipe EXACT per size on all sets (demo PVC 3\" 31.2 / 1.5\" 74.1; multibath 3\" 32.6 / 2\" 32.2 / 1.5\" 55.5; upper 3\" 20.4 / 2\" 1.5 / 1.5\" 4.4 lf; the demo copper 0.5\" 5.6 lf delta == the braided connectors booked as '3 pcs, counted each' by design), cleanouts 2/2 drawn==booked everywhere, stub-outs 2/8/3 match, every warning + member-flag class prints verbatim in the schedules flag block (0 missing on any set, incl. demo's 13-flag block wrapped clean on sheet 3/3).",
+        "note": "LOD-200 keeps the buried skeleton with 3 arrows + marker + correct stamps. Title blocks n/N correct at 14/12/13/11 sheets."
+      },
+      "ADVISORIES": {
+        "status": "FLAG",
+        "evidence": "(1) UPPER-STOREY NOTE WORDING: the standing legend row 'ARROWS POINT TO SEWER (P3005.3)' prints on the upper-bath MEP sheet whose own flag block says the sewer is NOT reachable ('runs shown end at the drain main') — downstream-true but locally overstated; swap the second row to 'ARROWS POINT DOWNSTREAM (P3005.3)' on non-ground storeys (one-line fix in the note loop, groundLevel is derivable from the sewer-CO presence the E3 marker already keys on). (2) Crowded runs drop their glyph SILENTLY per design — fine while branches converge visibly, but a legend hint ('short runs unmarked') or the round-1 '▶ flow' swatch row (still absent) would close P2 fully. (3) Through-floor drops spanning the floor line print solid below grade (member-granularity dash — round-1's own recommended predicate; segment-splitting is the finer fix). (4) OUT OF F3 SCOPE, byte-equal at base: my synthetic upper-storey scene prints the AC condenser row + pad ON the second-floor plan and its cabinet hangs below the storey's floor line on elevations (M2 upper-storey placement never paper-reviewed — queue for an HVAC round), and the upper-storey elevation datum still reads 'GRADE 0.00m' (round-7 carried advisory). (5) F1-merge interaction stays queued: arrows/marker have no de-collision vs the rerouted line-set pair — re-LOOK after merge (the commit queues it too).",
+        "note": "None blocks; (1) is the only one a plans examiner would circle, and it lies outside the round-1 defect classes."
+      }
+    },
+    "recommendations": [
+      "Storey-aware second note row: print 'ARROWS POINT DOWNSTREAM (P3005.3)' instead of '...TO SEWER' when the level has no sewer-labeled cleanout (same predicate as the E3 marker); pin with the upper-storey scenario.",
+      "Add the '▶ flow — to sewer' legend swatch row (round-1 advisory, still open) so P2 holds without reading the bold note.",
+      "After merging F1 (line-set rerouting), re-LOOK at the MEP sheets: flow arrows and the SEWER marker have no de-collision against the rerouted pair.",
+      "Queue an HVAC paper round for upper-storey condenser placement (pad/cabinet on a second-floor plan + below-floor-line cabinet on elevations) and the carried GRADE-datum advisory — pre-existing, not F3's."
+    ],
+    "shipStamp": "PASS — all three round-1 FAILs verified dead ON PIXELS across four scenes (two-row note inside its box everywhere; the 0.0 px arrow-under-bubble exhibit resolves to 15.7 px with the glyph still on its pipe, drops only where genuinely crowded and never the sewer arrow; SEWER/SEPTIC (P3005.4) legible at every ground-storey exit and correctly SUPPRESSED on the upper storey whose riser flag prints verbatim), the round-1 FLAG closed (buried == dashed on every elevation/section/cover, above-floor supply solid, counts exact), and the commit is provably paper-only (members/fixtures/takeoff byte-equal pin↔base; diffs exactly cover/MEP/elevations/section). 967/1/0 suite + tsc clean. Merge-order caveat: re-look at MEP after F1 lands."
+  },
+  "round3": {
+    "round": "F3-underfloor-dwv-r3 (light paper check on the skeptic-round-2 engine fixes: stack jog + per-crossing sleeves + corner-drop clamp)",
+    "pin": "331de783321db06715d6990fa314e8ecc73a8f23",
+    "branch": "feat/underfloor-dwv",
+    "base": "21168c0 (round-2 examiner pin — pin vs base isolates the skeptic fix commit)",
+    "protocol": "Round-3 light paper check per review/BLUEPRINTS.md. Pure buildPlanSet in a detached scratch worktree at the pin (/private/tmp/bones-f3r3) + the base worktree at 21168c0, FIXED date 08/20/2026. FOUR sets each side: demo-house-FL (fc866f2f271b over HTTP, 14 sheets), multibath-NY (round-2 regression scene, 12 sheets), NEW corner-powder-NY (skeptic R2 scene: SW powder room, exit forced west), NEW courtyard-NY (skeptic R3 scene: U-plan, kitchen branch across both courtyard stemwalls — the repo gate's own geometry). 50 pin sheets rasterized with Playwright page.setContent @2x (editor never opened) + 6x zoom crops of every wet core, the courtyard exit and the section/elevation stack bases; forensics recomputed independently of the drawing code: per-leg concrete-crossing recount vs sleeve labels, arrow census vs eligibility, dashed-vs-buried counts per sheet, drawn-vs-booked lf per size, member field-diff pin-vs-base; scratch SAT probes at pin AND base for the drop classes. Evidence in /tmp/bp-f3-r3-verify/ (+ /tmp/bp-f3r2base-verify/).",
+    "verdict": "REVISE",
+    "suite": {
+      "pass": 972,
+      "todo": 1,
+      "fail": 0,
+      "tests": 973,
+      "assertions": 31092,
+      "files": 42,
+      "tsc": "clean"
+    },
+    "items": {
+      "SWEEP-invariants": {
+        "status": "PASS",
+        "checklist": ["E1-E5", "S1-S11", "M1", "M2", "P1-P5", "A1-A4"],
+        "evidence": "bun test at 331de78: 972 pass / 1 todo / 0 fail (973 tests, 42 files, 31,092 expect() calls); bunx tsc --noEmit clean. The fix commit's gates present and green: stackToTreeGap <= ATTACH_TOL pins + jog-removal sensitivity (0.300 m gap reopens), corner-powder-room repro (frost, exit west — X-leg sleeved, SAT-clean), courtyard repro (kitchen branch sleeved through BOTH stemwalls), sleeveNoteFor sensitivity. master-baseline.json regenerated inside the same commit (E5 byte-equality re-keyed to the new plumbing output). No gated row regressed.",
+        "note": "968 -> 973 tests across the skeptic commit. S1's known-residual enumeration does not yet name the placed-path drop x interior-footing class (see ADVISORIES 2)."
+      },
+      "FOCUS-1-stack-jog-on-MEP": {
+        "status": "PASS",
+        "checklist": ["P3", "P1", "P5"],
+        "evidence": "The new dwv-stack-base floor-line jog (0.30 m, 1/4 in/ft fall — rz 0.0208, top 0.113 / bottom 0.037 m, clear of the 3/4 in deck band) prints in slate on all four MEP sheets WITHOUT cluttering the wet core: at 1:100/1:75 it is an 11 px leg riding the stack line (viewed at 6x on demo + multibath — invisible as separate ink under the CO bubble, exactly right for a 0.3 m fitting); at 1:50 the corner-powder wet core shows the jog and the sleeved-drop junction square cleanly beside the de-collided SO/CO/SO/SO row. Arrows unaffected: the jog stays under the 18 px glyph floor at 1:100/1:75 so no arrow minted; drawn arrow census unchanged vs recomputed eligibility (demo 3, multibath 4, powder 3, courtyard 1), every drawn arrow downstream-true (mains at the exits, powder junction arrow onto the drop). Stack reconnection engine-proven on all four sets (round-2's R1 regression closed: without the jog the stack-to-tree gap re-measures 0.300 m).",
+        "note": "The jog + lengthened drop are the ONLY demo/multibath member deltas (+2/-1 each, field-diff) — minimal blast radius on the already-PASSed scenes."
+      },
+      "FOCUS-2-sleeve-wording-on-paper": {
+        "status": "FAIL",
+        "checklist": ["P4", "C1"],
+        "evidence": "ENGINE TRUTH VERIFIED — sleeve labels now sit exactly on the concrete-CROSSING legs, 1:1 with an independent crossing recount on all four sets: corner-powder main X-leg 'sleeved through foundation wall (P2603.4)' crossing w_w (at base the sleeve sat on the EXIT leg and this leg was bare), courtyard kitchen branch sleeved crossing BOTH u_c1+u_c2 (bare at base), multibath main through w_s, exit legs bare. BUT NO SLEEVE INK REACHES PAPER: grep 'sleeve|P2603' across all 50 pin sheets = 0 hits; src/plans has zero sleeve awareness (plan-set never typesets member labels — the round-1 FOCUS-3 class exactly). On the corner-powder MEP sheet the 3 in main visibly crosses the west foundation wall band with no callout; same for both courtyard stemwall crossings. A plans examiner reviewing a LOD-400 set sees foundation-crossing drains with no sleeve detail anywhere.",
+        "note": "The engine now carries per-crossing truth, so printing it is cheap: stamp a halo'd 'SLEEVE (P2603.4)' tick at each crossing on the MEP sheet, keyed off the member label the way the E3 SEWER marker keys off the cleanout fixture — plus a grep gate on the two compose scenes."
+      },
+      "FOCUS-3-jog-drop-dash-convention": {
+        "status": "PASS",
+        "checklist": ["P3", "P2"],
+        "evidence": "dashed plumbing lines == buried members EXACTLY on every elevation of every set (demo 7/7 x4, multibath 14/14 x4, powder 6/6 x4, courtyard 4/4 x4) and the sections stay consistent (multibath 12 dashed in the cut band). Viewed at 6x on the multibath section + south elevation: the jog prints SOLID above the floor line (top 0.113 > grade — correct, it is not hidden work), the floor-spanning stack drop prints solid over its whole length (the documented round-2 member-granularity convention), buried trap drops and the falling main print dashed, threading the dashed stemwall hatch; the coaxial shower drop reads as dashes overlaying the solid stack-drop projection (consistent, see ADVISORIES 1).",
+        "note": "Round-2's FIX-FLAG machinery needed no change for the jog — the top-below-floor predicate classifies it right by construction."
+      },
+      "FOCUS-4-courtyard-exit-marker": {
+        "status": "FAIL",
+        "checklist": ["P4"],
+        "evidence": "The NEW courtyard scene (east-wall exit beside the condenser pad) exposes two holes in the round-2 E3 marker machinery, both verified on pixels and in the SVG: (a) the halo'd bold 'SEWER/SEPTIC (P3005.4)' starts at x=990.6 with ~106 px of text against viewBox width 1056 — ~40 px run OFF THE SHEET, the raster shows 'SEWER/SEPTIC (' clipped mid-word at the frame; (b) the marker glyph prints at (978.6, 468.0) with the nearest SO bubble center 3.0 px away — the glyph overprints the bubble almost concentrically (the marker has neither the edge-awareness nor the bubble de-collision the round-2 ARROWS got). Compounding: the courtyard main's own 45 px arrow — the only flow glyph that would point at this exit — is dropped as crowded at the same cluster, so the clipped marker is the exit's only signal.",
+        "note": "Not a regression of a round-2 exhibit (their four scenes had no east-pointing exit near the right frame) but a P4 checklist violation on this round's sanctioned scene. Fix: anchor-flip ('end') or slide the marker text when its rect exceeds the frame, and register the glyph in the bubbles' placed list; gate pins an east-exit scene."
+      },
+      "REG-round-2-fixes-hold": {
+        "status": "PASS",
+        "checklist": ["P4", "P2", "P1", "P3"],
+        "evidence": "All four round-2 fixes re-verified at the pin: (1) the TWO-ROW slope note prints inside the 250 px legend box on all four MEP sheets, zero contact with drawing linework; (2) arrows draw after bubbles and slide — drawn == eligible minus designed crowded drops on every set, the multibath main's arrow still clear of the register bubbles (viewed), all angles downstream-true; (3) the SEWER/SEPTIC marker prints legibly on demo (halo over the condenser-pad linework), multibath (bare paper) and powder (bare paper) — the courtyard failure is a new-scene hole, not a regression; (4) buried == dashed exact everywhere (FOCUS-3). Flag blocks verbatim: demo's 5 warnings + compressed member-flags print on schedules 3/3, the slab-on-grade pointer prints on every compose.",
+        "note": "Two CO bubbles + DS/CU cluster over the demo pad unchanged from round 2 (legible)."
+      },
+      "REG-takeoff-blast-radius": {
+        "status": "PASS",
+        "checklist": ["S4", "C5", "E3", "A3"],
+        "evidence": "Drawn-vs-booked EXACT per size on all four sets (demo PVC 3in 32.5 / 1.5in 74.1 lf; multibath 29.1/47.1/70.1; powder 21.4/1.5/3.7; courtyard 18.9/39.7/50.2 — booked rows equal summed member lengths to 0.1 lf); cleanouts 2 drawn == 2 booked everywhere; stub-outs 2/8/3/4 match the wet rooms. Member field-diff pin-vs-base: NON-PLUMBING DIFFS ZERO on all four sets — demo +2/-1 (jog + relengthened drop), multibath +2/-1, powder +18/-17 (clamped drops + supply stubs following them + the sleeve label swap main-exit->main-crossing), courtyard +11/-12 (jog, branch sleeve label, bath drops re-anchored). Electrical, foundation, framing, roof sheets and their legends untouched by construction.",
+        "note": "Takeoff deltas vs base are exactly the geometry deltas (demo 3in 31.2->32.5 lf == jog+drop; powder 1.5in 4.4->3.7 == shortened clamped arms)."
+      },
+      "ADVISORIES": {
+        "status": "FLAG",
+        "evidence": "(1) COAXIAL DROP COLLAPSE (skeptic queue, new-at-pin on gap scenes): fallbackStubs' clampOffset returns 0 for EVERY stub when the inboard drop band lies outside the room polygon (a zone that never reaches its boundary wall — the repo's own R3 courtyard gate geometry): the courtyard bath books FOUR coaxial verticals at (11.70, 4.00) — 3in toilet + 2in shower + 1.5in lav + 3in stack drop, y-overlap -0.688..0 — an S1-class member-in-member no gate tests (the drainage SAT suites test drains vs STRUCTURE only); paper stays legible only because bubble de-collision spreads the coincident SO tags. Pre-existing sibling AT BASE (not a regression, double-draws + double-books the shared span): the stack drop is exactly coaxial with the nearest fallback drop on powder (0.50,0.30) and multibath (6.00,2.30). Fix candidates: splay degenerate stubs by pipe diameters, clamp to the nearest polygon point, or emit one shared drop; add a plumbing-x-plumbing SAT scenario. (2) PLACED-PATH DROP RESIDUALS (pre-existing, base-parity proven by scratch probes at 21168c0): a placed toilet 0.22 m off an interior bearing wall centerline puts its 3in trap drop THROUGH the 12in thickened footing (SAT hit, unsleeved, unflagged); a corner-flush placed lav (0.08 m off the wall) drops inside the stemwall band. The pin strictly SHRINKS the class (the lav scene: 4 clashes at base -> 1 at pin) but S1's residual list should name it; drops near concrete want the bolt-style layout nudge or a flag. (3) The courtyard main's sewer-pointing arrow drops as crowded at the pad cluster — per design, but fold into the FOCUS-4 fix so the exit keeps at least one uncovered signal. (4) LOD-200 not re-rasterized this light round (engine delta is detail-agnostic; rounds 1-2 covered it) — spot it in the fix-check. (5) Round-2 carried advisories unchanged: upper-storey 'ARROWS POINT DOWNSTREAM' note wording, the flow-arrow legend swatch row, the F1-merge MEP re-look.",
+        "note": "None of these blocks alone; (1) deserves the skeptic's next round since the collapse geometry ships inside the repo's own gate scene."
+      }
+    },
+    "recommendations": [
+      "Print the per-crossing sleeve truth: a halo'd 'SLEEVE (P2603.4)' tick/text at each concrete crossing on the MEP sheet, keyed off the member label like the SEWER marker (de-collided like circuit labels); gate greps the corner-powder + courtyard MEP sheets (FOCUS-2).",
+      "Give the E3 marker edge- and bubble-awareness: flip text-anchor / slide the anchor when the text rect exceeds the sheet frame, and register the glyph rect in the shared placed list; gate pins an east-wall exit beside a fixture cluster (FOCUS-4 — today: ~40 px of 'SEWER/SEPTIC (P3005.4)' off-paper, glyph 3.0 px from an SO bubble center).",
+      "Skeptic round: de-collapse coincident fallback stubs when clampOffset degenerates to 0 (splay or nearest-polygon-point) and add a plumbing-x-plumbing SAT scenario on the courtyard gate scene; enumerate or nudge the placed-path trap-drop x interior-footing / flush-corner stemwall class (pre-existing, probes on file).",
+      "Fix-check should re-rasterize the LOD-200 demo set alongside the two paper fixes; keep the F1-merge MEP re-look queued."
+    ],
+    "shipStamp": "REVISE — the skeptic commit's engine story verifies end-to-end (jog reconnects the stack on every set with the 0.300 m sensitivity proof; sleeve labels 1:1 with an independent concrete-crossing recount, crossings sleeved and exit legs bare; drops clamped clear of the powder stemwalls; blast radius exactly plumbing; takeoff conserved to 0.1 lf; 972/1/0 suite + tsc clean; all four round-2 paper fixes hold on pixels), but two paper defects block: the per-crossing sleeve truth never reaches ANY sheet (0 hits across 50 sheets — foundation-crossing drains print bare, the round-1 FOCUS-3 class again), and the new courtyard scene clips the SEWER/SEPTIC marker mid-word at the sheet frame while its glyph overprints an SO bubble at 3.0 px. Both fixes are plan-set-only; the DWV engine needs no further change for paper."
+  }
+}

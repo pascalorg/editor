@@ -114,6 +114,34 @@ const warnedEmptyDraw = process.env.NODE_ENV === 'production' ? null : new WeakS
  * carry the same check inline).
  */
 function installEmptyDrawGuard(renderer: THREE.WebGPURenderer) {
+  // The render-object hook is one funnel; the post-processing passes and the
+  // outline node reach the backend by other paths, and a geometry whose
+  // draw range is empty still slips past a position count. The backend's
+  // own `draw` is the last gate before the command encoder — a zero-vertex
+  // draw leaves a vertex-buffer slot unbound ("Vertex buffer slot 1 required
+  // by [RenderPipeline "…MeshLambertNodeMaterial…"] was not set … Draw(0, …)",
+  // 2026-09-10) and poisons the whole encoder, so it is dropped here.
+  const backend = (renderer as unknown as { backend?: { draw?: (...args: unknown[]) => unknown; __pascalDrawGuard?: boolean } })
+    .backend
+  if (backend && typeof backend.draw === 'function' && !backend.__pascalDrawGuard) {
+    const draw = backend.draw.bind(backend)
+    backend.draw = (renderObject: unknown, ...rest: unknown[]) => {
+      const geometry = (renderObject as { geometry?: THREE.BufferGeometry } | null)?.geometry
+      const range = geometry?.drawRange
+      if (!hasDrawableGeometry(geometry) || (range && range.count === 0)) {
+        if (warnedEmptyDraw && geometry && !warnedEmptyDraw.has(geometry)) {
+          warnedEmptyDraw.add(geometry)
+          console.warn('[viewer] dropped a zero-vertex draw at the backend', {
+            name: (renderObject as { object?: { name?: string; type?: string } } | null)?.object?.name,
+            type: (renderObject as { object?: { name?: string; type?: string } } | null)?.object?.type,
+          })
+        }
+        return
+      }
+      return draw(renderObject, ...rest)
+    }
+    backend.__pascalDrawGuard = true
+  }
   renderer.setRenderObjectFunction(
     (
       object: any,

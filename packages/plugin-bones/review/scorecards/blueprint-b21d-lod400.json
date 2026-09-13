@@ -1,0 +1,60 @@
+{
+ "round": "B21d-lod400",
+ "pin": "53512202e8e75a36c83bb8fadb4e7766050a7dd9",
+ "branch": "feat/lod400-b21d",
+ "base": "3910a75 (master)",
+ "date": "2026-08-21",
+ "protocol": "Paper round on B21d (door + window SCHEDULE sheet + wall-plan mark bubbles) per review/BLUEPRINTS.md. Pure buildPlanSet in a detached worktree at the pin (/tmp/exam-b21d) vs a detached base worktree at master 3910a75, FIXED date so sheets byte-compare. Three sets: demo-house-FL (fc866f2f271b snapshot over HTTP, ground level, injected bonesframing node w/ electrical+plumbing+hvac ON — 15 openings / 18 active walls, 15 sheets), the pilot's 5-opening exhibit (frameWalls verbatim from the gate: 8m shell + 16-ft engineered garage door + floating tall-door wall), and the 40-opening stress scene (5 walls x 8 windows). All 48 pin sheets rasterized with Playwright page.setContent @2x; every affected sheet WALKED, tight bubble spots cropped at 4-5x. Regression: per-sheet byte-compare pin-without-walls vs master AND pin-with-walls vs pin-without. Full suite at the pin: 1063 pass / 1 todo / 0 fail (1064 tests, 44 files, 37729 expects). Evidence: /tmp/exam-b21d-work/{out,out-base,crop-*.png}.",
+ "verdict": "APPROVE — the set finally schedules its openings and every claim on paper is member-true: census exact on all three scenes (15/5/40, marks D1…/W1… deterministic), RO/header cells verbatim (16-ft door prints 'ENGINEERED (by supplier)', CMU openings 'precast lintel'), composed red flags print WHOLE under their rows (zero ellipsis anywhere), pagination splits on row-groups with (p/N) titles, cover indexes the sheet and SHEET n/N stays contiguous through 15/9/10-sheet sets, and the blast radius is surgically clean — pin-without-walls is byte-EQUAL to master on all 14 demo sheets, and with walls only cover (+index row), wall plan (+bubbles/legend) and the new sheet differ, so electrical/MEP/takeoff regression holds by construction. Two FLAG-class composition items ride the board, not the merge: (1) the bubble registry sees GLYPHS only — D2/D3 in the pilot exhibit park exactly ON the A-A cut line (white knockout keeps them legible; the pilot's flagged case confirmed as cosmetic) and 3 of the demo's 15 bubbles (W3, D1, W5) land on T-junction/corner wall linework; (2) the P1 sparseness call — judged: FOLD small schedules into the Schedules sheet (the pilot's pre-accepted fallback) when the whole table+flags fits ~1/3 page (the 5-opening sheet is ~80% empty and does scream half-empty); the demo's 15-row sheet is acceptable dedicated.",
+ "suite": { "pass": 1063, "todo": 1, "fail": 0, "tests": 1064, "files": 44, "expects": 37729 },
+ "items": {
+  "SWEEP-invariants": {
+   "status": "PASS",
+   "checklist": ["P1", "P2", "P3", "P4", "P6", "S4", "S8", "E3", "A3"],
+   "evidence": "No regressed row. P1 (shared transform): the schedule sheet carries no geometry; the wall plan's transform is untouched (byte-diff shows only added bubble <g>s + one legend row). P2: the new bubble symbol is keyed — 'opening mark — see door + window schedule' with a D1 specimen circle prints on every wall sheet that has marks, and only there. P3/C6: title blocks carry jurisdiction+code+date+disclaimer+SHEET n/N; numbering contiguous 1..15 (demo), 1..9 (pilot), 1..10 (stress) incl. the paginated pair at 8/10-9/10. P4: member flags print verbatim and whole (see FOCUS-1); the schedules flag block is byte-identical to master. P6 (new row): all six promises verified live on paper. S4/S8: compute.ts adds the additive `walls` field only — members/fixtures byte-equal (full suite incl. the master-baseline pin green). E3/glyph classes: electrical + MEP sheets byte-EQUAL to master. A3: north arrow + orientation unchanged.",
+   "note": "The A-A end bubbles joining placed[] cannot disturb other sheets: device labels place earlier in planSheet, and the electrical/MEP byte-equality proves zero interaction."
+  },
+  "FOCUS-1-schedule-table-legibility": {
+   "status": "PASS",
+   "checklist": ["P4", "C5", "P6"],
+   "evidence": "demo sheet 12/15: 15 rows (6 doors / 9 windows == scene's 6 door + 9 window nodes exactly), seven columns at fixed x (MARK bold, TYPE, NOMINAL, RO, SILL AFF, HEADER, WALL), 10px cells ≈ 7.5pt at print — legible; header row + rule repeat on every page. RO/header cells are member-verbatim (gated byte-match; spot-checked D1 4x8, W5 4x10, D3/D5/D6 4x6, 9 CMU openings 'precast lintel'). Four red ⚑ flags print WHOLE under their rows, word-wrapped, indented — incl. the two-line composed 'ENGINEERED BEAM REQUIRED — … | header 4x12 does not fit … (9.4\" of 11.3\") — raise the wall, lower the opening, or use an engineered flat header' on the pilot's D2. Ellipsis scan across every schedule SVG: zero hits. Stress 1/2 holds W1-W39 with the last row 120px above the title block; 2/2 holds W40; every mark exactly once (gated + counted on paper).",
+   "note": "Doors print '—' in SILL AFF; sill heights for windows come from the OpeningSlice (2'-11.44\" etc.) and read cleanly. Wall column prints raw host ids (wall_x86jgwle7bdzjmis) — machine-y but unambiguous and the cross-reference is honest; friendlier wall tags would need a naming scheme the model doesn't have."
+  },
+  "FOCUS-2-wall-plan-mark-bubbles": {
+   "status": "FLAG",
+   "checklist": ["P2", "P3", "P6"],
+   "evidence": "Every schedule row's mark is findable on its wall plan: 15/15 (demo), 5/5 (pilot), 40/40 (stress); bubbles pairwise ≥15px and ≥15px from the A-A END bubbles (gated + verified); no crowded-fallback comment fired on any scene; each bubble sits adjacent to its own opening (D3's directly under its flagged header, D2 beside its RO and clear of the A-A dashed line on the demo). THE FLAG — the registry sees glyphs, not ink: (a) the pilot's D2/D3 case (both openings at plan x=4 where sectionCutX lands): both bubbles park exactly ON the A-A cut line — centers on the line, white fill knocking it out (crop-p5-d2/d3.png). Legible and unambiguous (r=8 'D2' text vs the r=10 'A' marks), but the cut line now visually dead-ends into a door mark on both walls — a drafting-convention wobble, not a lie. (b) demo W3/D1/W5: the perpendicular ±14px offset from the OWNING wall lands on a CROSSING wall at T-junctions/corners — three bubbles' white fill occludes ~16px of stem-wall/corner framing linework (crop-w3d1.png, crop-w5.png). All three stay legible (white knockout + black rim is accepted mark practice) and 12 of 15 demo bubbles are fully clear.",
+   "note": "Cheap board-queue fix, no new machinery: push sampled points of the section line (every ~20px) and the wall-band rects into placed[] (wallPlan data is already in scope) — the existing candidate walk (t-offsets exist but are never preferred) then slides D2/D3 off the line and the T-junction trio off the stems for free. Not merge-blocking: marks always print, always read, reference never dangles."
+  },
+  "FOCUS-3-cover-index-and-numbering": {
+   "status": "PASS",
+   "checklist": ["P3", "C6"],
+   "evidence": "Cover SHEET INDEX lists the new sheet with its true ordinal on all three sets: demo '12.  Door + window schedule' (== SHEET 12/15 on the sheet itself), pilot '8.', stress '8.  Door + window schedule (1/2)' + '9.  (2/2)'. SHEET n/N patched globally after the census: demo runs 1/15..15/15 with no gap around the insertion (takeoff pages renumber 13-15), stress runs the paginated pair consecutively (8/10, 9/10 — gated + read off the rasters). Print order sensible: after the drawings it cross-references (plans/elevations/section), before Schedules + takeoff.",
+   "note": "In-sheet page titles ('sheet 1 of 2') and title-block '(1/2)' agree."
+  },
+  "FOCUS-4-P1-sparseness-call": {
+   "status": "FLAG",
+   "checklist": ["P6"],
+   "evidence": "BLUEPRINTS P1 (sheet balance, 'no sheet >30% empty') measured: pilot-5op dedicated sheet = 9 content lines, ink stops at y≈413/1632 — ~80% of the sheet is blank paper; it DOES scream half-empty, and a realistic 6-8-opening cottage prints the same. demo (15 rows + 4 flag lines = 22 lines) stops at y≈700/1632 — ~55% empty, but the table runs full width, the row rhythm reads like a real A6-series schedule, and door/window schedules customarily hold their own sheet; acceptable. stress 2/2 carries the W40 orphan row (pagination remainder — same convention the takeoff uses; fine).",
+   "note": "JUDGED, per the pilot's pre-accepted fallback: FOLD the schedule into the Schedules + takeoff sheet as a titled block when the whole table (rows + flags + header, ~lineH lines) fits ≤ ~1/3 of a page (≈18 lines) — kills the 5-opening class; KEEP the dedicated sheet from ~12-15 rows up (the demo stays as-is). Composition item, precedent class (round-3 P1 pagination balance) — board queue, not merge-blocking. Optional polish while there: balance the 39+1 stress split toward 20+20."
+  },
+  "FOCUS-5-regression-byte-story": {
+   "status": "PASS",
+   "checklist": ["S4", "P4", "E3", "P6"],
+   "evidence": "Two-sided proof. (1) Legacy callers: pin WITHOUT walls vs master at fixed date — all 14 demo sheets byte-EQUAL (cover, foundation, wall, roof, electrical rough-in, plumbing+HVAC, 4 elevations, section, 3 takeoff pages). (2) Option blast radius: pin WITH walls vs pin without — takeoff/schedules pages, electrical, MEP, elevations, section, foundation, roof differ ONLY in the SHEET n/N renumber; content diffs exist on exactly cover (+126 bytes = one index row), wall framing plan (+3865 bytes = 15 bubble groups + 1 legend row), plus the new sheet. Prior glyph/legend classes (MEP pair nudge, legend rows, return tone, takeoff flag block) therefore hold bit-for-bit. members/fixtures untouched (compute adds the additive `walls` field; suite's baseline pin green).",
+   "note": "The 5-line opening-less scene gate (option inert) also verified in-suite."
+  },
+  "ADVISORIES": {
+   "status": "FLAG",
+   "checklist": ["P4"],
+   "evidence": "(a) The demo W5 row prints the AGGREGATED per-(size,thickness)-class flag '2x4 framing compressed to 2.94\" — 0.100m drawn wall holds…' because that class flag rides its header member — honest (the flag IS on the member) but it reads as if the compression were about that opening; consider stripping class-aggregate flags (the S7 'compressed' family) from schedule rows or prefixing 'wall:'. (b) The wall-sheet legend's single 'header — 4x6' row keys one size while the schedule proves three header sizes on the level (4x6/4x8/4x10) — pre-existing legend convention, byte-identical to master, but the new schedule now makes the mismatch visible; a 'headers per schedule' legend wording would reconcile them.",
+   "note": "Neither is a B21d defect; both are follow-the-new-sheet polish."
+  }
+ },
+ "recommendations": [
+  "Register the section-line body (sampled ~20px) and wall-band rects in placed[] so mark bubbles slide off the A-A line (pilot D2/D3) and off T-junction stems (demo W3/D1/W5) via the existing candidate walk.",
+  "Fold the door+window schedule into the Schedules + takeoff sheet when the full table fits ≤ ~18 lines (the pilot's pre-accepted fallback); keep the dedicated sheet for larger sets.",
+  "Strip S7 class-aggregate 'compressed' flags from schedule rows (or prefix 'wall:') so opening rows carry opening-scoped honesty only.",
+  "Balance the last schedule page when the remainder is a single orphan row (39+1 → 20+20)."
+ ]
+}

@@ -103,6 +103,7 @@ import { SiteEdgeLabels } from './site-edge-labels'
 import { SlabHoleHighlights } from './slab-hole-highlights'
 import { SnapshotCaptureOverlay } from './snapshot-capture-overlay'
 import { type SnapshotCameraData, ThumbnailGenerator } from './thumbnail-generator'
+import { VectorEdgeExtractor } from './vector-edge-extractor'
 import { WallMeasurementLabel } from './wall-measurement-label'
 import { WallMoveSideHandles } from './wall-move-side-handles'
 import { WallOpeningHighlights } from './wall-opening-highlights'
@@ -831,6 +832,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       {isCaptureMode && <CaptureCameraRig />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
+      <VectorEdgeExtractor />
       {!isFirstPersonMode && <SiteEdgeLabels />}
       <InteractiveSystem />
       {presentationsReady ? <ViewerPresentations /> : null}
@@ -1514,6 +1516,7 @@ function EditorContent({
       {isFirstPersonMode && <FirstPersonControls />}
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
+      <VectorEdgeExtractor />
       <InteractiveSystem />
       {presentationsReady ? <ViewerPresentations /> : null}
     </Viewer>

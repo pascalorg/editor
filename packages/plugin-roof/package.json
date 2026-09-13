@@ -1,0 +1,38 @@
+{
+  "name": "@pascal-app/plugin-roof",
+  "version": "0.1.0",
+  "description": "Auto roof — derive the roof from the exterior walls the way PlanCrafters' roof engine does: the wall loop becomes masses, each mass a plate-seated roof segment, gable or hip by the style's vocabulary and the massing, a shed rising away from the street, every wall told what it carries.",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "peerDependencies": {
+    "@pascal-app/core": ">=0.9.1 <2",
+    "@pascal-app/editor": ">=0.9.1 <2",
+    "@pascal-app/viewer": ">=0.9.1 <2",
+    "lucide-react": "*",
+    "react": "^18 || ^19",
+    "react-dom": "^18 || ^19",
+    "zustand": "^5"
+  },
+  "devDependencies": {
+    "@pascal/typescript-config": "*",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5"
+  }
+}

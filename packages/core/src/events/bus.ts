@@ -240,6 +240,28 @@ export interface ThumbnailGenerateEvent {
    * any palette background.
    */
   transparent?: boolean
+  /** Ink edge mode for this frame; defaults to the canvas setting (`off` with alpha). */
+  edges?: 'off' | 'soft' | 'strong'
+  /** Host-authored orthographic view: capture camera at `position` looking at `target`, `viewWidth` metres across the frame. */
+  ortho?: {
+    position: [number, number, number]
+    target: [number, number, number]
+    viewWidth: number
+  }
+  /** Host-authored perspective view: capture camera at `position` looking at `target` (vertical `fov` degrees, default 60). */
+  perspective?: {
+    position: [number, number, number]
+    target: [number, number, number]
+    fov?: number
+  }
+  /** Node types hidden for this frame in addition to the editor helpers. */
+  hideTypes?: readonly string[]
+  /** Re-aim the scene's directional lights at the face an authored pose looks at, for this frame only. */
+  lightFace?: boolean
+  /** World-space clipping planes applied to the scene for this frame (a section cut). */
+  clip?: readonly { normal: [number, number, number]; constant: number }[]
+  /** Render the drawing buffer at this multiple of its size for the frame (print-scale pictures); restored afterwards. */
+  supersample?: number
 }
 
 export interface CameraControlFitSceneEvent {

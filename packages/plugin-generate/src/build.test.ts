@@ -1,0 +1,532 @@
+import { describe, expect, test } from 'bun:test'
+import { buildHouse, type NodeOp, PLATFORM_RIM_M } from './build'
+import { FIXTURE_CATALOG } from './furnish.fixture'
+import { normalizeDocument } from './document'
+import { outlineRing, ringArea, pointInRing } from './geometry'
+import { rollDocument } from './roll'
+import { styleFor } from './styles'
+import { POPPY } from './templates/poppy'
+
+type N = Record<string, any>
+const ofType = (ops: NodeOp[], type: string): N[] =>
+  ops.filter((op) => op.node.type === type).map((op) => op.node)
+
+describe('Poppy builds into Pascal nodes', () => {
+  const result = buildHouse(POPPY)
+
+  test('a block document builds block + stucco exterior walls and a 2x4 interior (2026-09-09)', () => {
+    const ops = buildHouse({ ...POPPY, wallSystem: 'cmu' }).ops
+    const walls = ofType(ops, 'wall') as { assembly?: { preset?: string; framing?: { kind?: string }; exterior?: { finish?: string } }; slots?: Record<string, string> }[]
+    const exterior = walls.filter((w) => w.assembly?.framing?.kind === 'cmu')
+    expect(exterior.length).toBeGreaterThan(3)
+    for (const w of exterior) {
+      expect(w.assembly?.preset).toBe('exterior-cmu-stucco')
+      expect(w.assembly?.exterior?.finish).toBe('stucco')
+    }
+    // a block house stands on a slab on grade; the record says why
+    const building = ops.find((op) => op.node.type === 'building')?.node as { metadata?: { foundation?: { type?: string; source?: string } } } | undefined
+    expect(building?.metadata?.foundation?.type).toBe('slab')
+    expect(building?.metadata?.foundation?.source).toMatch(/concrete-block/)
+    // the framed document keeps its siding stack
+    const framed = ofType(buildHouse(POPPY).ops, 'wall') as { assembly?: { framing?: { kind?: string } } }[]
+    expect(framed.some((w) => w.assembly?.framing?.kind === 'cmu')).toBe(false)
+  })
+  const ops = result.ops
+  const walls = ofType(ops, 'wall')
+  const doors = ofType(ops, 'door')
+  const windows = ofType(ops, 'window')
+  const zones = ofType(ops, 'zone')
+
+  test('builds clean, parent-first, one building and one level', () => {
+    expect(result.errors).toEqual([])
+    expect(result.ok).toBe(true)
+    expect(ops[0]?.node.type).toBe('building')
+    expect(ops[1]?.node.type).toBe('level')
+    const seen = new Set<string>()
+    for (const op of ops) {
+      const parent = op.node.parentId as string | null
+      if (parent) expect(seen.has(parent)).toBe(true)
+      seen.add(op.node.id as string)
+    }
+  })
+
+  test('the exterior outline closes at 24 × 33 and the walls carry assemblies', () => {
+    const ring = outlineRing(normalizeDocument(POPPY).rooms, 6)
+    expect(ring).not.toBeNull()
+    expect(ringArea(ring as [number, number][])).toBe(24 * 12 * 33 * 12)
+    const exterior = walls.filter((w) => w.metadata.wallType === 'ext2x6')
+    expect(exterior.length).toBe(4)
+    for (const w of exterior) {
+      expect(w.assembly.preset).toBe('exterior-2x6-siding')
+      expect([w.frontSide, w.backSide].sort()).toEqual(['exterior', 'interior'])
+    }
+    const interior = walls.filter((w) => w.metadata.wallType === 'int2x4')
+    expect(interior.length).toBeGreaterThan(0)
+    for (const w of interior) expect(w.assembly.preset).toBe('interior-2x4-drywall')
+    // The open plan has NO partition between living, dining and kitchen.
+    expect(
+      interior.some((w) => /LIVING \+ DINING|DINING \+ KITCHEN|LIVING \+ KITCHEN/.test(w.name)),
+    ).toBe(false)
+  })
+
+  test("the front door wears the style's leaf: a half-lite on the farmhouse, an arched four-panel on the cottage", () => {
+    const farmhouse = ofType(buildHouse({ ...POPPY, style: 'farmhouse' }).ops, 'door').find((d) => (d as N).name === 'Front door') as N
+    const segments = farmhouse.segments as { type: string; heightRatio: number }[]
+    expect(segments[0]?.type).toBe('glass')
+    expect(segments.map((s) => s.heightRatio).reduce((a, b) => a + b, 0)).toBeCloseTo(1, 9)
+    expect((farmhouse.metadata as { doorStyle?: string }).doorStyle).toBe('half-lite')
+    const cottage = ofType(buildHouse({ ...POPPY, style: 'cottage' }).ops, 'door').find((d) => (d as N).name === 'Front door') as N
+    // no round-top doors (Steve, 2026-09-07): the cottage leaf stays square
+    expect(cottage.openingShape).toBeUndefined()
+    expect((cottage.segments as { type: string }[]).every((s) => s.type === 'panel')).toBe(true)
+    // the cottage's gable ends carry a king post each; the farmhouse's none
+    const ornaments = (ops: readonly { node: Record<string, unknown> }[]) =>
+      ops.filter((op) => op.node.type === 'column' && (op.node.metadata as { ornament?: string }).ornament === 'gable' && (op.node.name as string) === 'Gable king post')
+    expect(ornaments(buildHouse({ ...POPPY, style: 'cottage' }).ops).length).toBeGreaterThan(0)
+    expect(ornaments(buildHouse({ ...POPPY, style: 'farmhouse' }).ops)).toHaveLength(0)
+  })
+
+  test('one door per door attachment plus the front door, seated inside their walls', () => {
+    const exterior = doors.filter((d) => d.metadata.attach === 'exterior')
+    expect(exterior.length).toBe(2) // the front door and the rear entrance
+    const front = exterior.filter((d) => d.name === 'Front door')
+    expect(front.length).toBe(1)
+    expect(front[0]?.width).toBeCloseTo(0.9144, 4)
+    expect(doors.filter((d) => d.metadata.attach === 'door').length).toBe(4)
+    const wallById = new Map(walls.map((w) => [w.id, w]))
+    for (const door of doors) {
+      const wall = wallById.get(door.parentId) as N
+      const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+      // 6" from a corner for a room door, 3" for a closet door or a cased opening.
+      expect(door.position[0] - door.width / 2).toBeGreaterThanOrEqual(0.0762 - 1e-9)
+      expect(door.position[0] + door.width / 2).toBeLessThanOrEqual(length - 0.0762 + 1e-9)
+      expect(door.position[1]).toBeCloseTo(door.height / 2, 6)
+    }
+  })
+
+  test('every bedroom gets a 4 × 5 egress window on an exterior wall, a corner bedroom one on each face; the bath a small slider', () => {
+    const byName = (n: string) => windows.filter((w) => w.name === n)
+    for (const bed of ['BEDROOM 1 window', 'BEDROOM 2 window']) {
+      const w = byName(bed)
+      // 2026-09-09: one window per exterior face, up to two — the Poppy's bedrooms are corner rooms
+      expect(w.length).toBe(2)
+      const faces = new Set(w.map((x) => x.parentId))
+      expect(faces.size).toBe(2)
+      for (const win of w) {
+        expect(win.width).toBeCloseTo(1.2192, 4)
+        expect(win.height).toBeCloseTo(1.524, 4)
+        expect(win.windowType).toBe('sliding') // the Poppy is a modern: sliders (finishes.ts WINDOW_STYLES)
+        const wall = walls.find((x) => x.id === win.parentId) as N
+        expect(wall.metadata.wallType).toBe('ext2x6')
+      }
+    }
+    expect(byName('BATH window')[0]?.windowType).toBe('sliding')
+    expect(byName('LIVING window').length).toBe(2)
+    // Openings on one wall never overlap.
+    const byWall = new Map<string, N[]>()
+    for (const o of [...doors, ...windows])
+      byWall.set(o.parentId, [...(byWall.get(o.parentId) ?? []), o])
+    for (const list of byWall.values()) {
+      const spans = list
+        .map((o) => [o.position[0] - o.width / 2, o.position[0] + o.width / 2])
+        .sort((a, b) => a[0]! - b[0]!)
+      for (let i = 1; i < spans.length; i++)
+        expect(spans[i]![0]).toBeGreaterThanOrEqual(spans[i - 1]![1]! - 1e-9)
+    }
+  })
+
+  test('every room gets a flat ceiling on its zone polygon, following the level top', () => {
+    const ceilings = ofType(ops, 'ceiling').filter((c) => !String(c.name).startsWith('Porch'))
+    expect(ceilings.length).toBe(zones.length)
+    expect(result.stats.ceilings).toBe(zones.length)
+    for (const c of ceilings) {
+      const zone = zones.find((z) => `${z.name} ceiling` === c.name)!
+      expect(zone).toBeDefined()
+      expect(c.polygon).toEqual(zone.polygon)
+      expect(c.parentId).toBe(result.levelId)
+      // the Poppy's rooms are all at the 9 ft storey: the height stated at the storey (2026-09-07)
+      expect(c.height).toBeCloseTo(9 * 12 * 0.0254, 6)
+    }
+  })
+
+  test('zones come from the walls: the open plan is one room, the others their own', () => {
+    const names = zones.map((z) => z.name).sort()
+    expect(names).toContain('LIVING / DINING / KITCHEN')
+    expect(names).toContain('BATH')
+    expect(names).toContain('BEDROOM 1')
+    expect(names).toContain('BEDROOM 2')
+    expect(names).toContain('LAUNDRY')
+    expect(zones.every((z) => z.spaceRole === 'room' && z.boundaryWallIds.length >= 3)).toBe(true)
+    expect(zones.find((z) => z.name === 'BATH')?.floorFinish).toBe('TILE')
+    expect(result.stats.livingSqFt).toBe(792)
+  })
+
+  test('slab under the outline, a 9:12 front-to-back gable, a 9 ft level', () => {
+    const slab = ofType(ops, 'slab')[0] as N
+    expect(slab.polygon.length).toBe(4)
+    const seg = ofType(ops, 'roof-segment')[0] as N
+    expect(seg.roofType).toBe('gable')
+    expect(seg.pitch).toBeCloseTo((Math.atan(9 / 12) * 180) / Math.PI, 2)
+    expect(Math.abs(Math.sin(seg.rotation))).toBeCloseTo(1, 6) // ridge along the depth: gables front and back
+    expect(seg.width).toBeGreaterThan(seg.depth)
+    expect(seg.wallHeight).toBe(0) // seated on the plate
+    const level0 = ofType(ops, 'level')[0] as N
+    expect(seg.position[1]).toBeCloseTo(level0.height, 6)
+    // every exterior wall knows what it carries
+    const roles = ofType(ops, 'wall')
+      .filter((w) => w.metadata.wallType === 'ext2x6')
+      .map((w) => w.metadata.roof?.role)
+    expect(roles.every((r) => r === 'eave' || r === 'gable-end')).toBe(true)
+    expect(roles.filter((r) => r === 'gable-end').length).toBe(2)
+    const level = ofType(ops, 'level')[0] as N
+    expect(level.height).toBeCloseTo(2.7432, 4)
+  })
+
+  test('regenerating keeps the building and level ids it is handed', () => {
+    const again = buildHouse(POPPY, {
+      reuse: { buildingId: 'building_keep', levelId: 'level_keep' },
+      siteId: 'site_x',
+    })
+    expect(again.ok).toBe(true)
+    expect(again.buildingId).toBe('building_keep')
+    expect(again.levelId).toBe('level_keep')
+    expect(ofType(again.ops, 'building')[0]?.parentId).toBe('site_x')
+    expect(ofType(again.ops, 'level')[0]?.parentId).toBe('building_keep')
+    expect(ofType(again.ops, 'wall').every((w) => w.parentId === 'level_keep')).toBe(true)
+  })
+
+  test('the entrance: a porch centred on the front door, its steps to grade, the building 8 in above grade', () => {
+    const built = buildHouse(POPPY)
+    expect(built.ok).toBe(true)
+    const building = ofType(built.ops, 'building')[0] as N
+    expect(building.position[1]).toBeCloseTo(8 * 0.0254, 9)
+    const door = ofType(built.ops, 'door').find((d) => (d as N).name === 'Front door') as N
+    expect(door).toBeDefined()
+    const porch = ofType(built.ops, 'slab').find((s) => (s as N).name === 'Porch') as N
+    expect(porch).toBeDefined()
+    expect(porch.elevation).toBeCloseTo(0.05 - 1.5 * 0.0254, 9) // 1½ in step down out of the house
+    const posts = ofType(built.ops, 'column')
+    expect(posts.length).toBeGreaterThanOrEqual(2)
+    for (const p of posts) expect((p as N).supportSlabId).toBe(porch.id)
+    const stair = ofType(built.ops, 'stair')[0] as N
+    expect(stair.deckSlabId).toBe(porch.id)
+    expect(stair.stepCount).toBe(2) // 8½ in from grade to the porch top
+    const segs = ofType(built.ops, 'roof-segment') as N[]
+    expect(segs.some((s) => /Porch/.test(String(s.name)))).toBe(true)
+    expect(built.porch?.policy).toBe(styleFor(POPPY.style ?? 'cottage').porch)
+    // the porch sits on the front door's wall, outside its exterior face
+    const wall = ofType(built.ops, 'wall').find((w) => (w as N).id === door.parentId) as N
+    const wz = (wall.start as number[])[1] as number
+    const poly = porch.polygon as [number, number][]
+    for (const p of poly) expect(Math.abs(p[1] - wz)).toBeGreaterThan(0.08)
+  })
+
+  test('the MEP choices on the roll ride the building metadata for Bones (G58)', () => {
+    const rolled = rollDocument(777, { style: 'ranch', beds: 3, baths: 1, garage: false, services: { hvacSystem: 'packaged', sewerSide: 'rear' } })
+    const built = buildHouse(rolled.document, { generation: { seed: 777, options: rolled.options } })
+    expect(built.ok).toBe(true)
+    const building = ofType(built.ops, 'building')[0] as N
+    expect(building.metadata.services).toEqual({ hvacSystem: 'packaged', sewerSide: 'rear' })
+    const plain = buildHouse(rollDocument(777, { style: 'ranch', beds: 3, baths: 1, garage: false }).document)
+    expect((ofType(plain.ops, 'building')[0] as N).metadata.services).toBeUndefined()
+  })
+
+  test('a wide farmhouse is raised: the floor is a platform, the garage slab sits at grade and its walls stand on it', () => {
+    const rolled = rollDocument(1499472249, { style: 'farmhouse', beds: 3, baths: 2, garage: true })
+    const built = buildHouse(rolled.document)
+    expect(built.ok).toBe(true)
+    expect(built.foundation?.type).toBe('raised')
+    expect(built.foundation?.ffAboveGradeIn).toBe(18)
+    const building = ofType(built.ops, 'building')[0] as N
+    expect(building.position[1]).toBeCloseTo(18 * 0.0254, 9)
+    expect(building.metadata.foundation).toEqual({
+      type: 'raised',
+      ffAboveGradeIn: 18,
+      source: built.foundation?.source,
+    })
+    const slabs = ofType(built.ops, 'slab') as N[]
+    const platform = slabs.find((s) => s.name === 'Floor platform')!
+    expect(platform.thickness).toBeCloseTo(0.019, 9)
+    const garage = slabs.find((s) => s.name === 'Garage slab')!
+    expect(garage).toBeDefined()
+    // the slab's top 1 in over the grade at the overhead door (Steve, 2026-09-07); flat ground here is 18 in under the floor
+    expect(garage.elevation).toBeCloseTo(-18 * 0.0254 + 1 * 0.0254, 6)
+    // the garage footprint is not part of the house platform
+    const platformArea = Math.abs(ringArea(platform.polygon as [number, number][]))
+    const garageArea = Math.abs(ringArea(garage.polygon as [number, number][]))
+    expect(garageArea).toBeGreaterThan(30)
+    // together they cover exactly the rooms (the roll's footprint is the house rectangle plus the garage bump)
+    const roomsM2 = rolled.document.rooms.reduce((s, r) => s + r.w * r.d, 0) * 0.09290304
+    expect(platformArea + garageArea).toBeCloseTo(roomsM2, 0)
+    const onGarage = (ofType(built.ops, 'wall') as N[]).filter((w) => w.supportSlabId === garage.id)
+    expect(onGarage.length).toBeGreaterThanOrEqual(2)
+    for (const w of onGarage) expect(w.name).toBe('Exterior wall')
+    // the house's exterior walls carry the platform rim in siding and the
+    // stemwall to grade under it; the garage's walls, on the pad, nothing
+    const exterior = (ofType(built.ops, 'wall') as N[]).filter((w) => w.name === 'Exterior wall')
+    for (const w of exterior) {
+      if (w.supportSlabId === garage.id) {
+        expect(w.underpinning).toBeUndefined()
+        continue
+      }
+      expect(w.fillToTerrain).toBe(true)
+      expect(w.underpinning.rim).toBeCloseTo(PLATFORM_RIM_M, 9)
+      // 18 in above grade less the platform, plus 6 in into the ground (Steve, 2026-09-07: no gap at the grade)
+      expect(w.underpinning.stem).toBeCloseTo(18 * 0.0254 - PLATFORM_RIM_M + 6 * 0.0254, 3)
+    }
+    const interior = (ofType(built.ops, 'wall') as N[]).filter((w) => w.name !== 'Exterior wall')
+    for (const w of interior) expect(w.underpinning).toBeUndefined()
+  })
+
+  test('with the catalog the house is furnished: fixtures in the baths and kitchen, furniture in the rooms, every item on the level inside the footprint; without it nothing', () => {
+    const built = buildHouse(POPPY, { catalog: FIXTURE_CATALOG })
+    expect(built.ok).toBe(true)
+    const items = ofType(built.ops, 'item') as N[]
+    expect(items.length).toBeGreaterThan(5)
+    expect(built.stats.items).toBe(items.length)
+    const ids = items.map((i) => (i.asset as N).id as string)
+    expect(ids).toContain('toilet')
+    expect(ids).toContain('kitchen')
+    expect(ids.some((id) => id.endsWith('-bed'))).toBe(true)
+    const level = ofType(built.ops, 'level')[0] as N
+    const slab = ofType(built.ops, 'slab').find((s) => (s as N).name === 'Slab on grade') as N
+    const xs = (slab.polygon as [number, number][]).map((p) => p[0])
+    const zs = (slab.polygon as [number, number][]).map((p) => p[1])
+    for (const i of items) {
+      expect(i.parentId).toBe(level.id)
+      expect((i.metadata as N).generatedBy).toBe('pascal:generate')
+      expect(((i.metadata as N).furnish as N).room).toBeTruthy()
+      const [x, y, z] = i.position as [number, number, number]
+      // on the floor — unless the piece floats (a hood over the range, the television on its stand)
+      if (((i.metadata as N).furnish as N).floating) expect(y).toBeGreaterThanOrEqual(0)
+      else expect(y).toBe(0)
+      expect(x).toBeGreaterThan(Math.min(...xs))
+      expect(x).toBeLessThan(Math.max(...xs))
+      expect(z).toBeGreaterThan(Math.min(...zs))
+      expect(z).toBeLessThan(Math.max(...zs))
+    }
+    expect(buildHouse(POPPY).stats.items).toBe(0)
+    expect(ofType(buildHouse(POPPY).ops, 'item')).toHaveLength(0)
+  })
+
+  test("a slab house's exterior walls carry the slab edge and stem to grade in concrete, no rim", () => {
+    const built = buildHouse(POPPY)
+    const exterior = (ofType(built.ops, 'wall') as N[]).filter((w) => w.name === 'Exterior wall')
+    expect(exterior.length).toBeGreaterThan(0)
+    for (const w of exterior) {
+      // 8 in over grade plus 6 in into it
+      expect(w.underpinning.rim).toBe(0)
+      expect(w.underpinning.stem).toBeCloseTo(14 * 0.0254, 4)
+      expect(w.fillToTerrain).toBe(true)
+    }
+  })
+
+  test('a rear slider opens onto the yard and gets its own entrance: a deck on the raised farmhouse, a patio on the slab Poppy', () => {
+    const farm = buildHouse(
+      rollDocument(1499472249, { style: 'farmhouse', beds: 3, baths: 2, garage: true }).document,
+    )
+    const slider = ofType(farm.ops, 'door').find((d) => /slider|Rear door/.test((d as N).name)) as N
+    expect(slider).toBeDefined()
+    if (/slider/.test(slider.name)) {
+      expect(slider.doorType).toBe('sliding')
+      expect(slider.width).toBeCloseTo(72 * 0.0254, 9)
+    } else {
+      expect(slider.doorType).toBe('hinged')
+    }
+    expect(farm.rear?.policy).toBe('deck')
+    expect(farm.rear?.landing).toBe('wood')
+    expect(farm.porch?.landing).toBe('wood')
+    expect((ofType(farm.ops, 'slab') as N[]).map((s) => s.name)).toContain('Rear deck')
+    // the Poppy is a modern (porch 'none') on a slab: a bare concrete landing at the rear door
+    const poppy = buildHouse(POPPY)
+    expect(poppy.rear?.policy).toBe('landing')
+    expect(poppy.rear?.landing).toBe('concrete')
+  })
+
+  test('the Poppy (24 ft wide) is a slab house at 8 in, one slab, no garage slab', () => {
+    const built = buildHouse(POPPY)
+    expect(built.foundation?.type).toBe('slab')
+    expect(built.foundation?.ffAboveGradeIn).toBe(8)
+    expect((ofType(built.ops, 'slab') as N[]).map((s) => s.name)).toEqual([
+      'Slab on grade',
+      'Porch',
+      'Rear landing',
+    ])
+  })
+
+  test('placed on a parcel: square to the street, at the front setback, attached to the site', () => {
+    // A 60 × 100 ft lot whose street edge runs along +x at z = 0; envelope inset 25/7/20.
+    const envelope: [number, number][] = [
+      [2.1336, 7.62],
+      [18.288 - 2.1336, 7.62],
+      [18.288 - 2.1336, 30.48 - 6.096],
+      [2.1336, 30.48 - 6.096],
+    ]
+    const placed = buildHouse(POPPY, { placement: { siteId: 'site_x', envelope, frontEdge: 0 } })
+    expect(placed.ok).toBe(true)
+    const building = ofType(placed.ops, 'building')[0] as N
+    expect(building.parentId).toBe('site_x')
+    // Front face (local −z) toward −z world: yaw 0; the house centre sits its half-depth behind the setback line.
+    expect(Math.abs(building.rotation[1])).toBeLessThan(1e-6)
+    expect(building.position[2]).toBeCloseTo(7.62 + (33 * 0.3048) / 2 + 0.0913, 1)
+    expect(building.position[0]).toBeCloseTo(18.288 / 2, 3)
+  })
+})
+
+describe('a tight lot (2026-09-09): the porches stay inside the setbacks', () => {
+  // the 46 × 73 ft rectangle again, but the caller measured no room beside the house
+  const envelope: [number, number][] = [
+    [2.1336, 7.62],
+    [18.288 - 2.1336, 7.62],
+    [18.288 - 2.1336, 30.48 - 6.096],
+    [2.1336, 30.48 - 6.096],
+  ]
+  test('with no side room the rear door takes the back wall, never a side slider; every porch slab is inside', () => {
+    const tight = buildHouse(POPPY, { placement: { siteId: 'site_x', envelope, frontEdge: 0, lateralOffsetM: 0, sideRoomM: 0.3 } })
+    expect(tight.ok).toBe(true)
+    // a rolled plan carries a laundry on the back wall: with no side room the
+    // hinged rear door there beats the social rooms' side slider
+    const rolled = rollDocument(1499472249, { style: 'farmhouse', beds: 3, baths: 2, garage: false }).document
+    const roomy = buildHouse(rolled, { placement: { siteId: 'site_x', envelope, frontEdge: 0, sideRoomM: 5 } })
+    const tightRolled = buildHouse(rolled, { placement: { siteId: 'site_x', envelope, frontEdge: 0, sideRoomM: 0.3 } })
+    const namesOf = (r: ReturnType<typeof buildHouse>) => (ofType(r.ops, 'door') as N[]).map((d) => String(d.name))
+    expect(namesOf(roomy).some((n) => /Side slider/.test(n))).toBe(true)
+    expect(namesOf(tightRolled).some((n) => /Side slider/.test(n))).toBe(false)
+    expect(namesOf(tightRolled).some((n) => /Rear door/.test(n))).toBe(true)
+    const building = ofType(tight.ops, 'building')[0] as N
+    const yaw = building.rotation[1] as number
+    const toSite = (x: number, z: number): [number, number] => [
+      (building.position[0] as number) + x * Math.cos(yaw) + z * Math.sin(yaw),
+      (building.position[2] as number) - x * Math.sin(yaw) + z * Math.cos(yaw),
+    ]
+    for (const slab of ofType(tight.ops, 'slab') as N[]) {
+      if (!/porch|patio|landing|deck/i.test(String(slab.name))) continue
+      if (/^Porch$/i.test(String(slab.name))) continue // the front porch may encroach the front yard
+      for (const [x, z] of slab.polygon as [number, number][]) {
+        const [sx, sz] = toSite(x, z)
+        expect(pointInRing(envelope, sx, sz)).toBe(true)
+      }
+    }
+  })
+  test('the band centre moves the house along the street edge', () => {
+    const left = buildHouse(POPPY, { placement: { siteId: 'site_x', envelope, frontEdge: 0, lateralOffsetM: -1.5 } })
+    const mid = buildHouse(POPPY, { placement: { siteId: 'site_x', envelope, frontEdge: 0 } })
+    const bl = ofType(left.ops, 'building')[0] as N
+    const bm = ofType(mid.ops, 'building')[0] as N
+    expect((bl.position[0] as number) - (bm.position[0] as number)).toBeCloseTo(-1.5, 6)
+    expect(bl.position[2]).toBeCloseTo(bm.position[2] as number, 6)
+  })
+})
+
+describe('on a hill (the site carries a USGS heightfield → gradeAt)', () => {
+  const doc = rollDocument(1499472249, {
+    style: 'farmhouse',
+    beds: 3,
+    baths: 2,
+    garage: true,
+  }).document
+  const IN = 0.0254
+  const buildingOf = (r: ReturnType<typeof buildHouse>) => ofType(r.ops, 'building')[0] as N
+  const garageSlabOf = (r: ReturnType<typeof buildHouse>) =>
+    (ofType(r.ops, 'slab') as N[]).find((s) => s.name === 'Garage slab') as N
+
+  test('flat ground read from a heightfield matches no heightfield at all', () => {
+    const flat = buildHouse(doc, { gradeAt: () => 0 })
+    const none = buildHouse(doc)
+    expect(flat.foundation?.type).toBe(none.foundation?.type)
+    expect(flat.foundation?.ffAboveGradeIn).toBe(none.foundation?.ffAboveGradeIn)
+    expect(flat.foundation?.terrain?.reliefIn).toBe(0)
+    expect(buildingOf(flat).position[1]).toBeCloseTo(buildingOf(none).position[1], 9)
+    expect(garageSlabOf(flat).elevation).toBeCloseTo(garageSlabOf(none).elevation, 9)
+  })
+
+  test('a gentle slope raises the house on a stem sized to the fall, standing on the high side', () => {
+    // 4 % up towards +x: the garage wing (to the right, +x) is uphill — over
+    // two feet of fall under the footprint, past the built-up-pad band
+    const r = buildHouse(doc, { gradeAt: (x) => 0.04 * x })
+    const f = r.foundation!
+    expect(f.type).toBe('raised')
+    expect(f.terrain).toBeDefined()
+    expect(f.terrain!.reliefIn).toBeGreaterThanOrEqual(24)
+    expect(f.ffAboveGradeIn).toBeGreaterThanOrEqual(24)
+    expect(f.ffAboveGradeIn).toBeLessThanOrEqual(36)
+    expect(f.source).toContain('hillside')
+    // the finish floor stands ff above the HIGHEST grade under the footprint
+    expect(buildingOf(r).position[1]).toBeCloseTo(f.terrain!.highestM + f.ffAboveGradeIn * IN, 3)
+    // the garage pad sits at its own grade: the datum is the HIGHEST point of the
+    // whole footprint, so the drop is never less than the stem — and an uphill
+    // garage (this slope) drops far less than a downhill one
+    const g = garageSlabOf(r)
+    expect(g.metadata.dropIn).toBeGreaterThanOrEqual(f.ffAboveGradeIn)
+    // (the grade is read 1 m out from the overhead door, the slab top 1 in over it)
+    expect(g.metadata.dropIn).toBeLessThan(f.ffAboveGradeIn + 8)
+    const downhill = garageSlabOf(buildHouse(doc, { gradeAt: (x) => -0.04 * x }))
+    // downhill drops further, to the 48 in ceiling
+    expect(downhill.metadata.dropIn).toBeGreaterThan(g.metadata.dropIn)
+    expect(downhill.metadata.dropIn).toBeLessThanOrEqual(48)
+    expect(g.elevation).toBeCloseTo(0.05 - g.metadata.dropIn * IN, 2)
+    expect(r.warnings.some((w) => /hillside/.test(w))).toBe(true)
+  })
+
+  test('a slope falling towards the garage drops the pad further, never past 48 in', () => {
+    const r = buildHouse(doc, { gradeAt: (x) => -0.02 * x })
+    const g = garageSlabOf(r)
+    expect(g.metadata.dropIn).toBeGreaterThan(r.foundation!.ffAboveGradeIn)
+    expect(g.metadata.dropIn).toBeLessThanOrEqual(48)
+    const steep = buildHouse(doc, { gradeAt: (x) => -0.1 * x })
+    expect(garageSlabOf(steep).metadata.dropIn).toBe(48)
+  })
+
+  test('over 30 in of fall is basement territory: a 36 in stem, said honestly, and longer flights at the entrances', () => {
+    const r = buildHouse(doc, { gradeAt: (_x, z) => 0.06 * z })
+    const f = r.foundation!
+    expect(f.ffAboveGradeIn).toBe(36)
+    expect(f.source).toContain('basement')
+    // the front (−z) is downhill of the house datum: the porch flight rises the full stem and the fall to the landing
+    expect(r.porch?.risers ?? 0).toBeGreaterThan(Math.ceil(36 / 7.75))
+  })
+})
+
+describe('wall roles (W8 — assemblies by what the wall is)', () => {
+  const doc = rollDocument(1499472249, {
+    style: 'farmhouse',
+    beds: 3,
+    baths: 2,
+    garage: true,
+  }).document
+  const built = buildHouse(doc)
+  const walls = ofType(built.ops, 'wall') as N[]
+
+  test('exterior by style, the garage separation a 2x6 on the exterior line, every other partition 2x4 (no plumbing-wall jogs)', () => {
+    const roles = new Set(walls.map((w) => w.metadata.role))
+    expect(roles.has('exterior')).toBe(true)
+    expect(roles.has('garage-separation')).toBe(true)
+    expect(roles.has('plumbing')).toBe(false)
+    expect(roles.has('partition')).toBe(true)
+    for (const w of walls) {
+      if (w.metadata.role === 'exterior') expect(w.assembly.preset).toBe('exterior-2x6-siding')
+      if (w.metadata.role === 'partition') {
+        expect(w.assembly.preset).toBe('interior-2x4-drywall')
+        expect(w.metadata.wallType).toBe('int2x4')
+      }
+      if (w.metadata.role === 'garage-separation') {
+        expect(w.assembly.preset).toBe('interior-2x6-plumbing')
+        expect(w.metadata.wallType).toBe('int2x6')
+        expect(w.thickness).toBeGreaterThan(0.15)
+        expect(w.metadata.fireSeparation).toBe('IRC Table R302.6')
+        expect(w.metadata.rooms).toContain('GARAGE')
+      }
+      if (w.metadata.role === 'partition') expect(w.metadata.wallType).toBe('int2x4')
+    }
+  })
+
+  test('the door from the garage into the house is the rated, self-closing one', () => {
+    const doors = ofType(built.ops, 'door') as N[]
+    const rated = doors.filter((d) => d.metadata.fireRated)
+    expect(rated).toHaveLength(1)
+    expect(rated[0]!.name).toContain('GARAGE')
+    expect(rated[0]!.name).toContain('20-min rated')
+    expect(rated[0]!.metadata.fireRated).toContain('R302.5.1')
+    expect(rated[0]!.doorType).toBe('hinged')
+  })
+})

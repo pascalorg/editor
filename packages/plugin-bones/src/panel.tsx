@@ -1,0 +1,1232 @@
+'use client'
+
+import { type AnyNode, type AnyNodeId, emitter, useScene } from '@pascal-app/core'
+import { DEFAULT_SPEC } from './core/spec'
+import { roofShellThickness } from './core/shell-sync'
+import { SegmentedControl, SliderControl, useEditor } from '@pascal-app/editor'
+import { useViewer } from '@pascal-app/viewer'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  activateXray,
+  removeXray,
+  type SceneLike,
+  setXrayViewMode,
+  type ViewerLike,
+} from './activation'
+import { characteristicsCsv, characteristicsRows } from './engines/characteristics'
+import { computeTakeoff, cutList, cutListCsv, SECTION_SYSTEMS, takeoffCsv } from './engines/takeoff'
+import { framePose, type HighlightSpec, levelToWorld, matchesHighlight, membersBounds, serviceHighlight } from './framing/highlight'
+import { SERVICE_LABEL } from './service/schema'
+import { computeLevel } from './framing/compute'
+import { effectiveViewMode, type FramingNode, type ViewMode } from './framing/schema'
+import { guessJurisdiction, siteStateOf } from './jurisdiction/guess'
+import { jurisdictionOptions, profileFor } from './jurisdiction/profiles'
+import { LUMBER_CROSS_SECTIONS, LUMBER_SIZES, type LumberSize } from './lumber'
+import {
+  type FramingSystemValue,
+  framingSystemPatch,
+  framingSystemValue,
+  LGS_MACHINE_NONE,
+  LGS_MACHINE_NONE_LABEL,
+  lgsMachineGroups,
+  lgsMachinePatch,
+  lgsMachineSelectExtra,
+  type RafterSpacingValue,
+  type RoofStockValue,
+  type RoofSystemValue,
+  RAFTER_SPACING_OPTIONS,
+  rafterSpacingPatch,
+  rafterSpacingValue,
+  ROOF_STOCK_OPTIONS,
+  roofStockPatch,
+  roofStockValue,
+  roofSystemPatch,
+  roofSystemValue,
+  SERVICE_CONTROLS,
+  serviceControlPatch,
+  serviceControlValue,
+  type ShedCeilingValue,
+  POST_PAD_OPTIONS,
+  postPadPatch,
+  postPadValue,
+  shedCeilingPatch,
+  shedCeilingValue, type ExteriorWallsValue, exteriorWallsPatch, exteriorWallsValue } from './panel-framing'
+import { groupWarnings, warningCount } from './panel-warnings'
+import { useBonesStore } from './store'
+
+const LUMBER_KIND: string = 'bones:lumber'
+const FRAMING_KIND: string = 'bones:framing'
+
+const setPluginTool = (tool: string) => {
+  const setTool = useEditor.getState().setTool as (value: string) => void
+  setTool(tool)
+}
+
+const METERS_PER_INCH = 0.0254
+const inchesLabel = (m: number) => `${(m / METERS_PER_INCH).toFixed(2).replace(/\.?0+$/, '')}"`
+
+/**
+ * The Bones panel — the control room for the engineering X-ray. One click
+ * derives the construction inside the current level (framing, foundation,
+ * electrical…) from the model and renders it in 3D; everything below tunes
+ * the derivation. Loose lumber placement lives at the bottom.
+ */
+export default function BonesPanel() {
+  const activeLevelId = useViewer((s) => s.selection.levelId)
+  const framingNode = useScene((s) => {
+    if (!activeLevelId) return undefined
+    return Object.values(s.nodes).find(
+      (n) => (n.type as string) === FRAMING_KIND && n.parentId === activeLevelId,
+    ) as (FramingNode & { id: string }) | undefined
+  })
+  // ONE derivation per scene edit, shared by the X-Ray status line and the
+  // takeoff — the renderer runs its own (also once). Reviewer advisory r1.
+  const nodes = useScene((s) => s.nodes)
+  const result = useMemo(() => {
+    if (!framingNode) return null
+    return computeLevel(nodes as Record<string, Record<string, unknown>>, framingNode)
+  }, [nodes, framingNode])
+
+  return (
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-y-auto p-4 text-sidebar-foreground">
+      <header className="flex flex-col gap-1">
+        <div className="flex items-center gap-2">
+          <h2 className="font-semibold text-base">Bones</h2>
+          <span className="rounded-full border border-sidebar-border/60 bg-sidebar-accent px-1.5 py-px font-semibold text-[9px] text-sidebar-foreground/70 uppercase tracking-widest">
+            Alpha
+          </span>
+        </div>
+        <p className="text-sidebar-foreground/50 text-xs leading-relaxed">
+          The engineering X-ray — see the construction inside the model: framing, foundation,
+          wiring. Computed from your walls, sized to your jurisdiction.
+        </p>
+      </header>
+
+      {/* Per-wall engineering lives ONLY on the floating inspector card
+          (the plugin's wall Engineering extension) — the sidebar mirror
+          cluttered the rail (user round 2026-08-20). Service points place
+          themselves at activation; no button (same round). */}
+      <XraySection
+        activeLevelId={activeLevelId ?? null}
+        framingNode={framingNode}
+        result={result}
+      />
+
+      {framingNode && result && <SelectionSection result={result} levelId={activeLevelId ?? null} />}
+      {framingNode && result && <PlacedPointsSection result={result} levelId={activeLevelId ?? null} />}
+      {framingNode && result && <TakeoffSection result={result} levelId={activeLevelId ?? null} />}
+      {framingNode && result && <CharacteristicsSection result={result} />}
+
+      <LumberSection />
+
+      <footer className="-mx-4 -mb-4 mt-1 flex flex-col gap-2 border-sidebar-border/50 border-t bg-sidebar px-4 py-3 text-[11px] text-sidebar-foreground/50 leading-relaxed">
+        <span>Drafting aid, not engineering — verify with your local building department.</span>
+      </footer>
+    </div>
+  )
+}
+
+function XraySection({
+  activeLevelId,
+  framingNode,
+  result,
+}: {
+  activeLevelId: string | null
+  framingNode: (FramingNode & { id: string }) | undefined
+  result: ReturnType<typeof computeLevel> | null
+}) {
+  // Client-only guess: the timezone differs between SSR and browser, which
+  // would desync hydration — render a stable label first, fill in on mount.
+  const [guess, setGuess] = useState<{ code: string; reason: string } | null>(null)
+  const siteState = useScene((s) => siteStateOf(s.nodes as Record<string, unknown>))
+  useEffect(() => setGuess(guessJurisdiction(undefined, siteState)), [siteState])
+  const options = useMemo(() => jurisdictionOptions(), [])
+  // Day-9 declutter: warnings fold into a collapsed drawer, repeated-class
+  // lines grouped — PANEL presentation only; result.warnings stays verbatim
+  // (the plan-set Flags block prints every line, always).
+  const warningLines = useMemo(() => groupWarnings(result?.warnings ?? []), [result])
+
+  const toggle = (key: keyof FramingNode) => {
+    if (!framingNode) return
+    useScene.getState().updateNode(
+      framingNode.id as AnyNodeId,
+      {
+        [key]: !framingNode[key],
+      } as Partial<AnyNode> as never,
+    )
+  }
+
+  if (!activeLevelId) {
+    return <p className="text-sidebar-foreground/50 text-xs">Select a level to X-ray.</p>
+  }
+
+  if (!framingNode) {
+    // The mode row IS the front door (Steve, 2026-09-09): picking X-ray,
+    // Subfloor or Framing derives the level's framing, foundation and
+    // systems and opens that view — one click, one undo entry (the
+    // framing node + every service point, walls to Low once). The controls
+    // that tune the derivation appear with it.
+    return (
+      <div className="flex flex-col gap-2">
+        <span className="font-medium text-sm">X-Ray this level</span>
+        <SegmentedControl
+          onChange={(v: string) => {
+            if (v === 'off') return
+            activateXray(
+              useScene as unknown as SceneLike,
+              activeLevelId,
+              useViewer as unknown as ViewerLike,
+              v as Exclude<ViewMode, 'off'>,
+            )
+          }}
+          options={[
+            { label: 'Normal', value: 'off' },
+            { label: 'X-ray', value: 'xray' },
+            { label: 'Subfloor', value: 'basement' },
+            { label: 'Framing', value: 'framing' },
+          ]}
+          value="off"
+        />
+        <span className="text-sidebar-foreground/50 text-xs leading-relaxed">
+          Pick a view to derive the framing, foundation and systems from the model — X-ray shows
+          them inside the walls, Subfloor the floor below, Framing the bare structure. The
+          jurisdiction, wall, roof and service settings appear with it.
+        </span>
+      </div>
+    )
+  }
+
+  const effectiveCode = result?.jurisdiction ?? 'INTL'
+  const profile = profileFor(effectiveCode)
+  const viewMode = effectiveViewMode(framingNode)
+  const viewLabel =
+    viewMode === 'framing'
+      ? 'Framing view'
+      : viewMode === 'basement'
+        ? 'Subfloor view'
+        : viewMode === 'xray'
+          ? 'X-ray view'
+          : 'Derived — view off'
+
+  return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <span className="font-medium text-sm">{viewLabel}</span>
+        <button
+          title="Delete the derived framing, foundation and services for this level"
+          aria-label="Remove the derivation"
+          className="rounded-md border border-sidebar-border/60 px-2 py-1 text-sidebar-foreground/70 text-xs transition-colors hover:bg-sidebar-accent"
+          onClick={() =>
+            // Deactivation mirror of the create click: framing node + the
+            // level's auto-managed service/device nodes in one undo entry,
+            // walls restored to the pre-X-ray mode.
+            removeXray(
+              useScene as unknown as SceneLike,
+              framingNode.id as string,
+              activeLevelId,
+              useViewer as unknown as ViewerLike,
+            )
+          }
+          type="button"
+        >
+          Remove
+        </button>
+      </div>
+
+      {/* OFF / X-RAY / SUBFLOOR — the control IS the switch: off↔on flips
+          also drive the host wall mode (Low on, restore off); between the
+          two active modes walls stay where the user put them. Label reads
+          "Subfloor" (day-9: on upper storeys it's the floor framing below
+          THIS storey, not a basement) — the persisted schema value stays
+          'basement'; do NOT migrate it. */}
+      <SegmentedControl
+        onChange={(v: string) =>
+          setXrayViewMode(
+            useScene as unknown as SceneLike,
+            framingNode,
+            v as ViewMode,
+            useViewer as unknown as ViewerLike,
+          )
+        }
+        options={[
+          { label: 'Normal', value: 'off' },
+          { label: 'X-ray', value: 'xray' },
+          { label: 'Subfloor', value: 'basement' },
+          { label: 'Framing', value: 'framing' },
+        ]}
+        value={viewMode}
+      />
+
+      <JurisdictionPicker
+        framingNodeId={framingNode.id as AnyNodeId}
+        value={framingNode.jurisdiction}
+        guess={guess}
+        options={options}
+        codeName={profile.residentialCode}
+        notes={profile.notes}
+      />
+
+      <FramingRow framingNode={framingNode} />
+
+      <RoofRow framingNode={framingNode} />
+      <ServicesRow framingNode={framingNode} />
+
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <SegmentedControl
+            onChange={(v: string) =>
+              useScene
+                .getState()
+                .updateNode(framingNode.id as AnyNodeId, { detail: v } as Partial<AnyNode> as never)
+            }
+            options={[
+              { label: 'Generic', value: '200' },
+              { label: 'Code', value: '300' },
+              { label: 'Fab', value: '400' },
+            ]}
+            value={framingNode.detail}
+          />
+        </div>
+        <div className="w-28">
+          <SegmentedControl
+            onChange={(v: string) =>
+              useScene.getState().updateNode(
+                framingNode.id as AnyNodeId,
+                {
+                  studSpacingIn: Number(v) as 12 | 16 | 24,
+                } as Partial<AnyNode> as never,
+              )
+            }
+            options={[
+              { label: '12', value: '12' },
+              { label: '16', value: '16' },
+              { label: '24', value: '24' },
+            ]}
+            value={String(framingNode.studSpacingIn)}
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-1.5">
+        {(
+          [
+            ['showWalls', 'Wall framing'],
+            ['showFloor', 'Floor'],
+            ['showRoof', 'Roof'],
+            ['showFoundation', 'Foundation'],
+            ['showElectrical', 'Electrical'],
+            ['showPlumbing', 'Plumbing'],
+            ['showHvac', 'HVAC'],
+          ] as const
+        ).map(([key, label]) => (
+          <button
+            className={`rounded-md border px-2 py-1.5 text-left text-xs transition-colors ${
+              framingNode[key]
+                ? 'border-sidebar-ring bg-sidebar-accent text-sidebar-foreground'
+                : 'border-sidebar-border/60 bg-sidebar-accent/30 text-sidebar-foreground/60 hover:bg-sidebar-accent/60'
+            }`}
+            key={key}
+            onClick={() => toggle(key)}
+            type="button"
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {result && (
+        <div className="flex flex-col gap-1 text-[11px] text-sidebar-foreground/50">
+          {/* the compact summary stays always visible — only the warning
+              text folds away (day-9: "we cannot have so much text on the
+              sidebar") */}
+          <span>
+            {result.members.length} members · {result.fixtures.length} devices
+          </span>
+          {warningLines.length > 0 && (
+            <details className="group">
+              <summary className="flex cursor-pointer items-center justify-between text-[11px]">
+                <span className="font-medium text-amber-500/90">Warnings</span>
+                <span className="text-[10px] text-sidebar-foreground/40">
+                  {warningCount(warningLines)}
+                </span>
+              </summary>
+              <div className="mt-0.5 flex flex-col gap-0.5 pl-1">
+                {warningLines.map((line) =>
+                  line.kind === 'single' ? (
+                    <span className="block text-amber-500/80" key={line.text}>
+                      {line.text}
+                    </span>
+                  ) : (
+                    <details key={line.message}>
+                      <summary className="cursor-pointer text-amber-500/80">
+                        {line.label} ({line.warnings.length}): {line.message}
+                      </summary>
+                      <div className="mt-0.5 flex flex-col gap-0.5 pl-2">
+                        {line.warnings.map((warning) => (
+                          <span className="block text-amber-500/60" key={warning}>
+                            {warning}
+                          </span>
+                        ))}
+                      </div>
+                    </details>
+                  ),
+                )}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The service types whose members a placed point owns — for the selection and the placed-points rows. */
+function serviceSpec(serviceType: string, label: string): HighlightSpec {
+  return { label, ...serviceHighlight(serviceType) }
+}
+
+/**
+ * THE SELECTION, LIVE. Whatever the user picked in the scene — a wall, a
+ * placed service point, a device — the engineering Bones derived for it:
+ * the member census by role, the equipment labels and their notes, and a
+ * Show button that paints the set and goes to it (Steve, 2026-09-09: "bones
+ * isnt live when i click the item").
+ */
+function SelectionSection({
+  result,
+  levelId,
+}: {
+  result: NonNullable<ReturnType<typeof computeLevel>>
+  levelId: string | null
+}) {
+  const selectedIds = useViewer((s) => s.selection.selectedIds)
+  const nodes = useScene((s) => s.nodes) as Record<string, Record<string, unknown> | undefined>
+  const picks = useMemo(() => {
+    const out: { id: string; name: string; spec: HighlightSpec; equipment: string[]; notes: string[]; census: [string, number][] }[] = []
+    for (const id of selectedIds ?? []) {
+      const node = nodes[id as string]
+      if (!node) continue
+      const type = String(node.type ?? '')
+      let spec: HighlightSpec | null = null
+      let name = String(node.name ?? type)
+      if (type === 'wall' || type === 'roof-segment' || type === 'slab') {
+        spec = { label: name, sourceIds: [String(id)] }
+      } else if (type === 'bones:service') {
+        const serviceType = String(node.serviceType ?? '')
+        name = SERVICE_LABEL[serviceType as keyof typeof SERVICE_LABEL] ?? serviceType
+        spec = serviceSpec(serviceType, name)
+      } else if (type === 'bones:device') {
+        const fx = result.fixtures.find((f) => f.meta?.deviceId === id)
+        if (!fx) continue
+        name = fx.label ?? String(node.name ?? 'Device')
+        spec = { label: name, sourceIds: [fx.sourceId] }
+      }
+      if (!spec) continue
+      const members = result.members.filter((m) => matchesHighlight(m, spec as HighlightSpec))
+      const byRole = new Map<string, number>()
+      for (const m of members) byRole.set(m.role, (byRole.get(m.role) ?? 0) + 1)
+      const census = [...byRole.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6)
+      const equipment = members
+        .filter((m) => m.role === 'water-heater' || m.role === 'equipment' || m.role === 'post')
+        .map((m) => (m.label ?? m.sourceId).split(/ — /)[0] as string)
+      const notes: string[] = []
+      for (const f of result.fixtures) {
+        if (type === 'bones:service' && f.kind === (String(node.serviceType) === 'power-entry' ? 'electric-meter' : String(node.serviceType))) {
+          const n = f.meta?.notes
+          if (typeof n === 'string') notes.push(...n.split(' | '))
+          if (f.label) notes.unshift(f.label)
+        }
+      }
+      out.push({ id: String(id), name, spec, equipment: [...new Set(equipment)].slice(0, 6), notes: notes.slice(0, 6), census })
+    }
+    return out
+  }, [selectedIds, nodes, result])
+  if (picks.length === 0) {
+    return (
+      <div className="flex flex-col gap-1 text-xs">
+        <span className="font-medium text-sm">Selection</span>
+        <span className="text-sidebar-foreground/50">
+          Select a wall, a service point or a device in the scene to see what Bones derived for it.
+        </span>
+      </div>
+    )
+  }
+  return (
+    <div className="flex flex-col gap-2 text-xs">
+      <span className="font-medium text-sm">Selection</span>
+      {picks.map((p) => (
+        <div className="flex flex-col gap-1 rounded-md border border-sidebar-border/60 p-2" key={p.id}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate font-medium">{p.name}</span>
+            <button
+              className="shrink-0 rounded border border-sidebar-border/60 px-1.5 py-px text-[10px] text-sidebar-foreground/70 hover:bg-sidebar-accent"
+              onClick={() => showInScene(p.spec, result, levelId)}
+              type="button"
+            >
+              Show in 3D
+            </button>
+          </div>
+          {p.census.length > 0 ? (
+            <span className="text-[11px] text-sidebar-foreground/60">
+              {p.census.map(([role, n]) => `${n} ${role}`).join(' · ')}
+            </span>
+          ) : (
+            <span className="text-[11px] text-sidebar-foreground/50">No members derived for it on this level.</span>
+          )}
+          {p.equipment.map((e) => (
+            <span className="text-[11px] text-sidebar-foreground/70" key={e}>
+              {e}
+            </span>
+          ))}
+          {p.notes.map((n) => (
+            <span className="text-[10px] text-sidebar-foreground/50 leading-snug" key={n}>
+              {n}
+            </span>
+          ))}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/**
+ * THE PLACED POINTS — the "manual" state. Every service point on the level is
+ * a node the user can drag; the engines take it verbatim and route to it.
+ * Here they are listed with Show (paint + go) and Reset (delete the point:
+ * the engine places that service itself again) — so what was moved is
+ * visible and undoable, not a hidden override (Steve, 2026-09-09: "if
+ * someone changes something it changes it to manual maybe").
+ */
+function PlacedPointsSection({
+  result,
+  levelId,
+}: {
+  result: NonNullable<ReturnType<typeof computeLevel>>
+  levelId: string | null
+}) {
+  const nodes = useScene((s) => s.nodes) as Record<string, Record<string, unknown> | undefined>
+  const points = useMemo(() => {
+    const out: { id: string; serviceType: string; label: string; where: string }[] = []
+    for (const node of Object.values(nodes)) {
+      if (!node || node.type !== 'bones:service') continue
+      if (levelId && node.parentId !== levelId && node.levelId !== levelId) continue
+      const serviceType = String(node.serviceType ?? '')
+      const label = SERVICE_LABEL[serviceType as keyof typeof SERVICE_LABEL] ?? serviceType
+      const wallId = typeof node.wallId === 'string' ? node.wallId : null
+      const wall = wallId ? nodes[wallId] : undefined
+      const t = typeof node.wallT === 'number' ? node.wallT : null
+      const where = wall
+        ? `on ${String(wall.name ?? 'a wall')}${t !== null ? ` at ${Math.round(t * 100)} %` : ''}`
+        : Array.isArray(node.position)
+          ? `at ${(node.position as number[]).map((v) => v.toFixed(1)).join(', ')}`
+          : ''
+      out.push({ id: String(node.id), serviceType, label, where })
+    }
+    return out.sort((a, b) => a.label.localeCompare(b.label))
+  }, [nodes, levelId])
+  if (points.length === 0) return null
+  return (
+    <details className="group text-xs">
+      <summary className="flex cursor-pointer items-center justify-between font-medium text-xs">
+        Placed points
+        <span className="text-[10px] text-sidebar-foreground/40">{points.length}</span>
+      </summary>
+      <span className="text-[10px] text-sidebar-foreground/50 leading-snug">
+        Drag a point in the scene to move its service; the engines route to it. Reset deletes the point and the engine places it again.
+      </span>
+      <div className="mt-1 flex flex-col gap-0.5">
+        {points.map((p) => (
+          <div className="flex items-center justify-between gap-2 text-[11px]" key={p.id}>
+            <span className="min-w-0 truncate text-sidebar-foreground/80" title={p.where}>
+              {p.label} <span className="text-sidebar-foreground/40">{p.where}</span>
+            </span>
+            <span className="flex shrink-0 items-center gap-1">
+              <button
+                className="rounded border border-sidebar-border/60 px-1.5 py-px text-[10px] text-sidebar-foreground/70 hover:bg-sidebar-accent"
+                onClick={() => showInScene(serviceSpec(p.serviceType, p.label), result, levelId)}
+                type="button"
+              >
+                Show
+              </button>
+              <button
+                className="rounded border border-sidebar-border/60 px-1.5 py-px text-[10px] text-sidebar-foreground/70 hover:bg-sidebar-accent"
+                onClick={() =>
+                  (useScene.getState() as unknown as { applyNodeChanges: (c: { delete: string[] }) => void }).applyNodeChanges({ delete: [p.id] })
+                }
+                title="Delete the placed point — the engine places this service itself again"
+                type="button"
+              >
+                Reset
+              </button>
+            </span>
+          </div>
+        ))}
+      </div>
+    </details>
+  )
+}
+
+/**
+ * SHOW IT IN THE SCENE. The X-ray meshes never take the host's raycast, so
+ * Bones and the scene meet from the panel's side: a takeoff section, a
+ * lumber row, a placed service point or the selected wall names a member
+ * set; the renderer paints it orange (framing/highlight.ts) and the camera
+ * goes to it (Steve, 2026-09-09: "when i click things in bones it doesnt
+ * show up in the scene").
+ */
+function showInScene(
+  spec: HighlightSpec,
+  result: NonNullable<ReturnType<typeof computeLevel>>,
+  levelId: string | null,
+): void {
+  useBonesStore.getState().setHighlight(spec)
+  const members = result.members.filter((m) => matchesHighlight(m, spec))
+  const bounds = membersBounds(members)
+  if (!bounds || !levelId) return
+  const toWorld = levelToWorld(useScene.getState().nodes as Record<string, Record<string, unknown>>, levelId)
+  // the eye stands toward the house's centre (the walls' box), so a tank on a
+  // garage wall is seen from inside the garage and the pole from the yard
+  let sx = 0
+  let sz = 0
+  let n = 0
+  for (const w of result.walls) {
+    sx += w.start[0] + w.end[0]
+    sz += w.start[1] + w.end[1]
+    n += 2
+  }
+  const pose = framePose(bounds, toWorld, n > 0 ? [sx / n, sz / n] : undefined)
+  emitter.emit('camera-controls:apply-pose', { position: pose.position, target: pose.target, projection: 'perspective', fov: 60 } as never)
+  emitter.emit('camera:go-to-position', { position: pose.position, target: pose.target })
+}
+
+/** The "Showing … · Clear" chip the sections share. */
+function HighlightChip() {
+  const highlight = useBonesStore((s) => s.highlight)
+  const setHighlight = useBonesStore((s) => s.setHighlight)
+  if (!highlight) return null
+  return (
+    <div className="flex items-center justify-between rounded-md border border-orange-500/50 bg-orange-500/10 px-2 py-1 text-[11px]">
+      <span className="min-w-0 truncate">
+        Showing <span className="font-medium">{highlight.label}</span> in the scene
+      </span>
+      <button
+        className="shrink-0 rounded px-1.5 py-0.5 text-sidebar-foreground/70 hover:bg-sidebar-accent"
+        onClick={() => setHighlight(null)}
+        type="button"
+      >
+        Clear
+      </button>
+    </div>
+  )
+}
+
+function TakeoffSection({ result, levelId }: { result: NonNullable<ReturnType<typeof computeLevel>>; levelId: string | null }) {
+  const rows = useMemo(
+    () => computeTakeoff(result.members, result.fixtures, result.areas),
+    [result],
+  )
+
+  // Group by section (the takeoff engine's `section` field; tolerate rows
+  // that predate it). FLAG rows always surface in their own group on top.
+  const sections = useMemo(() => {
+    const bySection = new Map<string, typeof rows>()
+    for (const row of rows) {
+      const section = ((row as { section?: string }).section ?? 'Takeoff') as string
+      const bucket = bySection.get(section)
+      if (bucket) bucket.push(row)
+      else bySection.set(section, [row])
+    }
+    const entries = [...bySection.entries()]
+    entries.sort(([a], [b]) => (a === 'Flags' ? -1 : b === 'Flags' ? 1 : 0))
+    return entries
+  }, [rows])
+
+  if (rows.length === 0) return null
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-center justify-between">
+        <span className="font-medium text-xs">Takeoff</span>
+        <div className="flex items-center gap-1">
+          <button
+            className="rounded-md border border-sidebar-border/60 px-2 py-0.5 text-[10px] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent"
+            onClick={() => navigator.clipboard?.writeText(takeoffCsv(rows))}
+            type="button"
+          >
+            Copy CSV
+          </button>
+          <button
+            className="rounded-md border border-sidebar-border/60 px-2 py-0.5 text-[10px] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent"
+            onClick={() => navigator.clipboard?.writeText(cutListCsv(cutList(result.members)))}
+            title="Every wood member: size × exact cut length × qty"
+            type="button"
+          >
+            Copy cut list
+          </button>
+        </div>
+      </div>
+      <HighlightChip />
+      <div className="flex max-h-80 flex-col gap-1 overflow-y-auto pr-1">
+        {/* Flags sort first but start COLLAPSED (day-9 declutter) — the
+            count badge keeps them visible; paper still prints them all. */}
+        {sections.map(([section, sectionRows], index) => (
+          <details className="group" key={section} open={index === 0 && section !== 'Flags'}>
+            <summary className="flex cursor-pointer items-center justify-between text-[11px] text-sidebar-foreground/80">
+              <span
+                className={section === 'Flags' ? 'font-medium text-amber-500/90' : 'font-medium'}
+              >
+                {section}
+              </span>
+              <span className="flex items-center gap-1.5">
+                {SECTION_SYSTEMS[section] && (
+                  <button
+                    className="rounded border border-sidebar-border/60 px-1.5 py-px text-[10px] text-sidebar-foreground/60 hover:bg-sidebar-accent"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      showInScene({ label: section, systems: SECTION_SYSTEMS[section] }, result, levelId)
+                    }}
+                    title={`Paint the ${section.toLowerCase()} members in the scene and go to them`}
+                    type="button"
+                  >
+                    Show
+                  </button>
+                )}
+                <span className="text-[10px] text-sidebar-foreground/40">{sectionRows.length}</span>
+              </span>
+            </summary>
+            <div className="mt-0.5 flex flex-col gap-0.5 pl-1">
+              {sectionRows.map((row) => (
+                <div
+                  className={`flex items-baseline justify-between gap-2 text-[11px] ${
+                    SECTION_SYSTEMS[section] ? 'cursor-pointer rounded px-0.5 hover:bg-sidebar-accent/50' : ''
+                  }`}
+                  key={`${row.item}-${row.detail}`}
+                  onClick={() => {
+                    const systems = SECTION_SYSTEMS[section]
+                    if (!systems) return
+                    // a lumber row names its size ("2x6", "2x6 PT"): the members of that size; any other row, its section
+                    const size = /^(\d+x\d+)/.exec(row.item)?.[1]
+                    showInScene(
+                      size ? { label: `${row.item} (${section})`, systems, sizes: [size] } : { label: `${row.item} (${section})`, systems },
+                      result,
+                      levelId,
+                    )
+                  }}
+                  title={`${row.item} — ${row.detail}${SECTION_SYSTEMS[section] ? ' (click to show in the scene)' : ''}`}
+                >
+                  <span
+                    className={`min-w-0 flex-1 text-sidebar-foreground/70 ${
+                      section === 'Flags' ? 'whitespace-normal break-words' : 'truncate'
+                    }`}
+                  >
+                    {row.item}
+                    <span className="text-sidebar-foreground/40"> {row.detail}</span>
+                  </span>
+                  <span className="shrink-0 tabular-nums text-sidebar-foreground/90">
+                    {row.quantity} {row.unit}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </details>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** Sidebar unit labels for the shared characteristics rows (CSV keeps ascii). */
+const CHARACTERISTIC_UNIT: Record<string, string> = {
+  m2: 'm²',
+  m3: 'm³',
+  count: '',
+  IECC: '',
+  'ft2·F·h/BTU': '',
+  'W/K': 'W/K',
+  W: 'W',
+  tons: 'ton',
+}
+
+/**
+ * Building characteristics — whole-building metrics (floor area, volume,
+ * envelope UA, design loads) in a compact drop-down under the takeoff.
+ * Helps dimension the HVAC; every number's assumption rides the footer.
+ */
+function CharacteristicsSection({
+  result,
+}: {
+  result: NonNullable<ReturnType<typeof computeLevel>>
+}) {
+  const c = result.characteristics
+  if (!c || result.members.length === 0) return null
+  const rows = characteristicsRows(c)
+  return (
+    <details className="group">
+      <summary className="flex cursor-pointer items-center justify-between font-medium text-xs">
+        Building characteristics
+        <button
+          className="rounded-md border border-sidebar-border/60 px-2 py-0.5 font-normal text-[10px] text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent"
+          onClick={(e) => {
+            // a click inside <summary> would also toggle the drawer
+            e.preventDefault()
+            e.stopPropagation()
+            navigator.clipboard?.writeText(characteristicsCsv(c))
+          }}
+          type="button"
+        >
+          Copy CSV
+        </button>
+      </summary>
+      <div className="mt-1.5 flex flex-col gap-0.5">
+        {rows.map((row) => {
+          const unit = CHARACTERISTIC_UNIT[row.unit] ?? row.unit
+          return (
+            <div
+              className="flex items-baseline justify-between gap-2 text-[11px]"
+              key={row.metric}
+              title={`${row.metric}: ${row.value} ${row.unit}`}
+            >
+              <span className="min-w-0 flex-1 truncate text-sidebar-foreground/70">
+                {row.metric}
+              </span>
+              <span className="shrink-0 tabular-nums text-sidebar-foreground/90">
+                {row.value}
+                {unit ? ` ${unit}` : ''}
+              </span>
+            </div>
+          )
+        })}
+        <p className="mt-1 text-[10px] text-sidebar-foreground/40 leading-relaxed">
+          {c.notes.join(' · ')}
+        </p>
+      </div>
+    </details>
+  )
+}
+
+/** Loose lumber placement (v0.1) — the manual escape hatch + debug tool. */
+function LumberSection() {
+  const size = useBonesStore((s) => s.size)
+  const length = useBonesStore((s) => s.length)
+  const orientation = useBonesStore((s) => s.orientation)
+  const activeTool = useEditor((s) => s.tool)
+  const count = useScene(
+    (s) => Object.values(s.nodes).filter((n) => (n.type as string) === LUMBER_KIND).length,
+  )
+  const arming = activeTool === LUMBER_KIND
+
+  const activate = (next: LumberSize) => {
+    useBonesStore.getState().setSize(next)
+    setPluginTool(LUMBER_KIND)
+    useEditor.getState().setMode('build')
+  }
+
+  return (
+    <details className="group">
+      <summary className="flex cursor-pointer items-center justify-between font-medium text-xs">
+        Loose lumber
+        <span className="rounded-full bg-sidebar-accent px-2 py-0.5 text-[10px] text-sidebar-foreground/60">
+          {count}
+        </span>
+      </summary>
+      <div className="mt-2 flex flex-col gap-2">
+        <p className="text-[11px] text-sidebar-foreground/50">
+          {arming ? 'Click the ground to place. Esc to stop.' : 'Pick a size, click the ground.'}
+        </p>
+        <div className="grid grid-cols-4 gap-1.5">
+          {LUMBER_SIZES.map((s) => {
+            const [t, w] = LUMBER_CROSS_SECTIONS[s]
+            const selected = arming && s === size
+            return (
+              <button
+                className={`rounded-md border px-1 py-1.5 text-xs transition-colors ${
+                  selected
+                    ? 'border-sidebar-ring bg-sidebar-accent text-sidebar-foreground'
+                    : 'border-sidebar-border/60 bg-sidebar-accent/40 text-sidebar-foreground/80 hover:bg-sidebar-accent'
+                }`}
+                key={s}
+                onClick={() => activate(s)}
+                title={`Actual ${inchesLabel(t)} × ${inchesLabel(w)}`}
+                type="button"
+              >
+                {s}
+              </button>
+            )
+          })}
+        </div>
+        <SegmentedControl
+          onChange={useBonesStore.getState().setOrientation}
+          options={[
+            { label: 'Stud', value: 'stud' },
+            { label: 'Flat', value: 'flat' },
+            { label: 'Edge', value: 'edge' },
+          ]}
+          value={orientation}
+        />
+        <SliderControl
+          label="Length"
+          max={7.4}
+          min={0.1}
+          onChange={useBonesStore.getState().setLength}
+          precision={2}
+          restoreOnCommit={false}
+          step={0.05}
+          unit="m"
+          value={length}
+        />
+      </div>
+    </details>
+  )
+}
+
+/**
+ * 'Framing' row — LGS Phase 2, UI/UX principle 1b (the second of the two
+ * controls total): ONE compact Lumber | Steel control, slotted between the
+ * JurisdictionPicker (its code-basis peer — the framing system picks the
+ * IRC chapter, R602 wood vs R603 steel) and the detail/spacing row.
+ * PROGRESSIVE DISCLOSURE: the Machine select exists ONLY while Steel is
+ * selected — lumber users see zero change. The select is the cited catalog
+ * verbatim (grouped by vendor, verified rows first, unverified rows keep
+ * their honest suffix); a machine CONSTRAINS + BRANDS (LGS-PLAN principle
+ * 4) + WARNS on can't-roll resolutions — at the code LODs (300/400)
+ * members are byte-identical with or without it (labels/flags/warnings
+ * only); at 200 it narrows the generic pick to its thinnest rollable
+ * variant (Phase-1 behavior). The engine's constraint channel carries the
+ * truth to the Warnings drawer and the paper Flags block. Lumber and
+ * 'None' writes REMOVE their keys, so untouched-equivalent scenes persist
+ * byte-identically (Phase 0).
+ */
+/**
+ * Roof system row — Stick (site-cut rafters + ceiling joists) or Truss
+ * (pre-engineered gable trusses). Stick REMOVES the key, so an untouched
+ * scene keeps persisting byte-identically (the framingSystem contract).
+ */
+/**
+ * Services row — the MEP routing choices (wiring route, service entrance,
+ * meter-main side, sewer direction, water route, HVAC system). Auto REMOVES
+ * the key, so an untouched scene persists byte-identically.
+ */
+/**
+ * Re-size the generated roof segments on `levelId` to the rafter stock:
+ * deckThickness = rafter depth + sheathing, so the drawn roof plane is the
+ * framed one (Steve, 2026-09-07: "ensure the roof planes are correct
+ * thickness per framing").
+ */
+function syncGeneratedRoofShell(levelId: string | undefined, rafterSize: LumberSize): void {
+  if (!levelId) return
+  const state = useScene.getState()
+  const nodes = state.nodes as Record<string, { id: string; type?: string; parentId?: string; metadata?: { generatedBy?: string } }>
+  const deck = roofShellThickness({ ...DEFAULT_SPEC, rafterSize })
+  for (const n of Object.values(nodes)) {
+    if (n.type !== 'roof-segment') continue
+    const roof = n.parentId ? nodes[n.parentId] : undefined
+    if (!roof || roof.parentId !== levelId) continue
+    const by = n.metadata?.generatedBy
+    if (by !== 'pascal:roof' && by !== 'pascal:generate') continue
+    state.updateNode(n.id as AnyNodeId, { deckThickness: Math.round(deck * 1e6) / 1e6 } as Partial<AnyNode> as never)
+  }
+}
+
+function ServicesRow({ framingNode }: { framingNode: FramingNode & { id: string } }) {
+  const write = (patch: Record<string, unknown>) =>
+    useScene.getState().updateNode(framingNode.id as AnyNodeId, patch as Partial<AnyNode> as never)
+  return (
+    <div className="flex flex-col gap-1 text-xs">
+      <span className="text-sidebar-foreground/60">Services</span>
+      {SERVICE_CONTROLS.map((c) => {
+        const options = [{ label: 'Auto', value: 'auto' }, ...c.options.map(([value, label]) => ({ label, value }))]
+        const value = serviceControlValue(framingNode, c.key)
+        return (
+          <div className="flex flex-col gap-1" key={c.key}>
+            <span className="text-sidebar-foreground/60">{c.label}</span>
+            {options.length > 5 ? (
+              // a long list (the water heater's seven kinds) wraps into a grid
+              // — one segmented row squeezed eight labels into the rail's width
+              <div className="grid grid-cols-4 gap-1">
+                {options.map((o) => (
+                  <button
+                    className={`rounded-md border px-1 py-1 text-[11px] leading-tight transition-colors ${
+                      value === o.value
+                        ? 'border-sidebar-ring bg-sidebar-accent text-sidebar-foreground'
+                        : 'border-sidebar-border/60 bg-sidebar-accent/40 text-sidebar-foreground/80 hover:bg-sidebar-accent'
+                    }`}
+                    key={o.value}
+                    onClick={() => write(serviceControlPatch(c.key, o.value))}
+                    type="button"
+                  >
+                    {o.label}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <SegmentedControl
+                onChange={(v: string) => write(serviceControlPatch(c.key, v))}
+                options={options}
+                value={value}
+              />
+            )}
+            <span className="text-sidebar-foreground/50">{c.note}</span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function RoofRow({ framingNode }: { framingNode: FramingNode & { id: string } }) {
+  const system = roofSystemValue(framingNode)
+  const shedCeiling = shedCeilingValue(framingNode)
+  const write = (patch: Record<string, unknown>) =>
+    useScene.getState().updateNode(framingNode.id as AnyNodeId, patch as Partial<AnyNode> as never)
+  return (
+    <div className="flex flex-col gap-1 text-xs">
+      <span className="text-sidebar-foreground/60">Roof</span>
+      <SegmentedControl
+        onChange={(v: string) => write(roofSystemPatch(v as RoofSystemValue))}
+        options={[
+          { label: 'Stick', value: 'stick' },
+          { label: 'Truss', value: 'truss' },
+        ]}
+        value={system}
+      />
+      <span className="text-sidebar-foreground/60">Shed ceiling</span>
+      <SegmentedControl
+        onChange={(v: string) => write(shedCeilingPatch(v as ShedCeilingValue))}
+        options={[
+          { label: 'Vaulted', value: 'none' },
+          { label: 'Joists', value: 'joists' },
+        ]}
+        value={shedCeiling}
+      />
+      {shedCeiling === 'joists' && (
+        <span className="text-sidebar-foreground/50">
+          Mono-pitch (shed) segments get ceiling joists across the depth on the low plate, lapped
+          over the partitions under them. A porch shed on a ledger has no ceiling.
+        </span>
+      )}
+      <span className="text-sidebar-foreground/60">Post pads (in)</span>
+      <SegmentedControl
+        onChange={(v: string) => write(postPadPatch(Number(v)))}
+        options={POST_PAD_OPTIONS.map((n) => ({ label: String(n), value: String(n) }))}
+        value={String(postPadValue(framingNode))}
+      />
+      {(
+        [
+          ['rafterSize', 'Rafters'],
+          ['ridgeSize', 'Ridge board'],
+          ['ceilingJoistSize', 'Ceiling joists'],
+        ] as const
+      ).map(([key, label]) => (
+        <div className="flex flex-col gap-1" key={key}>
+          <span className="text-sidebar-foreground/60">{label}</span>
+          <SegmentedControl
+            onChange={(v: string) => {
+              write(roofStockPatch(key, v as RoofStockValue | 'auto'))
+              // the generated roof shell follows the rafter stock: its slab is
+              // the rafter's depth plus the sheathing (shell-sync.ts)
+              if (key === 'rafterSize') syncGeneratedRoofShell(framingNode.parentId as string | undefined, v === 'auto' ? DEFAULT_SPEC.rafterSize : (v as LumberSize))
+            }}
+            options={[
+              { label: 'Auto', value: 'auto' },
+              ...ROOF_STOCK_OPTIONS.map((s) => ({ label: s, value: s })),
+            ]}
+            value={roofStockValue(framingNode, key)}
+          />
+        </div>
+      ))}
+      <span className="text-sidebar-foreground/60">Rafter spacing (in o.c.)</span>
+      <SegmentedControl
+        onChange={(v: string) => write(rafterSpacingPatch(v === 'auto' ? 'auto' : (Number(v) as RafterSpacingValue)))}
+        options={[
+          { label: 'Auto', value: 'auto' },
+          ...RAFTER_SPACING_OPTIONS.map((n) => ({ label: String(n), value: String(n) })),
+        ]}
+        value={String(rafterSpacingValue(framingNode))}
+      />
+      <span className="text-sidebar-foreground/50">
+        Auto is the jurisdiction's table: rafters by span and snow band, the ridge one size deeper than
+        the rafters. A size forced under the table still prints the span flag.
+      </span>
+      <span className="text-sidebar-foreground/50">
+        The pad footing under every porch, deck and girder post — on the foundation plan and its
+        schedule. 24 in is the R403.1 pad the engine pours by itself.
+      </span>
+      {system === 'truss' && (
+        <span className="text-sidebar-foreground/50">
+          Gable segments frame as trusses; webbing is representative — design by truss manufacturer
+          (deferred submittal). Other shapes stay stick-framed and flag it.
+        </span>
+      )}
+    </div>
+  )
+}
+
+function FramingRow({ framingNode }: { framingNode: FramingNode & { id: string } }) {
+  const system = framingSystemValue(framingNode)
+  const exterior = exteriorWallsValue(framingNode)
+  const write = (patch: Record<string, unknown>) =>
+    useScene.getState().updateNode(framingNode.id as AnyNodeId, patch as Partial<AnyNode> as never)
+  const extra = lgsMachineSelectExtra(framingNode.lgsMachine)
+  return (
+    <div className="flex flex-col gap-1 text-xs">
+      <span className="text-sidebar-foreground/60">Exterior walls</span>
+      <SegmentedControl
+        onChange={(v: string) => write(exteriorWallsPatch(v as ExteriorWallsValue))}
+        options={[
+          { label: 'Auto', value: 'auto' },
+          { label: 'Framed', value: 'framed' },
+          { label: 'CMU', value: 'cmu' },
+        ]}
+        value={exterior}
+      />
+      <span className="text-sidebar-foreground/50">
+        Auto follows the jurisdiction's convention: Florida builds exterior walls in CMU (block), everywhere
+        else framed. A convention, not a code rule — pick Framed for a wood-frame house there. Framing
+        below says how framed walls frame.
+      </span>
+      <span className="mt-1 text-sidebar-foreground/60">Framing</span>
+      <SegmentedControl
+        onChange={(v: string) => write(framingSystemPatch(v as FramingSystemValue))}
+        options={[
+          { label: 'Lumber', value: 'lumber' },
+          { label: 'Steel', value: 'lgs' },
+        ]}
+        value={system}
+      />
+      {system === 'lgs' && (
+        <>
+          <span className="mt-1 text-sidebar-foreground/60">Machine</span>
+          <select
+            className="w-full rounded-md border border-sidebar-border/60 bg-sidebar-accent/40 px-2 py-1.5 text-sidebar-foreground text-xs outline-none"
+            onChange={(e) => write(lgsMachinePatch(e.target.value))}
+            value={framingNode.lgsMachine ?? LGS_MACHINE_NONE}
+          >
+            <option value={LGS_MACHINE_NONE}>{LGS_MACHINE_NONE_LABEL}</option>
+            {lgsMachineGroups().map((group) => (
+              <optgroup key={group.vendor} label={group.vendor}>
+                {group.machines.map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {m.label}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+            {extra && <option value={extra.key}>{extra.label}</option>}
+          </select>
+        </>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Searchable jurisdiction picker (round-14 quality feedback): 51 states +
+ * Auto in a filter-as-you-type list instead of a bare <select>, with the
+ * resolved code linked to the public ICC library.
+ */
+function JurisdictionPicker({
+  framingNodeId,
+  value,
+  guess,
+  options,
+  codeName,
+  notes,
+}: {
+  framingNodeId: AnyNodeId
+  value: string
+  guess: { code: string; reason: string } | null
+  options: { code: string; name: string }[]
+  codeName: string
+  notes: string[]
+}) {
+  const [query, setQuery] = useState('')
+  const [open, setOpen] = useState(false)
+  const pick = (code: string) => {
+    useScene
+      .getState()
+      .updateNode(framingNodeId, { jurisdiction: code } as Partial<AnyNode> as never)
+    setOpen(false)
+    setQuery('')
+  }
+  const q = query.trim().toLowerCase()
+  const filtered = q
+    ? options.filter((o) => o.name.toLowerCase().includes(q) || o.code.toLowerCase().includes(q))
+    : options
+  const current =
+    value === 'AUTO'
+      ? guess
+        ? `Auto — ${guess.code}`
+        : 'Auto'
+      : (options.find((o) => o.code === value)?.name ?? value)
+  return (
+    <div className="flex flex-col gap-1 text-xs">
+      <span className="text-sidebar-foreground/60">Jurisdiction</span>
+      <button
+        type="button"
+        className="flex items-center justify-between rounded-md border border-sidebar-border/60 bg-sidebar-accent/40 px-2 py-1.5 text-left text-sidebar-foreground text-xs"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="truncate">{current}</span>
+        <span className="text-sidebar-foreground/40">{open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <div className="flex max-h-56 flex-col overflow-hidden rounded-md border border-sidebar-border/60 bg-sidebar shadow-lg">
+          <input
+            autoFocus
+            className="border-sidebar-border/40 border-b bg-transparent px-2 py-1.5 text-xs outline-none placeholder:text-sidebar-foreground/30"
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search states…"
+            value={query}
+          />
+          <div className="overflow-y-auto">
+            <button
+              type="button"
+              className="block w-full px-2 py-1.5 text-left text-xs hover:bg-sidebar-accent"
+              onClick={() => pick('AUTO')}
+            >
+              {guess ? `Auto — ${guess.code} (${guess.reason})` : 'Auto'}
+            </button>
+            {filtered.map((o) => (
+              <button
+                key={o.code}
+                type="button"
+                className={`block w-full px-2 py-1.5 text-left text-xs hover:bg-sidebar-accent ${o.code === value ? 'bg-sidebar-accent/60' : ''}`}
+                onClick={() => pick(o.code)}
+              >
+                {o.name}
+              </button>
+            ))}
+            {filtered.length === 0 && (
+              <div className="px-2 py-2 text-sidebar-foreground/40 text-xs">No match</div>
+            )}
+          </div>
+        </div>
+      )}
+      <a
+        className="text-[10px] text-sidebar-foreground/40 underline-offset-2 hover:underline"
+        href={`https://codes.iccsafe.org/search/titles?searchTermAny=${encodeURIComponent(
+          // the ICC library drops ?query= — /search/titles?searchTermAny=
+          // with the short code name is the form that returns results
+          // (quality B2, verified live)
+          codeName.split('(')[0]?.split('—')[0]?.trim().slice(0, 48) ?? codeName.slice(0, 48),
+        )}`}
+        rel="noreferrer"
+        target="_blank"
+      >
+        {codeName} ↗
+      </a>
+      {/* The profile's researched notes — amendment flavor + the per-row
+          frost/snow climate notes. This is the channel that carries the
+          territories' PERMAFROST warning to the user (it lived only in the
+          data file before 2026-08-24 — profileFor built the strings and
+          nothing rendered them). Same muted style as the characteristics
+          notes paragraph. */}
+      {notes.length > 0 && (
+        <p className="text-[10px] text-sidebar-foreground/40 leading-relaxed">
+          {notes.join(' · ')}
+        </p>
+      )}
+    </div>
+  )
+}
+

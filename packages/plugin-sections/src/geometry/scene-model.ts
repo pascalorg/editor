@@ -1,0 +1,1142 @@
+import {
+  type AnyNode,
+  type AnyNodeId,
+  type CeilingNode,
+  calculateLevelMiters,
+  DEFAULT_WALL_HEIGHT,
+  type DoorNode,
+  decodeTerrainField,
+  getActiveRoofHeight,
+  getDutchRoofMetrics,
+  getEffectiveRoofSurfaceMaterial,
+  getLevelElevations,
+  getMaterialPresetByRef,
+  getRoofSegmentVisibleTopBounds,
+  getScaledDimensions,
+  getSegmentSlopeFrame,
+  getWallPlanFootprint,
+  getWallThickness,
+  type ItemNode,
+  type LevelNode,
+  parseMaterialRef,
+  type RoofNode,
+  type RoofSegmentNode,
+  resolveWallAssembly,
+  type SiteNode,
+  type SlabNode,
+  surfaceHeightAt,
+  type WallAssemblyLayer,
+  type WallNode,
+  type WindowNode,
+  wallAssemblyFinishRef,
+} from '@pascal-app/core'
+import { resolveMarkDetail } from '@pascal-app/editor'
+import { rotateY, unrotateY } from './math'
+import type { Nodes, Vec2 } from './types'
+
+// ---------------------------------------------------------------------------
+// Wall assemblies — WS5's contract, consumed directly.
+//
+// `resolveWallAssembly` (packages/core/src/systems/wall/wall-assembly.ts) is
+// the single source of truth: it returns the layers ordered OUTSIDE -> INSIDE
+// summing exactly to `wall.thickness`, plus `exteriorSideResolved` telling us
+// which geometric side of the wall faces outdoors. A wall with no `assembly`
+// resolves to one `framing` layer, so this builder has one code path.
+// ---------------------------------------------------------------------------
+
+export type WallLayer = WallAssemblyLayer
+
+/** Outward-ordered layers (exterior face first). One layer when no assembly. */
+export function resolveWallLayers(wall: WallNode): WallLayer[] {
+  return resolveWallAssembly(wall).layers
+}
+
+/**
+ * The cladding an elevation draws for a wall.
+ *
+ * 1. The ASSEMBLY's declared exterior finish (WS5) — the source of truth when
+ *    the wall has one.
+ * 2. Otherwise the PAINTED material: a library / user material ref on the
+ *    exterior face slots (`wall.slots`, values like `library:siding/lap`) or
+ *    the legacy `material.preset` / `materialPreset`, read by name —
+ *    "siding", "stucco" / "plaster", "brick", "stone" / "masonry",
+ *    "fiber-cement" / "hardie". This is how a wall painted from the Pascal
+ *    material library or a user's own library still gets its symbol on paper.
+ * 3. Otherwise null — drawn blank and listed as "no cladding specified".
+ */
+export function exteriorFinishOf(
+  wall: Pick<WallNode, 'assembly' | 'slots' | 'material' | 'materialPreset'>,
+): WallSolid['exteriorFinish'] {
+  const declared = wall.assembly?.exterior?.finish as WallSolid['exteriorFinish'] | undefined
+  if (declared) return declared
+  const candidates: string[] = []
+  const slots = (wall.slots ?? {}) as Record<string, string>
+  for (const [slot, ref] of Object.entries(slots)) {
+    if (/exterior/i.test(slot) && typeof ref === 'string') candidates.push(ref)
+  }
+  if (typeof wall.materialPreset === 'string') candidates.push(wall.materialPreset)
+  const legacy = wall.material as { preset?: string; texture?: { url?: string } } | undefined
+  if (legacy?.preset) candidates.push(legacy.preset)
+  if (legacy?.texture?.url) candidates.push(legacy.texture.url)
+  for (const name of candidates.map((c) => c.toLowerCase())) {
+    if (/fiber|hardie|cement/.test(name)) return 'fiber-cement'
+    if (/siding|lap|batten|clapboard|shiplap/.test(name)) return 'siding'
+    if (/stucco|plaster/.test(name)) return 'stucco'
+    if (/brick/.test(name)) return 'brick'
+    if (/stone|masonry|rubble/.test(name)) return 'stone'
+  }
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// Solids
+// ---------------------------------------------------------------------------
+
+export type DoorSegmentSpec = {
+  type: 'panel' | 'glass' | 'empty'
+  heightRatio: number
+  columnRatios: number[]
+}
+
+export type Opening = {
+  id: string
+  nodeType: 'door' | 'window'
+  /** Distance along the wall from `wall.start`, at the opening centre. */
+  along: number
+  width: number
+  /** World elevation of the opening head / sill. */
+  headY: number
+  sillY: number
+  /** Windows only — a sill board is drawn in section/elevation. */
+  hasSill: boolean
+  /** Pane divisions, for the elevation mullion glyph. */
+  columns: number
+  rows: number
+  /** The schedule's mark for this opening (D101 / W101 …), '' when unknown. */
+  mark: string
+  /** 'opening' = a cased opening without a leaf / sash. */
+  openingKind: 'door' | 'window' | 'opening'
+  openingShape: string
+  construction: 'framed' | 'masonry'
+  frameThickness: number
+  columnRatios: number[]
+  rowRatios: number[]
+  // windows
+  windowType?: string
+  casementStyle?: 'single' | 'french'
+  hingesSide?: 'left' | 'right'
+  awningDirection?: 'up' | 'down'
+  // doors
+  doorType?: string
+  leafCount?: number
+  segments?: DoorSegmentSpec[]
+  handle?: boolean
+  handleHeight?: number
+  handleSide?: 'left' | 'right'
+  threshold?: boolean
+}
+
+/**
+ * A placed item (furniture, fixture, appliance, tree …) as an oriented
+ * footprint box: world plan corners plus base / top elevations. Items nested
+ * inside other items are skipped (their frame is the parent's mesh).
+ */
+export type ItemSolid = {
+  kind: 'item'
+  id: string
+  name: string
+  assetId: string
+  category: string
+  polygon: Vec2[]
+  baseY: number
+  topY: number
+  levelId: string | null
+}
+
+export type WallSolid = {
+  kind: 'wall'
+  id: string
+  /** Mitred plan footprint in world [x, z] metres. */
+  polygon: Vec2[]
+  start: Vec2
+  end: Vec2
+  /** Unit direction start→end. */
+  axis: Vec2
+  /** Unit normal, `(-dz, dx)` — the same `nUnit` `getWallPlanFootprint` uses. */
+  normal: Vec2
+  length: number
+  thickness: number
+  /** Which normal side is the exterior face: +1 = along `normal`, -1 = against. */
+  exteriorSign: 1 | -1
+  layers: WallLayer[]
+  /**
+   * The assembly's declared cladding (`wall.assembly.exterior.finish`), or
+   * null for a wall with no assembly / a partition — drives the elevation's
+   * material rendition. Never guessed: a wall without an assembly is drawn
+   * blank and listed as "no cladding specified" in the finish key.
+   */
+  exteriorFinish: 'siding' | 'stucco' | 'brick' | 'stone' | 'fiber-cement' | 'none' | null
+  /**
+   * The colour the cladding renders in 3D — the painted exterior slot's
+   * catalog colour, else the assembly finish's catalog colour — or null when
+   * neither is known (drawn on white).
+   */
+  claddingColor: string | null
+  baseY: number
+  topY: number
+  /**
+   * What the wall carries below its base (`WallNode.underpinning`): the
+   * finish carried down to `rimBottomY` over the floor platform's edge,
+   * the concrete stemwall from there down to `stemBottomY`. Null for a wall
+   * that stops at its base.
+   */
+  underpinning: { rimBottomY: number; stemBottomY: number } | null
+  openings: Opening[]
+  levelId: string | null
+}
+
+export type PrismSolid = {
+  /**
+   * 'equipment': a box a plugin pushes onto the model — Bones' ducts, boots,
+   * plenum, air handler, the water heater, the condenser — cut where the
+   * section plane passes, shown beyond it (Steve, 2026-09-09: "i need the
+   * ducts and things shown in the building sections, true to life").
+   */
+  kind: 'slab' | 'ceiling' | 'equipment'
+  id: string
+  polygon: Vec2[]
+  bottomY: number
+  topY: number
+  levelId: string | null
+}
+
+export type RoofSolid = {
+  kind: 'roof'
+  id: string
+  /** Local footprint rectangle including overhang, from core's own bounds fn. */
+  local: { minX: number; maxX: number; minZ: number; maxZ: number }
+  /** World plan polygon of that rectangle. */
+  polygon: Vec2[]
+  /** World Y of the segment's local Y = 0. */
+  originY: number
+  /** Vertical deck thickness (perpendicular deck thickness / cosθ). */
+  deckDrop: number
+  toWorld: (lx: number, lz: number) => Vec2
+  toLocal: (x: number, z: number) => Vec2
+  /** World plan direction of the segment's local +Z (the down-slope axis). */
+  axisZ: Vec2
+  /** Local Y of the top surface at a local plan point (extended over overhangs). */
+  surfaceY: (lx: number, lz: number) => number
+  /** World Y of the eave (deck at the un-overhung footprint edge) and the ridge. */
+  eaveY: number
+  ridgeY: number
+  /** Plate line — top of the segment's own wall band. */
+  plateY: number
+  /** The roof covering's catalog colour when painted, else null (assumed shingle grey). */
+  color: string | null
+  /** The segment's pitch, degrees — the roof plan's "7:12" comes from the same field. */
+  pitchDeg: number
+}
+
+export type LevelInfo = {
+  id: string
+  name: string
+  ordinal: number
+  baseY: number
+  height: number
+}
+
+/** The roof finish the generator recorded on the building (`metadata.finishes.roof`), if any. */
+export type RoofFinishRecord = { label: string; hex: string | null }
+
+/**
+ * The built features that are neither walls nor placed items but stand in
+ * an elevation all the same: porch posts (`column`), guards (`fence`), the
+ * flights (`stair`) and the trees plugin's trees. Each is its plan footprint
+ * raised between `baseY` and `topY`; a stair carries its riser count for the
+ * tread lines, a tree its canopy spread.
+ */
+/** How a guard is built, as the fence node records it (the generator's rail system, batch O). */
+export type GuardStyle = {
+  infill: 'balusters' | 'cable' | 'horizontal' | 'none'
+  postSpacing: number
+  postSize: number
+  /** Thickness of the cap over the top rail. */
+  capThickness: number
+  /** The bottom rail's clearance above the walking surface. */
+  bottomClearance: number
+  /** Gap between balusters / boards. */
+  slatGap: number
+  startPost: boolean
+  endPost: boolean
+  color: string | null
+}
+
+/** A straight flight's run, for the side view's sawtooth and its rail. */
+export type FlightRun = {
+  /** Plan midpoints of the bottom and top edges of the flight. */
+  bottom: Vec2
+  top: Vec2
+  rise: number
+  run: number
+  risers: number
+  /** Tread / stringer thickness. */
+  thickness: number
+  /** The guard the flight's rail matches (the porch's), when the level has one. */
+  rail: GuardStyle | null
+}
+
+export type FeatureSolid = {
+  kind: 'feature'
+  feature: 'column' | 'fence' | 'stair' | 'tree' | 'ornament'
+  id: string
+  polygon: Vec2[]
+  baseY: number
+  topY: number
+  risers?: number
+  spread?: number
+  guard?: GuardStyle
+  flight?: FlightRun
+  /** A gable's king post: the spread of its two braces at the top, its member width. */
+  ornament?: { spread: number; braceWidth: number }
+  levelId: string | null
+}
+
+/** The fence node's rail system, or a plain picket guard when it carries none. */
+function guardStyleOf(n: Record<string, unknown>): GuardStyle {
+  const infill = n.guardInfill
+  const num = (v: unknown, fallback: number) => (typeof v === 'number' && Number.isFinite(v) ? v : fallback)
+  return {
+    infill:
+      infill === 'cable' || infill === 'horizontal' || infill === 'none' || infill === 'balusters'
+        ? infill
+        : n.showInfill === false
+          ? 'none'
+          : 'balusters',
+    postSpacing: num(n.postSpacing, 1.8288),
+    postSize: num(n.postSize, 0.089),
+    capThickness: num(n.topRailHeight, 0.04),
+    bottomClearance: num(n.groundClearance, 0.089),
+    slatGap: num(n.slatGap, 0.089),
+    startPost: n.startPost !== false,
+    endPost: n.endPost !== false,
+    color: typeof n.color === 'string' && n.color.length > 0 ? n.color : null,
+  }
+}
+
+export type BuildingModel = {
+  walls: WallSolid[]
+  prisms: PrismSolid[]
+  roofs: RoofSolid[]
+  items: ItemSolid[]
+  features: FeatureSolid[]
+  levels: LevelInfo[]
+  /** Elevation of the ground at a plan point of the model, in the first building's own frame (its stand subtracted, its turn applied before the site is sampled). */
+  gradeAt: (x: number, z: number) => number
+  warnings: string[]
+  /** The recorded roofing finish — null when no building carries the record. */
+  roofFinish: RoofFinishRecord | null
+  /** The recorded trim colour (`metadata.finishes.trim.hex`) — fascia and rake boards; null without it. */
+  trimHex: string | null
+}
+
+/** The trim colour off the first building's `metadata.finishes.trim`, duck-typed like the roof finish. */
+export function trimHexOf(nodes: Nodes): string | null {
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'building') continue
+    const meta = (node as { metadata?: unknown }).metadata
+    const finishes = meta && typeof meta === 'object' ? (meta as { finishes?: unknown }).finishes : undefined
+    const trim = finishes && typeof finishes === 'object' ? (finishes as { trim?: unknown }).trim : undefined
+    const hex = trim && typeof trim === 'object' ? (trim as { hex?: unknown }).hex : undefined
+    if (typeof hex === 'string' && hex.length > 0) return hex
+  }
+  return null
+}
+
+/** A tree's canopy spread as a share of its height — a stand-in, the trees plugin carries no width. */
+const TREE_SPREAD = { deciduous: 0.6, evergreen: 0.4 } as const
+
+/**
+ * Posts, guards, flights and trees, as plan footprints between two
+ * elevations. A column or fence standing on a slab (`supportSlabId`) stands
+ * at that slab's elevation; a straight stair's footprint runs from its
+ * position up its own +z by its segments' length; a tree under the site is
+ * in world coordinates already, one under a level rides the level.
+ */
+function collectFeatures(
+  nodes: Nodes,
+  elevations: Map<string, { baseY: number }>,
+  warnings: string[],
+  gradeAt: (x: number, z: number) => number,
+): FeatureSolid[] {
+  const out: FeatureSolid[] = []
+  let trees = 0
+  const slabElevation = (id: unknown): number => {
+    if (typeof id !== 'string') return 0
+    const slab = nodes[id as AnyNodeId] as { type?: string; elevation?: number } | undefined
+    return slab?.type === 'slab' && typeof slab.elevation === 'number' ? slab.elevation : 0
+  }
+  // A node hosted on the ground (`supportSlabId: 'ground'`) stands on the
+  // sculpted ground under it — the viewer's terrain lift (terrain-support.ts):
+  // the site's grade at the node's world plan point, measured from the level base.
+  const groundLift = (levelId: string | null, levelBase: number, x: number, z: number): number => {
+    const level = levelId ? (nodes[levelId as AnyNodeId] as { parentId?: string } | undefined) : undefined
+    const building = level?.parentId
+      ? (nodes[level.parentId as AnyNodeId] as
+          | { position?: number[]; rotation?: number[] | number }
+          | undefined)
+      : undefined
+    const bp = building?.position ?? [0, 0, 0]
+    const yaw = Array.isArray(building?.rotation)
+      ? (building.rotation[1] ?? 0)
+      : typeof building?.rotation === 'number'
+        ? building.rotation
+        : 0
+    const wx = (bp[0] ?? 0) + x * Math.cos(yaw) + z * Math.sin(yaw)
+    const wz = (bp[2] ?? 0) - x * Math.sin(yaw) + z * Math.cos(yaw)
+    // the ground in the building's own vertical frame: the terrain height
+    // less the building's stand (its y), then less the level's base
+    return gradeAt(wx, wz) - (bp[1] ?? 0) - levelBase
+  }
+  const box = (cx: number, cz: number, w: number, d: number, yaw: number): Vec2[] =>
+    (
+      [
+        [-w / 2, -d / 2],
+        [w / 2, -d / 2],
+        [w / 2, d / 2],
+        [-w / 2, d / 2],
+      ] as Vec2[]
+    ).map(([x, z]) => {
+      const [rx, rz] = rotateVec(x, z, yaw)
+      return [cx + rx, cz + rz] as Vec2
+    })
+  for (const node of Object.values(nodes)) {
+    if (!node || node.visible === false) continue
+    const n = node as Record<string, unknown>
+    const type = String(n.type)
+    const levelId = findLevelId(node, nodes)
+    const levelBase = elevations.get(levelId ?? '')?.baseY ?? 0
+    if (type === 'column') {
+      const p = n.position as number[] | undefined
+      if (!p) continue
+      const w = typeof n.width === 'number' ? n.width : typeof n.radius === 'number' ? n.radius * 2 : 0.1
+      const d = typeof n.depth === 'number' ? n.depth : w
+      const h = typeof n.height === 'number' ? n.height : 2.5
+      const yaw = typeof n.rotation === 'number' ? n.rotation : 0
+      const baseY =
+        levelBase +
+        (p[1] ?? 0) +
+        (n.supportSlabId === 'ground'
+          ? groundLift(levelId, levelBase, p[0] ?? 0, p[2] ?? 0)
+          : slabElevation(n.supportSlabId))
+      const meta = n.metadata as { ornament?: unknown } | undefined
+      if (meta?.ornament === 'gable' && n.supportStyle === 'y-frame') {
+        // the king post: its braces span `braceTopSpread` across the column's local x
+        const spread = typeof n.braceTopSpread === 'number' ? n.braceTopSpread : 0.9
+        out.push({
+          kind: 'feature',
+          feature: 'ornament',
+          id: String(n.id),
+          polygon: box(p[0] ?? 0, p[2] ?? 0, spread, d, yaw),
+          baseY,
+          topY: baseY + h,
+          ornament: { spread, braceWidth: typeof n.braceWidth === 'number' ? n.braceWidth : w },
+          levelId,
+        })
+        continue
+      }
+      out.push({
+        kind: 'feature',
+        feature: 'column',
+        id: String(n.id),
+        polygon: box(p[0] ?? 0, p[2] ?? 0, w, d, yaw),
+        baseY,
+        topY: baseY + h,
+        levelId,
+      })
+    } else if (type === 'fence') {
+      const s = n.start as number[] | undefined
+      const e = n.end as number[] | undefined
+      if (!s || !e) continue
+      const dx = (e[0] ?? 0) - (s[0] ?? 0)
+      const dz = (e[1] ?? 0) - (s[1] ?? 0)
+      const len = Math.hypot(dx, dz)
+      if (len < 1e-4) continue
+      const t = typeof n.thickness === 'number' ? Math.max(n.thickness, 0.03) : 0.08
+      const h = typeof n.height === 'number' ? n.height : 1
+      const yaw = -Math.atan2(dz, dx)
+      const baseY = levelBase + slabElevation(n.supportSlabId) + (typeof n.supportOffset === 'number' ? n.supportOffset : 0)
+      out.push({
+        kind: 'feature',
+        feature: 'fence',
+        id: String(n.id),
+        polygon: box(((s[0] ?? 0) + (e[0] ?? 0)) / 2, ((s[1] ?? 0) + (e[1] ?? 0)) / 2, len, t, yaw),
+        baseY,
+        topY: baseY + h,
+        guard: guardStyleOf(n),
+        levelId,
+      })
+    } else if (type === 'stair') {
+      if (n.stairType !== undefined && n.stairType !== 'straight') continue
+      const p = n.position as number[] | undefined
+      if (!p) continue
+      const children = Array.isArray(n.children) ? (n.children as string[]) : []
+      let run = 0
+      for (const id of children) {
+        const seg = nodes[id as AnyNodeId] as { type?: string; length?: number } | undefined
+        if (seg?.type === 'stair-segment' && typeof seg.length === 'number') run += seg.length
+      }
+      if (run < 1e-4) continue
+      const w = typeof n.width === 'number' ? n.width : 1
+      const rise = typeof n.totalRise === 'number' ? n.totalRise : 0
+      const yaw = typeof n.rotation === 'number' ? n.rotation : 0
+      // the run climbs along the stair's local +z: local (x, z) → world
+      // (x cos + z sin, −x sin + z cos), the same map the stair node uses
+      const corners: Vec2[] = (
+        [
+          [-w / 2, 0],
+          [w / 2, 0],
+          [w / 2, run],
+          [-w / 2, run],
+        ] as Vec2[]
+      ).map(([x, z]) => [
+        (p[0] ?? 0) + x * Math.cos(yaw) + z * Math.sin(yaw),
+        (p[2] ?? 0) - x * Math.sin(yaw) + z * Math.cos(yaw),
+      ])
+      const baseY = levelBase + (p[1] ?? 0)
+      // the flight's rail matches the guard it lands on (batch O): the
+      // fence of the same porch when the generator says which, else any
+      // guard on the level, else no rail is drawn
+      const porch = (n.metadata as { porch?: { entrance?: unknown } } | undefined)?.porch?.entrance
+      let rail: GuardStyle | null = null
+      for (const other of Object.values(nodes)) {
+        if (!other || other.type !== 'fence' || other.visible === false) continue
+        if (findLevelId(other, nodes) !== levelId) continue
+        const o = other as Record<string, unknown>
+        const sameEntrance = (o.metadata as { porch?: { entrance?: unknown } } | undefined)?.porch?.entrance
+        if (porch !== undefined && sameEntrance !== porch && rail) continue
+        rail = guardStyleOf(o)
+        if (porch === undefined || sameEntrance === porch) break
+      }
+      const risers = typeof n.stepCount === 'number' ? n.stepCount : undefined
+      out.push({
+        kind: 'feature',
+        feature: 'stair',
+        id: String(n.id),
+        polygon: corners,
+        baseY,
+        topY: baseY + rise,
+        risers,
+        flight: {
+          bottom: [((corners[0] as Vec2)[0] + (corners[1] as Vec2)[0]) / 2, ((corners[0] as Vec2)[1] + (corners[1] as Vec2)[1]) / 2],
+          top: [((corners[2] as Vec2)[0] + (corners[3] as Vec2)[0]) / 2, ((corners[2] as Vec2)[1] + (corners[3] as Vec2)[1]) / 2],
+          rise,
+          run,
+          risers: risers ?? Math.max(1, Math.round(rise / 0.18)),
+          thickness: typeof n.thickness === 'number' ? n.thickness : 0.1,
+          rail,
+        },
+        levelId,
+      })
+    } else if (type === 'trees:tree') {
+      const p = n.position as number[] | undefined
+      if (!p) continue
+      const h = typeof n.height === 'number' ? n.height : 7
+      const preset = String(n.preset ?? 'oak')
+      const growth =
+        n.treeType === 'evergreen' || n.treeType === 'deciduous'
+          ? (n.treeType as 'evergreen' | 'deciduous')
+          : preset === 'pine'
+            ? 'evergreen'
+            : 'deciduous'
+      const spread = h * TREE_SPREAD[growth]
+      const baseY = levelBase + (p[1] ?? 0)
+      trees += 1
+      out.push({
+        kind: 'feature',
+        feature: 'tree',
+        id: String(n.id),
+        polygon: box(p[0] ?? 0, p[2] ?? 0, spread, spread, 0),
+        baseY,
+        topY: baseY + h,
+        spread,
+        levelId,
+      })
+    }
+  }
+  if (trees > 0) {
+    warnings.push(
+      `${trees} tree(s) drawn as a trunk and canopy at their height with a stand-in spread (${Math.round(TREE_SPREAD.deciduous * 100)} % of height, ${Math.round(TREE_SPREAD.evergreen * 100)} % for evergreens) — the trees plugin records no width.`,
+    )
+  }
+  return out
+}
+
+/**
+ * The roofing finish off the first building's `metadata.finishes` as the
+ * generator writes it (plugin-generate `Finishes.roof`: label + hex) —
+ * duck-typed, so a hand-made building without the record yields null.
+ */
+export function roofFinishOf(nodes: Nodes): RoofFinishRecord | null {
+  for (const node of Object.values(nodes)) {
+    if (node?.type !== 'building') continue
+    const meta = (node as { metadata?: unknown }).metadata
+    const finishes =
+      meta && typeof meta === 'object' ? (meta as { finishes?: unknown }).finishes : undefined
+    const roof =
+      finishes && typeof finishes === 'object' ? (finishes as { roof?: unknown }).roof : undefined
+    if (!roof || typeof roof !== 'object') continue
+    const label = (roof as { label?: unknown }).label
+    if (typeof label !== 'string' || label.length === 0) continue
+    const hex = (roof as { hex?: unknown }).hex
+    return { label, hex: typeof hex === 'string' && hex.length > 0 ? hex : null }
+  }
+  return null
+}
+
+function isType<T extends AnyNode>(node: AnyNode | undefined, type: string): node is T {
+  return node?.type === type
+}
+
+/** Nearest ancestor level of `node`, walking `parentId`. */
+function findLevelId(node: AnyNode, nodes: Nodes): string | null {
+  let current: AnyNode | undefined = node
+  for (let guard = 0; current && guard < 32; guard++) {
+    if (current.type === 'level') return current.id
+    const parentId = current.parentId as AnyNodeId | null
+    if (!parentId) return null
+    current = nodes[parentId]
+  }
+  return null
+}
+
+/** Catalog colour behind a `library:` material ref, else null. */
+function libraryColor(ref: string | null | undefined): string | null {
+  if (!ref || parseMaterialRef(ref)?.kind !== 'library') return null
+  const preset = getMaterialPresetByRef(ref) as {
+    previewColor?: string
+    mapProperties?: { color?: string }
+  } | null
+  return preset?.previewColor ?? preset?.mapProperties?.color ?? null
+}
+
+/** The 3D exterior face colour: painted exterior slot first, then the assembly cladding. */
+export function claddingColorOf(wall: WallNode): string | null {
+  const slots = (wall.slots ?? {}) as Record<string, string>
+  const painted = slots.exterior ?? slots.middleExterior ?? null
+  return libraryColor(painted) ?? libraryColor(wallAssemblyFinishRef(wall))
+}
+
+function roofColorOf(roof: RoofNode, segment: RoofSegmentNode): string | null {
+  const own =
+    (segment as { topMaterialPreset?: string; materialPreset?: string }).topMaterialPreset ??
+    (segment as { materialPreset?: string }).materialPreset
+  const spec = getEffectiveRoofSurfaceMaterial(roof, 'top')
+  return (
+    libraryColor(own) ??
+    libraryColor(spec.materialPreset) ??
+    (spec.material as { properties?: { color?: string } } | undefined)?.properties?.color ??
+    null
+  )
+}
+
+function collectOpenings(
+  wall: WallSolid,
+  nodes: Nodes,
+  warnings: string[],
+  marks: ReadonlyMap<string, string>,
+): Opening[] {
+  const openings: Opening[] = []
+  for (const node of Object.values(nodes)) {
+    if (!node) continue
+    if (node.type !== 'door' && node.type !== 'window') continue
+    const hosted = node as DoorNode | WindowNode
+    if (hosted.wallId !== wall.id) {
+      const parentIsWall = hosted.parentId === wall.id
+      if (!parentIsWall) continue
+    }
+    if ((hosted as { roofSegmentId?: string }).roofSegmentId) {
+      warnings.push(
+        `Opening ${hosted.id} is hosted on a roof segment face, not a wall — not drawn.`,
+      )
+      continue
+    }
+    const along = hosted.position[0]
+    const centerY = hosted.position[1]
+    const width = hosted.width
+    const height = hosted.height
+    const isDoor = node.type === 'door'
+    const door = hosted as DoorNode
+    const win = hosted as WindowNode
+    const loose = hosted as unknown as Record<string, unknown>
+    const kind = loose.openingKind === 'opening' ? 'opening' : isDoor ? 'door' : 'window'
+    openings.push({
+      id: hosted.id,
+      nodeType: isDoor ? 'door' : 'window',
+      along,
+      width,
+      sillY: wall.baseY + centerY - height / 2,
+      headY: wall.baseY + centerY + height / 2,
+      hasSill: !isDoor && win.sill !== false,
+      columns: !isDoor ? (win.columnRatios?.length ?? 1) : 1,
+      rows: !isDoor ? (win.rowRatios?.length ?? 1) : 1,
+      mark: marks.get(hosted.id) ?? (typeof loose.mark === 'string' ? loose.mark : ''),
+      openingKind: kind,
+      openingShape:
+        typeof loose.openingShape === 'string' ? (loose.openingShape as string) : 'rectangle',
+      construction: loose.constructionType === 'masonry' ? 'masonry' : 'framed',
+      frameThickness:
+        typeof loose.frameThickness === 'number' ? (loose.frameThickness as number) : 0.05,
+      columnRatios: !isDoor ? [...(win.columnRatios ?? [1])] : [1],
+      rowRatios: !isDoor ? [...(win.rowRatios ?? [1])] : [1],
+      ...(isDoor
+        ? {
+            doorType: door.doorType,
+            leafCount: door.leafCount,
+            segments: (door as { segments?: DoorSegmentSpec[] }).segments?.map((s) => ({
+              type: s.type,
+              heightRatio: s.heightRatio,
+              columnRatios: [...(s.columnRatios ?? [1])],
+            })),
+            handle: door.handle,
+            handleHeight: door.handleHeight,
+            handleSide: door.handleSide,
+            threshold: door.threshold,
+          }
+        : {
+            windowType: win.windowType,
+            casementStyle: win.casementStyle,
+            hingesSide: win.hingesSide,
+            awningDirection: win.awningDirection,
+          }),
+    })
+  }
+  return openings.sort((a, b) => a.along - b.along)
+}
+
+// Plan-space rotation, the floor plan's convention (`nodes/src/item/floorplan.ts`).
+function rotateVec(x: number, y: number, angle: number): Vec2 {
+  const c = Math.cos(angle)
+  const s = Math.sin(angle)
+  return [x * c + y * s, -x * s + y * c]
+}
+
+/**
+ * Every placed item as an oriented footprint box. Level-parented items carry
+ * level-local `position` / `rotation`; wall-hosted items carry a wall-local
+ * `[along, height, offset]` and the wall's own yaw — the same maths the floor
+ * plan uses, so an item lands on paper where it lands in plan.
+ */
+function collectItems(
+  nodes: Nodes,
+  elevations: Map<string, { baseY: number }>,
+  warnings: string[],
+): ItemSolid[] {
+  const items: ItemSolid[] = []
+  let nested = 0
+  for (const node of Object.values(nodes)) {
+    if (!isType<ItemNode>(node, 'item')) continue
+    if (node.visible === false) continue
+    const parent = node.parentId ? nodes[node.parentId as AnyNodeId] : undefined
+    const [w, h, d] = getScaledDimensions(node)
+    if (!(w > 1e-4 && d > 1e-4 && h > 1e-4)) continue
+    let cx: number
+    let cz: number
+    let rotation: number
+    let baseY: number
+    const levelId = findLevelId(node, nodes)
+    const levelBase = elevations.get(levelId ?? '')?.baseY ?? 0
+    if (parent?.type === 'wall') {
+      const wall = parent as WallNode
+      const wallRotation = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0])
+      const zLocal =
+        node.asset.attachTo === 'wall-side'
+          ? ((wall.thickness ?? 0.1) / 2) * (node.side === 'front' ? 1 : -1)
+          : node.position[2]
+      const [ox, oz] = rotateVec(node.position[0], zLocal, wallRotation)
+      cx = wall.start[0] + ox
+      cz = wall.start[1] + oz
+      rotation = wallRotation + (node.rotation[1] ?? 0)
+      if (node.asset.attachTo === 'wall-side') {
+        const [dx, dz] = rotateVec(0, d / 2, rotation)
+        cx += dx
+        cz += dz
+      }
+      baseY = levelBase + (wall.supportOffset ?? 0) + node.position[1]
+    } else if (parent?.type === 'item' || parent?.type === 'shelf') {
+      nested++
+      continue
+    } else if (parent?.type === 'roof-segment' || parent?.type === 'block') {
+      nested++
+      continue
+    } else {
+      cx = node.position[0]
+      cz = node.position[2]
+      rotation = node.rotation[1] ?? 0
+      baseY = levelBase + node.position[1]
+    }
+    const corners: Vec2[] = (
+      [
+        [-w / 2, -d / 2],
+        [w / 2, -d / 2],
+        [w / 2, d / 2],
+        [-w / 2, d / 2],
+      ] as Vec2[]
+    ).map(([x, z]) => {
+      const [rx, rz] = rotateVec(x, z, rotation)
+      return [cx + rx, cz + rz] as Vec2
+    })
+    items.push({
+      kind: 'item',
+      id: node.id,
+      name: node.name ?? node.asset.name ?? 'item',
+      assetId: node.asset.id,
+      category: node.asset.category,
+      polygon: corners,
+      baseY,
+      topY: baseY + h,
+      levelId,
+    })
+  }
+  if (nested > 0) {
+    warnings.push(
+      `${nested} item(s) hosted on other items / roof faces are not drawn (their frame is the host mesh).`,
+    )
+  }
+  return items
+}
+
+/**
+ * Local-Y of a roof segment's top surface, in the segment's own frame.
+ *
+ * Exact for `flat`, `shed`, `gable` and `hip` — the four shapes whose slope
+ * planes are fully determined by `getSegmentSlopeFrame` + the ridge/hip plan
+ * linework (`getRoofSegmentPlanLinework`). `gambrel` is modelled as its two
+ * documented slope bands. `mansard` and `dutch` fall back to the hip surface
+ * and raise a warning: their waist geometry is generated by the CSG brush
+ * builder, which is not reachable headlessly.
+ */
+function segmentSurfaceY(segment: RoofSegmentNode, warnings: string[]) {
+  const frame = getSegmentSlopeFrame(segment)
+  const hw = segment.width / 2
+  const hd = segment.depth / 2
+  // The TOP of the roofing, as the 3D roof builds it (nodes/shared/
+  // roof-surface.ts `shinTopWh`): the deck and the shingles sit ON the
+  // plane through the plate, lifting the surface by their thickness measured
+  // along the slope — 7 in on a 6:12 main roof, a foot on a thick porch
+  // deck. Drawn on the plate plane, the vector roof sat that far below the
+  // captured picture on every elevation (Steve, 2026-09-10: "your vector
+  // roof sits too low ... in both locations").
+  const lift = (segment.deckThickness + (segment.shingleThickness ?? 0)) / (frame.cosTheta || 1)
+  const wallHeight = segment.wallHeight + lift
+  const tan = frame.tanTheta
+
+  const hip = (lx: number, lz: number) =>
+    wallHeight + tan * Math.min(hd - Math.abs(lz), hw - Math.abs(lx))
+
+  switch (segment.roofType) {
+    case 'flat':
+      return () => wallHeight
+    case 'shed':
+      // The 3D builder slopes from the high eave at lz = -hd down to lz = +hd.
+      return (_lx: number, lz: number) => wallHeight + tan * (hd - lz)
+    case 'gable':
+      return (_lx: number, lz: number) => wallHeight + tan * (hd - Math.abs(lz))
+    case 'hip':
+      return hip
+    case 'gambrel': {
+      const kink = hd * segment.gambrelLowerWidthRatio
+      const kinkY = frame.activeRh * segment.gambrelLowerHeightRatio
+      const upperRun = Math.max(1e-6, kink)
+      const upperSlope = (frame.activeRh - kinkY) / upperRun
+      return (_lx: number, lz: number) => {
+        const d = Math.abs(lz)
+        if (d >= kink) return wallHeight + tan * (hd - d)
+        return wallHeight + kinkY + upperSlope * (kink - d)
+      }
+    }
+    default: {
+      // mansard / dutch
+      const metrics = getDutchRoofMetrics(segment)
+      warnings.push(
+        `Roof segment ${segment.id} is a ${segment.roofType} roof — its waist geometry (inset ${metrics.inset.toFixed(2)} m) comes from the CSG brush builder and is not derivable headlessly. Drawn as an equivalent hip.`,
+      )
+      return hip
+    }
+  }
+}
+
+function collectRoof(
+  roof: RoofNode,
+  nodes: Nodes,
+  levelBaseY: number,
+  warnings: string[],
+): RoofSolid[] {
+  const solids: RoofSolid[] = []
+  for (const childId of roof.children) {
+    const segment = nodes[childId as AnyNodeId]
+    if (!isType<RoofSegmentNode>(segment, 'roof-segment')) continue
+    const frame = getSegmentSlopeFrame(segment)
+    const bounds = getRoofSegmentVisibleTopBounds(segment)
+    const originY = levelBaseY + roof.position[1] + segment.position[1]
+    const totalRotation = roof.rotation + segment.rotation
+    const segCenter = rotateY(segment.position[0], segment.position[2], roof.rotation)
+    const cx = roof.position[0] + segCenter[0]
+    const cz = roof.position[2] + segCenter[1]
+    const toWorld = (lx: number, lz: number): Vec2 => {
+      const r = rotateY(lx, lz, totalRotation)
+      return [cx + r[0], cz + r[1]]
+    }
+    const toLocal = (x: number, z: number): Vec2 => unrotateY(x - cx, z - cz, totalRotation)
+    const surfaceLocalY = segmentSurfaceY(segment, warnings)
+    const deckDrop = segment.deckThickness / (frame.cosTheta || 1)
+    const polygon: Vec2[] = [
+      toWorld(bounds.minX, bounds.minZ),
+      toWorld(bounds.maxX, bounds.minZ),
+      toWorld(bounds.maxX, bounds.maxZ),
+      toWorld(bounds.minX, bounds.maxZ),
+    ]
+    solids.push({
+      kind: 'roof',
+      id: segment.id,
+      local: { minX: bounds.minX, maxX: bounds.maxX, minZ: bounds.minZ, maxZ: bounds.maxZ },
+      polygon,
+      originY,
+      deckDrop,
+      toWorld,
+      toLocal,
+      axisZ: rotateY(0, 1, totalRotation),
+      surfaceY: surfaceLocalY,
+      // Eave = the deck plane carried out to the visible footprint edge,
+      // which `getRoofSegmentVisibleTopBounds` puts `overhang * cos(pitch)`
+      // horizontally past the wall — so the drop is `overhang * sin(pitch)`.
+      //
+      // DEFECT (core, not this package): `computeGutterEaveY`
+      // (packages/core/src/schema/nodes/gutter.ts:138) instead drops by
+      // `overhang * tan(pitch)`, i.e. it reads `overhang` as a HORIZONTAL run
+      // while the bounds helper reads it as a SLOPE length. The two disagree
+      // by `overhang * sin * (1/cos - 1)` — 23 mm at 300 mm / 30 deg. This
+      // builder stays self-consistent with the footprint it draws.
+      eaveY: originY + segment.wallHeight - frame.sinTheta * segment.overhang,
+      ridgeY: originY + segment.wallHeight + getActiveRoofHeight(segment),
+      plateY: originY + segment.wallHeight,
+      color: roofColorOf(roof, segment),
+      pitchDeg: typeof segment.pitch === 'number' ? segment.pitch : 0,
+    })
+  }
+  return solids
+}
+
+function terrainSampler(nodes: Nodes, warnings: string[]): (x: number, z: number) => number {
+  const site = Object.values(nodes).find((node): node is SiteNode => node?.type === 'site')
+  const terrain = site?.terrain
+  if (!terrain) return () => 0
+  const field = decodeTerrainField(terrain)
+  if (!field) {
+    warnings.push('Site terrain present but undecodable — grade drawn flat at 0.00 m.')
+    return () => 0
+  }
+  return (x: number, z: number) => surfaceHeightAt(field, x, z)
+}
+
+/**
+ * Walk the scene once and turn it into the solid set both drawing builders
+ * consume. Everything here comes from the kinds' own geometry helpers
+ * (`getWallPlanFootprint` + `calculateLevelMiters`, `getLevelElevations`,
+ * `getSegmentSlopeFrame`, `decodeTerrainField`) — no re-derivation.
+ */
+export function buildBuildingModel(nodes: Nodes): BuildingModel {
+  const warnings: string[] = []
+  const elevations = getLevelElevations(nodes as Record<AnyNodeId, AnyNode>)
+  const levels: LevelInfo[] = []
+  const walls: WallSolid[] = []
+  const prisms: PrismSolid[] = []
+  const roofs: RoofSolid[] = []
+
+  for (const node of Object.values(nodes)) {
+    if (!isType<LevelNode>(node, 'level')) continue
+    const elevation = elevations.get(node.id)
+    levels.push({
+      id: node.id,
+      name: node.name ?? `Level ${node.level}`,
+      ordinal: node.level,
+      baseY: elevation?.baseY ?? 0,
+      height: elevation?.height ?? DEFAULT_WALL_HEIGHT,
+    })
+  }
+  levels.sort((a, b) => a.baseY - b.baseY)
+
+  // Mitres are a level-wide computation — do it once per level, exactly the
+  // way the floor-plan layer's `computeFloorplanLevelData` does.
+  const wallsByLevel = new Map<string, WallNode[]>()
+  for (const node of Object.values(nodes)) {
+    if (!isType<WallNode>(node, 'wall')) continue
+    const levelId = findLevelId(node, nodes) ?? '__orphan__'
+    const bucket = wallsByLevel.get(levelId)
+    if (bucket) bucket.push(node)
+    else wallsByLevel.set(levelId, [node])
+  }
+
+  for (const [levelId, levelWalls] of wallsByLevel) {
+    const baseY = elevations.get(levelId)?.baseY ?? 0
+    const miters = calculateLevelMiters(levelWalls)
+    // The schedule's marks, so the tags on paper and the schedule rows agree.
+    let marks: ReadonlyMap<string, string> = new Map()
+    if (levelId !== '__orphan__') {
+      try {
+        marks = resolveMarkDetail(nodes as never, levelId as never).marks
+      } catch {
+        warnings.push(`Opening marks could not be resolved for level ${levelId}.`)
+      }
+    }
+    for (const wall of levelWalls) {
+      const polygon = getWallPlanFootprint(wall, miters).map(
+        (point) => [point.x, point.y] as const,
+      ) as Vec2[]
+      if (polygon.length < 3) {
+        warnings.push(`Wall ${wall.id} has a degenerate footprint — skipped.`)
+        continue
+      }
+      if (wall.curveOffset && Math.abs(wall.curveOffset) > 1e-4) {
+        warnings.push(
+          `Wall ${wall.id} is curved — sectioned against its true footprint, but its openings are placed on the chord.`,
+        )
+      }
+      const dx = wall.end[0] - wall.start[0]
+      const dz = wall.end[1] - wall.start[1]
+      const length = Math.hypot(dx, dz)
+      if (length < 1e-6) continue
+      const assembly = resolveWallAssembly(wall)
+      const axis: Vec2 = [dx / length, dz / length]
+      const normal: Vec2 = [-axis[1], axis[0]]
+      const solid: WallSolid = {
+        kind: 'wall',
+        id: wall.id,
+        polygon,
+        start: [wall.start[0], wall.start[1]],
+        end: [wall.end[0], wall.end[1]],
+        axis,
+        normal,
+        length,
+        thickness: getWallThickness(wall),
+        // WS5 owns this call: +1 = exterior on the +normal (front) face,
+        // -1 = the -normal (back) face, with the +normal fallback already
+        // applied. The cut's layer order flips with it.
+        exteriorSign: assembly.exteriorSideResolved,
+        layers: assembly.layers,
+        exteriorFinish: exteriorFinishOf(wall),
+        claddingColor: claddingColorOf(wall),
+        baseY: baseY + (wall.supportOffset ?? 0),
+        // a wall without its own height is the storey's height, as the 3D
+        // builds it — the old 2.5 m default drew a 9 ft level's walls 8'-2"
+        // tall under a roof derived at 9 ft (2026-09-09: a white band at the
+        // plate and the rake ending short of the eave on a hand-drawn house)
+        topY:
+          baseY +
+          (wall.supportOffset ?? 0) +
+          (wall.height ?? elevations.get(levelId)?.height ?? DEFAULT_WALL_HEIGHT),
+        underpinning: wall.underpinning
+          ? {
+              rimBottomY: baseY + (wall.supportOffset ?? 0) - wall.underpinning.rim,
+              stemBottomY:
+                baseY + (wall.supportOffset ?? 0) - wall.underpinning.rim - wall.underpinning.stem,
+            }
+          : null,
+        openings: [],
+        levelId: levelId === '__orphan__' ? null : levelId,
+      }
+      solid.openings = collectOpenings(solid, nodes, warnings, marks)
+      walls.push(solid)
+    }
+  }
+
+  for (const node of Object.values(nodes)) {
+    if (!node) continue
+    if (isType<SlabNode>(node, 'slab')) {
+      const baseY = elevations.get(findLevelId(node, nodes) ?? '')?.baseY ?? 0
+      if (node.polygon.length < 3) continue
+      prisms.push({
+        kind: 'slab',
+        id: node.id,
+        polygon: node.polygon.map((p) => [p[0], p[1]] as Vec2),
+        // slab.ts: "the solid occupies [elevation - thickness, elevation]".
+        bottomY: baseY + node.elevation - node.thickness,
+        topY: baseY + node.elevation,
+        levelId: findLevelId(node, nodes),
+      })
+      if (node.holes.length > 0) {
+        warnings.push(
+          `Slab ${node.id} has ${node.holes.length} hole(s) — holes are not subtracted from the section cut.`,
+        )
+      }
+      continue
+    }
+    if (isType<CeilingNode>(node, 'ceiling')) {
+      const levelId = findLevelId(node, nodes)
+      const baseY = elevations.get(levelId ?? '')?.baseY ?? 0
+      const height = node.height ?? elevations.get(levelId ?? '')?.height ?? DEFAULT_WALL_HEIGHT
+      if (node.polygon.length < 3) continue
+      prisms.push({
+        kind: 'ceiling',
+        id: node.id,
+        polygon: node.polygon.map((p) => [p[0], p[1]] as Vec2),
+        bottomY: baseY + height - 0.012,
+        topY: baseY + height,
+        levelId,
+      })
+      continue
+    }
+    if (isType<RoofNode>(node, 'roof')) {
+      const baseY = elevations.get(findLevelId(node, nodes) ?? '')?.baseY ?? 0
+      roofs.push(...collectRoof(node, nodes, baseY, warnings))
+    }
+  }
+
+  const stairCount = Object.values(nodes).filter((node) => node?.type === 'stair').length
+  if (stairCount > 0) {
+    warnings.push(
+      `${stairCount} stair(s) drawn as their flight's box with a tread line per riser in elevation; a section cut does not pass through them (the stair system's tread and stringer meshes are not read here).`,
+    )
+  }
+
+  const items = collectItems(nodes, elevations, warnings)
+  const gradeAt = terrainSampler(nodes, warnings)
+  const features = collectFeatures(nodes, elevations, warnings, gradeAt)
+  // The model is drawn in the FIRST building's own frame (walls, slabs,
+  // roofs are level-local), so the grade the drawings read is the terrain
+  // under that building, in that frame: a point (x, z) of the model is
+  // carried to the site by the building's stand and turn before the field
+  // is asked, and the height comes back less the building's y — a platform
+  // 18 in over the ground reads 18 in over its grade line.
+  const primary = Object.values(nodes).find((node) => node?.type === 'building') as
+    | { position?: number[]; rotation?: number[] | number }
+    | undefined
+  const bp = primary?.position ?? [0, 0, 0]
+  const yaw = Array.isArray(primary?.rotation)
+    ? (primary.rotation[1] ?? 0)
+    : typeof primary?.rotation === 'number'
+      ? primary.rotation
+      : 0
+  const gradeAtLocal = (x: number, z: number): number =>
+    gradeAt(
+      (bp[0] ?? 0) + x * Math.cos(yaw) + z * Math.sin(yaw),
+      (bp[2] ?? 0) - x * Math.sin(yaw) + z * Math.cos(yaw),
+    ) - (bp[1] ?? 0)
+  const roofFinish = roofFinishOf(nodes)
+  // The roofing the building records (the generator's palette — the finish
+  // key's swatch) is what the roof prints in: a textured shingle preset's
+  // catalog colour is its base tint, not the roofing colour the reader sees.
+  if (roofFinish?.hex) for (const roof of roofs) roof.color = roofFinish.hex
+  return {
+    walls,
+    prisms,
+    roofs,
+    items,
+    features,
+    levels,
+    gradeAt: gradeAtLocal,
+    warnings,
+    roofFinish,
+    trimHex: trimHexOf(nodes),
+  }
+}

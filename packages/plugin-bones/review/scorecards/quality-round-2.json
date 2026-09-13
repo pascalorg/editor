@@ -1,0 +1,104 @@
+{
+  "round": 2,
+  "pin": "bb2cebf",
+  "verdict": "NO-SHIP — 2 FAIL, 9 FLAG, 7 PASS. Every round-1 data/plan fix landed and verified, but the headline experience (A1: the x-ray never opens a wall — every face is the host dot-stipple film) is unchanged, and the ICC code link lands on an unfiltered list because ICC ignores ?query=.",
+  "items": {
+    "A1": {
+      "status": "FAIL",
+      "evidence": "/tmp/r2c-facade-on.png",
+      "note": "Data layer FIXED: slab-side probe tags exactly the 9 perimeter walls of 24 exterior; sheathing/WRB/cladding 35 each, stack order correct on the outdoor side for 9/9 (drywall -0.076, stud 0, sheathing +0.075, WRB +0.081, cladding +0.091), 0 exterior layers on interior walls, all 16 wall devices on interior faces. VIEWPORT STILL FAILS: with X-ray vision ON (plugin default, host chip 'Cutaway') every wall face renders as the host charcoal dot-stipple film with studs and orange device boxes showing through; nothing opens toward the camera at any of 5 orbit angles. Same camera with X-ray vision OFF ('Full height') shows cream drywall + blue-grey cladding correctly (/tmp/r2c-facade-off.png) — proof the layers render and the film is what swamps them. Root cause: private-editor editor/packages/viewer/src/systems/wall/wall-cutout.tsx:42 requires wallNode.frontSide/backSide === 'exterior'; this scene's walls are interior/interior and Bones never writes its derived tags back (renderer.tsx untouched in bb2cebf). Repro: fresh clone, open panel, orbit right-drag 130px x4 -> /tmp/r2-a-0..4.png, /tmp/r2-crop-westfacade.png, /tmp/r2-crop-southfacade.png."
+    },
+    "A2": {
+      "status": "FLAG",
+      "evidence": "/tmp/r2-a-0.png",
+      "note": "Orbit is smooth, no popping lag over 4 quarter turns (/tmp/r2-a-0..4.png), but no opened/closed face ever swaps because no face is ever opened (see A1). Unblocked only by A1."
+    },
+    "A3": {
+      "status": "PASS",
+      "evidence": "/tmp/a3-cand0.png",
+      "note": "Unchanged from round 1: injected tree occludes the skeleton (wire terminates at the canopy at 20x crop); below-grade ghost restricted to foundation/floor-framing."
+    },
+    "A4": {
+      "status": "FLAG",
+      "evidence": "/tmp/r2-a-panel.png",
+      "note": "Floor toggle now explains the empty ground floor: 'Ground floor is slab-on-grade — see Foundation for the slab and footings', verified appearing/disappearing live with the toggle (/tmp/r2-3d.log FLOOR_OFF/FLOOR_ON). Still no per-room slab-less note: the phantom 8x5 room at -4..4 x -2.5..2.5 has no slab, gets no warning, and its 4 walls fall to 'interior' because both probe sides are uncovered."
+    },
+    "A5": {
+      "status": "FLAG",
+      "evidence": "/tmp/r2-probe2-final.log",
+      "note": "Dedupe works: panel warns '6 duplicate overlapping walls skipped (framed once, not twice)'; members 1265 -> 1165, devices 126 -> 87; 2x6 453 -> 339 pcs and 4618 -> 3404 bd-ft (-26%, the ~20% target); stud pairs within 4 cm 49 -> 8 of 207. Residual exact coincidence: 11 framing members (4 studs, 6 backings, 1 cripple) emitted twice by the SAME wall (stud|5.50,1.33,0.22 x2 from ...4sxhrx; backing|8.67,0.60,4.00 x2 from ...ak1liv) plus a T-junction stud pair (ak1liv/hhi8wf at 8.87,4.00), and 108 exactly coincident wire-run segments — all 11 circuits share one homerun centerline, 139.3 m of 446.6 m (31%) of drawn wire (/tmp/r2-probe5-wires.log)."
+    },
+    "A6": {
+      "status": "FLAG",
+      "evidence": "/tmp/r2-probe2-final.log",
+      "note": "Palette fixed: 11 circuits all distinct, closest RGB distance 45 (GEN-1 #8c29ae vs GEN-3 #ae2991; LTG-1 #ae8a29 vs LTG-3 #93ae29), cross-family min 48. Framing vs layers vs MEP read cleanly with X-ray OFF (/tmp/r2c-facade-off.png). Two legibility holes: with X-ray ON every wall face is charcoal film so layer colors are invisible at house scale (A1), and the 11 coincident homeruns mean only one colour is ever visible along the spine."
+    },
+    "B1": {
+      "status": "PASS",
+      "evidence": "/tmp/r2-panel-default.png",
+      "note": "CTA full-width (256 of 288 px), 14px/600, reads '📐 Blueprints / 7 print-ready sheets · LOD 400' and the popup exports exactly 7 sheets (/tmp/r2-panel.log SHEETS)."
+    },
+    "B2": {
+      "status": "FAIL",
+      "evidence": "/tmp/r2-icc-query-fl.png",
+      "note": "Picker itself is fine: Auto row shows the guess ('Auto — NY'), selection is no longer inert (AUTO 1165m, FL 1878m, CA 1301m), FL text reads 'Florida Building Code, Residential — 8th Edition (2023), 2021 IRC base, effective 2023-12-31' which matches the live ICC listing. The LINK is broken: https://codes.iccsafe.org/search?query=Florida%20Building%20Code%2C%20Residential returns HTTP 200 but ICC drops the param and redirects to /search/titles?searchTermAny= (empty) — an unfiltered newest-titles list; a junk query gives the identical page (/tmp/r2-icc-query-junk.png), so the Florida hits are coincidence, not search results. Correct form verified: /search/titles?searchTermAny=Florida+Building+Code+Residential -> '1,613 title results', top hits '2023 Florida Building Code, Residential, Eighth Edition — 2021 IRC Amended — Effective Date: Dec 31, 2023' (/tmp/r2-icc-termany.png)."
+    },
+    "B3": {
+      "status": "FLAG",
+      "evidence": "/tmp/r2-3d.log",
+      "note": "Roof toggle is LIVE at last: 1165 <-> 1138 members (27: rafter 23, rim-joist 4) with a 'Roof framing plan' sheet appearing/disappearing; Floor toggle live with its slab-on-grade note; counts plausible; flags wrap to 2 lines with a title tooltip on the row (no truncation soup). But each toggle costs ~14 s (measured 14271 ms) with no spinner or pending state anywhere in panel.tsx — the panel just sits stale."
+    },
+    "B4": {
+      "status": "PASS",
+      "evidence": "/tmp/r2-320.png",
+      "note": "Default sidebar 288 px: spacing control reads '16 in' / '24 in' (the unselected pill wraps to two lines, cosmetic), disclaimer intact, CTA intact. 10 takeoff spans truncate at 288 px and 12 at 320 px, but every row div carries title=\"item — detail\" so the full text is one hover away; flag rows wrap instead of truncating."
+    },
+    "C1": {
+      "status": "FLAG",
+      "evidence": "/tmp/r2c-titleblock.png",
+      "note": "Fixed: border on all 7 sheets, 2-line title block that no longer overruns, RESOLVED jurisdiction (no raw AUTO — 'Jurisdiction: FL — ...', and 'NY' under Auto), disclaimer present, scale bar plausible on plan sheets (3 m bar = 190 px at the wall-sheet scale; 2 m on MEP) and correctly absent on the schedules sheets. Remaining: line 1 is clipped at 66 chars — 'Jurisdiction: FL — Florida Building Code, Residential — 8th Editi…' — so the IRC base and effective date never print; project line shows an empty level name ('Pascal project — Level')."
+    },
+    "C2": {
+      "status": "PASS",
+      "evidence": "/tmp/r2c-found-corner.png",
+      "note": "Foundation corners read as single mitered runs; T-junctions butt cleanly, no crossed boxes or Y artifacts. Only wart: a 2-tick stub overshoot at the NW corner."
+    },
+    "C3": {
+      "status": "FLAG",
+      "evidence": "/tmp/r2-sheet-3.png",
+      "note": "Fixed: legend rows complete and per-circuit ('GEN-1 — 15A/14AWG · general receptacles', 11 rows) on a white backing, colours identical to the 3D palette, 70 device tags on-plan with 0 collisions under 14 px after the spiral de-collision, exactly one 'P' panel symbol, homeruns converge on it. Remaining: the 11 homeruns are drawn on the identical centerline so the spine shows a single colour and cannot be traced; and the sibling Plumbing + HVAC sheet (/tmp/r2-sheet-4.png) has NO legend at all for SR/SC/AH/T/RA/EF and draws no wall outline, so it reads as a floating diagram."
+    },
+    "C4": {
+      "status": "FLAG",
+      "evidence": "/tmp/r2c-legend-overlap.png",
+      "note": "Fixed: members stay inside the border (wall sheet drawn extent x 48..1007, y 66..668 of 1056x816), legend now shows the dominant size per role matching the takeoff (stud 2x6, header 4x8, rafter 2x6), wall junctions readable. New regression from the white legend backing (fill-opacity 0.92): the legend box (x 42..294, y 42..170) sits ON the plan and erases the west wing's top-left top plate and its left stemwall (visible re-emerging at the box edges), and hides the first two rafters on the roof sheet (/tmp/r2-sheet-2.png)."
+    },
+    "C5": {
+      "status": "FLAG",
+      "evidence": "/tmp/r2c-sched-clip.png",
+      "note": "Fixed: two-column rows fit, detail text present in parentheses, no 'Flags · FLAG' rows — flags print as a red list on the last page. Still clipping mid-word/mid-paren at 62 chars: 'Wall framing · 2x4 — 12 pcs (20 ft stock (field splice — run …', 'Mortar (Type S) — 51 bags (~20 blocks per 80-l…', 'GFCI receptacles — 25 pcs (NEC 210.8 wet locatio…', 'Nails 16d common — 25.9 lbs (3.5\" — R602.3(1) sch…' while sheet 2 of 2 is 97% empty (3 rows + flags)."
+    },
+    "C6": {
+      "status": "PASS",
+      "evidence": "/tmp/r2-panel.log",
+      "note": "7 sheets, 7 print boxes, each 816 px tall at y -4712/-3896/-3080/-2264/-1448/-632/184 — exactly 816 apart, one sheet per page; all sheets 1056x816 landscape letter @96dpi."
+    },
+    "D1": {
+      "status": "PASS",
+      "evidence": "/tmp/q9.log",
+      "note": "Unchanged from round 1: spot-checked sections (R602.3(1), R403.1, IRC R314, NEC 210.8/210.52, IRC P3005.2, M1505) all resolve against docs/research/."
+    },
+    "D2": {
+      "status": "PASS",
+      "evidence": "/tmp/r2-320.png",
+      "note": "Code names resolve correctly for all three: FL 'Florida Building Code, Residential — 8th Edition (2023), 2021 IRC base, effective 2023-12-31' (matches the live ICC listing '2023 Florida Building Code, Residential, Eighth Edition / 2021 IRC Amended / Effective Dec 31, 2023'), NY '2025 Residential Code of New York State (2024 IRC base), effective 2025-12-31', CA '2025 California Residential Code (CRC), Title 24 Part 2.5 (2024 IRC base), effective 2026-01-01' (data/jurisdictions-adoption.json). The link target itself is broken — scored in B2."
+    }
+  },
+  "topFixes": [
+    "A1 — make the x-ray actually open walls: write Bones' derived exterior/interior side tags onto the host wall nodes (or drive per-wall host wall mode / draw Bones' own opaque faces) so wall-cutout.tsx:42 can hide the camera-side exterior walls instead of falling back to materials.invisible. Today every face is charcoal dot-stipple film with X-ray ON, and the new sheathing/WRB/cladding stack is only legible with X-ray OFF.",
+    "B2 — fix the ICC deep link: https://codes.iccsafe.org/search/titles?searchTermAny=<terms>. The current ?query= is silently dropped and lands on an unfiltered title list (verified identical page for a junk query).",
+    "A5/A6 — offset each circuit's homerun laterally (e.g. 1 cm per index within the bay): 108 wire segments / 31% of drawn wire length are exactly coincident, so only one circuit colour is ever visible. Also drop the 11 remaining same-wall duplicate members (4 studs, 6 backings, 1 cripple) and the T-junction stud pair at 8.87,4.00.",
+    "C1/C5 — stop clipping text on the sheets: give the title block a third line (or 1 pt smaller) so the IRC base + effective date print, and wrap schedule rows instead of clipping at 62 chars — sheet 2 of 2 is 97% blank while sheet 1 rows lose their detail mid-paren.",
+    "C4/C3 — move the legend into dead space (or auto-relocate it): the new 0.92-opaque white backing erases the west wing's top-left walls on the wall sheet and the first rafters on the roof sheet. Give the Plumbing + HVAC sheet a legend for SR/SC/AH/T/RA/EF plus a wall outline for context."
+  ]
+}

@@ -1,0 +1,73 @@
+{
+  "round": "MANUAL-J-LITE paper round (blueprint examiner)",
+  "pin": "8515b63",
+  "branch": "feat/manual-j-sizing (4 commits on master eb27037; manifest docs/plans/MANUALJ-EXPECTED-DIFF.md)",
+  "protocol": "Per review/BLUEPRINTS.md — pure buildPlanSet bun harness at the exact pin (detached worktree /tmp/review-manualj-22667-1787454403; editor never opened): demo fc866f2f271b over HTTP composed under TX / FL / MN / INTL, plus two synthetic composes mirroring the 5-ton-split gate fabric (glazedShell 70x30, 12 east windows 2.4x2.4, laundry+bedroom+living zones, slab, door) under FL (multi-unit) and MN (divergence). Identical harness run in the master checkout at eb27037 for the regression baseline (fixed date string so byte-diffs are real). Per-sheet byte-diffs pin-vs-base on all four demo composes; full member/fixture JSON diff for demo-FL; 12 sheets + 4 zoom crops rasterized with Playwright page.setContent @2x and ALL looked at (/tmp/bp-mj/png/). Scratch harness files deleted from both trees after.",
+  "verdict": "APPROVE",
+  "suite": {
+    "pass": 1660,
+    "todo": 1,
+    "fail": 0,
+    "tests": 1661,
+    "assertions": 49006,
+    "files": 62,
+    "tsc": "clean (bunx tsc --noEmit at the exact pin, review worktree)",
+    "note": "Exact counts at 8515b63 — matches the manifest's stated 1660/0. No gated checklist row regressed."
+  },
+  "items": {
+    "FOCUS-1-TX-schedules-basis": {
+      "status": "PASS",
+      "checklist": ["M2", "P4", "C5", "P1"],
+      "evidence": "/tmp/bp-mj/png/tx-sched-5of5.png + fl-sched-5of5.png: characteristics block prints 'Cooling ~0.7 ton (MANUAL J-LITE load)' (the LOAD figure — 0.68 tons, same number the band warning cites) and the basis line 'cooling per Manual J-LITE (M1401.3) — verify local design conditions; not a full Manual J' — wrapped WHOLE at the 100-char budget (TX wraps after 'cooling per'; MN after '· cooling'), every wrapped line ends well inside the page border (longest line ~975 of 1056 svg units vs border ~1036 — the round-5 overrun class stays dead). Takeoff row prints 'HVAC · AC condensers — 1 pcs (1 × 1.5 tons (1.5 tons total) — Manual J-lite sizing, Manual S governs (M1401.3))' wrapped whole. Cabinet/fixture labels for the panel verified in the compose JSON: 'AC Condenser #1 — 1.5 tons (Manual J-lite, zone 2A design 35°C)', AH 'Air handler — 1.5 ton (Manual J-lite, zone 2A design 35°C; Manual J/S govern)', six term-by-term notes in characteristics.notes (panel/CSV — the sheet carries the basis line per D7, notes stay panel-side per D6).",
+      "note": "The sheet's 'Envelope UA 68.1 W/K' (wall+window, ΔT 22 winter row) and the cooling load (whose UA is 79.9 with the ceiling term) sit on one line — not a contradiction (the basis line names Manual J-lite and the notes carry the breakdown panel-side), but see recommendation 2."
+    },
+    "FOCUS-2-multi-unit": {
+      "status": "PASS",
+      "checklist": ["M2", "S4", "P4", "P2", "A2"],
+      "evidence": "multiunit-FL (load 5.13 tons → Manual S 5.5 → 2 units × 3 tons): TWO cabinets compose outdoors 1.55 m apart ('AC condenser #1/#2 — 3 tons outdoor unit'), two CU bubbles + DS print on the MEP sheet (/tmp/bp-mj/png/multi-mep.png, zoom multi-mep-zoom.png), 2 pads / 2 whips / 2 disconnects / line-set '2 runs' on the takeoff, circuits AC-1 + AC-2 (30A/10AWG/3600VA) each on the electrical legend. Takeoff row math RIGHT per D5: 'AC condensers — 2 pcs (2 × 3 tons (6 tons total) — Manual J-lite sizing, Manual S governs (M1401.3))' — installed sum 6 above the 5.5 plan, which is what you buy. The single-indoor-coil warning prints WHOLE in Flags (multi-sched-2of2.png): 'cooling load takes 2 condensers — ONE air handler/duct system drawn (single indoor coil/exchanger assumption; multi-system zoning not modeled, Manual S/D govern) — verify'; AH label carries 'serves 2 condensers, single indoor coil assumption'. Register census 3 pcs == 3 SR bubbles drawn (A2); scale bar honest (24 m bar measures 24.1 m, A1).",
+      "note": "At BASE the same compose books ELEVEN condensers (22,604 sqft / 450 rule = 50.2 tons) — /tmp/bp-mj/png/multi-mep-zoom-BASE.png is a wall of overlapping CU/DS bubbles. The branch turns that absurdity into real sizing."
+    },
+    "FOCUS-3-INTL-fallback": {
+      "status": "PASS",
+      "checklist": ["M2", "C5"],
+      "evidence": "demo-INTL compose JSON: the trigger prints VERBATIM on both panel labels — 'Air handler — 3 ton (assumed 1 ton/550 sqft — Manual J-lite fallback: climate zone unknown for 'INTL' — set the jurisdiction; Manual J/S govern)' and 'AC Condenser #1 — 3 tons (assumed 1 ton/550 sqft — Manual J-lite fallback: climate zone unknown for 'INTL' — set the jurisdiction)'; characteristics note gains '(Manual J-lite unavailable: climate zone unknown for 'INTL' — set the jurisdiction)'. ON PAPER (intl-sched-5of5.png) the fallback keeps the legacy wording exactly as the manifest enumerates: 'Cooling ~1.9 ton (RULE OF THUMB)', basis line 'schematic — not a Manual J', takeoff row '1 × 3 tons (3 tons total) — assumed sizing, Manual S governs (M1401.3)'. No Manual S band claim on the fallback (correct — its label states which rule sized it). Fallback sizing identical to base (3 tons then and now).",
+      "note": "The trigger string itself reaches the panel + CSV, not the sheet — per D5/D7 by design; the sheet still states 'assumed sizing' + 'RULE OF THUMB', never a silent basis swap."
+    },
+    "FOCUS-4-climate-divergence": {
+      "status": "PASS",
+      "checklist": ["M2"],
+      "evidence": "Same 12-window fabric, two jurisdictions, DIFFERENT tonnage ON PAPER: FL prints '2 pcs (2 × 3 tons (6 tons total)…' + 'Cooling ~5.1 ton' + zone 2A / R-13 (multi-sched-2of2.png); MN prints '1 pcs (1 × 3.5 tons (3.5 tons total)…' + 'Cooling ~3.5 ton' + zone 6A / R-30 (mn-sched-3of3.png) — ΔT 11 vs 7 K and the deeper envelope both visible in the printed characteristics. Panel labels diverge too ('zone 2A design 35°C' vs 'zone 6A design 31°C'). The demo house diverges on the load figure as well (TX/FL ~0.7 vs MN ~0.5) with both floored at 1.5 tons — the floor is exactly what the band warning names.",
+      "note": "MN in-band (3.5/3.46 = 101%) → correctly NO band warning; FL multi-unit in-band (5.5/5.13 = 107%) → same."
+    },
+    "FOCUS-5-regression-byte-equality": {
+      "status": "PASS",
+      "checklist": ["E5", "P3", "C6", "S4"],
+      "evidence": "Per-sheet byte-diff pin-vs-base at a FIXED date. demo-TX (17 sheets): cover, foundation, wall/roof framing, plumbing+HVAC plan, all 4 elevations, schedules 1/3 BYTE-IDENTICAL; the only diffs are the enumerated classes — electrical sheet AC-1 legend '40A/8AWG' → '30A/10AWG' (D2: the circuit follows the honest tonnage), section A-A ONE cut rect 12.7→12.8 px (D8 sub-mm trunk re-round), schedules cooling/row/flag lines, flags-continued gains the band warning. demo-MN: same shape (10 sheets byte-identical). demo-INTL: EVERY sheet byte-identical except schedules 5/5 (takeoff row gains the per-unit wording; sizing unchanged). demo-FL: full member JSON diff = 19 members (18 label-only cfm/label changes + the single D8 dims[2] 0.2528→0.2531) + 9 fixture labels, ZERO position deltas; the all-sheets byte-diff is exactly 'SHEET n/15'→'n/16' (schedules paginated 4→5 pages when the band-warning flag lines + longer AC row overflowed the last-page budget — P6 machinery, verified line-by-line on foundation/framing/elevations: no other delta). The Manual-S band warning prints in Flags where fired: TX + MN on the flags-continued sheet (tx-flags-cont.png — wrapped whole, ⚑-keyed, legible), FL on schedules 5/5. Warnings 10→11 (TX/MN), 6→7 (FL), 10→10 (INTL) — the delta is exactly the band warning.",
+      "note": "The D8 geometry class is real but sub-print-size (0.1 px at 1:75); the manifest's '563/563 members, only this dims[2]' claim reproduces on the live demo graph (2240/2240, one dims delta)."
+    },
+    "SWEEP-invariants": {
+      "status": "PASS",
+      "checklist": ["E1-E8", "S1-S17", "M1-M4", "P1-P6", "A1-A6"],
+      "evidence": "bun test at 8515b63 (review worktree): 1660 pass / 1 todo / 0 fail — 1661 tests across 62 files, 49,006 expect() calls; bunx tsc --noEmit clean. New gates present and green: src/engines/manual-j.test.ts (hand-computed four-term load, divergence, fallback triggers, Manual S band), the 'Manual-J-lite engine sizing' describe in hvac.condensers.test.ts (hand-derived tonnage w/ load-band sanity pin, 5-ton split w/ A6 triple + takeoff mirror, FL-vs-MN, band warning + fallback silence), characteristics coherence + fallback arm, plan-set paper pins (Manual-J-lite basis + rule-of-thumb never coexist). Checklist row M2 rewritten in the same commits; master-baseline.json recaptured (D8).",
+      "note": "Title blocks (P3/C6) verified on every rasterized sheet: jurisdiction + code + effective date, LOD stamp, fixed date, SHEET n/N consistent after the FL renumber."
+    },
+    "FLAG-mep-bubble-crowding": {
+      "status": "FLAG",
+      "checklist": ["P4", "P3"],
+      "evidence": "multiunit-FL MEP at 1:500 (multi-mep-zoom.png): the equipment-corner bubbles (CO/SO/T/SR + the return-air ring) overlap ring-on-ring — a dozen fixtures share ~2 m of plan at 7.6 px/m. PRE-EXISTING class, NOT this branch: the identical corner at base (multi-mep-zoom-BASE.png) is strictly worse (11 DS + 11 CU rings in a solid wall), and the demo composes print clean (tx-mep-zoom.png). The glyph de-collision loop's known budget limit at extreme scale on a synthetic 70 m shell.",
+      "note": "Carried to the glyph-seam residual queue: the bubble spiral budget could scale with px/m the way the tick budget was widened; no gate demanded here since no shipped scene composes this density."
+    },
+    "ADVISORY-synthetic-extremes": {
+      "status": "FLAG",
+      "checklist": ["C2"],
+      "evidence": "multiunit-FL schedules 2/2 prints 'Circuit LTG-2 — 2 devices (15A / 14 AWG / 64906 VA / AFCI)' — the lighting VA convention (area-derived) on an 1809 m² synthetic room books 65 kVA on a 15A breaker. Pre-existing electrical class untouched by this branch (demo scenes print sane VA); noted because the new honest HVAC sizing makes giant-scene paper otherwise credible.",
+      "note": "Queue candidate: cap/flag lighting-circuit VA the way receptacle circuits split — separate loop, electrical.ts owner."
+    }
+  },
+  "recommendations": [
+    "Panel-only trigger: consider echoing the Manual-J-lite fallback trigger on the schedules sheet's characteristics citation line (e.g. '… · schematic — not a Manual J (Manual J-lite unavailable: <trigger>)') — the paper reader of an INTL set sees 'assumed sizing' but not WHY the load didn't compute; one wrapRow line, byte-equal for manual-j-lite sets.",
+    "Two UAs on one block line: the printed 'Envelope UA 68.1 W/K' is the wall+window winter UA while the cooling load uses the ceiling-inclusive 79.9 W/K — consider printing the load's four-term one-liner (the first mj note, ~110 chars, wraps to 2 lines) under the basis line so the sheet's cooling figure is arithmetically self-contained.",
+    "Glyph residual (carried): scale the bubble de-collision spiral budget with px/m so 1:500-class sheets spread the equipment cluster; pin the multiunit corner as the gate compose if a shipped scene ever reaches this density.",
+    "Carried minors: even-distribution takeoff pages read ~half-filled on 5-page sets (deliberate P1 trade since round-3; unchanged here); lighting-circuit VA uncapped on synthetic giant rooms (C2 advisory above)."
+  ]
+}

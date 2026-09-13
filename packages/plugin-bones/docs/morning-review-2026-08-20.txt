@@ -1,0 +1,77 @@
+NIGHT-6 MORNING REVIEW — 2026-08-20
+====================================
+SHIPPED TO PROD: private-editor b836203e (editor 182f7c94 + plugin 85238a8e)
+
+YOUR BUGS, FIXED END-TO-END
+---------------------------
+1. Door/window drag in X-ray (the "rotates in place in red 90°" bug):
+   - Root cause: our own outlet fix (#683) made hidden walls invisible to
+     the cursor ray — the drag fell through to the grid.
+   - Host #689: the four door/window tools hold hidden walls as ray
+     targets while active. Ghost stays wall-aligned; slides smoothly.
+   - Host #694 (found by the loop while verifying #689): an INTERPOSED
+     hidden wall could silently steal the drag and re-parent your window
+     to a wall you can't see — now a MOVE only rides the node's own wall
+     (cross-wall re-parent needs a visible target). And a completed drag
+     is now EXACTLY ONE undo entry that restores the exact pre-drag
+     state (real undo-history leak, root-caused and fixed).
+2. Framing recomputes LIVE during the drag (plugin): kings/trimmers/
+   header follow the cursor at ~10Hz riding the host's transient
+   overrides; drop commits with no snap-back. Browser-verified with
+   screenshot evidence at the exact shipped pin.
+
+BIM-400 SWEEP (your "LOD-400 everywhere" directive)
+---------------------------------------------------
+Shipped batches B1-B5 + paper honesty:
+- B1 header truth: composed flags print VERBATIM (wrapRow loops, flag
+  block PAGINATES to continuation sheets — no silent warning drops).
+  Engineered headers book as supplier SKUs, not phantom 4x12 sticks.
+- B2 roof span discipline (pilot): R802.4/R802.5 tables live, purlins+
+  struts on gables, over-span flags.
+- B3 subfloor deck members: booked == built; floor sheet legible (deck
+  is a translucent labeled under-layer).
+- B4 takeoff double-booking dead: one row per material, fasteners
+  re-keyed. RIDER: climate-zone insulation/vapor labels were DEAD in
+  all 51 states (map-key mismatch) — revived + gated.
+- B5 PT sole plates on slab (R317.1) + honest anchor row text; 52-code
+  expected-diff manifest, storey-1 byte-equal.
+- Paper: storey-relative elevation lifts (upper-storey roofs drew a
+  full storey too high), derived bolt legend, LOD stamp honesty,
+  blocking full-extent cull (3 skeptic rounds to close the t/2 class).
+
+AUDIT WAVE 2 (the 4 dead auditors re-run): 27/27 confirmed, 0 rejected
+- BLOCKERS queued: B17 slab-on-grade concrete never booked (the biggest
+  pour on the job!) + no R506 vapor retarder; B19 air handler modeled
+  INSIDE the garage (M1602.2 forbids).
+- Also queued: B18 anchorage truth (J-bolts inside door ROs), B20
+  plumbing safety (no T&P/pan/strapping), B21d door/window schedule.
+
+YOUR 3 DAYTIME FEEDBACKS (all piloted, in verification now)
+-----------------------------------------------------------
+F1 heat pump: line-set routed for real — suction 3/4" (cold, insulated)
+   + liquid 3/8" pair from the condenser through ONE wall penetration
+   along the walls to the air handler; whip + disconnect verified; MEP
+   sheet legend + takeoff rows. (+9 tests)
+F2 wall selection: root-caused — hidden walls were fully invisible to
+   hover. Nearest-first now: wall in front of the sofa wins, outlets
+   keep their face priority, tool gates untouched. On :3002 NOW if you
+   want to feel it (dev server runs this branch).
+F3 crawlspace drainage: the fallback plumbing path (your scenes) drew
+   drains ABOVE the slab — now every WC/shower/sink gets through-floor
+   drops, buried sloped branches (P3005.3), one building drain to a
+   labeled sewer exit, flow arrows on the MEP sheet. (+11 tests)
+
+NUMBERS
+-------
+Tests 760 (night-5) → 961 on the F3 branch (950 shipped). ~10
+adversarial rounds; examiner ship-stamped the plan set. Host: 3 PRs
+merged (#689, #694, #695) + selection fix pending verification.
+
+OPEN QUESTIONS FOR YOU
+----------------------
+- Q13 (carried): X-ray wall-card solid-mode-only trade-off — still
+  awaiting your call.
+- F2 trade-off: with the selection fix, manually-hidden walls (without
+  Bones) are hoverable again too — flag if that feels wrong.
+- B17 (slab concrete) is the top of the next-night queue unless you
+  want the feedback branches shipped first.

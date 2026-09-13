@@ -1,0 +1,69 @@
+{
+ "round": "B12-lod400",
+ "pin": "de74cbc",
+ "branch": "feat/lod400-b12",
+ "base": "3fd0a1a",
+ "date": "2026-08-21",
+ "protocol": "Paper round on the B12 GES batch (f795f22 grounding electrode system — rods + GEC + intersystem termination + water bond, NEC 250; 76f2f3c 'GES' circuit family + legend rows + buried ghost convention; de74cbc self-skeptic round 2 — GEC strap-out beside the SE riser + dashed below-grade electrical on elevations) per review/BLUEPRINTS.md. Pure buildPlanSet via a scratch bun harness at the worktree roots (/private/tmp/pilot-b12 @ de74cbc vs the master checkout @ 3fd0a1a base, FIXED date so sheets byte-compare; harness deleted after). THREE sets each side: demo-house-FL (fc866f2f271b re-fetched over HTTP, graph byte-equal to the B13 snapshot — placed fixtures => placed-path plumbing => water bond MODELED; 16 sheets), gabled-TX (the gate's gabled-plan composite — non-rectangular, oblique walls — as a node graph with Living/Kitchen/Bedroom/Bathroom zones and NO placed fixtures => room-category FALLBACK plumbing => the honesty-warning exhibit; 13 sheets), gabled-TX-waterov (same + a bones:service water-entry node on the west wall, panel on the east => the bond must print READABLY across the plan and the warning must NOT fire; 13 sheets). All 42 pin sheets + 42 base sheets rasterized with Playwright page.setContent @2x (never the editor), every DIFF sheet walked by eye with zoom crops of the meter/GES plan zone and the grade band on elevations; member censuses + takeoff JSON diffed member-by-member; rod spacing/standoff, GEC lf sums and RGB color distances re-derived numerically. Evidence: /tmp/b12-exam/{out,out-base,crop-*}.",
+ "verdict": "APPROVE — the GES story is complete, honest and quantitatively exact on paper. Census diff pin-vs-base is EXACTLY the feature (+11 demo: 2 rods + 5 GES-1 legs + 3 GES-2 legs + IBT; +8 gabled: no bond, IBT labeled; nothing removed, no other row/sheet moved). Rods stand 6 ft apart to the millimeter and clear the footing projection (0.569 m off the wall centerline vs 0.203 m footing half-projection, both scenes); takeoff rows equal drawn geometry exactly (rods 2==2, GEC 12.5 lf == 12.51 drawn, jumper 4.4 == 4.41 / 74.7 == 74.73 on the override compose, clamps 3-with-bond / 2-without, IBT 1==1) and GES never books as NM-B; the fallback honesty warning prints VERBATIM in Flags wrapped whole; elevations show the rod pair as clean dashed below-grade verticals correctly layered over the B17 slab comb (no z-artifacts); the hue-160 family clears every circuit family by >=61.7 RGB (floor 20) and reads distinct on the sheet; SD-1/schedule/WH/glyph regressions are pixel- or byte-clean. Residual flags are dot-scale legibility polish (rod plan symbol, unkeyed IBT dot, rod-to-rod leg masked inside the slab comb, the demo's 4.4 lf bond stub too short for the pre-existing 40 px label rule) — none is a lie on paper; recommendations below.",
+ "items": {
+  "FOCUS-1-demo-ges-legibility": {
+   "status": "PASS",
+   "checklist": ["E7", "E3", "C2", "P2", "P3"],
+   "evidence": "demo-house-FL electrical rough-in (1:100): the GEC prints as a legible deep-green (#196b50) hook at the meter — strap-out beside the SE riser (the round-2 fix reads: the conductor is VISIBLE beside the heavy riser, not swallowed), grade run out to rod 1, then the 69.1 px rod-1->rod-2 run — with its 'GES-1' label printed clear of bubbles. Rod pair re-derived member-exact: 6 ft apart (|5.612-3.784| = 1.8288 m), 0.45 m out the meter wall's exterior normal = 0.569 m off the wall centerline, clear of the 0.203 m footing half-projection; on-paper spacing measures 69.1 svg-units / 1.8288 m = 37.78 u/m == the stated 1:100 EXACTLY (letter sheet at 96 dpi: 37.79; A1 0.03%). COLORS (LOOKED + computed): GES-1 nearest neighbor is AC-1 at 61.7 RGB (deep navy vs deep blue-green — distinct on the sheet), GES-2 #94e6de nearest AC-3 at 115.2, GES-1-vs-GES-2 224.5; nothing else on the sheet is pale cyan or deep blue-green — both clear the gated 20-RGB floor with >3x margin and READ distinct at print zoom. IBT: emitted at the meter (position re-derived: mount - 0.45 m), prints on elevations as a small box below the EM; on the plan it is a ~2 px unkeyed ochre dot (advisory below). Water bond on the demo: panel and water entry are 0.6 m apart, so the modeled bond is 4.4 lf and mostly VERTICAL — in plan a ~4.5 px pale stub behind the P/G bubbles with no circuit label (the pre-existing '< 40 px too-short-to-label' rule, round-3 de-collision); the legend row + takeoff row + the override exhibit carry the path. Pixel-diff pin-vs-base confines ALL plan change to the legend block + the meter zone (bbox x 87-978, y 472-836; 0 px elsewhere).",
+   "note": "On the plan the rods themselves are dot-scale (0.016 m footprint -> 0.8x1.2 px min-floored rects) in #b0723d — which is the EXACT hex circuitColor('service-entrance') already prints, so the dots read as SE-cable ink. Harmless at this size, but a plan-scale ground-rod symbol would earn its legend row (recommendation)."
+  },
+  "FOCUS-2-legend-rows": {
+   "status": "PASS",
+   "checklist": ["P2", "E3", "C2"],
+   "evidence": "Electrical legend prints named rows, never the breaker-dash pattern: 'GEC bare Cu — meter → ground rods (NEC 250.66)' and 'Water-pipe bond — metal water service (NEC 250.104)' with the shared 3D/paper family swatches (gate pins circuitColor parity; '—A/—AWG · grounding electrode' asserted absent). TRUTHFUL presence: the plain gabled-TX set (bond not modeled) prints the GEC row and NO bond row; the override set prints both. Rows sort inside the circuit list (GEN → GES → LTG), rect widening intact.",
+   "note": ""
+  },
+  "FOCUS-3-takeoff-parity": {
+   "status": "PASS",
+   "checklist": ["S4", "E7", "C5"],
+   "evidence": "Row diff pin-vs-base is EXACTLY the five GES rows on every set — no other row changed quantity, unit or detail, and no row vanished. Quantities == drawn geometry re-derived from the member census: demo 'Ground rods 5/8\" × 8 ft — 2 pcs' (2 members), 'Ground clamps — 3 pcs' (2 rods + water clamp, bond modeled), 'GEC 8 AWG bare Cu — 12.5 lf' (drawn 12.51), 'Bonding jumper 8 AWG Cu — 4.4 lf' (drawn 4.41), 'Intersystem bonding termination — 1 pcs'; gabled clamps 2 pcs + NO jumper row (bond not modeled — row honesty both directions); override jumper 74.7 lf == 74.73 drawn (the bond follows the wall graph panel->entry with E1 detours — booked as drawn, S4). GEC/bond lf never join the NM-B rows (all 14/2, 14/3, 12/2 rows byte-identical to base). On the sheet all five rows print WHOLE, wrapped at word boundaries with zero ellipsis (P4/wrapRow held: 'Ground rods 5/8\" × 8 ft — 2 pcs (copper-clad,' / 'driven below grade, 6 ft apart (NEC 250.52(A)(5) / 250.53))').",
+   "note": "The 8 AWG gauge in the rows is 'assumed 100 A service' — the assumption text rides the member labels (legend/label honesty precedent); the takeoff row cites 250.66 and matches gecSizeAwg."
+  },
+  "FOCUS-4-fallback-honesty": {
+   "status": "PASS",
+   "checklist": ["P4", "E7", "M-conventions"],
+   "evidence": "gabled-TX (room-category fallback plumbing — no placed fixtures, so no water meter exists to bond): the level warning prints VERBATIM in the schedules Flags block, wrapped whole over two lines — '⚑ water-pipe bond (NEC 250.104) not modeled — no water service entry visible; bond the metal' / 'water line at its entry' — and the IBT member label carries the same assumption ('; ⚠ water-pipe bond not modeled — no water service entry visible (NEC 250.104)'). The INVERSE holds on both other sets: demo (placed-path water meter) and gabled-TX-waterov (waterEntry service override) model the bond, print NO warning, and the IBT label is clean. The override also proves the A4 seam: the bond re-anchors to the bones:service node verbatim (74.7 lf wall-graph run to the west wall), and the plan prints it READABLY — pale cyan run hugging the walls with its 'GES-2' label, RO-detouring at the oblique wall's window like every circuit (E1 rails).",
+   "note": "The demo's five pre-existing warnings are byte-identical pin-vs-base — the batch adds no unprinted honesty anywhere."
+  },
+  "FOCUS-5-elevations-buried-convention": {
+   "status": "PASS",
+   "checklist": ["E7", "P3", "S3"],
+   "evidence": "All four elevations on both scenes (LOOKED at demo west/south + gabled south/east + zoom crops of the grade bands): the rod pair prints as dashed ochre verticals with tops at/just below the grade line running ~8 ft down — the buried 'hidden' convention now covers electrical (memberSegs: top-of-member < 0.02 dashes, gated in renderer.test + the plan-set diff). End-on views collapse the pair to ONE dashed vertical (gabled south, x = 14.544 — correct projection, standing clear of the building and slab comb); face-on views show both, 6 ft apart (gabled east; demo west). Z-LAYERING vs the B17 slab strokes is CORRECT, not fighting: depth-sort draws the rods OVER the gray slab comb (zoom crop shows the dashes passing cleanly through the comb band, no bow-ties, no flicker-class artifacts); above-grade the GEC strap/drop prints solid. The whole elevation family re-centered ~70 px upward vs base (the 2.4 m of new below-grade extent re-centers the shared fit) at the SAME snapped 1:100 ratio on every sheet — P1's vertical centering + the one-family-one-scale rule both held (271k px 'diff' on the south elevation is exactly this translation).",
+   "note": "The rod-1->rod-2 GEC leg at y=-0.05 lies INSIDE the slab comb's vertical band, so on elevations the connecting conductor is masked by the comb ink (visible in plan instead). Correct layering, zero added lies — but a below-comb depth or a contrast tweak would let the buried conductor read on side views (recommendation)."
+  },
+  "REG-sweep": {
+   "status": "PASS",
+   "checklist": ["E6", "P6", "M2", "M3", "S4", "P1", "C6", "A1"],
+   "evidence": "SD-1 interconnect legibility UNCHANGED: pixel-diff of the demo electrical sheet confines every changed pixel to the legend block + meter zone — the SD-1 route, its label, every other circuit run, every device bubble and the B13 alarm story are pixel-identical to base. BYTE-EQUAL sheets everywhere else: door+window schedule (B21d), Plumbing+HVAC plan (WH assembly + the MEP glyph seam — glyph de-collision untouched), foundation plan, wall/roof framing plans, Section A-A on all three sets. Cover diffs are the GES ink on the axon + reflow only; sheet index n/N, jurisdiction + code + effective date, LOD stamp and disclaimer intact (C6). Takeoff pages demo 4->4, gabled 3->3 (row additions absorbed, pagination stable). master-baseline.json recapture DISCLOSED and enumerated per commit (540 -> 547 -> 550 INTL+TX: exactly the GES members; fixtures 45 == 45), matching the E5 gate convention.",
+   "note": "Scene-data GIGO advisory (not counted against the round): with the composite's spine wall mis-declared exterior, the PRE-EXISTING electric-meter auto-spot parks the meter on it and the B12 rods follow — driven inside the footprint under the slab. Correctly-declared data behaves (this round's sets); a rods-vs-slab-footprint sanity flag would make bad data loud too."
+  },
+  "SWEEP": {
+   "status": "PASS",
+   "evidence": "Full suite at the pin (worktree /private/tmp/pilot-b12 @ de74cbc): bun test -> 1269 pass / 1 todo / 0 fail (1270 tests, 39,550 expect() calls, 52 files, 1440 ms); bunx tsc --noEmit clean. Checklist gains E7 with its gate present and non-vacuous (src/engines/electrical.ges.test.ts: 15 tests / 330 assertions — census + 6-ft/8-ft/below-grade pins, GEC + bond continuity, E4 legality, no-meter subset zero, takeoff parity matrix, 51-state sweep, water-meter parity, override + warn/label matrix); circuit-colors real-id floor grew GES-1/GES-2; renderer buried-stratum rows added. No checklist row regressed (E1-E6, S1-S12, M1-M3, P1-P6, A1-A5 walked; rows not named above are untouched by this diff and their gates ran green in the suite)."
+  }
+ },
+ "recommendations": [
+  "Give the ground rods a PLAN-scale symbol + legend row on the electrical sheet: today they render their true 5/8\" footprint (0.8x1.2 px dots) in #b0723d — the exact hex the SE cable prints — so the driven electrodes are invisible-as-themselves in plan (the drafting norm is a marked circle/⏚ with a 'ground rod' key; the foundation sheet's dowel-circle precedent applies).",
+  "Key the intersystem bonding termination on the electrical plan (it prints as a ~2 px unkeyed ochre 'equipment' dot at the meter) — a tag ('IBT') or a legend row keeps P2 airtight at dot scale.",
+  "Let the buried rod-1->rod-2 GEC leg read on elevations: at y=-0.05 it hides inside the B17 slab-comb band — drop the below-grade run just under the comb extent or print it in the GES-1 family color on side views so the 250.53(C) continuous run is visible outside the plan sheet.",
+  "The demo's 4.4 lf water bond is label-less in plan (every leg under the pre-existing 40 px label floor) — consider a device-style clamp tag at the water entry ('BOND' or a clamp tick), which would also mark the clamp the takeoff books.",
+  "Advisory (pre-existing meter auto-spot, exposed while composing): scene data that mis-declares an interior wall exterior can park the meter — and now the rod pair — inside the building footprint under the slab; a 'ground rods land inside the slab footprint — verify meter wall' flag would make GIGO loud.",
+  "Carried (pre-existing, byte-identical at base): P1 right-bias on plan sheets; TX cover footer statute string overrun; fixed-width legend backing rect vs longest row."
+ ],
+ "suite": {
+  "pass": 1269,
+  "todo": 1,
+  "fail": 0,
+  "tests": 1270,
+  "assertions": 39550,
+  "files": 52,
+  "runtime_ms": 1440,
+  "tsc": "clean"
+ }
+}

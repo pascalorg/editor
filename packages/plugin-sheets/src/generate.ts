@@ -1,0 +1,843 @@
+/**
+ * "Generate default set" — the sheets a small residential permit set always
+ * has, created from what is actually in the scene.
+ *
+ *   A0.0  Cover            project name block, hero 3D, sheet index,
+ *                          computed project data, general notes
+ *   A1.0  Site plan        with a north / graphic-scale / utilities-legend block
+ *   A2.x  Floor plan       one per level, with that level's room schedule
+ *   A2.n  Roof plan        (n = level count, so a one-storey scene gets A2.1)
+ *   A4.0  Exterior elevations   north / east / south / west
+ *   A5.0  Building sections     one per marker; two default cuts when there
+ *                               are none
+ *   A8.0  Door & window schedules
+ *   S1.0  Foundation plan
+ *   E1.0  Electrical plan
+ *
+ * Idempotent by sheet NUMBER: a run only creates the sheets that are missing,
+ * so pressing the button twice never doubles the set and never disturbs a
+ * sheet somebody has already laid out.
+ */
+import { generateId } from '@pascal-app/core'
+import {
+  type AnyNodeLike,
+  addSheet,
+  addViewport,
+  levelLabel,
+  levels,
+  type NodeMap,
+  removeViewport,
+  scene,
+  sceneNodes,
+  sheets,
+  viewports,
+} from './model'
+import { collectWalls, wallBounds } from './pose'
+import type { Plan, PlanSetContext } from './plans/context'
+import { mepPlans } from './plans/mep-set'
+import { energyPlans, notesPlans } from './plans/notes-set'
+import { structuralPlans } from './plans/structural-set'
+import { fitScale, SCALE_PRESETS } from './scale'
+import { DEFAULT_VIEWPORT_LAYERS, type SheetNode } from './schema'
+import { sheetFrame } from './titleblock'
+
+export type { Plan, PlanSetContext } from './plans/context'
+
+export type GeneratedSet = { created: string[]; skipped: string[] }
+
+const PAPER = { size: 'arch-d' as const, widthIn: 36, heightIn: 24 }
+const FRAME = sheetFrame(PAPER.widthIn, PAPER.heightIn)
+const GAP = 0.5
+
+const ARCH_SCALES = SCALE_PRESETS.filter((p) => p.scale <= 192)
+const CIVIL_SCALES = SCALE_PRESETS.filter((p) => p.scale >= 96)
+
+export function planDefaultSet(nodes: NodeMap): Plan[] {
+  const out: Plan[] = []
+  const levelNodes = levels(nodes)
+  const walls = collectWalls(nodes as never)
+  const footprint = wallBounds(walls)
+  const buildingW = footprint ? footprint.maxX - footprint.minX : 12
+  const buildingH = footprint ? footprint.maxZ - footprint.minZ : 12
+
+  // A0.0 — cover. Composed by `cover.ts`: a display-face project name block
+  // over the front-quarter hero on the left, SHEET INDEX / PROJECT DATA /
+  // GENERAL NOTES stacked down the right.
+  out.push({ number: 'A0.0', title: 'Cover sheet', viewports: coverViewports() })
+
+  // A1.0 — site plan.
+  const site = Object.values(nodes).find((n) => n?.type === 'site')
+  const polygon = (site?.polygon as { points?: [number, number][] } | undefined)?.points ?? []
+  const lotW = polygon.length ? extent(polygon.map((p) => p[0])) : 40
+  const lotH = polygon.length ? extent(polygon.map((p) => p[1])) : 40
+  // The fire separation table (R302.1) sits beside the plan: the distances
+  // a plan checker reads off the site plan, and the walls they rate.
+  const siteW = FRAME.w * 0.6
+  out.push({
+    number: 'A1.0',
+    title: 'Site plan',
+    viewports: [
+      {
+        kind: 'site-plan',
+        title: 'Site plan',
+        scale: fitScale(lotW, lotH, siteW, FRAME.h - 0.6, CIVIL_SCALES),
+        x: FRAME.x,
+        y: FRAME.y + 0.4,
+        w: siteW,
+        h: FRAME.h - 0.6,
+      },
+      {
+        kind: 'general-notes',
+        notesKey: 'fire-separation',
+        levelId: levelNodes[0]?.id,
+        title: 'Fire separation distance',
+        x: FRAME.x + siteW + GAP,
+        y: FRAME.y + 0.4,
+        w: FRAME.w - siteW - GAP,
+        h: FRAME.h - 0.6,
+      },
+    ],
+  })
+
+  // A2.x — one floor plan per level with the level's room schedule beside
+  // it. The door, window and fixture schedules have their own sheets (A8.0,
+  // P1.0) and are not repeated here (Steve, 2026-09-06).
+  const planW = FRAME.w * 0.62
+  const scheduleW = FRAME.w - planW - GAP
+  // 1/4" = 1'-0" is THE residential plan scale; it is used whenever the plan
+  // fits the field at it, and a larger scale only when the building is small
+  // enough that fitting is not the constraint. `fitScale` returns the largest
+  // preset that fits, so anything at or above 1/4" means 1/4" fits too.
+  const fitted = fitScale(buildingW * 1.15, buildingH * 1.15, planW, FRAME.h - 0.6, ARCH_SCALES)
+  const planScale = fitted <= 48 ? 48 : fitted
+  levelNodes.forEach((level, index) => {
+    const fieldH = FRAME.h - 0.6
+    out.push({
+      number: `A2.${index}`,
+      title: `${levelLabel(level)} floor plan`,
+      viewports: [
+        {
+          kind: 'plan',
+          drawingType: 'floor-plan',
+          levelId: level.id,
+          title: `Floor plan — ${levelLabel(level)}`,
+          scale: planScale,
+          layers: { ...DEFAULT_VIEWPORT_LAYERS, furniture: true },
+          x: FRAME.x,
+          y: FRAME.y + 0.4,
+          w: planW,
+          h: fieldH,
+        },
+        {
+          kind: 'schedule',
+          scheduleOf: 'rooms',
+          levelId: level.id,
+          title: `Room schedule — ${levelLabel(level)}`,
+          x: FRAME.x + planW + GAP,
+          y: FRAME.y + 0.4,
+          w: scheduleW,
+          h: fieldH,
+        },
+      ],
+    })
+  })
+
+  // A4.0–A4.3 — one exterior elevation per sheet, the whole frame, fitted
+  // to the whole building (porches, decks and the roof's overhang included)
+  // and centred by the window — 1/4" where it fits, smaller where the house
+  // is long or tall (Steve: "maybe one elevation per sheet, ensure it
+  // always fits correctly or scales down if the house is massive").
+  const envelope = buildingEnvelope(nodes)
+  const fieldH = FRAME.h - 0.6
+  ;(['north', 'east', 'south', 'west'] as const).forEach((direction, i) => {
+    const across = direction === 'north' || direction === 'south' ? envelope.width : envelope.depth
+    // 1/4" = 1'-0" is the residential elevation scale, the same as the plan:
+    // taken whenever it fits the frame, and only stepped down when the house
+    // is too long or too tall for it (`fitScale` returns the largest preset
+    // that fits, so anything at or above 1/4" means 1/4" fits).
+    const fittedElevation = fitScale(
+      across + VIEW_MARGIN_W,
+      envelope.height + VIEW_MARGIN_H,
+      FRAME.w,
+      fieldH,
+      ARCH_SCALES,
+    )
+    out.push({
+      number: `A4.${i}`,
+      title: `${direction.charAt(0).toUpperCase()}${direction.slice(1)} elevation`,
+      viewports: [
+        {
+          kind: 'elevation' as const,
+          direction,
+          title: `${direction.toUpperCase()} elevation`,
+          scale: fittedElevation,
+          x: FRAME.x,
+          y: FRAME.y + 0.4,
+          w: FRAME.w,
+          h: fieldH,
+        },
+      ],
+    })
+  })
+  // The sections are fitted the same way, at the box they get on A5.0.
+  const fittedSection = fitScale(
+    Math.max(envelope.width, envelope.depth) + VIEW_MARGIN_W,
+    envelope.height + VIEW_MARGIN_H,
+    FRAME.w * 0.6,
+    (FRAME.h - 0.6) / 2 - GAP,
+    ARCH_SCALES,
+  )
+  const elevationScale = fittedSection
+
+  // A3.0 — roof plan. NOT A2.1: A2.x is one number per level, so a roof plan
+  // parked at A2.1 collides with the second storey's floor plan the moment a
+  // level is added (and the generator, being idempotent by number, would then
+  // silently skip that storey). A3.0 is stable for the life of the set.
+  const roofNodes = Object.values(nodes).filter(
+    (n) => n?.type === 'roof' || n?.type === 'roof-segment',
+  )
+  out.push({
+    number: 'A3.0',
+    title: 'Roof plan',
+    viewports:
+      roofNodes.length > 0 && levelNodes[0]
+        ? [
+            {
+              kind: 'plan',
+              drawingType: 'roof-plan',
+              levelId: levelNodes[0].id,
+              title: 'Roof plan',
+              scale: planScale,
+              layers: {
+                ...DEFAULT_VIEWPORT_LAYERS,
+                roomLabels: false,
+                openingMarks: false,
+                roofPlan: true,
+              },
+              x: FRAME.x,
+              y: FRAME.y + 0.4,
+              // The right third is left for the attic-ventilation calculation
+              // and roof notes (plans/notes-set.ts extends this sheet).
+              w: FRAME.w * 0.66,
+              h: FRAME.h - 0.6,
+            },
+          ]
+        : [
+            {
+              kind: 'notes',
+              title: 'Roof plan',
+              text: NO_ROOF_NOTE,
+              x: FRAME.x,
+              y: FRAME.y + 0.4,
+              w: FRAME.w * 0.6,
+              h: 3,
+            },
+          ],
+  })
+
+  // S1.0 — foundation plan.
+  const slabNodes = Object.values(nodes).filter((n) => n?.type === 'slab')
+  out.push({
+    number: 'S1.0',
+    title: 'Foundation plan',
+    viewports:
+      slabNodes.length > 0 && levelNodes[0]
+        ? [
+            {
+              kind: 'plan',
+              drawingType: 'foundation-plan',
+              levelId: levelNodes[0].id,
+              title: 'Foundation plan',
+              scale: planScale,
+              layers: {
+                ...DEFAULT_VIEWPORT_LAYERS,
+                roomLabels: false,
+                openingMarks: false,
+                furniture: false,
+              },
+              x: FRAME.x,
+              y: FRAME.y + 0.4,
+              w: FRAME.w,
+              h: FRAME.h - 0.6,
+            },
+          ]
+        : [
+            {
+              kind: 'notes',
+              title: 'Foundation plan',
+              text: NO_SLAB_NOTE,
+              x: FRAME.x,
+              y: FRAME.y + 0.4,
+              w: FRAME.w * 0.6,
+              h: 3,
+            },
+          ],
+  })
+
+  // E1.0 — electrical plan. The devices and the service come from Bones
+  // (`bones:device` / `bones:service`); with Bones absent the sheet says so.
+  const hasBones = Object.values(nodes).some(
+    (n) => typeof n?.type === 'string' && n.type.startsWith('bones:'),
+  )
+  out.push({
+    number: 'E1.0',
+    title: 'Electrical plan',
+    viewports:
+      hasBones && levelNodes[0]
+        ? levelNodes.map((level, index) => ({
+            kind: 'plan' as const,
+            drawingType: 'floor-plan',
+            levelId: level.id,
+            title: `Electrical plan — ${levelLabel(level)}`,
+            scale: planScale,
+            layers: {
+              ...DEFAULT_VIEWPORT_LAYERS,
+              furniture: false,
+              electrical: true,
+              siteUtilities: true,
+              openingMarks: false,
+              automaticDimensions: false,
+            },
+            x: FRAME.x + index * (FRAME.w / Math.max(1, levelNodes.length)),
+            y: FRAME.y + 0.4,
+            w: FRAME.w / Math.max(1, levelNodes.length) - (levelNodes.length > 1 ? GAP : 0),
+            h: FRAME.h - 0.6,
+          }))
+        : [
+            {
+              kind: 'notes',
+              title: 'Electrical plan',
+              text: NO_BONES_NOTE,
+              x: FRAME.x,
+              y: FRAME.y + 0.4,
+              w: FRAME.w * 0.6,
+              h: 3.5,
+            },
+          ],
+  })
+
+  // A5.0 — building sections. Existing markers win; otherwise two default
+  // cuts through the building centre (see `defaultSectionMarkers`), so the
+  // sheet is never empty on a scene nobody has placed markers in.
+  const markers = Object.values(nodes).filter(
+    (n) => typeof n?.type === 'string' && n.type.includes('section-marker'),
+  )
+  const plannedCuts: { id?: string; label: string }[] =
+    markers.length > 0
+      ? markers.map((m, i) => ({
+          id: m.id,
+          label: (m.name as string) || (m.label as string) || `Section ${i + 1}`,
+        }))
+      : defaultSectionMarkers(nodes).map((spec) => ({ label: `Section ${spec.label}` }))
+  // A5.0 — the section cuts stacked on the left, the assembly schedule down the right
+  const sectionW = FRAME.w * 0.6
+  out.push({
+    number: 'A5.0',
+    title: 'Building sections',
+    viewports:
+      plannedCuts.length > 0
+        ? [
+            ...plannedCuts.map((cut, i) => ({
+              kind: 'section' as const,
+              markerId: cut.id,
+              title: cut.label,
+              scale: elevationScale,
+              x: FRAME.x,
+              y: FRAME.y + 0.4 + i * ((FRAME.h - 0.6) / plannedCuts.length),
+              w: sectionW,
+              h: (FRAME.h - 0.6) / plannedCuts.length - GAP,
+            })),
+            // the assemblies the cuts pass through, as a schedule (Steve:
+            // "ensure the wall assemblies are correct")
+            {
+              kind: 'general-notes' as const,
+              notesKey: 'assemblies',
+              levelId: levelNodes[0]?.id,
+              title: 'Wall, roof & floor assemblies',
+              x: FRAME.x + sectionW + GAP,
+              y: FRAME.y + 0.4,
+              w: FRAME.w - sectionW - GAP,
+              h: FRAME.h - 0.6,
+            },
+          ]
+        : [
+            // No walls at all: nothing to cut, and an invented cut through
+            // nothing would be a lie. The section viewport prints
+            // `NO_SECTION_MARKER_NOTE` until there is something to cut.
+            {
+              kind: 'section' as const,
+              title: 'Building section',
+              scale: elevationScale,
+              x: FRAME.x,
+              y: FRAME.y + 0.4,
+              w: FRAME.w,
+              h: FRAME.h - 0.6,
+            },
+          ],
+  })
+
+  // A8.0 — door and window schedules, one pair of columns per level.
+  const columns = Math.max(1, levelNodes.length) * 2
+  const colW = (FRAME.w - GAP * (columns - 1)) / columns
+  const scheduleViewports: Plan['viewports'] = []
+  const levelsForSchedule = levelNodes.length > 0 ? levelNodes : []
+  levelsForSchedule.forEach((level, index) => {
+    ;(['doors', 'windows'] as const).forEach((of, k) => {
+      const slot = index * 2 + k
+      scheduleViewports.push({
+        kind: 'schedule',
+        scheduleOf: of,
+        levelId: level.id,
+        title: `${of === 'doors' ? 'Door' : 'Window'} schedule — ${levelLabel(level)}`,
+        x: FRAME.x + slot * (colW + GAP),
+        y: FRAME.y + 0.4,
+        w: colW,
+        h: FRAME.h - 0.6,
+      })
+    })
+  })
+  out.push({
+    number: 'A8.0',
+    title: 'Door & window schedules',
+    viewports:
+      scheduleViewports.length > 0
+        ? scheduleViewports
+        : [
+            {
+              kind: 'notes',
+              title: 'Schedules',
+              text: 'No levels in this scene yet.',
+              x: FRAME.x,
+              y: FRAME.y + 0.4,
+              w: FRAME.w,
+              h: 2,
+            },
+          ],
+  })
+
+  // Sheets owned by the plan-set modules (structural, MEP, notes, energy).
+  // A module's plan REPLACES the generic fallback with the same number, so
+  // S1.0 becomes the Bones foundation plan the moment that module lands.
+  const ctx: PlanSetContext = {
+    nodes,
+    frame: FRAME,
+    gap: GAP,
+    planScale,
+    elevationScale,
+    levels: levelNodes,
+    hasBones,
+    archScales: ARCH_SCALES,
+    civilScales: CIVIL_SCALES,
+  }
+  for (const plan of [
+    ...structuralPlans(ctx),
+    ...mepPlans(ctx),
+    ...notesPlans(ctx),
+    ...energyPlans(ctx),
+  ]) {
+    const at = out.findIndex((p) => p.number === plan.number)
+    if (at < 0) out.push(plan)
+    else if (plan.extend) out[at] = { ...out[at]!, viewports: [...out[at]!.viewports, ...plan.viewports] }
+    else out[at] = plan
+  }
+
+  // SET ORDER: the architectural story reads first, then structural, then the
+  // trades — stable within a group, so a second storey stays next to the first.
+  const rank = (number: string): number => {
+    if (/^A0/.test(number)) return 0
+    if (/^A1/.test(number)) return 1
+    if (/^A2/.test(number)) return 2
+    if (/^A3/.test(number)) return 2.5
+    if (/^A4/.test(number)) return 3
+    if (/^A5/.test(number)) return 4
+    if (/^A/.test(number)) return 5
+    if (/^SN/.test(number)) return 5.9
+    if (/^S/.test(number)) return 6
+    if (/^EN/.test(number)) return 7.5
+    if (/^E/.test(number)) return 7
+    if (/^P/.test(number)) return 7.2
+    return 8
+  }
+  return out
+    .map((plan, index) => ({ plan, index }))
+    .sort((a, b) => rank(a.plan.number) - rank(b.plan.number) || a.index - b.index)
+    .map((entry) => entry.plan)
+}
+
+/* ------------------------------------------------------------- cover */
+
+/**
+ * The cover's column geometry, in sheet inches. Shared by the generator and
+ * `regenerateCover`, so a rebuild lands exactly where a fresh generate does.
+ */
+export const COVER_LAYOUT = (() => {
+  const gap = 0.6
+  const leftW = FRAME.w * 0.56
+  const rightX = FRAME.x + leftW + gap
+  const rightW = FRAME.w - leftW - gap
+  const titleH = 3.9
+  const indexH = FRAME.h * 0.34
+  const dataH = FRAME.h * 0.32
+  return {
+    title: { x: FRAME.x, y: FRAME.y + 0.15, w: leftW, h: titleH },
+    hero: { x: FRAME.x, y: FRAME.y + titleH + 0.55, w: leftW, h: FRAME.h - titleH - 1.1 },
+    index: { x: rightX, y: FRAME.y + 0.15, w: rightW, h: indexH },
+    data: { x: rightX, y: FRAME.y + 0.15 + indexH + 0.4, w: rightW, h: dataH },
+    notes: {
+      x: rightX,
+      y: FRAME.y + 0.15 + indexH + dataH + 0.8,
+      w: rightW,
+      h: FRAME.h - indexH - dataH - 0.95,
+    },
+  }
+})()
+
+/** The five viewports the cover is made of. */
+export function coverViewports(): Plan['viewports'] {
+  const L = COVER_LAYOUT
+  return [
+    { kind: 'cover', coverBlock: 'title', title: 'Project', ...L.title },
+    { kind: 'view3d', pose: 'cover-front', title: 'Perspective — front quarter', ...L.hero },
+    { kind: 'cover', coverBlock: 'index', title: 'Sheet index', ...L.index },
+    { kind: 'cover', coverBlock: 'data', title: 'Project data', ...L.data },
+    { kind: 'cover', coverBlock: 'notes', title: 'General notes', ...L.notes },
+  ]
+}
+
+/**
+ * Replace A0.0's viewports with the current cover composition.
+ *
+ * `generateDefaultSet` is idempotent by sheet NUMBER, which is what stops it
+ * disturbing a sheet somebody has laid out — but it also means an existing
+ * scene never sees a new cover. This is the explicit opt-in: it deletes only
+ * A0.0's viewports and lays the new ones down in their place. No other sheet
+ * is touched.
+ */
+export function regenerateCover(): { ok: boolean; reason?: string; viewports?: number } {
+  const nodes = sceneNodes()
+  const cover = sheets(nodes).find((sheet) => sheet.number === 'A0.0')
+  if (!cover) {
+    return { ok: false, reason: 'no A0.0 sheet in this set — generate the default set first' }
+  }
+  for (const vp of viewports(nodes, cover.id)) removeViewport(vp.id)
+  const created = coverViewports()
+  for (const vp of created) {
+    addViewport({ layers: { ...DEFAULT_VIEWPORT_LAYERS }, ...vp, sheetId: cover.id })
+  }
+  return { ok: true, viewports: created.length }
+}
+
+/* ------------------------------------------------ default section cuts */
+
+export type SectionMarkerSpec = {
+  label: string
+  start: [number, number]
+  end: [number, number]
+  lookDirection: 'left' | 'right'
+  depth: number
+  levelId: string | null
+}
+
+/**
+ * Two default cuts through the building — one longitudinal (along the longer
+ * plan dimension), one transverse — both through the centre of the wall
+ * footprint, so A5.0 is never an empty sheet.
+ *
+ * `lookDirection` is the side carrying more wall length. Plan axes are x right
+ * and z down, so screen-left of a +x cut is −z and screen-left of a +z cut is
+ * +x. Depth is the half-extent perpendicular to the cut plus the margin, so
+ * everything behind the cut projects.
+ *
+ * Returns [] when there are no walls: an invented cut through nothing is worse
+ * than the honest "place a marker" note.
+ */
+export function defaultSectionMarkers(nodes: NodeMap): SectionMarkerSpec[] {
+  const walls = collectWalls(nodes as never)
+  const bounds = wallBounds(walls)
+  if (!bounds) return []
+  const w = bounds.maxX - bounds.minX
+  const d = bounds.maxZ - bounds.minZ
+  if (w <= 0.01 || d <= 0.01) return []
+  const cx = (bounds.minX + bounds.maxX) / 2
+  const cz = (bounds.minZ + bounds.maxZ) / 2
+  const margin = Math.max(1, Math.max(w, d) * 0.12)
+  const levelId = levels(nodes)[0]?.id ?? null
+
+  const alongX: SectionMarkerSpec = {
+    label: 'A',
+    start: [bounds.minX - margin, cz],
+    end: [bounds.maxX + margin, cz],
+    lookDirection: heavierSide(walls, 1, cz) < 0 ? 'left' : 'right',
+    depth: d / 2 + margin,
+    levelId,
+  }
+  const alongZ: SectionMarkerSpec = {
+    label: 'B',
+    start: [cx, bounds.minZ - margin],
+    end: [cx, bounds.maxZ + margin],
+    lookDirection: heavierSide(walls, 0, cx) > 0 ? 'left' : 'right',
+    depth: w / 2 + margin,
+    levelId,
+  }
+  return w >= d
+    ? [alongX, alongZ]
+    : [
+        { ...alongZ, label: 'A' },
+        { ...alongX, label: 'B' },
+      ]
+}
+
+/** −1 or +1: which side of `at` on the given axis carries more wall length. */
+function heavierSide(
+  walls: readonly { start: readonly [number, number]; end: readonly [number, number] }[],
+  axis: 0 | 1,
+  at: number,
+): number {
+  let negative = 0
+  let positive = 0
+  for (const wall of walls) {
+    const length = Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1])
+    const mid = (wall.start[axis] + wall.end[axis]) / 2
+    if (mid < at) negative += length
+    else positive += length
+  }
+  return positive > negative ? 1 : -1
+}
+
+/**
+ * Create the default section markers when the scene has none, and return every
+ * marker A5.0 should get a viewport for. The kind belongs to
+ * `@pascal-app/plugin-sections` (`type: 'section-marker'`); the node is built
+ * from its literal shape rather than imported, so Sheets takes no hard
+ * dependency on a plugin that may not be installed.
+ */
+export function ensureSectionMarkers(nodes: NodeMap): AnyNodeLike[] {
+  const existing = Object.values(nodes).filter(
+    (n): n is AnyNodeLike => typeof n?.type === 'string' && n.type.includes('section-marker'),
+  )
+  if (existing.length > 0) return existing
+  const specs = defaultSectionMarkers(nodes)
+  if (specs.length === 0) return []
+  const created: AnyNodeLike[] = specs.map((spec) => ({
+    object: 'node',
+    id: generateId('secmk'),
+    type: 'section-marker',
+    name: `Section ${spec.label}`,
+    parentId: spec.levelId,
+    visible: true,
+    metadata: { createdBy: 'sheets-default-set' },
+    label: spec.label,
+    levelId: spec.levelId,
+    start: spec.start,
+    end: spec.end,
+    lookDirection: spec.lookDirection,
+    depth: spec.depth,
+    sheetRef: null,
+  }))
+  scene().applyNodeChanges({
+    create: created.map((node) => ({
+      node,
+      parentId: (node.parentId as string | null) ?? undefined,
+    })),
+  })
+  return created
+}
+
+export const NO_ROOF_NOTE = [
+  'ROOF PLAN — NOT DRAWN',
+  '',
+  'This scene has no roof or roof-segment nodes, so there is no',
+  'ridge, hip, eave or slope to draw. Add a roof in the 3D view,',
+  'then press "Generate default set" again — or delete this note',
+  'viewport and add a plan viewport with drawing type "roof-plan".',
+].join('\n')
+
+export const NO_SLAB_NOTE = [
+  'FOUNDATION PLAN — NOT DRAWN',
+  '',
+  'This scene has no slab nodes, so there is no foundation to draw.',
+  'Draw a slab under the building, then generate the set again.',
+  '',
+  'Footings, stem walls and reinforcement are not modelled by Pascal;',
+  'this sheet shows the slab outline, bearing walls and the grid only.',
+].join('\n')
+
+export const NO_BONES_NOTE = [
+  'ELECTRICAL PLAN — NO DEVICES IN THIS SCENE',
+  '',
+  'Receptacles, switches, fixtures and the service panel are Bones',
+  'kinds (bones:device, bones:service). None are in this scene.',
+  '',
+  'To add them: open the Bones panel (the rail’s plugin list — Bones is',
+  'installed but not shown by default; enable it there), run the',
+  'electrical engine for the level, then generate the set again.',
+].join('\n')
+
+const GENERAL_NOTES = [
+  '1. All work shall comply with the adopted building code and',
+  '   local amendments of the jurisdiction shown in the title block.',
+  '2. Contractor shall verify all dimensions and conditions in the',
+  '   field before starting work and report discrepancies.',
+  '3. Do not scale drawings. Written dimensions govern.',
+  '4. Dimensions are to face of stud unless noted otherwise.',
+].join('\n')
+
+function extent(values: number[]): number {
+  if (values.length === 0) return 0
+  return Math.max(...values) - Math.min(...values)
+}
+
+/**
+ * What the elevation / section builders draw beyond the geometry: the datum
+ * labels to the right (2.6 m), the GRADE label to the left (1.6 m), and the
+ * finish key under the grade line with the crawl space and footing below it.
+ * Sheet metres, added to the building's own extent before a scale is picked.
+ */
+const VIEW_MARGIN_W = 4.4
+const VIEW_MARGIN_H = 2.4
+
+export type BuildingEnvelope = {
+  /** Plan extent along level x, metres — porches, decks, posts and the roof's overhang included. */
+  width: number
+  /** Plan extent along level z. */
+  depth: number
+  /** From 1.5 m under the lowest level (the crawl space and footing a section shows) to the highest ridge. */
+  height: number
+}
+
+/**
+ * The whole building as an elevation sees it, in level-local plan metres:
+ * every wall, slab (the porch, the deck), post and roof segment with its
+ * overhang; the height from the footing to the highest ridge (the segment's
+ * plate plus its rise from the pitch). The wall footprint alone left the
+ * porch running off the paper (Steve, 2026-09-07).
+ */
+export function buildingEnvelope(nodes: NodeMap): BuildingEnvelope {
+  let minX = Number.POSITIVE_INFINITY
+  let maxX = Number.NEGATIVE_INFINITY
+  let minZ = Number.POSITIVE_INFINITY
+  let maxZ = Number.NEGATIVE_INFINITY
+  let top = Number.NEGATIVE_INFINITY
+  let bottom = Number.POSITIVE_INFINITY
+  const take = (x: number, z: number) => {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return
+    minX = Math.min(minX, x)
+    maxX = Math.max(maxX, x)
+    minZ = Math.min(minZ, z)
+    maxZ = Math.max(maxZ, z)
+  }
+  const num = (v: unknown, fallback = 0): number => (typeof v === 'number' && Number.isFinite(v) ? v : fallback)
+  const levelBase = (levelId: unknown): number => {
+    const level = typeof levelId === 'string' ? nodes[levelId] : undefined
+    return level?.type === 'level' ? num(level.baseElevation) : 0
+  }
+  for (const node of Object.values(nodes)) {
+    if (!node || node.visible === false) continue
+    switch (node.type) {
+      case 'level': {
+        const base = num(node.baseElevation)
+        bottom = Math.min(bottom, base)
+        top = Math.max(top, base + num(node.height, 2.7))
+        break
+      }
+      case 'wall': {
+        for (const key of ['start', 'end'] as const) {
+          const p = node[key]
+          if (Array.isArray(p)) take(num(p[0]), num(p[1]))
+        }
+        break
+      }
+      case 'slab': {
+        const polygon = Array.isArray(node.polygon) ? (node.polygon as unknown[]) : []
+        for (const p of polygon) if (Array.isArray(p)) take(num(p[0]), num(p[1]))
+        break
+      }
+      case 'column': {
+        const p = Array.isArray(node.position) ? (node.position as unknown[]) : null
+        if (!p) break
+        const half = Math.max(num(node.width, 0.14), num(node.depth, 0.14), num(node.radius) * 2) / 2
+        take(num(p[0]) - half, num(p[2]) - half)
+        take(num(p[0]) + half, num(p[2]) + half)
+        break
+      }
+      case 'roof-segment': {
+        const roof = typeof node.parentId === 'string' ? nodes[node.parentId] : undefined
+        const roofPos = Array.isArray(roof?.position) ? (roof.position as unknown[]) : [0, 0, 0]
+        const roofYaw = num(roof?.rotation)
+        const p = Array.isArray(node.position) ? (node.position as unknown[]) : [0, 0, 0]
+        const yaw = roofYaw + num(node.rotation)
+        const overhang = num(node.overhang)
+        const hw = num(node.width) / 2 + overhang
+        const hd = num(node.depth) / 2 + overhang
+        // segment centre in the level frame: the roof node's own turn applies first
+        const cx = num(roofPos[0]) + num(p[0]) * Math.cos(roofYaw) + num(p[2]) * Math.sin(roofYaw)
+        const cz = num(roofPos[2]) - num(p[0]) * Math.sin(roofYaw) + num(p[2]) * Math.cos(roofYaw)
+        for (const [lx, lz] of [[-hw, -hd], [hw, -hd], [hw, hd], [-hw, hd]] as const) {
+          take(cx + lx * Math.cos(yaw) + lz * Math.sin(yaw), cz - lx * Math.sin(yaw) + lz * Math.cos(yaw))
+        }
+        // the ridge: the plate band plus the rise over half the depth (a
+        // shed rises over its whole depth; a flat roof does not rise)
+        const pitch = (num(node.pitch) * Math.PI) / 180
+        const run = node.roofType === 'flat' ? 0 : node.roofType === 'shed' ? num(node.depth) : num(node.depth) / 2
+        const rise = Math.tan(pitch) * run
+        top = Math.max(
+          top,
+          levelBase(roof?.parentId) + num(roofPos[1]) + num(p[1]) + num(node.wallHeight) + rise + num(node.deckThickness),
+        )
+        break
+      }
+      default:
+        break
+    }
+  }
+  if (!Number.isFinite(minX)) return { width: 12, depth: 12, height: 8 }
+  if (!Number.isFinite(bottom)) bottom = 0
+  if (!Number.isFinite(top)) top = bottom + 6
+  return { width: maxX - minX, depth: maxZ - minZ, height: top - (bottom - 1.5) }
+}
+
+/**
+ * The idempotency test, as a pure function: which planned sheets are not in
+ * the scene yet. A number that already exists is left completely alone — the
+ * generator never touches a sheet somebody has laid out.
+ */
+export function missingSheets(nodes: NodeMap): { create: Plan[]; keep: string[] } {
+  const existing = new Set(sheets(nodes).map((s) => s.number))
+  const create: Plan[] = []
+  const keep: string[] = []
+  for (const plan of planDefaultSet(nodes)) {
+    if (existing.has(plan.number)) keep.push(plan.number)
+    else create.push(plan)
+  }
+  return { create, keep }
+}
+
+/**
+ * Create the missing sheets. Returns which numbers were created and which
+ * were left alone — the caller reports both, so "nothing happened" is never
+ * ambiguous.
+ */
+export function generateDefaultSet(nodes: NodeMap): GeneratedSet {
+  // Default section cuts must exist BEFORE the set is planned, so A5.0's
+  // viewports can carry their marker ids rather than an empty placeholder.
+  ensureSectionMarkers(nodes)
+  const planningNodes = sceneNodes()
+  const { create, keep } = missingSheets(planningNodes)
+  const created: string[] = []
+  const skipped: string[] = [...keep]
+  let order = sheets(planningNodes).length
+
+  for (const plan of create) {
+    const sheet: SheetNode = addSheet({
+      number: plan.number,
+      title: plan.title,
+      size: PAPER.size,
+      order: order++,
+    })
+    for (const vp of plan.viewports) {
+      addViewport({ layers: { ...DEFAULT_VIEWPORT_LAYERS }, ...vp, sheetId: sheet.id })
+    }
+    created.push(plan.number)
+  }
+  return { created, skipped }
+}

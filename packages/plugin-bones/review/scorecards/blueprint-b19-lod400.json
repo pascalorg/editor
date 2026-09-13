@@ -1,0 +1,237 @@
+{
+  "round": "B19-lod400",
+  "pin": "964a801",
+  "branch": "feat/lod400-b19",
+  "base": "00496a7",
+  "protocol": "LOD-400 B19 paper round per review/BLUEPRINTS.md. Pure buildPlanSet in the scratch worktree /private/tmp/pilot-b19 at 964a801, byte-compared against the SAME harness run at master 00496a7 with a fixed date (08/21/2026). Four sets each side: demo-house-FL (fc866f2f271b over HTTP, 14 sheets), garage-ranch-FL compose (garage + living + bedroom, NO conditioned service space — the B19a blocker geometry; one batt-override wall for the climate-label sweep; 12 sheets), twostorey-NY ground (laundry AH — negative control for the garage warning; soffit storey; 12 sheets) and twostorey-NY upper (framed floor + 3.51 m engineered-header RO; 12 sheets). All 50 pin sheets rasterized with Playwright page.setContent @2x (never the editor); every DIFF sheet walked, MEP/schedules crops at print size. Member dumps, fixtures, duct geometry and takeoff JSON diffed base-vs-pin. Evidence: /tmp/bp-b19/{base,pin}/**, crops in /tmp/bp-b19/crops/.",
+  "verdict": "REVISE — the return-air story is real and mostly honest on paper (garage warning verbatim, grille/thermostat truth, own takeoff rows with exactly-conserved lf, tone + legend row, tight blast radius: member diffs are EXACTLY the +3/+4 return-trunk members per scene), but the return trunk ROUTES THROUGH THE SUPPLY TRUNK whenever the grille shares the supply corridor axis — on the flagship demo house the entire return trunk, riser AND drop pass through the supply 8×8 trunk, and on the garage compose two full-section 14×8 trunks share 4.0 m of volume while the sheet hides ~90% of the drawn return under the supply run (long-first z-order). Physically impossible tin, un-gated (interpenetration.test.ts scopes MEP out; hvac.return.test.ts has no separation check), and it defeats the sheet's own supply/return distinguishability exactly where it matters. Fix the routing (lateral offset for the return plane legs, the same idea RETURN_DROP_OFFSET already applies to the drop) + add the gate, then this is a PASS.",
+  "items": {
+    "FOCUS-1-return-tone-E3-risk": {
+      "status": "FAIL",
+      "checklist": [
+        "S1",
+        "M3",
+        "C1",
+        "E3"
+      ],
+      "evidence": "Tone itself is GOOD: #5f7282 vs #9aa7b0 read apart clearly at 1:75 (two0/two1 sheets) and 1:100 (demo crop) — the dark return block between AH and RA is unmistakable, and register/fitting marks (orange bubbles) can't be confused with either. The FAIL is geometric: AABB check on the pin members — garage: Return trunk (4.6 m, pos 4.80/3.00/3.00) vs supply Trunk 14x8 (pos 4.25/3.00/3.00) overlap 4.00 m x 0.20 m x 0.36 m (full-section coincidence), plus return riser THROUGH the supply 8x8 trunk, return drop through the 14x8 trunk, and a supply boot inside the return trunk — 5 overlap pairs; demo: the ENTIRE return trunk (0.55 m), riser and drop pass through supply 'Trunk 8x8 — 211 cfm'. Both trunks share trunkY and the same corridor axis; only the DROP gets the 0.5 m offset. On the garage sheet the drawn return trunk is ~90 % INVISIBLE — planSheet draws long members first, so the 4.5 m supply trunk paints OVER the 4.6 m return trunk; only the drop sliver and the 8x8-vs-14-wide edges peek out (crops/garage-pin-trunk.png). On the demo sheet the short return prints as a dark patch ON the supply duct — reads as one two-toned duct, not a second air path. two0/two1 are clean (grille east of the supply riser) proving the layout CAN separate.",
+      "note": "Un-gated by design gap: interpenetration.test.ts line 23 scopes MEP out ('pipes, wires and ducts'); hvac.return.test.ts checks continuity but never separation. M3's own text promises the drop offset 'so the two verticals never occupy the same space' — the horizontal legs and riser need the same treatment. Fix: route the return plane legs on a laterally offset axis (z-shift by >= trunk width + clearance, mirroring SUPPLY_STEP/RETURN_DROP_OFFSET), or SAT-check return-vs-supply and re-route; gate it in hvac.return.test.ts (no return duct OBB intersects a supply duct OBB across the placement matrix incl. the corridor-colinear scene)."
+    },
+    "FOCUS-2-legend-rows": {
+      "status": "FLAG",
+      "checklist": [
+        "P2",
+        "P4",
+        "M3"
+      ],
+      "evidence": "'duct — return air' row prints with the #5f7282 swatch directly under the base duct row on all four MEP sheets, BOTH rows inside the backing rect (box height derives from legendLines.length — verified visually on garage/demo/two0/two1). Suppression logic is right: the base row is supply-ONLY (roleHit requires hvacDuctColor === null) and a return-only sheet drops the supply swatch (plan-set.test.ts pins it). BUT the base row still reads 'duct' (plan-set.ts NAMES 'duct-run': 'duct') — it does NOT say supply.",
+      "note": "With two duct tones on one sheet, a row named just 'duct' beside 'duct — return air' is ambiguous to a plans examiner — it IS the supply swatch now, so name it 'duct — supply air'. One-word fix in NAMES + update the branch's own '>duct</text>' pin in plan-set.test.ts in the same commit."
+    },
+    "FOCUS-3-garage-warning-verbatim": {
+      "status": "PASS",
+      "checklist": [
+        "P4",
+        "M3",
+        "C5"
+      ],
+      "evidence": "garage-ranch-FL schedules 2/2 flag block prints '⚑ air handler in garage — M1602.2(1) forbids garage return air; provide a sealed return + R302.5.2 duct protection — verify' — VERBATIM across a clean word-boundary wrap, no ellipsis (wrapRow loops, round-6 fix holding). Warning fires engine-side only when no conditioned service space exists (hvac.return.test.ts placement matrix); negative controls hold: demo (hallway AH) and twostorey (laundry AH) sets print NO garage flag.",
+      "note": "The fixed grille/AH story matches the flag: AH stays in the garage (fixture at zGar centroid) while the OPEN return grille moves to the living room — the paper and the warning tell the same story."
+    },
+    "FOCUS-4-transfer-air-on-paper": {
+      "status": "FLAG",
+      "checklist": [
+        "P4",
+        "M3"
+      ],
+      "evidence": "The transfer-path assumption exists ONLY as the register fixture's label suffix + meta.transferAirAssumed (demo: 4 rooms, garage: bedroom, two0: living+bedroom, two1: none — grille room correctly label-free). grep 'undercut' over all 50 pin sheet SVGs: ZERO hits. Registers print as bare SR bubbles; fixture labels never typeset on plan sheets; the flags block only carries member flags + level warnings, and this label is neither. NO printed surface carries the M1602.2 assumption.",
+      "note": "M3's row text only promises the label+meta, so the checklist is technically satisfied — but P4's spirit isn't: a code-compliance ASSUMPTION ('door undercut / jumper duct assumed') that a plans examiner would want to see never reaches paper. Cheap fix options: one aggregated schedules flag ('N closable rooms assume door undercut / jumper duct (M1602.2)'), or an asterisked SR* tag + legend footnote on the MEP sheet."
+    },
+    "FOCUS-5-takeoff-return-rows": {
+      "status": "FLAG",
+      "checklist": [
+        "C5",
+        "S4",
+        "M3"
+      ],
+      "evidence": "Return rows print SEPARATELY on their own 'Return duct …' items, never blended (takeoff diff base-vs-pin is exactly the Return rows on all four scenes; supply rows byte-identical), and lf conserves EXACTLY against the drawn members: garage 1.1+15.1+6.6 = 22.8 lf = 6.95 m drawn; demo 9.5 lf = 2.90 m; two0 7.2 lf = 2.20 m; two1 10.3 lf = 3.13 m (+1 fittings row for its L-bend, correct). Return grilles pcs row prints. BUT the riser/drop rows book FICTITIOUS sections: 'Return duct 14×79\"' (the 2.0 m drop's LENGTH printed as its section height), 'Return duct 14×53\"', 'Return duct 14×14\"', 'Return duct 14×12\"' — the real section is 14×8 everywhere (M3: full trunk section end to end).",
+      "note": "Extends a pre-existing supply-side class (base already books the supply drop as 'Duct 8×79\"' and boots as 'Duct 6×14\"' — takeoff.ts reads dims[1]/dims[2] as the section, true only for horizontal runs), but B19's new Return rows double the printed instances and M3 promises 'Return duct W×H\" rows'. Fix at the takeoff: for vertical duct-runs (dims[1] is the length) derive the section from dims[0]×dims[2] — collapses each scene's return to ONE 'Return duct 14×8\"' row; fixes the supply rows too. Gate: no duct row's printed section side exceeds the catalog trunk dims."
+    },
+    "FOCUS-6-thermostat-grille-move": {
+      "status": "PASS",
+      "checklist": [
+        "M3",
+        "A4",
+        "P2"
+      ],
+      "evidence": "Grille truth on paper: garage compose base drew RA at (2.5, 3.5) INSIDE the garage (silent M1602.2(1) violation) — pin draws it in the living room at (7.1, 3.0) with the thermostat re-anchored from the garage partition wP1 to wP2 near the grille; demo: RA moves from the floating equipAt+0.5 spot onto the actual return riser in the Hall (8.8, 5.75), thermostat stable on the same wall (its old target was already hall-adjacent). Grille Y now matches the register convention (ceiling − 0.04). Schedules/legend consistency holds: RA 'return air' tag row in the MEP legend, 'Return grilles — 1 pcs (return air path)' and 'Thermostats — 1 pcs' takeoff rows, thermostat label 'near the return' now true.",
+      "note": "placeReturnGrilleSpot's exported spot is also the thermostat target (one truth, both consumers) — verified identical sourceId zone on demo (Hall zone id)."
+    },
+    "FOCUS-7-regression-sweep": {
+      "status": "PASS",
+      "checklist": [
+        "S4",
+        "S6",
+        "S11",
+        "P2",
+        "P4",
+        "C5",
+        "E3",
+        "S8"
+      ],
+      "evidence": "Blast radius is airtight: member diffs base-vs-pin are EXACTLY the return-trunk members (+3 demo/garage/two0, +4 two1); every other member byte-identical; foundation / wall-framing / electrical / floor-framing sheets byte-EQUAL as SVG strings on all sets (two1 wall plan + sections differ only by the A-A cut mark sliding clear of the new return members — by design). Deck: two1 floor sheet EQ, translucent deck under joists/girder with the 'subfloor — 3/4\" T&G deck (drawn translucent)' legend row (round-5/6 items still closed). Flags pagination: demo 3/3 prints ALL 12 flags whole incl. the long S10 flat-roof flag with its 'required (R802.5.1)' tail — no ellipsis. Engineered SKU: two1 books 'Engineered header (LVL/PSL — by supplier)' pcs+lf with 'ENGINEERED BEAM REQUIRED' verbatim in flags. Climate labels: batt members 'batt R-13 (zone 2A)' + characteristics 'Climate zone 2A' on the FL compose (B4 fix live). PT rows: '2x4 PT/2x6 PT (pressure-treated)' + 'Anchor bolts — … (sole plate anchorage (R403.1.6))' on both slab-on-grade sets (B5/S11 holding). Circuit colors/legends untouched (electrical sheets EQ).",
+      "note": "master-baseline.json is regenerated on the branch (E5 byte-equality pin reset) — legitimate since hvac defaults moved, and the reset is fully enumerable: +return members, grille/thermostat repositioned, transfer label suffixes. The E5 'regenerate ONLY from master' rule needs the usual merge-time regeneration."
+    },
+    "SWEEP": {
+      "status": "PASS",
+      "checklist": [
+        "E1",
+        "E2",
+        "E3",
+        "E4",
+        "E5",
+        "S1",
+        "S3",
+        "M1",
+        "M2",
+        "M3",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "A3",
+        "A4"
+      ],
+      "evidence": "Full suite at the pin worktree: 965 pass / 1 todo / 0 fail — 966 tests, 31,017 expect() calls, 43 files; bunx tsc --noEmit exit 0. M3 row + gates present (hvac.return.test.ts: placement order incl. closet regex, garage warning, grille exclusion, union-find continuity in every scenario incl. garage AH + soffit storey, transfer labels + grille-room exemption, takeoff lf mirror; plan-set.test.ts: return tone + legend row + suppression both ways). M1 respected by the return path (riser passes W = narrow side so the plates harness sees the vertical; trunk on the M1 attic/soffit plane — two0 prints 'grille to soffit' + the soffit warning). Title blocks: code name w/ effective date, LOD 400 stamp, SHEET n/N, ratio scale, north arrow on every walked sheet (P3).",
+      "note": "The FOCUS-1 defect is invisible to the suite precisely because S1's gate scopes MEP out and M3's gates never assert separation — per the process rule the fix must land WITH its gate."
+    }
+  },
+  "recommendations": [
+    "BLOCKER (FOCUS-1): keep the return trunk OFF the supply corridor axis — offset the return plane legs laterally (>= 0.36 m section width + clearance; the RETURN_DROP_OFFSET idea applied to the whole path) or SAT-re-route on collision; gate: no return duct OBB intersects any supply duct OBB across the hvac.return placement matrix, including a corridor-colinear compose (grille, registers and AH all on one axis — the garage-ranch geometry).",
+    "Rename the MEP base duct legend row to 'duct — supply air' now that it is supply-only (NAMES in plan-set.ts) and update the '>duct</text>' pin in plan-set.test.ts in the same commit.",
+    "Takeoff: derive duct sections for VERTICAL runs from dims[0]×dims[2] so risers/drops stop booking their length as a section side ('Return duct 14×79\"' → 'Return duct 14×8\"'); fixes the pre-existing supply 'Duct 8×79\"' class too; add the section-sanity gate.",
+    "Put the transfer-air assumption on paper: one aggregated schedules flag ('N closable rooms assume door undercut / jumper duct (M1602.2)') or an SR* tag + legend footnote.",
+    "At merge time regenerate master-baseline.json from the merged master (E5 rule) and enumerate the expected diff (return members + grille/thermostat/register-label deltas) in the commit message.",
+    "Carried minors unchanged (not B19's): MEP sheet right-bias on sparse composes (P1), supply verticals' pre-existing section booking, zone ceilingHeight defaulting 0.2 m above 2.5 m walls puts grilles/registers above the plates on synthetic composes."
+  ],
+  "suite": {
+    "pass": 965,
+    "todo": 1,
+    "fail": 0,
+    "tests": 966,
+    "assertions": 31017,
+    "files": 43,
+    "tsc": "clean"
+  },
+  "round2": {
+    "round": "B19-lod400-r2 (CLOSING paper round on the round-1 FAIL + 3 FLAGs)",
+    "pin": "61479fa11150b3e0dfc41675ef0605fcfec5b362",
+    "branch": "feat/lod400-b19",
+    "base": "964a801 (the round-1 pin — pin vs base isolates the two round-2 commits 4511936+61479fa)",
+    "date": "2026-08-21",
+    "protocol": "Closing round per review/BLUEPRINTS.md. Same four harness scenes as round 1 (demo fc866f2f271b snapshot, garage-ranch-FL compose = the B19a blocker geometry, twostorey-NY ground=soffit + upper), pure buildPlanSet at the pin (main repo, detached checkout — restored after) and at the round-1 pin (scratch worktree), rasterized with Playwright page.setContent @2x — editor never opened. Every changed sheet walked at print size with zoom crops; return-vs-supply separation proven with an exact plan-rotated-OBB (Y-interval × 2D SAT) check over members.json; base-vs-pin diffed on members, fixtures, warnings, takeoff rows AND raw sheet SVG bytes. MERGE READINESS additionally proven on a scratch --no-commit merge of 61479fa into master 9c1490a in a temp worktree (deleted after, nothing committed). Evidence: /tmp/bp-b19r2/{base,pin,merged,crops}/**.",
+    "verdict": "PASS",
+    "items": {
+      "FOCUS-1-return-through-supply": {
+        "status": "PASS",
+        "checklist": [
+          "S1",
+          "M3",
+          "E3",
+          "P2"
+        ],
+        "evidence": "CLOSED as a class. Geometry: zero return×supply OBB overlaps in all four scenes; min face gap 0.0687 m (garage Return trunk vs supply Trunk 14x8) ≥ DUCT_CLEAR_GAP 0.05; return legs ride their OWN plane — attic y 3.253 = supply 3.0 + TRUNK_H + gap UP (demo/garage/two1), soffit y 2.097 = supply 2.35 − offset DOWN (two0). Pixels: the round-1 garage exhibit (return ~90% hidden under the supply trunk) now prints as TWO parallel separated bars with white gap (crops/garage-trunks.png); demo return prints as its own dark L off the corridor at RA (crops/demo-return.png); two0 dark return block clear of the light trunk at 1:75 (crops/two0-return.png); two1 stepped dark return path distinct. Tones sampled on pixels: supply exactly #9aa7b0, return exactly #5f7282 — honestly distinguishable at 1:75 AND 1:100, and the geometric separation means the tone is no longer carrying the whole story. Gates landed WITH the fix (process rule): hvac.return.test.ts 'zero return×supply OBB overlaps in every scenario, attic AND soffit' (utility/hallway/none × attic/soffit incl. the corridor-colinear garage plan) + the plane-offset pin + supplySpineOf keep-out shared by emission and model.",
+        "note": "Loud fallbacks verified present in code + gated (tiny-closet drop intrusion, clear:false grille) — none fire on the four scenes (warnings byte-equal to round 1)."
+      },
+      "FOCUS-2-legend-supply-air": {
+        "status": "PASS",
+        "checklist": [
+          "P2",
+          "P4",
+          "M3"
+        ],
+        "evidence": "Base duct row reads 'duct — supply air' beside 'duct — return air' on all four MEP sheets, both rows INSIDE the legend rect (walked at print size on garage/demo/two0/two1). plan-set.test.ts pins updated both ways in the same commit ('>duct — supply air</text>' drawn, return-only sheet excludes it)."
+      },
+      "FOCUS-3-transfer-air-on-paper": {
+        "status": "PASS",
+        "checklist": [
+          "P4",
+          "M3",
+          "C5"
+        ],
+        "evidence": "The assumption reaches paper: closable rooms' supply boots carry the member flag 'door undercut / jumper duct assumed — M1602.2' (demo 4 boots, garage bedroom 1, two0 living+bedroom 2, two1 correctly ZERO — grille room exempt) and the schedules flag block prints it verbatim (⚑ list, demo 3/3 / garage 2/2 / two0 2/2). The takeoff aggregates identical flags into ONE Flags row with quantity — 'FLAG — 4 ea / 1 ea / 2 ea' in computeTakeoff output — and hvac.return.test.ts gates the row quantity + flagged-boot census.",
+        "note": "The printed ⚑ line itself is count-less — the schedules sheet dedupes ALL aggregated flags by text (the 96-member compressed flag prints once too); the 'N ea' lives on the takeoff data row per the B21a machinery. Consistent with the sheet convention, so scored PASS."
+      },
+      "FOCUS-4-true-duct-sections": {
+        "status": "PASS",
+        "checklist": [
+          "C5",
+          "S4",
+          "M3"
+        ],
+        "evidence": "Every fictitious row is DEAD in the base-vs-pin takeoff diff: 'Duct 8×79\\\"', 'Duct 6×14\\\"', 'Duct 8×53\\\"', 'Return duct 14×79\\\"/14×14\\\"/14×12\\\"' all gone; each scene books exactly ONE 'Return duct 14×8\\\"' lf row and its lf equals the drawn return tin EXACTLY (demo 12.6, garage 25.7, two0 7.2, two1 11.9 lf); supply risers merge into their true trunk rows (garage Duct 14×8\\\" 21.3 lf = 4.5 m trunk + 2.0 m riser) and boots book as Duct 6\\\" round. Fitting rows equal the real joint censuses: return elbows 3/2/2/3 == member-chain joints; the riser-to-feed elbow the fictitious keys hid now counts (garage 'Duct 14×8\\\" fittings — 1'). Gate: true-section tests incl. the 'no Duct 8×NN phantom' regex pin.",
+        "note": "Advisory (no exhibit): the vertical heuristic dims[1]>dims[0] would misread a horizontal duct SHORTER than its 0.203 m section height; min horizontal in all scenes is 0.242 m. Watch if trunk stubs ever shrink."
+      },
+      "FOCUS-5-garage-warning": {
+        "status": "PASS",
+        "checklist": [
+          "P4",
+          "M3"
+        ],
+        "evidence": "'⚑ air handler in garage — M1602.2(1) forbids garage return air; provide a sealed return + R302.5.2 duct protection — verify' prints VERBATIM (word-boundary wrap, no ellipsis) on garage schedules 2/2 at the pin AND on the scratch-merged tree; negative controls (demo hallway AH, two0 laundry AH) print no garage flag."
+      },
+      "FOCUS-6-regression-sweep": {
+        "status": "PASS",
+        "checklist": [
+          "S4",
+          "S6",
+          "S7",
+          "S10",
+          "S11",
+          "P1",
+          "P2",
+          "P3",
+          "P4",
+          "C5",
+          "E3",
+          "A3"
+        ],
+        "evidence": "Branch blast radius airtight: foundation / wall-framing / roof-framing / electrical / floor-framing sheets byte-EQUAL as SVG strings to the round-1 pin on ALL four scenes; the only sheet diffs are MEP (by design), schedules (new rows), covers + elevations + two sections (the raised return plane refits the elevation extents — walked, clean composition, datums print). Member diff base→pin is EXACTLY two classes: return members re-routed (+1 trunk leg on demo) and supply boots gaining ONLY .flag (positions byte-equal); warnings byte-equal. Held on pixels: two1 translucent deck underlay + legend row; engineered header SKU pcs+lf + 'ENGINEERED BEAM REQUIRED' verbatim; PT rows ('2x4/2x6 PT (pressure-treated)') + 'Anchor bolts — 24 pcs (sole plate anchorage (R403.1.6))'; batt 'batt R-13 (zone 2A)' + characteristics 'Climate zone 2A'; demo flag block prints all 12+1 flags WHOLE incl. the long S10 tail. MASTER-SIDE features (not contained in this branch, base 00496a7): B17 slab underlay + vapor-retarder legend rows + bolt/dowel keys, F3 DWV flow arrows + 'ARROWS POINT TO SEWER (P3005.3)' + SEWER/SEPTIC(P3005.4) marker, F1 line-set suction/liquid pair + legend rows — ALL verified on pixels on the scratch-MERGED tree, coexisting with the separated return path.",
+        "note": "Fixture enumeration in the round-2 commit messages is inaccurate: the RA grille fixture MOVED with the cleared riser (demo 8.8,5.75→8.49,6.49 + thermostat z 6.246→6.492; garage 7.1,3.0→6.92,3.42) — correct one-truth behavior (thermostat targets the real grille, gates green), but 'fixtures byte-equal' is false as written. The merge-time baseline note must enumerate the grille/thermostat fixture deltas too."
+      },
+      "MERGE-READINESS": {
+        "status": "PASS",
+        "checklist": [
+          "E5",
+          "S1",
+          "M3"
+        ],
+        "evidence": "Scratch --no-commit merge of 61479fa into master 9c1490a (temp worktree, deleted, NOTHING committed): 3 conflicts, all mechanical — plan-set.ts COMMENT-only (M2 line-set sentence vs B19c tone sentence: union), CHECKLIST.md M2-tail vs new M3 row (union), master-baseline.json both-sides-recaptured (regenerated from the merged tree: INTL/TX 531 members · 45 fixtures). Merged tree: full suite 1032 pass / 1 todo / 0 fail (1033 tests, 44 files, 31,680 assertions), bunx tsc --noEmit clean; return×supply separation re-proven (0 overlaps, same gaps); B17 underlay + DWV arrows/marker + line-set pair + garage warning + both duct legend rows re-verified on merged pixels."
+      }
+    },
+    "suite": {
+      "pass": 970,
+      "todo": 1,
+      "fail": 0,
+      "tests": 971,
+      "assertions": 31050,
+      "files": 43,
+      "tsc": "clean",
+      "mergedScratch": {
+        "pass": 1032,
+        "todo": 1,
+        "fail": 0,
+        "tests": 1033,
+        "files": 44,
+        "assertions": 31680,
+        "tsc": "clean"
+      }
+    },
+    "recommendations": [
+      "Merge with the same resolutions the scratch merge proved: union both comment/doc conflicts, regenerate master-baseline.json FROM THE MERGED TREE (E5), and enumerate the full expected diff in the merge commit — return members re-routed + supply-boot flags + RA-grille/thermostat FIXTURE moves (the round-2 commit messages omit the fixture deltas).",
+      "Advisory: takeoff's vertical-duct heuristic (dims[1]>dims[0]) misreads horizontal runs shorter than the 0.203 m section height — no current instance (min 0.242 m); consider an explicit orientation tag if stub legs ever shrink.",
+      "Carried minors unchanged: MEP sheet right-bias on sparse composes (P1), 'RIDGE +' datum keys off the tallest member (now the return trunk) on roofless synthetic composes, zone ceilingHeight defaulting 0.2 m above 2.5 m walls on synthetic composes."
+    ]
+  },
+  "shipStamp": "APPROVE — B19 stamped for merge at 61479fa. The round-1 blocker is closed as a CLASS (supply keep-out model + return plane offset shared by emission and gate; zero return×supply overlaps geometric AND on pixels on the exact blocker geometry), all three round-1 FLAGs are closed on paper (supply-air legend row, transfer-air flag block row + takeoff 'N ea' aggregation, true duct sections with exact lf conservation), the garage M1602.2(1) warning prints verbatim, the branch's paper blast radius is byte-bounded to the MEP/schedules/elevation-refit sheets, and a scratch merge into master 9c1490a resolves mechanically to a 1032-pass suite with every master-side sweep item (B17 underlay, DWV arrows/marker, line-set pair) intact beside the separated return path. Merge-time duties: regenerate master-baseline.json from the merged tree and enumerate the grille/thermostat fixture moves the commit messages missed."
+}

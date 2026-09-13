@@ -1,0 +1,37 @@
+{
+  "name": "@pascal-app/plugin-lot",
+  "version": "0.1.0",
+  "description": "Lot — drop a real parcel into the scene from an address or a preset lot the way PlanCrafters does: the GIS ring, APN and zoning, the streets around it from OpenStreetMap, the street-facing front edge, planning-default setbacks, and a house placed on the envelope when Generate runs.",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "check-types": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "peerDependencies": {
+    "@pascal-app/core": ">=0.9.1 <2",
+    "@pascal-app/editor": ">=0.9.1 <2",
+    "lucide-react": "*",
+    "react": "^18 || ^19",
+    "react-dom": "^18 || ^19",
+    "zustand": "^5"
+  },
+  "devDependencies": {
+    "@pascal/typescript-config": "*",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "^5"
+  }
+}

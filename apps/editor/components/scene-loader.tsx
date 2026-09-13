@@ -227,7 +227,10 @@ export function SceneLoader({ initialScene, meta }: SceneLoaderProps) {
   }, [meta.id])
 
   const handleThumb = useCallback(
-    async (_blob: Blob) => {
+    async (_blob: Blob, cameraData?: unknown) => {
+      // Sheets' cover capture awaits the snapshot pipeline as a DOM event
+      // (same as apps/editor/app/page.tsx) — re-broadcast before uploading.
+      window.dispatchEvent(new CustomEvent('pascal:thumbnail', { detail: { blob: _blob, cameraData } }))
       // TODO(phase7): upload thumbnail via POST /api/scenes/[id]/thumbnail.
       // Stub endpoint is not yet implemented in v0.1 — skip upload for now.
       await fetch(`/api/scenes/${meta.id}/thumbnail`, {

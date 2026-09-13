@@ -1,0 +1,105 @@
+{
+  "round": 1,
+  "reviewer": "quality",
+  "pin": "e1b9a11",
+  "verdict": "NO-SHIP — 8 FAIL / 5 FLAG / 5 PASS. The X-ray read is fundamentally wrong (every wall is a dot-stipple film over studs, never a dollhouse cut), the ground level has no floor at all, exterior-wall detection returns 0/24 so the whole exterior stack + jurisdiction sizing is dead code, colinear duplicate walls inflate the takeoff ~20%, and the plan set's title block, circuit palette and legends are not readable. Round-14 did fix the foundation-corner artifact and the schedules overprint (both re-shot on this pin and now PASS).",
+  "items": {
+    "A1": {
+      "status": "FAIL",
+      "evidence": "/tmp/cam-3.png",
+      "note": "X-ray forces host setWallMode('cutaway'), but all 24 walls report frontSide/backSide 'interior' (wall-model.ts:79 has no geometric fallback), so the host paints EVERY wall with createInvisibleWallMaterial's 24% dot stipple. From all 5 orbit angles near and far walls read identically as translucent film with studs/wires showing through — exactly the failure mode this item forbids. No dollhouse face ever opens. Turning 'X-ray vision' off swings to the opposite extreme: full-height opaque drywall that hides the skeleton entirely (/tmp/tog-off-xrayvision.png). Baseline clone without Bones reads opaque 'Full height' (/tmp/base-4.png)."
+    },
+    "A2": {
+      "status": "FLAG",
+      "evidence": "/tmp/cam-1.png",
+      "note": "Orbit over /tmp/cam-0.png..cam-4.png (≈45° per step, >180° total) is smooth: no popping, no lag, no recompute, member positions stable. But there is nothing to swap — because no wall face is ever opened (A1), the same stipple film faces the camera at every angle, so the dollhouse open/close behaviour cannot be observed at all. Passes 'no popping', fails to demonstrate 'faces swap'."
+    },
+    "A3": {
+      "status": "PASS",
+      "evidence": "/tmp/a3-cand0.png",
+      "note": "Injected trees (1.5-2 m outside the wall, between camera and house, 4 dense oaks at facade midpoints). Wires/members terminate cleanly at the canopy alpha edge — the round-11 'members painted over the tree' regression is gone. Whole-frame scan of /tmp/tree-low.png found only 15 wire-coloured pixels with foliage-dominant neighbourhoods, and the 20x crop shows they are 1-2 px alpha-edge stragglers, not a drawn-through wire. A fixed-camera A/B (electrical off, /tmp/t4-crop-on.png vs /tmp/t4-crop-off.png) confirms the purple/red lines are Bones members, not host zone outlines. Per-pixel A/B beyond that is unusable: the editor's temporal AA makes every high-frequency edge differ between two screenshots (/tmp/a3-diffmask.png). Ghost pass is code-limited to foundation/floor-framing (renderer.tsx ghostless rule) and no ghost halo appears on wall/MEP members in any frame."
+    },
+    "A4": {
+      "status": "FAIL",
+      "evidence": "/tmp/cam-1.png",
+      "note": "Bones emits ZERO floor geometry on the ground level — not a miss in one room, all five: compute.ts gates frameFloor behind `!isGroundLevel` and the foundation engine deliberately omits the slab, so the only thing under your feet is the host slab. Worse, the plugin cannot tell a slab-less room from a slabbed one: an offline probe (/tmp/q-noslab2.ts) that deletes ONE slab, and one that deletes ALL FIVE, both return byte-identical output (1265 members, 66 foundation, 0 warnings) to the untouched graph, and no warning is ever surfaced. The Floor toggle is also dead (1265 -> 1265, /tmp/q4.log)."
+    },
+    "A5": {
+      "status": "FAIL",
+      "evidence": "/tmp/a5-zoom1.png",
+      "note": "Duplicate shells: the source graph has 7 colinear overlapping wall pairs, which the framer frames twice — 140 doubled member slots, 213 extra members, 49 stud pairs within 4 cm, and 2x bottom plates at identical coordinates (88 receptacles for a 5-room house). Coincident copies hide in plan view but z-fight in 3D and inflate the takeoff ~20% (161+241 pcs 2x6). Devices/boxes land on the OUTER face of the exterior walls (yellow boxes visible on the exterior drywall in /tmp/tog-off-xrayvision.png) — a poke-through caused by the same exterior=false bug. Flushness of the exterior stack cannot even be judged: there is no sheathing/WRB/cladding anywhere because 0/24 walls are classified exterior (wall-layers.ts:72 returns null when !wall.exterior); the printed takeoff carries only interior Drywall 1/2\" (/tmp/p2-sheet-4.png)."
+    },
+    "A6": {
+      "status": "FAIL",
+      "evidence": "/tmp/p2-crop-elec-tags.png",
+      "note": "circuit-colors.ts gives each family only TWO shades (`index >= 2 && index % 2 === 0 ? variant : base`), so GEN-1/3/5/7 are one colour, GEN-2/4/6 another, LTG-1/3 and LTG-2/4 likewise — 14 circuits are untraceable in the 3D X-ray and on paper. Framing vs MEP vs layers is otherwise distinguishable at house scale, but at house scale the wire runs read as generic amber lines against tan lumber (/tmp/cam-1.png), and device tag bubbles overprint into illegible clusters."
+    },
+    "B1": {
+      "status": "PASS",
+      "evidence": "/tmp/p2-panel.png",
+      "note": "Footer CTA '📐 Blueprints / 5 print-ready sheets · LOD 400', 256x56 px in a 288 px panel (full width minus padding), 14px/600, near-white block in a dark panel — the most prominent control on screen. Sheet count matches the export exactly (5 sheets: foundation, wall framing, electrical, plumbing+HVAC, takeoff — /tmp/q9.log SHEETS). Click opens a separate popup document with the sheets rendered."
+    },
+    "B2": {
+      "status": "FLAG",
+      "evidence": "/tmp/p2-juris-flor.png",
+      "note": "Search filters correctly ('flor' -> Florida, 'ny' -> New York, 'zzz' -> no match, /tmp/q8.log), Auto row reads 'Auto — NY (guessed from timezone America/New_York)' with zero network, and AUTO is genuinely resolved for the code line ('2025 Residential Code of New York State (2024 IRC base), effective 2025-12-31'). Two problems: (1) the ICC link is `codes.iccsafe.org/search?query=` + the WHOLE prose code name including the em dash and 'effective 2025-12-31', which will not resolve to the code; (2) the picker is inert — AUTO/FL/CA/NY/MN all compute the identical 1265 members, because every jurisdiction rule hangs off exterior walls that are never detected. Only the title-block text changes."
+    },
+    "B3": {
+      "status": "FAIL",
+      "evidence": "/tmp/q4.log",
+      "note": "'Within one recompute' is technically true but every real toggle costs 8-13 s (Wall framing off 11.0 s / on 12.7 s, Foundation 11.5/13.0, Electrical 8.0/12.8, Plumbing 12.1/13.0, HVAC 12.3/13.1, spacing 24\" 13.0 s) — the panel just sits there. Floor and Roof are DEAD controls (1265 -> 1265, no visual change: /tmp/tog-off-floor.png, /tmp/tog-off-roof.png); Roof is dead because extractRoofs only walks the bones node's own level and this scene's roof lives on a separate 'Roof' level (moving the node there yields 27 roof members). X-ray vision correctly changes the render without a recompute (/tmp/tog-off-xrayvision.png). Detail segments work and are plausible (Generic 582 / Code 801 / Fab 1265). Flags list is truncation soup: all three rows cut at '...verify the dr' with no tooltip."
+    },
+    "B4": {
+      "status": "FLAG",
+      "evidence": "/tmp/p2-320.png",
+      "note": "At a 320 px sidebar the three flag spans overflow (scrollWidth 342 vs clientWidth 221) plus ~9 truncated takeoff spans, none with a title/tooltip (/tmp/q9.log OVERFLOW_320). Already broken at the DEFAULT 288 px: the stud-spacing segmented control renders as one nonsense token `16\"24\"` with the two pills touching (/tmp/b4-crop-spacing.png). Footer disclaimer is intact and legible ('Drafting aid, not engineering — verify with your local building department.')."
+    },
+    "C1": {
+      "status": "FAIL",
+      "evidence": "/tmp/p2-sheet-4.png",
+      "note": "Border and scale bar are present on all 5 sheets, but the title block is broken on EVERY sheet: the jurisdiction line is unwrapped single-line text in a 372 px block, so it runs out of the block AND off the sheet, clipped mid-word at 'Jurisdiction: AUTO — 2025 Residential Code of New York State (2024 IRC base), e' — the effective date is lost. It also prints the raw 'AUTO' instead of the resolved state. Project/level read generically as 'Pascal project — Level'. The schedules sheet carries a meaningless '5 m' scale bar (chrome(title, opts, 40) on a text-only sheet). Plan sheets waste ~40% of the page because planBounds inflates every member by an isotropic radius max(dims[0],dims[2])/2."
+    },
+    "C2": {
+      "status": "PASS",
+      "evidence": "/tmp/p2-crop-corner-tl.png",
+      "note": "Re-shot on pin e1b9a11: the user-reported crossed-box/Y-junction artifact is gone. Corners and T-junctions read as single mitered runs at 8x zoom (/tmp/p2-crop-corner-tl.png, /tmp/p2-crop-corner-r.png). Round-14 foundation splices fixed this."
+    },
+    "C3": {
+      "status": "FAIL",
+      "evidence": "/tmp/p2-crop-elec-tags.png",
+      "note": "Legend rows are complete and match the 3D palette (swatch + 'GEN-1 — 20A/12AWG · general'), homeruns do converge on the 'P' panel symbol — but the palette itself only has 2 shades per family, so 7 GEN circuits share 2 colours on the sheet and cannot be traced (same root cause as A6). Device tags overprint: 6 bubbles stack into an unreadable blob with the letters hidden (/tmp/p2-crop-elec-tags.png), the panel 'P' is doubled (/tmp/p2-crop-elec-panel.png), and the legend block overlaps plan geometry (/tmp/p2-crop-elec-legend-overlap.png). The MEP sheet additionally has no wall outlines and no legend at all for its 8 tag codes (SR/SO/CO/T/WH/AH/RA/EF)."
+    },
+    "C4": {
+      "status": "FAIL",
+      "evidence": "/tmp/p2-sheet-1.png",
+      "note": "Members stay inside the border and wall junctions are legible, but the legend lies: it prints '2x4' for every role because plan-set.ts:216 keeps the FIRST size seen per role, while the takeoff is 2x6-dominant (161 + 241 pcs 2x6 vs 84 pcs 2x4). A framer reading the legend would order the wrong lumber."
+    },
+    "C5": {
+      "status": "FLAG",
+      "evidence": "/tmp/p2-sheet-4.png",
+      "note": "Round-14 fixed the overprint: rows fit both columns, flags print in red at the bottom-left, nothing is clipped mid-word, pagination logic is in place. Remaining: the row text drops r.detail (`${section} · ${item} — ${qty} ${unit}`), so SEVEN rows read 'Wall framing · 2x6 — N pcs' and are indistinguishable; three nonsense rows 'Flags · FLAG — 1 ea' appear in the material takeoff; and the sheet still carries the bogus 5 m scale bar."
+    },
+    "C6": {
+      "status": "PASS",
+      "evidence": "/tmp/q9.log",
+      "note": "Popup HTML uses @page letter landscape + page-break-after/break-after: page. Under emulated print media the 5 sheet boxes sit at an exact 816 px pitch (y = -3080, -2264, -1448, -632, 184; h = 816) — one sheet per page, no splitting, and the on-screen hint is display:none in print."
+    },
+    "D1": {
+      "status": "PASS",
+      "evidence": "/Users/julien/Documents/GitHub/plugin-bones/docs/research/framing-tables.md",
+      "note": "Six citations spot-checked against docs/research and all resolve to real, correctly-numbered sections: R302.11 (10 ft fireblocking), R602.11.1 (3x3x0.229\" plate washer), IRC Table M1505.4.4 (50 CFM intermittent bath fan), R314 (smoke alarms), R802.11 (roof uplift ties), R403.1.4.1 (frost depth). Minor: the plumbing cleanout labels cite P3005.2 / P3005.2.1, which are real IRC sections but are not covered by anything in docs/research/mep.md."
+    },
+    "D2": {
+      "status": "FLAG",
+      "evidence": "/tmp/p2-panel.png",
+      "note": "Code names are right for all three: FL 'Florida Building Code, Residential — 8th Edition (2023), 2021 IRC base, effective 2023-12-31'; CA '2025 California Residential Code (CRC), Title 24 Part 2.5 (2024 IRC base), effective 2026-01-01'; NY '2025 Residential Code of New York State (2024 IRC base), effective 2025-12-31' (panel.tsx:502 + profileFor probe; the NY string is visible in the panel screenshot via the Auto guess). The link does not resolve: panel.tsx URL-encodes the entire prose name into ?query=, e.g. 'Florida%20Building%20Code%2C%20Residential%20%E2%80%94%208th%20Edition%20(2023)%2C%202021%20IRC%20base%2C%20effective%202023-12-31'. Use the ICC code slug or a short title."
+    }
+  },
+  "topFixes": [
+    "Fix exterior-wall detection (core/wall-model.ts:79 trusts host frontSide/backSide only, and this scene reports 'interior' on all 24 walls). Add a geometric fallback — footprint-boundary / not-shared-by-two-zones — because sheathing, WRB, cladding, stemwall, anchor bolts, hold-downs, hurricane ties, CMU, every jurisdiction difference AND the side devices are placed on all hang off this one boolean. Today AUTO/FL/CA/NY/MN produce identical output.",
+    "Stop shipping the X-ray as a stipple film. Forcing host wallMode='cutaway' on all-interior walls hands the user createInvisibleWallMaterial's 24% dot pattern on every wall, so the skeleton is seen 'through' walls from all angles and there is no depth cue; X-ray off is the opposite failure (fully opaque). Implement the dollhouse read Bones already does for member buckets — hide/open only the wall shells whose face normal points at the camera.",
+    "Give the ground level a floor and make Floor/Roof real controls: emit slab or floor-sheathing geometry when isGroundLevel (compute.ts gate), warn per room that has no slab (deleting one slab or all five currently yields byte-identical output and no warning), and let extractRoofs search roof segments on every level, not just the bones node's level (this scene's roof is on a separate 'Roof' level, so the Roof toggle is dead).",
+    "Deduplicate colinear/overlapping walls before framing: 7 overlapping pairs produce 213 extra members, 49 stud pairs within 4 cm, doubled bottom plates and 88 receptacles — z-fighting in 3D and roughly 20% phantom lumber in the takeoff and on the printed schedules.",
+    "Legibility + latency pass: one distinct hue (or hatch) per circuit instead of 2 shades per family; de-collide plan device tags and the doubled panel symbol; wrap or auto-shrink the title-block jurisdiction line so it stays inside the block (and print the resolved state, not 'AUTO'); use the most-common size per role in framing legends; keep r.detail in schedule rows and drop the 'Flags · FLAG' rows and the schedules-sheet scale bar; fix the `16\"24\"` spacing control and the truncated flag/takeoff spans; and cut the 8-13 s per-toggle recompute (debounce + incremental) so toggles feel live."
+  ]
+}

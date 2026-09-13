@@ -75,6 +75,11 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
   const parsed = putSceneSchema.safeParse(body)
   if (!parsed.success) {
+    // Dev aid: a rejected save is invisible to the person editing (the client
+    // retries quietly), so say WHY in the server log.
+    if (process.env.NODE_ENV !== 'production') {
+      console.warn('[scenes] PUT rejected:', JSON.stringify(parsed.error.issues.slice(0, 5)))
+    }
     return sceneApiJson(
       request,
       { error: 'invalid_request', details: parsed.error.issues },

@@ -1,0 +1,852 @@
+{
+  "version": "2026-08-15",
+  "disclaimer": "Drafting aid, not engineering. Typical/approximate values — verify with the local authority having jurisdiction. Canadian entries (CA-*) describe National Building Code of Canada adoption, not IRC adoption; ircBase is null for all of them.",
+  "sources": [
+    "https://up.codes/viewer/alabama/irc-2015",
+    "https://up.codes/codes/alabama",
+    "https://up.codes/codes/alaska",
+    "https://up.codes/codes/arizona",
+    "https://up.codes/codes/arkansas",
+    "https://www.dgs.ca.gov/BSC/Codes",
+    "https://up.codes/codes/california",
+    "https://up.codes/codes/colorado",
+    "https://up.codes/viewer/connecticut/irc-2021",
+    "https://up.codes/codes/delaware",
+    "https://up.codes/codes/district-of-columbia",
+    "https://up.codes/viewer/florida/fl-residential-code-2023",
+    "https://up.codes/viewer/georgia/irc-2024",
+    "https://up.codes/codes/georgia",
+    "https://up.codes/codes/hawaii",
+    "https://up.codes/viewer/idaho/irc-2018",
+    "https://cdb.illinois.gov/business/codes.html",
+    "https://up.codes/codes/illinois",
+    "https://up.codes/viewer/indiana/irc-2018",
+    "https://up.codes/viewer/iowa/irc-2024",
+    "https://up.codes/codes/kansas",
+    "https://up.codes/codes/kentucky",
+    "https://up.codes/codes/louisiana",
+    "https://up.codes/viewer/maine/irc-2021",
+    "https://up.codes/viewer/maryland/irc-2024",
+    "https://up.codes/codes/maryland",
+    "https://up.codes/viewer/massachusetts/irc-2021",
+    "https://up.codes/codes/michigan",
+    "https://www.dli.mn.gov/business/codes-and-laws",
+    "https://up.codes/viewer/minnesota/irc-2018",
+    "https://up.codes/codes/mississippi",
+    "https://up.codes/codes/missouri",
+    "https://up.codes/codes/montana",
+    "https://up.codes/viewer/nebraska/irc-2018",
+    "https://up.codes/codes/nevada",
+    "https://up.codes/viewer/new_hampshire/irc-2021",
+    "https://up.codes/codes/new_hampshire",
+    "https://up.codes/viewer/new_jersey/irc-2021",
+    "https://up.codes/viewer/new_mexico/irc-2021",
+    "https://up.codes/viewer/new_york/irc-2024",
+    "https://up.codes/viewer/new_york/irc-2018",
+    "https://up.codes/viewer/north_carolina/irc-2015",
+    "https://up.codes/viewer/north_carolina/irc-2021",
+    "https://up.codes/viewer/north_dakota/irc-2024",
+    "https://up.codes/viewer/ohio/irc-2018",
+    "https://codes.ohio.gov/ohio-administrative-code/4101:8",
+    "https://up.codes/codes/oklahoma",
+    "https://www.oregon.gov/bcd/codes-stand/Pages/adopted-codes.aspx",
+    "https://up.codes/codes/oregon",
+    "https://up.codes/viewer/pennsylvania/irc-2021",
+    "https://up.codes/viewer/pennsylvania/irc-2018",
+    "https://up.codes/codes/rhode_island",
+    "https://up.codes/viewer/rhode_island/irc-2021",
+    "https://up.codes/viewer/south_carolina/irc-2021",
+    "https://up.codes/codes/south_dakota",
+    "https://up.codes/codes/tennessee",
+    "https://texas.public.law/statutes/tex._local_gov%27t_code_section_214.212",
+    "https://up.codes/codes/texas",
+    "https://up.codes/viewer/utah/irc-2021",
+    "https://up.codes/codes/vermont",
+    "https://up.codes/viewer/virginia/irc-2021",
+    "https://sbcc.wa.gov/",
+    "https://up.codes/codes/washington",
+    "https://up.codes/viewer/west_virginia/irc-2018",
+    "https://up.codes/codes/wisconsin",
+    "https://up.codes/codes/wyoming",
+    "https://www.ontario.ca/page/building-code-updates",
+    "https://www.saskatchewan.ca/business/housing-development-construction-and-property-management/building-and-technical-standards",
+    "https://www.gov.mb.ca/labour/its/bldg_codes/2020_construction_codes_adoption.html",
+    "https://dhicanada.ca/codes/provincial-codes-matrix"
+  ],
+  "states": {
+    "AL": {
+      "name": "Alabama",
+      "residentialCode": "2015 Alabama Residential Code (2015 IRC with AL amendments), effective 2016-10-01",
+      "ircBase": 2015,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Lightly amended 2015 IRC set as state minimum by the Energy & Residential Codes Board; enforcement is local and many rural counties do not inspect",
+      "specialRegimes": [
+        "Coastal counties (Mobile, Baldwin) enforce high-wind provisions incl. ICC 600-2020 and FORTIFIED incentives",
+        "Alabama residential energy code (Energy & Residential Codes Board)"
+      ],
+      "note": "UpCodes shows the 2015 IRC-based code still current in 2026; board updates have lagged. Verify locally — larger cities may amend or run ahead of the state minimum."
+    },
+    "AK": {
+      "name": "Alaska",
+      "residentialCode": "No general statewide residential code; 2018 IRC with Alaska-specific amendments (eff. 2019-01-01) applies to AHFC-financed housing; cities adopt their own",
+      "ircBase": 2018,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "State IRC amendments are mostly energy/ventilation (BEES); Anchorage and other deferred jurisdictions administer their own amended codes",
+      "specialRegimes": [
+        "AHFC Building Energy Efficiency Standard (BEES) for state-financed homes",
+        "Municipality of Anchorage amended IRC",
+        "Severe frost depth (42-60+ in) and high seismic in south-central AK"
+      ],
+      "note": "Large unincorporated areas have no permit/inspection regime for 1-2 family dwellings."
+    },
+    "AZ": {
+      "name": "Arizona",
+      "residentialCode": "No statewide residential code; municipalities/counties adopt the IRC individually (Phoenix and Tucson on 2018 IRC)",
+      "ircBase": 2018,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "Editions in use range roughly 2012-2024 by jurisdiction; only the fire code (2024 IFC) is adopted statewide",
+      "specialRegimes": [
+        "Statewide International Fire Code 2024 with amendments",
+        "Sonoran Desert jurisdictions commonly amend for thermal mass/masonry construction"
+      ],
+      "note": "ircBase 2018 is representative of the largest cities; unincorporated county areas may have minimal or no residential enforcement."
+    },
+    "AR": {
+      "name": "Arkansas",
+      "residentialCode": "Arkansas Fire Prevention Code, Vol. III — Residential, 2021 edition (2021 IRC base), effective 2023-01-01",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Moderately amended 2021 IRC issued by the State Fire Marshal as the AFPC Vol. III; local enforcement capacity varies widely",
+      "specialRegimes": [
+        "Arkansas Energy Code for New Building Construction"
+      ]
+    },
+    "CA": {
+      "name": "California",
+      "residentialCode": "2025 California Residential Code (CRC), Title 24 Part 2.5 (2024 IRC base), effective 2026-01-01",
+      "ircBase": 2024,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Heavily amended: seismic bracing/engineering triggers, WUI Chapter 7A materials, mandatory sprinklers, Title 24 Part 6 energy; local jurisdictions may only add more-restrictive amendments",
+      "specialRegimes": [
+        "Chapter 7A ignition-resistant construction in Fire Hazard Severity Zones (WUI)",
+        "Title 24 Part 6 Energy Code + Part 11 CALGreen",
+        "High seismic (SDC D0-E) makes engineered design common"
+      ],
+      "note": "Triennial cycle: 2022 CRC (2021 IRC base) applied 2023-01-01 through 2025-12-31."
+    },
+    "CO": {
+      "name": "Colorado",
+      "residentialCode": "No statewide residential building code; counties and home-rule municipalities adopt their own (2015-2024 IRC in use)",
+      "ircBase": 2021,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "Denver/Front Range mostly on amended 2021 I-codes; mountain counties amend heavily for snow load; some rural counties have no code",
+      "specialRegimes": [
+        "Statewide minimum energy code (HB22-1362: 2021 IECC+ required when a jurisdiction updates codes)",
+        "Colorado Wildfire Resiliency Code Board WUI rules (2025, phased into mapped WUI areas)",
+        "State plumbing and electrical codes apply statewide"
+      ],
+      "note": "ircBase 2021 is representative of the populous Front Range; edition and snow/frost amendments vary county by county."
+    },
+    "CT": {
+      "name": "Connecticut",
+      "residentialCode": "2022 Connecticut State Building Code — 2021 IRC portion with CT amendments, effective 2022-10-01",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Statewide code that cannot be amended locally; moderate CT amendments",
+      "specialRegimes": [
+        "Coastal high-wind / flood zones along Long Island Sound"
+      ]
+    },
+    "DE": {
+      "name": "Delaware",
+      "residentialCode": "No statewide residential building code; the three counties and municipalities adopt their own recent IRC editions",
+      "ircBase": 2018,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "New Castle, Kent and Sussex counties each adopt/amend the IRC on their own cycles; state role limited to fire and energy",
+      "specialRegimes": [
+        "Statewide residential energy conservation code (IECC-based)",
+        "Delaware State Fire Prevention Regulations"
+      ],
+      "note": "ircBase 2018 is representative; counties have been on 2012-2021 editions at different times."
+    },
+    "DC": {
+      "name": "District of Columbia",
+      "residentialCode": "2017 DC Construction Codes: DC Residential Code (12B DCMR) = 2015 IRC with DC amendments, effective 2020-05-29",
+      "ircBase": 2015,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Heavily amended via DCMR Title 12; a 2021-I-code-based update has been in rulemaking — verify status",
+      "specialRegimes": [
+        "DC Energy Conservation Code",
+        "DC Green Construction Code"
+      ]
+    },
+    "FL": {
+      "name": "Florida",
+      "residentialCode": "Florida Building Code, Residential — 8th Edition (2023), 2021 IRC base, effective 2023-12-31",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Standalone heavily-rewritten code: wind design integrated throughout, product approval system, sprinkler mandate removed; local amendment tightly controlled",
+      "specialRegimes": [
+        "High-Velocity Hurricane Zone (HVHZ) provisions in Miami-Dade and Broward counties",
+        "Wind-borne debris regions with opening protection per ASCE 7 wind maps",
+        "Florida Building Code, Energy Conservation"
+      ],
+      "note": "9th Edition (2026) expected effective late 2026 on the triennial cycle."
+    },
+    "GA": {
+      "name": "Georgia",
+      "residentialCode": "Georgia State Minimum Standard One- and Two-Family Dwelling Code — 2024 IRC with Georgia amendments, effective 2026-01-01",
+      "ircBase": 2024,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Mandatory statewide minimum administered by DCA; Georgia amendments moderate (energy and sprinkler carve-outs); locals may adopt approved local amendments",
+      "specialRegimes": [
+        "Coastal counties: wind-borne debris provisions",
+        "Georgia State Minimum Standard Energy Code"
+      ],
+      "note": "Prior base was the 2018 IRC (effective 2020-01-01); Georgia skipped the 2021 edition."
+    },
+    "HI": {
+      "name": "Hawaii",
+      "residentialCode": "Hawaii State Building Code — state residential code based on 2018 IRC (eff. 2020-11-17), with 2021 IRC adoption recorded 2022; each county then adopts/amends its own version",
+      "ircBase": 2018,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "State council adopts; counties must adopt within 2 years and may amend (Honolulu operates on the 2018 base); hurricane and lava-zone amendments are significant",
+      "specialRegimes": [
+        "County building codes (Honolulu ROH Ch.16, Maui, Hawaii, Kauai) control in practice",
+        "Hurricane-resistant construction provisions / wind uplift",
+        "Hawaii State Energy Code"
+      ],
+      "note": "DGS listed the 2018-based codes as current as of late 2025 even though a 2021 adoption exists; county editions lag the state code. Verify per county."
+    },
+    "ID": {
+      "name": "Idaho",
+      "residentialCode": "Idaho Residential Code, 2020 edition (2018 IRC with Idaho amendments), effective 2021-01-01",
+      "ircBase": 2018,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Legislature restricts updates; energy chapters frozen/rolled back; local jurisdictions enforce",
+      "specialRegimes": [
+        "High snow-load mountain jurisdictions amend ground snow values"
+      ]
+    },
+    "IL": {
+      "name": "Illinois",
+      "residentialCode": "No traditional statewide residential code; Illinois Statewide Building Code (eff. 2025-01-01, Capital Development Board) sets I-code minimums for jurisdictions without their own; Chicago has its own code",
+      "ircBase": 2021,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "Cities/counties adopt their own editions (2009-2021 common); the new CDB statewide backstop points at recent I-codes for previously code-free areas",
+      "specialRegimes": [
+        "Illinois Energy Conservation Code (statewide, current IECC)",
+        "Illinois Plumbing Code (statewide, state-written)",
+        "Chicago Construction Codes (independent of the IRC)"
+      ],
+      "note": "The exact edition designated under the 2025 statewide backstop is set by CDB rule — verify; 2021 is representative."
+    },
+    "IN": {
+      "name": "Indiana",
+      "residentialCode": "Indiana Residential Code, 2020 edition (2018 IRC with Indiana amendments), effective 2019-12-26",
+      "ircBase": 2018,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Statewide, cannot be amended locally; notable deletions (sprinklers) and Indiana-specific administrative chapters",
+      "specialRegimes": [
+        "Indiana energy code (amended IECC)"
+      ]
+    },
+    "IA": {
+      "name": "Iowa",
+      "residentialCode": "Iowa Residential Code 2024 (2024 IRC with amendments), effective 2025-09-10",
+      "ircBase": 2024,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "State building code adopted by the Building Code Bureau; mandatory statewide in scope but enforced only where local governments run programs",
+      "specialRegimes": [
+        "State electrical (NEC 2020) and plumbing/mechanical (UPC/IMC 2021) programs"
+      ],
+      "note": "Many rural areas have no residential inspection; larger cities (>15,000) may adopt stricter local codes."
+    },
+    "KS": {
+      "name": "Kansas",
+      "residentialCode": "No statewide residential building code; home-rule cities/counties adopt their own (2012-2018 IRC common)",
+      "ircBase": 2018,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "Only the Kansas Fire Prevention Code is mandatory statewide; a 2018 IRC reference exists for certain state programs",
+      "specialRegimes": [
+        "Kansas Fire Prevention Code (statewide)"
+      ],
+      "note": "ircBase 2018 is representative of Wichita/Johnson County-area jurisdictions; many rural counties have no code."
+    },
+    "KY": {
+      "name": "Kentucky",
+      "residentialCode": "2018 Kentucky Residential Code, 3rd edition (based on 2015 IRC), effective 2024-08-01",
+      "ircBase": 2015,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Kentucky publishes its own editions on a 2015 IRC base with successive KY amendment editions; statewide, administered by DHBC",
+      "specialRegimes": [
+        "2023 NEC adopted statewide effective 2025-01-01"
+      ],
+      "note": "The 'edition year' in Kentucky code titles (2018 KRC) is the KY publication year, not the IRC base year."
+    },
+    "LA": {
+      "name": "Louisiana",
+      "residentialCode": "2021 Louisiana State Uniform Construction Code — Residential (2021 IRC base), effective 2023-01-01",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "LSUCC adopted statewide post-Katrina; wind design amendments significant; parishes enforce",
+      "specialRegimes": [
+        "Hurricane wind design per ASCE 7; coastal parishes in wind-borne debris regions",
+        "Flood-resistant construction (ASCE 24 / FEMA) in coastal zones"
+      ]
+    },
+    "ME": {
+      "name": "Maine",
+      "residentialCode": "MUBEC (Maine Uniform Building and Energy Code) Residential — 2021 IRC base, effective 2025-04-07",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Statewide code; enforcement mandatory only in municipalities over 4,000 population — smaller towns may not inspect",
+      "specialRegimes": [
+        "MUBEC energy chapters (IECC-based)",
+        "Heavy ground snow loads (50-100+ psf) set locally"
+      ]
+    },
+    "MD": {
+      "name": "Maryland",
+      "residentialCode": "Maryland Building Performance Standards (MBPS) Residential — 2021 IRC base, effective 2023-05-29; local jurisdictions implement and may amend",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "State sets a uniform edition statewide; counties (Montgomery, Baltimore, etc.) layer significant local amendments",
+      "specialRegimes": [
+        "Maryland state sprinkler mandate for new one- and two-family dwellings",
+        "MBPS energy standards (IECC-based)"
+      ],
+      "note": "Maryland boards began adopting 2024 editions in late 2025 (e.g., Board of Plumbing residential code, eff. 2025-11-24); the MBPS-wide 2024 update may already be in force — verify."
+    },
+    "MA": {
+      "name": "Massachusetts",
+      "residentialCode": "Massachusetts State Building Code 780 CMR, 10th edition, Residential Volume (2021 IRC base), effective 2024-10-11",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Heavily amended (MA-specific structural, means-of-egress and administrative provisions); uniform statewide, no local structural amendments",
+      "specialRegimes": [
+        "Stretch Energy Code and opt-in Specialized code (DOER) adopted by most municipalities",
+        "Coastal wind zones (110+ mph Vult) on Cape Cod and islands"
+      ]
+    },
+    "MI": {
+      "name": "Michigan",
+      "residentialCode": "2021 Michigan Residential Code (2021 IRC base), effective 2025-08-29",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Statewide code under the Stille-DeRossett-Hale act; LARA rules amend the IRC moderately; local units enforce but cannot amend technical provisions",
+      "specialRegimes": [
+        "Michigan Uniform Energy Code"
+      ],
+      "note": "Replaced the long-running 2015 Michigan Residential Code (eff. 2016-02-08)."
+    },
+    "MN": {
+      "name": "Minnesota",
+      "residentialCode": "2020 Minnesota Residential Code (2018 IRC base), effective 2020-03-31",
+      "ircBase": 2018,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "State code is the sole standard where enforced, but municipal enforcement of the residential chapters is optional outside the Twin Cities metro",
+      "specialRegimes": [
+        "Minnesota residential energy code (state-written amendments)",
+        "60-in typical frost depths in the north; heavy ground snow loads"
+      ],
+      "note": "Minnesota adopts every other IRC edition; the next code (2024 IRC base) was in rulemaking as of 2025-2026 — verify."
+    },
+    "MS": {
+      "name": "Mississippi",
+      "residentialCode": "Local option: jurisdictions that regulate must use a designated recent IRC edition (Mississippi Residential Code 2024 = 2024 IRC, designated eff. 2025-01-01); counties may opt out",
+      "ircBase": 2024,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "State Building Codes Council designates editions; adoption/enforcement is a local choice and many rural counties opted out",
+      "specialRegimes": [
+        "Six southern coastal counties: mandatory wind/hurricane code enforcement post-Katrina"
+      ],
+      "note": "ircBase 2024 reflects the current state designation; jurisdictions may lawfully be on any of the three latest editions."
+    },
+    "MO": {
+      "name": "Missouri",
+      "residentialCode": "No statewide residential building code; cities/counties adopt their own (2015-2021 IRC common; St. Louis County and Kansas City maintain amended codes)",
+      "ircBase": 2018,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "Local editions and amendments vary widely; only state modular-housing program references the IRC (2021 IRC eff. 2024-11-30)",
+      "specialRegimes": [
+        "State modular residential program (2021 IRC base)"
+      ],
+      "note": "ircBase 2018 is representative of metro jurisdictions; many rural counties have no residential code."
+    },
+    "MT": {
+      "name": "Montana",
+      "residentialCode": "Montana Residential Code — 2021 IRC with Montana amendments (residential adoption eff. 2022-06-11; full 2021 suite updated 2024-09-21)",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "State code administered by DLI; 1-2 family permits/inspections happen only in certified local government jurisdictions",
+      "specialRegimes": [
+        "High ground snow loads by county (state snow load study)",
+        "2021 IWUIC available for local WUI adoption"
+      ],
+      "note": "Outside certified jurisdictions there is no residential building permit program (electrical/plumbing state permits still apply)."
+    },
+    "NE": {
+      "name": "Nebraska",
+      "residentialCode": "Nebraska Residential Code = 2018 IRC (state building code, eff. 2019-04-17); locals may adopt/amend if generally conforming",
+      "ircBase": 2018,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Statute adopts the IRC with few amendments; cities like Omaha/Lincoln amend locally; enforcement is local",
+      "specialRegimes": [
+        "NEC 2023 statewide effective 2024-08-01"
+      ]
+    },
+    "NV": {
+      "name": "Nevada",
+      "residentialCode": "No statewide residential code for private construction; counties/cities adopt their own (Clark County/Las Vegas on recent ICC suites; State Public Works adopted 2024 IRC for state buildings eff. 2024-11-15)",
+      "ircBase": 2021,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "Clark and Washoe counties run large amended code programs; rural counties vary",
+      "specialRegimes": [
+        "Statewide energy code (IECC-based) mandated by statute",
+        "Seismic D in western Nevada; Tahoe-area snow loads"
+      ],
+      "note": "ircBase 2021 is representative; southern Nevada jurisdictions were transitioning to the 2024 suite in 2025-2026."
+    },
+    "NH": {
+      "name": "New Hampshire",
+      "residentialCode": "NH State Building Code — Residential = 2024 IRC with NH amendments, effective 2026-07-01",
+      "ircBase": 2024,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Biennial legislative updates (2021 base ran 2024-07-01 to 2026-06-30); municipalities may adopt more-stringent local amendments with state approval; enforcement local",
+      "specialRegimes": [
+        "NH energy code amendments (reduced from model IECC)"
+      ]
+    },
+    "NJ": {
+      "name": "New Jersey",
+      "residentialCode": "NJ Uniform Construction Code — One- & Two-Family Dwelling Subcode = 2021 IRC/NJ edition, effective 2022-09-06",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "UCC is uniform statewide with no local amendments; NJ edition modifies the IRC substantially (administrative + technical)",
+      "specialRegimes": [
+        "Coastal A/V flood zones (post-Sandy elevation standards)",
+        "NJ energy subcode (IECC-based)"
+      ],
+      "note": "UpCodes shows the 2021 subcode scheduled to be superseded 2026-08-16, implying a 2024-base update — verify."
+    },
+    "NM": {
+      "name": "New Mexico",
+      "residentialCode": "2021 New Mexico Residential Building Code (2021 IRC base), effective 2023-12-14",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "CID-administered statewide code; includes NM Earthen Building Materials Code for adobe construction",
+      "specialRegimes": [
+        "New Mexico Earthen Building Materials Code (adobe/rammed earth)",
+        "NM residential energy conservation code"
+      ]
+    },
+    "NY": {
+      "name": "New York",
+      "residentialCode": "2025 Residential Code of New York State (2024 IRC base), effective 2025-12-31",
+      "ircBase": 2024,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Uniform Code applies statewide outside NYC; moderate NYS amendments; local governments may adopt more-restrictive standards with state approval",
+      "specialRegimes": [
+        "New York City Construction Codes (entirely separate from the NYS Uniform Code)",
+        "NYS Energy Conservation Construction Code"
+      ],
+      "note": "The 2020 RCNYS (2018 IRC base) governed 2020-05-12 through 2025-12-30; transition provisions may allow either code briefly."
+    },
+    "NC": {
+      "name": "North Carolina",
+      "residentialCode": "2018 North Carolina Residential Code (2015 IRC base), effective 2019-01-01 — still in force",
+      "ircBase": 2015,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "NC rewrites the IRC significantly (own bracing and appendix provisions); legislature repeatedly postponed the 2024 NCRC (2021 IRC base) and restricted residential re-adoption",
+      "specialRegimes": [
+        "Coastal wind zones and wind-borne debris regions (Outer Banks)",
+        "NC-specific wall-bracing and deck amendments"
+      ],
+      "note": "2024 NCRC (2021 IRC base) shown as pending/postponed as of 2026-08-13 (S.L. 2024-57, S.L. 2025-2 delays) — verify before assuming the new edition."
+    },
+    "ND": {
+      "name": "North Dakota",
+      "residentialCode": "North Dakota Residential Code 2024 (2024 IRC base), effective 2026-01-01 (ND State Building Code)",
+      "ircBase": 2024,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "State publishes the code with ND amendments; jurisdictions that enforce a building code must use it (may add local modifications); many rural areas do not enforce",
+      "specialRegimes": [
+        "Deep frost depths (~48+ in) and high snow loads"
+      ],
+      "note": "Prior edition: 2021 IRC base, effective 2023-01-01 to 2025-12-31."
+    },
+    "OH": {
+      "name": "Ohio",
+      "residentialCode": "2019 Residential Code of Ohio for One-, Two- and Three-Family Dwellings (2018 IRC base), effective 2019-07-01",
+      "ircBase": 2018,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Statewide RCO (OAC 4101:8) with Ohio amendments; note it covers three-family dwellings too; local building departments enforce",
+      "specialRegimes": [
+        "Ohio residential energy provisions (amended IECC)"
+      ],
+      "note": "An RCO update (2021/2024 base) was under committee review — verify current rule status at codes.ohio.gov."
+    },
+    "OK": {
+      "name": "Oklahoma",
+      "residentialCode": "Oklahoma Residential Code = 2018 IRC with OK amendments (OUBCC statewide minimum), effective 2022-09-14",
+      "ircBase": 2018,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "OUBCC sets the minimum; municipalities may amend (commonly up); unincorporated/rural enforcement is thin",
+      "specialRegimes": [
+        "Tornado-prone: storm shelter appendix and wind provisions frequently amended locally"
+      ]
+    },
+    "OR": {
+      "name": "Oregon",
+      "residentialCode": "2023 Oregon Residential Specialty Code (2021 IRC base), effective 2023-10-01 (mandatory 2024-04-01)",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "BCD rewrites the IRC into the ORSC; uniform statewide, no local technical amendments",
+      "specialRegimes": [
+        "ICC 600-2020 standard for coastal high-wind regions",
+        "Oregon Residential Reach Code (optional energy path)",
+        "Seismic D in western Oregon"
+      ]
+    },
+    "PA": {
+      "name": "Pennsylvania",
+      "residentialCode": "PA Uniform Construction Code — Pennsylvania Residential Code = 2021 IRC with PA amendments, effective 2026-01-01",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "UCC statewide; ~90% of municipalities administer it locally (opt-in), others use state enforcement; RAC filters which model-code changes are adopted",
+      "specialRegimes": [
+        "PA alternative residential energy provisions"
+      ],
+      "note": "2018 IRC base governed 2022-02-14 through 2025-12-31."
+    },
+    "RI": {
+      "name": "Rhode Island",
+      "residentialCode": "Rhode Island Residential Code SBC-2 (2021 IRC base), effective 2025-12-01",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Statewide, no local amendments; note the prior 'SBC-2-2021' edition (eff. 2022-02-01) was actually based on the 2018 IRC",
+      "specialRegimes": [
+        "Coastal wind/flood provisions (hurricane exposure)"
+      ]
+    },
+    "SC": {
+      "name": "South Carolina",
+      "residentialCode": "South Carolina Residential Code (2021 IRC with SC amendments), effective 2023-01-01",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Building Codes Council adopts statewide with SC modifications (notably to energy chapters); local enforcement mandatory",
+      "specialRegimes": [
+        "Charleston-area seismic (SDC D) — engineered lateral design common",
+        "Coastal wind-borne debris region"
+      ],
+      "note": "SC reviews each new edition on a ~3-year cycle; a 2024-base update may follow — verify."
+    },
+    "SD": {
+      "name": "South Dakota",
+      "residentialCode": "No statewide residential code; municipalities that adopt construction standards must use state-designated editions (statute references the 2021 IBC); IRC adoption is local (Sioux Falls, Rapid City on recent editions)",
+      "ircBase": 2021,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "State designates editions but does not mandate residential enforcement; rural areas largely uninspected",
+      "specialRegimes": [
+        "NEC statewide (2023 NEC eff. 2024-11-12)"
+      ],
+      "note": "ircBase 2021 is representative of the larger cities."
+    },
+    "TN": {
+      "name": "Tennessee",
+      "residentialCode": "Tennessee statewide residential code = 2018 IRC with TN amendments (State Fire Marshal's Office), effective 2020-07-16",
+      "ircBase": 2018,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "SFMO program covers jurisdictions without their own; local govts may adopt one of the three most recent editions or opt out by two-thirds vote (some counties are exempt)",
+      "specialRegimes": [
+        "Reduced statewide energy requirements (2009-2018 IECC mix for dwellings)"
+      ],
+      "note": "Opt-out counties have no residential inspections; cities like Nashville run their own newer codes."
+    },
+    "TX": {
+      "name": "Texas",
+      "residentialCode": "No statewide adoption/enforcement; by statute (Loc. Gov't Code §214.212) the IRC 'as it existed on May 1, 2012' is the municipal residential code, and cities routinely adopt current editions with local amendments; unincorporated areas largely unregulated",
+      "ircBase": 2021,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "Big-city editions range 2015-2024 with heavy local amendment packages (Houston, Dallas, Austin, San Antonio all differ); counties generally cannot enforce building codes",
+      "specialRegimes": [
+        "TDI/TWIA windstorm certification along the Gulf coast (2024 IRC-based standard eff. 2026-04-01)",
+        "Industrialized (modular) housing program: 2021 IRC eff. 2024-07-01",
+        "Municipal amendments must be reviewed for insurance-rated windstorm compliance in seaward counties"
+      ],
+      "note": "ircBase 2021 is representative of major metros; the statutory 2012 baseline only sets the floor for municipalities."
+    },
+    "UT": {
+      "name": "Utah",
+      "residentialCode": "Utah Residential Code (2021 IRC with substantial legislative amendments, Utah Code Title 15A), effective 2023-07-01",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Legislature adopts and amends directly in statute: sprinkler mandate removed, energy chapters modified, Utah snow-load study replaces map values",
+      "specialRegimes": [
+        "Utah-specific ground snow load study (by elevation)",
+        "Wasatch Front seismic (SDC D)"
+      ]
+    },
+    "VT": {
+      "name": "Vermont",
+      "residentialCode": "No statewide residential building code for detached one- and two-family homes; Residential Building Energy Standards (RBES) apply statewide; Fire & Building Safety Code covers public buildings and multifamily",
+      "ircBase": null,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "Towns may adopt local codes (e.g., Burlington); single-family construction is otherwise governed only by RBES energy certification",
+      "specialRegimes": [
+        "RBES / CBES energy standards (statewide, self-certified)",
+        "Vermont Fire and Building Safety Code (2015 base) for non-exempt buildings"
+      ]
+    },
+    "VA": {
+      "name": "Virginia",
+      "residentialCode": "Virginia USBC — Virginia Residential Code 2021 (2021 IRC base), effective 2024-01-18",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "Uniform statewide; no local technical amendments allowed; VA amendments moderate; triennial cycle (2024-base update expected ~2027)",
+      "specialRegimes": [
+        "Coastal wind zones (Hampton Roads / Eastern Shore)"
+      ]
+    },
+    "WA": {
+      "name": "Washington",
+      "residentialCode": "2021 Washington State Residential Code (2021 IRC with WA amendments), effective 2024-03-15",
+      "ircBase": 2021,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "SBCC amends heavily (especially energy/ventilation); statewide uniform; locals may amend residential only within limits",
+      "specialRegimes": [
+        "Washington State Energy Code — Residential (state-written, among the strictest in the US)",
+        "Seismic D/D2 west of the Cascades",
+        "WUI code provisions in mapped areas"
+      ],
+      "note": "2024-base cycle already scheduled: adoption August-September 2026, effective 2027-05-03."
+    },
+    "WV": {
+      "name": "West Virginia",
+      "residentialCode": "West Virginia Residential Code = 2018 IRC (State Building Code, 87 CSR 4), effective 2022-08-01 — applies only in jurisdictions that opt in",
+      "ircBase": 2018,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "State Fire Commission promulgates the code content; counties/municipalities choose whether to adopt and enforce it; many do not",
+      "specialRegimes": [
+        "State Fire Code (87 CSR 1) statewide"
+      ]
+    },
+    "WI": {
+      "name": "Wisconsin",
+      "residentialCode": "Wisconsin Uniform Dwelling Code (SPS 320-325) — state-written code for one- and two-family dwellings, statewide since 1980 (last major update eff. 2022-06-01)",
+      "ircBase": null,
+      "adoptionLevel": "state",
+      "amendmentFlavor": "NOT an IRC adoption: Wisconsin's own prescriptive tables (studs, joists, rafters, bracing) differ from IRC numbering and some values; municipalities enforce, no local technical amendments",
+      "specialRegimes": [
+        "UDC energy chapter (SPS 322, roughly 2009-IECC-era stringency)",
+        "Commercial/multifamily use IBC-based SPS 361-366"
+      ],
+      "note": "Inference engines must not assume IRC section numbers or IRC bracing methods in Wisconsin."
+    },
+    "WY": {
+      "name": "Wyoming",
+      "residentialCode": "No statewide residential building code; cities/counties adopt their own (Cheyenne, Casper on recent IRC editions)",
+      "ircBase": 2018,
+      "adoptionLevel": "local",
+      "amendmentFlavor": "State Fire Marshal adopts codes for state buildings only; local editions range roughly 2015-2024",
+      "specialRegimes": [
+        "High snow loads and frost depths in mountain jurisdictions"
+      ],
+      "note": "ircBase 2018 is representative; many rural counties have no residential code."
+    },
+    "CA-ON-S": {
+      "name": "Canada · Ontario — South (GTA / Golden Horseshoe)",
+      "residentialCode": "2024 Ontario Building Code (O. Reg. 163/24), adopting NBC 2020 plus the Ontario Amendments — effective 2025-01-01",
+      "ircBase": null,
+      "adoptionLevel": "province",
+      "amendmentFlavor": "Ontario adopts NBC 2020 by reference plus a published amendment document; the 2024 harmonization removed roughly 1,730 technical variations from the national codes. Part 9 wood framing is largely unamended.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)",
+        "MMAH Supplementary Standard SB-1 (climatic and seismic data by municipality) — governs snow load and frost depth, not NBC Appendix C",
+        "MMAH Supplementary Standard SB-7 (joist, rafter, beam and lintel span tables, by species group)"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-ON-E": {
+      "name": "Canada · Ontario — East (Ottawa Valley / Kingston)",
+      "residentialCode": "2024 Ontario Building Code (O. Reg. 163/24), adopting NBC 2020 plus the Ontario Amendments — effective 2025-01-01",
+      "ircBase": null,
+      "adoptionLevel": "province",
+      "amendmentFlavor": "Same code as the rest of Ontario; this entry differs only in climatic and seismic data (SB-1) for the Ottawa Valley.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)",
+        "MMAH Supplementary Standard SB-1 (climatic and seismic data by municipality)",
+        "MMAH Supplementary Standard SB-7 (span tables)"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-ON-N": {
+      "name": "Canada · Ontario — North (Sudbury / Thunder Bay)",
+      "residentialCode": "2024 Ontario Building Code (O. Reg. 163/24), adopting NBC 2020 plus the Ontario Amendments — effective 2025-01-01",
+      "ircBase": null,
+      "adoptionLevel": "province",
+      "amendmentFlavor": "Same code as the rest of Ontario; this entry differs only in climatic data (SB-1) for northern Ontario.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)",
+        "MMAH Supplementary Standard SB-1 (climatic and seismic data by municipality)",
+        "MMAH Supplementary Standard SB-7 (span tables)"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-BC": {
+      "name": "Canada · British Columbia",
+      "residentialCode": "BC Building Code 2024 (NBC 2020 base), in force 2024",
+      "ircBase": null,
+      "adoptionLevel": "province",
+      "amendmentFlavor": "BC publishes its own code book on the NBC base, with substantial provincial amendments. Vancouver enforces its own separate Vancouver Building By-law.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)",
+        "BC Energy Step Code — mandatory performance tiers that commonly drive thicker or double-stud exterior walls",
+        "High seismic: coastal BC exceeds the NBC 9.23.13 prescriptive bracing threshold, requiring Part 4 engineered lateral design"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-AB": {
+      "name": "Canada · Alberta",
+      "residentialCode": "Alberta Building Code 2023 (NBC 2020 base), in force 2023",
+      "ircBase": null,
+      "adoptionLevel": "province",
+      "amendmentFlavor": "Alberta publishes its own code book on the NBC base with modest provincial amendments; Part 9 framing is close to the national text.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-SK": {
+      "name": "Canada · Saskatchewan",
+      "residentialCode": "National Building Code of Canada 2020 (Division B Part 9), adopted 2024-01-01",
+      "ircBase": null,
+      "adoptionLevel": "province",
+      "amendmentFlavor": "Direct adoption under The Construction Codes Act; Saskatchewan skipped NBC 2015 entirely, moving from NBC 2010 to NBC 2020. Among the closest jurisdictions to the unmodified national code.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-MB": {
+      "name": "Canada · Manitoba",
+      "residentialCode": "Manitoba Building Code (M.R. 78/2023), adopting NBC 2020 — effective 2024-01-01",
+      "ircBase": null,
+      "adoptionLevel": "province",
+      "amendmentFlavor": "NBC 2020 with Manitoba amendments, which the province has been actively reducing under its Canadian Free Trade Agreement commitments. Manitoba also skipped NBC 2015.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-QC": {
+      "name": "Canada · Quebec",
+      "residentialCode": "Construction Code, Chapter I – Building (NBC 2015 base), in force since 2022",
+      "ircBase": null,
+      "adoptionLevel": "province",
+      "amendmentFlavor": "Quebec is one full code cycle behind the rest of Canada: the Construction Code still sits on the NBC 2015 base, with Regie du batiment du Quebec (RBQ) amendments. Official code text is French.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)",
+        "RBQ provincial amendments",
+        "Novoclimat energy program (voluntary)"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines. Quebec is on the NBC 2015 base, not NBC 2020 — verify clause numbering before citing."
+    },
+    "CA-NB": {
+      "name": "Canada · New Brunswick",
+      "residentialCode": "National Building Code of Canada 2020 (Division B Part 9), adopted the 2020 code cycle",
+      "ircBase": null,
+      "adoptionLevel": "province",
+      "amendmentFlavor": "Direct adoption of the national model code with minimal provincial amendment; municipalities enforce.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-NS": {
+      "name": "Canada · Nova Scotia",
+      "residentialCode": "National Building Code of Canada 2020 (Division B Part 9), adopted the 2020 code cycle",
+      "ircBase": null,
+      "adoptionLevel": "province",
+      "amendmentFlavor": "Direct adoption of the national model code with minimal provincial amendment; municipalities enforce.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)",
+        "Elevated Atlantic wind exposure — post-tropical systems drive roof-uplift connection detailing"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-PE": {
+      "name": "Canada · Prince Edward Island",
+      "residentialCode": "National Building Code of Canada 2020 (Division B Part 9), adopted the 2020 code cycle",
+      "ircBase": null,
+      "adoptionLevel": "province",
+      "amendmentFlavor": "Direct adoption of the national model code; permit administration and enforcement are municipal and are not uniform province-wide.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-NL": {
+      "name": "Canada · Newfoundland and Labrador",
+      "residentialCode": "National Building Code of Canada 2020 (Division B Part 9), adopted the 2020 code cycle",
+      "ircBase": null,
+      "adoptionLevel": "province",
+      "amendmentFlavor": "Direct adoption of the national model code with minimal provincial amendment; municipalities enforce.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)",
+        "Extreme North Atlantic wind and snow exposure",
+        "Permafrost in northern Labrador"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-YT": {
+      "name": "Canada · Yukon",
+      "residentialCode": "National Building Code of Canada 2020 (Division B Part 9), adopted the 2020 code cycle",
+      "ircBase": null,
+      "adoptionLevel": "province",
+      "amendmentFlavor": "Direct adoption of the national model code with minimal provincial amendment; municipalities enforce.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)",
+        "Discontinuous permafrost — pile and space-frame foundation practice"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-NT": {
+      "name": "Canada · Northwest Territories",
+      "residentialCode": "National Building Code of Canada 2020 (Division B Part 9), adopted the 2020 code cycle",
+      "ircBase": null,
+      "adoptionLevel": "territory",
+      "amendmentFlavor": "Direct adoption of the national model code with minimal provincial amendment; municipalities enforce.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)",
+        "Permafrost — pile and space-frame foundation practice"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-NU": {
+      "name": "Canada · Nunavut",
+      "residentialCode": "National Building Code of Canada 2020 (Division B Part 9), adopted the 2020 code cycle",
+      "ircBase": null,
+      "adoptionLevel": "territory",
+      "amendmentFlavor": "Direct adoption of the national model code with minimal provincial amendment; municipalities enforce.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)",
+        "Continuous permafrost — pile and space-frame foundation practice",
+        "Extreme Arctic wind and drifting snow"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines."
+    },
+    "CA-GEN": {
+      "name": "Canada · Generic (NBC 2020)",
+      "residentialCode": "National Building Code of Canada 2020 (Division B Part 9)",
+      "ircBase": null,
+      "adoptionLevel": "national model code",
+      "amendmentFlavor": "The unamended national model code. Nine of thirteen provinces and territories adopt it essentially as written; Ontario, British Columbia, Alberta and Quebec publish their own variants.",
+      "specialRegimes": [
+        "NBC Division B Part 9 — Housing and Small Buildings (buildings up to 3 storeys and 600 m2)"
+      ],
+      "note": "NOT an IRC adoption. Framing rules come from NBC Division B Part 9 (9.23 Wood-Frame Construction); inference engines must not assume IRC section numbers or IRC braced-wall-panel methods here. NBC 9.23.13 selects lateral bracing from Sa(0.2) and hourly wind pressure rather than braced-wall lines. This is the fallback for a Canadian locale with an unknown province — pick a province where it is known. NBC 2025 was published 2025-12-22 but no province had adopted it as of 2026-08."
+    }
+  }
+}

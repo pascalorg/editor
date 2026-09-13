@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "pascal": {
+      "command": "bun",
+      "args": ["packages/mcp/dist/bin/pascal-mcp.js", "--stdio"]
+    }
+  }
+}
