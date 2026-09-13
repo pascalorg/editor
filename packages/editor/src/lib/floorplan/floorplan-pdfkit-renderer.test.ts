@@ -85,6 +85,32 @@ describe('renderFloorplanGeometryToPdfKit', () => {
     expect([...new Set(baseFonts)]).toEqual(['Courier'])
     expect([...new Set(fontSizes)]).toEqual(['1.6'])
   })
+  test('uses even-odd fill for compound plugin paths', async () => {
+    const geometry = {
+      kind: 'path',
+      d: 'M0,0H4V4H0ZM1,1H3V3H1Z',
+      fill: '#3f6b2f',
+      fillRule: 'evenodd',
+    } satisfies FloorplanGeometry
+
+    const pdf = await renderTestPdf(geometry)
+
+    expect(pdf).toMatch(/f\*/)
+  })
+
+  test('writes a data-url PNG image without resolving it as an asset', async () => {
+    const geometry = {
+      kind: 'image',
+      url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
+      center: [2, 2],
+      width: 1,
+      height: 1,
+    } satisfies FloorplanGeometry
+
+    const pdf = await renderTestPdf(geometry)
+
+    expect(pdf).toContain('/Subtype /Image')
+  })
 })
 
 async function renderTestPdf(geometry: FloorplanGeometry, rotationDeg = 0): Promise<string> {

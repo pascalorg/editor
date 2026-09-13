@@ -21,6 +21,7 @@ import {
   ActionButton,
   ActionGroup,
   duplicateStairSubtree,
+  formatLinearMeasurement,
   getStairLevelOptions,
   MetricControl,
   PanelSection,
@@ -71,6 +72,8 @@ const DECK_DESTINATION_MIN_ELEVATION = 0.5
 export default function StairPanel() {
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
   const selectedCount = useViewer((s) => s.selection.selectedIds.length)
+  const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const createNode = useScene((s) => s.createNode)
@@ -269,7 +272,7 @@ export default function StairPanel() {
   const resolvedToLevelId = resolveStairToLevelId(nodes, node, resolvedFromLevelId, levels)
   const deckNode = node.deckSlabId ? nodes[node.deckSlabId as AnyNodeId] : undefined
   const attachedDeck = deckNode?.type === 'slab' ? deckNode : undefined
-  const resolvedRise = Math.round(resolveStairTotalRise(node, nodes) * 100) / 100
+  const resolvedRise = resolveStairTotalRise(node, nodes)
 
   return (
     <PanelWrapper
@@ -353,7 +356,7 @@ export default function StairPanel() {
             />
             {node.totalRise == null ? (
               <div className="px-1 text-[11px] text-muted-foreground">
-                Currently {resolvedRise} m
+                Currently {formatLinearMeasurement(resolvedRise, unit, metricNotation)}
               </div>
             ) : (
               <MetricControl
@@ -386,7 +389,7 @@ export default function StairPanel() {
                   precision={2}
                   step={0.01}
                   unit="m"
-                  value={Math.round((node.openingOffset ?? 0) * 100) / 100}
+                  value={node.openingOffset ?? 0}
                 />
               ) : null}
             </>
@@ -413,7 +416,7 @@ export default function StairPanel() {
                   precision={2}
                   step={0.05}
                   unit="m"
-                  value={Math.round((node.topLandingDepth ?? 0.9) * 100) / 100}
+                  value={node.topLandingDepth ?? 0.9}
                 />
               )}
             </>
@@ -461,7 +464,7 @@ export default function StairPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round((node.width ?? 1) * 100) / 100}
+            value={node.width ?? 1}
           />
           <MetricControl
             label="Steps"
@@ -489,7 +492,7 @@ export default function StairPanel() {
               precision={2}
               step={0.01}
               unit="m"
-              value={Math.round((node.thickness ?? 0.25) * 100) / 100}
+              value={node.thickness ?? 0.25}
             />
           )}
           <MetricControl
@@ -500,7 +503,7 @@ export default function StairPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round((node.innerRadius ?? 0.9) * 100) / 100}
+            value={node.innerRadius ?? 0.9}
           />
           <SliderControl
             label="Sweep"
@@ -540,7 +543,7 @@ export default function StairPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         <SliderControl
           label="Y"
@@ -552,7 +555,7 @@ export default function StairPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[1] * 100) / 100}
+          value={node.position[1]}
         />
         <SliderControl
           label="Z"
@@ -564,7 +567,7 @@ export default function StairPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[2] * 100) / 100}
+          value={node.position[2]}
         />
         <SliderControl
           label="Rotation"
@@ -611,7 +614,7 @@ export default function StairPanel() {
             precision={2}
             step={0.02}
             unit="m"
-            value={Math.round((node.railingHeight ?? 0.92) * 100) / 100}
+            value={node.railingHeight ?? 0.92}
           />
         )}
       </PanelSection>

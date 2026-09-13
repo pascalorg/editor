@@ -19,6 +19,7 @@ import {
   ActionButton,
   ActionGroup,
   duplicateRoofSubtree,
+  formatLinearMeasurement,
   PanelSection,
   PanelWrapper,
   SegmentedControl,
@@ -34,6 +35,8 @@ import { useShallow } from 'zustand/react/shallow'
 export default function RoofPanel() {
   const [ventType, setVentType] = useState<'box-vent' | 'ridge-vent' | 'turbine-vent'>('box-vent')
   const selectedId = useViewer((s) => s.selection.selectedIds[0])
+  const unit = useViewer((s) => s.unit)
+  const metricNotation = useViewer((s) => s.metricNotation)
   const setSelection = useViewer((s) => s.setSelection)
   const updateNode = useScene((s) => s.updateNode)
   const setMovingNode = useEditor((s) => s.setMovingNode)
@@ -281,7 +284,7 @@ export default function RoofPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[0] * 100) / 100}
+          value={node.position[0]}
         />
         {node.support?.kind !== 'roof' && (
           <SegmentedControl
@@ -297,7 +300,7 @@ export default function RoofPanel() {
         )}
         {node.support?.kind === 'walls' ? (
           <div className="px-1 text-[11px] text-muted-foreground">
-            Currently {Math.round(node.position[1] * 100) / 100} m
+            Currently {formatLinearMeasurement(node.position[1], unit, metricNotation)}
           </div>
         ) : (
           <SliderControl
@@ -318,7 +321,7 @@ export default function RoofPanel() {
             precision={2}
             step={0.05}
             unit="m"
-            value={Math.round(node.position[1] * 100) / 100}
+            value={node.position[1]}
           />
         )}
         <SliderControl
@@ -331,7 +334,7 @@ export default function RoofPanel() {
           precision={2}
           step={0.05}
           unit="m"
-          value={Math.round(node.position[2] * 100) / 100}
+          value={node.position[2]}
         />
         <SliderControl
           label="Rotation"

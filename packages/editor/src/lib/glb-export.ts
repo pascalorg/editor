@@ -1,23 +1,32 @@
 import {
   type AnyNode,
+  type AnyNodeId,
   bakePolicyOf,
   type DoorNode,
   emitter,
+  findLevelAncestorId,
+  type GeometryContext,
   getLevelDisplayName,
+  isNodeKindEnabled,
   isOperationDoorType,
   itemClipRegistry,
   type LevelNode,
+  levelBaseElevationAt,
   nodeRegistry,
   sceneRegistry,
+  useScene,
   type WindowNode,
   type ZoneNode,
 } from '@pascal-app/core'
 import {
   getPascalTextureRef,
+  isViewerPresentationTextureBorrowed,
   poseDoorMovingParts,
   poseWindowMovingParts,
   SCENE_LAYER,
   snapLevelsToTruePositions,
+  type ViewerPresentationContribution,
+  viewerPresentationRegistry,
 } from '@pascal-app/viewer'
 import type { Object3D } from 'three'
 import * as THREE from 'three'
@@ -27,6 +36,11 @@ import {
   type GLTFWriter,
 } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import * as WebGPUTextureUtils from 'three/examples/jsm/utils/WebGPUTextureUtils.js'
+import {
+  disposeExportResources,
+  normalizePortableScene,
+  normalizeViewerArtifactMaterials,
+} from './portable-export'
 
 /**
  * Two TRS samples (closed vs open) differing by less than this are treated as
@@ -44,11 +58,23 @@ type SwingLeafMarker = { axis: 'y'; openRotationY: number }
 export type GlbExport = {
   scene: THREE.Object3D
   animations: THREE.AnimationClip[]
+  warnings: string[]
+  dispose: () => void
 }
 
 export type GlbExportOptions = {
   textures?: 'embed' | 'reference'
   onlyVisible?: boolean
+  /** Omit these node kinds and their rendered subtrees before baking. */
+  excludedNodeTypes?: readonly string[]
+  /** Selected static viewer-presentation contributions; omitted means none. */
+  includedPresentationIds?: readonly string[]
+  /** Portable downloads are static; the baked viewer retains internal clips. */
+  purpose?: 'portable' | 'viewer'
+  /** Called for actual lossy portable conversions discovered during preparation. */
+  onWarning?: (warning: string) => void
+  /** Reject retained node kinds whose export geometry can only be baked asynchronously. */
+  requireSynchronousBake?: boolean
 }
 
 /** Resolve after the next couple of animation frames, giving React/R3F time to
@@ -118,114 +144,473 @@ export async function exportSceneToGlb(
   options: GlbExportOptions = {},
 ): Promise<ArrayBuffer> {
   const textureMode = options.textures ?? 'embed'
-  emitter.emit('thumbnail:before-capture', undefined)
-  // Snap levels to their true stacked positions (like thumbnail capture) so the
-  // export always reflects the clean stacked building, regardless of the live
-  // levelMode (exploded/solo) or an unsettled level lerp that could otherwise
-  // bake a level at a stray offset.
-  const restoreLevels = snapLevelsToTruePositions()
-  let prepared: ReturnType<typeof prepareSceneForExport>
+  const prepared = await preparePortableSceneFromViewer(sceneGroup, nodes, options)
+  for (const warning of prepared.warnings) options.onWarning?.(warning)
   try {
-    prepared = prepareSceneForExport(sceneGroup, nodes, options)
+    return await serializePreparedSceneToGlb(prepared, {
+      textures: textureMode,
+      onlyVisible: options.onlyVisible,
+    })
+  } finally {
+    prepared.dispose()
+  }
+}
+/**
+ * Capture the live renderer synchronously, restore editor presentation, then do
+ * async offscreen material/presentation work against only the owned clone.
+ */
+export async function preparePortableSceneFromViewer(
+  sceneGroup: Object3D,
+  nodes: Record<string, AnyNode>,
+  options: GlbExportOptions = {},
+): Promise<GlbExport> {
+  emitter.emit('thumbnail:before-capture', undefined)
+  const restoreLevels = snapLevelsToTruePositions()
+  let preparation: SceneExportPreparation
+  try {
+    preparation = startSceneExportPreparation(sceneGroup, nodes, {
+      ...options,
+      purpose: options.purpose ?? 'portable',
+    })
   } finally {
     restoreLevels()
     emitter.emit('thumbnail:after-capture', undefined)
   }
-  const { scene: exportScene, animations } = prepared
+  return completeSceneExportPreparation(preparation)
+}
 
+export function serializePreparedSceneToGlb(
+  prepared: GlbExport,
+  options: Pick<GlbExportOptions, 'textures' | 'onlyVisible'> = {},
+): Promise<ArrayBuffer> {
   const exporter = new GLTFExporter()
-  if (textureMode === 'reference') exporter.register(textureReferencePlugin)
-  // Painted finishes use KTX2 (GPU-compressed) maps; GLTFExporter can't read
-  // those directly. WebGPUTextureUtils blits each one to RGBA on its own
-  // offscreen renderer (passing the live renderer would resize/draw over the
-  // editor canvas), letting the exporter embed standard textures.
+  if ((options.textures ?? 'embed') === 'reference') {
+    exporter.register(textureReferencePlugin)
+  }
   exporter.setTextureUtils(WebGPUTextureUtils)
 
   return new Promise<ArrayBuffer>((resolve, reject) => {
     exporter.parse(
-      exportScene,
+      prepared.scene,
       (gltf) => {
         resolve(gltf as ArrayBuffer)
       },
       (error) => {
         reject(error)
       },
-      { binary: true, animations, onlyVisible: options.onlyVisible ?? true },
+      {
+        binary: true,
+        animations: prepared.animations,
+        onlyVisible: options.onlyVisible ?? true,
+      },
     )
   })
 }
 
+type RegistryEntry = readonly [id: string, original: THREE.Object3D]
+
+type SelectedPresentation = {
+  contribution: ViewerPresentationContribution
+  configuration: unknown
+}
+
+type SceneExportPreparation = {
+  scene: THREE.Object3D
+  nodes: Record<string, AnyNode>
+  options: GlbExportOptions
+  registryEntries: RegistryEntry[]
+  cloneByOriginal: Map<THREE.Object3D, THREE.Object3D>
+  builders: Map<
+    string,
+    {
+      sync: ((node: AnyNode, ctx: GeometryContext) => THREE.Object3D) | undefined
+      async: ((node: AnyNode, ctx: GeometryContext) => Promise<THREE.Object3D>) | undefined
+    }
+  >
+  geometryContext: Pick<GeometryContext, 'materials' | 'levelData'>
+  presentations: SelectedPresentation[]
+}
+
 /**
- * Build an engine-agnostic export tree from the live scene graph. The result is
- * a standalone three.js scene plus glTF animation clips, ready for
- * `GLTFExporter` — it carries no Pascal runtime dependency.
- *
- *  - Clones the source so live objects are never mutated.
- *  - Converts WebGPU NodeMaterials to classic glTF-standard materials.
- *    `GLTFExporter` only recognises `isMeshStandardMaterial` /
- *    `isMeshBasicMaterial`; the viewer's `MeshStandard/LambertNodeMaterial` set
- *    `isNodeMaterial` instead, so without this every surface exports as a blank
- *    default material.
- *  - Bakes open motions into glTF animation clips via kind-owned registry
- *    hooks, plus the legacy door/window build-once + pose-at-t primitives
- *    (`pascalSwingLeaf` for doors, `poseWindowMovingParts` for windows).
- *  - Stamps `name` + `extras` identity from `sceneRegistry` so selection/hover
- *    survive the bake with no in-memory registry, and strips all other userData
- *    so editor/runtime ephemera never leak into glTF extras.
+ * Build the legacy synchronous artifact used by geometry-only/print exports.
+ * The default remains viewer-purpose so existing internal baked-viewer clips
+ * are unchanged; portable downloads use the async entry point below.
  */
 export function prepareSceneForExport(
   source: THREE.Object3D,
   nodes: Record<string, AnyNode>,
   options: GlbExportOptions = {},
 ): GlbExport {
-  const scene = source.clone(true)
-  const cloneByOriginal = pairClones(source, scene)
+  const preparation = startSceneExportPreparation(source, nodes, {
+    ...options,
+    purpose: options.purpose ?? 'viewer',
+  })
+  try {
+    replaceBakeGeometrySync(preparation)
+    return finishSceneExportPreparation(preparation)
+  } catch (error) {
+    disposeExportResources(preparation.scene)
+    throw error
+  }
+}
 
-  // Kinds with `def.bake === 'strip'` (scans/LiDAR, guides/floorplan) are heavy
-  // reference assets stored elsewhere and aren't part of the compiled building.
-  // Drop them from the artifact entirely — `/viewer` re-adds them from the scene
-  // graph, gated by the project's public-visibility flags, so they never bloat
-  // the shared GLB nor slip past those flags into a static public file.
-  // (`'replace'` kinds are *kept*: static for portability, the viewer swaps them
-  // for a live render.)
-  for (const [id, original] of sceneRegistry.nodes) {
+/** Capture once, await async bake hooks, then normalize a static portable tree. */
+export async function prepareSceneForExportAsync(
+  source: THREE.Object3D,
+  nodes: Record<string, AnyNode>,
+  options: GlbExportOptions = {},
+): Promise<GlbExport> {
+  const preparation = startSceneExportPreparation(source, nodes, {
+    ...options,
+    purpose: options.purpose ?? 'portable',
+  })
+  return completeSceneExportPreparation(preparation)
+}
+
+function startSceneExportPreparation(
+  source: THREE.Object3D,
+  inputNodes: Record<string, AnyNode>,
+  options: GlbExportOptions,
+): SceneExportPreparation {
+  const nodes = structuredClone(inputNodes)
+  const registryEntries = Array.from(sceneRegistry.nodes.entries())
+  const excludedNodeTypes = new Set(options.excludedNodeTypes)
+  const excludedObjects = new Set<THREE.Object3D>()
+  const builders: SceneExportPreparation['builders'] = new Map()
+  const sceneState = useScene.getState()
+
+  for (const [id, original] of registryEntries) {
     const node = nodes[id]
-    if (node && bakePolicyOf(node.type) === 'strip') {
-      cloneByOriginal.get(original)?.removeFromParent()
+    if (!node) continue
+    const installedPlugins = sceneState.hasExplicitPluginInstallState
+      ? sceneState.installedPlugins
+      : undefined
+    if (!isNodeKindEnabled(node.type, installedPlugins)) {
+      excludedObjects.add(original)
+      continue
+    }
+    const definition = nodeRegistry.get(node.type)
+    builders.set(id, {
+      sync: definition?.bakeGeometry as
+        | ((node: AnyNode, ctx: GeometryContext) => THREE.Object3D)
+        | undefined,
+      async: definition?.bakeGeometryAsync as
+        | ((node: AnyNode, ctx: GeometryContext) => Promise<THREE.Object3D>)
+        | undefined,
+    })
+    if (bakePolicyOf(node.type) === 'strip' || excludedNodeTypes.has(node.type)) {
+      excludedObjects.add(original)
     }
   }
 
-  if (options.onlyVisible ?? true) {
-    pruneHiddenSceneNodes(cloneByOriginal, nodes)
+  const selectedIds = new Set(options.includedPresentationIds ?? [])
+  const registeredPresentations = viewerPresentationRegistry.getSnapshot()
+  const presentations: SelectedPresentation[] = []
+  for (const id of selectedIds) {
+    const contribution = registeredPresentations.find((entry) => entry.id === id)
+    if (!contribution?.staticExport) {
+      throw new Error(`Static viewer presentation "${id}" is not registered`)
+    }
+    if (contribution.pluginId && !sceneState.installedPlugins.includes(contribution.pluginId)) {
+      throw new Error(`Static viewer presentation "${id}" belongs to an uninstalled plugin`)
+    }
+    presentations.push({
+      contribution,
+      configuration: contribution.configuration?.getSnapshot(),
+    })
   }
 
-  // Object3Ds that carry node identity — never strip these even when they sit on
-  // a non-scene layer. Some are metadata-only: a zone's visible fill/wall meshes
-  // are stripped, but its identity node stays to carry the polygon that /viewer
-  // reconstructs the room from.
+  const cloneByOriginal = new Map<THREE.Object3D, THREE.Object3D>()
+  const scene = cloneSceneForExport(source, excludedObjects, cloneByOriginal)
+  cloneSkinnedSkeletons(cloneByOriginal)
+  if (options.onlyVisible ?? true) {
+    pruneHiddenSceneNodes(cloneByOriginal, nodes, registryEntries)
+  }
+
+  return {
+    scene,
+    nodes,
+    options,
+    registryEntries,
+    cloneByOriginal,
+    builders,
+    geometryContext: {
+      levelData: undefined,
+      materials: structuredClone(sceneState.materials),
+    },
+    presentations,
+  }
+}
+
+async function completeSceneExportPreparation(
+  preparation: SceneExportPreparation,
+): Promise<GlbExport> {
+  try {
+    await replaceBakeGeometryAsync(preparation)
+    await appendSelectedPresentations(preparation)
+    const prepared = finishSceneExportPreparation(preparation)
+    prepared.warnings.push(
+      ...(preparation.options.purpose === 'viewer'
+        ? normalizeViewerArtifactMaterials(prepared.scene)
+        : normalizePortableScene(prepared.scene)),
+    )
+    return prepared
+  } catch (error) {
+    disposeExportResources(preparation.scene)
+    throw error
+  }
+}
+
+function finishSceneExportPreparation(preparation: SceneExportPreparation): GlbExport {
+  const { scene, cloneByOriginal, nodes, options, registryEntries } = preparation
   const identityNodes = new Set<THREE.Object3D>()
-  for (const original of sceneRegistry.nodes.values()) {
+  for (const [, original] of registryEntries) {
     const clone = cloneByOriginal.get(original)
     if (clone) identityNodes.add(clone)
   }
 
   pruneNonRenderableMeshes(scene, identityNodes)
   sanitizeMaterialGroups(scene, identityNodes)
-  convertMaterials(scene, options.textures ?? 'embed')
+  convertMaterials(scene, options.textures ?? 'embed', options.purpose ?? 'viewer')
 
   const retainedCloneByOriginal = retainedClones(scene, cloneByOriginal)
-  const { clips, clipNamesByNode } = bakeAnimationClips(retainedCloneByOriginal, nodes)
+  const animation =
+    options.purpose === 'viewer'
+      ? bakeAnimationClips(retainedCloneByOriginal, nodes, registryEntries)
+      : { clips: [], clipNamesByNode: new Map<string, string[]>() }
+  stampIdentity(scene, retainedCloneByOriginal, nodes, animation.clipNamesByNode, registryEntries)
 
-  stampIdentity(scene, retainedCloneByOriginal, nodes, clipNamesByNode)
+  let disposed = false
+  return {
+    scene,
+    animations: animation.clips,
+    warnings: [],
+    dispose: () => {
+      if (disposed) return
+      disposed = true
+      disposeExportResources(scene)
+    },
+  }
+}
 
-  return { scene, animations: clips }
+function replaceBakeGeometrySync(preparation: SceneExportPreparation): void {
+  for (const [id, original] of preparation.registryEntries) {
+    const node = preparation.nodes[id]
+    const builders = preparation.builders.get(id)
+    if (!node || !builders) continue
+    const cloned = preparation.cloneByOriginal.get(original)
+    if (!cloned || !isDescendantOf(cloned, preparation.scene)) continue
+    if (preparation.options.requireSynchronousBake && builders.async && !builders.sync) {
+      throw new Error(
+        `Node kind "${node.type}" can only bake geometry asynchronously. Choose GLB/USDZ or exclude it from the export.`,
+      )
+    }
+    if (!builders.sync) continue
+    replaceBakedNode(
+      preparation,
+      id,
+      original,
+      builders.sync(
+        node,
+        buildBakeGeometryContext(node, preparation.nodes, preparation.geometryContext),
+      ),
+      'bakeGeometry',
+    )
+  }
+}
+
+async function replaceBakeGeometryAsync(preparation: SceneExportPreparation): Promise<void> {
+  for (const [id, original] of preparation.registryEntries) {
+    const node = preparation.nodes[id]
+    const builders = preparation.builders.get(id)
+    if (!node || (!builders?.async && !builders?.sync)) continue
+    const cloned = preparation.cloneByOriginal.get(original)
+    if (!cloned || !isDescendantOf(cloned, preparation.scene)) continue
+    const context = buildBakeGeometryContext(node, preparation.nodes, preparation.geometryContext)
+    const replacement = builders.async
+      ? await builders.async(node, context)
+      : builders.sync!(node, context)
+    replaceBakedNode(
+      preparation,
+      id,
+      original,
+      replacement,
+      builders.async ? 'bakeGeometryAsync' : 'bakeGeometry',
+    )
+  }
+}
+
+function replaceBakedNode(
+  preparation: SceneExportPreparation,
+  id: string,
+  original: THREE.Object3D,
+  replacement: THREE.Object3D,
+  hook: 'bakeGeometry' | 'bakeGeometryAsync',
+): void {
+  const cloned = preparation.cloneByOriginal.get(original)
+  if (!cloned || !isDescendantOf(cloned, preparation.scene)) return
+  const parent = cloned.parent
+  if (!parent) throw new Error(`Cannot replace root export geometry for node ${id}`)
+  if (replacement === cloned || replacement.parent) {
+    throw new Error(
+      `${hook} for ${preparation.nodes[id]?.type} must return a new detached Object3D`,
+    )
+  }
+
+  const siblingIndex = parent.children.indexOf(cloned)
+  replacement.position.copy(cloned.position)
+  replacement.quaternion.copy(cloned.quaternion)
+  replacement.scale.copy(cloned.scale)
+  replacement.matrix.copy(cloned.matrix)
+  replacement.matrixAutoUpdate = cloned.matrixAutoUpdate
+  replacement.visible = cloned.visible
+  replacement.layers.mask = cloned.layers.mask
+  replacement.renderOrder = cloned.renderOrder
+  parent.remove(cloned)
+  parent.add(replacement)
+  const appendedIndex = parent.children.indexOf(replacement)
+
+  parent.children.splice(appendedIndex, 1)
+  parent.children.splice(siblingIndex, 0, replacement)
+  preparation.cloneByOriginal.set(original, replacement)
+}
+function ownBorrowedPresentationTextures(root: THREE.Object3D): void {
+  const ownedTextures = new Map<THREE.Texture, THREE.Texture>()
+  root.traverse((object) => {
+    const renderable = object as THREE.Mesh
+    if (!renderable.material) return
+    const materials = Array.isArray(renderable.material)
+      ? renderable.material
+      : [renderable.material]
+    for (const material of materials) {
+      const textured = material as THREE.Material & Record<string, unknown>
+      for (const slot of REFERENCE_MAP_SLOTS) {
+        const sourceTexture = textured[slot]
+        if (
+          !(sourceTexture instanceof THREE.Texture) ||
+          !isViewerPresentationTextureBorrowed(sourceTexture)
+        ) {
+          continue
+        }
+        let ownedTexture = ownedTextures.get(sourceTexture)
+        if (!ownedTexture) {
+          ownedTexture = sourceTexture.clone()
+          ownedTexture.userData = structuredClone(sourceTexture.userData)
+          ownedTexture.needsUpdate = true
+          ownedTextures.set(sourceTexture, ownedTexture)
+        }
+        textured[slot] = ownedTexture
+      }
+    }
+  })
+}
+
+async function appendSelectedPresentations(preparation: SceneExportPreparation): Promise<void> {
+  for (const { contribution, configuration } of preparation.presentations) {
+    const staticExport = contribution.staticExport!
+    const built = await staticExport.build({
+      nodes: preparation.nodes,
+      configuration,
+      onlyVisible: preparation.options.onlyVisible ?? true,
+      excludedNodeTypes: preparation.options.excludedNodeTypes ?? [],
+    })
+    if (!built) continue
+    if (built.parent) {
+      throw new Error(`Static viewer presentation "${contribution.id}" returned an attached root`)
+    }
+    ownBorrowedPresentationTextures(built)
+    const wrapper = new THREE.Group()
+    wrapper.name = contribution.id
+    wrapper.userData = {
+      pascalPresentationId: contribution.id,
+      label: staticExport.label,
+    }
+    wrapper.add(built)
+    preparation.scene.add(wrapper)
+  }
+}
+
+function buildBakeGeometryContext(
+  node: AnyNode,
+  nodes: Record<string, AnyNode>,
+  base: Pick<GeometryContext, 'materials' | 'levelData'>,
+): GeometryContext {
+  const resolve = <N = AnyNode>(id: AnyNodeId): N | undefined => nodes[id] as N | undefined
+  const childIds = Array.isArray((node as { children?: AnyNodeId[] }).children)
+    ? (node as { children: AnyNodeId[] }).children
+    : []
+  const children = childIds
+    .map((id) => nodes[id])
+    .filter((child): child is AnyNode => child !== undefined)
+  const allNodes = node.parentId ? undefined : Object.values(nodes)
+  const parent = node.parentId
+    ? (nodes[node.parentId] ?? null)
+    : (allNodes?.find(
+        (candidate) =>
+          candidate.type === 'site' &&
+          'children' in candidate &&
+          Array.isArray(candidate.children) &&
+          candidate.children.includes(node.id),
+      ) ?? null)
+  const siblingIds =
+    parent && Array.isArray((parent as { children?: AnyNodeId[] }).children)
+      ? (parent as { children: AnyNodeId[] }).children
+      : []
+  let siblings: AnyNode[]
+  if (parent?.type === 'site') {
+    const declaredChildren = new Set(siblingIds)
+    siblings = (allNodes ?? Object.values(nodes)).filter(
+      (candidate) =>
+        candidate.id !== node.id &&
+        candidate.type === node.type &&
+        (candidate.parentId === parent.id || declaredChildren.has(candidate.id)),
+    )
+  } else {
+    siblings = siblingIds
+      .filter((id) => id !== node.id)
+      .map((id) => nodes[id])
+      .filter((sibling): sibling is AnyNode => sibling?.type === node.type)
+  }
+  const levelId = findLevelAncestorId(node.id, nodes)
+  const levelBaseAt = (x: number, z: number) =>
+    levelId ? levelBaseElevationAt(nodes, levelId, x, z) : 0
+
+  return {
+    resolve,
+    children,
+    siblings,
+    parent,
+    levelBaseAt,
+    levelData: base.levelData,
+    materials: base.materials,
+  }
+}
+
+function isDescendantOf(object: THREE.Object3D, ancestor: THREE.Object3D): boolean {
+  let current: THREE.Object3D | null = object
+  while (current) {
+    if (current === ancestor) return true
+    current = current.parent
+  }
+  return false
 }
 
 function pruneHiddenSceneNodes(
   cloneByOriginal: Map<THREE.Object3D, THREE.Object3D>,
   nodes: Record<string, AnyNode>,
+  registryEntries: readonly RegistryEntry[],
 ) {
   const visibility = new Map<string, boolean>()
+  const declaredSiteParents = new Map<string, string>()
+  for (const node of Object.values(nodes)) {
+    if (node.type !== 'site' || !('children' in node) || !Array.isArray(node.children)) continue
+    for (const childId of node.children) {
+      const child = nodes[childId]
+      if (child && !child.parentId && !declaredSiteParents.has(childId)) {
+        declaredSiteParents.set(childId, node.id)
+      }
+    }
+  }
 
   const isVisible = (id: string, path: Set<string>): boolean => {
     const cached = visibility.get(id)
@@ -237,19 +622,20 @@ function pruneHiddenSceneNodes(
       visibility.set(id, false)
       return false
     }
-    if (!node.parentId || path.has(id)) {
+    const parentId = node.parentId || declaredSiteParents.get(id)
+    if (!parentId || path.has(id)) {
       visibility.set(id, true)
       return true
     }
 
     path.add(id)
-    const visible = isVisible(node.parentId, path)
+    const visible = isVisible(parentId, path)
     path.delete(id)
     visibility.set(id, visible)
     return visible
   }
 
-  for (const [id, original] of sceneRegistry.nodes) {
+  for (const [id, original] of registryEntries) {
     if (isVisible(id, new Set())) continue
     cloneByOriginal.get(original)?.removeFromParent()
   }
@@ -264,26 +650,100 @@ function retainedClones(
   return new Map(Array.from(cloneByOriginal.entries()).filter(([, clone]) => retained.has(clone)))
 }
 
-/**
- * Pair each original Object3D with its clone. `clone(true)` builds children in
- * source order, so parallel pre-order traversals line up 1:1 — this is how we
- * map `sceneRegistry`'s live refs onto the export tree without mutating either.
- */
-function pairClones(
-  source: THREE.Object3D,
-  clone: THREE.Object3D,
-): Map<THREE.Object3D, THREE.Object3D> {
-  const originals: THREE.Object3D[] = []
-  const clones: THREE.Object3D[] = []
-  source.traverse((object) => originals.push(object))
-  clone.traverse((object) => clones.push(object))
+type ResourceCloneCache = {
+  geometries: Map<THREE.BufferGeometry, THREE.BufferGeometry>
+  materials: Map<THREE.Material, THREE.Material>
+  textures: Map<THREE.Texture, THREE.Texture>
+}
 
-  const map = new Map<THREE.Object3D, THREE.Object3D>()
-  for (let i = 0; i < originals.length; i++) {
-    const target = clones[i]
-    if (target) map.set(originals[i]!, target)
+/** Skip excluded subtrees before cloning large procedural instance buffers. */
+function cloneSceneForExport(
+  source: THREE.Object3D,
+  excludedObjects: Set<THREE.Object3D>,
+  cloneByOriginal: Map<THREE.Object3D, THREE.Object3D>,
+  cache: ResourceCloneCache = {
+    geometries: new Map(),
+    materials: new Map(),
+    textures: new Map(),
+  },
+): THREE.Object3D {
+  if (excludedObjects.has(source)) return new THREE.Group()
+
+  const clone = source.clone(false)
+  clone.userData = structuredClone(source.userData)
+  const renderable = source as THREE.Mesh
+  const renderableClone = clone as THREE.Mesh
+  if (renderable.geometry) {
+    let geometry = cache.geometries.get(renderable.geometry)
+    if (!geometry) {
+      geometry = renderable.geometry.clone()
+      cache.geometries.set(renderable.geometry, geometry)
+    }
+    renderableClone.geometry = geometry
   }
-  return map
+  if (renderable.material) {
+    const cloneMaterial = (material: THREE.Material): THREE.Material => {
+      let result = cache.materials.get(material)
+      if (result) return result
+      result = material.clone()
+      const textured = result as THREE.Material & Record<string, unknown>
+      for (const slot of REFERENCE_MAP_SLOTS) {
+        const texture = textured[slot]
+        if (!(texture instanceof THREE.Texture)) continue
+        let textureClone = cache.textures.get(texture)
+        if (!textureClone) {
+          textureClone = texture.clone()
+          textureClone.userData = structuredClone(texture.userData)
+          textureClone.needsUpdate = true
+          cache.textures.set(texture, textureClone)
+        }
+        textured[slot] = textureClone
+      }
+      cache.materials.set(material, result)
+      return result
+    }
+    if (Array.isArray(renderable.material)) {
+      const materialSlots = renderable.material as Array<THREE.Material | null | undefined>
+      renderableClone.material = materialSlots.map((material) =>
+        material ? cloneMaterial(material) : material,
+      ) as THREE.Material[]
+    } else {
+      renderableClone.material = cloneMaterial(renderable.material)
+    }
+  }
+
+  cloneByOriginal.set(source, clone)
+  for (const child of source.children) {
+    if (!excludedObjects.has(child)) {
+      clone.add(cloneSceneForExport(child, excludedObjects, cloneByOriginal, cache))
+    }
+  }
+  return clone
+}
+
+function cloneSkinnedSkeletons(cloneByOriginal: Map<THREE.Object3D, THREE.Object3D>): void {
+  for (const [original, cloned] of cloneByOriginal) {
+    const source = original as THREE.SkinnedMesh
+    const target = cloned as THREE.SkinnedMesh
+    if (!source.isSkinnedMesh) continue
+    const bones = source.skeleton.bones.map((bone) => {
+      const clonedBone = cloneByOriginal.get(bone)
+      if (!(clonedBone as THREE.Bone | undefined)?.isBone) {
+        throw new Error(
+          `Skinned mesh "${source.name}" references a bone outside its export subtree`,
+        )
+      }
+      return clonedBone as THREE.Bone
+    })
+    target.bindMode = source.bindMode
+    target.bind(
+      new THREE.Skeleton(
+        bones,
+        source.skeleton.boneInverses.map((inverse) => inverse.clone()),
+      ),
+      source.bindMatrix.clone(),
+    )
+  }
 }
 
 // A single empty geometry shared by every container mesh we neutralise below —
@@ -342,8 +802,8 @@ function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE
       renderable.material == null
     ) {
       if (object.children.length > 0) {
-        renderable.geometry = EMPTY_GEOMETRY
-        renderable.material = PLACEHOLDER_MATERIAL
+        renderable.geometry = EMPTY_GEOMETRY.clone()
+        renderable.material = PLACEHOLDER_MATERIAL.clone()
       } else {
         toRemove.push(object)
       }
@@ -361,12 +821,12 @@ function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE
       Array.isArray(renderable.material) &&
       renderable.material.some((m) => m == null)
     ) {
-      renderable.material = renderable.material.map((m) => m ?? PLACEHOLDER_MATERIAL)
+      renderable.material = renderable.material.map((m) => m ?? PLACEHOLDER_MATERIAL.clone())
     }
     const mesh = object as THREE.Mesh
     if (!mesh.isMesh || isRenderableMesh(mesh)) return
     if (mesh.children.length > 0) {
-      mesh.geometry = EMPTY_GEOMETRY
+      mesh.geometry = EMPTY_GEOMETRY.clone()
     } else {
       toRemove.push(mesh)
     }
@@ -389,8 +849,8 @@ function pruneNonRenderableMeshes(root: THREE.Object3D, identityNodes: Set<THREE
  *    system's degenerate placeholder) — is neutralised like other
  *    non-renderables (kept as a bare transform node, or removed if a leaf
  *    that carries no node identity).
- * Geometry/material refs are shared with the live scene (`clone(true)` is
- * shallow for both), so repairs swap refs instead of mutating in place.
+ * The export tree owns its resources; repairs still avoid copying vertex
+ * buffers when replacing only group metadata.
  */
 function sanitizeMaterialGroups(root: THREE.Object3D, identityNodes: Set<THREE.Object3D>) {
   const toRemove: THREE.Object3D[] = []
@@ -410,15 +870,15 @@ function sanitizeMaterialGroups(root: THREE.Object3D, identityNodes: Set<THREE.O
     )
     if (validGroups.length === 0) {
       if (mesh.children.length > 0 || identityNodes.has(mesh)) {
-        mesh.geometry = EMPTY_GEOMETRY
-        mesh.material = PLACEHOLDER_MATERIAL
+        mesh.geometry = EMPTY_GEOMETRY.clone()
+        mesh.material = PLACEHOLDER_MATERIAL.clone()
       } else {
         toRemove.push(mesh)
       }
       return
     }
-    // Only the group list needs repair — share the attribute/index refs
-    // instead of geometry.clone(), which deep-copies every vertex buffer.
+    // Only the group list needs repair; reuse export-owned attributes rather
+    // than duplicating every vertex buffer.
     if (validGroups.length !== groups.length) {
       const geometry = new THREE.BufferGeometry()
       geometry.index = mesh.geometry.index
@@ -431,7 +891,7 @@ function sanitizeMaterialGroups(root: THREE.Object3D, identityNodes: Set<THREE.O
       geometry.groups = validGroups.map((g) => ({ ...g }))
       mesh.geometry = geometry
     }
-    mesh.material = materials.map((m) => m ?? PLACEHOLDER_MATERIAL)
+    mesh.material = materials.map((m) => m ?? PLACEHOLDER_MATERIAL.clone())
   })
   for (const object of toRemove) {
     object.removeFromParent()
@@ -481,29 +941,44 @@ const REFERENCE_MAP_SLOTS = [
   'anisotropyMap',
 ] as const
 
-function convertMaterials(root: THREE.Object3D, textureMode: 'embed' | 'reference') {
+function convertMaterials(
+  root: THREE.Object3D,
+  textureMode: 'embed' | 'reference',
+  purpose: 'portable' | 'viewer',
+) {
   const cache = new Map<THREE.Material, THREE.Material>()
   const placeholderCache = new Map<THREE.Texture, THREE.Texture>()
   root.traverse((object) => {
     const mesh = object as THREE.Mesh
     if (!mesh.isMesh) return
     const material = mesh.material
-    if (Array.isArray(material)) {
-      mesh.material = material.map((m) => convertMaterial(m, cache, textureMode, placeholderCache))
-      return
-    }
-    // glTF has no BackSide — GLTFExporter renders the *front* face for any
-    // non-DoubleSide material, which inverts a BackSide surface (e.g. the
-    // ceiling underside, meant to be seen from the room). Flip the mesh winding
-    // so the intended face shows with the FrontSide material convertMaterial
-    // produces. Per-mesh geometry clone keeps shared geometry untouched.
+    const materialArray = Array.isArray(material) ? material : [material]
     if (
-      (material as { isNodeMaterial?: boolean }).isNodeMaterial &&
-      material.side === THREE.BackSide
+      purpose === 'viewer' &&
+      materialArray.length === 1 &&
+      (materialArray[0] as { isNodeMaterial?: boolean }).isNodeMaterial &&
+      materialArray[0]!.side === THREE.BackSide
     ) {
       mesh.geometry = flipGeometryWinding(mesh.geometry)
     }
-    mesh.material = convertMaterial(material, cache, textureMode, placeholderCache)
+    const converted = materialArray.map((entry) =>
+      convertMaterial(entry, cache, textureMode, placeholderCache, purpose),
+    )
+    const color = mesh.geometry.getAttribute('color')
+    let hasVertexAlpha = false
+    if (color?.itemSize === 4) {
+      for (let index = 0; index < color.count; index++) {
+        if (color.getW(index) < 1) {
+          hasVertexAlpha = true
+          break
+        }
+      }
+    }
+    for (const entry of converted) {
+      const textured = entry as THREE.Material & { alphaMap?: THREE.Texture | null }
+      if (hasVertexAlpha || textured.alphaMap) entry.transparent = true
+    }
+    mesh.material = Array.isArray(material) ? converted : converted[0]!
   })
 }
 
@@ -555,6 +1030,7 @@ function convertMaterial(
   cache: Map<THREE.Material, THREE.Material>,
   textureMode: 'embed' | 'reference',
   placeholderCache: Map<THREE.Texture, THREE.Texture>,
+  purpose: 'portable' | 'viewer',
 ): THREE.Material {
   const isNodeMaterial = (material as { isNodeMaterial?: boolean }).isNodeMaterial === true
   if (!isNodeMaterial) {
@@ -589,7 +1065,8 @@ function convertMaterial(
   target.opacity = material.opacity
   // BackSide is flipped to FrontSide (with the mesh winding reversed in
   // convertMaterials) because glTF has no back-face-only mode.
-  target.side = material.side === THREE.BackSide ? THREE.FrontSide : material.side
+  target.side =
+    purpose === 'viewer' && material.side === THREE.BackSide ? THREE.FrontSide : material.side
   target.alphaTest = material.alphaTest
   target.depthWrite = material.depthWrite
   target.depthTest = material.depthTest
@@ -695,11 +1172,12 @@ function createReferencePlaceholder(texture: THREE.Texture): THREE.Texture {
 function bakeAnimationClips(
   cloneByOriginal: Map<THREE.Object3D, THREE.Object3D>,
   nodes: Record<string, AnyNode>,
+  registryEntries: readonly RegistryEntry[],
 ): { clips: THREE.AnimationClip[]; clipNamesByNode: Map<string, string[]> } {
   const clips: THREE.AnimationClip[] = []
   const clipNamesByNode = new Map<string, string[]>()
 
-  for (const [id, original] of sceneRegistry.nodes) {
+  for (const [id, original] of registryEntries) {
     const node = nodes[id]
     const target = cloneByOriginal.get(original)
     if (!node || !target) continue
@@ -1052,12 +1530,16 @@ function stampIdentity(
   cloneByOriginal: Map<THREE.Object3D, THREE.Object3D>,
   nodes: Record<string, AnyNode>,
   clipNamesByNode: Map<string, string[]>,
+  registryEntries: readonly RegistryEntry[],
 ) {
   scene.traverse((object) => {
-    object.userData = {}
+    const presentationId = object.userData.pascalPresentationId
+    const label = object.userData.label
+    object.userData =
+      typeof presentationId === 'string' ? { pascalPresentationId: presentationId, label } : {}
   })
 
-  for (const [id, original] of sceneRegistry.nodes) {
+  for (const [id, original] of registryEntries) {
     const node = nodes[id]
     const target = cloneByOriginal.get(original)
     if (!node || !target) continue

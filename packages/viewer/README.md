@@ -120,6 +120,61 @@ floor-plan pan/zoom/rotation, and the compass synchronize through transient subs
 navigation does not require a React render per frame. Set `showCompass={false}` or
 `showSwitcher={false}` when the host supplies its own controls.
 
+## Capture Sessions
+
+`@pascal-app/viewer/capture` holds the optional capture runtime and its reference layers. Mount
+`CaptureRuntime` as a child of `Viewer` and provide a source resolver. The host owns access control
+and transport; the runtime owns source lifecycle, scan-node placement, layer visibility, and
+reference renderers for RoomPlan models, device trajectories, and PLY/live point clouds. The
+session contracts it consumes live in `@pascal-app/core/capture`.
+
+```tsx
+import { createHttpCaptureSource } from '@pascal-app/core/capture'
+import { Viewer } from '@pascal-app/viewer'
+import { CaptureRuntime } from '@pascal-app/viewer/capture'
+
+function CaptureViewer() {
+  return (
+    <Viewer>
+      <CaptureRuntime
+        onError={(error, context) => reportCaptureError(error, context)}
+        resolveSource={(locator) => createHttpCaptureSource(locator, { credentials: 'include' })}
+        retryKey={retryVersion}
+      />
+    </Viewer>
+  )
+}
+```
+
+Unknown streams remain in the descriptor and can be rendered by passing a custom renderer keyed by
+stream role or kind. A live transport implements `CaptureSource.subscribe()`; no particular
+WebSocket, WebRTC, or collaboration backend is required.
+
+`CaptureRuntime` keeps telemetry host-neutral: pass `onError` to report source or per-stream
+failures in the host, then increment `retryKey` to reload every affected session. Direct
+`useCaptureSource()` consumers can call its `retry()` function instead.
+
+Hosts can pass `defaultLayerVisibility` to keep expensive optional layers disabled until a user
+enables them. Persisted values in the scan node's `layers` map always override those host defaults;
+without host defaults, every available layer remains visible for backwards compatibility. Hidden
+sessions and layers are unmounted rather than only made visually transparent, so they stop
+raycasting, artifact work, animation, and live packet subscriptions while disabled.
+
+### Local surface previews
+
+`@pascal-app/viewer/capture/preview` exports `createSurfaceMeshGeometry` and `createClayMatcap`
+without importing the React viewer runtime, so a capture client can render a locally saved surface
+immediately, before its archive is uploaded. The geometry decoder uses the shared
+`@pascal-app/core/capture` validator, including the native 20,000-face budget, byte lengths, and
+index bounds. It returns `null` for invalid input. The host owns the returned geometry and matcap
+texture and must dispose them on teardown.
+
+Direct `CaptureStreamLayer` consumers can pass
+`meshPresentation={{ previewMaterial: 'clay', dollhouse: true }}`. Clay replaces preliminary vertex
+colors; dollhouse enables front-face rendering for surface previews and room models, revealing
+inward-facing room surfaces from outside. It changes per-instance materials, not geometry or
+loader-cached materials. Omitting these options preserves the existing presentation.
+
 ## Viewer State
 
 ```typescript

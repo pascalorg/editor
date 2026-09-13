@@ -1,5 +1,5 @@
 import type { GeometryContext } from '../registry/types'
-import type { AnyNodeId, SlabNode, WallNode } from '../schema'
+import type { AnyNode, AnyNodeId, SlabNode, WallNode } from '../schema'
 import { isCurvedWall, sampleWallCenterline } from '../systems/wall/wall-curve'
 import { getWallThickness } from '../systems/wall/wall-footprint'
 
@@ -115,7 +115,9 @@ type Segment = [number, number, number, number]
 
 /** A sibling slab edge and the direction of its polygon interior. */
 type NeighborSegment = {
+  slab: SlabNode
   segment: Segment
+  bounds: Bounds
   elevation: number
   /** Unit normal pointing into the sibling polygon at this edge. */
   inwardX: number
@@ -141,27 +143,34 @@ export function slabPolygonContextFromGeometry(
 ): SlabPolygonContext {
   if (!ctx) return { walls: [], siblingSlabs: [] }
 
-  const siblingSlabs = ctx.siblings.filter(
-    (node): node is SlabNode => node.type === 'slab',
-  ) as SlabNode[]
-
-  const walls: WallNode[] = []
-  const parentChildIds = (ctx.parent as { children?: AnyNodeId[] } | null)?.children
-  if (Array.isArray(parentChildIds)) {
-    for (const childId of parentChildIds) {
-      const child = ctx.resolve(childId)
-      if ((child as { type?: string } | undefined)?.type === 'wall') {
-        walls.push(child as WallNode)
-      }
-    }
+  return {
+    ...slabPolygonContextForLevel(ctx.parent, ctx.resolve),
+    siblingSlabs: ctx.siblings.filter((node): node is SlabNode => node.type === 'slab'),
   }
+}
 
+export function slabPolygonContextForLevel(
+  parent: AnyNode | null,
+  resolve: (id: AnyNodeId) => AnyNode | undefined,
+  fallbackSlabs: SlabNode[] = [],
+): SlabPolygonContext {
+  const walls: WallNode[] = []
+  const siblingSlabs: SlabNode[] = []
+  const childIds = (parent as { children?: AnyNodeId[] } | null)?.children
+  if (!Array.isArray(childIds)) {
+    return { walls, siblingSlabs: parent ? fallbackSlabs : [] }
+  }
+  for (const id of childIds) {
+    const child = resolve(id)
+    if (child?.type === 'wall') walls.push(child)
+    else if (child?.type === 'slab') siblingSlabs.push(child)
+  }
   return { walls, siblingSlabs }
 }
 
 export function getRenderableSlabPolygon(
   slabNode: SlabNode,
-  context: SlabPolygonContext,
+  context: SlabPolygonContext | PreparedSlabPolygonContext,
 ): Array<[number, number]> {
   const polygon = slabNode.polygon
   if (polygon.length < 3 || isFloatingSlab(slabNode)) {
@@ -171,7 +180,8 @@ export function getRenderableSlabPolygon(
   const subSpans = computeEdgeSubSpans(
     polygon,
     slabNode.elevation ?? DEFAULT_SLAB_ELEVATION,
-    context,
+    'wallCandidates' in context ? context : prepareSlabPolygonContext(context),
+    slabNode.id,
   )
   if (subSpans.every((spans) => spans.length === 1 && spans[0]!.offset === 0)) {
     return polygon.map(([x, z]) => [x, z] as [number, number])
@@ -375,23 +385,107 @@ type EdgeSubSpan = {
   key: string
 }
 
-/**
- * Split every polygon edge at candidate span boundaries and classify
- * each sub-span independently. Returns one non-empty span list per
- * edge, covering [0, edgeLength] without gaps.
- */
-function computeEdgeSubSpans(
-  polygon: Array<[number, number]>,
-  selfElevation: number,
+type Bounds = [number, number, number, number]
+
+function polygonBounds(polygon: Array<[number, number]>): Bounds {
+  const bounds: Bounds = [Infinity, Infinity, -Infinity, -Infinity]
+  for (const [x, z] of polygon) {
+    bounds[0] = Math.min(bounds[0], x)
+    bounds[1] = Math.min(bounds[1], z)
+    bounds[2] = Math.max(bounds[2], x)
+    bounds[3] = Math.max(bounds[3], z)
+  }
+  return bounds
+}
+
+function boundsOverlap(a: Bounds, b: Bounds, padding: number): boolean {
+  return (
+    a[0] <= b[2] + padding &&
+    a[2] >= b[0] - padding &&
+    a[1] <= b[3] + padding &&
+    a[3] >= b[1] - padding
+  )
+}
+
+export function scopeSlabPolygonContext(
+  slab: SlabNode,
+  context: PreparedSlabPolygonContext,
+): PreparedSlabPolygonContext {
+  const bounds = polygonBounds(slab.polygon)
+  const wallCandidates = context.wallCandidates.filter((candidate) =>
+    boundsOverlap(bounds, candidate.bounds, candidate.halfThickness + WALL_ADOPTION_TOLERANCE),
+  )
+  // Keep the level-wide tolerance: even an unadopted wall can widen sibling
+  // breakpoint collection, which may affect short-span fusion.
+  const neighborSegments = context.neighborSegments.filter(
+    (neighbor) =>
+      neighbor.slab.id !== slab.id &&
+      boundsOverlap(bounds, neighbor.bounds, context.siblingBreakTolerance),
+  )
+  return {
+    ...context,
+    walls: wallCandidates.map((candidate) => candidate.wall),
+    siblingSlabs: [...new Set(neighborSegments.map((neighbor) => neighbor.slab))],
+    wallCandidates,
+    neighborSegments,
+    siblingBreakTolerance: context.siblingBreakTolerance,
+  }
+}
+
+export function slabPolygonContextChanges(
+  before: PreparedSlabPolygonContext,
+  after: PreparedSlabPolygonContext,
+): (slab: SlabNode) => boolean {
+  if (before.siblingBreakTolerance !== after.siblingBreakTolerance) return () => true
+  const changedWalls = new Set<WallNode>()
+  const changedSlabs = new Set<SlabNode>()
+  for (let i = 0; i < Math.max(before.walls.length, after.walls.length); i++) {
+    if (before.walls[i] === after.walls[i]) continue
+    if (before.walls[i]) changedWalls.add(before.walls[i]!)
+    if (after.walls[i]) changedWalls.add(after.walls[i]!)
+  }
+  for (let i = 0; i < Math.max(before.siblingSlabs.length, after.siblingSlabs.length); i++) {
+    if (before.siblingSlabs[i] === after.siblingSlabs[i]) continue
+    if (before.siblingSlabs[i]) changedSlabs.add(before.siblingSlabs[i]!)
+    if (after.siblingSlabs[i]) changedSlabs.add(after.siblingSlabs[i]!)
+  }
+  const walls = [...before.wallCandidates, ...after.wallCandidates].filter((candidate) =>
+    changedWalls.has(candidate.wall),
+  )
+  const neighbors = [...before.neighborSegments, ...after.neighborSegments].filter((neighbor) =>
+    changedSlabs.has(neighbor.slab),
+  )
+  return (slab) => {
+    const bounds = polygonBounds(slab.polygon)
+    return (
+      walls.some((candidate) =>
+        boundsOverlap(bounds, candidate.bounds, candidate.halfThickness + WALL_ADOPTION_TOLERANCE),
+      ) ||
+      neighbors.some(
+        (neighbor) =>
+          neighbor.slab.id !== slab.id &&
+          boundsOverlap(bounds, neighbor.bounds, after.siblingBreakTolerance),
+      )
+    )
+  }
+}
+
+type PreparedWallCandidate = WallCandidate & { bounds: Bounds }
+
+type PreparedSlabPolygonContext = SlabPolygonContext & {
+  wallCache: WeakMap<WallNode, PreparedWallCandidate>
+  neighborCache: WeakMap<SlabNode, NeighborSegment[]>
+  wallCandidates: PreparedWallCandidate[]
+  neighborSegments: NeighborSegment[]
+  siblingBreakTolerance: number
+}
+
+export function prepareSlabPolygonContext(
   context: SlabPolygonContext,
-): EdgeSubSpan[][] {
-  const n = polygon.length
-
-  // Winding sign: the outward normal of an edge with direction `dir` is
-  // `s * (dirZ, -dirX)`, so a target lateral `L` measured along
-  // `(dirZ, -dirX)` is `s * L` along the outward normal.
-  const s = polygonWindingSign(polygon)
-
+  previous?: PreparedSlabPolygonContext,
+): PreparedSlabPolygonContext {
+  const wallCache = previous?.wallCache ?? new WeakMap<WallNode, PreparedWallCandidate>()
+  const neighborCache = previous?.neighborCache ?? new WeakMap<SlabNode, NeighborSegment[]>()
   const neighborSegments: NeighborSegment[] = []
   for (const sibling of context.siblingSlabs) {
     // A floating deck keeps its drawn polygon, so it can't be a seam
@@ -399,6 +493,12 @@ function computeEdgeSubSpans(
     // deck's stays put (asymmetric seam), and the higher/lower band rules
     // only describe room floors meeting under a wall.
     if (isFloatingSlab(sibling)) continue
+    const cached = neighborCache.get(sibling)
+    if (cached) {
+      neighborSegments.push(...cached)
+      continue
+    }
+    const segments: NeighborSegment[] = []
     const siblingPolygon = sibling.polygon
     if (siblingPolygon.length < 2) continue
     const elevation = sibling.elevation ?? DEFAULT_SLAB_ELEVATION
@@ -410,20 +510,37 @@ function computeEdgeSubSpans(
       const dz = to[1] - from[1]
       const length = Math.hypot(dx, dz)
       if (length < 1e-9) continue
-      neighborSegments.push({
+      segments.push({
+        slab: sibling,
+        bounds: polygonBounds([from, to]),
         segment: [from[0], from[1], to[0], to[1]],
         elevation,
         inwardX: (-siblingWinding * dz) / length,
         inwardZ: (siblingWinding * dx) / length,
       })
     }
+    neighborCache.set(sibling, segments)
+    neighborSegments.push(...segments)
   }
 
-  const wallCandidates: WallCandidate[] = context.walls.map((wall) => ({
-    wall,
-    segments: wallCenterlineSegments(wall),
-    halfThickness: getWallThickness(wall) / 2,
-  }))
+  const wallCandidates: PreparedWallCandidate[] = context.walls.map((wall) => {
+    const cached = wallCache.get(wall)
+    if (cached) return cached
+    const segments = wallCenterlineSegments(wall)
+    const candidate: PreparedWallCandidate = {
+      wall,
+      segments,
+      halfThickness: getWallThickness(wall) / 2,
+      bounds: polygonBounds(
+        segments.flatMap(([ax, az, bx, bz]) => [
+          [ax, az],
+          [bx, bz],
+        ]),
+      ),
+    }
+    wallCache.set(wall, candidate)
+    return candidate
+  })
 
   // Sibling breakpoints also matter for legacy face-aligned polygons up
   // to a full wall band away from the edge (the band-sibling interior
@@ -437,6 +554,37 @@ function computeEdgeSubSpans(
       2 * (candidate.halfThickness + WALL_ADOPTION_TOLERANCE),
     )
   }
+
+  return {
+    ...context,
+    wallCache,
+    neighborCache,
+    wallCandidates,
+    neighborSegments,
+    siblingBreakTolerance,
+  }
+}
+
+/**
+ * Split every polygon edge at candidate span boundaries and classify
+ * each sub-span independently. Returns one non-empty span list per
+ * edge, covering [0, edgeLength] without gaps.
+ */
+function computeEdgeSubSpans(
+  polygon: Array<[number, number]>,
+  selfElevation: number,
+  context: PreparedSlabPolygonContext,
+  slabId: SlabNode['id'],
+): EdgeSubSpan[][] {
+  const n = polygon.length
+
+  // Winding sign: the outward normal of an edge with direction `dir` is
+  // `s * (dirZ, -dirX)`, so a target lateral `L` measured along
+  // `(dirZ, -dirX)` is `s * L` along the outward normal.
+  const s = polygonWindingSign(polygon)
+
+  const { wallCandidates, siblingBreakTolerance } = context
+  const neighborSegments = context.neighborSegments.filter((segment) => segment.slab.id !== slabId)
 
   const subSpans: EdgeSubSpan[][] = []
   for (let index = 0; index < n; index += 1) {
