@@ -1063,7 +1063,8 @@ function convertMaterial(
   if (cached) return cached
 
   const src = material as THREE.Material & Record<string, unknown>
-  const target = new THREE.MeshStandardMaterial()
+  const glass = purpose === 'portable' && isPortableGlass(material)
+  const target = glass ? new THREE.MeshPhysicalMaterial() : new THREE.MeshStandardMaterial()
 
   target.name = material.name
   if (src.color instanceof THREE.Color) target.color.copy(src.color)
@@ -1099,10 +1100,41 @@ function convertMaterial(
     }
   }
 
+  if (glass) applyPortableGlass(target as THREE.MeshPhysicalMaterial, material)
   if (textureMode === 'reference') replaceReferencedTextures(target, placeholderCache)
 
   cache.set(material, target)
   return target
+}
+
+/** Mirrors the viewer's own rule (`maybeApplyGlassFresnel`): an untextured
+ * see-through surface below this opacity is glass, not tinted plastic. */
+const GLASS_OPACITY_THRESHOLD = 0.6
+
+function isPortableGlass(material: THREE.Material): boolean {
+  const src = material as THREE.Material & Record<string, unknown>
+  return (
+    material.transparent &&
+    material.opacity < GLASS_OPACITY_THRESHOLD &&
+    !(src.map instanceof THREE.Texture)
+  )
+}
+
+/**
+ * The viewer sells glass with a fresnel-driven opacity node, which glTF cannot
+ * carry; a plain alpha blend lands in every other tool as a blue film. Real
+ * transmission (KHR_materials_transmission + ior) is what Blender, Unity and
+ * Unreal all render as glass. The authored opacity becomes the tint strength.
+ */
+function applyPortableGlass(target: THREE.MeshPhysicalMaterial, source: THREE.Material) {
+  target.color.lerp(new THREE.Color(0xffffff), 1 - source.opacity)
+  target.transmission = 1
+  target.ior = 1.5
+  target.roughness = Math.min(target.roughness, 0.15)
+  target.metalness = 0
+  target.transparent = false
+  target.opacity = 1
+  target.depthWrite = true
 }
 
 function replaceReferencedTextures(
