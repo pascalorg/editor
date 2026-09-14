@@ -1,5 +1,10 @@
 import { MATERIAL_CATALOG, type MaterialCatalogItem } from '../material-library'
 import type { ProceduralItemNode } from './node'
+import type { Recipe } from './recipe'
+
+export const FINISH_LIBRARY_REFS = {
+  glass: 'library:preset-glass',
+} as const satisfies Record<NonNullable<Recipe['slots'][number]['finish']>, `library:${string}`>
 
 export type LibraryColorMatch = {
   ref: `library:${string}`
@@ -54,8 +59,10 @@ export function snapProceduralSlotsToLibrary(
   const slots = { ...node.slots }
   for (const slot of node.recipe.slots) {
     if (options.keepOverrides && Object.hasOwn(node.slots, slot.id)) continue
-    const nearest = nearestLibraryColorRef(slot.color)
-    if (nearest) slots[slot.id] = nearest.ref
+    const ref = slot.finish
+      ? FINISH_LIBRARY_REFS[slot.finish]
+      : nearestLibraryColorRef(slot.color)?.ref
+    if (ref) slots[slot.id] = ref
   }
   return slots
 }

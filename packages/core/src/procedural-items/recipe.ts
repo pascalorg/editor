@@ -66,6 +66,7 @@ export const RecipeSchema = z.strictObject({
         id,
         label: z.string().min(1).max(60),
         color: z.string().regex(/^#[0-9a-fA-F]{6}$/),
+        finish: z.enum(['glass']).optional(),
       }),
     )
     .min(1)

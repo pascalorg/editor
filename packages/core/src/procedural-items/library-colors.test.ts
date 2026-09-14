@@ -2,9 +2,36 @@ import { expect, test } from 'bun:test'
 import { MATERIAL_CATALOG, type MaterialCatalogItem } from '../material-library'
 import { shelfRecipe } from './fixtures'
 import { nearestLibraryColorRef, snapProceduralSlotsToLibrary } from './library-colors'
+import { proceduralSlotColor } from './materials'
 import { ProceduralItemNode } from './node'
 
 const softWhite = MATERIAL_CATALOG.find((entry) => entry.id === 'preset-softwhite')!
+
+test('glass finish selects the generic preset while explicit picks and recipe hex survive', () => {
+  const recipe = structuredClone(shelfRecipe)
+  recipe.slots[0]!.finish = 'glass'
+  for (const pick of [
+    undefined,
+    'scene:mtl_painted',
+    'library:preset-white',
+    recipe.slots[0]!.color,
+  ]) {
+    const node = ProceduralItemNode.parse({
+      recipe,
+      slots: pick ? { frame: pick } : {},
+    })
+    const before = structuredClone(node)
+    expect(snapProceduralSlotsToLibrary(node).frame).toBe(pick ?? 'library:preset-glass')
+    expect(node).toEqual(before)
+  }
+})
+
+test('glass glyph uses the preset color and Authored uses the recipe hex', () => {
+  const authored = shelfRecipe.slots[0]!.color
+  expect(proceduralSlotColor('library:preset-glass', authored, {})).toBe('#87ceeb')
+  expect(proceduralSlotColor(undefined, authored, {})).toBe(authored)
+  expect(proceduralSlotColor(authored, authored, {})).toBe(authored)
+})
 
 test('exact matches ignore hex casing and report zero CIE76 distance', () => {
   expect(nearestLibraryColorRef('#EBE7DF')).toEqual({
