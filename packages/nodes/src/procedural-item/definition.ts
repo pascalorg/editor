@@ -55,7 +55,7 @@ export const proceduralItemDefinition: NodeDefinition<typeof ProceduralItemNode>
       gridSnap: true,
       override: ({ node }) =>
         (node as unknown as ProceduralItemNode).wallId
-          ? null
+          ? { axes: [], gridSnap: false }
           : { axes: ['x', 'z'], gridSnap: true },
     },
     rotatable: { axes: ['y'], snapAngles: [0, Math.PI / 4, Math.PI / 2, Math.PI] },

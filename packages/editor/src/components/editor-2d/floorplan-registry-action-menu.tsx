@@ -27,6 +27,7 @@ import {
   prepareFreshPlacementRootDuplicate,
 } from '../../lib/fresh-planar-placement'
 import { curveReshapeScope } from '../../lib/interaction/scope'
+import { duplicateWithoutMove, registryMoveDisabled } from '../../lib/node-action-movement'
 import { playBlockedQuickActionFeedback } from '../../lib/quick-action-feedback'
 import { collectQuickActionNodeScope } from '../../lib/quick-action-nodes'
 import { sfxEmitter } from '../../lib/sfx-bus'
@@ -250,7 +251,8 @@ export function FloorplanRegistryActionMenu() {
   // walls land on their bespoke `MoveWallTool` (perpendicular slide
   // with linked-wall cascade) via `affordanceTools.move`.
   const canMove =
-    !!def.capabilities.movable || !!def.floorplanMoveTarget || !!def.affordanceTools?.move
+    !registryMoveDisabled(node) &&
+    (!!def.capabilities.movable || !!def.floorplanMoveTarget || !!def.affordanceTools?.move)
   const canDuplicate = def.capabilities.duplicable !== false
   const canDelete = def.capabilities.deletable !== false
   const canAddHole = node.type === 'slab' || node.type === 'ceiling'
@@ -320,6 +322,15 @@ export function FloorplanRegistryActionMenu() {
   const handleDuplicate = () => {
     if (!node.parentId) return
     sfxEmitter.emit('sfx:item-pick')
+    if (registryMoveDisabled(node)) {
+      try {
+        const id = duplicateWithoutMove(node)
+        if (id) useViewer.getState().setSelection({ selectedIds: [id] })
+      } catch (error) {
+        console.error('Failed to duplicate node', error)
+      }
+      return
+    }
     useScene.temporal.getState().pause()
     let draftId: AnyNodeId | null = null
     try {

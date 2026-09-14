@@ -1,4 +1,5 @@
 export * from './fixtures'
+export * from './integration'
 export * from './materials'
 export * from './node'
 export * from './query'

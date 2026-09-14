@@ -7,8 +7,10 @@ import {
   snapParameters,
   validateProceduralRelations,
 } from '@pascal-app/core/procedural-items'
+import { useViewer } from '@pascal-app/viewer'
 import { useEffect, useState } from 'react'
 import { SliderControl } from '../ui/controls/slider-control'
+import { PanelWrapper } from '../ui/panels/panel-wrapper'
 export function ProceduralInspector({
   nodeId,
   partId,
@@ -123,7 +125,6 @@ export function ProceduralInspector({
               </button>
             ))}
           </div>
-          <p className="mt-2 text-stone-500 text-xs">Or double-click a part in the preview.</p>
         </div>
       )}
       <div>
@@ -187,6 +188,79 @@ export function ProceduralInspector({
 export default function ProceduralItemPanel({ node }: { node: ProceduralItemNode }) {
   const [partId, setPartId] = useState<string | null>(null)
   return (
-    <ProceduralInspector key={node.id} nodeId={node.id} partId={partId} onPartChange={setPartId} />
+    <PanelWrapper
+      title={node.name ?? node.recipe.name}
+      onClose={() => useViewer.getState().setSelection({ selectedIds: [] })}
+    >
+      <div className="space-y-5 p-3">
+        <ProceduralInspector
+          key={node.id}
+          nodeId={node.id}
+          partId={partId}
+          onPartChange={setPartId}
+        />
+        <ProceduralPlacementControls node={node} />
+      </div>
+    </PanelWrapper>
+  )
+}
+
+function ProceduralPlacementControls({ node }: { node: ProceduralItemNode }) {
+  const [error, setError] = useState('')
+  const update = (patch: Partial<ProceduralItemNode>) => {
+    try {
+      useScene.getState().updateNode(node.id as AnyNodeId, patch as never)
+      setError('')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Invalid placement')
+    }
+  }
+  return (
+    <details className="space-y-3">
+      <summary className="cursor-pointer font-medium text-sm">Placement</summary>
+      <div className="grid grid-cols-3 gap-2">
+        {(node.wallId ? ['Along wall', 'Height', 'Gap'] : ['X', 'Y', 'Z']).map((label, i) => (
+          <label className="text-xs" key={`${node.id}:${i}:${node.position[i]}`}>
+            {label} (m)
+            <input
+              className="mt-1 w-full rounded border border-border bg-background p-1"
+              defaultValue={node.position[i]}
+              step="0.01"
+              type="number"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur()
+              }}
+              onBlur={(e) => {
+                const position = [...node.position] as [number, number, number]
+                position[i] = Math.round(e.currentTarget.valueAsNumber * 1000) / 1000
+                update({ position })
+                e.currentTarget.value = String(
+                  (useScene.getState().nodes[node.id as AnyNodeId] as unknown as ProceduralItemNode)
+                    .position[i],
+                )
+              }}
+            />
+          </label>
+        ))}
+      </div>
+      {node.wallId && (
+        <label className="block text-xs">
+          Side
+          <select
+            className="ml-2 rounded border border-border bg-background p-1"
+            value={node.side ?? 'front'}
+            onChange={(e) => update({ side: e.target.value as 'front' | 'back' })}
+          >
+            <option value="front">Front</option>
+            <option value="back">Back</option>
+          </select>
+        </label>
+      )}
+      {error && (
+        <p role="alert" className="text-red-600 text-xs">
+          {error}
+        </p>
+      )}
+    </details>
   )
 }
