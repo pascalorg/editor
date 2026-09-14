@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { StaticGeometryGenerator } from 'three-mesh-bvh'
+import { cloneExportUserData } from './export-user-data'
 
 const VERTEX_COLOR_UV_CHANNEL = 0
 const VERTEX_COLOR_TILE_SIZE = 8
@@ -64,7 +65,7 @@ function copyObjectState(source: THREE.Object3D, target: THREE.Object3D): void {
   target.layers.mask = source.layers.mask
   target.renderOrder = source.renderOrder
   target.frustumCulled = source.frustumCulled
-  target.userData = structuredClone(source.userData)
+  target.userData = cloneExportUserData(source.userData)
 }
 
 function replaceObject(source: THREE.Object3D, replacement: THREE.Object3D): void {
@@ -554,7 +555,7 @@ function cloneTextureSettings(source: THREE.Texture, target: THREE.Texture): voi
   target.flipY = source.flipY
   target.unpackAlignment = source.unpackAlignment
   target.colorSpace = THREE.NoColorSpace
-  target.userData = structuredClone(source.userData)
+  target.userData = cloneExportUserData(source.userData)
   target.needsUpdate = true
 }
 function materializeDataTextures(root: THREE.Object3D): void {
@@ -925,7 +926,7 @@ export function createUsdzScene(source: THREE.Object3D): THREE.Object3D {
     clone.visible = object.visible
     clone.layers.mask = object.layers.mask
     clone.renderOrder = object.renderOrder
-    clone.userData = structuredClone(object.userData)
+    clone.userData = cloneExportUserData(object.userData)
     for (const child of object.children) clone.add(cloneObject(child))
     return clone
   }

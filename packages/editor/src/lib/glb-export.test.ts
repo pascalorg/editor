@@ -99,6 +99,29 @@ describe('prepareSceneForExport', () => {
     expect(material.color.getHexString()).toBe('cc3300')
   })
 
+  test('clones userData that holds runtime resources and functions', () => {
+    const root = new THREE.Group()
+    root.name = 'scene-renderer'
+    const effectMaterial = new THREE.MeshStandardMaterial()
+    effectMaterial.addEventListener('dispose', () => {})
+    const pool = meshWithNodeMaterial(nodeMaterial())
+    pool.userData = { waterEffect: { material: effectMaterial, onFrame: () => {} } }
+    const overlay = meshWithNodeMaterial(nodeMaterial())
+    overlay.userData = { pascalExport: 'strip', mesh: pool }
+    root.add(pool, overlay)
+    expect(() => structuredClone(pool.userData)).toThrow()
+
+    const { scene } = prepareSceneForExport(root, {})
+
+    const meshes: THREE.Mesh[] = []
+    scene.traverse((object) => {
+      if ((object as THREE.Mesh).isMesh) meshes.push(object as THREE.Mesh)
+    })
+    expect(meshes).toHaveLength(1)
+    expect(meshes[0]?.userData.waterEffect).toBeUndefined()
+    expect(pool.userData.waterEffect.material).toBe(effectMaterial)
+  })
+
   test('replaces only the cloned registered subtree with bake-only geometry', () => {
     const restoreRegistry = nodeRegistry._snapshot()
     try {
