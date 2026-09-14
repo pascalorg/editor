@@ -44,6 +44,10 @@ export default function ProceduralRenderer({ node }: { node: ProceduralItemNode 
   const handlers = useNodeEvents(node as unknown as AnyNode, 'procedural-item' as AnyNode['type'])
   useRegistry(node.id as AnyNodeId, 'procedural-item', ref)
   useLayoutEffect(() => {
+    // React can restore base Y after the previous frame consumed the elevation mark.
+    useScene.getState().markDirty(node.id as AnyNodeId)
+  })
+  useLayoutEffect(() => {
     const [recipe, parameters] = JSON.parse(key)
     const lease = acquireProceduralGeometry({ recipe, parameters } as ProceduralItemNode)
     setBuilt(lease.value)

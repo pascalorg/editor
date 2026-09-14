@@ -1,10 +1,17 @@
 import { expect, test } from 'bun:test'
-import { createSceneApi, type HandleDescriptor, useScene } from '@pascal-app/core'
+import {
+  createSceneApi,
+  type GeometryContext,
+  type HandleDescriptor,
+  ItemNode,
+  useScene,
+} from '@pascal-app/core'
 import {
   bedRecipe,
   evaluateRecipe,
   ProceduralItemNode,
   parseRecipe,
+  queryProceduralItem,
   radiatorRecipe,
 } from '@pascal-app/core/procedural-items'
 import { proceduralItemDefinition } from './definition'
@@ -105,4 +112,97 @@ test('mounted recipes never expose rotation or move crosses, including before a 
     expect(all.some((h) => h.kind === 'arc-resize')).toBe(false)
     expect(all.some((h) => h.kind === 'tap-action' && h.shape === 'move-cross')).toBe(false)
   }
+})
+
+const floorplanContext: GeometryContext = {
+  resolve: () => undefined,
+  children: [],
+  siblings: [],
+  parent: null,
+}
+
+test('missing, empty and invalid plan image metadata retain the existing level bounds rect', () => {
+  for (const floorPlanUrl of [undefined, '', '  ', 42]) {
+    const node = ProceduralItemNode.parse({
+      recipe,
+      position: [3, 0, 4],
+      rotation: [0, 0.7, 0],
+      metadata: { floorPlanUrl },
+    })
+    const bounds = queryProceduralItem(node, {}).levelBounds
+    expect(proceduralItemDefinition.floorplan!(node, floorplanContext)).toEqual({
+      kind: 'rect',
+      x: bounds.min[0],
+      y: bounds.min[2],
+      width: bounds.dimensions[0],
+      height: bounds.dimensions[2],
+      fill: '#777777',
+      stroke: '#44403c',
+      strokeWidth: 0.01,
+    })
+  }
+})
+
+test('snapshot image and transparent hit polygon share root yaw, offset center and parameter scale', () => {
+  const url = 'https://example.test/chair-plan.png'
+  for (const width of [0.12, 2.4]) {
+    const node = ProceduralItemNode.parse({
+      recipe,
+      parameters: { width },
+      position: [3, 0, 4],
+      rotation: [0, Math.PI / 2, 0],
+      metadata: { floorPlanUrl: url },
+    })
+    const result = proceduralItemDefinition.floorplan!(node, floorplanContext)
+    expect(result?.kind).toBe('group')
+    if (result?.kind !== 'group') throw new Error('Expected image group')
+    expect(result.children).toHaveLength(2)
+    const [polygon, image] = result.children
+    expect(polygon).toMatchObject({ kind: 'polygon', fill: 'transparent' })
+    expect(image).toMatchObject({ kind: 'image', url })
+    if (image?.kind !== 'image' || polygon?.kind !== 'polygon')
+      throw new Error('Missing plan layers')
+    expect(image.center[0]).toBeCloseTo(2.7)
+    expect(image.center[1]).toBeCloseTo(3.6)
+    expect(image.width).toBeCloseTo(width)
+    expect(image.height).toBeCloseTo(0.12)
+    expect(image.rotation).toBeCloseTo(-Math.PI / 2)
+    expect(polygon.points[0]![0]).toBeCloseTo(2.64)
+    expect(polygon.points[0]![1]).toBeCloseTo(3.6 + width / 2)
+  }
+})
+
+test('plan image composes item host yaw and draws selected outline over the snapshot', () => {
+  const host = ItemNode.parse({
+    position: [5, 0, 6],
+    rotation: [0, Math.PI / 4, 0],
+    asset: {
+      id: 'table',
+      name: 'Table',
+      category: 'furniture',
+      src: '/table.glb',
+      thumbnail: '',
+      dimensions: [4, 1, 4],
+    },
+  })
+  const node = ProceduralItemNode.parse({
+    recipe,
+    parentId: host.id,
+    rotation: [0, Math.PI / 4, 0],
+    metadata: { floorPlanUrl: 'data:image/png;base64,snapshot' },
+  })
+  const result = proceduralItemDefinition.floorplan!(node, {
+    ...floorplanContext,
+    resolve: (() => host) as GeometryContext['resolve'],
+    parent: host,
+    viewState: { selected: true },
+  })
+  if (result?.kind !== 'group') throw new Error('Expected image group')
+  expect(result.children).toHaveLength(3)
+  const image = result.children[1]
+  if (image?.kind !== 'image') throw new Error('Missing image')
+  expect(image.rotation).toBeCloseTo(-Math.PI / 2)
+  expect(image.center[0]).toBeCloseTo(4.7)
+  expect(image.center[1]).toBeCloseTo(5.6)
+  expect(result.children[2]).toMatchObject({ kind: 'polygon', fill: 'none', strokeWidth: 0.035 })
 })
