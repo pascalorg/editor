@@ -1848,8 +1848,8 @@ describe('portable glass', () => {
     expect(exportedGlass!.roughness).toBeCloseTo(0.1)
     // 30% authored opacity keeps 30% of the (linear) tint.
     const tint = new THREE.Color('#3d9ed4')
-    expect(exportedGlass!.color.r).toBeCloseTo(1 - 0.7 * (1 - tint.r), 4)
-    expect(exportedGlass!.color.b).toBeCloseTo(1 - 0.7 * (1 - tint.b), 4)
+    expect(exportedGlass!.color.r).toBeCloseTo(tint.r + (1 - tint.r) * 0.7, 4)
+    expect(exportedGlass!.color.b).toBeCloseTo(tint.b + (1 - tint.b) * 0.7, 4)
     expect(exportedPlastic!.isMeshPhysicalMaterial).toBeUndefined()
     expect(exportedPlastic!.transparent).toBe(true)
 
