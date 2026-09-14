@@ -36,7 +36,10 @@ import {
   type GLTFWriter,
 } from 'three/examples/jsm/exporters/GLTFExporter.js'
 import * as WebGPUTextureUtils from 'three/examples/jsm/utils/WebGPUTextureUtils.js'
+import { cloneExportUserData } from './export-user-data'
 import {
+  type CompressedTextureDecompressor,
+  decompressCanonicalNormalMaps,
   disposeExportResources,
   normalizePortableScene,
   normalizeViewerArtifactMaterials,
@@ -75,6 +78,8 @@ export type GlbExportOptions = {
   onWarning?: (warning: string) => void
   /** Reject retained node kinds whose export geometry can only be baked asynchronously. */
   requireSynchronousBake?: boolean
+  /** GPU decompressor for compressed normal maps that must be baked; defaults to WebGPUTextureUtils. */
+  decompressTexture?: CompressedTextureDecompressor
 }
 
 /** Resolve after the next couple of animation frames, giving React/R3F time to
@@ -349,10 +354,21 @@ async function completeSceneExportPreparation(
     await replaceBakeGeometryAsync(preparation)
     await appendSelectedPresentations(preparation)
     const prepared = finishSceneExportPreparation(preparation)
+    const { options } = preparation
+    const byReference = (options.textures ?? 'embed') === 'reference'
+    const normalizeOptions = {
+      preserveNormalMap: (texture: THREE.Texture) =>
+        byReference && getPascalTextureRef(texture) !== null,
+    }
+    await decompressCanonicalNormalMaps(
+      prepared.scene,
+      options.decompressTexture ?? ((texture) => WebGPUTextureUtils.decompress(texture)),
+      normalizeOptions,
+    )
     prepared.warnings.push(
-      ...(preparation.options.purpose === 'viewer'
-        ? normalizeViewerArtifactMaterials(prepared.scene)
-        : normalizePortableScene(prepared.scene)),
+      ...(options.purpose === 'viewer'
+        ? normalizeViewerArtifactMaterials(prepared.scene, normalizeOptions)
+        : normalizePortableScene(prepared.scene, normalizeOptions)),
     )
     return prepared
   } catch (error) {
@@ -495,7 +511,7 @@ function ownBorrowedPresentationTextures(root: THREE.Object3D): void {
         let ownedTexture = ownedTextures.get(sourceTexture)
         if (!ownedTexture) {
           ownedTexture = sourceTexture.clone()
-          ownedTexture.userData = structuredClone(sourceTexture.userData)
+          ownedTexture.userData = cloneExportUserData(sourceTexture.userData)
           ownedTexture.needsUpdate = true
           ownedTextures.set(sourceTexture, ownedTexture)
         }
@@ -670,7 +686,7 @@ function cloneSceneForExport(
   if (excludedObjects.has(source)) return new THREE.Group()
 
   const clone = source.clone(false)
-  clone.userData = structuredClone(source.userData)
+  clone.userData = cloneExportUserData(source.userData)
   const renderable = source as THREE.Mesh
   const renderableClone = clone as THREE.Mesh
   if (renderable.geometry) {
@@ -693,7 +709,7 @@ function cloneSceneForExport(
         let textureClone = cache.textures.get(texture)
         if (!textureClone) {
           textureClone = texture.clone()
-          textureClone.userData = structuredClone(texture.userData)
+          textureClone.userData = cloneExportUserData(texture.userData)
           textureClone.needsUpdate = true
           cache.textures.set(texture, textureClone)
         }
