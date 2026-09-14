@@ -1,4 +1,0 @@
-preload = ["../../scripts/bun-preload-three.ts"]
-
-[test]
-preload = ["../../scripts/bun-preload-three.ts"]

@@ -22,43 +22,14 @@ npx @pascal-app/cli editor
 ```
 
 The CLI starts the editor and an authenticated MCP service in the background, selects
-collision-free loopback ports, and keeps projects in `~/.pascal/data/pascal.db`. Configure
-an agent to launch `pascal mcp connect`. See [Run Pascal locally](https://editor.pascal.app/docs/developers/local-editor)
+collision-free loopback ports, and keeps projects in `~/.pascal/data/pascal.db`. The npm
+package holds the CLI and that MCP service; the web editor runtime is downloaded once per
+version on the first command that starts the editor and verified against a digest published
+inside the package. Configure an agent to launch `pascal mcp connect`, which needs neither
+the editor process nor that download. Install the `pascal` command with
+`npm install --global @pascal-app/cli`. See [Run Pascal locally](https://editor.pascal.app/docs/developers/local-editor)
 for pnpm/Bun commands, project management, MCP setup, updates, storage paths, and
-troubleshooting. The npm release is the older runtime described below; use the verified
-GitHub preview when a task needs the new read-only furniture candidate check.
-
-## Verified CLI preview
-
-The npm `beta` tag currently resolves to `@pascal-app/cli@1.0.0-beta.1`, which predates the read-only furniture candidate input and hosted agent claim/status commands in this repository. To use those capabilities before the next npm release, install the verified GitHub prerelease built from commit `5dabbc3b56109c9f79dc8a378443a4c520d9ee0a`:
-
-```bash
-PASCAL_PREVIEW_VERSION='1.0.0-beta.2.status.0'
-PASCAL_PREVIEW_PREFIX="${XDG_DATA_HOME:-$HOME/.local/share}/pascal-preview"
-PASCAL_PREVIEW_DOWNLOAD="$(mktemp -d)"
-cd "$PASCAL_PREVIEW_DOWNLOAD"
-
-curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
-curl --fail --location --remote-name \
-  "https://github.com/pascalorg/editor/releases/download/cli-v1.0.0-beta.2-status.0/SHA256SUMS.txt"
-
-# macOS
-shasum -a 256 -c SHA256SUMS.txt
-# Linux: use `sha256sum -c SHA256SUMS.txt` instead.
-
-npm install --global --prefix "$PASCAL_PREVIEW_PREFIX" --ignore-scripts \
-  "./pascal-app-cli-${PASCAL_PREVIEW_VERSION}.tgz"
-export PATH="$PASCAL_PREVIEW_PREFIX/bin:$PATH"
-pascal --version
-pascal update --version "$PASCAL_PREVIEW_VERSION"
-pascal editor --no-open
-# For an existing hosted autonomous-agent key:
-PASCAL_API_KEY='sk_live_...' pascal agent claim
-PASCAL_API_KEY='sk_live_...' pascal agent status --json
-```
-
-The expected archive SHA-256 is `15628baeeb174fb7786a1643db08f0554bf6d18afaaa3979f01922c5cd40019a`. The same-version `update` command installs and activates this CLI's bundled runtime, restarting an older running service when necessary. Keep an existing `PASCAL_HOME` unchanged so stored projects remain in the same data directory; `pascal editor` alone reuses any healthy service, including an older one. Keep the preview prefix on the agent host's `PATH` before using the Claude plugin-provided connector, running `pascal mcp setup claude` or `pascal mcp setup codex` for another installation path, or configuring `pascal mcp connect` manually. `pascal agent claim` opens a prefilled 15-minute human handoff; `pascal agent status` verifies the key and reports the bounded claim state. Neither command stores or prints the hosted key. If you assign `PASCAL_API_KEY` in a shell command, avoid or remove that command from shell history. This GitHub prerelease is not an npm version.
+troubleshooting.
 
 Use one active agent client per local CLI service. The standalone local HTTP runtime shares active scene state between clients; use separate `PASCAL_HOME` directories and service processes when independent concurrent work is required.
 
@@ -119,11 +90,11 @@ owner publishes an approved version from `main` with the official registry publi
 
 The viewer runtime and built-in node definitions are separate packages. Install the full built-in
 viewer set, then load the built-in plugin once before mounting `<Viewer>`. Capture sessions are an
-optional transport-neutral extension:
+optional extension shipped inside those packages as the `@pascal-app/core/capture` and
+`@pascal-app/viewer/capture` subpaths:
 
 ```bash
 npm install @pascal-app/core @pascal-app/viewer @pascal-app/editor @pascal-app/nodes
-npm install @pascal-app/capture-protocol @pascal-app/capture-viewer
 ```
 
 ```typescript
@@ -146,10 +117,8 @@ editor/
 ├── apps/
 │   └── editor/          # Next.js application
 ├── packages/
-│   ├── core/            # Schemas, scene state, and registry contracts
-│   ├── viewer/          # 3D rendering runtime and shared systems
-│   ├── capture-protocol/ # Static/live capture-session contracts
-│   ├── capture-viewer/  # Capture source runtime and reference renderers
+│   ├── core/            # Schemas, scene state, registry contracts, capture contracts
+│   ├── viewer/          # 3D rendering runtime, shared systems, capture runtime
 │   ├── editor/          # Editing tools and UI components
 │   ├── nodes/           # Built-in node definitions, renderers, and systems
 │   ├── cli/             # Persistent local editor installer and process manager
@@ -161,10 +130,8 @@ editor/
 
 | Package | Responsibility |
 |---------|---------------|
-| **@pascal-app/core** | Node schemas, scene state (Zustand), registry contracts, spatial queries, and event bus |
-| **@pascal-app/viewer** | 3D rendering via React Three Fiber, shared render systems, default camera/controls, and post-processing |
-| **@pascal-app/capture-protocol** | Versioned capture manifests, normalized streams, and transport-neutral static/live sources |
-| **@pascal-app/capture-viewer** | Viewer child runtime and reference model, device-motion, and point-cloud layers |
+| **@pascal-app/core** | Node schemas, scene state (Zustand), registry contracts, spatial queries, and event bus. `core/capture` adds versioned capture manifests, normalized streams, and transport-neutral static/live sources |
+| **@pascal-app/viewer** | 3D rendering via React Three Fiber, shared render systems, default camera/controls, and post-processing. `viewer/capture` adds the capture runtime and reference model, device-motion, point-cloud, and surface-mesh layers |
 | **@pascal-app/editor** | Editing tools, panels, selection, and direct-manipulation UI |
 | **@pascal-app/nodes** | Built-in registry plugin with node definitions, renderers, geometry, and systems |
 | **@pascal-app/cli** | Installs and manages a versioned standalone editor runtime and persistent local data |
@@ -529,14 +496,12 @@ turbo build --filter=@pascal-app/core
 
 ### Publishing Packages
 
-```bash
-# Build packages
-turbo build --filter=@pascal-app/core --filter=@pascal-app/viewer
-
-# Publish to npm
-npm publish --workspace=@pascal-app/core --access public
-npm publish --workspace=@pascal-app/viewer --access public
-```
+Releases run from `.github/workflows/release.yml` (`workflow_dispatch`, with
+`package`, `bump`, and `dry-run` inputs). The workflow bumps versions, rewrites
+the internal `@pascal-app/*` ranges, builds, publishes in dependency order
+(`core` → `viewer` → `editor` → `nodes` → `mcp` → `ifc-converter` → `cli`),
+then commits the release and pushes one tag per package. A dry run validates
+the builds without touching the registry.
 
 ---
 

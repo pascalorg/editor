@@ -5,6 +5,17 @@ All notable changes to `@pascal-app/mcp` will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The published ESM output now resolves relative JavaScript imports under Node,
+  so `pascal-mcp` and package subpath exports no longer require Bun's
+  extensionless import fallback.
+- Tool schemas in `tools/list` now declare the JSON Schema 2020-12 dialect
+  instead of the SDK default `draft-07`, so clients that enforce 2020-12 no
+  longer reject every tool call.
+
 ## [0.1.0] - 2026-04-18
 
 ### Added

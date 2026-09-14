@@ -12,13 +12,21 @@ import {
 } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { fileSha256 } from '../src/runtime-download.js'
+import { createRuntimeArchive } from '../src/tar.js'
 
 const packageDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const repositoryRoot = path.resolve(packageDirectory, '../..')
 const appDirectory = path.join(repositoryRoot, 'apps/editor')
 const standaloneDirectory = path.join(appDirectory, '.next/standalone')
 const standaloneAppDirectory = path.join(standaloneDirectory, 'apps/editor')
-const outputDirectory = path.join(packageDirectory, 'dist/runtime')
+/**
+ * The web runtime is a release asset, not part of the npm package: it is staged and archived
+ * under `build/`, while `dist/` only gains the MCP service and the digest of that archive.
+ */
+const buildDirectory = path.join(packageDirectory, 'build')
+const outputDirectory = path.join(buildDirectory, 'runtime')
+const releaseAssetBaseUrl = 'https://github.com/pascalorg/editor/releases/download'
 
 /**
  * `next build` copies its tracing root into `.next/standalone`, so the portable runtime
@@ -52,7 +60,15 @@ const packageJson = JSON.parse(
   version: string
 }
 
+const archiveName = `pascal-web-runtime-${packageJson.version}.tar.gz`
+const archiveFile = path.join(buildDirectory, archiveName)
+const assetUrl = `${releaseAssetBaseUrl}/@pascal-app/cli@${packageJson.version}/${archiveName}`
+
 await chmod(path.join(packageDirectory, 'dist/bin/pascal.js'), 0o755)
+await bundleMcpServer(
+  path.join(packageDirectory, 'dist/services/pascal-mcp.mjs'),
+  packageJson.version,
+)
 await assertFile(path.join(standaloneAppDirectory, 'server.js'))
 await rm(outputDirectory, { recursive: true, force: true })
 await mkdir(path.dirname(outputDirectory), { recursive: true })
@@ -67,8 +83,6 @@ await cp(
   path.join(outputDirectory, 'apps/editor/.next/static'),
   { recursive: true, force: true },
 )
-await bundleMcpServer(outputDirectory, packageJson.version)
-
 await rm(path.join(outputDirectory, 'apps/editor/vendor'), { recursive: true, force: true })
 await removeUnusedSharp(outputDirectory)
 await flattenBunNodeModules(outputDirectory)
@@ -83,23 +97,32 @@ if (nativeFiles.length > 0) {
 await writeFile(
   path.join(outputDirectory, 'runtime-manifest.json'),
   `${JSON.stringify(
-    {
-      schemaVersion: 1,
-      version: packageJson.version,
-      entrypoint: 'apps/editor/server.js',
-      mcpEntrypoint: 'services/pascal-mcp.mjs',
-      healthPath: '/api/health',
-      mcpHealthPath: '/health',
-    },
+    { schemaVersion: 2, version: packageJson.version, entrypoint: 'apps/editor/server.js' },
     null,
     2,
   )}\n`,
 )
 
-console.log(`Staged Pascal editor runtime ${packageJson.version} at ${outputDirectory}`)
+const archive = await createRuntimeArchive(outputDirectory, archiveFile)
+const sha256 = await fileSha256(archiveFile)
+await writeFile(`${archiveFile}.sha256`, `${sha256}  ${archiveName}\n`)
+await writeFile(
+  path.join(packageDirectory, 'dist/runtime-source.json'),
+  `${JSON.stringify(
+    { version: packageJson.version, url: assetUrl, sha256, size: archive.size },
+    null,
+    2,
+  )}\n`,
+)
 
-async function bundleMcpServer(runtimeDirectory: string, version: string): Promise<void> {
-  const output = path.join(runtimeDirectory, 'services/pascal-mcp.mjs')
+console.log(`Staged Pascal web runtime ${packageJson.version} at ${outputDirectory}`)
+console.log(
+  `Archived ${archive.entryCount} entries to ${archiveFile} (${formatMegabytes(archive.size)} MB)`,
+)
+console.log(`Digest ${sha256}`)
+console.log(`Release asset ${assetUrl}`)
+
+async function bundleMcpServer(output: string, version: string): Promise<void> {
   await mkdir(path.dirname(output), { recursive: true })
   const child = spawn(
     process.execPath,

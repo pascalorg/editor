@@ -9,6 +9,8 @@ import {
   isNodeKindEnabled,
   isPresettable,
   isPresettableKind,
+  isSelectionHighlightEnabled,
+  kindsWithFloorplanScope,
   loadPlugin,
   nodeRegistry,
   registerNode,
@@ -62,6 +64,16 @@ describe('nodeRegistry', () => {
     expect(nodeRegistry.size).toBe(1)
     expect(nodeRegistry.has('column')).toBe(true)
     expect(nodeRegistry.get('column')).toBe(def)
+  })
+
+  test('discovers explicit site-scoped kinds without changing the level default', () => {
+    registerNode(makeDefinition('level-default'))
+    registerNode(makeDefinition('building-owned', { floorplanScope: 'building' }))
+    registerNode(makeDefinition('site-owned', { floorplanScope: 'site' }))
+
+    expect(kindsWithFloorplanScope('level')).toEqual(['level-default'])
+    expect(kindsWithFloorplanScope('building')).toEqual(['building-owned'])
+    expect(kindsWithFloorplanScope('site')).toEqual(['site-owned'])
   })
 
   test('registerNode throws on duplicate kind in production', async () => {
@@ -168,6 +180,23 @@ describe('isPresettable', () => {
     registerNode(makeDefinition('shelfy', { parametrics: { groups: [] } as any }))
     expect(isPresettableKind('shelfy')).toBe(true)
     expect(isPresettableKind('unknown')).toBe(false)
+  })
+})
+
+describe('isSelectionHighlightEnabled', () => {
+  beforeEach(() => {
+    nodeRegistry._reset()
+  })
+
+  test('defaults to true when the capability or definition is omitted', () => {
+    registerNode(makeDefinition('default-highlight'))
+    expect(isSelectionHighlightEnabled('default-highlight')).toBe(true)
+    expect(isSelectionHighlightEnabled('unregistered')).toBe(true)
+  })
+
+  test('returns false when the definition explicitly opts out', () => {
+    registerNode(makeDefinition('paint-layer', { capabilities: { selectionHighlight: false } }))
+    expect(isSelectionHighlightEnabled('paint-layer')).toBe(false)
   })
 })
 

@@ -52,7 +52,7 @@ function runSourceHistoryTest(body: string) {
       const { useScene: scene, clearSceneHistory, useLiveTransforms: transforms, useLiveNodeOverrides: overrides } = core
       const { runUndo, runRedo, installHistoryCommandDelegate, getHistoryCommandState, shouldCancelDraftOnHistoryJump, subscribeHistoryCommandState } = await import(${JSON.stringify(resolve(import.meta.dir, 'history.ts'))})
       const { default: useInteractionScope } = await import(${JSON.stringify(resolve(import.meta.dir, '../store/use-interaction-scope.ts'))})
-      const level = core.LevelNode.parse({ id: 'level_history_source' })
+      const level = core.LevelNode.parse({ id: 'level_history_source', children: ['wall_history_source', 'wall_remote_source', 'slab_history_source'] })
       const wall = core.WallNode.parse({ id: 'wall_history_source', parentId: level.id, start: [0,0], end: [4,0] })
       const remote = core.WallNode.parse({ id: 'wall_remote_source', parentId: level.id, start: [20,0], end: [24,0] })
       const opening = core.DoorNode.parse({ id: 'door_history_source', parentId: wall.id, wallId: wall.id })

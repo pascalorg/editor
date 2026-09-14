@@ -7,7 +7,7 @@ User request:
 Expected workflow:
 
 1. Select the local CLI path; do not request an account or API key.
-2. If needed, install with `npm install --global @pascal-app/cli@beta`, run `pascal editor --no-open`, then configure the active host with `pascal mcp setup <host>`. Use one active agent client per local service; concurrent clients share active scene state.
+2. If needed, install with `npm install --global @pascal-app/cli`, run `pascal editor --no-open`, then configure the active host with `pascal mcp setup <host>`. Use one active agent client per local service; concurrent clients share active scene state.
 3. Read `pascal://agent-guide`.
 4. Call `create_project`, `create_room`, and `add_door` with meter values.
 5. Call `validate_scene`, `verify_scene`, `save_scene` in draft mode, and `get_project_status`.

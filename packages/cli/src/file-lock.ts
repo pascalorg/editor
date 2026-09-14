@@ -19,10 +19,11 @@ export async function withFileLock<T>(
   code: string,
   message: string,
   action: () => Promise<T>,
+  options: { timeoutMs?: number } = {},
 ): Promise<T> {
   await mkdir(path.dirname(lockPath), { recursive: true, mode: 0o700 })
   const token = randomUUID()
-  const deadline = Date.now() + DEFAULT_TIMEOUT_MS
+  const deadline = Date.now() + (options.timeoutMs ?? DEFAULT_TIMEOUT_MS)
 
   while (!(await tryAcquire(lockPath, token))) {
     if (await reclaimStaleLock(lockPath)) continue

@@ -19,6 +19,7 @@ import {
   SceneEnvironment,
   useViewer,
   Viewer,
+  ViewerPresentations,
 } from '@pascal-app/viewer'
 import {
   memo,
@@ -27,6 +28,7 @@ import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
 } from 'react'
@@ -35,6 +37,10 @@ import { ViewerZoneSystem } from '../../components/viewer-zone-system'
 import { type SaveStatus, useAutoSave } from '../../hooks/use-auto-save'
 import { useKeyboard } from '../../hooks/use-keyboard'
 import { useSaveShortcut } from '../../hooks/use-save-shortcut'
+import {
+  createLocalProjectPresentationPersistence,
+  type LocalProjectPresentationPersistence,
+} from '../../lib/local-project-presentation-persistence'
 import { type ActivePaintMaterial, hasActivePaintMaterial } from '../../lib/material-paint'
 import {
   applySceneGraphToEditor,
@@ -112,6 +118,8 @@ const PAINT_CURSOR_BADGE_DISABLED_COLOR = '#94a3b8'
 const PAINT_CURSOR_BADGE_OFFSET_X = 14
 const PAINT_CURSOR_BADGE_OFFSET_Y = 14
 const SCENE_READY_FALLBACK_MS = 8000
+const PRESENTATION_PROJECT_NOT_RESTORED = Symbol('presentation-project-not-restored')
+const useClientLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
 type PaintCursorBadgeState = 'empty' | 'ready' | 'blocked'
 const recordEditorRender: ProfilerOnRenderCallback = (_id, _phase, actualDuration) => {
   if (PERF_OVERLAY_ENABLED) recordPerfSample('react-render', actualDuration)
@@ -777,6 +785,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isStudioMode,
   onThumbnailCapture,
   viewerSceneSlot,
+  presentationsReady,
 }: {
   isVersionPreviewMode: boolean
   isLoading: boolean
@@ -784,6 +793,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
   isStudioMode: boolean
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
   viewerSceneSlot?: ReactNode
+  presentationsReady: boolean
 }) {
   // Studio mode is a clean render/snapshot surface — no selection or editing
   // affordances. It mirrors version-preview's chrome gating on the canvas.
@@ -823,6 +833,7 @@ const ViewerSceneContent = memo(function ViewerSceneContent({
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       {!isFirstPersonMode && <SiteEdgeLabels />}
       <InteractiveSystem />
+      {presentationsReady ? <ViewerPresentations /> : null}
       {!noEditing && viewerSceneSlot}
     </>
   )
@@ -1006,6 +1017,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   sceneReadyKey,
   onSceneReadyChange,
   onThumbnailCapture,
+  presentationsReady,
   viewerSceneSlot,
   floorplanSceneSlot,
   disablePostFx = false,
@@ -1019,6 +1031,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
   sceneReadyKey: number
   onSceneReadyChange: (ready: boolean) => void
   onThumbnailCapture?: (blob: Blob, cameraData: SnapshotCameraData) => void
+  presentationsReady: boolean
   viewerSceneSlot?: ReactNode
   floorplanSceneSlot?: ReactNode
   disablePostFx?: boolean
@@ -1153,6 +1166,7 @@ const ViewerCanvas = memo(function ViewerCanvas({
               isStudioMode={isStudioMode}
               isVersionPreviewMode={isVersionPreviewMode}
               onThumbnailCapture={onThumbnailCapture}
+              presentationsReady={presentationsReady}
               viewerSceneSlot={viewerSceneSlot}
             />
           </Viewer>
@@ -1251,6 +1265,28 @@ function EditorContent({
 }: EditorProps) {
   const isFirstPersonMode = useEditor((s) => s.isFirstPersonMode)
   const isStudioMode = useEditor((s) => s.workspaceMode === 'studio')
+  const presentationProjectId = projectId ?? null
+  const presentationPersistenceRef = useRef<LocalProjectPresentationPersistence | null>(null)
+  const [restoredPresentationProjectId, setRestoredPresentationProjectId] = useState<
+    string | null | typeof PRESENTATION_PROJECT_NOT_RESTORED
+  >(PRESENTATION_PROJECT_NOT_RESTORED)
+  const presentationsReady = restoredPresentationProjectId === presentationProjectId
+
+  useClientLayoutEffect(() => {
+    const persistence = createLocalProjectPresentationPersistence()
+    presentationPersistenceRef.current = persistence
+    return () => {
+      presentationPersistenceRef.current = null
+      persistence.dispose()
+    }
+  }, [])
+
+  useClientLayoutEffect(() => {
+    const persistence = presentationPersistenceRef.current
+    if (!persistence) return
+    persistence.switchProject(presentationProjectId)
+    setRestoredPresentationProjectId(presentationProjectId)
+  }, [presentationProjectId])
 
   useKeyboard({ isVersionPreviewMode, disabled: isFirstPersonMode || isStudioMode })
 
@@ -1479,6 +1515,7 @@ function EditorContent({
       <CustomCameraControls />
       <ThumbnailGenerator onThumbnailCapture={onThumbnailCapture} />
       <InteractiveSystem />
+      {presentationsReady ? <ViewerPresentations /> : null}
     </Viewer>
   )
 
@@ -1492,6 +1529,7 @@ function EditorContent({
       isVersionPreviewMode={isVersionPreviewMode}
       onSceneReadyChange={handleSceneReadyChange}
       onThumbnailCapture={onThumbnailCapture}
+      presentationsReady={presentationsReady}
       sceneReadyKey={sceneReadyKey}
       showLoader={showLoader}
       viewerSceneSlot={viewerSceneSlot}

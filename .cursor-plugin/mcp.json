@@ -1,0 +1,22 @@
+{
+  "mcpServers": {
+    "pascal": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "--yes",
+        "--package=@pascal-app/cli@1.0.0",
+        "pascal",
+        "mcp",
+        "connect"
+      ]
+    },
+    "pascal-hosted": {
+      "type": "http",
+      "url": "https://editor.pascal.app/api/mcp",
+      "headers": {
+        "Authorization": "Bearer ${PASCAL_API_KEY}"
+      }
+    }
+  }
+}

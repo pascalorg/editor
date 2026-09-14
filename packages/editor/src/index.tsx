@@ -437,7 +437,7 @@ export {
   commitFreshPlacementSubtree,
   createFreshPlacementSubtree,
 } from './lib/fresh-planar-placement'
-export { exportSceneToGlb } from './lib/glb-export'
+export { exportSceneToGlb, type GlbExportOptions } from './lib/glb-export'
 export {
   type EditorGridEvent,
   type GridEventScreenProjection,
@@ -521,6 +521,12 @@ export {
   metersToLinearUnit,
   squareMetersToAreaUnit,
 } from './lib/measurements'
+export type {
+  ModelExport,
+  ModelExportArtifact,
+  ModelExportFormat,
+  ModelExportOptions,
+} from './lib/model-export'
 export { consumePlacementDragRelease } from './lib/placement-drag-release'
 export {
   addFreshPlacementMetadata,
@@ -539,6 +545,8 @@ export {
   editorHostPanelRegistry,
   registerEditorHostPanel,
 } from './lib/plugin-panels'
+export { configureManifoldRuntime } from './lib/print-shell-compiler-manifold-worker'
+export type { ManifoldRuntimeOptions } from './lib/print-shell-compiler-protocol'
 export {
   createQuickMeasurementPointerScheduler,
   quickMeasurementContext,
@@ -594,6 +602,7 @@ export {
   resolveFlattenTarget,
   sculptFieldForSite,
 } from './lib/terrain-sculpt'
+export { exportSceneToUsdz, type UsdzExportOptions } from './lib/usdz-export'
 // `cn` (twMerge + clsx) — used by kind-owned panels in `@pascal-app/
 // nodes` so they don't need their own copy / their own tailwind-merge
 // dependency.
